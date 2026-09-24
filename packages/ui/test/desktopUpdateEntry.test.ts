@@ -30,11 +30,20 @@ test("desktop update entry maps updater states to one icon-sized visual state", 
   });
   assert.equal(resolveUpdateStatusEntryVisualState(downloaded), "downloaded");
 
-  const hidden = deriveUpdateStatusViewModel({
+  const idle = deriveUpdateStatusViewModel({
     legacyReadyVersion: null,
     updateState: { kind: "idle", enabled: true },
   });
-  assert.equal(resolveUpdateStatusEntryVisualState(hidden), null);
+  assert.equal(resolveUpdateStatusEntryVisualState(idle), "idle");
+
+  const initial = deriveUpdateStatusViewModel({ legacyReadyVersion: null, updateState: null });
+  assert.equal(resolveUpdateStatusEntryVisualState(initial), "idle");
+
+  const checking = deriveUpdateStatusViewModel({
+    legacyReadyVersion: null,
+    updateState: { kind: "checking", enabled: false },
+  });
+  assert.equal(resolveUpdateStatusEntryVisualState(checking), "checking");
 });
 
 test("desktop update entry uses header actions and keeps an overlay fallback", () => {

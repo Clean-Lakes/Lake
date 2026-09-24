@@ -1,4 +1,4 @@
-import type { IPlatformService, UpdateStatePayload } from "@zcode/shared";
+import { DesktopCommandIds, type IPlatformService, type UpdateStatePayload } from "@zcode/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/components/lib/utils.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -88,35 +88,49 @@ export function UpdateStatusButton({
     [platform],
   );
   const handleUpdateEntryClick = useCallback(() => {
+    if (visualState === "idle") {
+      void platform.executeDesktopCommand(DesktopCommandIds.CheckForUpdates);
+      return;
+    }
+
     if (platform.openUpdateStatusWindow) {
       void platform.openUpdateStatusWindow();
       return;
     }
 
     setDialogOpen(true);
-  }, [platform]);
-
-  if (!displayVersion || !visualState) return null;
+  }, [platform, visualState]);
 
   // 更新弹窗和按钮 hover 共用同一个更新日志标题，避免 feed 自带 releaseName 与正文标题重复。
-  const releaseNotesTitle = intl.formatMessage(
-    { id: "updateReady.releaseNotesTitle" },
-    { version: displayVersion },
-  );
-  const tooltipTitle =
-    dialogPhase === "downloading"
-      ? progressLabel
-        ? intl.formatMessage(
-            { id: "desktopMenu.help.downloadingUpdateProgress" },
-            { progress: progressLabel },
-          )
-        : intl.formatMessage(
-            { id: "desktopMenu.help.downloadingUpdateVersion" },
-            { version: displayVersion },
-          )
-      : dialogPhase === "downloaded"
-        ? intl.formatMessage({ id: "updateReady.tooltip" }, { version: displayVersion })
-        : intl.formatMessage({ id: "updateAvailable.tooltip" }, { version: displayVersion });
+  const releaseNotesTitle = displayVersion
+    ? intl.formatMessage({ id: "updateReady.releaseNotesTitle" }, { version: displayVersion })
+    : "";
+  let tooltipTitle: string;
+  if (visualState === "idle") {
+    tooltipTitle = intl.formatMessage({ id: "titleBar.menu.help.checkForUpdates" });
+  } else if (visualState === "checking") {
+    tooltipTitle = intl.formatMessage({ id: "desktopMenu.help.checkingForUpdates" });
+  } else if (dialogPhase === "downloading") {
+    tooltipTitle = progressLabel
+      ? intl.formatMessage(
+          { id: "desktopMenu.help.downloadingUpdateProgress" },
+          { progress: progressLabel },
+        )
+      : intl.formatMessage(
+          { id: "desktopMenu.help.downloadingUpdateVersion" },
+          { version: displayVersion ?? "" },
+        );
+  } else if (dialogPhase === "downloaded") {
+    tooltipTitle = intl.formatMessage(
+      { id: "updateReady.tooltip" },
+      { version: displayVersion ?? "" },
+    );
+  } else {
+    tooltipTitle = intl.formatMessage(
+      { id: "updateAvailable.tooltip" },
+      { version: displayVersion ?? "" },
+    );
+  }
 
   const updateEntryButton = (
     <Button
@@ -127,6 +141,7 @@ export function UpdateStatusButton({
       data-testid="desktop-update-status-entry"
       data-update-status={visualState}
       onClick={handleUpdateEntryClick}
+      disabled={visualState === "checking"}
       className={cn(
         // 更新入口与工作区 Header 的其它图标操作共用中性 ghost 视觉；状态含义由图标、
         // Tooltip 和独立更新窗口表达，避免把标题栏重新撑成绿色文字胶囊。
@@ -134,7 +149,7 @@ export function UpdateStatusButton({
         className,
       )}
     >
-      {visualState === "downloading" ? (
+      {visualState === "downloading" || visualState === "checking" ? (
         <LoaderCircle className="size-4 animate-spin" />
       ) : (
         <CloudDownload className="size-4" />

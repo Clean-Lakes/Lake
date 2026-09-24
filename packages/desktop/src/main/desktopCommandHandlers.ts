@@ -12,7 +12,6 @@ import {
   type Locale,
   resolveRuntimeZCodeEndpointOrigin,
   ZCODE_ENV,
-  ZCODE_PRODUCT_FLAVOR,
   buildZCodeEndpointUrls,
   getCommunityUrlFromConfigs,
   getFeedbackUrlFromConfig,
@@ -589,12 +588,9 @@ export async function executeDesktopCommand(options: {
       );
       return;
     case DesktopCommandIds.CheckForUpdates:
-      // 按产品身份而不是后端环境放行：生产后端的 Preview 同样没有更新器。
-      if (ZCODE_PRODUCT_FLAVOR === "production") {
-        checkForUpdateMenuClick(targetWindow);
-      } else {
-        options.logger.info("[auto-update] Preview 已禁用手动更新检查");
-      }
+      // 功能原因：云更新入口在开发包中也常驻；由更新器按运行态返回 dev-skipped，
+      // 让点击产生明确反馈，同时 Preview 产品身份仍不会向 Release 发起请求。
+      checkForUpdateMenuClick(targetWindow);
       return;
     case DesktopCommandIds.RelaunchApp:
       await options.onRelaunchApp();

@@ -11,6 +11,7 @@ export type UpdateActionInFlight = "download" | "cancel" | "skip" | "restart" | 
 export type UpdateStatusViewModel = {
   dialogPhase: UpdateStatusDialogPhase;
   displayVersion: string | null;
+  isChecking: boolean;
   progressLabel: string | null;
   progressValue: number;
   releaseNotesPayload: PostUpdateReleaseNotesPayload | undefined;
@@ -18,7 +19,12 @@ export type UpdateStatusViewModel = {
   updateChannel: ElectronReleaseChannel | undefined;
 };
 
-export type UpdateStatusEntryVisualState = "available" | "downloading" | "downloaded";
+export type UpdateStatusEntryVisualState =
+  | "idle"
+  | "checking"
+  | "available"
+  | "downloading"
+  | "downloaded";
 
 export function deriveUpdateStatusViewModel({
   legacyReadyVersion,
@@ -46,6 +52,7 @@ export function deriveUpdateStatusViewModel({
         ? "downloading"
         : "before-download",
     displayVersion,
+    isChecking: updateState?.kind === "checking",
     progressLabel: getUpdateDownloadProgressLabel(updateState),
     progressValue: getUpdateDownloadProgressValue(updateState),
     releaseNotesPayload: getUpdateReleaseNotesPayload(updateState),
@@ -64,9 +71,13 @@ export function deriveUpdateStatusViewModel({
 
 export function resolveUpdateStatusEntryVisualState(
   viewModel: UpdateStatusViewModel,
-): UpdateStatusEntryVisualState | null {
+): UpdateStatusEntryVisualState {
+  if (viewModel.isChecking) {
+    return "checking";
+  }
+
   if (!viewModel.displayVersion) {
-    return null;
+    return "idle";
   }
 
   if (viewModel.dialogPhase === "downloading") {
