@@ -33,7 +33,10 @@ import { requestV4ComposerDraftWorkspaceTransfer } from "@/v4/composer/composerD
 import { ChatEmptyWorkspacePreviewMenu } from "@/ChatEmptyState.js";
 import { DesktopTopOverlay } from "@/DesktopTopOverlay.js";
 import { DesktopWindowFrame } from "@/DesktopWindowFrame.js";
+import { UpdateStatusButton } from "@/UpdateStatusButton.js";
 import { WorkspacePluginPreview } from "@/WorkspacePluginPreview.js";
+import { resolveUpdateStatusEntryPlacement } from "@/updateStatusEntryPlacement.js";
+import { LakeCatalogPage } from "@/lake-catalog/LakeCatalogPage.js";
 import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { GitBranchSwitcher } from "@/GitBranchSwitcher.js";
 import { ScopedErrorBoundary } from "@/ErrorBoundary.js";
@@ -191,6 +194,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   services,
   workspaceReadOnlyReason,
   workspaceMainView,
+  catalogInitialLakeId,
+  catalogInitialResourceId,
   pluginStoreOpenVersion,
   openAutomationId,
   openAutomationTab,
@@ -1483,18 +1488,15 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     />
   );
   const sidePanePanel = renderSidePanePanel();
-  const hasUpdateStatusButton =
-    updateReadyVersion !== null ||
-    updateState?.kind === "update-available" ||
-    updateState?.kind === "download-progress" ||
-    updateState?.kind === "update-downloaded";
   // Draft 之前维护一套独立轻量 header，导致 side pane、caption 安全区和拖拽入口
   // 与 Task Header 分叉。桌面端统一复用 WorkspaceHeader，只由 variant 裁剪 task 专属内容；
   // 手机远控无 active task 时仍不渲染桌面 chrome，继续遵守 replayable overlay 边界。
-  const shouldRenderMainViewHeader =
-    workspaceMainView !== "automations" && workspaceMainView !== "plugin-store";
+  const shouldRenderMainViewHeader = workspaceMainView === "chat";
   const shouldRenderWorkspaceHeader =
     shouldRenderMainViewHeader && (activeTaskId !== null || isDesktop);
+  const updateStatusEntryPlacement = resolveUpdateStatusEntryPlacement(
+    Boolean(shouldRenderWorkspaceHeader),
+  );
   // ErrorBoundary resetKeys 的数组如果每次 render 都重新创建，
   // 即使 workspace/task 没变化也会在 React DevTools Components 轨道里持续表现为子树 props 变化。
   const workspaceOnlyResetKeys = useMemo(() => [workspaceKey], [workspaceKey]);
@@ -1534,6 +1536,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
           id="sidebar"
           className={cn(
             "w-[var(--workspace-sidebar-panel-width)] max-w-[50%] flex-none overflow-hidden duration-200 ease-out transition-[width,opacity] data-[workspace-sidebar-resizing=true]:transition-opacity",
+            workspaceMainView === "lakes" && "max-sm:hidden",
             // 拖动侧栏宽度时如果继续过渡 width，会让指针移动和实际宽度之间产生滞后。
             // 拖拽 active 通过 DOM 标记切 transition，避免 pointerdown/up 为了切 class 重渲染整棵 workspace。
             isSidebarPanelVisible ? "opacity-100" : "pointer-events-none opacity-0",
@@ -1600,6 +1603,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     automationsActive={workspaceMainView === "automations"}
                     onOpenPluginStore={handleOpenPluginStore}
                     pluginStoreActive={workspaceMainView === "plugin-store"}
+                    onOpenLakes={() => onWorkspaceMainViewChange("lakes")}
+                    lakesActive={workspaceMainView === "lakes"}
                     onFileTreeOpenChange={setIsSidebarFileTreeOpen}
                   />
                 </WorkflowRunOpenProvider>
@@ -1625,6 +1630,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
             onPointerUp={(event) => finishWorkspaceSidebarResize(event)}
             className={cn(
               "group/handle relative z-10 flex h-full w-1 shrink-0 touch-none cursor-ew-resize items-center justify-center bg-transparent outline-none [app-region:no-drag] focus:outline-none focus-visible:ring-0",
+              workspaceMainView === "lakes" && "max-sm:hidden",
               "after:pointer-events-none after:absolute after:rounded-full after:bg-foreground-subtlest/50 after:opacity-0 after:transition-opacity after:content-[''] after:inset-y-[var(--workspace-panel-radius)] after:w-0.5",
               "hover:after:opacity-100 data-[separator=hover]:after:opacity-100 data-[separator=active]:after:opacity-100 focus-visible:after:opacity-100 [[data-workspace-sidebar-resizing=true]_&]:after:opacity-100",
               hasDesktopPanelInset && "after:inset-y-[var(--workspace-resize-handle-inset)]",
@@ -1706,7 +1712,16 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                           projectName={projectName}
                           activeTaskTitle={activeTaskTitle}
                           activeTaskChangeSummary={activeTaskChangeSummary}
-                          hasUpdateReady={hasUpdateStatusButton}
+                          updateStatusEntry={
+                            isDesktop &&
+                            updateStatusEntryPlacement === "workspace-header-actions" ? (
+                              <UpdateStatusButton
+                                platform={platform}
+                                version={updateReadyVersion}
+                                updateState={updateState}
+                              />
+                            ) : null
+                          }
                           activeTaskId={activeTaskId}
                           user={user}
                           activeTraceId={activeTraceId}
@@ -1796,6 +1811,18 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                               </ScopedErrorBoundary>
                             </div>
                           </AutomationsMainBreadcrumbFrame>
+                        </main>
+                      ) : workspaceMainView === "lakes" ? (
+                        <main className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-background [scrollbar-gutter:stable]">
+                          <LakeCatalogPage
+                            onBack={() => onWorkspaceMainViewChange("chat")}
+                            isDesktop={Boolean(isDesktop)}
+                            initialLakeId={catalogInitialLakeId}
+                            initialResourceId={catalogInitialResourceId}
+                            workspaceTabs={workspaceTabs.filter(
+                              (tab) => tab.workspacePurpose !== "conversation",
+                            )}
+                          />
                         </main>
                       ) : workspaceMainView === "plugin-store" ? (
                         <main className="flex h-full min-h-0 flex-1 flex-col bg-background">
@@ -1899,7 +1926,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     </div>
                   </section>
                 </ResizablePanel>
-                {workspaceMainView !== "automations" && workspaceMainView !== "plugin-store" ? (
+                {workspaceMainView === "chat" ? (
                   <AnimatedTerminalPanel
                     frameClassName={cn(
                       isSidePaneVisible
@@ -1951,6 +1978,9 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
             isSidebarVisible={isSidebarVisible}
             updateReadyVersion={updateReadyVersion}
             updateState={updateState}
+            showUpdateStatusButton={
+              Boolean(isDesktop) && updateStatusEntryPlacement === "top-overlay-fallback"
+            }
             toggleSidebarShortcutLabel={toggleSidebarShortcutLabel}
             newTaskShortcutLabel={newTaskShortcutLabel}
             goBackShortcutLabel={goBackShortcutLabel}

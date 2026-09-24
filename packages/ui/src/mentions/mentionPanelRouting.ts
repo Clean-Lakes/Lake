@@ -1,6 +1,12 @@
 import type { PromptInputTrigger } from "@/lib/promptInputTriggers.js";
 
-export type MentionPanelGroupId = "plugins" | "files" | "sessions" | "whiteboards" | "skills";
+export type MentionPanelGroupId =
+  | "plugins"
+  | "files"
+  | "sessions"
+  | "whiteboards"
+  | "skills"
+  | "lake-resources";
 export type SessionMentionWorkspaceScope = "current-workspace" | "same-authority-workspaces";
 
 const CONTEXT_GROUP_ORDER: readonly MentionPanelGroupId[] = [
@@ -11,6 +17,7 @@ const CONTEXT_GROUP_ORDER: readonly MentionPanelGroupId[] = [
 ];
 const SESSION_GROUP_ORDER: readonly MentionPanelGroupId[] = ["sessions"];
 const SKILL_GROUP_ORDER: readonly MentionPanelGroupId[] = ["skills"];
+const LAKE_RESOURCE_GROUP_ORDER: readonly MentionPanelGroupId[] = ["lake-resources"];
 
 /**
  * 输入触发器只负责发现入口，不改变候选选中后的 canonical mention。
@@ -27,6 +34,9 @@ export function getMentionPanelGroupOrder(
   }
   if (trigger === "$") {
     return SKILL_GROUP_ORDER;
+  }
+  if (trigger === "L") {
+    return LAKE_RESOURCE_GROUP_ORDER;
   }
   return [];
 }

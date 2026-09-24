@@ -19,6 +19,10 @@ import {
 } from "@/hooks/useCodingPlanEntryPlanList.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
 import { reportCodingPlanUpgradeClick } from "@/lib/codingPlanFunnelTelemetry.js";
+import {
+  createDisabledCodingPlanEntryInventory,
+  shouldEnableCodingPlanUpgrade,
+} from "@/lib/codingPlanUpgradeGate.js";
 
 interface CodingPlanUpgradeDialogContextValue {
   inventory: CodingPlanEntryInventory;
@@ -32,7 +36,32 @@ const CodingPlanUpgradeDialogContext = createContext<CodingPlanUpgradeDialogCont
   null,
 );
 
+/**
+ * 本地定制，见 specs/remove-coding-plan-upgrade.md：升级套餐页整页下线。
+ *
+ * 上下文契约保持不变（调用方仍拿得到 `openCodingPlanUpgrade`），但恒返回 `false`——
+ * 它表示「没有打开」，观察式打开（`SessionPane` 的会话额度入口）据此拿到真实结果，
+ * 不会被误报成成功。`inventory` 用常量占位：下线期间不再请求厂家套餐/企业价格。
+ */
+const DISABLED_CODING_PLAN_UPGRADE_VALUE: CodingPlanUpgradeDialogContextValue = {
+  inventory: createDisabledCodingPlanEntryInventory(),
+  openCodingPlanUpgrade: () => false,
+};
+
 export function CodingPlanUpgradeDialogProvider({ children }: { children: ReactNode }) {
+  // 闸门是编译期常量，渲染期不读取任何状态：关闭时整段购买状态机（套餐查询与升级页）都不挂载。
+  if (!shouldEnableCodingPlanUpgrade()) {
+    return (
+      <CodingPlanUpgradeDialogContext.Provider value={DISABLED_CODING_PLAN_UPGRADE_VALUE}>
+        {children}
+      </CodingPlanUpgradeDialogContext.Provider>
+    );
+  }
+  return <ActiveCodingPlanUpgradeDialogProvider>{children}</ActiveCodingPlanUpgradeDialogProvider>;
+}
+
+/** 上游实现，保留为恢复厂家购买流程时的接缝。 */
+function ActiveCodingPlanUpgradeDialogProvider({ children }: { children: ReactNode }) {
   const platform = usePlatform();
   const inventory = useCodingPlanEntryPlanList();
   const inventoryRef = useRef(inventory);

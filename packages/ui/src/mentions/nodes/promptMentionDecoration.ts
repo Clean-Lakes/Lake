@@ -11,6 +11,7 @@ import {
   COMPACT_COMMAND_MENTION_ICON_NODE,
   createMentionSvgIcon,
   GOAL_COMMAND_MENTION_ICON_NODE,
+  LAKE_RESOURCE_MENTION_ICON_NODE,
   PLUGIN_MENTION_ICON_NODE,
   SESSION_MENTION_ICON_NODE,
   SKILL_MENTION_ICON_NODE,
@@ -89,14 +90,16 @@ export function decoratePromptMention(
         ? SUBAGENT_MENTION_ICON_NODE
         : category === "sessions"
           ? SESSION_MENTION_ICON_NODE
-          : category === "whiteboards"
-            ? WHITEBOARD_MENTION_ICON_NODE
-            : command === "goal"
-              ? GOAL_COMMAND_MENTION_ICON_NODE
-              : command === "workflow"
-                ? WORKFLOW_COMMAND_MENTION_ICON_NODE
-                : command === "compact"
-                  ? COMPACT_COMMAND_MENTION_ICON_NODE
-                  : COMMAND_MENTION_ICON_NODE;
+          : category === "lake-resources"
+            ? LAKE_RESOURCE_MENTION_ICON_NODE
+            : category === "whiteboards"
+              ? WHITEBOARD_MENTION_ICON_NODE
+              : command === "goal"
+                ? GOAL_COMMAND_MENTION_ICON_NODE
+                : command === "workflow"
+                  ? WORKFLOW_COMMAND_MENTION_ICON_NODE
+                  : command === "compact"
+                    ? COMPACT_COMMAND_MENTION_ICON_NODE
+                    : COMMAND_MENTION_ICON_NODE;
   setMask(dom, icon);
 }

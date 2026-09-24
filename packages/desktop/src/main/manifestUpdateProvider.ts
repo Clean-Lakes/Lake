@@ -18,8 +18,11 @@ import {
 } from "electron-updater";
 import type { ProviderRuntimeOptions } from "electron-updater/out/providers/Provider.js";
 import { parse as parseYaml } from "yaml";
-
-const ELECTRON_MANIFEST_API_PATH = "/api/v1/releases/electron/manifest";
+import {
+  mapElectronReleaseChannelToApiValue,
+  resolveUpdateAssetBaseUrl,
+  resolveUpdateManifestRequestUrl,
+} from "./lakeUpdateFeed.js";
 
 const MANIFEST_ACCEPT_HEADER = "application/x-yaml,text/yaml,text/plain,*/*";
 
@@ -35,10 +38,6 @@ interface ManifestUpdateProviderOptions extends CustomPublishOptions {
 
 function normalizeReleaseChannel(channel: string | null | undefined): ElectronReleaseChannel {
   return channel === "preview" ? "preview" : "stable";
-}
-
-function mapReleaseChannelToApiValue(channel: ElectronReleaseChannel): string {
-  return channel === "preview" ? "3" : "1";
 }
 
 function mapElectronReleaseArch(arch: string): string {
@@ -72,24 +71,6 @@ export function getElectronReleasePlatform(
   arch = process.env["TEST_UPDATER_ARCH"] || process.arch,
 ): string {
   return `${mapElectronReleasePlatform(platform)}-${mapElectronReleaseArch(arch)}`;
-}
-
-function buildElectronManifestUrl(options: {
-  endpointOrigin: string;
-  manifestUrl?: string;
-  platform: string;
-  deviceMid?: string;
-  channel: ElectronReleaseChannel;
-}): URL {
-  const url = options.manifestUrl?.trim()
-    ? new URL(options.manifestUrl.trim())
-    : new URL(ELECTRON_MANIFEST_API_PATH, normalizeZCodeEndpointOrigin(options.endpointOrigin));
-  url.searchParams.set("platform", options.platform);
-  if (options.deviceMid?.trim()) {
-    url.searchParams.set("device_mid", options.deviceMid.trim());
-  }
-  url.searchParams.set("channel", mapReleaseChannelToApiValue(options.channel));
-  return url;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -205,21 +186,29 @@ export class ManifestUpdateProvider extends Provider<UpdateInfo> {
   override async getLatestVersion(): Promise<UpdateInfo> {
     const endpointOrigin = await this.resolveEndpointOrigin();
     const releaseChannel = await this.resolveReleaseChannel();
-    const manifestUrl = buildElectronManifestUrl({
+    const manifestUrl = resolveUpdateManifestRequestUrl({
       endpointOrigin,
       manifestUrl: this.options.manifestUrl,
       platform: this.releasePlatform,
       deviceMid: this.options.deviceMid,
       channel: releaseChannel,
     });
-    this.resolveBaseUrl = new URL("/", manifestUrl);
-    const releaseChannelApiValue = mapReleaseChannelToApiValue(releaseChannel);
+    this.resolveBaseUrl = resolveUpdateAssetBaseUrl(manifestUrl);
+    const releaseChannelApiValue = mapElectronReleaseChannelToApiValue(releaseChannel);
+    const isStaticManifest = Boolean(this.options.manifestUrl?.trim());
 
     const raw = await this.httpRequest(manifestUrl, {
       accept: MANIFEST_ACCEPT_HEADER,
-      "X-Platform": this.releasePlatform,
-      "X-Release-Channel": releaseChannelApiValue,
-      ...(this.options.deviceMid?.trim() ? { "X-Device-Mid": this.options.deviceMid.trim() } : {}),
+      // GitHub Release 是公开静态文件，不需要把本机 deviceMid 或旧服务端协商头发给第三方。
+      ...(!isStaticManifest
+        ? {
+            "X-Platform": this.releasePlatform,
+            "X-Release-Channel": releaseChannelApiValue,
+            ...(this.options.deviceMid?.trim()
+              ? { "X-Device-Mid": this.options.deviceMid.trim() }
+              : {}),
+          }
+        : {}),
     });
     if (!raw) {
       throw new Error(`Empty electron update manifest: ${manifestUrl.toString()}`);

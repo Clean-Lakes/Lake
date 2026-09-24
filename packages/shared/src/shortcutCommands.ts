@@ -15,6 +15,7 @@ export type ShortcutCommandId =
   | "toggleInterfaceMode"
   | "openOnboarding"
   | "openCommandCenter"
+  | "openLakeSwitcher"
   | "openSettings"
   | "findInTask"
   | "toggleSidebar"
@@ -64,6 +65,7 @@ export const SHORTCUT_COMMANDS: readonly ShortcutCommandEntry[] = [
     channel: "window",
     defaultBindings: ["CmdOrCtrl+k", "CmdOrCtrl+Shift+p"],
   },
+  { id: "openLakeSwitcher", channel: "window", defaultBindings: ["CmdOrCtrl+l"] },
   // 打开设置页：mac ⌘, / win·linux Ctrl+,（系统惯例，如 macOS Settings…、VSCode）
   { id: "openSettings", channel: "window", defaultBindings: ["CmdOrCtrl+,"] },
   { id: "findInTask", channel: "window", defaultBindings: ["CmdOrCtrl+f"] },

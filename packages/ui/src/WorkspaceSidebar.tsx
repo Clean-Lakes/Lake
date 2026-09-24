@@ -17,7 +17,6 @@ import {
   CalendarClock,
   Clock3,
   Cloud,
-  Folder,
   FolderOpen,
   Hash,
   ListFilter,
@@ -27,6 +26,7 @@ import {
   Minimize2,
   Plus,
   Search,
+  Waves,
   X,
 } from "lucide-react";
 import {
@@ -71,7 +71,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { logger } from "@/logger.js";
+import { SECONDARY_WORKSPACE_SIDEBAR_ENTRIES_VISIBLE } from "@/lib/sidebarEntryVisibility.js";
 import { NewTaskButtonGroup } from "@/NewTaskButtonGroup.js";
 import { selectWorkspaceZCodeState, useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import { useZCodeStore } from "@/store/StoreProvider.js";
@@ -108,7 +110,7 @@ import {
   persistGroupedTaskCollapsedGroupIds,
   readGroupedTaskCollapsedGroupIds,
 } from "@/lib/groupedTaskExpansionPreference.js";
-import type { Theme } from "@/useTheme.js";
+import { isThemePreference, type Theme } from "@/useTheme.js";
 import type { RemoteConnectionLogEntry } from "@/hooks/useRemoteConnectionLogs.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
 import { WorkspaceFileTree } from "@/WorkspaceFileTree.js";
@@ -129,6 +131,8 @@ import {
 } from "@/WorkspaceSidebar/taskGroupTogglePresentation.js";
 import { WorkspacePurposeSection } from "@/WorkspaceSidebar/WorkspacePurposeSection.js";
 import { cn } from "@/components/lib/utils.js";
+import { addLakeCatalogChangedListener } from "@/lib/lakeCatalogChanged.js";
+import { projectBoundLakeWorkspaceTabs } from "@/lib/lakeSidebarWorkspaceTabs.js";
 import { useCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
 import {
   resolveWorkspaceDragGlobalIndices,
@@ -192,7 +196,7 @@ function WorkspaceDragOverlay({ tab, width }: { tab: WorkspaceTabState; width: n
       {isRemote ? (
         <Cloud className="size-3.5 shrink-0 text-foreground-subtle" />
       ) : (
-        <Folder className="size-3.5 shrink-0 text-foreground-subtle" />
+        <Waves className="size-3.5 shrink-0 text-foreground-subtle" />
       )}
       <span className="min-w-0 flex-1 truncate px-1">{tab.label}</span>
     </div>
@@ -259,8 +263,10 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onOpenCommandCenter,
   onOpenAutomations,
   onOpenPluginStore,
+  onOpenLakes,
   automationsActive = false,
   pluginStoreActive = false,
+  lakesActive = false,
   onFileTreeOpenChange,
 }: {
   workspacePath: string;
@@ -311,11 +317,45 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onOpenCommandCenter: () => void;
   onOpenAutomations?: () => void;
   onOpenPluginStore?: () => void;
+  onOpenLakes?: () => void;
   automationsActive?: boolean;
   pluginStoreActive?: boolean;
+  lakesActive?: boolean;
   onFileTreeOpenChange?: (open: boolean) => void;
 }) {
-  const { intl, localePreference, setLocalePreference } = useZCodeIntl();
+  const { intl, locale, localePreference, setLocalePreference } = useZCodeIntl();
+  const lakeCatalogService = useBaseWorkspaceServices().lakeCatalogService;
+  const [boundLakeNames, setBoundLakeNames] = useState<Map<string, string>>(() => new Map());
+  useEffect(() => {
+    let active = true;
+    const refreshLakes = () => {
+      void lakeCatalogService.listLakes().then(
+        (lakes) => {
+          if (active) {
+            setBoundLakeNames(
+              new Map(
+                lakes
+                  .filter((lake) => lake.workspacePath)
+                  .map((lake) => [
+                    lake.workspaceIdentity?.trim() || lake.workspacePath!,
+                    lake.name,
+                  ]),
+              ),
+            );
+          }
+        },
+        (error: unknown) => logger.warn("[WorkspaceSidebar] 查询湖绑定失败", { error }),
+      );
+    };
+    refreshLakes();
+    const unsubscribe = addLakeCatalogChangedListener(refreshLakes);
+    window.addEventListener("focus", refreshLakes);
+    return () => {
+      active = false;
+      unsubscribe();
+      window.removeEventListener("focus", refreshLakes);
+    };
+  }, [lakeCatalogService]);
   const handleTaskRowSelect = useCallback(
     (
       targetWorkspacePath: string,
@@ -370,9 +410,13 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const collapseAllWorkspaceTabs = useTabStore((state) => state.collapseAllWorkspaceTabs);
 
   const workspaceTabs = useMemo(() => tabs.filter(isWorkspaceTab), [tabs]);
-  const { conversationWorkspaceTabs, projectWorkspaceTabs } = useMemo(
+  const { projectWorkspaceTabs: rawProjectWorkspaceTabs } = useMemo(
     () => partitionWorkspaceTabsByPurpose(workspaceTabs),
     [workspaceTabs],
+  );
+  const projectWorkspaceTabs = useMemo(
+    () => projectBoundLakeWorkspaceTabs(rawProjectWorkspaceTabs, boundLakeNames),
+    [boundLakeNames, rawProjectWorkspaceTabs],
   );
   const workspacePaths = useMemo(
     () => projectWorkspaceTabs.map((tab) => tab.workspacePath),
@@ -723,13 +767,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
 
   const handleThemeChange = useCallback(
     (value: string) => {
-      if (
-        value === "light" ||
-        value === "dark" ||
-        value === "zai-light" ||
-        value === "zai-dark" ||
-        value === "system"
-      ) {
+      // 用 useTheme 的唯一校验入口，避免这里再维护一份主题白名单导致新主题被静默丢弃。
+      if (isThemePreference(value)) {
         setTheme(value);
       }
     },
@@ -1059,7 +1098,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                   value="workspace"
                   className="relative z-10 h-6 flex-none gap-1 rounded-full border-transparent bg-transparent py-0 pl-1.5 pr-2 text-ui-sm font-medium text-foreground-subtle transition-colors data-active:border-transparent data-active:bg-transparent data-active:text-foreground data-active:shadow-none dark:data-active:border-transparent dark:data-active:bg-transparent"
                 >
-                  <Folder aria-hidden="true" className="size-3 shrink-0" />
+                  <Waves aria-hidden="true" className="size-3 shrink-0" />
                   <span>
                     {intl.formatMessage({
                       id: "workspaceSidebar.organizeByProject",
@@ -1152,7 +1191,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                         onValueChange={handleWorkspaceTaskViewChange}
                       >
                         <DropdownMenuRadioItem value="project">
-                          <Folder className="size-4" />
+                          <Waves className="size-4" />
                           {intl.formatMessage({
                             id: "workspaceSidebar.viewByWorkspace",
                           })}
@@ -1286,6 +1325,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
             <Button
               variant="ghost"
               onClick={onOpenCommandCenter}
+              hidden={!SECONDARY_WORKSPACE_SIDEBAR_ENTRIES_VISIBLE}
+              data-testid="sidebar-command-center-open"
               data-icon="inline-start"
               size="lg"
               className="w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground"
@@ -1319,6 +1360,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
             <Button
               variant="ghost"
               onClick={handleOpenAutomationsMain}
+              hidden={!SECONDARY_WORKSPACE_SIDEBAR_ENTRIES_VISIBLE}
               data-icon="inline-start"
               data-testid={TID_AUTOMATIONS_OPEN}
               size="lg"
@@ -1334,6 +1376,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
             <Button
               variant="ghost"
               onClick={handleOpenPluginStoreMain}
+              hidden={!SECONDARY_WORKSPACE_SIDEBAR_ENTRIES_VISIBLE}
               data-icon="inline-start"
               data-testid="plugin-store-sidebar-open"
               size="lg"
@@ -1345,6 +1388,21 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
             >
               <Blocks className="size-4" />
               {intl.formatMessage({ id: "workspace.openPluginsSettings" })}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={onOpenLakes}
+              data-icon="inline-start"
+              data-testid="lake-catalog-sidebar-open"
+              size="lg"
+              aria-pressed={lakesActive}
+              className={cn(
+                "w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground",
+                lakesActive && "bg-selected text-foreground",
+              )}
+            >
+              <Waves className="size-4" />
+              {locale === "en-US" ? "Lakes & resources" : "湖与资源"}
             </Button>
           </div>
 
@@ -1363,7 +1421,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                 // 归档切换主任务区时不应隐藏 pinned。
                 // pinned 是全局置顶区，归档态保持置顶区可见。
                 <WorkspacePinnedTasksSection
-                  workspaceTabs={workspaceTabs}
+                  workspaceTabs={projectWorkspaceTabs}
                   activeWorkspacePath={workspacePath}
                   activeWorkspaceIdentity={workspaceIdentity}
                   activeTaskId={activeTaskId}
@@ -1379,7 +1437,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                 {taskViewMode === "archived" ? (
                   <WorkspaceArchivedTasksFlatSection
                     actionsContainer={archivedActionsContainer}
-                    workspaceTabs={workspaceTabs}
+                    workspaceTabs={projectWorkspaceTabs}
                     activeWorkspacePath={workspacePath}
                     activeWorkspaceIdentity={workspaceIdentity}
                     activeTaskId={activeTaskId}
@@ -1388,7 +1446,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                   />
                 ) : taskViewMode === "grouped" ? (
                   <WorkspaceGroupedTasksSection
-                    workspaceTabs={workspaceTabs}
+                    workspaceTabs={projectWorkspaceTabs}
                     activeWorkspacePath={workspacePath}
                     activeWorkspaceIdentity={workspaceIdentity}
                     activeTaskId={activeTaskId}
@@ -1408,7 +1466,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                   />
                 ) : taskViewMode === "timeline" ? (
                   <WorkspaceTimelineTasksSection
-                    workspaceTabs={workspaceTabs}
+                    workspaceTabs={projectWorkspaceTabs}
                     activeWorkspacePath={workspacePath}
                     activeWorkspaceIdentity={workspaceIdentity}
                     activeTaskId={activeTaskId}
@@ -1618,7 +1676,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                               }
                             >
                               <WorkspaceTimelineTasksSection
-                                workspaceTabs={conversationWorkspaceTabs}
+                                workspaceTabs={[]}
                                 activeWorkspacePath={workspacePath}
                                 activeWorkspaceIdentity={workspaceIdentity}
                                 activeTaskId={activeTaskId}

@@ -34,6 +34,11 @@ import {
 } from "@/quickpick/taskFindNavigationState.js";
 import { createQuickPickCommands } from "@/quickpick/quickPickCommands.js";
 import { CommandCenterDialog } from "@/command-center/CommandCenterDialog.js";
+import { LakeSwitcherDialog } from "@/lake-catalog/LakeSwitcherDialog.js";
+import type { Lake } from "@zcode/services";
+import { toast } from "@/components/ui/toast.js";
+import { addLakeSwitcherOpenListener } from "@/lib/lakeSwitcherOpen.js";
+import { requestLakeSwitcherOpen } from "@/lib/lakeSwitcherOpen.js";
 import { FeedbackHost } from "@/feedback/FeedbackHost.js";
 import { useFeedbackStore } from "@/feedback/feedbackStore.js";
 import {
@@ -61,7 +66,10 @@ import {
 } from "@/app-shell/useWorkspaceTaskNavigation.js";
 import { useTaskSidePaneMemoryBridge } from "@/app-shell/useTaskSidePaneMemoryBridge.js";
 import { resolveAppWorkspaceRpcTarget } from "@/app-shell/workspaceRpcTarget.js";
-import { useWorkspaceServicesResolution } from "@/hooks/useWorkspaceServices.js";
+import {
+  useBaseWorkspaceServices,
+  useWorkspaceServicesResolution,
+} from "@/hooks/useWorkspaceServices.js";
 import { useWorkspaceTerminalTaskNotifications } from "@/hooks/useTaskNotifications.js";
 import { useOffPeakTaskNotifications } from "@/hooks/useOffPeakTaskNotifications.js";
 import type { AppProps, WorkspaceMainView } from "@/app-shell/types.js";
@@ -184,6 +192,7 @@ export function App({
   // Settings tab 覆盖 workspace 时 active tab 不是 workspace tab。
   // 这里必须使用 Root 传入的 workspaceIdentity 兜底，否则远程断连态会把 /home/... 当成本地 base workspace 预热。
   const workspaceIdentity = workspaceRpcTarget.workspaceIdentity;
+  const baseWorkspaceServices = useBaseWorkspaceServices();
   const { rpcReady: workspaceRpcReady } = useWorkspaceServicesResolution(
     workspaceAbsPath,
     workspaceRpcTarget.remoteSessionId,
@@ -701,7 +710,7 @@ export function App({
     reloadSessionDisabled,
   });
   const handleStartDraftInWorkspace = useCallback(
-    (
+    async (
       targetWorkspacePath: string,
       targetWorkspaceIdentity?: string,
       targetWorkspacePurpose?: WorkspacePurpose,
@@ -712,6 +721,20 @@ export function App({
         targetWorkspaceIdentity ??
         tabs.filter(isWorkspaceTab).find((tab) => tab.workspacePath === targetWorkspacePath)
           ?.workspaceIdentity;
+      try {
+        const lake = await baseWorkspaceServices.lakeCatalogService.getLakeForWorkspace(
+          targetWorkspacePath,
+          resolvedTargetWorkspaceIdentity,
+        );
+        if (!lake) {
+          // 项目行直接新建草稿曾绕过 Root 入口；在真正写草稿前同样校验湖绑定。
+          requestLakeSwitcherOpen();
+          return;
+        }
+      } catch (error) {
+        logger.warn("[App] 查询会话所属湖失败", { error });
+        return;
+      }
       if (isWorkspaceReadOnly({ tabs }, targetWorkspacePath, resolvedTargetWorkspaceIdentity)) {
         return;
       }
@@ -783,11 +806,33 @@ export function App({
     [
       activateTabByPath,
       addTab,
+      baseWorkspaceServices.lakeCatalogService,
       tabs,
       workspaceAbsPath,
       workspaceIdentity,
       workspaceShellZCodeState.selectedProvider,
     ],
+  );
+  const handleCreateLakeSessionFromSwitcher = useCallback(
+    (lake: Lake) => {
+      if (!lake.workspacePath) return;
+      if (
+        lake.workspaceIdentity &&
+        !tabs.some(
+          (tab) =>
+            isWorkspaceTab(tab) &&
+            (tab.workspaceIdentity?.trim() || tab.workspacePath) === lake.workspaceIdentity,
+        )
+      ) {
+        toast(
+          locale === "en-US" ? "Reconnect this remote project first." : "请先重新连接此远程项目。",
+        );
+        return;
+      }
+      setWorkspaceMainView("chat");
+      void handleStartDraftInWorkspace(lake.workspacePath, lake.workspaceIdentity);
+    },
+    [handleStartDraftInWorkspace, locale, tabs],
   );
 
   useWorkspaceShellLifecycle({
@@ -824,6 +869,51 @@ export function App({
   );
   useTestActions(testActions);
   const [workspaceMainView, setWorkspaceMainView] = useState<WorkspaceMainView>("chat");
+  const [isLakeSwitcherOpen, setIsLakeSwitcherOpen] = useState(false);
+  const [catalogInitialLakeId, setCatalogInitialLakeId] = useState<string | null>(null);
+  const [catalogInitialResourceId, setCatalogInitialResourceId] = useState<string | null>(null);
+  useEffect(() => addLakeSwitcherOpenListener(() => setIsLakeSwitcherOpen(true)), []);
+  const handleSelectLakeFromSwitcher = useCallback(
+    (lake: Lake) => {
+      if (!lake.workspacePath) {
+        setCatalogInitialLakeId(lake.id);
+        setWorkspaceMainView("lakes");
+        return;
+      }
+      if (
+        lake.workspaceIdentity &&
+        !tabs.some(
+          (tab) =>
+            isWorkspaceTab(tab) &&
+            (tab.workspaceIdentity?.trim() || tab.workspacePath) === lake.workspaceIdentity,
+        )
+      ) {
+        // 远程 identity 不能只凭路径重建 tab，否则会把远端目录误当成本地目录打开。
+        toast(
+          locale === "en-US" ? "Reconnect this remote project first." : "请先重新连接此远程项目。",
+        );
+        return;
+      }
+      if (
+        !activateTabByPath(
+          lake.workspacePath,
+          lake.workspaceIdentity ? { workspaceIdentity: lake.workspaceIdentity } : undefined,
+        )
+      ) {
+        addTab(
+          lake.workspacePath,
+          lake.workspaceIdentity ? { workspaceIdentity: lake.workspaceIdentity } : undefined,
+        );
+      }
+      setWorkspaceMainView("chat");
+    },
+    [activateTabByPath, addTab, locale, tabs],
+  );
+  const handleSelectLakeResourceFromSwitcher = useCallback((lakeId: string, resourceId: string) => {
+    setCatalogInitialLakeId(lakeId);
+    setCatalogInitialResourceId(resourceId || null);
+    setWorkspaceMainView("lakes");
+  }, []);
   const [openAutomationId, setOpenAutomationId] = useState<string | null>(null);
   const [openAutomationTab, setOpenAutomationTab] = useState<NonNullable<
     AutomationsNavigationTarget["automationTab"]
@@ -874,6 +964,37 @@ export function App({
     onNavigateToAutomations: handleNavigateToAutomationsMain,
     onNavigateToPluginStore: handleNavigateToPluginStoreMain,
   });
+  const handleSelectLakeTaskFromSwitcher = useCallback(
+    (targetWorkspacePath: string, taskId: string, targetWorkspaceIdentity?: string) => {
+      if (
+        targetWorkspaceIdentity &&
+        !tabs.some(
+          (tab) =>
+            isWorkspaceTab(tab) &&
+            (tab.workspaceIdentity?.trim() || tab.workspacePath) === targetWorkspaceIdentity,
+        )
+      ) {
+        // 仅有目录绑定不足以恢复远程 Host；等待原有远程连接注册表先重新连接。
+        toast(
+          locale === "en-US" ? "Reconnect this remote project first." : "请先重新连接此远程项目。",
+        );
+        return;
+      }
+      if (
+        !activateTabByPath(
+          targetWorkspacePath,
+          targetWorkspaceIdentity ? { workspaceIdentity: targetWorkspaceIdentity } : undefined,
+        )
+      ) {
+        addTab(
+          targetWorkspacePath,
+          targetWorkspaceIdentity ? { workspaceIdentity: targetWorkspaceIdentity } : undefined,
+        );
+      }
+      handleSelectTask(targetWorkspacePath, taskId, targetWorkspaceIdentity);
+    },
+    [activateTabByPath, addTab, handleSelectTask, locale, tabs],
+  );
   const handleOpenPluginStoreForScope = useCallback(
     (_target: PluginStoreOpenTarget = {}) => {
       // Workspace Marketplace 已收敛为全局入口。兼容旧事件中的 Workspace key，但返回
@@ -951,6 +1072,7 @@ export function App({
 
   useAppKeyboard({
     openCommandCenter: handleOpenQuickPick,
+    openLakeSwitcher: () => setIsLakeSwitcherOpen(true),
     // 打开设置页：与设置入口按钮共用 tabStore.openSettingsTab；默认 ⌘,/Ctrl+,（系统惯例）
     openSettings: openSettingsTab,
     findInTask: handleOpenTaskFind,
@@ -1119,6 +1241,15 @@ export function App({
         onSearchResultHighlightRequest={handleSearchResultHighlightRequest}
         onOpenCodeViewer={handleOpenCodeViewerIfWritable}
       />
+      <LakeSwitcherDialog
+        open={isLakeSwitcherOpen}
+        onOpenChange={setIsLakeSwitcherOpen}
+        onSelectLake={handleSelectLakeFromSwitcher}
+        onSelectTask={handleSelectLakeTaskFromSwitcher}
+        onCreateSession={handleCreateLakeSessionFromSwitcher}
+        onSelectResource={handleSelectLakeResourceFromSwitcher}
+        onOpenCatalog={() => setWorkspaceMainView("lakes")}
+      />
       {/* 反馈是应用级能力，必须固定走本机 base host；SSH session 连接中或断开时，
           workspace-scoped services 会切成断连代理，不能让反馈提交跟随远程 session 失效。 */}
       <FeedbackHost feedbackService={baseFeedbackService} platform={platform} />
@@ -1126,6 +1257,8 @@ export function App({
         services={services}
         workspaceReadOnlyReason={workspaceReadOnlyReason}
         workspaceMainView={workspaceMainView}
+        catalogInitialLakeId={catalogInitialLakeId}
+        catalogInitialResourceId={catalogInitialResourceId}
         pluginStoreOpenVersion={pluginStoreOpenVersion}
         openAutomationId={openAutomationId}
         openAutomationTab={openAutomationTab}

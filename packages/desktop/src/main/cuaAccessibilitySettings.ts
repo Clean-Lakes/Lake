@@ -504,7 +504,7 @@ export async function openCuaPermissionOnboarding(
   if (platform !== "darwin") {
     return {
       success: false,
-      error: "ZCode Computer Use permissions are only available on macOS.",
+      error: "Lake Computer Use permissions are only available on macOS.",
     };
   }
   const env = options.env ?? process.env;
@@ -528,7 +528,7 @@ export async function openCuaPermissionOnboarding(
     // 根本不会进到这个 catch；只有真正校验失败才会到这里。
     return {
       success: false,
-      error: `ZCode Computer Use is unavailable (install/verification failed): ${messageOf(error)}`,
+      error: `Lake Computer Use is unavailable (install/verification failed): ${messageOf(error)}`,
     };
   }
 
@@ -541,7 +541,7 @@ export async function openCuaPermissionOnboarding(
     return {
       success: false,
       returnedFromSettings: false,
-      error: `ZCode Computer Use permission identity verification failed: ${messageOf(error)}`,
+      error: `Lake Computer Use permission identity verification failed: ${messageOf(error)}`,
     };
   }
   const verifiedOptions: OpenCuaAccessibilitySettingsOptions = {
@@ -598,7 +598,7 @@ export async function prepareCuaHelperPermissionDrag(
   if (platform !== "darwin") {
     return {
       success: false,
-      error: "ZCode Computer Use permissions are only available on macOS.",
+      error: "Lake Computer Use permissions are only available on macOS.",
     };
   }
   const env = options.env ?? process.env;
@@ -620,13 +620,13 @@ export async function prepareCuaHelperPermissionDrag(
     const verifiedFingerprint = captureCuaHelperBundleFingerprint(helperAppPath);
     await (options.verifyHelperInstalled ?? defaultInstaller?.verifyInstalled)?.(helperAppPath);
     if (!cuaHelperBundleFingerprintUnchanged(helperAppPath, verifiedFingerprint)) {
-      throw new Error("ZCode Computer Use changed while its drag signature was being verified");
+      throw new Error("Lake Computer Use changed while its drag signature was being verified");
     }
     const identity = await (
       options.resolveHelperIdentity ?? resolveHelperPermissionSubjectIdentity
     )(helperAppPath);
     if (!cuaHelperBundleFingerprintUnchanged(helperAppPath, verifiedFingerprint)) {
-      throw new Error("ZCode Computer Use changed while its drag identity was being resolved");
+      throw new Error("Lake Computer Use changed while its drag identity was being resolved");
     }
     return {
       success: true,

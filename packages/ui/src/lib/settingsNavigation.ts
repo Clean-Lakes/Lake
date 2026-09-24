@@ -43,6 +43,8 @@ const HIDDEN_SETTINGS_SECTIONS = new Set<SettingsSectionId>([
   // 编辑页代码保留，放开时从这里移除即可。
   "workspaceFileSearch",
   "computerUse",
+  // 产品语义：模型设置页要保留（自定义供应商在这里配置），但页内不再渲染 Z.ai / BigModel
+  // 的预置分组与编程套餐。厂家内容在 settings/model-provider-section 内过滤，不在这里整页隐藏。
 ]);
 
 interface SettingsSectionIntentEventDetail {

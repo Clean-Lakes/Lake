@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Root workspace action hook 集中编排项目、远程和 conversation 入口；合并期保持动作边界完整，后续按领域拆分。 */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DesktopCommandIds,
   type AppSettings,
@@ -30,6 +30,7 @@ import { resolveWorkbenchNewTaskTarget } from "@/v4/workbenchNewTaskTarget.js";
 import type { WorkbenchNewTaskTarget } from "@/v4/workbenchNewTaskTarget.js";
 import { useWorkbenchGroupStore } from "@/v4/workbenchGroupStore.js";
 import { persistV4ComposerDraft, V4_DRAFT_SCOPE_ROOT } from "@/v4/composer/composerDraftStore.js";
+import { requestLakeSwitcherOpen } from "@/lib/lakeSwitcherOpen.js";
 
 interface OpenRemoteConnectionPreference {
   preferredKind?: RemoteTarget["kind"];
@@ -110,6 +111,7 @@ export function useRootWorkspaceActions({
   workbenchGroupClientMode?: ZCodeTaskClientMode;
 }) {
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
+  const newTaskRequestSerialRef = useRef(0);
   const requestConfirmation = useConfirmDialog();
   const {
     handleSelectConversationWorkspace,
@@ -159,7 +161,8 @@ export function useRootWorkspaceActions({
   );
 
   const startNewTaskFromActiveWorkspace = useCallback(
-    (source: string, request?: CreateTaskRequest) => {
+    async (source: string, request?: CreateTaskRequest) => {
+      const requestSerial = ++newTaskRequestSerialRef.current;
       const state = tabStoreApi.getState();
       const {
         activeWorkspacePath: currentActiveWorkspacePath,
@@ -197,8 +200,26 @@ export function useRootWorkspaceActions({
         return;
       }
       if (!newTaskTarget) {
-        logger.error(`[Root] ${source} failed: no active workspace`);
-        setWorkspaceActionError(intl.formatMessage({ id: "workspace.noActiveForNewTask" }));
+        setWorkspaceActionError(intl.formatMessage({ id: "lake.navigation.selectFirst" }));
+        requestLakeSwitcherOpen();
+        return;
+      }
+
+      try {
+        const lake = await services.lakeCatalogService.getLakeForWorkspace(
+          newTaskTarget.workspacePath,
+          newTaskTarget.workspaceIdentity ?? undefined,
+        );
+        if (requestSerial !== newTaskRequestSerialRef.current) return;
+        if (!lake) {
+          // 旧入口可直接按 workspace 建草稿；湖与会话关联后必须先校验绑定，不能只禁用侧栏按钮。
+          setWorkspaceActionError(intl.formatMessage({ id: "lake.navigation.selectFirst" }));
+          requestLakeSwitcherOpen();
+          return;
+        }
+      } catch (error) {
+        logger.warn("[Root] 查询会话所属湖失败", { error });
+        setWorkspaceActionError(intl.formatMessage({ id: "lake.navigation.selectFirst" }));
         return;
       }
 
@@ -279,7 +300,7 @@ export function useRootWorkspaceActions({
           );
       }
     },
-    [addTab, intl, tabStoreApi, workbenchGroupClientMode],
+    [addTab, intl, services.lakeCatalogService, tabStoreApi, workbenchGroupClientMode],
   );
 
   const handleLogout = useCallback(async () => {

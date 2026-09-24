@@ -585,9 +585,10 @@ function sanitizeFileSegment(value?: string): string {
 }
 
 // storage profile 回滚删除了自定义 CLI 根模块，遗留 import 会让 adapters 无法构建。
-// 这里保持历史语义：开发态写 ~/.zcode/cli/debug，生产态写 ~/.zcode/cli/rollout。
+// Lake 的开发态与生产态轨迹都跟随独立 storage root，不能回退到本机 ZCode 目录。
 function getModelIOBaseDir(isDev: boolean): string {
-  return join(homedir(), ".zcode", "cli", isDev ? "debug" : "rollout");
+  const storageRoot = process.env.ZCODE_STORAGE_DIR?.trim() || join(homedir(), ".lake");
+  return join(storageRoot, "cli", isDev ? "debug" : "rollout");
 }
 
 function stringifyDebugRecord(record: Record<string, unknown>): string {

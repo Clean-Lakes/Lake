@@ -8,12 +8,12 @@ import {
 } from "@zcode/core";
 import type { Logger, PluginMetadata } from "@zcode/contracts";
 import {
+  BUILT_IN_SUBAGENT_NAMES,
   createAgentStateId,
   createPluginAgentStateId,
   parsePluginSubagentModelSelectionOverrides,
   modelSelectionSchema,
   type BuiltInSubagentModelSelectionOverrides,
-  type BuiltInSubagentName,
   type PluginSubagentModelSelectionOverrides,
 } from "@zcode/shared";
 
@@ -44,7 +44,7 @@ interface ParsedPluginAgentProfile {
   profile: AgentProfile;
 }
 
-const RESERVED_AGENT_NAMES = new Set(["general-purpose", "Explore"]);
+const RESERVED_AGENT_NAMES = new Set<string>(BUILT_IN_SUBAGENT_NAMES);
 
 export async function loadZCodeAgentProfiles(
   input: LoadZCodeAgentProfilesInput,
@@ -294,10 +294,10 @@ function normalizeBuiltInSelectionOverrides(
 ): BuiltInSubagentModelSelectionOverrides {
   const result: BuiltInSubagentModelSelectionOverrides = {};
   const structuredRecord = isRecord(structured) ? structured : {};
-  const generalPurpose = modelSelectionSchema.safeParse(structuredRecord["general-purpose"]);
-  const explore = modelSelectionSchema.safeParse(structuredRecord.Explore);
-  if (generalPurpose.success) result["general-purpose"] = generalPurpose.data;
-  if (explore.success) result.Explore = explore.data;
+  for (const name of BUILT_IN_SUBAGENT_NAMES) {
+    const selection = modelSelectionSchema.safeParse(structuredRecord[name]);
+    if (selection.success) result[name] = selection.data;
+  }
   return result;
 }
 

@@ -1,7 +1,7 @@
 /** 中文翻译 */
 const zhCN: Record<string, string> = {
   "startPlan.recommendation.subagentDescription":
-    "你的体验套餐中，{model} 仍有可用额度，是否将此子智能体的模型切换到体验套餐？",
+    "你的体验套餐中，{model} 仍有可用额度，是否将此河狸的模型切换到体验套餐？",
   "startPlan.recommendation.preferenceSaveFailed": "未能保存“不再提示”，本次仍按你的选择继续。",
   "startPlan.recommendation.title": "体验套餐有可用额度",
   "startPlan.recommendation.description": "你的体验套餐中，{model} 仍有可用额度，是否切换使用？",
@@ -10,7 +10,7 @@ const zhCN: Record<string, string> = {
   "startPlan.recommendation.dismiss": "不再提示",
   "occupationOnboarding.stepMode": "UI 模式",
   "occupationOnboarding.modeTitle": "选择适合你的 UI 模式",
-  "occupationOnboarding.modeDescription": "你希望 ZCode 如何呈现工作过程？",
+  "occupationOnboarding.modeDescription": "你希望 Lake 如何呈现工作过程？",
   "occupationOnboarding.coding": "编程模式",
   "occupationOnboarding.codingDescription":
     "我需要查看代码、命令输出和修改细节，掌握完整的开发过程。",
@@ -49,7 +49,7 @@ const zhCN: Record<string, string> = {
   "occupationOnboarding.heroTitle": "简单、迅捷、氛围十足！",
   "occupationOnboarding.heroDescription": "多智能体协作完成复杂目标，随时随地尽在掌控。",
   "occupationOnboarding.title": "你的主要工作方向是？",
-  "occupationOnboarding.description": "选择最接近你日常工作的一项，让 ZCode 更懂你的工作。",
+  "occupationOnboarding.description": "选择最接近你日常工作的一项，让 Lake 更懂你的工作。",
   "occupationOnboarding.office": "白领 / 办公人群",
   "occupationOnboarding.developer": "软件开发/数据/AI",
   "occupationOnboarding.student": "学生/教师/科研",
@@ -59,26 +59,26 @@ const zhCN: Record<string, string> = {
   "occupationOnboarding.migration": "迁移会话数据",
   "occupationOnboarding.migrationDescription": "从 Claude Code 迁移历史会话数据",
   "occupationOnboarding.memory": "开启工作区记忆",
-  "occupationOnboarding.memoryDescription": "让 ZCode 记住你的偏好与工作上下文。",
+  "occupationOnboarding.memoryDescription": "让 Lake 记住你的偏好与工作上下文。",
   "occupationOnboarding.suggestions": "开启主动任务推荐",
   "occupationOnboarding.suggestionsDescription": "在新对话中显示任务建议，点击后填入输入框。",
   "occupationOnboarding.close": "退出引导",
-  "startup.global.silent": "正在启动 ZCode",
+  "startup.global.silent": "正在启动 Lake",
   "startup.global.upgrading": "正在升级本地数据",
   "startup.global.initializing": "正在初始化本地数据",
   "startup.global.waiting": "正在等待数据库准备",
   "startup.global.saving": "正在保存更新",
   "startup.global.finishing": "正在完成启动",
   "startup.global.servicesFailed":
-    "本地数据准备已完成，但应用服务启动失败。请复制诊断信息，退出并重新打开 ZCode。",
+    "本地数据准备已完成，但应用服务启动失败。请复制诊断信息，退出并重新打开 Lake。",
   "startup.global.starting": "正在准备本地数据",
   "startup.global.preparing_host_storage": "正在更新任务索引",
   "startup.global.preparing_session_storage": "正在更新聊天记录",
-  "startup.global.starting_services": "正在启动 ZCode",
+  "startup.global.starting_services": "正在启动 Lake",
   "startup.global.ready": "本地数据已就绪",
   "startup.global.failed": "无法完成启动准备",
   "startup.global.help":
-    "准备完成后将自动进入 ZCode。历史记录较多时可能需要较长时间，请保持应用运行。",
+    "准备完成后将自动进入 Lake。历史记录较多时可能需要较长时间，请保持应用运行。",
   "startup.global.diagnostic": "诊断 ID",
   "startup.global.copy": "复制诊断信息",
   "startup.global.exit": "退出",
@@ -97,15 +97,15 @@ const zhCN: Record<string, string> = {
   "startup.global.error.open_failed":
     "无法打开数据库。请检查数据目录是否存在且可访问，处理后点击重试。",
   "startup.global.error.lock_timeout":
-    "等待数据库写锁超时。请检查其他 ZCode 或 CLI 进程是否仍在更新数据，待其完成后点击重试。",
+    "等待数据库写锁超时。请检查其他 Lake 或 CLI 进程是否仍在更新数据，待其完成后点击重试。",
   "startup.global.error.sql_failed":
     "准备过程未完成。请复制诊断信息查看日志，排除问题后手动重试。应用不会自动重试。",
   "startup.global.error.startup_status_timeout":
-    "未能收到启动状态。请退出并重新打开 ZCode；如果仍失败，请提供诊断信息。",
+    "未能收到启动状态。请退出并重新打开 Lake；如果仍失败，请提供诊断信息。",
   "startup.global.error.transport_closed":
-    "数据准备进程意外退出或连接中断。请退出并重新打开 ZCode，应用会重新检查迁移记录。",
+    "数据准备进程意外退出或连接中断。请退出并重新打开 Lake，应用会重新检查迁移记录。",
   "startup.global.error.unsupported_runtime":
-    "当前配置的 Agent 不支持独立存储准备。请恢复配套的 Agent 后重新打开 ZCode。",
+    "当前配置的 Agent 不支持独立存储准备。请恢复配套的 Agent 后重新打开 Lake。",
 
   "startup.database.checking": "正在检查历史数据",
   "startup.database.waiting_for_lock": "数据库正被其他进程使用，正在等待",
@@ -152,7 +152,7 @@ const zhCN: Record<string, string> = {
   "offPeak.nav.listUnavailable": "闲时任务列表加载失败，请刷新后重试",
   "offPeak.boundSession.hint": "任务将在该会话中执行；执行期间停止会话会取消任务。",
   "offPeak.chatCreated.boundHint": "将在本会话中运行",
-  "settings.computerUse.disabledToast": "电脑控制已关闭，已有对话需重启 ZCode 后生效。",
+  "settings.computerUse.disabledToast": "电脑控制已关闭，已有对话需重启 Lake 后生效。",
   "settings.modelProvider.connectionUnavailableNotice": "当前套餐已不可用。",
   "settings.modelProvider.switchConnection": "切换至「{connection}」",
   "settings.modelProvider.connectionSuggestionStale": "套餐状态已变化，请在模型设置中重新选择。",
@@ -185,7 +185,7 @@ const zhCN: Record<string, string> = {
   "conversationShare.permission.linkViewerHint": "不能导入继续",
   "conversationShare.permission.linkViewerSummary": "链接持有者可查看",
   "conversationShare.permission.linkEditor": "拥有链接的人可导入并继续",
-  "conversationShare.permission.linkEditorHint": "可导入到 ZCode",
+  "conversationShare.permission.linkEditorHint": "可导入到 Lake",
   "conversationShare.permission.linkEditorSummary": "链接持有者可导入并继续",
   "conversationShare.permission.privateSummary": "仅自己可见",
   "conversationShare.openLink": "打开分享页",
@@ -376,7 +376,7 @@ const zhCN: Record<string, string> = {
   "conversationShare.import.installing": "正在安装分享文件",
   "conversationShare.import.committing": "正在创建分享会话",
   "conversationShare.import.complete": "分享导入完成",
-  "conversationShare.import.loginRequired": "该分享暂不支持匿名导入，请登录 ZCode 后重试",
+  "conversationShare.import.loginRequired": "该分享暂不支持匿名导入，请登录 Lake 后重试",
   "conversationShare.import.notFound": "分享不存在或当前账号无权访问",
   "conversationShare.import.expired": "分享已过期，请让分享者重新生成",
   "conversationShare.import.integrityFailed": "分享文件校验失败，已停止导入",
@@ -497,14 +497,14 @@ const zhCN: Record<string, string> = {
     "项目“{projectName}”会从侧边栏移除，但不会删除磁盘上的文件。",
 
   // 登录
-  "welcome.title": "Welcome to ZCode",
+  "welcome.title": "Welcome to Lake",
   "welcome.username": "用户名",
   "welcome.password": "密码",
   "welcome.login": "登录",
   "welcome.loggingIn": "登录中...",
   "welcome.loginFailed": "登录失败",
-  "login.title": "欢迎来到 ZCode",
-  "login.description": "连接账号，开始使用 ZCode",
+  "login.title": "欢迎来到 Lake",
+  "login.description": "连接账号，开始使用 Lake",
   "login.oauth.activeProviderHint": "当前已登录提供方：{provider}。新登录会替换当前登录身份。",
   "login.oauth.loadingProviders": "正在加载登录提供方...",
   "login.oauth.noProviders": "当前没有可用的登录提供方，请稍后重试。",
@@ -544,7 +544,7 @@ const zhCN: Record<string, string> = {
   "app.currentTheme": "当前: {theme}",
   "app.login": "连接使用",
   "app.logout": "断开连接",
-  "logout.confirm.title": "断开连接并重启 ZCode？",
+  "logout.confirm.title": "断开连接并重启 Lake？",
   "logout.confirm.descriptionWithRunningSessions":
     "检测到 {count} 个会话正在运行。断开连接会中断这些会话并重启 App。",
   "logout.confirm.descriptionDefault": "断开连接后会重启 App，之后需要重新连接账号。",
@@ -605,20 +605,20 @@ const zhCN: Record<string, string> = {
   "sidePane.restoreSize": "恢复面板宽度",
   "sidePane.addTab": "新增标签",
   "sidePane.openTab": "打开标签页",
-  "sidePane.subagent": "子智能体",
-  "sidePane.subagentDirectory": "子智能体目录",
+  "sidePane.subagent": "河狸",
+  "sidePane.subagentDirectory": "河狸目录",
   "sidePane.selectionChat": "辅助对话",
   "sidePane.workflowRun": "工作流实例",
   "sidePane.workflowDirectory": "工作流目录",
-  "sidePane.workflowActor": "工作流子代理",
+  "sidePane.workflowActor": "工作流河狸",
   "sidePane.workflowScript": "脚本步骤",
   "sidePane.workflowArtifact": "产物",
-  "subagentDirectory.title": "子智能体目录",
+  "subagentDirectory.title": "河狸目录",
   "subagentDirectory.running": "正在运行",
-  "subagentDirectory.runningEmpty": "没有正在运行的子智能体",
+  "subagentDirectory.runningEmpty": "没有正在运行的河狸",
   "subagentDirectory.ended": "已结束",
   "subagentDirectory.showMore": "再显示 20 个",
-  "subagentDirectory.loadFailed": "无法加载子智能体目录。",
+  "subagentDirectory.loadFailed": "无法加载河狸目录。",
   "subagentDirectory.status.running": "运行中",
   "subagentDirectory.status.waiting": "等待中",
   "subagentDirectory.status.blocked": "已阻塞",
@@ -690,7 +690,7 @@ const zhCN: Record<string, string> = {
   "modelTrajectory.refresh": "刷新",
   "modelTrajectory.close": "关闭",
   "modelTrajectory.loading": "正在加载调用轨迹…",
-  "modelTrajectory.empty": "暂无模型调用记录（仅 ZCode Agent 会落盘 model-io）",
+  "modelTrajectory.empty": "暂无模型调用记录（仅 Lake Agent 会落盘 model-io）",
   "modelTrajectory.error": "读取调用轨迹失败",
   "modelTrajectory.truncatedNotice": "记录过多，仅展示最近的调用",
   "modelTrajectory.summaryCalls": "{count} 次调用",
@@ -705,7 +705,7 @@ const zhCN: Record<string, string> = {
   "modelTrajectory.source.compact": "上下文压缩",
   "modelTrajectory.source.promptEnhance": "提示优化",
   "modelTrajectory.source.targetCompletion": "目标验证",
-  "modelTrajectory.source.subagent": "子智能体",
+  "modelTrajectory.source.subagent": "河狸",
   "modelTrajectory.source.sidecar": "辅助请求",
   "modelTrajectory.source.unknown": "未知来源",
   "modelTrajectory.inputSection": "输入",
@@ -1118,14 +1118,14 @@ const zhCN: Record<string, string> = {
   "titleBar.menu.view.actualSize": "实际大小",
   "titleBar.menu.view.zoomIn": "放大",
   "titleBar.menu.view.zoomOut": "缩小",
-  "titleBar.menu.help.about": "关于 ZCode",
+  "titleBar.menu.help.about": "关于 Lake",
   "titleBar.menu.help.checkForUpdates": "检查更新",
   "titleBar.menu.help.feedback": "问题上报",
   "sidebar.menu.community": "用户社群",
   "titleBar.menu.help.exportLogs": "导出日志",
   "titleBar.menu.help.toggleDevTools": "切换开发者工具",
   "titleBar.menu.help.resourceManager": "资源管理器",
-  "titleBar.menu.help.toggleZCodeStdioTap": "抓取 Agent stdio 通信",
+  "titleBar.menu.help.toggleLakeStdioTap": "抓取 Agent stdio 通信",
   "titleBar.menu.help.clearAllData": "清除所有数据",
 
   // 目录浏览
@@ -1170,7 +1170,7 @@ const zhCN: Record<string, string> = {
   "update.toast.ready": "v{version} 已下载，重启即可安装",
   "update.toast.devSkipped": "开发环境不检查更新",
   "update.toast.error": "检查更新失败：{error}",
-  "forceUpdate.title": "需要升级 ZCode 后继续使用",
+  "forceUpdate.title": "需要升级 Lake 后继续使用",
   "forceUpdate.description":
     "当前版本 v{currentVersion} 低于最低可用版本 v{minimalVersion}。请先完成升级，升级前暂时无法继续使用当前客户端。",
   "forceUpdate.currentVersion": "当前版本",
@@ -1220,15 +1220,15 @@ const zhCN: Record<string, string> = {
   "workspaceSidebar.taskViewOptions": "筛选和排序",
   "workspaceSidebar.organize": "视图",
   "workspaceSidebar.organizeGrouped": "分组",
-  "workspaceSidebar.organizeByProject": "项目",
+  "workspaceSidebar.organizeByProject": "湖",
   "workspaceSidebar.conversationsSection": "任务",
-  "workspaceSidebar.projectsSection": "项目",
+  "workspaceSidebar.projectsSection": "湖",
   "workspaceSidebar.newConversation": "新建任务",
   "workspaceSidebar.reorderSection": "移动{section}分区",
   "workspaceSidebar.addProject": "添加项目",
   "workspaceSidebar.noConversations": "还没有任务",
-  "workspaceSidebar.noProjects": "尚未打开项目",
-  "workspaceSidebar.viewByWorkspace": "按项目",
+  "workspaceSidebar.noProjects": "尚未打开湖",
+  "workspaceSidebar.viewByWorkspace": "按湖",
   "workspaceSidebar.organizeChronologicalList": "时间线",
   "workspaceSidebar.sortBy": "排序方式",
   "workspaceSidebar.sortByCreated": "创建时间",
@@ -1251,7 +1251,7 @@ const zhCN: Record<string, string> = {
   "workspaceSidebar.notConnected": "未连接",
   "workspaceSidebar.empty": "暂无工作区，请先打开一个工作区。",
   "workspaceSidebar.unavailableLocalDirectory":
-    "工作区目录不存在或无法访问，当前仅可查看历史记录。恢复该目录后重启 ZCode 即可继续使用。",
+    "工作区目录不存在或无法访问，当前仅可查看历史记录。恢复该目录后重启 Lake 即可继续使用。",
   "workspaceSidebar.showSidebar": "显示侧边栏",
   "workspaceSidebar.hideSidebar": "隐藏侧边栏",
   "workspaceSidebar.toggleSidebar": "切换侧边栏",
@@ -1294,7 +1294,7 @@ const zhCN: Record<string, string> = {
   "ssh.assetInstallMode.local-download-upload": "本地下载后上传",
   "ssh.assetInstallMode.remote-download": "远端服务器下载",
   "ssh.assetInstallModeDescription":
-    "远端服务器下载可减少上传等待，但服务器需要能访问 ZCode CDN，并具备下载、解压和校验工具。",
+    "远端服务器下载可减少上传等待，但服务器需要能访问实际下载源，并具备下载、解压和校验工具。",
   "ssh.password": "密码",
   "ssh.passwordPlaceholder": "输入 SSH 密码",
   "ssh.privateKey": "私钥",
@@ -1630,6 +1630,8 @@ const zhCN: Record<string, string> = {
   "settings.themeMode.dark": "深色",
   "settings.themeMode.zai-light": "浅色",
   "settings.themeMode.zai-dark": "深色",
+  "settings.themeMode.lake-light": "环保·浅色",
+  "settings.themeMode.lake-dark": "环保·深色",
   "settings.themeMode.system": "系统",
   "settings.appearanceTitle": "外观",
   "settings.shortcuts.title": "键盘快捷键",
@@ -1685,6 +1687,8 @@ const zhCN: Record<string, string> = {
   "settings.shortcuts.command.cycleThoughtLevel": "切换思考深度",
   "settings.shortcuts.command.findInTask": "任务内查找",
   "settings.shortcuts.command.openCommandCenter": "打开命令中心",
+  "settings.shortcuts.command.openLakeSwitcher": "打开湖快速切换",
+  "lake.navigation.selectFirst": "请先选择并绑定一个湖的项目目录，再创建会话。",
   "settings.shortcuts.command.openSettings": "打开设置",
   "settings.shortcuts.command.zoomIn": "放大",
   "settings.shortcuts.command.zoomOut": "缩小",
@@ -1704,7 +1708,7 @@ const zhCN: Record<string, string> = {
     "启动内置终端时尽量继承登录 shell 环境、代理、Kube 变量和本机终端字体。",
   "settings.terminalFontFamily": "终端字体",
   "settings.terminalFontFamilyDescription":
-    "留空时自动探测系统终端配置；填写后作为 ZCode 终端的字体覆盖。",
+    "留空时自动探测系统终端配置；填写后作为 Lake 终端的字体覆盖。",
   "settings.terminalFontFamilyPlaceholder": "留空自动继承，例如 MesloLGS NF, monospace",
   "settings.integratedTerminalShell": "集成终端Shell",
   "settings.integratedTerminalShellDescription":
@@ -1814,7 +1818,7 @@ const zhCN: Record<string, string> = {
     "将连续的 Write、Edit 和 ApplyPatch 调用聚合为 Changes 分组。",
   "settings.zcodeInteractionBehavior": "交互行为",
   "settings.zcodeInteractionBehaviorDescription":
-    "在 ZCode 运行时将后续操作加入队列，或引导至下一轮工具调用后运行。",
+    "在 Lake 运行时将后续操作加入队列，或引导至下一轮工具调用后运行。",
   "settings.zcodeInteractionBehavior.option.queue": "队列",
   "settings.zcodeInteractionBehavior.option.guide": "引导",
   "settings.askUserQuestionAutoResolution": "提问自动继续",
@@ -1843,7 +1847,7 @@ const zhCN: Record<string, string> = {
   "settings.dataBaseDirCopying": "正在复制数据，请勿关闭应用…",
   "settings.dataBaseDirCopyFailed": "数据复制失败，路径未更改。",
   "settings.dataBaseDirForbiddenInstallDir":
-    "不能选择 ZCode 安装目录作为数据存储路径。请选择安装目录之外的文件夹。",
+    "不能选择 Lake 安装目录作为数据存储路径。请选择安装目录之外的文件夹。",
   "settings.dataBaseDirRestartRequired": "数据已保存，重启应用后生效。",
   "settings.locale.system": "系统默认",
   "settings.locale.zh-CN": "中文简体",
@@ -1859,7 +1863,7 @@ const zhCN: Record<string, string> = {
   "settings.migration.title": "迁移",
   "settings.migration.sectionTitle": "Claude 历史迁移",
   "settings.migration.sectionDescription":
-    "扫描本机 Claude Code 原生历史，可按 workspace 和时间范围筛选，再把选中的会话导入到对应的 ZCode 任务列表。",
+    "扫描本机 Claude Code 原生历史，可按 workspace 和时间范围筛选，再把选中的会话导入到对应的 Lake 任务列表。",
   "settings.migration.badge.localOnly": "本机 Claude 记录",
   "settings.migration.badge.manualOnly": "手动执行",
   "settings.migration.currentWorkspace": "当前工作区",
@@ -1911,14 +1915,14 @@ const zhCN: Record<string, string> = {
     "源会话不存在，或已经不匹配当前 workspace 筛选。",
   "settings.usageTitle": "使用统计",
   "settings.usageDescription": "查看会话活跃度与模型用量的粗略统计。",
-  "resourceManager.storage.summaryTotal": "ZCode 总占用",
+  "resourceManager.storage.summaryTotal": "Lake 总占用",
   "resourceManager.storage.scanning": "正在计算…",
   "resourceManager.storage.lastScanned": "上次计算 {time}",
   "resourceManager.storage.idle": "尚未计算",
   "resourceManager.storage.failed": "计算失败",
   "resourceManager.storage.rescan": "重新计算",
   "resourceManager.storage.disk": "磁盘",
-  "resourceManager.storage.diskUsage": "ZCode 占用 {used}",
+  "resourceManager.storage.diskUsage": "Lake 占用 {used}",
   "resourceManager.storage.diskFree": "剩余 {free} / 共 {total}",
   "resourceManager.storage.diskUnknown": "无法读取磁盘容量",
   "resourceManager.storage.roots": "数据目录",
@@ -1938,7 +1942,7 @@ const zhCN: Record<string, string> = {
   "resourceManager.storage.confirmTitle": "清理「{category}」？",
   "resourceManager.storage.confirmSize": "将删除约 {size}。",
   "resourceManager.storage.category.sessionStore": "会话记录与数据库",
-  "resourceManager.storage.category.subagentTranscripts": "子代理产物",
+  "resourceManager.storage.category.subagentTranscripts": "河狸产物",
   "resourceManager.storage.category.toolOutputs": "工具输出与临时缓存",
   "resourceManager.storage.category.modelTrajectory": "模型调用轨迹",
   "resourceManager.storage.category.devTraces": "开发诊断抓包",
@@ -1951,7 +1955,7 @@ const zhCN: Record<string, string> = {
   "resourceManager.storage.categoryDescription.sessionStore":
     "任务索引、会话快照与 checkpoint，随任务删除或自动归档清理。",
   "resourceManager.storage.categoryDescription.subagentTranscripts":
-    "子代理运行的完整对话记录（transcript.jsonl），单文件可达数十 MB；最近 24 小时有活动的会话会保留。",
+    "河狸运行的完整对话记录（transcript.jsonl），单文件可达数十 MB；最近 24 小时有活动的会话会保留。",
   "resourceManager.storage.categoryDescription.toolOutputs":
     "工具结果留档、命令完整输出、图片缓存与临时文件；暂不提供清理。",
   "resourceManager.storage.categoryDescription.modelTrajectory":
@@ -1981,7 +1985,7 @@ const zhCN: Record<string, string> = {
   "settings.embeddedBrowserAllowInsecureCertificatesSavedHint":
     "证书校验设置已保存，重启应用后生效",
   "settings.browser.data.section": "浏览器数据",
-  "settings.browser.desktopOnly": "浏览器数据只能在 ZCode 桌面端管理。",
+  "settings.browser.desktopOnly": "浏览器数据只能在 Lake 桌面端管理。",
   "settings.browser.import.title": "导入 Chrome 登录状态",
   "settings.browser.import.description":
     "一次性把 Chrome 登录状态带到内置浏览器，AI 就能直接打开你已经登录的网站，操作更流畅。",
@@ -1997,12 +2001,12 @@ const zhCN: Record<string, string> = {
     "需要确认管理员授权后才能导入受 App-Bound 保护的 Chrome Cookie。",
   "settings.browser.import.elevationCancelled": "已取消 Windows 管理员授权，Cookie 未导入。",
   "settings.browser.import.helperVerificationFailed":
-    "ZCode 的 Windows 安全导入组件校验失败，Cookie 未导入。请重新安装或更新 ZCode。",
+    "Lake 的 Windows 安全导入组件校验失败，Cookie 未导入。请重新安装或更新 Lake。",
   "settings.browser.import.appBoundFailed":
     "Windows 未能解开 Chrome 的 App-Bound Cookie，Cookie 未导入。",
   "settings.browser.import.adminConfirmTitle": "允许管理员权限导入 Chrome Cookie？",
   "settings.browser.import.adminConfirmDescription":
-    "Chrome 在 Windows 上使用 App-Bound 加密保护 Cookie。ZCode 将为本次导入请求管理员权限，临时启动系统服务，完成后立即删除。不会读取或导入 Chrome 密码。",
+    "Chrome 在 Windows 上使用 App-Bound 加密保护 Cookie。Lake 将为本次导入请求管理员权限，临时启动系统服务，完成后立即删除。不会读取或导入 Chrome 密码。",
   "settings.browser.import.adminConsent": "我确认只为本次 Cookie 导入授予管理员权限",
   "settings.browser.import.adminConfirmAction": "继续并请求授权",
   "settings.browser.import.cookieProtected":
@@ -2057,7 +2061,7 @@ const zhCN: Record<string, string> = {
   "settings.previewBadge.dark": "深色",
   "settings.modelProviderTitle": "模型设置",
   "settings.mcpTitle": "MCP 服务器",
-  "settings.mcp.description": "管理 ZCode Agent 使用的 MCP 服务器配置。",
+  "settings.mcp.description": "管理 Lake Agent 使用的 MCP 服务器配置。",
   "settings.mcp.create.open": "新建 MCP 服务器",
   "settings.mcp.import.open": "从外部 Agent 导入 MCP 服务器",
   "settings.mcp.import.action": "导入",
@@ -2130,7 +2134,7 @@ const zhCN: Record<string, string> = {
   "settings.mcp.plugin.disconnectedDescription": "该插件 MCP 服务器已加载，但当前未连接。",
   "settings.mcp.host.active": "宿主内置",
   "settings.mcp.host.activeDescription":
-    "该 MCP 服务器由 ZCode 宿主为 {pluginName} 插件提供，运行时身份由宿主管理。",
+    "该 MCP 服务器由 Lake 宿主为 {pluginName} 插件提供，运行时身份由宿主管理。",
   "settings.mcp.plugin.disabled": "插件未启用",
   "settings.mcp.plugin.disabledDescription": "该 MCP 服务器内置在插件中，启用插件后会加载。",
   "settings.mcp.plugin.unavailable": "未加载",
@@ -2141,7 +2145,7 @@ const zhCN: Record<string, string> = {
     "打开授权后即可完成该插件 MCP 服务器连接。",
   "settings.mcp.oauth.openAuthorization": "打开授权",
   "settings.mcp.statusOnlyUnsupported":
-    "当前 ZCode Agent 不支持 OAuth 状态刷新。请升级或重启 ZCode，然后重新打开 MCP 设置进行完整刷新。",
+    "当前 Lake Agent 不支持 OAuth 状态刷新。请升级或重启 Lake，然后重新打开 MCP 设置进行完整刷新。",
   "settings.mcp.refreshFailed": "刷新 MCP 状态失败：{error}",
   "settings.mcp.status.toolCount": "{count} 个工具",
   "settings.mcp.status.connectedReason": "已连接并可用。",
@@ -2161,7 +2165,7 @@ const zhCN: Record<string, string> = {
   "settings.mcp.failure.unexpected_disconnect": "MCP 连接已意外断开。",
   "settings.mcp.failure.oauth_authorization_failed": "MCP 授权未完成或已超时，请重新授权。",
   "settings.mcp.failure.official_origin_untrusted": "MCP 服务器地址未通过安全校验，连接已阻止。",
-  "settings.mcp.failure.not_authenticated": "当前未登录，请先登录 ZCode。",
+  "settings.mcp.failure.not_authenticated": "当前未登录，请先登录 Lake。",
   "settings.mcp.failure.coding_plan_required":
     "当前账号没有 Coding Plan，请先购买或配置 Coding Plan。",
   "settings.mcp.failure.server_not_found": "找不到该 MCP 服务器，请检查插件或服务器配置。",
@@ -2223,7 +2227,7 @@ const zhCN: Record<string, string> = {
   "settings.mcpServers.import.targetLabel": "导入目标",
   "settings.mcpServers.import.target.global": "导入到全局",
   "settings.mcpServers.import.target.project": "导入到项目",
-  "settings.mcpServers.import.importing": "正在导入 MCP 服务器到 ZCode",
+  "settings.mcpServers.import.importing": "正在导入 MCP 服务器到 Lake",
   "settings.mcpServers.import.imported": "已导入",
   "settings.mcpServers.import.skipped": "已跳过",
   "settings.mcpServers.import.failed": "失败",
@@ -2342,7 +2346,7 @@ const zhCN: Record<string, string> = {
   "settings.modelProvider.startPlan.balance.used": "已用 {value}",
   "settings.modelProvider.startPlan.highlight.trial.label": "体验周期",
   "settings.modelProvider.startPlan.highlight.trial.value": "5 个自然日",
-  "settings.modelProvider.startPlan.highlight.trial.description": "登录 ZCode 3.x 后开始计时。",
+  "settings.modelProvider.startPlan.highlight.trial.description": "登录 Lake 3.x 后开始计时。",
   "settings.modelProvider.startPlan.highlight.quota.label": "每日额度",
   "settings.modelProvider.startPlan.highlight.quota.value": "3M tokens/日",
   "settings.modelProvider.startPlan.highlight.quota.description":
@@ -2352,7 +2356,7 @@ const zhCN: Record<string, string> = {
   "settings.modelProvider.startPlan.highlight.metering.description":
     "仅在使用平台 GLM 旗舰模型后计量。",
   "settings.modelProvider.startPlan.compatibility":
-    "支持 BYOK、BYOA；Base URL、API Format 和 API Key 由 ZCode 自动维护，无需手动配置。",
+    "支持 BYOK、BYOA；Base URL、API Format 和 API Key 由 Lake 自动维护，无需手动配置。",
   "settings.modelProvider.codingPlan.title": "{provider} - 编程套餐",
   "settings.modelProvider.codingPlan.webview.title": "升级套餐",
   "settings.modelProvider.codingPlan.webview.authInjectFailed": "无法登录到套餐页，请重试。",
@@ -2480,7 +2484,7 @@ const zhCN: Record<string, string> = {
   "settings.modelProvider.codingPlan.purchase.done": "完成",
   "settings.modelProvider.codingPlan.purchase.teamMemberNoticeTitle": "团队套餐需要分配成员",
   "settings.modelProvider.codingPlan.purchase.teamMemberNoticeDescription":
-    "请先在 BigModel 团队套餐管理页添加自己或其他成员，完成后即可在 ZCode 使用团队额度。",
+    "请先在 BigModel 团队套餐管理页添加自己或其他成员，完成后即可在 Lake 使用团队额度。",
   "settings.modelProvider.codingPlan.purchase.manageTeamPlan": "管理团队套餐",
   "settings.modelProvider.codingPlan.manage": "管理",
   "settings.modelProvider.planCard.codingPlan": "编程套餐",
@@ -2832,7 +2836,7 @@ const zhCN: Record<string, string> = {
   "settings.modelProvider.resetForm": "重置表单",
   "settings.modelProvider.fieldHelp": "{field}说明",
   "settings.modelProvider.help.contextWindow":
-    "模型一次可处理的上下文容量，单位为 Token。ZCode 会据此管理上下文。\n请勿超过模型的实际上限。",
+    "模型一次可处理的上下文容量，单位为 Token。Lake 会据此管理上下文。\n请勿超过模型的实际上限。",
   "settings.modelProvider.help.maxOutputTokens":
     "单次模型请求允许生成的最大 Token 数。\n请勿超过模型的实际上限。",
   "settings.modelProvider.help.inputModalities":
@@ -2848,7 +2852,7 @@ const zhCN: Record<string, string> = {
   "settings.modelProvider.help.advanced":
     "**MFJS 工具 Schema**：启用 Moonshot Flavored JSON Schema（Moonshot 的 JSON Schema 格式）兼容处理，常用于 Moonshot 的 Kimi 模型接口。仅在模型接口要求该格式时开启。",
   "settings.modelProvider.help.followRecommendedConfig":
-    "根据模型 ID、Base URL 和 API 格式，为您智能匹配推荐配置。ZCode 会持续更新推荐配置，并自动同步给您。\n如果手动修改某项配置，该项将转为手动管理，不再跟随推荐更新；其他配置仍由智能配置管理。",
+    "根据模型 ID、Base URL 和 API 格式，为您智能匹配推荐配置。Lake 会持续更新推荐配置，并自动同步给您。\n如果手动修改某项配置，该项将转为手动管理，不再跟随推荐更新；其他配置仍由智能配置管理。",
   "settings.modelProvider.modelDefaultsLoaded": "已匹配到智能配置",
   "settings.modelProvider.modelConfigIncomplete": "模型配置不完整",
   "settings.modelProvider.models": "模型列表",
@@ -2936,7 +2940,7 @@ const zhCN: Record<string, string> = {
   "settings.usage.sourceProvider": "来源：{provider}",
   "settings.usage.billingBanner.title": "{provider} 编程套餐",
   "settings.usage.billingBanner.description":
-    "连接 {provider} 账号后查询编程套餐权益，购买或配置后回到 ZCode 即可继续编码。",
+    "连接 {provider} 账号后查询编程套餐权益，购买或配置后回到 Lake 即可继续编码。",
   "settings.usage.billingBanner.compactDescription": "连接 {provider} 账号后即可同步用量。",
   "settings.usage.billingBanner.buy": "购买编程套餐",
   "settings.usage.billingBanner.apiKeys": "API 密钥",
@@ -2992,7 +2996,7 @@ const zhCN: Record<string, string> = {
   "settings.usage.entitlementFiveHourUsage": "5 小时剩余",
   "settings.usage.entitlementWeeklyUsage": "每周剩余",
   "settings.usage.entitlementMonthlyMcpUsage": "工具调用",
-  "settings.usage.entitlementServerMcpUsage": "ZCode MCP",
+  "settings.usage.entitlementServerMcpUsage": "Lake MCP",
   "settings.usage.entitlementResetAt": "重置 {time}",
   "settings.usage.entitlementUsageDetails": "工具用量拆分",
   "settings.usage.entitlementPromptCap": "5 小时 Prompt 池",
@@ -3050,9 +3054,9 @@ const zhCN: Record<string, string> = {
   "sidebar.usage.plan.fiveHour": "5 小时",
   "sidebar.usage.plan.weekly": "每周",
   "sidebar.usage.plan.toolCalls": "工具调用",
-  "sidebar.usage.plan.mcp": "ZCode MCP",
-  "sidebar.usage.plan.zcodeMcp": "ZCode MCP",
-  "sidebar.usage.plan.zcodeMcpDescription": "ZCode 预置插件 MCP 每日合计额度",
+  "sidebar.usage.plan.mcp": "Lake MCP",
+  "sidebar.usage.plan.zcodeMcp": "Lake MCP",
+  "sidebar.usage.plan.zcodeMcpDescription": "Lake 预置插件 MCP 每日合计额度",
   "chat.planUsage.title": "套餐用量",
   "chat.planUsage.titleWithPlan": "{plan} 套餐用量",
   "chat.planUsage.providerFallback": "当前供应商",
@@ -3237,10 +3241,10 @@ const zhCN: Record<string, string> = {
   "settings.skills.import.mode.copy": "直接复制",
   "settings.skills.import.mode.symlink": "软链",
   "settings.skills.import.mode.copy.description":
-    "将完整技能目录复制到 ZCode。外部 Agent 目录后续变更不会自动同步。",
+    "将完整技能目录复制到 Lake。外部 Agent 目录后续变更不会自动同步。",
   "settings.skills.import.mode.symlink.description":
-    "创建指向外部 Agent 技能目录的链接。ZCode 会跟随来源目录后续变更，但该技能依赖来源路径持续可用。",
-  "settings.skills.import.importing": "正在导入技能到 ZCode",
+    "创建指向外部 Agent 技能目录的链接。Lake 会跟随来源目录后续变更，但该技能依赖来源路径持续可用。",
+  "settings.skills.import.importing": "正在导入技能到 Lake",
   "settings.skills.import.imported": "已导入",
   "settings.skills.import.skipped": "已跳过",
   "settings.skills.import.failed": "失败",
@@ -3311,25 +3315,35 @@ const zhCN: Record<string, string> = {
   "settings.skills.diagnostics.code.skill_duplicate_name": "同名技能已被忽略",
   "settings.skills.diagnostics.code.skill_too_large": "SKILL.md 体积过大已截断",
   "settings.skills.diagnostics.code.skill_not_found": "技能未找到",
-  "settings.subagents.title": "子智能体",
-  "settings.subagents.description": "管理 ZCode Agent 运行时消费的用户级子智能体 Markdown 文件。",
+  "settings.subagents.title": "河狸",
+  "settings.subagents.description": "管理 Lake Agent 运行时消费的用户级河狸 Markdown 文件。",
   "settings.subagents.workspaceScopeUnsupported": "暂不支持工作区级创建或编辑",
-  "settings.subagents.searchPlaceholder": "搜索子智能体...",
-  "settings.subagents.empty": "没有找到子智能体",
-  "settings.subagents.addNew": "新建子智能体",
-  "settings.subagents.addDescription": "填写子智能体名称、工具和系统提示词，保存后返回列表。",
-  "settings.subagents.edit": "编辑子智能体",
-  "settings.subagents.editDescription": "修改子智能体配置，保存后返回列表。",
+  "settings.subagents.searchPlaceholder": "搜索河狸...",
+  "settings.subagents.empty": "没有找到河狸",
+  "settings.subagents.addNew": "新建河狸",
+  "settings.subagents.addDescription": "填写河狸名称、工具和系统提示词，保存后返回列表。",
+  "settings.subagents.edit": "编辑河狸",
+  "settings.subagents.editDescription": "修改河狸配置，保存后返回列表。",
   "settings.subagents.backToList": "返回",
-  "settings.subagents.openUserAgentsFolder": "打开用户子智能体目录",
+  "settings.subagents.openUserAgentsFolder": "打开用户河狸目录",
   "settings.subagents.noDescription": "暂无描述",
-  "settings.subagents.userScopeDesktopOnly": "当前阶段用户级子智能体仅支持桌面端。",
-  "settings.subagents.group.user": "已安装",
-  "settings.subagents.group.plugin": "插件子智能体",
+  "settings.subagents.userScopeDesktopOnly": "当前阶段用户级河狸仅支持桌面端。",
+  "settings.subagents.group.user": "用户河狸",
+  "settings.subagents.group.workspace": "工作区河狸",
+  "settings.subagents.group.plugin": "插件河狸",
   "settings.subagents.group.plugin.hint":
     "插件 profile 来自已启用插件，可覆盖模型与推理档位，其余字段只读。",
-  "settings.subagents.group.builtIn": "内置子智能体",
-  "settings.subagents.group.builtIn.hint": "内置 profile 是运行时默认能力，当前不可在这里编辑。",
+  "settings.subagents.group.builtIn": "内置河狸",
+  "settings.subagents.group.builtIn.hint":
+    "河狸是 Lake 的内置协作角色，可覆盖模型与推理档位，其他配置不可编辑。",
+  "settings.subagents.builtin.generalPurpose.name": "通用河狸",
+  "settings.subagents.builtin.generalPurpose.description":
+    "可使用全部工具，处理复杂问题与多步骤任务。",
+  "settings.subagents.builtin.explore.name": "探索河狸",
+  "settings.subagents.builtin.explore.description": "只读搜索与研究，适合快速勘察代码和资料。",
+  "settings.subagents.builtin.sre.name": "SRE 河狸",
+  "settings.subagents.builtin.sre.description":
+    "只读分析软件故障、影响范围与恢复方案；不直接操作线上系统。",
   "settings.subagents.scope.builtIn": "内置",
   "settings.subagents.scope.plugin": "插件",
   "settings.subagents.scope.workspace": "工作区",
@@ -3342,13 +3356,13 @@ const zhCN: Record<string, string> = {
   "settings.subagents.table.model": "模型",
   "settings.subagents.table.tools": "工具",
   "settings.subagents.table.enabled": "启用",
-  "settings.subagents.footerSummary": "共 {total} 个子智能体 · {enabled} 个已启用",
+  "settings.subagents.footerSummary": "共 {total} 个河狸 · {enabled} 个已启用",
   "settings.subagents.toolsCount": "{count} 个工具",
   "settings.subagents.tools.inherit": "继承工具",
   "settings.subagents.tools.all": "全部工具",
   "settings.subagents.toggleAria": "切换 {name}",
-  "settings.subagents.delete.title": "删除子智能体",
-  "settings.subagents.delete.description": "确定要删除子智能体「{name}」吗？此操作无法撤销。",
+  "settings.subagents.delete.title": "删除河狸",
+  "settings.subagents.delete.description": "确定要删除河狸「{name}」吗？此操作无法撤销。",
   "settings.subagents.form.description":
     "保存后会写入运行时实际读取的用户级 Markdown profile 目录。",
   "settings.subagents.form.name.label": "名称",
@@ -3362,16 +3376,16 @@ const zhCN: Record<string, string> = {
   "settings.subagents.form.color.label": "颜色标记",
   "settings.subagents.form.tools.label": "可用工具",
   "settings.subagents.form.tools.inheritAll": "继承全部",
-  "settings.subagents.form.tools.card.title": "控制该子智能体可以调用的工具范围。",
+  "settings.subagents.form.tools.card.title": "控制该河狸可以调用的工具范围。",
   "settings.subagents.form.tools.mode.all": "默认所有权限",
   "settings.subagents.form.tools.mode.custom": "自定义可用工具",
   "settings.subagents.form.disallowedTools.label": "禁用工具",
   "settings.subagents.form.skills.label": "技能",
   "settings.subagents.form.background.label": "允许后台运行",
-  "settings.subagents.form.background.description": "模型请求时允许该子智能体作为后台任务运行。",
+  "settings.subagents.form.background.description": "模型请求时允许该河狸作为后台任务运行。",
   "settings.subagents.form.injectAgentsMd.label": "注入 AGENTS.md",
   "settings.subagents.form.systemPrompt.label": "系统提示词",
-  "settings.subagents.form.systemPrompt.placeholder": "描述这个子智能体的角色、边界和规则...",
+  "settings.subagents.form.systemPrompt.placeholder": "描述这个河狸的角色、边界和规则...",
   "settings.subagents.form.validation.nameLength": "长度必须在 {min} 到 {max} 个字符之间",
   "settings.subagents.form.validation.nameCharacters": "仅允许使用字母、数字和连字符",
   "settings.subagents.form.validation.descriptionRequired": "描述不能为空",
@@ -3440,7 +3454,7 @@ const zhCN: Record<string, string> = {
   "settings.plugin.source.plugin": "插件",
   "settings.plugins.description":
     "启用或停用已安装的插件。插件可打包技能、命令、Hooks 和 MCP 服务器。",
-  "settings.plugins.store.subtitle": "用插件为 ZCode 扩展技能、命令与 MCP 能力",
+  "settings.plugins.store.subtitle": "用插件为 Lake 扩展技能、命令与 MCP 能力",
   "settings.plugins.store.searchPlaceholder": "搜索插件",
   "settings.plugins.store.searchResults": "搜索结果（{count}）",
   "settings.plugins.store.searchEmpty": "没有匹配的插件",
@@ -3480,7 +3494,7 @@ const zhCN: Record<string, string> = {
   "settings.plugins.store.section.mcp": "MCP 服务器",
   "settings.plugins.store.section.skills": "技能",
   "settings.plugins.store.section.commands": "命令",
-  "settings.plugins.store.section.agents": "子智能体",
+  "settings.plugins.store.section.agents": "河狸",
   "settings.plugins.store.section.hooks": "Hooks",
   "settings.plugins.store.info.title": "信息",
   "settings.plugins.store.info.developer": "开发者",
@@ -3565,7 +3579,7 @@ const zhCN: Record<string, string> = {
   "settings.plugins.detail.moreDetails": "高级信息",
   "settings.plugins.detail.componentsEmpty": "无组件",
   "settings.plugins.detail.componentsWhenEnabled": "启用插件后查看其组件。",
-  "settings.plugins.detail.component.agent": "Agents",
+  "settings.plugins.detail.component.agent": "河狸",
   "settings.plugins.detail.component.command": "命令",
   "settings.plugins.detail.component.skill": "技能",
   "settings.plugins.detail.component.hook": "Hooks",
@@ -3638,10 +3652,10 @@ const zhCN: Record<string, string> = {
   "settings.plugins.import.mode.copy": "直接复制",
   "settings.plugins.import.mode.symlink": "软链",
   "settings.plugins.import.mode.copy.description":
-    "将完整插件目录复制到 ZCode，并注册到 plugins.dirs。外部 Agent 目录后续变更不会自动同步。",
+    "将完整插件目录复制到 Lake，并注册到 plugins.dirs。外部 Agent 目录后续变更不会自动同步。",
   "settings.plugins.import.mode.symlink.description":
-    "创建指向外部 Agent 插件目录的链接，并注册到 plugins.dirs。ZCode 会跟随来源目录后续变更，但该插件依赖来源路径持续可用。",
-  "settings.plugins.import.importing": "正在导入插件到 ZCode",
+    "创建指向外部 Agent 插件目录的链接，并注册到 plugins.dirs。Lake 会跟随来源目录后续变更，但该插件依赖来源路径持续可用。",
+  "settings.plugins.import.importing": "正在导入插件到 Lake",
   "settings.plugins.import.imported": "已导入",
   "settings.plugins.import.skipped": "已跳过",
   "settings.plugins.import.failed": "失败",
@@ -3650,9 +3664,9 @@ const zhCN: Record<string, string> = {
   "settings.plugins.import.finish": "完成",
   "settings.commands.title": "命令",
   "settings.commands.description":
-    "管理 ZCode Agent 的 .md 命令文件。命令可通过 /command-name 在聊天中调用。",
+    "管理 Lake Agent 的 .md 命令文件。命令可通过 /command-name 在聊天中调用。",
   "settings.commands.sourceFilterLabel": "来源筛选",
-  "settings.commands.source.zcodeAgent": "ZCode Agent",
+  "settings.commands.source.zcodeAgent": "Lake Agent",
   "settings.commands.add": "新建",
   "settings.commands.addNew": "新建命令",
   "settings.commands.addDescription": "填写命令名称和提示词，保存后返回列表。",
@@ -3707,10 +3721,10 @@ const zhCN: Record<string, string> = {
   "settings.commands.import.mode.copy": "直接复制",
   "settings.commands.import.mode.symlink": "软链",
   "settings.commands.import.mode.copy.description":
-    "将命令文件复制到 ZCode。外部 Agent 文件后续变更不会自动同步。",
+    "将命令文件复制到 Lake。外部 Agent 文件后续变更不会自动同步。",
   "settings.commands.import.mode.symlink.description":
-    "创建指向外部 Agent 命令文件的链接。ZCode 会跟随来源文件后续变更，但该命令依赖来源路径持续可用。",
-  "settings.commands.import.importing": "正在导入命令到 ZCode",
+    "创建指向外部 Agent 命令文件的链接。Lake 会跟随来源文件后续变更，但该命令依赖来源路径持续可用。",
+  "settings.commands.import.importing": "正在导入命令到 Lake",
   "settings.commands.import.imported": "已导入",
   "settings.commands.import.skipped": "已跳过",
   "settings.commands.import.failed": "失败",
@@ -3802,7 +3816,7 @@ const zhCN: Record<string, string> = {
   "settingsSync.action.importSelected": "一键导入已选内容",
   "settingsSync.action.importing": "导入进行中",
   "settingsSync.action.finish": "开始使用",
-  "settingsSync.agent.zcode": "ZCode Agent",
+  "settingsSync.agent.zcode": "Lake Agent",
   "settingsSync.agent.claudeCode": "Claude Code",
   "settingsSync.agent.codexCli": "Codex CLI",
   "settingsSync.agent.openCode": "OpenCode",
@@ -3849,17 +3863,17 @@ const zhCN: Record<string, string> = {
   "settingsSync.complete.finished": "导入流程已经结束。",
   "settingsSync.discovery.title": "发现可导入的现有设置",
   "settingsSync.discovery.description": "不再自动扫描可导入的三方 Agent 设置。",
-  "settingsSync.discovery.helper": "仅导入缺失项，不会覆盖当前 ZCode 中已存在的配置。",
+  "settingsSync.discovery.helper": "仅导入缺失项，不会覆盖当前 Lake 中已存在的配置。",
   "settingsSync.discovery.agentCount": "已发现 {count} 个 Agent",
   "settingsSync.discovery.categoryCount": "发现分类：{count}",
   "settingsSync.discovery.error": "检测失败：{error}",
   "settingsSync.discovery.continue": "继续选择",
-  "onboarding.dialog.title": "欢迎使用 ZCode",
+  "onboarding.dialog.title": "欢迎使用 Lake",
   "onboarding.dialog.description": "选择如何开始第一次会话。",
   "onboarding.wizard.label": "迁移向导",
   "onboarding.welcome.eyebrow": "首次启动设置",
-  "onboarding.welcome.title": "欢迎使用 ZCode",
-  "onboarding.welcome.start": "开始使用 ZCode",
+  "onboarding.welcome.title": "欢迎使用 Lake",
+  "onboarding.welcome.start": "开始使用 Lake",
   "onboarding.welcome.migrate": "数据迁移向导",
   "onboarding.welcome.helper": "可立即导入旧工具设置，或先跳过，稍后在设置中继续迁移。",
   "onboarding.step.session": "会话",
@@ -3874,7 +3888,7 @@ const zhCN: Record<string, string> = {
   "onboarding.stepDescription.mcpImport": "从外部 Agent 配置中选择要合并的 MCP 服务器。",
   "onboarding.stepDescription.pluginsImport": "在最终迁移前，从外部 Agent 选择要导入的插件。",
   "onboarding.stepDescription.commandsImport": "在最终迁移前，从外部 Agent 选择要导入的命令。",
-  "onboarding.stepDescription.migration": "开始迁移并等待 ZCode 完成导入。",
+  "onboarding.stepDescription.migration": "开始迁移并等待 Lake 完成导入。",
   "onboarding.sessions.empty": "暂无可迁移工作区。请先扫描本地历史，再勾选要迁移的工作区。",
   "onboarding.sessions.count": "{count} 个会话",
   "onboarding.sessions.unlimited": "不限制",
@@ -3889,7 +3903,7 @@ const zhCN: Record<string, string> = {
   "onboarding.agentsFile.error": "检测 AGENTS.md 迁移状态失败：{error}",
   "onboarding.agentsFile.confirmTitle": "覆盖默认 AGENTS.md？",
   "onboarding.agentsFile.confirmDescription":
-    "将从 {source} 复制到 {target}。\n如果目标文件已存在，ZCode 默认 AGENTS 配置会被覆盖。",
+    "将从 {source} 复制到 {target}。\n如果目标文件已存在，Lake 默认 AGENTS 配置会被覆盖。",
   "onboarding.agentsFile.confirmAction": "覆盖并迁移",
   "onboarding.finish.summary.label.imported": "已导入",
   "onboarding.finish.summary.label.skipped": "已跳过",
@@ -3965,8 +3979,8 @@ const zhCN: Record<string, string> = {
   "chat.empty.createWorkspace.error.createFailed": "创建工作区失败。",
   "chat.emptyResult.title": "没有可展示内容",
   "chat.emptyResult.description": "这个任务没有生成聊天内容，可能是在模型返回正文前被停止了。",
-  "chat.placeholder.newTask": "向 ZCode 提问，使用 @ 添加上下文，使用 / 选择命令或能力",
-  "chat.placeholder.newTaskMobile": "向 ZCode 提问…",
+  "chat.placeholder.newTask": "向 Lake 提问，使用 @ 添加上下文，使用 / 选择命令或能力",
+  "chat.placeholder.newTaskMobile": "向 Lake 提问…",
   "chat.placeholder.followUpAsk": "提出后续修改要求",
   "chat.placeholder.followUpQueue": "继续输入以排队后续修改",
   "chat.placeholder.loading": "初始化任务中",
@@ -4006,7 +4020,7 @@ const zhCN: Record<string, string> = {
   "chat.message.mailbox.from": "来自 {sessionId} 的新消息",
   "chat.message.expand": "展开",
   "chat.message.collapse": "收起",
-  // 子代理 transcript 里折起来的引擎尾注。
+  // 河狸 transcript 里折起来的引擎尾注。
   "chat.userInput.epilogue.label": "工作流引擎附加说明",
   "chat.message.bodyPreview.notice":
     "这条回复较大，当前只显示预览（{previewBytes} / {fullBytes}）。",
@@ -4163,17 +4177,17 @@ const zhCN: Record<string, string> = {
   "chat.summaryPanel.runningBackgroundTasksMiniValue": "{count} 后台",
   "chat.summaryPanel.runningBackgroundTasksMiniValuePlural": "{count} 后台",
   "chat.summaryPanel.stopRunningBackgroundTask": "停止运行中的后台任务",
-  "chat.summaryPanel.openRunningSubagentSession": "打开子智能体会话",
+  "chat.summaryPanel.openRunningSubagentSession": "打开河狸会话",
   "chat.composer.backgroundWorks.tooltipTerminal": "运行中的终端",
-  "chat.composer.backgroundWorks.tooltipAgent": "打开运行中的智能体",
+  "chat.composer.backgroundWorks.tooltipAgent": "打开运行中的河狸",
   // workflow 从 bash 拆出后 badge 有三类：
   // 恰好一类时用该类文案，混合仍走 tooltipMixed——三类两两组合再各写一句只会堆出六条同义句。
   "chat.composer.backgroundWorks.tooltipWorkflow": "打开运行中的工作流",
   // 唯一在跑的工作流直达详情页时，徽标如实说出落点。
   "chat.composer.backgroundWorks.tooltipWorkflowDetails": "打开工作流详情",
-  "chat.composer.backgroundWorks.tooltipMixed": "打开运行中的终端与智能体",
+  "chat.composer.backgroundWorks.tooltipMixed": "打开运行中的终端与河狸",
   "chat.composer.backgroundWorks.ariaLabel":
-    "打开运行中的后台任务：Bash {bashCount} 个，工作流 {workflowCount} 个，子智能体 {subagentCount} 个，共 {count} 个",
+    "打开运行中的后台任务：Bash {bashCount} 个，工作流 {workflowCount} 个，河狸 {subagentCount} 个，共 {count} 个",
   "chat.summaryPanel.goalIterationValue": "第 {count} 次迭代",
   "chat.summaryPanel.todoGoalIterationGroup": "第 {count} 轮迭代",
   "chat.summaryPanel.todoSessionGroup": "整个会话",
@@ -4194,7 +4208,7 @@ const zhCN: Record<string, string> = {
   "chat.statusPanel.todoWaitingExpanded": "收起 {count} 项待处理",
   "chat.statusPanel.todoWaitingFold": "待处理 {count} 项",
   "chat.statusPanel.terminals": "终端",
-  "chat.statusPanel.agents": "智能体",
+  "chat.statusPanel.agents": "河狸",
   // Workflows 分区：与 Terminals / Agents 并列的
   // 第三类实时活动。行内的状态词与步数复用 chat.toolCall.workflow.* 那一组，不另造词汇。
   "chat.statusPanel.workflows": "工作流",
@@ -4237,10 +4251,10 @@ const zhCN: Record<string, string> = {
   "chat.toolbar.computerUse.label": "电脑操作",
   "chat.toolbar.computerUse.tooltip.idle": "电脑操作空闲——首次使用时自动启动",
   "chat.toolbar.computerUse.tooltip.starting": "正在启用电脑操作插件…",
-  "chat.toolbar.computerUse.tooltip.ready": "电脑操作已就绪 · 直接描述你想让 ZCode 做的事",
+  "chat.toolbar.computerUse.tooltip.ready": "电脑操作已就绪 · 直接描述你想让 Lake 做的事",
   "chat.toolbar.computerUse.tooltip.permissionRequired": "缺少 macOS 权限，点击完成授权",
   "chat.toolbar.computerUse.tooltip.error":
-    "电脑操作启用失败 · 重启 ZCode 应用后重试，或让 ZCode 排查日志",
+    "电脑操作启用失败 · 重启 Lake 应用后重试，或让 Lake 排查日志",
   "chat.toolbar.computerUse.tooltip.sessionBusy":
     "会话进行中，暂不能切换电脑操作；任务结束后可再试",
   "chat.toolbar.mode.description": "切换当前任务的权限/执行模式，例如默认、计划或接受编辑。",
@@ -4353,7 +4367,7 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.sendMessage.failed": "消息发送失败",
   "chat.toolCall.sendMessage.denied": "发送已拒绝",
   "chat.toolCall.sendMessage.stopped": "发送已停止",
-  "chat.toolCall.sendMessage.target": "目标子智能体",
+  "chat.toolCall.sendMessage.target": "目标河狸",
   "chat.toolCall.sendMessage.summary": "摘要",
   "chat.toolCall.sendMessage.message": "消息",
   "chat.toolCall.sendMessage.to": "给",
@@ -4432,11 +4446,11 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.workflow.graph.lane.script": "脚本",
   "chat.toolCall.workflow.graph.lane.unresolved": "未解析",
   // 分析拿不到名字时的兜底：站点 id（actor#3）是身份，不能当名字显示。并存多条才编号。
-  "chat.toolCall.workflow.graph.lane.anonymous": "未命名子代理",
-  "chat.toolCall.workflow.graph.lane.anonymousIndexed": "未命名子代理 {index}",
-  // 侧栏子代理行的计数：一枚药丸代表该子代理在阶段内的全部 ask；脚本药丸数读取。
-  // 展示词是「任务」：脚本里的 .ask() 是派给子代理的任务，
-  // 「问题」只留给 escalate（子代理向主代理提问），两者不能同用一个词。
+  "chat.toolCall.workflow.graph.lane.anonymous": "未命名河狸",
+  "chat.toolCall.workflow.graph.lane.anonymousIndexed": "未命名河狸 {index}",
+  // 侧栏河狸行的计数：一枚药丸代表该河狸在阶段内的全部 ask；脚本药丸数读取。
+  // 展示词是「任务」：脚本里的 .ask() 是派给河狸的任务，
+  // 「问题」只留给 escalate（河狸向主代理提问），两者不能同用一个词。
   "chat.toolCall.workflow.graph.card.tasks": "{count} 个任务",
   "chat.toolCall.workflow.graph.card.reads": "{count} 次读取",
   // 药丸状态标记的 aria-label：状态永不只靠颜色或图形。
@@ -4458,10 +4472,9 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.workflow.timeline.roster.failed": "{count} 个已失败",
   "chat.toolCall.workflow.timeline.roster.pending": "{count} 个待开始",
   "chat.toolCall.workflow.timeline.roster.more": "还有 {count} 个",
-  "chat.toolCall.workflow.timeline.roster.moreTitle":
-    "还有 {count} 个子代理 · 在运行侧栏里列出全部",
-  "chat.toolCall.workflow.timeline.roster.door.list": "还有 {count} 个子代理 · 在这里列出",
-  "chat.toolCall.workflow.timeline.roster.door.fold": "还有 {count} 个子代理 · 收起",
+  "chat.toolCall.workflow.timeline.roster.moreTitle": "还有 {count} 个河狸 · 在运行侧栏里列出全部",
+  "chat.toolCall.workflow.timeline.roster.door.list": "还有 {count} 个河狸 · 在这里列出",
+  "chat.toolCall.workflow.timeline.roster.door.fold": "还有 {count} 个河狸 · 收起",
   "chat.toolCall.workflow.timeline.ledge.earlier": "{count} 个更早的阶段已滚出视野",
   "chat.toolCall.workflow.timeline.ledge.later": "{count} 个更晚的阶段已滚出视野",
   "chat.toolCall.workflow.timeline.scrollbar": "时间线滚动位置",
@@ -4479,10 +4492,10 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.workflow.card.steps": "{done}/{total} 步",
   "chat.toolCall.workflow.card.phase": "{count} 个阶段",
   "chat.toolCall.workflow.card.phases": "{count} 个阶段",
-  "chat.toolCall.workflow.card.agent": "{count} 个子代理",
-  "chat.toolCall.workflow.card.agents": "{count} 个子代理",
-  "chat.toolCall.workflow.card.agentWorking": "{count} 个子代理工作中",
-  "chat.toolCall.workflow.card.agentsWorking": "{count} 个子代理工作中",
+  "chat.toolCall.workflow.card.agent": "{count} 个河狸",
+  "chat.toolCall.workflow.card.agents": "{count} 个河狸",
+  "chat.toolCall.workflow.card.agentWorking": "{count} 个河狸工作中",
+  "chat.toolCall.workflow.card.agentsWorking": "{count} 个河狸工作中",
   "chat.toolCall.workflow.card.tokens": "{count} tokens",
   "chat.toolCall.workflow.card.round": "第 {count} 轮",
   "chat.toolCall.workflow.card.rounds": "{count} 轮",
@@ -4493,13 +4506,13 @@ const zhCN: Record<string, string> = {
   // 种类词、状态词与计数复用上面的 run 卡词汇表；这里只有芯片与 chevron 的文案。
   "chat.toolCall.workflow.digest.question": "{count} 个待答问题",
   "chat.toolCall.workflow.digest.questions": "{count} 个待答问题",
-  "chat.toolCall.workflow.digest.showAgents": "显示子代理",
-  "chat.toolCall.workflow.digest.hideAgents": "隐藏子代理",
+  "chat.toolCall.workflow.digest.showAgents": "显示河狸",
+  "chat.toolCall.workflow.digest.hideAgents": "隐藏河狸",
   // ── 完成卡──
   // 种类词、状态词与产物文案复用既有词汇表；这里只有四格的标签与「拿不到」的无障碍名。
   "chat.toolCall.workflow.completion.time": "时间",
   "chat.toolCall.workflow.completion.tokens": "tokens",
-  "chat.toolCall.workflow.completion.subagents": "子代理",
+  "chat.toolCall.workflow.completion.subagents": "河狸",
   "chat.toolCall.workflow.completion.phases": "阶段",
   "chat.toolCall.workflow.completion.unavailable": "暂无数据",
   // 交付物行之后放不下的其余产物：`+N` 格的说明行；点开实例侧板看全部（title 复用 openRunDetails）。
@@ -4513,7 +4526,7 @@ const zhCN: Record<string, string> = {
   "chat.workflowLaunch.startedByYou": "由你从工作流中枢启动",
   // 「配置」修订出来的 run 的来龙去脉块。
   "chat.workflowLaunch.settingsChangedByYou": "由你调整设置",
-  "chat.workflowLaunch.settings.model": "子代理模型",
+  "chat.workflowLaunch.settings.model": "河狸模型",
   "chat.workflowLaunch.settings.limit": "同时运行上限",
   "chat.workflowLaunch.settings.sessionModel": "会话模型",
   "chat.workflowLaunch.settings.machineLimit": "本机上限",
@@ -4567,7 +4580,7 @@ const zhCN: Record<string, string> = {
   "workflows.hub.global.noLocalRuntime": "无法连接本地 agent，全局工作流暂不可用。",
   "workflows.hub.empty.title": "已打开的项目里还没有保存的工作流",
   "workflows.hub.empty.hint":
-    "在对话里让 ZCode 设计工作流，跑通之后再让它保存到项目里。未打开的项目不会出现在这里。",
+    "在对话里让 Lake 设计工作流，跑通之后再让它保存到项目里。未打开的项目不会出现在这里。",
   "workflows.hub.noWorkspace": "打开一个项目以查看它的工作流。",
   "workflows.hub.loadError": "读取工作流失败：{error}",
   "workflows.hub.invalid": "{count} 个文件无法读取",
@@ -4627,7 +4640,7 @@ const zhCN: Record<string, string> = {
   "workflows.hub.detail.basics": "基本信息",
   "workflows.hub.detail.description": "说明",
   "workflows.hub.detail.whenToUse": "使用时机",
-  "workflows.hub.detail.whenToUse.help": "给 ZCode 的路由提示：什么场景该选这个工作流。",
+  "workflows.hub.detail.whenToUse.help": "给 Lake 的路由提示：什么场景该选这个工作流。",
   "workflows.hub.detail.args": "参数",
   "workflows.hub.detail.args.name": "名称",
   "workflows.hub.detail.args.type": "类型",
@@ -4646,7 +4659,7 @@ const zhCN: Record<string, string> = {
   "workflows.hub.detail.meta.saveFailed": "保存失败：{reason}",
   "workflows.hub.detail.meta.descriptionRequired": "说明不能为空",
   "workflows.hub.detail.script": "脚本",
-  "workflows.hub.detail.script.note": "脚本只读。要改脚本，在对话里让 ZCode 修订后另存一版。",
+  "workflows.hub.detail.script.note": "脚本只读。要改脚本，在对话里让 Lake 修订后另存一版。",
   "workflows.hub.detail.script.copy": "复制脚本",
   "workflows.hub.detail.loadError": "无法读取这个工作流：{reason}",
   "workflows.hub.detail.notFound": "这个工作流已不在项目里。",
@@ -4670,7 +4683,7 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.workflow.getRun.fetched": "工作流状态",
   "chat.toolCall.workflow.getRun.nodesLine":
     "{observed} 个节点 · {done} 已完成 · {running} 运行中 · {failed} 已失败",
-  "chat.toolCall.workflow.getRun.section.actors": "子代理",
+  "chat.toolCall.workflow.getRun.section.actors": "河狸",
   "chat.toolCall.workflow.getRun.section.logTail": "日志",
   "chat.toolCall.workflow.getRun.section.result": "结果",
   "chat.toolCall.workflow.getRun.section.error": "错误",
@@ -4678,11 +4691,11 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.workflow.getRun.interruptedHint":
     "本会话无法证实这个实例仍在运行：它可能已被中断。",
   // 情势截面的词与读数（「Their cards」）。
-  // 词表与运行侧栏一致：子代理、阶段、运行中、已完成、等待槽位；年龄是裸时长 + 「前」。
+  // 词表与运行侧栏一致：河狸、阶段、运行中、已完成、等待槽位；年龄是裸时长 + 「前」。
   "chat.toolCall.workflow.getRun.age": "{age} 前",
   "chat.toolCall.workflow.getRun.truncated": "卡上省略了部分行。",
   "chat.toolCall.workflow.getRun.questionsUnknown":
-    "本会话看不到这个实例的待答问题；恢复实例会重新提出子代理仍然需要的问题。",
+    "本会话看不到这个实例的待答问题；恢复实例会重新提出河狸仍然需要的问题。",
   "chat.toolCall.workflow.getRun.phase.state.done": "已完成",
   "chat.toolCall.workflow.getRun.phase.state.current": "进行中",
   "chat.toolCall.workflow.getRun.phase.state.ahead": "待开始",
@@ -4764,13 +4777,13 @@ const zhCN: Record<string, string> = {
     "本实例已有 {minutes} 分钟没有一次成功的模型请求。它仍在运行并按退避重试；不再需要时可在运行卡上停止。",
   "chat.backgroundResult.workflow.stall.reason": "重试原因",
   "chat.backgroundResult.workflow.stall.cap": "当前并发数",
-  "chat.backgroundResult.workflow.waiting": "子代理正在等待回答",
-  "chat.backgroundResult.workflow.answered": "子代理的问题已回答",
-  "chat.backgroundResult.workflow.asked": "子代理提出了问题",
+  "chat.backgroundResult.workflow.waiting": "河狸正在等待回答",
+  "chat.backgroundResult.workflow.answered": "河狸的问题已回答",
+  "chat.backgroundResult.workflow.asked": "河狸提出了问题",
   // 通知行折叠头部的产物 chips 溢出计数（≤ 3 枚 chip + 「+N」）。
   "chat.backgroundResult.workflow.artifacts.more": "+{count}",
   // ── 升级问答工具卡 ──
-  // escalate：子代理把阻塞问题升级给主代理，停驻等答案。asking 相可能持续很久，措辞要平静。
+  // escalate：河狸把阻塞问题升级给主代理，停驻等答案。asking 相可能持续很久，措辞要平静。
   "chat.toolCall.workflow.escalate.asking": "正在询问主代理",
   "chat.toolCall.workflow.escalate.asked": "已询问主代理",
   "chat.toolCall.workflow.escalate.question": "问题",
@@ -4837,17 +4850,17 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.workflow.run.resume": "恢复运行",
   "chat.toolCall.workflow.run.resumeHint":
     "从停下的地方继续：已完成的步骤直接复用，被打断的步骤重新执行。",
-  // 「配置」弹层：改子代理模型与同时运行上限，
+  // 「配置」弹层：改河狸模型与同时运行上限，
   // 应用即一次 GUI 修订（新 run 接着跑，旧 run 停下，已完成的步骤作缓存带过去）。
   "chat.toolCall.workflow.run.configure": "配置",
   "chat.toolCall.workflow.run.settings.title": "配置工作流",
-  "chat.toolCall.workflow.run.settings.model": "子代理模型",
+  "chat.toolCall.workflow.run.settings.model": "河狸模型",
   "chat.toolCall.workflow.run.settings.model.session": "会话模型",
   "chat.toolCall.workflow.run.settings.model.sessionFallback": "会话模型",
   "chat.toolCall.workflow.run.settings.model.unavailable": "不可用",
   "chat.toolCall.workflow.run.settings.model.noCatalog":
-    "当前 agent 没有可选的模型目录，子代理沿用会话模型。",
-  "chat.toolCall.workflow.run.settings.limit": "同时运行的子代理上限",
+    "当前 agent 没有可选的模型目录，河狸沿用会话模型。",
+  "chat.toolCall.workflow.run.settings.limit": "同时运行的河狸上限",
   "chat.toolCall.workflow.run.settings.limit.ceiling": "本机上限 {n}",
   "chat.toolCall.workflow.run.settings.limit.atCeiling": "= 本机上限",
   "chat.toolCall.workflow.run.settings.limit.decrease": "减少同时运行数",
@@ -4879,8 +4892,8 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.workflow.run.settings.rejection.generic": "设置没能调整（{code}）。",
   // 设置轮在转写里的那一行。
   "chat.toolCall.workflow.settingsChange.kind": "已调整设置",
-  "chat.toolCall.workflow.settingsChange.model": "子代理改用 {model}",
-  "chat.toolCall.workflow.settingsChange.modelSession": "子代理改回会话模型",
+  "chat.toolCall.workflow.settingsChange.model": "河狸改用 {model}",
+  "chat.toolCall.workflow.settingsChange.modelSession": "河狸改回会话模型",
   "chat.toolCall.workflow.settingsChange.limit": "最多 {n} 个同时运行",
   "chat.toolCall.workflow.settingsChange.limitCeiling": "上限恢复为本机默认",
   "chat.toolCall.workflow.run.result.title": "结果",
@@ -4986,12 +4999,12 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.workflow.script.args.truncated": "实参在落库前被缩短过。",
   "chat.toolCall.workflow.run.actor.notStarted.title": "尚未启动",
   "chat.toolCall.workflow.run.actor.notStarted.body":
-    "这个子代理还没有被问过任何问题。它的首个步骤一派发，会话记录就会出现在这里。",
+    "这个河狸还没有被问过任何问题。它的首个步骤一派发，会话记录就会出现在这里。",
   // 逐条引擎事件的标签（`workflowRunEventLines` 的词汇表）。run 侧板的事件日志区已撤走，
   // 分区自己的表头与空/错文案随之删除；这一族**保留**——它是
   // journal 事件的展示规则，回放导出桶（replay.ts）仍在静态数据上用它。
   "chat.toolCall.workflow.run.event.runStarted": "实例启动",
-  "chat.toolCall.workflow.run.event.actorCreated": "创建子代理",
+  "chat.toolCall.workflow.run.event.actorCreated": "创建河狸",
   "chat.toolCall.workflow.run.event.nodeQueued": "入队",
   "chat.toolCall.workflow.run.event.nodeDispatched": "已派发",
   "chat.toolCall.workflow.run.event.nodeRepairing": "修复中（第 {attempt} 次）",
@@ -5023,15 +5036,15 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.workflow.run.throttle.reason.transient": "瞬态错误",
   "chat.toolCall.workflow.run.concurrency.label": "并发数 {cap}",
   "chat.toolCall.workflow.run.concurrency.cooldown": "冷却至 {time}",
-  // 子代理模型：只在这次 run 被指定过模型时在场。
+  // 河狸模型：只在这次 run 被指定过模型时在场。
   // 详情侧板摘要行的第一段——这一行本来就是「这条 run 的几个数」，模型是它的第一个词。
   // `{model}` 是**解析过的模型名**（describeWorkflowSubagentModel），不是规范串：规范串里的
   // providerId 可能是一个 UUID，它只住在 tooltip 里。
-  "chat.toolCall.workflow.run.subagentModel.label": "子代理 {model}",
+  "chat.toolCall.workflow.run.subagentModel.label": "河狸 {model}",
   // 模型名 + 思考强度：确认窗与 tooltip 说整句，卡与侧板只取模型名。
   "chat.toolCall.workflow.subagentModel.withLevel": "{model} · 思考 {level}",
   // 三个面共用的 tooltip：一句解释 + 换行 + 规范串（规范串由代码接在后面，不进词条）。
-  "chat.toolCall.workflow.subagentModel.tooltip": "子代理运行在 {model}。主代理仍使用会话模型。",
+  "chat.toolCall.workflow.subagentModel.tooltip": "河狸运行在 {model}。主代理仍使用会话模型。",
   "chat.toolCall.todo.updating": "正在更新待办",
   "chat.toolCall.todo.updated": "已更新待办",
   "chat.toolCall.search.find": "查找",
@@ -5057,12 +5070,12 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.explore.bucket.file.other": "文件",
   "chat.toolCall.explore.bucket.items": "项",
   "chat.toolCall.explore.emptySummary": "0 个文件",
-  "chat.toolCall.source.subAgent": "子智能体",
+  "chat.toolCall.source.subAgent": "河狸",
   // agent 工具块缺少 fallback 文案时会把内部 i18n id 直接渲染到界面。
-  "chat.toolCall.agent.label": "子智能体",
+  "chat.toolCall.agent.label": "河狸",
   "chat.toolCall.agent.prompt": "提示词",
-  "chat.toolCall.agent.fallback": "子智能体",
-  "chat.toolCall.agent.backgroundProcess": "后台 Agent 过程",
+  "chat.toolCall.agent.fallback": "河狸",
+  "chat.toolCall.agent.backgroundProcess": "后台河狸过程",
   "chat.toolCall.agent.backgroundLaunch": "启动",
   "chat.toolCall.agent.backgroundLaunchFailed": "启动失败",
   "chat.toolCall.agent.backgroundLaunching": "启动中",
@@ -5070,11 +5083,11 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.agent.backgroundActivity": "活动",
   "chat.toolCall.agent.backgroundActivityStreaming": "后台运行中，正在同步输出",
   "chat.toolCall.agent.backgroundActivityRunningWaiting": "后台运行中，等待输出",
-  "chat.toolCall.agent.backgroundActivityReceived": "已收到子智能体回传",
-  "chat.toolCall.agent.backgroundActivityWaiting": "等待子智能体回传",
+  "chat.toolCall.agent.backgroundActivityReceived": "已收到河狸回传",
+  "chat.toolCall.agent.backgroundActivityWaiting": "等待河狸回传",
   "chat.toolCall.agent.outputFile": "输出文件",
-  "chat.toolCall.agent.thought": "子智能体思考",
-  "chat.toolCall.agent.output": "子智能体输出",
+  "chat.toolCall.agent.thought": "河狸思考",
+  "chat.toolCall.agent.output": "河狸输出",
   "chat.toolCall.agent.output.syncing": "同步中",
   "chat.toolCall.agent.output.error": "同步失败：{error}",
   "chat.toolCall.agent.output.recentRows": "最近 {visible} 行 / 共 {total} 行",
@@ -5155,8 +5168,8 @@ const zhCN: Record<string, string> = {
   "chat.mention.skills.title": "技能",
   "chat.mention.skills.empty": "没有匹配的技能",
   "chat.mention.skills.searchHint": "输入内容以搜索技能",
-  "chat.mention.subagents.title": "子智能体",
-  "chat.mention.subagents.empty": "没有匹配的子智能体",
+  "chat.mention.subagents.title": "河狸",
+  "chat.mention.subagents.empty": "没有匹配的河狸",
   "chat.mention.whiteboards.title": "画板",
   "chat.mention.whiteboards.empty": "没有匹配的画板",
   "chat.mention.whiteboards.strokeCount": "{count} 条笔画",
@@ -5166,14 +5179,18 @@ const zhCN: Record<string, string> = {
   "chat.mention.sessions.title": "会话",
   "chat.mention.sessions.empty": "没有匹配的近期会话",
   "chat.mention.sessions.searchHint": "输入内容以搜索近期会话",
+  "chat.mention.lakeResources.title": "湖内资源",
+  "chat.mention.lakeResources.empty": "当前湖没有匹配的资源",
+  "chat.mention.lakeResources.noLake": "当前会话尚未绑定湖",
+  "chat.mention.lakeResources.searchHint": "继续输入以筛选当前湖的资源",
   "chat.slash.title": "命令与能力",
-  "chat.slash.searchHint": "输入内容以搜索命令、技能或子智能体",
+  "chat.slash.searchHint": "输入内容以搜索命令、技能或河狸",
   "chat.slash.app.side.description": "新建并打开一个辅助对话",
   "chat.slash.commands.title": "命令",
   "chat.slash.skills.title": "技能",
   "chat.slash.skills.empty": "没有匹配的技能",
-  "chat.slash.subagents.title": "子智能体",
-  "chat.slash.subagents.empty": "没有匹配的子智能体",
+  "chat.slash.subagents.title": "河狸",
+  "chat.slash.subagents.empty": "没有匹配的河狸",
   "chat.slash.emptyUnavailable": "没有匹配的命令",
   "chat.slash.emptyResults": "没有匹配的 slash command",
   // 错误
@@ -5211,9 +5228,9 @@ const zhCN: Record<string, string> = {
     "当前系统繁忙，当前自动重试已达到最大次数，请稍后再试或升级账户。",
   "chat.quota.startPlan.concurrentLimit.switchModel":
     "当前模型请求已达到并发上限，请切换模型继续当前任务",
-  "chat.quota.mcp.quotaExhausted": "ZCode MCP「{server}」今日额度已用完，明天自动恢复。",
+  "chat.quota.mcp.quotaExhausted": "Lake MCP「{server}」今日额度已用完，明天自动恢复。",
   "chat.quota.mcp.codingPlanRequired":
-    "当前无 ZCode MCP「{server}」额度，请登录或开通 Coding Plan 使用。",
+    "当前无 Lake MCP「{server}」额度，请登录或开通 Coding Plan 使用。",
   "chat.quota.providerLimited": "当前账户额度或套餐已达到使用限制。请升级或调整套餐后继续。",
   "chat.quota.action.upgrade": "升级",
   "chat.quota.action.renew": "续期",
@@ -5257,12 +5274,12 @@ const zhCN: Record<string, string> = {
   "chat.permission.workflow.amends.running": "仍在运行，将被停止",
   "chat.permission.workflow.amends.scriptUnchanged": "脚本不变",
   // 并发上限：模型只在用户要求时才写
-  // 这个字段，所以这一行说的是用户自己提的条件。单位是「同时在跑的子代理」，不是请求数。
-  "chat.permission.workflow.maxConcurrency": "最多 {count} 个子代理同时运行",
-  // 子代理模型：模型只在用户开口要求时才写 `subagent_model`，
-  // 所以这一行也是用户自己提的条件。只说子代理——主代理无论如何都留在会话模型上。
+  // 这个字段，所以这一行说的是用户自己提的条件。单位是「同时在跑的河狸」，不是请求数。
+  "chat.permission.workflow.maxConcurrency": "最多 {count} 个河狸同时运行",
+  // 河狸模型：模型只在用户开口要求时才写 `subagent_model`，
+  // 所以这一行也是用户自己提的条件。只说河狸——主代理无论如何都留在会话模型上。
   // `{model}` 是解析过的模型名（必要时带思考强度），不是规范串；规范串在这一行的 tooltip 里。
-  "chat.permission.workflow.subagentModel": "子代理运行在 {model}",
+  "chat.permission.workflow.subagentModel": "河狸运行在 {model}",
   // ── 可复用工作流──
   // saved 来源徽标（运行确认窗）：只说明脚本来自哪个文件、带了什么实参。
   // 它不表达任何信任——保存不产生信任，已保存的工作流照样过完整的运行确认。
@@ -5284,8 +5301,8 @@ const zhCN: Record<string, string> = {
   "chat.permission.workflow.save.args.requiredYes": "必填",
   "chat.permission.workflow.save.args.requiredNo": "可选",
   "chat.permission.workflow.save.args.default": "默认值",
-  "chat.interactionOrigin.subagent": "子智能体",
-  "chat.interactionOrigin.subagent.title": "来自子智能体：{agentType}",
+  "chat.interactionOrigin.subagent": "河狸",
+  "chat.interactionOrigin.subagent.title": "来自河狸：{agentType}",
   "chat.cuaPermission.openAccessibility": "打开辅助功能设置",
   "chat.cuaPermission.openScreenRecording": "打开屏幕录制设置",
   "chat.cuaPermission.opening": "正在打开...",
@@ -5361,7 +5378,7 @@ const zhCN: Record<string, string> = {
   "planTool.guidance.enterMode": "已开启 Plan Mode",
   "chat.permission.switchMode.placeholder": "实施计划",
 
-  // ZCode Agent
+  // Lake Agent
   "zcode.unavailable": "AI 代理不可用",
   "zcode.initFailed": "启动 AI 代理失败",
   "zcode.error.TASK_OWNED_BY_OTHER_HOST": "该任务正在另一个已连接视图中运行。",
@@ -5408,7 +5425,7 @@ const zhCN: Record<string, string> = {
   "resourceManager.cpu": "CPU",
   "resourceManager.memory": "内存",
   "resourceManager.storage": "存储",
-  "resourceManager.appUsage": "ZCode",
+  "resourceManager.appUsage": "Lake",
   "resourceManager.systemUsage": "整机",
   "resourceManager.category.base": "基础服务",
   "resourceManager.category.builtinPlugin": "内置插件",
@@ -5637,7 +5654,7 @@ const zhCN: Record<string, string> = {
   "feedback.submit.template.section.errorSummaryLine": "报错摘要：{message}",
   "feedback.submit.template.section.errorDetail": "报错详情",
   "feedback.submit.template.section.errorTraceId": "TraceID: {traceId}",
-  "feedback.submit.template.section.copyErrorHeading": "ZCode 报错信息",
+  "feedback.submit.template.section.copyErrorHeading": "Lake 报错信息",
   "feedback.submit.template.section.notProvided": "未提供",
   "feedback.submit.template.section.remoteLogEmpty": "未捕获到连接日志",
   "feedback.submit.template.section.taskFeedbackTitle": "反馈任务问题：{title}",
@@ -5729,8 +5746,8 @@ const zhCN: Record<string, string> = {
   "forms.labels.description": "描述",
   "forms.labels.color": "颜色",
   "forms.labels.systemPrompt": "系统提示词",
-  "forms.placeholders.agentName": "输入子智能体名称",
-  "forms.placeholders.agentDescription": "输入子智能体描述",
+  "forms.placeholders.agentName": "输入河狸名称",
+  "forms.placeholders.agentDescription": "输入河狸描述",
   "forms.placeholders.agentSystemPrompt": "输入系统提示词",
   "forms.validation.nameRequired": "名称不能为空",
   "forms.validation.nameMinLength": "名称至少需要 {min} 个字符",
@@ -5739,8 +5756,8 @@ const zhCN: Record<string, string> = {
   "forms.validation.descriptionRequired": "描述不能为空",
   "forms.validation.systemPromptRequired": "系统提示词不能为空",
   "forms.validation.agentNameHint": "只能包含字母、数字和连字符，3-50个字符",
-  "forms.validation.agentDescriptionHint": "简要描述子智能体的功能",
-  "forms.validation.agentSystemPromptHint": "定义子智能体的行为和能力",
+  "forms.validation.agentDescriptionHint": "简要描述河狸的功能",
+  "forms.validation.agentSystemPromptHint": "定义河狸的行为和能力",
   "forms.validation.fileExists": "文件 {fileName} 已存在",
 
   // ---- 自动化 / Automations ----
@@ -5780,7 +5797,7 @@ const zhCN: Record<string, string> = {
   "automations.statusFilter.completed": "已完成",
   "automations.statusFilter.failed": "失败",
   "automations.statusFilter.empty": "没有符合条件的任务",
-  "offPeak.keepAwakeBanner": "ZCode 运行会话时保持电脑唤醒。",
+  "offPeak.keepAwakeBanner": "Lake 运行会话时保持电脑唤醒。",
   "offPeak.sectionTitle": "闲时任务",
   "offPeak.createButton": "创建闲时任务",
   "offPeak.templates.sectionTitle": "闲时任务模板",
@@ -5824,7 +5841,7 @@ const zhCN: Record<string, string> = {
   "offPeak.form.titlePlaceholder": "例如：夜间重构",
   "offPeak.form.instructionsLabel": "任务指令",
   "offPeak.form.instructionsPlaceholder":
-    "描述希望 ZCode 在后台完成的工作、预期结果和约束，例如整理本周代码改动并生成站会摘要…",
+    "描述希望 Lake 在后台完成的工作、预期结果和约束，例如整理本周代码改动并生成站会摘要…",
   "offPeak.form.permissionWarning": "闲时执行时无人值守，需要确认的操作会暂停任务直到你响应。",
   "offPeak.form.modelLabel": "模型",
   "offPeak.thought.max": "最高",
@@ -6011,9 +6028,9 @@ const zhCN: Record<string, string> = {
   "automations.runs.nextPage": "下一页",
   // CUA (Computer Use)
   "chat.cuaReadiness.toolsNotLoaded":
-    "ZCode 电脑控制仍在准备中——工具尚未加载（已加载 {count} 个）。请先授予下方权限，Helper 就绪后工具会自动出现。",
+    "Lake 电脑控制仍在准备中——工具尚未加载（已加载 {count} 个）。请先授予下方权限，Helper 就绪后工具会自动出现。",
   "chat.cuaReadiness.toolsPreparing":
-    "ZCode 电脑控制仍在准备中——工具尚未加载。请先授予下方权限，Helper 就绪后工具会自动出现。",
+    "Lake 电脑控制仍在准备中——工具尚未加载。请先授予下方权限，Helper 就绪后工具会自动出现。",
   "chat.toolCall.cua.requestAccess": "检查 Computer Use 权限",
   "chat.toolCall.cua.appName": "电脑控制",
   "chat.toolCall.cua.group.completedLabel": "电脑控制",
@@ -6138,9 +6155,9 @@ const zhCN: Record<string, string> = {
   "cuaPermission.modal.restartButton": "重启 Helper",
   "cuaPermission.modal.restarting": "正在重启 Helper…",
   "cuaPermission.modal.restartFailed": "无法重启 Helper：{error}",
-  "cuaPermission.modal.relaunchAppButton": "重启 ZCode",
+  "cuaPermission.modal.relaunchAppButton": "重启 Lake",
   "cuaPermission.modal.relaunchAppHint":
-    "重启 Helper 后仍未生效？重启 ZCode 可彻底重载 Helper 进程。",
+    "重启 Helper 后仍未生效？重启 Lake 可彻底重载 Helper 进程。",
   "cuaPermission.status.granted": "已授权",
   "cuaPermission.status.missing": "未授权",
   "cuaPermission.status.unknown": "未知",
@@ -6153,7 +6170,7 @@ const zhCN: Record<string, string> = {
   "cuaPermission.tools.agentUpdateRequired":
     "当前 Agent 版本过旧，无法安全检查工具就绪状态。请更新或重启 Agent 后重新检查。",
   "cuaPermission.tools.untrustedRuntime":
-    "检测到电脑控制工具，但它们并非来自已校验的 ZCode 官方插件。请检查插件安装后重新验证。",
+    "检测到电脑控制工具，但它们并非来自已校验的 Lake 官方插件。请检查插件安装后重新验证。",
   "cuaPermission.perm.accessibility": "辅助功能 (Accessibility)",
   "cuaPermission.perm.accessibility.purpose": "读取/驱动 UI 元素 + 合成键鼠输入",
   "cuaPermission.perm.screenRecording": "屏幕录制 (Screen Recording)",
@@ -6163,7 +6180,7 @@ const zhCN: Record<string, string> = {
   "cuaPermission.osFloorDescription": "请先升级系统后再使用。授权设置在低版本系统上无法完成。",
   "cuaPermission.ready": "权限已就绪",
   "cuaPermission.ready.sessionValidationHint":
-    "首个会话启动时，ZCode 会针对该会话精确验证电脑控制工具。",
+    "首个会话启动时，Lake 会针对该会话精确验证电脑控制工具。",
   "settings.computerUse.title": "电脑控制",
   "settings.computerUse.toggleLabel": "启用电脑控制",
   "settings.computerUse.toggleDescription": "开启后将启用电脑控制及其 MCP 与技能。",

@@ -8,6 +8,7 @@ import {
   ITerminalService,
   ISettingService,
   IOnboardingRecordService,
+  ILakeCatalogService,
   ICredentialService,
   IBroadcastService,
   IZCodeTaskService,
@@ -48,6 +49,7 @@ import {
  * 新增服务只需在此添加一个 getter。
  */
 export class RemoteServiceAccess implements IServiceAccessor {
+  readonly lakeCatalogService: ILakeCatalogService;
   readonly fileService: IFileService;
   readonly mediaPreviewService: IMediaPreviewService;
   readonly gitService: IGitService;
@@ -92,6 +94,9 @@ export class RemoteServiceAccess implements IServiceAccessor {
   readonly promptAttachmentTransferService: IPromptAttachmentTransferService;
 
   constructor(channelClient: IChannelClient) {
+    this.lakeCatalogService = ProxyChannel.toService<ILakeCatalogService>(
+      channelClient.getChannel(ILakeCatalogService.channelName),
+    );
     this.fileService = ProxyChannel.toService<IFileService>(
       channelClient.getChannel(IFileService.channelName),
     );

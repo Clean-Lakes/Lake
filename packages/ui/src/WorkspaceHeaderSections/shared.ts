@@ -7,6 +7,7 @@ import type {
   RemoteTarget,
   UserInfo,
 } from "@zcode/shared";
+import type { ReactNode } from "react";
 
 export interface WorkspaceHeaderState {
   selectedProvider: ZCodeProvider;
@@ -75,4 +76,5 @@ export interface WorkspaceHeaderActionSectionProps {
   hideHelpMenu?: boolean;
   showWindowControls?: boolean;
   useWindowsCaptionSpacing?: boolean;
+  updateStatusEntry?: ReactNode;
 }

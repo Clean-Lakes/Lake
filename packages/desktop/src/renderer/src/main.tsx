@@ -73,30 +73,33 @@ function registerE2EStoreBridgesIfEnabled() {
   });
 }
 
-// 初始化主题：默认 Zai dark，后续由 useTheme hook 接管
+// 初始化主题：默认 Lake dark（环保主题），后续由 useTheme hook 接管
 {
-  const saved = localStorage.getItem("zcode-theme") || "zai-dark";
+  const saved = localStorage.getItem("zcode-theme") || "lake-dark";
+  const savedIsDark = saved === "dark" || saved === "zai-dark" || saved === "lake-dark";
   const resolved =
     saved === "system"
       ? window.matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark"
         : "light"
-      : saved === "dark" || saved === "zai-dark"
+      : savedIsDark
         ? "dark"
         : "light";
   const appliedTheme =
     saved === "system"
       ? resolved === "dark"
-        ? "zai-dark"
-        : "zai-light"
+        ? "lake-dark"
+        : "lake-light"
       : saved === "dark"
-        ? "zai-dark"
+        ? "lake-dark"
         : saved === "light"
-          ? "zai-light"
+          ? "lake-light"
           : saved;
   if (resolved === "dark") document.documentElement.classList.add("dark");
   document.documentElement.classList.toggle("theme-zai-light", appliedTheme === "zai-light");
   document.documentElement.classList.toggle("theme-zai-dark", appliedTheme === "zai-dark");
+  document.documentElement.classList.toggle("theme-lake-light", appliedTheme === "lake-light");
+  document.documentElement.classList.toggle("theme-lake-dark", appliedTheme === "lake-dark");
 }
 
 const isMacDesktop = navigator.userAgent.includes("Mac");

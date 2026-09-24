@@ -8,6 +8,10 @@ import {
 import type { ModelProviderConfig } from "./legacyModelProviderSerialized.js";
 import { getAppConfigDir } from "../paths.js";
 import { importLegacyPersonalProviderConfig } from "./legacyPersonalProviderConfigImporter.js";
+import {
+  migrateZCodeProviderConfig,
+  type ZCodeProviderConfigMigrationResult,
+} from "./migrateZCodeProviderConfig.js";
 
 export interface ProviderConfigRuntimeOptions {
   readonly zcodeBuiltinFilePath: string;
@@ -18,6 +22,9 @@ export interface ProviderConfigRuntimeOptions {
   readonly onPersonalConfigRecovery?: (event: PersonalProviderConfigRecoveryEvent) => void;
   readonly onPersonalConfigPollingError?: (error: unknown) => void;
   readonly personalFilePath?: string;
+  readonly priorProductPersonalFilePath?: string;
+  readonly migrationMarkerPath?: string;
+  readonly onPriorProductMigrationResult?: (result: ZCodeProviderConfigMigrationResult) => void;
   readonly personalPollingIntervalMs?: number | false;
   readonly readLegacyProviders?: () => Promise<readonly ModelProviderConfig[]>;
   readonly watch?: boolean;
@@ -30,8 +37,23 @@ export interface ProviderConfigRuntimeOptions {
 export class ProviderConfigRuntime {
   readonly configService: NodeProviderConfigRuntime["configService"];
   readonly #runtime: NodeProviderConfigRuntime;
+  readonly #priorProductMigration?: () => Promise<ZCodeProviderConfigMigrationResult>;
+  readonly #onPriorProductMigrationResult?: (result: ZCodeProviderConfigMigrationResult) => void;
+  #startPromise: Promise<void> | null = null;
 
   constructor(options: ProviderConfigRuntimeOptions) {
+    const personalFilePath =
+      options.personalFilePath ?? join(getAppConfigDir(), PERSONAL_PROVIDER_CONFIG_FILE_NAME);
+    const priorProductPersonalFilePath = options.priorProductPersonalFilePath;
+    if (priorProductPersonalFilePath) {
+      this.#priorProductMigration = () =>
+        migrateZCodeProviderConfig({
+          lakeFilePath: personalFilePath,
+          zcodeFilePath: priorProductPersonalFilePath,
+          migrationMarkerPath: options.migrationMarkerPath,
+        });
+    }
+    this.#onPriorProductMigrationResult = options.onPriorProductMigrationResult;
     const runtimeOptions: NodeProviderConfigRuntimeOptions = {
       zcodeBuiltinFilePath: options.zcodeBuiltinFilePath,
       zcodeBuiltinActiveFilePath: options.zcodeBuiltinActiveFilePath,
@@ -40,8 +62,7 @@ export class ProviderConfigRuntime {
       onZCodeBuiltinRefreshError: options.onZCodeBuiltinRefreshError,
       onPersonalConfigRecovery: options.onPersonalConfigRecovery,
       onPersonalConfigPollingError: options.onPersonalConfigPollingError,
-      personalFilePath:
-        options.personalFilePath ?? join(getAppConfigDir(), PERSONAL_PROVIDER_CONFIG_FILE_NAME),
+      personalFilePath,
       personalPollingIntervalMs: options.personalPollingIntervalMs,
       watch: options.watch,
       ...(options.readLegacyProviders
@@ -58,7 +79,19 @@ export class ProviderConfigRuntime {
   }
 
   start(): Promise<void> {
-    return this.#runtime.start();
+    if (this.#startPromise) return this.#startPromise;
+    const startPromise = (async () => {
+      if (this.#priorProductMigration) {
+        const result = await this.#priorProductMigration();
+        this.#onPriorProductMigrationResult?.(result);
+      }
+      await this.#runtime.start();
+    })();
+    this.#startPromise = startPromise;
+    void startPromise.catch(() => {
+      if (this.#startPromise === startPromise) this.#startPromise = null;
+    });
+    return startPromise;
   }
 
   get personalRepository(): NodeProviderConfigRuntime["personalRepository"] {

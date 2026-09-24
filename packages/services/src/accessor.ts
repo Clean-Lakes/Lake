@@ -37,10 +37,12 @@ import type { IFeedbackService } from "./feedback/feedback.js";
 import type { IPromptAttachmentTransferService } from "./prompt-attachment-transfer/promptAttachmentTransfer.js";
 import type { IWindowControllerService } from "./window-controller/windowController.js";
 import type { IOnboardingRecordService } from "./onboarding/onboardingRecord.js";
+import type { ILakeCatalogService } from "./lake-catalog/lakeCatalog.js";
 import type { IConversationShareService } from "./conversation-share/conversationShare.js";
 
 /** UI 层消费的统一服务接口 */
 export interface IServiceAccessor {
+  readonly lakeCatalogService: ILakeCatalogService;
   readonly fileService: IFileService;
   readonly mediaPreviewService?: IMediaPreviewService;
   readonly gitService: IGitService;

@@ -7,6 +7,7 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { resolveSubagentColorFromName, SUBAGENT_TEXT_COLOR_CLASS } from "@/lib/subagentColors.js";
 import { useSubagentsContextStore } from "@/store/subagentsContextStore.js";
 import { useSubagentsStore } from "@/store/subagentsStore.js";
+import { getBuiltInBeaverMessageIds } from "@/lib/builtInBeaverPresentation.js";
 import { ToolCallBlock } from "@/ToolCallBlocks.js";
 import { ToolSnapshotFieldNotice } from "@/ToolCallBlocks/ToolSnapshotFieldNotice.js";
 import { ToolLayout } from "../ToolLayout.js";
@@ -172,8 +173,8 @@ function BackgroundAgentProcessSection({
       ? msg("chat.toolCall.agent.backgroundActivityStreaming", "后台运行中，正在同步输出")
       : msg("chat.toolCall.agent.backgroundActivityRunningWaiting", "后台运行中，等待输出")
     : hasActivity
-      ? msg("chat.toolCall.agent.backgroundActivityReceived", "已收到子智能体回传")
-      : msg("chat.toolCall.agent.backgroundActivityWaiting", "等待子智能体回传");
+      ? msg("chat.toolCall.agent.backgroundActivityReceived", "已收到河狸回传")
+      : msg("chat.toolCall.agent.backgroundActivityWaiting", "等待河狸回传");
   const activityStatusKind = isRunning
     ? hasActivity
       ? "streaming"
@@ -232,22 +233,29 @@ export function AgentToolCallBlock(context: ToolCallBlockRenderContext) {
       : configuredAgentsFromHook.length > 0
         ? configuredAgentsFromHook
         : useSubagentsStore.getState().agents;
-  const configuredAgentColor = useMemo(() => {
-    const lookupName = normalizeAgentLookupValue(agentName);
-    if (!lookupName) {
-      return undefined;
-    }
-    return configuredAgents.find((agent) => {
-      const name = normalizeAgentLookupValue(agent.name);
-      const id = normalizeAgentLookupValue(agent.id);
-      return name === lookupName || id === lookupName;
-    })?.color;
-  }, [agentName, configuredAgents]);
+  const lookupName = normalizeAgentLookupValue(agentName);
+  const configuredAgent = lookupName
+    ? configuredAgents.find(
+        (agent) =>
+          normalizeAgentLookupValue(agent.name) === lookupName ||
+          normalizeAgentLookupValue(agent.id) === lookupName,
+      )
+    : undefined;
+  const beaverMessages = getBuiltInBeaverMessageIds(
+    configuredAgent?.name ?? "",
+    configuredAgent?.scope ?? "",
+    configuredAgent?.source ?? "",
+  );
+  const displayAgentName = beaverMessages
+    ? intl.formatMessage({ id: beaverMessages.name })
+    : agentName;
+  const displayPrimaryText =
+    beaverMessages && primaryText === agentName ? displayAgentName : primaryText;
   const agentColor = agentName
-    ? (configuredAgentColor ?? getAgentColor(toolCall) ?? resolveSubagentColorFromName(agentName))
+    ? (configuredAgent?.color ?? getAgentColor(toolCall) ?? resolveSubagentColorFromName(agentName))
     : null;
   const agentNameDetail =
-    agentName && agentColor ? <AgentNameText color={agentColor} name={agentName} /> : null;
+    agentName && agentColor ? <AgentNameText color={agentColor} name={displayAgentName} /> : null;
   // Agent 父块的完成/进行中边界只由父 Agent tool 决定。
   // 子 tool 是展开区明细，不能反向续住父块运行态，否则父 Agent completed 后
   // 仍会显示渐变和子工具摘要，和协议里的父工具生命周期不一致。
@@ -264,12 +272,12 @@ export function AgentToolCallBlock(context: ToolCallBlockRenderContext) {
   // 继续显示子智能体来源 badge 会制造重复噪音。
   const sourceLabel = undefined;
   const collapsedPrimaryText = useMemo(
-    () => <span className="truncate">{primaryText}</span>,
-    [primaryText],
+    () => <span className="truncate">{displayPrimaryText}</span>,
+    [displayPrimaryText],
   );
   const expandedPrimaryText = useMemo(
-    () => <span className="truncate">{primaryText}</span>,
-    [primaryText],
+    () => <span className="truncate">{displayPrimaryText}</span>,
+    [displayPrimaryText],
   );
   const summaryAction = useMemo(
     () =>

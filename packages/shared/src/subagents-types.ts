@@ -5,7 +5,12 @@ export type AgentScope = "built-in" | "workspace" | "user";
 
 export type AgentSource = "built-in" | "user" | "plugin";
 
-export type BuiltInSubagentName = "general-purpose" | "Explore";
+export const BUILT_IN_SUBAGENT_NAMES = ["general-purpose", "Explore", "lake-sre"] as const;
+
+/** SRE 河狸首版只读能力；服务列表与 CLI 运行时共用，避免展示与实际工具分叉。 */
+export const BUILT_IN_SRE_TOOLS = ["Read", "Glob", "Grep", "WebFetch", "WebSearch"] as const;
+
+export type BuiltInSubagentName = (typeof BUILT_IN_SUBAGENT_NAMES)[number];
 
 export type BuiltInSubagentModelSelectionOverrides = Partial<
   Record<BuiltInSubagentName, ModelSelection>

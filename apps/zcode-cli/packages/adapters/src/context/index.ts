@@ -234,7 +234,8 @@ async function findDefaultUserInstructionFile(
     return undefined;
   }
 
-  const filePath = join(resolveUserHomeDir(env), ".zcode", "AGENTS.md");
+  const storageRoot = env.ZCODE_STORAGE_DIR?.trim() || join(resolveUserHomeDir(env), ".lake");
+  const filePath = join(storageRoot, "AGENTS.md");
   if (await isFile(filePath)) {
     return { filePath, fileName: "AGENTS.md" };
   }

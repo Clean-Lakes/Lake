@@ -2,9 +2,10 @@
 import { useStartPlanRecommendation } from "@/hooks/useStartPlanRecommendation.js";
 import { hasExplicitModelChanged } from "@/lib/startPlanRecommendation.js";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Bot, Check, Plus, Trash2 } from "lucide-react";
+import { Check, Plus, Trash2 } from "lucide-react";
 import { completeNewModelSelection } from "@zcode/provider";
 import {
+  BUILT_IN_SUBAGENT_NAMES,
   TID_SUBAGENT_BUILT_IN_MODEL_TRIGGER,
   TID_SUBAGENT_ROW,
   ZCODE_AGENT_PROVIDER,
@@ -19,6 +20,7 @@ import {
 } from "@zcode/shared";
 import type { ModelSelectionView } from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
+import { BeaverIcon } from "@/components/icons/BeaverIcon.js";
 import { Input } from "@/components/ui/input.js";
 import {
   Select,
@@ -41,6 +43,7 @@ import { logger } from "@/logger.js";
 import { settingsResourceRowInteraction } from "@/settings/settingsResourceRowInteraction.js";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
 import { useModelSelectionServiceView } from "@/hooks/useModelSelectionView.js";
+import { getBuiltInBeaverMessageIds } from "@/lib/builtInBeaverPresentation.js";
 import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import {
@@ -150,7 +153,7 @@ function isBuiltInAgent(agent: AgentSummary): boolean {
 }
 
 /**
- * 内置 general-purpose / Explore 与插件 agent 都是只读 profile，配置入口统一为行内
+ * 内置河狸与插件 agent 都是只读 profile，配置入口统一为行内
  * model / effort 覆盖控件；插件 md 属于插件安装目录，升级会覆写，所以不能像 user agent 那样改文件。
  */
 function supportsModelOverride(agent: AgentSummary): boolean {
@@ -161,7 +164,7 @@ function getBuiltInSubagentName(agent: AgentSummary): BuiltInSubagentName | null
   if (!isBuiltInAgent(agent)) {
     return null;
   }
-  return agent.name === "general-purpose" || agent.name === "Explore" ? agent.name : null;
+  return BUILT_IN_SUBAGENT_NAMES.find((name) => name === agent.name) ?? null;
 }
 
 function getKnownTools(values: readonly string[] | undefined): string[] {
@@ -489,10 +492,15 @@ function AgentListRow({
   const toolsLabel = allowsAllTools(agent.tools)
     ? intl.formatMessage({ id: "settings.subagents.tools.all" })
     : intl.formatMessage({ id: "settings.subagents.toolsCount" }, { count: String(toolCount) });
-  const displayName =
-    agent.source === "plugin" && agent.name.includes(":")
+  const beaverMessages = getBuiltInBeaverMessageIds(agent.name, agent.scope, agent.source);
+  const displayName = beaverMessages
+    ? intl.formatMessage({ id: beaverMessages.name })
+    : agent.source === "plugin" && agent.name.includes(":")
       ? agent.name.slice(agent.name.indexOf(":") + 1)
       : agent.name;
+  const displayDescription = beaverMessages
+    ? intl.formatMessage({ id: beaverMessages.description })
+    : agent.description || intl.formatMessage({ id: "settings.subagents.noDescription" });
 
   return (
     <div
@@ -511,11 +519,11 @@ function AgentListRow({
           <PluginStoreAvatar
             item={pluginIconItem}
             className="size-9 bg-background"
-            fallbackIcon={<Bot className="size-4" />}
+            fallbackIcon={<BeaverIcon className="size-5" />}
           />
         ) : (
           <div className="flex size-9 items-center justify-center rounded-xl bg-background text-foreground-subtle">
-            <Bot className="size-4" />
+            <BeaverIcon className="size-5" />
           </div>
         )}
         {agent.color ? (
@@ -533,7 +541,7 @@ function AgentListRow({
           <AgentBadge>{toolsLabel}</AgentBadge>
         </div>
         <p className="mt-0.5 line-clamp-2 text-ui-sm text-foreground-subtle">
-          {agent.description || intl.formatMessage({ id: "settings.subagents.noDescription" })}
+          {displayDescription}
         </p>
       </div>
 
@@ -1579,9 +1587,12 @@ export function SubagentsSection({ onManageModels }: SubagentsSectionProps) {
           return false;
       }
       if (!normalizedQuery) return true;
+      const beaverMessages = getBuiltInBeaverMessageIds(agent.name, agent.scope, agent.source);
       const haystack = [
         agent.name,
         agent.description,
+        beaverMessages ? intl.formatMessage({ id: beaverMessages.name }) : undefined,
+        beaverMessages ? intl.formatMessage({ id: beaverMessages.description }) : undefined,
         agent.modelSelection
           ? `${agent.modelSelection.providerId}/${agent.modelSelection.modelId}`
           : undefined,
@@ -1597,7 +1608,7 @@ export function SubagentsSection({ onManageModels }: SubagentsSectionProps) {
         .toLowerCase();
       return haystack.includes(normalizedQuery);
     });
-  }, [activeScope, agents, query, targetWorkspacePath]);
+  }, [activeScope, agents, intl, query, targetWorkspacePath]);
 
   const groupedAgents = useMemo(() => groupAgentsByScope(filteredAgents), [filteredAgents]);
   const pluginGroups = useMemo(

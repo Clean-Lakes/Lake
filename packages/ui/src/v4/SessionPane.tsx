@@ -19,7 +19,6 @@ import { Hand } from "lucide-react";
 import {
   BUILTIN_MODEL_PROVIDER_IDS,
   buildCustomSupplierKey,
-  TID_CHAT_EMPTY,
   TID_V4_SESSION_PANE,
   testId,
   ZCODE_AGENT_PROVIDER,
@@ -75,6 +74,7 @@ import {
 import { useWorkflowRunJournalSummaries } from "@/hooks/useWorkflowRunJournalSummaries.js";
 import { usePlanIdentitySnapshot } from "@/hooks/usePlanIdentitySnapshot.js";
 import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
+import { requestLakeSwitcherOpen } from "@/lib/lakeSwitcherOpen.js";
 import { useWorkspaceHomePath } from "@/hooks/useWorkspaceHomePath.js";
 import { prepareWorkspaceWithZCodeSessionService } from "@/hooks/useWorkspacePrepare.js";
 import {
@@ -121,7 +121,6 @@ import {
 } from "@/v4/ConversationComposer.js";
 import type { ConversationDropTargetController } from "@/v4/composer/conversationDropTarget.js";
 import { shouldIgnoreEscapeForStopGeneration } from "@/v4/composer/escapeStop.js";
-import { ConversationDraftEmptyState } from "@/v4/ConversationDraftEmptyState.js";
 import { ConversationDraftSuggestedPromptsContainer } from "@/v4/ConversationDraftSuggestedPromptsContainer.js";
 import { ConversationHeader, type PaneWorkspaceBadge } from "@/v4/ConversationHeader.js";
 import { ConversationQueuePanel } from "@/v4/ConversationQueuePanel.js";
@@ -2964,6 +2963,26 @@ export function SessionPane({
       text: string,
       options?: ConversationComposerSendOptions,
     ): Promise<ConversationComposerSendResult> => {
+      if (sessionId === null) {
+        let lake;
+        try {
+          lake = await baseWorkspaceServices.lakeCatalogService.getLakeForWorkspace(
+            workspacePath,
+            workspaceIdentity,
+          );
+        } catch (error) {
+          // 绑定事实源不可用时必须保留草稿并拦截提交，不能让查询异常绕过首发边界。
+          logger.warn("[SessionPane] 查询会话所属湖失败", { error });
+          toast(intl.formatMessage({ id: "lake.navigation.selectFirst" }));
+          return "blocked";
+        }
+        if (!lake) {
+          // 首条消息是会话真正提交点；仅约束新建草稿按钮会让启动恢复草稿绕过选湖。
+          toast(intl.formatMessage({ id: "lake.navigation.selectFirst" }));
+          requestLakeSwitcherOpen();
+          return "blocked";
+        }
+      }
       // 发送前冻结本次 admission 预期：command ACK 回来时 projection 可能已经切到 running，
       // 不能用更新后的 enqueue mode 反推刚提交的 prompt 是否原本立即发送。
       const shouldFocusLatest = shouldFocusTimelineAfterComposerSend({
@@ -2999,7 +3018,15 @@ export function SessionPane({
         throw error;
       }
     },
-    [dispatchSendText, focusTimelineToLatest, intl, sessionId],
+    [
+      baseWorkspaceServices.lakeCatalogService,
+      dispatchSendText,
+      focusTimelineToLatest,
+      intl,
+      sessionId,
+      workspacePath,
+      workspaceIdentity,
+    ],
   );
 
   const handleComposerDraftStateChange = useCallback(
@@ -4784,11 +4811,10 @@ export function SessionPane({
                 ) : null
               }
               emptyState={
-                isDraft ? (
-                  <div data-testid={TID_CHAT_EMPTY} className="w-full">
-                    <ConversationDraftEmptyState />
-                  </div>
-                ) : null
+                // 本地定制，见 specs/remove-draft-empty-state.md：草稿态不再渲染
+                // “时间问候语 + ZCode Logo”空态。保持 centerEmptyStateWithDock 原样，
+                // 输入区位置与改动前一致，只是上方不再有问候与标识。
+                null
               }
               centerEmptyStateWithDock={isDraft}
               summaryPanelLayout={statusPanelLayout}

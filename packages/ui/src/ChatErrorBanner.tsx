@@ -1,4 +1,3 @@
-import { CodingPlanEntryButton } from "@/settings/CodingPlanEntryButton.js";
 /**
  * ChatErrorBanner — 错误提示组件
  *
@@ -13,7 +12,7 @@ import {
   TID_CHAT_ERROR_BANNER,
   TID_CHAT_ERROR_HOOK_ICON,
 } from "@zcode/shared";
-import { AnchorIcon, CopyIcon, InfoIcon, RocketIcon, SettingsIcon, X } from "lucide-react";
+import { AnchorIcon, CopyIcon, InfoIcon, SettingsIcon, X } from "lucide-react";
 import { useZCodeIntl } from "./i18n/IntlProvider.js";
 import type { IntlInstance } from "./i18n/IntlProvider.js";
 import { Button } from "./components/ui/button.js";
@@ -110,7 +109,6 @@ export function ChatErrorBanner({
   retryDisabled,
   onDismiss,
   onOpenModelSettings,
-  onOpenUpgrade,
 }: {
   error: ZCodeUiError;
   onRetry?: () => void;
@@ -118,6 +116,7 @@ export function ChatErrorBanner({
   retryDisabled?: boolean;
   onDismiss?: () => void;
   onOpenModelSettings?: () => void;
+  /** 本地定制，见 specs/remove-coding-plan-upgrade.md：升级入口已下线，保留 prop 作为接缝。 */
   onOpenUpgrade?: () => void;
 }) {
   const { intl } = useZCodeIntl();
@@ -207,35 +206,17 @@ export function ChatErrorBanner({
         </div>
 
         {modelConfigMissing ? (
-          <>
-            <CodingPlanEntryButton
-              type="button"
-              variant="default"
-              size="sm"
-              onClick={onOpenUpgrade}
-              className={cn(
-                actionButtonClassName,
-                "button-gradient gap-1.5 text-white hover:bg-transparent hover:opacity-90 dark:bg-[#484A58] dark:hover:bg-[#484A58]",
-              )}
-              aria-label={intl.formatMessage({
-                id: "chat.quota.action.upgrade",
-              })}
-            >
-              <RocketIcon className="size-3.5" />
-              {intl.formatMessage({ id: "chat.quota.action.upgrade" })}
-            </CodingPlanEntryButton>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onOpenModelSettings}
-              className={cn(actionButtonClassName, "gap-1.5")}
-              aria-label={intl.formatMessage({ id: "chat.error.setModels" })}
-            >
-              <SettingsIcon className="size-3.5" />
-              {intl.formatMessage({ id: "chat.error.setModels" })}
-            </Button>
-          </>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onOpenModelSettings}
+            className={cn(actionButtonClassName, "gap-1.5")}
+            aria-label={intl.formatMessage({ id: "chat.error.setModels" })}
+          >
+            <SettingsIcon className="size-3.5" />
+            {intl.formatMessage({ id: "chat.error.setModels" })}
+          </Button>
         ) : null}
 
         {!modelConfigMissing && error.detail ? (

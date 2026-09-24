@@ -26,6 +26,7 @@ interface DesktopTopOverlayProps {
   isSidebarVisible: boolean;
   updateReadyVersion: string | null;
   updateState: UpdateStatePayload | null;
+  showUpdateStatusButton?: boolean;
   toggleSidebarShortcutLabel: string;
   newTaskShortcutLabel: string;
   goBackShortcutLabel: string;
@@ -56,6 +57,7 @@ export function DesktopTopOverlay({
   isSidebarVisible,
   updateReadyVersion,
   updateState,
+  showUpdateStatusButton = true,
   toggleSidebarShortcutLabel,
   newTaskShortcutLabel,
   goBackShortcutLabel,
@@ -141,7 +143,7 @@ export function DesktopTopOverlay({
             >
               <img
                 src={appLogoUrl}
-                alt="ZCode"
+                alt="Lake"
                 className="size-5 transition-opacity duration-150 group-hover:opacity-0"
                 draggable={false}
               />
@@ -203,19 +205,15 @@ export function DesktopTopOverlay({
             </DesktopTopOverlayActionButton>
           </div>
 
-          {/* <div className="flex items-center [app-region:no-drag]"> */}
-          {/* 侧栏收起后，更新按钮之前会跟着“展开态的容器宽度阈值”一起被隐藏。
-                  但收起态本身已经改成把操作集中到顶部浮层里，如果这里还继续依赖侧栏宽度判断，
-                  用户就会在最需要全局入口的时候反而看不到更新按钮。
-                  所以展开态继续走容器查询，收起态则强制显示。 */}
-          <UpdateStatusButton
-            platform={platform}
-            version={updateReadyVersion}
-            updateState={updateState}
-            isMacDesktop={isMacDesktop}
-            isWindowsDesktop={isWindowsDesktop}
-          />
-          {/* </div> */}
+          {/* Automations、插件中心和湖目录没有 WorkspaceHeader；这些页面继续从全局浮层
+                  承载同一个更新入口，避免切换主视图后更新状态失去可达路径。 */}
+          {showUpdateStatusButton ? (
+            <UpdateStatusButton
+              platform={platform}
+              version={updateReadyVersion}
+              updateState={updateState}
+            />
+          ) : null}
         </div>
       </div>
     </div>

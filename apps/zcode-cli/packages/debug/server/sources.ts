@@ -16,11 +16,13 @@ import type {
 } from "./types.js";
 
 export function defaultLogDir(): string {
-  return join(homedir(), ".zcode", "cli", "log");
+  const storageRoot = process.env.ZCODE_STORAGE_DIR?.trim() || join(homedir(), ".lake");
+  return join(storageRoot, "cli", "log");
 }
 
 export function defaultDbPath(): string {
-  return join(homedir(), ".zcode", "cli", "db", "db.sqlite");
+  const storageRoot = process.env.ZCODE_STORAGE_DIR?.trim() || join(homedir(), ".lake");
+  return join(storageRoot, "cli", "db", "db.sqlite");
 }
 
 export async function loadLogs(options: ObservationOptions): Promise<SourceLoadResult<LogRecord>> {

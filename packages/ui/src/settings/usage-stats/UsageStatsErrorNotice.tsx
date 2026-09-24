@@ -1,7 +1,5 @@
 import { AlertTriangle, InfoIcon } from "lucide-react";
-import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { setPendingSettingsSection } from "@/lib/settingsNavigation.js";
 import {
   formatUsageErrorMessage,
   isUsageCredentialError,
@@ -11,7 +9,8 @@ import {
 export function UsageStatsErrorNotice({ error }: { error: string }) {
   const { intl } = useZCodeIntl();
   // 团队套餐业务错误（如"您当前暂无有效的团队套餐授权记录…"）含"授权"字样，
-  // 直接 isUsageCredentialError 会误判成凭据问题（显示检查 API Key 按钮），业务错误优先。
+  // 直接 isUsageCredentialError 会误判成凭据问题（影响提示的图标与配色），业务错误优先。
+  // 模型设置页已下线（specs/remove-model-settings-page.md），这里不再提供跳转按钮。
   const usageErrorIsTeamPlanBusiness = isUsageTeamPlanBusinessError(error);
   const usageErrorIsCredential = !usageErrorIsTeamPlanBusiness && isUsageCredentialError(error);
 
@@ -41,17 +40,6 @@ export function UsageStatsErrorNotice({ error }: { error: string }) {
       >
         {formatUsageErrorMessage(intl, "stats", error)}
       </span>
-      {usageErrorIsCredential ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-7 shrink-0 rounded-md bg-background"
-          onClick={() => setPendingSettingsSection("modelProvider")}
-        >
-          {intl.formatMessage({ id: "settings.usage.checkApiKey" })}
-        </Button>
-      ) : null}
     </div>
   );
 }

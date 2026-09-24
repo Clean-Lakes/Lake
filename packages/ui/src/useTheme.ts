@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 
-export type Theme = "light" | "dark" | "zai-light" | "zai-dark" | "system";
+export type Theme = "light" | "dark" | "zai-light" | "zai-dark" | "lake-light" | "lake-dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
 const STORAGE_KEY = "zcode-theme";
@@ -15,12 +15,13 @@ export function resolveTheme(theme: Theme): ResolvedTheme {
     return getSystemTheme();
   }
 
-  return theme === "dark" || theme === "zai-dark" ? "dark" : "light";
+  return theme === "dark" || theme === "zai-dark" || theme === "lake-dark" ? "dark" : "light";
 }
 
 export function normalizeThemePreference(theme: Theme): Theme {
-  if (theme === "dark") return "zai-dark";
-  if (theme === "light") return "zai-light";
+  // 裸 light/dark 收敛到 Lake（本产品的环保主题）；Zai 两套仍可显式选择，不删除。
+  if (theme === "dark") return "lake-dark";
+  if (theme === "light") return "lake-light";
   return theme;
 }
 
@@ -60,21 +61,29 @@ export function applyTheme(theme: Theme) {
   const appliedTheme =
     theme === "system"
       ? resolved === "dark"
-        ? "zai-dark"
-        : "zai-light"
+        ? "lake-dark"
+        : "lake-light"
       : normalizeThemePreference(theme);
   document.documentElement.classList.toggle("dark", resolved === "dark");
   document.documentElement.classList.toggle("theme-zai-light", appliedTheme === "zai-light");
   document.documentElement.classList.toggle("theme-zai-dark", appliedTheme === "zai-dark");
+  document.documentElement.classList.toggle("theme-lake-light", appliedTheme === "lake-light");
+  document.documentElement.classList.toggle("theme-lake-dark", appliedTheme === "lake-dark");
   syncBrowserThemeSurface(resolved);
 }
 
-function isTheme(value: string | null): value is Theme {
+/**
+ * 主题取值的唯一校验入口：新增主题必须只改这里，调用点不要再写一份白名单。
+ * 历史问题：设置页与侧边栏各自维护过一份 5 项白名单，导致新增主题被静默丢弃——下拉里能选、点了没反应。
+ */
+export function isThemePreference(value: string | null): value is Theme {
   return (
     value === "light" ||
     value === "dark" ||
     value === "zai-light" ||
     value === "zai-dark" ||
+    value === "lake-light" ||
+    value === "lake-dark" ||
     value === "system"
   );
 }
@@ -82,8 +91,8 @@ function isTheme(value: string | null): value is Theme {
 export function useTheme() {
   const [theme, setThemeState] = useState<Theme>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    // 默认主题统一收敛到 Zai dark，避免旧 hook 兜底值和 Zustand store 默认值分叉。
-    return isTheme(saved) ? normalizeThemePreference(saved) : "zai-dark";
+    // 默认主题统一收敛到 Lake dark，避免旧 hook 兜底值和 Zustand store 默认值分叉。
+    return isThemePreference(saved) ? normalizeThemePreference(saved) : "lake-dark";
   });
 
   const setTheme = useCallback((t: Theme) => {

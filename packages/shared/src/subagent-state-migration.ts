@@ -5,6 +5,7 @@ import {
 } from "./legacy-model-provider-identity.js";
 import { parseSubagentMarkdownSelection } from "./subagent-markdown-selection.js";
 import {
+  BUILT_IN_SUBAGENT_NAMES,
   parsePluginSubagentModelSelectionOverrides,
   type BuiltInSubagentModelSelectionOverrides,
   type PluginSubagentModelSelectionOverrides,
@@ -26,7 +27,7 @@ export function importSubagentStateSelections(input: Record<string, unknown>): R
 } {
   const current = Object.hasOwn(input, "builtInModelSelectionOverrides");
   const selections: BuiltInSubagentModelSelectionOverrides = {};
-  for (const name of ["Explore", "general-purpose"] as const) {
+  for (const name of BUILT_IN_SUBAGENT_NAMES) {
     const selection = current
       ? modelSelectionSchema.safeParse(record(input.builtInModelSelectionOverrides)[name]).data
       : parseSubagentMarkdownSelection({

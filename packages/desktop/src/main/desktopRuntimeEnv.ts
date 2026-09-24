@@ -29,6 +29,8 @@ import { resolvePlatformKeyForPackagedApp } from "../../scripts/target-platform.
 import {
   getAppConfigDir,
   getDataBaseDir,
+  getLakeAgentSessionDbPath,
+  getZCodeDataRootDir,
   ZCODE_CUA_BUNDLED_HELPER_APP_PATH_ENV,
   ZCODE_WINDOWS_APP_INSTALL_DIR_ENV,
 } from "@zcode/services/node";
@@ -60,7 +62,7 @@ function isTruthyRuntimeEnvOverride(name: string): boolean {
 // 这里允许测试显式隔离运行时身份，正常桌面/远控路径保持原来的默认值。
 export const runtimeApplicationName =
   readRuntimeEnvOverride("ZCODE_DESKTOP_APPLICATION_NAME") ??
-  (isLocalDevelopmentRuntime ? "ZCode Dev" : isPreviewPackagedRuntime ? "ZCode Preview" : "ZCode");
+  (isLocalDevelopmentRuntime ? "Lake Dev" : isPreviewPackagedRuntime ? "Lake Preview" : "Lake");
 // Electron 的 app.getPath("home") 不一定跟随测试进程里的 HOME 覆盖。
 // e2e 默认工作区依赖 home 路径，因此提供显式覆盖，避免测试写到开发者真实 ~/ZCodeProject。
 export const runtimeHomePath = readRuntimeEnvOverride("ZCODE_DESKTOP_HOME_DIR");
@@ -494,12 +496,7 @@ export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>)
               rawInheritedEnv.ZCODE_CUA_HELPER_ALLOW_UNSIGNED_LOCAL?.trim().toLowerCase() ?? "",
             )
           ? rawInheritedEnv.ZCODE_CUA_BUNDLED_HELPER_APP_PATH?.trim() ||
-            join(
-              rawInheritedEnv.ZCODE_HOME?.trim() || join(homedir(), ".zcode"),
-              "computer-use",
-              "dev",
-              DEV_HELPER_APP_NAME,
-            )
+            join(getZCodeDataRootDir(), "computer-use", "dev", DEV_HELPER_APP_NAME)
           : undefined;
   const windowsAppInstallDir = resolveWindowsAppInstallDirForDataBaseDirGuard();
   const agentTelemetryEnv = readZCodeAgentTelemetryEnv(rawInheritedEnv);
@@ -545,15 +542,21 @@ export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>)
     // 显式注入编译期产品身份，保证主进程与 host 的身份语义一致；地址独立解析。
     // inheritedEnv 从 .env 通用变量补齐 ZCode/ZAI 链接，未覆盖时统一使用线上默认值。
     ZCODE_ENV,
-    // Preview 与生产版共享任务、配置和凭据，但不同版本的 Helper 不能互相覆盖或触发降级保护。
-    // 只隔离 computer-use 下的运行组件，不改写 ZCODE_HOME / ZCODE_DATA_BASE_DIR 业务数据根。
+    // Preview 与生产版共享 Lake 任务、配置和凭据，但不同版本的 Helper 不能互相覆盖或触发降级保护。
     ...(isPreviewPackagedRuntime ? { ZCODE_CUA_HELPER_INSTALL_VARIANT: "preview" } : {}),
     // Dynamic Workflow 灰度的本地覆盖：Main 决策后写入，production 包为空对象（继承值已在上面删除）。
     ...dynamicWorkflowModeHostEnv,
     // 模型请求默认 header 由 agent 进程构造，过去只继承 shell env 导致桌面启动时拿不到 app 版本。
     // 这里从 main 进程显式下发，agent 子进程继承 host env 后即可稳定写入请求 header。
     [ZCODE_APP_VERSION_ENV]: ZCODE_VERSION,
+    // 内部运行时仍沿用 ZCODE_* 环境变量名，但 Lake 必须覆盖用户 shell 里可能残留的
+    // ZCode 路径，保证 Helper、telemetry、provider 与日志只落到 ~/.lake。
+    ZCODE_HOME: getZCodeDataRootDir(),
     ...(dataBaseDir !== homedir() ? { ZCODE_DATA_BASE_DIR: dataBaseDir } : {}),
+    // 任务索引、Agent 会话正文分别由 Services/CLI 持有；Main 在 Host 启动前
+    // 一次性绑定同一个 Lake 数据根，避免 CLI 默认回退到 ~/.zcode/cli/db。
+    ZCODE_STORAGE_DIR: getZCodeDataRootDir(),
+    ZCODE_SESSION_DB_PATH: getLakeAgentSessionDbPath(),
     ...(windowsAppInstallDir ? { [ZCODE_WINDOWS_APP_INSTALL_DIR_ENV]: windowsAppInstallDir } : {}),
     ...(bundledCuaHelperAppPath
       ? { [ZCODE_CUA_BUNDLED_HELPER_APP_PATH_ENV]: bundledCuaHelperAppPath }

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { BeaverIcon } from "@/components/icons/BeaverIcon.js";
 import type { IntlInstance } from "@/i18n/IntlProvider.js";
 import type { PromptInputSuggestionItem } from "@/lib/promptInputTriggers.js";
 import {
@@ -69,21 +70,26 @@ export function useSlashCommandMentionPanelSections(
       {
         id: "subagents",
         title: intl.formatMessage({ id: "chat.slash.subagents.title" }),
-        options: filteredSubagentSuggestions.map<MentionPanelOption>((suggestion) => ({
-          id: suggestion.id,
-          label: suggestion.value,
-          description: suggestion.description,
-          content: (
-            <span className="min-w-0 flex-1 flex items-center gap-2">
-              <span className="truncate text-ui-base font-medium text-foreground max-w-[40%]">
-                {suggestion.value}
+        options: filteredSubagentSuggestions.map<MentionPanelOption>((suggestion) => {
+          return {
+            id: suggestion.id,
+            // 旧面板把运行时 value 当展示名，导致内置河狸仍显示 general-purpose / Explore。
+            // 展示和无障碍名称使用本地化 label；插入与调用继续由原 value 负责。
+            label: suggestion.label,
+            description: suggestion.description,
+            content: (
+              <span className="min-w-0 flex-1 flex items-center gap-2">
+                <BeaverIcon className="size-5 shrink-0 text-foreground" />
+                <span className="truncate text-ui-base font-medium text-foreground max-w-[40%]">
+                  {suggestion.label}
+                </span>
+                <span className="truncate text-ui-base text-foreground-subtlest flex-1">
+                  {suggestion.description}
+                </span>
               </span>
-              <span className="truncate text-ui-base text-foreground-subtlest flex-1">
-                {suggestion.description}
-              </span>
-            </span>
-          ),
-        })),
+            ),
+          };
+        }),
         loading: subagentsLoading,
         emptyText: intl.formatMessage({ id: "chat.slash.subagents.empty" }),
         errorText: subagentsError,

@@ -157,13 +157,13 @@ Slash Commands:
     },
     sidebar: {
       subagents: {
-        title: "子代理",
-        empty: "暂无子代理",
-        emptyOutput: "子代理尚未产生输出",
+        title: "河狸",
+        empty: "暂无河狸",
+        emptyOutput: "河狸尚未产生输出",
         back: "← 返回主会话",
         readonly: "只读 · Esc 返回",
-        loading: "正在加载子代理输出…",
-        unavailable: "无法读取子代理输出",
+        loading: "正在加载河狸输出…",
+        unavailable: "无法读取河狸输出",
         retry: "重试",
         more: "加载更多",
         pendingMain: "主会话需要你的输入，返回后处理",
@@ -282,7 +282,7 @@ Slash Commands:
       turnFailed: "本轮失败。",
     },
     terminal: {
-      starting: "正在启动 ZCode… Ctrl+C 退出",
+      starting: "正在启动 Lake… Ctrl+C 退出",
       requiresInteractive: "TUI 需要交互式终端。",
     },
     transcript: {

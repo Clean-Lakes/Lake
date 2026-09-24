@@ -6,24 +6,22 @@ import { Button } from "@/components/ui/button.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { UpdateStatusDialogController } from "@/UpdateStatusDialogController.js";
 import { UpdateReleaseNotesTooltip } from "@/UpdateReleaseNotesTooltip.js";
-import { ArrowDownToLine, LoaderCircle } from "lucide-react";
+import { CloudDownload, LoaderCircle } from "lucide-react";
 import { formatUpdateReleaseDate, getLocalizedUpdateReleaseNotes } from "@/updateReleaseNotes.js";
-import { resolveUpdateButtonResponsiveClasses } from "@/updateStatusButtonLayout.js";
-import { deriveUpdateStatusViewModel } from "@/updateStatusModel.js";
+import {
+  deriveUpdateStatusViewModel,
+  resolveUpdateStatusEntryVisualState,
+} from "@/updateStatusModel.js";
 
 export function UpdateStatusButton({
   platform,
   version,
   updateState,
-  isMacDesktop = false,
-  isWindowsDesktop = false,
   className,
 }: {
   platform: IPlatformService;
   version: string | null;
   updateState: UpdateStatePayload | null;
-  isMacDesktop?: boolean;
-  isWindowsDesktop?: boolean;
   className?: string;
 }) {
   const { intl, locale } = useZCodeIntl();
@@ -37,13 +35,11 @@ export function UpdateStatusButton({
       }
     >(),
   );
-  const { expandWidthClass, hideIconClass, revealTextClass } = resolveUpdateButtonResponsiveClasses(
-    { isMacDesktop, isWindowsDesktop },
-  );
   const updateStatusViewModel = deriveUpdateStatusViewModel({
     legacyReadyVersion: version,
     updateState,
   });
+  const visualState = resolveUpdateStatusEntryVisualState(updateStatusViewModel);
   const {
     dialogPhase,
     displayVersion,
@@ -100,7 +96,7 @@ export function UpdateStatusButton({
     setDialogOpen(true);
   }, [platform]);
 
-  if (!displayVersion) return null;
+  if (!displayVersion || !visualState) return null;
 
   // 更新弹窗和按钮 hover 共用同一个更新日志标题，避免 feed 自带 releaseName 与正文标题重复。
   const releaseNotesTitle = intl.formatMessage(
@@ -122,40 +118,27 @@ export function UpdateStatusButton({
         ? intl.formatMessage({ id: "updateReady.tooltip" }, { version: displayVersion })
         : intl.formatMessage({ id: "updateAvailable.tooltip" }, { version: displayVersion });
 
-  const readyButton = (
+  const updateEntryButton = (
     <Button
-      size={"xs"}
-      variant={"secondary"}
+      type="button"
+      size="icon-md"
+      variant="ghost"
       aria-label={tooltipTitle}
+      data-testid="desktop-update-status-entry"
+      data-update-status={visualState}
       onClick={handleUpdateEntryClick}
       className={cn(
-        // 只把更新弹窗改成中性视觉，主页面更新入口要保留 success 色块，避免顶部状态提示变弱。
-        // 自动下载不会主动打开更新窗口；下载态入口必须保持可点，用户才能进入窗口取消下载。
-        // xs button 的固定 h-5 和展开态固定宽度只适配默认字号，UI 字号调大后会裁切文案。
-        // 改用最小高度配合内容宽度，默认仍保持紧凑，较大字号则由文字自然撑开按钮。
-        "h-auto min-h-5 gap-1 rounded-full py-0.5 font-medium leading-none text-ui-xs w-6 border-transparent bg-success text-success-foreground hover:bg-success/80 transition-all",
-        dialogPhase !== "downloading" && expandWidthClass,
+        // 更新入口与工作区 Header 的其它图标操作共用中性 ghost 视觉；状态含义由图标、
+        // Tooltip 和独立更新窗口表达，避免把标题栏重新撑成绿色文字胶囊。
+        "text-foreground hover:bg-hover hover:text-foreground [app-region:no-drag] transition-colors",
         className,
       )}
     >
-      {dialogPhase === "downloading" ? (
-        <LoaderCircle
-          // 下载态本身要靠 spinner 表达 loading，不能复用普通更新图标的展开隐藏规则。
-          className="size-3 shrink-0 animate-spin"
-        />
+      {visualState === "downloading" ? (
+        <LoaderCircle className="size-4 animate-spin" />
       ) : (
-        <ArrowDownToLine className={cn("size-3 shrink-0 inline", hideIconClass)} />
+        <CloudDownload className="size-4" />
       )}
-      {dialogPhase !== "downloading" ? (
-        <span
-          className={cn(
-            "w-0 overflow-hidden absolute opacity-0 transition-all",
-            ...revealTextClass,
-          )}
-        >
-          {intl.formatMessage({ id: "updateReady.shortTitle" })}
-        </span>
-      ) : null}
     </Button>
   );
 
@@ -167,11 +150,11 @@ export function UpdateStatusButton({
       releaseNotesMarkdown={visibleUpdateReleaseNotes.markdown}
       releaseNotesTitle={releaseNotesTitle}
     >
-      {readyButton}
+      {updateEntryButton}
     </UpdateReleaseNotesTooltip>
   ) : (
     <ControlHintTooltip title={tooltipTitle} side="bottom">
-      {readyButton}
+      {updateEntryButton}
     </ControlHintTooltip>
   );
 

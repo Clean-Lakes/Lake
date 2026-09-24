@@ -5,7 +5,7 @@ import { Terminal as XTerm } from "@xterm/xterm";
 import { ClipboardPaste, Copy } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import type { ILink, ILinkHandler, ITheme, IWindowsPty } from "@xterm/xterm";
-import type { IServiceAccessor } from "@zcode/services";
+import type { IServiceAccessor, ITerminalService } from "@zcode/services";
 import type { IDisposable } from "@zcode/rpc";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
@@ -96,6 +96,7 @@ export function TerminalSession({
   onOpenBrowserUrl,
   persistentKey,
   workspaceKey,
+  createTerminal,
 }: {
   sessionId: string;
   services: IServiceAccessor;
@@ -120,6 +121,8 @@ export function TerminalSession({
    * 不传时 fallback 到 cwd。下侧 terminal 不传 persistentKey，此值不生效。
    */
   workspaceKey?: string;
+  /** 运维 SSH 可复用 xterm 生命周期，但创建命令由调用方绑定到 host 资源。 */
+  createTerminal?: ITerminalService["create"];
 }) {
   const { intl } = useZCodeIntl();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -544,8 +547,15 @@ export function TerminalSession({
 
       // 创建 PTY（异步）
       const initialCreateSize = initialTerminalSize ?? { cols: term.cols, rows: term.rows };
-      void services.terminalService
-        .create({ cols: initialCreateSize.cols, rows: initialCreateSize.rows, cwd })
+      void (
+        createTerminal
+          ? createTerminal({ cols: initialCreateSize.cols, rows: initialCreateSize.rows, cwd })
+          : services.terminalService.create({
+              cols: initialCreateSize.cols,
+              rows: initialCreateSize.rows,
+              cwd,
+            })
+      )
         .then(({ id, shell, fontFamily, fontSize, theme, fontFamilySource, windowsPty }) => {
           if (ptyCancelled) {
             // cleanup 已发生：杀掉这个孤儿 PTY，不进 entry
@@ -882,8 +892,10 @@ export function TerminalSession({
 
     // 优先使用 workspace 路径作为 terminal 工作目录，未设置时后端回退到 HOME
     const initialCreateSize = initialTerminalSize ?? { cols: term.cols, rows: term.rows };
-    terminalService
-      .create({ cols: initialCreateSize.cols, rows: initialCreateSize.rows, cwd })
+    (createTerminal
+      ? createTerminal({ cols: initialCreateSize.cols, rows: initialCreateSize.rows, cwd })
+      : terminalService.create({ cols: initialCreateSize.cols, rows: initialCreateSize.rows, cwd })
+    )
       .then(({ id, shell, fontFamily, fontSize, theme, fontFamilySource, windowsPty }) => {
         if (disposed) {
           terminalService.dispose({ id });
@@ -1080,6 +1092,7 @@ export function TerminalSession({
     scheduleFitAndResize,
     flushTerminalServiceResize,
     services,
+    createTerminal,
     sessionId,
     persistentKey,
   ]);

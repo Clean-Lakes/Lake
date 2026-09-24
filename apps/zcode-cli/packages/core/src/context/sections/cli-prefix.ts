@@ -5,7 +5,9 @@
 import type { ContextSection } from "../types.js";
 import { estimateTokens } from "../utils.js";
 
-const CLI_PREFIX_PROMPT = "You are ZCode, an interactive coding agent";
+// 旧前缀把所有使用它的会话都指定为 ZCode 主智能体；产品上下文不能覆盖子智能体或自定义身份。
+const CLI_PREFIX_PROMPT =
+  "This session runs in Lake, the software operations and SRE product by Clean-Lakes.";
 
 export function buildCliPrefixSection(): ContextSection {
   const content = CLI_PREFIX_PROMPT;

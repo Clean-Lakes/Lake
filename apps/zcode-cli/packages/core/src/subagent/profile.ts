@@ -1,17 +1,20 @@
 import { basename } from "node:path";
 import { GENERAL_PURPOSE_AGENT_TYPE, buildGeneralPurposeSystemPrompt } from "./general-purpose.js";
 import { EXPLORE_AGENT_TYPE } from "./explore.js";
+import { SRE_AGENT_TYPE, buildSreSystemPrompt } from "./sre.js";
 import { formatExploreAllowedToolsForAgentDescription } from "./explore-tools.js";
 import { parseAgentFrontmatter, splitMarkdownFrontmatter } from "./profile-frontmatter.js";
 import { filterSubagentChildToolNames } from "./tool-policy.js";
-import type { ModelSelection } from "@zcode/shared";
+import {
+  BUILT_IN_SRE_TOOLS,
+  type BuiltInSubagentModelSelectionOverrides as SharedBuiltInSubagentModelSelectionOverrides,
+  type ModelSelection,
+} from "@zcode/shared";
 import { resolveProfileModelSelection } from "./profile-model-selection.js";
 
 export const DEFAULT_SUBAGENT_TYPE = GENERAL_PURPOSE_AGENT_TYPE;
 
-export type BuiltInSubagentModelSelectionOverrides = Partial<
-  Record<typeof DEFAULT_SUBAGENT_TYPE | typeof EXPLORE_AGENT_TYPE, ModelSelection>
->;
+export type BuiltInSubagentModelSelectionOverrides = SharedBuiltInSubagentModelSelectionOverrides;
 
 export type AgentPermissionMode = "auto" | "plan";
 
@@ -106,6 +109,12 @@ export function normalizeAgentProfiles(
       modelSelection: overrides[EXPLORE_AGENT_TYPE],
     }),
   );
+  active.set(
+    SRE_AGENT_TYPE,
+    createBuiltInSreAgentProfile({
+      modelSelection: overrides[SRE_AGENT_TYPE],
+    }),
+  );
   for (const profile of profiles) {
     active.set(profile.name, profile);
   }
@@ -126,6 +135,22 @@ export function createBuiltInGeneralPurposeAgentProfile(
     source: "built-in",
     systemPrompt: buildGeneralPurposeSystemPrompt(),
     tools: ["*"],
+  };
+}
+
+export function createBuiltInSreAgentProfile(
+  options: { modelSelection?: ModelSelection } = {},
+): AgentProfile {
+  return {
+    name: SRE_AGENT_TYPE,
+    description:
+      "Read-only software reliability investigator for incident triage, evidence-based diagnosis, impact assessment, and remediation planning. Does not inspect live infrastructure without an available observation tool or execute changes.",
+    color: "purple",
+    injectAgentsMd: true,
+    ...(options.modelSelection ? { modelSelection: options.modelSelection } : {}),
+    source: "built-in",
+    systemPrompt: buildSreSystemPrompt(),
+    tools: [...BUILT_IN_SRE_TOOLS],
   };
 }
 

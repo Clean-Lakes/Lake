@@ -7,6 +7,7 @@ const LOCK_RETRY_DELAY_MS = 10;
 const LOCK_RETRY_COUNT = 200;
 const LOCK_STALE_MS = 5 * 60 * 1000;
 const ZCODE_DATA_BASE_DIR_ENV_KEY = "ZCODE_DATA_BASE_DIR";
+const ZCODE_STORAGE_DIR_ENV_KEY = "ZCODE_STORAGE_DIR";
 
 interface TelemetryState {
   deviceMid?: unknown;
@@ -52,12 +53,16 @@ export function ensureCliDeviceMid(options: EnsureCliDeviceMidOptions = {}): Pro
   return pending;
 }
 
-function resolveCliTelemetryStateFile(options: EnsureCliDeviceMidOptions): string {
+export function resolveCliTelemetryStateFile(options: EnsureCliDeviceMidOptions): string {
   const env = options.env ?? process.env;
+  const storageRoot = options.baseDir ? undefined : env[ZCODE_STORAGE_DIR_ENV_KEY]?.trim();
+  if (storageRoot) {
+    return join(resolveUserPath(storageRoot), "v2", "telemetry-state.json");
+  }
   const configuredBaseDir =
     options.baseDir ?? env[ZCODE_DATA_BASE_DIR_ENV_KEY]?.trim() ?? homedir();
   const baseDir = configuredBaseDir.length > 0 ? configuredBaseDir : homedir();
-  return join(resolveUserPath(baseDir), ".zcode", "v2", "telemetry-state.json");
+  return join(resolveUserPath(baseDir), ".lake", "v2", "telemetry-state.json");
 }
 
 async function ensurePersistedDeviceMid(input: {

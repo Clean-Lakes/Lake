@@ -1,7 +1,7 @@
 /** English translations */
 const enUS: Record<string, string> = {
   "startPlan.recommendation.subagentDescription":
-    "Your Start Plan has quota available for {model}. Switch this subagent’s model to the Start Plan?",
+    "Your Start Plan has quota available for {model}. Switch this beaver’s model to the Start Plan?",
   "startPlan.recommendation.preferenceSaveFailed":
     "Could not save “Don’t ask again”. Continuing with your choice for this operation.",
   "startPlan.recommendation.title": "Start Plan quota available",
@@ -12,7 +12,7 @@ const enUS: Record<string, string> = {
   "startPlan.recommendation.dismiss": "Don’t show again",
   "occupationOnboarding.stepMode": "UI mode",
   "occupationOnboarding.modeTitle": "Choose your UI mode",
-  "occupationOnboarding.modeDescription": "How would you like ZCode to show its work?",
+  "occupationOnboarding.modeDescription": "How would you like Lake to show its work?",
   "occupationOnboarding.coding": "Coding mode",
   "occupationOnboarding.codingDescription":
     "I want to see code, command output, and change details throughout the development process.",
@@ -61,27 +61,27 @@ const enUS: Record<string, string> = {
   "occupationOnboarding.migration": "Migrate conversations",
   "occupationOnboarding.migrationDescription": "Migrate conversation history from Claude Code",
   "occupationOnboarding.memory": "Enable Workspace Memory",
-  "occupationOnboarding.memoryDescription": "Let ZCode remember your preferences and work context.",
+  "occupationOnboarding.memoryDescription": "Let Lake remember your preferences and work context.",
   "occupationOnboarding.suggestions": "Enable proactive task suggestions",
   "occupationOnboarding.suggestionsDescription":
     "Show suggestions in new conversations. Click to fill the composer.",
   "occupationOnboarding.close": "Exit onboarding",
-  "startup.global.silent": "Starting ZCode",
+  "startup.global.silent": "Starting Lake",
   "startup.global.upgrading": "Upgrading local data",
   "startup.global.initializing": "Initializing local data",
   "startup.global.waiting": "Waiting for database preparation",
   "startup.global.saving": "Saving updates",
   "startup.global.finishing": "Finishing startup",
   "startup.global.servicesFailed":
-    "Local data is ready, but app services failed to start. Copy the diagnostics, then exit and reopen ZCode.",
+    "Local data is ready, but app services failed to start. Copy the diagnostics, then exit and reopen Lake.",
   "startup.global.starting": "Preparing local data",
   "startup.global.preparing_host_storage": "Preparing task index",
   "startup.global.preparing_session_storage": "Preparing chat history",
-  "startup.global.starting_services": "Starting ZCode",
+  "startup.global.starting_services": "Starting Lake",
   "startup.global.ready": "Local data is ready",
   "startup.global.failed": "Startup preparation failed",
   "startup.global.help":
-    "ZCode will open when preparation finishes. Large histories may take longer. Please keep the app running.",
+    "Lake will open when preparation finishes. Large histories may take longer. Please keep the app running.",
   "startup.global.diagnostic": "Diagnostic ID",
   "startup.global.copy": "Copy diagnostics",
   "startup.global.exit": "Exit",
@@ -102,15 +102,15 @@ const enUS: Record<string, string> = {
   "startup.global.error.open_failed":
     "The database could not be opened. Check that the data directory exists and is accessible, then retry.",
   "startup.global.error.lock_timeout":
-    "Waiting for the database write lock timed out. Another ZCode or CLI process may be updating data. Retry after it finishes.",
+    "Waiting for the database write lock timed out. Another Lake or CLI process may be updating data. Retry after it finishes.",
   "startup.global.error.sql_failed":
     "Preparation did not finish. Copy the diagnostics and check the logs. Resolve the issue, then retry manually. The app will not retry automatically.",
   "startup.global.error.startup_status_timeout":
-    "No startup status was received. Exit and reopen ZCode. If it fails again, provide the diagnostics to support.",
+    "No startup status was received. Exit and reopen Lake. If it fails again, provide the diagnostics to support.",
   "startup.global.error.transport_closed":
-    "The preparation process exited or disconnected. Exit and reopen ZCode to check the migration records again.",
+    "The preparation process exited or disconnected. Exit and reopen Lake to check the migration records again.",
   "startup.global.error.unsupported_runtime":
-    "The configured Agent does not support storage preparation. Restore the bundled Agent, then reopen ZCode.",
+    "The configured Agent does not support storage preparation. Restore the bundled Agent, then reopen Lake.",
 
   "startup.database.checking": "Checking history",
   "startup.database.waiting_for_lock": "Waiting for another window to prepare data",
@@ -158,7 +158,7 @@ const enUS: Record<string, string> = {
   "offPeak.chatCreated.queuedAt": "#{position} in queue",
   "offPeak.chatCreated.open": "Go to idle-time tasks",
   "settings.computerUse.disabledToast":
-    "Computer Use is disabled. Existing conversations require a ZCode restart to take effect.",
+    "Computer Use is disabled. Existing conversations require a Lake restart to take effect.",
   "settings.modelProvider.connectionUnavailableNotice": "The current plan is unavailable.",
   "settings.modelProvider.switchConnection": "Switch to “{connection}”",
   "settings.modelProvider.connectionSuggestionStale":
@@ -195,7 +195,7 @@ const enUS: Record<string, string> = {
   "conversationShare.permission.linkViewerHint": "Cannot import and continue",
   "conversationShare.permission.linkViewerSummary": "Link holders can view",
   "conversationShare.permission.linkEditor": "Anyone with the link can import and continue",
-  "conversationShare.permission.linkEditorHint": "Import into ZCode",
+  "conversationShare.permission.linkEditorHint": "Import into Lake",
   "conversationShare.permission.linkEditorSummary": "Link holders can import and continue",
   "conversationShare.permission.privateSummary": "Only me",
   "conversationShare.openLink": "Open share page",
@@ -422,7 +422,7 @@ const enUS: Record<string, string> = {
   "conversationShare.import.committing": "Creating the shared conversation",
   "conversationShare.import.complete": "Share import complete",
   "conversationShare.import.loginRequired":
-    "This share cannot be imported anonymously. Sign in to ZCode and try again",
+    "This share cannot be imported anonymously. Sign in to Lake and try again",
   "conversationShare.import.notFound": "The share is unavailable for this account",
   "conversationShare.import.expired": "The share expired. Ask the author to create a new one",
   "conversationShare.import.integrityFailed": "Share file verification failed; import stopped",
@@ -547,14 +547,14 @@ const enUS: Record<string, string> = {
     "Project “{projectName}” will be removed from the sidebar, but files on disk will remain untouched.",
 
   // Welcome / Login
-  "welcome.title": "Welcome to ZCode",
+  "welcome.title": "Welcome to Lake",
   "welcome.username": "Username",
   "welcome.password": "Password",
   "welcome.login": "Login",
   "welcome.loggingIn": "Logging in...",
   "welcome.loginFailed": "Login failed",
-  "login.title": "Welcome to ZCode",
-  "login.description": "Connect your account to start using ZCode",
+  "login.title": "Welcome to Lake",
+  "login.description": "Connect your account to start using Lake",
   "login.oauth.activeProviderHint":
     "Current active provider: {provider}. Signing in again replaces the current identity.",
   "login.oauth.loadingProviders": "Loading account providers...",
@@ -597,7 +597,7 @@ const enUS: Record<string, string> = {
   "app.currentTheme": "Current: {theme}",
   "app.login": "Connect",
   "app.logout": "Disconnect",
-  "logout.confirm.title": "Disconnect and restart ZCode?",
+  "logout.confirm.title": "Disconnect and restart Lake?",
   "logout.confirm.descriptionWithRunningSessions":
     "{count} session(s) are currently running. Disconnecting will interrupt them and restart the app.",
   "logout.confirm.descriptionDefault":
@@ -661,20 +661,20 @@ const enUS: Record<string, string> = {
   "sidePane.restoreSize": "Restore panel width",
   "sidePane.addTab": "Add tab",
   "sidePane.openTab": "Open tab",
-  "sidePane.subagent": "Subagent",
-  "sidePane.subagentDirectory": "Subagents",
+  "sidePane.subagent": "Beaver",
+  "sidePane.subagentDirectory": "Beavers",
   "sidePane.selectionChat": "Side conversation",
   "sidePane.workflowRun": "Workflow run",
   "sidePane.workflowDirectory": "Workflow runs",
-  "sidePane.workflowActor": "Workflow subagent",
+  "sidePane.workflowActor": "Workflow beaver",
   "sidePane.workflowScript": "Script steps",
   "sidePane.workflowArtifact": "Artifact",
-  "subagentDirectory.title": "Subagents",
+  "subagentDirectory.title": "Beavers",
   "subagentDirectory.running": "Running",
-  "subagentDirectory.runningEmpty": "No running subagents",
+  "subagentDirectory.runningEmpty": "No running beavers",
   "subagentDirectory.ended": "Ended",
   "subagentDirectory.showMore": "Show 20 more",
-  "subagentDirectory.loadFailed": "Unable to load subagents.",
+  "subagentDirectory.loadFailed": "Unable to load beavers.",
   "subagentDirectory.status.running": "Running",
   "subagentDirectory.status.waiting": "Waiting",
   "subagentDirectory.status.blocked": "Blocked",
@@ -743,7 +743,7 @@ const enUS: Record<string, string> = {
   "modelTrajectory.refresh": "Refresh",
   "modelTrajectory.close": "Close",
   "modelTrajectory.loading": "Loading trajectory…",
-  "modelTrajectory.empty": "No model calls recorded (only ZCode Agent writes model-io)",
+  "modelTrajectory.empty": "No model calls recorded (only Lake Agent writes model-io)",
   "modelTrajectory.error": "Failed to load trajectory",
   "modelTrajectory.truncatedNotice": "Too many records, showing the most recent calls",
   "modelTrajectory.summaryCalls": "{count} calls",
@@ -758,7 +758,7 @@ const enUS: Record<string, string> = {
   "modelTrajectory.source.compact": "Compaction",
   "modelTrajectory.source.promptEnhance": "Prompt enhance",
   "modelTrajectory.source.targetCompletion": "Goal check",
-  "modelTrajectory.source.subagent": "Subagent",
+  "modelTrajectory.source.subagent": "Beaver",
   "modelTrajectory.source.sidecar": "Sidecar",
   "modelTrajectory.source.unknown": "Unknown source",
   "modelTrajectory.inputSection": "Input",
@@ -1205,14 +1205,14 @@ const enUS: Record<string, string> = {
   "titleBar.menu.view.actualSize": "Actual size",
   "titleBar.menu.view.zoomIn": "Zoom in",
   "titleBar.menu.view.zoomOut": "Zoom out",
-  "titleBar.menu.help.about": "About ZCode",
+  "titleBar.menu.help.about": "About Lake",
   "titleBar.menu.help.checkForUpdates": "Check for updates",
   "titleBar.menu.help.feedback": "Feedback",
   "sidebar.menu.community": "Community",
   "titleBar.menu.help.exportLogs": "Export logs",
   "titleBar.menu.help.toggleDevTools": "Toggle developer tools",
   "titleBar.menu.help.resourceManager": "Resource manager",
-  "titleBar.menu.help.toggleZCodeStdioTap": "Capture agent stdio traffic",
+  "titleBar.menu.help.toggleLakeStdioTap": "Capture agent stdio traffic",
   "titleBar.menu.help.clearAllData": "Clear all data",
 
   // Directory browser
@@ -1258,7 +1258,7 @@ const enUS: Record<string, string> = {
   "update.toast.ready": "v{version} downloaded, restart to install",
   "update.toast.devSkipped": "Updates are disabled in dev builds",
   "update.toast.error": "Update check failed: {error}",
-  "forceUpdate.title": "Update ZCode to continue",
+  "forceUpdate.title": "Update Lake to continue",
   "forceUpdate.description":
     "Your current version v{currentVersion} is below the minimum supported version v{minimalVersion}. Update first before continuing with this client.",
   "forceUpdate.currentVersion": "Current version",
@@ -1309,15 +1309,15 @@ const enUS: Record<string, string> = {
   "workspaceSidebar.taskViewOptions": "Filter and sort",
   "workspaceSidebar.organize": "View",
   "workspaceSidebar.organizeGrouped": "Group",
-  "workspaceSidebar.organizeByProject": "Project",
+  "workspaceSidebar.organizeByProject": "Lake",
   "workspaceSidebar.conversationsSection": "Tasks",
-  "workspaceSidebar.projectsSection": "Projects",
+  "workspaceSidebar.projectsSection": "Lakes",
   "workspaceSidebar.newConversation": "New task",
   "workspaceSidebar.reorderSection": "Move {section} section",
   "workspaceSidebar.addProject": "Add project",
   "workspaceSidebar.noConversations": "No tasks yet",
-  "workspaceSidebar.noProjects": "No open projects",
-  "workspaceSidebar.viewByWorkspace": "By project",
+  "workspaceSidebar.noProjects": "No open lakes",
+  "workspaceSidebar.viewByWorkspace": "By lake",
   "workspaceSidebar.organizeChronologicalList": "Timeline",
   "workspaceSidebar.sortBy": "Sort by",
   "workspaceSidebar.sortByCreated": "Created",
@@ -1340,7 +1340,7 @@ const enUS: Record<string, string> = {
   "workspaceSidebar.notConnected": "Not connected",
   "workspaceSidebar.empty": "No workspaces yet. Open a workspace to get started.",
   "workspaceSidebar.unavailableLocalDirectory":
-    "The workspace directory does not exist or cannot be accessed. You can only view history for now. Restore the directory and restart ZCode to continue.",
+    "The workspace directory does not exist or cannot be accessed. You can only view history for now. Restore the directory and restart Lake to continue.",
   "workspaceSidebar.showSidebar": "Toggle sidebar",
   "workspaceSidebar.hideSidebar": "Toggle sidebar",
   "workspaceSidebar.toggleSidebar": "Toggle sidebar",
@@ -1383,7 +1383,7 @@ const enUS: Record<string, string> = {
   "ssh.assetInstallMode.local-download-upload": "Download locally, then upload",
   "ssh.assetInstallMode.remote-download": "Download on remote server",
   "ssh.assetInstallModeDescription":
-    "Remote server download reduces upload waiting, but the server must reach the ZCode CDN and have download, extract, and checksum tools.",
+    "Remote server download reduces upload waiting, but the server must reach the configured download source and have download, extract, and checksum tools.",
   "ssh.password": "Password",
   "ssh.passwordPlaceholder": "Enter your SSH password",
   "ssh.privateKey": "Private key",
@@ -1635,7 +1635,7 @@ const enUS: Record<string, string> = {
   "chat.changeSummary.reverted": "Undone",
   "chat.changeSummary.rewindDialog.title": "Undo file changes",
   "chat.changeSummary.rewindDialog.description":
-    "ZCode checks current file content again before writing. If another process changed a file, no files will be written.",
+    "Lake checks current file content again before writing. If another process changed a file, no files will be written.",
   "chat.changeSummary.rewindDialog.loading": "Checking reversible files…",
   "chat.changeSummary.rewindDialog.safeTitle": "Safe to undo {count}",
   "chat.changeSummary.rewindDialog.unsafeTitle": "Unsafe to undo {count}",
@@ -1729,6 +1729,8 @@ const enUS: Record<string, string> = {
   "settings.themeMode.dark": "Dark",
   "settings.themeMode.zai-light": "Light",
   "settings.themeMode.zai-dark": "Dark",
+  "settings.themeMode.lake-light": "Eco Light",
+  "settings.themeMode.lake-dark": "Eco Dark",
   "settings.themeMode.system": "System",
   "settings.appearanceTitle": "Appearance",
   "settings.shortcuts.title": "Keyboard Shortcuts",
@@ -1786,6 +1788,9 @@ const enUS: Record<string, string> = {
   "settings.shortcuts.command.cycleThoughtLevel": "Cycle Thought Level",
   "settings.shortcuts.command.findInTask": "Find in Task",
   "settings.shortcuts.command.openCommandCenter": "Open Command Center",
+  "settings.shortcuts.command.openLakeSwitcher": "Open Lake switcher",
+  "lake.navigation.selectFirst":
+    "Select a lake with a bound project directory before creating a session.",
   "settings.shortcuts.command.openSettings": "Open Settings",
   "settings.shortcuts.command.zoomIn": "Zoom In",
   "settings.shortcuts.command.zoomOut": "Zoom Out",
@@ -1807,7 +1812,7 @@ const enUS: Record<string, string> = {
     "When launching the built-in terminal, inherit login shell environment, proxy, Kubernetes variables, and local terminal font when possible.",
   "settings.terminalFontFamily": "Terminal font",
   "settings.terminalFontFamilyDescription":
-    "Leave blank to auto-detect system terminal settings; set a value to override the ZCode terminal font.",
+    "Leave blank to auto-detect system terminal settings; set a value to override the Lake terminal font.",
   "settings.terminalFontFamilyPlaceholder": "Leave blank to inherit, e.g. MesloLGS NF, monospace",
   "settings.integratedTerminalShell": "Integrated terminal shell",
   "settings.integratedTerminalShellDescription":
@@ -1924,7 +1929,7 @@ const enUS: Record<string, string> = {
     "Group consecutive Write, Edit, and ApplyPatch calls into a Changes section.",
   "settings.zcodeInteractionBehavior": "Interaction behavior",
   "settings.zcodeInteractionBehaviorDescription":
-    "While ZCode is running, add follow-up actions to the queue or guide them to run after the next tool call.",
+    "While Lake is running, add follow-up actions to the queue or guide them to run after the next tool call.",
   "settings.zcodeInteractionBehavior.option.queue": "Queue",
   "settings.zcodeInteractionBehavior.option.guide": "Guide",
   "settings.askUserQuestionAutoResolution": "Automatically continue questions",
@@ -1954,7 +1959,7 @@ const enUS: Record<string, string> = {
   "settings.dataBaseDirCopying": "Copying data, please do not close the app...",
   "settings.dataBaseDirCopyFailed": "Data copy failed. Path was not changed.",
   "settings.dataBaseDirForbiddenInstallDir":
-    "The data directory cannot be the ZCode installation folder on Windows. Choose a folder outside the app install location.",
+    "The data directory cannot be the Lake installation folder on Windows. Choose a folder outside the app install location.",
   "settings.dataBaseDirRestartRequired": "Data saved. Please restart the app to take effect.",
   "settings.locale.system": "System default",
   "settings.locale.zh-CN": "中文简体",
@@ -1970,7 +1975,7 @@ const enUS: Record<string, string> = {
   "settings.migration.title": "Migration",
   "settings.migration.sectionTitle": "Claude History Migration",
   "settings.migration.sectionDescription":
-    "Scan native Claude Code history on this machine, optionally filter by workspace and activity window, then import the selected sessions into their matching ZCode task lists.",
+    "Scan native Claude Code history on this machine, optionally filter by workspace and activity window, then import the selected sessions into their matching Lake task lists.",
   "settings.migration.badge.localOnly": "Local Claude records",
   "settings.migration.badge.manualOnly": "Manual only",
   "settings.migration.currentWorkspace": "Current workspace",
@@ -2024,14 +2029,14 @@ const enUS: Record<string, string> = {
   "settings.usageTitle": "Usage stats",
   "settings.usageDescription":
     "Review rough activity and model usage aggregated from local sessions.",
-  "resourceManager.storage.summaryTotal": "Total used by ZCode",
+  "resourceManager.storage.summaryTotal": "Total used by Lake",
   "resourceManager.storage.scanning": "Calculating…",
   "resourceManager.storage.lastScanned": "Last calculated {time}",
   "resourceManager.storage.idle": "Not calculated yet",
   "resourceManager.storage.failed": "Calculation failed",
   "resourceManager.storage.rescan": "Recalculate",
   "resourceManager.storage.disk": "Disk",
-  "resourceManager.storage.diskUsage": "ZCode uses {used}",
+  "resourceManager.storage.diskUsage": "Lake uses {used}",
   "resourceManager.storage.diskFree": "{free} free of {total}",
   "resourceManager.storage.diskUnknown": "Disk capacity unavailable",
   "resourceManager.storage.roots": "Data directories",
@@ -2052,7 +2057,7 @@ const enUS: Record<string, string> = {
   "resourceManager.storage.confirmTitle": 'Clean "{category}"?',
   "resourceManager.storage.confirmSize": "About {size} will be deleted.",
   "resourceManager.storage.category.sessionStore": "Sessions & databases",
-  "resourceManager.storage.category.subagentTranscripts": "Subagent transcripts",
+  "resourceManager.storage.category.subagentTranscripts": "Beaver transcripts",
   "resourceManager.storage.category.toolOutputs": "Tool outputs & temporary caches",
   "resourceManager.storage.category.modelTrajectory": "Model call trajectories",
   "resourceManager.storage.category.devTraces": "Development traces",
@@ -2065,7 +2070,7 @@ const enUS: Record<string, string> = {
   "resourceManager.storage.categoryDescription.sessionStore":
     "Task index, session snapshots and checkpoints; cleaned by deleting or archiving tasks.",
   "resourceManager.storage.categoryDescription.subagentTranscripts":
-    "Full conversation records of subagent runs (transcript.jsonl), up to tens of MB each; sessions active in the last 24 hours are kept.",
+    "Full conversation records of beaver runs (transcript.jsonl), up to tens of MB each; sessions active in the last 24 hours are kept.",
   "resourceManager.storage.categoryDescription.toolOutputs":
     "Archived tool results, full command outputs, image caches and temporary files; not cleanable yet.",
   "resourceManager.storage.categoryDescription.modelTrajectory":
@@ -2099,7 +2104,7 @@ const enUS: Record<string, string> = {
   "settings.embeddedBrowserAllowInsecureCertificatesSavedHint":
     "Certificate setting saved. Restart the app to take effect.",
   "settings.browser.data.section": "Browser data",
-  "settings.browser.desktopOnly": "Browser data can only be managed in the ZCode desktop app.",
+  "settings.browser.desktopOnly": "Browser data can only be managed in the Lake desktop app.",
   "settings.browser.import.title": "Import Chrome sign-in state",
   "settings.browser.import.description":
     "Bring your Chrome sign-in state into the built-in browser once, so the AI can open sites you are already signed in to and work more smoothly.",
@@ -2117,13 +2122,13 @@ const enUS: Record<string, string> = {
   "settings.browser.import.elevationCancelled":
     "Windows administrator access was canceled. No cookies were imported.",
   "settings.browser.import.helperVerificationFailed":
-    "ZCode could not verify its Windows secure import component. Reinstall or update ZCode before importing cookies.",
+    "Lake could not verify its Windows secure import component. Reinstall or update Lake before importing cookies.",
   "settings.browser.import.appBoundFailed":
     "Windows could not unlock Chrome's App-Bound cookies. No cookies were imported.",
   "settings.browser.import.adminConfirmTitle":
     "Allow administrator access to import Chrome cookies?",
   "settings.browser.import.adminConfirmDescription":
-    "Chrome protects cookies with App-Bound encryption on Windows. For this import only, ZCode will request administrator access, start a temporary system service, and delete it immediately afterward. Chrome passwords are never read or imported.",
+    "Chrome protects cookies with App-Bound encryption on Windows. For this import only, Lake will request administrator access, start a temporary system service, and delete it immediately afterward. Chrome passwords are never read or imported.",
   "settings.browser.import.adminConsent":
     "I confirm administrator access for this cookie import only",
   "settings.browser.import.adminConfirmAction": "Continue and request access",
@@ -2182,7 +2187,7 @@ const enUS: Record<string, string> = {
   "settings.previewBadge.dark": "Dark",
   "settings.modelProviderTitle": "Model settings",
   "settings.mcpTitle": "MCP Servers",
-  "settings.mcp.description": "Manage MCP server configurations used by ZCode Agent.",
+  "settings.mcp.description": "Manage MCP server configurations used by Lake Agent.",
   "settings.mcp.create.open": "Add MCP server",
   "settings.mcp.import.open": "Import MCP servers from external agents",
   "settings.mcp.import.action": "Import",
@@ -2259,7 +2264,7 @@ const enUS: Record<string, string> = {
     "This plugin MCP server is loaded but not currently connected.",
   "settings.mcp.host.active": "Host built-in",
   "settings.mcp.host.activeDescription":
-    "ZCode provides this MCP server for the {pluginName} plugin. Its runtime identity is managed by the host.",
+    "Lake provides this MCP server for the {pluginName} plugin. Its runtime identity is managed by the host.",
   "settings.mcp.plugin.disabled": "Plugin disabled",
   "settings.mcp.plugin.disabledDescription":
     "This MCP server is built into a plugin. Enable the plugin to load it.",
@@ -2271,7 +2276,7 @@ const enUS: Record<string, string> = {
     "Open authorization to finish connecting this plugin MCP server.",
   "settings.mcp.oauth.openAuthorization": "Open authorization",
   "settings.mcp.statusOnlyUnsupported":
-    "This ZCode Agent cannot refresh OAuth status. Upgrade or restart ZCode, then reopen MCP settings to run a full refresh.",
+    "This Lake Agent cannot refresh OAuth status. Upgrade or restart Lake, then reopen MCP settings to run a full refresh.",
   "settings.mcp.refreshFailed": "Failed to refresh MCP status: {error}",
   "settings.mcp.status.toolCount": "{count} tools",
   "settings.mcp.status.connectedReason": "Connected and available.",
@@ -2298,7 +2303,7 @@ const enUS: Record<string, string> = {
   "settings.mcp.failure.official_origin_untrusted":
     "The MCP server URL failed the security check. The connection was blocked.",
   "settings.mcp.failure.not_authenticated":
-    "You are not signed in. Sign in to ZCode to use this MCP server.",
+    "You are not signed in. Sign in to Lake to use this MCP server.",
   "settings.mcp.failure.coding_plan_required":
     "This account has no Coding Plan. Purchase or configure a Coding Plan to use this MCP server.",
   "settings.mcp.failure.server_not_found":
@@ -2368,7 +2373,7 @@ const enUS: Record<string, string> = {
   "settings.mcpServers.import.targetLabel": "Import target",
   "settings.mcpServers.import.target.global": "Import to Global",
   "settings.mcpServers.import.target.project": "Import to Project",
-  "settings.mcpServers.import.importing": "Importing MCP servers into ZCode",
+  "settings.mcpServers.import.importing": "Importing MCP servers into Lake",
   "settings.mcpServers.import.imported": "Imported",
   "settings.mcpServers.import.skipped": "Skipped",
   "settings.mcpServers.import.failed": "Failed",
@@ -2496,7 +2501,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.startPlan.highlight.trial.label": "Trial period",
   "settings.modelProvider.startPlan.highlight.trial.value": "5 calendar days",
   "settings.modelProvider.startPlan.highlight.trial.description":
-    "Timing starts after signing in to ZCode 3.x.",
+    "Timing starts after signing in to Lake 3.x.",
   "settings.modelProvider.startPlan.highlight.quota.label": "Daily quota",
   "settings.modelProvider.startPlan.highlight.quota.value": "3M tokens daily",
   "settings.modelProvider.startPlan.highlight.quota.description":
@@ -2506,7 +2511,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.startPlan.highlight.metering.description":
     "Metered only after using platform GLM flagship models.",
   "settings.modelProvider.startPlan.compatibility":
-    "Supports BYOK and BYOA. Base URL, API format, and API Key are maintained by ZCode automatically.",
+    "Supports BYOK and BYOA. Base URL, API format, and API Key are maintained by Lake automatically.",
   "settings.modelProvider.codingPlan.title": "{provider} - Coding Plan",
   "settings.modelProvider.codingPlan.webview.title": "Upgrade Plan",
   "settings.modelProvider.codingPlan.webview.authInjectFailed":
@@ -2643,7 +2648,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.codingPlan.purchase.teamMemberNoticeTitle":
     "Assign members to your team plan",
   "settings.modelProvider.codingPlan.purchase.teamMemberNoticeDescription":
-    "Add yourself or other members on the BigModel team plan management page. Once assigned, the team quota will be available in ZCode.",
+    "Add yourself or other members on the BigModel team plan management page. Once assigned, the team quota will be available in Lake.",
   "settings.modelProvider.codingPlan.purchase.manageTeamPlan": "Manage team plan",
   "settings.modelProvider.codingPlan.manage": "Manage",
   "settings.modelProvider.planCard.codingPlan": "Coding Plan",
@@ -3025,7 +3030,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.resetForm": "Reset form",
   "settings.modelProvider.fieldHelp": "About {field}",
   "settings.modelProvider.help.contextWindow":
-    "The context capacity the model can process at once, in tokens. ZCode uses this to manage context.\nDo not exceed the model's actual limit.",
+    "The context capacity the model can process at once, in tokens. Lake uses this to manage context.\nDo not exceed the model's actual limit.",
   "settings.modelProvider.help.maxOutputTokens":
     "The maximum number of tokens a single model request may generate.\nDo not exceed the model's actual limit.",
   "settings.modelProvider.help.inputModalities":
@@ -3041,7 +3046,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.help.advanced":
     "**MFJS tool schema**: Enables Moonshot Flavored JSON Schema compatibility, commonly used by Moonshot's Kimi model API. Enable only when the model API requires this format.",
   "settings.modelProvider.help.followRecommendedConfig":
-    "Matches recommended configuration using the model ID, Base URL, and API format. ZCode continually updates recommendations and automatically syncs them to you.\nWhen you manually change a setting, that setting becomes manually managed and stops following recommendation updates; other settings remain managed by smart configuration.",
+    "Matches recommended configuration using the model ID, Base URL, and API format. Lake continually updates recommendations and automatically syncs them to you.\nWhen you manually change a setting, that setting becomes manually managed and stops following recommendation updates; other settings remain managed by smart configuration.",
   "settings.modelProvider.modelDefaultsLoaded": "Smart configuration matched for this model",
   "settings.modelProvider.modelConfigIncomplete": "Model configuration is incomplete",
   "settings.modelProvider.models": "Model list",
@@ -3111,7 +3116,7 @@ const enUS: Record<string, string> = {
   "settings.usage.sourceProvider": "Source: {provider}",
   "settings.usage.billingBanner.title": "{provider} Coding Plan",
   "settings.usage.billingBanner.description":
-    "Connect your {provider} account to query Coding Plan entitlement, then keep coding in ZCode after purchase or setup.",
+    "Connect your {provider} account to query Coding Plan entitlement, then keep coding in Lake after purchase or setup.",
   "settings.usage.billingBanner.compactDescription":
     "Connect your {provider} account to sync usage.",
   "settings.usage.billingBanner.buy": "Buy Coding Plan",
@@ -3170,7 +3175,7 @@ const enUS: Record<string, string> = {
   "settings.usage.entitlementFiveHourUsage": "5-hour remaining",
   "settings.usage.entitlementWeeklyUsage": "Weekly remaining",
   "settings.usage.entitlementMonthlyMcpUsage": "Tool calls",
-  "settings.usage.entitlementServerMcpUsage": "ZCode MCP",
+  "settings.usage.entitlementServerMcpUsage": "Lake MCP",
   "settings.usage.entitlementResetAt": "Resets {time}",
   "settings.usage.entitlementUsageDetails": "Tool usage detail",
   "settings.usage.entitlementPromptCap": "5-hour prompt pool",
@@ -3228,9 +3233,9 @@ const enUS: Record<string, string> = {
   "sidebar.usage.plan.fiveHour": "5 hours",
   "sidebar.usage.plan.weekly": "Weekly",
   "sidebar.usage.plan.toolCalls": "Tool calls",
-  "sidebar.usage.plan.mcp": "ZCode MCP",
-  "sidebar.usage.plan.zcodeMcp": "ZCode MCP",
-  "sidebar.usage.plan.zcodeMcpDescription": "Daily aggregate quota for ZCode built-in plugin MCPs",
+  "sidebar.usage.plan.mcp": "Lake MCP",
+  "sidebar.usage.plan.zcodeMcp": "Lake MCP",
+  "sidebar.usage.plan.zcodeMcpDescription": "Daily aggregate quota for Lake built-in plugin MCPs",
   "chat.planUsage.title": "Plan usage",
   "chat.planUsage.titleWithPlan": "{plan} Plan usage",
   "chat.planUsage.providerFallback": "Current provider",
@@ -3453,10 +3458,10 @@ const enUS: Record<string, string> = {
   "settings.skills.import.mode.copy": "Copy",
   "settings.skills.import.mode.symlink": "Symlink",
   "settings.skills.import.mode.copy.description":
-    "Copy the full skill directory into ZCode. Later changes in the external agent directory will not sync automatically.",
+    "Copy the full skill directory into Lake. Later changes in the external agent directory will not sync automatically.",
   "settings.skills.import.mode.symlink.description":
-    "Create a directory link to the external agent skill. ZCode follows later source changes, but the skill depends on that source path remaining available.",
-  "settings.skills.import.importing": "Importing skills into ZCode",
+    "Create a directory link to the external agent skill. Lake follows later source changes, but the skill depends on that source path remaining available.",
+  "settings.skills.import.importing": "Importing skills into Lake",
   "settings.skills.import.imported": "Imported",
   "settings.skills.import.skipped": "Skipped",
   "settings.skills.import.failed": "Failed",
@@ -3530,31 +3535,41 @@ const enUS: Record<string, string> = {
   "settings.skills.diagnostics.code.skill_duplicate_name": "Duplicate skill name ignored",
   "settings.skills.diagnostics.code.skill_too_large": "SKILL.md too large; content truncated",
   "settings.skills.diagnostics.code.skill_not_found": "Skill not found",
-  "settings.subagents.title": "Subagents",
+  "settings.subagents.title": "Beavers",
   "settings.subagents.description":
-    "Manage user-level subagent Markdown files consumed by ZCode Agent.",
+    "Manage user-level beaver Markdown files consumed by Lake Agent.",
   "settings.subagents.workspaceScopeUnsupported":
     "Workspace-level creation or editing is unsupported",
-  "settings.subagents.searchPlaceholder": "Search subagents...",
-  "settings.subagents.empty": "No subagents found",
-  "settings.subagents.addNew": "New subagent",
+  "settings.subagents.searchPlaceholder": "Search beavers...",
+  "settings.subagents.empty": "No beavers found",
+  "settings.subagents.addNew": "New beaver",
   "settings.subagents.addDescription":
-    "Fill in the subagent name, tools, and system prompt, then save to return to the list.",
-  "settings.subagents.edit": "Edit subagent",
+    "Fill in the beaver name, tools, and system prompt, then save to return to the list.",
+  "settings.subagents.edit": "Edit beaver",
   "settings.subagents.editDescription":
-    "Modify the subagent configuration, then save to return to the list.",
+    "Modify the beaver configuration, then save to return to the list.",
   "settings.subagents.backToList": "Back",
-  "settings.subagents.openUserAgentsFolder": "Open user subagents folder",
+  "settings.subagents.openUserAgentsFolder": "Open user beavers folder",
   "settings.subagents.noDescription": "No description",
   "settings.subagents.userScopeDesktopOnly":
-    "User-level subagents are currently available on desktop only.",
-  "settings.subagents.group.user": "Installed",
-  "settings.subagents.group.plugin": "Plugin subagents",
+    "User-level beavers are currently available on desktop only.",
+  "settings.subagents.group.user": "User Beavers",
+  "settings.subagents.group.workspace": "Workspace Beavers",
+  "settings.subagents.group.plugin": "Plugin Beavers",
   "settings.subagents.group.plugin.hint":
     "Plugin profiles are loaded from enabled plugins; only the model and reasoning effort can be overridden here.",
-  "settings.subagents.group.builtIn": "Built-in subagents",
+  "settings.subagents.group.builtIn": "Built-in Beavers",
   "settings.subagents.group.builtIn.hint":
-    "Built-in profiles are runtime defaults and cannot be edited here.",
+    "Beavers are Lake's built-in collaborators. You can override their model and reasoning effort; other settings are read-only.",
+  "settings.subagents.builtin.generalPurpose.name": "General Beaver",
+  "settings.subagents.builtin.generalPurpose.description":
+    "Uses all available tools for complex questions and multi-step tasks.",
+  "settings.subagents.builtin.explore.name": "Explore Beaver",
+  "settings.subagents.builtin.explore.description":
+    "Read-only search and research for quickly exploring code and reference material.",
+  "settings.subagents.builtin.sre.name": "SRE Beaver",
+  "settings.subagents.builtin.sre.description":
+    "Read-only software incident analysis, impact assessment, and recovery planning; no direct changes to live systems.",
   "settings.subagents.scope.builtIn": "Built-in",
   "settings.subagents.scope.plugin": "Plugin",
   "settings.subagents.scope.workspace": "Workspace",
@@ -3567,14 +3582,14 @@ const enUS: Record<string, string> = {
   "settings.subagents.table.model": "Model",
   "settings.subagents.table.tools": "Tools",
   "settings.subagents.table.enabled": "Enabled",
-  "settings.subagents.footerSummary": "{total} subagents · {enabled} enabled",
+  "settings.subagents.footerSummary": "{total} beavers · {enabled} enabled",
   "settings.subagents.toolsCount": "{count} tools",
   "settings.subagents.tools.inherit": "Inherit tools",
   "settings.subagents.tools.all": "All tools",
   "settings.subagents.toggleAria": "Toggle {name}",
-  "settings.subagents.delete.title": "Delete subagent",
+  "settings.subagents.delete.title": "Delete beaver",
   "settings.subagents.delete.description":
-    'Are you sure you want to delete the subagent "{name}"? This action cannot be undone.',
+    'Are you sure you want to delete the beaver "{name}"? This action cannot be undone.',
   "settings.subagents.form.description":
     "Save writes a user-level Markdown profile into the same storage root used by the runtime.",
   "settings.subagents.form.name.label": "Name",
@@ -3588,17 +3603,17 @@ const enUS: Record<string, string> = {
   "settings.subagents.form.color.label": "Color",
   "settings.subagents.form.tools.label": "Allowed tools",
   "settings.subagents.form.tools.inheritAll": "Inherit all",
-  "settings.subagents.form.tools.card.title": "Control which tools this SubAgent can use.",
+  "settings.subagents.form.tools.card.title": "Control which tools this Beaver can use.",
   "settings.subagents.form.tools.mode.all": "Default all permissions",
   "settings.subagents.form.tools.mode.custom": "Custom allowed tools",
   "settings.subagents.form.disallowedTools.label": "Disallowed tools",
   "settings.subagents.form.skills.label": "Skills",
   "settings.subagents.form.background.label": "Run in background",
   "settings.subagents.form.background.description":
-    "Allow the subagent to run as a background task when requested by the model.",
+    "Allow the beaver to run as a background task when requested by the model.",
   "settings.subagents.form.injectAgentsMd.label": "Inject AGENTS.md",
   "settings.subagents.form.systemPrompt.label": "System prompt",
-  "settings.subagents.form.systemPrompt.placeholder": "Describe this subagent's role and rules...",
+  "settings.subagents.form.systemPrompt.placeholder": "Describe this beaver's role and rules...",
   "settings.subagents.form.validation.nameLength": "Length must be between {min} and {max}",
   "settings.subagents.form.validation.nameCharacters": "Only letters, numbers, and hyphens allowed",
   "settings.subagents.form.validation.descriptionRequired": "Description is required",
@@ -3674,7 +3689,7 @@ const enUS: Record<string, string> = {
   "settings.plugins.description":
     "Enable or disable installed plugins. Plugins bundle skills, commands, hooks, and MCP servers.",
   "settings.plugins.store.subtitle":
-    "Extend ZCode with skills, commands, and MCP servers from plugins",
+    "Extend Lake with skills, commands, and MCP servers from plugins",
   "settings.plugins.store.searchPlaceholder": "Search plugins",
   "settings.plugins.store.searchResults": "Search results ({count})",
   "settings.plugins.store.searchEmpty": "No plugins match your search",
@@ -3715,7 +3730,7 @@ const enUS: Record<string, string> = {
   "settings.plugins.store.section.mcp": "MCP servers",
   "settings.plugins.store.section.skills": "Skills",
   "settings.plugins.store.section.commands": "Commands",
-  "settings.plugins.store.section.agents": "Subagents",
+  "settings.plugins.store.section.agents": "Beavers",
   "settings.plugins.store.section.hooks": "Hooks",
   "settings.plugins.store.info.title": "Information",
   "settings.plugins.store.info.developer": "Developer",
@@ -3802,7 +3817,7 @@ const enUS: Record<string, string> = {
   "settings.plugins.detail.moreDetails": "Advanced details",
   "settings.plugins.detail.componentsEmpty": "No components",
   "settings.plugins.detail.componentsWhenEnabled": "Enable the plugin to view its components.",
-  "settings.plugins.detail.component.agent": "Agents",
+  "settings.plugins.detail.component.agent": "Beavers",
   "settings.plugins.detail.component.command": "Commands",
   "settings.plugins.detail.component.skill": "Skills",
   "settings.plugins.detail.component.hook": "Hooks",
@@ -3881,10 +3896,10 @@ const enUS: Record<string, string> = {
   "settings.plugins.import.mode.copy": "Copy",
   "settings.plugins.import.mode.symlink": "Symlink",
   "settings.plugins.import.mode.copy.description":
-    "Copy the full plugin directory into ZCode and register it in plugins.dirs. Later changes in the external agent directory will not sync automatically.",
+    "Copy the full plugin directory into Lake and register it in plugins.dirs. Later changes in the external agent directory will not sync automatically.",
   "settings.plugins.import.mode.symlink.description":
-    "Create a directory link to the external agent plugin and register it in plugins.dirs. ZCode follows later source changes, but the plugin depends on that source path remaining available.",
-  "settings.plugins.import.importing": "Importing plugins into ZCode",
+    "Create a directory link to the external agent plugin and register it in plugins.dirs. Lake follows later source changes, but the plugin depends on that source path remaining available.",
+  "settings.plugins.import.importing": "Importing plugins into Lake",
   "settings.plugins.import.imported": "Imported",
   "settings.plugins.import.skipped": "Skipped",
   "settings.plugins.import.failed": "Failed",
@@ -3893,9 +3908,9 @@ const enUS: Record<string, string> = {
   "settings.plugins.import.finish": "Done",
   "settings.commands.title": "Commands",
   "settings.commands.description":
-    "Manage ZCode Agent .md command files. Commands can be invoked with /command-name in chat.",
+    "Manage Lake Agent .md command files. Commands can be invoked with /command-name in chat.",
   "settings.commands.sourceFilterLabel": "Source filter",
-  "settings.commands.source.zcodeAgent": "ZCode Agent",
+  "settings.commands.source.zcodeAgent": "Lake Agent",
   "settings.commands.add": "New",
   "settings.commands.addNew": "New command",
   "settings.commands.addDescription":
@@ -3955,10 +3970,10 @@ const enUS: Record<string, string> = {
   "settings.commands.import.mode.copy": "Copy",
   "settings.commands.import.mode.symlink": "Symlink",
   "settings.commands.import.mode.copy.description":
-    "Copy the command file into ZCode. Later changes in the external agent file will not sync automatically.",
+    "Copy the command file into Lake. Later changes in the external agent file will not sync automatically.",
   "settings.commands.import.mode.symlink.description":
-    "Create a file link to the external agent command. ZCode follows later source changes, but the command depends on that source path remaining available.",
-  "settings.commands.import.importing": "Importing commands into ZCode",
+    "Create a file link to the external agent command. Lake follows later source changes, but the command depends on that source path remaining available.",
+  "settings.commands.import.importing": "Importing commands into Lake",
   "settings.commands.import.imported": "Imported",
   "settings.commands.import.skipped": "Skipped",
   "settings.commands.import.failed": "Failed",
@@ -4054,8 +4069,8 @@ const enUS: Record<string, string> = {
   "settingsSync.action.rescanning": "Scanning...",
   "settingsSync.action.importSelected": "Import selected",
   "settingsSync.action.importing": "Importing...",
-  "settingsSync.action.finish": "Start using ZCode",
-  "settingsSync.agent.zcode": "ZCode Agent",
+  "settingsSync.action.finish": "Start using Lake",
+  "settingsSync.agent.zcode": "Lake Agent",
   "settingsSync.agent.claudeCode": "Claude Code",
   "settingsSync.agent.codexCli": "Codex CLI",
   "settingsSync.agent.openCode": "OpenCode",
@@ -4104,17 +4119,17 @@ const enUS: Record<string, string> = {
   "settingsSync.discovery.description":
     "Importable agent settings are no longer scanned automatically.",
   "settingsSync.discovery.helper":
-    "Only missing items will be imported and your current ZCode settings will not be overwritten.",
+    "Only missing items will be imported and your current Lake settings will not be overwritten.",
   "settingsSync.discovery.agentCount": "Agents found: {count}",
   "settingsSync.discovery.categoryCount": "Categories found: {count}",
   "settingsSync.discovery.error": "Scan failed: {error}",
   "settingsSync.discovery.continue": "Continue",
-  "onboarding.dialog.title": "Welcome to ZCode",
+  "onboarding.dialog.title": "Welcome to Lake",
   "onboarding.dialog.description": "Choose how to start your first session.",
   "onboarding.wizard.label": "Migration guide",
   "onboarding.welcome.eyebrow": "First run setup",
-  "onboarding.welcome.title": "Welcome to ZCode",
-  "onboarding.welcome.start": "Start ZCode",
+  "onboarding.welcome.title": "Welcome to Lake",
+  "onboarding.welcome.start": "Start Lake",
   "onboarding.welcome.migrate": "Migration Guide",
   "onboarding.welcome.helper":
     "Import existing tool settings now, or skip and continue later from Settings.",
@@ -4136,7 +4151,7 @@ const enUS: Record<string, string> = {
   "onboarding.stepDescription.commandsImport":
     "Import selected commands from external agents before the final migration.",
   "onboarding.stepDescription.migration":
-    "Start migration and wait while ZCode imports your selections.",
+    "Start migration and wait while Lake imports your selections.",
   "onboarding.sessions.empty":
     "No workspaces yet. Scan local history, then pick workspaces to migrate.",
   "onboarding.sessions.count": "{count} sessions",
@@ -4154,7 +4169,7 @@ const enUS: Record<string, string> = {
   "onboarding.agentsFile.error": "Could not check AGENTS.md migration status: {error}",
   "onboarding.agentsFile.confirmTitle": "Overwrite default AGENTS.md?",
   "onboarding.agentsFile.confirmDescription":
-    "ZCode will copy {source} to {target}.\nIf the target file already exists, the ZCode default AGENTS configuration will be overwritten.",
+    "Lake will copy {source} to {target}.\nIf the target file already exists, the Lake default AGENTS configuration will be overwritten.",
   "onboarding.agentsFile.confirmAction": "Overwrite and migrate",
   "onboarding.finish.summary.label.imported": "Imported",
   "onboarding.finish.summary.label.skipped": "Skipped",
@@ -4234,9 +4249,8 @@ const enUS: Record<string, string> = {
   "chat.emptyResult.title": "No visible output",
   "chat.emptyResult.description":
     "This task finished without any chat content. It may have been stopped before the model produced a response.",
-  "chat.placeholder.newTask":
-    "Ask ZCode anything, @ to add context, / for commands or capabilities",
-  "chat.placeholder.newTaskMobile": "Ask ZCode anything…",
+  "chat.placeholder.newTask": "Ask Lake anything, @ to add context, / for commands or capabilities",
+  "chat.placeholder.newTaskMobile": "Ask Lake anything…",
   "chat.placeholder.followUpAsk": "Ask for follow-up changes",
   "chat.placeholder.followUpQueue": "Keep typing to queue follow-up changes",
   "chat.placeholder.loading": "Initializing task...",
@@ -4438,14 +4452,14 @@ const enUS: Record<string, string> = {
   "chat.summaryPanel.runningBackgroundTasksMiniValue": "{count} background",
   "chat.summaryPanel.runningBackgroundTasksMiniValuePlural": "{count} background",
   "chat.summaryPanel.stopRunningBackgroundTask": "Stop running background task",
-  "chat.summaryPanel.openRunningSubagentSession": "Open subagent session",
+  "chat.summaryPanel.openRunningSubagentSession": "Open beaver session",
   "chat.composer.backgroundWorks.tooltipTerminal": "Open running terminals",
-  "chat.composer.backgroundWorks.tooltipAgent": "Open running agents",
+  "chat.composer.backgroundWorks.tooltipAgent": "Open running beavers",
   "chat.composer.backgroundWorks.tooltipWorkflow": "Open running workflows",
   "chat.composer.backgroundWorks.tooltipWorkflowDetails": "Open workflow details",
-  "chat.composer.backgroundWorks.tooltipMixed": "Open running terminals and agents",
+  "chat.composer.backgroundWorks.tooltipMixed": "Open running terminals and beavers",
   "chat.composer.backgroundWorks.ariaLabel":
-    "Open running background tasks: {bashCount} Bash, {workflowCount} workflow, {subagentCount} Subagent, {count} total",
+    "Open running background tasks: {bashCount} Bash, {workflowCount} workflow, {subagentCount} beavers, {count} total",
   "chat.summaryPanel.goalIterationValue": "Iteration {count}",
   "chat.summaryPanel.todoGoalIterationGroup": "Iteration {count}",
   "chat.summaryPanel.todoSessionGroup": "Session",
@@ -4466,7 +4480,7 @@ const enUS: Record<string, string> = {
   "chat.statusPanel.todoWaitingExpanded": "Hide {count} waiting",
   "chat.statusPanel.todoWaitingFold": "{count} waiting",
   "chat.statusPanel.terminals": "Terminals",
-  "chat.statusPanel.agents": "Agents",
+  "chat.statusPanel.agents": "Beavers",
   "chat.statusPanel.workflows": "Workflows",
   "chat.statusPanel.runningStatusValue": "{count} in background",
   "chat.statusPanel.runningStatusValuePlural": "{count} in background",
@@ -4498,7 +4512,7 @@ const enUS: Record<string, string> = {
   "chat.compact.duplicateBlocked": "A compaction is already running or queued.",
   "chat.modelSwitch.contextWindowGuard.title": "Compress context before switching models",
   "chat.modelSwitch.contextWindowGuard.description":
-    "This conversation has used {used} tokens, which exceeds {modelName}'s available context of {target} tokens after reserving maximum output.\nCompress the current conversation with the current model first. If the compressed context fits, ZCode will continue switching models.",
+    "This conversation has used {used} tokens, which exceeds {modelName}'s available context of {target} tokens after reserving maximum output.\nCompress the current conversation with the current model first. If the compressed context fits, Lake will continue switching models.",
   "chat.modelSwitch.contextWindowGuard.compress": "Compress",
   "chat.modelSwitch.contextWindowGuard.runningBlocked":
     "This conversation has used more context than the target model's available context after reserving maximum output. The conversation must be compressed before switching models, but the current task is still running and context compression cannot run now. Wait for the task to finish, then switch models again.",
@@ -4511,11 +4525,11 @@ const enUS: Record<string, string> = {
     "Computer Use is idle — it will start automatically on first use",
   "chat.toolbar.computerUse.tooltip.starting": "Enabling Computer Use plugin…",
   "chat.toolbar.computerUse.tooltip.ready":
-    "Computer Use ready — just describe what you want ZCode to do",
+    "Computer Use ready — just describe what you want Lake to do",
   "chat.toolbar.computerUse.tooltip.permissionRequired":
     "Missing macOS permissions — click to grant",
   "chat.toolbar.computerUse.tooltip.error":
-    "Computer Use enablement failed. Please restart ZCode app and retry, or ask ZCode to investigate the logs",
+    "Computer Use enablement failed. Please restart Lake app and retry, or ask Lake to investigate the logs",
   "chat.toolbar.computerUse.tooltip.sessionBusy":
     "A conversation is running. Computer Use can't be toggled right now — try again after it finishes.",
   "chat.toolbar.mode.description":
@@ -4629,7 +4643,7 @@ const enUS: Record<string, string> = {
   "chat.toolCall.sendMessage.failed": "Message failed",
   "chat.toolCall.sendMessage.denied": "Send denied",
   "chat.toolCall.sendMessage.stopped": "Sending stopped",
-  "chat.toolCall.sendMessage.target": "Target subagent",
+  "chat.toolCall.sendMessage.target": "Target beaver",
   "chat.toolCall.sendMessage.summary": "Summary",
   "chat.toolCall.sendMessage.message": "Message",
   "chat.toolCall.sendMessage.to": "to",
@@ -4703,8 +4717,8 @@ const enUS: Record<string, string> = {
   "chat.toolCall.workflow.graph.truncated": "Graph too large — some participants were omitted.",
   "chat.toolCall.workflow.graph.lane.script": "Script",
   "chat.toolCall.workflow.graph.lane.unresolved": "Unresolved",
-  "chat.toolCall.workflow.graph.lane.anonymous": "Anonymous Subagent",
-  "chat.toolCall.workflow.graph.lane.anonymousIndexed": "Anonymous Subagent {index}",
+  "chat.toolCall.workflow.graph.lane.anonymous": "Anonymous Beaver",
+  "chat.toolCall.workflow.graph.lane.anonymousIndexed": "Anonymous Beaver {index}",
   "chat.toolCall.workflow.graph.card.tasks": "{count} tasks",
   "chat.toolCall.workflow.graph.card.reads": "{count} reads",
   "chat.toolCall.workflow.graph.status.running": "running",
@@ -4722,9 +4736,9 @@ const enUS: Record<string, string> = {
   "chat.toolCall.workflow.timeline.roster.pending": "{count} pending",
   "chat.toolCall.workflow.timeline.roster.more": "{count} more",
   "chat.toolCall.workflow.timeline.roster.moreTitle":
-    "{count} more subagents · list everyone in the run pane",
-  "chat.toolCall.workflow.timeline.roster.door.list": "{count} more subagents · list them here",
-  "chat.toolCall.workflow.timeline.roster.door.fold": "{count} more subagents · fold",
+    "{count} more beavers · list everyone in the run pane",
+  "chat.toolCall.workflow.timeline.roster.door.list": "{count} more beavers · list them here",
+  "chat.toolCall.workflow.timeline.roster.door.fold": "{count} more beavers · fold",
   "chat.toolCall.workflow.timeline.ledge.earlier": "{count} earlier phase(s), scrolled out of view",
   "chat.toolCall.workflow.timeline.ledge.later": "{count} later phase(s), scrolled out of view",
   "chat.toolCall.workflow.timeline.scrollbar": "Timeline scroll position",
@@ -4738,10 +4752,10 @@ const enUS: Record<string, string> = {
   "chat.toolCall.workflow.card.steps": "{done}/{total} steps",
   "chat.toolCall.workflow.card.phase": "{count} phase",
   "chat.toolCall.workflow.card.phases": "{count} phases",
-  "chat.toolCall.workflow.card.agent": "{count} agent",
-  "chat.toolCall.workflow.card.agents": "{count} agents",
-  "chat.toolCall.workflow.card.agentWorking": "{count} agent working",
-  "chat.toolCall.workflow.card.agentsWorking": "{count} agents working",
+  "chat.toolCall.workflow.card.agent": "{count} beaver",
+  "chat.toolCall.workflow.card.agents": "{count} beavers",
+  "chat.toolCall.workflow.card.agentWorking": "{count} beaver working",
+  "chat.toolCall.workflow.card.agentsWorking": "{count} beavers working",
   "chat.toolCall.workflow.card.tokens": "{count} tokens",
   "chat.toolCall.workflow.card.round": "round {count}",
   "chat.toolCall.workflow.card.rounds": "{count} rounds",
@@ -4749,11 +4763,11 @@ const enUS: Record<string, string> = {
   "chat.toolCall.workflow.card.artifacts": "{count} artifacts",
   "chat.toolCall.workflow.digest.question": "{count} question",
   "chat.toolCall.workflow.digest.questions": "{count} questions",
-  "chat.toolCall.workflow.digest.showAgents": "Show subagents",
-  "chat.toolCall.workflow.digest.hideAgents": "Hide subagents",
+  "chat.toolCall.workflow.digest.showAgents": "Show beavers",
+  "chat.toolCall.workflow.digest.hideAgents": "Hide beavers",
   "chat.toolCall.workflow.completion.time": "time",
   "chat.toolCall.workflow.completion.tokens": "tokens",
-  "chat.toolCall.workflow.completion.subagents": "subagents",
+  "chat.toolCall.workflow.completion.subagents": "beavers",
   "chat.toolCall.workflow.completion.phases": "phases",
   "chat.toolCall.workflow.completion.unavailable": "Not available",
   "chat.toolCall.workflow.completion.moreArtifacts": "{count} more",
@@ -4763,7 +4777,7 @@ const enUS: Record<string, string> = {
   "chat.workflowLaunch.scope.global": "Global",
   "chat.workflowLaunch.startedByYou": "Started by you from the workflows hub",
   "chat.workflowLaunch.settingsChangedByYou": "Settings changed by you",
-  "chat.workflowLaunch.settings.model": "Subagent model",
+  "chat.workflowLaunch.settings.model": "Beaver model",
   "chat.workflowLaunch.settings.limit": "At once, at most",
   "chat.workflowLaunch.settings.sessionModel": "session model",
   "chat.workflowLaunch.settings.machineLimit": "this machine's limit",
@@ -4816,7 +4830,7 @@ const enUS: Record<string, string> = {
     "Could not reach the local agent; global workflows are unavailable.",
   "workflows.hub.empty.title": "No saved workflows in your open projects yet",
   "workflows.hub.empty.hint":
-    "Design a workflow with ZCode in chat, then have it save the workflow to a project once it works. Projects that aren't open don't appear here.",
+    "Design a workflow with Lake in chat, then have it save the workflow to a project once it works. Projects that aren't open don't appear here.",
   "workflows.hub.noWorkspace": "Open a workspace to see its workflows.",
   "workflows.hub.loadError": "Could not read workflows: {error}",
   "workflows.hub.invalid": "{count} files could not be read",
@@ -4879,7 +4893,7 @@ const enUS: Record<string, string> = {
   "workflows.hub.detail.description": "Description",
   "workflows.hub.detail.whenToUse": "When to use",
   "workflows.hub.detail.whenToUse.help":
-    "A routing hint for ZCode: when this workflow is the right pick.",
+    "A routing hint for Lake: when this workflow is the right pick.",
   "workflows.hub.detail.args": "Arguments",
   "workflows.hub.detail.args.name": "Name",
   "workflows.hub.detail.args.type": "Type",
@@ -4900,7 +4914,7 @@ const enUS: Record<string, string> = {
   "workflows.hub.detail.meta.descriptionRequired": "Description is required",
   "workflows.hub.detail.script": "Script",
   "workflows.hub.detail.script.note":
-    "The script is read-only. To change it, revise it with ZCode in chat and save a new version.",
+    "The script is read-only. To change it, revise it with Lake in chat and save a new version.",
   "workflows.hub.detail.script.copy": "Copy script",
   "workflows.hub.detail.loadError": "Could not read this workflow: {reason}",
   "workflows.hub.detail.notFound": "This workflow is no longer in the project.",
@@ -4922,7 +4936,7 @@ const enUS: Record<string, string> = {
   "chat.toolCall.workflow.getRun.fetched": "Workflow status",
   "chat.toolCall.workflow.getRun.nodesLine":
     "{observed} nodes · {done} done · {running} running · {failed} failed",
-  "chat.toolCall.workflow.getRun.section.actors": "Subagents",
+  "chat.toolCall.workflow.getRun.section.actors": "Beavers",
   "chat.toolCall.workflow.getRun.section.logTail": "Logs",
   "chat.toolCall.workflow.getRun.section.result": "Result",
   "chat.toolCall.workflow.getRun.section.error": "Error",
@@ -4932,7 +4946,7 @@ const enUS: Record<string, string> = {
   "chat.toolCall.workflow.getRun.age": "{age} ago",
   "chat.toolCall.workflow.getRun.truncated": "Some rows were left off this card.",
   "chat.toolCall.workflow.getRun.questionsUnknown":
-    "This session cannot see this run's pending questions. Resuming the run re-asks whatever a subagent still needs.",
+    "This session cannot see this run's pending questions. Resuming the run re-asks whatever a beaver still needs.",
   "chat.toolCall.workflow.getRun.phase.state.done": "done",
   "chat.toolCall.workflow.getRun.phase.state.current": "current",
   "chat.toolCall.workflow.getRun.phase.state.ahead": "ahead",
@@ -5009,9 +5023,9 @@ const enUS: Record<string, string> = {
     "No model request in this run has succeeded for {minutes} min. It is still running and retrying with backoff; stop it from the run card if you no longer need it.",
   "chat.backgroundResult.workflow.stall.reason": "Retry reason",
   "chat.backgroundResult.workflow.stall.cap": "Current fan-out",
-  "chat.backgroundResult.workflow.waiting": "Subagent is waiting for an answer",
-  "chat.backgroundResult.workflow.answered": "Subagent question answered",
-  "chat.backgroundResult.workflow.asked": "Subagent asked a question",
+  "chat.backgroundResult.workflow.waiting": "Beaver is waiting for an answer",
+  "chat.backgroundResult.workflow.answered": "Beaver question answered",
+  "chat.backgroundResult.workflow.asked": "Beaver asked a question",
   "chat.backgroundResult.workflow.artifacts.more": "+{count}",
   // ── Escalation tool cards ──
   // escalate：子代理把阻塞问题升级给主代理，停驻等答案。asking 相可能持续很久，措辞要平静。
@@ -5081,13 +5095,13 @@ const enUS: Record<string, string> = {
     "Continue from where it stopped: finished steps are reused, interrupted steps run again.",
   "chat.toolCall.workflow.run.configure": "Configure",
   "chat.toolCall.workflow.run.settings.title": "Configure workflow",
-  "chat.toolCall.workflow.run.settings.model": "Subagent model",
+  "chat.toolCall.workflow.run.settings.model": "Beaver model",
   "chat.toolCall.workflow.run.settings.model.session": "session model",
   "chat.toolCall.workflow.run.settings.model.sessionFallback": "Session model",
   "chat.toolCall.workflow.run.settings.model.unavailable": "unavailable",
   "chat.toolCall.workflow.run.settings.model.noCatalog":
-    "This agent has no model catalog; subagents stay on the session model.",
-  "chat.toolCall.workflow.run.settings.limit": "Subagents at once, at most",
+    "This agent has no model catalog; beavers stay on the session model.",
+  "chat.toolCall.workflow.run.settings.limit": "Beavers at once, at most",
   "chat.toolCall.workflow.run.settings.limit.ceiling": "this machine allows up to {n}",
   "chat.toolCall.workflow.run.settings.limit.atCeiling": "= this machine's limit",
   "chat.toolCall.workflow.run.settings.limit.decrease": "Fewer at once",
@@ -5123,8 +5137,8 @@ const enUS: Record<string, string> = {
   "chat.toolCall.workflow.run.settings.rejection.generic":
     "The settings could not be changed ({code}).",
   "chat.toolCall.workflow.settingsChange.kind": "Settings changed",
-  "chat.toolCall.workflow.settingsChange.model": "subagents on {model}",
-  "chat.toolCall.workflow.settingsChange.modelSession": "subagents back on the session model",
+  "chat.toolCall.workflow.settingsChange.model": "beavers on {model}",
+  "chat.toolCall.workflow.settingsChange.modelSession": "beavers back on the session model",
   "chat.toolCall.workflow.settingsChange.limit": "at most {n} at once",
   "chat.toolCall.workflow.settingsChange.limitCeiling": "limit back to this machine's default",
   "chat.toolCall.workflow.run.result.title": "Result",
@@ -5212,9 +5226,9 @@ const enUS: Record<string, string> = {
   "chat.toolCall.workflow.script.args.truncated": "Arguments were shortened before journaling.",
   "chat.toolCall.workflow.run.actor.notStarted.title": "Not started yet",
   "chat.toolCall.workflow.run.actor.notStarted.body":
-    "This subagent has not been asked anything yet. The transcript appears here as soon as its first step is dispatched.",
+    "This beaver has not been asked anything yet. The transcript appears here as soon as its first step is dispatched.",
   "chat.toolCall.workflow.run.event.runStarted": "Run started",
-  "chat.toolCall.workflow.run.event.actorCreated": "Subagent created",
+  "chat.toolCall.workflow.run.event.actorCreated": "Beaver created",
   "chat.toolCall.workflow.run.event.nodeQueued": "Queued",
   "chat.toolCall.workflow.run.event.nodeDispatched": "Dispatched",
   "chat.toolCall.workflow.run.event.nodeRepairing": "Repairing (attempt {attempt})",
@@ -5242,10 +5256,10 @@ const enUS: Record<string, string> = {
   "chat.toolCall.workflow.run.throttle.reason.transient": "transient error",
   "chat.toolCall.workflow.run.concurrency.label": "Concurrency {cap}",
   "chat.toolCall.workflow.run.concurrency.cooldown": "cooling down until {time}",
-  "chat.toolCall.workflow.run.subagentModel.label": "Subagents {model}",
+  "chat.toolCall.workflow.run.subagentModel.label": "Beavers {model}",
   "chat.toolCall.workflow.subagentModel.withLevel": "{model} · thinking {level}",
   "chat.toolCall.workflow.subagentModel.tooltip":
-    "Subagents run on {model}. The main agent stays on the session model.",
+    "Beavers run on {model}. The main agent stays on the session model.",
   "chat.toolCall.todo.updating": "Updating todos",
   "chat.toolCall.todo.updated": "Updated todo",
   "chat.toolCall.search.find": "Find",
@@ -5271,11 +5285,11 @@ const enUS: Record<string, string> = {
   "chat.toolCall.explore.bucket.file.other": "files",
   "chat.toolCall.explore.bucket.items": "items",
   "chat.toolCall.explore.emptySummary": "0 files",
-  "chat.toolCall.source.subAgent": "SubAgent",
-  "chat.toolCall.agent.label": "SubAgent",
+  "chat.toolCall.source.subAgent": "Beaver",
+  "chat.toolCall.agent.label": "Beaver",
   "chat.toolCall.agent.prompt": "Prompt",
-  "chat.toolCall.agent.fallback": "SubAgent",
-  "chat.toolCall.agent.backgroundProcess": "Background Agent process",
+  "chat.toolCall.agent.fallback": "Beaver",
+  "chat.toolCall.agent.backgroundProcess": "Background Beaver process",
   "chat.toolCall.agent.backgroundLaunch": "Launch",
   "chat.toolCall.agent.backgroundLaunchFailed": "Launch failed",
   "chat.toolCall.agent.backgroundLaunching": "Launching",
@@ -5284,11 +5298,11 @@ const enUS: Record<string, string> = {
   "chat.toolCall.agent.backgroundActivityStreaming": "Running in background, syncing output",
   "chat.toolCall.agent.backgroundActivityRunningWaiting":
     "Running in background, waiting for output",
-  "chat.toolCall.agent.backgroundActivityReceived": "SubAgent output received",
-  "chat.toolCall.agent.backgroundActivityWaiting": "Waiting for SubAgent output",
+  "chat.toolCall.agent.backgroundActivityReceived": "Beaver output received",
+  "chat.toolCall.agent.backgroundActivityWaiting": "Waiting for Beaver output",
   "chat.toolCall.agent.outputFile": "Output file",
-  "chat.toolCall.agent.thought": "SubAgent thought",
-  "chat.toolCall.agent.output": "SubAgent output",
+  "chat.toolCall.agent.thought": "Beaver thought",
+  "chat.toolCall.agent.output": "Beaver output",
   "chat.toolCall.agent.output.syncing": "Syncing",
   "chat.toolCall.agent.output.error": "Sync failed: {error}",
   "chat.toolCall.agent.output.recentRows": "Latest {visible} rows / {total} total",
@@ -5377,8 +5391,8 @@ const enUS: Record<string, string> = {
   "chat.mention.skills.title": "Skills",
   "chat.mention.skills.empty": "No matching skills",
   "chat.mention.skills.searchHint": "Type to search skills",
-  "chat.mention.subagents.title": "Agents",
-  "chat.mention.subagents.empty": "No matching agents",
+  "chat.mention.subagents.title": "Beavers",
+  "chat.mention.subagents.empty": "No matching beavers",
   "chat.mention.whiteboards.title": "Whiteboards",
   "chat.mention.whiteboards.empty": "No matching whiteboards",
   "chat.mention.whiteboards.strokeCount": "{count} strokes",
@@ -5388,16 +5402,20 @@ const enUS: Record<string, string> = {
   "chat.mention.sessions.title": "Sessions",
   "chat.mention.sessions.empty": "No recent sessions match",
   "chat.mention.sessions.searchHint": "Type to search recent sessions",
+  "chat.mention.lakeResources.title": "Lake resources",
+  "chat.mention.lakeResources.empty": "No matching resources in this lake",
+  "chat.mention.lakeResources.noLake": "This conversation is not bound to a lake",
+  "chat.mention.lakeResources.searchHint": "Keep typing to filter resources in this lake",
   "chat.slash.title": "Commands and capabilities",
-  "chat.slash.searchHint": "Type to search commands, skills, or agents",
+  "chat.slash.searchHint": "Type to search commands, skills, or beavers",
   "chat.slash.app.side.description": "Open a new side conversation",
   "chat.slash.commands.title": "Commands",
   "chat.slash.skills.title": "Skills",
   "chat.slash.skills.empty": "No matching skills",
-  "chat.slash.subagents.title": "Agents",
-  "chat.slash.subagents.empty": "No matching agents",
+  "chat.slash.subagents.title": "Beavers",
+  "chat.slash.subagents.empty": "No matching beavers",
   "chat.slash.emptyUnavailable":
-    "No slash commands have been broadcast for the current ZCode Agent session",
+    "No slash commands have been broadcast for the current Lake Agent session",
   "chat.slash.emptyResults": "No matching slash commands",
   // Errors
   "chat.error.connectionLost": "Connection to agent lost",
@@ -5440,9 +5458,9 @@ const enUS: Record<string, string> = {
   "chat.quota.startPlan.concurrentLimit.switchModel":
     "The current model request concurrency limit has been reached. Switch models to continue your current task.",
   "chat.quota.mcp.quotaExhausted":
-    'ZCode MCP "{server}" has used up today\'s quota. It resets tomorrow.',
+    'Lake MCP "{server}" has used up today\'s quota. It resets tomorrow.',
   "chat.quota.mcp.codingPlanRequired":
-    'No ZCode MCP "{server}" quota. Sign in or get a Coding Plan to use it.',
+    'No Lake MCP "{server}" quota. Sign in or get a Coding Plan to use it.',
   "chat.quota.providerLimited":
     "The current account quota or plan limit has been reached. Upgrade or adjust the plan to continue.",
   "chat.quota.action.upgrade": "Upgrade",
@@ -5486,8 +5504,8 @@ const enUS: Record<string, string> = {
   "chat.permission.workflow.amends": "Amends run",
   "chat.permission.workflow.amends.running": "still running, will be stopped",
   "chat.permission.workflow.amends.scriptUnchanged": "script unchanged",
-  "chat.permission.workflow.maxConcurrency": "At most {count} subagents at once",
-  "chat.permission.workflow.subagentModel": "Subagents run on {model}",
+  "chat.permission.workflow.maxConcurrency": "At most {count} beavers at once",
+  "chat.permission.workflow.subagentModel": "Beavers run on {model}",
   "chat.permission.workflow.saved.badge": "Saved workflow",
   "chat.permission.workflow.saved.scope.project": "project",
   "chat.permission.workflow.saved.args": "Arguments",
@@ -5505,8 +5523,8 @@ const enUS: Record<string, string> = {
   "chat.permission.workflow.save.args.requiredYes": "Required",
   "chat.permission.workflow.save.args.requiredNo": "Optional",
   "chat.permission.workflow.save.args.default": "Default",
-  "chat.interactionOrigin.subagent": "Subagent",
-  "chat.interactionOrigin.subagent.title": "Request from subagent: {agentType}",
+  "chat.interactionOrigin.subagent": "Beaver",
+  "chat.interactionOrigin.subagent.title": "Request from beaver: {agentType}",
   "chat.cuaPermission.openAccessibility": "Open Accessibility Settings",
   "chat.cuaPermission.openScreenRecording": "Open Screen Recording",
   "chat.cuaPermission.opening": "Opening...",
@@ -5585,7 +5603,7 @@ const enUS: Record<string, string> = {
   "planTool.guidance.enterMode": "Entered plan mode",
   "chat.permission.switchMode.placeholder": "Implementation plan",
 
-  // ZCode Agent
+  // Lake Agent
   "zcode.unavailable": "AI agent not available",
   "zcode.initFailed": "Failed to start AI agent",
   "zcode.error.TASK_OWNED_BY_OTHER_HOST": "This task is already running in another connected view.",
@@ -5643,7 +5661,7 @@ const enUS: Record<string, string> = {
   "resourceManager.cpu": "CPU",
   "resourceManager.memory": "Memory",
   "resourceManager.storage": "Storage",
-  "resourceManager.appUsage": "ZCode",
+  "resourceManager.appUsage": "Lake",
   "resourceManager.systemUsage": "System",
   "resourceManager.category.base": "Base services",
   "resourceManager.category.builtinPlugin": "Built-in plugins",
@@ -5887,7 +5905,7 @@ const enUS: Record<string, string> = {
   "feedback.submit.template.section.errorSummaryLine": "Error Summary: {message}",
   "feedback.submit.template.section.errorDetail": "Error Details",
   "feedback.submit.template.section.errorTraceId": "TraceID: {traceId}",
-  "feedback.submit.template.section.copyErrorHeading": "ZCode Error Info",
+  "feedback.submit.template.section.copyErrorHeading": "Lake Error Info",
   "feedback.submit.template.section.notProvided": "Not provided",
   "feedback.submit.template.section.remoteLogEmpty": "No connection logs captured",
   "feedback.submit.template.section.taskFeedbackTitle": "Feedback about task: {title}",
@@ -5988,8 +6006,8 @@ const enUS: Record<string, string> = {
   "forms.labels.description": "Description",
   "forms.labels.color": "Color",
   "forms.labels.systemPrompt": "System Prompt",
-  "forms.placeholders.agentName": "Enter subagent name",
-  "forms.placeholders.agentDescription": "Enter subagent description",
+  "forms.placeholders.agentName": "Enter beaver name",
+  "forms.placeholders.agentDescription": "Enter beaver description",
   "forms.placeholders.agentSystemPrompt": "Enter system prompt",
   "forms.validation.nameRequired": "Name is required",
   "forms.validation.nameMinLength": "Name must be at least {min} characters",
@@ -5998,8 +6016,8 @@ const enUS: Record<string, string> = {
   "forms.validation.descriptionRequired": "Description is required",
   "forms.validation.systemPromptRequired": "System prompt is required",
   "forms.validation.agentNameHint": "Letters, numbers, and hyphens only, 3-50 characters",
-  "forms.validation.agentDescriptionHint": "Briefly describe the subagent's purpose",
-  "forms.validation.agentSystemPromptHint": "Define the subagent's behavior and capabilities",
+  "forms.validation.agentDescriptionHint": "Briefly describe the beaver's purpose",
+  "forms.validation.agentSystemPromptHint": "Define the beaver's behavior and capabilities",
   "forms.validation.fileExists": "File {fileName} already exists",
   // ---- Scheduled tasks / Automations ----
   "taskList.cronTaskLabel": "Scheduled task",
@@ -6047,7 +6065,7 @@ const enUS: Record<string, string> = {
   "automations.statusFilter.completed": "Completed",
   "automations.statusFilter.failed": "Failed",
   "automations.statusFilter.empty": "No tasks match this filter",
-  "offPeak.keepAwakeBanner": "Keep your computer awake while ZCode is running a chat.",
+  "offPeak.keepAwakeBanner": "Keep your computer awake while Lake is running a chat.",
   "offPeak.sectionTitle": "Idle-time tasks",
   "offPeak.createButton": "Create idle-time task",
   "offPeak.templates.sectionTitle": "Idle-time task template",
@@ -6104,7 +6122,7 @@ const enUS: Record<string, string> = {
   "offPeak.form.titlePlaceholder": "e.g. Nightly refactor",
   "offPeak.form.instructionsLabel": "Instructions",
   "offPeak.form.instructionsPlaceholder":
-    "Describe a task ZCode can work on in the background, including the expected result and any constraints…",
+    "Describe a task Lake can work on in the background, including the expected result and any constraints…",
   "offPeak.form.permissionWarning":
     "Idle-time runs are unattended. Actions that need confirmation will pause the task until you respond.",
   "offPeak.form.modelLabel": "Model",
@@ -6299,9 +6317,9 @@ const enUS: Record<string, string> = {
   "automations.runs.nextPage": "Next",
   // CUA (Computer Use)
   "chat.cuaReadiness.toolsNotLoaded":
-    "ZCode Computer Use is still preparing — its tools aren't loaded yet ({count} loaded). Grant the permissions below; tools appear once the helper is ready.",
+    "Lake Computer Use is still preparing — its tools aren't loaded yet ({count} loaded). Grant the permissions below; tools appear once the helper is ready.",
   "chat.cuaReadiness.toolsPreparing":
-    "ZCode Computer Use is still preparing — its tools aren't loaded yet. Grant the permissions below; tools appear once the helper is ready.",
+    "Lake Computer Use is still preparing — its tools aren't loaded yet. Grant the permissions below; tools appear once the helper is ready.",
   "chat.toolCall.cua.requestAccess": "Check Computer Use access",
   "chat.toolCall.cua.appName": "Computer Use",
   "chat.toolCall.cua.group.completedLabel": "Computer Use",
@@ -6429,9 +6447,9 @@ const enUS: Record<string, string> = {
   "cuaPermission.modal.restartButton": "Restart Helper",
   "cuaPermission.modal.restarting": "Restarting Helper…",
   "cuaPermission.modal.restartFailed": "Couldn't restart Helper: {error}",
-  "cuaPermission.modal.relaunchAppButton": "Restart ZCode",
+  "cuaPermission.modal.relaunchAppButton": "Restart Lake",
   "cuaPermission.modal.relaunchAppHint":
-    "Still not working after restarting Helper? Restart ZCode to fully reload the Helper process.",
+    "Still not working after restarting Helper? Restart Lake to fully reload the Helper process.",
   "cuaPermission.status.granted": "Granted",
   "cuaPermission.status.missing": "Missing",
   "cuaPermission.status.unknown": "Unknown",
@@ -6445,7 +6463,7 @@ const enUS: Record<string, string> = {
   "cuaPermission.tools.agentUpdateRequired":
     "The connected Agent is too old for a safe readiness check. Update or restart it, then check again.",
   "cuaPermission.tools.untrustedRuntime":
-    "Computer Use tools were found, but they did not come from the verified ZCode plugin. Review the plugin installation, then check again.",
+    "Computer Use tools were found, but they did not come from the verified Lake plugin. Review the plugin installation, then check again.",
   "cuaPermission.perm.accessibility": "Accessibility",
   "cuaPermission.perm.accessibility.purpose": "Read/drive UI elements + synthesize input",
   "cuaPermission.perm.screenRecording": "Screen Recording",
@@ -6456,7 +6474,7 @@ const enUS: Record<string, string> = {
     "Please upgrade macOS before using it. Permission setup cannot be completed on older versions.",
   "cuaPermission.ready": "Permissions ready",
   "cuaPermission.ready.sessionValidationHint":
-    "ZCode will verify the Computer Use tools against the exact session when your first session starts.",
+    "Lake will verify the Computer Use tools against the exact session when your first session starts.",
   "settings.computerUse.title": "Computer Use",
   "settings.computerUse.toggleLabel": "Enable Computer Use",
   "settings.computerUse.toggleDescription":

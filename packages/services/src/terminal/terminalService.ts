@@ -1,11 +1,22 @@
-import { accessSync, chmodSync, constants, existsSync, statSync } from "node:fs";
+import { accessSync, chmodSync, constants, existsSync } from "node:fs";
 import { createRequire } from "node:module";
-import { homedir, release } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { Emitter, type Event } from "@zcode/rpc";
 import type { IPty } from "node-pty";
 import type { ISettingService } from "../setting/setting.js";
+import type { ILakeCatalogService } from "../lake-catalog/lakeCatalog.js";
+import { lakeSshPasswordKey } from "../lake-catalog/lakeSshPasswordKey.js";
+import type { ICredentialService } from "../credential/credential.js";
+import { resolveSshExecutablePath } from "../system/sshConfigAlias.js";
 import type { ITerminalService, TerminalWindowsPtyInfo } from "./terminal.js";
+import { buildLakeSshArgs } from "./lakeSshCommand.js";
+import { createLakeSshEventReplay } from "./lakeSshEventReplay.js";
+import { createLakeSshPasswordPromptResponder } from "./lakeSshPasswordPrompt.js";
+import {
+  resolveTerminalWindowsPtyInfo,
+  shouldFallbackFromConptyDll,
+} from "./terminalWindowsPtyInfo.js";
+import { resolveTerminalCwd } from "./terminalWorkingDirectory.js";
 import {
   resolveTerminalFontProfile,
   type TerminalFontFamilySource,
@@ -21,6 +32,8 @@ interface TerminalInstance {
   pty: IPty;
   dataEmitter: Emitter<string>;
   exitEmitter: Emitter<number>;
+  replay?: ReturnType<typeof createLakeSshEventReplay>;
+  passwordResponder?: ReturnType<typeof createLakeSshPasswordPromptResponder>;
 }
 
 let hasEnsuredNodePtyHelper = false;
@@ -45,25 +58,6 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function parseWindowsBuildNumber(releaseText: string): number | undefined {
-  const buildText = releaseText.split(".")[2];
-  if (!buildText) return undefined;
-  const buildNumber = Number.parseInt(buildText, 10);
-  return Number.isFinite(buildNumber) ? buildNumber : undefined;
-}
-
-function resolveTerminalWindowsPtyInfo(
-  platform: NodeJS.Platform = process.platform,
-  releaseText: string = release(),
-): TerminalWindowsPtyInfo | undefined {
-  if (platform !== "win32") return undefined;
-
-  return {
-    backend: "conpty",
-    buildNumber: parseWindowsBuildNumber(releaseText),
-  };
-}
-
 function isExecutable(command: string): boolean {
   try {
     if (/[\\/]/.test(command)) {
@@ -83,14 +77,6 @@ function isExecutable(command: string): boolean {
         return false;
       }
     });
-  } catch {
-    return false;
-  }
-}
-
-function isUsableDirectory(path: string): boolean {
-  try {
-    return statSync(path).isDirectory();
   } catch {
     return false;
   }
@@ -139,13 +125,6 @@ function ensureNodePtySpawnHelperExecutable(): void {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`node-pty spawn-helper is not executable: ${helperPath}. ${message}`);
   }
-}
-
-function shouldFallbackFromConptyDll(error: unknown): boolean {
-  const message = getErrorMessage(error);
-  return /conpty\.node module handle|conpty\.node module file name|cannot find conpty\.dll|error code:\s*126/i.test(
-    message,
-  );
 }
 
 function isUtf8Locale(value: string | undefined): boolean {
@@ -234,15 +213,16 @@ function resolveTerminalEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.Proces
 function spawnTerminalProcess(params: {
   nodePty: NodePtyModule;
   shell: string;
+  args: string[];
   cols: number;
   rows: number;
   cwd: string;
   env: NodeJS.ProcessEnv;
 }): IPty {
-  const { nodePty, shell, cols, rows, cwd, env } = params;
+  const { nodePty, shell, args, cols, rows, cwd, env } = params;
 
   if (process.platform !== "win32") {
-    return nodePty.spawn(shell, [], {
+    return nodePty.spawn(shell, args, {
       name: "xterm-256color",
       cols,
       rows,
@@ -263,7 +243,7 @@ function spawnTerminalProcess(params: {
   } satisfies PtySpawnOptions;
 
   try {
-    return nodePty.spawn(shell, [], {
+    return nodePty.spawn(shell, args, {
       ...windowsBaseOptions,
       useConptyDll: true,
     });
@@ -275,7 +255,7 @@ function spawnTerminalProcess(params: {
     // Windows 下开启 node-pty 的实验性 useConptyDll 时，某些 Electron/安装包环境会在 shell 真正启动前
     // 就因为 conpty.node / conpty.dll 的原生模块定位失败直接报错，导致终端整个打不开。
     // 这里仅在命中这类 DLL 加载错误时回退到系统内置 ConPTY，既保留新版路径的优先级，也避免把普通启动失败误判成可重试。
-    return nodePty.spawn(shell, [], {
+    return nodePty.spawn(shell, args, {
       ...windowsBaseOptions,
       useConptyDll: false,
     });
@@ -307,28 +287,20 @@ function resolveTerminalShell(): string {
   throw new Error("No usable shell found for terminal startup");
 }
 
-function resolveTerminalCwd(cwd?: string): string {
-  // 工作区目录可能已经被删除、移动，或者启动时传进来的是一个失效路径。
-  // 之前把这个 cwd 原样传给 node-pty，同样会在 spawn 阶段失败。
-  // 这里优先使用传入目录，不可用时回退到 HOME / 系统 home / 根目录，保证终端还能拉起。
-  const candidates = [cwd, process.env.HOME, homedir(), "/"];
-
-  for (const candidate of candidates) {
-    if (candidate && isUsableDirectory(candidate)) return candidate;
-  }
-
-  throw new Error("No usable working directory found for terminal startup");
-}
-
 export function createTerminalService(dependencies: {
   settingService: ISettingService;
+  lakeCatalogService?: ILakeCatalogService;
+  credentialService?: ICredentialService;
+  enableLakeSsh?: boolean;
 }): ITerminalService {
   const terminals = new Map<string, TerminalInstance>();
   let nextId = 0;
   // 内存诊断计数器：客户端断连不回收 pty 时
   // 这里会只增不减。
   const memoryDiagnostics = registerMemoryDiagnosticsProvider("terminal", () => ({
-    open: terminals.size,
+    open: Array.from(terminals.values()).filter(
+      (terminal) => !terminal.replay || terminal.replay.exitCode === null,
+    ).length,
   }));
 
   function getTerminal(id: string): TerminalInstance {
@@ -343,10 +315,91 @@ export function createTerminalService(dependencies: {
       return;
     }
 
-    terminal.pty.kill();
+    if (!terminal.replay || terminal.replay.exitCode === null) terminal.pty.kill();
+    terminal.passwordResponder?.dispose();
+    terminal.replay?.dispose();
     terminal.dataEmitter.dispose();
     terminal.exitEmitter.dispose();
     terminals.delete(id);
+  }
+
+  async function createProcess(params: {
+    shell: string;
+    args: string[];
+    cols: number;
+    rows: number;
+    cwd: string;
+    replayEarlyEvents?: boolean;
+    savedPassword?: string;
+    sshTarget?: { username: string; host: string };
+  }): ReturnType<ITerminalService["create"]> {
+    const id = String(nextId++);
+    const env = resolveTerminalEnv();
+    const terminalProfileSettings = await dependencies.settingService.get().catch(() => ({
+      terminalFontFamily: undefined,
+      terminalInheritSystemProfile: true,
+    }));
+    const fontProfile = resolveTerminalFontProfile({
+      settings: terminalProfileSettings,
+      env: process.env,
+    });
+    const nodePty = await loadNodePtyModule();
+    ensureNodePtySpawnHelperExecutable();
+    const dataEmitter = new Emitter<string>();
+    const exitEmitter = new Emitter<number>();
+    const replay = params.replayEarlyEvents ? createLakeSshEventReplay() : undefined;
+
+    let p: IPty;
+    try {
+      p = spawnTerminalProcess({
+        nodePty,
+        shell: params.shell,
+        args: params.args,
+        cols: params.cols,
+        rows: params.rows,
+        cwd: params.cwd,
+        env,
+      });
+    } catch (error) {
+      throw new Error(
+        `Failed to start terminal with '${params.shell}' in '${params.cwd}': ${getErrorMessage(error)}`,
+      );
+    }
+
+    const passwordResponder =
+      params.savedPassword && params.sshTarget
+        ? createLakeSshPasswordPromptResponder(params.savedPassword, params.sshTarget, (data) =>
+            p.write(data),
+          )
+        : undefined;
+
+    p.onData((data) => {
+      passwordResponder?.onData(data);
+      if (replay) replay.emitData(data);
+      else dataEmitter.fire(data);
+    });
+    p.onExit(({ exitCode }) => {
+      passwordResponder?.dispose();
+      if (replay) {
+        replay.emitExit(exitCode);
+        return;
+      }
+      exitEmitter.fire(exitCode);
+      dataEmitter.dispose();
+      exitEmitter.dispose();
+      terminals.delete(id);
+    });
+
+    terminals.set(id, { pty: p, dataEmitter, exitEmitter, replay, passwordResponder });
+    return {
+      id,
+      shell: params.shell,
+      fontFamily: fontProfile.fontFamily,
+      fontSize: fontProfile.fontSize,
+      theme: fontProfile.theme,
+      fontFamilySource: fontProfile.source,
+      windowsPty: resolveTerminalWindowsPtyInfo(),
+    };
   }
 
   const service: ITerminalService & { disposeAll(): void } = {
@@ -359,57 +412,33 @@ export function createTerminalService(dependencies: {
       fontFamilySource: TerminalFontFamilySource;
       windowsPty?: TerminalWindowsPtyInfo;
     }> {
-      const id = String(nextId++);
       const shell = resolveTerminalShell();
       const cwd = resolveTerminalCwd(params.cwd);
-      const env = resolveTerminalEnv();
-      const terminalProfileSettings = await dependencies.settingService.get().catch(() => ({
-        terminalFontFamily: undefined,
-        terminalInheritSystemProfile: true,
-      }));
-      const fontProfile = resolveTerminalFontProfile({
-        settings: terminalProfileSettings,
-        env: process.env,
-      });
-      const nodePty = await loadNodePtyModule();
-      ensureNodePtySpawnHelperExecutable();
-      const dataEmitter = new Emitter<string>();
-      const exitEmitter = new Emitter<number>();
+      return createProcess({ shell, args: [], cols: params.cols, rows: params.rows, cwd });
+    },
 
-      let p: IPty;
-      try {
-        p = spawnTerminalProcess({
-          nodePty,
-          shell,
-          cols: params.cols,
-          rows: params.rows,
-          cwd,
-          env,
-        });
-      } catch (error) {
-        throw new Error(
-          `Failed to start terminal with shell '${shell}' in '${cwd}': ${getErrorMessage(error)}`,
-        );
+    async createLakeSsh(params) {
+      if (!dependencies.enableLakeSsh || !dependencies.lakeCatalogService) {
+        throw new Error("Lake SSH is only available in the local desktop Host");
       }
-
-      p.onData((data) => dataEmitter.fire(data));
-      p.onExit(({ exitCode }) => {
-        exitEmitter.fire(exitCode);
-        dataEmitter.dispose();
-        exitEmitter.dispose();
-        terminals.delete(id);
+      const profile = await dependencies.lakeCatalogService.getSshProfile(params.resourceId);
+      if (!profile) throw new Error("Host SSH profile not found");
+      const savedPassword = await dependencies.credentialService?.load(
+        lakeSshPasswordKey(params.resourceId),
+      );
+      const sshExecutable = resolveSshExecutablePath();
+      if (!sshExecutable) throw new Error("OpenSSH executable not found on this computer");
+      return createProcess({
+        shell: sshExecutable,
+        args: buildLakeSshArgs(profile),
+        cols: params.cols,
+        rows: params.rows,
+        cwd: resolveTerminalCwd(),
+        replayEarlyEvents: true,
+        ...(savedPassword
+          ? { savedPassword, sshTarget: { username: profile.username, host: profile.host } }
+          : {}),
       });
-
-      terminals.set(id, { pty: p, dataEmitter, exitEmitter });
-      return {
-        id,
-        shell,
-        fontFamily: fontProfile.fontFamily,
-        fontSize: fontProfile.fontSize,
-        theme: fontProfile.theme,
-        fontFamilySource: fontProfile.source,
-        windowsPty: resolveTerminalWindowsPtyInfo(),
-      };
     },
 
     async write(params: { id: string; data: string }): Promise<void> {
@@ -425,11 +454,13 @@ export function createTerminalService(dependencies: {
     },
 
     onDynamicData(id: string): Event<string> {
-      return getTerminal(id).dataEmitter.event;
+      const terminal = getTerminal(id);
+      return terminal.replay?.onData ?? terminal.dataEmitter.event;
     },
 
     onDynamicExit(id: string): Event<number> {
-      return getTerminal(id).exitEmitter.event;
+      const terminal = getTerminal(id);
+      return terminal.replay?.onExit ?? terminal.exitEmitter.event;
     },
 
     disposeAll(): void {

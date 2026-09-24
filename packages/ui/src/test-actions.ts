@@ -1,5 +1,6 @@
 import type { TaskChatMessage as ChatMessage } from "@/lib/taskChatMessageTypes.js";
 import { shouldExposeE2EStoreBridge } from "@/lib/e2eStoreBridge.js";
+import type { Theme } from "@/useTheme.js";
 import type { IZCodeAgentService } from "@zcode/services";
 import type { TaskListE2EActions } from "@/lib/taskListE2EActions.js";
 import { useEffect } from "react";
@@ -19,7 +20,7 @@ export interface TestActions extends TaskListE2EActions {
   /** 获取当前主题 */
   getTheme: () => string;
   /** 设置主题 */
-  setTheme: (theme: "light" | "dark" | "zai-light" | "zai-dark" | "system") => void;
+  setTheme: (theme: Theme) => void;
   /** 获取当前语言，仅供跨语言展示 E2E */
   getLocale: () => "zh-CN" | "en-US";
   /** 设置当前语言，仅供跨语言展示 E2E */

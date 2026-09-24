@@ -9,7 +9,7 @@ import {
   NodeModelSelectionConfigRepository,
   PERSONAL_PROVIDER_CONFIG_FILE_NAME,
 } from "@zcode/provider-node";
-import { getAppConfigDir as resolveAppConfigDir } from "./paths.js";
+import { getAppConfigDir as resolveAppConfigDir, getDataBaseDir } from "./paths.js";
 import {
   buildLocalMediaPreviewUrl,
   isProviderProvisioningAccountCredentialKey,
@@ -62,6 +62,7 @@ export {
   getZCodeDataRootDir,
   getConversationWorkspaceDir,
   getAppConfigDir,
+  getLakeAgentSessionDbPath,
   getExportLogStageDir,
   getExportLogDir,
   getFeedbackRootDir,
@@ -81,6 +82,7 @@ export { createTerminalService } from "./terminal/terminalService.js";
 export {
   createSettingService,
   createSettingServiceWithMigrations,
+  getSettingsFilePath,
 } from "./setting/settingService.js";
 export { createCredentialService } from "./credential/credentialService.js";
 export { createBroadcastService } from "./broadcast/broadcastService.js";
@@ -291,6 +293,7 @@ import { ISystemService } from "./system/system.js";
 import { ITerminalService } from "./terminal/terminal.js";
 import { ISettingService } from "./setting/setting.js";
 import { IOnboardingRecordService } from "./onboarding/onboardingRecord.js";
+import { ILakeCatalogService } from "./lake-catalog/lakeCatalog.js";
 import { ICredentialService } from "./credential/credential.js";
 import { IBroadcastService } from "./broadcast/broadcast.js";
 import { IZCodeTaskService } from "./session/zcodeTaskService.js";
@@ -336,6 +339,7 @@ import { createSystemService } from "./system/systemService.js";
 import { createTerminalService } from "./terminal/terminalService.js";
 import { createSettingServiceWithMigrations } from "./setting/settingService.js";
 import { createOnboardingRecordService } from "./onboarding/onboardingRecordService.js";
+import { createLakeCatalogService } from "./lake-catalog/lakeCatalogService.js";
 import { createLegacyTeamOrganizationResolver } from "./model-provider/legacyTeamOrganizationResolver.js";
 import { createObservableSettingService } from "./setting/observableSettingService.js";
 import { createCredentialService } from "./credential/credentialService.js";
@@ -1069,7 +1073,8 @@ export { isOfficialCuaPluginEnabledForWorkspace };
 
 export function hasGlobalCliZCodeCuaServer(env: NodeJS.ProcessEnv = process.env): boolean {
   const home = env.HOME?.trim() || homedir();
-  const configPath = join(home, ".zcode", "cli", "config.json");
+  const storageRoot = env.ZCODE_STORAGE_DIR?.trim() || join(home, ".lake");
+  const configPath = join(storageRoot, "cli", "config.json");
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(configPath, "utf8"));
@@ -1547,6 +1552,21 @@ export function createLocalServices(options: {
         error,
       });
     },
+    // Lake Dev 曾使用 ZCode 数据根。只读取旧模型配置并一次性导入 Lake；
+    // 会话与项目仍严格隔离，且已经在 Lake 编辑过的非空配置永不被旧文件覆盖。
+    priorProductPersonalFilePath: join(
+      getDataBaseDir(),
+      ".zcode",
+      "v2",
+      PERSONAL_PROVIDER_CONFIG_FILE_NAME,
+    ),
+    onPriorProductMigrationResult: (result) => {
+      if (result === "imported") {
+        providerConfigLog.info(undefined, "已将旧模型配置一次性导入 Lake");
+      } else if (result === "invalid-source" || result === "invalid-lake") {
+        providerConfigLog.warn(undefined, "模型配置迁移跳过无效文件", { result });
+      }
+    },
     // 已发布 config.json 保存的是 ZCode 用户配置；清理第三方 ACP 不能移除这条升级路径。
     // Repository 仅在新 Personal 配置不存在时导入，并保留旧文件以便回滚。
     readLegacyProviders: () => readLegacyZCodeConfigProviders(),
@@ -1797,7 +1817,7 @@ export function createLocalServices(options: {
     const socketPath = resolveBrokerSocketPath();
     // standaloneHelperCandidatePaths 未在上游 exports 白名单——此处按同一规则枚举安装候选
     //（dev-desktop → dev/ 前缀；app 名一律取 helperConstants，不写字面量）。
-    const home = process.env.ZCODE_HOME?.trim() || join(homedir(), ".zcode");
+    const home = process.env.ZCODE_HOME?.trim() || join(homedir(), ".lake");
     const baseRoot = join(home, "computer-use");
     // 安装布局见上游 helperLauncher.resolveCuaHelperInstallRoot：dev 是独立子根 `dev/` 且 app
     // 名换成 DEV_HELPER_APP_NAME；preview 是独立子根 `preview/` 但**沿用**稳定 app 名
@@ -2419,13 +2439,24 @@ export function createLocalServices(options: {
   // 注册链上的懒工厂（如 OffPeak）会各自创建 tasks-index sqlite repo；先收集到本数组，
   // services 集合建好后在 return 前统一登记进 sharedSqliteRepos 侧表
   const sqliteReposToClose: Array<{ close(): void }> = [];
+  const lakeCatalogService = createLakeCatalogService({ credentialService });
+  sqliteReposToClose.push(lakeCatalogService);
   const services = new ServiceCollection()
+    .register(ILakeCatalogService, lakeCatalogService)
     .register(IFileService, fileService)
     .register(IMediaPreviewService, mediaPreviewService)
     .register(IGitService, gitService)
     .register(IGitCheckpointService, gitCheckpointService)
     .register(ISystemService, systemService)
-    .register(ITerminalService, createTerminalService({ settingService }))
+    .register(
+      ITerminalService,
+      createTerminalService({
+        settingService,
+        lakeCatalogService,
+        credentialService,
+        enableLakeSsh: options.agentRuntimeContext?.runtimeSurface === "desktop_local_host",
+      }),
+    )
     .register(ISettingService, settingService)
     .register(IOnboardingRecordService, onboardingRecordService)
     .register(ICredentialService, credentialService)

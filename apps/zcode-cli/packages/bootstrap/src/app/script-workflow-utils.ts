@@ -171,7 +171,8 @@ export function inferScriptWorkflowScope(
   workingDirectory: string,
 ): "explicit" | "project" | "user" {
   if (isWithin(scriptPath, join(workingDirectory, ".zcode", "workflows"))) return "project";
-  if (isWithin(scriptPath, join(homedir(), ".zcode", "workflows"))) return "user";
+  const storageRoot = process.env.ZCODE_STORAGE_DIR?.trim() || join(homedir(), ".lake");
+  if (isWithin(scriptPath, join(storageRoot, "workflows"))) return "user";
   return "explicit";
 }
 

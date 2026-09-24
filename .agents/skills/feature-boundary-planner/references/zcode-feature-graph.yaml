@@ -134,8 +134,12 @@ nodes:
     label: Subagents
     aliases:
       - subagent
+      - Beaver
+      - SRE 河狸
+      - lake-sre
       - agent profile
       - 子代理
+      - 河狸
       - 智能体配置
     codeSeeds:
       - file: packages/ui/src/settings/SubagentsSection.tsx
@@ -355,7 +359,227 @@ nodes:
     codeSeeds:
       - file: apps/zcode-cli/packages/core/src/runtime/methods/turn-model.ts
         symbol: applySubmissionExecutionState
+  - id: capability.lake-ssh-sessions
+    kind: capability
+    label: Lake host resource SSH sessions
+    aliases:
+      - SSH session management
+      - host resource terminal
+      - SSH 会话管理
+      - 主机资源终端
+    codeSeeds:
+      - file: packages/ui/src/lake-catalog/LakeSshPanel.tsx
+        symbol: LakeSshPanel
+    invariants:
+      - "SSH tabs are local PTYs for host resources, not Agent conversations or remote workspaces."
+  - id: surface.lake-ssh-panel
+    kind: ui-surface
+    label: Lake host resource SSH panel
+    codeSeeds:
+      - file: packages/ui/src/lake-catalog/LakeCatalogPage.tsx
+        symbol: LakeCatalogPage
+      - file: packages/ui/src/lake-catalog/LakeSshPanel.tsx
+        symbol: LakeSshPanel
+  - id: service.lake-catalog
+    kind: service
+    label: Lake catalog, workspace binding and SSH profile owner
+    codeSeeds:
+      - file: packages/services/src/lake-catalog/lakeCatalogService.ts
+        symbol: createLakeCatalogService
+  - id: service.lake-ssh-pty
+    kind: service
+    label: Desktop local Host SSH PTY owner
+    codeSeeds:
+      - file: packages/services/src/terminal/terminalService.ts
+        symbol: createTerminalService
+  - id: service.lake-ssh-credentials
+    kind: service
+    label: Lake SSH password owner via app credential store
+    codeSeeds:
+      - file: packages/services/src/credential/credentialService.ts
+        symbol: createCredentialService
+      - file: packages/services/src/lake-catalog/lakeSshPasswordKey.ts
+        symbol: lakeSshPasswordKey
+  - id: persistence.lake-ssh-profile
+    kind: persistence
+    label: Lake catalog SSH profile record
+    codeSeeds:
+      - file: packages/services/src/lake-catalog/lakeCatalogService.ts
+        symbol: createLakeCatalogService
+  - id: capability.lake-session-navigation
+    kind: capability
+    label: Lake-scoped Agent session navigation
+    aliases:
+      - 湖会话
+      - 选湖展开会话
+      - Command+L 湖快速切换
+      - lake session switcher
+    codeSeeds:
+      - file: packages/ui/src/lake-catalog/LakeSwitcherDialog.tsx
+        symbol: LakeSwitcherDialog
+    invariants:
+      - "Agent sessions remain owned by the workspace task index; a lake binds one workspace identity."
+  - id: capability.lake-resource-composer-picker
+    kind: capability
+    label: Composer L picker for resources in the current lake
+    aliases:
+      - 大写 L 湖资源候选
+      - 会话框湖内资源列表
+      - lake resource mention
+      - 湖资源短标签与元信息回显
+    codeSeeds:
+      - file: packages/ui/src/mentions/providers/lakeResourceMentionProvider.ts
+        symbol: useLakeResourceMentionProvider
+      - file: packages/ui/src/lib/promptInputTriggers.ts
+        symbol: extractActivePromptInputTrigger
+      - file: packages/ui/src/mentions/mentionMarkdown.ts
+        symbol: parseMentionMarkdown
+      - file: packages/ui/src/v4/ConversationUserInputContent.tsx
+        symbol: ConversationUserInputContent
+    invariants:
+      - "Only resources of the lake bound to the current workspace identity are suggested; a mention does not connect or monitor an asset."
+      - "The canonical submitted snapshot retains metadata while user-message and share projections show only icon and name."
+  - id: capability.lake-agent-identity
+    kind: capability
+    label: Lake main-agent user-facing identity
+    aliases:
+      - Lake 身份提示词
+      - 你好 我是 Lake
+      - Agent 仍自称 ZCode
+      - Clean-Lakes SRE identity
+    codeSeeds:
+      - file: apps/zcode-cli/packages/core/src/context/sections/identity.ts
+        symbol: buildIdentitySection
+      - file: apps/zcode-cli/packages/core/src/context/builder.ts
+        symbol: ContextBuilder
+    invariants:
+      - "Main-agent greetings use Lake; compatibility identifiers are described accurately only when relevant."
+  - id: surface.lake-switcher
+    kind: ui-surface
+    label: Sessions, lakes and resources quick switcher
+    codeSeeds:
+      - file: packages/ui/src/lake-catalog/LakeSwitcherDialog.tsx
+        symbol: LakeSwitcherDialog
+  - id: persistence.lake-workspace-binding
+    kind: persistence
+    label: Unique lake to workspace identity binding
+    codeSeeds:
+      - file: packages/services/src/lake-catalog/lakeCatalogService.ts
+        symbol: createLakeCatalogService
+  - id: capability.desktop-app-update
+    kind: capability
+    label: Desktop application update
+    aliases:
+      - DBX style update
+      - title bar update entry
+      - 自动更新
+      - 标题栏更新入口
+      - 云下载更新
+    codeSeeds:
+      - file: packages/desktop/src/main/autoUpdater.ts
+        symbol: initAutoUpdater
+      - file: packages/ui/src/UpdateStatusButton.tsx
+        symbol: UpdateStatusButton
+    invariants:
+      - "Electron main owns update truth; renderer state is a per-window display projection only."
+      - "Desktop app updates remain isolated from Web and mobile conversation delivery."
+  - id: state.desktop-auto-updater
+    kind: state-owner
+    label: Electron main desktop update state machine
+    codeSeeds:
+      - file: packages/desktop/src/main/autoUpdater.ts
+        symbol: getAutoUpdaterState
+      - file: packages/desktop/src/main/autoUpdater.ts
+        symbol: initAutoUpdater
+  - id: surface.desktop-update-entry
+    kind: ui-surface
+    label: Desktop title-bar update entry and status window
+    codeSeeds:
+      - file: packages/ui/src/UpdateStatusButton.tsx
+        symbol: UpdateStatusButton
+      - file: packages/ui/src/UpdateStatusDialogController.tsx
+        symbol: UpdateStatusDialogController
 edges:
+  - from: capability.desktop-app-update
+    to: state.desktop-auto-updater
+    type: implemented-by
+    rank: must-inspect
+  - from: capability.desktop-app-update
+    to: surface.desktop-update-entry
+    type: renders-in
+    rank: must-inspect
+  - from: state.desktop-auto-updater
+    to: surface.desktop-update-entry
+    type: projects-state-to
+    rank: must-inspect
+  - from: surface.desktop-update-entry
+    to: state.desktop-auto-updater
+    type: sends-existing-ipc-commands-to
+    rank: must-inspect
+  - from: capability.lake-resource-composer-picker
+    to: service.lake-catalog
+    type: reads-current-lake-resources-through
+    rank: must-inspect
+  - from: capability.lake-resource-composer-picker
+    to: surface.composer-at-context-picker
+    type: reuses-composer-mention-surface
+    rank: should-inspect
+  - from: capability.lake-resource-composer-picker
+    to: capability.conversation-runtime
+    type: preserves-canonical-metadata-for
+    rank: invariant-only
+  - from: capability.lake-agent-identity
+    to: capability.conversation-runtime
+    type: injects-system-identity-into
+    rank: must-inspect
+  - from: capability.lake-session-navigation
+    to: surface.lake-switcher
+    type: renders-in
+    rank: must-inspect
+  - from: surface.lake-switcher
+    to: service.lake-catalog
+    type: reads-binding-through
+    rank: must-inspect
+  - from: service.lake-catalog
+    to: persistence.lake-workspace-binding
+    type: persists-to
+    rank: must-inspect
+  - from: capability.lake-session-navigation
+    to: capability.conversation-runtime
+    type: reuses-workspace-task-index
+    rank: should-inspect
+  - from: capability.lake-ssh-sessions
+    to: surface.lake-ssh-panel
+    type: renders-in
+    rank: must-inspect
+  - from: surface.lake-ssh-panel
+    to: service.lake-catalog
+    type: reads-and-saves-profile-through
+    rank: must-inspect
+  - from: service.lake-catalog
+    to: persistence.lake-ssh-profile
+    type: persists-to
+    rank: must-inspect
+  - from: surface.lake-ssh-panel
+    to: service.lake-ssh-pty
+    type: opens-and-disposes-terminal-through
+    rank: must-inspect
+  - from: service.lake-ssh-pty
+    to: service.lake-catalog
+    type: resolves-host-profile-through
+    rank: must-inspect
+  - from: service.lake-catalog
+    to: service.lake-ssh-credentials
+    type: saves-and-checks-password-through
+    rank: must-inspect
+  - from: service.lake-ssh-pty
+    to: service.lake-ssh-credentials
+    type: loads-password-for-prompt-through
+    rank: must-inspect
+  - from: capability.lake-ssh-sessions
+    to: capability.conversation-runtime
+    type: must-remain-isolated-from
+    rank: invariant-only
   - from: capability.model-selection
     to: surface.conversation-model-control
     type: renders-in

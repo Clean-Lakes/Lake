@@ -757,7 +757,7 @@ function V4ComposerModelControlsImpl({
     });
   }, [displayProvider, intl, modelSelectionView]);
 
-  // 修复：恢复「管理模型」入口（老版 onManageModels = 打开设置页并定位模型供应商区）。
+  // 「管理模型」入口恢复：模型设置页保留（页内只展示自定义供应商），见 specs/vendor-config-removal.md。
   const handleOpenModelProviderSettings = useCallback(() => {
     setPendingSettingsSectionIntent("modelProvider");
     openSettingsTab();

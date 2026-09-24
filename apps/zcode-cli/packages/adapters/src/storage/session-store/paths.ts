@@ -4,7 +4,8 @@ import { dirname, join } from "node:path";
 import { maybeThrowStorageFsFault } from "../fs-fault-injection.js";
 
 export function getDefaultSessionDbPath(): string {
-  return join(homedir(), ".zcode", "cli", "db", "db.sqlite");
+  const storageRoot = process.env.ZCODE_STORAGE_DIR?.trim() || join(homedir(), ".lake");
+  return join(storageRoot, "cli", "db", "db.sqlite");
 }
 
 export function ensureParentDir(filePath: string): void {

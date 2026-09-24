@@ -1,4 +1,4 @@
-export type PromptInputTrigger = "/" | "@" | "$" | "#";
+export type PromptInputTrigger = "/" | "@" | "$" | "#" | "L";
 
 export interface ActivePromptInputTrigger {
   trigger: PromptInputTrigger;
@@ -29,6 +29,7 @@ export interface PromptInputSuggestionItem {
 type PromptInputReplacementCandidates = string | readonly string[];
 
 const ACTIVE_TRIGGER_RE = /(^|\s)([/@$#¥￥])([^\s/@$#¥￥]*)$/;
+const ACTIVE_LAKE_TRIGGER_RE = /(^|\s)(L)([^\s/@$#¥￥]*)$/;
 // 中文输入通常不在句中插入空格；仅放宽 @，避免改变 slash、skill、session 面板的触发边界。
 const ACTIVE_MENTION_TRIGGER_RE =
   /(^|[\s\p{Script=Han}\u3000-\u303f\uff00-\uffef])(@)([^\s/@$#¥￥]*)$/u;
@@ -114,7 +115,9 @@ export function extractActivePromptInputTrigger(
   textBeforeCursor: string,
 ): ActivePromptInputTrigger | null {
   const match =
-    ACTIVE_MENTION_TRIGGER_RE.exec(textBeforeCursor) ?? ACTIVE_TRIGGER_RE.exec(textBeforeCursor);
+    ACTIVE_MENTION_TRIGGER_RE.exec(textBeforeCursor) ??
+    ACTIVE_TRIGGER_RE.exec(textBeforeCursor) ??
+    ACTIVE_LAKE_TRIGGER_RE.exec(textBeforeCursor);
   if (!match) {
     return null;
   }

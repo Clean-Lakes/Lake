@@ -112,8 +112,9 @@ export function buildSubagentSuggestions(
       "id" | "name" | "description" | "path" | "scope" | "source" | "enabled" | "modelSelection"
     >
   >,
+  formatMessage?: (id: string) => string,
 ): PromptInputSuggestionItem[] {
-  return mapSubagentsToMentionItemsForTest(agents).map((item) =>
+  return mapSubagentsToMentionItemsForTest(agents, formatMessage).map((item) =>
     mapSubagentMentionItemToSuggestion(item),
   );
 }
@@ -140,9 +141,9 @@ function mapSubagentMentionItemToSuggestion(item: MentionItem): PromptInputSugge
     id: item.id,
     trigger: "/",
     value: item.value,
-    label: item.label,
+    label: item.displayLabel ?? item.label,
     description: item.description,
-    keywords: [...new Set([...(item.keywords ?? []), "subagent", "agent"])],
+    keywords: [...new Set([...(item.keywords ?? []), "subagent", "agent", "河狸", "beaver"])],
     data: item.data,
   };
 }

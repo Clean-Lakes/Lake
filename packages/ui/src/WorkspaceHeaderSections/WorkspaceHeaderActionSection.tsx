@@ -28,6 +28,7 @@ export function WorkspaceHeaderActionSection({
   hideHelpMenu = false,
   showWindowControls = false,
   useWindowsCaptionSpacing = false,
+  updateStatusEntry,
 }: WorkspaceHeaderActionSectionProps) {
   return (
     <div
@@ -38,6 +39,7 @@ export function WorkspaceHeaderActionSection({
         useWindowsCaptionSpacing ? "-my-2 h-12 gap-0" : "gap-0.5",
       )}
     >
+      {updateStatusEntry}
       {variant === "task" ? (
         <WorkspaceEditorButtonGroup
           disabledReason={readOnlyReason}

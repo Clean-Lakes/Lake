@@ -52,7 +52,7 @@ const CODEX_PLUGIN_MANIFEST_PATH = join(".codex-plugin", "plugin.json");
 const ZCODE_COMMAND_DESCRIPTOR: CommandAgentSourceDescriptor = {
   agentSource: "zcodeAgent",
   directorySource: "zcode",
-  userDirectorySegments: [".zcode", "commands"],
+  userDirectorySegments: [".lake", "commands"],
   workspaceDirectorySegments: [".zcode", "commands"],
   fileExtension: ".md",
   format: "markdown",
@@ -86,7 +86,7 @@ function getUserCommandsRoot(agentSource?: CommandAgentSource): string {
 }
 
 function getUserCliConfigPath(): string {
-  return join(resolveUserHomeDir(), ".zcode", "cli", "config.json");
+  return join(resolveUserHomeDir(), ".lake", "cli", "config.json");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -201,9 +201,7 @@ function readBooleanRecord(value: unknown): Record<string, boolean> {
 
 function readStorageDirFromConfig(config: Record<string, unknown>): string {
   const storage = isRecord(config.storage) ? config.storage : {};
-  return typeof storage.dir === "string" && storage.dir.trim().length > 0
-    ? storage.dir
-    : "~/.zcode";
+  return typeof storage.dir === "string" && storage.dir.trim().length > 0 ? storage.dir : "~/.lake";
 }
 
 function readPluginConfigFromConfig(config: Record<string, unknown>): PluginConfigSummary {

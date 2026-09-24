@@ -40,6 +40,7 @@ import {
   type SubagentWaitOptions,
   type TraceContext,
 } from "@zcode/contracts";
+import type { BuiltInSubagentModelSelectionOverrides } from "@zcode/shared";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -117,9 +118,7 @@ export interface ExploreSubagentPortOptions {
   enqueueParentTaskNotification?: EnqueueParentTaskNotification;
   outputRootDir?: string;
   profiles?: readonly AgentProfile[];
-  builtInModelSelectionOverrides?: Partial<
-    Record<"general-purpose" | "Explore", import("@zcode/shared").ModelSelection>
-  >;
+  builtInModelSelectionOverrides?: BuiltInSubagentModelSelectionOverrides;
   runtimeTaskRegistry?: RuntimeTaskRegistry;
   createAgentId?: () => string;
   getAllowedTools?: (profile: AgentProfile) => readonly string[];

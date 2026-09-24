@@ -34,14 +34,10 @@ export function ProviderTemplatePicker({
   const { intl, locale } = useZCodeIntl();
   const { dismissFeedback, showFeedback } = useProviderDetailFeedback();
   const customLabel = intl.formatMessage({ id: "settings.modelProvider.newProviderName" });
+  // 本地定制，见 specs/vendor-config-removal.md：Z.ai / BigModel 的 API Key 模板
+  // （智谱分组）不再出现在「添加供应商」里，只保留通用模板。
   const zhipuIds = ["bigmodel-api", "zai-api", "bigmodel-standard-api", "zai-standard-api"];
   const groups = [
-    {
-      id: "zhipu",
-      templates: zhipuIds.flatMap((id) =>
-        templates.filter((template) => template.templateId === id),
-      ),
-    },
     {
       id: "other",
       templates: templates.filter((template) => !zhipuIds.includes(template.templateId)),

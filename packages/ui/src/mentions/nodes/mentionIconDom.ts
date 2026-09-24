@@ -83,6 +83,11 @@ export const SESSION_MENTION_ICON_NODE = [
   ],
   ["path", { d: "M18 9h2a2 2 0 0 1 2 2v10l-4-4h-6a2 2 0 0 1-2-2v-1" }],
 ] as const satisfies MentionLucideIconNode;
+export const LAKE_RESOURCE_MENTION_ICON_NODE = [
+  ["path", { d: "M2 6c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2 2.5-2 5-2" }],
+  ["path", { d: "M2 12c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2 2.5-2 5-2" }],
+  ["path", { d: "M2 18c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2 2.5-2 5-2" }],
+] as const satisfies MentionLucideIconNode;
 export const PLUGIN_MENTION_ICON_NODE = [
   ["path", { d: "M17 19a1 1 0 0 1-1-1v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1z" }],
   ["path", { d: "M17 21v-2" }],

@@ -11,6 +11,7 @@ import { toToolJsonSchema } from "./json-schema.js";
 export const AgentType = {
   GeneralPurpose: "general-purpose",
   Explore: "Explore",
+  Sre: "lake-sre",
 } as const;
 
 export type AgentType = string;

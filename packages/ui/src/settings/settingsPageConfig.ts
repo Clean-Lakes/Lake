@@ -27,6 +27,8 @@ export const THEME_MODES: Array<{
   icon: typeof Sun;
 }> = [
   { mode: "system", icon: Monitor },
+  { mode: "lake-dark", icon: Moon },
+  { mode: "lake-light", icon: Sun },
   { mode: "zai-dark", icon: Moon },
   { mode: "zai-light", icon: Sun },
 ];

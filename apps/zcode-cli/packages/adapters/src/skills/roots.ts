@@ -8,6 +8,7 @@ const HOME_PREFIX = "~/";
 const PRIORITY_STEP = 10;
 const SKILLS_DIR = "skills";
 const ZCODE_DIR = ".zcode";
+const LAKE_USER_DIR = ".lake";
 const AGENTS_DIR = ".agents";
 
 export interface SkillRootResolutionOptions {
@@ -43,13 +44,13 @@ export async function resolveDefaultSkillRoots(
   }
 
   if (includeZcode) {
-    roots.push(...skillRootsForBase(home, "user", nextPriority));
+    roots.push(...skillRootsForBase(home, "user", nextPriority, LAKE_USER_DIR));
   }
 
   const projectDirectories = await resolveProjectSkillDirectories(resolvedWorkingDirectory);
   for (const directory of projectDirectories) {
     if (includeZcode) {
-      roots.push(...skillRootsForBase(directory, "project", nextPriority));
+      roots.push(...skillRootsForBase(directory, "project", nextPriority, ZCODE_DIR));
     }
   }
 
@@ -95,11 +96,12 @@ function skillRootsForBase(
   baseDirectory: string,
   scope: SkillRoot["scope"],
   nextPriority: () => number,
+  productDirectory: string,
 ): SkillRoot[] {
   // 合并而不是 fallback：用户可能同时安装原生 `.zcode` skill 和兼容 `.agents` skill。
   // 同一级别仍保持 `.zcode` 优先，后续同名按 root 顺序解析。
   return [
-    root(join(baseDirectory, ZCODE_DIR, SKILLS_DIR), scope, "zcode", nextPriority()),
+    root(join(baseDirectory, productDirectory, SKILLS_DIR), scope, "zcode", nextPriority()),
     root(join(baseDirectory, AGENTS_DIR, SKILLS_DIR), scope, "agents", nextPriority()),
   ];
 }

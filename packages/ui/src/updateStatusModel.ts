@@ -18,6 +18,8 @@ export type UpdateStatusViewModel = {
   updateChannel: ElectronReleaseChannel | undefined;
 };
 
+export type UpdateStatusEntryVisualState = "available" | "downloading" | "downloaded";
+
 export function deriveUpdateStatusViewModel({
   legacyReadyVersion,
   updateState,
@@ -58,6 +60,20 @@ export function deriveUpdateStatusViewModel({
         ? updateState.channel
         : undefined,
   };
+}
+
+export function resolveUpdateStatusEntryVisualState(
+  viewModel: UpdateStatusViewModel,
+): UpdateStatusEntryVisualState | null {
+  if (!viewModel.displayVersion) {
+    return null;
+  }
+
+  if (viewModel.dialogPhase === "downloading") {
+    return "downloading";
+  }
+
+  return viewModel.dialogPhase === "downloaded" ? "downloaded" : "available";
 }
 
 export function isUpdateActionCompleted(

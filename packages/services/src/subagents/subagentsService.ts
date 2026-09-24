@@ -2,6 +2,8 @@
 import { access, lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
+  BUILT_IN_SRE_TOOLS,
+  BUILT_IN_SUBAGENT_NAMES,
   createAgentStateId,
   createPluginAgentStateId,
   parsePluginSubagentModelSelectionOverrides,
@@ -80,7 +82,7 @@ interface PluginAgentDiscovery {
   runtimeAgents: AgentSummary[];
 }
 
-const BUILT_IN_AGENT_NAMES = new Set(["general-purpose", "Explore"]);
+const BUILT_IN_AGENT_NAMES = new Set<string>(BUILT_IN_SUBAGENT_NAMES);
 const PLUGIN_MANIFEST_PATHS = [
   join(".zcode-plugin", "plugin.json"),
   join(".claude-plugin", "plugin.json"),
@@ -92,6 +94,7 @@ function createBuiltInAgents(
 ): AgentSummary[] {
   const generalPurposeOverride = modelSelectionOverrides["general-purpose"];
   const exploreOverride = modelSelectionOverrides.Explore;
+  const sreOverride = modelSelectionOverrides["lake-sre"];
   return [
     {
       id: createAgentStateId({
@@ -130,6 +133,27 @@ function createBuiltInAgents(
       systemPrompt: "",
       tools: ["Bash", "Glob", "Grep", "Read", "WebFetch", "WebSearch", "TodoWrite"],
       path: "built-in:Explore",
+      scope: "built-in",
+      source: "built-in",
+      enabled: true,
+      readOnly: true,
+    },
+    {
+      id: createAgentStateId({
+        name: "lake-sre",
+        scope: "built-in",
+        source: "built-in",
+      }),
+      name: "lake-sre",
+      description:
+        "Read-only software reliability investigator for incident triage, evidence-based diagnosis, impact assessment, and remediation planning.",
+      color: "purple",
+      injectAgentsMd: true,
+      modelSelection: sreOverride,
+      modelSelectionOverride: sreOverride,
+      systemPrompt: "",
+      tools: [...BUILT_IN_SRE_TOOLS],
+      path: "built-in:lake-sre",
       scope: "built-in",
       source: "built-in",
       enabled: true,
@@ -396,7 +420,7 @@ async function discoverPluginAgents(params: {
 
 async function readPluginConfig(options?: SubagentStorageOptions): Promise<PluginConfigSummary> {
   try {
-    const configPath = join(resolveUserHomeDir(options), ".zcode", "cli", "config.json");
+    const configPath = join(resolveUserHomeDir(options), ".lake", "cli", "config.json");
     const raw = await readFile(configPath, "utf-8");
     const parsed = JSON.parse(raw) as unknown;
     if (!isRecord(parsed)) return { enabledPlugins: {}, suppressedBuiltins: [] };
@@ -533,10 +557,10 @@ function normalizeBuiltInSelectionOverrides(
 ): BuiltInSubagentModelSelectionOverrides {
   const result: BuiltInSubagentModelSelectionOverrides = {};
   const structuredRecord = isRecord(structured) ? structured : {};
-  const generalPurpose = modelSelectionSchema.safeParse(structuredRecord["general-purpose"]).data;
-  const explore = modelSelectionSchema.safeParse(structuredRecord.Explore).data;
-  if (generalPurpose) result["general-purpose"] = generalPurpose;
-  if (explore) result.Explore = explore;
+  for (const name of BUILT_IN_SUBAGENT_NAMES) {
+    const selection = modelSelectionSchema.safeParse(structuredRecord[name]).data;
+    if (selection) result[name] = selection;
+  }
   return result;
 }
 
@@ -724,13 +748,18 @@ export function createSubagentsService(options?: SubagentsServiceOptions): ISuba
 
     async updateAgent(params: AgentUpdateParams): Promise<{ agent: AgentSummary }> {
       validateUserAgentConfig(params.config);
-      assertNotBuiltInName(params.config.name);
 
       const scope = params.scope ?? "user";
       const agentDir =
         scope === "workspace"
           ? resolveWorkspaceSubagentRoot(requireWorkspacePath(params.workspacePath))
           : await resolveUserSubagentRoot(storageOptions);
+      if (params.config.name.trim() === "lake-sre") {
+        // 新增内置 SRE 后，升级前恰好同名的用户文件不能被锁死；只允许验证过的原文件原名保存。
+        await assertExistingSreProfileUpdate(params, agentDir, scope);
+      } else {
+        assertNotBuiltInName(params.config.name);
+      }
       const filePath = join(agentDir, `${params.config.name.trim().toLowerCase()}.md`);
       await mkdir(agentDir, { recursive: true });
 
@@ -785,6 +814,33 @@ function validateUserAgentConfig(config: SubAgentConfig): void {
 function assertNotBuiltInName(name: string): void {
   if (BUILT_IN_AGENT_NAMES.has(name.trim())) {
     throw new Error(`Agent name "${name.trim()}" is reserved by a built-in agent`);
+  }
+}
+
+async function assertExistingSreProfileUpdate(
+  params: AgentUpdateParams,
+  agentDir: string,
+  scope: "user" | "workspace",
+): Promise<void> {
+  const originalPath = params.oldFilePath;
+  const invalidName = () => new Error('Agent name "lake-sre" is reserved by a built-in agent');
+  if (!originalPath) throw invalidName();
+  const relativePath = relative(agentDir, originalPath);
+  if (!relativePath || /^\.\.(?:[\\/]|$)/u.test(relativePath) || isAbsolute(relativePath)) {
+    throw invalidName();
+  }
+  try {
+    if (!(await lstat(originalPath)).isFile()) throw invalidName();
+    const parsed = parseSubagentMarkdown({
+      content: await readFile(originalPath, "utf8"),
+      path: originalPath,
+      scope,
+    });
+    if (parsed.agent?.id !== params.agentId || parsed.agent.name !== "lake-sre") {
+      throw invalidName();
+    }
+  } catch {
+    throw invalidName();
   }
 }
 

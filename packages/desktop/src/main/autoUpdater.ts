@@ -20,10 +20,13 @@ import pkg, { CancellationToken } from "electron-updater";
 import semver from "semver";
 import { logger } from "./logger.js";
 import { getElectronReleasePlatform, ManifestUpdateProvider } from "./manifestUpdateProvider.js";
+import {
+  DEFAULT_LAKE_UPDATE_MANIFEST_URL,
+  LAKE_UPDATE_POLL_INTERVAL_MS,
+} from "./lakeUpdateFeed.js";
 const { autoUpdater } = pkg;
 
 export const CHECK_FOR_UPDATE_MENU_ID = "check-for-update";
-const AUTO_UPDATE_POLL_INTERVAL_MS = 60 * 60 * 1000;
 const UPDATE_FEED_URL_ENV = "ZCODE_UPDATE_FEED_URL";
 const UPDATE_FEED_URL_SWITCH = "--zcode-update-feed-url";
 const DEV_AUTO_UPDATE_ENV = "ZCODE_AUTO_UPDATE_DEV";
@@ -752,12 +755,12 @@ async function syncAutoUpdateCheckChannelFromSettings(
 }
 
 function applyManifestUpdateProvider(options: InitAutoUpdaterOptions): void {
-  const manifestUrl = options.updateFeedSource?.url.trim();
+  const manifestUrl = options.updateFeedSource?.url.trim() || DEFAULT_LAKE_UPDATE_MANIFEST_URL;
   autoUpdater.setFeedURL({
     provider: "custom",
     updateProvider: ManifestUpdateProvider,
     endpointOrigin: DEFAULT_ZCODE_ENDPOINT_ORIGIN,
-    ...(manifestUrl ? { manifestUrl } : {}),
+    manifestUrl,
     releasePlatform: getElectronReleasePlatform(),
     deviceMid: options.deviceMid,
     resolveEndpointOrigin:
@@ -768,9 +771,7 @@ function applyManifestUpdateProvider(options: InitAutoUpdaterOptions): void {
     },
   });
   logger.info(
-    manifestUrl
-      ? `[auto-update] service manifest provider applied platform=${getElectronReleasePlatform()} manifestUrl=${redactUpdateFeedUrlForLog(manifestUrl)}`
-      : `[auto-update] service manifest provider applied platform=${getElectronReleasePlatform()}`,
+    `[auto-update] manifest provider applied platform=${getElectronReleasePlatform()} manifestUrl=${redactUpdateFeedUrlForLog(manifestUrl)}`,
   );
 }
 
@@ -1757,7 +1758,7 @@ export async function initAutoUpdater(options: InitAutoUpdaterOptions = {}): Pro
 
   autoUpdatePollTimer = setInterval(() => {
     triggerCheckForUpdates("poll");
-  }, AUTO_UPDATE_POLL_INTERVAL_MS);
+  }, LAKE_UPDATE_POLL_INTERVAL_MS);
   autoUpdatePollTimer.unref?.();
 }
 

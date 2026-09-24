@@ -3,7 +3,6 @@ import type { Locale, UserInfo } from "@zcode/shared";
 import { memo, useCallback, useEffect, useState } from "react";
 import {
   DesktopCommandIds,
-  TID_LOGIN_MENU_ITEM,
   TID_LOGIN_TRIGGER,
   TID_LOGOUT_BUTTON,
   TID_TASK_SETTINGS_BUTTON,
@@ -29,7 +28,6 @@ import {
   PencilRuler,
   Globe,
   Loader2,
-  LogInIcon,
   LogOut,
   Maximize,
   Palette,
@@ -64,7 +62,7 @@ function getSidebarProfileName(user?: UserInfo | null): string {
     return username;
   }
 
-  return "ZCode";
+  return "Lake";
 }
 
 function getSidebarProfileBadge(
@@ -75,7 +73,9 @@ function getSidebarProfileBadge(
     return getSidebarProfileName(user);
   }
 
-  return formatMessage({ id: "sidebar.profile.notLoggedIn" });
+  // 本地定制，见 specs/vendor-config-removal.md：产品不接账号，未登录不再显示
+  // 「连接使用」这种连接账号的文案；这里只作为头像区的无障碍名称。
+  return formatMessage({ id: "settings.title" });
 }
 
 function getAvatarFallbackText(user: UserInfo | null | undefined): string {
@@ -91,7 +91,6 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   onSettingsButtonClick,
   onUsageClick,
   onUpgradeClick,
-  onLogin,
   onLogout,
   settingsButtonMode = "settings",
   user,
@@ -111,6 +110,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   onUpgradeClick?: Parameters<
     typeof WorkspaceSidebarFooterUsageSummaryContent
   >[0]["onUpgradeClick"];
+  /** 保留 prop 作为以后恢复账号入口的接缝；本地定制下 footer 不再渲染登录项。 */
   onLogin?: () => void;
   onLogout?: () => void;
   settingsButtonMode?: "settings" | "back";
@@ -161,9 +161,11 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
       </Avatar>
       <div className="min-w-0 flex-1 overflow-hidden text-left">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="min-w-0 truncate text-ui-base font-semibold text-foreground">
-            {profileBadge}
-          </span>
+          {user ? (
+            <span className="min-w-0 truncate text-ui-base font-semibold text-foreground">
+              {profileBadge}
+            </span>
+          ) : null}
           {user ? <WorkspaceSidebarFooterPlanBadge state={usageSummaryState} /> : null}
         </div>
       </div>
@@ -272,6 +274,16 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
                       id: "sidebar.settings.systemDefault",
                     })}
                   </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="lake-dark">
+                    {intl.formatMessage({
+                      id: "settings.themeMode.lake-dark",
+                    })}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="lake-light">
+                    {intl.formatMessage({
+                      id: "settings.themeMode.lake-light",
+                    })}
+                  </DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="zai-dark">
                     {intl.formatMessage({
                       id: "sidebar.settings.theme.zai-dark",
@@ -348,15 +360,6 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
               onUsageClick={usageButtonClick}
               onUpgradeClick={onUpgradeClick}
             />
-            {onLogin && !user ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={onLogin} data-testid={TID_LOGIN_MENU_ITEM}>
-                  <LogInIcon className="size-4" />
-                  {intl.formatMessage({ id: "app.login" })}
-                </DropdownMenuItem>
-              </>
-            ) : null}
             {onLogout ? (
               <>
                 <DropdownMenuSeparator />

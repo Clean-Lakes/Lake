@@ -72,6 +72,8 @@ import type {
 
 /** RPC 服务频道名。与 ServiceDescriptor.channelName 对应。 */
 export const ServiceChannels = {
+  /** Lake 应用级 SRE 资产目录 */
+  LakeCatalog: "lake-catalog",
   File: "file",
   MediaPreview: "media-preview",
   System: "system",

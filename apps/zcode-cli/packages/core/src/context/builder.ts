@@ -97,9 +97,7 @@ export class ContextBuilder {
     }
     const isWorkflowActor = workflowActor !== undefined;
 
-    // 1. CLI / product prefix. Keep this as the short leading identity block.
-    // 「You are ZCode, an interactive coding agent」对一个
-    // 只对脚本说话、可能连读文件工具都没有的子代理是错的身份，且走在正确身份段前面。
+    // 1. 产品前缀只说明 Lake 环境，不覆盖显式自定义身份；只对脚本说话的工作流子代理不注入它。
     if (!isWorkflowActor) {
       sections.push(buildCliPrefixSection());
     }

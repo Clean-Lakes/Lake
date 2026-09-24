@@ -160,13 +160,13 @@ Slash Commands:
     },
     sidebar: {
       subagents: {
-        title: "Subagents",
-        empty: "No subagents yet.",
+        title: "Beavers",
+        empty: "No beavers yet.",
         emptyOutput: "No output yet.",
         back: "← Main conversation",
         readonly: "Read-only · Esc to return",
-        loading: "Loading subagent output...",
-        unavailable: "Subagent output unavailable.",
+        loading: "Loading beaver output...",
+        unavailable: "Beaver output unavailable.",
         retry: "Retry",
         more: "Load more",
         pendingMain: "Main conversation needs your input — return to respond",
@@ -286,7 +286,7 @@ Slash Commands:
     },
     terminal: {
       requiresInteractive: "TUI requires an interactive terminal.",
-      starting: "Starting ZCode... Ctrl+C to exit",
+      starting: "Starting Lake... Ctrl+C to exit",
     },
     transcript: {
       compact: {

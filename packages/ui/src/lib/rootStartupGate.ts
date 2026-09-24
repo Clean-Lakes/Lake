@@ -41,7 +41,11 @@ export function shouldShowRootStartupLoading(state: RootStartupLoadingVisibility
 }
 
 export function shouldEnableProviderAvailabilityLoginEntryGuard(): boolean {
-  return true;
+  // 本地定制，见 specs/skip-account-login-gate.md：
+  // 上游用启动阶段的 provider 可用性判断决定是否把首屏切到账号连接页（WelcomeScreen）。
+  // 我们要让客户端直接进入工作区，所以不启用该守卫；设置里的主动登录、logout
+  // 与会话过期三条路径不经这里，仍然会打开连接页。
+  return false;
 }
 
 export function shouldResolveProviderStartupState(state: ProviderStartupResolutionState): boolean {

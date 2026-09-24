@@ -97,6 +97,13 @@ type WelcomeScreenOpenReason =
   | "session-expired";
 
 /**
+ * 本地定制，见 specs/vendor-config-removal.md：连接页（WelcomeScreen）只剩厂商入口——
+ * OAuth 按钮和 Z.ai / BigModel 的 API Key 面板，本产品不接账号，所以整体不再渲染。
+ * 改成 true 可恢复上游行为（同时需要恢复 WelcomeScreen 的 resolveVisibleLoginProviders）。
+ */
+const shouldRenderWelcomeScreen = false;
+
+/**
  * Root —— 应用根组件
  *
  * 外层挂载 StoreProvider（连接广播服务）+ TabStoreProvider，内层处理认证和路由。
@@ -958,7 +965,10 @@ function RootInner({
     );
   }
 
-  if (welcomeScreenOpenReason) {
+  // 本地定制，见 specs/vendor-config-removal.md：连接页只剩厂商入口（OAuth 按钮与
+  // Z.ai / BigModel 的 API Key 面板），本产品不接账号，因此不再渲染它。
+  // welcomeScreenOpenReason 状态机与 WelcomeScreen 代码保留，作为日后做自有引导页的接缝。
+  if (shouldRenderWelcomeScreen && welcomeScreenOpenReason) {
     return (
       <RootShell>
         {rootModelSelectionErrorNode}

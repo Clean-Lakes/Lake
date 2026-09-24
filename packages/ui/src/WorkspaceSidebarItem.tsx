@@ -14,15 +14,13 @@ import {
   Cloud,
   CopyIcon,
   Ellipsis,
-  Folder,
-  FolderOpen,
-  House,
   InfoIcon,
   ListTree,
   LoaderCircle,
   RefreshCwIcon,
   MessageCirclePlus,
   XIcon,
+  Waves,
 } from "lucide-react";
 import type { useSortable } from "@dnd-kit/sortable";
 import { BorderBeam } from "border-beam";
@@ -95,11 +93,6 @@ export type SortableBindings = Pick<ReturnType<typeof useSortable>, "attributes"
 // workspace 行在流式工具事件期间会因父级刷新而重渲染；
 // TaskList 如果每次收到新的空数组，会把等价数据误判成变化并连带刷新任务行。
 const EMPTY_PINNED_TASKS: ZCodeTaskMeta[] = [];
-
-function isHomeWorkspacePath(path: string): boolean {
-  const normalizedPath = path.replace(/\\/g, "/").replace(/\/+$/, "");
-  return /^(\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\/Users\/[^/]+)$/.test(normalizedPath);
-}
 
 type SshRemoteTarget = Extract<NonNullable<WorkspaceTabState["remoteTarget"]>, { kind: "ssh" }>;
 
@@ -218,7 +211,6 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
     // 用 ref 在调用时读取最新列表，既保持回调稳定，也避免乐观更新拿到过期 meta。
     return taskItemsRef.current.find((task) => task.taskId === taskId) ?? null;
   }, []);
-  const isHomeWorkspace = isHomeWorkspacePath(tab.workspacePath);
   const readOnlyReason =
     tab.availability === "unavailable-local-directory"
       ? intl.formatMessage({ id: "workspaceSidebar.unavailableLocalDirectory" })
@@ -716,25 +708,12 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
     });
   }, [remoteWorkspaceError]);
   const renderWorkspaceIcon = () => {
-    // workspace 行之前在 hover/展开时会把目录图标切成箭头，
-    // 视觉上会多出一层“树形展开控件”的暗示；当前交互只需要保留项目图标本身，
-    // 这样能减少噪音，也避免用户把它理解成独立的箭头开关。
-    if (isExpanded && !isDisconnectedRemoteWorkspace) {
-      return isRemoteWorkspace ? (
-        <Cloud className="h-4 w-4 text-foreground-subtle" />
-      ) : isHomeWorkspace ? (
-        <House className="h-4 w-4 text-foreground-subtle" />
-      ) : (
-        <FolderOpen className="h-4 w-4 text-foreground-subtle" />
-      );
-    }
-
+    // 行主标题已经是绑定的湖名；本地湖不再沿用目录图标误导归属。
+    // 远程湖保留云图标表达连接状态，分区标题仍明确这是一列湖。
     return isRemoteWorkspace ? (
       <Cloud className="h-4 w-4 text-foreground-subtle" />
-    ) : isHomeWorkspace ? (
-      <House className="h-4 w-4 text-foreground-subtle" />
     ) : (
-      <Folder className="h-4 w-4 text-foreground-subtle" />
+      <Waves className="h-4 w-4 text-foreground-subtle" />
     );
   };
 

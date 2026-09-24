@@ -466,9 +466,9 @@ function findExecutableFromPath(binaryName: string): string | null {
   return null;
 }
 
-function resolveSshExecutablePath(): string | null {
+export function resolveSshExecutablePath(): string | null {
   if (process.platform !== "win32") {
-    return findExecutableFromPath("ssh");
+    return findExecutableFromPath("ssh") ?? (existsSync("/usr/bin/ssh") ? "/usr/bin/ssh" : null);
   }
 
   const fromPath = findExecutableFromPath("ssh.exe");

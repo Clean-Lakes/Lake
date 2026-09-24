@@ -3,7 +3,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import type { ZCodeProvider } from "@zcode/shared";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { createPortal } from "react-dom";
-import { PaletteIcon, WandSparkles } from "lucide-react";
+import { PaletteIcon, WandSparkles, Waves } from "lucide-react";
 import {
   $createTextNode,
   $getSelection,
@@ -45,6 +45,7 @@ import {
 } from "./mentionPanelRouting.js";
 import { $createPromptMentionNode } from "./nodes/PromptMentionNode.js";
 import { useFileMentionProvider } from "./providers/fileMentionProvider.js";
+import { useLakeResourceMentionProvider } from "./providers/lakeResourceMentionProvider.js";
 import { usePluginsMentionProvider } from "./providers/pluginsMentionProvider.js";
 import { useSessionsMentionProvider } from "./providers/sessionsMentionProvider.js";
 import { useSkillsMentionProvider } from "./providers/skillsMentionProvider.js";
@@ -159,10 +160,12 @@ export function MentionPlugin({
     !disabled &&
     (activeTrigger?.trigger === "@" ||
       activeTrigger?.trigger === "$" ||
-      activeTrigger?.trigger === "#");
+      activeTrigger?.trigger === "#" ||
+      activeTrigger?.trigger === "L");
   const isContextTrigger = activeTrigger?.trigger === "@";
   const isSessionTrigger = activeTrigger?.trigger === "#";
   const isSkillTrigger = activeTrigger?.trigger === "$";
+  const isLakeResourceTrigger = activeTrigger?.trigger === "L";
 
   // 修复说明：之前把 @ 面板拆成了两层，导致用户输入 query 后还要再确认一次，
   // 实际感受像“按回车之后才开始搜”。现在改成单层分组面板，query 一变化就直接展示各分组结果。
@@ -218,6 +221,17 @@ export function MentionPlugin({
     intl.formatMessage({ id: "chat.mention.plugins.empty" }),
     intl.formatMessage({ id: "chat.mention.plugins.title" }),
   );
+  const lakeResourceResult = useLakeResourceMentionProvider(
+    workspacePath,
+    workspaceIdentity,
+    deferredActiveQuery,
+    isOpen && isLakeResourceTrigger,
+    {
+      title: intl.formatMessage({ id: "chat.mention.lakeResources.title" }),
+      empty: intl.formatMessage({ id: "chat.mention.lakeResources.empty" }),
+      noLake: intl.formatMessage({ id: "chat.mention.lakeResources.noLake" }),
+    },
+  );
 
   const panelGroups = useMemo<MentionResultGroup<MentionItem>[]>(() => {
     const groupsById = {
@@ -261,13 +275,24 @@ export function MentionPlugin({
         errorText: whiteboardResult.error?.message ?? null,
         emptyText: whiteboardResult.emptyText,
       },
+      "lake-resources": {
+        id: "lake-resources",
+        title: lakeResourceResult.title,
+        items: lakeResourceResult.items,
+        loading: lakeResourceResult.loading,
+        errorText: lakeResourceResult.error?.message ?? null,
+        emptyText: lakeResourceResult.emptyText,
+      },
     } satisfies Record<MentionPanelGroupId, MentionResultGroup<MentionItem>>;
 
     // 产品约束：@ 固定为 Plugin → 文件 → 对话 → 画板；旧 # / $ 面板继续走
     // 原单分组 provider。这里仅重排发现入口，候选自身的 canonical markdown 不变。
-    return buildVisibleMentionGroups(
-      getMentionPanelGroupOrder(activeTrigger?.trigger).map((groupId) => groupsById[groupId]),
+    const orderedGroups = getMentionPanelGroupOrder(activeTrigger?.trigger).map(
+      (groupId) => groupsById[groupId],
     );
+    // 湖未绑定或没有资源时也保留单分组，展示明确空状态，绝不退回全局资源。
+    if (isLakeResourceTrigger) return orderedGroups;
+    return buildVisibleMentionGroups(orderedGroups);
   }, [
     fileResult.emptyText,
     fileResult.error,
@@ -295,6 +320,12 @@ export function MentionPlugin({
     skillsResult.items,
     skillsResult.loading,
     skillsResult.title,
+    lakeResourceResult.emptyText,
+    lakeResourceResult.error,
+    lakeResourceResult.items,
+    lakeResourceResult.loading,
+    lakeResourceResult.title,
+    isLakeResourceTrigger,
   ]);
 
   const flatItems = useMemo(() => panelGroups.flatMap((group) => group.items), [panelGroups]);
@@ -343,6 +374,16 @@ export function MentionPlugin({
               </span>
             ) : item.category === "sessions" ? (
               <ContextMentionOptionContent item={item} workspacePath={workspacePath} />
+            ) : item.category === "lake-resources" ? (
+              <span className="min-w-0 flex flex-1 items-center gap-2">
+                <Waves className="size-3.5 shrink-0 text-foreground" />
+                <span className="min-w-0 truncate text-ui-base font-medium text-foreground">
+                  {item.label}
+                </span>
+                <span className="min-w-0 truncate text-ui-xs text-foreground-subtlest">
+                  {item.description}
+                </span>
+              </span>
             ) : item.category === "plugins" ? (
               <PluginMentionOptionContent item={item} />
             ) : undefined,
@@ -413,7 +454,8 @@ export function MentionPlugin({
           !nextActiveToken ||
           (nextActiveToken.trigger !== "@" &&
             nextActiveToken.trigger !== "$" &&
-            nextActiveToken.trigger !== "#")
+            nextActiveToken.trigger !== "#" &&
+            nextActiveToken.trigger !== "L")
         ) {
           activeTokenRef.current = null;
           dismissedSignatureRef.current = null;
@@ -523,7 +565,8 @@ export function MentionPlugin({
           !activeMentionTrigger ||
           (activeMentionTrigger.trigger !== "@" &&
             activeMentionTrigger.trigger !== "$" &&
-            activeMentionTrigger.trigger !== "#")
+            activeMentionTrigger.trigger !== "#" &&
+            activeMentionTrigger.trigger !== "L")
         ) {
           return;
         }
@@ -627,6 +670,12 @@ export function MentionPlugin({
     const unregisterEnter = editor.registerCommand(
       KEY_ENTER_COMMAND,
       (event) => {
+        // 修复说明：L 候选正在加载或为空时，回落到输入框 Enter 会把裸 L 当消息发送。
+        // 湖资源尚未被选择，必须保留草稿，等待候选或由用户明确关闭面板。
+        if (isLakeResourceTrigger && flatItems.length === 0) {
+          event?.preventDefault();
+          return true;
+        }
         if (!selectOption(selectedIndex)) {
           return false;
         }
@@ -688,16 +737,20 @@ export function MentionPlugin({
       unregisterEscape();
       unregisterBlur();
     };
-  }, [editor, flatItems, isOpen, selectOption, selectedIndex]);
+  }, [editor, flatItems, isLakeResourceTrigger, isOpen, selectOption, selectedIndex]);
 
-  const panelTitle = intl.formatMessage({ id: "chat.mention.title" });
+  const panelTitle = isLakeResourceTrigger
+    ? intl.formatMessage({ id: "chat.mention.lakeResources.title" })
+    : intl.formatMessage({ id: "chat.mention.title" });
   const panelDescription = hasActiveQuery
     ? ""
     : activeTrigger?.trigger === "#"
       ? intl.formatMessage({ id: "chat.mention.sessions.searchHint" })
       : activeTrigger?.trigger === "$"
         ? intl.formatMessage({ id: "chat.mention.skills.searchHint" })
-        : intl.formatMessage({ id: "chat.mention.searchHint" });
+        : activeTrigger?.trigger === "L"
+          ? intl.formatMessage({ id: "chat.mention.lakeResources.searchHint" })
+          : intl.formatMessage({ id: "chat.mention.searchHint" });
   const panelEmptyText = hasActiveQuery
     ? intl.formatMessage({ id: "chat.mention.emptyResults" })
     : "";

@@ -1,5 +1,17 @@
 // Descriptors & collection (browser-safe)
 export { type ServiceDescriptor, createServiceDescriptor } from "./descriptors.js";
+export { ILakeCatalogService } from "./lake-catalog/lakeCatalog.js";
+export type {
+  Lake,
+  LakeResource,
+  LakeResourceKind,
+  LakeResourceEnvironment,
+  CreateLakeInput,
+  LakeWorkspaceBinding,
+  CreateLakeResourceInput,
+  LakeSshProfile,
+  LakeSshProfileInput,
+} from "./lake-catalog/lakeCatalog.js";
 export { ServiceCollection } from "./collection.js";
 export {
   IModelSelectionService,

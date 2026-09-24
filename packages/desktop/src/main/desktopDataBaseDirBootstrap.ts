@@ -3,8 +3,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { setDataBaseDir } from "@zcode/services/node";
 
-function resolveBootstrapSettingsFile(homePath: string = homedir()): string {
-  return join(homePath, ".zcode", "v2", "setting.json");
+export function resolveBootstrapSettingsFile(homePath: string = homedir()): string {
+  return join(homePath, ".lake", "v2", "setting.json");
 }
 
 function extractBootstrapDataBaseDir(rawValue: unknown): string | null {

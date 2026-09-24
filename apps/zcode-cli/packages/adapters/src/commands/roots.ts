@@ -8,6 +8,7 @@ const GIT_MARKER = ".git";
 const HOME_PREFIX = "~/";
 const PRIORITY_STEP = 10;
 const ZCODE_DIR = ".zcode";
+const LAKE_USER_DIR = ".lake";
 const AGENTS_DIR = ".agents";
 
 export interface CustomCommandRootResolutionOptions {
@@ -43,13 +44,13 @@ export async function resolveDefaultCustomCommandRoots(
   }
 
   if (includeZcode) {
-    roots.push(...commandRootsForBase(home, "user", nextPriority));
+    roots.push(...commandRootsForBase(home, "user", nextPriority, LAKE_USER_DIR));
   }
 
   const projectDirectories = await resolveProjectDirectories(resolvedWorkingDirectory);
   for (const directory of projectDirectories) {
     if (includeZcode) {
-      roots.push(...commandRootsForBase(directory, "project", nextPriority));
+      roots.push(...commandRootsForBase(directory, "project", nextPriority, ZCODE_DIR));
     }
   }
 
@@ -95,11 +96,12 @@ function commandRootsForBase(
   baseDirectory: string,
   scope: CustomCommandRoot["scope"],
   nextPriority: () => number,
+  productDirectory: string,
 ): CustomCommandRoot[] {
   // 合并而不是 fallback：兼容 `.agents` 命令和原生 `.zcode` 命令需要同时可见。
   // 同一级别 `.zcode` 先扫描，命令同名时仍按“先到先赢”处理。
   return [
-    root(join(baseDirectory, ZCODE_DIR, COMMANDS_DIR), scope, "zcode", nextPriority()),
+    root(join(baseDirectory, productDirectory, COMMANDS_DIR), scope, "zcode", nextPriority()),
     root(join(baseDirectory, AGENTS_DIR, COMMANDS_DIR), scope, "agents", nextPriority()),
   ];
 }

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/components/lib/utils.js";
 import { FileDisplayInline } from "@/lib/fileDisplay.js";
+import { LakeResourceUserInputMention } from "@/mentions/components/LakeResourceUserInputMention.js";
 import { isTrustedPluginIconSource } from "@/lib/pluginIconSource.js";
 import { usePluginReferenceIconProjection } from "@/v4/pluginReferenceIconContext.js";
 import {
@@ -111,6 +112,16 @@ function V4UserInputMention({
         <MessagesSquare aria-hidden="true" className="size-4 shrink-0" />
         {part.label}
       </span>
+    );
+  }
+
+  if (part.type === "lake-resource") {
+    return (
+      <LakeResourceUserInputMention
+        label={part.label}
+        metadata={part.metadata}
+        className={mentionClassName("lake-resources")}
+      />
     );
   }
 

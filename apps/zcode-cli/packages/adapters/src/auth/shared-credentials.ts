@@ -6,6 +6,7 @@ import { atomicWritePrivateTextFile, backupCorruptFile, withFileLock } from "@zc
 import { createZCodeCredentialCipher, type ZCodeCredentialCipher } from "./credential-cipher.js";
 
 const ZCODE_DATA_BASE_DIR_ENV_KEY = "ZCODE_DATA_BASE_DIR";
+const ZCODE_STORAGE_DIR_ENV_KEY = "ZCODE_STORAGE_DIR";
 const ZAI_PROVIDER_ID = "zai";
 const credentialChangeListeners = new Map<
   string,
@@ -285,8 +286,12 @@ export function resolveSharedZCodeCredentialsPath(
   }
 
   const env = options.env ?? process.env;
+  const storageRoot = options.baseDir ? undefined : env[ZCODE_STORAGE_DIR_ENV_KEY]?.trim();
+  if (storageRoot) {
+    return join(resolveUserPath(storageRoot), "v2", "credentials.json");
+  }
   const baseDir = options.baseDir ?? env[ZCODE_DATA_BASE_DIR_ENV_KEY] ?? homedir();
-  return join(resolveUserPath(baseDir), ".zcode", "v2", "credentials.json");
+  return join(resolveUserPath(baseDir), ".lake", "v2", "credentials.json");
 }
 
 async function readRawCredentialRecord(filePath: string): Promise<Record<string, string>> {

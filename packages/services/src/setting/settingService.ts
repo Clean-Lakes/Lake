@@ -53,10 +53,10 @@ function resolveUserHomeDir() {
 }
 
 function getSettingsDir() {
-  return join(resolveUserHomeDir(), ".zcode", "v2");
+  return join(resolveUserHomeDir(), ".lake", "v2");
 }
 
-function getSettingsFile() {
+export function getSettingsFilePath() {
   return join(getSettingsDir(), "setting.json");
 }
 
@@ -114,7 +114,7 @@ interface ReadSettingsResult {
 }
 
 async function readSettingsWithMeta(): Promise<ReadSettingsResult> {
-  const settingsFile = getSettingsFile();
+  const settingsFile = getSettingsFilePath();
   try {
     // settingService.get() 会被 UI 和远程会话高频调用。
     // 之前每次读取都把完整配置写入生产日志，导致日志暴涨且暴露路径/配置细节；普通读取只保留开发态 debug。
@@ -195,7 +195,7 @@ async function writeSettings(
   commitAccountSelection = false,
 ): Promise<void> {
   const settingsDir = getSettingsDir();
-  const settingsFile = getSettingsFile();
+  const settingsFile = getSettingsFilePath();
   // Windows 下测试只改了 HOME，模块顶层常量如果在导入时就把 homedir() 固化，
   // 后续读写仍会串到真实用户目录。这里改成每次按当前环境解析配置路径，保证本地和测试都稳定。
   log("writing settings to:", settingsFile, JSON.stringify(settings));
@@ -386,7 +386,7 @@ export function createSettingServiceWithMigrations(): {
       if (inFlight) return inFlight;
       const run = async (): Promise<readonly ProviderFamilyDomain[]> => {
         await service.get();
-        const original = await readLegacyAccountConnectionSettingsFile(getSettingsFile());
+        const original = await readLegacyAccountConnectionSettingsFile(getSettingsFilePath());
         const incomplete = readIncompleteLegacyTeamConnections(original);
         if (incomplete.length === 0) return [];
         // 网络在写队列外：代理设置读取及用户操作均可继续，不形成 get -> HTTP -> get 循环。
@@ -397,7 +397,7 @@ export function createSettingServiceWithMigrations(): {
           })),
         );
         await enqueueSettingsWrite(async (shouldCommit, enterCommitPhase) => {
-          const latest = await readLegacyAccountConnectionSettingsFile(getSettingsFile());
+          const latest = await readLegacyAccountConnectionSettingsFile(getSettingsFilePath());
           // 只核对迁移输入，不因普通语言/窗口设置变化丢失合法结果，也不覆盖用户新账号意图。
           if (
             Object.hasOwn(latest, "providerFamilyConnectionSelections") ||
@@ -428,7 +428,7 @@ export function createSettingServiceWithMigrations(): {
           );
         });
         return readIncompleteLegacyTeamConnections(
-          await readLegacyAccountConnectionSettingsFile(getSettingsFile()),
+          await readLegacyAccountConnectionSettingsFile(getSettingsFilePath()),
         ).map((entry) => entry.family);
       };
       const pending = run();

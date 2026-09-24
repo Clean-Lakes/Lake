@@ -2,6 +2,10 @@ const LINK_MENTION_MARKDOWN_PATTERN =
   /\[((?:\\.|[^\\\]])*)\]\((?:<((?:\\.|[^>])*?)>|((?:\\.|[^)])*))\)/g;
 const INLINE_MENTION_TOKEN_PATTERN =
   /(^|\s)(\$[a-zA-Z0-9._-]+|\/[a-zA-Z0-9._-]+|@[a-zA-Z0-9._-]+|#sess_[a-zA-Z0-9._-]+)(?=$|\s)/g;
+// 湖资源的 canonical 文本必须完整留给 Agent；回显只识别带稳定 ID 和登记声明的完整引用。
+// 先于普通 Markdown 链接切分，避免资源说明里恰好含 `[text](url)` 时打断资源引用。
+const LAKE_RESOURCE_MENTION_PATTERN =
+  /湖资源「([^\r\n]{1,256}?)」〔湖：[^\r\n]{0,2048}?；湖ID：[A-Za-z0-9-]{1,128}；资源ID：[A-Za-z0-9-]{1,128}；仅为登记信息，非实时状态〕|Lake resource "([^\r\n]{1,256}?)" \[lake: [^\r\n]{0,2048}?; lake ID: [A-Za-z0-9-]{1,128}; resource ID: [A-Za-z0-9-]{1,128}; registered information only, not live status\]/g;
 
 function escapeMarkdownLabel(label: string): string {
   return label.replaceAll("\\", "\\\\").replaceAll("[", "\\[").replaceAll("]", "\\]");
@@ -99,6 +103,7 @@ type MentionTextPart =
   | { type: "command"; label: string }
   | { type: "subagent"; label: string }
   | { type: "session"; label: string }
+  | { type: "lake-resource"; label: string; metadata: string }
   | { type: "plugin"; label: string; pluginId?: string };
 
 const PLUGIN_STABLE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -174,7 +179,7 @@ function parseInlineMentionTokens(segment: string): MentionTextPart[] {
   return parts;
 }
 
-export function parseMentionMarkdown(content: string): MentionTextPart[] {
+function parseStandardMentionMarkdown(content: string): MentionTextPart[] {
   const parts: MentionTextPart[] = [];
   LINK_MENTION_MARKDOWN_PATTERN.lastIndex = 0;
   let cursor = 0;
@@ -216,5 +221,29 @@ export function parseMentionMarkdown(content: string): MentionTextPart[] {
     parts.push(...parseInlineMentionTokens(content.slice(cursor)));
   }
 
+  return parts;
+}
+
+export function parseMentionMarkdown(content: string): MentionTextPart[] {
+  const parts: MentionTextPart[] = [];
+  LAKE_RESOURCE_MENTION_PATTERN.lastIndex = 0;
+  let cursor = 0;
+
+  for (const match of content.matchAll(LAKE_RESOURCE_MENTION_PATTERN)) {
+    const start = match.index ?? 0;
+    if (start > cursor) {
+      parts.push(...parseStandardMentionMarkdown(content.slice(cursor, start)));
+    }
+    parts.push({
+      type: "lake-resource",
+      label: unescapeMarkdownText(match[1] ?? match[2] ?? ""),
+      metadata: match[0],
+    });
+    cursor = start + match[0].length;
+  }
+
+  if (cursor < content.length) {
+    parts.push(...parseStandardMentionMarkdown(content.slice(cursor)));
+  }
   return parts;
 }

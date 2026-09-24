@@ -223,7 +223,10 @@ export function useModelProviderNavigation({
       },
     ];
 
-    return groups;
+    // 本地定制，见 specs/vendor-config-removal.md：产品不接 Z.ai / BigModel 账号，
+    // 模型设置页只保留「自定义供应商」；预置分组（智谱家族、Start Plan）与编程套餐
+    // 一律不进导航。上面这段构建逻辑保留，是以后想恢复厂家配置时的接缝。
+    return groups.filter((group) => group.id === "custom");
   }, [
     customProviders,
     codingPlanItems,
@@ -238,13 +241,10 @@ export function useModelProviderNavigation({
   ]);
 
   const navigationItems = useMemo(() => {
+    // 与导航分组保持一致：只保留自定义供应商，不再追加编程套餐 / 连接方式项。
     const visibleItems = navigationGroups.flatMap((group) => group.items);
-    const visibleKeys = new Set(visibleItems.map((item) => item.key));
-    return [
-      ...visibleItems,
-      ...connectionModeCodingPlanItems.filter((item) => !visibleKeys.has(item.key)),
-    ];
-  }, [connectionModeCodingPlanItems, navigationGroups]);
+    return [...visibleItems];
+  }, [navigationGroups]);
 
   const selectableNavigationItems = useMemo(
     () => navigationItems.filter((item) => item.type !== "codingPlanLoading"),

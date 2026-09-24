@@ -2,9 +2,7 @@ import { useCallback } from "react";
 import type { IServiceAccessor } from "@zcode/services";
 import { logger } from "@/logger.js";
 import type { TabStoreState } from "@/store/tabStore.js";
-import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
-import { usePaneLayoutStore } from "@/v4/paneLayoutStore.js";
-import { useWorkbenchGroupStore } from "@/v4/workbenchGroupStore.js";
+import { requestLakeSwitcherOpen } from "@/lib/lakeSwitcherOpen.js";
 
 export function useConversationWorkspaceActions({
   services,
@@ -46,17 +44,9 @@ export function useConversationWorkspaceActions({
   }, [handleResolveConversationWorkspace, handleSelectConversationWorkspace]);
 
   const handleCreateConversationTask = useCallback(async () => {
-    try {
-      const path = await handleResolveConversationWorkspace();
-      handleSelectConversationWorkspace(path);
-      // “对话 +”是显式目标，不应被当前 split pane / workbench group 的项目绑定覆盖。
-      useWorkbenchGroupStore.getState().deactivateActiveGroup();
-      usePaneLayoutStore.getState().resetToPrimaryPane();
-      useZCodeSessionStore.getState().startDraft(path);
-    } catch {
-      // handleResolveConversationWorkspace 已记录错误并保留当前 workspace。
-    }
-  }, [handleResolveConversationWorkspace, handleSelectConversationWorkspace]);
+    // 通用对话工作区没有湖绑定；继续从这里建草稿会绕过“先选湖”规则。
+    requestLakeSwitcherOpen();
+  }, []);
 
   return {
     handleSelectConversationWorkspace,
