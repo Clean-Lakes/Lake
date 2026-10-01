@@ -472,6 +472,19 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  apps/zcode-cli/packages/lake:
+    dependencies:
+      smol-toml:
+        specifier: 1.6.1
+        version: 1.6.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.12.2
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+
   apps/zcode-cli/packages/node-repl-host:
     dependencies:
       '@modelcontextprotocol/server':
@@ -16172,11 +16185,11 @@ snapshots:
 
   lodash.merge@4.6.2: {}
 
+  lodash.pickby@4.6.0: {}
+
   lodash.uniqby@4.7.0: {}
 
   lodash@4.18.1: {}
-
-  lodash.pickby@4.6.0: {}
 
   log-symbols@4.1.0:
     dependencies:
