@@ -14,4 +14,5 @@ export interface RuntimePorts {
   options: LakeRuntimeOptions; emit(event: LakeEvent): void;
   id(): string;
   agent?: AgentPort;
+  digest?(input: string): string;
 }

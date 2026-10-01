@@ -22,6 +22,8 @@ The runtime owns one AbortController per admitted execution and terminal lease. 
 
 ## Verification boundary
 
+The workspace application owns registered project snapshots and terminal admission. `workspace.files/read/search/git/diff` are bounded read adapters; `workspace.terminal.open/run/close` are physical shell adapters. Each accepted shell command is approved, journaled and revalidates the canonical project identity. Shell state (cd/export) persists within one session, stdin is closed for each command, and interruption closes the shell with an unknown result. Native desktop dialogs only answer the runtime approval request. Git paths and symlinks cannot escape the registered project or read credential files. These commands use the same cancellation and request-ID boundary as operations tools.
+
 Use synthetic legacy databases and credentials only. Assert schema preservation, secret permissions/redaction, approval revocation, cancellation, idempotency, event replay and complete frontend method coverage. Build the source CLI with Node 24.14.0 and pnpm 10.33.2, run architecture checks and root/CLI typecheck/lint, test the current frontend and build/sign the desktop launcher. Do not mark complete while any old backend still serves an operations action.
 
 The vendored source is nested in Lake's Git repository. Architecture changed-file discovery must request paths relative to its working directory so changed managed files are actually checked; paths outside the vendored root do not belong to this policy.
