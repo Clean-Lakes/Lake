@@ -4,13 +4,13 @@ version: 1.0
 date_created: 2026-10-01
 last_updated: 2026-10-01
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [zcode, runtime, integration]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 用户要求提交并推送当前代码，创建新分支导入 ZCode 开源版进行二开，前端继续使用当前 LAKE 界面。按 docs/zcode-runtime.md 的契约替换桌面主 Agent 循环，复用 LAKE 的工具、审批与持久数据服务。
 
@@ -42,7 +42,7 @@ tags: [zcode, runtime, integration]
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
 | TASK-004 | 新建 lake/zcode/，实现 adk.Agent 接口、隔离子进程、MCP 工具注册与模型代理；更新 cmd/lake/chat.go 的 Agent 工厂及 bridge 运行时选择。 | Yes | 2026-10-01 |
-| TASK-005 | 增加模拟服务和真实源码 Agent 集成测试，覆盖批准、拒绝、撤权、取消、代理凭据和旧前端协议；更新文档后提交推送新分支。 | | |
+| TASK-005 | 增加模拟服务和真实源码 Agent 集成测试，覆盖批准、拒绝、撤权、取消、代理凭据和旧前端协议；更新文档后提交推送新分支。 | Yes | 2026-10-01 |
 
 ## 3. Alternatives
 
@@ -66,6 +66,10 @@ tags: [zcode, runtime, integration]
 - **TEST-001**: 当前 Go 运维/CLI/桌面测试及前端测试构建；前端源码不替换。
 - **TEST-002**: 源码 Agent 的模型/工具 fixture 及 bridge v1 审批、工具事件、结果和会话持久化。
 - **TEST-003**: 代理认证、工具名校验、Key 隔离、取消和错误终态。
+
+2026-10-01 验收记录：根模块 `go test ./...`（68 个包）与 `go vet ./...` 通过；桌面 Go 模块测试和静态检查、现有前端测试及构建通过。固定源码 CLI 构建、签名 LAKE CLI 和桌面包的 deep/strict 验证通过。对桌面包内 Node/CLI 执行带 race 检查的集成测试，批准/拒绝/撤权、模型及工具执行中的取消、三协议模型参数与用量、工具调用 ID、输出裁剪和界面失败后的工具停用均通过。模型、SSH 和外部 MCP 使用本机 fixture；未安装用户应用。
+
+当前基线已推送：`d12f7158`，分支 `codex/zcode-migration`。源码快照 `96c2ee43` 与主 Agent 接入 `ac6599dd` 已推送到 `codex/zcode-lake-runtime`。与基线对比，LAKE 前端源码无变化；导入的 ZCode 上游源码保持原样，集成代码位于 LAKE 适配层。
 
 ## 7. Risks & Assumptions
 
