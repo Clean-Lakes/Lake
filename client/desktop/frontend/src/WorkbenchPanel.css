@@ -1,0 +1,50 @@
+.workbench-panel { display: flex; flex-direction: column; width: 360px; min-width: 290px; flex: none; border-left: 1px solid #343438; background: #202023; color: #d4d4d9; }
+.workbench-heading { display: flex; justify-content: space-between; gap: 9px; padding: 13px 13px 10px; border-bottom: 1px solid #343438; }
+.workbench-heading strong, .workbench-heading small { display: block; }
+.workbench-heading strong { font-size: 13px; }
+.workbench-heading small { max-width: 315px; overflow: hidden; margin-top: 5px; color: #96969e; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.workbench-heading button, .workbench-tabs button { border: 0; background: transparent; color: #9999a2; }
+.workbench-tabs { display: flex; gap: 3px; padding: 7px; border-bottom: 1px solid #343438; }
+.workbench-tabs button { display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 30px; padding: 5px 9px; border-radius: 6px; font-size: 11px; }
+.workbench-tabs button.active, .workbench-tabs button:hover { background: #343438; color: #eeeef0; }
+.workbench-tabs button:last-child { margin-left: auto; }
+.workbench-content { flex: 1; min-height: 0; overflow: auto; }
+.workbench-error { margin: 9px; padding: 9px; border: 1px solid #664247; border-radius: 7px; color: #f1aeb4; font-size: 11px; overflow-wrap: anywhere; }
+.workbench-section-title { display: flex; align-items: center; gap: 6px; padding: 10px 12px 7px; color: #b9b9c0; font-size: 11px; font-weight: 600; }
+.workbench-section-title span { color: #777780; }
+.workbench-tree { max-height: 40vh; overflow: auto; padding: 0 8px 12px; }
+.workbench-folder summary, .workbench-file { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 26px; padding: 4px 6px; border: 0; border-radius: 5px; background: transparent; color: #bcbcc3; text-align: left; font-size: 11px; cursor: pointer; }
+.workbench-folder summary { list-style: none; }
+.workbench-folder summary::-webkit-details-marker { display: none; }
+.workbench-folder-content { padding-left: 13px; }
+.workbench-file:hover, .workbench-file.selected, .workbench-folder summary:hover { background: #343438; color: #f1f1f3; }
+.workbench-preview { border-top: 1px solid #38383d; }
+.workbench-preview strong { display: block; padding: 10px 12px; color: #cfcfd5; font-size: 11px; overflow-wrap: anywhere; }
+.workbench-preview pre { overflow: auto; margin: 0; padding: 0 12px 15px; color: #b5b5bd; font-size: 10px; line-height: 1.55; white-space: pre; }
+.workbench-git-files { max-height: 32vh; overflow: auto; padding: 0 8px 8px; }
+.workbench-git-files button { display: flex; align-items: center; gap: 7px; width: 100%; padding: 6px; border: 0; border-radius: 5px; background: transparent; color: #c1c1c8; text-align: left; font-size: 11px; }
+.workbench-git-files button:hover { background: #343438; }
+.workbench-git-files button span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workbench-git-files code { color: #a4c8a9; }
+.workbench-git-files p { padding: 0 6px; color: #85858d; font-size: 11px; }
+.workbench-graph { overflow: auto; margin: 0 10px 7px; padding: 8px; border: 1px solid #38383d; border-radius: 6px; color: #a9c4b8; font-size: 10px; line-height: 1.5; }
+.workbench-commits { display: grid; gap: 9px; margin: 0; padding: 3px 13px 17px; list-style: none; }
+.workbench-commits li { display: flex; gap: 8px; min-width: 0; color: #b6b6be; font-size: 11px; }
+.workbench-commits code { color: #9ab2d5; }
+.workbench-commits span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workbench-terminal { display: flex; flex-direction: column; height: 100%; }
+.workbench-terminal-context { display: grid; gap: 5px; padding: 11px; border-bottom: 1px solid #38383d; color: #aaaaaf; font-size: 10px; overflow-wrap: anywhere; }
+.workbench-terminal-context button, .workbench-terminal-start button, .workbench-terminal form button { width: fit-content; padding: 6px 9px; border: 1px solid #55555e; border-radius: 6px; background: #36363b; color: #e5e5e9; font-size: 11px; }
+.workbench-terminal-history { flex: 1; overflow: auto; padding: 10px 12px; font-family: ui-monospace, Menlo, monospace; }
+.workbench-terminal-history > div { margin-bottom: 13px; }
+.workbench-terminal-history strong { display: block; color: #d0dfb5; font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
+.workbench-terminal-history pre { margin: 5px 0; color: #c0c0c5; font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.workbench-terminal-history small { color: #85858d; font-size: 10px; }
+.workbench-terminal form { display: flex; gap: 6px; padding: 9px; border-top: 1px solid #38383d; }
+.workbench-terminal form input { flex: 1; min-width: 0; padding: 7px; border: 1px solid #4b4b52; border-radius: 6px; outline: none; background: #27272a; color: #ececef; font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
+.workbench-terminal-start { padding: 14px; }
+.workbench-terminal-start p { color: #a2a2aa; font-size: 11px; line-height: 1.6; }
+.remote-code-editor { display: block; box-sizing: border-box; width: calc(100% - 20px); min-height: 220px; margin: 0 10px; padding: 8px; border: 1px solid #55555e; border-radius: 6px; background: #27272a; color: #ececef; font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.5; resize: vertical; }
+.remote-code-actions { display: flex; gap: 7px; padding: 9px 10px 14px; }
+.remote-code-actions button, .workbench-error button { padding: 6px 9px; border: 1px solid #55555e; border-radius: 6px; background: #36363b; color: #e5e5e9; font-size: 11px; }
+.remote-code-actions button:disabled { opacity: .45; }

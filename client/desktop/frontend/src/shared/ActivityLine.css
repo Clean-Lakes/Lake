@@ -1,0 +1,27 @@
+.message-row.activity.tool-activity { margin-bottom: 17px; color: #929299; font-size: 12px; line-height: 1.5; }
+.tool-activity-disclosure { min-width: 0; max-width: 100%; }
+.tool-activity-disclosure > summary { display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; min-height: 25px; list-style: none; cursor: pointer; border-radius: 4px; }
+.tool-activity-disclosure > summary::-webkit-details-marker { display: none; }
+.tool-activity-disclosure > summary:hover { color: #c0c0c6; }
+.tool-activity-disclosure > summary:focus-visible { outline: 2px solid #a6a6b3; outline-offset: 4px; }
+.tool-activity-disclosure > summary > svg { flex: none; }
+.tool-activity-label { flex: none; }
+.tool-activity-preview { min-width: 0; max-width: 480px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #787880; font-size: 11px; }
+.tool-activity-check { opacity: .5; }
+.tool-activity-chevron { opacity: 0; transition: transform 120ms, opacity 120ms; }
+.tool-activity-disclosure > summary:hover .tool-activity-chevron, .tool-activity-disclosure[open] .tool-activity-chevron, .tool-activity-disclosure > summary:focus-visible .tool-activity-chevron { opacity: .7; }
+.tool-activity-disclosure[open] .tool-activity-chevron { transform: rotate(90deg); }
+.message-row.tool-activity.running { color: #b4b4bd; }
+.message-row.tool-activity.failed { color: #d49a9e; }
+.message-row.tool-activity.failed.format-adjustment { color: #a5adbb; }
+.message-row.tool-activity.unknown, .message-row.tool-activity.cancelled { color: #b5a58a; }
+.tool-activity-details { margin: 8px 0 3px 23px; padding: 2px 0 2px 12px; border-left: 1px solid #3b3b42; color: #a4a4ac; }
+.tool-activity-item { padding: 6px 0; }
+.tool-activity-item > div { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.tool-activity-item strong { font-size: 11px; font-weight: 500; }
+.tool-activity-item span, .tool-activity-item small, .tool-activity-duration { font-size: 10px; color: #7f7f89; }
+.tool-activity-item p { margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; color: #aeaeB7; font-size: 11px; }
+.tool-activity-item small { display: block; margin-top: 3px; }
+.tool-activity-duration { margin: 7px 0 4px; }
+@media (max-width: 600px) { .tool-activity-preview { max-width: 35vw; } .tool-activity-label { flex: 0 1 auto; } }
+@media (prefers-reduced-motion: reduce) { .tool-activity-chevron { transition: none; } }

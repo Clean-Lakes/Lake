@@ -1,0 +1,43 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "test": "node --experimental-strip-types --test src/timeline.test.mjs src/activity.test.mjs src/userQuestions.test.mjs src/workflowLibrary.test.mjs src/workflowTrace.test.mjs src/visualReport.test.mjs src/reportUI.test.mjs src/a2ui.test.mjs src/automaticReply.test.mjs",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@a2ui/react": "0.12.0",
+    "@a2ui/web_core": "0.12.0",
+    "@json-render/core": "0.21.0",
+    "@json-render/react": "0.21.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.49.0",
+    "motion": "^13.4.6",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "11.0.0",
+    "tailwind-merge": "^3.7.0",
+    "unified": "11.0.5",
+    "zod": "4.3.6",
+    "zod-a2ui": "npm:zod@3.25.76"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/mdast": "4.0.4",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.6.3",
+    "vite": "^7.0.0"
+  },
+  "overrides": {
+    "dompurify": "3.4.16"
+  }
+}

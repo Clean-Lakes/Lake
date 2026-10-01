@@ -1,0 +1,250 @@
+{
+  "lake_code_list": {
+    "kind": "list",
+    "action": "列出文件"
+  },
+  "lake_remote_code_list": {
+    "kind": "list",
+    "action": "列出远程文件"
+  },
+  "lake_code_read": {
+    "kind": "read",
+    "action": "读取文件"
+  },
+  "lake_remote_code_read": {
+    "kind": "read",
+    "action": "读取远程文件"
+  },
+  "lake_pdf_read": {
+    "kind": "read",
+    "action": "读取 PDF"
+  },
+  "lake_code_search": {
+    "kind": "search",
+    "action": "搜索代码"
+  },
+  "lake_code_edit": {
+    "kind": "edit",
+    "action": "编辑文件"
+  },
+  "lake_code_create": {
+    "kind": "create",
+    "action": "创建文件"
+  },
+  "lake_code_patch": {
+    "kind": "edit",
+    "action": "修改文件"
+  },
+  "lake_remote_code_write": {
+    "kind": "edit",
+    "action": "写入远程文件"
+  },
+  "lake_code_checkpoint": {
+    "kind": "checkpoint",
+    "action": "保存文件检查点"
+  },
+  "lake_code_restore": {
+    "kind": "restore",
+    "action": "恢复文件检查点"
+  },
+  "lake_code_status": {
+    "kind": "query",
+    "action": "检查代码状态"
+  },
+  "lake_code_diff": {
+    "kind": "read",
+    "action": "查看代码差异"
+  },
+  "lake_code_run": {
+    "kind": "command",
+    "action": "运行命令"
+  },
+  "lake_remote_code_run": {
+    "kind": "command",
+    "action": "运行远程命令"
+  },
+  "lake_ssh": {
+    "kind": "command",
+    "action": "运行 SSH 命令"
+  },
+  "lake_ssh_session_open": {
+    "kind": "query",
+    "action": "连接主机"
+  },
+  "lake_ssh_session_close": {
+    "kind": "query",
+    "action": "关闭主机连接"
+  },
+  "lake_ssh_session_list": {
+    "kind": "query",
+    "action": "列出主机连接"
+  },
+  "lake_overview": {
+    "kind": "query",
+    "action": "查看湖概况"
+  },
+  "lake_resources": {
+    "kind": "query",
+    "action": "查询资源"
+  },
+  "lake_database_inspect": {
+    "kind": "query",
+    "action": "查询数据库"
+  },
+  "lake_k8s_get": {
+    "kind": "query",
+    "action": "查询 Kubernetes 资源"
+  },
+  "lake_link_list": {
+    "kind": "query",
+    "action": "查看资源关系"
+  },
+  "lake_script_list": {
+    "kind": "list",
+    "action": "列出脚本"
+  },
+  "lake_script_read": {
+    "kind": "read",
+    "action": "读取脚本"
+  },
+  "lake_script_add": {
+    "kind": "create",
+    "action": "保存脚本"
+  },
+  "lake_script_run": {
+    "kind": "command",
+    "action": "运行脚本"
+  },
+  "lake_script_start": {
+    "kind": "task",
+    "action": "提交长任务"
+  },
+  "lake_script_status": {
+    "kind": "task",
+    "action": "查询长任务"
+  },
+  "lake_script_wait": {
+    "kind": "task",
+    "action": "等待长任务"
+  },
+  "lake_script_cancel": {
+    "kind": "task",
+    "action": "取消长任务"
+  },
+  "lake_script_jobs": {
+    "kind": "list",
+    "action": "列出长任务"
+  },
+  "lake_web_search": {
+    "kind": "search",
+    "action": "搜索网页"
+  },
+  "lake_web_fetch": {
+    "kind": "read",
+    "action": "读取网页"
+  },
+  "lake_browser_open": {
+    "kind": "browser",
+    "action": "打开网页"
+  },
+  "lake_browser_navigate": {
+    "kind": "browser",
+    "action": "跳转网页"
+  },
+  "lake_browser_snapshot": {
+    "kind": "read",
+    "action": "读取页面快照"
+  },
+  "lake_browser_close": {
+    "kind": "browser",
+    "action": "关闭浏览器会话"
+  },
+  "lake_workflow_list": {
+    "kind": "list",
+    "action": "列出工作流"
+  },
+  "lake_workflow_create": {
+    "kind": "create",
+    "action": "创建工作流"
+  },
+  "lake_workflow_update": {
+    "kind": "edit",
+    "action": "编辑工作流"
+  },
+  "lake_workflow_run": {
+    "kind": "workflow",
+    "action": "执行工作流"
+  },
+  "lake_workflow_status": {
+    "kind": "query",
+    "action": "查看工作流状态"
+  },
+  "lake_workflow_recover": {
+    "kind": "workflow",
+    "action": "恢复工作流"
+  },
+  "lake_workflow_recovery_complete": {
+    "kind": "workflow",
+    "action": "提交恢复验证结果"
+  },
+  "lake_workflow_v2_validate": {
+    "kind": "query",
+    "action": "校验工作流"
+  },
+  "lake_workflow_v2_dry_run": {
+    "kind": "query",
+    "action": "预演工作流"
+  },
+  "lake_workflow_v2_save": {
+    "kind": "create",
+    "action": "保存工作流"
+  },
+  "lake_workflow_v2_amend": {
+    "kind": "edit",
+    "action": "编辑工作流"
+  },
+  "lake_workflow_v2_run": {
+    "kind": "workflow",
+    "action": "执行工作流"
+  },
+  "lake_workflow_v2_resume": {
+    "kind": "workflow",
+    "action": "恢复工作流"
+  },
+  "lake_workflow_v2_status": {
+    "kind": "query",
+    "action": "查看工作流状态"
+  },
+  "lake_workflow_v2_events": {
+    "kind": "read",
+    "action": "读取工作流轨迹"
+  },
+  "lake_schedule_add": {
+    "kind": "create",
+    "action": "创建计划任务"
+  },
+  "lake_schedule_authorize": {
+    "kind": "edit",
+    "action": "更新计划任务授权"
+  },
+  "lake_schedule_stop": {
+    "kind": "task",
+    "action": "停止计划任务"
+  },
+  "lake_visual_report": {
+    "kind": "report",
+    "action": "整理图形化结果"
+  },
+  "lake_ui": {
+    "kind": "report",
+    "action": "更新交互界面"
+  },
+  "lake_port_inspector": {
+    "kind": "report",
+    "action": "展示端口检查界面"
+  },
+  "lake_conversation_history": {
+    "kind": "query",
+    "action": "查看会话历史"
+  }
+}

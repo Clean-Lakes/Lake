@@ -1,0 +1,78 @@
+.settings-shell { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; color: #e9e9eb; background: #1a1a1b; }
+.settings-top { position: relative; z-index: 21; --wails-draggable: drag; display: flex; align-items: center; justify-content: space-between; height: 62px; flex: none; padding: 0 25px; border-bottom: 1px solid #303033; }
+.settings-top button { --wails-draggable: no-drag; }
+.settings-top > div { display: flex; align-items: center; gap: 11px; }
+.settings-top strong { font-size: 15px; }
+.settings-back, .settings-close { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: #a9a9ae; cursor: pointer; }
+.settings-back svg { transform: rotate(180deg); }
+.settings-back:hover, .settings-close:hover { background: #303033; color: #fff; }
+.settings-body { display: flex; flex: 1; min-height: 0; }
+.settings-nav { display: flex; flex-direction: column; width: 184px; flex: none; gap: 2px; padding: 24px 11px; border-right: 1px solid #303033; }
+.settings-nav > span { margin: 13px 9px 8px; color: #777780; font-size: 10px; font-weight: 700; letter-spacing: .09em; }
+.settings-nav > button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: #a9a9ae; text-align: left; font-size: 12px; cursor: pointer; }
+.settings-nav > button:hover, .settings-nav > button.active { background: #303033; color: #f3f3f4; }
+.settings-content { flex: 1; min-width: 0; overflow-y: auto; padding: 32px min(5vw, 56px) 70px; }
+.settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; max-width: 1080px; margin-bottom: 24px; }
+.settings-heading h1 { margin: 0 0 7px; font-size: 23px; font-weight: 650; letter-spacing: -.025em; }
+.settings-heading p { margin: 0; color: #92929a; font-size: 12px; line-height: 1.6; }
+.settings-split { display: grid; grid-template-columns: minmax(200px, 30%) minmax(300px, 1fr); gap: 18px; max-width: 1080px; }
+.settings-list { align-self: start; overflow: hidden; border: 1px solid #38383d; border-radius: 10px; background: #222224; }
+.settings-list > button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 9px 13px; border: 0; border-bottom: 1px solid #343439; background: transparent; color: #d8d8db; text-align: left; cursor: pointer; }
+.settings-list > button:last-child { border-bottom: 0; }
+.settings-list > button:hover, .settings-list > button.active { background: #333338; }
+.settings-list > button span { min-width: 0; flex: 1; }
+.settings-list strong, .settings-list small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-list strong { font-size: 12px; font-weight: 600; }
+.settings-list small { margin-top: 5px; color: #8d8d95; font-size: 10px; }
+.settings-list > button svg { color: #777780; }
+.settings-list > p { margin: 0; padding: 19px; color: #8d8d95; font-size: 12px; }
+.settings-card { align-self: start; display: flex; min-width: 0; flex-direction: column; gap: 15px; padding: 22px; border: 1px solid #38383d; border-radius: 10px; background: #222224; }
+.settings-card h2 { margin: 0 0 4px; font-size: 15px; font-weight: 640; }
+.settings-card label { display: flex; flex-direction: column; gap: 7px; color: #bbbcc2; font-size: 11px; font-weight: 550; }
+.settings-card input:not([type=checkbox]), .settings-card textarea, .settings-card select { box-sizing: border-box; width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid #44444a; border-radius: 7px; outline: none; background: #1a1a1c; color: #e5e5e8; font: inherit; font-size: 12px; }
+.settings-card textarea { resize: vertical; line-height: 1.55; }
+.settings-card input:focus, .settings-card textarea:focus, .settings-card select:focus { border-color: #7686b0; }
+.settings-card input:disabled { opacity: .6; }
+.settings-card input::placeholder, .settings-card textarea::placeholder { color: #6e6e77; }
+.settings-number-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.settings-card .settings-check { flex-direction: row; align-items: center; gap: 9px; margin: 1px 0; font-size: 12px; }
+.settings-check input { accent-color: #7794db; }
+.settings-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.settings-actions button, .settings-heading button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 30px; padding: 0 11px; border: 1px solid #48484e; border-radius: 7px; background: #303034; color: #e4e4e7; font-size: 11px; cursor: pointer; white-space: nowrap; }
+.settings-actions button:hover:not(:disabled), .settings-heading button:hover:not(:disabled) { background: #3c3c40; }
+.settings-actions button:disabled { opacity: .5; cursor: default; }
+.settings-actions .primary { border-color: #ececef; background: #ededf0; color: #19191b; font-weight: 620; }
+.settings-actions .primary:hover:not(:disabled) { background: #fff; }
+.settings-actions .settings-danger { margin-left: auto; color: #d99096; }
+.settings-alert { display: flex; align-items: center; gap: 8px; max-width: 1080px; margin: 0 0 16px; padding: 10px 12px; border-radius: 7px; font-size: 11px; }
+.settings-alert.error { background: #3b2528; color: #f1acb1; }
+.settings-alert.success { background: #233329; color: #91d0a5; }
+.settings-alert button { margin-left: auto; border: 0; background: transparent; color: inherit; }
+.settings-help { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: #92929a; font-size: 11px; line-height: 1.6; }
+.settings-help svg { flex: none; }
+.settings-test { padding: 10px 12px; border-radius: 7px; background: #1a1a1c; color: #acb7cf; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.settings-memory-card { max-width: 720px; }
+.settings-memory-state { color: #92929a; font-size: 11px; }
+.settings-memory-list { display: grid; gap: 8px; margin-top: 10px; }
+.settings-memory-item { display: flex; align-items: flex-start; gap: 12px; justify-content: space-between; padding: 12px; border: 1px solid #38383d; border-radius: 8px; background: #1d1d1f; }
+.settings-memory-item p { margin: 0 0 7px; color: #e4e4e7; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.settings-memory-item small { color: #898991; font-size: 10px; }
+.settings-memory-delete { flex: none; display: grid; place-items: center; width: 27px; height: 27px; border: 0; border-radius: 6px; background: transparent; color: #d99096; cursor: pointer; }
+.settings-memory-delete:hover:not(:disabled) { background: #3c292d; }
+.extension-grid { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); align-items: start; gap: 16px; max-width: 1080px; }
+.extension-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 9px 0; border-top: 1px solid #38383d; }
+.extension-row > div { min-width: 0; }
+.extension-row strong, .extension-row span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.extension-row strong { color: #e9e9eb; font-size: 12px; }
+.extension-row span { margin-top: 4px; color: #92929a; font-size: 10px; }
+.extension-row button { flex: none; padding: 5px 9px; border: 1px solid #48484e; border-radius: 6px; background: #303034; color: #e4e4e7; font-size: 11px; cursor: pointer; }
+.extension-row button:disabled { opacity: .5; cursor: default; }
+@media(max-width: 1100px) { .settings-body { flex-direction: column; } .settings-nav { width: auto; flex-direction: row; flex: none; padding: 10px; border-right: 0; border-bottom: 1px solid #303033; } .settings-nav > span { display: none; } .settings-nav > button { width: auto; } .settings-content { padding: 26px 22px; } .settings-split { grid-template-columns: 1fr; } }
+@media(max-width: 680px) { .settings-heading { align-items: flex-start; flex-direction: column; } .settings-nav > button { gap: 5px; padding: 0 6px; font-size: 11px; } .extension-grid { grid-template-columns: 1fr; } }
+
+.workflow-v2-content { overflow-y: auto; width: 100%; padding: 24px; }
+.workflow-v2-source { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.workflow-v2-content table { width: 100%; text-align: left; font-size: 12px; border-collapse: collapse; margin: 12px 0; }
+.workflow-v2-content td, .workflow-v2-content th { padding: 8px; border-bottom: 1px solid var(--border, #ddd); }
+.workflow-v2-events { padding-left: 22px; font-size: 12px; }
+.workflow-v2-events code { display: block; overflow-wrap: anywhere; margin: 6px 0 12px; }

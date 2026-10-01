@@ -1,0 +1,27 @@
+.workflow-library { min-width: 0; }
+.workflow-library-row { position: relative; display: flex; align-items: center; min-height: 32px; min-width: 0; border-radius: 6px; color: #aaaab1; }
+.workflow-library-row:hover, .workflow-library-row:focus-within { background: #303034; color: #eeeef1; }
+.workflow-grip { display: grid; place-items: center; flex: none; width: 10px; color: #74747c; cursor: grab; opacity: 0; }
+.workflow-library-row:hover .workflow-grip, .workflow-library-row:focus-within .workflow-grip { opacity: 1; }
+.workflow-library-open { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; min-height: 32px; padding: 4px 2px; border: 0; background: transparent; color: inherit; text-align: left; font-size: 12px; }
+.workflow-library-open svg { flex: none; }
+.workflow-library-open span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.workflow-library-open small { flex: none; color: #8e8e9a; font-size: 9px; }
+.workflow-library-actions { display: flex; flex: none; align-items: center; }
+.workflow-library-actions button { display: none; place-items: center; width: 19px; height: 24px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: #9999a3; }
+.workflow-library-row:hover .workflow-library-actions button, .workflow-library-row:focus-within .workflow-library-actions button, .workflow-library-actions .workflow-library-run { display: grid; }
+.workflow-library-actions button:hover:not(:disabled) { background: #44444a; color: #fff; }
+.workflow-library-actions button:disabled { opacity: .3; }
+.workflow-library-children { margin-left: 12px; padding-left: 4px; border-left: 1px solid #37373b; }
+.workflow-library-row.dragging { opacity: .45; }
+.workflow-library-row.drop-before::before, .workflow-library-row.drop-after::after { content: ''; position: absolute; height: 2px; left: 0; right: 0; background: #8eaaf3; pointer-events: none; }
+.workflow-library-row.drop-before::before { top: 0; }
+.workflow-library-row.drop-after::after { bottom: 0; }
+.workflow-library .drop-inside { background: #33405a; outline: 1px solid #7896dc; outline-offset: -1px; border-radius: 6px; }
+.workflow-folder-empty { padding: 6px 5px; color: #797982; font-size: 10px; }
+.workflow-folder-editor { display: flex; align-items: center; gap: 3px; padding: 4px 2px; color: #9f9fa8; }
+.workflow-folder-editor input { flex: 1; min-width: 0; width: 40px; padding: 5px; border: 1px solid #66759a; border-radius: 4px; background: #202023; color: #f2f2f4; font-size: 11px; outline: none; }
+.workflow-folder-editor button { display: grid; place-items: center; flex: none; width: 19px; height: 24px; border: 0; padding: 0; border-radius: 4px; color: #c5c5ce; background: transparent; }
+.workflow-folder-editor button:hover:not(:disabled) { background: #41414a; }
+.workflow-folder-editor button:disabled { opacity: .4; }
+.workflow-library-error { margin: 4px 6px; padding: 7px; border-radius: 5px; background: #3a282c; color: #edabb3; font-size: 11px; overflow-wrap: anywhere; }
