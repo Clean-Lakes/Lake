@@ -20,11 +20,12 @@ export class LakeSettings implements SettingsPort {
         return { current_model: config.model ?? "", models, prompts: settings.prompts, descriptions: settings.descriptions, mcp, specialists: settings.specialists };
       }
       case "model_save": {
-        const model = name(text(p, "model")), provider = validIdentifier(text(p, "provider"));
+        const model = text(p, "model"), provider = validIdentifier(text(p, "provider"));
+        if (!/^[a-zA-Z0-9._:/-]{1,128}$/u.test(model)) throw new Error("无效的模型名称");
         if (catalog[model] && catalog[model] !== provider) throw new Error("同名模型不能改用其他提供方");
         const wire = text(p, "wire_api", "anthropic");
         if (!["anthropic", "openai_chat", "openai_responses"].includes(wire)) throw new Error("无效的模型协议");
-        providers[provider] = { base_url: secureURL(text(p, "base_url")), wire_api: wire };
+        providers[provider] = { base_url: secureURL(text(p, "base_url"), true), wire_api: wire };
         catalog[model] = provider;
         const window = integer(p, "context_window", Number(config.context_window ?? 32000)), output = integer(p, "max_output_tokens", Number(config.max_output_tokens ?? 4096));
         if (window < 1024 || window > 1_000_000 || output < 1 || output >= window) throw new Error("模型 Token 配置无效");
