@@ -79,7 +79,9 @@ export class CatalogRepository {
       }
       case "res.credential": {
         const target = this.resource(text(p, "resource"));
-        return this.db.one("SELECT ref FROM attach WHERE resource_id=? AND kind='credential'", String(target.id));
+        const rows = this.db.all("SELECT ref FROM attach WHERE resource_id=? AND kind='credential'", String(target.id));
+        if (!rows.length && !p.optional) throw new Error("资源未关联凭据");
+        return rows[0] ?? {};
       }
       case "permissions.get": return this.policy();
       case "permissions.set": {
