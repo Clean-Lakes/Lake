@@ -51,4 +51,5 @@ export class FileVault {
     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
   }
   async delete(kind: string, id: string): Promise<void> { await rm(this.path(kind, id), { force: true }); }
+  async deleteReference(ref: string): Promise<void> { const [kind, id] = this.reference(ref); await this.delete(kind, id); }
 }

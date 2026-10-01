@@ -15,6 +15,12 @@ void main();
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+  if (argv[0] === "lake") {
+    const { runLakeCLI } = await import("@zcode/lake");
+    try { process.exitCode = await runLakeCLI({ argv: argv.slice(1), stdin: process.stdin, stdout: process.stdout, stderr: process.stderr }); }
+    catch { process.stderr.write("Lake TypeScript runtime 启动失败\n"); process.exitCode = 1; }
+    return;
+  }
   // 存储模式也可运行在 Host Worker 中，不能修改整个 Host 的进程名称。
   if (!argv.includes("--prepare-storage")) setCliProcessTitle();
   // 真实 zcode CLI 进程里仍可能有少量路径直接读取 process.env。
