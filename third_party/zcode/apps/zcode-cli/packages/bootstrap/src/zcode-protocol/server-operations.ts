@@ -3337,6 +3337,8 @@ async function createRecord(
       modelSelection: "model" in params ? toRuntimeModelSelection(initialModel) : undefined,
       parentSessionId,
       taskType,
+      // 嵌入产品只替换身份段，仍由原生 ContextBuilder 保留工具、权限和压缩规则。
+      productIdentity: "productIdentity" in params ? params.productIdentity : undefined,
       // 动态工作流灰度门：与 offPeakPort
       // 同一套读法——本次 create/resume 参数优先，缺席时读 Host 同步到进程的 workspace 级
       // 结论；两者都没有就是 false（fail-closed）。这里**必须写出显式布尔**，不能省成

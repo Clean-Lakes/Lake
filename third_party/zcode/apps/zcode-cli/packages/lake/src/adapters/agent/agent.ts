@@ -48,7 +48,7 @@ export class LakeZCodeAgent implements AgentPort {
     }
     selectedProvider(config);
     const baseOwner = text(input, "native_session_id", text(input, "conversation_id"));
-    if (!baseOwner) throw new Error("ZCode 会话需要稳定 ID");
+    if (!baseOwner) throw new Error("LAKE 会话需要稳定 ID");
     // A report uses native session restrictions and an imported snapshot of the current Lake history.
     const owner =
         input.review_only === true ? `${baseOwner}-report-${text(input, "run_id")}` : baseOwner,

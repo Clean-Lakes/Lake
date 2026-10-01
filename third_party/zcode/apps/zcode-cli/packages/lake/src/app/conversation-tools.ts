@@ -2,6 +2,7 @@ import type { LakeTool } from "../domain/agent.js";
 import type { JsonValue } from "../domain/json.js";
 import { object, redact, text, type Params } from "../domain/validation.js";
 import { resourceIdentity } from "../domain/inspection.js";
+import { workflowAuthoringTool } from "./workflow-authoring.js";
 import type { RuntimePorts } from "./ports.js";
 import type { OperationsService } from "./operations.js";
 const schema = (properties: Params, required: string[] = []): Params => ({
@@ -227,5 +228,8 @@ export function conversationTools(
       );
     },
   });
+  tools.push(
+    workflowAuthoringTool(services.ports.data, frozen.conversation, frozen.resources, activity),
+  );
   return tools;
 }

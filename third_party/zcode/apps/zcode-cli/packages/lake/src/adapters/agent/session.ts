@@ -13,6 +13,8 @@ import { ZCodeProtocol } from "./protocol.js";
 import { prepareNativeExtensions } from "./extensions.js";
 import type { NativeRemoteSession } from "../native/remote.js";
 import { FileVault } from "../vault.js";
+import { LAKE_PRODUCT_IDENTITY } from "../../domain/product-identity.js";
+import { nativeTurnFailure } from "../../domain/native-failure.js";
 
 /** Owns a native process connection, never native session/tool/background state. */
 export class NativeSession {
@@ -101,6 +103,7 @@ export class NativeSession {
         channel?.stream,
       );
       const scope = {
+        productIdentity: LAKE_PRODUCT_IDENTITY,
         workspace: { workspacePath: workspace, workspaceKey: workspace },
         mcpServers: [
           {
@@ -145,7 +148,7 @@ export class NativeSession {
       );
       const returnedID = text(object(result.session), "sessionId");
       if (!returnedID || (session.sessionID && returnedID !== session.sessionID))
-        throw new Error("ZCode 未返回对应会话");
+        throw new Error("LAKE 运行时未返回对应会话");
       session.sessionID = returnedID;
       await session.protocol.call("session/subscribe", {
         sessionId: returnedID,
@@ -198,7 +201,7 @@ export class NativeSession {
     void finished.catch(() => {});
     this.onEvent = (method, params) => {
       if (method === "runtime.closed") {
-        fail(new Error("ZCode 运行时已退出"));
+        fail(new Error("LAKE 运行时已退出"));
         return;
       }
       if (method === "v4/telemetry/event" && params.kind === "usage.delta") {
@@ -220,9 +223,8 @@ export class NativeSession {
       const payload = object(params.payload);
       if (params.type === "turn.completed") {
         if (payload.resultType === "success") complete(text(payload, "response"));
-        else fail(new Error(`ZCode 任务结束：${String(payload.resultType)}`));
-      } else if (params.type === "turn.failed")
-        fail(new Error("ZCode 模型任务失败，请检查模型配置与网络"));
+        else fail(new Error(`LAKE 任务结束：${String(payload.resultType)}`));
+      } else if (params.type === "turn.failed") fail(nativeTurnFailure(payload));
       else if (params.type === "model.streaming" && payload.kind === "text_delta")
         emit({ type: "token", text: text(payload, "delta") });
       else if (
@@ -240,7 +242,7 @@ export class NativeSession {
     try {
       if (signal.aborted) abort();
       signal.throwIfAborted();
-      emit({ type: "thinking", model: config.model, label: "ZCode Agent" });
+      emit({ type: "thinking", model: config.model, label: "LAKE Agent" });
       await this.protocol.call("session/send", {
         sessionId: this.sessionID,
         content: text(input, "content"),
@@ -248,7 +250,7 @@ export class NativeSession {
         modelSelection: modelSelection(config),
       });
       const answer = await finished;
-      if (!answer.trim()) throw new Error("ZCode 未返回回复");
+      if (!answer.trim()) throw new Error("LAKE 未返回回复");
       return answer.replaceAll(this.key.toString(), "[redacted]");
     } finally {
       signal.removeEventListener("abort", abort);

@@ -28,7 +28,7 @@ export async function prepareAgentConfig(
     openai_chat: "openai-chat-completions",
     openai_responses: "openai-responses",
   }[wire];
-  if (!api) throw new Error("ZCode 不支持此模型协议");
+  if (!api) throw new Error("当前模型协议不受支持");
   object(builtin.config).providerConfigRules = {
     templateRules: [],
     providerRules: [

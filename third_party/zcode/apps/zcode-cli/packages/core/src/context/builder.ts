@@ -101,7 +101,7 @@ export class ContextBuilder {
     // 「You are ZCode, an interactive coding agent」对一个
     // 只对脚本说话、可能连读文件工具都没有的子代理是错的身份，且走在正确身份段前面。
     if (!isWorkflowActor) {
-      sections.push(buildCliPrefixSection());
+      sections.push(buildCliPrefixSection(this.config.productIdentity));
     }
 
     // 2. Stable agent behavior or custom prompt body
@@ -118,7 +118,7 @@ export class ContextBuilder {
     } else if (workflowActor !== undefined) {
       sections.push(buildWorkflowActorIdentitySection(workflowActor));
     } else {
-      sections.push(buildIdentitySection(activeOutputStyle));
+      sections.push(buildIdentitySection(activeOutputStyle, this.config.productIdentity));
     }
 
     // 3. Dynamic system context
