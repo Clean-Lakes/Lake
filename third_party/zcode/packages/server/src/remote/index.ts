@@ -33,3 +33,5 @@ export {
   type WSLDistro,
   parseWSLDistroList,
 } from "./wsl-detect.js";
+
+export { SSHBackend } from "./ssh-backend.js";

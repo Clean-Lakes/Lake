@@ -14,6 +14,14 @@ export function AddK8sResource(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['AddK8sResource'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function AddRemoteCodeWorkspace(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['AddRemoteCodeWorkspace'](arg1, arg2, arg3, arg4);
+}
+
+export function AnswerQuestion(arg1, arg2, arg3) {
+  return window['go']['main']['App']['AnswerQuestion'](arg1, arg2, arg3);
+}
+
 export function Approve(arg1, arg2) {
   return window['go']['main']['App']['Approve'](arg1, arg2);
 }
@@ -26,8 +34,16 @@ export function Ask(arg1, arg2) {
   return window['go']['main']['App']['Ask'](arg1, arg2);
 }
 
+export function AskWithExecutions(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['AskWithExecutions'](arg1, arg2, arg3, arg4);
+}
+
 export function AskWithImages(arg1, arg2, arg3) {
   return window['go']['main']['App']['AskWithImages'](arg1, arg2, arg3);
+}
+
+export function AuthorizeRemoteCodeWorkspace(arg1, arg2) {
+  return window['go']['main']['App']['AuthorizeRemoteCodeWorkspace'](arg1, arg2);
 }
 
 export function AuthorizeResource(arg1, arg2) {
@@ -38,12 +54,28 @@ export function BindConversationProject(arg1, arg2) {
   return window['go']['main']['App']['BindConversationProject'](arg1, arg2);
 }
 
+export function BindConversationRemoteCodeWorkspace(arg1, arg2) {
+  return window['go']['main']['App']['BindConversationRemoteCodeWorkspace'](arg1, arg2);
+}
+
+export function CloseTaskTerminal(arg1) {
+  return window['go']['main']['App']['CloseTaskTerminal'](arg1);
+}
+
+export function CloseTerminal(arg1) {
+  return window['go']['main']['App']['CloseTerminal'](arg1);
+}
+
 export function CreateConversation(arg1) {
   return window['go']['main']['App']['CreateConversation'](arg1);
 }
 
 export function CurrentLake() {
   return window['go']['main']['App']['CurrentLake']();
+}
+
+export function DeclineProposedCommand(arg1) {
+  return window['go']['main']['App']['DeclineProposedCommand'](arg1);
 }
 
 export function DeleteMemory(arg1) {
@@ -68,6 +100,14 @@ export function GetPermissions() {
 
 export function GetWorkflowRun(arg1) {
   return window['go']['main']['App']['GetWorkflowRun'](arg1);
+}
+
+export function GitDiff(arg1, arg2) {
+  return window['go']['main']['App']['GitDiff'](arg1, arg2);
+}
+
+export function GitOverview(arg1) {
+  return window['go']['main']['App']['GitOverview'](arg1);
 }
 
 export function ListAllResources() {
@@ -98,8 +138,24 @@ export function ListModels() {
   return window['go']['main']['App']['ListModels']();
 }
 
+export function ListProjectFiles(arg1) {
+  return window['go']['main']['App']['ListProjectFiles'](arg1);
+}
+
+export function ListRemoteCodeFiles(arg1) {
+  return window['go']['main']['App']['ListRemoteCodeFiles'](arg1);
+}
+
+export function ListRemoteCodeWorkspaces() {
+  return window['go']['main']['App']['ListRemoteCodeWorkspaces']();
+}
+
 export function ListResources(arg1) {
   return window['go']['main']['App']['ListResources'](arg1);
+}
+
+export function ListSpecialistTasks() {
+  return window['go']['main']['App']['ListSpecialistTasks']();
 }
 
 export function ListWorkflowRuns(arg1) {
@@ -110,12 +166,36 @@ export function ListWorkflows() {
   return window['go']['main']['App']['ListWorkflows']();
 }
 
+export function OpenTerminal(arg1) {
+  return window['go']['main']['App']['OpenTerminal'](arg1);
+}
+
 export function PickCodeProjectDirectory() {
   return window['go']['main']['App']['PickCodeProjectDirectory']();
 }
 
 export function PickKubeconfigFile() {
   return window['go']['main']['App']['PickKubeconfigFile']();
+}
+
+export function PickPDFPreview() {
+  return window['go']['main']['App']['PickPDFPreview']();
+}
+
+export function PickVideoFrames(arg1) {
+  return window['go']['main']['App']['PickVideoFrames'](arg1);
+}
+
+export function ReadProjectFile(arg1, arg2) {
+  return window['go']['main']['App']['ReadProjectFile'](arg1, arg2);
+}
+
+export function ReadRemoteCodeFile(arg1, arg2) {
+  return window['go']['main']['App']['ReadRemoteCodeFile'](arg1, arg2);
+}
+
+export function ReformatResult(arg1, arg2) {
+  return window['go']['main']['App']['ReformatResult'](arg1, arg2);
 }
 
 export function RenameConversation(arg1, arg2) {
@@ -126,8 +206,40 @@ export function RestoreConversation(arg1) {
   return window['go']['main']['App']['RestoreConversation'](arg1);
 }
 
+export function ResumeSpecialist(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['ResumeSpecialist'](arg1, arg2, arg3, arg4);
+}
+
+export function ReturnCommandControl(arg1, arg2) {
+  return window['go']['main']['App']['ReturnCommandControl'](arg1, arg2);
+}
+
+export function RunProposedCommand(arg1) {
+  return window['go']['main']['App']['RunProposedCommand'](arg1);
+}
+
+export function RunRemoteCodeCommand(arg1, arg2) {
+  return window['go']['main']['App']['RunRemoteCodeCommand'](arg1, arg2);
+}
+
+export function RunTaskCommand(arg1, arg2) {
+  return window['go']['main']['App']['RunTaskCommand'](arg1, arg2);
+}
+
+export function RunTerminal(arg1, arg2) {
+  return window['go']['main']['App']['RunTerminal'](arg1, arg2);
+}
+
 export function RunWorkflow(arg1, arg2, arg3) {
   return window['go']['main']['App']['RunWorkflow'](arg1, arg2, arg3);
+}
+
+export function RunWorkflowV2(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RunWorkflowV2'](arg1, arg2, arg3);
+}
+
+export function SaveDownload(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveDownload'](arg1, arg2, arg3);
 }
 
 export function SetMemoryEnabled(arg1) {
@@ -158,10 +270,34 @@ export function StopConversation() {
   return window['go']['main']['App']['StopConversation']();
 }
 
+export function TakeCommandControl(arg1) {
+  return window['go']['main']['App']['TakeCommandControl'](arg1);
+}
+
+export function TaskTerminalStatus(arg1) {
+  return window['go']['main']['App']['TaskTerminalStatus'](arg1);
+}
+
+export function UIAction(arg1, arg2) {
+  return window['go']['main']['App']['UIAction'](arg1, arg2);
+}
+
 export function UseLake(arg1) {
   return window['go']['main']['App']['UseLake'](arg1);
 }
 
 export function UseModel(arg1) {
   return window['go']['main']['App']['UseModel'](arg1);
+}
+
+export function WorkflowLibrary(arg1) {
+  return window['go']['main']['App']['WorkflowLibrary'](arg1);
+}
+
+export function WorkflowV2Manage(arg1) {
+  return window['go']['main']['App']['WorkflowV2Manage'](arg1);
+}
+
+export function WriteRemoteCodeFile(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['WriteRemoteCodeFile'](arg1, arg2, arg3, arg4);
 }

@@ -12,9 +12,9 @@ const cli = join(source, 'apps/zcode-cli/packages/cli');
 const output = join(root, 'bin/zcode');
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 
-async function run(args) {
+async function run(args, cwd = source) {
   await new Promise((resolve, reject) => {
-    const child = spawn(pnpm, args, { cwd: source, stdio: 'inherit', env: { ...process.env, NODE_ENV: 'development' }, shell: process.platform === 'win32' });
+    const child = spawn(pnpm, args, { cwd, stdio: 'inherit', env: { ...process.env, NODE_ENV: 'development' }, shell: process.platform === 'win32' });
     child.on('error', reject);
     child.on('exit', code => code === 0 ? resolve() : reject(new Error(`ZCode build exited ${code}`)));
   });
@@ -24,7 +24,15 @@ await run(['install', '--filter', 'zcode', '--filter', 'zcode-cli', '--filter', 
 for (const name of ['shared-types', 'contracts', 'dynamic-workflow', 'dynamic-workflow-runtime', 'telemetry', 'i18n', 'core', 'adapters', 'tui', 'bootstrap', 'lake', 'cli']) {
   await run(['--filter', `@zcode/${name}`, 'run', 'build']);
 }
+await run(['exec', 'tsx', 'build-remote.ts'], join(source, 'packages/server'));
 await mkdir(output, { recursive: true });
+// Only the source-built remote bundle and its notices are runtime assets.
+// Never carry stale TypeScript outputs or synced placeholder copies into the app.
+await rm(join(output, 'remote'), { recursive: true, force: true });
+await mkdir(join(output, 'remote'), { recursive: true });
+for (const name of ['zcode-server.cjs', 'THIRD-PARTY-NOTICES.md']) {
+  await cp(join(source, 'packages/server/dist/remote', name), join(output, 'remote', name));
+}
 await cp(join(cli, 'dist/zcode.cjs'), join(output, 'zcode.cjs'));
 await cp(join(cli, 'dist/provider/zcode-builtin.json'), join(output, 'builtin.json'));
 await cp(process.execPath, join(output, process.platform === 'win32' ? 'node.exe' : 'node'));
@@ -45,7 +53,9 @@ await cp(nodeLicense, join(output, 'NODE-LICENSE'));
 
 async function copyPackage(name) {
   let directory;
+  try { directory = await realpath(join(source, "packages/services/node_modules", name)); } catch {}
   for (let base = cli; ; base = dirname(base)) {
+    if (directory) break;
     try { directory = await realpath(join(base, 'node_modules', name)); break; }
     catch { if (base === source) throw new Error(`Cannot locate runtime dependency ${name}`); }
   }
@@ -53,7 +63,12 @@ async function copyPackage(name) {
   await rm(destination, { recursive: true, force: true });
   await cp(directory, destination, { recursive: true, dereference: true, filter: path => !path.endsWith('.map') && !path.includes(`${join(directory, 'node_modules')}`) });
 }
-for (const name of ['playwright-core', 'koffi', '@zcode/tui']) await copyPackage(name);
+for (const name of ['playwright-core', 'koffi', 'node-pty', '@zcode/tui', 'typescript', 'ssh2', 'asn1', 'safer-buffer', 'bcrypt-pbkdf', 'tweetnacl']) await copyPackage(name);
+for (const name of (await readdir(join(source, 'apps/zcode-cli/packages'))).filter(name => name.endsWith('-plugin') || ['bundled-skills', 'node-repl-host'].includes(name))) {
+  const destination = join(output, 'packages', name);
+  await rm(destination, { recursive: true, force: true });
+  await cp(join(source, 'apps/zcode-cli/packages', name), destination, { recursive: true, dereference: true, filter: path => !path.includes('/node_modules') && !path.endsWith('.map') });
+}
 for (const name of ['LICENSE', 'NOTICE.md', 'THIRD-PARTY-NOTICES.md']) await cp(join(source, name), join(output, name));
 await writeFile(join(output, 'runtime.json'), JSON.stringify({ source: 'https://github.com/zai-org/ZCode', commit: '29628c9acdb81b703bbd4080c207a0e7ce5e276e', node: process.versions.node, cli: '0.16.9', frontend: 'Lake Wails/React' }, null, 2));
 console.log('Built source Agent in bin/zcode');

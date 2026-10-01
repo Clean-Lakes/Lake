@@ -114,15 +114,8 @@ test('dedicated specialist, question, approval and MCP cards do not gain duplica
   assert.equal(activityLabel(queried[0].activity), '已查询长任务')
 })
 
-test('all built-in invokable tools have a specific action, including specialist file tools', () => {
-  const directory = new URL('../../../../cmd/lake/', import.meta.url)
-  const names = new Set()
-  for (const file of readdirSync(directory).filter(file => file.endsWith('.go') && !file.endsWith('_test.go'))) {
-    const source = readFileSync(new URL(file, directory), 'utf8')
-    for (const match of source.matchAll(/InferTool[\s\S]*?\(\s*"(lake_[a-z0-9_]+)"/g)) names.add(match[1])
-  }
-  assert.ok(names.size > 40)
-  for (const name of names) if (name !== 'lake_ask_user') assert.notEqual(toolAction(name).kind, 'tool', `missing activity: ${name}`)
+test('native tools use explicit actions in the existing timeline', () => {
+ for (const name of ['Bash','Read','Write','Edit','Grep','Glob','Agent','Skill','AskUserQuestion']) assert.notEqual(toolAction(name).kind,'tool',`missing native activity: ${name}`)
 })
 
 test('read, list, edit, create, delete, restore and checks retain explicit action and outcome', () => {

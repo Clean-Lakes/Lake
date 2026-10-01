@@ -100,7 +100,7 @@ function createStreamClosePromise(stream: StdioStream): {
 } {
   let disposable: { dispose(): void } | undefined;
   const promise = new Promise<number>((resolve) => {
-    disposable = stream.onClose((code) => resolve(code));
+    disposable = stream.onClose((code: number) => resolve(code));
   });
   return {
     promise,

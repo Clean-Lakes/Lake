@@ -8,8 +8,8 @@ const nodes = surfaces => surfaces.flatMap(surface => surface.components)
 const ofType = (surfaces, name) => nodes(surfaces).filter(component => component.component === name)
 const facts = surfaces => Object.assign({}, ...surfaces.map(surface => surface.data))
 
-test('the backend catalog fixture is produced by the current automatic converter', () => {
- const fixture = JSON.parse(readFileSync(new URL('../../../../lake/agent/testdata/a2ui-automatic-reply.json', import.meta.url), 'utf8'))
+test('historical reply presentation remains compatible', () => {
+ const fixture = JSON.parse(readFileSync(new URL('./fixtures/a2ui-automatic-reply.json', import.meta.url), 'utf8'))
  assert.deepEqual(automaticReplySurfaces(fixture.answer, 'fixture'), fixture.surfaces)
 })
 

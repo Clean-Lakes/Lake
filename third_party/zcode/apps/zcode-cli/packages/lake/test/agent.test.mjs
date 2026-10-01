@@ -58,7 +58,8 @@ test("source-built ZCode executes a model turn through the TypeScript gateway", 
     await vault.put("model", "fixture", Buffer.from(credential));
     await saveModelConfig(root, { model: "fixture-model", model_provider: "fixture", model_catalog: { "fixture-model": "fixture" }, model_providers: { fixture: { base_url: upstream.url + "/v1", wire_api: "anthropic" } }, context_window: 42000, max_output_tokens: 384 });
     const events = [], agent = new LakeZCodeAgent(root, vault, { cliPath, nodePath: process.execPath });
-    const answer = await agent.run({ content: "Return fixture text." }, [], AbortSignal.timeout(20000), event => events.push(event));
+    const answer = await agent.run({ native_session_id:"fixture", content: "Return fixture text." }, [], AbortSignal.timeout(20000), event => events.push(event));
+    await agent.close();
     assert.equal(answer, "fixture TypeScript"); assert.equal(calls.length, 1);
     assert.deepEqual(failures, []);
     assert.equal(calls[0].max_tokens, 384);

@@ -6,23 +6,28 @@
   "exports": {
     ".": {
       "types": "./dist/contract.d.ts",
-      "import": "./dist/contract.js"
+      "import": "./src/contract.ts"
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "pnpm --dir ../../../.. --filter @zcode/services build:lake-host && tsc && node scripts/bundle-runtime.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --no-ignore src",
     "test": "node --test test/*.test.mjs",
     "clean": "node ../../scripts/clean-dist.mjs"
   },
   "dependencies": {
+    "@zcode/services": "workspace:*",
+    "@zcode/adapters": "workspace:*",
+    "@zcode/bootstrap": "workspace:*",
     "mysql2": "3.15.3",
     "pg": "8.16.3",
-    "smol-toml": "1.6.1"
+    "smol-toml": "1.6.1",
+    "@zcode/server": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
+    "esbuild": "^0.25.0",
+    "@types/node": "^25.5.0",
     "@types/pg": "8.15.5",
     "typescript": "^5.9.0"
   }

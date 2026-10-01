@@ -2,7 +2,7 @@
 goal: Move the complete Lake operations backend into the ZCode TypeScript source
 version: 1
 date_created: 2026-10-01
-last_updated: 2026-10-01
+last_updated: 2026-10-02
 owner: Lake
 status: In progress
 tags: [refactor, architecture, migration, typescript]
@@ -12,13 +12,14 @@ tags: [refactor, architecture, migration, typescript]
 
 ![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
 
-The existing Lake frontend remains the user interface. The new managed `@zcode/lake` package owns all operations data, credentials, approval, execution, conversation, workflow, scheduler and extension services. ZCode runs every agent. Go remains only the signed launcher and native desktop presentation bridge.
+The existing Lake frontend remains the user interface. Following the user's 2026-10-02 clarification, `@zcode/lake` owns only Lake operations data and operations workflows. Agent sessions, context compaction, code tools, terminals, subagents, Skills, plugins, MCP and generic automation use ZCode's existing implementations. Go remains the signed launcher and native desktop presentation bridge.
 
 ## 1. Requirements & Constraints
 
 - **REQ-001**: Remove Eino from both runtime and build dependencies; use TypeScript for every operations service.
 - **REQ-002**: Preserve all existing SQLite schema-version-19 tables, records, private file data, configuration and frontend method signatures.
-- **REQ-003**: Preserve lake/resource selection, SSH/Kubernetes/database operations, conversations, memory, code projects/workspaces/terminals, workflows, schedules, scripts, specialists and extensions.
+- **REQ-003**: Preserve Lake resources and operations workflows; connect the current frontend to native ZCode sessions/tools/terminals/subagents/extensions. Preserve historical Lake metadata without adding parallel implementations of these services.
+- **REQ-004**: Remove Lake-owned Agent, context, terminal, code editing, specialist and extension engines. Native ZCode is the sole owner of these capabilities.
 - **SEC-001**: Store credentials only in the private file vault; reject symlinks and permissive permissions; never expose credentials to the frontend, events, diagnostics or source control.
 - **SEC-002**: Freeze task targets; approve before dispatch; revalidate authorization after approval; append audit records; never automatically replay a dispatched command with unknown outcome.
 - **CON-001**: Build user-facing macOS launchers only with `scripts/build_lake.sh` using the persistent signing identity.
@@ -32,23 +33,23 @@ The existing Lake frontend remains the user interface. The new managed `@zcode/l
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-001 | Add `third_party/zcode/.agents/specs/lake-typescript.md`, register managed module lake in `architecture-policy.yaml`, and provide `module.ts`, `contract.ts`, `contract.example.ts`, `CONTRACT.md`. | ✅ | 2026-10-01 |
-| TASK-002 | Inventory old CLI, SQLite migrations and frontend methods; record fixtures and exact compatibility assertions in the new package tests. Depends on TASK-001. | | |
+| TASK-002 | Inventory old CLI, SQLite migrations and frontend methods; record fixtures and exact compatibility assertions in the new package tests. Depends on TASK-001. | ✅ | 2026-10-02 |
 
 - **GOAL-002**: Implement all operations services in TypeScript with one data owner.
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-003 | Implement `packages/lake/src/adapters/storage` with schema 1–19 migrations and repositories; verify synthetic legacy databases before any launcher switch. Depends on TASK-002. | | |
-| TASK-004 | Implement vault, settings, authorization, process/SSH/Kubernetes/database execution and append-only journal adapters. Depends on TASK-003. | | |
-| TASK-005 | Implement conversation, code workspace/terminal, workflow/schedule/script, memory and extension application services and CLI/desktop protocol commands. Depends on TASK-004. | | |
-| TASK-006 | Connect ZCode's public agent interface to TypeScript Lake tools, event persistence, approval and cancellation. Depends on TASK-005. | | |
+| TASK-003 | Implement `packages/lake/src/adapters/storage` with schema 1–19 migrations and repositories; verify synthetic legacy databases before any launcher switch. Depends on TASK-002. | ✅ | 2026-10-02 |
+| TASK-004 | Implement vault, settings, authorization, process/SSH/Kubernetes/database execution and append-only journal adapters. Depends on TASK-003. | ✅ | 2026-10-02 |
+| TASK-005 | Implement Lake operations workflow execution and workflow schedules; adapt frontend methods to ZCode native session, file, execution and extension APIs. Depends on TASK-004. | ✅ | 2026-10-02 |
+| TASK-006 | Connect ZCode's public agent interface to TypeScript Lake tools, event persistence, approval and cancellation. Depends on TASK-005. | ✅ | 2026-10-02 |
 
 - **GOAL-003**: Replace the Go backend, verify and deliver the source migration.
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-007 | Replace `cmd/lake` with a signed launcher and remove desktop business logic in favor of typed TypeScript commands; remove Eino source/dependencies only after compatibility tests pass. Depends on TASK-006. | | |
-| TASK-008 | Update source/runtime build and release checks; run managed architecture checks, ZCode root/CLI typecheck and lint, frontend tests/build, signed desktop tests and end-to-end fixture execution. Depends on TASK-007. | | |
+| TASK-007 | Replace `cmd/lake` with a signed launcher and remove desktop business logic in favor of typed TypeScript commands; remove Eino source/dependencies only after compatibility tests pass. Depends on TASK-006. | ✅ | 2026-10-02 |
+| TASK-008 | Update source/runtime build and release checks; run managed architecture checks, ZCode root/CLI typecheck and lint, frontend tests/build, signed desktop tests and end-to-end fixture execution. Depends on TASK-007. | ✅ | 2026-10-02 |
 | TASK-009 | Update migration/startup documentation, create feature commits and push `codex/zcode-lake-runtime`; mark complete only after all requirements pass. Depends on TASK-008. | | |
 
 ## 3. Alternatives
@@ -64,7 +65,7 @@ The existing Lake frontend remains the user interface. The new managed `@zcode/l
 
 ## 5. Files
 
-- **FILE-001**: `third_party/zcode/apps/zcode-cli/packages/lake/` owns the complete backend.
+- **FILE-001**: `third_party/zcode/apps/zcode-cli/packages/lake/` owns Lake operations data/workflows and the native ZCode protocol adapters.
 - **FILE-002**: `third_party/zcode/architecture-policy.yaml`, CLI entry and workspace lockfile register/build the managed package.
 - **FILE-003**: `cmd/lake/`, `client/desktop/` and `go.mod` become launcher/presentation code without Eino or data ownership.
 - **FILE-004**: `scripts/build_lake*.sh`, `scripts/build_zcode_agent.mjs`, release verification and migration/startup docs record the TypeScript runtime.
@@ -89,4 +90,6 @@ The existing Lake frontend remains the user interface. The new managed `@zcode/l
 - [Managed Lake specification](../third_party/zcode/.agents/specs/lake-typescript.md)
 - [Previous runtime integration](../docs/zcode-runtime.md)
 
-Progress evidence: the new package compiles; schema compatibility, vault, approval/cancellation/idempotency and model/MCP settings tests are implemented. `test/desktop-methods.json` inventories 75 existing desktop methods. Workflow repository revision/state tests are being added. The desktop launcher still uses the previous backend while the remaining TypeScript services are implemented; Eino removal and final source/root checks remain open.
+Progress evidence: Eino source and runtime dependencies are removed. The signed launcher and desktop bridge now use the source-built TypeScript runtime. `test/desktop-methods.json` and the Go reflection test cover 75 desktop methods. Synthetic regression covers schema 1–19, vault, selected-lake operations, approvals, journal, native sessions/tools/MCP/PTY, workflow recovery and scheduler leases/grants. Final signed release verification passed: backend 58/58, native SSH integration 1/1, frontend 38/38, 75 desktop method signatures, Go test/vet and desktop race checks, root/CLI typecheck, Lake lint (0 warnings/errors), changed managed architecture (0 violations), and strict desktop/launcher signature checks. Root lint retains 70 upstream warnings; full CLI lint has upstream max-lines errors. The Mac was locked, so desktop click inspection could not be completed. Real remote deployments/models/connectors and native browser/CUA host interaction are outside the verified boundary. Branch push remains pending.
+
+Scope correction (2026-10-02): user explicitly requires every capability except the Lake data layer and operations workflows to use ZCode built-ins. Custom TypeScript context/compaction, code editing/checkpoints, specialist/checkpoints and UI session engines created during migration are withdrawn. Previously committed Lake terminal/task and extension engines have been replaced by native ZCode APIs. The specialist form edits only the supported native profile adapter fields; old custom execution settings remain historical configuration. Legacy metadata repositories remain for data compatibility, not as active competing runtimes.

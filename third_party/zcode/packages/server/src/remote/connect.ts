@@ -23,6 +23,8 @@ import { formatWslProxyForLog } from "./wslProxy.js";
 const BACKEND_DISCONNECT_EXIT_CODE = -1;
 
 export interface ConnectOptions extends DeployOptions {
+  /** A source-built server bundle supplied by the application host. Native deployment still owns Node/assets. */
+  localServerBundlePath?: string;
   /** Client identifier for handshake */
   clientId?: string;
   /** Handshake timeout in ms (default: 10000) */
@@ -187,6 +189,8 @@ async function connectRemoteUnchecked(
     throwIfRemoteConnectAborted(options?.signal);
     log("deploy complete");
   }
+
+  if (options?.localServerBundlePath) await backend.upload(options.localServerBundlePath, "~/.zcode/server/zcode-server.cjs", {signal:options.signal});
 
   // 3. Launch server
   log("launching remote server...");

@@ -29,8 +29,8 @@ export class MemoryRepository {
         const value = text(p, "text").trim();
         if (!value || value.length > 1024 || /(?:private key|api[_ -]?key|password|passwd|access[_ -]?token|secret|密码|私钥|密钥|访问令牌|口令)/iu.test(value)) throw new Error("无效或含敏感内容的记忆");
         const conversation = text(p, "conversation_id"), sequence = integer(p, "source_event_seq");
-        const source = this.db.one("SELECT c.lake_id,e.kind,e.payload FROM conversation_event e JOIN conversation c ON c.id=e.conversation_id WHERE e.conversation_id=? AND e.seq=?", conversation, sequence);
-        if (source.lake_id !== lakeID || source.kind !== "user") throw new Error("记忆来源必须是同一湖的用户事件");
+        const source = this.db.one("SELECT c.lake_id,e.kind,COALESCE(t.prompt,json_extract(e.payload,'$.preview'),'') original FROM conversation_event e JOIN conversation c ON c.id=e.conversation_id LEFT JOIN conversation_turn t ON t.id=e.legacy_turn_id WHERE e.conversation_id=? AND e.seq=?", conversation, sequence);
+        if (source.lake_id !== lakeID || source.kind !== "user" || !String(source.original).includes(value)) throw new Error("记忆来源必须是同一湖的用户原话");
         const project = text(p, "project_id");
         if (project && this.db.one("SELECT lake_id FROM code_project WHERE id=?", project).lake_id !== lakeID) throw new Error("记忆项目不属于同一湖");
         const id = newID(), now = Date.now();

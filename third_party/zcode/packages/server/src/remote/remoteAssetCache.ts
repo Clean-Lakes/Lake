@@ -1645,7 +1645,7 @@ async function writeResponseBodyToFile(
     },
   });
 
-  await pipeline(Readable.fromWeb(response.body as globalThis.ReadableStream), byteMeter, output);
+  await pipeline(Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]), byteMeter, output);
   reportProgress(transferredBytes, true);
 }
 

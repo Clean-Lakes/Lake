@@ -5,7 +5,7 @@ modules:
   - id: lake
     roots: [apps/zcode-cli/packages/lake/src]
     managed: true
-    requires: []
+    requires: [services, server, zcode-native-runtime]
     publicEntrypoints: [apps/zcode-cli/packages/lake/src/contract.ts]
     layers: { domain: domain, app: app, adapters: adapters }
     layerOrder: [domain, app, adapters]
@@ -25,6 +25,7 @@ modules:
   - id: services
     roots: [packages/services/src]
     managed: false
+    publicEntrypoints: [packages/services/src/lake-host.ts, packages/services/src/index.ts, packages/services/src/node.ts]
   - id: session
     roots: [packages/services/src/session]
     managed: false
@@ -43,6 +44,7 @@ modules:
     roots: [packages/client/src]
     managed: false
   - id: server
+    publicEntrypoints: [packages/server/src/remote/index.ts]
     roots: [packages/server/src]
     managed: false
   - id: zcode-server-cli
@@ -64,6 +66,9 @@ modules:
     roots: [apps/zcode-cli]
     managed: false
     requires: [lake]
+  - id: zcode-native-runtime
+    roots: [apps/zcode-cli/packages/adapters/src, apps/zcode-cli/packages/core/src, apps/zcode-cli/packages/contracts/src, apps/zcode-cli/packages/bootstrap/src]
+    managed: false
 
 global:
   maxFileLines: 400

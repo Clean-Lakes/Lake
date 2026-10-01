@@ -7,17 +7,24 @@ import { createLakeRuntime } from "../runtime.js";
 import { parseArguments, flag, readRequest } from "./arguments.js";
 import { runBridge } from "./bridge.js";
 import { resourceCommand } from "./resources.js";
+import { mcpCommand } from "./mcp.js";
 import { modelCommand } from "./models.js";
 import { workflowCommand } from "./workflows.js";
+import type { LakeRuntime } from "../../domain/protocol.js";
+import { runDesktopServer } from "./serve.js";
+import { migrateSecrets } from "./secrets.js";
 
-export async function runLakeCLI(context: LakeCLIContext): Promise<number> {
+export async function runLakeCLI(context: LakeCLIContext, suppliedRuntime?: LakeRuntime): Promise<number> {
   const args = parseArguments(context.argv), [command, action, ...values] = args.positionals;
   const root = process.env.LAKE_HOME ?? join(homedir(), ".lake");
-  const runtime = await createLakeRuntime({ root });
+  const runtime = suppliedRuntime ?? await createLakeRuntime({ root });
   const dispatch = (method: string, params: Params = {}) => runtime.dispatch({ method, params });
   let result: JsonValue = null;
   try {
     switch (command) {
+      case undefined: case "help": context.stdout.write("Lake · ZCode TypeScript runtime\n启动桌面：scripts/build_lake_desktop.sh；交互协议：lake bridge --conversation <ID>\n命令：ls current add use res model mcp code conversation memory workflow workflow-v2 journal permissions rpc\n");return 0;
+      case "mcp": result=await mcpCommand(context,runtime,args,root);break;
+      case "secrets": if (action !== "migrate") throw new Error("用法：lake secrets migrate"); result = await migrateSecrets(root, runtime); break;
       case "ls": result = await dispatch("lake.list"); break;
       case "current": result = await dispatch("lake.current"); break;
       case "add": result = await dispatch("lake.add", { name: action, description: flag(args, "desc") }); break;
@@ -58,10 +65,11 @@ export async function runLakeCLI(context: LakeCLIContext): Promise<number> {
       }
       case "journal": result = await dispatch("journal.list", { target_path: flag(args, "target"), run_id: flag(args, "run"), action_id: flag(args, "action"), limit: Number(flag(args, "limit", "100")) }); break;
       case "bridge": await runBridge(context, runtime, flag(args, "conversation")); return 0;
+      case "serve": await runDesktopServer(context, runtime, request => runLakeCLI(request, runtime)); return 0;
       default: throw new Error(`未知的 Lake 命令 ${command ?? ""}`);
     }
     context.stdout.write(JSON.stringify(result) + "\n"); return 0;
   } catch (error) {
     context.stderr.write(redact(error instanceof Error ? error.message : String(error)) + "\n"); return 1;
-  } finally { await runtime.close(); }
+  } finally { if (!suppliedRuntime) await runtime.close(); }
 }

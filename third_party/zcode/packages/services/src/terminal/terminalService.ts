@@ -13,7 +13,8 @@ import {
 } from "./terminalProfile.js";
 import { registerMemoryDiagnosticsProvider } from "#src/memoryDiagnostics.js";
 
-const require = createRequire(import.meta.url);
+// Lake also bundles the native host into the CommonJS CLI. Preserve both module formats.
+const require = createRequire(typeof __filename === "string" ? __filename : import.meta.url);
 type NodePtyModule = typeof import("node-pty");
 type PtySpawnOptions = Parameters<NodePtyModule["spawn"]>[2];
 
@@ -321,7 +322,7 @@ function resolveTerminalCwd(cwd?: string): string {
 }
 
 export function createTerminalService(dependencies: {
-  settingService: ISettingService;
+  settingService: Pick<ISettingService, "get">;
 }): ITerminalService {
   const terminals = new Map<string, TerminalInstance>();
   let nextId = 0;

@@ -8,6 +8,8 @@ export function QuestionCard({ question, onAnswer }: { question: QuestionView; o
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const active = question.status === 'pending' && !!onAnswer
+  const selected = (item: {id:string;multiSelect?:boolean}, label: string) => item.multiSelect ? (JSON.parse(choices[item.id] || '[]') as string[]).includes(label) : choices[item.id] === label
+  const choose = (item: {id:string;multiSelect?:boolean}, label: string) => {setChoices(previous => {const values: string[]=item.multiSelect ? JSON.parse(previous[item.id] || '[]') : [];return {...previous,[item.id]:item.multiSelect ? JSON.stringify(values.includes(label) ? values.filter(value=>value !== label) : [...values,label]) : label}});setCustom(previous=>({...previous,[item.id]:''}))}
   const answers = questionAnswers(question.questions, choices, custom)
   useEffect(() => { if (question.error || question.status !== 'pending') setSubmitting(false) }, [question.error, question.status])
   return <form className={'question-card ' + question.status} aria-label="回答 Lake 的问题" onSubmit={async event => {
@@ -21,8 +23,8 @@ export function QuestionCard({ question, onAnswer }: { question: QuestionView; o
       <legend>{question.questions.length > 1 ? `${index + 1}. ` : ''}{item.header}</legend>
       <p>{item.prompt}</p>
       {question.status === 'answered' ? <div className="question-answer">{question.answers?.[item.id]}</div> : active ? <>
-        {item.options?.length ? <div className="question-options">{item.options.map(option => <label className={'question-option ' + (choices[item.id] === option.label && !custom[item.id] ? 'selected' : '')} key={option.label}>
-          <input type="radio" name={`${question.id}-${item.id}`} checked={choices[item.id] === option.label && !custom[item.id]} onChange={() => { setChoices(previous => ({ ...previous, [item.id]: option.label })); setCustom(previous => ({ ...previous, [item.id]: '' })) }} />
+        {item.options?.length ? <div className="question-options">{item.options.map(option => <label className={'question-option ' + (selected(item,option.label) && !custom[item.id] ? 'selected' : '')} key={option.label}>
+          <input type={item.multiSelect ? "checkbox" : "radio"} name={`${question.id}-${item.id}`} checked={selected(item,option.label) && !custom[item.id]} onChange={() => choose(item,option.label)} />
           <span><strong>{option.label}</strong>{option.description && <small>{option.description}</small>}</span>
         </label>)}</div> : null}
         <label className="question-custom-label">{item.options?.length ? '或直接回答' : '你的回答'}<textarea aria-label={`${item.header}：直接回答`} value={custom[item.id] ?? ''} maxLength={2048} rows={2} placeholder="填写你的选择或补充信息" onChange={event => setCustom(previous => ({ ...previous, [item.id]: event.target.value }))} /></label>

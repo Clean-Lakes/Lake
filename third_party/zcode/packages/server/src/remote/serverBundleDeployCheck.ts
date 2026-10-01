@@ -54,7 +54,7 @@ function waitForDeployCheckClose(stream: StdioStream): Promise<void> {
       }
       stderrText += chunk.toString();
     });
-    stream.onClose((code) => {
+    stream.onClose((code: number) => {
       if (code === 0) {
         resolve();
         return;

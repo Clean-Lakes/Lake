@@ -21,12 +21,12 @@ export class SummaryRepository {
     return this.db.transaction(() => {
       const latest = Number(this.db.one("SELECT COALESCE(MAX(seq),0) latest FROM conversation_event WHERE conversation_id=?", id).latest);
       if (through > latest) throw new Error("摘要超出最新事件");
-      const rows = this.db.all("SELECT e.seq,e.kind,COALESCE(t.prompt,json_extract(e.payload,'$.preview'),'') original FROM conversation_event e LEFT JOIN conversation_turn t ON t.id=e.legacy_turn_id WHERE e.conversation_id=? AND e.seq<=?", id, through);
+      const rows = this.db.all("SELECT e.seq,e.kind,CASE WHEN e.kind='question_answered' THEN json_extract(e.payload,'$.answers_json') ELSE COALESCE(t.prompt,json_extract(e.payload,'$.preview'),'') END original FROM conversation_event e LEFT JOIN conversation_turn t ON t.id=e.legacy_turn_id WHERE e.conversation_id=? AND e.seq<=?", id, through);
       const byID = new Map(rows.map(row => [Number(row.seq), row]));
       if ((sources as number[]).some(source => !byID.has(source))) throw new Error("摘要来源不属于此会话");
       for (const group of ["goals", "constraints"]) for (const value of state?.[group] as JsonValue[] | undefined ?? []) {
         const fact = object(value);
-        for (const source of fact.source_event_ids as number[]) { const row = byID.get(source); if (row?.kind !== "user" || !String(row.original).includes(text(fact, "text"))) throw new Error("任务目标或约束必须引用用户原话"); }
+        for (const source of fact.source_event_ids as number[]) { const row = byID.get(source); if (!row || !["user", "question_answered"].includes(String(row.kind)) || !String(row.original).includes(text(fact, "text"))) throw new Error("任务目标或约束必须引用用户原话"); }
       }
       const changed = this.db.run(`INSERT INTO conversation_summary(conversation_id,through_seq,text,source_event_ids,token_estimate,created_at,task_state) VALUES(?,?,?,?,?,?,?)
 ON CONFLICT(conversation_id,through_seq) DO UPDATE SET text=excluded.text,source_event_ids=excluded.source_event_ids,token_estimate=excluded.token_estimate,created_at=excluded.created_at,task_state=excluded.task_state

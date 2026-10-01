@@ -5,7 +5,7 @@ import { TaskTerminalPanel } from './TaskTerminalPanel'
 import type { ExecutionRecord } from './taskTerminal'
 
 type RemoteFile = { path: string; content: string; sha256: string }
-type RemoteResult = { stdout: string; stderr: string; exit_code: number; truncated: boolean; unknown: boolean; error?: string }
+type RemoteResult = { sha256: string }
 
 function api() {
   const bridge = window.go?.main?.App
@@ -44,10 +44,9 @@ export default function RemoteWorkbenchPanel({ id, name, location, onClose, conv
     setPending(true)
     try {
       const result = JSON.parse(await api().WriteRemoteCodeFile(id, selected.path, selected.sha256, draft)) as RemoteResult
-      if (result.unknown) { setUnknown(true); setError(result.error || '写入结果未知；请核对远端文件后重新读取') }
-      else if (result.exit_code !== 0) setError(result.stderr || `写入失败：退出码 ${result.exit_code}`)
-      else await openFile(selected.path)
-    } catch (cause) { setError(String(cause)) }
+      if (!result.sha256) throw new Error('未收到文件写入确认')
+      await openFile(selected.path)
+    } catch (cause) { setUnknown(true); setError(String(cause) + '；重新读取远端文件后再保存') }
     finally { setPending(false) }
   }
 

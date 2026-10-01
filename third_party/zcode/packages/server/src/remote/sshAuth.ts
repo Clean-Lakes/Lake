@@ -12,6 +12,7 @@ interface SSHConnectConfigInput {
   passphrase?: string;
   password?: string;
   agent?: string;
+  hostVerifier?: ConnectConfig["hostVerifier"];
 }
 
 function isMissingPrivateKeyPassphraseMessage(message: string): boolean {
@@ -32,6 +33,7 @@ export function buildSSHConnectConfig(input: SSHConnectConfigInput): ConnectConf
 
   return {
     host: input.host,
+    hostVerifier: input.hostVerifier,
     port: input.port ?? 22,
     username: input.username,
     privateKey: input.privateKey,

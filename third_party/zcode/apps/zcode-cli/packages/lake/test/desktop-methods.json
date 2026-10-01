@@ -1,529 +1,529 @@
 {
-  "version": 1,
+  "version": 2,
   "methods": [
     {
       "method": "PickVideoFrames",
       "source": "client/desktop/media.go",
       "signature": "count int) (string, error) {",
-      "status": "pending",
+      "status": "native-presentation",
       "owner": "native-presentation"
     },
     {
       "method": "PickPDFPreview",
       "source": "client/desktop/media.go",
       "signature": ") (string, error) {",
-      "status": "pending",
+      "status": "native-presentation",
       "owner": "native-presentation"
     },
     {
       "method": "RunProposedCommand",
       "source": "client/desktop/task_terminal.go",
       "signature": "id string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "DeclineProposedCommand",
       "source": "client/desktop/task_terminal.go",
-      "signature": "id string) error {",
-      "status": "pending",
+      "signature": "id string) error { return a.Approve(id, false) }",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "TakeCommandControl",
       "source": "client/desktop/task_terminal.go",
       "signature": "id string) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ReturnCommandControl",
       "source": "client/desktop/task_terminal.go",
       "signature": "id string, sequence uint64) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "TaskTerminalStatus",
       "source": "client/desktop/task_terminal.go",
       "signature": "conversationID string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "CloseTaskTerminal",
       "source": "client/desktop/task_terminal.go",
       "signature": "conversationID string) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "RunTaskCommand",
       "source": "client/desktop/task_terminal.go",
       "signature": "conversationID, command string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "AskWithExecutions",
-      "source": "client/desktop/task_terminal.go",
+      "source": "client/desktop/app_chat.go",
       "signature": "id, prompt string, sequences []uint64, images []ImageAttachment) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "SaveDownload",
       "source": "client/desktop/download.go",
       "signature": "filename, mimeType, encoded string) (string, error) {",
-      "status": "pending",
+      "status": "native-presentation",
       "owner": "native-presentation"
     },
     {
       "method": "WorkflowLibrary",
-      "source": "client/desktop/workflow_library.go",
+      "source": "client/desktop/app_data.go",
       "signature": "payload string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ListLakes",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": ") (string, error)   { return a.cli(\"ls\", \"--json\") }",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "CurrentLake",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": ") (string, error) { return a.cli(\"current\", \"--json\") }",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ListModels",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": ") (string, error)  { return a.cli(\"model\", \"ls\", \"--json\") }",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "Settings",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "payload string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ExtensionStatus",
-      "source": "client/desktop/app.go",
-      "signature": "projectPath string) (string, error) {",
-      "status": "pending",
+      "source": "client/desktop/app_data.go",
+      "signature": "path string) (string, error) {",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "SetPluginEnabled",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "name string, enabled bool) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "SetWorkspaceHookEnabled",
-      "source": "client/desktop/app.go",
-      "signature": "projectPath string, enabled bool) (string, error) {",
-      "status": "pending",
+      "source": "client/desktop/app_data.go",
+      "signature": "path string, enabled bool) (string, error) {",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "GetPermissions",
-      "source": "client/desktop/app.go",
-      "signature": ") (string, error) {",
-      "status": "pending",
+      "source": "client/desktop/app_data.go",
+      "signature": ") (string, error) { return a.cli(\"permissions\", \"--json\") }",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "SetPermission",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "key string, enabled bool) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "UseModel",
-      "source": "client/desktop/app.go",
-      "signature": "model string) error {",
-      "status": "pending",
+      "source": "client/desktop/app_data.go",
+      "signature": "model string) error { _, err := a.cli(\"model\", \"use\", model); return err }",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ListResources",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "lake string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ListAllResources",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": ") (string, error) { return a.cli(\"res\", \"ls\", \"--all\", \"--json\") }",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "PickKubeconfigFile",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": ") (string, error) {",
-      "status": "pending",
+      "status": "native-presentation",
       "owner": "native-presentation"
     },
     {
       "method": "ListKubeContexts",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "path string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "AddK8sResource",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "lake, name, path, contextName, namespace string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "AddDatabaseResource",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "lake, name, kind, host string, port int, username, database, tlsMode, password string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ListCodeProjects",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": ") (string, error) { return a.cli(\"code\", \"list\", \"--json\") }",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ListWorkflows",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": ") (string, error)    { return a.cli(\"workflow\", \"list\", \"--json\") }",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ListWorkflowRuns",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "lake string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "GetWorkflowRun",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "id string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "PickCodeProjectDirectory",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": ") (string, error) {",
-      "status": "pending",
+      "status": "native-presentation",
       "owner": "native-presentation"
     },
     {
       "method": "AddCodeProject",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "lake, path string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "BindConversationProject",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "conversationID, projectID string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ListConversations",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": ") (string, error) { return a.cli(\"conversation\", \"list\", \"--json\") }",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ListArchivedConversations",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": ") (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "CreateConversation",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "lake string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "GetConversation",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "id string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "GetMemory",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": ") (string, error) { return a.cli(\"memory\", \"show\", \"--json\") }",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "SetMemoryEnabled",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "enabled bool) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "DeleteMemory",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "id string) (string, error) { return a.cli(\"memory\", \"delete\", id, \"--json\") }",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "RenameConversation",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "id, title string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ArchiveConversation",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "id string) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "RestoreConversation",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "id string) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "UseLake",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "lake string) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "AuthorizeResource",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "path string, allow bool) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "StartConversation",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_chat.go",
       "signature": "id string) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "Ask",
-      "source": "client/desktop/app.go",
-      "signature": "id, prompt string) error {",
-      "status": "pending",
+      "source": "client/desktop/app_chat.go",
+      "signature": "id, prompt string) error { return a.ask(id, prompt, map[string]any{}) }",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ReformatResult",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_chat.go",
       "signature": "id, prompt string) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "UIAction",
-      "source": "client/desktop/app.go",
-      "signature": "id string, action agent.UIUserAction) error {",
-      "status": "pending",
+      "source": "client/desktop/app_chat.go",
+      "signature": "id string, action UIUserAction) error {",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "RunWorkflow",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_chat.go",
       "signature": "id, prompt string, request WorkflowRunRequest) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "AskWithImages",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_chat.go",
       "signature": "id, prompt string, images []ImageAttachment) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "Approve",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_chat.go",
       "signature": "id string, approved bool) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "AnswerQuestion",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_chat.go",
       "signature": "id, questionID string, answers map[string]string) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "StopConversation",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_chat.go",
       "signature": ") {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "WorkflowV2Manage",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_data.go",
       "signature": "payload string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ListSpecialistTasks",
-      "source": "client/desktop/app.go",
-      "signature": ") (string, error) { return a.cli(\"specialist\", \"tasks\") }",
-      "status": "pending",
+      "source": "client/desktop/app_data.go",
+      "signature": ") (string, error) {",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "RunWorkflowV2",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_chat.go",
       "signature": "id, prompt string, request WorkflowV2Request) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ResumeSpecialist",
-      "source": "client/desktop/app.go",
+      "source": "client/desktop/app_chat.go",
       "signature": "id, prompt, taskID string, retryWrites bool) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ListProjectFiles",
       "source": "client/desktop/workbench.go",
       "signature": "projectID string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ReadProjectFile",
       "source": "client/desktop/workbench.go",
       "signature": "projectID, relative string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "GitOverview",
       "source": "client/desktop/workbench.go",
       "signature": "projectID string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "GitDiff",
       "source": "client/desktop/workbench.go",
       "signature": "projectID, relative string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "OpenTerminal",
       "source": "client/desktop/workbench.go",
       "signature": "projectID string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "RunTerminal",
       "source": "client/desktop/workbench.go",
       "signature": "sessionID, command string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "CloseTerminal",
       "source": "client/desktop/workbench.go",
       "signature": "sessionID string) error {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ListRemoteCodeWorkspaces",
       "source": "client/desktop/remote_workbench.go",
       "signature": ") (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "AddRemoteCodeWorkspace",
       "source": "client/desktop/remote_workbench.go",
       "signature": "lake, name, resource, root string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "AuthorizeRemoteCodeWorkspace",
       "source": "client/desktop/remote_workbench.go",
       "signature": "id string, enabled bool) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "BindConversationRemoteCodeWorkspace",
       "source": "client/desktop/remote_workbench.go",
       "signature": "conversationID, workspaceID string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ListRemoteCodeFiles",
       "source": "client/desktop/remote_workbench.go",
       "signature": "id string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "ReadRemoteCodeFile",
       "source": "client/desktop/remote_workbench.go",
       "signature": "id, relative string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "WriteRemoteCodeFile",
       "source": "client/desktop/remote_workbench.go",
       "signature": "id, relative, expectedSHA, content string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     },
     {
       "method": "RunRemoteCodeCommand",
       "source": "client/desktop/remote_workbench.go",
       "signature": "id, command string) (string, error) {",
-      "status": "pending",
+      "status": "protocol-adapter",
       "owner": "lake-typescript"
     }
   ]
