@@ -39,6 +39,7 @@ export async function privateDirectory(path: string): Promise<void> {
   await chmod(path, 0o700);
 }
 export class LakeDatabase {
+  private transactionDepth = 0;
   private constructor(readonly root: string, private readonly db: DatabaseSync) {}
   static async open(root: string): Promise<LakeDatabase> {
     root = resolve(root);
@@ -69,9 +70,15 @@ export class LakeDatabase {
     return Number(this.db.prepare(sql).run(...values).changes);
   }
   transaction<T>(body: () => T): T {
-    this.db.exec("BEGIN IMMEDIATE");
-    try { const result = body(); this.db.exec("COMMIT"); return result; }
-    catch (error) { this.db.exec("ROLLBACK"); throw error; }
+    const depth = this.transactionDepth++, savepoint = `lake_transaction_${depth}`;
+    let begun = false;
+    try {
+      this.db.exec(depth ? `SAVEPOINT ${savepoint}` : "BEGIN IMMEDIATE"); begun = true;
+      const result = body();
+      if (result instanceof Promise) throw new Error("SQLite 事务不能跨异步边界");
+      this.db.exec(depth ? `RELEASE SAVEPOINT ${savepoint}` : "COMMIT"); return result;
+    } catch (error) { if (begun) this.db.exec(depth ? `ROLLBACK TO SAVEPOINT ${savepoint}; RELEASE SAVEPOINT ${savepoint}` : "ROLLBACK"); throw error; }
+    finally { this.transactionDepth--; }
   }
   close(): void { this.db.close(); }
   private version(): number { return Number(this.one("PRAGMA user_version").user_version); }
