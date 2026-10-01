@@ -21,7 +21,10 @@ export class CatalogRepository {
     switch (method) {
       case "lake.list": return this.db.all("SELECT * FROM lake ORDER BY name").map(timeView);
       case "lake.get": return timeView(this.lake(text(p, "lake")));
-      case "lake.current": return timeView(this.db.one("SELECT l.* FROM current_lake c JOIN lake l ON l.id=c.lake_id WHERE c.singleton=1"));
+      case "lake.current": {
+        const row = this.db.all("SELECT l.* FROM current_lake c JOIN lake l ON l.id=c.lake_id WHERE c.singleton=1")[0];
+        return row ? timeView(row) : null;
+      }
       case "lake.add": {
         const id = newID(), now = Date.now();
         this.db.run("INSERT INTO lake(id,name,description,created_at,updated_at) VALUES(?,?,?,?,?)", id, name(text(p, "name")), text(p, "description"), now, now);

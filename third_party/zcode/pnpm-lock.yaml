@@ -322,6 +322,9 @@ importers:
       '@zcode/i18n':
         specifier: workspace:*
         version: link:../i18n
+      '@zcode/lake':
+        specifier: workspace:*
+        version: link:../lake
       '@zcode/provider-node':
         specifier: workspace:*
         version: link:../../../../packages/provider-node

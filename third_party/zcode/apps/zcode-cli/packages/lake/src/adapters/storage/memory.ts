@@ -9,7 +9,7 @@ export class MemoryRepository {
     const lake = this.catalog.lake(text(p, "lake")), lakeID = String(lake.id);
     const enabled = this.db.all("SELECT enabled FROM memory_policy WHERE lake_id=?", lakeID)[0]?.enabled === 1;
     switch (method) {
-      case "memory.show": return { lake: String(lake.name), enabled, facts: this.db.all("SELECT * FROM memory_fact WHERE lake_id=? AND deleted_at IS NULL ORDER BY updated_at DESC", lakeID).map(timeView) };
+      case "memory.show": return { lake_id: lakeID, lake: String(lake.name), enabled, facts: this.db.all("SELECT * FROM memory_fact WHERE lake_id=? AND deleted_at IS NULL ORDER BY updated_at DESC", lakeID).map(timeView) };
       case "memory.set": {
         this.db.run("INSERT INTO memory_policy(lake_id,enabled,updated_at) VALUES(?,?,?) ON CONFLICT(lake_id) DO UPDATE SET enabled=excluded.enabled,updated_at=excluded.updated_at", lakeID, p.enabled === true ? 1 : 0, Date.now());
         return this.request("memory.show", p);
@@ -17,6 +17,12 @@ export class MemoryRepository {
       case "memory.delete": {
         if (!this.db.run("UPDATE memory_fact SET deleted_at=?,updated_at=? WHERE id=? AND lake_id=?", Date.now(), Date.now(), text(p, "id"), lakeID)) throw new Error("记忆不存在");
         return null;
+      }
+      case "memory.edit": {
+        const value = text(p, "text").trim();
+        if (!value || value.length > 1024 || /(?:private key|api[_ -]?key|password|passwd|access[_ -]?token|secret|密码|私钥|密钥|访问令牌|口令)/iu.test(value)) throw new Error("无效或含敏感内容的记忆");
+        if (!this.db.run("UPDATE memory_fact SET text=?,updated_at=? WHERE id=? AND lake_id=? AND deleted_at IS NULL", value, Date.now(), text(p, "id"), lakeID)) throw new Error("记忆不存在");
+        return this.request("memory.show", p);
       }
       case "memory.add": {
         if (!enabled) throw new Error("跨会话记忆未启用");

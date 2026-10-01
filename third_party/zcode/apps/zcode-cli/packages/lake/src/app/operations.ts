@@ -2,23 +2,30 @@ import type { JsonValue } from "../domain/json.js";
 import { command, FIXED_READ_CHECKS, object, redact, text, type Params } from "../domain/validation.js";
 import type { RuntimePorts } from "./ports.js";
 
-interface PendingApproval { resolve(approved: boolean): void }
+interface PendingApproval { turnID: string; resolve(approved: boolean): void }
 export class OperationsService {
   private readonly approvals = new Map<string, PendingApproval>();
+  private approvalTail: Promise<void> = Promise.resolve();
   constructor(private readonly ports: RuntimePorts) {}
   respond(id: string, approved: boolean): void {
-    const pending = this.approvals.get(id);
+    const key = this.approvals.has(id) ? id : [...this.approvals.keys()].find(key => this.approvals.get(key)?.turnID === id);
+    const pending = key ? this.approvals.get(key) : undefined;
     if (!pending) throw new Error("审批已过期或不属于当前任务");
-    this.approvals.delete(id); pending.resolve(approved);
+    this.approvals.delete(key as string); pending.resolve(approved);
   }
-  private approve(id: string, resource: Params, body: string, signal: AbortSignal): Promise<boolean> {
-    return new Promise(resolve => {
+  private async approve(id: string, resource: Params, body: string, signal: AbortSignal, turnID: string): Promise<boolean> {
+    const previous = this.approvalTail;
+    let release: () => void = () => {};
+    this.approvalTail = new Promise(resolve => { release = resolve; });
+    await previous;
+    if (signal.aborted) { release(); return false; }
+    try { return await new Promise<boolean>(resolve => {
       const abort = () => { this.approvals.delete(id); resolve(false); };
-      this.approvals.set(id, { resolve: approved => { signal.removeEventListener("abort", abort); resolve(approved); } });
+      this.approvals.set(id, { turnID, resolve: approved => { signal.removeEventListener("abort", abort); resolve(approved); } });
       signal.addEventListener("abort", abort, { once: true });
-      this.ports.emit({ type: "approval", id, kind: "ssh", path: `${resource.lake}/${resource.name}`, command: body });
+      this.ports.emit({ type: "approval", id: turnID || id, approval_id: id, kind: "ssh", path: `${resource.lake}/${resource.name}`, command: body });
       if (signal.aborted) abort();
-    });
+    }); } finally { release(); }
   }
   async run(method: string, p: Params, id: string, signal: AbortSignal): Promise<JsonValue> {
     const resource = object(await this.ports.data.request("res.get", { resource: text(p, "resource") }));
@@ -32,7 +39,7 @@ export class OperationsService {
     const silent = read ? policy.silent_ssh_read : policy.silent_ssh_command;
     if (!silent || p.require_approval === true) {
       await audit("proposed");
-      if (!(await this.approve(id, resource, body, signal))) { await audit("denied"); throw new Error("执行未获批准"); }
+      if (!(await this.approve(id, resource, body, signal, text(p, "turn_id")))) { await audit("denied"); throw new Error("执行未获批准"); }
     }
     signal.throwIfAborted();
     const current = object(await this.ports.data.request("res.get", { resource: String(resource.id) }));

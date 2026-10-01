@@ -21,7 +21,7 @@ async function run(args) {
 }
 await run(['install', '--filter', 'zcode', '--filter', 'zcode-cli', '--filter', '@zcode/cli...', '--prod=false', '--frozen-lockfile', '--ignore-scripts']);
 // Match the CLI build graph without compiling ZCode's Desktop/Web applications.
-for (const name of ['shared-types', 'contracts', 'dynamic-workflow', 'dynamic-workflow-runtime', 'telemetry', 'i18n', 'core', 'adapters', 'tui', 'bootstrap', 'cli']) {
+for (const name of ['shared-types', 'contracts', 'dynamic-workflow', 'dynamic-workflow-runtime', 'telemetry', 'i18n', 'core', 'adapters', 'tui', 'bootstrap', 'lake', 'cli']) {
   await run(['--filter', `@zcode/${name}`, 'run', 'build']);
 }
 await mkdir(output, { recursive: true });
