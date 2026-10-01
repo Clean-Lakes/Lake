@@ -22,7 +22,7 @@ Eino 提供：
 - **编排**：把组件组装成图或工作流，既能独立运行，也能作为工具给智能体调用
 - **[示例](https://github.com/cloudwego/eino-examples)**：常见模式和实际场景的可运行代码
 
-![](.github/static/img/eino/eino_project_structure_and_modules.png)
+![](../../.github/static/img/eino/eino_project_structure_and_modules.png)
 
 # 快速上手
 
@@ -157,7 +157,7 @@ Eino 在编排中自动处理流式：拼接、装箱、合并、复制。组件
 
 # 框架结构
 
-![](.github/static/img/eino/eino_architecture_overview.png)
+![](../../.github/static/img/eino/eino_architecture_overview.png)
 
 Eino 框架包含：
 
@@ -203,7 +203,7 @@ golangci-lint run ./...
 - Issues：[Issues](https://github.com/cloudwego/eino/issues)
 - 飞书：扫码加入 CloudWeGo/eino 用户群
 
-&ensp;&ensp;&ensp; <img src=".github/static/img/eino/lark_group_zh.png" alt="LarkGroup" width="200"/>
+&ensp;&ensp;&ensp; <img src="../../.github/static/img/eino/lark_group_zh.png" alt="LarkGroup" width="200"/>
 
 ## 开源许可证
 

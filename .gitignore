@@ -1,4 +1,6 @@
 # Binaries for programs and plugins
+/bin/
+/dist/
 *.exe
 *.exe~
 *.dll
@@ -64,3 +66,8 @@ CLAUDE.md
 
 # Internal dev setup (not for public repo)
 /scripts/dev_setup_internal.sh
+
+# Lake JavaScript dependencies and generated frontend bundles
+node_modules/
+client/web/dist/
+client/desktop/frontend/dist/

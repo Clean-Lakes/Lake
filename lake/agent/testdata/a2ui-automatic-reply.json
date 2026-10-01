@@ -1,0 +1,129 @@
+{
+  "answer": "# 主机检查\n\n以下是界面验证示例数据。\n\n| 主机 | CPU占用 |\n| --- | --- |\n| 示例一 | 25% |\n| 示例二 | 75% |\n\n## 接下来\n\n1. 确认范围。\n2. 查看原始记录。\n\n```sh\nss -H -lntup\n```",
+  "surfaces": [
+    {
+      "surfaceId": "reply-kbvdiq-0",
+      "catalogId": "com.cleanlakes.lake:catalog-v1",
+      "revision": 3116429578,
+      "components": [
+        {
+          "id": "root",
+          "component": "Column",
+          "children": [
+            "section-1",
+            "section-2"
+          ]
+        },
+        {
+          "id": "section-1",
+          "component": "Card",
+          "title": "主机检查",
+          "children": [
+            "block-0",
+            "block-1"
+          ]
+        },
+        {
+          "id": "block-0",
+          "component": "Markdown",
+          "text": {
+            "path": "/block-0"
+          }
+        },
+        {
+          "id": "block-1",
+          "component": "Tabs",
+          "labels": [
+            "概览",
+            "详细清单"
+          ],
+          "children": [
+            "block-3",
+            "block-2"
+          ]
+        },
+        {
+          "id": "block-2",
+          "component": "Table",
+          "label": "详细清单",
+          "columns": [
+            "column-0",
+            "column-1"
+          ],
+          "headers": [
+            "主机",
+            "CPU占用"
+          ],
+          "rows": {
+            "path": "/block-2"
+          }
+        },
+        {
+          "id": "block-3",
+          "component": "Chart",
+          "label": "CPU占用",
+          "unit": "%",
+          "max": 100,
+          "values": {
+            "path": "/block-3"
+          }
+        },
+        {
+          "id": "section-2",
+          "component": "Card",
+          "title": "接下来",
+          "children": [
+            "block-4",
+            "block-5"
+          ]
+        },
+        {
+          "id": "block-4",
+          "component": "List",
+          "items": {
+            "path": "/block-4"
+          },
+          "ordered": true,
+          "start": 1
+        },
+        {
+          "id": "block-5",
+          "component": "Code",
+          "text": {
+            "path": "/block-5"
+          },
+          "language": "sh",
+          "label": "sh"
+        }
+      ],
+      "data": {
+        "block-0": "以下是界面验证示例数据。",
+        "block-2": [
+          {
+            "column-0": "示例一",
+            "column-1": "25%"
+          },
+          {
+            "column-0": "示例二",
+            "column-1": "75%"
+          }
+        ],
+        "block-3": [
+          {
+            "label": "示例一",
+            "value": 25
+          },
+          {
+            "label": "示例二",
+            "value": 75
+          }
+        ],
+        "block-4": [
+          "确认范围。",
+          "查看原始记录。"
+        ],
+        "block-5": "ss -H -lntup"
+      }
+    }
+  ]
+}

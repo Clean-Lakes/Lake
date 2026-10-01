@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "target": "ESNext",
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ESNext"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "baseUrl": ".",
+    "paths": {
+      "react": [
+        "../desktop/frontend/node_modules/@types/react"
+      ],
+      "react/jsx-runtime": [
+        "../desktop/frontend/node_modules/@types/react/jsx-runtime"
+      ],
+      "react-dom/client": [
+        "../desktop/frontend/node_modules/@types/react-dom/client"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "../desktop/frontend/src/shared",
+    "../desktop/frontend/src/timeline.ts",
+    "../desktop/frontend/src/SpecialistCallCard.tsx",
+    "../desktop/frontend/src/components",
+    "../desktop/frontend/src/lib",
+    "../desktop/frontend/src/wails.d.ts"
+  ]
+}
