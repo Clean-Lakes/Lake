@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { redact, type View } from "../../domain/validation.js";
 
 const OUTPUT_LIMIT = 256 * 1024;
@@ -31,7 +32,7 @@ export async function runProcess(executable: string, args: string[], options: Pr
     child.on("error", error => { cleanup(); reject(error); });
     child.on("close", (code, signal) => {
       cleanup();
-      resolve({ stdout: redact(stdout), stderr: redact(stderr), exit_code: code ?? -1, duration_ms: Date.now() - start, truncated, status: stopped || signal ? "unknown" : code === 0 ? "completed" : "failed", error: stopped ? "命令已取消或超时；执行结果未知" : "" });
+      resolve({ stdout: redact(stdout, OUTPUT_LIMIT), stdout_sha256: createHash("sha256").update(stdout).digest("hex"), stderr: redact(stderr, OUTPUT_LIMIT), exit_code: code ?? -1, duration_ms: Date.now() - start, truncated, status: stopped || signal ? "unknown" : code === 0 ? "completed" : "failed", error: stopped ? "命令已取消或超时；执行结果未知" : "" });
     });
     child.stdin.on("error", () => {});
     child.stdin.end(options.input);

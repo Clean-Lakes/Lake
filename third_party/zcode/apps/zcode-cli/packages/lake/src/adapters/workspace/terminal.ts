@@ -9,9 +9,11 @@ import { registeredRoot } from "./files.js";
 import { DelimitedStream } from "./stream.js";
 
 const NUL = Buffer.from([0]), MAX_OUTPUT = 64 * 1024, COMMAND_TIMEOUT = 90000;
+export interface ShellConnection { executable: string; args: string[]; user: string; remote: true }
 export class LocalTerminal {
   readonly id = randomBytes(16).toString("hex");
-  readonly user = userInfo().username;
+  readonly user: string;
+  private readonly controlOnOutput: boolean;
   private readonly child: ChildProcess;
   private readonly input: Writable;
   private readonly stdout: DelimitedStream;
@@ -21,23 +23,25 @@ export class LocalTerminal {
   private running = false;
   private closed = false;
   private closePromise?: Promise<void>;
-  constructor(readonly root: string) {
+  constructor(readonly root: string, private readonly connection?: ShellConnection) {
+    this.user = connection?.user ?? userInfo().username;
     this.directory = root;
     const env: NodeJS.ProcessEnv = {};
     for (const key of ["PATH", "HOME", "USERPROFILE", "SystemRoot", "TMPDIR", "TEMP", "LANG", "LC_ALL", "TERM", "GOPATH", "GOROOT", "GOCACHE"]) if (process.env[key]) env[key] = process.env[key];
     const windows = process.platform === "win32";
-    this.child = spawn(windows ? "powershell.exe" : "sh", windows ? ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "-"] : [], { cwd: root, env, shell: false, detached: !windows, stdio: windows ? ["pipe", "pipe", "pipe"] : ["pipe", "pipe", "pipe", "pipe"] });
+    this.controlOnOutput = windows || !!connection;
+    this.child = spawn(connection?.executable ?? (windows ? "powershell.exe" : "sh"), connection?.args ?? (windows ? ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "-"] : []), { cwd: connection ? undefined : root, env, shell: false, detached: !windows, stdio: this.controlOnOutput ? ["pipe", "pipe", "pipe"] : ["pipe", "pipe", "pipe", "pipe"] });
     this.input = this.child.stdin as Writable;
     this.stdout = new DelimitedStream(this.child.stdout as Readable);
     this.stderr = new DelimitedStream(this.child.stderr as Readable);
-    this.control = windows ? this.stdout : new DelimitedStream(this.child.stdio[3] as Readable);
+    this.control = this.controlOnOutput ? this.stdout : new DelimitedStream(this.child.stdio[3] as Readable);
     this.child.on("error", () => { this.closed = true; this.stdout.end(); this.stderr.end(); this.control.end(); });
     this.child.on("close", () => { this.closed = true; this.stdout.end(); this.stderr.end(); this.control.end(); });
     this.input.on("error", () => { void this.close(); });
   }
   view(): View { return { id: this.id, root: this.root, user: this.user, directory: this.directory, running: this.running, closed: this.closed }; }
   async run(command: string, signal: AbortSignal): Promise<View> {
-    terminalCommand(command); await registeredRoot(this.root); signal.throwIfAborted();
+    terminalCommand(command); if (!this.connection) await registeredRoot(this.root); signal.throwIfAborted();
     if (this.closed || this.running) throw new Error("终端已关闭或已有命令正在执行");
     this.running = true;
     const workingDirectory = this.directory, nonce = randomBytes(16).toString("hex"), marker = Buffer.from(`\0${nonce}\0`), start = Date.now();
@@ -49,14 +53,14 @@ export class LocalTerminal {
       const output = this.stdout.read(marker, MAX_OUTPUT), errors = this.stderr.read(marker, MAX_OUTPUT);
       const fields = (async () => {
         // Windows 的控制字段复用 stdout；必须等正文边界被消费后再读取。
-        if (process.platform === "win32") await output;
+        if (this.controlOnOutput) await output;
         const exit = await this.control.read(NUL, 16), directory = await this.control.read(NUL, 8192);
         if (exit.truncated || directory.truncated || !/^-?\d+$/u.test(exit.data.toString())) throw new Error("终端状态协议无效");
         return { exit: Number(exit.data.toString()), directory: directory.data.toString() };
       })();
       void output.catch(() => {}); void errors.catch(() => {}); void fields.catch(() => {});
       let script: string;
-      if (process.platform === "win32") {
+      if (process.platform === "win32" && !this.connection) {
         const encoded = Buffer.from(command).toString("base64");
         script = `$global:LASTEXITCODE=0; '' | ForEach-Object { . ([ScriptBlock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}')))) }; $lakeExit=if($?){$LASTEXITCODE}else{if($LASTEXITCODE){$LASTEXITCODE}else{1}}; [Console]::Out.Write("$([char]0)${nonce}$([char]0)$lakeExit$([char]0)$((Get-Location).Path)$([char]0)"); [Console]::Error.Write("$([char]0)${nonce}$([char]0)")\r\n`;
       } else script = `eval ${shellQuote(command)} </dev/null; _lake_exit=$?; command printf '\\000${nonce}\\000'; command printf '\\000${nonce}\\000' >&2; command printf '%s\\000%s\\000' "$_lake_exit" "$(command pwd -P)" >&3\n`;

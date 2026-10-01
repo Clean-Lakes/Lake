@@ -28,8 +28,8 @@ export async function runBridge(context: LakeCLIContext, runtime: LakeRuntime, c
           if (!id) throw new Error("请求需要 id"); active = id;
           const task = runtime.dispatch({ method: "conversation.ask", id, params: { ...request, id: conversation } });
           tasks.push(task.catch(() => {}).finally(() => { if (active === id) active = ""; }));
-        } else if (type === "approval") await runtime.dispatch({ method: "approval.respond", params: { id, approved: request.approved === true } });
-        else if (type === "cancel") { if (active) await runtime.dispatch({ method: "execution.cancel", params: { id: active } }); }
+        } else if (type === "approval" || type === "approve") await runtime.dispatch({ method: "approval.respond", params: { id, approved: request.approved === true } });
+        else if (type === "cancel" || type === "close") { if (active) await runtime.dispatch({ method: "execution.cancel", params: { id: active } }); if (type === "close") break; }
         else throw new Error(`未知请求类型 ${type}`);
       } catch (error) { emit({ type: "error", id, error: redact(error instanceof Error ? error.message : String(error)) }); }
     }

@@ -6,18 +6,24 @@ import { OperationsService } from "./operations.js";
 import { ConversationService } from "./conversation.js";
 import { ApprovalGate } from "./approval.js";
 import { WorkbenchService } from "./workbench.js";
+import { TaskCommandService } from "./task-commands.js";
+import { RemoteWorkbenchService } from "./remote-workbench.js";
 
 export class LakeApplication implements Pick<LakeRuntime, "dispatch" | "close"> {
   private readonly operations: OperationsService;
   private readonly conversations: ConversationService;
   private readonly workbench: WorkbenchService;
+  private readonly tasks: TaskCommandService;
+  private readonly remote: RemoteWorkbenchService;
   private readonly executions = new Map<string, { input: string; controller: AbortController; result: Promise<JsonValue> }>();
   private closed = false;
   constructor(private readonly ports: RuntimePorts) {
     const approvals = new ApprovalGate(ports.emit);
     this.operations = new OperationsService(ports, approvals);
     this.workbench = new WorkbenchService(ports, approvals);
-    this.conversations = new ConversationService(ports, this.operations);
+    this.remote = new RemoteWorkbenchService(ports, approvals);
+    this.tasks = new TaskCommandService(ports, this.workbench, id => this.conversations.isActive(id));
+    this.conversations = new ConversationService(ports, this.operations, this.tasks, this.workbench);
   }
   async dispatch(command: LakeCommand): Promise<JsonValue> {
     if (this.closed) throw new Error("Lake runtime 已关闭");
@@ -29,10 +35,10 @@ export class LakeApplication implements Pick<LakeRuntime, "dispatch" | "close"> 
       const execution = this.executions.get(text(params, "id"));
       if (!execution) throw new Error("执行不存在"); execution.controller.abort(); return null;
     }
-    if (method === "ops.read" || method === "ops.command" || method === "conversation.ask" || method.startsWith("workbench.")) {
+    if (method.startsWith("ops.") || method.startsWith("remote.workbench.") || method === "conversation.ask" || method.startsWith("workbench.") || method.startsWith("task.")) {
       const id = command.id ?? this.ports.id(), input = JSON.stringify([method, command.params]), previous = this.executions.get(id);
       if (previous) { if (previous.input !== input) throw new Error("重复执行 ID 的输入不同"); return previous.result; }
-      const controller = new AbortController(), result = method === "conversation.ask" ? this.conversations.ask(params, id, controller.signal) : method.startsWith("workbench.") ? this.workbench.request(method, params, id, controller.signal) : this.operations.run(method, params, id, controller.signal);
+      const controller = new AbortController(), result = method === "conversation.ask" ? this.conversations.ask(params, id, controller.signal) : method.startsWith("remote.workbench.") ? this.remote.request(method, params, id, controller.signal) : method.startsWith("workbench.") ? this.workbench.request(method, params, id, controller.signal) : method.startsWith("task.") ? this.tasks.request(method, params, id, controller.signal) : this.operations.run(method, params, id, controller.signal);
       this.executions.set(id, { input, controller, result });
       return result;
     }
