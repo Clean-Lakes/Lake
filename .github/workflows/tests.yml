@@ -4,7 +4,8 @@ permissions:
   contents: read
 jobs:
   typescript:
-    runs-on: ubuntu-latest
+    # Native PTY fixtures use the same macOS prebuilt assets as the desktop app.
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,10 +23,16 @@ jobs:
           pnpm --dir third_party/zcode exec tsx --test apps/zcode-cli/packages/lake/test/native-remote.test.ts
           pnpm --dir third_party/zcode --filter @zcode/lake typecheck
           pnpm --dir third_party/zcode --filter @zcode/lake lint
-          pnpm --dir third_party/zcode architecture:check -- --changed
+          pnpm --dir third_party/zcode architecture:check
       - name: Verify current frontend
         working-directory: client/desktop/frontend
         run: npm ci && npm test && npm run build
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.0'
+      - name: Verify desktop bridge
+        working-directory: client/desktop
+        run: GOWORK=off go test -race ./... && GOWORK=off go vet ./...
   launcher:
     runs-on: ubuntu-latest
     steps:

@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-10-01
 last_updated: 2026-10-02
 owner: Lake
-status: In progress
+status: Completed
 tags: [refactor, architecture, migration, typescript]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 The existing Lake frontend remains the user interface. Following the user's 2026-10-02 clarification, `@zcode/lake` owns only Lake operations data and operations workflows. Agent sessions, context compaction, code tools, terminals, subagents, Skills, plugins, MCP and generic automation use ZCode's existing implementations. Go remains the signed launcher and native desktop presentation bridge.
 
@@ -50,7 +50,7 @@ The existing Lake frontend remains the user interface. Following the user's 2026
 |------|-------------|-----------|------|
 | TASK-007 | Replace `cmd/lake` with a signed launcher and remove desktop business logic in favor of typed TypeScript commands; remove Eino source/dependencies only after compatibility tests pass. Depends on TASK-006. | ✅ | 2026-10-02 |
 | TASK-008 | Update source/runtime build and release checks; run managed architecture checks, ZCode root/CLI typecheck and lint, frontend tests/build, signed desktop tests and end-to-end fixture execution. Depends on TASK-007. | ✅ | 2026-10-02 |
-| TASK-009 | Update migration/startup documentation, create feature commits and push `codex/zcode-lake-runtime`; mark complete only after all requirements pass. Depends on TASK-008. | | |
+| TASK-009 | Update migration/startup documentation, create feature commits and push `codex/zcode-lake-runtime`; mark complete only after all requirements pass. Depends on TASK-008. | ✅ | 2026-10-02 |
 
 ## 3. Alternatives
 
@@ -90,6 +90,6 @@ The existing Lake frontend remains the user interface. Following the user's 2026
 - [Managed Lake specification](../third_party/zcode/.agents/specs/lake-typescript.md)
 - [Previous runtime integration](../docs/zcode-runtime.md)
 
-Progress evidence: Eino source and runtime dependencies are removed. The signed launcher and desktop bridge now use the source-built TypeScript runtime. `test/desktop-methods.json` and the Go reflection test cover 75 desktop methods. Synthetic regression covers schema 1–19, vault, selected-lake operations, approvals, journal, native sessions/tools/MCP/PTY, workflow recovery and scheduler leases/grants. Final signed release verification passed: backend 58/58, native SSH integration 1/1, frontend 38/38, 75 desktop method signatures, Go test/vet and desktop race checks, root/CLI typecheck, Lake lint (0 warnings/errors), changed managed architecture (0 violations), and strict desktop/launcher signature checks. Root lint retains 70 upstream warnings; full CLI lint has upstream max-lines errors. The Mac was locked, so desktop click inspection could not be completed. Real remote deployments/models/connectors and native browser/CUA host interaction are outside the verified boundary. Branch push remains pending.
+Progress evidence: Eino source and runtime dependencies are removed. The signed launcher and desktop bridge now use the source-built TypeScript runtime. `test/desktop-methods.json` and the Go reflection test cover 75 desktop methods. Synthetic regression covers schema 1–19, vault, selected-lake operations, approvals, journal, native sessions/tools/MCP/PTY, workflow recovery and scheduler leases/grants. Final signed release verification passed: backend 58/58, native SSH integration 1/1, frontend 38/38, 75 desktop method signatures, Go test/vet and desktop race checks, root/CLI typecheck, Lake lint (0 warnings/errors), changed managed architecture (0 violations), and strict desktop/launcher signature checks. Root lint retains 70 upstream warnings; full CLI lint has upstream max-lines errors. The Mac was locked, so desktop click inspection could not be completed. Real remote deployments/models/connectors and native browser/CUA host interaction are outside the verified boundary. Migration implementation commit `bcafdb03` has been pushed to `codex/zcode-lake-runtime`. Full managed architecture checks also pass with zero violations. CI runs native PTY and desktop bridge fixtures on macOS, and the thin launcher builds/tests independently on Linux.
 
 Scope correction (2026-10-02): user explicitly requires every capability except the Lake data layer and operations workflows to use ZCode built-ins. Custom TypeScript context/compaction, code editing/checkpoints, specialist/checkpoints and UI session engines created during migration are withdrawn. Previously committed Lake terminal/task and extension engines have been replaced by native ZCode APIs. The specialist form edits only the supported native profile adapter fields; old custom execution settings remain historical configuration. Legacy metadata repositories remain for data compatibility, not as active competing runtimes.
