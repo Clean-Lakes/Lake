@@ -1,4 +1,5 @@
-import { chmod, lstat, open, readFile, rename, rm } from "node:fs/promises";
+import { chmod, lstat, open, rename, rm } from "node:fs/promises";
+import { constants } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { privateDirectory } from "./storage/database.js";
@@ -43,7 +44,16 @@ export class FileVault {
     if (!info.isFile() || info.isSymbolicLink() || (info.mode & 0o077)) throw new Error("凭据文件权限不安全");
     return path;
   }
-  async load(kind: string, id: string): Promise<Buffer> { return readFile(await this.privatePath(kind, id)); }
+  async load(kind: string, id: string): Promise<Buffer> {
+    const path = await this.privatePath(kind, id), file = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    try {
+      const info = await file.stat(), current = await lstat(path), limit = kind === "kubeconfig" ? 4194304 : kind === "ssh" ? 1048576 : 65536;
+      if (!info.isFile() || (info.mode & 0o077) || current.isSymbolicLink() || info.ino !== current.ino || info.dev !== current.dev || info.size > limit) throw new Error("凭据文件已变化或权限、大小无效");
+      const bytes = Buffer.alloc(limit + 1), result = await file.read(bytes, 0, bytes.length, 0);
+      if (!result.bytesRead || result.bytesRead > limit) { bytes.fill(0); throw new Error("凭据为空或过长"); }
+      return bytes.subarray(0, result.bytesRead);
+    } finally { await file.close(); }
+  }
   async loadReference(ref: string): Promise<Buffer> { const [kind, id] = this.reference(ref); return this.load(kind, id); }
   async referencePath(ref: string): Promise<string> { const [kind, id] = this.reference(ref); return this.privatePath(kind, id); }
   async has(kind: string, id: string): Promise<boolean> {

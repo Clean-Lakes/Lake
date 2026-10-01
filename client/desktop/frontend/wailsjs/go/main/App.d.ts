@@ -8,21 +8,37 @@ export function AddDatabaseResource(arg1:string,arg2:string,arg3:string,arg4:str
 
 export function AddK8sResource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<string>;
 
+export function AddRemoteCodeWorkspace(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
+
+export function AnswerQuestion(arg1:string,arg2:string,arg3:Record<string, string>):Promise<void>;
+
 export function Approve(arg1:string,arg2:boolean):Promise<void>;
 
 export function ArchiveConversation(arg1:string):Promise<void>;
 
 export function Ask(arg1:string,arg2:string):Promise<void>;
 
+export function AskWithExecutions(arg1:string,arg2:string,arg3:Array<number>,arg4:Array<main.ImageAttachment>):Promise<void>;
+
 export function AskWithImages(arg1:string,arg2:string,arg3:Array<main.ImageAttachment>):Promise<void>;
+
+export function AuthorizeRemoteCodeWorkspace(arg1:string,arg2:boolean):Promise<string>;
 
 export function AuthorizeResource(arg1:string,arg2:boolean):Promise<void>;
 
 export function BindConversationProject(arg1:string,arg2:string):Promise<string>;
 
+export function BindConversationRemoteCodeWorkspace(arg1:string,arg2:string):Promise<string>;
+
+export function CloseTaskTerminal(arg1:string):Promise<void>;
+
+export function CloseTerminal(arg1:string):Promise<void>;
+
 export function CreateConversation(arg1:string):Promise<string>;
 
 export function CurrentLake():Promise<string>;
+
+export function DeclineProposedCommand(arg1:string):Promise<void>;
 
 export function DeleteMemory(arg1:string):Promise<string>;
 
@@ -35,6 +51,10 @@ export function GetMemory():Promise<string>;
 export function GetPermissions():Promise<string>;
 
 export function GetWorkflowRun(arg1:string):Promise<string>;
+
+export function GitDiff(arg1:string,arg2:string):Promise<string>;
+
+export function GitOverview(arg1:string):Promise<string>;
 
 export function ListAllResources():Promise<string>;
 
@@ -50,21 +70,57 @@ export function ListLakes():Promise<string>;
 
 export function ListModels():Promise<string>;
 
+export function ListProjectFiles(arg1:string):Promise<string>;
+
+export function ListRemoteCodeFiles(arg1:string):Promise<string>;
+
+export function ListRemoteCodeWorkspaces():Promise<string>;
+
 export function ListResources(arg1:string):Promise<string>;
+
+export function ListSpecialistTasks():Promise<string>;
 
 export function ListWorkflowRuns(arg1:string):Promise<string>;
 
 export function ListWorkflows():Promise<string>;
 
+export function OpenTerminal(arg1:string):Promise<string>;
+
 export function PickCodeProjectDirectory():Promise<string>;
 
 export function PickKubeconfigFile():Promise<string>;
+
+export function PickPDFPreview():Promise<string>;
+
+export function PickVideoFrames(arg1:number):Promise<string>;
+
+export function ReadProjectFile(arg1:string,arg2:string):Promise<string>;
+
+export function ReadRemoteCodeFile(arg1:string,arg2:string):Promise<string>;
+
+export function ReformatResult(arg1:string,arg2:string):Promise<void>;
 
 export function RenameConversation(arg1:string,arg2:string):Promise<string>;
 
 export function RestoreConversation(arg1:string):Promise<void>;
 
+export function ResumeSpecialist(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
+
+export function ReturnCommandControl(arg1:string,arg2:number):Promise<void>;
+
+export function RunProposedCommand(arg1:string):Promise<string>;
+
+export function RunRemoteCodeCommand(arg1:string,arg2:string):Promise<string>;
+
+export function RunTaskCommand(arg1:string,arg2:string):Promise<string>;
+
+export function RunTerminal(arg1:string,arg2:string):Promise<string>;
+
 export function RunWorkflow(arg1:string,arg2:string,arg3:main.WorkflowRunRequest):Promise<void>;
+
+export function RunWorkflowV2(arg1:string,arg2:string,arg3:main.WorkflowV2Request):Promise<void>;
+
+export function SaveDownload(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function SetMemoryEnabled(arg1:boolean):Promise<string>;
 
@@ -80,6 +136,18 @@ export function StartConversation(arg1:string):Promise<void>;
 
 export function StopConversation():Promise<void>;
 
+export function TakeCommandControl(arg1:string):Promise<void>;
+
+export function TaskTerminalStatus(arg1:string):Promise<string>;
+
+export function UIAction(arg1:string,arg2:main.UIUserAction):Promise<void>;
+
 export function UseLake(arg1:string):Promise<void>;
 
 export function UseModel(arg1:string):Promise<void>;
+
+export function WorkflowLibrary(arg1:string):Promise<string>;
+
+export function WorkflowV2Manage(arg1:string):Promise<string>;
+
+export function WriteRemoteCodeFile(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;

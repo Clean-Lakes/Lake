@@ -4,7 +4,8 @@ import type { JsonValue } from "../../domain/json.js";
 import { object, text } from "../../domain/validation.js";
 import { FileVault } from "../vault.js";
 import { readModelConfig, validIdentifier } from "../config/files.js";
-import { flag, readInput, type Arguments } from "./arguments.js";
+import { readSecret } from "./secret-input.js";
+import { flag, type Arguments } from "./arguments.js";
 
 export async function modelCommand(context: LakeCLIContext, runtime: LakeRuntime, args: Arguments, root: string): Promise<JsonValue> {
   const action = args.positionals[1], config = await readModelConfig(root), providers = object(config.model_providers);
@@ -21,7 +22,7 @@ export async function modelCommand(context: LakeCLIContext, runtime: LakeRuntime
       if (action === "configure") await dispatch({ action: "model_use", model }); return null;
     }
     case "login": {
-      const provider = validIdentifier(flag(args, "provider", "mimo")), input = await readInput(context);
+      const provider = validIdentifier(flag(args, "provider", "mimo")), input = await readSecret(context,"API Key");
       try {
         const value = input.toString("utf8").trim();
         if (!value || value.length > 65536 || /\s/u.test(value)) throw new Error("API Key 不能为空、过长或含空白");

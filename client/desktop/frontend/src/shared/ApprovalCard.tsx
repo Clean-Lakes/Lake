@@ -8,6 +8,7 @@ const titles: Record<string, string> = {
   'code-restore': '请求恢复代码检查点', 'code-run': '请求执行本地命令',
   mcp: '请求调用 MCP 工具', hook: '请求执行工作区 Hook',
   workflow: '请求保存或运行工作流',
+  native: 'ZCode 请求执行工具',
 }
 
 export function ApprovalCard({ approval, onDecision }: { approval: ApprovalView; onDecision?: (allow: boolean) => void }) {

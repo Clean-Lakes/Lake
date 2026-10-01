@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FileVault } from "../dist/adapters/vault.js";
+import { createAgentHost } from "../dist/adapters/agent/host.js";
 import { LakeSettings } from "../dist/adapters/config/settings.js";
 
 test("model catalog and MCP secrets preserve old settings shapes without leaking credentials", async () => {
@@ -23,4 +24,13 @@ test("model catalog and MCP secrets preserve old settings shapes without leaking
     assert.equal(await vault.has("mcp", "fixture-mcp"), false);
     await assert.rejects(settings.request({ action: "model_save", model: "bad", provider: "bad", base_url: "http://example.invalid" }));
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("MCP connection test uses the native adapter and private headers",async()=>{
+ const root=await mkdtemp(join(tmpdir(),"lake-native-mcp-")), vault=new FileVault(root),settings=new LakeSettings(root,vault);
+ const host=await createAgentHost({tools:[{name:"fixture_tool",description:"fixture",inputSchema:{type:"object",properties:{}},execute:async()=>({fixture:true})}],apiKey:Buffer.from("synthetic-key"),provider:{},signal:new AbortController().signal});
+ try {await settings.request({action:"mcp_save",server:{name:"fixture",transport:"http",url:host.url+"/mcp",headers:{Authorization:"Bearer "+host.token},enabled:true}});
+ assert.deepEqual((await settings.request({action:"mcp_test",name:"fixture"})).tools,["fixture_tool"]);
+ assert(!(await readFile(join(root,"settings.json"),"utf8")).includes(host.token));
+ }finally{await host.close();await rm(root,{recursive:true,force:true});}
 });

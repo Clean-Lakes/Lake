@@ -99,7 +99,7 @@ export function waitForClose(stream: StdioStream): Promise<void> {
       stderrText += chunk.toString();
     });
 
-    stream.onClose((code) => {
+    stream.onClose((code: number) => {
       // 之前只等待 close 不校验退出码，远端命令失败会被当成成功继续执行。
       // 这会导致部署链路把失败写成“已完成”（甚至继续写 version），形成假成功状态。
       if (code !== 0) {

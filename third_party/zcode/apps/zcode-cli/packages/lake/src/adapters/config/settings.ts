@@ -2,6 +2,7 @@ import { join } from "node:path";
 import type { JsonValue } from "../../domain/json.js";
 import { hasControl, integer, name, object, text, type Params } from "../../domain/validation.js";
 import type { SettingsPort } from "../../app/ports.js";
+import { testNativeMCP } from "../native/mcp.js";
 import { FileVault } from "../vault.js";
 import { atomicFile, readModelConfig, readSettings, saveModelConfig, secureURL, validIdentifier } from "./files.js";
 
@@ -11,6 +12,7 @@ export class LakeSettings implements SettingsPort {
     const settings = await readSettings(this.root), config = await readModelConfig(this.root);
     const action = text(p, "action", "get"), catalog = object(config.model_catalog), providers = object(config.model_providers);
     switch (action) {
+      case "mcp_test": return testNativeMCP(this.root,this.vault,text(p,"name"));
       case "get": {
         const models = await Promise.all(Object.entries(catalog).sort(([a], [b]) => a.localeCompare(b)).map(async ([model, provider]) => {
           const spec = object(providers[String(provider)]);

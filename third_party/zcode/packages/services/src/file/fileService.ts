@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { createNodeFileSystemAdapter } from "@zcode/adapters/fs";
 /* eslint-disable max-lines */
 import type { Dirent } from "node:fs";
 import { mkdir, open, readFile, readdir, realpath, stat } from "node:fs/promises";
@@ -421,6 +423,14 @@ export function createFileService(options: CreateFileServiceOptions = {}): IFile
           exists: await checkFileExists(path),
         })),
       );
+    },
+    async writeTextFile(params: { path: string; content: string; expectedSha256: string }) {
+      const fs = createNodeFileSystemAdapter();
+      if (!/^[a-f0-9]{64}$/u.test(params.expectedSha256) || Buffer.byteLength(params.content) > 65536) throw new Error("Invalid file revision or content");
+      const current = await fs.readTextFile({path:params.path});
+      if (createHash("sha256").update(current.content).digest("hex") !== params.expectedSha256 || !current.revision) throw new Error("File changed since it was read");
+      await fs.writeTextFile({path:params.path,content:params.content,expectedRevision:current.revision,atomic:true});
+      return {sha256:createHash("sha256").update(params.content).digest("hex")};
     },
     async resolvePath(params: { path: string }): Promise<string> {
       // 远程 workspace 可能通过符号链接别名输入（/dev vs /home/dev）。

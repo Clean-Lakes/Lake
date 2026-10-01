@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/cloudwego/eino/lake/media"
-	"github.com/cloudwego/eino/lake/store"
+	"LakeDesktop/internal/media"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -22,12 +21,9 @@ func (a *App) PickVideoFrames(count int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	images := make([]store.ImageAttachment, 0, len(frames))
+	images := make([]ImageAttachment, 0, len(frames))
 	for _, frame := range frames {
-		images = append(images, store.ImageAttachment{Name: fmt.Sprintf("%s · %.1f 秒", filepath.Base(path), frame.AtSeconds), MIMEType: "image/jpeg", Data: base64.StdEncoding.EncodeToString(frame.JPEG)})
-	}
-	if err := store.ValidateImages(images); err != nil {
-		return "", err
+		images = append(images, ImageAttachment{Name: fmt.Sprintf("%s · %.1f 秒", filepath.Base(path), frame.AtSeconds), MIMEType: "image/jpeg", Data: base64.StdEncoding.EncodeToString(frame.JPEG)})
 	}
 	data, err := json.Marshal(images)
 	return string(data), err
@@ -42,16 +38,13 @@ func (a *App) PickPDFPreview() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	image := store.ImageAttachment{Name: filepath.Base(path) + " · 第 1 页", MIMEType: "image/jpeg", Data: base64.StdEncoding.EncodeToString(preview.JPEG)}
-	if err := store.ValidateImages([]store.ImageAttachment{image}); err != nil {
-		return "", err
-	}
+	image := ImageAttachment{Name: filepath.Base(path) + " · 第 1 页", MIMEType: "image/jpeg", Data: base64.StdEncoding.EncodeToString(preview.JPEG)}
 	data, err := json.Marshal(struct {
-		Name      string                `json:"name"`
-		Pages     int                   `json:"pages"`
-		Text      string                `json:"text"`
-		Truncated bool                  `json:"truncated"`
-		Image     store.ImageAttachment `json:"image"`
+		Name      string          `json:"name"`
+		Pages     int             `json:"pages"`
+		Text      string          `json:"text"`
+		Truncated bool            `json:"truncated"`
+		Image     ImageAttachment `json:"image"`
 	}{filepath.Base(path), preview.Pages, preview.Text, preview.Truncated, image})
 	return string(data), err
 }

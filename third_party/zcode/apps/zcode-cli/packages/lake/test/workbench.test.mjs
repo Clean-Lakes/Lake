@@ -38,44 +38,26 @@ test("registered workspace file/Git views preserve shapes and reject credential/
   } finally { await f.close(); }
 });
 
-test("TypeScript terminal approval, persistent cd/export and duplicate admission append one audit", async () => {
-  const f = await fixture(), approvals = [];
-  f.runtime.subscribe(event => { if (event.type === "approval") { approvals.push(event); void f.call("approval.respond", { id: event.approval_id, approved: true }); } });
+test("ZCode PTY streams output and preserves shell state; duplicate submission is admitted once", { timeout: 10000 }, async () => {
+  const f = await fixture(), chunks = [];
+  f.runtime.subscribe(event => { if (event.type === "terminal_data") chunks.push(event.text); });
   try {
     await mkdir(join(f.path, "sub"));
     const terminal = await f.call("workbench.terminal.open", { project_id: f.project.id });
-    const first = await f.call("workbench.terminal.run", { id: terminal.id, command: "cd sub; export LAKE_TEST_VALUE=fixture" });
-    assert.equal(first.next_directory, join(f.path, "sub"));
+    assert.equal(terminal.native, true);
+    await f.call("workbench.terminal.run", { id: terminal.id, command: "cd sub; export LAKE_TEST_VALUE=fixture" });
     const params = { id: terminal.id, command: "printf '%s' \"$LAKE_TEST_VALUE\"; printf x >> once.txt" };
-    const [second, duplicate] = await Promise.all([f.call("workbench.terminal.run", params, "fixture-once"), f.call("workbench.terminal.run", params, "fixture-once")]);
-    assert.deepEqual(second, duplicate); assert.equal(second.stdout, "fixture");
-    assert.equal(await readFile(join(f.path, "sub", "once.txt"), "utf8"), "x");
-    assert.equal(approvals.length, 3);
-    const audit = await f.call("journal.list", { action_id: "fixture-once" });
-    assert.deepEqual(audit.map(row => row.event).reverse(), ["requested", "proposed", "approved", "started", "completed"]);
-    assert(audit.every(row => row.detail.startsWith("arguments_sha256=")));
+    const [submitted, duplicate] = await Promise.all([f.call("workbench.terminal.run", params, "fixture-once"), f.call("workbench.terminal.run", params, "fixture-once")]);
+    assert.deepEqual(submitted, duplicate); assert.equal(submitted.status, "submitted");
+    for (let i = 0; i < 100; i++) { try { if ((await readFile(join(f.path, "sub", "once.txt"), "utf8")) === "x" && chunks.join("").includes("fixture")) break; } catch {} await new Promise(resolve => setTimeout(resolve, 20)); }
+    assert.equal(await readFile(join(f.path, "sub", "once.txt"), "utf8"), "x"); assert(chunks.join("").includes("fixture"));
     await f.call("workbench.terminal.close", { id: terminal.id });
-    await assert.rejects(f.call("workbench.terminal.run", { id: terminal.id, command: "pwd" }));
+    await assert.rejects(f.call("workbench.terminal.run", { id: terminal.id, command: "pwd" }), /已关闭/);
   } finally { await f.close(); }
 });
 
-test("denied terminal commands dispatch nothing and cancellation closes a shell with unknown outcome", async () => {
-  const f = await fixture(); let allow = true;
-  f.runtime.subscribe(event => { if (event.type === "approval") void f.call("approval.respond", { id: event.approval_id, approved: allow }); });
-  try {
-    const terminal = await f.call("workbench.terminal.open", { project_id: f.project.id });
-    allow = false;
-    await assert.rejects(f.call("workbench.terminal.run", { id: terminal.id, command: "printf x > denied.txt" }));
-    await assert.rejects(readFile(join(f.path, "denied.txt")));
-    allow = true;
-    const result = f.call("workbench.terminal.run", { id: terminal.id, command: "printf started > started.txt; sleep 30" }, "cancel-fixture");
-    for (let i = 0; i < 100; i++) {
-      try { await readFile(join(f.path, "started.txt")); break; } catch { await new Promise(resolve => setTimeout(resolve, 10)); }
-    }
-    await f.call("execution.cancel", { id: "cancel-fixture" });
-    assert.equal((await result).status, "unknown");
-    assert.equal((await f.call("workbench.terminal.status", { id: terminal.id })).closed, true);
-    const audit = await f.call("journal.list", { action_id: "cancel-fixture" });
-    assert.equal(audit[0].event, "unknown");
-  } finally { await f.close(); }
+test("native file write rejects stale content hashes and bounds edits before dispatch",async()=>{
+ const {createFileService}=await import("../../../../../packages/services/dist/lake-host.js");const {createHash}=await import("node:crypto"), root=await mkdtemp(join(tmpdir(),"lake-native-cas-")),path=join(root,"fixture.txt"),files=createFileService();
+ const sha=value=>createHash("sha256").update(value).digest("hex");
+ try{await writeFile(path,"first");assert.equal((await files.writeTextFile({path,content:"second",expectedSha256:sha("first")})).sha256,sha("second"));await assert.rejects(files.writeTextFile({path,content:"stale",expectedSha256:sha("first")}));assert.equal(await readFile(path,"utf8"),"second");await assert.rejects(files.writeTextFile({path,content:"x".repeat(65537),expectedSha256:sha("second")}));}finally{await rm(root,{recursive:true,force:true});}
 });

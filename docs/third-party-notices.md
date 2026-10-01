@@ -1,14 +1,14 @@
 # 第三方组件与许可
 
-Lake 在仓库内保留 Eino 的 [Apache License 2.0](../LICENSE-APACHE) 文本。以下是本次迁移直接使用或复制的组件，版本以 `go.mod`、`client/desktop/go.mod` 和两个前端的锁文件为准。
+Lake 在仓库内保留早期源码的 [Apache License 2.0](../LICENSE-APACHE) 文本。以下是本次迁移直接使用或复制的组件，版本以 `go.mod`、`client/desktop/go.mod` 和两个前端的锁文件为准。
 
 | 组件 | 用途 | 仓库内许可文本 |
 | --- | --- | --- |
-| [Eino](https://github.com/cloudwego/eino) | Go Agent 框架与本仓库底座 | [LICENSE-APACHE](../LICENSE-APACHE) |
+| [Eino](https://github.com/cloudwego/eino) | 已移除的早期框架；保留原始许可归属 | [LICENSE-APACHE](../LICENSE-APACHE) |
 | [ZCode CLI 0.16.9](https://github.com/zai-org/ZCode/tree/29628c9acdb81b703bbd4080c207a0e7ce5e276e) | 桌面主 Agent 的源码运行时 | [Apache-2.0 许可](../third_party/zcode/LICENSE)、[NOTICE](../third_party/zcode/NOTICE.md)、[依赖许可](../third_party/zcode/THIRD-PARTY-NOTICES.md) |
 | [Node.js 24.14.0](https://nodejs.org/) | 运行源码构建的 Agent | 固定 npm Node 发行包附带的 LICENSE，构建时复制到 zcode/NODE-LICENSE |
 | [Wails v2.15.0](https://github.com/wailsapp/wails) | macOS 桌面壳 | [Wails MIT 许可](licenses/wails-v2.15.0-LICENSE) |
-| [官方 Go MCP SDK v1.7.0](https://github.com/modelcontextprotocol/go-sdk) | MCP 客户端 | [SDK 原始许可文件](licenses/mcp-go-sdk-v1.7.0-LICENSE)；该版本文件说明 Apache-2.0/MIT 过渡安排 |
+| [历史 Go MCP SDK v1.7.0](https://github.com/modelcontextprotocol/go-sdk) | 已移除的历史依赖；保留许可 | [SDK 原始许可文件](licenses/mcp-go-sdk-v1.7.0-LICENSE)；该版本文件说明 Apache-2.0/MIT 过渡安排 |
 | [beUI](https://github.com/starc007/ui-components) | 桌面聊天组件的复制源码 | [beUI MIT 许可](../client/desktop/frontend/BEUI_LICENSE) |
 | [json-render core/react v0.21.0](https://github.com/vercel-labs/json-render) | 受组件目录约束的动态报告布局与 React 渲染 | [core Apache-2.0 许可](licenses/json-render-core-v0.21.0-LICENSE)；[react Apache-2.0 许可](licenses/json-render-react-v0.21.0-LICENSE) |
 | [A2UI React / Web Core v0.12.0](https://github.com/a2ui-project/a2ui) | 官方 v0.9.1 动态面板处理与 React 渲染 | [React Apache-2.0 许可](licenses/a2ui-react-v0.12.0-LICENSE)；[Web Core Apache-2.0 许可](licenses/a2ui-web-core-v0.12.0-LICENSE) |

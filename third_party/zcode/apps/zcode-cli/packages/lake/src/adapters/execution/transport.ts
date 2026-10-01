@@ -5,30 +5,19 @@ import { hasControl, integer, object, text, type Params } from "../../domain/val
 import type { ExecutionPort } from "../../app/ports.js";
 import { FileVault } from "../vault.js";
 import { runProcess } from "./process.js";
-import { WorkspaceAdapter } from "../workspace/adapter.js";
 import { InspectionTransport } from "./inspection.js";
-import { RemoteWorkspaceAdapter } from "../workspace/remote.js";
-import { LocalTerminal } from "../workspace/terminal.js";
-import { remotePrefix } from "../../domain/remote.js";
-import { shellQuote } from "../../domain/workspace.js";
+import { createNodeExecutionAdapter } from "@zcode/adapters/exec";
 
 export class OperationsTransport implements ExecutionPort {
-  private readonly workspaces = new WorkspaceAdapter();
+  private readonly native = createNodeExecutionAdapter();
   private readonly inspections: InspectionTransport;
-  private readonly remote = new RemoteWorkspaceAdapter((p, signal) => this.request("transport.ssh", p, signal), async (p, signal) => {
-    const args = await this.sshArgs(p), root = text(p, "root"), user = text(object(object(p.resource).ssh), "username");
-    signal.throwIfAborted();
-    const terminal = new LocalTerminal(root, { executable: "ssh", args: [...args, "sh -c " + shellQuote(remotePrefix(root) + "exec sh 3>&1")], user, remote: true });
-    const probe = await terminal.run("pwd -P", signal);
-    if (probe.status !== "completed" || String(probe.stdout).trim() !== root) { await terminal.close(); throw new Error("远程终端根目录验证失败"); }
-    return terminal;
-  });
   constructor(private readonly vault: FileVault) { this.inspections = new InspectionTransport(vault); }
   async request(method: string, p: Params, signal: AbortSignal): Promise<JsonValue> {
-    if (method.startsWith("workspace.")) return this.workspaces.request(method, p, signal);
-    if (method.startsWith("remote.")) return this.remote.request(method, p, signal);
     if (method === "transport.k8s" || method === "transport.database") return this.inspections.request(method, p, signal);
-    if (method === "transport.local") return runProcess(process.platform === "win32" ? "cmd.exe" : "/bin/sh", process.platform === "win32" ? ["/d", "/s", "/c", text(p, "command")] : ["-c", text(p, "command")], { cwd: text(p, "cwd"), signal, timeoutMS: integer(p, "timeout_ms", 120_000) });
+    if (method === "transport.local") {
+      const result = await this.native.run({ command: { mode: "shell", command: text(p, "command") }, cwd: text(p, "cwd"), timeoutMs: integer(p, "timeout_ms", 120_000), outputLimit: { maxInlineBytes: 64 * 1024, persistOutput: "none" } }, { signal });
+      return { status: result.status, stdout: result.stdout.text, stderr: result.stderr.text, exit_code: result.exitCode ?? -1, duration_ms: Math.round(result.durationMs), truncated: result.stdout.truncated || result.stderr.truncated };
+    }
     if (method !== "transport.ssh") throw new Error(`未知的执行传输 ${method}`);
     const args = await this.sshArgs(p);
     signal.throwIfAborted();
@@ -44,5 +33,5 @@ export class OperationsTransport implements ExecutionPort {
     const keyPath = await this.vault.referencePath(ref);
     return ["-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "IdentityAgent=none", "-o", "PasswordAuthentication=no", "-o", "StrictHostKeyChecking=yes", "-o", `UserKnownHostsFile=${join(homedir(), ".ssh", "known_hosts")}`, "-o", "ConnectTimeout=10", "-i", keyPath, "-p", String(integer(ssh, "port", 22)), `${username}@${host}`];
   }
-  async close(): Promise<void> { await this.workspaces.close(); await this.remote.close(); }
+  async close(): Promise<void> { await this.native.close?.(); }
 }

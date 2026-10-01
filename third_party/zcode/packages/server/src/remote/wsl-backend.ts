@@ -300,7 +300,8 @@ export class WSLBackend implements IRemoteBackend {
         finishError(error);
       };
       options.signal?.addEventListener("abort", abort, { once: true });
-      readStream.on("data", (chunk: Buffer) => {
+      readStream.on("data", (value: Buffer | string) => {
+          const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
         uploadedBytes += chunk.length;
         options.onProgress?.({ uploadedBytes, totalBytes });
       });

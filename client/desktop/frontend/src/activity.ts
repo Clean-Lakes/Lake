@@ -7,6 +7,8 @@ export type ToolActivity = { id: string; turnID: string; tool: string; kind: Act
 
 const kinds = new Set<ActivityKind>(['read', 'list', 'search', 'command', 'edit', 'create', 'delete', 'restore', 'checkpoint', 'browser', 'query', 'task', 'workflow', 'report', 'context', 'tool'])
 export function toolAction(name: string): { kind: ActivityKind; action: string } {
+  const native: Record<string, {kind: ActivityKind; action: string}> = {Bash:{kind:'command',action:'运行命令'},Read:{kind:'read',action:'读取文件'},Write:{kind:'create',action:'创建文件'},Edit:{kind:'edit',action:'编辑文件'},Grep:{kind:'search',action:'搜索代码'},Glob:{kind:'list',action:'列出文件'},Agent:{kind:'task',action:'委派 Agent'},Skill:{kind:'task',action:'使用 Skill'},AskUserQuestion:{kind:'query',action:'询问用户'}}
+  if (native[name]) return native[name]
   const definition = (catalog as Record<string, { kind: string; action: string }>)[name]
   return definition && kinds.has(definition.kind as ActivityKind) ? { kind: definition.kind as ActivityKind, action: definition.action } : { kind: 'tool', action: `调用 ${name}` }
 }
@@ -44,7 +46,7 @@ export function applyActivityEvent(messages: ChatMessage[], event: ConversationE
   if (event.kind !== 'tool_proposed' || index >= 0) return messages
   const name = text('tool_name')
   // Questions, specialists and MCP already have dedicated live cards.
-  if (!name.startsWith('lake_') || name === 'lake_ask_user' || name === 'lake_ssh_agent' || name === 'lake_code_agent' || name.startsWith('lake_specialist_')) return messages
+  if (!name || name === 'lake_ask_user' || name === 'mcp_tool' || name === 'ssh' || name === 'lake_ssh_agent' || name === 'lake_code_agent' || name.startsWith('lake_specialist_')) return messages
   const fallback = toolAction(name)
   const kind = text('activity_kind') as ActivityKind
   const action = text('activity_action')

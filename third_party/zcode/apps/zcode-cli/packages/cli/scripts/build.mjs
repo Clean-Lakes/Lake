@@ -11,7 +11,7 @@ const executableFileMode = 0o755;
 const packageJsonFile = "package.json";
 const rootPackageVersionError = "Root package.json must define a non-empty string version.";
 const desktopAgentBuildFlag = "--desktop-agent";
-export const resolveBuildExternal = () => ["@zcode/tui", "playwright-core", "koffi"];
+export const resolveBuildExternal = () => ["@zcode/tui", "playwright-core", "koffi", "node-pty"];
 
 export const readZodBuildVersion = async () => {
   const sharedPackage = JSON.parse(
@@ -196,8 +196,9 @@ export const resolveBuildAliases = ({
     rootDirectory,
     "../../packages/shared/src/zcodeEndpoint.ts",
   ),
+  "@zcode/shared/workspaceFileEntriesCodec": resolve(rootDirectory, "../../packages/shared/src/workspaceFileEntriesCodec.ts"),
+  "@zcode/shared/workspaceFileSearch": resolve(rootDirectory, "../../packages/shared/src/workspaceFileSearch.ts"),
   "@zcode/shared/node": resolve(rootDirectory, "../../packages/shared/src/node.ts"),
-  "@zcode/shared": resolve(rootDirectory, "../../packages/shared/src/index.ts"),
   "@zcode/core": resolve(cliDirectory, "../core/dist/index.js"),
 });
 
@@ -240,7 +241,7 @@ export const buildCli = async ({
     // koffi 会按当前平台动态 require 原生 `.node` 文件；内联会让 esbuild 遍历所有
     // 平台产物并直接报 "No loader is configured for .node"。运行时仍从依赖包加载，
     // SEA 资源由 build-sea 的 native asset 收集阶段单独处理。
-    external: resolveBuildExternal(),
+    external: [...resolveBuildExternal(), "typescript", "ssh2"],
     format: "cjs",
     // 桌面 app 集成只内置 zcode.cjs，旧 desktop-agent 构建复用 CLI 调试产物，
     // 未压缩且会留下指向未随包复制的 sourcemap。桌面 agent 模式压缩 JS，同时保留

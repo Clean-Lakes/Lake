@@ -91,7 +91,7 @@ export function resolveValue(value: Params, results: Map<string, JsonValue>, ite
     if (!results.has(text(reference, "node"))) throw new Error("被引用的节点尚未完成");
     resolved = results.get(text(reference, "node")) as JsonValue;
     for (const key of text(reference, "path").split("/").slice(1).map(part => part.replaceAll("~1", "/").replaceAll("~0", "~"))) {
-      if (resolved === null || typeof resolved !== "object" || !(key in resolved)) throw new Error("结果引用路径不存在");
+      if (["__proto__", "constructor", "prototype"].includes(key) || resolved === null || typeof resolved !== "object" || !Object.hasOwn(resolved, key) || (Array.isArray(resolved) && !/^(?:0|[1-9][0-9]*)$/u.test(key))) throw new Error("结果引用路径不存在");
       resolved = Array.isArray(resolved) ? resolved[Number(key)] : resolved[key];
     }
   } else resolved = value.literal;

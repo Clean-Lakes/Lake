@@ -3,6 +3,7 @@ import { integer, object, redact, text, type Params, type View } from "../../dom
 import { LakeDatabase, newID, timeView } from "./database.js";
 import { CatalogRepository } from "./catalog.js";
 import { checkedEvent } from "../../domain/events.js";
+import { checkedImages } from "../../domain/images.js";
 
 const CONVERSATION = `SELECT c.*,l.name lake,p.name project_name,p.path project_path,w.name remote_workspace_name,w.remote_root,r.spec remote_spec
 FROM conversation c JOIN lake l ON l.id=c.lake_id LEFT JOIN code_project p ON p.id=c.project_id LEFT JOIN code_workspace w ON w.id=c.remote_workspace_id LEFT JOIN resource r ON r.id=w.resource_id`;
@@ -65,10 +66,14 @@ export class HistoryRepository {
       }
       case "conversation.events": return this.events(id, integer(p, "after"), Math.min(1000, Math.max(1, integer(p, "limit", 500))));
       case "conversation.append_event": return this.append(id, text(p, "kind"), text(p, "actor", "agent"), p.payload ?? {}, text(p, "tool_call_id"));
+      case "conversation.append_events": {
+        if (!Array.isArray(p.events) || p.events.length > 16) throw new Error("事件批次数量无效");
+        return this.db.transaction(() => (p.events as JsonValue[]).map(value => { const event = object(value); return this.append(id, text(event, "kind"), "agent", event.payload ?? {}); }));
+      }
       case "conversation.begin_turn": {
         return this.db.transaction(() => {
-          const turn = newID(), prompt = text(p, "prompt"), now = Date.now();
-          this.db.run("INSERT INTO conversation_turn(id,conversation_id,prompt,images,created_at) VALUES(?,?,?,?,?)", turn, id, prompt, JSON.stringify(p.images ?? []), now);
+          const turn = newID(), prompt = redact(text(p, "prompt"), 100000), images = checkedImages(p.images ?? []), now = Date.now();
+          this.db.run("INSERT INTO conversation_turn(id,conversation_id,prompt,images,created_at) VALUES(?,?,?,?,?)", turn, id, prompt, JSON.stringify(images), now);
           const event = this.append(id, "user", "user", { preview: redact(prompt, 4000), truncated: prompt.length > 4000 }, "", turn);
           return { id: turn, event };
         });
@@ -76,7 +81,10 @@ export class HistoryRepository {
       case "conversation.finish_turn": {
         return this.db.transaction(() => {
           const turn = text(p, "turn_id"), answer = redact(text(p, "answer"), 2_000_000), error = redact(text(p, "error"));
-          if (!this.db.run("UPDATE conversation_turn SET answer=?,display=?,error=?,specialists=? WHERE id=? AND conversation_id=?", answer, text(p, "display"), error, JSON.stringify(p.specialists ?? []), turn, id)) throw new Error("轮次不属于此会话");
+          const display = text(p, "display"), specialists = p.specialists ?? [];
+          if (!Array.isArray(specialists) || specialists.length > 32 || JSON.stringify(specialists).length > 16384) throw new Error("专员结果摘要无效");
+          const safeDisplay = redact(display, 2_000_000);
+          if (!this.db.run("UPDATE conversation_turn SET answer=?,display=?,error=?,specialists=? WHERE id=? AND conversation_id=?", answer, safeDisplay, error, redact(JSON.stringify(specialists), 16384), turn, id)) throw new Error("轮次不属于此会话");
           return this.append(id, "assistant", "agent", { preview: redact(answer, 4000), truncated: answer.length > 4000 }, "", turn);
         });
       }

@@ -32,6 +32,7 @@ export interface IFileService {
   }>;
   createDefaultWorkspace(): Promise<{ path: string }>;
   createScratchWorkspace(params: { name: string }): Promise<{ path: string }>;
+  writeTextFile(params: { path: string; content: string; expectedSha256: string }): Promise<{ sha256: string }>;
   readTextFile(params: { path: string; offset?: number; length?: number }): Promise<FileTextSlice>;
   readMediaPreview(params: { path: string; maxBytes?: number }): Promise<FileMediaPreview>;
   /**

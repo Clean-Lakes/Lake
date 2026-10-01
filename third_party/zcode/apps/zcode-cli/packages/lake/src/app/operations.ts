@@ -9,7 +9,7 @@ export class OperationsService {
   respond(id: string, approved: boolean): void {
     this.approvals.respond(id, approved);
   }
-  async run(method: string, p: Params, id: string, signal: AbortSignal): Promise<JsonValue> {
+  async run(method: string, p: Params, id: string, signal: AbortSignal, consent?: () => boolean): Promise<JsonValue> {
     const resource = object(await this.ports.data.request("res.get", { resource: text(p, "resource") }));
     const ssh = method === "ops.read" || method === "ops.command", kube = method === "ops.k8s", database = method === "ops.database";
     if (!ssh && !kube && !database) throw new Error("未知的运维检查");
@@ -24,7 +24,7 @@ export class OperationsService {
     const silent = !ssh || (read ? policy.silent_ssh_read : policy.silent_ssh_command);
     if (!silent || p.require_approval === true) {
       await audit("proposed");
-      if (!(await this.approvals.request(id, { type: "approval", kind: ssh ? "ssh" : "read", path: target, command: body }, signal, text(p, "turn_id")))) { await audit("denied"); throw new Error("执行未获批准"); }
+      if (!(await (consent ? consent() : this.approvals.request(id, { type: "approval", kind: ssh ? "ssh" : "read", path: target, command: body }, signal, text(p, "turn_id"))))) { await audit("denied"); throw new Error("执行未获批准"); }
     }
     signal.throwIfAborted();
     const current = object(await this.ports.data.request("res.get", { resource: String(resource.id) }));

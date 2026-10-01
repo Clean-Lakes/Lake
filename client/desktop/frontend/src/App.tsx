@@ -28,7 +28,7 @@ type Resource = { id: string; lake: string; name: string; kind: string; env: str
 type ModelEntry = { name: string; provider: string }
 type PermissionPolicy = { silent_ssh_read: boolean; silent_ssh_command: boolean }
 type WorkflowProgress = { run_id: string; name: string; status: string; step_id?: string; step_name?: string; step_status?: string; completed: number; total: number; message?: string }
-type BridgeEvent = { ui?: unknown; activity?: ConversationEvent; report?: unknown; report_id?: string; proposal_id?: string; conversation_id?: string; after_sequence?: number; working_directory?: string; type: string; id?: string; model?: string; label?: string; text?: string; error?: string; path?: string; command?: string; kind?: string; workflow?: WorkflowProgress; specialist?: SpecialistCall; specialists?: SpecialistCall[]; tool_call_id?: string; mcp_server?: string; mcp_tool?: string; status?: string; question?: UserQuestionRequest; question_id?: string; answers?: Record<string, string> }
+type BridgeEvent = { ui?: unknown; activity?: ConversationEvent; report?: unknown; report_id?: string; proposal_id?: string; approval_id?: string; conversation_id?: string; after_sequence?: number; working_directory?: string; type: string; id?: string; model?: string; label?: string; text?: string; error?: string; path?: string; command?: string; kind?: string; workflow?: WorkflowProgress; specialist?: SpecialistCall; specialists?: SpecialistCall[]; tool_call_id?: string; mcp_server?: string; mcp_tool?: string; status?: string; question?: UserQuestionRequest; question_id?: string; answers?: Record<string, string> }
 type Conversation = { id: string; lake_id: string; lake: string; title: string; project_id?: string; project_name?: string; project_path?: string; remote_workspace_id?: string; remote_workspace_name?: string; remote_root?: string; remote_host?: string; remote_username?: string; remote_port?: number; created_at: string; updated_at: string }
 type CodeProject = { id: string; lake_id: string; lake: string; name: string; path: string }
 type RemoteCodeWorkspace = { id: string; lake_id: string; lake: string; resource_id: string; name: string; remote_root: string; authorized: boolean; host: string; port: number; username: string }
@@ -184,12 +184,14 @@ function App() {
   const modelAreaRef = useRef<HTMLDivElement>(null)
   const modelMenuRef = useRef<HTMLDivElement>(null)
   const activeID = useRef<string | null>(null)
+  const selectedConversation = useRef(activeConversationID)
+  selectedConversation.current = activeConversationID
   const uiAnchor = useRef<string | null>(null)
   const uiCompletion = useRef<{ id: string; resolve: () => void; reject: (error: Error) => void } | null>(null)
   const activityStartedAt = useRef(0)
   const booted = useRef(false)
   const questionSubmission = useRef<string | null>(null)
-  const pendingQuestion = messages.findLast(item => item.question?.status === 'pending' && item.question.turnID === activeID.current)?.question
+  const pendingQuestion = messages.findLast(item => item.question?.status === 'pending')?.question
 
   const allResources = Object.values(resourcesByLake).flat()
   const mentionSuggestions = mentionQuery ? allResources
@@ -344,13 +346,13 @@ function App() {
       else if (event.type === 'assistant_step' && event.id === activeID.current && event.text?.trim()) {
         setMessages(previous => [...previous, { id: crypto.randomUUID(), role: 'assistant', text: event.text!.trim() }])
       }
-      else if (event.type === 'question' && event.id === activeID.current && event.question) {
+      else if (event.type === 'question' && (event.id === activeID.current || event.conversation_id === selectedConversation.current) && event.question) {
         const question: QuestionView = { ...event.question, turnID: event.id, status: 'pending' }
         setMessages(previous => [...previous, { id: `question-${question.id}`, role: 'question', text: '', question }])
         questionSubmission.current = null; setQuestionSubmitting(false)
         setProgress('等待你回答问题，当前任务保留')
       }
-      else if (event.type === 'question_answered' && event.id === activeID.current) {
+      else if (event.type === 'question_answered' && (event.id === activeID.current || event.conversation_id === selectedConversation.current)) {
         setMessages(previous => previous.map(item => item.question && item.question.id === event.question_id ? { ...item, question: { ...item.question, status: 'answered', answers: event.answers, error: '' } } : item))
         questionSubmission.current = null; setQuestionSubmitting(false)
         setProgress('已收到回答，Lake Agent 正在继续当前任务')
@@ -368,7 +370,7 @@ function App() {
         setActivityStages(previous => previous.includes('工作流执行器正在运行') ? previous : [...previous, '工作流执行器正在运行'].slice(-12))
         setWorkflowProgress(previous => [...previous.filter(item => item.step_id !== event.workflow?.step_id || !item.step_id), event.workflow!])
       }
-      else if (event.type === 'approval' && event.id === activeID.current) { setApproval(event); const label = event.kind === 'ssh' ? '等待批准 SSH 命令' : event.kind === 'mcp' ? '等待批准 MCP 工具' : '等待批准代码操作'; setProgress(label); setActivityStages(previous => [...previous, label].slice(-12)) }
+      else if (event.type === 'approval' && (event.id === activeID.current || event.conversation_id === selectedConversation.current)) { setApproval(event); const label = event.kind === 'ssh' ? '等待批准 SSH 命令' : event.kind === 'mcp' ? '等待批准 MCP 工具' : '等待批准代码操作'; setProgress(label); setActivityStages(previous => [...previous, label].slice(-12)) }
       else if (event.type === 'result' && event.id === activeID.current) {
         if (uiCompletion.current?.id === event.id) { const pending = uiCompletion.current; uiCompletion.current = null; if (event.error) pending.reject(new Error(event.error)); else pending.resolve() }
         const result = splitStats(event.text ?? '')
@@ -498,8 +500,8 @@ function App() {
     if (!activeConversationID) throw new Error('请先选择任务会话')
     setCommandPending(true)
     try {
-      const record = JSON.parse(await api().RunTaskCommand(activeConversationID, command)) as ExecutionRecord
-      setMessages(previous => upsertExecution(previous, record))
+      const result = JSON.parse(await api().RunTaskCommand(activeConversationID, command)) as ExecutionRecord & { native?: boolean }
+      if (!result.native) setMessages(previous => upsertExecution(previous, result))
     } finally { setCommandPending(false) }
   }
   const commandAction = async (action: 'run' | 'take' | 'return' | 'decline') => {
@@ -584,11 +586,11 @@ function App() {
   }
 
   const sendQuestionAnswer = async (questionID: string, answers: Record<string, string>) => {
-    if (!activeID.current || !pendingQuestion || pendingQuestion.id !== questionID) throw new Error('此问题所属运行已结束')
+    if (!pendingQuestion?.turnID || pendingQuestion.id !== questionID) throw new Error('此问题所属运行已结束')
     if (questionSubmission.current) throw new Error('回答正在提交')
     questionSubmission.current = questionID; setQuestionSubmitting(true)
     setMessages(previous => previous.map(item => item.question && item.question.id === questionID ? { ...item, question: { ...item.question, error: '' } } : item))
-    try { await api().AnswerQuestion(activeID.current, questionID, answers) }
+    try { await api().AnswerQuestion(pendingQuestion.turnID!, questionID, answers) }
     catch (cause) { questionSubmission.current = null; setQuestionSubmitting(false); throw cause }
   }
 
@@ -987,10 +989,10 @@ function App() {
             <button onClick={() => ask('查看当前湖主机的 CPU 占用')}><Cpu size={16} />检查 CPU 占用<ArrowRight size={15} /></button>
             {(activeConversation?.project_id || activeConversation?.remote_workspace_id) && <button onClick={() => ask('分析这个代码项目的结构，并给出下一步实现建议')}><Code2 size={16} />分析代码项目<ArrowRight size={15} /></button>}
           </div></div>}
-          <ConversationMessages messages={messages} uiScope={activeConversationID ?? ''} busy={busy} onUIAction={ready && !commandPending ? sendUIAction : undefined} onReportRetry={!busy && !commandPending && ready ? runIDs => { setInputMode('ai'); void submitPrompt(`请重新整理上次检查结果，用图表和清单展示。只使用本会话已有数据${runIDs.length ? `，可读取以下已保存的运行记录：${runIDs.join('、')}` : ''}。不要重新运行工作流或执行任何命令，不做新的远端查询；缺失的数据请标为待确认。`, [], undefined, undefined, undefined, [], true) } : undefined} onQuestionAnswer={busy && ready ? sendQuestionAnswer : undefined} onExecutionQuote={quoteExecution} onCommandFill={hasWorkspace ? fillCommand : undefined} />
+          <ConversationMessages messages={messages} uiScope={activeConversationID ?? ''} busy={busy} onUIAction={ready && !commandPending ? sendUIAction : undefined} onReportRetry={!busy && !commandPending && ready ? runIDs => { setInputMode('ai'); void submitPrompt(`请重新整理上次检查结果，用图表和清单展示。只使用本会话已有数据${runIDs.length ? `，可读取以下已保存的运行记录：${runIDs.join('、')}` : ''}。不要重新运行工作流或执行任何命令，不做新的远端查询；缺失的数据请标为待确认。`, [], undefined, undefined, undefined, [], true) } : undefined} onQuestionAnswer={ready ? sendQuestionAnswer : undefined} onExecutionQuote={quoteExecution} onCommandFill={hasWorkspace ? fillCommand : undefined} />
           {busy && <div className="progress-card"><div className="progress-head"><LoaderCircle className="spin" size={16} /><strong>{progress || 'Lake Agent 正在处理'}</strong><span className="progress-elapsed">{activityElapsed} 秒</span><button aria-label={showProgress ? '收起执行阶段' : '展开执行阶段'} onClick={() => setShowProgress(!showProgress)}><ChevronDown className={showProgress ? 'open' : ''} size={15} /></button></div><AgentDisclosure open={showProgress}><ol className="activity-timeline">{activityStages.map((stage, index) => <li className={index === activityStages.length - 1 ? 'current' : 'done'} key={`${index}-${stage}`}>{index === activityStages.length - 1 ? <LoaderCircle className="spin" size={12} /> : <Check size={12} />}<span>{stage}</span></li>)}</ol>{workflowProgress.length > 0 && <div className="activity-workflow-count">工作流步骤 {Math.max(...workflowProgress.map(item => item.completed), 0)}/{Math.max(...workflowProgress.map(item => item.total), 0)}</div>}</AgentDisclosure></div>}
           {pendingCommand && <CommandProposalCard proposal={pendingCommand} canReturn={!commandPending && taskRecords.some(item => item.actor === 'user' && item.sequence > pendingCommand.afterSequence && item.status !== 'running')} onRun={() => void commandAction('run')} onTake={() => void commandAction('take')} onReturn={() => void commandAction('return')} onDecline={() => void commandAction('decline')} />}
-          {approval && <ApprovalCard approval={approval} onDecision={allow => { api().Approve(approval.id ?? '', allow); setApproval(null); setProgress(allow ? approval.kind === 'ssh' ? 'SSH 专员正在执行' : approval.kind === 'mcp' ? 'MCP 工具正在执行' : approval.kind === 'hook' ? '工作区 Hook 正在执行' : approval.kind === 'workflow' ? '工作流正在执行' : '代码专员正在执行' : '操作已拒绝') }} />}
+          {approval && <ApprovalCard approval={approval} onDecision={allow => { api().Approve(approval.approval_id ?? approval.id ?? '', allow); setApproval(null); setProgress(allow ? approval.kind === 'ssh' ? 'SSH 专员正在执行' : approval.kind === 'mcp' ? 'MCP 工具正在执行' : approval.kind === 'hook' ? '工作区 Hook 正在执行' : approval.kind === 'workflow' ? '工作流正在执行' : 'ZCode 正在执行' : '操作已拒绝') }} />}
         </div>
         <form className="composer" onSubmit={event => { event.preventDefault(); ask() }} onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }} onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void addImages(Array.from(event.dataTransfer.files)) } }}>
           <input ref={imageInputRef} className="image-file-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple onChange={event => { void addImages(Array.from(event.target.files ?? [])); event.target.value = '' }} />

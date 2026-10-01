@@ -477,6 +477,18 @@ importers:
 
   apps/zcode-cli/packages/lake:
     dependencies:
+      '@zcode/adapters':
+        specifier: workspace:*
+        version: link:../adapters
+      '@zcode/bootstrap':
+        specifier: workspace:*
+        version: link:../bootstrap
+      '@zcode/server':
+        specifier: workspace:*
+        version: link:../../../../packages/server
+      '@zcode/services':
+        specifier: workspace:*
+        version: link:../../../../packages/services
       mysql2:
         specifier: 3.15.3
         version: 3.15.3
@@ -488,11 +500,14 @@ importers:
         version: 1.6.1
     devDependencies:
       '@types/node':
-        specifier: ^24.0.0
-        version: 24.12.2
+        specifier: ^25.5.0
+        version: 25.6.0
       '@types/pg':
         specifier: 8.15.5
         version: 8.15.5
+      esbuild:
+        specifier: ^0.25.0
+        version: 0.25.12
       typescript:
         specifier: ^5.9.0
         version: 5.9.3
@@ -981,6 +996,9 @@ importers:
       '@larksuiteoapi/node-sdk':
         specifier: 1.64.0
         version: 1.64.0
+      '@zcode/adapters':
+        specifier: workspace:*
+        version: link:../../apps/zcode-cli/packages/adapters
       '@zcode/provider':
         specifier: workspace:*
         version: link:../provider

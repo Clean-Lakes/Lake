@@ -16,6 +16,8 @@ void main();
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   if (argv[0] === "lake") {
+    // Native service diagnostics cannot share Lake's structured stdout or expose credentials.
+    for (const method of ["log", "info", "warn", "error", "debug"] as const) console[method] = () => {};
     const { runLakeCLI } = await import("@zcode/lake");
     try { process.exitCode = await runLakeCLI({ argv: argv.slice(1), stdin: process.stdin, stdout: process.stdout, stderr: process.stderr }); }
     catch { process.stderr.write("Lake TypeScript runtime 启动失败\n"); process.exitCode = 1; }

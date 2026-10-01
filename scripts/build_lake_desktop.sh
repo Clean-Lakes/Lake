@@ -35,7 +35,6 @@ mkdir -p "$staging_dir/client/desktop" "$staging_dir/cmd/lake"
 rsync -a --exclude='/build/bin/' --exclude='/frontend/node_modules/' "$lake_repo_root/client/desktop/" "$staging_dir/client/desktop/"
 # Match repository layout for the JSON action catalog shared by Go and React.
 cp "$lake_repo_root/cmd/lake/activity_tools.json" "$staging_dir/cmd/lake/activity_tools.json"
-(cd "$staging_dir/client/desktop" && go mod edit -replace="github.com/cloudwego/eino=$lake_repo_root")
 (cd "$staging_dir/client/desktop" && "$wails_cli" build -clean)
 
 app_path="$staging_dir/client/desktop/build/bin/LakeDesktop.app"
@@ -46,7 +45,7 @@ cp -R "$lake_repo_root/bin/zcode" "$resource_path/zcode"
 mkdir -p "$resource_path/licenses"
 cp "$lake_repo_root/docs/third-party-notices.md" "$resource_path/third-party-notices.md"
 cp "$lake_repo_root/docs/licenses/"* "$resource_path/licenses/"
-cp "$lake_repo_root/LICENSE-APACHE" "$resource_path/licenses/eino-LICENSE-APACHE"
+cp "$lake_repo_root/LICENSE-APACHE" "$resource_path/licenses/lake-LICENSE-APACHE"
 cp "$lake_repo_root/client/desktop/frontend/BEUI_LICENSE" "$resource_path/licenses/beui-LICENSE"
 # Module-cache licenses may be read-only; the private staged copies need write
 # permission for xattr cleanup before the application is signed.

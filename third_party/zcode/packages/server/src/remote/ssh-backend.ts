@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- SSH backend 集中维护连接、exec、SFTP 上传和 fallback 进度链路；集中维护以避免拆分引入远端连接回归。 */
+import { connect as connectSocket } from "node:net";
 import { Client as SSHClient } from "ssh2";
 import type { ConnectConfig } from "ssh2";
 import { createReadStream } from "node:fs";
@@ -45,6 +46,7 @@ export interface SSHBackendOptions {
   privateKeyPassphrase?: string;
   password?: string;
   agent?: string;
+  hostVerifier?: ConnectConfig["hostVerifier"];
 }
 
 type SSHUploadFailureKind = "sftp-session" | "sftp-write" | "local-read" | "aborted";
@@ -98,6 +100,15 @@ export class SSHBackend implements IRemoteBackend {
   private disposed = false;
   private hasEverConnected = false;
   private disconnectReported = false;
+  private readonly loopbackForwards = new Map<number, number>();
+  private readonly onForwardConnection = (details: { destIP: string; destPort: number }, accept: () => NodeJS.ReadWriteStream, reject: () => void): void => {
+    const port = this.loopbackForwards.get(details.destPort);
+    if (details.destIP !== "127.0.0.1" || port === undefined) { reject(); return; }
+    const channel = accept(), socket = connectSocket({ host: "127.0.0.1", port });
+    socket.on("error", () => channel.end()); channel.on("error", () => socket.destroy());
+    channel.on("close", () => socket.destroy()); socket.on("close", () => channel.end());
+    channel.pipe(socket).pipe(channel);
+  };
   private readonly disconnectEmitter = new Emitter<RemoteDisconnectEvent>();
   readonly onDidDisconnect = this.disconnectEmitter.event;
 
@@ -128,6 +139,7 @@ export class SSHBackend implements IRemoteBackend {
     this.client.on("error", this.onClientError);
     this.client.on("close", this.onClientClose);
     this.client.on("end", this.onClientEnd);
+    this.client.on("tcp connection", this.onForwardConnection);
     this.config = buildSSHConnectConfig({
       host: options.host,
       port: options.port,
@@ -136,6 +148,7 @@ export class SSHBackend implements IRemoteBackend {
       passphrase: options.privateKeyPassphrase,
       password: options.password,
       agent: options.agent,
+      hostVerifier: options.hostVerifier,
     });
     if (resolveZCodeRuntimeEnv(process.env) === "development") {
       this.config.debug = (message: string) => {
@@ -162,6 +175,14 @@ export class SSHBackend implements IRemoteBackend {
         ) => void,
       );
     }
+  }
+
+  /** Expose a loopback-only native SSH forward for a desktop-owned model/tool gateway. */
+  async forwardLocal(port: number): Promise<{ port: number; dispose(): void }> {
+    await this.ensureConnected();
+    const remotePort = await new Promise<number>((resolve, reject) => this.client.forwardIn("127.0.0.1", 0, (error, allocated) => error ? reject(error) : resolve(allocated)));
+    this.loopbackForwards.set(remotePort, port);
+    return { port: remotePort, dispose: () => { if (this.loopbackForwards.delete(remotePort)) this.client.unforwardIn("127.0.0.1", remotePort, () => {}); } };
   }
 
   private assertNotDisposed(): void {
@@ -486,7 +507,8 @@ export class SSHBackend implements IRemoteBackend {
         }
         options?.signal?.addEventListener("abort", abortOnce, { once: true });
 
-        readStream.on("data", (chunk: Buffer) => {
+        readStream.on("data", (value: Buffer | string) => {
+          const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
           if (settled) {
             return;
           }
@@ -566,7 +588,8 @@ export class SSHBackend implements IRemoteBackend {
       options?.signal?.addEventListener("abort", abortOnce, { once: true });
 
       readStream.on("error", (error) => finishWithError(error));
-      readStream.on("data", (chunk: Buffer) => {
+      readStream.on("data", (value: Buffer | string) => {
+          const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
         transferredBytes += chunk.length;
         reportProgress(transferredBytes, false);
       });
@@ -606,6 +629,8 @@ export class SSHBackend implements IRemoteBackend {
     // client 只由当前 backend 持有，监听器会随 client 一起回收；此处优先保证退役阶段不崩溃。
     this.client.off("close", this.onClientClose);
     this.client.off("end", this.onClientEnd);
+    this.client.off("tcp connection", this.onForwardConnection);
+    this.loopbackForwards.clear();
     this.client.end();
     this.connected = false;
     this.disconnectEmitter.dispose();
