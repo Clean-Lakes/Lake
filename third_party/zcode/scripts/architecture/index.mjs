@@ -316,7 +316,7 @@ export async function updateBaseline({ cwd = process.cwd(), violations }) {
 
 export async function changedFilesFromGit(cwd = process.cwd()) {
   const [diff, untracked] = await Promise.all([
-    gitFileNames(cwd, ["diff", "--name-only", "-z", "HEAD"]),
+    gitFileNames(cwd, ["diff", "--relative", "--name-only", "-z", "HEAD"]),
     gitFileNames(cwd, ["ls-files", "--others", "--exclude-standard", "-z"]),
   ]);
   return [...new Set([...diff, ...untracked])];

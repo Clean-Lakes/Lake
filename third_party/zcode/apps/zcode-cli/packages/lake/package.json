@@ -1,0 +1,16 @@
+{
+  "name": "@zcode/lake",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./dist/contract.d.ts", "import": "./dist/contract.js" } },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --no-ignore src",
+    "test": "node --test test/*.test.mjs",
+    "clean": "node ../../scripts/clean-dist.mjs"
+  },
+  "dependencies": { "smol-toml": "1.6.1" },
+  "devDependencies": { "@types/node": "^24.0.0", "typescript": "^5.9.0" }
+}

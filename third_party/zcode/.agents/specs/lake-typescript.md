@@ -1,0 +1,27 @@
+# Lake TypeScript operations backend
+
+The `lake` managed module under `apps/zcode-cli/packages/lake/src` owns the entire Lake backend. The existing Wails/React frontend consumes the unchanged Lake desktop protocol. Go is a signed process launcher and native presentation boundary. It must not import a database, agent framework or operations service.
+
+## Ownership and command path
+
+`frontend/CLI → LakeRuntime → application command → typed adapter port → SQLite/vault/transport → journal + ordered event`
+
+LakeRuntime owns conversations, pending approvals, accepted command proposals, terminal ownership, cancellation and scheduler leases. SQLite is the sole durable data source. The desktop shell forwards commands and events without a second proposal queue or data cache. Runtime adapters alone access disk, network or processes. Domain validation has no IO. ZCode's native Agent executes model turns and calls Lake tools through the Lake adapter; no Eino fallback is permitted.
+
+## Compatibility
+
+Keep SQLite user_version 19 and the existing tables/JSON shapes and private file layouts. Port schema migrations 1–19, including version-8 event backfill, version-9/11 resource table rebuilds and version-17/18/19 column repairs. Back up a pre-existing older database privately before migration. Reject a future version. Existing journals stay append-only. Credentials remain under `~/.lake/secrets`; normal runtime never reads Keychain. A signed launcher may perform the explicit one-time legacy migration only.
+
+Lake CLI actions, settings payloads, NDJSON bridge events and every current frontend method remain compatible. Code project and remote workspace operations, workflows v1/v2 and library, schedules/grants, scripts/jobs, specialists/checkpoints, hooks/plugins/skills and conversation summaries must be TypeScript services before the migration is declared complete.
+
+## Authorization and time
+
+Freeze lake/resource/project identity at task admission. Read approval policy before dispatch; approval does not override resource authorization. Re-read target identity and authorization after approval and before credential access. A stale approval, cancelled turn, mismatched conversation or changed target cannot dispatch. Journal order is requested → proposed/approved or denied → started → completed/failed/unknown. Persist every accepted sequence before publishing it to the desktop stream.
+
+The runtime owns one AbortController per admitted execution and terminal lease. Commands have stable IDs and cannot be executed twice by duplicate frontend replies. A failed transport after dispatch is unknown; resuming a conversation never automatically reruns it. Schedule claims use transactional leases and version/hash-bound grants. Desktop receives a continuous ordered stream; replay uses the same SQLite conversation sequence and repairs gaps. Agent answers and command output are untrusted content and cannot grant execution authority.
+
+## Verification boundary
+
+Use synthetic legacy databases and credentials only. Assert schema preservation, secret permissions/redaction, approval revocation, cancellation, idempotency, event replay and complete frontend method coverage. Build the source CLI with Node 24.14.0 and pnpm 10.33.2, run architecture checks and root/CLI typecheck/lint, test the current frontend and build/sign the desktop launcher. Do not mark complete while any old backend still serves an operations action.
+
+The vendored source is nested in Lake's Git repository. Architecture changed-file discovery must request paths relative to its working directory so changed managed files are actually checked; paths outside the vendored root do not belong to this policy.
