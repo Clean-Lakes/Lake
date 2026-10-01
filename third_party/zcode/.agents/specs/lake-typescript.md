@@ -34,3 +34,19 @@ Remote workspaces use the public ZCode remote connection, SSH and service contra
 Use synthetic legacy databases and credentials only. Assert schema preservation, secret permissions/redaction, approval revocation, cancellation, idempotency, event replay and complete frontend method coverage. Build the source CLI with Node 24.14.0 and pnpm 10.33.2, run architecture checks and root/CLI typecheck/lint, test the current frontend and build/sign the desktop launcher. Do not mark complete while any old backend still serves an operations action.
 
 The vendored source is nested in Lake's Git repository. Architecture changed-file discovery must request paths relative to its working directory so changed managed files are actually checked; paths outside the vendored root do not belong to this policy.
+
+## Product identity and operations workflow authoring
+
+ZCode Protocol create/resume accept an optional bounded `productIdentity` (name and instructions). Native ContextBuilder owns its composition: change the product prefix and identity while retaining native security, tools, Skills, memory and compaction. Omitted identity preserves upstream ZCode behavior. Lake supplies LAKE identity on both create and cold resume. Greeting replies must not advertise globally discovered Skills or their servers as current-lake capabilities. Existing historical replies are not rewritten.
+
+The native Agent authors Lake operations definitions through `lake_workflow_save`, not through shell access to the database or the generic dynamic-workflow tools. Save/amend reuse WorkflowRepository validation, revisions and metadata journal. The current conversation injects the lake; literal resources must belong to the frozen conversation resource set. Saving only writes a definition and never dispatches inspections. Generic automation remains ZCode-owned.
+
+```mermaid
+flowchart LR
+  A[Native Agent] --> B[lake_workflow_save]
+  B --> C[WorkflowRepository validation and SQLite commit]
+  C --> D[Persisted workflow_saved event]
+  D --> E[Existing frontend refresh]
+```
+
+Native failed-turn error codes are translated to fixed, credential-free LAKE messages. Context exhaustion must say context exhaustion, retain completed operations, and never automatically rerun a partially executed task. Raw provider errors, stack traces and request bodies never enter the frontend. Test native model-request identity on create/resume, definition creation without execution, frozen-resource rejection, optimistic amendment, sidebar refresh and context-exceeded error translation.

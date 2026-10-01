@@ -25,16 +25,18 @@ test("source ZCode → TypeScript tool → approval → fixture host check → h
     response.writeHead(200, { "content-type": "text/event-stream" });
     const send = (type, value) => response.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...value })}\n\n`);
     send("message_start", { message: { id: `fixture-${requests.length}`, type: "message", role: "assistant", model: "fixture-model", content: [], stop_reason: null, usage: { input_tokens: 7, output_tokens: 0 } } });
-    if (requests.length === 1) {
-      send("content_block_start", { index: 0, content_block: { type: "tool_use", id: "fixture-call", name: "mcp__lake__lake_ssh_read", input: {} } });
-      send("content_block_delta", { index: 0, delta: { type: "input_json_delta", partial_json: JSON.stringify({ resource: "测试主机", check: "uptime" }) } });
+    if (requests.length <= 2) {
+      const name = requests.length === 1 ? "mcp__lake__lake_ssh_read" : "mcp__lake__lake_workflow_save";
+      const input = requests.length === 1 ? { resource: "测试主机", check: "uptime" } : { version: 2, spec: { version: 2, name: "fixture_CPU巡检", nodes: [{ id: "cpu", kind: "ssh_check", check: "cpu", target: { type: "string", literal: "测试主机" } }] } };
+      send("content_block_start", { index: 0, content_block: { type: "tool_use", id: `fixture-call-${requests.length}`, name, input: {} } });
+      send("content_block_delta", { index: 0, delta: { type: "input_json_delta", partial_json: JSON.stringify(input) } });
     } else {
       if (!JSON.stringify(payload.messages).includes("fixture uptime")) failures.push("approved result missing from next model input");
       send("content_block_start", { index: 0, content_block: { type: "text", text: "" } });
       send("content_block_delta", { index: 0, delta: { type: "text_delta", text: "fixture checked" } });
     }
     send("content_block_stop", { index: 0 });
-    send("message_delta", { delta: { stop_reason: requests.length === 1 ? "tool_use" : "end_turn", stop_sequence: null }, usage: { output_tokens: 3 } });
+    send("message_delta", { delta: { stop_reason: requests.length <= 2 ? "tool_use" : "end_turn", stop_sequence: null }, usage: { output_tokens: 3 } });
     send("message_stop", {}); response.end();
   });
   server.listen(0, "127.0.0.1"); await once(server, "listening");
@@ -51,13 +53,18 @@ test("source ZCode → TypeScript tool → approval → fixture host check → h
       events.push(event);
       if (event.type === "approval") void runtime.dispatch({ method: "approval.respond", params: { id: event.id, approved: true } });
     } });
-    const result = await runtime.dispatch({ method: "conversation.ask", id: "fixture-turn", params: { id: conversation.id, prompt: "检查测试主机的 uptime" } });
+    const result = await runtime.dispatch({ method: "conversation.ask", id: "fixture-turn", params: { id: conversation.id, prompt: "检查测试主机的 uptime，并创建 CPU 巡检工作流，只保存定义不执行 CPU 检查" } });
     assert.equal(result.answer, "fixture checked"); assert.deepEqual(failures, []);
     assert.equal(calls.length, 1); assert.equal(calls[0].params.command, "uptime");
     assert.equal(events.filter(event => event.type === "approval").length, 1);
     const history = await data.request("conversation.show", { id: conversation.id });
     assert.equal(history.turns.length, 1); assert.equal(history.turns[0].answer, "fixture checked");
     assert(history.events.some(event => event.kind === "tool_finished"));
+    const definitions = await data.request("workflow.v2.list", { lake: "测试湖" });
+    assert.equal(definitions.length, 1); assert.equal(definitions[0].spec.nodes[0].check, "cpu");
+    assert.equal((await data.request("workflow.v2.runs", { lake: "测试湖" })).length, 0);
+    assert(history.events.some(event => event.kind === "workflow_saved"));
+    assert(JSON.stringify(requests[2].messages).includes("fixture_CPU巡检"));
     assert.deepEqual((await data.request("journal.list", { run_id: "fixture-turn" })).reverse().map(row => row.event), ["requested", "proposed", "approved", "started", "completed"]);
   } finally {
     if (runtime) await runtime.close(); else data.close();

@@ -330,6 +330,7 @@ function App() {
       }
       else if (event.type === 'activity' && event.id === activeID.current && event.activity) {
         setMessages(previous => applyActivityEvent(previous, event.activity!, event.id!))
+        if (event.activity.kind === 'workflow_saved') refreshWorkflows().catch(cause => setError(String(cause)))
       }
       else if (event.type === 'progress' && event.id === activeID.current) {
         const label = event.label ?? '正在处理'

@@ -2,7 +2,7 @@
 // Identity Section Builder
 // ============================================================
 
-import type { ContextSection } from "../types.js";
+import type { ContextSection, ContextBuilderConfig } from "../types.js";
 import type { OutputStylePromptConfig } from "../types.js";
 import { estimateTokens } from "../utils.js";
 
@@ -29,18 +29,32 @@ export function buildHarnessBlock(): string {
   ].join("\n");
 }
 
-function buildIdentityPrompt(outputStyle?: OutputStylePromptConfig): string {
-  const intro = outputStyle
-    ? "You respond to the user according to the active Output Style below while using ZCode's tools and instructions."
-    : "You are an interactive ZCode agent that helps users with software engineering tasks.";
+function buildIdentityPrompt(
+  outputStyle?: OutputStylePromptConfig,
+  identity?: ContextBuilderConfig["productIdentity"],
+): string {
+  const intro = identity
+    ? `You are the ${identity.name} assistant for coding and operations tasks.`
+    : outputStyle
+      ? "You respond to the user according to the active Output Style below while using ZCode's tools and instructions."
+      : "You are an interactive ZCode agent that helps users with software engineering tasks.";
 
-  const identityLines = ["", intro, "", SECURITY_NOTICE].join("\n");
+  const identityLines = [
+    "",
+    intro,
+    ...(identity?.instructions ? [identity.instructions] : []),
+    "",
+    SECURITY_NOTICE,
+  ].join("\n");
 
   return [identityLines, "", buildHarnessBlock()].join("\n");
 }
 
-export function buildIdentitySection(outputStyle?: OutputStylePromptConfig): ContextSection {
-  const content = buildIdentityPrompt(outputStyle);
+export function buildIdentitySection(
+  outputStyle?: OutputStylePromptConfig,
+  identity?: ContextBuilderConfig["productIdentity"],
+): ContextSection {
+  const content = buildIdentityPrompt(outputStyle, identity);
 
   return {
     name: "Agent Identity",

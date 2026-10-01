@@ -57,6 +57,10 @@ test("native Bash and AskUserQuestion are available; native history survives col
     agent = new LakeZCodeAgent(root, vault, { cliPath: fileURLToPath(new URL("../../../../../../../bin/zcode/zcode.cjs", import.meta.url)), nodePath: process.execPath });
     const emit = event => { events.push(event); if (event.type === "approval") void agent.respond(event.approval_id, { approved: true }); if (event.type === "question") void agent.respond(event.question.id, { run_id: "first", answers: { q0: "Continue" } }); };
     assert.equal(await agent.run({ native_session_id: "fixture-owner", run_id: "first", content: "First fixture prompt" }, [], new AbortController().signal, emit), "first-native-answer");
+    const identity = JSON.stringify(requests[0].system);
+    assert(identity.includes("You are LAKE"));
+    assert(!identity.includes("You are ZCode, an interactive coding agent"));
+    assert(identity.includes("lake_workflow_save"));
     assert.match(await readFile(join(nativeProfiles, "lake-legacy_fixture.md"), "utf8"), /name: "legacy_fixture"/);
     assert(events.some(event=>event.type === "token" && event.text));
     const nativeNames = requests[0].tools.map(tool => tool.name);
@@ -76,6 +80,7 @@ test("native Bash and AskUserQuestion are available; native history survives col
     agent=new LakeZCodeAgent(root,vault,{cliPath:fileURLToPath(new URL("../../../../../../../bin/zcode/zcode.cjs",import.meta.url)),nodePath:process.execPath});
     await agent.run({native_session_id:"fixture-owner",run_id:"cold",content:"Cold fixture resume"},[],new AbortController().signal,emit);
     const cold=JSON.stringify(requests.find(request=>JSON.stringify(request.messages).includes("Cold fixture resume"))?.messages);assert(cold.includes("First fixture prompt"));assert(cold.includes("Second fixture prompt"));
+    assert(JSON.stringify(requests.at(-1).system).includes("You are LAKE"));
   } finally { await agent?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await rm(root, { recursive: true, force: true }); }
 });
 

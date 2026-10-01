@@ -92,25 +92,25 @@ export class ZCodeProtocol {
           if (message.error)
             pending.reject(
               new Error(
-                `ZCode 协议请求失败（${pending.method}，${String(object(message.error).code)}）`,
+                `LAKE 运行时请求失败（${pending.method}，${String(object(message.error).code)}）`,
               ),
             );
           else pending.resolve(message.result ?? null);
         } else if (message.method) onEvent(text(message, "method"), object(message.params));
       } catch {
-        this.fail(new Error("ZCode 返回了无效协议数据"));
+        this.fail(new Error("LAKE 运行时返回了无效协议数据"));
         this.child.kill("SIGTERM");
       }
     });
-    this.child.stdin.on("error", () => this.fail(new Error("ZCode 输入通道关闭")));
-    this.child.on("error", () => this.fail(new Error("无法启动 ZCode 源码运行时")));
+    this.child.stdin.on("error", () => this.fail(new Error("LAKE 运行时输入通道关闭")));
+    this.child.on("error", () => this.fail(new Error("无法启动 LAKE 运行时")));
     const abort = () => this.child.kill("SIGTERM");
     signal.addEventListener("abort", abort, { once: true });
     this.exit = new Promise((resolve) =>
       this.child.on("close", () => {
         signal.removeEventListener("abort", abort);
         lines.close();
-        this.fail(new Error("ZCode 运行时已退出"));
+        this.fail(new Error("LAKE 运行时已退出"));
         onEvent("runtime.closed", {});
         resolve();
       }),
@@ -122,7 +122,7 @@ export class ZCodeProtocol {
       id = String(number);
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.fail(new Error(`ZCode 协议响应超时（${method}）`));
+        this.fail(new Error(`LAKE 运行时响应超时（${method}）`));
         this.child.kill("SIGTERM");
       }, 15000);
       timer.unref();

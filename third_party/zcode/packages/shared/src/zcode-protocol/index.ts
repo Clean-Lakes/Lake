@@ -1556,6 +1556,11 @@ export const zcodeSessionSubagentsResultSchema = z
   })
   .strict();
 export type ZCodeSessionSubagentsResult = z.infer<typeof zcodeSessionSubagentsResultSchema>;
+const zcodeProductIdentitySchema = z.object({
+  name: z.string().trim().min(1).max(64),
+  instructions: z.string().max(8000).optional(),
+}).strict();
+
 export const zcodeSessionCreateParamsSchema = z
   .object({
     sessionId: nonEmptyString.optional(),
@@ -1570,6 +1575,7 @@ export const zcodeSessionCreateParamsSchema = z
     toolAllowlist: z.array(nonEmptyString).optional(),
     toolDenylist: z.array(nonEmptyString).optional(),
     importedHistory: zcodeSessionImportHistorySchema.optional(),
+    productIdentity: zcodeProductIdentitySchema.optional(),
     // host 只按本地服务装配/远程/端形态决定是否注册工具，不读取灰度；
     // 缺省不下发 = 不注册；灰度与套餐准入在实际创建的 Host handler 校验。
     offPeakToolEnabled: z.boolean().optional(),
@@ -1587,6 +1593,7 @@ export const zcodeSessionResumeParamsSchema = z
     // 旧 session 尚无 runtime/model_selection entry 时，由同 task 的索引元数据提供迁移 hint。
     thoughtLevel: nonEmptyString.optional(),
     mcpServers: z.array(zcodeProtocolMcpServerSchema).optional(),
+    productIdentity: zcodeProductIdentitySchema.optional(),
     // 冷恢复重建 runtime 时必须沿用 create 的工具面约束（否则会绕过 allow/deny，尤其 CUA 会话）。
     toolAllowlist: z.array(nonEmptyString).optional(),
     toolDenylist: z.array(nonEmptyString).optional(),

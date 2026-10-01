@@ -72,7 +72,7 @@ export class NativeInteractions {
         : [
             {
               question: text(input, "prompt"),
-              header: text(input, "toolName", "ZCode"),
+              header: text(input, "toolName", "LAKE"),
               options: [],
             },
           ];
