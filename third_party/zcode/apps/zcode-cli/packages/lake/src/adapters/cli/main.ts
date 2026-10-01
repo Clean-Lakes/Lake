@@ -7,6 +7,8 @@ import { createLakeRuntime } from "../runtime.js";
 import { parseArguments, flag, readRequest } from "./arguments.js";
 import { runBridge } from "./bridge.js";
 import { resourceCommand } from "./resources.js";
+import { modelCommand } from "./models.js";
+import { workflowCommand } from "./workflows.js";
 
 export async function runLakeCLI(context: LakeCLIContext): Promise<number> {
   const args = parseArguments(context.argv), [command, action, ...values] = args.positionals;
@@ -22,6 +24,8 @@ export async function runLakeCLI(context: LakeCLIContext): Promise<number> {
       case "use": result = await dispatch("lake.use", { lake: action }); break;
       case "settings": result = await dispatch("settings", await readRequest(context)); break;
       case "res": result = await resourceCommand(context, runtime, args, root); break;
+      case "model": result = await modelCommand(context, runtime, args, root); break;
+      case "workflow": case "workflow-v2": result = await workflowCommand(context, runtime, args); break;
       case "rpc": {
         const request = await readRequest(context); result = await dispatch(text(request, "method"), object(request.params)); break;
       }
@@ -40,7 +44,14 @@ export async function runLakeCLI(context: LakeCLIContext): Promise<number> {
         result = await dispatch("memory.show", p); break;
       }
       case "code": {
-        if (action === "list") result = await dispatch("code.list");
+        if (action === "remote") {
+          const [operation, first, second] = values;
+          if (operation === "list") result = await dispatch("code.remote.list");
+          else if (operation === "add") result = await dispatch("code.remote.add", { lake: first, name: second, resource: flag(args, "resource"), root: flag(args, "root") });
+          else if (operation === "authz") result = await dispatch("code.remote.authorize", { id: first, enabled: second === "on" });
+          else if (operation === "bind") { await dispatch("code.remote.bind", { id: first, workspace_id: second === "none" ? "" : second }); result = await dispatch("conversation.get", { id: first }); }
+          else throw new Error("未知的远程代码工作区操作");
+        } else if (action === "list") result = await dispatch("code.list");
         else if (action === "add") result = await dispatch("code.add", { lake: values[0], name: values[1], path: flag(args, "path") });
         else if (action === "bind") { await dispatch("code.bind", { id: values[0], project_id: values[1] === "none" ? "" : values[1] }); result = await dispatch("conversation.get", { id: values[0] }); }
         else throw new Error("未知的代码项目操作"); break;
