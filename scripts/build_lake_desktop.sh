@@ -18,6 +18,7 @@ if [ "$(uname -s)" != Darwin ]; then
 fi
 
 scripts/build_lake.sh
+npm exec --yes --package=node@24.14.0 -- node scripts/build_zcode_agent.mjs
 swift scripts/generate_lake_icon.swift client/desktop/build/appicon.png
 
 wails_cli="$(go env GOPATH)/bin/wails"
@@ -41,6 +42,7 @@ app_path="$staging_dir/client/desktop/build/bin/LakeDesktop.app"
 resource_path="$app_path/Contents/Resources"
 mkdir -p "$resource_path"
 cp "$lake_repo_root/bin/lake" "$resource_path/lake"
+cp -R "$lake_repo_root/bin/zcode" "$resource_path/zcode"
 mkdir -p "$resource_path/licenses"
 cp "$lake_repo_root/docs/third-party-notices.md" "$resource_path/third-party-notices.md"
 cp "$lake_repo_root/docs/licenses/"* "$resource_path/licenses/"
@@ -52,6 +54,20 @@ chmod u+w "$resource_path/licenses/"*
 xattr -cr "$app_path"
 
 lake_identity='Lake Local Development Code Signing'
+# Sign the bundled Node and Mach-O native modules with the same persistent
+# identity before signing the outer app. Other platform assets are data files.
+python3 - "$resource_path/zcode" "$lake_identity" <<'PY'
+import pathlib,subprocess,sys
+root=pathlib.Path(sys.argv[1])
+for path in sorted(root.rglob('*')):
+    if not path.is_file():
+        continue
+    if path.name != 'node' and path.suffix not in ('.node','.dylib'):
+        continue
+    kind=subprocess.check_output(['file','-b',str(path)],text=True)
+    if 'Mach-O' in kind:
+        subprocess.run(['codesign','--force','--timestamp=none','--sign',sys.argv[2],str(path)],check=True)
+PY
 codesign --force --timestamp=none --sign "$lake_identity" \
   --identifier com.cleanlakes.lake "$resource_path/lake"
 codesign --force --timestamp=none --sign "$lake_identity" \

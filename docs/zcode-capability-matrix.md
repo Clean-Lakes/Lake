@@ -1,6 +1,6 @@
 # ZCode → Lake 能力矩阵
 
-基线：ZCode [`29628c9acdb81b703bbd4080c207a0e7ce5e276e`](https://github.com/zai-org/ZCode/tree/29628c9acdb81b703bbd4080c207a0e7ce5e276e)，Lake 工作区 2026-10-01。实施目标与任务编号见[迁移方案](../plan/architecture-zcode-lake-1.md)。本表记录能力差距，不代表逐文件移植。Lake 保持 Go/Eino 单运行时；ZCode 的 `subagent` 对应 Lake 的“专员”。
+基线：ZCode [`29628c9acdb81b703bbd4080c207a0e7ce5e276e`](https://github.com/zai-org/ZCode/tree/29628c9acdb81b703bbd4080c207a0e7ce5e276e)，Lake 工作区 2026-10-01。下表记录此前[Go 能力迁移方案](../plan/architecture-zcode-lake-1.md)的结果。用户随后要求引入开源 ZCode，当前分支桌面主 Agent 改用源码运行时，前端继续使用 LAKE；更新契约见 [ZCode 接入](zcode-runtime.md)。既有 Go 专员保留，ZCode 的 `subagent` 对应 Lake 的“专员”。
 
 状态定义：**已覆盖**表示 Lake 已有可用入口；**待建**表示方案已安排但尚未按验收项完成；**明确排除**表示本轮不迁移。已有能力的扩展仍单列为待建，以免把部分覆盖误记为完成。
 
@@ -35,7 +35,8 @@
 | PDF/视频附件工作台 | macOS PDFKit 提取 PDF 首页 JPEG 与最多 12 KiB 提交文本；AVFoundation 提取最多 4 张、最长边 768 像素的 JPEG 视频关键帧；桌面发送后两入口均可回看/下载预览，专员和工作流结果摘要可下载 JSON，Web 展示工作流时间线 | PDF/视频预览与有界视频帧提取；R3 | 已覆盖（派生预览） | 原视频/PDF 文件不进数据库或模型；只保存有界派生预览；运行位置、待审批和模型状态可见 | `apps/zcode-cli/packages/` |
 | Z.ai 账号、订阅、遥测、云分享 | Lake 无此服务 | 保持本地单用户产品边界 | 明确排除 | 不出现云账号或计费依赖 | ZCode 产品服务 |
 | Computer Use 占位包 | Lake 无 | 不作为可迁移现成功能 | 明确排除 | 不列入发布门槛 | ZCode `NOTICE.md` |
-| Node/TypeScript Agent 与 Electron 壳 | Lake 使用 Go/Eino、Wails | 不引入第二套 Agent 运行时 | 明确排除 | 发布包无 Node Agent 进程 | ZCode 桌面/CLI 架构 |
+| Node/TypeScript 主 Agent | 源码构建的 ZCode app-server；LAKE 保持审批、工具、凭据及会话所有权 | 现有 bridge v1 接入；见新运行时契约 | 已覆盖（模拟服务联调） | 批准/拒绝/撤权、取消与旧前端事件通过真实源码 Agent | ZCode CLI 架构 |
+| ZCode Electron 壳与前端 | Lake 继续使用 Wails/React | 保留当前前端 | 明确排除 | 前端源码未替换，桌面包只打包 CLI 运行时 | ZCode 桌面架构 |
 
 每项由对应任务的测试与发布门槛确认后才改为“已覆盖”；不能仅凭文件存在改变状态。
 

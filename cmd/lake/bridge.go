@@ -194,6 +194,10 @@ func runBridge(ctx context.Context, root string, input io.Reader, out io.Writer)
 }
 
 func runBridgeConversation(ctx context.Context, root, conversationID string, input io.Reader, out io.Writer) error {
+	return runBridgeConversationRuntime(ctx, root, conversationID, input, out, "eino")
+}
+
+func runBridgeConversationRuntime(ctx context.Context, root, conversationID string, input io.Reader, out io.Writer, runtimeName string) error {
 	uiSession := agent.NewUISession()
 	var conversationStore *store.Store
 	var initialTurns []store.ConversationTurn
@@ -447,8 +451,9 @@ func runBridgeConversation(ctx context.Context, root, conversationID string, inp
 	var taskCommands atomic.Bool
 	var hooks *chatHooks
 	hooks = &chatHooks{
-		UISession: uiSession,
-		PresentUI: emitUI,
+		AgentRuntime: runtimeName,
+		UISession:    uiSession,
+		PresentUI:    emitUI,
 		TakeUIAction: func() *agent.UIUserAction {
 			stateMu.Lock()
 			defer stateMu.Unlock()

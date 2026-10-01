@@ -61,6 +61,7 @@ func runChat(ctx context.Context, args []string, root string, input io.Reader, o
 }
 
 type chatHooks struct {
+	AgentRuntime      string
 	UISession         *agent.UISession
 	PresentUI         func(context.Context, agent.UISnapshot) error
 	TakeUIAction      func() *agent.UIUserAction
@@ -127,6 +128,10 @@ func userMessageWithImages(prompt string, images []store.ImageAttachment) *schem
 }
 
 func runChatWithHooks(ctx context.Context, args []string, root string, input io.Reader, out, errOut io.Writer, hooks *chatHooks) error {
+	runtimeName := "eino"
+	if hooks != nil && hooks.AgentRuntime != "" {
+		runtimeName = hooks.AgentRuntime
+	}
 	opts, err := parseChatOptions(args, errOut)
 	if err != nil {
 		return err
@@ -588,12 +593,12 @@ func runChatWithHooks(ctx context.Context, args []string, root string, input io.
 		if err != nil {
 			return err
 		}
-		agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+		agent, err := buildChatAgent(ctx, &adk.ChatModelAgentConfig{
 			Name: "Lake Agent", Description: agentDescription(root, "lake", "Lake 运维 Agent"),
 			Instruction: instruction + promptSuffix(root, "lake"),
 			Model:       &presentationModel{base: chatModel},
 			ToolsConfig: adk.ToolsConfig{EmitInternalEvents: true, ToolsNodeConfig: compose.ToolsNodeConfig{Tools: tools}},
-		})
+		}, s.Root(), config, apiKey, meter, runtimeName)
 		if err != nil {
 			return err
 		}
@@ -984,12 +989,12 @@ func runChatWithHooks(ctx context.Context, args []string, root string, input io.
 		turn := prepared.Messages
 		turnRunner := runner
 		if reviewOnly || workflowReview {
-			reviewAgent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+			reviewAgent, err := buildChatAgent(ctx, &adk.ChatModelAgentConfig{
 				Name: "Lake Agent", Description: "整理本会话已有的检查结果",
 				Instruction: "仅使用当前会话资料和已保存的工作流运行记录整理结果。不要执行命令、运行或恢复工作流、查询远端资源。没有的数据标为待确认。工作流执行成功不代表业务健康，运行中不等于健康，退出容器的旧 healthy 标签不代表当前健康。" + conversationContinuityInstruction + presentationInstruction,
 				Model:       &presentationModel{base: chatModel},
 				ToolsConfig: adk.ToolsConfig{EmitInternalEvents: true, ToolsNodeConfig: compose.ToolsNodeConfig{Tools: reportReviewTools}},
-			})
+			}, s.Root(), config, apiKey, meter, runtimeName)
 			if err != nil {
 				return err
 			}

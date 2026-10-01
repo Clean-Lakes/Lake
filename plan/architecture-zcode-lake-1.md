@@ -12,6 +12,8 @@ tags: [architecture, migration, agent, zcode, lake]
 
 ![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
+2026-10-01 后续决定：用户要求保留现有前端并引入开源 ZCode。当前分支的主 Agent 按[新接入计划](feature-zcode-runtime-1.md)使用 Node 源码运行时；本文件保留为之前 Go 能力迁移的历史记录，其单运行时约束不再适用于新分支。LAKE 凭据、审批和数据层边界继续有效。
+
 本方案以 ZCode 提交 `29628c9acdb81b703bbd4080c207a0e7ce5e276e` 为能力基线，以 2026-09-30 的 Lake 工作区为实现基线。目标是**能力迁移**：保留 Go/Eino 作为唯一 Agent 运行时，继续使用 SQLite 运维数据层、Wails 桌面壳和 Lake 的凭据/SSH 审批链；参考 ZCode 的行为与边界，在 Go 中实现相应模块。不引入 Node/TypeScript Agent 进程，不复制 Electron 桌面壳。
 
 交付分为三个可独立使用的版本：**R1 Agent 内核**（会话、上下文、权限、代码工具、多协议模型），**R2 扩展与编排**（MCP、Skills、插件、通用专员、动态工作流、定时运行），**R3 工作台**（Web/TUI、Git/终端、远程代码工作区）。每个版本须满足本文件的验证门槛才能进入下一版本。各阶段实施时再拆成小型任务计划；本文件是跨子系统的总体方案和验收契约。

@@ -32,6 +32,7 @@ scripts/build_lake_desktop.sh
 
 echo "[7/8] 数据迁移样本与安全回归"
 go test ./lake/store -run 'TestMigrationFixturesV1ThroughV16|TestFailedUpgradeKeepsRestorableV15Snapshot|TestV17RepairsLegacyEventColumnAndKeepsConversation' -count=1
+LAKE_ZCODE_INTEGRATION=1 go test ./lake/zcode ./cmd/lake -run 'TestSource' -count=1
 
 echo "[8/8] 核对签名身份"
 codesign -dv --verbose=2 bin/lake 2>&1 | grep -F 'Authority=Lake Local Development Code Signing'

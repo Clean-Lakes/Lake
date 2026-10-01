@@ -1,13 +1,15 @@
 # Lake
 
-Lake Agent 使用仓库内的 Eino 框架运行模型与工具循环。运行 `bin/lake`（不带参数）进入对话；现有数据管理命令继续可用。Lake 支持运维资源查询、受控 SSH 操作，以及绑定本地代码项目后的分析、设计和实现工作流。
+Lake 桌面主 Agent 使用从开源源码构建的 ZCode 运行时，前端继续使用现有 Wails/React 界面。资源、审批、凭据、湖志和工作流仍由 LAKE Go 服务管理。运行 `bin/lake`（不带参数）的命令行对话及既有专员服务继续使用 Eino；现有数据管理命令保持可用。
 
-Lake 核心直接在 eino 框架内实现，使用根目录 Go 模块 `github.com/cloudwego/eino`。桌面壳在 `client/desktop` 使用独立的 Wails Go 模块，复用 Lake CLI 进程：
+Lake 数据与执行服务使用根目录 Go 模块 `github.com/cloudwego/eino`。桌面壳在 `client/desktop` 使用独立的 Wails Go 模块，复用 Lake CLI 进程，并由 CLI 启动源码构建的 Node Agent：
 
 - `cmd/lake/`：产品 CLI 入口；从根目录编译为 `bin/lake`。
 - `lake/store/`：独立于 Agent 包的 SQLite 运维数据层。
 - `lake/model/`：Anthropic Messages、OpenAI Chat Completions 和 Responses 模型适配器。
 - `lake/operate/`、`lake/transport/ssh/`：授权、湖志与 SSH 执行服务。
+- `lake/zcode/`：ZCode 主 Agent、受控 MCP 工具桥接与模型凭据代理。
+- `third_party/zcode/`：固定提交的开源 Agent 源码；不使用其 Desktop/Web 前端。
 - `lake/code/`：本地及远程代码项目的受限文件读取、修改和命令执行。
 - `lake/workflow/`：运维工作流定义校验、依赖编排、执行与恢复。
 - `adk/`、`components/`、`compose/` 等：Eino 底座源码。
@@ -19,6 +21,7 @@ Lake 核心直接在 eino 框架内实现，使用根目录 Go 模块 `github.co
 ```sh
 scripts/setup_lake_signing.sh   # macOS 首次开发构建时运行一次
 scripts/build_lake.sh           # 编译并使用同一身份签名 bin/lake
+npm exec --yes --package=node@24.14.0 -- node scripts/build_zcode_agent.mjs
 bin/lake model configure --model mimo-v2.6-pro --base-url https://api.xiaomimimo.com/anthropic
 bin/lake model login             # 新用户输入 API Key
 bin/lake secrets migrate        # 旧用户从钥匙串迁移时运行一次
