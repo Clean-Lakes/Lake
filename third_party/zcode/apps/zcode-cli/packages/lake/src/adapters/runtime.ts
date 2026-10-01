@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import type { LakeEvent, LakeRuntime, LakeRuntimeOptions } from "../domain/protocol.js";
 import { LakeApplication } from "../app/runtime.js";
@@ -13,7 +14,7 @@ export async function createLakeRuntime(options: LakeRuntimeOptions = {}): Promi
   const root = resolve(options.root ?? process.env.LAKE_HOME ?? join(homedir(), ".lake"));
   const database = await LakeDatabase.open(root), data = new LakeData(database), vault = new FileVault(root);
   const listeners = new Set<(event: LakeEvent) => void>();
-  const application = new LakeApplication({ data, settings: new LakeSettings(root, vault), execution: new OperationsTransport(vault), agent: new LakeZCodeAgent(root, vault, options), options: { ...options, root }, id: newID,
+  const application = new LakeApplication({ data, settings: new LakeSettings(root, vault), execution: new OperationsTransport(vault), agent: new LakeZCodeAgent(root, vault, options), options: { ...options, root }, id: newID, digest: input => createHash("sha256").update(input).digest("hex"),
     emit: event => { for (const listener of listeners) listener(event); },
   });
   return {

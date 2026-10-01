@@ -1,31 +1,12 @@
 import type { JsonValue } from "../domain/json.js";
 import { command, FIXED_READ_CHECKS, object, redact, text, type Params } from "../domain/validation.js";
 import type { RuntimePorts } from "./ports.js";
+import { ApprovalGate } from "./approval.js";
 
-interface PendingApproval { turnID: string; resolve(approved: boolean): void }
 export class OperationsService {
-  private readonly approvals = new Map<string, PendingApproval>();
-  private approvalTail: Promise<void> = Promise.resolve();
-  constructor(private readonly ports: RuntimePorts) {}
+  constructor(private readonly ports: RuntimePorts, private readonly approvals = new ApprovalGate(ports.emit)) {}
   respond(id: string, approved: boolean): void {
-    const key = this.approvals.has(id) ? id : [...this.approvals.keys()].find(key => this.approvals.get(key)?.turnID === id);
-    const pending = key ? this.approvals.get(key) : undefined;
-    if (!pending) throw new Error("审批已过期或不属于当前任务");
-    this.approvals.delete(key as string); pending.resolve(approved);
-  }
-  private async approve(id: string, resource: Params, body: string, signal: AbortSignal, turnID: string): Promise<boolean> {
-    const previous = this.approvalTail;
-    let release: () => void = () => {};
-    this.approvalTail = new Promise(resolve => { release = resolve; });
-    await previous;
-    if (signal.aborted) { release(); return false; }
-    try { return await new Promise<boolean>(resolve => {
-      const abort = () => { this.approvals.delete(id); resolve(false); };
-      this.approvals.set(id, { turnID, resolve: approved => { signal.removeEventListener("abort", abort); resolve(approved); } });
-      signal.addEventListener("abort", abort, { once: true });
-      this.ports.emit({ type: "approval", id: turnID || id, approval_id: id, kind: "ssh", path: `${resource.lake}/${resource.name}`, command: body });
-      if (signal.aborted) abort();
-    }); } finally { release(); }
+    this.approvals.respond(id, approved);
   }
   async run(method: string, p: Params, id: string, signal: AbortSignal): Promise<JsonValue> {
     const resource = object(await this.ports.data.request("res.get", { resource: text(p, "resource") }));
@@ -39,7 +20,7 @@ export class OperationsService {
     const silent = read ? policy.silent_ssh_read : policy.silent_ssh_command;
     if (!silent || p.require_approval === true) {
       await audit("proposed");
-      if (!(await this.approve(id, resource, body, signal, text(p, "turn_id")))) { await audit("denied"); throw new Error("执行未获批准"); }
+      if (!(await this.approvals.request(id, { type: "approval", kind: "ssh", path: target, command: body }, signal, text(p, "turn_id")))) { await audit("denied"); throw new Error("执行未获批准"); }
     }
     signal.throwIfAborted();
     const current = object(await this.ports.data.request("res.get", { resource: String(resource.id) }));

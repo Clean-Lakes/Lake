@@ -5,10 +5,13 @@ import { hasControl, integer, object, text, type Params } from "../../domain/val
 import type { ExecutionPort } from "../../app/ports.js";
 import { FileVault } from "../vault.js";
 import { runProcess } from "./process.js";
+import { WorkspaceAdapter } from "../workspace/adapter.js";
 
 export class OperationsTransport implements ExecutionPort {
+  private readonly workspaces = new WorkspaceAdapter();
   constructor(private readonly vault: FileVault) {}
   async request(method: string, p: Params, signal: AbortSignal): Promise<JsonValue> {
+    if (method.startsWith("workspace.")) return this.workspaces.request(method, p, signal);
     if (method === "transport.local") return runProcess(process.platform === "win32" ? "cmd.exe" : "/bin/sh", process.platform === "win32" ? ["/d", "/s", "/c", text(p, "command")] : ["-c", text(p, "command")], { cwd: text(p, "cwd"), signal, timeoutMS: integer(p, "timeout_ms", 120_000) });
     if (method !== "transport.ssh") throw new Error(`未知的执行传输 ${method}`);
     const resource = object(p.resource), ssh = object(resource.ssh), host = text(ssh, "host"), username = text(ssh, "username");
@@ -22,5 +25,5 @@ export class OperationsTransport implements ExecutionPort {
     if (result.exit_code === 255) { result.status = "unknown"; result.error = "SSH 连接失败或中断，不能确定远端命令是否执行"; }
     return result;
   }
-  async close(): Promise<void> {}
+  async close(): Promise<void> { await this.workspaces.close(); }
 }
