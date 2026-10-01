@@ -84,3 +84,9 @@ func (m *UsageMeter) Snapshot() UsageSnapshot {
 	defer m.mu.Unlock()
 	return m.totals
 }
+
+// RecordExternal merges reported usage from an external Agent runtime into the
+// same meter used by Lake specialists and conversation event persistence.
+func (m *UsageMeter) RecordExternal(input, output, cacheRead, cacheWrite int64) {
+	m.record(&wireUsage{InputTokens: input, OutputTokens: output, CacheReadInputTokens: cacheRead, CacheCreationInputTokens: cacheWrite}, 0, 0, 0)
+}

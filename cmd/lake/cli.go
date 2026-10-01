@@ -173,13 +173,7 @@ func run(ctx context.Context, args []string, root string, stdout, stderr io.Writ
 		return secretsCommand(ctx, args[1:], root, stdout, stderr)
 	}
 	if args[0] == "bridge" {
-		if len(args) == 1 {
-			return runBridge(ctx, root, os.Stdin, stdout)
-		}
-		if len(args) == 3 && args[1] == "--conversation" && args[2] != "" {
-			return runBridgeConversation(ctx, root, args[2], os.Stdin, stdout)
-		}
-		return errors.New("lake bridge 仅支持 --conversation <会话ID>")
+		return bridgeCommand(ctx, root, args[1:], os.Stdin, stdout, stderr)
 	}
 	if strings.HasPrefix(args[0], "-") {
 		return runChat(ctx, args, root, os.Stdin, stdout, stderr)
