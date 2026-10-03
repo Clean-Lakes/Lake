@@ -50,6 +50,7 @@ import { TaskFindDialog } from "@/quickpick/TaskFindDialog.js";
 import { WorkspaceHeader } from "@/WorkspaceHeader.js";
 import { WorkspaceSidebar, type SidebarFileTreeOpenRequest } from "@/WorkspaceSidebar.js";
 import { AnimatedSidePanePanel } from "@/app-shell/AnimatedSidePanePanel.js";
+import { LakePanel } from '@/lake/LakePanel.js';
 import {
   findScreenshotSurfaceTabForRender,
   useBrowserScreenshotSurfaceRequest,
@@ -359,6 +360,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     null,
   );
   const [isSidebarFileTreeOpen, setIsSidebarFileTreeOpen] = useState(false);
+  const [lakeOpen, setLakeOpen] = useState(false);
   const workspaceKey = workspaceIdentity?.trim() || workspaceAbsPath;
   const screenshotSurfaceRequest = useBrowserScreenshotSurfaceRequest(sidePaneState?.tabs ?? []);
   const screenshotSurfaceTab = screenshotSurfaceRequest
@@ -1516,6 +1518,9 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       isWindowsDesktop={isWindowsDesktop}
       headerTestId={TID_APP_HEADER}
     >
+      {lakeOpen ? <LakePanel open={lakeOpen} onOpenChange={setLakeOpen} workspacePath={workspaceAbsPath} workspaceIdentity={workspaceIdentity}
+        onCreateViaChat={handleCreateAutomationInChat} onNavigateToLaunchedRun={handleNavigateToLaunchedRun}
+        onOpenWorkflowRun={handleOpenSavedWorkflowRun} onOpenWorkflowArtifact={handleOpenSavedWorkflowArtifact} /> : null}
       <div
         ref={workspaceShellRef}
         data-workspace-shell="true"
@@ -1597,6 +1602,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     goForwardShortcutLabel={goForwardShortcutLabel}
                     onOpenCommandCenter={handleOpenCommandCenter}
                     onOpenAutomations={handleOpenAutomations}
+                    onOpenLake={() => setLakeOpen(true)}
                     automationsActive={workspaceMainView === "automations"}
                     onOpenPluginStore={handleOpenPluginStore}
                     pluginStoreActive={workspaceMainView === "plugin-store"}

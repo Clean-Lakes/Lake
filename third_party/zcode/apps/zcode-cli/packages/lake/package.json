@@ -13,10 +13,15 @@
     "build": "pnpm --dir ../../../.. --filter @zcode/services build:lake-host && tsc && node scripts/bundle-runtime.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --no-ignore src",
-    "test": "node --test test/*.test.mjs",
-    "clean": "node ../../scripts/clean-dist.mjs"
+    "test": "node --test test/native-data*.test.mjs test/migrations.test.mjs test/vault.test.mjs test/metadata.test.mjs test/settings.test.mjs test/secrets.test.mjs test/history.test.mjs test/library.test.mjs",
+    "clean": "node ../../scripts/clean-dist.mjs",
+    "test:legacy": "node --test test/*.test.mjs"
   },
   "dependencies": {
+    "@zcode/provider": "workspace:*",
+    "@zcode/provider-node": "workspace:*",
+    "@modelcontextprotocol/server": "2.0.0",
+    "@zcode/shared": "workspace:*",
     "@zcode/services": "workspace:*",
     "@zcode/adapters": "workspace:*",
     "@zcode/bootstrap": "workspace:*",

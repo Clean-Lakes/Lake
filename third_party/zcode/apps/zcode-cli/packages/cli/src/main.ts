@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { interceptTuiStderr, isTuiInvocation } from "./tui-stderr.js";
 import { interceptKnownRuntimeWarnings } from "./runtime-warnings.js";
 import { installStderrConsoleBoundary } from "./protocol-console.js";
@@ -15,11 +17,19 @@ void main();
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+  process.env.LAKE_HOME ||= join(homedir(), '.lake');
+  process.env.ZCODE_STORAGE_DIR = process.env.LAKE_HOME;
+  process.env.ZCODE_HOME = process.env.LAKE_HOME;
+  process.env.ZCODE_SESSION_DB_PATH = join(process.env.LAKE_HOME, 'cli/db/db.sqlite');
   if (argv[0] === "lake") {
+    if (argv.length !== 3 || argv[1] !== 'secrets' || argv[2] !== 'migrate') {
+      process.stderr.write('旧 LAKE Agent 和运维工作流入口已停用。湖数据使用 lake data；其他能力使用原生 CLI。\n');
+      process.exitCode = 2; return;
+    }
     // Native service diagnostics cannot share Lake's structured stdout or expose credentials.
     for (const method of ["log", "info", "warn", "error", "debug"] as const) console[method] = () => {};
-    const { runLakeCLI } = await import("@zcode/lake");
-    try { process.exitCode = await runLakeCLI({ argv: argv.slice(1), stdin: process.stdin, stdout: process.stdout, stderr: process.stderr }); }
+    const { runLakeSecretMigration } = await import("@zcode/lake");
+    try { process.exitCode = await runLakeSecretMigration({ argv: argv.slice(1), stdin: process.stdin, stdout: process.stdout, stderr: process.stderr }); }
     catch { process.stderr.write("Lake TypeScript runtime 启动失败\n"); process.exitCode = 1; }
     return;
   }

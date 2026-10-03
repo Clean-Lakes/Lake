@@ -1,5 +1,5 @@
 export function getScratchWorkspaceLocationHint(name: string) {
-  return `~/ZCodeProject/${name.trim()}`;
+  return `~/.lake/LakeProject/${name.trim()}`;
 }
 
 export function getScratchWorkspaceNameErrorKind(name: string) {

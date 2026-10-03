@@ -1,88 +1,67 @@
 #!/bin/sh
 set -eu
-
 lake_repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$lake_repo_root"
-
 install_app=0
-if [ "${1:-}" = "--install" ] && [ "$#" -eq 1 ]; then
-  install_app=1
-elif [ "$#" -ne 0 ]; then
-  echo "用法: scripts/build_lake_desktop.sh [--install]" >&2
-  exit 2
-fi
-
-if [ "$(uname -s)" != Darwin ]; then
-  echo "此脚本用于 macOS" >&2
-  exit 1
-fi
-
+if [ "${1:-}" = "--install" ] && [ "$#" -eq 1 ]; then install_app=1
+elif [ "$#" -ne 0 ]; then echo "用法: scripts/build_lake_desktop.sh [--install]" >&2; exit 2; fi
+[ "$(uname -s)" = Darwin ] || { echo "此脚本用于 macOS" >&2; exit 1; }
+lake_identity='Lake Local Development Code Signing'
 scripts/build_lake.sh
 npm exec --yes --package=node@24.14.0 -- node scripts/build_zcode_agent.mjs
-swift scripts/generate_lake_icon.swift client/desktop/build/appicon.png
-
-wails_cli="$(go env GOPATH)/bin/wails"
-if [ ! -x "$wails_cli" ]; then
-  echo "缺少 Wails CLI；运行 go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0" >&2
-  exit 1
-fi
-
-staging_dir=$(mktemp -d)
-trap 'rm -rf "$staging_dir"' EXIT HUP INT TERM
-mkdir -p "$staging_dir/client/desktop" "$staging_dir/cmd/lake"
-# Reinstall frontend dependencies in staging. Synced Desktop folders can contain
-# placeholder copies in node_modules that stall copying or confuse TypeScript.
-rsync -a --exclude='/build/bin/' --exclude='/frontend/node_modules/' "$lake_repo_root/client/desktop/" "$staging_dir/client/desktop/"
-# Match repository layout for the JSON action catalog shared by Go and React.
-cp "$lake_repo_root/cmd/lake/activity_tools.json" "$staging_dir/cmd/lake/activity_tools.json"
-(cd "$staging_dir/client/desktop" && "$wails_cli" build -clean)
-
-app_path="$staging_dir/client/desktop/build/bin/LakeDesktop.app"
+export PATH="$lake_repo_root/bin/zcode:$lake_repo_root/third_party/zcode/node_modules/.bin:$PATH"
+export ZCODE_TARGET_OS=darwin
+export ZCODE_TARGET_ARCH=arm64
+export ZCODE_ENV=production
+export ZCODE_PREVIEW_IDENTITY=0
+export ZCODE_ENABLE_MAC_SIGN=0
+# Original runtime assets, renderer, Main, Host and native workflow implementation.
+# Cross-platform remote assets may be prepared separately; local builds use the same native preparation.
+pnpm --dir third_party/zcode install --frozen-lockfile --ignore-scripts
+ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node third_party/zcode/node_modules/electron/install.js
+pnpm --dir third_party/zcode --filter @zcode/desktop prepare:runtime-assets
+pnpm --dir third_party/zcode --filter @zcode/desktop build:no-runtime-assets
+swift scripts/generate_lake_icon.swift third_party/zcode/packages/desktop/build/icon.png
+lake_iconset=$(mktemp -d)/lake.iconset
+mkdir -p "$lake_iconset"
+for lake_size in 16 32 128 256 512; do
+  sips -z "$lake_size" "$lake_size" third_party/zcode/packages/desktop/build/icon.png --out "$lake_iconset/icon_${lake_size}x${lake_size}.png" >/dev/null
+  lake_double=$((lake_size * 2))
+  sips -z "$lake_double" "$lake_double" third_party/zcode/packages/desktop/build/icon.png --out "$lake_iconset/icon_${lake_size}x${lake_size}@2x.png" >/dev/null
+done
+iconutil -c icns "$lake_iconset" -o third_party/zcode/packages/desktop/build/icon.icns
+rm -rf "$(dirname "$lake_iconset")"
+pnpm --dir third_party/zcode/packages/desktop exec electron-builder --config electron-builder.config.js --mac --arm64 --dir
+built_app_path="$lake_repo_root/third_party/zcode/packages/desktop/dist/mac-arm64/LAKE.app"
+[ -d "$built_app_path" ] || { echo "原生 LAKE 应用未生成" >&2; exit 1; }
+# Desktop/iCloud may re-add Finder attributes while signing; stage outside it first.
+build_dir="$HOME/Library/Application Support/LAKE/builds"
+mkdir -p "$build_dir"
+build_path="$build_dir/LAKE-$(date +%Y%m%d-%H%M%S)-$$.app"
+ditto --norsrc "$built_app_path" "$build_path"
+app_path="$build_path"
 resource_path="$app_path/Contents/Resources"
-mkdir -p "$resource_path"
+node scripts/verify_lake_native_runtime.mjs "$app_path"
+ELECTRON_RUN_AS_NODE=1 "$app_path/Contents/MacOS/LAKE" scripts/verify_lake_native_runtime.mjs "$app_path"
 cp "$lake_repo_root/bin/lake" "$resource_path/lake"
-cp -R "$lake_repo_root/bin/zcode" "$resource_path/zcode"
 mkdir -p "$resource_path/licenses"
 cp "$lake_repo_root/docs/third-party-notices.md" "$resource_path/third-party-notices.md"
 cp "$lake_repo_root/docs/licenses/"* "$resource_path/licenses/"
 cp "$lake_repo_root/LICENSE-APACHE" "$resource_path/licenses/lake-LICENSE-APACHE"
-cp "$lake_repo_root/client/desktop/frontend/BEUI_LICENSE" "$resource_path/licenses/beui-LICENSE"
-# Module-cache licenses may be read-only; the private staged copies need write
-# permission for xattr cleanup before the application is signed.
-chmod u+w "$resource_path/licenses/"*
+chmod -R u+w "$app_path"
 xattr -cr "$app_path"
-
-lake_identity='Lake Local Development Code Signing'
-# Sign the bundled Node and Mach-O native modules with the same persistent
-# identity before signing the outer app. Other platform assets are data files.
-python3 - "$resource_path/zcode" "$lake_identity" <<'PY'
-import pathlib,subprocess,sys
-root=pathlib.Path(sys.argv[1])
-for path in sorted(root.rglob('*')):
-    if not path.is_file():
-        continue
-    if path.name != 'node' and path.suffix not in ('.node','.dylib'):
-        continue
-    kind=subprocess.check_output(['file','-b',str(path)],text=True)
-    if 'Mach-O' in kind:
-        subprocess.run(['codesign','--force','--timestamp=none','--sign',sys.argv[2],str(path)],check=True)
-PY
-codesign --force --timestamp=none --sign "$lake_identity" \
-  --identifier com.cleanlakes.lake "$resource_path/lake"
-codesign --force --timestamp=none --sign "$lake_identity" \
-  --identifier com.cleanlakes.desktop "$app_path"
+python3 scripts/sign_lake_native.py "$app_path" "$lake_identity"
 codesign --verify --deep --strict "$app_path"
-
-build_dir="$HOME/Library/Application Support/Lake/builds"
-mkdir -p "$build_dir"
-build_path="$build_dir/Lake-$(date +%Y%m%d-%H%M%S)-$$.app"
-ditto --norsrc "$app_path" "$build_path"
-xattr -cr "$build_path"
-codesign --force --timestamp=none --sign "$lake_identity" \
-  --identifier com.cleanlakes.desktop "$build_path"
-codesign --verify --deep --strict "$build_path"
-echo "已构建 $build_path"
-
+# Verify the signed launcher resolves the installed runtime, without loading
+# real provider preferences or user data.
+smoke_home=$(mktemp -d)
+if ! LAKE_HOME="$smoke_home" "$resource_path/lake" --help >/dev/null; then
+  rm -rf "$smoke_home"
+  echo "安装包 CLI 启动验收失败" >&2
+  exit 1
+fi
+rm -rf "$smoke_home"
+echo "已构建原生客户端 $build_path"
 if [ "$install_app" -eq 1 ]; then
   install_path="$HOME/Applications/Lake.app"
   mkdir -p "$HOME/Applications"
@@ -92,17 +71,6 @@ if [ "$install_app" -eq 1 ]; then
     echo "原应用已保留在 $backup_path"
   fi
   ditto --norsrc "$build_path" "$install_path"
-  xattr -cr "$install_path"
-  codesign --force --timestamp=none --sign "$lake_identity" \
-    --identifier com.cleanlakes.desktop "$install_path"
   codesign --verify --deep --strict "$install_path"
   echo "已安装 $install_path"
 fi
-
-# Keep only the verified replacement. A failed build or install never removes
-# the previous usable output.
-for old_build in "$build_dir"/Lake-*.app; do
-  [ -d "$old_build" ] || continue
-  [ "$old_build" != "$build_path" ] || continue
-  rm -rf -- "$old_build"
-done

@@ -1,9 +1,9 @@
 import { access, cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-export const DEV_ELECTRON_PROTOCOL_SCHEME = "zcode";
-export const DEV_ELECTRON_APP_NAME = "ZCode Dev";
-export const DEV_ELECTRON_APP_BUNDLE_ID = "dev.zcode.app.development";
+export const DEV_ELECTRON_PROTOCOL_SCHEME = "lake";
+export const DEV_ELECTRON_APP_NAME = "LAKE Dev";
+export const DEV_ELECTRON_APP_BUNDLE_ID = "com.cleanlakes.desktop.development";
 // 副本布局版本，见 prepareDevElectronAppBundle 中的指纹说明。
 export const DEV_ELECTRON_BUNDLE_FORMAT = 2;
 

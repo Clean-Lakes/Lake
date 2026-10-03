@@ -4,12 +4,12 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import type { Locale } from "@zcode/shared";
 
-const WORKFLOW_NAME = "Open in ZCode.workflow";
-const WORKFLOW_BUNDLE_ID = "dev.zcode.app.finder-open-workflow";
+const WORKFLOW_NAME = "Open in LAKE.workflow";
+const WORKFLOW_BUNDLE_ID = "com.cleanlakes.desktop.finder-open-workflow";
 const WORKFLOW_VERSION = "5";
 const SERVICES_MENU_LABELS: Record<Locale, string> = {
-  "zh-CN": "在ZCode中打开",
-  "en-US": "Open in ZCode",
+  "zh-CN": "在LAKE中打开",
+  "en-US": "Open in LAKE",
 };
 
 const workflowScript = `first=""
@@ -22,7 +22,7 @@ done
 
 if [ -n "$first" ]; then
   encoded=$(/usr/bin/osascript -l JavaScript -e 'function run(argv) { return encodeURIComponent(argv[0]); }' "$first")
-  /usr/bin/open "zcode://workspace/open?path=\${encoded}"
+  /usr/bin/open "lake://workspace/open?path=\${encoded}"
 fi
 `;
 

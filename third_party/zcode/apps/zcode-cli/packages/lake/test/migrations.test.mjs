@@ -4,7 +4,7 @@ import { copyFile, lstat, mkdtemp, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { DatabaseSync } from "node:sqlite";
-import { LakeDatabase } from "../dist/adapters/storage/database.js";
+import { LakeDatabase, SCHEMA_VERSION } from "../dist/adapters/storage/database.js";
 import { LakeData } from "../dist/adapters/storage/data.js";
 
 for (let version = 1; version <= 16; version++) {
@@ -33,7 +33,7 @@ for (let version = 1; version <= 16; version++) {
       }
       data.close(); data = undefined;
       const db = new DatabaseSync(file);
-      assert.equal(db.prepare("PRAGMA user_version").get().user_version, 19);
+      assert.equal(db.prepare("PRAGMA user_version").get().user_version, SCHEMA_VERSION);
       assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
       assert.equal(db.prepare("SELECT COUNT(*) count FROM attach WHERE ref='file:ssh/fixture-only'").get().count, 1);
       assert.equal(db.prepare("SELECT COUNT(*) count FROM code_workspace WHERE authorized=1").get().count, 0);
@@ -66,7 +66,7 @@ test("future schema is rejected and failed migration preserves a private backup"
       assert.equal(db.prepare("PRAGMA user_version").get().user_version, 15); db.close();
       assert.equal((await lstat(path)).mode & 0o777, 0o600);
     }
-    const future = new DatabaseSync(file); future.exec("PRAGMA user_version=20"); future.close();
+    const future = new DatabaseSync(file); future.exec(`PRAGMA user_version=${SCHEMA_VERSION + 1}`); future.close();
     await assert.rejects(LakeDatabase.open(root), /newer than supported/u);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

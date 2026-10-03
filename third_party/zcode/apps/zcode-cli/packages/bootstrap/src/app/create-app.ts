@@ -1,3 +1,4 @@
+import { resolveNativeLakeMcpServers } from './lake-native-integration.js';
 import { isAbsolute, join, resolve } from "node:path";
 import {
   createInMemorySessionEventStore,
@@ -227,10 +228,10 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       modelSelectionOverrides: zcodeSubagentProfileOutcome.pluginAgentModelSelectionOverrides,
     }).profiles;
     const pluginRuntimeFeatures = resolvePluginRuntimeFeatures(pluginOutcome);
-    const builtInMcpServers = resolveBuiltInNodeReplMcpServers({
+    const builtInMcpServers = { ...resolveNativeLakeMcpServers(workingDirectory), ...resolveBuiltInNodeReplMcpServers({
       pluginOutcome,
       workingDirectory,
-    });
+    }) };
     // 用户目录已在 loader 前完成原地迁移；不能给项目/插件旧身份加内存兼容旁路。
     const subagentProfiles = [...zcodeSubagentProfiles, ...pluginSubagentProfiles];
     const ownsSessionStore = options.sessionStore === undefined;
@@ -361,7 +362,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       (messageEnabled
         ? createNodeSessionMailboxAdapter({
             rootDir: resolvePath(
-              (options.env ?? process.env).ZCODE_MAILBOX_ROOT ?? "~/.zcode/mailbox",
+              (options.env ?? process.env).ZCODE_MAILBOX_ROOT ?? "~/.lake/mailbox",
             ),
           })
         : undefined);

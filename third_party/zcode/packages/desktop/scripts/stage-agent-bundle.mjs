@@ -8,10 +8,25 @@
 // bundled-agents/，没有 cli/dist/。于是 dev 一直跑着上一次打包时留下的那份 ——
 // 实测陈旧 3 天，任何 agent CLI 侧改动在 dev 里静默不生效，排查时会把「改动没生效」
 // 误判成「代码没起作用」。两边共用这一份，dev 与打包不可能再各自漂移。
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { collectRuntimeModuleClosureEntries } from "./runtime-dependency-closure.mjs";
 
 export const AGENT_BUNDLE_SOURCE_RELATIVE = "apps/zcode-cli/packages/cli/dist/zcode.cjs";
+
+export function stageAgentRuntimeModules({ repoRoot, glmDir }) {
+  const runtimeModules = collectRuntimeModuleClosureEntries(
+    ['typescript', 'ssh2', 'playwright-core', 'koffi', 'node-pty'],
+    [resolve(repoRoot, 'packages/desktop'), repoRoot],
+  );
+  for (const entry of runtimeModules) {
+    if (!entry.sourceModulePath) throw new Error(`Agent runtime module missing: ${entry.moduleName}`);
+    cpSync(entry.sourceModulePath, resolve(glmDir, 'node_modules', entry.moduleName), {
+      recursive: true, dereference: true,
+      filter: path => !path.includes('/node_modules/', entry.sourceModulePath.length) && !path.endsWith('.map'),
+    });
+  }
+}
 
 export function resolveAgentBundlePaths({ repoRoot, platformKey }) {
   const glmDir = resolve(repoRoot, "packages", "desktop", "bundled-agents", platformKey, "glm");
@@ -39,6 +54,15 @@ export function stageAgentBundle({ repoRoot, platformKey, log = console.log }) {
   rmSync(glmDir, { recursive: true, force: true });
   mkdirSync(glmDir, { recursive: true });
   copyFileSync(cliBundlePath, stagedBundlePath);
+  mkdirSync(resolve(glmDir, 'provider'), { recursive: true });
+  copyFileSync(resolve(repoRoot, 'apps/zcode-cli/packages/cli/dist/provider/zcode-builtin.json'), resolve(glmDir, 'provider/zcode-builtin.json'));
+  const lakeDataWorker = resolve(repoRoot, 'apps/zcode-cli/packages/lake/dist/lake-data.cjs');
+  if (!existsSync(lakeDataWorker)) throw new Error('LAKE data worker is missing; build @zcode/lake first');
+  copyFileSync(lakeDataWorker, resolve(glmDir, 'lake-data.cjs'));
+  // This entry runs outside app.asar, so its external imports need an adjacent
+  // runtime closure. In particular native storage startup also loads the
+  // TypeScript workflow compiler before opening any session.
+  stageAgentRuntimeModules({ repoRoot, glmDir });
   const meta = {
     runtime: "electron-node",
     entry: "zcode.cjs",

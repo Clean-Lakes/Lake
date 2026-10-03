@@ -34,6 +34,7 @@ import type {
 import { selectSavedWorkflowState, useSavedWorkflowStore } from "@/store/savedWorkflowStore.js";
 
 interface UseSavedWorkflowGlobalGroupParams {
+  allowedNames?: readonly string[];
   refreshSeq: number;
   mode: SavedWorkflowGroupMode;
   onStateChange: (key: "global", state: { loaded: boolean; empty: boolean; count: number }) => void;
@@ -51,6 +52,7 @@ interface UseSavedWorkflowGlobalGroupParams {
 }
 
 export function useSavedWorkflowGlobalGroup({
+  allowedNames,
   refreshSeq,
   mode,
   onStateChange,
@@ -68,9 +70,15 @@ export function useSavedWorkflowGlobalGroup({
   const requestConfirmation = useConfirmDialog();
   const { zcodeAgentService: agentService, fileWatcherService } = useServices();
 
-  const state = useSavedWorkflowStore((store) =>
+  const nativeState = useSavedWorkflowStore((store) =>
     selectSavedWorkflowState(store, GLOBAL_SAVED_WORKFLOW_TARGET),
   );
+  const state = useMemo(() => allowedNames ? {
+    ...nativeState,
+    entries: nativeState.entries.filter(entry => allowedNames.includes(entry.name)),
+    runs: nativeState.runs.filter(run => allowedNames.includes(run.name ?? '') && localProjects.some(project => project.workspacePath === run.cwd)),
+    invalid: [],
+  } : nativeState, [allowedNames, localProjects, nativeState]);
   const load = useSavedWorkflowStore((store) => store.load);
   const [launchEntry, setLaunchEntry] = useState<ZCodeSavedWorkflowEntry | null>(null);
   const [moveEntry, setMoveEntry] = useState<ZCodeSavedWorkflowEntry | null>(null);
@@ -96,7 +104,7 @@ export function useSavedWorkflowGlobalGroup({
     void refresh({ bypassCache: true });
   }, [refresh, refreshSeq]);
 
-  // 目录监听：list 回的绝对目录（`~/.zcode/workflows`）本机可直接 watch。
+  // 目录监听：list 回的绝对目录（`~/.lake/workflows`）本机可直接 watch。
   useSavedWorkflowsDirectoryWatch({
     fileWatcherService,
     directory: state.dir,

@@ -119,7 +119,7 @@ export async function deployServer(
     },
   );
   const resolveFreshCdnManifestRef = createFreshRemoteAssetManifestRefResolver(
-    { ...componentResolverOptions, mockCdnDir: undefined },
+    componentResolverOptions, // LAKE source artifacts remain authoritative for remote isolation.
     env,
     { log, logWarn },
   );

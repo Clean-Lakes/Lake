@@ -79,3 +79,9 @@ _Avoid_: 未安装 CDN 插件、临时禁用的内置插件
 **Orphaned Installed Plugin（孤立已安装插件）**:
 对应 Personal Source 已被删除、但安装目录和用户数据仍保留的插件。它仍可使用、配置、启停和卸载；来源重新添加前不能更新，重新添加同一来源后恢复目录关联。
 _Avoid_: 安装损坏、manifest 缺失、已卸载插件
+
+## LAKE native client fork
+
+LAKE owns only lakes/resources/journal/private data and native workspace/workflow association metadata. The native Electron client, CLI, sessions, models, tools, permissions, extensions and dynamic workflows remain native-owned. `lake-data.cjs` is a bounded data worker; it must not construct the historical LAKE Agent, workflow runner or scheduler. Project association includes its native workflows; global associations filter the original workflow view to linked definitions and lake workspaces. The authoritative specification is `.agents/specs/lake-native-client.md`, superseding the earlier Wails/custom operations workflow scope.
+
+All fork-owned state uses `~/.lake`, project `.lake`, independent LAKE Electron identity and `lake://`. `LAKE_HOME` isolates fixtures/custom installs. Never implicitly import original ZCode user state. The original `.zcode-plugin` manifest format and protocol/package identifiers remain interoperable.

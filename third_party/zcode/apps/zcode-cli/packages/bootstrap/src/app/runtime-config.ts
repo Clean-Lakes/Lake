@@ -1,3 +1,4 @@
+import { LAKE_NATIVE_IDENTITY } from './lake-native-integration.js';
 import type { ConfigResult } from "@zcode/adapters/config";
 import { resolveInitialModelSelection, type ModelSelectionOptions } from "@zcode/provider";
 import { resolveBashTimeoutPolicy, type AgentProfile, type AgentRuntimeConfig } from "@zcode/core";
@@ -117,6 +118,7 @@ export function resolveAppRuntimeConfig(input: {
     options.runtimeConfig?.subagents?.builtInModelSelectionOverrides ?? {};
   const runtimeConfig: AgentRuntimeConfig = {
     ...options.runtimeConfig,
+    productIdentity: options.runtimeConfig?.productIdentity ?? LAKE_NATIVE_IDENTITY,
     bashTimeoutPolicy:
       options.runtimeConfig?.bashTimeoutPolicy ??
       resolveBashTimeoutPolicy(options.env ?? process.env),

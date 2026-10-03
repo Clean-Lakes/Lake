@@ -27,6 +27,7 @@ import type {
 } from "@/settings/saved-workflows/savedWorkflowContract.js";
 
 interface SavedWorkflowGlobalGroupProps {
+  allowedNames?: readonly string[];
   /** 页级刷新计数器；变化（非首挂）时绕过缓存重拉。 */
   refreshSeq: number;
   mode: SavedWorkflowGroupMode;

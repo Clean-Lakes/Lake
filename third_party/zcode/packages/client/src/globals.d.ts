@@ -56,6 +56,7 @@ import type {
 declare global {
   interface Window {
     zcode: {
+      lakeDataRequest(request: import('@zcode/shared').LakeDataRequest): Promise<import('@zcode/shared').LakeDataResult>;
       connectRemote(
         options: RemoteTarget,
         requestId?: string,
@@ -225,7 +226,7 @@ declare global {
       reportRendererHeapSample?(sample: RendererHeapSample): void;
       /** 触发任务状态对应的系统通知 */
       showTaskNotification(payload: TaskNotificationPayload): void;
-      /** 导出日志：打包 ~/.zcode/v2 及外部 agent 日志为 zip 并在 Finder 中显示 */
+      /** 导出日志：打包 ~/.lake/v2 及外部 agent 日志为 zip 并在 Finder 中显示 */
       exportLogs(): Promise<{
         success: boolean;
         path?: string;

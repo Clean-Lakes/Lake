@@ -43,6 +43,12 @@ if (!hasSwiftc()) {
 mkdirSync(outputDir, { recursive: true });
 
 try {
+  if (process.env.ZCODE_TARGET_ARCH) {
+    const arch = process.env.ZCODE_TARGET_ARCH === 'x64' ? 'x86_64' : process.env.ZCODE_TARGET_ARCH;
+    execFileSync('xcrun', ['swiftc', '-O', '-target', `${arch}-apple-macos11`, sourcePath, '-o', outputPath], { stdio: 'inherit' });
+    console.log(`[window-bounds] Built ${arch}: ${outputPath}`);
+    process.exit(0);
+  }
   // 同时产出 arm64 与 x86_64 的 universal 二进制，避免发布包在另一架构上无法执行。
   execFileSync(
     "xcrun",
