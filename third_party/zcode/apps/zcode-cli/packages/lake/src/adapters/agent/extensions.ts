@@ -9,6 +9,7 @@ import type { FileVault } from "../vault.js";
 export function nativeEnvironment(root: string): NodeJS.ProcessEnv {
   return {
     ...process.env,
+    LAKE_HOME: join(root, "zcode-runtime", "storage"),
     ZCODE_STORAGE_DIR: join(root, "zcode-runtime", "storage"),
     ZCODE_DATA_BASE_DIR: join(root, "zcode-runtime"),
   };

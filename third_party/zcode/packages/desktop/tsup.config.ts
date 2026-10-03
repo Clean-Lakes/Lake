@@ -94,6 +94,13 @@ export function applyDesktopTsupEsbuildSecurityOptions(options: DesktopTsupEsbui
 
 const desktopTsupBundleSecurityOptions = resolveDesktopTsupBundleSecurityOptions();
 
+// Bundled CommonJS dependencies still require Node built-ins (for example
+// iconv-lite -> safer-buffer). ESM chunks need their own require bridge before
+// esbuild's CommonJS helpers initialize; do not modify process globals.
+const desktopNodeEsmBanner = {
+  js: 'import { createRequire as __lakeCreateRequire } from "node:module"; var require = __lakeCreateRequire(import.meta.url);',
+};
+
 function createSharedDefines() {
   return {
     __ZCODE_VERSION__: JSON.stringify(buildMetadata.appVersion),
@@ -127,7 +134,7 @@ const desktopNodeRuntimeExternals = [
   "yauzl",
 ];
 
-function createDevReadyMarkerHook(target: "main" | "host" | "preload"): string {
+function createDevReadyMarkerHook(target: "main" | "host" | "preload" | "scheduler"): string {
   // CLI 级 --onSuccess 在多 config watch 模式下会被每个子构建分别触发。
   // 之前 preload 先成功时就提前写入 ready 标记，Electron 仍会在 main/host 未完成时启动。
   // 这里改成每个 config 自己在成功后写独立 marker，让 dev 启动脚本能精确等待全部构建完成。
@@ -146,6 +153,7 @@ export default defineConfig([
     },
     outDir: "out",
     format: "esm",
+    banner: desktopNodeEsmBanner,
     platform: "node",
     target: "node22",
     // undici 如果被 main ESM bundle 直接内联，运行时会落到它内部的 CommonJS require("assert")，
@@ -211,6 +219,7 @@ export default defineConfig([
     },
     outDir: "out",
     format: "esm",
+    banner: desktopNodeEsmBanner,
     platform: "node",
     target: "node22",
     // host 与 main 共用同一套 services 图，继续内联 undici 会在 Electron ESM runtime 里触发同样的 dynamic require 崩溃。
@@ -240,6 +249,7 @@ export default defineConfig([
     entry: { "scheduler/index": "src/scheduler/index.ts" },
     outDir: "out",
     format: "esm",
+    banner: desktopNodeEsmBanner,
     platform: "node",
     target: "node22",
     // 与 host 同构：常驻 cron scheduler 进程复用 @zcode/services（tasks-index + cron），

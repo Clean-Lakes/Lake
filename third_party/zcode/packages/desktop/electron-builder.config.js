@@ -569,6 +569,11 @@ export default {
     }
   },
   extraResources: [
+    { from: "mock-cdn", to: "lake-remote-assets", filter: ["**/*"] },
+    { from: resolve(workspaceRoot, "../../bin/zcode"), to: "lake-runtime", filter: ["**/*", "!**/*.map", "!**/* [0-9]*", "!**/.DS_Store"] },
+    // electron-builder deliberately ignores a source-root node_modules folder.
+    // Map it separately so standalone installed entries cannot borrow repo deps.
+    { from: resolve(workspaceRoot, "../../bin/zcode/node_modules"), to: "lake-runtime/node_modules", filter: ["**/*", "!**/*.map"] },
     { from: resolve(workspaceRoot, noticesFileName), to: noticesFileName },
     ...(targetPlatform.os === "darwin"
       ? [
@@ -632,6 +637,11 @@ export default {
       filter: ["**/*", "!**/*.map"],
     },
     {
+      from: `bundled-agents/${targetPlatform.key}/glm/node_modules`,
+      to: "glm/node_modules",
+      filter: ["**/*", "!**/*.map"],
+    },
+    {
       // agent shell 之前完全依赖宿主系统 PATH，GUI 启动时经常拿不到用户自己装的 rg。
       // 这里把 ripgrep 作为桌面端内置 runtime tool 打进 resources/tools，
       // 后续 host/server 把该目录追加到 PATH；用户版本优先，缺失时再由随包 rg 兜底。
@@ -652,9 +662,9 @@ export default {
   protocols: [
     {
       // 协议处理器的展示名之前使用小写 scheme，打包产物里的协议描述无法体现产品名。
-      // 展示名跟随安装包身份；scheme 仍保持 zcode，因此两个应用中最后注册者会成为默认 handler。
+      // LAKE 使用独立 lake scheme，避免覆盖正版 ZCode 的协议处理器。
       name: desktopProductIdentity.productName,
-      schemes: ["zcode"],
+      schemes: ["lake"],
     },
   ],
   mac: {

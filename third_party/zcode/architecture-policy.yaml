@@ -5,7 +5,7 @@ modules:
   - id: lake
     roots: [apps/zcode-cli/packages/lake/src]
     managed: true
-    requires: [services, server, zcode-native-runtime]
+    requires: [shared, provider, provider-node, services, server, zcode-native-runtime]
     publicEntrypoints: [apps/zcode-cli/packages/lake/src/contract.ts]
     layers: { domain: domain, app: app, adapters: adapters }
     layerOrder: [domain, app, adapters]

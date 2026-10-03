@@ -300,7 +300,7 @@ export class NativeRemoteHost {
           // ZCode deployment owns the remote CLI and its native dependencies.
           void cli;
           const base = `$HOME/.lake/zcode-runtime/${hash}`;
-          const command = `cd -- ${q(workspace)} && NODE_ENV=production ZCODE_STORAGE_DIR="$HOME/.lake/zcode-runtime/storage" ZCODE_SESSION_DB_PATH="${base}/sessions.sqlite" ZCODE_BUILTIN_PROVIDER_CONFIG_FILE="${base}/builtin.json" ZCODE_PERSONAL_PROVIDER_CONFIG_FILE="${base}/personal.json" "$HOME/.zcode/server/node" "$HOME/.zcode/server/agents/glm/zcode.cjs" app-server --cwd ${q(workspace)} --surface desktop`;
+          const command = `cd -- ${q(workspace)} && NODE_ENV=production ZCODE_STORAGE_DIR="$HOME/.lake/zcode-runtime/storage" ZCODE_SESSION_DB_PATH="${base}/sessions.sqlite" ZCODE_BUILTIN_PROVIDER_CONFIG_FILE="${base}/builtin.json" ZCODE_PERSONAL_PROVIDER_CONFIG_FILE="${base}/personal.json" "$HOME/.lake/server/node" "$HOME/.lake/server/agents/glm/zcode.cjs" app-server --cwd ${q(workspace)} --surface desktop`;
           return {
             stream: await entry.backend.exec(command),
             url: remoteURL,

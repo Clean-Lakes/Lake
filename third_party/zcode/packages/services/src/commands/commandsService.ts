@@ -52,8 +52,8 @@ const CODEX_PLUGIN_MANIFEST_PATH = join(".codex-plugin", "plugin.json");
 const ZCODE_COMMAND_DESCRIPTOR: CommandAgentSourceDescriptor = {
   agentSource: "zcodeAgent",
   directorySource: "zcode",
-  userDirectorySegments: [".zcode", "commands"],
-  workspaceDirectorySegments: [".zcode", "commands"],
+  userDirectorySegments: [".lake", "commands"],
+  workspaceDirectorySegments: [".lake", "commands"],
   fileExtension: ".md",
   format: "markdown",
   namespaceSeparator: "/",
@@ -86,7 +86,7 @@ function getUserCommandsRoot(agentSource?: CommandAgentSource): string {
 }
 
 function getUserCliConfigPath(): string {
-  return join(resolveUserHomeDir(), ".zcode", "cli", "config.json");
+  return join(resolveUserHomeDir(), ".lake", "cli", "config.json");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -203,7 +203,7 @@ function readStorageDirFromConfig(config: Record<string, unknown>): string {
   const storage = isRecord(config.storage) ? config.storage : {};
   return typeof storage.dir === "string" && storage.dir.trim().length > 0
     ? storage.dir
-    : "~/.zcode";
+    : "~/.lake";
 }
 
 function readPluginConfigFromConfig(config: Record<string, unknown>): PluginConfigSummary {
@@ -996,7 +996,7 @@ async function discoverCommandsFromDirectorySources(params: {
       scope: params.scope,
       ...(params.projectPath ? { projectPath: params.projectPath } : {}),
     });
-    // `.zcode` 是强优先级来源；只要读到有效命令，同 scope 的 `.agents` 就不再参与。
+    // `.lake` 是强优先级来源；只要读到有效命令，同 scope 的 `.agents` 就不再参与。
     if (descriptor.directorySource === "zcode" && discoveredCount > 0) {
       break;
     }

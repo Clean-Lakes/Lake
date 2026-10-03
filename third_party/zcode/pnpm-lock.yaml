@@ -477,18 +477,30 @@ importers:
 
   apps/zcode-cli/packages/lake:
     dependencies:
+      '@modelcontextprotocol/server':
+        specifier: 2.0.0
+        version: 2.0.0
       '@zcode/adapters':
         specifier: workspace:*
         version: link:../adapters
       '@zcode/bootstrap':
         specifier: workspace:*
         version: link:../bootstrap
+      '@zcode/provider':
+        specifier: workspace:*
+        version: link:../../../../packages/provider
+      '@zcode/provider-node':
+        specifier: workspace:*
+        version: link:../../../../packages/provider-node
       '@zcode/server':
         specifier: workspace:*
         version: link:../../../../packages/server
       '@zcode/services':
         specifier: workspace:*
         version: link:../../../../packages/services
+      '@zcode/shared':
+        specifier: workspace:*
+        version: link:../../../../packages/shared
       mysql2:
         specifier: 3.15.3
         version: 3.15.3

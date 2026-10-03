@@ -35,6 +35,7 @@ export class ZCodeProtocol {
       if (process.env[name]) env[name] = process.env[name];
     Object.assign(env, {
       NODE_ENV: "production",
+      LAKE_HOME: join(dirname(directory), "storage"),
       ZCODE_MODEL_TELEMETRY_ENABLED: "false",
       ZCODE_DATA_BASE_DIR: dirname(directory),
       ZCODE_STORAGE_DIR: join(dirname(directory), "storage"),

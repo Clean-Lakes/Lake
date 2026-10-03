@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp,writeFile,readFile,rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { legacyPipe,migrateSecrets } from "../dist/adapters/cli/secrets.js";
+import { legacyPipe,migrateSecrets,runLakeSecretMigration } from "../dist/adapters/cli/secrets.js";
 import { saveModelConfig } from "../dist/adapters/config/files.js";
 import { FileVault } from "../dist/adapters/vault.js";
 
@@ -18,6 +18,9 @@ test("normal runtime refuses legacy access; explicit migration uses private FD 3
  await saveModelConfig(root,{model_providers:{fixture:{base_url:"https://example.invalid",wire_api:"anthropic"}}});
  process.env.LAKE_EXPLICIT_SECRET_MIGRATION="1";process.env.LAKE_SIGNED_LAUNCHER=launcher;
  const result=await migrateSecrets(root,{dispatch:async()=>[]});assert.deepEqual(result,{migrated:["model:fixture"],failed:[]});
+ const oldRoot=process.env.LAKE_HOME;process.env.LAKE_HOME=root;let output="",error="";
+ try{assert.equal(await runLakeSecretMigration({argv:["secrets","migrate"],stdin:[],stdout:{write:value=>output+=value},stderr:{write:value=>error+=value}}),0);assert.deepEqual(JSON.parse(output),{migrated:[],failed:[]});assert.equal(error,"");}
+ finally{if(oldRoot===undefined)delete process.env.LAKE_HOME;else process.env.LAKE_HOME=oldRoot;}
  const bytes=await new FileVault(root).load("model","fixture");try{assert.equal(bytes.toString(),"synthetic-migration-value");}finally{bytes.fill(0);}
  assert.equal((await readFile(join(root,"actions"),"utf8")).trim().split("\n").at(-1),"delete-model");
  }finally{for(const [i,name] of ["LAKE_EXPLICIT_SECRET_MIGRATION","LAKE_SIGNED_LAUNCHER"].entries())if(old[i]===undefined)delete process.env[name];else process.env[name]=old[i];await rm(root,{recursive:true,force:true});}

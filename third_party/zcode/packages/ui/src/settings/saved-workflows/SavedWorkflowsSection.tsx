@@ -42,6 +42,10 @@ export type SavedWorkflowsOpenTarget =
   | { scope: "global"; name: string };
 
 interface SavedWorkflowsSectionProps {
+  /** LAKE supplies explicitly associated native workspaces; workflow ownership stays native. */
+  projects?: AutomationWorkspaceOption[];
+  includeGlobal?: boolean;
+  globalNames?: readonly string[];
   /** 页头（标题切换 + 副标题）；只在列表态渲染，详情页与定时任务编辑页一样独占整页。 */
   header?: ReactNode;
   /** 活动 workspace：只用来打「当前」标记和作全局空态的创建目标。 */
@@ -80,6 +84,9 @@ function resolveOptionKey(option: AutomationWorkspaceOption): string {
  * 其下按已打开项目分组。页只持有刷新计数器、每组的加载态、详情态；「项目」= `buildAutomationWorkspaceOptions`。
  */
 export function SavedWorkflowsSection({
+  projects: associatedProjects,
+  includeGlobal = true,
+  globalNames,
   header,
   workspacePath,
   workspaceIdentity,
@@ -92,7 +99,7 @@ export function SavedWorkflowsSection({
 }: SavedWorkflowsSectionProps) {
   const { intl, locale } = useZCodeIntl();
   const tabs = useTabStore((store) => store.tabs);
-  const projects = useMemo(() => buildAutomationWorkspaceOptions(tabs), [tabs]);
+  const projects = useMemo(() => associatedProjects ?? buildAutomationWorkspaceOptions(tabs), [tabs, associatedProjects]);
   // 全局组的运行 / 移动落点只能是本机项目：过滤掉远程 workspace。
   const localProjects = useMemo(
     () => projects.filter((project) => !project.remoteSessionId),
@@ -186,6 +193,7 @@ export function SavedWorkflowsSection({
   }, [emptyCardTarget, locale, onCreateViaChat]);
 
   const globalGroupCommonProps = {
+    allowedNames: globalNames,
     refreshSeq,
     onStateChange: handleStateChange,
     onNavigateToLaunchedRun,
@@ -233,9 +241,9 @@ export function SavedWorkflowsSection({
     // 项目在详情打开后被关闭：上面的 effect 会把 view 复位为列表，这里先落回列表渲染。
   }
 
-  const globalReady = readiness[GLOBAL_READINESS_KEY];
+  const globalReady = includeGlobal ? readiness[GLOBAL_READINESS_KEY] : undefined;
   const anyLoaded =
-    Boolean(globalReady?.loaded) ||
+    projects.length === 0 || Boolean(globalReady?.loaded) ||
     projects.some((project) => readiness[resolveOptionKey(project)]?.loaded);
   // 全局空态卡只看项目组：所有项目组都加载且空时出现，忽略全局组的空/满。
   const allProjectsLoaded =
@@ -286,12 +294,12 @@ export function SavedWorkflowsSection({
       {/* 组始终挂载才能各自加载并回报状态（未就绪 / 空项目组内部渲染 null；全局组空也显示）；
          首屏 spinner 只是覆盖在上，不阻断加载。全局组恒置顶，项目组在其下。 */}
       <div className={cn("flex flex-col", anyLoaded ? "mt-5" : "hidden")}>
-        <SavedWorkflowGlobalGroup
+        {includeGlobal ? <SavedWorkflowGlobalGroup
           {...globalGroupCommonProps}
           mode={{ kind: "list" }}
           onOpenDetail={(name) => setView({ mode: "detail", scope: "global", name })}
           onBack={() => setView({ mode: "list" })}
-        />
+        /> : null}
 
         {projects.length === 0 ? (
           <p className="mt-8 text-ui-base text-foreground-subtlest">

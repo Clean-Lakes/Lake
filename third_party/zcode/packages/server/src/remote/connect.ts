@@ -190,7 +190,7 @@ async function connectRemoteUnchecked(
     log("deploy complete");
   }
 
-  if (options?.localServerBundlePath) await backend.upload(options.localServerBundlePath, "~/.zcode/server/zcode-server.cjs", {signal:options.signal});
+  if (options?.localServerBundlePath) await backend.upload(options.localServerBundlePath, "~/.lake/server/zcode-server.cjs", {signal:options.signal});
 
   // 3. Launch server
   log("launching remote server...");
@@ -366,7 +366,7 @@ function buildRemoteServerCommand(
 ): string {
   const envParts = [
     `${SERVICE_AUTHORITY_MODE_ENV}="desktop-attached-remote"`,
-    'ZCODE_SERVER_RUNTIME_ROOT="$HOME/.zcode/server"',
+    'ZCODE_SERVER_RUNTIME_ROOT="$HOME/.lake/server"',
   ];
   for (const [key, value] of Object.entries(
     pickRemoteRuntimeEnv(options?.remoteRuntimeEnv ?? {}),
@@ -392,5 +392,5 @@ function buildRemoteServerCommand(
       );
     }
   }
-  return `${envParts.join(" ")} ~/.zcode/server/node ~/.zcode/server/zcode-server.cjs`;
+  return `${envParts.join(" ")} ~/.lake/server/node ~/.lake/server/zcode-server.cjs`;
 }

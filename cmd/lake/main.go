@@ -42,6 +42,14 @@ func launch(ctx context.Context, args []string) error {
 	runtimeDir := os.Getenv("LAKE_ZCODE_DIR")
 	if runtimeDir == "" {
 		runtimeDir = filepath.Join(base, "zcode")
+		// Electron 安装包将原生 CLI 放在 Resources/lake-runtime；源码目录
+		// 仍使用 bin/zcode，不能让安装后的签名启动器查找不存在的目录。
+		if _, err := os.Stat(runtimeDir); os.IsNotExist(err) {
+			packagedRuntime := filepath.Join(base, "lake-runtime")
+			if info, err := os.Stat(packagedRuntime); err == nil && info.IsDir() {
+				runtimeDir = packagedRuntime
+			}
+		}
 	}
 	node := filepath.Join(runtimeDir, "node")
 	if filepath.Ext(self) == ".exe" {
@@ -50,10 +58,17 @@ func launch(ctx context.Context, args []string) error {
 	cli := filepath.Join(runtimeDir, "zcode.cjs")
 	for _, path := range []string{node, cli} {
 		if info, err := os.Stat(path); err != nil || info.IsDir() {
-			return fmt.Errorf("缺少 ZCode 源码运行时；先运行 scripts/build_zcode_agent.mjs")
+			return fmt.Errorf("缺少 LAKE 原生运行时；先运行 scripts/build_zcode_agent.mjs")
 		}
 	}
-	argv := append([]string{"--disable-warning=ExperimentalWarning", cli, "lake"}, args...)
+	entry := cli
+	if len(args) > 0 && args[0] == "data" {
+		entry = filepath.Join(runtimeDir, "lake-data.cjs")
+		args = args[1:]
+	} else if len(args) == 2 && args[0] == "secrets" && args[1] == "migrate" {
+		args = append([]string{"lake"}, args...)
+	}
+	argv := append([]string{"--disable-warning=ExperimentalWarning", entry}, args...)
 	command := exec.CommandContext(ctx, node, argv...)
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
 	for _, variable := range os.Environ() {
@@ -61,8 +76,16 @@ func launch(ctx context.Context, args []string) error {
 			command.Env = append(command.Env, variable)
 		}
 	}
-	command.Env = append(command.Env, "LAKE_SIGNED_LAUNCHER="+self)
-	if len(args) == 2 && args[0] == "secrets" && args[1] == "migrate" {
+	lakeHome := os.Getenv("LAKE_HOME")
+	if lakeHome == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		lakeHome = filepath.Join(homeDir, ".lake")
+	}
+	command.Env = append(command.Env, "LAKE_HOME="+lakeHome, "ZCODE_STORAGE_DIR="+lakeHome, "LAKE_SIGNED_LAUNCHER="+self)
+	if len(args) == 3 && args[0] == "lake" && args[1] == "secrets" && args[2] == "migrate" {
 		command.Env = append(command.Env, "LAKE_EXPLICIT_SECRET_MIGRATION=1")
 	}
 	command.Cancel = func() error { return command.Process.Signal(syscall.SIGTERM) }

@@ -2,12 +2,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, parse, resolve } from "node:path";
 import { createRequire } from "node:module";
 
-function findPackageRoot(entryPath) {
+function findPackageRoot(entryPath, moduleName) {
   let currentDir = dirname(entryPath);
   const root = parse(currentDir).root;
   while (currentDir !== root) {
     const packageJsonPath = resolve(currentDir, "package.json");
-    if (existsSync(packageJsonPath)) {
+    // 部分依赖在 dist/cjs 内仅放 {type:"commonjs"}。将其误认成包根会
+    // 丢掉 exports 和 dependencies，安装后的 TUI 随即缺少命名导出。
+    if (
+      existsSync(packageJsonPath) &&
+      JSON.parse(readFileSync(packageJsonPath, "utf8")).name === moduleName
+    ) {
       return currentDir;
     }
     currentDir = dirname(currentDir);
@@ -20,7 +25,7 @@ function readRuntimePackage(moduleLookupRoots, moduleName, parentPackagePath = n
     try {
       const requireFromParent = createRequire(parentPackagePath);
       const entryPath = requireFromParent.resolve(moduleName);
-      const packageRoot = findPackageRoot(entryPath);
+      const packageRoot = findPackageRoot(entryPath, moduleName);
       if (packageRoot) {
         const packageJsonPath = resolve(packageRoot, "package.json");
         return {

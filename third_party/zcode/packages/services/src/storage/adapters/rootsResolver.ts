@@ -6,12 +6,13 @@ import { join, resolve } from "node:path";
 import type { RootsResolverPort } from "../app/ports.js";
 import type { StorageRootSpec } from "@zcode/shared";
 
-const ZCODE_DATA_DIR_NAME = ".zcode";
+const ZCODE_DATA_DIR_NAME = ".lake";
 
 export function resolveStorageRoots(params: {
   homeDir: string;
   dataBaseDir: string;
 }): StorageRootSpec[] {
+  if (process.env.LAKE_HOME?.trim()) return [{ id: "home", path: resolve(process.env.LAKE_HOME), hasCustomDataBaseDir: false }];
   const home = resolve(params.homeDir);
   const dataBase = resolve(params.dataBaseDir);
   const hasCustomDataBaseDir = dataBase !== home;

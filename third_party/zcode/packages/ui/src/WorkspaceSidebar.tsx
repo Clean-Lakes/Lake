@@ -258,6 +258,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   goForwardShortcutLabel: _goForwardShortcutLabel,
   onOpenCommandCenter,
   onOpenAutomations,
+  onOpenLake,
   onOpenPluginStore,
   automationsActive = false,
   pluginStoreActive = false,
@@ -310,6 +311,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   goForwardShortcutLabel?: string;
   onOpenCommandCenter: () => void;
   onOpenAutomations?: () => void;
+  onOpenLake?: () => void;
   onOpenPluginStore?: () => void;
   automationsActive?: boolean;
   pluginStoreActive?: boolean;
@@ -1316,6 +1318,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                 }
               />
             ) : null} */}
+            {onOpenLake ? <Button variant="ghost" size="lg" className="w-full justify-start gap-2 text-foreground" data-testid="lake-open" onClick={onOpenLake}><Folder className="size-4" />LAKE 湖</Button> : null}
             <Button
               variant="ghost"
               onClick={handleOpenAutomationsMain}

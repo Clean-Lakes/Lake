@@ -3,6 +3,29 @@ import type { LakeRuntime } from "../../domain/protocol.js";
 import { object, text, type Params } from "../../domain/validation.js";
 import { readModelConfig } from "../config/files.js";
 import { FileVault } from "../vault.js";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { LakeDatabase } from "../storage/database.js";
+import { LakeData } from "../storage/data.js";
+import type { LakeCLIContext } from "../../domain/cli.js";
+
+/** Published migration path: storage only, with no retired Agent or scheduler. */
+export async function runLakeSecretMigration(context: LakeCLIContext): Promise<number> {
+  const root = process.env.LAKE_HOME || join(homedir(), ".lake");
+  if (process.env.LAKE_EXPLICIT_SECRET_MIGRATION !== "1" || !process.env.LAKE_SIGNED_LAUNCHER) {
+    context.stderr.write("请使用签名的 bin/lake secrets migrate 执行一次性迁移\n");
+    return 1;
+  }
+  const data = new LakeData(await LakeDatabase.open(root));
+  try {
+    const result = await migrateSecrets(root, { dispatch: command => data.request(command.method, command.params) });
+    context.stdout.write(JSON.stringify(result) + "\n");
+    return 0;
+  } catch {
+    context.stderr.write("凭据迁移失败；旧凭据和湖数据已保留\n");
+    return 1;
+  } finally { data.close(); }
+}
 
 /** Only the explicitly invoked signed migration can access old macOS Keychain items. */
 export async function legacyPipe(launcher: string, action: string, id: string): Promise<Buffer> {
@@ -36,7 +59,7 @@ export async function legacyPipe(launcher: string, action: string, id: string): 
   }
 }
 
-export async function migrateSecrets(root: string, runtime: LakeRuntime): Promise<Params> {
+export async function migrateSecrets(root: string, runtime: Pick<LakeRuntime, "dispatch">): Promise<Params> {
   const launcher = process.env.LAKE_SIGNED_LAUNCHER;
   if (process.env.LAKE_EXPLICIT_SECRET_MIGRATION !== "1" || !launcher)
     throw new Error("请使用签名的 bin/lake secrets migrate 执行一次性迁移");

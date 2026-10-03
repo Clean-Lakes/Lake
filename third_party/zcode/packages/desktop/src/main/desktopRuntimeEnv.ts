@@ -29,6 +29,7 @@ import { resolvePlatformKeyForPackagedApp } from "../../scripts/target-platform.
 import {
   getAppConfigDir,
   getDataBaseDir,
+  getZCodeDataRootDir,
   ZCODE_CUA_BUNDLED_HELPER_APP_PATH_ENV,
   ZCODE_WINDOWS_APP_INSTALL_DIR_ENV,
 } from "@zcode/services/node";
@@ -60,7 +61,7 @@ function isTruthyRuntimeEnvOverride(name: string): boolean {
 // 这里允许测试显式隔离运行时身份，正常桌面/远控路径保持原来的默认值。
 export const runtimeApplicationName =
   readRuntimeEnvOverride("ZCODE_DESKTOP_APPLICATION_NAME") ??
-  (isLocalDevelopmentRuntime ? "ZCode Dev" : isPreviewPackagedRuntime ? "ZCode Preview" : "ZCode");
+  (isLocalDevelopmentRuntime ? "LAKE Dev" : isPreviewPackagedRuntime ? "LAKE Preview" : "LAKE");
 // Electron 的 app.getPath("home") 不一定跟随测试进程里的 HOME 覆盖。
 // e2e 默认工作区依赖 home 路径，因此提供显式覆盖，避免测试写到开发者真实 ~/ZCodeProject。
 export const runtimeHomePath = readRuntimeEnvOverride("ZCODE_DESKTOP_HOME_DIR");
@@ -70,6 +71,7 @@ export const shouldUseElectronDefaultUserDataPath = isTruthyRuntimeEnvOverride(
 );
 export const runtimeUserDataPath =
   readRuntimeEnvOverride("ZCODE_DESKTOP_USER_DATA_DIR") ??
+  (process.env.LAKE_HOME ? join(process.env.LAKE_HOME, "desktop") : undefined) ??
   (shouldUseElectronDefaultUserDataPath
     ? undefined
     : join(getElectronAppPath("appData"), runtimeApplicationName));
@@ -304,6 +306,13 @@ export function resolveRemoteAssetDirs(
   options: ResolveRemoteCdnOptions = {},
   localEnv: LocalRuntimeEnv = {},
 ): RemoteAssetDirs {
+  // Forked remote runtimes must use the same isolated filesystem namespace.
+  // Never recover a missing LAKE asset by fetching an upstream ZCode binary.
+  if (isElectronAppPackaged()) return {
+    mockCdnDir: join(process.resourcesPath, "lake-remote-assets"),
+    remoteCdnBaseUrls: [],
+    remoteCacheDir: resolveRemoteAssetCacheDir(localEnv),
+  };
   const remoteCdnBaseUrls = resolveRemoteCdnBaseUrls(options, localEnv);
   const remoteCdnBaseUrl = remoteCdnBaseUrls[0];
 
@@ -313,7 +322,7 @@ export function resolveRemoteAssetDirs(
   // 不再暴露任何安装包内 remote-assets 路径，避免 remote 资源再次被塞回安装包。
   // 功能开关：开发态默认继续走 mock-cdn，只有显式打开开关才切到公网 CDN。
   // 这样能兼容离线开发场景，同时允许在开发环境提前验证真实 CDN 下载链路。
-  if (isElectronAppPackaged() || shouldUseRemoteCdnInDevelopment(localEnv)) {
+  if (shouldUseRemoteCdnInDevelopment(localEnv)) {
     return {
       remoteCdnBaseUrl,
       remoteCdnBaseUrls,
@@ -457,7 +466,7 @@ function resolveDynamicWorkflowModeHostEnv(options: {
     const mode = normalizeDynamicWorkflowMode(options.inheritedValue);
     return mode ? { [ZCODE_DYNAMIC_WORKFLOW_MODE_ENV]: mode } : {};
   }
-  if (options.isPreview) {
+  if (options.isPackaged) {
     return { [ZCODE_DYNAMIC_WORKFLOW_MODE_ENV]: "alwaysOn" };
   }
   return {};
@@ -495,7 +504,7 @@ export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>)
             )
           ? rawInheritedEnv.ZCODE_CUA_BUNDLED_HELPER_APP_PATH?.trim() ||
             join(
-              rawInheritedEnv.ZCODE_HOME?.trim() || join(homedir(), ".zcode"),
+              getZCodeDataRootDir(),
               "computer-use",
               "dev",
               DEV_HELPER_APP_NAME,
@@ -545,6 +554,8 @@ export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>)
     // 显式注入编译期产品身份，保证主进程与 host 的身份语义一致；地址独立解析。
     // inheritedEnv 从 .env 通用变量补齐 ZCode/ZAI 链接，未覆盖时统一使用线上默认值。
     ZCODE_ENV,
+    LAKE_HOME: process.env.LAKE_HOME || getZCodeDataRootDir(),
+    ZCODE_STORAGE_DIR: getZCodeDataRootDir(),
     // Preview 与生产版共享任务、配置和凭据，但不同版本的 Helper 不能互相覆盖或触发降级保护。
     // 只隔离 computer-use 下的运行组件，不改写 ZCODE_HOME / ZCODE_DATA_BASE_DIR 业务数据根。
     ...(isPreviewPackagedRuntime ? { ZCODE_CUA_HELPER_INSTALL_VARIANT: "preview" } : {}),

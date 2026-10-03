@@ -521,6 +521,7 @@ async function stageRemoteBundledSkillPack(glmDir) {
 // 不必再为每个平台准备一份内嵌 node 的 SEA 二进制。zcode.cjs 跨平台同一份，逐平台只是放进各自的
 // glm/<platform> 组件目录，保持现有 manifest 组件结构不变。
 async function stageRemoteAgentBundles() {
+  const { stageAgentRuntimeModules } = await import('../packages/desktop/scripts/stage-agent-bundle.mjs');
   console.log("==> Building zcode-cli bundle for remote agents");
   // 复用桌面同款构建脚本（turbo build:desktop-agent --filter=@zcode/cli），命中缓存时几乎瞬时。
   runCommand(process.execPath, [join(rootDir, "scripts/build-desktop-agent-cli.mjs")], {
@@ -542,6 +543,10 @@ async function stageRemoteAgentBundles() {
     rmSync(glmDir, { recursive: true, force: true });
     mkdirSync(glmDir, { recursive: true });
     copyFileSync(cliBundlePath, join(glmDir, "zcode.cjs"));
+    mkdirSync(join(glmDir, 'provider'), { recursive: true });
+    copyFileSync(join(rootDir, 'apps/zcode-cli/packages/cli/dist/provider/zcode-builtin.json'), join(glmDir, 'provider/zcode-builtin.json'));
+    copyFileSync(join(rootDir, 'apps/zcode-cli/packages/lake/dist/lake-data.cjs'), join(glmDir, 'lake-data.cjs'));
+    stageAgentRuntimeModules({ repoRoot: rootDir, glmDir });
     stageRemoteOfficialPlugins(glmDir);
     await stageRemoteBundledSkillPack(glmDir);
     console.log(`  [ok] mock-cdn glm/${platformKey}/zcode.cjs`);

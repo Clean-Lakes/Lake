@@ -527,6 +527,7 @@ export type CuaOsSupport =
  * 业务服务（文件、终端、凭据等）走 IServiceAccessor 的 RPC 通道。
  */
 export interface IPlatformService {
+  lakeDataRequest?(request: import('./lake-data.js').LakeDataRequest): Promise<import('./lake-data.js').LakeDataResult>;
   /** 当前平台的文件选择框是否能返回 agent 可访问的本地绝对路径 */
   canSelectFilePath?: boolean;
 
@@ -687,7 +688,7 @@ export interface IPlatformService {
    */
   onPaymentCallback(callback: (url: string) => void): () => void;
 
-  /** 注册 `zcode://share/import?code=...` 导入意图。 */
+  /** 注册 `lake://share/import?code=...` 导入意图。 */
   onShareImport?(callback: (payload: { shareCode: string }) => void): () => void;
 
   /** 通知 main process renderer 已就绪，触发缓存的冷启动 deep link 转发 */
@@ -838,7 +839,7 @@ export interface IPlatformService {
   /** 注册用户点击系统通知后跳转到对应任务的回调，返回 disposer */
   onTaskNotificationClick(handler: (taskId: string) => void): () => void;
 
-  /** 导出日志：打包 ~/.zcode/v2 及外部 agent 日志为 zip 并在系统文件浏览器中显示 */
+  /** 导出日志：打包 ~/.lake/v2 及外部 agent 日志为 zip 并在系统文件浏览器中显示 */
   exportLogs(): Promise<{ success: boolean; path?: string; error?: string }>;
 
   /** 截取当前窗口，用于错误反馈携带现场画面；Web fallback 可返回 null */

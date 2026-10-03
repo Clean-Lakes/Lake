@@ -20,10 +20,11 @@ import { sql as v14 } from "./migrations/v14.js";
 import { sql as v15 } from "./migrations/v15.js";
 import { sql as v16 } from "./migrations/v16.js";
 import { sql as v18 } from "./migrations/v18.js";
+import { sql as v20 } from './migrations/v20.js';
 import type { View } from "../../domain/validation.js";
 
-export const SCHEMA_VERSION = 19;
-const migrations = ["", v1, v2, v3, v4, v5, v6, v7, v8 + v8Backfill, v9, v10, v11, v12, v13, v14, v15, v16, "", v18, ""];
+export const SCHEMA_VERSION = 20;
+const migrations = ["", v1, v2, v3, v4, v5, v6, v7, v8 + v8Backfill, v9, v10, v11, v12, v13, v14, v15, v16, "", v18, "", v20];
 export const newID = (): string => randomBytes(16).toString("hex");
 export const timeView = (row: View): View => {
   const result = { ...row };
