@@ -70,9 +70,9 @@ The user's final scope supersedes the previous frontend preservation requirement
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-010 | After TASK-003 through TASK-009, test data/vault preservation, scoped associations, original workflow routing, native sessions switching during active work, background completion and approval routing with an isolated model fixture. | No | 2026-10-02 |
+| TASK-010 | After TASK-003 through TASK-009, test data/vault preservation, scoped associations, original workflow routing, native sessions switching during active work, background completion and approval routing with an isolated model fixture. | No | 2026-10-03 |
 | TASK-011 | Run native root/CLI typecheck and lint, data tests, architecture checks, launcher Go checks and signed native build. Record existing lint failures separately. | Yes | 2026-10-03 |
-| TASK-012 | After packaged runtime verification and TASK-011, install the verified app with backup, update migration documentation and commit/push codex/zcode-lake-runtime; record unavailable GUI checks separately. | No | 2026-10-02 |
+| TASK-012 | After packaged runtime verification and TASK-011, install the verified app with backup, update migration documentation and commit/push codex/zcode-lake-runtime; record unavailable GUI checks separately. | Yes | 2026-10-03 |
 
 ## 3. Alternatives
 
@@ -119,3 +119,5 @@ The user's final scope supersedes the previous frontend preservation requirement
 Data/history/private storage: 36 passing tests. Root typecheck and CLI typecheck: passed (29 CLI packages). Root lint: 70 warnings, no errors. LAKE lint and architecture: passed. Full CLI lint: fails on existing max-lines limits, recorded separately. Go test/vet: passed.
 
 Packaged native protocol: session B created, opened and completed while A was active; A completed and reopened. Native saved workflow completed with a Markdown artifact. Main/Host and native Scheduler startup verified. Packaged runtime probes passed under pinned Node and Electron Node; TUI import, signed installed CLI --help and deep signature verification passed. Native client installed with the previous app retained as a timestamped backup. GUI interaction checks in TASK-010 remain pending because macOS is locked and computer-use tools require manual unlock. Upstream Computer Use is an unavailable open-source placeholder, not a shipped proprietary capability.
+
+Delivery: native application installed at ~/Applications/Lake.app; prior application retained as a timestamped backup. Implementation commit 26d199f2 pushed to origin/codex/zcode-lake-runtime. TASK-010 remains open only for native GUI navigation and permission interaction checks after manual Mac unlock.
