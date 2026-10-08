@@ -1,64 +1,72 @@
 #!/usr/bin/env node
-import {
-  readFile,
-  writeFile,
-  rename,
-  rm,
-  mkdir,
-  realpath,
-} from "node:fs/promises";
+import { readFile, writeFile, rename, rm, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
-import { parseArgs } from "node:util";
+import {
+  parseCli,
+  assertSupported,
+  helpText,
+  commands,
+} from "./cli-options.js";
+import { runConversation } from "./cli-exec.js";
 import { spawn } from "node:child_process";
-import { createInterface } from "node:readline/promises";
-import { pathToFileURL, fileURLToPath } from "node:url";
+import { fileURLToPath } from "node:url";
 import { createLakeApplication } from "../app/application.js";
 import { createHttpServer } from "./http-server.js";
-import { CredentialStore, privateDirectory } from "../storage/credentials.js";
+import { CredentialStore } from "../storage/credentials.js";
 import { Redactor } from "../storage/redaction.js";
 import { connectOrStartDaemon } from "./daemon-client.js";
-import { renderJsonResult, resultExitCode } from "./cli-renderer.js";
+import { renderJsonResult } from "./cli-renderer.js";
 import { publicError, requireCondition } from "../domain/errors.js";
-import { interactiveChat } from "./cli-chat.js";
 import { VERSION } from "../version.js";
 export async function runCli(args = process.argv.slice(2)): Promise<void> {
-  const { values, positionals } = parseArgs({
-    args,
-    allowPositionals: true,
-    options: {
-      help: {type:'boolean',short:'h'},
-      version: {type:'boolean'},
-      home: { type: "string" },
-      port: { type: "string" },
-      open: { type: "boolean" },
-      json: { type: "boolean" },
-      prompt: { type: "string" },
-      intent: { type: "string" },
-      lake: { type: "string" },
-      environment: { type: "string" },
-      resource: { type: "string", multiple: true },
-      provider: { type: "string" },
-      file: { type: "string" },
-      kind: { type: "string" },
-      id: { type: "string" },
-      stdin: { type: "boolean" },
-      action: { type: "string" },
-      digest: { type: "string" },
-      task: { type: "string" },
-      criterion: { type: "string" },
-      session: { type: "string" },
-      terminal: { type: "string" },
-      effects: { type: "string" },
-      "max-calls": { type: "string" },
-      "max-tokens": { type: "string" },
-      manifest: { type: "string" },
-    },
-  });
+  const options = parseCli(args),
+    values = options.values;
+  if (options.command === "help") {
+    process.stdout.write(helpText(options.args[0]));
+    return;
+  }
+  assertSupported(options);
+  if (options.command === "completion") {
+    const shell = options.args[0];
+    requireCondition(
+      ["bash", "zsh", "fish"].includes(shell ?? ""),
+      "invalid_input",
+      "Use completion bash|zsh|fish",
+    );
+    const words = commands.join(" ");
+    process.stdout.write(
+      shell === "bash"
+        ? `complete -W '${words} --model --config --profile --cd --add-dir --sandbox --ask-for-approval --json --last --help --version' lake\n`
+        : shell === "zsh"
+          ? `#compdef lake\n_arguments '1:command:(${words})' '*:argument:_files'\n`
+          : `complete -c lake -f -a '${words}'\n`,
+    );
+    return;
+  }
+  if (options.command === "features") {
+    renderJsonResult({
+      interactive: true,
+      exec: true,
+      resume: true,
+      fork: true,
+      profiles: true,
+      modelTools: true,
+      workspaceScope: true,
+      resourceApprovals: true,
+      jsonl: true,
+      cloud: false,
+      mcpHost: false,
+      images: false,
+      arbitraryShell: false,
+    });
+    return;
+  }
   const home = resolve(
     values.home ?? process.env.LAKE_HOME ?? join(homedir(), ".lake"),
   );
-  const [command, sub, id] = positionals;
+  const command = options.command,
+    [sub, id] = options.args;
   if (command === "version" || values.version) {
     renderJsonResult({ version: VERSION, node: process.versions.node });
     return;
@@ -142,13 +150,17 @@ export async function runCli(args = process.argv.slice(2)): Promise<void> {
     process.once("SIGINT", () => void stop());
     return;
   }
-  if (!command || command === "help" || values.help) {
-    process.stdout.write(
-      "Lake Agent 0.0.1\nCommands: serve, chat, run, sessions, resources, services, credentials, grants, budget, approve, cancel, terminal, doctor\nUse --home to select an isolated home; model configuration is agent/config.json.\n",
-    );
+  const client = await connectOrStartDaemon(home);
+  if (["chat", "run", "exec", "resume", "fork", "review"].includes(command)) {
+    await runConversation(client, options);
     return;
   }
-  const client = await connectOrStartDaemon(home);
+  if (command === "models") {
+    const config = await client.request("GET", "config");
+    renderJsonResult(config);
+    return;
+  }
+
   if (command === "open") {
     const { ticket } = await client.request("POST", "launch", {});
     spawn(
@@ -392,96 +404,6 @@ export async function runCli(args = process.argv.slice(2)): Promise<void> {
       }
       await new Promise((r) => setTimeout(r, 150));
     }
-    return;
-  }
-  if (command === "run" || command === "chat") {
-    if (command === "chat" && values.session && !values.json) {
-      await interactiveChat(client, values.session);
-      return;
-    }
-    requireCondition(
-      values.lake && values.environment,
-      "invalid_input",
-      "Use --lake and --environment",
-    );
-    const assets = await client.request("GET", "resources"),
-      resources =
-        values.resource ??
-        assets.resources
-          .filter(
-            (r: any) =>
-              r.lakeId === values.lake &&
-              r.environmentId === values.environment,
-          )
-          .map((r: any) => r.id);
-    let prompt = values.prompt;
-    if (command === "chat" && !prompt) {
-      const input = createInterface({
-        input: process.stdin,
-        output: process.stderr,
-      });
-      prompt = await input.question("目标：");
-      input.close();
-    }
-    requireCondition(prompt, "invalid_input", "Use --prompt");
-    const session = await client.request("POST", "sessions", {
-      lakeId: values.lake,
-      environmentId: values.environment,
-      objective: prompt,
-      resourceIds: resources,
-      ...(values.provider ? { providerId: values.provider } : {}),
-      intent: values.intent ?? "diagnose",
-    });
-    if (command === "chat" && !values.json) {
-      await interactiveChat(client, session.id);
-      return;
-    }
-    let result: any;
-    while (true) {
-      const snapshot = await client.request(
-          "GET",
-          `sessions/${session.id}/snapshot`,
-        ),
-        task = snapshot.tasks.find((t: any) => t.id === session.rootTaskId);
-      if (
-        ["succeeded", "qualified", "failed", "cancelled"].includes(task.status)
-      ) {
-        result = {
-          sessionId: session.id,
-          taskId: task.id,
-          status: task.status,
-          reportArtifactId: task.reportArtifactId ?? null,
-          waitingReason: task.waitingReason ?? null,
-        };
-        break;
-      }
-      if (
-        task.status === "waiting" &&
-        !snapshot.specialist_runs.some((r: any) =>
-          ["queued", "running"].includes(r.state.status),
-        )
-      ) {
-        result = {
-          sessionId: session.id,
-          taskId: task.id,
-          status: "waiting",
-          waitingReason: task.waitingReason,
-          actions: snapshot.actions
-            .filter((a: any) =>
-              ["waiting_approval", "unknown"].includes(a.status),
-            )
-            .map((a: any) => ({
-              id: a.id,
-              status: a.status,
-              digest: a.proposalDigest,
-            })),
-        };
-        break;
-      }
-      await new Promise((r) => setTimeout(r, 200));
-    }
-    renderJsonResult(result);
-    process.exitCode = resultExitCode(result.status);
     return;
   }
   requireCondition(false, "invalid_input", "Unknown command");

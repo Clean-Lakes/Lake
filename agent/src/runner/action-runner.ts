@@ -17,6 +17,8 @@ import { toolResult } from "../domain/entities.js";
 import { requireCondition, LakeError, publicError } from "../domain/errors.js";
 import { changeCommands } from "../domain/events.js";
 import { GrantService } from "../operations/grants.js";
+import { checkInvocation } from "../operations/invocation-policy.js";
+import type { Session } from "../domain/entities.js";
 import { executionSignal } from "./timeouts.js";
 export class ActionRunner {
   private readonly running = new Map<string, Promise<ToolResult>>();
@@ -118,6 +120,9 @@ export class ActionRunner {
           resource.revision === a.targets[0]!.revision,
         "identity_mismatch",
       );
+      const session = await this.store.get<Session>("sessions", a.sessionId);
+      requireCondition(session, "not_found");
+      checkInvocation(session, resource, a.effect);
       await new GrantService(this.store).resolve(
         resource,
         a.effect,

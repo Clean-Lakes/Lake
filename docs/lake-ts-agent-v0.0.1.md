@@ -65,6 +65,15 @@ enable Power 不等于授权。读、变更、交互授权均绑定资源身份�
 
 ## 运行与工作台
 
+CLI 支持裸命令/位置目标、`exec`、`resume --last`、`fork`、`-m/-c/-p/-C`、`--add-dir`、执行策略与 JSONL。完整行为和与 Codex 的差异见 [CLI 兼容清单](lake-cli-compatibility.md)。
+
+```sh
+bin/lake
+bin/lake -m ds-flash "检查当前项目"
+bin/lake exec -s read-only --json "分析部署配置"
+bin/lake resume --last
+```
+
 ```sh
 bin/lake serve --open
 bin/lake open

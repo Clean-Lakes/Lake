@@ -60,6 +60,9 @@ export type TaskStatus =
   | "failed"
   | "cancelled";
 export interface Session extends Entity {
+  createdAt?: string;
+  parentSessionId?: string;
+  invocation?: Invocation;
   lakeId: string;
   environmentId: string;
   status: TaskStatus;
@@ -338,3 +341,4 @@ export function toolResult(
     ...extra,
   };
 }
+import type { Invocation } from "./invocation.js";

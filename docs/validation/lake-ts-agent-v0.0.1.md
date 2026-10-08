@@ -28,7 +28,7 @@ Agent 循环、历史、上下文、预算、专员工单、共享终端和持�
 
 TEST-001～009 的证据对应 contracts/state-machines/daemon-lock/storage/event-replay/credentials/artifacts/budgets；TEST-010～018 对应 model-protocol、agent-loop、runtime-recovery、runtime-guards、context-compaction、skills、specialist-scheduler/inbox/cancellation；TEST-019～035 对应 authorization、execution-sessions、terminal-concurrency/redaction、handoff、workspace、SSH/K8s/PG/HTTP、approval/action-runner、verification/business-proof/delivery/service-context；TEST-036～040、042～043 对应 acceptance 套件与 verify-release。部分行为规格合并到同一测试文件，不按文件数量伪造覆盖。
 
-真实协议使用合成凭据和固定 HTTP 模型，未读取用户模型 key、SSH 私钥、Keychain 或生产数据库。未知写效果核对前不重派；回滚成功仍保持原变更失败。外部模型 smoke 为 `not_run`，这不是任意兼容 provider 都已验证的声明。
+真实协议使用合成凭据和固定 HTTP 模型，未读取用户模型 key、SSH 私钥、Keychain 或生产数据库。未知写效果核对前不重派；回滚成功仍保持原变更失败。初次核心验收的外部模型 smoke 为 `not_run`；随后 CLI 增量的真实 DS 验证见文末。其他兼容 provider 不据此推定已验证。
 
 ## 浏览器人工验收（TEST-041）
 
@@ -51,6 +51,20 @@ macOS 实测 600.3 秒、2000 个业务事件、10 MiB 终端输出、3 active s
 
 ## 明确边界
 
-首版 K8s、PostgreSQL 只读；自动变更仅登记的 Linux 配置/systemd 模板和受控本地 patch。专用 VM 断电、生产宿主机、真实 K8s 集群、远端真实模型、跨主机发布和数据库写未验收。没有任意插件宿主、桌面安装包或定时自治。未知输出的任意恶意编码不是完整信息流隔离保证。
+首版 K8s、PostgreSQL 只读；自动变更仅登记的 Linux 配置/systemd 模板和受控本地 patch。专用 VM 断电、生产宿主机、真实 K8s 集群、跨主机发布和数据库写未验收；远端模型仅文末列出的两个 DS 模型通过兼容测试。没有任意插件宿主、桌面安装包或定时自治。未知输出的任意恶意编码不是完整信息流隔离保证。
 
 原有插件未跟踪目录、旧 Electron 客户端和用户旧数据未改写或自动迁移。正式工作与凭据需要按运行说明显式配置。
+
+## CLI 与 DS 增量验收（2026-10-08）
+
+对应 [实施计划](../../plan/feature-codex-style-cli-1.md) 和 [CLI 对照](../lake-cli-compatibility.md)。此增量以当前 macOS 签名入口验收；上述 Linux 分发和性能数据属于初次核心验收，不作为此增量的重新测量。
+
+- `pnpm --dir agent check`：TypeScript、UI 类型和模块边界通过。
+- 单元 7/7、集成 48/48、验收 12/12；Go launcher 编译检查通过。
+- 入口测试覆盖裸 prompt、stdin、exec/resume/fork、-m/-c/-p/-C/--add-dir、JSONL、最终输出文件、旧 run 单 JSON，以及帮助不启动 daemon。
+- 策略测试覆盖只读阻断已授权 patch、本地 never 精确绑定审批、作用域及模型覆盖隔离、fork 不重放行动、空闲模型切换保持原策略；显式运维范围保留原授权与人工审批行为。
+- CLI SIGTERM 测试验证模型请求中取消落盘；修复迟到模型结果将 cancelled 任务重新写为 waiting 的竞态。
+- 签名 `bin/lake` 在真实 PTY 中完成裸命令目标输入、模型正文与进度输出、`/model` 和 `/quit`。
+- 通过 `scripts/build_lake.sh` 构建并校验独立分发，runtime digest：`088fdeecd86ebf5381c9d822a9354414d48ecf54b4088e8e081cc13fcebf6757`。
+- 用户授权后接入原有 DS 私有凭据；Pro/Flash 各完成真实流式两轮 mock echo 工具往返，reasoning_content 回填和 usage 均通过。只发送公开测试文字与虚构工具结果，未访问生产资源。API key 未进入 argv、输出或仓库；无 Keychain 调用。
+- `bin/lake models` 确认默认 `ds` / `deepseek-v4-pro`，以及 `ds-flash` / `deepseek-flash`；均为 1M window / 8192 output。旧 v2 配置与旧凭据保留。

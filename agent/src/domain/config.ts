@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CliPreferencesSchema } from "./invocation.js";
 export const ProfileSchema = z
   .object({
     id: z.string().min(1),
@@ -23,6 +24,10 @@ export const ProviderSchema = z
     supportsUsageInStream: z.boolean().default(false),
     inputPricePerMillion: z.number().nonnegative().optional(),
     outputPricePerMillion: z.number().nonnegative().optional(),
+    thinking: z.enum(["enabled", "disabled"]).optional(),
+    reasoningEffort: z
+      .enum(["minimal", "low", "medium", "high", "xhigh", "max", "ultra"])
+      .optional(),
   })
   .strict()
   .refine((v) => v.maxOutputTokens < v.contextWindowTokens, {
@@ -35,6 +40,7 @@ export const ConfigSchema = z
     defaultProvider: z.string().min(1),
     profiles: z.array(ProfileSchema).default([]),
     trustedSkillRoots: z.array(z.string()).default([]),
+    cli: CliPreferencesSchema.optional(),
     limits: z
       .object({
         maxActiveSpecialists: z.int().min(1).max(3).default(3),

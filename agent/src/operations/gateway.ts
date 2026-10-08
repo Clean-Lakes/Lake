@@ -11,6 +11,7 @@ import type {
   ToolResult,
   Resource,
   Service,
+  Session,
 } from "../domain/entities.js";
 import { toolResult } from "../domain/entities.js";
 import { ActionProposalSchema } from "../domain/schemas.js";
@@ -22,6 +23,7 @@ import { ApprovalService } from "./approvals.js";
 import { resolveTargets } from "./scope.js";
 import { canonicalActionDigest } from "./action-digest.js";
 import { stableId } from "../specialists/task-progress.js";
+import { checkInvocation, autoApprove } from "./invocation-policy.js";
 import { ResourceLockService } from "../runner/resource-locks.js";
 export class OperationGateway implements OperationGatewayPort {
   constructor(
@@ -100,6 +102,12 @@ export class OperationGateway implements OperationGatewayPort {
     const { manifest, tool, schema } = this.powers.capability(
       request.capability,
     );
+    const session = await this.store.get<Session>(
+      "sessions",
+      request.sessionId,
+    );
+    requireCondition(session, "not_found");
+    checkInvocation(session, resource, tool.effect);
     requireCondition(
       manifest.requiredResourceKinds.includes(resource.kind),
       "scope_denied",
@@ -209,6 +217,25 @@ export class OperationGateway implements OperationGatewayPort {
     if (a.status !== "proposed" && a.status !== "waiting_approval") return a;
     let status: "authorized" | "waiting_approval" = "authorized";
     if (a.effect !== "read") {
+      const session = await this.store.get<Session>("sessions", a.sessionId),
+        resources = await Promise.all(
+          a.targets.map((t) => this.store.get<Resource>("resources", t.id)),
+        );
+      requireCondition(session && resources.every(Boolean), "not_found");
+      if (autoApprove(session, resources as Resource[])) {
+        if (a.status === "proposed")
+          await this.store.transact(
+            changeCommands(
+              "actions",
+              { ...a, revision: a.revision + 1, status: "waiting_approval" },
+              "action.approval_required",
+              a.actor,
+              new Date().toISOString(),
+            ),
+          );
+        await this.approvals.approve(a.id, a.proposalDigest, this.principal);
+        return this.authorizeApproved(a.id);
+      }
       try {
         await this.approvals.consume(a, this.principal);
       } catch {
@@ -223,6 +250,26 @@ export class OperationGateway implements OperationGatewayPort {
         status === "authorized"
           ? "action.authorized"
           : "action.approval_required",
+        a.actor,
+        new Date().toISOString(),
+      ),
+    );
+    return value;
+  }
+  private async authorizeApproved(id: string): Promise<Action> {
+    const a = await this.store.get<Action>("actions", id);
+    requireCondition(a, "not_found");
+    await this.approvals.consume(a, this.principal);
+    const value = {
+      ...a,
+      revision: a.revision + 1,
+      status: "authorized" as const,
+    };
+    await this.store.transact(
+      changeCommands(
+        "actions",
+        value,
+        "action.authorized",
         a.actor,
         new Date().toISOString(),
       ),
@@ -255,6 +302,9 @@ export class OperationGateway implements OperationGatewayPort {
         "identity_mismatch",
       );
       await this.grants.resolve(r, a.effect, this.principal);
+      const session = await this.store.get<Session>("sessions", a.sessionId);
+      requireCondition(session, "not_found");
+      checkInvocation(session, r, a.effect);
       if (a.effect === "change") await this.requireBusinessAcceptance(task, r);
     }
     const commands: DbCommand[] = this.locks.commands(

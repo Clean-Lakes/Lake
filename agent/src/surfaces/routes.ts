@@ -12,6 +12,8 @@ import type {
 import { publicProjection } from "../domain/schemas.js";
 import { requireCondition, LakeError, publicError } from "../domain/errors.js";
 import { canonicalActionDigest } from "../operations/action-digest.js";
+import { resolveWorkspaces } from "../app/workspaces.js";
+import { InvocationSchema } from "../domain/invocation.js";
 import { stableId } from "../specialists/task-progress.js";
 export const CommandSchema = z
   .object({
@@ -49,12 +51,29 @@ export async function dispatchRoute(
           id: p.id,
           model: p.model,
           supportsTools: p.supportsTools,
+          contextWindowTokens: p.contextWindowTokens,
+          maxOutputTokens: p.maxOutputTokens,
+          supportsStreaming: p.supportsStreaming,
         })),
         defaultProvider: app.config.defaultProvider,
+        cli: app.config.cli,
       };
     if (collection === "sessions") {
       if (!id) return publicProjection(await app.store.list("sessions"));
       if (operation === "snapshot") return app.data.snapshot(id);
+      if (operation === "activity") {
+        requireCondition(await app.store.get("sessions", id), "not_found");
+        const after = query.get("after") ?? "0";
+        requireCondition(/^\d+$/.test(after), "invalid_input");
+        return app.events.replay(`session:${id}`, after);
+      }
+      if (operation === "messages")
+        return (await app.store.list<any>("model_exchanges"))
+          .filter(
+            (e) =>
+              e.sessionId === id && e.actor === id && e.status === "complete",
+          )
+          .map((e) => ({ text: e.assistant.content, createdAt: e.createdAt }));
     }
     if (collection === "terminals" && id && operation === "output") {
       const t = await app.store.get<ExecutionSession>("execution_sessions", id);
@@ -146,13 +165,82 @@ export async function dispatchRoute(
   ]);
   let result: unknown;
   try {
-    if (collection === "sessions" && !id) {
+    if (
+      collection === "workspaces" &&
+      operation === undefined &&
+      id === "resolve"
+    ) {
+      const p = z
+        .object({
+          roots: z.array(z.string()).min(1).max(32),
+          sandboxMode: InvocationSchema.shape.sandboxMode,
+        })
+        .strict()
+        .parse(data);
+      result = await resolveWorkspaces(app, p.roots, p.sandboxMode);
+    } else if (collection === "sessions" && !id) {
       const session = await app.createSession(
         data,
         stableId("session:" + command.requestId),
       );
       result = publicProjection(session);
       app.startRoot(session.id);
+    } else if (collection === "sessions" && id && operation === "model") {
+      const p = z
+        .object({
+          providerId: z.string().min(1),
+          model: z.string().min(1).optional(),
+          reasoningEffort: InvocationSchema.shape.reasoningEffort,
+        })
+        .strict()
+        .parse(data);
+      result = publicProjection(
+        await app.configureModel(id, p.providerId, p.model, p.reasoningEffort),
+      );
+    } else if (collection === "sessions" && id && operation === "fork") {
+      const p = z
+        .object({
+          objective: z.string().min(1).max(65536).optional(),
+          providerId: z.string().optional(),
+          invocation: InvocationSchema.optional(),
+        })
+        .strict()
+        .parse(data);
+      const s = await app.store.get<Session>("sessions", id);
+      requireCondition(s, "not_found");
+      const task = await app.store.get<TaskContract>("tasks", s.rootTaskId);
+      requireCondition(task, "not_found");
+      const messages = (await app.store.list<any>("model_exchanges"))
+        .filter(
+          (e) =>
+            e.sessionId === id && e.actor === id && e.status === "complete",
+        )
+        .slice(-3)
+        .map((e) => e.assistant.content ?? "")
+        .join("\n")
+        .slice(-12000);
+      const child = await app.createSession(
+        {
+          lakeId: s.lakeId,
+          environmentId: s.environmentId,
+          resourceIds: task.scope,
+          objective: p.objective ?? task.objective,
+          providerId: p.providerId ?? s.providerId,
+          invocation: p.invocation ?? s.invocation,
+          parentSessionId: id,
+          intent: task.intent ?? "diagnose",
+          constraints: [
+            ...task.constraints,
+            `Previous task context (historical, re-observe before changing): ${task.objective}\n${messages}`,
+          ],
+          acceptanceCriteria: task.acceptanceCriteria.map(
+            ({ confirmedBy, ...criterion }) => criterion,
+          ),
+        },
+        stableId("session:" + command.requestId),
+      );
+      result = publicProjection(child);
+      app.startRoot(child.id);
     } else if (collection === "sessions" && id && operation === "messages") {
       const p = z
         .object({
