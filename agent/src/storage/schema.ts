@@ -1,0 +1,36 @@
+export const tables = [
+  "lakes",
+  "environments",
+  "resources",
+  "services",
+  "service_bindings",
+  "service_dependencies",
+  "sessions",
+  "session_messages",
+  "tasks",
+  "task_steps",
+  "specialist_profiles",
+  "specialist_runs",
+  "specialist_inbox",
+  "execution_sessions",
+  "terminal_chunks",
+  "actions",
+  "action_attempts",
+  "approvals",
+  "resource_grants",
+  "resource_locks",
+  "observations",
+  "hypotheses",
+  "evidence",
+  "model_exchanges",
+  "model_usage",
+  "budget_reservations",
+  "skill_snapshots",
+  "checkpoints",
+  "artifacts",
+  "api_requests",
+] as const;
+export function assertTable(table: string): void {
+  if (!tables.includes(table as (typeof tables)[number]))
+    throw new Error("Unknown storage table");
+}

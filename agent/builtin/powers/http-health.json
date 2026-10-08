@@ -1,0 +1,37 @@
+{
+  "id": "http-health",
+  "version": "0.0.1",
+  "description": "Bound HTTP service health",
+  "requiredResourceKinds": [
+    "http"
+  ],
+  "requiredGrants": [
+    "read"
+  ],
+  "tools": [
+    {
+      "name": "probe",
+      "description": "Probe the bound business URL",
+      "effect": "read",
+      "schema": "http"
+    },
+    {
+      "name": "health_window",
+      "description": "Observe consecutive healthy responses",
+      "effect": "read",
+      "schema": "http"
+    }
+  ],
+  "inputSchemas": {
+    "probe": "http",
+    "health_window": "http"
+  },
+  "effectPolicies": {
+    "probe": "read",
+    "health_window": "read"
+  },
+  "verificationProfiles": [
+    "http-service-v1"
+  ],
+  "adapterFactory": "http-health"
+}

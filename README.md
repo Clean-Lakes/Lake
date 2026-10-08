@@ -1,47 +1,40 @@
-# LAKE
+# Lake
 
-LAKE 使用仓库内二开的 ZCode 原生 Electron 客户端和 CLI。湖、资源、湖志及关联元数据由 TypeScript 数据层提供；会话、模型、工具、权限、Skills、插件、MCP、浏览器/CUA、自动化和工作流使用原生实现。
+此分支交付 **Lake TypeScript Agent v0.0.1**：从零实现模型循环、工具协议、上下文、预算和多专员协作。一个会话拥有共享终端、任务进度、现场事实和验收证据；专员按工单组合 SSH、K8s、PostgreSQL、HTTP 与本地文件 Power。
 
-本分支采用开源版的能力范围：上游 Computer Use/CUA 包是不可用占位实现，不包含正版客户端的专有 Computer Use 服务。
+首版包括 CLI、本地 API 和 React 工作台，以及两条 Linux/systemd 运维闭环：服务故障恢复、配置变更与验证。变更需要绑定审批，失败可核对或在无漂移时回滚；进程退出码不能代替业务验收。
 
-## 启动
+## 运行
 
-macOS 需要 Go 1.25、Node.js 24.14.0、pnpm 10.33.2 和 Xcode Command Line Tools。
-
-```sh
-scripts/build_lake_desktop.sh --install
-open "$HOME/Applications/Lake.app"
-```
-
-构建使用持久的 `Lake Local Development Code Signing` 身份，验证完整应用签名后安装，原应用保留为时间戳备份。缺少签名身份时先运行 `scripts/setup_lake_signing.sh`。
-
-旧客户端仍在运行时，先退出它，再打开安装后的应用。
-
-客户端左侧的 **LAKE 湖** 可新建湖、查看和添加资源、关联项目。进入湖工作空间后，通过原生对话创建工作流；湖面板的工作流页显示关联项目的原生工作流，也可以关联全局工作流。定义、运行、历史、产物和审批仍由原生工作流组件管理。
-
-## CLI
+开发需要 Node.js **24.14.0**、pnpm **10.33.4**，macOS 构建签名入口还需要 Go 和 Xcode Command Line Tools。
 
 ```sh
-npm exec --yes --package=node@24.14.0 -- node scripts/build_zcode_agent.mjs
+pnpm --dir agent install --frozen-lockfile
+pnpm --dir agent check
 scripts/build_lake.sh
-bin/lake --help
-bin/lake
-bin/lake data '{"action":"overview"}'
+bin/lake version
+bin/lake serve --open
 ```
 
-`bin/lake` 默认启动原生 CLI，`data` 是独立数据入口。macOS 的 `bin/lake` 只能用 `scripts/build_lake.sh` 构建和签名。
+macOS 的 `bin/lake` 只能由 `scripts/build_lake.sh` 构建，使用持久的 `Lake Local Development Code Signing` 身份；缺少身份时先运行 `scripts/setup_lake_signing.sh`。若 shell 的 Node 不符合要求，用 `LAKE_AGENT_NODE` 指定 Node 24.14.0 的绝对路径。
 
-## 数据隔离
+首次使用需要配置模型、导入湖/环境/资源与服务绑定，再明确授权。不要把模型 key、SSH 私钥或数据库口令写入配置、argv 或仓库。配置和完整命令见 [运行说明](docs/lake-ts-agent-v0.0.1.md)。
 
-- 湖数据、私有凭据、原生配置与会话使用 `~/.lake`；`LAKE_HOME` 可以指定独立目录。
-- Electron 使用 `~/Library/Application Support/LAKE`。设置 `LAKE_HOME` 后，Electron 状态改放在该目录的 `desktop` 下。
-- 项目工作流和配置使用 `.lake/`、`lake.json` 和 `.lakeignore`。
-- 不自动导入正版 ZCode 的配置、会话、凭据或缓存，使用独立 `lake://` 协议和应用标识。
+```sh
+bin/lake doctor
+bin/lake resources import --file resources.json
+bin/lake services import --file services.json
+bin/lake grants create --resource RESOURCE_UUID --effects read
+bin/lake chat --lake LAKE_UUID --environment ENV_UUID --prompt '检查服务异常'
+bin/lake open
+```
 
-已有湖数据升级到 schema 20 前会创建私有备份。旧 LAKE 会话、运维工作流和计划保留为历史，新的客户端不启动旧执行器。旧 LAKE 模型配置仅在原生模型配置不存在时迁入 LAKE 自己的原生配置；原始文件和私有凭据保留。
+## 数据与边界
 
-普通运行不读取 Keychain。显式执行签名的 `bin/lake secrets migrate` 才会迁移旧 Keychain 凭据。
+新运行时数据位于 `<LAKE_HOME>/agent/`，默认父目录为 `~/.lake`；凭据仍保存在私有的 `<LAKE_HOME>/secrets/`。不会自动读取 Keychain、改写旧数据库、迁移旧会话或模型配置。旧凭据迁移必须显式使用签名的 `lake secrets migrate --manifest <file>`。
 
-[运行时与职责](docs/zcode-runtime.md) · [迁移说明](docs/migration-closure.md) · [构建验收](scripts/verify_lake_release.sh) · [第三方许可](docs/third-party-notices.md) · [原生客户端计划](plan/refactor-native-zcode-client-1.md)
+K8s、PostgreSQL 首版只读；SSH 自动变更限于登记的配置路径与 systemd 服务。Electron 安装包、任意 MCP 插件、定时自治和跨机器协作属于后续范围。真实外部模型兼容性须单独验收，确定性夹具不代表所有兼容 provider。
 
-ZCode 源码位于 `third_party/zcode`，固定上游提交 `29628c9acdb81b703bbd4080c207a0e7ce5e276e`。
+仓库保留旧 ZCode 客户端及其文档作为历史参考；本分支的新 Agent 不加载其内核。旧 Electron 构建脚本不是新 TS 工作台的入口。
+
+[完整方案](plan/architecture-lake-ts-agent-v0.0.1.md) · [验证记录](docs/validation/lake-ts-agent-v0.0.1.md) · [Power 契约](docs/lake-ts-power-contract.md) · [恢复语义](docs/lake-ts-recovery.md) · [第三方许可](agent/THIRD_PARTY_NOTICES.md)

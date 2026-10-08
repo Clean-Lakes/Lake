@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/legacykeychain"
@@ -11,9 +14,13 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 )
+
+// Set by scripts/build_lake.sh after the complete TypeScript runtime is verified.
+var agentRelease string
 
 // The signed launcher has no agent, data, workflow or SSH execution implementation.
 func main() {
@@ -34,6 +41,9 @@ func main() {
 	}
 }
 func launch(ctx context.Context, args []string) error {
+	if agentRelease != "" {
+		return launchAgent(ctx, args)
+	}
 	self, err := os.Executable()
 	if err != nil {
 		return err
@@ -90,6 +100,122 @@ func launch(ctx context.Context, args []string) error {
 	}
 	command.Cancel = func() error { return command.Process.Signal(syscall.SIGTERM) }
 	return command.Run()
+}
+
+func launchAgent(ctx context.Context, args []string) error {
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	base := filepath.Dir(self)
+	runtimeDir := filepath.Join(base, filepath.FromSlash(agentRelease))
+	if err := verifyAgentRelease(runtimeDir); err != nil {
+		return err
+	}
+	node := filepath.Join(runtimeDir, "node")
+	entry := filepath.Join(runtimeDir, "dist", "surfaces", "cli.js")
+	command := exec.CommandContext(ctx, node, append([]string{entry}, args...)...)
+	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
+	for _, variable := range os.Environ() {
+		if !strings.HasPrefix(variable, "LAKE_EXPLICIT_SECRET_MIGRATION=") && !strings.HasPrefix(variable, "LAKE_SIGNED_LAUNCHER=") {
+			command.Env = append(command.Env, variable)
+		}
+	}
+	lakeHome := os.Getenv("LAKE_HOME")
+	if lakeHome == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		lakeHome = filepath.Join(home, ".lake")
+	}
+	command.Env = append(command.Env, "LAKE_HOME="+lakeHome, "LAKE_SIGNED_LAUNCHER="+self)
+	if len(args) >= 2 && args[0] == "secrets" && args[1] == "migrate" {
+		command.Env = append(command.Env, "LAKE_EXPLICIT_SECRET_MIGRATION=1")
+	}
+	command.Cancel = func() error { return command.Process.Signal(syscall.SIGTERM) }
+	return command.Run()
+}
+
+func verifyAgentRelease(root string) error {
+	contents, err := os.ReadFile(filepath.Join(root, "manifest.json"))
+	if err != nil {
+		return errors.New("Lake TypeScript runtime is missing")
+	}
+	var manifest map[string]json.RawMessage
+	if json.Unmarshal(contents, &manifest) != nil {
+		return errors.New("Lake runtime manifest is invalid")
+	}
+	var digest string
+	if json.Unmarshal(manifest["digest"], &digest) != nil {
+		return errors.New("Lake runtime digest is invalid")
+	}
+	var platform, arch string
+	json.Unmarshal(manifest["platform"], &platform)
+	json.Unmarshal(manifest["arch"], &arch)
+	expectedArch := map[string]string{"amd64": "x64", "arm64": "arm64"}[runtime.GOARCH]
+	if platform != runtime.GOOS || arch != expectedArch {
+		return errors.New("Lake runtime target mismatch")
+	}
+	delete(manifest, "digest")
+	var body map[string]interface{}
+	if json.Unmarshal(contents, &body) != nil {
+		return errors.New("Lake runtime manifest is invalid")
+	}
+	delete(body, "digest")
+	canonical, err := json.Marshal(body)
+	if err != nil {
+		return errors.New("Lake runtime manifest is invalid")
+	}
+	sum := sha256.Sum256(canonical)
+	if hex.EncodeToString(sum[:]) != digest || !strings.HasSuffix(filepath.Base(root), "-"+digest) {
+		return errors.New("Lake runtime manifest was changed")
+	}
+	var files, links map[string]string
+	if json.Unmarshal(manifest["files"], &files) != nil || json.Unmarshal(manifest["links"], &links) != nil {
+		return errors.New("Lake runtime inventory is invalid")
+	}
+	for name, expected := range files {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		rel, err := filepath.Rel(root, path)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return errors.New("Lake runtime path escapes its release")
+		}
+		info, err := os.Lstat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			return errors.New("Lake runtime file is missing")
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return errors.New("Lake runtime file cannot be read")
+		}
+		hash := sha256.New()
+		_, copyErr := io.Copy(hash, file)
+		file.Close()
+		if copyErr != nil || hex.EncodeToString(hash.Sum(nil)) != expected {
+			return errors.New("Lake runtime file was changed")
+		}
+	}
+	for name, expected := range links {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		rel, err := filepath.Rel(root, path)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return errors.New("Lake runtime path escapes its release")
+		}
+		target, err := os.Readlink(path)
+		if err != nil || target != expected || filepath.IsAbs(target) {
+			return errors.New("Lake runtime link was changed")
+		}
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return errors.New("Lake runtime link is invalid")
+		}
+		realRoot, err := filepath.EvalSymlinks(root)
+		if err != nil || !strings.HasPrefix(resolved, realRoot+string(filepath.Separator)) {
+			return errors.New("Lake runtime link escapes its release")
+		}
+	}
+	return nil
 }
 func legacySecret(args []string) error {
 	if os.Getenv("LAKE_EXPLICIT_SECRET_MIGRATION") != "1" || len(args) != 2 {
