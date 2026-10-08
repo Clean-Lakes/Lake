@@ -2,17 +2,17 @@
 goal: 从零实现 Lake TypeScript 运维 Agent v0.0.1，交付会话内多专员、共享终端与进度、通用 SRE 技能、Power 和证据驱动的运维闭环
 version: 0.0.1
 date_created: 2026-10-04
-last_updated: 2026-10-04
+last_updated: 2026-10-08
 owner: Lake
-status: 'Planned'
+status: 'Completed'
 tags: [architecture, agent, typescript, sre, operations, implementation]
 ---
 
 # Introduction
 
-![Status: Planned](https://img.shields.io/badge/status-Planned-blue)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
-本方案在 `codex/lake-ts-agent-v0.0.1` 分支上规划独立的 Lake Agent。分支基点为 `7de96a60`，已有未跟踪的插件目录及其他计划不属于本方案。当前文档是完整实施规格，全部任务尚未实施；创建分支和编写方案不表示 Agent 已可运行。
+本方案在 `codex/lake-ts-agent-v0.0.1` 分支上规划独立的 Lake Agent。分支基点为 `7de96a60`，已有未跟踪的插件目录及其他计划不属于本方案。当前文档是实施规格，2026-10-08 已开始执行。57 项实施任务及发布门禁已完成，验证环境、边界和摘要见 `docs/validation/lake-ts-agent-v0.0.1.md`。
 
 用户确认的最终结构为：**一个会话可以由多个专员协作；专员是拥有独立模型上下文的子智能体；所有专员默认拥有诊断、coding、部署、调试、验证、报告技能；专员按任务使用多个 Power；会话统一持有终端会话、任务进度与证据。** SSH、K8s、数据库是 Power，而不是必须切换的专员身份。
 
@@ -327,6 +327,15 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 审批过期、现场漂移和 capability unavailable 可以形成行动 blocked，但任务是否最终 failed 由任务契约与可替代路径判断。CLI 的 blocked 退出结果表示本次调用无法继续，不意味着 daemon 丢弃了可恢复任务。诊断报告可交付已确认事实及待验证假设，服务修复报告须经过对应业务验收。
 
+### 1.14 实施决策与验证边界
+
+- 任务契约使用 `contractRevision`，生命周期与预算更新使用普通实体 revision。等待审批和恢复不会使冻结审批失效；用户约束修订会失效旧审批与旧契约的完成证据。新行动与任务 revision 在同一事务更新，交付会复核，避免行动准入与完成判定交错。
+- HTTP 连续健康检查同时支持只读业务验收。配置变更要求已验证的实际变更；诊断、恢复、变更在入口明确区分。取消专员停止排队行动，未知效果先核对，再释放未完成步骤供接替。
+- 真实 Linux 场景使用 Docker Desktop 的 Linux 虚拟化与一次性、特权 systemd PID 1 容器，绑定回环端口并使用合成密钥。覆盖真实 SSH/SFTP、配置替换、reload、业务 HTTP 与 daemon SIGKILL；不宣称已经覆盖专用 VM 断电、生产宿主机或真实 K8s 集群。
+- Linux amd64 验证在 Apple Silicon 的 amd64 仿真容器执行；Node 与原生模块在 Linux 构建。仿真环境中的 esbuild/Vite 崩溃后，Linux 包复用经完整 Vite 构建的可移植浏览器 JS/CSS，核心仍在 Linux 编译与验证。发布记录明确该构建路径。
+- 测试文件按行为合并，增加 `domain/dto.ts`、`cli-chat.ts`、`ArtifactDialog.tsx`、环境诊断和负载脚本。无真实 provider 凭据时外部模型 smoke 记录为 `not_run`，不把确定性模型测试当作生产模型兼容性结论。
+- macOS 用户入口已按用户的实施授权，通过规定签名脚本切换到 TS runtime；未安装或改写旧 Electron 客户端，未推送，未自动迁移用户旧数据。
+
 ## 2. Implementation Steps
 
 任务中的路径均相对仓库根目录。`No` 表示计划任务未实施，不代表验证失败。除明确列出的依赖外，同阶段任务可独立实现；每阶段完成标准须全部满足才进入发布验收。临时 fake 适配器仅用于内核测试，不能作为真实 Power 的交付结果。
@@ -337,12 +346,12 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | 无前置依赖。创建 `agent/package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`.node-version`、`tsconfig.json`、`src/version.ts`、`ui/package.json`、`ui/tsconfig.json`、`ui/vite.config.ts`、`ui/index.html`、`ui/src/main.tsx`；核心 ESM/NodeNext，UI Bundler/react-jsx，统一 strict，version.ts 导出 VERSION=0.0.1，首阶段页面只显示产品名与版本。使用 DEP-001 至 DEP-007 固定版本。创建 `agent/scripts/check-runtime.mjs` 的 `assertRuntime()`；Node 不为 24.x 或低于 24.14.0 时拒绝运行。锁文件从空 TS 工程生成，不复用 ZCode lock。验收：`pnpm --dir agent install --frozen-lockfile` 与核心/UI typecheck 成功。 | No | |
-| TASK-002 | 依赖 TASK-001。创建 `agent/src/domain/entities.ts`、`schemas.ts`、`config.ts`，实现第 1.3 节对象、`TaskContractSchema`、`ActionProposalSchema`、`ConfigSchema`；输入 unknown 使用 Zod parse，错误包含字段路径与稳定 code，排除私有字段。创建 `agent/config.example.json`，只包含合成资源与模型配置字段、不含凭据值。验收：合法/非法输入和公共 DTO 的 TEST-001 通过。 | No | |
-| TASK-003 | 依赖 TASK-002。创建 `agent/src/domain/state-machines.ts`、`events.ts`，实现 `validateTransition()`、`reduceEvent()` 与第 1.4/1.10 节全部枚举和事件 schema；非法跳转、旧 revision、缺失 action 证据拒绝。规范第 1.13 节错误 code，禁止把 waiting_reason 混入生命周期枚举。验收：所有允许边及 unknown 禁止重派发边的 TEST-002 通过。 | No | |
-| TASK-004 | 依赖 TASK-002。创建 `agent/src/domain/ports.ts`、`errors.ts`，定义 `ModelPort/StorePort/CredentialPort/ExecutionAdapterPort/VerificationPort/ReconciliationPort/OperationGatewayPort/ClockPort`、`AbortSignal`、`ToolResult`、`PublicError`；ToolResult 包含 status、data、artifactRefs、truncated、retryPolicy；断线后效果不明确必须可表达。验收：fake 实现均编译，业务模块不依赖具体 IO 库。 | No | |
-| TASK-005 | 依赖 TASK-001、TASK-004。创建 `agent/scripts/check-boundaries.mjs` 的 `checkImports()`、`test.mjs` 的 `runSuite()`；检查跨层导入、旧 runtime 导入及 domain 的 Node IO 导入。测试入口递归枚举各套件 `*.test.ts` 后用当前 `process.execPath --import tsx --test` 启动。更新 `.gitignore` 排除 `agent/dist/`、`agent/ui/dist/`、临时夹具与私有验收 home。验收：人为违规导入被拒绝，正常工程检查通过。 | No | |
-| TASK-006 | 依赖 TASK-001、TASK-004。创建 `agent/src/app/daemon-lock.ts` 的 `acquireDaemonLock()`、`release()`；以 fs-ext 对私有普通文件加非阻塞排他锁，fd 持有整个进程生命周期。pnpm 仅允许 fs-ext 的构建脚本。验收：macOS/Linux 两进程竞争只有一个成功、kill 后可重新取得锁，原生模块不兼容时明确失败；见 TEST-003。 | No | |
+| TASK-001 | 无前置依赖。创建 `agent/package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`.node-version`、`tsconfig.json`、`src/version.ts`、`ui/package.json`、`ui/tsconfig.json`、`ui/vite.config.ts`、`ui/index.html`、`ui/src/main.tsx`；核心 ESM/NodeNext，UI Bundler/react-jsx，统一 strict，version.ts 导出 VERSION=0.0.1，首阶段页面只显示产品名与版本。使用 DEP-001 至 DEP-007 固定版本。创建 `agent/scripts/check-runtime.mjs` 的 `assertRuntime()`；Node 不为 24.x 或低于 24.14.0 时拒绝运行。锁文件从空 TS 工程生成，不复用 ZCode lock。验收：`pnpm --dir agent install --frozen-lockfile` 与核心/UI typecheck 成功。 | Yes | 2026-10-08 |
+| TASK-002 | 依赖 TASK-001。创建 `agent/src/domain/entities.ts`、`schemas.ts`、`config.ts`，实现第 1.3 节对象、`TaskContractSchema`、`ActionProposalSchema`、`ConfigSchema`；输入 unknown 使用 Zod parse，错误包含字段路径与稳定 code，排除私有字段。创建 `agent/config.example.json`，只包含合成资源与模型配置字段、不含凭据值。验收：合法/非法输入和公共 DTO 的 TEST-001 通过。 | Yes | 2026-10-08 |
+| TASK-003 | 依赖 TASK-002。创建 `agent/src/domain/state-machines.ts`、`events.ts`，实现 `validateTransition()`、`reduceEvent()` 与第 1.4/1.10 节全部枚举和事件 schema；非法跳转、旧 revision、缺失 action 证据拒绝。规范第 1.13 节错误 code，禁止把 waiting_reason 混入生命周期枚举。验收：所有允许边及 unknown 禁止重派发边的 TEST-002 通过。 | Yes | 2026-10-08 |
+| TASK-004 | 依赖 TASK-002。创建 `agent/src/domain/ports.ts`、`errors.ts`，定义 `ModelPort/StorePort/CredentialPort/ExecutionAdapterPort/VerificationPort/ReconciliationPort/OperationGatewayPort/ClockPort`、`AbortSignal`、`ToolResult`、`PublicError`；ToolResult 包含 status、data、artifactRefs、truncated、retryPolicy；断线后效果不明确必须可表达。验收：fake 实现均编译，业务模块不依赖具体 IO 库。 | Yes | 2026-10-08 |
+| TASK-005 | 依赖 TASK-001、TASK-004。创建 `agent/scripts/check-boundaries.mjs` 的 `checkImports()`、`test.mjs` 的 `runSuite()`；检查跨层导入、旧 runtime 导入及 domain 的 Node IO 导入。测试入口递归枚举各套件 `*.test.ts` 后用当前 `process.execPath --import tsx --test` 启动。更新 `.gitignore` 排除 `agent/dist/`、`agent/ui/dist/`、临时夹具与私有验收 home。验收：人为违规导入被拒绝，正常工程检查通过。 | Yes | 2026-10-08 |
+| TASK-006 | 依赖 TASK-001、TASK-004。创建 `agent/src/app/daemon-lock.ts` 的 `acquireDaemonLock()`、`release()`；以 fs-ext 对私有普通文件加非阻塞排他锁，fd 持有整个进程生命周期。pnpm 仅允许 fs-ext 的构建脚本。验收：macOS/Linux 两进程竞争只有一个成功、kill 后可重新取得锁，原生模块不兼容时明确失败；见 TEST-003。 | Yes | 2026-10-08 |
 
 ### Implementation Phase 2
 
@@ -350,12 +359,12 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-007 | 依赖 TASK-002、TASK-003、TASK-004。创建 `agent/src/storage/schema.ts`、`migrations/001-initial.sql`、`sqlite-worker.ts`、`store.ts`，实现 `migrate()`、`SqliteStore.transact()` 和参数化 worker RPC；按第 1.10 节建表，外键、事件唯一 `(stream_id,sequence)`、attempt 唯一 ID、API request 唯一 `(principal,request_id)`、实体 revision CAS；以 bigint 处理 SQLite 序号。验收：全新 DB schema=1，回滚与并发 CAS 的 TEST-004 通过。 | No | |
-| TASK-008 | 依赖 TASK-007。创建 `agent/src/storage/events.ts`、`projections.ts`，实现 `EventStore.append()`、`replay()`、`getSnapshotWithCursor()`；状态/事件原子提交，按 stream 序号分页 cursor exclusive，快照 cursor 在同一读事务取得；资产/grant 变化向相关会话追加 context_changed。验收：投影重建、会话建立前导入、撤权传播与持续写入时快照无缺口，TEST-005 通过。 | No | |
-| TASK-009 | 依赖 TASK-001、TASK-004。创建 `agent/src/storage/credentials.ts`、`redaction.ts`，实现 `CredentialStore.importFromFd()`、`resolve()`、`StreamingRedactor.push()/flush()`；校验 owner/权限/普通文件/路径/符号链接，以原子写入保存秘密；仅受控调用者持有 secret buffer，不通过消息队列传给模型。脱敏保留跨 chunk 的最长匹配尾部。验收：TEST-006 的合成密钥不出现在输出、DB、错误或产物中，正常运行无 Keychain 调用。 | No | |
-| TASK-010 | 依赖 TASK-007、TASK-009。创建 `agent/src/storage/artifacts.ts`、`checkpoints.ts`，实现 `ArtifactStore.put()/read()`、`CheckpointStore.save()/load()`；SHA-256 内容摘要、私有权限、大小上限、schema 版本、原子 rename；DB 引用提交后清理无引用临时文件，不删除有效产物。验收：中断写入不形成半个有效 checkpoint，越界 artifact ID/链接不能读取，TEST-007 通过。 | No | |
-| TASK-011 | 依赖 TASK-007。创建 `agent/src/agent/budget.ts` 的 `BudgetService.reserve()/settle()/update()`；session 与专员调用、token、deadline 原子预留，无法计量按估算结算，更新有授权主体与事件。验收：两个并行请求只能使用剩余一次额度、失败不退款为零，TEST-008 通过。 | No | |
-| TASK-012 | 依赖 TASK-006、TASK-008、TASK-010。创建 `agent/src/app/home.ts`、`shutdown.ts` 和 `agent/src/storage/backup.ts`；实现 `prepareHome()`、`drainAndStop()`、`backupDatabase()`；启动按 home 锁、权限、DB 顺序，退出先停止新派发再结算和保存。验收：WAL 持续写期间备份可恢复且完整，SIGTERM 不伪造在途完成，TEST-004、TEST-009 通过。 | No | |
+| TASK-007 | 依赖 TASK-002、TASK-003、TASK-004。创建 `agent/src/storage/schema.ts`、`migrations/001-initial.sql`、`sqlite-worker.ts`、`store.ts`，实现 `migrate()`、`SqliteStore.transact()` 和参数化 worker RPC；按第 1.10 节建表，外键、事件唯一 `(stream_id,sequence)`、attempt 唯一 ID、API request 唯一 `(principal,request_id)`、实体 revision CAS；以 bigint 处理 SQLite 序号。验收：全新 DB schema=1，回滚与并发 CAS 的 TEST-004 通过。 | Yes | 2026-10-08 |
+| TASK-008 | 依赖 TASK-007。创建 `agent/src/storage/events.ts`、`projections.ts`，实现 `EventStore.append()`、`replay()`、`getSnapshotWithCursor()`；状态/事件原子提交，按 stream 序号分页 cursor exclusive，快照 cursor 在同一读事务取得；资产/grant 变化向相关会话追加 context_changed。验收：投影重建、会话建立前导入、撤权传播与持续写入时快照无缺口，TEST-005 通过。 | Yes | 2026-10-08 |
+| TASK-009 | 依赖 TASK-001、TASK-004。创建 `agent/src/storage/credentials.ts`、`redaction.ts`，实现 `CredentialStore.importFromFd()`、`resolve()`、`StreamingRedactor.push()/flush()`；校验 owner/权限/普通文件/路径/符号链接，以原子写入保存秘密；仅受控调用者持有 secret buffer，不通过消息队列传给模型。脱敏保留跨 chunk 的最长匹配尾部。验收：TEST-006 的合成密钥不出现在输出、DB、错误或产物中，正常运行无 Keychain 调用。 | Yes | 2026-10-08 |
+| TASK-010 | 依赖 TASK-007、TASK-009。创建 `agent/src/storage/artifacts.ts`、`checkpoints.ts`，实现 `ArtifactStore.put()/read()`、`CheckpointStore.save()/load()`；SHA-256 内容摘要、私有权限、大小上限、schema 版本、原子 rename；DB 引用提交后清理无引用临时文件，不删除有效产物。验收：中断写入不形成半个有效 checkpoint，越界 artifact ID/链接不能读取，TEST-007 通过。 | Yes | 2026-10-08 |
+| TASK-011 | 依赖 TASK-007。创建 `agent/src/agent/budget.ts` 的 `BudgetService.reserve()/settle()/update()`；session 与专员调用、token、deadline 原子预留，无法计量按估算结算，更新有授权主体与事件。验收：两个并行请求只能使用剩余一次额度、失败不退款为零，TEST-008 通过。 | Yes | 2026-10-08 |
+| TASK-012 | 依赖 TASK-006、TASK-008、TASK-010。创建 `agent/src/app/home.ts`、`shutdown.ts` 和 `agent/src/storage/backup.ts`；实现 `prepareHome()`、`drainAndStop()`、`backupDatabase()`；启动按 home 锁、权限、DB 顺序，退出先停止新派发再结算和保存。验收：WAL 持续写期间备份可恢复且完整，SIGTERM 不伪造在途完成，TEST-004、TEST-009 通过。 | Yes | 2026-10-08 |
 
 ### Implementation Phase 3
 
@@ -363,12 +372,12 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-013 | 依赖 TASK-002、TASK-004、TASK-009、TASK-011。创建 `agent/src/adapters/model/chat-completions.ts`、`sse-parser.ts`，实现 `ChatModelAdapter.stream()`、`parseSse()`；使用 fetch，解析 text/tool-call/finish/usage，工具参数按 index 拼接，仅在合法 finish 后发布完整调用；非 streaming 配置解析完整 JSON 并映射同一事件协议，supportsTools=false 则拒绝 Agent 模型选择；usage stream 字段仅在 provider 明确支持时发送。错误不携带 Authorization 或请求正文。验收：分块 UTF-8、多个 tool calls、非 2xx、半截 JSON、断流的 TEST-010 通过。 | No | |
-| TASK-014 | 依赖 TASK-003、TASK-008、TASK-010。创建 `agent/src/agent/history.ts`、`tool-protocol.ts`，实现 `ModelHistory.commitExchange()`、`ToolProtocol.validate()/settle()`；assistant 的 tool-call 与对应 tool result 成对持久化，外部模型重复 ID 使用运行时命名空间，未完成 attempt 不进入成功历史。验收：恢复后不会漏结果、重复执行或发送孤立 tool result，TEST-011 通过。 | No | |
-| TASK-015 | 依赖 TASK-010、TASK-011、TASK-014。创建 `agent/src/agent/context.ts`、`compaction.ts` 与 `agent/builtin/prompts/{coordinator,specialist,sre-base}.md`，实现 `ContextBuilder.build()`、`compact()`；稳定前缀、事实来源/TTL、按字节保守估算、70%/45% 阈值、摘要计费与未结算工具保护；以确定 schema 保存摘要与保留引用。prompts 分别规定工单分派/汇总、范围内执行/证据回交、六技能的通用 SRE 规则。验收：小窗口强制压缩后最新用户约束与关键证据保留，摘要失败有受阻结果，TEST-012 通过。 | No | |
-| TASK-016 | 依赖 TASK-002、TASK-004、TASK-014。创建 `agent/src/agent/tool-catalog.ts`、`tool-executor.ts`，实现 `ToolCatalog.project()`、`ToolExecutor.execute()`；根据协调者/专员角色和授权投影工具，执行前校验 schema，结果有调用 ID、行动 ID 与标准错误；副作用委派 OperationGatewayPort，禁止模型直接访问 adapter。验收：错误角色/未知工具/越界资源被拒绝，fake gateway 工具闭环通过。 | No | |
-| TASK-017 | 依赖 TASK-013、TASK-014、TASK-015、TASK-016。创建 `agent/src/agent/runtime.ts`、`runtime-recovery.ts`，实现 `AgentRuntime.run()/interrupt()/resume()`；一轮先保存模型 attempt，完成后按模型返回顺序串行执行本实例工具列表再继续，跨专员受调度器/资源队列控制并发；每个工具前读取最新取消/scope 状态；达到预算或 no-progress 阈值交回结构化 waiting。验收：TEST-008、TEST-011、TEST-013 通过，取消立即停止新工具派发。 | No | |
-| TASK-018 | 依赖 TASK-017。创建 `agent/test/fixtures/model-server.ts` 的 `startModelFixture()`、`test/integration/agent-loop.test.ts` 的 `runToolScenario()`；HTTP 夹具用固定场景返回流和工具调用，用 fake gateway 执行确定性探测。验收：无需真实 API key 可重现成功、阻塞、重复调用、取消四条路径，并记录各路径事件与用量。 | No | |
+| TASK-013 | 依赖 TASK-002、TASK-004、TASK-009、TASK-011。创建 `agent/src/adapters/model/chat-completions.ts`、`sse-parser.ts`，实现 `ChatModelAdapter.stream()`、`parseSse()`；使用 fetch，解析 text/tool-call/finish/usage，工具参数按 index 拼接，仅在合法 finish 后发布完整调用；非 streaming 配置解析完整 JSON 并映射同一事件协议，supportsTools=false 则拒绝 Agent 模型选择；usage stream 字段仅在 provider 明确支持时发送。错误不携带 Authorization 或请求正文。验收：分块 UTF-8、多个 tool calls、非 2xx、半截 JSON、断流的 TEST-010 通过。 | Yes | 2026-10-08 |
+| TASK-014 | 依赖 TASK-003、TASK-008、TASK-010。创建 `agent/src/agent/history.ts`、`tool-protocol.ts`，实现 `ModelHistory.commitExchange()`、`ToolProtocol.validate()/settle()`；assistant 的 tool-call 与对应 tool result 成对持久化，外部模型重复 ID 使用运行时命名空间，未完成 attempt 不进入成功历史。验收：恢复后不会漏结果、重复执行或发送孤立 tool result，TEST-011 通过。 | Yes | 2026-10-08 |
+| TASK-015 | 依赖 TASK-010、TASK-011、TASK-014。创建 `agent/src/agent/context.ts`、`compaction.ts` 与 `agent/builtin/prompts/{coordinator,specialist,sre-base}.md`，实现 `ContextBuilder.build()`、`compact()`；稳定前缀、事实来源/TTL、按字节保守估算、70%/45% 阈值、摘要计费与未结算工具保护；以确定 schema 保存摘要与保留引用。prompts 分别规定工单分派/汇总、范围内执行/证据回交、六技能的通用 SRE 规则。验收：小窗口强制压缩后最新用户约束与关键证据保留，摘要失败有受阻结果，TEST-012 通过。 | Yes | 2026-10-08 |
+| TASK-016 | 依赖 TASK-002、TASK-004、TASK-014。创建 `agent/src/agent/tool-catalog.ts`、`tool-executor.ts`，实现 `ToolCatalog.project()`、`ToolExecutor.execute()`；根据协调者/专员角色和授权投影工具，执行前校验 schema，结果有调用 ID、行动 ID 与标准错误；副作用委派 OperationGatewayPort，禁止模型直接访问 adapter。验收：错误角色/未知工具/越界资源被拒绝，fake gateway 工具闭环通过。 | Yes | 2026-10-08 |
+| TASK-017 | 依赖 TASK-013、TASK-014、TASK-015、TASK-016。创建 `agent/src/agent/runtime.ts`、`runtime-recovery.ts`，实现 `AgentRuntime.run()/interrupt()/resume()`；一轮先保存模型 attempt，完成后按模型返回顺序串行执行本实例工具列表再继续，跨专员受调度器/资源队列控制并发；每个工具前读取最新取消/scope 状态；达到预算或 no-progress 阈值交回结构化 waiting。验收：TEST-008、TEST-011、TEST-013 通过，取消立即停止新工具派发。 | Yes | 2026-10-08 |
+| TASK-018 | 依赖 TASK-017。创建 `agent/test/fixtures/model-server.ts` 的 `startModelFixture()`、`test/integration/agent-loop.test.ts` 的 `runToolScenario()`；HTTP 夹具用固定场景返回流和工具调用，用 fake gateway 执行确定性探测。验收：无需真实 API key 可重现成功、阻塞、重复调用、取消四条路径，并记录各路径事件与用量。 | Yes | 2026-10-08 |
 
 ### Implementation Phase 4
 
@@ -376,11 +385,11 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-019 | 依赖 TASK-002、TASK-009、TASK-010。创建 `agent/src/skills/registry.ts`、`loader.ts` 和六份 `agent/builtin/skills/<name>/SKILL.md`，实现 `composeDefaultSkills()`、`SkillRegistry.resolve()`、`SkillLoader.load()`；使用第 1.6 节命名、格式、版本冻结与目录授信规则。验收：每个 profile 始终具备六个默认技能，未授信/版本冲突/内置覆盖拒绝，TEST-014 通过。 | No | |
-| TASK-020 | 依赖 TASK-008、TASK-015、TASK-019。创建 `agent/src/specialists/profile.ts`、`work-order.ts`、`agent/src/agent/specialist-context.ts`，实现 `freezeProfile()`、`createWorkOrder()`、`buildSpecialistContext()`；初始化内置 sre-general，从 ConfigSchema.profiles 加载校验后的自定义 profile；只共享领域摘要、工单、证据和终端引用，不注入其他专员历史；压缩后恢复仍需要的技能正文。验收：独立历史、相同技能快照、profile 修改只影响新工单，TEST-012、TEST-014 通过。 | No | |
-| TASK-021 | 依赖 TASK-003、TASK-007、TASK-008。创建 `agent/src/specialists/task-progress.ts` 的 `TaskProgressService.plan()/claim()/report()/completeStep()`；检查依赖 DAG、owner 和 revision，完成请求必须附证据，先等待 VerificationPort/DeliveryGate 判据结果。验收：两个专员竞争一个步骤仅一人成功，无证据 report 不变成 succeeded，TEST-015 通过。 | No | |
-| TASK-022 | 依赖 TASK-011、TASK-017、TASK-020、TASK-021。创建 `agent/src/specialists/service.ts`、`scheduler.ts`，实现 `SpecialistService.spawn()/send()/await()/cancel()/resume()`、`SpecialistScheduler.schedule()`；先落 queued，三专员和两模型请求独立并发限制，depth=1；取消排队任务无需模型轮次。验收：TEST-016 通过，主会话能在专员运行期间接收输入。 | No | |
-| TASK-023 | 依赖 TASK-008、TASK-022。创建 `agent/src/specialists/inbox.ts`、`state.ts`，实现 `InboxService.deliver()/ack()`、`SpecialistStateService.changeActivity()/setPhase()`；有序 durable inbox、去重消息 ID、执行事件驱动活动；阶段变更不能修改完成状态。验收：消息恢复后不丢失，工具异常清除旧活动，等待原因可读，TEST-017 通过。 | No | |
+| TASK-019 | 依赖 TASK-002、TASK-009、TASK-010。创建 `agent/src/skills/registry.ts`、`loader.ts` 和六份 `agent/builtin/skills/<name>/SKILL.md`，实现 `composeDefaultSkills()`、`SkillRegistry.resolve()`、`SkillLoader.load()`；使用第 1.6 节命名、格式、版本冻结与目录授信规则。验收：每个 profile 始终具备六个默认技能，未授信/版本冲突/内置覆盖拒绝，TEST-014 通过。 | Yes | 2026-10-08 |
+| TASK-020 | 依赖 TASK-008、TASK-015、TASK-019。创建 `agent/src/specialists/profile.ts`、`work-order.ts`、`agent/src/agent/specialist-context.ts`，实现 `freezeProfile()`、`createWorkOrder()`、`buildSpecialistContext()`；初始化内置 sre-general，从 ConfigSchema.profiles 加载校验后的自定义 profile；只共享领域摘要、工单、证据和终端引用，不注入其他专员历史；压缩后恢复仍需要的技能正文。验收：独立历史、相同技能快照、profile 修改只影响新工单，TEST-012、TEST-014 通过。 | Yes | 2026-10-08 |
+| TASK-021 | 依赖 TASK-003、TASK-007、TASK-008。创建 `agent/src/specialists/task-progress.ts` 的 `TaskProgressService.plan()/claim()/report()/completeStep()`；检查依赖 DAG、owner 和 revision，完成请求必须附证据，先等待 VerificationPort/DeliveryGate 判据结果。验收：两个专员竞争一个步骤仅一人成功，无证据 report 不变成 succeeded，TEST-015 通过。 | Yes | 2026-10-08 |
+| TASK-022 | 依赖 TASK-011、TASK-017、TASK-020、TASK-021。创建 `agent/src/specialists/service.ts`、`scheduler.ts`，实现 `SpecialistService.spawn()/send()/await()/cancel()/resume()`、`SpecialistScheduler.schedule()`；先落 queued，三专员和两模型请求独立并发限制，depth=1；取消排队任务无需模型轮次。验收：TEST-016 通过，主会话能在专员运行期间接收输入。 | Yes | 2026-10-08 |
+| TASK-023 | 依赖 TASK-008、TASK-022。创建 `agent/src/specialists/inbox.ts`、`state.ts`，实现 `InboxService.deliver()/ack()`、`SpecialistStateService.changeActivity()/setPhase()`；有序 durable inbox、去重消息 ID、执行事件驱动活动；阶段变更不能修改完成状态。验收：消息恢复后不丢失，工具异常清除旧活动，等待原因可读，TEST-017 通过。 | Yes | 2026-10-08 |
 
 ### Implementation Phase 5
 
@@ -388,11 +397,11 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-024 | 依赖 TASK-002、TASK-016。创建 `agent/src/operations/power-registry.ts`、`power-manifest.ts` 和五份 `agent/builtin/powers/<id>.json`，实现 `PowerRegistry.register()/enable()/project()`；manifest 固定版本、schema、effect 和所需资源类型，不从模型参数决定 effect；adapterFactory 使用内置 ID 查表而非动态 import 路径。验收：相同专员可启用 SSH+K8s+Postgres，启用不赋权，TEST-018 通过。 | No | |
-| TASK-025 | 依赖 TASK-007、TASK-008、TASK-024。创建 `agent/src/operations/grants.ts`、`scope.ts`，实现 `GrantService.create()/revoke()/resolve()`、`resolveTargets()`；绑定 lake/env/resource/identity/revision，任务和工单取权限交集；撤权停止排队派发并触发在途核对。验收：跨环境、IP 冒充资源 ID、撤权前审批重用均拒绝，TEST-019 通过。 | No | |
-| TASK-026 | 依赖 TASK-004、TASK-008、TASK-024、TASK-025。创建 `agent/src/sessions/execution-session.ts`、`connection-pool.ts`、`terminal-output.ts`；实现 `ExecutionSessionService.open()/attach()/read()/close()`、`appendOutput()`，所有权属于 session，逻辑 ID 与连接 handle 分开，输出 chunk 脱敏后落盘。验收：专员完成不关闭 session 终端，跨会话 attach 拒绝，TEST-020 通过。 | No | |
-| TASK-027 | 依赖 TASK-026。创建 `agent/src/sessions/input-control.ts` 的 `claimInput()/renew()/release()/enqueue()`；CAS 输入 holder+epoch、FIFO 请求、30 秒受管租约、超时拒绝旧持有者；执行器持有 lease 到结果结算或核对。验收：两个专员同时请求相同终端只有一个执行，输出被两个读者订阅且不混淆 action ID，TEST-021 通过。 | No | |
-| TASK-028 | 依赖 TASK-023、TASK-025、TASK-027。创建 `agent/src/sessions/handoff.ts` 的 `requestHandoff()/grantHandoff()/returnToManaged()`；接管先停新派发，借 ReconciliationPort 结算/核对在途动作，人工租约需独立授权和资源独占写控制；交还更新 epoch 并使相关观测失效，租约过期不自动释放 unknown 动作的隔离。验收：TEST-022 通过，未知写效果未解决时不声称安全交接。 | No | |
+| TASK-024 | 依赖 TASK-002、TASK-016。创建 `agent/src/operations/power-registry.ts`、`power-manifest.ts` 和五份 `agent/builtin/powers/<id>.json`，实现 `PowerRegistry.register()/enable()/project()`；manifest 固定版本、schema、effect 和所需资源类型，不从模型参数决定 effect；adapterFactory 使用内置 ID 查表而非动态 import 路径。验收：相同专员可启用 SSH+K8s+Postgres，启用不赋权，TEST-018 通过。 | Yes | 2026-10-08 |
+| TASK-025 | 依赖 TASK-007、TASK-008、TASK-024。创建 `agent/src/operations/grants.ts`、`scope.ts`，实现 `GrantService.create()/revoke()/resolve()`、`resolveTargets()`；绑定 lake/env/resource/identity/revision，任务和工单取权限交集；撤权停止排队派发并触发在途核对。验收：跨环境、IP 冒充资源 ID、撤权前审批重用均拒绝，TEST-019 通过。 | Yes | 2026-10-08 |
+| TASK-026 | 依赖 TASK-004、TASK-008、TASK-024、TASK-025。创建 `agent/src/sessions/execution-session.ts`、`connection-pool.ts`、`terminal-output.ts`；实现 `ExecutionSessionService.open()/attach()/read()/close()`、`appendOutput()`，所有权属于 session，逻辑 ID 与连接 handle 分开，输出 chunk 脱敏后落盘。验收：专员完成不关闭 session 终端，跨会话 attach 拒绝，TEST-020 通过。 | Yes | 2026-10-08 |
+| TASK-027 | 依赖 TASK-026。创建 `agent/src/sessions/input-control.ts` 的 `claimInput()/renew()/release()/enqueue()`；CAS 输入 holder+epoch、FIFO 请求、30 秒受管租约、超时拒绝旧持有者；执行器持有 lease 到结果结算或核对。验收：两个专员同时请求相同终端只有一个执行，输出被两个读者订阅且不混淆 action ID，TEST-021 通过。 | Yes | 2026-10-08 |
+| TASK-028 | 依赖 TASK-023、TASK-025、TASK-027。创建 `agent/src/sessions/handoff.ts` 的 `requestHandoff()/grantHandoff()/returnToManaged()`；接管先停新派发，借 ReconciliationPort 结算/核对在途动作，人工租约需独立授权和资源独占写控制；交还更新 epoch 并使相关观测失效，租约过期不自动释放 unknown 动作的隔离。验收：TEST-022 通过，未知写效果未解决时不声称安全交接。 | Yes | 2026-10-08 |
 
 ### Implementation Phase 6
 
@@ -400,11 +409,11 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-029 | 依赖 TASK-009、TASK-010、TASK-024、TASK-025。创建 `agent/src/adapters/workspace.ts`、`sandbox.ts` 的 `WorkspaceAdapter.read()/search()/proposePatch()/applyPatch()`、`ContainerSandbox.runTest()`；真实路径检查、旧 hash CAS、patch 先生成产物；固定容器 profile 以无凭据挂载/无网络/CPU 内存超时限制执行。验收：TEST-023 通过，无 Docker 时返回 capability_unavailable 而非本机执行。 | No | |
-| TASK-030 | 依赖 TASK-009、TASK-025、TASK-026、TASK-027。创建 `agent/src/adapters/ssh.ts`、`ssh-templates.ts`，实现 `SshAdapter.connect()/executeManaged()/openInteractive()/readConfig()/prepareReplacement()`；hostVerifier 严格比对 SHA-256 指纹，固定 argv/参数引用和 POSIX 安全引用；结构化 stdout/stderr/exit，SFTP 存取受限路径；写模板只注册，最终准入由 TASK-034/035 绑定。验收：真实 ssh2 测试服务器执行、PTY、SFTP 与指纹拒绝的 TEST-024 通过。 | No | |
-| TASK-031 | 依赖 TASK-009、TASK-024、TASK-025、TASK-026。创建 `agent/src/adapters/kubernetes.ts` 的 `KubeAdapter.executeRead()`；spawn 固定 kubectl argv，不用 shell；绑定 context/namespace，允许 Pod/Deployment/StatefulSet/Service/Endpoints/Event 读取和日志，禁止 Secret；kubeconfig exec 凭据插件默认拒绝，用户授信后冻结命令摘要。验收：伪造 namespace、命令注入、Secret 请求拒绝；TEST-025 的 kubectl/API 夹具通过。 | No | |
-| TASK-032 | 依赖 TASK-009、TASK-024、TASK-025。创建 `agent/src/adapters/postgres.ts`、`postgres-queries.ts` 的 `PostgresAdapter.queryRead()`；固定查询表、参数化输入、BEGIN READ ONLY、statement_timeout=5000ms、TLS 配置验证、最小池；权限不足返回 unavailable evidence。验收：临时真实 PostgreSQL 下固定查询成功，任意 SQL 拒绝，TEST-026 通过。 | No | |
-| TASK-033 | 依赖 TASK-002、TASK-024、TASK-025。创建 `agent/src/adapters/http-probe.ts` 的 `HttpProbeAdapter.probe()`；只请求已绑定完整 URL，重定向默认禁止，响应上限 64KiB、AbortSignal、超时、限频；请求主体和可选断言由 schema 给出，禁止模型临时扫描地址。验收：合成 HTTP 服务的正常、错误、超时、越界重定向、过大响应 TEST-027 通过。 | No | |
+| TASK-029 | 依赖 TASK-009、TASK-010、TASK-024、TASK-025。创建 `agent/src/adapters/workspace.ts`、`sandbox.ts` 的 `WorkspaceAdapter.read()/search()/proposePatch()/applyPatch()`、`ContainerSandbox.runTest()`；真实路径检查、旧 hash CAS、patch 先生成产物；固定容器 profile 以无凭据挂载/无网络/CPU 内存超时限制执行。验收：TEST-023 通过，无 Docker 时返回 capability_unavailable 而非本机执行。 | Yes | 2026-10-08 |
+| TASK-030 | 依赖 TASK-009、TASK-025、TASK-026、TASK-027。创建 `agent/src/adapters/ssh.ts`、`ssh-templates.ts`，实现 `SshAdapter.connect()/executeManaged()/openInteractive()/readConfig()/prepareReplacement()`；hostVerifier 严格比对 SHA-256 指纹，固定 argv/参数引用和 POSIX 安全引用；结构化 stdout/stderr/exit，SFTP 存取受限路径；写模板只注册，最终准入由 TASK-034/035 绑定。验收：真实 ssh2 测试服务器执行、PTY、SFTP 与指纹拒绝的 TEST-024 通过。 | Yes | 2026-10-08 |
+| TASK-031 | 依赖 TASK-009、TASK-024、TASK-025、TASK-026。创建 `agent/src/adapters/kubernetes.ts` 的 `KubeAdapter.executeRead()`；spawn 固定 kubectl argv，不用 shell；绑定 context/namespace，允许 Pod/Deployment/StatefulSet/Service/Endpoints/Event 读取和日志，禁止 Secret；kubeconfig exec 凭据插件默认拒绝，用户授信后冻结命令摘要。验收：伪造 namespace、命令注入、Secret 请求拒绝；TEST-025 的 kubectl/API 夹具通过。 | Yes | 2026-10-08 |
+| TASK-032 | 依赖 TASK-009、TASK-024、TASK-025。创建 `agent/src/adapters/postgres.ts`、`postgres-queries.ts` 的 `PostgresAdapter.queryRead()`；固定查询表、参数化输入、BEGIN READ ONLY、statement_timeout=5000ms、TLS 配置验证、最小池；权限不足返回 unavailable evidence。验收：临时真实 PostgreSQL 下固定查询成功，任意 SQL 拒绝，TEST-026 通过。 | Yes | 2026-10-08 |
+| TASK-033 | 依赖 TASK-002、TASK-024、TASK-025。创建 `agent/src/adapters/http-probe.ts` 的 `HttpProbeAdapter.probe()`；只请求已绑定完整 URL，重定向默认禁止，响应上限 64KiB、AbortSignal、超时、限频；请求主体和可选断言由 schema 给出，禁止模型临时扫描地址。验收：合成 HTTP 服务的正常、错误、超时、越界重定向、过大响应 TEST-027 通过。 | Yes | 2026-10-08 |
 
 ### Implementation Phase 7
 
@@ -412,13 +421,13 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-034 | 依赖 TASK-007、TASK-011、TASK-024、TASK-025、TASK-027。创建 `agent/src/operations/action-digest.ts`、`approvals.ts`、`gateway.ts` 的 `canonicalActionDigest()`、`ApprovalService.approve()/consume()`、`OperationGateway.prepare()/authorize()/dispatch()`；冻结摘要，默认读自动/变更审批，审批消耗与队列/锁同事务，dispatch 前重新检查 grant/identity/revision。验收：TEST-028 的参数/脚本/资源变更、重复审批、过期撤销均拒绝。 | No | |
-| TASK-035 | 依赖 TASK-028、TASK-029、TASK-030、TASK-031、TASK-032、TASK-033、TASK-034。创建 `agent/src/runner/action-runner.ts`、`resource-locks.ts`、`timeouts.ts`，实现 `ActionRunner.tick()/cancel()`、`ResourceLockService.acquireOrdered()/release()`；先 persisted dispatched 再 IO，持有终端与资源控制，分开结果/验证；每个 attempt 一次派发，同一资源写互斥。验收：跨终端同资源竞争、queued 取消、dispatched 取消与读重试的 TEST-021、TEST-029 通过。 | No | |
-| TASK-036 | 依赖 TASK-010、TASK-030、TASK-035。创建 `agent/src/runner/reconciler.ts`、`recovery.ts` 的 `Reconciler.reconcile()`、`RecoveryService.recover()`；在启动时将无结算 dispatched 设 unknown，结合旧/新配置 hash、unit 启动标识、当前状态核对；无法证明未执行则不重派。验收：派发前/外部已改但回执丢失/回执后落盘前三个 crash 点的 TEST-030 通过。 | No | |
-| TASK-037 | 依赖 TASK-008、TASK-033、TASK-035。创建 `agent/src/verification/evidence-policy.ts`、`verifier.ts`、`http-service.ts` 和 `agent/builtin/capabilities/http-service-v1.json`；实现 `EvidencePolicy.isFresh()`、`Verifier.run()`、`verifyHttpService()`；证据绑定行动及身份，按第 1.9 节进行连续健康检查和证据记录，缓存旧成功不得复用为本次证明。验收：HTTP 200/500 交替、unit 正常但业务错误、过期证据的 TEST-031 通过。 | No | |
-| TASK-038 | 依赖 TASK-030、TASK-034、TASK-035、TASK-036、TASK-037。创建 `agent/src/runner/config-change.ts` 的 `replaceConfigAndVerify()`、`rollbackIfUnchanged()`；操作步骤固定为旧 hash/私有备份/语法检查/同目录临时文件/权限保持/原子替换/reload 或 restart/健康；失败回滚须属于原摘要，回滚前当前 hash 必须是本次新 hash。验收：成功变更、语法拒绝、验证失败可回滚、外部漂移禁止回滚的 TEST-032 通过。 | No | |
-| TASK-039 | 依赖 TASK-021、TASK-036、TASK-037。创建 `agent/src/verification/delivery-gate.ts` 的 `DeliveryGate.evaluate()`，完成 TaskProgressService 的证据判定绑定；每个 required 判据有 fresh evidence/人工确认，unknown 动作阻止成功，optional 缺证标记 qualified。验收：模型直接调用 deliver 不可绕过，诊断可只读交付，TEST-033 通过。 | No | |
-| TASK-040 | 依赖 TASK-034、TASK-039。创建 `agent/src/agent/coordinator-tools.ts`、`specialist-tools.ts`；将第 1.5 节工具逐一绑定真实服务和动作网关，`terminal.execute` 只接受已投影 capability+参数而非原始 shell。验收：从真实 runtime 发起工具直至行动验证/共享步骤更新，任何副作用工具均可定位 gateway action ID。 | No | |
+| TASK-034 | 依赖 TASK-007、TASK-011、TASK-024、TASK-025、TASK-027。创建 `agent/src/operations/action-digest.ts`、`approvals.ts`、`gateway.ts` 的 `canonicalActionDigest()`、`ApprovalService.approve()/consume()`、`OperationGateway.prepare()/authorize()/dispatch()`；冻结摘要，默认读自动/变更审批，审批消耗与队列/锁同事务，dispatch 前重新检查 grant/identity/revision。验收：TEST-028 的参数/脚本/资源变更、重复审批、过期撤销均拒绝。 | Yes | 2026-10-08 |
+| TASK-035 | 依赖 TASK-028、TASK-029、TASK-030、TASK-031、TASK-032、TASK-033、TASK-034。创建 `agent/src/runner/action-runner.ts`、`resource-locks.ts`、`timeouts.ts`，实现 `ActionRunner.tick()/cancel()`、`ResourceLockService.acquireOrdered()/release()`；先 persisted dispatched 再 IO，持有终端与资源控制，分开结果/验证；每个 attempt 一次派发，同一资源写互斥。验收：跨终端同资源竞争、queued 取消、dispatched 取消与读重试的 TEST-021、TEST-029 通过。 | Yes | 2026-10-08 |
+| TASK-036 | 依赖 TASK-010、TASK-030、TASK-035。创建 `agent/src/runner/reconciler.ts`、`recovery.ts` 的 `Reconciler.reconcile()`、`RecoveryService.recover()`；在启动时将无结算 dispatched 设 unknown，结合旧/新配置 hash、unit 启动标识、当前状态核对；无法证明未执行则不重派。验收：派发前/外部已改但回执丢失/回执后落盘前三个 crash 点的 TEST-030 通过。 | Yes | 2026-10-08 |
+| TASK-037 | 依赖 TASK-008、TASK-033、TASK-035。创建 `agent/src/verification/evidence-policy.ts`、`verifier.ts`、`http-service.ts` 和 `agent/builtin/capabilities/http-service-v1.json`；实现 `EvidencePolicy.isFresh()`、`Verifier.run()`、`verifyHttpService()`；证据绑定行动及身份，按第 1.9 节进行连续健康检查和证据记录，缓存旧成功不得复用为本次证明。验收：HTTP 200/500 交替、unit 正常但业务错误、过期证据的 TEST-031 通过。 | Yes | 2026-10-08 |
+| TASK-038 | 依赖 TASK-030、TASK-034、TASK-035、TASK-036、TASK-037。创建 `agent/src/runner/config-change.ts` 的 `replaceConfigAndVerify()`、`rollbackIfUnchanged()`；操作步骤固定为旧 hash/私有备份/语法检查/同目录临时文件/权限保持/原子替换/reload 或 restart/健康；失败回滚须属于原摘要，回滚前当前 hash 必须是本次新 hash。验收：成功变更、语法拒绝、验证失败可回滚、外部漂移禁止回滚的 TEST-032 通过。 | Yes | 2026-10-08 |
+| TASK-039 | 依赖 TASK-021、TASK-036、TASK-037。创建 `agent/src/verification/delivery-gate.ts` 的 `DeliveryGate.evaluate()`，完成 TaskProgressService 的证据判定绑定；每个 required 判据有 fresh evidence/人工确认，unknown 动作阻止成功，optional 缺证标记 qualified。验收：模型直接调用 deliver 不可绕过，诊断可只读交付，TEST-033 通过。 | Yes | 2026-10-08 |
+| TASK-040 | 依赖 TASK-034、TASK-039。创建 `agent/src/agent/coordinator-tools.ts`、`specialist-tools.ts`；将第 1.5 节工具逐一绑定真实服务和动作网关，`terminal.execute` 只接受已投影 capability+参数而非原始 shell。验收：从真实 runtime 发起工具直至行动验证/共享步骤更新，任何副作用工具均可定位 gateway action ID。 | Yes | 2026-10-08 |
 
 ### Implementation Phase 8
 
@@ -426,10 +435,10 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-041 | 依赖 TASK-012、TASK-022、TASK-026、TASK-036、TASK-040。创建 `agent/src/app/application.ts`、`services.ts` 的 `createLakeApplication()`、`LakeApplication.start()/stop()`；组合全部 ports，先恢复后接受客户端，所有 clients 使用同一 daemon；不从 ZCode 目录动态加载。验收：空 home 启动完成，shutdown 无新派发，真实运行组件无 fake 替代。 | No | |
-| TASK-042 | 依赖 TASK-008、TASK-025、TASK-037。创建 `agent/src/app/data-service.ts`、`imports.ts` 的 `DataService.snapshot()/serviceContext()`、`importResources()/importServices()`；校验明确绑定和引用，不自动发现关系，导入整批失败回滚；事实带 freshness/source。验收：同一服务 SSH+K8s+Postgres 绑定可查询，重复 ID/错环境/失效引用拒绝，TEST-034 通过。 | No | |
-| TASK-043 | 依赖 TASK-008、TASK-037、TASK-042。创建 `agent/src/app/investigation.ts`、`report.ts` 的 `recordObservation()`、`updateHypothesis()`、`buildEvidenceReport()`；区分候选/支持/反驳/确认，报告输出目标、发现、变更、验收、未验证项与恢复结果；confirmed 要求配置的验证或人工确认。验收：相互矛盾事实保留而非覆盖，报告不能把相关性或 rollback success 当原变更成功，TEST-035 通过。 | No | |
-| TASK-044 | 依赖 TASK-019、TASK-038、TASK-039、TASK-041、TASK-043。创建 `agent/test/fixtures/scenarios/http-service.ts` 的 `makeIncidentScenario()`、`makeConfigChangeScenario()`，把默认技能接到两条业务场景；协调者按工单创建不同侧重点专员，独立诊断/验证，复用一个 managed 终端和共享进度。验收：TEST-036/037 在真实受控 Linux 目标上通过，固定模型夹具保证可重复。 | No | |
+| TASK-041 | 依赖 TASK-012、TASK-022、TASK-026、TASK-036、TASK-040。创建 `agent/src/app/application.ts`、`services.ts` 的 `createLakeApplication()`、`LakeApplication.start()/stop()`；组合全部 ports，先恢复后接受客户端，所有 clients 使用同一 daemon；不从 ZCode 目录动态加载。验收：空 home 启动完成，shutdown 无新派发，真实运行组件无 fake 替代。 | Yes | 2026-10-08 |
+| TASK-042 | 依赖 TASK-008、TASK-025、TASK-037。创建 `agent/src/app/data-service.ts`、`imports.ts` 的 `DataService.snapshot()/serviceContext()`、`importResources()/importServices()`；校验明确绑定和引用，不自动发现关系，导入整批失败回滚；事实带 freshness/source。验收：同一服务 SSH+K8s+Postgres 绑定可查询，重复 ID/错环境/失效引用拒绝，TEST-034 通过。 | Yes | 2026-10-08 |
+| TASK-043 | 依赖 TASK-008、TASK-037、TASK-042。创建 `agent/src/app/investigation.ts`、`report.ts` 的 `recordObservation()`、`updateHypothesis()`、`buildEvidenceReport()`；区分候选/支持/反驳/确认，报告输出目标、发现、变更、验收、未验证项与恢复结果；confirmed 要求配置的验证或人工确认。验收：相互矛盾事实保留而非覆盖，报告不能把相关性或 rollback success 当原变更成功，TEST-035 通过。 | Yes | 2026-10-08 |
+| TASK-044 | 依赖 TASK-019、TASK-038、TASK-039、TASK-041、TASK-043。创建 `agent/test/fixtures/scenarios/http-service.ts` 的 `makeIncidentScenario()`、`makeConfigChangeScenario()`，把默认技能接到两条业务场景；协调者按工单创建不同侧重点专员，独立诊断/验证，复用一个 managed 终端和共享进度。验收：TEST-036/037 在真实受控 Linux 目标上通过，固定模型夹具保证可重复。 | Yes | 2026-10-08 |
 
 ### Implementation Phase 9
 
@@ -437,12 +446,12 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-045 | 依赖 TASK-006、TASK-009、TASK-041、TASK-042。创建 `agent/src/surfaces/auth.ts`、`daemon-client.ts` 的 `BootstrapAuth.exchange()`、`connectOrStartDaemon()`；32 字节随机票据 60 秒有效且单次兑换、访问 token 仅本机内存，私有 runtime 文件只保存 CLI 所需 token/port；既有 daemon 验证 PID/进程 nonce 与连接认证。验收：并行启动只有一个 daemon，无关端口不可冒认，TEST-003/038 通过。 | No | |
-| TASK-046 | 依赖 TASK-008、TASK-025、TASK-028、TASK-034、TASK-041、TASK-043、TASK-045。创建 `agent/src/surfaces/http-server.ts`、`routes.ts`、`event-stream.ts` 的 `createHttpServer()`、`dispatchRoute()`、`streamEvents()`；实现第 1.12 节完整 API、固定 JSON 错误 code、1MiB body limit、Host/Origin/token 校验、idempotency/expectedRevision、受限流式产物读取。验收：旧 revision 返回 409，相同 request ID 相同输入返回原结果、不同输入返回 409；TEST-005/038/039 通过。 | No | |
-| TASK-047 | 依赖 TASK-041、TASK-045、TASK-046。创建 `agent/src/surfaces/cli.ts`、`cli-renderer.ts` 的 `runCli()`、`renderJsonResult()`；实现全部 CLI 子命令，run 的机器结果只写 stdout，进度 stderr；退出码 verified=0、qualified=2、failed/blocked=1、cancelled=130。等待审批时输出待审批事实并保持 daemon 任务，非交互调用返回 3 和 resume 信息。验收：终端外 stdin/fd 凭据导入无回显，CLI/API 结果等价，TEST-040 通过。 | No | |
-| TASK-048 | 依赖 TASK-003、TASK-046。创建 `agent/ui/src/api/client.ts`、`events.ts`、`state/session-store.ts`、`main.tsx`、`App.tsx` 的 `EventClient.subscribe()`、`SessionStore.applySnapshot()/applyEvent()`；fetch SSE 携带内存 token，首次 fragment 票据兑换后清除，不渲染未经净化的 HTML/终端控制序列。验收：重复/乱序/断线后快照恢复 TEST-005/039 通过。 | No | |
-| TASK-049 | 依赖 TASK-048。创建 `agent/ui/src/components/SessionNavigation.tsx`、`Conversation.tsx`、`TaskProgress.tsx`、`SpecialistPanel.tsx`、`EvidencePanel.tsx`、`ApprovalPanel.tsx`；分别实现服务/会话选择、聊天增量、步骤 owner/dependency、正交状态、判据证据与冻结审批摘要。验收：三个专员并行不阻塞主聊天、未知动作有明确核对状态、不得给未验证任务显示完成，见 TEST-041。 | No | |
-| TASK-050 | 依赖 TASK-028、TASK-046、TASK-048。创建 `agent/ui/src/components/TerminalPanel.tsx`、`terminal-controller.ts` 的 `TerminalController.subscribe()/requestControl()/sendInput()/release()`；xterm 只承担显示与人工 PTY，managed 输入按冻结工具执行；底部 tabs 展示 session owner、连接、持有者、epoch。验收：只读订阅、人工接管/交还、重连不伪造 PTY 恢复，TEST-022/041 通过。 | No | |
+| TASK-045 | 依赖 TASK-006、TASK-009、TASK-041、TASK-042。创建 `agent/src/surfaces/auth.ts`、`daemon-client.ts` 的 `BootstrapAuth.exchange()`、`connectOrStartDaemon()`；32 字节随机票据 60 秒有效且单次兑换、访问 token 仅本机内存，私有 runtime 文件只保存 CLI 所需 token/port；既有 daemon 验证 PID/进程 nonce 与连接认证。验收：并行启动只有一个 daemon，无关端口不可冒认，TEST-003/038 通过。 | Yes | 2026-10-08 |
+| TASK-046 | 依赖 TASK-008、TASK-025、TASK-028、TASK-034、TASK-041、TASK-043、TASK-045。创建 `agent/src/surfaces/http-server.ts`、`routes.ts`、`event-stream.ts` 的 `createHttpServer()`、`dispatchRoute()`、`streamEvents()`；实现第 1.12 节完整 API、固定 JSON 错误 code、1MiB body limit、Host/Origin/token 校验、idempotency/expectedRevision、受限流式产物读取。验收：旧 revision 返回 409，相同 request ID 相同输入返回原结果、不同输入返回 409；TEST-005/038/039 通过。 | Yes | 2026-10-08 |
+| TASK-047 | 依赖 TASK-041、TASK-045、TASK-046。创建 `agent/src/surfaces/cli.ts`、`cli-renderer.ts` 的 `runCli()`、`renderJsonResult()`；实现全部 CLI 子命令，run 的机器结果只写 stdout，进度 stderr；退出码 verified=0、qualified=2、failed/blocked=1、cancelled=130。等待审批时输出待审批事实并保持 daemon 任务，非交互调用返回 3 和 resume 信息。验收：终端外 stdin/fd 凭据导入无回显，CLI/API 结果等价，TEST-040 通过。 | Yes | 2026-10-08 |
+| TASK-048 | 依赖 TASK-003、TASK-046。创建 `agent/ui/src/api/client.ts`、`events.ts`、`state/session-store.ts`、`main.tsx`、`App.tsx` 的 `EventClient.subscribe()`、`SessionStore.applySnapshot()/applyEvent()`；fetch SSE 携带内存 token，首次 fragment 票据兑换后清除，不渲染未经净化的 HTML/终端控制序列。验收：重复/乱序/断线后快照恢复 TEST-005/039 通过。 | Yes | 2026-10-08 |
+| TASK-049 | 依赖 TASK-048。创建 `agent/ui/src/components/SessionNavigation.tsx`、`Conversation.tsx`、`TaskProgress.tsx`、`SpecialistPanel.tsx`、`EvidencePanel.tsx`、`ApprovalPanel.tsx`；分别实现服务/会话选择、聊天增量、步骤 owner/dependency、正交状态、判据证据与冻结审批摘要。验收：三个专员并行不阻塞主聊天、未知动作有明确核对状态、不得给未验证任务显示完成，见 TEST-041。 | Yes | 2026-10-08 |
+| TASK-050 | 依赖 TASK-028、TASK-046、TASK-048。创建 `agent/ui/src/components/TerminalPanel.tsx`、`terminal-controller.ts` 的 `TerminalController.subscribe()/requestControl()/sendInput()/release()`；xterm 只承担显示与人工 PTY，managed 输入按冻结工具执行；底部 tabs 展示 session owner、连接、持有者、epoch。验收：只读订阅、人工接管/交还、重连不伪造 PTY 恢复，TEST-022/041 通过。 | Yes | 2026-10-08 |
 
 ### Implementation Phase 10
 
@@ -450,13 +459,13 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-051 | 依赖 TASK-018、TASK-030、TASK-032、TASK-044、TASK-047、TASK-050。创建 `agent/test/fixtures/compose.yaml`、`ssh-server.ts`、`kube-api.ts`、`fault-injection.ts`，实现 `startFixtures()/stopFixtures()/crashAt()`；使用临时合成密钥和私有 home，提供真实 SSH、PostgreSQL、固定 kubectl API 响应及具备 systemd 的临时 Linux VM 接口；TEST-036/037 的 VM 未提供时必需验收返回 prerequisite_missing，不记为 passed。验收：同一场景可稳定注入三个 crash 点、工具出口无生产地址。 | No | |
-| TASK-052 | 依赖 TASK-051。创建 `agent/test/acceptance/incident.test.ts`、`config-change.test.ts`、`multi-specialist.test.ts`、`recovery.test.ts`、`surface-parity.test.ts`，实现 `runAcceptance()`；运行 Section 6 的场景并写私有事件/计时/证据报告；真实模型 smoke 与确定性模型结果分开。验收：TEST-036 至 TEST-042 的必需场景无 false success、无重复未知写派发、无凭据泄露。 | No | |
-| TASK-053 | 依赖 TASK-005、TASK-041、TASK-048、TASK-052。创建 `agent/scripts/build.mjs`、`verify-release.mjs` 的 `buildRuntime()/verifyRelease()`；核心 tsc 与 UI vite 产出 `agent/dist/`、`agent/ui/dist/`；打包到 `bin/lake-agent-runtime/releases/<version>-<digest>/{node,dist,builtin,ui,node_modules,manifest.json}`，运行依赖与 fs-ext 针对目标 Node ABI 构建，不依赖 bin/zcode；manifest 记录版本、架构、Node、文件 hash，digest 对 manifest 中除自身外字段计算。验收：空 PATH 除系统工具、源码目录外、独立私有 home 启动，TEST-042 通过。 | No | |
-| TASK-054 | 依赖 TASK-053。修改 `cmd/lake/main.go` 的 `launch()` 与 `scripts/build_lake.sh`：Go 以构建时嵌入的相对 release 路径定位新 Node/dist CLI，转发参数/信号/LAKE_HOME；创建 `agent/src/storage/legacy-migration.ts` 的 `migrateFromSignedPipe()`，只在第 1.12 节显式命令/env/签名 launcher 条件满足时使用 fd 私有迁移，不复用旧 runtime。build 脚本先校验身份、构建/签名并校验临时 runtime，安装不可变 release 目录，最后原子 rename 已签名 launcher；旧 launcher 对应 release 不删除。macOS Node 与原生 .node 逐个用同身份签名/verify，签名后生成最终文件摘要。验收：用户入口只能由规定脚本生成，身份缺失不会替换已有可用版本，TEST-043 通过。 | No | |
-| TASK-055 | 依赖 TASK-047、TASK-052、TASK-054。创建 `docs/lake-ts-agent-v0.0.1.md`、`docs/lake-ts-power-contract.md`、`docs/lake-ts-recovery.md`；更新 `README.md` 中新分支入口与旧客户端边界，记录 doctor/install/import/grant/运行/审批/恢复及实际限制；第三方声明写 `agent/THIRD_PARTY_NOTICES.md`。验收：按文档在空 home 完成资源导入和两场景，不引用旧 runtime 作为新实现入口。 | No | |
-| TASK-056 | 依赖 TASK-052、TASK-054、TASK-055。创建 `agent/scripts/collect-release-evidence.mjs` 的 `collectReleaseEvidence()` 和 `docs/validation/lake-ts-agent-v0.0.1.md`，收集 commit、平台、依赖锁摘要、测试结果、签名标识、故障场景、模型 smoke 可用性；不记录秘密或完整模型请求。验收：本节发布门禁全部逐项有证据，失败/缺前置条件不更新为 Completed。 | No | |
-| TASK-057 | 依赖 TASK-056。复核本计划 `status` 与每项 Completed/Date、`agent/package.json` 的版本及发布 manifest；只在所有必需门禁通过后标记 Completed，形成 v0.0.1 候选提交。若真实模型凭据由用户提供，可在明确指定的隔离测试环境完成额外 smoke；没有凭据则验收记录为 not_run，不阻塞确定性内核验收、不宣称已验证该 provider。验收：变更范围只含本方案文件，不夹带原有未跟踪插件；不自动推送、安装或替换用户正在运行的应用。 | No | |
+| TASK-051 | 依赖 TASK-018、TASK-030、TASK-032、TASK-044、TASK-047、TASK-050。创建 `agent/test/fixtures/compose.yaml`、`ssh-server.ts`、`kube-api.ts`、`fault-injection.ts`，实现 `startFixtures()/stopFixtures()/crashAt()`；使用临时合成密钥和私有 home，提供真实 SSH、PostgreSQL、固定 kubectl API 响应及具备 systemd 的Docker Linux 虚拟化内真实 systemd PID 1 的一次性目标接口；TEST-036/037 的 Linux 目标未提供时必需验收返回 prerequisite_missing，不记为 passed。验收：同一场景可稳定注入三个 crash 点、工具出口无生产地址。 | Yes | 2026-10-08 |
+| TASK-052 | 依赖 TASK-051。创建 `agent/test/acceptance/incident.test.ts`、`config-change.test.ts`、`multi-specialist.test.ts`、`recovery.test.ts`、`surface-parity.test.ts`，实现 `runAcceptance()`；运行 Section 6 的场景并写私有事件/计时/证据报告；真实模型 smoke 与确定性模型结果分开。验收：TEST-036 至 TEST-042 的必需场景无 false success、无重复未知写派发、无凭据泄露。 | Yes | 2026-10-08 |
+| TASK-053 | 依赖 TASK-005、TASK-041、TASK-048、TASK-052。创建 `agent/scripts/build.mjs`、`verify-release.mjs` 的 `buildRuntime()/verifyRelease()`；核心 tsc 与 UI vite 产出 `agent/dist/`、`agent/ui/dist/`；打包到 `bin/lake-agent-runtime/releases/<version>-<digest>/{node,dist,builtin,ui,node_modules,manifest.json}`，运行依赖与 fs-ext 针对目标 Node ABI 构建，不依赖 bin/zcode；manifest 记录版本、架构、Node、文件 hash，digest 对 manifest 中除自身外字段计算。验收：空 PATH 除系统工具、源码目录外、独立私有 home 启动，TEST-042 通过。 | Yes | 2026-10-08 |
+| TASK-054 | 依赖 TASK-053。修改 `cmd/lake/main.go` 的 `launch()` 与 `scripts/build_lake.sh`：Go 以构建时嵌入的相对 release 路径定位新 Node/dist CLI，转发参数/信号/LAKE_HOME；创建 `agent/src/storage/legacy-migration.ts` 的 `migrateFromSignedPipe()`，只在第 1.12 节显式命令/env/签名 launcher 条件满足时使用 fd 私有迁移，不复用旧 runtime。build 脚本先校验身份、构建/签名并校验临时 runtime，安装不可变 release 目录，最后原子 rename 已签名 launcher；旧 launcher 对应 release 不删除。macOS Node 与原生 .node 逐个用同身份签名/verify，签名后生成最终文件摘要。验收：用户入口只能由规定脚本生成，身份缺失不会替换已有可用版本，TEST-043 通过。 | Yes | 2026-10-08 |
+| TASK-055 | 依赖 TASK-047、TASK-052、TASK-054。创建 `docs/lake-ts-agent-v0.0.1.md`、`docs/lake-ts-power-contract.md`、`docs/lake-ts-recovery.md`；更新 `README.md` 中新分支入口与旧客户端边界，记录 doctor/install/import/grant/运行/审批/恢复及实际限制；第三方声明写 `agent/THIRD_PARTY_NOTICES.md`。验收：按文档在空 home 完成资源导入和两场景，不引用旧 runtime 作为新实现入口。 | Yes | 2026-10-08 |
+| TASK-056 | 依赖 TASK-052、TASK-054、TASK-055。创建 `agent/scripts/collect-release-evidence.mjs` 的 `collectReleaseEvidence()` 和 `docs/validation/lake-ts-agent-v0.0.1.md`，收集 commit、平台、依赖锁摘要、测试结果、签名标识、故障场景、模型 smoke 可用性；不记录秘密或完整模型请求。验收：本节发布门禁全部逐项有证据，失败/缺前置条件不更新为 Completed。 | Yes | 2026-10-08 |
+| TASK-057 | 依赖 TASK-056。复核本计划 `status` 与每项 Completed/Date、`agent/package.json` 的版本及发布 manifest；只在所有必需门禁通过后标记 Completed，形成 v0.0.1 候选提交。若真实模型凭据由用户提供，可在明确指定的隔离测试环境完成额外 smoke；没有凭据则验收记录为 not_run，不阻塞确定性内核验收、不宣称已验证该 provider。验收：变更范围只含本方案文件，不夹带原有未跟踪插件；不自动推送、安装或替换用户正在运行的应用。 | Yes | 2026-10-08 |
 
 发布必需门禁：
 
@@ -488,16 +497,16 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 - **DEP-002**: TypeScript `5.9.3`、tsx `4.22.0`、`@types/node` `24.10.0`；开发/测试依赖，生产核心输出为 ESM JavaScript，发布不要求 tsx 或 TypeScript 编译器。
 - **DEP-003**: Zod `4.3.6`、yaml `2.9.0`；运行时 schema 与技能 front matter/config 解析。YAML 禁止自定义可执行 tag，技能正文按文本保留。
 - **DEP-004**: ssh2 `1.17.0`、`@types/ssh2` `1.15.5`；SSH exec、PTY、SFTP 和 host verifier。SSH key 由临时夹具或受控私有凭据接口提供。
-- **DEP-005**: pg `8.16.3`、`@types/pg` `8.15.5`；PostgreSQL 只读诊断。kubectl 是明确版本的外部 CLI，doctor 检查路径/版本/摘要；协议回归夹具基线为 Kubernetes/kubectl `1.34.0`，不是生产版本推荐。实际 cluster 前使用其 server minor ±1 范围内的 kubectl，版本未知则诊断为待配置。[官方版本偏差规则](https://kubernetes.io/releases/version-skew-policy/#kubectl)
+- **DEP-005**: pg `8.16.3`、`@types/pg` `8.15.5`；PostgreSQL 只读诊断。kubectl 是明确版本的外部 CLI，doctor 检查路径/版本/摘要；协议回归夹具基线为 Kubernetes/kubectl `1.34.1`，不是生产版本推荐。实际 cluster 前使用其 server minor ±1 范围内的 kubectl，版本未知则诊断为待配置。[官方版本偏差规则](https://kubernetes.io/releases/version-skew-policy/#kubectl)
 - **DEP-006**: React/React DOM `19.1.0`、Vite `7.0.0`、`@vitejs/plugin-react` `5.0.0`、`@types/react`/`@types/react-dom` `19.1.0`；UI 子包构建产物由 daemon 提供，生产不启动 Vite dev server。
 - **DEP-007**: `@xterm/xterm` `5.5.0`、`@xterm/addon-fit` `0.10.0`；Web 终端显示。fs-ext `2.1.1`、`@types/fs-ext` `2.0.3`；唯一 daemon OS 文件锁，需要目标 Node ABI 的本机 C/C++ 构建工具及 Python，纳入分发与签名验收。其传递依赖由 lock 固定，不允许运行时下载编译。
-- **DEP-008**: Docker 引擎用于隔离 workspace.test、临时 PostgreSQL 与可重复服务夹具；Linux/systemd 临时 VM 用于真实配置变更验收。VM 只使用合成凭据和受控测试资源；开发者没有 VM 时可运行基础测试，但不能宣称完整发布门禁通过。
+- **DEP-008**: Docker 引擎用于隔离 workspace.test、临时 PostgreSQL 与可重复服务夹具；Docker Desktop Linux 虚拟化内的 systemd 一次性容器用于真实配置变更验收。目标只使用合成凭据和受控测试资源；开发者没有 Linux 目标时可运行基础测试，但不能宣称完整发布门禁通过。
 - **DEP-009**: macOS 持久 `Lake Local Development Code Signing` 身份与仓库现有 `scripts/build_lake.sh`、`scripts/setup_lake_signing.sh`。当前身份缺失时按 AGENTS.md 设置一次；没有签名身份不生成 unsigned 用户入口。
 - **DEP-010**: 用户明确配置的 Chat Completions 兼容 endpoint/model/窗口/能力和私有 credential reference。基础测试用本地 HTTP 合成模型；真实模型测试需单独配置的隔离环境，不假定可访问用户已有凭据。
 
 ## 5. Files
 
-下列是计划创建/修改的文件清单；本次方案阶段只创建本计划，其他路径尚未实现。
+下列文件已在本分支实施；实际验证与发布摘要见 `docs/validation/lake-ts-agent-v0.0.1.md`。
 
 - **FILE-001**: `plan/architecture-lake-ts-agent-v0.0.1.md`：当前自包含实施规格、任务状态和验收门禁。
 - **FILE-002**: `agent/package.json`、`agent/pnpm-workspace.yaml`、`agent/pnpm-lock.yaml`、`agent/.node-version`、`agent/tsconfig.json`、`agent/src/version.ts`、`agent/config.example.json`、`.gitignore`：独立工程与生成目录规则。
@@ -519,7 +528,7 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 
 ## 6. Testing
 
-使用 Node test runner、临时私有 home 与合成模型。以下定义验证行为，不要求对可逆 UI 文案或实现细节逐行编写测试。各 TEST 在对应任务完成时运行；新修改/失败/未解决风险才扩大或重复测试。以下所有结果当前均为未执行。
+使用 Node test runner、临时私有 home 与合成模型。以下定义验证行为，不要求对可逆 UI 文案或实现细节逐行编写测试。各 TEST 在对应任务完成时运行；新修改/失败/未解决风险才扩大或重复测试。实际覆盖与结果以验证记录中的矩阵为准；TEST 编号是行为规格，部分测试合并在同一个文件中。
 
 - **TEST-001**: `agent/test/unit/contracts.test.ts`：资源身份/工单 scope/输入 schema/错误 DTO；合法配置通过，未知字段按 schema 策略拒绝，model/public projection 不包含 credentialRef 或 secret 值。
 - **TEST-002**: `agent/test/unit/state-machines.test.ts`：验证状态边、非法成功跃迁、unknown→queued 拒绝、终端活动异常清理、取消在途动作不伪造 cancelled。
@@ -579,7 +588,7 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 - **RISK-008**: 只有进程存活/HTTP 200 可能不足以证明用户业务恢复。任务开始冻结验收配置，缺少可选指标标 qualified，业务断言可配；用户没有明确判据时先形成诊断交付，不编造业务健康。
 - **RISK-009**: 本地 Web token 被 URL/日志/持久存储泄漏或跨站请求利用。fragment 一次票据、内存 token、Host/Origin 校验与 CLI 私有 runtime 文件；绑定回环仍需认证。
 - **RISK-010**: 历史 Go/桌面文档与新分支入口同时存在会造成误用。新 docs 明确 TS 分支、命令、数据命名空间和最终切换时点；不在未验收阶段移除旧 runtime。
-- **RISK-011**: 两个业务闭环中的 systemd 真实验收需要 Linux VM，容器里的普通 SSH mock 不足以覆盖 reload/服务恢复。缺少 VM 时报告 prerequisite_missing，不能发布“完整可用”结论。
+- **RISK-011**: 两个业务闭环中的 systemd 真实验收需要真实 Linux/systemd，普通 SSH mock 不足以覆盖 reload/服务恢复。此实现使用 Linux 虚拟化内的 PID 1 systemd 一次性容器，缺少该目标时报告 prerequisite_missing，不能发布“完整可用”结论。
 - **RISK-012**: 六技能不等于六类运维操作已实现。deployment 技能可制定方案，首版只有单 Linux 服务配置/恢复写模板；K8s 发布/数据库写/跨机发布必须明确留到后续能力版本。
 
 - **ASSUMPTION-001**: 首版由单一可信本机用户管理 home，所有 clients 连同一个 daemon；不提供组织级 RBAC、远程公网 API 或跨机器共享 SQLite。

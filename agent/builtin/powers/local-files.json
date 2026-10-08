@@ -1,0 +1,60 @@
+{
+  "id": "local-files",
+  "version": "0.0.1",
+  "description": "Bound project files and isolated tests",
+  "requiredResourceKinds": [
+    "local"
+  ],
+  "requiredGrants": [
+    "read",
+    "change"
+  ],
+  "tools": [
+    {
+      "name": "file.read",
+      "description": "Read a bound file",
+      "effect": "read",
+      "schema": "fileRead"
+    },
+    {
+      "name": "file.search",
+      "description": "Search bounded project text",
+      "effect": "read",
+      "schema": "fileSearch"
+    },
+    {
+      "name": "file.propose_patch",
+      "description": "Prepare a hash-bound patch artifact",
+      "effect": "read",
+      "schema": "patch"
+    },
+    {
+      "name": "file.apply_patch",
+      "description": "Apply an approved hash-bound patch",
+      "effect": "change",
+      "schema": "patchApply"
+    },
+    {
+      "name": "workspace.test",
+      "description": "Run the configured isolated test profile",
+      "effect": "read",
+      "schema": "empty"
+    }
+  ],
+  "inputSchemas": {
+    "file.read": "fileRead",
+    "file.search": "fileSearch",
+    "file.propose_patch": "patch",
+    "file.apply_patch": "patchApply",
+    "workspace.test": "empty"
+  },
+  "effectPolicies": {
+    "file.read": "read",
+    "file.search": "read",
+    "file.propose_patch": "read",
+    "file.apply_patch": "change",
+    "workspace.test": "read"
+  },
+  "verificationProfiles": [],
+  "adapterFactory": "local-files"
+}

@@ -71,3 +71,8 @@ CLAUDE.md
 node_modules/
 client/web/dist/
 client/desktop/frontend/dist/
+agent/dist/
+agent/ui/dist/
+agent/.fixtures/
+agent/.test-home/
+agent/test-results/

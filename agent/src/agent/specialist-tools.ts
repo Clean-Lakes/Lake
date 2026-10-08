@@ -1,0 +1,16 @@
+export const specialistToolNames = [
+  "task.claim_step",
+  "task.report",
+  "task.progress",
+  "skill.load",
+  "power.enable",
+  "terminal.open",
+  "terminal.attach",
+  "terminal.read",
+  "terminal.execute",
+  "specialist.set_phase",
+  "observation.record",
+  "hypothesis.update",
+  "evidence.query",
+  "specialist.deliver",
+] as const;
