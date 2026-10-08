@@ -50,6 +50,12 @@ export class ChatModelAdapter implements ModelPort {
     }
     const streaming = this.provider.supportsStreaming;
     const body = {
+      ...(this.provider.thinking
+        ? { thinking: { type: this.provider.thinking } }
+        : {}),
+      ...(this.provider.reasoningEffort
+        ? { reasoning_effort: this.provider.reasoningEffort }
+        : {}),
       model: this.provider.model,
       messages: request.messages,
       ...(request.tools.length
@@ -103,6 +109,9 @@ export class ChatModelAdapter implements ModelPort {
         message: {
           role: "assistant",
           content: typeof m.content === "string" ? m.content : null,
+          ...(typeof m.reasoning_content === "string"
+            ? { reasoning_content: m.reasoning_content }
+            : {}),
           ...(calls.length ? { tool_calls: calls } : {}),
         },
         usage: usage(data.usage),
@@ -111,6 +120,7 @@ export class ChatModelAdapter implements ModelPort {
     }
     requireCondition(response.body, "model_protocol_error");
     let text = "",
+      reasoning = "",
       finished = false,
       done = false,
       meter: ModelUsage | null = null;
@@ -138,6 +148,13 @@ export class ChatModelAdapter implements ModelPort {
         const choice = chunk.choices?.[0];
         if (!choice) continue;
         const delta = choice.delta ?? {};
+        if (typeof delta.reasoning_content === "string") {
+          reasoning += delta.reasoning_content;
+          requireCondition(
+            Buffer.byteLength(reasoning) <= 2097152,
+            "output_limit",
+          );
+        }
         if (typeof delta.content === "string") {
           text += delta.content;
           requireCondition(Buffer.byteLength(text) <= 1048576, "output_limit");
@@ -196,6 +213,7 @@ export class ChatModelAdapter implements ModelPort {
       message: {
         role: "assistant",
         content: text || null,
+        ...(reasoning ? { reasoning_content: reasoning } : {}),
         ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
       },
       usage: meter,

@@ -12,3 +12,21 @@ export function resultExitCode(status: string): number {
           ? 3
           : 1;
 }
+
+export function statusText(
+  text: string,
+  status: string,
+  color = "auto",
+): string {
+  if (color === "never" || (color === "auto" && !process.stderr.isTTY))
+    return text;
+  const code =
+    status === "succeeded"
+      ? 32
+      : status === "failed"
+        ? 31
+        : status === "waiting"
+          ? 33
+          : 36;
+  return `\x1b[${code}m${text}\x1b[0m`;
+}

@@ -13,6 +13,7 @@ import { changeCommands } from "../domain/events.js";
 import { GrantService } from "../operations/grants.js";
 import { ResourceLockService } from "../runner/resource-locks.js";
 import { randomUUID } from "node:crypto";
+import { checkInvocation } from "../operations/invocation-policy.js";
 import { canonicalActionDigest } from "../operations/action-digest.js";
 export class HandoffService {
   constructor(
@@ -95,6 +96,7 @@ export class HandoffService {
       terminal.sessionId,
     );
     requireCondition(session, "not_found");
+    checkInvocation(session, resource, "interactive");
     const targetDigest = canonicalActionDigest({
       id: resource.id,
       identity: resource.identity,

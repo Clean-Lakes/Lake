@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { InvocationSchema } from "./invocation.js";
 import {
   Id,
   ResourceSchema,
@@ -25,6 +26,9 @@ export const BudgetSchema = z
   .strict();
 export const SessionSchema = z
   .object({
+    invocation: InvocationSchema.optional(),
+    createdAt: date.optional(),
+    parentSessionId: Id.optional(),
     ...entity,
     lakeId: Id,
     environmentId: Id,

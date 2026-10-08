@@ -6,12 +6,14 @@ export async function startModelFixture(
     attempt: number,
   ) => {
     text?: string;
+    reasoning?: string;
     calls?: {
       id: string;
       name: string;
       arguments: string;
     }[];
     partial?: boolean;
+    delayMs?: number;
     status?: number;
   },
 ) {
@@ -25,6 +27,8 @@ export async function startModelFixture(
     }
     const input = JSON.parse(raw),
       result = reply(input, ++attempts);
+    if (result.delayMs) await new Promise((r) => setTimeout(r, result.delayMs));
+    if (res.destroyed) return;
     if (result.status) {
       res.writeHead(result.status).end();
       return;
@@ -44,6 +48,7 @@ export async function startModelFixture(
               message: {
                 role: "assistant",
                 content: result.text ?? null,
+                reasoning_content: result.reasoning,
                 tool_calls: toolCalls.map(({ index, ...r }) => r),
               },
               finish_reason: toolCalls.length ? "tool_calls" : "stop",
@@ -55,7 +60,11 @@ export async function startModelFixture(
       return;
     }
     res.setHeader("Content-Type", "text/event-stream");
-    const delta = { content: result.text ?? "", tool_calls: toolCalls };
+    const delta = {
+      content: result.text ?? "",
+      reasoning_content: result.reasoning,
+      tool_calls: toolCalls,
+    };
     let output = `data: ${JSON.stringify({ choices: [{ delta }] })}\n\n`;
     if (!result.partial)
       output += `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: toolCalls.length ? "tool_calls" : "stop" }], usage: { prompt_tokens: 30, completion_tokens: 10 } })}\n\ndata: [DONE]\n\n`;

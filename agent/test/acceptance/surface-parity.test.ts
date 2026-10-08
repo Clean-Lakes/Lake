@@ -75,6 +75,8 @@ test("CLI JSON and API report the same durable task and waiting state", async (t
   const snapshot = (await response.json()) as any;
   assert.equal(snapshot.session.id, result.sessionId);
   assert.equal(snapshot.session.rootTaskId, result.taskId);
+  assert.equal(snapshot.session.invocation.sandboxMode, "danger-full-access");
+  assert.equal(snapshot.session.invocation.bypassApprovals, false);
   assert.equal(snapshot.tasks[0].status, result.status);
   assert(!output.includes(http.auth.token));
 });

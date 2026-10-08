@@ -24,6 +24,7 @@ import { requireCondition, LakeError } from "../domain/errors.js";
 import { changeCommands } from "../domain/events.js";
 import { publicProjection } from "../domain/schemas.js";
 import { runtimeReadiness } from "../adapters/readiness.js";
+import { InvocationSchema } from "../domain/invocation.js";
 import { prepareHome } from "./home.js";
 import { acquireDaemonLock } from "./daemon-lock.js";
 import { SqliteStore } from "../storage/store.js";
@@ -83,6 +84,8 @@ const creation = z
     objective: z.string().min(1).max(65536),
     resourceIds: z.array(z.uuid()).min(1),
     providerId: z.string().optional(),
+    invocation: InvocationSchema.optional(),
+    parentSessionId: z.uuid().optional(),
     intent: z.enum(["diagnose", "recover", "change"]).default("diagnose"),
     constraints: z.array(z.string()).default([]),
     acceptanceCriteria: z
@@ -635,11 +638,14 @@ export class LakeApplication {
       environmentId: p.environmentId,
       status: "active",
       rootTaskId: taskId,
+      createdAt: new Date().toISOString(),
+      ...(p.parentSessionId ? { parentSessionId: p.parentSessionId } : {}),
       providerId,
       eventCursor: "0",
+      ...(p.invocation ? { invocation: p.invocation } : {}),
       budget: initialBudget(
-        this.config.limits.sessionMaxModelCalls,
-        this.config.limits.sessionMaxEstimatedTokens,
+        p.invocation?.maxCalls ?? this.config.limits.sessionMaxModelCalls,
+        p.invocation?.maxTokens ?? this.config.limits.sessionMaxEstimatedTokens,
         deadline,
       ),
     };
@@ -832,6 +838,14 @@ export class LakeApplication {
     for (let attempt = 0; attempt < 10; attempt++) {
       const current = await this.store.get<TaskContract>("tasks", task.id);
       requireCondition(current, "not_found");
+      // Late model completion must not reopen an already finished or cancelled task.
+      if (
+        ["succeeded", "qualified", "failed", "cancelled"].includes(
+          current.status,
+        ) &&
+        patch.status !== current.status
+      )
+        return;
       if (["succeeded", "qualified"].includes(String(patch.status))) {
         const delivery = await this.gate.evaluate(current.id);
         requireCondition(
@@ -975,6 +989,15 @@ export class LakeApplication {
     const provider = this.provider(
       profile?.modelOverride ?? session.providerId,
     );
+    const selectedProvider = {
+      ...provider,
+      ...(!profile?.modelOverride && session.invocation?.model
+        ? { model: session.invocation.model }
+        : {}),
+      ...(session.invocation?.reasoningEffort
+        ? { reasoningEffort: session.invocation.reasoningEffort }
+        : {}),
+    };
     const snapshot = run?.workOrder.skillSnapshot ?? this.skills.resolve();
     const loader = new SkillLoader(snapshot);
     this.loaders.set(actor, loader);
@@ -998,8 +1021,8 @@ export class LakeApplication {
       );
     const runtime = new AgentRuntime(
       this.store,
-      this.model(provider),
-      provider,
+      this.model(selectedProvider),
+      selectedProvider,
       this.catalog,
       this.executor,
       this.budget,
@@ -1121,6 +1144,48 @@ export class LakeApplication {
       runtime.restore(resumeState);
     }
     return runtime;
+  }
+  async configureModel(
+    sessionId: string,
+    providerId: string,
+    model?: string,
+    reasoningEffort?: import("../domain/invocation.js").Invocation["reasoningEffort"],
+  ): Promise<Session> {
+    this.provider(providerId);
+    const s = await this.store.get<Session>("sessions", sessionId);
+    requireCondition(s, "not_found");
+    requireCondition(
+      !this.roots.has(sessionId) &&
+        !(await this.store.list<SpecialistRun>("specialist_runs")).some(
+          (r) =>
+            r.sessionId === sessionId &&
+            ["running", "queued"].includes(r.state.status),
+        ),
+      "conflict",
+      "Wait for active model calls and specialists before changing model",
+    );
+    const invocation = InvocationSchema.parse({
+      ...(s.invocation ?? {
+        sandboxMode: "danger-full-access",
+        approvalPolicy: "on-request",
+        bypassApprovals: false,
+      }),
+      ...(model ? { model } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
+    });
+    if (!model) delete invocation.model;
+    const next = { ...s, revision: s.revision + 1, providerId, invocation };
+    await this.store.transact(
+      changeCommands(
+        "sessions",
+        next,
+        "session.context_changed",
+        "local-user",
+        new Date().toISOString(),
+      ),
+    );
+    this.runtimes.delete(sessionId);
+    return next;
   }
   async userMessage(
     sessionId: string,

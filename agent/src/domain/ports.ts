@@ -62,6 +62,7 @@ export interface CredentialPort {
 }
 export type BufferLike = Uint8Array;
 export interface ModelMessage {
+  reasoning_content?: string;
   role: "system" | "user" | "assistant" | "tool";
   content: string | null;
   tool_calls?: ToolCall[];
