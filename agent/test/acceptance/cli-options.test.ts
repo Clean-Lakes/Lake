@@ -233,3 +233,34 @@ test("CLI termination requests durable cancellation while a model request is in 
   assert.equal(tasks[0].status, "cancelled");
   assert.equal((await h.app.store.list("actions")).length, 0);
 });
+
+test("status CLI reads real host metrics with zero model calls and a verified durable report", async (t) => {
+  const h = await testApplication(),
+    http = await createHttpServer(h.app),
+    root = await mkdtemp(join(tmpdir(), "lake-cli-status-"));
+  t.after(async () => {
+    await http.close();
+    await h.close();
+    await rm(root, { recursive: true, force: true });
+  });
+  await writeFile(
+    join(h.home, "agent/runtime/daemon.json"),
+    JSON.stringify({
+      origin: http.origin,
+      token: http.auth.token,
+      nonce: http.auth.nonce,
+      pid: process.pid,
+    }),
+    { mode: 0o600 },
+  );
+  const r = await cli(["status", "--home", h.home, "-C", root, "--json"]);
+  assert.equal(r.code, 0, r.err);
+  const result = JSON.parse(r.out);
+  assert.equal(result.modelCalls, 0);
+  assert.equal(result.status.source, "local-system-status");
+  const snap = (await h.app.data.snapshot(result.sessionId)) as any;
+  assert.equal(snap.session.status, "succeeded");
+  assert.equal(snap.specialist_runs.length, 0);
+  assert.equal(snap.observations.length, 1);
+  assert.equal(snap.session.budget.calls, 0);
+});

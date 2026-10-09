@@ -68,3 +68,16 @@ macOS 实测 600.3 秒、2000 个业务事件、10 MiB 终端输出、3 active s
 - 通过 `scripts/build_lake.sh` 构建并校验独立分发，runtime digest：`088fdeecd86ebf5381c9d822a9354414d48ecf54b4088e8e081cc13fcebf6757`。
 - 用户授权后接入原有 DS 私有凭据；Pro/Flash 各完成真实流式两轮 mock echo 工具往返，reasoning_content 回填和 usage 均通过。只发送公开测试文字与虚构工具结果，未访问生产资源。API key 未进入 argv、输出或仓库；无 Keychain 调用。
 - `bin/lake models` 确认默认 `ds` / `deepseek-v4-pro`，以及 `ds-flash` / `deepseek-flash`；均为 1M window / 8192 output。旧 v2 配置与旧凭据保留。
+
+## 本机查询与空转修复（2026-10-09）
+
+用户指出 CLI 慢，原会话约 139.9 秒、14次模型调用、零行动/终端。主会话误把服务器状态改成项目目录调查；专员没有 Power 清单，猜测 shell/filesystem/read-only/ls 等不存在 ID，且 profileId 混用了技能名。最终 no_progress 等待。
+
+修复包括：准确 Powers/profiles 上下文与枚举、sre-general 显式 ID 回退、匹配工单资源的能力初始化、主会话只读工具、固定本机状态探针、目标澄清工具及 CLI 模型活动时间。变更工具仍限专员，执行网关授权与证据门保留。
+
+- 单元 7/7、集成 51/51、业务验收 13/13；TS/UI 类型和模块边界检查通过。
+- 固定探针真实数值与来源、撤权拒绝、两轮 Agent 无 spawn 交付、单轮请求输入、CLI零模型检查均通过。
+- 同一 deepseek-v4-pro/high 真模型，本机明确目标 4.189秒、2次调用、1次成功 system.status 行动、1条来源观察、0专员，succeeded。
+- 原模糊目标“查看服务器的状态”：8.724秒、1次调用，waiting_user_input；0行动/专员，没有虚构远端检查。
+- 签名 bin/lake status --json 实测：冷启动含启动daemon 2.785秒（检查186ms）；后台就绪1.263秒（检查166ms）；均零模型调用。启动开销和检查开销分别记录，以上是单次本机测量，不承诺每次同样延迟。
+- 规定脚本签名构建通过，runtime digest：d8ab8e7ef157e0b88d6abdb79711677570b37c3574f19ec475e46f2b1faa15b7。已确认当前后台无在途模型/专员/动作后重启加载，旧会话保留。

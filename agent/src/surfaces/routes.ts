@@ -165,7 +165,16 @@ export async function dispatchRoute(
   ]);
   let result: unknown;
   try {
-    if (
+    if (collection === "inspect" && id === "local-status") {
+      const p = z
+        .object({ cwd: z.string().min(1) })
+        .strict()
+        .parse(data);
+      result = await app.inspectLocalStatus(
+        p.cwd,
+        stableId("inspection:" + command.requestId),
+      );
+    } else if (
       collection === "workspaces" &&
       operation === undefined &&
       id === "resolve"

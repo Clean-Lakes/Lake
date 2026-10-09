@@ -35,7 +35,8 @@ export class SpecialistService {
     const task = await this.store.get<TaskContract>("tasks", taskId);
     requireCondition(task && !task.cancelRequestedAt, "not_found");
     const selected = input.profileId
-      ? this.profiles.find((p) => p.id === input.profileId)
+      ? (this.profiles.find((p) => p.id === input.profileId) ??
+        (input.profileId === generalProfile.id ? generalProfile : undefined))
       : generalProfile;
     requireCondition(selected, "not_found");
     const { profile, digest } = freezeProfile(selected);

@@ -1,7 +1,7 @@
 {
   "id": "local-files",
   "version": "0.0.1",
-  "description": "Bound project files and isolated tests",
+  "description": "Local machine status, bound files and isolated tests",
   "requiredResourceKinds": [
     "local"
   ],
@@ -10,6 +10,12 @@
     "change"
   ],
   "tools": [
+    {
+      "name": "system.status",
+      "description": "Read the current local machine CPU usage, load, memory counters, disk space and uptime. Use for 本机/Mac/当前电脑状态; not remote hosts. No terminal or shell required.",
+      "effect": "read",
+      "schema": "empty"
+    },
     {
       "name": "file.read",
       "description": "Read a bound file",
@@ -46,14 +52,16 @@
     "file.search": "fileSearch",
     "file.propose_patch": "patch",
     "file.apply_patch": "patchApply",
-    "workspace.test": "empty"
+    "workspace.test": "empty",
+    "system.status": "empty"
   },
   "effectPolicies": {
     "file.read": "read",
     "file.search": "read",
     "file.propose_patch": "read",
     "file.apply_patch": "change",
-    "workspace.test": "read"
+    "workspace.test": "read",
+    "system.status": "read"
   },
   "verificationProfiles": [],
   "adapterFactory": "local-files"

@@ -69,6 +69,7 @@ CLI 支持裸命令/位置目标、`exec`、`resume --last`、`fork`、`-m/-c/-p
 
 ```sh
 bin/lake
+bin/lake status
 bin/lake -m ds-flash "检查当前项目"
 bin/lake exec -s read-only --json "分析部署配置"
 bin/lake resume --last
@@ -87,6 +88,8 @@ bin/lake sessions resume SESSION_UUID
 ```
 
 `chat` 支持持续追加指令，使用 `/status`、`/resume`、`/approve <行动ID> <摘要>`、`/cancel`、`/quit`。`run --json` 适合脚本。恢复/配置变更使用 `--intent recover` 或 `--intent change`；工作台有相应任务类型。两类任务必须选择已导入服务的健康资源和目标资源，创建时冻结 HTTP 判据；配置变更还需要一项已验证的实际变更。诊断任务默认使用有来源的调查发现判据。
+
+`status` 是固定本机只读检查，不调用模型。普通对话可直接输入“查看这台 Mac 本机状态”；CPU/内存/磁盘/运行时间使用同一个受控 Power，带来源证据。不要仅凭 OS 空闲内存计数判定内存压力。
 
 CLI/Web 连接同一 home 的唯一 daemon。Web 只监听 127.0.0.1，启动链接使用一次性 fragment 票据，兑换后立刻清除；访问 token 只在前端内存中使用，刷新通过 HttpOnly、SameSite=Strict 的会话 cookie 恢复。API 校验 Host/Origin，SSE 使用带 Authorization 的 fetch，不把访问 token 放进 query 或 localStorage。
 
