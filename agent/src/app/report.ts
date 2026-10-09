@@ -4,6 +4,7 @@ export async function buildEvidenceReport(
   store: StorePort,
   taskId: string,
   delivery: DeliveryResult,
+  summary?: string,
 ): Promise<unknown> {
   const [task, actions, observations, hypotheses, evidence] = await Promise.all(
     [
@@ -15,6 +16,7 @@ export async function buildEvidenceReport(
     ],
   );
   return {
+    ...(summary ? { summary } : {}),
     objective: task?.objective,
     delivery,
     findings: observations
