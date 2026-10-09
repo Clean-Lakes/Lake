@@ -247,8 +247,10 @@ export async function interactiveChat(
           : 0;
         ui.activity(
           [
-            states[task.status] ?? task.status,
-            task.waitingReason
+            task.waitingReason === "turn_complete"
+              ? "就绪 · 输入下一条继续"
+              : (states[task.status] ?? task.status),
+            task.waitingReason && task.waitingReason !== "turn_complete"
               ? (reasons[task.waitingReason] ?? task.waitingReason)
               : undefined,
             task.status === "active" && rootActivity

@@ -53,6 +53,15 @@ export class ContextBuilder {
       }),
     };
     const messages = [prefix, task, ...input.history];
+    const last = input.history.at(-1);
+    if (last?.role === "assistant" && !last.tool_calls?.length) {
+      // New conversational turns must end with the actual user request, not
+      // the previous assistant answer. Paired tool continuations stay intact.
+      messages.push({
+        role: "user",
+        content: input.inbox.at(-1) ?? input.objective,
+      });
+    }
     const tokens = estimateTokens(messages, input.tools);
     return {
       messages,

@@ -838,13 +838,45 @@ export class LakeApplication {
   }
   startRoot(sessionId: string): void {
     if (this.stopped || this.roots.has(sessionId)) return;
-    const promise = this.runRoot(sessionId).finally(() =>
-      this.roots.delete(sessionId),
-    );
+    let yielded = false;
+    const promise = this.runRoot(sessionId)
+      .then((value) => {
+        yielded = value;
+      })
+      .finally(async () => {
+        let wake = false;
+        try {
+          // A message can arrive after the runtime's final inbox check while this
+          // root is still registered. Restart only for durable, unconsumed input.
+          if (
+            this.stopped ||
+            !yielded ||
+            !(await this.inbox.pending(sessionId)).length
+          )
+            return;
+          const session = await this.store.get<Session>("sessions", sessionId);
+          const task = session
+            ? await this.store.get<TaskContract>("tasks", session.rootTaskId)
+            : undefined;
+          if (
+            !task ||
+            task.cancelRequestedAt ||
+            !["active", "waiting"].includes(task.status)
+          )
+            return;
+          await this.setTask(task, { status: "active" });
+          wake = true;
+        } finally {
+          // Keep the root registered until finalization ends so shutdown waits
+          // for these storage reads before closing the database.
+          this.roots.delete(sessionId);
+          if (wake && !this.stopped) this.startRoot(sessionId);
+        }
+      });
     this.roots.set(sessionId, promise);
     void promise.catch(() => {});
   }
-  private async runRoot(sessionId: string): Promise<void> {
+  private async runRoot(sessionId: string): Promise<boolean> {
     const session = await this.store.get<Session>("sessions", sessionId);
     requireCondition(session, "not_found");
     const task = await this.store.get<TaskContract>(
@@ -853,7 +885,7 @@ export class LakeApplication {
     );
     requireCondition(task, "not_found");
     if (["succeeded", "qualified", "failed", "cancelled"].includes(task.status))
-      return;
+      return false;
     try {
       const runtime = await this.makeRuntime(sessionId, task.id, sessionId);
       this.runtimes.set(sessionId, runtime);
@@ -869,6 +901,7 @@ export class LakeApplication {
           status: "waiting",
           waitingReason: (result.data as any)?.reason ?? "waiting_dependency",
         });
+      return true;
     } catch (error) {
       const latest = await this.store.get<TaskContract>("tasks", task.id);
       if (
@@ -896,6 +929,7 @@ export class LakeApplication {
             error instanceof LakeError ? error.code : "model_protocol_error",
         });
       }
+      return false;
     } finally {
       this.runtimes.delete(sessionId);
     }
@@ -1210,6 +1244,8 @@ export class LakeApplication {
                 (await this.store.get<TaskContract>("tasks", taskId))?.status ??
                   "",
               ),
+        hasPendingInput: async () =>
+          (await this.inbox.pending(actor)).length > 0,
         checkpoint: async (state) => {
           const unsettled = (await this.store.list<Action>("actions")).some(
             (a) =>

@@ -161,19 +161,45 @@ export async function connectOrStartDaemon(
     import.meta.url.endsWith(".ts") ? "./cli.ts" : "./cli.js",
     import.meta.url,
   ).pathname;
+  // A chat can outlive a build. Starting its own archived cli.js would roll
+  // the daemon back after a restart. Managed releases use the stable signed
+  // launcher, which always points at the current build.
+  const releaseRoot = new URL("../../", import.meta.url);
+  let launcher: string | undefined;
+  if (
+    /\/lake-agent-runtime\/releases\/0\.0\.1-[a-f0-9]{64}\/$/.test(
+      releaseRoot.pathname,
+    )
+  ) {
+    const candidate = new URL("../../../lake", releaseRoot).pathname;
+    try {
+      const st = await lstat(candidate);
+      if (
+        st.isFile() &&
+        !st.isSymbolicLink() &&
+        st.uid === process.getuid?.() &&
+        st.mode & 0o111
+      )
+        launcher = candidate;
+    } catch {
+      /* Standalone copied runtimes retain the direct entry fallback. */
+    }
+  }
   const child = spawn(
-    process.execPath,
-    [
-      ...(entry.endsWith(".ts") ? ["--import", "tsx"] : []),
-      entry,
-      "serve",
-      "--home",
-      home,
-    ],
+    launcher ?? process.execPath,
+    launcher
+      ? ["serve", "--home", home]
+      : [
+          ...(entry.endsWith(".ts") ? ["--import", "tsx"] : []),
+          entry,
+          "serve",
+          "--home",
+          home,
+        ],
     {
       detached: true,
       stdio: "ignore",
-      cwd: new URL("../../", import.meta.url).pathname,
+      cwd: releaseRoot.pathname,
     },
   );
   child.unref();
