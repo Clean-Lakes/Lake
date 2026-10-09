@@ -14,6 +14,7 @@
 | `lake fork [SESSION_ID]` | 创建关联会话与新任务，沿用资源范围、历史摘要和执行策略。行动队列、已确认标准和终端控制权不会复制。 |
 | 已完成会话输入新目标 | 创建关联任务；原任务保持结束状态。无新目标的 resume 展示历史结果。 |
 | `lake review [PROMPT]` | 本地工作区只读审查；默认审查当前代码。当前没有 Codex 的 Git diff review 选择器。 |
+| `lake status [--json]` | 直接读取当前电脑 CPU、负载、OS 内存计数、工作目录所在磁盘与运行时间；零模型调用，生成持久会话和来源证据。 |
 | `lake models` / `lake doctor` | 查看模型元数据和运行能力；凭据内容不进入输出。 |
 | `lake completion bash\|zsh\|fish` | 输出基础 shell 补全脚本。 |
 | `lake features` | 返回真实功能清单。 |
@@ -48,6 +49,8 @@
 优先级：CLI defaults → 命名 profile → 重复 `-c`（后者覆盖前者）→ 显式参数。模型、推理级别、目录、策略和预算均属于单个会话，不改变其他客户端的模型设置。已有任务的执行策略与资源范围冻结；改变策略用 `fork`，增加目录用新会话。空闲时可切换模型或更新预算；活跃专员期间拒绝切换模型。
 
 显式选择 `--lake/--environment` 的运维会话，在未指定 sandbox 策略时保留原有“资源授权 + 行动审批”行为，保存为 `danger-full-access` 且 `bypassApprovals=false`；本地工作区默认 `workspace-write`。显式 `-s`、profile 和 config 策略优先。
+
+简单只读任务由主会话直接调用对应 Power；复杂调查仍可分给多个专员。上下文包含合法 Power/profile 清单，专员自动获得与工单资源匹配的能力。模糊的“服务器”目标会先请求输入；本地目录不代表远端服务器。
 
 交互命令：`/help`、`/status`、`/resume`、`/model [名称]`、`/approve <行动ID> <摘要>`、`/cancel`、`/quit`。待审批行动展示参数和变更产物。`Ctrl+C` 请求取消任务；`/quit` 离开界面，后台任务可通过 resume 回到。
 

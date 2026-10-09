@@ -45,6 +45,7 @@ export const eventTypes = [
   "recovery.started",
   "recovery.finished",
   "model.delta",
+  "model.activity",
   "model.finished",
 ] as const;
 export const EventSchema = z

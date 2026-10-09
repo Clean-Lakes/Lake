@@ -18,7 +18,11 @@ export async function interactiveChat(
     stopped = false,
     cursor = "0",
     previous = "",
-    reported = "";
+    reported = "",
+    rootActivity:
+      | { activity: string; since: string; model: string }
+      | undefined,
+    lastHeartbeat = Date.now();
   let cancelPromise: Promise<unknown> | undefined;
   const interrupt = () => {
     input.close();
@@ -50,6 +54,12 @@ export async function interactiveChat(
         if (selected !== sessionId) continue;
         for (const e of events) {
           cursor = e.sequence;
+          if (e.type === "model.activity" && e.actor === selected)
+            rootActivity = {
+              activity: String(e.data.activity),
+              since: e.occurredAt,
+              model: String(e.data.model),
+            };
           if (e.type === "model.delta") process.stdout.write(e.data.text ?? "");
         }
         const snap = await client.request(
@@ -90,6 +100,22 @@ export async function interactiveChat(
               process.stderr.write(artifact.content + "\n");
             }
           }
+        }
+        if (Date.now() - lastHeartbeat >= 5000) {
+          lastHeartbeat = Date.now();
+          const labels: string[] = [];
+          if (rootActivity?.activity === "model_call")
+            labels.push(
+              `主会话等待 ${rootActivity.model} · ${Math.max(0, Math.floor((Date.now() - Date.parse(rootActivity.since)) / 1000))}秒`,
+            );
+          for (const r of snap.specialist_runs.filter(
+            (r: any) => r.state.status === "running",
+          ))
+            labels.push(
+              `专员 ${r.id.slice(0, 8)} · ${r.state.activity === "model_call" ? "等待模型" : r.state.activity} · ${Math.max(0, Math.floor((Date.now() - Date.parse(r.state.since)) / 1000))}秒`,
+            );
+          if (labels.length)
+            process.stderr.write("\n" + labels.join("；") + "\n");
         }
         if (finishedStatuses.includes(task.status) && reported !== task.id) {
           reported = task.id;
@@ -197,6 +223,7 @@ export async function interactiveChat(
             sessionId = child.id;
             cursor = "0";
             previous = "";
+            rootActivity = undefined;
             process.stderr.write(`会话 ${sessionId}\n`);
           } else
             await client.request(

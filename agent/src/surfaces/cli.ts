@@ -54,6 +54,7 @@ export async function runCli(args = process.argv.slice(2)): Promise<void> {
       modelTools: true,
       workspaceScope: true,
       resourceApprovals: true,
+      localSystemStatus: true,
       jsonl: true,
       cloud: false,
       mcpHost: false,
@@ -151,6 +152,21 @@ export async function runCli(args = process.argv.slice(2)): Promise<void> {
     return;
   }
   const client = await connectOrStartDaemon(home);
+  if (command === "status") {
+    const result = await client.request("POST", "inspect/local-status", {
+      cwd: resolve(values.cd ?? process.cwd()),
+    });
+    if (values.json) renderJsonResult(result);
+    else {
+      const s = result.status,
+        gib = (n: number) => (n / 1073741824).toFixed(2);
+      process.stdout.write(
+        `本机 ${s.host.hostname} · ${s.host.platform} ${s.host.arch}\nCPU ${s.cpu.usagePercent ?? "未知"}% · ${s.cpu.logicalCores} 核 · 负载 ${s.cpu.loadAverage.map((n: number) => n.toFixed(2)).join(" / ")}\n内存 总量 ${gib(s.memory.totalBytes)} GiB · 空闲 ${gib(s.memory.freeBytes)} GiB（OS报告值）\n磁盘 使用 ${s.disk.usedPercent}% · 可用 ${gib(s.disk.availableBytes)} GiB\n运行 ${(s.uptimeSeconds / 3600).toFixed(1)} 小时 · 检查 ${result.durationMs} ms · 模型调用 0\n会话 ${result.sessionId} · 来源 local-system-status\n`,
+      );
+    }
+    return;
+  }
+
   if (["chat", "run", "exec", "resume", "fork", "review"].includes(command)) {
     await runConversation(client, options);
     return;

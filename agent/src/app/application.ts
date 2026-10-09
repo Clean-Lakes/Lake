@@ -24,6 +24,10 @@ import { requireCondition, LakeError } from "../domain/errors.js";
 import { changeCommands } from "../domain/events.js";
 import { publicProjection } from "../domain/schemas.js";
 import { runtimeReadiness } from "../adapters/readiness.js";
+import { resolveWorkspaces } from "./workspaces.js";
+import { hostStatus } from "../adapters/host-status.js";
+import { generalProfile } from "../specialists/profile.js";
+import { wireName } from "../agent/tool-catalog.js";
 import { InvocationSchema } from "../domain/invocation.js";
 import { prepareHome } from "./home.js";
 import { acquireDaemonLock } from "./daemon-lock.js";
@@ -734,6 +738,71 @@ export class LakeApplication {
     ]);
     return session;
   }
+  async inspectLocalStatus(cwd: string, id: string): Promise<unknown> {
+    const started = performance.now(),
+      scope = await resolveWorkspaces(this, [cwd], "read-only");
+    const session = await this.createSession(
+      {
+        lakeId: scope.lakeId,
+        environmentId: scope.environmentId,
+        resourceIds: scope.resourceIds,
+        objective: "查看本机系统状态",
+        invocation: {
+          cwd: scope.roots[0],
+          workspaceRoots: scope.roots,
+          sandboxMode: "read-only",
+        },
+      },
+      id,
+    );
+    try {
+      const result = await this.gateway.execute(
+        {
+          sessionId: session.id,
+          taskId: session.rootTaskId,
+          actor: session.id,
+          capability: "local-files.system.status",
+          resourceId: scope.resourceIds[0],
+          parameters: {},
+          callKey: "local-status",
+        },
+        new AbortController().signal,
+      );
+      requireCondition(
+        result.status === "ok",
+        "precondition_failed",
+        "Local inspection failed",
+      );
+      const delivery = await this.gate.evaluate(session.rootTaskId);
+      requireCondition(delivery.status === "verified", "precondition_failed");
+      const reportArtifactId = await this.artifacts.put(
+          JSON.stringify(
+            await buildEvidenceReport(this.store, session.rootTaskId, delivery),
+          ),
+          session.id,
+        ),
+        task = await this.store.get<TaskContract>("tasks", session.rootTaskId);
+      requireCondition(task, "not_found");
+      await this.setTask(task, { status: "succeeded", reportArtifactId });
+      return this.redactor.value({
+        sessionId: session.id,
+        taskId: session.rootTaskId,
+        reportArtifactId,
+        durationMs: Math.round(performance.now() - started),
+        modelCalls: 0,
+        status: (
+          result.data as { execution: Awaited<ReturnType<typeof hostStatus>> }
+        ).execution,
+      });
+    } catch (error) {
+      const task = await this.store.get<TaskContract>(
+        "tasks",
+        session.rootTaskId,
+      );
+      if (task) await this.setTask(task, { status: "failed" });
+      throw error;
+    }
+  }
   provider(id: string): Provider {
     const p = this.config.providers.find((p) => p.id === id);
     requireCondition(p, "not_found", "Configured provider is missing");
@@ -894,6 +963,18 @@ export class LakeApplication {
     const abort = () => runtime?.interrupt();
     signal.addEventListener("abort", abort, { once: true });
     try {
+      const resources = await Promise.all(
+        run.workOrder.resourceIds.map((id) =>
+          this.store.get<Resource>("resources", id),
+        ),
+      );
+      for (const manifest of this.powers.project())
+        if (
+          resources.some(
+            (r) => r && manifest.requiredResourceKinds.includes(r.kind),
+          )
+        )
+          await this.powers.enable(this.store, run.id, manifest.id);
       for (const id of run.profile.defaultPowers)
         await this.powers.enable(this.store, run.id, id);
       runtime = await this.makeRuntime(run.sessionId, run.taskId, run.id);
@@ -989,6 +1070,19 @@ export class LakeApplication {
     const provider = this.provider(
       profile?.modelOverride ?? session.providerId,
     );
+    const taskScope = await this.store.get<TaskContract>("tasks", taskId);
+    const scopeResources = await Promise.all(
+      (run?.workOrder.resourceIds ?? taskScope?.scope ?? []).map((id) =>
+        this.store.get<Resource>("resources", id),
+      ),
+    );
+    const availablePowers = this.powers
+      .project()
+      .filter((m) =>
+        scopeResources.some(
+          (r) => r && m.requiredResourceKinds.includes(r.kind),
+        ),
+      );
     const selectedProvider = {
       ...provider,
       ...(!profile?.modelOverride && session.invocation?.model
@@ -1031,7 +1125,7 @@ export class LakeApplication {
         taskId,
         actor,
         role: run ? "specialist" : "coordinator",
-        powerBindings: run?.powerBindings ?? [],
+        powerBindings: run?.powerBindings ?? availablePowers.map((m) => m.id),
       },
       {
         context: async () => {
@@ -1044,6 +1138,22 @@ export class LakeApplication {
             objective: run?.workOrder.objective ?? task.objective,
             constraints: task.constraints,
             shared: {
+              availablePowers: availablePowers.map((m) => ({
+                id: m.id,
+                description: m.description,
+                resourceKinds: m.requiredResourceKinds,
+                tools: m.tools
+                  .filter((t) => Boolean(run) || t.effect === "read")
+                  .map((t) => ({
+                    capability: m.id + "." + t.name,
+                    toolName: wireName(m.id + "." + t.name),
+                    effect: t.effect,
+                    description: t.description,
+                  })),
+              })),
+              specialistProfiles: [generalProfile, ...this.config.profiles].map(
+                (p) => ({ id: p.id, name: p.name }),
+              ),
               ...((await this.data.agentContext(sessionId)) as Record<
                 string,
                 unknown
@@ -1067,6 +1177,19 @@ export class LakeApplication {
         },
         activity: async (activity) => {
           if (run) await this.state.changeActivity(actor, activity as Activity);
+          else {
+            const current = await this.store.get<Session>(
+              "sessions",
+              sessionId,
+            );
+            if (current)
+              await this.store.transact([
+                eventCommand("model.activity", current, actor, {
+                  activity,
+                  model: selectedProvider.model,
+                }),
+              ]);
+          }
         },
         delta: async (text) => {
           const current = await this.store.get<Session>("sessions", sessionId);
@@ -1408,6 +1531,8 @@ export class LakeApplication {
         ? this.http.healthWindow(resource, service?.health, signal)
         : this.http.probe(resource, service?.health, signal);
     }
+    if (capability === "local-files.system.status")
+      return toolResult(await hostStatus(resource, signal));
     if (capability === "local-files.file.read")
       return toolResult(await this.workspace.read(resource, String(p.path)));
     if (capability === "local-files.file.search")
@@ -1623,7 +1748,12 @@ export class LakeApplication {
           objective: z.string(),
           resourceIds: z.array(z.uuid()),
           stepIds: z.array(z.uuid()).default([]),
-          profileId: z.string().optional(),
+          profileId: z
+            .enum([
+              generalProfile.id,
+              ...this.config.profiles.map((p) => p.id),
+            ] as [string, ...string[]])
+            .optional(),
         })
         .strict(),
       "Start a bounded specialist work order",
@@ -1711,6 +1841,31 @@ export class LakeApplication {
         }),
     );
     add(
+      "task.request_input",
+      ["coordinator"],
+      z.object({ question: z.string().min(1).max(2000) }).strict(),
+      "Ask the user to clarify the target or missing inputs and pause immediately. Never guess a remote host from a local project directory.",
+      async (p, c) => {
+        const task = await this.store.get<TaskContract>("tasks", c.taskId);
+        requireCondition(task, "not_found");
+        await this.setTask(task, {
+          status: "waiting",
+          waitingReason: "waiting_user_input",
+        });
+        const current = await this.store.get<Session>("sessions", c.sessionId);
+        requireCondition(current, "not_found");
+        await this.store.transact([
+          eventCommand("model.delta", current, c.actor, {
+            text: p.question + "\n",
+          }),
+        ]);
+        return toolResult(
+          { reason: "waiting_user_input", question: p.question },
+          { status: "waiting" },
+        );
+      },
+    );
+    add(
       "task.deliver",
       ["coordinator"],
       empty,
@@ -1789,7 +1944,13 @@ export class LakeApplication {
     add(
       "power.enable",
       ["specialist"],
-      z.object({ powerId: z.string() }).strict(),
+      z
+        .object({
+          powerId: z.enum(
+            this.powers.project().map((p) => p.id) as [string, ...string[]],
+          ),
+        })
+        .strict(),
       "Enable tools without granting resource permissions",
       async (p, c) => {
         await this.powers.enable(this.store, c.actor, p.powerId);
@@ -1799,7 +1960,14 @@ export class LakeApplication {
     add(
       "terminal.open",
       ["specialist"],
-      z.object({ resourceId: z.uuid(), powerId: z.string() }).strict(),
+      z
+        .object({
+          resourceId: z.uuid(),
+          powerId: z.enum(
+            this.powers.project().map((p) => p.id) as [string, ...string[]],
+          ),
+        })
+        .strict(),
       "Create a session-owned managed terminal",
       async (p, c) => {
         const r = await resolveTargets(
@@ -2032,7 +2200,7 @@ export class LakeApplication {
           name: manifest.id + "." + tool.name,
           description: tool.description,
           schema: powerSchemas[tool.schema]!,
-          roles: ["specialist"],
+          roles: tool.effect === "read" ? both : ["specialist"],
           powerId: manifest.id,
           run: (p, c) =>
             this.gateway.execute(
