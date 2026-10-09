@@ -1868,13 +1868,18 @@ export class LakeApplication {
     add(
       "task.deliver",
       ["coordinator"],
-      empty,
-      "Verify required criteria and deliver the final report",
-      async (_, c) => {
+      z.object({ summary: z.string().min(1).max(32000).optional() }).strict(),
+      "Verify required criteria and deliver the final report. Include a user-facing summary with findings, measurements and limitations in the user's language.",
+      async (p, c) => {
         const result = await this.gate.evaluate(c.taskId);
         if (result.status === "blocked")
           return toolResult(result, { status: "waiting" });
-        const report = await buildEvidenceReport(this.store, c.taskId, result),
+        const report = await buildEvidenceReport(
+            this.store,
+            c.taskId,
+            result,
+            p.summary,
+          ),
           artifactId = await this.artifacts.put(
             JSON.stringify(report),
             c.sessionId,

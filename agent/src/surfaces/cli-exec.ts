@@ -5,7 +5,12 @@ import type { DaemonClient } from "./daemon-client.js";
 import type { CliOptions } from "./cli-options.js";
 import { invocationOptions } from "./cli-options.js";
 import { requireCondition } from "../domain/errors.js";
-import { resultExitCode, statusText } from "./cli-renderer.js";
+import {
+  resultExitCode,
+  statusText,
+  renderEvidenceReport,
+  terminalText,
+} from "./cli-renderer.js";
 import { interactiveChat } from "./cli-chat.js";
 
 export const finishedStatuses = [
@@ -220,19 +225,21 @@ export async function finalResponse(
   sessionId: string,
   snapshot?: any,
 ): Promise<string> {
-  const messages = await client.request(
-    "GET",
-    `sessions/${sessionId}/messages`,
-  );
-  const text = messages.filter((m: any) => m.text).at(-1)?.text;
-  if (text) return text;
   const snap =
       snapshot ??
       (await client.request("GET", `sessions/${sessionId}/snapshot`)),
     task = snap.tasks.find((t: any) => t.id === snap.session.rootTaskId);
   if (task.reportArtifactId)
-    return (await client.request("GET", `artifacts/${task.reportArtifactId}`))
-      .content;
+    return renderEvidenceReport(
+      (await client.request("GET", `artifacts/${task.reportArtifactId}`))
+        .content,
+    );
+  const messages = await client.request(
+    "GET",
+    `sessions/${sessionId}/messages`,
+  );
+  const text = messages.filter((m: any) => m.text).at(-1)?.text;
+  if (text) return terminalText(text);
   return `任务 ${task.status}${task.waitingReason ? " · " + task.waitingReason : ""}`;
 }
 export async function saveResponse(path: string, text: string): Promise<void> {
@@ -256,7 +263,7 @@ export async function waitForSession(
   } else if (!legacy)
     process.stderr.write(`会话 ${session.id} · ${session.providerId}\n`);
   let cursor = "0",
-    printed = false,
+    streamed = "",
     lastStatus = "";
   const controller = new AbortController();
   let cancelling = false,
@@ -284,8 +291,9 @@ export async function waitForSession(
         cursor = event.sequence;
         if (jsonl) emit(event);
         else if (!legacy && event.type === "model.delta") {
-          process.stdout.write(event.data.text ?? "");
-          printed = true;
+          const text = terminalText(event.data.text ?? "");
+          process.stdout.write(text);
+          if (event.actor === session.id) streamed += text;
         }
       }
       const snap = await client.request(
@@ -321,8 +329,9 @@ export async function waitForSession(
             cursor = e.sequence;
             if (jsonl) emit(e);
             else if (!legacy && e.type === "model.delta") {
-              process.stdout.write(e.data.text ?? "");
-              printed = true;
+              const text = terminalText(e.data.text ?? "");
+              process.stdout.write(text);
+              if (e.actor === session.id) streamed += text;
             }
           }
         }
@@ -359,7 +368,8 @@ export async function waitForSession(
           });
         else if (legacy) emit(result);
         else {
-          if (!printed) process.stdout.write(response);
+          if (!streamed.includes(response))
+            process.stdout.write((streamed ? "\n\n" : "") + response);
           process.stdout.write("\n");
           if (task.status === "waiting")
             process.stderr.write(
@@ -564,6 +574,30 @@ export async function runConversation(
         );
     }
   } else {
+    const explicitPrompt =
+      options.values.prompt ?? (options.args.join(" ") || undefined);
+    if (interactive && !explicitPrompt && command !== "review") {
+      const config = await client.request("GET", "config"),
+        overrides = invocationOptions(options.values, config.cli),
+        chosen = await selectModel(
+          client,
+          overrides.invocation.model,
+          overrides.providerId,
+        );
+      await interactiveChat(client, undefined, options.values.color, {
+        createSession: (objective, model) =>
+          createCliSession(
+            client,
+            model
+              ? { ...options, values: { ...options.values, model } }
+              : options,
+            objective,
+          ),
+        cwd: overrides.invocation.cwd,
+        model: chosen.model,
+      });
+      return;
+    }
     const prompt = await readPrompt(
       options.values.prompt ??
         (options.args.join(" ") ||
@@ -576,6 +610,17 @@ export async function runConversation(
     session = await createCliSession(client, options, prompt);
   }
   if (interactive)
-    await interactiveChat(client, session.id, options.values.color);
+    await interactiveChat(client, session.id, options.values.color, {
+      createSession: (objective, model) =>
+        createCliSession(
+          client,
+          model
+            ? { ...options, values: { ...options.values, model } }
+            : options,
+          objective,
+        ),
+      cwd: session.invocation?.cwd,
+      model: session.invocation?.model ?? session.providerId,
+    });
   else await waitForSession(client, session, options);
 }

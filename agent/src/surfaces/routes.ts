@@ -228,6 +228,25 @@ export async function dispatchRoute(
         .map((e) => e.assistant.content ?? "")
         .join("\n")
         .slice(-12000);
+      // Delivery can be a tool-only model turn. Carry its persisted findings
+      // into the next turn even when assistant.content was empty.
+      let priorDelivery = "";
+      if (typeof task.reportArtifactId === "string") {
+        const content = await app.artifacts.read(task.reportArtifactId);
+        try {
+          const report = JSON.parse(content);
+          priorDelivery =
+            typeof report.summary === "string"
+              ? report.summary
+              : JSON.stringify({
+                  findings: report.findings,
+                  gaps: report.gaps,
+                });
+        } catch {
+          priorDelivery = content;
+        }
+        priorDelivery = priorDelivery.slice(0, 12000);
+      }
       const child = await app.createSession(
         {
           lakeId: s.lakeId,
@@ -240,7 +259,7 @@ export async function dispatchRoute(
           intent: task.intent ?? "diagnose",
           constraints: [
             ...task.constraints,
-            `Previous task context (historical, re-observe before changing): ${task.objective}\n${messages}`,
+            `Previous task context (historical, re-observe before changing): ${task.objective}\n${messages}\nPrevious delivered findings (historical): ${priorDelivery}`,
           ],
           acceptanceCriteria: task.acceptanceCriteria.map(
             ({ confirmedBy, ...criterion }) => criterion,
