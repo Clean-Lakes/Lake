@@ -23,6 +23,7 @@ export interface RuntimeHooks {
   isFinished(): Promise<boolean>;
   checkpoint(state: unknown): Promise<void>;
   progress?(): Promise<string>;
+  hasPendingInput?(): Promise<boolean>;
 }
 export interface RuntimeLimits {
   maxEquivalentTools: number;
@@ -254,6 +255,30 @@ export class AgentRuntime {
             truncated: false,
             retryPolicy: "never",
           };
+        if (!pending.assistant.tool_calls?.length) {
+          requireCondition(
+            pending.assistant.content?.trim(),
+            "model_protocol_error",
+            "Model completed without text or tool calls",
+          );
+          // A normal final answer ends this conversational turn. It does not
+          // declare the operations task verified. Only new input can open the
+          // next model turn; lack of tools is not a reason to ask again.
+          if (await this.hooks.hasPendingInput?.()) continue;
+          return {
+            status: "waiting",
+            data: {
+              reason:
+                this.context.role === "coordinator"
+                  ? "turn_complete"
+                  : "waiting_supervisor",
+              turnCompleted: true,
+            },
+            artifactRefs: [],
+            truncated: false,
+            retryPolicy: "never",
+          };
+        }
         const progressed = this.hooks.progress
           ? progressBefore !== (await this.hooks.progress())
           : Boolean(pending.assistant.tool_calls?.length);

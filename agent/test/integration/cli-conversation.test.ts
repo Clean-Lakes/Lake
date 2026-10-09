@@ -305,3 +305,153 @@ test(
     assert.equal(pty.exitCode, 0);
   },
 );
+
+test(
+  "real PTY: greetings answer once, idle without retries, and follow-up keeps context",
+  { skip: process.platform === "win32" },
+  async (t) => {
+    const requests: any[] = [];
+    const h = await setup(t, (body) => {
+      requests.push(body);
+      return {
+        text:
+          requests.length === 1
+            ? "你好！有什么我能帮你的？"
+            : "第二个问题的回复。",
+      };
+    });
+    const pty = startPty([
+      "--import",
+      "tsx",
+      "src/surfaces/cli.ts",
+      "--home",
+      h.home,
+      "-C",
+      h.workspace,
+    ]);
+    t.after(() => pty.close());
+    await pty.waitFor("输入目标开始");
+    pty.write("你好\r");
+    await pty.waitFor("就绪 · 输入下一条继续");
+    await new Promise((r) => setTimeout(r, 500));
+    assert.equal(h.model!.attempts, 1);
+    const s = (await h.app.store.list<any>("sessions"))[0];
+    let snap: any = await h.app.data.snapshot(s.id);
+    assert.equal(snap.tasks[0].waitingReason, "turn_complete");
+    assert.equal(
+      snap.tasks[0].status,
+      "waiting",
+      "ordinary chat is not operations verification",
+    );
+    assert.equal(snap.session.budget.calls, 1);
+    assert.equal(snap.actions.length, 0);
+    assert.equal(snap.specialist_runs.length, 0);
+    assert(!snap.tasks[0].reportArtifactId);
+    pty.write("你能帮我做什么？\r");
+    await pty.waitFor("第二个问题的回复");
+    const end = Date.now() + 5000;
+    do {
+      await new Promise((r) => setTimeout(r, 20));
+      snap = await h.app.data.snapshot(s.id);
+    } while (
+      (snap.tasks[0].waitingReason !== "turn_complete" ||
+        snap.session.budget.reservedCalls) &&
+      Date.now() < end
+    );
+    await new Promise((r) => setTimeout(r, 500));
+    assert.equal(h.model!.attempts, 2);
+    assert.equal((await h.app.store.list("sessions")).length, 1);
+    assert(
+      requests[1].messages.some(
+        (m: any) => m.role === "assistant" && m.content.includes("你好！"),
+      ),
+    );
+    assert.equal(requests[1].messages.at(-1).role, "user");
+    assert.equal(requests[1].messages.at(-1).content, "你能帮我做什么？");
+    assert(JSON.stringify(requests[1].messages).includes("你能帮我做什么"));
+    assert.equal(
+      (await h.app.store.list<any>("model_exchanges")).filter(
+        (e) => e.status === "complete",
+      ).length,
+      2,
+    );
+    assert(!pty.output.includes("暂未取得进展"));
+    pty.write("/quit\r");
+    await pty.done;
+    assert.equal(pty.exitCode, 0);
+  },
+);
+
+async function chatRace(t: any, atBoundary: boolean) {
+  let ready!: () => void;
+  const requested = new Promise<void>((resolve) => {
+    ready = resolve;
+  });
+  const bodies: any[] = [];
+  const h = await setup(t, (body) => {
+    bodies.push(body);
+    if (bodies.length === 1) ready();
+    return {
+      text: bodies.length === 1 ? "第一条答复。" : "新输入的答复。",
+      delayMs: atBoundary ? 0 : 200,
+    };
+  });
+  const scope = await resolveWorkspaces(h.app, [h.workspace], "read-only");
+  const s = await h.app.createSession({
+    lakeId: scope.lakeId,
+    environmentId: scope.environmentId,
+    resourceIds: scope.resourceIds,
+    objective: "你好",
+  });
+  const deliver = async () => {
+    const task = await h.app.store.get<any>("tasks", s.rootTaskId);
+    await h.app.userMessage(
+      s.id,
+      "回答新问题",
+      task.revision,
+      crypto.randomUUID(),
+    );
+  };
+  if (atBoundary) {
+    const pending = h.app.inbox.pending.bind(h.app.inbox);
+    let injected = false;
+    h.app.inbox.pending = async (actor) => {
+      const prior = await pending(actor);
+      if (actor === s.id && !injected) {
+        injected = true;
+        await deliver();
+      }
+      return prior; // Simulates arrival after the runtime's final inbox snapshot.
+    };
+  }
+  h.app.startRoot(s.id);
+  await requested;
+  if (!atBoundary) await deliver();
+  const end = Date.now() + 5000;
+  let snap: any;
+  do {
+    await new Promise((r) => setTimeout(r, 20));
+    snap = await h.app.data.snapshot(s.id);
+  } while (
+    (snap.tasks[0].waitingReason !== "turn_complete" ||
+      snap.session.budget.calls < 2 ||
+      snap.session.budget.reservedCalls) &&
+    Date.now() < end
+  );
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(h.model!.attempts, 2);
+  assert.equal(snap.session.budget.calls, 2);
+  assert.equal(snap.tasks[0].waitingReason, "turn_complete");
+  assert(JSON.stringify(bodies[1].messages).includes("回答新问题"));
+  assert.equal((await h.app.inbox.pending(s.id)).length, 0);
+  assert.equal(
+    (await h.app.store.list<any>("model_exchanges")).filter(
+      (e) => e.status === "complete",
+    ).length,
+    2,
+  );
+}
+test("input arriving during a model reply is handled once", async (t) =>
+  chatRace(t, false));
+test("input arriving at turn completion is rescheduled once without being lost", async (t) =>
+  chatRace(t, true));

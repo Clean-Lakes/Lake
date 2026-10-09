@@ -79,16 +79,24 @@ test("equivalent probes stop, cancellation prevents the next side effect and no-
   assert.equal(fixture.attempts, 4);
   const idle = await startModelFixture(() => ({ text: "Still thinking" }));
   t.after(() => idle.close());
+  const answer = await make(
+    new ChatModelAdapter({ ...provider, baseUrl: idle.baseUrl }, h.credentials),
+  ).run();
+  assert.equal(answer.status, "waiting");
+  assert.equal((answer.data as any).reason, "turn_complete");
+  assert.equal(idle.attempts, 1);
+  const empty = await startModelFixture(() => ({}));
+  t.after(() => empty.close());
   await assert.rejects(
     make(
       new ChatModelAdapter(
-        { ...provider, baseUrl: idle.baseUrl },
+        { ...provider, baseUrl: empty.baseUrl },
         h.credentials,
       ),
     ).run(),
-    (e: any) => e.code === "no_progress",
+    { code: "model_protocol_error" },
   );
-  assert.equal(idle.attempts, 5);
+  assert.equal(empty.attempts, 1);
   let runtime: AgentRuntime;
   catalog.register({
     name: "fixture.cancel",
