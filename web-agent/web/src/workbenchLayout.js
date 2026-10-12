@@ -20,6 +20,7 @@
     .workbench-splitter-terminal { left:0; }
     .workbench-resizing, .workbench-resizing * { cursor:col-resize !important; user-select:none !important; }
     .workbench-resizing .app-shell, .workbench-resizing .terminal-side-panel { transition:none !important; }
+    .ai-context-panel { position:fixed; z-index:60; bottom:auto; right:auto; overflow-y:auto; }
     @media(min-width:768px) {
       .app-shell { position:relative; grid-template-columns:var(--sidebar-width, 264px) minmax(0,1fr) 0px; }
       .app-shell.terminal-is-open { grid-template-columns:var(--sidebar-width, 264px) minmax(0,1fr) var(--terminal-panel-width); }
@@ -32,6 +33,8 @@
   `;
   document.head.appendChild(style);
   let shell, active, frame = 0, lastChrome = '';
+  let observedContextPanel;
+  const contextResize = new ResizeObserver(() => schedule());
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
   function limits(pane) {
     const width = shell?.clientWidth || innerWidth;
@@ -108,6 +111,31 @@
     const body = JSON.stringify({ regions, excluded });
     if (body !== lastChrome) { lastChrome = body; bridge.postMessage(JSON.parse(body)); }
   }
+  function placeContextPanel() {
+    const panel = shell.querySelector('.ai-context-panel');
+    const trigger = shell.querySelector('.ai-context-trigger');
+    const workspace = trigger?.closest('.workspace');
+    if (panel !== observedContextPanel) {
+      contextResize.disconnect();
+      observedContextPanel = panel;
+      for (const element of [panel, trigger, workspace]) if (element) contextResize.observe(element);
+    }
+    if (!panel || !trigger || !workspace) return;
+    const bounds = workspace.getBoundingClientRect();
+    const anchor = trigger.getBoundingClientRect();
+    const leftEdge = Math.max(12, bounds.left + 12);
+    const rightEdge = Math.min(innerWidth - 12, bounds.right - 12);
+    const width = Math.max(1, Math.min(330, rightEdge - leftEdge));
+    const header = workspace.querySelector('.workspace-header')?.getBoundingClientRect();
+    const topEdge = Math.max(12, (header?.bottom ?? bounds.top) + 12);
+    panel.style.width = `${width}px`;
+    panel.style.maxHeight = `${Math.max(1, innerHeight - topEdge - 12)}px`;
+    panel.style.left = `${clamp(anchor.left + anchor.width / 2 - width / 2, leftEdge, Math.max(leftEdge, rightEdge - width))}px`;
+    const height = panel.getBoundingClientRect().height;
+    const above = anchor.top - height - 9;
+    const top = above >= topEdge ? above : anchor.bottom + 9 + height <= innerHeight - 12 ? anchor.bottom + 9 : topEdge;
+    panel.style.top = `${clamp(top, topEdge, Math.max(topEdge, innerHeight - height - 12))}px`;
+  }
   function sync() {
     frame = 0;
     shell = document.querySelector('.app-shell');
@@ -115,11 +143,12 @@
     addHandle(shell, 'sidebar');
     const terminal = shell.querySelector('.terminal-side-panel');
     if (terminal) addHandle(terminal, 'terminal');
-    apply(); syncChrome();
+    apply(); syncChrome(); placeContextPanel();
   }
   function schedule() { if (!frame) frame = requestAnimationFrame(sync); }
   new MutationObserver(schedule).observe(document.body, { childList:true, subtree:true, attributes:true, attributeFilter:['class'] });
   window.addEventListener('resize', schedule);
+  document.addEventListener('scroll', schedule, true);
   window.addEventListener('lake-chrome-resize', schedule);
   document.addEventListener('transitionend', event => { if (event.target.matches('.app-shell, .terminal-side-panel')) schedule(); });
   schedule();

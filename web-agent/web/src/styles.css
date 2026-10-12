@@ -419,6 +419,8 @@ a { color: inherit; }
 .settings-source { border: 1px solid #e3e7dc; background: #f7f8f3; border-radius: 7px; padding: 9px 11px; margin: 0 0 18px; color: #6d7a6e; font-size: 11px; line-height: 1.6; }
 .settings-source.source-none { border-color: #eee1cb; background: #faf4e9; color: #765d3d; }
 .settings-note { color: #8d948d; font-size: 11px; line-height: 1.7; margin: 12px 0 0; }
+.settings-conversation { margin: 18px 0; padding-bottom: 18px; border-bottom: 1px solid #e9eae3; }
+.settings-conversation h3, .settings-model-heading { margin: 0 0 12px; color: #4d6358; font-size: 14px; font-weight: 600; }
 .preset-row { display: flex; flex-wrap: wrap; gap: 7px; margin: 9px 0 17px; }
 .preset-chip { border: 1px solid #dce1d7; background: #fff; color: #55645a; border-radius: 999px; padding: 6px 12px; font-size: 12px; }
 .preset-chip:hover { border-color: #b9cdc4; color: #2f6f68; }
