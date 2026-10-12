@@ -4,9 +4,9 @@ import { api, readableError } from "./api";
 import { canMoveInto, dropPlacement, projectResourceTree } from "./resource-tree-model";
 
 function FolderIcon() { return <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>; }
-export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource}: {
+export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource, onImport}: {
   project: Project; resources: Resource[]; nodes: ResourceTreeNode[]; disabled: boolean;
-  renderResource: (resource: Resource) => ReactNode; refresh: () => Promise<unknown>; onAddResource: () => void;
+  renderResource: (resource: Resource) => ReactNode; refresh: () => Promise<unknown>; onAddResource: () => void; onImport: () => void;
 }) {
   const tree = projectResourceTree(project.id, nodes, resources);
   const resourceMap = new Map(resources.map(resource => [resource.id, resource]));
@@ -149,6 +149,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
       }
     }}>
       <button type="button" role="menuitem" onClick={() => { setAddOpen(false); onAddResource(); }}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h.01M7 17.5h.01M11 6.5h7M11 17.5h7"/></svg><span>新建资源<small>SSH、数据库、Redis、Docker</small></span></button>
+      <button type="button" role="menuitem" onClick={() => { setAddOpen(false); onImport(); }}><FolderIcon/><span>从文本导入<small>文件、JSON、CSV、连接说明</small></span></button>
       <button type="button" role="menuitem" onClick={() => { setAddOpen(false); setEditor({parentId:null,name:""}); }}><FolderIcon/>新建目录</button>
     </div>}
   </div></div><div className="resource-tree" aria-label={`${project.name} 资源目录`}>

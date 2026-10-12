@@ -8,7 +8,12 @@ import type {
   AIPreset,
   AvailableModels,
   Catalog,
+  MessageQueue,
+  QueueOperation,
+  SendMessageResult,
   ModelSettings,
+  ProviderCatalog,
+  ProviderInput,
   ModelTestResult,
   Project,
   Resource,
@@ -17,6 +22,8 @@ import type {
   ReasoningSettings,
   TerminalHistory,
   TerminalSession,
+  ResourceImportPreview,
+  TextFileAttachment,
   WorkSession,
 } from "../../shared/contracts";
 
@@ -74,6 +81,12 @@ export const api = {
     request<Bootstrap>("/api/bootstrap", token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
   catalog: (signal?: AbortSignal) => request<Catalog>("/api/catalog", { signal }),
   modelCapacity: () => request<{modelId?: string; limit: number; source?: string}>("/api/settings/model/capacity"),
+  providers: () => request<ProviderCatalog>("/api/settings/providers"),
+  saveProvider: (id: string | null, data: ProviderInput) => request<ProviderCatalog>(`/api/settings/providers${id ? "/" + encodeURIComponent(id) : ""}`, {method: id ? "PUT" : "POST", body: JSON.stringify(data)}),
+  deleteProvider: (id: string) => request<ProviderCatalog>(`/api/settings/providers/${encodeURIComponent(id)}`, {method:"DELETE"}),
+  selectProviderModel: (providerId: string, modelId: string) => post<ProviderCatalog>("/api/settings/model/select", {providerId, modelId}),
+  testProvider: (id: string, data: {baseURL: string; protocol: string; model: string; apiKey?: string | null}) => post<ModelTestResult>(`/api/settings/providers/${encodeURIComponent(id)}/test`, data),
+  discoverProvider: (id: string, data: {baseURL: string; protocol: string; apiKey?: string | null}) => post<AvailableModels>(`/api/settings/providers/${encodeURIComponent(id)}/discover`, data),
   modelSettings: (signal?: AbortSignal) => request<ModelSettings>("/api/settings/model", { signal }),
   saveModelSettings: (url: string, name: string, apiKey?: string, protocol = "openai", supportsImageInput?: boolean, supportsImageOutput?: boolean) =>
     request<ModelSettings>("/api/settings/model", {
@@ -93,6 +106,9 @@ export const api = {
   createSshResource: (projectId: string, name: string, ssh: SSHConnectionInput) =>
     post<Resource>(`/api/projects/${encodeURIComponent(projectId)}/resources`, { kind: "ssh", name, ssh }),
   createServiceResource: (projectId: string, name: string, kind: string, settings: object) => post<Resource>(`/api/projects/${encodeURIComponent(projectId)}/resources`, { name, kind, settings }),
+  previewResourceImport: (projectId: string, name: string, text: string) => post<ResourceImportPreview>(`/api/projects/${encodeURIComponent(projectId)}/resource-import-preview`, {name, text}),
+  importResources: (projectId: string, planId: string, indexes: number[]) => post<{createdCount: number; skippedCount: number}>(`/api/projects/${encodeURIComponent(projectId)}/resource-import`, {planId, indexes}),
+  uploadTextFile: (sessionId: string, name: string, text: string) => post<TextFileAttachment>(`/api/sessions/${encodeURIComponent(sessionId)}/text-files`, {name, text}),
   aiCards: (session: string, before: number) => request<AIView>(`/api/sessions/${encodeURIComponent(session)}/ai/snapshot?before=${before}`),
   aiView: (session: string) => request<AIView>(`/api/sessions/${encodeURIComponent(session)}/ai`),
   aiOptions: (session: string) => request<Record<string, unknown>>(`/api/sessions/${encodeURIComponent(session)}/ai/options`),
@@ -108,8 +124,10 @@ export const api = {
     request<SessionSnapshot>(`/api/sessions/${encodeURIComponent(sessionId)}/snapshot`, { signal }),
   deleteSession: (sessionId: string) =>
     request<void>(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" }),
-  sendMessage: (sessionId: string, text: string, resourceIds: string[] = [], images: AIImage[] = [], references: Record<string, unknown>[] = [], terminalReuse?: {terminalId: string; generation: string}) =>
-    post<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, { text, ...(terminalReuse ? {terminalReuse} : {}), ...(references.length ? { references } : {}), ...(images.length ? { images } : {}), ...(resourceIds.length ? { resourceIds } : {}) }),
+  sendMessage: (sessionId: string, text: string, resourceIds: string[] = [], images: AIImage[] = [], references: Record<string, unknown>[] = [], terminalReuse?: {terminalId: string; generation: string}, files: TextFileAttachment[] = [], enqueue = false) =>
+    post<SendMessageResult>(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, { text, ...(enqueue ? {enqueue:true} : {}), ...(files.length ? {files} : {}), ...(terminalReuse ? {terminalReuse} : {}), ...(references.length ? { references } : {}), ...(images.length ? { images } : {}), ...(resourceIds.length ? { resourceIds } : {}) }),
+  messageQueue: (sessionId: string) => request<MessageQueue>(`/api/sessions/${encodeURIComponent(sessionId)}/message-queue`),
+  updateMessageQueue: (sessionId: string, data: QueueOperation) => post<MessageQueue>(`/api/sessions/${encodeURIComponent(sessionId)}/message-queue`, data),
   decide: (actionId: string, decision: "approve" | "reject", confirmation?: string) =>
     post<unknown>(`/api/actions/${encodeURIComponent(actionId)}/decision`, { decision, confirmation }),
   createTerminal: (sessionId: string, resourceId: string, shell?: string, interactive = false) =>

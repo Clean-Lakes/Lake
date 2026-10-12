@@ -139,6 +139,7 @@ func OpenStore(dir string) (*Store, error) {
 	}
 	s.update(func() any {
 		s.seedResourceTree()
+		s.pauseMessageQueuesOnRestart()
 		// Capture work that is unfinished NOW. Historical unknown outcomes must
 		// not mark a completed session as interrupted on every subsequent boot.
 		interrupted := s.rows("SELECT id FROM sessions WHERE status IN ('investigating','waiting_approval') OR id IN (SELECT sessionId FROM actions WHERE status='running') OR id IN (SELECT sessionId FROM terminals WHERE status='busy') OR id IN (SELECT sessionId FROM specialists WHERE status='working')")
@@ -537,7 +538,7 @@ func (s *Store) snapshot(id string) Object {
 		a["risk"] = p.Risk
 		a["riskReason"] = p.Reason
 	}
-	return Object{"session": session, "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE projectId=? ORDER BY position,id", session["projectId"]), "messages": messages, "actions": actions, "specialists": s.rows("SELECT * FROM specialists WHERE sessionId=? ORDER BY createdAt,rowid", id), "evidence": s.rows("SELECT * FROM evidence WHERE sessionId=? ORDER BY collectedAt,rowid", id), "terminals": s.rows("SELECT id,sessionId,resourceId,status,holder,contextVersion,createdAt,generation,outputCapturedAt,cwd,shell FROM terminals WHERE sessionId=? ORDER BY createdAt,rowid", id), "cursor": s.row("SELECT COALESCE(MAX(seq),0) AS cursor FROM events WHERE sessionId=?", id)["cursor"]}
+	return Object{"messageQueue": s.messageQueue(id), "session": session, "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE projectId=? ORDER BY position,id", session["projectId"]), "messages": messages, "actions": actions, "specialists": s.rows("SELECT * FROM specialists WHERE sessionId=? ORDER BY createdAt,rowid", id), "evidence": s.rows("SELECT * FROM evidence WHERE sessionId=? ORDER BY collectedAt,rowid", id), "terminals": s.rows("SELECT id,sessionId,resourceId,status,holder,contextVersion,createdAt,generation,outputCapturedAt,cwd,shell FROM terminals WHERE sessionId=? ORDER BY createdAt,rowid", id), "cursor": s.row("SELECT COALESCE(MAX(seq),0) AS cursor FROM events WHERE sessionId=?", id)["cursor"]}
 }
 func (s *Store) Snapshot(id string) Object {
 	return s.read(func() any { return s.snapshot(id) }).(Object)
@@ -590,26 +591,27 @@ func (s *Store) AddMessage(id, role, text string, images any) Object {
 	return s.update(func() any { return s.message(id, role, text, images) }).(Object)
 }
 func (s *Store) Begin(id, text string, images any, titleInput ...string) Object {
-	return s.update(func() any {
-		r := s.session(id)
-		if r["status"] == "investigating" {
-			fail(409, "Investigation already running")
+	return s.update(func() any { return s.begin(id, text, images, titleInput...) }).(Object)
+}
+func (s *Store) begin(id, text string, images any, titleInput ...string) Object {
+	r := s.session(id)
+	if r["status"] == "investigating" {
+		fail(409, "Investigation already running")
+	}
+	m := s.message(id, "user", text, images)
+	if s.row("SELECT 1 FROM sessionNaming WHERE sessionId=? AND generated=0", id) != nil {
+		input := text
+		if len(titleInput) > 0 {
+			input = titleInput[0]
 		}
-		m := s.message(id, "user", text, images)
-		if s.row("SELECT 1 FROM sessionNaming WHERE sessionId=? AND generated=0", id) != nil {
-			input := text
-			if len(titleInput) > 0 {
-				input = titleInput[0]
-			}
-			if title := sessionTitle(input); title != "" {
-				s.exec("UPDATE sessions SET title=? WHERE id=?", title, id)
-				s.exec("UPDATE sessionNaming SET generated=1 WHERE sessionId=?", id)
-				s.event(id, "session")
-			}
+		if title := sessionTitle(input); title != "" {
+			s.exec("UPDATE sessions SET title=? WHERE id=?", title, id)
+			s.exec("UPDATE sessionNaming SET generated=1 WHERE sessionId=?", id)
+			s.event(id, "session")
 		}
-		s.status(id, "investigating")
-		return m
-	}).(Object)
+	}
+	s.status(id, "investigating")
+	return m
 }
 func (s *Store) status(id, status string) {
 	s.session(id)

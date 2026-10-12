@@ -123,7 +123,7 @@ func atomicFile(path string, b []byte) error {
 	defer dir.Close()
 	return dir.Sync()
 }
-func (m *Models) saved() *ai.Model {
+func (m *Models) legacySaved() *ai.Model {
 	b, e := os.ReadFile(filepath.Join(m.Dir, "model.json"))
 	if e != nil {
 		return nil
@@ -177,28 +177,40 @@ func (m *Models) environment() *ai.Model {
 	}()
 	return result
 }
-func (m *Models) Active() *ai.Model {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if cfg := m.saved(); cfg != nil {
+func (m *Models) activeLocked() *ai.Model {
+	if catalog, exists := m.readProviderCatalogLocked(); exists {
+		return m.catalogModelLocked(catalog)
+	}
+	if cfg := m.legacySaved(); cfg != nil {
 		return cfg
 	}
 	return m.environment()
 }
+func (m *Models) Active() *ai.Model {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.activeLocked()
+}
 func (m *Models) Settings() Object {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	active := m.saved()
+	active := m.activeLocked()
 	source := "settings"
-	if active == nil {
-		active = m.environment()
+	if _, exists := m.readProviderCatalogLocked(); !exists && m.legacySaved() == nil {
 		source = "environment"
 	}
 	if active == nil {
 		source = "none"
 		active = &ai.Model{Protocol: "openai"}
 	}
-	return Object{"source": source, "configured": source != "none", "url": active.URL, "name": active.Name, "keyConfigured": active.Key != "", "protocol": active.Protocol, "supportsImageInput": active.SupportsImageInput, "supportsImageOutput": active.SupportsImageOutput}
+	result := Object{"source": source, "configured": source != "none", "url": active.URL, "name": active.Name, "keyConfigured": active.Key != "", "protocol": active.Protocol, "supportsImageInput": active.SupportsImageInput, "supportsImageOutput": active.SupportsImageOutput}
+	if catalog, exists := m.readProviderCatalogLocked(); exists {
+		result["providerId"], result["providerModelId"] = catalog.ActiveProviderID, catalog.ActiveModelID
+		if provider := findProvider(catalog, catalog.ActiveProviderID); provider != nil {
+			result["providerName"] = provider.Name
+		}
+	}
+	return result
 }
 func (m *Models) Input(data Object) *ai.Model {
 	p := validateProtocol(data["protocol"])
@@ -270,10 +282,15 @@ func (m *Models) Save(cfg *ai.Model) {
 	if regexp.MustCompile(`^web-model-[0-9a-f-]+\.key$`).MatchString(previous) {
 		os.Remove(filepath.Join(m.Home, "secrets", previous))
 	}
+	m.syncLegacyProviderLocked(cfg)
 }
 func (m *Models) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if catalog, exists := m.readProviderCatalogLocked(); exists {
+		catalog.ActiveProviderID, catalog.ActiveModelID = "", ""
+		m.saveProviderCatalogLocked(catalog)
+	}
 	e := os.Remove(filepath.Join(m.Dir, "model.json"))
 	if !os.IsNotExist(e) {
 		must(e)
@@ -416,9 +433,11 @@ func (m *Models) WithCapacity(ctx context.Context, model *ai.Model) *ai.Model {
 		}
 	}
 	copy := *model
-	copy.ContextLimit = cached.Limit
+	if model.ContextLimitSource != "settings" {
+		copy.ContextLimit = cached.Limit
+	}
 	copy.Reasoning = cached.Reasoning
-	if cached.Limit > 0 {
+	if cached.Limit > 0 && model.ContextLimitSource != "settings" {
 		copy.ContextLimitSource = "provider"
 	}
 	return &copy
@@ -442,9 +461,11 @@ func (m *Models) CachedCapacity(model *ai.Model) *ai.Model {
 	m.mu.Unlock()
 	copy := *model
 	if ok && time.Now().Before(cached.Expires) {
-		copy.ContextLimit = cached.Limit
+		if model.ContextLimitSource != "settings" {
+			copy.ContextLimit = cached.Limit
+		}
 		copy.Reasoning = cached.Reasoning
-		if cached.Limit > 0 {
+		if cached.Limit > 0 && model.ContextLimitSource != "settings" {
 			copy.ContextLimitSource = "provider"
 		}
 	}

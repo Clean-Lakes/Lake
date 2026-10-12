@@ -1,0 +1,25 @@
+{
+  "version": "0.3.3",
+  "platform": "macOS 13+, Apple Silicon arm64",
+  "checks": {
+    "frontend": "72 passed",
+    "goRace": "go test -race ./... passed",
+    "goVet": "passed",
+    "swiftUpdatePolicy": "4 groups passed",
+    "installer": "4 tests passed",
+    "packageSignatures": "ZIP-extracted app and nested binary passed deep strict verification",
+    "packagedBackend": "isolated startup, authenticated catalog, embedded assets, provider settings, queue and resource-import preview APIs passed",
+    "dmg": "hdiutil verify passed"
+  },
+  "assets": {
+    "Lake-0.3.3-macos-arm64.zip": {
+      "size": 14171025,
+      "sha256": "11c7a338b9af0d62d01762d799a149e19f25ed178019ecbc649f3a8ed089b41e"
+    },
+    "Lake-0.3.3-macos-arm64.dmg": {
+      "size": 14991045,
+      "sha256": "587e57a02e42ce8e7870404cce577de310c18c5f0ce979b715fa975962c05c82"
+    }
+  },
+  "build": "scripts/build_lake_desktop.sh delegates CLI signing to scripts/build_lake.sh with persistent Lake Local Development Code Signing"
+}

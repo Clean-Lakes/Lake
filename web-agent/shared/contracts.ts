@@ -50,6 +50,33 @@ export type Specialist = {
   finishedAt: string | null;
 };
 
+/** Independent child tasks, supplied by the runtime rather than inferred from tool calls. */
+export type AgentRole = "host" | "application" | "data" | "network" | "change" | "verify" | "plan" | "memory";
+export type AgentRunStatus = "queued" | "running" | "waiting_approval" | "completed" | "failed" | "cancelled" | "interrupted" | "unknown";
+export type AgentRun = {
+  id: string;
+  sessionId: string;
+  rootTurnId?: string;
+  role: AgentRole | string;
+  name?: string;
+  task: string;
+  resourceIds: string[];
+  status: AgentRunStatus;
+  summary?: string;
+  evidenceIds?: string[];
+  toolCount?: number;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  /** Only the owning execution service can advertise individual cancellation. */
+  canCancel?: boolean;
+  pending?: AIApproval;
+  evidence?: AgentEvidence[];
+  usage?: AIUsage;
+  budgetSpent?: number;
+};
+export type AgentEvidence = {id: string; sessionId: string; runId: string; resourceId: string; title: string; excerpt: string; exitCode: number | null; collectedAt: string};
+
 export type Evidence = {
   id: string;
   sessionId: string;
@@ -112,7 +139,13 @@ export type Catalog = {
   terminals?: Array<TerminalSession & { sessionTitle?: string }>;
 };
 
+export type QueuedMessage = {id: string; text: string; resourceIds: string[]; images: Pick<AIImage,"id" | "name" | "mimeType">[]; files: TextFileAttachment[]; createdAt: string};
+export type MessageQueue = {paused: boolean; revision: number; lastError: string; items: QueuedMessage[]};
+export type QueueOperation = {operation:"pause" | "resume"; revision:number} | {operation:"remove"; revision:number; id:string} | {operation:"edit"; revision:number; id:string; text:string; resourceIds:string[]} | {operation:"reorder"; revision:number; ids:string[]};
+export type SendMessageResult = {queued?: boolean; queuedMessageId?: string; messageQueue?: MessageQueue};
+
 export type SessionSnapshot = {
+  messageQueue?: MessageQueue;
  aiBinding?: {terminalId?: string; generation?: string};
   session: WorkSession;
   resources: Resource[];
@@ -160,17 +193,25 @@ export type ModelSettings = {
 export type ModelTestResult = { ok: boolean; message: string };
 
 /** Models the configured endpoint reports, for the composer's model switcher. */
-export type AvailableModels = { models: string[]; message?: string };
+export type ProviderModel = {id: string; name: string; displayName?: string; enabled: boolean; contextWindow?: number; supportsImageInput: boolean; supportsImageOutput: boolean};
+export type ModelProvider = {id: string; name: string; baseURL: string; protocol: string; enabled: boolean; keyConfigured: boolean; models: ProviderModel[]};
+export type ProviderCatalog = {providers: ModelProvider[]; activeProviderId: string; activeModelId: string; savedProviderId?: string};
+export type ProviderInput = Omit<ModelProvider,"id" | "keyConfigured"> & {apiKey?: string | null};
+export type AvailableModelEntry = {providerId: string; providerName: string; modelId: string; name: string; displayName: string; contextWindow?: number};
+export type AvailableModels = { models: string[]; entries?: AvailableModelEntry[]; activeProviderId?: string; activeModelId?: string; message?: string };
 
 export type ReasoningSettings = { modelId?: string; levels: string[]; default?: string; source?: string; effort: string };
 
 export type ApiError = { error: string };
 
 export type AICard = { id: string; type: string; title?: string; content?: string; data?: unknown; status: string; at: string };
-export type AIApproval = { id: string; call: { id: string; name: string; arguments: string }; target: string; risk: string; kind?: string; needsTerminal?: boolean; resourceId?: string; terminalId?: string; terminalVersion?: number; confirmation?: string; fingerprint: string; preview?: {before: string; after: string} };
+export type ResourceImportRow = {index: number; name: string; kind: string; folder: string; error: string; host?: string; port?: number; username?: string; driver?: string; database?: string; endpoint?: string; authMethod?: string; hasCredential: boolean};
+export type ResourceImportPreview = {planId: string; name: string; resources: ResourceImportRow[]};
+export type TextFileAttachment = {sourceId: string; name: string};
+export type AIApproval = { id: string; call: { id: string; name: string; arguments: string }; target: string; risk: string; kind?: string; needsTerminal?: boolean; resourceId?: string; terminalId?: string; terminalVersion?: number; confirmation?: string; fingerprint: string; preview?: {before?: string; after?: string; resources?: ResourceImportRow[]} };
 export type AIUsage = { input: number; output: number; total: number; known?: boolean; inputKnown?: boolean; outputKnown?: boolean; cachedInput?: number | null };
 export type AIContextUsage = { window: number; windowSource?: string; modelId?: string; budget?: number; used: number; usedKnown?: boolean; estimated: boolean; estimatedUsed?: number; lastRequest?: AIUsage; lastRequestAt?: string };
-export type AIView = { session: string; status: string; cards: AICard[]; pending?: AIApproval; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
+export type AIView = { session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
 export type AIPreset = { id: string; title: string; content: string };
 
 export type AIImage = { id: string; mimeType: string; base64: string; sizeBytes: number; width: number; height: number; name?: string; url?: string };

@@ -342,7 +342,7 @@ func TestProfilesAndSchemaValidation(t *testing.T) {
 			t.Fatal("prompt substitutions")
 		}
 	}
-	if len(all) != 40 || !all["inspect_host"] {
+	if len(all) != 42 || !all["inspect_host"] || !all["preview_resource_import"] || !all["import_resources"] {
 		t.Fatal(len(all))
 	}
 	for _, tool := range Catalog("core") {

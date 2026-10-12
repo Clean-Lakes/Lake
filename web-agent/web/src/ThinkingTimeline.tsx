@@ -47,6 +47,7 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
   return <section className={`thinking-timeline ${live ? "is-live" : ""} ${live && !pending ? "is-processing" : ""}`} aria-label="思考与操作过程">
     <button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => { onInspect?.(); setOpen(!open); }}>
       <LakeThinkingIcon className="thinking-symbol"/>
+      <strong className="thinking-agent-name">Lake</strong>
       <span className="thinking-label">{label}</span><svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
       {activity?.detail && <small className="thinking-current-target">{activity.detail}</small>}
     </button>
