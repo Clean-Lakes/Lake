@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var defaults = Object{"reasoningEffort": "", "reasoningModelId": "", "profile": "core", "runtime": "local", "asset_ref": "", "container_id": "", "terminal_id": "", "terminal_generation": "", "userPrompt": "", "contextWindow": 64000, "maxOutput": 8192, "maxSteps": 500, "silentReadFiles": true, "silentWriteFiles": false, "silentReadSQL": true, "silentCommands": false, "silentTerminalCreation": false, "blockUnreferencedAssets": false, "denyLocalExecution": false}
+var defaults = Object{"multiAgentMode": "auto", "reasoningEffort": "", "reasoningModelId": "", "profile": "core", "runtime": "local", "asset_ref": "", "container_id": "", "terminal_id": "", "terminal_generation": "", "userPrompt": "", "contextWindow": 64000, "maxOutput": 8192, "maxSteps": 500, "silentReadFiles": true, "silentWriteFiles": false, "silentReadSQL": true, "silentCommands": false, "silentTerminalCreation": false, "blockUnreferencedAssets": false, "denyLocalExecution": false}
 
 func (b *Server) sessionOptions(id string) Object {
 	options := Object{}
@@ -36,6 +36,9 @@ func (b *Server) configure(id string, updates Object) Object {
 	}
 	if !set("core terminal2 db-query-editor")[stringOf(options["profile"])] || !set("local ssh container")[stringOf(options["runtime"])] {
 		fail(400, "Invalid AI profile/runtime")
+	}
+	if !set("off auto")[stringOf(options["multiAgentMode"])] {
+		fail(400, "Invalid multi-agent mode")
 	}
 	for _, k := range []string{"asset_ref", "container_id", "terminal_id", "terminal_generation", "userPrompt", "reasoningEffort", "reasoningModelId"} {
 		if _, ok := options[k].(string); !ok {
@@ -100,9 +103,19 @@ func (b *Server) configure(id string, updates Object) Object {
 	model.ReasoningEffort = effort
 	model.ContextWindow = integer(options["contextWindow"])
 	model.MaxOutput = integer(options["maxOutput"])
-	snap := b.sessionSnapshot(id)
+	assets := b.sessionAssets(id)
+	// Approvals belong to individual operations; earlier pending actions must not
+	// disable this turn's tools. invoke enforces per-operation permissions.
+	aiFailure(b.Engine.Configure(id, ai.Config{MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
+	b.Store.SaveOptions(id, options)
+	if previousPermissions != permissionVersion(options) {
+		b.revokeSessionTerminals(id)
+	}
+	return options
+}
+func (b *Server) sessionAssets(id string) []ai.Asset {
 	assets := []ai.Asset{}
-	for _, r := range objects(snap["resources"]) {
+	for _, r := range objects(b.sessionSnapshot(id)["resources"]) {
 		var ssh *ai.SSH
 		if v := r["ssh"]; v != nil {
 			var c ai.SSH
@@ -112,14 +125,7 @@ func (b *Server) configure(id string, updates Object) Object {
 		}
 		assets = append(assets, ai.Asset{ID: stringOf(r["id"]), Name: stringOf(r["name"]), Kind: stringOf(r["kind"]), SSH: ssh, Settings: object(r["settings"])})
 	}
-	// Approvals belong to individual operations; earlier pending actions must not
-	// disable this turn's tools. invoke enforces per-operation permissions.
-	aiFailure(b.Engine.Configure(id, ai.Config{Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
-	b.Store.SaveOptions(id, options)
-	if previousPermissions != permissionVersion(options) {
-		b.revokeSessionTerminals(id)
-	}
-	return options
+	return assets
 }
 func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any, error) {
 	return b.Engine.Handle(ctx, method, id, json.RawMessage(jsonText(data)))
@@ -141,8 +147,9 @@ func (b *Server) event(event ai.Event) {
 		b.Store.Touch(event.Session)
 	}
 }
-func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs []Object) {
+func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, files []Object) {
 	defer b.workers.Done()
+	defer b.finishMessageQueue(id)
 	defer b.releaseManualTerminals(id)
 	retryMessage := message
 	for _, reference := range refs {
@@ -174,9 +181,10 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs [
 		fail(400, "尚未配置模型")
 	}
 	options := b.configure(id, nil)
-	simpleConversation := ai.IsBriefConversation(message) && len(refs) == 0 && len(images) == 0
+	simpleConversation := ai.IsBriefConversation(message) && len(refs) == 0 && len(images) == 0 && len(files) == 0
 	var prelude []ai.Call
-	if !simpleConversation {
+	importRequest := len(files) > 0 || len(refs) == 0 && (strings.Contains(message, "导入") || strings.Contains(strings.ToLower(message), "import"))
+	if !simpleConversation && !importRequest {
 		prelude = b.hostPrelude(id, refs, options)
 	}
 	snap := b.sessionSnapshot(id)
@@ -215,6 +223,9 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs [
 	modelContext := "[LAKE_SESSION_CONTEXT]\n" + jsonText(Object{"boundTarget": bound, "terminals": terminalContext, "conversation": conversation, "pendingOperations": pending, "recentCommands": recent})
 	if options["profile"] == "terminal2" && stringOf(options["terminal_id"]) != "" {
 		modelContext = b.terminalContext(id, stringOf(options["terminal_id"]))
+	}
+	if len(files) > 0 {
+		modelContext += "\n[LAKE_TEXT_FILES]\n" + jsonText(files) + "\nThese are user-selected text attachments. Use preview_resource_import with source_id to inspect connection candidates. Do not read private credential storage or echo credentials."
 	}
 	e = b.Engine.ChatTurn(turnContext, id, ai.TurnInput{UserText: message, Context: modelContext, References: refs, Images: images, Prelude: prelude})
 	if e != nil {
@@ -263,6 +274,22 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		}
 	}()
 	snap := b.sessionSnapshot(id)
+	if name == "policy" && set("preview_resource_import import_resources")[stringOf(args["name"])] {
+		return b.importBridgePolicy(id, stringOf(args["name"]), object(args["arguments"])), nil
+	}
+	project := stringOf(b.Store.Session(id)["projectId"])
+	if name == "preview_resource_import" {
+		return b.previewResourceImport(ctx, project, id, args), nil
+	}
+	if name == "import_resources" {
+		if !approved {
+			fail(403, "导入资源需要本次授权")
+		}
+		return b.commitResourceImport(project, id, stringOf(args["plan_id"]), args["indexes"]), nil
+	}
+	if name == "resource_import_assets" {
+		return b.sessionAssets(id), nil
+	}
 	tid := stringOf(args["terminal_id"])
 	var target Object
 	if tid != "" {

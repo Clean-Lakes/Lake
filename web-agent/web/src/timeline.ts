@@ -1,5 +1,6 @@
 import {displayAiError} from "./aiErrors";
-import type { AICard, SessionSnapshot } from "../../shared/contracts";
+import type { AICard, AgentRun, SessionSnapshot } from "../../shared/contracts";
+import { transcriptAgentRuns } from "./agentTasks";
 
 export function compareTime(a: string, b: string): number {
   const millis = Date.parse(a) - Date.parse(b);
@@ -11,6 +12,7 @@ export type TranscriptEntry = {
   at: string; id: string; card?: AICard;
   message?: SessionSnapshot["messages"][number];
   action?: SessionSnapshot["actions"][number];
+  agentRun?: AgentRun;
 };
 // File summaries belong to the user turn that produced them, even when that
 // turn includes several assistant replies and tool runs.
@@ -27,9 +29,10 @@ export function orderedTranscript(snapshot: SessionSnapshot, cards: AICard[], be
   const earlierUser = snapshot.messages.filter(m => m.role === "user" && compareTime(m.createdAt, earliest) < 0).at(-1)?.id;
   const entries: TranscriptEntry[] = [
     ...snapshot.messages.filter(m => (m.role !== "assistant" || !snapshot.ai?.startedAt || compareTime(m.createdAt, snapshot.ai.startedAt) < 0) && (before === 0 || compareTime(m.createdAt, earliest) >= 0 || m.id === earlierUser)).map(message => ({ at: message.createdAt, id: message.id, message })),
-    ...cards.filter(card => card.type !== "compaction" && (!!card.content || ["operation", "chart", "diff", "image"].includes(card.type) || card.type === "thinking" && card.status === "running")).map(card => ({ at: card.at, id: card.id, card })),
+    ...cards.filter(card => card.type !== "compaction" && card.type !== "draft" && (!!card.content || ["operation", "chart", "diff", "image"].includes(card.type) || card.type === "thinking" && card.status === "running")).map(card => ({ at: card.at, id: card.id, card })),
     // The Go engine owns new tool cards. Keep earlier native approvals in their original turn.
     ...snapshot.actions.filter(action => (!snapshot.ai?.startedAt || compareTime(action.createdAt, snapshot.ai.startedAt) < 0) && (before === 0 || compareTime(action.createdAt, earliest) >= 0)).map(action => ({ at: action.createdAt, id: action.id, action })),
+    ...transcriptAgentRuns(snapshot).filter(run => before === 0 || compareTime(run.createdAt, earliest) >= 0).map(agentRun => ({ at: agentRun.createdAt, id: `agent:${agentRun.id}`, agentRun })),
   ].sort((a, b) => compareTime(a.at, b.at));
   // Older persisted histories may contain the same fatal error as both an
   // engine card and a native system message. Keep the card in its own turn.
@@ -41,7 +44,7 @@ export function orderedTranscript(snapshot: SessionSnapshot, cards: AICard[], be
 
 // Thinking timelines never cross a reply, user turn, or an earlier native approval.
 export function transcriptGroups(entries: TranscriptEntry[]): TranscriptEntry[][] {
-  const stage = (entry: TranscriptEntry) => !!entry.card && ["thinking", "operation", "shell"].includes(entry.card.type);
+  const stage = (entry: TranscriptEntry) => !!entry.agentRun || !!entry.card && ["thinking", "operation", "shell"].includes(entry.card.type);
   const groups: TranscriptEntry[][] = [];
   for (const entry of entries) {
     const last = groups.at(-1);

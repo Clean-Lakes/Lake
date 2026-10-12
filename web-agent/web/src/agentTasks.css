@@ -1,0 +1,78 @@
+/* Role color stays fixed: execution status is a separate icon and label. */
+.agent-task-list { --agent-ink: var(--ink, #2b302f); --agent-muted: #68766e; --agent-line: #dfe6dd; --agent-surface: #fffefa; --agent-soft: #eef2ec; --agent-green: #2c7971; color: var(--agent-ink); min-width: 0; margin: 16px 0 22px; }
+.agent-role-icon { flex-shrink: 0; }
+.agent-lead { display: flex; align-items: flex-start; gap: 12px; }
+.agent-emblem { display: grid; place-items: center; flex: 0 0 36px; height: 36px; border-radius: 11px; background: #e5efea; color: var(--agent-green); }
+.agent-lead-copy { flex: 1; min-width: 0; }
+.agent-lead-copy > div { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.agent-lead-copy strong { font-size: 14px; font-weight: 500; }
+.agent-group-state { color: var(--agent-green); font-size: 12px; }
+.agent-lead-copy p { margin: 5px 0 0; color: var(--agent-muted); font-size: 13px; line-height: 1.6; }
+.agent-task-body { margin: 18px 0 0 17px; border-left: 1px solid var(--agent-line); padding-left: 28px; }
+.agent-task-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 10px; color: var(--agent-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.agent-task-rows { list-style: none; margin: 0; padding: 0; }
+.agent-task-row { margin-bottom: 6px; min-width: 0; }
+.agent-task-row > details > summary { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto 14px; align-items: center; gap: 11px; padding: 11px 8px; border-radius: 10px; list-style: none; cursor: pointer; }
+.agent-task-row > details > summary::-webkit-details-marker { display: none; }
+.agent-task-row > details > summary:hover, .agent-task-row > details[open] > summary { background: var(--agent-soft); }
+.agent-task-role { display: flex; color: var(--agent-green); }
+.agent-task-copy { min-width: 0; }
+.agent-task-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 7px; }
+.agent-task-title strong { font-size: 14px; font-weight: 500; color: var(--agent-ink); }
+.agent-task-title > span { font-size: 12px; color: var(--agent-muted); overflow-wrap: anywhere; }
+.agent-task-description { display: block; margin-top: 3px; font-size: 12px; color: var(--agent-muted); line-height: 1.6; overflow-wrap: anywhere; }
+.agent-task-status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; color: var(--agent-muted); }
+.agent-task-status.status-running, .agent-task-status.status-completed { color: var(--agent-green); }
+.agent-task-status.status-waiting_approval { color: #946019; }
+.agent-task-status.status-failed, .agent-task-status.status-interrupted, .agent-task-status.status-unknown { color: #a6463d; }
+.agent-status-icon { flex-shrink: 0; }
+.agent-task-chevron { color: var(--agent-muted); transition: transform .15s ease; }
+.agent-task-row > details[open] > summary .agent-task-chevron { transform: rotate(180deg); }
+.agent-task-detail { margin: 6px 0 12px 38px; padding: 12px 14px; border: 1px solid var(--agent-line); border-radius: 10px; background: var(--agent-surface); font-size: 12px; }
+.agent-task-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; margin: 0; }
+.agent-task-detail dt { color: var(--agent-muted); }
+.agent-task-detail dd { margin: 0; color: var(--agent-ink); overflow-wrap: anywhere; }
+.agent-duration { font-variant-numeric: tabular-nums; }
+.agent-task-result { margin-top: 12px; }
+.agent-task-result strong { font-weight: 500; }
+.agent-task-result p { margin: 5px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent-task-evidence { margin-top: 12px; }
+.agent-task-evidence > summary, .agent-coordinator-detail > summary { color: var(--agent-muted); cursor: pointer; }
+.agent-task-evidence pre { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.agent-coordinator-detail { margin: 12px 8px; font-size: 12px; }
+.agent-coordinator-detail .thinking-timeline { margin: 10px 0 0; }
+.agent-cancel-button, .agent-stop-turn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid var(--agent-line); border-radius: 8px; background: var(--agent-surface); color: var(--agent-ink); font-size: 12px; }
+.agent-cancel-button { margin-top: 12px; }
+.agent-cancel-button:hover:not(:disabled), .agent-stop-turn:hover:not(:disabled) { background: var(--agent-soft); }
+.agent-cancel-button:disabled, .agent-stop-turn:disabled { color: var(--agent-muted); }
+.agent-task-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--agent-line); font-size: 12px; color: var(--agent-muted); }
+.agent-task-error { color: #a6463d; font-size: 12px; }
+.agent-run-approval { margin: 8px 0 14px 38px; }
+.agent-run-approval .ai-pending { margin: 0; }
+.agent-task-usage { margin-top: 12px; color: var(--agent-muted); font-variant-numeric: tabular-nums; }
+.thinking-agent-name { color: var(--ink); font-size: 13px; font-weight: 500; flex-shrink: 0; }
+.thinking-toggle .agent-role-icon, .ai-progress-activity .agent-role-icon { color: #2c7971; }
+/* Override older shimmering labels without lowering the contrast of completed work. */
+.thinking-timeline.is-processing .thinking-label, .ai-progress-activity.is-processing .ai-progress-text { animation: none; background: none; color: #68766e; -webkit-text-fill-color: currentColor; }
+@media (max-width: 640px) {
+  .agent-task-body { margin-left: 10px; padding-left: 14px; }
+  .agent-task-row > details > summary { grid-template-columns: 20px minmax(0, 1fr) 14px; gap: 7px; }
+  .agent-task-status { grid-column: 2; grid-row: 2; }
+  .agent-task-chevron { grid-column: 3; grid-row: 1; }
+  .agent-task-detail { margin-left: 0; }
+  .agent-run-approval { margin-left: 0; }
+  .agent-task-footer { align-items: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-task-status { animation: none; }
+  .agent-task-row > details > summary { transition: none; }
+  .agent-task-chevron { transition: none; }
+}
+@media (pointer: coarse) {
+  .agent-cancel-button, .agent-stop-turn { min-height: 44px; }
+  .agent-task-row > details > summary { min-height: 60px; }
+}
+
+.agent-task-row > details > summary { transition: background-color .16s ease; }
+.agent-task-status { animation: activity-state-enter .16s ease-out; }
+@media (prefers-reduced-motion: reduce) { .agent-task-status { animation:none; } .agent-task-row > details > summary { transition:none; } }

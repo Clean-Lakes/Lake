@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -20,7 +21,7 @@ func asset(c Config, ref string) (Asset, error) {
 func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a map[string]any) (string, string, error) {
 	risk := "readonly"
 	switch name {
-	case "kill_shell":
+	case "kill_shell", "import_resources":
 		risk = "write"
 	case "shell", "terminal_execute_command":
 		risk = "write"
@@ -64,6 +65,12 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if err != nil {
 		return nil, err
 	}
+	if e.worker != nil {
+		c, err = e.scopedChildConfig(c, a)
+		if err != nil {
+			return nil, err
+		}
+	}
 	for k := range a {
 		if strings.HasPrefix(k, "__") {
 			return nil, errors.New("reserved tool argument")
@@ -95,6 +102,40 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if !found {
 		return nil, errors.New("tool unavailable in selected profile")
 	}
+	if e.worker != nil {
+		e.worker.mu.Lock()
+		e.worker.calls++
+		calls := e.worker.calls
+		e.worker.mu.Unlock()
+		if calls > 12 {
+			return nil, errors.New("子 Agent 工具调用预算已达到上限")
+		}
+		if err := e.worker.parent.updateAgent(e.worker, func(r *AgentRun) { r.ToolCount = calls }); err != nil {
+			return nil, err
+		}
+	}
+	if call.Name == "delegate_investigation" {
+		var input struct {
+			Tasks []investigationSpec `json:"tasks"`
+		}
+		if json.Unmarshal([]byte(call.Arguments), &input) != nil {
+			return nil, errors.New("invalid investigation tasks")
+		}
+		_, err := e.runInvestigations(ctx, s, c, input.Tasks)
+		if err != nil {
+			return nil, err
+		}
+		return e.investigationReports(s, false), nil
+	}
+	if call.Name == "read_investigation" {
+		if len(a) != 0 {
+			return nil, errors.New("调查记录工具不接受身份参数")
+		}
+		return e.investigationReports(s, true), nil
+	}
+	if call.Name == "read_evidence" && e.worker != nil {
+		return e.observation(ctx, c, call.Name, a)
+	}
 	s.mu.Lock()
 	sessionID := s.state.View.Session
 	s.mu.Unlock()
@@ -115,7 +156,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		policyContext = obj(p)
 	}
 	ref := str(a["asset_ref"])
-	if ref == "" {
+	if ref == "" && call.Name != "preview_resource_import" && call.Name != "import_resources" {
 		ref = c.AssetRef
 	}
 	if ref != "" {
@@ -148,6 +189,9 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		return nil, err
 	}
 	var preview map[string]any
+	if call.Name == "import_resources" {
+		preview = obj(policyContext["importPreview"])
+	}
 	if strings.Contains(" write edit multi_edit append delete ", " "+call.Name+" ") {
 		preview, err = e.filePreview(ctx, c, call.Name, a)
 		if err != nil {
@@ -242,7 +286,20 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
+	if e.worker != nil {
+		c, err = e.scopedChildConfig(c, a)
+		if err != nil {
+			return nil, err
+		}
+	}
 	switch call.Name {
+	case "observe_host", "observe_logs", "observe_data", "read_evidence":
+		return e.observation(ctx, c, call.Name, a)
+	case "preview_resource_import", "import_resources":
+		if e.Bridge == nil {
+			return nil, errors.New("资源导入需要 Lake 工作台")
+		}
+		return e.bridgeCall(ctx, sessionID, call.Name, a, approved)
 	case "list_assets":
 		re, err := regexp.Compile("(?i)" + str(a["pattern"]))
 		if err != nil {

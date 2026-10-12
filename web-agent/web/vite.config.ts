@@ -9,6 +9,6 @@ export default defineConfig({
     host: "localhost",
     port: 5173,
     strictPort: true,
-    proxy: { "/api": { target: "http://127.0.0.1:4177", changeOrigin: true } },
+    proxy: { "/api": { target: process.env.LAKE_DEV_BACKEND_URL || "http://127.0.0.1:4177", changeOrigin: true } },
   },
 });

@@ -26,6 +26,21 @@ func approvalKind(c Config, name, risk string, context map[string]any) (string, 
 	} else {
 		p.SilentTerminalCreation = true // Preserve standalone callers' behavior.
 	}
+	if name == "preview_resource_import" {
+		if p.DenyLocalExecution && context["localFileRead"] == true {
+			return "", errors.New("当前会话禁止读取本机文件；请通过文件按钮上传文本附件")
+		}
+		if !p.SilentReadFiles {
+			return "file_read", nil
+		}
+		return "", nil
+	}
+	if name == "import_resources" {
+		if !p.SilentWriteFiles {
+			return "resource_import", nil
+		}
+		return "", nil
+	}
 	hostCommand := strings.Contains(" shell inspect_host open_ssh_terminal terminal_execute_command ssh_terminal_send terminal_send_input ssh_terminal_key terminal_send_key ssh_terminal_expect terminal_expect ", " "+name+" ")
 	if p.DenyLocalExecution && hostCommand && str(context["runtime"]) == "local" {
 		return "", errors.New("当前会话禁止本机执行；请引用 SSH 主机或修改权限设置")
@@ -66,6 +81,14 @@ func approvalKind(c Config, name, risk string, context map[string]any) (string, 
 		return "", nil
 	}
 	switch name {
+	case "observe_logs":
+		if !p.SilentReadFiles {
+			return "file_read", nil
+		}
+	case "observe_data":
+		if !p.SilentReadSQL {
+			return "readonly_sql", nil
+		}
 	case "ls", "glob", "grep", "read":
 		if !p.SilentReadFiles {
 			return "file_read", nil

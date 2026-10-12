@@ -22,15 +22,23 @@ type session struct {
 	decision chan bool
 }
 type Engine struct {
-	mu           sync.Mutex
-	sessions     map[string]*session
-	Dir          string
-	Bridge       Bridge
-	Emit         func(Event)
-	tunnels      sync.Map
-	shells       sync.Map
-	shellMu      sync.Mutex
-	shellsClosed bool
+	agentMu          sync.Mutex
+	agentWorkers     map[string]*agentWorker
+	agentSlots       chan struct{}
+	modelSlots       chan struct{}
+	childModelSlots  chan struct{}
+	agentsClosed     bool
+	worker           *agentWorker
+	observationSlots sync.Map
+	mu               sync.Mutex
+	sessions         map[string]*session
+	Dir              string
+	Bridge           Bridge
+	Emit             func(Event)
+	tunnels          sync.Map
+	shells           sync.Map
+	shellMu          sync.Mutex
+	shellsClosed     bool
 }
 
 func New(dir string, bridge Bridge, emit func(Event)) (*Engine, error) {
@@ -40,7 +48,7 @@ func New(dir string, bridge Bridge, emit func(Event)) (*Engine, error) {
 	if err := os.Chmod(dir, 0700); err != nil {
 		return nil, err
 	}
-	return &Engine{sessions: map[string]*session{}, Dir: dir, Bridge: bridge, Emit: emit}, nil
+	return &Engine{sessions: map[string]*session{}, Dir: dir, Bridge: bridge, Emit: emit, agentWorkers: map[string]*agentWorker{}, agentSlots: make(chan struct{}, 6), modelSlots: make(chan struct{}, 4), childModelSlots: make(chan struct{}, 3)}, nil
 }
 
 var identifier = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,100}$`)
@@ -68,6 +76,16 @@ func (e *Engine) get(id string) (*session, error) {
 				if s.state.View.Cards[i].Status == "running" || s.state.View.Cards[i].Status == "pending" {
 					s.state.View.Cards[i].Status = "interrupted"
 				}
+			}
+			for i := range s.state.View.AgentRuns {
+				run := &s.state.View.AgentRuns[i]
+				if agentActive(run.Status) {
+					run.Status, run.Summary, run.FinishedAt = "interrupted", "调查因服务重启中断；未自动重放。", timestamp()
+					run.Pending, run.CanCancel = nil, false
+				}
+			}
+			if err := e.save(s); err != nil {
+				return nil, err
 			}
 		}
 	} else if !os.IsNotExist(err) {
@@ -172,6 +190,9 @@ func (e *Engine) notify(s *session, kind string, v any) {
 	}
 }
 func (e *Engine) Configure(id string, c Config) error {
+	if c.MultiAgentMode != "" && c.MultiAgentMode != "off" && c.MultiAgentMode != "auto" {
+		return errors.New("invalid multi-agent mode")
+	}
 	c.AuthSecrets = nil
 	for _, asset := range c.Assets {
 		if asset.SSH != nil && asset.SSH.CredentialRef != "" {
@@ -276,8 +297,9 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	view.Cards = append([]Card{}, view.Cards[start:end]...)
 	view.CardsOffset = start
 	b, _ := json.Marshal(view)
-	_ = json.Unmarshal(safeJSON(b, s.state.Config), &view)
-	return view, nil
+	var snapshot View
+	_ = json.Unmarshal(safeJSON(b, s.state.Config), &snapshot)
+	return snapshot, nil
 }
 func (e *Engine) History(id string) ([]Message, error) {
 	s, err := e.get(id)
@@ -435,6 +457,8 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 	s.cancel = cancel
 	s.state.Config.ReferencedAssets = append([]string(nil), c.ReferencedAssets...)
 	s.state.View.Status = "running"
+	s.state.View.RootTurnID = uid()
+	s.state.RootQuestion = redact(input.UserText, c)
 	s.state.View.TurnStartedAt = timestamp()
 	s.state.View.TurnFinishedAt = ""
 	s.state.View.Pending = nil
@@ -512,11 +536,24 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		s.mu.Lock()
 		history := append([]Message(nil), s.state.History...)
 		textID, thinkID := uid(), uid()
-		s.state.View.Cards = append(s.state.View.Cards, Card{ID: thinkID, Type: "thinking", Status: "running", At: timestamp()}, Card{ID: textID, Type: "message", Status: "running", At: timestamp()})
+		textType := "message"
+		if e.worker == nil {
+			hasInvestigation, hasReview := false, false
+			for _, run := range s.state.View.AgentRuns {
+				if run.RootTurnID == s.state.View.RootTurnID {
+					hasInvestigation = true
+					hasReview = hasReview || run.Role == "verify"
+				}
+			}
+			if hasInvestigation && !hasReview {
+				textType = "draft"
+			}
+		}
+		s.state.View.Cards = append(s.state.View.Cards, Card{ID: thinkID, Type: "thinking", Status: "running", At: timestamp()}, Card{ID: textID, Type: textType, Status: "running", At: timestamp()})
 		s.mu.Unlock()
 		lastFlush := time.Now()
 		tools := e.sessionCatalog(ctx, id, c)
-		result, modelErr := Stream(ctx, c.Model, history, tools, func(kind, delta string) {
+		result, modelErr := e.stream(ctx, c.Model, history, tools, func(kind, delta string) {
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			if kind == "image" {
@@ -570,6 +607,27 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 			return err
 		}
 		if len(result.Message.Calls) == 0 {
+			if e.needsAgentVerification(s) {
+				// Keep the candidate private until an independent evidence review has finished.
+				s.mu.Lock()
+				for i := range s.state.View.Cards {
+					if s.state.View.Cards[i].ID == textID {
+						s.state.View.Cards[i].Type = "draft"
+					}
+				}
+				s.mu.Unlock()
+				if _, err = e.runInvestigations(ctx, s, c, []investigationSpec{{Role: "verify", Task: "独立验证本轮调查证据"}}); err != nil {
+					return err
+				}
+				m := Message{Role: "assistant", Calls: []Call{{ID: uid(), Name: "read_investigation", Arguments: `{}`}}}
+				s.mu.Lock()
+				s.state.History = append(s.state.History, m)
+				s.mu.Unlock()
+				if err = e.invokeCalls(ctx, s, &c, m.Calls); err != nil {
+					return err
+				}
+				continue
+			}
 			return nil
 		}
 		if err = e.invokeCalls(ctx, s, &c, result.Message.Calls); err != nil {
@@ -585,6 +643,29 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls []Call) error {
 	for _, call := range calls {
 		value, toolErr := e.invoke(ctx, s, *c, call)
+		if call.Name == "import_resources" && toolErr == nil {
+			s.mu.Lock()
+			sessionID := s.state.View.Session
+			s.mu.Unlock()
+			fresh, err := e.bridgeCall(ctx, sessionID, "resource_import_assets", nil, false)
+			if err != nil {
+				return err
+			}
+			if assets, ok := fresh.([]Asset); ok {
+				c.Assets = assets
+				for _, as := range assets {
+					if as.SSH != nil && as.SSH.CredentialRef != "" {
+						if secret, err := sshSecret(as.SSH.CredentialRef, c.CredentialDir); err == nil {
+							c.AuthSecrets = append(c.AuthSecrets, secret)
+						}
+					}
+				}
+				s.mu.Lock()
+				s.state.Config.Assets = assets
+				s.state.Config.AuthSecrets = c.AuthSecrets
+				s.mu.Unlock()
+			}
+		}
 		if errors.Is(toolErr, context.Canceled) || errors.Is(toolErr, context.DeadlineExceeded) {
 			return toolErr
 		}
@@ -626,8 +707,9 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) error {
 	s.mu.Lock()
 	history := append([]Message(nil), s.state.History...)
+	id := s.state.View.Session
 	s.mu.Unlock()
-	chars := len(js(Catalog(c.Profile))) + historyCost(history)
+	chars := len(js(e.sessionCatalog(ctx, id, c))) + historyCost(history)
 	budget := (c.Model.ContextWindow - c.Model.MaxOutput) * 2
 	if !force && chars < budget {
 		return nil
@@ -661,11 +743,11 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	}
 	model.MaxOutput = min(4096, ceiling)
 	messages := []Message{{Role: "system", Content: string(prompt) + "\nOutput only a compact handoff of at most 1000 words. Omit raw reasoning, repetitive logs and full command outputs."}, {Role: "user", Content: js(summaryMessages(history[1:cut]))}}
-	result, err := Stream(ctx, model, messages, nil, nil)
+	result, err := e.stream(ctx, model, messages, nil, nil)
 	if errors.Is(err, ErrModelOutputLimit) && ctx.Err() == nil {
 		model.MaxOutput = ceiling
 		messages[0].Content += "\nThe previous summary exceeded the output limit. Keep this retry under 500 words, preserving the target, constraints, completed work and next steps."
-		result, err = Stream(ctx, model, messages, nil, nil)
+		result, err = e.stream(ctx, model, messages, nil, nil)
 	}
 	if err != nil {
 		return fmt.Errorf("context compaction: %w", err)
@@ -846,7 +928,7 @@ func (e *Engine) ExtractPreset(ctx context.Context, id string) (Preset, error) {
 	c := s.state.Config
 	h := append([]Message(nil), s.state.History...)
 	s.mu.Unlock()
-	r, err := Stream(ctx, c.Model, []Message{{Role: "system", Content: "Extract a reusable operations prompt from this conversation. Exclude credentials and internal IDs. Return only JSON {\"title\":\"...\",\"content\":\"...\"}. Do not execute tools."}, {Role: "user", Content: js(h)}}, nil, nil)
+	r, err := e.stream(ctx, c.Model, []Message{{Role: "system", Content: "Extract a reusable operations prompt from this conversation. Exclude credentials and internal IDs. Return only JSON {\"title\":\"...\",\"content\":\"...\"}. Do not execute tools."}, {Role: "user", Content: js(h)}}, nil, nil)
 	if err != nil {
 		return Preset{}, err
 	}
@@ -860,6 +942,7 @@ func (e *Engine) ExtractPreset(ctx context.Context, id string) (Preset, error) {
 	return p, err
 }
 func (e *Engine) Shutdown() {
+	agentDone := e.stopAgentWorkers()
 	// 退出或更新时先关闭后台任务准入，等待最终卡片持久化，避免退出后仍写数据目录。
 	e.shellMu.Lock()
 	e.shellsClosed = true
@@ -886,6 +969,9 @@ func (e *Engine) Shutdown() {
 		return true
 	})
 	for _, done := range shellDone {
+		<-done
+	}
+	for _, done := range agentDone {
 		<-done
 	}
 }

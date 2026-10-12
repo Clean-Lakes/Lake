@@ -90,3 +90,13 @@
       CREATE INDEX IF NOT EXISTS idx_terminals_session ON terminals(sessionId, createdAt);
       CREATE INDEX IF NOT EXISTS idx_entries_terminal ON terminalEntries(terminalId, createdAt);
       CREATE INDEX IF NOT EXISTS idx_events_session ON events(sessionId, seq);
+      CREATE TABLE IF NOT EXISTS messageQueueState (
+        sessionId TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+        paused INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL DEFAULT 0,
+        lastError TEXT NOT NULL DEFAULT ''
+      );
+      CREATE TABLE IF NOT EXISTS queuedMessages (
+        id TEXT PRIMARY KEY, sessionId TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL, payload TEXT NOT NULL, createdAt TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS queued_messages_session ON queuedMessages(sessionId,position);

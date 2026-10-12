@@ -130,6 +130,24 @@ func (e *Engine) Handle(ctx context.Context, method, id string, data json.RawMes
 		return e.shellJob(ctx, id, method, a)
 	case "abort":
 		return nil, e.Abort(id)
+	case "cancelAgent", "agentDecision", "agentDetails":
+		var input struct {
+			RunID        string `json:"runId"`
+			ID           string `json:"id"`
+			Accept       bool   `json:"accept"`
+			Confirmation string `json:"confirmation"`
+		}
+		if err := decode(&input); err != nil {
+			return nil, err
+		}
+		switch method {
+		case "cancelAgent":
+			return nil, e.CancelAgent(id, input.RunID)
+		case "agentDecision":
+			return nil, e.AgentDecision(id, input.RunID, input.ID, input.Accept, input.Confirmation)
+		default:
+			return e.AgentDetails(id, input.RunID)
+		}
 	case "snapshot":
 		var a struct {
 			Before int `json:"before"`

@@ -5,13 +5,23 @@ import LakeUpdateCore
 @MainActor private final class WorkbenchWindow: NSWindow {
     var shouldStartDrag: (NSEvent) -> Bool = { _ in false }
     private var dragStart: (mouse: NSPoint, origin: NSPoint)?
+    private var zoomingHeaderClick = false
     override func sendEvent(_ event: NSEvent) {
         // Consume header drags before WKContentView turns them into web selection gestures.
-        if event.type == .leftMouseDown { dragStart = nil }
+        if event.type == .leftMouseDown { dragStart = nil; zoomingHeaderClick = false }
         if event.type == .leftMouseDown, isMovable, !styleMask.contains(.fullScreen), shouldStartDrag(event) {
-            dragStart = (convertPoint(toScreen: event.locationInWindow), frame.origin)
             makeKeyAndOrderFront(nil)
+            if event.clickCount == 2 {
+                zoomingHeaderClick = true
+                performZoom(nil)
+                return
+            }
+            dragStart = (convertPoint(toScreen: event.locationInWindow), frame.origin)
             return
+        }
+        if zoomingHeaderClick {
+            if event.type == .leftMouseUp { zoomingHeaderClick = false; return }
+            if event.type == .leftMouseDragged { return }
         }
         if let start = dragStart {
             if event.type == .leftMouseDragged {

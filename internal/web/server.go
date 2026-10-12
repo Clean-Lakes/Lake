@@ -23,7 +23,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 )
 
 type Options struct {
@@ -35,6 +34,8 @@ type Options struct {
 	Output                          io.Writer
 }
 type Server struct {
+	messageMu          sync.Mutex
+	runningMessages    map[string]bool
 	bindingMu          sync.Mutex
 	accessMu           sync.Mutex
 	terminalGrants     map[string]TerminalAccess
@@ -316,6 +317,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, 200, Object{"authenticated": true, "modelConfigured": model != nil, "modelName": modelName, "modelId": modelID, "supportsImageInput": imageInput, "terminalMode": "pty", "aiRuntime": "go", "backendRuntime": "go"})
 		return
 	}
+	if b.providerRoute(w, r, name, method) {
+		return
+	}
 	if name == "/api/settings/model" {
 		switch method {
 		case "GET":
@@ -350,6 +354,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if name == "/api/settings/model/available" && method == "GET" {
+		if result, exists := b.Models.ConfiguredProviderModels(); exists {
+			reply(w, 200, result)
+			return
+		}
 		cfg := b.Models.Active()
 		if cfg == nil {
 			reply(w, 200, Object{"models": []string{}, "message": "尚未配置模型"})
@@ -436,7 +444,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) == 4 && parts[0] == "api" && parts[1] == "projects" && method == "POST" {
 		limit := int64(16384)
-		if parts[3] == "resources" {
+		if parts[3] == "resources" || parts[3] == "resource-import-preview" {
 			// A 1 MB private key may expand when JSON-escaped; the key itself
 			// is bounded and validated by prepareSSH before saving.
 			limit = 8 << 20
@@ -445,6 +453,12 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		switch parts[3] {
 		case "resource-tree":
 			reply(w, 200, Object{"nodes": b.Store.EditResourceTree(parts[2], data)})
+			return
+		case "resource-import-preview":
+			reply(w, 200, b.previewResourceImport(r.Context(), parts[2], "", data))
+			return
+		case "resource-import":
+			reply(w, 201, b.commitResourceImport(parts[2], "", stringOf(data["planId"]), data["indexes"]))
 			return
 		case "resources":
 			kind := stringOf(data["kind"])
@@ -532,6 +546,11 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(parts) == 3 && method == "DELETE" {
+			b.messageMu.Lock()
+			defer b.messageMu.Unlock()
+			if b.runningMessages[id] {
+				fail(409, "请先停止 AI，并等待本轮结束")
+			}
 			snap := b.sessionSnapshot(id)
 			view, e := b.Engine.Snapshot(id)
 			aiFailure(e)
@@ -579,52 +598,19 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					b.sse(w, r, id, n)
 					return
 				}
-			case "messages":
+			case "text-files":
 				if method == "POST" {
 					data := body(w, r, 8<<20)
-					validateIDs(data["resourceIds"])
-					view, e := b.Engine.Snapshot(id)
-					aiFailure(e)
-					if view.Pending != nil {
-						fail(409, "请先处理本轮审批，或停止本轮")
-					}
-					images := []ai.ImageAttachment{}
-					if v, ok := data["images"]; ok {
-						cfg := b.Models.Active()
-						if cfg == nil || !cfg.SupportsImageInput {
-							fail(400, "所选模型未启用图片输入能力")
-						}
-						if json.Unmarshal([]byte(jsonText(v)), &images) != nil {
-							fail(400, "Invalid image attachments")
-						}
-						images, e = ai.ValidateImages(images)
-						if e != nil {
-							fail(400, e.Error())
-						}
-					}
-					refs := []Object{}
-					for _, ref := range stringsOf(data["resourceIds"]) {
-						b.Store.AssertResource(id, ref)
-						resource := b.Store.Resource(ref)
-						refs = append(refs, Object{"asset_ref": ref, "name": resource["name"], "type": resource["kind"]})
-					}
-					refs = append(refs, references(b.Store, id, data["references"], func(id, tid string) string { return b.terminalOwner(id, tid, false) })...)
-					message := text(data["text"], "text", 400000)
-					if utf8.RuneCountInString(message) > 100000 {
-						fail(400, "text exceeds 100000 characters")
-					}
-					b.bindManualTerminalForHuman(id, refs, data["terminalReuse"])
-					titleMessage := b.Terminals.titleInput(message)
-					for _, reference := range refs {
-						name := stringOf(reference["name"])
-						if name != "" && (strings.HasPrefix(titleMessage, "@"+name+" ") || strings.HasPrefix(titleMessage, "@"+name+"\n")) {
-							titleMessage = strings.TrimSpace(strings.TrimPrefix(titleMessage, "@"+name))
-						}
-					}
-					m := b.Store.Begin(id, message, images, titleMessage)
-					b.workers.Add(1)
-					go b.runTurn(id, message, images, refs)
-					reply(w, 202, m)
+					project := stringOf(b.Store.Session(id)["projectId"])
+					reply(w, 201, b.saveImportSource(project, id, stringOf(data["name"]), stringOf(data["text"])))
+					return
+				}
+			case "message-queue":
+				b.messageQueueRoute(w, r, id)
+				return
+			case "messages":
+				if method == "POST" {
+					reply(w, 202, b.submitHumanMessage(id, body(w, r, 8<<20)))
 					return
 				}
 			case "terminals":
@@ -695,20 +681,21 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					reply(w, 200, b.configure(id, body(w, r, 128000)))
 					return
 				}
-				if set("abort decision clear clearReferences rollback compact restore undoFile extractPreset")[op] {
+				if set("abort decision cancelAgent agentDecision agentDetails clear clearReferences rollback compact restore undoFile extractPreset")[op] {
 					limit := int64(128000)
 					if op == "restore" {
 						limit = 32 << 20
 					}
 					data := body(w, r, limit)
 					status := b.Store.Session(id)["status"]
-					if op != "abort" && op != "decision" && op != "extractPreset" && (status == "investigating" || status == "waiting_approval") {
+					if !set("abort decision cancelAgent agentDecision agentDetails extractPreset")[op] && (status == "investigating" || status == "waiting_approval") {
 						fail(409, "AI 正在运行，请先停止")
 					}
 					if op == "compact" || op == "undoFile" || op == "extractPreset" {
 						b.configure(id, nil)
 					}
 					if op == "abort" {
+						b.pausePendingMessageQueue(id)
 						b.cancelHostKeys(id)
 
 					}
@@ -931,8 +918,9 @@ func (b *Server) startAction(ctx context.Context, a Object, confirmation string)
 			b.Store.Status(id, "completed")
 			return
 		}
-		b.workers.Add(1)
-		go b.runTurn(id, goal, nil, nil)
+		b.messageMu.Lock()
+		defer b.messageMu.Unlock()
+		b.launchMessageLocked(id, humanMessage{Text: goal})
 	}()
 }
 func (b *Server) sse(w http.ResponseWriter, r *http.Request, id string, after int64) {

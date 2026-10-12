@@ -1,0 +1,236 @@
+package web
+
+import (
+	"encoding/json"
+	"net/http"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/Clean-Lakes/Lake/internal/ai"
+)
+
+type humanMessage struct {
+	Text       string
+	Images     []ai.ImageAttachment
+	References []Object
+	Files      []Object
+	Reuse      any
+}
+
+func messageText(value any) string {
+	message := text(value, "text", 400000)
+	if utf8.RuneCountInString(message) > 100000 {
+		fail(400, "text exceeds 100000 characters")
+	}
+	return message
+}
+func (b *Server) validateHumanMessage(id string, data Object) humanMessage {
+	validateIDs(data["resourceIds"])
+	message := humanMessage{Text: messageText(data["text"]), Images: []ai.ImageAttachment{}, References: []Object{}, Files: []Object{}, Reuse: data["terminalReuse"]}
+	if value, exists := data["images"]; exists {
+		if _, valid := value.([]any); !valid {
+			fail(400, "Invalid image attachments")
+		}
+		if len(value.([]any)) == 0 {
+			fail(400, "图片附件不能为空；无图片时请省略 images")
+		}
+		if len(objects(value)) != len(value.([]any)) {
+			fail(400, "Invalid image attachments")
+		}
+		if len(objects(value)) == 0 {
+			fail(400, "Invalid image attachments")
+		}
+		{
+			cfg := b.Models.Active()
+			if cfg == nil || !cfg.SupportsImageInput {
+				fail(400, "所选模型未启用图片输入能力")
+			}
+			if json.Unmarshal([]byte(jsonText(value)), &message.Images) != nil {
+				fail(400, "Invalid image attachments")
+			}
+			var err error
+			message.Images, err = ai.ValidateImages(message.Images)
+			if err != nil {
+				fail(400, err.Error())
+			}
+		}
+	}
+	for _, ref := range stringsOf(data["resourceIds"]) {
+		b.Store.AssertResource(id, ref)
+		resource := b.Store.Resource(ref)
+		message.References = append(message.References, Object{"asset_ref": ref, "name": resource["name"], "type": resource["kind"]})
+	}
+	message.References = append(message.References, references(b.Store, id, data["references"], func(id, tid string) string { return b.terminalOwner(id, tid, false) })...)
+	if value, exists := data["files"]; exists {
+		if _, valid := value.([]any); !valid {
+			fail(400, "文本附件须为数组")
+		}
+	}
+	project := stringOf(b.Store.Session(id)["projectId"])
+	if len(objects(data["files"])) > 4 {
+		fail(400, "每条消息最多附加 4 个文本文件")
+	}
+	for _, file := range objects(data["files"]) {
+		source := b.loadImportSource(project, id, stringOf(file["sourceId"]))
+		message.Files = append(message.Files, Object{"source_id": source.ID, "name": source.Name})
+	}
+	return message
+}
+func (b *Server) humanMessageTitle(message humanMessage) string {
+	title := b.Terminals.titleInput(message.Text)
+	for _, reference := range message.References {
+		name := stringOf(reference["name"])
+		if name != "" && (strings.HasPrefix(title, "@"+name+" ") || strings.HasPrefix(title, "@"+name+"\n")) {
+			title = strings.TrimSpace(strings.TrimPrefix(title, "@"+name))
+		}
+	}
+	return title
+}
+
+// messageMu serializes admission and queue changes, including the gap between an
+// engine's done event and runTurn's terminal/history cleanup.
+func (b *Server) messageBusyLocked(id string) bool {
+	if b.runningMessages[id] {
+		return true
+	}
+	status := b.Store.Session(id)["status"]
+	if status == "investigating" || status == "waiting_approval" || b.hostKeyPrompt(id) != nil {
+		return true
+	}
+	view, err := b.Engine.Snapshot(id)
+	aiFailure(err)
+	return view.Status == "running" || view.Status == "waiting_approval" || view.Pending != nil
+}
+func (b *Server) launchMessageLocked(id string, message humanMessage) {
+	if b.runningMessages == nil {
+		b.runningMessages = map[string]bool{}
+	}
+	if b.runningMessages[id] {
+		fail(409, "本轮仍在结束，请稍后发送")
+	}
+	b.runningMessages[id] = true
+	b.workers.Add(1)
+	go b.runTurn(id, message.Text, message.Images, message.References, message.Files)
+}
+func (b *Server) submitHumanMessage(id string, data Object) Object {
+	message := b.validateHumanMessage(id, data)
+	b.messageMu.Lock()
+	defer b.messageMu.Unlock()
+	queue := b.Store.MessageQueue(id)
+	if b.messageBusyLocked(id) || len(objects(queue["items"])) > 0 || data["enqueue"] == true {
+		payload := Object{"text": message.Text, "resourceIds": stringsOf(data["resourceIds"])}
+		if len(message.Images) > 0 {
+			payload["images"] = message.Images
+		}
+		if len(message.Files) > 0 {
+			files := []Object{}
+			for _, file := range message.Files {
+				files = append(files, Object{"sourceId": file["source_id"], "name": file["name"]})
+			}
+			payload["files"] = files
+		}
+		if data["references"] != nil {
+			payload["references"] = data["references"]
+		}
+		if message.Reuse != nil {
+			payload["terminalReuse"] = message.Reuse
+		}
+		result := b.Store.EnqueueMessage(id, payload)
+		b.dispatchMessageQueueLocked(id)
+		result["messageQueue"] = b.Store.MessageQueue(id)
+		return result
+	}
+	// A deliberate new message after stopping starts a fresh queue cycle.
+	if queue["paused"] == true {
+		b.Store.MutateMessageQueue(id, Object{"operation": "resume", "revision": queue["revision"]})
+	}
+	b.bindManualTerminalForHuman(id, message.References, message.Reuse)
+	result := b.Store.Begin(id, message.Text, message.Images, b.humanMessageTitle(message))
+	b.launchMessageLocked(id, message)
+	return result
+}
+func (b *Server) dispatchMessageQueueLocked(id string) {
+	if b.Context.Err() != nil || b.messageBusyLocked(id) {
+		return
+	}
+	queue := b.Store.MessageQueue(id)
+	if queue["paused"] == true || len(objects(queue["items"])) == 0 {
+		return
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			reason := "待发送消息无法执行，请检查后继续"
+			if failure, ok := recovered.(*Failure); ok {
+				reason = failure.Message
+			}
+			b.Store.PauseMessageQueue(id, reason)
+		}
+	}()
+	head := b.Store.queuedHead(id)
+	data := object(parsed(stringOf(head["payload"])))
+	message := b.validateHumanMessage(id, data)
+	if b.Models.Active() == nil {
+		fail(400, "尚未配置模型")
+	}
+	b.bindManualTerminalForHuman(id, message.References, message.Reuse)
+	b.Store.BeginQueuedMessage(id, stringOf(head["id"]), message.Text, message.Images, b.humanMessageTitle(message))
+	b.launchMessageLocked(id, message)
+}
+func (b *Server) finishMessageQueue(id string) {
+	defer func() { recover() }()
+	b.messageMu.Lock()
+	defer b.messageMu.Unlock()
+	delete(b.runningMessages, id)
+	if b.Context.Err() != nil {
+		return
+	}
+	queue := b.Store.MessageQueue(id)
+	if len(objects(queue["items"])) == 0 {
+		return
+	}
+	view, err := b.Engine.Snapshot(id)
+	aiFailure(err)
+	if view.Status == "cancelled" || view.Status == "failed" || b.Store.Session(id)["status"] == "failed" {
+		reason := "本轮回复失败，待发送队列已暂停"
+		if view.Status == "cancelled" {
+			reason = "已停止本轮，待发送队列已暂停"
+		}
+		b.Store.PauseMessageQueue(id, reason)
+		return
+	}
+	b.dispatchMessageQueueLocked(id)
+}
+func (b *Server) pausePendingMessageQueue(id string) {
+	b.messageMu.Lock()
+	defer b.messageMu.Unlock()
+	if len(objects(b.Store.MessageQueue(id)["items"])) > 0 {
+		b.Store.PauseMessageQueue(id, "已停止本轮，待发送队列已暂停")
+	}
+}
+func (b *Server) messageQueueRoute(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method == "GET" {
+		reply(w, 200, b.Store.MessageQueue(id))
+		return
+	}
+	if r.Method != "POST" {
+		fail(405, "Method not allowed")
+	}
+	data := body(w, r, 1<<20)
+	if data["operation"] == "edit" {
+		data["text"] = messageText(data["text"])
+		validateIDs(data["resourceIds"])
+		for _, ref := range stringsOf(data["resourceIds"]) {
+			b.Store.AssertResource(id, ref)
+		}
+	}
+	if data["operation"] == "reorder" {
+		if _, ok := data["ids"].([]any); !ok {
+			fail(400, "排序须为消息标识数组")
+		}
+	}
+	b.messageMu.Lock()
+	defer b.messageMu.Unlock()
+	b.Store.MutateMessageQueue(id, data)
+	b.dispatchMessageQueueLocked(id)
+	reply(w, 200, b.Store.MessageQueue(id))
+}

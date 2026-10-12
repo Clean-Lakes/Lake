@@ -11,6 +11,30 @@ import (
 	"time"
 )
 
+func TestResourceImportPermissions(t *testing.T) {
+	p := DefaultPermissions()
+	c := Config{Permissions: &p}
+	if kind, err := approvalKind(c, "import_resources", "write", nil); err != nil || kind != "resource_import" {
+		t.Fatal("import must require write authorization")
+	}
+	p.SilentWriteFiles = true
+	if kind, err := approvalKind(c, "import_resources", "write", nil); err != nil || kind != "" {
+		t.Fatal("silent import permission ignored")
+	}
+	p.SilentReadFiles = false
+	if kind, err := approvalKind(c, "preview_resource_import", "readonly", nil); err != nil || kind != "file_read" {
+		t.Fatal("file-read permission ignored")
+	}
+	p.SilentReadFiles = true
+	p.DenyLocalExecution = true
+	if _, err := approvalKind(c, "preview_resource_import", "readonly", map[string]any{"localFileRead": true}); err == nil {
+		t.Fatal("local file restriction ignored")
+	}
+	if kind, err := approvalKind(c, "preview_resource_import", "readonly", map[string]any{"localFileRead": false}); err != nil || kind != "" {
+		t.Fatal("user upload incorrectly treated as local execution")
+	}
+}
+
 func TestFileAndSQLPermissionEffects(t *testing.T) {
 	for _, kind := range []string{"file_read", "file_write_silent", "readonly_sql"} {
 		t.Run(kind, func(t *testing.T) {

@@ -41,6 +41,8 @@ type SSH struct {
 	KnownHosts    string `json:"-"`
 }
 type Config struct {
+	agentRole        string
+	MultiAgentMode   string       `json:"multiAgentMode,omitempty"`
 	Permissions      *Permissions `json:"permissions,omitempty"`
 	ReferencedAssets []string     `json:"-"`
 	AuthSecrets      []string     `json:"-"`
@@ -107,6 +109,9 @@ type Approval struct {
 	Fingerprint        string `json:"fingerprint"`
 }
 type View struct {
+	AgentRuns      []AgentRun    `json:"agentRuns,omitempty"`
+	DelegatedUsage Usage         `json:"delegatedUsage,omitempty"`
+	RootTurnID     string        `json:"rootTurnId,omitempty"`
 	CardsOffset    int           `json:"cardsOffset"`
 	TotalCards     int           `json:"totalCards"`
 	StartedAt      string        `json:"startedAt,omitempty"`
@@ -123,6 +128,7 @@ type View struct {
 	Turns          int           `json:"turns"`
 }
 type State struct {
+	RootQuestion       string     `json:"rootQuestion,omitempty"`
 	ReferencedAssetIDs []string   `json:"referencedAssetIds,omitempty"`
 	LastRequest        *Usage     `json:"lastRequest,omitempty"`
 	LastRequestAt      string     `json:"lastRequestAt,omitempty"`
