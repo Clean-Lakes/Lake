@@ -33,6 +33,7 @@ import { FollowScroll } from "./followScroll";
 import { rebaseMentions, referencedResources, type MentionReference } from "../../shared/references";
 import { type CommandPolicy, dangerConfirmation } from "../../shared/command-policy";
 import "./styles.css";
+import "./workbenchLayout.js";
 
 type GlyphName = "layers" | "folder" | "shield" | "plus" | "chevron" | "terminal" | "chat" | "server" | "arrow" | "close" | "menu" | "refresh" | "check" | "alert" | "spark" | "clock" | "lock" | "link" | "send" | "stop" | "copy" | "expand" | "settings" | "trash";
 

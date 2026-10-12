@@ -38,7 +38,10 @@ jobs:
             gh release create "v$LAKE_RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --target master --draft --title "Lake v$LAKE_RELEASE_VERSION · Apple Silicon" --notes-file client/macos/RELEASE_NOTES.md
           fi
           gh release upload "v$LAKE_RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --clobber release-assets/macos/*.zip release-assets/macos/*.dmg release-assets/macos/*.sha256
-          gh release edit "v$LAKE_RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --target master --draft=false --latest
+          # A same-version refresh must point its source tag at the packaged master commit.
+          # Fast-forward only, so unrelated tag changes cannot be overwritten.
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/v$LAKE_RELEASE_VERSION" -f sha="$LAKE_RELEASE_COMMIT" -F force=false
+          gh release edit "v$LAKE_RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --target master --draft=false --latest --notes-file client/macos/RELEASE_NOTES.md
           gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$LAKE_RELEASE_VERSION" > /tmp/lake-published.json
           python3 - <<'PY'
           import json, pathlib

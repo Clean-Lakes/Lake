@@ -2,7 +2,31 @@ import AppKit
 import WebKit
 import LakeUpdateCore
 
-@MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, NSToolbarDelegate {
+@MainActor private final class WorkbenchWindow: NSWindow {
+    var shouldStartDrag: (NSEvent) -> Bool = { _ in false }
+    private var dragStart: (mouse: NSPoint, origin: NSPoint)?
+    override func sendEvent(_ event: NSEvent) {
+        // Consume header drags before WKContentView turns them into web selection gestures.
+        if event.type == .leftMouseDown { dragStart = nil }
+        if event.type == .leftMouseDown, isMovable, !styleMask.contains(.fullScreen), shouldStartDrag(event) {
+            dragStart = (convertPoint(toScreen: event.locationInWindow), frame.origin)
+            makeKeyAndOrderFront(nil)
+            return
+        }
+        if let start = dragStart {
+            if event.type == .leftMouseDragged {
+                let mouse = convertPoint(toScreen: event.locationInWindow)
+                setFrameOrigin(NSPoint(x: start.origin.x + mouse.x - start.mouse.x,
+                                       y: start.origin.y + mouse.y - start.mouse.y))
+                return
+            }
+            if event.type == .leftMouseUp { dragStart = nil; return }
+        }
+        super.sendEvent(event)
+    }
+}
+
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, NSToolbarDelegate, WKScriptMessageHandler {
     private var window: NSWindow!
     private var webView: WKWebView!
     private let backend = Backend()
@@ -16,6 +40,8 @@ import LakeUpdateCore
     private let updateVersion = NSTextField(labelWithString: "")
     private let updateAction = NSButton(title: "检测更新", target: nil, action: nil)
     private let updateProgress = NSProgressIndicator()
+    private var dragRegions: [NSRect] = []
+    private var dragExcluded: [NSRect] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // LaunchServices can open the app more than once. Keep one owner of the backend and updater.
@@ -27,6 +53,11 @@ import LakeUpdateCore
         }
         installMenu()
         let config = WKWebViewConfiguration()
+        if let widths = UserDefaults.standard.dictionary(forKey: "LakeWorkbenchWidths"),
+           JSONSerialization.isValidJSONObject(widths), let data = try? JSONSerialization.data(withJSONObject: widths),
+           let json = String(data: data, encoding: .utf8) {
+            config.userContentController.addUserScript(WKUserScript(source: "window.lakeWorkbenchWidths = \(json);", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
         // Native chrome applies even when attaching to an independently running older Go service.
         let chrome = """
         document.documentElement.classList.add('lake-native');
@@ -35,6 +66,8 @@ import LakeUpdateCore
           html.lake-native { --lake-titlebar-height: 52px; }
           .lake-native .sidebar { padding-top: var(--lake-titlebar-height); }
           .lake-native .workspace-header { min-height: var(--lake-titlebar-height); padding-right: 72px; border-bottom: 0; }
+          /* Keep terminal actions in the unified header, outside the native update button. */
+          .lake-native .terminal-panel-header { min-height: var(--lake-titlebar-height); padding-right: 72px; }
           .lake-native .desktop-update { display: none; }
         `;
         document.head.appendChild(style);
@@ -46,10 +79,15 @@ import LakeUpdateCore
         }, true);
         """
         config.userContentController.addUserScript(WKUserScript(source: chrome, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        config.userContentController.add(self, name: "lakeChrome")
+        if let layoutURL = Bundle.main.url(forResource: "workbench-layout", withExtension: "js"),
+           let layout = try? String(contentsOf: layoutURL, encoding: .utf8) {
+            config.userContentController.addUserScript(WKUserScript(source: layout, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        }
         webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
         webView.uiDelegate = self
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 840),
+        window = WorkbenchWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 840),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = "Lake"
         window.titleVisibility = .hidden
@@ -58,6 +96,15 @@ import LakeUpdateCore
         window.backgroundColor = NSColor(calibratedRed: 252/255, green: 251/255, blue: 248/255, alpha: 1)
         window.minSize = NSSize(width: 850, height: 600)
         window.contentView = webView
+        (window as? WorkbenchWindow)?.shouldStartDrag = { [weak self] event in
+            guard let self, self.sameOrigin(self.webView.url) else { return false }
+            let local = self.webView.convert(event.locationInWindow, from: nil)
+            let point = NSPoint(x: local.x, y: self.webView.isFlipped ? local.y : self.webView.bounds.height - local.y)
+            let height = max(40, self.window.frame.height - self.window.contentLayoutRect.height)
+            return point.y >= 0 && point.y < height && point.x >= 96 && point.x <= self.webView.bounds.width - 72
+                && self.dragRegions.contains(where: { $0.contains(point) })
+                && !self.dragExcluded.contains(where: { $0.insetBy(dx: -2, dy: -2).contains(point) })
+        }
         installUpdateToolbar()
         window.delegate = self
         window.isReleasedWhenClosed = false
@@ -202,10 +249,30 @@ import LakeUpdateCore
         if busy { updateProgress.startAnimation(nil) } else { updateProgress.stopAnimation(nil) }
     }
     func windowDidResize(_ notification: Notification) { syncChromeHeight() }
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "lakeChrome", message.frameInfo.isMainFrame,
+              sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any] else { return }
+        if body["widths"] != nil {
+            if let widths = body["widths"] as? [String: Double], let sidebar = widths["sidebar"], let terminal = widths["terminal"],
+               sidebar.isFinite, terminal.isFinite, (200...420).contains(sidebar), (280...900).contains(terminal) {
+                UserDefaults.standard.set(["sidebar": sidebar, "terminal": terminal], forKey: "LakeWorkbenchWidths")
+            }
+            return
+        }
+        func rectangles(_ key: String) -> [NSRect] {
+            guard let values = body[key] as? [[Double]], values.count <= 100 else { return [] }
+            return values.compactMap { value in
+                guard value.count == 4, value.allSatisfy({ $0.isFinite }), value[2] > 0, value[3] > 0 else { return nil }
+                return NSRect(x: value[0], y: value[1], width: value[2], height: value[3])
+            }
+        }
+        dragRegions = rectangles("regions")
+        dragExcluded = rectangles("excluded")
+    }
     private func syncChromeHeight() {
         guard sameOrigin(webView?.url) else { return }
         let height = max(40, window.frame.height - window.contentLayoutRect.height)
-        webView.evaluateJavaScript("document.documentElement.style.setProperty('--lake-titlebar-height', '\(height)px');", completionHandler: nil)
+        webView.evaluateJavaScript("document.documentElement.style.setProperty('--lake-titlebar-height', '\(height)px'); window.dispatchEvent(new Event('lake-chrome-resize'));", completionHandler: nil)
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
