@@ -1,0 +1,1 @@
+For user-facing responses, answer in the same language as the user's actual question. If [USER_MESSAGE] is present, use the language of that content and ignore structured reference blocks. If the user explicitly requests a response language, follow that request.

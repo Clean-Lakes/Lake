@@ -1,0 +1,35 @@
+# Lake macOS
+
+当前 Go/React 工作台的 AppKit + WKWebView 客户端，macOS 13+，仅 Apple Silicon（M 系列）arm64，运行不需要 Node、pnpm 或 Electron。应用启动内置签名 `lake web --port 0`，使用系统分配的 loopback 端口。已有同数据目录的 Go 服务时复用，客户端不会终止独立启动的 CLI 服务；这种模式需要先退出独立服务、重新打开客户端后再更新。
+
+```sh
+pnpm --dir web-agent install --frozen-lockfile
+scripts/build_lake_desktop.sh
+scripts/build_lake_desktop.sh --install
+```
+
+CLI 构建始终经过 `scripts/build_lake.sh`。CLI 与应用使用持久 `Lake Local Development Code Signing` 身份，缺少时显式运行 `scripts/setup_lake_signing.sh`，没有未签名构建路径。`VERSION` 同时控制 CLI、应用和资产名；输出 `dist/macos/<version>/<architecture>/Lake.app`、DMG、ZIP 和 SHA-256。默认不覆盖现有安装；`--install` 安装到 `~/Applications/Lake.app` 并保留旧应用。
+
+右上角图标和 Lake 菜单可手动检测，启动及每 5 分钟自动检查。GitHub Releases API 选择 `target_commitish=master`、非草稿/预发布、版本更高且架构匹配的发布，忽略旧 Electron 包。资产格式为 `Lake-<version>-macos-arm64.zip` 与同名 `.zip.sha256`，发布命令必须带 `--target master`。下载并重启更新依次验证摘要、归档路径、版本、bundle ID、整个应用代码签名和当前证书；准备替换后退出后端及窗口。安装器保留旧应用，等待新应用加载工作台回执，45 秒未就绪则回滚。DMG 运行、App Translocation 和不可写应用目录不直接更新，应先安装到可写 Applications。
+
+```mermaid
+sequenceDiagram
+    participant UI as 右上角图标
+    participant Native as 原生更新器
+    participant GitHub as master Release
+    participant Helper as 独立安装器
+    participant App as 新应用
+    UI->>Native: 检测 / 下载并更新
+    Native->>GitHub: 正式版本 + 架构匹配 ZIP / SHA-256
+    Native->>Native: 摘要、归档、版本、签名及同一证书验证
+    Native->>Helper: 同目录暂存应用与 PID
+    Native->>Native: 关闭 Go 后端、退出窗口
+    Helper->>Helper: 等待 PID 退出、备份并替换
+    Helper->>App: 启动新应用
+    App-->>Helper: 后端正常、工作台已加载回执
+    Note over Helper,App: 启动失败或超时：恢复旧应用
+```
+
+验证：`swift run --package-path client/macos --build-system native LakeUpdateTests`、`python3 scripts/test_lake_macos_installer.py`、`go test -race ./...` 和前端测试。Swift 独立测试可执行文件可在不含 XCTest 的 Xcode Command Line Tools 环境运行。
+
+发布：创建并推送 `master`，构建 arm64 后运行 `scripts/publish_lake_macos.sh`（使用现有 GitHub 登录）。脚本校验摘要/签名和 HEAD=origin/master，并以 `--target master` 上传 GitHub Releases。未来版本必须使用相同持久签名证书，不能每次临时生成证书，证书轮换须单独设计迁移。当前本地证书未公证；已有 Electron 版本应首次手动安装。

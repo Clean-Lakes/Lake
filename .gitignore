@@ -76,3 +76,12 @@ agent/ui/dist/
 agent/.fixtures/
 agent/.test-home/
 agent/test-results/
+
+# Reconstructed AI prompt constants are intentional source assets.
+!/internal/ai/prompts/*.txt
+/web-agent/dist/
+/web-agent/web/dist/
+/assets/web/dist/
+/assets/web/.stage.*/
+/client/macos/.build/
+/client/macos/.swiftpm/

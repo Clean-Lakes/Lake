@@ -1,4 +1,6 @@
-# Lake Desktop
+# Lake Desktop（历史 Wails 客户端）
+
+当前 Go/React 原生 macOS 客户端与更新流程见 [client/macos](../macos/README.md)。此目录保留历史桥接实现；旧 Electron 构建脚本另存为 `scripts/build_lake_legacy_desktop.sh`。
 
 Wails/React 客户端。请从仓库根目录运行 `scripts/build_lake_desktop.sh`。脚本会同时打包
 已签名的 Lake CLI，默认输出到 `~/Library/Application Support/Lake/builds/`，成功构建后只保留最新一个版本；需要安装到 `~/Applications/Lake.app` 时显式加 `--install`，原应用会备份。构建或安装失败时保留之前的构建。单独运行 `wails build` 的应用缺少这个必需的后端进程。

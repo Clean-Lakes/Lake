@@ -1,0 +1,46 @@
+{
+  "name": "lake-web-agent",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.14.0 <25"
+  },
+  "packageManager": "pnpm@10.33.4",
+  "scripts": {
+    "dev": "go run ../cmd/lake web",
+    "dev:server": "go run ../cmd/lake web",
+    "dev:web": "vite --config web/vite.config.ts",
+    "check": "tsc --noEmit -p web/tsconfig.json",
+    "test": "go test -race ../internal/web ../internal/ai",
+    "test:frontend": "tsx --tsconfig web/tsconfig.json --test web/test/*.test.ts",
+    "build:web": "tsc --noEmit -p web/tsconfig.json && vite build --config web/vite.config.ts",
+    "build": "../scripts/build_lake.sh",
+    "start": "../bin/lake web",
+    "package": "../scripts/build_lake.sh"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "0.10.0",
+    "@xterm/xterm": "5.5.0",
+    "diff": "8.0.2",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "@types/react": "19.1.0",
+    "@types/react-dom": "19.1.0",
+    "@vitejs/plugin-react": "5.0.0",
+    "tsx": "4.22.0",
+    "typescript": "5.9.3",
+    "vite": "7.0.0"
+  },
+  "files": [
+    "web/dist",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md",
+    "licenses"
+  ]
+}

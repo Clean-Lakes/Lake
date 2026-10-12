@@ -1,40 +1,24 @@
 # Lake
 
-此分支交付 **Lake TypeScript Agent v0.0.1**：从零实现模型循环、工具协议、上下文、预算和多专员协作。一个会话拥有共享终端、任务进度、现场事实和验收证据；专员按工单组合 SSH、K8s、PostgreSQL、HTTP 与本地文件 Power。
+macOS 客户端：运行 `scripts/build_lake_desktop.sh` 生成原生应用与 DMG/ZIP，`--install` 安装到 `~/Applications/Lake.app`。右上角更新图标检测 `master` 的正式 Release，点击后自动下载、校验、替换并重启，失败回滚。[客户端与发布说明](client/macos/README.md) · [下载安装包](https://github.com/Clean-Lakes/Lake/releases)。
 
-首版包括 CLI、本地 API 和 React 工作台，以及两条 Linux/systemd 运维闭环：服务故障恢复、配置变更与验证。变更需要绑定审批，失败可核对或在无漂移时回滚；进程退出码不能代替业务验收。
-
-## 运行
-
-开发需要 Node.js **24.14.0**、pnpm **10.33.4**，macOS 构建签名入口还需要 Go 和 Xcode Command Line Tools。
+Lake 是 Go 运维 Agent 后端和 React 工作台。Web 服务、SQLite 会话存储、SSH/PTY 终端管理与 AI 工具执行均在 Go 中运行；签名的 `bin/lake` 内嵌前端，分发和启动无需 Node.js。
 
 ```sh
-pnpm --dir agent install --frozen-lockfile
-pnpm --dir agent check
 scripts/build_lake.sh
-bin/lake version
-bin/lake serve --open
+bin/lake web --open
 ```
 
-macOS 的 `bin/lake` 只能由 `scripts/build_lake.sh` 构建，使用持久的 `Lake Local Development Code Signing` 身份；缺少身份时先运行 `scripts/setup_lake_signing.sh`。若 shell 的 Node 不符合要求，用 `LAKE_AGENT_NODE` 指定 Node 24.14.0 的绝对路径。
+访问 `http://localhost:4177`。Node.js/pnpm 只用于 React 构建；已有前端产物时可使用 `LAKE_REUSE_WEB_ASSETS=1 scripts/build_lake.sh`。macOS 必须使用持久 `Lake Local Development Code Signing` 身份签名，缺少身份先运行 `scripts/setup_lake_signing.sh`。
 
-首次使用需要配置模型、导入湖/环境/资源与服务绑定，再明确授权。不要把模型 key、SSH 私钥或数据库口令写入配置、argv 或仓库。配置和完整命令见 [运行说明](docs/lake-ts-agent-v0.0.1.md)。
+工作台按项目管理会话、本机/SSH/数据库/Docker/Redis 资源，支持持久终端、人工接管、流式 AI、工具确认、思考过程、三种场景、图片、上下文压缩与提示词预设。聊天中旧操作按原轮次排列，不再显示折叠终端汇总条。
 
-```sh
-bin/lake doctor
-bin/lake resources import --file resources.json
-bin/lake services import --file services.json
-bin/lake grants create --resource RESOURCE_UUID --effects read
-bin/lake chat --lake LAKE_UUID --environment ENV_UUID --prompt '检查服务异常'
-bin/lake open
-```
+数据默认位于 `~/.lake/web-agent/`，模型和 SSH 凭据在 `~/.lake/secrets/` 私有文件内。Go 读取现有 Web SQLite 和 AI 状态；升级表结构前创建一致性备份，重启不自动重放命令。正常操作不访问 Keychain，旧凭据迁移必须显式运行签名 `lake secrets migrate --manifest FILE`。
 
-## 数据与边界
+[运行与开发](web-agent/README.md) · [Go AI 接入](docs/hexhub-ai/README.md) · [迁移计划](plan/refactor-go-server-1.md) · [发布验证](docs/validation/lake-go-server.md)
 
-新运行时数据位于 `<LAKE_HOME>/agent/`，默认父目录为 `~/.lake`；凭据仍保存在私有的 `<LAKE_HOME>/secrets/`。不会自动读取 Keychain、改写旧数据库、迁移旧会话或模型配置。旧凭据迁移必须显式使用签名的 `lake secrets migrate --manifest <file>`。
+仓库保留 `agent/`、旧桌面/ZCode 客户端和 `legacy/web-agent/` 作为历史实现。它们不参与当前 Go 发布入口；旧 grants/tasks/workflow 命令与历史 Agent 数据不自动转接或导入新工作台。旧版文档见 [TypeScript Agent v0.0.1](docs/lake-ts-agent-v0.0.1.md)。
 
-K8s、PostgreSQL 首版只读；SSH 自动变更限于登记的配置路径与 systemd 服务。Electron 安装包、任意 MCP 插件、定时自治和跨机器协作属于后续范围。真实外部模型兼容性须单独验收，确定性夹具不代表所有兼容 provider。
+持续终端内可打开“终端 AI”，按资源恢复独立历史并明确绑定当前 shell；支持 Bash/Zsh/Fish hooks、cwd/命令块上下文、同项目终端采用授权及资源访问记忆。停止本轮、Ctrl-C 中断和关闭终端分别处理，断线读屏标记历史来源。[补齐与验收](docs/validation/lake-hexhub-terminal-parity.md)
 
-仓库保留旧 ZCode 客户端及其文档作为历史参考；本分支的新 Agent 不加载其内核。旧 Electron 构建脚本不是新 TS 工作台的入口。
-
-[完整方案](plan/architecture-lake-ts-agent-v0.0.1.md) · [验证记录](docs/validation/lake-ts-agent-v0.0.1.md) · [Power 契约](docs/lake-ts-power-contract.md) · [恢复语义](docs/lake-ts-recovery.md) · [第三方许可](agent/THIRD_PARTY_NOTICES.md)
+本轮逐项复核补齐终端面板图片/上下文引用、实时采样时间及授权永久撤销，并拒绝终端与资源不匹配配置。[24 步验收清单](docs/validation/lake-terminal-plan-step-audit.md)

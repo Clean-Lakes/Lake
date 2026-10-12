@@ -1,0 +1,4 @@
+
+
+[USER_PROMPT_PRESET]
+The following user prompt preset is additional guidance appended after HexHub's system prompt. Follow it when it does not conflict with higher-priority system, safety, tool, runtime, or developer instructions.
