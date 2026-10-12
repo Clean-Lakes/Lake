@@ -1,6 +1,6 @@
 # Lake macOS
 
-当前 Go/React 工作台的 AppKit + WKWebView 客户端，macOS 13+，仅 Apple Silicon（M 系列）arm64，运行不需要 Node、pnpm 或 Electron。应用启动内置签名 `lake web --port 0`，使用系统分配的 loopback 端口。已有同数据目录的 Go 服务时复用，客户端不会终止独立启动的 CLI 服务；这种模式需要先退出独立服务、重新打开客户端后再更新。
+当前 Go/React 工作台的 AppKit + WKWebView 客户端，macOS 13+，仅 Apple Silicon（M 系列）arm64，运行不需要 Node、pnpm 或 Electron。应用启动内置签名 `lake web --port 0`，使用系统分配的 loopback 端口。已有同数据目录的 Go 服务时复用；更新客户端时保留独立启动的 CLI 服务，替换客户端后继续连接同一服务。
 
 ```sh
 pnpm --dir web-agent install --frozen-lockfile
@@ -32,4 +32,4 @@ sequenceDiagram
 
 验证：`swift run --package-path client/macos --build-system native LakeUpdateTests`、`python3 scripts/test_lake_macos_installer.py`、`go test -race ./...` 和前端测试。Swift 独立测试可执行文件可在不含 XCTest 的 Xcode Command Line Tools 环境运行。
 
-发布：创建并推送 `master`，构建 arm64 后运行 `scripts/publish_lake_macos.sh`（使用现有 GitHub 登录）。脚本校验摘要/签名和 HEAD=origin/master，并以 `--target master` 上传 GitHub Releases。未来版本必须使用相同持久签名证书，不能每次临时生成证书，证书轮换须单独设计迁移。当前本地证书未公证；已有 Electron 版本应首次手动安装。
+发布：创建并推送 `master`，构建 arm64 后运行 `scripts/publish_lake_macos.sh`。脚本校验摘要/签名和 HEAD=origin/master；有 GitHub CLI 登录时直接上传，否则通过 SSH Git 推送临时资产标签，由流水线以 `--target master` 发布，成功后自动删除临时标签，不创建发布分支。二进制资产不进入 master 的文件树。未来版本必须使用相同持久签名证书，不能每次临时生成证书，证书轮换须单独设计迁移。当前本地证书未公证；已有 Electron 版本应首次手动安装。

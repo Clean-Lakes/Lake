@@ -138,7 +138,10 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   }
   return <><div className="nav-heading resources-heading"><span>资源 <small>{resources.length}</small></span><div className="resource-add-control" ref={addControl} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAddOpen(false); }}>
     <button type="button" ref={addButton} className="nav-add resource-create-trigger" aria-label={`在${project.name}新建资源或目录`} title="新建资源或目录" aria-haspopup="menu" aria-expanded={addOpen} aria-controls={`resource-add-${project.id}`} disabled={blocked} onClick={() => setAddOpen(value => !value)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>新建</span></button>
-    {addOpen && <div ref={addMenu} id={`resource-add-${project.id}`} className="resource-add-menu" role="menu" aria-label="新建资源或目录" onKeyDown={event => {
+    {addOpen && <div ref={addMenu} id={`resource-add-${project.id}`} className="resource-add-menu" role="menu" aria-label="新建资源或目录" onMouseDown={event => {
+      // Safari 点击按钮时会先 blur 到 body；保留菜单焦点，避免 onBlur 在 click 前卸载菜单。
+      if (event.button === 0) event.preventDefault();
+    }} onKeyDown={event => {
       if (event.key === "Escape") { event.preventDefault(); setAddOpen(false); addButton.current?.focus(); }
       if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
         event.preventDefault(); const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button")); const index = items.indexOf(document.activeElement as HTMLButtonElement);
