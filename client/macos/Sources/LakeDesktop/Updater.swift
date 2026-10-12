@@ -105,7 +105,8 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
     func start() {
         Task { await check() }
         timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
-            Task { @MainActor in await self?.check() }
+            guard let updater = self else { return }
+            Task { @MainActor in await updater.check() }
         }
         if let jobs = try? FileManager.default.contentsOfDirectory(at: updatesDirectory, includingPropertiesForKeys: nil) {
             for job in jobs {
