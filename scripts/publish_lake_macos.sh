@@ -15,6 +15,9 @@ for lake_arch in arm64; do
   codesign --verify --deep --strict "$lake_artifacts/$lake_arch/Lake.app"
 done
 # target_commitish MUST remain master; clients reject main/preview releases.
+if ! gh auth status >/dev/null 2>&1; then
+  exec python3 scripts/stage_lake_macos_release.py
+fi
 gh release create "v$lake_version" --repo Clean-Lakes/Lake --target master --title "Lake v$lake_version" \
   --notes-file client/macos/RELEASE_NOTES.md \
   "$lake_artifacts/arm64/"*.zip "$lake_artifacts/arm64/"*.zip.sha256 \

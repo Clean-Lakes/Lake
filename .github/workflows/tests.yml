@@ -2,6 +2,7 @@ name: Lake verification
 on:
   push:
     branches-ignore: ['codex/lake-macos-release-*']
+    tags-ignore: ['lake-macos-assets-*']
   pull_request:
 permissions:
   contents: read

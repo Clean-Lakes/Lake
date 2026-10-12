@@ -38,6 +38,12 @@ import LakeUpdateCore
           .lake-native .desktop-update { display: none; }
         `;
         document.head.appendChild(style);
+        // 已有独立 Go 服务可能仍提供旧页面；同样保留菜单焦点直到 click 完成。
+        document.addEventListener('mousedown', event => {
+          if (event.button === 0 && event.target instanceof Element && event.target.closest('.resource-add-menu [role="menuitem"]')) {
+            event.preventDefault();
+          }
+        }, true);
         """
         config.userContentController.addUserScript(WKUserScript(source: chrome, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         webView = WKWebView(frame: .zero, configuration: config)
@@ -63,9 +69,6 @@ import LakeUpdateCore
         renderUpdate(updater.state)
         updater.beforeInstall = { [weak self] in
             guard let self else { throw UpdateError.message("应用正在退出。") }
-            if self.backend.process == nil {
-                throw UpdateError.message("请先退出独立运行的 lake web 服务，再重新打开客户端更新。")
-            }
             let context = InstallContext(pid: self.backend.process?.processIdentifier ?? 0, home: self.backend.home, data: self.backend.dataDirectory)
             await self.backend.stop()
             guard self.backend.process?.isRunning != true else { throw UpdateError.message("后端尚未退出，更新未安装，请稍后重试。") }

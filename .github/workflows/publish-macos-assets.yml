@@ -1,11 +1,12 @@
 name: Publish signed Apple Silicon assets
 on:
   push:
-    branches: ['codex/lake-macos-release-*']
+    tags: ['lake-macos-assets-*']
 permissions:
   contents: write
 jobs:
   publish:
+    if: github.event.deleted == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,10 +34,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Correct a newly created tag which a web form may have placed on its default branch.
-          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/v$LAKE_RELEASE_VERSION" -f sha="$LAKE_RELEASE_COMMIT" -F force=true
-          gh release edit "v$LAKE_RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --target master --latest
+          if ! gh release view "v$LAKE_RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "v$LAKE_RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --target master --draft --title "Lake v$LAKE_RELEASE_VERSION · Apple Silicon" --notes-file client/macos/RELEASE_NOTES.md
+          fi
           gh release upload "v$LAKE_RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --clobber release-assets/macos/*.zip release-assets/macos/*.dmg release-assets/macos/*.sha256
+          gh release edit "v$LAKE_RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --target master --draft=false --latest
           gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$LAKE_RELEASE_VERSION" > /tmp/lake-published.json
           python3 - <<'PY'
           import json, pathlib
@@ -47,3 +49,5 @@ jobs:
               assert a['size'] == (pathlib.Path('release-assets/macos') / a['name']).stat().st_size
           print('Published master release with four verified Apple Silicon assets')
           PY
+          # Only a temporary asset tag is used; no release branches or PR banners are created.
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$GITHUB_REF_NAME"

@@ -1,4 +1,7 @@
-原生 macOS 客户端，内置当前 Go 后端与 React 工作台，仅支持 Apple Silicon（M 系列）arm64，macOS 13 及以上。
+Lake 0.3.1：原生 macOS 客户端，内置当前 Go 后端与 React 工作台，仅支持 Apple Silicon（M 系列）arm64，macOS 13 及以上。
+
+- 修复 macOS 客户端点击“新建资源”“新建目录”没有反应的问题；鼠标和键盘均可打开创建界面。
+- 客户端复用已有 Web 服务时也能使用创建菜单，并可保留独立服务进行客户端更新。
 
 - 右上角新增更新检测图标，启动时及每 5 分钟检查 Clean-Lakes/Lake 的 master 正式 Release。
 - 标题栏与侧栏、工作台融为一体，右上角原生更新入口在复用旧 Web 服务时也始终可见。
