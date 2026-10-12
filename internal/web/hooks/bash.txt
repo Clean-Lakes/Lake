@@ -1,0 +1,5 @@
+__lake_prompt() { local __lake_status=$?; __lake_recording=; printf '\033]9003;%s;%s\007' "$__lake_status" "$PWD"; }
+__lake_preexec() { case "$BASH_COMMAND" in __lake_*|*LAKE_DONE_*|*LAKE_READY_*|*9003*) return;; esac; if [ -z "$__lake_managed" ] && [ -z "$__lake_recording" ]; then __lake_recording=1; printf '\033]9004;%s\007' "$BASH_COMMAND"; fi; }
+PROMPT_COMMAND=__lake_prompt
+trap '__lake_preexec' DEBUG
+PS1='' PS2=''

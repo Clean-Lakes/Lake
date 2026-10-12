@@ -1,0 +1,18 @@
+function __lake_preexec --on-event fish_preexec
+ if not set -q __lake_managed; and not string match -q '__lake_*' -- $argv[1]
+  printf '\033]9004;%s\007' $argv[1]
+ end
+end
+function fish_prompt
+ set -l __lake_status $status
+ printf '\033]9003;%s;%s\007' $__lake_status $PWD
+ if set -q __lake_interactive
+  set_color magenta
+  printf '[%s@%s' (whoami) (hostname -s)
+  set_color normal
+  printf ' %s]' (prompt_pwd)
+  if test (id -u) = 0; printf '# '; else; printf '$ '; end
+ end
+end
+function fish_right_prompt
+end

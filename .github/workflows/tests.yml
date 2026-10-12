@@ -1,5 +1,8 @@
 name: Lake verification
-on: [push, pull_request]
+on:
+  push:
+    branches-ignore: ['codex/lake-macos-release-*']
+  pull_request:
 permissions:
   contents: read
 jobs:

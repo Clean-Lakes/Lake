@@ -66,7 +66,10 @@ import LakeUpdateCore
             if self.backend.process == nil {
                 throw UpdateError.message("请先退出独立运行的 lake web 服务，再重新打开客户端更新。")
             }
-            return InstallContext(pid: self.backend.process?.processIdentifier ?? 0, home: self.backend.home, data: self.backend.dataDirectory)
+            let context = InstallContext(pid: self.backend.process?.processIdentifier ?? 0, home: self.backend.home, data: self.backend.dataDirectory)
+            await self.backend.stop()
+            guard self.backend.process?.isRunning != true else { throw UpdateError.message("后端尚未退出，更新未安装，请稍后重试。") }
+            return context
         }
         writeReceiptPID()
         Task {
@@ -203,13 +206,23 @@ import LakeUpdateCore
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if terminating { return .terminateNow }
+        guard backend.process?.isRunning == true else { return .terminateNow }
+        if terminating { return .terminateCancel }
         terminating = true
+        // AppKit's terminateLater uses a modal run loop which can starve Swift actor tasks.
+        // Cancel this request, finish shutdown on the normal run loop, then terminate synchronously.
         Task {
             await backend.stop()
-            sender.reply(toApplicationShouldTerminate: true)
+            terminating = false
+            if backend.process?.isRunning != true { sender.terminate(nil) }
+            else {
+                let alert = NSAlert()
+                alert.messageText = "Lake 后端正在退出"
+                alert.informativeText = "后台操作尚未结束，请稍后再退出。"
+                alert.beginSheetModal(for: window, completionHandler: nil)
+            }
         }
-        return .terminateLater
+        return .terminateCancel
     }
     private func sameOrigin(_ url: URL?) -> Bool {
         guard let url, let origin else { return false }

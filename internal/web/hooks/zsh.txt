@@ -1,0 +1,5 @@
+__lake_preexec() { if [[ -z "$__lake_managed" && "$1" != __lake_* ]]; then printf '\033]9004;%s\007' "$1"; fi }
+__lake_precmd() { local __lake_status=$?; printf '\033]9003;%s;%s\007' "$__lake_status" "$PWD"; }
+preexec_functions=(__lake_preexec)
+precmd_functions=(__lake_precmd)
+PS1='' PS2=''

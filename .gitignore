@@ -79,6 +79,7 @@ agent/test-results/
 
 # Reconstructed AI prompt constants are intentional source assets.
 !/internal/ai/prompts/*.txt
+!/internal/web/hooks/*.txt
 /web-agent/dist/
 /web-agent/web/dist/
 /assets/web/dist/
