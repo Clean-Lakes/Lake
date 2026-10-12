@@ -62,7 +62,10 @@ func TestRepeatedUnchangedBackgroundPollingFinishesTurn(t *testing.T) {
 	})
 	defer closeModel()
 	e := engineFor(t, m, nil)
-	e.shells.Store("case:running-job", &shellJob{id: "running-job", session: "case", status: "running", done: make(chan struct{}), cancel: func() {}})
+	backgroundDone := make(chan struct{})
+	// 合成任务没有实际 worker；测试结束时显式完成它，让 Shutdown 可以等待任务收尾。
+	t.Cleanup(func() { close(backgroundDone) })
+	e.shells.Store("case:running-job", &shellJob{id: "running-job", session: "case", status: "running", done: backgroundDone, cancel: func() {}})
 	if err := e.Chat(context.Background(), "case", "查看后台进度", nil); err != nil {
 		t.Fatal(err)
 	}
