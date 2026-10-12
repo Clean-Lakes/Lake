@@ -22,13 +22,15 @@ type session struct {
 	decision chan bool
 }
 type Engine struct {
-	mu       sync.Mutex
-	sessions map[string]*session
-	Dir      string
-	Bridge   Bridge
-	Emit     func(Event)
-	tunnels  sync.Map
-	shells   sync.Map
+	mu           sync.Mutex
+	sessions     map[string]*session
+	Dir          string
+	Bridge       Bridge
+	Emit         func(Event)
+	tunnels      sync.Map
+	shells       sync.Map
+	shellMu      sync.Mutex
+	shellsClosed bool
 }
 
 func New(dir string, bridge Bridge, emit func(Event)) (*Engine, error) {
@@ -858,9 +860,17 @@ func (e *Engine) ExtractPreset(ctx context.Context, id string) (Preset, error) {
 	return p, err
 }
 func (e *Engine) Shutdown() {
+	// 退出或更新时先关闭后台任务准入，等待最终卡片持久化，避免退出后仍写数据目录。
+	e.shellMu.Lock()
+	e.shellsClosed = true
 	e.cancelShells("")
+	var shellDone []<-chan struct{}
+	e.shells.Range(func(_, value any) bool {
+		shellDone = append(shellDone, value.(*shellJob).done)
+		return true
+	})
+	e.shellMu.Unlock()
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	for _, s := range e.sessions {
 		s.mu.Lock()
 		if s.cancel != nil {
@@ -868,12 +878,16 @@ func (e *Engine) Shutdown() {
 		}
 		s.mu.Unlock()
 	}
+	e.mu.Unlock()
 	e.tunnels.Range(func(_, v any) bool {
 		if cancel, ok := v.(context.CancelFunc); ok {
 			cancel()
 		}
 		return true
 	})
+	for _, done := range shellDone {
+		<-done
+	}
 }
 
 func (e *Engine) Compact(ctx context.Context, id string) error {

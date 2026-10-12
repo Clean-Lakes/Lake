@@ -19,6 +19,11 @@ type shellJob struct {
 }
 
 func (e *Engine) startShell(c Config, a map[string]any, command string) (any, error) {
+	e.shellMu.Lock()
+	defer e.shellMu.Unlock()
+	if e.shellsClosed {
+		return nil, context.Canceled
+	}
 	id := uid()
 	session := str(a["__session"])
 	count := 0
@@ -39,6 +44,7 @@ func (e *Engine) startShell(c Config, a map[string]any, command string) (any, er
 	e.shellCard(session, id, "", "background_running", true)
 	e.shells.Store(session+":"+id, j)
 	go func() {
+		defer close(j.done)
 		result, err := e.execRuntime(ctx, c, a, []string{"/bin/sh", "-c", command}, "")
 		cancel()
 		j.mu.Lock()
@@ -49,7 +55,6 @@ func (e *Engine) startShell(c Config, a map[string]any, command string) (any, er
 			j.status = "failed"
 		}
 		j.mu.Unlock()
-		close(j.done)
 		content := js(result)
 		if err != nil {
 			content = err.Error()
@@ -123,6 +128,11 @@ func (e *Engine) cancelShells(id string) {
 
 // trackBridgeShell gives persistent PTY jobs the same wait/output/kill contract as container jobs.
 func (e *Engine) trackBridgeShell(session string, result any, a map[string]any) (any, error) {
+	e.shellMu.Lock()
+	defer e.shellMu.Unlock()
+	if e.shellsClosed {
+		return nil, context.Canceled
+	}
 	data := obj(result)
 	entryID, terminalID := str(data["entry_id"]), str(data["terminal_id"])
 	if entryID == "" || terminalID == "" {
@@ -135,6 +145,7 @@ func (e *Engine) trackBridgeShell(session string, result any, a map[string]any) 
 	e.shells.Store(session+":"+id, job)
 	e.shellCard(session, id, "", "background_running", true)
 	go func() {
+		defer close(job.done)
 		result, err := e.Bridge(ctx, session, "terminal_wait_command", map[string]any{"terminal_id": terminalID, "entry_id": entryID}, false)
 		if code, hasExit := obj(result)["exitCode"]; err == nil && hasExit && code == nil {
 			err = errors.New("命令执行结果未确认，请核查终端实际状态")
@@ -149,7 +160,6 @@ func (e *Engine) trackBridgeShell(session string, result any, a map[string]any) 
 		}
 		status := job.status
 		job.mu.Unlock()
-		close(job.done)
 		content := js(result)
 		if err != nil {
 			content = err.Error()
