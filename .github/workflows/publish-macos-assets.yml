@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify the prepared release belongs to current master
         run: |
-          git fetch origin master
+          git fetch origin refs/heads/master:refs/remotes/origin/master
           python3 - <<'PY'
           import hashlib, json, pathlib, re, subprocess
           root = pathlib.Path('release-assets/macos')

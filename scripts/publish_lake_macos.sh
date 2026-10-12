@@ -5,7 +5,7 @@ lake_repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$lake_repo_root"
 [ "$(git branch --show-current)" = master ] || { echo '请从 master 发布' >&2; exit 1; }
 [ -z "$(git status --porcelain --untracked-files=no)" ] || { echo '请先提交发布代码' >&2; exit 1; }
-git fetch origin master
+git fetch origin refs/heads/master:refs/remotes/origin/master
 [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)" ] || { echo '请先将当前 master 推送到 origin/master' >&2; exit 1; }
 lake_version=$(cat VERSION)
 lake_artifacts="$lake_repo_root/dist/macos/$lake_version"
