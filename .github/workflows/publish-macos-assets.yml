@@ -1,0 +1,49 @@
+name: Publish signed Apple Silicon assets
+on:
+  push:
+    branches: ['codex/lake-macos-release-*']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the prepared release belongs to current master
+        run: |
+          git fetch origin master
+          python3 - <<'PY'
+          import hashlib, json, pathlib, re, subprocess
+          root = pathlib.Path('release-assets/macos')
+          meta = json.loads((root / 'release.json').read_text())
+          version = pathlib.Path('VERSION').read_text().strip()
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version)
+          assert meta['version'] == version
+          assert meta['commit'] == subprocess.check_output(['git', 'rev-parse', 'origin/master'], text=True).strip()
+          name = f'Lake-{version}-macos-arm64'
+          assert sorted(p.name for p in root.iterdir()) == sorted([name+'.zip', name+'.zip.sha256', name+'.dmg', name+'.dmg.sha256', 'release.json'])
+          for ext in ['zip', 'dmg']:
+              file = root / (name+'.'+ext)
+              expected = (root / (file.name+'.sha256')).read_text().split()
+              assert expected == [hashlib.sha256(file.read_bytes()).hexdigest(), file.name]
+          with open(__import__('os').environ['GITHUB_ENV'], 'a') as out:
+              out.write(f'LAKE_RELEASE_VERSION={version}\nLAKE_RELEASE_COMMIT={meta["commit"]}\n')
+          PY
+      - name: Publish verified packages on master
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Correct a newly created tag which a web form may have placed on its default branch.
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/v$LAKE_RELEASE_VERSION" -f sha="$LAKE_RELEASE_COMMIT" -F force=true
+          gh release edit "v$LAKE_RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --target master --latest
+          gh release upload "v$LAKE_RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --clobber release-assets/macos/*.zip release-assets/macos/*.dmg release-assets/macos/*.sha256
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$LAKE_RELEASE_VERSION" > /tmp/lake-published.json
+          python3 - <<'PY'
+          import json, pathlib
+          r = json.loads(pathlib.Path('/tmp/lake-published.json').read_text())
+          assert r['target_commitish'] == 'master' and not r['draft'] and not r['prerelease']
+          assert len(r['assets']) == 4
+          for a in r['assets']:
+              assert a['size'] == (pathlib.Path('release-assets/macos') / a['name']).stat().st_size
+          print('Published master release with four verified Apple Silicon assets')
+          PY
