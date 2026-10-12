@@ -18,7 +18,11 @@ done
 if ! gh auth status >/dev/null 2>&1; then
   exec python3 scripts/stage_lake_macos_release.py
 fi
-gh release create "v$lake_version" --repo Clean-Lakes/Lake --target master --title "Lake v$lake_version" \
-  --notes-file client/macos/RELEASE_NOTES.md \
+if ! gh release view "v$lake_version" --repo Clean-Lakes/Lake >/dev/null 2>&1; then
+  gh release create "v$lake_version" --repo Clean-Lakes/Lake --target master --draft --title "Lake v$lake_version" --notes-file client/macos/RELEASE_NOTES.md
+fi
+gh release upload "v$lake_version" --repo Clean-Lakes/Lake --clobber \
   "$lake_artifacts/arm64/"*.zip "$lake_artifacts/arm64/"*.zip.sha256 \
   "$lake_artifacts/arm64/"*.dmg "$lake_artifacts/arm64/"*.dmg.sha256
+gh api -X PATCH "repos/Clean-Lakes/Lake/git/refs/tags/v$lake_version" -f sha="$(git rev-parse HEAD)" -F force=false
+gh release edit "v$lake_version" --repo Clean-Lakes/Lake --target master --draft=false --latest --notes-file client/macos/RELEASE_NOTES.md
