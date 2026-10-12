@@ -17,7 +17,7 @@ if subprocess.check_output(["git", "branch", "--show-current"], text=True).strip
     raise SystemExit("Publish from master")
 if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=no"], text=True).strip():
     raise SystemExit("Commit release changes first")
-subprocess.run(["git", "fetch", "origin", "master"], check=True)
+subprocess.run(["git", "fetch", "origin", "refs/heads/master:refs/remotes/origin/master"], check=True)
 if commit != subprocess.check_output(["git", "rev-parse", "origin/master"], text=True).strip():
     raise SystemExit("Push master first")
 assets = root / "dist/macos" / version / "arm64"
