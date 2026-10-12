@@ -1,76 +1,93 @@
 #!/bin/sh
+# Current Go/React macOS client. Archived Electron: build_lake_legacy_desktop.sh.
 set -eu
 lake_repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$lake_repo_root"
 install_app=0
 if [ "${1:-}" = "--install" ] && [ "$#" -eq 1 ]; then install_app=1
-elif [ "$#" -ne 0 ]; then echo "用法: scripts/build_lake_desktop.sh [--install]" >&2; exit 2; fi
-[ "$(uname -s)" = Darwin ] || { echo "此脚本用于 macOS" >&2; exit 1; }
+elif [ "$#" -ne 0 ]; then echo '用法: scripts/build_lake_desktop.sh [--install]' >&2; exit 2; fi
+[ "$(uname -s)" = Darwin ] || { echo '此脚本用于 macOS' >&2; exit 1; }
 lake_identity='Lake Local Development Code Signing'
+security find-identity -v -p codesigning | grep -Fq "\"$lake_identity\"" || {
+  echo '缺少持久签名身份，请先运行 scripts/setup_lake_signing.sh' >&2; exit 1;
+}
+lake_version=$(cat VERSION)
+lake_arch=arm64
+[ "${LAKE_DESKTOP_ARCH:-arm64}" = arm64 ] || { echo '当前仅发布 Apple Silicon（M 系列）arm64 包' >&2; exit 2; }
+export GOARCH=arm64
+export GOOS=darwin CGO_ENABLED=1
+export CC="clang -arch $lake_arch"
 scripts/build_lake.sh
-npm exec --yes --package=node@24.14.0 -- node scripts/build_zcode_agent.mjs
-export PATH="$lake_repo_root/bin/zcode:$lake_repo_root/third_party/zcode/node_modules/.bin:$PATH"
-export ZCODE_TARGET_OS=darwin
-export ZCODE_TARGET_ARCH=arm64
-export ZCODE_ENV=production
-export ZCODE_PREVIEW_IDENTITY=0
-export ZCODE_ENABLE_MAC_SIGN=0
-# Original runtime assets, renderer, Main, Host and native workflow implementation.
-# Cross-platform remote assets may be prepared separately; local builds use the same native preparation.
-pnpm --dir third_party/zcode install --frozen-lockfile --ignore-scripts
-ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node third_party/zcode/node_modules/electron/install.js
-pnpm --dir third_party/zcode --filter @zcode/desktop prepare:runtime-assets
-pnpm --dir third_party/zcode --filter @zcode/desktop build:no-runtime-assets
-swift scripts/generate_lake_icon.swift third_party/zcode/packages/desktop/build/icon.png
-lake_iconset=$(mktemp -d)/lake.iconset
-mkdir -p "$lake_iconset"
+swift build --package-path client/macos --build-system native -c release --triple "$lake_arch-apple-macosx13.0"
+lake_swift_bin=$(swift build --package-path client/macos --build-system native -c release --triple "$lake_arch-apple-macosx13.0" --show-bin-path)
+lake_output="$lake_repo_root/dist/macos/$lake_version/$lake_arch"
+mkdir -p "$lake_output"
+# Stage outside Desktop/iCloud so Finder attributes cannot invalidate signing.
+lake_stage=$(mktemp -d "${TMPDIR:-/tmp}/lake-macos.XXXXXX")
+trap 'rm -rf "$lake_stage"' EXIT HUP INT TERM
+lake_app="$lake_stage/Lake.app"
+mkdir -p "$lake_app/Contents/MacOS" "$lake_app/Contents/Resources/licenses"
+cp "$lake_swift_bin/LakeDesktop" "$lake_app/Contents/MacOS/Lake"
+cp bin/lake "$lake_app/Contents/Resources/lake"
+cp client/macos/Resources/install-update.sh "$lake_app/Contents/Resources/"
+cp LICENSE-APACHE "$lake_app/Contents/Resources/licenses/Lake-APACHE"
+cp web-agent/THIRD_PARTY_NOTICES.md "$lake_app/Contents/Resources/"
+cp web-agent/licenses/* "$lake_app/Contents/Resources/licenses/"
+cat > "$lake_app/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.cleanlakes.lake.desktop</string>
+<key>CFBundleName</key><string>Lake</string>
+<key>CFBundleDisplayName</key><string>Lake</string>
+<key>CFBundleExecutable</key><string>Lake</string>
+<key>CFBundleShortVersionString</key><string>$lake_version</string>
+<key>CFBundleVersion</key><string>$lake_version</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleIconFile</key><string>Lake.icns</string>
+<key>LSMinimumSystemVersion</key><string>13.0</string>
+<key>NSHighResolutionCapable</key><true/>
+<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+</dict></plist>
+EOF
+swift scripts/generate_lake_icon.swift "$lake_stage/icon.png"
+lake_iconset="$lake_stage/Lake.iconset"
+mkdir "$lake_iconset"
 for lake_size in 16 32 128 256 512; do
-  sips -z "$lake_size" "$lake_size" third_party/zcode/packages/desktop/build/icon.png --out "$lake_iconset/icon_${lake_size}x${lake_size}.png" >/dev/null
+  sips -z "$lake_size" "$lake_size" "$lake_stage/icon.png" --out "$lake_iconset/icon_${lake_size}x${lake_size}.png" >/dev/null
   lake_double=$((lake_size * 2))
-  sips -z "$lake_double" "$lake_double" third_party/zcode/packages/desktop/build/icon.png --out "$lake_iconset/icon_${lake_size}x${lake_size}@2x.png" >/dev/null
+  sips -z "$lake_double" "$lake_double" "$lake_stage/icon.png" --out "$lake_iconset/icon_${lake_size}x${lake_size}@2x.png" >/dev/null
 done
-iconutil -c icns "$lake_iconset" -o third_party/zcode/packages/desktop/build/icon.icns
-rm -rf "$(dirname "$lake_iconset")"
-pnpm --dir third_party/zcode/packages/desktop exec electron-builder --config electron-builder.config.js --mac --arm64 --dir
-built_app_path="$lake_repo_root/third_party/zcode/packages/desktop/dist/mac-arm64/LAKE.app"
-[ -d "$built_app_path" ] || { echo "原生 LAKE 应用未生成" >&2; exit 1; }
-# Desktop/iCloud may re-add Finder attributes while signing; stage outside it first.
-build_dir="$HOME/Library/Application Support/LAKE/builds"
-mkdir -p "$build_dir"
-build_path="$build_dir/LAKE-$(date +%Y%m%d-%H%M%S)-$$.app"
-ditto --norsrc "$built_app_path" "$build_path"
-app_path="$build_path"
-resource_path="$app_path/Contents/Resources"
-node scripts/verify_lake_native_runtime.mjs "$app_path"
-ELECTRON_RUN_AS_NODE=1 "$app_path/Contents/MacOS/LAKE" scripts/verify_lake_native_runtime.mjs "$app_path"
-cp "$lake_repo_root/bin/lake" "$resource_path/lake"
-mkdir -p "$resource_path/licenses"
-cp "$lake_repo_root/docs/third-party-notices.md" "$resource_path/third-party-notices.md"
-cp "$lake_repo_root/docs/licenses/"* "$resource_path/licenses/"
-cp "$lake_repo_root/LICENSE-APACHE" "$resource_path/licenses/lake-LICENSE-APACHE"
-chmod -R u+w "$app_path"
-xattr -cr "$app_path"
-python3 scripts/sign_lake_native.py "$app_path" "$lake_identity"
-codesign --verify --deep --strict "$app_path"
-# Verify the signed launcher resolves the installed runtime, without loading
-# real provider preferences or user data.
-smoke_home=$(mktemp -d)
-if ! LAKE_HOME="$smoke_home" "$resource_path/lake" --help >/dev/null; then
-  rm -rf "$smoke_home"
-  echo "安装包 CLI 启动验收失败" >&2
-  exit 1
-fi
-rm -rf "$smoke_home"
-echo "已构建原生客户端 $build_path"
+iconutil -c icns "$lake_iconset" -o "$lake_app/Contents/Resources/Lake.icns"
+chmod -R u+w "$lake_app"
+xattr -cr "$lake_app"
+codesign --force --timestamp=none --sign "$lake_identity" --identifier com.cleanlakes.lake.desktop "$lake_app"
+codesign --verify --deep --strict "$lake_app"
+"$lake_app/Contents/Resources/lake" --version
+lake_name="Lake-$lake_version-macos-$lake_arch"
+ditto --norsrc -c -k --keepParent "$lake_app" "$lake_output/$lake_name.zip"
+(cd "$lake_output" && shasum -a 256 "$lake_name.zip" > "$lake_name.zip.sha256")
+mkdir "$lake_stage/dmg"
+ditto --norsrc "$lake_app" "$lake_stage/dmg/Lake.app"
+ln -s /Applications "$lake_stage/dmg/Applications"
+hdiutil create -quiet -volname "Lake $lake_version" -srcfolder "$lake_stage/dmg" -format UDZO -ov "$lake_output/$lake_name.dmg"
+(cd "$lake_output" && shasum -a 256 "$lake_name.dmg" > "$lake_name.dmg.sha256")
+lake_builds="$HOME/Library/Application Support/Lake/builds"
+mkdir -p "$lake_builds"
+lake_saved_app="$lake_builds/Lake-$lake_version-$lake_arch-$(date +%Y%m%d-%H%M%S)-$$.app"
+ditto --norsrc "$lake_app" "$lake_saved_app"
+codesign --verify --deep --strict "$lake_saved_app"
+# Desktop/iCloud can add Finder attributes after signing. Keep the runnable app outside it.
+if [ -e "$lake_output/Lake.app" ] || [ -L "$lake_output/Lake.app" ]; then rm -rf "$lake_output/Lake.app"; fi
+ln -s "$lake_saved_app" "$lake_output/Lake.app"
+echo "已构建 $lake_output/Lake.app 与 ZIP/DMG 安装包"
 if [ "$install_app" -eq 1 ]; then
-  install_path="$HOME/Applications/Lake.app"
+  lake_install="$HOME/Applications/Lake.app"
   mkdir -p "$HOME/Applications"
-  if [ -e "$install_path" ]; then
-    backup_path="$HOME/Applications/Lake.backup.$(date +%Y%m%d-%H%M%S)-$$.app"
-    mv "$install_path" "$backup_path"
-    echo "原应用已保留在 $backup_path"
+  if [ -e "$lake_install" ]; then
+    mv "$lake_install" "$HOME/Applications/Lake.backup.$(date +%Y%m%d-%H%M%S)-$$.app"
   fi
-  ditto --norsrc "$build_path" "$install_path"
-  codesign --verify --deep --strict "$install_path"
-  echo "已安装 $install_path"
+  ditto --norsrc "$lake_app" "$lake_install"
+  codesign --verify --deep --strict "$lake_install"
+  echo "已安装 $lake_install"
 fi

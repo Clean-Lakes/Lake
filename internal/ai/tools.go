@@ -1,0 +1,561 @@
+package ai
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"regexp"
+	"strings"
+	"time"
+)
+
+func asset(c Config, ref string) (Asset, error) {
+	for _, a := range c.Assets {
+		if a.ID == ref || assetAlias(a.ID) == ref {
+			return a, nil
+		}
+	}
+	return Asset{}, errors.New("asset not available in this session; call list_assets")
+}
+func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a map[string]any) (string, string, error) {
+	risk := "readonly"
+	switch name {
+	case "kill_shell":
+		risk = "write"
+	case "shell", "terminal_execute_command":
+		risk = "write"
+	case "ssh_terminal_send", "terminal_send_input", "ssh_terminal_key", "terminal_send_key", "delete":
+		risk = "dangerous"
+	case "close_ssh_terminal", "open_ssh_tunnel", "close_ssh_tunnel", "scp_transfer", "docker_container_action", "write", "edit", "multi_edit", "append":
+		risk = "write"
+	case "open_ssh_terminal", "ssh_terminal_expect", "terminal_expect":
+		if str(a["initial_input"])+str(a["input"]) != "" {
+			risk = "dangerous"
+		}
+	case "execute_sql":
+		if !readonlySQL(str(a["sql"])) {
+			risk = "write"
+		}
+	case "redis_command":
+		if !redisReadOnly(str(a["command"])) {
+			risk = "write"
+		}
+	}
+	if e.Bridge != nil {
+		v, err := e.bridgeCall(ctx, id, "policy", map[string]any{"name": name, "arguments": a, "terminal_id": c.TerminalID}, false)
+		if err != nil {
+			return "", "", err
+		}
+		p := obj(v)
+		if r := str(p["risk"]); r != "" {
+			if name == "shell" || name == "terminal_execute_command" || r == "dangerous" {
+				risk = r
+			}
+		}
+		return risk, str(p["fingerprint"]), nil
+	}
+	return risk, hash(js(c.Assets) + js(a)), nil
+}
+func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (result any, err error) {
+	if c.Model.Key != "" && (strings.Contains(call.Arguments, c.Model.Key) || strings.Contains(call.Arguments, strings.Trim(js(c.Model.Key), "\""))) {
+		return nil, errors.New("tool arguments cannot contain model credentials")
+	}
+	a, err := args(call)
+	if err != nil {
+		return nil, err
+	}
+	for k := range a {
+		if strings.HasPrefix(k, "__") {
+			return nil, errors.New("reserved tool argument")
+		}
+	}
+	if ref := str(a["asset_ref"]); ref != "" {
+		as, err := asset(c, ref)
+		if err != nil {
+			return nil, err
+		}
+		if ref != assetAlias(as.ID) {
+			return nil, errors.New("use asset_ref returned by list_assets, not the Lake resource id")
+		}
+	}
+	s.mu.Lock()
+	c.ReferencedAssets = validRemembered(c, append(c.ReferencedAssets, s.state.ReferencedAssetIDs...))
+	sessionForTools := s.state.View.Session
+	s.mu.Unlock()
+	found := false
+	for _, t := range e.sessionCatalog(ctx, sessionForTools, c) {
+		if t.Name == call.Name {
+			found = true
+			if err = validateTool(t, a); err != nil {
+				return nil, err
+			}
+			break
+		}
+	}
+	if !found {
+		return nil, errors.New("tool unavailable in selected profile")
+	}
+	s.mu.Lock()
+	sessionID := s.state.View.Session
+	s.mu.Unlock()
+	risk, fingerprint, err := e.policy(ctx, sessionID, c, call.Name, a)
+	if err != nil {
+		return nil, err
+	}
+	target := "本机"
+	policyContext := map[string]any{}
+	if e.Bridge != nil {
+		p, pe := e.bridgeCall(ctx, sessionID, "policy", map[string]any{"name": call.Name, "arguments": a, "terminal_id": c.TerminalID}, false)
+		if pe != nil {
+			return nil, pe
+		}
+		if name := str(obj(p)["target"]); name != "" {
+			target = name
+		}
+		policyContext = obj(p)
+	}
+	ref := str(a["asset_ref"])
+	if ref == "" {
+		ref = c.AssetRef
+	}
+	if ref != "" {
+		as, e := asset(c, ref)
+		if e != nil {
+			return nil, e
+		}
+		target = as.Name
+		if str(policyContext["asset_ref"]) == "" {
+			policyContext["asset_ref"] = as.ID
+			policyContext["runtime"] = as.Kind
+		}
+	}
+	if str(policyContext["runtime"]) == "" {
+		policyContext["runtime"] = hostArguments(c, a)["runtime"]
+	}
+	// Always compute this from validated tool arguments, never a model flag.
+	for _, key := range []string{"command", "input", "initial_input"} {
+		if CatastrophicCommand(str(a[key])) {
+			policyContext["catastrophic"] = true
+			risk = "dangerous"
+		}
+	}
+	if call.Name == "delete" && CatastrophicDelete(str(a["path"])) {
+		policyContext["catastrophic"] = true
+		risk = "dangerous"
+	}
+	kind, err := approvalKind(c, call.Name, risk, policyContext)
+	if err != nil {
+		return nil, err
+	}
+	var preview map[string]any
+	if strings.Contains(" write edit multi_edit append delete ", " "+call.Name+" ") {
+		preview, err = e.filePreview(ctx, c, call.Name, a)
+		if err != nil {
+			return nil, err
+		}
+	}
+	cardID := uid()
+	s.mu.Lock()
+	s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "operation", Title: call.Name, Data: map[string]any{"arguments": a, "target": target, "risk": risk, "call_id": call.ID}, Status: "running", At: timestamp()})
+	e.notify(s, "toolCall", map[string]any{"name": call.Name})
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for i := range s.state.View.Cards {
+			card := &s.state.View.Cards[i]
+			if card.ID == cardID {
+				card.Status = "completed"
+				if err != nil {
+					card.Status = "failed"
+					card.Content = redact(err.Error(), c)
+				} else {
+					card.Content = redact(js(result), c)
+					if len(card.Content) > 32000 {
+						card.Content = card.Content[:32000] + " [TRUNCATED]"
+					}
+				}
+			}
+		}
+		e.notify(s, "operation", map[string]any{"card_id": cardID})
+	}()
+	approved := kind == "" && (risk != "readonly" || policyContext["needsTerminal"] == true)
+	if kind != "" {
+		decision := make(chan bool, 1)
+		approval := &Approval{ID: uid(), Call: call, Target: target, Risk: risk, Kind: kind, NeedsTerminal: policyContext["needsTerminal"] == true, Fingerprint: fingerprint, Preview: preview, ResourceID: str(policyContext["asset_ref"]), TerminalID: str(policyContext["terminal_id"]), TerminalGeneration: str(policyContext["generation"]), TerminalVersion: num(policyContext["terminalVersion"], 0)}
+		if risk == "dangerous" {
+			approval.Confirmation = "执行 " + target
+		}
+		s.mu.Lock()
+		s.state.View.Pending = approval
+		for i := range s.state.View.Cards {
+			if s.state.View.Cards[i].ID == cardID {
+				s.state.View.Cards[i].Status = "pending"
+			}
+		}
+		s.state.View.Status = "waiting_approval"
+		s.decision = decision
+		err = e.save(s)
+		e.notify(s, "approval", approval)
+		s.mu.Unlock()
+		if err != nil {
+			return nil, err
+		}
+		select {
+		case approved = <-decision:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		s.mu.Lock()
+		s.state.View.Pending = nil
+		for i := range s.state.View.Cards {
+			if s.state.View.Cards[i].ID == cardID {
+				s.state.View.Cards[i].Status = "running"
+			}
+		}
+		s.state.View.Status = "running"
+		s.decision = nil
+		err = e.save(s)
+		s.mu.Unlock()
+		if err != nil {
+			return nil, err
+		}
+		if !approved {
+			return nil, errors.New("user rejected this tool call")
+		}
+		_, current, err := e.policy(ctx, sessionID, c, call.Name, a)
+		if err != nil {
+			return nil, err
+		}
+		if current != fingerprint {
+			return nil, errors.New("target or terminal context changed; approval expired")
+		}
+		if kind == "adopt_terminal" {
+			if _, err = e.bridgeCall(ctx, sessionID, "adopt_terminal", map[string]any{"terminal_id": policyContext["terminal_id"], "generation": policyContext["generation"]}, true); err != nil {
+				return nil, err
+			}
+		}
+		if err = e.rememberApproved(s, c, str(policyContext["asset_ref"])); err != nil {
+			return nil, err
+		}
+	}
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch call.Name {
+	case "list_assets":
+		re, err := regexp.Compile("(?i)" + str(a["pattern"]))
+		if err != nil {
+			return nil, errors.New("invalid asset filter regex")
+		}
+		list := []any{}
+		for _, as := range c.Assets {
+			if c.Permissions != nil && c.Permissions.BlockUnreferencedAssets {
+				allowed := false
+				for _, ref := range c.ReferencedAssets {
+					allowed = allowed || ref == as.ID
+				}
+				if !allowed {
+					continue
+				}
+			}
+			info := map[string]any{"asset_ref": assetAlias(as.ID), "name": as.Name, "type": as.Kind, "path": str(as.Settings["path"]), "db_type": str(as.Settings["driver"])}
+			if host := str(as.Settings["host"]); host != "" {
+				info["host"] = host
+			}
+			if as.SSH != nil {
+				info["host"] = as.SSH.Host
+			}
+			if r := str(as.Settings["ssh_asset_ref"]); r != "" {
+				info["ssh_asset_ref"] = assetAlias(r)
+			}
+			if re.MatchString(js(info)) {
+				list = append(list, info)
+			}
+		}
+		return list, nil
+	case "render_chart":
+		labels := arr(a["labels"])
+		if len(labels) == 0 || len(labels) > 1000 {
+			return nil, errors.New("chart labels must contain 1..1000 items")
+		}
+		series := arr(a["series"])
+		if len(series) == 0 {
+			series = []any{map[string]any{"values": a["values"]}}
+		}
+		for _, x := range series {
+			if len(arr(obj(x)["values"])) != len(labels) {
+				return nil, errors.New("chart values must match labels")
+			}
+		}
+		s.mu.Lock()
+		s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "chart", Title: str(a["title"]), Data: a, Status: "completed", At: timestamp()})
+		s.mu.Unlock()
+		return map[string]any{"rendered": true}, nil
+	case "list_db_objects", "db_table_ddl", "execute_sql":
+		return e.database(ctx, c, call.Name, a)
+	case "redis_command":
+		return e.redis(ctx, c, a)
+	case "list_docker_containers", "docker_container_logs", "docker_container_action":
+		return e.docker(ctx, c, call.Name, a)
+	case "open_ssh_tunnel", "close_ssh_tunnel", "scp_transfer":
+		return e.transfer(ctx, sessionID, c, call.Name, a)
+	case "shell":
+		command := str(a["command"])
+		bridgeArgs := hostArguments(c, a)
+		targetRuntime := str(bridgeArgs["runtime"])
+		if e.Bridge != nil && targetRuntime != "container" {
+			return e.bridgeCall(ctx, sessionID, "runtimeCommandExec", bridgeArgs, approved)
+		}
+		if risk == "readonly" && e.Bridge != nil {
+			value, err := e.bridgeCall(ctx, sessionID, "policy", map[string]any{"name": call.Name, "arguments": a, "terminal_id": c.TerminalID}, false)
+			if err != nil {
+				return nil, err
+			}
+			safe := str(obj(value)["safeCommand"])
+			if safe == "" {
+				return nil, errors.New("read-only execution requires a validated command")
+			}
+			command = safe
+		}
+		executionArgs := map[string]any{}
+		for k, v := range bridgeArgs {
+			executionArgs[k] = v
+		}
+		executionArgs["__session"] = sessionID
+		return e.command(ctx, c, executionArgs, command)
+	case "inspect_host":
+		if e.Bridge == nil {
+			return nil, errors.New("host session bridge unavailable")
+		}
+		value, err := e.bridgeCall(ctx, sessionID, "inspectHost", hostArguments(c, a), approved)
+		if err != nil {
+			return nil, err
+		}
+		data := obj(value)
+		if as, err := asset(c, str(data["asset_ref"])); err == nil {
+			data["asset_ref"] = assetAlias(as.ID)
+		}
+		return data, nil
+	case "wait_shell", "shell_output", "kill_shell":
+		return e.shellJob(ctx, sessionID, call.Name, a)
+	case "ls", "glob", "grep", "read", "edit", "multi_edit", "append", "write", "delete":
+		executionArgs := map[string]any{}
+		for k, v := range a {
+			executionArgs[k] = v
+		}
+		if preview != nil {
+			executionArgs["__expected_hash"] = hash(str(preview["before"]))
+			executionArgs["__expected_exists"] = preview["existed"]
+		}
+		return e.file(ctx, s, c, call.Name, executionArgs)
+	case "web_fetch", "web_search":
+		return e.web(ctx, call.Name, a)
+	default:
+		if e.Bridge == nil {
+			return nil, errors.New("terminal bridge unavailable")
+		}
+		if str(a["terminal_id"]) == "" && c.TerminalID != "" {
+			a["terminal_id"] = c.TerminalID
+		}
+		return e.terminal(ctx, sessionID, call.Name, a, approved)
+	}
+}
+func hostArguments(c Config, a map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range a {
+		out[k] = v
+	}
+	if str(out["asset_ref"]) == "" {
+		out["asset_ref"] = c.AssetRef
+	}
+	if str(out["runtime"]) == "" {
+		out["runtime"] = c.Runtime
+		if as, err := asset(c, str(out["asset_ref"])); err == nil {
+			out["runtime"] = as.Kind
+			if as.Kind == "docker" {
+				out["runtime"] = "container"
+			}
+		}
+	}
+	return out
+}
+
+func readonlySQL(sql string) bool {
+	s := strings.TrimSpace(strings.ToUpper(sql))
+	if strings.HasSuffix(s, ";") {
+		s = strings.TrimSuffix(s, ";")
+	}
+	if strings.ContainsAny(s, ";\\") || strings.Contains(s, "--") || strings.Contains(s, "/*") {
+		return false
+	}
+	if !strings.HasPrefix(s, "SELECT ") {
+		return false
+	}
+	for _, word := range []string{"INTO", "FOR UPDATE", "PG_", "DBLINK", "LOAD_FILE", "SLEEP(", "BENCHMARK("} {
+		if strings.Contains(s, word) {
+			return false
+		}
+	}
+	return true
+}
+func redisReadOnly(command string) bool {
+	parts, err := words(command)
+	if err != nil || len(parts) == 0 {
+		return false
+	}
+	switch strings.ToUpper(parts[0]) {
+	case "PING", "INFO", "GET", "MGET", "HGET", "HMGET", "HGETALL", "LRANGE", "LLEN", "SMEMBERS", "SCARD", "SISMEMBER", "ZRANGE", "ZSCORE", "ZCARD", "EXISTS", "TYPE", "TTL", "PTTL", "SCAN", "HSCAN", "SSCAN", "ZSCAN", "DBSIZE":
+		return true
+	}
+	return false
+}
+func words(s string) ([]string, error) {
+	result := []string{}
+	var b strings.Builder
+	quote := rune(0)
+	escape := false
+	started := false
+	for _, r := range s {
+		if escape {
+			b.WriteRune(r)
+			escape = false
+			started = true
+			continue
+		}
+		if r == '\\' {
+			escape = true
+			continue
+		}
+		if quote != 0 {
+			if r == quote {
+				quote = 0
+			} else {
+				b.WriteRune(r)
+			}
+			continue
+		}
+		if r == '\'' || r == '"' {
+			quote = r
+			started = true
+			continue
+		}
+		if r == ' ' || r == '\t' || r == '\n' {
+			if started {
+				result = append(result, b.String())
+				b.Reset()
+				started = false
+			}
+			continue
+		}
+		b.WriteRune(r)
+		started = true
+	}
+	if quote != 0 || escape {
+		return nil, fmt.Errorf("invalid quoted command")
+	}
+	if started {
+		result = append(result, b.String())
+	}
+	return result, nil
+}
+
+func (e *Engine) terminal(ctx context.Context, id, name string, a map[string]any, approved bool) (any, error) {
+	if (name != "terminal_expect" && name != "ssh_terminal_expect") || str(a["match"]) != "regex" {
+		return e.bridgeCall(ctx, id, name, a, approved)
+	}
+	if input := str(a["input"]); input != "" {
+		send := "ssh_terminal_send"
+		if name == "terminal_expect" {
+			send = "terminal_send_input"
+		}
+		if _, err := e.bridgeCall(ctx, id, send, a, approved); err != nil {
+			return nil, err
+		}
+	}
+	if len(arr(a["wait_for"])) == 0 {
+		a["match"] = "contains"
+		return e.bridgeCall(ctx, id, name, a, approved)
+	}
+	patterns := []*regexp.Regexp{}
+	for _, v := range arr(a["wait_for"]) {
+		p, err := regexp.Compile(str(v))
+		if err != nil {
+			return nil, errors.New("invalid terminal regex")
+		}
+		patterns = append(patterns, p)
+	}
+	readName := "ssh_terminal_read"
+	if name == "terminal_expect" {
+		readName = "read_terminal_screen"
+	}
+	ctx, cancel := context.WithTimeout(ctx, duration(a))
+	defer cancel()
+	timer := time.NewTicker(100 * time.Millisecond)
+	defer timer.Stop()
+	for {
+		value, err := e.bridgeCall(ctx, id, readName, a, false)
+		if err != nil {
+			return nil, err
+		}
+		if obj(value)["source"] == "historical" {
+			return nil, errors.New("terminal_disconnected: historical output cannot satisfy expect")
+		}
+		text := str(obj(value)["text"])
+		for _, p := range patterns {
+			if p.MatchString(text) {
+				snapshot := obj(value)
+				snapshot["matched"] = p.String()
+				snapshot["timed_out"] = false
+				return snapshot, nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			snapshot := obj(value)
+			snapshot["timed_out"] = true
+			return snapshot, ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func assetAlias(id string) string { return "a_" + hash(id)[:16] }
+func (e *Engine) bridgeCall(ctx context.Context, id, name string, a map[string]any, approved bool) (any, error) {
+	s, err := e.get(id)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	c := s.state.Config
+	s.mu.Unlock()
+	convert := func(input map[string]any) (map[string]any, error) {
+		out := map[string]any{}
+		for k, v := range input {
+			out[k] = v
+		}
+		if ref := str(out["asset_ref"]); ref != "" {
+			as, err := asset(c, ref)
+			if err != nil {
+				return nil, err
+			}
+			out["asset_ref"] = as.ID
+		}
+		return out, nil
+	}
+	out, err := convert(a)
+	if err != nil {
+		return nil, err
+	}
+	if nested, ok := a["arguments"].(map[string]any); ok {
+		out["arguments"], err = convert(nested)
+		if err != nil {
+			return nil, err
+		}
+	}
+	result, err := e.Bridge(ctx, id, name, out, approved)
+	if err == nil && a["run_in_background"] == true && (name == "runtimeCommandExec" || name == "terminal_execute_command") {
+		return e.trackBridgeShell(id, result, a)
+	}
+	return result, err
+}

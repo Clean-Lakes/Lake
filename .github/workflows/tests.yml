@@ -3,9 +3,8 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
-  typescript:
-    # Native PTY fixtures use the same macOS prebuilt assets as the desktop app.
-    runs-on: macos-latest
+  workbench:
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -13,31 +12,14 @@ jobs:
           node-version: 24.14.0
       - uses: pnpm/action-setup@v4
         with:
-          version: 10.33.2
-      - name: Build native source runtime
-        run: node scripts/build_zcode_agent.mjs
-      - name: Verify Lake and native integration
-        run: |
-          export PATH="$PWD/bin/zcode:$PWD/third_party/zcode/node_modules/.bin:$PATH"
-          pnpm --dir third_party/zcode --filter @zcode/lake test
-          pnpm --dir third_party/zcode exec tsx --test apps/zcode-cli/packages/lake/test/native-remote.test.ts
-          pnpm --dir third_party/zcode --filter @zcode/lake typecheck
-          pnpm --dir third_party/zcode --filter @zcode/lake lint
-          pnpm --dir third_party/zcode architecture:check
-      - name: Verify current frontend
-        working-directory: client/desktop/frontend
-        run: npm ci && npm test && npm run build
+          version: 10.33.4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.0'
-      - name: Verify desktop bridge
-        working-directory: client/desktop
-        run: GOWORK=off go test -race ./... && GOWORK=off go vet ./...
-  launcher:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25.0'
-      - run: GOWORK=off go test ./... && GOWORK=off go vet ./...
+      - run: pnpm --dir web-agent install --frozen-lockfile
+      - run: pnpm --dir web-agent test:frontend && pnpm --dir web-agent build:web
+      - run: mkdir -p assets/web/dist && cp -R web-agent/web/dist/. assets/web/dist/
+      - run: go test -race ./... && go vet ./...
+      - run: swift run --package-path client/macos --build-system native LakeUpdateTests
+      - run: swift build --package-path client/macos --build-system native --product LakeDesktop
+      - run: python3 scripts/test_lake_macos_installer.py

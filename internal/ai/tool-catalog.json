@@ -1,0 +1,826 @@
+[
+  {
+    "name": "list_assets",
+    "description": "List SSH, Docker, database, and Redis assets to obtain asset_ref before calling remote runtime tools. The returned asset_ref is a stable short alias; always copy it exactly, never invent one, and never pass the real asset id. If an older reference is rejected, call list_assets again and retry with a currently returned asset_ref. The canonical associated-SSH field is ssh_asset_ref. jump_asset_ref is only a legacy alias with the same value. asset_ref, ssh_asset_ref, and jump_asset_ref are internal tool identifiers only. Use them only for tool selection and tool arguments. Never expose short ids, refs, or aliases in user-facing answers. Refer to assets by their name instead. User-facing output rule: never print any ref field or ref value from this tool, including asset_ref, ssh_asset_ref, or jump_asset_ref. When mentioning a selected asset to the user, always use the asset name or another human-readable identifier, never a ref. If disambiguation is needed, use readable fields such as name + type + host + path, not ref values. If a Docker, database, or Redis asset has ssh_asset_ref, that target is remote and you must not treat it as the local machine. Strong Docker rule: never run local shell commands such as `docker ps`, `docker logs`, or `docker inspect` for a Docker asset returned by this tool. Use Docker remote tools with the Docker asset_ref. If host shell access is truly required, use the SSH asset_ref from ssh_asset_ref instead of local shell. Example remote Docker flow: call list_assets, copy its returned Docker asset_ref exactly into list_docker_containers, then copy the same asset_ref into docker_container_logs. For host-shell access, copy the returned ssh_asset_ref instead of using local shell. Always call with a JSON object containing a plain string field named pattern. Use {\"pattern\":\"\"} for all assets, or {\"pattern\":\"81|prod|mysql|redis\"} to filter. Never use {} and never use /regex/ literal syntax.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Required regular expression as a plain JSON string used to filter asset_ref, type, db_type, name, path, host, ssh_asset_ref, and jump_asset_ref. Use an empty string to return all assets. Example: \"prod|mysql|redis\". Do not use /.../ regex literal syntax."
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    }
+  },
+  {
+    "name": "render_chart",
+    "description": "Render a compact chart inside the conversation from values that are already known. Keep the input minimal. Supported types are bar, line, pie, and doughnut. Always provide labels. For a simple chart, provide values. Only use series when you need multiple data series. Colors and other visual details are generated automatically. Only call this tool at the end when writing the final summary or conclusion. Do not call it during intermediate analysis, exploration, or step-by-step reasoning.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Optional chart type. Defaults to bar.",
+          "enum": [
+            "bar",
+            "line",
+            "pie",
+            "doughnut"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "description": "Optional chart title shown above the chart."
+        },
+        "labels": {
+          "type": "array",
+          "description": "Required x-axis labels or slice labels.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "values": {
+          "type": "array",
+          "description": "Use this for a normal single-series chart. Length must match labels.",
+          "items": {
+            "type": "number"
+          }
+        },
+        "series": {
+          "type": "array",
+          "description": "Only use this when you need multiple data series instead of a single values array.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Optional series name."
+              },
+              "values": {
+                "type": "array",
+                "description": "Required numeric values. Length must match labels.",
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "required": [
+              "values"
+            ]
+          }
+        }
+      },
+      "required": [
+        "labels"
+      ]
+    }
+  },
+  {
+    "name": "list_db_objects",
+    "description": "List databases, schemas, tables, views, functions, and procedures from a database asset by calling dedicated metadata APIs. Use this tool whenever the user asks to inspect, search, or filter database/schema/table/view/function/procedure names. Do not use execute_sql to simulate this with SHOW, INFORMATION_SCHEMA, pg_catalog, sqlite_master, or similar metadata SQL when this tool can satisfy the request. Strong rule: when the target comes from a database asset, never fall back to local shell commands or local CLIs such as `mysql`, `psql`, `sqlcmd`, or `sqlite3` on the local machine. Use list_assets first to obtain a valid database asset_ref and copy it exactly into this call. If list_assets returned ssh_asset_ref for the database asset, that means the database is remote; host-level shell access must use that SSH asset_ref, not local shell. Always provide asset_ref. query_type is optional and should be set to database, schema, table, view, function, or procedure when the user is asking for one specific object category; omit it or use object to search across all supported categories. If the current database supports independent db + schema scope, then query_type=\"schema\" must include db, and query_type=\"table\"|\"view\"|\"function\"|\"procedure\"|\"object\" must include both db and schema. Otherwise, query_type=\"table\"|\"view\"|\"function\"|\"procedure\"|\"object\" must include schema. If required fields are missing, the tool returns a natural-language correction error; fix the tool call and retry. For engines that do not support an independent database namespace, database and schema queries are both resolved through schema metadata, and any provided db value is treated as schema context when needed. pattern is an optional plain regex string matched case-insensitively against name and type. timeout is optional in milliseconds, defaults to 20000 and is capped at 300000. The tool returns only name and type for each object, and truncates the result to at most 30000 characters.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "asset_ref": {
+          "type": "string",
+          "description": "Required database asset_ref returned by list_assets."
+        },
+        "query_type": {
+          "type": "string",
+          "description": "Optional object category: database, schema, table, view, function, procedure, or object. Use a specific category when the user is only asking for one type of object."
+        },
+        "db": {
+          "type": "string",
+          "description": "Optional database name in general. Required when the current database supports independent db + schema scope and query_type=\"schema\", and required together with schema when querying tables, views, functions, procedures, or object."
+        },
+        "schema": {
+          "type": "string",
+          "description": "Optional schema name in general. Required when querying tables, views, functions, procedures, or object. If the current database supports independent db + schema scope, pass it together with db."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Optional plain regex string matched case-insensitively against object name and type."
+        },
+        "timeout": {
+          "type": "number",
+          "description": "Optional timeout in milliseconds. Defaults to 20000 and is capped at 300000."
+        }
+      },
+      "required": [
+        "asset_ref"
+      ]
+    }
+  },
+  {
+    "name": "db_table_ddl",
+    "description": "Fetch table DDL from a database asset. Use this tool when the user asks for table structure or create-table SQL. Do not use execute_sql to simulate this with SHOW CREATE TABLE, INFORMATION_SCHEMA, pg_catalog, sqlite_master, or similar metadata SQL when this tool can satisfy the request. Strong rule: do not switch to local shell or a local database CLI for remote databases. Use list_assets first to obtain a valid database asset_ref and copy it exactly into this call. Always provide asset_ref, schema, and table. If the current database supports independent db + schema scope, you must also provide db explicitly. If required fields are missing, the tool returns a natural-language correction error; fix the tool call and retry. Output is truncated to at most 30000 characters. Never invent asset_ref values.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "asset_ref": {
+          "type": "string",
+          "description": "Required database asset_ref returned by list_assets."
+        },
+        "db": {
+          "type": "string",
+          "description": "Conditionally required database name. Required when the current database supports independent db + schema scope."
+        },
+        "schema": {
+          "type": "string",
+          "description": "Required schema name or logical namespace. It must be passed explicitly."
+        },
+        "table": {
+          "type": "string",
+          "description": "Required table name."
+        }
+      },
+      "required": [
+        "asset_ref",
+        "schema",
+        "table"
+      ]
+    }
+  },
+  {
+    "name": "execute_sql",
+    "description": "Execute SQL on a database asset by reusing a stable per-LLM-session database connection. Use this instead of local shell database CLIs such as `mysql`, `psql`, or `sqlcmd` whenever the target comes from a database asset. Use list_assets first to obtain a valid database asset_ref and copy it exactly into this call. If list_assets returned ssh_asset_ref for the database asset, the database is remote; do not switch to local shell. Always provide asset_ref and sql. Always provide schema explicitly. If the current database supports independent db + schema scope, you must also provide db explicitly. If required fields are missing, the tool returns a natural-language correction error; fix the tool call and retry. Query SQL rule: query statements that return rows must be executed one statement per execute_sql call, and the tool returns that query result. Non-query SQL rule: DML/DDL/script statements that do not return rows may be sent as multiple statements in one execute_sql call; they are split with the database dialect parser and executed sequentially on the same connection. Multi-statement execution stops at the first error or timeout. Previous statements are not automatically rolled back unless the SQL explicitly uses a transaction supported by the database. Unless the user explicitly requests a non-query SQL change, do not execute mutating or destructive SQL such as DELETE, DROP, TRUNCATE, ALTER, UPDATE, INSERT, GRANT, REVOKE, and similar statements. Any non-query SQL, including INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, TRUNCATE, GRANT and similar statements, requires explicit user confirmation before execution; multiple statements from the same batch are confirmed in a single approval prompt. Dangerous statements such as DELETE, DROP, and TRUNCATE are shown with stronger warning styling in the confirmation card. Do not use execute_sql to list databases, schemas, tables, views, functions, or procedures when list_db_objects can satisfy the request. Do not use execute_sql to fetch table structure or table DDL when db_table_ddl can satisfy the request. For engines that do not support an independent database namespace, any provided db value is treated as schema context and execution is sent with schema only. timeout is optional in milliseconds, defaults to 20000 and is capped at 300000. Output is truncated to at most 30000 characters. Never invent asset_ref values.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "asset_ref": {
+          "type": "string",
+          "description": "Required database asset_ref returned by list_assets."
+        },
+        "sql": {
+          "type": "string",
+          "description": "Required SQL text to execute. Query SQL must contain exactly one statement and returns result rows. Non-query DML/DDL/script SQL may contain multiple statements."
+        },
+        "db": {
+          "type": "string",
+          "description": "Optional database name in general. Required when the current database supports independent db + schema scope."
+        },
+        "schema": {
+          "type": "string",
+          "description": "Optional schema name in general. It must be passed explicitly."
+        },
+        "timeout": {
+          "type": "number",
+          "description": "Optional timeout in milliseconds. Defaults to 20000 and is capped at 300000."
+        }
+      },
+      "required": [
+        "asset_ref",
+        "sql"
+      ]
+    }
+  },
+  {
+    "name": "list_docker_containers",
+    "description": "List Docker containers for a Docker asset so the model can obtain the exact container name before running shell or file tools in a container. This is the primary discovery tool for remote Docker assets, including Docker-over-SSH assets. Strong rule: when the user refers to a Docker asset or a container on a server, never run local shell commands such as `docker ps`, `docker logs`, or `docker inspect` on the local machine. Use this tool first. If list_assets returned ssh_asset_ref for the Docker asset, that SSH asset_ref is only for host-level shell access; it never means local shell. Call list_assets, then copy its returned Docker asset_ref exactly into list_docker_containers. Always provide asset_ref from list_assets, and optionally provide pattern as a plain JSON string. Never invent asset_ref values, never pass the real asset id, and never use {} or /regex/ literal syntax.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "asset_ref": {
+          "type": "string",
+          "description": "Required Docker asset_ref returned by list_assets."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Optional regular expression as a plain JSON string used to filter name, image, state, and status. Use an empty string to return all containers."
+        }
+      },
+      "required": [
+        "asset_ref"
+      ]
+    }
+  },
+  {
+    "name": "docker_container_logs",
+    "description": "Fetch recent Docker container logs from a Docker asset. Use this instead of running local shell commands like `docker logs ...` whenever the target is a Docker asset. Use list_assets to get asset_ref and list_docker_containers to find the exact container name first. Copy the asset_ref returned by list_assets exactly into this call. If the Docker asset has ssh_asset_ref, the host is remote; do not switch to local shell for Docker inspection. Always provide asset_ref and the exact container_name. tail_lines defaults to 200 and is capped at 1000. Output is truncated to at most 30000 characters, similar to shell output limits. Set filter to a plain JSON regex string when you need to narrow results. Never invent asset_ref or container_name values.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "asset_ref": {
+          "type": "string",
+          "description": "Required Docker asset_ref returned by list_assets."
+        },
+        "container_name": {
+          "type": "string",
+          "description": "Required exact Docker container name, preferably selected from list_docker_containers."
+        },
+        "tail_lines": {
+          "type": "number",
+          "description": "Optional number of recent log lines to request. Defaults to 200 and is capped at 1000."
+        },
+        "show_stdout": {
+          "type": "boolean",
+          "description": "Optional. Include stdout logs. Defaults to true."
+        },
+        "show_stderr": {
+          "type": "boolean",
+          "description": "Optional. Include stderr logs. Defaults to true."
+        },
+        "timestamps": {
+          "type": "boolean",
+          "description": "Optional. Include timestamps when supported by the Docker log stream. Defaults to false."
+        },
+        "filter": {
+          "type": "string",
+          "description": "Optional regular expression as a plain JSON string used to keep only matching log lines. Do not use /.../ regex literal syntax."
+        }
+      },
+      "required": [
+        "asset_ref",
+        "container_name"
+      ]
+    }
+  },
+  {
+    "name": "docker_container_action",
+    "description": "Control a Docker container on a Docker asset. Use this for start, stop, pause, or restart. Use this instead of local shell commands such as `docker restart ...` whenever the target comes from a Docker asset. Copy the asset_ref returned by list_assets exactly into this call. This tool always requires explicit user confirmation before execution and will show a confirmation card. Always provide asset_ref from list_assets and the exact container_name from list_docker_containers. Never invent asset_ref or container_name values.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "asset_ref": {
+          "type": "string",
+          "description": "Required Docker asset_ref returned by list_assets."
+        },
+        "container_name": {
+          "type": "string",
+          "description": "Required exact Docker container name, preferably selected from list_docker_containers."
+        },
+        "action": {
+          "type": "string",
+          "description": "Required container action. Supported values: pause, restart, start, stop.",
+          "enum": [
+            "pause",
+            "restart",
+            "start",
+            "stop"
+          ]
+        }
+      },
+      "required": [
+        "asset_ref",
+        "container_name",
+        "action"
+      ]
+    }
+  },
+  {
+    "name": "redis_command",
+    "description": "Execute a Redis command on a Redis asset through the built-in Redis console channel. Use list_assets first to obtain a valid Redis asset_ref. Common read-only commands such as GET, MGET, HGETALL, LRANGE, SMEMBERS, SCAN, INFO, DBSIZE, TTL, TYPE, ZRANGE, XRANGE, and JSON.GET run directly. Non-whitelisted commands require explicit user confirmation and will show a confirmation card. Always provide asset_ref and command. db is optional and defaults to the asset default DB. timeout is optional in milliseconds, defaults to 20000 and is capped at 300000. Output is truncated to at most 30000 characters. Never invent asset_ref values.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "asset_ref": {
+          "type": "string",
+          "description": "Required Redis asset_ref returned by list_assets."
+        },
+        "command": {
+          "type": "string",
+          "description": "Required Redis command text to execute, for example GET user:1 or HGETALL session:abc."
+        },
+        "db": {
+          "type": "number",
+          "description": "Optional Redis database index. Defaults to the asset default DB or 0."
+        },
+        "timeout": {
+          "type": "number",
+          "description": "Optional timeout in milliseconds. Defaults to 20000 and is capped at 300000."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional short description shown in the confirmation card when the command is not on the read-only whitelist."
+        }
+      },
+      "required": [
+        "asset_ref",
+        "command"
+      ]
+    }
+  },
+  {
+    "name": "open_ssh_tunnel",
+    "description": {
+      "template_source": "Open one TCP tunnel through an SSH asset. Use list_assets first to obtain a valid SSH asset_ref. direction=local (default) listens on the ${On.displayName} machine and forwards through SSH to target_host:target_port as seen from the SSH server. direction=remote listens on the SSH server and forwards incoming connections to target_host:target_port as seen from the ${On.displayName} machine. bind_host defaults to 127.0.0.1 and bind_port defaults to 0 (automatic allocation) on the listening side. For a remote bind_host other than loopback, the SSH server normally needs GatewayPorts yes. Always use the returned bound_address because port 0 is replaced by the allocated port. The tunnel stays active until explicitly closed or the tool session ends. Never invent asset_ref values."
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "asset_ref": {
+          "type": "string",
+          "description": "Required SSH asset_ref returned by list_assets."
+        },
+        "target_host": {
+          "type": "string",
+          "description_template": {
+            "template_source": "Required forwarding destination. For direction=local, it must be reachable from the SSH server. For direction=remote, it must be reachable from the ${On.displayName} machine."
+          }
+        },
+        "target_port": {
+          "type": "number",
+          "description": "Required TCP port on target_host."
+        },
+        "direction": {
+          "type": "string",
+          "description_template": {
+            "template_source": "Tunnel direction. local means ${On.displayName} listens locally and forwards to the SSH-side target; remote means the SSH server listens remotely and forwards to the ${On.displayName}-side target. Defaults to local."
+          },
+          "enum": [
+            "local",
+            "remote"
+          ]
+        },
+        "bind_host": {
+          "type": "string",
+          "description": "Optional listen host on the listening side. Defaults to 127.0.0.1. A non-loopback remote listen usually requires GatewayPorts yes on the SSH server."
+        },
+        "bind_port": {
+          "type": "number",
+          "description": "Optional listen port from 0 to 65535. Defaults to 0, which dynamically allocates an available port."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional short purpose note for the tunnel, for example PostgreSQL admin or internal web service."
+        }
+      },
+      "required": [
+        "asset_ref",
+        "target_host",
+        "target_port"
+      ]
+    }
+  },
+  {
+    "name": "close_ssh_tunnel",
+    "description": "Close a previously opened local or remote SSH tunnel by tunnel_id. Always use the tunnel_id returned by open_ssh_tunnel. Use this when the tunnel is no longer needed so the listening port is released.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "tunnel_id": {
+          "type": "string",
+          "description": "Required tunnel_id returned by open_ssh_tunnel."
+        }
+      },
+      "required": [
+        "tunnel_id"
+      ]
+    }
+  },
+  {
+    "name": "scp_transfer",
+    "description": {
+      "template_source": "Start an SSH file transfer by reusing the current LLM session SSH connection. This tool supports both upload and download and accepts files or directories. Use list_assets first to obtain a valid SSH asset_ref. Always provide asset_ref, direction, local_path, and remote_path. local_path must always be an absolute path on the local machine running ${On.displayName}. When direction=upload, local_path is local source and remote_path is remote destination. When direction=download, remote_path is remote source and local_path is local destination. The tool returns immediately with a task_id for the whole batch transfer. If conflicting target files exist and overwrite is not true, a user confirmation card will appear. Never invent asset_ref values."
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "asset_ref": {
+          "type": "string",
+          "description": "Required SSH asset_ref returned by list_assets."
+        },
+        "direction": {
+          "type": "string",
+          "description": "Required transfer direction: upload or download."
+        },
+        "local_path": {
+          "type": "string",
+          "description": "Required absolute local path on the current machine. This is the source for upload and the destination for download."
+        },
+        "remote_path": {
+          "type": "string",
+          "description": "Required remote path on the SSH target. This is the destination for upload and the source for download."
+        },
+        "overwrite": {
+          "type": "boolean",
+          "description": "Optional. When true, conflicting target files are overwritten without asking again."
+        }
+      },
+      "required": [
+        "asset_ref",
+        "direction",
+        "local_path",
+        "remote_path"
+      ]
+    }
+  },
+  {
+    "name": "open_ssh_terminal",
+    "description": {
+      "template_source": "Open a new visible ${On.displayName} SSH terminal tab for an exposed SSH asset. Use non-interactive SSH and dedicated remote tools by default for ordinary work when no suitable interactive terminal is already open. Prefer the interactive SSH terminal workflow when a suitable terminal for the target is already open, when the user explicitly asks to operate interactively, or when the command truly requires interactive behavior such as prompts, password entry, menus, bastions, switches, pagers, full-screen CLIs, or visible user intervention. Before opening a new terminal, use list_ssh_terminals and reuse a suitable existing terminal when possible. Opening or taking control of an interactive terminal requires user confirmation unless the session policy allows silent command execution."
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "asset_ref": {
+          "type": "string",
+          "description_template": {
+            "template_source": "Session-scoped ${On.displayName} SSH asset_ref returned by list_assets."
+          }
+        },
+        "initial_input": {
+          "type": "string",
+          "description": "Optional text to send after the terminal is opened."
+        },
+        "append_enter": {
+          "type": "boolean",
+          "description": "If true, append a newline to initial_input when it does not already end with a line break."
+        }
+      },
+      "required": [
+        "asset_ref"
+      ]
+    }
+  },
+  {
+    "name": "ssh_terminal_send",
+    "description": {
+      "template_source": "Send raw input to a visible ${On.displayName} SSH terminal. This is interactive terminal input, not a non-interactive command executor."
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "terminal_id": {
+          "type": "string",
+          "description": "terminal_id returned by open_ssh_terminal or list_ssh_terminals."
+        },
+        "input": {
+          "type": "string",
+          "description": "Raw input to send to the terminal."
+        },
+        "append_enter": {
+          "type": "boolean",
+          "description": "Append a newline to input when it does not already end with a line break."
+        }
+      },
+      "required": [
+        "terminal_id",
+        "input"
+      ]
+    }
+  },
+  {
+    "name": "ssh_terminal_read",
+    "description": {
+      "template_source": "Read rendered text from a visible ${On.displayName} SSH terminal. The returned text is terminal buffer content, not raw SSH bytes."
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "terminal_id": {
+          "type": "string",
+          "description": "terminal_id returned by open_ssh_terminal or list_ssh_terminals."
+        },
+        "mode": {
+          "type": "string",
+          "description": "cursor_before reads N lines ending at the input cursor row; viewport reads the visible screen; tail reads the end of the scrollback buffer.",
+          "enum": [
+            "cursor_before",
+            "viewport",
+            "tail"
+          ]
+        },
+        "lines": {
+          "type": "number",
+          "description": "Number of terminal lines to return. Defaults to 80 and is capped."
+        },
+        "max_chars": {
+          "type": "number",
+          "description": "Maximum characters to return from the selected rendered text."
+        }
+      },
+      "required": [
+        "terminal_id"
+      ]
+    }
+  },
+  {
+    "name": "ssh_terminal_expect",
+    "description": "Optionally send input, then read the visible SSH terminal until wait_for matches, terminal output becomes idle for idle_ms, or timeout_ms is reached.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "terminal_id": {
+          "type": "string",
+          "description": "terminal_id returned by open_ssh_terminal or list_ssh_terminals."
+        },
+        "input": {
+          "type": "string",
+          "description": "Optional raw input to send before waiting."
+        },
+        "append_enter": {
+          "type": "boolean",
+          "description": "Append a newline to input when it does not already end with a line break."
+        },
+        "wait_for": {
+          "type": "array",
+          "description": "One or more strings or regex patterns to wait for in the rendered terminal text.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "match": {
+          "type": "string",
+          "description": "Match mode for wait_for. Defaults to contains.",
+          "enum": [
+            "contains",
+            "regex"
+          ]
+        },
+        "mode": {
+          "type": "string",
+          "description": "Rendered terminal read mode used while waiting. Defaults to cursor_before.",
+          "enum": [
+            "cursor_before",
+            "viewport",
+            "tail"
+          ]
+        },
+        "lines": {
+          "type": "number",
+          "description": "Number of rendered terminal lines to inspect. Defaults to 80."
+        },
+        "idle_ms": {
+          "type": "number",
+          "description": "Return after terminal output has changed and then stayed unchanged for this many milliseconds. Defaults to 1000."
+        },
+        "timeout_ms": {
+          "type": "number",
+          "description": "Maximum time to wait. Defaults to 30000."
+        },
+        "min_wait_ms": {
+          "type": "number",
+          "description": "Minimum time to wait before idle_ms can return. Defaults to 100."
+        },
+        "max_chars": {
+          "type": "number",
+          "description": "Maximum characters to return from the selected rendered text."
+        }
+      },
+      "required": [
+        "terminal_id"
+      ]
+    }
+  },
+  {
+    "name": "ssh_terminal_key",
+    "description": {
+      "template_source": "Send a common terminal key to a visible ${On.displayName} SSH terminal, such as ctrl_c, space, enter, arrows, or page keys."
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "terminal_id": {
+          "type": "string",
+          "description": "terminal_id returned by open_ssh_terminal or list_ssh_terminals."
+        },
+        "key": {
+          "type": "string",
+          "description": "Key to send.",
+          "enum": [
+            "enter",
+            "tab",
+            "esc",
+            "backspace",
+            "delete",
+            "ctrl_c",
+            "ctrl_d",
+            "ctrl_z",
+            "up",
+            "down",
+            "left",
+            "right",
+            "home",
+            "end",
+            "page_up",
+            "page_down",
+            "space"
+          ]
+        },
+        "count": {
+          "type": "number",
+          "description": "Optional repeat count, capped at 100."
+        }
+      },
+      "required": [
+        "terminal_id",
+        "key"
+      ]
+    }
+  },
+  {
+    "name": "list_ssh_terminals",
+    "description": {
+      "template_source": "List visible ${On.displayName} SSH terminals available to this tool session. Use this to find and preferentially reuse a suitable existing terminal before opening a new interactive terminal. Agent sessions may include already-opened user terminals; MCP sessions are restricted to terminals opened by that MCP bridge."
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "asset_ref": {
+          "type": "string",
+          "description": "Optional SSH asset_ref returned by list_assets to filter terminals by SSH asset."
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "name": "close_ssh_terminal",
+    "description": {
+      "template_source": "Close a visible ${On.displayName} SSH terminal tab or terminal session by terminal_id."
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "terminal_id": {
+          "type": "string",
+          "description": "terminal_id returned by open_ssh_terminal or list_ssh_terminals."
+        }
+      },
+      "required": [
+        "terminal_id"
+      ]
+    }
+  },
+  {
+    "name": "read_terminal_screen",
+    "description": "Read rendered text from the current visible enhanced terminal. This reads the real xterm buffer and remains available when command-block shell integration is degraded.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "cursor_before reads lines ending at the cursor, viewport reads the visible screen, and tail reads the end of scrollback.",
+          "enum": [
+            "cursor_before",
+            "viewport",
+            "tail"
+          ]
+        },
+        "lines": {
+          "type": "number",
+          "description": "Number of terminal lines to return. Defaults to 80 and is capped at 1000."
+        },
+        "max_chars": {
+          "type": "number",
+          "description": "Maximum returned characters. Defaults to 20000 and is capped at 100000."
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "name": "terminal_send_input",
+    "description": "Send raw input to the current visible enhanced terminal. This is interactive input rather than a command-block executor and requires user confirmation unless silent command execution is enabled.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "Raw input to send to the current terminal."
+        },
+        "append_enter": {
+          "type": "boolean",
+          "description": "Append a newline when input does not already end with one."
+        }
+      },
+      "required": [
+        "input"
+      ]
+    }
+  },
+  {
+    "name": "terminal_send_key",
+    "description": "Send a common key to the current visible enhanced terminal. Requires user confirmation unless silent command execution is enabled.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "Key to send.",
+          "enum": [
+            "enter",
+            "tab",
+            "esc",
+            "backspace",
+            "delete",
+            "ctrl_c",
+            "ctrl_d",
+            "ctrl_z",
+            "up",
+            "down",
+            "left",
+            "right",
+            "home",
+            "end",
+            "page_up",
+            "page_down",
+            "space"
+          ]
+        },
+        "count": {
+          "type": "number",
+          "description": "Optional repeat count, capped at 100."
+        }
+      },
+      "required": [
+        "key"
+      ]
+    }
+  },
+  {
+    "name": "terminal_expect",
+    "description": "Optionally send input to the current visible enhanced terminal, then wait until text matches, output becomes idle, or timeout is reached. Requires user confirmation because it can write terminal input.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "Optional raw input to send before waiting."
+        },
+        "append_enter": {
+          "type": "boolean",
+          "description": "Append a newline to input when needed."
+        },
+        "wait_for": {
+          "type": "array",
+          "description": "Strings or regex patterns to wait for.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "match": {
+          "type": "string",
+          "description": "Match mode. Defaults to contains.",
+          "enum": [
+            "contains",
+            "regex"
+          ]
+        },
+        "mode": {
+          "type": "string",
+          "description": "Screen read mode used while waiting.",
+          "enum": [
+            "cursor_before",
+            "viewport",
+            "tail"
+          ]
+        },
+        "lines": {
+          "type": "number",
+          "description": "Number of rendered lines to inspect. Defaults to 80."
+        },
+        "idle_ms": {
+          "type": "number",
+          "description": "Return after changed output stays idle for this duration."
+        },
+        "timeout_ms": {
+          "type": "number",
+          "description": "Maximum wait time. Defaults to 30000 and is capped at 300000."
+        },
+        "min_wait_ms": {
+          "type": "number",
+          "description": "Minimum wait before idle completion."
+        },
+        "max_chars": {
+          "type": "number",
+          "description": "Maximum returned characters."
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "name": "terminal_execute_command",
+    "description": "Execute a command in the current visible enhanced terminal and return its captured command-block output. This tool is only available while shell integration is active.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Command text to send to the current terminal session."
+        },
+        "intent": {
+          "type": "string",
+          "description": "Concise user-visible explanation shown in the confirmation UI."
+        },
+        "timeout_ms": {
+          "type": "number",
+          "description": "Optional maximum time to wait for the command block to finish."
+        },
+        "run_in_background": {
+          "type": "boolean",
+          "description": "Dispatch the command in the background when supported."
+        }
+      },
+      "required": [
+        "command",
+        "intent"
+      ]
+    }
+  }
+]

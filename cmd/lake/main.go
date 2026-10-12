@@ -1,255 +1,333 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
-	"github.com/Clean-Lakes/Lake/internal/legacykeychain"
+	webassets "github.com/Clean-Lakes/Lake/assets/web"
+	"github.com/Clean-Lakes/Lake/internal/ai"
+	"github.com/Clean-Lakes/Lake/internal/web"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
-// Set by scripts/build_lake.sh after the complete TypeScript runtime is verified.
-var agentRelease string
+var version = "0.3.0" // Release builds inject the repository VERSION through -ldflags.
 
-// The signed launcher has no agent, data, workflow or SSH execution implementation.
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "__legacy_keychain" {
-		if err := legacySecret(os.Args[2:]); err != nil {
-			os.Exit(1)
-		}
-		return
+	if os.Getenv("LAKE_SSH_ASKPASS") == "1" {
+		// stdout belongs to OpenSSH's helper pipe. Never emit credentials as errors.
+		code := 1
+		func() {
+			defer func() { recover() }()
+			if len(os.Args) == 2 && web.SSHAskpass(os.Args[1], os.Stdout) == nil {
+				code = 0
+			}
+		}()
+		os.Exit(code)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := launch(ctx, os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "lake:", err)
-		if e, ok := err.(*exec.ExitError); ok {
-			os.Exit(e.ExitCode())
-		}
+	if e := run(ctx, os.Args[1:]); e != nil {
+		fmt.Fprintln(os.Stderr, "lake:", e)
 		os.Exit(1)
 	}
 }
-func launch(ctx context.Context, args []string) error {
-	if agentRelease != "" {
-		return launchAgent(ctx, args)
+func run(ctx context.Context, args []string) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			if f, ok := p.(*web.Failure); ok {
+				err = f
+			} else {
+				err = errors.New("operation failed")
+			}
+		}
+	}()
+	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
+		fmt.Println(help)
+		return nil
 	}
-	self, err := os.Executable()
-	if err != nil {
-		return err
+	if args[0] == "--version" || args[0] == "version" {
+		fmt.Println("Lake " + version + " · Go backend · React frontend")
+		return nil
 	}
-	base := filepath.Dir(self)
-	runtimeDir := os.Getenv("LAKE_ZCODE_DIR")
-	if runtimeDir == "" {
-		runtimeDir = filepath.Join(base, "zcode")
-		// Electron 安装包将原生 CLI 放在 Resources/lake-runtime；源码目录
-		// 仍使用 bin/zcode，不能让安装后的签名启动器查找不存在的目录。
-		if _, err := os.Stat(runtimeDir); os.IsNotExist(err) {
-			packagedRuntime := filepath.Join(base, "lake-runtime")
-			if info, err := os.Stat(packagedRuntime); err == nil && info.IsDir() {
-				runtimeDir = packagedRuntime
+	if args[0] == "secrets" {
+		return migrate(args[1:])
+	}
+	if args[0] == "web" || args[0] == "serve" {
+		flags := flag.NewFlagSet("lake web", flag.ContinueOnError)
+		flags.SetOutput(os.Stderr)
+		port := flags.Int("port", envPort(), "localhost port (0 selects a free port)")
+		home := flags.String("home", lakeHome(), "private Lake data directory")
+		open := flags.Bool("open", false, "open authenticated browser")
+		if e := flags.Parse(args[1:]); e != nil {
+			if errors.Is(e, flag.ErrHelp) {
+				return nil
+			}
+			return e
+		}
+		if flags.NArg() != 0 {
+			return errors.New("unknown web argument")
+		}
+		if *port < 0 || *port > 65535 {
+			return errors.New("invalid web port")
+		}
+		os.Setenv("LAKE_HOME", *home)
+		dataDir := ""
+		flags.Visit(func(f *flag.Flag) {
+			if f.Name == "home" {
+				dataDir = filepath.Join(*home, "web-agent")
+			}
+		})
+		b, e := web.New(ctx, web.Options{Home: *home, DataDir: dataDir, Port: *port, DynamicPort: *port == 0, Open: *open || os.Getenv("LAKE_WEB_START_OPEN") == "1", Static: webassets.Files(), DevOrigin: os.Getenv("LAKE_WEB_DEV_ORIGIN")})
+		if e != nil {
+			return e
+		}
+		defer b.Close()
+		return b.Start()
+	}
+	if args[0] == "ai" {
+		flags := flag.NewFlagSet("lake ai", flag.ContinueOnError)
+		dir := flags.String("data", filepath.Join(lakeHome(), "web-agent", "ai"), "AI state directory")
+		if e := flags.Parse(args[1:]); e != nil {
+			return e
+		}
+		return ai.Serve(ctx, *dir, os.Stdin, os.Stdout)
+	}
+	if args[0] == "status" {
+		cmd := exec.CommandContext(ctx, "/usr/bin/uname", "-a")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+	flags := flag.NewFlagSet("lake "+args[0], flag.ContinueOnError)
+	home := flags.String("home", lakeHome(), "Lake home")
+	session := flags.String("session", "", "session ID")
+	message := flags.String("message", "", "user message")
+	if e := flags.Parse(args[1:]); e != nil {
+		return e
+	}
+	client, e := connect(*home)
+	if e != nil {
+		return e
+	}
+	switch args[0] {
+	case "open":
+		return openURL(client.origin + "/#token=" + url.QueryEscape(client.token))
+	case "doctor":
+		v, e := client.request(ctx, "GET", "/api/bootstrap", nil)
+		if e != nil {
+			return e
+		}
+		return printJSON(v)
+	case "models":
+		v, e := client.request(ctx, "GET", "/api/settings/model", nil)
+		if e != nil {
+			return e
+		}
+		return printJSON(v)
+	case "resources", "projects", "sessions":
+		rest := flags.Args()
+		sub := "list"
+		if len(rest) > 0 {
+			sub = rest[0]
+		}
+		if args[0] == "sessions" && len(rest) > 1 && (sub == "show" || sub == "delete") {
+			path := "/api/sessions/" + url.PathEscape(rest[1])
+			method := "DELETE"
+			if sub == "show" {
+				path += "/snapshot"
+				method = "GET"
+			}
+			v, e := client.request(ctx, method, path, nil)
+			if e != nil {
+				return e
+			}
+			return printJSON(v)
+		}
+		if sub != "list" {
+			return errors.New("use list, or sessions show/delete ID")
+		}
+		v, e := client.request(ctx, "GET", "/api/catalog", nil)
+		if e != nil {
+			return e
+		}
+		var catalog map[string]json.RawMessage
+		if json.Unmarshal(v, &catalog) != nil {
+			return errors.New("invalid catalog")
+		}
+		return printJSON(catalog[args[0]])
+	case "chat", "run":
+		if *session == "" {
+			return errors.New("use --session ID --message TEXT; create the session in lake web")
+		}
+		if *message == "" {
+			*message = strings.Join(flags.Args(), " ")
+		}
+		if strings.TrimSpace(*message) == "" {
+			return errors.New("message required")
+		}
+		path := "/api/sessions/" + url.PathEscape(*session)
+		if _, e = client.request(ctx, "POST", path+"/messages", map[string]any{"text": *message}); e != nil {
+			return e
+		}
+		timer := time.NewTicker(250 * time.Millisecond)
+		defer timer.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-timer.C:
+			}
+			raw, e := client.request(ctx, "GET", path+"/snapshot", nil)
+			if e != nil {
+				return e
+			}
+			var snap struct {
+				Session struct {
+					Status string `json:"status"`
+				} `json:"session"`
+				AI ai.View `json:"ai"`
+			}
+			if json.Unmarshal(raw, &snap) != nil {
+				return errors.New("invalid snapshot")
+			}
+			if snap.Session.Status == "waiting_approval" || snap.AI.Pending != nil {
+				return printJSON(raw)
+			}
+			if snap.Session.Status != "investigating" {
+				for i := len(snap.AI.Cards) - 1; i >= 0; i-- {
+					c := snap.AI.Cards[i]
+					if c.Type == "message" {
+						fmt.Println(c.Content)
+						return nil
+					}
+				}
+				return printJSON(raw)
 			}
 		}
 	}
-	node := filepath.Join(runtimeDir, "node")
-	if filepath.Ext(self) == ".exe" {
-		node += ".exe"
-	}
-	cli := filepath.Join(runtimeDir, "zcode.cjs")
-	for _, path := range []string{node, cli} {
-		if info, err := os.Stat(path); err != nil || info.IsDir() {
-			return fmt.Errorf("缺少 LAKE 原生运行时；先运行 scripts/build_zcode_agent.mjs")
-		}
-	}
-	entry := cli
-	if len(args) > 0 && args[0] == "data" {
-		entry = filepath.Join(runtimeDir, "lake-data.cjs")
-		args = args[1:]
-	} else if len(args) == 2 && args[0] == "secrets" && args[1] == "migrate" {
-		args = append([]string{"lake"}, args...)
-	}
-	argv := append([]string{"--disable-warning=ExperimentalWarning", entry}, args...)
-	command := exec.CommandContext(ctx, node, argv...)
-	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
-	for _, variable := range os.Environ() {
-		if !strings.HasPrefix(variable, "LAKE_EXPLICIT_SECRET_MIGRATION=") && !strings.HasPrefix(variable, "LAKE_SIGNED_LAUNCHER=") {
-			command.Env = append(command.Env, variable)
-		}
-	}
-	lakeHome := os.Getenv("LAKE_HOME")
-	if lakeHome == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return err
-		}
-		lakeHome = filepath.Join(homeDir, ".lake")
-	}
-	command.Env = append(command.Env, "LAKE_HOME="+lakeHome, "ZCODE_STORAGE_DIR="+lakeHome, "LAKE_SIGNED_LAUNCHER="+self)
-	if len(args) == 3 && args[0] == "lake" && args[1] == "secrets" && args[2] == "migrate" {
-		command.Env = append(command.Env, "LAKE_EXPLICIT_SECRET_MIGRATION=1")
-	}
-	command.Cancel = func() error { return command.Process.Signal(syscall.SIGTERM) }
-	return command.Run()
+	return errors.New("command unavailable in the Go workbench; use lake --help")
 }
 
-func launchAgent(ctx context.Context, args []string) error {
-	self, err := os.Executable()
-	if err != nil {
-		return err
+const help = `Lake — Go 运维工作台（运行无需 Node.js）
+  lake web [--open] [--port 4177] [--home PATH]   启动 React 工作台
+  lake serve [相同参数]                        启动同一个 Go 服务
+  lake open [--home PATH]                      打开已运行的工作台
+  lake doctor | models [--home PATH]           查看后端或模型设置
+  lake projects | resources | sessions list   查看工作台记录
+  lake sessions show/delete ID                查看或删除会话
+  lake chat --session ID --message TEXT        在已有会话发起 AI 轮次
+  lake status                                 查看本机系统
+  lake ai [--data PATH]                        Go AI stdio 接口
+  lake secrets migrate --manifest FILE [--home PATH]  显式旧凭据迁移
+旧版 TypeScript Agent 的独立 grants/tasks/workflow CLI 合约已归档，
+不会自动转发到旧 Node 运行时；其历史文件保留，不会自动导入新工作台。`
+
+func lakeHome() string {
+	if s := os.Getenv("LAKE_HOME"); s != "" {
+		return s
 	}
-	base := filepath.Dir(self)
-	runtimeDir := filepath.Join(base, filepath.FromSlash(agentRelease))
-	if err := verifyAgentRelease(runtimeDir); err != nil {
-		return err
-	}
-	node := filepath.Join(runtimeDir, "node")
-	entry := filepath.Join(runtimeDir, "dist", "surfaces", "cli.js")
-	command := exec.CommandContext(ctx, node, append([]string{entry}, args...)...)
-	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
-	for _, variable := range os.Environ() {
-		if !strings.HasPrefix(variable, "LAKE_EXPLICIT_SECRET_MIGRATION=") && !strings.HasPrefix(variable, "LAKE_SIGNED_LAUNCHER=") {
-			command.Env = append(command.Env, variable)
+	h, _ := os.UserHomeDir()
+	return filepath.Join(h, ".lake")
+}
+func envPort() int {
+	if s := os.Getenv("LAKE_WEB_PORT"); s != "" {
+		p, e := strconv.Atoi(s)
+		if e != nil {
+			return -1
 		}
+		return p
 	}
-	lakeHome := os.Getenv("LAKE_HOME")
-	if lakeHome == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return err
-		}
-		lakeHome = filepath.Join(home, ".lake")
+	return 4177
+}
+func openURL(s string) error {
+	program := "xdg-open"
+	if runtime.GOOS == "darwin" {
+		program = "open"
 	}
-	command.Env = append(command.Env, "LAKE_HOME="+lakeHome, "LAKE_SIGNED_LAUNCHER="+self)
-	if len(args) >= 2 && args[0] == "secrets" && args[1] == "migrate" {
-		command.Env = append(command.Env, "LAKE_EXPLICIT_SECRET_MIGRATION=1")
-	}
-	command.Cancel = func() error { return command.Process.Signal(syscall.SIGTERM) }
-	return command.Run()
+	return exec.Command(program, s).Run()
 }
 
-func verifyAgentRelease(root string) error {
-	contents, err := os.ReadFile(filepath.Join(root, "manifest.json"))
-	if err != nil {
-		return errors.New("Lake TypeScript runtime is missing")
+type apiClient struct{ origin, token string }
+
+func connect(home string) (apiClient, error) {
+	path := filepath.Join(home, "web-agent", "runtime.json")
+	info, e := os.Stat(path)
+	if e != nil || info.Mode().Perm()&0077 != 0 {
+		return apiClient{}, errors.New("Go workbench not running; start lake web --open")
 	}
-	var manifest map[string]json.RawMessage
-	if json.Unmarshal(contents, &manifest) != nil {
-		return errors.New("Lake runtime manifest is invalid")
+	b, e := os.ReadFile(path)
+	if e != nil {
+		return apiClient{}, e
 	}
-	var digest string
-	if json.Unmarshal(manifest["digest"], &digest) != nil {
-		return errors.New("Lake runtime digest is invalid")
+	var v struct{ Origin, Token string }
+	if json.Unmarshal(b, &v) != nil {
+		return apiClient{}, errors.New("invalid private runtime metadata")
 	}
-	var platform, arch string
-	json.Unmarshal(manifest["platform"], &platform)
-	json.Unmarshal(manifest["arch"], &arch)
-	expectedArch := map[string]string{"amd64": "x64", "arm64": "arm64"}[runtime.GOARCH]
-	if platform != runtime.GOOS || arch != expectedArch {
-		return errors.New("Lake runtime target mismatch")
+	u, e := url.Parse(v.Origin)
+	if e != nil || u.Scheme != "http" || u.Hostname() != "localhost" || u.User != nil || u.RawQuery != "" || u.Path != "" || v.Token == "" {
+		return apiClient{}, errors.New("invalid local runtime address")
 	}
-	delete(manifest, "digest")
-	var body map[string]interface{}
-	if json.Unmarshal(contents, &body) != nil {
-		return errors.New("Lake runtime manifest is invalid")
-	}
-	delete(body, "digest")
-	canonical, err := json.Marshal(body)
-	if err != nil {
-		return errors.New("Lake runtime manifest is invalid")
-	}
-	sum := sha256.Sum256(canonical)
-	if hex.EncodeToString(sum[:]) != digest || !strings.HasSuffix(filepath.Base(root), "-"+digest) {
-		return errors.New("Lake runtime manifest was changed")
-	}
-	var files, links map[string]string
-	if json.Unmarshal(manifest["files"], &files) != nil || json.Unmarshal(manifest["links"], &links) != nil {
-		return errors.New("Lake runtime inventory is invalid")
-	}
-	for name, expected := range files {
-		path := filepath.Join(root, filepath.FromSlash(name))
-		rel, err := filepath.Rel(root, path)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return errors.New("Lake runtime path escapes its release")
-		}
-		info, err := os.Lstat(path)
-		if err != nil || !info.Mode().IsRegular() {
-			return errors.New("Lake runtime file is missing")
-		}
-		file, err := os.Open(path)
-		if err != nil {
-			return errors.New("Lake runtime file cannot be read")
-		}
-		hash := sha256.New()
-		_, copyErr := io.Copy(hash, file)
-		file.Close()
-		if copyErr != nil || hex.EncodeToString(hash.Sum(nil)) != expected {
-			return errors.New("Lake runtime file was changed")
-		}
-	}
-	for name, expected := range links {
-		path := filepath.Join(root, filepath.FromSlash(name))
-		rel, err := filepath.Rel(root, path)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return errors.New("Lake runtime path escapes its release")
-		}
-		target, err := os.Readlink(path)
-		if err != nil || target != expected || filepath.IsAbs(target) {
-			return errors.New("Lake runtime link was changed")
-		}
-		resolved, err := filepath.EvalSymlinks(path)
-		if err != nil {
-			return errors.New("Lake runtime link is invalid")
-		}
-		realRoot, err := filepath.EvalSymlinks(root)
-		if err != nil || !strings.HasPrefix(resolved, realRoot+string(filepath.Separator)) {
-			return errors.New("Lake runtime link escapes its release")
-		}
-	}
-	return nil
+	return apiClient{v.Origin, v.Token}, nil
 }
-func legacySecret(args []string) error {
-	if os.Getenv("LAKE_EXPLICIT_SECRET_MIGRATION") != "1" || len(args) != 2 {
-		return errors.New("legacy migration is unavailable")
-	}
-	vault := legacykeychain.Keychain{}
-	var secret []byte
-	var err error
-	switch args[0] {
-	case "load-model":
-		secret, err = vault.LoadModelAPIKey(args[1])
-	case "load-ssh":
-		secret, err = vault.Load(args[1])
-	case "delete-model":
-		return vault.DeleteModelAPIKey(args[1])
-	case "delete-ssh":
-		return vault.Delete(args[1])
-	default:
-		return errors.New("unknown migration request")
-	}
-	if err != nil {
-		return err
-	}
-	defer func() {
-		for i := range secret {
-			secret[i] = 0
+func (c apiClient) request(ctx context.Context, method, path string, data any) (json.RawMessage, error) {
+	var body io.Reader
+	if data != nil {
+		b, e := json.Marshal(data)
+		if e != nil {
+			return nil, e
 		}
-	}()
-	// Credentials travel on a private inherited pipe, never stdout or logs.
-	pipe := os.NewFile(3, "migration-secret")
-	if pipe == nil {
-		return errors.New("migration pipe unavailable")
+		body = strings.NewReader(string(b))
 	}
-	defer pipe.Close()
-	_, err = io.Copy(pipe, bytes.NewReader(secret))
-	return err
+	r, e := http.NewRequestWithContext(ctx, method, c.origin+path, body)
+	if e != nil {
+		return nil, e
+	}
+	r.Header.Set("Authorization", "Bearer "+c.token)
+	if data != nil {
+		r.Header.Set("Content-Type", "application/json")
+	}
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	resp, e := httpClient.Do(r)
+	if e != nil {
+		return nil, errors.New("Go workbench unavailable; start lake web --open")
+	}
+	defer resp.Body.Close()
+	b, e := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	if e != nil {
+		return nil, e
+	}
+	if resp.StatusCode >= 400 {
+		var v struct{ Error string }
+		json.Unmarshal(b, &v)
+		if v.Error != "" {
+			return nil, errors.New(v.Error)
+		}
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	if resp.StatusCode == 204 {
+		return []byte("null"), nil
+	}
+	return b, nil
+}
+func printJSON(v json.RawMessage) error {
+	var out any
+	if e := json.Unmarshal(v, &out); e != nil {
+		return e
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(out)
 }
