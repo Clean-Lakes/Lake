@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -54,23 +55,40 @@ func request(ctx context.Context, client *http.Client, raw string) (*http.Respon
 	return response, nil
 }
 func Check(ctx context.Context, client *http.Client, current string) (*Update, error) {
+	update, _, err := CheckWithNotes(ctx, client, current)
+	return update, err
+}
+
+// Keep the announcement available even when the installed version is current.
+func CheckWithNotes(ctx context.Context, client *http.Client, current string) (*Update, string, error) {
 	if _, ok := ParseVersion(current); !ok {
-		return nil, ErrInvalidRelease
+		return nil, "", ErrInvalidRelease
 	}
 	response, err := request(ctx, client, ReleasesURL)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer response.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(response.Body, (4<<20)+1))
 	if err != nil || len(data) > 4<<20 {
-		return nil, ErrInvalidRelease
+		return nil, "", ErrInvalidRelease
 	}
 	var releases []Release
 	if json.Unmarshal(data, &releases) != nil {
-		return nil, ErrInvalidRelease
+		return nil, "", ErrInvalidRelease
 	}
-	return Latest(releases, current), nil
+	update := Latest(releases, current)
+	if update != nil {
+		return update, update.ReleaseNotes, nil
+	}
+	installed, _ := ParseVersion(current)
+	for _, release := range releases {
+		version, ok := ParseVersion(release.Tag)
+		if ok && version == installed && !release.Draft && !release.Prerelease && release.Target == "master" {
+			return nil, strings.TrimSpace(release.Body), nil
+		}
+	}
+	return nil, "", nil
 }
 func Download(ctx context.Context, client *http.Client, update Update, dest io.Writer, progress func(int)) (string, error) {
 	// Validate even if a caller reconstructs Update instead of using Latest.

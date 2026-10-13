@@ -1,0 +1,32 @@
+{
+  "version": "0.3.6",
+  "architecture": "arm64",
+  "minimumMacOS": "13.0",
+  "assets": {
+    "Lake-0.3.6-macos-arm64.zip": {
+      "size": 14791852,
+      "sha256": "52f6abcf0231730bc579787aae421892943c5641c6f85112fc26ca4dad717f08"
+    },
+    "Lake-0.3.6-macos-arm64.dmg": {
+      "size": 15648176,
+      "sha256": "66e5f797d73902c703c97afa9ad46cea3e814066c96add239cd336a496b14a06"
+    }
+  },
+  "verification": {
+    "zipCRC": "passed",
+    "dmgChecksum": "passed",
+    "bundleVersion": "0.3.6",
+    "signature": "deep strict verified",
+    "sameSignerAsInstalledClient": true,
+    "embeddedCLI": "Lake 0.3.6 · Go backend · React frontend",
+    "architectures": "app and CLI arm64"
+  },
+  "tests": {
+    "frontend": "97 passed",
+    "macOSUpdatePolicy": "5 groups passed",
+    "macOSUpdateIndicator": "passed",
+    "macOSInstaller": "4 passed",
+    "vet": "passed",
+    "go": "go test -race ./... passed"
+  }
+}

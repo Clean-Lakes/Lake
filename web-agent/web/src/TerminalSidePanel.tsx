@@ -8,8 +8,7 @@ export function TerminalSidePanel({ open, onClose, onOpen, children }: { open: b
   useEffect(() => {
     if (open) { setMounted(true); const frame = requestAnimationFrame(() => setVisible(true)); return () => cancelAnimationFrame(frame); }
     setVisible(false);
-    const timer = setTimeout(() => setMounted(false), 260);
-    return () => clearTimeout(timer);
+    // Keep visited terminal screens alive while the panel is collapsed.
   }, [open]);
   useEffect(() => {
     if (!open || !mounted || !visible) return;

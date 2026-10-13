@@ -177,3 +177,36 @@ func TestCheckAndRedirects(t *testing.T) {
 		t.Fatal("blocked official release CDN")
 	}
 }
+
+func TestReleaseNotesFollowSelectedCompatibleVersion(t *testing.T) {
+	release := fixture("0.3.10", []byte("MZfixture"))
+	release.Body = "  ## 更新公告\n- 一键打开终端\n- 中文菜单  "
+	newer := fixture("0.4.0", []byte("MZfixture"))
+	newer.Draft = true
+	newer.Body = "draft notes"
+	update := Latest([]Release{release, newer}, "0.3.3")
+	if update == nil || update.ReleaseNotes != "## 更新公告\n- 一键打开终端\n- 中文菜单" {
+		t.Fatalf("release notes not carried by selected update: %+v", update)
+	}
+	release.Body = ""
+	if Latest([]Release{release}, "0.3.3").ReleaseNotes != "" {
+		t.Fatal("missing notes must remain empty")
+	}
+}
+
+func TestCheckRetainsCurrentVersionAnnouncement(t *testing.T) {
+	release := fixture("0.3.10", []byte("MZfixture"))
+	release.Body = "## 更新公告\n- 中文菜单"
+	data, err := json.Marshal([]Release{release})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := NewHTTPClient()
+	client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(data)), Header: make(http.Header), Request: req}, nil
+	})
+	update, notes, err := CheckWithNotes(context.Background(), client, "0.3.10")
+	if err != nil || update != nil || notes != release.Body {
+		t.Fatalf("current release announcement lost: update=%+v notes=%q err=%v", update, notes, err)
+	}
+}

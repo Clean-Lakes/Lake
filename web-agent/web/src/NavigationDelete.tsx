@@ -5,18 +5,18 @@ import {api,readableError} from "./api";
 
 export type NavigationDeleteTarget = {kind:"project" | "resource" | "folder";id:string;projectId:string;name:string};
 export function TrashIcon() {return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13M10 11v5M14 11v5"/></svg>;}
-export function NavigationMenu({title,x,y,actions,onClose}: {title:string;x:number;y:number;actions:{label:string;danger?:boolean;run:()=>void}[];onClose:()=>void}) {
+export function NavigationMenu({title,x,y,actions,onClose}: {title:string;x:number;y:number;actions:{label:string;danger?:boolean;disabled?:boolean;run:()=>void}[];onClose:()=>void}) {
  const menu=useRef<HTMLDivElement>(null);
  const closeRef=useRef(onClose);closeRef.current=onClose;
  useEffect(() => {
   const previous=document.activeElement as HTMLElement|null;
-  menu.current?.querySelector<HTMLButtonElement>('button')?.focus();
+  menu.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
   const dismiss=(event:PointerEvent)=>{if(!menu.current?.contains(event.target as Node))closeRef.current();};
   const key=(event:KeyboardEvent)=>{if(event.key==="Escape"){event.preventDefault();closeRef.current();previous?.focus();}};
   document.addEventListener('pointerdown',dismiss);document.addEventListener('keydown',key);
   return()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',key);};
  },[]);
- return createPortal(<div ref={menu} role="menu" aria-label={`${title} 管理菜单`} className="navigation-context-menu" style={{left:Math.max(8,Math.min(x,window.innerWidth-220)),top:Math.max(8,Math.min(y,window.innerHeight-actions.length*36-45))}} onContextMenu={event=>event.preventDefault()} onKeyDown={event=>{if(!["ArrowDown","ArrowUp","Home","End"].includes(event.key))return;event.preventDefault();const buttons=[...event.currentTarget.querySelectorAll<HTMLButtonElement>('button')];const index=buttons.indexOf(document.activeElement as HTMLButtonElement);buttons[event.key==="Home"?0:event.key==="End"?buttons.length-1:(index+(event.key==="ArrowUp"?-1:1)+buttons.length)%buttons.length]?.focus();}}><small>{title}</small>{actions.map(action=><button key={action.label} type="button" role="menuitem" className={action.danger?"danger-text":""} onClick={()=>{onClose();action.run();}}>{action.danger&&<TrashIcon/>}{action.label}</button>)}</div>,document.body);
+ return createPortal(<div ref={menu} role="menu" aria-label={`${title} 管理菜单`} className="navigation-context-menu" style={{left:Math.max(8,Math.min(x,window.innerWidth-220)),top:Math.max(8,Math.min(y,window.innerHeight-actions.length*36-45))}} onContextMenu={event=>event.preventDefault()} onKeyDown={event=>{if(!["ArrowDown","ArrowUp","Home","End"].includes(event.key))return;event.preventDefault();const buttons=[...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];const index=buttons.indexOf(document.activeElement as HTMLButtonElement);buttons[event.key==="Home"?0:event.key==="End"?buttons.length-1:(index+(event.key==="ArrowUp"?-1:1)+buttons.length)%buttons.length]?.focus();}}><small>{title}</small>{actions.map(action=><button key={action.label} type="button" role="menuitem" disabled={action.disabled} className={action.danger?"danger-text":""} onClick={()=>{onClose();action.run();}}>{action.danger&&<TrashIcon/>}{action.label}</button>)}</div>,document.body);
 }
 export function NavigationDelete({target,onClose,onDeleted}: {target:NavigationDeleteTarget;onClose:()=>void;onDeleted:()=>Promise<void>}) {
  const [busy,setBusy]=useState(false),[error,setError]=useState("");

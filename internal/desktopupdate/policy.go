@@ -60,6 +60,7 @@ type Asset struct {
 	Digest string `json:"digest"`
 }
 type Release struct {
+	Body       string  `json:"body"`
 	Tag        string  `json:"tag_name"`
 	Target     string  `json:"target_commitish"`
 	Draft      bool    `json:"draft"`
@@ -67,6 +68,7 @@ type Release struct {
 	Assets     []Asset `json:"assets"`
 }
 type Update struct {
+	ReleaseNotes        string
 	Version, Tag        string
 	Installer, Checksum Asset
 }
@@ -112,7 +114,7 @@ func Latest(releases []Release, current string) *Update {
 			continue
 		}
 		newest = v
-		selected = &Update{Version: number, Tag: release.Tag, Installer: installer, Checksum: checksum}
+		selected = &Update{Version: number, Tag: release.Tag, Installer: installer, Checksum: checksum, ReleaseNotes: strings.TrimSpace(release.Body)}
 	}
 	return selected
 }
