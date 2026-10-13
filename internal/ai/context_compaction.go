@@ -30,17 +30,25 @@ func utf8Prefix(value string, limit int) string {
 }
 
 func fitSummaryInput(history []Message, prompt string, budget int) ([]Message, bool) {
-	// Fit the actual serialized summary request rather than reserving a fixed
-	// 20K characters, which consumed most of a child agent's 16K token window.
-	for allowance := budget - len(prompt) - 1024; allowance >= 512; allowance /= 2 {
-		prefix, fits := fitToolContext(summaryMessages(history), allowance)
+	// The user payload is a JSON-encoded transcript, so it is encoded a second
+	// time in the request. Search both sides of the fit interval: halving only
+	// downward skipped valid projections between the serialized ceiling and the
+	// irreducible user/call history floor.
+	original := summaryMessages(history)
+	low, high := 512, budget-len(prompt)-1024
+	allowance := high
+	for tries := 0; tries < 20 && low <= high; tries++ {
+		prefix, fits := fitToolContext(original, allowance)
 		if !fits {
-			continue
+			low = allowance + 1
+		} else {
+			messages := []Message{{Role: "system", Content: prompt}, {Role: "user", Content: js(prefix)}}
+			if historyCost(messages) <= budget {
+				return messages, true
+			}
+			high = allowance - 1
 		}
-		messages := []Message{{Role: "system", Content: prompt}, {Role: "user", Content: js(prefix)}}
-		if historyCost(messages) <= budget {
-			return messages, true
-		}
+		allowance = low + (high-low)/2
 	}
 	return nil, false
 }

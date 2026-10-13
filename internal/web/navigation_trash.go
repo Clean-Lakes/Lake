@@ -1,6 +1,9 @@
 package web
 
-import "net/http"
+import (
+	"fmt"
+	"net/http"
+)
 
 const activeProjectsSQL = "NOT EXISTS(SELECT 1 FROM navigationTrash d WHERE d.kind='project' AND d.id=projects.id)"
 const activeResourcesSQL = "NOT EXISTS(SELECT 1 FROM navigationTrash d WHERE (d.kind='resource' AND d.id=resources.id) OR (d.kind='project' AND d.id=resources.projectId))"
@@ -27,8 +30,11 @@ func (s *Store) projectIdleForDeletion(project string) {
 	}
 }
 func (s *Store) resourceIdleForDeletion(ref string) {
+	s.resourceIdleForChange(ref, "删除")
+}
+func (s *Store) resourceIdleForChange(ref, operation string) {
 	if s.row("SELECT id FROM terminals WHERE resourceId=? AND status!='disconnected' LIMIT 1", ref) != nil {
-		fail(409, "资源仍有连接的终端，请先关闭终端后删除")
+		fail(409, fmt.Sprintf("资源仍有连接的终端，请先关闭终端后%s", operation))
 	}
 	// A proposal bound to a closed/missing terminal cannot be approved or replayed.
 	// Keep its history, but do not let that stale proposal permanently block trash.
@@ -41,7 +47,7 @@ func (s *Store) resourceIdleForDeletion(ref string) {
 			)
 		))
 	) LIMIT 1`, ref) != nil {
-		fail(409, "资源仍有待确认或执行中的操作，请先处理后删除")
+		fail(409, fmt.Sprintf("资源仍有待确认或执行中的操作，请先处理后%s", operation))
 	}
 }
 func (s *Store) ArchiveNavigation(kind, id string) {
@@ -63,6 +69,10 @@ func (s *Store) ArchiveNavigation(kind, id string) {
 				node = Object{}
 			}
 			s.trashEntry(kind, id, project, stringOf(resource["name"]), node)
+			// Evidence from a removed resource must not commit after its scope changes.
+			s.ensureMemorySettings(project)
+			s.exec("UPDATE projectMemorySettings SET epoch=epoch+1,updatedAt=? WHERE projectId=?", now(), project)
+			s.exec("UPDATE projectMemoryJobs SET status='skipped',lastErrorCode='resource_archived',updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE projectId=?) AND status IN ('queued','retry_wait','running')", now(), project)
 			s.exec("DELETE FROM resourceTree WHERE resourceId=?", id)
 			s.treeOrder(s.treeChildren(project, stringOf(node["parentId"]), ""))
 		case "project":
@@ -71,6 +81,9 @@ func (s *Store) ArchiveNavigation(kind, id string) {
 			for _, resource := range s.rows("SELECT id FROM resources WHERE projectId=?", id) {
 				s.resourceIdleForDeletion(stringOf(resource["id"]))
 			}
+			s.ensureMemorySettings(id)
+			s.exec("UPDATE projectMemorySettings SET epoch=epoch+1,updatedAt=? WHERE projectId=?", now(), id)
+			s.exec("UPDATE projectMemoryJobs SET status='skipped',lastErrorCode='project_archived',updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE projectId=?) AND status IN ('queued','retry_wait','running')", now(), id)
 			s.trashEntry(kind, id, id, stringOf(project["name"]), Object{})
 		default:
 			fail(400, "删除对象类型无效")

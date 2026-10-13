@@ -12,3 +12,15 @@ export async function readImageSelection(existing: AIImage[], files: File[]): Pr
   return {id:crypto.randomUUID(),mimeType:file.type,base64:data.split(",")[1]!,sizeBytes:file.size,width:0,height:0,name:file.name};
  }));
 }
+
+/** Read pasted bitmaps only; HTML/URLs and ordinary text keep native paste. */
+export function clipboardImageFiles(data: Pick<DataTransfer, "items" | "files">): File[] {
+ const images: File[] = [];
+ for (const item of Array.from(data.items ?? [])) {
+  if (item.kind !== "file") continue;
+  const file = item.getAsFile();
+  if (file && (file.type || item.type).startsWith("image/")) images.push(file.type ? file : new File([file],file.name || "剪贴板图片.png",{type:item.type,lastModified:file.lastModified}));
+ }
+ // Browsers expose the same image through items and files; do not attach twice.
+ return images.length ? images : Array.from(data.files ?? []).filter(file => file.type.startsWith("image/"));
+}

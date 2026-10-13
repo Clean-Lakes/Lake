@@ -58,6 +58,13 @@ func TestOriginalPrototypeSchemaMigration(t *testing.T) {
 	if backup.QueryRow("SELECT text FROM messages WHERE id='m'").Scan(&text) != nil || text != "preserved message" {
 		t.Fatal("inconsistent migration backup")
 	}
+	var memoryTable string
+	if err := backup.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='projectMemories'").Scan(&memoryTable); err != sql.ErrNoRows {
+		t.Fatalf("backup was taken after memory migration: %v", err)
+	}
+	if store.MemorySettings("p")["useEnabled"] != true {
+		t.Fatal("existing project did not receive default memory settings")
+	}
 	store.Close()
 	store, e = OpenStore(dir)
 	if e != nil {

@@ -21,38 +21,18 @@ NSGraphicsContext.saveGraphicsState()
 NSGraphicsContext.current = graphics
 graphics.imageInterpolation = .high
 
-let background = NSBezierPath(roundedRect: NSRect(x: 32, y: 32, width: 960, height: 960), xRadius: 225, yRadius: 225)
-NSGradient(starting: NSColor(calibratedRed: 0.18, green: 0.28, blue: 0.60, alpha: 1),
-           ending: NSColor(calibratedRed: 0.10, green: 0.17, blue: 0.40, alpha: 1))!
-    .draw(in: background, angle: -50)
-
-NSColor(calibratedWhite: 1, alpha: 0.96).setStroke()
-let top = NSBezierPath(ovalIn: NSRect(x: 257, y: 594, width: 510, height: 164))
-top.lineWidth = 39
-top.stroke()
-
-let vessel = NSBezierPath()
-vessel.lineWidth = 39
-vessel.lineCapStyle = .round
-vessel.move(to: NSPoint(x: 257, y: 676))
-vessel.line(to: NSPoint(x: 257, y: 360))
-vessel.curve(to: NSPoint(x: 767, y: 360),
-             controlPoint1: NSPoint(x: 257, y: 224),
-             controlPoint2: NSPoint(x: 767, y: 224))
-vessel.line(to: NSPoint(x: 767, y: 676))
-vessel.stroke()
-
-let middle = NSBezierPath()
-middle.lineWidth = 31
-middle.lineCapStyle = .round
-middle.move(to: NSPoint(x: 260, y: 501))
-middle.curve(to: NSPoint(x: 764, y: 501),
-             controlPoint1: NSPoint(x: 260, y: 372),
-             controlPoint2: NSPoint(x: 764, y: 372))
-middle.stroke()
-
-NSColor(calibratedRed: 0.35, green: 0.88, blue: 0.72, alpha: 1).setFill()
-NSBezierPath(ovalIn: NSRect(x: 680, y: 694, width: 89, height: 89)).fill()
+// Keep the approved artwork intact; only apply the native app-icon silhouette.
+let sourceURL = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent().deletingLastPathComponent()
+    .appendingPathComponent("assets/branding/lake-app-icon.png")
+guard let artwork = NSImage(contentsOf: sourceURL) else {
+    fatalError("无法读取 Lake 图标母版：\(sourceURL.path)")
+}
+NSColor.clear.setFill()
+NSRect(x: 0, y: 0, width: size, height: size).fill(using: .copy)
+let tile = NSRect(x: 88, y: 88, width: 848, height: 848)
+NSBezierPath(roundedRect: tile, xRadius: 190, yRadius: 190).addClip()
+artwork.draw(in: tile, from: .zero, operation: .sourceOver, fraction: 1)
 
 graphics.flushGraphics()
 NSGraphicsContext.restoreGraphicsState()

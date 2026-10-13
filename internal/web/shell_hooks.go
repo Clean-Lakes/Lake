@@ -231,17 +231,10 @@ func (t *Terminals) OpenShell(ctx context.Context, id, ref, name string) Object 
 	return t.open(ctx, id, ref, shellName(name))
 }
 func (t *Terminals) OpenInteractive(ctx context.Context, id, ref, name string) Object {
-	if name == "" {
-		r := t.store.Resource(ref)
-		name = shellName(object(r["settings"])["shell"])
-		if r["kind"] == "ssh" {
-			name = shellName(object(r["ssh"])["shell"])
-		}
-		if name == "sh" {
-			name = "bash"
-		}
+	if name != "" {
+		name = shellName(name)
 	}
-	return t.open(ctx, id, ref, shellName(name), true)
+	return t.open(ctx, id, ref, name, true)
 }
 func (t *Terminals) UserInteractive(tid string) bool {
 	t.mu.Lock()

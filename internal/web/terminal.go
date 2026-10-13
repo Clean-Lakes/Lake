@@ -112,16 +112,21 @@ func (t *Terminals) redact(s string) string {
 	return s
 }
 func (t *Terminals) Open(ctx context.Context, id, ref string) Object {
-	r := t.store.Resource(ref)
-	name := object(r["settings"])["shell"]
-	if r["kind"] == "ssh" {
-		name = object(r["ssh"])["shell"]
-	}
-	return t.open(ctx, id, ref, shellName(name))
+	return t.open(ctx, id, ref, "")
 }
 func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, interactiveMode ...bool) Object {
 	interactive := len(interactiveMode) > 0 && interactiveMode[0]
 	r := t.store.Resource(ref)
+	if selectedShell == "" {
+		config := object(r["settings"])
+		if r["kind"] == "ssh" {
+			config = object(r["ssh"])
+		}
+		selectedShell = shellName(config["shell"])
+		if interactive && stringOf(config["shell"]) == "" {
+			selectedShell = "bash"
+		}
+	}
 	if r["kind"] != "local" && r["kind"] != "ssh" {
 		fail(400, "Only host resources support terminals")
 	}
@@ -149,6 +154,14 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 				panic(p)
 			}
 		}()
+		current := t.store.Resource(ref)
+		field := "settings"
+		if r["kind"] == "ssh" {
+			field = "ssh"
+		}
+		if terminalConnectionSignature(stringOf(r["kind"]), object(r[field])) != terminalConnectionSignature(stringOf(current["kind"]), object(current[field])) {
+			fail(409, "资源连接配置已更新，请重新打开终端")
+		}
 		term = t.store.CreateTerminal(id, ref)
 	}()
 	tid := stringOf(term["id"])

@@ -6,10 +6,10 @@ import { ContextUsage } from '../src/ContextUsage';
 import type { AIView } from '../../shared/contracts';
 
 const view = (context: AIView['context']): AIView => ({session:'usage-fixture',status:'completed',cards:[],turns:1,profile:'core',cardsOffset:0,totalCards:0,usage:{input:640000,output:442,total:640442,known:true},context});
-test('context percentage uses measured input and provider capacity, not estimate or total spend', () => {
+test('context percentage uses measured input and configured allocation, not full provider capacity or total spend', () => {
  const html=renderToStaticMarkup(createElement(ContextUsage,{view:view({window:1000000,windowSource:'provider',budget:64000,used:30800,usedKnown:true,estimated:false,estimatedUsed:67800,lastRequest:{input:30800,output:442,total:31242,inputKnown:true,outputKnown:true,known:true}})}));
- assert.match(html,/上下文 3.1%/);
- assert.doesNotMatch(html,/106%|64%/);
+ assert.match(html,/上下文 48.1%/);
+ assert.doesNotMatch(html,/上下文 3.1%|106%|64%/);
 });
 test('context never invents a percentage from default budget or missing usage', () => {
  for (const context of [
@@ -28,3 +28,12 @@ test('switching the selected model does not show the preceding model percentage'
  const html=renderToStaticMarkup(createElement(ContextUsage,{model:{modelId:'new-model'},view:view({modelId:'old-model',window:1000000,windowSource:'provider',used:30800,usedKnown:true,estimated:false})}));
  assert.match(html,/上下文 --/);
 });
+
+ test('output reservation is excluded from the input budget', () => {
+  const html=renderToStaticMarkup(createElement(ContextUsage,{view:view({window:1000000,windowSource:'provider',budget:64000,inputBudget:55808,maxOutput:8192,used:73930,usedKnown:true,estimated:false})}));
+  assert.match(html,/上下文 132.5%/); assert.doesNotMatch(html,/上下文 7.4%/);
+ });
+ test('known allocation can be used without inventing provider capacity', () => {
+  const html=renderToStaticMarkup(createElement(ContextUsage,{view:view({window:0,budget:64000,inputBudget:55808,maxOutput:8192,used:27904,usedKnown:true,estimated:false})}));
+  assert.match(html,/上下文 50.0%/);
+ });

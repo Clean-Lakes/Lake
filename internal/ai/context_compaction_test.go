@@ -192,3 +192,28 @@ func TestLanguageReminderRespectsExplicitLanguageAndOtherScripts(t *testing.T) {
 		}
 	}
 }
+
+func TestSummaryFitsBetweenJSONCeilingAndHistoryFloor(t *testing.T) {
+	history := []Message{{Role: "user", Content: strings.Repeat("explicit constraint; ", 1800)}}
+	for i := 0; i < 8; i++ {
+		id := string(rune('a' + i))
+		history = append(history, Message{Role: "assistant", Calls: []Call{{ID: id, Name: "shell", Arguments: `{"command":"read-only observation"}`}}}, Message{Role: "tool", CallID: id, Content: js(map[string]any{"output": strings.Repeat("\\\"引用\"", 3000), "exitCode": 0})})
+	}
+	prompt := "Create a handoff summary. Preserve user constraints and completed observations."
+	budget := 50000
+	high := budget - len(prompt) - 1024
+	prefix, fits := fitToolContext(summaryMessages(history), high)
+	if !fits || historyCost([]Message{{Role: "system", Content: prompt}, {Role: "user", Content: js(prefix)}}) <= budget {
+		t.Fatal("fixture must reproduce JSON serialization overflow")
+	}
+	if _, fits = fitToolContext(summaryMessages(history), high/2); fits {
+		t.Fatal("fixture must reproduce the skipped intermediate fit interval")
+	}
+	messages, fits := fitSummaryInput(history, prompt, budget)
+	if !fits || historyCost(messages) > budget {
+		t.Fatal("valid summary fit was skipped")
+	}
+	if !strings.Contains(messages[1].Content, history[0].Content) {
+		t.Fatal("user constraints changed")
+	}
+}

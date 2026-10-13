@@ -12,8 +12,8 @@ import (
 	"time"
 )
 
-// HexHub 的本机 MCP 只暴露资产清单和操作入口，不提供登录凭据，因此直连导入的
-// SSH 条目可能缺少用户名/凭据，导入后在资源编辑中补充。
+// MCP provides the import scope; login material is read separately from the
+// current local HexHub asset store.
 const defaultHexHubMCPURL = "http://127.0.0.1:17321/mcp"
 
 type hexHubAsset struct {

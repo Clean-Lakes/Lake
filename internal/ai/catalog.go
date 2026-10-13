@@ -106,6 +106,9 @@ func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool
 	}
 	if c.Profile != "terminal2" || e.Bridge == nil {
 		list := Catalog(c.Profile)
+		if c.MemoryEnabled && e.Bridge != nil {
+			list = append(list, projectMemoryTools()...)
+		}
 		if c.MultiAgentMode == "auto" && (c.Profile == "core" || c.Profile == "") {
 			list = append(list, delegationTools()...)
 		}
@@ -118,7 +121,11 @@ func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool
 			caps = obj(v)
 		}
 	}
-	return CatalogForConfig(c, caps)
+	list := CatalogForConfig(c, caps)
+	if c.MemoryEnabled {
+		list = append(list, projectMemoryTools()...)
+	}
+	return list
 }
 func Prompt(c Config) string {
 	if c.workflowMode {
@@ -140,6 +147,9 @@ func Prompt(c Config) string {
 	prompt := string(b)
 	if name == "core-tool-template" {
 		prompt = fmt.Sprintf(prompt, "Lake", "Lake", runtime.GOOS, c.Runtime+" "+c.AssetRef)
+	}
+	if c.MemoryEnabled {
+		prompt += memoryPrompt()
 	}
 	for _, n := range []string{"user-language-policy", "hide-internal-ref-policy"} {
 		b, _ := embedded.ReadFile("prompts/" + n + ".txt")

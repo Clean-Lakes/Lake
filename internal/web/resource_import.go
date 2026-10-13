@@ -38,6 +38,7 @@ type importPlan struct {
 	ID, Project, Session, Name string
 	Candidates                 []importCandidate
 	Source                     string
+	Notice                     string
 }
 
 // Serialize commits so a replay or concurrent selection cannot create duplicates.
@@ -175,7 +176,7 @@ func normalizeImportRecord(record Object) Object {
 
 // HexHub export's SSH fields use a fixed AES-CBC compatibility layer. Decode
 // locally; these values must never be returned to the model or preview UI.
-func decodeHexHubSecret(value string) string {
+func decodeHexHubSecretText(value string) string {
 	if value == "" {
 		return ""
 	}
@@ -198,6 +199,11 @@ func decodeHexHubSecret(value string) string {
 	if !utf8.ValidString(value) {
 		fail(400, "HexHub 凭据解码失败")
 	}
+	return value
+}
+
+func decodeHexHubSecret(value string) string {
+	value = decodeHexHubSecretText(value)
 	if strings.HasPrefix(value, "{") {
 		var key Object
 		if json.Unmarshal([]byte(value), &key) == nil {
@@ -416,8 +422,8 @@ func (b *Server) prepareImportCandidate(record Object, secrets map[string]string
 				config[field] = r[field]
 			}
 		}
-		// HexHub MCP 只提供连接目标不含登录凭据；缺登录信息的条目先入库，
-		// 登录信息在资源编辑中补充。
+		// A metadata-only fallback remains importable; the preview explicitly
+		// reports unavailable login information.
 		if source == "hexhub" && (config["username"] == nil || (config["identityFile"] == nil && config["privateKey"] == nil && config["password"] == nil)) {
 			for _, field := range strings.Fields("authMethod identityFile privateKey password passphrase") {
 				delete(config, field)
@@ -472,7 +478,13 @@ func (b *Server) prepareImportCandidate(record Object, secrets map[string]string
 		config = validateService(kind, config)
 		if password := stringOf(r["password"]); password != "" {
 			ref := "import-service-" + ident() + ".json"
-			must(atomicFile(filepath.Join(b.Models.Home, "secrets", ref), []byte(jsonText(Object{"password": password}))))
+			root := filepath.Join(b.Models.Home, "secrets")
+			must(platform.MkdirAll(root, 0700))
+			info, err := os.Lstat(root)
+			if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || !platform.Private(root, info) {
+				fail(400, "Lake 凭据目录须归当前用户所有且权限为 0700")
+			}
+			must(atomicFile(filepath.Join(root, ref), []byte(jsonText(Object{"password": password}))))
 			config["credentialRef"] = ref
 		}
 	} else {
@@ -494,18 +506,19 @@ func publicImportPlan(plan importPlan) Object {
 		row["hasCredential"] = item.Config["credentialRef"] != nil || item.Config["identityFile"] != nil
 		rows = append(rows, row)
 	}
-	return Object{"planId": plan.ID, "name": plan.Name, "resources": rows}
+	return Object{"planId": plan.ID, "name": plan.Name, "resources": rows, "notice": plan.Notice}
 }
 
 func (b *Server) previewResourceImport(ctx context.Context, project, session string, input Object) Object {
 	b.Store.Project(project)
 	name, raw := stringOf(input["name"]), stringOf(input["text"])
-	source := ""
+	source, notice := "", ""
 	records, parsed := []Object{}, false
 	secrets := map[string]string{}
 	if hex, ok := input["hexhub"].(bool); ok && hex {
 		name, source = "HexHub 资产", "hexhub"
-		records, parsed = hexHubImportRecords(b.fetchHexHubAssets(ctx)), true
+		records, notice = b.hexHubRecordsWithLogins(ctx, b.fetchHexHubAssets(ctx))
+		parsed = true
 	} else if id := stringOf(input["source_id"]); id != "" {
 		attachment := b.loadImportSource(project, session, id)
 		name, raw = attachment.Name, attachment.Text
@@ -574,7 +587,7 @@ func (b *Server) previewResourceImport(ctx context.Context, project, session str
 	if len(records) == 0 || len(records) > 1000 {
 		fail(400, "未识别到连接配置，或资源数量超过 1000 条")
 	}
-	plan := importPlan{ID: ident(), Project: project, Session: session, Name: text(name, "文件名", 200), Source: source}
+	plan := importPlan{ID: ident(), Project: project, Session: session, Name: text(name, "文件名", 200), Source: source, Notice: notice}
 	for _, record := range records {
 		plan.Candidates = append(plan.Candidates, b.prepareImportCandidate(record, secrets, source))
 	}
@@ -682,13 +695,17 @@ func selectImportIndexes(plan importPlan, indexes any) []int {
 func (b *Server) commitResourceImport(project, session, id string, indexes any) Object {
 	importCommitMu.Lock()
 	defer importCommitMu.Unlock()
+	b.messageMu.Lock()
+	defer b.messageMu.Unlock()
+	b.Terminals.mu.Lock()
+	defer b.Terminals.mu.Unlock()
 	plan := b.loadImportPlan(project, session, id)
 	selected := selectImportIndexes(plan, indexes)
 	// Revalidate all selected configurations before any resource write.
 	for _, index := range selected {
 		item := plan.Candidates[index]
 		if item.Kind == "ssh" {
-			if plan.Source == "hexhub" && stringOf(item.Config["username"]) == "" {
+			if plan.Source == "hexhub" && !importSSHHasLogin(item.Config) {
 				validateImportedSSH(item.Config)
 			} else {
 				validateSSH(b.Models.Home, item.Config)
@@ -703,7 +720,8 @@ func (b *Server) commitResourceImport(project, session, id string, indexes any) 
 		}
 	}
 	existing := map[string]Object{}
-	endpoints := map[string]bool{}
+	endpoints := map[string][]Object{}
+	existingEndpoints := map[string]bool{}
 	for _, resource := range objects(b.Store.Catalog()["resources"]) {
 		if resource["projectId"] != project {
 			continue
@@ -713,23 +731,86 @@ func (b *Server) commitResourceImport(project, session, id string, indexes any) 
 			config = object(resource["ssh"])
 		}
 		existing[importConnectionKey(stringOf(resource["kind"]), config)] = resource
-		endpoints[importEndpointKey(stringOf(resource["kind"]), config)] = true
+		endpoint := importLoginEndpointKey(stringOf(resource["kind"]), config)
+		endpoints[endpoint] = append(endpoints[endpoint], resource)
+		existingEndpoints[importEndpointKey(stringOf(resource["kind"]), config)] = true
 	}
-	created, skipped := []Object{}, []Object{}
+	updates := map[string]Object{}
 	for _, index := range selected {
 		item := plan.Candidates[index]
-		key, endpoint := importConnectionKey(item.Kind, item.Config), importEndpointKey(item.Kind, item.Config)
-		// 缺少用户名的条目（HexHub MCP）按连接端点匹配已有连接，避免重复导入。
-		if found := existing[key]; found != nil || (stringOf(item.Config["username"]) == "" && endpoints[endpoint]) {
+		if plan.Source != "hexhub" || !set("ssh database redis")[item.Kind] || !importResourceHasLogin(item.Kind, item.Config) {
+			continue
+		}
+		found := existing[importConnectionKey(item.Kind, item.Config)]
+		if found == nil {
+			matches := endpoints[importLoginEndpointKey(item.Kind, item.Config)]
+			if len(matches) > 1 {
+				for _, match := range matches {
+					if stringOf(importResourceConfig(match)["username"]) == "" {
+						fail(409, "已有多个同端点资源，无法确定要同步哪个；请先在资源编辑中补齐登录信息")
+					}
+				}
+			}
+			if len(matches) == 1 && !importResourceHasLogin(item.Kind, importResourceConfig(matches[0])) && (stringOf(importResourceConfig(matches[0])["username"]) == "" || importResourceConfig(matches[0])["username"] == item.Config["username"]) && (stringOf(importResourceConfig(matches[0])["database"]) == "" || importResourceConfig(matches[0])["database"] == item.Config["database"]) {
+				found = matches[0]
+			}
+		}
+		if found != nil && !importResourceHasLogin(item.Kind, importResourceConfig(found)) {
+			if previous, ok := updates[stringOf(found["id"])]; ok && importConnectionKey(item.Kind, previous) != importConnectionKey(item.Kind, item.Config) {
+				fail(409, "多个导入条目匹配同一资源，请仅选择一个登录配置")
+			}
+			config := Object{}
+			for key, value := range item.Config {
+				config[key] = value
+			}
+			if shell := importResourceConfig(found)["shell"]; shell != nil {
+				config["shell"] = shell
+			}
+			updates[stringOf(found["id"])] = config
+		}
+	}
+	if len(updates) > 0 {
+		for sid, running := range b.runningMessages {
+			if running && b.Store.Session(sid)["projectId"] == project {
+				fail(409, "请等待项目中本轮 AI 任务结束后同步登录信息")
+			}
+		}
+		b.Store.SyncImportedLogins(project, updates)
+		for _, session := range objects(b.Store.Catalog()["sessions"]) {
+			if session["projectId"] == project {
+				b.resetConnectionFailures(stringOf(session["id"]))
+			}
+		}
+	}
+	created, skipped, updated := []Object{}, []Object{}, []Object{}
+	updatedKeys := map[string]bool{}
+	for id, config := range updates {
+		resource := b.Store.Resource(id)
+		existing[importConnectionKey(stringOf(resource["kind"]), config)] = resource
+		endpoint := importLoginEndpointKey(stringOf(resource["kind"]), config)
+		endpoints[endpoint] = []Object{resource}
+		updatedKeys[importConnectionKey(stringOf(resource["kind"]), config)] = true
+		existingEndpoints[importEndpointKey(stringOf(resource["kind"]), config)] = true
+		updated = append(updated, Object{"name": resource["name"], "kind": resource["kind"]})
+	}
+	for _, index := range selected {
+		item := plan.Candidates[index]
+		key, endpoint := importConnectionKey(item.Kind, item.Config), importLoginEndpointKey(item.Kind, item.Config)
+		if updatedKeys[key] {
+			continue
+		}
+		if found := existing[key]; found != nil || (stringOf(item.Config["username"]) == "" && existingEndpoints[importEndpointKey(item.Kind, item.Config)]) {
 			skipped = append(skipped, Object{"name": item.Name, "kind": item.Kind})
 			continue
 		}
 		resource := b.Store.CreateResource(project, item.Name, item.Kind, item.Config)
 		b.Store.EditResourceTree(project, Object{"operation": "move", "nodeId": resource["id"], "parentId": b.importFolderNode(project, item.Folder)})
-		existing[key], endpoints[endpoint] = resource, true
+		existing[key] = resource
+		endpoints[endpoint] = append(endpoints[endpoint], resource)
+		existingEndpoints[importEndpointKey(item.Kind, item.Config)] = true
 		created = append(created, Object{"name": item.Name, "kind": item.Kind})
 	}
-	return Object{"created": created, "skipped": skipped, "createdCount": len(created), "skippedCount": len(skipped)}
+	return Object{"created": created, "skipped": skipped, "updated": updated, "createdCount": len(created), "skippedCount": len(skipped), "updatedCount": len(updated)}
 }
 
 func (b *Server) importBridgePolicy(id, name string, args Object) Object {

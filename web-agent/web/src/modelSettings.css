@@ -71,6 +71,11 @@
 .provider-success {color:#4d8970;}
 .provider-footer-actions {display:flex;gap:10px;flex-shrink:0;}
 .model-conversation {flex:1;overflow:auto;padding:30px;}
+.model-conversation-memory {border-top:1px solid #e5e8e3;margin-top:22px;padding-top:22px;}
+.model-conversation-memory h3 {font-size:13px;font-weight:600;color:#4a6251;margin:0 0 14px;}
+.model-conversation-memory label {display:flex;align-items:center;gap:8px;font-size:13px;color:#35473c;cursor:pointer;}
+.model-conversation-memory input {accent-color:#367b6c;}
+.model-conversation-memory .settings-note {margin:8px 0 18px 22px;}
 .model-menu-provider {padding:9px 12px 5px;font-size:10px;color:#8d998d;}
 .model-settings-dialog button:disabled {opacity:.45;cursor:default;}
 .model-settings-dialog :focus-visible {outline:2px solid #6a9f8d;outline-offset:2px;}

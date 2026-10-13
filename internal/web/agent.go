@@ -104,9 +104,11 @@ func (b *Server) configure(id string, updates Object) Object {
 	model.ContextWindow = integer(options["contextWindow"])
 	model.MaxOutput = integer(options["maxOutput"])
 	assets, directories := b.sessionAssetCatalog(id)
+	projectID := stringOf(b.Store.Session(id)["projectId"])
+	memorySettings := b.Store.MemorySettings(projectID)
 	// Approvals belong to individual operations; earlier pending actions must not
 	// disable this turn's tools. invoke enforces per-operation permissions.
-	aiFailure(b.Engine.Configure(id, ai.Config{Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
+	aiFailure(b.Engine.Configure(id, ai.Config{MemoryProjectID: projectID, MemoryEnabled: memorySettings["useEnabled"] == true, MemoryExtractionEnabled: memorySettings["useEnabled"] == true && memorySettings["extractionEnabled"] == true, MemoryEpoch: integer(memorySettings["epoch"]), MemoryKnowledgeRevision: integer(memorySettings["revision"]), Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
 	b.Store.SaveOptions(id, options)
 	if previousPermissions != permissionVersion(options) {
 		b.revokeSessionTerminals(id)
@@ -153,7 +155,7 @@ func (b *Server) event(event ai.Event) {
 		b.Store.Touch(event.Session)
 	}
 }
-func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, files []Object) {
+func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, files []Object, ignoreProjectMemory bool) {
 	defer b.workers.Done()
 	defer b.finishMessageQueue(id)
 	defer b.finishReplyTiming(id)
@@ -248,7 +250,7 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	if len(files) > 0 {
 		modelContext += "\n[LAKE_TEXT_FILES]\n" + jsonText(files) + "\nThese are user-selected text attachments. Use preview_resource_import with source_id to inspect connection candidates. Do not read private credential storage or echo credentials."
 	}
-	e = b.Engine.ChatTurn(turnContext, id, ai.TurnInput{UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope})
+	e = b.Engine.ChatTurn(turnContext, id, ai.TurnInput{UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
 	if e != nil {
 		if b.Context.Err() != nil {
 			return
@@ -273,6 +275,7 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	}
 	view, e := b.Engine.Snapshot(id)
 	must(e)
+	_ = b.reconcileMemoryOutboxForSession(id)
 	for i := len(view.Cards) - 1; i >= 0; i-- {
 		if view.CardsOffset+i < before.TotalCards {
 			break
@@ -294,6 +297,9 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 			}
 		}
 	}()
+	if name == "project_memory_index" || name == "list_project_memories" || name == "read_project_memory" || name == "save_project_memory" || name == "forget_project_memory" {
+		return b.projectMemoryBridge(ctx, id, name, args)
+	}
 	snap := b.sessionSnapshot(id)
 	if name == "policy" && set("preview_resource_import import_resources")[stringOf(args["name"])] {
 		return b.importBridgePolicy(id, stringOf(args["name"]), object(args["arguments"])), nil

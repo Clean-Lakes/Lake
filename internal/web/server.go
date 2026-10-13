@@ -47,6 +47,7 @@ type Server struct {
 	Store              *Store
 	Models             *Models
 	HexHubMCP          string
+	HexHubLocalAssets  func(context.Context) ([]Object, error)
 	Terminals          *Terminals
 	Engine             *ai.Engine
 	Context            context.Context
@@ -143,11 +144,18 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	return server, nil
 }
 func (b *Server) Start() error {
+	if err := b.reconcilePersistedMemoryOutboxes(); err != nil {
+		return err
+	}
+	b.Store.RecoverMemoryJobs()
+	_ = b.Store.ReconcileProjectMemoryFiles()
 	l, e := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", b.options.Port))
 	if e != nil {
 		return e
 	}
 	b.listener = l
+	b.workers.Add(1)
+	go b.runMemoryWorker()
 	b.options.Port = l.Addr().(*net.TCPAddr).Port
 	must(atomicFile(filepath.Join(b.options.DataDir, "runtime.json"), []byte(jsonText(Object{"origin": fmt.Sprintf("http://localhost:%d", b.options.Port), "token": b.token, "pid": os.Getpid()}))))
 	b.http = &http.Server{Handler: b, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384, BaseContext: func(net.Listener) context.Context { return b.Context }}
@@ -279,7 +287,7 @@ func (b *Server) protect(r *http.Request) {
 	if origin != "" && !origins[origin] {
 		fail(403, "Origin not allowed")
 	}
-	if (r.Method == "POST" || r.Method == "PUT" || r.Method == "DELETE") && origin == "" && r.Header.Get("Sec-Fetch-Site") != "" && r.Header.Get("Sec-Fetch-Site") != "none" {
+	if (r.Method == "POST" || r.Method == "PUT" || r.Method == "PATCH" || r.Method == "DELETE") && origin == "" && r.Header.Get("Sec-Fetch-Site") != "" && r.Header.Get("Sec-Fetch-Site") != "none" {
 		fail(403, "Origin required")
 	}
 }
@@ -332,6 +340,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if b.providerRoute(w, r, name, method) {
+		return
+	}
+	if b.projectMemoryRoute(w, r, name, method) {
 		return
 	}
 	if name == "/api/settings/model" {
@@ -411,6 +422,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(strings.Trim(name, "/"), "/")
+	if len(parts) == 3 && parts[0] == "api" && parts[1] == "resources" && method == "PATCH" {
+		b.editTerminalResourceRoute(w, r, parts[2])
+		return
+	}
 	if len(parts) == 4 && parts[0] == "api" && parts[1] == "resources" && parts[3] == "terminals" && method == "GET" {
 		b.Store.Resource(parts[2])
 		terminals := []Object{}
@@ -548,6 +563,20 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(parts) >= 3 && parts[0] == "api" && parts[1] == "sessions" {
 		id := parts[2]
 		b.Store.Session(id)
+		if len(parts) == 3 && method == "PATCH" {
+			data := body(w, r, 4096)
+			for key := range data {
+				if key != "title" {
+					fail(400, "编辑会话仅支持修改名称")
+				}
+			}
+			title := text(data["title"], "会话名称", 200)
+			if b.Terminals.titleInput(title) != title {
+				fail(400, "名称包含敏感凭据，请改用描述性名称")
+			}
+			reply(w, 200, b.Store.RenameSession(id, title))
+			return
+		}
 		if len(parts) == 4 && parts[3] == "host-key" && method == "POST" {
 			data := body(w, r, 4096)
 			accept, ok := data["accept"].(bool)

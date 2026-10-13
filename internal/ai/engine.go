@@ -111,6 +111,9 @@ func redact(text string, c Config) string {
 	text = jsonSecret.ReplaceAllString(text, "${1}[REDACTED]${2}")
 	return lineSecret.ReplaceAllString(text, "${1} [REDACTED]")
 }
+func SafeMemoryContent(text string, model Model) bool {
+	return redact(text, Config{Model: model}) == text
+}
 func headerValues(headers map[string]string) []string {
 	out := []string{}
 	for _, v := range headers {
@@ -395,6 +398,10 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		return errors.New("session busy")
 	}
 	c := s.state.Config
+	if input.IgnoreProjectMemory {
+		c.MemoryEnabled = false
+		c.MemoryExtractionEnabled = false
+	}
 	if len(input.workflow) > 0 {
 		if err = validateWorkflow(c, input.workflow); err != nil {
 			s.mu.Unlock()
@@ -508,6 +515,9 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		}
 		s.state.View.Status = status
 		s.state.View.TurnFinishedAt = timestamp()
+		if err == nil {
+			e.collectMemorySnapshot(s, c, input)
+		}
 		for i := range s.state.View.Cards {
 			card := &s.state.View.Cards[i]
 			if card.Status == "running" || card.Status == "pending" {
@@ -524,6 +534,8 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 			return err
 		}
 	}
+	outputRetried := false
+	requestModel := c.Model
 	for step := 0; step < c.MaxSteps; step++ {
 		if err = ctx.Err(); err != nil {
 			return err
@@ -537,6 +549,18 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		textType := "message"
 		s.state.View.Cards = append(s.state.View.Cards, Card{ID: thinkID, Type: "thinking", Status: "running", At: timestamp()}, Card{ID: textID, Type: textType, Status: "running", At: timestamp()})
 		s.mu.Unlock()
+		if !c.MemoryEnabled {
+			for i := range history {
+				if history[i].Role == "tool" && memoryTool(history[i].Name) {
+					history[i].Content = "[project memory disabled]"
+				}
+			}
+		} else if len(history) > 0 {
+			attachment := e.requestMemoryContext(ctx, id, c)
+			if historyCost(history)+len(attachment) <= (c.Model.ContextWindow-c.Model.MaxOutput)*2 {
+				history[0].Content += attachment
+			}
+		}
 		lastFlush := time.Now()
 		tools := e.sessionCatalog(ctx, id, c)
 		if e.worker != nil {
@@ -552,7 +576,10 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 			}
 			history[0].Content += fmt.Sprintf("\nRuntime allowance: %d tool calls remain. Reuse already collected evidence. When no tool remains, return a concise final report citing recorded evidence and explicit gaps; do not request another tool or infer unobserved facts. A finished report may describe a blocked deliverable honestly.", remaining)
 		}
-		result, modelErr := e.stream(ctx, c.Model, history, tools, func(kind, delta string) {
+		if outputRetried {
+			history = outputRecoveryHistory(history)
+		}
+		streamDelta := func(kind, delta string) {
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			if kind == "image" {
@@ -581,8 +608,35 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 				e.notify(s, "delta", map[string]any{"card_id": id, "kind": kind})
 				lastFlush = time.Now()
 			}
-		})
+		}
+		result, modelErr := e.stream(ctx, requestModel, history, tools, streamDelta)
+		if errors.Is(modelErr, ErrModelOutputLimit) && !outputRetried && ctx.Err() == nil {
+			outputRetried = true
+			requestModel = outputRecoveryModel(c.Model)
+			s.mu.Lock()
+			addUsage(&s.state.View.Usage, result.Usage)
+			kept := s.state.View.Cards[:0]
+			for _, card := range s.state.View.Cards {
+				if card.ID != textID && card.ID != thinkID {
+					kept = append(kept, card)
+				}
+			}
+			s.state.View.Cards = kept
+			s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "notice", Content: "模型回复达到单次输出上限，正在缩短回复后重试；已完成的操作保留", Status: "completed", At: timestamp()})
+			textID, thinkID = uid(), uid()
+			s.state.View.Cards = append(s.state.View.Cards, Card{ID: thinkID, Type: "thinking", Status: "running", At: timestamp()}, Card{ID: textID, Type: "message", Status: "running", At: timestamp()})
+			err = e.save(s)
+			e.notify(s, "compact", nil)
+			s.mu.Unlock()
+			if err != nil {
+				return err
+			}
+			result, modelErr = e.stream(ctx, requestModel, outputRecoveryHistory(history), tools, streamDelta)
+		}
 		if modelErr != nil {
+			s.mu.Lock()
+			addUsage(&s.state.View.Usage, result.Usage)
+			s.mu.Unlock()
 			return modelErr
 		}
 		s.mu.Lock()
@@ -744,7 +798,16 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	}
 	model.MaxOutput = min(4096, ceiling)
 	messagePrompt := string(prompt) + "\nOutput only a compact handoff of at most 1000 words. Omit raw reasoning, repetitive logs and full command outputs. Use the user's language. Do not infer health or success from omitted output."
-	messages, fits := fitSummaryInput(history[1:cut], messagePrompt, budget)
+	summarySource := history[1:cut]
+	if !c.MemoryEnabled {
+		summarySource = append([]Message(nil), summarySource...)
+		for i := range summarySource {
+			if summarySource[i].Role == "tool" && memoryTool(summarySource[i].Name) {
+				summarySource[i].Content = "[project memory disabled]"
+			}
+		}
+	}
+	messages, fits := fitSummaryInput(summarySource, messagePrompt, budget)
 	if !fits {
 		return errors.New("context compaction: summary input exceeds context budget; original history retained")
 	}

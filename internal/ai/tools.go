@@ -110,6 +110,12 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if !found {
 		return nil, errors.New("tool unavailable in selected profile")
 	}
+	if memoryTool(call.Name) {
+		if !c.MemoryEnabled || c.MemoryProjectID == "" || e.worker != nil || e.Bridge == nil {
+			return nil, errors.New("project memory unavailable")
+		}
+		return e.bridgeCall(ctx, sessionForTools, call.Name, a, false)
+	}
 	if c.targetScope != nil && (str(a["terminal_id"]) == "" || str(a["asset_ref"]) != "" || c.targetScope.NeedsClarification || len(c.targetScope.ResourceIDs) == 0 || call.Name == "delegate_investigation") {
 		if err := enforceTargetScope(c, call.Name, a, nil); err != nil {
 			return nil, err

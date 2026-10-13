@@ -40,3 +40,13 @@ test("compaction limit failures display one Chinese message with history-preserv
  assert.equal(html.split("上下文整理未完成").length-1,1);
  assert.ok(html.includes("历史记录已保留"));assert.ok(!html.includes("incomplete response discarded"));
 });
+
+test("plain output-limit errors are localized and retain original-session recovery guidance",()=>{
+ const message=displayAiError("model output limit reached; incomplete response discarded");
+ assert.ok(message.includes("单次输出上限") && message.includes("原会话继续"));
+ assert.ok(!message.includes("incomplete response"));
+});
+test("automatic output recovery shows a single notice while previous compaction hints stay hidden",()=>{
+ const snapshot={session:{id:"demo"},messages:[{id:"user",role:"user",createdAt:start,text:"继续调查"}],actions:[],ai:{session:"demo",status:"running",cards:[{id:"retry",type:"notice",content:"模型回复达到单次输出上限，正在缩短回复后重试；已完成的操作保留",status:"completed",at:start}],cardsOffset:0}} as SessionSnapshot;
+ assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot})).includes("正在缩短回复后重试"));
+});

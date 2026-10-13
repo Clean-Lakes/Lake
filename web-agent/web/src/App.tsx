@@ -1,10 +1,13 @@
 import {NavigationDelete,NavigationTrash,NavigationMenu,TrashIcon,type NavigationDeleteTarget} from "./NavigationDelete";
+import {SessionEdit} from "./SessionEdit";
+import {TerminalConfigEdit} from "./TerminalConfigEdit";
 import { Workflows } from "./Workflows";
+import { ProjectMemory } from "./ProjectMemory";
 import { DesktopUpdate } from "./DesktopUpdate";
 import { ActivityIndicator } from "./ActivityIndicator";
 import { PendingMessages } from "./PendingMessages";
 import { ModelSettings } from "./ModelSettings";
-import { readImageSelection } from "./imageAttachments";
+import { readImageSelection, clipboardImageFiles } from "./imageAttachments";
 import { readTextFile } from "./textFiles";
 import { ResourceImport } from "./ResourceImport";
 import { SSHResourceFields, emptySSH } from "./SSHResourceFields";
@@ -161,6 +164,10 @@ function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [dialog, setDialog] = useState<{ kind: "project" } | { kind: "session"; projectId: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WorkSession | null>(null);
+  const [editSession, setEditSession] = useState<WorkSession | null>(null);
+  const [editTerminalResource, setEditTerminalResource] = useState<Resource | null>(null);
+  const [resourceConfigContext, setResourceConfigContext] = useState<{resource: Resource; x: number; y: number} | null>(null);
+  const [sessionContext, setSessionContext] = useState<{session: WorkSession; x: number; y: number} | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [draftProject, setDraftProject] = useState("");
@@ -170,6 +177,7 @@ function App() {
   const [serviceSettings, setServiceSettings] = useState({ driver: "postgres", host: "", port: 5432, username: "", database: "", path: "", credentialRef: "", endpoint: "unix:///var/run/docker.sock", ssh_asset_ref: "", tls: true });
   const [sshProject, setSshProject] = useState<string | null>(null);
   const [workflowProject, setWorkflowProject] = useState<Project | null>(null);
+  const [memoryProject, setMemoryProject] = useState<Project | null>(null);
   const [importProject, setImportProject] = useState<Project | null>(null);
   const [importHexhub, setImportHexhub] = useState(false);
   const [sshName, setSshName] = useState("");
@@ -178,10 +186,14 @@ function App() {
   const [sshBusy, setSshBusy] = useState(false);
   const inputQueue = useRef(Promise.resolve());
   const [imageDraft, setImageDraft] = useState<AIImage[]>([]);
+  const attachmentReading = useRef(false);
+  const attachmentEpoch = useRef(0);
+  useLayoutEffect(() => { attachmentEpoch.current++; }, [route.sessionId]);
   const [fileDraft, setFileDraft] = useState<TextFileAttachment[]>([]);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const [mentionRefs, setMentionRefs] = useState<MentionReference[]>([]);
   const [messageDraft, setMessageDraft] = useState("");
+  const [ignoreProjectMemory, setIgnoreProjectMemory] = useState(false);
   const messageComposition = useRef(new CompositionGuard());
   const [sendShortcut, setSendShortcut] = useState<SendShortcut>(() => {
     try { return parseSendShortcut(localStorage.getItem(sendShortcutStorageKey)); } catch { return "enter"; }
@@ -494,6 +506,7 @@ function App() {
     setMessageDraft("");
     setImageDraft([]);
     setFileDraft([]);
+    setIgnoreProjectMemory(false);
     setAgentOptionsOpen(false);
     setPermissionsOpen(false);
     setMentionRefs([]);
@@ -768,6 +781,20 @@ function App() {
       if (error instanceof ApiRequestError && error.status === 401) { setDeleteTarget(null); handleFailure(error); }
     } finally { setDeleteBusy(false); }
   }
+  function terminalResourceSaved(saved: Resource) {
+    setCatalog(current => current ? {...current, resources: current.resources.map(resource => resource.id === saved.id ? saved : resource)} : current);
+    for (const [id, cached] of snapshotCache.current) snapshotCache.current.set(id, {...cached, resources: cached.resources.map(resource => resource.id === saved.id ? saved : resource)});
+    setSnapshot(current => current ? {...current, resources: current.resources.map(resource => resource.id === saved.id ? saved : resource)} : current);
+    notify("终端配置已保存");
+    void refreshCatalog().catch(handleFailure);
+  }
+  function sessionRenamed(saved: WorkSession) {
+    setCatalog(current => current ? {...current, sessions: current.sessions.map(session => session.id === saved.id ? {...session, title: saved.title, updatedAt: saved.updatedAt} : session), terminals: current.terminals?.map(terminal => terminal.sessionId === saved.id ? {...terminal, sessionTitle: saved.title} : terminal)} : current);
+    const cached = snapshotCache.current.get(saved.id);
+    if (cached) snapshotCache.current.set(saved.id, {...cached, session: {...cached.session, title: saved.title, updatedAt: saved.updatedAt}});
+    setSnapshot(current => current?.session.id === saved.id ? {...current, session: {...current.session, title: saved.title, updatedAt: saved.updatedAt}} : current);
+    notify("会话名称已更新");
+  }
   /** Resources the composer can reference with "@". */
   const mentionable = sessionId ? (activeSnapshot?.resources ?? catalog?.resources.filter(resource => resource.projectId === selectedSession?.projectId) ?? []) : [];
   const mentionMatches = mention
@@ -801,44 +828,47 @@ function App() {
     catch (error) { handleFailure(error); }
     finally { setStoppingTurn(false); }
   }
-  async function attachFiles(files: FileList | null) {
-    if (!files?.length || !sessionId) return;
+  async function attachFiles(files: FileList | File[] | null) {
+    if (!files?.length || !sessionId || pendingOperation || attachmentReading.current) return;
+    attachmentReading.current = true;
+    const epoch = attachmentEpoch.current;
     const targetSession = sessionId;
     const selected = [...files];
     const imageFiles = selected.filter(file => file.type.startsWith("image/"));
     const textFiles = selected.filter(file => !file.type.startsWith("image/"));
     setPendingOperation("attachment-upload");
     try {
-      if (imageFiles.length && !bootstrap?.supportsImageInput) throw new Error("当前模型未启用图片输入能力，请在模型设置中启用后重试。");
       if (fileDraft.length + textFiles.length > 4) throw new Error("每条消息最多附加 4 个文本文件。");
       const images = imageFiles.length ? await readImageSelection(imageDraft, imageFiles) : [];
       const texts = await Promise.all(textFiles.map(readTextFile));
       const uploaded: TextFileAttachment[] = [];
       for (const [index, file] of textFiles.entries()) uploaded.push(await api.uploadTextFile(targetSession, file.name, texts[index]!));
-      if (activeSession.current === targetSession) {
+      if (activeSession.current === targetSession && epoch === attachmentEpoch.current) {
         setFileDraft(current => [...current, ...uploaded]);
         setImageDraft(current => [...current, ...images]);
       }
     } catch (error) { handleFailure(error); }
-    finally { setPendingOperation(""); if (attachmentInputRef.current) attachmentInputRef.current.value = ""; }
+    finally { attachmentReading.current = false; setPendingOperation(""); if (attachmentInputRef.current) attachmentInputRef.current.value = ""; if (activeSession.current === targetSession && epoch === attachmentEpoch.current) requestAnimationFrame(() => messageInputRef.current?.focus()); }
   }
   async function sendMessage(event: FormEvent) {
     event.preventDefault();
     const text = messageDraft.trim() || (fileDraft.length ? "请读取附加文本文件，识别并导入其中的资源。" : imageDraft.length ? "请分析附加图片。" : "");
     if (!sessionId || !text || !sessionConnected || !modelConfigured || stoppingTurn || pendingOperation) return;
+    if (imageDraft.length && !bootstrap?.supportsImageInput) { handleFailure(new Error("当前模型未启用图片输入，请切换到支持图片的模型后发送。")); return; }
     const targetSession=sessionId;
     setMention(null);
     setPendingOperation("message");
     conversationScroll.current.following = true;
     try {
       const refs = mentionedResourceIds(text);
-      const result=await api.sendMessage(targetSession, text, refs, imageDraft, [], undefined, fileDraft, queueMode);
+      const result=await api.sendMessage(targetSession, text, refs, imageDraft, [], undefined, fileDraft, queueMode, ignoreProjectMemory);
       if (result.queued) notify("已加入待发送队列");
       if (activeSession.current === targetSession) {
         setMessageDraft("");
         setImageDraft([]);
         setFileDraft([]);
         setMentionRefs([]);
+        setIgnoreProjectMemory(false);
       }
       await refreshCurrent();
     } catch (error) { handleFailure(error); }
@@ -1121,16 +1151,18 @@ function App() {
             </button><button type="button" className="navigation-delete-button project-delete-button" title="删除项目" aria-label={`删除项目 ${project.name}`} disabled={!connected} onClick={()=>setNavigationDelete({kind:"project",id:project.id,projectId:project.id,name:project.name})}><TrashIcon/></button></div>
             {expanded && <div className="project-contents">
               {showWorkflows && <button type="button" className="workflow-entry" onClick={() => setWorkflowProject(project)} disabled={!connected}><Glyph name="layers" size={15}/>运维工作流</button>}
+              <button type="button" className="workflow-entry" onClick={() => setMemoryProject(project)} disabled={!connected}><Glyph name="layers" size={15}/>项目记忆</button>
               <div className="nav-heading"><button type="button" className="nav-section-toggle" aria-label={`${sessionsExpanded ? "折叠" : "展开"}${project.name}的会话`} aria-expanded={sessionsExpanded} aria-controls={`project-sessions-${project.id}`} onClick={() => setClosedSessionGroups(items => sessionsExpanded ? [...items, project.id] : items.filter(id => id !== project.id))}><Glyph name="chevron" size={13} className={sessionsExpanded ? "chevron-open" : ""}/><span>会话 <small>{sessions.length}</small></span></button><button className="nav-add" aria-label={`在${project.name}新建会话`} title="新建会话" disabled={!connected} onClick={() => { setClosedSessionGroups(items => items.filter(id => id !== project.id)); openSessionDialog(project.id); }}><Glyph name="plus" size={14}/></button></div>
-              <div id={`project-sessions-${project.id}`} hidden={!sessionsExpanded}>{sessions.length ? visibleSessions.map(session => <div className="nav-row-wrap" key={session.id}>
+              <div id={`project-sessions-${project.id}`} hidden={!sessionsExpanded}>{sessions.length ? visibleSessions.map(session => <div className="nav-row-wrap" key={session.id} onContextMenu={event => {event.preventDefault(); if (connected) {setProjectContext(null); setSessionContext({session, x: event.clientX, y: event.clientY});}}}>
                 <button className={`nav-row session-nav-row ${route.sessionId === session.id && !route.resourceId ? "active" : ""}`} onClick={() => navigate({ sessionId: session.id, resourceId: null })} aria-current={route.sessionId === session.id && !route.resourceId ? "page" : undefined}>
                   <Glyph name="chat" size={16}/><span className="nav-row-text"><strong>{session.title}</strong><small>{sessionLabels[session.status]}</small></span>{session.status === "investigating" && <span className="session-activity" title="正在回复"><ActivityIndicator/></span>}{session.status === "waiting_approval" && <span className="attention-dot" title="等待确认"/>}
                 </button>
+                <button type="button" className="session-edit" title="编辑会话" aria-label={`编辑会话 ${session.title}`} onClick={() => setEditSession(session)} disabled={!connected}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1 12-12a2.8 2.8 0 0 0-4-4L4 15Z"/></svg></button>
                 <button className="session-delete" title="删除会话" aria-label={`删除会话 ${session.title}`} onClick={() => { setDeleteError(""); setDeleteTarget(session); }} disabled={!connected || !!pendingOperation}><Glyph name="trash" size={14}/></button>
               </div>) : <p className="nav-empty">还没有会话</p>}{sessions.length > 5 && <button type="button" className="nav-show-more" aria-expanded={allSessions} onClick={() => setAllSessionGroups(items => allSessions ? items.filter(id => id !== project.id) : [...items, project.id])}>{allSessions ? "收起历史会话" : `显示全部 ${sessions.length} 个会话`}</button>}</div>
               {<ResourceTree onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={catalog.resourceTree ?? []} disabled={!connected} refresh={refreshCatalog} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={() => { setResourceKind("ssh"); setSshProject(project.id); setSshName(""); setSshDraft(emptySSH()); setSshError(""); }} renderResource={resource => {
                 const live = resourceTerminals.filter(t => t.resourceId === resource.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-                return <div key={resource.id} className="resource-nav-wrap" ref={resourceTerminalMenu === resource.id ? resourceMenuRef : undefined}><div className="resource-nav-row">
+                return <div key={resource.id} className="resource-nav-wrap" ref={resourceTerminalMenu === resource.id ? resourceMenuRef : undefined}><div className="resource-nav-row" onContextMenu={event => {if (["local", "ssh"].includes(resource.kind)) {event.preventDefault(); event.stopPropagation(); if (connected) {setResourceTerminalMenu(null); setResourceConfigContext({resource, x:event.clientX, y:event.clientY});}}}}>
                   <button id={`resource-trigger-${resource.id}`} className={`nav-row resource-row ${route.resourceId === resource.id || terminalOpen && terminalResource?.id === resource.id ? "active" : ""}`} onClick={() => { if (["local", "ssh"].includes(resource.kind)) { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); } else navigate({ sessionId: route.sessionId, resourceId: resource.id }); }} aria-expanded={["local", "ssh"].includes(resource.kind) ? resourceTerminalMenu === resource.id : undefined} aria-current={route.resourceId === resource.id ? "page" : undefined}>
                     <Glyph name="server" size={16}/><span className="nav-row-text"><strong>{resource.name}</strong><small>{resource.kind === "ssh" ? "SSH 主机" : "本机"}{live.length ? ` · ${live.length} 个终端` : ""}</small></span>{connected && live.some(terminal => terminal.status === "ready" || terminal.status === "busy") && <span className="resource-indicator available" title="终端已连接"/>}
                   </button>
@@ -1144,7 +1176,7 @@ function App() {
                   <div className="resource-terminal-list-heading"><span>在线终端</span><small>{live.length}</small></div>
                   <div className="resource-terminal-connections">{live.length ? live.map((t, i) => <div className="resource-terminal-item" key={t.id}><div><strong>终端 {i + 1}</strong><small title={t.sessionTitle || "独立连接"}>{t.sessionTitle || "独立连接"}</small></div><span className={`resource-terminal-state state-${t.status}`}><i/>{t.status === "busy" ? "执行中" : t.status === "connecting" ? "连接中" : t.status === "unknown" ? "待核查" : "空闲"}<small>{t.holder === "agent" ? "Lake" : "用户"}</small></span><button type="button" title={`关闭终端 ${i + 1}`} aria-label={`关闭 ${t.sessionTitle || "资源"} 的终端 ${i + 1}`} disabled={!!pendingOperation} onClick={() => void closeResourceTerminal(resource.id, t.id)}><Glyph name="close" size={14}/></button></div>) : <p className="resource-terminal-empty">暂无在线终端</p>}</div>
                   {live.some(t => t.status === "busy") && <p className="resource-terminal-note">关闭执行中的终端会中断当前命令。</p>}
-                  <div className="resource-terminal-footer"><button type="button" className="resource-view-info" onClick={() => { setResourceTerminalMenu(null); navigate({sessionId, resourceId: resource.id}); }}><Glyph name="server" size={14}/>资源信息</button>{live.length > 1 && <button type="button" className="resource-terminal-close-all" disabled={!!pendingOperation} onClick={() => void closeResourceTerminal(resource.id)}>关闭全部</button>}</div>
+                  <div className="resource-terminal-footer"><button type="button" className="resource-view-info" aria-label={`编辑 ${resource.name} 的终端配置`} disabled={!connected} onClick={() => {setResourceTerminalMenu(null); setEditTerminalResource(resource);}}>编辑配置</button><button type="button" className="resource-view-info" onClick={() => { setResourceTerminalMenu(null); navigate({sessionId, resourceId: resource.id}); }}><Glyph name="server" size={14}/>资源信息</button>{live.length > 1 && <button type="button" className="resource-terminal-close-all" disabled={!!pendingOperation} onClick={() => void closeResourceTerminal(resource.id)}>关闭全部</button>}</div>
                 </ResourceTerminalMenu>}</div>;
               }}/>}
             </div>}
@@ -1168,8 +1200,9 @@ function App() {
       {!modelConfigured && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>尚未配置 Agent 模型。可浏览项目、资源和命令记录；发送对话需要先在设置里填写模型端点、名称和密钥。</span><button onClick={() => void openSettings()}><Glyph name="settings" size={15}/>打开设置</button></div>}
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}
       {connection.warning && warningSessionId === sessionId && <div className="system-banner offline-banner" role="alert"><Glyph name="alert" size={18}/><span>{visibleSessionError || "实时连接已断开。当前内容可能不是最新状态，操作已暂停。"}</span><button onClick={() => sessionId ? setSessionReload(value => value + 1) : void loadApp()}><Glyph name="refresh" size={15}/>重试</button></div>}
+      {activeSnapshot?.ai?.memoryStatus === "backlog_full" && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>项目记忆待处理队列已满，本轮未自动学习。请在项目记忆中查看任务状态。</span>{selectedProjectId && <button onClick={() => {const project = projectList.find(item => item.id === selectedProjectId); if (project) setMemoryProject(project);}}>查看项目记忆</button>}</div>}
 
-      {selectedResource ? <><ResourceDetail resource={selectedResource} project={projectList.find(project => project.id === selectedResource.projectId)} sessions={catalog.sessions.filter(session => session.projectId === selectedResource.projectId)} selectedSession={selectedSession} terminalList={resourceTerminals} disabled={!connected || !!pendingOperation} onBack={() => navigate({ sessionId, resourceId: null })} onNewSession={() => openSessionDialog(selectedResource.projectId)} onSession={id => navigate({ sessionId: id, resourceId: null })} />
+      {selectedResource ? <><ResourceDetail resource={selectedResource} project={projectList.find(project => project.id === selectedResource.projectId)} sessions={catalog.sessions.filter(session => session.projectId === selectedResource.projectId)} selectedSession={selectedSession} terminalList={resourceTerminals} disabled={!connected || !!pendingOperation} onBack={() => navigate({ sessionId, resourceId: null })} onNewSession={() => openSessionDialog(selectedResource.projectId)} onSession={id => navigate({ sessionId: id, resourceId: null })} onEdit={() => setEditTerminalResource(selectedResource)} />
         </> : sessionId && selectedSession ? <div className="session-view">
         <section ref={conversationRef} onWheel={pauseFollowing} onPointerDown={pauseFollowing} onKeyDown={event => { if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key)) pauseFollowing(); }} onScroll={event => { if (conversationFollower.current?.animating) return; const container = event.currentTarget; conversationScroll.current.following = container.scrollHeight - container.clientHeight - container.scrollTop < 80; }} className="conversation" aria-label="会话记录">
           {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true">{loadingSessionId === sessionId && <span role="status">正在加载会话…</span>}</div> : itemList.length ? <div className="timeline-list">
@@ -1183,7 +1216,7 @@ function App() {
             {mentionMatches.map((resource, index) => <button type="button" role="option" aria-selected={index === mention.index} key={resource.id} className={`mention-item ${index === mention.index ? "selected" : ""}`} onMouseDown={event => event.preventDefault()} onClick={() => insertMention(resource)}><Glyph name="server" size={14}/><span>{resource.name}</span><small>{resource.status === "available" ? "可用" : "不可用"}</small></button>)}
             <button type="button" role="option" aria-selected={false} className="mention-item" onMouseDown={event => event.preventDefault()} onClick={() => { const target = projectList.find(item => item.id === selectedSession?.projectId); setMention(null); if (target) { setImportHexhub(true); setImportProject(target); } }}><Glyph name="plus" size={14}/><span>从 HexHub 导入资源</span><small>本机 MCP</small></button>
           </div>}
-          {fileDraft.length > 0 && <div className="text-file-drafts">{fileDraft.map(file => <span key={file.sourceId}>{file.name}<button type="button" aria-label={`移除 ${file.name}`} onClick={() => setFileDraft(files => files.filter(item => item.sourceId !== file.sourceId))}>×</button></span>)}</div>}{imageDraft.length > 0 && <div className="image-drafts">{imageDraft.map(image => <figure key={image.id}><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "待发送图片"}/><button type="button" aria-label={`移除 ${image.name || "图片"}`} onClick={() => setImageDraft(images => images.filter(item => item.id !== image.id))}>×</button></figure>)}</div>}{mentionRefs.length > 0 && <div className="reference-chips">{mentionRefs.map(ref => <span key={`${ref.resourceId}:${ref.start}`}>{ref.label}</span>)}</div>}<div className="composer-body"><textarea id="message-input" ref={messageInputRef} rows={2} placeholder={!modelConfigured ? "配置 Agent 模型后即可开始对话" : queueMode ? "继续输入，发送后加入待发送队列…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : "向 Lake 描述问题，输入 @ 可引用资源…"} value={messageDraft} onChange={event => { setMentionRefs(refs => rebaseMentions(messageDraft, event.target.value, refs)); setMessageDraft(event.target.value); syncMention(event.target.value, event.target.selectionStart ?? event.target.value.length); }} disabled={!sessionConnected || !modelConfigured || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
+          {fileDraft.length > 0 && <div className="text-file-drafts">{fileDraft.map(file => <span key={file.sourceId}>{file.name}<button type="button" aria-label={`移除 ${file.name}`} onClick={() => setFileDraft(files => files.filter(item => item.sourceId !== file.sourceId))}>×</button></span>)}</div>}{imageDraft.length > 0 && <div className="image-drafts">{imageDraft.map(image => <figure key={image.id}><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "待发送图片"}/><figcaption title={image.name}>{image.name || "剪贴板图片"}</figcaption><button type="button" aria-label={`移除 ${image.name || "图片"}`} onClick={() => setImageDraft(images => images.filter(item => item.id !== image.id))}>×</button></figure>)}</div>}{mentionRefs.length > 0 && <div className="reference-chips">{mentionRefs.map(ref => <span key={`${ref.resourceId}:${ref.start}`}>{ref.label}</span>)}</div>}{imageDraft.length > 0 && !bootstrap?.supportsImageInput && <p className="composer-image-hint" role="status">图片已添加。当前模型未启用图片输入，请切换到支持图片的模型后发送。</p>}<div className="composer-body"><textarea id="message-input" ref={messageInputRef} rows={2} placeholder={!modelConfigured ? "配置 Agent 模型后即可开始对话" : queueMode ? "继续输入，发送后加入待发送队列…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : "向 Lake 描述问题，输入 @ 可引用资源…"} value={messageDraft} onPaste={event => { const images = clipboardImageFiles(event.clipboardData); if (!images.length) return; event.preventDefault(); void attachFiles(images); }} onChange={event => { setMentionRefs(refs => rebaseMentions(messageDraft, event.target.value, refs)); setMessageDraft(event.target.value); syncMention(event.target.value, event.target.selectionStart ?? event.target.value.length); }} disabled={!sessionConnected || !modelConfigured || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
             if (messageComposition.current.ignores(event.nativeEvent)) return;
             if (mention && mentionMatches.length) {
               if (event.key === "ArrowDown") { event.preventDefault(); setMention({ ...mention, index: (mention.index + 1) % mentionMatches.length }); return; }
@@ -1203,7 +1236,7 @@ function App() {
             <div className="model-menu-sep"/>
             <button type="button" role="menuitem" className="model-menu-item" onClick={() => { setModelMenuOpen(false); void openSettings(); }}><span>模型设置…</span><Glyph name="settings" size={14}/></button>
           </div>}
-        </div>{activeSnapshot?.ai && <ReasoningSelector key={sessionId} session={sessionId} modelId={bootstrap?.modelId} disabled={!sessionConnected || turnActive || !!pendingOperation} onSaving={saving => setPendingOperation(current => saving ? "reasoning" : current === "reasoning" ? "" : current)}/>}</div><div className="composer-send-actions">{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止本轮" title="停止本轮，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${turnActive && !hasMessageDraft ? " stop-button" : ""}`} type={turnActive && !hasMessageDraft ? "button" : "submit"} aria-label={turnActive && !hasMessageDraft ? "停止本轮" : queueMode ? "挂起消息" : "发送消息"} title={turnActive && !hasMessageDraft ? "停止本轮" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`} aria-busy={stoppingTurn} onClick={turnActive && !hasMessageDraft ? () => void stopCurrentTurn() : undefined} disabled={turnActive && !hasMessageDraft ? stoppingTurn || !sessionConnected : !hasMessageDraft || !sessionConnected || !modelConfigured || !!pendingOperation || stoppingTurn}><Glyph name={turnActive && !hasMessageDraft ? "stop" : "send"} size={19}/></button></div></div></form></div>
+        </div>{activeSnapshot?.ai && <ReasoningSelector key={sessionId} session={sessionId} modelId={bootstrap?.modelId} disabled={!sessionConnected || turnActive || !!pendingOperation} onSaving={saving => setPendingOperation(current => saving ? "reasoning" : current === "reasoning" ? "" : current)}/>}</div><div className="composer-send-actions">{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止本轮" title="停止本轮，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${turnActive && !hasMessageDraft ? " stop-button" : ""}`} type={turnActive && !hasMessageDraft ? "button" : "submit"} aria-label={turnActive && !hasMessageDraft ? "停止本轮" : queueMode ? "挂起消息" : "发送消息"} title={turnActive && !hasMessageDraft ? "停止本轮" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`} aria-busy={stoppingTurn} onClick={turnActive && !hasMessageDraft ? () => void stopCurrentTurn() : undefined} disabled={turnActive && !hasMessageDraft ? stoppingTurn || !sessionConnected : !hasMessageDraft || !sessionConnected || !modelConfigured || !!pendingOperation || stoppingTurn || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)}><Glyph name={turnActive && !hasMessageDraft ? "stop" : "send"} size={19}/></button></div></div></form></div>
       </div> : <div className="welcome-view"><div className="welcome-content"><Brand/><h1>今天要处理什么问题？</h1><p>从项目开始一段会话。Lake 会把调查、证据和需要你确认的操作留在对话中。</p>{!projectList.length ? <button className="button primary" disabled={!connected} onClick={openProjectDialog}>创建第一个项目<Glyph name="arrow" size={17}/></button> : <button className="button primary" disabled={!connected} onClick={() => openSessionDialog(projectList[0].id)}>开始新会话<Glyph name="arrow" size={17}/></button>}</div></div>}
     </main>
     <TerminalSidePanel open={terminalOpen} onClose={closeTerminalPanel} onOpen={() => { revealActiveTerminalTab(); if (!commandBusy && currentTerminal?.holder === "user" && currentTerminal.status === "ready") terminalControlRef.current?.focus(); }}>{terminalDrawer}</TerminalSidePanel>
@@ -1212,11 +1245,16 @@ function App() {
     {activeSnapshot?.hostKeyTrust && (!terminalContext || terminalContext.sessionId !== activeSnapshot.session.id) && <HostKeyTrust session={activeSnapshot.session.id} prompt={activeSnapshot.hostKeyTrust} disabled={!sessionConnected} refresh={refreshCurrent}/>}
 
     {notice && <div className="toast" role="status"><Glyph name="check" size={17}/>{notice}<button aria-label="关闭提示" onClick={() => setNotice("")}><Glyph name="close" size={14}/></button></div>}
+    {editTerminalResource && <TerminalConfigEdit key={editTerminalResource.id} resource={editTerminalResource} connected={connected} onClose={() => setEditTerminalResource(null)} onSaved={terminalResourceSaved}/>}
+    {resourceConfigContext && <NavigationMenu title={resourceConfigContext.resource.name} x={resourceConfigContext.x} y={resourceConfigContext.y} onClose={() => setResourceConfigContext(null)} actions={[{label:"编辑终端配置",run:()=>setEditTerminalResource(resourceConfigContext.resource)}, {label:"删除资源",danger:true,run:()=>setNavigationDelete({kind:"resource",id:resourceConfigContext.resource.id,projectId:resourceConfigContext.resource.projectId,name:resourceConfigContext.resource.name})}]}/>}
+    {editSession && <SessionEdit key={editSession.id} session={editSession} connected={connected} onClose={() => setEditSession(null)} onSaved={sessionRenamed}/>}
+    {sessionContext && <NavigationMenu title={sessionContext.session.title} x={sessionContext.x} y={sessionContext.y} onClose={() => setSessionContext(null)} actions={[{label:"编辑会话", run:() => setEditSession(sessionContext.session)}, {label:"删除会话", danger:true, run:() => {setDeleteError(""); setDeleteTarget(sessionContext.session);}}]}/>}
     {deleteTarget && <div className="modal-scrim" onMouseDown={event => { if (event.target === event.currentTarget && !deleteBusy) setDeleteTarget(null); }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-session-title"><div className="modal-header"><span className="modal-icon danger-icon"><Glyph name="trash" size={20}/></span><button className="icon-button" aria-label="关闭" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}><Glyph name="close"/></button></div><h2 id="delete-session-title">删除会话</h2><p className="modal-description">将删除会话「{deleteTarget.title}」的对话、专员结论、证据、审批和命令记录。此操作不可恢复。</p>{deleteError && <p className="form-error" role="alert">{deleteError}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>取消</button><button type="button" className="button danger" onClick={() => void confirmDeleteSession()} disabled={deleteBusy || !connected}>{deleteBusy ? "正在删除…" : "删除会话"}</button></div></div></div>}
-    {projectContext && <NavigationMenu title={projectContext.project.name} x={projectContext.x} y={projectContext.y} onClose={()=>setProjectContext(null)} actions={[{label:"删除项目",danger:true,run:()=>setNavigationDelete({kind:"project",id:projectContext.project.id,projectId:projectContext.project.id,name:projectContext.project.name})}]}/>}
+    {memoryProject && <ProjectMemory key={memoryProject.id} project={memoryProject} onClose={() => setMemoryProject(null)}/>}
+    {projectContext && <NavigationMenu title={projectContext.project.name} x={projectContext.x} y={projectContext.y} onClose={()=>setProjectContext(null)} actions={[{label:"项目记忆",run:()=>setMemoryProject(projectContext.project)},{label:"删除项目",danger:true,run:()=>setNavigationDelete({kind:"project",id:projectContext.project.id,projectId:projectContext.project.id,name:projectContext.project.name})}]}/>}
     {navigationDelete && <NavigationDelete target={navigationDelete} onClose={()=>setNavigationDelete(null)} onDeleted={async()=>{setResourceTerminalMenu(null);if(navigationDelete.kind==="project" && selectedSession?.projectId===navigationDelete.id)navigate({sessionId:null,resourceId:null});else if(navigationDelete.kind==="resource"&&route.resourceId===navigationDelete.id)navigate({sessionId:route.sessionId,resourceId:null});await refreshCatalog();if(navigationDelete.kind!=="project")await refreshCurrent();}}/>}
     {trashOpen && <NavigationTrash onClose={()=>setTrashOpen(false)} onRestored={async()=>{await refreshCatalog();await refreshCurrent();}}/>}
-    {settingsOpen && <ModelSettings onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined}/>}
+    {settingsOpen && <ModelSettings onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined} ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>}
     {importProject && <ResourceImport project={importProject} hexhub={importHexhub} refresh={refreshCatalog} onClose={() => { setImportProject(null); setImportHexhub(false); }} onImported={notify}/>}
     {sshProject && <div className="modal-scrim"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="ssh-title"><div className="modal-header"><span className="modal-icon"><Glyph name="server" size={20}/></span><button className="icon-button" aria-label="关闭" disabled={sshBusy} onClick={() => { setSshProject(null); setSshDraft(emptySSH()); }}><Glyph name="close"/></button></div><h2 id="ssh-title">新建资源</h2><p className="modal-description">添加 SSH 主机、数据库、Redis 或 Docker，供项目会话使用。</p><form onSubmit={createSsh}><label className="field-label">类型<select value={resourceKind} onChange={event => { setResourceKind(event.target.value); setSshDraft(current => ({...current, password: "", passphrase: "", privateKey: undefined, identityFile: undefined})); setServiceSettings(v => ({ ...v, port: event.target.value === "redis" ? 6379 : 5432 })); }}>{[["ssh", "SSH 主机"], ["database", "数据库"], ["docker", "Docker"], ["redis", "Redis"]].map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}</select></label>
       <label className="field-label">资源名称<input required maxLength={120} value={sshName} onChange={event => setSshName(event.target.value)} autoFocus/></label>
@@ -1239,10 +1277,10 @@ function Brand({ large = false }: { large?: boolean }) {
   return <div className={`brand ${large ? "brand-large" : ""}`}><div className="brand-symbol" aria-hidden="true"><span/><span/><span/></div><div className="brand-word"><strong>lake</strong><small>运维工作台</small></div></div>;
 }
 
-function ResourceDetail({ resource, project, sessions, selectedSession, terminalList, disabled, onBack, onNewSession, onSession }: {
+function ResourceDetail({ resource, project, sessions, selectedSession, terminalList, disabled, onBack, onNewSession, onSession, onEdit }: {
   resource: Resource; project?: Project; sessions: WorkSession[]; selectedSession?: WorkSession;
   terminalList: TerminalSession[]; disabled: boolean; onBack: () => void; onNewSession: () => void;
-  onSession: (sessionId: string) => void;
+  onSession: (sessionId: string) => void; onEdit: () => void;
 }) {
   const inScope = selectedSession?.projectId === resource.projectId;
   const available = resource.status === "available";
@@ -1254,7 +1292,7 @@ function ResourceDetail({ resource, project, sessions, selectedSession, terminal
   const targetSession = usingSessions.find(session => session.id === selectedSession?.id) ?? usingSessions[0]
     ?? (inScope ? selectedSession : undefined);
   return <div className="resource-detail"><button className="back-link" onClick={onBack} disabled={!selectedSession}><Glyph name="arrow" size={15}/>返回当前会话</button><div className="resource-hero"><div className="resource-hero-copy"><span className="section-overline">项目资源 <span className="overline-stroke"/></span><div className="resource-hero-title"><span className="resource-hero-icon"><Glyph name="server" size={30}/></span><div><h1>{resource.name}</h1><p>{project?.name ?? "项目"}中的{resource.kind === "ssh" ? "SSH 主机" : resource.kind === "local" ? "本机资源" : resource.kind === "database" ? "数据库" : resource.kind === "docker" ? "Docker" : "Redis"}</p></div></div></div><div className={`resource-status-badge ${available ? "available" : "unavailable"}`}><span/>{available ? "可用" : "不可用"}</div></div>
-    <div className="resource-detail-grid"><section className="detail-panel"><h2>资源信息</h2><dl className="detail-list"><div><dt>名称</dt><dd>{resource.name}</dd></div><div><dt>资源标识</dt><dd className="machine-text">{resource.id}</dd></div><div><dt>类型</dt><dd>{resource.kind === "ssh" ? "SSH 主机" : resource.kind === "local" ? "本机资源" : resource.kind === "database" ? "数据库" : resource.kind === "docker" ? "Docker" : "Redis"}</dd></div><div><dt>当前状态</dt><dd>{available ? "可用" : "不可用"}</dd></div>{resource.ssh && <div><dt>登录方式</dt><dd>{resource.ssh.authMethod === "password" ? "密码登录" : "密钥登录"}</dd></div>}</dl>{resource.description && <div className="resource-description"><strong>说明</strong><p>{resource.description}</p></div>}</section><section className="detail-panel action-panel"><h2>在会话中使用</h2><p>进入会话后向 Lake 描述问题，或引用此资源开始调查。</p>{targetSession && <div className="context-session"><Glyph name="chat" size={17}/><div><small>{usingSessionIds.has(targetSession.id) ? "正在使用此资源" : "当前会话"}</small><strong>{targetSession.title}</strong></div></div>}{targetSession && <button className="button primary wide" onClick={() => onSession(targetSession.id)}><Glyph name="chat" size={17}/>{usingSessionIds.has(targetSession.id) ? "进入使用中的会话" : "进入当前会话"}<Glyph name="arrow" size={16}/></button>}<button className="button secondary wide" disabled={disabled} onClick={onNewSession}><Glyph name="plus" size={17}/>新建会话</button></section></div>
+    <div className="resource-detail-grid"><section className="detail-panel"><h2>资源信息</h2>{["local","ssh"].includes(resource.kind) && <button type="button" className="button secondary" disabled={disabled} onClick={onEdit}>编辑终端配置</button>}<dl className="detail-list"><div><dt>名称</dt><dd>{resource.name}</dd></div><div><dt>资源标识</dt><dd className="machine-text">{resource.id}</dd></div><div><dt>类型</dt><dd>{resource.kind === "ssh" ? "SSH 主机" : resource.kind === "local" ? "本机资源" : resource.kind === "database" ? "数据库" : resource.kind === "docker" ? "Docker" : "Redis"}</dd></div><div><dt>当前状态</dt><dd>{available ? "可用" : "不可用"}</dd></div>{resource.ssh && <div><dt>登录方式</dt><dd>{resource.ssh.authMethod === "password" ? "密码登录" : "密钥登录"}</dd></div>}</dl>{resource.description && <div className="resource-description"><strong>说明</strong><p>{resource.description}</p></div>}</section><section className="detail-panel action-panel"><h2>在会话中使用</h2><p>进入会话后向 Lake 描述问题，或引用此资源开始调查。</p>{targetSession && <div className="context-session"><Glyph name="chat" size={17}/><div><small>{usingSessionIds.has(targetSession.id) ? "正在使用此资源" : "当前会话"}</small><strong>{targetSession.title}</strong></div></div>}{targetSession && <button className="button primary wide" onClick={() => onSession(targetSession.id)}><Glyph name="chat" size={17}/>{usingSessionIds.has(targetSession.id) ? "进入使用中的会话" : "进入当前会话"}<Glyph name="arrow" size={16}/></button>}<button className="button secondary wide" disabled={disabled} onClick={onNewSession}><Glyph name="plus" size={17}/>新建会话</button></section></div>
     <section className="linked-sessions"><div className="linked-heading"><h2>使用中的会话</h2><span>{usingSessions.length} 条</span></div>{usingSessions.length ? usingSessions.map(session => <button className="linked-row" type="button" key={session.id} onClick={() => onSession(session.id)}><Glyph name="chat" size={16}/><span className="linked-row-text"><strong>{session.title}</strong><small>正在使用此资源</small></span><span className={`session-state state-${session.status}`}>{session.status === "investigating" && <ActivityIndicator/>}{sessionLabels[session.status]}</span><Glyph name="arrow" size={15}/></button>) : <p>暂无会话正在使用此资源。</p>}</section>
   </div>;
 }
