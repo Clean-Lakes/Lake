@@ -3,9 +3,9 @@ package web
 import (
 	"context"
 	"fmt"
-	"github.com/creack/pty"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"github.com/hinshun/vt10x"
-	"golang.org/x/sys/unix"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unicode/utf8"
 )
@@ -30,9 +29,13 @@ type terminalJob struct {
 	startMarker              string
 	started                  bool
 }
+type terminalDevice interface {
+	io.ReadWriteCloser
+	WriteString(string) (int, error)
+}
 type liveTerminal struct {
 	mu                                        sync.Mutex
-	pty                                       *os.File
+	pty                                       terminalDevice
 	cmd                                       *exec.Cmd
 	id, session, readyMarker, pending, output string
 	ready, closed                             bool
@@ -205,11 +208,11 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 			}
 		}
 	}
-	cmd := exec.Command(program, args...)
+	cmd := exec.Command(platform.Executable(program), args...)
 	cmd.Dir = home
-	cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin", "LANG=en_US.UTF-8", "TERM=xterm-256color", "PS1=", "PS2=", "HISTFILE=/dev/null"}
+	cmd.Env = append(platform.Environment(home), "TERM=xterm-256color", "PS1=", "PS2=", "HISTFILE=/dev/null")
 	cmd.Env = append(cmd.Env, authEnv...)
-	f, e := pty.StartWithSize(cmd, &pty.Winsize{Cols: 100, Rows: 30})
+	f, e := startTerminal(cmd, 100, 30)
 	if e != nil {
 		t.mu.Unlock()
 		t.store.TerminalStatus(id, tid, "disconnected")
@@ -590,7 +593,7 @@ func (t *Terminals) Resize(id, tid string, cols, rows int) {
 	l := t.get(id, tid)
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	must(pty.Setsize(l.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)}))
+	must(resizeTerminal(l.pty, cols, rows))
 	l.screen.Resize(cols, rows)
 }
 func (t *Terminals) Screen(id, tid, mode string, lines, maxChars int) string {
@@ -719,19 +722,13 @@ func (t *Terminals) closeLive(l *liveTerminal, reason string) {
 	t.mu.Lock()
 	delete(t.live, l.id)
 	t.mu.Unlock()
-	if l.cmd.Process != nil {
-		if foreground, e := unix.IoctlGetInt(int(l.pty.Fd()), unix.TIOCGPGRP); e == nil && foreground > 0 && foreground != syscall.Getpgrp() {
-			syscall.Kill(-foreground, syscall.SIGKILL)
-		}
-	}
+	killForeground(l)
 	l.pty.Close()
 	if l.cmd.Process != nil {
 		killTerminal(l.cmd.Process.Pid)
 	}
 }
 
-// A PTY shell owns its session. Kill foreground children as well as the shell's process group.
-func killTerminal(pid int) { syscall.Kill(-pid, syscall.SIGKILL); syscall.Kill(pid, syscall.SIGKILL) }
 func (t *Terminals) CloseSession(id string) {
 	t.mu.Lock()
 	a := []*liveTerminal{}

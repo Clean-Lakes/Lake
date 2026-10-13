@@ -16,11 +16,15 @@ func boundedShellPolling(ctx context.Context) context.Context {
 }
 
 func shellPollingProgress(ctx context.Context, call Call, value any) error {
-	if call.Name != "wait_shell" && call.Name != "shell_output" {
-		return nil
-	}
 	guard, _ := ctx.Value(shellPollingKey{}).(*shellPollGuard)
 	if guard == nil {
+		return nil
+	}
+	if call.Name != "wait_shell" && call.Name != "shell_output" {
+		// Other tool work between polls is progress; only consecutive fruitless
+		// polls on the same job count toward the no-progress bound.
+		guard.fingerprints = map[string]string{}
+		guard.unchanged = map[string]int{}
 		return nil
 	}
 	a, err := args(call)

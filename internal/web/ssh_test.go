@@ -82,13 +82,16 @@ func TestRealSSHPersistentPTY(t *testing.T) {
 	}
 	b.Terminals.Resize(sid, tid, 90, 25)
 	b.Terminals.Close(sid, tid)
-	// AI conversation setup connects SSH before a model that makes no calls,
-	// and a later unmentioned turn keeps reading the same remote PTY.
+	// The model chooses SSH inspection; a later unmentioned turn can choose
+	// to refresh through the same remote PTY.
 	var remoteTerminal atomic.Value
 	var rounds atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		var req Object
 		json.NewDecoder(request.Body).Decode(&req)
+		if fixtureModelInspect(w, req, stringOf(r["id"]), "ssh") {
+			return
+		}
 		latest := Object{}
 		for _, m := range objects(req["messages"]) {
 			if m["role"] == "tool" && m["name"] == "inspect_host" {
@@ -96,7 +99,7 @@ func TestRealSSHPersistentPTY(t *testing.T) {
 			}
 		}
 		if latest["runtime"] != "ssh" || latest["status"] != "ready" || len(objects(latest["checks"])) < 4 {
-			t.Error("initial model request lacked real SSH session evidence")
+			t.Error("model-selected SSH inspection lacked real session evidence")
 		}
 		if rounds.Add(1) == 1 {
 			remoteTerminal.Store(stringOf(latest["terminal_id"]))

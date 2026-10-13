@@ -6,7 +6,7 @@
 .agent-lead-copy { flex: 1; min-width: 0; }
 .agent-lead-copy > div { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .agent-lead-copy strong { font-size: 14px; font-weight: 500; }
-.agent-group-state { color: var(--agent-green); font-size: 12px; }
+.agent-group-state { display: inline-flex; align-items: center; gap: 6px; color: var(--agent-green); font-size: 12px; }
 .agent-lead-copy p { margin: 5px 0 0; color: var(--agent-muted); font-size: 13px; line-height: 1.6; }
 .agent-task-body { margin: 18px 0 0 17px; border-left: 1px solid var(--agent-line); padding-left: 28px; }
 .agent-task-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 10px; color: var(--agent-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -52,8 +52,6 @@
 .agent-task-usage { margin-top: 12px; color: var(--agent-muted); font-variant-numeric: tabular-nums; }
 .thinking-agent-name { color: var(--ink); font-size: 13px; font-weight: 500; flex-shrink: 0; }
 .thinking-toggle .agent-role-icon, .ai-progress-activity .agent-role-icon { color: #2c7971; }
-/* Override older shimmering labels without lowering the contrast of completed work. */
-.thinking-timeline.is-processing .thinking-label, .ai-progress-activity.is-processing .ai-progress-text { animation: none; background: none; color: #68766e; -webkit-text-fill-color: currentColor; }
 @media (max-width: 640px) {
   .agent-task-body { margin-left: 10px; padding-left: 14px; }
   .agent-task-row > details > summary { grid-template-columns: 20px minmax(0, 1fr) 14px; gap: 7px; }

@@ -4,16 +4,13 @@ import (
 	"context"
 	"strings"
 	"time"
-
-	"github.com/Clean-Lakes/Lake/internal/ai"
 )
 
-// hostPrelude binds the explicitly referenced hosts (or the remembered target)
-// before model inference. The engine runs these read-only calls inside the turn
-// so stop/cancellation, history and operation cards use the normal tool path.
-func (b *Server) hostPrelude(id string, refs []Object, options Object) []ai.Call {
+// bindReferenceTargets records the user-selected resource/terminal metadata.
+// It does not select an investigation strategy or execute any host operation.
+func (b *Server) bindReferenceTargets(id string, refs []Object, options Object) {
 	if options["profile"] != "core" {
-		return nil
+		return
 	}
 	targets := []Object{}
 	seen := map[string]bool{}
@@ -29,32 +26,11 @@ func (b *Server) hostPrelude(id string, refs []Object, options Object) []ai.Call
 		seen[ref] = true
 		targets = append(targets, r)
 	}
-	explicitTarget := false
 	for _, ref := range refs {
-		if stringOf(ref["asset_ref"]) != "" {
-			explicitTarget = true
-		}
 		add(stringOf(ref["asset_ref"]))
 	}
-	if len(targets) == 0 && !explicitTarget {
-		if options["blockUnreferencedAssets"] == true {
-			return nil
-		}
-		add(stringOf(options["asset_ref"]))
-		if len(targets) == 0 && options["asset_ref"] == "" {
-			var hosts []Object
-			for _, r := range objects(b.sessionSnapshot(id)["resources"]) {
-				if set("local ssh")[stringOf(r["kind"])] {
-					hosts = append(hosts, r)
-				}
-			}
-			if len(hosts) == 1 {
-				add(stringOf(hosts[0]["id"]))
-			}
-		}
-	}
 	if len(targets) == 0 {
-		return nil
+		return
 	}
 	primary := targets[0]
 	updates := Object{"asset_ref": primary["id"], "runtime": primary["kind"]}
@@ -81,11 +57,6 @@ func (b *Server) hostPrelude(id string, refs []Object, options Object) []ai.Call
 		}
 	}
 	b.configure(id, updates)
-	calls := []ai.Call{}
-	for _, r := range targets {
-		calls = append(calls, ai.Call{ID: ident(), Name: "inspect_host", Arguments: jsonText(Object{"asset_ref": r["id"], "runtime": r["kind"]})})
-	}
-	return calls
 }
 
 func (b *Server) reusableHostTerminal(id, ref string, selected ...string) Object {

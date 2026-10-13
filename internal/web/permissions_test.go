@@ -18,8 +18,14 @@ import (
 func TestProgressiveTerminalPermissionCloseAndRecreate(t *testing.T) {
 	b, h := fixture(t)
 	id, ref := newSession(t, h)
+	b.Store.SaveOptions(id, Object{"contextWindow": 131072})
 	var requests atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req Object
+		must(json.NewDecoder(r.Body).Decode(&req))
+		if fixtureModelInspect(w, req, ref, "local") {
+			return
+		}
 		requests.Add(1)
 		emitModel(w, "会话授权状态已处理", nil)
 	}))
@@ -108,6 +114,10 @@ func TestSessionPermissionSettingsAndBlocks(t *testing.T) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req Object
 		json.NewDecoder(r.Body).Decode(&req)
+		messages := objects(req["messages"])
+		if len(messages) > 0 && strings.Contains(stringOf(messages[len(messages)-1]["content"]), "[HEXHUB_REFERENCES]") && fixtureModelInspect(w, req, ref, "local") {
+			return
+		}
 		for _, m := range objects(req["messages"]) {
 			if m["role"] == "tool" && strings.Contains(stringOf(m["content"]), "禁止本机执行") {
 				blocked.Store(true)

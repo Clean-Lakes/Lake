@@ -3,6 +3,7 @@ package web
 import (
 	"errors"
 	"github.com/Clean-Lakes/Lake/internal/ai"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"golang.org/x/crypto/ssh"
 	"io"
 	"os"
@@ -104,7 +105,7 @@ func listSSHKeys(directory string) Object {
 		fail(400, "无法读取密钥目录")
 	}
 	info, e := os.Stat(real)
-	if e != nil || !info.IsDir() || !owned(info) || info.Mode().Perm()&0077 != 0 {
+	if e != nil || !info.IsDir() || !platform.Private(real, info) {
 		fail(400, "密钥目录须归当前用户所有，权限为 0700")
 	}
 	entries, e := os.ReadDir(real)
@@ -162,9 +163,9 @@ func prepareSSH(home string, input Object) (config Object, cleanup func()) {
 	}()
 	root := filepath.Join(home, "secrets")
 	save := func(prefix string, data []byte) string {
-		must(os.MkdirAll(root, 0700))
+		must(platform.MkdirAll(root, 0700))
 		info, e := os.Stat(root)
-		if e != nil || !owned(info) || info.Mode().Perm()&0077 != 0 {
+		if e != nil || !platform.Private(root, info) {
 			fail(400, "Lake 凭据目录权限须为 0700")
 		}
 		ref := prefix + ident()

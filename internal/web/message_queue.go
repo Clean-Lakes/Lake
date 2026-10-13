@@ -113,6 +113,9 @@ func (b *Server) launchMessageLocked(id string, message humanMessage) {
 	go b.runTurn(id, message.Text, message.Images, message.References, message.Files)
 }
 func (b *Server) submitHumanMessage(id string, data Object) Object {
+	if b.Store.ActiveWorkflowRun(id) != "" {
+		fail(409, "此会话正在执行工作流，请停止或等待工作流结束后再发送消息")
+	}
 	message := b.validateHumanMessage(id, data)
 	b.messageMu.Lock()
 	defer b.messageMu.Unlock()

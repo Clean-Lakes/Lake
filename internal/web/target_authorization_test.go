@@ -171,7 +171,7 @@ func TestMultiTerminalBindingDoesNotGuessOrSwitch(t *testing.T) {
 	defer provider.Close()
 	b.Models.Save(&ai.Model{URL: provider.URL, Name: "targets", Protocol: "openai"})
 	b.Store.SaveOptions(id, Object{"asset_ref": ref, "runtime": "local", "terminal_id": a})
-	b.hostPrelude(id, []Object{{"asset_ref": ref, "terminal_id": z}}, b.sessionOptions(id))
+	b.bindReferenceTargets(id, []Object{{"asset_ref": ref, "terminal_id": z}}, b.sessionOptions(id))
 	if b.Store.Options(id)["terminal_id"] != z {
 		t.Fatal("explicit terminal reference did not bind")
 	}
@@ -185,7 +185,8 @@ func TestUnqualifiedMultipleHostsRequiresTargetConfirmation(t *testing.T) {
 	session := b.Store.CreateSession(project, "ambiguous hosts", []string{ref, stringOf(other["id"])})
 	sid := stringOf(session["id"])
 	expectPanic(t, 409, func() { b.hostResource(sid, "") })
-	if prelude := b.hostPrelude(sid, nil, b.sessionOptions(sid)); len(prelude) != 0 {
+	b.bindReferenceTargets(sid, nil, b.sessionOptions(sid))
+	if b.Store.Options(sid)["asset_ref"] != nil && b.Store.Options(sid)["asset_ref"] != "" {
 		t.Fatal("multiple resources chose an implicit primary")
 	}
 	result, err := b.bridge(context.Background(), sid, "policy", Object{"name": "inspect_host", "arguments": Object{"asset_ref": ref, "runtime": "local"}}, false)

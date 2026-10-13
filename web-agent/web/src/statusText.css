@@ -1,0 +1,16 @@
+.status-text { display: inline-block; min-width: 0; max-width: 100%; vertical-align: middle; }
+.status-text--active { color: var(--status-text-base, #78837d); }
+.agent-group-state, .agent-task-status.status-running { --status-text-base: #2c7971; }
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  .status-text--active {
+    color: transparent; -webkit-text-fill-color: transparent;
+    /* Every stop is opaque: the letters stay readable throughout the sweep. */
+    background: linear-gradient(105deg, var(--status-text-base, #78837d) 36%, #35473f 48%, #243a31 50%, #35473f 52%, var(--status-text-base, #78837d) 64%);
+    background-size: 250% 100%; background-clip: text; -webkit-background-clip: text;
+    animation: status-text-sweep 1.8s linear infinite;
+  }
+}
+@keyframes status-text-sweep { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .status-text--active { animation: none; background: none; color: var(--status-text-base, #78837d); -webkit-text-fill-color: currentColor; }
+}

@@ -140,6 +140,19 @@ func TestProviderErrorDetailsRedactCredentials(t *testing.T) {
 		t.Fatal("provider error was hidden or credentials were not redacted")
 	}
 }
+func TestStreamErrorDetailsRedactCredentials(t *testing.T) {
+	const key = "synthetic-stream-test-key"
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n")
+		fmt.Fprintf(w, "data: {\"error\":{\"message\":\"DeepSeek: connection lost mid-response; credential %s\"}}\n\n", key)
+	}))
+	defer provider.Close()
+	_, err := Stream(context.Background(), Model{URL: provider.URL, Name: "deepseek/deepseek-flash", Protocol: "openai", Key: key}, nil, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "connection lost mid-response") || strings.Contains(err.Error(), key) {
+		t.Fatal("stream error detail was hidden or credentials were not redacted")
+	}
+}
 func TestRestoreRejectsOrphanBatches(t *testing.T) {
 	for _, history := range [][]Message{{{Role: "tool", CallID: "orphan"}}, {{Role: "assistant", Calls: []Call{{ID: "id", Name: "read", Arguments: "{}"}}}, {Role: "user", Content: "skip tool"}}, {{Role: "assistant", Calls: []Call{{ID: "id"}, {ID: "id"}}}}} {
 		if validHistory(history) == nil {

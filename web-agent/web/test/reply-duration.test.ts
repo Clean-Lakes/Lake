@@ -1,0 +1,34 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {createElement} from "react";
+import {renderToStaticMarkup} from "react-dom/server";
+import type {ReplyTiming,SessionSnapshot} from "../../shared/contracts";
+import {replyDurationText,timingForTurn} from "../src/replyDurationState";
+import {AITranscript} from "../src/AIPanel";
+
+const start="2026-10-12T03:00:00Z";
+const timing:ReplyTiming={messageId:"u",startedAt:start,finishedAt:"2026-10-12T03:01:13Z",status:"completed"};
+test("completed duration stays frozen and quick answers show a meaningful duration",()=>{
+ assert.equal(replyDurationText(timing,Date.parse(start)+9_000_000),"回答耗时 1分钟 13秒");
+ assert.equal(replyDurationText({...timing,finishedAt:start},Date.now()),"回答耗时 不到1秒");
+ assert.equal(replyDurationText({...timing,status:"running",finishedAt:""},Date.parse(start)+19000),"正在回答 · 已用时 19秒");
+ assert.equal(replyDurationText({...timing,status:"running"},Date.parse(start)+19000,true),"等待确认 · 已用时 19秒");
+});
+test("cancelled and failed turns are identified; unknown endpoints do not fabricate time",()=>{
+ assert.equal(replyDurationText({...timing,status:"cancelled"},Date.now()),"本轮耗时 1分钟 13秒 · 已停止");
+ assert.equal(replyDurationText({...timing,status:"failed"},Date.now()),"本轮耗时 1分钟 13秒 · 未完成");
+ assert.equal(replyDurationText({...timing,status:"interrupted",finishedAt:""},Date.now()),undefined);
+ assert.equal(replyDurationText({...timing,finishedAt:""},Date.now()),undefined);
+ assert.equal(replyDurationText({...timing,startedAt:"invalid"},Date.now()),undefined);
+ assert.equal(replyDurationText({...timing,finishedAt:"2026-10-12T02:00:00Z"},Date.now()),undefined);
+});
+test("each footer stays with its own user turn and multi-Agent replies keep one timer",()=>{
+ const snapshot={session:{id:"s"},messages:[{id:"u",role:"user",text:"你好",createdAt:start},{id:"v",role:"user",text:"谢谢",createdAt:"2026-10-12T03:02:00Z"}],resources:[],actions:[],specialists:[],evidence:[],replyTimings:[timing,{messageId:"v",startedAt:"2026-10-12T03:02:00Z",finishedAt:"2026-10-12T03:02:04Z",status:"completed"}],ai:{session:"s",status:"completed",startedAt:start,turnStartedAt:"2026-10-12T03:02:00Z",turnFinishedAt:"2026-10-12T03:02:04Z",cardsOffset:0,cards:[{id:"reply1",type:"message",content:"你好。",status:"completed",at:"2026-10-12T03:00:10Z"},{id:"reply2",type:"message",content:"不客气。",status:"completed",at:"2026-10-12T03:02:01Z"}],agentRuns:[{id:"run",sessionId:"s",role:"host",task:"检查",status:"completed",resourceIds:[],createdAt:"2026-10-12T03:00:01Z"}]}} as SessionSnapshot;
+ assert.equal(timingForTurn([{id:"u",at:start,message:snapshot.messages[0]}],snapshot),timing);
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.equal((html.match(/aria-label="回答耗时"/g)||[]).length,2);
+ assert.ok(html.includes("回答耗时 1分钟 13秒"));assert.ok(html.includes("回答耗时 4秒"));assert.ok(!html.includes("已处理"));
+ const legacy={...snapshot,replyTimings:undefined};
+ assert.equal(timingForTurn([{id:"u",at:start,message:snapshot.messages[0]}],legacy),undefined);
+ assert.equal(timingForTurn([{id:"v",at:snapshot.messages[1]!.createdAt,message:snapshot.messages[1]}],legacy)?.finishedAt,snapshot.ai!.turnFinishedAt);
+});

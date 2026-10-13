@@ -79,6 +79,30 @@ func TestRepeatedUnchangedBackgroundPollingFinishesTurn(t *testing.T) {
 	}
 }
 
+func TestWorkBetweenPollsKeepsWaiting(t *testing.T) {
+	ctx := boundedShellPolling(context.Background())
+	poll := Call{Name: "shell_output", Arguments: `{"shell_id":"job"}`}
+	status := map[string]any{"status": "running", "result": "unchanged"}
+	// 轮询间隙执行其他命令是真实进展，不算重复询问，长任务等待期间不应终止整轮。
+	for i := 0; i < 4; i++ {
+		if err := shellPollingProgress(ctx, poll, status); err != nil {
+			t.Fatal("poll after real work paused the wait", err)
+		}
+		if err := shellPollingProgress(ctx, Call{Name: "shell", Arguments: `{}`}, map[string]any{"status": "ok"}); err != nil {
+			t.Fatal("unrelated tool call treated as a poll", err)
+		}
+	}
+	// 连续三次没有新信息的轮询仍然停止整轮。
+	for i := 0; i < 2; i++ {
+		if err := shellPollingProgress(ctx, poll, status); err != nil {
+			t.Fatal("consecutive polls bounded too early", err)
+		}
+	}
+	if err := shellPollingProgress(ctx, poll, status); err == nil {
+		t.Fatal("consecutive unchanged polling was not bounded")
+	}
+}
+
 func TestNewOutputResetsPollingGuard(t *testing.T) {
 	ctx := boundedShellPolling(context.Background())
 	call := Call{Name: "shell_output", Arguments: `{"shell_id":"job"}`}

@@ -100,3 +100,30 @@
         position INTEGER NOT NULL, payload TEXT NOT NULL, createdAt TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS queued_messages_session ON queuedMessages(sessionId,position);
+      CREATE TABLE IF NOT EXISTS replyTimings (
+        messageId TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+        sessionId TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        startedAt TEXT NOT NULL, finishedAt TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'running'
+      );
+      CREATE INDEX IF NOT EXISTS reply_timings_session ON replyTimings(sessionId,startedAt);
+
+CREATE TABLE IF NOT EXISTS workflows (
+ id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
+ name TEXT NOT NULL, goal TEXT NOT NULL, steps TEXT NOT NULL,
+ version INTEGER NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS workflows_project ON workflows(projectId,updatedAt);
+CREATE TABLE IF NOT EXISTS workflowRuns (
+ id TEXT PRIMARY KEY, workflowId TEXT REFERENCES workflows(id) ON DELETE SET NULL,
+ projectId TEXT NOT NULL REFERENCES projects(id), sessionId TEXT UNIQUE NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+ template TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('running','completed','failed','cancelled','interrupted')),
+ error TEXT NOT NULL DEFAULT '', createdAt TEXT NOT NULL, finishedAt TEXT
+);
+CREATE INDEX IF NOT EXISTS workflow_runs_project ON workflowRuns(projectId,createdAt);
+      CREATE TABLE IF NOT EXISTS navigationTrash (
+        kind TEXT NOT NULL CHECK(kind IN ('project','resource','folder')),
+        id TEXT NOT NULL, projectId TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        name TEXT NOT NULL, payload TEXT NOT NULL DEFAULT '{}', deletedAt TEXT NOT NULL,
+        PRIMARY KEY(kind,id)
+      );

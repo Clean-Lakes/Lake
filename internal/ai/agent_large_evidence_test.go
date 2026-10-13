@@ -22,6 +22,9 @@ func TestLargeAgentEvidenceUsesBoundedModelHandoffs(t *testing.T) {
 			if step == 1 {
 				return response("", Call{"delegate", "delegate_investigation", js(map[string]any{"tasks": []investigationSpec{{Role: "application", Task: "Read fixture log", AssetRefs: []string{ref}, Context: strings.Repeat("bounded handoff ", 850)}}})})
 			}
+			if step == 2 {
+				return response("", Call{"verify", "delegate_investigation", js(map[string]any{"tasks": []investigationSpec{{Role: "verify", Task: "Review observed data"}}})})
+			}
 			return response("result")
 		}
 		if step == 1 {

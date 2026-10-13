@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -107,8 +108,8 @@ func (m *Models) readProviderCatalogLocked() (*providerCatalog, bool) {
 	return &catalog, true
 }
 func (m *Models) saveProviderCatalogLocked(catalog *providerCatalog) {
-	must(os.MkdirAll(m.Dir, 0700))
-	must(os.Chmod(m.Dir, 0700))
+	must(platform.MkdirAll(m.Dir, 0700))
+	must(platform.Chmod(m.Dir, 0700))
 	must(atomicFile(filepath.Join(m.Dir, "providers.json"), []byte(jsonText(catalog)+"\n")))
 	m.capacities = nil
 }
@@ -117,9 +118,9 @@ func (m *Models) saveProviderKeyLocked(key string) string {
 		return ""
 	}
 	dir := filepath.Join(m.Home, "secrets")
-	must(os.MkdirAll(dir, 0700))
+	must(platform.MkdirAll(dir, 0700))
 	info, err := os.Stat(dir)
-	if err != nil || !owned(info) || info.Mode().Perm()&0077 != 0 {
+	if err != nil || !platform.Private(dir, info) {
 		fail(400, "Lake 凭据目录权限须为 0700")
 	}
 	ref := "provider-model-" + ident() + ".key"

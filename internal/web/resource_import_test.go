@@ -134,6 +134,70 @@ func TestHexHubImportKeepsKeysLocal(t *testing.T) {
 	}
 }
 
+func TestHexHubV4ExportUsesDataKeyAndNestedConfig(t *testing.T) {
+	// HexHub v4 exports keep the connection list under "data" and nest each
+	// connection's config as an object (not a JSON string). Synthesise credentials.
+	b, h := fixture(t)
+	id, _ := newSession(t, h)
+	project := stringOf(b.Store.Session(id)["projectId"])
+	path := filepath.Join(t.TempDir(), "synthetic_v4_key")
+	if exec.Command("/usr/bin/ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", path).Run() != nil {
+		t.Fatal("synthetic key generation failed")
+	}
+	key, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal("synthetic key unavailable")
+	}
+	encrypt := func(value string) string {
+		data := []byte(value)
+		padding := aes.BlockSize - len(data)%aes.BlockSize
+		for i := 0; i < padding; i++ {
+			data = append(data, byte(padding))
+		}
+		block, _ := aes.NewCipher([]byte("CsN#&Uc!aOUQbh&B"))
+		cipher.NewCBCEncrypter(block, []byte("w6KQ^MPlEx*mfHcb")).CryptBlocks(data, data)
+		return base64.StdEncoding.EncodeToString(data)
+	}
+	doc := Object{"version": 4, "time": "Date(1791791576386)", "sign": "synthetic-sign", "data": []Object{
+		{
+			"id": "0e63c6e9-284c-4063-b58b-57a07a1187a3", "memberId": "synthetic-member",
+			"type": 2, "dirPath": "/", "name": "京东云主机", "keyword": "京东云主机 36.151.150.63 root",
+			"data": Object{
+				"host": "36.151.150.63", "port": 22, "user": "root", "authType": 1,
+				"privateKey":   encrypt(jsonText(Object{"name": "Key", "privateKey": string(key)})),
+				"privateKeyId": "51b74989-1137-4f90-b3ba-b83cedfcabba",
+				"agentType": "auto", "charset": "UTF-8", "terminalType": "xterm-256color",
+				"proxy": Object{"method": 0}, "tunnels": []Object{},
+			},
+			"updated": "Date(1787133481294)", "created": "Date(1787133481293)",
+		},
+	}}
+	preview := b.previewResourceImport(context.Background(), project, id, Object{"name": "HexHub-连接配置.json", "text": jsonText(doc)})
+	rows := objects(preview["resources"])
+	if len(rows) != 1 {
+		t.Fatalf("HexHub v4 preview: want 1 candidate, got %d", len(rows))
+	}
+	if rows[0]["error"] != "" {
+		t.Fatalf("HexHub v4 candidate rejected: %v", rows[0]["error"])
+	}
+	if strings.Contains(jsonText(preview), "PRIVATE KEY") {
+		t.Fatal("HexHub v4 preview leaked a private key")
+	}
+	result := b.commitResourceImport(project, id, stringOf(preview["planId"]), nil)
+	if integer(result["createdCount"]) != 1 {
+		t.Fatalf("HexHub v4 import failed: %v", result)
+	}
+	for _, resource := range objects(b.Store.Catalog()["resources"]) {
+		if resource["kind"] != "ssh" {
+			continue
+		}
+		data, err := os.ReadFile(stringOf(object(resource["ssh"])["identityFile"]))
+		if err != nil || string(data) != string(key) {
+			t.Fatal("imported v4 key content mismatch")
+		}
+	}
+}
+
 func TestLocalTextImportDecodingAndMasking(t *testing.T) {
 	for _, data := range [][]byte{{0xff, 0xfe, 0x41, 0}, {0xfe, 0xff, 0, 0x41}, {0x41}} {
 		if decodeImportFile(data) != "A" {

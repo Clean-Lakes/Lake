@@ -20,6 +20,9 @@ func DefaultPermissions() Permissions {
 }
 
 func approvalKind(c Config, name, risk string, context map[string]any) (string, error) {
+	if name == "list_assets" || name == "list_resource_groups" {
+		return "", nil
+	}
 	p := DefaultPermissions()
 	if c.Permissions != nil {
 		p = *c.Permissions
@@ -81,7 +84,7 @@ func approvalKind(c Config, name, risk string, context map[string]any) (string, 
 		return "", nil
 	}
 	switch name {
-	case "observe_logs":
+	case "observe_logs", "observe_journal", "observe_cluster_logs":
 		if !p.SilentReadFiles {
 			return "file_read", nil
 		}

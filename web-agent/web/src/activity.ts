@@ -2,8 +2,9 @@ import type { AICard, AIView } from "../../shared/contracts";
 import { compareTime } from "./timeline";
 
 export const toolLabels: Record<string, string> = {
+  observe_host: "检查主机指标", observe_cluster: "检查 Kubernetes 集群", observe_cluster_logs: "读取 Pod 日志", observe_journal: "读取服务日志", observe_logs: "查看应用日志", observe_data: "检查数据服务", read_evidence: "复核原始证据", delegate_investigation: "分派调查任务", read_investigation: "查看调查结果",
   inspect_host: "检查主机状态", shell: "执行命令", terminal_execute_command: "执行终端命令",
-  list_assets: "查找资源", read: "读取文件", read_file: "读取文件",
+  list_assets: "查找资源", list_resource_groups: "查看资源目录", read: "读取文件", read_file: "读取文件",
   write: "写入文件", write_file: "写入文件", append: "追加文件", edit: "编辑文件",
   edit_file: "编辑文件", multi_edit: "编辑文件", delete: "删除文件",
   ls: "列出文件", glob: "查找文件", grep: "搜索文件", list_files: "列出文件",

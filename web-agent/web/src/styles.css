@@ -63,6 +63,8 @@ a { color: inherit; }
 .nav-section-toggle:hover { color: #397d73; }
 .nav-section-toggle > svg { flex-shrink: 0; transform: rotate(-90deg); transition: transform .15s ease; }
 .nav-section-toggle > .chevron-open { transform: rotate(0); }
+.nav-show-more { display: block; margin: 4px 0 8px 12px; padding: 5px 8px; border: 0; border-radius: 6px; background: transparent; color: #7a8b80; font: inherit; font-size: 11px; cursor: pointer; }
+.nav-show-more:hover { background: #e7eae2; color: #397d73; }
 .resource-add-control { position: relative; }
 .resource-create-trigger { display: inline-flex; width: auto; gap: 3px; padding: 0 6px; font-size: 11px; }
 .resource-add-menu { position: absolute; top: calc(100% + 3px); right: 0; z-index: 10; width: 198px; padding: 4px; border: 1px solid #d7dfd7; border-radius: 8px; background: #fffefa; box-shadow: 0 5px 18px #2330281a; }
@@ -141,6 +143,7 @@ a { color: inherit; }
 .modal.resource-import-dialog { width: min(720px, calc(100vw - 32px)); }
 .resource-import-dialog > p { color: #758278; font-size: 12px; line-height: 1.7; }
 .resource-import-dialog > label { display: grid; gap: 8px; margin-top: 16px; }
+.resource-import-dialog > label + .button { margin-top: 16px; }
 .resource-import-dialog textarea { width: 100%; box-sizing: border-box; border: 1px solid #dbe2dc; border-radius: 8px; padding: 10px; background: #fffefa; color: #3b4a3f; font: inherit; resize: vertical; }
 .resource-import-rows { max-height: 48vh; overflow: auto; margin: 12px 0; border: 1px solid #dbe2dc; border-radius: 8px; }
 .resource-import-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #e6eae6; }
@@ -396,9 +399,17 @@ a { color: inherit; }
 .button.primary:hover:not(:disabled) { background: #246864; border-color: #246864; }
 .button.secondary { color: #526459; background: #fffefa; border-color: #dedfd7; }
 .button.secondary:hover:not(:disabled) { background: #f3f5ee; border-color: #bfcbbd; }
-.button:disabled { opacity: .52; }
 .button.danger { background: #a6554a; border-color: #a6554a; color: #fff; }
 .button.danger:hover:not(:disabled) { background: #8f463c; border-color: #8f463c; }
+/* Disabled variants mute their own fill and label; fading the whole button with
+   opacity washes the label into the fill and makes it unreadable. */
+.button:disabled { background: #f0f2ee; border-color: #e4e6df; color: #879487; }
+.button.primary:disabled { background: #dfe4de; border-color: #dfe4de; color: #6f7d74; }
+.button.secondary:disabled { background: #fbfbf8; border-color: #e4e6df; color: #879487; }
+.button.danger:disabled { background: #e4d9d5; border-color: #e4d9d5; color: #87685f; }
+.button.approval-button:disabled { background: #e8e0d4; border-color: #e8e0d4; color: #7e6748; }
+.button.handoff-button:disabled { background: #faf6f0; border-color: #e6d9c7; color: #a08b72; }
+.button.command-button:disabled { background: #eef2ec; border-color: #dfe6db; color: #6f7d74; }
 .modal-icon.danger-icon { background: #f8e8e4; color: #a6554a; }
 .icon-button { display: grid; place-items: center; width: 33px; height: 33px; border: 0; border-radius: 8px; background: transparent; color: #75847a; }
 .icon-button:hover:not(:disabled) { background: #eeeee9; color: #276f69; }
@@ -867,34 +878,9 @@ a { color: inherit; }
 
 .ssh-key-file-input::file-selector-button { border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; margin-right: 10px; background: #fff; color: var(--ink); cursor: pointer; font: inherit; }
 
-/* A quiet moving highlight and water ripple keep the active status alive. */
-@supports ((background-clip: text) or (-webkit-background-clip: text)) {
-  .thinking-timeline.is-processing .thinking-label,
-  .ai-progress-activity.is-processing .ai-progress-text {
-    background-image: linear-gradient(105deg, #8c9690 30%, #61766e 43%, #254c40 50%, #61766e 57%, #8c9690 70%);
-    background-size: 250% 100%;
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
-    animation: thinking-shimmer 2.25s linear infinite;
-  }
-}
-.is-processing .lake-thinking-drop { animation: thinking-drop-float 2.25s ease-in-out infinite; }
-.is-processing .lake-thinking-ripple,
-.is-processing .lake-thinking-wave { transform-box: fill-box; transform-origin: center; }
-.is-processing .lake-thinking-ripple { animation: thinking-water-ripple 2.25s ease-in-out infinite; }
-.is-processing .lake-thinking-wave { animation: thinking-water-ripple 2.25s .3s ease-in-out infinite; }
-@keyframes thinking-shimmer { from { background-position: 140% 0; } to { background-position: -140% 0; } }
-@keyframes thinking-drop-float { 0%, 100% { transform: translateY(-1px); opacity: .65; } 45% { transform: translateY(.8px); opacity: 1; } }
-@keyframes thinking-water-ripple { 0%, 100% { transform: scale(.8, .86); opacity: .45; } 55% { transform: scale(1.06, 1); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-  .thinking-timeline.is-processing .thinking-label,
-  .ai-progress-activity.is-processing .ai-progress-text { animation: none; background: none; color: #757c85; -webkit-text-fill-color: currentColor; }
-  .is-processing .lake-thinking-drop,
-  .is-processing .lake-thinking-ripple,
-  .is-processing .lake-thinking-wave { animation: none; transform: none; opacity: 1; }
-}
+/* Active labels keep a solid base color throughout their moving highlight. */
+.thinking-timeline.is-processing .thinking-label,
+.ai-progress-activity.is-processing .ai-progress-text { --status-text-base: #78837d; }
 
 .resource-terminal-menu, .resource-terminal-connections { scrollbar-width: thin; scrollbar-color: #c7d2c5 transparent; }
 .resource-terminal-menu::-webkit-scrollbar, .resource-terminal-connections::-webkit-scrollbar { width: 5px; }
@@ -911,3 +897,30 @@ a { color: inherit; }
  .activity-indicator,.session-activity {animation:none;}
  .session-nav-row {transition:none;}
 }
+
+.reply-duration {display:flex;align-items:center;gap:6px;margin:12px 0 24px;color:#919991;font-size:11px;line-height:1.5;font-variant-numeric:tabular-nums;}
+.reply-duration svg {flex-shrink:0;}
+.reply-duration.is-live {color:#82958c;}
+
+.project-heading-row {display:flex;align-items:center;gap:2px;}
+.project-heading-row .project-toggle {flex:1;min-width:0;}
+.navigation-delete-button {display:grid;place-items:center;flex:0 0 25px;width:25px;height:27px;padding:3px;border:0;border-radius:5px;background:transparent;color:#8d9a8e;cursor:pointer;}
+.navigation-delete-button:hover:not(:disabled) {background:#f0e3dc;color:#a66051;}
+.navigation-delete-button:disabled {opacity:.35;}
+.project-delete-button {margin-right:7px;}
+.resource-tree-resource-content {flex:1;min-width:0;}
+.resource-delete-button {margin-right:2px;}
+.navigation-context-menu {position:fixed;z-index:100;min-width:200px;max-width:260px;padding:5px;border:1px solid #dce3d8;border-radius:9px;background:#fffefa;box-shadow:0 8px 28px #253b2925;color:#536d59;}
+.navigation-context-menu>small {display:block;font-size:10px;color:#96a08d;padding:7px 9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.navigation-context-menu>button {display:flex;align-items:center;gap:8px;width:100%;padding:8px 9px;border:0;border-radius:5px;background:none;text-align:left;color:inherit;font-size:12px;}
+.navigation-context-menu>button:hover,.navigation-context-menu>button:focus-visible {background:#edf2e7;outline:none;}
+.navigation-context-menu>button.danger-text {color:#ac7461;}
+.sidebar-trash {display:flex;align-items:center;gap:9px;width:calc(100% - 20px);margin:4px 10px 0;padding:8px 11px;border:0;border-radius:8px;background:none;color:#859080;font-size:11px;}
+.sidebar-trash:hover:not(:disabled) {background:#eaece4;}
+.navigation-trash-dialog.modal {width:min(640px,calc(100vw - 36px));}
+.navigation-trash-list {list-style:none;margin:0;padding:0;}
+.navigation-trash-list>li {display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #e8ece1;}
+.navigation-trash-list>li>div {display:flex;flex:1;min-width:0;flex-direction:column;gap:5px;}
+.navigation-trash-list strong {font-size:13px;font-weight:500;overflow-wrap:anywhere;}
+.navigation-trash-list small {font-size:11px;color:#94a087;}
+.navigation-delete-dialog h2 {overflow-wrap:anywhere;}

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"net"
 	"os"
 	"path/filepath"
@@ -119,9 +120,9 @@ func (b *Server) hostKeyPrompt(id string) Object {
 
 func (b *Server) saveHostPin(path, host string, port int, key ssh.PublicKey) {
 	root := filepath.Dir(path)
-	must(os.MkdirAll(root, 0700))
+	must(platform.MkdirAll(root, 0700))
 	info, err := os.Lstat(root)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0077 != 0 || !owned(info) {
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || !platform.Private(root, info) {
 		fail(403, "Lake 信任目录权限或所有者无效")
 	}
 	if _, err = os.Lstat(path); err == nil {

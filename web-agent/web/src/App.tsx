@@ -1,3 +1,6 @@
+import {NavigationDelete,NavigationTrash,NavigationMenu,TrashIcon,type NavigationDeleteTarget} from "./NavigationDelete";
+import { Workflows } from "./Workflows";
+import { DesktopUpdate } from "./DesktopUpdate";
 import { ActivityIndicator } from "./ActivityIndicator";
 import { PendingMessages } from "./PendingMessages";
 import { ModelSettings } from "./ModelSettings";
@@ -34,6 +37,7 @@ import { TerminalSidePanel } from "./TerminalSidePanel";
 import { reusableResourceTerminal, onlineTerminalOptions } from "./resourceTerminalState";
 import { ResourceTree } from "./ResourceTree";
 import { ResourceTerminalMenu } from "./ResourceTerminalMenu";
+import { initialSidebarProject, sidebarSessions } from "./sidebarState";
 import { CompositionGuard, isSendKey, parseSendShortcut, sendShortcutStorageKey, type SendShortcut } from "./composerKeyboard";
 import { HostKeyTrust } from "./HostKeyTrust";
 import { conversationActive, sessionConnection, type StreamState } from "./connection";
@@ -42,7 +46,11 @@ import { rebaseMentions, referencedResources, type MentionReference } from "../.
 import { type CommandPolicy, dangerConfirmation } from "../../shared/command-policy";
 import "./styles.css";
 import "./agentTasks.css";
+import "./statusText.css";
 import "./workbenchLayout.js";
+
+// Keep the workflow editor available for later development without exposing it.
+const showWorkflows = false;
 
 type GlyphName = "layers" | "folder" | "shield" | "plus" | "chevron" | "terminal" | "chat" | "server" | "arrow" | "close" | "menu" | "refresh" | "check" | "alert" | "spark" | "clock" | "lock" | "link" | "send" | "stop" | "copy" | "expand" | "settings" | "trash";
 
@@ -145,6 +153,7 @@ function App() {
     }
   }, [snapshot]);
   const [expandedProjects, setExpandedProjects] = useState<string[]>([]);
+  const [allSessionGroups, setAllSessionGroups] = useState<string[]>([]);
   const [closedSessionGroups, setClosedSessionGroups] = useState<string[]>(() => {
     try { const saved: unknown = JSON.parse(localStorage.getItem("lake.closed-session-groups") || "[]"); return Array.isArray(saved) ? saved.filter(id => typeof id === "string") : []; } catch { return []; }
   });
@@ -160,7 +169,9 @@ function App() {
   const [resourceKind, setResourceKind] = useState("ssh");
   const [serviceSettings, setServiceSettings] = useState({ driver: "postgres", host: "", port: 5432, username: "", database: "", path: "", credentialRef: "", endpoint: "unix:///var/run/docker.sock", ssh_asset_ref: "", tls: true });
   const [sshProject, setSshProject] = useState<string | null>(null);
+  const [workflowProject, setWorkflowProject] = useState<Project | null>(null);
   const [importProject, setImportProject] = useState<Project | null>(null);
+  const [importHexhub, setImportHexhub] = useState(false);
   const [sshName, setSshName] = useState("");
   const [sshDraft, setSshDraft] = useState<SSHConnectionInput>(emptySSH());
   const [sshError, setSshError] = useState("");
@@ -177,6 +188,9 @@ function App() {
   });
   useEffect(() => { try { localStorage.setItem(sendShortcutStorageKey, sendShortcut); } catch {} }, [sendShortcut]);
   const sendShortcutLabel = sendShortcut === "command-enter" ? "Command / Ctrl + Enter" : "Enter";
+  const [navigationDelete,setNavigationDelete]=useState<NavigationDeleteTarget|null>(null);
+  const [trashOpen,setTrashOpen]=useState(false);
+  const [projectContext,setProjectContext]=useState<{project:Project;x:number;y:number}|null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [agentOptionsOpen, setAgentOptionsOpen] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
@@ -276,7 +290,8 @@ function App() {
       setAuthRequired(false);
       setAuthInput("");
       setCatalog(data);
-      setExpandedProjects(previous => [...new Set([...previous, ...data.projects.map(project => project.id)])]);
+      const initialProject = initialSidebarProject(data, initialRoute());
+      setExpandedProjects(previous => previous.length ? previous.filter(id => data.projects.some(project => project.id === id)) : initialProject ? [initialProject] : []);
       setRoute(previous => {
         const sessionId = previous.sessionId && data.sessions.some(session => session.id === previous.sessionId)
           ? previous.sessionId : [...data.sessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id ?? null;
@@ -534,6 +549,10 @@ function App() {
   const activeSnapshot = snapshot?.session.id === sessionId ? snapshot : sessionId && catalog?.sessions.some(session => session.id === sessionId) ? snapshotCache.current.get(sessionId) ?? null : null;
   const selectedSession = activeSnapshot?.session ?? catalog?.sessions.find(item => item.id === sessionId);
   const selectedResource = catalog?.resources.find(item => item.id === route.resourceId);
+  const selectedProjectId = selectedResource?.projectId ?? selectedSession?.projectId;
+  useEffect(() => {
+    if (selectedProjectId) setExpandedProjects(items => items.includes(selectedProjectId) ? items : [...items, selectedProjectId]);
+  }, [selectedProjectId]);
   const resourceMap = new Map((catalog?.resources ?? []).map(resource => [resource.id, resource]));
   const visibleSessionError = streamSessionId === sessionId ? sessionError : "";
   const connection = sessionConnection({ ready: !!bootstrap && !!catalog, sessionId, streamSessionId, streamState,
@@ -1083,6 +1102,7 @@ function App() {
   </section>;
 
   return <div className={`app-shell ${terminalOpen ? "terminal-is-open" : ""}`}>
+    {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
     <aside className={`sidebar ${mobileMenu ? "sidebar-open" : ""}`} aria-label="项目导航">
       <div className="sidebar-head mobile-only"><button className="icon-button" title="关闭导航" aria-label="关闭导航" onClick={() => setMobileMenu(false)}><Glyph name="close"/></button></div>
@@ -1092,20 +1112,23 @@ function App() {
           const expanded = expandedProjects.includes(project.id);
           const sessionsExpanded = !closedSessionGroups.includes(project.id);
           const sessions = catalog.sessions.filter(session => session.projectId === project.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+          const allSessions = allSessionGroups.includes(project.id);
+          const visibleSessions = sidebarSessions(sessions, route.sessionId, allSessions);
           const projectResources = catalog.resources.filter(resource => resource.projectId === project.id);
           return <div className="project-group" key={project.id}>
-            <button className="project-toggle" aria-expanded={expanded} onClick={() => setExpandedProjects(items => expanded ? items.filter(id => id !== project.id) : [...items, project.id])}>
+            <div className="project-heading-row" onContextMenu={event=>{event.preventDefault();if(connected)setProjectContext({project,x:event.clientX,y:event.clientY});}}><button className="project-toggle" aria-expanded={expanded} onClick={() => setExpandedProjects(items => expanded ? items.filter(id => id !== project.id) : [...items, project.id])}>
               <span className="project-mark"><Glyph name="folder" size={17}/></span><span className="project-name">{project.name}</span><Glyph name="chevron" size={16} className={expanded ? "chevron-open" : ""}/>
-            </button>
+            </button><button type="button" className="navigation-delete-button project-delete-button" title="删除项目" aria-label={`删除项目 ${project.name}`} disabled={!connected} onClick={()=>setNavigationDelete({kind:"project",id:project.id,projectId:project.id,name:project.name})}><TrashIcon/></button></div>
             {expanded && <div className="project-contents">
+              {showWorkflows && <button type="button" className="workflow-entry" onClick={() => setWorkflowProject(project)} disabled={!connected}><Glyph name="layers" size={15}/>运维工作流</button>}
               <div className="nav-heading"><button type="button" className="nav-section-toggle" aria-label={`${sessionsExpanded ? "折叠" : "展开"}${project.name}的会话`} aria-expanded={sessionsExpanded} aria-controls={`project-sessions-${project.id}`} onClick={() => setClosedSessionGroups(items => sessionsExpanded ? [...items, project.id] : items.filter(id => id !== project.id))}><Glyph name="chevron" size={13} className={sessionsExpanded ? "chevron-open" : ""}/><span>会话 <small>{sessions.length}</small></span></button><button className="nav-add" aria-label={`在${project.name}新建会话`} title="新建会话" disabled={!connected} onClick={() => { setClosedSessionGroups(items => items.filter(id => id !== project.id)); openSessionDialog(project.id); }}><Glyph name="plus" size={14}/></button></div>
-              <div id={`project-sessions-${project.id}`} hidden={!sessionsExpanded}>{sessions.length ? sessions.map(session => <div className="nav-row-wrap" key={session.id}>
+              <div id={`project-sessions-${project.id}`} hidden={!sessionsExpanded}>{sessions.length ? visibleSessions.map(session => <div className="nav-row-wrap" key={session.id}>
                 <button className={`nav-row session-nav-row ${route.sessionId === session.id && !route.resourceId ? "active" : ""}`} onClick={() => navigate({ sessionId: session.id, resourceId: null })} aria-current={route.sessionId === session.id && !route.resourceId ? "page" : undefined}>
                   <Glyph name="chat" size={16}/><span className="nav-row-text"><strong>{session.title}</strong><small>{sessionLabels[session.status]}</small></span>{session.status === "investigating" && <span className="session-activity" title="正在回复"><ActivityIndicator/></span>}{session.status === "waiting_approval" && <span className="attention-dot" title="等待确认"/>}
                 </button>
                 <button className="session-delete" title="删除会话" aria-label={`删除会话 ${session.title}`} onClick={() => { setDeleteError(""); setDeleteTarget(session); }} disabled={!connected || !!pendingOperation}><Glyph name="trash" size={14}/></button>
-              </div>) : <p className="nav-empty">还没有会话</p>}</div>
-              {<ResourceTree project={project} resources={projectResources} nodes={catalog.resourceTree ?? []} disabled={!connected} refresh={refreshCatalog} onImport={() => setImportProject(project)} onAddResource={() => { setResourceKind("ssh"); setSshProject(project.id); setSshName(""); setSshDraft(emptySSH()); setSshError(""); }} renderResource={resource => {
+              </div>) : <p className="nav-empty">还没有会话</p>}{sessions.length > 5 && <button type="button" className="nav-show-more" aria-expanded={allSessions} onClick={() => setAllSessionGroups(items => allSessions ? items.filter(id => id !== project.id) : [...items, project.id])}>{allSessions ? "收起历史会话" : `显示全部 ${sessions.length} 个会话`}</button>}</div>
+              {<ResourceTree onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={catalog.resourceTree ?? []} disabled={!connected} refresh={refreshCatalog} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={() => { setResourceKind("ssh"); setSshProject(project.id); setSshName(""); setSshDraft(emptySSH()); setSshError(""); }} renderResource={resource => {
                 const live = resourceTerminals.filter(t => t.resourceId === resource.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
                 return <div key={resource.id} className="resource-nav-wrap" ref={resourceTerminalMenu === resource.id ? resourceMenuRef : undefined}><div className="resource-nav-row">
                   <button id={`resource-trigger-${resource.id}`} className={`nav-row resource-row ${route.resourceId === resource.id || terminalOpen && terminalResource?.id === resource.id ? "active" : ""}`} onClick={() => { if (["local", "ssh"].includes(resource.kind)) { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); } else navigate({ sessionId: route.sessionId, resourceId: resource.id }); }} aria-expanded={["local", "ssh"].includes(resource.kind) ? resourceTerminalMenu === resource.id : undefined} aria-current={route.resourceId === resource.id ? "page" : undefined}>
@@ -1128,10 +1151,12 @@ function App() {
           </div>;
         }) : <div className="sidebar-empty"><Glyph name="layers" size={25}/><p>还没有项目</p><button onClick={openProjectDialog} disabled={!connected}>创建第一个项目</button></div>}
       </nav>
+      <button className="sidebar-trash" disabled={!connected} onClick={()=>setTrashOpen(true)}><TrashIcon/>已删除</button>
       <button className="sidebar-settings" onClick={() => void openSettings()} disabled={booting}>
         <Glyph name="settings" size={16}/><span>设置</span>
         {!modelConfigured && <span className="settings-flag">模型未配置</span>}
       </button>
+      <DesktopUpdate/>
     </aside>
 
     <main className="workspace">
@@ -1153,9 +1178,10 @@ function App() {
           </div> : <div className="timeline-empty"><div className="empty-icon"><Glyph name="chat" size={25}/></div><h2>从一个问题开始</h2><p>描述你看到的故障或想核实的现象。Lake 会把调查过程、证据和需要确认的操作留在这里。</p>{!modelConfigured && <span className="empty-hint">配置 Agent 模型后可发送第一条消息。</span>}</div>}
         </section>
         <div className="composer-dock">{activeSnapshot?.ai && <AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/>}<PendingMessages key={sessionId} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/><form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">给 Lake 的消息</label>
-          {mention && mentionMatches.length > 0 && <div className="mention-menu" role="listbox" aria-label="引用资源">
+          {mention && <div className="mention-menu" role="listbox" aria-label="引用资源">
             <span className="mention-head">引用资源</span>
             {mentionMatches.map((resource, index) => <button type="button" role="option" aria-selected={index === mention.index} key={resource.id} className={`mention-item ${index === mention.index ? "selected" : ""}`} onMouseDown={event => event.preventDefault()} onClick={() => insertMention(resource)}><Glyph name="server" size={14}/><span>{resource.name}</span><small>{resource.status === "available" ? "可用" : "不可用"}</small></button>)}
+            <button type="button" role="option" aria-selected={false} className="mention-item" onMouseDown={event => event.preventDefault()} onClick={() => { const target = projectList.find(item => item.id === selectedSession?.projectId); setMention(null); if (target) { setImportHexhub(true); setImportProject(target); } }}><Glyph name="plus" size={14}/><span>从 HexHub 导入资源</span><small>本机 MCP</small></button>
           </div>}
           {fileDraft.length > 0 && <div className="text-file-drafts">{fileDraft.map(file => <span key={file.sourceId}>{file.name}<button type="button" aria-label={`移除 ${file.name}`} onClick={() => setFileDraft(files => files.filter(item => item.sourceId !== file.sourceId))}>×</button></span>)}</div>}{imageDraft.length > 0 && <div className="image-drafts">{imageDraft.map(image => <figure key={image.id}><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "待发送图片"}/><button type="button" aria-label={`移除 ${image.name || "图片"}`} onClick={() => setImageDraft(images => images.filter(item => item.id !== image.id))}>×</button></figure>)}</div>}{mentionRefs.length > 0 && <div className="reference-chips">{mentionRefs.map(ref => <span key={`${ref.resourceId}:${ref.start}`}>{ref.label}</span>)}</div>}<div className="composer-body"><textarea id="message-input" ref={messageInputRef} rows={2} placeholder={!modelConfigured ? "配置 Agent 模型后即可开始对话" : queueMode ? "继续输入，发送后加入待发送队列…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : "向 Lake 描述问题，输入 @ 可引用资源…"} value={messageDraft} onChange={event => { setMentionRefs(refs => rebaseMentions(messageDraft, event.target.value, refs)); setMessageDraft(event.target.value); syncMention(event.target.value, event.target.selectionStart ?? event.target.value.length); }} disabled={!sessionConnected || !modelConfigured || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
             if (messageComposition.current.ignores(event.nativeEvent)) return;
@@ -1187,8 +1213,11 @@ function App() {
 
     {notice && <div className="toast" role="status"><Glyph name="check" size={17}/>{notice}<button aria-label="关闭提示" onClick={() => setNotice("")}><Glyph name="close" size={14}/></button></div>}
     {deleteTarget && <div className="modal-scrim" onMouseDown={event => { if (event.target === event.currentTarget && !deleteBusy) setDeleteTarget(null); }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-session-title"><div className="modal-header"><span className="modal-icon danger-icon"><Glyph name="trash" size={20}/></span><button className="icon-button" aria-label="关闭" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}><Glyph name="close"/></button></div><h2 id="delete-session-title">删除会话</h2><p className="modal-description">将删除会话「{deleteTarget.title}」的对话、专员结论、证据、审批和命令记录。此操作不可恢复。</p>{deleteError && <p className="form-error" role="alert">{deleteError}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>取消</button><button type="button" className="button danger" onClick={() => void confirmDeleteSession()} disabled={deleteBusy || !connected}>{deleteBusy ? "正在删除…" : "删除会话"}</button></div></div></div>}
+    {projectContext && <NavigationMenu title={projectContext.project.name} x={projectContext.x} y={projectContext.y} onClose={()=>setProjectContext(null)} actions={[{label:"删除项目",danger:true,run:()=>setNavigationDelete({kind:"project",id:projectContext.project.id,projectId:projectContext.project.id,name:projectContext.project.name})}]}/>}
+    {navigationDelete && <NavigationDelete target={navigationDelete} onClose={()=>setNavigationDelete(null)} onDeleted={async()=>{setResourceTerminalMenu(null);if(navigationDelete.kind==="project" && selectedSession?.projectId===navigationDelete.id)navigate({sessionId:null,resourceId:null});else if(navigationDelete.kind==="resource"&&route.resourceId===navigationDelete.id)navigate({sessionId:route.sessionId,resourceId:null});await refreshCatalog();if(navigationDelete.kind!=="project")await refreshCurrent();}}/>}
+    {trashOpen && <NavigationTrash onClose={()=>setTrashOpen(false)} onRestored={async()=>{await refreshCatalog();await refreshCurrent();}}/>}
     {settingsOpen && <ModelSettings onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined}/>}
-    {importProject && <ResourceImport project={importProject} refresh={refreshCatalog} onClose={() => setImportProject(null)} onImported={notify}/>}
+    {importProject && <ResourceImport project={importProject} hexhub={importHexhub} refresh={refreshCatalog} onClose={() => { setImportProject(null); setImportHexhub(false); }} onImported={notify}/>}
     {sshProject && <div className="modal-scrim"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="ssh-title"><div className="modal-header"><span className="modal-icon"><Glyph name="server" size={20}/></span><button className="icon-button" aria-label="关闭" disabled={sshBusy} onClick={() => { setSshProject(null); setSshDraft(emptySSH()); }}><Glyph name="close"/></button></div><h2 id="ssh-title">新建资源</h2><p className="modal-description">添加 SSH 主机、数据库、Redis 或 Docker，供项目会话使用。</p><form onSubmit={createSsh}><label className="field-label">类型<select value={resourceKind} onChange={event => { setResourceKind(event.target.value); setSshDraft(current => ({...current, password: "", passphrase: "", privateKey: undefined, identityFile: undefined})); setServiceSettings(v => ({ ...v, port: event.target.value === "redis" ? 6379 : 5432 })); }}>{[["ssh", "SSH 主机"], ["database", "数据库"], ["docker", "Docker"], ["redis", "Redis"]].map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}</select></label>
       <label className="field-label">资源名称<input required maxLength={120} value={sshName} onChange={event => setSshName(event.target.value)} autoFocus/></label>
 {resourceKind === "ssh" ? <SSHResourceFields value={sshDraft} onChange={setSshDraft} disabled={sshBusy}/> : <>

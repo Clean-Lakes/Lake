@@ -86,3 +86,8 @@ agent/test-results/
 /assets/web/.stage.*/
 /client/macos/.build/
 /client/macos/.swiftpm/
+/client/windows/*.syso
+
+# Python build caches
+__pycache__/
+*.pyc

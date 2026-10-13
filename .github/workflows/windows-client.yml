@@ -1,0 +1,46 @@
+name: Windows x86_64 client
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']
+  pull_request:
+    paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']
+permissions:
+  contents: read
+jobs:
+  windows-amd64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.0'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: pnpm --dir web-agent install --frozen-lockfile
+      - run: pnpm --dir web-agent test:frontend
+      - run: choco install nsis 7zip --no-progress -y
+      - run: python scripts/build_lake_windows.py
+      - name: Test Windows locks, SQLite, ACLs and ConPTY
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION).Trim()
+          Expand-Archive "dist/windows/$version/x86_64/Lake-$version-windows-x86_64.zip" -DestinationPath "$env:RUNNER_TEMP/lake-package"
+          $env:LAKE_PORTABLE_ROOT = "$env:RUNNER_TEMP/lake-package/Lake/resources/git"
+          $env:CGO_ENABLED = '0'
+          go test ./internal/web -run '^TestWindows' -count=1 -timeout 2m
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go test ./client/windows -run '^TestWindows' -count=1 -timeout 1m
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lake-windows-x86_64
+          path: dist/windows/*/x86_64/*

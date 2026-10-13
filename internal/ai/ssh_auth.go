@@ -2,6 +2,7 @@ package ai
 
 import (
 	"errors"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"io"
 	"os"
 	"path/filepath"
@@ -42,7 +43,7 @@ func SSHAskpass(prompt string, out io.Writer) error {
 
 func sshEnvironment(c *SSH, root string) ([]string, error) {
 	home, _ := os.UserHomeDir()
-	env := []string{"HOME=" + home, "PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin", "LANG=en_US.UTF-8"}
+	env := platform.Environment(home)
 	if c == nil || c.CredentialRef == "" {
 		return env, nil
 	}

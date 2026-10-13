@@ -343,6 +343,7 @@ func Stream(ctx context.Context, m Model, history []Message, tools []Tool, onDel
 		return modelResult{}, fmt.Errorf("model returned HTTP %d", resp.StatusCode)
 	}
 	a := newAccumulator(protocol(m), onDelta)
+	a.model = m
 	ct := resp.Header.Get("Content-Type")
 	if strings.Contains(ct, "application/json") && !strings.Contains(ct, "ndjson") {
 		var v map[string]any
@@ -417,6 +418,7 @@ func Stream(ctx context.Context, m Model, history []Message, tools []Tool, onDel
 
 type accumulator struct {
 	p           string
+	model       Model
 	msg         Message
 	usage       Usage
 	usageValues map[string]any
@@ -517,8 +519,35 @@ func (a *accumulator) use(v map[string]any) {
 	}
 }
 
+// streamFailureDetail returns the provider's own error text from a stream error
+// event so the failure names the real cause. Only this bounded, redacted text is
+// exposed; raw payloads and request headers are never surfaced.
+func streamFailureDetail(v map[string]any) string {
+	for _, candidate := range []any{v["error"], v["message"], v} {
+		if text := str(candidate); text != "" {
+			return text
+		}
+		if item := obj(candidate); len(item) > 0 {
+			if text := str(item["message"]); text != "" {
+				return text
+			}
+			if text := str(item["code"]); text != "" {
+				return text
+			}
+		}
+	}
+	return ""
+}
+
 func (a *accumulator) consume(v map[string]any, whole bool) error {
 	if v["error"] != nil || str(v["type"]) == "error" {
+		detail := redact(streamFailureDetail(v), Config{Model: a.model})
+		if len(detail) > 500 {
+			detail = detail[:500] + "…"
+		}
+		if detail != "" {
+			return fmt.Errorf("model reported a stream error: %s", detail)
+		}
 		return errors.New("model reported a stream error")
 	}
 	switch a.p {

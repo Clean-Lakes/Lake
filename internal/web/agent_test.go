@@ -127,6 +127,9 @@ func testEarlierPendingActions(t *testing.T, holder string) {
 	b, h := fixture(t)
 	id, ref := newSession(t, h)
 	allowFixtureHost(b, id)
+	opts := b.Store.Options(id)
+	opts["contextWindow"] = 131072
+	b.Store.SaveOptions(id, opts)
 	b.Store.AddMessage(id, "user", "上一轮检查", nil)
 	var oldTerminal Object
 	if holder == "disconnected" {
@@ -150,6 +153,9 @@ func testEarlierPendingActions(t *testing.T, holder string) {
 		var req Object
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Error(err)
+		}
+		if fixtureModelInspect(w, req, ref, "local") {
+			return
 		}
 		hasShell := false
 		for _, tool := range objects(req["tools"]) {
@@ -177,8 +183,7 @@ func testEarlierPendingActions(t *testing.T, holder string) {
 					collected.Store(memory && strings.Contains(output, "PID") && data["terminal_id"] != tid)
 				}
 			}
-			// The model deliberately makes no tool call: backend preparation must
-			// have already collected evidence before its first response.
+			// The preceding model call chose inspection; this response consumes its evidence.
 			emitModel(w, "已经采集本轮进程数据", nil)
 		case 2:
 			emitModel(w, "", []ai.Call{{ID: "fresh-write", Name: "write", Arguments: jsonText(Object{"path": newFile, "content": "new operation", "runtime": "local"})}})
@@ -191,7 +196,7 @@ func testEarlierPendingActions(t *testing.T, holder string) {
 	apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "什么进程资源占用过高", "resourceIds": []string{ref}}, 202)
 	view := waitAI(t, b, id, "completed")
 	if !collected.Load() || view.Pending != nil {
-		t.Fatal("fresh process evidence was not collected automatically")
+		t.Fatal("model-selected fresh process evidence was not collected")
 	}
 	// Engine completion is published before the SQLite assistant message export.
 	b.workers.Wait()
@@ -286,6 +291,9 @@ func TestHostConversationConnectsReadsReusesAndReconnects(t *testing.T) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req Object
 		json.NewDecoder(r.Body).Decode(&req)
+		if fixtureModelInspect(w, req, ref, "local") {
+			return
+		}
 		latest := Object{}
 		for _, m := range objects(req["messages"]) {
 			if m["role"] == "tool" && m["name"] == "inspect_host" {
@@ -299,7 +307,7 @@ func TestHostConversationConnectsReadsReusesAndReconnects(t *testing.T) {
 			}
 		}
 		if !memory || latest["status"] != "ready" || latest["runtime"] != "local" {
-			t.Error("first model request did not receive live host memory evidence")
+			t.Error("model-selected inspection did not return live host memory evidence")
 		}
 		tid := stringOf(latest["terminal_id"])
 		switch step.Add(1) {
@@ -343,7 +351,7 @@ func TestHostConversationConnectsReadsReusesAndReconnects(t *testing.T) {
 	send := func(refs []string) {
 		t.Helper()
 		apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "内存状态", "resourceIds": refs}, 202)
-		// Wait for the worker, including pre-model connection and final export.
+		// Wait for the worker, including model-selected connection and final export.
 		b.workers.Wait()
 		view, err := b.Engine.Snapshot(id)
 		if err != nil || view.Status != "completed" {

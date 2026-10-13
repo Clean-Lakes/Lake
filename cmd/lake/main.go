@@ -8,6 +8,7 @@ import (
 	"fmt"
 	webassets "github.com/Clean-Lakes/Lake/assets/web"
 	"github.com/Clean-Lakes/Lake/internal/ai"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"github.com/Clean-Lakes/Lake/internal/web"
 	"io"
 	"net/http"
@@ -23,7 +24,7 @@ import (
 	"time"
 )
 
-var version = "0.3.3" // Release builds inject the repository VERSION through -ldflags.
+var version = "0.3.4" // Release builds inject the repository VERSION through -ldflags.
 
 func main() {
 	if os.Getenv("LAKE_SSH_ASKPASS") == "1" {
@@ -106,7 +107,7 @@ func run(ctx context.Context, args []string) (err error) {
 		return ai.Serve(ctx, *dir, os.Stdin, os.Stdout)
 	}
 	if args[0] == "status" {
-		cmd := exec.CommandContext(ctx, "/usr/bin/uname", "-a")
+		cmd := exec.CommandContext(ctx, platform.Executable("/usr/bin/uname"), "-a")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		return cmd.Run()
@@ -253,6 +254,9 @@ func envPort() int {
 	return 4177
 }
 func openURL(s string) error {
+	if runtime.GOOS == "windows" {
+		return exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", s).Run()
+	}
 	program := "xdg-open"
 	if runtime.GOOS == "darwin" {
 		program = "open"
@@ -265,7 +269,7 @@ type apiClient struct{ origin, token string }
 func connect(home string) (apiClient, error) {
 	path := filepath.Join(home, "web-agent", "runtime.json")
 	info, e := os.Stat(path)
-	if e != nil || info.Mode().Perm()&0077 != 0 {
+	if e != nil || !platform.Private(path, info) {
 		return apiClient{}, errors.New("Go workbench not running; start lake web --open")
 	}
 	b, e := os.ReadFile(path)

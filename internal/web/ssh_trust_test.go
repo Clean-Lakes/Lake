@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -198,7 +199,14 @@ func TestFirstSSHConnectionCombinesTrustAndTerminalCreation(t *testing.T) {
 	defer cleanup()
 	resource := b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "Unknown SSH fixture", "ssh", config)
 	ref := stringOf(resource["id"])
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { emitModel(w, "指纹确认后已连接", nil) }))
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req Object
+		must(json.NewDecoder(r.Body).Decode(&req))
+		if fixtureModelInspect(w, req, ref, "ssh") {
+			return
+		}
+		emitModel(w, "指纹确认后已连接", nil)
+	}))
 	defer provider.Close()
 	b.Models.Save(&ai.Model{URL: provider.URL, Name: "host trust fixture", Protocol: "openai"})
 	apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "检查内存", "resourceIds": []string{ref}}, 202)

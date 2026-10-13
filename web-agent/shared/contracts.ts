@@ -54,6 +54,8 @@ export type Specialist = {
 export type AgentRole = "host" | "application" | "data" | "network" | "change" | "verify" | "plan" | "memory";
 export type AgentRunStatus = "queued" | "running" | "waiting_approval" | "completed" | "failed" | "cancelled" | "interrupted" | "unknown";
 export type AgentRun = {
+  automaticSurvey?: boolean;
+  workflowStepId?: string;
   id: string;
   sessionId: string;
   rootTurnId?: string;
@@ -75,7 +77,7 @@ export type AgentRun = {
   usage?: AIUsage;
   budgetSpent?: number;
 };
-export type AgentEvidence = {id: string; sessionId: string; runId: string; resourceId: string; title: string; excerpt: string; exitCode: number | null; collectedAt: string};
+export type AgentEvidence = {id: string; sessionId: string; runId: string; resourceId: string; resourceName?: string; assetRef?: string; title: string; excerpt: string; exitCode: number | null; collectedAt: string};
 
 export type Evidence = {
   id: string;
@@ -144,7 +146,10 @@ export type MessageQueue = {paused: boolean; revision: number; lastError: string
 export type QueueOperation = {operation:"pause" | "resume"; revision:number} | {operation:"remove"; revision:number; id:string} | {operation:"edit"; revision:number; id:string; text:string; resourceIds:string[]} | {operation:"reorder"; revision:number; ids:string[]};
 export type SendMessageResult = {queued?: boolean; queuedMessageId?: string; messageQueue?: MessageQueue};
 
+export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;status:"running" | "completed" | "cancelled" | "failed" | "interrupted"};
+
 export type SessionSnapshot = {
+ replyTimings?:ReplyTiming[];
   messageQueue?: MessageQueue;
  aiBinding?: {terminalId?: string; generation?: string};
   session: WorkSession;
@@ -215,3 +220,11 @@ export type AIView = { session: string; status: string; cards: AICard[]; agentRu
 export type AIPreset = { id: string; title: string; content: string };
 
 export type AIImage = { id: string; mimeType: string; base64: string; sizeBytes: number; width: number; height: number; name?: string; url?: string };
+
+export type WorkflowStep = {id:string; role:"host"|"application"|"data"; task:string; resourceIds:string[]};
+export type WorkflowTemplate = {id:string; projectId:string; name:string; goal:string; steps:WorkflowStep[]; version:number; createdAt:string; updatedAt:string};
+export type WorkflowInput = Pick<WorkflowTemplate,"name"|"goal"|"steps"> & {version?:number};
+export type WorkflowRun = {id:string; workflowId:string|null; projectId:string; sessionId:string; template:WorkflowTemplate; status:"running"|"completed"|"failed"|"cancelled"|"interrupted"; error:string; createdAt:string; finishedAt:string|null; agentRuns?:AgentRun[]; waitingApproval?:boolean};
+export type WorkflowCatalog = {templates:WorkflowTemplate[]; runs:WorkflowRun[]};
+
+export type NavigationTrashItem = {kind:"project" | "resource" | "folder";id:string;projectId:string;name:string;projectName:string;deletedAt:string};

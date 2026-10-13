@@ -182,7 +182,18 @@ func TestCompactionFailureIsNotDuplicatedAsSystemMessage(t *testing.T) {
 		waitAI(t, b, id, "completed")
 		b.workers.Wait()
 	}
-	b.configure(id, Object{"contextWindow": 2048, "maxOutput": 512})
+	// Grow a compressible previous turn while keeping the current prompt and
+	// tool catalog inside the configured window. A 2K window cannot fit the
+	// runtime prompt and tests admission failure rather than summary failure.
+	history, err := b.Engine.History(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	history[1].Content += strings.Repeat("old note ", 9000)
+	if err := b.Engine.Restore(id, history); err != nil {
+		t.Fatal(err)
+	}
+	b.configure(id, Object{"contextWindow": 64000, "maxOutput": 8192})
 	apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "你好"}, 202)
 	waitAI(t, b, id, "failed")
 	b.workers.Wait()

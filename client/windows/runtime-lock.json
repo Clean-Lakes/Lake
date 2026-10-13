@@ -1,0 +1,7 @@
+{
+  "version": "v2.56.0.windows.2",
+  "url": "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.2/PortableGit-2.56.0.2-64-bit.7z.exe",
+  "sha256": "075e158ef8e1f0ab80b347e245405d3eca735c2dc88fd8e032e137d0ca61f61b",
+  "source": "https://github.com/git-for-windows/git",
+  "sourceArchive": "https://api.github.com/repos/git-for-windows/git/tarball/v2.56.0.windows.2"
+}
