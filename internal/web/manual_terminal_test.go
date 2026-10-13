@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -91,6 +92,11 @@ func TestNewChatReusesSelectedManualTerminalWithoutCreationApproval(t *testing.T
 	tid := stringOf(term["id"])
 	var requests atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req Object
+		must(json.NewDecoder(r.Body).Decode(&req))
+		if fixtureModelInspect(w, req, ref, "local") {
+			return
+		}
 		requests.Add(1)
 		emitModel(w, "已从原终端读取主机状态", nil)
 	}))
@@ -242,6 +248,11 @@ func TestOrdinaryChatUsesBackgroundTerminalWithMultipleManualShells(t *testing.T
 	b.bindManualTerminalForHuman(chat, []Object{{"asset_ref": ref}}, Object{"terminalId": one["id"], "generation": one["generation"]})
 	b.configure(chat, Object{"silentTerminalCreation": true})
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req Object
+		must(json.NewDecoder(r.Body).Decode(&req))
+		if fixtureModelInspect(w, req, ref, "local") {
+			return
+		}
 		emitModel(w, "后台检查完成", nil)
 	}))
 	defer provider.Close()
@@ -285,7 +296,7 @@ func TestOrdinaryChatDropsDisconnectedForeignTerminalBinding(t *testing.T) {
 	if stringOf(b.Store.Options(chat)["terminal_id"]) != "" {
 		t.Fatal("ordinary chat retained an expired manual binding")
 	}
-	if b.hostPrelude(chat, nil, b.sessionOptions(chat)) == nil {
+	if b.Store.Options(chat)["asset_ref"] != ref {
 		t.Fatal("dropping the stale shell forgot the target resource")
 	}
 }

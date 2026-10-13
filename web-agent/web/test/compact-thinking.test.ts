@@ -6,10 +6,15 @@ import type {AICard, AIView, SessionSnapshot} from "../../shared/contracts";
 import {ThinkingTimeline} from "../src/ThinkingTimeline";
 import {AIProgress} from "../src/AIProgress";
 import {AITranscript} from "../src/AIPanel";
+import {displayAiError} from "../src/aiErrors";
 
 const start="2026-10-11T00:00:00Z";
 const thought:AICard={id:"thought",type:"thinking",content:"VERY_VERBOSE_RAW_REASONING",status:"running",at:start};
 const read:AICard={id:"read",type:"operation",title:"read",status:"running",at:start,data:{arguments:{path:"/tmp/example.log"},target:"Local machine"}};
+test("tool-turn budget failure is localized with preserved-history guidance",()=>{
+ const text=displayAiError("current tool turn exceeds context budget");
+ assert.ok(text.includes("本轮上下文"));assert.ok(text.includes("操作记录已保留"));assert.ok(!text.includes("exceeds"));
+});
 test("live thinking defaults to a single short current-action line without raw thoughts or details",()=>{
   const html=renderToStaticMarkup(createElement(ThinkingTimeline,{cards:[thought,read],live:true}));
   assert.ok(html.includes('aria-expanded="false"'));assert.ok(html.includes("正在读取 example.log"));

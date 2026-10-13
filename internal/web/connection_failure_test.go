@@ -41,6 +41,9 @@ func TestFailedSSHConnectionDoesNotRepeatApproval(t *testing.T) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req Object
 		json.NewDecoder(r.Body).Decode(&req)
+		if fixtureModelInspect(w, req, ref, "ssh") {
+			return
+		}
 		if requests.Add(1) == 1 {
 			emitModel(w, "", []ai.Call{
 				{ID: "retry-shell", Name: "shell", Arguments: jsonText(Object{"command": "free -m", "runtime": "ssh", "asset_ref": alias})},

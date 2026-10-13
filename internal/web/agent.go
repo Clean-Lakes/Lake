@@ -103,10 +103,10 @@ func (b *Server) configure(id string, updates Object) Object {
 	model.ReasoningEffort = effort
 	model.ContextWindow = integer(options["contextWindow"])
 	model.MaxOutput = integer(options["maxOutput"])
-	assets := b.sessionAssets(id)
+	assets, directories := b.sessionAssetCatalog(id)
 	// Approvals belong to individual operations; earlier pending actions must not
 	// disable this turn's tools. invoke enforces per-operation permissions.
-	aiFailure(b.Engine.Configure(id, ai.Config{MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
+	aiFailure(b.Engine.Configure(id, ai.Config{Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
 	b.Store.SaveOptions(id, options)
 	if previousPermissions != permissionVersion(options) {
 		b.revokeSessionTerminals(id)
@@ -114,8 +114,14 @@ func (b *Server) configure(id string, updates Object) Object {
 	return options
 }
 func (b *Server) sessionAssets(id string) []ai.Asset {
+	assets, _ := b.sessionAssetCatalog(id)
+	return assets
+}
+func (b *Server) sessionAssetCatalog(id string) ([]ai.Asset, []ai.AssetDirectory) {
+	snap := b.Store.Snapshot(id)
+	directories, paths := directoryInventory(snap)
 	assets := []ai.Asset{}
-	for _, r := range objects(b.sessionSnapshot(id)["resources"]) {
+	for _, r := range objects(snap["resources"]) {
 		var ssh *ai.SSH
 		if v := r["ssh"]; v != nil {
 			var c ai.SSH
@@ -123,9 +129,9 @@ func (b *Server) sessionAssets(id string) []ai.Asset {
 			ssh = &c
 			ssh.KnownHosts = b.Terminals.hostKeyPath(object(r["ssh"]))
 		}
-		assets = append(assets, ai.Asset{ID: stringOf(r["id"]), Name: stringOf(r["name"]), Kind: stringOf(r["kind"]), SSH: ssh, Settings: object(r["settings"])})
+		assets = append(assets, ai.Asset{FolderPath: paths[stringOf(r["id"])], ID: stringOf(r["id"]), Name: stringOf(r["name"]), Kind: stringOf(r["kind"]), SSH: ssh, Settings: object(r["settings"])})
 	}
-	return assets
+	return assets, directories
 }
 func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any, error) {
 	return b.Engine.Handle(ctx, method, id, json.RawMessage(jsonText(data)))
@@ -150,6 +156,7 @@ func (b *Server) event(event ai.Event) {
 func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, files []Object) {
 	defer b.workers.Done()
 	defer b.finishMessageQueue(id)
+	defer b.finishReplyTiming(id)
 	defer b.releaseManualTerminals(id)
 	retryMessage := message
 	for _, reference := range refs {
@@ -182,10 +189,21 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	}
 	options := b.configure(id, nil)
 	simpleConversation := ai.IsBriefConversation(message) && len(refs) == 0 && len(images) == 0 && len(files) == 0
-	var prelude []ai.Call
+	var targetScope *ai.TargetScope
+	var directoryAssets []ai.Asset
+	var directories []ai.AssetDirectory
 	importRequest := len(files) > 0 || len(refs) == 0 && (strings.Contains(message, "导入") || strings.Contains(strings.ToLower(message), "import"))
 	if !simpleConversation && !importRequest {
-		prelude = b.hostPrelude(id, refs, options)
+		if options["profile"] == "core" {
+			directoryAssets, directories = b.sessionAssetCatalog(id)
+			directorySnap := b.Store.Snapshot(id)
+			targetScope, refs = b.directoryTurnScope(id, message, refs, directories, objects(directorySnap["resources"]))
+		}
+		if targetScope != nil {
+			options = b.configure(id, Object{"asset_ref": "", "terminal_id": "", "terminal_generation": "", "runtime": "local"})
+		} else {
+			b.bindReferenceTargets(id, refs, options)
+		}
 	}
 	snap := b.sessionSnapshot(id)
 	messages := objects(snap["messages"])
@@ -224,10 +242,13 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	if options["profile"] == "terminal2" && stringOf(options["terminal_id"]) != "" {
 		modelContext = b.terminalContext(id, stringOf(options["terminal_id"]))
 	}
+	if len(directories) > 0 || targetScope != nil {
+		modelContext += directoryModelContext(directories, targetScope, directoryAssets)
+	}
 	if len(files) > 0 {
 		modelContext += "\n[LAKE_TEXT_FILES]\n" + jsonText(files) + "\nThese are user-selected text attachments. Use preview_resource_import with source_id to inspect connection candidates. Do not read private credential storage or echo credentials."
 	}
-	e = b.Engine.ChatTurn(turnContext, id, ai.TurnInput{UserText: message, Context: modelContext, References: refs, Images: images, Prelude: prelude})
+	e = b.Engine.ChatTurn(turnContext, id, ai.TurnInput{UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope})
 	if e != nil {
 		if b.Context.Err() != nil {
 			return
@@ -450,6 +471,20 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 	}
 	if name == "inspectHost" {
 		return b.inspectHost(ctx, id, args, approved), nil
+	}
+	if name == "prepare_host" {
+		if !approved {
+			fail(403, "Terminal creation requires approval")
+		}
+		resource := b.hostResource(id, stringOf(args["asset_ref"]))
+		ref := stringOf(resource["id"])
+		term := b.hostTerminal(ctx, id, ref, true, stringOf(args["terminal_id"]))
+		options := b.Store.Options(id)
+		if options["asset_ref"] == ref || stringOf(options["asset_ref"]) == "" {
+			options["asset_ref"], options["runtime"], options["terminal_id"] = ref, resource["kind"], term["id"]
+			b.Store.SaveOptions(id, options)
+		}
+		return Object{"terminal_id": term["id"], "resourceId": ref}, nil
 	}
 	if name == "runtimeCommandExec" {
 		explicitTerminal := stringOf(args["terminal_id"])

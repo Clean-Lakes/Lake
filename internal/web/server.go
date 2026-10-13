@@ -34,6 +34,8 @@ type Options struct {
 	Output                          io.Writer
 }
 type Server struct {
+	workflowMu         sync.Mutex
+	workflowCancels    map[string]context.CancelFunc
 	messageMu          sync.Mutex
 	runningMessages    map[string]bool
 	bindingMu          sync.Mutex
@@ -44,6 +46,7 @@ type Server struct {
 	manualBorrowers    map[string]string
 	Store              *Store
 	Models             *Models
+	HexHubMCP          string
 	Terminals          *Terminals
 	Engine             *ai.Engine
 	Context            context.Context
@@ -155,7 +158,12 @@ func (b *Server) Start() error {
 		if runtime.GOOS == "darwin" {
 			program = "open"
 		}
-		cmd := exec.Command(program, address+"/#token="+url.QueryEscape(b.token))
+		args := []string{address + "/#token=" + url.QueryEscape(b.token)}
+		if runtime.GOOS == "windows" {
+			program = "rundll32.exe"
+			args = append([]string{"url.dll,FileProtocolHandler"}, args...)
+		}
+		cmd := exec.Command(program, args...)
 		if cmd.Start() == nil {
 			go cmd.Wait()
 		} else {
@@ -315,6 +323,12 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			imageInput = model.SupportsImageInput
 		}
 		reply(w, 200, Object{"authenticated": true, "modelConfigured": model != nil, "modelName": modelName, "modelId": modelID, "supportsImageInput": imageInput, "terminalMode": "pty", "aiRuntime": "go", "backendRuntime": "go"})
+		return
+	}
+	if b.workflowRoute(w, r, name, method) {
+		return
+	}
+	if b.navigationTrashRoute(w, r, name) {
 		return
 	}
 	if b.providerRoute(w, r, name, method) {
@@ -695,6 +709,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						b.configure(id, nil)
 					}
 					if op == "abort" {
+						b.cancelSessionWorkflow(id)
 						b.pausePendingMessageQueue(id)
 						b.cancelHostKeys(id)
 

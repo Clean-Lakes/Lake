@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -37,9 +38,9 @@ func shellArgs(name string) []string {
 }
 func shellProgram(name string) string {
 	if name == "sh" {
-		return "/bin/sh"
+		return platform.Executable("/bin/sh")
 	}
-	p, err := exec.LookPath(name)
+	p, err := exec.LookPath(platform.Executable(name))
 	if err != nil || !filepath.IsAbs(p) {
 		fail(400, "Selected shell is not installed: "+name)
 	}

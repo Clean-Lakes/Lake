@@ -7,13 +7,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
-	"net/url"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -95,29 +93,29 @@ type Store struct {
 }
 
 func OpenStore(dir string) (*Store, error) {
-	if e := os.MkdirAll(dir, 0700); e != nil {
+	if e := platform.MkdirAll(dir, 0700); e != nil {
 		return nil, e
 	}
-	if e := os.Chmod(dir, 0700); e != nil {
+	if e := platform.Chmod(dir, 0700); e != nil {
 		return nil, e
 	}
 	path := filepath.Join(dir, "lake-web.sqlite")
-	lockFile, e := os.OpenFile(filepath.Join(dir, "server.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	lockFile, e := platform.OpenFile(filepath.Join(dir, "server.lock"), os.O_CREATE|os.O_RDWR, 0600)
 	if e != nil {
 		return nil, e
 	}
-	if e = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); e != nil {
+	if e = lockStore(lockFile); e != nil {
 		lockFile.Close()
 		return nil, fmt.Errorf("Lake data directory is already used by a Go backend")
 	}
 	opened := false
 	defer func() {
 		if !opened {
-			syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+			unlockStore(lockFile)
 			lockFile.Close()
 		}
 	}()
-	db, e := sql.Open("sqlite3", (&url.URL{Scheme: "file", Path: path}).String()+"?_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL")
+	db, e := openSQLite(path)
 	if e != nil {
 		return nil, e
 	}
@@ -127,10 +125,10 @@ func OpenStore(dir string) (*Store, error) {
 		db.Close()
 		return nil, e
 	}
-	os.Chmod(path, 0600)
+	platform.Chmod(path, 0600)
 	defer func() {
 		for _, suffix := range []string{"-wal", "-shm"} {
-			os.Chmod(path+suffix, 0600)
+			platform.Chmod(path+suffix, 0600)
 		}
 	}()
 	if e = s.migrate(); e != nil {
@@ -140,6 +138,8 @@ func OpenStore(dir string) (*Store, error) {
 	s.update(func() any {
 		s.seedResourceTree()
 		s.pauseMessageQueuesOnRestart()
+		s.exec("UPDATE workflowRuns SET status='interrupted',error='服务重启，工作流已中断；未自动重放',finishedAt=? WHERE status='running'", now())
+		s.exec("UPDATE replyTimings SET status='interrupted' WHERE status='running' AND finishedAt=''")
 		// Capture work that is unfinished NOW. Historical unknown outcomes must
 		// not mark a completed session as interrupted on every subsequent boot.
 		interrupted := s.rows("SELECT id FROM sessions WHERE status IN ('investigating','waiting_approval') OR id IN (SELECT sessionId FROM actions WHERE status='running') OR id IN (SELECT sessionId FROM terminals WHERE status='busy') OR id IN (SELECT sessionId FROM specialists WHERE status='working')")
@@ -200,7 +200,7 @@ func (s *Store) migrate() error {
 		if _, e := s.db.Exec("VACUUM INTO ?", backup); e != nil {
 			return e
 		}
-		if e := os.Chmod(backup, 0600); e != nil {
+		if e := platform.Chmod(backup, 0600); e != nil {
 			return e
 		}
 	}
@@ -269,7 +269,7 @@ func (s *Store) Close() error {
 	}
 	err := s.db.Close()
 	if s.lockFile != nil {
-		syscall.Flock(int(s.lockFile.Fd()), syscall.LOCK_UN)
+		unlockStore(s.lockFile)
 		s.lockFile.Close()
 	}
 	return err
@@ -380,7 +380,7 @@ func (s *Store) Events(id string, after int64) []Object {
 	}).([]Object)
 }
 func (s *Store) resource(id string) Object {
-	r := required(s.row("SELECT * FROM resources WHERE id=?", id), "Resource")
+	r := required(s.row("SELECT * FROM resources WHERE id=? AND "+activeResourcesSQL+"", id), "Resource")
 	if c := s.row("SELECT config FROM resourceConnections WHERE resourceId=?", id); c != nil {
 		key := "settings"
 		if r["kind"] == "ssh" {
@@ -394,11 +394,11 @@ func (s *Store) Resource(id string) Object {
 	return s.read(func() any { return s.resource(id) }).(Object)
 }
 func (s *Store) session(id string) Object {
-	r := required(s.row("SELECT * FROM sessions WHERE id=?", id), "Session")
+	r := required(s.row("SELECT * FROM sessions WHERE id=? AND "+activeSessionsSQL, id), "Session")
 	ids := []string{}
 	// Resource availability follows the project, including resources added after
 	// this session was created. Legacy sessionResources rows remain historical.
-	for _, v := range s.rows("SELECT id FROM resources WHERE projectId=? ORDER BY rowid", r["projectId"]) {
+	for _, v := range s.rows("SELECT id FROM resources WHERE projectId=? AND "+activeResourcesSQL+" ORDER BY rowid", r["projectId"]) {
 		ids = append(ids, stringOf(v["id"]))
 	}
 	r["resourceIds"] = ids
@@ -409,7 +409,7 @@ func (s *Store) Session(id string) Object {
 }
 func (s *Store) assertResource(id, ref string) {
 	session := s.session(id)
-	if s.row("SELECT 1 FROM resources WHERE projectId=? AND id=?", session["projectId"], ref) == nil {
+	if s.row("SELECT 1 FROM resources WHERE projectId=? AND id=? AND "+activeResourcesSQL+"", session["projectId"], ref) == nil {
 		fail(404, "Resource not found in session project")
 	}
 }
@@ -419,18 +419,18 @@ func (s *Store) AssertResource(id, ref string) {
 func (s *Store) Catalog() Object {
 	return s.read(func() any {
 		resources := []Object{}
-		for _, r := range s.rows("SELECT id FROM resources ORDER BY rowid") {
+		for _, r := range s.rows("SELECT id FROM resources WHERE " + activeResourcesSQL + " ORDER BY rowid") {
 			resources = append(resources, s.resource(stringOf(r["id"])))
 		}
 		sessions := []Object{}
-		for _, r := range s.rows("SELECT id FROM sessions WHERE NOT EXISTS (SELECT 1 FROM aiScopes a WHERE a.sessionId=sessions.id AND (a.scope='resource-terminal' OR (a.scope='enhanced-terminal' AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.sessionId=sessions.id)))) ORDER BY createdAt DESC,rowid DESC") {
+		for _, r := range s.rows("SELECT id FROM sessions WHERE " + activeSessionsSQL + " AND NOT EXISTS (SELECT 1 FROM aiScopes a WHERE a.sessionId=sessions.id AND (a.scope='resource-terminal' OR (a.scope='enhanced-terminal' AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.sessionId=sessions.id)))) ORDER BY createdAt DESC,rowid DESC") {
 			sessions = append(sessions, s.session(stringOf(r["id"])))
 		}
-		return Object{"projects": s.rows("SELECT * FROM projects ORDER BY createdAt,id"), "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree ORDER BY position,id"), "sessions": sessions, "terminals": s.rows("SELECT t.id,t.sessionId,t.resourceId,t.status,t.holder,t.contextVersion,t.createdAt,s.title AS sessionTitle FROM terminals t JOIN sessions s ON s.id=t.sessionId WHERE t.status!='disconnected' ORDER BY t.createdAt,t.rowid")}
+		return Object{"projects": s.rows("SELECT * FROM projects WHERE " + activeProjectsSQL + " ORDER BY createdAt,id"), "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE NOT EXISTS(SELECT 1 FROM navigationTrash d WHERE d.kind='project' AND d.id=resourceTree.projectId) ORDER BY position,id"), "sessions": sessions, "terminals": s.rows("SELECT t.id,t.sessionId,t.resourceId,t.status,t.holder,t.contextVersion,t.createdAt,s.title AS sessionTitle FROM terminals t JOIN sessions s ON s.id=t.sessionId WHERE t.status!='disconnected' ORDER BY t.createdAt,t.rowid")}
 	}).(Object)
 }
 func (s *Store) Project(id string) Object {
-	return s.read(func() any { return required(s.row("SELECT * FROM projects WHERE id=?", id), "Project") }).(Object)
+	return s.read(func() any { return s.activeProject(id) }).(Object)
 }
 func (s *Store) CreateProject(name string) Object {
 	return s.update(func() any {
@@ -443,7 +443,7 @@ func (s *Store) CreateProject(name string) Object {
 }
 func (s *Store) CreateResource(project, name, kind string, config Object) Object {
 	return s.update(func() any {
-		required(s.row("SELECT id FROM projects WHERE id=?", project), "Project")
+		s.activeProject(project)
 		if ref := stringOf(config["ssh_asset_ref"]); ref != "" {
 			r := s.resource(ref)
 			if r["projectId"] != project || r["kind"] != "ssh" {
@@ -472,9 +472,9 @@ func (s *Store) CreateResource(project, name, kind string, config Object) Object
 }
 func (s *Store) CreateSession(project, title string, chosen []string) Object {
 	return s.update(func() any {
-		required(s.row("SELECT id FROM projects WHERE id=?", project), "Project")
+		s.activeProject(project)
 		available := map[string]bool{}
-		for _, r := range s.rows("SELECT id FROM resources WHERE projectId=? ORDER BY rowid", project) {
+		for _, r := range s.rows("SELECT id FROM resources WHERE projectId=? AND "+activeResourcesSQL+" ORDER BY rowid", project) {
 			available[stringOf(r["id"])] = true
 		}
 		// Accept resourceIds from older clients, but they no longer limit the
@@ -538,7 +538,7 @@ func (s *Store) snapshot(id string) Object {
 		a["risk"] = p.Risk
 		a["riskReason"] = p.Reason
 	}
-	return Object{"messageQueue": s.messageQueue(id), "session": session, "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE projectId=? ORDER BY position,id", session["projectId"]), "messages": messages, "actions": actions, "specialists": s.rows("SELECT * FROM specialists WHERE sessionId=? ORDER BY createdAt,rowid", id), "evidence": s.rows("SELECT * FROM evidence WHERE sessionId=? ORDER BY collectedAt,rowid", id), "terminals": s.rows("SELECT id,sessionId,resourceId,status,holder,contextVersion,createdAt,generation,outputCapturedAt,cwd,shell FROM terminals WHERE sessionId=? ORDER BY createdAt,rowid", id), "cursor": s.row("SELECT COALESCE(MAX(seq),0) AS cursor FROM events WHERE sessionId=?", id)["cursor"]}
+	return Object{"replyTimings": s.rows("SELECT messageId,startedAt,finishedAt,status FROM replyTimings WHERE sessionId=? ORDER BY startedAt,rowid", id), "messageQueue": s.messageQueue(id), "session": session, "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE projectId=? ORDER BY position,id", session["projectId"]), "messages": messages, "actions": actions, "specialists": s.rows("SELECT * FROM specialists WHERE sessionId=? ORDER BY createdAt,rowid", id), "evidence": s.rows("SELECT * FROM evidence WHERE sessionId=? ORDER BY collectedAt,rowid", id), "terminals": s.rows("SELECT id,sessionId,resourceId,status,holder,contextVersion,createdAt,generation,outputCapturedAt,cwd,shell FROM terminals WHERE sessionId=? ORDER BY createdAt,rowid", id), "cursor": s.row("SELECT COALESCE(MAX(seq),0) AS cursor FROM events WHERE sessionId=?", id)["cursor"]}
 }
 func (s *Store) Snapshot(id string) Object {
 	return s.read(func() any { return s.snapshot(id) }).(Object)
@@ -599,6 +599,7 @@ func (s *Store) begin(id, text string, images any, titleInput ...string) Object 
 		fail(409, "Investigation already running")
 	}
 	m := s.message(id, "user", text, images)
+	s.exec("INSERT INTO replyTimings(messageId,sessionId,startedAt) VALUES(?,?,?)", m["id"], id, m["createdAt"])
 	if s.row("SELECT 1 FROM sessionNaming WHERE sessionId=? AND generated=0", id) != nil {
 		input := text
 		if len(titleInput) > 0 {

@@ -48,7 +48,7 @@ func (s *Store) treeOrder(nodes []Object) {
 }
 
 func (s *Store) seedResourceTree() {
-	for _, r := range s.rows("SELECT r.id,r.projectId FROM resources r LEFT JOIN resourceTree n ON n.resourceId=r.id WHERE n.id IS NULL ORDER BY r.rowid") {
+	for _, r := range s.rows("SELECT r.id,r.projectId FROM resources r LEFT JOIN resourceTree n ON n.resourceId=r.id WHERE n.id IS NULL AND NOT EXISTS(SELECT 1 FROM navigationTrash d WHERE (d.kind='resource' AND d.id=r.id) OR (d.kind='project' AND d.id=r.projectId)) ORDER BY r.rowid") {
 		position := integer(s.row("SELECT COALESCE(MAX(position),-1)+1 AS next FROM resourceTree WHERE projectId=? AND parentId IS NULL", r["projectId"])["next"])
 		s.exec("INSERT INTO resourceTree(id,projectId,kind,resourceId,position) VALUES(?,?,'resource',?,?)", r["id"], r["projectId"], r["id"], position)
 	}
@@ -58,7 +58,7 @@ func (s *Store) seedResourceTree() {
 // bindings. A removed folder promotes its children instead of deleting them.
 func (s *Store) EditResourceTree(project string, data Object) []Object {
 	return s.update(func() any {
-		required(s.row("SELECT id FROM projects WHERE id=?", project), "Project")
+		s.activeProject(project)
 		operation := stringOf(data["operation"])
 		id, parent, before := optionalTreeID(data["nodeId"]), optionalTreeID(data["parentId"]), optionalTreeID(data["beforeId"])
 		switch operation {
@@ -122,6 +122,13 @@ func (s *Store) EditResourceTree(project string, data Object) []Object {
 			}
 			parent = stringOf(n["parentId"])
 			children := s.treeChildren(project, id, "")
+			payload := Object{"parentId": n["parentId"], "position": n["position"], "childrenIds": []string{}}
+			ids := []string{}
+			for _, child := range children {
+				ids = append(ids, stringOf(child["id"]))
+			}
+			payload["childrenIds"] = ids
+			s.trashEntry("folder", id, project, stringOf(n["name"]), payload)
 			ordered := []Object{}
 			for _, sibling := range s.treeChildren(project, parent, "") {
 				if sibling["id"] == id {

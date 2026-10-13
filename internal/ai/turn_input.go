@@ -6,11 +6,12 @@ import (
 )
 
 type TurnInput struct {
-	UserText   string            `json:"message"`
-	Context    string            `json:"context,omitempty"`
-	References []map[string]any  `json:"references,omitempty"`
-	Images     []ImageAttachment `json:"images,omitempty"`
-	Prelude    []Call            `json:"-"`
+	TargetScope *TargetScope `json:"-"`
+	workflow    []WorkflowStep
+	UserText    string            `json:"message"`
+	Context     string            `json:"context,omitempty"`
+	References  []map[string]any  `json:"references,omitempty"`
+	Images      []ImageAttachment `json:"images,omitempty"`
 }
 
 func (input TurnInput) validate() error {
@@ -79,6 +80,7 @@ func (e *Engine) ClearReferences(id string) error {
 		return errors.New("session busy")
 	}
 	s.state.ReferencedAssetIDs = nil
+	s.state.TargetScope = nil
 	s.state.Config.ReferencedAssets = nil
 	return e.save(s)
 }

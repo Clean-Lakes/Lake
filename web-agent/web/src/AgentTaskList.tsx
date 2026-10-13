@@ -1,4 +1,4 @@
-import { ActivityIndicator } from "./ActivityIndicator";
+import { StatusText } from "./StatusText";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import type { AgentRun, AgentRunStatus, Evidence, Resource } from "../../shared/contracts";
 import { AgentIcon } from "./AgentIcon";
@@ -6,7 +6,7 @@ import { activeAgentStatus, agentDuration, agentGroupLabel, agentIdentity, agent
 import { readableError } from "./api";
 
 function StatusIcon({ status }: { status: AgentRunStatus }) {
-  if (status === "running") return <ActivityIndicator className="agent-status-icon"/>;
+  if (status === "running") return null;
   return <svg className="agent-status-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     {<><circle cx="8" cy="8" r="6"/>{status === "completed" ? <path d="m5 8 2 2 4-4"/> : status === "queued" ? <path d="M8 4v4l2 1"/> : status === "cancelled" ? <rect x="6" y="6" width="4" height="4" rx=".5"/> : status === "waiting_approval" ? <path d="M6 5v6M10 5v6"/> : <path d="M8 4.5v4M8 11h.01"/>}</>}
   </svg>;
@@ -31,6 +31,7 @@ export function AgentTaskList({ runs, resources, evidence = [], live = false, on
   }, [timed]);
   if (!runs.length) return null;
   const completed = runs.filter(run => run.status === "completed").length;
+  const processing = live && (runs.some(run => run.status === "running") || !runs.some(run => run.status === "waiting_approval"));
   const resourceMap = new Map(resources.map(resource => [resource.id, resource]));
   const allEvidence = [...new Map([...evidence, ...runs.flatMap(run => (run.evidence || []).map(item => ({...item, specialistId: null, command: null})))].map(item => [item.id, item])).values()];
   const cancel = async (run: AgentRun) => {
@@ -40,7 +41,7 @@ export function AgentTaskList({ runs, resources, evidence = [], live = false, on
     finally { setCancelling(current => current.filter(item => item !== run.id)); }
   };
   return <section className="agent-task-list" aria-label="Lake 子 Agent 任务">
-    <div className="agent-lead"><span className="agent-emblem"><AgentIcon role="lake" size={20}/></span><div className="agent-lead-copy"><div><strong>Lake</strong><span className="agent-group-state" role="status" aria-live="polite" aria-atomic="true">{agentGroupLabel(runs, live)}</span></div><p>{live ? "正在按任务汇总调查结果与证据。" : "已保留各任务的结果与证据。"}</p></div></div>
+    <div className="agent-lead"><span className="agent-emblem"><AgentIcon role="lake" size={20}/></span><div className="agent-lead-copy"><div><strong>Lake</strong><span className="agent-group-state" role="status" aria-live="polite" aria-atomic="true"><StatusText text={agentGroupLabel(runs, live)} active={processing}/></span></div><p>{live ? "正在按任务汇总调查结果与证据。" : "已保留各任务的结果与证据。"}</p></div></div>
     <div className="agent-task-body"><div className="agent-task-heading"><span>本轮子任务</span><span>{completed} / {runs.length} 已完成</span></div>
       <ol className="agent-task-rows">{runs.map(run => {
         const identity = agentIdentity(run);
@@ -50,7 +51,7 @@ export function AgentTaskList({ runs, resources, evidence = [], live = false, on
         const canCancel = !!onCancelRun && run.canCancel && activeAgentStatus(run.status);
         return <li key={run.id} className="agent-task-row" data-agent-id={run.id} data-agent-status={run.status}>
           <details onToggle={event => { if (event.currentTarget.open) onInspect?.(); }}>
-            <summary><span className="agent-task-role"><AgentIcon role={identity.icon}/></span><span className="agent-task-copy"><span className="agent-task-title"><strong>{identity.name}</strong><span>{identity.label} · {target}</span></span><span className="agent-task-description">{summary || run.task}</span></span><span key={run.status} className={`agent-task-status status-${run.status}`}><StatusIcon status={run.status}/>{agentStatusLabels[run.status] || "状态待核查"}</span><svg className="agent-task-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary>
+            <summary><span className="agent-task-role"><AgentIcon role={identity.icon}/></span><span className="agent-task-copy"><span className="agent-task-title"><strong>{identity.name}</strong><span>{identity.label} · {target}</span></span><span className="agent-task-description">{summary || run.task}</span></span><span key={run.status} className={`agent-task-status status-${run.status}`}><StatusIcon status={run.status}/><StatusText text={agentStatusLabels[run.status] || "状态待核查"} active={live && run.status === "running"}/></span><svg className="agent-task-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary>
             <div className="agent-task-detail" id={`${id}-${run.id}`}><dl><dt>职责</dt><dd>{identity.label}</dd><dt>目标</dt><dd>{target}</dd><dt>任务</dt><dd>{run.task}</dd><dt>耗时</dt><dd className="agent-duration">{agentDuration(run, now)}</dd><dt>证据</dt><dd>{collected.length ? `${collected.length} 项` : run.status === "queued" ? "等待采集" : run.status === "running" ? "尚未收集" : "暂无已记录证据"}</dd>{typeof run.toolCount === "number" && <><dt>工具调用</dt><dd>{run.toolCount} 次</dd></>}</dl>
               {run.usage && <div className="agent-task-usage">模型用量：{!run.usage.total && !run.usage.known && !run.usage.inputKnown && !run.usage.outputKnown ? "服务商尚未返回" : <>{run.usage.total.toLocaleString()} tokens{!run.usage.known && !(run.usage.inputKnown && run.usage.outputKnown) ? "（已知部分）" : ""}</>} · 上下文独立</div>}
               {summary && <div className="agent-task-result"><strong>任务结果</strong><p>{summary}</p></div>}

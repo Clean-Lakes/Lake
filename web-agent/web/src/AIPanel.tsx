@@ -1,3 +1,5 @@
+import { ReplyDuration } from "./ReplyDuration";
+import { timingForTurn } from "./replyDurationState";
 import {displayAiError} from "./aiErrors";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -78,6 +80,7 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
         return <Card key={entry.id} card={entry.card!}/>;
       })}
       <FileChanges cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
+ <ReplyDuration timing={timingForTurn(turn,snapshot)} waiting={index===turns.length-1 && snapshot.ai?.status==="waiting_approval"}/>
     </Fragment>)}
     {snapshot.ai && <AIProgress thinkingVisible={thinkingVisible || activeRunVisible} view={snapshot.ai} cards={cards} latestUserAt={latestUserAt}/>}
   </div>;

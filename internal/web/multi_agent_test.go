@@ -67,6 +67,8 @@ func TestMultiAgentHTTPApprovalCancelAndDetailsScope(t *testing.T) {
 			case 2:
 				ref := refPattern.FindString(content)
 				emitModel(w, "", []ai.Call{{ID: "delegate", Name: "delegate_investigation", Arguments: jsonText(Object{"tasks": []Object{{"role": "application", "task": "Read fixture log", "asset_refs": []string{ref}, "context": "Log path: " + logPath}}})}})
+			case 3:
+				emitModel(w, "", []ai.Call{{ID: "verify", Name: "delegate_investigation", Arguments: jsonText(Object{"tasks": []Object{{"role": "verify", "task": "Review collected evidence"}}})}})
 			default:
 				emitModel(w, "Parent result", nil)
 			}

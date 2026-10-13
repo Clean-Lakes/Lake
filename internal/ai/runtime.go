@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"io"
 	"os"
 	"os/exec"
@@ -70,7 +71,7 @@ func privateCredential(path string, roots ...string) (string, error) {
 		return "", errors.New("credential directory unavailable")
 	}
 	rootInfo, err := os.Stat(realRoot)
-	if err != nil || rootInfo.Mode().Perm()&0077 != 0 || !ownedFile(rootInfo) {
+	if err != nil || !platform.Private(realRoot, rootInfo) {
 		return "", errors.New("credential directory must be private")
 	}
 	path, err = filepath.EvalSymlinks(path)
@@ -78,7 +79,7 @@ func privateCredential(path string, roots ...string) (string, error) {
 		return "", errors.New("credential must be under ~/.lake/secrets")
 	}
 	st, err := os.Stat(path)
-	if err != nil || !st.Mode().IsRegular() || st.Mode().Perm()&0077 != 0 || !ownedFile(st) {
+	if err != nil || !st.Mode().IsRegular() || !platform.Private(path, st) {
 		return "", errors.New("credential must be a private file")
 	}
 	return path, nil
@@ -199,10 +200,10 @@ func (e *Engine) execRuntime(ctx context.Context, c Config, a map[string]any, ar
 	}
 	ctx, cancel := context.WithTimeout(ctx, duration(a))
 	defer cancel()
-	cmd := exec.CommandContext(ctx, executable, cmdargs...)
+	cmd := exec.CommandContext(ctx, platform.Executable(executable), cmdargs...)
 	setupProcess(cmd)
 	home, _ := os.UserHomeDir()
-	cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin", "LANG=en_US.UTF-8"}
+	cmd.Env = platform.Environment(home)
 	if sshTarget != nil {
 		var err error
 		cmd.Env, err = sshEnvironment(sshTarget, c.CredentialDir)

@@ -449,7 +449,10 @@ func TestPasswordAndEncryptedKeyPersistentSSH(t *testing.T) {
 			if err != nil || view.Status != "completed" || !strings.Contains(jsonText(view), "REMOTE_AUTH_FILE_EVIDENCE") {
 				t.Fatal("model remote file read did not authenticate")
 			}
-			b.Terminals.Close(sid, stringOf(b.Store.Options(sid)["terminal_id"]))
+			// A model-selected file read may use direct SSH without creating a PTY.
+			if bound := stringOf(b.Store.Options(sid)["terminal_id"]); bound != "" {
+				b.Terminals.Close(sid, bound)
+			}
 		})
 	}
 	bad := Object{"host": "127.0.0.1", "port": port, "username": "fixture", "authMethod": "password", "password": "Synthetic-wrong-password"}

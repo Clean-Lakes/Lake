@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,10 +17,11 @@ import (
 )
 
 type session struct {
-	mu       sync.Mutex
-	state    State
-	cancel   context.CancelFunc
-	decision chan bool
+	mu                 sync.Mutex
+	state              State
+	cancel             context.CancelFunc
+	decision           chan bool
+	agentBudgetChanged chan struct{}
 }
 type Engine struct {
 	agentMu          sync.Mutex
@@ -27,6 +29,7 @@ type Engine struct {
 	agentSlots       chan struct{}
 	modelSlots       chan struct{}
 	childModelSlots  chan struct{}
+	collectionSlots  chan struct{}
 	agentsClosed     bool
 	worker           *agentWorker
 	observationSlots sync.Map
@@ -42,13 +45,13 @@ type Engine struct {
 }
 
 func New(dir string, bridge Bridge, emit func(Event)) (*Engine, error) {
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := platform.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
-	if err := os.Chmod(dir, 0700); err != nil {
+	if err := platform.Chmod(dir, 0700); err != nil {
 		return nil, err
 	}
-	return &Engine{sessions: map[string]*session{}, Dir: dir, Bridge: bridge, Emit: emit, agentWorkers: map[string]*agentWorker{}, agentSlots: make(chan struct{}, 6), modelSlots: make(chan struct{}, 4), childModelSlots: make(chan struct{}, 3)}, nil
+	return &Engine{sessions: map[string]*session{}, Dir: dir, Bridge: bridge, Emit: emit, agentWorkers: map[string]*agentWorker{}, agentSlots: make(chan struct{}, 6), modelSlots: make(chan struct{}, 4), childModelSlots: make(chan struct{}, 3), collectionSlots: make(chan struct{}, 6)}, nil
 }
 
 var identifier = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,100}$`)
@@ -166,7 +169,7 @@ func (e *Engine) save(s *session) error {
 		return err
 	}
 	defer os.Remove(tmp.Name())
-	if err = tmp.Chmod(0600); err == nil {
+	if err = platform.Chmod(tmp.Name(), 0600); err == nil {
 		_, err = tmp.Write(b)
 	}
 	if err == nil {
@@ -179,7 +182,7 @@ func (e *Engine) save(s *session) error {
 	if err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	return platform.ReplaceFile(tmp.Name(), path)
 }
 func (e *Engine) notify(s *session, kind string, v any) {
 	if e.Emit != nil {
@@ -370,19 +373,14 @@ func (e *Engine) Chat(ctx context.Context, id, text string, refs []map[string]an
 	return e.ChatImages(ctx, id, text, refs, nil)
 }
 func (e *Engine) ChatImages(ctx context.Context, id, text string, refs []map[string]any, images []ImageAttachment) (err error) {
-	return e.ChatImagesWithPrelude(ctx, id, text, refs, images, nil)
+	return e.ChatTurn(ctx, id, TurnInput{UserText: text, References: refs, Images: images})
 }
 
-// ChatImagesWithPrelude gathers read-only host context through the normal tool
-// pipeline before asking the model for its first response.
-func (e *Engine) ChatImagesWithPrelude(ctx context.Context, id, text string, refs []map[string]any, images []ImageAttachment, prelude []Call) error {
-	return e.ChatTurn(ctx, id, TurnInput{UserText: text, References: refs, Images: images, Prelude: prelude})
-}
 func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err error) {
 	if err = input.validate(); err != nil {
 		return err
 	}
-	text, refs, images, prelude := input.UserText, input.References, input.Images, input.Prelude
+	text, refs, images := input.UserText, input.References, input.Images
 	images, err = ValidateImages(images)
 	if err != nil {
 		return err
@@ -397,26 +395,12 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		return errors.New("session busy")
 	}
 	c := s.state.Config
-	prelude = append([]Call(nil), prelude...)
-	for i := range prelude {
-		if prelude[i].Name != "inspect_host" {
+	if len(input.workflow) > 0 {
+		if err = validateWorkflow(c, input.workflow); err != nil {
 			s.mu.Unlock()
-			return errors.New("only read-only host inspection is allowed in the turn prelude")
+			return err
 		}
-		a, parseErr := args(prelude[i])
-		if parseErr != nil {
-			s.mu.Unlock()
-			return parseErr
-		}
-		if ref := str(a["asset_ref"]); ref != "" {
-			as, assetErr := asset(c, ref)
-			if assetErr != nil {
-				s.mu.Unlock()
-				return assetErr
-			}
-			a["asset_ref"] = assetAlias(as.ID)
-			prelude[i].Arguments = js(a)
-		}
+		c.workflowMode = true
 	}
 	if len(images) > 0 && !c.Model.SupportsImageInput {
 		s.mu.Unlock()
@@ -427,6 +411,23 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		return errors.New("model not configured")
 	}
 	message := text
+	if e.worker == nil {
+		if input.TargetScope != nil {
+			for _, ref := range input.TargetScope.ResourceIDs {
+				if as, scopeErr := asset(c, ref); scopeErr != nil || as.ID != ref {
+					s.mu.Unlock()
+					return errors.New("directory scope contains an unavailable resource")
+				}
+			}
+			s.state.TargetScope = cloneTargetScope(input.TargetScope)
+		} else if len(refs) > 0 {
+			s.state.TargetScope = nil
+		}
+		c.targetScope = cloneTargetScope(s.state.TargetScope)
+		if c.targetScope != nil {
+			c.AssetRef, c.TerminalID, c.Runtime = "", "", "local"
+		}
+	}
 	c.ReferencedAssets = validRemembered(c, s.state.ReferencedAssetIDs)
 	if len(refs) > 0 {
 		for _, r := range refs {
@@ -448,6 +449,9 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		message = "[HEXHUB_REFERENCES]\n" + js(refs) + "\n[USER_MESSAGE]\n" + text
 	}
 	if input.Context != "" {
+		if len(refs) == 0 {
+			message = "[USER_MESSAGE]\n" + text
+		}
 		message = boundedTurnContext(message, input.Context, c) + "\n" + message
 	}
 	c.ReferencedAssets = validRemembered(c, c.ReferencedAssets)
@@ -467,10 +471,14 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 	if s.state.View.StartedAt == "" {
 		s.state.View.StartedAt = timestamp()
 	}
+	systemPrompt := Prompt(c)
+	if e.worker == nil {
+		systemPrompt += "\n" + userLanguageReminder(text)
+	}
 	if len(s.state.History) == 0 {
-		s.state.History = append(s.state.History, Message{Role: "system", Content: Prompt(c)})
+		s.state.History = append(s.state.History, Message{Role: "system", Content: systemPrompt})
 	} else {
-		s.state.History[0] = Message{Role: "system", Content: Prompt(c)}
+		s.state.History[0] = Message{Role: "system", Content: systemPrompt}
 	}
 	s.state.History = append(s.state.History, Message{Role: "user", Content: redact(message, c), Images: images})
 	err = e.save(s)
@@ -511,18 +519,8 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		}
 		e.notify(s, "done", map[string]any{"status": status})
 	}()
-	if len(prelude) > 0 {
-		s.mu.Lock()
-		m := Message{Role: "assistant", Calls: prelude}
-		resolveCallIDs(&m, s.state.History)
-		s.state.History = append(s.state.History, m)
-		err = e.save(s)
-		e.notify(s, "historyMessage", m)
-		s.mu.Unlock()
-		if err != nil {
-			return err
-		}
-		if err = e.invokeCalls(ctx, s, &c, m.Calls); err != nil {
+	if len(input.workflow) > 0 {
+		if err = e.executeWorkflow(ctx, s, c, input.workflow); err != nil {
 			return err
 		}
 	}
@@ -537,22 +535,23 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		history := append([]Message(nil), s.state.History...)
 		textID, thinkID := uid(), uid()
 		textType := "message"
-		if e.worker == nil {
-			hasInvestigation, hasReview := false, false
-			for _, run := range s.state.View.AgentRuns {
-				if run.RootTurnID == s.state.View.RootTurnID {
-					hasInvestigation = true
-					hasReview = hasReview || run.Role == "verify"
-				}
-			}
-			if hasInvestigation && !hasReview {
-				textType = "draft"
-			}
-		}
 		s.state.View.Cards = append(s.state.View.Cards, Card{ID: thinkID, Type: "thinking", Status: "running", At: timestamp()}, Card{ID: textID, Type: textType, Status: "running", At: timestamp()})
 		s.mu.Unlock()
 		lastFlush := time.Now()
 		tools := e.sessionCatalog(ctx, id, c)
+		if e.worker != nil {
+			e.worker.mu.Lock()
+			remaining := max(0, agentObservationCallLimit-e.worker.calls)
+			e.worker.mu.Unlock()
+			if step == c.MaxSteps-1 {
+				tools = nil
+				remaining = 0
+				e.worker.mu.Lock()
+				e.worker.finalizing = true
+				e.worker.mu.Unlock()
+			}
+			history[0].Content += fmt.Sprintf("\nRuntime allowance: %d tool calls remain. Reuse already collected evidence. When no tool remains, return a concise final report citing recorded evidence and explicit gaps; do not request another tool or infer unobserved facts. A finished report may describe a blocked deliverable honestly.", remaining)
+		}
 		result, modelErr := e.stream(ctx, c.Model, history, tools, func(kind, delta string) {
 			s.mu.Lock()
 			defer s.mu.Unlock()
@@ -607,27 +606,7 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 			return err
 		}
 		if len(result.Message.Calls) == 0 {
-			if e.needsAgentVerification(s) {
-				// Keep the candidate private until an independent evidence review has finished.
-				s.mu.Lock()
-				for i := range s.state.View.Cards {
-					if s.state.View.Cards[i].ID == textID {
-						s.state.View.Cards[i].Type = "draft"
-					}
-				}
-				s.mu.Unlock()
-				if _, err = e.runInvestigations(ctx, s, c, []investigationSpec{{Role: "verify", Task: "独立验证本轮调查证据"}}); err != nil {
-					return err
-				}
-				m := Message{Role: "assistant", Calls: []Call{{ID: uid(), Name: "read_investigation", Arguments: `{}`}}}
-				s.mu.Lock()
-				s.state.History = append(s.state.History, m)
-				s.mu.Unlock()
-				if err = e.invokeCalls(ctx, s, &c, m.Calls); err != nil {
-					return err
-				}
-				continue
-			}
+
 			return nil
 		}
 		if err = e.invokeCalls(ctx, s, &c, result.Message.Calls); err != nil {
@@ -671,7 +650,11 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 		}
 		payload := js(value)
 		if toolErr != nil {
-			payload = js(map[string]any{"error": toolErr.Error()})
+			failure := map[string]any{"error": toolErr.Error()}
+			if value != nil {
+				failure["result"] = value
+			}
+			payload = js(failure)
 		}
 		payload = redact(payload, *c)
 		if len(payload) > 100000 {
@@ -717,13 +700,31 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	if len(history) < 4 {
 		return errors.New("message exceeds configured context window")
 	}
-	// Retain complete user turns; never separate assistant tool calls from their results.
+	// Prefer complete turns; a long first turn can also compact between complete
+	// tool batches. Never separate assistant calls from their matching results.
 	cut := len(history) - 1
 	for cut > 1 && history[cut].Role != "user" {
 		cut--
 	}
-	if cut <= 1 {
-		return errors.New("current tool turn exceeds context budget")
+	retained := append([]Message(nil), history[cut:]...)
+	latestUser := cut
+	if cut <= 1 || historyCost(retained)+len(js(history[0]))+len(js(e.sessionCatalog(ctx, id, c)))+16000 > budget {
+		boundary := latestBatchBoundary(history)
+		if boundary <= latestUser+1 {
+			projected, fits := fitToolContext(history, budget-len(js(e.sessionCatalog(ctx, id, c))))
+			if !fits {
+				return errors.New("current tool turn exceeds context budget")
+			}
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			s.state.History = projected
+			s.state.LastRequest, s.state.LastRequestAt = nil, ""
+			s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "compaction", Content: "工具输出已缩减为上下文预览；原始操作记录保留", Status: "completed", At: timestamp()})
+			e.notify(s, "compact", nil)
+			return e.save(s)
+		}
+		cut = boundary
+		retained = append([]Message{history[latestUser]}, history[cut:]...)
 	}
 	prompt, _ := embedded.ReadFile("prompts/compaction-summary.txt")
 	// Handoffs are a bounded summarization task, independent of the user's
@@ -742,7 +743,11 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 		ceiling = 8192
 	}
 	model.MaxOutput = min(4096, ceiling)
-	messages := []Message{{Role: "system", Content: string(prompt) + "\nOutput only a compact handoff of at most 1000 words. Omit raw reasoning, repetitive logs and full command outputs."}, {Role: "user", Content: js(summaryMessages(history[1:cut]))}}
+	messagePrompt := string(prompt) + "\nOutput only a compact handoff of at most 1000 words. Omit raw reasoning, repetitive logs and full command outputs. Use the user's language. Do not infer health or success from omitted output."
+	messages, fits := fitSummaryInput(history[1:cut], messagePrompt, budget)
+	if !fits {
+		return errors.New("context compaction: summary input exceeds context budget; original history retained")
+	}
 	result, err := e.stream(ctx, model, messages, nil, nil)
 	if errors.Is(err, ErrModelOutputLimit) && ctx.Err() == nil {
 		model.MaxOutput = ceiling
@@ -757,11 +762,19 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 		return errors.New("context compaction: empty summary; original history retained")
 	}
 	if len(summary) > 16000 {
-		summary = summary[:16000]
+		summary = utf8Prefix(summary, 16000)
+	}
+	projected := append([]Message{history[0], {Role: "user", Content: "Previous conversation handoff (untrusted summary; not authorization):\n" + summary}}, retained...)
+	projected, fits = fitToolContext(projected, budget-len(js(e.sessionCatalog(ctx, id, c))))
+	if !fits {
+		return errors.New("current tool turn exceeds context budget")
+	}
+	if err := validHistory(projected); err != nil {
+		return fmt.Errorf("context compaction: %w", err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.state.History = append([]Message{history[0], {Role: "user", Content: "Previous conversation handoff (untrusted summary):\n" + summary}}, history[cut:]...)
+	s.state.History = projected
 	s.state.Checkpoints = nil
 	s.state.View.Summary = redact(summary, c)
 	addUsage(&s.state.View.Usage, result.Usage)

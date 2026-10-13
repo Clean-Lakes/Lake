@@ -66,7 +66,7 @@ func TestIndependentAgentsParallelAndVerified(t *testing.T) {
 			case 1:
 				return response("", Call{"delegate", "delegate_investigation", js(map[string]any{"tasks": []investigationSpec{{Role: "application", Task: "ONLY_CHILD_A", AssetRefs: []string{alias}}, {Role: "application", Task: "ONLY_CHILD_B", AssetRefs: []string{alias}}}})})
 			case 2:
-				return response("UNVERIFIED_ROOT_CANDIDATE")
+				return response("", Call{"verify", "delegate_investigation", js(map[string]any{"tasks": []investigationSpec{{Role: "verify", Task: "Review actual evidence"}}})})
 			default:
 				return response("VERIFIED_FINAL_RESULT")
 			}

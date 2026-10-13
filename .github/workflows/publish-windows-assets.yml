@@ -1,0 +1,80 @@
+name: Supplement Windows x86_64 release assets
+on:
+  push:
+    tags: ['lake-windows-assets-*']
+permissions:
+  contents: write
+jobs:
+  supplement:
+    if: github.event.deleted == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reassemble and verify prepared Windows assets
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, re
+          root = pathlib.Path('release-assets/windows')
+          meta = json.loads((root / 'release.json').read_text())
+          version = meta['version']
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version)
+          name = f'Lake-{version}-windows-x86_64'
+          expected = {name+'.zip', name+'.zip.sha256', name+'-setup.exe', name+'-setup.exe.sha256'}
+          assert set(meta['assets']) == expected
+          out = pathlib.Path('/tmp/lake-windows-release')
+          out.mkdir()
+          for filename, artifact in meta['assets'].items():
+              assert artifact['parts'] and len(artifact['parts']) <= 16
+              target = out / filename
+              with target.open('wb') as stream:
+                  for part in artifact['parts']:
+                      assert re.fullmatch(r'chunk-[a-f0-9]{64}-[0-9]{3}', part['name'])
+                      source = root / part['name']
+                      assert source.stat().st_size == part['size']
+                      assert hashlib.sha256(source.read_bytes()).hexdigest() == part['sha256']
+                      with source.open('rb') as data:
+                          __import__('shutil').copyfileobj(data, stream)
+              assert target.stat().st_size == artifact['size']
+              assert hashlib.sha256(target.read_bytes()).hexdigest() == artifact['sha256']
+          for extension in ['.zip', '-setup.exe']:
+              file = out / (name+extension)
+              assert (out / (file.name+'.sha256')).read_text().split() == [meta['assets'][file.name]['sha256'], file.name]
+          with open(__import__('os').environ['GITHUB_ENV'], 'a') as env:
+              env.write(f'LAKE_WINDOWS_VERSION={version}\n')
+          print('Four Windows assets reassembled and SHA-256 verified')
+          PY
+      - name: Supplement the existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$LAKE_WINDOWS_VERSION" > /tmp/lake-before-release.json
+          python3 - <<'PY'
+          import json, pathlib
+          r = json.loads(pathlib.Path('/tmp/lake-before-release.json').read_text())
+          assert not r['draft'] and not r['prerelease'] and r['target_commitish'] == 'master'
+          marker = '## Windows x86_64 补充包'
+          body = (r['body'] or '').split(marker)[0].rstrip()
+          body += '\n\n'+marker+'\n\n支持 Windows 10 1809+ / Windows 11、Intel / AMD 64 位处理器。提供安装 EXE、免安装 ZIP 和 SHA-256；内置当前工作台、Bash 与 SSH，无需 Node.js 或 WSL。缺少 WebView2 Runtime 时，安装版会验证 Microsoft 签名并安装官方运行环境（需要联网）。\n\nWindows 包已通过交叉编译、包结构与校验值检查；尚未在 Windows 实机验证，未配置 Windows Authenticode 应用签名。\n'
+          body += '\n本次 Windows 包补充了自动适配 Windows 10/11 的标题栏配色，以及左下角“检查更新”入口。可在客户端检查、下载安装更高版本的 Windows 正式发布；安装会关闭终端连接并重新打开，保留用户数据。此前没有更新入口的客户端请先手动覆盖安装本包；同一版本的资产替换不会触发版本升级。\n'
+          pathlib.Path('/tmp/lake-release-notes.md').write_text(body)
+          PY
+          gh release upload "v$LAKE_WINDOWS_VERSION" --repo "$GITHUB_REPOSITORY" --clobber /tmp/lake-windows-release/*
+          gh release edit "v$LAKE_WINDOWS_VERSION" --repo "$GITHUB_REPOSITORY" --title "Lake v$LAKE_WINDOWS_VERSION · macOS / Windows" --notes-file /tmp/lake-release-notes.md
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$LAKE_WINDOWS_VERSION" > /tmp/lake-after-release.json
+          python3 - <<'PY'
+          import json, pathlib
+          before = json.loads(pathlib.Path('/tmp/lake-before-release.json').read_text())
+          after = json.loads(pathlib.Path('/tmp/lake-after-release.json').read_text())
+          meta = json.loads(pathlib.Path('release-assets/windows/release.json').read_text())
+          assets = {a['name']:a for a in after['assets']}
+          for name, info in meta['assets'].items():
+              assert assets[name]['size'] == info['size']
+              assert assets[name]['digest'] == 'sha256:'+info['sha256']
+          for asset in before['assets']:
+              if asset['name'] not in meta['assets']:
+                  assert assets[asset['name']]['id'] == asset['id']
+                  assert assets[asset['name']]['digest'] == asset['digest']
+          assert after['target_commitish']=='master' and not after['draft']
+          print('Windows packages published; existing release assets preserved')
+          PY
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$GITHUB_REF_NAME"

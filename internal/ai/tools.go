@@ -84,6 +84,14 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		if ref != assetAlias(as.ID) {
 			return nil, errors.New("use asset_ref returned by list_assets, not the Lake resource id")
 		}
+		if c.targetScope != nil && as.ID != c.AssetRef {
+			// A directory can contain several hosts. Do not borrow the previous
+			// host's terminal when the model explicitly chooses another member.
+			c.TerminalID = ""
+			if as.Kind == "local" || as.Kind == "ssh" {
+				c.Runtime = as.Kind
+			}
+		}
 	}
 	s.mu.Lock()
 	c.ReferencedAssets = validRemembered(c, append(c.ReferencedAssets, s.state.ReferencedAssetIDs...))
@@ -102,12 +110,17 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if !found {
 		return nil, errors.New("tool unavailable in selected profile")
 	}
+	if c.targetScope != nil && (str(a["terminal_id"]) == "" || str(a["asset_ref"]) != "" || c.targetScope.NeedsClarification || len(c.targetScope.ResourceIDs) == 0 || call.Name == "delegate_investigation") {
+		if err := enforceTargetScope(c, call.Name, a, nil); err != nil {
+			return nil, err
+		}
+	}
 	if e.worker != nil {
 		e.worker.mu.Lock()
 		e.worker.calls++
 		calls := e.worker.calls
 		e.worker.mu.Unlock()
-		if calls > 12 {
+		if calls > agentObservationCallLimit {
 			return nil, errors.New("子 Agent 工具调用预算已达到上限")
 		}
 		if err := e.worker.parent.updateAgent(e.worker, func(r *AgentRun) { r.ToolCount = calls }); err != nil {
@@ -128,10 +141,11 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		return e.investigationReports(s, false), nil
 	}
 	if call.Name == "read_investigation" {
-		if len(a) != 0 {
-			return nil, errors.New("调查记录工具不接受身份参数")
+		if len(a) == 0 {
+			return e.investigationReports(s, true), nil
 		}
-		return e.investigationReports(s, true), nil
+		value, _, err := e.readAgentEvidence(s, a)
+		return value, err
 	}
 	if call.Name == "read_evidence" && e.worker != nil {
 		return e.observation(ctx, c, call.Name, a)
@@ -139,13 +153,20 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	s.mu.Lock()
 	sessionID := s.state.View.Session
 	s.mu.Unlock()
-	risk, fingerprint, err := e.policy(ctx, sessionID, c, call.Name, a)
-	if err != nil {
-		return nil, err
+	discovery := call.Name == "list_assets" || call.Name == "list_resource_groups"
+	risk, fingerprint := "readonly", ""
+	if !discovery {
+		risk, fingerprint, err = e.policy(ctx, sessionID, c, call.Name, a)
+		if err != nil {
+			return nil, err
+		}
 	}
 	target := "本机"
+	if discovery {
+		target = "项目资源目录"
+	}
 	policyContext := map[string]any{}
-	if e.Bridge != nil {
+	if e.Bridge != nil && !discovery {
 		p, pe := e.bridgeCall(ctx, sessionID, "policy", map[string]any{"name": call.Name, "arguments": a, "terminal_id": c.TerminalID}, false)
 		if pe != nil {
 			return nil, pe
@@ -156,19 +177,31 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		policyContext = obj(p)
 	}
 	ref := str(a["asset_ref"])
-	if ref == "" && call.Name != "preview_resource_import" && call.Name != "import_resources" {
-		ref = c.AssetRef
+	if ref == "" && !discovery && call.Name != "preview_resource_import" && call.Name != "import_resources" {
+		ref = str(policyContext["asset_ref"])
+		if ref == "" {
+			ref = c.AssetRef
+		}
 	}
-	if ref != "" {
+	if ref != "" && !discovery {
 		as, e := asset(c, ref)
 		if e != nil {
 			return nil, e
 		}
 		target = as.Name
+		if c.targetScope != nil && str(a["terminal_id"]) != "" && str(a["asset_ref"]) == "" {
+			c.AssetRef = as.ID
+			if as.Kind == "local" || as.Kind == "ssh" {
+				c.Runtime = as.Kind
+			}
+		}
 		if str(policyContext["asset_ref"]) == "" {
 			policyContext["asset_ref"] = as.ID
 			policyContext["runtime"] = as.Kind
 		}
+	}
+	if err := enforceTargetScope(c, call.Name, a, policyContext); err != nil {
+		return nil, err
 	}
 	if str(policyContext["runtime"]) == "" {
 		policyContext["runtime"] = hostArguments(c, a)["runtime"]
@@ -203,7 +236,11 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "operation", Title: call.Name, Data: map[string]any{"arguments": a, "target": target, "risk": risk, "call_id": call.ID}, Status: "running", At: timestamp()})
 	e.notify(s, "toolCall", map[string]any{"name": call.Name})
 	s.mu.Unlock()
+	connectionPrepared := false
 	defer func() {
+		if connectionPrepared {
+			return
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		for i := range s.state.View.Cards {
@@ -282,6 +319,27 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		if err = e.rememberApproved(s, c, str(policyContext["asset_ref"])); err != nil {
 			return nil, err
 		}
+		if kind == "terminal_open" && call.Name == "shell" && e.Bridge != nil {
+			// A connection decision authorizes setup only. Re-evaluate the requested
+			// command against the newly established terminal and its permissions.
+			prepared, prepareErr := e.bridgeCall(ctx, sessionID, "prepare_host", map[string]any{"asset_ref": policyContext["asset_ref"], "terminal_id": a["terminal_id"]}, true)
+			err = prepareErr
+			if err != nil {
+				return nil, err
+			}
+			connectionPrepared = true
+			s.mu.Lock()
+			for i := range s.state.View.Cards {
+				if s.state.View.Cards[i].ID == cardID {
+					s.state.View.Cards[i].Title = "open_ssh_terminal"
+					s.state.View.Cards[i].Content = redact(js(prepared), c)
+					s.state.View.Cards[i].Status = "completed"
+				}
+			}
+			e.notify(s, "operation", map[string]any{"card_id": cardID})
+			s.mu.Unlock()
+			return e.invoke(ctx, s, c, call)
+		}
 	}
 	if err = ctx.Err(); err != nil {
 		return nil, err
@@ -293,7 +351,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		}
 	}
 	switch call.Name {
-	case "observe_host", "observe_logs", "observe_data", "read_evidence":
+	case "observe_host", "observe_cluster", "observe_cluster_logs", "observe_journal", "observe_logs", "observe_data", "read_evidence":
 		return e.observation(ctx, c, call.Name, a)
 	case "preview_resource_import", "import_resources":
 		if e.Bridge == nil {
@@ -301,36 +359,9 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		}
 		return e.bridgeCall(ctx, sessionID, call.Name, a, approved)
 	case "list_assets":
-		re, err := regexp.Compile("(?i)" + str(a["pattern"]))
-		if err != nil {
-			return nil, errors.New("invalid asset filter regex")
-		}
-		list := []any{}
-		for _, as := range c.Assets {
-			if c.Permissions != nil && c.Permissions.BlockUnreferencedAssets {
-				allowed := false
-				for _, ref := range c.ReferencedAssets {
-					allowed = allowed || ref == as.ID
-				}
-				if !allowed {
-					continue
-				}
-			}
-			info := map[string]any{"asset_ref": assetAlias(as.ID), "name": as.Name, "type": as.Kind, "path": str(as.Settings["path"]), "db_type": str(as.Settings["driver"])}
-			if host := str(as.Settings["host"]); host != "" {
-				info["host"] = host
-			}
-			if as.SSH != nil {
-				info["host"] = as.SSH.Host
-			}
-			if r := str(as.Settings["ssh_asset_ref"]); r != "" {
-				info["ssh_asset_ref"] = assetAlias(r)
-			}
-			if re.MatchString(js(info)) {
-				list = append(list, info)
-			}
-		}
-		return list, nil
+		return listDirectoryAssets(c, a)
+	case "list_resource_groups":
+		return directoryDiscovery(c), nil
 	case "render_chart":
 		labels := arr(a["labels"])
 		if len(labels) == 0 || len(labels) > 1000 {

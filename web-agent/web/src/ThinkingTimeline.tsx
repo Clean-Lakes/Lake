@@ -5,6 +5,7 @@ import type { AICard } from "../../shared/contracts";
 import { sameCard } from "./cardEquality";
 import { toolActivity, toolLabels } from "./activity";
 import { LakeThinkingIcon } from "./LakeThinkingIcon";
+import { StatusText } from "./StatusText";
 function StepIcon({ name }: { name?: string }) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
     {name && /search|fetch|url/.test(name) ? <><circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6"/></> : name === "shell" || name === "terminal_read" ? <><path d="m4 6 5 5-5 5M12 17h8"/></> : <><rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="14" width="16" height="6" rx="2"/><path d="M7 7h1M7 17h1"/></>}
@@ -48,7 +49,7 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
     <button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => { onInspect?.(); setOpen(!open); }}>
       <LakeThinkingIcon className="thinking-symbol"/>
       <strong className="thinking-agent-name">Lake</strong>
-      <span className="thinking-label">{label}</span><svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+      <StatusText className="thinking-label" text={label} active={live && !pending}/><svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
       {activity?.detail && <small className="thinking-current-target">{activity.detail}</small>}
     </button>
     {open && <div className="thinking-detail-panel" id={panelId}>

@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/Clean-Lakes/Lake/internal/ai"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -68,7 +68,7 @@ func privateFile(root, path string) (string, error) {
 		return "", e
 	}
 	dir, e := os.Stat(realRoot)
-	if e != nil || dir.Mode().Perm()&0077 != 0 || !owned(dir) {
+	if e != nil || !platform.Private(realRoot, dir) {
 		return "", os.ErrPermission
 	}
 	if !filepath.IsAbs(path) {
@@ -79,24 +79,19 @@ func privateFile(root, path string) (string, error) {
 		return "", e
 	}
 	rel, e := filepath.Rel(realRoot, real)
-	if e != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+	if e != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", os.ErrPermission
 	}
 	info, e := os.Stat(real)
-	if e != nil || !info.Mode().IsRegular() || (info.Mode().Perm() != 0600 && info.Mode().Perm() != 0400) || !owned(info) {
+	if e != nil || !info.Mode().IsRegular() || !platform.Private(real, info) {
 		return "", os.ErrPermission
 	}
 	return real, nil
 }
-func owned(info os.FileInfo) bool {
-	if info == nil {
-		return false
-	}
-	s, ok := info.Sys().(*syscall.Stat_t)
-	return ok && int(s.Uid) == os.Getuid()
-}
+func owned(info os.FileInfo) bool { return platform.Owned(info) }
+
 func atomicFile(path string, b []byte) error {
-	f, e := os.OpenFile(path+"."+ident()+".tmp", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	f, e := platform.OpenFile(path+"."+ident()+".tmp", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if e != nil {
 		return e
 	}
@@ -113,15 +108,10 @@ func atomicFile(path string, b []byte) error {
 	if e = f.Close(); e != nil {
 		return e
 	}
-	if e = os.Rename(temp, path); e != nil {
+	if e = platform.ReplaceFile(temp, path); e != nil {
 		return e
 	}
-	dir, e := os.Open(filepath.Dir(path))
-	if e != nil {
-		return e
-	}
-	defer dir.Close()
-	return dir.Sync()
+	return platform.SyncDirectory(filepath.Dir(path))
 }
 func (m *Models) legacySaved() *ai.Model {
 	b, e := os.ReadFile(filepath.Join(m.Dir, "model.json"))
@@ -247,8 +237,8 @@ func (m *Models) Save(cfg *ai.Model) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.capacities = nil
-	must(os.MkdirAll(m.Dir, 0700))
-	must(os.Chmod(m.Dir, 0700))
+	must(platform.MkdirAll(m.Dir, 0700))
+	must(platform.Chmod(m.Dir, 0700))
 	path := filepath.Join(m.Dir, "model.json")
 	previous := ""
 	if b, e := os.ReadFile(path); e == nil {
@@ -260,10 +250,10 @@ func (m *Models) Save(cfg *ai.Model) {
 	ref := ""
 	if cfg.Key != "" {
 		dir := filepath.Join(m.Home, "secrets")
-		must(os.MkdirAll(dir, 0700))
-		must(os.Chmod(dir, 0700))
+		must(platform.MkdirAll(dir, 0700))
+		must(platform.Chmod(dir, 0700))
 		ref = "web-model-" + ident() + ".key"
-		f, e := os.OpenFile(filepath.Join(dir, ref), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		f, e := platform.OpenFile(filepath.Join(dir, ref), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 		must(e)
 		_, e = f.WriteString(cfg.Key)
 		if e == nil {
@@ -300,7 +290,13 @@ func (m *Models) Clear() {
 var hostPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.:-]{0,252}$`)
 
 func validateSSH(home string, v Object) Object {
-	if !hostPattern.MatchString(stringOf(v["host"])) || !regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_.-]{0,63}$`).MatchString(stringOf(v["username"])) {
+	if !hostPattern.MatchString(stringOf(v["host"])) {
+		fail(400, "Invalid SSH host/username")
+	}
+	if stringOf(v["username"]) == "" {
+		fail(400, "请在资源编辑中补充 SSH 登录信息")
+	}
+	if !regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_.-]{0,63}$`).MatchString(stringOf(v["username"])) {
 		fail(400, "Invalid SSH host/username")
 	}
 	port := 22
