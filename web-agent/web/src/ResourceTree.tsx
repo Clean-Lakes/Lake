@@ -1,11 +1,13 @@
-import {NavigationMenu,TrashIcon,type NavigationDeleteTarget} from "./NavigationDelete";
+import {BulkCheckbox, type BulkSelection} from "./BulkNavigationDelete";
+import {NavigationMenu,type NavigationDeleteTarget} from "./NavigationDelete";
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent, type ReactNode } from "react";
 import type { Project, Resource, ResourceTreeNode } from "../../shared/contracts";
 import { api, readableError } from "./api";
 import { canMoveInto, dropPlacement, projectResourceTree } from "./resource-tree-model";
 
 function FolderIcon() { return <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>; }
-export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource, onImport, onDelete}: {
+export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource, onImport, onDelete, selection, onSelectAll}: {
+  selection?: BulkSelection; onSelectAll?: () => void;
   project: Project; resources: Resource[]; nodes: ResourceTreeNode[]; disabled: boolean;
   renderResource: (resource: Resource) => ReactNode; refresh: () => Promise<unknown>; onAddResource: () => void; onImport: () => void; onDelete:(target:NavigationDeleteTarget)=>void;
 }) {
@@ -125,6 +127,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
         const zone = node.kind === "resource" ? (ratio < .5 ? "before" : "after") : ratio < .25 ? "before" : ratio > .75 ? "after" : "inside";
         const target = dropPlacement(tree,node,zone); move(source,target.parentId,target.beforeId);
       }}>
+        {(node.kind === "folder" || resource) && <BulkCheckbox selection={selection} target={node.kind === "folder" ? {kind:"folder",id:node.id,projectId:project.id,name:folderPath(node)} : {kind:"resource",id:resource!.id,projectId:project.id,name:resource!.name}}/>}
         <button type="button" className="resource-drag-handle" aria-label={`拖动或移动 ${resource?.name || node.name}`} title="拖动排序或移动到目录；点击选择位置" disabled={blocked} draggable={false}
           onClick={() => {if(!suppressClick.current)setMoving(current => current === node.id ? null : node.id);}}
           onPointerDown={event=>{if(blocked || event.button!==0)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);pointerDrag.current={source:node.id,pointer:event.pointerId,x:event.clientX,y:event.clientY,active:false};pointerDrop.current=null;}}
@@ -132,8 +135,8 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
           onDragStart={event => {dragSource.current = node.id;event.dataTransfer.setData("application/x-lake-resource-tree",node.id);event.dataTransfer.effectAllowed="move";setDragging(node.id);setError("");}} onDragEnd={() => {dragSource.current = null;setDragging(null);setDrop(null);}}>⠿</button>
         {node.kind === "folder" ? <div className="resource-folder-row">
           <button type="button" className="resource-folder-toggle" title={folderPath(node)} aria-expanded={expanded} onClick={() => setClosed(values => expanded ? [...values,node.id] : values.filter(id => id !== node.id))}><span className={expanded ? "folder-chevron open" : "folder-chevron"}>›</span><FolderIcon/><span>{node.name}</span></button>
-          <div className="resource-folder-actions"><button type="button" disabled={blocked} aria-label={`在 ${node.name} 新建子目录`} title="新建子目录" onClick={() => {setEditor({parentId:node.id,name:""});setClosed(values => values.filter(id => id !== node.id));}}>+</button><button type="button" disabled={blocked} aria-label={`管理目录 ${node.name}`} title="重命名或移除目录" onClick={() => setEditor({id:node.id,parentId:node.parentId,name:node.name})}>⋯</button><button type="button" className="navigation-delete-button" disabled={blocked} aria-label={`删除文件夹 ${folderPath(node)}`} title="删除文件夹" onClick={()=>onDelete({kind:"folder",id:node.id,projectId:project.id,name:folderPath(node)})}><TrashIcon/></button></div>
-        </div> : resource && <><div className="resource-tree-resource-content">{renderResource(resource)}</div><button type="button" className="navigation-delete-button resource-delete-button" disabled={blocked} aria-label={`删除资源 ${resource.name}`} title="删除资源" onClick={()=>onDelete({kind:"resource",id:resource.id,projectId:project.id,name:resource.name})}><TrashIcon/></button></>}
+          <div className="resource-folder-actions"><button type="button" disabled={blocked} aria-label={`在 ${node.name} 新建子目录`} title="新建子目录" onClick={() => {setEditor({parentId:node.id,name:""});setClosed(values => values.filter(id => id !== node.id));}}>+</button><button type="button" className="navigation-more-button" disabled={blocked} aria-label={`管理文件夹 ${folderPath(node)}`} aria-haspopup="menu" title="更多操作" onClick={event => {const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right,y:rect.bottom});}}>⋯</button></div>
+        </div> : resource && <><div className="resource-tree-resource-content">{renderResource(resource)}</div>{!["local", "ssh"].includes(resource.kind) && <button type="button" className="navigation-more-button resource-more-button" disabled={blocked} aria-label={`管理资源 ${resource.name}`} aria-haspopup="menu" title="更多操作" onClick={event=>{const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right,y:rect.bottom});}}>⋯</button>}</>}
       </div>
       {moving === node.id && <div className="resource-move-panel" role="group" aria-label={`移动 ${resource?.name || node.name}`}>
         <div><button disabled={blocked || index === 0} onClick={() => move(node.id,parent,siblings[index-1]?.id ?? null)}>上移</button><button disabled={blocked || index === siblings.length-1} onClick={() => move(node.id,parent,siblings[index+2]?.id ?? null)}>下移</button></div>
@@ -153,7 +156,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
    ...(contextNode.kind==="folder" ? [{label:"重命名文件夹",run:()=>setEditor({id:contextNode.id,parentId:contextNode.parentId,name:contextNode.name})}] : []),
    {label:"移动到…",run:()=>setMoving(contextNode.id)},
    {label:contextNode.kind==="folder"?"删除文件夹":"删除资源",danger:true,run:()=>onDelete({kind:contextNode.kind,id:contextResource?.id || contextNode.id,projectId:project.id,name:contextResource?.name || contextNode.name})}
-  ]}/>}<div className="nav-heading resources-heading"><button type="button" className="nav-section-toggle" aria-label={`${sectionExpanded ? "折叠" : "展开"}${project.name}的资源`} aria-expanded={sectionExpanded} aria-controls={`project-resources-${project.id}`} onClick={() => setSectionExpanded(value => !value)}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={sectionExpanded ? "chevron-open" : ""} aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg><span>资源 <small>{resources.length}</small></span></button><div className="resource-add-control" ref={addControl} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAddOpen(false); }}>
+  ]}/>}<div className="nav-heading resources-heading"><button type="button" className="nav-section-toggle" aria-label={`${sectionExpanded ? "折叠" : "展开"}${project.name}的资源`} aria-expanded={sectionExpanded} aria-controls={`project-resources-${project.id}`} onClick={() => setSectionExpanded(value => !value)}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={sectionExpanded ? "chevron-open" : ""} aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg><span>资源 <small>{resources.length}</small></span></button>{selection && <button type="button" className="bulk-group-toggle" disabled={blocked || selection.disabled || !resources.length && !tree.length} aria-label={`全选 ${project.name} 的资源和文件夹`} onClick={onSelectAll}>全选</button>}<div hidden={!!selection} className="resource-add-control" ref={addControl} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAddOpen(false); }}>
     <button type="button" ref={addButton} className="nav-add resource-create-trigger" aria-label={`在${project.name}新建资源或目录`} title="新建资源或目录" aria-haspopup="menu" aria-expanded={addOpen} aria-controls={`resource-add-${project.id}`} disabled={blocked} onClick={() => setAddOpen(value => !value)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>新建</span></button>
     {addOpen && <div ref={addMenu} id={`resource-add-${project.id}`} className="resource-add-menu" role="menu" aria-label="新建资源或目录" onMouseDown={event => {
       // Safari 点击按钮时会先 blur 到 body；保留菜单焦点，避免 onBlur 在 click 前卸载菜单。
@@ -172,7 +175,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   </div></div>{sectionExpanded && <div id={`project-resources-${project.id}`} className="resource-tree" aria-label={`${project.name} 资源目录`}>
     {editor && <form className="resource-folder-editor" onSubmit={event => {event.preventDefault();void work({operation:editor.id ? "rename":"create",nodeId:editor.id,parentId:editor.parentId,name:editor.name.trim()});}}>
       <label>{editor.id ? "目录名称" : editor.parentId ? "新建子目录" : "新建目录"}<input aria-label="目录名称" autoFocus maxLength={120} value={editor.name} disabled={busy} onChange={event => setEditor({...editor,name:event.target.value})}/></label>
-      <div><button type="submit" disabled={blocked || !editor.name.trim()}>{busy ? "保存中…":"保存"}</button><button type="button" disabled={busy} onClick={() => setEditor(null)}>取消</button>{editor.id && <button type="button" disabled={blocked} title="只移除目录，内容移到上一层，资源不会删除" onClick={() => onDelete({kind:"folder",id:editor.id!,projectId:project.id,name:editor.name})}>删除文件夹</button>}</div>
+      <div><button type="submit" disabled={blocked || !editor.name.trim()}>{busy ? "保存中…":"保存"}</button><button type="button" disabled={busy} onClick={() => setEditor(null)}>取消</button></div>
     </form>}
     {error && <p className="form-error" role="alert">{error}</p>}
     {render(null)}

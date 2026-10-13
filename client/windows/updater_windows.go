@@ -24,11 +24,13 @@ import (
 )
 
 type updateState struct {
-	Status         string `json:"status"`
-	CurrentVersion string `json:"currentVersion"`
-	Version        string `json:"version,omitempty"`
-	Message        string `json:"message"`
-	Progress       *int   `json:"progress,omitempty"`
+	UpdateAvailable bool   `json:"updateAvailable"`
+	ReleaseNotes    string `json:"releaseNotes,omitempty"`
+	Status          string `json:"status"`
+	CurrentVersion  string `json:"currentVersion"`
+	Version         string `json:"version,omitempty"`
+	Message         string `json:"message"`
+	Progress        *int   `json:"progress,omitempty"`
 }
 type windowsUpdater struct {
 	mu        sync.Mutex
@@ -83,7 +85,7 @@ func installUpdateBridge(ctx context.Context, window webview.WebView, endpoint, 
 		case <-timer.C:
 			u.check()
 		}
-		ticker := time.NewTicker(6 * time.Hour)
+		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for {
 			select {
@@ -111,16 +113,14 @@ func (u *windowsUpdater) check() {
 		return
 	}
 	u.busy = true
-	u.available = nil
 	u.state.Status = "checking"
 	u.state.Message = "正在检查 master 的 Windows 正式版本…"
 	u.state.Progress = nil
-	u.state.Version = ""
 	u.mu.Unlock()
 	go func() {
 		ctx, cancel := context.WithTimeout(u.ctx, 30*time.Second)
 		defer cancel()
-		update, err := desktopupdate.Check(ctx, u.client, version)
+		update, notes, err := desktopupdate.CheckWithNotes(ctx, u.client, version)
 		u.mu.Lock()
 		defer u.mu.Unlock()
 		u.busy = false
@@ -130,13 +130,17 @@ func (u *windowsUpdater) check() {
 			return
 		}
 		u.available = update
+		u.state.UpdateAvailable = update != nil
+		u.state.ReleaseNotes = notes
 		if update == nil {
+			u.state.Version = ""
 			u.state.Status = "current"
 			u.state.Message = "当前已是最新的 Windows 兼容版本"
 			return
 		}
 		u.state.Status = "available"
 		u.state.Version = update.Version
+		u.state.ReleaseNotes = update.ReleaseNotes
 		u.state.Message = "发现 Lake " + update.Version + "，可以下载并安装"
 	}()
 }

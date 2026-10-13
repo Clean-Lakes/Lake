@@ -1,3 +1,5 @@
+import {BulkCheckbox, BulkNavigationDelete, type BulkSelection} from "./BulkNavigationDelete";
+import {addBulkTargets, bulkCatalogTargets, bulkKey, orderBulkDeletion, type BulkTarget, type BulkDeleteResult} from "./bulkNavigation";
 import {NavigationDelete,NavigationTrash,NavigationMenu,TrashIcon,type NavigationDeleteTarget} from "./NavigationDelete";
 import {SessionEdit} from "./SessionEdit";
 import {TerminalConfigEdit} from "./TerminalConfigEdit";
@@ -37,7 +39,7 @@ import { ReasoningSelector } from "./ReasoningSelector";
 import { uniqueTerminalRows } from "./terminalAIState";
 import { TerminalPane, type TerminalHandle } from "./TerminalPane";
 import { TerminalSidePanel } from "./TerminalSidePanel";
-import { reusableResourceTerminal, onlineTerminalOptions } from "./resourceTerminalState";
+import { reusableResourceTerminal, onlineTerminalOptions, panelTerminalSessions, ResourceTerminalConnections } from "./resourceTerminalState";
 import { ResourceTree } from "./ResourceTree";
 import { ResourceTerminalMenu } from "./ResourceTerminalMenu";
 import { initialSidebarProject, sidebarSessions } from "./sidebarState";
@@ -201,6 +203,14 @@ function App() {
   useEffect(() => { try { localStorage.setItem(sendShortcutStorageKey, sendShortcut); } catch {} }, [sendShortcut]);
   const sendShortcutLabel = sendShortcut === "command-enter" ? "Command / Ctrl + Enter" : "Enter";
   const [navigationDelete,setNavigationDelete]=useState<NavigationDeleteTarget|null>(null);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<BulkTarget[]>([]);
+  const [bulkConfirmation, setBulkConfirmation] = useState<BulkTarget[] | null>(null);
+  useEffect(() => {
+    if (!catalog) return;
+    const available = new Set(bulkCatalogTargets(catalog).map(bulkKey));
+    setBulkSelected(current => current.every(target => available.has(bulkKey(target))) ? current : current.filter(target => available.has(bulkKey(target))));
+  }, [catalog]);
   const [trashOpen,setTrashOpen]=useState(false);
   const [projectContext,setProjectContext]=useState<{project:Project;x:number;y:number}|null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -236,15 +246,19 @@ function App() {
   const [resourceTerminalConnected, setResourceTerminalConnected] = useState(false);
   const terminalSessionId = terminalContext?.sessionId ?? route.sessionId;
   const [terminalOpeningResource, setTerminalOpeningResource] = useState<string | null>(null);
+  const terminalConnections = useRef(new ResourceTerminalConnections());
+  const [connectingResources, setConnectingResources] = useState<string[]>([]);
   const [localShell,setLocalShell]=useState("bash");
   const terminalControlRef = useRef<TerminalHandle | null>(null);
   const terminalTabsRef = useRef<HTMLDivElement>(null);
   const [terminalOptionsOpen, setTerminalOptionsOpen] = useState(false);
   const [terminalListOpen, setTerminalListOpen] = useState(false);
+  const [terminalTabContext, setTerminalTabContext] = useState<{terminal: TerminalSession; x: number; y: number} | null>(null);
   const [commandEditorOpen, setCommandEditorOpen] = useState(false);
   const [restoringStream, setRestoringStream] = useState(false);
   const [terminalId, setTerminalId] = useState<string | null>(null);
   const [terminalHistory, setTerminalHistory] = useState<TerminalHistory | null>(null);
+  const [terminalHistories, setTerminalHistories] = useState<Record<string, TerminalHistory>>({});
   const [terminalError, setTerminalError] = useState("");
   const [terminalRevision, setTerminalRevision] = useState(0);
   const [terminalRefresh, setTerminalRefresh] = useState(0);
@@ -552,7 +566,7 @@ function App() {
     let cancelled = false;
     setTerminalError("");
     api.terminalHistory(terminalSessionId, terminalId).then(history => {
-      if (!cancelled) setTerminalHistory(history);
+      if (!cancelled) { setTerminalHistory(history); setTerminalHistories(current => ({...current, [history.terminal.id]: history})); }
     }).catch(error => {
       if (!cancelled) { setTerminalError(readableError(error)); handleFailure(error); }
     });
@@ -588,7 +602,7 @@ function App() {
   const persistentMode = bootstrap?.terminalMode === "pty";
   const terminalConnected = terminalContext ? !!bootstrap && !!catalog && resourceTerminalConnected : sessionConnected;
   const conversationTerminals = activeSnapshot?.terminals ?? [];
-  const terminalList = terminalContext ? resourceLiveTerminals.filter(terminal => terminal.resourceId === terminalContext.resourceId) : activeSnapshot?.terminals ?? [];
+  const terminalList = panelTerminalSessions(catalog?.terminals ?? [], conversationTerminals, terminalContext ? resourceLiveTerminals : [], terminalContext?.resourceId);
   const terminalOptions = onlineTerminalOptions(terminalList, id => resourceLabel(resourceMap.get(id)));
   const resourceTerminals = uniqueTerminalRows([
     ...(catalog?.terminals ?? []).filter(t => t.interactive === true && t.sessionId !== activeSnapshot?.session.id),
@@ -684,6 +698,27 @@ function App() {
       : [...current.sessions, fresh.session] } : current);
     setTerminalRevision(value => value + 1);
   }, []);
+
+  function toggleBulkTarget(target: BulkTarget) {
+    setBulkSelected(current => current.some(item => bulkKey(item) === bulkKey(target)) ? current.filter(item => bulkKey(item) !== bulkKey(target)) : addBulkTargets(current, [target]));
+  }
+  function toggleBulkGroup(targets: BulkTarget[]) {
+    const keys = new Set(targets.map(bulkKey));
+    setBulkSelected(current => targets.every(target => current.some(item => bulkKey(item) === bulkKey(target))) ? current.filter(item => !keys.has(bulkKey(item))) : addBulkTargets(current, targets));
+  }
+  const bulkSelection: BulkSelection | undefined = bulkMode ? {has: target => bulkSelected.some(item => bulkKey(item) === bulkKey(target)), toggle: toggleBulkTarget, disabled: !connected || !!pendingOperation} : undefined;
+  async function bulkProcessed(result: BulkDeleteResult) {
+    snapshotCache.current.clear();
+    setBulkSelected(result.failed.map(item => item.target));
+    if (!result.failed.length) setBulkMode(false);
+    const fresh = await refreshCatalog();
+    setResourceTerminalMenu(null);
+    if (route.sessionId && !fresh.sessions.some(item => item.id === route.sessionId)) {
+      const next = fresh.sessions.filter(item => item.projectId === selectedProjectId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+      navigate({sessionId: next?.id ?? null, resourceId: null});
+    } else if (route.resourceId && !fresh.resources.some(item => item.id === route.resourceId)) navigate({sessionId: route.sessionId, resourceId: null});
+    else await refreshCurrent();
+  }
 
   const openSettings = useCallback(() => {setSettingsOpen(true);}, []);
   async function openModelMenu() {
@@ -919,33 +954,50 @@ function App() {
     setTerminalError(""); setCommandDraft(""); setCommandError(""); setConfirmedCommand(null);
     setTerminalId(null); setTerminalHistory(null);
     setTerminalOpen(true);
-    setPendingOperation(`resource:${resourceId}`);
-    let context: {sessionId: string; resourceId: string} | null = null;
+    const connections = terminalConnections.current;
+    const { attempt, started } = connections.begin(resourceId);
+    setConnectingResources(connections.resourceIds());
+    activeTerminalContext.current = attempt.context ?? null;
+    setTerminalContext(attempt.context ?? null);
+    setResourceTerminalSnapshot(null); setResourceLiveTerminals([]); setResourceTerminalConnected(false);
+    // Revisit a pending host without issuing a second connection request.
+    if (!started) return;
     try {
       const scope = await api.resourceTerminalContext(resourceId);
-      context = {...scope, resourceId};
-      activeTerminalContext.current = context; setTerminalContext(context);
-      setResourceTerminalSnapshot(null); setResourceLiveTerminals([]); setResourceTerminalConnected(false);
-      const fresh = await refreshResourceTerminal();
-      if (activeTerminalContext.current !== context) return;
-      const existing = forceNew ? undefined : reusableResourceTerminal(fresh?.terminals ?? [], resourceId, true);
+      const context = {...scope, resourceId};
+      attempt.context = context;
+      if (connections.isSelected(attempt)) { activeTerminalContext.current = context; setTerminalContext(context); }
+      const [fresh, live] = await Promise.all([api.snapshot(context.sessionId), api.resourceTerminals(resourceId)]);
+      if (connections.isSelected(attempt)) {
+        setResourceTerminalSnapshot(fresh); setResourceLiveTerminals(live.terminals); setResourceTerminalConnected(true);
+      }
+      const existing = forceNew ? undefined : reusableResourceTerminal(fresh.terminals, resourceId, true);
       const terminal = existing ?? await api.createTerminal(context.sessionId, resourceId, resource.kind === "local" ? localShell : undefined, true);
       if (existing?.status === "ready" && existing.holder !== "user" && existing.holder !== "agent") await api.terminalControl(context.sessionId, existing.id, "user");
-      if (activeTerminalContext.current !== context) return;
-      setTerminalId(terminal.id);
-      await refreshResourceTerminal();
-      void refreshCatalog().catch(handleFailure);
+      if (connections.isSelected(attempt)) {
+        activeTerminalContext.current = context; setTerminalContext(context);
+        setTerminalId(terminal.id);
+        await refreshResourceTerminal();
+      }
     } catch (error) {
-      if (!context || activeTerminalContext.current === context) { setTerminalError(readableError(error)); handleFailure(error); }
-    } finally { setPendingOperation(""); }
+      if (connections.isSelected(attempt)) setTerminalError(readableError(error));
+      handleFailure(error);
+    } finally {
+      connections.finish(attempt);
+      setConnectingResources(connections.resourceIds());
+      void refreshCatalog().catch(handleFailure);
+    }
   }
   function selectTerminalTab(item: TerminalSession) {
-    if (terminalContext && item.sessionId !== terminalContext.sessionId) {
+    terminalConnections.current.selectTerminal();
+    if (item.id === terminalId) { setTerminalListOpen(false); terminalControlRef.current?.focus(); return; }
+    if (terminalContext || item.sessionId !== terminalSessionId) {
       const context = {sessionId: item.sessionId, resourceId: item.resourceId};
       activeTerminalContext.current = context; setTerminalContext(context);
       setResourceTerminalSnapshot(null); setResourceTerminalConnected(false);
+      setResourceLiveTerminals(terminalList.filter(terminal => terminal.resourceId === item.resourceId));
     }
-    setTerminalId(item.id); setTerminalHistory(null); setTerminalError("");
+    setTerminalId(item.id); setTerminalHistory(terminalHistories[item.id] ?? null); setTerminalError("");
     setTerminalListOpen(false); setCommandDraft(""); setCommandError(""); setCommandEditorOpen(false); setConfirmedCommand(null);
   }
   async function refreshTerminal() {
@@ -1001,9 +1053,10 @@ function App() {
     setPendingOperation(`terminal:${item.id}`);
     try {
       await api.closeResourceTerminal(item.resourceId, item.id);
+      setTerminalHistories(current => { const next = {...current}; delete next[item.id]; return next; });
       await refreshTerminal(); await refreshCatalog();
       if (terminalId === item.id) {
-        const next = terminalList.find(terminal => terminal.id !== item.id && terminal.status !== "disconnected");
+        const next = terminalOptions.find(option => option.terminal.id !== item.id)?.terminal;
         if (next) selectTerminalTab(next);
         else { setTerminalId(null); closeTerminalPanel(); }
       }
@@ -1102,7 +1155,7 @@ function App() {
       <strong>{terminalResource?.name || "终端"}</strong>
       <div className="terminal-header-actions">
         <button type="button" className="icon-button" aria-label="清屏" title="清屏" onClick={() => terminalControlRef.current?.clear()}><Glyph name="refresh" size={16}/></button>
-        <button type="button" className="icon-button" aria-label="新建终端" title="新建终端" disabled={!terminalResource || !!pendingOperation} onClick={() => terminalResource && void openTerminalFor(terminalResource.id, true)}><Glyph name="plus" size={17}/></button>
+        <button type="button" className="icon-button" aria-label="新建终端" title="新建终端" disabled={!terminalResource || !!pendingOperation || connectingResources.includes(terminalResource.id)} onClick={() => terminalResource && void openTerminalFor(terminalResource.id, true)}><Glyph name="plus" size={17}/></button>
         <button type="button" className="icon-button" aria-label="终端选项" title="终端选项" aria-expanded={terminalOptionsOpen} onClick={() => setTerminalOptionsOpen(value => !value)}>⋮</button>
         <button type="button" className="icon-button" aria-label="收起终端" title="收起终端，保留连接" onClick={closeTerminalPanel}><Glyph name="close" size={17}/></button>
       </div>
@@ -1116,27 +1169,34 @@ function App() {
     </div>
     <div className="terminal-tab-bar">
       <button type="button" className="terminal-list-button" aria-expanded={terminalListOpen} onClick={() => setTerminalListOpen(value => !value)}><Glyph name="menu" size={15}/>列表<Glyph name="chevron" size={13}/></button>
-      <div className="terminal-tabs" ref={terminalTabsRef} role="tablist" aria-label="选择终端">{terminalOptions.map(({terminal: item, label}) => <div className={`terminal-tab-wrap ${terminalId === item.id ? "selected" : ""}`} key={item.id}>
+      <div className="terminal-tabs" ref={terminalTabsRef} role="tablist" aria-label="选择终端">{terminalOptions.map(({terminal: item, label}) => <div className={`terminal-tab-wrap ${terminalId === item.id ? "selected" : ""}`} key={item.id} onContextMenu={event => { event.preventDefault(); setTerminalTabContext({terminal: item, x: event.clientX, y: event.clientY}); }}>
         <button type="button" role="tab" aria-label={label} title={label} aria-selected={terminalId === item.id} className="terminal-tab" onClick={() => selectTerminalTab(item)}><Glyph name="terminal" size={14}/><span className="terminal-tab-label">{label}</span><span className={`terminal-tab-dot ${item.status}`}/></button>
         <button type="button" className="terminal-tab-close" aria-label={`关闭 ${label}`} title="关闭终端" disabled={!!pendingOperation} onClick={() => void closeTerminalTab(item)}><Glyph name="close" size={12}/></button>
       </div>)}</div>
-      {terminalListOpen && <div className="terminal-list-menu">{terminalOptions.map(({terminal: item, label}) => <button type="button" key={item.id} onClick={() => selectTerminalTab(item)}><Glyph name="terminal" size={14}/><span>{label}</span><small>{terminalLabels[item.status]}</small></button>)}{!terminalOptions.length && <span>暂无在线终端</span>}{terminalResource && <button type="button" disabled={!!pendingOperation || !terminalConnected} onClick={() => { setTerminalListOpen(false); void openTerminalFor(terminalResource.id, true); }}><Glyph name="plus" size={14}/><span>新建终端</span></button>}</div>}
+      {terminalListOpen && <div className="terminal-list-menu">{terminalOptions.map(({terminal: item, label}) => <button type="button" key={item.id} onClick={() => selectTerminalTab(item)}><Glyph name="terminal" size={14}/><span>{label}</span><small>{terminalLabels[item.status]}</small></button>)}{!terminalOptions.length && <span>暂无在线终端</span>}{terminalResource && <button type="button" disabled={!!pendingOperation || !terminalConnected || connectingResources.includes(terminalResource.id)} onClick={() => { setTerminalListOpen(false); void openTerminalFor(terminalResource.id, true); }}><Glyph name="plus" size={14}/><span>新建终端</span></button>}</div>}
     </div>
     <div className="drawer-body">
-      {!terminalId && (terminalError ? <div className="terminal-load-error" role="alert">{terminalError}{terminalOpeningResource && <button type="button" disabled={!!pendingOperation} onClick={() => void openTerminalFor(terminalOpeningResource)}>重新连接</button>}</div> : <div className="terminal-placeholder" role="status">{pendingOperation.startsWith("resource:") ? `正在连接 ${terminalResource?.name || "终端"}…` : "暂无在线终端，点击上方 + 新建终端"}</div>)}
-      {terminalId && <div className="terminal-session">
-        {terminalError ? <div className="terminal-load-error" role="alert">{terminalError}<button type="button" onClick={() => setTerminalRefresh(value => value + 1)}>重新读取</button></div> : terminalHistory?.terminal.id === terminalId ? <TerminalPane key={terminalId} showCommandEntries={!terminalContext && currentTerminal?.interactive !== true} controlRef={terminalControlRef} entries={terminalHistory.entries} output={terminalHistory.output} interactive={terminalConnected && currentTerminal?.holder === "user" && ["ready","busy"].includes(currentTerminal.status) && (currentTerminal.interactive === true || currentTerminal.status === "busy")} onInput={terminalInput} onResize={terminalResize}/> : <div className="terminal-placeholder">正在读取终端…</div>}
+      {!terminalId && (terminalError ? <div className="terminal-load-error" role="alert">{terminalError}{terminalOpeningResource && <button type="button" disabled={!!pendingOperation} onClick={() => void openTerminalFor(terminalOpeningResource)}>重新连接</button>}</div> : <div className="terminal-placeholder" role="status">{terminalOpeningResource && connectingResources.includes(terminalOpeningResource) ? `正在连接 ${terminalResource?.name || "终端"}…` : "暂无在线终端，点击上方 + 新建终端"}</div>)}
+      <div className="terminal-session">
+        {terminalId && terminalError && <div className="terminal-load-error" role="alert">{terminalError}<button type="button" onClick={() => setTerminalRefresh(value => value + 1)}>重新读取</button></div>}
+        {Object.values(terminalHistories).map(history => {
+          const active = history.terminal.id === terminalId && terminalOpen && !terminalError;
+          const item = terminalList.find(item => item.id === history.terminal.id) ?? history.terminal;
+          return <div key={item.id} className="terminal-screen-slot" hidden={!active}><TerminalPane active={active} showCommandEntries={item.interactive !== true} controlRef={terminalControlRef} entries={history.entries} output={history.output} interactive={active && terminalConnected && item.holder === "user" && ["ready", "busy"].includes(item.status) && (item.interactive === true || item.status === "busy")} onInput={terminalInput} onResize={terminalResize}/></div>;
+        })}
+        {terminalId && !terminalError && !terminalHistories[terminalId] && <div className="terminal-placeholder">正在读取终端…</div>}
         {currentTerminal && (currentTerminal.status === "disconnected" || currentTerminal.status === "unknown" || !currentTerminal.interactive || currentTerminal.holder !== "user") && <div className="terminal-status-line"><span>{currentTerminal.status === "disconnected" ? "连接已断开 · 历史输出" : currentTerminal.holder === "agent" ? currentTerminal.interactive ? "Lake 正在使用终端 · 执行完成后恢复输入" : "终端专员正在持有输入" : currentTerminal.status === "unknown" ? "终端状态待核查" : "命令记录终端"}</span>{currentTerminal.holder !== "user" && currentTerminal.status === "ready" ? <button type="button" onClick={() => void changeHolder("user")}>接管输入</button> : currentTerminal.status !== "busy" && <button type="button" onClick={() => terminalResource && void openTerminalFor(terminalResource.id, true)}>打开交互终端</button>}</div>}
-      </div>}
+      </div>
     </div>
   </section>;
 
   return <div className={`app-shell ${terminalOpen ? "terminal-is-open" : ""}`}>
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
-    <aside className={`sidebar ${mobileMenu ? "sidebar-open" : ""}`} aria-label="项目导航">
+    <aside className={`sidebar ${mobileMenu ? "sidebar-open" : ""} ${bulkMode ? "is-bulk-selecting" : ""}`} aria-label="项目导航">
       <div className="sidebar-head mobile-only"><button className="icon-button" title="关闭导航" aria-label="关闭导航" onClick={() => setMobileMenu(false)}><Glyph name="close"/></button></div>
-      <div className="sidebar-projects-head"><span>项目</span><button className="sidebar-add" title="新建项目" aria-label="新建项目" onClick={openProjectDialog} disabled={!connected}><Glyph name="plus" size={16}/></button></div>
+      <div className="sidebar-projects-head"><span>项目</span><button type="button" className="sidebar-bulk-toggle" aria-pressed={bulkMode} disabled={!connected || !!pendingOperation} onClick={() => {setBulkMode(value => !value); setBulkSelected([]);}}>{bulkMode ? "完成" : "批量管理"}</button><button className="sidebar-add" title="新建项目" aria-label="新建项目" onClick={openProjectDialog} disabled={!connected}><Glyph name="plus" size={16}/></button></div>
+      {bulkMode && <div className="bulk-navigation-toolbar"><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
       <nav className="project-scroll">
         {projectList.length ? projectList.map(project => {
           const expanded = expandedProjects.includes(project.id);
@@ -1146,37 +1206,40 @@ function App() {
           const visibleSessions = sidebarSessions(sessions, route.sessionId, allSessions);
           const projectResources = catalog.resources.filter(resource => resource.projectId === project.id);
           return <div className="project-group" key={project.id}>
-            <div className="project-heading-row" onContextMenu={event=>{event.preventDefault();if(connected)setProjectContext({project,x:event.clientX,y:event.clientY});}}><button className="project-toggle" aria-expanded={expanded} onClick={() => setExpandedProjects(items => expanded ? items.filter(id => id !== project.id) : [...items, project.id])}>
+            <div className="project-heading-row" onContextMenu={event=>{event.preventDefault();if(connected)setProjectContext({project,x:event.clientX,y:event.clientY});}}><BulkCheckbox target={{kind:"project",id:project.id,projectId:project.id,name:project.name}} selection={bulkSelection}/><button className="project-toggle" aria-expanded={expanded} onClick={() => setExpandedProjects(items => expanded ? items.filter(id => id !== project.id) : [...items, project.id])}>
               <span className="project-mark"><Glyph name="folder" size={17}/></span><span className="project-name">{project.name}</span><Glyph name="chevron" size={16} className={expanded ? "chevron-open" : ""}/>
-            </button><button type="button" className="navigation-delete-button project-delete-button" title="删除项目" aria-label={`删除项目 ${project.name}`} disabled={!connected} onClick={()=>setNavigationDelete({kind:"project",id:project.id,projectId:project.id,name:project.name})}><TrashIcon/></button></div>
+            </button><button type="button" className="navigation-more-button project-more-button" title="更多操作" aria-label={`管理项目 ${project.name}`} aria-haspopup="menu" disabled={!connected} onClick={event => {const rect = event.currentTarget.getBoundingClientRect(); setProjectContext({project, x: rect.right, y: rect.bottom});}}>⋯</button></div>
             {expanded && <div className="project-contents">
               {showWorkflows && <button type="button" className="workflow-entry" onClick={() => setWorkflowProject(project)} disabled={!connected}><Glyph name="layers" size={15}/>运维工作流</button>}
-              <button type="button" className="workflow-entry" onClick={() => setMemoryProject(project)} disabled={!connected}><Glyph name="layers" size={15}/>项目记忆</button>
-              <div className="nav-heading"><button type="button" className="nav-section-toggle" aria-label={`${sessionsExpanded ? "折叠" : "展开"}${project.name}的会话`} aria-expanded={sessionsExpanded} aria-controls={`project-sessions-${project.id}`} onClick={() => setClosedSessionGroups(items => sessionsExpanded ? [...items, project.id] : items.filter(id => id !== project.id))}><Glyph name="chevron" size={13} className={sessionsExpanded ? "chevron-open" : ""}/><span>会话 <small>{sessions.length}</small></span></button><button className="nav-add" aria-label={`在${project.name}新建会话`} title="新建会话" disabled={!connected} onClick={() => { setClosedSessionGroups(items => items.filter(id => id !== project.id)); openSessionDialog(project.id); }}><Glyph name="plus" size={14}/></button></div>
-              <div id={`project-sessions-${project.id}`} hidden={!sessionsExpanded}>{sessions.length ? visibleSessions.map(session => <div className="nav-row-wrap" key={session.id} onContextMenu={event => {event.preventDefault(); if (connected) {setProjectContext(null); setSessionContext({session, x: event.clientX, y: event.clientY});}}}>
-                <button className={`nav-row session-nav-row ${route.sessionId === session.id && !route.resourceId ? "active" : ""}`} onClick={() => navigate({ sessionId: session.id, resourceId: null })} aria-current={route.sessionId === session.id && !route.resourceId ? "page" : undefined}>
+              <div className="nav-heading"><button type="button" className="nav-section-toggle" aria-label={`${sessionsExpanded ? "折叠" : "展开"}${project.name}的会话`} aria-expanded={sessionsExpanded} aria-controls={`project-sessions-${project.id}`} onClick={() => setClosedSessionGroups(items => sessionsExpanded ? [...items, project.id] : items.filter(id => id !== project.id))}><Glyph name="chevron" size={13} className={sessionsExpanded ? "chevron-open" : ""}/><span>会话 <small>{sessions.length}</small></span></button>{bulkMode && <button className="bulk-group-toggle" type="button" disabled={!connected || !!pendingOperation || !sessions.length} aria-label={`全选 ${project.name} 的会话`} onClick={() => toggleBulkGroup(sessions.map(session => ({kind:"session",id:session.id,projectId:project.id,name:session.title})))}>全选</button>}<button hidden={bulkMode} className="nav-add" aria-label={`在${project.name}新建会话`} title="新建会话" disabled={!connected} onClick={() => { setClosedSessionGroups(items => items.filter(id => id !== project.id)); openSessionDialog(project.id); }}><Glyph name="plus" size={14}/></button></div>
+              <div id={`project-sessions-${project.id}`} hidden={!sessionsExpanded}>{sessions.length ? visibleSessions.map(session => <div className={`nav-row-wrap ${bulkMode ? "bulk-session-row" : ""}`} key={session.id} onContextMenu={event => {event.preventDefault(); if (connected) {setProjectContext(null); setSessionContext({session, x: event.clientX, y: event.clientY});}}}>
+                <BulkCheckbox target={{kind:"session",id:session.id,projectId:session.projectId,name:session.title}} selection={bulkSelection}/>
+                <button className={`nav-row session-nav-row ${route.sessionId === session.id && !route.resourceId ? "active" : ""}`} onClick={() => bulkMode ? toggleBulkTarget({kind:"session",id:session.id,projectId:session.projectId,name:session.title}) : navigate({ sessionId: session.id, resourceId: null })} aria-current={route.sessionId === session.id && !route.resourceId ? "page" : undefined}>
                   <Glyph name="chat" size={16}/><span className="nav-row-text"><strong>{session.title}</strong><small>{sessionLabels[session.status]}</small></span>{session.status === "investigating" && <span className="session-activity" title="正在回复"><ActivityIndicator/></span>}{session.status === "waiting_approval" && <span className="attention-dot" title="等待确认"/>}
                 </button>
                 <button type="button" className="session-edit" title="编辑会话" aria-label={`编辑会话 ${session.title}`} onClick={() => setEditSession(session)} disabled={!connected}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1 12-12a2.8 2.8 0 0 0-4-4L4 15Z"/></svg></button>
-                <button className="session-delete" title="删除会话" aria-label={`删除会话 ${session.title}`} onClick={() => { setDeleteError(""); setDeleteTarget(session); }} disabled={!connected || !!pendingOperation}><Glyph name="trash" size={14}/></button>
+                <button type="button" className="session-more" title="更多操作" aria-label={`管理会话 ${session.title}`} aria-haspopup="menu" onClick={event => {const rect = event.currentTarget.getBoundingClientRect(); setSessionContext({session, x: rect.right, y: rect.bottom});}} disabled={!connected || !!pendingOperation}>⋯</button>
               </div>) : <p className="nav-empty">还没有会话</p>}{sessions.length > 5 && <button type="button" className="nav-show-more" aria-expanded={allSessions} onClick={() => setAllSessionGroups(items => allSessions ? items.filter(id => id !== project.id) : [...items, project.id])}>{allSessions ? "收起历史会话" : `显示全部 ${sessions.length} 个会话`}</button>}</div>
-              {<ResourceTree onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={catalog.resourceTree ?? []} disabled={!connected} refresh={refreshCatalog} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={() => { setResourceKind("ssh"); setSshProject(project.id); setSshName(""); setSshDraft(emptySSH()); setSshError(""); }} renderResource={resource => {
+              {<ResourceTree selection={bulkSelection} onSelectAll={() => toggleBulkGroup(bulkCatalogTargets(catalog).filter(target => target.projectId === project.id && ["resource","folder"].includes(target.kind)))} onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={catalog.resourceTree ?? []} disabled={!connected} refresh={refreshCatalog} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={() => { setResourceKind("ssh"); setSshProject(project.id); setSshName(""); setSshDraft(emptySSH()); setSshError(""); }} renderResource={resource => {
                 const live = resourceTerminals.filter(t => t.resourceId === resource.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
                 return <div key={resource.id} className="resource-nav-wrap" ref={resourceTerminalMenu === resource.id ? resourceMenuRef : undefined}><div className="resource-nav-row" onContextMenu={event => {if (["local", "ssh"].includes(resource.kind)) {event.preventDefault(); event.stopPropagation(); if (connected) {setResourceTerminalMenu(null); setResourceConfigContext({resource, x:event.clientX, y:event.clientY});}}}}>
-                  <button id={`resource-trigger-${resource.id}`} className={`nav-row resource-row ${route.resourceId === resource.id || terminalOpen && terminalResource?.id === resource.id ? "active" : ""}`} onClick={() => { if (["local", "ssh"].includes(resource.kind)) { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); } else navigate({ sessionId: route.sessionId, resourceId: resource.id }); }} aria-expanded={["local", "ssh"].includes(resource.kind) ? resourceTerminalMenu === resource.id : undefined} aria-current={route.resourceId === resource.id ? "page" : undefined}>
-                    <Glyph name="server" size={16}/><span className="nav-row-text"><strong>{resource.name}</strong><small>{resource.kind === "ssh" ? "SSH 主机" : "本机"}{live.length ? ` · ${live.length} 个终端` : ""}</small></span>{connected && live.some(terminal => terminal.status === "ready" || terminal.status === "busy") && <span className="resource-indicator available" title="终端已连接"/>}
+                  <button id={`resource-trigger-${resource.id}`} className={`nav-row resource-row ${route.resourceId === resource.id || terminalOpen && terminalResource?.id === resource.id ? "active" : ""}`} onClick={() => { if (bulkMode) {toggleBulkTarget({kind:"resource",id:resource.id,projectId:resource.projectId,name:resource.name}); return;} if (["local", "ssh"].includes(resource.kind)) { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); } else navigate({ sessionId: route.sessionId, resourceId: resource.id }); }} aria-expanded={["local", "ssh"].includes(resource.kind) ? resourceTerminalMenu === resource.id : undefined} aria-current={route.resourceId === resource.id ? "page" : undefined}>
+                    <Glyph name="server" size={16}/><span className="nav-row-text"><strong>{resource.name}</strong><small>{resource.kind === "ssh" ? "SSH 主机" : "本机"}{connectingResources.includes(resource.id) ? " · 连接中" : live.length ? ` · ${live.length} 个终端` : ""}</small></span>{connected && live.some(terminal => terminal.status === "ready" || terminal.status === "busy") && <span className="resource-indicator available" title="终端已连接"/>}
                   </button>
-                  {["local", "ssh"].includes(resource.kind) && <button type="button" className="resource-terminal-button" aria-label={`管理 ${resource.name} 的终端`} aria-expanded={resourceTerminalMenu === resource.id} disabled={!connected} onClick={() => { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); }} title="管理终端"><Glyph name="terminal" size={15}/></button>}
+                  {["local", "ssh"].includes(resource.kind) && <>
+                    <button type="button" className="resource-terminal-button resource-terminal-quick" aria-label={`一键打开 ${resource.name} 的终端`} disabled={!connected || !persistentMode || !!pendingOperation || resource.status !== "available"} onClick={() => void openTerminalFromSidebar(resource.id)} title={connectingResources.includes(resource.id) ? "查看连接进度" : live.length ? "打开已有终端" : "创建并打开终端"}><Glyph name="terminal" size={15}/></button>
+                    <button type="button" className="resource-terminal-button resource-terminal-manage" aria-label={`管理 ${resource.name} 的终端`} aria-expanded={resourceTerminalMenu === resource.id} disabled={!connected} onClick={() => { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); }} title="管理终端">⋯</button>
+                  </>}
                 </div>{resourceTerminalMenu === resource.id && <ResourceTerminalMenu anchor={resourceMenuRef} menuRef={resourcePopupRef} label={`${resource.name} 终端`}>
                   <div className="resource-terminal-heading"><div><strong title={resource.name}>{resource.name}</strong><small>终端管理</small></div><button type="button" onClick={() => { setResourceTerminalMenu(null); document.getElementById(`resource-trigger-${resource.id}`)?.focus(); }} aria-label="收起资源终端"><Glyph name="close" size={15}/></button></div>
                   <div className="resource-terminal-actions">
-                    <button type="button" className="resource-open-terminal" aria-label={`打开 ${resource.name} 的终端`} disabled={!connected || !persistentMode || !!pendingOperation || resource.status !== "available"} onClick={() => void openTerminalFromSidebar(resource.id)}><Glyph name="terminal" size={17}/><span><strong>打开终端</strong><small>{live.length ? "继续使用已有连接" : "连接此资源"}</small></span><Glyph name="arrow" size={15}/></button>
-                    <button type="button" className="resource-new-terminal" aria-label={`为 ${resource.name} 新建终端`} disabled={!connected || !persistentMode || !!pendingOperation || resource.status !== "available"} onClick={() => void openTerminalFor(resource.id, true)}><Glyph name="plus" size={17}/><span><strong>新建终端</strong><small>为此资源新增独立连接</small></span><Glyph name="arrow" size={15}/></button>
+                    <button type="button" className="resource-open-terminal" aria-label={`打开 ${resource.name} 的终端`} disabled={!connected || !persistentMode || !!pendingOperation || resource.status !== "available"} onClick={() => void openTerminalFromSidebar(resource.id)}><Glyph name="terminal" size={17}/><span><strong>打开终端</strong><small>{connectingResources.includes(resource.id) ? "查看连接进度" : live.length ? "继续使用已有连接" : "连接此资源"}</small></span><Glyph name="arrow" size={15}/></button>
+                    <button type="button" className="resource-new-terminal" aria-label={`为 ${resource.name} 新建终端`} disabled={!connected || !persistentMode || !!pendingOperation || connectingResources.includes(resource.id) || resource.status !== "available"} onClick={() => void openTerminalFor(resource.id, true)}><Glyph name="plus" size={17}/><span><strong>新建终端</strong><small>为此资源新增独立连接</small></span><Glyph name="arrow" size={15}/></button>
                   </div>
                   <div className="resource-terminal-list-heading"><span>在线终端</span><small>{live.length}</small></div>
                   <div className="resource-terminal-connections">{live.length ? live.map((t, i) => <div className="resource-terminal-item" key={t.id}><div><strong>终端 {i + 1}</strong><small title={t.sessionTitle || "独立连接"}>{t.sessionTitle || "独立连接"}</small></div><span className={`resource-terminal-state state-${t.status}`}><i/>{t.status === "busy" ? "执行中" : t.status === "connecting" ? "连接中" : t.status === "unknown" ? "待核查" : "空闲"}<small>{t.holder === "agent" ? "Lake" : "用户"}</small></span><button type="button" title={`关闭终端 ${i + 1}`} aria-label={`关闭 ${t.sessionTitle || "资源"} 的终端 ${i + 1}`} disabled={!!pendingOperation} onClick={() => void closeResourceTerminal(resource.id, t.id)}><Glyph name="close" size={14}/></button></div>) : <p className="resource-terminal-empty">暂无在线终端</p>}</div>
                   {live.some(t => t.status === "busy") && <p className="resource-terminal-note">关闭执行中的终端会中断当前命令。</p>}
-                  <div className="resource-terminal-footer"><button type="button" className="resource-view-info" aria-label={`编辑 ${resource.name} 的终端配置`} disabled={!connected} onClick={() => {setResourceTerminalMenu(null); setEditTerminalResource(resource);}}>编辑配置</button><button type="button" className="resource-view-info" onClick={() => { setResourceTerminalMenu(null); navigate({sessionId, resourceId: resource.id}); }}><Glyph name="server" size={14}/>资源信息</button>{live.length > 1 && <button type="button" className="resource-terminal-close-all" disabled={!!pendingOperation} onClick={() => void closeResourceTerminal(resource.id)}>关闭全部</button>}</div>
+                  <div className="resource-terminal-footer"><button type="button" className="resource-view-info" aria-label={`编辑 ${resource.name} 的终端配置`} disabled={!connected} onClick={() => {setResourceTerminalMenu(null); setEditTerminalResource(resource);}}>编辑配置</button><button type="button" className="resource-view-info" onClick={() => { setResourceTerminalMenu(null); navigate({sessionId, resourceId: resource.id}); }}><Glyph name="server" size={14}/>资源信息</button>{live.length > 1 && <button type="button" className="resource-terminal-close-all" disabled={!!pendingOperation} onClick={() => void closeResourceTerminal(resource.id)}>关闭全部</button>}<button type="button" className="resource-terminal-delete" disabled={!connected || !!pendingOperation} onClick={() => {setResourceTerminalMenu(null); setNavigationDelete({kind:"resource", id:resource.id, projectId:resource.projectId, name:resource.name});}}>删除资源</button></div>
                 </ResourceTerminalMenu>}</div>;
               }}/>}
             </div>}
@@ -1239,6 +1302,11 @@ function App() {
         </div>{activeSnapshot?.ai && <ReasoningSelector key={sessionId} session={sessionId} modelId={bootstrap?.modelId} disabled={!sessionConnected || turnActive || !!pendingOperation} onSaving={saving => setPendingOperation(current => saving ? "reasoning" : current === "reasoning" ? "" : current)}/>}</div><div className="composer-send-actions">{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止本轮" title="停止本轮，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${turnActive && !hasMessageDraft ? " stop-button" : ""}`} type={turnActive && !hasMessageDraft ? "button" : "submit"} aria-label={turnActive && !hasMessageDraft ? "停止本轮" : queueMode ? "挂起消息" : "发送消息"} title={turnActive && !hasMessageDraft ? "停止本轮" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`} aria-busy={stoppingTurn} onClick={turnActive && !hasMessageDraft ? () => void stopCurrentTurn() : undefined} disabled={turnActive && !hasMessageDraft ? stoppingTurn || !sessionConnected : !hasMessageDraft || !sessionConnected || !modelConfigured || !!pendingOperation || stoppingTurn || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)}><Glyph name={turnActive && !hasMessageDraft ? "stop" : "send"} size={19}/></button></div></div></form></div>
       </div> : <div className="welcome-view"><div className="welcome-content"><Brand/><h1>今天要处理什么问题？</h1><p>从项目开始一段会话。Lake 会把调查、证据和需要你确认的操作留在对话中。</p>{!projectList.length ? <button className="button primary" disabled={!connected} onClick={openProjectDialog}>创建第一个项目<Glyph name="arrow" size={17}/></button> : <button className="button primary" disabled={!connected} onClick={() => openSessionDialog(projectList[0].id)}>开始新会话<Glyph name="arrow" size={17}/></button>}</div></div>}
     </main>
+    {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[
+      {label: "打开终端", run: () => selectTerminalTab(terminalTabContext.terminal)},
+      {label: "新建终端", disabled: !!pendingOperation || connectingResources.includes(terminalTabContext.terminal.resourceId), run: () => { void openTerminalFor(terminalTabContext.terminal.resourceId, true); }},
+      {label: "关闭终端", disabled: !!pendingOperation, run: () => { void closeTerminalTab(terminalTabContext.terminal); }},
+    ]}/>}
     <TerminalSidePanel open={terminalOpen} onClose={closeTerminalPanel} onOpen={() => { revealActiveTerminalTab(); if (!commandBusy && currentTerminal?.holder === "user" && currentTerminal.status === "ready") terminalControlRef.current?.focus(); }}>{terminalDrawer}</TerminalSidePanel>
     {commandEditorOpen && <div className="modal-scrim"><section className="modal" role="dialog" aria-modal="true" aria-label="运行完整命令"><div className="modal-header"><h2>运行完整命令</h2><button type="button" className="icon-button" aria-label="关闭命令输入" onClick={() => setCommandEditorOpen(false)}><Glyph name="close"/></button></div><form className="command-form" onSubmit={reviewCommand}><label htmlFor="command-input">发送到 {resourceLabel(terminalResource)} 的命令</label><div className="command-input-row"><textarea ref={commandInputRef} id="command-input" rows={2} spellCheck={false} placeholder="输入单行命令，Enter 执行" value={commandDraft} onChange={event => { setCommandDraft(event.target.value); setCommandError(""); }} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} disabled={!terminalConnected || !persistentMode || currentTerminal?.holder !== "user" || currentTerminal.status !== "ready" || commandBusy}/><button type="submit" className="button command-button" disabled={!commandDraft.trim() || !terminalConnected || !persistentMode || currentTerminal?.holder !== "user" || currentTerminal.status !== "ready" || commandBusy}>执行<Glyph name="arrow" size={15}/></button></div>{commandError && <p className="form-error" role="alert">{commandError}</p>}<p>只读命令直接执行，变更命令需确认。运行交互程序时，可在上方终端输入按键。{currentTerminal?.holder !== "user" && currentTerminal?.status === "ready" ? "请先接管输入。" : ""}{currentTerminal?.status === "unknown" ? "执行结果不明，请先核查，避免重复提交。" : ""}</p></form></section></div>}
     {terminalContext && resourceTerminalSnapshot?.hostKeyTrust && <HostKeyTrust session={terminalContext.sessionId} prompt={resourceTerminalSnapshot.hostKeyTrust} disabled={!terminalConnected} refresh={refreshResourceTerminal}/>}
@@ -1252,6 +1320,7 @@ function App() {
     {deleteTarget && <div className="modal-scrim" onMouseDown={event => { if (event.target === event.currentTarget && !deleteBusy) setDeleteTarget(null); }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-session-title"><div className="modal-header"><span className="modal-icon danger-icon"><Glyph name="trash" size={20}/></span><button className="icon-button" aria-label="关闭" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}><Glyph name="close"/></button></div><h2 id="delete-session-title">删除会话</h2><p className="modal-description">将删除会话「{deleteTarget.title}」的对话、专员结论、证据、审批和命令记录。此操作不可恢复。</p>{deleteError && <p className="form-error" role="alert">{deleteError}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>取消</button><button type="button" className="button danger" onClick={() => void confirmDeleteSession()} disabled={deleteBusy || !connected}>{deleteBusy ? "正在删除…" : "删除会话"}</button></div></div></div>}
     {memoryProject && <ProjectMemory key={memoryProject.id} project={memoryProject} onClose={() => setMemoryProject(null)}/>}
     {projectContext && <NavigationMenu title={projectContext.project.name} x={projectContext.x} y={projectContext.y} onClose={()=>setProjectContext(null)} actions={[{label:"项目记忆",run:()=>setMemoryProject(projectContext.project)},{label:"删除项目",danger:true,run:()=>setNavigationDelete({kind:"project",id:projectContext.project.id,projectId:projectContext.project.id,name:projectContext.project.name})}]}/>}
+    {bulkConfirmation && <BulkNavigationDelete targets={bulkConfirmation} onClose={() => setBulkConfirmation(null)} onProcessed={bulkProcessed} onBusy={busy => setPendingOperation(current => busy ? "bulk-delete" : current === "bulk-delete" ? "" : current)}/>}
     {navigationDelete && <NavigationDelete target={navigationDelete} onClose={()=>setNavigationDelete(null)} onDeleted={async()=>{setResourceTerminalMenu(null);if(navigationDelete.kind==="project" && selectedSession?.projectId===navigationDelete.id)navigate({sessionId:null,resourceId:null});else if(navigationDelete.kind==="resource"&&route.resourceId===navigationDelete.id)navigate({sessionId:route.sessionId,resourceId:null});await refreshCatalog();if(navigationDelete.kind!=="project")await refreshCurrent();}}/>}
     {trashOpen && <NavigationTrash onClose={()=>setTrashOpen(false)} onRestored={async()=>{await refreshCatalog();await refreshCurrent();}}/>}
     {settingsOpen && <ModelSettings onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined} ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>}

@@ -606,6 +606,10 @@ func (t *Terminals) Resize(id, tid string, cols, rows int) {
 	l := t.get(id, tid)
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	currentCols, currentRows := l.screen.Size()
+	if cols == currentCols && rows == currentRows {
+		return
+	}
 	must(resizeTerminal(l.pty, cols, rows))
 	l.screen.Resize(cols, rows)
 }

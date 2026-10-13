@@ -1,19 +1,37 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { NavigationMenu } from "./NavigationDelete";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import type { TerminalEntry } from "../../shared/contracts";
 
 export type TerminalHandle = { focus: () => void; clear: () => void };
-type Props = { entries: TerminalEntry[]; output: string; interactive: boolean; showCommandEntries?: boolean; onInput: (data: string) => void; onResize: (cols: number, rows: number) => void; controlRef?: RefObject<TerminalHandle | null> };
+type Props = { active?: boolean; entries: TerminalEntry[]; output: string; interactive: boolean; showCommandEntries?: boolean; onInput: (data: string) => void; onResize: (cols: number, rows: number) => void; controlRef?: RefObject<TerminalHandle | null> };
 
 /** Real PTY input and output, including the shell's own prompt and line editor. */
-export function TerminalPane({ entries, output, interactive, showCommandEntries = true, onInput, onResize, controlRef }: Props) {
+export function TerminalPane({ active = true, entries, output, interactive, showCommandEntries = true, onInput, onResize, controlRef }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
-  const propsRef = useRef({ interactive, onInput, onResize });
-  propsRef.current = { interactive, onInput, onResize };
+  const fitRef = useRef<FitAddon | null>(null);
+  const propsRef = useRef({ active, interactive, onInput, onResize });
+  propsRef.current = { active, interactive, onInput, onResize };
   const previousOutput = useRef("");
+  const [menu, setMenu] = useState<{x: number; y: number} | null>(null);
+  const [clipboardError, setClipboardError] = useState("");
+  useEffect(() => { if (!active) { setMenu(null); setClipboardError(""); } }, [active]);
+  async function clipboard(action: "copy" | "paste") {
+    try {
+      const terminal = terminalRef.current;
+      if (!terminal) return;
+      if (action === "copy") await navigator.clipboard.writeText(terminal.getSelection());
+      else {
+        const text = await navigator.clipboard.readText();
+        if (propsRef.current.active && propsRef.current.interactive) terminal.paste(text);
+      }
+      setClipboardError("");
+      if (propsRef.current.active) terminal.focus();
+    } catch { setClipboardError("无法访问剪贴板，请使用键盘快捷键复制或粘贴。"); }
+  }
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -41,32 +59,40 @@ export function TerminalPane({ entries, output, interactive, showCommandEntries 
     });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
+    fitRef.current = fit;
     terminal.open(hostRef.current);
     terminalRef.current = terminal;
-    if (controlRef) controlRef.current = { focus: () => terminal.focus(), clear: () => terminal.clear() };
     const inputListener = terminal.onData(data => { if (propsRef.current.interactive) propsRef.current.onInput(data); });
-    const sizeListener = terminal.onResize(({ cols, rows }) => propsRef.current.onResize(cols, rows));
+    const sizeListener = terminal.onResize(({ cols, rows }) => { if (propsRef.current.active) propsRef.current.onResize(cols, rows); });
     let resizeFrame = 0;
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
     const resize = () => {
       if (closed || resizeFrame) return;
       resizeFrame = requestAnimationFrame(() => {
         resizeFrame = 0;
-        if (closed || !hostRef.current?.isConnected) return;
+        if (closed || !propsRef.current.active || !hostRef.current?.isConnected || !hostRef.current.clientWidth || !hostRef.current.clientHeight) return;
         try { fit.fit(); } catch { /* The pane can become hidden during navigation. */ }
       });
     };
-    const observer = new ResizeObserver(resize);
+    const observer = new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(resize, 100);
+    });
     observer.observe(hostRef.current);
+    // Size the emulator before parsing the initial history.
+    if (propsRef.current.active) { try { fit.fit(); } catch {} }
     resize();
     return () => {
       closed = true;
       observer.disconnect();
+      clearTimeout(resizeTimer);
       inputListener.dispose();
       sizeListener.dispose();
       previousOutput.current = "";
       if (resizeFrame) cancelAnimationFrame(resizeFrame);
       terminalRef.current = null;
-      if (controlRef) controlRef.current = null;
+      fitRef.current = null;
+
       // xterm schedules viewport work on open/reset and parses write() asynchronously.
       // Let its queued work drain before disposal, including React StrictMode remounts.
       terminal.write("", () => setTimeout(() => terminal.dispose(), 50));
@@ -77,8 +103,14 @@ export function TerminalPane({ entries, output, interactive, showCommandEntries 
     if (!terminal) return;
     terminal.options.disableStdin = !interactive;
     terminal.options.cursorBlink = interactive;
+    if (!active) return;
+    if (hostRef.current?.clientWidth && hostRef.current.clientHeight) { try { fitRef.current?.fit(); } catch {} }
+    const handle = { focus: () => terminal.focus(), clear: () => terminal.clear() };
+    if (controlRef) controlRef.current = handle;
+    propsRef.current.onResize(terminal.cols, terminal.rows);
     if (interactive) terminal.focus();
-  }, [interactive]);
+    return () => { if (controlRef?.current === handle) controlRef.current = null; };
+  }, [active, interactive, controlRef]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -91,5 +123,14 @@ export function TerminalPane({ entries, output, interactive, showCommandEntries 
     terminal.write(update, () => { if (terminalRef.current === terminal) terminal.scrollToBottom(); });
   }, [entries, output, showCommandEntries]);
 
-  return <div className="terminal-screen" ref={hostRef} aria-label={interactive ? "交互终端：可输入按键" : "持续终端输出"} />;
+  return <>
+    <div className="terminal-screen" ref={hostRef} aria-label={interactive ? "交互终端：可输入按键" : "持续终端输出"} onContextMenu={event => { event.preventDefault(); event.stopPropagation(); setClipboardError(""); setMenu({x: event.clientX, y: event.clientY}); }}/>
+    {clipboardError && active && <div className="terminal-clipboard-error" role="alert" onClick={() => setClipboardError("")}>{clipboardError}</div>}
+    {menu && active && <NavigationMenu title="终端" x={menu.x} y={menu.y} onClose={() => setMenu(null)} actions={[
+      {label: "复制", disabled: !terminalRef.current?.hasSelection(), run: () => { void clipboard("copy"); }},
+      {label: "粘贴", disabled: !interactive, run: () => { void clipboard("paste"); }},
+      {label: "全选", run: () => terminalRef.current?.selectAll()},
+      {label: "清屏", run: () => { terminalRef.current?.clear(); terminalRef.current?.focus(); }},
+    ]}/>}
+  </>;
 }

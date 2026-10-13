@@ -32,11 +32,13 @@ public struct Release: Decodable {
     public let draft: Bool
     public let prerelease: Bool
     public let assets: [ReleaseAsset]
+    public let body: String?
 }
 public struct Update {
     public let version: String
     public let archive: ReleaseAsset
     public let checksum: ReleaseAsset
+    public let releaseNotes: String
 }
 
 public enum ReleasePolicy {
@@ -56,7 +58,7 @@ public enum ReleasePolicy {
                   checksum.url?.lastPathComponent == name + ".sha256",
                   archive.url?.deletingLastPathComponent().lastPathComponent == release.tag_name,
                   checksum.url?.deletingLastPathComponent().lastPathComponent == release.tag_name else { return nil }
-            return Update(version: number, archive: archive, checksum: checksum)
+            return Update(version: number, archive: archive, checksum: checksum, releaseNotes: release.body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
         }.max(by: { Version($0.version)! < Version($1.version)! })
     }
 

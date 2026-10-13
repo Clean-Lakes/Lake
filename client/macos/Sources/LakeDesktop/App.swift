@@ -45,11 +45,14 @@ import LakeUpdateCore
     private var terminating = false
     private var ready = false
     private let updateButton = NSButton()
+    private lazy var updateIndicator = UpdateIndicator(button: updateButton)
     private let updatePopover = NSPopover()
     private let updateMessage = NSTextField(wrappingLabelWithString: "正在检测更新…")
     private let updateVersion = NSTextField(labelWithString: "")
     private let updateAction = NSButton(title: "检测更新", target: nil, action: nil)
     private let updateProgress = NSProgressIndicator()
+    private let updateNotesTitle = NSTextField(labelWithString: "更新公告")
+    private let updateNotes = NSTextView()
     private var dragRegions: [NSRect] = []
     private var dragExcluded: [NSRect] = []
 
@@ -61,6 +64,7 @@ import LakeUpdateCore
             NSApp.terminate(nil)
             return
         }
+        refreshApplicationIcon()
         installMenu()
         let config = WKWebViewConfiguration()
         if let widths = UserDefaults.standard.dictionary(forKey: "LakeWorkbenchWidths"),
@@ -79,6 +83,7 @@ import LakeUpdateCore
           /* Keep terminal actions in the unified header, outside the native update button. */
           .lake-native .terminal-panel-header { min-height: var(--lake-titlebar-height); padding-right: 72px; }
           .lake-native .desktop-update { display: none; }
+          .lake-native .session-edit, .lake-native .session-more { background: transparent; }
         `;
         document.head.appendChild(style);
         // 已有独立 Go 服务可能仍提供旧页面；同样保留菜单焦点直到 click 完成。
@@ -124,6 +129,8 @@ import LakeUpdateCore
         NSApp.activate(ignoringOtherApps: true)
         updater.changed = { [weak self] state in self?.renderUpdate(state) }
         renderUpdate(updater.state)
+        updater.start()
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(updateAccessibilityChanged), name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
         updater.beforeInstall = { [weak self] in
             guard let self else { throw UpdateError.message("应用正在退出。") }
             let context = InstallContext(pid: self.backend.process?.processIdentifier ?? 0, home: self.backend.home, data: self.backend.dataDirectory)
@@ -148,6 +155,14 @@ import LakeUpdateCore
                 NSApp.terminate(nil)
             }
         }
+    }
+    private func refreshApplicationIcon() {
+        // The updater replaces the bundle at the same path before relaunching. Load the
+        // icon from this process's bundle so the Dock does not keep the previous one.
+        guard let url = Bundle.main.url(forResource: "Lake", withExtension: "icns"),
+              let icon = NSImage(contentsOf: url) else { return }
+        NSApp.applicationIconImage = icon
+        NSApp.dockTile.display()
     }
     private func installMenu() {
         let menu = NSMenu()
@@ -192,7 +207,7 @@ import LakeUpdateCore
         toolbar.allowsUserCustomization = false
         window.toolbar = toolbar
         let controller = NSViewController()
-        controller.view = NSView(frame: NSRect(x: 0, y: 0, width: 330, height: 216))
+        controller.view = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 422))
         let title = NSTextField(labelWithString: "Lake 客户端更新")
         title.font = .boldSystemFont(ofSize: 14)
         updateVersion.font = .systemFont(ofSize: 11)
@@ -207,7 +222,27 @@ import LakeUpdateCore
         let note = NSTextField(wrappingLabelWithString: "安装更新会关闭终端连接，完成后自动重新打开。")
         note.font = .systemFont(ofSize: 11)
         note.textColor = .secondaryLabelColor
-        let stack = NSStackView(views: [title, updateVersion, updateMessage, updateProgress, note, updateAction])
+        updateNotesTitle.font = .boldSystemFont(ofSize: 12)
+        updateNotes.isEditable = false
+        updateNotes.isSelectable = true
+        updateNotes.drawsBackground = false
+        updateNotes.font = .systemFont(ofSize: 12)
+        updateNotes.textColor = .labelColor
+        updateNotes.textContainerInset = NSSize(width: 4, height: 6)
+        updateNotes.frame = NSRect(x: 0, y: 0, width: 384, height: 160)
+        updateNotes.minSize = NSSize(width: 0, height: 160)
+        updateNotes.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        updateNotes.isVerticallyResizable = true
+        updateNotes.isHorizontallyResizable = false
+        updateNotes.autoresizingMask = [.width]
+        updateNotes.textContainer?.widthTracksTextView = true
+        let notesScroll = NSScrollView()
+        notesScroll.hasVerticalScroller = true
+        notesScroll.drawsBackground = false
+        notesScroll.documentView = updateNotes
+        notesScroll.translatesAutoresizingMaskIntoConstraints = false
+        notesScroll.heightAnchor.constraint(equalToConstant: 160).isActive = true
+        let stack = NSStackView(views: [title, updateVersion, updateMessage, updateProgress, updateNotesTitle, notesScroll, note, updateAction])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
@@ -217,6 +252,7 @@ import LakeUpdateCore
             stack.leadingAnchor.constraint(equalTo: controller.view.leadingAnchor, constant: 18),
             stack.trailingAnchor.constraint(equalTo: controller.view.trailingAnchor, constant: -18),
             stack.topAnchor.constraint(equalTo: controller.view.topAnchor, constant: 18),
+            notesScroll.widthAnchor.constraint(equalTo: stack.widthAnchor),
             stack.bottomAnchor.constraint(lessThanOrEqualTo: controller.view.bottomAnchor, constant: -18)
         ])
         updatePopover.contentViewController = controller
@@ -241,22 +277,33 @@ import LakeUpdateCore
         }
     }
     private func showUpdates() {
+        updateIndicator.display(version: updater.state.updateAvailable ? updater.state.version : nil, viewing: true, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         updatePopover.show(relativeTo: updateButton.bounds, of: updateButton, preferredEdge: .minY)
     }
     @objc private func performUpdateAction() {
-        if updater.state.status == "available" { Task { await updater.install() } }
+        if updater.state.updateAvailable { Task { await updater.install() } }
         else { Task { await updater.check() } }
     }
     private func renderUpdate(_ state: UpdateState) {
         updateVersion.stringValue = "当前版本 \(state.currentVersion) · master · Apple Silicon"
         updateMessage.stringValue = state.message
+        updateNotesTitle.stringValue = "更新公告 · " + (state.version ?? state.currentVersion)
+        updateNotes.string = state.status == "checking" ? "正在读取更新公告…" : state.releaseNotes.isEmpty ? "该版本未提供更新公告。" : state.releaseNotes
+        updateNotes.scrollRangeToVisible(NSRange(location: 0, length: 0))
         updateButton.toolTip = state.message
-        updateButton.contentTintColor = state.status == "available" ? .systemGreen : .secondaryLabelColor
+        updateIndicator.display(version: state.updateAvailable ? state.version : nil, viewing: updatePopover.isShown, installing: ["downloading", "verifying", "installing"].contains(state.status), reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        updateButton.setAccessibilityLabel(state.updateAvailable ? "发现新版本 Lake \(state.version ?? "")" : "检测更新")
         let busy = ["checking", "downloading", "verifying", "installing"].contains(state.status)
         updateAction.isEnabled = !busy
-        updateAction.title = state.status == "available" ? "下载并重启更新 \(state.version ?? "")" : busy ? "正在处理…" : "重新检测"
+        updateAction.title = busy ? "正在处理…" : state.updateAvailable ? "下载并重启更新 \(state.version ?? "")" : "重新检测"
         updateProgress.isHidden = !busy
         if busy { updateProgress.startAnimation(nil) } else { updateProgress.stopAnimation(nil) }
+    }
+    @objc private func updateAccessibilityChanged() { renderUpdate(updater.state) }
+    func applicationDidBecomeActive(_ notification: Notification) {
+        guard ready else { return }
+        renderUpdate(updater.state)
+        Task { await updater.checkIfDue() }
     }
     func windowDidResize(_ notification: Notification) { syncChromeHeight() }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -338,7 +385,7 @@ import LakeUpdateCore
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         guard sameOrigin(webView.url) else { return }
         syncChromeHeight()
-        if !ready { ready = true; updater.start() }
+        if !ready { ready = true }
         if let receipt = receiptURL() {
             try? updater.state.currentVersion.data(using: .utf8)?.write(to: receipt, options: .atomic)
         }

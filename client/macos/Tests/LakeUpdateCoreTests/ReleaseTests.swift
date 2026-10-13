@@ -28,6 +28,15 @@ final class ReleaseTests {
         XCTAssertEqual(ReleasePolicy.latest(releases, current: "0.3.0", architecture: "x86_64")?.version, "0.8.0")
         XCTAssertNil(ReleasePolicy.latest(releases, current: "0.3.0", architecture: "unknown"))
     }
+    func testReleaseNotesStayWithSelectedVersion() throws {
+        let original = try release("0.4.0")
+        var object = try JSONSerialization.jsonObject(with: JSONEncoderForRelease(original)) as! [String: Any]
+        object["body"] = "  ## 更新公告\n- 一键打开终端\n- 中文菜单  "
+        let releaseWithNotes = try JSONDecoder().decode(Release.self, from: JSONSerialization.data(withJSONObject: object))
+        let selected = ReleasePolicy.latest([releaseWithNotes], current: "0.3.0", architecture: "arm64")
+        XCTAssertEqual(selected?.releaseNotes, "## 更新公告\n- 一键打开终端\n- 中文菜单")
+        XCTAssertEqual(ReleasePolicy.latest([original], current: "0.3.0", architecture: "arm64")?.releaseNotes, "")
+    }
     func testVersionsRejectNonStableAndCompareNumerically() {
         XCTAssertTrue(Version("0.10.0")! > Version("0.9.0")!)
         XCTAssertEqual(Version("v1.2.3"), Version("1.2.3"))
@@ -72,12 +81,14 @@ final class ReleaseTests {
 }
 
 @main struct PolicyTests {
-    static func main() throws {
+    @MainActor static func main() throws {
+        testUpdateIndicator()
         let tests = ReleaseTests()
         try tests.testMasterStableArchitectureAndOrdering()
+        try tests.testReleaseNotesStayWithSelectedVersion()
         tests.testVersionsRejectNonStableAndCompareNumerically()
         try tests.testAssetURLBoundary()
         try tests.testArchiveTraversalAndChecksum()
-        print("Passed 4 release policy groups: master/stable/architecture, versions, asset boundaries, archive/checksum")
+        print("Passed 5 release policy groups: master/stable/architecture, versions, asset boundaries, archive/checksum")
     }
 }

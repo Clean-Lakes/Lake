@@ -9,6 +9,8 @@ struct UpdateState: Encodable {
     var version: String? = nil
     var message = "点击检测 master 发布版本"
     var progress: Int? = nil
+    var releaseNotes = ""
+    var updateAvailable = false
 }
 
 struct InstallContext {
@@ -85,6 +87,7 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
     private var available: Update?
     private var busy = false
     private var timer: Timer?
+    private var lastCheck: Date?
     private let session: URLSession
     private let target = Bundle.main.bundleURL.resolvingSymlinksInPath()
     private let updatesDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -103,11 +106,14 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
         changed?(state)
     }
     func start() {
+        guard timer == nil else { return }
         Task { await check() }
-        timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+        let periodic = Timer(timeInterval: 300, repeats: true) { [weak self] _ in
             guard let updater = self else { return }
             Task { @MainActor in await updater.check() }
         }
+        timer = periodic
+        RunLoop.main.add(periodic, forMode: .common)
         if let jobs = try? FileManager.default.contentsOfDirectory(at: updatesDirectory, includingPropertiesForKeys: nil) {
             for job in jobs {
                 let error = job.appendingPathComponent("error")
@@ -118,8 +124,13 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
             }
         }
     }
+    func checkIfDue() async {
+        guard lastCheck.map({ Date().timeIntervalSince($0) >= 300 }) ?? true else { return }
+        await check()
+    }
     func check() async {
         guard !busy else { return }
+        lastCheck = Date()
         busy = true
         defer { busy = false }
         publish("checking", "正在检测 master 的正式版本…")
@@ -140,7 +151,11 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
             let architecture = "x86_64"
             #endif
             available = ReleasePolicy.latest(releases, current: state.currentVersion, architecture: architecture)
+            state.updateAvailable = available != nil
             state.version = available?.version
+            state.releaseNotes = available?.releaseNotes ?? releases.first(where: {
+                !$0.draft && !$0.prerelease && $0.target_commitish == "master" && Version($0.tag_name) == Version(state.currentVersion)
+            })?.body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if let update = available {
                 publish("available", "发现 Lake \(update.version)，点击下载并重启更新")
             } else {
