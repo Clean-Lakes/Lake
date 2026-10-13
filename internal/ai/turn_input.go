@@ -6,12 +6,13 @@ import (
 )
 
 type TurnInput struct {
-	TargetScope *TargetScope `json:"-"`
-	workflow    []WorkflowStep
-	UserText    string            `json:"message"`
-	Context     string            `json:"context,omitempty"`
-	References  []map[string]any  `json:"references,omitempty"`
-	Images      []ImageAttachment `json:"images,omitempty"`
+	IgnoreProjectMemory bool         `json:"ignoreProjectMemory,omitempty"`
+	TargetScope         *TargetScope `json:"-"`
+	workflow            []WorkflowStep
+	UserText            string            `json:"message"`
+	Context             string            `json:"context,omitempty"`
+	References          []map[string]any  `json:"references,omitempty"`
+	Images              []ImageAttachment `json:"images,omitempty"`
 }
 
 func (input TurnInput) validate() error {

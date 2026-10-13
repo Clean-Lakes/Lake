@@ -197,7 +197,11 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 			return modelResult{}, ctx.Err()
 		}
 		result, err := Stream(ctx, model, history, tools, delta)
-		settleAgentBudget(e.worker, charge, result.Usage, true)
+		budgetUsage := result.Usage
+		if err != nil && (!budgetUsage.InputKnown || !budgetUsage.OutputKnown) {
+			budgetUsage = Usage{}
+		}
+		settleAgentBudget(e.worker, charge, budgetUsage, true)
 		if result.Usage.InputKnown {
 			e.worker.mu.Lock()
 			e.worker.lastModelChars = chars

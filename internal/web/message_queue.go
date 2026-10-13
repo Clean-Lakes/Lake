@@ -10,11 +10,12 @@ import (
 )
 
 type humanMessage struct {
-	Text       string
-	Images     []ai.ImageAttachment
-	References []Object
-	Files      []Object
-	Reuse      any
+	Text                string
+	IgnoreProjectMemory bool
+	Images              []ai.ImageAttachment
+	References          []Object
+	Files               []Object
+	Reuse               any
 }
 
 func messageText(value any) string {
@@ -27,6 +28,14 @@ func messageText(value any) string {
 func (b *Server) validateHumanMessage(id string, data Object) humanMessage {
 	validateIDs(data["resourceIds"])
 	message := humanMessage{Text: messageText(data["text"]), Images: []ai.ImageAttachment{}, References: []Object{}, Files: []Object{}, Reuse: data["terminalReuse"]}
+	if raw, exists := data["ignoreProjectMemory"]; exists {
+		value, ok := raw.(bool)
+		if !ok {
+			fail(400, "Invalid memory option")
+		}
+		message.IgnoreProjectMemory = value
+	}
+	message.IgnoreProjectMemory = message.IgnoreProjectMemory || ignoreMemoryPhrase(message.Text)
 	if value, exists := data["images"]; exists {
 		if _, valid := value.([]any); !valid {
 			fail(400, "Invalid image attachments")
@@ -110,7 +119,7 @@ func (b *Server) launchMessageLocked(id string, message humanMessage) {
 	}
 	b.runningMessages[id] = true
 	b.workers.Add(1)
-	go b.runTurn(id, message.Text, message.Images, message.References, message.Files)
+	go b.runTurn(id, message.Text, message.Images, message.References, message.Files, message.IgnoreProjectMemory)
 }
 func (b *Server) submitHumanMessage(id string, data Object) Object {
 	if b.Store.ActiveWorkflowRun(id) != "" {
@@ -121,7 +130,7 @@ func (b *Server) submitHumanMessage(id string, data Object) Object {
 	defer b.messageMu.Unlock()
 	queue := b.Store.MessageQueue(id)
 	if b.messageBusyLocked(id) || len(objects(queue["items"])) > 0 || data["enqueue"] == true {
-		payload := Object{"text": message.Text, "resourceIds": stringsOf(data["resourceIds"])}
+		payload := Object{"text": message.Text, "resourceIds": stringsOf(data["resourceIds"]), "ignoreProjectMemory": message.IgnoreProjectMemory}
 		if len(message.Images) > 0 {
 			payload["images"] = message.Images
 		}

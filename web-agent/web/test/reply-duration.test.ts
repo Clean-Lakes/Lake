@@ -32,3 +32,11 @@ test("each footer stays with its own user turn and multi-Agent replies keep one 
  assert.equal(timingForTurn([{id:"u",at:start,message:snapshot.messages[0]}],legacy),undefined);
  assert.equal(timingForTurn([{id:"v",at:snapshot.messages[1]!.createdAt,message:snapshot.messages[1]}],legacy)?.finishedAt,snapshot.ai!.turnFinishedAt);
 });
+
+test("waiting for first model data already has visible motion, independent of idle engine state",()=>{
+ const snapshot={session:{id:"s"},messages:[{id:"u",role:"user",text:"你能看懂图片吗",createdAt:start}],resources:[],actions:[],replyTimings:[{...timing,status:"running",finishedAt:""}],ai:{session:"s",status:"idle",cards:[],cardsOffset:0}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.ok(html.includes("reply-duration-spinner") && html.includes("status-text--active"));
+ const completed=renderToStaticMarkup(createElement(AITranscript,{snapshot:{...snapshot,replyTimings:[timing]}}));
+ assert.ok(!completed.includes("reply-duration-spinner") && !completed.includes("status-text--active"));
+});

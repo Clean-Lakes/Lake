@@ -42,25 +42,30 @@ type SSH struct {
 	KnownHosts    string `json:"-"`
 }
 type Config struct {
-	targetScope      *TargetScope
-	Directories      []AssetDirectory `json:"directories,omitempty"`
-	agentRole        string
-	workflowMode     bool
-	MultiAgentMode   string       `json:"multiAgentMode,omitempty"`
-	Permissions      *Permissions `json:"permissions,omitempty"`
-	ReferencedAssets []string     `json:"-"`
-	AuthSecrets      []string     `json:"-"`
-	CredentialDir    string       `json:"-"`
-	Model            Model        `json:"model"`
-	Profile          string       `json:"profile"`
-	UserPrompt       string       `json:"userPrompt,omitempty"`
-	Runtime          string       `json:"runtime,omitempty"`
-	AssetRef         string       `json:"asset_ref,omitempty"`
-	Container        string       `json:"container_id,omitempty"`
-	TerminalID       string       `json:"terminal_id,omitempty"`
-	Assets           []Asset      `json:"assets"`
-	MaxSteps         int          `json:"maxSteps,omitempty"`
-	Workspace        string       `json:"workspace,omitempty"`
+	targetScope             *TargetScope
+	MemoryProjectID         string           `json:"-"`
+	MemoryEnabled           bool             `json:"-"`
+	MemoryExtractionEnabled bool             `json:"-"`
+	MemoryEpoch             int              `json:"-"`
+	MemoryKnowledgeRevision int              `json:"-"`
+	Directories             []AssetDirectory `json:"directories,omitempty"`
+	agentRole               string
+	workflowMode            bool
+	MultiAgentMode          string       `json:"multiAgentMode,omitempty"`
+	Permissions             *Permissions `json:"permissions,omitempty"`
+	ReferencedAssets        []string     `json:"-"`
+	AuthSecrets             []string     `json:"-"`
+	CredentialDir           string       `json:"-"`
+	Model                   Model        `json:"model"`
+	Profile                 string       `json:"profile"`
+	UserPrompt              string       `json:"userPrompt,omitempty"`
+	Runtime                 string       `json:"runtime,omitempty"`
+	AssetRef                string       `json:"asset_ref,omitempty"`
+	Container               string       `json:"container_id,omitempty"`
+	TerminalID              string       `json:"terminal_id,omitempty"`
+	Assets                  []Asset      `json:"assets"`
+	MaxSteps                int          `json:"maxSteps,omitempty"`
+	Workspace               string       `json:"workspace,omitempty"`
 }
 type Call struct {
 	ID        string `json:"id"`
@@ -113,6 +118,7 @@ type Approval struct {
 	Fingerprint        string `json:"fingerprint"`
 }
 type View struct {
+	MemoryStatus   string        `json:"memoryStatus,omitempty"`
 	AgentRuns      []AgentRun    `json:"agentRuns,omitempty"`
 	DelegatedUsage Usage         `json:"delegatedUsage,omitempty"`
 	RootTurnID     string        `json:"rootTurnId,omitempty"`
@@ -132,16 +138,18 @@ type View struct {
 	Turns          int           `json:"turns"`
 }
 type State struct {
-	TargetScope        *TargetScope `json:"targetScope,omitempty"`
-	RootQuestion       string       `json:"rootQuestion,omitempty"`
-	ReferencedAssetIDs []string     `json:"referencedAssetIds,omitempty"`
-	LastRequest        *Usage       `json:"lastRequest,omitempty"`
-	LastRequestAt      string       `json:"lastRequestAt,omitempty"`
-	View               View         `json:"view"`
-	History            []Message    `json:"history"`
-	Checkpoints        []int        `json:"checkpoints"`
-	Config             Config       `json:"config"`
-	Undo               []FileUndo   `json:"undo,omitempty"`
+	MemoryOutbox           []MemoryTurnSnapshot `json:"memoryOutbox,omitempty"`
+	MemoryRecentUserInputs []string             `json:"memoryRecentUserInputs,omitempty"`
+	TargetScope            *TargetScope         `json:"targetScope,omitempty"`
+	RootQuestion           string               `json:"rootQuestion,omitempty"`
+	ReferencedAssetIDs     []string             `json:"referencedAssetIds,omitempty"`
+	LastRequest            *Usage               `json:"lastRequest,omitempty"`
+	LastRequestAt          string               `json:"lastRequestAt,omitempty"`
+	View                   View                 `json:"view"`
+	History                []Message            `json:"history"`
+	Checkpoints            []int                `json:"checkpoints"`
+	Config                 Config               `json:"config"`
+	Undo                   []FileUndo           `json:"undo,omitempty"`
 }
 type FileUndo struct {
 	TargetHash string `json:"targetHash,omitempty"`

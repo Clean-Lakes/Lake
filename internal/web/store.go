@@ -83,13 +83,14 @@ type queryer interface {
 	Exec(string, ...any) (sql.Result, error)
 }
 type Store struct {
-	mu          sync.Mutex
-	db          *sql.DB
-	q           queryer
-	events      []Object
-	subscribers map[chan Object]bool
-	Dir         string
-	lockFile    *os.File
+	mu              sync.Mutex
+	memoryPublishMu sync.Mutex
+	db              *sql.DB
+	q               queryer
+	events          []Object
+	subscribers     map[chan Object]bool
+	Dir             string
+	lockFile        *os.File
 }
 
 func OpenStore(dir string) (*Store, error) {
@@ -168,6 +169,9 @@ func OpenStore(dir string) (*Store, error) {
 }
 func (s *Store) migrate() error {
 	needBackup := s.row("SELECT name FROM sqlite_master WHERE name='aiScopes'") == nil
+	if s.row("SELECT name FROM sqlite_master WHERE type='table' AND name='projectMemories'") == nil {
+		needBackup = true
+	}
 	parityColumns := [][3]string{{"terminals", "generation", "TEXT NOT NULL DEFAULT ''"}, {"terminals", "outputCapturedAt", "TEXT"}, {"terminals", "cwd", "TEXT"}, {"terminals", "shell", "TEXT NOT NULL DEFAULT 'sh'"}, {"terminalEntries", "status", "TEXT NOT NULL DEFAULT 'unknown'"}, {"terminalEntries", "generation", "TEXT NOT NULL DEFAULT ''"}, {"terminalEntries", "cwd", "TEXT"}, {"terminalEntries", "startedAt", "TEXT"}, {"terminalEntries", "finishedAt", "TEXT"}, {"terminalEntries", "originSessionId", "TEXT"}}
 	for _, c := range parityColumns {
 		found := false
@@ -258,7 +262,10 @@ func (s *Store) migrate() error {
 		s.db.Exec("PRAGMA foreign_keys=ON")
 	}
 	_, e := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_terminals_session ON terminals(sessionId,createdAt); CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(projectId)")
-	return e
+	if e != nil {
+		return e
+	}
+	return s.migrateProjectMemory()
 }
 func (s *Store) Close() error {
 	s.mu.Lock()
@@ -502,6 +509,18 @@ func (s *Store) CreateSession(project, title string, chosen []string) Object {
 		return s.session(id)
 	}).(Object)
 }
+func (s *Store) RenameSession(id, title string) Object {
+	title = text(title, "会话名称", 200)
+	return s.update(func() any {
+		s.session(id)
+		s.exec("UPDATE sessions SET title=?, updatedAt=? WHERE id=?", title, now(), id)
+		// An explicit name also locks unnamed sessions before the first message.
+		s.exec("DELETE FROM sessionNaming WHERE sessionId=?", id)
+		s.event(id, "session")
+		return s.session(id)
+	}).(Object)
+}
+
 func (s *Store) DeleteSession(id string) {
 	s.update(func() any {
 		s.session(id)

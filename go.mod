@@ -6,10 +6,12 @@ require (
 	github.com/UserExistsError/conpty v0.1.4
 	github.com/creack/pty v1.1.24
 	github.com/go-sql-driver/mysql v1.9.3
+	github.com/golang/snappy v1.0.0
 	github.com/hinshun/vt10x v0.0.0-20220301184237-5011da428d02
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/syndtr/goleveldb v1.0.0
 	golang.org/x/crypto v0.37.0
 	golang.org/x/image v0.26.0
 	golang.org/x/sys v0.37.0

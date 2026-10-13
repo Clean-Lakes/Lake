@@ -6,6 +6,8 @@ import "fmt"
 type ContextUsage struct {
 	Window        int    `json:"window"`
 	WindowSource  string `json:"windowSource,omitempty"`
+	InputBudget   int    `json:"inputBudget"`
+	MaxOutput     int    `json:"maxOutput"`
 	Budget        int    `json:"budget"`
 	Used          int    `json:"used"`
 	UsedKnown     bool   `json:"usedKnown"`
@@ -25,7 +27,7 @@ func contextUsage(state State) *ContextUsage {
 		estimated = (historyCost(state.History) + len(js(Catalog(state.Config.Profile))) + 1) / 2
 	}
 	value := &ContextUsage{Window: state.Config.Model.ContextLimit, WindowSource: state.Config.Model.ContextLimitSource,
-		Budget: state.Config.Model.ContextWindow, EstimatedUsed: estimated, ModelID: ModelIdentity(state.Config.Model),
+		Budget: state.Config.Model.ContextWindow, InputBudget: max(0, state.Config.Model.ContextWindow-state.Config.Model.MaxOutput), MaxOutput: state.Config.Model.MaxOutput, EstimatedUsed: estimated, ModelID: ModelIdentity(state.Config.Model),
 		LastRequest: state.LastRequest, LastRequestAt: state.LastRequestAt}
 	if state.LastRequest != nil && state.LastRequest.InputKnown {
 		value.Used = state.LastRequest.Input

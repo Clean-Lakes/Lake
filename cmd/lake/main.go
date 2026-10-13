@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-var version = "0.3.4" // Release builds inject the repository VERSION through -ldflags.
+var version = "0.3.5" // Release builds inject the repository VERSION through -ldflags.
 
 func main() {
 	if os.Getenv("LAKE_SSH_ASKPASS") == "1" {

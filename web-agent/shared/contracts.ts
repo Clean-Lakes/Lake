@@ -8,6 +8,11 @@ export type Project = {
   createdAt: string;
 };
 
+export type ProjectMemorySettings = { projectId: string; useEnabled: boolean; extractionEnabled: boolean; epoch: number; revision: number; settingsRevision: number; publishedRevision: number };
+export type ProjectMemoryEntry = { projectId: string; key: string; type: "user" | "feedback" | "project" | "reference"; description: string; body?: string; revision: number; projectRevision: number; verification: string; validUntil: string; expired: boolean; deletedAt: string; createdAt: string; updatedAt: string; sources?: Array<{kind: string; sessionId?: string; turnId?: string; at: string; excerpt?: string}> };
+export type ProjectMemoryList = { settings: ProjectMemorySettings; items: ProjectMemoryEntry[]; total: number; projectRevision: number };
+export type ProjectMemoryJob = { jobId: string; status: string; attempts: number; lastErrorCode: string; createdAt: string; updatedAt: string; usageJSON: string };
+
 export type Resource = {
   id: string;
   projectId: string;
@@ -211,12 +216,12 @@ export type ApiError = { error: string };
 
 export type AICard = { id: string; type: string; title?: string; content?: string; data?: unknown; status: string; at: string };
 export type ResourceImportRow = {index: number; name: string; kind: string; folder: string; error: string; host?: string; port?: number; username?: string; driver?: string; database?: string; endpoint?: string; authMethod?: string; hasCredential: boolean};
-export type ResourceImportPreview = {planId: string; name: string; resources: ResourceImportRow[]};
+export type ResourceImportPreview = {planId: string; name: string; notice?: string; resources: ResourceImportRow[]};
 export type TextFileAttachment = {sourceId: string; name: string};
 export type AIApproval = { id: string; call: { id: string; name: string; arguments: string }; target: string; risk: string; kind?: string; needsTerminal?: boolean; resourceId?: string; terminalId?: string; terminalVersion?: number; confirmation?: string; fingerprint: string; preview?: {before?: string; after?: string; resources?: ResourceImportRow[]} };
 export type AIUsage = { input: number; output: number; total: number; known?: boolean; inputKnown?: boolean; outputKnown?: boolean; cachedInput?: number | null };
-export type AIContextUsage = { window: number; windowSource?: string; modelId?: string; budget?: number; used: number; usedKnown?: boolean; estimated: boolean; estimatedUsed?: number; lastRequest?: AIUsage; lastRequestAt?: string };
-export type AIView = { session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
+export type AIContextUsage = { window: number; windowSource?: string; modelId?: string; budget?: number; inputBudget?: number; maxOutput?: number; used: number; usedKnown?: boolean; estimated: boolean; estimatedUsed?: number; lastRequest?: AIUsage; lastRequestAt?: string };
+export type AIView = { session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
 export type AIPreset = { id: string; title: string; content: string };
 
 export type AIImage = { id: string; mimeType: string; base64: string; sizeBytes: number; width: number; height: number; name?: string; url?: string };

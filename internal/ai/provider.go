@@ -352,7 +352,7 @@ func Stream(ctx context.Context, m Model, history []Message, tools []Tool, onDel
 			e = a.consume(v, true)
 		}
 		if e != nil {
-			return modelResult{}, e
+			return modelResult{Usage: a.usage}, e
 		}
 		result, err := a.finish()
 		result.Message.NativeProtocol = protocol(m)
@@ -378,7 +378,7 @@ func Stream(ctx context.Context, m Model, history []Message, tools []Tool, onDel
 		if protocol(m) == "ollama" {
 			if strings.TrimSpace(line) != "" {
 				if e = consume(line); e != nil {
-					return modelResult{}, e
+					return modelResult{Usage: a.usage}, e
 				}
 			}
 			continue
@@ -386,7 +386,7 @@ func Stream(ctx context.Context, m Model, history []Message, tools []Tool, onDel
 		if line == "" {
 			if len(data) > 0 {
 				if e = consume(strings.Join(data, "\n")); e != nil {
-					return modelResult{}, e
+					return modelResult{Usage: a.usage}, e
 				}
 				data = nil
 			}
@@ -398,14 +398,14 @@ func Stream(ctx context.Context, m Model, history []Message, tools []Tool, onDel
 	}
 	if len(data) > 0 {
 		if e = consume(strings.Join(data, "\n")); e != nil {
-			return modelResult{}, e
+			return modelResult{Usage: a.usage}, e
 		}
 	}
 	if e = scanner.Err(); e != nil {
 		if ctx.Err() != nil {
 			return modelResult{}, ctx.Err()
 		}
-		return modelResult{}, errors.New("model stream interrupted")
+		return modelResult{Usage: a.usage}, errors.New("model stream interrupted")
 	}
 	if ctx.Err() != nil {
 		return modelResult{}, ctx.Err()

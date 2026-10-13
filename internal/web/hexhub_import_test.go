@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -38,6 +39,7 @@ func mockHexHubMCP(t *testing.T, assets string) *httptest.Server {
 
 func TestHexHubMCPImportPreviewCommitAndSkip(t *testing.T) {
 	b, h := fixture(t)
+	b.HexHubLocalAssets = func(context.Context) ([]Object, error) { return nil, errors.New("synthetic unavailable storage") }
 	id, _ := newSession(t, h)
 	project := stringOf(b.Store.Session(id)["projectId"])
 	assets := `[
@@ -109,6 +111,7 @@ func TestHexHubMCPImportPreviewCommitAndSkip(t *testing.T) {
 
 func TestHexHubMCPImportUnavailable(t *testing.T) {
 	b, h := fixture(t)
+	b.HexHubLocalAssets = func(context.Context) ([]Object, error) { return nil, errors.New("synthetic unavailable storage") }
 	id, _ := newSession(t, h)
 	project := stringOf(b.Store.Session(id)["projectId"])
 	b.HexHubMCP = "http://127.0.0.1:1/mcp"

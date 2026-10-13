@@ -215,6 +215,43 @@ func (m *Models) catalogModelLocked(catalog *providerCatalog) *ai.Model {
 	}
 	return config
 }
+
+// Resolve a stored model identity against the current provider catalog and
+// credentials without switching the user's active model.
+func (m *Models) ResolveModelIdentity(identity string) *ai.Model {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	catalog, exists := m.readProviderCatalogLocked()
+	if !exists {
+		model := m.activeLocked()
+		if model != nil && ai.ModelIdentity(*model) == identity {
+			return model
+		}
+		return nil
+	}
+	for _, provider := range catalog.Providers {
+		if !provider.Enabled {
+			continue
+		}
+		key, valid := m.providerKeyLocked(provider.CredentialRef)
+		if !valid {
+			continue
+		}
+		for _, item := range provider.Models {
+			if !item.Enabled {
+				continue
+			}
+			model := &ai.Model{URL: providerModelEndpoint(&provider), Name: item.Name, Protocol: provider.Protocol, Key: key, SupportsImageInput: item.SupportsImageInput, SupportsImageOutput: item.SupportsImageOutput, ContextLimit: item.ContextWindow}
+			if item.ContextWindow > 0 {
+				model.ContextLimitSource = "settings"
+			}
+			if ai.ModelIdentity(*model) == identity {
+				return model
+			}
+		}
+	}
+	return nil
+}
 func (m *Models) publicProviderCatalogLocked(catalog *providerCatalog) Object {
 	providers := []Object{}
 	for _, provider := range catalog.Providers {
