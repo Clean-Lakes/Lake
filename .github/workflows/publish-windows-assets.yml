@@ -55,7 +55,7 @@ jobs:
           marker = '## Windows x86_64 补充包'
           body = (r['body'] or '').split(marker)[0].rstrip()
           body += '\n\n'+marker+'\n\n支持 Windows 10 1809+ / Windows 11、Intel / AMD 64 位处理器。提供安装 EXE、免安装 ZIP 和 SHA-256；内置当前工作台、Bash 与 SSH，无需 Node.js 或 WSL。缺少 WebView2 Runtime 时，安装版会验证 Microsoft 签名并安装官方运行环境（需要联网）。\n\nWindows 包已通过交叉编译、包结构与校验值检查；尚未在 Windows 实机验证，未配置 Windows Authenticode 应用签名。\n'
-          body += '\n本次 Windows 包补充了自动适配 Windows 10/11 的标题栏配色，以及左下角“检查更新”入口。可在客户端检查、下载安装更高版本的 Windows 正式发布；安装会关闭终端连接并重新打开，保留用户数据。此前没有更新入口的客户端请先手动覆盖安装本包；同一版本的资产替换不会触发版本升级。\n'
+          body += '\n本次替换的 Windows 包把窗口控制按钮与 Lake 工作台顶栏合为一体，并调整了右上角更新按钮的位置。客户端可检查、下载安装更高版本的 Windows 正式发布；安装会关闭终端连接并重新打开，保留用户数据。已安装 v0.3.8 的用户须手动覆盖安装本包，同一版本的资产替换不会触发版本升级。\n'
           pathlib.Path('/tmp/lake-release-notes.md').write_text(body)
           PY
           gh release upload "v$LAKE_WINDOWS_VERSION" --repo "$GITHUB_REPOSITORY" --clobber /tmp/lake-windows-release/*
