@@ -131,6 +131,12 @@ func run() error {
 	if err = applyWindowColors(window.Window()); err != nil {
 		return err
 	}
+	if err = extendWorkbenchIntoTitleBar(window.Window()); err != nil {
+		return err
+	}
+	if err = installWindowsChrome(window, endpoint); err != nil {
+		return fmt.Errorf("无法初始化窗口操作")
+	}
 	if err = installUpdateBridge(ctx, window, endpoint, home, exe); err != nil {
 		return fmt.Errorf("无法初始化客户端更新入口")
 	}

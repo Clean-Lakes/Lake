@@ -1,0 +1,21 @@
+html.lake-windows-chrome .sidebar-brand-row { height: 48px; padding: 0 18px; user-select: none; }
+html.lake-windows-chrome .workspace-header { height: 48px; padding-right: 148px; user-select: none; }
+html.lake-windows-chrome .terminal-panel-header { user-select: none; }
+html.lake-windows-chrome .app-shell.terminal-is-open .workspace-header { padding-right: 22px; }
+html.lake-windows-chrome .app-shell.terminal-is-open .terminal-panel-header { padding-right: 148px; }
+html.lake-windows-chrome .workspace-header button,
+html.lake-windows-chrome .sidebar-brand-row button,
+html.lake-windows-chrome .terminal-panel-header button { user-select: auto; }
+.windows-titlebar-controls { position: fixed; top: 0; right: 0; z-index: 100; display: flex; width: 138px; height: 48px; color: var(--foreground); background: var(--background); }
+html.lake-windows-chrome .app-shell.terminal-is-open ~ .windows-titlebar-controls { background: var(--surface); }
+.windows-titlebar-controls button { display: grid; place-items: center; width: 46px; height: 48px; padding: 0; border: 0; border-radius: 0; color: inherit; background: transparent; }
+.windows-titlebar-controls button:hover { background: var(--surface-hover); }
+.windows-titlebar-controls button:active { background: var(--surface-selected); }
+.windows-titlebar-controls button.windows-close:hover { color: #fff; background: #c42b1c; }
+.windows-titlebar-controls button.windows-close:active { color: #fff; background: #a02417; }
+.windows-titlebar-controls svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: square; stroke-linejoin: miter; }
+@media (forced-colors: active) {
+  .windows-titlebar-controls { color: ButtonText; background: ButtonFace; }
+  .windows-titlebar-controls button:hover,
+  .windows-titlebar-controls button.windows-close:hover { color: HighlightText; background: Highlight; }
+}
