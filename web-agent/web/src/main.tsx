@@ -3,9 +3,11 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { initializeAppearance } from "./appearance";
+import { WindowsChrome } from "./WindowsChrome";
 
 initializeAppearance();
+if (window.lakeWindowsChrome) document.documentElement.classList.add("lake-windows-chrome");
 
 const root = document.getElementById("root");
 if (!root) throw new Error("缺少应用挂载点");
-createRoot(root).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(root).render(<React.StrictMode><App /><WindowsChrome /></React.StrictMode>);
