@@ -1,4 +1,4 @@
-import type {ModelProvider, ProviderInput, ProviderModel} from "../../shared/contracts";
+import type {ModelProvider, ModelReasoningCapability, ProviderInput, ProviderModel} from "../../shared/contracts";
 
 export type ProviderDraft = ModelProvider & {apiKey: string; clearKey: boolean; isNew: boolean; dirty: boolean};
 export function providerDraft(provider: ModelProvider): ProviderDraft {
@@ -14,13 +14,19 @@ export function contextLabel(value?: number): string {
   if (value >= 1_000_000) return `${+(value / 1_000_000).toFixed(2)}M`;
   return `${+(value / 1_000).toFixed(1)}K`;
 }
-export function discoveredModels(current: ProviderModel[], names: string[]): ProviderModel[] {
+export function discoveredModels(current: ProviderModel[], names: string[], capabilities: Record<string, boolean> = {}, reasoning: Record<string, ModelReasoningCapability> = {}): ProviderModel[] {
   const seen = new Set(current.map(model => model.name));
-  const result = [...current];
+  const result = current.map(model => {
+    const detected = capabilities[model.name];
+    const mode = model.imageInputMode || (model.supportsImageInput ? "on" : "auto");
+    const next = typeof detected === "boolean" && mode === "auto" ? {...model, imageInputMode:"auto" as const, imageInputDetected:detected, supportsImageInput:detected} : model;
+    return reasoning[model.name] ? {...next, reasoningCapability:reasoning[model.name]} : next;
+  });
   for (const name of names) {
     if (!name.trim() || seen.has(name)) continue;
     seen.add(name);
-    result.push({id:crypto.randomUUID(), name, enabled:true, supportsImageInput:false, supportsImageOutput:false});
+    const detected = capabilities[name];
+    result.push({id:crypto.randomUUID(), name, enabled:true, supportsImageInput:detected === true, supportsImageOutput:false, imageInputMode:"auto", ...(typeof detected === "boolean" ? {imageInputDetected:detected} : {}), ...(reasoning[name] ? {reasoningCapability:reasoning[name]} : {})});
   }
   return result;
 }

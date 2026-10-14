@@ -7,7 +7,7 @@ import (
 
 func (b *Server) reasoningSettings(ctx context.Context, id string) Object {
 	b.Store.Session(id)
-	model := b.Models.WithCapacity(ctx, b.Models.Active())
+	model := b.Models.CachedCapacity(b.Models.Active())
 	if model == nil {
 		return Object{"levels": []string{}, "effort": ""}
 	}
@@ -22,7 +22,7 @@ func (b *Server) reasoningSettings(ctx context.Context, id string) Object {
 
 func (b *Server) setReasoning(ctx context.Context, id string, data Object) Object {
 	b.Store.Session(id)
-	model := b.Models.WithCapacity(ctx, b.Models.Active())
+	model := b.Models.CachedCapacity(b.Models.Active())
 	if model == nil {
 		fail(400, "尚未配置模型")
 	}

@@ -162,6 +162,11 @@ func (b *Server) Start() error {
 	b.listener = l
 	b.workers.Add(1)
 	go b.runMemoryWorker()
+	b.workers.Add(1)
+	go func() {
+		defer b.workers.Done()
+		b.Models.RefreshStoredReasoning(b.Context)
+	}()
 	b.options.Port = l.Addr().(*net.TCPAddr).Port
 	must(atomicFile(filepath.Join(b.options.DataDir, "runtime.json"), []byte(jsonText(Object{"origin": fmt.Sprintf("http://localhost:%d", b.options.Port), "token": b.token, "pid": os.Getpid()}))))
 	b.http = &http.Server{Handler: b, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384, BaseContext: func(net.Listener) context.Context { return b.Context }}
@@ -200,6 +205,9 @@ func (b *Server) Start() error {
 }
 func (b *Server) Close() {
 	b.closeOnce.Do(func() {
+		if b.Models != nil {
+			b.Models.cancelCapabilityDetections()
+		}
 		if b.cancel != nil {
 			b.cancel()
 		}
