@@ -221,6 +221,9 @@ func (m *Models) catalogModelLocked(catalog *providerCatalog) *ai.Model {
 func (m *Models) ResolveModelIdentity(identity string) *ai.Model {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if model := m.magpieModelLocked(); model != nil && ai.ModelIdentity(*model) == identity {
+		return model
+	}
 	catalog, exists := m.readProviderCatalogLocked()
 	if !exists {
 		model := m.activeLocked()
