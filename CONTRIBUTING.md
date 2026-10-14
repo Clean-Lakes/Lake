@@ -32,7 +32,7 @@ open "$HOME/Applications/Lake Dev.app"
 | 构建参数 | `--dev --install` | `--install` |
 | 自动正式版更新 | 关闭 | 开启 |
 
-Dev 忽略正式版的 `LAKE_HOME`、`LAKE_WEB_DATA_DIR` 和 `LAKE_WEB_TOKEN`。确需覆盖 Dev 路径时仅用 `LAKE_DEV_HOME`、`LAKE_DEV_WEB_DATA_DIR` 或应用的 `--lake-home`、`--lake-data`，并确保目标**不指向** `~/.lake` 或正式版的数据目录。不要把正式版的密钥文件复制或链接到 Dev。Magpie 的 Lake 插件当前默认对接 `~/.lake`，所以 Dev 中显示“未连接 Magpie”并不表示正式版插件失效；联调插件时须单独配置 Dev 端的隔离凭据路径。
+Dev 忽略正式版的 `LAKE_HOME`、`LAKE_WEB_DATA_DIR` 和 `LAKE_WEB_TOKEN`。确需覆盖 Dev 路径时仅用 `LAKE_DEV_HOME`、`LAKE_DEV_WEB_DATA_DIR` 或应用的 `--lake-home`、`--lake-data`，并确保目标**不指向** `~/.lake` 或正式版的数据目录。不要把正式版的密钥文件复制或链接到 Dev。Magpie 的常规 Lake 插件对接 `~/.lake`；联调时从 [插件仓库](https://github.com/Clean-Lakes/magpie-agent-lake)单独安装 `lake-dev.agent.js`，它使用 `~/.lake-dev/secrets/magpie-agent.json`，在 Magpie 中显示为 Lake Dev。
 
 只开发 Go/Web 而不打开桌面应用时，先通过 `scripts/build_lake.sh` 构建签名二进制，然后使用另外一个专用目录和端口，避免和两个桌面应用争用数据目录：
 
