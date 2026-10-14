@@ -54,6 +54,19 @@ func installUpdateBridge(ctx context.Context, window webview.WebView, endpoint, 
 	}
 	token := hex.EncodeToString(capability)
 	u := &windowsUpdater{ctx: ctx, client: desktopupdate.NewHTTPClient(), window: window, home: home, exe: exe, state: updateState{Status: "idle", CurrentVersion: version, Message: "检查 GitHub master 的 Windows 正式版本"}}
+	go func() {
+		root := filepath.Join(home, "updates", "windows")
+		for attempt := 0; attempt < 30; attempt++ {
+			_ = desktopupdate.CleanupCompletedJobs(root, version)
+			timer := time.NewTimer(time.Second)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+		}
+	}()
 	if err = window.Bind("__lakeWindowsUpdate", func(provided, action string) (updateState, error) {
 		if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
 			return updateState{}, fmt.Errorf("更新入口无效")
@@ -107,6 +120,7 @@ func (u *windowsUpdater) publish(status, message string, progress *int) {
 	u.state.Progress = progress
 }
 func (u *windowsUpdater) check() {
+	_ = desktopupdate.CleanupCompletedJobs(filepath.Join(u.home, "updates", "windows"), u.snapshot().CurrentVersion)
 	u.mu.Lock()
 	if u.busy {
 		u.mu.Unlock()

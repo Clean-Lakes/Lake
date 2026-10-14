@@ -254,7 +254,7 @@ func (b *Server) ensureHostKey(ctx context.Context, id, ref string) string {
 	return path
 }
 
-func (b *Server) decideHostKey(id, nonce string, accept bool, fingerprint, confirmation string) {
+func (b *Server) decideHostKey(id, nonce string, accept bool, fingerprint string) {
 	b.hostKeyMu.Lock()
 	defer b.hostKeyMu.Unlock()
 	p := b.hostKeyPrompts[nonce]
@@ -269,9 +269,6 @@ func (b *Server) decideHostKey(id, nonce string, accept bool, fingerprint, confi
 	if accept {
 		if fingerprint != ssh.FingerprintSHA256(p.Key) {
 			fail(409, "指纹与待确认记录不一致")
-		}
-		if len(p.Previous) > 0 && confirmation != "信任 "+net.JoinHostPort(p.Host, strconv.Itoa(p.Port)) {
-			fail(400, "主机密钥已变化，请明确确认新的服务器身份")
 		}
 		path := lakeHostKeyPath(b.Models.Home, p.Host, p.Port)
 		if hostPinHash(path) != p.PinHash && !hostPinMatches(path, p) {

@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var defaults = Object{"multiAgentMode": "auto", "reasoningEffort": "", "reasoningModelId": "", "profile": "core", "runtime": "local", "asset_ref": "", "container_id": "", "terminal_id": "", "terminal_generation": "", "userPrompt": "", "contextWindow": 64000, "maxOutput": 8192, "maxSteps": 500, "silentReadFiles": true, "silentWriteFiles": false, "silentReadSQL": true, "silentCommands": false, "silentTerminalCreation": false, "blockUnreferencedAssets": false, "denyLocalExecution": false}
+var defaults = Object{"multiAgentMode": "auto", "reasoningEffort": "", "reasoningModelId": "", "profile": "core", "runtime": "local", "asset_ref": "", "container_id": "", "terminal_id": "", "terminal_generation": "", "userPrompt": "", "contextWindow": 64000, "maxOutput": 8192, "maxSteps": 500, "silentReadFiles": true, "silentWriteFiles": false, "silentReadSQL": true, "silentCommands": true, "silentTerminalCreation": true, "blockUnreferencedAssets": false, "denyLocalExecution": false}
 
 func (b *Server) sessionOptions(id string) Object {
 	options := Object{}
@@ -136,6 +136,16 @@ func (b *Server) sessionAssetCatalog(id string) ([]ai.Asset, []ai.AssetDirectory
 	return assets, directories
 }
 func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any, error) {
+	if method == "questionReply" {
+		var input struct {
+			ID      string              `json:"id"`
+			Answers map[string][]string `json:"answers"`
+		}
+		if err := json.Unmarshal([]byte(jsonText(data)), &input); err != nil {
+			return nil, err
+		}
+		return nil, b.Engine.ReplyQuestionWithTarget(id, input.ID, input.Answers, b.questionTargetScope(id, input.Answers))
+	}
 	return b.Engine.Handle(ctx, method, id, json.RawMessage(jsonText(data)))
 }
 func (b *Server) event(event ai.Event) {
@@ -297,6 +307,9 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 			}
 		}
 	}()
+	if projectTool(name) {
+		return b.projectToolBridge(ctx, id, name, args, approved)
+	}
 	if name == "project_memory_index" || name == "list_project_memories" || name == "read_project_memory" || name == "save_project_memory" || name == "forget_project_memory" {
 		return b.projectMemoryBridge(ctx, id, name, args)
 	}

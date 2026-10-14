@@ -34,6 +34,8 @@ type Options struct {
 	Output                          io.Writer
 }
 type Server struct {
+	scheduleMu         sync.Mutex
+	schedulerWorkers   sync.WaitGroup
 	workflowMu         sync.Mutex
 	workflowCancels    map[string]context.CancelFunc
 	messageMu          sync.Mutex
@@ -141,6 +143,10 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		cancel()
 		return nil, e
 	}
+	if err = server.startScheduler(); err != nil {
+		server.Close()
+		return nil, err
+	}
 	return server, nil
 }
 func (b *Server) Start() error {
@@ -215,6 +221,7 @@ func (b *Server) Close() {
 		if b.Terminals != nil {
 			b.Terminals.Shutdown()
 		}
+		b.schedulerWorkers.Wait()
 		b.workers.Wait()
 		if b.http != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -334,6 +341,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if b.workflowRoute(w, r, name, method) {
+		return
+	}
+	if b.presentationRoute(w, r, name, method) {
 		return
 	}
 	if b.navigationTrashRoute(w, r, name) {
@@ -583,7 +593,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				fail(400, "accept must be boolean")
 			}
-			b.decideHostKey(id, text(data["id"], "id", 100), accept, stringOf(data["fingerprint"]), stringOf(data["confirmation"]))
+			b.decideHostKey(id, text(data["id"], "id", 100), accept, stringOf(data["fingerprint"]))
 			b.Store.Touch(id)
 			reply(w, 200, Object{"ok": true})
 			return
@@ -724,14 +734,14 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					reply(w, 200, b.configure(id, body(w, r, 128000)))
 					return
 				}
-				if set("abort decision cancelAgent agentDecision agentDetails clear clearReferences rollback compact restore undoFile extractPreset")[op] {
+				if set("abort questionReply decision cancelAgent agentDecision agentDetails clear clearReferences rollback compact restore undoFile extractPreset")[op] {
 					limit := int64(128000)
 					if op == "restore" {
 						limit = 32 << 20
 					}
 					data := body(w, r, limit)
 					status := b.Store.Session(id)["status"]
-					if !set("abort decision cancelAgent agentDecision agentDetails extractPreset")[op] && (status == "investigating" || status == "waiting_approval") {
+					if !set("abort questionReply decision cancelAgent agentDecision agentDetails extractPreset")[op] && (status == "investigating" || status == "waiting_approval") {
 						fail(409, "AI 正在运行，请先停止")
 					}
 					if op == "compact" || op == "undoFile" || op == "extractPreset" {

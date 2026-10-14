@@ -4,7 +4,7 @@
   if (window.lakeWorkbenchLayout) return;
   window.lakeWorkbenchLayout = true;
   const key = 'lake.workbench.widths';
-  let preferred = { sidebar: 264, terminal: 448 };
+  let preferred = { sidebar: 280, terminal: 400 };
   try {
     const saved = window.lakeWorkbenchWidths || JSON.parse(localStorage.getItem(key) || '{}');
     for (const pane of ['sidebar', 'terminal']) {
@@ -15,19 +15,19 @@
   const style = document.createElement('style');
   style.textContent = `
     .workbench-splitter { position:absolute; top:0; bottom:0; width:8px; z-index:35; cursor:col-resize; touch-action:none; outline:none; }
-    .workbench-splitter:hover::after, .workbench-splitter:focus-visible::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:2px; background:#479488; }
+    .workbench-splitter:hover::after, .workbench-splitter:focus-visible::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:2px; background:var(--focus); }
     .workbench-splitter-sidebar { left:calc(var(--sidebar-width) - 4px); }
     .workbench-splitter-terminal { left:0; }
     .workbench-resizing, .workbench-resizing * { cursor:col-resize !important; user-select:none !important; }
     .workbench-resizing .app-shell, .workbench-resizing .terminal-side-panel { transition:none !important; }
     .ai-context-panel { position:fixed; z-index:60; bottom:auto; right:auto; overflow-y:auto; }
     @media(min-width:768px) {
-      .app-shell { position:relative; grid-template-columns:var(--sidebar-width, 264px) minmax(0,1fr) 0px; }
-      .app-shell.terminal-is-open { grid-template-columns:var(--sidebar-width, 264px) minmax(0,1fr) var(--terminal-panel-width); }
+      .app-shell { position:relative; grid-template-columns:var(--sidebar-width, 280px) minmax(0,1fr) 0px; }
+      .app-shell.terminal-is-open { grid-template-columns:var(--sidebar-width, 280px) minmax(0,1fr) var(--terminal-panel-width); }
       .terminal-side-panel { position:relative; }
     }
     @media(min-width:768px) and (max-width:1100px) {
-      .app-shell, .app-shell.terminal-is-open { grid-template-columns:var(--sidebar-width, 264px) minmax(0,1fr) 0px; }
+      .app-shell, .app-shell.terminal-is-open { grid-template-columns:var(--sidebar-width, 280px) minmax(0,1fr) 0px; }
     }
     @media(max-width:767px) { .workbench-splitter { display:none; } }
   `;
@@ -86,7 +86,7 @@
     handle.addEventListener('pointerup', finish);
     handle.addEventListener('pointercancel', finish);
     handle.addEventListener('lostpointercapture', finish);
-    handle.addEventListener('dblclick', () => { preferred[pane] = pane === 'sidebar' ? 264 : 448; apply(); save(); schedule(); });
+    handle.addEventListener('dblclick', () => { preferred[pane] = pane === 'sidebar' ? 280 : 400; apply(); save(); schedule(); });
     handle.addEventListener('keydown', event => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();
@@ -108,7 +108,7 @@
     const regions = headers.map(rect);
     if (sidebar) { const r = sidebar.getBoundingClientRect(); regions.push([r.x, 0, r.width, height]); }
     const excluded = [...shell.querySelectorAll('.workbench-splitter'), ...headers.flatMap(header => [...header.querySelectorAll('button, a, input, select, textarea, [role="button"]')])].map(rect);
-    const body = JSON.stringify({ regions, excluded });
+    const body = JSON.stringify({ regions, excluded, theme: document.documentElement.dataset.theme || 'light', appearance: window.lakeAppearance || 'light' });
     if (body !== lastChrome) { lastChrome = body; bridge.postMessage(JSON.parse(body)); }
   }
   function placeContextPanel() {
@@ -147,6 +147,7 @@
   }
   function schedule() { if (!frame) frame = requestAnimationFrame(sync); }
   new MutationObserver(schedule).observe(document.body, { childList:true, subtree:true, attributes:true, attributeFilter:['class'] });
+  new MutationObserver(schedule).observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
   window.addEventListener('resize', schedule);
   document.addEventListener('scroll', schedule, true);
   window.addEventListener('lake-chrome-resize', schedule);

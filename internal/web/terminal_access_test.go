@@ -96,6 +96,9 @@ func TestAdoptTerminalRequiresGrantAndExclusiveWriter(t *testing.T) {
 	owner, ref := newSession(t, h)
 	project := stringOf(b.Store.Session(owner)["projectId"])
 	other := stringOf(b.Store.CreateSession(project, "adopter", nil)["id"])
+	// Start from a locked-down state so the later toggle below is a real
+	// permission change regardless of the current defaults.
+	b.configure(other, Object{"silentCommands": false})
 	term := b.Terminals.Open(context.Background(), owner, ref)
 	tid := stringOf(term["id"])
 	expectTerminalFailure(t, func() { b.Terminals.Screen(other, tid, "tail", 80, 20000) })

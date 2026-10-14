@@ -265,3 +265,6 @@ func enforceTargetScope(c Config, name string, a, policy map[string]any) error {
 	}
 	return nil
 }
+
+// AssetAlias exposes the model-facing reference format to trusted adapters.
+func AssetAlias(id string) string { return assetAlias(id) }

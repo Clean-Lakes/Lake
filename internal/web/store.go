@@ -127,6 +127,10 @@ func OpenStore(dir string) (*Store, error) {
 		return nil, e
 	}
 	platform.Chmod(path, 0600)
+	if _, e = db.Exec(presentationSchema); e != nil {
+		db.Close()
+		return nil, e
+	}
 	defer func() {
 		for _, suffix := range []string{"-wal", "-shm"} {
 			platform.Chmod(path+suffix, 0600)
@@ -409,6 +413,7 @@ func (s *Store) session(id string) Object {
 		ids = append(ids, stringOf(v["id"]))
 	}
 	r["resourceIds"] = ids
+	s.decorateSession(r)
 	return r
 }
 func (s *Store) Session(id string) Object {
@@ -433,7 +438,7 @@ func (s *Store) Catalog() Object {
 		for _, r := range s.rows("SELECT id FROM sessions WHERE " + activeSessionsSQL + " AND NOT EXISTS (SELECT 1 FROM aiScopes a WHERE a.sessionId=sessions.id AND (a.scope='resource-terminal' OR (a.scope='enhanced-terminal' AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.sessionId=sessions.id)))) ORDER BY createdAt DESC,rowid DESC") {
 			sessions = append(sessions, s.session(stringOf(r["id"])))
 		}
-		return Object{"projects": s.rows("SELECT * FROM projects WHERE " + activeProjectsSQL + " ORDER BY createdAt,id"), "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE NOT EXISTS(SELECT 1 FROM navigationTrash d WHERE d.kind='project' AND d.id=resourceTree.projectId) ORDER BY position,id"), "sessions": sessions, "terminals": s.rows("SELECT t.id,t.sessionId,t.resourceId,t.status,t.holder,t.contextVersion,t.createdAt,s.title AS sessionTitle FROM terminals t JOIN sessions s ON s.id=t.sessionId WHERE t.status!='disconnected' ORDER BY t.createdAt,t.rowid")}
+		return Object{"tags": s.rows("SELECT t.* FROM workspaceTags t WHERE NOT EXISTS(SELECT 1 FROM navigationTrash d WHERE d.kind='project' AND d.id=t.projectId) ORDER BY name,id"), "projects": s.rows("SELECT * FROM projects WHERE " + activeProjectsSQL + " ORDER BY createdAt,id"), "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE NOT EXISTS(SELECT 1 FROM navigationTrash d WHERE d.kind='project' AND d.id=resourceTree.projectId) ORDER BY position,id"), "sessions": sessions, "terminals": s.rows("SELECT t.id,t.sessionId,t.resourceId,t.status,t.holder,t.contextVersion,t.createdAt,s.title AS sessionTitle FROM terminals t JOIN sessions s ON s.id=t.sessionId WHERE t.status!='disconnected' ORDER BY t.createdAt,t.rowid")}
 	}).(Object)
 }
 func (s *Store) Project(id string) Object {
@@ -519,6 +524,34 @@ func (s *Store) RenameSession(id, title string) Object {
 		s.event(id, "session")
 		return s.session(id)
 	}).(Object)
+}
+
+// PendingSessionNaming reports whether the first meaningful user message may
+// still choose this session's name. It must be sampled before Begin sets the
+// local placeholder's generated bit.
+func (s *Store) PendingSessionNaming(id string) bool {
+	return s.read(func() any {
+		s.session(id)
+		return s.row("SELECT 1 FROM sessionNaming WHERE sessionId=? AND generated=0", id) != nil
+	}).(bool)
+}
+
+// SetGeneratedTitle applies a background title only while the naming row still
+// exists. RenameSession deletes that row in the same SQLite transaction as the
+// explicit title write, so a late model result can never replace a user name.
+func (s *Store) SetGeneratedTitle(id, title string) bool {
+	title = text(title, "会话名称", 200)
+	return s.update(func() any {
+		result := s.exec("UPDATE sessions SET title=?, updatedAt=? WHERE id=? AND EXISTS(SELECT 1 FROM sessionNaming WHERE sessionId=?)", title, now(), id, id)
+		changed, err := result.RowsAffected()
+		must(err)
+		if changed == 0 {
+			return false
+		}
+		s.exec("UPDATE sessionNaming SET generated=1 WHERE sessionId=?", id)
+		s.event(id, "session")
+		return true
+	}).(bool)
 }
 
 func (s *Store) DeleteSession(id string) {
@@ -610,7 +643,25 @@ func (s *Store) AddMessage(id, role, text string, images any) Object {
 	return s.update(func() any { return s.message(id, role, text, images) }).(Object)
 }
 func (s *Store) Begin(id, text string, images any, titleInput ...string) Object {
-	return s.update(func() any { return s.begin(id, text, images, titleInput...) }).(Object)
+	message, _ := s.BeginWithNaming(id, text, images, titleInput...)
+	return message
+}
+
+// BeginWithNaming atomically samples whether this message is the one that may
+// claim an automatic title, then records the message and its local placeholder.
+func (s *Store) BeginWithNaming(id, text string, images any, titleInput ...string) (Object, bool) {
+	result := s.update(func() any {
+		pendingTitle := s.row("SELECT 1 FROM sessionNaming WHERE sessionId=? AND generated=0", id) != nil
+		message := s.begin(id, text, images, titleInput...)
+		return struct {
+			message      Object
+			pendingTitle bool
+		}{message, pendingTitle}
+	}).(struct {
+		message      Object
+		pendingTitle bool
+	})
+	return result.message, result.pendingTitle
 }
 func (s *Store) begin(id, text string, images any, titleInput ...string) Object {
 	r := s.session(id)

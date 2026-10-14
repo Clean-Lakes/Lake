@@ -61,9 +61,18 @@ fi
 count=0
 while [ "$count" -lt "$ready_limit" ]; do
   if [ -f "$receipt" ] && [ "$(cat "$receipt")" = "$version" ]; then
-    # Retain the previous app as a recoverable backup; remove download/staging data only.
-    rm -f "$work/update.zip"
-    rm -rf "$work/unpacked"
+    # The replacement has opened its UI/backend and confirmed this exact version.
+    # Only now is the rollback bundle obsolete. Mark completion before cleanup so
+    # the replacement can retry cleanup after interruption or filesystem failure.
+    trap - HUP INT TERM
+    printf '%s\n' "$version" > "$work/complete"
+    if [ "$(dirname "$backup")" != "$(dirname "$target")" ] || [ "$backup" = "$target" ] || [ "$work" = / ]; then
+      printf '%s\n' '更新成功，但旧包清理路径无效。' > "$work/error"
+      exit 0
+    fi
+    if rm -rf "$backup"; then
+      rm -rf "$work"
+    fi
     exit 0
   fi
   count=$((count + 1))

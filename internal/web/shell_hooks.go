@@ -50,6 +50,24 @@ func terminalInit(name, marker string, interactiveMode ...bool) string {
 	interactive := len(interactiveMode) > 0 && interactiveMode[0]
 	ready := strings.NewReplacer("\x1e", "\\036", "\x1f", "\\037").Replace(marker)
 	script := "stty -echo\n"
+	if name == "fish" {
+		script += "set -e __lake_init\n"
+	} else {
+		script += "unset __lake_init\n"
+	}
+	// OpenSSH does not necessarily forward LANG/LC_*. Select a UTF-8 locale
+	// installed on the target; otherwise Readline may interpret Chinese bytes
+	// as Meta shortcuts instead of text. Keep an existing UTF-8 locale.
+	localeProbe := `case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in *[Uu][Tt][Ff]*8*) printf '%s' "${LC_ALL:-${LC_CTYPE:-$LANG}}"; exit;; esac
+LC_ALL=C locale -a 2>/dev/null | LC_ALL=C awk 'tolower($0) ~ /^(c|en_us)[.](utf-?8)$/ {print; found=1; exit} tolower($0) ~ /utf-?8/ && !fallback {fallback=$0} END {if (!found && fallback) print fallback}'`
+	if name == "fish" {
+		script += "set -l __lake_utf8_locale (/bin/sh -c " + quote(localeProbe) + "); if test -n \"$__lake_utf8_locale\"; set -gx LC_ALL \"$__lake_utf8_locale\"; end\n"
+	} else {
+		script += "__lake_utf8_locale=$(/bin/sh -c " + quote(localeProbe) + "); if [ -n \"$__lake_utf8_locale\" ]; then export LC_ALL=\"$__lake_utf8_locale\"; fi\n"
+	}
+	// The login shell and its startup files may change directories. Every new
+	// terminal starts in the authenticated user's home, including remote PTYs.
+	script += "cd -- \"$HOME\"\n"
 	if name == "sh" {
 		script += "PS1='' PS2=''\n"
 	} else {
@@ -57,6 +75,14 @@ func terminalInit(name, marker string, interactiveMode ...bool) string {
 		script += string(b) + "\n"
 	}
 	if interactive {
+		if name == "bash" || name == "sh" {
+			// Readline initializes its Meta conversion settings before our locale
+			// setup. Updating LC_ALL alone does not undo a C-locale startup.
+			script += "if [ -n \"${BASH_VERSION-}\" ]; then bind 'set input-meta on'; bind 'set convert-meta off'; bind 'set output-meta on'; fi\n"
+			if name == "sh" {
+				script += "if [ -n \"${BASH_VERSION-}\" ]; then printf '\\033]9005;readline\\007'; fi\n"
+			}
+		}
 		switch name {
 		case "bash":
 			script += "PS1='\\[\\033[35m\\][\\u@\\h\\[\\033[0m\\] \\w]\\$ '; PS2='> '\n"
@@ -65,10 +91,15 @@ func terminalInit(name, marker string, interactiveMode ...bool) string {
 		case "fish":
 			script += "set -g __lake_interactive 1\n"
 		default:
-			script += "__lake_user=$(id -un); __lake_host=$(hostname -s); __lake_sign='$'; [ \"$(id -u)\" != 0 ] || __lake_sign='#'; PS1=$(printf " + quote(ready) + ")'$(printf \"\\033]9003;%s;%s\\007\" \"$?\" \"$PWD\")['\"$__lake_user@$__lake_host\"' $PWD]'\"$__lake_sign\"' '; PS2='> '\n"
+			// /bin/sh can be Bash in POSIX mode. Readline must not count the
+			// readiness/CWD frames as visible prompt columns, or SIGWINCH and
+			// line editing truncate and overwrite the real prompt. Other sh
+			// implementations must not receive Bash's literal \\[ delimiters.
+			script += "__lake_prompt_path() { case \"$PWD\" in \"$HOME\") printf '~';; \"$HOME\"/*) printf '~/%s' \"${PWD#\"$HOME\"/}\";; *) printf '%s' \"$PWD\";; esac; }\n"
+			script += "__lake_user=$(id -un); __lake_host=$(hostname -s); __lake_sign='$'; [ \"$(id -u)\" != 0 ] || __lake_sign='#'; __lake_prompt_frames=$(printf " + quote(ready) + ")'$(printf \"\\033]9003;%s;%s\\007\" \"$?\" \"$PWD\")'; [ -z \"${BASH_VERSION-}\" ] || __lake_prompt_frames='\\['\"$__lake_prompt_frames\"'\\]'; PS1=\"$__lake_prompt_frames\"'['\"$__lake_user@$__lake_host\"' $(__lake_prompt_path)]'\"$__lake_sign\"' '; PS2='> '\n"
 		}
 		if name == "fish" {
-			script += "set -g __lake_managed 1; printf " + quote(ready) + "; stty echo; set -e __lake_managed\n"
+			script += "set -g __lake_managed 1; stty echo icanon; printf " + quote(ready) + "; set -e __lake_managed\n"
 		} else {
 			resetHistory := ""
 			if name == "bash" {
@@ -77,16 +108,19 @@ func terminalInit(name, marker string, interactiveMode ...bool) string {
 			if name == "zsh" {
 				resetHistory = "fc -p /dev/null 1000 0; "
 			}
-			script += "__lake_managed=1; " + resetHistory + "printf " + quote(ready) + "; stty echo; __lake_managed=\n"
+			script += "__lake_managed=1; " + resetHistory + "stty echo icanon; printf " + quote(ready) + "; __lake_managed=\n"
 		}
 	} else {
-		script += "printf " + quote(ready) + "\n"
+		script += "stty icanon; printf " + quote(ready) + "\n"
 	}
 	// sh also supplies cwd; no preexec hook is installed in this fallback shell.
 	if name == "sh" && !interactive {
 		script += "printf '\\033]9003;0;%s\\007' \"$PWD\"\n"
 	}
-	return script
+	// Evaluate one compound command. Sending these as separate commands makes
+	// interactive shells render intermediate prompts after installing PS1,
+	// and the sh readiness frame would expose those prompts to the UI.
+	return "eval " + quote(script) + "\n"
 }
 func commandFrame(l *liveTerminal, command, marker string) string {
 	start, finish := "", ""
@@ -108,7 +142,7 @@ func (t *Terminals) stripHooks(l *liveTerminal, data string) string {
 	var out strings.Builder
 	for len(data) > 0 {
 		at := -1
-		for _, prefix := range []string{"\x1b]9003;", "\x1b]9004;"} {
+		for _, prefix := range []string{"\x1b]9003;", "\x1b]9004;", "\x1b]9005;"} {
 			i := strings.Index(data, prefix)
 			if i >= 0 && (at < 0 || i < at) {
 				at = i
@@ -118,7 +152,7 @@ func (t *Terminals) stripHooks(l *liveTerminal, data string) string {
 			keep := 0
 			for n := 1; n < 8 && n <= len(data); n++ {
 				tail := data[len(data)-n:]
-				if strings.HasPrefix("\x1b]9003;", tail) || strings.HasPrefix("\x1b]9004;", tail) {
+				if strings.HasPrefix("\x1b]9003;", tail) || strings.HasPrefix("\x1b]9004;", tail) || strings.HasPrefix("\x1b]9005;", tail) {
 					keep = n
 				}
 			}
@@ -150,6 +184,10 @@ func (t *Terminals) stripHooks(l *liveTerminal, data string) string {
 	return out.String()
 }
 func (t *Terminals) hook(l *liveTerminal, frame string) {
+	if frame == "9005;readline" && l.shell == "sh" && !l.ready {
+		l.promptRedraw = true
+		return
+	}
 	if strings.HasPrefix(frame, "9003;") {
 		p := strings.SplitN(strings.TrimPrefix(frame, "9003;"), ";", 2)
 		if len(p) != 2 {

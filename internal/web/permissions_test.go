@@ -18,7 +18,7 @@ import (
 func TestProgressiveTerminalPermissionCloseAndRecreate(t *testing.T) {
 	b, h := fixture(t)
 	id, ref := newSession(t, h)
-	b.Store.SaveOptions(id, Object{"contextWindow": 131072})
+	b.Store.SaveOptions(id, Object{"contextWindow": 131072, "silentCommands": false, "silentTerminalCreation": false})
 	var requests atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req Object
@@ -104,7 +104,7 @@ func TestSessionPermissionSettingsAndBlocks(t *testing.T) {
 	b, h := fixture(t)
 	id, ref := newSession(t, h)
 	options := apiTest(t, h, "GET", "/api/sessions/"+id+"/ai/options", nil, 200)
-	if options["silentReadFiles"] != true || options["silentCommands"] != false || options["silentTerminalCreation"] != false {
+	if options["silentReadFiles"] != true || options["silentCommands"] != true || options["silentTerminalCreation"] != true || options["silentWriteFiles"] != false || options["silentReadSQL"] != true || options["blockUnreferencedAssets"] != false || options["denyLocalExecution"] != false {
 		t.Fatal("incorrect permission defaults")
 	}
 	// Permissions can be configured before a model is selected.
@@ -133,7 +133,7 @@ func TestSessionPermissionSettingsAndBlocks(t *testing.T) {
 	if !blocked.Load() || len(objects(b.Store.Snapshot(id)["terminals"])) != 0 {
 		t.Fatal("local restriction allowed a terminal/command effect")
 	}
-	apiTest(t, h, "POST", "/api/sessions/"+id+"/ai/configure", Object{"denyLocalExecution": false, "silentTerminalCreation": true, "blockUnreferencedAssets": true}, 200)
+	apiTest(t, h, "POST", "/api/sessions/"+id+"/ai/configure", Object{"denyLocalExecution": false, "silentTerminalCreation": true, "silentWriteFiles": true, "blockUnreferencedAssets": true}, 200)
 	apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "内存状态"}, 202)
 	waitAI(t, b, id, "completed")
 	b.workers.Wait()
@@ -148,7 +148,7 @@ func TestSessionPermissionSettingsAndBlocks(t *testing.T) {
 	}
 	second := b.Store.CreateSession(stringOf(b.Store.Session(id)["projectId"]), "different permission scope", []string{ref})
 	other := apiTest(t, h, "GET", "/api/sessions/"+stringOf(second["id"])+"/ai/options", nil, 200)
-	if other["blockUnreferencedAssets"] != false || other["silentTerminalCreation"] != false {
+	if other["blockUnreferencedAssets"] != false || other["silentWriteFiles"] != false {
 		t.Fatal("permissions leaked between conversations")
 	}
 }
@@ -156,6 +156,7 @@ func TestSessionPermissionSettingsAndBlocks(t *testing.T) {
 func TestCommandPermissionIsSeparateFromTerminalCreation(t *testing.T) {
 	b, h := fixture(t)
 	id, ref := newSession(t, h)
+	b.Store.SaveOptions(id, Object{"silentCommands": false, "silentTerminalCreation": false})
 	marker := filepath.Join(t.TempDir(), "PERMISSION_MARKER")
 	var step atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

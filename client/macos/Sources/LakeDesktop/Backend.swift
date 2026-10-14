@@ -19,15 +19,11 @@ struct RuntimeInfo: Decodable {
     let home: URL
     let dataDirectory: URL
     init() {
-        let env = ProcessInfo.processInfo.environment
-        func argument(_ name: String) -> String? {
-            let args = CommandLine.arguments
-            guard let index = args.firstIndex(of: name), index + 1 < args.count else { return nil }
-            return args[index + 1]
-        }
-        home = URL(fileURLWithPath: argument("--lake-home") ?? env["LAKE_HOME"] ?? NSHomeDirectory() + "/.lake", isDirectory: true)
-        dataDirectory = (argument("--lake-data") ?? env["LAKE_WEB_DATA_DIR"]).map { URL(fileURLWithPath: $0, isDirectory: true) }
-            ?? home.appendingPathComponent("web-agent", isDirectory: true)
+        let profile = DesktopProfile(bundleIdentifier: Bundle.main.bundleIdentifier)
+        let directories = profile.directories(userHome: NSHomeDirectory(),
+            environment: ProcessInfo.processInfo.environment, arguments: CommandLine.arguments)
+        home = directories.home
+        dataDirectory = directories.data
     }
     private func readRuntime() -> RuntimeInfo? {
         let file = dataDirectory.appendingPathComponent("runtime.json")
@@ -66,6 +62,9 @@ struct RuntimeInfo: Decodable {
             environment["LAKE_WEB_DATA_DIR"] = dataDirectory.path
             environment.removeValue(forKey: "LAKE_WEB_START_OPEN")
             environment.removeValue(forKey: "LAKE_WEB_DEV_ORIGIN")
+            if DesktopProfile(bundleIdentifier: Bundle.main.bundleIdentifier).isDevelopment {
+                environment.removeValue(forKey: "LAKE_WEB_TOKEN")
+            }
             child.environment = environment
             child.standardOutput = FileHandle.nullDevice
             child.standardError = FileHandle.nullDevice

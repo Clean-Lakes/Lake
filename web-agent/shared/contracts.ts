@@ -33,7 +33,12 @@ export type WorkSession = {
   resourceIds: string[];
   createdAt: string;
   updatedAt: string;
+  icon?: string;
+  tags?: WorkspaceTag[];
+  presentationRevision?: number;
 };
+
+export type WorkspaceTag = {id: string; projectId: string; name: string; color: "gray" | "green" | "blue" | "purple" | "orange" | "red"};
 
 export type Message = {
   id: string;
@@ -139,6 +144,7 @@ export type TerminalEntry = {
 };
 
 export type Catalog = {
+  tags?: WorkspaceTag[];
   projects: Project[];
   resources: Resource[];
   resourceTree?: ResourceTreeNode[];
@@ -221,7 +227,11 @@ export type TextFileAttachment = {sourceId: string; name: string};
 export type AIApproval = { id: string; call: { id: string; name: string; arguments: string }; target: string; risk: string; kind?: string; needsTerminal?: boolean; resourceId?: string; terminalId?: string; terminalVersion?: number; confirmation?: string; fingerprint: string; preview?: {before?: string; after?: string; resources?: ResourceImportRow[]} };
 export type AIUsage = { input: number; output: number; total: number; known?: boolean; inputKnown?: boolean; outputKnown?: boolean; cachedInput?: number | null };
 export type AIContextUsage = { window: number; windowSource?: string; modelId?: string; budget?: number; inputBudget?: number; maxOutput?: number; used: number; usedKnown?: boolean; estimated: boolean; estimatedUsed?: number; lastRequest?: AIUsage; lastRequestAt?: string };
-export type AIView = { session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
+export type AITodo = {content:string;status:"pending"|"in_progress"|"completed";priority?:"high"|"medium"|"low"};
+export type AIQuestionOption = {label:string;description?:string;recommended?:boolean};
+export type AIUserQuestion = {id:string;title:string;reason?:string;options?:Array<string|AIQuestionOption>;multi_select?:boolean};
+export type AIQuestionRequest = {id:string;questions:AIUserQuestion[]};
+export type AIView = { todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
 export type AIPreset = { id: string; title: string; content: string };
 
 export type AIImage = { id: string; mimeType: string; base64: string; sizeBytes: number; width: number; height: number; name?: string; url?: string };

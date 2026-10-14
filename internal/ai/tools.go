@@ -110,6 +110,9 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if !found {
 		return nil, errors.New("tool unavailable in selected profile")
 	}
+	if sessionTool(call.Name) {
+		return e.invokeSessionTool(ctx, s, c, call, a)
+	}
 	if memoryTool(call.Name) {
 		if !c.MemoryEnabled || c.MemoryProjectID == "" || e.worker != nil || e.Bridge == nil {
 			return nil, errors.New("project memory unavailable")
@@ -159,6 +162,14 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	s.mu.Lock()
 	sessionID := s.state.View.Session
 	s.mu.Unlock()
+	if strings.Contains(" write edit multi_edit append delete ", " "+call.Name+" ") {
+		s.mu.Lock()
+		readHash := s.state.FileReads[fileReadKey(c, a)]
+		s.mu.Unlock()
+		if str(a["expected_hash"]) == "" && readHash != "" {
+			a["expected_hash"] = readHash
+		}
+	}
 	discovery := call.Name == "list_assets" || call.Name == "list_resource_groups"
 	risk, fingerprint := "readonly", ""
 	if !discovery {

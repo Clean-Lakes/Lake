@@ -44,6 +44,40 @@ func TestUnnamedSessionNamesFromFirstMeaningfulMessage(t *testing.T) {
 	}
 	apiTest(t, h, "POST", path, Object{"title": true}, 400)
 }
+func TestGeneratedSessionTitleCannotReplaceExplicitRename(t *testing.T) {
+	s, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	project := s.CreateProject("title lock")
+	auto := s.CreateSession(stringOf(project["id"]), "", nil)
+	autoID := stringOf(auto["id"])
+	if !s.PendingSessionNaming(autoID) {
+		t.Fatal("unnamed session was not pending naming")
+	}
+	s.Begin(autoID, "检查MongoDB服务", nil)
+	if s.PendingSessionNaming(autoID) {
+		t.Fatal("local placeholder did not claim automatic naming")
+	}
+	if !s.SetGeneratedTitle(autoID, "MongoDB 服务异常排查") {
+		t.Fatal("AI title was not accepted")
+	}
+	if got := stringOf(s.Session(autoID)["title"]); got != "MongoDB 服务异常排查" {
+		t.Fatalf("generated title = %q", got)
+	}
+
+	locked := s.CreateSession(stringOf(project["id"]), "", nil)
+	lockedID := stringOf(locked["id"])
+	s.RenameSession(lockedID, "用户手动命名")
+	if s.PendingSessionNaming(lockedID) || s.SetGeneratedTitle(lockedID, "AI 覆盖标题") {
+		t.Fatal("automatic naming overwrote an explicit rename")
+	}
+	if got := stringOf(s.Session(lockedID)["title"]); got != "用户手动命名" {
+		t.Fatalf("manual title changed to %q", got)
+	}
+}
+
 func TestGeneratedSessionTitleFormattingAndPrivateInput(t *testing.T) {
 	for _, tc := range []struct{ input, want string }{
 		{"\n# 检查内存\n详细说明", "检查内存"},

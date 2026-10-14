@@ -40,6 +40,7 @@ type liveTerminal struct {
 	id, session, readyMarker, pending, output string
 	ready, closed                             bool
 	interactive, rawUserPending               bool
+	inputSeen, promptRedraw                   bool
 	userInputPending, hiddenAgentOutput       bool
 	connected                                 chan struct{}
 	connectErr                                error
@@ -47,6 +48,7 @@ type liveTerminal struct {
 	job                                       *terminalJob
 	screen                                    vt10x.Terminal
 	screenPartial                             string
+	utf8Partial                               string
 	capturedAt                                string
 	shell                                     string
 	hooks                                     bool
@@ -171,6 +173,8 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 		panic(e)
 	}
 	var authEnv []string
+	readyMarker := "\x1eLAKE_READY_" + ident() + "\x1f"
+	initialization := terminalInit(selectedShell, readyMarker, interactive)
 	if r["kind"] == "ssh" {
 		var cfg Object
 		var authSecret string
@@ -189,7 +193,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 		}()
 		program = "/usr/bin/ssh"
 		cfg["shell"] = selectedShell
-		args = sshArguments(cfg)
+		args = sshArguments(cfg, initialization)
 		if trustedPath != "" {
 			for i, v := range args {
 				if strings.HasPrefix(v, "UserKnownHostsFile=") {
@@ -225,19 +229,21 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 	cmd.Dir = home
 	cmd.Env = append(platform.Environment(home), "TERM=xterm-256color", "PS1=", "PS2=", "HISTFILE=/dev/null")
 	cmd.Env = append(cmd.Env, authEnv...)
+	if r["kind"] == "local" {
+		cmd.Env = append(cmd.Env, "__lake_init="+initialization)
+	}
 	f, e := startTerminal(cmd, 100, 30)
 	if e != nil {
 		t.mu.Unlock()
 		t.store.TerminalStatus(id, tid, "disconnected")
 		fail(503, "Could not start terminal; verify connection configuration")
 	}
-	l := &liveTerminal{pty: f, cmd: cmd, id: tid, session: id, interactive: interactive, readyMarker: "\x1eLAKE_READY_" + ident() + "\x1f", connected: make(chan struct{}), shell: selectedShell, screen: vt10x.New(vt10x.WithSize(100, 30))}
+	l := &liveTerminal{pty: f, cmd: cmd, id: tid, session: id, interactive: interactive, promptRedraw: selectedShell != "sh", readyMarker: readyMarker, connected: make(chan struct{}), shell: selectedShell, screen: vt10x.New(vt10x.WithSize(100, 30))}
 	t.live[tid] = l
 	t.wg.Add(2)
 	t.mu.Unlock()
 	l.mu.Lock()
 	l.startup = time.AfterFunc(15*time.Second, func() { t.closeLive(l, "Connection timed out") })
-	_, e = f.WriteString(terminalInit(selectedShell, l.readyMarker, interactive))
 	l.mu.Unlock()
 	readDone := make(chan struct{})
 	go func() {
@@ -264,6 +270,13 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 		}
 		t.closeLive(l, "Terminal connection closed")
 	}()
+	// Drain the PTY before writing initialization. Echo and continuation prompts
+	// can fill its output buffer and block a large write; do not hold l.mu while
+	// writing so cancellation/timeout can still close the terminal.
+	// Carry the script through the environment/SSH command channel. Only this
+	// short trigger enters the PTY: large pasted initialization can overflow
+	// canonical queues or race line-editor mode changes and lose bytes.
+	_, e = f.WriteString("eval \"$__lake_init\"\n")
 	if e != nil {
 		t.closeLive(l, "Connection initialization failed")
 	}
@@ -336,6 +349,17 @@ func (t *Terminals) receive(l *liveTerminal, data string) {
 	if l.closed {
 		return
 	}
+	// PTY reads can end inside a UTF-8 character. Never persist or JSON-encode
+	// that incomplete byte sequence: JSON would replace it and the frontend
+	// would replay the changed snapshot, corrupting both text and cursor state.
+	data = l.utf8Partial + data
+	end := 0
+	for end < len(data) && utf8.FullRuneInString(data[end:]) {
+		_, size := utf8.DecodeRuneInString(data[end:])
+		end += size
+	}
+	l.utf8Partial = data[end:]
+	data = strings.ToValidUTF8(data[:end], "\ufffd")
 	t.stripHooks(l, data)
 }
 func (t *Terminals) receivePlain(l *liveTerminal, data string) {
@@ -481,6 +505,7 @@ func (t *Terminals) Execute(id, tid, actor, command, actionID string) Object {
 		fail(409, "Terminal disconnected")
 	}
 	entry := t.store.BeginCommand(id, tid, actor, command, actionID, origin)
+	l.inputSeen = true
 	job := &terminalJob{entry: entry, marker: ident(), done: make(chan struct{}), actionID: actionID}
 	l.job = job
 	if l.interactive && actor == "agent" {
@@ -594,6 +619,7 @@ func (t *Terminals) Input(id, tid, data string, agent bool) {
 		}
 	}
 	_, e := l.pty.WriteString(data)
+	l.inputSeen = true
 	must(e)
 }
 func (t *Terminals) Resize(id, tid string, cols, rows int) {
@@ -612,6 +638,13 @@ func (t *Terminals) Resize(id, tid string, cols, rows int) {
 	}
 	must(resizeTerminal(l.pty, cols, rows))
 	l.screen.Resize(cols, rows)
+	if l.interactive && l.promptRedraw && !l.inputSeen {
+		// The first browser fit can reflow the initial 100-column prompt before
+		// the shell learns its actual size. Redraw the untouched prompt to remove
+		// wrapped leftovers. Real input permanently disables this startup fix.
+		_, err := l.pty.WriteString("\x0c")
+		must(err)
+	}
 }
 func (t *Terminals) Screen(id, tid, mode string, lines, maxChars int) string {
 	return stringOf(t.ScreenResult(id, tid, mode, lines, maxChars)["text"])

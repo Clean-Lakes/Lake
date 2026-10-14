@@ -5,8 +5,8 @@ export const permissionDefaults = {
   silentReadFiles: true,
   silentWriteFiles: false,
   silentReadSQL: true,
-  silentCommands: false,
-  silentTerminalCreation: false,
+  silentCommands: true,
+  silentTerminalCreation: true,
   blockUnreferencedAssets: false,
   denyLocalExecution: false,
 };

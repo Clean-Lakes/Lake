@@ -121,16 +121,29 @@ func (s *Store) queuedHead(id string) Object {
 	}).(Object)
 }
 func (s *Store) BeginQueuedMessage(id, qid, text string, images any, title string) Object {
-	return s.update(func() any {
+	message, _ := s.BeginQueuedMessageWithNaming(id, qid, text, images, title)
+	return message
+}
+
+func (s *Store) BeginQueuedMessageWithNaming(id, qid, text string, images any, title string) (Object, bool) {
+	result := s.update(func() any {
 		head := s.row("SELECT id FROM queuedMessages WHERE sessionId=? ORDER BY position,rowid LIMIT 1", id)
 		if head["id"] != qid || integer(s.row("SELECT paused FROM messageQueueState WHERE sessionId=?", id)["paused"]) != 0 {
 			fail(409, "队列已变化")
 		}
+		pendingTitle := s.row("SELECT 1 FROM sessionNaming WHERE sessionId=? AND generated=0", id) != nil
 		message := s.begin(id, text, images, title)
 		s.exec("DELETE FROM queuedMessages WHERE id=? AND sessionId=?", qid, id)
 		s.queueChanged(id)
-		return message
-	}).(Object)
+		return struct {
+			message      Object
+			pendingTitle bool
+		}{message, pendingTitle}
+	}).(struct {
+		message      Object
+		pendingTitle bool
+	})
+	return result.message, result.pendingTitle
 }
 func (s *Store) pauseMessageQueuesOnRestart() {
 	for _, row := range s.rows("SELECT DISTINCT sessionId FROM queuedMessages") {

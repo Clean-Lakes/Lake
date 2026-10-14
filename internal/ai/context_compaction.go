@@ -96,7 +96,7 @@ func toolContextPreview(content string, limit int) string {
 	}
 	var result map[string]json.RawMessage
 	if json.Unmarshal([]byte(content), &result) == nil {
-		for _, key := range []string{"exitCode", "exit_code", "error", "status", "truncated", "asset_ref", "resource", "resourceName", "terminal_id", "evidence_id", "run_id", "next_offset", "offset", "source_bytes", "source_truncated", "legacy_preview_only", "complete"} {
+		for _, key := range []string{"exitCode", "exit_code", "error", "status", "truncated", "asset_ref", "resource", "resourceName", "terminal_id", "evidence_id", "result_id", "run_id", "next_offset", "offset", "source_bytes", "source_truncated", "legacy_preview_only", "complete"} {
 			if value := result[key]; len(value) > 0 && len(value) <= 256 {
 				preview[key] = value
 			}
@@ -116,7 +116,7 @@ func toolContextPreview(content string, limit int) string {
 	}
 	// Oversized metadata cannot crowd out the explicit omission warning.
 	minimal := map[string]any{"context_truncated": true, "original_bytes": len(content), "notice": "Output omitted; read recorded evidence pages. Do not infer success."}
-	for _, key := range []string{"evidence_id", "offset", "next_offset", "source_bytes", "source_truncated", "legacy_preview_only"} {
+	for _, key := range []string{"evidence_id", "result_id", "offset", "next_offset", "source_bytes", "source_truncated", "legacy_preview_only"} {
 		if value := result[key]; len(value) > 0 && len(value) <= 64 {
 			minimal[key] = value
 		}

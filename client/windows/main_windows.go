@@ -24,7 +24,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var version = "0.3.6"
+var version = "0.3.7"
 
 func message(text string) {
 	title, _ := windows.UTF16PtrFromString("Lake")

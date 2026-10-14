@@ -1,5 +1,6 @@
 import {displayAiError} from "./aiErrors";
 import type { CommandPolicy } from "../../shared/command-policy";
+import type { WorkspaceTag } from "../../shared/contracts";
 import type {
   SSHConnectionInput,
   SSHKeyDirectory,
@@ -85,6 +86,10 @@ export type Bootstrap = {
 };
 
 export const api = {
+  createTag: (project:string,data:{name:string;color:string}) => post<WorkspaceTag>(`/api/projects/${encodeURIComponent(project)}/tags`,data),
+  updateTag: (id:string,data:{name:string;color:string}) => request<WorkspaceTag>(`/api/tags/${encodeURIComponent(id)}`,{method:"PUT",body:JSON.stringify(data)}),
+  deleteTag: (id:string) => request(`/api/tags/${encodeURIComponent(id)}`,{method:"DELETE"}),
+  saveSessionPresentation: (session:WorkSession,icon:string,tagIds:string[]) => request<WorkSession>(`/api/sessions/${encodeURIComponent(session.id)}/presentation`,{method:"PUT",body:JSON.stringify({icon,tagIds,revision:session.presentationRevision??0})}),
  commandPolicy: (command:string) => post<CommandPolicy>("/api/commands/policy",{command}),
   bootstrap: (token?: string) =>
     request<Bootstrap>("/api/bootstrap", token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
@@ -161,12 +166,12 @@ export const api = {
   createTerminal: (sessionId: string, resourceId: string, shell?: string, interactive = false) =>
     post<TerminalSession>(`/api/sessions/${encodeURIComponent(sessionId)}/terminals`, { resourceId, ...(shell ? {shell} : {}), ...(interactive ? {interactive: true} : {}) }),
   resourceTerminalContext: (resourceId: string) => post<{sessionId: string}>(`/api/resources/${encodeURIComponent(resourceId)}/terminal-context`, {}),
-  resourceTerminals: (resourceId: string) => request<{terminals: TerminalSession[]}>(`/api/resources/${encodeURIComponent(resourceId)}/terminals`),
+  resourceTerminals: (resourceId: string, signal?: AbortSignal) => request<{terminals: TerminalSession[]}>(`/api/resources/${encodeURIComponent(resourceId)}/terminals`, {signal}),
   availableTerminals: (session: string) => request<Array<TerminalSession & {ownerTitle:string}>>(`/api/sessions/${encodeURIComponent(session)}/terminals/available`),
   terminalAIScope: (session: string, terminal: string, generation: string) => post<{sessionId:string;terminalId:string;generation:string;needsAdoption:boolean;shellRecreated:boolean;ownerTitle:string}>(`/api/sessions/${encodeURIComponent(session)}/terminals/${encodeURIComponent(terminal)}/ai-scope`,{generation}),
   adoptTerminal: (session: string, terminal: string, generation: string, bind=false) => post<TerminalSession>(`/api/sessions/${encodeURIComponent(session)}/terminals/${encodeURIComponent(terminal)}/adopt`,{accept:true,generation,bind}),
   referenceMemory: (session: string) => request<string[]>(`/api/sessions/${encodeURIComponent(session)}/ai/references`),
-  hostKeyDecision: (sessionId: string, decision: {id: string; accept: boolean; fingerprint: string; confirmation: string}) =>
+  hostKeyDecision: (sessionId: string, decision: {id: string; accept: boolean; fingerprint: string}) =>
     post<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/host-key`, decision),
   closeResourceTerminal: (resourceId: string, terminalId?: string) => request<{closed: number}>(`/api/resources/${encodeURIComponent(resourceId)}/terminals${terminalId ? `/${encodeURIComponent(terminalId)}` : ""}`, { method: "DELETE" }),
   terminalHistory: (sessionId: string, terminalId: string, signal?: AbortSignal) =>

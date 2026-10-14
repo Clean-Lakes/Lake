@@ -82,7 +82,9 @@ final class ReleaseTests {
 
 @main struct PolicyTests {
     @MainActor static func main() throws {
+        testDesktopProfiles()
         testUpdateIndicator()
+        try testUpdateCleanup()
         let tests = ReleaseTests()
         try tests.testMasterStableArchitectureAndOrdering()
         try tests.testReleaseNotesStayWithSelectedVersion()

@@ -2,6 +2,7 @@ import type { AICard, AIView } from "../../shared/contracts";
 import { compareTime } from "./timeline";
 
 export const toolLabels: Record<string, string> = {
+ todo_read:"查看任务进度",todo_write:"更新任务进度",ask_user_question:"询问你的选择",read_session_context:"查阅历史会话",load_skill:"加载技能",list_workflows:"查看工作流",get_workflow_run:"查看工作流结果",run_workflow:"运行工作流",save_workflow:"保存工作流",schedule_create:"创建定时任务",schedule_list:"查看定时任务",schedule_update:"更新定时任务",schedule_delete:"删除定时任务",task_output:"查看任务结果",task_stop:"停止任务",read_tool_result:"读取完整工具结果",
   observe_host: "检查主机指标", observe_cluster: "检查 Kubernetes 集群", observe_cluster_logs: "读取 Pod 日志", observe_journal: "读取服务日志", observe_logs: "查看应用日志", observe_data: "检查数据服务", read_evidence: "复核原始证据", delegate_investigation: "分派调查任务", read_investigation: "查看调查结果",
   inspect_host: "检查主机状态", shell: "执行命令", terminal_execute_command: "执行终端命令",
   list_assets: "查找资源", list_resource_groups: "查看资源目录", read: "读取文件", read_file: "读取文件",
@@ -32,13 +33,14 @@ export function toolActivity(card: AICard, waiting = false): Activity {
     icon: waiting ? "approval" : file ? "file" : /search|grep|glob|fetch/.test(name) ? "search" : /shell|terminal/.test(name) ? "terminal" : "host" };
 }
 // Limit activity to the newest turn, even when old pending/running cards are retained.
-export function turnProgress(view: AIView, cards: AICard[], latestUserAt: string, now: number, thinkingVisible = false): { activity?: Activity; elapsed?: string } {
+export function turnProgress(view: AIView, cards: AICard[], latestUserAt: string, now: number): { activity?: Activity; elapsed?: string } {
   const live = ["running", "waiting_approval"].includes(view.status);
   const start = view.turnStartedAt && (!latestUserAt || compareTime(view.turnStartedAt, latestUserAt) >= 0) ? view.turnStartedAt : live ? latestUserAt : "";
   const turnCards = start ? cards.filter(card => compareTime(card.at, start) >= 0) : [];
   const current = turnCards.filter(card => ["operation", "shell"].includes(card.type) && ["running", "pending"].includes(card.status)).at(-1);
   let activity: Activity | undefined;
   if (live) {
+    if(view.question) return {activity:{text:"等待你的选择",icon:"approval"}};
     if (current) {
       activity = toolActivity(current, current.status === "pending" || view.status === "waiting_approval");
       if (current.status === "pending" && view.pending?.kind === "terminal_open") activity.text = "等待授权创建终端";
@@ -49,11 +51,39 @@ export function turnProgress(view: AIView, cards: AICard[], latestUserAt: string
   const end = live ? now : Date.parse(view.turnFinishedAt || "");
   const seconds = Math.floor((end - Date.parse(start)) / 1000);
   const instantConversation = !live && seconds === 0 && !turnCards.some(card => ["operation", "shell"].includes(card.type));
-  // The timeline header already owns generic thinking, including when collapsed.
-  if (thinkingVisible && activity?.text === "正在思考") activity = undefined;
   return { activity, elapsed: Number.isFinite(seconds) && seconds >= 0 && view.status !== "idle" && !instantConversation ? formatElapsed(seconds) : undefined };
 }
 export function formatElapsed(seconds: number): string {
   const hours = Math.floor(seconds / 3600), minutes = Math.floor(seconds % 3600 / 60), rest = seconds % 60;
   return `${hours ? `${hours}小时 ` : ""}${minutes ? `${minutes}分钟 ` : ""}${rest}秒`;
+}
+
+/** Describe recognizable executed commands, never echo their contents into the summary. */
+function shellDescription(command:unknown):string|undefined {
+ if(typeof command!=="string")return;
+ // Only executable positions count: `echo uname` is not a system inspection.
+ const prefix="(?:^|[\\n;]|&&|\\|\\|)\\s*(?:sudo\\s+)?";
+ const executables=command.replace(/'[^']*'|"(?:\\.|[^"\\])*"/g," ").replace(/#[^\n]*/g," ");
+ const executes=(pattern:string)=>new RegExp(prefix+pattern,"m").test(executables);
+ const labels:string[]=[];
+ if(executes("(?:uname|hostname|lscpu|lsblk|dmidecode|uptime|free|vmstat|df)\\b") || executes("cat\\s+/(?:etc/(?:os-release|redhat-release)|proc/(?:cpuinfo|meminfo))\\b"))labels.push("检查系统与资源");
+ if(executes("systemctl\\s+(?:status|show|is-active|list-units|list-unit-files)\\b"))labels.push("检查服务状态");
+ if(executes("(?:ps|ss|netstat|pgrep)\\b"))labels.push("检查进程与连接");
+ if(executes("(?:mysql|psql|mongo|mongosh|redis-cli)\\b"))labels.push("执行数据库命令");
+ return labels.length ? labels.slice(0,2).join("、")+(labels.length>2 ? "等" : "") : undefined;
+}
+/** Descriptive text for collapsed process rows, without copying command contents. */
+export function toolDescription(card:AICard): string {
+ const activity=toolActivity(card);
+ const data=card.data&&typeof card.data==="object" ? card.data as Record<string,unknown> : {};
+ const args=data.arguments&&typeof data.arguments==="object" ? data.arguments as Record<string,unknown> : {};
+ const action=["shell","terminal_execute_command"].includes(card.title??"") ? shellDescription(args.command) || activity.text.replace(/^正在/,"") : activity.text.replace(/^正在/,"");
+ const pattern=card.title==="list_assets" ? clean(args.pattern) : "";
+ return [action,pattern,activity.detail].filter(Boolean).join(" · ");
+}
+export function processDescription(cards:AICard[]): string {
+ const tools=cards.filter(card=>card.type!=="thinking");
+ if(!tools.length)return "分析问题";
+ const labels=[...new Set(tools.map(toolDescription))];
+ return labels.slice(0,2).join("、")+(labels.length>2 ? ` 等 ${tools.length} 项操作` : tools.length>labels.length ? `（${tools.length} 次）` : "");
 }

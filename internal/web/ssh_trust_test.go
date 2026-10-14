@@ -5,7 +5,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
-	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -150,7 +149,9 @@ func TestLakeGlobalHostTrustAndRotation(t *testing.T) {
 	if p["changed"] != true || p["fingerprint"] != changed || stringsOf(p["previousFingerprints"])[0] != previous {
 		t.Fatal("rotation did not require review of old and new fingerprints")
 	}
-	apiTest(t, h, "POST", "/api/sessions/"+otherID+"/host-key", Object{"id": p["id"], "accept": true, "fingerprint": p["fingerprint"]}, 400)
+	if p["changed"] != true || len(stringsOf(p["previousFingerprints"])) == 0 {
+		t.Fatal("rotated fingerprint prompt did not show both old and new fingerprints")
+	}
 	apiTest(t, h, "POST", "/api/sessions/"+otherID+"/host-key", Object{"id": p["id"], "accept": false}, 200)
 	if err := <-done; err == nil {
 		t.Fatal("rejected key still connected")
@@ -165,7 +166,18 @@ func TestLakeGlobalHostTrustAndRotation(t *testing.T) {
 	}
 	done = startHostProbe(b, otherID, stringOf(secondResource["id"]))
 	p = waitHostTrust(t, b, otherID)
-	apiTest(t, h, "POST", "/api/sessions/"+otherID+"/host-key", Object{"id": p["id"], "accept": true, "fingerprint": p["fingerprint"], "confirmation": fmt.Sprintf("信任 127.0.0.1:%d", port)}, 200)
+	if p["changed"] != true || len(stringsOf(p["previousFingerprints"])) == 0 {
+		t.Fatal("retry did not show the rotated fingerprint for explicit approval")
+	}
+	data, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, _, _, _, err = ssh.ParseAuthorizedKey(data[len(knownPeerPrefix(port)):])
+	if err != nil || ssh.FingerprintSHA256(key) != previous {
+		t.Fatal("new fingerprint was trusted before explicit approval")
+	}
+	apiTest(t, h, "POST", "/api/sessions/"+otherID+"/host-key", Object{"id": p["id"], "accept": true, "fingerprint": p["fingerprint"]}, 200)
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
