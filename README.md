@@ -24,17 +24,17 @@ Lake 是一个面向运维场景的 AI 工作台。用自然语言调查主机�
 
 ## 本地运行
 
-构建需要 Go 1.25、Node.js 24 和 pnpm。macOS 首次构建先运行 `scripts/setup_lake_signing.sh`，配置本地签名身份。
+构建需要 Go 1.25、Node.js 24 和 pnpm。macOS 首次构建先运行 `scripts/setup_lake_signing.sh`，配置本地签名身份。本地桌面联调使用独立的 Lake Dev：
 
 ```sh
 pnpm --dir web-agent install --frozen-lockfile
-scripts/build_lake.sh
-bin/lake web --open
+scripts/build_lake_desktop.sh --dev --install
+open "$HOME/Applications/Lake Dev.app"
 ```
 
-默认访问 `http://localhost:4177`。构建后的程序内嵌前端，运行时不需要 Node.js。
+Dev 使用 `~/.lake-dev`，与正式版 `~/.lake` 分离。仅运行 CLI 时，先用 `scripts/build_lake.sh` 构建签名程序，再指定独立 home，例如 `bin/lake web --home "$HOME/.lake-dev-cli" --port 4182 --open`。构建后的程序内嵌前端，运行时不需要 Node.js。
 
-更多说明：[运行与开发](web-agent/README.md) · [macOS 客户端](client/macos/README.md) · [Windows 客户端](client/windows/README.md)。
+更多说明：[开发规范](CONTRIBUTING.md) · [运行与开发](web-agent/README.md) · [macOS 客户端](client/macos/README.md) · [Windows 客户端](client/windows/README.md)。
 
 ## License
 

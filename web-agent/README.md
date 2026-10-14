@@ -4,10 +4,10 @@ Web 服务、SQLite 会话存储、SSH 和 PTY 终端管理、AI 工具循环全
 
 ```sh
 scripts/build_lake.sh
-bin/lake web --open
+bin/lake web --home "$HOME/.lake-dev-cli" --port 4182 --open
 ```
 
-访问 `http://localhost:4177`。`--open` 使用一次启动令牌建立 HttpOnly、SameSite=Strict Cookie；不带 `--open` 时终端提供本机访问链接。API 保持 Bearer/Cookie、Host 和 Origin 校验，只监听 `127.0.0.1`。
+本地开发访问 `http://localhost:4182`，独立 home 不会使用正式版 `~/.lake`。`--open` 使用一次启动令牌建立 HttpOnly、SameSite=Strict Cookie；不带 `--open` 时终端提供本机访问链接。API 保持 Bearer/Cookie、Host 和 Origin 校验，只监听 `127.0.0.1`。桌面联调请使用 [Lake Dev](../CONTRIBUTING.md)。
 
 macOS 的用户二进制只通过上述脚本构建，并由持久 `Lake Local Development Code Signing` 身份签名。缺少身份时先运行 `scripts/setup_lake_signing.sh`。
 
