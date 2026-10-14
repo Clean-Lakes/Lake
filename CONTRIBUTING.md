@@ -1,51 +1,48 @@
-# How to Contribute
+# Lake 开发规范
 
-## Your First Pull Request
-We use GitHub for our codebase. You can start by reading [How To Pull Request](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests).
+本仓库以 `master` 为正式版基线。日常改动在独立分支完成；本地联调使用 **Lake Dev**。只有明确进行正式版构建、安装或发布时，才操作 `Lake.app` 和 `~/.lake`。
 
-## Branch Organization
-We use [git-flow](https://nvie.com/posts/a-successful-git-branching-model/) as our branch organization, as known as [FDD](https://en.wikipedia.org/wiki/Feature-driven_development)
+## macOS 本地联调
 
-## Bugs
-### 1. How to Find Known Issues
-We are using [Github Issues](https://github.com/cloudwego/{project_name}/issues) for our public bugs. We keep a close eye on this and try to make it clear when we have an internal fix in progress. Before filing a new task, try to make sure your problem doesn’t already exist.
+需要 macOS 13+、Apple Silicon、Go 1.25、Node.js 24.14+、pnpm 10.33.4、Swift 5.9+ 和 Xcode Command Line Tools。第一次构建先配置持久代码签名身份：
 
-### 2. Reporting New Issues
-Providing a reduced test code is a recommended way for reporting issues. Then can place in:
-- Just in issues
-- [Golang Playground](https://play.golang.org/)
+```sh
+scripts/setup_lake_signing.sh
+pnpm --dir web-agent install --frozen-lockfile
+```
 
-### 3. Security Bugs
-Please do not report the safe disclosure of bugs to public issues. Contact us by [Support Email](mailto:conduct@cloudwego.io)
+以后从仓库根目录构建并安装 Dev：
 
-## How to Get in Touch
-- [Email](mailto:conduct@cloudwego.io)
+```sh
+scripts/build_lake_desktop.sh --dev --install
+open "$HOME/Applications/Lake Dev.app"
+```
 
-## Submit a Pull Request
-Before you submit your Pull Request (PR) consider the following guidelines:
-1. Search [GitHub](https://github.com/cloudwego/{project_name}/pulls) for an open or closed PR that relates to your submission. You don't want to duplicate existing efforts.
-2. Be sure that an issue describes the problem you're fixing, or documents the design for the feature you'd like to add. Discussing the design upfront helps to ensure that we're ready to accept your work.
-3. [Fork](https://docs.github.com/en/github/getting-started-with-github/fork-a-repo) the cloudwego {project_name} repo.
-4. In your forked repository, make your changes in a new git branch:
-    ```
-    git checkout -b my-fix-branch develop
-    ```
-5. Create your patch, including appropriate test cases.
-6. Follow our [Style Guides](#code-style-guides).
-7. Commit your changes using a descriptive commit message that follows [AngularJS Git Commit Message Conventions](https://docs.google.com/document/d/1QrDFcIiPjSLDn3EL15IJygNPiHORgU1_OOAqWjiDU5Y/edit).
-   Adherence to these conventions is necessary because release notes are automatically generated from these messages.
-8. Push your branch to GitHub:
-    ```
-    git push origin my-fix-branch
-    ```
-9. In GitHub, send a pull request to `{project_name}:develop`
+构建脚本先调用 `scripts/build_lake.sh` 生成**已签名**的 `bin/lake`，再构建和签名 Dev 应用。缺少 `Lake Local Development Code Signing` 身份时应停止构建并运行一次签名设置脚本，不能改用未签名二进制。构建产物在 `dist/macos/<版本>/arm64/dev/`，安装位置为 `~/Applications/Lake Dev.app`。应用会启动自己的 Go 服务并选择本机空闲端口；不要另外启动一个服务来驱动这个窗口。
 
-## Contribution Prerequisites
-- Our development environment keeps up with [Go Official](https://golang.org/project/).
-- You need fully checking with lint tools before submit your pull request. [gofmt](https://golang.org/pkg/cmd/gofmt/) and [golangci-lint](https://github.com/golangci/golangci-lint)
-- You are familiar with [GitHub](https://github.com)
-- Maybe you need familiar with [Actions](https://github.com/features/actions)(our default workflow tool).
+已运行 Dev 时，安装新包后先正常退出 **Lake Dev**，再打开上面的应用路径，确保加载新进程。不要退出或重启正式版 Lake。Dev 标题旁有 `DEV` 标记；模型和项目配置从独立目录读取，首次启动为空是正常现象。
 
-## Code Style Guides
-- [Effective Go](https://golang.org/doc/effective_go)
-- [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
+| 项目 | 本地联调 | 正式版 |
+| --- | --- | --- |
+| 应用 | `Lake Dev.app` | `Lake.app` |
+| Bundle ID | `com.cleanlakes.lake.desktop.dev` | `com.cleanlakes.lake.desktop` |
+| 安装位置 | `~/Applications/Lake Dev.app` | `~/Applications/Lake.app` |
+| Home / 凭据 | `~/.lake-dev/` | `~/.lake/` |
+| Web 数据 | `~/.lake-dev/web-agent/` | `~/.lake/web-agent/` |
+| 构建参数 | `--dev --install` | `--install` |
+| 自动正式版更新 | 关闭 | 开启 |
+
+Dev 忽略正式版的 `LAKE_HOME`、`LAKE_WEB_DATA_DIR` 和 `LAKE_WEB_TOKEN`。确需覆盖 Dev 路径时仅用 `LAKE_DEV_HOME`、`LAKE_DEV_WEB_DATA_DIR` 或应用的 `--lake-home`、`--lake-data`，并确保目标**不指向** `~/.lake` 或正式版的数据目录。不要把正式版的密钥文件复制或链接到 Dev。Magpie 的 Lake 插件当前默认对接 `~/.lake`，所以 Dev 中显示“未连接 Magpie”并不表示正式版插件失效；联调插件时须单独配置 Dev 端的隔离凭据路径。
+
+只开发 Go/Web 而不打开桌面应用时，先通过 `scripts/build_lake.sh` 构建签名二进制，然后使用另外一个专用目录和端口，避免和两个桌面应用争用数据目录：
+
+```sh
+bin/lake web --home "$HOME/.lake-dev-cli" --port 4182 --open
+```
+
+## 提交和安全
+
+- 提交前检查 `git diff` 与暂存区，只加入本次修改。分支提交后向 `master` 发 PR；同步最新 `master` 并处理冲突后再合并。
+- Go 代码用 `gofmt`；前端遵循现有 React/Vite 代码组织；macOS 客户端沿用 Swift Package 结构。改动对应功能时更新说明和必要的验证记录。
+- 不在代码、日志、截图、Issue 或提交中放模型 API Key、SSH 私钥内容。Lake 正常运行的凭据位于各自 home 下权限私有的 `secrets/`；只有显式执行已签名的 `lake secrets migrate` 才读取旧 Keychain 凭据。
+- 本地联调只检查 Dev 应用和隔离数据。正式版构建、安装与发布按 [macOS 客户端说明](client/macos/README.md) 进行。
