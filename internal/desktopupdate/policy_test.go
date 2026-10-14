@@ -22,12 +22,12 @@ func fixture(number string, payload []byte) Release {
 	return Release{Tag: "v" + number, Target: "master", Assets: []Asset{{Name: name, Size: int64(len(payload)), URL: base + name, Digest: "sha256:" + digest}, {Name: name + ".sha256", Size: int64(len(checksum)), URL: base + name + ".sha256"}}}
 }
 func TestVersion(t *testing.T) {
-	for _, s := range []string{"0.3.3", "v0.3.4", "10.20.30"} {
+	for _, s := range []string{"0.3.3", "v0.3.4", "10.20.30", "0.3.8.1", "v0.3.8.1", "1.2.3.4"} {
 		if _, ok := ParseVersion(s); !ok {
 			t.Fatal(s)
 		}
 	}
-	for _, s := range []string{"0.03.3", "0.3", "0.3.4-beta", "+1.2.3", "1.2.3 ", "1.2.4294967296", "1.２.3"} {
+	for _, s := range []string{"0.03.3", "0.3", "0.3.4-beta", "+1.2.3", "1.2.3 ", "1.2.4294967296", "1.２.3", "1.2.3.4.5", "0.3.4.", ".3.4"} {
 		if _, ok := ParseVersion(s); ok {
 			t.Fatal(s)
 		}
@@ -36,6 +36,12 @@ func TestVersion(t *testing.T) {
 	b, _ := ParseVersion("0.3.9")
 	if !a.After(b) || b.After(a) || a.After(a) {
 		t.Fatal("incorrect comparison")
+	}
+	c, _ := ParseVersion("0.3.8.1")
+	d, _ := ParseVersion("0.3.8")
+	e, _ := ParseVersion("0.3.8.2")
+	if !c.After(d) || d.After(c) || !e.After(c) || !a.After(c) {
+		t.Fatal("incorrect four-part comparison")
 	}
 }
 func TestSelectStableWindowsMaster(t *testing.T) {
@@ -47,6 +53,13 @@ func TestSelectStableWindowsMaster(t *testing.T) {
 	}
 	if Latest(releases, "0.3.10") != nil || Latest(releases, "invalid") != nil {
 		t.Fatal("same version or invalid current must not update")
+	}
+	patch := Latest([]Release{fixture("0.3.8.1", data)}, "0.3.8")
+	if patch == nil || patch.Version != "0.3.8.1" {
+		t.Fatalf("four-part patch release not selected: %+v", patch)
+	}
+	if Latest([]Release{fixture("0.3.8.1", data)}, "0.3.8.1") != nil || Latest([]Release{fixture("0.3.8", data)}, "0.3.8.1") != nil {
+		t.Fatal("four-part comparison must order patch releases")
 	}
 	mutations := map[string]func(*Release){
 		"draft": func(r *Release) { r.Draft = true }, "prerelease": func(r *Release) { r.Prerelease = true }, "other branch": func(r *Release) { r.Target = "feature" },

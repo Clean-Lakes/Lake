@@ -18,13 +18,16 @@ const MaxChecksumSize int64 = 4096
 var ErrInvalidRelease = errors.New("更新发布或安装包不兼容")
 var ErrChecksum = errors.New("安装包校验失败，请重新检查更新")
 
-type Version [3]uint32
+// Version is major.minor.patch with an optional fourth release field
+// (e.g. 0.3.8 and 0.3.8.1). Three-field versions fill the fourth slot with 0,
+// so 0.3.8.1 sorts after 0.3.8 and before 0.3.9.
+type Version [4]uint32
 
 func ParseVersion(s string) (Version, bool) {
 	var v Version
 	s = strings.TrimPrefix(s, "v")
 	fields := strings.Split(s, ".")
-	if len(fields) != 3 {
+	if len(fields) < 3 || len(fields) > 4 {
 		return v, false
 	}
 	for i, f := range fields {

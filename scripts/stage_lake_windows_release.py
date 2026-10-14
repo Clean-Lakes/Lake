@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--version', required=True)
     args = parser.parse_args()
     version = args.version
-    if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version):
+    if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?', version):
         raise SystemExit('Invalid version')
     base = subprocess.check_output(['git','rev-parse',f'refs/tags/v{version}^{{}}'],cwd=ROOT,text=True).strip()
     name = f'Lake-{version}-windows-x86_64'

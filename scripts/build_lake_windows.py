@@ -64,7 +64,7 @@ def main():
     parser.add_argument("--skip-installer", action="store_true")
     args = parser.parse_args()
     version = (ROOT / "VERSION").read_text().strip()
-    if not __import__("re").fullmatch(r"\d+\.\d+\.\d+", version):
+    if not __import__("re").fullmatch(r"\d+\.\d+\.\d+(?:\.\d+)?", version):
         raise RuntimeError("Invalid release version")
     if sys.platform == "darwin":
         environment = os.environ.copy()
@@ -151,7 +151,9 @@ def main():
         assets = [package]
         if nsis:
             installer = output / (name + "-setup.exe")
-            run([nsis, "-V2", "-DVERSION=" + version, "-DAPP_DIR=" + str(stage), "-DOUTPUT=" + str(installer), ROOT / "client/windows/installer.nsi"])
+            # VIProductVersion requires exactly four numeric fields.
+            product_version = version + ".0" if version.count(".") == 2 else version
+            run([nsis, "-V2", "-DVERSION=" + version, "-DPRODUCT_VERSION=" + product_version, "-DAPP_DIR=" + str(stage), "-DOUTPUT=" + str(installer), ROOT / "client/windows/installer.nsi"])
             assets.append(installer)
         for path in assets:
             path.with_name(path.name + ".sha256").write_text(sha(path) + "  " + path.name + "\n")

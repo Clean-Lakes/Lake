@@ -17,7 +17,7 @@ jobs:
           root = pathlib.Path('release-assets/windows')
           meta = json.loads((root / 'release.json').read_text())
           version = meta['version']
-          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version)
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?', version)
           name = f'Lake-{version}-windows-x86_64'
           expected = {name+'.zip', name+'.zip.sha256', name+'-setup.exe', name+'-setup.exe.sha256'}
           assert set(meta['assets']) == expected

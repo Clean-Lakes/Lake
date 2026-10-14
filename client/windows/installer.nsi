@@ -9,7 +9,7 @@ OutFile "${OUTPUT}"
 InstallDir "$LOCALAPPDATA\Programs\Lake"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
-VIProductVersion "${VERSION}.0"
+VIProductVersion "${PRODUCT_VERSION}"
 VIAddVersionKey "ProductName" "Lake"
 VIAddVersionKey "FileDescription" "Lake Windows x86_64 installer"
 VIAddVersionKey "FileVersion" "${VERSION}"
