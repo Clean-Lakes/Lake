@@ -20,6 +20,8 @@ Lake 是一个面向运维场景的 AI 工作台。用自然语言调查主机�
 
 图片识别需要所选模型支持图片输入。
 
+也可以安装 [Magpie Agent 插件](https://github.com/Clean-Lakes/magpie-agent-lake)，在 Magpie 的 Agents 页面为 Lake 选择模型。首次连接前启动 Lake 一次，以创建权限为 `0600` 的私有配置文件。
+
 ## 本地运行
 
 构建需要 Go 1.25、Node.js 24 和 pnpm。macOS 首次构建先运行 `scripts/setup_lake_signing.sh`，配置本地签名身份。
