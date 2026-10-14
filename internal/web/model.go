@@ -197,7 +197,7 @@ func (m *Models) Settings() Object {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if active := m.magpieModelLocked(); active != nil {
-		return Object{"source": "settings", "configured": true, "url": active.URL, "name": active.Name, "keyConfigured": true, "protocol": active.Protocol, "supportsImageInput": active.SupportsImageInput, "supportsImageOutput": active.SupportsImageOutput, "providerName": "Magpie"}
+		return Object{"source": "settings", "managedBy": "magpie", "configured": true, "url": active.URL, "name": active.Name, "keyConfigured": true, "protocol": active.Protocol, "supportsImageInput": active.SupportsImageInput, "supportsImageOutput": active.SupportsImageOutput, "providerName": "Magpie"}
 	}
 	active := m.activeLocked()
 	source := "settings"

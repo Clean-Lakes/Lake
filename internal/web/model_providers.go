@@ -596,6 +596,10 @@ func (m *Models) ProviderInput(id string, data Object) *ai.Model {
 func (m *Models) ConfiguredProviderModels() (Object, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if model := m.magpieModelLocked(); model != nil {
+		entry := Object{"providerId": "magpie", "providerName": "Magpie", "modelId": "magpie", "name": model.Name, "displayName": model.Name, "contextWindow": model.ContextLimit}
+		return Object{"models": []string{model.Name}, "entries": []Object{entry}, "activeProviderId": "magpie", "activeModelId": "magpie", "source": "magpie", "message": "请在 Magpie 的 Agent 页面切换 Lake 使用的模型"}, true
+	}
 	catalog, exists := m.readProviderCatalogLocked()
 	if !exists {
 		return nil, false

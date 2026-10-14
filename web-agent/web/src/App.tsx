@@ -793,6 +793,7 @@ function App() {
   }
   async function switchModel(model: string | AvailableModelEntry) {
     if (pendingOperation) return;
+    if (typeof model !== "string" && model.providerId === "magpie") {setModelMenuOpen(false);return;}
     setPendingOperation("model");
     try {
       if (typeof model === "string") {
@@ -1363,7 +1364,7 @@ function App() {
             {modelMenu.loading && <p className="model-menu-note">正在获取可用模型…</p>}
             {!modelMenu.loading && modelMenu.entries && [...new Set(modelMenu.entries.map(entry => entry.providerId))].map(providerId => <div key={providerId} role="group" aria-label={modelMenu.entries!.find(entry => entry.providerId===providerId)!.providerName}><div className="model-menu-provider">{modelMenu.entries!.find(entry => entry.providerId===providerId)!.providerName}</div>{modelMenu.entries!.filter(entry => entry.providerId===providerId).map(entry => {const active=entry.providerId===modelMenu.activeProviderId && entry.modelId===modelMenu.activeModelId;return <button type="button" role="menuitemradio" aria-checked={active} key={entry.modelId} className={`model-menu-item ${active ? "selected" : ""}`} onClick={() => void switchModel(entry)} disabled={!!pendingOperation}><span>{entry.displayName}</span>{active && <Glyph name="check" size={14}/>}</button>;})}</div>)}
             {!modelMenu.loading && !modelMenu.entries && modelMenu.models.map(model => <button type="button" role="menuitemradio" aria-checked={model===bootstrap?.modelName} key={model} className={`model-menu-item ${model===bootstrap?.modelName ? "selected" : ""}`} onClick={() => void switchModel(model)} disabled={!!pendingOperation}><span>{model}</span>{model===bootstrap?.modelName && <Glyph name="check" size={14}/>}</button>)}
-            {!modelMenu.loading && !modelMenu.models.length && modelMenu.message && <p className="model-menu-note">{modelMenu.message}</p>}
+            {!modelMenu.loading && modelMenu.message && (modelMenu.source==="magpie" || !modelMenu.models.length) && <p className="model-menu-note">{modelMenu.message}</p>}
             <div className="model-menu-sep"/>
             <button type="button" role="menuitem" className="model-menu-item" onClick={() => { setModelMenuOpen(false); void openSettings(); }}><span>模型设置…</span><Glyph name="settings" size={14}/></button>
           </div>}

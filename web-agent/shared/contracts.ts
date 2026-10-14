@@ -196,6 +196,7 @@ export type TerminalHistory = {
 /** Interface-visible model configuration. The API key itself is never returned. */
 export type ModelSettings = {
   source: "settings" | "environment" | "none";
+  managedBy?: "magpie";
   configured: boolean;
   url: string;
   name: string;
@@ -215,7 +216,7 @@ export type ModelProvider = {id: string; name: string; baseURL: string; protocol
 export type ProviderCatalog = {providers: ModelProvider[]; activeProviderId: string; activeModelId: string; savedProviderId?: string};
 export type ProviderInput = Omit<ModelProvider,"id" | "keyConfigured"> & {apiKey?: string | null};
 export type AvailableModelEntry = {providerId: string; providerName: string; modelId: string; name: string; displayName: string; contextWindow?: number};
-export type AvailableModels = { models: string[]; entries?: AvailableModelEntry[]; activeProviderId?: string; activeModelId?: string; message?: string; imageInputCapabilities?: Record<string, boolean>; reasoningCapabilities?: Record<string, ModelReasoningCapability> };
+export type AvailableModels = { models: string[]; entries?: AvailableModelEntry[]; activeProviderId?: string; activeModelId?: string; source?: "magpie"; message?: string; imageInputCapabilities?: Record<string, boolean>; reasoningCapabilities?: Record<string, ModelReasoningCapability> };
 
 export type ReasoningSettings = { modelId?: string; levels: string[]; default?: string; source?: string; effort: string };
 
