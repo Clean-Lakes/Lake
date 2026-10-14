@@ -133,6 +133,29 @@ func TestInteractiveUserShellPromptInputAndCompletion(t *testing.T) {
 		})
 	}
 }
+func TestInteractiveOutputOnlyHistorySkipsCommandEntries(t *testing.T) {
+	b, h := fixture(t)
+	id, ref := newSession(t, h)
+	term := b.Terminals.OpenInteractive(context.Background(), id, ref, "bash")
+	tid := stringOf(term["id"])
+	b.Terminals.Input(id, tid, "printf 'output-only-check\\n'\r", false)
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(stringOf(b.Store.History(id, tid)["output"]), "output-only-check\r\n") && len(objects(b.Store.History(id, tid)["entries"])) > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	path := "/api/sessions/" + id + "/terminals/" + tid + "/history"
+	full := apiTest(t, h, "GET", path, nil, 200)
+	compact := apiTest(t, h, "GET", path+"?outputOnly=1", nil, 200)
+	if len(objects(full["entries"])) == 0 || len(objects(compact["entries"])) != 0 {
+		t.Fatal("output-only history must omit command entries")
+	}
+	if compact["output"] != full["output"] || object(compact["terminal"])["interactive"] != true {
+		t.Fatal("output-only history lost terminal output or metadata")
+	}
+}
 func TestManagedTerminalStillRejectsIdleUserRawInput(t *testing.T) {
 	b, h := fixture(t)
 	id, ref := newSession(t, h)

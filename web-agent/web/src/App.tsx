@@ -44,6 +44,7 @@ import { ContextUsage } from "./ContextUsage";
 import { ReasoningSelector } from "./ReasoningSelector";
 import { uniqueTerminalRows } from "./terminalAIState";
 import { TerminalPane, type TerminalHandle } from "./TerminalPane";
+import { TerminalInputQueue } from "./terminalInputQueue";
 import { TerminalSidePanel } from "./TerminalSidePanel";
 import { reusableResourceTerminal, onlineTerminalOptions, panelTerminalSessions, ResourceTerminalConnections } from "./resourceTerminalState";
 import { ResourceTree } from "./ResourceTree";
@@ -165,7 +166,7 @@ function App() {
   const [sshDraft, setSshDraft] = useState<SSHConnectionInput>(emptySSH());
   const [sshError, setSshError] = useState("");
   const [sshBusy, setSshBusy] = useState(false);
-  const inputQueue = useRef(Promise.resolve());
+  const inputQueue = useRef<TerminalInputQueue | null>(null);
   const [imageDraft, setImageDraft] = useState<AIImage[]>([]);
   const attachmentReading = useRef(false);
   const attachmentEpoch = useRef(0);
@@ -259,6 +260,10 @@ function App() {
   const [terminalId, setTerminalId] = useState<string | null>(null);
   const [terminalHistory, setTerminalHistory] = useState<TerminalHistory | null>(null);
   const [terminalHistories, setTerminalHistories] = useState<Record<string, TerminalHistory>>({});
+  const terminalHistoriesRef = useRef(terminalHistories);
+  terminalHistoriesRef.current = terminalHistories;
+  const refreshTerminalHistoryRef = useRef<() => void>(() => {});
+  const seenTerminalRevision = useRef(0);
   const [terminalError, setTerminalError] = useState("");
   const [terminalRevision, setTerminalRevision] = useState(0);
   const [terminalRefresh, setTerminalRefresh] = useState(0);
@@ -304,6 +309,7 @@ function App() {
     }
     notify(readableError(error));
   }, [notify]);
+  if (!inputQueue.current) inputQueue.current = new TerminalInputQueue(api.terminalInput, error => handleFailure(error));
 
   const loadApp = useCallback(async (token?: string) => {
     setBooting(true);
@@ -366,6 +372,7 @@ function App() {
     let disposed = false;
     let stream: EventSource | null = null;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let terminalRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     const requests = new AbortController();
     const fetchSnapshot = () => api.snapshot(sessionId, AbortSignal.any([requests.signal, AbortSignal.timeout(12000)]));
@@ -421,13 +428,16 @@ function App() {
         const event = JSON.parse(incoming.data) as SessionEvent;
         if (event.sessionId !== sessionId || typeof event.seq !== "number" || event.seq <= streamCursor.current) return;
         streamCursor.current = event.seq;
-        if (event.type === "terminal") queuedRevision = true;
+        if (event.type === "terminal" && !terminalRefreshTimer) terminalRefreshTimer = setTimeout(() => {
+          terminalRefreshTimer = null;
+          setTerminalRevision(value => value + 1);
+        }, 32);
         // Bound snapshot traffic without postponing every update until a
         // continuous token stream finally goes quiet.
         if (!refreshTimer) refreshTimer = setTimeout(() => {
           refreshTimer = null;
           void refresh();
-        }, 120);
+        }, event.type === "terminal" ? 250 : 120);
       } catch { /* Keep the current snapshot if an unrelated SSE frame arrives. */ }
     };
     const stopPolling = () => { if (pollTimer) clearInterval(pollTimer); pollTimer = null; };
@@ -499,6 +509,7 @@ function App() {
       stopPolling();
       stream?.close();
       if (refreshTimer) clearTimeout(refreshTimer);
+      if (terminalRefreshTimer) clearTimeout(terminalRefreshTimer);
     };
   }, [sessionId, sessionReload, bootstrap, Boolean(catalog), handleFailure]);
 
@@ -542,6 +553,7 @@ function App() {
     let disposed = false;
     let syncing = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let terminalRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     const refresh = async () => {
       if (disposed || syncing) return;
       syncing = true;
@@ -550,28 +562,57 @@ function App() {
       finally { syncing = false; }
     };
     const stream = new EventSource(api.eventsUrl(terminalContext.sessionId, resourceTerminalSnapshot?.cursor ?? 0), {withCredentials: true});
-    const update = () => { if (!timer) timer = setTimeout(() => { timer = null; void refresh(); }, 80); };
+    const update = (event?: Event) => {
+      if (event?.type === "terminal" && !terminalRefreshTimer) terminalRefreshTimer = setTimeout(() => {
+        terminalRefreshTimer = null;
+        setTerminalRevision(value => value + 1);
+      }, 32);
+      if (!timer) timer = setTimeout(() => { timer = null; void refresh(); }, event?.type === "terminal" ? 250 : 80);
+    };
     stream.onopen = update;
     stream.onerror = update;
     stream.onmessage = update;
     for (const type of ["terminal", "session", "action"]) stream.addEventListener(type, update);
     void refresh();
     const poll = setInterval(() => { if (!document.hidden) void refresh(); }, 2000);
-    return () => { disposed = true; stream.close(); clearInterval(poll); if (timer) clearTimeout(timer); };
+    return () => { disposed = true; stream.close(); clearInterval(poll); if (timer) clearTimeout(timer); if (terminalRefreshTimer) clearTimeout(terminalRefreshTimer); };
   }, [terminalContext, terminalOpen, bootstrap, refreshResourceTerminal]);
 
   useEffect(() => {
-    if (!terminalSessionId || !terminalId) { setTerminalHistory(null); return; }
+    if (!terminalSessionId || !terminalId) { setTerminalHistory(null); refreshTerminalHistoryRef.current = () => {}; return; }
     if (!terminalOpen) return;
     let cancelled = false;
+    let syncing = false;
+    let queued = false;
     setTerminalError("");
-    api.terminalHistory(terminalSessionId, terminalId).then(history => {
-      if (!cancelled) { setTerminalHistory(history); setTerminalHistories(current => ({...current, [history.terminal.id]: history})); }
-    }).catch(error => {
-      if (!cancelled) { setTerminalError(readableError(error)); handleFailure(error); }
-    });
-    return () => { cancelled = true; };
-  }, [terminalId, terminalOpen, terminalSessionId, terminalRevision, terminalRefresh, handleFailure]);
+    const refresh = async () => {
+      if (cancelled) return;
+      if (syncing) { queued = true; return; }
+      syncing = true;
+      try {
+        const outputOnly = terminalHistoriesRef.current[terminalId]?.terminal.interactive === true;
+        const history = await api.terminalHistory(terminalSessionId, terminalId, undefined, outputOnly);
+        if (!cancelled) {
+          const merged = outputOnly ? { ...history, entries: terminalHistoriesRef.current[terminalId]?.entries ?? [] } : history;
+          setTerminalHistory(merged);
+          setTerminalHistories(current => ({...current, [merged.terminal.id]: merged}));
+        }
+      } catch (error) {
+        if (!cancelled) { setTerminalError(readableError(error)); handleFailure(error); }
+      } finally {
+        syncing = false;
+        if (queued && !cancelled) { queued = false; void refresh(); }
+      }
+    };
+    refreshTerminalHistoryRef.current = () => { void refresh(); };
+    void refresh();
+    return () => { cancelled = true; if (refreshTerminalHistoryRef.current) refreshTerminalHistoryRef.current = () => {}; };
+  }, [terminalId, terminalOpen, terminalSessionId, terminalRefresh, handleFailure]);
+  useEffect(() => {
+    if (seenTerminalRevision.current === terminalRevision) return;
+    seenTerminalRevision.current = terminalRevision;
+    refreshTerminalHistoryRef.current();
+  }, [terminalRevision]);
 
   const activeSnapshot = snapshot?.session.id === sessionId ? snapshot : sessionId && catalog?.sessions.some(session => session.id === sessionId) ? snapshotCache.current.get(sessionId) ?? null : null;
   const selectedSession = activeSnapshot?.session ?? catalog?.sessions.find(item => item.id === sessionId);
@@ -1055,7 +1096,7 @@ function App() {
   function terminalInput(data: string) {
     if (!terminalSessionId || !terminalId || !terminalConnected || currentTerminal?.holder !== "user" || !["ready", "busy"].includes(currentTerminal.status) || !currentTerminal.interactive && currentTerminal.status !== "busy") return;
     const session = terminalSessionId; const terminal = terminalId;
-    inputQueue.current = inputQueue.current.then(() => api.terminalInput(session, terminal, data)).then(() => {}).catch(handleFailure);
+    inputQueue.current?.enqueue(session, terminal, data);
   }
   function terminalResize(cols: number, rows: number) {
     if (!terminalSessionId || !terminalId || !terminalConnected || currentTerminal?.status === "disconnected") return;
