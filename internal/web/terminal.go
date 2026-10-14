@@ -448,7 +448,11 @@ func (t *Terminals) receivePlain(l *liveTerminal, data string) {
 		break
 	}
 	if l.flush == nil {
-		l.flush = time.AfterFunc(100*time.Millisecond, func() {
+		interval := 100 * time.Millisecond
+		if l.interactive {
+			interval = 25 * time.Millisecond
+		}
+		l.flush = time.AfterFunc(interval, func() {
 			l.mu.Lock()
 			defer l.mu.Unlock()
 			l.flush = nil

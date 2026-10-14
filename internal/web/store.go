@@ -752,6 +752,12 @@ func (s *Store) History(id, tid string) Object {
 		return Object{"terminal": t, "entries": rows, "output": s.row("SELECT output FROM terminals WHERE id=?", tid)["output"]}
 	}).(Object)
 }
+func (s *Store) TerminalOutput(id, tid string) Object {
+	return s.read(func() any {
+		terminal := s.terminal(id, tid)
+		return Object{"terminal": terminal, "entries": []Object{}, "output": s.row("SELECT output FROM terminals WHERE id=?", tid)["output"]}
+	}).(Object)
+}
 func (s *Store) Entry(id, tid, eid string) Object {
 	return s.read(func() any {
 		s.terminal(id, tid)

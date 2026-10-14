@@ -174,9 +174,9 @@ export const api = {
   hostKeyDecision: (sessionId: string, decision: {id: string; accept: boolean; fingerprint: string}) =>
     post<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/host-key`, decision),
   closeResourceTerminal: (resourceId: string, terminalId?: string) => request<{closed: number}>(`/api/resources/${encodeURIComponent(resourceId)}/terminals${terminalId ? `/${encodeURIComponent(terminalId)}` : ""}`, { method: "DELETE" }),
-  terminalHistory: (sessionId: string, terminalId: string, signal?: AbortSignal) =>
+  terminalHistory: (sessionId: string, terminalId: string, signal?: AbortSignal, outputOnly = false) =>
     request<TerminalHistory>(
-      `/api/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}/history`,
+      `/api/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}/history${outputOnly ? "?outputOnly=1" : ""}`,
       { signal },
     ),
   terminalControl: (sessionId: string, terminalId: string, holder: "user" | "agent" | null) =>

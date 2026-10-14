@@ -4,6 +4,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import type { TerminalEntry } from "../../shared/contracts";
+import { terminalOutputUpdate } from "./terminalOutput";
 
 function terminalTheme() {
   const style = getComputedStyle(document.documentElement);
@@ -124,9 +125,11 @@ export function TerminalPane({ active = true, entries, output, interactive, show
     const display = output || (showCommandEntries ? entries.map(entry => `${entry.actor} > ${entry.command}\r\n${entry.output}\r\n`).join("") : "");
     const previous = previousOutput.current;
     if (display === previous) return;
-    const update = display.startsWith(previous) ? display.slice(previous.length) : `\x1b[2J\x1b[3J\x1b[H${display}`;
+    const update = terminalOutputUpdate(previous, display).text;
     previousOutput.current = display;
-    terminal.write(update, () => { if (terminalRef.current === terminal) terminal.scrollToBottom(); });
+    if (!update) return;
+    const following = terminal.buffer.active.viewportY >= terminal.buffer.active.baseY - 1;
+    terminal.write(update, () => { if (terminalRef.current === terminal && following) terminal.scrollToBottom(); });
   }, [entries, output, showCommandEntries]);
 
   return <>

@@ -804,7 +804,13 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if len(parts) == 6 && parts[3] == "terminals" {
 			tid, op := parts[4], parts[5]
 			if method == "GET" && op == "history" {
-				history := b.Store.History(b.terminalOwner(id, tid, false), tid)
+				owner := b.terminalOwner(id, tid, false)
+				var history Object
+				if r.URL.Query().Get("outputOnly") == "1" {
+					history = b.Store.TerminalOutput(owner, tid)
+				} else {
+					history = b.Store.History(owner, tid)
+				}
 				object(history["terminal"])["interactive"] = b.Terminals.UserInteractive(tid)
 				reply(w, 200, history)
 				return
