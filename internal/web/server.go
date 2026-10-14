@@ -100,6 +100,9 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	if options.DataDir == "" {
 		options.DataDir = filepath.Join(options.Home, "web-agent")
 	}
+	if err = prepareMagpieConfig(options.Home); err != nil {
+		return nil, err
+	}
 	if options.Token == "" {
 		options.Token = os.Getenv("LAKE_WEB_TOKEN")
 	}

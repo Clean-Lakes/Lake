@@ -169,6 +169,12 @@ func (m *Models) environment() *ai.Model {
 	return result
 }
 func (m *Models) activeLocked() *ai.Model {
+	if cfg := m.magpieModelLocked(); cfg != nil {
+		return cfg
+	}
+	return m.nativeActiveLocked()
+}
+func (m *Models) nativeActiveLocked() *ai.Model {
 	if catalog, exists := m.readProviderCatalogLocked(); exists {
 		return m.catalogModelLocked(catalog)
 	}
@@ -176,6 +182,11 @@ func (m *Models) activeLocked() *ai.Model {
 		return cfg
 	}
 	return m.environment()
+}
+func (m *Models) nativeActive() *ai.Model {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.nativeActiveLocked()
 }
 func (m *Models) Active() *ai.Model {
 	m.mu.Lock()
@@ -185,6 +196,9 @@ func (m *Models) Active() *ai.Model {
 func (m *Models) Settings() Object {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if active := m.magpieModelLocked(); active != nil {
+		return Object{"source": "settings", "configured": true, "url": active.URL, "name": active.Name, "keyConfigured": true, "protocol": active.Protocol, "supportsImageInput": active.SupportsImageInput, "supportsImageOutput": active.SupportsImageOutput, "providerName": "Magpie"}
+	}
 	active := m.activeLocked()
 	source := "settings"
 	if _, exists := m.readProviderCatalogLocked(); !exists && m.legacySaved() == nil {
@@ -206,7 +220,7 @@ func (m *Models) Settings() Object {
 func (m *Models) Input(data Object) *ai.Model {
 	p := validateProtocol(data["protocol"])
 	cfg := &ai.Model{URL: endpoint(data["url"], p), Name: text(data["name"], "name", 200), Protocol: p}
-	old := m.Active()
+	old := m.nativeActive()
 	if old != nil {
 		cfg.Key = old.Key
 		cfg.SupportsImageInput = old.SupportsImageInput
