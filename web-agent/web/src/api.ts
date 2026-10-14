@@ -109,6 +109,8 @@ export const api = {
   selectProviderModel: (providerId: string, modelId: string) => post<ProviderCatalog>("/api/settings/model/select", {providerId, modelId}),
   testProvider: (id: string, data: {baseURL: string; protocol: string; model: string; apiKey?: string | null}) => post<ModelTestResult>(`/api/settings/providers/${encodeURIComponent(id)}/test`, data),
   discoverProvider: (id: string, data: {baseURL: string; protocol: string; apiKey?: string | null}) => post<AvailableModels>(`/api/settings/providers/${encodeURIComponent(id)}/discover`, data),
+  detectProviderCapabilities: (id: string) => post<{status:string;total:number;complete:number}>(`/api/settings/providers/${encodeURIComponent(id)}/detect-capabilities`, {}),
+  providerCapabilityStatus: (id: string) => request<{status:string;total:number;complete:number}>(`/api/settings/providers/${encodeURIComponent(id)}/detect-capabilities`),
   modelSettings: (signal?: AbortSignal) => request<ModelSettings>("/api/settings/model", { signal }),
   saveModelSettings: (url: string, name: string, apiKey?: string, protocol = "openai", supportsImageInput?: boolean, supportsImageOutput?: boolean) =>
     request<ModelSettings>("/api/settings/model", {

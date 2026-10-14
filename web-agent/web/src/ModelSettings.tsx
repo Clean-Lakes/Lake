@@ -33,11 +33,18 @@ export function ModelSettings({onClose,onChanged,sendShortcut,onShortcutChange,o
   const [result,setResult] = useState<{ok:boolean;message:string}|null>(null);
   const [editor,setEditor] = useState<ProviderModel|null>(null);
   const [deleteConfirm,setDeleteConfirm] = useState(false);
+  const [detection,setDetection] = useState<{id:string;status:string;total:number;complete:number}|null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef=useRef(onClose);closeRef.current=onClose;
   const busyRef=useRef(busy);busyRef.current=busy;
   const draft = drafts[selected];
   const isBusy = !!busy;
+  async function refreshDetectedProviders() {
+    const next=await api.providers();
+    setCatalog(next);
+    setDrafts(current => ({...current,...Object.fromEntries(next.providers.filter(provider => !current[provider.id]?.dirty).map(provider => [provider.id,providerDraft(provider)]))}));
+    await onChanged();
+  }
   async function load() {
     setLoading(true);setError("");
     try {
@@ -47,6 +54,25 @@ export function ModelSettings({onClose,onChanged,sendShortcut,onShortcutChange,o
     } catch (e) {setError(readableError(e));} finally {setLoading(false);}
   }
   useEffect(() => {void load();}, []);
+  useEffect(() => {
+    if (detection?.status !== "running") return;
+    let active=true;
+    let pending=false;
+    const timer=window.setInterval(async () => {
+      if (pending) return;
+      pending=true;
+      try {
+        const status=await api.providerCapabilityStatus(detection.id);
+        if (!active) return;
+        setDetection({id:detection.id,...status});
+        if (status.status === "complete") {
+          if (active) await refreshDetectedProviders();
+        }
+      } catch { /* A later settings refresh can recover after a transient failure. */ }
+      finally { pending=false; }
+    }, 1500);
+    return () => {active=false;window.clearInterval(timer);};
+  }, [detection?.id,detection?.status]);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement|null;
     dialogRef.current?.focus();
@@ -84,13 +110,24 @@ export function ModelSettings({onClose,onChanged,sendShortcut,onShortcutChange,o
     if (!draft.dirty && !draft.isNew) return draft;
     const next=await api.saveProvider(draft.isNew ? null : draft.id,providerPayload(draft));
     const saved=next.providers.find(provider => provider.id===next.savedProviderId)!;
-    acceptCatalog(next,saved.id);await onChanged();return saved;
+    acceptCatalog(next,saved.id);await onChanged();
+    const status=await api.providerCapabilityStatus(saved.id);
+    setDetection({id:saved.id,...status});
+    if (status.status === "complete") await refreshDetectedProviders();
+    return saved;
   }
   async function run(kind:string, action:()=>Promise<void>) {
     if (isBusy) return;setBusy(kind);setError("");setResult(null);
     try {await action();} catch(e) {setError(readableError(e));} finally {setBusy("");}
   }
-  async function save() {await saveCurrent();setResult({ok:true,message:"供应商已保存，聊天中可直接选择模型。"});}
+  async function save() {await saveCurrent();setResult({ok:true,message:"供应商已保存；图片与思考级别能力会在后台识别。"});}
+  async function detectImages() {
+    if (!draft || draft.isNew || draft.dirty) throw new Error("请先保存供应商配置");
+    const status=await api.detectProviderCapabilities(draft.id);
+    setDetection({id:draft.id,...status});
+    if (status.status === "complete") await refreshDetectedProviders();
+    setResult({ok:true,message:"已开始在后台重新识别图片与思考级别能力。"});
+  }
   function requestInput() {
     const payload=providerPayload(draft!);
     return {baseURL:payload.baseURL,protocol:payload.protocol,...("apiKey" in payload ? {apiKey:payload.apiKey} : {})};
@@ -102,12 +139,12 @@ export function ModelSettings({onClose,onChanged,sendShortcut,onShortcutChange,o
   }
   async function discover() {
     const found=await api.discoverProvider(draft!.isNew ? "new" : draft!.id,requestInput());
-    const models=discoveredModels(draft!.models,found.models);
+    const models=discoveredModels(draft!.models,found.models,found.imageInputCapabilities,found.reasoningCapabilities);
     update({models});setResult({ok:true,message:`获取 ${found.models.length} 个模型，新增 ${models.length-draft!.models.length} 个；保存后生效。${found.message ? " "+found.message : ""}`});
   }
   async function activate(modelId:string) {
     const saved=await saveCurrent();
-    const next=await api.selectProviderModel(saved.id,modelId);setCatalog(next);await onChanged();setResult({ok:true,message:"已切换当前聊天模型。"});
+    const next=await api.selectProviderModel(saved.id,modelId);setCatalog(next);await onChanged();
   }
   async function remove() {
     if (!draft) return;
@@ -117,7 +154,7 @@ export function ModelSettings({onClose,onChanged,sendShortcut,onShortcutChange,o
     choose(next.providers.find(provider => provider.id!==selected)?.id || Object.keys(drafts).find(id => id!==selected && drafts[id]?.isNew) || "");
   }
   function startModel(model?:ProviderModel) {
-    setEditor(model ? {...model} : {id:crypto.randomUUID(),name:"",displayName:"",enabled:true,contextWindow:0,supportsImageInput:false,supportsImageOutput:false});setError("");
+    setEditor(model ? {...model} : {id:crypto.randomUUID(),name:"",displayName:"",enabled:true,contextWindow:0,supportsImageInput:false,supportsImageOutput:false,imageInputMode:"auto"});setError("");
   }
   function commitModel() {
     if (!editor || !draft) return;
@@ -142,9 +179,10 @@ export function ModelSettings({onClose,onChanged,sendShortcut,onShortcutChange,o
         <label className="field-label">Base URL<input spellCheck={false} autoComplete="off" maxLength={2000} placeholder="https://api.example.com/v1" value={draft.baseURL} onChange={event => update({baseURL:event.target.value})}/></label>
         <label className="field-label">API 格式<select value={draft.protocol} onChange={event => update({protocol:event.target.value})}>{formats.map(([id,label]) => <option key={id} value={id}>{label}</option>)}</select></label>
         <label className="field-label">API Key<div className="provider-key-row"><input type="password" autoComplete="new-password" spellCheck={false} maxLength={4096} placeholder={draft.clearKey ? "保存后清除密钥" : draft.keyConfigured ? "已保存密钥，留空保持不变" : "输入密钥；本地模型可留空"} value={draft.apiKey} onChange={event => update({apiKey:event.target.value,clearKey:false})}/>{draft.keyConfigured && <button type="button" className="provider-text-button" onClick={() => update({clearKey:!draft.clearKey,apiKey:""})}>{draft.clearKey ? "撤销清除" : "清除"}</button>}</div></label>
-        <div className="provider-model-heading"><h4>模型列表 <small>{draft.models.length}</small></h4><div><button type="button" className="provider-text-button" disabled={!draft.baseURL.trim() || !!editor} onClick={() => void run("discover",discover)}>从接口获取</button><button type="button" className="provider-text-button" disabled={!!editor} onClick={() => startModel()}>＋ 添加模型</button></div></div>
+        <div className="provider-model-heading"><h4>模型列表 <small>{draft.models.length}</small></h4><div><button type="button" className="provider-text-button" disabled={draft.isNew || draft.dirty || !!editor} onClick={() => void run("detect-images",detectImages)}>重新识别模型能力</button><button type="button" className="provider-text-button" disabled={!draft.baseURL.trim() || !!editor} onClick={() => void run("discover",discover)}>从接口获取</button><button type="button" className="provider-text-button" disabled={!!editor} onClick={() => startModel()}>＋ 添加模型</button></div></div>
+        {detection?.id===draft.id && detection.status==="running" && <p className="settings-note" role="status">模型能力后台识别中：{detection.complete}/{detection.total}</p>}
         <div className="provider-model-list">{!draft.models.length && !editor && <div className="provider-model-empty">添加模型 ID，或从接口获取模型列表。</div>}{draft.models.map(model => <div className="provider-model-row" key={model.id}><div className="provider-model-name"><strong title={model.name}>{model.displayName || model.name}</strong>{model.displayName && <small>{model.name}</small>}</div><span className="provider-context" title="上下文窗口">{contextLabel(model.contextWindow)}</span><button type="button" className={`provider-use ${catalog.activeProviderId===draft.id && catalog.activeModelId===model.id ? "active" : ""}`} aria-label={`使用模型 ${model.name}`} title="用于聊天" disabled={!draft.enabled || !model.enabled || !!editor} onClick={() => void run("select",() => activate(model.id))}>{catalog.activeProviderId===draft.id && catalog.activeModelId===model.id ? "使用中" : "使用"}</button><button className="provider-row-icon" aria-label={`编辑模型 ${model.name}`} disabled={!!editor} onClick={() => startModel(model)}>✎</button><button className="provider-row-icon" aria-label={`删除模型 ${model.name}`} disabled={!!editor} onClick={() => update({models:draft.models.filter(item => item.id!==model.id)})}>×</button><Switch label={`启用模型 ${model.name}`} checked={model.enabled} onChange={enabled => update({models:draft.models.map(item => item.id===model.id ? {...item,enabled} : item)})}/></div>)}</div>
-        {editor && <div className="provider-model-editor"><label className="field-label">模型 ID<input autoFocus maxLength={200} placeholder="例如 mimo-v2.6-pro" value={editor.name} onChange={event => setEditor({...editor,name:event.target.value})}/></label><div className="provider-model-editor-grid"><label className="field-label">显示名称（可选）<input maxLength={120} value={editor.displayName || ""} onChange={event => setEditor({...editor,displayName:event.target.value})}/></label><label className="field-label">上下文 tokens（可选）<input type="number" min={2048} max={2000000} step={1} placeholder="自动检测" value={editor.contextWindow || ""} onChange={event => setEditor({...editor,contextWindow:event.target.value ? Number(event.target.value) : 0})}/></label></div><div className="provider-capabilities"><label><input type="checkbox" checked={editor.supportsImageInput} onChange={event => setEditor({...editor,supportsImageInput:event.target.checked})}/>图片输入</label><label><input type="checkbox" checked={editor.supportsImageOutput} onChange={event => setEditor({...editor,supportsImageOutput:event.target.checked})}/>图片输出</label></div><div className="provider-editor-actions"><button className="provider-text-button" onClick={() => {setEditor(null);setError("");}}>取消</button><button className="button secondary" onClick={commitModel}>完成模型编辑</button></div></div>}
+        {editor && <div className="provider-model-editor"><label className="field-label">模型 ID<input autoFocus maxLength={200} placeholder="例如 mimo-v2.6-pro" value={editor.name} onChange={event => setEditor({...editor,name:event.target.value})}/></label><div className="provider-model-editor-grid"><label className="field-label">显示名称（可选）<input maxLength={120} value={editor.displayName || ""} onChange={event => setEditor({...editor,displayName:event.target.value})}/></label><label className="field-label">上下文 tokens（可选）<input type="number" min={2048} max={2000000} step={1} placeholder="自动检测" value={editor.contextWindow || ""} onChange={event => setEditor({...editor,contextWindow:event.target.value ? Number(event.target.value) : 0})}/></label></div><div className="provider-capabilities"><label>图片输入<select value={editor.imageInputMode || (editor.supportsImageInput ? "on" : "auto")} onChange={event => {const mode=event.target.value as "auto" | "on" | "off";setEditor({...editor,imageInputMode:mode,imageInputDetected:undefined,supportsImageInput:mode==="on"});}}><option value="auto">自动识别</option><option value="on">支持（手动）</option><option value="off">不支持（手动）</option></select></label><label><input type="checkbox" checked={editor.supportsImageOutput} onChange={event => setEditor({...editor,supportsImageOutput:event.target.checked})}/>图片输出</label></div><div className="provider-editor-actions"><button className="provider-text-button" onClick={() => {setEditor(null);setError("");}}>取消</button><button className="button secondary" onClick={commitModel}>完成模型编辑</button></div></div>}
         </fieldset>
         <div className="provider-delete">{deleteConfirm ? <><span>删除此供应商及其模型？</span><button className="provider-text-button" disabled={isBusy} onClick={() => setDeleteConfirm(false)}>取消</button><button className="provider-text-button danger-text" disabled={isBusy} onClick={() => void run("delete",remove)}>确认删除</button></> : <button className="provider-text-button danger-text" disabled={isBusy} onClick={() => draft.isNew ? void run("delete",remove) : setDeleteConfirm(true)}>{draft.isNew ? "移除草稿" : "删除供应商"}</button>}</div>
       </> : <div className="provider-empty"><span>◇</span><h3>添加你的模型供应商</h3><p>同一供应商可配置多个模型，聊天时直接切换。</p><button className="button primary" disabled={loading || isBusy} onClick={addProvider}>＋ 添加供应商</button></div>}</section>

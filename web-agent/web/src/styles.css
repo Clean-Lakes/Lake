@@ -739,6 +739,9 @@ a { color: inherit; }
 .image-attach-button:disabled { opacity: .4; }
 .ai-image { margin: 8px 0; }
 .ai-image img { display: block; max-width: 100%; max-height: 520px; object-fit: contain; border-radius: var(--radius-panel); }
+.ai-chat-message .ai-image { display: table; max-width: 100%; margin: 0; }
+.ai-chat-message .ai-image img { max-width: min(300px, 65vw); max-height: 190px; }
+.ai-chat-message > div + .ai-image { margin-top: 8px; }
 .ai-image a { font-size: 12px; color: var(--foreground); }
 .ai-markdown { white-space: normal; }
 .ai-markdown p { margin: 0 0 10px; line-height: 1.8; margin-bottom: 14px; }

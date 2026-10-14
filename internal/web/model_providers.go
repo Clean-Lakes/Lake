@@ -13,14 +13,40 @@ import (
 )
 
 type ProviderModel struct {
-	ID                  string `json:"id"`
-	Name                string `json:"name"`
-	DisplayName         string `json:"displayName,omitempty"`
-	Enabled             bool   `json:"enabled"`
-	ContextWindow       int    `json:"contextWindow,omitempty"`
-	SupportsImageInput  bool   `json:"supportsImageInput"`
-	SupportsImageOutput bool   `json:"supportsImageOutput"`
+	ID                  string                  `json:"id"`
+	Name                string                  `json:"name"`
+	DisplayName         string                  `json:"displayName,omitempty"`
+	Enabled             bool                    `json:"enabled"`
+	ContextWindow       int                     `json:"contextWindow,omitempty"`
+	SupportsImageInput  bool                    `json:"supportsImageInput"`
+	SupportsImageOutput bool                    `json:"supportsImageOutput"`
+	ImageInputMode      string                  `json:"imageInputMode,omitempty"`
+	ImageInputDetected  *bool                   `json:"imageInputDetected,omitempty"`
+	Reasoning           *ai.ReasoningCapability `json:"reasoningCapability,omitempty"`
 }
+
+func (model ProviderModel) imageInputMode() string {
+	if model.ImageInputMode != "" {
+		return model.ImageInputMode
+	}
+	if model.SupportsImageInput { // Preserve explicit support in legacy catalogs.
+		return "on"
+	}
+	return "auto"
+}
+
+func (model ProviderModel) allowsImageInput() bool {
+	switch model.imageInputMode() {
+	case "on":
+		return true
+	case "off":
+		return false
+	default:
+		// An unknown capability must not silently strip an attached image.
+		return model.ImageInputDetected == nil || *model.ImageInputDetected
+	}
+}
+
 type ModelProvider struct {
 	EndpointURL   string          `json:"endpointURL,omitempty"`
 	ID            string          `json:"id"`
@@ -209,7 +235,7 @@ func (m *Models) catalogModelLocked(catalog *providerCatalog) *ai.Model {
 	if !valid {
 		return nil
 	}
-	config := &ai.Model{URL: providerModelEndpoint(provider), Name: model.Name, Protocol: provider.Protocol, Key: key, SupportsImageInput: model.SupportsImageInput, SupportsImageOutput: model.SupportsImageOutput, ContextLimit: model.ContextWindow}
+	config := &ai.Model{URL: providerModelEndpoint(provider), Name: model.Name, Protocol: provider.Protocol, Key: key, SupportsImageInput: model.allowsImageInput(), SupportsImageOutput: model.SupportsImageOutput, ContextLimit: model.ContextWindow, Reasoning: model.Reasoning}
 	if model.ContextWindow > 0 {
 		config.ContextLimitSource = "settings"
 	}
@@ -241,7 +267,7 @@ func (m *Models) ResolveModelIdentity(identity string) *ai.Model {
 			if !item.Enabled {
 				continue
 			}
-			model := &ai.Model{URL: providerModelEndpoint(&provider), Name: item.Name, Protocol: provider.Protocol, Key: key, SupportsImageInput: item.SupportsImageInput, SupportsImageOutput: item.SupportsImageOutput, ContextLimit: item.ContextWindow}
+			model := &ai.Model{URL: providerModelEndpoint(&provider), Name: item.Name, Protocol: provider.Protocol, Key: key, SupportsImageInput: item.allowsImageInput(), SupportsImageOutput: item.SupportsImageOutput, ContextLimit: item.ContextWindow, Reasoning: item.Reasoning}
 			if item.ContextWindow > 0 {
 				model.ContextLimitSource = "settings"
 			}
@@ -269,6 +295,41 @@ func (m *Models) Providers() Object {
 	defer m.mu.Unlock()
 	return m.publicProviderCatalogLocked(m.catalogLocked())
 }
+
+func validatedProviderReasoning(value any) *ai.ReasoningCapability {
+	if value == nil {
+		return nil
+	}
+	data, valid := value.(map[string]any)
+	if !valid {
+		fail(400, "思考级别配置无效")
+	}
+	raw, valid := data["levels"].([]any)
+	if !valid || len(raw) > 8 {
+		fail(400, "思考级别列表无效")
+	}
+	allowed := set("none minimal low medium high xhigh max ultra")
+	levels := make([]string, 0, len(raw))
+	seen := map[string]bool{}
+	for _, value := range raw {
+		level, ok := value.(string)
+		if !ok || !allowed[level] || seen[level] {
+			fail(400, "思考级别列表无效")
+		}
+		seen[level] = true
+		levels = append(levels, level)
+	}
+	defaultLevel := stringOf(data["default"])
+	if defaultLevel != "" && !seen[defaultLevel] {
+		fail(400, "默认思考级别无效")
+	}
+	source := stringOf(data["source"])
+	if source != "" && source != "provider" && source != "model" {
+		fail(400, "思考级别来源无效")
+	}
+	return &ai.ReasoningCapability{Levels: levels, Default: defaultLevel, Source: source}
+}
+
 func validatedProviderModels(value any) []ProviderModel {
 	rows, ok := value.([]any)
 	if !ok || len(rows) > 256 {
@@ -311,7 +372,28 @@ func validatedProviderModels(value any) []ProviderModel {
 				fail(400, "上下文须为 0（自动）或 2048～2000000 tokens")
 			}
 		}
-		models = append(models, ProviderModel{ID: id, Name: name, DisplayName: display, Enabled: enabled, ContextWindow: context, SupportsImageInput: data["supportsImageInput"] == true, SupportsImageOutput: data["supportsImageOutput"] == true})
+		imageMode := stringOf(data["imageInputMode"])
+		if imageMode == "" {
+			if data["supportsImageInput"] == true {
+				imageMode = "on"
+			} else {
+				imageMode = "auto"
+			}
+		}
+		if imageMode != "auto" && imageMode != "on" && imageMode != "off" {
+			fail(400, "图片输入模式无效")
+		}
+		var detected *bool
+		if raw, exists := data["imageInputDetected"]; exists && raw != nil {
+			value, ok := raw.(bool)
+			if !ok {
+				fail(400, "图片输入检测结果无效")
+			}
+			if imageMode == "auto" {
+				detected = &value
+			}
+		}
+		models = append(models, ProviderModel{ID: id, Name: name, DisplayName: display, Enabled: enabled, ContextWindow: context, SupportsImageInput: imageMode == "on" || imageMode == "auto" && detected != nil && *detected, SupportsImageOutput: data["supportsImageOutput"] == true, ImageInputMode: imageMode, ImageInputDetected: detected, Reasoning: validatedProviderReasoning(data["reasoningCapability"])})
 	}
 	return models
 }
@@ -371,6 +453,20 @@ func (m *Models) SaveProvider(id string, data Object) Object {
 		}
 	}
 	if old != nil {
+		for i := range provider.Models {
+			model := &provider.Models[i]
+			previous := findProviderModel(old, model.ID)
+			sameTarget := previous != nil && previous.Name == model.Name && provider.BaseURL == old.BaseURL && provider.Protocol == old.Protocol && provider.CredentialRef == old.CredentialRef
+			if model.imageInputMode() == "auto" && !sameTarget {
+				model.ImageInputDetected = nil
+				model.SupportsImageInput = false
+			}
+			if !sameTarget {
+				model.Reasoning = nil
+			} else if model.Reasoning == nil {
+				model.Reasoning = previous.Reasoning
+			}
+		}
 		*old = provider
 	} else {
 		if len(catalog.Providers) >= 128 {
@@ -383,6 +479,7 @@ func (m *Models) SaveProvider(id string, data Object) Object {
 	if previousRef != provider.CredentialRef {
 		m.removeProviderKeyLocked(previousRef)
 	}
+	m.startProviderCapabilityDetectionLocked(provider.ID, catalog, false)
 	result := m.publicProviderCatalogLocked(catalog)
 	result["savedProviderId"] = provider.ID
 	return result
@@ -410,6 +507,10 @@ func (m *Models) DeleteProvider(id string) Object {
 	catalog.Providers = next
 	ensureActiveProvider(catalog)
 	m.saveProviderCatalogLocked(catalog)
+	if job := m.capabilityJobs[id]; job != nil {
+		job.cancel()
+		delete(m.capabilityJobs, id)
+	}
 	m.removeProviderKeyLocked(ref)
 	return m.publicProviderCatalogLocked(catalog)
 }
@@ -541,6 +642,10 @@ func (m *Models) syncLegacyProviderLocked(cfg *ai.Model) {
 		model = &provider.Models[len(provider.Models)-1]
 	}
 	model.Enabled, model.SupportsImageInput, model.SupportsImageOutput = true, cfg.SupportsImageInput, cfg.SupportsImageOutput
+	model.ImageInputMode, model.ImageInputDetected = "off", nil
+	if cfg.SupportsImageInput {
+		model.ImageInputMode = "on"
+	}
 	catalog.ActiveProviderID, catalog.ActiveModelID = provider.ID, model.ID
 	m.saveProviderCatalogLocked(catalog)
 	m.removeProviderKeyLocked(previous)

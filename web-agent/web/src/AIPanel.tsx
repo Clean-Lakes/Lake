@@ -96,7 +96,7 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
         }
         if (entry.card && ["thinking", "operation", "shell"].includes(entry.card.type)) return <ThinkingTimeline key={entry.id} cards={group.map(item => item.card!)} live={thinkingVisible && group.at(-1)?.id === visibleEntries.at(-1)?.id} onInspect={onInspect}/>;
         if (entry.message) return <div key={entry.id} className={`ai-chat-message ai-role-${entry.message.role}`}>
-          {entry.message.role !== "user" && <small>系统</small>}<div>{entry.message.role === "system" ? displayAiError(entry.message.text) : entry.message.text}</div>
+          {entry.message.role !== "user" && <small>系统</small>}{entry.message.text && <div>{entry.message.role === "system" ? displayAiError(entry.message.text) : entry.message.text}</div>}
           {entry.message.images?.map(image => <figure key={image.id} className="ai-image"><img src={image.url || `data:${image.mimeType};base64,${image.base64}`} alt={image.name || "用户附加图片"}/></figure>)}
         </div>;
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;

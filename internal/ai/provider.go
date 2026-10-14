@@ -66,7 +66,10 @@ func modelPayload(m Model, history []Message, tools []Tool) (string, map[string]
 		}
 		message := map[string]any{"role": h.Role, "content": h.Content}
 		if h.Role == "user" && len(h.Images) > 0 && m.SupportsImageInput && p != "ollama" {
-			parts := []any{map[string]any{"type": "text", "text": h.Content}}
+			parts := []any{}
+			if h.Content != "" {
+				parts = append(parts, map[string]any{"type": "text", "text": h.Content})
+			}
 			for _, img := range h.Images {
 				parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]any{"url": imageURL(img)}})
 			}
@@ -130,7 +133,10 @@ func modelPayload(m Model, history []Message, tools []Tool) (string, map[string]
 			if h.Content != "" || len(h.Images) > 0 {
 				content := any(h.Content)
 				if h.Role == "user" && m.SupportsImageInput && len(h.Images) > 0 {
-					parts := []any{map[string]any{"type": "input_text", "text": h.Content}}
+					parts := []any{}
+					if h.Content != "" {
+						parts = append(parts, map[string]any{"type": "input_text", "text": h.Content})
+					}
 					for _, img := range h.Images {
 						parts = append(parts, map[string]any{"type": "input_image", "image_url": imageURL(img)})
 					}
@@ -853,6 +859,7 @@ func Models(ctx context.Context, m Model) (any, error) {
 	names := []string{}
 	limits := map[string]int{}
 	reasoning := map[string]ReasoningCapability{}
+	imageInput := map[string]bool{}
 	for _, v := range items {
 		item := obj(v)
 		name := str(item["id"])
@@ -862,6 +869,9 @@ func Models(ctx context.Context, m Model) (any, error) {
 		name = strings.TrimPrefix(name, "models/")
 		if name != "" && len(name) < 200 {
 			names = append(names, name)
+			if supported := imageInputMetadata(item); supported != nil {
+				imageInput[name] = *supported
+			}
 			if capability := reasoningMetadata(item); capability != nil {
 				reasoning[name] = *capability
 			}
@@ -876,7 +886,29 @@ func Models(ctx context.Context, m Model) (any, error) {
 			break
 		}
 	}
-	return map[string]any{"models": names, "contextLimits": limits, "reasoningCapabilities": reasoning}, nil
+	return map[string]any{"models": names, "contextLimits": limits, "reasoningCapabilities": reasoning, "imageInputCapabilities": imageInput}, nil
+}
+
+func imageInputMetadata(item map[string]any) *bool {
+	for _, raw := range []any{item["supports_image_input"], item["supportsImageInput"], item["supports_vision"], obj(item["capabilities"])["vision"]} {
+		if value, ok := raw.(bool); ok {
+			return &value
+		}
+	}
+	for _, raw := range []any{obj(item["architecture"])["input_modalities"], item["input_modalities"]} {
+		values, ok := raw.([]any)
+		if !ok {
+			continue
+		}
+		supported := false
+		for _, value := range values {
+			if strings.EqualFold(str(value), "image") {
+				supported = true
+			}
+		}
+		return &supported
+	}
+	return nil
 }
 
 // Some compatible providers restart call IDs at each response. Keep persisted

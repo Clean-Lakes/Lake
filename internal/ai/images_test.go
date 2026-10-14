@@ -43,6 +43,22 @@ func TestImageValidationAndSixProtocolPayloads(t *testing.T) {
 		t.Fatal("non-image accepted")
 	}
 }
+
+func TestImageOnlyInputAndOpenAIResponsePayload(t *testing.T) {
+	image := fixtureImage(t)
+	if err := (TurnInput{Images: []ImageAttachment{image}}).validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := (TurnInput{}).validate(); err == nil {
+		t.Fatal("empty turn accepted")
+	}
+	for _, protocol := range []string{"openai", "openai-response"} {
+		_, body, err := modelPayload(Model{URL: "http://localhost/test", Name: "vision", Protocol: protocol, SupportsImageInput: true}, []Message{{Role: "user", Images: []ImageAttachment{image}}}, nil)
+		if err != nil || !strings.Contains(js(body), image.Base64) || strings.Contains(js(body), `"text":""`) {
+			t.Fatal(protocol, err)
+		}
+	}
+}
 func TestNativeImageOutputAndHistory(t *testing.T) {
 	img := fixtureImage(t)
 	m, close := fakeModel(t, func(_ int, _ map[string]any) any {
