@@ -220,6 +220,9 @@ function App() {
   const permissionButtonRef = useRef<HTMLButtonElement>(null);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [modelMenu, setModelMenu] = useState<AvailableModels & { loading: boolean }>({ loading: false, models: [], message: "" });
+  const [modelSearch,setModelSearch] = useState("");
+  const visibleModelEntries=modelMenu.entries?.filter(entry => `${entry.displayName} ${entry.name} ${entry.providerName}`.toLowerCase().includes(modelSearch.trim().toLowerCase()));
+  const visibleModelNames=modelMenu.models.filter(name => name.toLowerCase().includes(modelSearch.trim().toLowerCase()));
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const [mention, setMention] = useState<{ query: string; index: number } | null>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
@@ -784,6 +787,7 @@ function App() {
   const openSettings = useCallback(() => {setSettingsOpen(true);}, []);
   async function openModelMenu() {
     if (modelMenuOpen) { setModelMenuOpen(false); return; }
+    setModelSearch("");
     setModelMenuOpen(true);
     setModelMenu({ loading: true, models: [], message: "" });
     try {
@@ -793,7 +797,6 @@ function App() {
   }
   async function switchModel(model: string | AvailableModelEntry) {
     if (pendingOperation) return;
-    if (typeof model !== "string" && model.providerId === "magpie") {setModelMenuOpen(false);return;}
     setPendingOperation("model");
     try {
       if (typeof model === "string") {
@@ -1360,10 +1363,10 @@ function App() {
           }}/><div className="composer-send-actions">{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止本轮" title="停止本轮，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${turnActive && !hasMessageDraft ? " stop-button" : ""}`} type={turnActive && !hasMessageDraft ? "button" : "submit"} aria-label={turnActive && !hasMessageDraft ? "停止本轮" : queueMode ? "挂起消息" : "发送消息"} title={turnActive && !hasMessageDraft ? "停止本轮" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`} aria-busy={stoppingTurn} onClick={turnActive && !hasMessageDraft ? () => void stopCurrentTurn() : undefined} disabled={turnActive && !hasMessageDraft ? stoppingTurn || !sessionConnected : !hasMessageDraft || !sessionConnected || !modelConfigured || !!pendingOperation || stoppingTurn || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)}><Glyph name={turnActive && !hasMessageDraft ? "stop" : "return"} size={16}/></button></div></div></div><div className="composer-foot"><input ref={attachmentInputRef} className="visually-hidden" type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加文本文件或图片" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}>权限</button>}<div className="composer-status"><div className="model-switch-wrap" ref={modelMenuRef}>
           <button type="button" className={`model-switch ${modelConfigured ? "" : "model-missing"}`} title={bootstrap?.modelName??"选择模型"} aria-label={modelConfigured ? `选择模型：${bootstrap?.modelName??"已配置"}` : "选择模型"} onClick={() => void openModelMenu()} aria-haspopup="menu" aria-expanded={modelMenuOpen}><span>{modelConfigured ? (bootstrap?.modelName?.split("/").pop() ?? "已配置") : "选择模型"}</span><Glyph name="chevron" size={13} className={modelMenuOpen ? "chevron-open" : ""}/></button>
           {modelMenuOpen && <div className="model-menu" role="menu" aria-label="切换模型">
-            <span className="model-menu-head">选择模型</span>
+            <span className="model-menu-head">选择模型</span>{!modelMenu.loading && modelMenu.models.length > 8 && <input className="model-menu-search" aria-label="搜索模型" placeholder="搜索模型…" value={modelSearch} onChange={event => setModelSearch(event.target.value)}/>}
             {modelMenu.loading && <p className="model-menu-note">正在获取可用模型…</p>}
-            {!modelMenu.loading && modelMenu.entries && [...new Set(modelMenu.entries.map(entry => entry.providerId))].map(providerId => <div key={providerId} role="group" aria-label={modelMenu.entries!.find(entry => entry.providerId===providerId)!.providerName}><div className="model-menu-provider">{modelMenu.entries!.find(entry => entry.providerId===providerId)!.providerName}</div>{modelMenu.entries!.filter(entry => entry.providerId===providerId).map(entry => {const active=entry.providerId===modelMenu.activeProviderId && entry.modelId===modelMenu.activeModelId;return <button type="button" role="menuitemradio" aria-checked={active} key={entry.modelId} className={`model-menu-item ${active ? "selected" : ""}`} onClick={() => void switchModel(entry)} disabled={!!pendingOperation}><span>{entry.displayName}</span>{active && <Glyph name="check" size={14}/>}</button>;})}</div>)}
-            {!modelMenu.loading && !modelMenu.entries && modelMenu.models.map(model => <button type="button" role="menuitemradio" aria-checked={model===bootstrap?.modelName} key={model} className={`model-menu-item ${model===bootstrap?.modelName ? "selected" : ""}`} onClick={() => void switchModel(model)} disabled={!!pendingOperation}><span>{model}</span>{model===bootstrap?.modelName && <Glyph name="check" size={14}/>}</button>)}
+            {!modelMenu.loading && visibleModelEntries && [...new Set(visibleModelEntries.map(entry => entry.providerId))].map(providerId => <div key={providerId} role="group" aria-label={visibleModelEntries!.find(entry => entry.providerId===providerId)!.providerName}><div className="model-menu-provider">{visibleModelEntries!.find(entry => entry.providerId===providerId)!.providerName}</div>{visibleModelEntries!.filter(entry => entry.providerId===providerId).map(entry => {const active=entry.providerId===modelMenu.activeProviderId && entry.modelId===modelMenu.activeModelId;return <button type="button" role="menuitemradio" aria-checked={active} key={entry.modelId} className={`model-menu-item ${active ? "selected" : ""}`} onClick={() => void switchModel(entry)} disabled={!!pendingOperation}><span>{entry.displayName}</span>{active && <Glyph name="check" size={14}/>}</button>;})}</div>)}
+            {!modelMenu.loading && !modelMenu.entries && visibleModelNames.map(model => <button type="button" role="menuitemradio" aria-checked={model===bootstrap?.modelName} key={model} className={`model-menu-item ${model===bootstrap?.modelName ? "selected" : ""}`} onClick={() => void switchModel(model)} disabled={!!pendingOperation}><span>{model}</span>{model===bootstrap?.modelName && <Glyph name="check" size={14}/>}</button>)}
             {!modelMenu.loading && modelMenu.message && (modelMenu.source==="magpie" || !modelMenu.models.length) && <p className="model-menu-note">{modelMenu.message}</p>}
             <div className="model-menu-sep"/>
             <button type="button" role="menuitem" className="model-menu-item" onClick={() => { setModelMenuOpen(false); void openSettings(); }}><span>模型设置…</span><Glyph name="settings" size={14}/></button>

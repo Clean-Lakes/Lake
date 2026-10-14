@@ -247,8 +247,13 @@ func (m *Models) catalogModelLocked(catalog *providerCatalog) *ai.Model {
 func (m *Models) ResolveModelIdentity(identity string) *ai.Model {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if model := m.magpieModelLocked(); model != nil && ai.ModelIdentity(*model) == identity {
-		return model
+	if models, _, _ := m.magpieModelsLocked(); len(models) > 0 {
+		for _, item := range models {
+			if ai.ModelIdentity(item.Model) == identity {
+				model := item.Model
+				return &model
+			}
+		}
 	}
 	catalog, exists := m.readProviderCatalogLocked()
 	if !exists {
@@ -520,6 +525,13 @@ func (m *Models) DeleteProvider(id string) Object {
 func (m *Models) ActivateProviderModel(providerID, modelID string) Object {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if providerID == "magpie" {
+		m.activateMagpieModelLocked(modelID)
+		if catalog, exists := m.readProviderCatalogLocked(); exists {
+			return m.publicProviderCatalogLocked(catalog)
+		}
+		return Object{"providers": []Object{}, "activeProviderId": "", "activeModelId": ""}
+	}
 	catalog := m.catalogLocked()
 	provider := findProvider(catalog, providerID)
 	model := findProviderModel(provider, modelID)
@@ -596,9 +608,14 @@ func (m *Models) ProviderInput(id string, data Object) *ai.Model {
 func (m *Models) ConfiguredProviderModels() (Object, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if model := m.magpieModelLocked(); model != nil {
-		entry := Object{"providerId": "magpie", "providerName": "Magpie", "modelId": "magpie", "name": model.Name, "displayName": model.Name, "contextWindow": model.ContextLimit}
-		return Object{"models": []string{model.Name}, "entries": []Object{entry}, "activeProviderId": "magpie", "activeModelId": "magpie", "source": "magpie", "message": "请在 Magpie 的 Agent 页面切换 Lake 使用的模型"}, true
+	if models, selected, _ := m.magpieModelsLocked(); len(models) > 0 {
+		entries := make([]Object, 0, len(models))
+		names := make([]string, 0, len(models))
+		for _, item := range models {
+			entries = append(entries, Object{"providerId": "magpie", "providerName": "Magpie", "modelId": item.ID, "name": item.ID, "displayName": item.Label, "contextWindow": item.Model.ContextLimit})
+			names = append(names, item.ID)
+		}
+		return Object{"models": names, "entries": entries, "activeProviderId": "magpie", "activeModelId": selected, "source": "magpie", "message": "Magpie 管理可用模型；在 Lake 中切换当前模型"}, true
 	}
 	catalog, exists := m.readProviderCatalogLocked()
 	if !exists {
