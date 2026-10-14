@@ -3,6 +3,10 @@ html.lake-windows-chrome .workspace-header { height: 48px; padding-right: 148px;
 html.lake-windows-chrome .terminal-panel-header { user-select: none; }
 html.lake-windows-chrome .app-shell.terminal-is-open .workspace-header { padding-right: 22px; }
 html.lake-windows-chrome .app-shell.terminal-is-open .terminal-panel-header { padding-right: 148px; }
+/* Modals dim the workbench but not the integrated titlebar row, so the
+   window controls keep matching the header next to them instead of sitting
+   on a bright block beside the dimmed row. */
+html.lake-windows-chrome .modal-scrim { inset: 48px 0 0 0; }
 html.lake-windows-chrome .workspace-header button,
 html.lake-windows-chrome .sidebar-brand-row button,
 html.lake-windows-chrome .terminal-panel-header button { user-select: auto; }

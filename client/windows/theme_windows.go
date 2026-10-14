@@ -45,6 +45,13 @@ type titleBarInfo struct {
 	Rects  [6]windows.Rect
 }
 
+// NCCALCSIZE_PARAMS: the window rect on entry, the proposed client rect that
+// DefSubclassProc overwrites, the restorable rect, and the window's show state.
+type nccalcsizeParams struct {
+	Rg  [3]windows.Rect
+	Pos uintptr
+}
+
 func applyWindowColors(handle unsafe.Pointer) error {
 	return installWindowTheme(uintptr(handle), false)
 }
@@ -121,6 +128,9 @@ func windowThemeProc(hwnd, msg, wp, lp, id, ref uintptr) uintptr {
 		r, _, _ := themeDefSubclass.Call(hwnd, msg, wp, lp)
 		return r
 	}
+	if msg == 0x83 { // WM_NCCALCSIZE: run after Def, but keep the entry rect.
+		return stretchClientOverTopFrame(hwnd, msg, wp, lp)
+	}
 	r, _, _ := themeDefSubclass.Call(hwnd, msg, wp, lp)
 	switch msg {
 	case 0x31a, 0x1a: // WM_THEMECHANGED, WM_SETTINGCHANGE.
@@ -153,6 +163,32 @@ func windowThemeProc(hwnd, msg, wp, lp, id, ref uintptr) uintptr {
 		case 0x85, 0x86, 0x6, 0xc, 0x5, 0x47, 0x2e0, 0xa0, 0x2a2, 0xa1, 0xa2, themeRefresh:
 			s.paint(hwnd)
 		}
+	}
+	return r
+}
+
+// The workbench replaces the caption. DefWindowProc still reserves a caption
+// band above the client, which DWM paints in caption color — a white strip
+// under the window's top edge. Keep the side frame insets (the native resize
+// border) and give the top the same inset so content reaches the top frame
+// exactly as it reaches the sides. rgrc[0] holds the proposed window rect on
+// entry and is overwritten with the client rect by DefSubclassProc, so the
+// entry copy is taken first. The side inset is measured after Def.
+func stretchClientOverTopFrame(hwnd, msg, wp, lp uintptr) uintptr {
+	if wp != 0 {
+		params := *(**nccalcsizeParams)(unsafe.Pointer(&lp))
+		entry := params.Rg[0]
+		r, _, _ := themeDefSubclass.Call(hwnd, msg, wp, lp)
+		if inset := params.Rg[0].Left - entry.Left; inset >= 0 && params.Rg[0].Top-entry.Top > inset {
+			params.Rg[0].Top = entry.Top + inset
+		}
+		return r
+	}
+	rect := *(**windows.Rect)(unsafe.Pointer(&lp))
+	entry := *rect
+	r, _, _ := themeDefSubclass.Call(hwnd, msg, wp, lp)
+	if inset := rect.Left - entry.Left; inset >= 0 && rect.Top-entry.Top > inset {
+		rect.Top = entry.Top + inset
 	}
 	return r
 }
