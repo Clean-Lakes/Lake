@@ -123,6 +123,54 @@ func TestRealSSHPersistentPTY(t *testing.T) {
 		t.Fatal("SSH binding or reuse failed")
 	}
 	b.Terminals.Close(sid, bound)
+	// Exercise the same SSH PTY path as the terminal drawer, including sh's
+	// nonprinting prompt frames and a resize without a forced clear/redraw.
+	for _, shell := range []string{"sh", "bash"} {
+		var raw Object
+		func() {
+			defer func() {
+				if p := recover(); p != nil {
+					for _, failed := range objects(b.Store.Snapshot(sid)["terminals"]) {
+						if failed["status"] == "disconnected" {
+							t.Logf("isolated SSH initialization output: %q", b.Store.History(sid, stringOf(failed["id"]))["output"])
+						}
+					}
+					t.Fatalf("isolated SSH %s initialization failed: %v", shell, p)
+				}
+			}()
+			raw = b.Terminals.OpenInteractive(ctx, sid, stringOf(r["id"]), shell)
+		}()
+		rawID := stringOf(raw["id"])
+		time.Sleep(200 * time.Millisecond)
+		home, _ := os.UserHomeDir()
+		if b.Store.Terminal(sid, rawID)["cwd"] != home {
+			t.Fatalf("SSH %s did not start at home", shell)
+		}
+		output := stringOf(b.Store.History(sid, rawID)["output"])
+		if strings.Count(output, "@") != 1 {
+			t.Fatalf("SSH %s duplicated startup prompt: %q", shell, output)
+		}
+		for _, cols := range []int{60, 120, 80} {
+			b.Terminals.Resize(sid, rawID, cols, 25)
+			time.Sleep(100 * time.Millisecond)
+			screen := strings.TrimSpace(b.Terminals.Screen(sid, rawID, "viewport", 25, 10000))
+			if strings.Count(screen, "@") != 1 || !strings.Contains(screen, " ~]") {
+				t.Fatalf("SSH %s prompt corrupted after resize: %q", shell, screen)
+			}
+		}
+		b.Terminals.Input(sid, rawID, "printf '中文", false)
+		b.Terminals.Resize(sid, rawID, 70, 25)
+		time.Sleep(100 * time.Millisecond)
+		b.Terminals.Input(sid, rawID, "输出\\n'\r", false)
+		deadline := time.Now().Add(2 * time.Second)
+		for !strings.Contains(stringOf(b.Store.History(sid, rawID)["output"]), "中文输出\r\n") && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if !strings.Contains(stringOf(b.Store.History(sid, rawID)["output"]), "中文输出\r\n") {
+			t.Fatalf("SSH %s UTF-8 output missing: %q", shell, b.Store.History(sid, rawID)["output"])
+		}
+		b.Terminals.Close(sid, rawID)
+	}
 	// An empty trust store must refuse; no permissive fallback to a local terminal.
 	empty := filepath.Join(dir, "empty-known-hosts")
 	must(os.WriteFile(empty, nil, 0600))

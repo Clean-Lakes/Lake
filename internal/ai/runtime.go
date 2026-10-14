@@ -215,9 +215,10 @@ func (e *Engine) execRuntime(ctx context.Context, c Config, a map[string]any, ar
 		cmd.Dir = c.Workspace
 	}
 	cmd.Stdin = strings.NewReader(input)
-	output := &limitBuffer{limit: 100000}
-	stdout := &limitBuffer{limit: 100000}
-	stderr := &limitBuffer{limit: 100000}
+	outputLimit := bounded(num(a["__output_limit"], 100000), 100000, 3<<20)
+	output := &limitBuffer{limit: outputLimit}
+	stdout := &limitBuffer{limit: outputLimit}
+	stderr := &limitBuffer{limit: outputLimit}
 	cmd.Stdout = io.MultiWriter(output, stdout)
 	cmd.Stderr = io.MultiWriter(output, stderr)
 	err := cmd.Run()
@@ -371,35 +372,48 @@ func (e *Engine) file(ctx context.Context, s *session, c Config, name string, a 
 	if err := safeFile(path); err != nil {
 		return nil, err
 	}
+	if err := safeConfiguredFile(c, path); err != nil {
+		return nil, err
+	}
 	if str(a["runtime"]) == "local" || str(a["runtime"]) == "" && c.Runtime == "local" {
 		real, err := filepath.EvalSymlinks(path)
 		if err == nil {
 			if err = safeFile(real); err != nil {
 				return nil, err
 			}
+			if err = safeConfiguredFile(c, real); err != nil {
+				return nil, err
+			}
 		}
+	}
+	if name == "read" {
+		result, err := e.readFilePage(ctx, c, a)
+		if err == nil && str(obj(result)["content_hash"]) != "" {
+			s.mu.Lock()
+			if s.state.FileReads == nil {
+				s.state.FileReads = map[string]string{}
+			}
+			s.state.FileReads[fileReadKey(c, a)] = str(obj(result)["content_hash"])
+			err = e.save(s)
+			s.mu.Unlock()
+		}
+		return result, err
+	}
+	if name == "glob" || name == "grep" {
+		return e.searchFiles(ctx, c, name, a)
 	}
 	switch name {
 	case "ls":
 		return e.execRuntime(ctx, c, a, []string{"ls", "-la", "--", path}, "")
-	case "glob":
-		pattern := str(a["pattern"])
-		if strings.Contains(pattern, "/") {
-			return nil, errors.New("glob pattern is a basename glob")
-		}
-		return e.execRuntime(ctx, c, a, []string{"find", path, "-type", "d", "(", "-name", ".ssh", "-o", "-name", ".lake", "-o", "-name", "Keychains", ")", "-prune", "-o", "-name", pattern, "-print"}, "")
-	case "grep":
-		return e.execRuntime(ctx, c, a, []string{"grep", "-rnE", "--exclude-dir=.ssh", "--exclude-dir=.lake", "--exclude-dir=Keychains", "--", str(a["pattern"]), path}, "")
+
 	}
 	before, exists, err := runtimeFile(ctx, e, c, a, path)
 	if err != nil {
 		return nil, err
 	}
-	if name == "read" {
-		if !exists {
-			return nil, errors.New("file not found")
-		}
-		return map[string]any{"path": path, "content": redact(before, c)}, nil
+
+	if expected, ok := a["expected_hash"].(string); ok && expected != hash(before) {
+		return nil, errors.New("file changed since read; expected_hash mismatch")
 	}
 	if expected, ok := a["__expected_hash"].(string); ok && (hash(before) != expected || exists != a["__expected_exists"]) {
 		return nil, errors.New("file changed after preview; approval expired")
@@ -443,6 +457,10 @@ func (e *Engine) file(ctx context.Context, s *session, c Config, name string, a 
 	}
 	undo := FileUndo{TargetHash: targetHash, Path: path, Before: before, AfterHash: hash(next), Existed: exists, Runtime: target, AssetRef: ref, Container: str(a["container_id"])}
 	s.mu.Lock()
+	if s.state.FileReads == nil {
+		s.state.FileReads = map[string]string{}
+	}
+	s.state.FileReads[fileReadKey(c, a)] = hash(next)
 	s.state.Undo = append(s.state.Undo, undo)
 	s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "diff", Title: path, Data: map[string]any{"before": before, "after": next, "deleted": name == "delete", "existed": exists, "runtime": target, "assetRef": ref, "containerId": str(a["container_id"])}, Status: "completed", At: timestamp()})
 	err = e.save(s)
@@ -577,3 +595,18 @@ func (e *Engine) filePreview(ctx context.Context, c Config, name string, a map[s
 }
 
 var containerName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,255}$`)
+
+func safeConfiguredFile(c Config, path string) error {
+	if c.CredentialDir == "" {
+		return nil
+	}
+	root := c.CredentialDir
+	if real, err := filepath.EvalSymlinks(root); err == nil {
+		root = real
+	}
+	rel, err := filepath.Rel(root, path)
+	if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return errors.New("credential files cannot be accessed by model tools")
+	}
+	return nil
+}

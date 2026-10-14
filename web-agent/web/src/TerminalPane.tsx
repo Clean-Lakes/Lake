@@ -5,6 +5,18 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import type { TerminalEntry } from "../../shared/contracts";
 
+function terminalTheme() {
+  const style = getComputedStyle(document.documentElement);
+  const token = (name: string) => style.getPropertyValue(`--terminal-${name}`).trim();
+  return {
+    background: token("background"), foreground: token("foreground"),
+    cursor: token("foreground"), cursorAccent: token("background"), selectionBackground: token("selection"),
+    black: token("black"), brightBlack: token("bright-black"), red: token("red"), green: token("green"),
+    yellow: token("yellow"), blue: token("blue"), magenta: token("magenta"), cyan: token("cyan"),
+    white: token("bright-black"), brightWhite: token("foreground"),
+  };
+}
+
 export type TerminalHandle = { focus: () => void; clear: () => void };
 type Props = { active?: boolean; entries: TerminalEntry[]; output: string; interactive: boolean; showCommandEntries?: boolean; onInput: (data: string) => void; onResize: (cols: number, rows: number) => void; controlRef?: RefObject<TerminalHandle | null> };
 
@@ -46,22 +58,15 @@ export function TerminalPane({ active = true, entries, output, interactive, show
       fontSize: 13,
       lineHeight: 1.15,
       scrollback: 5000,
-      theme: {
-        background: "#eef0f5",
-        foreground: "#424955",
-        cursor: "#646b75",
-        cursorAccent: "#eef0f5",
-        selectionBackground: "#ccd2df",
-        black: "#424955", brightBlack: "#707781",
-        blue: "#5274a5", cyan: "#458e98", green: "#48866d",
-        red: "#b45c69", magenta: "#aa597d", yellow: "#a58544",
-      },
+      theme: terminalTheme(),
     });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     fitRef.current = fit;
     terminal.open(hostRef.current);
     terminalRef.current = terminal;
+    const themeObserver = new MutationObserver(() => { terminal.options.theme = terminalTheme(); });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const inputListener = terminal.onData(data => { if (propsRef.current.interactive) propsRef.current.onInput(data); });
     const sizeListener = terminal.onResize(({ cols, rows }) => { if (propsRef.current.active) propsRef.current.onResize(cols, rows); });
     let resizeFrame = 0;
@@ -85,6 +90,7 @@ export function TerminalPane({ active = true, entries, output, interactive, show
     return () => {
       closed = true;
       observer.disconnect();
+      themeObserver.disconnect();
       clearTimeout(resizeTimer);
       inputListener.dispose();
       sizeListener.dispose();

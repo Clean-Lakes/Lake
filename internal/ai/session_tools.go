@@ -1,0 +1,275 @@
+package ai
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"strings"
+)
+
+type Todo struct {
+	Content  string `json:"content"`
+	Status   string `json:"status"`
+	Priority string `json:"priority,omitempty"`
+}
+type UserQuestion struct {
+	ID          string           `json:"id"`
+	Title       string           `json:"title"`
+	Reason      string           `json:"reason,omitempty"`
+	Options     []QuestionOption `json:"options,omitempty"`
+	MultiSelect bool             `json:"multi_select,omitempty"`
+}
+type QuestionRequest struct {
+	ID        string         `json:"id"`
+	Questions []UserQuestion `json:"questions"`
+}
+
+func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, call Call, a map[string]any) (result any, err error) {
+	cardID := uid()
+	s.mu.Lock()
+	id := s.state.View.Session
+	s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "operation", Title: call.Name, Data: map[string]any{"arguments": a, "target": "当前项目/会话", "call_id": call.ID}, Status: "running", At: timestamp()})
+	e.notify(s, "toolCall", map[string]any{"name": call.Name})
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for i := range s.state.View.Cards {
+			card := &s.state.View.Cards[i]
+			if card.ID == cardID {
+				card.Status = "completed"
+				card.Content = utf8Prefix(redact(js(result), c), 32000)
+				if err != nil {
+					card.Status = "failed"
+					card.Content = redact(err.Error(), c)
+				}
+			}
+		}
+		if saveErr := e.save(s); err == nil && saveErr != nil {
+			err = saveErr
+		}
+		e.notify(s, "operation", map[string]any{"card_id": cardID})
+	}()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	switch call.Name {
+	case "todo_read":
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return map[string]any{"todos": append([]Todo{}, s.state.View.Todos...)}, nil
+	case "todo_write":
+		var input struct {
+			Todos []Todo `json:"todos"`
+		}
+		if json.Unmarshal([]byte(call.Arguments), &input) != nil || len(input.Todos) > 100 {
+			return nil, errors.New("invalid todo list")
+		}
+		for _, t := range input.Todos {
+			if strings.TrimSpace(t.Content) == "" || len(t.Content) > 2000 || !strings.Contains(" pending in_progress completed ", " "+t.Status+" ") || t.Priority != "" && !strings.Contains(" high medium low ", " "+t.Priority+" ") {
+				return nil, errors.New("invalid todo item")
+			}
+		}
+		s.mu.Lock()
+		s.state.View.Todos = input.Todos
+		err = e.save(s)
+		e.notify(s, "todos", input.Todos)
+		s.mu.Unlock()
+		return map[string]any{"todos": input.Todos}, err
+	case "ask_user_question":
+		return e.askQuestion(ctx, s, call)
+	case "read_tool_result":
+		return e.readToolResult(id, a)
+	case "load_skill":
+		if c.Permissions != nil && c.Permissions.DenyLocalExecution {
+			return nil, errors.New("当前会话禁止读取本机技能文件")
+		}
+		if c.Permissions != nil && !c.Permissions.SilentReadFiles {
+			if err = e.sessionApproval(ctx, s, call, "file_read"); err != nil {
+				return nil, err
+			}
+		}
+		return e.loadSkill(c, str(a["name"]))
+	case "task_output", "task_stop":
+		return e.taskTool(ctx, s, c, call, a)
+	}
+	if e.Bridge == nil {
+		return nil, errors.New("此工具需要 Lake 工作台")
+	}
+	mutation := call.Name == "run_workflow" || call.Name == "save_workflow" || strings.HasPrefix(call.Name, "schedule_") && call.Name != "schedule_list"
+	if mutation {
+		silent := c.Permissions != nil && c.Permissions.SilentWriteFiles
+		if call.Name == "run_workflow" {
+			silent = c.Permissions != nil && c.Permissions.SilentCommands
+		}
+		if !silent {
+			if err = e.sessionApproval(ctx, s, call, "project_operation"); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return e.bridgeCall(ctx, id, call.Name, a, mutation)
+}
+func (e *Engine) sessionApproval(ctx context.Context, s *session, call Call, kind string) error {
+	s.mu.Lock()
+	approval := &Approval{ID: uid(), Call: call, Target: "当前项目", Risk: "write", Kind: kind, Fingerprint: hash(call.Arguments)}
+	reply := make(chan bool, 1)
+	s.decision = reply
+	s.state.View.Pending = approval
+	s.state.View.Status = "waiting_approval"
+	err := e.save(s)
+	e.notify(s, "approval", approval)
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.decision = nil
+		s.state.View.Pending = nil
+		s.state.View.Status = "running"
+		_ = e.save(s)
+		s.mu.Unlock()
+	}()
+	if err != nil {
+		return err
+	}
+	select {
+	case accept := <-reply:
+		if !accept {
+			return errors.New("user rejected this tool call")
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+func (e *Engine) askQuestion(ctx context.Context, s *session, call Call) (any, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	var input struct {
+		Questions []UserQuestion `json:"questions"`
+	}
+	if json.Unmarshal([]byte(call.Arguments), &input) != nil || len(input.Questions) < 1 || len(input.Questions) > 3 {
+		return nil, errors.New("questions must contain 1..3 items")
+	}
+	seen := map[string]bool{}
+	for _, q := range input.Questions {
+		if !identifier.MatchString(q.ID) || seen[q.ID] || strings.TrimSpace(q.Title) == "" || len(q.Title) > 2000 || len(q.Reason) > 2000 || len(q.Options) > 8 {
+			return nil, errors.New("invalid question")
+		}
+		seen[q.ID] = true
+		opts := map[string]bool{}
+		for _, o := range q.Options {
+			if strings.TrimSpace(o.Label) == "" || len(o.Label) > 1000 || len(o.Description) > 2000 || opts[o.Label] {
+				return nil, errors.New("invalid question option")
+			}
+			opts[o.Label] = true
+		}
+	}
+	s.mu.Lock()
+	key := hash(s.state.View.RootTurnID + js(input.Questions))
+	previous, reused := s.state.QuestionDecisions[key]
+	s.mu.Unlock()
+	if reused {
+		return questionResult(input.Questions, previous, true), nil
+	}
+	req := &QuestionRequest{ID: uid(), Questions: input.Questions}
+	reply := make(chan map[string][]string, 1)
+	s.mu.Lock()
+	s.questionReply = reply
+	s.state.View.Question = req
+	err := e.save(s)
+	e.notify(s, "question", req)
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.questionReply = nil
+		s.state.View.Question = nil
+		_ = e.save(s)
+		e.notify(s, "question", nil)
+		s.mu.Unlock()
+	}()
+	if err != nil {
+		return nil, err
+	}
+	select {
+	case answers := <-reply:
+		s.mu.Lock()
+		if s.state.QuestionDecisions == nil {
+			s.state.QuestionDecisions = map[string]map[string][]string{}
+		}
+		s.state.QuestionDecisions[key] = answers
+		saveErr := e.save(s)
+		s.mu.Unlock()
+		return questionResult(req.Questions, answers, false), saveErr
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+func (e *Engine) ReplyQuestion(id, requestID string, answers map[string][]string) error {
+	return e.ReplyQuestionWithTarget(id, requestID, answers, nil)
+}
+
+// ReplyQuestionWithTarget accepts a target resolved by the trusted application
+// from the actual human answer. Question text and model-proposed options cannot
+// select resources before that answer is validated and submitted.
+func (e *Engine) ReplyQuestionWithTarget(id, requestID string, answers map[string][]string, scope *TargetScope) error {
+	s, err := e.get(id)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	req := s.state.View.Question
+	if req == nil || req.ID != requestID || s.questionReply == nil {
+		return errors.New("question expired")
+	}
+	allowed := map[string]UserQuestion{}
+	for _, q := range req.Questions {
+		allowed[q.ID] = q
+	}
+	for key, values := range answers {
+		q, ok := allowed[key]
+		if !ok || len(values) > 9 || !q.MultiSelect && len(values) > 1 {
+			return errors.New("invalid question answers")
+		}
+		for _, v := range values {
+			if len(v) > 4000 {
+				return errors.New("answer too long")
+			}
+		}
+	}
+	if scope != nil {
+		for _, ref := range scope.ResourceIDs {
+			as, err := asset(s.state.Config, ref)
+			if err != nil || as.ID != ref {
+				return errors.New("question target contains an unavailable resource")
+			}
+		}
+		previous := s.state.TargetScope
+		previousRefs := s.state.ReferencedAssetIDs
+		s.state.TargetScope = cloneTargetScope(scope)
+		s.state.ReferencedAssetIDs = validRemembered(s.state.Config, append(append([]string{}, previousRefs...), scope.ResourceIDs...))
+		if err := e.save(s); err != nil {
+			s.state.TargetScope = previous
+			s.state.ReferencedAssetIDs = previousRefs
+			return err
+		}
+	}
+	select {
+	case s.questionReply <- answers:
+		s.questionReply = nil
+		return nil
+	default:
+		return errors.New("question already answered")
+	}
+}
+
+func questionResult(questions []UserQuestion, answers map[string][]string, reused bool) map[string]any {
+	skipped := []string{}
+	for _, q := range questions {
+		if len(answers[q.ID]) == 0 {
+			skipped = append(skipped, q.ID)
+		}
+	}
+	return map[string]any{"questions": questions, "answers": answers, "skipped": skipped, "reused": reused, "notice": "Answers select requirements only and do not authorize operations. Skipped questions are unanswered, not rejection. Continue independent useful work with sensible defaults; do not repeat unchanged skipped questions or guess a required target."}
+}

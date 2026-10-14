@@ -187,6 +187,7 @@ func TestCancelledWaitReturnsManualInputAfterHiddenJobCompletes(t *testing.T) {
 func TestManualReuseKeepsCommandApproval(t *testing.T) {
 	b, h := fixture(t)
 	id, ref := newSession(t, h)
+	b.configure(id, Object{"silentCommands": false})
 	owner := stringOf(b.Store.ResourceTerminalSession(ref)["id"])
 	term := b.Terminals.OpenInteractive(context.Background(), owner, ref, "bash")
 	tid := stringOf(term["id"])
@@ -221,6 +222,9 @@ func TestManualReuseKeepsCommandApproval(t *testing.T) {
 func TestPermissionRevocationReturnsBorrowedInputWithoutRevivingAccess(t *testing.T) {
 	b, h := fixture(t)
 	chat, ref := newSession(t, h)
+	// Establish the permission state under test explicitly so the later toggle
+	// below is a real permission change regardless of the current defaults.
+	b.configure(chat, Object{"silentCommands": false, "silentTerminalCreation": false})
 	owner := stringOf(b.Store.ResourceTerminalSession(ref)["id"])
 	term := b.Terminals.OpenInteractive(context.Background(), owner, ref, "bash")
 	tid := stringOf(term["id"])

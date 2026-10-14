@@ -10,12 +10,12 @@ test("file activity shows the actual leaf filename and distinguishes approval", 
   assert.equal(toolActivity(read).text, "正在读取 permissions.go");
   assert.equal(toolActivity({...read, title:"delete"}, true).text, "等待授权删除 permissions.go");
 });
-test("a visible timeline owns thinking status without hiding elapsed time or tool activity", () => {
-  const progress = turnProgress(view, [], start, Date.parse(start)+19000, true);
-  assert.equal(progress.activity, undefined);
+test("turn progress always provides state for the footer independently of process rows", () => {
+  const progress = turnProgress(view, [], start, Date.parse(start)+19000);
+  assert.equal(progress.activity?.text,"正在思考");
   assert.equal(progress.elapsed, "19秒");
-  assert.equal(turnProgress(view, [], start, Date.parse(start), false).activity?.text, "正在思考");
-  assert.equal(turnProgress(view, [read], start, Date.parse(start)+19000, true).activity?.text, "正在读取 permissions.go");
+  assert.equal(turnProgress(view, [], start, Date.parse(start)).activity?.text, "正在思考");
+  assert.equal(turnProgress(view, [read], start, Date.parse(start)+19000).activity?.text, "正在读取 permissions.go");
 });
 test("retained operations from an earlier turn never become current progress", () => {
   const old = {...read, at:"2026-10-11T09:59:00Z", status:"pending"};

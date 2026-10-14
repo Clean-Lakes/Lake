@@ -3,9 +3,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AICard } from "../../shared/contracts";
 import { sameCard } from "./cardEquality";
-import { toolActivity, toolLabels } from "./activity";
-import { LakeThinkingIcon } from "./LakeThinkingIcon";
-import { StatusText } from "./StatusText";
+import { processDescription, toolLabels } from "./activity";
 function StepIcon({ name }: { name?: string }) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
     {name && /search|fetch|url/.test(name) ? <><circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6"/></> : name === "shell" || name === "terminal_read" ? <><path d="m4 6 5 5-5 5M12 17h8"/></> : <><rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="14" width="16" height="6" rx="2"/><path d="M7 7h1M7 17h1"/></>}
@@ -14,7 +12,7 @@ function StepIcon({ name }: { name?: string }) {
 const ToolStep = memo(function ToolStep({ card, onInspect }: { card: AICard; onInspect?: () => void }) {
   const data = card.data && typeof card.data === "object" ? card.data as Record<string, unknown> : {};
   const args = data.arguments && typeof data.arguments === "object" ? data.arguments as Record<string, unknown> : {};
-  const state = card.status === "pending" ? "等待确认" : card.status === "background_running" ? "后台执行中" : card.status === "running" ? "执行中" : card.status === "failed" ? "失败" : ["interrupted", "cancelled"].includes(card.status) ? "已停止" : "已完成";
+  const state = card.status === "pending" ? "等待确认" : card.status === "background_running" ? "后台执行中" : card.status === "running" ? "执行中" : card.status === "failed" ? "失败" : ["interrupted", "cancelled"].includes(card.status) ? "已停止" : ["completed", "succeeded", "success"].includes(card.status) ? "已完成" : "结果待核查";
   const command = typeof args.command === "string" ? args.command : "";
   return <li className={`thinking-step thinking-tool step-${card.status}`}>
     <span className="thinking-step-marker"><StepIcon name={card.title}/></span>
@@ -36,21 +34,13 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
   // A compact current-action line stays closed until the user requests details.
   const [open, setOpen] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
-  const pending = cards.some(card => card.status === "pending");
-  const background = cards.some(card => card.status === "background_running");
-  const interrupted = cards.some(card => ["failed", "interrupted"].includes(card.status));
   const tools = cards.filter(card => card.type !== "thinking");
   const thoughts = cards.filter(card => card.type === "thinking" && card.content);
-  const current = tools.filter(card => ["running", "pending"].includes(card.status)).at(-1);
-  const activity = live && current ? toolActivity(current, current.status === "pending") : undefined;
-  const label = live ? activity?.text || (pending ? "等待确认" : "正在思考") : pending ? "待确认的操作" : interrupted ? "处理未完成" : background ? "后台命令仍在执行" : tools.length ? `已处理 ${tools.length} 项操作` : "思考记录";
+  const label = processDescription(cards);
   const panelId = `thinking-${cards[0]!.id}`;
-  return <section className={`thinking-timeline ${live ? "is-live" : ""} ${live && !pending ? "is-processing" : ""}`} aria-label="思考与操作过程">
+  return <section className={`thinking-timeline ${live ? "is-live" : ""}`} aria-label="思考与操作过程">
     <button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => { onInspect?.(); setOpen(!open); }}>
-      <LakeThinkingIcon className="thinking-symbol"/>
-      <strong className="thinking-agent-name">Lake</strong>
-      <StatusText className="thinking-label" text={label} active={live && !pending}/><svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
-      {activity?.detail && <small className="thinking-current-target">{activity.detail}</small>}
+      <span className="thinking-label">{label}</span><svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
     </button>
     {open && <div className="thinking-detail-panel" id={panelId}>
       {tools.length > 0 && <ol className="thinking-steps">{tools.map(card => <ToolStep card={card} key={card.id} onInspect={onInspect}/>)}</ol>}

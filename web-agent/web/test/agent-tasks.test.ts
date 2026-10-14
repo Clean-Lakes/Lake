@@ -17,7 +17,7 @@ test("only actual independent tasks create agents; ordinary tool cards remain La
   const s=snapshot();s.ai!.cards=[{id:"tool",type:"operation",title:"inspect_host",status:"running",at}];
   assert.deepEqual(transcriptAgentRuns(s),[]);
   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
-  assert.ok(html.includes("Lake"));assert.ok(!html.includes("Scout"));assert.ok(!html.includes("agent-task-list"));
+  assert.ok(html.includes("检查主机状态"));assert.ok(!html.includes("Scout"));assert.ok(!html.includes("agent-task-list"));
 });
 test("names have distinct stable role shapes, including the eight planned roles",()=>{
   const expected={host:"Scout",application:"Trace",data:"Deep",network:"Link",change:"Delta",verify:"Beacon",plan:"Pilot",memory:"Scribe"};
@@ -54,11 +54,11 @@ test("agent runs stay in their original user turn, while unverified candidates r
   assert.deepEqual(transcriptTurns(entries).map(turn=>turn.map(entry=>entry.id)),[["u","agent:old"],["next-user","agent:new"]]);
   assert.ok(!entries.some(entry=>entry.id==="draft"));assert.equal(transcriptGroups(entries).length,4);
 });
-test("the child list owns live progress without a duplicate Lake activity line or raw reasoning",()=>{
+test("child details stay collapsed while one turn footer owns live progress",()=>{
   const s=snapshot([run(),run({id:"trace",role:"application"})]);
   s.ai!.cards=[{id:"thinking",type:"thinking",status:"running",content:"RAW_PRIVATE_REASONING",at}];
   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
-  assert.equal((html.match(/正在分析 · 2 个 Agent 执行中/g)||[]).length,1);
+  assert.equal((html.match(/2 个子任务执行中…/g)||[]).length,1);
   assert.ok(!html.includes("ai-progress-activity"));assert.ok(!html.includes("RAW_PRIVATE_REASONING"));
 });
 test("runtime evidence is readable and evidence belonging to another session is excluded",()=>{

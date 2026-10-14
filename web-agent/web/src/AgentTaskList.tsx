@@ -12,11 +12,11 @@ function StatusIcon({ status }: { status: AgentRunStatus }) {
   </svg>;
 }
 
-export function AgentTaskList({ runs, resources, evidence = [], live = false, onInspect, onStopTurn, onCancelRun, renderApproval, disabled = false, stopping = false, children }: {
+export function AgentTaskList({ runs, resources, evidence = [], live = false, onInspect, onStopTurn, onCancelRun, renderApproval, disabled = false, stopping = false, children, compact = false }: {
   runs: AgentRun[]; resources: Resource[]; evidence?: Evidence[]; live?: boolean; onInspect?: () => void;
   onStopTurn?: () => void; onCancelRun?: (run: AgentRun) => Promise<unknown>; disabled?: boolean; stopping?: boolean;
   renderApproval?: (run: AgentRun) => ReactNode;
-  children?: ReactNode;
+  children?: ReactNode; compact?: boolean;
 }) {
   const id = useId();
   const [now, setNow] = useState(Date.now);
@@ -40,9 +40,7 @@ export function AgentTaskList({ runs, resources, evidence = [], live = false, on
     try { await onCancelRun(run); } catch (cause) { setError(readableError(cause)); }
     finally { setCancelling(current => current.filter(item => item !== run.id)); }
   };
-  return <section className="agent-task-list" aria-label="Lake 子 Agent 任务">
-    <div className="agent-lead"><span className="agent-emblem"><AgentIcon role="lake" size={20}/></span><div className="agent-lead-copy"><div><strong>Lake</strong><span className="agent-group-state" role="status" aria-live="polite" aria-atomic="true"><StatusText text={agentGroupLabel(runs, live)} active={processing}/></span></div><p>{live ? "正在按任务汇总调查结果与证据。" : "已保留各任务的结果与证据。"}</p></div></div>
-    <div className="agent-task-body"><div className="agent-task-heading"><span>本轮子任务</span><span>{completed} / {runs.length} 已完成</span></div>
+  const body = <div className="agent-task-body"><div className="agent-task-heading"><span>本轮子任务</span><span>{completed} / {runs.length} 已完成</span></div>
       <ol className="agent-task-rows">{runs.map(run => {
         const identity = agentIdentity(run);
         const summary = agentSummary(run);
@@ -59,12 +57,13 @@ export function AgentTaskList({ runs, resources, evidence = [], live = false, on
               {canCancel && <button type="button" className="agent-cancel-button" disabled={disabled || cancelling.includes(run.id)} onClick={() => void cancel(run)}>{cancelling.includes(run.id) ? "正在停止…" : `停止 ${identity.name}`}</button>}
             </div>
           </details>
-          {run.pending && renderApproval && <div className="agent-run-approval">{renderApproval(run)}</div>}
+          {!compact && run.pending && renderApproval && <div className="agent-run-approval">{renderApproval(run)}</div>}
         </li>;
       })}</ol>
       {children && <details className="agent-coordinator-detail" onToggle={event => { if (event.currentTarget.open) onInspect?.(); }}><summary>Lake 的操作记录</summary>{children}</details>}
       {error && <p className="agent-task-error" role="alert">{error}</p>}
       {live && onStopTurn && <div className="agent-task-footer"><span>结果汇总到当前会话</span><button type="button" className="agent-stop-turn" disabled={disabled || stopping} aria-busy={stopping} onClick={onStopTurn}><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>{stopping ? "正在停止…" : "停止本轮"}</button></div>}
-    </div>
-  </section>;
+    </div>;
+  return <section className={`agent-task-list ${compact ? "agent-task-list-compact" : ""}`} aria-label="Lake 子 Agent 任务">{compact ? <details className="agent-process-details" onToggle={event=>{if(event.currentTarget.open)onInspect?.();}}><summary className="thinking-toggle"><span>委派 {runs.length} 个调查任务</span><svg className="thinking-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg></summary>{body}</details> : <>    <div className="agent-lead"><span className="agent-emblem"><AgentIcon role="lake" size={20}/></span><div className="agent-lead-copy"><div><strong>Lake</strong><span className="agent-group-state" role="status" aria-live="polite" aria-atomic="true"><StatusText text={agentGroupLabel(runs, live)} active={processing}/></span></div><p>{live ? "正在按任务汇总调查结果与证据。" : "已保留各任务的结果与证据。"}</p></div></div>
+{body}</>}{compact&&runs.filter(run=>run.pending).map(run=>renderApproval&&<div className="agent-run-approval" key={run.id}>{renderApproval(run)}</div>)}</section>;
 }

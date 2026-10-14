@@ -7,13 +7,12 @@ export function HostKeyTrust({ session, prompt, disabled, refresh }: {
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [confirmation, setConfirmation] = useState("");
-  useEffect(() => { setError(""); setConfirmation(""); }, [prompt.id]);
+  useEffect(() => { setError(""); }, [prompt.id]);
   const peer = `${prompt.host.includes(":") ? `[${prompt.host}]` : prompt.host}:${prompt.port}`;
   const decide = async (accept: boolean) => {
     setBusy(true); setError("");
     try {
-      await api.hostKeyDecision(session, { id: prompt.id, accept, fingerprint: prompt.fingerprint, confirmation });
+      await api.hostKeyDecision(session, { id: prompt.id, accept, fingerprint: prompt.fingerprint });
       await refresh();
     } catch (e) { setError(readableError(e)); }
     finally { setBusy(false); }
@@ -24,8 +23,7 @@ export function HostKeyTrust({ session, prompt, disabled, refresh }: {
     <dl className="host-key-facts"><div><dt>服务器</dt><dd>{peer}</dd></div><div><dt>密钥算法</dt><dd>{prompt.algorithm}</dd></div><div><dt>当前指纹</dt><dd><code>{prompt.fingerprint}</code></dd></div></dl>
     {!!prompt.previousFingerprints.length && <div className="host-key-previous"><span>之前保存的指纹</span>{prompt.previousFingerprints.map(value => <code key={value}>{value}</code>)}</div>}
     <p className="host-key-scope">确认后保存在 Lake 全局，所有项目和会话连接此服务器时都会复用。</p>
-    {prompt.changed && <label className="field-label">请输入「信任 {peer}」<input value={confirmation} onChange={e => setConfirmation(e.target.value)} autoComplete="off"/></label>}
     {error && <p className="form-error" role="alert">{error}</p>}
-    <div className="modal-actions"><button className="button secondary" type="button" disabled={busy || disabled} onClick={() => void decide(false)}>取消连接</button><button className="button primary" type="button" disabled={busy || disabled || prompt.changed && confirmation !== `信任 ${peer}`} onClick={() => void decide(true)}>{busy ? "处理中…" : prompt.changed ? "信任新指纹并连接" : "信任并连接"}</button></div>
+    <div className="modal-actions"><button className="button secondary" type="button" disabled={busy || disabled} onClick={() => void decide(false)}>取消连接</button><button className="button primary" type="button" disabled={busy || disabled} onClick={() => void decide(true)}>{busy ? "处理中…" : prompt.changed ? "信任新指纹并连接" : "信任并连接"}</button></div>
   </section></div>;
 }

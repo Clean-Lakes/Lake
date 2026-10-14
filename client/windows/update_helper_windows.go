@@ -201,6 +201,11 @@ func runUpdateHelper(path string) error {
 	if err = cmd.Run(); err != nil {
 		return failure(fmt.Errorf("更新安装失败，请手动运行已下载的安装包"))
 	}
-	_ = writePrivate(filepath.Join(work, "complete"), []byte(job.Version))
+	if err = writePrivate(filepath.Join(work, "complete"), []byte(job.Version)); err != nil {
+		return err
+	}
+	// NSIS has exited; remove the large installer immediately. The replacement
+	// retries cleanup of the locked helper and completion marker after this exits.
+	_ = os.Remove(filepath.Join(work, job.InstallerName))
 	return nil
 }

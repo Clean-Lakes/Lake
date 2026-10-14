@@ -1,0 +1,128 @@
+/* The sole palette for the active Lake workbench, including native and terminal surfaces. */
+:root {
+  color-scheme: light;
+  --font-ui: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --status-text-base: var(--text-secondary);
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --background: #ffffff;
+  --surface: #ffffff;
+  --surface-subtle: #fafafa;
+  --surface-muted: #f5f5f5;
+  --surface-hover: #eeeeee;
+  --surface-selected: #e8e8e8;
+  --sidebar: #f5f5f5;
+  --foreground: #222222;
+  --text-secondary: #555555;
+  --text-muted: #737373;
+  --text-disabled: #999999;
+  --border: #e5e5e5;
+  --border-strong: #cccccc;
+  --primary: #17345c;
+  --primary-hover: #102746;
+  --on-primary: #ffffff;
+  --focus: #5278a6;
+  --selection: #dae6f5;
+  --success: #16834b;
+  --success-soft: #edf8f1;
+  --success-border: #c4e5d1;
+  --warning: #996313;
+  --warning-soft: #fff8eb;
+  --warning-border: #ead6ac;
+  --danger: #bc3737;
+  --danger-hover: #a12b2b;
+  --danger-soft: #fdf0f0;
+  --danger-border: #efc9c9;
+  --info: #3568a5;
+  --info-soft: #eff5fd;
+  --tag-purple: #6941c6;
+  --tag-purple-soft: #eee8fc;
+  --tag-orange: #b54a16;
+  --tag-orange-soft: #fff0e5;
+  --overlay: rgb(0 0 0 / 35%);
+  --shadow-popover: 0 4px 16px rgb(0 0 0 / 8%);
+  --shadow-dialog: 0 16px 48px rgb(0 0 0 / 12%);
+  --radius-control: 5px;
+  --radius-panel: 7px;
+  --radius-dialog: 9px;
+  --chart-1: #3568a5;
+  --chart-2: #159b88;
+  --chart-3: #cd8a25;
+  --chart-4: #8064be;
+  --terminal-background: #fafafa;
+  --terminal-foreground: #303030;
+  --terminal-selection: #dbe5f2;
+  --terminal-black: #303030;
+  --terminal-bright-black: #737373;
+  --terminal-red: #ba3838;
+  --terminal-green: #16834b;
+  --terminal-yellow: #996313;
+  --terminal-blue: #3568a5;
+  --terminal-magenta: #8064be;
+  --terminal-cyan: #168e97;
+  /* Layout consumers use these semantic aliases, never their own palette. */
+  --ink: var(--foreground);
+  --muted: var(--text-muted);
+  --line: var(--border);
+  --paper: var(--background);
+  --border-color: var(--border);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #171717;
+  --surface: #1b1b1b;
+  --surface-subtle: #202020;
+  --surface-muted: #242424;
+  --surface-hover: #2c2c2c;
+  --surface-selected: #333333;
+  --sidebar: #141414;
+  --foreground: #eeeeee;
+  --text-secondary: #cccccc;
+  --text-muted: #aaaaaa;
+  --text-disabled: #777777;
+  --border: #333333;
+  --border-strong: #505050;
+  --primary: #9bbce8;
+  --primary-hover: #bed3ee;
+  --on-primary: #172335;
+  --focus: #9bbce8;
+  --selection: #33465f;
+  --success: #64bf8a;
+  --success-soft: #18291f;
+  --success-border: #2b533a;
+  --warning: #d8ad63;
+  --warning-soft: #2d261a;
+  --warning-border: #5b4827;
+  --danger: #ee8585;
+  --danger-hover: #f5a1a1;
+  --danger-soft: #301f1f;
+  --danger-border: #603333;
+  --info: #9bbce8;
+  --info-soft: #202b3d;
+  --tag-purple: #b49ae9;
+  --tag-purple-soft: #2d2442;
+  --tag-orange: #e8a375;
+  --tag-orange-soft: #34271f;
+  --overlay: rgb(0 0 0 / 55%);
+  --shadow-popover: 0 4px 16px rgb(0 0 0 / 20%);
+  --shadow-dialog: 0 16px 48px rgb(0 0 0 / 35%);
+  --chart-1: #82aee8;
+  --chart-2: #5cc9b7;
+  --chart-3: #e1b063;
+  --chart-4: #b49ae9;
+  --terminal-background: #1b1b1b;
+  --terminal-foreground: #eeeeee;
+  --terminal-selection: #33465f;
+  --terminal-black: #aaaaaa;
+  --terminal-bright-black: #cccccc;
+  --terminal-red: #ee8585;
+  --terminal-green: #64bf8a;
+  --terminal-yellow: #d8ad63;
+  --terminal-blue: #82aee8;
+  --terminal-magenta: #b49ae9;
+  --terminal-cyan: #64c5ce;
+}
+
+/* Theme previews are local miniature surfaces, not a second application theme. */
+.theme-preview[data-preview="light"] { --surface: #ffffff; --surface-muted: #f5f5f5; --surface-subtle: #fafafa; --border: #e5e5e5; }
+.theme-preview[data-preview="dark"] { --surface: #171717; --surface-muted: #242424; --surface-subtle: #202020; --border: #333333; }

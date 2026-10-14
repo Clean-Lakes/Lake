@@ -157,7 +157,11 @@ func (b *Server) submitHumanMessage(id string, data Object) Object {
 		b.Store.MutateMessageQueue(id, Object{"operation": "resume", "revision": queue["revision"]})
 	}
 	b.bindManualTerminalForHuman(id, message.References, message.Reuse)
-	result := b.Store.Begin(id, message.Text, message.Images, b.humanMessageTitle(message))
+	titleInput := b.humanMessageTitle(message)
+	result, pendingTitle := b.Store.BeginWithNaming(id, message.Text, message.Images, titleInput)
+	if pendingTitle && shouldGenerateSessionTitle(titleInput) {
+		b.generateSessionTitle(id, titleInput)
+	}
 	b.launchMessageLocked(id, message)
 	return result
 }
@@ -185,7 +189,11 @@ func (b *Server) dispatchMessageQueueLocked(id string) {
 		fail(400, "尚未配置模型")
 	}
 	b.bindManualTerminalForHuman(id, message.References, message.Reuse)
-	b.Store.BeginQueuedMessage(id, stringOf(head["id"]), message.Text, message.Images, b.humanMessageTitle(message))
+	titleInput := b.humanMessageTitle(message)
+	_, pendingTitle := b.Store.BeginQueuedMessageWithNaming(id, stringOf(head["id"]), message.Text, message.Images, titleInput)
+	if pendingTitle && shouldGenerateSessionTitle(titleInput) {
+		b.generateSessionTitle(id, titleInput)
+	}
 	b.launchMessageLocked(id, message)
 }
 func (b *Server) finishMessageQueue(id string) {

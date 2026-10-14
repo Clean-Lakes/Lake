@@ -86,15 +86,18 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
     var beforeInstall: (() async throws -> InstallContext)?
     private var available: Update?
     private var busy = false
+    private var cleanupScheduled = false
     private var timer: Timer?
     private var lastCheck: Date?
     private let session: URLSession
     private let target = Bundle.main.bundleURL.resolvingSymlinksInPath()
+    private let profile = DesktopProfile(bundleIdentifier: Bundle.main.bundleIdentifier)
     private let updatesDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Lake/updates", isDirectory: true)
 
     init() {
         state = UpdateState(currentVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0")
+        if profile.isDevelopment { state.message = "本地测试版：通过本地构建更新，不接收正式版更新" }
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 1800
@@ -106,6 +109,8 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
         changed?(state)
     }
     func start() {
+        guard profile.allowsReleaseUpdates else { return }
+        cleanupOldPackages()
         guard timer == nil else { return }
         Task { await check() }
         let periodic = Timer(timeInterval: 300, repeats: true) { [weak self] _ in
@@ -124,11 +129,49 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
             }
         }
     }
+    // Receipt-bearing launches may still be inside the installer rollback window.
+    // Wait for its completion marker or job removal before pruning older backups.
+    func cleanupOldPackages() {
+        guard !cleanupScheduled, profile.allowsReleaseUpdates else { return }
+        cleanupScheduled = true
+        let target = target, directory = updatesDirectory, version = state.currentVersion
+        let args = CommandLine.arguments
+        let receiptIndex = args.firstIndex(of: "--lake-update-receipt")
+        let work = receiptIndex.flatMap { index -> URL? in
+            guard index + 1 < args.count else { return nil }
+            let receipt = URL(fileURLWithPath: args[index + 1]).standardizedFileURL
+            let job = receipt.deletingLastPathComponent()
+            guard receipt.lastPathComponent == "ready", UUID(uuidString: job.lastPathComponent) != nil,
+                  job.deletingLastPathComponent() == directory.standardizedFileURL else { return nil }
+            return job
+        }
+        Task {
+            defer { cleanupScheduled = false }
+            await Task.detached {
+                for attempt in 0..<60 {
+                    if let work, FileManager.default.fileExists(atPath: work.path),
+                       !FileManager.default.fileExists(atPath: work.appendingPathComponent("complete").path) {
+                        try? await Task.sleep(nanoseconds: 1_000_000_000)
+                        continue
+                    }
+                    do {
+                        try UpdateCleanup.removeObsoleteBackups(target: target, currentVersion: version)
+                        try UpdateCleanup.removeCompletedDownloads(directory: directory, currentVersion: version)
+                        return
+                    } catch {
+                        if attempt < 59 { try? await Task.sleep(nanoseconds: 1_000_000_000) }
+                    }
+                }
+            }.value
+        }
+    }
     func checkIfDue() async {
         guard lastCheck.map({ Date().timeIntervalSince($0) >= 300 }) ?? true else { return }
         await check()
     }
-    func check() async {
+    func check(preview: Bool = false) async {
+        guard profile.allowsReleaseUpdates || preview else { return }
+        cleanupOldPackages()
         guard !busy else { return }
         lastCheck = Date()
         busy = true
@@ -157,15 +200,16 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
                 !$0.draft && !$0.prerelease && $0.target_commitish == "master" && Version($0.tag_name) == Version(state.currentVersion)
             })?.body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if let update = available {
-                publish("available", "发现 Lake \(update.version)，点击下载并重启更新")
+                publish("available", profile.isDevelopment ? "正式版发布了 Lake \(update.version)，本地测试版使用本地构建更新" : "发现 Lake \(update.version)，点击下载并重启更新")
             } else {
-                publish("current", "当前已是 master 的最新兼容版本（\(state.currentVersion)）")
+                publish("current", "未发现可用更新（当前版本 \(state.currentVersion)）")
             }
         } catch {
             publish("error", (error as? UpdateError)?.localizedDescription ?? "无法检测更新，请检查网络后重试。")
         }
     }
     func install() async {
+        guard profile.allowsReleaseUpdates else { return }
         guard !busy, let update = available else { return }
         // A separately started CLI service must be closed by its owner before replacing its executable.
         guard FileManager.default.isWritableFile(atPath: target.deletingLastPathComponent().path),

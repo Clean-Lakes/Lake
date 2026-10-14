@@ -15,14 +15,16 @@ export function timingForTurn(turn:TranscriptEntry[],snapshot:SessionSnapshot):R
  if (!view.turnFinishedAt || !["completed","cancelled","failed"].includes(view.status)) return;
  return {messageId:user.id,startedAt:view.turnStartedAt,finishedAt:view.turnFinishedAt,status:view.status as ReplyTiming["status"]};
 }
-export function replyDurationText(timing:ReplyTiming,now:number,waiting=false):string|undefined {
+export function replyElapsed(timing:ReplyTiming,now:number):string|undefined {
  if (timing.status==="interrupted") return;
  const start=Date.parse(timing.startedAt),end=timing.status==="running" ? now : Date.parse(timing.finishedAt);
  const milliseconds=end-start;
  if (!Number.isFinite(milliseconds) || milliseconds<0) return;
- const duration=milliseconds<1000 ? "不到1秒" : formatElapsed(Math.floor(milliseconds/1000));
- if (timing.status==="running") return `${waiting ? "等待确认" : "正在回答"} · 已用时 ${duration}`;
- if (timing.status==="cancelled") return `本轮耗时 ${duration} · 已停止`;
- if (timing.status==="failed") return `本轮耗时 ${duration} · 未完成`;
- return `回答耗时 ${duration}`;
+ return milliseconds<1000 ? "不到1秒" : formatElapsed(Math.floor(milliseconds/1000));
+}
+export function replyDurationText(timing:ReplyTiming,now:number,waiting=false,state?:string):string|undefined {
+ const duration=replyElapsed(timing,now);
+ if(!duration)return;
+ const label=state ?? (timing.status==="running" ? waiting ? "等待确认" : "正在思考…" : timing.status==="cancelled" ? "已停止" : timing.status==="failed" ? "未完成" : "已完成");
+ return `${duration} · ${label}`;
 }

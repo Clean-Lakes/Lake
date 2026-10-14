@@ -5,7 +5,7 @@ import type { AIView } from "../../shared/contracts";
 const compact = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString();
 const count = (n?: number | null) => n === undefined || n === null ? "--" : compact(n);
 
-export function ContextUsage({view, model}: {view: AIView; model?: {modelId?: string | null}}) {
+export function ContextUsage({view, model, compact = false}: {view: AIView; model?: {modelId?: string | null}; compact?: boolean}) {
   const [capacity, setCapacity] = useState<{modelId?: string; limit: number; source?: string} | null>(null);
   const [open, setOpen] = useState(false); const [pinned, setPinned] = useState(false);
   const root = useRef<HTMLDivElement>(null); const panelId = useId();
@@ -34,7 +34,7 @@ export function ContextUsage({view, model}: {view: AIView; model?: {modelId?: st
   return <div className="ai-context-usage" ref={root} onMouseEnter={() => setOpen(true)} onMouseLeave={() => {if (!pinned) setOpen(false);}} onFocus={() => setOpen(true)} onBlur={event => {if (!pinned && !event.currentTarget.contains(event.relatedTarget)) setOpen(false);}} onKeyDown={event => {if (event.key === "Escape") {setOpen(false); setPinned(false);}}}>
     <button type="button" className="ai-context-trigger" aria-label="上下文用量" aria-expanded={open} aria-controls={panelId} onClick={() => {setPinned(!pinned); setOpen(!pinned);}}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle className="ai-context-track" cx="12" cy="12" r="9"/><circle className={`ai-context-fill ${percent !== undefined && percent >= 85 ? "near-limit" : ""}`} cx="12" cy="12" r="9" pathLength="100" strokeDasharray={`${Math.min(100, Math.max(0, percent ?? 0))} 100`}/></svg>
-      <span>上下文 {percent === undefined ? "--" : `${percent.toFixed(percent < 1 ? 2 : 1)}%`}</span>
+      <span className={compact ? "visually-hidden" : undefined}>上下文 {percent === undefined ? "--" : `${percent.toFixed(percent < 1 ? 2 : 1)}%`}</span>
     </button>
     {open && <section className="ai-context-panel" id={panelId} role="region" aria-label="上下文用量详情">
       <strong>本会话上下文预算</strong><div className="ai-context-window">{count(allocation)} <small>tokens</small></div>

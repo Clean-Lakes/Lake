@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-func sshArguments(c Object) []string {
+func sshArguments(c Object, initialization ...string) []string {
 	h, _ := os.UserHomeDir()
 	known := filepath.Join(h, ".ssh", "known_hosts")
 	args := []string{"-F", "/dev/null", "-tt", "-e", "none", "-a", "-x", "-o", "StrictHostKeyChecking=yes", "-o", "GlobalKnownHostsFile=/dev/null", "-o", "IdentitiesOnly=yes", "-o", "IdentityAgent=none", "-o", "AddKeysToAgent=no", "-o", "KbdInteractiveAuthentication=no", "-o", "NumberOfPasswordPrompts=1", "-o", "UserKnownHostsFile=" + known, "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2"}
@@ -25,7 +25,11 @@ func sshArguments(c Object) []string {
 		}
 		args = append(args, "-o", "BatchMode="+batch, "-o", "PreferredAuthentications=publickey", "-o", "PasswordAuthentication=no", "-i", stringOf(c["identityFile"]))
 	}
-	return append(args, "-p", strconv.Itoa(integer(c["port"])), "-l", stringOf(c["username"]), stringOf(c["host"]), remoteShellCommand(shellName(c["shell"])))
+	remote := remoteShellCommand(shellName(c["shell"]))
+	if len(initialization) > 0 {
+		remote = "/bin/sh -c " + quote("export __lake_init="+quote(initialization[0])+"; "+remote)
+	}
+	return append(args, "-p", strconv.Itoa(integer(c["port"])), "-l", stringOf(c["username"]), stringOf(c["host"]), remote)
 }
 
 // SSHAskpass writes only to OpenSSH's private helper pipe, never the terminal.

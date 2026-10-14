@@ -199,7 +199,7 @@ func (b *Server) workflowRunView(run Object) Object {
 	}
 	return run
 }
-func (b *Server) startWorkflow(project, id string, version int) Object {
+func (b *Server) startWorkflow(project, id string, version int, inherited ...Object) Object {
 	if b.Models.Active() == nil {
 		fail(400, "请先配置 Agent 模型")
 	}
@@ -211,6 +211,9 @@ func (b *Server) startWorkflow(project, id string, version int) Object {
 	b.workflowMu.Lock()
 	defer b.workflowMu.Unlock()
 	run := b.Store.CreateWorkflowRun(project, id, version)
+	if len(inherited) > 0 {
+		b.Store.SaveOptions(stringOf(run["sessionId"]), inherited[0])
+	}
 	// Always execute the frozen snapshot, including if another editor saves now.
 	var snapshot workflowTemplate
 	must(json.Unmarshal([]byte(jsonText(run["template"])), &snapshot))

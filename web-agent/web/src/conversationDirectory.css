@@ -1,0 +1,29 @@
+.ai-turn { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.conversation-directory { position: sticky; top: 18px; z-index: 7; height: var(--directory-rail-height, 28px); flex: 0 0 var(--directory-rail-height, 28px); margin-top: -20px; margin-bottom: calc(0px - var(--directory-rail-height, 28px)); margin-left: calc(8px - max(var(--session-gutter, 40px), (100cqi - 960px) / 2)); width: 24px; overflow-anchor: none; }
+.conversation-directory-trigger { display: grid; place-items: center; width: 24px; height: 100%; padding: 6px 3px; border: 0; border-radius: 5px; background: var(--background); color: var(--text-secondary); cursor: pointer; }
+.conversation-directory-trigger:hover, .conversation-directory-trigger[aria-expanded="true"] { background: var(--surface-hover); color: var(--foreground); }
+.conversation-directory-marks { display: grid; grid-template-rows: repeat(var(--directory-count, 1), minmax(0, 1fr)); align-items: center; width: 18px; height: 100%; }
+.conversation-directory-mark { display: block; width: 10px; height: min(2px, 100%); border-radius: 2px; background: var(--border-strong); }
+.conversation-directory-mark.is-current { width: 18px; background: var(--foreground); }
+.conversation-directory-panel { position: absolute; top: 0; left: 32px; display: flex; flex-direction: column; width: min(270px, calc(100vw - 72px)); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 6px; background: var(--surface); color: var(--foreground); box-shadow: var(--shadow-dialog); }
+.conversation-directory-panel header { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 9px; font-size: 12px; }
+.conversation-directory-panel header strong { font-weight: 550; }
+.conversation-directory-panel header span { color: var(--text-muted); font-size: 11px; }
+.conversation-directory-panel nav { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; overflow-y: auto; }
+.conversation-directory-panel nav button { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; padding: 7px 8px; text-align: left; font: inherit; font-size: 12px; border: 0; background: transparent; color: var(--text-secondary); border-radius: 5px; cursor: pointer; }
+.conversation-directory-row-mark { width: 10px; height: 2px; margin-right: 8px; border-radius: 2px; background: var(--border-strong); flex-shrink: 0; }
+.conversation-directory-row-mark.is-current { width: 18px; margin-right: 0; background: var(--foreground); }
+.conversation-directory-panel nav button > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-directory-panel button:hover, .conversation-directory-panel button[aria-current] { color: var(--foreground); background: var(--surface-hover); }
+.conversation-directory-panel nav p { color: var(--text-muted); font-size: 12px; padding: 8px; margin: 0; }
+.conversation-directory-older, .conversation-directory-latest { display: block; width: 100%; padding: 8px; border: 0; background: transparent; color: var(--text-secondary); text-align: left; font: inherit; font-size: 12px; border-radius: 5px; cursor: pointer; }
+.conversation-directory-latest { border-top: 1px solid var(--border); margin-top: 5px; border-radius: 0; }
+.conversation-directory-panel header, .conversation-directory-older, .conversation-directory-latest { flex-shrink: 0; }
+.conversation-directory-older:disabled { opacity: .6; cursor: default; }
+@media(max-width:700px) {
+ .conversation-directory { margin-left: calc(4px - var(--session-gutter, 32px)); }
+ .conversation-directory-panel { left: 28px; }
+}
+@media(pointer:coarse) {
+ .conversation-directory-panel nav button, .conversation-directory-older, .conversation-directory-latest { min-height: 44px; }
+}

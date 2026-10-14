@@ -8,9 +8,11 @@ scripts/build_lake_desktop.sh
 scripts/build_lake_desktop.sh --install
 ```
 
-CLI 构建始终经过 `scripts/build_lake.sh`。CLI 与应用使用持久 `Lake Local Development Code Signing` 身份，缺少时显式运行 `scripts/setup_lake_signing.sh`，没有未签名构建路径。`VERSION` 同时控制 CLI、应用和资产名；输出 `dist/macos/<version>/<architecture>/Lake.app`、DMG、ZIP 和 SHA-256。默认不覆盖现有安装；`--install` 安装到 `~/Applications/Lake.app` 并保留旧应用。
+CLI 构建始终经过 `scripts/build_lake.sh`。CLI 与应用使用持久 `Lake Local Development Code Signing` 身份，缺少时显式运行 `scripts/setup_lake_signing.sh`，没有未签名构建路径。`VERSION` 同时控制 CLI、应用和资产名；输出 `dist/macos/<version>/<architecture>/Lake.app`、DMG、ZIP 和 SHA-256。默认不覆盖现有安装；`--install` 安装到 `~/Applications/Lake.app`；先校验暂存的新应用，替换成功后删除本次旧备份，失败恢复旧应用。
 
-右上角图标和 Lake 菜单可手动检测，启动及每 5 分钟自动检查。GitHub Releases API 选择 `target_commitish=master`、非草稿/预发布、版本更高且架构匹配的发布，忽略旧 Electron 包。资产格式为 `Lake-<version>-macos-arm64.zip` 与同名 `.zip.sha256`，发布命令必须带 `--target master`。下载并重启更新依次验证摘要、归档路径、版本、bundle ID、整个应用代码签名和当前证书；准备替换后退出后端及窗口。安装器保留旧应用，等待新应用加载工作台回执，45 秒未就绪则回滚。DMG 运行、App Translocation 和不可写应用目录不直接更新，应先安装到可写 Applications。
+本地测试请运行 `scripts/build_lake_desktop.sh --dev --install`，然后打开 `~/Applications/Lake Dev.app`。测试版显示 `DEV` 标记，使用独立 bundle ID `com.cleanlakes.lake.desktop.dev`、偏好设置和 `~/.lake-dev`（包含 `web-agent` 数据目录及凭据），可以与正式版同时启动、单独退出或重启。测试版初始项目和模型配置为空，不复制正式数据，也不检测或安装正式版更新。它忽略继承的 `LAKE_HOME`、`LAKE_WEB_DATA_DIR` 和 `LAKE_WEB_TOKEN`；需要自定义测试目录时使用 `LAKE_DEV_HOME` / `LAKE_DEV_WEB_DATA_DIR`，或显式传入 `--lake-home` / `--lake-data`。测试构建产物位于 `dist/macos/<version>/<architecture>/dev/`，`--install` 仅替换 `Lake Dev.app`。
+
+右上角图标和 Lake 菜单可手动检测，启动及每 5 分钟自动检查。GitHub Releases API 选择 `target_commitish=master`、非草稿/预发布、版本更高且架构匹配的发布，忽略旧 Electron 包。资产格式为 `Lake-<version>-macos-arm64.zip` 与同名 `.zip.sha256`，发布命令必须带 `--target master`。下载并重启更新依次验证摘要、归档路径、版本、bundle ID、整个应用代码签名和当前证书；准备替换后退出后端及窗口。安装期间保留旧应用，等待新应用加载工作台回执；45 秒未就绪则回滚。收到版本一致的成功回执后自动删除本次旧应用和下载缓存；客户端继续清理 Lake 管理的旧备份及完成任务目录，未知目录、符号链接、其他应用和未来版本不会被清理。DMG 运行、App Translocation 和不可写应用目录不直接更新，应先安装到可写 Applications。
 
 ```mermaid
 sequenceDiagram

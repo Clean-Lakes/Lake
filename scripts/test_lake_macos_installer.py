@@ -19,6 +19,9 @@ class InstallerTests(unittest.TestCase):
                 stage.mkdir()
                 (stage / "version").write_text("new")
             work.mkdir()
+            (work / "update.zip").write_text("synthetic package")
+            (work / "unpacked").mkdir()
+            (work / "unpacked" / "bundle").write_text("synthetic extracted app")
             opener = root / "open-test"
             opener.write_text("#!/bin/sh\n" + behavior + "\n")
             opener.chmod(0o700)
@@ -28,11 +31,13 @@ class InstallerTests(unittest.TestCase):
                 str(target), str(backup), str(work), "0.3.0", str(opener), "2"])
             child.wait()
             code = process.wait(timeout=15)
+            if code == 0:
+                self.assertFalse(work.exists(), "successful update left its package cache")
             return code, (target / "version").read_text(), backup.exists(), (work / "error").exists()
 
-    def test_success_preserves_backup(self):
+    def test_success_removes_old_app_and_downloads(self):
         result = self.scenario('if [ "$#" -gt 2 ]; then printf 0.3.0 > "$5"; fi')
-        self.assertEqual(result, (0, "new", True, False))
+        self.assertEqual(result, (0, "new", False, False))
 
     def test_launch_failure_restores_old_app(self):
         result = self.scenario('if [ "$#" -gt 2 ]; then exit 1; fi')
@@ -40,6 +45,10 @@ class InstallerTests(unittest.TestCase):
 
     def test_no_ready_receipt_restores_old_app(self):
         result = self.scenario('exit 0')
+        self.assertEqual(result, (1, "old", False, True))
+
+    def test_wrong_version_receipt_restores_old_app(self):
+        result = self.scenario('if [ "$#" -gt 2 ]; then printf 9.9.9 > "$5"; fi')
         self.assertEqual(result, (1, "old", False, True))
 
     def test_failed_replacement_restores_old_app(self):

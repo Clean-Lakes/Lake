@@ -3,10 +3,13 @@ package web
 import (
 	"net"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
 )
+
+var filesystemDirectoryMention = regexp.MustCompile(`(?i)(?:nfs|共享|挂载|导出)\s*(?:的)?目录`)
 
 // Reconstruct project navigation ancestry, never filesystem or connection paths.
 func directoryInventory(snap Object) ([]ai.AssetDirectory, map[string][]string) {
@@ -203,13 +206,34 @@ func (b *Server) directoryTurnScope(id, message string, refs []Object, groups []
 			}
 		}
 	}
-	unresolvedDirectory := len(selected) == 0 && (strings.Contains(message, "目录") || strings.Contains(message, "文件夹") || strings.Contains(message, "分组")) && !regexp.MustCompile(`(?:^|[\s"'「]|查看|读取|检查|打开|列出|访问|看看|在)/(?:[^\s"'」]+)`).MatchString(message)
+	// NFS/export/mount directories describe paths on a confirmed host scope.
+	// Without a confirmed scope, keep the existing clarification safeguard.
+	directoryTargetText := message
+	if prior, err := b.Engine.TargetScope(id); err == nil && prior != nil && !prior.NeedsClarification && len(prior.ResourceIDs) > 0 {
+		directoryTargetText = filesystemDirectoryMention.ReplaceAllString(message, "")
+	}
+	unresolvedDirectory := len(selected) == 0 && (strings.Contains(directoryTargetText, "目录") || strings.Contains(directoryTargetText, "文件夹") || strings.Contains(directoryTargetText, "分组")) && !regexp.MustCompile(`(?:^|[\s"'「]|查看|读取|检查|打开|列出|访问|看看|在)/(?:[^\s"'」]+)`).MatchString(message)
 	var scope *ai.TargetScope
 	if len(selected) > 0 {
 		scope = directoryScope(groups, selected, nil)
 		if ambiguous {
 			scope.NeedsClarification = true
 			scope.ResourceIDs = nil
+		} else if (strings.Contains(message, "主机") || strings.Contains(strings.ToLower(message), "ssh")) && !strings.Contains(message, "数据库") {
+			hosts := map[string]bool{}
+			for _, resource := range resources {
+				if set("local ssh")[stringOf(resource["kind"])] {
+					hosts[stringOf(resource["id"])] = true
+				}
+			}
+			filtered := []string{}
+			for _, ref := range scope.ResourceIDs {
+				if hosts[ref] {
+					filtered = append(filtered, ref)
+				}
+			}
+			scope.ResourceIDs = filtered
+			scope.NeedsClarification = len(filtered) == 0
 		}
 	} else if len(refs) == 0 && unresolvedDirectory && !strings.Contains(message, "这个目录") && !strings.Contains(message, "该目录") && !strings.Contains(message, "它的目录") {
 		scope = &ai.TargetScope{DirectoryIDs: []string{}, Paths: []string{}, ResourceIDs: []string{}, NeedsClarification: true}
@@ -218,6 +242,23 @@ func (b *Server) directoryTurnScope(id, message string, refs []Object, groups []
 		must(err)
 		if prior != nil {
 			scope = directoryScope(groups, prior.DirectoryIDs, prior.Paths)
+			// Keep a confirmed subset (for example SSH hosts in a folder that
+			// also contains databases) across ordinary follow-up messages.
+			if !prior.NeedsClarification && !scope.NeedsClarification {
+				current := map[string]bool{}
+				for _, ref := range scope.ResourceIDs {
+					current[ref] = true
+				}
+				scope.ResourceIDs = nil
+				for _, ref := range prior.ResourceIDs {
+					if current[ref] {
+						scope.ResourceIDs = append(scope.ResourceIDs, ref)
+					}
+				}
+				if len(scope.ResourceIDs) == 0 {
+					scope.NeedsClarification = true
+				}
+			}
 			if prior.NeedsClarification {
 				scope.NeedsClarification = true
 				scope.ResourceIDs = nil
@@ -265,6 +306,51 @@ func (b *Server) directoryTurnScope(id, message string, refs []Object, groups []
 		}
 	}
 	return scope, refs
+}
+
+// Only actual submitted answers enter target resolution. Never infer a choice
+// from the question title, recommended option or an unsubmitted default.
+func (b *Server) questionTargetScope(id string, answers map[string][]string) *ai.TargetScope {
+	snapshot := b.Store.Snapshot(id)
+	groups, _ := directoryInventory(snapshot)
+	keys := make([]string, 0, len(answers))
+	for key := range answers {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	values := []string{}
+	for _, key := range keys {
+		for _, value := range answers[key] {
+			for _, group := range groups {
+				if ai.DirectoryNameMentioned(value, group.Name) || ai.DirectoryNameMentioned(value, strings.Join(group.Path, "/")) {
+					values = append(values, value)
+					break
+				}
+			}
+		}
+	}
+	if len(values) == 0 {
+		return nil
+	}
+	message := strings.Join(values, "\n")
+	scope, _ := b.directoryTurnScope(id, message, nil, groups, objects(snapshot["resources"]))
+	if scope != nil && !scope.NeedsClarification && (strings.Contains(message, "主机") || strings.Contains(strings.ToLower(message), "ssh")) {
+		hosts := map[string]bool{}
+		for _, resource := range objects(snapshot["resources"]) {
+			if set("local ssh")[stringOf(resource["kind"])] {
+				hosts[stringOf(resource["id"])] = true
+			}
+		}
+		selected := []string{}
+		for _, ref := range scope.ResourceIDs {
+			if hosts[ref] {
+				selected = append(selected, ref)
+			}
+		}
+		scope.ResourceIDs = selected
+		scope.NeedsClarification = len(selected) == 0
+	}
+	return scope
 }
 func directoryModelContext(groups []ai.AssetDirectory, scope *ai.TargetScope, assets []ai.Asset) string {
 	rows := []Object{}

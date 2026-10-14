@@ -27,9 +27,9 @@ func init() {
 }
 
 const (
-	paperColor   = 0x00f8fbfc // COLORREF for --paper: #fcfbf8.
-	inkColor     = 0x002f302b // --ink: #2b302f.
-	lineColor    = 0x00e0e6e9 // --line: #e9e6e0.
+	paperColor   = 0x00ffffff // COLORREF for --background: #ffffff.
+	inkColor     = 0x00222222 // --foreground: #222222.
+	lineColor    = 0x00e5e5e5 // --border: #e5e5e5.
 	themeRefresh = 0x8031
 )
 
@@ -242,7 +242,7 @@ func (s *windowTheme) paint(hwnd uintptr) {
 		hit := map[int]uintptr{2: 8, 3: 9, 5: 20}[index]
 		background := uint32(paperColor)
 		if s.hover == hit {
-			background = 0x00e8eceb
+			background = 0x00eeeeee
 			if index == 5 {
 				background = 0x002323c4
 				color = 0x00ffffff
