@@ -27,7 +27,11 @@ func messageText(value any) string {
 }
 func (b *Server) validateHumanMessage(id string, data Object) humanMessage {
 	validateIDs(data["resourceIds"])
-	message := humanMessage{Text: messageText(data["text"]), Images: []ai.ImageAttachment{}, References: []Object{}, Files: []Object{}, Reuse: data["terminalReuse"]}
+	rawText, ok := data["text"].(string)
+	if !ok || utf8.RuneCountInString(rawText) > 100000 {
+		fail(400, "text must be text (max 100000 characters)")
+	}
+	message := humanMessage{Text: strings.TrimSpace(rawText), Images: []ai.ImageAttachment{}, References: []Object{}, Files: []Object{}, Reuse: data["terminalReuse"]}
 	if raw, exists := data["ignoreProjectMemory"]; exists {
 		value, ok := raw.(bool)
 		if !ok {
@@ -82,6 +86,9 @@ func (b *Server) validateHumanMessage(id string, data Object) humanMessage {
 	for _, file := range objects(data["files"]) {
 		source := b.loadImportSource(project, id, stringOf(file["sourceId"]))
 		message.Files = append(message.Files, Object{"source_id": source.ID, "name": source.Name})
+	}
+	if message.Text == "" && len(message.Images) == 0 {
+		fail(400, "请输入消息或附加图片")
 	}
 	return message
 }

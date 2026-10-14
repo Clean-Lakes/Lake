@@ -462,3 +462,47 @@ func TestImageMetadataAndAuthenticatedBytes(t *testing.T) {
 	}
 	apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "bad", "images": []any{}}, 400)
 }
+
+func TestImageOnlyMessageKeepsUserTextEmpty(t *testing.T) {
+	b, h := fixture(t)
+	id, _ := newSession(t, h)
+	requests := make(chan Object, 1)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload Object
+		if err := json.NewDecoder(r.Body).Decode(&payload); err == nil {
+			requests <- payload
+		}
+		emitModel(w, "收到图片", nil)
+	}))
+	defer provider.Close()
+	apiTest(t, h, "PUT", "/api/settings/model", Object{"url": provider.URL + "/v1/chat/completions", "name": "image-fixture", "supportsImageInput": true}, 200)
+	pngBytes, _ := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==")
+	image := Object{"id": "image-only", "name": "image.png", "mimeType": "image/png", "base64": base64.StdEncoding.EncodeToString(pngBytes)}
+	apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "", "images": []any{image}}, 202)
+	waitAI(t, b, id, "completed")
+	snapshot := b.Store.Snapshot(id)
+	user := objects(snapshot["messages"])[0]
+	if user["text"] != "" || len(objects(user["images"])) != 1 {
+		t.Fatal("image-only message gained synthetic text or lost its image")
+	}
+	select {
+	case payload := <-requests:
+		messages := objects(payload["messages"])
+		content := objects(messages[len(messages)-1]["content"])
+		images := 0
+		for _, part := range content {
+			if part["type"] == "image_url" {
+				images++
+			}
+			if strings.Contains(stringOf(part["text"]), "请分析附加图片") {
+				t.Fatal("model payload contains an injected image instruction")
+			}
+		}
+		if images != 1 {
+			t.Fatal("model payload lost the attached image")
+		}
+	default:
+		t.Fatal("model request missing")
+	}
+	apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": ""}, 400)
+}

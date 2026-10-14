@@ -40,6 +40,14 @@ func (b *Server) providerRoute(w http.ResponseWriter, r *http.Request, name, met
 			return true
 		}
 	}
+	if len(parts) == 2 && method == "POST" && (parts[1] == "detect-capabilities" || parts[1] == "detect-images") {
+		reply(w, 202, b.Models.StartProviderCapabilityDetection(id))
+		return true
+	}
+	if len(parts) == 2 && method == "GET" && (parts[1] == "detect-capabilities" || parts[1] == "detect-images") {
+		reply(w, 200, b.Models.ProviderCapabilityDetectionStatus(id))
+		return true
+	}
 	if len(parts) == 2 && method == "POST" && (parts[1] == "test" || parts[1] == "discover") {
 		cfg := b.Models.ProviderInput(id, body(w, r, 16384))
 		operation := "testModel"

@@ -15,9 +15,10 @@ import (
 )
 
 type Models struct {
-	mu         sync.Mutex
-	Home, Dir  string
-	capacities map[string]modelCapacity
+	mu             sync.Mutex
+	Home, Dir      string
+	capacities     map[string]modelCapacity
+	capabilityJobs map[string]*capabilityDetectionJob
 }
 
 var protocols = set("openai azure-gpt openai-response claude gemini ollama")
@@ -446,7 +447,9 @@ func (m *Models) WithCapacity(ctx context.Context, model *ai.Model) *ai.Model {
 	if model.ContextLimitSource != "settings" {
 		copy.ContextLimit = cached.Limit
 	}
-	copy.Reasoning = cached.Reasoning
+	if copy.Reasoning == nil {
+		copy.Reasoning = cached.Reasoning
+	}
 	if cached.Limit > 0 && model.ContextLimitSource != "settings" {
 		copy.ContextLimitSource = "provider"
 	}
@@ -474,7 +477,9 @@ func (m *Models) CachedCapacity(model *ai.Model) *ai.Model {
 		if model.ContextLimitSource != "settings" {
 			copy.ContextLimit = cached.Limit
 		}
-		copy.Reasoning = cached.Reasoning
+		if copy.Reasoning == nil {
+			copy.Reasoning = cached.Reasoning
+		}
 		if cached.Limit > 0 && model.ContextLimitSource != "settings" {
 			copy.ContextLimitSource = "provider"
 		}

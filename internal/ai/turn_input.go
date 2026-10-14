@@ -16,7 +16,7 @@ type TurnInput struct {
 }
 
 func (input TurnInput) validate() error {
-	if input.UserText == "" || utf8.RuneCountInString(input.UserText) > 100000 {
+	if input.UserText == "" && len(input.Images) == 0 || utf8.RuneCountInString(input.UserText) > 100000 {
 		return errors.New("invalid chat message")
 	}
 	if len(input.Context) > 2<<20 {

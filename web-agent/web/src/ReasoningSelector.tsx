@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReasoningSettings } from "../../shared/contracts";
 import { api, readableError } from "./api";
 
-const labels: Record<string, string> = { "": "默认", none: "关闭", minimal: "极低", low: "低", medium: "中", high: "高", xhigh: "极高", max: "最高" };
+const labels: Record<string, string> = { "": "默认", none: "关闭", minimal: "极低", low: "低", medium: "中", high: "高", xhigh: "极高", max: "最高", ultra: "Ultra" };
 
 export function ReasoningSelector({ session, modelId, disabled, onSaving }: {
   session: string; modelId?: string | null; disabled: boolean; onSaving: (saving: boolean) => void;

@@ -18,6 +18,7 @@ func TestReasoningRequestAdapters(t *testing.T) {
 		{"deepseek-flash", "claude", "max", `"output_config":{"effort":"max"}`},
 		{"gpt-5.2", "openai", "xhigh", `"reasoning_effort":"xhigh"`},
 		{"gpt-5.2", "openai-response", "low", `"reasoning":{"effort":"low"}`},
+		{"gpt-6.1-sol", "openai-response", "ultra", `"reasoning":{"effort":"ultra"}`},
 		{"claude-opus-4-6", "claude", "max", `"output_config":{"effort":"max"}`},
 		{"gemini-3-pro-preview", "gemini", "low", `"thinkingLevel":"low"`},
 	} {
@@ -63,6 +64,7 @@ func TestProviderReasoningMetadataOverridesModelFallback(t *testing.T) {
 			map[string]any{"id": "deepseek-flash", "effort": map[string]any{"supported_levels": []string{"low", "high", "high", "invalid"}, "default_level": "high"}},
 			map[string]any{"id": "custom-model", "supported_reasoning_efforts": []string{"medium", "high"}},
 			map[string]any{"id": "gpt-5.2", "effort": map[string]any{"supported_levels": []string{}}},
+			map[string]any{"id": "codex/gpt-6.1-sol", "supported_reasoning_levels": []any{map[string]any{"effort": "low"}, map[string]any{"effort": "ultra"}}},
 		}})
 	}))
 	defer server.Close()
@@ -87,5 +89,13 @@ func TestProviderReasoningMetadataOverridesModelFallback(t *testing.T) {
 	disabled := caps["gpt-5.2"]
 	if len(ReasoningSupport(Model{Name: "gpt-5.2", Reasoning: &disabled}).Levels) != 0 {
 		t.Fatal("explicit absence borrowed fallback")
+	}
+	actual := caps["codex/gpt-6.1-sol"]
+	if !reflect.DeepEqual(actual.Levels, []string{"low", "ultra"}) || actual.Source != "provider" {
+		t.Fatal("gateway reasoning levels were not parsed", actual)
+	}
+	m.Name, m.Reasoning, m.ReasoningEffort = "codex/gpt-6.1-sol", &actual, "ultra"
+	if _, _, err := modelPayload(m, nil, nil); err != nil {
+		t.Fatal("gateway ultra effort was rejected", err)
 	}
 }

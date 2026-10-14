@@ -209,12 +209,13 @@ export type ModelSettings = {
 export type ModelTestResult = { ok: boolean; message: string };
 
 /** Models the configured endpoint reports, for the composer's model switcher. */
-export type ProviderModel = {id: string; name: string; displayName?: string; enabled: boolean; contextWindow?: number; supportsImageInput: boolean; supportsImageOutput: boolean};
+export type ModelReasoningCapability = {levels: string[]; default?: string; source?: string};
+export type ProviderModel = {id: string; name: string; displayName?: string; enabled: boolean; contextWindow?: number; supportsImageInput: boolean; supportsImageOutput: boolean; imageInputMode?: "auto" | "on" | "off"; imageInputDetected?: boolean; reasoningCapability?: ModelReasoningCapability};
 export type ModelProvider = {id: string; name: string; baseURL: string; protocol: string; enabled: boolean; keyConfigured: boolean; models: ProviderModel[]};
 export type ProviderCatalog = {providers: ModelProvider[]; activeProviderId: string; activeModelId: string; savedProviderId?: string};
 export type ProviderInput = Omit<ModelProvider,"id" | "keyConfigured"> & {apiKey?: string | null};
 export type AvailableModelEntry = {providerId: string; providerName: string; modelId: string; name: string; displayName: string; contextWindow?: number};
-export type AvailableModels = { models: string[]; entries?: AvailableModelEntry[]; activeProviderId?: string; activeModelId?: string; message?: string };
+export type AvailableModels = { models: string[]; entries?: AvailableModelEntry[]; activeProviderId?: string; activeModelId?: string; message?: string; imageInputCapabilities?: Record<string, boolean>; reasoningCapabilities?: Record<string, ModelReasoningCapability> };
 
 export type ReasoningSettings = { modelId?: string; levels: string[]; default?: string; source?: string; effort: string };
 

@@ -13,7 +13,7 @@ type ReasoningCapability struct {
 	Source  string   `json:"source,omitempty"`
 }
 
-var reasoningLevels = []string{"none", "minimal", "low", "medium", "high", "xhigh", "max"}
+var reasoningLevels = []string{"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}
 var modelSnapshotDate = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 func cleanReasoning(c ReasoningCapability) ReasoningCapability {
@@ -68,7 +68,7 @@ func ReasoningSupport(m Model) ReasoningCapability {
 				c.Default = "none"
 			}
 		case p == "openai-response" && (modelVersion(name, "gpt-6-astra") || modelVersion(name, "gpt-6.1-sol")):
-			c.Levels, c.Default = []string{"low", "medium", "high", "xhigh", "max"}, "medium"
+			c.Levels, c.Default = []string{"low", "medium", "high", "xhigh", "max", "ultra"}, "medium"
 		}
 	}
 	if p == "claude" {
@@ -112,11 +112,18 @@ func reasoningMetadata(item map[string]any) *ReasoningCapability {
 		raw, present = item["supported_reasoning_efforts"]
 	}
 	if !present {
+		raw, present = item["supported_reasoning_levels"]
+	}
+	if !present {
 		return nil
 	}
 	c := ReasoningCapability{Source: "provider", Default: str(effort["default_level"])}
 	for _, v := range arr(raw) {
-		c.Levels = append(c.Levels, str(v))
+		level := str(v)
+		if entry, ok := v.(map[string]any); ok {
+			level = str(entry["effort"])
+		}
+		c.Levels = append(c.Levels, level)
 	}
 	c = cleanReasoning(c)
 	return &c
