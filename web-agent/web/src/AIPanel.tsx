@@ -5,6 +5,7 @@ import { timingForTurn } from "./replyDurationState";
 import {displayAiError} from "./aiErrors";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { remarkAssistantProse } from "./assistantProse";
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { AIImage, AICard, AIView, AIPreset, SessionSnapshot, TerminalSession, WorkspaceTag } from "../../shared/contracts";
 import { conversationTagSignature, remarkConversationTags } from "./conversationTags";
@@ -43,13 +44,14 @@ const noTags: WorkspaceTag[] = [];
 const Card = memo(function Card({ card, tags = noTags }: { card: AICard; tags?: WorkspaceTag[] }) {
   const signature = conversationTagSignature(tags);
   const decorateTags = useMemo(() => remarkConversationTags(tags), [signature]);
+  const assistantText = ["text", "message"].includes(card.type);
   const content = card.type === "error" ? card.status === "cancelled" ? "已停止本轮" : displayAiError(card.content || "") : card.content;
   if (card.type === "image") { const image = card.data as AIImage; return <figure className="ai-image"><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "模型返回图片"}/><a href={`data:${image.mimeType};base64,${image.base64}`} download={image.name || `lake-image.${image.mimeType.split("/")[1]}`}>保存图片</a></figure>; }
   if (card.type === "thinking") return <details className="ai-thinking"><summary>思考过程 {card.status === "running" ? "· 正在生成" : ""}</summary><div>{card.content}</div></details>;
   if (card.type === "chart") return <Chart card={card}/>;
   if (card.type === "diff") { const data = card.data as { before: string; after: string }; return <details className="ai-diff"><summary>文件变更 · {card.title}</summary><div className="ai-diff-columns"><pre>{data.before || "（新文件）"}</pre><pre>{data.after || "（空文件或删除）"}</pre></div></details>; }
   if (card.type === "operation") return <details className="ai-operation"><summary><span>{card.title}</span><small>{card.status === "pending" ? "等待确认" : card.status === "running" ? "执行中" : card.status === "failed" ? "未完成" : "已结束"}</small></summary><pre>{JSON.stringify(card.data, null, 2)}</pre>{card.content && <pre>{card.content}</pre>}</details>;
-  return <div className={`ai-card ai-${card.type}`}><div className="ai-markdown"><Markdown remarkPlugins={["text", "message"].includes(card.type) ? [remarkGfm, decorateTags] : [remarkGfm]} skipHtml components={{ a: props => <a {...props} target="_blank" rel="noopener noreferrer"/>, table: props => <div className="markdown-table-scroll"><table {...props}/></div> }}>{content || ""}</Markdown></div>{card.status === "running" && <span className="ai-stream-dot"/>}</div>;
+  return <div className={`ai-card ai-${card.type}`}><div className={`ai-markdown${assistantText ? " assistant-prose" : ""}`}><Markdown remarkPlugins={assistantText ? [remarkGfm, remarkAssistantProse, decorateTags] : [remarkGfm]} skipHtml components={{ a: props => <a {...props} target="_blank" rel="noopener noreferrer"/>, table: props => <div className="markdown-table-scroll"><table {...props}/></div> }}>{content || ""}</Markdown></div>{card.status === "running" && <span className="ai-stream-dot"/>}</div>;
 }, (previous, next) => sameCard(previous.card, next.card) && conversationTagSignature(previous.tags) === conversationTagSignature(next.tags));
 export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation" }: { mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean }) {
   const [older, setOlder] = useState<AICard[]>([]); const [offset, setOffset] = useState<number | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState("");

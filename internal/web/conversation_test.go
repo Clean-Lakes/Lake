@@ -3,7 +3,6 @@ package web
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -61,13 +60,17 @@ func TestForegroundPersistentCommandHonorsTimeout(t *testing.T) {
 	b, h := fixture(t)
 	id, ref := newSession(t, h)
 	start := time.Now()
-	_, err := b.bridge(context.Background(), id, "runtimeCommandExec", Object{"asset_ref": ref, "runtime": "local", "command": "sleep 2", "timeout_ms": 80}, true)
-	if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > time.Second {
-		t.Fatal("foreground PTY ignored its timeout", err)
+	value, err := b.bridge(context.Background(), id, "runtimeCommandExec", Object{"asset_ref": ref, "runtime": "local", "command": "sleep 2", "timeout_ms": 80}, true)
+	result := object(value)
+	if err != nil || result["timed_out"] != true || result["status"] != "running" || time.Since(start) > time.Second {
+		t.Fatal("foreground PTY ignored its bounded wait", err, result)
 	}
 	tid := stringOf(b.Store.Options(id)["terminal_id"])
 	if b.Store.Terminal(id, tid)["status"] != "busy" {
 		t.Fatal("wait timeout closed the persistent command")
+	}
+	if result["terminal_id"] != tid || stringOf(result["entry_id"]) == "" || result["exitCode"] != nil {
+		t.Fatal("timeout lost command identity or invented an exit code", result)
 	}
 	b.Terminals.Close(id, tid)
 }

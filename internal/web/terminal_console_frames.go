@@ -1,6 +1,8 @@
 package web
 
 import (
+	"os/exec"
+	"path"
 	"regexp"
 	"strings"
 )
@@ -10,22 +12,49 @@ import (
 // envelope and restore them before the ordinary terminal parser sees them.
 const consoleFramePrefix = "\x1b]0;LAKE_FRAME_"
 const consoleHookPrefix = "\x1b]0;LAKE_HOOK_"
+const consoleReadyHookPrefix = "\x1b]0;LAKE_READY_HOOK_"
 
 var encodedConsoleFrame = regexp.MustCompile(`\\036LAKE_([^\\\r\n'"]*)\\037`)
+var encodedConsoleReady = regexp.MustCompile(`\\036LAKE_READY_([a-zA-Z0-9_-]+)\\037`)
+
+// Local shells receive initialization through the environment; SSH carries it
+// in the remote command argument. Both paths pass through the same ConPTY.
+func consoleTerminalCommand(cmd *exec.Cmd) ([]string, []string) {
+	args := append([]string(nil), cmd.Args...)
+	if len(args) > 1 {
+		program := strings.ToLower(path.Base(strings.ReplaceAll(args[0], "\\", "/")))
+		if program == "ssh" || program == "ssh.exe" {
+			args[len(args)-1] = consoleTerminalScript(args[len(args)-1])
+		}
+	}
+	env := append([]string(nil), cmd.Env...)
+	for i, item := range env {
+		if key, value, ok := strings.Cut(item, "="); ok && strings.EqualFold(key, "__lake_init") {
+			env[i] = key + "=" + consoleTerminalScript(value)
+		}
+	}
+	return args, env
+}
 
 func consoleTerminalScript(script string) string {
 	if !strings.Contains(script, `\036LAKE_`) && !strings.Contains(script, `\033]900`) {
 		return script
 	}
+	// ConPTY can coalesce successive title changes. Keep the startup nonce in
+	// the cwd/prompt title too, so the final retained title proves readiness.
+	cwdPrefix := `\033]0;LAKE_HOOK_9003;`
+	if ready := encodedConsoleReady.FindStringSubmatch(script); len(ready) == 2 {
+		cwdPrefix = `\033]0;LAKE_READY_HOOK_` + ready[1] + `;9003;`
+	}
 	script = encodedConsoleFrame.ReplaceAllString(script, `\033]0;LAKE_FRAME_${1}\007`)
 	return strings.NewReplacer(
-		`\033]9003;`, `\033]0;LAKE_HOOK_9003;`,
+		`\033]9003;`, cwdPrefix,
 		`\033]9004;`, `\033]0;LAKE_HOOK_9004;`,
 		`\033]9005;`, `\033]0;LAKE_HOOK_9005;`,
 	).Replace(script)
 }
 
-type consoleFrameDecoder struct{ pending string }
+type consoleFrameDecoder struct{ pending, ready string }
 
 func (d *consoleFrameDecoder) feed(chunk string, final bool) string {
 	data := d.pending + chunk
@@ -33,7 +62,7 @@ func (d *consoleFrameDecoder) feed(chunk string, final bool) string {
 	var out strings.Builder
 	for data != "" {
 		at, prefix := -1, ""
-		for _, candidate := range []string{consoleFramePrefix, consoleHookPrefix} {
+		for _, candidate := range []string{consoleFramePrefix, consoleHookPrefix, consoleReadyHookPrefix} {
 			if i := strings.Index(data, candidate); i >= 0 && (at < 0 || i < at) {
 				at, prefix = i, candidate
 			}
@@ -41,7 +70,7 @@ func (d *consoleFrameDecoder) feed(chunk string, final bool) string {
 		if at < 0 {
 			keep := 0
 			if !final {
-				for _, candidate := range []string{consoleFramePrefix, consoleHookPrefix} {
+				for _, candidate := range []string{consoleFramePrefix, consoleHookPrefix, consoleReadyHookPrefix} {
 					for n := 1; n < len(candidate) && n <= len(data); n++ {
 						if strings.HasSuffix(data, candidate[:n]) && n > keep {
 							keep = n
@@ -72,7 +101,23 @@ func (d *consoleFrameDecoder) feed(chunk string, final bool) string {
 		} else {
 			payload := data[len(prefix):end]
 			if prefix == consoleFramePrefix {
-				out.WriteString("\x1eLAKE_" + payload + "\x1f")
+				if id, isReady := strings.CutPrefix(payload, "READY_"); !isReady || id != d.ready {
+					out.WriteString("\x1eLAKE_" + payload + "\x1f")
+					if isReady {
+						d.ready = id
+					}
+				}
+			} else if prefix == consoleReadyHookPrefix {
+				id, hook, ok := strings.Cut(payload, ";")
+				if !ok || id == "" || len(id) > 128 || !strings.HasPrefix(hook, "9003;") {
+					out.WriteString("[invalid console frame]")
+				} else {
+					if id != d.ready {
+						out.WriteString("\x1eLAKE_READY_" + id + "\x1f")
+						d.ready = id
+					}
+					out.WriteString("\x1b]" + hook + "\a")
+				}
 			} else {
 				out.WriteString("\x1b]" + payload + "\a")
 			}

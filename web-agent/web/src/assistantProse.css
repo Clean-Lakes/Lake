@@ -1,0 +1,27 @@
+.ai-markdown.assistant-prose { max-width: 860px; color: var(--foreground); font-size: 14px; line-height: 1.85; overflow-wrap: anywhere; }
+.ai-markdown.assistant-prose > :first-child { margin-top: 0; }
+.ai-markdown.assistant-prose > :last-child { margin-bottom: 0; }
+.ai-markdown.assistant-prose p { margin: 0 0 16px; line-height: inherit; }
+.ai-markdown.assistant-prose strong { font-weight: 600; }
+.ai-markdown.assistant-prose ul,.ai-markdown.assistant-prose ol { margin: 16px 0 20px; padding-inline-start: 1.5em; }
+.ai-markdown.assistant-prose li { margin: 9px 0; padding-inline-start: 4px; }
+.ai-markdown.assistant-prose li::marker { color: var(--text-muted); font-size: .9em; }
+.ai-markdown.assistant-prose li > p { margin: 0; }
+.ai-markdown.assistant-prose li > p + p { margin-top: 8px; }
+.ai-markdown.assistant-prose li > ul,.ai-markdown.assistant-prose li > ol { margin: 8px 0 12px; }
+.ai-markdown.assistant-prose :not(pre) > code { padding: 2px 5px; border-radius: 4px; background: var(--surface-muted); font-size: .9em; }
+.ai-markdown.assistant-prose pre { margin: 16px 0 20px; padding: 14px 16px; line-height: 1.65; }
+.ai-markdown.assistant-prose pre code { font-size: 12px; }
+.ai-markdown.assistant-prose h1,.ai-markdown.assistant-prose h2,.ai-markdown.assistant-prose h3,.ai-markdown.assistant-prose h4 { margin: 24px 0 12px; line-height: 1.5; font-weight: 600; }
+.ai-markdown.assistant-prose h1 { font-size: 22px; }
+.ai-markdown.assistant-prose h2 { font-size: 19px; }
+.ai-markdown.assistant-prose h3 { font-size: 16px; }
+.ai-markdown.assistant-prose h4 { font-size: 14px; }
+.ai-markdown.assistant-prose p.assistant-summary { margin: 20px 0 0; padding: 12px 16px; border-inline-start: 3px solid var(--border-strong); border-radius: 0 var(--radius-control) var(--radius-control) 0; background: var(--surface-subtle); }
+.ai-markdown.assistant-prose table { margin: 16px 0 20px; line-height: 1.65; }
+.ai-markdown.assistant-prose td,.ai-markdown.assistant-prose th { padding: 9px 12px; text-align: start; }
+@media (max-width: 600px) {
+  .ai-markdown.assistant-prose ul,.ai-markdown.assistant-prose ol { padding-inline-start: 1.35em; }
+  .ai-markdown.assistant-prose li { padding-inline-start: 2px; }
+  .ai-markdown.assistant-prose p.assistant-summary { padding: 10px 12px; }
+}

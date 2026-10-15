@@ -659,7 +659,8 @@ func (e *Engine) bridgeCall(ctx context.Context, id, name string, a map[string]a
 		}
 	}
 	result, err := e.Bridge(ctx, id, name, out, approved)
-	if err == nil && a["run_in_background"] == true && (name == "runtimeCommandExec" || name == "terminal_execute_command") {
+	continued := obj(result)["timed_out"] == true && str(obj(result)["status"]) == "running"
+	if err == nil && (a["run_in_background"] == true || continued) && (name == "runtimeCommandExec" || name == "terminal_execute_command") {
 		return e.trackBridgeShell(id, result, a)
 	}
 	return result, err

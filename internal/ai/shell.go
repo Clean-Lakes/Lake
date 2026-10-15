@@ -166,7 +166,13 @@ func (e *Engine) trackBridgeShell(session string, result any, a map[string]any) 
 		}
 		e.shellCard(session, id, content, status, false)
 	}()
-	return map[string]any{"shell_id": id, "terminal_id": terminalID, "status": "running"}, nil
+	tracked := map[string]any{"shell_id": id, "terminal_id": terminalID, "entry_id": entryID, "status": "running", "poll_after_ms": 1000}
+	if data["timed_out"] == true {
+		tracked["timed_out"] = true
+		tracked["result"] = result
+		tracked["notice"] = "等待命令超时，命令尚未确认结束；使用 wait_shell 或 shell_output 读取此 shell_id 的状态，不要重复执行原命令。"
+	}
+	return tracked, nil
 }
 
 // Completion updates the original card, never the status or ordering of a later turn.

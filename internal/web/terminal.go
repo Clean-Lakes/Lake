@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +50,7 @@ type liveTerminal struct {
 	utf8Partial                               string
 	capturedAt                                string
 	shell                                     string
+	remote                                    bool
 	hooks                                     bool
 	hookPartial                               string
 	rawOrigin                                 string
@@ -195,7 +195,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 		if trustedPath != "" {
 			for i, v := range args {
 				if strings.HasPrefix(v, "UserKnownHostsFile=") {
-					args[i] = "UserKnownHostsFile=" + strconv.Quote(trustedPath)
+					args[i] = sshFileOption("UserKnownHostsFile", trustedPath)
 				}
 			}
 		}
@@ -218,7 +218,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 		if t.KnownHosts != "" {
 			for i, v := range args {
 				if strings.HasPrefix(v, "UserKnownHostsFile=") {
-					args[i] = "UserKnownHostsFile=" + t.KnownHosts
+					args[i] = sshFileOption("UserKnownHostsFile", t.KnownHosts)
 				}
 			}
 		}
@@ -236,7 +236,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 		t.store.TerminalStatus(id, tid, "disconnected")
 		fail(503, "Could not start terminal; verify connection configuration")
 	}
-	l := &liveTerminal{pty: f, cmd: cmd, id: tid, session: id, interactive: interactive, promptRedraw: selectedShell != "sh", readyMarker: readyMarker, connected: make(chan struct{}), shell: selectedShell, screen: vt10x.New(vt10x.WithSize(100, 30))}
+	l := &liveTerminal{pty: f, cmd: cmd, id: tid, session: id, remote: r["kind"] == "ssh", interactive: interactive, promptRedraw: selectedShell != "sh", readyMarker: readyMarker, connected: make(chan struct{}), shell: selectedShell, screen: vt10x.New(vt10x.WithSize(100, 30))}
 	t.live[tid] = l
 	t.wg.Add(2)
 	t.mu.Unlock()

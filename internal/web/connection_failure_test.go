@@ -122,11 +122,18 @@ func TestSSHStartupReasonAndRetryIntent(t *testing.T) {
 		{"Connection timed out", "连接超时"},
 		{"Could not resolve hostname synthetic", "无法解析"},
 		{"No route to host", "网络不可达"},
+		{"Unable to negotiate: no matching host key type found. Their offer: ssh-rsa", "加密算法协商失败"},
+		{"Bad owner or permissions on C:/private/config", "文件访问权限"},
+		{"ssh_askpass: exec(C:/Program Files/Lake/Lake.exe): No such file", "凭据助手无法启动"},
+		{"command-line: Bad configuration option: fixture", "不支持连接所需的选项"},
 	} {
 		result := terminalConnectionError(tc.output+"\nfixture-secret-not-for-display", "")
 		if !strings.Contains(result, tc.want) || strings.Contains(result, "fixture-secret") || strings.Contains(result, "synthetic") {
 			t.Fatal("startup reason is missing or raw stderr escaped")
 		}
+	}
+	if message := terminalConnectionError("", "Terminal connection closed"); !strings.Contains(message, "初始化完成前退出") || strings.Contains(message, "连接超时") {
+		t.Fatal("immediate SSH exit was misreported as timeout", message)
 	}
 	for _, message := range []string{"为什么一直重试", "不要重试", "为啥重新连接失败", "don't retry", "显示 retry.log"} {
 		if connectionRetryRequested(message) {
