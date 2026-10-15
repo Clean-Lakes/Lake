@@ -29,14 +29,18 @@ func TestWindowsSSHPasswordConPTYHandshake(t *testing.T) {
 	for _, tc := range []struct {
 		name                                  string
 		interactive, unusualPaths, rejectAuth bool
+		challenge                             string
 	}{
-		{"managed", false, false, false},
-		{"interactive", true, false, false},
-		{"installed-paths", true, true, false},
-		{"authentication-failure", true, false, true},
+		{"managed", false, false, false, ""},
+		{"interactive", true, false, false, ""},
+		{"installed-paths", true, true, false, ""},
+		{"authentication-failure", true, false, true, ""},
+		{"pam-managed", false, false, false, "Password: "},
+		{"pam-interactive", true, true, false, "Password: "},
+		{"otp-does-not-receive-password", true, false, true, "One-time password: "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			windowsSSHPasswordConPTYHandshake(t, tc.interactive, tc.unusualPaths, tc.rejectAuth)
+			windowsSSHPasswordConPTYHandshake(t, tc.interactive, tc.unusualPaths, tc.rejectAuth, windowsSSHFixtureOptions{challenge: tc.challenge})
 		})
 	}
 }
@@ -59,16 +63,26 @@ func TestWindowsPackagedSSHCredentialHelper(t *testing.T) {
 	if !ok || header.Subsystem != 3 {
 		t.Fatal("packaged credential helper is not a console-subsystem x64 executable")
 	}
-	for _, unusual := range []bool{false, true} {
-		t.Run(fmt.Sprintf("unicode-and-spaces-%t", unusual), func(t *testing.T) { windowsSSHPasswordConPTYHandshake(t, true, unusual, false, desktop) })
+	for _, challenge := range []string{"", "Password: "} {
+		for _, unusual := range []bool{false, true} {
+			t.Run(fmt.Sprintf("pam-%t/unicode-and-spaces-%t", challenge != "", unusual), func(t *testing.T) {
+				windowsSSHPasswordConPTYHandshake(t, true, unusual, false, windowsSSHFixtureOptions{desktop: desktop, challenge: challenge})
+			})
+		}
 	}
 }
 
-func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, rejectAuth bool, desktopEntry ...string) {
+type windowsSSHFixtureOptions struct{ desktop, challenge string }
+
+func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, rejectAuth bool, options ...windowsSSHFixtureOptions) {
+	var opts windowsSSHFixtureOptions
+	if len(options) > 0 {
+		opts = options[0]
+	}
 	b, h := fixture(t)
 	id, _ := newSession(t, h)
-	if len(desktopEntry) > 0 {
-		b.Terminals.askpassProgram = desktopEntry[0]
+	if opts.desktop != "" {
+		b.Terminals.askpassProgram = opts.desktop
 	}
 	if unusualPaths {
 		// Reproduce an installed backend/credential path, not only the ASCII
@@ -79,8 +93,8 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 			t.Fatal(err)
 		}
 		executable, err := os.Executable()
-		if len(desktopEntry) > 0 {
-			executable, err = platform.SSHAskpassProgram(desktopEntry[0])
+		if opts.desktop != "" {
+			executable, err = platform.SSHAskpassProgram(opts.desktop)
 		}
 		if err != nil {
 			t.Fatal(err)
@@ -93,10 +107,10 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 			t.Fatal(err)
 		}
 		b.Terminals.askpassProgram = helper
-		if len(desktopEntry) > 0 {
+		if opts.desktop != "" {
 			// Match the desktop layout while keeping the test credentials private.
 			gui := filepath.Join(filepath.Dir(filepath.Dir(helper)), "Lake.exe")
-			data, err := os.ReadFile(desktopEntry[0])
+			data, err := os.ReadFile(opts.desktop)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -122,6 +136,20 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 		authenticated.Store(true)
 		return nil, nil
 	}}
+	if opts.challenge != "" {
+		config.PasswordCallback = nil
+		config.KeyboardInteractiveCallback = func(meta ssh.ConnMetadata, challenge ssh.KeyboardInteractiveChallenge) (*ssh.Permissions, error) {
+			answers, err := challenge(meta.User(), "", []string{opts.challenge}, []bool{false})
+			if opts.challenge == "One-time password: " && len(answers) == 1 && answers[0] == "synthetic-windows-password" {
+				t.Error("OTP challenge received the saved login password")
+			}
+			if err != nil || rejectAuth || meta.User() != "fixture" || len(answers) != 1 || answers[0] != "synthetic-windows-password" {
+				return nil, errors.New("fixture authentication rejected")
+			}
+			authenticated.Store(true)
+			return nil, nil
+		}
+	}
 	config.AddHostKey(signer)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

@@ -104,7 +104,7 @@ func sshBase(c *SSH, roots ...string) ([]string, error) {
 	if c.KnownHosts != "" {
 		known = c.KnownHosts
 	}
-	args := []string{"-F", "/dev/null", "-o", "StrictHostKeyChecking=yes", "-o", "IdentitiesOnly=yes", "-o", "IdentityAgent=none", "-o", "AddKeysToAgent=no", "-o", "KbdInteractiveAuthentication=no", "-o", "NumberOfPasswordPrompts=1", "-o", "UserKnownHostsFile=" + strconv.Quote(known), "-o", "ConnectTimeout=10"}
+	args := []string{"-F", "/dev/null", "-o", "StrictHostKeyChecking=yes", "-o", "IdentitiesOnly=yes", "-o", "IdentityAgent=none", "-o", "AddKeysToAgent=no", "-o", "NumberOfPasswordPrompts=1", "-o", "UserKnownHostsFile=" + strconv.Quote(known), "-o", "ConnectTimeout=10"}
 	if c.KnownHosts != "" {
 		args = append(args, "-o", "GlobalKnownHostsFile=/dev/null")
 	}
@@ -121,7 +121,7 @@ func sshBase(c *SSH, roots ...string) ([]string, error) {
 		if c.CredentialRef == "" {
 			return nil, errors.New("SSH password reference required")
 		}
-		return append(args, "-o", "BatchMode=no", "-o", "PreferredAuthentications=password", "-o", "PasswordAuthentication=yes", "-o", "PubkeyAuthentication=no"), nil
+		return append(args, "-o", "BatchMode=no", "-o", "PreferredAuthentications=password,keyboard-interactive", "-o", "KbdInteractiveAuthentication=yes", "-o", "PasswordAuthentication=yes", "-o", "PubkeyAuthentication=no"), nil
 	}
 	path, err := privateCredential(c.IdentityFile, roots...)
 	if err != nil {
@@ -131,7 +131,7 @@ func sshBase(c *SSH, roots ...string) ([]string, error) {
 	if c.CredentialRef != "" {
 		batch = "no"
 	}
-	return append(args, "-o", "BatchMode="+batch, "-o", "PreferredAuthentications=publickey", "-o", "PasswordAuthentication=no", "-i", path), nil
+	return append(args, "-o", "BatchMode="+batch, "-o", "PreferredAuthentications=publickey", "-o", "KbdInteractiveAuthentication=no", "-o", "PasswordAuthentication=no", "-i", path), nil
 }
 func (e *Engine) execRuntime(ctx context.Context, c Config, a map[string]any, argv []string, input string) (map[string]any, error) {
 	target := str(a["runtime"])

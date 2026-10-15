@@ -778,7 +778,11 @@ func (t *Terminals) closeLive(l *liveTerminal, reason string) {
 	t.finish(l, nil, "\n["+reason+"]", true)
 	t.store.TerminalStatus(l.session, l.id, "disconnected")
 	if !l.ready {
-		l.connectErr = fmt.Errorf("%s", terminalConnectionErrorWithExit(l.output, reason, l.startupExitCode))
+		startupOutput := l.output
+		if l.screen != nil {
+			startupOutput += "\n" + t.screenLocked(l, "tail", 1000, outputLimit)
+		}
+		l.connectErr = fmt.Errorf("%s", terminalConnectionErrorWithExit(startupOutput, reason, l.startupExitCode))
 		close(l.connected)
 	}
 	t.mu.Lock()

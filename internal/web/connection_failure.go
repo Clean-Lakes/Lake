@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type connectionRetryContextKey struct{}
@@ -209,31 +211,50 @@ func terminalConnectionErrorWithExit(output, reason string, code *int) string {
 	return fmt.Sprintf("%s（SSH 退出码：%d / 0x%08X）。", strings.TrimSuffix(message, "。"), *code, uint32(*code))
 }
 
+var sshDiagnosticEscape = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
+
+func compactSSHDiagnostic(value string) string {
+	value = sshDiagnosticEscape.ReplaceAllString(value, "")
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return unicode.ToLower(r)
+	}, value)
+}
+
 func terminalConnectionError(output, reason string) string {
-	output = strings.ToLower(output)
+	// ConPTY inserts ANSI sequences and wraps text even inside an error word.
+	// Normalize only for matching fixed categories; never expose raw output.
+	output = compactSSHDiagnostic(output)
+	has := func(value string) bool { return strings.Contains(output, compactSSHDiagnostic(value)) }
 	switch {
-	case strings.Contains(output, "no matching host key type found"), strings.Contains(output, "no matching key exchange method found"), strings.Contains(output, "no matching cipher found"), strings.Contains(output, "no mutual signature algorithm"):
+	case has("no matching mac found"), has("no matching host key type found"), has("no matching key exchange method found"), has("no matching cipher found"), has("no mutual signature algorithm"):
 		return "SSH 加密算法协商失败，客户端与服务器支持的算法不匹配。请检查 SSH 版本和服务端算法配置。"
-	case strings.Contains(output, "bad owner or permissions"), strings.Contains(output, "unprotected private key file"), strings.Contains(output, "permissions for") && strings.Contains(output, "too open"):
+	case has("bad owner or permissions"), has("unprotected private key file"), has("permissions for") && has("too open"):
 		return "SSH 配置或私钥文件权限不符合客户端要求，连接被拒绝。请检查当前用户的文件访问权限。"
-	case strings.Contains(output, "ssh_askpass: exec"), strings.Contains(output, "ssh_askpass: posix_spawn"), strings.Contains(output, "exec(") && strings.Contains(output, "askpass"):
+	case has("ssh_askpass: exec"), has("ssh_askpass: posix_spawn"), has("exec(") && has("askpass"):
 		return "SSH 登录凭据助手无法启动。请检查 Lake 安装是否完整，以及程序是否被系统或安全软件阻止。"
-	case strings.Contains(output, "bad configuration option"), strings.Contains(output, "unsupported option"), strings.Contains(output, "unknown option"), strings.Contains(output, "can't open user config file"):
+	case has("bad configuration option"), has("unsupported option"), has("unknown option"), has("can't open user config file"):
 		return "SSH 客户端不支持连接所需的选项，请检查 Lake 随包 SSH 运行环境是否完整。"
-	case strings.Contains(output, "remote host identification has changed"):
+	case has("remote host identification has changed"):
 		return "SSH 主机密钥已变化，连接被拒绝。请核对服务器身份和可信主机记录。"
-	case strings.Contains(output, "host key verification failed"), strings.Contains(output, "no ") && strings.Contains(output, "host key is known"):
+	case has("host key verification failed"), has("no ") && has("host key is known"):
 		return "SSH 主机密钥尚未受信任，连接被拒绝。请先核对并信任正确的服务器密钥。"
-	case strings.Contains(output, "permission denied"), strings.Contains(output, "authentication failed"):
+	case has("permission denied"), has("authentication failed"):
 		return "SSH 身份认证失败，请检查登录账号及密码或密钥配置。"
-	case strings.Contains(output, "connection refused"):
+	case has("connection refused"):
 		return "SSH 端口拒绝连接，请检查 SSH 服务是否启动及资源端口是否正确。"
-	case strings.Contains(output, "could not resolve hostname"):
+	case has("could not resolve hostname"):
 		return "SSH 主机名无法解析，请检查主机地址和 DNS。"
-	case strings.Contains(output, "no route to host"), strings.Contains(output, "network is unreachable"):
+	case has("no route to host"), has("network is unreachable"):
 		return "SSH 主机网络不可达，请检查网络、路由及跳板连接。"
-	case strings.Contains(output, "connection timed out"), reason == "Connection timed out":
+	case has("connection timed out"), reason == "Connection timed out":
 		return "SSH 连接超时，请检查主机、端口与防火墙可达性。"
+	case has("pty allocation request failed"), has("shell request failed"), has("exec request failed"):
+		return "SSH 服务器拒绝创建终端或执行 Shell。请检查账号权限、远端 Shell 和服务端会话策略。"
+	case has("connection reset by"), has("connection closed by"), has("kex_exchange_identification"), has("banner exchange"), has("exceeded maxstartups"):
+		return "SSH 服务器在认证或终端初始化前关闭了连接。请检查服务端连接限制、安全策略和 SSH 服务日志。"
 	case reason == "Terminal connection closed":
 		return "SSH 客户端在终端初始化完成前退出，尚未建立可用会话。请检查登录方式、客户端兼容性和连接配置。"
 	default:
