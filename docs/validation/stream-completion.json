@@ -1,0 +1,30 @@
+{
+  "verifiedAt": "2026-10-15T21:28:00.871061+08:00",
+  "scope": "model stream completion and safe Windows SSH startup diagnostics",
+  "oldVersionReproduction": {
+    "commit": "97f28ba4e1346f8be5fd4fed5e1cd18b8a55a571",
+    "method": "Go source overlay using the v0.3.13 provider; isolated mock endpoint emits a complete reply and holds its connection open",
+    "result": "expected test failure: completed answer retains investigating/running state and open reply timer"
+  },
+  "localChecks": {
+    "goRaceAI": "passed",
+    "goRaceWeb": "passed, including the final helper selection and exit-code diagnostics",
+    "goVet": "passed, including the final helper selection and exit-code diagnostics",
+    "frontendTests": 162,
+    "frontendBuild": "passed",
+    "targetedStreamRegression": "passed: six protocols, terminal sentinel without trailing blank line, usage trailer, valid tool arguments, caller cancellation, stalled heartbeats and follow-up messages"
+  },
+  "windowsBaseline": {
+    "commit": "b6bab38805d6f71ec3e246e64e616e2a599c3bee",
+    "run": "https://github.com/Clean-Lakes/Lake/actions/runs/38741817922",
+    "nativeTests": "passed: managed and manual SSH, Unicode/space helper and credential paths, exact remote-command preservation, streaming reply completion"
+  },
+  "sshUserMachine": "Reported failure not yet reproduced; retain a bounded, fixed diagnostic message plus process exit code. Never expose raw stderr, banners, credential paths or secret values.",
+  "formalReleaseModified": false,
+  "windowsHelperSelection": "Desktop-embedded server now resolves resources/lake.exe for the private credential pipe; standalone CLI/test helper behavior is retained. CI extracts the built ZIP into a Unicode/spaced path, requires a console-subsystem x64 helper, and performs password-authenticated SSH against the packaged runtime.",
+  "windowsPackagedValidation": {
+    "commit": "b9f2d937fbf4a82f57fa03f43fe0e4a61d6bafb0",
+    "run": "https://github.com/Clean-Lakes/Lake/actions/runs/38744288363",
+    "result": "passed: actual packaged console helper and OpenSSH authenticated successfully, including Unicode/spaced paths; stream completion accepts follow-up messages"
+  }
+}

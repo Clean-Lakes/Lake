@@ -43,6 +43,7 @@ type liveTerminal struct {
 	userInputPending, hiddenAgentOutput       bool
 	connected                                 chan struct{}
 	connectErr                                error
+	startupExitCode                           *int
 	startup, flush                            *time.Timer
 	job                                       *terminalJob
 	screen                                    vt10x.Terminal
@@ -204,6 +205,9 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 			if t.askpassProgram != "" {
 				helper = t.askpassProgram
 			}
+			if e == nil {
+				helper, e = platform.SSHAskpassProgram(helper)
+			}
 			if e != nil {
 				t.store.TerminalStatus(id, tid, "disconnected")
 				t.mu.Unlock()
@@ -261,10 +265,16 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 	go func() {
 		defer t.wg.Done()
 		cmd.Wait()
+		l.mu.Lock()
+		if l.remote && !l.ready && cmd.ProcessState != nil {
+			code := cmd.ProcessState.ExitCode()
+			l.startupExitCode = &code
+		}
+		l.mu.Unlock()
 		// Drain final OpenSSH stderr before classifying a failed handshake.
 		select {
 		case <-readDone:
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(500 * time.Millisecond):
 		}
 		t.closeLive(l, "Terminal connection closed")
 	}()
@@ -768,7 +778,7 @@ func (t *Terminals) closeLive(l *liveTerminal, reason string) {
 	t.finish(l, nil, "\n["+reason+"]", true)
 	t.store.TerminalStatus(l.session, l.id, "disconnected")
 	if !l.ready {
-		l.connectErr = fmt.Errorf("%s", terminalConnectionError(l.output, reason))
+		l.connectErr = fmt.Errorf("%s", terminalConnectionErrorWithExit(l.output, reason, l.startupExitCode))
 		close(l.connected)
 	}
 	t.mu.Lock()

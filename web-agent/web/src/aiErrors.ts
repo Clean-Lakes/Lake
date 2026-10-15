@@ -1,5 +1,6 @@
 /** Translate known internal failures without rewriting user/assistant prose. */
 export function displayAiError(message: string): string {
+	if (message.includes("model stream idle timeout")) return message.includes("context compaction:") ? "上下文整理未完成：模型长时间没有返回新内容。历史记录已保留，可以重试整理或切换模型后继续。" : "模型长时间没有返回新内容，已停止等待。已收到的回复和操作记录已保留，可以继续发送消息或重试。";
 	if (message.trim() === "context deadline exceeded") return "本轮等待超时。已有消息和操作记录已保留；终端命令可能仍在运行，继续前请先核查执行状态。";
 	if (message.includes("context compaction:")) {
 		if (message.includes("context deadline exceeded")) return "上下文整理超时。历史消息和操作记录已保留；可以在原会话重试压缩，或切换响应更快的模型后继续。";

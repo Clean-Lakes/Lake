@@ -10,6 +10,11 @@ import {displayAiError} from "../src/aiErrors";
 const start="2026-10-11T00:00:00Z";
 const thought:AICard={id:"thought",type:"thinking",content:"VERY_VERBOSE_RAW_REASONING",status:"running",at:start};
 const read:AICard={id:"read",type:"operation",title:"read",status:"running",at:start,data:{arguments:{path:"/tmp/example.log"},target:"Local machine"}};
+test("stalled model streams explain retained partial output and allow a follow-up",()=>{
+ const text=displayAiError("model stream idle timeout; partial reply retained");
+ assert.ok(text.includes("已停止等待")&&text.includes("已收到的回复和操作记录已保留")&&text.includes("继续发送"));
+ assert.ok(displayAiError("context compaction: model stream idle timeout; partial reply retained").includes("历史记录已保留"));
+});
 test("execution deadlines explain timeout and uncertain command state without blaming context size",()=>{
  const text=displayAiError("context deadline exceeded");
  assert.ok(text.includes("等待超时")&&text.includes("操作记录已保留")&&text.includes("命令可能仍在运行"));

@@ -189,6 +189,26 @@ func (b *Server) openAgentTerminal(ctx context.Context, id, ref string) Object {
 
 // Classify bounded startup output into fixed messages, never return raw SSH
 // stderr, passwords, key contents, banners, or credential paths to the model.
+func terminalConnectionErrorWithExit(output, reason string, code *int) string {
+	message := terminalConnectionError(output, reason)
+	if code == nil || reason != "Terminal connection closed" {
+		return message
+	}
+	switch uint32(*code) {
+	case 0xc0000135:
+		message = "SSH 运行环境缺少依赖 DLL，进程无法启动。请重新安装完整 Lake 包，并检查安全软件隔离记录。"
+	case 0xc000007b:
+		message = "SSH 运行环境的可执行文件或 DLL 架构不匹配。请重新安装完整 Windows x64 包。"
+	case 0xc0000142:
+		message = "SSH 运行环境初始化失败。请检查安全软件拦截或系统运行环境，并重新启动 Lake。"
+	case 0xc0000005:
+		message = "SSH 客户端启动时发生访问冲突。请检查运行环境冲突或安全软件隔离记录。"
+	case 0:
+		message = "SSH 进程已退出，但远端终端初始化没有完成。请检查远端 Shell 和初始化配置。"
+	}
+	return fmt.Sprintf("%s（SSH 退出码：%d / 0x%08X）。", strings.TrimSuffix(message, "。"), *code, uint32(*code))
+}
+
 func terminalConnectionError(output, reason string) string {
 	output = strings.ToLower(output)
 	switch {
