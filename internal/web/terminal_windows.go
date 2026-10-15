@@ -54,15 +54,10 @@ func (t *windowsTerminal) Read(p []byte) (int, error) {
 	return 0, t.readErr
 }
 func startTerminal(cmd *exec.Cmd, cols, rows int) (terminalDevice, error) {
-	parts := make([]string, len(cmd.Args))
-	for i, arg := range cmd.Args {
+	args, env := consoleTerminalCommand(cmd)
+	parts := make([]string, len(args))
+	for i, arg := range args {
 		parts[i] = syscall.EscapeArg(arg)
-	}
-	env := append([]string(nil), cmd.Env...)
-	for i, item := range env {
-		if key, value, ok := strings.Cut(item, "="); ok && strings.EqualFold(key, "__lake_init") {
-			env[i] = key + "=" + consoleTerminalScript(value)
-		}
 	}
 	sort.Slice(env, func(i, j int) bool { return strings.ToUpper(env[i]) < strings.ToUpper(env[j]) })
 	p, err := conpty.Start(strings.Join(parts, " "), conpty.ConPtyDimensions(cols, rows), conpty.ConPtyWorkDir(cmd.Dir), conpty.ConPtyEnv(env))

@@ -192,6 +192,14 @@ func (b *Server) openAgentTerminal(ctx context.Context, id, ref string) Object {
 func terminalConnectionError(output, reason string) string {
 	output = strings.ToLower(output)
 	switch {
+	case strings.Contains(output, "no matching host key type found"), strings.Contains(output, "no matching key exchange method found"), strings.Contains(output, "no matching cipher found"), strings.Contains(output, "no mutual signature algorithm"):
+		return "SSH 加密算法协商失败，客户端与服务器支持的算法不匹配。请检查 SSH 版本和服务端算法配置。"
+	case strings.Contains(output, "bad owner or permissions"), strings.Contains(output, "unprotected private key file"), strings.Contains(output, "permissions for") && strings.Contains(output, "too open"):
+		return "SSH 配置或私钥文件权限不符合客户端要求，连接被拒绝。请检查当前用户的文件访问权限。"
+	case strings.Contains(output, "ssh_askpass: exec"), strings.Contains(output, "ssh_askpass: posix_spawn"), strings.Contains(output, "exec(") && strings.Contains(output, "askpass"):
+		return "SSH 登录凭据助手无法启动。请检查 Lake 安装是否完整，以及程序是否被系统或安全软件阻止。"
+	case strings.Contains(output, "bad configuration option"), strings.Contains(output, "unsupported option"), strings.Contains(output, "unknown option"), strings.Contains(output, "can't open user config file"):
+		return "SSH 客户端不支持连接所需的选项，请检查 Lake 随包 SSH 运行环境是否完整。"
 	case strings.Contains(output, "remote host identification has changed"):
 		return "SSH 主机密钥已变化，连接被拒绝。请核对服务器身份和可信主机记录。"
 	case strings.Contains(output, "host key verification failed"), strings.Contains(output, "no ") && strings.Contains(output, "host key is known"):
@@ -206,6 +214,8 @@ func terminalConnectionError(output, reason string) string {
 		return "SSH 主机网络不可达，请检查网络、路由及跳板连接。"
 	case strings.Contains(output, "connection timed out"), reason == "Connection timed out":
 		return "SSH 连接超时，请检查主机、端口与防火墙可达性。"
+	case reason == "Terminal connection closed":
+		return "SSH 客户端在终端初始化完成前退出，尚未建立可用会话。请检查登录方式、客户端兼容性和连接配置。"
 	default:
 		return "终端连接未建立，请检查主机密钥信任、登录凭据和网络可达性。"
 	}

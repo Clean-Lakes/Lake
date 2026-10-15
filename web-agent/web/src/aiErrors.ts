@@ -1,5 +1,6 @@
 /** Translate known internal failures without rewriting user/assistant prose. */
 export function displayAiError(message: string): string {
+	if (message.trim() === "context deadline exceeded") return "本轮等待超时。已有消息和操作记录已保留；终端命令可能仍在运行，继续前请先核查执行状态。";
 	if (message.includes("context compaction:")) {
 		if (/model returned HTTP 404\b/.test(message)) return "上下文整理未完成：模型接口不存在（HTTP 404）。请检查供应商的 API 格式与 Base URL 是否匹配；历史记录已保留，修正后可继续。";
 		if (/model returned HTTP 503\b/.test(message)) return "上下文整理未完成：模型渠道暂不可用（HTTP 503），可能没有支持该模型的可用账号。请切换可用模型或渠道，或稍后重试；历史记录已保留。";

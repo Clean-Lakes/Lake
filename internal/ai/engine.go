@@ -731,8 +731,11 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 				s.mu.Unlock()
 			}
 		}
-		if errors.Is(toolErr, context.Canceled) || errors.Is(toolErr, context.DeadlineExceeded) {
-			return toolErr
+		// A child tool's deadline must not cancel the whole conversation turn.
+		// Preserve its paired result so the model can report or inspect the
+		// outcome. Only cancellation of this turn stops further model requests.
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		if image, ok := obj(value)["image"].(ImageAttachment); ok && toolErr == nil {
 			observations = append(observations, image)
@@ -742,6 +745,10 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 		payload := js(value)
 		if toolErr != nil {
 			failure := map[string]any{"error": toolErr.Error()}
+			if errors.Is(toolErr, context.DeadlineExceeded) || errors.Is(toolErr, context.Canceled) {
+				failure["outcome"] = "unknown"
+				failure["notice"] = "工具等待已中断；先核查执行状态，不要重复执行或宣称成功。"
+			}
 			if value != nil {
 				failure["result"] = value
 			}

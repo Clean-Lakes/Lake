@@ -1,6 +1,8 @@
 package web
 
 import (
+	"os/exec"
+	"path"
 	"regexp"
 	"strings"
 )
@@ -12,6 +14,25 @@ const consoleFramePrefix = "\x1b]0;LAKE_FRAME_"
 const consoleHookPrefix = "\x1b]0;LAKE_HOOK_"
 
 var encodedConsoleFrame = regexp.MustCompile(`\\036LAKE_([^\\\r\n'"]*)\\037`)
+
+// Local shells receive initialization through the environment; SSH carries it
+// in the remote command argument. Both paths pass through the same ConPTY.
+func consoleTerminalCommand(cmd *exec.Cmd) ([]string, []string) {
+	args := append([]string(nil), cmd.Args...)
+	if len(args) > 1 {
+		program := strings.ToLower(path.Base(strings.ReplaceAll(args[0], "\\", "/")))
+		if program == "ssh" || program == "ssh.exe" {
+			args[len(args)-1] = consoleTerminalScript(args[len(args)-1])
+		}
+	}
+	env := append([]string(nil), cmd.Env...)
+	for i, item := range env {
+		if key, value, ok := strings.Cut(item, "="); ok && strings.EqualFold(key, "__lake_init") {
+			env[i] = key + "=" + consoleTerminalScript(value)
+		}
+	}
+	return args, env
+}
 
 func consoleTerminalScript(script string) string {
 	if !strings.Contains(script, `\036LAKE_`) && !strings.Contains(script, `\033]900`) {

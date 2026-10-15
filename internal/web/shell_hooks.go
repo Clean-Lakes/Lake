@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/platform"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -194,8 +195,12 @@ func (t *Terminals) hook(l *liveTerminal, frame string) {
 			return
 		}
 		code, err := strconv.Atoi(p[0])
-		p[1] = platform.FromShellPath(p[1])
-		if err != nil || code < 0 || code > 255 || !filepath.IsAbs(p[1]) || strings.ContainsAny(p[1], "\x00\x1b\r\n") {
+		absolute := path.IsAbs(p[1])
+		if !l.remote {
+			p[1] = platform.FromShellPath(p[1])
+			absolute = filepath.IsAbs(p[1])
+		}
+		if err != nil || code < 0 || code > 255 || !absolute || strings.ContainsAny(p[1], "\x00\x1b\r\n") {
 			return
 		}
 		l.hooks = true

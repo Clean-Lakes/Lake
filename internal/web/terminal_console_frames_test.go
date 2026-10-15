@@ -1,12 +1,45 @@
 package web
 
 import (
+	"os/exec"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"github.com/hinshun/vt10x"
 )
+
+func TestConsoleSSHInitializationUsesSameFramesAsLocalShell(t *testing.T) {
+	marker := "\x1eLAKE_READY_fixture\x1f"
+	initialization := terminalInit("sh", marker)
+	args := sshArguments(Object{"host": "example.invalid", "port": 22, "username": "fixture", "authMethod": "key", "identityFile": "C:/private folder/id_fixture"}, initialization)
+	cmd := exec.Command(`C:\Program Files\Lake\git\usr\bin\ssh.exe`, args...)
+	cmd.Env = []string{"HOME=C:/fixture", "__LAKE_INIT=" + initialization, "UNRELATED=kept"}
+	originalArgs, originalEnv := append([]string(nil), cmd.Args...), append([]string(nil), cmd.Env...)
+	converted, env := consoleTerminalCommand(cmd)
+	if !reflect.DeepEqual(converted[:len(converted)-1], cmd.Args[:len(cmd.Args)-1]) || !reflect.DeepEqual(cmd.Args, originalArgs) || !reflect.DeepEqual(cmd.Env, originalEnv) {
+		t.Fatal("console preparation changed SSH configuration or caller-owned data")
+	}
+	if !strings.Contains(converted[len(converted)-1], "LAKE_FRAME_READY_fixture") || !strings.Contains(env[1], "LAKE_FRAME_READY_fixture") || env[2] != "UNRELATED=kept" {
+		t.Fatal("SSH initialization bypassed the ConPTY frame transport")
+	}
+	remote := exec.Command(platform.Executable("/bin/sh"), "-c", converted[len(converted)-1])
+	remote.Env = platform.Environment(t.TempDir())
+	remote.Stdin = strings.NewReader("eval \"$__lake_init\"\nexit\n")
+	output, err := remote.Output()
+	if err != nil {
+		t.Fatal("converted remote shell initialization failed", err)
+	}
+	if !strings.Contains(string(output), consoleFramePrefix+"READY_fixture") {
+		t.Fatal("remote initialization did not emit a ConPTY-safe readiness frame")
+	}
+	var decoder consoleFrameDecoder
+	if !strings.Contains(decoder.feed(string(output), true), marker) {
+		t.Fatal("remote readiness was not restored for the terminal manager")
+	}
+}
 
 func TestConsoleFramesRoundTripEveryByteBoundary(t *testing.T) {
 	data := "中文\x1b]0;normal title\a" + consoleFramePrefix + "READY_fixture\a" + consoleHookPrefix + "9003;0;/tmp\x1b\\" + consoleFramePrefix + "DONE_fixture:0\a尾部"

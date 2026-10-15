@@ -4,14 +4,121 @@ package web
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"errors"
+	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/platform"
+	"golang.org/x/crypto/ssh"
 	"golang.org/x/sys/windows"
+	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
+
+// Exercise the bundled OpenSSH process, credential helper and ConPTY together.
+// The isolated server emits the remote init frame without using Windows' local
+// shell, so local-only initialization tests cannot hide an SSH transport gap.
+func TestWindowsSSHPasswordConPTYHandshake(t *testing.T) {
+	b, h := fixture(t)
+	id, _ := newSession(t, h)
+	_, key, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := ssh.NewSignerFromKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var authenticated atomic.Bool
+	config := &ssh.ServerConfig{PasswordCallback: func(meta ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+		if meta.User() != "fixture" || string(password) != "synthetic-windows-password" {
+			return nil, errors.New("fixture authentication rejected")
+		}
+		authenticated.Store(true)
+		return nil, nil
+	}}
+	config.AddHostKey(signer)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		socket, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer socket.Close()
+		stop := context.AfterFunc(ctx, func() { socket.Close() })
+		defer stop()
+		connection, channels, requests, err := ssh.NewServerConn(socket, config)
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		go ssh.DiscardRequests(requests)
+		for incoming := range channels {
+			channel, requests, err := incoming.Accept()
+			if err != nil {
+				return
+			}
+			defer channel.Close()
+			for request := range requests {
+				if request.Type != "exec" {
+					request.Reply(request.Type == "pty-req" || request.Type == "window-change", nil)
+					continue
+				}
+				var payload struct{ Command string }
+				if ssh.Unmarshal(request.Payload, &payload) != nil {
+					request.Reply(false, nil)
+					return
+				}
+				marker := regexp.MustCompile(`LAKE_(?:FRAME_)?READY_([a-zA-Z0-9_-]+)`).FindStringSubmatch(payload.Command)
+				if len(marker) != 2 {
+					request.Reply(false, nil)
+					return
+				}
+				request.Reply(true, nil)
+				frame := "\x1eLAKE_READY_" + marker[1] + "\x1f"
+				if strings.Contains(payload.Command, "LAKE_FRAME_READY_") {
+					frame = consoleFramePrefix + "READY_" + marker[1] + "\a"
+					frame += consoleHookPrefix + "9003;0;/root/remote dir\a"
+				}
+				channel.Write([]byte(frame))
+			}
+		}
+	}()
+	port := listener.Addr().(*net.TCPAddr).Port
+	known := filepath.Join(t.TempDir(), "known hosts")
+	if err := os.WriteFile(known, []byte(fmt.Sprintf("[127.0.0.1]:%d %s", port, ssh.MarshalAuthorizedKey(signer.PublicKey()))), 0600); err != nil {
+		t.Fatal(err)
+	}
+	b.Terminals.KnownHosts = known
+	settings, cleanup := prepareSSH(b.Models.Home, Object{"host": "127.0.0.1", "port": port, "username": "fixture", "authMethod": "password", "password": "synthetic-windows-password", "shell": "sh"})
+	defer cleanup()
+	resource := b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "isolated SSH", "ssh", settings)
+	term := b.Terminals.Open(ctx, id, stringOf(resource["id"]))
+	if term["status"] != "ready" || !authenticated.Load() || term["cwd"] != "/root/remote dir" {
+		t.Fatal("Windows SSH password session never became ready")
+	}
+	b.Terminals.Close(id, stringOf(term["id"]))
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("isolated SSH server did not stop")
+	}
+}
 
 func TestWindowsPrivateACLRejectsPublicAccess(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "private")

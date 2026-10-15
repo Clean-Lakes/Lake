@@ -1,0 +1,20 @@
+{
+  "isolatedStylePreview": true,
+  "actualWindowsSSHVerified": false,
+  "layouts": [
+    {
+      "buttonHeight": 32,
+      "buttonWhiteSpace": "nowrap",
+      "color": "rgb(238, 133, 133)",
+      "overflow": false,
+      "width": 318
+    },
+    {
+      "buttonHeight": 32,
+      "buttonWhiteSpace": "nowrap",
+      "color": "rgb(238, 133, 133)",
+      "overflow": false,
+      "width": 208
+    }
+  ]
+}

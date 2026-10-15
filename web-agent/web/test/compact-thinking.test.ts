@@ -10,6 +10,12 @@ import {displayAiError} from "../src/aiErrors";
 const start="2026-10-11T00:00:00Z";
 const thought:AICard={id:"thought",type:"thinking",content:"VERY_VERBOSE_RAW_REASONING",status:"running",at:start};
 const read:AICard={id:"read",type:"operation",title:"read",status:"running",at:start,data:{arguments:{path:"/tmp/example.log"},target:"Local machine"}};
+test("execution deadlines explain timeout and uncertain command state without blaming context size",()=>{
+ const text=displayAiError("context deadline exceeded");
+ assert.ok(text.includes("等待超时")&&text.includes("操作记录已保留")&&text.includes("命令可能仍在运行"));
+ assert.ok(!text.includes("上下文"));
+ assert.equal(displayAiError("The log says context deadline exceeded"),"The log says context deadline exceeded");
+});
 test("compaction HTTP failures explain configuration or channel recovery without blaming context size",()=>{
  const missing=displayAiError("context compaction: model returned HTTP 404");
  assert.ok(missing.includes("API 格式")&&missing.includes("Base URL")&&missing.includes("历史记录已保留"));

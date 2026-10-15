@@ -8,6 +8,24 @@ import (
 	"time"
 )
 
+func TestRemoteShellCwdKeepsTargetFilesystemPaths(t *testing.T) {
+	b, h := fixture(t)
+	id, ref := newSession(t, h)
+	term := b.Store.CreateTerminal(id, ref)
+	l := &liveTerminal{id: stringOf(term["id"]), session: id, shell: "sh", remote: true}
+	want := "/root/远程 directory"
+	b.Terminals.hook(l, "9003;0;"+want)
+	if !l.hooks || b.Store.Terminal(id, l.id)["cwd"] != want {
+		t.Fatal("remote cwd was interpreted as a local client path")
+	}
+	for _, invalid := range []string{"relative/path", "C:/local/path", "/root/\x1b[31m", "/root/\ninvalid"} {
+		b.Terminals.hook(l, "9003;0;"+invalid)
+		if b.Store.Terminal(id, l.id)["cwd"] != want {
+			t.Fatal("invalid remote cwd replaced the observation")
+		}
+	}
+}
+
 func TestShellHooksPersistentStateAndCapabilities(t *testing.T) {
 	for _, shell := range []string{"sh", "bash", "zsh", "fish"} {
 		t.Run(shell, func(t *testing.T) {
