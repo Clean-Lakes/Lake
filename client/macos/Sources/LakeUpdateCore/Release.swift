@@ -6,11 +6,13 @@ public struct Version: Comparable, Equatable {
     public init?(_ value: String) {
         let text = value.hasPrefix("v") ? String(value.dropFirst()) : value
         let fields = text.split(separator: ".", omittingEmptySubsequences: false)
-        guard fields.count == 3, fields.allSatisfy({ !$0.isEmpty && $0.allSatisfy({ $0.isASCII && $0.isNumber }) }),
+        guard (3...4).contains(fields.count), fields.allSatisfy({ !$0.isEmpty && $0.allSatisfy({ $0.isASCII && $0.isNumber }) }),
               fields.allSatisfy({ $0.count == 1 || !$0.hasPrefix("0") }) else { return nil }
         let numbers = fields.compactMap { Int($0) }
-        guard numbers.count == 3 else { return nil }
-        parts = numbers
+        guard numbers.count == fields.count else { return nil }
+        // Three-field versions fill the fourth slot with 0 so 0.3.8.1 sorts
+        // after 0.3.8 and before 0.3.9, matching the Windows Go client.
+        parts = numbers + Array(repeating: 0, count: 4 - numbers.count)
     }
     public static func < (lhs: Version, rhs: Version) -> Bool { lhs.parts.lexicographicallyPrecedes(rhs.parts) }
 }

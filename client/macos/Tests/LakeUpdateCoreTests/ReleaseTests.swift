@@ -25,6 +25,8 @@ final class ReleaseTests {
             release("0.7.0", draft: true), release("0.8.0", arch: "x86_64"), release("0.4.0"), release("0.3.1")]
         XCTAssertEqual(ReleasePolicy.latest(releases, current: "0.3.0", architecture: "arm64")?.version, "0.4.0")
         XCTAssertNil(ReleasePolicy.latest(releases, current: "0.4.0", architecture: "arm64"))
+        XCTAssertEqual(ReleasePolicy.latest([try release("0.3.8.1")], current: "0.3.8", architecture: "arm64")?.version, "0.3.8.1")
+        XCTAssertNil(ReleasePolicy.latest([try release("0.3.8.1")], current: "0.3.8.1", architecture: "arm64"))
         XCTAssertEqual(ReleasePolicy.latest(releases, current: "0.3.0", architecture: "x86_64")?.version, "0.8.0")
         XCTAssertNil(ReleasePolicy.latest(releases, current: "0.3.0", architecture: "unknown"))
     }
@@ -40,7 +42,11 @@ final class ReleaseTests {
     func testVersionsRejectNonStableAndCompareNumerically() {
         XCTAssertTrue(Version("0.10.0")! > Version("0.9.0")!)
         XCTAssertEqual(Version("v1.2.3"), Version("1.2.3"))
-        for text in ["1.2", "1.2.3-beta", "1.2.3+build", "01.2.3", "1.-2.3", "１.2.3", "1.2.3.4"] {
+        XCTAssertEqual(Version("1.2.3.0"), Version("1.2.3"))
+        XCTAssertTrue(Version("0.3.8.1")! > Version("0.3.8")!)
+        XCTAssertTrue(Version("0.3.8.2")! > Version("0.3.8.1")!)
+        XCTAssertTrue(Version("0.3.9")! > Version("0.3.8.1")!)
+        for text in ["1.2", "1.2.3-beta", "1.2.3+build", "01.2.3", "1.-2.3", "１.2.3", "1.2.3.4.5", "1.2.3."] {
             XCTAssertNil(Version(text), text)
         }
     }
