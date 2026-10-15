@@ -57,7 +57,7 @@ FunctionEnd
 Section "Lake"
  SetShellVarContext current
  SetOutPath "$INSTDIR"
- File /r "${APP_DIR}/*"
+ File /r "${APP_FILES}"
  ExecWait '"$INSTDIR\Lake.exe" --check-webview' $0
  ${If} $0 != 0
   System::Call 'kernel32::SetEnvironmentVariable(t "LAKE_WEBVIEW_BOOTSTRAPPER", t "$INSTDIR\resources\WebView2Setup.exe")'

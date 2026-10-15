@@ -60,7 +60,8 @@ func TestInteractiveShPromptRedrawUsesVisibleWidth(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		b.Terminals.Input(id, tid, "\x0c", false) // Readline redraw, without running a command.
 		time.Sleep(100 * time.Millisecond)
-		screen := strings.TrimSpace(b.Terminals.Screen(id, tid, "viewport", 30, 10000))
+		// A long CI hostname can wrap across rows in a narrow terminal.
+		screen := strings.ReplaceAll(strings.TrimSpace(b.Terminals.Screen(id, tid, "viewport", 30, 10000)), "\n", "")
 		if !regexp.MustCompile(`^\[[^\]\r\n]+ /tmp\][#$]$`).MatchString(screen) {
 			t.Fatalf("prompt corrupted after resize to %d columns: %q", cols, screen)
 		}
