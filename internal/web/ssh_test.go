@@ -152,8 +152,18 @@ func TestRealSSHPersistentPTY(t *testing.T) {
 		}
 		for _, cols := range []int{60, 120, 80} {
 			b.Terminals.Resize(sid, rawID, cols, 25)
-			time.Sleep(100 * time.Millisecond)
-			screen := strings.TrimSpace(b.Terminals.Screen(sid, rawID, "viewport", 25, 10000))
+			b.Terminals.Input(sid, rawID, "\x0c", false)
+			// SSH window changes and prompt redraw arrive asynchronously. Check
+			// the whole wrapped prompt rather than assuming a short hostname.
+			deadline := time.Now().Add(2 * time.Second)
+			screen := ""
+			for time.Now().Before(deadline) {
+				screen = strings.ReplaceAll(strings.TrimSpace(b.Terminals.Screen(sid, rawID, "viewport", 25, 10000)), "\n", "")
+				if strings.Count(screen, "@") == 1 && strings.Contains(screen, " ~]") {
+					break
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
 			if strings.Count(screen, "@") != 1 || !strings.Contains(screen, " ~]") {
 				t.Fatalf("SSH %s prompt corrupted after resize: %q", shell, screen)
 			}

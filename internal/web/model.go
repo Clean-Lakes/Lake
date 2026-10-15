@@ -169,7 +169,7 @@ func (m *Models) environment() *ai.Model {
 	return result
 }
 func (m *Models) activeLocked() *ai.Model {
-	if cfg := m.magpieModelLocked(); cfg != nil {
+	if cfg := m.activeMagpieModelLocked(); cfg != nil {
 		return cfg
 	}
 	return m.nativeActiveLocked()
@@ -193,11 +193,53 @@ func (m *Models) Active() *ai.Model {
 	defer m.mu.Unlock()
 	return m.activeLocked()
 }
+
+// ActiveSelection returns only public presentation metadata alongside the active model.
+// Bootstrap uses one locked snapshot so identical IDs from different sources stay distinct.
+func (m *Models) ActiveSelection() (*ai.Model, Object) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	active := m.activeLocked()
+	if active == nil {
+		return nil, nil
+	}
+	catalog, exists := m.readProviderCatalogLocked()
+	nativeSelection := func() Object {
+		if !exists {
+			return nil
+		}
+		provider := findProvider(catalog, catalog.ActiveProviderID)
+		if provider == nil {
+			return nil
+		}
+		model := findProviderModel(provider, catalog.ActiveModelID)
+		if model == nil || model.Name != active.Name {
+			return nil
+		}
+		label := model.DisplayName
+		if label == "" {
+			label = model.Name
+		}
+		return Object{"providerId": provider.ID, "providerName": provider.Name, "modelId": model.ID, "name": model.Name, "displayName": label}
+	}
+	if exists && catalog.ActiveSource == "native" && m.catalogModelLocked(catalog) != nil {
+		return active, nativeSelection()
+	}
+	models, selected, _ := m.magpieModelsLocked()
+	for _, model := range models {
+		if model.ID == selected && model.ID == active.Name {
+			return active, Object{"providerId": "magpie", "providerName": "Magpie", "modelId": model.ID, "name": model.ID, "displayName": model.Label}
+		}
+	}
+	return active, nativeSelection()
+}
+
 func (m *Models) Settings() Object {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if active := m.magpieModelLocked(); active != nil {
-		return Object{"source": "settings", "managedBy": "magpie", "configured": true, "url": active.URL, "name": active.Name, "keyConfigured": true, "protocol": active.Protocol, "supportsImageInput": active.SupportsImageInput, "supportsImageOutput": active.SupportsImageOutput, "providerName": "Magpie"}
+	magpie := m.magpieModelLocked()
+	if active := m.activeMagpieModelLocked(); active != nil {
+		return Object{"source": "settings", "managedBy": "magpie", "configured": true, "url": active.URL, "name": active.Name, "keyConfigured": true, "protocol": active.Protocol, "supportsImageInput": active.SupportsImageInput, "supportsImageOutput": active.SupportsImageOutput, "providerName": "Magpie", "magpie": Object{"name": active.Name}}
 	}
 	active := m.activeLocked()
 	source := "settings"
@@ -209,6 +251,9 @@ func (m *Models) Settings() Object {
 		active = &ai.Model{Protocol: "openai"}
 	}
 	result := Object{"source": source, "configured": source != "none", "url": active.URL, "name": active.Name, "keyConfigured": active.Key != "", "protocol": active.Protocol, "supportsImageInput": active.SupportsImageInput, "supportsImageOutput": active.SupportsImageOutput}
+	if magpie != nil {
+		result["magpie"] = Object{"name": magpie.Name}
+	}
 	if catalog, exists := m.readProviderCatalogLocked(); exists {
 		result["providerId"], result["providerModelId"] = catalog.ActiveProviderID, catalog.ActiveModelID
 		if provider := findProvider(catalog, catalog.ActiveProviderID); provider != nil {

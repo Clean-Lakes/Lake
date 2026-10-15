@@ -94,6 +94,10 @@ func tail(s string, n int) string {
 var privateKeyBlock = regexp.MustCompile(`(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(-----END [A-Z0-9 ]*PRIVATE KEY-----|$)`)
 
 func (t *Terminals) redact(s string) string {
+	// Flushes and screen reads sanitize accumulated snapshots, not isolated PTY
+	// chunks. Match complete credentials even when received across several reads.
+	// A suffix matching only a credential prefix is ordinary terminal input too
+	// (for example the "s" in "ls"); replacing it corrupts echo and cursor replay.
 	s = privateKeyBlock.ReplaceAllString(s, "[PRIVATE KEY REDACTED]")
 	secrets := t.authenticationSecrets()
 	if cfg := t.models.Active(); cfg != nil {
@@ -104,12 +108,6 @@ func (t *Terminals) redact(s string) string {
 			continue
 		}
 		s = strings.ReplaceAll(s, secret, "[REDACTED]")
-		for n := len(secret) - 1; n > 0; n-- {
-			if strings.HasSuffix(s, secret[:n]) {
-				s = strings.TrimSuffix(s, secret[:n]) + "[REDACTED]"
-				break
-			}
-		}
 	}
 	return s
 }

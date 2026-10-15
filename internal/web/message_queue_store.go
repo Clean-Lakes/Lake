@@ -15,7 +15,7 @@ func (s *Store) messageQueue(id string) Object {
 		for _, image := range objects(payload["images"]) {
 			images = append(images, Object{"id": image["id"], "name": image["name"], "mimeType": image["mimeType"]})
 		}
-		items = append(items, Object{"id": row["id"], "text": payload["text"], "resourceIds": stringsOf(payload["resourceIds"]), "images": images, "files": objects(payload["files"]), "createdAt": row["createdAt"]})
+		items = append(items, Object{"id": row["id"], "text": payload["text"], "resourceIds": stringsOf(payload["resourceIds"]), "references": objects(payload["references"]), "images": images, "files": objects(payload["files"]), "createdAt": row["createdAt"]})
 	}
 	state["items"] = items
 	return state
@@ -75,6 +75,9 @@ func (s *Store) MutateMessageQueue(id string, data Object) Object {
 			payload := object(parsed(stringOf(row["payload"])))
 			payload["text"] = data["text"]
 			payload["resourceIds"] = data["resourceIds"]
+			if data["references"] != nil {
+				payload["references"] = data["references"]
+			}
 			s.exec("UPDATE queuedMessages SET payload=? WHERE id=? AND sessionId=?", jsonText(payload), qid, id)
 			s.exec("UPDATE messageQueueState SET lastError='' WHERE sessionId=?", id)
 		case "remove":

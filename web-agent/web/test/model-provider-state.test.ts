@@ -37,3 +37,23 @@ test("discovery retains provider reasoning levels for saved model settings",()=>
 test("context badges distinguish explicit capacity from automatic detection",()=>{
  assert.equal(contextLabel(1000000),"1M");assert.equal(contextLabel(128000),"128K");assert.equal(contextLabel(),"自动");
 });
+
+test("API import adds only selected IDs and keeps the existing model's local settings",()=>{
+ const current=[{...provider.models[0]!,imageInputMode:"on" as const,contextWindow:64000}];
+ const models=discoveredModels(current,["selected-model"],{"same-model":false,"selected-model":true,"not-selected":true},{"selected-model":{levels:["low","high"],source:"provider"}},{"selected-model":128000,"not-selected":256000});
+ assert.equal(models.length,2);
+ assert.deepEqual(models[0],current[0]);
+ assert.equal(models[1]?.name,"selected-model");
+ assert.equal(models[1]?.contextWindow,128000);
+ assert.equal(models[1]?.imageInputDetected,true);
+ assert.deepEqual(models[1]?.reasoningCapability?.levels,["low","high"]);
+ assert.equal(models.some(model => model.name==="not-selected"),false);
+});
+test("API import preserves explicit local context and skips invalid API context values",()=>{
+ const current=[{...provider.models[0]!,contextWindow:64000}];
+ const models=discoveredModels(current,["same-model","too-large","fractional","valid"],{}, {},{"same-model":128000,"too-large":10000000,"fractional":8192.5,valid:8192});
+ assert.equal(models[0]?.contextWindow,64000);
+ assert.equal(models[1]?.contextWindow,0);
+ assert.equal(models[2]?.contextWindow,0);
+ assert.equal(models[3]?.contextWindow,8192);
+});

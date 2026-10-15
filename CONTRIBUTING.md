@@ -40,6 +40,10 @@ Dev 忽略正式版的 `LAKE_HOME`、`LAKE_WEB_DATA_DIR` 和 `LAKE_WEB_TOKEN`。
 bin/lake web --home "$HOME/.lake-dev-cli" --port 4182 --open
 ```
 
+## 前端界面规范
+
+新增或修改前端界面时遵循 [Lake 前端 UI 规范](docs/ui-guidelines.md)。表单下拉框统一使用 `AppSelect`，通用图标使用 `Glyph`，供应商品牌使用 `ProviderIcon`；同时验证键盘、深色主题和窄窗口布局。
+
 ## 提交和安全
 
 - 提交前检查 `git diff` 与暂存区，只加入本次修改。分支提交后向 `master` 发 PR；同步最新 `master` 并处理冲突后再合并。

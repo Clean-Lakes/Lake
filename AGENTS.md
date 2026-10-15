@@ -9,3 +9,7 @@
 - On macOS, build and install the app used for local integration with `scripts/build_lake_desktop.sh --dev --install`; launch `~/Applications/Lake Dev.app`. This script calls the signed `scripts/build_lake.sh` build. Do not install the regular `Lake.app` for local development or restart it as part of a Dev iteration.
 - Keep Dev and release separate: Dev uses bundle ID `com.cleanlakes.lake.desktop.dev` and `~/.lake-dev`; release uses `com.cleanlakes.lake.desktop` and `~/.lake`. Never point `LAKE_DEV_HOME`, `LAKE_DEV_WEB_DATA_DIR`, `--lake-home`, or `--lake-data` at release data, and do not copy or symlink release secrets into Dev.
 - For standalone web development, pass an explicit isolated `--home` path and a free loopback port. Do not run a second backend against a home already in use by the Dev app. See `CONTRIBUTING.md` for the workflow.
+
+# Frontend UI consistency
+
+- Follow `docs/ui-guidelines.md` for all frontend UI work. Form dropdowns must use the shared `AppSelect`; do not add visible native selects in business components. Use `Glyph` for interface icons and `ProviderIcon` with local SVG assets for model-provider branding, rather than letter placeholders.

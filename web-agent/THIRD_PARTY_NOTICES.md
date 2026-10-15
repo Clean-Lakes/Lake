@@ -5,3 +5,7 @@ The Go backend uses the pinned modules in repository `go.mod` / `go.sum`: pgx, g
 The embedded React frontend uses React (MIT), xterm.js (MIT), react-markdown (MIT), remark-gfm (MIT), jsdiff (BSD-3-Clause), Lucide React (ISC, with MIT-licensed Feather-derived icons) and their locked transitive packages. Exact frontend versions are in `pnpm-lock.yaml`. Node/Vite/TypeScript/pnpm are build tools and are not shipped as runtime dependencies.
 
 HexHub 5.4.1 extracted prompt constants and reconstructed contracts are reverse-engineering evidence. The Go implementation is rebuilt Lake source. See `docs/hexhub-ai/provenance.json`.
+
+Provider brand SVGs are vendored from [Lobe Icons](https://github.com/lobehub/lobe-icons), `@lobehub/icons-static-svg` v1.95.1 (MIT). Source paths and hashes are recorded in `web/public/providers/provenance.json`; the upstream license is included as `licenses/lobe-icons-MIT`. Brand names and logos remain the property of their respective owners.
+
+MCP client connections use the [official Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) v1.7.0 (Apache-2.0/MIT transition, upstream LICENSE retained in `licenses/mcp-go-sdk-v1.7.0-LICENSE`), google/jsonschema-go (MIT), segmentio encoding/asm (MIT), yosida95/uritemplate (BSD-3-Clause), and golang.org/x/oauth2 and x/time (BSD-3-Clause). Their upstream license files are included in `licenses/`. Exact versions are pinned in `go.mod` / `go.sum`.

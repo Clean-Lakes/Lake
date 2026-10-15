@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-15",
+  "bug": "Typing ls in a manual terminal could display l[REDACTED] and trigger cursor/history replay.",
+  "cause": "Terminal redaction replaced any trailing credential prefix, including a single ordinary character. Tests reproduced the failure with the synthetic browser token, model key and SSH password.",
+  "fix": "Sanitize accumulated output and screen snapshots with complete credential matching. Do not replace an ordinary suffix just because it is the beginning of a credential. Raw snapshots retained in memory still allow complete credentials received across PTY reads to be redacted.",
+  "regression": [
+    "New regression tests failed on the original implementation, then passed after the fix.",
+    "Ordinary ls, pwd, processes, Chinese text and ANSI-colored prompts remain unchanged.",
+    "Complete model, SSH and browser credentials remain redacted.",
+    "Credential split across three received chunks is redacted in persisted output and live screen observations.",
+    "Real local bash PTY preserves l -> ls -> backspace -> ls, with no false redaction marker.",
+    "Existing raw-input ownership, split-UTF8 and title-redaction tests passed."
+  ],
+  "tests": {
+    "targeted": "go test -race ./internal/web -run 'TestTerminalRedaction|TestInteractiveKeystrokes|TestRawInputOwnershipAndRedaction|TestTerminalUTF8Chunks|TestTitleRedactsExactKeys' -count=1: passed",
+    "web_full": "go test -race ./internal/web: passed in 114.455s",
+    "browser": "Isolated temporary home and loopback fixture. Typed l then s, backspaced and typed s again. Actual terminal displayed ls correctly. No commands executed, no model calls or remote SSH requests. Fixture and test tab closed."
+  },
+  "desktop": {
+    "build": "scripts/build_lake_desktop.sh --dev --install",
+    "signature": "codesign --verify --deep --strict passed",
+    "runtime": "Relaunched installed Lake Dev and verified DEV marker, idle chat and preserved model selection. Release app/data untouched."
+  },
+  "screenshot": "lake-terminal-redaction-command.png"
+}

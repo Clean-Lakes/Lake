@@ -27,19 +27,34 @@ jobs:
           python-version: '3.14'
       - run: pnpm --dir web-agent install --frozen-lockfile
       - run: pnpm --dir web-agent test:frontend
+      - run: pnpm --dir web-agent build:web
       - run: choco install nsis 7zip --no-progress -y
-      - run: python scripts/build_lake_windows.py
+      - name: Prepare pinned terminal runtime before packaging
+        shell: python
+        run: |
+          import json, os, pathlib, runpy, shutil
+          build = runpy.run_path('scripts/build_lake_windows.py')
+          shutil.copytree('web-agent/web/dist', 'assets/web/dist', dirs_exist_ok=True)
+          lock = json.loads(pathlib.Path('client/windows/runtime-lock.json').read_text())
+          cache = pathlib.Path.home() / '.cache/lake/windows-build'
+          cache.mkdir(parents=True, exist_ok=True)
+          archive = cache / (lock['sha256'] + '.7z.exe')
+          build['download'](lock['url'], archive, lock['sha256'])
+          seven = build['tool']('7zz', [shutil.which('7z') or '', 'C:/Program Files/7-Zip/7z.exe'])
+          runtime = pathlib.Path(os.environ['RUNNER_TEMP']) / 'lake-conpty-runtime'
+          build['run']([seven, 'x', '-y', '-o' + str(runtime), archive])
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('LAKE_PORTABLE_ROOT=' + str(runtime) + '\n')
       - name: Test Windows locks, SQLite, ACLs and ConPTY
         shell: pwsh
         run: |
-          $version = (Get-Content VERSION).Trim()
-          Expand-Archive "dist/windows/$version/x86_64/Lake-$version-windows-x86_64.zip" -DestinationPath "$env:RUNNER_TEMP/lake-package"
-          $env:LAKE_PORTABLE_ROOT = "$env:RUNNER_TEMP/lake-package/Lake/resources/git"
           $env:CGO_ENABLED = '0'
           go test ./internal/web -run '^TestWindows' -count=1 -timeout 2m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test ./client/windows -run '^TestWindows' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build installer after native runtime tests
+        run: python scripts/build_lake_windows.py --reuse-web
       - uses: actions/upload-artifact@v4
         with:
           name: Lake-windows-x86_64

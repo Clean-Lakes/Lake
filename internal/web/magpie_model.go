@@ -162,6 +162,14 @@ func (m *Models) magpieModelLocked() *ai.Model {
 	return nil
 }
 
+// Connecting Magpie supplies models without overriding an explicit Lake choice.
+func (m *Models) activeMagpieModelLocked() *ai.Model {
+	if catalog, exists := m.readProviderCatalogLocked(); exists && catalog.ActiveSource == "native" && m.catalogModelLocked(catalog) != nil {
+		return nil
+	}
+	return m.magpieModelLocked()
+}
+
 func (m *Models) activateMagpieModelLocked(id string) {
 	models, _, defaultModel := m.magpieModelsLocked()
 	valid := false

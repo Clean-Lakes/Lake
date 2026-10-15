@@ -1,3 +1,4 @@
+import {AppSelect} from "./AppSelect";
 import { useEffect, useRef, useState } from "react";
 import type { SSHConnectionInput, SSHConnection } from "../../shared/contracts";
 
@@ -45,8 +46,8 @@ export function SSHResourceFields({value, onChange, disabled, existing}: {value:
     <label className="field-label">主机地址<input required maxLength={253} value={value.host} onChange={e => set({host: e.target.value})}/></label>
     <label className="field-label">SSH 端口<input required type="number" min={1} max={65535} value={value.port} onChange={e => set({port: Number(e.target.value)})}/></label>
     <label className="field-label">登录用户<input required maxLength={64} value={value.username} autoComplete="off" onChange={e => set({username: e.target.value})}/></label>
-    <label className="field-label">Shell<select value={value.shell ?? "sh"} onChange={e => set({shell: e.target.value as SSHConnectionInput["shell"]})}>{["sh","bash","zsh","fish"].map(shell => <option key={shell} value={shell}>{shell}</option>)}</select></label>
-    <label className="field-label">登录方式<select value={value.authMethod ?? "key"} onChange={e => { readVersion.current++; setReading(false); setError(""); const keep = e.target.value === (existing?.authMethod ?? "key"); set({authMethod: e.target.value as "key" | "password", password: "", passphrase: "", privateKey: undefined, identityFile: keep ? existing?.identityFile : undefined, credentialRef: keep ? existing?.credentialRef : undefined}); }}><option value="key">SSH 密钥</option><option value="password">登录密码</option></select></label>
+    <label className="field-label">Shell<AppSelect value={value.shell ?? "sh"} onChange={e => set({shell: e.target.value as SSHConnectionInput["shell"]})}>{["sh","bash","zsh","fish"].map(shell => <option key={shell} value={shell}>{shell}</option>)}</AppSelect></label>
+    <label className="field-label">登录方式<AppSelect value={value.authMethod ?? "key"} onChange={e => { readVersion.current++; setReading(false); setError(""); const keep = e.target.value === (existing?.authMethod ?? "key"); set({authMethod: e.target.value as "key" | "password", password: "", passphrase: "", privateKey: undefined, identityFile: keep ? existing?.identityFile : undefined, credentialRef: keep ? existing?.credentialRef : undefined}); }}><option value="key">SSH 密钥</option><option value="password">登录密码</option></AppSelect></label>
     {value.authMethod === "password" ? <label className="field-label">登录密码<input type="password" required={!storedPassword} placeholder={storedPassword ? "留空保留已保存的密码" : undefined} maxLength={4096} autoComplete="new-password" value={value.password ?? ""} onChange={e => set({password: e.target.value})}/></label> : <>
       <label className="field-label">私钥文件<input className="ssh-key-file-input" type="file" required={!storedKey} aria-describedby="ssh-key-upload-note" onChange={e => void chooseKey(e.currentTarget)}/></label>
       {storedKey && <p className="settings-note">已有私钥已保存。不选择新文件即可保留，上传新文件会替换私钥。</p>}

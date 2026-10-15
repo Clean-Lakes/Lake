@@ -71,11 +71,27 @@ func TestWindowsSQLiteLockAndRestart(t *testing.T) {
 func TestWindowsConPTYInteractiveAndManagedCommands(t *testing.T) {
 	b, h := fixture(t)
 	id, ref := newSession(t, h)
+	defer func() {
+		if p := recover(); p != nil {
+			for _, term := range objects(b.Store.Snapshot(id)["terminals"]) {
+				t.Logf("isolated ConPTY startup output: %q", tail(stringOf(b.Store.History(id, stringOf(term["id"]))["output"]), 2000))
+			}
+			t.Fatalf("isolated ConPTY startup failed: %v", p)
+		}
+	}()
 	term := b.Terminals.OpenInteractive(context.Background(), id, ref, "bash")
 	tid := stringOf(term["id"])
+	home, _ := os.UserHomeDir()
+	deadline := time.Now().Add(2 * time.Second)
+	for !strings.EqualFold(stringOf(b.Store.Terminal(id, tid)["cwd"]), home) && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !strings.EqualFold(stringOf(b.Store.Terminal(id, tid)["cwd"]), home) {
+		t.Fatal("Git Bash working directory was not observed as a native path")
+	}
 	b.Terminals.Resize(id, tid, 90, 24)
 	b.Terminals.Input(id, tid, "printf 'WINDOWS_TERMINAL_FIXTURE\\n'\r", false)
-	deadline := time.Now().Add(5 * time.Second)
+	deadline = time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if strings.Contains(stringOf(b.Store.History(id, tid)["output"]), "WINDOWS_TERMINAL_FIXTURE\r\n") {
 			break
@@ -97,4 +113,16 @@ func TestWindowsConPTYInteractiveAndManagedCommands(t *testing.T) {
 	}
 	b.Terminals.Close(id, mid)
 	b.Terminals.Close(id, tid)
+}
+
+func TestWindowsConPTYInputLineEndings(t *testing.T) {
+	for _, tc := range []struct{ input, want string }{
+		{"eval \"$__lake_init\"\n", "eval \"$__lake_init\"\r"},
+		{"pwd\r\nprintf 'ok'\n", "pwd\rprintf 'ok'\r"},
+		{"\x1b[A\x03\r", "\x1b[A\x03\r"},
+	} {
+		if got := windowsTerminalInput(tc.input); got != tc.want {
+			t.Fatalf("input = %q, want %q", got, tc.want)
+		}
+	}
 }

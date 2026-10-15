@@ -115,7 +115,7 @@ func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool
 		if c.MultiAgentMode == "auto" && (c.Profile == "core" || c.Profile == "") {
 			list = append(list, delegationTools()...)
 		}
-		return list
+		return e.configuredExtensionTools(c, list)
 	}
 	caps := map[string]any{}
 	if c.TerminalID != "" {
@@ -128,7 +128,7 @@ func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool
 	if c.MemoryEnabled {
 		list = append(list, projectMemoryTools()...)
 	}
-	return list
+	return e.configuredExtensionTools(c, list)
 }
 func Prompt(c Config) string {
 	if c.workflowMode {

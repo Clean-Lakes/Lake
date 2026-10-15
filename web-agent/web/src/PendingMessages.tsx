@@ -1,3 +1,4 @@
+import {rebaseExtensionReferences} from "../../shared/references";
 import {useRef,useState} from "react";
 import type {MessageQueue,QueueOperation,QueuedMessage} from "../../shared/contracts";
 import {api,readableError} from "./api";
@@ -10,7 +11,7 @@ export function PendingMessages({sessionId,queue,disabled,active,sendShortcut,re
 }) {
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState("");
- const [editor,setEditor]=useState<{id:string;text:string}|null>(null);
+ const [editor,setEditor]=useState<{id:string;text:string;original:string;references:Record<string,unknown>[]} | null>(null);
  const [dragging,setDragging]=useState<string|null>(null);
  const [dragOver,setDragOver]=useState<string|null>(null);
  const composition=useRef(new CompositionGuard());
@@ -26,11 +27,11 @@ export function PendingMessages({sessionId,queue,disabled,active,sendShortcut,re
   if (!next) return;
   const pending=next.items.find(row => row.id===item.id);
   if (!pending) {setError("这条消息已发送或移除");return;}
-  setEditor({id:pending.id,text:pending.text});composition.current=new CompositionGuard();
+  setEditor({id:pending.id,text:pending.text,original:pending.text,references:pending.references??[]});composition.current=new CompositionGuard();
  }
  async function saveEdit() {
   if (!editor?.text.trim()) return;
-  const next=await mutate({operation:"edit",revision:queue.revision,id:editor.id,text:editor.text.trim(),resourceIds:resourceIds(editor.text)});
+  const next=await mutate({operation:"edit",revision:queue.revision,id:editor.id,text:editor.text.trim(),resourceIds:queue.items.find(item=>item.id===editor.id)?.resourceIds??resourceIds(editor.text),references:rebaseExtensionReferences(editor.original,editor.text.trim(),editor.references)});
   if (next) setEditor(null);
  }
  async function move(id:string,position:number) {

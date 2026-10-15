@@ -449,24 +449,6 @@ a { color: inherit; }
 .settings-test { border-radius: var(--radius-control); padding: 9px 11px; margin: 15px 0 0; font-size: 11px; line-height: 1.6; }
 .model-row { margin: 9px 0 15px; }
 .model-switch-wrap { position: relative; margin-left: auto; min-width: 0; }
-.model-switch { display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; height: 28px; max-width: 100%; background: var(--surface-subtle); color: var(--text-secondary); border: 1px solid var(--border); border-radius: var(--radius-control); padding: 0 8px; font-size: 11px; }
-.model-switch span, .model-switch { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.model-switch:hover { background: var(--surface-hover); color: var(--foreground); border-color: var(--border); }
-.model-switch.model-missing { color: var(--warning); }
-.model-switch svg { flex: 0 0 auto; color: var(--text-muted); transition: transform .18s ease; }
-.model-switch .chevron-open { transform: rotate(180deg); }
-.model-menu { position: absolute; right: 0; bottom: calc(100% + 9px); z-index: 40; min-width: 232px; max-width: min(340px, 78vw); max-height: min(58vh, 420px); overflow-y: auto; scrollbar-width: thin; padding: 6px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-popover); }
-.model-menu-head { display: block; padding: 7px 9px 5px; color: var(--text-muted); font-size: 11px; }
-.model-menu-search { box-sizing: border-box; width: calc(100% - 12px); margin: 4px 6px 8px; padding: 8px 9px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--foreground); font-size: 12px; outline: none; }
-.model-menu-search:focus { border-color: var(--focus); }
-.model-menu-item { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; border-radius: var(--radius-panel); padding: 8px 9px; color: var(--foreground); font-size: 12px; text-align: left; }
-.model-menu-item span { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.model-menu-item svg { flex: 0 0 auto; color: var(--text-muted); }
-.model-menu-item:hover:not(:disabled) { background: var(--surface-hover); }
-.model-menu-item.selected { color: var(--foreground); font-weight: 600; }
-.model-menu-item.selected svg { color: var(--foreground); }
-.model-menu-note { margin: 4px 9px 8px; color: var(--text-secondary); font-size: 11px; line-height: 1.6; }
-.model-menu-sep { border-top: 1px solid var(--border); margin: 5px 4px; }
 .mention-menu { position: absolute; left: 12px; bottom: calc(100% - 8px); z-index: 40; min-width: 208px; max-width: min(320px, 76vw); max-height: min(46vh, 320px); overflow-y: auto; scrollbar-width: thin; padding: 6px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-popover); }
 .mention-head { display: block; padding: 7px 9px 5px; color: var(--text-muted); font-size: 11px; }
 .mention-item { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; border-radius: var(--radius-panel); padding: 8px 9px; color: var(--foreground); font-size: 12px; text-align: left; }
@@ -567,7 +549,6 @@ a { color: inherit; }
   .composer-dock { padding: 9px var(--session-gutter, 13px) 12px; }
   .composer-input { padding: 10px 12px; border-radius: 17px; }
   .composer-foot { gap: 6px; }
-  .model-switch { max-width: 52%; }
   .resource-detail { width: calc(100% - 26px); padding-top: 19px; }
   .resource-hero { margin-top: 23px; }
   .resource-hero-title { gap: 10px; }
@@ -834,8 +815,6 @@ a { color: inherit; }
 
 .composer-status { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-left: auto; min-width: 0; }
 .composer-status .model-switch-wrap { margin-left: 0; min-width: 0; max-width: min(340px, 60cqw); }
-.composer-status .model-switch { max-width: 100%; border: 0; background: transparent; padding: 0 3px; font-size: 12px; color: var(--foreground); }
-.composer-status .model-switch span { min-width: 0; }
 .reasoning-switch-wrap { position: relative; flex-shrink: 0; }
 .reasoning-switch { gap: 5px; white-space: nowrap; }
 .reasoning-switch > svg { flex-shrink: 0; }

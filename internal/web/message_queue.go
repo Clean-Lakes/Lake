@@ -73,7 +73,7 @@ func (b *Server) validateHumanMessage(id string, data Object) humanMessage {
 		resource := b.Store.Resource(ref)
 		message.References = append(message.References, Object{"asset_ref": ref, "name": resource["name"], "type": resource["kind"]})
 	}
-	message.References = append(message.References, references(b.Store, id, data["references"], func(id, tid string) string { return b.terminalOwner(id, tid, false) })...)
+	message.References = append(message.References, b.contextReferences(id, message.Text, data["references"])...)
 	if value, exists := data["files"]; exists {
 		if _, valid := value.([]any); !valid {
 			fail(400, "文本附件须为数组")
@@ -149,7 +149,16 @@ func (b *Server) submitHumanMessage(id string, data Object) Object {
 			payload["files"] = files
 		}
 		if data["references"] != nil {
-			payload["references"] = data["references"]
+			_, _, selectedExtensions := separateExtensionReferences(message.Text, message.References)
+			// Keep canonical extension metadata; resource references are already in
+			// resourceIds and the remaining context references keep their old format.
+			context := []Object{}
+			for _, ref := range message.References {
+				if ref["kind"] != nil && ref["kind"] != "skill" && ref["kind"] != "mcp" {
+					context = append(context, ref)
+				}
+			}
+			payload["references"] = append(context, selectedExtensions...)
 		}
 		if message.Reuse != nil {
 			payload["terminalReuse"] = message.Reuse
@@ -248,6 +257,9 @@ func (b *Server) messageQueueRoute(w http.ResponseWriter, r *http.Request, id st
 		validateIDs(data["resourceIds"])
 		for _, ref := range stringsOf(data["resourceIds"]) {
 			b.Store.AssertResource(id, ref)
+		}
+		if data["references"] != nil {
+			data["references"] = b.contextReferences(id, stringOf(data["text"]), data["references"])
 		}
 	}
 	if data["operation"] == "reorder" {

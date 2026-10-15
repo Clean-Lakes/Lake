@@ -1,3 +1,4 @@
+import {AppSelect} from "./AppSelect";
 import {Glyph} from "./Icons";
 import {BulkCheckbox, type BulkSelection} from "./BulkNavigationDelete";
 import {NavigationMenu,type NavigationDeleteTarget} from "./NavigationDelete";
@@ -142,7 +143,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
       </div>
       {moving === node.id && <div className="resource-move-panel" role="group" aria-label={`移动 ${resource?.name || node.name}`}>
         <div><button disabled={blocked || index === 0} onClick={() => move(node.id,parent,siblings[index-1]?.id ?? null)}>上移</button><button disabled={blocked || index === siblings.length-1} onClick={() => move(node.id,parent,siblings[index+2]?.id ?? null)}>下移</button></div>
-        <label>移到目录<select aria-label={`将 ${resource?.name || node.name} 移到目录`} value="" disabled={blocked} onChange={event => {if(event.target.value) move(node.id,event.target.value === "root" ? null : event.target.value);}}><option value="">选择位置…</option><option value="root">资源根层</option>{tree.filter(folder => folder.kind === "folder" && canMoveInto(tree,node.id,folder.id)).map(folder => <option value={folder.id} key={folder.id}>{folderPath(folder)}</option>)}</select></label>
+        <label>移到目录<AppSelect aria-label={`将 ${resource?.name || node.name} 移到目录`} value="" disabled={blocked} onChange={event => {if(event.target.value) move(node.id,event.target.value === "root" ? null : event.target.value);}}><option value="">选择位置…</option><option value="root">资源根层</option>{tree.filter(folder => folder.kind === "folder" && canMoveInto(tree,node.id,folder.id)).map(folder => <option value={folder.id} key={folder.id}>{folderPath(folder)}</option>)}</AppSelect></label>
       </div>}
       {node.kind === "folder" && expanded && depth < 32 && <div className="resource-folder-children" style={depth>=4 ? {marginLeft:0,paddingLeft:0,borderLeft:0}:undefined}>{render(node.id,depth+1)}{!childrenOf(node.id).length && <div data-resource-drop-inside={node.id} className={`resource-folder-empty ${drop?.id === node.id ? "drop-inside" : ""}`} onDragOver={event => {if(dragSource.current && canMoveInto(tree,dragSource.current,node.id)){event.preventDefault();event.stopPropagation();setDrop({id:node.id,zone:"inside"});}}} onDrop={event => {event.preventDefault();event.stopPropagation();if(dragSource.current)move(dragSource.current,node.id);}}>拖动资源到这里</div>}</div>}
     </div>;

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/ai"
+	"github.com/Clean-Lakes/Lake/internal/extensions"
 	"io"
 	"io/fs"
 	"mime"
@@ -34,6 +35,8 @@ type Options struct {
 	Output                          io.Writer
 }
 type Server struct {
+	Extensions         *extensions.Manager
+	draftCompletions   sync.Map
 	scheduleMu         sync.Mutex
 	schedulerWorkers   sync.WaitGroup
 	workflowMu         sync.Mutex
@@ -130,6 +133,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		return nil, e
 	}
 	server.Store = store
+	server.Extensions = extensions.NewManager(extensions.NewStore(options.Home))
 	server.Models = &Models{Home: options.Home, Dir: options.DataDir}
 	server.Terminals = NewTerminals(store, server.Models, token)
 	server.Terminals.ResolveAccess = server.terminalOwner
@@ -225,6 +229,9 @@ func (b *Server) Close() {
 		b.closed = true
 		if b.cancel != nil {
 			b.cancel()
+		}
+		if b.Extensions != nil {
+			b.Extensions.Close()
 		}
 		if b.Engine != nil {
 			b.Engine.Shutdown()
@@ -339,7 +346,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if name == "/api/bootstrap" && method == "GET" {
 		http.SetCookie(w, &http.Cookie{Name: "lake_web_token", Value: b.token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
-		model := b.Models.Active()
+		model, selection := b.Models.ActiveSelection()
 		var modelName any
 		var modelID any
 		imageInput := false
@@ -348,7 +355,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			modelID = ai.ModelIdentity(*model)
 			imageInput = model.SupportsImageInput
 		}
-		reply(w, 200, Object{"authenticated": true, "modelConfigured": model != nil, "modelName": modelName, "modelId": modelID, "supportsImageInput": imageInput, "terminalMode": "pty", "aiRuntime": "go", "backendRuntime": "go"})
+		reply(w, 200, Object{"authenticated": true, "modelConfigured": model != nil, "modelName": modelName, "modelId": modelID, "modelSelection": selection, "supportsImageInput": imageInput, "terminalMode": "pty", "aiRuntime": "go", "backendRuntime": "go"})
 		return
 	}
 	if b.workflowRoute(w, r, name, method) {
@@ -358,6 +365,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if b.navigationTrashRoute(w, r, name) {
+		return
+	}
+	if b.extensionRoute(w, r, name) {
 		return
 	}
 	if b.providerRoute(w, r, name, method) {
@@ -667,6 +677,11 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					data := body(w, r, 8<<20)
 					project := stringOf(b.Store.Session(id)["projectId"])
 					reply(w, 201, b.saveImportSource(project, id, stringOf(data["name"]), stringOf(data["text"])))
+					return
+				}
+			case "completion":
+				if method == "POST" {
+					b.completeDraft(w, r, id)
 					return
 				}
 			case "message-queue":

@@ -1,3 +1,4 @@
+import {AppSelect} from "./AppSelect";
 import {useEffect, useRef, useState, type FormEvent} from "react";
 import type {Resource, SSHConnectionInput} from "../../shared/contracts";
 import {api, readableError} from "./api";
@@ -39,7 +40,7 @@ export function TerminalConfigEdit({resource, connected, onClose, onSaved}: {
       <h2 id="terminal-config-title">编辑终端配置</h2><p className="modal-description">{resource.kind === "ssh" ? "修改 SSH 连接与登录配置。已有密码和私钥不会回显，留空保留原凭据。" : "修改本机资源名称和默认 Shell。"}修改连接配置前请先关闭在线终端。</p>
       <form onSubmit={event => void save(event)}>
         <label className="field-label">资源名称<input ref={input} required maxLength={120} value={name} disabled={busy} onChange={event => setName(event.target.value)}/></label>
-        {resource.kind === "ssh" ? <SSHResourceFields value={ssh} existing={resource.ssh} disabled={busy} onChange={setSSH}/> : <label className="field-label">默认 Shell<select value={shell} disabled={busy} onChange={event => setShell(event.target.value)}>{["sh","bash","zsh","fish"].map(value => <option key={value} value={value}>{value}</option>)}</select></label>}
+        {resource.kind === "ssh" ? <SSHResourceFields value={ssh} existing={resource.ssh} disabled={busy} onChange={setSSH}/> : <label className="field-label">默认 Shell<AppSelect value={shell} disabled={busy} onChange={event => setShell(event.target.value)}>{["sh","bash","zsh","fish"].map(value => <option key={value} value={value}>{value}</option>)}</AppSelect></label>}
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="modal-actions"><button type="button" className="button secondary" disabled={busy} onClick={onClose}>取消</button><button type="submit" className="button primary" disabled={busy || !connected || !name.trim()}>{busy ? "正在保存…" : "保存配置"}</button></div>
       </form>

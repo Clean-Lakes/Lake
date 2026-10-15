@@ -831,43 +831,65 @@ func Models(ctx context.Context, m Model) (any, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-	if m.Key != "" {
-		switch protocol(m) {
-		case "claude":
-			req.Header.Set("x-api-key", m.Key)
-			req.Header.Set("anthropic-version", "2023-06-01")
-		case "gemini":
-			req.Header.Set("x-goog-api-key", m.Key)
-		default:
-			req.Header.Set("Authorization", "Bearer "+m.Key)
-		}
-	}
-	res, err := HTTPClient.Do(req)
-	if err != nil {
-		return map[string]any{"models": []string{}, "message": "无法获取模型列表；可手动填写"}, nil
-	}
-	defer res.Body.Close()
-	var body map[string]any
-	if res.StatusCode != 200 || json.NewDecoder(io.LimitReader(res.Body, 2<<20)).Decode(&body) != nil {
-		return map[string]any{"models": []string{}, "message": "端点未提供可用模型列表；可手动填写"}, nil
-	}
-	items := arr(body["data"])
-	if len(items) == 0 {
-		items = arr(body["models"])
-	}
 	names := []string{}
 	limits := map[string]int{}
 	reasoning := map[string]ReasoningCapability{}
 	imageInput := map[string]bool{}
-	for _, v := range items {
-		item := obj(v)
-		name := str(item["id"])
-		if name == "" {
-			name = str(item["name"])
+	seenNames, seenPages := map[string]bool{}, map[string]bool{}
+	message := ""
+	for page := 0; page < 20; page++ {
+		if seenPages[u.String()] {
+			return map[string]any{"models": []string{}, "message": "模型列表分页重复，请检查 API 或手动添加模型"}, nil
 		}
-		name = strings.TrimPrefix(name, "models/")
-		if name != "" && len(name) < 200 {
+		seenPages[u.String()] = true
+		req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+		if err != nil {
+			return nil, errors.New("invalid model-list endpoint")
+		}
+		if protocol(m) == "claude" {
+			req.Header.Set("anthropic-version", "2023-06-01")
+		}
+		if m.Key != "" {
+			switch protocol(m) {
+			case "claude":
+				req.Header.Set("x-api-key", m.Key)
+			case "gemini":
+				req.Header.Set("x-goog-api-key", m.Key)
+			default:
+				req.Header.Set("Authorization", "Bearer "+m.Key)
+			}
+		}
+		res, err := HTTPClient.Do(req)
+		if err != nil {
+			return map[string]any{"models": []string{}, "message": "无法获取完整模型列表，请检查接入地址和网络，或手动添加模型"}, nil
+		}
+		var body map[string]any
+		decodeErr := json.NewDecoder(io.LimitReader(res.Body, 2<<20)).Decode(&body)
+		res.Body.Close()
+		if res.StatusCode == 401 || res.StatusCode == 403 {
+			return map[string]any{"models": []string{}, "message": fmt.Sprintf("模型列表鉴权失败（HTTP %d），请检查 API Key 和接入区域", res.StatusCode)}, nil
+		}
+		if res.StatusCode != 200 || decodeErr != nil {
+			return map[string]any{"models": []string{}, "message": "端点未提供可用模型列表；可手动添加模型 ID"}, nil
+		}
+		items := arr(body["data"])
+		if len(items) == 0 {
+			items = arr(body["models"])
+		}
+		for _, v := range items {
+			item := obj(v)
+			name := str(item["id"])
+			if name == "" {
+				name = str(item["name"])
+			}
+			if name == "" {
+				name, _ = v.(string)
+			}
+			name = strings.TrimSpace(strings.TrimPrefix(name, "models/"))
+			if name == "" || len(name) > 200 || strings.ContainsAny(name, "\r\n\x00") || seenNames[name] {
+				continue
+			}
+			seenNames[name] = true
 			names = append(names, name)
 			if supported := imageInputMetadata(item); supported != nil {
 				imageInput[name] = *supported
@@ -881,12 +903,36 @@ func Models(ctx context.Context, m Model) (any, error) {
 					break
 				}
 			}
+			if len(names) >= 2048 {
+				message = "模型列表较长，当前展示前 2048 个模型；也可以手动添加指定模型 ID。"
+				break
+			}
 		}
-		if len(names) >= 200 {
+		if len(names) >= 2048 {
 			break
 		}
+		query := u.Query()
+		switch {
+		case protocol(m) == "gemini" && str(body["nextPageToken"]) != "":
+			query.Set("pageToken", str(body["nextPageToken"]))
+		case protocol(m) == "claude" && body["has_more"] == true:
+			lastID := str(body["last_id"])
+			if lastID == "" && len(items) > 0 {
+				lastID = str(obj(items[len(items)-1])["id"])
+			}
+			if lastID == "" {
+				return map[string]any{"models": []string{}, "message": "模型列表缺少分页信息，可手动添加模型 ID"}, nil
+			}
+			query.Set("after_id", lastID)
+		default:
+			return map[string]any{"models": names, "contextLimits": limits, "reasoningCapabilities": reasoning, "imageInputCapabilities": imageInput}, nil
+		}
+		u.RawQuery = query.Encode()
+		if page == 19 {
+			message = "模型列表页数较多，仅展示已获取的部分；也可以手动添加指定模型 ID。"
+		}
 	}
-	return map[string]any{"models": names, "contextLimits": limits, "reasoningCapabilities": reasoning, "imageInputCapabilities": imageInput}, nil
+	return map[string]any{"models": names, "contextLimits": limits, "reasoningCapabilities": reasoning, "imageInputCapabilities": imageInput, "message": message}, nil
 }
 
 func imageInputMetadata(item map[string]any) *bool {

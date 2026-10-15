@@ -194,6 +194,7 @@ func (t *Terminals) hook(l *liveTerminal, frame string) {
 			return
 		}
 		code, err := strconv.Atoi(p[0])
+		p[1] = platform.FromShellPath(p[1])
 		if err != nil || code < 0 || code > 255 || !filepath.IsAbs(p[1]) || strings.ContainsAny(p[1], "\x00\x1b\r\n") {
 			return
 		}
