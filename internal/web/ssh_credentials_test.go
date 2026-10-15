@@ -34,6 +34,9 @@ func TestMain(m *testing.M) {
 				code = 0
 			}
 		}()
+		if code != 0 {
+			fmt.Fprintln(os.Stderr, SSHAskpassFailureMessage)
+		}
 		os.Exit(code)
 	}
 	os.Exit(m.Run())

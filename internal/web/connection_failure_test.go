@@ -131,6 +131,7 @@ func TestSSHStartupReasonAndRetryIntent(t *testing.T) {
 		{"Connection closed by synthetic port 22", "关闭了连接"},
 		{"PTY allocation request failed on channel 0", "拒绝创建终端"},
 		{"exec request failed on channel 0", "拒绝创建终端"},
+		{SSHAskpassFailureMessage, "凭据助手未能提供"},
 	} {
 		result := terminalConnectionError(tc.output+"\nfixture-secret-not-for-display", "")
 		if !strings.Contains(result, tc.want) || strings.Contains(result, "fixture-secret") || strings.Contains(result, "synthetic") {

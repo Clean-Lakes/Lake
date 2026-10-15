@@ -81,7 +81,7 @@ func (b *Server) retainedConnectionFailure(id, ref string, resource Object) stri
 				return ""
 			}
 		}
-		message := terminalConnectionError(stringOf(history["output"]), "")
+		message := retainedSSHStartupCause(stringOf(history["output"]))
 		if message != terminalConnectionError("", "") {
 			return message
 		}
@@ -192,7 +192,10 @@ func (b *Server) openAgentTerminal(ctx context.Context, id, ref string) Object {
 // Classify bounded startup output into fixed messages, never return raw SSH
 // stderr, passwords, key contents, banners, or credential paths to the model.
 func terminalConnectionErrorWithExit(output, reason string, code *int) string {
-	message := terminalConnectionError(output, reason)
+	return terminalConnectionCauseWithExit(terminalConnectionError(output, reason), reason, code)
+}
+
+func terminalConnectionCauseWithExit(message, reason string, code *int) string {
 	if code == nil || reason != "Terminal connection closed" {
 		return message
 	}
@@ -206,7 +209,9 @@ func terminalConnectionErrorWithExit(output, reason string, code *int) string {
 	case 0xc0000005:
 		message = "SSH 客户端启动时发生访问冲突。请检查运行环境冲突或安全软件隔离记录。"
 	case 0:
-		message = "SSH 进程已退出，但远端终端初始化没有完成。请检查远端 Shell 和初始化配置。"
+		if message == terminalConnectionError("", "Terminal connection closed") || message == terminalConnectionError("", "") {
+			message = "SSH 进程已退出，但远端终端初始化没有完成。请检查远端 Shell 和初始化配置。"
+		}
 	}
 	return fmt.Sprintf("%s（SSH 退出码：%d / 0x%08X）。", strings.TrimSuffix(message, "。"), *code, uint32(*code))
 }
@@ -229,6 +234,8 @@ func terminalConnectionError(output, reason string) string {
 	output = compactSSHDiagnostic(output)
 	has := func(value string) bool { return strings.Contains(output, compactSSHDiagnostic(value)) }
 	switch {
+	case has(SSHAskpassFailureMessage):
+		return "SSH 登录凭据助手未能提供保存的凭据。请重新填写密码，或检查密钥口令与私有凭据目录权限。"
 	case has("no matching mac found"), has("no matching host key type found"), has("no matching key exchange method found"), has("no matching cipher found"), has("no mutual signature algorithm"):
 		return "SSH 加密算法协商失败，客户端与服务器支持的算法不匹配。请检查 SSH 版本和服务端算法配置。"
 	case has("bad owner or permissions"), has("unprotected private key file"), has("permissions for") && has("too open"):

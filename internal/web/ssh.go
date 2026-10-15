@@ -40,6 +40,8 @@ func sshArguments(c Object, initialization ...string) []string {
 // The environment contains a reference; it never contains password material.
 func SSHAskpass(prompt string, out io.Writer) error { return ai.SSHAskpass(prompt, out) }
 
+const SSHAskpassFailureMessage = "SSH credential helper could not provide saved credentials"
+
 func readSSHSecret(root, ref string) string {
 	path, e := privateFile(root, ref)
 	if e != nil {

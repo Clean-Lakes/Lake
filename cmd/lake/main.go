@@ -36,6 +36,9 @@ func main() {
 				code = 0
 			}
 		}()
+		if code != 0 {
+			fmt.Fprintln(os.Stderr, web.SSHAskpassFailureMessage)
+		}
 		os.Exit(code)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

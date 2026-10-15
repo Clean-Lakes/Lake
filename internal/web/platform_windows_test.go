@@ -259,8 +259,18 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 			defer func() { failure, _ = recover().(*Failure) }()
 			b.Terminals.OpenInteractive(ctx, id, stringOf(resource["id"]), "sh")
 		}()
-		if failure == nil || !strings.Contains(failure.Message, "身份认证失败") || !strings.Contains(failure.Message, "255") || !strings.Contains(failure.Message, "fixture@127.0.0.1:") {
+		if failure == nil || !(strings.Contains(failure.Message, "身份认证失败") || opts.challenge != "" && strings.Contains(failure.Message, "凭据助手")) || !strings.Contains(failure.Message, "255") || !strings.Contains(failure.Message, "fixture@127.0.0.1:") {
 			t.Errorf("authentication rejection lost its cause and exit code: %v", failure)
+		}
+		if opts.challenge == "" {
+			terminals := objects(b.Store.Snapshot(id)["terminals"])
+			if len(terminals) != 1 {
+				t.Fatal("failed SSH terminal is missing from history")
+			}
+			history := b.Store.History(id, stringOf(terminals[0]["id"]))
+			if !strings.Contains(retainedSSHStartupCause(stringOf(history["output"])), "身份认证失败") {
+				t.Error("ConPTY startup diagnostic was not retained safely")
+			}
 		}
 		cancel()
 		select {
@@ -292,6 +302,20 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("isolated SSH server did not stop")
+	}
+	deadline = time.Now().Add(2 * time.Second)
+	for {
+		logs, err := filepath.Glob(filepath.Join(b.Models.Home, "secrets", "ssh-startup-*"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(logs) == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("private SSH startup diagnostics were not removed after exit")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 
