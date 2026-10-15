@@ -1,0 +1,74 @@
+{
+  "verifiedAt": "2026-10-15T19:38:01.116635+08:00",
+  "scope": "Local source verification; no version bump, app installation, push, or release",
+  "models": "isolated httptest fixtures; no live credentials or external model requests",
+  "resumePolicy": {
+    "idleMinutes": 30,
+    "minimumEstimatedHistoryCharacters": 8192,
+    "summaryTimeoutSeconds": 45
+  },
+  "checks": [
+    {
+      "command": "go test -race ./internal/ai ./internal/web",
+      "result": "passed",
+      "aiSeconds": 29.404,
+      "webSeconds": 104.772
+    },
+    {
+      "command": "go test -race ./internal/ai -run 'Idle|Compac|FirstTurn|OversizedSingle|ReloadClears' -count=1",
+      "log": "/tmp/lake-idle-final-targeted.log",
+      "result": "passed"
+    },
+    {
+      "command": "go vet ./internal/ai ./internal/web",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm test:frontend",
+      "result": "passed",
+      "tests": 161
+    },
+    {
+      "command": "pnpm build:web",
+      "result": "passed"
+    }
+  ],
+  "behaviors": [
+    "Persisted two-day-old conversation compacts before answering the new message",
+    "Summary has no tools; original command evidence and new question are retained",
+    "Short or fresh histories do not force an idle handoff",
+    "Compaction deadline preserves original history and rollback points; the same session can retry",
+    "Failed optional handoff falls back only if original history fits the configured budget",
+    "Cancellation starts no answer request; the same session can resume",
+    "Restart clears orphaned manual compaction state"
+  ],
+  "ui": {
+    "method": "AITranscript rendered with current built styles and synthetic session data in an isolated loopback fixture; not a native client integration run",
+    "layouts": [
+      {
+        "theme": "light",
+        "width": 1280,
+        "overflow": false,
+        "liveStatusCount": 1,
+        "historicalStatus": "已完成",
+        "screenshot": "idle-context-light.png"
+      },
+      {
+        "theme": "dark",
+        "width": 1280,
+        "overflow": false,
+        "liveStatusCount": 1,
+        "historicalStatus": "已完成",
+        "screenshot": "idle-context-dark.png"
+      },
+      {
+        "theme": "dark",
+        "width": 390,
+        "overflow": false,
+        "liveStatusCount": 1,
+        "historicalStatus": "已完成",
+        "screenshot": "idle-context-narrow.png"
+      }
+    ]
+  }
+}

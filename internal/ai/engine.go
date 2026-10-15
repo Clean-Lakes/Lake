@@ -43,6 +43,8 @@ type Engine struct {
 	shells           sync.Map
 	shellMu          sync.Mutex
 	shellsClosed     bool
+
+	compactionTimeout time.Duration
 }
 
 func New(dir string, bridge Bridge, emit func(Event)) (*Engine, error) {
@@ -72,6 +74,14 @@ func (e *Engine) get(id string) (*session, error) {
 		if json.Unmarshal(b, &s.state) != nil {
 			return nil, errors.New("AI state is invalid")
 		}
+		orphanedCompaction := false
+		for i := range s.state.View.Cards {
+			card := &s.state.View.Cards[i]
+			if card.Type == "compaction" && card.Status == "running" {
+				card.Status, card.Content = "interrupted", "上下文整理已中断；可在原会话继续"
+				orphanedCompaction = true
+			}
+		}
 		if s.state.View.Status == "running" || s.state.View.Status == "waiting_approval" || s.state.View.Question != nil {
 			s.state.View.Status = "interrupted"
 			s.state.View.Pending = nil
@@ -89,6 +99,10 @@ func (e *Engine) get(id string) (*session, error) {
 					run.Pending, run.CanCancel = nil, false
 				}
 			}
+			if err := e.save(s); err != nil {
+				return nil, err
+			}
+		} else if orphanedCompaction {
 			if err := e.save(s); err != nil {
 				return nil, err
 			}
@@ -469,6 +483,7 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 	}
 	c.ReferencedAssets = validRemembered(c, c.ReferencedAssets)
 	s.state.ReferencedAssetIDs = append([]string(nil), c.ReferencedAssets...)
+	resume := e.worker == nil && shouldCompactResumedConversation(s.state, time.Now())
 	ctx, cancel := context.WithCancel(ctx)
 	ctx = boundedShellPolling(ctx)
 	s.cancel = cancel
@@ -547,7 +562,7 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		if err = ctx.Err(); err != nil {
 			return err
 		}
-		if err = e.compact(ctx, s, c, false); err != nil {
+		if err = e.compactForTurn(ctx, s, c, resume && step == 0); err != nil {
 			return err
 		}
 		s.mu.Lock()
@@ -795,7 +810,7 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 	}
 	return nil
 }
-func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) error {
+func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) (err error) {
 	s.mu.Lock()
 	history := append([]Message(nil), s.state.History...)
 	id := s.state.View.Session
@@ -808,7 +823,48 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 		return nil
 	}
 	if len(history) < 4 {
+		if chars < budget {
+			return nil
+		}
 		return errors.New("message exceeds configured context window")
+	}
+	timeout := e.compactionTimeout
+	if timeout <= 0 {
+		timeout = 45 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	cardID := uid()
+	content := "上下文已压缩"
+	s.mu.Lock()
+	s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "compaction", Content: "正在压缩上下文…", Status: "running", At: timestamp()})
+	err = e.save(s)
+	e.notify(s, "compact", nil)
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for i := range s.state.View.Cards {
+			card := &s.state.View.Cards[i]
+			if card.ID != cardID {
+				continue
+			}
+			card.Status, card.Content = "completed", content
+			if err != nil {
+				card.Status, card.Content = "failed", "上下文整理未完成；原始记录已保留"
+				if errors.Is(err, context.Canceled) {
+					card.Status, card.Content = "cancelled", "已停止整理上下文；原始记录已保留"
+				}
+			}
+			break
+		}
+		if saveErr := e.save(s); err == nil {
+			err = saveErr
+		}
+		e.notify(s, "compact", nil)
+	}()
+	if err != nil {
+		return err
 	}
 	// Prefer complete turns; a long first turn can also compact between complete
 	// tool batches. Never separate assistant calls from their matching results.
@@ -834,10 +890,12 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 			}
 			s.mu.Lock()
 			defer s.mu.Unlock()
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("context compaction: %w", err)
+			}
 			s.state.History = projected
 			s.state.LastRequest, s.state.LastRequestAt = nil, ""
-			s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "compaction", Content: "工具输出已缩减为上下文预览；原始操作记录保留", Status: "completed", At: timestamp()})
-			e.notify(s, "compact", nil)
+			content = "工具输出已缩减为上下文预览；原始操作记录保留"
 			return e.save(s)
 		}
 	}
@@ -881,6 +939,9 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	if err != nil {
 		return fmt.Errorf("context compaction: %w", err)
 	}
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context compaction: %w", err)
+	}
 	summary := result.Message.Content
 	if strings.TrimSpace(summary) == "" {
 		return errors.New("context compaction: empty summary; original history retained")
@@ -894,14 +955,15 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context compaction: %w", err)
+	}
 	s.state.History = projected
 	s.state.Checkpoints = nil
 	s.state.View.Summary = redact(summary, c)
 	addUsage(&s.state.View.Usage, result.Usage)
 	s.state.LastRequest = nil
 	s.state.LastRequestAt = ""
-	s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "compaction", Content: "上下文已压缩", Status: "completed", At: timestamp()})
-	e.notify(s, "compact", nil)
 	return e.save(s)
 }
 func (e *Engine) Clear(id string) error {

@@ -7,12 +7,14 @@ export function turnStatus(timing:ReplyTiming|undefined,view:AIView|undefined,ca
  const live=timing ? timing.status==="running" : !!view && ["running","waiting_approval"].includes(view.status);
  const start=timing?.startedAt || latestUserAt;
  const currentCards=start ? cards.filter(card=>compareTime(card.at,start)>=0) : [];
+ const compacting=!!start && view?.cards.some(card=>card.type==="compaction"&&card.status==="running"&&compareTime(card.at,start)>=0);
  const runs=(view?.agentRuns??[]).filter(run=>run.sessionId===view?.session && (view?.rootTurnId&&run.rootTurnId ? run.rootTurnId===view.rootTurnId : !!start&&compareTime(run.createdAt,start)>=0));
  const waiting=live && (view?.status==="waiting_approval" || !!view?.question || currentCards.some(card=>card.status==="pending") || runs.some(run=>run.status==="waiting_approval"));
  let state:string|undefined;
  if(live) {
   if(view?.question) state="等待你的选择";
   else if(waiting) state="等待确认";
+  else if(compacting) state="正在压缩上下文…";
   else if(runs.some(run=>run.status==="running"||run.status==="queued")) state=`${runs.filter(run=>run.status==="running"||run.status==="queued").length} 个子任务执行中…`;
   else if(currentCards.some(card=>["operation","shell"].includes(card.type)&&card.status==="running")) state="正在执行工具…";
   else if(["message","text"].includes(currentCards.at(-1)?.type??"")&&currentCards.at(-1)?.status==="running") state="正在生成回复…";

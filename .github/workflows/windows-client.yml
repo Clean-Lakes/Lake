@@ -52,7 +52,7 @@ jobs:
           $env:CGO_ENABLED = '0'
           go test -v ./internal/web -run '^(TestWindows|TestConsole|TestRemoteShellCwd|TestCommandWaitTimeout)' -count=1 -timeout 3m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go test -v ./internal/ai -run '^(TestToolChildContextFailure|TestParentContextFailure)' -count=1 -timeout 1m
+          go test -v ./internal/ai -run '^Test(Idle|ManualCompaction|CancelIdle|ReloadClears|FirstTurn|OversizedSingle|FailedCompaction|CompactionUses|ToolChildContextFailure|ParentContextFailure)' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test ./client/windows -run '^TestWindows' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
