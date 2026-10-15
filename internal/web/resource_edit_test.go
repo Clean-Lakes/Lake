@@ -20,7 +20,7 @@ func TestSSHResourceEditPreservesAndRotatesPrivateCredentials(t *testing.T) {
 	oldRef := stringOf(object(resource["ssh"])["credentialRef"])
 	updated := apiTest(t, h, "PATCH", path, Object{"name": "renamed", "ssh": Object{"host": "localhost", "port": 2222, "username": "fixture2", "shell": "bash", "password": ""}}, 200)
 	cfg := object(updated["ssh"])
-	if cfg["credentialRef"] != oldRef || cfg["host"] != "localhost" || integer(cfg["port"]) != 2222 || updated["id"] != id || updated["projectId"] != project {
+	if cfg["credentialRef"] != oldRef || cfg["host"] != "localhost" || cfg["username"] != "fixture2" || object(b.Store.Resource(id)["ssh"])["username"] != "fixture2" || integer(cfg["port"]) != 2222 || updated["id"] != id || updated["projectId"] != project {
 		t.Fatal("edit lost connection identity or existing credential")
 	}
 	if readSSHSecret(filepath.Join(b.Models.Home, "secrets"), oldRef) != "Synthetic-edit-password-old" {

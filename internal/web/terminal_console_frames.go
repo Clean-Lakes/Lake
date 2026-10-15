@@ -4,6 +4,7 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -13,6 +14,36 @@ import (
 const consoleFramePrefix = "\x1b]0;LAKE_FRAME_"
 const consoleHookPrefix = "\x1b]0;LAKE_HOOK_"
 const consoleReadyHookPrefix = "\x1b]0;LAKE_READY_HOOK_"
+
+// ConPTY receives a raw Windows environment block instead of exec.Cmd's usual
+// environment processing. Match Go's last-value-wins semantics before sorting:
+// an inherited SSH_ASKPASS must not override this connection's private helper.
+func consoleTerminalEnvironment(env []string) []string {
+	values := map[string]string{}
+	for _, entry := range env {
+		at := strings.IndexByte(entry, '=')
+		if at == 0 {
+			// Preserve Windows' per-drive current-directory variables (=C:=...).
+			if next := strings.IndexByte(entry[1:], '='); next >= 0 {
+				at = next + 1
+			}
+		}
+		if at <= 0 {
+			continue
+		}
+		values[strings.ToUpper(entry[:at])] = entry
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	result := make([]string, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, values[key])
+	}
+	return result
+}
 
 var encodedConsoleFrame = regexp.MustCompile(`\\036LAKE_([^\\\r\n'"]*)\\037`)
 var encodedConsoleReady = regexp.MustCompile(`\\036LAKE_READY_([a-zA-Z0-9_-]+)\\037`)

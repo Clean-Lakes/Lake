@@ -44,6 +44,7 @@ type liveTerminal struct {
 	connected                                 chan struct{}
 	connectErr                                error
 	startupExitCode                           *int
+	connectionTarget                          string
 	startup, flush                            *time.Timer
 	job                                       *terminalJob
 	screen                                    vt10x.Terminal
@@ -172,6 +173,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 		panic(e)
 	}
 	var authEnv []string
+	connectionTarget := ""
 	readyMarker := "\x1eLAKE_READY_" + ident() + "\x1f"
 	initialization := terminalInit(selectedShell, readyMarker, interactive)
 	if r["kind"] == "ssh" {
@@ -191,6 +193,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 			}
 		}()
 		program = "/usr/bin/ssh"
+		connectionTarget = fmt.Sprintf("%s@%s:%d", stringOf(cfg["username"]), stringOf(cfg["host"]), integer(cfg["port"]))
 		cfg["shell"] = selectedShell
 		args = sshArguments(cfg, initialization)
 		if trustedPath != "" {
@@ -240,7 +243,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 		t.store.TerminalStatus(id, tid, "disconnected")
 		fail(503, "Could not start terminal; verify connection configuration")
 	}
-	l := &liveTerminal{pty: f, cmd: cmd, id: tid, session: id, remote: r["kind"] == "ssh", interactive: interactive, promptRedraw: selectedShell != "sh", readyMarker: readyMarker, connected: make(chan struct{}), shell: selectedShell, screen: vt10x.New(vt10x.WithSize(100, 30))}
+	l := &liveTerminal{pty: f, cmd: cmd, id: tid, session: id, remote: r["kind"] == "ssh", interactive: interactive, promptRedraw: selectedShell != "sh", readyMarker: readyMarker, connected: make(chan struct{}), shell: selectedShell, connectionTarget: connectionTarget, screen: vt10x.New(vt10x.WithSize(100, 30))}
 	t.live[tid] = l
 	t.wg.Add(2)
 	t.mu.Unlock()
@@ -782,7 +785,11 @@ func (t *Terminals) closeLive(l *liveTerminal, reason string) {
 		if l.screen != nil {
 			startupOutput += "\n" + t.screenLocked(l, "tail", 1000, outputLimit)
 		}
-		l.connectErr = fmt.Errorf("%s", terminalConnectionErrorWithExit(startupOutput, reason, l.startupExitCode))
+		message := terminalConnectionErrorWithExit(startupOutput, reason, l.startupExitCode)
+		if l.connectionTarget != "" {
+			message += " 连接目标：" + l.connectionTarget + "。"
+		}
+		l.connectErr = fmt.Errorf("%s", message)
 		close(l.connected)
 	}
 	t.mu.Lock()

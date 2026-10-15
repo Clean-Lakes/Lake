@@ -43,6 +43,15 @@ func TestWindowsSSHPasswordConPTYHandshake(t *testing.T) {
 			windowsSSHPasswordConPTYHandshake(t, tc.interactive, tc.unusualPaths, tc.rejectAuth, windowsSSHFixtureOptions{challenge: tc.challenge})
 		})
 	}
+	t.Run("inherited-credential-helper", func(t *testing.T) {
+		t.Setenv("SSH_ASKPASS", "0-stale-helper")
+		t.Setenv("LAKE_SSH_SECRET_REF", "0-stale-reference")
+		t.Setenv("LAKE_SSH_ASKPASS_MODE", "key")
+		windowsSSHPasswordConPTYHandshake(t, true, false, false)
+	})
+	t.Run("edited-credentials", func(t *testing.T) {
+		windowsSSHPasswordConPTYHandshake(t, true, false, false, windowsSSHFixtureOptions{editCredentials: true})
+	})
 }
 
 func TestWindowsPackagedSSHCredentialHelper(t *testing.T) {
@@ -70,9 +79,21 @@ func TestWindowsPackagedSSHCredentialHelper(t *testing.T) {
 			})
 		}
 	}
+	t.Run("inherited-credential-helper", func(t *testing.T) {
+		t.Setenv("SSH_ASKPASS", "0-stale-helper")
+		t.Setenv("LAKE_SSH_SECRET_REF", "0-stale-reference")
+		t.Setenv("LAKE_SSH_ASKPASS_MODE", "key")
+		windowsSSHPasswordConPTYHandshake(t, true, true, false, windowsSSHFixtureOptions{desktop: desktop})
+	})
+	t.Run("edited-credentials", func(t *testing.T) {
+		windowsSSHPasswordConPTYHandshake(t, true, true, false, windowsSSHFixtureOptions{desktop: desktop, editCredentials: true})
+	})
 }
 
-type windowsSSHFixtureOptions struct{ desktop, challenge string }
+type windowsSSHFixtureOptions struct {
+	desktop, challenge string
+	editCredentials    bool
+}
 
 func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, rejectAuth bool, options ...windowsSSHFixtureOptions) {
 	var opts windowsSSHFixtureOptions
@@ -222,16 +243,23 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 		t.Fatal(err)
 	}
 	b.Terminals.KnownHosts = known
-	settings, cleanup := prepareSSH(b.Models.Home, Object{"host": "127.0.0.1", "port": port, "username": "fixture", "authMethod": "password", "password": "synthetic-windows-password", "shell": "sh"})
+	username, password := "fixture", "synthetic-windows-password"
+	if opts.editCredentials {
+		username, password = "old-fixture", "old-fixture-password"
+	}
+	settings, cleanup := prepareSSH(b.Models.Home, Object{"host": "127.0.0.1", "port": port, "username": username, "authMethod": "password", "password": password, "shell": "sh"})
 	defer cleanup()
 	resource := b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "isolated SSH", "ssh", settings)
+	if opts.editCredentials {
+		resource = apiTest(t, h, "PATCH", "/api/resources/"+stringOf(resource["id"]), Object{"name": "edited SSH", "ssh": Object{"username": "fixture", "password": "synthetic-windows-password"}}, 200)
+	}
 	if rejectAuth {
 		var failure *Failure
 		func() {
 			defer func() { failure, _ = recover().(*Failure) }()
 			b.Terminals.OpenInteractive(ctx, id, stringOf(resource["id"]), "sh")
 		}()
-		if failure == nil || !strings.Contains(failure.Message, "身份认证失败") || !strings.Contains(failure.Message, "255") {
+		if failure == nil || !strings.Contains(failure.Message, "身份认证失败") || !strings.Contains(failure.Message, "255") || !strings.Contains(failure.Message, "fixture@127.0.0.1:") {
 			t.Errorf("authentication rejection lost its cause and exit code: %v", failure)
 		}
 		cancel()
