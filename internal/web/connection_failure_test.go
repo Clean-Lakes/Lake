@@ -146,3 +146,23 @@ func TestSSHStartupReasonAndRetryIntent(t *testing.T) {
 		}
 	}
 }
+
+func TestSSHStartupExitCodesRemainUsefulWithoutExposingOutput(t *testing.T) {
+	for _, tc := range []struct {
+		code int
+		want string
+	}{
+		{255, "255 / 0x000000FF"}, {0, "远端终端初始化"},
+		{0xc0000135, "缺少依赖 DLL"}, {0xc000007b, "架构不匹配"},
+		{0xc0000142, "运行环境初始化失败"}, {0xc0000005, "访问冲突"},
+	} {
+		got := terminalConnectionErrorWithExit("synthetic-private-output", "Terminal connection closed", &tc.code)
+		if !strings.Contains(got, tc.want) || strings.Contains(got, "synthetic-private") {
+			t.Fatal("missing safe startup evidence", got)
+		}
+	}
+	code := 255
+	if got := terminalConnectionErrorWithExit("Permission denied (password)", "Terminal connection closed", &code); !strings.Contains(got, "身份认证失败") {
+		t.Fatal("exit evidence replaced the authentication cause", got)
+	}
+}

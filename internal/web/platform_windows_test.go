@@ -26,18 +26,21 @@ import (
 // shell, so local-only initialization tests cannot hide an SSH transport gap.
 func TestWindowsSSHPasswordConPTYHandshake(t *testing.T) {
 	for _, tc := range []struct {
-		name                      string
-		interactive, unusualPaths bool
+		name                                  string
+		interactive, unusualPaths, rejectAuth bool
 	}{
-		{"managed", false, false},
-		{"interactive", true, false},
-		{"installed-paths", true, true},
+		{"managed", false, false, false},
+		{"interactive", true, false, false},
+		{"installed-paths", true, true, false},
+		{"authentication-failure", true, false, true},
 	} {
-		t.Run(tc.name, func(t *testing.T) { windowsSSHPasswordConPTYHandshake(t, tc.interactive, tc.unusualPaths) })
+		t.Run(tc.name, func(t *testing.T) {
+			windowsSSHPasswordConPTYHandshake(t, tc.interactive, tc.unusualPaths, tc.rejectAuth)
+		})
 	}
 }
 
-func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths bool) {
+func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, rejectAuth bool) {
 	b, h := fixture(t)
 	id, _ := newSession(t, h)
 	if unusualPaths {
@@ -71,7 +74,7 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths b
 	}
 	var authenticated atomic.Bool
 	config := &ssh.ServerConfig{PasswordCallback: func(meta ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-		if meta.User() != "fixture" || string(password) != "synthetic-windows-password" {
+		if rejectAuth || meta.User() != "fixture" || string(password) != "synthetic-windows-password" {
 			return nil, errors.New("fixture authentication rejected")
 		}
 		authenticated.Store(true)
@@ -152,6 +155,23 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths b
 	settings, cleanup := prepareSSH(b.Models.Home, Object{"host": "127.0.0.1", "port": port, "username": "fixture", "authMethod": "password", "password": "synthetic-windows-password", "shell": "sh"})
 	defer cleanup()
 	resource := b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "isolated SSH", "ssh", settings)
+	if rejectAuth {
+		var failure *Failure
+		func() {
+			defer func() { failure, _ = recover().(*Failure) }()
+			b.Terminals.OpenInteractive(ctx, id, stringOf(resource["id"]), "sh")
+		}()
+		if failure == nil || !strings.Contains(failure.Message, "身份认证失败") || !strings.Contains(failure.Message, "255") {
+			t.Errorf("authentication rejection lost its cause and exit code: %v", failure)
+		}
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Error("rejected SSH fixture did not stop")
+		}
+		return
+	}
 	var term Object
 	if interactive {
 		term = b.Terminals.OpenInteractive(ctx, id, stringOf(resource["id"]), "sh")
