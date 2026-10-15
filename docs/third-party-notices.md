@@ -8,7 +8,7 @@ Lake 在仓库内保留早期源码的 [Apache License 2.0](../LICENSE-APACHE) �
 | [ZCode CLI 0.16.9](https://github.com/zai-org/ZCode/tree/29628c9acdb81b703bbd4080c207a0e7ce5e276e) | 桌面主 Agent 的源码运行时 | [Apache-2.0 许可](../third_party/zcode/LICENSE)、[NOTICE](../third_party/zcode/NOTICE.md)、[依赖许可](../third_party/zcode/THIRD-PARTY-NOTICES.md) |
 | [Node.js 24.14.0](https://nodejs.org/) | 运行源码构建的 Agent | 固定 npm Node 发行包附带的 LICENSE，构建时复制到 zcode/NODE-LICENSE |
 | [Wails v2.15.0](https://github.com/wailsapp/wails) | macOS 桌面壳 | [Wails MIT 许可](licenses/wails-v2.15.0-LICENSE) |
-| [历史 Go MCP SDK v1.7.0](https://github.com/modelcontextprotocol/go-sdk) | 已移除的历史依赖；保留许可 | [SDK 原始许可文件](licenses/mcp-go-sdk-v1.7.0-LICENSE)；该版本文件说明 Apache-2.0/MIT 过渡安排 |
+| [Go MCP SDK v1.7.0](https://github.com/modelcontextprotocol/go-sdk) | 当前 MCP 客户端的 HTTP、SSE 和 stdio 协议支持 | [SDK 原始许可文件](licenses/mcp-go-sdk-v1.7.0-LICENSE)；该版本文件说明 Apache-2.0/MIT 过渡安排 |
 | [beUI](https://github.com/starc007/ui-components) | 桌面聊天组件的复制源码 | [beUI MIT 许可](../client/desktop/frontend/BEUI_LICENSE) |
 | [json-render core/react v0.21.0](https://github.com/vercel-labs/json-render) | 受组件目录约束的动态报告布局与 React 渲染 | [core Apache-2.0 许可](licenses/json-render-core-v0.21.0-LICENSE)；[react Apache-2.0 许可](licenses/json-render-react-v0.21.0-LICENSE) |
 | [A2UI React / Web Core v0.12.0](https://github.com/a2ui-project/a2ui) | 官方 v0.9.1 动态面板处理与 React 渲染 | [React Apache-2.0 许可](licenses/a2ui-react-v0.12.0-LICENSE)；[Web Core Apache-2.0 许可](licenses/a2ui-web-core-v0.12.0-LICENSE) |
@@ -19,3 +19,5 @@ Lake 在仓库内保留早期源码的 [Apache License 2.0](../LICENSE-APACHE) �
 | [Zod v4.3.6](https://github.com/colinhacks/zod) | 动态组件属性校验 | [Zod MIT 许可](licenses/zod-v4.3.6-LICENSE) |
 
 React、Vite、Motion、Lucide 等前端依赖及其他 Go 依赖由各自的锁文件固定，具体许可文本随对应源包提供。仓库保留 ZCode 完整源码快照，桌面应用仅构建并打包 Agent CLI 依赖图，前端使用 LAKE 的 Wails/React。ZCode、Node 和未打入 CLI 单文件的运行依赖许可随 zcode/ 运行目录分发；发布到仓库外时，应随应用分发本页所链接的许可文本，并按实际打包依赖核对其许可文件。
+
+模型供应商品牌 SVG 来自 [Lobe Icons](https://github.com/lobehub/lobe-icons) 的 `@lobehub/icons-static-svg` v1.95.1，采用 MIT 许可；[原始许可](../web-agent/licenses/lobe-icons-MIT) 与 [素材来源和摘要](../web-agent/web/public/providers/provenance.json) 随仓库保存，图标随应用本地分发。

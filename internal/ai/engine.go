@@ -420,6 +420,10 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		return errors.New("model not configured")
 	}
 	message := text
+	hasTargetReference := false
+	for _, ref := range refs {
+		hasTargetReference = hasTargetReference || str(ref["asset_ref"]) != "" || str(ref["terminal_id"]) != ""
+	}
 	if e.worker == nil {
 		if input.TargetScope != nil {
 			for _, ref := range input.TargetScope.ResourceIDs {
@@ -429,7 +433,7 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 				}
 			}
 			s.state.TargetScope = cloneTargetScope(input.TargetScope)
-		} else if len(refs) > 0 {
+		} else if hasTargetReference {
 			s.state.TargetScope = nil
 		}
 		c.targetScope = cloneTargetScope(s.state.TargetScope)

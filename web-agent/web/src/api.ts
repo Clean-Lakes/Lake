@@ -1,3 +1,4 @@
+import type {MCPServerConfig,MCPToolCatalog,SkillConfig,SkillCatalog} from "../../shared/contracts";
 import {displayAiError} from "./aiErrors";
 import type { CommandPolicy } from "../../shared/command-policy";
 import type { WorkspaceTag } from "../../shared/contracts";
@@ -8,6 +9,7 @@ import type {
   AIView,
   AIPreset,
   AvailableModels,
+  AvailableModelEntry,
   Catalog,
   WorkflowCatalog,
   WorkflowInput,
@@ -80,12 +82,21 @@ export type Bootstrap = {
   modelConfigured: boolean;
   modelName: string | null;
   modelId?: string | null;
+  modelSelection?: AvailableModelEntry | null;
   terminalMode: "command" | "pty";
   supportsImageInput?: boolean;
   aiRuntime?: "go" | "legacy";
 };
 
 export const api = {
+  mcpServers:()=>request<{servers:MCPServerConfig[]}>("/api/settings/mcp"),
+  saveMCP:(value:Record<string,unknown>)=>request<MCPServerConfig>(`/api/settings/mcp${value.id?`/${encodeURIComponent(String(value.id))}`:""}`,{method:value.id?"PUT":"POST",body:JSON.stringify(value)}),
+  deleteMCP:(id:string)=>request(`/api/settings/mcp/${encodeURIComponent(id)}`,{method:"DELETE"}),
+  testMCP:(id:string)=>request<MCPToolCatalog>(`/api/settings/mcp/${encodeURIComponent(id)}/test`,{method:"POST",body:"{}"}),
+  skills:()=>request<SkillCatalog>("/api/settings/skills"),
+  skill:(name:string)=>request<{skill:SkillConfig;content:string}>(`/api/settings/skills/${encodeURIComponent(name)}`),
+  saveSkill:(name:string,value:{content?:string;enabled?:boolean;create?:boolean})=>request(`/api/settings/skills/${encodeURIComponent(name)}`,{method:"PUT",body:JSON.stringify(value)}),
+  skillRoot:(path:string,remove=false)=>request("/api/settings/skills/roots",{method:remove?"DELETE":"POST",body:JSON.stringify({path})}),
   createTag: (project:string,data:{name:string;color:string}) => post<WorkspaceTag>(`/api/projects/${encodeURIComponent(project)}/tags`,data),
   updateTag: (id:string,data:{name:string;color:string}) => request<WorkspaceTag>(`/api/tags/${encodeURIComponent(id)}`,{method:"PUT",body:JSON.stringify(data)}),
   deleteTag: (id:string) => request(`/api/tags/${encodeURIComponent(id)}`,{method:"DELETE"}),
@@ -101,6 +112,7 @@ export const api = {
   navigationTrash: () => request<{items:NavigationTrashItem[]}>("/api/navigation-trash"),
   deleteNavigation: (kind:"project" | "resource",id:string) => post<{items:NavigationTrashItem[]}>("/api/navigation-delete",{kind,id}),
   restoreNavigation: (kind:NavigationTrashItem["kind"],id:string) => post<{items:NavigationTrashItem[]}>("/api/navigation-trash",{kind,id}),
+  completeDraft: (session:string,text:string,modelId:string|undefined,signal:AbortSignal) => request<{suffix:string;modelId?:string}>(`/api/sessions/${encodeURIComponent(session)}/completion`,{method:"POST",body:JSON.stringify({text,modelId}),signal}),
   catalog: (signal?: AbortSignal) => request<Catalog>("/api/catalog", { signal }),
   modelCapacity: () => request<{modelId?: string; limit: number; source?: string}>("/api/settings/model/capacity"),
   providers: () => request<ProviderCatalog>("/api/settings/providers"),

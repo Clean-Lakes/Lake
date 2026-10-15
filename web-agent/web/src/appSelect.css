@@ -1,0 +1,24 @@
+.app-select { display: block; width: 100%; min-width: 0; margin-top: 7px; }
+.app-select > .app-select-trigger { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; height: 36px; padding: 0 11px; box-sizing: border-box; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--foreground); font: inherit; font-size: 13px; font-weight: 400; text-align: left; cursor: pointer; }
+.app-select > .app-select-trigger:hover:not(:disabled) { border-color: var(--border-strong); }
+.app-select > .app-select-trigger:focus-visible,.app-select > .app-select-trigger[aria-expanded="true"] { outline: 2px solid var(--focus); outline-offset: 2px; }
+.app-select > .app-select-trigger:disabled { cursor: default; opacity: .45; }
+.app-select-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-select-icon { display: flex; flex-shrink: 0; color: var(--text-secondary); }
+.app-select-chevron { flex-shrink: 0; color: var(--text-muted); transition: transform .15s; }
+.app-select-chevron.is-open { transform: rotate(180deg); }
+.app-select-popup { position: fixed; z-index: 120; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; overscroll-behavior: contain; scrollbar-width: thin; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); color: var(--foreground); box-shadow: var(--shadow-popover); font-size: 13px; }
+.app-select-option { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; box-sizing: border-box; padding: 8px 9px; border-radius: var(--radius-control); line-height: 1.45; cursor: pointer; }
+.app-select-option-content { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.app-select-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.app-select-header,.app-select-footer { flex-shrink: 0; }
+.app-select-footer { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
+.app-select-group { padding: 10px 9px 5px; font-size: 11px; color: var(--text-secondary); }
+.app-select-empty { padding: 14px 9px; color: var(--text-secondary); line-height: 1.6; }
+.app-select-option.is-active:not([aria-disabled="true"]) { background: var(--surface-hover); }
+.app-select-option.is-selected { font-weight: 550; }
+.app-select-option[aria-disabled="true"] { color: var(--text-disabled); cursor: default; }
+.app-select-check { display: flex; align-items: center; width: 15px; flex-shrink: 0; }
+.workflow-editor .app-select,.ai-options .app-select,.project-memory-editor .app-select { margin-top: 0; }
+.terminal-action-menu .app-select > .app-select-trigger,.terminal-panel-targets .app-select > .app-select-trigger { height: 28px; font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .app-select-chevron { transition: none; } }

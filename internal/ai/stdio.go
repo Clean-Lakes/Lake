@@ -242,12 +242,22 @@ func (e *Engine) Handle(ctx context.Context, method, id string, data json.RawMes
 		if err := decode(&m); err != nil {
 			return nil, err
 		}
-		m.MaxOutput = 16
+		// Reasoning models need room for hidden thinking even for a short ping.
+		m.MaxOutput = 1024
+		m.ReasoningEffort = ""
+		for _, effort := range reasoningLevels {
+			if ValidReasoningEffort(m, effort) {
+				m.ReasoningEffort = effort
+				break
+			}
+		}
 		m.SupportsImageOutput = false
 		probe, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
-		r, err := Stream(probe, m, []Message{{Role: "user", Content: "ping"}}, nil, nil)
-		_ = r
+		_, err := Stream(probe, m, []Message{{Role: "user", Content: "Reply with only OK."}}, nil, nil)
+		if errors.Is(err, ErrModelOutputLimit) {
+			return map[string]any{"ok": true, "message": "连接成功，模型已响应；测试回复达到输出上限"}, nil
+		}
 		if err != nil {
 			return map[string]any{"ok": false, "message": "模型连接测试失败：" + err.Error()}, nil
 		}

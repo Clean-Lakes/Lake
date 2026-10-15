@@ -205,11 +205,13 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	var directoryAssets []ai.Asset
 	var directories []ai.AssetDirectory
 	importRequest := len(files) > 0 || len(refs) == 0 && (strings.Contains(message, "导入") || strings.Contains(strings.ToLower(message), "import"))
+	targetMessage, resourceRefs, extensionRefs := separateExtensionReferences(message, refs)
+	refs = resourceRefs
 	if !simpleConversation && !importRequest {
 		if options["profile"] == "core" {
 			directoryAssets, directories = b.sessionAssetCatalog(id)
 			directorySnap := b.Store.Snapshot(id)
-			targetScope, refs = b.directoryTurnScope(id, message, refs, directories, objects(directorySnap["resources"]))
+			targetScope, refs = b.directoryTurnScope(id, targetMessage, refs, directories, objects(directorySnap["resources"]))
 		}
 		if targetScope != nil {
 			options = b.configure(id, Object{"asset_ref": "", "terminal_id": "", "terminal_generation": "", "runtime": "local"})
@@ -260,6 +262,7 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	if len(files) > 0 {
 		modelContext += "\n[LAKE_TEXT_FILES]\n" + jsonText(files) + "\nThese are user-selected text attachments. Use preview_resource_import with source_id to inspect connection candidates. Do not read private credential storage or echo credentials."
 	}
+	refs = append(refs, extensionRefs...)
 	e = b.Engine.ChatTurn(turnContext, id, ai.TurnInput{UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
 	if e != nil {
 		if b.Context.Err() != nil {
@@ -307,6 +310,9 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 			}
 		}
 	}()
+	if name == "list_mcp_servers" || name == "list_mcp_tools" || name == "call_mcp_tool" {
+		return b.extensionBridge(ctx, id, name, args, approved)
+	}
 	if projectTool(name) {
 		return b.projectToolBridge(ctx, id, name, args, approved)
 	}

@@ -1,0 +1,108 @@
+{
+  "package": "@lobehub/icons-static-svg",
+  "version": "1.95.1",
+  "source": "https://registry.npmjs.org/@lobehub/icons-static-svg/-/icons-static-svg-1.95.1.tgz",
+  "license": "MIT",
+  "files": [
+    {
+      "file": "openai.svg",
+      "source": "package/icons/openai.svg",
+      "sha256": "a595df6b423920c67a7f8f73c063e4bfb72d415948097b6cac063a2366bb5186"
+    },
+    {
+      "file": "anthropic.svg",
+      "source": "package/icons/anthropic.svg",
+      "sha256": "e833fdfa7e7187a86a05b870925067556a506dcd4239089aed73e1e58c9366a3"
+    },
+    {
+      "file": "gemini.svg",
+      "source": "package/icons/gemini-color.svg",
+      "sha256": "8ab0a9bafec11f7e69bcb9fc4ffd8f1bc927d1ddcbbb6ff36dee5ae8b5a9d602"
+    },
+    {
+      "file": "deepseek.svg",
+      "source": "package/icons/deepseek-color.svg",
+      "sha256": "deba5f98a5c1796e20fcac3149bcd7eb8a32f0bdd04d048819400b1f28bd1439"
+    },
+    {
+      "file": "qwen.svg",
+      "source": "package/icons/qwen-color.svg",
+      "sha256": "77f5768c66d08ce1d3d14e73373975c1bc0454be88c81523ddd0ffd7e2974029"
+    },
+    {
+      "file": "glm.svg",
+      "source": "package/icons/zhipu-color.svg",
+      "sha256": "8174e65ff71647d5c705c920c953a82bd723d9e3e42887bdd4ffc9dfe51207a0"
+    },
+    {
+      "file": "kimi.svg",
+      "source": "package/icons/kimi.svg",
+      "sha256": "ed08131b46acf70e6e2144eceb775e74098b58ea65fa21eaee04be7b05cfe63b"
+    },
+    {
+      "file": "mimo.svg",
+      "source": "package/icons/xiaomimimo.svg",
+      "sha256": "b04ad7dad52af2212c4567daf0ee6856f2c4625c92c680a27f9880295d558b71"
+    },
+    {
+      "file": "minimax.svg",
+      "source": "package/icons/minimax-color.svg",
+      "sha256": "7f7187fa6d9b341ac5f22f6c5a970523afb439dc45566d64eb4f4b9b604d6b01"
+    },
+    {
+      "file": "siliconflow.svg",
+      "source": "package/icons/siliconcloud-color.svg",
+      "sha256": "a02d8d7ccb81739fbc720e2e5daaf149013dd5088605dc2dce1b71df0784d424"
+    },
+    {
+      "file": "openrouter.svg",
+      "source": "package/icons/openrouter.svg",
+      "sha256": "ae671cc83de9bd45db97a47ed5e38a4e1bd9f93a12be495ba4b4f8b284026bca"
+    },
+    {
+      "file": "ollama.svg",
+      "source": "package/icons/ollama.svg",
+      "sha256": "3a268218fb2e6e81fa31df70f70b51331625047794db81db21d35359428fae7a"
+    },
+    {
+      "file": "xai.svg",
+      "source": "package/icons/xai.svg",
+      "sha256": "89eb7de9f0d02a41cfecd9109e253d7fd3529e27467dee4254faa67f3ac21451"
+    },
+    {
+      "file": "meta.svg",
+      "source": "package/icons/meta-color.svg",
+      "sha256": "adf9f2c1a646ccd3a37ca8c2e7e5985d64630cd633f4b95fba393d1d44e0578c"
+    },
+    {
+      "file": "mistral.svg",
+      "source": "package/icons/mistral-color.svg",
+      "sha256": "722f74b289d95486b43662fe24fa883b333701296f618406cd0ed502299170b6"
+    },
+    {
+      "file": "doubao.svg",
+      "source": "package/icons/doubao-color.svg",
+      "sha256": "3cd31ba03ae44b8c29561597a3b863809efecb13fcdfd08407a086df86a69b55"
+    },
+    {
+      "file": "hunyuan.svg",
+      "source": "package/icons/hunyuan-color.svg",
+      "sha256": "510e7bb438506b5aadfaf8b9551d1606efd5b4171161a64a64204c72a453658a"
+    },
+    {
+      "file": "cohere.svg",
+      "source": "package/icons/cohere-color.svg",
+      "sha256": "84d0ee3cbe66f030e5a18cb2c86da9166ab2137c7a98781693bb1fbf31e392b9"
+    },
+    {
+      "file": "stepfun.svg",
+      "source": "package/icons/stepfun-color.svg",
+      "sha256": "f55afc0e6004c8854f76bd5bbcc0fce9fc0ed9316691d54fb02d088c24fab40d"
+    },
+    {
+      "file": "baidu.svg",
+      "source": "package/icons/baidu-color.svg",
+      "sha256": "1059750a2069aec6080ff48732931e87a99bd3d22db3e8471cebe255b6014b75"
+    }
+  ]
+}

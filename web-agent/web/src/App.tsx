@@ -1,3 +1,8 @@
+import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerMentions";
+import {filterMentions,mentionInsertion,mentionOptions,type MentionCategory,type MentionOption} from "./composerMentionState";
+import {ComposerTextInput} from "./ComposerTextInput";
+import {AppSelect} from "./AppSelect";
+import {ComposerModelSelect} from "./ComposerModelSelect";
 import {ProjectSwitcher} from "./ProjectSwitcher";
 import {BulkCheckbox, BulkNavigationDelete, type BulkSelection} from "./BulkNavigationDelete";
 import {addBulkTargets, bulkCatalogTargets, bulkKey, orderBulkDeletion, type BulkTarget, type BulkDeleteResult} from "./bulkNavigation";
@@ -55,7 +60,7 @@ import { CompositionGuard, isSendKey, parseSendShortcut, sendShortcutStorageKey,
 import { HostKeyTrust } from "./HostKeyTrust";
 import { conversationActive, sessionConnection, type StreamState } from "./connection";
 import { FollowScroll } from "./followScroll";
-import { rebaseMentions, referencedResources, type MentionReference } from "../../shared/references";
+import { rebaseMentions, referencedResources, referencedExtensions, type MentionReference } from "../../shared/references";
 import { type CommandPolicy, dangerConfirmation } from "../../shared/command-policy";
 import "./styles.css";
 import "./agentTasks.css";
@@ -181,6 +186,8 @@ function App() {
     try { return parseSendShortcut(localStorage.getItem(sendShortcutStorageKey)); } catch { return "enter"; }
   });
   useEffect(() => { try { localStorage.setItem(sendShortcutStorageKey, sendShortcut); } catch {} }, [sendShortcut]);
+  const [completionEnabled,setCompletionEnabled] = useState(() => {try {return localStorage.getItem("lake.composer-completion")!=="off";} catch {return true;}});
+  useEffect(() => {try {localStorage.setItem("lake.composer-completion",completionEnabled?"on":"off");} catch {}},[completionEnabled]);
   const sendShortcutLabel = sendShortcut === "command-enter" ? "Command / Ctrl + Enter" : "Enter";
   const [navigationDelete,setNavigationDelete]=useState<NavigationDeleteTarget|null>(null);
   const [bulkMode, setBulkMode] = useState(false);
@@ -220,10 +227,6 @@ function App() {
   const permissionButtonRef = useRef<HTMLButtonElement>(null);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [modelMenu, setModelMenu] = useState<AvailableModels & { loading: boolean }>({ loading: false, models: [], message: "" });
-  const [modelSearch,setModelSearch] = useState("");
-  const visibleModelEntries=modelMenu.entries?.filter(entry => `${entry.displayName} ${entry.name} ${entry.providerName}`.toLowerCase().includes(modelSearch.trim().toLowerCase()));
-  const visibleModelNames=modelMenu.models.filter(name => name.toLowerCase().includes(modelSearch.trim().toLowerCase()));
-  const modelMenuRef = useRef<HTMLDivElement>(null);
   const [mention, setMention] = useState<{ query: string; index: number } | null>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const [pendingOperation, setPendingOperation] = useState("");
@@ -538,6 +541,7 @@ function App() {
     setAgentOptionsOpen(false);
     setPermissionsOpen(false);
     setMentionRefs([]);
+    setMention(null);
   }, [sessionId]);
 
   const refreshResourceTerminal = useCallback(async (signal?: AbortSignal) => {
@@ -621,25 +625,6 @@ function App() {
   const selectedSession = activeSnapshot?.session ?? catalog?.sessions.find(item => item.id === sessionId);
   const selectedResource = catalog?.resources.find(item => item.id === route.resourceId);
   const selectedProjectId = selectedResource?.projectId ?? selectedSession?.projectId;
-  useLayoutEffect(() => {
-    const input = messageInputRef.current;
-    if (!input) return;
-    const resize = () => {
-      input.style.height = "0px";
-      const height = input.scrollHeight;
-      input.style.height = `${Math.min(160, Math.max(30, height))}px`;
-      input.style.overflowY = height > 160 ? "auto" : "hidden";
-    };
-    resize();
-    let width = input.clientWidth;
-    const observer = new ResizeObserver(() => {
-      if (input.clientWidth === width) return;
-      width = input.clientWidth;
-      resize();
-    });
-    observer.observe(input);
-    return () => observer.disconnect();
-  }, [messageDraft, sessionId, selectedSession?.id]);
   useEffect(() => {
     if (selectedProjectId) setSidebarProjectId(selectedProjectId);
   }, [selectedProjectId]);
@@ -787,11 +772,11 @@ function App() {
   const openSettings = useCallback(() => {setSettingsOpen(true);}, []);
   async function openModelMenu() {
     if (modelMenuOpen) { setModelMenuOpen(false); return; }
-    setModelSearch("");
     setModelMenuOpen(true);
-    setModelMenu({ loading: true, models: [], message: "" });
+    setModelMenu(current=>({...current,loading:true,message:""}));
     try {
-      const available = await api.availableModels();
+      const [available,current] = await Promise.all([api.availableModels(),api.bootstrap()]);
+      setBootstrap(current);
       setModelMenu({ ...available, loading: false });
     } catch (error) {setModelMenu({ loading: false, models: [], message: readableError(error) });}
   }
@@ -807,16 +792,6 @@ function App() {
     } catch (error) {notify(readableError(error));}
     finally {setPendingOperation("");}
   }
-  useEffect(() => {
-    if (!modelMenuOpen) return;
-    const onDown = (event: MouseEvent) => {
-      if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) setModelMenuOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setModelMenuOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
-  }, [modelMenuOpen]);
   async function refreshBootstrap() {
     try { setBootstrap(await api.bootstrap()); } catch { /* The banner keeps its last known state. */ }
   }
@@ -894,27 +869,24 @@ function App() {
     setSnapshot(current => current?.session.id === saved.id ? {...current, session: {...current.session, title: saved.title, updatedAt: saved.updatedAt}} : current);
     notify("会话名称已更新");
   }
-  /** Resources the composer can reference with "@". */
+  /** Only explicitly selected, enabled extensions become message references. */
   const mentionable = sessionId ? (activeSnapshot?.resources ?? catalog?.resources.filter(resource => resource.projectId === selectedSession?.projectId) ?? []) : [];
-  const mentionMatches = mention
-    ? mentionable.filter(resource => resource.name.toLowerCase().includes(mention.query.toLowerCase())).slice(0, 40)
-    : [];
+  const [mentionCategory,setMentionCategory]=useState<MentionCategory>("all");
+  const mentionExtensions=useMentionExtensions(!!mention,sessionId);
+  const allMentionOptions=mentionOptions(mentionable,mentionExtensions.skills,mentionExtensions.servers);
+  const mentionMatches=mention?filterMentions(allMentionOptions,mention.query,mentionCategory):[];
+  const mentionIndex=Math.min(mention?.index??0,Math.max(0,mentionMatches.length-1));
   function syncMention(value: string, caret: number) {
     const token = value.slice(0, caret).match(/(?:^|\s)@([^\s@]*)$/);
+    if(token&&!mention)setMentionCategory("all");
     setMention(token ? { query: token[1] ?? "", index: 0 } : null);
   }
-  function insertMention(resource: Resource) {
-    const input = messageInputRef.current;
-    const caret = input?.selectionStart ?? messageDraft.length;
-    const before = messageDraft.slice(0, caret);
-    const token = before.match(/(?:^|\s)@([^\s@]*)$/);
-    const head = token ? before.slice(0, before.length - token[0].length) + (token[0].startsWith(" ") ? " " : "") : before;
-    const next = `${head}@${resource.name} ${messageDraft.slice(caret)}`;
-    setMentionRefs(refs => [...rebaseMentions(messageDraft, next, refs), { resourceId: resource.id, label: `@${resource.name}`, start: head.length, end: head.length + resource.name.length + 1 }]);
-    setMessageDraft(next);
-    setMention(null);
-    const position = head.length + resource.name.length + 2;
-    requestAnimationFrame(() => { input?.focus(); input?.setSelectionRange(position, position); });
+  function insertMention(option: MentionOption) {
+    const input=messageInputRef.current;
+    const {next,position,reference}=mentionInsertion(messageDraft,input?.selectionStart??messageDraft.length,option);
+    setMentionRefs(refs=>[...rebaseMentions(messageDraft,next,refs),reference]);
+    setMessageDraft(next);setMention(null);
+    requestAnimationFrame(()=>{input?.focus();input?.setSelectionRange(position,position);});
   }
   /** Resource ids whose "@name" still appears in the draft, so deleting the text drops the reference. */
   function mentionedResourceIds(_text: string) {
@@ -960,7 +932,7 @@ function App() {
     conversationScroll.current.following = true;
     try {
       const refs = mentionedResourceIds(text);
-      const result=await api.sendMessage(targetSession, text, refs, imageDraft, [], undefined, fileDraft, queueMode, ignoreProjectMemory);
+      const result=await api.sendMessage(targetSession, text, refs, imageDraft, referencedExtensions(messageDraft,mentionRefs), undefined, fileDraft, queueMode, ignoreProjectMemory);
       if (result.queued) notify("已加入待发送队列");
       if (activeSession.current === targetSession) {
         setMessageDraft("");
@@ -1230,7 +1202,7 @@ function App() {
         <button type="button" className="icon-button" aria-label="收起终端" title="收起终端，保留连接" onClick={closeTerminalPanel}><Glyph name="close" size={17}/></button>
       </div>
       {terminalOptionsOpen && <div className="terminal-action-menu">
-        <label>本地 Shell<select value={localShell} onChange={event => setLocalShell(event.target.value)}>{["bash","zsh","sh","fish"].map(shell => <option key={shell}>{shell}</option>)}</select></label>
+        <label>本地 Shell<AppSelect value={localShell} onChange={event => setLocalShell(event.target.value)}>{["bash","zsh","sh","fish"].map(shell => <option key={shell}>{shell}</option>)}</AppSelect></label>
         <button type="button" disabled={!currentTerminal || currentTerminal.status !== "ready" || currentTerminal.holder !== "user"} onClick={() => { setTerminalOptionsOpen(false); setCommandEditorOpen(true); }}>运行完整命令…</button>
         {!terminalContext && currentTerminal?.holder === "user" && currentTerminal.status === "ready" && <button type="button" onClick={() => { setTerminalOptionsOpen(false); void changeHolder("agent"); }}>交给终端专员</button>}
         {currentTerminal?.status === "busy" && <button type="button" onClick={() => { setTerminalOptionsOpen(false); void interruptTerminal(); }}>中断命令</button>}
@@ -1346,31 +1318,20 @@ function App() {
           </div> : <div className="timeline-empty"><div className="empty-icon"><Glyph name="chat" size={25}/></div><h2>从一个问题开始</h2><p>描述你看到的故障或想核实的现象。Lake 会把调查过程、证据和需要确认的操作留在这里。</p>{!modelConfigured && <span className="empty-hint">配置 Agent 模型后可发送第一条消息。</span>}</div>}
         </section>
         <div className="composer-dock">{activeSnapshot?.ai && <AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/>}<PendingMessages key={sessionId} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/><form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">给 Lake 的消息</label><div className="composer-input">
-          {mention && <div className="mention-menu" role="listbox" aria-label="引用资源">
-            <span className="mention-head">引用资源</span>
-            {mentionMatches.map((resource, index) => <button type="button" role="option" aria-selected={index === mention.index} key={resource.id} className={`mention-item ${index === mention.index ? "selected" : ""}`} onMouseDown={event => event.preventDefault()} onClick={() => insertMention(resource)}><Glyph name="server" size={14}/><span>{resource.name}</span><small>{resource.status === "available" ? "可用" : "不可用"}</small></button>)}
-            <button type="button" role="option" aria-selected={false} className="mention-item" onMouseDown={event => event.preventDefault()} onClick={() => { const target = projectList.find(item => item.id === selectedSession?.projectId); setMention(null); if (target) { setImportHexhub(true); setImportProject(target); } }}><Glyph name="plus" size={14}/><span>从 HexHub 导入资源</span><small>本机 MCP</small></button>
-          </div>}
-          {fileDraft.length > 0 && <div className="text-file-drafts">{fileDraft.map(file => <span key={file.sourceId}>{file.name}<button type="button" aria-label={`移除 ${file.name}`} onClick={() => setFileDraft(files => files.filter(item => item.sourceId !== file.sourceId))}>×</button></span>)}</div>}{imageDraft.length > 0 && <div className="image-drafts">{imageDraft.map(image => <figure key={image.id}><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "待发送图片"}/><figcaption title={image.name}>{image.name || "剪贴板图片"}</figcaption><button type="button" aria-label={`移除 ${image.name || "图片"}`} onClick={() => setImageDraft(images => images.filter(item => item.id !== image.id))}>×</button></figure>)}</div>}{mentionRefs.length > 0 && <div className="reference-chips">{mentionRefs.map(ref => <span key={`${ref.resourceId}:${ref.start}`}>{ref.label}</span>)}</div>}{imageDraft.length > 0 && !bootstrap?.supportsImageInput && <p className="composer-image-hint" role="status">当前模型不接受图片输入，请切换模型或在模型设置中手动调整。</p>}<div className="composer-body"><textarea id="message-input" ref={messageInputRef} rows={1} placeholder={!modelConfigured ? "配置 Agent 模型后即可开始对话" : queueMode ? "继续输入，发送后加入待发送队列…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : "向 Lake 描述问题，输入 @ 可引用资源…"} value={messageDraft} onPaste={event => { const images = clipboardImageFiles(event.clipboardData); if (!images.length) return; event.preventDefault(); void attachFiles(images); }} onChange={event => { setMentionRefs(refs => rebaseMentions(messageDraft, event.target.value, refs)); setMessageDraft(event.target.value); syncMention(event.target.value, event.target.selectionStart ?? event.target.value.length); }} disabled={!sessionConnected || !modelConfigured || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
+          {mention && <ComposerMentions options={mentionMatches} allOptions={allMentionOptions} index={mentionIndex} category={mentionCategory} onCategory={kind=>{setMentionCategory(kind);setMention({...mention,index:0});}} onSelect={insertMention} loading={mentionExtensions.loading} error={mentionExtensions.error} onReload={mentionExtensions.reload} onClose={()=>setMention(null)} onImport={()=>{const target=projectList.find(item=>item.id===selectedSession?.projectId);setMention(null);if(target){setImportHexhub(true);setImportProject(target);}}}/>}
+          {fileDraft.length > 0 && <div className="text-file-drafts">{fileDraft.map(file => <span key={file.sourceId}>{file.name}<button type="button" aria-label={`移除 ${file.name}`} onClick={() => setFileDraft(files => files.filter(item => item.sourceId !== file.sourceId))}>×</button></span>)}</div>}{imageDraft.length > 0 && <div className="image-drafts">{imageDraft.map(image => <figure key={image.id}><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "待发送图片"}/><figcaption title={image.name}>{image.name || "剪贴板图片"}</figcaption><button type="button" aria-label={`移除 ${image.name || "图片"}`} onClick={() => setImageDraft(images => images.filter(item => item.id !== image.id))}>×</button></figure>)}</div>}{mentionRefs.length > 0 && <div className="reference-chips">{mentionRefs.map(ref => <span key={`${ref.kind??"resource"}:${ref.resourceId}:${ref.start}`}><Glyph name={ref.kind==="skill"?"book":ref.kind==="mcp"?"plug":"server"} size={12}/>{ref.label}{ref.kind&&ref.kind!=="resource"&&<small>{ref.kind==="skill"?"Skill":"MCP"}</small>}</span>)}</div>}{imageDraft.length > 0 && !bootstrap?.supportsImageInput && <p className="composer-image-hint" role="status">当前模型不接受图片输入，请切换模型或在模型设置中手动调整。</p>}<div className="composer-body"><ComposerTextInput key={sessionId} sessionId={sessionId!} modelId={bootstrap?.modelId??undefined} modelSource={bootstrap?.modelSelection?.providerId} history={(activeSnapshot?.messages??[]).filter(message=>message.role==="user").slice(-8).map(message=>message.text)} completionBlocked={!!mention||!completionEnabled} onComplete={next=>{setMentionRefs(refs=>rebaseMentions(messageDraft,next,refs));setMessageDraft(next);syncMention(next,next.length);}} id="message-input" ref={messageInputRef} rows={1} role="combobox" aria-haspopup="listbox" aria-autocomplete={mention?"list":"inline"} aria-expanded={!!mention} aria-controls={mention?"composer-mention-options":undefined} aria-activedescendant={mention&&mentionMatches[mentionIndex]?mentionOptionId(mentionMatches[mentionIndex]!):undefined} placeholder={!modelConfigured ? "配置 Agent 模型后即可开始对话" : queueMode ? "继续输入，发送后加入待发送队列…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : "向 Lake 描述问题，输入 @ 引用资源、Skills 或 MCP…"} value={messageDraft} onPaste={event => { const images = clipboardImageFiles(event.clipboardData); if (!images.length) return; event.preventDefault(); void attachFiles(images); }} onChange={event => { setMentionRefs(refs => rebaseMentions(messageDraft, event.target.value, refs)); setMessageDraft(event.target.value); syncMention(event.target.value, event.target.selectionStart ?? event.target.value.length); }} disabled={!sessionConnected || !modelConfigured || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
             if (messageComposition.current.ignores(event.nativeEvent)) return;
-            if (mention && mentionMatches.length) {
-              if (event.key === "ArrowDown") { event.preventDefault(); setMention({ ...mention, index: (mention.index + 1) % mentionMatches.length }); return; }
-              if (event.key === "ArrowUp") { event.preventDefault(); setMention({ ...mention, index: (mention.index - 1 + mentionMatches.length) % mentionMatches.length }); return; }
-              if ((event.key === "Enter" || event.key === "Tab") && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { event.preventDefault(); insertMention(mentionMatches[Math.min(mention.index, mentionMatches.length - 1)]!); return; }
+            if (mention) {
+              if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setMention(null); return; }
+              if (!mentionMatches.length) { if(event.key==="Enter")event.preventDefault(); return; }
+              if (event.key === "ArrowDown") { event.preventDefault(); setMention({ ...mention, index: (mentionIndex + 1) % mentionMatches.length }); return; }
+              if (event.key === "ArrowUp") { event.preventDefault(); setMention({ ...mention, index: (mentionIndex - 1 + mentionMatches.length) % mentionMatches.length }); return; }
+              if ((event.key === "Enter" || event.key === "Tab") && !event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { event.preventDefault(); insertMention(mentionMatches[mentionIndex]!); return; }
               if (event.key === "Escape") { event.preventDefault(); setMention(null); return; }
             }
             if (isSendKey(event.nativeEvent, sendShortcut)) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); }
-          }}/><div className="composer-send-actions">{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止本轮" title="停止本轮，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${turnActive && !hasMessageDraft ? " stop-button" : ""}`} type={turnActive && !hasMessageDraft ? "button" : "submit"} aria-label={turnActive && !hasMessageDraft ? "停止本轮" : queueMode ? "挂起消息" : "发送消息"} title={turnActive && !hasMessageDraft ? "停止本轮" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`} aria-busy={stoppingTurn} onClick={turnActive && !hasMessageDraft ? () => void stopCurrentTurn() : undefined} disabled={turnActive && !hasMessageDraft ? stoppingTurn || !sessionConnected : !hasMessageDraft || !sessionConnected || !modelConfigured || !!pendingOperation || stoppingTurn || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)}><Glyph name={turnActive && !hasMessageDraft ? "stop" : "return"} size={16}/></button></div></div></div><div className="composer-foot"><input ref={attachmentInputRef} className="visually-hidden" type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加文本文件或图片" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}>权限</button>}<div className="composer-status"><div className="model-switch-wrap" ref={modelMenuRef}>
-          <button type="button" className={`model-switch ${modelConfigured ? "" : "model-missing"}`} title={bootstrap?.modelName??"选择模型"} aria-label={modelConfigured ? `选择模型：${bootstrap?.modelName??"已配置"}` : "选择模型"} onClick={() => void openModelMenu()} aria-haspopup="menu" aria-expanded={modelMenuOpen}><span>{modelConfigured ? (bootstrap?.modelName?.split("/").pop() ?? "已配置") : "选择模型"}</span><Glyph name="chevron" size={13} className={modelMenuOpen ? "chevron-open" : ""}/></button>
-          {modelMenuOpen && <div className="model-menu" role="menu" aria-label="切换模型">
-            <span className="model-menu-head">选择模型</span>{!modelMenu.loading && modelMenu.models.length > 8 && <input className="model-menu-search" aria-label="搜索模型" placeholder="搜索模型…" value={modelSearch} onChange={event => setModelSearch(event.target.value)}/>}
-            {modelMenu.loading && <p className="model-menu-note">正在获取可用模型…</p>}
-            {!modelMenu.loading && visibleModelEntries && [...new Set(visibleModelEntries.map(entry => entry.providerId))].map(providerId => <div key={providerId} role="group" aria-label={visibleModelEntries!.find(entry => entry.providerId===providerId)!.providerName}><div className="model-menu-provider">{visibleModelEntries!.find(entry => entry.providerId===providerId)!.providerName}</div>{visibleModelEntries!.filter(entry => entry.providerId===providerId).map(entry => {const active=entry.providerId===modelMenu.activeProviderId && entry.modelId===modelMenu.activeModelId;return <button type="button" role="menuitemradio" aria-checked={active} key={entry.modelId} className={`model-menu-item ${active ? "selected" : ""}`} onClick={() => void switchModel(entry)} disabled={!!pendingOperation}><span>{entry.displayName}</span>{active && <Glyph name="check" size={14}/>}</button>;})}</div>)}
-            {!modelMenu.loading && !modelMenu.entries && visibleModelNames.map(model => <button type="button" role="menuitemradio" aria-checked={model===bootstrap?.modelName} key={model} className={`model-menu-item ${model===bootstrap?.modelName ? "selected" : ""}`} onClick={() => void switchModel(model)} disabled={!!pendingOperation}><span>{model}</span>{model===bootstrap?.modelName && <Glyph name="check" size={14}/>}</button>)}
-            {!modelMenu.loading && modelMenu.message && (modelMenu.source==="magpie" || !modelMenu.models.length) && <p className="model-menu-note">{modelMenu.message}</p>}
-            <div className="model-menu-sep"/>
-            <button type="button" role="menuitem" className="model-menu-item" onClick={() => { setModelMenuOpen(false); void openSettings(); }}><span>模型设置…</span><Glyph name="settings" size={14}/></button>
-          </div>}
+          }}/><div className="composer-send-actions">{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止本轮" title="停止本轮，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${turnActive && !hasMessageDraft ? " stop-button" : ""}`} type={turnActive && !hasMessageDraft ? "button" : "submit"} aria-label={turnActive && !hasMessageDraft ? "停止本轮" : queueMode ? "挂起消息" : "发送消息"} title={turnActive && !hasMessageDraft ? "停止本轮" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`} aria-busy={stoppingTurn} onClick={turnActive && !hasMessageDraft ? () => void stopCurrentTurn() : undefined} disabled={turnActive && !hasMessageDraft ? stoppingTurn || !sessionConnected : !hasMessageDraft || !sessionConnected || !modelConfigured || !!pendingOperation || stoppingTurn || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)}><Glyph name={turnActive && !hasMessageDraft ? "stop" : "return"} size={16}/></button></div></div></div><div className="composer-foot"><input ref={attachmentInputRef} className="visually-hidden" type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加文本文件或图片" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}>权限</button>}<div className="composer-status"><div className="model-switch-wrap">
+          <ComposerModelSelect available={modelMenu} modelName={bootstrap?.modelName??null} selection={bootstrap?.modelSelection??undefined} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void switchModel(model)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}}/>
         </div>{activeSnapshot?.ai && <ReasoningSelector key={sessionId} session={sessionId} modelId={bootstrap?.modelId} disabled={!sessionConnected || turnActive || !!pendingOperation} onSaving={saving => setPendingOperation(current => saving ? "reasoning" : current === "reasoning" ? "" : current)}/>}{activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} compact/>}</div></div></form></div>
       </div> : <div className="welcome-view"><div className="welcome-content"><Brand/><h1>今天要处理什么问题？</h1><p>从项目开始一段会话。Lake 会把调查、证据和需要你确认的操作留在对话中。</p>{!projectList.length ? <button className="button primary" disabled={!connected} onClick={openProjectDialog}>创建第一个项目<Glyph name="arrow" size={17}/></button> : <button className="button primary" disabled={!connected} onClick={() => openSessionDialog(sidebarProject?.id??projectList[0].id)}>开始新会话<Glyph name="arrow" size={17}/></button>}</div></div>}
     </main>
@@ -1396,13 +1357,13 @@ function App() {
     {bulkConfirmation && <BulkNavigationDelete targets={bulkConfirmation} onClose={() => setBulkConfirmation(null)} onProcessed={bulkProcessed} onBusy={busy => setPendingOperation(current => busy ? "bulk-delete" : current === "bulk-delete" ? "" : current)}/>}
     {navigationDelete && <NavigationDelete target={navigationDelete} onClose={()=>setNavigationDelete(null)} onDeleted={async()=>{setResourceTerminalMenu(null);if(navigationDelete.kind==="project" && selectedSession?.projectId===navigationDelete.id)navigate({sessionId:null,resourceId:null});else if(navigationDelete.kind==="resource"&&route.resourceId===navigationDelete.id)navigate({sessionId:route.sessionId,resourceId:null});await refreshCatalog();if(navigationDelete.kind!=="project")await refreshCurrent();}}/>}
     {trashOpen && <NavigationTrash onClose={()=>setTrashOpen(false)} onRestored={async()=>{await refreshCatalog();await refreshCurrent();}}/>}
-    {settingsOpen && <ModelSettings onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined} onProjectMemory={selectedProjectId ? () => {const project=projectList.find(p=>p.id===selectedProjectId);if(project){setSettingsOpen(false);setMemoryProject(project);}} : undefined} projectName={projectList.find(p=>p.id===selectedProjectId)?.name} ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>}
+    {settingsOpen && <ModelSettings onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined} onProjectMemory={selectedProjectId ? () => {const project=projectList.find(p=>p.id===selectedProjectId);if(project){setSettingsOpen(false);setMemoryProject(project);}} : undefined} projectName={projectList.find(p=>p.id===selectedProjectId)?.name} ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>}
     {importProject && <ResourceImport project={importProject} hexhub={importHexhub} refresh={refreshCatalog} onClose={() => { setImportProject(null); setImportHexhub(false); }} onImported={notify}/>}
-    {sshProject && <div className="modal-scrim"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="ssh-title"><div className="modal-header"><span className="modal-icon"><Glyph name="server" size={20}/></span><button className="icon-button" aria-label="关闭" disabled={sshBusy} onClick={() => { setSshProject(null); setSshDraft(emptySSH()); }}><Glyph name="close"/></button></div><h2 id="ssh-title">新建资源</h2><p className="modal-description">添加 SSH 主机、数据库、Redis 或 Docker，供项目会话使用。</p><form onSubmit={createSsh}><label className="field-label">类型<select value={resourceKind} onChange={event => { setResourceKind(event.target.value); setSshDraft(current => ({...current, password: "", passphrase: "", privateKey: undefined, identityFile: undefined})); setServiceSettings(v => ({ ...v, port: event.target.value === "redis" ? 6379 : 5432 })); }}>{[["ssh", "SSH 主机"], ["database", "数据库"], ["docker", "Docker"], ["redis", "Redis"]].map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}</select></label>
+    {sshProject && <div className="modal-scrim"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="ssh-title"><div className="modal-header"><span className="modal-icon"><Glyph name="server" size={20}/></span><button className="icon-button" aria-label="关闭" disabled={sshBusy} onClick={() => { setSshProject(null); setSshDraft(emptySSH()); }}><Glyph name="close"/></button></div><h2 id="ssh-title">新建资源</h2><p className="modal-description">添加 SSH 主机、数据库、Redis 或 Docker，供项目会话使用。</p><form onSubmit={createSsh}><label className="field-label">类型<AppSelect value={resourceKind} onChange={event => { setResourceKind(event.target.value); setSshDraft(current => ({...current, password: "", passphrase: "", privateKey: undefined, identityFile: undefined})); setServiceSettings(v => ({ ...v, port: event.target.value === "redis" ? 6379 : 5432 })); }}>{[["ssh", "SSH 主机"], ["database", "数据库"], ["docker", "Docker"], ["redis", "Redis"]].map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}</AppSelect></label>
       <label className="field-label">资源名称<input required maxLength={120} value={sshName} onChange={event => setSshName(event.target.value)} autoFocus/></label>
 {resourceKind === "ssh" ? <SSHResourceFields value={sshDraft} onChange={setSshDraft} disabled={sshBusy}/> : <>
-        {resourceKind === "database" && <label className="field-label">数据库类型<select value={serviceSettings.driver} onChange={event => setServiceSettings({ ...serviceSettings, driver: event.target.value, port: event.target.value === "mysql" ? 3306 : 5432 })}><option value="postgres">PostgreSQL</option><option value="mysql">MySQL</option><option value="sqlite">SQLite</option></select></label>}
-        {resourceKind === "docker" ? <><label className="field-label">Docker 端点<input value={serviceSettings.endpoint} onChange={event => setServiceSettings({ ...serviceSettings, endpoint: event.target.value })}/></label><label className="field-label">或使用 SSH 主机<select value={serviceSettings.ssh_asset_ref} onChange={event => setServiceSettings({ ...serviceSettings, ssh_asset_ref: event.target.value })}><option value="">直接连接端点</option>{catalog.resources.filter(r => r.projectId === sshProject && r.kind === "ssh").map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label></> : resourceKind === "database" && serviceSettings.driver === "sqlite" ? <label className="field-label">SQLite 文件绝对路径<input required value={serviceSettings.path} onChange={event => setServiceSettings({ ...serviceSettings, path: event.target.value })}/></label> : <><label className="field-label">主机地址<input required value={serviceSettings.host} onChange={event => setServiceSettings({ ...serviceSettings, host: event.target.value })}/></label><label className="field-label">端口<input type="number" min={1} max={65535} value={serviceSettings.port} onChange={event => setServiceSettings({ ...serviceSettings, port: Number(event.target.value) })}/></label>{resourceKind === "database" && <><label className="field-label">用户名<input value={serviceSettings.username} onChange={event => setServiceSettings({ ...serviceSettings, username: event.target.value })}/></label><label className="field-label">数据库<input value={serviceSettings.database} onChange={event => setServiceSettings({ ...serviceSettings, database: event.target.value })}/></label></>}<label className="field-label">凭据 JSON 文件引用<input value={serviceSettings.credentialRef} onChange={event => setServiceSettings({ ...serviceSettings, credentialRef: event.target.value })} placeholder="~/.lake/secrets/ 下的文件名"/></label><label className="check-row"><input type="checkbox" checked={serviceSettings.tls} onChange={event => setServiceSettings({ ...serviceSettings, tls: event.target.checked })}/>验证 TLS 证书</label><p className="settings-note">凭据文件填写 username / password，权限须为 0600。凭据不会返回页面或写入模型上下文。</p></>}
+        {resourceKind === "database" && <label className="field-label">数据库类型<AppSelect value={serviceSettings.driver} onChange={event => setServiceSettings({ ...serviceSettings, driver: event.target.value, port: event.target.value === "mysql" ? 3306 : 5432 })}><option value="postgres">PostgreSQL</option><option value="mysql">MySQL</option><option value="sqlite">SQLite</option></AppSelect></label>}
+        {resourceKind === "docker" ? <><label className="field-label">Docker 端点<input value={serviceSettings.endpoint} onChange={event => setServiceSettings({ ...serviceSettings, endpoint: event.target.value })}/></label><label className="field-label">或使用 SSH 主机<AppSelect value={serviceSettings.ssh_asset_ref} onChange={event => setServiceSettings({ ...serviceSettings, ssh_asset_ref: event.target.value })}><option value="">直接连接端点</option>{catalog.resources.filter(r => r.projectId === sshProject && r.kind === "ssh").map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</AppSelect></label></> : resourceKind === "database" && serviceSettings.driver === "sqlite" ? <label className="field-label">SQLite 文件绝对路径<input required value={serviceSettings.path} onChange={event => setServiceSettings({ ...serviceSettings, path: event.target.value })}/></label> : <><label className="field-label">主机地址<input required value={serviceSettings.host} onChange={event => setServiceSettings({ ...serviceSettings, host: event.target.value })}/></label><label className="field-label">端口<input type="number" min={1} max={65535} value={serviceSettings.port} onChange={event => setServiceSettings({ ...serviceSettings, port: Number(event.target.value) })}/></label>{resourceKind === "database" && <><label className="field-label">用户名<input value={serviceSettings.username} onChange={event => setServiceSettings({ ...serviceSettings, username: event.target.value })}/></label><label className="field-label">数据库<input value={serviceSettings.database} onChange={event => setServiceSettings({ ...serviceSettings, database: event.target.value })}/></label></>}<label className="field-label">凭据 JSON 文件引用<input value={serviceSettings.credentialRef} onChange={event => setServiceSettings({ ...serviceSettings, credentialRef: event.target.value })} placeholder="~/.lake/secrets/ 下的文件名"/></label><label className="check-row"><input type="checkbox" checked={serviceSettings.tls} onChange={event => setServiceSettings({ ...serviceSettings, tls: event.target.checked })}/>验证 TLS 证书</label><p className="settings-note">凭据文件填写 username / password，权限须为 0600。凭据不会返回页面或写入模型上下文。</p></>}
       </>}      {sshError && <p className="form-error" role="alert">{sshError}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => { setSshProject(null); setSshDraft(emptySSH()); }} disabled={sshBusy}>取消</button><button type="submit" className="button primary" disabled={sshBusy}>{sshBusy ? "正在添加…" : "添加资源"}</button></div>
     </form></div></div>}
     {dialog && <div className="modal-scrim" onMouseDown={event => { if (event.target === event.currentTarget && !dialogBusy) setDialog(null); }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="create-dialog-title"><div className="modal-header"><span className="modal-icon"><Glyph name={dialog.kind === "project" ? "layers" : "chat"} size={20}/></span><button className="icon-button" aria-label="关闭" onClick={() => setDialog(null)} disabled={dialogBusy}><Glyph name="close"/></button></div><h2 id="create-dialog-title">{dialog.kind === "project" ? "新建项目" : "开启新会话"}</h2><p className="modal-description">{dialog.kind === "project" ? "将相关会话和资源放在同一个项目下。" : "名称会根据对话内容自动生成，可通过 @ 引用项目中的任意资源。"}</p><form onSubmit={submitDialog}>

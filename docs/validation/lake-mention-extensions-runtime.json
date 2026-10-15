@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-15",
+  "feature": "Chat @ selection for resources, enabled Skills and MCP services",
+  "verified": [
+    "Shared mention menu contains All, Resources, Skills and MCP categories, counts, search, Glyph icons and type labels.",
+    "ArrowDown selects a Skill; Tab inserts it without sending. Selecting the MCP category and pressing Enter inserts the MCP reference without sending.",
+    "One message can select both a Skill and MCP. Actual loopback Agent execution loads service-check, discovers the selected service and waits for approval before echo invocation. Approving returns mention-ok.",
+    "Empty search results prevent Enter from sending a message; Escape closes an empty result menu.",
+    "Only selected stable identifiers become references. Edited/deleted mentions are removed, same-name resources and services remain distinct, and UTF-16 offsets survive leading whitespace and emoji.",
+    "Server resolves trusted metadata, ignores forged content/instructions, rejects disabled/deleted extensions and does not attach MCP credentials to references.",
+    "Extension selection preserves the previously selected resource/directory scope and does not grant tool execution permission.",
+    "Queued messages preserve canonical references; editing can remove them. Disabling a Skill before dispatch pauses the queue without executing it.",
+    "Light and dark themes render correctly. At 430x840, document width is 430 and the menu spans x=36..394, within the viewport.",
+    "Signed installed Lake Dev relaunched successfully. Native @ menu shows all 133 existing resources and empty Skills/MCP categories; MCP empty state verified. Test @ removed and original empty draft restored without sending messages."
+  ],
+  "tests": {
+    "frontend": "153 tests passed",
+    "typescript": "Passed standalone check and production build",
+    "go_targeted": "Extension reference, queue and resource scope race tests passed",
+    "go_full": "go test -race ./internal/web ./internal/ai passed; web 112.351s, ai 28.524s",
+    "desktop": "scripts/build_lake_desktop.sh --dev --install succeeded; strict deep codesign verification passed"
+  },
+  "environment": "Browser call-chain verification uses an explicit isolated temporary home, local SDK MCP fixture and local model fixture. No external model or remote SSH requests. Release app/data untouched. Test tab and fixture closed; viewport override reset.",
+  "screenshots": [
+    "lake-mention-extensions.png",
+    "lake-mention-extensions-mobile.png",
+    "lake-mention-extensions-dark.png"
+  ]
+}
