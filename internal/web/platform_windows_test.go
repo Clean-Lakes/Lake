@@ -83,7 +83,7 @@ func TestWindowsSSHPasswordConPTYHandshake(t *testing.T) {
 					request.Reply(false, nil)
 					return
 				}
-				marker := regexp.MustCompile(`LAKE_(?:FRAME_)?READY_([a-zA-Z0-9_-]+)`).FindStringSubmatch(payload.Command)
+				marker := regexp.MustCompile(`LAKE_FRAME_READY_([a-zA-Z0-9_-]+)`).FindStringSubmatch(payload.Command)
 				if len(marker) != 2 {
 					request.Reply(false, nil)
 					return
@@ -93,6 +93,10 @@ func TestWindowsSSHPasswordConPTYHandshake(t *testing.T) {
 				if strings.Contains(payload.Command, "LAKE_FRAME_READY_") {
 					frame = consoleFramePrefix + "READY_" + marker[1] + "\a"
 					frame += consoleHookPrefix + "9003;0;/root/remote dir\a"
+				}
+				if strings.Contains(payload.Command, "LAKE_READY_HOOK_") {
+					// A renderer may retain only the last title in this batch.
+					frame = consoleReadyHookPrefix + marker[1] + ";9003;0;/root/remote dir\a"
 				}
 				channel.Write([]byte(frame))
 			}

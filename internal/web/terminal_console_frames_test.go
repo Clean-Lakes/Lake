@@ -62,6 +62,32 @@ func TestConsoleFramesRoundTripEveryByteBoundary(t *testing.T) {
 	}
 }
 
+func TestConsoleCoalescedStartupTitleRetainsNonceAndCwd(t *testing.T) {
+	// The standalone READY title was dropped; only the final cwd title remains.
+	data := consoleReadyHookPrefix + "fixture;9003;0;/root/中文 dir\x1b\\prompt"
+	want := "\x1eLAKE_READY_fixture\x1f\x1b]9003;0;/root/中文 dir\aprompt"
+	for split := 0; split <= len(data); split++ {
+		var decoder consoleFrameDecoder
+		got := decoder.feed(data[:split], false) + decoder.feed(data[split:], true)
+		if got != want {
+			t.Fatalf("coalesced startup split %d lost readiness or cwd", split)
+		}
+		// Later prompts still update cwd without leaking repeated READY markers.
+		if got := decoder.feed(data, true); strings.Contains(got, "LAKE_READY") || !strings.Contains(got, "9003;0;/root/") {
+			t.Fatal("repeated prompt leaked private startup marker")
+		}
+	}
+	var decoder consoleFrameDecoder
+	decoder.feed(consoleFramePrefix+"READY_fixture\a", false)
+	if got := decoder.feed(data, true); strings.Contains(got, "LAKE_READY") {
+		t.Fatal("fallback duplicated an already observed startup marker")
+	}
+	encoded := consoleTerminalScript(terminalInit("bash", "\x1eLAKE_READY_fixture\x1f", true))
+	if !strings.Contains(encoded, `\033]0;LAKE_READY_HOOK_fixture;9003;`) {
+		t.Fatal("startup nonce was not retained in the prompt hook")
+	}
+}
+
 func TestConsoleFramesPreserveUserInputAndBoundPartialFrames(t *testing.T) {
 	for _, input := range []string{"ls", `printf '\037'`, "printf '中文\\n'", "\x1b[A\x03"} {
 		if consoleTerminalScript(input) != input {
