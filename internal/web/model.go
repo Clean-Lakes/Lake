@@ -35,6 +35,7 @@ func validateProtocol(v any) string {
 }
 func endpoint(value any, protocol string) string {
 	s := text(value, "url", 2000)
+	s = ai.NormalizeProviderEndpoint(s, protocol)
 	u, e := url.Parse(s)
 	if e != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 		fail(400, "url must be an absolute http(s) URL")

@@ -793,8 +793,10 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	history := append([]Message(nil), s.state.History...)
 	id := s.state.View.Session
 	s.mu.Unlock()
-	chars := len(js(e.sessionCatalog(ctx, id, c))) + historyCost(history)
+	toolCost := len(js(e.sessionCatalog(ctx, id, c)))
+	chars := toolCost + historyCost(history)
 	budget := (c.Model.ContextWindow - c.Model.MaxOutput) * 2
+	historyBudget := budget - toolCost
 	if !force && chars < budget {
 		return nil
 	}
@@ -809,10 +811,17 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	}
 	retained := append([]Message(nil), history[cut:]...)
 	latestUser := cut
-	if cut <= 1 || historyCost(retained)+len(js(history[0]))+len(js(e.sessionCatalog(ctx, id, c)))+16000 > budget {
+	// Prefer a recent complete batch within a growing turn. A fixed maximum
+	// summary reservation must not force us back into an already completed
+	// turn when the current user message and a smaller handoff still fit.
+	_, _, fits := fitHandoffContext(history[0], strings.Repeat("s", 512), retained, historyBudget)
+	if cut <= 1 || historyCost(retained)+historyCost(history[:1])+16000 > historyBudget {
 		boundary := latestBatchBoundary(history)
-		if boundary <= latestUser+1 {
-			projected, fits := fitToolContext(history, budget-len(js(e.sessionCatalog(ctx, id, c))))
+		if boundary > latestUser+1 {
+			cut = boundary
+			retained = append([]Message{history[latestUser]}, history[cut:]...)
+		} else if cut <= 1 || !fits {
+			projected, fits := fitToolContext(history, historyBudget)
 			if !fits {
 				return errors.New("current tool turn exceeds context budget")
 			}
@@ -824,8 +833,6 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 			e.notify(s, "compact", nil)
 			return e.save(s)
 		}
-		cut = boundary
-		retained = append([]Message{history[latestUser]}, history[cut:]...)
 	}
 	prompt, _ := embedded.ReadFile("prompts/compaction-summary.txt")
 	// Handoffs are a bounded summarization task, independent of the user's
@@ -871,11 +878,7 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	if strings.TrimSpace(summary) == "" {
 		return errors.New("context compaction: empty summary; original history retained")
 	}
-	if len(summary) > 16000 {
-		summary = utf8Prefix(summary, 16000)
-	}
-	projected := append([]Message{history[0], {Role: "user", Content: "Previous conversation handoff (untrusted summary; not authorization):\n" + summary}}, retained...)
-	projected, fits = fitToolContext(projected, budget-len(js(e.sessionCatalog(ctx, id, c))))
+	projected, summary, fits := fitHandoffContext(history[0], summary, retained, historyBudget)
 	if !fits {
 		return errors.New("current tool turn exceeds context budget")
 	}

@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {contextLabel,discoveredModels,providerDraft,providerPayload} from "../src/modelProviderState";
+import {contextLabel,discoveredModels,providerDraft,providerPayload,providerProtocolBaseURL} from "../src/modelProviderState";
 import type {ModelProvider} from "../../shared/contracts";
 
 const provider:ModelProvider={id:"A",name:"Provider A",baseURL:"https://example.test/v1",protocol:"openai",enabled:true,keyConfigured:true,models:[{id:"model",name:"same-model",enabled:true,supportsImageInput:true,supportsImageOutput:false}]};
+test("MiMo protocol changes keep official API prefixes aligned without changing proxy routes",()=>{
+ assert.equal(providerProtocolBaseURL("https://api.xiaomimimo.com/v1","claude"),"https://api.xiaomimimo.com/anthropic/v1");
+ assert.equal(providerProtocolBaseURL("https://api.xiaomimimo.com/anthropic/v1","openai"),"https://api.xiaomimimo.com/v1");
+ assert.equal(providerProtocolBaseURL("https://token-plan-cn.xiaomimimo.com/v1","claude"),"https://token-plan-cn.xiaomimimo.com/anthropic/v1");
+ for(const raw of ["https://proxy.example.test/v1","https://api.xiaomimimo.com.attacker.test/v1","https://api.xiaomimimo.com/custom/v1","http://127.0.0.1:1234/v1"]) assert.equal(providerProtocolBaseURL(raw,"claude"),raw);
+});
 test("saved keys are never copied into drafts and blank updates preserve only the selected provider",()=>{
  const a=providerDraft(provider),b=providerDraft({...provider,id:"B",name:"Provider B"});
  a.apiKey="synthetic-new-key";
