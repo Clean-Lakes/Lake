@@ -29,7 +29,9 @@ func SyncDirectory(path string) error {
 	defer f.Close()
 	return f.Sync()
 }
-func Executable(name string) string { return name }
+
+func FromShellPath(path string) string { return path }
+func Executable(name string) string    { return name }
 func Environment(home string) []string {
 	return []string{"HOME=" + home, "PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin", "LANG=en_US.UTF-8"}
 }

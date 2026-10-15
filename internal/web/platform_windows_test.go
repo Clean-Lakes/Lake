@@ -81,9 +81,17 @@ func TestWindowsConPTYInteractiveAndManagedCommands(t *testing.T) {
 	}()
 	term := b.Terminals.OpenInteractive(context.Background(), id, ref, "bash")
 	tid := stringOf(term["id"])
+	home, _ := os.UserHomeDir()
+	deadline := time.Now().Add(2 * time.Second)
+	for !strings.EqualFold(stringOf(b.Store.Terminal(id, tid)["cwd"]), home) && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !strings.EqualFold(stringOf(b.Store.Terminal(id, tid)["cwd"]), home) {
+		t.Fatal("Git Bash working directory was not observed as a native path")
+	}
 	b.Terminals.Resize(id, tid, 90, 24)
 	b.Terminals.Input(id, tid, "printf 'WINDOWS_TERMINAL_FIXTURE\\n'\r", false)
-	deadline := time.Now().Add(5 * time.Second)
+	deadline = time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if strings.Contains(stringOf(b.Store.History(id, tid)["output"]), "WINDOWS_TERMINAL_FIXTURE\r\n") {
 			break

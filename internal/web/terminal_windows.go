@@ -15,8 +15,11 @@ import (
 
 type windowsTerminal struct {
 	*conpty.ConPty
-	once sync.Once
-	err  error
+	once       sync.Once
+	err        error
+	decoder    consoleFrameDecoder
+	readBuffer []byte
+	readErr    error
 }
 
 func windowsTerminalInput(value string) string {
@@ -26,19 +29,41 @@ func windowsTerminalInput(value string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(value, "\r\n", "\r"), "\n", "\r")
 }
 func (t *windowsTerminal) WriteString(value string) (int, error) {
-	_, err := t.Write([]byte(windowsTerminalInput(value)))
+	_, err := t.Write([]byte(windowsTerminalInput(consoleTerminalScript(value))))
 	if err != nil {
 		return 0, err
 	}
 	return len(value), nil
 }
 func (t *windowsTerminal) Close() error { t.once.Do(func() { t.err = t.ConPty.Close() }); return t.err }
+func (t *windowsTerminal) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	for len(t.readBuffer) == 0 && t.readErr == nil {
+		var buf [8192]byte
+		n, err := t.ConPty.Read(buf[:])
+		t.readBuffer = append(t.readBuffer, t.decoder.feed(string(buf[:n]), err != nil)...)
+		t.readErr = err
+	}
+	n := copy(p, t.readBuffer)
+	t.readBuffer = t.readBuffer[n:]
+	if n > 0 {
+		return n, nil
+	}
+	return 0, t.readErr
+}
 func startTerminal(cmd *exec.Cmd, cols, rows int) (terminalDevice, error) {
 	parts := make([]string, len(cmd.Args))
 	for i, arg := range cmd.Args {
 		parts[i] = syscall.EscapeArg(arg)
 	}
 	env := append([]string(nil), cmd.Env...)
+	for i, item := range env {
+		if key, value, ok := strings.Cut(item, "="); ok && strings.EqualFold(key, "__lake_init") {
+			env[i] = key + "=" + consoleTerminalScript(value)
+		}
+	}
 	sort.Slice(env, func(i, j int) bool { return strings.ToUpper(env[i]) < strings.ToUpper(env[j]) })
 	p, err := conpty.Start(strings.Join(parts, " "), conpty.ConPtyDimensions(cols, rows), conpty.ConPtyWorkDir(cmd.Dir), conpty.ConPtyEnv(env))
 	if err != nil {
