@@ -8,8 +8,8 @@
   },
   "localChecks": {
     "goRaceAI": "passed",
-    "goRaceWeb": "passed before the additional exit-code diagnostic change",
-    "goVet": "passed before the additional exit-code diagnostic change",
+    "goRaceWeb": "passed, including the final helper selection and exit-code diagnostics",
+    "goVet": "passed, including the final helper selection and exit-code diagnostics",
     "frontendTests": 162,
     "frontendBuild": "passed",
     "targetedStreamRegression": "passed: six protocols, terminal sentinel without trailing blank line, usage trailer, valid tool arguments, caller cancellation, stalled heartbeats and follow-up messages"
@@ -21,5 +21,10 @@
   },
   "sshUserMachine": "Reported failure not yet reproduced; retain a bounded, fixed diagnostic message plus process exit code. Never expose raw stderr, banners, credential paths or secret values.",
   "formalReleaseModified": false,
-  "windowsHelperSelection": "Desktop-embedded server now resolves resources/lake.exe for the private credential pipe; standalone CLI/test helper behavior is retained. CI extracts the built ZIP into a Unicode/spaced path, requires a console-subsystem x64 helper, and performs password-authenticated SSH against the packaged runtime."
+  "windowsHelperSelection": "Desktop-embedded server now resolves resources/lake.exe for the private credential pipe; standalone CLI/test helper behavior is retained. CI extracts the built ZIP into a Unicode/spaced path, requires a console-subsystem x64 helper, and performs password-authenticated SSH against the packaged runtime.",
+  "windowsPackagedValidation": {
+    "commit": "b9f2d937fbf4a82f57fa03f43fe0e4a61d6bafb0",
+    "run": "https://github.com/Clean-Lakes/Lake/actions/runs/38744288363",
+    "result": "passed: actual packaged console helper and OpenSSH authenticated successfully, including Unicode/spaced paths; stream completion accepts follow-up messages"
+  }
 }
