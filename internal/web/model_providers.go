@@ -70,6 +70,7 @@ var providerIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,119}$`)
 var providerVersionPath = regexp.MustCompile(`/v\d+(?:beta\d*|alpha\d*)?$`)
 
 func providerEndpoint(base, protocol string) string {
+	base = ai.NormalizeProviderEndpoint(base, protocol)
 	validated := endpoint(base, protocol)
 	u, err := url.Parse(strings.TrimSpace(base))
 	if err != nil {
@@ -132,6 +133,12 @@ func (m *Models) readProviderCatalogLocked() (*providerCatalog, bool) {
 	var catalog providerCatalog
 	if json.Unmarshal(data, &catalog) != nil || catalog.Version != 1 || len(catalog.Providers) > 128 {
 		fail(500, "模型供应商配置格式无效，请恢复配置备份")
+	}
+	for i := range catalog.Providers {
+		provider := &catalog.Providers[i]
+		if normalized := ai.NormalizeProviderEndpoint(provider.BaseURL, provider.Protocol); normalized != provider.BaseURL {
+			provider.BaseURL = providerBaseURL(normalized)
+		}
 	}
 	return &catalog, true
 }
@@ -431,6 +438,9 @@ func (m *Models) SaveProvider(id string, data Object) Object {
 	}
 	if v, exists := data["protocol"]; exists {
 		provider.Protocol = validateProtocol(v)
+	}
+	if normalized := ai.NormalizeProviderEndpoint(provider.BaseURL, provider.Protocol); normalized != provider.BaseURL {
+		provider.BaseURL = providerBaseURL(normalized)
 	}
 	if v, exists := data["enabled"]; exists {
 		var ok bool

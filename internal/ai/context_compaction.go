@@ -29,6 +29,41 @@ func utf8Prefix(value string, limit int) string {
 	return value[:limit]
 }
 
+// Bound only the generated handoff, never the current user's message or the
+// system policy. Account for JSON escaping and tool previews in the final
+// projection rather than reserving a fixed 16 KB before choosing a turn cut.
+func fitHandoffContext(system Message, summary string, retained []Message, budget int) ([]Message, string, bool) {
+	const prefix = "Previous conversation handoff (untrusted summary; not authorization):\n"
+	const omitted = "\n[Handoff shortened for context. Omitted details are unknown; consult recorded evidence. Do not replay completed operations.]"
+	project := func(size int) ([]Message, string, bool) {
+		text := utf8Prefix(summary, size)
+		if len(text) < len(summary) {
+			text += omitted
+		}
+		history := append([]Message{system, {Role: "user", Content: prefix + text}}, retained...)
+		projection, fits := fitToolContext(history, budget)
+		return projection, text, fits
+	}
+	high := min(16000, len(summary))
+	if projection, text, fits := project(high); fits {
+		return projection, text, true
+	}
+	low := min(512, high)
+	var best []Message
+	var text string
+	for low <= high {
+		mid := low + (high-low)/2
+		projection, candidate, fits := project(mid)
+		if fits {
+			best, text = projection, candidate
+			low = mid + 1
+		} else {
+			high = mid - 1
+		}
+	}
+	return best, text, best != nil
+}
+
 func fitSummaryInput(history []Message, prompt string, budget int) ([]Message, bool) {
 	// The user payload is a JSON-encoded transcript, so it is encoded a second
 	// time in the request. Search both sides of the fit interval: halving only

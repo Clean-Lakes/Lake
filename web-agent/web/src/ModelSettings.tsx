@@ -6,7 +6,7 @@ import {useEffect, useRef, useState} from "react";
 import {setThemePreference, themePreference, type ThemePreference} from "./appearance";
 import type {AvailableModels, ModelProvider, ProviderCatalog, ProviderModel} from "../../shared/contracts";
 import {api, readableError} from "./api";
-import {contextLabel, discoveredModels, providerDraft, providerPayload, type ProviderDraft} from "./modelProviderState";
+import {contextLabel, discoveredModels, providerDraft, providerPayload, providerProtocolBaseURL, type ProviderDraft} from "./modelProviderState";
 import {parseSendShortcut, type SendShortcut} from "./composerKeyboard";
 import {ProviderQuickSetup,ProviderModelPicker} from "./ProviderSetup";
 import {type ProviderPreset} from "./providerPresets";
@@ -203,7 +203,7 @@ export function ModelSettings({onClose,onChanged,sendShortcut,onShortcutChange,c
         <div className="provider-connection-grid">
           <label className="field-label provider-field-wide">供应商名称<input maxLength={120} value={draft.name} onChange={event => update({name:event.target.value})}/></label>
           <label className="field-label provider-field-wide">Base URL<input spellCheck={false} autoComplete="off" maxLength={2000} placeholder="https://api.example.com/v1" value={draft.baseURL} onChange={event => update({baseURL:event.target.value})}/></label>
-          <label className="field-label">API 格式<AppSelect icon={<Glyph name="code" size={15}/>} value={draft.protocol} onChange={event => update({protocol:event.target.value})}>{formats.map(([id,label]) => <option key={id} value={id}>{label}</option>)}</AppSelect></label>
+          <label className="field-label">API 格式<AppSelect icon={<Glyph name="code" size={15}/>} value={draft.protocol} onChange={event => update({protocol:event.target.value,baseURL:providerProtocolBaseURL(draft.baseURL,event.target.value)})}>{formats.map(([id,label]) => <option key={id} value={id}>{label}</option>)}</AppSelect></label>
           <label className="field-label">API Key<div className="provider-key-row"><input type="password" autoComplete="new-password" spellCheck={false} maxLength={4096} placeholder={draft.clearKey ? "保存后清除密钥" : draft.keyConfigured ? "已保存密钥，留空保持不变" : "输入密钥；本地模型可留空"} value={draft.apiKey} onChange={event => update({apiKey:event.target.value,clearKey:false})}/>{draft.keyConfigured && <button type="button" className="provider-text-button" onClick={() => update({clearKey:!draft.clearKey,apiKey:""})}>{draft.clearKey ? "撤销清除" : "清除"}</button>}</div></label>
         </div>
         <div className="provider-model-heading"><h4>模型列表 <small>{draft.models.length}</small></h4><div><button type="button" className="provider-text-button" disabled={draft.isNew || draft.dirty || !!editor || !!discovery} onClick={() => void run("detect-images",detectImages)}>重新识别模型能力</button><button type="button" className="provider-text-button" disabled={!draft.baseURL.trim() || !!editor || !!discovery} onClick={() => void run("discover",discover)}>{busy==="discover" ? "获取中…" : "从 API 选择模型"}</button><button type="button" className="provider-text-button" disabled={!!editor || !!discovery} onClick={() => startModel()}><Glyph name="plus" size={13}/>手动添加</button></div></div>

@@ -1,6 +1,17 @@
 import type {ModelProvider, ModelReasoningCapability, ProviderInput, ProviderModel} from "../../shared/contracts";
 
 export type ProviderDraft = ModelProvider & {apiKey: string; clearKey: boolean; isNew: boolean; dirty: boolean};
+export function providerProtocolBaseURL(base: string, protocol: string): string {
+  try {
+    const url = new URL(base);
+    if (url.protocol !== "https:" || url.username || url.password || url.port || !["api.xiaomimimo.com", "token-plan-cn.xiaomimimo.com"].includes(url.hostname)) return base;
+    if (!["", "/v1", "/v1/messages", "/v1/chat/completions", "/v1/responses", "/anthropic", "/anthropic/v1", "/anthropic/v1/messages"].includes(url.pathname.replace(/\/+$/, ""))) return base;
+    if (protocol === "claude") url.pathname = "/anthropic/v1";
+    else if (["openai", "openai-response"].includes(protocol)) url.pathname = "/v1";
+    else return base;
+    return url.toString();
+  } catch { return base; }
+}
 export function providerDraft(provider: ModelProvider): ProviderDraft {
   return {...provider, models: provider.models.map(model => ({...model})), apiKey:"", clearKey:false, isNew:false, dirty:false};
 }

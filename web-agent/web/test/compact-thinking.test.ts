@@ -10,6 +10,14 @@ import {displayAiError} from "../src/aiErrors";
 const start="2026-10-11T00:00:00Z";
 const thought:AICard={id:"thought",type:"thinking",content:"VERY_VERBOSE_RAW_REASONING",status:"running",at:start};
 const read:AICard={id:"read",type:"operation",title:"read",status:"running",at:start,data:{arguments:{path:"/tmp/example.log"},target:"Local machine"}};
+test("compaction HTTP failures explain configuration or channel recovery without blaming context size",()=>{
+ const missing=displayAiError("context compaction: model returned HTTP 404");
+ assert.ok(missing.includes("API 格式")&&missing.includes("Base URL")&&missing.includes("历史记录已保留"));
+ const unavailable=displayAiError("context compaction: model returned HTTP 503: No available accounts supporting model: fixture");
+ assert.ok(unavailable.includes("模型渠道")&&unavailable.includes("可用账号")&&unavailable.includes("历史记录已保留"));
+ assert.ok(!unavailable.includes("No available accounts"));
+ assert.equal(displayAiError("An assistant explains HTTP 404 in prose"),"An assistant explains HTTP 404 in prose");
+});
 test("tool-turn budget failure is localized with preserved-history guidance",()=>{
  const text=displayAiError("current tool turn exceeds context budget");
  assert.ok(text.includes("本轮上下文"));assert.ok(text.includes("操作记录已保留"));assert.ok(!text.includes("exceeds"));

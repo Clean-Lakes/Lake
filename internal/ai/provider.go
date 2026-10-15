@@ -40,7 +40,7 @@ func protocol(m Model) string {
 }
 func modelPayload(m Model, history []Message, tools []Tool) (string, map[string]any, error) {
 	p := protocol(m)
-	endpoint := strings.ReplaceAll(strings.ReplaceAll(m.URL, "{model}", url.PathEscape(m.Name)), "%7Bmodel%7D", url.PathEscape(m.Name))
+	endpoint := strings.ReplaceAll(strings.ReplaceAll(NormalizeProviderEndpoint(m.URL, p), "{model}", url.PathEscape(m.Name)), "%7Bmodel%7D", url.PathEscape(m.Name))
 	u, e := url.Parse(endpoint)
 	if e != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
 		return "", nil, errors.New("invalid model endpoint")
@@ -307,7 +307,11 @@ func Stream(ctx context.Context, m Model, history []Message, tools []Tool, onDel
 	case "claude":
 		req.Header.Set("anthropic-version", "2023-06-01")
 		if m.Key != "" {
-			req.Header.Set("x-api-key", m.Key)
+			if mimoAPI(req.URL) {
+				req.Header.Set("Authorization", "Bearer "+m.Key)
+			} else {
+				req.Header.Set("x-api-key", m.Key)
+			}
 		}
 	case "azure-gpt":
 		if m.Key != "" {
@@ -808,7 +812,7 @@ func (a *accumulator) finish() (modelResult, error) {
 }
 
 func Models(ctx context.Context, m Model) (any, error) {
-	u, err := url.Parse(m.URL)
+	u, err := url.Parse(NormalizeProviderEndpoint(m.URL, protocol(m)))
 	if err != nil {
 		return nil, errors.New("invalid endpoint")
 	}
@@ -828,6 +832,9 @@ func Models(ctx context.Context, m Model) (any, error) {
 		u.Path = "/api/tags"
 	default:
 		return map[string]any{"models": []string{}, "message": "此协议请手动填写模型名称"}, nil
+	}
+	if mimoAPI(u) && strings.HasPrefix(u.Path, "/anthropic/") {
+		u.Path = "/v1/models"
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -852,7 +859,11 @@ func Models(ctx context.Context, m Model) (any, error) {
 		if m.Key != "" {
 			switch protocol(m) {
 			case "claude":
-				req.Header.Set("x-api-key", m.Key)
+				if mimoAPI(req.URL) {
+					req.Header.Set("Authorization", "Bearer "+m.Key)
+				} else {
+					req.Header.Set("x-api-key", m.Key)
+				}
 			case "gemini":
 				req.Header.Set("x-goog-api-key", m.Key)
 			default:
