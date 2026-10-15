@@ -108,8 +108,15 @@ func TestWindowsSSHPasswordConPTYHandshake(t *testing.T) {
 	defer cleanup()
 	resource := b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "isolated SSH", "ssh", settings)
 	term := b.Terminals.Open(ctx, id, stringOf(resource["id"]))
+	// ConPTY can emit the ready title before the following cwd title. Observe
+	// the asynchronously published cwd as in the local Windows shell test.
+	deadline := time.Now().Add(2 * time.Second)
+	for term["cwd"] != "/root/remote dir" && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+		term = b.Store.Terminal(id, stringOf(term["id"]))
+	}
 	if term["status"] != "ready" || !authenticated.Load() || term["cwd"] != "/root/remote dir" {
-		t.Fatal("Windows SSH password session never became ready")
+		t.Fatalf("Windows SSH session status=%v authenticated=%t cwd=%q", term["status"], authenticated.Load(), stringOf(term["cwd"]))
 	}
 	b.Terminals.Close(id, stringOf(term["id"]))
 	cancel()
