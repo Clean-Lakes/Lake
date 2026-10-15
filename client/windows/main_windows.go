@@ -24,7 +24,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var version = "0.3.9"
+var version = "0.3.10"
 
 func message(text string) {
 	title, _ := windows.UTF16PtrFromString("Lake")
@@ -131,7 +131,7 @@ func run() error {
 	if err = applyWindowColors(window.Window()); err != nil {
 		return err
 	}
-	if err = extendWorkbenchIntoTitleBar(window.Window()); err != nil {
+	if err = extendWorkbenchIntoTitleBar(uintptr(window.Window())); err != nil {
 		return err
 	}
 	if err = installWindowsChrome(window, endpoint); err != nil {

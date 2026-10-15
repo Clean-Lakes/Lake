@@ -115,3 +115,48 @@ func TestWindowsCompatibilityCaption(t *testing.T) {
 		t.Fatal("native restore command failed")
 	}
 }
+
+// With the caption removed the client must reach the top frame like it reaches
+// the sides: only the one-pixel border line stays above it, while the sides
+// keep their invisible resize margin.
+func TestWindowsWorkbenchReachesTopFrame(t *testing.T) {
+	hwnd := themeTestWindow(t, false)
+	if err := extendWorkbenchIntoTitleBar(hwnd); err != nil {
+		t.Fatal(err)
+	}
+	var window windows.Rect
+	themeUser.NewProc("GetWindowRect").Call(hwnd, uintptr(unsafe.Pointer(&window)))
+	// NCCALCSIZE_PARAMS with a typed WINDOWPOS pointer keeps vet happy while
+	// matching the native layout (three RECTs plus a WINDOWPOS pointer).
+	var pos struct {
+		Hwnd, After  uintptr
+		X, Y, Cx, Cy int32
+		Flags        uint32
+	}
+	pos.Hwnd = hwnd
+	pos.Cx, pos.Cy = window.Right-window.Left, window.Bottom-window.Top
+	params := struct {
+		Rg  [3]windows.Rect
+		Pos unsafe.Pointer
+	}{Rg: [3]windows.Rect{window}, Pos: unsafe.Pointer(&pos)}
+	themeUser.NewProc("SendMessageW").Call(hwnd, 0x83, 1, uintptr(unsafe.Pointer(&params)))
+	assertTopFrame(t, "NCCALCSIZE valid", window, params.Rg[0])
+
+	rect := window
+	themeUser.NewProc("SendMessageW").Call(hwnd, 0x83, 0, uintptr(unsafe.Pointer(&rect)))
+	assertTopFrame(t, "NCCALCSIZE rect", window, rect)
+}
+
+func assertTopFrame(t *testing.T, name string, entry, client windows.Rect) {
+	t.Helper()
+	top := client.Top - entry.Top
+	if top != topFrameLine {
+		t.Fatalf("%s: top band %d, expected the %d-pixel frame line", name, top, topFrameLine)
+	}
+	if side := client.Left - entry.Left; side <= top {
+		t.Fatalf("%s: side inset %d must keep the resize frame", name, side)
+	}
+	if client.Bottom >= entry.Bottom {
+		t.Fatalf("%s: bottom frame removed", name)
+	}
+}

@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"unsafe"
 
 	webview "github.com/jchv/go-webview2"
 )
@@ -30,8 +29,7 @@ const (
 // The WebView occupies the same client area as the workbench header. Windows
 // keeps its resize frame and system commands; only the separate caption is
 // removed, so the React header can be the visible title bar.
-func extendWorkbenchIntoTitleBar(handle unsafe.Pointer) error {
-	hwnd := uintptr(handle)
+func extendWorkbenchIntoTitleBar(hwnd uintptr) error {
 	style, _, _ := themeUser.NewProc("GetWindowLongPtrW").Call(hwnd, windowStyleIndex)
 	if style == 0 {
 		return fmt.Errorf("无法读取窗口样式")

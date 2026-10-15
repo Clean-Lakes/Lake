@@ -31,6 +31,9 @@ const (
 	inkColor     = 0x00222222 // --foreground: #222222.
 	lineColor    = 0x00e5e5e5 // --border: #e5e5e5.
 	themeRefresh = 0x8031
+	// The one-pixel DWM border line kept between the window edge and the
+	// client on top — the same visible gap content keeps at the sides.
+	topFrameLine = 1
 )
 
 type windowTheme struct {
@@ -167,28 +170,32 @@ func windowThemeProc(hwnd, msg, wp, lp, id, ref uintptr) uintptr {
 	return r
 }
 
-// The workbench replaces the caption. DefWindowProc still reserves a caption
-// band above the client, which DWM paints in caption color — a white strip
-// under the window's top edge. Keep the side frame insets (the native resize
-// border) and give the top the same inset so content reaches the top frame
-// exactly as it reaches the sides. rgrc[0] holds the proposed window rect on
-// entry and is overwritten with the client rect by DefSubclassProc, so the
-// entry copy is taken first. The side inset is measured after Def.
+// The workbench replaces the caption, and the window keeps its thick resize
+// frame after WS_CAPTION is removed. DefWindowProc then insets the top by the
+// full frame width, the same as the sides. On the sides that band is the
+// invisible resize margin plus the one-pixel window border, so content sits one
+// pixel inside the visible frame. Above the window there is no invisible
+// margin: the same band lies inside the visible frame, and DWM paints it in
+// caption color — the white strip under the top edge. Keep only the border
+// line on top so content reaches the top frame exactly as it reaches the sides.
+// rgrc[0] holds the proposed window rect on entry and is overwritten with the
+// client rect by DefSubclassProc, so the entry copy is taken first. The clamp
+// only shrinks the band; it never grows it past the frame line.
 func stretchClientOverTopFrame(hwnd, msg, wp, lp uintptr) uintptr {
 	if wp != 0 {
 		params := *(**nccalcsizeParams)(unsafe.Pointer(&lp))
 		entry := params.Rg[0]
 		r, _, _ := themeDefSubclass.Call(hwnd, msg, wp, lp)
-		if inset := params.Rg[0].Left - entry.Left; inset >= 0 && params.Rg[0].Top-entry.Top > inset {
-			params.Rg[0].Top = entry.Top + inset
+		if params.Rg[0].Top-entry.Top > topFrameLine {
+			params.Rg[0].Top = entry.Top + topFrameLine
 		}
 		return r
 	}
 	rect := *(**windows.Rect)(unsafe.Pointer(&lp))
 	entry := *rect
 	r, _, _ := themeDefSubclass.Call(hwnd, msg, wp, lp)
-	if inset := rect.Left - entry.Left; inset >= 0 && rect.Top-entry.Top > inset {
-		rect.Top = entry.Top + inset
+	if rect.Top-entry.Top > topFrameLine {
+		rect.Top = entry.Top + topFrameLine
 	}
 	return r
 }
