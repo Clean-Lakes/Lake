@@ -12,12 +12,14 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
 var HTTPClient = &http.Client{Timeout: 5 * time.Minute}
 
 var ErrModelOutputLimit = errors.New("model output limit reached")
+var ErrModelStreamIdle = errors.New("model stream idle timeout; partial reply retained")
 
 type modelResult struct {
 	Message Message
@@ -289,12 +291,18 @@ func modelPayload(m Model, history []Message, tools []Tool) (string, map[string]
 	return endpoint, body, nil
 }
 func Stream(ctx context.Context, m Model, history []Message, tools []Tool, onDelta func(string, string)) (modelResult, error) {
+	return streamWithTimeouts(ctx, m, history, tools, onDelta, time.Minute, time.Second)
+}
+
+func streamWithTimeouts(ctx context.Context, m Model, history []Message, tools []Tool, onDelta func(string, string), idleTimeout, completionTimeout time.Duration) (modelResult, error) {
 	endpoint, body, e := modelPayload(m, history, tools)
 	if e != nil {
 		return modelResult{}, e
 	}
 	b, _ := json.Marshal(body)
-	req, e := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(b))
+	requestCtx, cancelRequest := context.WithCancel(ctx)
+	defer cancelRequest()
+	req, e := http.NewRequestWithContext(requestCtx, "POST", endpoint, bytes.NewReader(b))
 	if e != nil {
 		return modelResult{}, errors.New("invalid model request")
 	}
@@ -372,16 +380,48 @@ func Stream(ctx context.Context, m Model, history []Message, tools []Tool, onDel
 	scanner := bufio.NewScanner(io.LimitReader(resp.Body, 32<<20))
 	scanner.Buffer(make([]byte, 65536), 4<<20)
 	data := []string{}
+	terminal := false
+	var idleExpired, completionExpired atomic.Bool
+	var idleTimer, completionTimer *time.Timer
+	defer func() {
+		if idleTimer != nil {
+			idleTimer.Stop()
+		}
+		if completionTimer != nil {
+			completionTimer.Stop()
+		}
+	}()
 	consume := func(line string) error {
 		if line == "[DONE]" {
 			a.completed = true
+			terminal = true
 			return nil
 		}
 		var v map[string]any
 		if json.Unmarshal([]byte(line), &v) != nil {
 			return errors.New("invalid model stream JSON")
 		}
-		return a.consume(v, false)
+		if err := a.consume(v, false); err != nil {
+			return err
+		}
+		// SSE heartbeats do not prove that an unfinished reply is progressing.
+		if str(v["type"]) != "ping" && (a.msg.Content != "" || a.msg.Reasoning != "" || len(a.calls) > 0 || len(a.msg.Images) > 0) {
+			if idleTimer == nil {
+				idleTimer = time.AfterFunc(idleTimeout, func() { idleExpired.Store(true); cancelRequest() })
+			} else {
+				idleTimer.Reset(idleTimeout)
+			}
+		}
+		if a.completed {
+			if a.p != "openai" && a.p != "azure-gpt" || len(obj(v["usage"])) > 0 {
+				terminal = true
+			} else if completionTimer == nil {
+				// OpenAI-compatible gateways may send usage after finish_reason.
+				// Give that trailer a bounded grace period, never wait for socket EOF.
+				completionTimer = time.AfterFunc(completionTimeout, func() { completionExpired.Store(true); cancelRequest() })
+			}
+		}
+		return nil
 	}
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -389,6 +429,9 @@ func Stream(ctx context.Context, m Model, history []Message, tools []Tool, onDel
 			if strings.TrimSpace(line) != "" {
 				if e = consume(line); e != nil {
 					return modelResult{Usage: a.usage}, e
+				}
+				if terminal {
+					break
 				}
 			}
 			continue
@@ -399,11 +442,25 @@ func Stream(ctx context.Context, m Model, history []Message, tools []Tool, onDel
 					return modelResult{Usage: a.usage}, e
 				}
 				data = nil
+				if terminal {
+					break
+				}
 			}
 			continue
 		}
 		if strings.HasPrefix(line, "data:") {
-			data = append(data, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+			payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			if payload == "[DONE]" {
+				if len(data) > 0 {
+					if e = consume(strings.Join(data, "\n")); e != nil {
+						return modelResult{Usage: a.usage}, e
+					}
+					data = nil
+				}
+				a.completed, terminal = true, true
+				break
+			}
+			data = append(data, payload)
 		}
 	}
 	if len(data) > 0 {
@@ -415,7 +472,12 @@ func Stream(ctx context.Context, m Model, history []Message, tools []Tool, onDel
 		if ctx.Err() != nil {
 			return modelResult{}, ctx.Err()
 		}
-		return modelResult{Usage: a.usage}, errors.New("model stream interrupted")
+		if !a.completed || !completionExpired.Load() {
+			if idleExpired.Load() {
+				return modelResult{Usage: a.usage}, ErrModelStreamIdle
+			}
+			return modelResult{Usage: a.usage}, errors.New("model stream interrupted")
+		}
 	}
 	if ctx.Err() != nil {
 		return modelResult{}, ctx.Err()
@@ -594,8 +656,7 @@ func (a *accumulator) consume(v map[string]any, whole bool) error {
 				c.Name += str(f["name"])
 				c.Arguments += str(f["arguments"])
 			}
-			if choice["finish_reason"] != nil {
-				reason := str(choice["finish_reason"])
+			if reason := str(choice["finish_reason"]); reason != "" {
 				if reason == "length" {
 					return fmt.Errorf("%w; incomplete response discarded", ErrModelOutputLimit)
 				}

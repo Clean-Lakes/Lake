@@ -25,8 +25,42 @@ import (
 // The isolated server emits the remote init frame without using Windows' local
 // shell, so local-only initialization tests cannot hide an SSH transport gap.
 func TestWindowsSSHPasswordConPTYHandshake(t *testing.T) {
+	for _, tc := range []struct {
+		name                      string
+		interactive, unusualPaths bool
+	}{
+		{"managed", false, false},
+		{"interactive", true, false},
+		{"installed-paths", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) { windowsSSHPasswordConPTYHandshake(t, tc.interactive, tc.unusualPaths) })
+	}
+}
+
+func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths bool) {
 	b, h := fixture(t)
 	id, _ := newSession(t, h)
+	if unusualPaths {
+		// Reproduce an installed backend/credential path, not only the ASCII
+		// checkout path used by go test on a hosted runner.
+		b.Models.Home = filepath.Join(t.TempDir(), "Lake 数据 with spaces")
+		helper := filepath.Join(t.TempDir(), "Lake 安装 with spaces", "resources", "lake.exe")
+		if err := os.MkdirAll(filepath.Dir(helper), 0700); err != nil {
+			t.Fatal(err)
+		}
+		executable, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(executable)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(helper, data, 0700); err != nil {
+			t.Fatal(err)
+		}
+		b.Terminals.askpassProgram = helper
+	}
 	_, key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -88,6 +122,13 @@ func TestWindowsSSHPasswordConPTYHandshake(t *testing.T) {
 					request.Reply(false, nil)
 					return
 				}
+				ready := "\x1eLAKE_READY_" + marker[1] + "\x1f"
+				expected := sshArguments(Object{"shell": "sh"}, terminalInit("sh", ready, interactive))
+				if payload.Command != consoleTerminalScript(expected[len(expected)-1]) {
+					t.Error("bundled Windows OpenSSH changed the remote initialization command in transit")
+					request.Reply(false, nil)
+					return
+				}
 				request.Reply(true, nil)
 				frame := "\x1eLAKE_READY_" + marker[1] + "\x1f"
 				if strings.Contains(payload.Command, "LAKE_FRAME_READY_") {
@@ -111,7 +152,12 @@ func TestWindowsSSHPasswordConPTYHandshake(t *testing.T) {
 	settings, cleanup := prepareSSH(b.Models.Home, Object{"host": "127.0.0.1", "port": port, "username": "fixture", "authMethod": "password", "password": "synthetic-windows-password", "shell": "sh"})
 	defer cleanup()
 	resource := b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "isolated SSH", "ssh", settings)
-	term := b.Terminals.Open(ctx, id, stringOf(resource["id"]))
+	var term Object
+	if interactive {
+		term = b.Terminals.OpenInteractive(ctx, id, stringOf(resource["id"]), "sh")
+	} else {
+		term = b.Terminals.Open(ctx, id, stringOf(resource["id"]))
+	}
 	// ConPTY can emit the ready title before the following cwd title. Observe
 	// the asynchronously published cwd as in the local Windows shell test.
 	deadline := time.Now().Add(2 * time.Second)
