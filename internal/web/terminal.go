@@ -205,6 +205,9 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 			if t.askpassProgram != "" {
 				helper = t.askpassProgram
 			}
+			if e == nil {
+				helper, e = platform.SSHAskpassProgram(helper)
+			}
 			if e != nil {
 				t.store.TerminalStatus(id, tid, "disconnected")
 				t.mu.Unlock()

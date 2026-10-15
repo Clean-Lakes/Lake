@@ -20,5 +20,6 @@
     "nativeTests": "passed: managed and manual SSH, Unicode/space helper and credential paths, exact remote-command preservation, streaming reply completion"
   },
   "sshUserMachine": "Reported failure not yet reproduced; retain a bounded, fixed diagnostic message plus process exit code. Never expose raw stderr, banners, credential paths or secret values.",
-  "formalReleaseModified": false
+  "formalReleaseModified": false,
+  "windowsHelperSelection": "Desktop-embedded server now resolves resources/lake.exe for the private credential pipe; standalone CLI/test helper behavior is retained. CI extracts the built ZIP into a Unicode/spaced path, requires a console-subsystem x64 helper, and performs password-authenticated SSH against the packaged runtime."
 }

@@ -58,6 +58,25 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build installer after native runtime tests
         run: python scripts/build_lake_windows.py --reuse-web
+      - name: Prepare the actual packaged desktop for SSH tests
+        shell: python
+        run: |
+          import os, pathlib, zipfile
+          version = pathlib.Path('VERSION').read_text().strip()
+          package = pathlib.Path('dist/windows') / version / 'x86_64' / f'Lake-{version}-windows-x86_64.zip'
+          output = pathlib.Path(os.environ['RUNNER_TEMP']) / 'Lake packaged 中文 with spaces'
+          with zipfile.ZipFile(package) as archive:
+              archive.extractall(output)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write('LAKE_TEST_DESKTOP_EXE=' + str(output / 'Lake/Lake.exe') + '\n')
+              env.write('LAKE_PORTABLE_ROOT=' + str(output / 'Lake/resources/git') + '\n')
+      - name: Test packaged desktop credential helper and bundled SSH
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = '0'
+          if (-not $env:LAKE_TEST_DESKTOP_EXE) { throw 'Packaged desktop path is required for this test' }
+          go test -v ./internal/web -run '^TestWindowsPackagedSSHCredentialHelper$' -count=1 -timeout 90s
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Identify branch test packages
         if: github.event_name == 'pull_request' || github.ref != 'refs/heads/master'
         shell: python

@@ -12,6 +12,8 @@
 
 输出位于 `dist/windows/<version>/x86_64/`，包含 ZIP、安装 EXE 和 SHA-256。当前 Windows 分发未配置 Authenticode 应用签名；本地交叉编译不等于 Windows GUI 运行验收，Windows CI 定义提供存储、权限、终端和安装包验证。
 
+桌面进程内嵌 Go 后台；SSH 密码和密钥口令助手使用同包的 `resources/lake.exe` 控制台程序，通过 OpenSSH 私有管道返回凭据。不得依赖 GUI 子系统的 `Lake.exe` 继承标准输出句柄。Windows CI 在打包后解压实际 ZIP，检查助手的 PE 子系统，并使用包内 SSH 在含中文、空格的路径下验证交互式密码认证。
+
 PR 或非 master 分支的 Windows CI 构建仅作为测试产物保留 14 天，名称为 `Lake-windows-x86_64-test-<run-id>`，附带 `TEST-BUILD.txt` 和来源提交记录，不创建正式 Release，不修改稳定更新渠道。测试包内版本号沿用源码 `VERSION`，不能仅靠版本号区分构建；请同时核对来源提交。优先将完整 ZIP 解压到独立目录，在 PowerShell 中设置 `$env:LAKE_HOME = "$env:LOCALAPPDATA\LakeTest\<build-id>"` 后从该目录启动 `Lake.exe`，避免使用正式数据。安装 EXE 仍是普通用户级安装器，会覆盖已有安装。
 
 Lake 工作台顶栏与窗口标题栏合为一体，右上角提供最小化、最大化或还原、关闭按钮。在顶部品牌、项目路径或终端标题的空白处拖动窗口，双击可最大化或还原；窗口仍保留 Windows 缩放边框。高对比度模式下窗口按钮使用系统颜色。

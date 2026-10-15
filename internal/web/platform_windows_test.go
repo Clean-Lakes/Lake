@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"debug/pe"
 	"errors"
 	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/platform"
@@ -40,9 +41,35 @@ func TestWindowsSSHPasswordConPTYHandshake(t *testing.T) {
 	}
 }
 
-func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, rejectAuth bool) {
+func TestWindowsPackagedSSHCredentialHelper(t *testing.T) {
+	desktop := os.Getenv("LAKE_TEST_DESKTOP_EXE")
+	if desktop == "" {
+		t.Skip("requires the packaged desktop artifact")
+	}
+	helper, err := platform.SSHAskpassProgram(desktop)
+	if err != nil || strings.EqualFold(helper, desktop) {
+		t.Fatal("packaged GUI is still the credential helper", err)
+	}
+	file, err := pe.Open(helper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	header, ok := file.OptionalHeader.(*pe.OptionalHeader64)
+	if !ok || header.Subsystem != 3 {
+		t.Fatal("packaged credential helper is not a console-subsystem x64 executable")
+	}
+	for _, unusual := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unicode-and-spaces-%t", unusual), func(t *testing.T) { windowsSSHPasswordConPTYHandshake(t, true, unusual, false, desktop) })
+	}
+}
+
+func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, rejectAuth bool, desktopEntry ...string) {
 	b, h := fixture(t)
 	id, _ := newSession(t, h)
+	if len(desktopEntry) > 0 {
+		b.Terminals.askpassProgram = desktopEntry[0]
+	}
 	if unusualPaths {
 		// Reproduce an installed backend/credential path, not only the ASCII
 		// checkout path used by go test on a hosted runner.
@@ -52,6 +79,9 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 			t.Fatal(err)
 		}
 		executable, err := os.Executable()
+		if len(desktopEntry) > 0 {
+			executable, err = platform.SSHAskpassProgram(desktopEntry[0])
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -63,6 +93,18 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 			t.Fatal(err)
 		}
 		b.Terminals.askpassProgram = helper
+		if len(desktopEntry) > 0 {
+			// Match the desktop layout while keeping the test credentials private.
+			gui := filepath.Join(filepath.Dir(filepath.Dir(helper)), "Lake.exe")
+			data, err := os.ReadFile(desktopEntry[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(gui, data, 0700); err != nil {
+				t.Fatal(err)
+			}
+			b.Terminals.askpassProgram = gui
+		}
 	}
 	_, key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

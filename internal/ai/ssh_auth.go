@@ -52,6 +52,9 @@ func sshEnvironment(c *SSH, root string) ([]string, error) {
 		return nil, err
 	}
 	helper, err := os.Executable()
+	if err == nil {
+		helper, err = platform.SSHAskpassProgram(helper)
+	}
 	if err != nil {
 		return nil, errors.New("SSH credential helper unavailable")
 	}
