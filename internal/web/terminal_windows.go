@@ -19,8 +19,20 @@ type windowsTerminal struct {
 	err  error
 }
 
-func (t *windowsTerminal) WriteString(value string) (int, error) { return t.Write([]byte(value)) }
-func (t *windowsTerminal) Close() error                          { t.once.Do(func() { t.err = t.ConPty.Close() }); return t.err }
+func windowsTerminalInput(value string) string {
+	// ConPTY translates input into console key events: Enter is CR, not LF.
+	// Shell initialization and managed commands use LF on Unix; normalize both
+	// LF and CRLF here without submitting CRLF twice or changing VT key codes.
+	return strings.ReplaceAll(strings.ReplaceAll(value, "\r\n", "\r"), "\n", "\r")
+}
+func (t *windowsTerminal) WriteString(value string) (int, error) {
+	_, err := t.Write([]byte(windowsTerminalInput(value)))
+	if err != nil {
+		return 0, err
+	}
+	return len(value), nil
+}
+func (t *windowsTerminal) Close() error { t.once.Do(func() { t.err = t.ConPty.Close() }); return t.err }
 func startTerminal(cmd *exec.Cmd, cols, rows int) (terminalDevice, error) {
 	parts := make([]string, len(cmd.Args))
 	for i, arg := range cmd.Args {

@@ -28,7 +28,7 @@ jobs:
       - run: pnpm --dir web-agent install --frozen-lockfile
       - run: pnpm --dir web-agent test:frontend
       - run: choco install nsis 7zip --no-progress -y
-      - run: python scripts/build_lake_windows.py
+      - run: python scripts/build_lake_windows.py --skip-installer
       - name: Test Windows locks, SQLite, ACLs and ConPTY
         shell: pwsh
         run: |
@@ -40,6 +40,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test ./client/windows -run '^TestWindows' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build installer after native runtime tests
+        run: python scripts/build_lake_windows.py --reuse-web
       - uses: actions/upload-artifact@v4
         with:
           name: Lake-windows-x86_64

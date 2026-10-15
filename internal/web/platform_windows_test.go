@@ -71,6 +71,14 @@ func TestWindowsSQLiteLockAndRestart(t *testing.T) {
 func TestWindowsConPTYInteractiveAndManagedCommands(t *testing.T) {
 	b, h := fixture(t)
 	id, ref := newSession(t, h)
+	defer func() {
+		if p := recover(); p != nil {
+			for _, term := range objects(b.Store.Snapshot(id)["terminals"]) {
+				t.Logf("isolated ConPTY startup output: %q", tail(stringOf(b.Store.History(id, stringOf(term["id"]))["output"]), 2000))
+			}
+			t.Fatalf("isolated ConPTY startup failed: %v", p)
+		}
+	}()
 	term := b.Terminals.OpenInteractive(context.Background(), id, ref, "bash")
 	tid := stringOf(term["id"])
 	b.Terminals.Resize(id, tid, 90, 24)
@@ -97,4 +105,16 @@ func TestWindowsConPTYInteractiveAndManagedCommands(t *testing.T) {
 	}
 	b.Terminals.Close(id, mid)
 	b.Terminals.Close(id, tid)
+}
+
+func TestWindowsConPTYInputLineEndings(t *testing.T) {
+	for _, tc := range []struct{ input, want string }{
+		{"eval \"$__lake_init\"\n", "eval \"$__lake_init\"\r"},
+		{"pwd\r\nprintf 'ok'\n", "pwd\rprintf 'ok'\r"},
+		{"\x1b[A\x03\r", "\x1b[A\x03\r"},
+	} {
+		if got := windowsTerminalInput(tc.input); got != tc.want {
+			t.Fatalf("input = %q, want %q", got, tc.want)
+		}
+	}
 }
