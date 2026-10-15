@@ -15,9 +15,13 @@ import (
 )
 
 func TestWindowsUpdateJobValidation(t *testing.T) {
-	for _, mode := range []string{"valid", "same version", "traversal", "wrong parent", "corrupt file", "trailing JSON", "other home"} {
+	for _, mode := range []string{"valid", "same version", "traversal", "wrong parent", "corrupt file", "trailing JSON", "other home", "public root"} {
 		t.Run(mode, func(t *testing.T) {
 			home := t.TempDir()
+			root := filepath.Join(home, "updates", "windows")
+			if err := platform.MkdirAll(root, 0700); err != nil {
+				t.Fatal(err)
+			}
 			work := filepath.Join(home, "updates", "windows", "job-test")
 			if err := platform.MkdirAll(work, 0700); err != nil {
 				t.Fatal(err)
@@ -55,6 +59,19 @@ func TestWindowsUpdateJobValidation(t *testing.T) {
 			validateHome := home
 			if mode == "other home" {
 				validateHome = t.TempDir()
+			}
+			if mode == "public root" {
+				sd, err := windows.SecurityDescriptorFromString("D:P(A;;FA;;;WD)")
+				if err != nil {
+					t.Fatal(err)
+				}
+				acl, _, err := sd.DACL()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = windows.SetNamedSecurityInfo(root, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil); err != nil {
+					t.Fatal(err)
+				}
 			}
 			_, _, err = readUpdateJob(path, validateHome)
 			if mode == "valid" {
