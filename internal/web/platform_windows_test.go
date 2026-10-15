@@ -296,6 +296,13 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 	if term["status"] != "ready" || !authenticated.Load() || term["cwd"] != "/root/remote dir" {
 		t.Fatalf("Windows SSH session status=%v authenticated=%t cwd=%q", term["status"], authenticated.Load(), stringOf(term["cwd"]))
 	}
+	live := b.Terminals.get(id, stringOf(term["id"]))
+	if len(live.cmd.Args) < 3 || live.cmd.Args[1] != "-E" {
+		t.Fatal("Windows SSH silently skipped its independent startup diagnostic")
+	}
+	if info, err := os.Stat(live.cmd.Args[2]); err != nil || !platform.Private(live.cmd.Args[2], info) {
+		t.Fatal("active Windows SSH startup diagnostic is not private")
+	}
 	b.Terminals.Close(id, stringOf(term["id"]))
 	cancel()
 	select {

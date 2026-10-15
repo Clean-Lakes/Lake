@@ -8,7 +8,7 @@ import (
 	"github.com/Clean-Lakes/Lake/internal/platform"
 )
 
-func TestSSHStartupLogKeepsOnlySafeCauseAndDeletesPrivateFile(t *testing.T) {
+func TestWindowsSSHStartupLogKeepsOnlySafeCauseAndDeletesPrivateFile(t *testing.T) {
 	for _, tc := range []struct{ output, want string }{
 		{"Permission denied (password).", "身份认证失败"},
 		{"Authenticated to fixture using password.\nConnection closed by fixture", "身份认证已通过"},
