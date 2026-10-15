@@ -34,6 +34,9 @@ func TestMain(m *testing.M) {
 				code = 0
 			}
 		}()
+		if code != 0 {
+			fmt.Fprintln(os.Stderr, SSHAskpassFailureMessage)
+		}
 		os.Exit(code)
 	}
 	os.Exit(m.Run())
@@ -211,7 +214,7 @@ func TestSSHPrivateKeyUpload(t *testing.T) {
 
 // Isolated SSH protocol server: genuine password/public-key authentication and
 // PTY shell, but no macOS accounts, production hosts or production credentials.
-func credentialSSHServer(t *testing.T, password string, public ssh.PublicKey) (int, string) {
+func credentialSSHServer(t *testing.T, password string, public ssh.PublicKey, configure ...func(*ssh.ServerConfig)) (int, string) {
 	t.Helper()
 	_, key, e := ed25519.GenerateKey(rand.Reader)
 	if e != nil {
@@ -234,6 +237,9 @@ func credentialSSHServer(t *testing.T, password string, public ssh.PublicKey) (i
 			}
 			return nil, errors.New("authentication rejected")
 		},
+	}
+	for _, apply := range configure {
+		apply(config)
 	}
 	config.AddHostKey(signer)
 	listener, e := net.Listen("tcp", "127.0.0.1:0")
@@ -472,6 +478,36 @@ func TestPasswordAndEncryptedKeyPersistentSSH(t *testing.T) {
 	expectPanic(t, 503, func() { b.Terminals.Open(ctx, sid, rid) })
 }
 
+func TestKeyboardInteractivePasswordPersistentSSH(t *testing.T) {
+	b, h := fixture(t)
+	id, _ := newSession(t, h)
+	password := "Synthetic-PAM-password"
+	port, known := credentialSSHServer(t, password, nil, func(config *ssh.ServerConfig) {
+		config.PasswordCallback, config.PublicKeyCallback = nil, nil
+		config.KeyboardInteractiveCallback = func(meta ssh.ConnMetadata, challenge ssh.KeyboardInteractiveChallenge) (*ssh.Permissions, error) {
+			answers, err := challenge(meta.User(), "", []string{"Password: "}, []bool{false})
+			if err != nil || meta.User() != "fixture" || len(answers) != 1 || answers[0] != password {
+				return nil, errors.New("fixture authentication rejected")
+			}
+			return nil, nil
+		}
+	})
+	b.Terminals.KnownHosts = known
+	config, cleanup := prepareSSH(b.Models.Home, Object{"host": "127.0.0.1", "port": port, "username": "fixture", "authMethod": "password", "password": password})
+	defer cleanup()
+	resource := b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "PAM-only fixture", "ssh", config)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	term := b.Terminals.Open(ctx, id, stringOf(resource["id"]))
+	tid := stringOf(term["id"])
+	defer b.Terminals.Close(id, tid)
+	entry := b.Terminals.Execute(id, tid, "user", "printf PAM_AUTHENTICATED", "")
+	result := b.Terminals.Wait(ctx, id, tid, stringOf(entry["id"]))
+	if !strings.Contains(stringOf(result["output"]), "PAM_AUTHENTICATED") {
+		t.Fatal("keyboard-interactive password did not establish a usable terminal")
+	}
+}
+
 func TestSSHAskpassPromptBoundaries(t *testing.T) {
 	root := t.TempDir()
 	must(os.Chmod(root, 0700))
@@ -480,11 +516,17 @@ func TestSSHAskpassPromptBoundaries(t *testing.T) {
 	t.Setenv("LAKE_SSH_SECRET_REF", "fixture")
 	t.Setenv("LAKE_SSH_ASKPASS_MODE", "password")
 	var out bytes.Buffer
-	if SSHAskpass("Are you sure you want to continue connecting (yes/no)?", &out) == nil || out.Len() != 0 {
-		t.Fatal("host confirmation exposed secret")
+	for _, prompt := range []string{"Are you sure you want to continue connecting (yes/no)?", "One-time password:", "New password:", "Retype new password:", "Verification code:", "(fixture@host) One-time password:", "(fixture@host) New password:", "(One-time password) Password:"} {
+		out.Reset()
+		if SSHAskpass(prompt, &out) == nil || out.Len() != 0 {
+			t.Fatal("non-password challenge exposed a saved password")
+		}
 	}
-	if SSHAskpass("fixture@host's password:", &out) != nil || out.String() != "Synthetic-helper-secret\n" {
-		t.Fatal("password helper failed")
+	for _, prompt := range []string{"fixture@host's password:", "Password: ", "(fixture@host) Password:", "密码："} {
+		out.Reset()
+		if SSHAskpass(prompt, &out) != nil || out.String() != "Synthetic-helper-secret\n" {
+			t.Fatal("password helper failed")
+		}
 	}
 	out.Reset()
 	t.Setenv("LAKE_SSH_ASKPASS_MODE", "key")

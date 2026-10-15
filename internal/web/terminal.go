@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -44,6 +45,8 @@ type liveTerminal struct {
 	connected                                 chan struct{}
 	connectErr                                error
 	startupExitCode                           *int
+	connectionTarget                          string
+	startupCause                              string
 	startup, flush                            *time.Timer
 	job                                       *terminalJob
 	screen                                    vt10x.Terminal
@@ -172,6 +175,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 		panic(e)
 	}
 	var authEnv []string
+	connectionTarget := ""
 	readyMarker := "\x1eLAKE_READY_" + ident() + "\x1f"
 	initialization := terminalInit(selectedShell, readyMarker, interactive)
 	if r["kind"] == "ssh" {
@@ -191,6 +195,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 			}
 		}()
 		program = "/usr/bin/ssh"
+		connectionTarget = fmt.Sprintf("%s@%s:%d", stringOf(cfg["username"]), stringOf(cfg["host"]), integer(cfg["port"]))
 		cfg["shell"] = selectedShell
 		args = sshArguments(cfg, initialization)
 		if trustedPath != "" {
@@ -227,6 +232,14 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 			}
 		}
 	}
+	var startupLog *sshStartupLog
+	if r["kind"] == "ssh" && runtime.GOOS == "windows" {
+		// Failure to create optional diagnostics must not block a valid login.
+		startupLog, _ = newSSHStartupLog(t.models.Home)
+		if startupLog != nil {
+			args = append([]string{"-E", filepath.ToSlash(startupLog.path), "-o", "LogLevel=VERBOSE"}, args...)
+		}
+	}
 	cmd := exec.Command(platform.Executable(program), args...)
 	cmd.Dir = home
 	cmd.Env = append(platform.Environment(home), "TERM=xterm-256color", "PS1=", "PS2=", "HISTFILE=/dev/null")
@@ -236,11 +249,12 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 	}
 	f, e := startTerminal(cmd, 100, 30)
 	if e != nil {
+		startupLog.discard()
 		t.mu.Unlock()
 		t.store.TerminalStatus(id, tid, "disconnected")
 		fail(503, "Could not start terminal; verify connection configuration")
 	}
-	l := &liveTerminal{pty: f, cmd: cmd, id: tid, session: id, remote: r["kind"] == "ssh", interactive: interactive, promptRedraw: selectedShell != "sh", readyMarker: readyMarker, connected: make(chan struct{}), shell: selectedShell, screen: vt10x.New(vt10x.WithSize(100, 30))}
+	l := &liveTerminal{pty: f, cmd: cmd, id: tid, session: id, remote: r["kind"] == "ssh", interactive: interactive, promptRedraw: selectedShell != "sh", readyMarker: readyMarker, connected: make(chan struct{}), shell: selectedShell, connectionTarget: connectionTarget, screen: vt10x.New(vt10x.WithSize(100, 30))}
 	t.live[tid] = l
 	t.wg.Add(2)
 	t.mu.Unlock()
@@ -265,7 +279,9 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 	go func() {
 		defer t.wg.Done()
 		cmd.Wait()
+		startupCause := startupLog.finish()
 		l.mu.Lock()
+		l.startupCause = startupCause
 		if l.remote && !l.ready && cmd.ProcessState != nil {
 			code := cmd.ProcessState.ExitCode()
 			l.startupExitCode = &code
@@ -774,11 +790,26 @@ func (t *Terminals) closeLive(l *liveTerminal, reason string) {
 	}
 	t.record(l, l.pending)
 	l.pending = ""
+	if !l.ready && retainedSSHCauses[l.startupCause] {
+		t.record(l, "\r\n"+sshStartupHistoryPrefix+l.startupCause+"\r\n")
+	}
 	t.flush(l)
 	t.finish(l, nil, "\n["+reason+"]", true)
 	t.store.TerminalStatus(l.session, l.id, "disconnected")
 	if !l.ready {
-		l.connectErr = fmt.Errorf("%s", terminalConnectionErrorWithExit(l.output, reason, l.startupExitCode))
+		startupOutput := l.output
+		if l.screen != nil {
+			startupOutput += "\n" + t.screenLocked(l, "tail", 1000, outputLimit)
+		}
+		message := terminalConnectionError(startupOutput, reason)
+		if l.startupCause != "" && !strings.Contains(message, "凭据助手") {
+			message = l.startupCause
+		}
+		message = terminalConnectionCauseWithExit(message, reason, l.startupExitCode)
+		if l.connectionTarget != "" {
+			message += " 连接目标：" + l.connectionTarget + "。"
+		}
+		l.connectErr = fmt.Errorf("%s", message)
 		close(l.connected)
 	}
 	t.mu.Lock()

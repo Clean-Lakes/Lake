@@ -19,15 +19,15 @@ func sshFileOption(name, value string) string {
 func sshArguments(c Object, initialization ...string) []string {
 	h, _ := os.UserHomeDir()
 	known := filepath.Join(h, ".ssh", "known_hosts")
-	args := []string{"-F", "/dev/null", "-tt", "-e", "none", "-a", "-x", "-o", "StrictHostKeyChecking=yes", "-o", "GlobalKnownHostsFile=/dev/null", "-o", "IdentitiesOnly=yes", "-o", "IdentityAgent=none", "-o", "AddKeysToAgent=no", "-o", "KbdInteractiveAuthentication=no", "-o", "NumberOfPasswordPrompts=1", "-o", sshFileOption("UserKnownHostsFile", known), "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2"}
+	args := []string{"-F", "/dev/null", "-tt", "-e", "none", "-a", "-x", "-o", "StrictHostKeyChecking=yes", "-o", "GlobalKnownHostsFile=/dev/null", "-o", "IdentitiesOnly=yes", "-o", "IdentityAgent=none", "-o", "AddKeysToAgent=no", "-o", "NumberOfPasswordPrompts=1", "-o", sshFileOption("UserKnownHostsFile", known), "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2"}
 	if c["authMethod"] == "password" {
-		args = append(args, "-o", "BatchMode=no", "-o", "PreferredAuthentications=password", "-o", "PasswordAuthentication=yes", "-o", "PubkeyAuthentication=no")
+		args = append(args, "-o", "BatchMode=no", "-o", "PreferredAuthentications=password,keyboard-interactive", "-o", "KbdInteractiveAuthentication=yes", "-o", "PasswordAuthentication=yes", "-o", "PubkeyAuthentication=no")
 	} else {
 		batch := "yes"
 		if stringOf(c["credentialRef"]) != "" {
 			batch = "no"
 		}
-		args = append(args, "-o", "BatchMode="+batch, "-o", "PreferredAuthentications=publickey", "-o", "PasswordAuthentication=no", "-i", stringOf(c["identityFile"]))
+		args = append(args, "-o", "BatchMode="+batch, "-o", "PreferredAuthentications=publickey", "-o", "KbdInteractiveAuthentication=no", "-o", "PasswordAuthentication=no", "-i", stringOf(c["identityFile"]))
 	}
 	remote := remoteShellCommand(shellName(c["shell"]))
 	if len(initialization) > 0 {
@@ -39,6 +39,8 @@ func sshArguments(c Object, initialization ...string) []string {
 // SSHAskpass writes only to OpenSSH's private helper pipe, never the terminal.
 // The environment contains a reference; it never contains password material.
 func SSHAskpass(prompt string, out io.Writer) error { return ai.SSHAskpass(prompt, out) }
+
+const SSHAskpassFailureMessage = "SSH credential helper could not provide saved credentials"
 
 func readSSHSecret(root, ref string) string {
 	path, e := privateFile(root, ref)

@@ -6,7 +6,6 @@ import (
 	"github.com/UserExistsError/conpty"
 	"os"
 	"os/exec"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -59,7 +58,7 @@ func startTerminal(cmd *exec.Cmd, cols, rows int) (terminalDevice, error) {
 	for i, arg := range args {
 		parts[i] = syscall.EscapeArg(arg)
 	}
-	sort.Slice(env, func(i, j int) bool { return strings.ToUpper(env[i]) < strings.ToUpper(env[j]) })
+	env = consoleTerminalEnvironment(env)
 	p, err := conpty.Start(strings.Join(parts, " "), conpty.ConPtyDimensions(cols, rows), conpty.ConPtyWorkDir(cmd.Dir), conpty.ConPtyEnv(env))
 	if err != nil {
 		return nil, err

@@ -11,6 +11,16 @@ import (
 	"github.com/hinshun/vt10x"
 )
 
+func TestConsoleEnvironmentUsesConnectionOverrides(t *testing.T) {
+	inherited := []string{"SSH_ASKPASS=0-stale-helper", "Path=old", "LAKE_SSH_SECRET_REF=0-stale-reference", "=C:=C:\\old", "SSH_ASKPASS=correct-helper", "PATH=correct", "LAKE_SSH_SECRET_REF=correct-reference", "__lake_init=correct-init", "=D:=D:\\other"}
+	original := append([]string(nil), inherited...)
+	got := consoleTerminalEnvironment(inherited)
+	want := []string{"=C:=C:\\old", "=D:=D:\\other", "LAKE_SSH_SECRET_REF=correct-reference", "PATH=correct", "SSH_ASKPASS=correct-helper", "__lake_init=correct-init"}
+	if !reflect.DeepEqual(got, want) || !reflect.DeepEqual(inherited, original) {
+		t.Fatal("ConPTY retained stale inherited authentication values or changed its caller's environment")
+	}
+}
+
 func TestConsoleSSHInitializationUsesSameFramesAsLocalShell(t *testing.T) {
 	marker := "\x1eLAKE_READY_fixture\x1f"
 	initialization := terminalInit("sh", marker)

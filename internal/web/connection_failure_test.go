@@ -126,6 +126,12 @@ func TestSSHStartupReasonAndRetryIntent(t *testing.T) {
 		{"Bad owner or permissions on C:/private/config", "文件访问权限"},
 		{"ssh_askpass: exec(C:/Program Files/Lake/Lake.exe): No such file", "凭据助手无法启动"},
 		{"command-line: Bad configuration option: fixture", "不支持连接所需的选项"},
+		{"Permission de\x1b[0m\r\nnied (keyboard-interactive)", "身份认证失败"},
+		{"kex_exchange_identification: read: Connection reset by peer", "关闭了连接"},
+		{"Connection closed by synthetic port 22", "关闭了连接"},
+		{"PTY allocation request failed on channel 0", "拒绝创建终端"},
+		{"exec request failed on channel 0", "拒绝创建终端"},
+		{SSHAskpassFailureMessage, "凭据助手未能提供"},
 	} {
 		result := terminalConnectionError(tc.output+"\nfixture-secret-not-for-display", "")
 		if !strings.Contains(result, tc.want) || strings.Contains(result, "fixture-secret") || strings.Contains(result, "synthetic") {

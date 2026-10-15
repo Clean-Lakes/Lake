@@ -43,6 +43,7 @@ func main() {
 	// Git OpenSSH invokes the same executable through a private inherited pipe.
 	if os.Getenv("LAKE_SSH_ASKPASS") == "1" {
 		if len(os.Args) != 2 || web.SSHAskpass(os.Args[1], os.Stdout) != nil {
+			fmt.Fprintln(os.Stderr, web.SSHAskpassFailureMessage)
 			os.Exit(1)
 		}
 		return

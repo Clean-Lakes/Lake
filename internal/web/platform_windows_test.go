@@ -29,16 +29,29 @@ func TestWindowsSSHPasswordConPTYHandshake(t *testing.T) {
 	for _, tc := range []struct {
 		name                                  string
 		interactive, unusualPaths, rejectAuth bool
+		challenge                             string
 	}{
-		{"managed", false, false, false},
-		{"interactive", true, false, false},
-		{"installed-paths", true, true, false},
-		{"authentication-failure", true, false, true},
+		{"managed", false, false, false, ""},
+		{"interactive", true, false, false, ""},
+		{"installed-paths", true, true, false, ""},
+		{"authentication-failure", true, false, true, ""},
+		{"pam-managed", false, false, false, "Password: "},
+		{"pam-interactive", true, true, false, "Password: "},
+		{"otp-does-not-receive-password", true, false, true, "One-time password: "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			windowsSSHPasswordConPTYHandshake(t, tc.interactive, tc.unusualPaths, tc.rejectAuth)
+			windowsSSHPasswordConPTYHandshake(t, tc.interactive, tc.unusualPaths, tc.rejectAuth, windowsSSHFixtureOptions{challenge: tc.challenge})
 		})
 	}
+	t.Run("inherited-credential-helper", func(t *testing.T) {
+		t.Setenv("SSH_ASKPASS", "0-stale-helper")
+		t.Setenv("LAKE_SSH_SECRET_REF", "0-stale-reference")
+		t.Setenv("LAKE_SSH_ASKPASS_MODE", "key")
+		windowsSSHPasswordConPTYHandshake(t, true, false, false)
+	})
+	t.Run("edited-credentials", func(t *testing.T) {
+		windowsSSHPasswordConPTYHandshake(t, true, false, false, windowsSSHFixtureOptions{editCredentials: true})
+	})
 }
 
 func TestWindowsPackagedSSHCredentialHelper(t *testing.T) {
@@ -59,16 +72,38 @@ func TestWindowsPackagedSSHCredentialHelper(t *testing.T) {
 	if !ok || header.Subsystem != 3 {
 		t.Fatal("packaged credential helper is not a console-subsystem x64 executable")
 	}
-	for _, unusual := range []bool{false, true} {
-		t.Run(fmt.Sprintf("unicode-and-spaces-%t", unusual), func(t *testing.T) { windowsSSHPasswordConPTYHandshake(t, true, unusual, false, desktop) })
+	for _, challenge := range []string{"", "Password: "} {
+		for _, unusual := range []bool{false, true} {
+			t.Run(fmt.Sprintf("pam-%t/unicode-and-spaces-%t", challenge != "", unusual), func(t *testing.T) {
+				windowsSSHPasswordConPTYHandshake(t, true, unusual, false, windowsSSHFixtureOptions{desktop: desktop, challenge: challenge})
+			})
+		}
 	}
+	t.Run("inherited-credential-helper", func(t *testing.T) {
+		t.Setenv("SSH_ASKPASS", "0-stale-helper")
+		t.Setenv("LAKE_SSH_SECRET_REF", "0-stale-reference")
+		t.Setenv("LAKE_SSH_ASKPASS_MODE", "key")
+		windowsSSHPasswordConPTYHandshake(t, true, true, false, windowsSSHFixtureOptions{desktop: desktop})
+	})
+	t.Run("edited-credentials", func(t *testing.T) {
+		windowsSSHPasswordConPTYHandshake(t, true, true, false, windowsSSHFixtureOptions{desktop: desktop, editCredentials: true})
+	})
 }
 
-func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, rejectAuth bool, desktopEntry ...string) {
+type windowsSSHFixtureOptions struct {
+	desktop, challenge string
+	editCredentials    bool
+}
+
+func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, rejectAuth bool, options ...windowsSSHFixtureOptions) {
+	var opts windowsSSHFixtureOptions
+	if len(options) > 0 {
+		opts = options[0]
+	}
 	b, h := fixture(t)
 	id, _ := newSession(t, h)
-	if len(desktopEntry) > 0 {
-		b.Terminals.askpassProgram = desktopEntry[0]
+	if opts.desktop != "" {
+		b.Terminals.askpassProgram = opts.desktop
 	}
 	if unusualPaths {
 		// Reproduce an installed backend/credential path, not only the ASCII
@@ -79,8 +114,8 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 			t.Fatal(err)
 		}
 		executable, err := os.Executable()
-		if len(desktopEntry) > 0 {
-			executable, err = platform.SSHAskpassProgram(desktopEntry[0])
+		if opts.desktop != "" {
+			executable, err = platform.SSHAskpassProgram(opts.desktop)
 		}
 		if err != nil {
 			t.Fatal(err)
@@ -93,10 +128,10 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 			t.Fatal(err)
 		}
 		b.Terminals.askpassProgram = helper
-		if len(desktopEntry) > 0 {
+		if opts.desktop != "" {
 			// Match the desktop layout while keeping the test credentials private.
 			gui := filepath.Join(filepath.Dir(filepath.Dir(helper)), "Lake.exe")
-			data, err := os.ReadFile(desktopEntry[0])
+			data, err := os.ReadFile(opts.desktop)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -122,6 +157,20 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 		authenticated.Store(true)
 		return nil, nil
 	}}
+	if opts.challenge != "" {
+		config.PasswordCallback = nil
+		config.KeyboardInteractiveCallback = func(meta ssh.ConnMetadata, challenge ssh.KeyboardInteractiveChallenge) (*ssh.Permissions, error) {
+			answers, err := challenge(meta.User(), "", []string{opts.challenge}, []bool{false})
+			if opts.challenge == "One-time password: " && len(answers) == 1 && answers[0] == "synthetic-windows-password" {
+				t.Error("OTP challenge received the saved login password")
+			}
+			if err != nil || rejectAuth || meta.User() != "fixture" || len(answers) != 1 || answers[0] != "synthetic-windows-password" {
+				return nil, errors.New("fixture authentication rejected")
+			}
+			authenticated.Store(true)
+			return nil, nil
+		}
+	}
 	config.AddHostKey(signer)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -194,17 +243,34 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 		t.Fatal(err)
 	}
 	b.Terminals.KnownHosts = known
-	settings, cleanup := prepareSSH(b.Models.Home, Object{"host": "127.0.0.1", "port": port, "username": "fixture", "authMethod": "password", "password": "synthetic-windows-password", "shell": "sh"})
+	username, password := "fixture", "synthetic-windows-password"
+	if opts.editCredentials {
+		username, password = "old-fixture", "old-fixture-password"
+	}
+	settings, cleanup := prepareSSH(b.Models.Home, Object{"host": "127.0.0.1", "port": port, "username": username, "authMethod": "password", "password": password, "shell": "sh"})
 	defer cleanup()
 	resource := b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "isolated SSH", "ssh", settings)
+	if opts.editCredentials {
+		resource = apiTest(t, h, "PATCH", "/api/resources/"+stringOf(resource["id"]), Object{"name": "edited SSH", "ssh": Object{"username": "fixture", "password": "synthetic-windows-password"}}, 200)
+	}
 	if rejectAuth {
 		var failure *Failure
 		func() {
 			defer func() { failure, _ = recover().(*Failure) }()
 			b.Terminals.OpenInteractive(ctx, id, stringOf(resource["id"]), "sh")
 		}()
-		if failure == nil || !strings.Contains(failure.Message, "身份认证失败") || !strings.Contains(failure.Message, "255") {
+		if failure == nil || !(strings.Contains(failure.Message, "身份认证失败") || opts.challenge != "" && strings.Contains(failure.Message, "凭据助手")) || !strings.Contains(failure.Message, "255") || !strings.Contains(failure.Message, "fixture@127.0.0.1:") {
 			t.Errorf("authentication rejection lost its cause and exit code: %v", failure)
+		}
+		if opts.challenge == "" {
+			terminals := objects(b.Store.Snapshot(id)["terminals"])
+			if len(terminals) != 1 {
+				t.Fatal("failed SSH terminal is missing from history")
+			}
+			history := b.Store.History(id, stringOf(terminals[0]["id"]))
+			if !strings.Contains(retainedSSHStartupCause(stringOf(history["output"])), "身份认证失败") {
+				t.Error("ConPTY startup diagnostic was not retained safely")
+			}
 		}
 		cancel()
 		select {
@@ -230,12 +296,33 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 	if term["status"] != "ready" || !authenticated.Load() || term["cwd"] != "/root/remote dir" {
 		t.Fatalf("Windows SSH session status=%v authenticated=%t cwd=%q", term["status"], authenticated.Load(), stringOf(term["cwd"]))
 	}
+	live := b.Terminals.get(id, stringOf(term["id"]))
+	if len(live.cmd.Args) < 3 || live.cmd.Args[1] != "-E" {
+		t.Fatal("Windows SSH silently skipped its independent startup diagnostic")
+	}
+	if info, err := os.Stat(live.cmd.Args[2]); err != nil || !platform.Private(live.cmd.Args[2], info) {
+		t.Fatal("active Windows SSH startup diagnostic is not private")
+	}
 	b.Terminals.Close(id, stringOf(term["id"]))
 	cancel()
 	select {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("isolated SSH server did not stop")
+	}
+	deadline = time.Now().Add(2 * time.Second)
+	for {
+		logs, err := filepath.Glob(filepath.Join(b.Models.Home, "secrets", "ssh-startup-*"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(logs) == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("private SSH startup diagnostics were not removed after exit")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 
