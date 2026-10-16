@@ -2,7 +2,7 @@
 
 支持 Windows 10 1809+、Windows 11，Intel / AMD 64 位处理器。使用当前 Go + React 工作台和原生 WebView2 窗口，随软件包携带 Bash、SSH 及常用工具；无需安装 Node.js、Python、Git 或 WSL。
 
-安装版运行 `Lake-<version>-windows-x86_64-setup.exe`；按用户安装到 `%LOCALAPPDATA%\Programs\Lake`，创建桌面与开始菜单快捷方式。若 WebView2 Runtime 缺失，安装程序验证 Microsoft 签名后安装随包的官方引导程序；首次补装运行环境需要联网。
+安装版运行 `Lake-<version>-windows-x86_64-setup.exe`；安装向导提供目录选择页，默认按用户安装到 `%LOCALAPPDATA%\Programs\Lake`，也可浏览或输入自定义目录，并显示所需空间与剩余空间。再次安装和自动更新会沿用上次安装位置；静默安装仍支持 NSIS `/D=完整路径`（放在命令行末尾）。安装后创建桌面与开始菜单快捷方式。若 WebView2 Runtime 缺失，安装程序验证 Microsoft 签名后安装随包的官方引导程序；首次补装运行环境需要联网。
 
 免安装版解压整个 ZIP 后运行 `Lake.exe`，不要单独复制 EXE。WebView2 Runtime 必须已经安装；也可运行 `resources\WebView2Setup.exe`。用户数据存放于 `%USERPROFILE%\.lake`，卸载保留数据。
 

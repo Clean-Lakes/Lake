@@ -7,6 +7,7 @@ Var LakeUpdate
 Name "Lake ${VERSION} (Windows x86_64)"
 OutFile "${OUTPUT}"
 InstallDir "$LOCALAPPDATA\Programs\Lake"
+InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\CleanLakes" "InstallLocation"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 VIProductVersion "${PRODUCT_VERSION}"
@@ -18,12 +19,16 @@ VIAddVersionKey "LegalCopyright" "Copyright (c) Clean Lakes contributors"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\Lake.exe"
 !define MUI_FINISHPAGE_RUN_NOTCHECKED
 !insertmacro MUI_PAGE_WELCOME
+!define MUI_DIRECTORYPAGE_TEXT_TOP "$(LakeDirectoryText)"
+!insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "SimpChinese"
 !insertmacro MUI_LANGUAGE "English"
+LangString LakeDirectoryText ${LANG_SIMPCHINESE} "保留默认位置即可直接安装，或点击“浏览”选择自定义安装目录。下次安装和自动更新会沿用此位置。"
+LangString LakeDirectoryText ${LANG_ENGLISH} "Keep the default location, or click Browse to choose a custom installation folder. Future installations and updates will reuse this location."
 
 Function .onInit
  StrCpy $LakeUpdate "0"
