@@ -1,33 +1,43 @@
+<div align="center">
+
 # Lake
 
-Lake 是一个面向运维场景的 AI 工作台。用自然语言调查主机、集群和服务问题，把资源、终端、执行过程和证据放在同一个界面中。
+**面向 SRE 的 AI 运维工作台**
 
-![Lake 演示](docs/images/lake-demo.png)
+连接资源，协同排障，让执行有迹可循。
 
-## 功能
+[下载客户端](https://github.com/Clean-Lakes/Lake/releases) · [快速开始](#快速开始) · [SRE 协作](docs/sre-collaboration.md)
 
-- 按项目管理资源与会话，支持本机、SSH、数据库、Redis 和 Docker。
-- 通过自然语言查询资源状态、查看日志、分析 Kubernetes 和服务故障。
-- 普通模式由 Lake 主 Agent 直接处理，展示工具执行与任务进度。
-- 可按项目开启 SRE 协作：协调者、调查员、执行员和验证员在同一对话交接，保留 Plan、操作确认、独立验证和跨轮历史。
-- 持续终端、操作确认和会话记录，方便人工接管与继续排查。
-- 项目记忆在同一项目的会话间共享；可在项目侧栏查看、编辑、忘记和停用，完成回复后可自动提取长期约束。
+</div>
 
-## 开始使用
+<br>
 
-1. 从 [GitHub Releases](https://github.com/Clean-Lakes/Lake/releases) 下载客户端：macOS 支持 Apple Silicon（M 系列），Windows 支持 x86_64。
-2. 在设置中配置模型供应商、接口与 API 密钥。
-3. 创建项目，添加或导入资源，在聊天中使用 `@资源` 发起调查。
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/lake-workbench-dark.jpg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/lake-workbench-light.jpg">
+  <img alt="Lake 工作台：在同一对话中查看调查员、执行员、验证员与协调者的协作结果" src="docs/images/lake-workbench-light.jpg" width="1440">
+</picture>
 
-在输入框旁开启 **SRE 协作**，模型根据上下文决定直接回答、澄清或组织专员；资源可从名称、上下文或可选的 `@资源` 解析。需要先评审时可要求只出计划。操作权限沿用会话设置，`@专员` 只路由问题，不授予执行权限。[使用与边界](docs/sre-collaboration.md)。
+<p align="center"><sub>专员协作与恢复验证 · 当前界面，演示数据</sub></p>
 
-图片识别需要所选模型支持图片输入。
+## 为运维工作而设计
 
-也可以安装 [Magpie Agent 插件](https://github.com/Clean-Lakes/magpie-agent-lake)，在 Magpie 的 Agents 页面为 Lake 选择默认模型，再在 Lake 内切换 Magpie 提供的可用模型。首次连接前启动 Lake 一次，以创建权限为 `0600` 的私有配置文件。
+- **资源就在上下文里。** 按项目组织主机、数据库、Redis 和 Docker，将资源、会话和终端放在一起。
+- **过程可以追溯。** 从工具调用到操作确认，再到执行记录与证据，随时查看，也能人工接管。
+- **专员共同推进。** 开启实验性 SRE 协作，由协调者、调查员、执行员和验证员按需分工；用 Plan 跟进任务，用独立验证核对结果。
 
-## 本地运行
+## 快速开始
 
-构建需要 Go 1.25、Node.js 24 和 pnpm。macOS 首次构建先运行 `scripts/setup_lake_signing.sh`，配置本地签名身份。本地桌面联调使用独立的 Lake Dev：
+1. [下载客户端](https://github.com/Clean-Lakes/Lake/releases)。支持 macOS Apple Silicon 与 Windows x86_64。
+2. 在设置中连接模型，或通过 [Magpie Agent](https://github.com/Clean-Lakes/magpie-agent-lake) 接入。
+3. 添加资源，描述要排查的问题。输入 `@` 可引用资源、Skills 和 MCP；开启 SRE 协作后也可引用专员。
+
+普通模式由 Lake 直接处理。需要多人分工时，在输入框旁开启 **SRE 协作 · 实验性**；操作沿用会话权限。[了解使用与边界 →](docs/sre-collaboration.md)
+
+<details>
+<summary>本地开发</summary>
+
+需要 Go 1.25、Node.js 24 和 pnpm。macOS 首次构建先运行 `scripts/setup_lake_signing.sh`，然后启动独立的 Lake Dev：
 
 ```sh
 pnpm --dir web-agent install --frozen-lockfile
@@ -35,10 +45,10 @@ scripts/build_lake_desktop.sh --dev --install
 open "$HOME/Applications/Lake Dev.app"
 ```
 
-Dev 使用 `~/.lake-dev`，与正式版 `~/.lake` 分离。仅运行 CLI 时，先用 `scripts/build_lake.sh` 构建签名程序，再指定独立 home，例如 `bin/lake web --home "$HOME/.lake-dev-cli" --port 4182 --open`。构建后的程序内嵌前端，运行时不需要 Node.js。
+Dev 使用 `~/.lake-dev`，与正式版数据分离。构建后的程序内嵌前端，运行时无需 Node.js。CLI 和独立 Web 开发见 [开发规范](CONTRIBUTING.md)。
 
-更多说明：[开发规范](CONTRIBUTING.md) · [运行与开发](web-agent/README.md) · [macOS 客户端](client/macos/README.md) · [Windows 客户端](client/windows/README.md)。
+</details>
 
-## License
+---
 
-[Apache-2.0](LICENSE-APACHE)
+[使用与开发](web-agent/README.md) · [macOS](client/macos/README.md) · [Windows](client/windows/README.md) · [贡献指南](CONTRIBUTING.md) · [Apache-2.0](LICENSE-APACHE)
