@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -104,7 +103,7 @@ func sshBase(c *SSH, roots ...string) ([]string, error) {
 	if c.KnownHosts != "" {
 		known = c.KnownHosts
 	}
-	args := []string{"-F", "/dev/null", "-o", "StrictHostKeyChecking=yes", "-o", "IdentitiesOnly=yes", "-o", "IdentityAgent=none", "-o", "AddKeysToAgent=no", "-o", "NumberOfPasswordPrompts=1", "-o", "UserKnownHostsFile=" + strconv.Quote(known), "-o", "ConnectTimeout=10"}
+	args := []string{"-F", "/dev/null", "-o", "StrictHostKeyChecking=yes", "-o", "IdentitiesOnly=yes", "-o", "IdentityAgent=none", "-o", "AddKeysToAgent=no", "-o", "NumberOfPasswordPrompts=1", "-o", platform.SSHFileOption("UserKnownHostsFile", known), "-o", "ConnectTimeout=10"}
 	if c.KnownHosts != "" {
 		args = append(args, "-o", "GlobalKnownHostsFile=/dev/null")
 	}

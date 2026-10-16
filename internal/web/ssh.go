@@ -12,14 +12,10 @@ import (
 	"strings"
 )
 
-func sshFileOption(name, value string) string {
-	return name + "=" + strconv.Quote(filepath.ToSlash(value))
-}
-
 func sshArguments(c Object, initialization ...string) []string {
 	h, _ := os.UserHomeDir()
 	known := filepath.Join(h, ".ssh", "known_hosts")
-	args := []string{"-F", "/dev/null", "-tt", "-e", "none", "-a", "-x", "-o", "StrictHostKeyChecking=yes", "-o", "GlobalKnownHostsFile=/dev/null", "-o", "IdentitiesOnly=yes", "-o", "IdentityAgent=none", "-o", "AddKeysToAgent=no", "-o", "NumberOfPasswordPrompts=1", "-o", sshFileOption("UserKnownHostsFile", known), "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2"}
+	args := []string{"-F", "/dev/null", "-tt", "-e", "none", "-a", "-x", "-o", "StrictHostKeyChecking=yes", "-o", "GlobalKnownHostsFile=/dev/null", "-o", "IdentitiesOnly=yes", "-o", "IdentityAgent=none", "-o", "AddKeysToAgent=no", "-o", "NumberOfPasswordPrompts=1", "-o", platform.SSHFileOption("UserKnownHostsFile", known), "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2"}
 	if c["authMethod"] == "password" {
 		args = append(args, "-o", "BatchMode=no", "-o", "PreferredAuthentications=password,keyboard-interactive", "-o", "KbdInteractiveAuthentication=yes", "-o", "PasswordAuthentication=yes", "-o", "PubkeyAuthentication=no")
 	} else {

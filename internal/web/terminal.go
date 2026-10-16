@@ -59,6 +59,7 @@ type liveTerminal struct {
 	hookPartial                               string
 	rawOrigin                                 string
 	scrollback                                []string
+	initEchoDropped                           bool
 }
 type Terminals struct {
 	ResolveAccess   func(string, string, bool) string
@@ -201,7 +202,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 		if trustedPath != "" {
 			for i, v := range args {
 				if strings.HasPrefix(v, "UserKnownHostsFile=") {
-					args[i] = sshFileOption("UserKnownHostsFile", trustedPath)
+					args[i] = platform.SSHFileOption("UserKnownHostsFile", trustedPath)
 				}
 			}
 		}
@@ -227,7 +228,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 		if t.KnownHosts != "" {
 			for i, v := range args {
 				if strings.HasPrefix(v, "UserKnownHostsFile=") {
-					args[i] = sshFileOption("UserKnownHostsFile", t.KnownHosts)
+					args[i] = platform.SSHFileOption("UserKnownHostsFile", t.KnownHosts)
 				}
 			}
 		}
@@ -300,7 +301,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 	// Carry the script through the environment/SSH command channel. Only this
 	// short trigger enters the PTY: large pasted initialization can overflow
 	// canonical queues or race line-editor mode changes and lose bytes.
-	_, e = f.WriteString("eval \"$__lake_init\"\n")
+	_, e = f.WriteString(terminalInitTrigger + "\n")
 	if e != nil {
 		t.closeLive(l, "Connection initialization failed")
 	}
@@ -330,7 +331,35 @@ func (t *Terminals) get(id, tid string) *liveTerminal {
 	}
 	return l
 }
+
+// terminalInitTrigger is the only command Lake types into a fresh PTY: the script
+// itself travels through the environment or the SSH command channel.
+const terminalInitTrigger = `eval "$__lake_init"`
+
+// dropInitEcho removes the echoed initialization line. The trigger is written into
+// the PTY, and the login shell echoes it before the script can turn echo off; a
+// console repaint can repeat that line after the handshake. The echo is internal
+// plumbing, so drop the first line carrying it and keep everything else — banners,
+// prompts and real output — untouched.
+func (l *liveTerminal) dropInitEcho(data string) string {
+	if l.initEchoDropped {
+		return data
+	}
+	at := strings.Index(data, terminalInitTrigger)
+	if at < 0 {
+		return data
+	}
+	l.initEchoDropped = true
+	start := strings.LastIndexByte(data[:at], '\n') + 1
+	end := at + len(terminalInitTrigger)
+	if next := strings.IndexByte(data[end:], '\n'); next >= 0 {
+		end += next + 1
+	}
+	return data[:start] + data[end:]
+}
+
 func (t *Terminals) record(l *liveTerminal, data string) {
+	data = l.dropInitEcho(data)
 	if data != "" {
 		l.capturedAt = now()
 	}
