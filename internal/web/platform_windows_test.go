@@ -43,6 +43,9 @@ func TestWindowsSSHPasswordConPTYHandshake(t *testing.T) {
 			windowsSSHPasswordConPTYHandshake(t, tc.interactive, tc.unusualPaths, tc.rejectAuth, windowsSSHFixtureOptions{challenge: tc.challenge})
 		})
 	}
+	t.Run("desktop-trusted-pin", func(t *testing.T) {
+		windowsSSHPasswordConPTYHandshake(t, true, false, false, windowsSSHFixtureOptions{trustedPin: true})
+	})
 	t.Run("inherited-credential-helper", func(t *testing.T) {
 		t.Setenv("SSH_ASKPASS", "0-stale-helper")
 		t.Setenv("LAKE_SSH_SECRET_REF", "0-stale-reference")
@@ -93,6 +96,8 @@ func TestWindowsPackagedSSHCredentialHelper(t *testing.T) {
 type windowsSSHFixtureOptions struct {
 	desktop, challenge string
 	editCredentials    bool
+	// trustedPin leaves KnownHosts empty so the desktop host-trust branch runs.
+	trustedPin bool
 }
 
 func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, rejectAuth bool, options ...windowsSSHFixtureOptions) {
@@ -180,69 +185,36 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	done := make(chan struct{})
+	// A real server takes every connection: the desktop host-trust probe arrives
+	// before the terminal session that follows it.
 	go func() {
 		defer close(done)
-		socket, err := listener.Accept()
-		if err != nil {
-			return
-		}
-		defer socket.Close()
-		stop := context.AfterFunc(ctx, func() { socket.Close() })
+		stop := context.AfterFunc(ctx, func() { listener.Close() })
 		defer stop()
-		connection, channels, requests, err := ssh.NewServerConn(socket, config)
-		if err != nil {
-			return
-		}
-		defer connection.Close()
-		go ssh.DiscardRequests(requests)
-		for incoming := range channels {
-			channel, requests, err := incoming.Accept()
+		for {
+			socket, err := listener.Accept()
 			if err != nil {
 				return
 			}
-			defer channel.Close()
-			for request := range requests {
-				if request.Type != "exec" {
-					request.Reply(request.Type == "pty-req" || request.Type == "window-change", nil)
-					continue
-				}
-				var payload struct{ Command string }
-				if ssh.Unmarshal(request.Payload, &payload) != nil {
-					request.Reply(false, nil)
-					return
-				}
-				marker := regexp.MustCompile(`LAKE_FRAME_READY_([a-zA-Z0-9_-]+)`).FindStringSubmatch(payload.Command)
-				if len(marker) != 2 {
-					request.Reply(false, nil)
-					return
-				}
-				ready := "\x1eLAKE_READY_" + marker[1] + "\x1f"
-				expected := sshArguments(Object{"shell": "sh"}, terminalInit("sh", ready, interactive))
-				if payload.Command != consoleTerminalScript(expected[len(expected)-1]) {
-					t.Error("bundled Windows OpenSSH changed the remote initialization command in transit")
-					request.Reply(false, nil)
-					return
-				}
-				request.Reply(true, nil)
-				frame := "\x1eLAKE_READY_" + marker[1] + "\x1f"
-				if strings.Contains(payload.Command, "LAKE_FRAME_READY_") {
-					frame = consoleFramePrefix + "READY_" + marker[1] + "\a"
-					frame += consoleHookPrefix + "9003;0;/root/remote dir\a"
-				}
-				if strings.Contains(payload.Command, "LAKE_READY_HOOK_") {
-					// A renderer may retain only the last title in this batch.
-					frame = consoleReadyHookPrefix + marker[1] + ";9003;0;/root/remote dir\a"
-				}
-				channel.Write([]byte(frame))
-			}
+			go serveSSHFixture(t, ctx, socket, config, interactive)
 		}
 	}()
 	port := listener.Addr().(*net.TCPAddr).Port
-	known := filepath.Join(t.TempDir(), "known hosts")
+	// An installed client keeps its known-hosts record under the Lake home and
+	// usually sees no space anywhere in that path. Both variants have to survive
+	// command-line quoting, so only the unusual-path case forces a space here.
+	known := filepath.Join(t.TempDir(), "known_hosts")
+	if unusualPaths {
+		known = filepath.Join(t.TempDir(), "known hosts")
+	}
 	if err := os.WriteFile(known, []byte(fmt.Sprintf("[127.0.0.1]:%d %s", port, ssh.MarshalAuthorizedKey(signer.PublicKey()))), 0600); err != nil {
 		t.Fatal(err)
 	}
-	b.Terminals.KnownHosts = known
+	if opts.trustedPin {
+		b.saveHostPin(lakeHostKeyPath(b.Models.Home, "127.0.0.1", port), "127.0.0.1", port, signer.PublicKey())
+	} else {
+		b.Terminals.KnownHosts = known
+	}
 	username, password := "fixture", "synthetic-windows-password"
 	if opts.editCredentials {
 		username, password = "old-fixture", "old-fixture-password"
@@ -300,6 +272,18 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 	if len(live.cmd.Args) < 3 || live.cmd.Args[1] != "-E" {
 		t.Fatal("Windows SSH silently skipped its independent startup diagnostic")
 	}
+	// OpenSSH parses the known-hosts value itself, and Go only preserves quotes in
+	// an argument that also holds a space. Without that space the bundled ssh aborts
+	// with "invalid quotes" before it can report anything.
+	knownHosts := ""
+	for _, arg := range live.cmd.Args {
+		if strings.HasPrefix(arg, "UserKnownHostsFile=") {
+			knownHosts = arg
+		}
+	}
+	if !strings.HasPrefix(knownHosts, `UserKnownHostsFile= "`) || !strings.HasSuffix(knownHosts, `"`) {
+		t.Errorf("known-hosts option does not survive command-line quoting: %q", knownHosts)
+	}
 	if info, err := os.Stat(live.cmd.Args[2]); err != nil || !platform.Private(live.cmd.Args[2], info) {
 		t.Fatal("active Windows SSH startup diagnostic is not private")
 	}
@@ -323,6 +307,61 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 			t.Fatal("private SSH startup diagnostics were not removed after exit")
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// serveSSHFixture answers one accepted connection. The desktop host-trust probe
+// stops after the handshake, so a connection without channels simply ends.
+func serveSSHFixture(t *testing.T, ctx context.Context, socket net.Conn, config *ssh.ServerConfig, interactive bool) {
+	defer socket.Close()
+	stop := context.AfterFunc(ctx, func() { socket.Close() })
+	defer stop()
+	connection, channels, requests, err := ssh.NewServerConn(socket, config)
+	if err != nil {
+		return
+	}
+	defer connection.Close()
+	go ssh.DiscardRequests(requests)
+	for incoming := range channels {
+		channel, requests, err := incoming.Accept()
+		if err != nil {
+			return
+		}
+		defer channel.Close()
+		for request := range requests {
+			if request.Type != "exec" {
+				request.Reply(request.Type == "pty-req" || request.Type == "window-change", nil)
+				continue
+			}
+			var payload struct{ Command string }
+			if ssh.Unmarshal(request.Payload, &payload) != nil {
+				request.Reply(false, nil)
+				return
+			}
+			marker := regexp.MustCompile(`LAKE_FRAME_READY_([a-zA-Z0-9_-]+)`).FindStringSubmatch(payload.Command)
+			if len(marker) != 2 {
+				request.Reply(false, nil)
+				return
+			}
+			ready := "\x1eLAKE_READY_" + marker[1] + "\x1f"
+			expected := sshArguments(Object{"shell": "sh"}, terminalInit("sh", ready, interactive))
+			if payload.Command != consoleTerminalScript(expected[len(expected)-1]) {
+				t.Error("bundled Windows OpenSSH changed the remote initialization command in transit")
+				request.Reply(false, nil)
+				return
+			}
+			request.Reply(true, nil)
+			frame := "\x1eLAKE_READY_" + marker[1] + "\x1f"
+			if strings.Contains(payload.Command, "LAKE_FRAME_READY_") {
+				frame = consoleFramePrefix + "READY_" + marker[1] + "\a"
+				frame += consoleHookPrefix + "9003;0;/root/remote dir\a"
+			}
+			if strings.Contains(payload.Command, "LAKE_READY_HOOK_") {
+				// A renderer may retain only the last title in this batch.
+				frame = consoleReadyHookPrefix + marker[1] + ";9003;0;/root/remote dir\a"
+			}
+			channel.Write([]byte(frame))
+		}
 	}
 }
 

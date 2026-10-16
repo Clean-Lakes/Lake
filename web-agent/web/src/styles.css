@@ -560,7 +560,11 @@ a { color: inherit; }
   .confirm-facts { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *:before, *:after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  /* The iteration limit is load-bearing: without it an infinite animation keeps
+     looping at 0.01ms, and the terminal cursor flickers as fast as the renderer
+     can repaint instead of standing still. The block cursor keeps its own base
+     colors, so ending its blink leaves a solid, visible block. */
+  *, *:before, *:after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 .workspace > .terminal-drawer { margin-bottom: 24px; }
 .terminal-controls { display: flex; flex-wrap: wrap; gap: 6px; }

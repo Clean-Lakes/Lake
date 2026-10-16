@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -51,6 +52,14 @@ func terminalInit(name, marker string, interactiveMode ...bool) string {
 	interactive := len(interactiveMode) > 0 && interactiveMode[0]
 	ready := strings.NewReplacer("\x1e", "\\036", "\x1f", "\\037").Replace(marker)
 	script := "stty -echo\n"
+	if runtime.GOOS == "windows" {
+		// ConPTY uses absolute cursor positions when repainting. The bootstrap
+		// trigger consumes a row before readiness, but pre-handshake output is
+		// hidden from the frontend. Align both screens before the first prompt
+		// so the initial resize cannot leave a second prompt on the next row.
+		// Never reset the screen on resize: that would erase real user history.
+		script += "printf '\\033[H\\033[2J'\n"
+	}
 	if name == "fish" {
 		script += "set -e __lake_init\n"
 	} else {
