@@ -87,7 +87,8 @@ final class ReleaseTests {
 }
 
 @main struct PolicyTests {
-    @MainActor static func main() throws {
+    @MainActor static func main() async throws {
+        try await testArchiveDownload()
         testDesktopProfiles()
         testUpdateIndicator()
         try testUpdateCleanup()

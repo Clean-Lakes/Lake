@@ -80,5 +80,6 @@ func (b *Server) sessionSnapshot(id string) Object {
 	opts := b.Store.Options(id)
 	snap["aiBinding"] = Object{"terminalId": opts["terminal_id"], "generation": opts["terminal_generation"]}
 	snap["terminals"] = own
+	snap["sre"] = b.sreSnapshot(id)
 	return snap
 }

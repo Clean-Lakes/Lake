@@ -57,14 +57,24 @@ func (e *Engine) storeAgentEvidence(ev AgentEvidence, content string) error {
 	return os.Rename(f.Name(), path)
 }
 
-func (e *Engine) readAgentEvidence(s *session, a map[string]any) (any, []string, error) {
+func (e *Engine) readAgentEvidence(s *session, a map[string]any, ownRun ...string) (any, []string, error) {
 	for key := range a {
 		if key != "mode" && key != "evidence_id" && key != "run_id" && key != "offset" && key != "limit" {
 			return nil, nil, errors.New("证据读取仅接受 mode、evidence_id、run_id、offset、limit；不接受身份、文件路径或证据内容")
 		}
 	}
 	evidence := []AgentEvidence{}
-	for _, run := range e.currentInvestigations(s) {
+	runs := e.currentInvestigations(s)
+	if len(ownRun) > 0 {
+		filtered := []AgentRun{}
+		for _, run := range runs {
+			if run.ID == ownRun[0] {
+				filtered = append(filtered, run)
+			}
+		}
+		runs = filtered
+	}
+	for _, run := range runs {
 		if run.Role != "verify" {
 			evidence = append(evidence, run.Evidence...)
 		}
@@ -72,6 +82,12 @@ func (e *Engine) readAgentEvidence(s *session, a map[string]any) (any, []string,
 	if len(a) == 0 {
 		ids := []string{}
 		previews := e.rawAgentEvidence(s)
+		if len(ownRun) > 0 {
+			previews = append([]AgentEvidence(nil), evidence[:min(8, len(evidence))]...)
+			for i := range previews {
+				previews[i].Excerpt = utf8Prefix(previews[i].Excerpt, 2048)
+			}
+		}
 		for _, ev := range previews {
 			ids = append(ids, ev.ID)
 		}
@@ -84,7 +100,7 @@ func (e *Engine) readAgentEvidence(s *session, a map[string]any) (any, []string,
 		}
 		if runID := str(a["run_id"]); runID != "" {
 			owned := false
-			for _, run := range e.currentInvestigations(s) {
+			for _, run := range runs {
 				owned = owned || run.ID == runID
 			}
 			if !owned {
@@ -113,12 +129,29 @@ func (e *Engine) readAgentEvidence(s *session, a map[string]any) (any, []string,
 		}
 		s.mu.Lock()
 		_, tokenLimit := agentUsageLimits(s.state.Config)
+		sessionID := s.state.View.Session
 		s.mu.Unlock()
 		runs, used := e.currentInvestigations(s), 0
 		for _, run := range runs {
 			used += run.BudgetSpent
 		}
-		return map[string]any{"evidence_index": index, "total": len(evidence), "offset": offset, "next_offset": next, "agent_tasks_used": len(runs), "agent_tasks_limit": turnAgentTaskLimit, "agent_tokens_used": used, "agent_tokens_limit": tokenLimit, "agent_tokens_remaining": max(0, tokenLimit-used), "note": "Index is metadata, not observed output. Read relevant IDs with mode=evidence before inferring facts. Source limits cannot be recovered by paging. Reading existing evidence spawns no new jobs or observations; model inference usage remains metered."}, nil, nil
+		result := map[string]any{"evidence_index": index, "total": len(evidence), "offset": offset, "next_offset": next, "agent_tasks_used": len(runs), "agent_tasks_limit": turnAgentTaskLimit, "agent_tokens_used": used, "agent_tokens_limit": tokenLimit, "agent_tokens_remaining": max(0, tokenLimit-used), "note": "Index is metadata, not observed output. Read relevant IDs with mode=evidence before inferring facts. Source limits cannot be recovered by paging. Reading existing evidence spawns no new jobs or observations; model inference usage remains metered."}
+		if len(ownRun) > 0 && e.sreRepository != nil {
+			for _, run := range runs {
+				if run.ID == ownRun[0] && run.SRETaskID != "" {
+					task, err := e.sreRepository.LoadSRETask(sessionID, run.SRETaskID)
+					if err != nil {
+						return nil, nil, err
+					}
+					delete(result, "agent_tasks_used")
+					delete(result, "agent_tasks_limit")
+					result["agent_budget_scope"] = "sre_task"
+					result["agent_tokens_used"], result["agent_tokens_limit"], result["agent_tokens_remaining"] = task.BudgetSpent, task.TokenBudget, max(0, task.TokenBudget-task.BudgetSpent)
+					break
+				}
+			}
+		}
+		return result, nil, nil
 	case "evidence":
 		if a["run_id"] != nil {
 			return nil, nil, errors.New("读取明文只需 evidence_id，run_id 仅用于索引筛选")

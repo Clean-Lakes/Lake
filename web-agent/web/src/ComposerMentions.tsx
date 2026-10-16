@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from "react";
 import {api,readableError} from "./api";
 import {Glyph} from "./Icons";
+import {AgentIcon,type AgentIconName} from './AgentIcon';
 import type {MCPServerConfig,SkillConfig} from "../../shared/contracts";
 import {mentionCategories,type MentionCategory,type MentionOption} from "./composerMentionState";
 import "./composerMentions.css";
@@ -26,10 +27,10 @@ export function ComposerMentions({options,allOptions,index,category,onCategory,o
  const list=useRef<HTMLDivElement>(null),menu=useRef<HTMLDivElement>(null);
  useEffect(()=>{const close=(event:MouseEvent)=>{if(!menu.current?.contains(event.target as Node)&&!(event.target as Element).closest?.("#message-input"))onClose();};document.addEventListener("mousedown",close);return()=>document.removeEventListener("mousedown",close);},[onClose]);
  useEffect(()=>{list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({block:"nearest"});},[index,options]);
- return <div ref={menu} className="mention-menu composer-mentions" aria-label="引用资源、Skills 或 MCP" onMouseDown={event=>event.preventDefault()}>
-  <div className="mention-categories" role="group" aria-label="引用类型">{mentionCategories.map(group=><button key={group.kind} type="button" aria-pressed={group.kind===category} onClick={()=>onCategory(group.kind)}>{group.label}<small>{group.kind==="all"?allOptions.length:allOptions.filter(o=>o.kind===group.kind).length}</small></button>)}</div>
+ return <div ref={menu} className="mention-menu composer-mentions" aria-label={allOptions.some(o=>o.kind==="role")?"引用资源、专员、Skills 或 MCP":"引用资源、Skills 或 MCP"} onMouseDown={event=>event.preventDefault()}>
+  <div className="mention-categories" role="group" aria-label="引用类型">{mentionCategories.filter(group=>group.kind!=="role"||allOptions.some(o=>o.kind==="role")).map(group=><button key={group.kind} type="button" aria-pressed={group.kind===category} onClick={()=>onCategory(group.kind)}>{group.label}<small>{group.kind==="all"?allOptions.length:allOptions.filter(o=>o.kind===group.kind).length}</small></button>)}</div>
   <div className="mention-results" id="composer-mention-options" ref={list} role="listbox" aria-label="引用候选" aria-busy={loading}>
-   {options.map((option,i)=><button key={`${option.kind}:${option.id}`} id={mentionOptionId(option)} tabIndex={-1} type="button" role="option" aria-selected={i===index} className={`mention-item ${i===index?"selected":""}`} onClick={()=>onSelect(option)}><Glyph name={option.kind==="skill"?"book":option.kind==="mcp"?"plug":"server"} size={16}/><span className="mention-copy"><strong>{option.name}</strong><small title={option.detail}>{option.detail}</small></span><span className="mention-kind">{option.kind==="skill"?"Skill":option.kind==="mcp"?"MCP":"资源"}</span></button>)}
+   {options.map((option,i)=><button key={`${option.kind}:${option.id}`} id={mentionOptionId(option)} tabIndex={-1} type="button" role="option" aria-selected={i===index} className={`mention-item ${i===index?"selected":""}`} onClick={()=>onSelect(option)}>{option.kind==="role"?<AgentIcon role={option.id as AgentIconName} size={18}/>:<Glyph name={option.kind==="skill"?"book":option.kind==="mcp"?"plug":"server"} size={16}/>}<span className="mention-copy"><strong>{option.name}</strong><small title={option.detail}>{option.detail}</small></span><span className="mention-kind">{option.kind==="role"?"专员":option.kind==="skill"?"Skill":option.kind==="mcp"?"MCP":"资源"}</span></button>)}
    {!options.length&&<p className="mention-empty">{loading?"正在加载…":category==="skill"?"没有匹配的已启用 Skill":category==="mcp"?"没有匹配的已启用 MCP 服务":"没有匹配的引用"}</p>}
   </div>
   {error&&<div className="mention-error" role="status">{error}<button type="button" onClick={onReload}>重试</button></div>}

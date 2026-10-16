@@ -56,6 +56,7 @@ func TestWorkflowToolTaskOwnershipAndPermissions(t *testing.T) {
 	apiTest(t, h, "PUT", "/api/settings/model", Object{"url": provider.URL, "name": "tool fixture", "protocol": "openai"}, 200)
 	b.configure(id, Object{"silentReadFiles": false, "silentCommands": false, "denyLocalExecution": false})
 	project := stringOf(b.Store.Session(id)["projectId"])
+	b.Store.SetSREEnabled(project, true)
 	saved := b.Store.SaveWorkflow(project, "", 0, b.validateWorkflowTemplate(project, object(parsed(jsonText(workflowFixtureInput(ref))))))
 	value, err := b.bridge(context.Background(), id, "run_workflow", Object{"workflow_id": saved.ID, "version": 1}, true)
 	if err != nil {

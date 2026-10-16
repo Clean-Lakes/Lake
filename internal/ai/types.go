@@ -42,6 +42,9 @@ type SSH struct {
 	KnownHosts    string `json:"-"`
 }
 type Config struct {
+	legacyInvestigations    bool // Historical runtime compatibility; never enabled by user settings.
+	sreCoordinator          bool
+	sre                     *sreRoleContext
 	targetScope             *TargetScope
 	MemoryProjectID         string           `json:"-"`
 	MemoryEnabled           bool             `json:"-"`
@@ -140,6 +143,7 @@ type View struct {
 	Turns          int              `json:"turns"`
 }
 type State struct {
+	SREHandoff             *SREHandoff                    `json:"sreHandoff,omitempty"`
 	QuestionDecisions      map[string]map[string][]string `json:"questionDecisions,omitempty"`
 	FileReads              map[string]string              `json:"fileReads,omitempty"`
 	MemoryOutbox           []MemoryTurnSnapshot           `json:"memoryOutbox,omitempty"`
@@ -149,6 +153,7 @@ type State struct {
 	ReferencedAssetIDs     []string                       `json:"referencedAssetIds,omitempty"`
 	LastRequest            *Usage                         `json:"lastRequest,omitempty"`
 	LastRequestAt          string                         `json:"lastRequestAt,omitempty"`
+	ContextMeasurement     *ContextMeasurement            `json:"contextMeasurement,omitempty"`
 	View                   View                           `json:"view"`
 	History                []Message                      `json:"history"`
 	Checkpoints            []int                          `json:"checkpoints"`

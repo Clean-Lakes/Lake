@@ -24,6 +24,21 @@ func reserveAgentBudget(ctx context.Context, w *agentWorker, charge int) error {
 			return err
 		}
 		w.session.mu.Lock()
+		if w.sreTaskID != "" {
+			// The durable SRE task reservation is checked by stream. Keep the
+			// child journal, without imposing the legacy Scout/Beacon quotas.
+			for i := range w.session.state.View.AgentRuns {
+				run := &w.session.state.View.AgentRuns[i]
+				if run.ID == w.runID && run.SRETaskID == w.sreTaskID {
+					run.BudgetSpent += charge
+					run.budgetReserved += charge
+					w.session.mu.Unlock()
+					return nil
+				}
+			}
+			w.session.mu.Unlock()
+			return errors.New("SRE 子智能体预算记录不存在")
+		}
 		if w.session.agentBudgetChanged == nil {
 			w.session.agentBudgetChanged = make(chan struct{})
 		}

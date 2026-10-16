@@ -28,6 +28,8 @@ func TestWorkflowTemplateCRUDScopeVersionAndSnapshots(t *testing.T) {
 	if integer(saved["version"]) != 1 {
 		t.Fatal("missing initial version")
 	}
+	apiTest(t, h, "POST", base+"/"+id+"/run", Object{"version": 1}, 409)
+	apiTest(t, h, "PUT", "/api/projects/"+project+"/sre", Object{"enabled": true}, 200)
 	apiTest(t, h, "POST", base+"/"+id+"/run", Object{"version": 1}, 400)
 	snapshot := b.Store.CreateWorkflowRun(project, id, 1)
 	input := workflowFixtureInput(ref)
@@ -83,6 +85,7 @@ func TestWorkflowHTTPStartsRealAgentsAndCancelsFromConversation(t *testing.T) {
 	b, h := fixture(t)
 	session, ref := newSession(t, h)
 	project := stringOf(b.Store.Session(session)["projectId"])
+	apiTest(t, h, "PUT", "/api/projects/"+project+"/sre", Object{"enabled": true}, 200)
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -101,10 +104,10 @@ func TestWorkflowHTTPStartsRealAgentsAndCancelsFromConversation(t *testing.T) {
 		json.NewDecoder(r.Body).Decode(&body)
 		content := jsonText(body["messages"])
 		role := "parent"
-		if strings.Contains(content, "You are Trace, an independent") {
+		if strings.Contains(content, "You are Lake's investigator") {
 			role = "Trace"
 		}
-		if strings.Contains(content, "You are Beacon, an independent") {
+		if strings.Contains(content, "You are Lake's independent verifier") {
 			role = "Beacon"
 		}
 		mu.Lock()
@@ -128,7 +131,7 @@ func TestWorkflowHTTPStartsRealAgentsAndCancelsFromConversation(t *testing.T) {
 			}
 			return
 		}
-		emitModel(w, "Supported by "+strings.Join(evidence.FindAllString(content, -1), ", "), nil)
+		emitModel(w, jsonText(Object{"schemaVersion": 1, "summary": "已取得工作流日志", "facts": []Object{{"statement": "读取到实际日志", "evidenceIds": evidence.FindAllString(content, -1)}}, "hypotheses": []string{}, "unknowns": []string{}, "nextChecks": []string{}}), nil)
 	}))
 	defer provider.Close()
 	apiTest(t, h, "PUT", "/api/settings/model", Object{"url": provider.URL, "name": "workflow fixture", "protocol": "openai"}, 200)

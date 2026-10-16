@@ -96,7 +96,7 @@ func TestAsyncRPCFailureClearsBusyPresentation(t *testing.T) {
 }
 
 func TestExistingDesktopMethodsRemainAvailable(t *testing.T) {
-	data, err := os.ReadFile("../../third_party/zcode/apps/zcode-cli/packages/lake/test/desktop-methods.json")
+	data, err := os.ReadFile("testdata/desktop-methods.json")
 	if err != nil {
 		t.Fatal(err)
 	}

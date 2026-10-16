@@ -23,7 +23,8 @@ type sshTrustPrompt struct {
 	Port                                                 int
 	Key                                                  ssh.PublicKey
 	Previous                                             []string
-	Decision                                             chan bool
+	Done                                                 chan struct{}
+	Accepted                                             bool
 	Resolved                                             bool
 }
 
@@ -224,7 +225,7 @@ func (b *Server) ensureHostKey(ctx context.Context, id, ref string) string {
 			previous = append(previous, ssh.FingerprintSHA256(want.Key))
 		}
 	}
-	p := &sshTrustPrompt{ID: ident(), SessionID: id, ResourceID: ref, Host: host, Port: port, Key: observed, Previous: previous, ConfigHash: sshConfigHash(config), PinHash: hostPinHash(path), Decision: make(chan bool, 1)}
+	p := &sshTrustPrompt{ID: ident(), SessionID: id, ResourceID: ref, Host: host, Port: port, Key: observed, Previous: previous, ConfigHash: sshConfigHash(config), PinHash: hostPinHash(path), Done: make(chan struct{})}
 	b.hostKeyMu.Lock()
 	if hostPinMatches(path, p) {
 		b.hostKeyMu.Unlock()
@@ -235,6 +236,11 @@ func (b *Server) ensureHostKey(ctx context.Context, id, ref string) string {
 	}
 	for _, existing := range b.hostKeyPrompts {
 		if existing.SessionID == id && !existing.Resolved {
+			if existing.ResourceID == ref && existing.ConfigHash == p.ConfigHash && existing.Host == p.Host && existing.Port == p.Port && ssh.FingerprintSHA256(existing.Key) == ssh.FingerprintSHA256(p.Key) {
+				b.hostKeyMu.Unlock()
+				b.waitHostKeyDecision(ctx, existing)
+				return path
+			}
 			b.hostKeyMu.Unlock()
 			fail(409, "请先处理当前服务器指纹确认")
 		}
@@ -242,15 +248,17 @@ func (b *Server) ensureHostKey(ctx context.Context, id, ref string) string {
 	b.hostKeyPrompts[p.ID] = p
 	b.hostKeyMu.Unlock()
 	b.Store.Touch(id)
-	defer func() { b.hostKeyMu.Lock(); delete(b.hostKeyPrompts, p.ID); b.hostKeyMu.Unlock(); b.Store.Touch(id) }()
-	select {
-	case <-ctx.Done():
-		panic(ctx.Err())
-	case accepted := <-p.Decision:
-		if !accepted {
-			fail(503, "已取消服务器指纹信任，停止该主机的连接；明确重试后才会再次请求确认。")
+	defer func() {
+		b.hostKeyMu.Lock()
+		if !p.Resolved {
+			p.Resolved = true
+			close(p.Done)
 		}
-	}
+		delete(b.hostKeyPrompts, p.ID)
+		b.hostKeyMu.Unlock()
+		b.Store.Touch(id)
+	}()
+	b.waitHostKeyDecision(ctx, p)
 	return path
 }
 
@@ -280,12 +288,14 @@ func (b *Server) decideHostKey(id, nonce string, accept bool, fingerprint string
 		for _, other := range b.hostKeyPrompts {
 			if other != p && !other.Resolved && other.Host == p.Host && other.Port == p.Port && ssh.FingerprintSHA256(other.Key) == ssh.FingerprintSHA256(p.Key) {
 				other.Resolved = true
-				other.Decision <- true
+				other.Accepted = true
+				close(other.Done)
 			}
 		}
 	}
 	p.Resolved = true
-	p.Decision <- accept
+	p.Accepted = accept
+	close(p.Done)
 }
 
 func (b *Server) cancelHostKeys(id string) {
@@ -294,7 +304,22 @@ func (b *Server) cancelHostKeys(id string) {
 	for _, p := range b.hostKeyPrompts {
 		if p.SessionID == id && !p.Resolved {
 			p.Resolved = true
-			p.Decision <- false
+			p.Accepted = false
+			close(p.Done)
 		}
+	}
+}
+
+func (b *Server) waitHostKeyDecision(ctx context.Context, p *sshTrustPrompt) {
+	select {
+	case <-ctx.Done():
+		panic(ctx.Err())
+	case <-p.Done:
+	}
+	b.hostKeyMu.Lock()
+	accepted := p.Accepted
+	b.hostKeyMu.Unlock()
+	if !accepted {
+		fail(503, "已取消服务器指纹信任，停止该主机的连接；明确重试后才会再次请求确认。")
 	}
 }

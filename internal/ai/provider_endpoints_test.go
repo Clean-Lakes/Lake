@@ -60,7 +60,9 @@ func TestMiMoCompactionAndDiscoveryUseDocumentedRouteAndAuth(t *testing.T) {
 	e := engineFor(t, model, nil)
 	s, _ := e.get("case")
 	s.state.History = longFirstTurn()
-	if err := e.compact(context.Background(), s, s.state.Config, false); err != nil {
+	// Force a model summary: automatic maintenance can now fit older tool
+	// previews locally, which would not exercise the MiMo request at all.
+	if err := e.compact(context.Background(), s, s.state.Config, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Models(context.Background(), model); err != nil {

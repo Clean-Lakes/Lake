@@ -251,3 +251,42 @@ func TestFirstSSHConnectionCombinesTrustAndTerminalCreation(t *testing.T) {
 }
 
 func knownPeerPrefix(port int) string { return "[127.0.0.1]:" + strconv.Itoa(port) + " " }
+
+func TestParallelSpecialistsShareOneHostTrustDecision(t *testing.T) {
+	for _, accept := range []bool{true, false} {
+		t.Run(strconv.FormatBool(accept), func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			b, h := fixture(t)
+			sid, _ := newSession(t, h)
+			port, _, auth := rotatingHostKeyServer(t)
+			resource := b.Store.CreateResource(stringOf(b.Store.Session(sid)["projectId"]), "Parallel trust fixture", "ssh", Object{"host": "127.0.0.1", "port": port, "username": "fixture"})
+			first := startHostProbe(b, sid, stringOf(resource["id"]))
+			prompt := waitHostTrust(t, b, sid)
+			second := startHostProbe(b, sid, stringOf(resource["id"]))
+			// The peer must wait for this same human decision, not return an immediate
+			// 'handle current fingerprint prompt' failure and abandon its deliverable.
+			select {
+			case err := <-second:
+				t.Fatal("parallel peer did not share the pending prompt", err)
+			case <-time.After(100 * time.Millisecond):
+			}
+			if auth.Load() != 0 {
+				t.Fatal("fingerprint wait authenticated before approval")
+			}
+			apiTest(t, h, "POST", "/api/sessions/"+sid+"/host-key", Object{"id": prompt["id"], "accept": accept, "fingerprint": prompt["fingerprint"]}, 200)
+			for _, done := range []<-chan error{first, second} {
+				select {
+				case err := <-done:
+					if (err == nil) != accept {
+						t.Fatal("peers received inconsistent trust decision", err)
+					}
+				case <-time.After(3 * time.Second):
+					t.Fatal("peer stuck after shared trust decision")
+				}
+			}
+			if auth.Load() != 0 {
+				t.Fatal("public fingerprint probe attempted authentication")
+			}
+		})
+	}
+}

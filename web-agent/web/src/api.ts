@@ -89,6 +89,14 @@ export type Bootstrap = {
 };
 
 export const api = {
+	getSREEnabled:(project:string,signal?:AbortSignal)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{signal}),
+	setSREEnabled:(project:string,enabled:boolean)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{method:'PUT',body:JSON.stringify({enabled})}),
+	sreTask:(session:string,task:string)=>request<import('../../shared/contracts').SRETask>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}`),
+	sreTasks:(session:string,cursor='')=>request<{items:import('../../shared/contracts').SRETask[];nextCursor:string}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks?limit=20&cursor=${encodeURIComponent(cursor)}`),
+	sreEvents:(session:string,task:string,after=0)=>request<{items:Array<{id:number;type:string;createdAt:string;payload:Record<string,unknown>}>}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}/events?after=${after}`),
+	sreOperation:(session:string,task:string,operation:string,data:Record<string,unknown>)=>post<import('../../shared/contracts').SRETask>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}/${operation}`,data),
+	sreEvidence:(session:string,task:string,evidence:string,offset=0)=>request<{source:string;nextCursor:number|null;sourceTruncated:boolean;sourceBytes:number;collectedAt:string}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}/evidence/${encodeURIComponent(evidence)}?offset=${offset}`),
+	sreExport:(session:string,task:string)=>request<{name:string;content:string}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}/export`),
   mcpServers:()=>request<{servers:MCPServerConfig[]}>("/api/settings/mcp"),
   saveMCP:(value:Record<string,unknown>)=>request<MCPServerConfig>(`/api/settings/mcp${value.id?`/${encodeURIComponent(String(value.id))}`:""}`,{method:value.id?"PUT":"POST",body:JSON.stringify(value)}),
   deleteMCP:(id:string)=>request(`/api/settings/mcp/${encodeURIComponent(id)}`,{method:"DELETE"}),

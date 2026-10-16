@@ -1,6 +1,7 @@
 package web
 
 import (
+	"github.com/Clean-Lakes/Lake/internal/ai"
 	"strings"
 	"unicode/utf16"
 )
@@ -24,6 +25,14 @@ func (b *Server) contextReferences(id, message string, value any) []Object {
 		kind := stringOf(r["kind"])
 		var resolved Object
 		switch kind {
+		case "role":
+			role := ai.SREAgentRole(stringOf(r["role_id"]))
+			project := stringOf(b.Store.Session(id)["projectId"])
+			if !ai.ValidSRERole(role) || !b.Store.SREEnabled(project) {
+				fail(400, "专员不存在或本项目未启用 SRE 协作")
+			}
+			name := map[ai.SREAgentRole]string{ai.SRECoordinator: "协调者", ai.SREInvestigator: "调查员", ai.SREExecutor: "执行员", ai.SREVerifier: "验证员"}[role]
+			resolved = Object{"kind": "role", "role_id": string(role), "name": name}
 		case "skill":
 			meta, _, err := b.Extensions.Store.ReadSkill(stringOf(r["skill_name"]), "")
 			if err != nil || !meta.Enabled {
@@ -59,7 +68,7 @@ func (b *Server) contextReferences(id, message string, value any) []Object {
 func separateExtensionReferences(message string, refs []Object) (string, []Object, []Object) {
 	resources, extensions := []Object{}, []Object{}
 	for _, ref := range refs {
-		if ref["kind"] == "skill" || ref["kind"] == "mcp" {
+		if ref["kind"] == "skill" || ref["kind"] == "mcp" || ref["kind"] == "role" {
 			extensions = append(extensions, ref)
 			message = strings.ReplaceAll(message, "@"+stringOf(ref["name"]), "")
 		} else {

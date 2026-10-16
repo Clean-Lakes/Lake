@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var defaults = Object{"multiAgentMode": "auto", "reasoningEffort": "", "reasoningModelId": "", "profile": "core", "runtime": "local", "asset_ref": "", "container_id": "", "terminal_id": "", "terminal_generation": "", "userPrompt": "", "contextWindow": 64000, "maxOutput": 8192, "maxSteps": 500, "silentReadFiles": true, "silentWriteFiles": false, "silentReadSQL": true, "silentCommands": true, "silentTerminalCreation": true, "blockUnreferencedAssets": false, "denyLocalExecution": false}
+var defaults = Object{"multiAgentMode": "off", "reasoningEffort": "", "reasoningModelId": "", "profile": "core", "runtime": "local", "asset_ref": "", "container_id": "", "terminal_id": "", "terminal_generation": "", "userPrompt": "", "contextWindow": 64000, "maxOutput": 8192, "maxSteps": 500, "silentReadFiles": true, "silentWriteFiles": false, "silentReadSQL": true, "silentCommands": true, "silentTerminalCreation": true, "blockUnreferencedAssets": false, "denyLocalExecution": false}
 
 func (b *Server) sessionOptions(id string) Object {
 	options := Object{}
@@ -22,6 +22,8 @@ func (b *Server) sessionOptions(id string) Object {
 	for k, v := range b.Store.Options(id) {
 		options[k] = v
 	}
+	// Legacy auto settings no longer enable Scout/Trace/Deep/Beacon.
+	options["multiAgentMode"] = "off"
 	return options
 }
 
@@ -41,6 +43,7 @@ func (b *Server) configure(id string, updates Object) Object {
 	if !set("off auto")[stringOf(options["multiAgentMode"])] {
 		fail(400, "Invalid multi-agent mode")
 	}
+	options["multiAgentMode"] = "off"
 	for _, k := range []string{"asset_ref", "container_id", "terminal_id", "terminal_generation", "userPrompt", "reasoningEffort", "reasoningModelId"} {
 		if _, ok := options[k].(string); !ok {
 			fail(400, "Invalid AI options")
@@ -153,6 +156,8 @@ func (b *Server) event(event ai.Event) {
 	defer func() { recover() }()
 	b.Store.Session(event.Session)
 	switch event.Type {
+	case "sreDone":
+		b.syncSRESessionStatus(event.Session)
 	case "approval":
 		b.Store.Status(event.Session, "waiting_approval")
 	case "done":
@@ -201,7 +206,8 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 		fail(400, "尚未配置模型")
 	}
 	options := b.configure(id, nil)
-	simpleConversation := ai.IsBriefConversation(message) && len(refs) == 0 && len(images) == 0 && len(files) == 0
+	sreCoordination := options["profile"] == "core" && len(files) == 0 && b.Store.SREEnabled(stringOf(b.Store.Session(id)["projectId"]))
+	simpleConversation := !sreCoordination && ai.IsBriefConversation(message) && len(refs) == 0 && len(images) == 0 && len(files) == 0
 	var targetScope *ai.TargetScope
 	var directoryAssets []ai.Asset
 	var directories []ai.AssetDirectory
@@ -220,6 +226,7 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 			b.bindReferenceTargets(id, refs, options)
 		}
 	}
+
 	snap := b.sessionSnapshot(id)
 	messages := objects(snap["messages"])
 	if len(messages) > 12 {
@@ -264,7 +271,10 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 		modelContext += "\n[LAKE_TEXT_FILES]\n" + jsonText(files) + "\nThese are user-selected text attachments. Use preview_resource_import with source_id to inspect connection candidates. Do not read private credential storage or echo credentials."
 	}
 	refs = append(refs, extensionRefs...)
-	e = b.Engine.ChatTurn(turnContext, id, ai.TurnInput{UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
+	if sreCoordination {
+		modelContext += b.sreConversationContext(id)
+	}
+	e = b.Engine.ChatTurn(turnContext, id, ai.TurnInput{SRECoordination: sreCoordination, UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
 	if e != nil {
 		if b.Context.Err() != nil {
 			return
@@ -298,6 +308,16 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 		if card.Type == "message" && card.Content != "" {
 			b.Store.AddMessage(id, "assistant", card.Content, nil)
 			break
+		}
+	}
+	if sreCoordination {
+		handoff, takeErr := b.Engine.TakeSREHandoff(id)
+		if takeErr == nil && handoff != nil {
+			takeErr = b.followSREHandoff(turnContext, id, *handoff)
+		}
+		if takeErr != nil {
+			b.Store.AddMessage(id, "system", takeErr.Error(), nil)
+			b.Store.Status(id, "failed")
 		}
 	}
 }
@@ -513,6 +533,9 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		return Object{"terminal_id": term["id"], "resourceId": ref}, nil
 	}
 	if name == "runtimeCommandExec" {
+		if !validCommand(stringOf(args["command"])) {
+			return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("Invalid command")}
+		}
 		explicitTerminal := stringOf(args["terminal_id"])
 		ref := stringOf(args["asset_ref"])
 		if ref == "" && explicitTerminal != "" {
@@ -648,14 +671,14 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		return Object{"closed": true}, nil
 	case "terminal_execute_command":
 		if b.Terminals.Capabilities(id, tid)["commandBlocks"] != true {
-			fail(409, "Terminal command-block integration unavailable")
+			return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("Terminal command-block integration unavailable")}
 		}
 		command := stringOf(args["command"])
 		if !validCommand(command) {
-			fail(400, "Invalid command")
+			return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("Invalid command")}
 		}
 		if target["holder"] != "agent" || target["status"] != "ready" {
-			fail(409, "请先将空闲终端交给 Agent")
+			return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("请先将空闲终端交给 Agent")}
 		}
 		actionID := ""
 		if CommandPolicy(command).Risk != "readonly" {

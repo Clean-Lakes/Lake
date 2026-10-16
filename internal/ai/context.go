@@ -3,6 +3,25 @@ package ai
 import "crypto/sha256"
 import "fmt"
 
+// Anchor provider-reported input to the history before that response. Subsequent
+// assistant/tool messages are additions, not part of the measured request.
+type ContextMeasurement struct {
+	ModelID     string `json:"modelId"`
+	HistoryCost int    `json:"historyCost"`
+	ToolsCost   int    `json:"toolsCost"`
+}
+
+func estimatedContextCost(state State, history []Message, toolsCost int) int {
+	cost := historyCost(history)
+	m := state.ContextMeasurement
+	if m == nil || m.ModelID != ModelIdentity(state.Config.Model) || state.LastRequest == nil || !state.LastRequest.InputKnown || state.LastRequest.Input <= 0 {
+		return cost + toolsCost
+	}
+	// Keep a 10% margin on the measured input and conservatively estimate only
+	// new material. Cached input is still occupied context and is not deducted.
+	return (state.LastRequest.Input*11+9)/10*2 + max(0, cost-m.HistoryCost) + max(0, toolsCost-m.ToolsCost)
+}
+
 type ContextUsage struct {
 	Window        int    `json:"window"`
 	WindowSource  string `json:"windowSource,omitempty"`
@@ -24,7 +43,11 @@ func ModelIdentity(model Model) string {
 func contextUsage(state State) *ContextUsage {
 	estimated := 0
 	if len(state.History) > 0 {
-		estimated = (historyCost(state.History) + len(js(Catalog(state.Config.Profile))) + 1) / 2
+		toolsCost := len(js(Catalog(state.Config.Profile)))
+		if state.ContextMeasurement != nil {
+			toolsCost = state.ContextMeasurement.ToolsCost
+		}
+		estimated = (estimatedContextCost(state, state.History, toolsCost) + 1) / 2
 	}
 	value := &ContextUsage{Window: state.Config.Model.ContextLimit, WindowSource: state.Config.Model.ContextLimitSource,
 		Budget: state.Config.Model.ContextWindow, InputBudget: max(0, state.Config.Model.ContextWindow-state.Config.Model.MaxOutput), MaxOutput: state.Config.Model.MaxOutput, EstimatedUsed: estimated, ModelID: ModelIdentity(state.Config.Model),

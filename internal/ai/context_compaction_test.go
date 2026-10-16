@@ -38,7 +38,7 @@ func TestFirstTurnCompactsAtCompleteBatchWithoutReplayingTools(t *testing.T) {
 	s.state.Checkpoints = []int{0}
 	s.state.View.Cards = []Card{{ID: "raw", Type: "operation", Content: h[3].Content, Status: "completed"}}
 	raw := s.state.View.Cards[0].Content
-	if err := e.compact(context.Background(), s, s.state.Config, false); err != nil {
+	if err := e.compact(context.Background(), s, s.state.Config, true); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := e.History("case")
@@ -69,7 +69,7 @@ func TestFirstTurnCompactsAtCompleteBatchWithoutReplayingTools(t *testing.T) {
 		}
 	}
 	s.state.History = append(after, more[2:]...)
-	if err := e.compact(context.Background(), s, s.state.Config, false); err != nil {
+	if err := e.compact(context.Background(), s, s.state.Config, true); err != nil {
 		t.Fatal(err)
 	}
 	if summaries != 2 || len(s.state.History) != 5 || !reflect.DeepEqual(s.state.History[2], h[1]) || validHistory(s.state.History) != nil {
@@ -121,7 +121,7 @@ func TestFirstTurnSummaryFailureLeavesHistoryAndCheckpointsUntouched(t *testing.
 	h := longFirstTurn()
 	s.state.History = h
 	s.state.Checkpoints = []int{0}
-	if err := e.compact(context.Background(), s, s.state.Config, false); !errors.Is(err, ErrModelOutputLimit) {
+	if err := e.compact(context.Background(), s, s.state.Config, true); !errors.Is(err, ErrModelOutputLimit) {
 		t.Fatalf("expected summary failure: %v", err)
 	}
 	if !reflect.DeepEqual(s.state.History, h) || !reflect.DeepEqual(s.state.Checkpoints, []int{0}) {
@@ -151,7 +151,7 @@ func TestChildSummaryFitsSixteenKWindowWithLongAssignment(t *testing.T) {
 	h := longFirstTurn()
 	h[1].Content += strings.Repeat("scope ", 1500)
 	s.state.History = h
-	if err := e.compact(context.Background(), s, c, false); err != nil {
+	if err := e.compact(context.Background(), s, c, true); err != nil {
 		t.Fatal("child could not summarize after collected evidence", err)
 	}
 	if summaries != 1 || validHistory(s.state.History) != nil || s.state.History[2].Content != h[1].Content {

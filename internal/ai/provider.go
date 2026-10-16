@@ -20,6 +20,7 @@ var HTTPClient = &http.Client{Timeout: 5 * time.Minute}
 
 var ErrModelOutputLimit = errors.New("model output limit reached")
 var ErrModelStreamIdle = errors.New("model stream idle timeout; partial reply retained")
+var ErrModelIncomplete = errors.New("model response incomplete")
 
 type modelResult struct {
 	Message Message
@@ -704,9 +705,21 @@ func (a *accumulator) consume(v map[string]any, whole bool) error {
 			a.completed = true
 			a.use(obj(obj(v["response"])["usage"]))
 		case "response.failed", "response.incomplete":
-			return errors.New("model response incomplete")
+			response := obj(v["response"])
+			a.use(obj(response["usage"]))
+			if str(obj(response["incomplete_details"])["reason"]) == "max_output_tokens" {
+				return ErrModelOutputLimit
+			}
+			return ErrModelIncomplete
 		}
 		if whole {
+			a.use(obj(v["usage"]))
+			if status := str(v["status"]); status == "incomplete" || status == "failed" {
+				if str(obj(v["incomplete_details"])["reason"]) == "max_output_tokens" {
+					return ErrModelOutputLimit
+				}
+				return ErrModelIncomplete
+			}
 			a.completed = true
 			a.use(obj(v["usage"]))
 			for i, x := range arr(v["output"]) {
@@ -831,7 +844,7 @@ func (a *accumulator) consume(v map[string]any, whole bool) error {
 }
 func (a *accumulator) finish() (modelResult, error) {
 	if !a.completed {
-		return modelResult{}, errors.New("model stream ended before completion")
+		return modelResult{Usage: a.usage}, ErrModelIncomplete
 	}
 	keys := []int{}
 	for i := range a.calls {

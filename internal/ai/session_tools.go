@@ -94,6 +94,26 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 				approved = true
 			}
 		}
+
+		if e.worker != nil {
+			c, err = e.scopedChildConfig(c, a)
+			if err != nil {
+				return nil, err
+			}
+			if call.Name != "list_mcp_servers" {
+				server, lookupErr := extensions.NewStore(skillHome(c)).FindServer(str(a["server_id"]))
+				if lookupErr != nil || !server.Enabled {
+					return nil, errors.New("MCP 服务已不可用")
+				}
+				if c.Permissions != nil && (server.Transport == "stdio" && c.Permissions.DenyLocalExecution || (call.Name == "call_mcp_tool" || server.Transport == "stdio") && c.Permissions.BlockUnreferencedAssets) {
+					return nil, errors.New("当前父会话权限已禁止此次 MCP 操作")
+				}
+			}
+		}
+		if err = e.DispatchSREOperation(ctx, c, call); err != nil {
+			return nil, err
+		}
+		defer func() { e.finishSREOperation(c, call, result, err) }()
 		return e.bridgeCall(ctx, id, call.Name, bridgeArgs, approved)
 
 	case "todo_read":

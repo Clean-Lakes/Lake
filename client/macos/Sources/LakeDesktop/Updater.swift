@@ -86,6 +86,7 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
     var beforeInstall: (() async throws -> InstallContext)?
     private var available: Update?
     private var busy = false
+    private var downloadID: UUID?
     private var cleanupScheduled = false
     private var timer: Timer?
     private var lastCheck: Date?
@@ -219,12 +220,15 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
         }
         busy = true
         defer { busy = false }
+        let downloadID = UUID()
+        self.downloadID = downloadID
         state.progress = 0
-        publish("downloading", "正在自动下载安装包…")
+        publish("downloading", "正在获取安装包校验信息…")
         let work = updatesDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         var staged: URL?
         var handedOff = false
         defer {
+            self.downloadID = nil
             state.progress = nil
             if !handedOff {
                 if let staged { try? FileManager.default.removeItem(at: staged) }
@@ -237,13 +241,20 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
             guard (checksumResponse as? HTTPURLResponse)?.statusCode == 200,
                   checksum.count <= 4096, Int64(checksum.count) == update.checksum.size else { throw UpdateError.invalidChecksum }
             let archive = work.appendingPathComponent("update.zip")
-            let (temporary, response) = try await session.download(from: update.archive.url!)
+            let response = try await ArchiveDownload.download(from: update.archive.url!, to: archive,
+                                                            expectedSize: update.archive.size, configuration: session.configuration) { [weak self] percent in
+                Task { @MainActor in
+                    guard let self, self.downloadID == downloadID, self.state.status == "downloading",
+                          percent > (self.state.progress ?? -1) else { return }
+                    self.state.progress = percent
+                    self.publish("downloading", "正在下载安装包…")
+                }
+            }
             guard (response as? HTTPURLResponse)?.statusCode == 200 else {
                 throw UpdateError.message("安装包下载失败，请稍后重试。")
             }
-            let size = try FileManager.default.attributesOfItem(atPath: temporary.path)[.size] as? NSNumber
+            let size = try FileManager.default.attributesOfItem(atPath: archive.path)[.size] as? NSNumber
             guard size?.int64Value == update.archive.size else { throw UpdateError.invalidArchive }
-            try FileManager.default.moveItem(at: temporary, to: archive)
             state.progress = 100
             publish("verifying", "正在校验安装包及应用签名…")
             let destination = target
@@ -267,6 +278,7 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
             publish("installing", "即将退出 Lake，安装更新并重新打开…")
             NSApplication.shared.terminate(nil)
         } catch {
+            state.progress = nil
             publish("error", (error as? UpdateError)?.localizedDescription ?? "更新下载或安装失败，请检查网络和磁盘空间后重试。")
         }
     }

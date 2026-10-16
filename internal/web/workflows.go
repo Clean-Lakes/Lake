@@ -200,6 +200,9 @@ func (b *Server) workflowRunView(run Object) Object {
 	return run
 }
 func (b *Server) startWorkflow(project, id string, version int, inherited ...Object) Object {
+	if !b.Store.SREEnabled(project) {
+		fail(409, "工作流协作执行需要先开启本项目的 SRE 协作")
+	}
 	if b.Models.Active() == nil {
 		fail(400, "请先配置 Agent 模型")
 	}
@@ -248,11 +251,44 @@ func (b *Server) executeWorkflowRun(ctx context.Context, cancel context.CancelFu
 	if ctx.Err() != nil {
 		return
 	}
-	b.configure(id, Object{"profile": "core", "multiAgentMode": "auto", "blockUnreferencedAssets": true, "maxSteps": 12})
-	if ctx.Err() != nil {
+	b.configure(id, Object{"profile": "core", "multiAgentMode": "off", "blockUnreferencedAssets": true, "maxSteps": 34})
+	refs := []string{}
+	seen := map[string]bool{}
+	steps := []ai.SREPlanStep{}
+	previous := ""
+	for _, step := range template.Steps {
+		for _, ref := range step.ResourceIDs {
+			if !seen[ref] {
+				refs = append(refs, ref)
+				seen[ref] = true
+			}
+		}
+		deps := []string{}
+		if previous != "" {
+			deps = append(deps, previous)
+		}
+		steps = append(steps, ai.SREPlanStep{ID: step.ID, Role: ai.SREInvestigator, Kind: "observe", Capability: step.Role, Description: step.Task, ResourceIDs: step.ResourceIDs, DependsOn: deps, CompletionChecks: []string{"取得可追溯的实际证据"}})
+		previous = step.ID
+	}
+	summaryID := "sre_summary"
+	for {
+		found := false
+		for _, step := range steps {
+			found = found || step.ID == summaryID
+		}
+		if !found {
+			break
+		}
+		summaryID += "_"
+	}
+	steps = append(steps, ai.SREPlanStep{ID: summaryID, Role: ai.SRECoordinator, Kind: "summarize", Description: "汇总工作流调查事实、缺失证据和建议", ResourceIDs: refs, DependsOn: []string{previous}, CompletionChecks: []string{"基于真实证据汇总，不宣称未经验证的恢复"}})
+	task := b.createSRETask(id, template.Goal, "assist", "workflow_"+runID, refs)
+	plan := ai.SREPlanRevision{Goal: template.Goal, TaskType: "investigation", Scope: refs, Steps: steps, Acceptance: []ai.SRECheck{}, ChangeReason: "已保存工作流通过 SRE 专员执行"}
+	if _, err := b.Engine.ReviseSREPlan(id, task.ID, 0, plan); err != nil {
+		message = err.Error()
 		return
 	}
-	if err := b.Engine.ChatWorkflow(ctx, id, template.Goal, template.Steps); err != nil {
+	if err := b.Engine.StartSRETask(ctx, id, task.ID, false, ""); err != nil {
 		message = err.Error()
 		if errors.Is(err, context.Canceled) {
 			status, message = "cancelled", "工作流已停止"

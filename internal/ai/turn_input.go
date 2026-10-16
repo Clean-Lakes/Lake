@@ -6,6 +6,7 @@ import (
 )
 
 type TurnInput struct {
+	SRECoordination     bool         `json:"-"`
 	IgnoreProjectMemory bool         `json:"ignoreProjectMemory,omitempty"`
 	TargetScope         *TargetScope `json:"-"`
 	workflow            []WorkflowStep

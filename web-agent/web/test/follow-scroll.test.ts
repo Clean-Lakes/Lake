@@ -53,6 +53,18 @@ test("device-pixel rounding still reaches the exact tail and stops scheduling fr
   assert.equal(top, 500); assert.equal(f.callbacks.size, 0);
 });
 
+test("activity-only snapshot updates at the tail never schedule frames or write scroll position", () => {
+  const f = fixture(); f.follower.jump();
+  let writes = 0, top = f.box.scrollTop;
+  Object.defineProperty(f.box, "scrollTop", {get: () => top, set: value => {writes++;top=value;}});
+  for (let i=0;i<500;i++) f.follower.request();
+  assert.equal(f.callbacks.size, 0); assert.equal(writes, 0);
+  // Actual new content still follows; the optimization must not suppress it.
+  f.box.scrollHeight += 100; f.follower.request();
+  for(let time=0;time<1500;time+=16.67)f.frame(time);
+  assert.equal(top,600); assert.ok(writes>0);
+});
+
 test("unchanged historical cards reuse Markdown, while streamed content and tool state invalidate it", () => {
   const card = {id: "reason", type: "thinking", at: "2026-10-11T00:00:00Z", status: "completed", content: "**historical**", data: {target: "fixture", arguments: {command: "stat fixture"}}};
   assert.ok(sameCard(card, JSON.parse(JSON.stringify(card))));

@@ -1,0 +1,61 @@
+{
+  "version": "0.3.16",
+  "platforms": [
+    "macos-arm64"
+  ],
+  "base": "1c365733f12d2224f879be19df4ce5b15839fb0d",
+  "downloadProgress": {
+    "source": "URLSessionDownloadDelegate totalBytesWritten / release asset size",
+    "transferCapPercent": 99,
+    "completion": "file size validated before verifying stage",
+    "staleCallbacks": "per-download identity and monotonic main-actor updates",
+    "tests": [
+      "real throttled Content-Length transfer: 16 intermediate events",
+      "real throttled chunked transfer without Content-Length: 16 intermediate events",
+      "cancellation fails without reporting completion"
+    ]
+  },
+  "checks": {
+    "go test ./...": "passed",
+    "go vet ./...": "passed",
+    "go test -race SRE/parallel/trust/persistent-command regressions": "passed",
+    "pnpm check": "passed",
+    "frontendTests": 200,
+    "SwiftPolicyAndDownloadTests": "passed",
+    "nativeReleaseBuild": "passed",
+    "installerRollbackTests": 5,
+    "ZIPAndDMGChecksums": "passed",
+    "ZIPIntegrity": "passed",
+    "DMGIntegrity": "passed",
+    "codesignDeepStrict": "passed",
+    "packagedBackendWithIsolatedHome": "authenticated catalog and embedded React entry passed"
+  },
+  "signingIdentity": "Lake Local Development Code Signing",
+  "artifacts": [
+    {
+      "name": "Lake-0.3.16-macos-arm64.dmg",
+      "size": 17641723,
+      "sha256": "7e00053d0d8e063f63a5da69aa80622dbb5328ece2aa84c0b0fea0e34fe3f49b"
+    },
+    {
+      "name": "Lake-0.3.16-macos-arm64.dmg.sha256",
+      "size": 94,
+      "sha256": "6522e5a8fa31c8946ce5987fbf06cd3eab0cbcf04144b6ea0922ed5f14db1f1a"
+    },
+    {
+      "name": "Lake-0.3.16-macos-arm64.zip",
+      "size": 16650652,
+      "sha256": "13371dc6bac2a627e75cec47c5595bb2ce331809d3a89f854587902f32ec0a1a"
+    },
+    {
+      "name": "Lake-0.3.16-macos-arm64.zip.sha256",
+      "size": 94,
+      "sha256": "a3479884709117b642153abc2b1f55cfc68f815153381c9e3060bfd7bc4c95f4"
+    }
+  ],
+  "notes": [
+    "Only macOS release assets are published.",
+    "This update includes latest v0.3.15 fixes and SRE collaboration.",
+    "A previous client uses its previous updater while initially downloading v0.3.16."
+  ]
+}
