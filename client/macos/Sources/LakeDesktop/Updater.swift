@@ -243,11 +243,12 @@ private func prepareArchive(_ archive: URL, checksum: Data, update: Update, work
             let archive = work.appendingPathComponent("update.zip")
             let response = try await ArchiveDownload.download(from: update.archive.url!, to: archive,
                                                             expectedSize: update.archive.size, configuration: session.configuration) { [weak self] percent in
+                guard let updater = self else { return }
                 Task { @MainActor in
-                    guard let self, self.downloadID == downloadID, self.state.status == "downloading",
-                          percent > (self.state.progress ?? -1) else { return }
-                    self.state.progress = percent
-                    self.publish("downloading", "正在下载安装包…")
+                    guard updater.downloadID == downloadID, updater.state.status == "downloading",
+                          percent > (updater.state.progress ?? -1) else { return }
+                    updater.state.progress = percent
+                    updater.publish("downloading", "正在下载安装包…")
                 }
             }
             guard (response as? HTTPURLResponse)?.statusCode == 200 else {
