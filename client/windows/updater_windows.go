@@ -53,7 +53,11 @@ func installUpdateBridge(ctx context.Context, window webview.WebView, endpoint, 
 		return err
 	}
 	token := hex.EncodeToString(capability)
-	u := &windowsUpdater{ctx: ctx, client: desktopupdate.NewHTTPClient(), window: window, home: home, exe: exe, state: updateState{Status: "idle", CurrentVersion: version, Message: "检查 GitHub master 的 Windows 正式版本"}}
+	message := "检查 GitHub master 的 Windows 正式版本"
+	if isDevelopment() {
+		message = developmentUpdateMessage
+	}
+	u := &windowsUpdater{ctx: ctx, client: desktopupdate.NewHTTPClient(), window: window, home: home, exe: exe, state: updateState{Status: "idle", CurrentVersion: version, Message: message}}
 	go func() {
 		root := filepath.Join(home, "updates", "windows")
 		for attempt := 0; attempt < 30; attempt++ {
@@ -88,7 +92,12 @@ func installUpdateBridge(ctx context.Context, window webview.WebView, endpoint, 
 	secret, _ := json.Marshal(token)
 	// Keep the random capability inside a closure, and expose it only to the
 	// authenticated local main frame. Navigated external pages cannot call it.
-	window.Init(fmt.Sprintf(`(()=>{if(window.top!==window||location.origin!==%s)return;const invoke=window.__lakeWindowsUpdate;const token=%s;Object.defineProperty(window,'lakeWindowsDesktop',{value:Object.freeze({command:action=>invoke(token,action)}),writable:false});})();`, origin, secret))
+	// The workbench reads platform and development for its update labels, and a
+	// development build refuses to install a release over itself.
+	window.Init(fmt.Sprintf(`(()=>{if(window.top!==window||location.origin!==%s)return;const invoke=window.__lakeWindowsUpdate;const token=%s;Object.defineProperty(window,'lakeWindowsDesktop',{value:Object.freeze({platform:'Windows x86_64',development:%t,command:action=>invoke(token,action)}),writable:false});})();`, origin, secret, isDevelopment()))
+	if isDevelopment() {
+		return nil
+	}
 	go func() {
 		timer := time.NewTimer(3 * time.Second)
 		defer timer.Stop()
@@ -159,6 +168,12 @@ func (u *windowsUpdater) check() {
 	}()
 }
 func (u *windowsUpdater) install() {
+	if isDevelopment() {
+		// Like the macOS Dev app, a development build updates through local builds:
+		// installing a release package would replace the development client.
+		u.publish("idle", developmentUpdateMessage, nil)
+		return
+	}
 	u.mu.Lock()
 	if u.busy || u.available == nil {
 		u.mu.Unlock()
