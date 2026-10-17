@@ -26,7 +26,7 @@ import (
 
 // Release builds inject the repository VERSION through -ldflags and leave
 // main.development empty; local dev builds set both (see dist/windows/dev/build_dev_client.py).
-var version = "0.3.13"
+var version = "0.3.17"
 
 func message(text string) {
 	title, _ := windows.UTF16PtrFromString("Lake")
