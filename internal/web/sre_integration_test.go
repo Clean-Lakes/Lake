@@ -18,9 +18,15 @@ import (
 	"github.com/Clean-Lakes/Lake/internal/ai"
 )
 
+// A full-agent run can make dozens of sequential model calls. Race-enabled CI
+// runners are about twice as slow as a local run, so the deadline leaves room
+// for the longest fixture instead of assuming local speed.
+const sreSettleTimeout = 45 * time.Second
+
 func waitSRE(t *testing.T, b *Server, session, id string, statuses ...string) ai.SRETask {
 	t.Helper()
-	deadline := time.Now().Add(12 * time.Second)
+	start := time.Now()
+	deadline := start.Add(sreSettleTimeout)
 	for time.Now().Before(deadline) {
 		task, err := b.Store.LoadSRETask(session, id)
 		if err != nil {
@@ -34,7 +40,7 @@ func waitSRE(t *testing.T, b *Server, session, id string, statuses ...string) ai
 		time.Sleep(10 * time.Millisecond)
 	}
 	task, _ := b.Store.LoadSRETask(session, id)
-	t.Fatalf("SRE did not settle: status=%s error=%s messages=%v", task.Status, task.Error, task.Messages)
+	t.Fatalf("SRE did not settle after %s: status=%s error=%s messages=%v", time.Since(start).Round(time.Millisecond), task.Status, task.Error, task.Messages)
 	return task
 }
 func configureSREModel(t *testing.T, b *Server, h *httptest.Server, session, resource string, plan ai.SREPlanRevision, logPath string) (*atomic.Int32, func()) {
