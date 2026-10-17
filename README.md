@@ -1,69 +1,54 @@
+<div align="center">
 
+# Lake
 
-# Clean Lakes
+**面向 SRE 的 AI 运维工作台**
 
-**清朗湖泊**
+连接资源，协同排障，让执行有迹可循。
 
-[清朗湖泊](#清朗湖泊) · [原则](#原则) · [环保](#环保) · [项目](#项目) 
+[下载客户端](https://github.com/Clean-Lakes/Lake/releases) · [快速开始](#快速开始) · [SRE 协作](docs/sre-collaboration.md)
 
-## 清朗湖泊
+</div>
 
-> 源清，则流清。
+<br>
 
-Clean Lakes 是一个开源组织。名字取自「清朗湖泊」：「湖」是资源、变化与人汇聚的地方；「清朗」是它应有的样子——源头干净，水流畅通，没有淤积，也没有看不见的角落。
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/lake-workbench-dark.jpg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/lake-workbench-light.jpg">
+  <img alt="Lake 工作台：在同一对话中查看调查员、执行员、验证员与协调者的协作结果" src="docs/images/lake-workbench-light.jpg" width="1440">
+</picture>
 
-「源清，则流清」说的是：下游的样子，由上游决定 。Lake 是这一理念下的第一个作品，但不会是唯一一个。
+<p align="center"><sub>专员协作与恢复验证 · 当前界面，演示数据</sub></p>
 
-一座湖的健康，靠的是水源、湿地与草木各司其职，日复一日地维持平衡；
+## 为运维工作而设计
 
-## 原则
+- **资源就在上下文里。** 按项目组织主机、数据库、Redis 和 Docker，将资源、会话和终端放在一起。
+- **过程可以追溯。** 从工具调用到操作确认，再到执行记录与证据，随时查看，也能人工接管。
+- **专员共同推进。** 开启实验性 SRE 协作，由协调者、调查员、执行员和验证员按需分工；用 Plan 跟进任务，用独立验证核对结果。
 
-我们把自然界的几条常识，搬进了做软件的方式里。落到每一件事上，是六条共同原则——它们既是工程的，也是环保的：
+## 快速开始
 
-- **清澈**：状态、调用与证据摆在明面上，随时可以查看，也可以人工接管。
-- **克制**：不做多余的采集，不制造无谓的消耗，只保留让系统可理解、可恢复所必需的信息。少一分冗余，就少一分负担。
-- **循环**：复用已有的工具与经验，而不是每个问题都从头造一遍；让代码、文档与知识能被反复使用，而不是一次性消耗。
-- **共生**：项目之间、维护者与使用者之间彼此依存。我们倾向于协作，而不是重复建设；倾向于开放，而不是筑墙。
-- **共建**：以开源方式共享成果，问题、文档和代码都欢迎一起完善。清朗不是一家之事，而是所有参与者共同维持的状态。
-- **长期**：工具耐用一点，维护就轻松一点。守护一片湖，和守护一套系统，都是长期的事。
+1. [下载客户端](https://github.com/Clean-Lakes/Lake/releases)。支持 macOS Apple Silicon 与 Windows x86_64。
+2. 在设置中连接模型，或通过 [Magpie Agent](https://github.com/Clean-Lakes/magpie-agent-lake) 接入。
+3. 添加资源，描述要排查的问题。输入 `@` 可引用资源、Skills 和 MCP；开启 SRE 协作后也可引用专员。
 
-## 环保
+普通模式由 Lake 直接处理。需要多人分工时，在输入框旁开启 **SRE 协作 · 实验性**；操作沿用会话权限。[了解使用与边界 →](docs/sre-collaboration.md)
 
-环保不只属于自然，也属于软件。冗余的算力、重复的构建、无人维护的依赖，同样在消耗资源。
+<details>
+<summary>本地开发</summary>
 
-我们在力所能及的地方做减法：
+需要 Go 1.25、Node.js 24 和 pnpm。macOS 首次构建先运行 `scripts/setup_lake_signing.sh`，然后启动独立的 Lake Dev：
 
-- **少消耗**：不做与目标无关的计算与采集。
-- **少浪费**：优先复用与共享，而不是从头再造一遍。
-- **少遗忘**：让文档与决策可追溯，减少重复付出的成本。
-- **可延续**：选择能被长期维护的方式，让项目活得久一点。
+```sh
+pnpm --dir web-agent install --frozen-lockfile
+scripts/build_lake_desktop.sh --dev --install
+open "$HOME/Applications/Lake Dev.app"
+```
 
-这些事很小，但清朗正是由许多小的克制累积而成的。
+Dev 使用 `~/.lake-dev`，与正式版数据分离。构建后的程序内嵌前端，运行时无需 Node.js。CLI 和独立 Web 开发见 [开发规范](CONTRIBUTING.md)。
 
-## 项目
-
-Clean Lakes 目前维护的开源项目：
-
-| 项目                                                                        | 说明                                             |
-| ------------------------------------------------------------------------- | ---------------------------------------------- |
-| **[Lake](https://github.com/Clean-Lakes/Lake)**                           | 面向 SRE 的 AI 运维工作台：连接资源，协同排障，让执行有迹可循。           |
-| **[magpie-agent-lake](https://github.com/Clean-Lakes/magpie-agent-lake)** | 在 Magpie 的 Agent 页面为 Lake 选择模型，通过 Magpie 网关接入。 |
-
-## 参与共建
-
-清朗不是一家之事。Clean Lakes 以开源方式维护，欢迎任何形式的参与——提出问题、补充文档、修正代码，或者只是把使用中的困惑告诉我们。
-
-- **提出问题**：在 [Issues](https://github.com/Clean-Lakes/Lake/issues) 中描述你遇到的场景，越具体越好。
-- **完善文档**：文档和代码一样需要维护，发现过时或含混的地方，欢迎直接提交修改。
-- **贡献代码**：先阅读 [贡献指南](CONTRIBUTING.md) 与 [行为准则](CODE_OF_CONDUCT.md)，再提交 Pull Request。
-- **共享经验**：把你的用法、踩过的坑写下来，让后来的人少走一段弯路。
-
-我们倾向于协作而不是重复建设，倾向于开放而不是筑墙。哪怕只是一次提问，也是在让这片湖更清一点。
-
-## 许可
-
-Clean Lakes 的项目均以 [Apache-2.0](LICENSE-APACHE) 许可开源。你可以自由使用、修改和分发，也欢迎把改进回流给社区。
+</details>
 
 ---
 
-[Lake 仓库](https://github.com/Clean-Lakes/Lake) · [magpie-agent-lake](https://github.com/Clean-Lakes/magpie-agent-lake) · [贡献指南](CONTRIBUTING.md) · [Apache-2.0](LICENSE-APACHE)
+[使用与开发](web-agent/README.md) · [macOS](client/macos/README.md) · [Windows](client/windows/README.md) · [贡献指南](CONTRIBUTING.md) · [Apache-2.0](LICENSE-APACHE)
