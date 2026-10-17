@@ -30,7 +30,7 @@ func sshSecret(ref, root string) (string, error) {
 func SSHAskpass(prompt string, out io.Writer) error {
 	mode := os.Getenv("LAKE_SSH_ASKPASS_MODE")
 	lower := strings.ToLower(prompt)
-	if os.Getenv("SSH_ASKPASS_PROMPT") == "confirm" || (mode == "password" && !strings.Contains(lower, "password")) || (mode == "key" && !strings.Contains(lower, "passphrase")) || (mode != "key" && mode != "password") {
+	if os.Getenv("SSH_ASKPASS_PROMPT") == "confirm" || (mode == "password" && !sshPasswordPrompt(prompt)) || (mode == "key" && !strings.Contains(lower, "passphrase")) || (mode != "key" && mode != "password") {
 		return errors.New("unsupported authentication prompt")
 	}
 	secret, err := sshSecret(os.Getenv("LAKE_SSH_SECRET_REF"), os.Getenv("LAKE_SSH_SECRET_ROOT"))
@@ -39,6 +39,29 @@ func SSHAskpass(prompt string, out io.Writer) error {
 	}
 	_, err = io.WriteString(out, secret+"\n")
 	return err
+}
+
+// Keyboard-interactive can also request OTPs, password changes or confirmation.
+// Only recognize ordinary password prompts; never reuse a saved password for
+// another challenge, including an otherwise matching "one-time password".
+func sshPasswordPrompt(prompt string) bool {
+	value := strings.ToLower(strings.TrimSpace(prompt))
+	if strings.HasPrefix(value, "(") {
+		if end := strings.IndexByte(value, ')'); end > 0 {
+			peer := value[1:end]
+			if !strings.Contains(peer, "@") || strings.ContainsAny(peer, " \t\r\n()") {
+				return false
+			}
+			value = strings.TrimSpace(value[end+1:])
+		}
+	}
+	if value == "password:" || value == "密码:" || value == "密码：" {
+		return true
+	}
+	if peer, ok := strings.CutSuffix(value, "'s password:"); ok {
+		return strings.Contains(peer, "@") && !strings.ContainsAny(peer, " \t\r\n()")
+	}
+	return false
 }
 
 func sshEnvironment(c *SSH, root string) ([]string, error) {
@@ -52,6 +75,9 @@ func sshEnvironment(c *SSH, root string) ([]string, error) {
 		return nil, err
 	}
 	helper, err := os.Executable()
+	if err == nil {
+		helper, err = platform.SSHAskpassProgram(helper)
+	}
 	if err != nil {
 		return nil, errors.New("SSH credential helper unavailable")
 	}

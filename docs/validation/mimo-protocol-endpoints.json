@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-15",
+  "issue": "MiMo configured for Anthropic with an OpenAI /v1 base caused context-compaction HTTP 404",
+  "officialReferences": [
+    "https://mimo.mi.com/docs/en-US/api/chat/anthropic-api",
+    "https://mimo.mi.com/docs/en-US/api/model/list-models",
+    "https://mimo.mi.com/docs/en-US/quick-start/summary/first-api-call"
+  ],
+  "fix": {
+    "openai": "/v1/chat/completions",
+    "claude": "/anthropic/v1/messages",
+    "discovery": "/v1/models",
+    "hosts": [
+      "api.xiaomimimo.com",
+      "token-plan-cn.xiaomimimo.com"
+    ],
+    "scope": "Exact HTTPS official hosts and documented root routes only; custom proxy hosts, ports and paths unchanged",
+    "authentication": "Official MiMo Anthropic requests use documented Bearer authentication; other Anthropic endpoints retain x-api-key",
+    "existingConfigurations": "Read compatibly with the selected protocol; no model, credential or history replacement"
+  },
+  "validation": {
+    "targetedGo": "passed",
+    "frontendTests": 155,
+    "typescript": "passed",
+    "goVet": "passed",
+    "signedDevBuild": "scripts/build_lake_desktop.sh --dev --install passed",
+    "transportTest": "Compaction and model discovery validated with an in-memory HTTP transport; no real credentials or provider requests",
+    "userConfirmation": "User reports OpenAI format with /v1 works in the affected conversation",
+    "runningDev": "Restarted on user request; loaded fixed assets and localized errors; current MiMo selection preserved",
+    "goRace": "Full internal/ai and internal/web packages passed"
+  }
+}

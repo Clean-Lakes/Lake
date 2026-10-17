@@ -137,6 +137,11 @@ func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool
 	return e.configuredExtensionTools(c, list)
 }
 func Prompt(c Config) string {
+	b, _ := embedded.ReadFile("prompts/identity-and-permissions.txt")
+	return string(b) + "\n" + profilePrompt(c)
+}
+
+func profilePrompt(c Config) string {
 	if c.sreCoordinator {
 		b, _ := embedded.ReadFile("prompts/sre-coordination.txt")
 		lang, _ := embedded.ReadFile("prompts/user-language-policy.txt")

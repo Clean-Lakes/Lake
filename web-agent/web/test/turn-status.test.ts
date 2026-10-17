@@ -29,6 +29,18 @@ test("old pending tools and foreign or earlier agent runs cannot become the curr
  assert.equal(turnStatus(timing,{...v,agentRuns:[{...run,status:"waiting_approval"}]},[],at,now).state,"等待确认");
  assert.equal(turnStatus({...timing,status:"cancelled",finishedAt:new Date(now).toISOString()},v,[],at,now).text,"49秒 · 已停止");
 });
+test("current compaction has one live footer even when its card is hidden from the transcript",()=>{
+ const compact:AICard={id:"compact",type:"compaction",content:"正在压缩上下文…",status:"running",at};
+ const v={...view,cards:[compact]};
+ assert.equal(turnStatus(timing,v,[],at,now).text,"49秒 · 正在压缩上下文…");
+ assert.equal(turnStatus(timing,{...v,cards:[{...compact,at:"2026-10-13T00:00:00Z"}]},[],at,now).state,"正在思考…");
+ assert.equal(turnStatus(timing,{...v,cards:[{...compact,status:"completed"}]},[],at,now).state,"正在思考…");
+ assert.equal(turnStatus({...timing,status:"cancelled",finishedAt:new Date(now).toISOString()},v,[],at,now).state,"已停止");
+ const snapshot={session:{id:"s"},messages:[{id:"u",sessionId:"s",role:"user",text:"继续检查",createdAt:at}],resources:[],actions:[],replyTimings:[timing],ai:v} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.equal(html.split("正在压缩上下文…").length-1,1);
+ assert.equal((html.match(/class="reply-duration /g)||[]).length,1);
+});
 test("unverified and background results stay honest; missing endpoints never invent elapsed time",()=>{
  const saved={...timing,status:"completed" as const,finishedAt:new Date(now).toISOString()};
  assert.equal(turnStatus(saved,undefined,[{...tool,status:"unknown"}],at,now).text,"49秒 · 已完成 · 执行结果待核查");

@@ -310,6 +310,30 @@ func (e *Engine) finishSREPreparation(c Config, call Call, toolErr error) {
 	})
 }
 
+// Ordinary conversations can inspect a tool-local deadline and keep chatting.
+// A specialist must instead yield on a recorded unknown resource outcome; live
+// persistent commands remain dispatched and can still be polled by their handle.
+func (e *Engine) unknownSREOperation(c Config, call Call) error {
+	if !sreTrackedCall(c, call) {
+		return nil
+	}
+	task, err := e.sreRepository.LoadSRETask(e.worker.parentID, c.sre.TaskID)
+	if err != nil {
+		return err
+	}
+	for _, attempt := range task.Attempts {
+		if attempt.ID != c.sre.AttemptID {
+			continue
+		}
+		for _, op := range attempt.Operations {
+			if op.Digest == hash(call.Name+call.Arguments) && op.Status == "unknown" {
+				return errors.New("操作结果不明，请核实实际状态；不会自动重放。")
+			}
+		}
+	}
+	return nil
+}
+
 func SREExecutionSummary(attempt SREStepAttempt) string {
 	for _, op := range attempt.Operations {
 		if op.Status == "unknown" || op.Status == "dispatched" {

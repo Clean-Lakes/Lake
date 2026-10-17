@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/ai"
 	"path/filepath"
@@ -712,20 +713,19 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		}
 		commandContext, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Millisecond)
 		defer cancel()
-		defer func() {
-			if p := recover(); p != nil {
-				if commandContext.Err() == context.DeadlineExceeded {
-					err = fmt.Errorf("等待命令超时；命令仍在终端执行，可读取状态: %w", context.DeadlineExceeded)
-					return
-				}
-				panic(p)
-			}
-		}()
-		result, waitErr := b.waitTerminal(commandContext, id, tid, stringOf(entry["id"]))
-		if waitErr != nil && commandContext.Err() == context.DeadlineExceeded && ctx.Err() == nil {
-			return Object{"terminal_id": tid, "entry_id": entry["id"], "status": "running", "wait_timed_out": true}, &ai.ToolWaitTimeoutError{Err: waitErr}
+		result, err = b.waitTerminal(commandContext, id, tid, stringOf(entry["id"]))
+		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			// Only this wait expired. The persistent terminal owns the command;
+			// expose its existing entry rather than killing or replaying it.
+			observed := b.Store.Entry(b.terminalOwner(id, tid, false), tid, stringOf(entry["id"]))
+			observed["output"] = tail(stringOf(observed["output"]), 16000)
+			observed["terminal_id"], observed["entry_id"] = tid, entry["id"]
+			observed["timed_out"] = true
+			observed["partial"] = observed["status"] == "running"
+			observed["notice"] = "本次等待超时，请核查此命令的执行状态；不要重复执行，也不要将超时视为执行成功。"
+			return observed, nil
 		}
-		return result, waitErr
+		return result, err
 	}
 	send := func(input string, enter bool) {
 		if !approved {

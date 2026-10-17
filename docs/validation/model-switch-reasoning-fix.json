@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-15",
+  "scope": "Model-switch context compaction and reasoning dropdown",
+  "data": "Synthetic UI project; isolated CLI home; no release or Dev secrets copied",
+  "backend": [
+    "go test -race ./internal/ai: passed",
+    "go test -race ./internal/web: passed",
+    "go vet ./internal/ai ./internal/web: passed"
+  ],
+  "frontend": {
+    "tests": 155,
+    "typescript": "passed",
+    "productionBuild": "passed"
+  },
+  "desktop": "Signed scripts/build_lake_desktop.sh --dev --install completed; restarted Lake Dev",
+  "ui": {
+    "component": "ReasoningSelector uses AppSelect and Glyph brain",
+    "triggerHeight": 28,
+    "borderWidth": 0,
+    "testedViewports": [
+      "1280x720",
+      "700x650"
+    ],
+    "narrowPopupBounds": {
+      "left": 516,
+      "right": 692,
+      "top": 381,
+      "bottom": 601
+    },
+    "keyboardSelection": "End + Enter selected and persisted xhigh",
+    "escape": "Closed popup and restored trigger focus",
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "screenshots": [
+      "reasoning-select-light.png",
+      "reasoning-select-narrow.png",
+      "reasoning-select-dark.png"
+    ]
+  },
+  "regressions": [
+    "Switching to a new model acknowledges a short user message after compacting a completed tool turn",
+    "Long generated handoff fits the actual remaining serialized budget with a Unicode-safe omission marker",
+    "Current user input, permissions and original operation cards remain intact",
+    "No completed shell command is replayed",
+    "Existing repeated first-turn compaction, tool pairing and summary failure preservation tests pass"
+  ]
+}

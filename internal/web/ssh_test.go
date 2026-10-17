@@ -61,6 +61,11 @@ func TestRealSSHPersistentPTY(t *testing.T) {
 	session := b.Store.CreateSession(stringOf(r["projectId"]), "SSH fixture", []string{stringOf(r["id"])})
 	sid := stringOf(session["id"])
 	allowFixtureHost(b, sid)
+	// This fixture tests SSH reuse, not compaction; host observations vary with
+	// the runner and the scripted provider does not implement summarization.
+	options := b.Store.Options(sid)
+	options["contextWindow"] = 131072
+	b.Store.SaveOptions(sid, options)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	for n := 0; n < 100; n++ {
@@ -115,6 +120,11 @@ func TestRealSSHPersistentPTY(t *testing.T) {
 		b.workers.Wait()
 		view, err := b.Engine.Snapshot(sid)
 		if err != nil || view.Status != "completed" {
+			for _, card := range view.Cards {
+				if card.Type == "error" {
+					t.Log("isolated SSH conversation error:", card.Content)
+				}
+			}
 			t.Fatal("remote conversation preparation failed")
 		}
 	}
@@ -152,8 +162,18 @@ func TestRealSSHPersistentPTY(t *testing.T) {
 		}
 		for _, cols := range []int{60, 120, 80} {
 			b.Terminals.Resize(sid, rawID, cols, 25)
-			time.Sleep(100 * time.Millisecond)
-			screen := strings.TrimSpace(b.Terminals.Screen(sid, rawID, "viewport", 25, 10000))
+			b.Terminals.Input(sid, rawID, "\x0c", false)
+			// SSH window changes and prompt redraw arrive asynchronously. Check
+			// the whole wrapped prompt rather than assuming a short hostname.
+			deadline := time.Now().Add(2 * time.Second)
+			screen := ""
+			for time.Now().Before(deadline) {
+				screen = strings.ReplaceAll(strings.TrimSpace(b.Terminals.Screen(sid, rawID, "viewport", 25, 10000)), "\n", "")
+				if strings.Count(screen, "@") == 1 && strings.Contains(screen, " ~]") {
+					break
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
 			if strings.Count(screen, "@") != 1 || !strings.Contains(screen, " ~]") {
 				t.Fatalf("SSH %s prompt corrupted after resize: %q", shell, screen)
 			}

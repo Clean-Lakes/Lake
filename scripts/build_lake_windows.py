@@ -153,7 +153,9 @@ def main():
             installer = output / (name + "-setup.exe")
             # VIProductVersion requires exactly four numeric fields.
             product_version = version + ".0" if version.count(".") == 2 else version
-            run([nsis, "-V2", "-DVERSION=" + version, "-DPRODUCT_VERSION=" + product_version, "-DAPP_DIR=" + str(stage), "-DOUTPUT=" + str(installer), ROOT / "client/windows/installer.nsi"])
+            # Build the glob with the host's native separator. Appending a POSIX
+            # slash to a Windows path makes NSIS fail to find the payload.
+            run([nsis, "-V2", "-DVERSION=" + version, "-DPRODUCT_VERSION=" + product_version, "-DAPP_FILES=" + str(stage / "*"), "-DOUTPUT=" + str(installer), ROOT / "client/windows/installer.nsi"])
             assets.append(installer)
         for path in assets:
             path.with_name(path.name + ".sha256").write_text(sha(path) + "  " + path.name + "\n")

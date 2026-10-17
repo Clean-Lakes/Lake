@@ -166,7 +166,7 @@ func TestHexHubV4ExportUsesDataKeyAndNestedConfig(t *testing.T) {
 				"host": "36.151.150.63", "port": 22, "user": "root", "authType": 1,
 				"privateKey":   encrypt(jsonText(Object{"name": "Key", "privateKey": string(key)})),
 				"privateKeyId": "51b74989-1137-4f90-b3ba-b83cedfcabba",
-				"agentType": "auto", "charset": "UTF-8", "terminalType": "xterm-256color",
+				"agentType":    "auto", "charset": "UTF-8", "terminalType": "xterm-256color",
 				"proxy": Object{"method": 0}, "tunnels": []Object{},
 			},
 			"updated": "Date(1787133481294)", "created": "Date(1787133481293)",

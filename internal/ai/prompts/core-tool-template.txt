@@ -18,6 +18,7 @@ File workflow rule:
 
 Shell rule:
 - Use shell for executing programs, builds, tests, package managers, diagnostics, processes, services, networking, resource/runtime status, and other non-file command work.
+- A failed SSH connection does not change the target. Do not present local-machine results as remote-host state. If permitted local network probes are relevant, label them as local reachability evidence, bound each probe, and avoid chaining several slow probes in one foreground call.
 - Prefer absolute paths and quote paths that contain spaces. For long jobs set run_in_background=true, then use bashOutput to poll output and killShell to stop the session if needed.
 - Use bashOutput with filter when you only need matching lines from a running command.
 - Resolve the target set and investigate directly using the available tools. Ordinary mode does not schedule child agents. Reuse successful evidence, fill specific gaps and summarize when the goal is covered. SRE collaboration is a separate explicit project mode.

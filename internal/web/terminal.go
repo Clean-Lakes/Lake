@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -44,6 +44,9 @@ type liveTerminal struct {
 	userInputPending, hiddenAgentOutput       bool
 	connected                                 chan struct{}
 	connectErr                                error
+	startupExitCode                           *int
+	connectionTarget                          string
+	startupCause                              string
 	startup, flush                            *time.Timer
 	job                                       *terminalJob
 	screen                                    vt10x.Terminal
@@ -51,10 +54,12 @@ type liveTerminal struct {
 	utf8Partial                               string
 	capturedAt                                string
 	shell                                     string
+	remote                                    bool
 	hooks                                     bool
 	hookPartial                               string
 	rawOrigin                                 string
 	scrollback                                []string
+	initEchoDropped                           bool
 }
 type Terminals struct {
 	ResolveAccess   func(string, string, bool) string
@@ -171,6 +176,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 		panic(e)
 	}
 	var authEnv []string
+	connectionTarget := ""
 	readyMarker := "\x1eLAKE_READY_" + ident() + "\x1f"
 	initialization := terminalInit(selectedShell, readyMarker, interactive)
 	if r["kind"] == "ssh" {
@@ -190,12 +196,13 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 			}
 		}()
 		program = "/usr/bin/ssh"
+		connectionTarget = fmt.Sprintf("%s@%s:%d", stringOf(cfg["username"]), stringOf(cfg["host"]), integer(cfg["port"]))
 		cfg["shell"] = selectedShell
 		args = sshArguments(cfg, initialization)
 		if trustedPath != "" {
 			for i, v := range args {
 				if strings.HasPrefix(v, "UserKnownHostsFile=") {
-					args[i] = "UserKnownHostsFile=" + strconv.Quote(trustedPath)
+					args[i] = platform.SSHFileOption("UserKnownHostsFile", trustedPath)
 				}
 			}
 		}
@@ -203,6 +210,9 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 			helper, e := os.Executable()
 			if t.askpassProgram != "" {
 				helper = t.askpassProgram
+			}
+			if e == nil {
+				helper, e = platform.SSHAskpassProgram(helper)
 			}
 			if e != nil {
 				t.store.TerminalStatus(id, tid, "disconnected")
@@ -218,9 +228,17 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 		if t.KnownHosts != "" {
 			for i, v := range args {
 				if strings.HasPrefix(v, "UserKnownHostsFile=") {
-					args[i] = "UserKnownHostsFile=" + t.KnownHosts
+					args[i] = platform.SSHFileOption("UserKnownHostsFile", t.KnownHosts)
 				}
 			}
+		}
+	}
+	var startupLog *sshStartupLog
+	if r["kind"] == "ssh" && runtime.GOOS == "windows" {
+		// Failure to create optional diagnostics must not block a valid login.
+		startupLog, _ = newSSHStartupLog(t.models.Home)
+		if startupLog != nil {
+			args = append([]string{"-E", filepath.ToSlash(startupLog.path), "-o", "LogLevel=VERBOSE"}, args...)
 		}
 	}
 	cmd := exec.Command(platform.Executable(program), args...)
@@ -232,11 +250,12 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 	}
 	f, e := startTerminal(cmd, 100, 30)
 	if e != nil {
+		startupLog.discard()
 		t.mu.Unlock()
 		t.store.TerminalStatus(id, tid, "disconnected")
 		fail(503, "Could not start terminal; verify connection configuration")
 	}
-	l := &liveTerminal{pty: f, cmd: cmd, id: tid, session: id, interactive: interactive, promptRedraw: selectedShell != "sh", readyMarker: readyMarker, connected: make(chan struct{}), shell: selectedShell, screen: vt10x.New(vt10x.WithSize(100, 30))}
+	l := &liveTerminal{pty: f, cmd: cmd, id: tid, session: id, remote: r["kind"] == "ssh", interactive: interactive, promptRedraw: selectedShell != "sh", readyMarker: readyMarker, connected: make(chan struct{}), shell: selectedShell, connectionTarget: connectionTarget, screen: vt10x.New(vt10x.WithSize(100, 30))}
 	t.live[tid] = l
 	t.wg.Add(2)
 	t.mu.Unlock()
@@ -261,10 +280,18 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 	go func() {
 		defer t.wg.Done()
 		cmd.Wait()
+		startupCause := startupLog.finish()
+		l.mu.Lock()
+		l.startupCause = startupCause
+		if l.remote && !l.ready && cmd.ProcessState != nil {
+			code := cmd.ProcessState.ExitCode()
+			l.startupExitCode = &code
+		}
+		l.mu.Unlock()
 		// Drain final OpenSSH stderr before classifying a failed handshake.
 		select {
 		case <-readDone:
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(500 * time.Millisecond):
 		}
 		t.closeLive(l, "Terminal connection closed")
 	}()
@@ -274,7 +301,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 	// Carry the script through the environment/SSH command channel. Only this
 	// short trigger enters the PTY: large pasted initialization can overflow
 	// canonical queues or race line-editor mode changes and lose bytes.
-	_, e = f.WriteString("eval \"$__lake_init\"\n")
+	_, e = f.WriteString(terminalInitTrigger + "\n")
 	if e != nil {
 		t.closeLive(l, "Connection initialization failed")
 	}
@@ -304,7 +331,35 @@ func (t *Terminals) get(id, tid string) *liveTerminal {
 	}
 	return l
 }
+
+// terminalInitTrigger is the only command Lake types into a fresh PTY: the script
+// itself travels through the environment or the SSH command channel.
+const terminalInitTrigger = `eval "$__lake_init"`
+
+// dropInitEcho removes the echoed initialization line. The trigger is written into
+// the PTY, and the login shell echoes it before the script can turn echo off; a
+// console repaint can repeat that line after the handshake. The echo is internal
+// plumbing, so drop the first line carrying it and keep everything else — banners,
+// prompts and real output — untouched.
+func (l *liveTerminal) dropInitEcho(data string) string {
+	if l.initEchoDropped {
+		return data
+	}
+	at := strings.Index(data, terminalInitTrigger)
+	if at < 0 {
+		return data
+	}
+	l.initEchoDropped = true
+	start := strings.LastIndexByte(data[:at], '\n') + 1
+	end := at + len(terminalInitTrigger)
+	if next := strings.IndexByte(data[end:], '\n'); next >= 0 {
+		end += next + 1
+	}
+	return data[:start] + data[end:]
+}
+
 func (t *Terminals) record(l *liveTerminal, data string) {
+	data = l.dropInitEcho(data)
 	if data != "" {
 		l.capturedAt = now()
 	}
@@ -764,11 +819,26 @@ func (t *Terminals) closeLive(l *liveTerminal, reason string) {
 	}
 	t.record(l, l.pending)
 	l.pending = ""
+	if !l.ready && retainedSSHCauses[l.startupCause] {
+		t.record(l, "\r\n"+sshStartupHistoryPrefix+l.startupCause+"\r\n")
+	}
 	t.flush(l)
 	t.finish(l, nil, "\n["+reason+"]", true)
 	t.store.TerminalStatus(l.session, l.id, "disconnected")
 	if !l.ready {
-		l.connectErr = fmt.Errorf("%s", terminalConnectionError(l.output, reason))
+		startupOutput := l.output
+		if l.screen != nil {
+			startupOutput += "\n" + t.screenLocked(l, "tail", 1000, outputLimit)
+		}
+		message := terminalConnectionError(startupOutput, reason)
+		if l.startupCause != "" && !strings.Contains(message, "凭据助手") {
+			message = l.startupCause
+		}
+		message = terminalConnectionCauseWithExit(message, reason, l.startupExitCode)
+		if l.connectionTarget != "" {
+			message += " 连接目标：" + l.connectionTarget + "。"
+		}
+		l.connectErr = fmt.Errorf("%s", message)
 		close(l.connected)
 	}
 	t.mu.Lock()

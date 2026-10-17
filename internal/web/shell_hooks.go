@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/platform"
 	"os/exec"
+	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -50,6 +52,14 @@ func terminalInit(name, marker string, interactiveMode ...bool) string {
 	interactive := len(interactiveMode) > 0 && interactiveMode[0]
 	ready := strings.NewReplacer("\x1e", "\\036", "\x1f", "\\037").Replace(marker)
 	script := "stty -echo\n"
+	if runtime.GOOS == "windows" {
+		// ConPTY uses absolute cursor positions when repainting. The bootstrap
+		// trigger consumes a row before readiness, but pre-handshake output is
+		// hidden from the frontend. Align both screens before the first prompt
+		// so the initial resize cannot leave a second prompt on the next row.
+		// Never reset the screen on resize: that would erase real user history.
+		script += "printf '\\033[H\\033[2J'\n"
+	}
 	if name == "fish" {
 		script += "set -e __lake_init\n"
 	} else {
@@ -194,7 +204,12 @@ func (t *Terminals) hook(l *liveTerminal, frame string) {
 			return
 		}
 		code, err := strconv.Atoi(p[0])
-		if err != nil || code < 0 || code > 255 || !filepath.IsAbs(p[1]) || strings.ContainsAny(p[1], "\x00\x1b\r\n") {
+		absolute := path.IsAbs(p[1])
+		if !l.remote {
+			p[1] = platform.FromShellPath(p[1])
+			absolute = filepath.IsAbs(p[1])
+		}
+		if err != nil || code < 0 || code > 255 || !absolute || strings.ContainsAny(p[1], "\x00\x1b\r\n") {
 			return
 		}
 		l.hooks = true

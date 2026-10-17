@@ -1,0 +1,64 @@
+{
+  "version": "0.3.16",
+  "platforms": [
+    "macos-arm64"
+  ],
+  "base": "1c365733f12d2224f879be19df4ce5b15839fb0d",
+  "downloadProgress": {
+    "source": "URLSessionDownloadDelegate totalBytesWritten / release asset size",
+    "transferCapPercent": 99,
+    "completion": "file size validated before verifying stage",
+    "staleCallbacks": "per-download identity and monotonic main-actor updates",
+    "tests": [
+      "real throttled Content-Length transfer: 16 intermediate events",
+      "real throttled chunked transfer without Content-Length: 16 intermediate events",
+      "cancellation fails without reporting completion"
+    ],
+    "SwiftCompatibility": "resolve weak updater capture to an immutable reference before crossing into the main-actor task"
+  },
+  "checks": {
+    "go test ./...": "passed",
+    "go vet ./...": "passed",
+    "go test -race SRE/parallel/trust/persistent-command regressions": "passed",
+    "pnpm check": "passed",
+    "frontendTests": 200,
+    "SwiftPolicyAndDownloadTests": "passed",
+    "nativeReleaseBuild": "passed",
+    "installerRollbackTests": 5,
+    "ZIPAndDMGChecksums": "passed",
+    "ZIPIntegrity": "passed",
+    "DMGIntegrity": "passed",
+    "codesignDeepStrict": "passed",
+    "packagedBackendWithIsolatedHome": "authenticated catalog and embedded React entry passed",
+    "nativeDebugProductBuild": "passed",
+    "GitHubFullGoRaceAndVet": "passed (first CI run)"
+  },
+  "signingIdentity": "Lake Local Development Code Signing",
+  "artifacts": [
+    {
+      "name": "Lake-0.3.16-macos-arm64.dmg",
+      "size": 17641713,
+      "sha256": "c9776749b884e1f31a6797e4bfa9870305f20647ffd33e00d8a6a2541d04095c"
+    },
+    {
+      "name": "Lake-0.3.16-macos-arm64.dmg.sha256",
+      "size": 94,
+      "sha256": "87b2ff1ebcc2c34aebfe9a08cf1908010a4a02b9feefb550a76ab8ec0551f024"
+    },
+    {
+      "name": "Lake-0.3.16-macos-arm64.zip",
+      "size": 16650668,
+      "sha256": "cf62d5760b021243c1321ab67b979369b2496673a5f4eb5c7a0f0952835543c2"
+    },
+    {
+      "name": "Lake-0.3.16-macos-arm64.zip.sha256",
+      "size": 94,
+      "sha256": "d6f2fdc229b60d264a0fb4fc2be9a5493c47fd99bc6f954a9b9f2da4ae04cc28"
+    }
+  ],
+  "notes": [
+    "Only macOS release assets are published.",
+    "This update includes latest v0.3.15 fixes and SRE collaboration.",
+    "A previous client uses its previous updater while initially downloading v0.3.16."
+  ]
+}

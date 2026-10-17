@@ -156,3 +156,15 @@ func Environment(home string) []string {
 	return env
 }
 func NullDevice() string { return os.DevNull }
+
+// Git Bash reports POSIX mount paths; store native paths so cwd observations
+// pass the same absolute-path validation as Windows file operations.
+func FromShellPath(path string) string {
+	if filepath.IsAbs(path) || !strings.HasPrefix(path, "/") {
+		return path
+	}
+	if len(path) >= 3 && path[2] == '/' && ((path[1] >= 'a' && path[1] <= 'z') || (path[1] >= 'A' && path[1] <= 'Z')) {
+		return strings.ToUpper(path[1:2]) + ":" + filepath.FromSlash(path[2:])
+	}
+	return filepath.Join(PortableRoot(), filepath.FromSlash(path))
+}

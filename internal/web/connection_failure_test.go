@@ -122,11 +122,24 @@ func TestSSHStartupReasonAndRetryIntent(t *testing.T) {
 		{"Connection timed out", "连接超时"},
 		{"Could not resolve hostname synthetic", "无法解析"},
 		{"No route to host", "网络不可达"},
+		{"Unable to negotiate: no matching host key type found. Their offer: ssh-rsa", "加密算法协商失败"},
+		{"Bad owner or permissions on C:/private/config", "文件访问权限"},
+		{"ssh_askpass: exec(C:/Program Files/Lake/Lake.exe): No such file", "凭据助手无法启动"},
+		{"command-line: Bad configuration option: fixture", "不支持连接所需的选项"},
+		{"Permission de\x1b[0m\r\nnied (keyboard-interactive)", "身份认证失败"},
+		{"kex_exchange_identification: read: Connection reset by peer", "关闭了连接"},
+		{"Connection closed by synthetic port 22", "关闭了连接"},
+		{"PTY allocation request failed on channel 0", "拒绝创建终端"},
+		{"exec request failed on channel 0", "拒绝创建终端"},
+		{SSHAskpassFailureMessage, "凭据助手未能提供"},
 	} {
 		result := terminalConnectionError(tc.output+"\nfixture-secret-not-for-display", "")
 		if !strings.Contains(result, tc.want) || strings.Contains(result, "fixture-secret") || strings.Contains(result, "synthetic") {
 			t.Fatal("startup reason is missing or raw stderr escaped")
 		}
+	}
+	if message := terminalConnectionError("", "Terminal connection closed"); !strings.Contains(message, "初始化完成前退出") || strings.Contains(message, "连接超时") {
+		t.Fatal("immediate SSH exit was misreported as timeout", message)
 	}
 	for _, message := range []string{"为什么一直重试", "不要重试", "为啥重新连接失败", "don't retry", "显示 retry.log"} {
 		if connectionRetryRequested(message) {
@@ -137,5 +150,25 @@ func TestSSHStartupReasonAndRetryIntent(t *testing.T) {
 		if !connectionRetryRequested(message) {
 			t.Fatal("explicit retry was not recognized")
 		}
+	}
+}
+
+func TestSSHStartupExitCodesRemainUsefulWithoutExposingOutput(t *testing.T) {
+	for _, tc := range []struct {
+		code int
+		want string
+	}{
+		{255, "255 / 0x000000FF"}, {0, "远端终端初始化"},
+		{0xc0000135, "缺少依赖 DLL"}, {0xc000007b, "架构不匹配"},
+		{0xc0000142, "运行环境初始化失败"}, {0xc0000005, "访问冲突"},
+	} {
+		got := terminalConnectionErrorWithExit("synthetic-private-output", "Terminal connection closed", &tc.code)
+		if !strings.Contains(got, tc.want) || strings.Contains(got, "synthetic-private") {
+			t.Fatal("missing safe startup evidence", got)
+		}
+	}
+	code := 255
+	if got := terminalConnectionErrorWithExit("Permission denied (password)", "Terminal connection closed", &code); !strings.Contains(got, "身份认证失败") {
+		t.Fatal("exit evidence replaced the authentication cause", got)
 	}
 }

@@ -34,11 +34,12 @@ export function ReasoningSelector({ session, modelId, disabled, onSaving }: {
   };
   const label = valid ? labels[settings.effort] ?? settings.effort : "级别不可用";
   return <div className="reasoning-switch-wrap">
-    <AppSelect className="composer-reasoning-select" label={`思考级别：${label}`} title="思考级别" value={valid ? settings.effort : ""} renderValue={busy ? "保存中…" : label}
-      icon={<Glyph name="brain" size={16}/>} disabled={disabled || busy || !valid} aria-busy={busy} open={open && valid} onOpenChange={setOpen} onChange={event=>void select(event.target.value)}
-      popupMinWidth={180} popupHeader={<div className="composer-model-heading">思考级别</div>}>
+    <AppSelect className="composer-model-select composer-reasoning-select" label="思考级别" title={`思考级别：${label}`} icon={<Glyph name="brain" size={16}/>}
+      value={valid ? settings.effort : ""} renderValue={busy ? "保存中…" : label} disabled={disabled || busy || !valid} aria-busy={busy}
+      open={open && valid} onOpenChange={setOpen} onChange={event => void select(event.target.value)} popupMinWidth={176}
+      popupHeader={<div className="composer-model-heading">思考级别</div>}>
       <option value="">默认{valid && settings.default ? `（${labels[settings.default] ?? settings.default}）` : ""}</option>
-      {(valid ? settings.levels : []).filter(effort=>effort!=="").map(effort=><option key={effort} value={effort}>{labels[effort] ?? effort}</option>)}
+      {(valid ? settings.levels : []).filter(effort => effort !== "").map(effort => <option key={effort} value={effort}>{labels[effort] ?? effort}</option>)}
     </AppSelect>
     {error && <p className="reasoning-error" role="alert">{error}</p>}
   </div>;

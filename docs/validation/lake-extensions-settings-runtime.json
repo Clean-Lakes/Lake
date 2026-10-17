@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-15",
+  "feature": "MCP 与 Skills 配置及聊天接入",
+  "environment": "Explicit isolated temporary Lake home with a loopback MCP/model fixture; no external model or production service requests.",
+  "verified": [
+    "Settings contains MCP and Skills tabs, unified AppSelect transport selection and Glyph icons.",
+    "MCP configuration saves without connecting, retains masked credentials, tests a real initialize/tools-list handshake and displays the tool schema.",
+    "HTTP, SSE and stdio SDK transports pass tests; cached SSE connection survives cancellation of the discovery request.",
+    "Chat executes list_mcp_servers, list_mcp_tools and call_mcp_tool against the loopback echo service.",
+    "Disabling silent commands makes the MCP call wait for an operation decision; approving resumes the call.",
+    "MCP configuration changes invalidate connections; server disablement blocks further calls; private header/env values are scrubbed from tool output.",
+    "Unconfigured or entirely disabled MCP services do not consume the default model tool budget.",
+    "UI creates service-check SKILL.md, imports an existing directory without copying support files and displays imported content read-only.",
+    "Chat loads the enabled service-check Skill and rejects loading it after disablement.",
+    "Skill content, enablement and imported root metadata survive backend restart.",
+    "Invalid stdio JSON parameters produce a visible in-form error without saving or starting a process.",
+    "Light/dark desktop layouts and 430x840 MCP/Skills layouts have no horizontal page overflow; mobile sources, editor and save controls remain scrollable."
+  ],
+  "automated": {
+    "typescript": "Passed standalone check and final production build.",
+    "frontend": "147 tests passed.",
+    "go_full": "go test -race ./internal/extensions ./internal/ai ./internal/web passed.",
+    "go_latest": "Extension, skill-isolation, MCP permission and configuration tests rerun after final storage hardening; passed.",
+    "codesign": "Signed Dev build and installation succeeded; strict signature verification succeeded."
+  },
+  "desktop": {
+    "app": "~/Applications/Lake Dev.app",
+    "build": "scripts/build_lake_desktop.sh --dev --install",
+    "status": "Verified after macOS unlock: relaunched the signed installed Lake Dev, opened MCP and Skills tabs, checked empty states, MCP creation form and all three transport options, Skill editor/template and directory manager. Returned to chat without saving test configurations. Release app and data were untouched."
+  },
+  "screenshots": [
+    "lake-mcp-settings.png",
+    "lake-skills-settings.png",
+    "lake-mcp-settings-dark.png",
+    "lake-mcp-settings-mobile.png",
+    "lake-skills-settings-mobile.png",
+    "lake-mcp-settings-native.png",
+    "lake-skills-settings-native.png"
+  ],
+  "limitations": [
+    "Authentication uses custom headers/env; interactive OAuth login is not implemented.",
+    "Imported external Skills are read-only in the settings editor."
+  ]
+}

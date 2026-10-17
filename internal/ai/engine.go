@@ -47,6 +47,8 @@ type Engine struct {
 	shells           sync.Map
 	shellMu          sync.Mutex
 	shellsClosed     bool
+
+	compactionTimeout time.Duration
 }
 
 func New(dir string, bridge Bridge, emit func(Event)) (*Engine, error) {
@@ -76,6 +78,14 @@ func (e *Engine) get(id string) (*session, error) {
 		if json.Unmarshal(b, &s.state) != nil {
 			return nil, errors.New("AI state is invalid")
 		}
+		orphanedCompaction := false
+		for i := range s.state.View.Cards {
+			card := &s.state.View.Cards[i]
+			if card.Type == "compaction" && card.Status == "running" {
+				card.Status, card.Content = "interrupted", "上下文整理已中断；可在原会话继续"
+				orphanedCompaction = true
+			}
+		}
 		if s.state.View.Status == "running" || s.state.View.Status == "waiting_approval" || s.state.View.Question != nil {
 			s.state.View.Status = "interrupted"
 			s.state.View.Pending = nil
@@ -93,6 +103,10 @@ func (e *Engine) get(id string) (*session, error) {
 					run.Pending, run.CanCancel = nil, false
 				}
 			}
+			if err := e.save(s); err != nil {
+				return nil, err
+			}
+		} else if orphanedCompaction {
 			if err := e.save(s); err != nil {
 				return nil, err
 			}
@@ -480,6 +494,7 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 	}
 	c.ReferencedAssets = validRemembered(c, c.ReferencedAssets)
 	s.state.ReferencedAssetIDs = append([]string(nil), c.ReferencedAssets...)
+	resume := e.worker == nil && shouldCompactResumedConversation(s.state, time.Now())
 	ctx, cancel := context.WithCancel(ctx)
 	ctx = boundedShellPolling(ctx)
 	s.cancel = cancel
@@ -568,7 +583,7 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 			}
 			e.worker.mu.Unlock()
 		}
-		if err = e.compact(ctx, s, c, false); err != nil {
+		if err = e.compactForTurn(ctx, s, c, resume && step == 0); err != nil {
 			return err
 		}
 		teamContext := e.sreTeamContext(c)
@@ -814,8 +829,11 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 				s.mu.Unlock()
 			}
 		}
-		if errors.Is(toolErr, context.Canceled) || errors.Is(toolErr, context.DeadlineExceeded) {
-			return toolErr
+		// A child tool's deadline must not cancel the whole conversation turn.
+		// Preserve its paired result so the model can report or inspect the
+		// outcome. Only cancellation of this turn stops further model requests.
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		if image, ok := obj(value)["image"].(ImageAttachment); ok && toolErr == nil {
 			observations = append(observations, image)
@@ -825,6 +843,10 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 		payload := js(value)
 		if toolErr != nil {
 			failure := map[string]any{"error": toolErr.Error()}
+			if errors.Is(toolErr, context.DeadlineExceeded) || errors.Is(toolErr, context.Canceled) {
+				failure["outcome"] = "unknown"
+				failure["notice"] = "工具等待已中断；先核查执行状态，不要重复执行或宣称成功。"
+			}
 			if value != nil {
 				failure["result"] = value
 			}
@@ -854,6 +876,9 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 		if err != nil {
 			return err
 		}
+		if err := e.unknownSREOperation(*c, call); err != nil {
+			return err
+		}
 		if toolErr == nil {
 			if err := shellPollingProgress(ctx, call, value); err != nil {
 				return err
@@ -871,16 +896,17 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 	}
 	return nil
 }
-func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) error {
+func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) (err error) {
 	s.mu.Lock()
 	history := append([]Message(nil), s.state.History...)
 	id := s.state.View.Session
 	s.mu.Unlock()
-	toolsCost := len(js(e.sessionCatalog(ctx, id, c)))
+	toolCost := len(js(e.sessionCatalog(ctx, id, c)))
 	s.mu.Lock()
-	chars := estimatedContextCost(s.state, history, toolsCost)
+	chars := estimatedContextCost(s.state, history, toolCost)
 	s.mu.Unlock()
 	budget := (c.Model.ContextWindow - c.Model.MaxOutput) * 2
+	historyBudget := budget - toolCost
 	if !force && chars < budget {
 		return nil
 	}
@@ -888,13 +914,13 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	if c.sre != nil && c.sre.Role == SREInvestigator && !c.sre.FullTools {
 		// Preserve calls, evidence IDs and recorded results deterministically;
 		// an extra model summary must not consume the report time reserve.
-		allocation := target - toolsCost
+		allocation := target - toolCost
 		if !force {
 			allocation = min(allocation, historyCost(history)-1)
 		}
 		projected, fits := fitToolContext(history, allocation)
 		if !fits {
-			projected, fits = fitToolContext(history, budget-toolsCost)
+			projected, fits = fitToolContext(history, budget-toolCost)
 		}
 		if !force && fits && historyCost(projected) >= historyCost(history) {
 			fits = false
@@ -911,7 +937,7 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	// Automatic maintenance first reduces old model-only tool previews. Avoid
 	// another summary request when this already creates meaningful headroom.
 	if !force {
-		if projected, fits := fitOlderToolContext(history, target-toolsCost); fits && historyCost(history)-historyCost(projected) >= budget/4 {
+		if projected, fits := fitOlderToolContext(history, target-toolCost); fits && historyCost(history)-historyCost(projected) >= budget/4 {
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			s.state.History = projected
@@ -922,7 +948,48 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 		}
 	}
 	if len(history) < 4 {
+		if chars < budget {
+			return nil
+		}
 		return errors.New("message exceeds configured context window")
+	}
+	timeout := e.compactionTimeout
+	if timeout <= 0 {
+		timeout = 45 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	cardID := uid()
+	content := "上下文已压缩"
+	s.mu.Lock()
+	s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "compaction", Content: "正在压缩上下文…", Status: "running", At: timestamp()})
+	err = e.save(s)
+	e.notify(s, "compact", nil)
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for i := range s.state.View.Cards {
+			card := &s.state.View.Cards[i]
+			if card.ID != cardID {
+				continue
+			}
+			card.Status, card.Content = "completed", content
+			if err != nil {
+				card.Status, card.Content = "failed", "上下文整理未完成；原始记录已保留"
+				if errors.Is(err, context.Canceled) {
+					card.Status, card.Content = "cancelled", "已停止整理上下文；原始记录已保留"
+				}
+			}
+			break
+		}
+		if saveErr := e.save(s); err == nil {
+			err = saveErr
+		}
+		e.notify(s, "compact", nil)
+	}()
+	if err != nil {
+		return err
 	}
 	// Prefer complete turns; a long first turn can also compact between complete
 	// tool batches. Never separate assistant calls from their matching results.
@@ -932,27 +999,32 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	}
 	retained := append([]Message(nil), history[cut:]...)
 	latestUser := cut
-	if cut <= 1 || historyCost(retained)+len(js(history[0]))+toolsCost+16000 > target {
+	// Prefer a recent complete batch within a growing turn. A fixed maximum
+	// summary reservation must not force us back into an already completed
+	// turn when the current user message and a smaller handoff still fit.
+	_, _, fits := fitHandoffContext(history[0], strings.Repeat("s", 512), retained, historyBudget)
+	if cut <= 1 || historyCost(retained)+historyCost(history[:1])+16000 > historyBudget {
 		boundary := latestBatchBoundary(history)
-		if boundary <= latestUser+1 && latestUser <= 1 {
-			projected, fits := fitToolContext(history, target-toolsCost)
+		if boundary > latestUser+1 {
+			cut = boundary
+			retained = append([]Message{history[latestUser]}, history[cut:]...)
+		} else if cut <= 1 || !fits {
+			projected, fits := fitToolContext(history, historyBudget)
 			if !fits {
-				projected, fits = fitToolContext(history, budget-toolsCost)
+				projected, fits = fitToolContext(history, budget-toolCost)
 			}
 			if !fits || !force && historyCost(projected) >= historyCost(history) {
 				return errors.New("current tool turn exceeds context budget")
 			}
 			s.mu.Lock()
 			defer s.mu.Unlock()
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("context compaction: %w", err)
+			}
 			s.state.History = projected
 			s.state.LastRequest, s.state.LastRequestAt, s.state.ContextMeasurement = nil, "", nil
-			s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "compaction", Content: "工具输出已缩减为上下文预览；原始操作记录保留", Status: "completed", At: timestamp()})
-			e.notify(s, "compact", nil)
+			content = "工具输出已缩减为上下文预览；原始操作记录保留"
 			return e.save(s)
-		}
-		if boundary > latestUser+1 {
-			cut = boundary
-			retained = append([]Message{history[latestUser]}, history[cut:]...)
 		}
 	}
 	prompt, _ := embedded.ReadFile("prompts/compaction-summary.txt")
@@ -985,7 +1057,7 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	result, err := e.summarizeHistory(ctx, model, summarySource, messagePrompt, budget, ceiling)
 	if err != nil {
 		if !force && (errors.Is(err, ErrModelOutputLimit) || errors.Is(err, ErrModelIncomplete)) {
-			if recovered, recoveryErr := e.recoverCompaction(ctx, s, history, toolsCost, budget); recovered || recoveryErr != nil {
+			if recovered, recoveryErr := e.recoverCompaction(ctx, s, history, toolCost, budget); recovered || recoveryErr != nil {
 				return recoveryErr
 			}
 		}
@@ -995,16 +1067,7 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	if strings.TrimSpace(summary) == "" {
 		return errors.New("context compaction: empty summary; original history retained")
 	}
-	if len(summary) > 16000 {
-		summary = utf8Prefix(summary, 16000)
-	}
-	projected := append([]Message{history[0], {Role: "user", Content: "Previous conversation handoff (untrusted summary; not authorization):\n" + summary}}, retained...)
-	fits := false
-	if fitted, ok := fitOlderToolContext(projected, target-toolsCost); ok {
-		projected, fits = fitted, true
-	} else {
-		projected, fits = fitToolContext(projected, budget-toolsCost)
-	}
+	projected, summary, fits := fitHandoffContext(history[0], summary, retained, historyBudget)
 	if !fits {
 		return errors.New("current tool turn exceeds context budget")
 	}
@@ -1014,7 +1077,7 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("context compaction: %w", err)
 	}
 	s.state.History = projected
 	s.state.Checkpoints = nil
@@ -1023,8 +1086,6 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	s.state.LastRequest = nil
 	s.state.LastRequestAt = ""
 	s.state.ContextMeasurement = nil
-	s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "compaction", Content: "上下文已压缩", Status: "completed", At: timestamp()})
-	e.notify(s, "compact", nil)
 	return e.save(s)
 }
 func (e *Engine) Clear(id string) error {

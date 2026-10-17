@@ -197,7 +197,8 @@ func TestSegmentedCompactionFailureAndCancellationAreAtomic(t *testing.T) {
 			s.state.History = oversizedConversation()
 			s.state.Checkpoints = []int{0, 3}
 			s.state.View.Cards = []Card{{ID: "raw", Type: "operation", Content: "original evidence", Status: "completed"}}
-			before := js(s.state)
+			beforeHistory, beforeCheckpoints, beforeUsage := js(s.state.History), js(s.state.Checkpoints), js(s.state.View.Usage)
+			beforeSummary, beforeCards := s.state.View.Summary, js(s.state.View.Cards)
 			if err := e.save(s); err != nil {
 				t.Fatal(err)
 			}
@@ -205,8 +206,18 @@ func TestSegmentedCompactionFailureAndCancellationAreAtomic(t *testing.T) {
 			if err == nil || failure == "cancel" && !errors.Is(err, context.Canceled) {
 				t.Fatal("expected summary failure/cancellation", err)
 			}
-			if js(s.state) != before {
-				t.Fatal("partially successful compaction changed live history, cards, usage or checkpoints")
+			if js(s.state.History) != beforeHistory || js(s.state.Checkpoints) != beforeCheckpoints || js(s.state.View.Usage) != beforeUsage || s.state.View.Summary != beforeSummary {
+				t.Fatal("partially successful compaction changed live history, usage, summary or checkpoints")
+			}
+			// A failed attempt may only add its own status card. Partial
+			// summaries must never reach the cards that describe evidence.
+			cards := s.state.View.Cards
+			wantStatus := "failed"
+			if failure == "cancel" {
+				wantStatus = "cancelled"
+			}
+			if len(cards) != 2 || js(cards[:1]) != beforeCards || cards[1].Type != "compaction" || cards[1].Status != wantStatus {
+				t.Fatal("partially successful compaction changed live cards")
 			}
 			loaded, err := New(e.Dir, nil, nil)
 			if err != nil {

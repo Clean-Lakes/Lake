@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-16",
+  "purpose": "Minimal README and current-product screenshots",
+  "assets": [
+    {
+      "path": "docs/images/lake-workbench-light.jpg",
+      "bytes": 79058,
+      "sha256": "5ebf76495aa6c6d42cb8b6b4d33ef267db7010305d86b4915329620c6f12f2e4"
+    },
+    {
+      "path": "docs/images/lake-workbench-dark.jpg",
+      "bytes": 78047,
+      "sha256": "7361d90f9cf0d561aae1badc2d34b456d834d02109b27a2780c6352cbb8e9130"
+    }
+  ],
+  "provenance": "Production React App rendered with fictional read-only demo records. No model calls, backend or resource commands.",
+  "checks": {
+    "relativeLinks": [
+      "CONTRIBUTING.md",
+      "LICENSE-APACHE",
+      "client/macos/README.md",
+      "client/windows/README.md",
+      "docs/images/lake-workbench-dark.jpg",
+      "docs/images/lake-workbench-light.jpg",
+      "docs/sre-collaboration.md",
+      "web-agent/README.md"
+    ],
+    "lightAndDarkCapture": "visually reviewed",
+    "desktop": "real resource navigation, four specialist identities and completed recovery example",
+    "mobile": {
+      "viewportWidth": 390,
+      "horizontalOverflow": false
+    },
+    "quickStartAnchor": "verified",
+    "developerDetails": "collapsed by default; expansion shows signed Dev build instructions",
+    "frontendTypecheck": "passed",
+    "fixtureTypecheck": "passed"
+  },
+  "preview": "docs/validation/lake-readme-preview.jpg"
+}

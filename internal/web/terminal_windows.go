@@ -6,7 +6,6 @@ import (
 	"github.com/UserExistsError/conpty"
 	"os"
 	"os/exec"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,19 +14,51 @@ import (
 
 type windowsTerminal struct {
 	*conpty.ConPty
-	once sync.Once
-	err  error
+	once       sync.Once
+	err        error
+	decoder    consoleFrameDecoder
+	readBuffer []byte
+	readErr    error
 }
 
-func (t *windowsTerminal) WriteString(value string) (int, error) { return t.Write([]byte(value)) }
-func (t *windowsTerminal) Close() error                          { t.once.Do(func() { t.err = t.ConPty.Close() }); return t.err }
+func windowsTerminalInput(value string) string {
+	// ConPTY translates input into console key events: Enter is CR, not LF.
+	// Shell initialization and managed commands use LF on Unix; normalize both
+	// LF and CRLF here without submitting CRLF twice or changing VT key codes.
+	return strings.ReplaceAll(strings.ReplaceAll(value, "\r\n", "\r"), "\n", "\r")
+}
+func (t *windowsTerminal) WriteString(value string) (int, error) {
+	_, err := t.Write([]byte(windowsTerminalInput(consoleTerminalScript(value))))
+	if err != nil {
+		return 0, err
+	}
+	return len(value), nil
+}
+func (t *windowsTerminal) Close() error { t.once.Do(func() { t.err = t.ConPty.Close() }); return t.err }
+func (t *windowsTerminal) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	for len(t.readBuffer) == 0 && t.readErr == nil {
+		var buf [8192]byte
+		n, err := t.ConPty.Read(buf[:])
+		t.readBuffer = append(t.readBuffer, t.decoder.feed(string(buf[:n]), err != nil)...)
+		t.readErr = err
+	}
+	n := copy(p, t.readBuffer)
+	t.readBuffer = t.readBuffer[n:]
+	if n > 0 {
+		return n, nil
+	}
+	return 0, t.readErr
+}
 func startTerminal(cmd *exec.Cmd, cols, rows int) (terminalDevice, error) {
-	parts := make([]string, len(cmd.Args))
-	for i, arg := range cmd.Args {
+	args, env := consoleTerminalCommand(cmd)
+	parts := make([]string, len(args))
+	for i, arg := range args {
 		parts[i] = syscall.EscapeArg(arg)
 	}
-	env := append([]string(nil), cmd.Env...)
-	sort.Slice(env, func(i, j int) bool { return strings.ToUpper(env[i]) < strings.ToUpper(env[j]) })
+	env = consoleTerminalEnvironment(env)
 	p, err := conpty.Start(strings.Join(parts, " "), conpty.ConPtyDimensions(cols, rows), conpty.ConPtyWorkDir(cmd.Dir), conpty.ConPtyEnv(env))
 	if err != nil {
 		return nil, err
