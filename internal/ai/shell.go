@@ -166,7 +166,7 @@ func (e *Engine) trackBridgeShell(session string, result any, a map[string]any) 
 		}
 		e.shellCard(session, id, content, status, false)
 	}()
-	return map[string]any{"shell_id": id, "terminal_id": terminalID, "status": "running"}, nil
+	return map[string]any{"shell_id": id, "terminal_id": terminalID, "entry_id": entryID, "status": "running", "poll_after_ms": 1000}, nil
 }
 
 // Completion updates the original card, never the status or ordering of a later turn.

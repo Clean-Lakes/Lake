@@ -24,7 +24,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var version = "0.3.10"
+// Release builds inject the repository VERSION through -ldflags and leave
+// main.development empty; local dev builds set both (see dist/windows/dev/build_dev_client.py).
+var version = "0.3.13"
 
 func message(text string) {
 	title, _ := windows.UTF16PtrFromString("Lake")
@@ -43,6 +45,7 @@ func main() {
 	// Git OpenSSH invokes the same executable through a private inherited pipe.
 	if os.Getenv("LAKE_SSH_ASKPASS") == "1" {
 		if len(os.Args) != 2 || web.SSHAskpass(os.Args[1], os.Stdout) != nil {
+			fmt.Fprintln(os.Stderr, web.SSHAskpassFailureMessage)
 			os.Exit(1)
 		}
 		return
@@ -71,7 +74,7 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("无法读取用户目录")
 		}
-		home = filepath.Join(user, ".lake")
+		home = filepath.Join(user, lakeHomeDirectory())
 	}
 	absolute, err := filepath.Abs(home)
 	if err != nil {
@@ -123,7 +126,8 @@ func run() error {
 	if err = platform.MkdirAll(profile, 0700); err != nil {
 		return err
 	}
-	window := webview.NewWithOptions(webview.WebViewOptions{DataPath: profile, AutoFocus: true, WindowOptions: webview.WindowOptions{Title: "Lake " + version, Width: 1280, Height: 840, Center: true, IconId: 1}})
+	width, height, minimumWidth, minimumHeight := workbenchGeometry()
+	window := webview.NewWithOptions(webview.WebViewOptions{DataPath: profile, AutoFocus: true, WindowOptions: webview.WindowOptions{Title: windowTitle(), Width: uint(width), Height: uint(height), Center: true, IconId: 1}})
 	if window == nil {
 		return fmt.Errorf("无法创建 WebView2 窗口，请检查运行环境")
 	}
@@ -140,7 +144,10 @@ func run() error {
 	if err = installUpdateBridge(ctx, window, endpoint, home, exe); err != nil {
 		return fmt.Errorf("无法初始化客户端更新入口")
 	}
-	window.SetSize(850, 600, webview.HintMin)
+	window.SetSize(minimumWidth, minimumHeight, webview.HintMin)
+	if isDevelopment() {
+		window.Init(developmentBadge)
+	}
 	window.Navigate(endpoint)
 	window.Run()
 	return nil

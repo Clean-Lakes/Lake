@@ -604,9 +604,9 @@ Web 使用 fetch SSE 流并携带 Authorization，不能为了原生 EventSource
 仓库约束与历史参考：
 
 - [Lake 构建与凭据规则](../AGENTS.md)：本分支继续执行的签名与秘密处理要求。
-- [现有 Lake 设计](../docs/lake-design.md)、[现有 ZCode runtime 接入](../docs/zcode-runtime.md)、[旧原生客户端计划](refactor-native-zcode-client-1.md)：理解已有用户入口和数据边界；本方案 Introduction 明确替代旧“仅 ZCode Agent”约束。
+- [现有 Lake 设计](../docs/lake-design.md)、[现有 ZCode runtime 接入](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/docs/zcode-runtime.md)、[旧原生客户端计划](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/plan/refactor-native-zcode-client-1.md)：理解已有用户入口和数据边界；本方案 Introduction 明确替代旧“仅 ZCode Agent”约束。
 - [现有签名启动器](../cmd/lake/main.go)、[规定构建入口](../scripts/build_lake.sh)、[一次签名设置](../scripts/setup_lake_signing.sh)：只复用发布/兼容边界，不复用 Agent 内核。
-- [ZCode profile 参考](../third_party/zcode/apps/zcode-cli/packages/core/src/subagent/profile.ts)、[子智能体 context 参考](../third_party/zcode/apps/zcode-cli/packages/core/src/subagent/context-builder.ts)：专员独立上下文与 profile 的研究参考，首版新源码不得 import 这些文件。
+- [ZCode profile 参考](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/third_party/zcode/apps/zcode-cli/packages/core/src/subagent/profile.ts)、[子智能体 context 参考](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/third_party/zcode/apps/zcode-cli/packages/core/src/subagent/context-builder.ts)：专员独立上下文与 profile 的研究参考，首版新源码不得 import 这些文件。
 - [Tianshu harness](https://github.com/huiliyi37/Tianshu-harness)：用户最初提供的项目参考；不把未核实的能力声明当作 Lake 的验收结果。
 
 协议、库与运维原则：

@@ -127,3 +127,15 @@ CREATE INDEX IF NOT EXISTS workflow_runs_project ON workflowRuns(projectId,creat
         name TEXT NOT NULL, payload TEXT NOT NULL DEFAULT '{}', deletedAt TEXT NOT NULL,
         PRIMARY KEY(kind,id)
       );
+
+      CREATE TABLE IF NOT EXISTS sreProjectSettings(projectId TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)));
+      CREATE TABLE IF NOT EXISTS sreTasks(id TEXT PRIMARY KEY,sessionId TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,projectId TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,requestId TEXT NOT NULL,status TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,createdAt TEXT NOT NULL,updatedAt TEXT NOT NULL,UNIQUE(sessionId,requestId));
+      CREATE INDEX IF NOT EXISTS sreTasks_session ON sreTasks(sessionId,createdAt,id);
+      CREATE UNIQUE INDEX IF NOT EXISTS sreTasks_one_active ON sreTasks(sessionId) WHERE status IN ('draft','active','waiting_input','waiting_approval','paused');
+      CREATE TABLE IF NOT EXISTS srePlanRevisions(id TEXT PRIMARY KEY,taskId TEXT NOT NULL REFERENCES sreTasks(id) ON DELETE CASCADE,version INTEGER NOT NULL,body TEXT NOT NULL,UNIQUE(taskId,version));
+      CREATE TABLE IF NOT EXISTS srePlanRuns(id TEXT PRIMARY KEY,taskId TEXT NOT NULL REFERENCES sreTasks(id) ON DELETE CASCADE,body TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS sreStepAttempts(id TEXT PRIMARY KEY,taskId TEXT NOT NULL REFERENCES sreTasks(id) ON DELETE CASCADE,body TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS sreMessages(id TEXT PRIMARY KEY,taskId TEXT NOT NULL REFERENCES sreTasks(id) ON DELETE CASCADE,sequence INTEGER NOT NULL,body TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS sreEvents(id INTEGER PRIMARY KEY AUTOINCREMENT,taskId TEXT NOT NULL REFERENCES sreTasks(id) ON DELETE CASCADE,sessionId TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,type TEXT NOT NULL,payload TEXT NOT NULL,createdAt TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS sreEvents_task ON sreEvents(taskId,id);
+      CREATE TABLE IF NOT EXISTS sreVerificationResults(id TEXT PRIMARY KEY,taskId TEXT NOT NULL REFERENCES sreTasks(id) ON DELETE CASCADE,body TEXT NOT NULL);

@@ -1,0 +1,12 @@
+.composer-text { flex: 1; min-width: 0; }
+.composer-text-field { position: relative; min-width: 0; }
+.composer-text textarea { position: relative; z-index: 1; overflow-wrap: break-word; white-space: pre-wrap; }
+.composer-ghost-viewport { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.composer-ghost { box-sizing: border-box; width: 100%; padding: 3px 0; color: var(--text-muted); font: inherit; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: break-word; }
+.composer-ghost-prefix { color: transparent; }
+.composer-completion-hint { display: flex; align-items: center; gap: 12px; height: 20px; margin-top: 3px; }
+.composer-completion-hint button { display: inline-flex; align-items: center; gap: 5px; border: 0; padding: 0; color: var(--text-muted); background: transparent; font-size: 11px; cursor: pointer; }
+.composer-completion-hint button:hover { color: var(--foreground); }
+.composer-completion-hint button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
+.composer-completion-hint kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font: inherit; line-height: 15px; }
+.composer-text.has-completion + .composer-send-actions { margin-bottom: 23px; }

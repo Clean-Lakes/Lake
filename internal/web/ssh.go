@@ -32,6 +32,10 @@ func sshArguments(c Object, initialization ...string) []string {
 	return append(args, "-p", strconv.Itoa(integer(c["port"])), "-l", stringOf(c["username"]), stringOf(c["host"]), remote)
 }
 
+// SSHAskpassFailureMessage lets the client report helper failures on the
+// private pipe without exposing prompt or credential text.
+const SSHAskpassFailureMessage = "SSH credential helper could not provide saved credentials"
+
 // SSHAskpass writes only to OpenSSH's private helper pipe, never the terminal.
 // The environment contains a reference; it never contains password material.
 func SSHAskpass(prompt string, out io.Writer) error { return ai.SSHAskpass(prompt, out) }

@@ -1,14 +1,14 @@
 # 第三方组件与许可
 
-Lake 在仓库内保留早期源码的 [Apache License 2.0](../LICENSE-APACHE) 文本。以下是本次迁移直接使用或复制的组件，版本以 `go.mod`、`client/desktop/go.mod` 和两个前端的锁文件为准。
+Lake 当前客户端使用 Go/React，运行时不依赖 ZCode 或 Node.js。当前分发组件的许可见 [web-agent/THIRD_PARTY_NOTICES.md](../web-agent/THIRD_PARTY_NOTICES.md)，版本以根目录 `go.mod` / `go.sum` 和 `web-agent/pnpm-lock.yaml` 为准。下表列出当前与历史实现涉及的来源及许可，用途栏注明是否参与当前构建。
 
 | 组件 | 用途 | 仓库内许可文本 |
 | --- | --- | --- |
 | [Eino](https://github.com/cloudwego/eino) | 已移除的早期框架；保留原始许可归属 | [LICENSE-APACHE](../LICENSE-APACHE) |
-| [ZCode CLI 0.16.9](https://github.com/zai-org/ZCode/tree/29628c9acdb81b703bbd4080c207a0e7ce5e276e) | 桌面主 Agent 的源码运行时 | [Apache-2.0 许可](../third_party/zcode/LICENSE)、[NOTICE](../third_party/zcode/NOTICE.md)、[依赖许可](../third_party/zcode/THIRD-PARTY-NOTICES.md) |
-| [Node.js 24.14.0](https://nodejs.org/) | 运行源码构建的 Agent | 固定 npm Node 发行包附带的 LICENSE，构建时复制到 zcode/NODE-LICENSE |
-| [Wails v2.15.0](https://github.com/wailsapp/wails) | macOS 桌面壳 | [Wails MIT 许可](licenses/wails-v2.15.0-LICENSE) |
-| [历史 Go MCP SDK v1.7.0](https://github.com/modelcontextprotocol/go-sdk) | 已移除的历史依赖；保留许可 | [SDK 原始许可文件](licenses/mcp-go-sdk-v1.7.0-LICENSE)；该版本文件说明 Apache-2.0/MIT 过渡安排 |
+| [ZCode CLI 0.16.9](https://github.com/zai-org/ZCode/tree/29628c9acdb81b703bbd4080c207a0e7ce5e276e) | 已移除的历史 Agent/Electron 运行时；源码快照原以 `git archive` 导入，未包含上游 Git 历史 | [Apache-2.0 许可](licenses/zcode-0.16.9-LICENSE)、[NOTICE](licenses/zcode-0.16.9-NOTICE.md)、[历史依赖许可](licenses/zcode-0.16.9-THIRD-PARTY-NOTICES.md) |
+| [Node.js](https://nodejs.org/) | 当前仅用于前端构建；不随当前客户端作为运行时分发 | 历史 TypeScript Agent 的许可保留于 [agent/licenses](../agent/licenses) |
+| [Wails v2.15.0](https://github.com/wailsapp/wails) | 历史 Wails 桌面壳；当前 macOS 使用 Swift/WebKit | [Wails MIT 许可](licenses/wails-v2.15.0-LICENSE) |
+| [Go MCP SDK v1.7.0](https://github.com/modelcontextprotocol/go-sdk) | 当前 MCP 客户端的 HTTP、SSE 和 stdio 协议支持 | [SDK 原始许可文件](licenses/mcp-go-sdk-v1.7.0-LICENSE)；该版本文件说明 Apache-2.0/MIT 过渡安排 |
 | [beUI](https://github.com/starc007/ui-components) | 桌面聊天组件的复制源码 | [beUI MIT 许可](../client/desktop/frontend/BEUI_LICENSE) |
 | [json-render core/react v0.21.0](https://github.com/vercel-labs/json-render) | 受组件目录约束的动态报告布局与 React 渲染 | [core Apache-2.0 许可](licenses/json-render-core-v0.21.0-LICENSE)；[react Apache-2.0 许可](licenses/json-render-react-v0.21.0-LICENSE) |
 | [A2UI React / Web Core v0.12.0](https://github.com/a2ui-project/a2ui) | 官方 v0.9.1 动态面板处理与 React 渲染 | [React Apache-2.0 许可](licenses/a2ui-react-v0.12.0-LICENSE)；[Web Core Apache-2.0 许可](licenses/a2ui-web-core-v0.12.0-LICENSE) |
@@ -18,4 +18,6 @@ Lake 在仓库内保留早期源码的 [Apache License 2.0](../LICENSE-APACHE) �
 | [unified v11.0.5 / remark-parse v11.0.0](https://github.com/remarkjs/remark/tree/main/packages/remark-parse) | 将所有 AI 正文解析为 AST，自动选择 A2UI 展示结构 | [unified MIT 许可](licenses/unified-v11.0.5-LICENSE)；[remark-parse MIT 许可](licenses/remark-parse-v11.0.0-LICENSE) |
 | [Zod v4.3.6](https://github.com/colinhacks/zod) | 动态组件属性校验 | [Zod MIT 许可](licenses/zod-v4.3.6-LICENSE) |
 
-React、Vite、Motion、Lucide 等前端依赖及其他 Go 依赖由各自的锁文件固定，具体许可文本随对应源包提供。仓库保留 ZCode 完整源码快照，桌面应用仅构建并打包 Agent CLI 依赖图，前端使用 LAKE 的 Wails/React。ZCode、Node 和未打入 CLI 单文件的运行依赖许可随 zcode/ 运行目录分发；发布到仓库外时，应随应用分发本页所链接的许可文本，并按实际打包依赖核对其许可文件。
+ZCode 源码快照、旧 Electron 构建入口和相关运行时脚本已移除，历史许可归属继续保留。当前 macOS/Windows 构建使用 Go 后端及内嵌 React 前端，按实际分发的依赖携带 `web-agent/licenses/` 下的许可文件。历史设计可通过 Git 历史查看。
+
+模型供应商品牌 SVG 来自 [Lobe Icons](https://github.com/lobehub/lobe-icons) 的 `@lobehub/icons-static-svg` v1.95.1，采用 MIT 许可；[原始许可](../web-agent/licenses/lobe-icons-MIT) 与 [素材来源和摘要](../web-agent/web/public/providers/provenance.json) 随仓库保存，图标随应用本地分发。

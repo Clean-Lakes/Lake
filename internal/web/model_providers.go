@@ -62,6 +62,8 @@ type providerCatalog struct {
 	Providers        []ModelProvider `json:"providers"`
 	ActiveProviderID string          `json:"activeProviderId"`
 	ActiveModelID    string          `json:"activeModelId"`
+	// Empty preserves automatic Magpie selection for existing installations.
+	ActiveSource string `json:"activeSource,omitempty"`
 }
 
 var providerIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,119}$`)
@@ -296,7 +298,11 @@ func (m *Models) publicProviderCatalogLocked(catalog *providerCatalog) Object {
 		}
 		providers = append(providers, Object{"id": provider.ID, "name": provider.Name, "baseURL": provider.BaseURL, "protocol": provider.Protocol, "enabled": provider.Enabled, "keyConfigured": configured, "models": provider.Models})
 	}
-	return Object{"providers": providers, "activeProviderId": catalog.ActiveProviderID, "activeModelId": catalog.ActiveModelID}
+	providerID, modelID := catalog.ActiveProviderID, catalog.ActiveModelID
+	if active := m.activeMagpieModelLocked(); active != nil {
+		providerID, modelID = "magpie", active.Name
+	}
+	return Object{"providers": providers, "activeProviderId": providerID, "activeModelId": modelID}
 }
 func (m *Models) Providers() Object {
 	m.mu.Lock()
@@ -527,10 +533,10 @@ func (m *Models) ActivateProviderModel(providerID, modelID string) Object {
 	defer m.mu.Unlock()
 	if providerID == "magpie" {
 		m.activateMagpieModelLocked(modelID)
-		if catalog, exists := m.readProviderCatalogLocked(); exists {
-			return m.publicProviderCatalogLocked(catalog)
-		}
-		return Object{"providers": []Object{}, "activeProviderId": "", "activeModelId": ""}
+		catalog := m.catalogLocked()
+		catalog.ActiveSource = "magpie"
+		m.saveProviderCatalogLocked(catalog)
+		return m.publicProviderCatalogLocked(catalog)
 	}
 	catalog := m.catalogLocked()
 	provider := findProvider(catalog, providerID)
@@ -542,6 +548,7 @@ func (m *Models) ActivateProviderModel(providerID, modelID string) Object {
 		fail(400, "供应商密钥不可用，请重新填写")
 	}
 	catalog.ActiveProviderID, catalog.ActiveModelID = providerID, modelID
+	catalog.ActiveSource = "native"
 	m.saveProviderCatalogLocked(catalog)
 	return m.publicProviderCatalogLocked(catalog)
 }
@@ -608,21 +615,20 @@ func (m *Models) ProviderInput(id string, data Object) *ai.Model {
 func (m *Models) ConfiguredProviderModels() (Object, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if models, selected, _ := m.magpieModelsLocked(); len(models) > 0 {
-		entries := make([]Object, 0, len(models))
-		names := make([]string, 0, len(models))
-		for _, item := range models {
-			entries = append(entries, Object{"providerId": "magpie", "providerName": "Magpie", "modelId": item.ID, "name": item.ID, "displayName": item.Label, "contextWindow": item.Model.ContextLimit})
-			names = append(names, item.ID)
-		}
-		return Object{"models": names, "entries": entries, "activeProviderId": "magpie", "activeModelId": selected, "source": "magpie", "message": "Magpie 管理可用模型；在 Lake 中切换当前模型"}, true
-	}
-	catalog, exists := m.readProviderCatalogLocked()
-	if !exists {
-		return nil, false
-	}
+	models, selected, _ := m.magpieModelsLocked()
 	entries := []Object{}
 	names := []string{}
+	for _, item := range models {
+		entries = append(entries, Object{"providerId": "magpie", "providerName": "Magpie", "modelId": item.ID, "name": item.ID, "displayName": item.Label, "contextWindow": item.Model.ContextLimit})
+		names = append(names, item.ID)
+	}
+	catalog, exists := m.readProviderCatalogLocked()
+	if !exists && len(models) == 0 {
+		return nil, false
+	}
+	if !exists {
+		catalog = &providerCatalog{}
+	}
 	for _, provider := range catalog.Providers {
 		if provider.Enabled {
 			for _, model := range provider.Models {
@@ -637,7 +643,12 @@ func (m *Models) ConfiguredProviderModels() (Object, bool) {
 			}
 		}
 	}
-	return Object{"models": names, "entries": entries, "activeProviderId": catalog.ActiveProviderID, "activeModelId": catalog.ActiveModelID}, true
+	result := Object{"models": names, "entries": entries, "activeProviderId": catalog.ActiveProviderID, "activeModelId": catalog.ActiveModelID}
+	if len(models) > 0 && (catalog.ActiveSource != "native" || m.catalogModelLocked(catalog) == nil) {
+		result["activeProviderId"], result["activeModelId"] = "magpie", selected
+		result["source"] = "magpie"
+	}
+	return result, true
 }
 
 func (m *Models) syncLegacyProviderLocked(cfg *ai.Model) {

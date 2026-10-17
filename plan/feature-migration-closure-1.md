@@ -88,9 +88,9 @@ tags: [feature, migration, runtime, desktop]
 
 ## 8. Related Specifications / Further Reading
 
-[迁移方案](architecture-zcode-lake-1.md)
+[迁移方案](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/plan/architecture-zcode-lake-1.md)
 
-[能力矩阵](../docs/zcode-capability-matrix.md)
+[能力矩阵](https://github.com/Clean-Lakes/Lake/blob/c894965e973a8cb92842ddbb2210fb9d0efdf521/docs/zcode-capability-matrix.md)
 
 
 实施证据（2026-10-01）：`cmd/lake/migration_closure_test.go` 覆盖本机 MCP 实际调用/禁用、聊天 Hook 审批、独立专员模型/白名单、v2 管理/版本冲突及实时桥审批；`lake/agent/specialist/checkpoint_test.go` 覆盖重启重放、未知写保护、文件锁和符号链接保护。全量 Go 测试/vet、桌面模块测试/vet、Web 测试、两个前端构建、迁移样本、签名 CLI 和 Wails 构建均通过 `scripts/verify_lake_release.sh`。专员/工作流/CLI 并发检测通过。桌面原生页面已核对 v2 预览与专员配置；本机旧库已由签名 CLI 升级至 v17，保留私有备份并验证历史会话正常读取。随后补充空事件 JSON 与 null 时间线回归，桌面时间线 4 项测试、受影响存储测试及前端构建通过；最终签名应用启动后空会话输入可用。

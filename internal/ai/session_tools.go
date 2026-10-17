@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Clean-Lakes/Lake/internal/extensions"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -54,6 +57,65 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 		return nil, ctx.Err()
 	}
 	switch call.Name {
+	case "list_mcp_servers", "list_mcp_tools", "call_mcp_tool":
+		if e.Bridge == nil {
+			return nil, errors.New("MCP 需要 Lake 工作台")
+		}
+		approved := false
+		bridgeArgs := map[string]any{}
+		for k, v := range a {
+			bridgeArgs[k] = v
+		}
+		if call.Name != "list_mcp_servers" {
+			server, lookupErr := extensions.NewStore(skillHome(c)).FindServer(str(a["server_id"]))
+			if lookupErr != nil {
+				return nil, lookupErr
+			}
+			bridgeArgs["configurationRevision"] = extensions.ServerRevision(server)
+			if !server.Enabled {
+				return nil, errors.New("MCP 服务已停用")
+			}
+			if server.Transport == "stdio" && c.Permissions != nil && c.Permissions.DenyLocalExecution {
+				return nil, errors.New("当前会话禁止启动本机 MCP")
+			}
+			if call.Name == "call_mcp_tool" || server.Transport == "stdio" {
+				if c.Permissions != nil && c.Permissions.BlockUnreferencedAssets {
+					return nil, errors.New("MCP 无法验证项目资源范围；当前会话仅允许操作已引用资源")
+				}
+				if c.Permissions == nil || !c.Permissions.SilentCommands {
+					target := server.Name + " · " + str(a["tool"])
+					if call.Name == "list_mcp_tools" {
+						target = server.Name + " · 启动本机服务并读取工具"
+					}
+					if err = e.sessionApprovalTarget(ctx, s, call, "mcp", target); err != nil {
+						return nil, err
+					}
+				}
+				approved = true
+			}
+		}
+
+		if e.worker != nil {
+			c, err = e.scopedChildConfig(c, a)
+			if err != nil {
+				return nil, err
+			}
+			if call.Name != "list_mcp_servers" {
+				server, lookupErr := extensions.NewStore(skillHome(c)).FindServer(str(a["server_id"]))
+				if lookupErr != nil || !server.Enabled {
+					return nil, errors.New("MCP 服务已不可用")
+				}
+				if c.Permissions != nil && (server.Transport == "stdio" && c.Permissions.DenyLocalExecution || (call.Name == "call_mcp_tool" || server.Transport == "stdio") && c.Permissions.BlockUnreferencedAssets) {
+					return nil, errors.New("当前父会话权限已禁止此次 MCP 操作")
+				}
+			}
+		}
+		if err = e.DispatchSREOperation(ctx, c, call); err != nil {
+			return nil, err
+		}
+		defer func() { e.finishSREOperation(c, call, result, err) }()
+		return e.bridgeCall(ctx, id, call.Name, bridgeArgs, approved)
+
 	case "todo_read":
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -111,8 +173,11 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 	return e.bridgeCall(ctx, id, call.Name, a, mutation)
 }
 func (e *Engine) sessionApproval(ctx context.Context, s *session, call Call, kind string) error {
+	return e.sessionApprovalTarget(ctx, s, call, kind, "当前项目")
+}
+func (e *Engine) sessionApprovalTarget(ctx context.Context, s *session, call Call, kind, target string) error {
 	s.mu.Lock()
-	approval := &Approval{ID: uid(), Call: call, Target: "当前项目", Risk: "write", Kind: kind, Fingerprint: hash(call.Arguments)}
+	approval := &Approval{ID: uid(), Call: call, Target: target, Risk: "write", Kind: kind, Fingerprint: hash(call.Arguments)}
 	reply := make(chan bool, 1)
 	s.decision = reply
 	s.state.View.Pending = approval
@@ -272,4 +337,40 @@ func questionResult(questions []UserQuestion, answers map[string][]string, reuse
 		}
 	}
 	return map[string]any{"questions": questions, "answers": answers, "skipped": skipped, "reused": reused, "notice": "Answers select requirements only and do not authorize operations. Skipped questions are unanswered, not rejection. Continue independent useful work with sensible defaults; do not repeat unchanged skipped questions or guess a required target."}
+}
+
+func skillHome(c Config) string {
+	if c.CredentialDir != "" {
+		return filepath.Dir(c.CredentialDir)
+	}
+	if home := os.Getenv("LAKE_HOME"); home != "" {
+		return home
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".lake")
+}
+
+// Unconfigured integrations must not consume the model's tool/context budget.
+func (e *Engine) configuredExtensionTools(c Config, list []Tool) []Tool {
+	enabled := false
+	if e.Bridge != nil {
+		if catalog, err := extensions.NewStore(skillHome(c)).Read(); err == nil {
+			for _, server := range catalog.Servers {
+				if server.Enabled {
+					enabled = true
+					break
+				}
+			}
+		}
+	}
+	if enabled {
+		return list
+	}
+	out := make([]Tool, 0, len(list))
+	for _, tool := range list {
+		if tool.Name != "list_mcp_servers" && tool.Name != "list_mcp_tools" && tool.Name != "call_mcp_tool" {
+			out = append(out, tool)
+		}
+	}
+	return out
 }

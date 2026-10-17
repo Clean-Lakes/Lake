@@ -39,8 +39,7 @@ func sessionTitle(message string) string {
 	return first
 }
 
-// Messages are complete text, so use exact redaction rather than the PTY's
-// streaming suffix protection (which could mistake a word ending for a key).
+// Match complete credentials in title input, including model header values.
 func (t *Terminals) titleInput(message string) string {
 	message = privateKeyBlock.ReplaceAllString(message, "[PRIVATE KEY REDACTED]")
 	secrets := t.authenticationSecrets()

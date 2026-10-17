@@ -72,7 +72,7 @@ func TestModelControlsParallelDispatchAndOptionalReview(t *testing.T) {
 			})
 			defer closeModel()
 			e := engineFor(t, model, nil)
-			if err := e.Configure("case", Config{Model: model, Profile: "core", MultiAgentMode: "auto", Assets: assets}); err != nil {
+			if err := e.Configure("case", Config{legacyInvestigations: true, Model: model, Profile: "core", MultiAgentMode: "auto", Assets: assets}); err != nil {
 				t.Fatal(err)
 			}
 			if err := e.Chat(context.Background(), "case", "查看新k8s集群所有节点状态", refs); err != nil {

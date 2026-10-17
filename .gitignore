@@ -92,3 +92,8 @@ agent/test-results/
 # Python build caches
 __pycache__/
 *.pyc
+
+# Retired ZCode snapshots, local tooling and generated runtime
+/third_party/zcode/
+/zcode-plugin-ops-data/
+/.zcodeignore

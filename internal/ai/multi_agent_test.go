@@ -41,7 +41,7 @@ func fixtureMultiEngine(t *testing.T, m Model, silentRead bool) (*Engine, string
 	p := DefaultPermissions()
 	p.SilentReadFiles = silentRead
 	p.BlockUnreferencedAssets = true
-	c := Config{MultiAgentMode: "auto", Model: m, Profile: "core", Runtime: "local", Assets: []Asset{{ID: "fixture-host", Name: "Fixture host", Kind: "local"}}, Workspace: real, Permissions: &p}
+	c := Config{legacyInvestigations: true, MultiAgentMode: "auto", Model: m, Profile: "core", Runtime: "local", Assets: []Asset{{ID: "fixture-host", Name: "Fixture host", Kind: "local"}}, Workspace: real, Permissions: &p}
 	if err = e.Configure("case", c); err != nil {
 		t.Fatal(err)
 	}

@@ -14,11 +14,27 @@ func themeTestWindow(t *testing.T, fallback bool) uintptr {
 	t.Helper()
 	runtime.LockOSThread()
 	t.Cleanup(runtime.UnlockOSThread)
-	class, _ := windows.UTF16PtrFromString("STATIC")
+	// STATIC is a control class: its hit test returns HTTRANSPARENT. Use the
+	// normal top-level DefWindowProc just like the actual app window.
+	class, _ := windows.UTF16PtrFromString("LakeCaptionTest-" + t.Name())
+	instance, _, _ := windows.NewLazySystemDLL("kernel32.dll").NewProc("GetModuleHandleW").Call(0)
+	windowClass := struct {
+		Size, Style                        uint32
+		Proc                               uintptr
+		ClassExtra, WindowExtra            int32
+		Instance, Icon, Cursor, Background uintptr
+		Menu, Name                         *uint16
+		SmallIcon                          uintptr
+	}{Proc: themeUser.NewProc("DefWindowProcW").Addr(), Instance: instance, Name: class}
+	windowClass.Size = uint32(unsafe.Sizeof(windowClass))
+	if atom, _, err := themeUser.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&windowClass))); atom == 0 {
+		t.Fatalf("register class: %v", err)
+	}
+	t.Cleanup(func() { themeUser.NewProc("UnregisterClassW").Call(uintptr(unsafe.Pointer(class)), instance) })
 	title, _ := windows.UTF16PtrFromString("Lake caption test")
 	hwnd, _, err := themeUser.NewProc("CreateWindowExW").Call(0,
 		uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)),
-		0xcf0000, 100, 100, 600, 400, 0, 0, 0, 0)
+		0xcf0000, 100, 100, 600, 400, 0, 0, instance, 0)
 	if hwnd == 0 {
 		t.Fatalf("create window: %v", err)
 	}
@@ -54,11 +70,10 @@ func TestWindowsAutomaticCaption(t *testing.T) {
 	if !state.native {
 		t.Fatal("Windows 11 must select native caption colors")
 	}
-	var color uint32
-	get := windows.NewLazySystemDLL("dwmapi.dll").NewProc("DwmGetWindowAttribute")
-	hr, _, _ := get.Call(hwnd, 35, uintptr(unsafe.Pointer(&color)), 4)
-	if int32(hr) < 0 || color != paperColor {
-		t.Fatalf("caption color: HRESULT=%x color=%x", hr, color)
+	// DWMWA_CAPTION_COLOR is documented for DwmSetWindowAttribute only;
+	// DwmGetWindowAttribute can return E_INVALIDARG for a successful setting.
+	if !setDWM(hwnd, 35, paperColor) {
+		t.Fatal("native caption color could not be applied")
 	}
 }
 

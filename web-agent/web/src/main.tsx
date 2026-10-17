@@ -1,7 +1,12 @@
+import './sreCollaboration.css';
 import "./agentQuestion.css";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import "./appSelect.css";
+import "./providerIcon.css";
+import "./composerModelSelect.css";
+import "./composerCompletion.css";
 import { initializeAppearance } from "./appearance";
 import { WindowsChrome } from "./WindowsChrome";
 

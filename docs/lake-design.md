@@ -1,5 +1,7 @@
 # LAKE 架构
 
+> 历史记录：本文描述已停用的 ZCode 集成。相关源码与构建入口已移除；当前 Go/React 架构和本地开发流程见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
+
 LAKE 是 ZCode 源码中的运维数据与工作流模块。用户继续使用当前前端。
 
 ```mermaid

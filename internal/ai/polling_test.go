@@ -15,7 +15,7 @@ func TestAcknowledgementClassifierDoesNotConsumeConcreteRequests(t *testing.T) {
 			t.Fatal("missing acknowledgement", text)
 		}
 	}
-	for _, text := range []string{"继续", "好的，继续检查内存", "谢谢，请删除指定文件", "查看磁盘情况"} {
+	for _, text := range []string{"", "继续", "好的，继续检查内存", "谢谢，请删除指定文件", "查看磁盘情况", "重试重启指定服务", "再试试删除文件"} {
 		if IsBriefConversation(text) {
 			t.Fatal("concrete instruction became an acknowledgement", text)
 		}

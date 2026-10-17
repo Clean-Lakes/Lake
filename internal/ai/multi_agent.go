@@ -32,28 +32,33 @@ type AgentEvidence struct {
 	SourceTruncated bool   `json:"sourceTruncated,omitempty"`
 }
 type AgentRun struct {
-	budgetReserved  int
-	AutomaticSurvey bool            `json:"automaticSurvey,omitempty"`
-	WorkflowStepID  string          `json:"workflowStepId,omitempty"`
-	ID              string          `json:"id"`
-	SessionID       string          `json:"sessionId"`
-	RootTurnID      string          `json:"rootTurnId"`
-	Role            string          `json:"role"`
-	Name            string          `json:"name"`
-	Task            string          `json:"task"`
-	ResourceIDs     []string        `json:"resourceIds"`
-	Status          string          `json:"status"`
-	Summary         string          `json:"summary,omitempty"`
-	Evidence        []AgentEvidence `json:"evidence,omitempty"`
-	EvidenceIDs     []string        `json:"evidenceIds,omitempty"`
-	ToolCount       int             `json:"toolCount"`
-	Usage           Usage           `json:"usage"`
-	BudgetSpent     int             `json:"budgetSpent"`
-	CreatedAt       string          `json:"createdAt"`
-	StartedAt       string          `json:"startedAt,omitempty"`
-	FinishedAt      string          `json:"finishedAt,omitempty"`
-	CanCancel       bool            `json:"canCancel"`
-	Pending         *Approval       `json:"pending,omitempty"`
+	ActivityPhase     string       `json:"activityPhase,omitempty"`
+	ActivityTool      string       `json:"activityTool,omitempty"`
+	ActivityUpdatedAt string       `json:"activityUpdatedAt,omitempty"`
+	SRETaskID         string       `json:"sreTaskId,omitempty"`
+	SRERole           SREAgentRole `json:"sreRole,omitempty"`
+	budgetReserved    int
+	AutomaticSurvey   bool            `json:"automaticSurvey,omitempty"`
+	WorkflowStepID    string          `json:"workflowStepId,omitempty"`
+	ID                string          `json:"id"`
+	SessionID         string          `json:"sessionId"`
+	RootTurnID        string          `json:"rootTurnId"`
+	Role              string          `json:"role"`
+	Name              string          `json:"name"`
+	Task              string          `json:"task"`
+	ResourceIDs       []string        `json:"resourceIds"`
+	Status            string          `json:"status"`
+	Summary           string          `json:"summary,omitempty"`
+	Evidence          []AgentEvidence `json:"evidence,omitempty"`
+	EvidenceIDs       []string        `json:"evidenceIds,omitempty"`
+	ToolCount         int             `json:"toolCount"`
+	Usage             Usage           `json:"usage"`
+	BudgetSpent       int             `json:"budgetSpent"`
+	CreatedAt         string          `json:"createdAt"`
+	StartedAt         string          `json:"startedAt,omitempty"`
+	FinishedAt        string          `json:"finishedAt,omitempty"`
+	CanCancel         bool            `json:"canCancel"`
+	Pending           *Approval       `json:"pending,omitempty"`
 }
 type investigationSpec struct {
 	WorkflowStepID string   `json:"-"`
@@ -63,6 +68,8 @@ type investigationSpec struct {
 	Context        string   `json:"context,omitempty"`
 }
 type agentWorker struct {
+	sreTaskID                     string
+	sreQuestion                   bool
 	parent                        *Engine
 	session                       *session
 	parentID, runID, turnID, role string
@@ -76,6 +83,8 @@ type agentWorker struct {
 	lastModelChars, lastInput     int
 	finalizing                    bool
 	reads                         map[string]int
+	sreObservations               map[string]any
+	sreReportAt                   time.Time
 }
 
 var agentNames = map[string]string{"host": "Scout", "application": "Trace", "data": "Deep", "verify": "Beacon"}
@@ -163,6 +172,7 @@ func childObservationTools(role string, assets []Asset) []Tool {
 }
 
 func (e *Engine) stream(ctx context.Context, model Model, history []Message, tools []Tool, delta func(string, string)) (modelResult, error) {
+	e.setSREActivity("waiting_model", "")
 	if e.worker != nil {
 		w := e.worker
 		select {
@@ -178,7 +188,9 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 		return modelResult{}, ctx.Err()
 	}
 	defer func() { <-e.modelSlots }()
+	e.setSREActivity("thinking", "")
 	if e.worker != nil {
+		w := e.worker
 		chars := historyCost(history) + len(js(tools))
 		estimated := (chars + 2) / 3
 		e.worker.mu.Lock()
@@ -187,13 +199,28 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 		}
 		e.worker.mu.Unlock()
 		charge := estimated + model.MaxOutput
+		if e.worker.sreTaskID != "" {
+			if err := e.reserveSREBudget(w.parentID, w.sreTaskID, charge); err != nil {
+				return modelResult{}, err
+			}
+		}
 		if err := reserveAgentBudget(ctx, e.worker, charge); err != nil {
+			if w.sreTaskID != "" {
+				e.settleSREBudget(w.parentID, w.sreTaskID, charge, Usage{}, false)
+			}
 			return modelResult{}, err
 		}
-		ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+		requestTimeout := 45 * time.Second
+		if w.sreTaskID != "" {
+			requestTimeout = 5 * time.Minute
+		}
+		ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 		defer cancel()
 		if ctx.Err() != nil {
 			settleAgentBudget(e.worker, charge, Usage{}, false)
+			if w.sreTaskID != "" {
+				e.settleSREBudget(w.parentID, w.sreTaskID, charge, Usage{}, false)
+			}
 			return modelResult{}, ctx.Err()
 		}
 		result, err := Stream(ctx, model, history, tools, delta)
@@ -202,6 +229,9 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 			budgetUsage = Usage{}
 		}
 		settleAgentBudget(e.worker, charge, budgetUsage, true)
+		if w.sreTaskID != "" {
+			e.settleSREBudget(w.parentID, w.sreTaskID, charge, budgetUsage, true)
+		}
 		if result.Usage.InputKnown {
 			e.worker.mu.Lock()
 			e.worker.lastModelChars = chars
@@ -243,7 +273,7 @@ func (e *Engine) currentInvestigations(s *session) []AgentRun {
 	return snapshot
 }
 func (e *Engine) runInvestigations(ctx context.Context, s *session, c Config, specs []investigationSpec) ([]AgentRun, error) {
-	if e.worker != nil || c.MultiAgentMode != "auto" || c.Profile != "core" {
+	if e.worker != nil || !c.legacyInvestigations || c.MultiAgentMode != "auto" || c.Profile != "core" {
 		return nil, errors.New("此会话未启用多 Agent 调查")
 	}
 	if len(specs) < 1 || len(specs) > 8 {
@@ -591,6 +621,11 @@ func (e *Engine) scopedChildConfig(c Config, a map[string]any) (Config, error) {
 	p.SilentWriteFiles = false
 	p.SilentCommands = false
 	p.SilentTerminalCreation = false
+	if c.sre != nil && (c.sre.FullTools || c.sre.Role == SREExecutor) {
+		p.SilentCommands = c.Permissions != nil && c.Permissions.SilentCommands && cp.SilentCommands
+		p.SilentWriteFiles = c.Permissions != nil && c.Permissions.SilentWriteFiles && cp.SilentWriteFiles
+		p.SilentTerminalCreation = c.Permissions != nil && c.Permissions.SilentTerminalCreation && cp.SilentTerminalCreation
+	}
 	c.Permissions = &p
 	c.ReferencedAssets = append([]string(nil), w.assets...)
 	ref := str(a["asset_ref"])
@@ -703,11 +738,39 @@ func (e *Engine) recordObservation(c Config, resourceID, title string, value any
 	if err := w.parent.updateAgent(w, func(r *AgentRun) { r.Evidence = append(r.Evidence, ev); r.EvidenceIDs = append(r.EvidenceIDs, ev.ID) }); err != nil {
 		return nil, err
 	}
+	if c.sre != nil && c.sre.AttemptID != "" && e.sreRepository != nil {
+		if _, err := e.sreRepository.MutateSRETask(w.parentID, c.sre.TaskID, 0, "evidence_collected", func(t *SRETask) error {
+			for i := range t.Attempts {
+				if t.Attempts[i].ID == c.sre.AttemptID {
+					t.Attempts[i].Evidence = append(t.Attempts[i].Evidence, ev)
+					return nil
+				}
+			}
+			return errors.New("证据没有绑定到运行中的步骤")
+		}); err != nil {
+			return nil, err
+		}
+	}
 	modelExcerpt := content
 	if len(modelExcerpt) > 4000 {
-		modelExcerpt = utf8Prefix(modelExcerpt, 4000) + " [TRUNCATED: full recorded observation is available in task details]"
+		if output, ok := obj(value)["output"].(string); ok && toolErr == nil {
+			// JSON map ordering otherwise puts large parsed disk arrays before
+			// the actual load/CPU/memory output and hides it from the model.
+			for limit := 3000; limit > 0; limit /= 2 {
+				modelExcerpt = redact(js(map[string]any{"output": utf8Prefix(output, limit), "exitCode": obj(value)["exitCode"], "preview_truncated": true}), c)
+				if len(modelExcerpt) <= 4000 {
+					break
+				}
+			}
+		} else {
+			modelExcerpt = utf8Prefix(modelExcerpt, 4000) + " [TRUNCATED: page recorded source by evidence_id]"
+		}
 	}
-	return map[string]any{"evidence_id": ev.ID, "resource": ev.ResourceName, "asset_ref": ev.AssetRef, "collected_at": ev.CollectedAt, "success": ev.Success, "exit_code": ev.ExitCode, "source_bytes": ev.SourceBytes, "source_truncated": ev.SourceTruncated, "observation": modelExcerpt}, toolErr
+	result := map[string]any{"evidence_id": ev.ID, "resource": ev.ResourceName, "asset_ref": ev.AssetRef, "collected_at": ev.CollectedAt, "success": ev.Success, "exit_code": ev.ExitCode, "source_bytes": ev.SourceBytes, "source_truncated": ev.SourceTruncated, "observation": modelExcerpt, "observation_truncated": len(modelExcerpt) < len(content)}
+	if c.sre != nil && c.sre.Role == SREInvestigator {
+		result["read_hint"] = "Reuse this observation. If needed, page the recorded source using read_evidence mode=evidence, evidence_id, offset=0, limit<=4096; do not recollect because a preview is clipped."
+	}
+	return result, toolErr
 }
 
 var evidenceReference = regexp.MustCompile(`\bev_[a-f0-9]{32}\b`)

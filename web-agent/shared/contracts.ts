@@ -64,6 +64,9 @@ export type Specialist = {
 export type AgentRole = "host" | "application" | "data" | "network" | "change" | "verify" | "plan" | "memory";
 export type AgentRunStatus = "queued" | "running" | "waiting_approval" | "completed" | "failed" | "cancelled" | "interrupted" | "unknown";
 export type AgentRun = {
+  activityPhase?: string; activityTool?: string; activityUpdatedAt?: string;
+	sreTaskId?:string;
+	sreRole?:SREAgentRole;
   automaticSurvey?: boolean;
   workflowStepId?: string;
   id: string;
@@ -152,14 +155,15 @@ export type Catalog = {
   terminals?: Array<TerminalSession & { sessionTitle?: string }>;
 };
 
-export type QueuedMessage = {id: string; text: string; resourceIds: string[]; images: Pick<AIImage,"id" | "name" | "mimeType">[]; files: TextFileAttachment[]; createdAt: string};
+export type QueuedMessage = {id: string; text: string; resourceIds: string[]; references?: Record<string,unknown>[]; images: Pick<AIImage,"id" | "name" | "mimeType">[]; files: TextFileAttachment[]; createdAt: string};
 export type MessageQueue = {paused: boolean; revision: number; lastError: string; items: QueuedMessage[]};
-export type QueueOperation = {operation:"pause" | "resume"; revision:number} | {operation:"remove"; revision:number; id:string} | {operation:"edit"; revision:number; id:string; text:string; resourceIds:string[]} | {operation:"reorder"; revision:number; ids:string[]};
+export type QueueOperation = {operation:"pause" | "resume"; revision:number} | {operation:"remove"; revision:number; id:string} | {operation:"edit"; revision:number; id:string; text:string; resourceIds:string[]; references?:Record<string,unknown>[]} | {operation:"reorder"; revision:number; ids:string[]};
 export type SendMessageResult = {queued?: boolean; queuedMessageId?: string; messageQueue?: MessageQueue};
 
 export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;status:"running" | "completed" | "cancelled" | "failed" | "interrupted"};
 
 export type SessionSnapshot = {
+	sre?:SRESnapshot;
  replyTimings?:ReplyTiming[];
   messageQueue?: MessageQueue;
  aiBinding?: {terminalId?: string; generation?: string};
@@ -197,6 +201,7 @@ export type TerminalHistory = {
 export type ModelSettings = {
   source: "settings" | "environment" | "none";
   managedBy?: "magpie";
+  magpie?: {name: string};
   configured: boolean;
   url: string;
   name: string;
@@ -216,7 +221,7 @@ export type ModelProvider = {id: string; name: string; baseURL: string; protocol
 export type ProviderCatalog = {providers: ModelProvider[]; activeProviderId: string; activeModelId: string; savedProviderId?: string};
 export type ProviderInput = Omit<ModelProvider,"id" | "keyConfigured"> & {apiKey?: string | null};
 export type AvailableModelEntry = {providerId: string; providerName: string; modelId: string; name: string; displayName: string; contextWindow?: number};
-export type AvailableModels = { models: string[]; entries?: AvailableModelEntry[]; activeProviderId?: string; activeModelId?: string; source?: "magpie"; message?: string; imageInputCapabilities?: Record<string, boolean>; reasoningCapabilities?: Record<string, ModelReasoningCapability> };
+export type AvailableModels = { models: string[]; contextLimits?: Record<string, number>; entries?: AvailableModelEntry[]; activeProviderId?: string; activeModelId?: string; source?: "magpie"; message?: string; imageInputCapabilities?: Record<string, boolean>; reasoningCapabilities?: Record<string, ModelReasoningCapability> };
 
 export type ReasoningSettings = { modelId?: string; levels: string[]; default?: string; source?: string; effort: string };
 
@@ -245,3 +250,25 @@ export type WorkflowRun = {id:string; workflowId:string|null; projectId:string; 
 export type WorkflowCatalog = {templates:WorkflowTemplate[]; runs:WorkflowRun[]};
 
 export type NavigationTrashItem = {kind:"project" | "resource" | "folder";id:string;projectId:string;name:string;projectName:string;deletedAt:string};
+
+export interface MCPServerConfig {id:string;name:string;transport:"http"|"sse"|"stdio";enabled:boolean;url:string;command:string;args:string[];headersConfigured:boolean;envConfigured:boolean}
+export interface MCPToolInfo {name:string;description:string;inputSchema:unknown}
+export interface MCPToolCatalog {serverId:string;serverName:string;tools:MCPToolInfo[];count:number}
+export interface SkillConfig {name:string;description:string;path:string;source:string;enabled:boolean;managed:boolean}
+export interface SkillCatalog {skills:SkillConfig[];roots:string[];defaultRoot:string}
+
+/** Fixed product roles; legacy AgentRole remains compatible. */
+export type SREAgentRole = 'coordinator'|'investigator'|'executor'|'verifier';
+export type SREAction = {tool:string;arguments:Record<string,unknown>;reason?:string;impact?:string;rollback?:string;stopCondition?:string};
+export type SRECheck = {id:string;description:string;kind:'number_threshold'|'boolean_probe'|'manual_attestation';resourceId?:string;probe?:SREAction;path?:string;operator?:string;expected?:unknown;unit?:string;windowSeconds?:number;minSamples?:number};
+export type SREPlanStep = {id:string;role:SREAgentRole;kind:'observe'|'analyze'|'act'|'verify'|'summarize';description:string;capability?:string;dependsOn:string[];resourceIds:string[];completionChecks:string[];action?:SREAction};
+export type SREPlanRevision = {collaborationVersion?:number;id:string;taskId:string;version:number;goal:string;taskType:'query'|'investigation'|'recovery'|'change';scope:string[];steps:SREPlanStep[];acceptance:SRECheck[];changeReason:string;createdAt:string};
+export type SREOperation = {resolutionNote?:string;resolvedBy?:string;resolvedAt?:string;id:string;call:{id:string;name:string;arguments:string};digest:string;resourceId:string;status:string;preparedAt:string;dispatchedAt?:string;finishedAt?:string;approvalId?:string;result?:string};
+export type SRERoleReport = {schemaVersion:number;summary:string;facts:{statement:string;evidenceIds:string[]}[];hypotheses:string[];unknowns:string[];nextChecks:string[]};
+export type SREStepAttempt = {reusedFromAttemptId?:string;report?:SRERoleReport;id:string;planRunId:string;stepId:string;roleRunId:string;status:string;evidence:AgentEvidence[];operations:SREOperation[];result?:string;startedAt:string;finishedAt?:string};
+export type SREPlanRun = {id:string;taskId:string;planRevisionId:string;profileVersion:number;status:string;resumeOfRunId?:string;startedAt:string;finishedAt?:string};
+export type SRETranscriptEntry = {toRoleId?:SREAgentRole;evidenceIds?:string[];source?:string;id:string;sessionId:string;taskId:string;roleId:SREAgentRole;roleRunId:string;kind:string;body:string;revision:number;sequence:number;planVersion?:number;attemptId?:string;createdAt:string};
+export type SRECheckResult = {checkId:string;status:string;reason:string;evidenceIds:string[];samples:number;value?:unknown;attestedBy?:string;checkedAt:string};
+export type SREVerificationResult = {reviewSummary?:string;id:string;taskId:string;planRunId:string;checks:SRECheckResult[];verdict:string;checkedAt:string};
+export type SRETask = {id:string;sessionId:string;projectId:string;requestId:string;goal:string;scope:string[];mode:'assist'|'plan_only';status:string;outcome:string;recoveryStatus:string;rootCauseStatus:string;profileId:string;profileVersion:number;revision:number;tokenBudget:number;budgetPolicy?:string;budgetSpent:number;usage:AIUsage;plans:SREPlanRevision[];runs:SREPlanRun[];attempts:SREStepAttempt[];messages:SRETranscriptEntry[];verifications:SREVerificationResult[];error?:string;createdAt:string;updatedAt:string};
+export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[]};

@@ -131,8 +131,11 @@ func windowThemeProc(hwnd, msg, wp, lp, id, ref uintptr) uintptr {
 		r, _, _ := themeDefSubclass.Call(hwnd, msg, wp, lp)
 		return r
 	}
-	if msg == 0x83 { // WM_NCCALCSIZE: run after Def, but keep the entry rect.
-		return stretchClientOverTopFrame(hwnd, msg, wp, lp)
+	if msg == 0x83 { // Only stretch after the workbench removes WS_CAPTION.
+		style, _, _ := themeUser.NewProc("GetWindowLongPtrW").Call(hwnd, windowStyleIndex)
+		if style&windowCaption == 0 {
+			return stretchClientOverTopFrame(hwnd, msg, wp, lp)
+		}
 	}
 	r, _, _ := themeDefSubclass.Call(hwnd, msg, wp, lp)
 	switch msg {

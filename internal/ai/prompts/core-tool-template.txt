@@ -20,7 +20,7 @@ Shell rule:
 - Use shell for executing programs, builds, tests, package managers, diagnostics, processes, services, networking, resource/runtime status, and other non-file command work.
 - Prefer absolute paths and quote paths that contain spaces. For long jobs set run_in_background=true, then use bashOutput to poll output and killShell to stop the session if needed.
 - Use bashOutput with filter when you only need matching lines from a running command.
-- Resolve the target set and decide how to investigate from the goal, tool capabilities, independent work and missing evidence. When delegate_investigation is available, consider parallel child tasks for independent multi-host or cross-domain work. Choose the number, roles and observations yourself. You may handle a simple query directly. Reuse successful evidence when it is still relevant; supplement only specific gaps or contradictions. Summarize when the goal is covered.
+- Resolve the target set and investigate directly using the available tools. Ordinary mode does not schedule child agents. Reuse successful evidence, fill specific gaps and summarize when the goal is covered. SRE collaboration is a separate explicit project mode.
 - Do not invent multi-minute benchmarks or long test loops. When a long-running experiment is genuinely required, state the expected duration first and run it in the background.
 - Unless explicitly requested, do not run deletion-oriented shell commands such as rm or find with -delete.
 - Unless explicitly requested, do not run mutating SQL such as DELETE, DROP, TRUNCATE, ALTER, UPDATE, INSERT, GRANT, or REVOKE. Prefer read-only SQL and metadata tools by default.

@@ -10,6 +10,31 @@ import (
 )
 
 var filesystemDirectoryMention = regexp.MustCompile(`(?i)(?:nfs|共享|挂载|导出)\s*(?:的)?目录`)
+var relativeDirectoryMention = regexp.MustCompile(`(?:这(?:个|些|几个|[一二两三四五六七八九十0-9]+个)|那(?:个|些)|该|上述|它的)目录`)
+
+// Resource selections and folder selections share the same execution scope.
+// An explicit list is revalidated by ID, never widened to all remembered assets
+// or to resources newly added to the project.
+func resourceSelectionScope(ids []string, resources []Object) *ai.TargetScope {
+	scope := &ai.TargetScope{ResourceIDs: []string{}}
+	available, seen := map[string]bool{}, map[string]bool{}
+	for _, resource := range resources {
+		available[stringOf(resource["id"])] = true
+	}
+	for _, id := range ids {
+		if !available[id] {
+			scope.NeedsClarification = true
+		} else if !seen[id] {
+			seen[id] = true
+			scope.ResourceIDs = append(scope.ResourceIDs, id)
+		}
+	}
+	if scope.NeedsClarification || len(scope.ResourceIDs) == 0 {
+		scope.NeedsClarification = true
+		scope.ResourceIDs = nil
+	}
+	return scope
+}
 
 // Reconstruct project navigation ancestry, never filesystem or connection paths.
 func directoryInventory(snap Object) ([]ai.AssetDirectory, map[string][]string) {
@@ -202,6 +227,13 @@ func (b *Server) directoryTurnScope(id, message string, refs []Object, groups []
 						refs = append(refs, Object{"asset_ref": resource["id"], "name": resource["name"], "type": resource["kind"]})
 					}
 				}
+				ids := []string{}
+				for _, reference := range refs {
+					ids = append(ids, stringOf(reference["asset_ref"]))
+				}
+				if len(ids) > 1 {
+					return resourceSelectionScope(ids, resources), refs
+				}
 				return nil, refs
 			}
 		}
@@ -211,6 +243,7 @@ func (b *Server) directoryTurnScope(id, message string, refs []Object, groups []
 	directoryTargetText := message
 	if prior, err := b.Engine.TargetScope(id); err == nil && prior != nil && !prior.NeedsClarification && len(prior.ResourceIDs) > 0 {
 		directoryTargetText = filesystemDirectoryMention.ReplaceAllString(message, "")
+		directoryTargetText = relativeDirectoryMention.ReplaceAllString(directoryTargetText, "")
 	}
 	unresolvedDirectory := len(selected) == 0 && (strings.Contains(directoryTargetText, "目录") || strings.Contains(directoryTargetText, "文件夹") || strings.Contains(directoryTargetText, "分组")) && !regexp.MustCompile(`(?:^|[\s"'「]|查看|读取|检查|打开|列出|访问|看看|在)/(?:[^\s"'」]+)`).MatchString(message)
 	var scope *ai.TargetScope
@@ -235,13 +268,29 @@ func (b *Server) directoryTurnScope(id, message string, refs []Object, groups []
 			scope.ResourceIDs = filtered
 			scope.NeedsClarification = len(filtered) == 0
 		}
-	} else if len(refs) == 0 && unresolvedDirectory && !strings.Contains(message, "这个目录") && !strings.Contains(message, "该目录") && !strings.Contains(message, "它的目录") {
+	} else if len(refs) > 0 {
+		ids := []string{}
+		seen := map[string]bool{}
+		for _, reference := range refs {
+			if ref := stringOf(reference["asset_ref"]); ref != "" && !seen[ref] {
+				ids = append(ids, ref)
+				seen[ref] = true
+			}
+		}
+		if len(ids) > 1 {
+			scope = resourceSelectionScope(ids, resources)
+		}
+	} else if unresolvedDirectory && !strings.Contains(message, "这个目录") && !strings.Contains(message, "该目录") && !strings.Contains(message, "它的目录") {
 		scope = &ai.TargetScope{DirectoryIDs: []string{}, Paths: []string{}, ResourceIDs: []string{}, NeedsClarification: true}
 	} else if len(refs) == 0 {
 		prior, err := b.Engine.TargetScope(id)
 		must(err)
 		if prior != nil {
-			scope = directoryScope(groups, prior.DirectoryIDs, prior.Paths)
+			if len(prior.DirectoryIDs) == 0 && !prior.NeedsClarification {
+				scope = resourceSelectionScope(prior.ResourceIDs, resources)
+			} else {
+				scope = directoryScope(groups, prior.DirectoryIDs, prior.Paths)
+			}
 			// Keep a confirmed subset (for example SSH hosts in a folder that
 			// also contains databases) across ordinary follow-up messages.
 			if !prior.NeedsClarification && !scope.NeedsClarification {
@@ -313,6 +362,7 @@ func (b *Server) directoryTurnScope(id, message string, refs []Object, groups []
 func (b *Server) questionTargetScope(id string, answers map[string][]string) *ai.TargetScope {
 	snapshot := b.Store.Snapshot(id)
 	groups, _ := directoryInventory(snapshot)
+	resources := objects(snapshot["resources"])
 	keys := make([]string, 0, len(answers))
 	for key := range answers {
 		keys = append(keys, key)
@@ -321,11 +371,21 @@ func (b *Server) questionTargetScope(id string, answers map[string][]string) *ai
 	values := []string{}
 	for _, key := range keys {
 		for _, value := range answers[key] {
+			matched := false
 			for _, group := range groups {
 				if ai.DirectoryNameMentioned(value, group.Name) || ai.DirectoryNameMentioned(value, strings.Join(group.Path, "/")) {
-					values = append(values, value)
+					matched = true
 					break
 				}
+			}
+			for _, resource := range resources {
+				name := stringOf(resource["name"])
+				if set("local ssh")[stringOf(resource["kind"])] && net.ParseIP(name) != nil && ai.ResourceAddressMentioned(value, name) {
+					matched = true
+				}
+			}
+			if matched {
+				values = append(values, value)
 			}
 		}
 	}
@@ -333,7 +393,26 @@ func (b *Server) questionTargetScope(id string, answers map[string][]string) *ai
 		return nil
 	}
 	message := strings.Join(values, "\n")
-	scope, _ := b.directoryTurnScope(id, message, nil, groups, objects(snapshot["resources"]))
+	refs := []Object{}
+	addresses := map[string]int{}
+	for _, resource := range resources {
+		name := stringOf(resource["name"])
+		if set("local ssh")[stringOf(resource["kind"])] && net.ParseIP(name) != nil && ai.ResourceAddressMentioned(message, name) {
+			addresses[name]++
+			if addresses[name] > 1 {
+				return &ai.TargetScope{NeedsClarification: true}
+			}
+			refs = append(refs, Object{"asset_ref": resource["id"], "name": resource["name"], "type": resource["kind"]})
+		}
+	}
+	scope, _ := b.directoryTurnScope(id, message, refs, groups, resources)
+	if scope == nil && len(refs) > 0 {
+		ids := []string{}
+		for _, ref := range refs {
+			ids = append(ids, stringOf(ref["asset_ref"]))
+		}
+		scope = resourceSelectionScope(ids, resources)
+	}
 	if scope != nil && !scope.NeedsClarification && (strings.Contains(message, "主机") || strings.Contains(strings.ToLower(message), "ssh")) {
 		hosts := map[string]bool{}
 		for _, resource := range objects(snapshot["resources"]) {

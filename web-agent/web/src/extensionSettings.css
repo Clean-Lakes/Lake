@@ -1,0 +1,76 @@
+.extension-settings {display:flex;flex:1;min-height:0;min-width:0;}
+.extension-rail {width:230px;flex-shrink:0;padding:18px 12px;display:flex;flex-direction:column;background:var(--surface-muted);border-right:1px solid var(--border);min-height:0;}
+.extension-rail-heading {display:flex;justify-content:space-between;align-items:center;margin:0 8px 12px;color:var(--text-secondary);font-size:12px;}
+.extension-rail-heading small {margin-left:5px;}
+.extension-rail .provider-add {display:flex;align-items:center;justify-content:center;gap:8px;}
+.extension-list {flex:1;min-height:0;overflow:auto;}
+.extension-item {display:flex;align-items:center;gap:10px;width:100%;margin-bottom:4px;padding:12px 9px;border:1px solid transparent;border-radius:var(--radius-panel);background:transparent;color:var(--foreground);text-align:left;cursor:pointer;}
+.extension-item.selected {border-color:var(--border);background:var(--surface);}
+.extension-item:hover {background:var(--surface-hover);}
+.extension-item > span:not(.provider-avatar) {display:flex;flex:1;min-width:0;flex-direction:column;gap:5px;}
+.extension-item strong {font-weight:550;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.extension-item small {font-size:11px;color:var(--text-secondary);}
+.extension-detail {flex:1;min-width:0;overflow:auto;padding:24px 30px;}
+.extension-heading {display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:22px;}
+.extension-heading h3 {display:flex;align-items:center;gap:9px;margin:0;font-size:18px;overflow-wrap:anywhere;}
+.extension-heading p {margin:7px 0 0;font-size:12px;color:var(--text-muted);}
+.extension-check {display:flex;align-items:center;gap:7px;font-size:12px;white-space:nowrap;}
+.extension-fields {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;border:0;margin:0;padding:0;min-width:0;}
+.extension-wide {grid-column:1/-1;}
+.extension-settings input:not([type="checkbox"]),.extension-settings textarea {box-sizing:border-box;width:100%;margin-top:7px;}
+.extension-settings textarea {display:block;padding:10px 11px;border:1px solid var(--border);border-radius:var(--radius-control);background:var(--surface);color:var(--foreground);font-size:12px;line-height:1.65;resize:vertical;}
+.extension-code {font-family:ui-monospace,SFMono-Regular,Menlo,monospace!important;tab-size:2;}
+.extension-settings .settings-note {line-height:1.7;font-size:12px;}
+.extension-actions {display:flex;align-items:center;gap:10px;margin-top:24px;padding-top:16px;border-top:1px solid var(--border);}
+.extension-actions > span {flex:1;}
+.extension-tools {margin-top:20px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-panel);}
+.extension-tools h4 {display:flex;align-items:center;gap:7px;margin:0 0 9px;font-size:12px;color:var(--success);font-weight:500;}
+.extension-tools details {font-size:12px;padding:10px 0;border-top:1px solid var(--border);}
+.extension-tools summary {cursor:pointer;overflow-wrap:anywhere;}
+.extension-tools pre {max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text-secondary);font-size:11px;}
+.extension-tools p {color:var(--text-secondary);overflow-wrap:anywhere;line-height:1.6;}
+.extension-empty {display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:350px;text-align:center;color:var(--text-muted);}
+.extension-empty h3 {font-size:17px;color:var(--foreground);margin:20px 0 0;}
+.extension-empty p {font-size:13px;line-height:1.7;max-width:340px;margin:12px 0 22px;}
+.extension-empty > div {display:flex;gap:10px;}
+.extension-skill-content {min-height:260px;}
+.extension-path {font-size:11px;color:var(--text-muted);overflow-wrap:anywhere;line-height:1.6;}
+.extension-roots-button {display:flex;justify-content:center;align-items:center;gap:8px;margin-top:16px;}
+.extension-root-default {display:flex;flex-direction:column;gap:9px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-panel);font-size:12px;}
+.extension-root-default code {color:var(--text-secondary);overflow-wrap:anywhere;}
+.extension-root-form {margin-top:22px;display:flex;gap:12px;align-items:flex-end;}
+.extension-root-form label {flex:1;min-width:0;}
+.extension-root-form button {display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.extension-root-list {margin-top:20px;}
+.extension-root-list > div {display:flex;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);color:var(--text-secondary);}
+.extension-root-list code {flex:1;min-width:0;font-size:11px;overflow-wrap:anywhere;}
+.extension-settings .provider-success {font-size:12px;line-height:1.6;}
+.model-settings-tabs {gap:22px;overflow-x:auto;}
+.model-settings-tabs button {display:flex;align-items:center;gap:7px;white-space:nowrap;}
+@media(max-width:700px) {
+ .extension-rail {width:160px;padding:12px 8px;}
+ .extension-detail {padding:20px 16px;}
+ .extension-fields {grid-template-columns:minmax(0,1fr);}
+ .extension-wide {grid-column:auto;}
+ .extension-heading {flex-wrap:wrap;}
+ .extension-root-form {flex-direction:column;align-items:stretch;}
+}
+@media(max-width:520px) {
+ .extension-settings {flex-direction:column;overflow:auto;}
+ .extension-rail {width:auto;max-height:240px;border-right:0;border-bottom:1px solid var(--border);}
+ .extension-list {display:flex;gap:6px;overflow:auto;min-height:48px;flex:none;}
+ .extension-item {width:180px;flex-shrink:0;margin:0;}
+ .extension-rail-heading {margin-bottom:6px;}
+ .extension-rail .provider-add {margin-bottom:8px;}
+ .extension-roots-button {margin-top:8px;}
+ .extension-detail {overflow:visible;flex:1 0 auto;}
+ .extension-empty {min-height:240px;}
+ .model-settings-tabs {gap:20px;}
+}
+.model-settings-dialog .extension-fields > .field-label {min-width:0;margin:0;line-height:1.5;}
+.model-settings-dialog .extension-fields > .settings-note {margin:0;}
+.extension-tools {max-height:220px;overflow:auto;}
+.extension-actions {position:sticky;bottom:-24px;z-index:1;padding:16px 0;background:var(--surface);}
+@media(max-width:700px) {.extension-actions {bottom:-20px;}}
+
+.extension-item small {white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}

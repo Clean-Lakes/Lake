@@ -1,5 +1,5 @@
 #!/bin/sh
-# Current Go/React macOS client. Archived Electron: build_lake_legacy_desktop.sh.
+# Current Go/React macOS client.
 set -eu
 lake_repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$lake_repo_root"
@@ -93,6 +93,14 @@ mkdir -p "$lake_builds"
 lake_saved_app="$lake_builds/$lake_app_name-$lake_version-$lake_arch-$(date +%Y%m%d-%H%M%S)-$$.app"
 ditto --norsrc "$lake_app" "$lake_saved_app"
 codesign --verify --deep --strict "$lake_saved_app"
+# Keep only the newest build so repeated iterations cannot fill the disk.
+# Skip any build another dist/ symlink still points at.
+for lake_old_build in "$lake_builds"/*.app; do
+  [ -d "$lake_old_build" ] || continue
+  [ "$lake_old_build" = "$lake_saved_app" ] && continue
+  if find "$lake_repo_root/dist" -type l -lname "$lake_old_build" -print -quit 2>/dev/null | grep -q .; then continue; fi
+  rm -rf "$lake_old_build"
+done
 # Desktop/iCloud can add Finder attributes after signing. Keep the runnable app outside it.
 if [ -e "$lake_output/$lake_app_name.app" ] || [ -L "$lake_output/$lake_app_name.app" ]; then rm -rf "$lake_output/$lake_app_name.app"; fi
 ln -s "$lake_saved_app" "$lake_output/$lake_app_name.app"

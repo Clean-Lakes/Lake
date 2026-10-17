@@ -1,0 +1,23 @@
+.composer-model-select.app-select { width: auto; max-width: 240px; margin-top: 0; }
+.composer-model-select.app-select > .app-select-trigger { height: 28px; padding: 0 8px; gap: 7px; border: 0; background: transparent; font-size: 12px; }
+.composer-model-select.app-select > .app-select-trigger:hover:not(:disabled),.composer-model-select.app-select > .app-select-trigger[aria-expanded="true"] { background: var(--surface-hover); }
+.composer-model-select.app-select > .app-select-trigger[aria-expanded="true"]:not(:focus-visible) { outline: none; }
+.composer-model-select.model-missing > .app-select-trigger { color: var(--warning); }
+.composer-reasoning-select.app-select { width: auto; max-width: 132px; margin-top: 0; }
+.composer-reasoning-select.app-select > .app-select-trigger { height: 28px; padding: 0 7px; gap: 5px; border: 0; background: transparent; font-size: 12px; color: var(--text-secondary); }
+.composer-reasoning-select.app-select > .app-select-trigger:hover:not(:disabled),.composer-reasoning-select.app-select > .app-select-trigger[aria-expanded="true"] { background: var(--surface-hover); }
+.composer-reasoning-select.app-select > .app-select-trigger[aria-expanded="true"]:not(:focus-visible) { outline: none; }
+.composer-model-popup .app-select-option { min-height: 38px; }
+.composer-model-heading { padding: 7px 9px; color: var(--text-muted); font-size: 11px; }
+.composer-model-search { display: flex; align-items: center; gap: 7px; margin: 2px 5px 7px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text-muted); }
+.composer-model-search:focus-within { border-color: var(--focus); }
+.composer-model-search input { min-width: 0; width: 100%; height: 32px; margin: 0; padding: 0; border: 0; outline: none; background: transparent; color: var(--foreground); font: inherit; font-size: 12px; }
+.composer-model-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.composer-model-label > span { overflow-wrap: anywhere; }
+.composer-model-label small { color: var(--text-muted); font-size: 11px; font-weight: 400; overflow-wrap: anywhere; }
+.composer-model-settings { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 36px; padding: 8px 9px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.composer-model-settings span { flex: 1; }
+.composer-model-settings:hover { background: var(--surface-hover); color: var(--foreground); }
+.composer-model-settings:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.composer-model-note { margin: 6px 9px; color: var(--text-secondary); font-size: 11px; line-height: 1.6; }
+@media (max-width:700px) { .composer-model-select.app-select { max-width: 180px; } }

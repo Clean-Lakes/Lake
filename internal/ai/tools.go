@@ -110,29 +110,49 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if !found {
 		return nil, errors.New("tool unavailable in selected profile")
 	}
-	if sessionTool(call.Name) {
-		return e.invokeSessionTool(ctx, s, c, call, a)
+	if err = e.checkSRECall(c, call, a); err != nil {
+		return nil, err
 	}
-	if memoryTool(call.Name) {
-		if !c.MemoryEnabled || c.MemoryProjectID == "" || e.worker != nil || e.Bridge == nil {
-			return nil, errors.New("project memory unavailable")
-		}
-		return e.bridgeCall(ctx, sessionForTools, call.Name, a, false)
+	if err = e.PrepareSREOperation(c, call); err != nil {
+		return nil, err
 	}
-	if c.targetScope != nil && (str(a["terminal_id"]) == "" || str(a["asset_ref"]) != "" || c.targetScope.NeedsClarification || len(c.targetScope.ResourceIDs) == 0 || call.Name == "delegate_investigation") {
-		if err := enforceTargetScope(c, call.Name, a, nil); err != nil {
+	defer func() { e.finishSREPreparation(c, call, err) }()
+	defer func() { result, err = e.recordSREToolResult(c, call, a, result, err) }()
+	if call.Name == "sre_collaborate" {
+		return e.prepareSREHandoff(s, c, call)
+	}
+	if call.Name == "sre_reply" {
+		return e.prepareSREReply(s, c, call)
+	}
+	if call.Name == "sre_team_update" || call.Name == "sre_team_read" {
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+		return e.invokeSRETeam(c, call.Name, a)
 	}
 	if e.worker != nil {
 		e.worker.mu.Lock()
 		e.worker.calls++
 		calls := e.worker.calls
 		e.worker.mu.Unlock()
-		if calls > agentObservationCallLimit {
+		if !fullSREAgent(c) && calls > agentCallLimit(c) {
 			return nil, errors.New("子 Agent 工具调用预算已达到上限")
 		}
 		if err := e.worker.parent.updateAgent(e.worker, func(r *AgentRun) { r.ToolCount = calls }); err != nil {
+			return nil, err
+		}
+	}
+	if sessionTool(call.Name) {
+		return e.invokeSessionTool(ctx, s, c, call, a)
+	}
+	if memoryTool(call.Name) {
+		if !c.MemoryEnabled || c.MemoryProjectID == "" || e.worker != nil && (c.sre == nil || !c.sre.FullTools) || e.Bridge == nil {
+			return nil, errors.New("project memory unavailable")
+		}
+		return e.bridgeCall(ctx, sessionForTools, call.Name, a, false)
+	}
+	if c.targetScope != nil && (str(a["terminal_id"]) == "" || str(a["asset_ref"]) != "" || c.targetScope.NeedsClarification || len(c.targetScope.ResourceIDs) == 0 || call.Name == "delegate_investigation") {
+		if err := enforceTargetScope(c, call.Name, a, nil); err != nil {
 			return nil, err
 		}
 	}
@@ -367,6 +387,10 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 			return nil, err
 		}
 	}
+	if err = e.DispatchSREOperation(ctx, c, call); err != nil {
+		return nil, err
+	}
+	defer func() { e.finishSREOperation(c, call, result, err) }()
 	switch call.Name {
 	case "observe_host", "observe_cluster", "observe_cluster_logs", "observe_journal", "observe_logs", "observe_data", "read_evidence":
 		return e.observation(ctx, c, call.Name, a)
@@ -659,6 +683,12 @@ func (e *Engine) bridgeCall(ctx context.Context, id, name string, a map[string]a
 		}
 	}
 	result, err := e.Bridge(ctx, id, name, out, approved)
+	var waiting *ToolWaitTimeoutError
+	if errors.As(err, &waiting) && ctx.Err() == nil && (name == "runtimeCommandExec" || name == "terminal_execute_command") && str(obj(result)["terminal_id"]) != "" && str(obj(result)["entry_id"]) != "" {
+		// Keep the original command; expose wait/output handles instead of
+		// aborting this specialist and cancelling all parallel peers.
+		return e.trackBridgeShell(id, result, a)
+	}
 	if err == nil && a["run_in_background"] == true && (name == "runtimeCommandExec" || name == "terminal_execute_command") {
 		return e.trackBridgeShell(id, result, a)
 	}

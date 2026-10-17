@@ -88,7 +88,8 @@ func TestContextUsagePersistsAndClearsIndependently(t *testing.T) {
 		t.Fatal(err)
 	}
 	rollback, _ := e.Snapshot("case")
-	if rollback.Context.LastRequest != nil || rollback.Context.UsedKnown || rollback.Context.Used != 0 || rollback.Usage.Total != 240 {
+	rolledState, _ := e.get("case")
+	if rolledState.state.ContextMeasurement != nil || rollback.Context.LastRequest != nil || rollback.Context.UsedKnown || rollback.Context.Used != 0 || rollback.Usage.Total != 240 {
 		t.Fatal("rollback did not separate context and cumulative tokens")
 	}
 	if err = e.Chat(context.Background(), "case", "新的第二轮", nil); err != nil {
@@ -98,7 +99,7 @@ func TestContextUsagePersistsAndClearsIndependently(t *testing.T) {
 		t.Fatal(err)
 	}
 	view, _ = e.Snapshot("case")
-	if view.Context.LastRequest != nil || view.Usage.Total != 480 {
+	if rolledState.state.ContextMeasurement != nil || view.Context.LastRequest != nil || view.Usage.Total != 480 {
 		t.Fatal("compaction request displayed as normal context usage")
 	}
 	if err = e.Restore("case", []Message{{Role: "user", Content: strings.Repeat("large context ", 10000)}}); err != nil {
@@ -164,7 +165,8 @@ func TestMeasuredContextClearsOnModelSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 	view, _ = e.Snapshot("usage")
-	if view.Context.UsedKnown || view.Context.LastRequest != nil {
+	switchedState, _ := e.get("usage")
+	if switchedState.state.ContextMeasurement != nil || view.Context.UsedKnown || view.Context.LastRequest != nil {
 		t.Fatal("used old model tokens for new model")
 	}
 }

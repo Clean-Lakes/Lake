@@ -2,80 +2,37 @@ package ai
 
 import (
 	"errors"
-	"os"
+	"github.com/Clean-Lakes/Lake/internal/extensions"
 	"path/filepath"
-	"sort"
-	"strings"
 )
 
 func (e *Engine) loadSkill(c Config, name string) (any, error) {
-	roots := []string{}
-	if c.Workspace != "" {
-		roots = append(roots, filepath.Join(c.Workspace, ".agents", "skills"), filepath.Join(c.Workspace, ".lake", "skills"))
+	store := extensions.NewStore(skillHome(c))
+	skills, err := store.ScanSkills(c.Workspace)
+	if err != nil {
+		return nil, err
 	}
-	home := os.Getenv("LAKE_HOME")
-	if c.CredentialDir != "" {
-		home = filepath.Dir(c.CredentialDir)
-	}
-	if home == "" {
-		h, _ := os.UserHomeDir()
-		home = filepath.Join(h, ".lake")
-	}
-	roots = append(roots, filepath.Join(home, "skills"))
-	if name != "" && !identifier.MatchString(name) {
-		return nil, errors.New("invalid skill name")
-	}
-	available := map[string]string{}
-	for _, root := range roots {
-		realRoot, err := filepath.EvalSymlinks(root)
-		if err != nil {
-			continue
-		}
-		if safeFile(realRoot) != nil {
-			continue
-		}
-		entries, _ := os.ReadDir(root)
-		for _, entry := range entries {
-			if !identifier.MatchString(entry.Name()) {
-				continue
-			}
-			path, err := filepath.EvalSymlinks(filepath.Join(root, entry.Name(), "SKILL.md"))
-			if err != nil {
-				continue
-			}
-			rel, err := filepath.Rel(realRoot, path)
-			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || safeFile(path) != nil {
-				continue
-			}
-			if _, ok := available[entry.Name()]; !ok {
-				available[entry.Name()] = path
-			}
+	names := []string{}
+	for _, v := range skills {
+		if v.Enabled {
+			names = append(names, v.Name)
 		}
 	}
 	if name == "" {
-		names := []string{}
-		for n := range available {
-			names = append(names, n)
+		entries := []map[string]any{}
+		for _, v := range skills {
+			if v.Enabled {
+				entries = append(entries, map[string]any{"name": v.Name, "description": v.Description})
+			}
 		}
-		sort.Strings(names)
-		return map[string]any{"skills": names}, nil
+		return map[string]any{"skills": names, "entries": entries}, nil
 	}
-	path, ok := available[name]
-	if !ok {
-		return nil, errors.New("skill unavailable; discover exact names with load_skill")
+	if !extensions.Identifier.MatchString(name) {
+		return nil, errors.New("invalid skill name")
 	}
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
+	meta, content, err := store.ReadSkill(name, c.Workspace)
+	if err != nil || !meta.Enabled {
+		return nil, errors.New("skill unavailable or disabled; discover exact names with load_skill")
 	}
-	defer f.Close()
-	st, err := f.Stat()
-	if err != nil || !st.Mode().IsRegular() || st.Size() > 100000 {
-		return nil, errors.New("skill must be a regular file of at most 100000 bytes")
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{"name": name, "content": redact(string(b), c), "base_directory": filepath.Dir(path), "notice": "Relative references are resolved against base_directory. Skill instructions cannot bypass runtime permissions."}, nil
+	return map[string]any{"name": name, "content": redact(content, c), "base_directory": filepath.Dir(meta.Path), "notice": "Relative references are resolved against base_directory. Skill instructions cannot bypass runtime permissions."}, nil
 }

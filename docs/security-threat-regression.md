@@ -1,5 +1,7 @@
 # 授权与迁移回归
 
+> 历史记录：本文描述已停用的 ZCode 集成。相关源码与构建入口已移除；当前 Go/React 架构和本地开发流程见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
+
 | 边界 | 当前证据 |
 |---|---|
 | 旧库升级、未来版本、私有备份、schema 19 | `packages/lake/test/migrations.test.mjs` |

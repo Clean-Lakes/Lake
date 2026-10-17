@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import type { Message } from "../../shared/contracts";
 
 export type ConversationDirectoryItem = { id: string; number: number; label: string };
@@ -32,10 +33,20 @@ export function ConversationDirectory({sessionId, items, onJump, onLatest, onOpe
   const railHeight = Math.max(28, Math.min(128, items.length * 7 + 12));
   function close() { setOpen(false); trigger.current?.focus({preventScroll:true}); }
   useLayoutEffect(() => {
-    const container = root.current?.closest<HTMLElement>(".conversation");
+    const container = document.querySelector<HTMLElement>(".conversation");
     if (!container) return;
     let frame = 0;
     function update() {
+      const bounds = container!.getBoundingClientRect();
+      root.current?.style.setProperty("--directory-center-top", `${bounds.top + bounds.height / 2}px`);
+      const timeline = container!.querySelector<HTMLElement>(".timeline-list");
+      if (timeline) {
+        const narrow = window.matchMedia("(max-width: 700px)").matches;
+        const configuredGutter = Number.parseFloat(getComputedStyle(container!).getPropertyValue("--session-gutter"));
+        const gutter = configuredGutter || (narrow ? 32 : 40);
+        const margin = narrow ? 4 - gutter : 8 - Math.max(gutter, (container!.clientWidth - 960) / 2);
+        root.current?.style.setProperty("--directory-center-left", `${timeline.getBoundingClientRect().left + margin}px`);
+      }
       const positions = items.flatMap(item => {
         const turn = document.getElementById(conversationTurnId(sessionId, item.id));
         return turn ? [{id: item.id, top: turn.getBoundingClientRect().top}] : [];
@@ -49,11 +60,12 @@ export function ConversationDirectory({sessionId, items, onJump, onLatest, onOpe
     const content = container.querySelector(".timeline-list");
     if(content)observer.observe(content);
     container.addEventListener("scroll",schedule);
-    return()=>{cancelAnimationFrame(frame);observer.disconnect();container.removeEventListener("scroll",schedule);};
+    window.addEventListener("resize",schedule);
+    return()=>{cancelAnimationFrame(frame);observer.disconnect();container.removeEventListener("scroll",schedule);window.removeEventListener("resize",schedule);};
   }, [sessionId, itemIds]);
   useLayoutEffect(() => {
     if (!open) return;
-    const container = root.current?.closest<HTMLElement>(".conversation");
+    const container = document.querySelector<HTMLElement>(".conversation");
     if (!container) return;
     function measure() {
       const bottom = container!.getBoundingClientRect().bottom;
@@ -85,7 +97,7 @@ export function ConversationDirectory({sessionId, items, onJump, onLatest, onOpe
     document.addEventListener("keydown", escape);
     return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape); };
   }, [open]);
-  return <div className="conversation-directory" ref={root} style={{"--directory-rail-height":`${railHeight}px`,"--directory-count":Math.max(1,items.length)} as CSSProperties}>
+  const content = <div className="conversation-directory" ref={root} style={{"--directory-rail-height":`${railHeight}px`,"--directory-count":Math.max(1,items.length)} as CSSProperties}>
     <button type="button" ref={trigger} className="conversation-directory-trigger" aria-label="会话目录" title="会话目录" aria-expanded={open} aria-controls={panelId} aria-haspopup="dialog" onClick={() => { if(!open)onOpen?.(); setOpen(!open); }}>
       <span className="conversation-directory-marks" aria-hidden="true">{items.map(item=><span key={item.id} data-directory-item={item.id} className={`conversation-directory-mark${selected===item.id?" is-current":""}`}/>)}</span>
     </button>
@@ -96,4 +108,6 @@ export function ConversationDirectory({sessionId, items, onJump, onLatest, onOpe
       <button type="button" className="conversation-directory-latest" onClick={() => {onLatest();close();}}>跳到最新</button>
     </div>}
   </div>;
+  // Server rendering (tests) has no document; render inline there.
+  return typeof document === "undefined" ? content : createPortal(content, document.body);
 }

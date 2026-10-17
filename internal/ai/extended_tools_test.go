@@ -169,6 +169,7 @@ func TestFilePagingSearchAndStaleRead(t *testing.T) {
 	}
 }
 func TestSkillPathIsolationAndImageObservation(t *testing.T) {
+	t.Setenv("LAKE_HOME", t.TempDir())
 	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "vision fixture", SupportsImageInput: true}, nil)
 	s, _ := e.get("case")
 	c := s.state.Config

@@ -122,6 +122,17 @@ func OpenStore(dir string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	s := &Store{db: db, q: db, subscribers: map[chan Object]bool{}, Dir: dir, lockFile: lockFile}
+	if s.row("SELECT name FROM sqlite_master WHERE type='table' AND name='projects'") != nil && s.row("SELECT name FROM sqlite_master WHERE type='table' AND name='sreTasks'") == nil {
+		backup := filepath.Join(dir, "lake-web.before-sre-"+ident()+".sqlite")
+		if _, e = db.Exec("VACUUM INTO ?", backup); e != nil {
+			db.Close()
+			return nil, e
+		}
+		if e = platform.Chmod(backup, 0600); e != nil {
+			db.Close()
+			return nil, e
+		}
+	}
 	if _, e = db.Exec(schema); e != nil {
 		db.Close()
 		return nil, e
@@ -825,6 +836,12 @@ func (s *Store) Finish(id, tid, eid, output string, code any, disconnected bool,
 	s.update(func() any {
 		t := s.terminal(id, tid)
 		s.exec("UPDATE terminalEntries SET output=?,exitCode=?,status=?,finishedAt=? WHERE id=? AND terminalId=?", output, code, map[bool]string{true: "completed", false: "unknown"}[code != nil], now(), eid, tid)
+		if code != nil {
+			entry := s.row("SELECT originSessionId FROM terminalEntries WHERE id=? AND terminalId=?", eid, tid)
+			if origin := stringOf(entry["originSessionId"]); origin != "" {
+				s.reconcileSRECommandsForSession(origin)
+			}
+		}
 		status, holder := "ready", t["holder"]
 		if disconnected {
 			status = "disconnected"

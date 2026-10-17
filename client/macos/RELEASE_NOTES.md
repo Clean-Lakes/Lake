@@ -1,9 +1,18 @@
-Lake 0.3.8：Magpie 模型接入与模型设置改进。支持 Apple Silicon（M 系列）arm64，macOS 13 及以上。
+Lake v0.3.16：SRE 专员协作实验功能与 macOS 更新体验改进。
 
-- Magpie 接入后，Lake 的模型设置和聊天输入区可搜索、选择 Magpie 提供的多个模型；Magpie Agent 页面仍用于设置默认模型。
-- 模型设置中展示 Magpie 标识和模型来源，并保留 Lake 内当前的 Magpie 模型选择。
-- 完善 Lake Dev 独立联调流程；正式版和 Dev 使用不同的应用、数据目录及凭据。本安装包为正式版 Lake.app，使用正式 bundle ID，不带 DEV 标识。
+- 新增实验性 SRE 协作模式：协调者、调查员、执行员和验证员使用独立子智能体，按任务需要并行工作，在对话中交流并更新真实执行状态。普通模式继续由 Lake 直接处理。
+- Plan 保留任务步骤、操作证据和验证结果；节点完成时给出简短小结，结束时统一总结，详细证据按需展开。
+- 改善跨轮资源范围继承、并行主机指纹确认、原命令超时后的状态跟踪和只读任务重新开始，避免重复执行已派发的命令。
+- 修复专员回复刷新与滚动抖动，完善执行动效、权限确认文案和思考级别选择器。
+- 修复 macOS 安装包下载进度：根据实际收到的字节更新，不再一直停在 0% 后直接跳到完成。兼容未返回 Content-Length 的下载，下载失败或取消不显示为完成。
+- 保留 v0.3.15 的 SSH 兼容性、连接诊断及模型流式回复结束修复。
 
-更新保留 ~/.lake 中的模型配置、会话、资源和凭据。重启时会关闭当前终端连接，不自动重放历史命令。
+## 下载与安装
 
-安装：下载 Apple Silicon DMG，将 Lake.app 拖入 Applications；也可解压 ZIP 到用户 Applications 目录。安装包使用持久 Lake Local Development Code Signing 证书签名，尚未使用 Apple Developer ID 公证。首次安装可能需要在 macOS 系统设置中允许打开；自动更新只接受使用同一证书签名的安装包。
+本次仅发布 macOS Apple Silicon（M 系列）arm64 包，要求 macOS 13+。提供 DMG、ZIP 和 SHA-256；将 Lake.app 安装到 Applications。
+
+下载进度修复在安装 v0.3.16 后生效；旧客户端首次下载本版本时仍使用旧版更新器。
+
+更新保留模型配置、会话、资源和凭据；重启会关闭当前终端连接，不自动重放历史命令。SRE 协作为实验功能，开启后沿用当前会话权限。
+
+安装包使用持久 Lake Local Development Code Signing 证书签名，尚未使用 Apple Developer ID 公证；自动更新只接受使用同一证书签名的安装包。

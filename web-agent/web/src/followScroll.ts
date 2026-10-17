@@ -11,6 +11,9 @@ export class FollowScroll {
     private frames: Frames = {request: callback => window.requestAnimationFrame(callback), cancel: id => window.cancelAnimationFrame(id)}, private reducedMotion = false) {}
   request() {
     if (!this.following() || this.frame !== null) return;
+    // Cursor/activity updates are not necessarily new content. Avoid starting
+    // an animation and writing scrollTop again when already at the tail.
+    if (Math.abs(Math.max(0, this.box.scrollHeight - this.box.clientHeight) - this.box.scrollTop) < 0.5) return;
     this.frame = this.frames.request(this.tick);
   }
   jump() {

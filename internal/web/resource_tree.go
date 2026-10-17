@@ -149,3 +149,12 @@ func (s *Store) EditResourceTree(project string, data Object) []Object {
 		return s.rows("SELECT * FROM resourceTree WHERE projectId=? ORDER BY position,id", project)
 	}).([]Object)
 }
+
+// fileResource places a freshly created resource under the given folder. A new
+// resource starts at the root level, so a folder only needs a move.
+func (b *Server) fileResource(project string, resource Object, parent string) {
+	if parent == "" {
+		return
+	}
+	b.Store.EditResourceTree(project, Object{"operation": "move", "nodeId": stringOf(resource["id"]), "parentId": parent})
+}

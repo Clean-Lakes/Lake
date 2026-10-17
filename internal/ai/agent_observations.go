@@ -16,11 +16,16 @@ func (e *Engine) observation(ctx context.Context, c Config, name string, a map[s
 	}
 	allowed := map[string]string{"host": "observe_host", "application": "observe_logs", "data": "observe_data", "verify": "read_evidence"}
 	clusterRole := w.role == "host" || w.role == "application" || w.role == "data"
-	if allowed[w.role] != name && !(clusterRole && name == "observe_cluster") && !((w.role == "application" || w.role == "data") && name == "observe_cluster_logs") && !((w.role == "host" || w.role == "application") && name == "observe_journal") {
+	sreRead := c.sre != nil && (c.sre.Role == SREInvestigator || c.sre.Role == SREVerifier) && sreProbeTools[name]
+	if !sreRead && !(c.sre != nil && (c.sre.FullTools || c.sre.Role == SREInvestigator) && name == "read_evidence") && allowed[w.role] != name && !(clusterRole && name == "observe_cluster") && !((w.role == "application" || w.role == "data") && name == "observe_cluster_logs") && !((w.role == "host" || w.role == "application") && name == "observe_journal") {
 		return nil, errors.New("此职责不能使用该观察工具")
 	}
 	if name == "read_evidence" {
-		value, ids, err := w.parent.readAgentEvidence(w.session, a)
+		ownRun := []string{}
+		if c.sre != nil && (c.sre.FullTools || c.sre.Role == SREInvestigator) {
+			ownRun = append(ownRun, w.runID)
+		}
+		value, ids, err := w.parent.readAgentEvidence(w.session, a, ownRun...)
 		if err != nil {
 			return nil, err
 		}
@@ -49,7 +54,22 @@ func (e *Engine) observation(ctx context.Context, c Config, name string, a map[s
 		return nil, err
 	}
 	w.mu.Lock()
-	readKey := as.ID + ":" + name + ":" + js(a)
+	readArgs := a
+	if name == "observe_host" && str(a["metric"]) != "disk_usage" {
+		// path is ignored by these fixed probes; varying it is not a new sample.
+		readArgs = map[string]any{"asset_ref": as.ID, "metric": a["metric"]}
+	}
+	readKey := as.ID + ":" + name + ":" + js(readArgs)
+	cacheRead := c.sre != nil && c.sre.Role == SREInvestigator
+	if cacheRead && w.sreObservations[readKey] != nil {
+		cached := map[string]any{}
+		for k, v := range obj(w.sreObservations[readKey]) {
+			cached[k] = v
+		}
+		cached["reused"] = true
+		w.mu.Unlock()
+		return cached, nil
+	}
 	w.reads[readKey]++
 	reads := w.reads[readKey]
 	w.mu.Unlock()
@@ -160,7 +180,16 @@ func (e *Engine) observation(ctx context.Context, c Config, name string, a map[s
 			err = errors.New("日志路径不存在、不是普通文件或指向符号链接；请使用实际日志路径，或改用 observe_journal / observe_cluster_logs，不要重复猜路径")
 		}
 	}
-	return e.recordObservation(c, as.ID, name, value, err)
+	result, recordErr := e.recordObservation(c, as.ID, name, value, err)
+	if cacheRead && recordErr == nil {
+		w.mu.Lock()
+		if w.sreObservations == nil {
+			w.sreObservations = map[string]any{}
+		}
+		w.sreObservations[readKey] = result
+		w.mu.Unlock()
+	}
+	return result, recordErr
 }
 
 func observeDatabase(ctx context.Context, c Config, as Asset, metric string) (any, error) {

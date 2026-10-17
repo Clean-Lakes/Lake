@@ -1,9 +1,8 @@
 # Lake Desktop（历史 Wails 客户端）
 
-当前 Go/React 原生 macOS 客户端与更新流程见 [client/macos](../macos/README.md)。此目录保留历史桥接实现；旧 Electron 构建脚本另存为 `scripts/build_lake_legacy_desktop.sh`。
+当前 Go/React 原生 macOS 客户端与更新流程见 [client/macos](../macos/README.md)。此目录仅保留历史 Wails 桥接实现和测试；以下说明记录旧版行为。ZCode 源码快照和旧 Electron 构建脚本已移除。
 
-Wails/React 客户端。请从仓库根目录运行 `scripts/build_lake_desktop.sh`。脚本会同时打包
-已签名的 Lake CLI，默认输出到 `~/Library/Application Support/Lake/builds/`，成功构建后只保留最新一个版本；需要安装到 `~/Applications/Lake.app` 时显式加 `--install`，原应用会备份。构建或安装失败时保留之前的构建。单独运行 `wails build` 的应用缺少这个必需的后端进程。
+`scripts/build_lake_desktop.sh --dev --install` 构建并安装当前的 Swift/WebKit Lake Dev 客户端，不再构建此目录或旧 Electron 客户端。本地开发流程见 [CONTRIBUTING.md](../../CONTRIBUTING.md)。
 
 侧栏按湖展示会话和资源。会话可新建、切换、重命名、归档和恢复；每轮消息保存在 `~/.lake/lake.db`，切回会话时恢复上下文。切换会话会关闭之前会话的 SSH 连接。
 输入框底部可在已登记的模型之间切换；切换会重新启动当前会话的 Lake Agent 进程并关闭当前保持的 SSH 会话，对话历史仍在。

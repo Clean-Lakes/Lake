@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"unicode"
@@ -16,6 +17,62 @@ func latestBatchBoundary(history []Message) int {
 		}
 	}
 	return 1
+}
+
+// Leave a quarter of the input allocation free, instead of fitting immediately
+// below the trigger again. Recent complete tool results remain verbatim.
+func fitOlderToolContext(history []Message, budget int) ([]Message, bool) {
+	if historyCost(history) <= budget {
+		return append([]Message(nil), history...), true
+	}
+	boundary := latestBatchBoundary(history)
+	if boundary <= 1 {
+		return nil, false
+	}
+	prefix, fits := fitToolContext(history[:boundary], budget-historyCost(history[boundary:]))
+	if !fits {
+		return nil, false
+	}
+	return append(prefix, history[boundary:]...), true
+}
+
+// A failed summary must never become task state. Automatic maintenance can
+// retain the exact conversation with explicitly clipped tool previews instead.
+// User messages and calls stay intact; this fallback executes no tools.
+func (e *Engine) recoverCompaction(ctx context.Context, s *session, history []Message, toolsCost, budget int) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	var projected []Message
+	fits := false
+	// Large immutable assignments and call arguments may not fit a 1/8 reserve.
+	// Keep at least 1/16 of the input budget free even in that case.
+	for _, reserve := range []int{8, 16} {
+		allocation := budget - budget/reserve - toolsCost
+		projected, fits = fitOlderToolContext(history, allocation)
+		if !fits {
+			projected, fits = fitToolContext(history, allocation)
+		}
+		if fits {
+			break
+		}
+	}
+	if !fits || historyCost(projected) >= historyCost(history) {
+		return false, nil
+	}
+	if err := validHistory(projected); err != nil {
+		return false, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	s.state.History = projected
+	s.state.LastRequest, s.state.LastRequestAt, s.state.ContextMeasurement = nil, "", nil
+	s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "compaction", Content: "模型摘要未完成，已改用工具输出预览继续；原始操作记录保留", Status: "completed", At: timestamp()})
+	e.notify(s, "compact", nil)
+	return true, e.save(s)
 }
 
 func utf8Prefix(value string, limit int) string {

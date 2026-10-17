@@ -1,3 +1,4 @@
+import type {MCPServerConfig,MCPToolCatalog,SkillConfig,SkillCatalog} from "../../shared/contracts";
 import {displayAiError} from "./aiErrors";
 import type { CommandPolicy } from "../../shared/command-policy";
 import type { WorkspaceTag } from "../../shared/contracts";
@@ -8,6 +9,7 @@ import type {
   AIView,
   AIPreset,
   AvailableModels,
+  AvailableModelEntry,
   Catalog,
   WorkflowCatalog,
   WorkflowInput,
@@ -80,12 +82,29 @@ export type Bootstrap = {
   modelConfigured: boolean;
   modelName: string | null;
   modelId?: string | null;
+  modelSelection?: AvailableModelEntry | null;
   terminalMode: "command" | "pty";
   supportsImageInput?: boolean;
   aiRuntime?: "go" | "legacy";
 };
 
 export const api = {
+	getSREEnabled:(project:string,signal?:AbortSignal)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{signal}),
+	setSREEnabled:(project:string,enabled:boolean)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{method:'PUT',body:JSON.stringify({enabled})}),
+	sreTask:(session:string,task:string)=>request<import('../../shared/contracts').SRETask>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}`),
+	sreTasks:(session:string,cursor='')=>request<{items:import('../../shared/contracts').SRETask[];nextCursor:string}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks?limit=20&cursor=${encodeURIComponent(cursor)}`),
+	sreEvents:(session:string,task:string,after=0)=>request<{items:Array<{id:number;type:string;createdAt:string;payload:Record<string,unknown>}>}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}/events?after=${after}`),
+	sreOperation:(session:string,task:string,operation:string,data:Record<string,unknown>)=>post<import('../../shared/contracts').SRETask>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}/${operation}`,data),
+	sreEvidence:(session:string,task:string,evidence:string,offset=0)=>request<{source:string;nextCursor:number|null;sourceTruncated:boolean;sourceBytes:number;collectedAt:string}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}/evidence/${encodeURIComponent(evidence)}?offset=${offset}`),
+	sreExport:(session:string,task:string)=>request<{name:string;content:string}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}/export`),
+  mcpServers:()=>request<{servers:MCPServerConfig[]}>("/api/settings/mcp"),
+  saveMCP:(value:Record<string,unknown>)=>request<MCPServerConfig>(`/api/settings/mcp${value.id?`/${encodeURIComponent(String(value.id))}`:""}`,{method:value.id?"PUT":"POST",body:JSON.stringify(value)}),
+  deleteMCP:(id:string)=>request(`/api/settings/mcp/${encodeURIComponent(id)}`,{method:"DELETE"}),
+  testMCP:(id:string)=>request<MCPToolCatalog>(`/api/settings/mcp/${encodeURIComponent(id)}/test`,{method:"POST",body:"{}"}),
+  skills:()=>request<SkillCatalog>("/api/settings/skills"),
+  skill:(name:string)=>request<{skill:SkillConfig;content:string}>(`/api/settings/skills/${encodeURIComponent(name)}`),
+  saveSkill:(name:string,value:{content?:string;enabled?:boolean;create?:boolean})=>request(`/api/settings/skills/${encodeURIComponent(name)}`,{method:"PUT",body:JSON.stringify(value)}),
+  skillRoot:(path:string,remove=false)=>request("/api/settings/skills/roots",{method:remove?"DELETE":"POST",body:JSON.stringify({path})}),
   createTag: (project:string,data:{name:string;color:string}) => post<WorkspaceTag>(`/api/projects/${encodeURIComponent(project)}/tags`,data),
   updateTag: (id:string,data:{name:string;color:string}) => request<WorkspaceTag>(`/api/tags/${encodeURIComponent(id)}`,{method:"PUT",body:JSON.stringify(data)}),
   deleteTag: (id:string) => request(`/api/tags/${encodeURIComponent(id)}`,{method:"DELETE"}),
@@ -101,6 +120,7 @@ export const api = {
   navigationTrash: () => request<{items:NavigationTrashItem[]}>("/api/navigation-trash"),
   deleteNavigation: (kind:"project" | "resource",id:string) => post<{items:NavigationTrashItem[]}>("/api/navigation-delete",{kind,id}),
   restoreNavigation: (kind:NavigationTrashItem["kind"],id:string) => post<{items:NavigationTrashItem[]}>("/api/navigation-trash",{kind,id}),
+  completeDraft: (session:string,text:string,modelId:string|undefined,signal:AbortSignal) => request<{suffix:string;modelId?:string}>(`/api/sessions/${encodeURIComponent(session)}/completion`,{method:"POST",body:JSON.stringify({text,modelId}),signal}),
   catalog: (signal?: AbortSignal) => request<Catalog>("/api/catalog", { signal }),
   modelCapacity: () => request<{modelId?: string; limit: number; source?: string}>("/api/settings/model/capacity"),
   providers: () => request<ProviderCatalog>("/api/settings/providers"),
@@ -135,10 +155,10 @@ export const api = {
   retryProjectMemoryJob: (projectId: string, jobId: string, expectedProjectRevision: number) => post<{jobId:string;status:string}>(`/api/projects/${encodeURIComponent(projectId)}/memory-jobs/${encodeURIComponent(jobId)}/retry`, {expectedProjectRevision}),
   editResourceTree: (project: string, data: {operation: "create" | "rename" | "move" | "delete"; nodeId?: string; parentId?: string | null; beforeId?: string | null; name?: string}) => post<{nodes: ResourceTreeNode[]}>(`/api/projects/${encodeURIComponent(project)}/resource-tree`, data),
   sshKeys: (directory = "~/.ssh") => post<SSHKeyDirectory>("/api/settings/ssh/keys", {directory}),
-  createSshResource: (projectId: string, name: string, ssh: SSHConnectionInput) =>
-    post<Resource>(`/api/projects/${encodeURIComponent(projectId)}/resources`, { kind: "ssh", name, ssh }),
+  createSshResource: (projectId: string, name: string, ssh: SSHConnectionInput, parentId?: string | null) =>
+    post<Resource>(`/api/projects/${encodeURIComponent(projectId)}/resources`, { kind: "ssh", name, ssh, ...(parentId ? { parentId } : {}) }),
   editTerminalResource: (id: string, data: {name: string; ssh?: SSHConnectionInput; settings?: {shell: string}}) => request<Resource>(`/api/resources/${encodeURIComponent(id)}`, {method: "PATCH", body: JSON.stringify(data)}),
-  createServiceResource: (projectId: string, name: string, kind: string, settings: object) => post<Resource>(`/api/projects/${encodeURIComponent(projectId)}/resources`, { name, kind, settings }),
+  createServiceResource: (projectId: string, name: string, kind: string, settings: object, parentId?: string | null) => post<Resource>(`/api/projects/${encodeURIComponent(projectId)}/resources`, { name, kind, settings, ...(parentId ? { parentId } : {}) }),
   previewResourceImport: (projectId: string, name: string, text: string) => post<ResourceImportPreview>(`/api/projects/${encodeURIComponent(projectId)}/resource-import-preview`, {name, text}),
   previewHexhubImport: (projectId: string) => post<ResourceImportPreview>(`/api/projects/${encodeURIComponent(projectId)}/resource-import-preview`, {hexhub: true}),
   importResources: (projectId: string, planId: string, indexes: number[]) => post<{createdCount: number; skippedCount: number; updatedCount: number}>(`/api/projects/${encodeURIComponent(projectId)}/resource-import`, {planId, indexes}),

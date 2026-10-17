@@ -14,9 +14,11 @@ export function contextLabel(value?: number): string {
   if (value >= 1_000_000) return `${+(value / 1_000_000).toFixed(2)}M`;
   return `${+(value / 1_000).toFixed(1)}K`;
 }
-export function discoveredModels(current: ProviderModel[], names: string[], capabilities: Record<string, boolean> = {}, reasoning: Record<string, ModelReasoningCapability> = {}): ProviderModel[] {
+export function discoveredModels(current: ProviderModel[], names: string[], capabilities: Record<string, boolean> = {}, reasoning: Record<string, ModelReasoningCapability> = {}, contextLimits: Record<string, number> = {}): ProviderModel[] {
   const seen = new Set(current.map(model => model.name));
+  const wanted = new Set(names);
   const result = current.map(model => {
+    if (!wanted.has(model.name)) return model;
     const detected = capabilities[model.name];
     const mode = model.imageInputMode || (model.supportsImageInput ? "on" : "auto");
     const next = typeof detected === "boolean" && mode === "auto" ? {...model, imageInputMode:"auto" as const, imageInputDetected:detected, supportsImageInput:detected} : model;
@@ -26,7 +28,9 @@ export function discoveredModels(current: ProviderModel[], names: string[], capa
     if (!name.trim() || seen.has(name)) continue;
     seen.add(name);
     const detected = capabilities[name];
-    result.push({id:crypto.randomUUID(), name, enabled:true, supportsImageInput:detected === true, supportsImageOutput:false, imageInputMode:"auto", ...(typeof detected === "boolean" ? {imageInputDetected:detected} : {}), ...(reasoning[name] ? {reasoningCapability:reasoning[name]} : {})});
+    const limit = contextLimits[name];
+    const contextWindow = limit && Number.isInteger(limit) && limit >= 2048 && limit <= 2_000_000 ? limit : 0;
+    result.push({id:crypto.randomUUID(), name, contextWindow, enabled:true, supportsImageInput:detected === true, supportsImageOutput:false, imageInputMode:"auto", ...(typeof detected === "boolean" ? {imageInputDetected:detected} : {}), ...(reasoning[name] ? {reasoningCapability:reasoning[name]} : {})});
   }
   return result;
 }

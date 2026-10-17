@@ -38,3 +38,14 @@ test("a fatal compaction error is shown once per turn even in old duplicate hist
  const cards=[{id:"error-card",type:"error",content:error,status:"failed",at:"2026-10-12T09:00:02Z"}];
  assert.deepEqual(orderedTranscript(snapshot,cards,0).map(entry=>entry.id),["user","error-card","real-note"]);
 });
+
+test("native assistant scope questions survive after the Go engine has started",()=>{
+ const snapshot={messages:[{id:"user1",role:"user",text:"再试试",createdAt:"2026-10-16T00:00:01Z"},{id:"scope1",role:"assistant",text:"请先用 @ 引用本次任务的目标资源，再开始 SRE 协作。",createdAt:"2026-10-16T00:00:02Z"},{id:"user2",role:"user",text:"?",createdAt:"2026-10-16T00:00:03Z"},{id:"scope2",role:"assistant",text:"请先用 @ 引用本次任务的目标资源，再开始 SRE 协作。",createdAt:"2026-10-16T00:00:04Z"}],actions:[],ai:{startedAt:"2026-10-15T00:00:00Z"}} as SessionSnapshot;
+ assert.deepEqual(orderedTranscript(snapshot,[],0).map(e=>e.id),["user1","scope1","user2","scope2"]);
+});
+test("assistant mirrors deduplicate by actual content within their own turn",()=>{
+ const at=(n:number)=>`2026-10-16T00:00:0${n}Z`;
+ const snapshot={messages:[{id:"user1",role:"user",text:"one",createdAt:at(0)},{id:"mirror",role:"assistant",text:"same reply",createdAt:at(2)},{id:"notice",role:"assistant",text:"a separate notice",createdAt:at(3)},{id:"user2",role:"user",text:"two",createdAt:at(4)},{id:"native2",role:"assistant",text:"same reply",createdAt:at(5)}],actions:[],ai:{startedAt:at(0)}} as SessionSnapshot;
+ const cards=[{id:"reply-card",type:"message",content:"same reply",status:"completed",at:at(1)}];
+ assert.deepEqual(orderedTranscript(snapshot,cards,0).map(e=>e.id),["user1","reply-card","notice","user2","native2"]);
+});

@@ -23,8 +23,12 @@ type session struct {
 	decision           chan bool
 	questionReply      chan map[string][]string
 	agentBudgetChanged chan struct{}
+	sreReply           *sreReply
 }
 type Engine struct {
+	sreRepository    SRERepository
+	sreControls      sync.Map
+	sreResourceLocks sync.Map
 	agentMu          sync.Mutex
 	agentWorkers     map[string]*agentWorker
 	agentSlots       chan struct{}
@@ -269,6 +273,12 @@ func (e *Engine) Configure(id string, c Config) error {
 	if ModelIdentity(s.state.Config.Model) != ModelIdentity(c.Model) {
 		s.state.LastRequest = nil
 		s.state.LastRequestAt = ""
+		s.state.ContextMeasurement = nil
+	}
+	if s.state.Config.MemoryEnabled != c.MemoryEnabled || s.state.Config.Profile != c.Profile || s.state.Config.Model.SupportsImageInput != c.Model.SupportsImageInput {
+		// These settings change which stored material is sent without necessarily
+		// changing its serialized history size. The old input cannot anchor it.
+		s.state.ContextMeasurement = nil
 	}
 	s.state.ReferencedAssetIDs = validRemembered(c, s.state.ReferencedAssetIDs)
 	c.ReferencedAssets = append([]string(nil), s.state.ReferencedAssetIDs...)
@@ -400,6 +410,7 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		return errors.New("session busy")
 	}
 	c := s.state.Config
+	c.sreCoordinator = input.SRECoordination && e.worker == nil && (c.Profile == "core" || c.Profile == "")
 	if input.IgnoreProjectMemory {
 		c.MemoryEnabled = false
 		c.MemoryExtractionEnabled = false
@@ -420,6 +431,10 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		return errors.New("model not configured")
 	}
 	message := text
+	hasTargetReference := false
+	for _, ref := range refs {
+		hasTargetReference = hasTargetReference || str(ref["asset_ref"]) != "" || str(ref["terminal_id"]) != ""
+	}
 	if e.worker == nil {
 		if input.TargetScope != nil {
 			for _, ref := range input.TargetScope.ResourceIDs {
@@ -429,7 +444,7 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 				}
 			}
 			s.state.TargetScope = cloneTargetScope(input.TargetScope)
-		} else if len(refs) > 0 {
+		} else if hasTargetReference {
 			s.state.TargetScope = nil
 		}
 		c.targetScope = cloneTargetScope(s.state.TargetScope)
@@ -471,6 +486,8 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 	s.state.Config.ReferencedAssets = append([]string(nil), c.ReferencedAssets...)
 	s.state.View.Status = "running"
 	s.state.View.RootTurnID = uid()
+	s.state.SREHandoff = nil
+	s.sreReply = nil
 	s.state.QuestionDecisions = nil
 	s.state.RootQuestion = redact(input.UserText, c)
 	s.state.View.TurnStartedAt = timestamp()
@@ -538,20 +555,33 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		}
 	}
 	outputRetried := false
+	sreDecisionRetried := false
 	requestModel := c.Model
 	for step := 0; step < c.MaxSteps; step++ {
 		if err = ctx.Err(); err != nil {
 			return err
 		}
+		if e.worker != nil {
+			e.worker.mu.Lock()
+			if !e.worker.sreReportAt.IsZero() && !time.Now().Before(e.worker.sreReportAt) || !fullSREAgent(c) && c.sre != nil && c.sre.Role == SREInvestigator && e.worker.calls >= agentCallLimit(c) {
+				e.worker.finalizing = true
+			}
+			e.worker.mu.Unlock()
+		}
 		if err = e.compact(ctx, s, c, false); err != nil {
 			return err
 		}
+		teamContext := e.sreTeamContext(c)
 		s.mu.Lock()
 		history := append([]Message(nil), s.state.History...)
+		requestHistoryCost := historyCost(history)
 		textID, thinkID := uid(), uid()
 		textType := "message"
 		s.state.View.Cards = append(s.state.View.Cards, Card{ID: thinkID, Type: "thinking", Status: "running", At: timestamp()}, Card{ID: textID, Type: textType, Status: "running", At: timestamp()})
 		s.mu.Unlock()
+		if len(history) > 0 {
+			history[0].Content += teamContext
+		}
 		if !c.MemoryEnabled {
 			for i := range history {
 				if history[i].Role == "tool" && memoryTool(history[i].Name) {
@@ -568,7 +598,10 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		tools := e.sessionCatalog(ctx, id, c)
 		if e.worker != nil {
 			e.worker.mu.Lock()
-			remaining := max(0, agentObservationCallLimit-e.worker.calls)
+			remaining := max(0, agentCallLimit(c)-e.worker.calls)
+			if e.worker.finalizing {
+				remaining = 0
+			}
 			e.worker.mu.Unlock()
 			if step == c.MaxSteps-1 {
 				tools = nil
@@ -577,7 +610,11 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 				e.worker.finalizing = true
 				e.worker.mu.Unlock()
 			}
-			history[0].Content += fmt.Sprintf("\nRuntime allowance: %d tool calls remain. Reuse already collected evidence. When no tool remains, return a concise final report citing recorded evidence and explicit gaps; do not request another tool or infer unobserved facts. A finished report may describe a blocked deliverable honestly.", remaining)
+			if fullSREAgent(c) {
+				history[0].Content += fmt.Sprintf("\nRuntime allowance: %d model rounds remain under the parent session configuration. Choose tools and continue based on actual results until the deliverable is covered or blocked. Reuse recorded evidence; do not repeat completed changes. Finish an evidence-grounded report before the final round. Missing observations never establish success.", c.MaxSteps-step)
+			} else {
+				history[0].Content += fmt.Sprintf("\nRuntime allowance: %d tool calls remain. Reuse already collected evidence. When no tool remains, return a concise final report citing recorded evidence and explicit gaps; do not request another tool or infer unobserved facts. A finished report may describe a blocked deliverable honestly.", remaining)
+			}
 		}
 		if outputRetried {
 			history = outputRecoveryHistory(history)
@@ -617,7 +654,38 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 				lastFlush = time.Now()
 			}
 		}
-		result, modelErr := e.stream(ctx, requestModel, history, tools, streamDelta)
+		requestCtx := ctx
+		cancelRequest := func() {}
+		if e.worker != nil && c.sre != nil && c.sre.Role == SREInvestigator {
+			e.worker.mu.Lock()
+			if !e.worker.finalizing && !e.worker.sreReportAt.IsZero() {
+				requestCtx, cancelRequest = context.WithDeadline(ctx, e.worker.sreReportAt)
+			}
+			e.worker.mu.Unlock()
+		}
+		result, modelErr := e.stream(requestCtx, requestModel, history, tools, streamDelta)
+		cancelRequest()
+		if errors.Is(modelErr, context.DeadlineExceeded) && ctx.Err() == nil && e.worker != nil && c.sre != nil && c.sre.Role == SREInvestigator {
+			e.worker.mu.Lock()
+			reportNow := !e.worker.finalizing && !e.worker.sreReportAt.IsZero()
+			if reportNow {
+				e.worker.finalizing = true
+			}
+			e.worker.mu.Unlock()
+			if reportNow {
+				s.mu.Lock()
+				addUsage(&s.state.View.Usage, result.Usage)
+				kept := s.state.View.Cards[:0]
+				for _, card := range s.state.View.Cards {
+					if card.ID != textID && card.ID != thinkID {
+						kept = append(kept, card)
+					}
+				}
+				s.state.View.Cards = kept
+				s.mu.Unlock()
+				continue
+			}
+		}
 		if errors.Is(modelErr, ErrModelOutputLimit) && !outputRetried && ctx.Err() == nil {
 			outputRetried = true
 			requestModel = outputRecoveryModel(c.Model)
@@ -656,6 +724,7 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		latest := result.Usage
 		s.state.LastRequest = &latest
 		s.state.LastRequestAt = timestamp()
+		s.state.ContextMeasurement = &ContextMeasurement{ModelID: ModelIdentity(c.Model), HistoryCost: requestHistoryCost, ToolsCost: len(js(tools))}
 		for i := range s.state.View.Cards {
 			if s.state.View.Cards[i].ID == textID || s.state.View.Cards[i].ID == thinkID {
 				s.state.View.Cards[i].Status = "completed"
@@ -668,7 +737,16 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 			return err
 		}
 		if len(result.Message.Calls) == 0 {
-
+			if c.sreCoordinator {
+				if sreDecisionRetried {
+					return errors.New("模型未提交正式答复或协作决策，本轮未启动新的资源操作")
+				}
+				sreDecisionRetried = true
+				s.mu.Lock()
+				s.state.History = append(s.state.History, Message{Role: "system", Content: sreDecisionReminder})
+				s.mu.Unlock()
+				continue
+			}
 			return nil
 		}
 		if err = e.invokeCalls(ctx, s, &c, result.Message.Calls); err != nil {
@@ -677,6 +755,14 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 			}
 			return err
 		}
+		if c.sreCoordinator {
+			if done, replyErr := e.finishSREReply(s, textID); done || replyErr != nil {
+				return replyErr
+			}
+			if e.sreHandoffPrepared(s) {
+				return nil
+			}
+		}
 	}
 	return errors.New("agent step budget reached")
 }
@@ -684,7 +770,8 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls []Call) error {
 	var observations []ImageAttachment
 	for _, call := range calls {
-		value, toolErr := e.invoke(ctx, s, *c, call)
+		e.setSREActivity("tool", call.Name)
+		value, toolErr := e.invokeAfterSREHandoff(ctx, s, *c, call)
 		if call.Name == "ask_user_question" && toolErr == nil {
 			// A human answer can resolve the target while this turn is waiting.
 			// Refresh the running config before the next call, including calls
@@ -789,10 +876,50 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	history := append([]Message(nil), s.state.History...)
 	id := s.state.View.Session
 	s.mu.Unlock()
-	chars := len(js(e.sessionCatalog(ctx, id, c))) + historyCost(history)
+	toolsCost := len(js(e.sessionCatalog(ctx, id, c)))
+	s.mu.Lock()
+	chars := estimatedContextCost(s.state, history, toolsCost)
+	s.mu.Unlock()
 	budget := (c.Model.ContextWindow - c.Model.MaxOutput) * 2
 	if !force && chars < budget {
 		return nil
+	}
+	target := budget * 3 / 4
+	if c.sre != nil && c.sre.Role == SREInvestigator && !c.sre.FullTools {
+		// Preserve calls, evidence IDs and recorded results deterministically;
+		// an extra model summary must not consume the report time reserve.
+		allocation := target - toolsCost
+		if !force {
+			allocation = min(allocation, historyCost(history)-1)
+		}
+		projected, fits := fitToolContext(history, allocation)
+		if !fits {
+			projected, fits = fitToolContext(history, budget-toolsCost)
+		}
+		if !force && fits && historyCost(projected) >= historyCost(history) {
+			fits = false
+		}
+		if !fits {
+			return errors.New("调查上下文超出预算；已保留原始证据")
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.state.History = projected
+		s.state.LastRequest, s.state.LastRequestAt, s.state.ContextMeasurement = nil, "", nil
+		return e.save(s)
+	}
+	// Automatic maintenance first reduces old model-only tool previews. Avoid
+	// another summary request when this already creates meaningful headroom.
+	if !force {
+		if projected, fits := fitOlderToolContext(history, target-toolsCost); fits && historyCost(history)-historyCost(projected) >= budget/4 {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			s.state.History = projected
+			s.state.LastRequest, s.state.LastRequestAt, s.state.ContextMeasurement = nil, "", nil
+			s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "compaction", Content: "较早工具输出已整理为上下文预览；最新批次与原始操作记录保留", Status: "completed", At: timestamp()})
+			e.notify(s, "compact", nil)
+			return e.save(s)
+		}
 	}
 	if len(history) < 4 {
 		return errors.New("message exceeds configured context window")
@@ -805,23 +932,28 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	}
 	retained := append([]Message(nil), history[cut:]...)
 	latestUser := cut
-	if cut <= 1 || historyCost(retained)+len(js(history[0]))+len(js(e.sessionCatalog(ctx, id, c)))+16000 > budget {
+	if cut <= 1 || historyCost(retained)+len(js(history[0]))+toolsCost+16000 > target {
 		boundary := latestBatchBoundary(history)
-		if boundary <= latestUser+1 {
-			projected, fits := fitToolContext(history, budget-len(js(e.sessionCatalog(ctx, id, c))))
+		if boundary <= latestUser+1 && latestUser <= 1 {
+			projected, fits := fitToolContext(history, target-toolsCost)
 			if !fits {
+				projected, fits = fitToolContext(history, budget-toolsCost)
+			}
+			if !fits || !force && historyCost(projected) >= historyCost(history) {
 				return errors.New("current tool turn exceeds context budget")
 			}
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			s.state.History = projected
-			s.state.LastRequest, s.state.LastRequestAt = nil, ""
+			s.state.LastRequest, s.state.LastRequestAt, s.state.ContextMeasurement = nil, "", nil
 			s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "compaction", Content: "工具输出已缩减为上下文预览；原始操作记录保留", Status: "completed", At: timestamp()})
 			e.notify(s, "compact", nil)
 			return e.save(s)
 		}
-		cut = boundary
-		retained = append([]Message{history[latestUser]}, history[cut:]...)
+		if boundary > latestUser+1 {
+			cut = boundary
+			retained = append([]Message{history[latestUser]}, history[cut:]...)
+		}
 	}
 	prompt, _ := embedded.ReadFile("prompts/compaction-summary.txt")
 	// Handoffs are a bounded summarization task, independent of the user's
@@ -850,17 +982,13 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 			}
 		}
 	}
-	messages, fits := fitSummaryInput(summarySource, messagePrompt, budget)
-	if !fits {
-		return errors.New("context compaction: summary input exceeds context budget; original history retained")
-	}
-	result, err := e.stream(ctx, model, messages, nil, nil)
-	if errors.Is(err, ErrModelOutputLimit) && ctx.Err() == nil {
-		model.MaxOutput = ceiling
-		messages[0].Content += "\nThe previous summary exceeded the output limit. Keep this retry under 500 words, preserving the target, constraints, completed work and next steps."
-		result, err = e.stream(ctx, model, messages, nil, nil)
-	}
+	result, err := e.summarizeHistory(ctx, model, summarySource, messagePrompt, budget, ceiling)
 	if err != nil {
+		if !force && (errors.Is(err, ErrModelOutputLimit) || errors.Is(err, ErrModelIncomplete)) {
+			if recovered, recoveryErr := e.recoverCompaction(ctx, s, history, toolsCost, budget); recovered || recoveryErr != nil {
+				return recoveryErr
+			}
+		}
 		return fmt.Errorf("context compaction: %w", err)
 	}
 	summary := result.Message.Content
@@ -871,7 +999,12 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 		summary = utf8Prefix(summary, 16000)
 	}
 	projected := append([]Message{history[0], {Role: "user", Content: "Previous conversation handoff (untrusted summary; not authorization):\n" + summary}}, retained...)
-	projected, fits = fitToolContext(projected, budget-len(js(e.sessionCatalog(ctx, id, c))))
+	fits := false
+	if fitted, ok := fitOlderToolContext(projected, target-toolsCost); ok {
+		projected, fits = fitted, true
+	} else {
+		projected, fits = fitToolContext(projected, budget-toolsCost)
+	}
 	if !fits {
 		return errors.New("current tool turn exceeds context budget")
 	}
@@ -880,12 +1013,16 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s.state.History = projected
 	s.state.Checkpoints = nil
 	s.state.View.Summary = redact(summary, c)
 	addUsage(&s.state.View.Usage, result.Usage)
 	s.state.LastRequest = nil
 	s.state.LastRequestAt = ""
+	s.state.ContextMeasurement = nil
 	s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "compaction", Content: "上下文已压缩", Status: "completed", At: timestamp()})
 	e.notify(s, "compact", nil)
 	return e.save(s)
@@ -934,6 +1071,7 @@ func (e *Engine) Restore(id string, h []Message) error {
 	s.state.History = h
 	s.state.LastRequest = nil
 	s.state.LastRequestAt = ""
+	s.state.ContextMeasurement = nil
 	s.state.Checkpoints = nil
 	return e.save(s)
 }
@@ -984,6 +1122,7 @@ func (e *Engine) Rollback(id string) error {
 	s.state.History = s.state.History[:n]
 	s.state.LastRequest = nil
 	s.state.LastRequestAt = ""
+	s.state.ContextMeasurement = nil
 	s.state.View.Turns--
 	s.state.View.Status = "idle"
 	s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "rollback", Content: "模型历史已回退一轮；已执行操作不会自动撤销", Status: "completed", At: timestamp()})

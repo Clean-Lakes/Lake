@@ -8,6 +8,6 @@ let package = Package(
         .target(name: "LakeUpdateCore"),
         .executableTarget(name: "LakeDesktop", dependencies: ["LakeUpdateCore"]),
         // Standalone assertions also run with Command Line Tools, which do not ship XCTest.
-        .executableTarget(name: "LakeUpdateTests", dependencies: ["LakeUpdateCore"], path: "Tests/LakeUpdateCoreTests")
+        .executableTarget(name: "LakeUpdateTests", dependencies: ["LakeUpdateCore"], path: "Tests/LakeUpdateCoreTests", exclude: ["download-server.py"])
     ]
 )

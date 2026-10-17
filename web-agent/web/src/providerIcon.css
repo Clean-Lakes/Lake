@@ -1,0 +1,7 @@
+.provider-brand-icon { display: block; flex-shrink: 0; object-fit: contain; }
+.provider-brand-fallback { flex-shrink: 0; color: var(--text-secondary); }
+[data-theme="dark"] .provider-brand-icon[data-monochrome="true"] { filter: brightness(0) invert(1); }
+.provider-detail-title { display: flex; align-items: center; gap: 11px; }
+.provider-detail-title > .provider-detail-icon { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-subtle); flex-shrink: 0; }
+.provider-detail-title > div { min-width: 0; }
+.provider-detail-title > div > span { display: block; font-size: 11px; color: var(--text-secondary); margin-top: 6px; }
