@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -58,6 +59,9 @@ func TestADKCrashApprovalHelper(t *testing.T) {
 	}
 }
 
+// Subprocess startup on Windows CI can include antivirus and private ACL setup.
+// Bound readiness separately from the crash/once assertions, and retain child
+// diagnostics so a startup failure cannot masquerade as a recovery failure.
 func TestADKApprovalSurvivesProcessCrashAndExecutesOnce(t *testing.T) {
 	home := t.TempDir()
 	target := filepath.Join(home, "effect.txt")
@@ -72,7 +76,9 @@ func TestADKApprovalSurvivesProcessCrashAndExecutesOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=25s")
+	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=60s")
+	var childOutput bytes.Buffer
+	child.Stdout, child.Stderr = &childOutput, &childOutput
 	child.Env = append(os.Environ(), "LAKE_ADK_CRASH_HELPER=1", "LAKE_ADK_CRASH_HOME="+home, "LAKE_ADK_CRASH_PROVIDER="+model.URL)
 	if err = child.Start(); err != nil {
 		t.Fatal(err)
@@ -85,7 +91,7 @@ func TestADKApprovalSurvivesProcessCrashAndExecutesOnce(t *testing.T) {
 		}
 	}()
 	var saved State
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		raw, err := os.ReadFile(filepath.Join(home, "case.json"))
 		if err == nil && json.Unmarshal(raw, &saved) == nil && saved.View.Pending != nil && saved.Runtime != nil {
@@ -97,8 +103,11 @@ func TestADKApprovalSurvivesProcessCrashAndExecutesOnce(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if saved.View.Pending == nil {
-		t.Fatal("child did not persist an approval")
+	if saved.View.Pending == nil || saved.Runtime == nil || len(saved.Runtime.PendingConfirmations) == 0 {
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		killed = true
+		t.Fatalf("child did not persist a complete approval checkpoint: %s", childOutput.String())
 	}
 	if _, err = os.Stat(target); !os.IsNotExist(err) {
 		t.Fatal("effect occurred before approval")
@@ -123,7 +132,7 @@ func TestADKApprovalSurvivesProcessCrashAndExecutesOnce(t *testing.T) {
 	if err = restarted.Decision("case", view.Pending.ID, true, view.Pending.Confirmation); err != nil {
 		t.Fatal(err)
 	}
-	deadline = time.Now().Add(10 * time.Second)
+	deadline = time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		view, _ = restarted.Snapshot("case")
 		if view.Status == "completed" || view.Status == "failed" {
@@ -161,7 +170,9 @@ func TestADKCrashAfterExternalEffectNeverReplaysUnknownOperation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=25s")
+	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=60s")
+	var childOutput bytes.Buffer
+	child.Stdout, child.Stderr = &childOutput, &childOutput
 	child.Env = append(os.Environ(), "LAKE_ADK_CRASH_HELPER=1", "LAKE_ADK_CRASH_SCENARIO=effect", "LAKE_ADK_CRASH_HOME="+home, "LAKE_ADK_CRASH_PROVIDER="+model.URL)
 	if err = child.Start(); err != nil {
 		t.Fatal(err)
@@ -174,7 +185,7 @@ func TestADKCrashAfterExternalEffectNeverReplaysUnknownOperation(t *testing.T) {
 		}
 	}()
 	dispatched := false
-	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); {
 		if _, err = os.Stat(filepath.Join(home, "effect-dispatched")); err == nil {
 			dispatched = true
 			break
@@ -182,7 +193,10 @@ func TestADKCrashAfterExternalEffectNeverReplaysUnknownOperation(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if !dispatched {
-		t.Fatal("external effect was never dispatched")
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		killed = true
+		t.Fatalf("external effect was never dispatched: %s", childOutput.String())
 	}
 	if err = child.Process.Kill(); err != nil {
 		t.Fatal(err)
@@ -241,7 +255,9 @@ func TestADKQuestionSurvivesProcessCrashWithoutReplayingTools(t *testing.T) {
 	})
 	defer close()
 	binary, _ := os.Executable()
-	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=25s")
+	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=60s")
+	var childOutput bytes.Buffer
+	child.Stdout, child.Stderr = &childOutput, &childOutput
 	child.Env = append(os.Environ(), "LAKE_ADK_CRASH_HELPER=1", "LAKE_ADK_CRASH_HOME="+home, "LAKE_ADK_CRASH_PROVIDER="+model.URL)
 	if err := child.Start(); err != nil {
 		t.Fatal(err)
@@ -249,7 +265,7 @@ func TestADKQuestionSurvivesProcessCrashWithoutReplayingTools(t *testing.T) {
 	defer func() { _ = child.Process.Kill(); _ = child.Wait() }()
 	var state State
 	ready := false
-	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); {
 		raw, _ := os.ReadFile(filepath.Join(home, "case.json"))
 		_ = json.Unmarshal(raw, &state)
 		if nativeQuestionReady(state.View.Question) && state.Runtime != nil {
@@ -259,7 +275,9 @@ func TestADKQuestionSurvivesProcessCrashWithoutReplayingTools(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if !ready {
-		t.Fatal("no durable official workflow question")
+		_ = child.Process.Kill()
+		_ = child.Wait()
+		t.Fatalf("no durable official workflow question: %s", childOutput.String())
 	}
 	_ = child.Process.Kill()
 	_ = child.Wait()
@@ -274,7 +292,7 @@ func TestADKQuestionSurvivesProcessCrashWithoutReplayingTools(t *testing.T) {
 	if err = e.ReplyQuestion("case", state.View.Question.ID, map[string][]string{"target": {"test only"}}); err != nil {
 		t.Fatal(err)
 	}
-	for deadline := time.Now().Add(5 * time.Second); ; {
+	for deadline := time.Now().Add(15 * time.Second); ; {
 		view, _ := e.Snapshot("case")
 		if view.Status == "completed" {
 			break
