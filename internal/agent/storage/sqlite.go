@@ -11,11 +11,12 @@ import (
 	"sync"
 
 	"github.com/Clean-Lakes/Lake/internal/platform"
-	"github.com/glebarez/sqlite"
 	"google.golang.org/adk/v2/session"
 	sessiondb "google.golang.org/adk/v2/session/database"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	_ "modernc.org/sqlite"
 )
 
 type Store struct {
@@ -43,13 +44,17 @@ func Open(path string) (*Store, error) {
 	if err = platform.Chmod(path, 0600); err != nil {
 		return nil, err
 	}
-	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	if err != nil {
-		return nil, fmt.Errorf("open private ADK database: %w", err)
-	}
-	raw, err := db.DB()
+	// Lake's Windows store already registers modernc's "sqlite" driver.
+	// Use the same pure-Go driver through GORM's public SQLite dialector;
+	// glebarez/go-sqlite would register that name a second time at process init.
+	raw, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
+	}
+	db, err := gorm.Open(sqlite.New(sqlite.Config{DriverName: "sqlite", Conn: raw}), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		raw.Close()
+		return nil, fmt.Errorf("open private ADK database: %w", err)
 	}
 	raw.SetMaxOpenConns(1)
 	fail := func(err error) (*Store, error) { raw.Close(); return nil, err }

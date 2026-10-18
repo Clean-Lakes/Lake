@@ -5,7 +5,6 @@ go 1.26.6
 require (
 	github.com/UserExistsError/conpty v0.1.4
 	github.com/creack/pty v1.1.24
-	github.com/glebarez/sqlite v1.11.0
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/golang/snappy v1.0.0
 	github.com/google/jsonschema-go v0.4.3
@@ -21,6 +20,7 @@ require (
 	golang.org/x/text v0.42.0
 	google.golang.org/adk/v2 v2.6.0
 	google.golang.org/genai v1.74.0
+	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.2
 	modernc.org/sqlite v1.46.1
 	mvdan.cc/sh/v3 v3.12.0
@@ -34,7 +34,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
-	github.com/glebarez/go-sqlite v1.21.2 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect

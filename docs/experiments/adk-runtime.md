@@ -16,7 +16,9 @@ ADK 2.6 Workflow AgentNode rewrites its user content, which discards a tool-conf
 
 ## Persistence and human decisions
 
-Web stores private SDK sessions at `<DataDir>/adk/sessions.sqlite`; standalone engines use `<Engine.Dir>/adk`. Official session state refers to versioned artifacts holding Lake's lossless provider-history projection, including provider-native reasoning blocks. Images are stored as artifacts, with references in SDK events. The local JSON history cache can be reconstructed from the migration index and the canonical SDK projection. Intentional clear, restore, rollback and compaction publish their new projection; they do not undo external effects.
+Web stores private SDK sessions at `<DataDir>/adk/sessions.sqlite`; standalone engines use `<Engine.Dir>/adk`. GORM uses its public SQLite dialector with Lake's existing `modernc.org/sqlite` driver. This prevents the duplicate `sqlite` driver registration that the initial glebarez adapter caused when the Windows Web store initialized.
+
+Official session state refers to versioned artifacts holding Lake's lossless provider-history projection, including provider-native reasoning blocks. Images are stored as artifacts, with references in SDK events. The local JSON history cache can be reconstructed from the migration index and the canonical SDK projection. Intentional clear, restore, rollback and compaction publish their new projection; they do not undo external effects.
 
 Tools request official RequestConfirmation. Durable bindings include the original call, argument/preview digests, policy and target fingerprints, terminal version, scope, plan/attempt identity and expiry. The client sends only the original ID and decision. Approval consumption and the dispatched operation row share a SQLite transaction. A failed pre-dispatch audit prevents execution. Requests that contain credentials are rejected before SDK persistence and resource execution.
 

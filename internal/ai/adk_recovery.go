@@ -176,6 +176,7 @@ func (e *Engine) executeRecoveredRole(ctx context.Context, id string, c Config, 
 			s.mu.Unlock()
 			return err
 		}
+		e.notify(s, "question", nil)
 	}
 	s.cancel = cancel
 	s.decisions = map[string]chan bool{}

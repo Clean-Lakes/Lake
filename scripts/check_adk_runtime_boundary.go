@@ -43,6 +43,9 @@ func main() {
 			}
 			for _, imp := range file.Imports {
 				value, _ := strconv.Unquote(imp.Path.Value)
+				if value == "github.com/glebarez/sqlite" || value == "github.com/glebarez/go-sqlite" {
+					report(imp, "duplicate modernc SQLite driver registration; use shared storage dialector")
+				}
 				if strings.HasPrefix(value, "google.golang.org/adk/v2/internal/") {
 					report(imp, "SDK private import")
 				}
