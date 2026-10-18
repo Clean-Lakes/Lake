@@ -32,7 +32,13 @@ func TestADKSRERoleCrashHelper(t *testing.T) {
 
 func TestADKSRERoleApprovalSurvivesProcessCrash(t *testing.T) { testADKRoleCrash(t, false) }
 func TestADKSRERoleQuestionSurvivesProcessCrash(t *testing.T) { testADKRoleCrash(t, true) }
-func testADKRoleCrash(t *testing.T, question bool) {
+func TestADKSRERoleQuestionRecoversBeforeBusinessWaitProjection(t *testing.T) {
+	testADKRoleCrash(t, true, true)
+}
+func TestADKSRERoleApprovalRecoversBeforeBusinessWaitProjection(t *testing.T) {
+	testADKRoleCrash(t, false, true)
+}
+func testADKRoleCrash(t *testing.T, question bool, projectionWindow ...bool) {
 	home := t.TempDir()
 	b, err := New(context.Background(), Options{Home: home, Token: "synthetic-test-auth-token"})
 	if err != nil {
@@ -110,6 +116,33 @@ func testADKRoleCrash(t *testing.T, question bool) {
 	}
 	_ = child.Process.Kill()
 	_ = child.Wait()
+	if len(projectionWindow) > 0 && projectionWindow[0] {
+		// Reproduce a crash after the role's durable wait/parent card but
+		// before the separate business store projects waiting_input/approval.
+		store, openErr := OpenStore(filepath.Join(home, "web-agent"))
+		if openErr != nil {
+			t.Fatal(openErr)
+		}
+		_, mutationErr := store.MutateSRETask(session, taskID, 0, "fixture_before_wait_projection", func(task *ai.SRETask) error {
+			task.Status = "active"
+			task.ActiveRun().Status = "running"
+			for i := range task.Attempts {
+				attempt := &task.Attempts[i]
+				if attempt.RoleRunID == pending.ID {
+					attempt.Status = "running"
+					for j := range attempt.Operations {
+						attempt.Operations[j].Status = "prepared"
+						attempt.Operations[j].ApprovalID = ""
+					}
+				}
+			}
+			return nil
+		})
+		_ = store.Close()
+		if mutationErr != nil {
+			t.Fatal(mutationErr)
+		}
+	}
 	recovered, err := New(context.Background(), Options{Home: home, Token: "synthetic-test-auth-token"})
 	if err != nil {
 		t.Fatal(err)

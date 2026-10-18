@@ -107,17 +107,74 @@ func (e *Engine) recoverAgentDecision(parentID, runID, approval string, accept b
 	if result.RowsAffected != 1 {
 		return errors.New("approval expired or already decided")
 	}
-	return e.queueRoleRecovery(parentID, run.SRETaskID)
+	return e.queueRoleRecovery(parentID, run.SRETaskID, runID)
 }
 
-func (e *Engine) queueRoleRecovery(parentID, taskID string) error {
+func (e *Engine) queueRoleRecovery(parentID, taskID, roleRunID string) error {
+	var role State
+	raw, err := os.ReadFile(filepath.Join(e.Dir, "children", parentID, roleRunID+".json"))
+	if err != nil || json.Unmarshal(raw, &role) != nil || role.Runtime == nil {
+		return errors.New("durable role wait unavailable")
+	}
 	key := parentID + ":" + taskID
 	if _, loaded := e.sreRecoveries.LoadOrStore(key, true); loaded {
 		return nil
 	}
-	_, err := e.sreRepository.MutateSRETask(parentID, taskID, 0, "recovery_requested", func(t *SRETask) error {
+	_, err = e.sreRepository.MutateSRETask(parentID, taskID, 0, "recovery_requested", func(t *SRETask) error {
 		if !SRETaskActive(t.Status) {
 			return errors.New("task already ended")
+		}
+		// The durable role wait can precede its SRE status projection. A crash
+		// in that window makes the business run look interrupted. Reconcile
+		// the original attempt instead of starting a replacement plan run.
+		run, plan := t.ActiveRun(), t.LatestPlan()
+		if run == nil || plan == nil || run.PlanRevisionID != plan.ID {
+			return errors.New("role wait belongs to an obsolete plan")
+		}
+		found := false
+		for i := range t.Attempts {
+			attempt := &t.Attempts[i]
+			if attempt.PlanRunID != run.ID || attempt.RoleRunID != roleRunID {
+				continue
+			}
+			identity := role.Runtime.Identity
+			if identity.TaskID != taskID || identity.PlanRunID != run.ID || identity.AttemptID != attempt.ID {
+				return errors.New("durable role identity differs from current attempt")
+			}
+			found = true
+			if nativeQuestionReady(role.View.Question) {
+				attempt.Status = "waiting_input"
+			}
+			for _, pending := range role.View.PendingApprovals {
+				matched := false
+				for j := range attempt.Operations {
+					op := &attempt.Operations[j]
+					if op.Call.ID != pending.Call.ID || op.Digest != hash(pending.Call.Name+pending.Call.Arguments) {
+						continue
+					}
+					switch op.Status {
+					case "prepared", "interrupted", "waiting_approval":
+						op.Status, op.ApprovalID = "waiting_approval", pending.ID
+						attempt.Status = "waiting_approval"
+						matched = true
+					default:
+						return errors.New("approval operation already dispatched or settled; inspect its outcome")
+					}
+				}
+				if !matched {
+					return errors.New("approval has no matching recorded operation")
+				}
+			}
+		}
+		if !found || !e.hasRecoverableRole(parentID, roleRunID) {
+			return errors.New("role wait outside current plan run")
+		}
+		switch run.Status {
+		case "interrupted", "paused", "running", "waiting_approval":
+			run.Status = "paused"
+			run.FinishedAt = ""
+		default:
+			return errors.New("role plan run already ended")
 		}
 		t.Status = "active"
 		t.Error = ""

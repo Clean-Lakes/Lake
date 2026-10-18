@@ -132,7 +132,8 @@ func prepareQuestionResponse(s *session, req *QuestionRequest, answers map[strin
 	}
 	s.state.History = append(s.state.History, replies...)
 	s.nativeResumeContent = content
-
+	s.state.View.Question = nil
+	s.questionReply = nil
 	return nil
 }
 
@@ -186,7 +187,7 @@ func (e *Engine) AgentQuestionReply(parentID, runID, requestID string, answers m
 	if err = child.save(s); err != nil {
 		return err
 	}
-	return e.queueRoleRecovery(parentID, run.SRETaskID)
+	return e.queueRoleRecovery(parentID, run.SRETaskID, runID)
 }
 
 // SRE's existing plan-review and manual-attestation UI routes resolve these
