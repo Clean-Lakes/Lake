@@ -70,11 +70,25 @@ func engineFor(t *testing.T, m Model, bridge Bridge) *Engine {
 }
 func waitApproval(t *testing.T, e *Engine) *Approval {
 	t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
+	// Durable SDK initialization can exceed three seconds on native Windows CI.
+	// Retain a bounded readiness wait and fail immediately on a terminal error.
+	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		v, _ := e.Snapshot("case")
+		v, err := e.Snapshot("case")
+		if err != nil {
+			t.Fatal("approval snapshot failed", err)
+		}
 		if v.Pending != nil {
 			return v.Pending
+		}
+		if v.Status == "failed" || v.Status == "cancelled" || v.Status == "completed" {
+			var reason string
+			for _, card := range v.Cards {
+				if card.Type == "error" {
+					reason = card.Content
+				}
+			}
+			t.Fatalf("turn ended before approval: status=%s error=%s", v.Status, reason)
 		}
 		time.Sleep(time.Millisecond)
 	}

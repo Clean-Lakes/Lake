@@ -8,9 +8,135 @@
   "goVersion": "1.26.6",
   "scope": "Local synthetic resources and providers; no production-resource claims",
   "remainingGates": [
-    "final source verification",
-    "Windows CI",
-    "final signed Dev build",
-    "locked desktop: narrow/dark visual checks"
-  ]
+    "latest native Windows CI result",
+    "latest full macOS CI result"
+  ],
+  "runtimeSourceCommit": "351e8a11715e06e2284c64682130453188044727",
+  "finalCISnapshot": "0f544ef29643e95cdf81e0adc353e181eb72c1e7",
+  "localVerification": {
+    "sourceDigest": "409eb4c1b92f63672f2f9de338c32c59047fb8e5f62a1105983c57f2e0fa5d8f",
+    "acceptanceCommit": "351e8a11715e06e2284c64682130453188044727",
+    "startedAt": "2026-10-18T05:23:54.405841+00:00",
+    "branch": "experiment/adk-runtime",
+    "sourceCommit": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+    "checks": [
+      {
+        "name": "modules",
+        "command": "go mod verify",
+        "exitCode": 0,
+        "seconds": 2.373,
+        "log": "/tmp/lake-adk-verified-modules.log",
+        "sha256": "b4537ed75f533f993f371954de47e42a793b8e5b0587577de7e27fb3e50696bd"
+      },
+      {
+        "name": "go",
+        "command": "go test ./... -count=1 -timeout=5m",
+        "exitCode": 0,
+        "seconds": 120.581,
+        "log": "/tmp/lake-adk-verified-go.log",
+        "sha256": "e59ae78ee0f744a859fe61b90db767e2a082c13a3c5ea7000bc1ae938d6bd30b"
+      },
+      {
+        "name": "race",
+        "command": "go test -race ./internal/agent/... ./internal/ai ./internal/web -count=1 -timeout=5m",
+        "exitCode": 0,
+        "seconds": 218.383,
+        "log": "/tmp/lake-adk-verified-race.log",
+        "sha256": "7a09caefd849f0bcd2b5d71794494737261f214feb522523b0872d3c5062749c"
+      },
+      {
+        "name": "vet",
+        "command": "go vet ./...",
+        "exitCode": 0,
+        "seconds": 1.008,
+        "log": "/tmp/lake-adk-verified-vet.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "frontend",
+        "command": "pnpm --dir web-agent test:frontend",
+        "exitCode": 0,
+        "seconds": 1.415,
+        "log": "/tmp/lake-adk-verified-frontend.log",
+        "sha256": "fd2d445f8142898bc533403df8bc9b6983b432cf8f0105cd74bc57862468fefb"
+      },
+      {
+        "name": "typescript",
+        "command": "pnpm --dir web-agent check",
+        "exitCode": 0,
+        "seconds": 2.22,
+        "log": "/tmp/lake-adk-verified-typescript.log",
+        "sha256": "3445ecd6e28d171ec6be2e078c8051ac42c07180c19af0f5cf639967ffd3db8c"
+      },
+      {
+        "name": "web-build",
+        "command": "pnpm --dir web-agent build:web",
+        "exitCode": 0,
+        "seconds": 3.547,
+        "log": "/tmp/lake-adk-verified-web-build.log",
+        "sha256": "40454efa102b1b39306f1182feecd35f6e6054f2934582c2db54681d058c1c55"
+      },
+      {
+        "name": "boundary",
+        "command": "python3 scripts/check_adk_runtime_boundary.py",
+        "exitCode": 0,
+        "seconds": 0.167,
+        "log": "/tmp/lake-adk-verified-boundary.log",
+        "sha256": "4425050f06c8b8e57c47bb4f078dc660e4ab508d62f7930c0dd85f9f92633884"
+      },
+      {
+        "name": "signed-cli",
+        "command": "scripts/build_lake.sh",
+        "exitCode": 0,
+        "seconds": 9.569,
+        "log": "/tmp/lake-adk-verified-signed-cli.log",
+        "sha256": "192ce9434993bb35b418476366ff006fe2e8a057c01161233e4a7006ef93c6bd"
+      },
+      {
+        "name": "signed-dev",
+        "command": "scripts/build_lake_desktop.sh --dev --install",
+        "exitCode": 0,
+        "seconds": 20.471,
+        "log": "/tmp/lake-adk-verified-signed-dev.log",
+        "sha256": "766bb18e46d6487cea215cbf5d5b6f623ef67887fec215b06e97db80308492a1"
+      },
+      {
+        "name": "swift",
+        "command": "swift run --package-path client/macos --build-system native LakeUpdateTests",
+        "exitCode": 0,
+        "seconds": 3.71,
+        "log": "/tmp/lake-adk-verified-swift.log",
+        "sha256": "97b990752120a4d1be446b2deb9e4f79ea598046276aa1cbe26a7c759ae1714e"
+      },
+      {
+        "name": "installer",
+        "command": "python3 scripts/test_lake_macos_installer.py",
+        "exitCode": 0,
+        "seconds": 11.592,
+        "log": "/tmp/lake-adk-verified-installer.log",
+        "sha256": "9c2d760f073786907a174a88ee0d8cbc1c208f96dc43a41943e20cb7684e66a7"
+      },
+      {
+        "name": "diff",
+        "command": "git diff --check",
+        "exitCode": 0,
+        "seconds": 0.02,
+        "log": "/tmp/lake-adk-verified-diff.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "completedAt": "2026-10-18T05:30:29.525367+00:00"
+  },
+  "testOnlyFollowup": {
+    "command": "go test -race -v ./internal/ai -run '^TestADK(ApprovalSurvivesProcessCrashAndExecutesOnce|CrashAfterExternalEffectNeverReplaysUnknownOperation|QuestionSurvivesProcessCrashWithoutReplayingTools)$' -count=3 -timeout=2m",
+    "exitCode": 0,
+    "cases": 9,
+    "log": "/tmp/lake-adk-subprocess-fixtures.log",
+    "sha256": "87c5fcbd7180a84cbc07476ee347f7f52f23e2ad8924719ba04df98004c21fd6",
+    "sourceCommit": "0f544ef29643e95cdf81e0adc353e181eb72c1e7",
+    "completedAt": "2026-10-18T05:31:55.681440+00:00"
+  },
+  "linuxCI": "https://github.com/Clean-Lakes/Lake/actions/runs/39100811080",
+  "macOSCI": "https://github.com/Clean-Lakes/Lake/actions/runs/39100811078",
+  "compatibleRollback": "passed; latest ledger retained, signed compatible prior backend on isolated copy, one append before/after"
 }

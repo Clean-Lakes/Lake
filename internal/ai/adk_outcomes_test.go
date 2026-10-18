@@ -20,6 +20,10 @@ func TestADKConcurrentApprovalExecutesActualAppendOnce(t *testing.T) {
 	})
 	defer close()
 	e := engineFor(t, m, nil)
+	// This test races approval decisions, not first-use schema/ACL setup.
+	if _, err := e.adkStore(); err != nil {
+		t.Fatal(err)
+	}
 	done := make(chan error, 1)
 	go func() { done <- e.Chat(context.Background(), "case", "append fixture", nil) }()
 	p := waitApproval(t, e)
