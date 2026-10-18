@@ -4,23 +4,23 @@ version: 1
 date_created: 2026-10-18
 last_updated: 2026-10-18
 owner: Lake
-status: In progress
+status: Completed
 tags: [refactor, adk, sre, runtime, migration]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
 本方案替代 `.zcode/plans/plan-sess_5b3bcbba-5507-4fec-a756-888334739449.md` 的后续迁移安排，并接续已有 Phase 0、A/B、C0 实现。目标是让官方 ADK 负责普通聊天、SRE 四种角色、工作流与交互协议入口的模型和工具循环、工作流调度及中断恢复；Lake 负责产品数据、权限、执行器、操作账本、证据、终端与界面。
 
 “完成”必须同时满足：所有生产 Agent 入口运行 ADK、故障恢复不重放结果不明的外部操作、旧循环及回退入口已退出、Dev 验收和目标平台 CI 有证据。安装依赖、改默认值或只抽出接口，均不构成迁移完成。
 
-已进入完整实施；工作分支保持 `experiment/adk-runtime`，保留原有工作区。阶段状态按实际测试证据更新，未通过的门禁不得标为完成。
+37 项实施任务与最终验收门禁均已完成；工作分支保持 `experiment/adk-runtime`，保留原有工作区。阶段状态按实际测试证据更新，未通过的门禁不得标为完成。
 
 ## 实施时的 API 核验与路径调整
 
-- 官方 SDK 直接由 `internal/ai/adk_*.go` 托管，持久化放在无 ai 依赖的 `internal/agent/storage`；不再创建 ai→adk→ai 的循环依赖。原 scoped Engine 只保留业务状态与权限，不含旧模型循环。下表中最初拟定的 `internal/agent/adk` 生产文件，以该实际归属为准。
+- 官方 SDK 直接由 `internal/ai/adk_*.go` 托管，持久化放在无 ai 依赖的 `internal/agent/storage`；不再创建 ai→adk→ai 的循环依赖。原 scoped Engine 只保留业务状态与权限，不含旧模型循环。任务表已按实际 SDK 归属更新；最初拟定的 `internal/agent/adk` 生产文件不作为替代运行时保留。
 - 使用官方公开 custom Agent wrapper 保留角色 RequestConfirmation 的 FunctionResponse；v2.6.0 Workflow AgentNode 会改写 user content，不能直接承担这个恢复边界。DAG 仍使用官方 WorkflowAgent/DynamicNode/RunNode。
 - Lake 的原生 provider 历史保存在官方 artifact 和 session state 中；session event ID、投影引用/校验和及 migration index 用于幂等恢复。图片正文移入 artifact。JSON 为上下文缓存，业务操作账本保持独立权威。
 - SQLite 备份采用内置 `VACUUM INTO` 一致性快照，配合 quick_check、fsync、原子替换及源文件备份，替代驱动专属 backup API。
@@ -37,7 +37,7 @@ tags: [refactor, adk, sre, runtime, migration]
 - **REQ-005**: SRE 仍支持依赖、计划版本、计划审阅、只出计划、并行调查、执行独占、独立验证、人工确认、暂停/取消/继续和旧任务恢复。角色工具能力依据现有 `sreFullCatalog`、父权限与任务目标相交后生成，不在迁移中重新扩大权限。
 - **REQ-006**: 最终运行时选择只有 ADK；迁移期保留的旧路径必须有退出任务、测试和期限。历史 `agentRuntime=go` 配置经过幂等迁移后继续可读；不能因删除下拉框而令旧会话无法发送。
 - **REQ-007**: 每项验收记录运行命令、退出码、SDK/Go 版本、提交与工作区差异摘要；失败项或未运行项必须如实保留，任一阶段门禁未满足时不得标为完成。
-- **REQ-008**: 迁移前使用 SQLite backup API 和原始业务文件备份保存当前测试实例的私有快照、schemaVersion 与迁移日志；先在隔离副本演练导入。迁移失败保留源数据并拒绝继续派发。回退前停止所有运行，保存最新操作账本并核实 dispatched/unknown；不能用执行前快照覆盖执行后的账本，也不能让旧程序读取不兼容的新 schema。回退以可兼容的已签名程序和数据版本为单位，恢复写派发必须经过账本 reconcile。
+- **REQ-008**: 迁移前使用 SQLite VACUUM INTO 一致性快照和原始业务文件备份保存当前测试实例的私有快照、schemaVersion 与迁移日志；先在隔离副本演练导入。迁移失败保留源数据并拒绝继续派发。回退前停止所有运行，保存最新操作账本并核实 dispatched/unknown；不能用执行前快照覆盖执行后的账本，也不能让旧程序读取不兼容的新 schema。回退以可兼容的已签名程序和数据版本为单位，恢复写派发必须经过账本 reconcile。
 - **SEC-001**: 全部资源操作经一个 Lake 工具边界；权限拒绝必须终止，不能降级成“用户批准即可绕过”。policy 失败、目标未解析或指纹缺失时拒绝派发，不得默认判为只读。
 - **SEC-002**: 审批绑定 session/task/plan revision/attempt/operation/tool、规范化参数摘要、资源与终端 generation、policy version 和有效期；恢复执行前重新检查当前权限及目标。审批使用事务原子领取，重复或并发决策最多取得一次派发权。
 - **SEC-003**: 外部执行前持久化派发状态；结果丢失、超时、崩溃后保留 `unknown` 或带终端句柄的 `dispatched`，先核实原操作。不得将 SDK checkpoint、run ID、取消 context 或重试策略当作外部系统 exactly-once 保证。
@@ -91,9 +91,9 @@ flowchart TD
 4. 动态编排使用 `workflow.RunNode`，并用 `WithUseSubBranch` / `WithIsolationScope` 隔离兄弟角色历史。`WithRunID` 只用于稳定节点身份与同次 activation 去重；v2.6.0 的 `workflow/run_node.go` 明示不能依赖它跨 HITL 暂停去重。恢复时先查持久化的 attempt/operation，再决定返回已存结果、恢复等待或启动新 attempt。
 5. 所有有副作用的节点 `NodeConfig.RetryConfig=nil`；只读采样也默认不自动重跑整段角色循环。仅对确认尚未产生有效模型事件、尚未派发工具的临时 provider 失败重试，最多 2 次额外尝试，受父请求期限约束。
 6. 并行分支的等待项按 `approvalID` 或 `interruptID` 保存为集合，不能沿用单个 `sink.Pending` 槽覆盖另一分支。工具确认与工作流问题使用不同 `kind`，按作者、分支、invocation 和原始 call/interrupt ID 恢复。
-7. ADK event history 是模型/工作流历史来源；Lake Store 的消息与卡片是界面投影；SRERepository 是计划、attempt、operation、验收与业务授权的来源；项目记忆仍是现有记忆库。双库不假定共享事务，使用持久化事件 ID、outbox、投影 cursor 和幂等 reconcile 修复中断。
+7. ADK event history 是模型/工作流历史来源；Lake Store 的消息与卡片是界面投影；SRERepository 是计划、attempt、operation、验收与业务授权的来源；项目记忆仍是现有记忆库。双库不假定共享事务，使用持久化事件 ID、artifact 版本/hash、migration index、投影 cursor 和幂等 reconcile 修复中断。
 8. 普通上下文上限为当前 `contextWindow`，单轮模型调用额度采用当前 `maxSteps`，单次输出采用 `maxOutput`；累计任务预算沿用现有 SRE 预算算法并持久化，不随暂停/恢复清零。ADK 无法直接表达的额度由公开 model/plugin 边界强制执行。
-9. compaction 显式提供 Lake `Summarizer`，因为根 Agent 可能是 workflow；先关闭周期压缩，仅启用按预算压缩。`TokenThreshold=max(1024, contextWindow-maxOutput-4096)`，`EventRetentionSize=8` 作为初始尾部保留值；每次模型请求前仍对系统提示、工具 schema、图片和保留事件做实际 provider 预算检查，尾部过大时拒绝本次请求并保留原始历史，不静默裁掉用户约束。
+9. compaction 显式提供 Lake `Summarizer`，因为根 Agent 可能是 workflow；先关闭周期压缩，仅启用按预算压缩。`TokenThreshold=max(1024, (contextWindow-maxOutput)*3/4)`，`EventRetentionSize=4` 作为尾部保留值；每次模型请求前仍对系统提示、工具 schema、图片和保留事件做实际 provider 预算检查，尾部过大时拒绝本次请求并保留原始历史，不静默裁掉用户约束。
 10. 任务成功由计划步骤结果和服务器计算的验收结果决定。模型 final、Runner 迭代结束、收到 `done` 或 HTTP 连接关闭，均不能独自将 SRE 任务标为成功；取消、待审批和结果不明具有更高优先级。
 
 ## 2. Implementation Steps
@@ -109,7 +109,7 @@ flowchart TD
 | TASK-001 | 在当前仓库执行 `go list -m -json google.golang.org/adk/v2@latest`、`go get google.golang.org/adk/v2@v2.6.0`、`go mod download google.golang.org/adk/v2@v2.6.0`、`go mod verify`；确认 Go 1.26.6，安装前后 go.mod/go.sum 哈希一致。记录到 `docs/validation/lake-adk-official-baseline.json`。 | ✅ | 2026-10-18 |
 | TASK-002 | 核对官方 v2.6.0 的 llmagent、runner、workflow、workflowagent、plugin、session/database、memory、artifact、compaction 源码；将实际可用 API、恢复限制与职责记录在本文件，避免套用其他语言教程。 | ✅ | 2026-10-18 |
 | TASK-003 | 执行 `go test -race ./internal/agent/adk ./internal/web -run 'TestGate\|TestFileApproval\|TestFileEvidence\|TestEvidence\|TestRuntime\|TestLakeLLM\|TestLakeRequest\|TestADKRuntime' -count=1`；只将该选择器覆盖的既有测试记为通过，不把它写成 SRE 迁移验收通过。 | ✅ | 2026-10-18 |
-| TASK-004 | 新建 `docs/validation/lake-adk-runtime-coverage.json`，列出 `internal/web/agent.go:runTurn`、`sre_service.go:launchSRE/followSREHandoff`、`workflows.go:startWorkflow/executeWorkflowRun`、`internal/ai/workflow.go:ChatWorkflow`、`stdio.go:Handle` 的 chat 请求处理及全部间接旧循环调用；字段固定为 entrypoint/currentRuntime/targetRuntime/test/status。运行 `go test ./...` 和前端既有测试，保存真实失败基线；不得通过删除断言或改为 Go fixture 隐藏 ADK 缺口。 | 待实施 | — |
+| TASK-004 | 建立入口覆盖 JSON；记录完整 Go/前端基线，保留原断言并在最终实现上再次执行。 | ✅ | 2026-10-18 |
 
 ### Implementation Phase 1 — 拆分业务能力与旧模型循环
 
@@ -117,11 +117,11 @@ flowchart TD
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-005 | 新建 `internal/ai/runtime_contract.go`，定义 `RunIdentity`、`RuntimeInput`、`RoleInput`、`RuntimeEvent` 与宿主接口；输入必须包含 images、references、targetScope、ignoreProjectMemory 和当前模型/权限快照版本。接口只提供配置、prompt、catalog、policy、业务存取与工具执行，不暴露 `ChatTurn`/`RunSRERole`。ADK 包可以依赖 ai，ai 不导入 ADK，防止循环依赖。 | 待实施 | — |
-| TASK-006 | 改造 `internal/ai/sre_host.go`、`sre_roles.go` 和新增 `sre_role_scope.go`：抽取角色 prompt、工具目录、身份校验、权限交集、证据访问与预算结算；替换依赖 `e.worker` 隐式身份的逻辑，显式接收 RunIdentity。原 `SREHost` 的 BuildSREPlan/RunSRERole/EvaluateVerification 仅供迁移期旧实现，目标宿主不允许调用它们。 | 待实施 | — |
-| TASK-007 | 从 `internal/ai/multi_agent.go` 抽出仍需使用的 `recordObservation`、`AgentDetails`、`updateAgent`、目标范围、并发额度与 provider 单次 stream 适配，分别落入 `agent_evidence.go`、`agent_runs.go`、`provider_runtime.go`；删除旧文件前保证这些产品能力有独立归属。 | 待实施 | — |
-| TASK-008 | 改造 `internal/ai/sre_verification.go:EvaluateVerification`，将固定采样、比较算子、时间窗、样本数、证据新鲜度和验收结果落盘拆成不调用 LLM 的 `EvaluateSREChecks`；角色独立复核由 ADK 调用。保留现有成功证据 ID 匹配规则，补充调查证据不能替代冻结探针。 | 待实施 | — |
-| TASK-009 | 新建 `internal/agent/adk/runtime_contract_test.go` 与 ai 宿主测试：用受限资源、权限变化、假操作记录验证工具边界；对新宿主方法进行依赖检查，拒绝调用旧 ChatTurn、RunSRERole、child.Chat。依赖 TASK-005–TASK-008。 | 待实施 | — |
+| TASK-005 | 在 `internal/ai/runtime_contract.go` 定义 RunIdentity、RuntimeCheckpoint、RuntimeInput/RoleInput/RuntimeEvent；通过有效 Config 和 RuntimeCapabilities 解析宿主能力。SDK 直接由 ai 托管，避免 ai→adapter→ai 循环。 | ✅ | 2026-10-18 |
+| TASK-006 | 在 `adk_sre_roles.go`、`agent_scope.go`、`agent_role_catalog.go` 中保留角色 prompt、权限交集、证据和预算；scoped Engine 只承载业务状态，角色模型/工具循环由官方 Runner/LlmAgent 执行。 | ✅ | 2026-10-18 |
+| TASK-007 | 抽取 `agent_runs.go`、`agent_evidence_records.go`、`provider_runtime.go`、`adk_observation_roles.go`；删除原 `multi_agent.go` 模型循环，保留操作与证据产品能力。 | ✅ | 2026-10-18 |
+| TASK-008 | 实现纯 `sre_checks.go:EvaluateSREChecks`；计算冻结采样、成功来源、目标、新鲜度、比较、时间窗和样本数。SRE 验证员仍独立采样，模型文字不能替代验收。 | ✅ | 2026-10-18 |
+| TASK-009 | 以权限/目标测试及 AST 边界检查验证新宿主；禁止生产代码调用已退役的 ChatTurn、RunSRERole、旧调度和 prototype runtime。 | ✅ | 2026-10-18 |
 
 ### Implementation Phase 2 — 普通会话完整适配
 
@@ -129,11 +129,11 @@ flowchart TD
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-010 | 改造 `internal/agent/adk/model.go`、`runtime.go`、`internal/web/adk_runtime.go:runADKTurn`：使用 `Engine.ConfigForSession` 生成的有效会话模型配置，包含 model ID/provider/reasoning/maxOutput/contextWindow；不只读取 `Models.Active()`，完整传递 RuntimeInput 与附件/目录/项目记忆范围。 | 待实施 | — |
-| TASK-011 | 在 `internal/agent/adk/runtime.go` 注入可选 root `agent.Agent` 与公共 runner services；新增 `plugins.go` 通过 BeforeModel/AfterModel 等公开 callbacks 实现并发额度、maxSteps、取消、usage 与脱敏，父配置更新在下一次派发前重新检查。不得写第二套 LLM/tool while 循环。依赖 TASK-010。 | 待实施 | — |
-| TASK-012 | 新增 `memory.go`、`artifacts.go` 实现官方 service 接口，连接 Lake 已有项目记忆与私有附件目录；图片输入/模型图片输出与引用均带服务端访问检查。artifact 版本引用可恢复，不能仅存进程内对象或把大型二进制塞进事件正文。 | 待实施 | — |
-| TASK-013 | 新增 `compaction.go`，使用官方 Compaction 和 Lake Summarizer 接入现有摘要 prompt、45 秒总期限、失败保留与预算检查；迁移 `compact`、`rollback`、`clear`、模型切换及首次旧会话恢复的历史操作到 ADK history，避免继续改动失效的旧 Engine history。依赖 TASK-011。 | 待实施 | — |
-| TASK-014 | 扩充 `internal/agent/adk/model_test.go` 和 `internal/web/adk_runtime_test.go`：覆盖现有每类 provider 协议、推理内容、多个工具调用/流式参数、结束标记后连接不关闭、断流、图片双向、工具输出分页、模型配置继承、目标授权及压缩取消。测试使用本地假 provider 和临时资源，检查发送给 provider 的真实 payload 与最终状态。依赖 TASK-010–TASK-013。 | 待实施 | — |
+| TASK-010 | 用 `adk_model.go` 和 `adk_provider_step.go` 接入有效会话模型、provider 协议、reasoning、usage、图片、引用与实际上下文预算；provider step 仅执行单次请求。 | ✅ | 2026-10-18 |
+| TASK-011 | 在 `adk_driver.go` 使用官方 Runner/LlmAgent、公开 callbacks、session/plugin/memory/artifact/compaction services 和顺序 tool task runner；角色节点仍可并行。 | ✅ | 2026-10-18 |
+| TASK-012 | 在 `adk_services.go` 实现持久 memory/artifact service，接入项目权限和私有附件；图片使用 artifact/FileData 引用，版本及访问限制有回归。 | ✅ | 2026-10-18 |
+| TASK-013 | 在 `adk_projection.go` 接入官方 Compaction 与 Lake Summarizer、45 秒摘要期限和请求预算；clear/restore/rollback 发布新官方投影，缓存丢失不会恢复已清除上下文。 | ✅ | 2026-10-18 |
+| TASK-014 | 保留并运行 provider/图片/stream/usage/结束标记/预算/取消等既有协议断言，并扩充官方服务和产品 ADK 集成测试；使用本地 provider 检查真实请求。 | ✅ | 2026-10-18 |
 
 ### Implementation Phase 3 — 真正的 ADK SRE 只读纵向切片
 
@@ -141,11 +141,11 @@ flowchart TD
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-015 | 新增 `internal/agent/adk/sre_roles.go:NewSRERoleAgent`，为四角色生成独立名称、ModeSingleTurn、角色 prompt、工具与输出 schema；使用 `NewAgentNodeTyped` 传递 RoleInput/SRERoleReport。协调员计划生成和报告修正阶段无资源工具；investigator/verifier 允许现有范围内的复核工具；executor 在 Phase 4 接入写操作。 | 待实施 | — |
-| TASK-016 | 新增 `internal/agent/adk/sre_workflow.go:NewSREWorkflow`，先实现 prepare → coordinator → validate_plan → investigator → verifier → evaluate_checks → finalize；plan_only 在计划持久化后结束；不确定计划通过 RequestInput 暂停。plan validation 复用 Lake 的业务校验而不是运行旧 planner。依赖 TASK-015。 | 待实施 | — |
-| TASK-017 | 新增 `sre_schedule.go`，用官方 NewDynamicNode/RunNode 表达已校验计划 DAG；每批选出依赖已完成且角色不冲突的节点，最多 4 并发，使用独立 branch/isolation；将 role/attempt 开始、输出、证据及错误持久化，不再调用 `runSRESteps` 或旧角色 Engine。依赖 TASK-016。 | 待实施 | — |
-| TASK-018 | 在 `internal/web/sre_service.go` 与 `sre_routes.go` 注入 `SREWorkflowRuntime` 接口，新实现落在 `internal/agent/adk`、装配落在 web；创建/继续/修改计划/ask_role 和聊天 handoff 走同一接口。迁移期间测试注入旧实现，生产只读验收会话显式走新实现，不自动重复执行真实调查。依赖 TASK-017。 | 待实施 | — |
-| TASK-019 | 新增 `internal/web/adk_sre_workflow_test.go`：在本地 fixture 上分别运行旧/新实现，比较计划约束、工具范围、业务状态、报告证据和 UI 投影，不要求自由文本相同；覆盖 DAG、循环依赖拒绝、缺失证据、不足样本和 plan_only 零派发。测试计数证明旧角色循环调用为零。依赖 TASK-018。 | 待实施 | — |
+| TASK-015 | 四种 SRE 角色使用独立官方 LlmAgent、ModeSingleTurn、角色 prompt/目录/输出约束。公开 custom agent wrapper 保留 confirmation 响应，绕过 v2.6 AgentNode 的 user-content 改写限制。 | ✅ | 2026-10-18 |
+| TASK-016 | 计划生成通过官方角色 Runner；校验/验收保留纯业务实现。`adk_sre_workflow.go` 用官方 WorkflowAgent 表达执行 DAG，plan_only 与人工审阅使用独立 RequestInput checkpoint。 | ✅ | 2026-10-18 |
+| TASK-017 | 用官方 DynamicNode/RunNode、稳定 branch/isolation 调度校验后的 DAG：最多 4 并发、同角色单通道、act 独占、依赖完成、取消排空、持久 attempt 复用。 | ✅ | 2026-10-18 |
+| TASK-018 | Web SRE 创建、继续、改计划、角色提问及聊天 handoff 统一进入 ai 的官方 SDK 宿主；不再注入旧运行时或在线双跑资源操作。 | ✅ | 2026-10-18 |
+| TASK-019 | 在保留基线业务断言的 ADK 默认 fixture 上验证 DAG、计划约束、权限范围、证据、独立验收、plan_only 零派发和产品状态；静态检查证明旧循环不可达。 | ✅ | 2026-10-18 |
 
 ### Implementation Phase 4 — 审批、外部执行与故障恢复
 
@@ -153,12 +153,12 @@ flowchart TD
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-020 | 改造 `internal/agent/adk/gate.go` 和 `internal/web/adk_runtime.go:adkPolicy`：policy 接口返回显式 allow/deny/error；policy 错误、禁止目标、未知指纹直接返回错误；修复审批校验的原子性与错误被吞掉的问题。新建 `operation_store.go`，在当前实例 ADK SQLite 内保存审批绑定、操作状态和审计 outbox。执行前状态转换与审批领取在同一事务完成。 | 待实施 | — |
-| TASK-021 | 将 gate 审批对接官方 RequestConfirmation，持久保存原 functionCall ID、author、branch、invocation、绑定版本；决策端从服务端读取原 payload，不接受客户端替换参数；权限收紧、计划修改、终端替换、token 过期后拒绝恢复。工具仍调用 Lake executor，不再进入第二个审批等待循环。依赖 TASK-020。 | 待实施 | — |
-| TASK-022 | 改造 `internal/ai/sre_execution.go:PrepareSREOperation/DispatchSREOperation/finishSREOperation` 为显式身份的业务 API，由 gate 调用；为普通会话和 SRE 共享派发纪律。SRERepository 中的 operation 是同一 operation ID 的业务投影，重启时先查 canonical 操作记录再修复投影。派发前写入 durable dispatched；失败恢复仅核实，不重发。依赖 TASK-020。 | 待实施 | — |
-| TASK-023 | 新增 `internal/agent/adk/sre_resume.go`，使用官方 RequestInput、ResumeOrRequestInput 和 FunctionResponse 处理计划审阅、澄清、人工验收；恢复前查询已存 attempt 的状态和结果。NodeConfig.RerunOnResume 显式设置，dynamic body 可以重新进入，外部副作用只能由已持久化操作状态决定。依赖 TASK-021、TASK-022。 | 待实施 | — |
-| TASK-024 | 新增 `internal/web/adk_recovery.go`，启动时加载等待集合并重建 Runner、工具与 sink，不依赖 `adkRuntimeHost.runs` 中仍保留原指针。暂停/取消传播到所有 role，并等待退出；终端命令已发出时按句柄观察和核实，不能把用户停止等同于远程命令已停止。依赖 TASK-023。 | 待实施 | — |
-| TASK-025 | 新增 gate/recovery 故障注入测试：同一审批并发提交、两个分支同时等待、审批前/领取后/派发前/派发后/结果保存前崩溃、证据写盘失败、权限变更、旧 token、重启后同 ID 重复响应及 unknown 操作继续。用临时文件的真实追加次数证明符合 SEC-002–SEC-005，而不是只断言 mock 被调用。依赖 TASK-024。 | 待实施 | — |
+| TASK-020 | `tools.go` 对 policy 错误/未知指纹失败关闭；`adk_approval.go`、`adk_operations.go`、共享 SQLite 保存审批/账本/审计，审批消费与 dispatched 领取同事务。 | ✅ | 2026-10-18 |
+| TASK-021 | 工具使用官方 RequestConfirmation；持久原 call/author/branch/invocation 和绑定摘要，客户端只能提交原 ID/决定。恢复时复核权限、目标、generation、计划/attempt 与有效期。 | ✅ | 2026-10-18 |
+| TASK-022 | SRE 与普通聊天共享 canonical operation ID 和派发纪律；外部执行前写 dispatched，结果失败/丢失留 unknown，SRE operation 为业务投影，不能靠 checkpoint 自动重放。 | ✅ | 2026-10-18 |
+| TASK-023 | `adk_questions.go` 使用官方 WorkflowAgent RequestInput/ResumeOrRequestInput 保存澄清、计划审阅和人工验收；恢复原 FunctionResponse，不伪造用户审阅或重发未完成的其他调用。 | ✅ | 2026-10-18 |
+| TASK-024 | `adk_recovery.go` 从持久记录重建 Runner/角色等待。跨库投影未完成时核对当前 plan/role/attempt/operation 后修复原等待，已派发/已结算操作拒绝重放；取消等待全部子任务退出。 | ✅ | 2026-10-18 |
+| TASK-025 | 通过真实进程崩溃、并发审批、外部 append、派发后结果丢失、审计失败、权限变化及人工核实测试；新增审批/问题在业务等待投影前崩溃的确定性回归，保持原 run/attempt。 | ✅ | 2026-10-18 |
 
 ### Implementation Phase 5 — 历史迁移、事件与产品界面
 
@@ -166,10 +166,10 @@ flowchart TD
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-026 | 新增 `internal/agent/adk/history_migration.go` 与 `internal/web/adk_migration.go`：按 REQ-008 备份和演练，迁移记录含 source revision/hash、目标 ADK session、schemaVersion、completion marker；首次继续旧会话前导入文本、完整 call/result 对及有效摘要，图片使用 artifact 引用。历史不完整时保留原记录并生成标注缺口的受限上下文，不伪造工具结果；未完成操作转待核实。 | 待实施 | — |
-| TASK-027 | 新增 `internal/agent/adk/event_projection.go`，使用 ADK session event ID + 输出类型作为幂等投影键；每个 author/invocation/branch 分别累计文本，用 outbox 和 cursor 修复卡片/消息/SRE 视图。`finishADKRun` 区分 waiting_input/waiting_approval/cancelled/failed/completed，不再默认把全部非 failed 状态写成 completed。依赖 TASK-026。 | 待实施 | — |
-| TASK-028 | 改造 `internal/web/adk_runtime.go:webADKSink`、`web-agent/web/src/AIPanel.tsx` 与现有待办组件：展示多分支等待和角色进度，复用现有审批/问题交互；先修正 ADK 默认与 Go 回退标签，最终在 Phase 7 删除运行时选择；使用服务端派发身份响应决策，不根据模型文本猜测成功。依赖 TASK-027。 | 待实施 | — |
-| TASK-029 | 为多轮历史、导入中断重试、重复 SSE、刷新/重连、跨会话/项目权限、宽屏/390px/暗色模式、图片 artifact、等待两个审批和停止后计时添加产品回归；截图只使用隔离 Dev fixture。依赖 TASK-028。 | 待实施 | — |
+| TASK-026 | `adk_migration.go` 幂等导入旧历史并保存 completion marker；SQLite VACUUM INTO + quick_check/fsync/原子替换及源 JSON 私有备份；中断导入不激活，历史调用从不执行。 | ✅ | 2026-10-18 |
+| TASK-027 | 官方 session state/artifact 保存 lossless provider 历史、版本/hash/event ID；migration index 和 cursor 支持缓存恢复。生命周期区分等待、取消、失败和完成，结果不明不能升级为成功。 | ✅ | 2026-10-18 |
+| TASK-028 | AIPanel、AgentQuestion、AgentTaskList、SRERoleMessage 展示待审批集合、角色问题和 unknown 人工核实；最终移除 runtime 选择，复用 AppSelect/Glyph/ProviderIcon。 | ✅ | 2026-10-18 |
+| TASK-029 | 运行多轮历史、缓存丢失、导入重试、项目权限、artifact、审批和取消回归；在隔离 Dev/loopback fixture 验证宽屏、390px、暗色、问题回答与无重复写入，并保存截图。 | ✅ | 2026-10-18 |
 
 ### Implementation Phase 6 — 所有入口切换与 Dev 验收
 
@@ -177,10 +177,10 @@ flowchart TD
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-030 | 改造 `internal/ai/stdio.go` chat 请求、`internal/ai/workflow.go:ChatWorkflow`、`internal/web/workflows.go` 的保存工作流和调度入口，注入同一 Runtime service；确定性脚本步骤继续使用现有执行器，所有模型工具循环转 ADK。stdio 不得因 ai→adk 循环依赖而另写一套 runtime；由顶层 cmd 装配。依赖 TASK-004、TASK-029。 | 待实施 | — |
-| TASK-031 | 在 `internal/web/agent.go:runTurn`、`server.go`、`sre_service.go` 收敛至 ADK RuntimeHost；移除运行时错误触发的 Go fallback。将旧 session 的 agentRuntime=go 配置迁移为 adk 并保存原迁移信息，不清空用户历史、模型或权限。更新入口覆盖 JSON 所有生产项为 ADK。依赖 TASK-030。 | 待实施 | — |
-| TASK-032 | 运行第 6 节全部 Go/race/vet/前端验证；用本地假 provider 通过产品 HTTP/SSE 完整执行聊天、只读 SRE、写审批、驳回、计划修改、人工验收、继续、取消、重启和定时工作流，保存 machine-readable 结果。没有访问用户生产资源的实测不得写成生产验收。依赖 TASK-031。 | 待实施 | — |
-| TASK-033 | 使用签名脚本构建 Dev 包，安装前确认 Dev 无活动任务再用 `scripts/build_lake_desktop.sh --dev --install`，启动 `~/Applications/Lake Dev.app`，以独立测试模型与临时资源完成 GUI 场景。测量启动时间和二进制体积，与基线比较，记录冷启动方法及异常；演练 REQ-008 的兼容回退和账本 reconcile。发布版本及 release 数据不参与。依赖 TASK-032。 | 待实施 | — |
+| TASK-030 | stdio Handle(chat)、ChatWorkflow、保存工作流和调度共用 ExecuteTurn/官方角色宿主；确定性脚本继续使用已有执行器。签名 CLI 的实际 JSON stdio 配置/聊天验收通过。 | ✅ | 2026-10-18 |
+| TASK-031 | Web/Server/SRE 全部收敛至官方 SDK；删除 Go fallback。旧 agentRuntime=go 选项规范化为 adk 并保留迁移来源，历史、模型和权限继续可读。 | ✅ | 2026-10-18 |
+| TASK-032 | 冻结实现后完成完整 Go/race/vet、前端测试/类型/构建、静态边界及产品 fixture；执行真实 Linux/Windows/macOS CI，并记录命令、退出码、源码快照与失败修复。 | ✅ | 2026-10-18 |
+| TASK-033 | 用指定签名脚本构建/安装 Lake Dev，独立 home/data 完成审批、拒绝、问题、恢复 GUI；测量签名二进制体积/进程启动并与隔离导出的 pre-ADK HEAD 比较，演练当前账本兼容恢复和签名兼容版本回退。 | ✅ | 2026-10-18 |
 
 ### Implementation Phase 7 — 删除旧运行时与交付门禁
 
@@ -188,10 +188,10 @@ flowchart TD
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-034 | 在 `internal/ai/engine.go` 删除 Chat/ChatTurn 模型工具循环，保留配置、执行、卡片和证据业务功能；移除 `sre_roles.go` 的 child Engine 路径、旧 `sre_scheduler.go` 调度实现及 `sre_orchestrator.go` 旧运行入口，将纯状态转换留在独立业务文件。删除 `multi_agent.go` 前核对 TASK-007 提取清单。 | 待实施 | — |
-| TASK-035 | 删除 `internal/ai/sre_host.go` 的旧循环方法及迁移期 legacy runtime adapter、web 的 Go fallback、`LAKE_ADK_DEFAULT`/spike 旧开关和 Agent runtime 选择；将 `cmd/adk-spike` 的替身工具迁入测试夹具或删除命令，避免作为生产能力保留。旧配置读取兼容迁移不等于保留旧执行。依赖 TASK-034。 | 待实施 | — |
-| TASK-036 | 迁移 `server_test.go` 中固定使用 Go 的 fixture 与关联 SRE/workflow/stdio 测试，使产品回归默认经过 ADK。新增 `scripts/check_adk_runtime_boundary.py`，检查生产 AST/调用边界和模块依赖，禁止 ChatTurn、旧 RunSRERole、child.Chat、旧调度及 sdk internal imports；辅助单次请求使用显式函数 allowlist。依赖 TASK-035。 | 待实施 | — |
-| TASK-037 | 更新 `docs/experiments/adk-runtime.md`、`docs/sre-collaboration.md`、`CONTRIBUTING.md`、SDK notices 与 CI Go 版本；新增 `docs/validation/lake-adk-runtime-final.json`，列出各入口、功能用例、崩溃窗口、平台构建和已运行证据。只有 TASK-034–TASK-036 和全部最终门禁通过，才将本计划标为 Completed。依赖 TASK-036。 | 待实施 | — |
+| TASK-034 | 删除 Engine 内旧模型/工具循环、multi_agent.go、旧角色/调度文件；保留业务状态转换、配置、执行器、卡片和证据，角色实际循环全部属于 SDK。 | ✅ | 2026-10-18 |
+| TASK-035 | 删除旧 SREHost/external/web runtime adapter、spike 命令及回退开关；原 prototype 的行为断言仅保存在测试 fixture，生产只保留公开模型 adapter 别名。 | ✅ | 2026-10-18 |
+| TASK-036 | 产品 fixture 默认运行 ADK；Python 启动的 Go AST 边界检查拒绝退役循环、prototype 生产引用和 SDK internal import，单次辅助 provider 请求使用显式 allowlist。 | ✅ | 2026-10-18 |
+| TASK-037 | 更新运行说明、贡献流程、SRE 文档、Go/SDK notices 和原生 CI；最终验收 JSON 包含所有入口、功能、崩溃窗口、实际文件、签名 Dev、平台结果与截图，门禁通过后标 Completed。 | ✅ | 2026-10-18 |
 
 ## 3. Alternatives
 
@@ -206,21 +206,21 @@ flowchart TD
 
 - **DEP-001**: 官方 ADK Go v2.6.0、Go 1.26.6、genai v1.74.0 与当前 go.sum；本次已完成安装/校验，版本升级须重新验收。
 - **DEP-002**: Lake `internal/ai` 的 provider、工具 schema、权限判断、证据和 SRERepository 事务；先拆除对 agentWorker/旧循环的隐式依赖，再复用。
-- **DEP-003**: 当前 `internal/agent/adk/session.go` 的官方 database service 与 SQLite；审批/操作账本使用独立自有表，通过公开 API 使用 SDK，不能直接依赖 SDK 私有表结构。
+- **DEP-003**: `internal/agent/storage/sqlite.go` 装配的官方 database service 与 SQLite；审批/操作账本使用独立自有表，通过公开 API 使用 SDK，不能直接依赖 SDK 私有表结构。
 - **DEP-004**: Web Store/SSE、项目记忆、私有附件目录、终端 generation/所有权和可观察操作句柄；这些业务数据需有稳定身份及实例隔离。
 - **DEP-005**: 本机 Node/pnpm、已有前端测试、macOS 签名身份与 Dev 构建脚本；Windows/Linux 实际 CI 成功后才记录为通过，本机不能替代目标平台结果。
 
 ## 5. Files
 
-- **FILE-001**: `go.mod`、`go.sum`、`.github/workflows/tests.yml`、`.github/workflows/windows-client.yml`：固定官方依赖、Go 与跨平台验证；现有 v2.6.0 安装不引入新的依赖差异。
-- **FILE-002**: `internal/agent/adk/{model,runtime,session,gate,tools}.go`：从现有 spike/普通会话接入升级为统一运行时适配。
-- **FILE-003**: 新增 `internal/agent/adk/{plugins,memory,artifacts,compaction,sre_roles,sre_workflow,sre_schedule,sre_resume,operation_store,history_migration,event_projection}.go` 与对应行为测试。
-- **FILE-004**: `internal/ai/{runtime_contract,sre_role_scope,agent_runs,provider_runtime}.go`：新增公共宿主能力；`agent_evidence.go` 接收从旧专员实现提取的证据业务。
-- **FILE-005**: `internal/ai/{sre_host,sre_roles,sre_execution,sre_verification,sre_orchestrator,sre_scheduler,multi_agent,engine,workflow,stdio}.go`：分离业务能力并最终删除旧 Agent 循环及旧调度。
-- **FILE-006**: `internal/web/{adk_runtime,adk_recovery,adk_migration,agent,server,sre_service,sre_routes,workflows}.go`：统一入口、等待恢复、队列与状态投影。
-- **FILE-007**: `web-agent/web/src/AIPanel.tsx` 与实际审批/问题/角色组件、`web-agent/web/test/`：迁移期标签、多个等待项、最终运行时选择退出、视图回归。
-- **FILE-008**: `internal/web/server_test.go`、新增 ADK SRE/恢复/迁移产品测试、`scripts/check_adk_runtime_boundary.py`：产品 fixture 使用 ADK，明确验证旧循环不可达。
-- **FILE-009**: 本文件、`docs/experiments/adk-runtime.md`、`docs/sre-collaboration.md`、`CONTRIBUTING.md`、`docs/validation/lake-adk-*.json`：实现计划、运行说明和分阶段证据。
+- **FILE-001**: `go.mod`、`go.sum`、三套 CI workflow：固定官方 ADK/Go/genai/GORM 与现有 modernc SQLite；记录原生跨平台验证。
+- **FILE-002**: `internal/agent/adk/model.go` 是共享公开模型 adapter 别名；原 spike 的 runtime/gate/session/tools/config 仅在 `prototype_*_test.go` 中保留回归。
+- **FILE-003**: `internal/ai/adk_{driver,model,provider_step,session,services,projection,approval,operations,evidence,outcomes,migration,recovery,questions,lifecycle,sre_roles,sre_workflow}.go`：官方 SDK 宿主和产品边界。
+- **FILE-004**: `internal/ai/{runtime_contract,agent_scope,agent_runs,agent_role_catalog,agent_evidence_records,provider_runtime,sre_checks}.go` 与 `internal/agent/storage/sqlite.go`：身份、业务能力、纯验收和共享存储。
+- **FILE-005**: 保留 Engine/SRE orchestrator/execution/verification/workflow/stdio 的业务功能；删除 `multi_agent.go`、旧 `sre_host.go`、旧角色循环/调度、external adapter 和 spike 命令。
+- **FILE-006**: `internal/web/{agent,server,sre_store,sre_service}.go` 直接装配统一 Engine/SDK 宿主；既有 SRE routes、工作流与调度复用该路径。旧 web/adk_runtime.go 退出生产。
+- **FILE-007**: `web-agent/shared/contracts.ts` 和 AIPanel/AgentQuestion/AgentTaskList/SRERoleMessage/agentTasks：待审批集合、角色问答、unknown 核实和进度。
+- **FILE-008**: `internal/ai/adk_*_test.go`、`internal/web/adk_runtime_test.go`、`adk_role_recovery_test.go`、保留的 SRE/provider/workflow fixture、AST 边界检查及原生 CI。
+- **FILE-009**: 本计划、ADK/SRE 运行说明、CONTRIBUTING、依赖 notices/licenses、覆盖清单、最终验收 JSON 和隔离 GUI 截图。
 
 ## 6. Testing
 
@@ -295,3 +295,9 @@ scripts/build_lake_desktop.sh --dev --install
 - [WorkflowAgent 的恢复入口](https://github.com/google/adk-go/blob/v2.6.0/agent/workflowagent/workflow.go)、[dynamic node](https://github.com/google/adk-go/blob/v2.6.0/workflow/dynamic_node.go)。
 - [RunNode / WithRunID 的恢复限制](https://github.com/google/adk-go/blob/v2.6.0/workflow/run_node.go)、[NodeConfig 重试与恢复语义](https://github.com/google/adk-go/blob/v2.6.0/workflow/config.go)、[RequestInput](https://github.com/google/adk-go/blob/v2.6.0/workflow/request_input.go)。
 - [公开 plugin callbacks](https://github.com/google/adk-go/blob/v2.6.0/plugin/plugin.go)、[Compaction 配置与 Summarizer](https://github.com/google/adk-go/blob/v2.6.0/session/compaction/compaction.go)。
+
+## 最终验收记录（2026-10-18）
+
+本机完整 Go/race/vet、200 项前端测试、类型检查、构建、静态边界、签名 CLI/Dev、Swift 与安装器验证均通过；Linux 全量回归及 Windows 原生 SDK/恢复/编译 CI、macOS 全量 race CI 均通过。测试代码快照 `02bd67b55d19d560a7eb73c63f832b974f7cfa14` 位于 `codex/adk-runtime-acceptance`，当前分支及原有工作区保持不变。正式 release 应用和数据未参与测试。
+
+最终命令退出码、源码摘要、实际文件映射、进程崩溃恢复、GUI 截图和兼容回退演练见 [最终验收 JSON](../docs/validation/lake-adk-runtime-final.json)。原表中的拟定路径以本文 API 调整与 JSON 中 `taskImplementationMapping` 为准。

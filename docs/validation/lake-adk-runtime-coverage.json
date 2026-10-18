@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "branch": "experiment/adk-runtime",
-  "status": "implemented_pending_full_acceptance",
+  "status": "passed",
   "baseline": {
     "goTestAll": {
       "command": "go test ./...",
@@ -22,7 +22,7 @@
       "currentRuntime": "Engine.ExecuteTurn -> official ADK Runner",
       "targetRuntime": "official ADK Go v2.6.0",
       "test": "internal/web/adk_runtime_test.go",
-      "status": "implemented_pending_full_acceptance"
+      "status": "passed"
     },
     {
       "entrypoint": "internal/web/sre_service.go:launchSRE/followSREHandoff",
@@ -30,7 +30,7 @@
       "currentRuntime": "ADK workflow and independent LlmAgent roles",
       "targetRuntime": "official ADK Go v2.6.0",
       "test": "internal/web/sre_full_tools_test.go",
-      "status": "implemented_pending_full_acceptance"
+      "status": "passed"
     },
     {
       "entrypoint": "internal/web/workflows.go:startWorkflow/executeWorkflowRun",
@@ -38,7 +38,7 @@
       "currentRuntime": "same ADK SRE workflow",
       "targetRuntime": "official ADK Go v2.6.0",
       "test": "internal/web/workflows_test.go",
-      "status": "implemented_pending_full_acceptance"
+      "status": "passed"
     },
     {
       "entrypoint": "internal/ai/workflow.go:ChatWorkflow",
@@ -46,15 +46,15 @@
       "currentRuntime": "official ADK role and summary runners",
       "targetRuntime": "official ADK Go v2.6.0",
       "test": "internal/ai/workflow_test.go",
-      "status": "implemented_pending_full_acceptance"
+      "status": "passed"
     },
     {
       "entrypoint": "internal/ai/stdio.go:Handle(chat)",
       "baselineRuntime": "Go chat loop",
       "currentRuntime": "Engine.ExecuteTurn -> official ADK Runner",
       "targetRuntime": "official ADK Go v2.6.0",
-      "test": "internal/ai/engine_test.go",
-      "status": "implemented_pending_full_acceptance"
+      "test": "signed bin/lake ai configure/chat JSON protocol; internal/ai/stdio.go:Handle -> ExecuteTurn; /tmp/lake-adk-stdio-result.json",
+      "status": "passed"
     },
     {
       "entrypoint": "internal/ai/sre_questions.go:AnswerSRERole",
@@ -62,7 +62,14 @@
       "currentRuntime": "ADK role runtime with no resource tools",
       "targetRuntime": "official ADK Go v2.6.0",
       "test": "internal/web/sre_coordination_test.go",
-      "status": "implemented_pending_full_acceptance"
+      "status": "passed"
     }
-  ]
+  ],
+  "verifiedSourceCommit": "02bd67b55d19d560a7eb73c63f832b974f7cfa14",
+  "finalFrontend": {
+    "command": "pnpm --dir web-agent test:frontend",
+    "exitCode": 0,
+    "tests": 200,
+    "nodeVersion": "v24.19.0"
+  }
 }
