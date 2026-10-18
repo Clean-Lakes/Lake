@@ -4,6 +4,11 @@ import "context"
 
 // A role mention routes a question. It is never authority to execute an action.
 func (e *Engine) AnswerSRERole(ctx context.Context, sessionID, taskID string, role SREAgentRole, message string) (err error) {
+	done, admissionErr := e.admitRuntime()
+	if admissionErr != nil {
+		return admissionErr
+	}
+	defer done()
 	if !ValidSRERole(role) {
 		return sreError(400, "未知专员")
 	}

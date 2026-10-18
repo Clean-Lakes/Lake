@@ -93,7 +93,6 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 			if s.state.Runtime != nil {
 				s.state.Runtime.Identity.InvocationID = tc.InvocationID()
 				s.state.Runtime.Identity.Branch = tc.Branch()
-				s.state.Runtime.Identity.IsolationScope = tc.IsolationScope()
 			}
 			s.mu.Unlock()
 			call := Call{ID: tc.FunctionCallID(), Name: entry.Name, Arguments: js(arguments)}

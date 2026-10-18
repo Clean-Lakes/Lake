@@ -938,6 +938,9 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 		}
 	}
 	result, err := e.summarizeHistory(ctx, model, summarySource, messagePrompt, budget, ceiling)
+	if ctx.Err() != nil {
+		return fmt.Errorf("context compaction: %w", ctx.Err())
+	}
 	if err != nil {
 		if !force && (errors.Is(err, ErrModelOutputLimit) || errors.Is(err, ErrModelIncomplete)) {
 			if recovered, recoveryErr := e.recoverCompaction(ctx, s, history, toolCost, budget); recovered || recoveryErr != nil {
@@ -1199,6 +1202,11 @@ func (e *Engine) Shutdown() {
 }
 
 func (e *Engine) Compact(ctx context.Context, id string) error {
+	done, admissionErr := e.admitRuntime()
+	if admissionErr != nil {
+		return admissionErr
+	}
+	defer done()
 	s, err := e.get(id)
 	if err != nil {
 		return err

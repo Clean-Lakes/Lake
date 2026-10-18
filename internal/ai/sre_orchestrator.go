@@ -10,6 +10,11 @@ import (
 // StartSRETask owns the parent session while dependency-scheduled roles run.
 // Plan revisions are immutable; an interrupted/unknown run is never replayed.
 func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, planOnly bool, userText string) (err error) {
+	done, admissionErr := e.admitRuntime()
+	if admissionErr != nil {
+		return admissionErr
+	}
+	defer done()
 	if e.sreRepository == nil {
 		return errors.New("此运行端未接入 SRE 任务仓库")
 	}

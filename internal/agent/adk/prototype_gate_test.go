@@ -161,7 +161,7 @@ func (f *fileApprovalStore) write(data map[string]PendingApproval) error {
 	}
 	name := tmp.Name()
 	defer os.Remove(name)
-	if err := tmp.Chmod(0600); err != nil {
+	if err := platform.Chmod(tmp.Name(), 0600); err != nil {
 		tmp.Close()
 		return err
 	}
@@ -176,7 +176,7 @@ func (f *fileApprovalStore) write(data map[string]PendingApproval) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(name, f.path)
+	return platform.ReplaceFile(name, f.path)
 }
 
 func (f *fileApprovalStore) Put(p PendingApproval) error {
@@ -288,7 +288,7 @@ func (f *fileEvidence) Append(r EvidenceRecord) error {
 		return err
 	}
 	defer file.Close()
-	if err := file.Chmod(0600); err != nil {
+	if err := platform.Chmod(file.Name(), 0600); err != nil {
 		return err
 	}
 	_, err = file.Write(append(b, '\n'))
