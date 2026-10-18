@@ -12,16 +12,21 @@ import (
 	"time"
 )
 
-var defaults = Object{"multiAgentMode": "off", "reasoningEffort": "", "reasoningModelId": "", "profile": "core", "runtime": "local", "asset_ref": "", "container_id": "", "terminal_id": "", "terminal_generation": "", "userPrompt": "", "contextWindow": 64000, "maxOutput": 8192, "maxSteps": 500, "silentReadFiles": true, "silentWriteFiles": false, "silentReadSQL": true, "silentCommands": true, "silentTerminalCreation": true, "blockUnreferencedAssets": false, "denyLocalExecution": false}
+var defaults = Object{"multiAgentMode": "off", "agentRuntime": "adk", "reasoningEffort": "", "reasoningModelId": "", "profile": "core", "runtime": "local", "asset_ref": "", "container_id": "", "terminal_id": "", "terminal_generation": "", "userPrompt": "", "contextWindow": 64000, "maxOutput": 8192, "maxSteps": 500, "silentReadFiles": true, "silentWriteFiles": false, "silentReadSQL": true, "silentCommands": true, "silentTerminalCreation": true, "blockUnreferencedAssets": false, "denyLocalExecution": false}
 
 func (b *Server) sessionOptions(id string) Object {
 	options := Object{}
 	for k, v := range defaults {
 		options[k] = v
 	}
-	for k, v := range b.Store.Options(id) {
+	stored := b.Store.Options(id)
+	for k, v := range stored {
 		options[k] = v
 	}
+	if options["agentRuntime"] == "go" {
+		options["_runtimeMigration"] = Object{"from": "go", "schemaVersion": 1}
+	}
+	options["agentRuntime"] = "adk"
 	// Legacy auto settings no longer enable Scout/Trace/Deep/Beacon.
 	options["multiAgentMode"] = "off"
 	return options
@@ -40,11 +45,18 @@ func (b *Server) configure(id string, updates Object) Object {
 	if !set("core terminal2 db-query-editor")[stringOf(options["profile"])] || !set("local ssh container")[stringOf(options["runtime"])] {
 		fail(400, "Invalid AI profile/runtime")
 	}
+	if options["agentRuntime"] == "go" {
+		options["_runtimeMigration"] = Object{"from": "go", "schemaVersion": 1}
+		options["agentRuntime"] = "adk"
+	}
+	if options["agentRuntime"] != "adk" {
+		fail(400, "Invalid agent runtime")
+	}
 	if !set("off auto")[stringOf(options["multiAgentMode"])] {
 		fail(400, "Invalid multi-agent mode")
 	}
 	options["multiAgentMode"] = "off"
-	for _, k := range []string{"asset_ref", "container_id", "terminal_id", "terminal_generation", "userPrompt", "reasoningEffort", "reasoningModelId"} {
+	for _, k := range []string{"asset_ref", "container_id", "terminal_id", "terminal_generation", "userPrompt", "reasoningEffort", "reasoningModelId", "agentRuntime"} {
 		if _, ok := options[k].(string); !ok {
 			fail(400, "Invalid AI options")
 		}
@@ -140,6 +152,9 @@ func (b *Server) sessionAssetCatalog(id string) ([]ai.Asset, []ai.AssetDirectory
 	return assets, directories
 }
 func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any, error) {
+	if method == "questionReply" && b.Engine.NeedsQuestionRecovery(id) || method == "agentDecision" && b.Engine.NeedsRoleRecovery(id, stringOf(object(data)["runId"])) || method == "decision" && b.Engine.NeedsADKRecovery(id) {
+		b.configure(id, nil)
+	}
 	if method == "questionReply" {
 		var input struct {
 			ID      string              `json:"id"`
@@ -274,7 +289,7 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	if sreCoordination {
 		modelContext += b.sreConversationContext(id)
 	}
-	e = b.Engine.ChatTurn(turnContext, id, ai.TurnInput{SRECoordination: sreCoordination, UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
+	e = b.Engine.ExecuteTurn(turnContext, id, ai.TurnInput{SRECoordination: sreCoordination, UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
 	if e != nil {
 		if b.Context.Err() != nil {
 			return

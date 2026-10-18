@@ -19,6 +19,13 @@ func DefaultPermissions() Permissions {
 	return Permissions{SilentReadFiles: true, SilentReadSQL: true}
 }
 
+// RequiresApproval reports whether an operation needs an interactive approval.
+// It is used by alternative runtimes that own the approval UI.
+func RequiresApproval(c Config, name, risk string, context map[string]any) (bool, error) {
+	kind, err := approvalKind(c, name, risk, context)
+	return kind != "", err
+}
+
 func approvalKind(c Config, name, risk string, context map[string]any) (string, error) {
 	if name == "list_assets" || name == "list_resource_groups" {
 		return "", nil

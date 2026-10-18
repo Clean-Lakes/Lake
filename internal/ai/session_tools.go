@@ -23,18 +23,35 @@ type UserQuestion struct {
 	MultiSelect bool             `json:"multi_select,omitempty"`
 }
 type QuestionRequest struct {
-	ID        string         `json:"id"`
-	Questions []UserQuestion `json:"questions"`
+	Call             *Call          `json:"call,omitempty"`
+	RuntimeSessionID string         `json:"runtimeSessionId,omitempty"`
+	ID               string         `json:"id"`
+	Questions        []UserQuestion `json:"questions"`
 }
 
 func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, call Call, a map[string]any) (result any, err error) {
 	cardID := uid()
 	s.mu.Lock()
 	id := s.state.View.Session
-	s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "operation", Title: call.Name, Data: map[string]any{"arguments": a, "target": "当前项目/会话", "call_id": call.ID}, Status: "running", At: timestamp()})
+	foundCard := false
+	for i := range s.state.View.Cards {
+		card := &s.state.View.Cards[i]
+		if card.Type == "operation" && str(obj(card.Data)["call_id"]) == call.ID && card.Status == "pending" {
+			cardID = card.ID
+			card.Status = "running"
+			foundCard = true
+			break
+		}
+	}
+	if !foundCard {
+		s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "operation", Title: call.Name, Data: map[string]any{"arguments": a, "target": "当前项目/会话", "call_id": call.ID}, Status: "running", At: timestamp()})
+	}
 	e.notify(s, "toolCall", map[string]any{"name": call.Name})
 	s.mu.Unlock()
 	defer func() {
+		if errors.Is(err, errADKApprovalPending) {
+			return
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		for i := range s.state.View.Cards {
@@ -114,6 +131,15 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 			return nil, err
 		}
 		defer func() { e.finishSREOperation(c, call, result, err) }()
+		operation, operationErr := e.dispatchNativeOperation(ctx, s, c, call, "write", serverTarget(a), hash(js(bridgeArgs)))
+		if operationErr != nil {
+			return nil, operationErr
+		}
+		defer func() {
+			if persistErr := e.finishNativeOperation(operation, c, result, err); persistErr != nil {
+				err = persistErr
+			}
+		}()
 		return e.bridgeCall(ctx, id, call.Name, bridgeArgs, approved)
 
 	case "todo_read":
@@ -170,42 +196,33 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 			}
 		}
 	}
+	if mutation {
+		operation, operationErr := e.dispatchNativeOperation(ctx, s, c, call, "write", "当前项目", hash(call.Arguments))
+		if operationErr != nil {
+			return nil, operationErr
+		}
+		defer func() {
+			if persistErr := e.finishNativeOperation(operation, c, result, err); persistErr != nil {
+				err = persistErr
+			}
+		}()
+	}
 	return e.bridgeCall(ctx, id, call.Name, a, mutation)
 }
+func serverTarget(a map[string]any) string { return "MCP · " + str(a["server_id"]) }
+
 func (e *Engine) sessionApproval(ctx context.Context, s *session, call Call, kind string) error {
 	return e.sessionApprovalTarget(ctx, s, call, kind, "当前项目")
 }
 func (e *Engine) sessionApprovalTarget(ctx context.Context, s *session, call Call, kind, target string) error {
 	s.mu.Lock()
-	approval := &Approval{ID: uid(), Call: call, Target: target, Risk: "write", Kind: kind, Fingerprint: hash(call.Arguments)}
-	reply := make(chan bool, 1)
-	s.decision = reply
-	s.state.View.Pending = approval
-	s.state.View.Status = "waiting_approval"
-	err := e.save(s)
-	e.notify(s, "approval", approval)
+	c := s.state.Config
 	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		s.decision = nil
-		s.state.View.Pending = nil
-		s.state.View.Status = "running"
-		_ = e.save(s)
-		s.mu.Unlock()
-	}()
-	if err != nil {
-		return err
-	}
-	select {
-	case accept := <-reply:
-		if !accept {
-			return errors.New("user rejected this tool call")
-		}
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	p := &Approval{ID: uid(), Call: call, Target: target, Risk: "write", Kind: kind, Fingerprint: hash(call.Arguments)}
+	_, err := e.waitNativeApproval(ctx, s, c, p)
+	return err
 }
+
 func (e *Engine) askQuestion(ctx context.Context, s *session, call Call) (any, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -238,6 +255,13 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call) (any, e
 		return questionResult(input.Questions, previous, true), nil
 	}
 	req := &QuestionRequest{ID: uid(), Questions: input.Questions}
+	if ctx.Value(adkToolContextKey{}) != nil {
+		req.Call = &call
+		req.RuntimeSessionID = "input_" + uid()
+		if err := e.runNativeQuestion(ctx, req, nil); err != nil {
+			return nil, err
+		}
+	}
 	reply := make(chan map[string][]string, 1)
 	s.mu.Lock()
 	s.questionReply = reply
@@ -258,6 +282,11 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call) (any, e
 	}
 	select {
 	case answers := <-reply:
+		if req.RuntimeSessionID != "" {
+			if err := e.runNativeQuestion(ctx, req, answers); err != nil {
+				return nil, err
+			}
+		}
 		s.mu.Lock()
 		if s.state.QuestionDecisions == nil {
 			s.state.QuestionDecisions = map[string]map[string][]string{}
@@ -285,7 +314,7 @@ func (e *Engine) ReplyQuestionWithTarget(id, requestID string, answers map[strin
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	req := s.state.View.Question
-	if req == nil || req.ID != requestID || s.questionReply == nil {
+	if req == nil || req.ID != requestID || s.questionReply == nil && (!nativeQuestionReady(req) || s.cancel != nil) {
 		return errors.New("question expired")
 	}
 	allowed := map[string]UserQuestion{}
@@ -319,6 +348,9 @@ func (e *Engine) ReplyQuestionWithTarget(id, requestID string, answers map[strin
 			s.state.ReferencedAssetIDs = previousRefs
 			return err
 		}
+	}
+	if s.questionReply == nil {
+		return e.recoverQuestionReply(s, req, answers)
 	}
 	select {
 	case s.questionReply <- answers:

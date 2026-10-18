@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/ai"
+	"strings"
 )
 
 func sreStoreError(err *error) {
@@ -240,12 +241,23 @@ func (s *Store) RecoverSRETasks() {
 				r := &t.Runs[i]
 				if r.Status == "running" || r.Status == "queued" || r.Status == "waiting_approval" {
 					r.Status = "interrupted"
+					for _, a := range t.Attempts {
+						for _, op := range a.Operations {
+							if a.PlanRunID == r.ID && op.Status == "waiting_approval" && strings.HasPrefix(op.ApprovalID, "adk-") {
+								r.Status = "paused"
+							}
+						}
+					}
 					r.FinishedAt = now()
 				}
 			}
 			for i := range t.Attempts {
 				a := &t.Attempts[i]
-				if a.Status == "running" || a.Status == "waiting_approval" {
+				nativeWait := false
+				for _, op := range a.Operations {
+					nativeWait = nativeWait || op.Status == "waiting_approval" && strings.HasPrefix(op.ApprovalID, "adk-")
+				}
+				if !nativeWait && (a.Status == "running" || a.Status == "waiting_approval") {
 					a.Status = "interrupted"
 					a.FinishedAt = now()
 				}
@@ -254,7 +266,7 @@ func (s *Store) RecoverSRETasks() {
 					if op.Status == "dispatched" {
 						op.Status = "unknown"
 					}
-					if op.Status == "waiting_approval" || op.Status == "prepared" {
+					if (op.Status == "waiting_approval" || op.Status == "prepared") && !strings.HasPrefix(op.ApprovalID, "adk-") {
 						op.Status = "interrupted"
 						op.ApprovalID = ""
 					}

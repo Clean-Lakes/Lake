@@ -40,7 +40,14 @@ func TestMCPCallsRespectOperationAndLocalExecutionPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 	var calls atomic.Int32
-	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, func(ctx context.Context, id, name string, args map[string]any, approved bool) (any, error) {
+	model, closeModel := fakeModel(t, func(n int, _ map[string]any) any {
+		if n == 1 {
+			return response("", Call{ID: "mcp-test", Name: "call_mcp_tool", Arguments: `{"server_id":"fixture","tool":"echo","arguments":{}}`})
+		}
+		return response("MCP operation rejected")
+	})
+	defer closeModel()
+	e := engineFor(t, model, func(ctx context.Context, id, name string, args map[string]any, approved bool) (any, error) {
 		if name != "call_mcp_tool" || !approved || str(args["configurationRevision"]) != extensions.ServerRevision(server) {
 			t.Error("MCP bridge lacked approved configuration identity")
 		}
@@ -53,8 +60,11 @@ func TestMCPCallsRespectOperationAndLocalExecutionPermissions(t *testing.T) {
 	c.Permissions = &p
 	c.CredentialDir = filepath.Join(home, "secrets")
 	call := Call{ID: "mcp-test", Name: "call_mcp_tool", Arguments: `{"server_id":"fixture","tool":"echo","arguments":{}}`}
+	if err := e.Configure("case", c); err != nil {
+		t.Fatal(err)
+	}
 	done := make(chan error, 1)
-	go func() { _, err := e.invoke(context.Background(), s, c, call); done <- err }()
+	go func() { done <- e.Chat(context.Background(), "case", "call the configured MCP fixture", nil) }()
 	approval := waitApproval(t, e)
 	if approval.Kind != "mcp" || !strings.Contains(approval.Target, "Fixture") || calls.Load() != 0 {
 		t.Fatal("MCP ran before approval")
@@ -62,7 +72,7 @@ func TestMCPCallsRespectOperationAndLocalExecutionPermissions(t *testing.T) {
 	if err := e.Decision("case", approval.ID, false, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := <-done; err == nil || calls.Load() != 0 {
+	if err := <-done; err != nil || calls.Load() != 0 {
 		t.Fatal("rejected MCP call executed")
 	}
 	p.SilentCommands = true
@@ -123,10 +133,10 @@ func TestExtensionReferencePreservesPreviouslySelectedResourceScope(t *testing.T
 		t.Fatal(err)
 	}
 	scope := &TargetScope{DirectoryIDs: []string{"new"}, Paths: []string{"Production/新k8s集群"}, ResourceIDs: []string{"node-a", "node-b"}}
-	if err := e.ChatTurn(context.Background(), "case", TurnInput{UserText: "检查所选目录", TargetScope: scope}); err != nil {
+	if err := e.ExecuteTurn(context.Background(), "case", TurnInput{UserText: "检查所选目录", TargetScope: scope}); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.ChatTurn(context.Background(), "case", TurnInput{UserText: "@service-check 继续", References: []map[string]any{{"kind": "skill", "skill_name": "service-check"}}}); err != nil {
+	if err := e.ExecuteTurn(context.Background(), "case", TurnInput{UserText: "@service-check 继续", References: []map[string]any{{"kind": "skill", "skill_name": "service-check"}}}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := e.TargetScope("case")

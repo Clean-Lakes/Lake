@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/platform"
+	"google.golang.org/genai"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,17 +18,24 @@ import (
 )
 
 type session struct {
-	mu                 sync.Mutex
-	state              State
-	cancel             context.CancelFunc
-	decision           chan bool
-	questionReply      chan map[string][]string
-	agentBudgetChanged chan struct{}
-	sreReply           *sreReply
+	nativeResumeContent *genai.Content
+	mu                  sync.Mutex
+	state               State
+	cancel              context.CancelFunc
+	decision            chan bool
+	decisions           map[string]chan bool
+	questionReply       chan map[string][]string
+	agentBudgetChanged  chan struct{}
+	sreReply            *sreReply
 }
 type Engine struct {
+	runMu            sync.Mutex
+	runs             sync.WaitGroup
+	runtimeClosed    bool
+	shutdownOnce     sync.Once
 	sreRepository    SRERepository
 	sreControls      sync.Map
+	sreRecoveries    sync.Map
 	sreResourceLocks sync.Map
 	agentMu          sync.Mutex
 	agentWorkers     map[string]*agentWorker
@@ -41,6 +49,7 @@ type Engine struct {
 	mu               sync.Mutex
 	sessions         map[string]*session
 	Dir              string
+	RuntimeDir       string
 	Bridge           Bridge
 	Emit             func(Event)
 	tunnels          sync.Map
@@ -49,6 +58,8 @@ type Engine struct {
 	shellsClosed     bool
 
 	compactionTimeout time.Duration
+	adkMu             sync.Mutex
+	adk               *adkServices
 }
 
 func New(dir string, bridge Bridge, emit func(Event)) (*Engine, error) {
@@ -86,7 +97,12 @@ func (e *Engine) get(id string) (*session, error) {
 				orphanedCompaction = true
 			}
 		}
-		if s.state.View.Status == "running" || s.state.View.Status == "waiting_approval" || s.state.View.Question != nil {
+		if s.state.Runtime != nil && len(s.state.View.PendingApprovals) > 0 {
+			s.state.View.Status = "waiting_approval"
+			s.state.View.Pending = s.state.View.PendingApprovals[0]
+		} else if s.state.Runtime != nil && nativeQuestionReady(s.state.View.Question) {
+			s.state.View.Status = "waiting_input"
+		} else if s.state.View.Status == "running" || s.state.View.Status == "waiting_approval" || s.state.View.Question != nil {
 			s.state.View.Status = "interrupted"
 			s.state.View.Pending = nil
 			s.state.View.Question = nil
@@ -98,6 +114,10 @@ func (e *Engine) get(id string) (*session, error) {
 			}
 			for i := range s.state.View.AgentRuns {
 				run := &s.state.View.AgentRuns[i]
+				if run.Status == "waiting_approval" && run.Pending != nil && strings.HasPrefix(run.Pending.ID, "adk-") {
+					run.CanCancel = false
+					continue
+				}
 				if agentActive(run.Status) {
 					run.Status, run.Summary, run.FinishedAt = "interrupted", "调查因服务重启中断；未自动重放。", timestamp()
 					run.Pending, run.CanCancel = nil, false
@@ -302,6 +322,10 @@ func (e *Engine) Configure(id string, c Config) error {
 }
 func (e *Engine) Snapshot(id string) (View, error) { return e.SnapshotPage(id, 0, 300) }
 func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
+	outcomes, err := e.OperationOutcomes(id)
+	if err != nil {
+		return View{}, err
+	}
 	s, err := e.get(id)
 	if err != nil {
 		return View{}, err
@@ -309,6 +333,7 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	view := s.state.View
+	view.OperationOutcomes = outcomes
 	view.Context = contextUsage(s.state)
 	view.TotalCards = len(view.Cards)
 	end := len(view.Cards)
@@ -358,12 +383,51 @@ func (e *Engine) Abort(id string) error {
 	return nil
 }
 func (e *Engine) Decision(id, approval string, accept bool, confirmation string) error {
+	store, err := e.adkStore()
+	if err != nil {
+		return err
+	}
 	s, err := e.get(id)
 	if err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if len(s.state.View.PendingApprovals) > 0 {
+		reply, err := e.decideNativeApproval(store, s, approval, accept, confirmation)
+		if err != nil {
+			return err
+		}
+		if reply == nil {
+			if s.state.Config.Model.Name == "" {
+				return errors.New("model not configured for recovery")
+			}
+			if s.decisions == nil {
+				s.decisions = map[string]chan bool{}
+			}
+			for _, pending := range s.state.View.PendingApprovals {
+				if s.decisions[pending.ID] == nil {
+					s.decisions[pending.ID] = make(chan bool, 1)
+				}
+			}
+			reply = s.decisions[approval]
+			work, cancel := context.WithCancel(context.Background())
+			s.cancel = cancel
+			config := s.state.Config
+			e.runMu.Lock()
+			if e.runtimeClosed {
+				e.runMu.Unlock()
+				cancel()
+				s.cancel = nil
+				return errors.New("Agent 服务正在关闭")
+			}
+			e.runs.Add(1)
+			e.runMu.Unlock()
+			go func() { defer e.runs.Done(); e.resumeNativeApproval(work, s, config, cancel) }()
+		}
+		reply <- accept
+		return nil
+	}
 	p := s.state.View.Pending
 	if p == nil || p.ID != approval || s.decision == nil {
 		return errors.New("approval expired or already decided")
@@ -402,10 +466,18 @@ func (e *Engine) Chat(ctx context.Context, id, text string, refs []map[string]an
 	return e.ChatImages(ctx, id, text, refs, nil)
 }
 func (e *Engine) ChatImages(ctx context.Context, id, text string, refs []map[string]any, images []ImageAttachment) (err error) {
-	return e.ChatTurn(ctx, id, TurnInput{UserText: text, References: refs, Images: images})
+	return e.ExecuteTurn(ctx, id, TurnInput{UserText: text, References: refs, Images: images})
 }
 
-func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err error) {
+func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (err error) {
+	e.runMu.Lock()
+	if e.runtimeClosed {
+		e.runMu.Unlock()
+		return errors.New("Agent 服务正在关闭")
+	}
+	e.runs.Add(1)
+	e.runMu.Unlock()
+	defer e.runs.Done()
 	if err = input.validate(); err != nil {
 		return err
 	}
@@ -416,6 +488,9 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 	}
 	s, err := e.get(id)
 	if err != nil {
+		return err
+	}
+	if err = e.hydrateNativeProjection(ctx, s); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -533,12 +608,17 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 		return err
 	}
 	defer func() {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
 		cancel()
 		s.mu.Lock()
-		defer s.mu.Unlock()
+
 		s.cancel = nil
 		s.decision = nil
+		s.decisions = nil
 		s.state.View.Pending = nil
+		s.state.View.PendingApprovals = nil
 		status := "completed"
 		if err != nil {
 			status = "failed"
@@ -563,223 +643,18 @@ func (e *Engine) ChatTurn(ctx context.Context, id string, input TurnInput) (err 
 			err = saveErr
 		}
 		e.notify(s, "done", map[string]any{"status": status})
+		s.mu.Unlock()
+		if persistErr := e.persistNativeProjection(context.WithoutCancel(ctx), s); persistErr != nil && err == nil {
+			err = persistErr
+		}
+
 	}()
 	if len(input.workflow) > 0 {
 		if err = e.executeWorkflow(ctx, s, c, input.workflow); err != nil {
 			return err
 		}
 	}
-	outputRetried := false
-	sreDecisionRetried := false
-	requestModel := c.Model
-	for step := 0; step < c.MaxSteps; step++ {
-		if err = ctx.Err(); err != nil {
-			return err
-		}
-		if e.worker != nil {
-			e.worker.mu.Lock()
-			if !e.worker.sreReportAt.IsZero() && !time.Now().Before(e.worker.sreReportAt) || !fullSREAgent(c) && c.sre != nil && c.sre.Role == SREInvestigator && e.worker.calls >= agentCallLimit(c) {
-				e.worker.finalizing = true
-			}
-			e.worker.mu.Unlock()
-		}
-		if err = e.compactForTurn(ctx, s, c, resume && step == 0); err != nil {
-			return err
-		}
-		teamContext := e.sreTeamContext(c)
-		s.mu.Lock()
-		history := append([]Message(nil), s.state.History...)
-		requestHistoryCost := historyCost(history)
-		textID, thinkID := uid(), uid()
-		textType := "message"
-		s.state.View.Cards = append(s.state.View.Cards, Card{ID: thinkID, Type: "thinking", Status: "running", At: timestamp()}, Card{ID: textID, Type: textType, Status: "running", At: timestamp()})
-		s.mu.Unlock()
-		if len(history) > 0 {
-			history[0].Content += teamContext
-		}
-		if !c.MemoryEnabled {
-			for i := range history {
-				if history[i].Role == "tool" && memoryTool(history[i].Name) {
-					history[i].Content = "[project memory disabled]"
-				}
-			}
-		} else if len(history) > 0 {
-			attachment := e.requestMemoryContext(ctx, id, c)
-			if historyCost(history)+len(attachment) <= (c.Model.ContextWindow-c.Model.MaxOutput)*2 {
-				history[0].Content += attachment
-			}
-		}
-		lastFlush := time.Now()
-		tools := e.sessionCatalog(ctx, id, c)
-		if e.worker != nil {
-			e.worker.mu.Lock()
-			remaining := max(0, agentCallLimit(c)-e.worker.calls)
-			if e.worker.finalizing {
-				remaining = 0
-			}
-			e.worker.mu.Unlock()
-			if step == c.MaxSteps-1 {
-				tools = nil
-				remaining = 0
-				e.worker.mu.Lock()
-				e.worker.finalizing = true
-				e.worker.mu.Unlock()
-			}
-			if fullSREAgent(c) {
-				history[0].Content += fmt.Sprintf("\nRuntime allowance: %d model rounds remain under the parent session configuration. Choose tools and continue based on actual results until the deliverable is covered or blocked. Reuse recorded evidence; do not repeat completed changes. Finish an evidence-grounded report before the final round. Missing observations never establish success.", c.MaxSteps-step)
-			} else {
-				history[0].Content += fmt.Sprintf("\nRuntime allowance: %d tool calls remain. Reuse already collected evidence. When no tool remains, return a concise final report citing recorded evidence and explicit gaps; do not request another tool or infer unobserved facts. A finished report may describe a blocked deliverable honestly.", remaining)
-			}
-		}
-		if outputRetried {
-			history = outputRecoveryHistory(history)
-		}
-		s.mu.Lock()
-		if len(s.state.View.Todos) > 0 {
-			history = append(history, Message{Role: "system", Content: "Current authoritative session tasks (progress only, not permission): " + js(s.state.View.Todos)})
-		}
-		s.mu.Unlock()
-		streamDelta := func(kind, delta string) {
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			if kind == "image" {
-				var img ImageAttachment
-				if json.Unmarshal([]byte(delta), &img) == nil {
-					s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "image", Data: img, Status: "completed", At: timestamp()})
-					e.notify(s, "image", nil)
-				}
-				return
-			}
-			id := textID
-			if kind == "thinking" {
-				id = thinkID
-			}
-			for i := len(s.state.View.Cards) - 1; i >= 0; i-- {
-				card := &s.state.View.Cards[i]
-				if card.ID == id {
-					card.Content += redact(delta, c)
-					if len(card.Content) > 2<<20 {
-						cancel()
-					}
-					break
-				}
-			}
-			if time.Since(lastFlush) > 80*time.Millisecond {
-				e.notify(s, "delta", map[string]any{"card_id": id, "kind": kind})
-				lastFlush = time.Now()
-			}
-		}
-		requestCtx := ctx
-		cancelRequest := func() {}
-		if e.worker != nil && c.sre != nil && c.sre.Role == SREInvestigator {
-			e.worker.mu.Lock()
-			if !e.worker.finalizing && !e.worker.sreReportAt.IsZero() {
-				requestCtx, cancelRequest = context.WithDeadline(ctx, e.worker.sreReportAt)
-			}
-			e.worker.mu.Unlock()
-		}
-		result, modelErr := e.stream(requestCtx, requestModel, history, tools, streamDelta)
-		cancelRequest()
-		if errors.Is(modelErr, context.DeadlineExceeded) && ctx.Err() == nil && e.worker != nil && c.sre != nil && c.sre.Role == SREInvestigator {
-			e.worker.mu.Lock()
-			reportNow := !e.worker.finalizing && !e.worker.sreReportAt.IsZero()
-			if reportNow {
-				e.worker.finalizing = true
-			}
-			e.worker.mu.Unlock()
-			if reportNow {
-				s.mu.Lock()
-				addUsage(&s.state.View.Usage, result.Usage)
-				kept := s.state.View.Cards[:0]
-				for _, card := range s.state.View.Cards {
-					if card.ID != textID && card.ID != thinkID {
-						kept = append(kept, card)
-					}
-				}
-				s.state.View.Cards = kept
-				s.mu.Unlock()
-				continue
-			}
-		}
-		if errors.Is(modelErr, ErrModelOutputLimit) && !outputRetried && ctx.Err() == nil {
-			outputRetried = true
-			requestModel = outputRecoveryModel(c.Model)
-			s.mu.Lock()
-			addUsage(&s.state.View.Usage, result.Usage)
-			kept := s.state.View.Cards[:0]
-			for _, card := range s.state.View.Cards {
-				if card.ID != textID && card.ID != thinkID {
-					kept = append(kept, card)
-				}
-			}
-			s.state.View.Cards = kept
-			s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "notice", Content: "模型回复达到单次输出上限，正在缩短回复后重试；已完成的操作保留", Status: "completed", At: timestamp()})
-			textID, thinkID = uid(), uid()
-			s.state.View.Cards = append(s.state.View.Cards, Card{ID: thinkID, Type: "thinking", Status: "running", At: timestamp()}, Card{ID: textID, Type: "message", Status: "running", At: timestamp()})
-			err = e.save(s)
-			e.notify(s, "compact", nil)
-			s.mu.Unlock()
-			if err != nil {
-				return err
-			}
-			result, modelErr = e.stream(ctx, requestModel, outputRecoveryHistory(history), tools, streamDelta)
-		}
-		if modelErr != nil {
-			s.mu.Lock()
-			addUsage(&s.state.View.Usage, result.Usage)
-			s.mu.Unlock()
-			return modelErr
-		}
-		s.mu.Lock()
-		result.Message.Content = redact(result.Message.Content, c)
-		result.Message.Reasoning = redact(result.Message.Reasoning, c)
-		resolveCallIDs(&result.Message, s.state.History)
-		s.state.History = append(s.state.History, result.Message)
-		addUsage(&s.state.View.Usage, result.Usage)
-		latest := result.Usage
-		s.state.LastRequest = &latest
-		s.state.LastRequestAt = timestamp()
-		s.state.ContextMeasurement = &ContextMeasurement{ModelID: ModelIdentity(c.Model), HistoryCost: requestHistoryCost, ToolsCost: len(js(tools))}
-		for i := range s.state.View.Cards {
-			if s.state.View.Cards[i].ID == textID || s.state.View.Cards[i].ID == thinkID {
-				s.state.View.Cards[i].Status = "completed"
-			}
-		}
-		err = e.save(s)
-		e.notify(s, "historyMessage", result.Message)
-		s.mu.Unlock()
-		if err != nil {
-			return err
-		}
-		if len(result.Message.Calls) == 0 {
-			if c.sreCoordinator {
-				if sreDecisionRetried {
-					return errors.New("模型未提交正式答复或协作决策，本轮未启动新的资源操作")
-				}
-				sreDecisionRetried = true
-				s.mu.Lock()
-				s.state.History = append(s.state.History, Message{Role: "system", Content: sreDecisionReminder})
-				s.mu.Unlock()
-				continue
-			}
-			return nil
-		}
-		if err = e.invokeCalls(ctx, s, &c, result.Message.Calls); err != nil {
-			if pause, ok := err.(*pollingPause); ok {
-				return e.finishPolling(s, pause)
-			}
-			return err
-		}
-		if c.sreCoordinator {
-			if done, replyErr := e.finishSREReply(s, textID); done || replyErr != nil {
-				return replyErr
-			}
-			if e.sreHandoffPrepared(s) {
-				return nil
-			}
-		}
-	}
-	return errors.New("agent step budget reached")
+	return e.runOfficialADK(ctx, s, &c, resume, cancel)
 }
 
 func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls []Call) error {
@@ -787,6 +662,9 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 	for _, call := range calls {
 		e.setSREActivity("tool", call.Name)
 		value, toolErr := e.invokeAfterSREHandoff(ctx, s, *c, call)
+		if errors.Is(toolErr, errADKApprovalPending) {
+			return toolErr
+		}
 		if call.Name == "ask_user_question" && toolErr == nil {
 			// A human answer can resolve the target while this turn is waiting.
 			// Refresh the running config before the next call, including calls
@@ -1107,6 +985,9 @@ func (e *Engine) Clear(id string) error {
 	view.TurnStartedAt = ""
 	view.TurnFinishedAt = ""
 	view.Cards = append(view.Cards, Card{ID: uid(), Type: "clear", Content: "模型上下文已清空；操作记录保留", Status: "completed", At: timestamp()})
+	if s.state.Runtime != nil {
+		s.state.Runtime.Detached = true
+	}
 	s.state = State{Config: c, View: view, Undo: s.state.Undo}
 	return e.save(s)
 }
@@ -1128,6 +1009,9 @@ func (e *Engine) Restore(id string, h []Message) error {
 	}
 	if err = validHistory(h); err != nil {
 		return err
+	}
+	if s.state.Runtime != nil {
+		s.state.Runtime.Detached = true
 	}
 	s.state.History = h
 	s.state.LastRequest = nil
@@ -1180,6 +1064,9 @@ func (e *Engine) Rollback(id string) error {
 	}
 	n := s.state.Checkpoints[len(s.state.Checkpoints)-1]
 	s.state.Checkpoints = s.state.Checkpoints[:len(s.state.Checkpoints)-1]
+	if s.state.Runtime != nil {
+		s.state.Runtime.Detached = true
+	}
 	s.state.History = s.state.History[:n]
 	s.state.LastRequest = nil
 	s.state.LastRequestAt = ""
@@ -1261,38 +1148,49 @@ func (e *Engine) ExtractPreset(ctx context.Context, id string) (Preset, error) {
 	return p, err
 }
 func (e *Engine) Shutdown() {
-	agentDone := e.stopAgentWorkers()
-	// 退出或更新时先关闭后台任务准入，等待最终卡片持久化，避免退出后仍写数据目录。
-	e.shellMu.Lock()
-	e.shellsClosed = true
-	e.cancelShells("")
-	var shellDone []<-chan struct{}
-	e.shells.Range(func(_, value any) bool {
-		shellDone = append(shellDone, value.(*shellJob).done)
-		return true
-	})
-	e.shellMu.Unlock()
-	e.mu.Lock()
-	for _, s := range e.sessions {
-		s.mu.Lock()
-		if s.cancel != nil {
-			s.cancel()
+	e.shutdownOnce.Do(func() {
+		e.runMu.Lock()
+		e.runtimeClosed = true
+		e.runMu.Unlock()
+		agentDone := e.stopAgentWorkers()
+		// 退出或更新时先关闭后台任务准入，等待最终卡片持久化，避免退出后仍写数据目录。
+		e.shellMu.Lock()
+		e.shellsClosed = true
+		e.cancelShells("")
+		var shellDone []<-chan struct{}
+		e.shells.Range(func(_, value any) bool {
+			shellDone = append(shellDone, value.(*shellJob).done)
+			return true
+		})
+		e.shellMu.Unlock()
+		e.mu.Lock()
+		for _, s := range e.sessions {
+			s.mu.Lock()
+			if s.cancel != nil {
+				s.cancel()
+			}
+			s.mu.Unlock()
 		}
-		s.mu.Unlock()
-	}
-	e.mu.Unlock()
-	e.tunnels.Range(func(_, v any) bool {
-		if cancel, ok := v.(context.CancelFunc); ok {
-			cancel()
+		e.mu.Unlock()
+		e.tunnels.Range(func(_, v any) bool {
+			if cancel, ok := v.(context.CancelFunc); ok {
+				cancel()
+			}
+			return true
+		})
+		for _, done := range shellDone {
+			<-done
 		}
-		return true
+		for _, done := range agentDone {
+			<-done
+		}
+		e.runs.Wait()
+		e.adkMu.Lock()
+		defer e.adkMu.Unlock()
+		if e.worker == nil && e.adk != nil && e.adk.store != nil {
+			_ = e.adk.store.Close()
+		}
 	})
-	for _, done := range shellDone {
-		<-done
-	}
-	for _, done := range agentDone {
-		<-done
-	}
 }
 
 func (e *Engine) Compact(ctx context.Context, id string) error {
@@ -1310,5 +1208,8 @@ func (e *Engine) Compact(ctx context.Context, id string) error {
 	c := s.state.Config
 	s.mu.Unlock()
 	defer func() { cancel(); s.mu.Lock(); s.cancel = nil; s.mu.Unlock() }()
-	return e.compact(ctx, s, c, true)
+	if err := e.compact(ctx, s, c, true); err != nil {
+		return err
+	}
+	return e.persistNativeProjection(ctx, s)
 }

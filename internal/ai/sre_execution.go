@@ -285,7 +285,7 @@ func IsSRERejection(err error) bool {
 // Tool errors may be followed by another model response. Persist the dispatch
 // fact independently so prose can never turn a rejection into an execution.
 func (e *Engine) finishSREPreparation(c Config, call Call, toolErr error) {
-	if !sreTrackedCall(c, call) || toolErr == nil {
+	if !sreTrackedCall(c, call) || toolErr == nil || errors.Is(toolErr, errADKApprovalPending) {
 		return
 	}
 	_, _ = e.sreRepository.MutateSRETask(e.worker.parentID, c.sre.TaskID, 0, "operation_not_dispatched", func(t *SRETask) error {

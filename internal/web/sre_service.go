@@ -284,7 +284,7 @@ func (b *Server) sreResolveOperation(session, taskID string, revision int, opera
 	if b.Terminals.containsCredential(note) {
 		return ai.SRETask{}, &ai.SREError{Status: 400, Message: "核实记录不能包含凭据"}
 	}
-	return b.Store.MutateSRETask(session, taskID, revision, "operation_resolved", func(t *ai.SRETask) error {
+	updated, err := b.Store.MutateSRETask(session, taskID, revision, "operation_resolved", func(t *ai.SRETask) error {
 		if t.Status != "paused" && t.Status != "waiting_input" {
 			return &ai.SREError{Status: 409, Message: "请先暂停任务并等待在途步骤结束"}
 		}
@@ -313,4 +313,11 @@ func (b *Server) sreResolveOperation(session, taskID string, revision int, opera
 		}
 		return &ai.SREError{Status: 404, Message: "任务中不存在该操作"}
 	})
+	if err != nil {
+		return updated, err
+	}
+	if err = b.Engine.ResolveRecordedOperation(session, operationID, result, note); err != nil {
+		return updated, err
+	}
+	return b.Store.LoadSRETask(session, taskID)
 }

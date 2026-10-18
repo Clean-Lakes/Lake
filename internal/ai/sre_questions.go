@@ -38,7 +38,7 @@ func (e *Engine) AnswerSRERole(ctx context.Context, sessionID, taskID string, ro
 		}
 	}()
 	step := SREPlanStep{ID: "question", Role: role, Kind: "analyze", Description: message, ResourceIDs: task.Scope}
-	result, err := e.RunSRERole(ctx, sessionID, task, step, "", "", message+"\nCurrent recorded plan and facts (not new observations):\n"+js(task.LatestPlan())+"\n"+sreHandoff(task), true)
+	result, err := e.ExecuteSRERole(ctx, sessionID, task, step, "", "", message+"\nCurrent recorded plan and facts (not new observations):\n"+js(task.LatestPlan())+"\n"+sreHandoff(task), true)
 	_, saveErr := e.sreRepository.MutateSRETask(sessionID, taskID, 0, "role_answer", func(t *SRETask) error {
 		kind := "handoff"
 		if err != nil {

@@ -20,7 +20,7 @@ func TestSRESchedulerParallelRoleLanesExclusiveActionAndDependencies(t *testing.
 	release := make(chan struct{})
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	err := runSRESteps(ctx, plan, map[string]bool{}, func(ctx context.Context, step SREPlanStep) error {
+	err := executeADKPlan(ctx, plan, map[string]bool{}, func(ctx context.Context, step SREPlanStep) error {
 		mu.Lock()
 		running++
 		if running > peak {
@@ -69,7 +69,7 @@ func TestSRESchedulerFailureCancelsAndDrainsPeers(t *testing.T) {
 	peerStarted, peerStopped := make(chan struct{}), make(chan struct{})
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	err := runSRESteps(ctx, plan, map[string]bool{}, func(ctx context.Context, step SREPlanStep) error {
+	err := executeADKPlan(ctx, plan, map[string]bool{}, func(ctx context.Context, step SREPlanStep) error {
 		switch step.ID {
 		case "fail":
 			select {

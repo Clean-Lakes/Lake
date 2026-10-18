@@ -64,7 +64,7 @@ func sreEvidenceCall(name string) bool {
 }
 
 func (e *Engine) recordSREToolResult(c Config, call Call, a map[string]any, result any, toolErr error) (any, error) {
-	if e.worker == nil || c.sre == nil || !c.sre.FullTools || !sreEvidenceCall(call.Name) {
+	if errors.Is(toolErr, errADKApprovalPending) || e.worker == nil || c.sre == nil || !c.sre.FullTools || !sreEvidenceCall(call.Name) {
 		return result, toolErr
 	}
 	ref := str(a["asset_ref"])

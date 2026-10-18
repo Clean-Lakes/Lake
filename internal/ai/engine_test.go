@@ -41,6 +41,18 @@ func response(content string, calls ...Call) any {
 }
 func engineFor(t *testing.T, m Model, bridge Bridge) *Engine {
 	t.Helper()
+	if bridge != nil {
+		original := bridge
+		bridge = func(ctx context.Context, id, name string, args map[string]any, approved bool) (any, error) {
+			value, err := original(ctx, id, name, args, approved)
+			// A minimal fixture that does not implement policy still needs a trusted
+			// synthetic target generation. Production bridges must return a fingerprint.
+			if name == "policy" && value == nil && err == nil {
+				return map[string]any{"fingerprint": "fixture-target-generation"}, nil
+			}
+			return value, err
+		}
+	}
 	e, err := New(t.TempDir(), bridge, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -231,7 +243,7 @@ func TestApprovalDriftAndCancellation(t *testing.T) {
 		})
 	}
 }
-func TestRestartDoesNotReplayPending(t *testing.T) {
+func TestLegacyRestartDoesNotReplayPending(t *testing.T) {
 	m, close := fakeModel(t, func(_ int, _ map[string]any) any {
 		return response("", Call{"c1", "write", `{"path":"/tmp/should-never-exist-lake-test","content":"no"}`})
 	})
@@ -240,6 +252,23 @@ func TestRestartDoesNotReplayPending(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- e.Chat(context.Background(), "case", "write", nil) }()
 	p := waitApproval(t, e)
+	// This fixture intentionally represents a pre-ADK interrupted approval.
+	// Native durable approvals have a separate crash/restart acceptance test.
+	statePath := filepath.Join(e.Dir, "case.json")
+	raw, readErr := os.ReadFile(statePath)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	var legacy State
+	if err := json.Unmarshal(raw, &legacy); err != nil {
+		t.Fatal(err)
+	}
+	legacy.Runtime = nil
+	legacy.View.PendingApprovals = nil
+	raw, _ = json.Marshal(legacy)
+	if err := os.WriteFile(statePath, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
 	e2, _ := New(e.Dir, nil, nil)
 	v, err := e2.Snapshot("case")
 	if err != nil || v.Status != "interrupted" || v.Pending != nil {

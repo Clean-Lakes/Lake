@@ -121,28 +121,31 @@ type Approval struct {
 	Fingerprint        string `json:"fingerprint"`
 }
 type View struct {
-	Todos          []Todo           `json:"todos,omitempty"`
-	Question       *QuestionRequest `json:"question,omitempty"`
-	MemoryStatus   string           `json:"memoryStatus,omitempty"`
-	AgentRuns      []AgentRun       `json:"agentRuns,omitempty"`
-	DelegatedUsage Usage            `json:"delegatedUsage,omitempty"`
-	RootTurnID     string           `json:"rootTurnId,omitempty"`
-	CardsOffset    int              `json:"cardsOffset"`
-	TotalCards     int              `json:"totalCards"`
-	StartedAt      string           `json:"startedAt,omitempty"`
-	TurnStartedAt  string           `json:"turnStartedAt,omitempty"`
-	TurnFinishedAt string           `json:"turnFinishedAt,omitempty"`
-	Session        string           `json:"session"`
-	Status         string           `json:"status"`
-	Cards          []Card           `json:"cards"`
-	Pending        *Approval        `json:"pending,omitempty"`
-	Context        *ContextUsage    `json:"context,omitempty"`
-	Usage          Usage            `json:"usage"`
-	Profile        string           `json:"profile"`
-	Summary        string           `json:"summary,omitempty"`
-	Turns          int              `json:"turns"`
+	OperationOutcomes []OperationOutcome `json:"operationOutcomes,omitempty"`
+	PendingApprovals  []*Approval        `json:"pendingApprovals,omitempty"`
+	Todos             []Todo             `json:"todos,omitempty"`
+	Question          *QuestionRequest   `json:"question,omitempty"`
+	MemoryStatus      string             `json:"memoryStatus,omitempty"`
+	AgentRuns         []AgentRun         `json:"agentRuns,omitempty"`
+	DelegatedUsage    Usage              `json:"delegatedUsage,omitempty"`
+	RootTurnID        string             `json:"rootTurnId,omitempty"`
+	CardsOffset       int                `json:"cardsOffset"`
+	TotalCards        int                `json:"totalCards"`
+	StartedAt         string             `json:"startedAt,omitempty"`
+	TurnStartedAt     string             `json:"turnStartedAt,omitempty"`
+	TurnFinishedAt    string             `json:"turnFinishedAt,omitempty"`
+	Session           string             `json:"session"`
+	Status            string             `json:"status"`
+	Cards             []Card             `json:"cards"`
+	Pending           *Approval          `json:"pending,omitempty"`
+	Context           *ContextUsage      `json:"context,omitempty"`
+	Usage             Usage              `json:"usage"`
+	Profile           string             `json:"profile"`
+	Summary           string             `json:"summary,omitempty"`
+	Turns             int                `json:"turns"`
 }
 type State struct {
+	Runtime                *RuntimeCheckpoint             `json:"runtime,omitempty"`
 	SREHandoff             *SREHandoff                    `json:"sreHandoff,omitempty"`
 	QuestionDecisions      map[string]map[string][]string `json:"questionDecisions,omitempty"`
 	FileReads              map[string]string              `json:"fileReads,omitempty"`

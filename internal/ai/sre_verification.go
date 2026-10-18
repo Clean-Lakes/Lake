@@ -117,7 +117,7 @@ func (e *Engine) EvaluateVerification(ctx context.Context, sessionID string, tas
 			step.Action = check.Probe
 			step.Description = assigned.Description + "（" + check.Description + "）"
 			step.ResourceIDs = []string{check.ResourceID}
-			result, err := e.RunSRERole(ctx, sessionID, task, step, runID, attemptID, assignedPrompt+"Independently inspect this acceptance criterion using normal tools. The runtime collects the exact frozen probe once after your checks; do not replay it or claim a result in advance. Runtime acceptance criterion: "+js(check), false)
+			result, err := e.ExecuteSRERole(ctx, sessionID, task, step, runID, attemptID, assignedPrompt+"Independently inspect this acceptance criterion using normal tools. The runtime collects the exact frozen probe once after your checks; do not replay it or claim a result in advance. Runtime acceptance criterion: "+js(check), false)
 			roleRun = result.RunID
 			evidence = append(evidence, result.Evidence...)
 			if err != nil {
@@ -197,7 +197,7 @@ func (e *Engine) EvaluateVerification(ctx context.Context, sessionID string, tas
 	if roleRun == "" {
 		step := assigned
 		step.Action = nil
-		result, err := e.RunSRERole(ctx, sessionID, task, step, runID, attemptID, assignedPrompt+"Independently review the assigned deliverable using the full normal toolset under inherited permissions. These are the server-calculated acceptance results. No frozen automatic probe is available, so additional checks may add evidence but cannot upgrade manual or missing criteria to automatic recovery:\n"+js(v.Checks), false)
+		result, err := e.ExecuteSRERole(ctx, sessionID, task, step, runID, attemptID, assignedPrompt+"Independently review the assigned deliverable using the full normal toolset under inherited permissions. These are the server-calculated acceptance results. No frozen automatic probe is available, so additional checks may add evidence but cannot upgrade manual or missing criteria to automatic recovery:\n"+js(v.Checks), false)
 		v.ReviewSummary = result.Summary
 		if err != nil {
 			return v, err

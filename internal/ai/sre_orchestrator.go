@@ -37,7 +37,9 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
 	s.state.View.Status = "running"
-	s.state.View.RootTurnID = uid()
+	if _, recovering := e.sreRecoveries.Load(sessionID + ":" + taskID); !recovering {
+		s.state.View.RootTurnID = uid()
+	}
 	s.state.RootQuestion = task.Goal
 	s.state.View.TurnStartedAt = timestamp()
 	s.state.View.TurnFinishedAt = ""
@@ -215,13 +217,23 @@ func (e *Engine) runSREStep(ctx context.Context, sessionID, taskID, runID string
 		return err
 	}
 	attempt := SREStepAttempt{ID: uid(), PlanRunID: runID, StepID: step.ID, Status: "running", StartedAt: timestamp(), Evidence: []AgentEvidence{}, Operations: []SREOperation{}}
-	task, err = e.sreRepository.MutateSRETask(sessionID, taskID, 0, "step_started", func(t *SRETask) error {
-		if t.Status != "active" && t.Status != "waiting_approval" {
-			return sreError(409, "任务已暂停或结束")
+	recovering := false
+	for _, previous := range task.Attempts {
+		if previous.PlanRunID == runID && previous.StepID == step.ID && previous.RoleRunID != "" && e.hasRecoverableRole(sessionID, previous.RoleRunID) {
+			attempt, recovering = previous, true
+			ctx = context.WithValue(ctx, sreRoleRecoveryKey{}, sreRoleRecovery{runID: previous.RoleRunID})
+			break
 		}
-		t.Attempts = append(t.Attempts, attempt)
-		return nil
-	})
+	}
+	if !recovering {
+		task, err = e.sreRepository.MutateSRETask(sessionID, taskID, 0, "step_started", func(t *SRETask) error {
+			if t.Status != "active" && t.Status != "waiting_approval" {
+				return sreError(409, "任务已暂停或结束")
+			}
+			t.Attempts = append(t.Attempts, attempt)
+			return nil
+		})
+	}
 	if err != nil {
 		return err
 	}
@@ -245,7 +257,7 @@ func (e *Engine) runSREStep(ctx context.Context, sessionID, taskID, runID string
 			}
 		}
 	} else {
-		result, err = e.RunSRERole(ctx, sessionID, task, step, runID, attempt.ID, prompt, false)
+		result, err = e.ExecuteSRERole(ctx, sessionID, task, step, runID, attempt.ID, prompt, false)
 	}
 	roleErr := err
 	task, err = e.sreRepository.MutateSRETask(sessionID, taskID, 0, "step_finished", func(t *SRETask) error {
@@ -418,7 +430,7 @@ func (e *Engine) buildSREPlan(ctx context.Context, sessionID string, task SRETas
 	var result SRERoleResult
 	var err error
 	for tries := 0; tries < 2; tries++ {
-		result, err = e.RunSRERole(ctx, sessionID, task, step, "", "", prompt, true)
+		result, err = e.ExecuteSRERole(ctx, sessionID, task, step, "", "", prompt, true)
 		if err != nil {
 			return plan, result.RunID, err
 		}

@@ -150,6 +150,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		cancel()
 		return nil, e
 	}
+	server.Engine.RuntimeDir = filepath.Join(options.DataDir, "adk")
 	server.Engine.SetSRERepository(store)
 	store.RecoverSRETasks()
 	if err = server.startScheduler(); err != nil {
@@ -773,7 +774,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					reply(w, 200, b.configure(id, body(w, r, 128000)))
 					return
 				}
-				if set("abort questionReply decision cancelAgent agentDecision agentDetails clear clearReferences rollback compact restore undoFile extractPreset")[op] {
+				if set("abort questionReply decision cancelAgent agentDecision agentDetails resolveOperation clear clearReferences rollback compact restore undoFile extractPreset")[op] {
 					limit := int64(128000)
 					if op == "restore" {
 						limit = 32 << 20
