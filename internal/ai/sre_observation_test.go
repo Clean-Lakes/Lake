@@ -92,7 +92,7 @@ func TestSREInvestigatorCollectionDeadlineLeavesTimeForReport(t *testing.T) {
 	var calls atomic.Int32
 	model, close := fakeModel(t, func(_ int, body map[string]any) any {
 		if calls.Add(1) == 1 {
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(2 * time.Second)
 			return response("late provisional answer")
 		}
 		if len(arr(body["tools"])) != 0 {
@@ -102,8 +102,13 @@ func TestSREInvestigatorCollectionDeadlineLeavesTimeForReport(t *testing.T) {
 	})
 	defer close()
 	_, child, _, _, _ := sreObservationFixture(t, model)
-	child.worker.sreReportAt = time.Now().Add(250 * time.Millisecond)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	// Measure collection/report behavior after durable SDK schema setup, rather
+	// than making a busy race-enabled CI runner finish that setup in 250ms.
+	if _, err := child.adkStore(); err != nil {
+		t.Fatal(err)
+	}
+	child.worker.sreReportAt = time.Now().Add(time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 	defer cancel()
 	if err := child.Chat(ctx, "own", "finish the assigned report", nil); err != nil {
 		t.Fatal("collection deadline cancelled the report reserve", err)

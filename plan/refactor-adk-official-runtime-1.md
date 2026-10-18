@@ -24,6 +24,8 @@ tags: [refactor, adk, sre, runtime, migration]
 - 使用官方公开 custom Agent wrapper 保留角色 RequestConfirmation 的 FunctionResponse；v2.6.0 Workflow AgentNode 会改写 user content，不能直接承担这个恢复边界。DAG 仍使用官方 WorkflowAgent/DynamicNode/RunNode。
 - Lake 的原生 provider 历史保存在官方 artifact 和 session state 中；session event ID、投影引用/校验和及 migration index 用于幂等恢复。图片正文移入 artifact。JSON 为上下文缓存，业务操作账本保持独立权威。
 - SQLite 备份采用内置 `VACUUM INTO` 一致性快照，配合 quick_check、fsync、原子替换及源文件备份，替代驱动专属 backup API。
+- 上下文压缩采用 `(contextWindow-maxOutput)*3/4`（最小 1024）的 token 门限和 4 个尾部事件；模型适配器同时执行实际 provider 请求预算，继续使用 Lake 45 秒摘要期限。该值替代下文最初拟定的初始门限。
+- 跨库投影采用官方 event/state 中的 artifact 版本、hash、event ID 和 migration index 检查点；恢复时重建可丢弃 JSON 缓存，明确 clear/rollback 的新投影优先。没有新增一套假定双库原子提交的事务。
 - 实际文件、测试与命令映射见最终验收 JSON。平台测试中保留原断言意图：Windows 检查用户私有 ACL；Linux 使用 GNU date，dash 不发送 readline 专属 Ctrl-L；终端历史检查使用 durable history，输入保留仍检查真实命令输出。
 
 ## 1. Requirements & Constraints

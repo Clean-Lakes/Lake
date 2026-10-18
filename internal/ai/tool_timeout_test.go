@@ -52,14 +52,10 @@ func TestParentContextFailureStillStopsToolTurn(t *testing.T) {
 				return response("", Call{ID: "stopped", Name: "shell", Arguments: `{"command":"pwd"}`})
 			})
 			defer closeModel()
+			// The assertion concerns cancellation inside an executing tool. Keep
+			// the first durable SDK store initialization outside that deadline.
 			var turnCtx context.Context
 			var cancel context.CancelFunc
-			if deadline {
-				turnCtx, cancel = context.WithTimeout(context.Background(), 200*time.Millisecond)
-			} else {
-				turnCtx, cancel = context.WithCancel(context.Background())
-			}
-			defer cancel()
 			bridge := func(ctx context.Context, _, name string, _ map[string]any, _ bool) (any, error) {
 				if name == "runtimeCommandExec" {
 					if !deadline {
@@ -71,6 +67,15 @@ func TestParentContextFailureStillStopsToolTurn(t *testing.T) {
 				return map[string]any{"risk": "readonly", "runtime": "local"}, nil
 			}
 			e := engineFor(t, m, bridge)
+			if _, err := e.adkStore(); err != nil {
+				t.Fatal(err)
+			}
+			if deadline {
+				turnCtx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+			} else {
+				turnCtx, cancel = context.WithCancel(context.Background())
+			}
+			defer cancel()
 			err := e.Chat(turnCtx, "case", "检查测试命令", nil)
 			if !errors.Is(err, turnCtx.Err()) || turnCtx.Err() == nil || requests.Load() != 1 {
 				t.Fatal("turn cancellation allowed another model request", err, requests.Load())
