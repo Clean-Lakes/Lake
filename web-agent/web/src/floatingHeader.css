@@ -1,0 +1,49 @@
+/* Only the title bubble covers the scroll canvas; no full-width header strip. */
+.workspace.has-floating-header {
+  container-type: inline-size;
+  --session-content-start: max(var(--session-gutter), calc((100cqw - 960px) / 2));
+  --session-content-width: min(960px, calc(100cqw - var(--session-gutter) - var(--session-gutter)));
+}
+.workspace.has-floating-header > .workspace-header {
+  position: absolute;
+  z-index: 8;
+  top: 12px;
+  left: var(--session-content-start);
+  width: max-content;
+  max-width: calc(100% - var(--session-gutter) - var(--session-gutter));
+  min-height: 40px;
+  padding: 10px 14px;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-window);
+  background: var(--surface);
+  box-shadow: var(--shadow-popover);
+}
+.workspace.has-floating-header .breadcrumbs { flex: 0 1 auto; }
+.crumb-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace.has-floating-header .crumb-slash { flex-shrink: 0; }
+.workspace.has-floating-header .conversation { container-type: normal; scrollbar-gutter: stable; scroll-padding-top: 80px; }
+.workspace.has-floating-header .timeline-list {
+  width: var(--session-content-width);
+  margin-left: var(--session-content-start);
+  margin-right: 0;
+  padding-top: 80px;
+}
+.workspace.has-floating-header .composer { width: var(--session-content-width); }
+.workspace.has-floating-header > .workspace-header + .system-banner { margin-top: 72px; }
+.sidebar-footer .desktop-update-trigger { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; color: var(--text-secondary); }
+.session-nav-row.active ~ .session-actions-trigger { opacity: 1; }
+@media (max-width: 700px) {
+  .workspace.has-floating-header > .workspace-header { gap: 6px; padding: 8px 10px; }
+  .workspace.has-floating-header .breadcrumbs { gap: 6px; }
+}
+/* Reserve the native Windows window controls, without extending the bubble. */
+html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
+  max-width: calc(100% - var(--session-gutter) - 156px);
+  height: auto;
+  user-select: none;
+}
+@media (max-width: 700px) {
+  html.lake-windows-chrome .workspace.has-floating-header > .workspace-header { top: 52px; max-width: calc(100% - var(--session-gutter) - var(--session-gutter)); }
+  html.lake-windows-chrome .workspace.has-floating-header .timeline-list { padding-top: 120px; }
+}

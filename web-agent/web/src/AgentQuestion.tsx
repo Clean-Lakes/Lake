@@ -1,3 +1,4 @@
+import {Glyph} from './Icons';
 import {useEffect, useState} from "react";
 import type {AIQuestionRequest} from "../../shared/contracts";
 import {api, readableError} from "./api";
@@ -29,8 +30,8 @@ export function AgentQuestion({session, request, refresh,runId}: {runId?:string;
  }}>
  <header className="lake-question-heading"><span className="lake-question-count">{index+1}/{request.questions.length}</span>
  <strong>{question.title}{question.multi_select?<small>（可多选）</small>:null}</strong>
- <button type="button" aria-label={collapsed?"展开问题":"收起问题"} aria-expanded={!collapsed} onClick={()=>setCollapsed(!collapsed)}>{collapsed?"⌃":"⌄"}</button>
- <button type="button" aria-label="暂不回答剩余问题，继续任务" disabled={busy} onClick={()=>void submit(committed)}>×</button></header>
+ <button type="button" aria-label={collapsed?"展开问题":"收起问题"} aria-expanded={!collapsed} onClick={()=>setCollapsed(!collapsed)}><Glyph name="chevron" size={14} className={collapsed?"is-collapsed":""}/></button>
+ <button type="button" aria-label="暂不回答剩余问题，继续任务" disabled={busy} onClick={()=>void submit(committed)}><Glyph name="close" size={14}/></button></header>
  {!collapsed&&<><fieldset disabled={busy}><legend className="visually-hidden">{question.title}</legend>
  {question.reason&&<p className="lake-question-reason">{question.reason}</p>}
  {options.map(option=>{

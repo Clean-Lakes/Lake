@@ -12,6 +12,8 @@
 
 输出位于 `dist/windows/<version>/x86_64/`，包含 ZIP、安装 EXE 和 SHA-256。当前 Windows 分发未配置 Authenticode 应用签名；本地交叉编译不等于 Windows GUI 运行验收，Windows CI 定义提供存储、权限、终端和安装包验证。
 
+日常联调使用 `python3 scripts/build_lake_windows.py --dev`，产物在上述目录的 `dev/` 下，文件名以 `Lake-Dev-` 开头。Dev 窗口显示 `DEV`，任务栏标题包含 `Lake Dev <version>`；安装器使用独立的 `%LOCALAPPDATA%\Programs\Lake Dev`、`Lake Dev` 快捷方式和卸载项。数据固定保存到 `%USERPROFILE%\.lake-dev`，更新、移动程序或重新安装均沿用该目录，卸载也保留数据。Dev 忽略正式版的 `LAKE_HOME`；需要专用测试目录时只设置 `LAKE_DEV_HOME`，不能指向 `.lake` 或其子目录。Dev 不接收正式版自动更新。自动化测试的临时隔离目录不用于日常 Dev 启动。
+
 桌面进程内嵌 Go 后台；SSH 密码和密钥口令助手使用同包的 `resources/lake.exe` 控制台程序，通过 OpenSSH 私有管道返回凭据。不得依赖 GUI 子系统的 `Lake.exe` 继承标准输出句柄。Windows CI 在打包后解压实际 ZIP，检查助手的 PE 子系统，并使用包内 SSH 在含中文、空格的路径下验证交互式密码认证。
 
 密码登录依次支持 SSH password 和 keyboard-interactive 的普通密码提示，以兼容 PAM 服务器。保存的密码不用于验证码、一次性密码、修改密码或主机信任确认；密钥登录不回退到密码。CI 同时验证 PAM-only 服务器和 OTP 提示的拒绝行为。
@@ -23,6 +25,8 @@ Windows SSH 将诊断写入私有凭据目录下的临时文件，以免 ConPTY 
 PR 或非 master 分支的 Windows CI 构建仅作为测试产物保留 14 天，名称为 `Lake-windows-x86_64-test-<run-id>`，附带 `TEST-BUILD.txt` 和来源提交记录，不创建正式 Release，不修改稳定更新渠道。测试包内版本号沿用源码 `VERSION`，不能仅靠版本号区分构建；请同时核对来源提交。优先将完整 ZIP 解压到独立目录，在 PowerShell 中设置 `$env:LAKE_HOME = "$env:LOCALAPPDATA\LakeTest\<build-id>"` 后从该目录启动 `Lake.exe`，避免使用正式数据。安装 EXE 仍是普通用户级安装器，会覆盖已有安装。
 
 Lake 工作台顶栏与窗口标题栏合为一体，右上角提供最小化、最大化或还原、关闭按钮。在顶部品牌、项目路径或终端标题的空白处拖动窗口，双击可最大化或还原；窗口仍保留 Windows 缩放边框。高对比度模式下窗口按钮使用系统颜色。
+
+最大化按当前显示器的工作区计算，保留任务栏，包含任务栏位于顶部或两侧及多显示器的情况；再次双击恢复窗口，不进入全屏模式。
 
 顶栏右侧“检查更新”检测 GitHub master 的 Windows 正式版本；启动后 3 秒及每 5 分钟自动检查。发现更高版本后可下载安装，先匹配官方 GitHub 资产摘要和 SHA256 文件，再等待客户端完全退出后执行用户级安装器并重新打开。安装保留 `%USERPROFILE%\.lake`，但会关闭终端连接；免安装用户更新后使用标准用户目录中的安装版。此前不带更新入口的 0.3.3 软件包需要先手动安装新包，之后才能在客户端更新。安装成功后自动删除下载的安装包，重新打开的客户端重试清理完成任务目录及暂时锁定的安装助手；未完成、失败或包含未知文件的任务不被清理。相同版本的资产替换不会触发版本升级。
 

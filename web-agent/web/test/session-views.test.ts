@@ -22,7 +22,8 @@ test("conversation retains question and answer while activity shows actual opera
   assert.ok(conversation.includes("本轮问题") && conversation.includes("本轮回答"));
   const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:"activity"}));
   assert.ok(activity.includes("执行结果待核查"));
-  assert.ok(!activity.includes("本轮问题") && !activity.includes("本轮回答") && !activity.includes("调查图表"));
+  const activityBody=activity.slice(activity.indexOf('<div class="ai-turn"'));
+  assert.ok(!activityBody.includes("本轮问题") && !activityBody.includes("本轮回答") && !activityBody.includes("调查图表"));
 });
 
 test("evidence shows recorded reports and deduplicates evidence without exposing another session", () => {
@@ -99,7 +100,7 @@ test("sidebar uses the same colors, bounds visible tags and names the full set f
 test("session chrome is inline in the breadcrumb: status and a menu button replace the title and tab rows", () => {
   const session={id:"s",projectId:"p",title:"隆泰的ftp服务器在哪里",status:"completed" as const,resourceIds:[],createdAt:at,updatedAt:at,tags};
   const badge=renderToStaticMarkup(createElement(SessionStateBadge,{session}));
-  assert.ok(badge.includes('class="session-state-badge state-completed"')&&badge.includes("已完成"), "status renders inline for the breadcrumb");
+  assert.ok(badge.includes('class="session-state-badge state-completed"')&&badge.includes("回复结束"), "status renders inline for the breadcrumb");
   const actions=renderToStaticMarkup(createElement(SessionActions,{session,tags,disabled:false,view:"conversation",hasViews:true,onView:()=>{},onSaved:()=>{},onRefresh:async()=>{},onEdit:()=>{}}));
   assert.ok(actions.includes('aria-haspopup="menu"'), "the views and presentation edits live behind a menu");
   assert.ok(!actions.includes("session-page-header")&&!actions.includes("session-view-tabs")&&!actions.includes("role=\"tablist\""), "no title row and no tab row");
@@ -147,6 +148,10 @@ test("the directory rail has exactly one mark per entry as history grows", () =>
     assert.equal((html.match(/data-directory-item=/g)||[]).length,count);
     assert.equal((html.match(/is-current/g)||[]).length,1);
     assert.ok(!html.includes("<svg"));
+    assert.ok(html.includes('aria-describedby='));
+    assert.ok(html.includes('悬停预览这一轮的提问与回复，点击刻度跳转'));
+    assert.ok(html.includes('完整记录保留'));
+    assert.ok(!html.includes('title="会话目录"'), 'a native tooltip must not compete with the hover preview');
   }
 });
 

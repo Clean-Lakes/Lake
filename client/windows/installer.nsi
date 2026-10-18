@@ -3,16 +3,26 @@ Unicode true
 !include "x64.nsh"
 !include "WinVer.nsh"
 !include "FileFunc.nsh"
+!ifndef APP_NAME
+ !define APP_NAME "Lake"
+!endif
+!ifndef UNINSTALL_KEY
+ !define UNINSTALL_KEY "CleanLakes"
+!endif
 Var LakeUpdate
-Name "Lake ${VERSION} (Windows x86_64)"
+Name "${APP_NAME} ${VERSION} (Windows x86_64)"
 OutFile "${OUTPUT}"
-InstallDir "$LOCALAPPDATA\Programs\Lake"
-InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\CleanLakes" "InstallLocation"
+InstallDir "$LOCALAPPDATA\Programs\${APP_NAME}"
+InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINSTALL_KEY}" "InstallLocation"
 RequestExecutionLevel user
-SetCompressor /SOLID lzma
+!ifdef DEV_BUILD
+ SetCompressor /SOLID zlib
+!else
+ SetCompressor /SOLID lzma
+!endif
 VIProductVersion "${PRODUCT_VERSION}"
-VIAddVersionKey "ProductName" "Lake"
-VIAddVersionKey "FileDescription" "Lake Windows x86_64 installer"
+VIAddVersionKey "ProductName" "${APP_NAME}"
+VIAddVersionKey "FileDescription" "${APP_NAME} Windows x86_64 installer"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "LegalCopyright" "Copyright (c) Clean Lakes contributors"
 !define MUI_ABORTWARNING
@@ -59,7 +69,7 @@ Function .onInstSuccess
  ${EndIf}
 FunctionEnd
 
-Section "Lake"
+Section "${APP_NAME}"
  SetShellVarContext current
  SetOutPath "$INSTDIR"
  File /r "${APP_FILES}"
@@ -80,26 +90,26 @@ Section "Lake"
    Abort
   ${EndIf}
  ${EndIf}
- CreateDirectory "$SMPROGRAMS\Lake"
- CreateShortcut "$SMPROGRAMS\Lake\Lake.lnk" "$INSTDIR\Lake.exe"
- CreateShortcut "$DESKTOP\Lake.lnk" "$INSTDIR\Lake.exe"
+ CreateDirectory "$SMPROGRAMS\${APP_NAME}"
+ CreateShortcut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\Lake.exe"
+ CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\Lake.exe"
  WriteUninstaller "$INSTDIR\Uninstall.exe"
- WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\CleanLakes" "DisplayName" "Lake"
- WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\CleanLakes" "DisplayVersion" "${VERSION}"
- WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\CleanLakes" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
- WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\CleanLakes" "InstallLocation" "$INSTDIR"
+ WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINSTALL_KEY}" "DisplayName" "${APP_NAME}"
+ WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINSTALL_KEY}" "DisplayVersion" "${VERSION}"
+ WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINSTALL_KEY}" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
+ WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
 SectionEnd
 
 Section "Uninstall"
  SetShellVarContext current
- Delete "$DESKTOP\Lake.lnk"
- Delete "$SMPROGRAMS\Lake\Lake.lnk"
- RMDir "$SMPROGRAMS\Lake"
+ Delete "$DESKTOP\${APP_NAME}.lnk"
+ Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
+ RMDir "$SMPROGRAMS\${APP_NAME}"
  Delete "$INSTDIR\Lake.exe"
  Delete "$INSTDIR\README.md"
  Delete "$INSTDIR\Uninstall.exe"
  RMDir /r "$INSTDIR\resources"
  RMDir "$INSTDIR"
- DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\CleanLakes"
- ; User data under ~/.lake is intentionally retained.
+ DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINSTALL_KEY}"
+ ; Release and Dev user data live outside INSTDIR and are intentionally retained.
 SectionEnd

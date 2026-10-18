@@ -74,7 +74,7 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 			history[0].Content += attachment
 		}
 	}
-	lastFlush := time.Now()
+	lastFlush := map[string]time.Time{}
 	tools := e.sessionCatalog(ctx, id, c)
 	if e.worker != nil {
 		e.worker.mu.Lock()
@@ -129,9 +129,19 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 				break
 			}
 		}
-		if time.Since(lastFlush) > 80*time.Millisecond {
-			e.notify(s, "delta", map[string]any{"card_id": id, "kind": kind})
-			lastFlush = time.Now()
+		if time.Since(lastFlush[kind]) > 16*time.Millisecond {
+			// Include the redacted cumulative text: SRE parents cannot take a
+			// child Snapshot here because this callback holds the child lock.
+			content, at := "", ""
+			for i := len(s.state.View.Cards) - 1; i >= 0; i-- {
+				if s.state.View.Cards[i].ID == id {
+					content = s.state.View.Cards[i].Content
+					at = s.state.View.Cards[i].At
+					break
+				}
+			}
+			e.notify(s, "delta", map[string]any{"card_id": id, "kind": kind, "content": content, "at": at, "rootTurnId": s.state.View.RootTurnID})
+			lastFlush[kind] = time.Now()
 		}
 	}
 	requestCtx := ctx

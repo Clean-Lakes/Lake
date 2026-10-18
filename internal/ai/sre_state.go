@@ -227,6 +227,13 @@ func ValidateSREPlan(plan SREPlanRevision, scope []string) error {
 }
 
 func CanCompleteSRETask(task SRETask) bool {
+	for _, a := range task.Attempts {
+		for _, op := range a.Operations {
+			if SREOperationBlocksResume(op) {
+				return false
+			}
+		}
+	}
 	p := task.LatestPlan()
 	run := task.ActiveRun()
 	if p == nil || run == nil {
@@ -255,6 +262,14 @@ func CanCompleteSRETask(task SRETask) bool {
 }
 
 func SREAttemptCompleted(a SREStepAttempt, step SREPlanStep) bool {
+	if sreReadCheckIncomplete(a) {
+		return false
+	}
+	for _, op := range a.Operations {
+		if SREOperationBlocksResume(op) {
+			return false
+		}
+	}
 	if a.Status == "succeeded" {
 		return true
 	}

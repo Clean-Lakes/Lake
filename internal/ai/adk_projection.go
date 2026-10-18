@@ -155,7 +155,10 @@ func (n *nativeCompaction) SummarizeEvents(ctx context.Context, events []*adkses
 	n.session.mu.Lock()
 	before := hash(js(n.session.state.History))
 	n.session.mu.Unlock()
-	if err := n.engine.compact(ctx, n.session, n.config, true); err != nil {
+	// ADK's event estimate and Lake's provider-native projection differ. Share
+	// the measured budget gate with normal provider requests; an SDK callback
+	// must not force a second summary of an already compacted projection.
+	if err := n.engine.compact(ctx, n.session, n.config, false); err != nil {
 		return compaction.SummarizeResult{}, err
 	}
 	n.session.mu.Lock()

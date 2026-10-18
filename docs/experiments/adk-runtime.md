@@ -6,7 +6,7 @@ Implementation and acceptance are tracked in [the migration plan](../../plan/ref
 
 ## Execution
 
-`internal/ai/adk_driver.go` hosts official LlmAgents and their Runner. `adk_model.go` adapts existing provider protocols, model selection, reasoning, usage and image support. Every role gets its own official LlmAgent and isolated business scope. `adk_sre_workflow.go` uses WorkflowAgent, DynamicNode and RunNode for the validated DAG, four concurrent lanes, one lane per role, dependencies and exclusive act steps. The old model/tool loop and scheduler files have been removed.
+`internal/ai/adk_driver.go` hosts official LlmAgents and their Runner. `adk_model.go` adapts existing provider protocols, model selection, reasoning, usage and image support. Every role gets its own official LlmAgent and isolated business scope. `adk_sre_workflow.go` compiles the validated DAG into ADK FunctionNodes, dependency edges and JoinNodes. Role serialization and exclusive acts are business ordering constraints; the ADK graph scheduler owns execution, fan-in, cancellation and draining. Successful native Output/NodeInfo events provide durable result reuse across explicit retries. The old model/tool loop and scheduler files have been removed.
 
 SDK ownership sits inside `internal/ai`; `internal/agent/storage` has no AI-domain dependency. This avoids an ai → adapter → ai import cycle and ensures direct CLI/stdio callers cannot accidentally bypass ADK. Scoped Engine objects retain business state, evidence and executor access; they contain no alternative model/tool loop. The former spike runtime and gate survive only in `_test.go` regression fixtures; the spike executable is removed.
 

@@ -1,0 +1,60 @@
+/* Lightweight workspace: conversations and resources share one quiet sidebar. */
+.sidebar.workspace-navigation .sidebar-brand-row { padding: 8px 18px 14px; min-height: 44px; }
+.sidebar.workspace-navigation .brand { gap: 7px; }
+.sidebar.workspace-navigation .brand > strong { font-size: 20px; font-weight: 600; letter-spacing: -.5px; }
+.lake-development .sidebar.workspace-navigation .brand::after { border: 0; padding: 3px 0 0; font-weight: 500; font-size: 9px; letter-spacing: .6px; color: var(--text-muted); }
+.sidebar.workspace-navigation .sidebar-project-picker { margin: 0 12px 9px; padding: 0; min-height: 34px; border: 0; background: transparent; gap: 2px; }
+.sidebar.workspace-navigation .project-switcher { min-height: 34px; padding: 7px 9px; font-weight: 500; border-radius: var(--radius-panel); }
+.sidebar.workspace-navigation .sidebar-project-picker .icon-button { width: 26px; height: 28px; padding: 0; }
+.sidebar.workspace-navigation .navigation-search { margin: 0 18px 12px; padding: 7px 9px; min-height: 32px; background: var(--surface-hover); border-radius: var(--radius-panel); }
+.sidebar.workspace-navigation .navigation-search-key { font-size: 10px; }
+.sidebar.workspace-navigation .sidebar-new-session { display: flex; align-items: center; justify-content: center; flex: 0 0 28px; width: 28px; height: 28px; margin: 0; padding: 0; border: 0; border-radius: var(--radius-panel); background: transparent; color: var(--text-secondary); font: inherit; }
+.sidebar.workspace-navigation .sidebar-new-session[hidden] { display: none; }
+.sidebar.workspace-navigation .sidebar-new-session:is(:hover,:focus-visible):not(:disabled) { background: var(--surface-hover); }
+.sidebar.workspace-navigation .sidebar-new-session:disabled { opacity: .45; }
+.sidebar.workspace-navigation .sidebar-new-session > svg { flex-shrink: 0; }
+.sidebar.workspace-navigation .sidebar-session-heading { display: flex; align-items: center; gap: 8px; min-height: 32px; margin: 0 7px 5px; }
+.sidebar.workspace-navigation .sidebar-session-heading[hidden] { display: none; }
+.sidebar.workspace-navigation .project-scroll { padding: 0 10px 72px; scroll-padding-bottom: 72px; }
+.sidebar.workspace-navigation .nav-heading { margin: 0 7px 5px; font-size: 11px; font-weight: 400; color: var(--text-muted); }
+.sidebar.workspace-navigation .nav-section-toggle { min-height: 26px; gap: 5px; padding: 3px 0; }
+.sidebar.workspace-navigation .session-group-count { display: none; }
+.sidebar.workspace-navigation .session-nav-row { min-height: 34px; padding: 7px 9px; gap: 9px; margin-bottom: 2px; border-radius: var(--radius-panel); }
+.sidebar.workspace-navigation .session-nav-row .nav-row-text strong { font-weight: 400; }
+.sidebar.workspace-navigation .session-nav-row.active .nav-row-text strong { font-weight: 500; }
+/* The live state and the menu own separate space, including the non-hovered active row. */
+.sidebar.workspace-navigation .nav-row-wrap > .session-nav-row,
+.sidebar.workspace-navigation .nav-row-wrap:is(:hover,:focus-within) > .session-nav-row { padding-right: 40px; }
+.sidebar.workspace-navigation.is-bulk-selecting .nav-row-wrap > .session-nav-row,
+.sidebar.workspace-navigation.is-bulk-selecting .nav-row-wrap:is(:hover,:focus-within) > .session-nav-row { padding-right: 9px; }
+.sidebar.workspace-navigation .nav-row-text > small { display: none; }
+.sidebar.workspace-navigation .nav-show-more { margin: 5px 0 18px 7px; padding: 4px 0; font-size: 11px; text-align: left; }
+.sidebar.workspace-navigation .session-edit,.sidebar.workspace-navigation .session-more { padding: 0; width: 26px; height: 26px; }
+.sidebar.workspace-navigation .nav-row-wrap:is(:hover,:focus-within) :is(.session-edit,.session-more) { background: var(--surface-hover); }
+.sidebar.workspace-navigation .nav-row-wrap:has(.active):is(:hover,:focus-within) :is(.session-edit,.session-more) { background: var(--surface-selected); }
+.sidebar.workspace-navigation .resources-heading { margin: 16px 4px 5px; padding: 14px 3px 0; border-top: 1px solid var(--border); border-bottom: 0; color: var(--text-muted); font-weight: 400; }
+.sidebar.workspace-navigation .resources-heading .nav-section-toggle { gap: 6px; }
+.sidebar.workspace-navigation .resource-section-label { gap: 7px; }
+.sidebar.workspace-navigation .resource-section-label > small { padding: 0; border-radius: 0; background: transparent; color: var(--text-muted); font-size: 11px; }
+.sidebar.workspace-navigation .resource-section-chevron { width: 11px; height: 11px; }
+.sidebar.workspace-navigation .resource-folder-row { padding: 0; }
+.sidebar.workspace-navigation .resource-folder-toggle { min-height: 31px; padding: 5px 4px; gap: 7px; font-size: 13px; border-radius: var(--radius-control); }
+.sidebar.workspace-navigation .resource-folder-row .resource-folder-toggle { padding-right: 40px; }
+.sidebar.workspace-navigation.is-bulk-selecting .resource-folder-row .resource-folder-toggle { padding-right: 4px; }
+.sidebar.workspace-navigation .resource-folder-toggle:hover { background: var(--surface-hover); }
+.sidebar.workspace-navigation .resource-folder-name { flex: 1; }
+.sidebar.workspace-navigation .resource-folder-count { margin-left: auto; font-size: 11px; }
+.sidebar.workspace-navigation .folder-chevron { flex: 0 0 11px; width: 11px; height: 11px; transform: rotate(-90deg); }
+.sidebar.workspace-navigation .folder-chevron.open { transform: rotate(0); }
+.sidebar.workspace-navigation .resource-folder-children { margin-left: 13px; }
+.sidebar.workspace-navigation .resource-folder-actions { right: 2px; top: 50%; transform: translateY(-50%); }
+.sidebar.workspace-navigation .resource-folder-actions .navigation-more-button { padding: 0; width: 26px; height: 26px; }
+.sidebar.workspace-navigation .resource-row { min-height: 31px; padding: 6px 8px; border-radius: var(--radius-control); }
+.sidebar.workspace-navigation .resource-row .nav-row-text strong { font-size: 12px; font-weight: 400; }
+.sidebar.workspace-navigation .resource-more-button { top: 50%; transform: translateY(-50%); padding: 0; width: 26px; height: 26px; }
+.sidebar.workspace-navigation .sidebar-tags { padding: 8px 13px 0; }
+.sidebar.workspace-navigation .sidebar-tags-toggle { padding: 6px 7px; }
+.sidebar.workspace-navigation .sidebar-tags-toggle small { font-size: 11px; }
+.sidebar.workspace-navigation .sidebar-footer { padding: 0 13px 12px; }
+.sidebar.workspace-navigation .sidebar-settings { min-height: 32px; padding: 7px; }
+@media (prefers-reduced-motion: reduce) { .sidebar.workspace-navigation .folder-chevron { transition: none; } }

@@ -133,6 +133,9 @@ func sshBase(c *SSH, roots ...string) ([]string, error) {
 	return append(args, "-o", "BatchMode="+batch, "-o", "PreferredAuthentications=publickey", "-o", "KbdInteractiveAuthentication=no", "-o", "PasswordAuthentication=no", "-i", path), nil
 }
 func (e *Engine) execRuntime(ctx context.Context, c Config, a map[string]any, argv []string, input string) (map[string]any, error) {
+	return e.execRuntimeInput(ctx, c, a, argv, strings.NewReader(input))
+}
+func (e *Engine) execRuntimeInput(ctx context.Context, c Config, a map[string]any, argv []string, input io.Reader) (map[string]any, error) {
 	target := str(a["runtime"])
 	if target == "" {
 		target = c.Runtime
@@ -213,7 +216,7 @@ func (e *Engine) execRuntime(ctx context.Context, c Config, a map[string]any, ar
 	if target == "local" && c.Workspace != "" {
 		cmd.Dir = c.Workspace
 	}
-	cmd.Stdin = strings.NewReader(input)
+	cmd.Stdin = input
 	outputLimit := bounded(num(a["__output_limit"], 100000), 100000, 3<<20)
 	output := &limitBuffer{limit: outputLimit}
 	stdout := &limitBuffer{limit: outputLimit}

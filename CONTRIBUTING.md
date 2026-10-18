@@ -40,6 +40,10 @@ Dev 忽略正式版的 `LAKE_HOME`、`LAKE_WEB_DATA_DIR` 和 `LAKE_WEB_TOKEN`。
 bin/lake web --home "$HOME/.lake-dev-cli" --port 4182 --open
 ```
 
+## Windows 本地联调
+
+Windows 本地联调使用 `python3 scripts/build_lake_windows.py --dev`，安装 `dist/windows/<version>/x86_64/dev/` 下的 Dev 包。程序和快捷方式名为 **Lake Dev**，固定数据目录为 `%USERPROFILE%\.lake-dev`；更新只替换程序文件，保留模型、项目、会话和凭据。Dev 忽略 `LAKE_HOME`，隔离运行只使用独立的 `LAKE_DEV_HOME`，不能指向正式版 `.lake`。测试脚本的随机隔离 Home 仅用于自动化验收，日常使用应启动固定位置的 Lake Dev。
+
 ## 前端界面规范
 
 新增或修改前端界面时遵循 [Lake 前端 UI 规范](docs/ui-guidelines.md)。表单下拉框统一使用 `AppSelect`，通用图标使用 `Glyph`，供应商品牌使用 `ProviderIcon`；同时验证键盘、深色主题和窄窗口布局。

@@ -62,6 +62,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--reuse-web", action="store_true")
     parser.add_argument("--skip-installer", action="store_true")
+    parser.add_argument("--dev", action="store_true", help="Build a labeled Dev client with persistent .lake-dev data")
     args = parser.parse_args()
     version = (ROOT / "VERSION").read_text().strip()
     if not __import__("re").fullmatch(r"\d+\.\d+\.\d+(?:\.\d+)?", version):
@@ -96,12 +97,15 @@ def main():
     bootstrap_url = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
     download(bootstrap_url, bootstrap)
     output = ROOT / "dist/windows" / version / "x86_64"
+    if args.dev:
+        output = output / "dev"
     output.mkdir(parents=True, exist_ok=True)
-    name = "Lake-" + version + "-windows-x86_64"
+    app_name = "Lake Dev" if args.dev else "Lake"
+    name = ("Lake-Dev-" if args.dev else "Lake-") + version + "-windows-x86_64"
     env = os.environ.copy()
     env.update(GOOS="windows", GOARCH="amd64", CGO_ENABLED="0", GOWORK="off")
     with tempfile.TemporaryDirectory(prefix="lake-windows-package-") as temporary:
-        stage = pathlib.Path(temporary) / "Lake"
+        stage = pathlib.Path(temporary) / app_name
         resources = stage / "resources"
         resources.mkdir(parents=True)
         git = resources / "git"
@@ -116,7 +120,8 @@ def main():
         generated_resource = ROOT / "client/windows/rsrc_windows_amd64.syso"
         run(["go", "run", "github.com/akavel/rsrc@v0.10.2", "-arch", "amd64", "-manifest", ROOT / "client/windows/app.manifest", "-ico", ico, "-o", generated_resource])
         run(["go", "build", "-trimpath", "-ldflags", "-X main.version=" + version, "-o", resources / "lake.exe", "./cmd/lake"], env=env)
-        run(["go", "build", "-trimpath", "-ldflags", "-H windowsgui -X main.version=" + version, "-o", stage / "Lake.exe", "./client/windows"], env=env)
+        desktop_flags = "-H windowsgui -X main.version=" + version + (" -X main.development=1" if args.dev else "")
+        run(["go", "build", "-trimpath", "-ldflags", desktop_flags, "-o", stage / "Lake.exe", "./client/windows"], env=env)
         for executable in (stage / "Lake.exe", resources / "lake.exe", git / "usr/bin/bash.exe", git / "usr/bin/ssh.exe"):
             amd64_pe(executable)
         shutil.copy2(bootstrap, resources / "WebView2Setup.exe")
@@ -139,7 +144,8 @@ def main():
                     break
         loader_license = next((module_cache / "github.com/jchv").glob("go-webview2@*/webviewloader/sdk/LICENSE.txt"))
         shutil.copy2(loader_license, licenses / "Microsoft-WebView2-SDK.txt")
-        provenance = {"version": version, "architecture": "amd64", "portableGit": lock,
+        provenance = {"version": version, "architecture": "amd64", "development": args.dev,
+                      "dataDirectory": ".lake-dev" if args.dev else ".lake", "portableGit": lock,
                       "webviewBootstrapper": {"url": bootstrap_url, "sha256": sha(bootstrap)},
                       "executables": {str(p.relative_to(stage)): sha(p) for p in (stage / "Lake.exe", resources / "lake.exe")}}
         (resources / "build.json").write_text(json.dumps(provenance, indent=2) + "\n")
@@ -155,7 +161,7 @@ def main():
             product_version = version + ".0" if version.count(".") == 2 else version
             # Build the glob with the host's native separator. Appending a POSIX
             # slash to a Windows path makes NSIS fail to find the payload.
-            run([nsis, "-V2", "-DVERSION=" + version, "-DPRODUCT_VERSION=" + product_version, "-DAPP_FILES=" + str(stage / "*"), "-DOUTPUT=" + str(installer), ROOT / "client/windows/installer.nsi"])
+            run([nsis, "-V2", *(["-DDEV_BUILD=1"] if args.dev else []), "-DAPP_NAME=" + app_name, "-DUNINSTALL_KEY=" + ("CleanLakesDev" if args.dev else "CleanLakes"), "-DVERSION=" + version, "-DPRODUCT_VERSION=" + product_version, "-DAPP_FILES=" + str(stage / "*"), "-DOUTPUT=" + str(installer), ROOT / "client/windows/installer.nsi"])
             assets.append(installer)
         for path in assets:
             path.with_name(path.name + ".sha256").write_text(sha(path) + "  " + path.name + "\n")

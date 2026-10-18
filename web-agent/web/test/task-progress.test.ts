@@ -18,9 +18,10 @@ function fixture(cards: AICard[]): SessionSnapshot {
 }
 function renderedTurns(snapshot: SessionSnapshot): [string, string] {
   const html = renderToStaticMarkup(createElement(AITranscript, {snapshot}));
-  const split = html.indexOf("FTP 返回 421 的问题是为啥");
+  const start = html.indexOf('id="conversation-turn-todo-fixture-first"');
+  const split = html.indexOf('id="conversation-turn-todo-fixture-second"');
   assert.ok(split > 0);
-  return [html.slice(0, split), html.slice(split)];
+  return [html.slice(start, split), html.slice(split)];
 }
 
 test("old completed tasks stay in their own turn while a new reply is running", () => {

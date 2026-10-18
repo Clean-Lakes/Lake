@@ -25,8 +25,8 @@ import (
 )
 
 // Release builds inject the repository VERSION through -ldflags and leave
-// main.development empty; local dev builds set both (see dist/windows/dev/build_dev_client.py).
-var version = "0.3.17"
+// main.development empty; local dev builds set both (scripts/build_lake_windows.py --dev).
+var version = "0.3.18"
 
 func message(text string) {
 	title, _ := windows.UTF16PtrFromString("Lake")
@@ -57,7 +57,7 @@ func main() {
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "--version" {
-		fmt.Println("Lake " + version + " · Windows x86_64")
+		fmt.Println(windowTitle() + " · Windows x86_64")
 		return
 	}
 	runtime.LockOSThread()
@@ -68,19 +68,14 @@ func main() {
 }
 
 func run() error {
-	home := os.Getenv("LAKE_HOME")
-	if home == "" {
-		user, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("无法读取用户目录")
-		}
-		home = filepath.Join(user, lakeHomeDirectory())
+	user, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("无法读取用户目录")
 	}
-	absolute, err := filepath.Abs(home)
+	home, err := profileHome(user)
 	if err != nil {
 		return err
 	}
-	home = absolute
 	os.Setenv("LAKE_HOME", home)
 	exe, err := os.Executable()
 	if err != nil {

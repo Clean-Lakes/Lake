@@ -23,12 +23,7 @@ type ProviderLLM struct {
 
 // NewProviderLLM creates an ADK model backed by Lake's provider layer.
 func NewProviderLLM(m Model) *ProviderLLM {
-	if m.ContextWindow <= 0 {
-		m.ContextWindow = 64000
-	}
-	if m.MaxOutput <= 0 {
-		m.MaxOutput = 8192
-	}
+	applyContextBudget(&m)
 	if m.Protocol == "" {
 		m.Protocol = "openai"
 	}

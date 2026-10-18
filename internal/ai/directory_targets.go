@@ -240,7 +240,7 @@ func scopeAllows(scope *TargetScope, ref string) bool {
 	return false
 }
 func enforceTargetScope(c Config, name string, a, policy map[string]any) error {
-	if c.targetScope == nil || name == "list_assets" || name == "list_resource_groups" || name == "render_chart" || strings.HasPrefix(name, "web_") || name == "read_investigation" || name == "read_evidence" || name == "preview_resource_import" || name == "import_resources" {
+	if c.targetScope == nil || name == "list_assets" || name == "list_resource_groups" || name == "render_chart" || strings.HasPrefix(name, "web_") || name == "read_investigation" || name == "read_evidence" || name == "preview_resource_import" || name == "import_resources" || name == "inspect_attachment" {
 		return nil
 	}
 	if c.targetScope.NeedsClarification || len(c.targetScope.ResourceIDs) == 0 {

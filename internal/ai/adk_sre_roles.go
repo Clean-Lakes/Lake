@@ -256,10 +256,22 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 		}
 	}
 	child.Emit = func(ev Event) {
+		if ev.Type == "delta" && attemptID != "" {
+			data := obj(ev.Data)
+			if str(data["kind"]) == "message" {
+				e.updateSRELiveText(s, w.runID, str(data["card_id"]), str(data["content"]))
+			}
+			return
+		}
 		if ev.Type == "historyMessage" && attemptID != "" {
 			var message Message
 			raw, _ := json.Marshal(ev.Data)
-			if json.Unmarshal(raw, &message) == nil && message.Role == "assistant" && len(message.Calls) > 0 && strings.TrimSpace(message.Content) != "" {
+			if json.Unmarshal(raw, &message) == nil && message.Role == "assistant" && strings.TrimSpace(message.Content) != "" {
+				// Flush the final (possibly unthrottled) suffix before the run ends.
+				e.updateSRELiveText(s, w.runID, "", redact(message.Content, cc))
+				if len(message.Calls) == 0 {
+					return
+				}
 				_, _ = e.sreRepository.MutateSRETask(sessionID, task.ID, 0, "role_progress", func(t *SRETask) error {
 					for i := range t.Messages {
 						m := &t.Messages[i]
@@ -296,19 +308,11 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 			})
 			if attemptID != "" {
 				_, _ = e.sreRepository.MutateSRETask(sessionID, task.ID, 0, "role_question", func(t *SRETask) error {
-					for i := range t.Attempts {
-						if t.Attempts[i].ID == attemptID {
-							t.Attempts[i].Status = "running"
-							if req != nil {
-								t.Attempts[i].Status = "waiting_input"
-							}
-						}
-					}
+					status := "running"
 					if req != nil {
-						t.Status = "waiting_approval"
-					} else {
-						t.Status = "active"
+						status = "waiting_input"
 					}
+					projectSREAttemptStatus(t, attemptID, status)
 					return nil
 				})
 			}
@@ -321,7 +325,7 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 			_ = e.updateAgent(w, func(r *AgentRun) { r.Status = "waiting_approval"; r.Pending = &p })
 			if attemptID != "" {
 				_, _ = e.sreRepository.MutateSRETask(sessionID, task.ID, 0, "approval_requested", func(t *SRETask) error {
-					t.Status = "waiting_approval"
+					projectSREAttemptStatus(t, attemptID, "waiting_approval")
 					for i := range t.Attempts {
 						a := &t.Attempts[i]
 						if a.ID == attemptID {
@@ -339,7 +343,15 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 			}
 		}
 		if ev.Type == "operation" || ev.Type == "toolResult" {
-			_ = e.updateAgent(w, func(r *AgentRun) { r.Status = "running"; r.Pending = nil })
+			resumed := false
+			_ = e.updateAgent(w, func(r *AgentRun) {
+				resumed = r.Status == "waiting_approval" || r.Status == "waiting_input"
+				r.Status = "running"
+				r.Pending = nil
+			})
+			if resumed && attemptID != "" {
+				_, _ = e.sreRepository.MutateSRETask(sessionID, task.ID, 0, "role_resumed", func(t *SRETask) error { projectSREAttemptStatus(t, attemptID, "running"); return nil })
+			}
 		}
 		if e.Emit != nil {
 			e.Emit(Event{Session: sessionID, Type: "sreUpdate"})
@@ -468,14 +480,11 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 		out.Summary = redact(out.Summary, cc)
 	}
 	_ = e.updateAgent(w, func(r *AgentRun) {
-		r.Status = "completed"
+		r.Status = sreExecutionStatus(err)
+		// Keep the last real prose visible until the task transaction replaces
+		// its progress entry with the final report. Clearing it here briefly
+		// restores the original step description between those two updates.
 		r.ActivityPhase, r.ActivityTool = "", ""
-		if err != nil {
-			r.Status = "failed"
-			if errors.Is(err, context.Canceled) {
-				r.Status = "cancelled"
-			}
-		}
 		r.Summary = utf8Prefix(out.Summary, 8192)
 		r.CanCancel = false
 		r.Pending = nil

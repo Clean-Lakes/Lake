@@ -284,9 +284,7 @@ func (e *Engine) Configure(id string, c Config) error {
 	if c.MaxSteps <= 0 || c.MaxSteps > 500 {
 		c.MaxSteps = 500
 	}
-	if c.Model.ContextWindow == 0 {
-		c.Model.ContextWindow = 64000
-	}
+	applyContextBudget(&c.Model)
 	if c.Model.ContextWindow < 2048 {
 		return errors.New("context window must be at least 2048")
 	}
@@ -740,6 +738,10 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 			if errors.Is(toolErr, context.DeadlineExceeded) || errors.Is(toolErr, context.Canceled) {
 				failure["outcome"] = "unknown"
 				failure["notice"] = "工具等待已中断；先核查执行状态，不要重复执行或宣称成功。"
+				if e.sreCallReadOnly(*c, call) {
+					failure["outcome"] = "incomplete_observation"
+					failure["notice"] = "只读检查未完成，未取得完整结果。可以用新的调用重新检查；保留原始超时记录，不得宣称成功。"
+				}
 			}
 			if value != nil {
 				failure["result"] = value
@@ -964,7 +966,12 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	if strings.TrimSpace(summary) == "" {
 		return errors.New("context compaction: empty summary; original history retained")
 	}
-	projected, summary, fits := fitHandoffContext(history[0], summary, retained, historyBudget)
+	// Aim below the trigger, so a successful summary leaves room for follow-up
+	// messages and tool results instead of immediately compacting again.
+	projected, summary, fits := fitHandoffContext(history[0], summary, retained, target-toolCost)
+	if !fits {
+		projected, summary, fits = fitHandoffContext(history[0], result.Message.Content, retained, historyBudget)
+	}
 	if !fits {
 		return errors.New("current tool turn exceeds context budget")
 	}

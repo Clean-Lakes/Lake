@@ -202,8 +202,8 @@ func (e *Engine) validateSREHandoff(sessionID string, c Config, h SREHandoff) (S
 		if h.Action == "continue_task" || h.Action == "revise_plan" || h.Action == "restart_task" {
 			for _, a := range task.Attempts {
 				for _, op := range a.Operations {
-					if op.Status == "unknown" || op.Status == "dispatched" {
-						return h, errors.New("任务存在待核实操作，本轮没有恢复执行。请先在 Plan 的待核实操作入口查看原记录并核实实际状态；不要承诺正在继续，也不要重发该操作。请用 sre_reply 说明当前阻塞和下一步。")
+					if SREOperationBlocksResume(op) {
+						return h, sreOperationBlockError(op)
 					}
 				}
 			}

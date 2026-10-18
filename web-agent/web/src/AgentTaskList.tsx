@@ -1,3 +1,4 @@
+import {DisclosureSummary} from './DisclosureSummary';
 import { StatusText } from "./StatusText";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import type { AgentRun, AgentRunStatus, Evidence, Resource } from "../../shared/contracts";
@@ -53,14 +54,14 @@ export function AgentTaskList({ runs, resources, evidence = [], live = false, on
             <div className="agent-task-detail" id={`${id}-${run.id}`}><dl><dt>职责</dt><dd>{identity.label}</dd><dt>目标</dt><dd>{target}</dd><dt>任务</dt><dd>{run.task}</dd><dt>耗时</dt><dd className="agent-duration">{agentDuration(run, now)}</dd><dt>证据</dt><dd>{collected.length ? `${collected.length} 项` : run.status === "queued" ? "等待采集" : run.status === "running" ? "尚未收集" : "暂无已记录证据"}</dd>{typeof run.toolCount === "number" && <><dt>工具调用</dt><dd>{run.toolCount} 次</dd></>}</dl>
               {run.usage && <div className="agent-task-usage">模型用量：{!run.usage.total && !run.usage.known && !run.usage.inputKnown && !run.usage.outputKnown ? "服务商尚未返回" : <>{run.usage.total.toLocaleString()} tokens{!run.usage.known && !(run.usage.inputKnown && run.usage.outputKnown) ? "（已知部分）" : ""}</>} · 上下文独立</div>}
               {summary && <div className="agent-task-result"><strong>任务结果</strong><p>{summary}</p></div>}
-              {collected.map(item => <details className="agent-task-evidence" key={item.id}><summary>{item.title}</summary>{item.command && <pre>{item.command}</pre>}<pre>{item.excerpt}</pre>{item.exitCode !== null && <small>退出码：{item.exitCode}</small>}</details>)}
+              {collected.map(item => <details className="agent-task-evidence" key={item.id}><DisclosureSummary>{item.title}</DisclosureSummary>{item.command && <pre>{item.command}</pre>}<pre>{item.excerpt}</pre>{item.exitCode !== null && <small>退出码：{item.exitCode}</small>}</details>)}
               {canCancel && <button type="button" className="agent-cancel-button" disabled={disabled || cancelling.includes(run.id)} onClick={() => void cancel(run)}>{cancelling.includes(run.id) ? "正在停止…" : `停止 ${identity.name}`}</button>}
             </div>
           </details>
           {!compact && (run.pending||run.question) && renderApproval && <div className="agent-run-approval">{renderApproval(run)}</div>}
         </li>;
       })}</ol>
-      {children && <details className="agent-coordinator-detail" onToggle={event => { if (event.currentTarget.open) onInspect?.(); }}><summary>Lake 的操作记录</summary>{children}</details>}
+      {children && <details className="agent-coordinator-detail" onToggle={event => { if (event.currentTarget.open) onInspect?.(); }}><DisclosureSummary>Lake 的操作记录</DisclosureSummary>{children}</details>}
       {error && <p className="agent-task-error" role="alert">{error}</p>}
       {live && onStopTurn && <div className="agent-task-footer"><span>结果汇总到当前会话</span><button type="button" className="agent-stop-turn" disabled={disabled || stopping} aria-busy={stopping} onClick={onStopTurn}><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>{stopping ? "正在停止…" : "停止本轮"}</button></div>}
     </div>;

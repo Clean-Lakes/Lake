@@ -18,10 +18,13 @@ func asset(c Config, ref string) (Asset, error) {
 	}
 	return Asset{}, errors.New("asset not available in this session; call list_assets")
 }
-func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a map[string]any) (string, string, error) {
+
+// ToolRisk is the conservative built-in policy. Shell needs the trusted bridge
+// classifier to establish readonly; arbitrary MCP calls remain writes.
+func ToolRisk(name string, a map[string]any) string {
 	risk := "readonly"
 	switch name {
-	case "kill_shell", "import_resources":
+	case "call_mcp_tool", "kill_shell", "import_resources", "stage_attachment":
 		risk = "write"
 	case "shell", "terminal_execute_command":
 		risk = "write"
@@ -42,6 +45,11 @@ func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a
 			risk = "write"
 		}
 	}
+	return risk
+}
+
+func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a map[string]any) (string, string, error) {
+	risk := ToolRisk(name, a)
 	if e.Bridge != nil {
 		v, err := e.bridgeCall(ctx, id, "policy", map[string]any{"name": name, "arguments": a, "terminal_id": c.TerminalID}, false)
 		if err != nil {
@@ -116,8 +124,10 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if err = e.checkSRECall(c, call, a); err != nil {
 		return nil, err
 	}
-	if err = e.PrepareSREOperation(c, call); err != nil {
-		return nil, err
+	if sessionTool(call.Name) {
+		if err = e.PrepareSREOperation(c, call, "write"); err != nil {
+			return nil, err
+		}
 	}
 	defer func() { e.finishSREPreparation(c, call, err) }()
 	defer func() { result, err = e.recordSREToolResult(c, call, a, result, err) }()
@@ -217,7 +227,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		policyContext = obj(p)
 	}
 	ref := str(a["asset_ref"])
-	if ref == "" && !discovery && call.Name != "preview_resource_import" && call.Name != "import_resources" {
+	if ref == "" && !discovery && call.Name != "preview_resource_import" && call.Name != "import_resources" && call.Name != "inspect_attachment" {
 		ref = str(policyContext["asset_ref"])
 		if ref == "" {
 			ref = c.AssetRef
@@ -257,6 +267,9 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if call.Name == "delete" && CatastrophicDelete(str(a["path"])) {
 		policyContext["catastrophic"] = true
 		risk = "dangerous"
+	}
+	if err = e.PrepareSREOperation(c, call, risk); err != nil {
+		return nil, err
 	}
 	kind := ""
 	kind, err = approvalKind(c, call.Name, risk, policyContext)
@@ -388,7 +401,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	defer func() { e.finishSREOperation(c, call, result, err) }()
 	operation, operationErr := e.dispatchNativeOperation(ctx, s, c, call, risk, target, fingerprint)
 	if operationErr != nil {
-		return nil, operationErr
+		return nil, &ToolNotExecutedError{Err: operationErr}
 	}
 	defer func() {
 		if persistErr := e.finishNativeOperation(operation, c, result, err); persistErr != nil {
@@ -396,6 +409,13 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		}
 	}()
 	switch call.Name {
+	case "stage_attachment":
+		return e.stageAttachment(ctx, sessionForTools, c, a)
+	case "inspect_attachment":
+		if e.Bridge == nil {
+			return nil, errors.New("附件需要 Lake 工作台")
+		}
+		return e.bridgeCall(ctx, sessionForTools, call.Name, a, false)
 	case "observe_host", "observe_cluster", "observe_cluster_logs", "observe_journal", "observe_logs", "observe_data", "read_evidence":
 		return e.observation(ctx, c, call.Name, a)
 	case "preview_resource_import", "import_resources":

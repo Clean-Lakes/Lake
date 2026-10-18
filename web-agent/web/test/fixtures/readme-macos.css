@@ -1,0 +1,10 @@
+html { --lake-titlebar-height:52px; --radius-window:20px; background:#e9ecef; }
+html[data-theme="dark"] { background:#101112; }
+body { box-sizing:border-box; padding:16px; background:transparent; }
+#root { height:100%; overflow:hidden; border-radius:20px; border:1px solid var(--border); box-shadow:0 8px 32px #00000014; }
+.app-shell { height:100%; }
+.lake-native .sidebar { padding-top:52px; }
+.readme-macos-controls { position:fixed; z-index:1000; top:30px; left:30px; display:flex; gap:8px; pointer-events:none; }
+.readme-macos-controls i { display:block; width:12px; height:12px; box-sizing:border-box; border:1px solid #00000012; border-radius:50%; background:#ff5f57; }
+.readme-macos-controls i:nth-child(2) { background:#febc2e; }
+.readme-macos-controls i:nth-child(3) { background:#28c840; }

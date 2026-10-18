@@ -1,3 +1,7 @@
+import {DisclosureSummary} from './DisclosureSummary';
+import {acceptSnapshot,reuseUnchanged} from './snapshotUpdates';
+import {applyLiveText} from './liveTextUpdates';
+import {sreSessionPresentation} from './sreSessionPresentation';
 import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerMentions";
 import {SREModeToggle} from './SREModeToggle';
 import {filterMentions,mentionInsertion,mentionOptions,type MentionCategory,type MentionOption} from "./composerMentionState";
@@ -7,17 +11,17 @@ import {ComposerModelSelect} from "./ComposerModelSelect";
 import {ProjectSwitcher} from "./ProjectSwitcher";
 import {BulkCheckbox, BulkNavigationDelete, type BulkSelection} from "./BulkNavigationDelete";
 import {addBulkTargets, bulkCatalogTargets, bulkKey, orderBulkDeletion, type BulkTarget, type BulkDeleteResult} from "./bulkNavigation";
-import {NavigationDelete,NavigationTrash,NavigationMenu,TrashIcon,type NavigationDeleteTarget} from "./NavigationDelete";
+import {NavigationDelete,NavigationTrash,NavigationMenu,type NavigationDeleteTarget} from "./NavigationDelete";
 import {SessionEdit} from "./SessionEdit";
 import {TerminalConfigEdit} from "./TerminalConfigEdit";
 import { Workflows } from "./Workflows";
 import { ProjectMemory } from "./ProjectMemory";
-import { DesktopUpdate } from "./DesktopUpdate";
+import {SidebarUtilities} from "./SidebarUtilities";
 import { ActivityIndicator } from "./ActivityIndicator";
 import { PendingMessages } from "./PendingMessages";
 import { ModelSettings } from "./ModelSettings";
-import { readImageSelection, clipboardImageFiles } from "./imageAttachments";
-import { readTextFile } from "./textFiles";
+import { readImageSelection } from "./imageAttachments";
+import {clipboardFiles,partitionAttachments,attachmentCountLimit,fileSize} from "./fileAttachments";
 import { ResourceImport } from "./ResourceImport";
 import { SSHResourceFields, emptySSH } from "./SSHResourceFields";
 import type { SSHConnectionInput } from "../../shared/contracts";
@@ -43,7 +47,7 @@ import { api, ApiRequestError, readableError, type Bootstrap } from "./api";
 import { AIControls, AITranscript } from "./AIPanel";
 import { AgentIcon, type AgentIconName } from "./AgentIcon";
 import { Glyph, ResourceIcon, type GlyphName } from "./Icons";
-import { SessionActions, SessionListTags, TagNavigation, TagManager, SessionStateBadge } from "./SessionPresentation";
+import { SessionActions, SessionListTags, TagManager, SessionStateBadge } from "./SessionPresentation";
 import "./sessionPresentation.css";
 import "./conversationDirectory.css";
 import { ContextUsage } from "./ContextUsage";
@@ -66,6 +70,7 @@ import { type CommandPolicy, dangerConfirmation } from "../../shared/command-pol
 import "./styles.css";
 import "./agentTasks.css";
 import "./statusText.css";
+import "./floatingHeader.css";
 import "./workbenchLayout.js";
 
 // Keep the workflow editor available for later development without exposing it.
@@ -73,7 +78,7 @@ const showWorkflows = false;
 
 
 const sessionLabels: Record<WorkSession["status"], string> = {
-  idle: "待命中", investigating: "调查中", waiting_approval: "等待确认", completed: "已完成", failed: "需要关注",
+  idle: "待命中", investigating: "调查中", waiting_approval: "等待确认", completed: "回复结束", failed: "需要关注",
 };
 const actionLabels: Record<Action["status"], string> = {
   pending: "等待确认", rejected: "已拒绝", running: "执行中", succeeded: "命令已执行", failed: "执行失败", unknown: "状态待核查",
@@ -125,6 +130,7 @@ function App() {
   }, [booting]);
   const [route, setRoute] = useState(initialRoute);
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
+  const liveSnapshot=useRef(snapshot);liveSnapshot.current=snapshot;
   const [sessionError, setSessionError] = useState("");
   const [sessionReload, setSessionReload] = useState(0);
   const [streamState, setStreamState] = useState<StreamState>("connecting");
@@ -179,6 +185,8 @@ function App() {
   const attachmentEpoch = useRef(0);
   useLayoutEffect(() => { attachmentEpoch.current++; }, [route.sessionId]);
   const [fileDraft, setFileDraft] = useState<TextFileAttachment[]>([]);
+  const [attachmentDragOver,setAttachmentDragOver] = useState(false);
+  const [attachmentUploading,setAttachmentUploading] = useState("");
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const [mentionRefs, setMentionRefs] = useState<MentionReference[]>([]);
   const [messageDraft, setMessageDraft] = useState("");
@@ -205,9 +213,17 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [navigationQuery, setNavigationQuery] = useState("");
   const navigationInput = useRef<HTMLInputElement>(null);
+  const newSessionButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.isComposing || event.repeat) return;
+      if(event.key.toLowerCase()==="n"){
+        if(/Mac/.test(navigator.platform)?!event.metaKey:!event.ctrlKey)return;
+        const button=newSessionButton.current;
+        if(!button||button.disabled||button.hidden||document.querySelector('[role="dialog"],.modal-scrim'))return;
+        event.preventDefault();button.click();return;
+      }
+      if(event.key.toLowerCase()!=="k")return;
       event.preventDefault();
       if (matchMedia("(max-width:700px)").matches) setMobileMenu(true);
       requestAnimationFrame(() => navigationInput.current?.focus());
@@ -380,6 +396,8 @@ function App() {
     let disposed = false;
     let stream: EventSource | null = null;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let textFrame:number|null=null;
+    let textEvents:SessionEvent[]=[];
     let terminalRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     const requests = new AbortController();
@@ -403,7 +421,7 @@ function App() {
       try {
         const fresh = await fetchSnapshot();
         if (disposed || activeSession.current !== sessionId) return;
-        setSnapshot(fresh);
+        setSnapshot(current=>acceptSnapshot(current,fresh));
         streamCursor.current = Math.max(streamCursor.current, fresh.cursor);
         setCatalog(current => current ? {
           ...current,
@@ -436,6 +454,16 @@ function App() {
         const event = JSON.parse(incoming.data) as SessionEvent;
         if (event.sessionId !== sessionId || typeof event.seq !== "number" || event.seq <= streamCursor.current) return;
         streamCursor.current = event.seq;
+        if(event.textUpdate&&applyLiveText(liveSnapshot.current,event)){
+          textEvents.push(event);
+          if(textFrame===null)textFrame=requestAnimationFrame(()=>{
+            textFrame=null;
+            const batch=textEvents;textEvents=[];
+            if(disposed)return;
+            setSnapshot(current=>batch.reduce((value,item)=>applyLiveText(value,item)??value,current));
+          });
+          return;
+        }
         if (event.type === "terminal" && !terminalRefreshTimer) terminalRefreshTimer = setTimeout(() => {
           terminalRefreshTimer = null;
           setTerminalRevision(value => value + 1);
@@ -445,7 +473,7 @@ function App() {
         if (!refreshTimer) refreshTimer = setTimeout(() => {
           refreshTimer = null;
           void refresh();
-        }, event.type === "terminal" ? 250 : 120);
+        }, event.type === "terminal" ? 250 : 16);
       } catch { /* Keep the current snapshot if an unrelated SSE frame arrives. */ }
     };
     const stopPolling = () => { if (pollTimer) clearInterval(pollTimer); pollTimer = null; };
@@ -486,6 +514,8 @@ function App() {
         stream?.close(); stream = null; stopPolling(); pollingHealthy = false;
         if (refreshTimer) clearTimeout(refreshTimer);
         refreshTimer = null;
+        if(textFrame!==null)cancelAnimationFrame(textFrame);
+        textFrame=null;textEvents=[];
         // A hidden tab deliberately suspends its stream; it has not failed.
         setStreamState("connecting"); setRestoringStream(true);
       } else { setStreamState("connecting"); setSessionError(""); restoring = true; startPolling(); connectStream(); }
@@ -495,7 +525,7 @@ function App() {
       try {
         const first = await fetchSnapshot();
         if (disposed || activeSession.current !== sessionId) return;
-        setSnapshot(first);
+        setSnapshot(current=>acceptSnapshot(current,first));
         setSessionError("");
         streamCursor.current = first.cursor;
         setCatalog(current => current ? { ...current, sessions: current.sessions.map(session => session.id === first.session.id ? first.session : session) } : current);
@@ -517,9 +547,10 @@ function App() {
       stopPolling();
       stream?.close();
       if (refreshTimer) clearTimeout(refreshTimer);
+      if(textFrame!==null)cancelAnimationFrame(textFrame);
       if (terminalRefreshTimer) clearTimeout(terminalRefreshTimer);
     };
-  }, [sessionId, sessionReload, bootstrap, Boolean(catalog), handleFailure]);
+  }, [sessionId, sessionReload, Boolean(bootstrap), Boolean(catalog), handleFailure]);
 
   useEffect(() => {
     if (!activeTerminalContext.current) {
@@ -731,7 +762,7 @@ function App() {
     const sync = async () => {
       if(disposed || syncing || document.hidden)return;
       syncing=true;
-      try { const data=await api.catalog();if(!disposed)setCatalog(data); }
+      try { const data=await api.catalog();if(!disposed)setCatalog(current=>reuseUnchanged(current,data)); }
       catch {} finally {syncing=false;}
     };
     const timer=setInterval(() => void sync(),2000);
@@ -745,7 +776,7 @@ function App() {
     if (!activeSession.current) return;
     const fresh = await api.snapshot(activeSession.current);
     if (activeSession.current !== fresh.session.id) return;
-    setSnapshot(fresh);
+    setSnapshot(current=>acceptSnapshot(current,fresh));
     streamCursor.current = Math.max(streamCursor.current, fresh.cursor);
     setCatalog(current => current ? { ...current, sessions: current.sessions.some(session => session.id === fresh.session.id)
       ? current.sessions.map(session => session.id === fresh.session.id ? fresh.session : session)
@@ -911,26 +942,26 @@ function App() {
     const epoch = attachmentEpoch.current;
     const targetSession = sessionId;
     const selected = [...files];
-    const imageFiles = selected.filter(file => file.type.startsWith("image/"));
-    const textFiles = selected.filter(file => !file.type.startsWith("image/"));
     setPendingOperation("attachment-upload");
     try {
-      if (fileDraft.length + textFiles.length > 4) throw new Error("每条消息最多附加 4 个文本文件。");
-      const images = imageFiles.length ? await readImageSelection(imageDraft, imageFiles) : [];
-      const texts = await Promise.all(textFiles.map(readTextFile));
-      const uploaded: TextFileAttachment[] = [];
-      for (const [index, file] of textFiles.entries()) uploaded.push(await api.uploadTextFile(targetSession, file.name, texts[index]!));
-      if (activeSession.current === targetSession && epoch === attachmentEpoch.current) {
-        setFileDraft(current => [...current, ...uploaded]);
-        setImageDraft(current => [...current, ...images]);
+      const {images:imageFiles,files:otherFiles}=partitionAttachments(selected,imageDraft,!!bootstrap?.supportsImageInput);
+      if(fileDraft.length+otherFiles.length>attachmentCountLimit)throw Error("每条消息最多附加 8 个文件。");
+      const images=imageFiles.length?await readImageSelection(imageDraft,imageFiles):[];
+      if(activeSession.current===targetSession&&epoch===attachmentEpoch.current)setImageDraft(current=>[...current,...images]);
+      for(const file of otherFiles) {
+        setAttachmentUploading(file.name);
+        const uploaded=await api.uploadAttachment(targetSession,file);
+        if(activeSession.current===targetSession&&epoch===attachmentEpoch.current)setFileDraft(current=>[...current,uploaded]);
       }
     } catch (error) { handleFailure(error); }
-    finally { attachmentReading.current = false; setPendingOperation(""); if (attachmentInputRef.current) attachmentInputRef.current.value = ""; if (activeSession.current === targetSession && epoch === attachmentEpoch.current) requestAnimationFrame(() => messageInputRef.current?.focus()); }
+    finally { attachmentReading.current = false; setAttachmentUploading(""); setPendingOperation(""); if (attachmentInputRef.current) attachmentInputRef.current.value = ""; if (activeSession.current === targetSession && epoch === attachmentEpoch.current) requestAnimationFrame(() => messageInputRef.current?.focus()); }
   }
   async function sendMessage(event: FormEvent) {
     event.preventDefault();
-    const text = messageDraft.trim() || (fileDraft.length ? "请读取附加文本文件，识别并导入其中的资源。" : "");
-    if (!sessionId || (!text && !imageDraft.length) || !sessionConnected || !modelConfigured || stoppingTurn || pendingOperation) return;
+    const text = messageDraft.trim() || (fileDraft.length ? "请查看附件信息，并说明可以如何处理；执行或部署前先确认目标和需求。" : "");
+    if (!sessionId || !sessionConnected || stoppingTurn || pendingOperation) return;
+    if (!modelConfigured) {setMention(null);void openSettings();return;}
+    if (!text && !imageDraft.length) return;
     if (imageDraft.length && !bootstrap?.supportsImageInput) { handleFailure(new Error("当前模型未启用图片输入，请切换到支持图片的模型后发送。")); return; }
     const targetSession=sessionId;
     setMention(null);
@@ -938,8 +969,7 @@ function App() {
     conversationScroll.current.following = true;
     try {
       const refs = mentionedResourceIds(text);
-      const result=await api.sendMessage(targetSession, text, refs, imageDraft, referencedExtensions(messageDraft,mentionRefs), undefined, fileDraft, queueMode, ignoreProjectMemory);
-      if (result.queued) notify("已加入待发送队列");
+      await api.sendMessage(targetSession, text, refs, imageDraft, referencedExtensions(messageDraft,mentionRefs), undefined, fileDraft, queueMode, ignoreProjectMemory);
       if (activeSession.current === targetSession) {
         setMessageDraft("");
         setImageDraft([]);
@@ -1193,6 +1223,7 @@ function App() {
   const projectList = [...catalog.projects].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const sidebarProject = projectList.find(project => project.id === (sidebarProjectId ?? selectedProjectId)) ?? projectList[0];
   const navigationSearch = navigationQuery.trim().toLocaleLowerCase();
+  const sidebarSessionsExpanded=!!navigationSearch||!closedSessionGroups.includes(sidebarProject?.id??"");
   const matchesNavigation = (name: string) => name.toLocaleLowerCase().includes(navigationSearch);
   const navigationProjects = projectList.filter(project => project.id === sidebarProject?.id && (!selectedTag || catalog.tags?.some(tag=>tag.id===selectedTag&&tag.projectId===project.id)) && (!navigationSearch || matchesNavigation(project.name)
     || catalog.sessions.some(session => session.projectId === project.id && matchesNavigation(session.title))
@@ -1241,16 +1272,20 @@ function App() {
   return <div className={`app-shell ${terminalOpen ? "terminal-is-open" : ""}`}>
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
-    <aside className={`sidebar ${mobileMenu ? "sidebar-open" : ""} ${bulkMode ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
+    <aside className={`sidebar workspace-navigation ${mobileMenu ? "sidebar-open" : ""} ${bulkMode ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
       <div className="sidebar-brand-row"><Brand icon={false}/><button className="icon-button mobile-only" title="关闭导航" aria-label="关闭导航" onClick={() => setMobileMenu(false)}><Glyph name="close"/></button></div>
       {sidebarProject && <div className="sidebar-project-picker">
         <BulkCheckbox target={{kind:"project",id:sidebarProject.id,projectId:sidebarProject.id,name:sidebarProject.name}} selection={bulkSelection}/>
         <ProjectSwitcher projects={projectList} value={sidebarProject.id} onChange={id=>{setSidebarProjectId(id);setNavigationQuery("");setSelectedTag(null);setBulkMode(false);setBulkSelected([]);const session=catalog.sessions.filter(item=>item.projectId===id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];navigate({sessionId:session?.id??null,resourceId:null});}}/>
-        <button type="button" className="icon-button" aria-label={`管理项目 ${sidebarProject.name}`} title="更多操作" aria-haspopup="menu" disabled={!connected} onClick={event=>{const rect=event.currentTarget.getBoundingClientRect();setProjectContext({project:sidebarProject,x:rect.right,y:rect.bottom});}}>⋯</button>
+        <button type="button" className="icon-button" aria-label={`管理项目 ${sidebarProject.name}`} title="更多操作" aria-haspopup="menu" disabled={!connected} onClick={event=>{const rect=event.currentTarget.getBoundingClientRect();setProjectContext({project:sidebarProject,x:rect.right,y:rect.bottom});}}><Glyph name="more" size={16}/></button>
       </div>}
-      <label className="navigation-search"><Glyph name="search" size={15}/><input ref={navigationInput} type="search" value={navigationQuery} onChange={event => setNavigationQuery(event.target.value)} placeholder="搜索当前项目…" aria-label="搜索当前项目"/>{navigationQuery ? <button type="button" aria-label="清除搜索" onClick={() => setNavigationQuery("")}><Glyph name="close" size={13}/></button> : <span className="navigation-search-key">⌘ K</span>}</label>
+      <label className="navigation-search"><Glyph name="search" size={15}/><input ref={navigationInput} type="search" value={navigationQuery} onChange={event => setNavigationQuery(event.target.value)} placeholder="搜索当前项目…" aria-label="搜索当前项目"/>{navigationQuery ? <button type="button" aria-label="清除搜索" onClick={() => setNavigationQuery("")}><Glyph name="close" size={13}/></button> : <span className="navigation-search-key">{/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}</span>}</label>
       {bulkMode && <div className="bulk-navigation-toolbar"><button type="button" onClick={()=>{setBulkMode(false);setBulkSelected([]);}}>完成</button><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
       <nav className="project-scroll">
+        {sidebarProject&&<div className="nav-heading sidebar-session-heading" hidden={bulkMode}>
+          <button type="button" className="nav-section-toggle" aria-label={`${sidebarSessionsExpanded?"折叠":"展开"}${sidebarProject.name}的会话`} aria-expanded={sidebarSessionsExpanded} aria-controls={navigationProjects.length?`project-sessions-${sidebarProject.id}`:undefined} disabled={!navigationProjects.length} onClick={()=>setClosedSessionGroups(items=>sidebarSessionsExpanded?[...items,sidebarProject.id]:items.filter(id=>id!==sidebarProject.id))}><Glyph name="chevron" size={13} className={sidebarSessionsExpanded?"chevron-open":""}/><span>{navigationSearch?"匹配会话":allSessionGroups.includes(sidebarProject.id)?"全部会话":"最近会话"}</span></button>
+          <button type="button" ref={newSessionButton} className="sidebar-new-session" hidden={bulkMode} disabled={!connected||!!pendingOperation} aria-label="新对话" aria-keyshortcuts="Meta+N Control+N" title={`新对话（${/Mac/.test(navigator.platform)?'⌘ N':'Ctrl N'}）`} onClick={()=>{setClosedSessionGroups(items=>items.filter(id=>id!==sidebarProject.id));openSessionDialog(sidebarProject.id);}}><Glyph name="edit" size={14}/></button>
+        </div>}
         {navigationProjects.length ? navigationProjects.map(project => {
           const sessionsExpanded = !!navigationSearch || !closedSessionGroups.includes(project.id);
           const projectMatches = matchesNavigation(project.name);
@@ -1261,24 +1296,27 @@ function App() {
           return <div className="project-group" key={project.id}>
             <div className="project-contents">
               {showWorkflows && <button type="button" className="workflow-entry" onClick={() => setWorkflowProject(project)} disabled={!connected}><Glyph name="layers" size={15}/>运维工作流</button>}
-              <div className="nav-heading"><button type="button" className="nav-section-toggle" aria-label={`${sessionsExpanded ? "折叠" : "展开"}${project.name}的会话`} aria-expanded={sessionsExpanded} aria-controls={`project-sessions-${project.id}`} onClick={() => setClosedSessionGroups(items => sessionsExpanded ? [...items, project.id] : items.filter(id => id !== project.id))}><Glyph name="chevron" size={13} className={sessionsExpanded ? "chevron-open" : ""}/><span>会话 <small>{sessions.length}</small></span></button>{bulkMode && <button className="bulk-group-toggle" type="button" disabled={!connected || !!pendingOperation || !sessions.length} aria-label={`全选 ${project.name} 的会话`} onClick={() => toggleBulkGroup(sessions.map(session => ({kind:"session",id:session.id,projectId:project.id,name:session.title})))}>全选</button>}<button hidden={bulkMode} className="nav-add" aria-label={`在${project.name}新建会话`} title="新建会话" disabled={!connected} onClick={() => { setClosedSessionGroups(items => items.filter(id => id !== project.id)); openSessionDialog(project.id); }}><Glyph name="plus" size={16}/></button></div>
+              {bulkMode&&<div className="nav-heading"><button type="button" className="nav-section-toggle" aria-label={`${sessionsExpanded ? "折叠" : "展开"}${project.name}的会话`} aria-expanded={sessionsExpanded} aria-controls={`project-sessions-${project.id}`} onClick={() => setClosedSessionGroups(items => sessionsExpanded ? [...items, project.id] : items.filter(id => id !== project.id))}><Glyph name="chevron" size={13} className={sessionsExpanded ? "chevron-open" : ""}/><span>{navigationSearch?"匹配会话":allSessions?"全部会话":"最近会话"} <small className="session-group-count">{sessions.length}</small></span></button>{bulkMode && <button className="bulk-group-toggle" type="button" disabled={!connected || !!pendingOperation || !sessions.length} aria-label={`全选 ${project.name} 的会话`} onClick={() => toggleBulkGroup(sessions.map(session => ({kind:"session",id:session.id,projectId:project.id,name:session.title})))}>全选</button>}</div>}
               <div id={`project-sessions-${project.id}`} hidden={!sessionsExpanded}>{sessions.length ? visibleSessions.map(session => <div className={`nav-row-wrap ${bulkMode ? "bulk-session-row" : ""}`} key={session.id} onContextMenu={event => {event.preventDefault(); if (connected) {setProjectContext(null); setSessionContext({session, x: event.clientX, y: event.clientY});}}}>
                 <BulkCheckbox target={{kind:"session",id:session.id,projectId:session.projectId,name:session.title}} selection={bulkSelection}/>
                 <button className={`nav-row session-nav-row ${route.sessionId === session.id && !route.resourceId ? "active" : ""}`} onClick={() => bulkMode ? toggleBulkTarget({kind:"session",id:session.id,projectId:session.projectId,name:session.title}) : navigate({ sessionId: session.id, resourceId: null })} aria-current={route.sessionId === session.id && !route.resourceId ? "page" : undefined}>
                   <Glyph name={session.icon??"chat"} size={16}/><span className="nav-row-text"><strong>{session.title}</strong><SessionListTags tags={session.tags??[]}/><small>{sessionLabels[session.status]}</small></span>{session.status === "investigating" && <span className="session-activity" title="正在回复"><ActivityIndicator/></span>}{session.status === "waiting_approval" && <span className="attention-dot" title="等待确认"/>}
                 </button>
-                <button type="button" className="session-edit" title="编辑会话" aria-label={`编辑会话 ${session.title}`} onClick={() => setEditSession(session)} disabled={!connected}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1 12-12a2.8 2.8 0 0 0-4-4L4 15Z"/></svg></button>
-                <button type="button" className="session-more" title="更多操作" aria-label={`管理会话 ${session.title}`} aria-haspopup="menu" onClick={event => {const rect = event.currentTarget.getBoundingClientRect(); setSessionContext({session, x: rect.right, y: rect.bottom});}} disabled={!connected || !!pendingOperation}>⋯</button>
-              </div>) : <p className="nav-empty">{navigationSearch ? "没有匹配的会话" : "还没有会话"}</p>}{sessions.length > 5 && <button type="button" className="nav-show-more" aria-expanded={allSessions} onClick={() => setAllSessionGroups(items => allSessions ? items.filter(id => id !== project.id) : [...items, project.id])}>{allSessions ? "收起历史会话" : `显示全部 ${sessions.length} 个会话`}</button>}</div>
+                <SessionActions session={session} tags={catalog.tags??[]} className="session-more" label={`管理会话 ${session.title}`} disabled={!connected||!!pendingOperation}
+                  menuPosition={sessionContext?.session.id===session.id?sessionContext:null} onMenuChange={position=>setSessionContext(position?{session,...position}:null)}
+                  view={conversationMode} hasViews={session.id===selectedSession?.id&&!!activeSnapshot?.ai} onView={value=>{pauseFollowing();setConversationMode(value as "conversation"|"activity"|"evidence");conversationRef.current?.scrollTo({top:0});setMobileMenu(false);}}
+                  onEdit={()=>setEditSession(session)} onDelete={()=>{setDeleteError("");setDeleteTarget(session);}} onRefresh={async()=>{await refreshCatalog();}}
+                  onSaved={saved=>{setSnapshot(current=>current&&current.session.id===saved.id?{...current,session:saved}:current);setCatalog(current=>current?{...current,sessions:current.sessions.map(s=>s.id===saved.id?saved:s)}:current);}}/>
+              </div>) : <p className="nav-empty">{navigationSearch ? "没有匹配的会话" : "还没有会话"}</p>}{sessions.length > 5 && <button type="button" className="nav-show-more" aria-expanded={allSessions} onClick={() => setAllSessionGroups(items => allSessions ? items.filter(id => id !== project.id) : [...items, project.id])}>{allSessions ? "收起历史会话" : `查看全部 ${sessions.length} 个会话`}</button>}</div>
               {<ResourceTree selection={bulkSelection} onSelectAll={() => toggleBulkGroup(bulkCatalogTargets(catalog).filter(target => target.projectId === project.id && ["resource","folder"].includes(target.kind)))} onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={navigationSearch && !projectMatches ? resourceSearchNodes(project.id, catalog.resourceTree ?? [], projectResources) : catalog.resourceTree ?? []} filtering={!!navigationSearch && !projectMatches} disabled={!connected} refresh={refreshCatalog} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={(parentId) => { setSshProject(project.id); setSshParent(parentId); setSshName(""); setSshDraft(emptySSH()); setSshError(""); }} renderResource={resource => {
                 const live = resourceTerminals.filter(t => t.resourceId === resource.id && t.status !== "disconnected").sort((a, b) => a.createdAt.localeCompare(b.createdAt));
                 return <div key={resource.id} className="resource-nav-wrap" ref={resourceTerminalMenu === resource.id ? resourceMenuRef : undefined}><div className="resource-nav-row" onContextMenu={event => {if (["local", "ssh"].includes(resource.kind)) {event.preventDefault(); event.stopPropagation(); if (connected) {setResourceTerminalMenu(null); setResourceConfigContext({resource, x:event.clientX, y:event.clientY});}}}}>
                   <button id={`resource-trigger-${resource.id}`} className={`nav-row resource-row ${route.resourceId === resource.id || terminalOpen && terminalResource?.id === resource.id ? "active" : ""}`} onClick={() => { if (bulkMode) {toggleBulkTarget({kind:"resource",id:resource.id,projectId:resource.projectId,name:resource.name}); return;} if (["local", "ssh"].includes(resource.kind)) { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); } else navigate({ sessionId: route.sessionId, resourceId: resource.id }); }} aria-expanded={["local", "ssh"].includes(resource.kind) ? resourceTerminalMenu === resource.id : undefined} aria-current={route.resourceId === resource.id ? "page" : undefined}>
-                    <ResourceIcon kind={resource.kind}/><span className="nav-row-text"><strong>{resource.name}</strong></span>{connectingResources.includes(resource.id) ? <span className="resource-inline-status">连接中</span> : live.length>0 && <span className={`resource-inline-status ${connected && live.some(terminal=>terminal.status==="ready"||terminal.status==="busy") ? "online" : ""}`} title={`${live.length} 个终端`}>{connected && live.some(terminal=>terminal.status==="ready"||terminal.status==="busy")&&<span className="resource-indicator available"/>}{live.length} 终端</span>}
+                    <ResourceIcon kind={resource.kind}/><span className="nav-row-text"><strong>{resource.name}</strong></span>{connected && live.some(terminal=>terminal.status==="ready"||terminal.status==="busy") && <span className="resource-indicator available resource-connection-indicator" role="img" aria-label="终端已连接" title="终端已连接"/>}{connectingResources.includes(resource.id) && <span className="resource-inline-status">连接中</span>}
                   </button>
                   {["local", "ssh"].includes(resource.kind) && <>
                     <button type="button" className="resource-terminal-button resource-terminal-quick" aria-label={`一键打开 ${resource.name} 的终端`} disabled={!connected || !persistentMode || !!pendingOperation || resource.status !== "available"} onClick={() => void openTerminalFromSidebar(resource.id)} title={connectingResources.includes(resource.id) ? "查看连接进度" : live.length ? "打开已有终端" : "创建并打开终端"}><Glyph name="terminal" size={15}/></button>
-                    <button type="button" className="resource-terminal-button resource-terminal-manage" aria-label={`管理 ${resource.name} 的终端`} aria-expanded={resourceTerminalMenu === resource.id} disabled={!connected} onClick={() => { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); }} title="管理终端">⋯</button>
+                    <button type="button" className="resource-terminal-button resource-terminal-manage" aria-label={`管理 ${resource.name} 的终端`} aria-expanded={resourceTerminalMenu === resource.id} disabled={!connected} onClick={() => { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); }} title="管理终端"><Glyph name="more" size={16}/></button>
                   </>}
                 </div>{resourceTerminalMenu === resource.id && <ResourceTerminalMenu anchor={resourceMenuRef} menuRef={resourcePopupRef} label={`${resource.name} 终端`}>
                   <div className="resource-terminal-heading"><div><strong title={resource.name}>{resource.name}</strong><small>终端管理</small></div><button type="button" onClick={() => { setResourceTerminalMenu(null); document.getElementById(`resource-trigger-${resource.id}`)?.focus(); }} aria-label="收起资源终端"><Glyph name="close" size={15}/></button></div>
@@ -1296,21 +1334,16 @@ function App() {
           </div>;
         }) : <div className="sidebar-empty"><Glyph name={navigationSearch ? "search" : "layers"} size={25}/><p>{navigationSearch ? "没有匹配的项目、会话或资源" : "还没有项目"}</p>{navigationSearch ? <button onClick={() => setNavigationQuery("")}>清除搜索</button> : <button onClick={openProjectDialog} disabled={!connected}>创建第一个项目</button>}</div>}
       </nav>
-      <TagNavigation key={sidebarProject?.id} tags={(catalog.tags??[]).filter(tag=>tag.projectId===sidebarProject?.id)} sessions={catalog.sessions} selected={selectedTag} onSelect={setSelectedTag} onManage={()=>{const project=sidebarProject;if(project)setTagProject(project);else openProjectDialog();}} onSession={id=>navigate({sessionId:id,resourceId:null})}/>
-      <div className="sidebar-footer"><button className="sidebar-settings" onClick={() => void openSettings()} disabled={booting}>
-        <Glyph name="settings" size={16}/><span>设置</span>
-        {!modelConfigured && <span className="settings-flag">模型未配置</span>}
-      </button><button className="sidebar-trash" aria-label="已删除" title="已删除" disabled={!connected} onClick={()=>setTrashOpen(true)}><TrashIcon/></button></div>
+      <SidebarUtilities key={sidebarProject?.id} tags={(catalog.tags??[]).filter(tag=>tag.projectId===sidebarProject?.id)} sessions={catalog.sessions} selectedTag={selectedTag} onSelectTag={setSelectedTag} onManageTags={()=>{const project=sidebarProject;if(project)setTagProject(project);else openProjectDialog();}} onSession={id=>navigate({sessionId:id,resourceId:null})} onSettings={()=>void openSettings()} onTrash={()=>setTrashOpen(true)} booting={booting} connected={connected} modelConfigured={modelConfigured}/>
+
     </aside>
 
-    <main className="workspace">
+    <main className={`workspace${selectedSession&&!selectedResource?" has-floating-header":""}`} onDragOver={event=>{if(selectedSession&&!selectedResource&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(!selectedSession||selectedResource||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       <header className="workspace-header">
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
-        <div className="breadcrumbs"><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span><strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</strong>{selectedSession && !selectedResource && <SessionStateBadge session={selectedSession}/>}</div>
-        <div className="workspace-actions">{selectedSession && !selectedResource && <SessionActions key={selectedSession.id} session={selectedSession} tags={catalog.tags??[]} disabled={!connected} view={conversationMode} hasViews={!!activeSnapshot?.ai} onView={value=>{pauseFollowing();setConversationMode(value as "conversation"|"activity"|"evidence");conversationRef.current?.scrollTo({top:0});}} onEdit={()=>setEditSession(selectedSession)} onRefresh={async()=>{await refreshCatalog();}} onSaved={saved=>{setSnapshot(current=>current&&current.session.id===saved.id?{...current,session:saved}:current);setCatalog(current=>current?{...current,sessions:current.sessions.map(s=>s.id===saved.id?saved:s)}:current);}}/>}<DesktopUpdate/></div>
+        <div className="breadcrumbs"><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span><strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/><span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong>{selectedSession && !selectedResource && <SessionStateBadge session={selectedSession} {...sreSessionPresentation(selectedSession,activeSnapshot?.sre?.tasks)}/>}</div>
       </header>
 
-      {!modelConfigured && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>尚未配置 Agent 模型。可浏览项目、资源和命令记录；发送对话需要先在设置里填写模型端点、名称和密钥。</span><button onClick={() => void openSettings()}><Glyph name="settings" size={15}/>打开设置</button></div>}
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}
       {connection.warning && warningSessionId === sessionId && <div className="system-banner offline-banner" role="alert"><Glyph name="alert" size={18}/><span>{visibleSessionError || "实时连接已断开。当前内容可能不是最新状态，操作已暂停。"}</span><button onClick={() => sessionId ? setSessionReload(value => value + 1) : void loadApp()}><Glyph name="refresh" size={15}/>重试</button></div>}
       {activeSnapshot?.ai?.memoryStatus === "backlog_full" && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>项目记忆待处理队列已满，本轮未自动学习。请在项目记忆中查看任务状态。</span>{selectedProjectId && <button onClick={() => {const project = projectList.find(item => item.id === selectedProjectId); if (project) setMemoryProject(project);}}>查看项目记忆</button>}</div>}
@@ -1319,13 +1352,13 @@ function App() {
         </> : sessionId && selectedSession ? <div className="session-view">
         <section id="session-view-panel" ref={conversationRef} onWheel={pauseFollowing} onPointerDown={pauseFollowing} onKeyDown={event => { if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key)) pauseFollowing(); }} onScroll={event => { if (conversationFollower.current?.animating) return; const container = event.currentTarget; conversationScroll.current.following = container.scrollHeight - container.clientHeight - container.scrollTop < 80; }} className="conversation" aria-label="会话记录">
           {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true">{loadingSessionId === sessionId && <span role="status">正在加载会话…</span>}</div> : (itemList.length || !!activeSnapshot.sre?.tasks.length) ? <div className="timeline-list">
-            {activeSnapshot?.ai ? <AITranscript snapshot={activeSnapshot} mode={conversationMode} onInspect={pauseFollowing} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={!sessionConnected} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
+            {activeSnapshot?.ai ? <AITranscript key={sessionId} snapshot={activeSnapshot} mode={conversationMode} onInspect={pauseFollowing} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={!sessionConnected} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
             {selectedSession.status === "investigating" && !activeSnapshot.ai && <div className="timeline-item item-thinking" role="status" aria-live="polite"><span className="timeline-point"><Glyph name="spark" size={15}/></span><div className="timeline-content"><div className="thinking-line"><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span><span>正在处理…</span></div></div></div>}
-          </div> : <div className="timeline-empty"><div className="empty-icon"><Glyph name="chat" size={25}/></div><h2>从一个问题开始</h2><p>描述你看到的故障或想核实的现象。Lake 会把调查过程、证据和需要确认的操作留在这里。</p>{!modelConfigured && <span className="empty-hint">配置 Agent 模型后可发送第一条消息。</span>}</div>}
+          </div> : <div className="timeline-empty"><div className="empty-icon"><Glyph name="chat" size={25}/></div><h2>从一个问题开始</h2><p>描述你看到的故障或想核实的现象。Lake 会把调查过程、证据和需要确认的操作留在这里。</p></div>}
         </section>
-        <div className="composer-dock">{activeSnapshot?.ai && <AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/>}<PendingMessages key={sessionId} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/><form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">给 Lake 的消息</label><div className="composer-input">
+        <div className="composer-dock">{activeSnapshot?.ai && <AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/>}<PendingMessages key={sessionId} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/><form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">给 Lake 的消息</label><div className={`composer-input${attachmentDragOver?" attachment-drop-active":""}`}>
           {mention && <ComposerMentions options={mentionMatches} allOptions={allMentionOptions} index={mentionIndex} category={mentionCategory} onCategory={kind=>{setMentionCategory(kind);setMention({...mention,index:0});}} onSelect={insertMention} loading={mentionExtensions.loading} error={mentionExtensions.error} onReload={mentionExtensions.reload} onClose={()=>setMention(null)} onImport={()=>{const target=projectList.find(item=>item.id===selectedSession?.projectId);setMention(null);if(target){setImportHexhub(true);setImportProject(target);}}}/>}
-          {fileDraft.length > 0 && <div className="text-file-drafts">{fileDraft.map(file => <span key={file.sourceId}>{file.name}<button type="button" aria-label={`移除 ${file.name}`} onClick={() => setFileDraft(files => files.filter(item => item.sourceId !== file.sourceId))}>×</button></span>)}</div>}{imageDraft.length > 0 && <div className="image-drafts">{imageDraft.map(image => <figure key={image.id}><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "待发送图片"}/><figcaption title={image.name}>{image.name || "剪贴板图片"}</figcaption><button type="button" aria-label={`移除 ${image.name || "图片"}`} onClick={() => setImageDraft(images => images.filter(item => item.id !== image.id))}>×</button></figure>)}</div>}{mentionRefs.length > 0 && <div className="reference-chips">{mentionRefs.map(ref => <span key={`${ref.kind??"resource"}:${ref.resourceId}:${ref.start}`}><>{ref.kind==="role"?<AgentIcon role={ref.resourceId as AgentIconName} size={14}/>:<Glyph name={ref.kind==="skill"?"book":ref.kind==="mcp"?"plug":"server"} size={12}/>}</>{ref.label}{ref.kind&&ref.kind!=="resource"&&<small>{ref.kind==="role"?"专员":ref.kind==="skill"?"Skill":"MCP"}</small>}</span>)}</div>}{imageDraft.length > 0 && !bootstrap?.supportsImageInput && <p className="composer-image-hint" role="status">当前模型不接受图片输入，请切换模型或在模型设置中手动调整。</p>}<div className="composer-body"><ComposerTextInput key={sessionId} sessionId={sessionId!} modelId={bootstrap?.modelId??undefined} modelSource={bootstrap?.modelSelection?.providerId} history={(activeSnapshot?.messages??[]).filter(message=>message.role==="user").slice(-8).map(message=>message.text)} completionBlocked={!!mention||!completionEnabled} onComplete={next=>{setMentionRefs(refs=>rebaseMentions(messageDraft,next,refs));setMessageDraft(next);syncMention(next,next.length);}} id="message-input" ref={messageInputRef} rows={1} role="combobox" aria-haspopup="listbox" aria-autocomplete={mention?"list":"inline"} aria-expanded={!!mention} aria-controls={mention?"composer-mention-options":undefined} aria-activedescendant={mention&&mentionMatches[mentionIndex]?mentionOptionId(mentionMatches[mentionIndex]!):undefined} placeholder={!modelConfigured ? "配置 Agent 模型后即可开始对话" : queueMode ? "继续输入，发送后加入待发送队列…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : "向 Lake 描述问题，输入 @ 引用资源、Skills 或 MCP…"} value={messageDraft} onPaste={event => { const images = clipboardImageFiles(event.clipboardData); if (!images.length) return; event.preventDefault(); void attachFiles(images); }} onChange={event => { setMentionRefs(refs => rebaseMentions(messageDraft, event.target.value, refs)); setMessageDraft(event.target.value); syncMention(event.target.value, event.target.selectionStart ?? event.target.value.length); }} disabled={!sessionConnected || !modelConfigured || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
+          {attachmentUploading&&<p className="attachment-upload-status" role="status">正在上传：{attachmentUploading}</p>}{attachmentDragOver&&<p className="attachment-upload-status" role="status">松开以添加文件 · 每个最多 512 MiB</p>}{fileDraft.length > 0 && <div className="text-file-drafts">{fileDraft.map(file => <span key={file.sourceId}><Glyph name="file" size={14}/>{file.name}{file.sizeBytes!==undefined&&<small>{fileSize(file.sizeBytes)}</small>}<button type="button" aria-label={`移除 ${file.name}`} onClick={() => setFileDraft(files => files.filter(item => item.sourceId !== file.sourceId))}><Glyph name="close" size={14}/></button></span>)}</div>}{imageDraft.length > 0 && <div className="image-drafts">{imageDraft.map(image => <figure key={image.id}><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "待发送图片"}/><figcaption title={image.name}>{image.name || "剪贴板图片"}</figcaption><button type="button" aria-label={`移除 ${image.name || "图片"}`} onClick={() => setImageDraft(images => images.filter(item => item.id !== image.id))}><Glyph name="close" size={14}/></button></figure>)}</div>}{mentionRefs.length > 0 && <div className="reference-chips">{mentionRefs.map(ref => <span key={`${ref.kind??"resource"}:${ref.resourceId}:${ref.start}`}><>{ref.kind==="role"?<AgentIcon role={ref.resourceId as AgentIconName} size={14}/>:<Glyph name={ref.kind==="skill"?"book":ref.kind==="mcp"?"plug":"server"} size={12}/>}</>{ref.label}{ref.kind&&ref.kind!=="resource"&&<small>{ref.kind==="role"?"专员":ref.kind==="skill"?"Skill":"MCP"}</small>}</span>)}</div>}{modelConfigured && imageDraft.length > 0 && !bootstrap?.supportsImageInput && <p className="composer-image-hint" role="status">当前模型不接受图片输入，请切换模型或在模型设置中手动调整。</p>}<div className="composer-body"><ComposerTextInput key={sessionId} sessionId={sessionId!} modelId={bootstrap?.modelId??undefined} modelSource={bootstrap?.modelSelection?.providerId} history={(activeSnapshot?.messages??[]).filter(message=>message.role==="user").slice(-8).map(message=>message.text)} completionBlocked={!!mention||!completionEnabled||!modelConfigured} onComplete={next=>{setMentionRefs(refs=>rebaseMentions(messageDraft,next,refs));setMessageDraft(next);syncMention(next,next.length);}} id="message-input" ref={messageInputRef} rows={1} role="combobox" aria-haspopup="listbox" aria-autocomplete={mention?"list":"inline"} aria-expanded={!!mention} aria-controls={mention?"composer-mention-options":undefined} aria-activedescendant={mention&&mentionMatches[mentionIndex]?mentionOptionId(mentionMatches[mentionIndex]!):undefined} placeholder={queueMode ? "继续输入，稍后发送…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : "想让 Lake 帮你做什么？"} value={messageDraft} onPaste={event => { const files = clipboardFiles(event.clipboardData); if (!files.length) return; event.preventDefault(); void attachFiles(files); }} onChange={event => { setMentionRefs(refs => rebaseMentions(messageDraft, event.target.value, refs)); setMessageDraft(event.target.value); syncMention(event.target.value, event.target.selectionStart ?? event.target.value.length); }} disabled={!sessionConnected || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
             if (messageComposition.current.ignores(event.nativeEvent)) return;
             if (mention) {
               if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setMention(null); return; }
@@ -1336,10 +1369,10 @@ function App() {
               if (event.key === "Escape") { event.preventDefault(); setMention(null); return; }
             }
             if (isSendKey(event.nativeEvent, sendShortcut)) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); }
-          }}/><div className="composer-send-actions">{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止本轮" title="停止本轮，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${turnActive && !hasMessageDraft ? " stop-button" : ""}`} type={turnActive && !hasMessageDraft ? "button" : "submit"} aria-label={turnActive && !hasMessageDraft ? "停止本轮" : queueMode ? "挂起消息" : "发送消息"} title={turnActive && !hasMessageDraft ? "停止本轮" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`} aria-busy={stoppingTurn} onClick={turnActive && !hasMessageDraft ? () => void stopCurrentTurn() : undefined} disabled={turnActive && !hasMessageDraft ? stoppingTurn || !sessionConnected : !hasMessageDraft || !sessionConnected || !modelConfigured || !!pendingOperation || stoppingTurn || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)}><Glyph name={turnActive && !hasMessageDraft ? "stop" : "return"} size={16}/></button></div></div></div><div className="composer-foot"><input ref={attachmentInputRef} className="visually-hidden" type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加文本文件或图片" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}>权限</button>}{activeSnapshot&&<SREModeToggle snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive}/> }<div className="composer-status"><div className="model-switch-wrap">
+          }}/><div className="composer-send-actions">{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止本轮" title="停止本轮，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${turnActive && !hasMessageDraft ? " stop-button" : ""}`} type={turnActive && !hasMessageDraft ? "button" : "submit"} aria-label={turnActive && !hasMessageDraft ? "停止本轮" : !modelConfigured ? "连接模型" : queueMode ? "加入待发送队列" : "发送消息"} title={turnActive && !hasMessageDraft ? "停止本轮" : !modelConfigured ? "连接模型，保留当前草稿" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`} aria-busy={stoppingTurn} onClick={turnActive && !hasMessageDraft ? () => void stopCurrentTurn() : undefined} disabled={turnActive && !hasMessageDraft ? stoppingTurn || !sessionConnected : !sessionConnected || !!pendingOperation || stoppingTurn || (modelConfigured && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}><Glyph name={turnActive && !hasMessageDraft ? "stop" : !modelConfigured ? "plug" : "return"} size={16}/></button></div></div></div><div className="composer-foot"><input ref={attachmentInputRef} className="visually-hidden" type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加任意文件或图片，也可拖入或粘贴文件" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}>权限</button>}{activeSnapshot&&<SREModeToggle snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive} disabledReason={!sessionConnected?"连接恢复后可切换 SRE 协作。":"本轮运行中，结束后可切换 SRE 协作。"}/> }<div className="composer-status"><div className="model-switch-wrap">
           <ComposerModelSelect available={modelMenu} modelName={bootstrap?.modelName??null} selection={bootstrap?.modelSelection??undefined} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void switchModel(model)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}}/>
-        </div>{activeSnapshot?.ai && <ReasoningSelector key={sessionId} session={sessionId} modelId={bootstrap?.modelId} disabled={!sessionConnected || turnActive || !!pendingOperation} onSaving={saving => setPendingOperation(current => saving ? "reasoning" : current === "reasoning" ? "" : current)}/>}{activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} compact/>}</div></div></form></div>
-      </div> : <div className="welcome-view"><div className="welcome-content"><Brand/><h1>今天要处理什么问题？</h1><p>从项目开始一段会话。Lake 会把调查、证据和需要你确认的操作留在对话中。</p>{!projectList.length ? <button className="button primary" disabled={!connected} onClick={openProjectDialog}>创建第一个项目<Glyph name="arrow" size={17}/></button> : <button className="button primary" disabled={!connected} onClick={() => openSessionDialog(sidebarProject?.id??projectList[0].id)}>开始新会话<Glyph name="arrow" size={17}/></button>}</div></div>}
+        </div>{activeSnapshot?.ai && <ReasoningSelector key={sessionId} session={sessionId} modelId={bootstrap?.modelId} disabled={!sessionConnected || turnActive || !!pendingOperation} disabledReason={!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。"} onSaving={saving => setPendingOperation(current => saving ? "reasoning" : current === "reasoning" ? "" : current)}/>}{activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} compact/>}</div></div></form></div>
+      </div> : <div className="welcome-view"><div className="welcome-content"><Brand/><h1>今天要处理什么问题？</h1><p>从项目开始一段会话。Lake 会把调查、证据和需要你确认的操作留在对话中。</p>{!projectList.length ? <button className="button primary" disabled={!connected} onClick={openProjectDialog}>创建第一个项目<Glyph name="arrow" size={17}/></button> : <button className="button primary" disabled={!connected} onClick={() => openSessionDialog(sidebarProject?.id??projectList[0].id)}>开始新会话<Glyph name="arrow" size={17}/></button>}{!modelConfigured && !booting && <button type="button" className="welcome-connect-model" onClick={() => void openSettings()}><Glyph name="plug" size={15}/>连接模型<Glyph name="arrow" size={14}/></button>}</div></div>}
     </main>
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[
       {label: "打开终端", run: () => selectTerminalTab(terminalTabContext.terminal)},
@@ -1355,7 +1388,6 @@ function App() {
     {editTerminalResource && <TerminalConfigEdit key={editTerminalResource.id} resource={editTerminalResource} connected={connected} onClose={() => setEditTerminalResource(null)} onSaved={terminalResourceSaved}/>}
     {resourceConfigContext && <NavigationMenu title={resourceConfigContext.resource.name} x={resourceConfigContext.x} y={resourceConfigContext.y} onClose={() => setResourceConfigContext(null)} actions={[{label:"编辑终端配置",run:()=>setEditTerminalResource(resourceConfigContext.resource)}, {label:"删除资源",danger:true,run:()=>setNavigationDelete({kind:"resource",id:resourceConfigContext.resource.id,projectId:resourceConfigContext.resource.projectId,name:resourceConfigContext.resource.name})}]}/>}
     {editSession && <SessionEdit key={editSession.id} session={editSession} connected={connected} onClose={() => setEditSession(null)} onSaved={sessionRenamed}/>}
-    {sessionContext && <NavigationMenu title={sessionContext.session.title} x={sessionContext.x} y={sessionContext.y} onClose={() => setSessionContext(null)} actions={[{label:"编辑会话", run:() => setEditSession(sessionContext.session)}, {label:"删除会话", danger:true, run:() => {setDeleteError(""); setDeleteTarget(sessionContext.session);}}]}/>}
     {deleteTarget && <div className="modal-scrim" onMouseDown={event => { if (event.target === event.currentTarget && !deleteBusy) setDeleteTarget(null); }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-session-title"><div className="modal-header"><span className="modal-icon danger-icon"><Glyph name="trash" size={20}/></span><button className="icon-button" aria-label="关闭" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}><Glyph name="close"/></button></div><h2 id="delete-session-title">删除会话</h2><p className="modal-description">将删除会话「{deleteTarget.title}」的对话、专员结论、证据、审批和命令记录。此操作不可恢复。</p>{deleteError && <p className="form-error" role="alert">{deleteError}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>取消</button><button type="button" className="button danger" onClick={() => void confirmDeleteSession()} disabled={deleteBusy || !connected}>{deleteBusy ? "正在删除…" : "删除会话"}</button></div></div></div>}
     {tagProject && <TagManager project={tagProject} tags={catalog.tags??[]} onClose={()=>{setTagProject(null);if(selectedTag&&!catalog.tags?.some(t=>t.id===selectedTag))setSelectedTag(null);}} onRefresh={async()=>{await refreshCatalog();}}/>}
     {memoryProject && <ProjectMemory key={memoryProject.id} project={memoryProject} onClose={() => setMemoryProject(null)}/>}
@@ -1365,7 +1397,7 @@ function App() {
     {trashOpen && <NavigationTrash onClose={()=>setTrashOpen(false)} onRestored={async()=>{await refreshCatalog();await refreshCurrent();}}/>}
     {settingsOpen && <ModelSettings onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined} onProjectMemory={selectedProjectId ? () => {const project=projectList.find(p=>p.id===selectedProjectId);if(project){setSettingsOpen(false);setMemoryProject(project);}} : undefined} projectName={projectList.find(p=>p.id===selectedProjectId)?.name} ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>}
     {importProject && <ResourceImport project={importProject} hexhub={importHexhub} refresh={refreshCatalog} onClose={() => { setImportProject(null); setImportHexhub(false); }} onImported={notify}/>}
-    {sshProject && <div className="modal-scrim"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="ssh-title"><div className="modal-header"><span className="modal-icon"><Glyph name="server" size={20}/></span><button className="icon-button" aria-label="关闭" disabled={sshBusy} onClick={() => { setSshProject(null); setSshParent(null); setSshDraft(emptySSH()); }}><Glyph name="close"/></button></div><h2 id="ssh-title">新建资源</h2><p className="modal-description">添加 SSH 主机、数据库、Redis 或 Docker，供项目会话使用。{sshParent ? `资源会创建在「${sshParentName}」目录下。` : ""}</p><form onSubmit={createSsh}><label className="field-label">类型<AppSelect value={resourceKind} onChange={event => { setResourceKind(event.target.value); setSshDraft(current => ({...current, password: "", passphrase: "", privateKey: undefined, identityFile: undefined})); setServiceSettings(v => ({ ...v, port: event.target.value === "redis" ? 6379 : 5432 })); }}>{[["ssh", "SSH 主机"], ["database", "数据库"], ["docker", "Docker"], ["redis", "Redis"]].map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}</AppSelect></label>
+    {sshProject && <div className="modal-scrim"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="ssh-title"><div className="modal-header"><span className="modal-icon"><Glyph name="server" size={20}/></span><button className="icon-button" aria-label="关闭" disabled={sshBusy} onClick={() => { setSshProject(null); setSshParent(null); setSshDraft(emptySSH()); }}><Glyph name="close"/></button></div><h2 id="ssh-title">新建资源</h2><p className="modal-description">添加 SSH 主机，供项目会话使用。{sshParent ? `资源会创建在「${sshParentName}」目录下。` : ""}</p><form onSubmit={createSsh}><label className="field-label">类型<AppSelect value={resourceKind} onChange={event => { setResourceKind(event.target.value); setSshDraft(current => ({...current, password: "", passphrase: "", privateKey: undefined, identityFile: undefined})); setServiceSettings(v => ({ ...v, port: event.target.value === "redis" ? 6379 : 5432 })); }}>{[["ssh", "SSH 主机"]].map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}</AppSelect></label>
       <label className="field-label">资源名称<input required maxLength={120} value={sshName} onChange={event => setSshName(event.target.value)} autoFocus/></label>
 {resourceKind === "ssh" ? <SSHResourceFields value={sshDraft} onChange={setSshDraft} disabled={sshBusy}/> : <>
         {resourceKind === "database" && <label className="field-label">数据库类型<AppSelect value={serviceSettings.driver} onChange={event => setServiceSettings({ ...serviceSettings, driver: event.target.value, port: event.target.value === "mysql" ? 3306 : 5432 })}><option value="postgres">PostgreSQL</option><option value="mysql">MySQL</option><option value="sqlite">SQLite</option></AppSelect></label>}
@@ -1418,7 +1450,7 @@ function TimelineNode({ entry, resourceMap, sessionTitle, disabled, pendingOpera
   const glyph: GlyphName = entry.kind === "message" ? (entry.item.role === "assistant" ? "spark" : "chat") : entry.kind === "specialist" ? "layers" : "lock";
   return <article className={`timeline-item item-${entry.kind} ${entry.kind === "message" ? `message-${entry.item.role}` : ""}`}><span className="timeline-point"><Glyph name={glyph} size={15}/></span><div className="timeline-content"><div className="item-meta">{label && <strong>{label}</strong>}<time dateTime={entry.at} title={entry.at}>{dateLabel(entry.at)}</time></div>
     {entry.kind === "message" && <div className="message-text">{entry.item.text}</div>}
-    {entry.kind === "specialist" && <div className="specialist-card"><div className="specialist-head"><div><strong>{specialistLabels[entry.item.name] ?? entry.item.name}</strong><p>{entry.item.task}</p></div><span className={`pill specialist-${entry.item.status}`}><span/>{entry.item.status === "working" ? "调查中" : entry.item.status === "completed" ? "已完成" : "未完成"}</span></div>{entry.item.summary && <details className="expand-detail"><summary>查看专员结论<Glyph name="chevron" size={15}/></summary><p>{entry.item.summary}</p></details>}{!entry.item.summary && <p className="specialist-awaiting">正在收集结果，更新会显示在这里。</p>}</div>}
+    {entry.kind === "specialist" && <div className="specialist-card"><div className="specialist-head"><div><strong>{specialistLabels[entry.item.name] ?? entry.item.name}</strong><p>{entry.item.task}</p></div><span className={`pill specialist-${entry.item.status}`}><span/>{entry.item.status === "working" ? "调查中" : entry.item.status === "completed" ? "已完成" : "未完成"}</span></div>{entry.item.summary && <details className="expand-detail"><DisclosureSummary>查看专员结论</DisclosureSummary><p>{entry.item.summary}</p></details>}{!entry.item.summary && <p className="specialist-awaiting">正在收集结果，更新会显示在这里。</p>}</div>}
     {entry.kind === "action" && <div className={`approval-card ${entry.item.status !== "pending" ? "approval-resolved" : ""}`}><div className="approval-head"><span className="approval-mark"><Glyph name="lock" size={19}/></span><div><strong>{entry.item.risk === "readonly" ? entry.item.status === "pending" ? "只读检查等待终端交接" : "只读检查" : entry.item.risk === "dangerous" ? "危险操作需要再次确认" : "变更操作需要你的确认"}</strong><p>{entry.item.riskReason}</p></div><span className={`pill action-${entry.item.status}`}>{entry.item.status === "pending" && entry.item.risk === "readonly" ? "等待交接" : actionLabels[entry.item.status]}</span></div><div className="approval-grid"><div><span>目标资源</span><button className="detail-link" onClick={() => onResource(entry.item.resourceId)}>{resourceLabel(resourceMap.get(entry.item.resourceId))}</button></div><div><span>所属会话</span><strong>{sessionTitle}</strong></div></div><div className="approval-section"><span>完整命令</span><pre>{entry.item.command}</pre></div><div className="approval-notes"><div><span>为什么执行</span><p>{entry.item.reason}</p></div><div><span>可能的影响</span><p>{entry.item.impact}</p></div><div><span>如何验证</span><p>{entry.item.verification}</p></div></div>{entry.item.status === "pending" ? <><div className={`approval-handoff ${agentReady ? "ready" : ""}`}><Glyph name={agentReady ? "check" : "terminal"} size={17}/><div><strong>{agentReady ? "目标终端已交给 Agent" : "执行前需交给 Agent 输入"}</strong><p>{agentReady ? entry.item.risk === "readonly" ? "只读检查自动执行，无需逐条确认。" : "请核对完整命令和影响，再确认本次操作。" : readyTerminal ? "此资源的持续终端由你持有。交接后，只读检查自动执行，变更仍需确认。" : "先为此资源打开持续终端，并交给 Agent 输入。"}</p></div>{!agentReady && <button className="button handoff-button" onClick={() => onHandoff(entry.item)} disabled={disabled || !!pendingOperation || !persistentMode}>{pendingOperation === `handoff:${entry.item.id}` ? "准备中…" : readyTerminal ? "交给 Agent 输入" : "创建控制台并交接"}</button>}</div><div className="approval-actions"><button className="button secondary" onClick={() => onDecision(entry.item.id, "reject")} disabled={disabled || !!pendingOperation}>{pendingOperation === entry.item.id ? "处理中…" : entry.item.risk === "readonly" ? "取消检查" : "拒绝操作"}</button>{entry.item.risk !== "readonly" && <button className="button approval-button" onClick={() => onDecision(entry.item.id, "approve")} disabled={disabled || !!pendingOperation || !agentReady || !persistentMode}>{pendingOperation === entry.item.id ? "处理中…" : entry.item.risk === "dangerous" ? "继续确认风险" : "确认本次变更"}<Glyph name="arrow" size={16}/></button>}</div></> : <div className="approval-result">{entry.item.exitCode !== null ? `执行退出码：${entry.item.exitCode}。` : ""}{entry.item.status === "unknown" ? "执行结果不明，请核查实际结果后再决定下一步。" : entry.item.status === "succeeded" ? "命令已执行；是否恢复仍需按上面的方式验证。" : `当前状态：${actionLabels[entry.item.status]}。`}</div>}</div>}
   </div></article>;
 }

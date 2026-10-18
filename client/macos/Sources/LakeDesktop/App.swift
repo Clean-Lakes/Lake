@@ -36,7 +36,7 @@ import LakeUpdateCore
     }
 }
 
-@MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKScriptMessageHandlerWithReply {
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, WKScriptMessageHandlerWithReply {
     private var window: NSWindow!
     private var webView: WKWebView!
     private let backend = Backend()
@@ -71,13 +71,14 @@ import LakeUpdateCore
         }
         // Native chrome applies even when attaching to an independently running older Go service.
         let headerControlsInset = 16
+        let windowCornerRadius = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 ? 20 : 10
         let chrome = """
         document.documentElement.classList.add('lake-native');
         const style = document.createElement('style');
         style.textContent = `
-          html.lake-native { --lake-titlebar-height: 52px; }
+          html.lake-native { --lake-titlebar-height: 52px; --radius-window: \(windowCornerRadius)px; }
           .lake-native .sidebar { padding-top: var(--lake-titlebar-height); }
-          .lake-native .workspace-header { min-height: var(--lake-titlebar-height); padding-right: \(headerControlsInset)px; }
+          .lake-native .workspace:not(.has-floating-header) .workspace-header { min-height: var(--lake-titlebar-height); padding-right: \(headerControlsInset)px; }
           /* Web update and terminal controls share the same header inset. */
           .lake-native .terminal-panel-header { min-height: var(--lake-titlebar-height); padding-right: \(headerControlsInset)px; }
           .lake-native .session-edit, .lake-native .session-more { background: transparent; }
@@ -238,7 +239,10 @@ import LakeUpdateCore
               sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any] else { return }
         if let theme = body["theme"] as? String, theme == "light" || theme == "dark" {
             let dark = theme == "dark"
-            window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+            // WebKit's prefers-color-scheme reflects this window's appearance. Pinning
+            // the resolved system theme here would make it stop following macOS.
+            window.appearance = body["appearance"] as? String == "system"
+                ? nil : NSAppearance(named: dark ? .darkAqua : .aqua)
             window.backgroundColor = dark ? NSColor(calibratedWhite: 23/255, alpha: 1) : .white
         }
         if let appearance = body["appearance"] as? String,
@@ -295,13 +299,32 @@ import LakeUpdateCore
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         let url = navigationAction.request.url
         if sameOrigin(url) || url?.scheme == "blob" {
-            decisionHandler(.allow)
+            decisionHandler(navigationAction.shouldPerformDownload ? .download : .allow)
         } else {
             decisionHandler(.cancel)
             if navigationAction.navigationType == .linkActivated, let url, ["https", "http"].contains(url.scheme ?? "") {
                 NSWorkspace.shared.open(url)
             }
         }
+    }
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+                 decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        let attachment = (navigationResponse.response as? HTTPURLResponse)?
+            .value(forHTTPHeaderField: "Content-Disposition")?.lowercased().hasPrefix("attachment") == true
+        decisionHandler(sameOrigin(navigationResponse.response.url) && attachment ? .download : .allow)
+    }
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        download.delegate = self
+    }
+    func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+        download.delegate = self
+    }
+    func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
+                  suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = URL(fileURLWithPath: suggestedFilename).lastPathComponent
+        panel.canCreateDirectories = true
+        panel.beginSheetModal(for: window) { result in completionHandler(result == .OK ? panel.url : nil) }
     }
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {

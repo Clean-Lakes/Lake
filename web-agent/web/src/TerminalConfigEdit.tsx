@@ -1,3 +1,4 @@
+import {Glyph} from './Icons';
 import {AppSelect} from "./AppSelect";
 import {useEffect, useRef, useState, type FormEvent} from "react";
 import type {Resource, SSHConnectionInput} from "../../shared/contracts";
@@ -36,7 +37,7 @@ export function TerminalConfigEdit({resource, connected, onClose, onSaved}: {
       if (event.shiftKey && document.activeElement === first) {event.preventDefault(); last?.focus();}
       if (!event.shiftKey && document.activeElement === last) {event.preventDefault(); first?.focus();}
     }}}>
-      <div className="modal-header"><span className="modal-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="2.5" y="3.5" width="19" height="17" rx="2"/><path d="m6 9 3 3-3 3m6 0h5"/></svg></span><button type="button" className="icon-button" aria-label="关闭终端配置编辑" disabled={busy} onClick={onClose}>×</button></div>
+      <div className="modal-header"><span className="modal-icon"><Glyph name="terminal" size={20}/></span><button type="button" className="icon-button" aria-label="关闭终端配置编辑" disabled={busy} onClick={onClose}><Glyph name="close" size={14}/></button></div>
       <h2 id="terminal-config-title">编辑终端配置</h2><p className="modal-description">{resource.kind === "ssh" ? "修改 SSH 连接与登录配置。已有密码和私钥不会回显，留空保留原凭据。" : "修改本机资源名称和默认 Shell。"}修改连接配置前请先关闭在线终端。</p>
       <form onSubmit={event => void save(event)}>
         <label className="field-label">资源名称<input ref={input} required maxLength={120} value={name} disabled={busy} onChange={event => setName(event.target.value)}/></label>

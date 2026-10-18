@@ -23,9 +23,9 @@ export function turnStatus(timing:ReplyTiming|undefined,view:AIView|undefined,ca
   const last=currentCards.at(-1);
   const historical=!view && last && (["message","text"].includes(last.type)||last.type==="error") ? last.status : undefined;
   const status=timing?.status || view?.status || historical;
-  state=status==="cancelled"?"已停止":status==="failed"?"未完成":status==="interrupted"?"记录已中断":status==="completed"?"已完成":undefined;
-  if(currentCards.some(card=>card.status==="unknown")) state=state ? `${state} · 执行结果待核查` : "执行结果待核查";
-  else if(currentCards.some(card=>card.status==="background_running")) state=state ? `${state} · 后台命令仍在执行` : "后台命令仍在执行";
+  state=status==="cancelled"?"已停止":status==="failed"?"未完成":status==="interrupted"?"记录已中断":status==="completed"?"回复结束":undefined;
+  if(currentCards.some(card=>card.status==="unknown")) state="执行结果待核查";
+  else if(currentCards.some(card=>card.status==="background_running")) state="后台命令仍在执行";
  }
  const duration=timing ? replyElapsed(timing,now) : undefined;
  const text=[duration,state].filter(Boolean).join(" · ") || undefined;

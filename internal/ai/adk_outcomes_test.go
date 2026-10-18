@@ -79,6 +79,68 @@ func TestADKUnknownOutcomeRequiresHumanEvidenceAndCannotCrossSessions(t *testing
 	}
 }
 
+func TestADKOperationOutcomesOnlyRequireVerificationWhenUnknown(t *testing.T) {
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+	store, err := e.adkStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, status := range []string{"dispatched", "succeeded", "failed", "not_executed", "unknown"} {
+		row := nativeOperation{ID: status, SessionID: "case", Status: status, Risk: "write", Tool: "shell", StartedAt: time.Now()}
+		if err := store.DB.Create(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, row := range []nativeOperation{
+		{ID: "other-session", SessionID: "other", Status: "unknown", Risk: "write"},
+		{ID: "readonly", SessionID: "case", Status: "unknown", Risk: "readonly"},
+	} {
+		if err := store.DB.Create(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	view, err := e.Snapshot("case")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.OperationOutcomes) != 1 || view.OperationOutcomes[0].ID != "unknown" {
+		t.Fatalf("only unknown effects should request verification: %+v", view.OperationOutcomes)
+	}
+	var running nativeOperation
+	if err := store.DB.First(&running, "id = ?", "dispatched").Error; err != nil || running.Status != "dispatched" {
+		t.Fatalf("view must preserve the running operation ledger: %+v, %v", running, err)
+	}
+	if err := e.ResolveOperation("case", "dispatched", "succeeded", "still running"); err == nil {
+		t.Fatal("running operation accepted a manual verdict")
+	}
+}
+
+func TestADKInterruptedOperationStillRequestsVerificationAfterRestart(t *testing.T) {
+	dir := t.TempDir()
+	e, err := New(dir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := e.adkStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := nativeOperation{ID: "interrupted", SessionID: "case", Status: "dispatched", Risk: "write", Tool: "shell", StartedAt: time.Now()}
+	if err := store.DB.Create(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	e.Shutdown()
+	restarted, err := New(dir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restarted.Shutdown()
+	view, err := restarted.Snapshot("case")
+	if err != nil || len(view.OperationOutcomes) != 1 || view.OperationOutcomes[0].ID != row.ID || view.OperationOutcomes[0].Status != "unknown" {
+		t.Fatalf("interrupted effect must still require verification: %+v, %v", view.OperationOutcomes, err)
+	}
+}
+
 func TestADKMissingPolicyFingerprintFailsClosed(t *testing.T) {
 	e, err := New(t.TempDir(), func(context.Context, string, string, map[string]any, bool) (any, error) { return nil, nil }, nil)
 	if err != nil {

@@ -18,7 +18,7 @@ test("one footer transitions from initial waiting to thinking, tools, streaming,
  assert.equal(turnStatus(timing,view,[{...tool,status:"pending"}],at,now).state,"等待确认");
  assert.equal(turnStatus(timing,{...view,question:{id:"q",questions:[]}},[],at,now).state,"等待你的选择");
  const saved={...timing,status:"completed" as const,finishedAt:new Date(now).toISOString()};
- assert.equal(turnStatus(saved,view,[],at,now+500000).text,"49秒 · 已完成");
+ assert.equal(turnStatus(saved,view,[],at,now+500000).text,"49秒 · 回复结束");
  assert.equal(turnStatus(saved,view,[],at,now).live,false,"stored completion wins over a delayed engine snapshot");
 });
 test("old pending tools and foreign or earlier agent runs cannot become the current status",()=>{
@@ -43,11 +43,11 @@ test("current compaction has one live footer even when its card is hidden from t
 });
 test("unverified and background results stay honest; missing endpoints never invent elapsed time",()=>{
  const saved={...timing,status:"completed" as const,finishedAt:new Date(now).toISOString()};
- assert.equal(turnStatus(saved,undefined,[{...tool,status:"unknown"}],at,now).text,"49秒 · 已完成 · 执行结果待核查");
- assert.equal(turnStatus(saved,undefined,[{...tool,status:"background_running"}],at,now).state,"已完成 · 后台命令仍在执行");
+ assert.equal(turnStatus(saved,undefined,[{...tool,status:"unknown"}],at,now).text,"49秒 · 执行结果待核查");
+ assert.equal(turnStatus(saved,undefined,[{...tool,status:"background_running"}],at,now).state,"后台命令仍在执行");
  assert.equal(turnStatus({...saved,finishedAt:""},undefined,[],at,now).duration,undefined);
  assert.equal(turnStatus({...saved,status:"interrupted"},undefined,[],at,now).text,"记录已中断");
- assert.equal(turnStatus(undefined,undefined,[{id:"reply",at,type:"message",status:"completed",content:"历史答复"}],at,now).text,"已完成");
+ assert.equal(turnStatus(undefined,undefined,[{id:"reply",at,type:"message",status:"completed",content:"历史答复"}],at,now).text,"回复结束");
 });
 test("light process labels name the file and target, bound repeated operations and omit raw commands",()=>{
  assert.equal(processDescription([tool]),"读取 example.conf · 测试主机");

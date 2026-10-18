@@ -197,7 +197,7 @@ func (s *Store) migrate() error {
 			needBackup = true
 		}
 	}
-	for _, item := range [][2]string{{"messages", "images"}, {"actions", "terminalId"}, {"actions", "contextVersion"}, {"terminals", "contextVersion"}, {"terminals", "output"}} {
+	for _, item := range [][2]string{{"messages", "files"}, {"messages", "images"}, {"actions", "terminalId"}, {"actions", "contextVersion"}, {"terminals", "contextVersion"}, {"terminals", "output"}} {
 		found := false
 		for _, r := range s.rows("PRAGMA table_info(" + item[0] + ")") {
 			if r["name"] == item[1] {
@@ -226,7 +226,7 @@ func (s *Store) migrate() error {
 	if _, err := s.db.Exec("CREATE TABLE IF NOT EXISTS aiScopes(scope TEXT NOT NULL,projectId TEXT NOT NULL REFERENCES projects(id),resourceKind TEXT NOT NULL,resourceId TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,sessionId TEXT UNIQUE NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,PRIMARY KEY(scope,projectId,resourceKind,resourceId))"); err != nil {
 		return err
 	}
-	for _, c := range append(parityColumns, [][3]string{{"messages", "images", "TEXT NOT NULL DEFAULT '[]'"}, {"actions", "terminalId", "TEXT"}, {"actions", "contextVersion", "INTEGER"}, {"terminals", "contextVersion", "INTEGER NOT NULL DEFAULT 0"}, {"terminals", "output", "TEXT NOT NULL DEFAULT ''"}}...) {
+	for _, c := range append(parityColumns, [][3]string{{"messages", "files", "TEXT NOT NULL DEFAULT '[]'"}, {"messages", "images", "TEXT NOT NULL DEFAULT '[]'"}, {"actions", "terminalId", "TEXT"}, {"actions", "contextVersion", "INTEGER"}, {"terminals", "contextVersion", "INTEGER NOT NULL DEFAULT 0"}, {"terminals", "output", "TEXT NOT NULL DEFAULT ''"}}...) {
 		found := false
 		for _, r := range s.rows("PRAGMA table_info(" + c[0] + ")") {
 			if r["name"] == c[1] {
@@ -394,6 +394,18 @@ func (s *Store) Subscribe() (chan Object, func()) {
 }
 func (s *Store) Touch(id string) {
 	s.update(func() any { s.session(id); s.event(id, "message"); return nil })
+}
+
+// Text is a live presentation hint, not another copy of the durable transcript.
+// Replayed events omit the hint and clients recover from the canonical snapshot.
+// Commit and broadcast under the same lock as other events to retain ordering.
+func (s *Store) TouchText(id string, text Object) {
+	s.update(func() any {
+		s.session(id)
+		s.event(id, "message")
+		s.events[len(s.events)-1]["textUpdate"] = text
+		return nil
+	})
 }
 func (s *Store) Events(id string, after int64) []Object {
 	return s.read(func() any {
@@ -585,6 +597,7 @@ func (s *Store) snapshot(id string) Object {
 	}
 	messages := s.rows("SELECT * FROM messages WHERE sessionId=? ORDER BY createdAt,rowid", id)
 	for _, m := range messages {
+		m["files"] = objects(parsed(stringOf(m["files"])))
 		images := objects(parsed(stringOf(m["images"])))
 		delete(m, "images")
 		if len(images) > 0 {
@@ -661,9 +674,13 @@ func (s *Store) Begin(id, text string, images any, titleInput ...string) Object 
 // BeginWithNaming atomically samples whether this message is the one that may
 // claim an automatic title, then records the message and its local placeholder.
 func (s *Store) BeginWithNaming(id, text string, images any, titleInput ...string) (Object, bool) {
+	return s.BeginWithFilesAndNaming(id, text, images, nil, titleInput...)
+}
+func (s *Store) BeginWithFilesAndNaming(id, text string, images any, files []Object, titleInput ...string) (Object, bool) {
 	result := s.update(func() any {
 		pendingTitle := s.row("SELECT 1 FROM sessionNaming WHERE sessionId=? AND generated=0", id) != nil
 		message := s.begin(id, text, images, titleInput...)
+		s.attachMessageFiles(id, message, files)
 		return struct {
 			message      Object
 			pendingTitle bool
@@ -949,4 +966,12 @@ func (s *Store) UnknownAction(id string) {
 		}
 		return nil
 	})
+}
+
+func (s *Store) attachMessageFiles(id string, message Object, files []Object) {
+	if len(files) == 0 {
+		return
+	}
+	s.exec("UPDATE messages SET files=? WHERE id=? AND sessionId=?", jsonText(files), message["id"], id)
+	message["files"] = files
 }

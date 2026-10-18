@@ -17,6 +17,7 @@
     .workbench-splitter { position:absolute; top:0; bottom:0; width:8px; z-index:35; cursor:col-resize; touch-action:none; outline:none; }
     .workbench-splitter:hover::after, .workbench-splitter:focus-visible::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:2px; background:var(--focus); }
     .workbench-splitter-sidebar { left:calc(var(--sidebar-width) - 4px); }
+    .workbench-splitter-sidebar:hover:not(:focus-visible)::after { width:1px; background:var(--border-strong); }
     .workbench-splitter-terminal { left:0; }
     .workbench-resizing, .workbench-resizing * { cursor:col-resize !important; user-select:none !important; }
     .workbench-resizing .app-shell, .workbench-resizing .terminal-side-panel { transition:none !important; }
@@ -106,8 +107,12 @@
     const sidebar = shell.querySelector('.sidebar');
     const height = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--lake-titlebar-height')) || 52;
     const regions = headers.map(rect);
+    // Floating headers no longer fill this strip; its empty space remains a titlebar.
+    const workspace = shell.querySelector('.workspace');
+    if (workspace) { const r = workspace.getBoundingClientRect(); regions.push([r.x, 0, r.width, height]); }
     if (sidebar) { const r = sidebar.getBoundingClientRect(); regions.push([r.x, 0, r.width, height]); }
     const excluded = [...shell.querySelectorAll('.workbench-splitter'), ...headers.flatMap(header => [...header.querySelectorAll('button, a, input, select, textarea, [role="button"]')])].map(rect);
+    for (const element of document.querySelectorAll('.modal-scrim, dialog[open], [role="dialog"], [role="menu"], [role="listbox"]')) excluded.push(rect(element));
     const body = JSON.stringify({ regions, excluded, theme: document.documentElement.dataset.theme || 'light', appearance: window.lakeAppearance || 'light' });
     if (body !== lastChrome) { lastChrome = body; bridge.postMessage(JSON.parse(body)); }
   }

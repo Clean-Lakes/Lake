@@ -138,6 +138,15 @@ func windowThemeProc(hwnd, msg, wp, lp, id, ref uintptr) uintptr {
 		}
 	}
 	r, _, _ := themeDefSubclass.Call(hwnd, msg, wp, lp)
+	if msg == 0x24 { // WM_GETMINMAXINFO: a borderless maximized window still excludes the taskbar.
+		style, _, _ := themeUser.NewProc("GetWindowLongPtrW").Call(hwnd, windowStyleIndex)
+		if style&windowCaption == 0 {
+			if monitor, ok := windowMonitor(hwnd); ok {
+				info := *(**workbenchMinMaxInfo)(unsafe.Pointer(&lp))
+				maximizeInWorkArea(info, monitor.Monitor, monitor.Work)
+			}
+		}
+	}
 	switch msg {
 	case 0x31a, 0x1a: // WM_THEMECHANGED, WM_SETTINGCHANGE.
 		// SetWindowTheme sends WM_THEMECHANGED synchronously. Defer and
@@ -185,10 +194,16 @@ func windowThemeProc(hwnd, msg, wp, lp, id, ref uintptr) uintptr {
 // client rect by DefSubclassProc, so the entry copy is taken first. The clamp
 // only shrinks the band; it never grows it past the frame line.
 func stretchClientOverTopFrame(hwnd, msg, wp, lp uintptr) uintptr {
+	zoomed, _, _ := themeUser.NewProc("IsZoomed").Call(hwnd)
+	monitor, valid := windowMonitor(hwnd)
 	if wp != 0 {
 		params := *(**nccalcsizeParams)(unsafe.Pointer(&lp))
 		entry := params.Rg[0]
 		r, _, _ := themeDefSubclass.Call(hwnd, msg, wp, lp)
+		if zoomed != 0 && valid {
+			params.Rg[0] = monitor.Work
+			return r
+		}
 		if params.Rg[0].Top-entry.Top > topFrameLine {
 			params.Rg[0].Top = entry.Top + topFrameLine
 		}
@@ -197,6 +212,10 @@ func stretchClientOverTopFrame(hwnd, msg, wp, lp uintptr) uintptr {
 	rect := *(**windows.Rect)(unsafe.Pointer(&lp))
 	entry := *rect
 	r, _, _ := themeDefSubclass.Call(hwnd, msg, wp, lp)
+	if zoomed != 0 && valid {
+		*rect = monitor.Work
+		return r
+	}
 	if rect.Top-entry.Top > topFrameLine {
 		rect.Top = entry.Top + topFrameLine
 	}

@@ -100,7 +100,7 @@ test('successful SRE operations collapse together while unknown outcomes stay vi
  operations.push({...operations[0]!,id:'unknown-op',status:'unknown'});
  const t=task({status:'paused',messages:[message({roleId:'investigator',kind:'error',attemptId:'attempt',body:'context compaction: model response incomplete'})],attempts:[{id:'attempt',planRunId:'run',stepId:'observe',roleRunId:'real-role',status:'failed',evidence:[],operations,startedAt:at}]});
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:snapshot([t])}));
- assert.ok(/<details class="sre-operation-group"><summary>/.test(html));assert.ok(html.includes('15 项操作记录'));
+ assert.ok(/<details class="sre-operation-group"><summary[^>]*>/.test(html));assert.ok(html.includes('15 项操作记录'));
  assert.ok(html.includes('结果待核实'));assert.ok(html.includes('记录核实结果'));assert.ok(html.includes('上下文整理未完成，已保留本次证据。可继续任务。'));assert.ok(!html.includes('context compaction:'));
 });
 
@@ -169,7 +169,7 @@ test('untracked tool approval is reflected by the same role in Plan and conversa
 test('node reports keep only the checkpoint expanded and retain full evidence details',()=>{
  const html=renderToStaticMarkup(createElement(SREReport,{compact:true,report:roleReport,evidence:reportEvidence,onEvidence:()=>{}}));
  assert.ok(html.indexOf('根分区使用率')<html.indexOf('<details'));
- assert.ok(html.includes('<details class="sre-node-details"><summary>查看节点详情'));
+ assert.ok(/<details class="sre-node-details"><summary[^>]*>查看节点详情/.test(html));
  assert.ok(!/<details[^>]* open/.test(html));
  assert.ok(html.includes('查看证据 1：磁盘与挂载检查'));assert.ok(html.includes('尚未确认'));
 });
@@ -192,4 +192,21 @@ test('completed status duplicates disappear only when their own node reply is pr
  const reply=message({id:'reply',kind:'finding',attemptId:'a',body:'本节点已完成，未发现异常。',sequence:2});
  t.messages=[status,reply,message({id:'other',kind:'status',source:'runtime',attemptId:'b',body:status.body,sequence:3})];
  assert.deepEqual(sreEntries(snapshot([t])).map(x=>x.entry.id),['reply','other']);assert.equal(t.messages.length,3);
+});
+
+test('read timeout preserves its record with retry and never asks for human verification',()=>{
+ const op={id:'read-timeout',call:{id:'read',name:'shell',arguments:'{"command":"uptime"}'},digest:'read',resourceId:'host',risk:'readonly',status:'unknown',preparedAt:at,result:'context deadline exceeded'};
+ const t=task({status:'paused',runs:[{id:'run',taskId:'task',planRevisionId:'plan',profileVersion:1,status:'paused',startedAt:at}],attempts:[{id:'a',planRunId:'run',stepId:'observe',roleRunId:'real-role',status:'failed',evidence:[],operations:[op],startedAt:at}],messages:[message(),message({id:'read-error',roleId:'investigator',kind:'error',attemptId:'a',body:'只读检查未完成，可重新检查。'})]});
+ assert.ok(sreCanStart(t));assert.equal(sreStepAttempt(t,t.plans[0]!.steps[0]!)?.status,'failed');
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:snapshot([t])}));
+ for(const text of ['继续任务','检查未完成，可重试','context deadline exceeded'])assert.ok(html.includes(text),text);
+ for(const text of ['查看并核实','记录核实结果','项操作结果待核实'])assert.ok(!html.includes(text),text);
+ const write=structuredClone(t);write.attempts[0]!.operations[0]!.risk='write';
+ assert.ok(!sreCanStart(write));const blocked=renderToStaticMarkup(createElement(AITranscript,{snapshot:snapshot([write])}));assert.ok(blocked.includes('查看并核实'));assert.ok(blocked.includes('记录核实结果'));
+});
+
+test('still running operations show progress without a manual verification prompt or duplicate start',()=>{
+ const t=task({status:'paused',attempts:[{id:'a',planRunId:'run',stepId:'observe',roleRunId:'r',status:'unknown',evidence:[],operations:[{id:'op',call:{id:'read',name:'shell',arguments:'{}'},digest:'r',resourceId:'host',risk:'readonly',status:'dispatched',preparedAt:at}],startedAt:at}]});
+ assert.ok(!sreCanStart(t));const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:snapshot([t])}));
+ assert.ok(html.includes('原操作仍在执行'));assert.ok(!html.includes('查看并核实'));assert.ok(!html.includes('项操作结果待核实'));assert.ok(!html.includes('结果待核实'));
 });

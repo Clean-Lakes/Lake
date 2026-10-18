@@ -47,7 +47,7 @@ func sreTrackedCall(c Config, call Call) bool {
 	if !c.sre.FullTools {
 		return c.sre.Role == SREExecutor
 	}
-	return strings.Contains(" shell terminal_execute_command ssh_terminal_send terminal_send_input ssh_terminal_key terminal_send_key write edit multi_edit append delete execute_sql redis_command docker_container_action scp_transfer call_mcp_tool ", " "+call.Name+" ")
+	return strings.Contains(" stage_attachment shell terminal_execute_command ssh_terminal_send terminal_send_input ssh_terminal_key terminal_send_key write edit multi_edit append delete execute_sql redis_command docker_container_action scp_transfer call_mcp_tool ", " "+call.Name+" ")
 }
 
 func sreEvidenceCall(name string) bool {
@@ -82,7 +82,7 @@ func (e *Engine) recordSREToolResult(c Config, call Call, a map[string]any, resu
 	if observationErr == nil && obj(result)["exitCode"] != nil && num(obj(result)["exitCode"], 0) != 0 {
 		observationErr = errors.New("工具退出码非零，不能作为成功证据")
 	}
-	if observationErr == nil && (obj(result)["status"] == "running" || obj(result)["running"] == true) {
+	if observationErr == nil && (obj(result)["status"] == "running" || obj(result)["status"] == "unknown" || obj(result)["running"] == true) {
 		observationErr = errors.New("工具仍在运行，尚无完成结果")
 	}
 	value, recordErr := e.recordObservation(c, as.ID, call.Name, result, observationErr)

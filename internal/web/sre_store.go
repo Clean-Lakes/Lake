@@ -23,6 +23,8 @@ func sreStoreError(err *error) {
 func decodeSRETask(row Object) ai.SRETask {
 	var task ai.SRETask
 	must(json.Unmarshal([]byte(stringOf(required(row, "SRE task")["body"])), &task))
+	normalizeSREOperationRisks(&task)
+	normalizeSREReadBlocker(&task)
 	return task
 }
 func (s *Store) sreTask(session, id string) ai.SRETask {
@@ -84,7 +86,7 @@ func (s *Store) RestartSREInvestigation(session, taskID, requestID, mode string,
 		}
 		for _, a := range old.Attempts {
 			for _, op := range a.Operations {
-				if op.Status == "unknown" || op.Status == "dispatched" {
+				if ai.SREOperationBlocksResume(op) {
 					fail(409, "原操作尚未完成或结果未明，核实前不会重新开始")
 				}
 			}

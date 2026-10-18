@@ -225,7 +225,7 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 	if err != nil {
 		return err
 	}
-	r, err := runner.New(runner.Config{AppName: "lake", Agent: root, SessionService: sessions, PluginConfig: runner.PluginConfig{Plugins: []*plugin.Plugin{projection}}, Compaction: &compaction.Config{TokenThreshold: max(1024, (c.Model.ContextWindow-c.Model.MaxOutput)*3/4), EventRetentionSize: 4, Summarizer: &nativeCompaction{engine: e, session: s, config: *c}}, ArtifactService: &nativeArtifacts{engine: e, sessionID: runtimeID, config: *c}, MemoryService: &nativeMemory{engine: e, session: s, config: *c, runtimeID: runtimeID}, AutoCreateSession: true})
+	r, err := runner.New(runner.Config{AppName: "lake", Agent: root, SessionService: sessions, PluginConfig: runner.PluginConfig{Plugins: []*plugin.Plugin{projection}}, Compaction: &compaction.Config{TokenThreshold: max(1024, c.Model.ContextWindow-c.Model.MaxOutput), EventRetentionSize: 4, Summarizer: &nativeCompaction{engine: e, session: s, config: *c}}, ArtifactService: &nativeArtifacts{engine: e, sessionID: runtimeID, config: *c}, MemoryService: &nativeMemory{engine: e, session: s, config: *c, runtimeID: runtimeID}, AutoCreateSession: true})
 	if err != nil {
 		return err
 	}

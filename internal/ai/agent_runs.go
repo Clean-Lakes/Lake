@@ -28,6 +28,8 @@ type AgentEvidence struct {
 	SourceTruncated bool   `json:"sourceTruncated,omitempty"`
 }
 type AgentRun struct {
+	LiveTextID        string           `json:"liveTextId,omitempty"`
+	LiveText          string           `json:"liveText,omitempty"`
 	Question          *QuestionRequest `json:"question,omitempty"`
 	ActivityPhase     string           `json:"activityPhase,omitempty"`
 	ActivityTool      string           `json:"activityTool,omitempty"`

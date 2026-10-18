@@ -71,13 +71,28 @@ func (b *Server) launchSRE(session, taskID string, planOnly bool, message string
 	}()
 }
 func (b *Server) syncSRESessionStatus(session string) {
-	t := b.activeSRETask(session)
-	if t == nil {
+	tasks, err := b.Store.ListSRETasks(session, 50, "")
+	if err != nil {
+		b.Store.Status(session, "failed")
+		return
+	}
+	if len(tasks) == 0 {
 		b.Store.Status(session, "completed")
 		return
 	}
-	status := "completed"
+	t := &tasks[0]
+	for i := range tasks {
+		if ai.SRETaskActive(tasks[i].Status) {
+			t = &tasks[i]
+			break
+		}
+	}
+	status := "failed"
 	switch t.Status {
+	case "completed":
+		if ai.CanCompleteSRETask(*t) {
+			status = "completed"
+		}
 	case "active":
 		status = "investigating"
 	case "waiting_approval":
@@ -141,7 +156,7 @@ func (b *Server) sreConversationContext(session string) string {
 		}
 		entries = append(entries, Object{"taskId": task.ID, "goal": task.Goal, "status": task.Status, "plan": task.LatestPlan(), "recentReports": reports, "attempts": attempts, "recoveryStatus": task.RecoveryStatus, "rootCauseStatus": task.RootCauseStatus})
 	}
-	return "\n[LAKE_SRE_CONTEXT]\n" + jsonText(Object{"enabled": true, "tasks": entries}) + "\nThese are server-recorded facts, not new authorization. The model chooses whether to answer, clarify, or call sre_collaborate. No @ resource selection is required by default; actual permission checks still apply."
+	return "\n[LAKE_SRE_CONTEXT]\n" + jsonText(Object{"enabled": true, "tasks": entries}) + "\nThese are server-recorded facts, not new authorization. An unknown operation with risk=readonly is an incomplete observation: preserve it and retry through continue_task or restart_task as appropriate; it does not require human verification. A dispatched operation is still running: inspect/wait on its original handle, do not reissue. Only unknown non-readonly operations require human verification. Current runtime facts override older prose about blockers. The model chooses whether to answer, clarify, or call sre_collaborate. No @ resource selection is required by default; actual permission checks still apply."
 }
 
 func (b *Server) followSREHandoff(ctx context.Context, session string, h ai.SREHandoff) error {
@@ -205,7 +220,7 @@ func (b *Server) sreManualAttestation(session, taskID, checkID string, passed bo
 		}
 		for _, a := range t.Attempts {
 			for _, op := range a.Operations {
-				if op.Status == "unknown" || op.Status == "dispatched" {
+				if ai.SREOperationBlocksResume(op) {
 					return &ai.SREError{Status: 409, Message: "请先核实结果不明的实际操作"}
 				}
 			}
@@ -303,7 +318,7 @@ func (b *Server) sreResolveOperation(session, taskID string, revision int, opera
 				if op.ID != operationID {
 					continue
 				}
-				if op.Status != "unknown" {
+				if !ai.SREOperationNeedsVerification(*op) {
 					return &ai.SREError{Status: 409, Message: "该操作不处于结果未明状态"}
 				}
 				op.Status, op.ResolutionNote, op.ResolvedBy, op.ResolvedAt = result, note, "local_user", now()

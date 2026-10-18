@@ -19,6 +19,9 @@ func (b *Server) finishReplyTiming(id string) {
 	if b.Context.Err() != nil {
 		return
 	}
+	if tasks, err := b.Store.ListSRETasks(id, 1, ""); err == nil && len(tasks) > 0 {
+		b.syncSRESessionStatus(id)
+	}
 	status := "failed"
 	if view, err := b.Engine.Snapshot(id); err == nil && set("completed cancelled failed")[view.Status] {
 		status = view.Status

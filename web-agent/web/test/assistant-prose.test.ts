@@ -5,6 +5,7 @@ import {renderToStaticMarkup} from "react-dom/server";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {remarkAssistantProse} from "../src/assistantProse";
+import {SREProse} from '../src/SREReport';
 
 const render = (text:string) => renderToStaticMarkup(createElement(Markdown,{remarkPlugins:[remarkGfm,remarkAssistantProse],skipHtml:true,children:text}));
 
@@ -30,4 +31,35 @@ test("ordinary strong text, nested lists and table contents keep Markdown semant
  assert.ok(html.includes('<p class="assistant-summary"><strong>综合结论：</strong>'));
  assert.ok(html.includes("<ul>"));assert.ok(html.includes("<table>"));assert.ok(html.includes("<strong>正常</strong>"));
  assert.ok(!html.includes("<script>"));
+});
+
+test('long Chinese conclusions with a space before the closing delimiter render bold',()=>{
+ const screenshotBody='服务器本体是健康的，本轮唯一实质变化是“负载读数”从 0.04 涨到 2 上下——但它不是真实压力，是 3 个残留健康检查单元制造出来的读数虚高。';
+ for(const body of [screenshotBody,screenshotBody+'本次采集没有执行任何变更。']){
+ const source=`## 结论先行\n\n**${body} **没有新增故障、没有容器异常、没有内存或磁盘变化。`;
+ const html=render(source);
+ assert.ok(html.includes(`<strong>${body}</strong> 没有新增故障`));
+ assert.ok(!html.includes('**'));
+ assert.equal(source,`## 结论先行\n\n**${body} **没有新增故障、没有容器异常、没有内存或磁盘变化。`);
+ }
+});
+test('Chinese quote and punctuation boundaries and multiple malformed bold spans are recovered',()=>{
+ const html=render('这是**“负载读数”**的变化；**服务健康。 **下一步核对。**systemd 启动频率限流（startLimit） **把重试压住了。');
+ for(const body of ['“负载读数”','服务健康。','systemd 启动频率限流（startLimit）'])assert.ok(html.includes(`<strong>${body}</strong>`),html);
+ assert.ok(!html.includes('**'));
+});
+test('Chinese literal code, escapes, links and unpaired/triple-star delimiters stay intact',()=>{
+ const html=render('`**服务健康。 **`\n\n```text\n**服务健康。 **\n```\n\n\\*\\*服务健康。 \\*\\*\n\n[**服务健康。 **](https://example.test)\n\n**还没有闭合\n\n***服务健康。 ***\n\nA ** literal ** expression.');
+ assert.ok(html.includes('<code>**服务健康。 **</code>'));
+ assert.ok(html.includes('<p>**服务健康。 **</p>'));
+ assert.ok(html.includes('href="https://example.test">**服务健康。 **</a>'));
+ assert.ok(html.includes('**还没有闭合'));
+ assert.ok(html.includes('***服务健康。 ***'));
+ assert.ok(html.includes('A ** literal ** expression.'));
+});
+test('specialist reports use the same Chinese prose recovery',()=>{
+ const html=renderToStaticMarkup(createElement(SREProse,{children:'**服务健康。 **完整记录保留。\n\n| 项目 | 状态 |\n| --- | --- |\n| CPU | **空闲。 ** |'}));
+ assert.ok(html.includes('<strong>服务健康。</strong> 完整记录保留。'));
+ assert.ok(html.includes('<strong>空闲。</strong>'));
+ assert.ok(html.includes('<table>'));
 });

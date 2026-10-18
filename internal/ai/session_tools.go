@@ -134,7 +134,7 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 		defer func() { e.finishSREOperation(c, call, result, err) }()
 		operation, operationErr := e.dispatchNativeOperation(ctx, s, c, call, "write", serverTarget(a), hash(js(bridgeArgs)))
 		if operationErr != nil {
-			return nil, operationErr
+			return nil, &ToolNotExecutedError{Err: operationErr}
 		}
 		defer func() {
 			if persistErr := e.finishNativeOperation(operation, c, result, err); persistErr != nil {
@@ -200,7 +200,7 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 	if mutation {
 		operation, operationErr := e.dispatchNativeOperation(ctx, s, c, call, "write", "当前项目", hash(call.Arguments))
 		if operationErr != nil {
-			return nil, operationErr
+			return nil, &ToolNotExecutedError{Err: operationErr}
 		}
 		defer func() {
 			if persistErr := e.finishNativeOperation(operation, c, result, err); persistErr != nil {

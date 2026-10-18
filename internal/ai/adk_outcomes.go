@@ -35,7 +35,10 @@ func (e *Engine) OperationOutcomes(id string) ([]OperationOutcome, error) {
 		return nil, err
 	}
 	var rows []nativeOperation
-	if err = store.DB.Where("session_id = ? AND status IN ? AND risk <> ?", id, []string{"unknown", "dispatched"}, "readonly").Order("started_at").Find(&rows).Error; err != nil {
+	// Dispatched operations still have a live execution path and use the normal
+	// progress UI. Only effects whose outcome is unknown need human verification.
+	// The dispatch guard independently checks both states to prevent replay.
+	if err = store.DB.Where("session_id = ? AND status = ? AND risk <> ?", id, "unknown", "readonly").Order("started_at").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := make([]OperationOutcome, 0, len(rows))

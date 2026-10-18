@@ -24,7 +24,7 @@ export function ContextUsage({view, model, compact = false}: {view: AIView; mode
   const context = view.context;
   const sameModel = !model?.modelId || model.modelId === context?.modelId;
   const discovered = capacity?.modelId === (model?.modelId || context?.modelId) && capacity?.source === "provider" ? capacity.limit : undefined;
-  const window = discovered && discovered > 0 ? discovered : sameModel && context?.windowSource === "provider" && context.window > 0 ? context.window : undefined;
+  const window = discovered && discovered > 0 ? discovered : sameModel && ["provider", "settings"].includes(context?.windowSource || "") && context!.window > 0 ? context!.window : undefined;
   const allocation = sameModel ? context?.budget && context.budget > 0 ? context.budget : window : undefined;
   const inputBudget = sameModel && context?.inputBudget && context.inputBudget > 0 ? context.inputBudget : allocation;
   const effectiveInputBudget = window && inputBudget ? Math.min(window,inputBudget) : inputBudget;

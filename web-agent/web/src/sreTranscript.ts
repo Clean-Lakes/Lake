@@ -1,3 +1,4 @@
+import {sreBlocksResume,sreNeedsVerification,sreIncompleteRead} from './sreOperationPolicy';
 import type {SRETask,SREAgentRole,SREPlanStep,SREStepAttempt,SessionSnapshot,AgentRun} from '../../shared/contracts';
 
 export const sreRoles:Record<SREAgentRole,{name:string;description:string}>={coordinator:{name:'协调者',description:'计划与调度'},investigator:{name:'调查员',description:'只读取证'},executor:{name:'执行员',description:'受控执行'},verifier:{name:'验证员',description:'独立复测'}};
@@ -8,9 +9,9 @@ export function sreEntries(snapshot:SessionSnapshot){
  const entries=[...found.values()];
  return entries.filter(({entry:m,task})=>!(m.kind==='status'&&m.source==='runtime'&&m.attemptId&&entries.some(({entry:other,task:owner})=>owner.id===task.id&&other.attemptId===m.attemptId&&other.roleRunId===m.roleRunId&&['finding','result','verification','summary'].includes(other.kind)&&(m.body==='本步工作已完成。'||m.body===other.body)))).sort((a,b)=>a.entry.sequence-b.entry.sequence||a.entry.createdAt.localeCompare(b.entry.createdAt)||a.entry.id.localeCompare(b.entry.id));
 }
-export function sreStepAttempt(task:SRETask,step:SREPlanStep):SREStepAttempt|undefined {const run=task.runs?.at(-1);if(!run||run.planRevisionId!==task.plans.at(-1)?.id)return undefined;const attempt=[...(task.attempts??[])].reverse().find(a=>a.stepId===step.id&&a.planRunId===run?.id);return attempt?.operations?.some(o=>o.status==='unknown')?{...attempt,status:'unknown'}:attempt&&step.kind==='act'&&attempt.operations?.length&&attempt.operations.every(o=>o.status==='succeeded')?{...attempt,status:'succeeded'}:attempt?.operations?.some(o=>o.status==='waiting_approval')?{...attempt,status:'waiting_approval'}:attempt}
+export function sreStepAttempt(task:SRETask,step:SREPlanStep):SREStepAttempt|undefined {const run=task.runs?.at(-1);if(!run||run.planRevisionId!==task.plans.at(-1)?.id)return undefined;const attempt=[...(task.attempts??[])].reverse().find(a=>a.stepId===step.id&&a.planRunId===run?.id);return attempt?.operations?.some(sreNeedsVerification)?{...attempt,status:'unknown'}:attempt?.operations?.some(o=>o.status==='dispatched')?{...attempt,status:'running'}:attempt&&sreIncompleteRead(attempt.operations)?{...attempt,status:'failed'}:attempt&&step.kind==='act'&&attempt.operations?.length&&attempt.operations.every(o=>o.status==='succeeded')?{...attempt,status:'succeeded'}:attempt?.operations?.some(o=>o.status==='waiting_approval')?{...attempt,status:'waiting_approval'}:attempt}
 export const sreTaskActive=(task:SRETask)=>['draft','active','waiting_input','waiting_approval','paused'].includes(task.status);
-export function sreCanStart(task:SRETask){return !!task.plans?.length&&['draft','paused','waiting_input'].includes(task.status)&&!task.attempts?.some(a=>a.operations?.some(o=>['unknown','dispatched'].includes(o.status)))}
+export function sreCanStart(task:SRETask){return !!task.plans?.length&&['draft','paused','waiting_input'].includes(task.status)&&!task.attempts?.some(a=>a.operations?.some(sreBlocksResume))}
 
 export function sreStepStatus(task:SRETask,step:SREPlanStep,runs:AgentRun[]=[]){
  const attempt=sreStepAttempt(task,step);

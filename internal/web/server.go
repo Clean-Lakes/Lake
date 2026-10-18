@@ -658,6 +658,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(204)
 			return
 		}
+		if len(parts) == 5 && parts[3] == "attachments" {
+			b.attachmentRoute(w, r, id, parts[4])
+			return
+		}
 		if len(parts) == 4 {
 			switch parts[3] {
 			case "snapshot":
@@ -686,6 +690,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					b.sse(w, r, id, n)
 					return
 				}
+			case "attachments":
+				b.attachmentRoute(w, r, id, "")
+				return
 			case "text-files":
 				if method == "POST" {
 					data := body(w, r, 8<<20)
