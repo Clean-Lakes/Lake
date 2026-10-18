@@ -183,6 +183,12 @@ func (e *Engine) prepareADKHistory(ctx context.Context, s *session, service adks
 		if err != nil {
 			return "", nil, err
 		}
+		s.mu.Lock()
+		c := s.state.Config
+		s.mu.Unlock()
+		if err = e.persistContentImages(ctx, content, importedID, c); err != nil {
+			return "", nil, err
+		}
 		who := author
 		if message.Role == "user" || message.Role == "tool" {
 			who = "user"

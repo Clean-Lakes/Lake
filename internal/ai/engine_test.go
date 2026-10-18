@@ -47,8 +47,13 @@ func engineFor(t *testing.T, m Model, bridge Bridge) *Engine {
 			value, err := original(ctx, id, name, args, approved)
 			// A minimal fixture that does not implement policy still needs a trusted
 			// synthetic target generation. Production bridges must return a fingerprint.
-			if name == "policy" && value == nil && err == nil {
-				return map[string]any{"fingerprint": "fixture-target-generation"}, nil
+			if name == "policy" && err == nil && str(obj(value)["fingerprint"]) == "" {
+				policy := obj(value)
+				if policy == nil {
+					policy = map[string]any{}
+				}
+				policy["fingerprint"] = "fixture-target-generation"
+				return policy, nil
 			}
 			return value, err
 		}
@@ -266,10 +271,12 @@ func TestLegacyRestartDoesNotReplayPending(t *testing.T) {
 	legacy.Runtime = nil
 	legacy.View.PendingApprovals = nil
 	raw, _ = json.Marshal(legacy)
-	if err := os.WriteFile(statePath, raw, 0600); err != nil {
+	legacyDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(legacyDir, "case.json"), raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	e2, _ := New(e.Dir, nil, nil)
+	e2, _ := New(legacyDir, nil, nil)
+	t.Cleanup(e2.Shutdown)
 	v, err := e2.Snapshot("case")
 	if err != nil || v.Status != "interrupted" || v.Pending != nil {
 		t.Fatal(v, err)

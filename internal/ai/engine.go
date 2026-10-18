@@ -114,6 +114,11 @@ func (e *Engine) get(id string) (*session, error) {
 			}
 			for i := range s.state.View.AgentRuns {
 				run := &s.state.View.AgentRuns[i]
+				if nativeQuestionReady(run.Question) {
+					run.Status = "waiting_input"
+					run.CanCancel = false
+					continue
+				}
 				if run.Status == "waiting_approval" && run.Pending != nil && strings.HasPrefix(run.Pending.ID, "adk-") {
 					run.CanCancel = false
 					continue

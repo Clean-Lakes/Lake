@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-18",
+  "timezone": "Asia/Shanghai",
+  "purpose": "Official ADK dependency installation and existing adapter integration baseline; not full runtime migration acceptance",
+  "branch": "experiment/adk-runtime",
+  "head": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+  "workspace": {
+    "clean": false,
+    "preexistingChanges": "ADK integration in go.mod/go.sum, internal/ai, internal/web, frontend and CI; untracked ADK code and validation docs; unrelated documentation deletions and untracked assets preserved",
+    "changesMadeThisRun": [
+      "plan/refactor-adk-official-runtime-1.md",
+      "docs/experiments/adk-runtime.md",
+      "docs/validation/lake-adk-official-baseline.json"
+    ],
+    "runtimeImplementationChangedThisRun": false
+  },
+  "toolchain": {
+    "goVersion": "go1.26.6",
+    "goos": "darwin",
+    "goarch": "arm64"
+  },
+  "dependency": {
+    "module": "google.golang.org/adk/v2",
+    "version": "v2.6.0",
+    "latestAtVerification": "v2.6.0",
+    "publishedAt": "2026-10-13T13:21:42Z",
+    "requiredGoVersion": "1.26.6",
+    "sum": "h1:ZgMfKWzzB1H3qQ/6JV3pGkm7rcfNZFRMkgvOLBtmJTk=",
+    "goModSum": "h1:Z3nLJKDFE1UzbEs3JXiTnAtWjS92kXo4cI8S8FFLRrc=",
+    "genaiVersion": "v1.74.0",
+    "alreadyPresentBeforeInstallation": true,
+    "officialRepository": "https://github.com/google/adk-go",
+    "release": "https://github.com/google/adk-go/releases/tag/v2.6.0"
+  },
+  "dependencyFiles": {
+    "go.mod": {
+      "sha256Before": "a22ddf1ac9d0857d30089d742b2c7462c7143c58a0b7f9ee28e83e91d525e1d9",
+      "sha256After": "a22ddf1ac9d0857d30089d742b2c7462c7143c58a0b7f9ee28e83e91d525e1d9"
+    },
+    "go.sum": {
+      "sha256Before": "c245156ba2daf914f8f6c6defb7a4021e16204efd5c588868aa42c080b0c8209",
+      "sha256After": "c245156ba2daf914f8f6c6defb7a4021e16204efd5c588868aa42c080b0c8209"
+    }
+  },
+  "checks": [
+    {"command": "go list -m -json google.golang.org/adk/v2@latest", "exitCode": 0, "status": "passed"},
+    {"command": "go get google.golang.org/adk/v2@v2.6.0", "exitCode": 0, "status": "passed"},
+    {"command": "go mod download google.golang.org/adk/v2@v2.6.0", "exitCode": 0, "status": "passed"},
+    {"command": "go mod verify", "exitCode": 0, "status": "passed", "output": "all modules verified"},
+    {
+      "command": "go test -race ./internal/agent/adk ./internal/web -run 'TestGate|TestFileApproval|TestFileEvidence|TestEvidence|TestRuntime|TestLakeLLM|TestLakeRequest|TestADKRuntime' -count=1",
+      "exitCode": 0,
+      "status": "passed",
+      "packages": [
+        {"path": "github.com/Clean-Lakes/Lake/internal/agent/adk", "durationSeconds": 1.970},
+        {"path": "github.com/Clean-Lakes/Lake/internal/web", "durationSeconds": 3.406}
+      ]
+    }
+  ],
+  "notValidatedThisRun": [
+    "Full go test ./... and frontend regression suite",
+    "Future ADK SRE workflow and all four role implementations",
+    "Future multi-branch approval and Web process restart recovery",
+    "Legacy history migration and complete removal of old runtime",
+    "macOS signed application build/install and GUI acceptance",
+    "Windows/Linux target runtime verification"
+  ],
+  "plan": "plan/refactor-adk-official-runtime-1.md",
+  "migrationStatus": "planned; existing code remains at A/B plus C0"
+}

@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,6 +64,9 @@ func (e *Engine) projectionPlugin(s *session, runtimeID string) (*plugin.Plugin,
 		}
 		var clean adksession.Event
 		if err = json.Unmarshal(safeJSON(raw, c), &clean); err != nil {
+			return nil, err
+		}
+		if err = e.persistContentImages(ic, clean.Content, runtimeID, c); err != nil {
 			return nil, err
 		}
 		delta, err := e.projectionDelta(ic, s, runtimeID, event.ID)
@@ -194,4 +198,25 @@ func nativeProjectionAuthor(cp *RuntimeCheckpoint) string {
 		return "lake_" + string(cp.Identity.Role)
 	}
 	return "lake_chat"
+}
+
+func (e *Engine) persistContentImages(ctx context.Context, content *genai.Content, runtimeID string, c Config) error {
+	if content == nil {
+		return nil
+	}
+	service := &nativeArtifacts{engine: e, sessionID: runtimeID, config: c}
+	for _, part := range content.Parts {
+		if part == nil || part.InlineData == nil {
+			continue
+		}
+		name := "media-" + hash(base64.StdEncoding.EncodeToString(part.InlineData.Data))
+		saved, err := service.Save(ctx, &artifact.SaveRequest{AppName: "lake", UserID: "lake", SessionID: runtimeID, FileName: name, Part: &genai.Part{InlineData: part.InlineData}})
+		if err != nil {
+			return err
+		}
+		mime := part.InlineData.MIMEType
+		part.InlineData = nil
+		part.FileData = &genai.FileData{MIMEType: mime, FileURI: fmt.Sprintf("lake-artifact://%s/%s?version=%d", runtimeID, name, saved.Version)}
+	}
+	return nil
 }

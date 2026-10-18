@@ -13,10 +13,10 @@ export const agentRoles: Record<string, { name: string; label: string; icon: Age
   memory: {name: "Scribe", label: "事件复盘", icon: "memory"},
 };
 export const agentStatusLabels: Record<AgentRunStatus, string> = {
-  queued: "排队中", running: "执行中", waiting_approval: "等待确认", completed: "已完成",
+  queued: "排队中", running: "执行中", waiting_approval: "等待确认", waiting_input:"等待回答", completed: "已完成",
   failed: "执行失败", cancelled: "已停止", interrupted: "已中断", unknown: "状态待核查",
 };
-export const activeAgentStatus = (status: AgentRunStatus) => ["queued", "running", "waiting_approval"].includes(status);
+export const activeAgentStatus = (status: AgentRunStatus) => ["queued", "running", "waiting_approval", "waiting_input"].includes(status);
 export function agentIdentity(run: Pick<AgentRun, "role" | "name">) {
   return agentRoles[run.role] || {name: run.name || "子 Agent", label: "任务调查", icon: "other" as const};
 }

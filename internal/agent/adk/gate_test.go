@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"os"
 	"path/filepath"
 	"strings"
@@ -309,7 +310,7 @@ func TestFileApprovalStoreExpires(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0600 {
+	if !platform.Private(path, info) {
 		t.Fatalf("approval store mode = %v, want 0600", info.Mode().Perm())
 	}
 }
@@ -338,7 +339,7 @@ func TestFileEvidenceIsAppendOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0600 {
+	if !platform.Private(path, info) {
 		t.Fatalf("evidence mode = %v, want 0600", info.Mode().Perm())
 	}
 }

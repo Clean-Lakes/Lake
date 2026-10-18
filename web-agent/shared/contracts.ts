@@ -62,7 +62,7 @@ export type Specialist = {
 
 /** Independent child tasks, supplied by the runtime rather than inferred from tool calls. */
 export type AgentRole = "host" | "application" | "data" | "network" | "change" | "verify" | "plan" | "memory";
-export type AgentRunStatus = "queued" | "running" | "waiting_approval" | "completed" | "failed" | "cancelled" | "interrupted" | "unknown";
+export type AgentRunStatus = "queued" | "running" | "waiting_approval" | "waiting_input" | "completed" | "failed" | "cancelled" | "interrupted" | "unknown";
 export type AgentRun = {
   activityPhase?: string; activityTool?: string; activityUpdatedAt?: string;
 	sreTaskId?:string;
@@ -86,6 +86,7 @@ export type AgentRun = {
   /** Only the owning execution service can advertise individual cancellation. */
   canCancel?: boolean;
   pending?: AIApproval;
+  question?: AIQuestionRequest;
   evidence?: AgentEvidence[];
   usage?: AIUsage;
   budgetSpent?: number;

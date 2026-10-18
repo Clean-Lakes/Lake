@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -162,7 +163,10 @@ func TestRealSSHPersistentPTY(t *testing.T) {
 		}
 		for _, cols := range []int{60, 120, 80} {
 			b.Terminals.Resize(sid, rawID, cols, 25)
-			b.Terminals.Input(sid, rawID, "\x0c", false)
+			// Linux /bin/sh is dash and has no readline Ctrl-L binding.
+			if shell != "sh" || runtime.GOOS != "linux" {
+				b.Terminals.Input(sid, rawID, "\x0c", false)
+			}
 			// SSH window changes and prompt redraw arrive asynchronously. Check
 			// the whole wrapped prompt rather than assuming a short hostname.
 			deadline := time.Now().Add(2 * time.Second)

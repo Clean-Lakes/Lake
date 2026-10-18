@@ -280,6 +280,40 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 		if ev.Type == "delta" || ev.Type == "historyMessage" || ev.Type == "done" {
 			return
 		}
+		if ev.Type == "question" {
+			var req *QuestionRequest
+			if ev.Data != nil {
+				raw, _ := json.Marshal(ev.Data)
+				_ = json.Unmarshal(raw, &req)
+			}
+			_ = e.updateAgent(w, func(r *AgentRun) {
+				r.Question = req
+				if req != nil {
+					r.Status = "waiting_input"
+				} else {
+					r.Status = "running"
+				}
+			})
+			if attemptID != "" {
+				_, _ = e.sreRepository.MutateSRETask(sessionID, task.ID, 0, "role_question", func(t *SRETask) error {
+					for i := range t.Attempts {
+						if t.Attempts[i].ID == attemptID {
+							t.Attempts[i].Status = "running"
+							if req != nil {
+								t.Attempts[i].Status = "waiting_input"
+							}
+						}
+					}
+					if req != nil {
+						t.Status = "waiting_approval"
+					} else {
+						t.Status = "active"
+					}
+					return nil
+				})
+			}
+
+		}
 		if ev.Type == "approval" {
 			var p Approval
 			raw, _ := json.Marshal(ev.Data)
@@ -445,6 +479,7 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 		r.Summary = utf8Prefix(out.Summary, 8192)
 		r.CanCancel = false
 		r.Pending = nil
+		r.Question = nil
 		r.FinishedAt = timestamp()
 		r.Usage = out.Usage
 		addUsage(&s.state.View.Usage, out.Usage)

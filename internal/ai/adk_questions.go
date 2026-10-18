@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"errors"
+	"path/filepath"
 
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/agent/workflowagent"
@@ -54,6 +55,38 @@ func (e *Engine) recoverQuestionReply(s *session, req *QuestionRequest, answers 
 	if err := e.runNativeQuestion(context.Background(), req, answers); err != nil {
 		return err
 	}
+	if err := prepareQuestionResponse(s, req, answers); err != nil {
+		return err
+	}
+	work, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	c := s.state.Config
+	c.targetScope = cloneTargetScope(s.state.TargetScope)
+	c.ReferencedAssets = validRemembered(c, s.state.ReferencedAssetIDs)
+	if err := e.save(s); err != nil {
+		cancel()
+		s.cancel = nil
+		return err
+	}
+	e.runMu.Lock()
+	if e.runtimeClosed {
+		e.runMu.Unlock()
+		cancel()
+		s.cancel = nil
+		return errors.New("runtime closed")
+	}
+	e.runs.Add(1)
+	e.runMu.Unlock()
+	go func() { defer e.runs.Done(); _ = e.resumeNativeApproval(work, s, c, cancel) }()
+	return nil
+}
+
+// The durable marker distinguishes SDK-backed waits from legacy history.
+func nativeQuestionReady(req *QuestionRequest) bool {
+	return req != nil && req.Call != nil && req.RuntimeSessionID != ""
+}
+
+func prepareQuestionResponse(s *session, req *QuestionRequest, answers map[string][]string) error {
 	key := hash(s.state.View.RootTurnID + js(req.Questions))
 	if s.state.QuestionDecisions == nil {
 		s.state.QuestionDecisions = map[string]map[string][]string{}
@@ -87,31 +120,59 @@ func (e *Engine) recoverQuestionReply(s *session, req *QuestionRequest, answers 
 	}
 	s.state.History = append(s.state.History, replies...)
 	s.nativeResumeContent = content
-	work, cancel := context.WithCancel(context.Background())
-	s.cancel = cancel
-	c := s.state.Config
-	c.targetScope = cloneTargetScope(s.state.TargetScope)
-	c.ReferencedAssets = validRemembered(c, s.state.ReferencedAssetIDs)
-	if err := e.save(s); err != nil {
-		cancel()
-		s.cancel = nil
-		return err
-	}
-	e.runMu.Lock()
-	if e.runtimeClosed {
-		e.runMu.Unlock()
-		cancel()
-		s.cancel = nil
-		return errors.New("runtime closed")
-	}
-	e.runs.Add(1)
-	e.runMu.Unlock()
-	go func() { defer e.runs.Done(); _ = e.resumeNativeApproval(work, s, c, cancel) }()
+
 	return nil
 }
 
-// Used by acceptance tests to distinguish durable waits from ordinary legacy
-// blocking question fixtures.
-func nativeQuestionReady(req *QuestionRequest) bool {
-	return req != nil && req.Call != nil && req.RuntimeSessionID != ""
+func (e *Engine) AgentQuestionReply(parentID, runID, requestID string, answers map[string][]string) error {
+	if w, err := e.ownedWorker(parentID, runID); err == nil {
+		return w.child.ReplyQuestion(runID, requestID, answers)
+	}
+	e.agentMu.Lock()
+	if w := e.agentWorkers[runID]; w != nil && w.parentID == parentID {
+		e.agentMu.Unlock()
+		return w.child.ReplyQuestion(runID, requestID, answers)
+	}
+	defer e.agentMu.Unlock()
+	parent, err := e.get(parentID)
+	if err != nil {
+		return err
+	}
+	parent.mu.Lock()
+	var run AgentRun
+	for _, r := range parent.state.View.AgentRuns {
+		if r.ID == runID && r.SessionID == parentID {
+			run = r
+		}
+	}
+	c := parent.state.Config
+	parent.mu.Unlock()
+	if run.SRETaskID == "" || run.Question == nil || run.Question.ID != requestID || !e.hasRecoverableRole(parentID, runID) {
+		return errors.New("question outside current role")
+	}
+	child, err := New(filepath.Join(e.Dir, "children", parentID), nil, nil)
+	if err != nil {
+		return err
+	}
+	child.worker = &agentWorker{parent: e, parentID: parentID, runID: runID}
+	defer child.Shutdown()
+	s, err := child.get(runID)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	req := s.state.View.Question
+	if !nativeQuestionReady(req) || req.ID != requestID || req.Answers != nil {
+		return errors.New("question expired")
+	}
+	if err = validateQuestionAnswers(req, answers); err != nil {
+		return err
+	}
+	req.Answers = answers
+	s.state.Config = c
+	if err = child.save(s); err != nil {
+		return err
+	}
+	return e.queueRoleRecovery(parentID, run.SRETaskID)
 }

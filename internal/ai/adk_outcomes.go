@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,6 +25,10 @@ type OperationOutcome struct {
 func (e *Engine) OperationOutcomes(id string) ([]OperationOutcome, error) {
 	if !identifier.MatchString(id) {
 		return nil, errors.New("invalid session id")
+	}
+	// Legacy/idle views do not open and migrate a database merely to poll UI.
+	if _, err := os.Stat(filepath.Join(e.runtimeDirectory(), "sessions.sqlite")); os.IsNotExist(err) {
+		return []OperationOutcome{}, nil
 	}
 	store, err := e.adkStore()
 	if err != nil {

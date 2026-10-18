@@ -138,6 +138,16 @@ func (e *Engine) Handle(ctx context.Context, method, id string, data json.RawMes
 			return nil, err
 		}
 		return e.shellJob(ctx, id, method, a)
+	case "agentQuestionReply":
+		var input struct {
+			RunID   string              `json:"runId"`
+			ID      string              `json:"id"`
+			Answers map[string][]string `json:"answers"`
+		}
+		if err := decode(&input); err != nil {
+			return nil, err
+		}
+		return nil, e.AgentQuestionReply(id, input.RunID, input.ID, input.Answers)
 	case "questionReply":
 		var input struct {
 			ID      string              `json:"id"`

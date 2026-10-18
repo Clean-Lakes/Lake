@@ -5,6 +5,8 @@ import "context"
 // RunIdentity is assigned by the host, never supplied through model arguments.
 // It survives pauses and identifies every execution and its audit projection.
 type RunIdentity struct {
+	Branch         string       `json:"branch,omitempty"`
+	IsolationScope string       `json:"isolationScope,omitempty"`
 	ScopeID        string       `json:"scopeId,omitempty"`
 	SessionID      string       `json:"sessionId"`
 	RootTurnID     string       `json:"rootTurnId"`

@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -128,10 +129,10 @@ func NewFileApprovalStore(path string) (ApprovalStore, error) {
 
 func privateDir(path string) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := platform.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
-	return os.Chmod(dir, 0700)
+	return platform.Chmod(dir, 0700)
 }
 
 func (f *fileApprovalStore) read() (map[string]PendingApproval, error) {

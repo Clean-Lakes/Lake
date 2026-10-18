@@ -28,11 +28,12 @@ type AgentEvidence struct {
 	SourceTruncated bool   `json:"sourceTruncated,omitempty"`
 }
 type AgentRun struct {
-	ActivityPhase     string       `json:"activityPhase,omitempty"`
-	ActivityTool      string       `json:"activityTool,omitempty"`
-	ActivityUpdatedAt string       `json:"activityUpdatedAt,omitempty"`
-	SRETaskID         string       `json:"sreTaskId,omitempty"`
-	SRERole           SREAgentRole `json:"sreRole,omitempty"`
+	Question          *QuestionRequest `json:"question,omitempty"`
+	ActivityPhase     string           `json:"activityPhase,omitempty"`
+	ActivityTool      string           `json:"activityTool,omitempty"`
+	ActivityUpdatedAt string           `json:"activityUpdatedAt,omitempty"`
+	SRETaskID         string           `json:"sreTaskId,omitempty"`
+	SRERole           SREAgentRole     `json:"sreRole,omitempty"`
 	budgetReserved    int
 	AutomaticSurvey   bool            `json:"automaticSurvey,omitempty"`
 	WorkflowStepID    string          `json:"workflowStepId,omitempty"`
@@ -86,7 +87,7 @@ type agentWorker struct {
 var agentNames = map[string]string{"host": "Scout", "application": "Trace", "data": "Deep", "verify": "Beacon"}
 
 func agentActive(status string) bool {
-	return status == "queued" || status == "running" || status == "waiting_approval"
+	return status == "queued" || status == "running" || status == "waiting_approval" || status == "waiting_input"
 }
 
 func (e *Engine) updateAgent(w *agentWorker, update func(*AgentRun)) error {

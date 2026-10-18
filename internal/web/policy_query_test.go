@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -78,6 +79,9 @@ func TestReadOnlyQueryPolicy(t *testing.T) {
 		{`ls /lake-query-fixture-does-not-exist 2>/dev/null; printf 'DONE'`, "DONE"},
 		{`printf '%s' /dev/disk | grep -E /dev/disk`, "/dev/disk"},
 	} {
+		if runtime.GOOS == "linux" {
+			test.command = strings.Replace(test.command, `date -u -r "$BOOT"`, `date -u -d "@$BOOT"`, 1)
+		}
 		b, h := fixture(t)
 		id, ref := newSession(t, h)
 		ctx := context.Background()

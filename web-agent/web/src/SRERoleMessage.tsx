@@ -30,7 +30,7 @@ export function SRERoleMessage({task,entry,snapshot,renderApproval,onUpdated}:{t
  const live=sreRoleLiveState(task,entry,run,attempt);
  const showRecords=['finding','result','verification','error'].includes(entry.kind);
  const approvalAnchor=task.messages?.find(m=>m.roleRunId===entry.roleRunId&&m.kind==='progress')??task.messages?.filter(m=>m.roleRunId===entry.roleRunId).at(-1);
- const showApproval=!!run?.pending&&approvalAnchor?.id===entry.id;
+ const showApproval=!!(run?.pending||run?.question)&&approvalAnchor?.id===entry.id;
  const successfulOps=attempt?.operations?.filter(op=>op.status==='succeeded')??[];
  const otherOps=attempt?.operations?.filter(op=>op.status!=='succeeded')??[];
  const operationRecord=(op:NonNullable<typeof attempt>['operations'][number])=><details className="sre-operation-record" id={`sre-operation-${op.id}`} key={op.id}><summary><Glyph name="terminal" size={13}/>{op.call.name} · {({prepared:'已准备',waiting_approval:'等待确认',dispatched:'已派发',succeeded:'执行成功，仍需验证',failed:'执行失败',unknown:'结果待核实',rejected:'已拒绝，未执行',not_executed:'未执行',interrupted:'已中断，未派发'} as Record<string,string>)[op.status]??op.status}</summary><pre>{op.call.arguments}</pre>{op.result&&<pre>{op.result}</pre>}{op.resolutionNote&&<p>人工核实 · {op.resolutionNote}</p>}{op.status==='unknown'&&['paused','waiting_input'].includes(task.status)&&<button type="button" onClick={()=>{setResolveId(op.id);setResolveNote('');setResolveError('')}}>记录核实结果</button>}</details>;

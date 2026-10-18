@@ -89,6 +89,13 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 			if err := tc.Err(); err != nil {
 				return nil, err
 			}
+			s.mu.Lock()
+			if s.state.Runtime != nil {
+				s.state.Runtime.Identity.InvocationID = tc.InvocationID()
+				s.state.Runtime.Identity.Branch = tc.Branch()
+				s.state.Runtime.Identity.IsolationScope = tc.IsolationScope()
+			}
+			s.mu.Unlock()
 			call := Call{ID: tc.FunctionCallID(), Name: entry.Name, Arguments: js(arguments)}
 			toolCtx := context.WithValue(tc, adkToolContextKey{}, tc)
 			if err := e.invokeCalls(toolCtx, s, c, []Call{call}); err != nil {
@@ -233,6 +240,9 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 			for _, part := range content.Parts {
 				resuming = resuming || part.FunctionResponse != nil
 			}
+		}
+		if err := e.persistContentImages(ctx, content, id, *c); err != nil {
+			return err
 		}
 		delta, err := e.projectionDelta(ctx, s, id, uid())
 		if err != nil {

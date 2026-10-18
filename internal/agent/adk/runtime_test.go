@@ -244,6 +244,9 @@ func TestRuntimeResumeAfterSQLiteReload(t *testing.T) {
 		t.Fatal("write executed in the first process")
 	}
 
+	if err := sessions1.(*prototypeSQLiteService).Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Simulate a process restart: new stores, new session service instance and a
 	// fresh model that will produce the final answer after the tool resumes.
 	store2, err := NewFileApprovalStore(approvalPath)
@@ -263,6 +266,7 @@ func TestRuntimeResumeAfterSQLiteReload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer sessions2.(*prototypeSQLiteService).Close()
 	sink2 := &RecordingSink{}
 	llm2 := &scriptedLLM{first: textResponse("done after restart")}
 	rt2, err := NewRuntime(llm2, tools2, sessions2, sink2)

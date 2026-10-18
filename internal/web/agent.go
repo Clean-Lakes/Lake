@@ -152,7 +152,7 @@ func (b *Server) sessionAssetCatalog(id string) ([]ai.Asset, []ai.AssetDirectory
 	return assets, directories
 }
 func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any, error) {
-	if method == "questionReply" && b.Engine.NeedsQuestionRecovery(id) || method == "agentDecision" && b.Engine.NeedsRoleRecovery(id, stringOf(object(data)["runId"])) || method == "decision" && b.Engine.NeedsADKRecovery(id) {
+	if method == "agentQuestionReply" && b.Engine.NeedsRoleRecovery(id, stringOf(object(data)["runId"])) || method == "questionReply" && b.Engine.NeedsQuestionRecovery(id) || method == "agentDecision" && b.Engine.NeedsRoleRecovery(id, stringOf(object(data)["runId"])) || method == "decision" && b.Engine.NeedsADKRecovery(id) {
 		b.configure(id, nil)
 	}
 	if method == "questionReply" {

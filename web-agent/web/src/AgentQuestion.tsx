@@ -2,7 +2,7 @@ import {useEffect, useState} from "react";
 import type {AIQuestionRequest} from "../../shared/contracts";
 import {api, readableError} from "./api";
 import {chooseAnswer, questionAnswer, questionOptions, recordQuestionAnswer} from "./questionState";
-export function AgentQuestion({session, request, refresh}: {session: string; request: AIQuestionRequest; refresh: () => Promise<unknown>}) {
+export function AgentQuestion({session, request, refresh,runId}: {runId?:string;session: string; request: AIQuestionRequest; refresh: () => Promise<unknown>}) {
  const [selected,setSelected]=useState<Record<string,string[]>>({});
  const [text,setText]=useState<Record<string,string>>({});
  const [other,setOther]=useState<Record<string,boolean>>({});
@@ -16,7 +16,7 @@ export function AgentQuestion({session, request, refresh}: {session: string; req
  const values=questionAnswer(question,selected[question.id]||[],text[question.id]||"",custom);
  const last=index===request.questions.length-1;
  const submit=async(answers:Record<string,string[]>)=>{setBusy(true);setError("");try{
-  await api.aiOperation(session,"questionReply",{id:request.id,answers});await refresh();
+  await api.aiOperation(session,runId?"agentQuestionReply":"questionReply",{id:request.id,answers,...(runId?{runId}:{})});await refresh();
  }catch(error){setError(readableError(error));setBusy(false);}};
  const advance=(skip=false)=>{
   if(busy||!skip&&!values.length)return;

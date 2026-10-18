@@ -73,7 +73,7 @@ func (e *Engine) hasRecoverableRole(parentID, runID string) bool {
 	}
 	raw, err := os.ReadFile(filepath.Join(e.Dir, "children", parentID, runID+".json"))
 	var state State
-	return err == nil && json.Unmarshal(raw, &state) == nil && state.Runtime != nil && len(state.View.PendingApprovals) > 0
+	return err == nil && json.Unmarshal(raw, &state) == nil && state.Runtime != nil && (len(state.View.PendingApprovals) > 0 || nativeQuestionReady(state.View.Question))
 }
 
 func (e *Engine) recoverAgentDecision(parentID, runID, approval string, accept bool, confirmation string) error {
@@ -107,11 +107,15 @@ func (e *Engine) recoverAgentDecision(parentID, runID, approval string, accept b
 	if result.RowsAffected != 1 {
 		return errors.New("approval expired or already decided")
 	}
-	key := parentID + ":" + run.SRETaskID
+	return e.queueRoleRecovery(parentID, run.SRETaskID)
+}
+
+func (e *Engine) queueRoleRecovery(parentID, taskID string) error {
+	key := parentID + ":" + taskID
 	if _, loaded := e.sreRecoveries.LoadOrStore(key, true); loaded {
 		return nil
 	}
-	_, err = e.sreRepository.MutateSRETask(parentID, run.SRETaskID, 0, "recovery_requested", func(t *SRETask) error {
+	_, err := e.sreRepository.MutateSRETask(parentID, taskID, 0, "recovery_requested", func(t *SRETask) error {
 		if !SRETaskActive(t.Status) {
 			return errors.New("task already ended")
 		}
@@ -134,7 +138,7 @@ func (e *Engine) recoverAgentDecision(parentID, runID, approval string, accept b
 	go func() {
 		defer e.runs.Done()
 		defer e.sreRecoveries.Delete(key)
-		_ = e.ResumeSRETask(context.Background(), parentID, run.SRETaskID)
+		_ = e.ResumeSRETask(context.Background(), parentID, taskID)
 	}()
 	return nil
 }
@@ -149,6 +153,30 @@ func (e *Engine) executeRecoveredRole(ctx context.Context, id string, c Config, 
 		return err
 	}
 	s.mu.Lock()
+	if req := s.state.View.Question; nativeQuestionReady(req) {
+		answers := req.Answers
+		if answers == nil {
+			reply := make(chan map[string][]string, 1)
+			s.questionReply = reply
+			e.notify(s, "question", req)
+			s.mu.Unlock()
+			select {
+			case answers = <-reply:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			s.mu.Lock()
+		}
+		s.mu.Unlock()
+		if err = e.runNativeQuestion(ctx, req, answers); err != nil {
+			return err
+		}
+		s.mu.Lock()
+		if err = prepareQuestionResponse(s, req, answers); err != nil {
+			s.mu.Unlock()
+			return err
+		}
+	}
 	s.cancel = cancel
 	s.decisions = map[string]chan bool{}
 	for _, p := range s.state.View.PendingApprovals {

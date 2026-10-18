@@ -23,10 +23,11 @@ type UserQuestion struct {
 	MultiSelect bool             `json:"multi_select,omitempty"`
 }
 type QuestionRequest struct {
-	Call             *Call          `json:"call,omitempty"`
-	RuntimeSessionID string         `json:"runtimeSessionId,omitempty"`
-	ID               string         `json:"id"`
-	Questions        []UserQuestion `json:"questions"`
+	Answers          map[string][]string `json:"answers,omitempty"`
+	Call             *Call               `json:"call,omitempty"`
+	RuntimeSessionID string              `json:"runtimeSessionId,omitempty"`
+	ID               string              `json:"id"`
+	Questions        []UserQuestion      `json:"questions"`
 }
 
 func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, call Call, a map[string]any) (result any, err error) {
@@ -317,20 +318,8 @@ func (e *Engine) ReplyQuestionWithTarget(id, requestID string, answers map[strin
 	if req == nil || req.ID != requestID || s.questionReply == nil && (!nativeQuestionReady(req) || s.cancel != nil) {
 		return errors.New("question expired")
 	}
-	allowed := map[string]UserQuestion{}
-	for _, q := range req.Questions {
-		allowed[q.ID] = q
-	}
-	for key, values := range answers {
-		q, ok := allowed[key]
-		if !ok || len(values) > 9 || !q.MultiSelect && len(values) > 1 {
-			return errors.New("invalid question answers")
-		}
-		for _, v := range values {
-			if len(v) > 4000 {
-				return errors.New("answer too long")
-			}
-		}
+	if err := validateQuestionAnswers(req, answers); err != nil {
+		return err
 	}
 	if scope != nil {
 		for _, ref := range scope.ResourceIDs {
@@ -405,4 +394,24 @@ func (e *Engine) configuredExtensionTools(c Config, list []Tool) []Tool {
 		}
 	}
 	return out
+}
+
+func validateQuestionAnswers(req *QuestionRequest, answers map[string][]string) error {
+	allowed := map[string]UserQuestion{}
+	for _, q := range req.Questions {
+		allowed[q.ID] = q
+	}
+	for key, values := range answers {
+		q, ok := allowed[key]
+		if !ok || len(values) > 9 || !q.MultiSelect && len(values) > 1 {
+			return errors.New("invalid question answers")
+		}
+		for _, v := range values {
+			if len(v) > 4000 {
+				return errors.New("answer too long")
+			}
+		}
+	}
+
+	return nil
 }

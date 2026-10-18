@@ -242,6 +242,9 @@ func (s *Store) RecoverSRETasks() {
 				if r.Status == "running" || r.Status == "queued" || r.Status == "waiting_approval" {
 					r.Status = "interrupted"
 					for _, a := range t.Attempts {
+						if a.PlanRunID == r.ID && a.Status == "waiting_input" {
+							r.Status = "paused"
+						}
 						for _, op := range a.Operations {
 							if a.PlanRunID == r.ID && op.Status == "waiting_approval" && strings.HasPrefix(op.ApprovalID, "adk-") {
 								r.Status = "paused"
@@ -253,7 +256,7 @@ func (s *Store) RecoverSRETasks() {
 			}
 			for i := range t.Attempts {
 				a := &t.Attempts[i]
-				nativeWait := false
+				nativeWait := a.Status == "waiting_input"
 				for _, op := range a.Operations {
 					nativeWait = nativeWait || op.Status == "waiting_approval" && strings.HasPrefix(op.ApprovalID, "adk-")
 				}
