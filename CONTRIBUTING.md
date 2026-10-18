@@ -50,3 +50,9 @@ bin/lake web --home "$HOME/.lake-dev-cli" --port 4182 --open
 - Go 代码用 `gofmt`；前端遵循现有 React/Vite 代码组织；macOS 客户端沿用 Swift Package 结构。改动对应功能时更新说明和必要的验证记录。
 - 不在代码、日志、截图、Issue 或提交中放模型 API Key、SSH 私钥内容。Lake 正常运行的凭据位于各自 home 下权限私有的 `secrets/`；只有显式执行已签名的 `lake secrets migrate` 才读取旧 Keychain 凭据。
 - 本地联调只检查 Dev 应用和隔离数据。正式版构建、安装与发布按 [macOS 客户端说明](client/macos/README.md) 进行。
+
+## Official ADK runtime
+
+Interactive agents use official ADK Go v2.6.0 on Go 1.26.6, including direct stdio and scheduled workflows. Runtime ownership is in `internal/ai/adk_*.go`; the shared durable session store is `internal/agent/storage`. Preserve the existing provider/executor boundaries. Do not add another model/tool loop, import SDK internals, or restore a production Go fallback. Run `python3 scripts/check_adk_runtime_boundary.py` along with Go/race/vet and frontend checks.
+
+See [runtime architecture and recovery](docs/experiments/adk-runtime.md) and [migration acceptance](docs/validation/lake-adk-runtime-final.json). Keep credentials out of SDK events, state, artifacts and test output. Use the signed build scripts and an isolated Dev home for integration. Unknown operations require reconciliation; clearing model context never clears the operation ledger or authorizes a retry.

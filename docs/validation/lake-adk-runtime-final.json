@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-18",
+  "status": "verification_in_progress",
+  "workingBranch": "experiment/adk-runtime",
+  "acceptanceBranch": "codex/adk-runtime-acceptance",
+  "officialSDK": "google.golang.org/adk/v2@v2.6.0",
+  "goVersion": "1.26.6",
+  "scope": "Local synthetic resources and providers; no production-resource claims",
+  "remainingGates": [
+    "final source verification",
+    "Windows CI",
+    "final signed Dev build",
+    "locked desktop: narrow/dark visual checks"
+  ]
+}

@@ -187,7 +187,7 @@ func (b *Server) followSREHandoff(ctx context.Context, session string, h ai.SREH
 }
 
 func (b *Server) sreManualAttestation(session, taskID, checkID string, passed bool) (ai.SRETask, error) {
-	return b.Store.MutateSRETask(session, taskID, 0, "manual_verification", func(t *ai.SRETask) error {
+	updated, err := b.Store.MutateSRETask(session, taskID, 0, "manual_verification", func(t *ai.SRETask) error {
 		if t.Status != "paused" && t.Status != "waiting_input" {
 			return &ai.SREError{Status: 409, Message: "请等待执行结束后确认验证结果"}
 		}
@@ -265,6 +265,14 @@ func (b *Server) sreManualAttestation(session, taskID, checkID string, passed bo
 		}
 		return nil
 	})
+	if err != nil {
+		return updated, err
+	}
+	if err = b.Engine.RecordSREAttestation(context.Background(), session, updated, checkID, passed); err != nil {
+		return updated, err
+	}
+	return updated, nil
+
 }
 
 func (b *Server) sreExport(task ai.SRETask) string {

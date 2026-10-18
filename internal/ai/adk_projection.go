@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gorm.io/gorm"
+	"os"
+	"path/filepath"
 	"time"
 
 	"google.golang.org/adk/v2/agent"
@@ -25,9 +28,12 @@ type nativeProjectionRef struct {
 	EventID string `json:"eventId"`
 }
 type nativeProjection struct {
-	History      []Message `json:"history"`
-	View         View      `json:"view"`
-	RootQuestion string    `json:"rootQuestion"`
+	Runtime      *RuntimeCheckpoint `json:"runtime,omitempty"`
+	References   []string           `json:"references,omitempty"`
+	Scope        *TargetScope       `json:"scope,omitempty"`
+	History      []Message          `json:"history"`
+	View         View               `json:"view"`
+	RootQuestion string             `json:"rootQuestion"`
 }
 
 // The public SDK content format cannot represent every provider's signed
@@ -36,7 +42,7 @@ type nativeProjection struct {
 func (e *Engine) projectionDelta(ctx context.Context, s *session, runtimeID, eventID string) (map[string]any, error) {
 	s.mu.Lock()
 	c := s.state.Config
-	raw, err := json.Marshal(nativeProjection{History: s.state.History, View: s.state.View, RootQuestion: s.state.RootQuestion})
+	raw, err := json.Marshal(nativeProjection{History: s.state.History, View: s.state.View, RootQuestion: s.state.RootQuestion, Runtime: s.state.Runtime, References: s.state.ReferencedAssetIDs, Scope: s.state.TargetScope})
 	s.mu.Unlock()
 	if err != nil {
 		return nil, err
@@ -170,7 +176,7 @@ func (e *Engine) persistNativeProjection(ctx context.Context, s *session) error 
 	s.mu.Lock()
 	cp := s.state.Runtime
 	s.mu.Unlock()
-	if cp == nil || cp.Detached {
+	if cp == nil {
 		return nil
 	}
 	store, err := e.adkStore()
@@ -219,4 +225,82 @@ func (e *Engine) persistContentImages(ctx context.Context, content *genai.Conten
 		part.FileData = &genai.FileData{MIMEType: mime, FileURI: fmt.Sprintf("lake-artifact://%s/%s?version=%d", runtimeID, name, saved.Version)}
 	}
 	return nil
+}
+
+// The migration index identifies the active official session when the local
+// context cache is missing. No credential is recovered from this projection.
+func (e *Engine) recoverMissingNativeState(ctx context.Context, id string) (*State, error) {
+	if _, err := os.Stat(filepath.Join(e.runtimeDirectory(), "sessions.sqlite")); os.IsNotExist(err) {
+		return nil, nil
+	}
+	store, err := e.adkStore()
+	if err != nil {
+		return nil, err
+	}
+	var migration nativeHistoryMigration
+	if err = store.DB.Where("session_id = ? AND status = ?", id, "complete").Order("created_at DESC").First(&migration).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	stored, err := store.Sessions.Get(ctx, &adksession.GetRequest{AppName: "lake", UserID: "lake", SessionID: migration.RuntimeSessionID})
+	if err != nil {
+		return nil, err
+	}
+	value, err := stored.Session.State().Get(nativeProjectionKey)
+	if errors.Is(err, adksession.ErrStateKeyNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var ref nativeProjectionRef
+	if err = json.Unmarshal([]byte(js(value)), &ref); err != nil {
+		return nil, err
+	}
+	loaded, err := (&nativeArtifacts{engine: e, sessionID: migration.RuntimeSessionID}).Load(ctx, &artifact.LoadRequest{AppName: "lake", UserID: "lake", SessionID: migration.RuntimeSessionID, FileName: "lake-context.json", Version: ref.Version})
+	if err != nil {
+		return nil, err
+	}
+	if hash(loaded.Part.Text) != ref.Hash {
+		return nil, errors.New("ADK projection checksum mismatch")
+	}
+	var projection nativeProjection
+	if err = json.Unmarshal([]byte(loaded.Part.Text), &projection); err != nil {
+		return nil, err
+	}
+	if projection.View.Session != id {
+		return nil, errors.New("ADK projection outside requested session")
+	}
+	checkpoint := projection.Runtime
+	if checkpoint == nil {
+		checkpoint = &RuntimeCheckpoint{SchemaVersion: 1, SessionID: migration.RuntimeSessionID, HistoryHash: hash(js(projection.History)), Identity: RunIdentity{SessionID: id, RootTurnID: projection.View.RootTurnID}}
+	}
+	state := &State{Runtime: checkpoint, History: projection.History, View: projection.View, RootQuestion: projection.RootQuestion, ReferencedAssetIDs: projection.References, TargetScope: projection.Scope}
+	if len(state.View.PendingApprovals) == 0 && !nativeQuestionReady(state.View.Question) && state.View.Status == "running" {
+		state.View.Status = "interrupted"
+		reconcile(state, "cache recovered after interrupted invocation; inspect recorded outcomes, no replay")
+	}
+	return state, nil
+}
+
+// The caller owns s.mu; reserve the idle session while publishing an intentional
+// context edit so a new turn cannot race its canonical ADK state transition.
+func (e *Engine) saveNativeMutationLocked(s *session) error {
+	done, err := e.admitRuntime()
+	if err != nil {
+		return err
+	}
+	defer done()
+	if err = e.save(s); err != nil {
+		return err
+	}
+	s.cancel = func() {}
+	s.mu.Unlock()
+	work, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	err = e.persistNativeProjection(work, s)
+	cancel()
+	s.mu.Lock()
+	s.cancel = nil
+	return err
 }

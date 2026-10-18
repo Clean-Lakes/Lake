@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 
@@ -16,14 +17,25 @@ import (
 // Each human question has an independent official workflow input checkpoint.
 // The enclosing LlmAgent tool waits in process; after a crash its original
 // function response is reconstructed without executing any resource tool.
-func (e *Engine) runNativeQuestion(ctx context.Context, req *QuestionRequest, answers map[string][]string) error {
+func (e *Engine) runNativeQuestion(ctx context.Context, req *QuestionRequest, answers map[string][]string, configs ...Config) error {
+	var c Config
+	if len(configs) > 0 {
+		c = configs[0]
+	}
+	raw, _ := json.Marshal(req.Questions)
+	var safeQuestions []UserQuestion
+	_ = json.Unmarshal(safeJSON(raw, c), &safeQuestions)
+	if answers != nil {
+		raw, _ = json.Marshal(answers)
+		_ = json.Unmarshal(safeJSON(raw, c), &answers)
+	}
 	store, err := e.adkStore()
 	if err != nil {
 		return err
 	}
 	rerun := true
 	node := workflow.NewDynamicNode("human_answer", func(ac agent.Context, _ any, emit func(*adksession.Event) error) (any, error) {
-		return workflow.ResumeOrRequestInput(ac, emit, adksession.RequestInput{InterruptID: req.ID, Message: "请回答会话问题", Payload: req.Questions})
+		return workflow.ResumeOrRequestInput(ac, emit, adksession.RequestInput{InterruptID: req.ID, Message: "请回答会话问题", Payload: safeQuestions})
 	}, workflow.NodeConfig{RerunOnResume: &rerun})
 	root, err := workflowagent.New(workflowagent.Config{Name: "lake_human_input", Edges: workflow.Chain(workflow.Start, node)})
 	if err != nil {
@@ -52,7 +64,7 @@ func (e *Engine) recoverQuestionReply(s *session, req *QuestionRequest, answers 
 	if s.state.Config.Model.Name == "" {
 		return errors.New("model not configured for recovery")
 	}
-	if err := e.runNativeQuestion(context.Background(), req, answers); err != nil {
+	if err := e.runNativeQuestion(context.Background(), req, answers, s.state.Config); err != nil {
 		return err
 	}
 	if err := prepareQuestionResponse(s, req, answers); err != nil {
@@ -175,4 +187,48 @@ func (e *Engine) AgentQuestionReply(parentID, runID, requestID string, answers m
 		return err
 	}
 	return e.queueRoleRecovery(parentID, run.SRETaskID)
+}
+
+// SRE's existing plan-review and manual-attestation UI routes resolve these
+// official workflow waits; their business revision/ownership checks stay in place.
+func (e *Engine) recordSREInput(ctx context.Context, sessionID string, task SRETask, kind, key string, answers map[string][]string) error {
+	s, err := e.get(sessionID)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	c := s.state.Config
+	s.mu.Unlock()
+	id := "sre_input_" + hash(sessionID+task.ID+kind+key)
+	req := &QuestionRequest{ID: id, RuntimeSessionID: id, Questions: []UserQuestion{{ID: kind, Title: "SRE 人工审阅", Reason: task.Goal}}}
+	store, err := e.adkStore()
+	if err != nil {
+		return err
+	}
+	_, lookup := store.Sessions.Get(ctx, &adksession.GetRequest{AppName: "lake_input", UserID: "lake", SessionID: id})
+	if errors.Is(lookup, adksession.ErrNotFound) {
+		if kind == "plan_review" && answers != nil {
+			return nil
+		}
+		if err = e.runNativeQuestion(ctx, req, nil, c); err != nil {
+			return err
+		}
+	} else if lookup != nil {
+		return lookup
+	}
+	if answers != nil {
+		return e.runNativeQuestion(ctx, req, answers, c)
+	}
+	return nil
+}
+func (e *Engine) RecordSREAttestation(ctx context.Context, sessionID string, task SRETask, checkID string, passed bool) error {
+	run := task.ActiveRun()
+	if run == nil {
+		return errors.New("no plan run for attestation")
+	}
+	answer := "failed"
+	if passed {
+		answer = "passed"
+	}
+	return e.recordSREInput(ctx, sessionID, task, "manual_attestation", run.ID+checkID, map[string][]string{"manual_attestation": {answer}})
 }

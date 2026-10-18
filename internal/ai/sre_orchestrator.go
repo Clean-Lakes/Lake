@@ -160,7 +160,10 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 		}
 	}
 	if planOnly {
-		return nil
+		return e.recordSREInput(ctx, sessionID, task, "plan_review", task.LatestPlan().ID, nil)
+	}
+	if err = e.recordSREInput(ctx, sessionID, task, "plan_review", task.LatestPlan().ID, map[string][]string{"plan_review": {"start"}}); err != nil {
+		return err
 	}
 	run := task.ActiveRun()
 	if run == nil || run.Status != "queued" {

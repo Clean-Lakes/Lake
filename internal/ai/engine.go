@@ -138,6 +138,17 @@ func (e *Engine) get(id string) (*session, error) {
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, err
+	} else {
+		recovered, recoveryErr := e.recoverMissingNativeState(context.Background(), id)
+		if recoveryErr != nil {
+			return nil, recoveryErr
+		}
+		if recovered != nil {
+			s.state = *recovered
+			if saveErr := e.save(s); saveErr != nil {
+				return nil, saveErr
+			}
+		}
 	}
 	e.sessions[id] = s
 	return s, nil
@@ -996,8 +1007,10 @@ func (e *Engine) Clear(id string) error {
 	if s.state.Runtime != nil {
 		s.state.Runtime.Detached = true
 	}
-	s.state = State{Config: c, View: view, Undo: s.state.Undo}
-	return e.save(s)
+	view.PendingApprovals = nil
+	view.Question = nil
+	s.state = State{Config: c, View: view, Undo: s.state.Undo, Runtime: s.state.Runtime}
+	return e.saveNativeMutationLocked(s)
 }
 func (e *Engine) Restore(id string, h []Message) error {
 	s, err := e.get(id)
@@ -1026,7 +1039,7 @@ func (e *Engine) Restore(id string, h []Message) error {
 	s.state.LastRequestAt = ""
 	s.state.ContextMeasurement = nil
 	s.state.Checkpoints = nil
-	return e.save(s)
+	return e.saveNativeMutationLocked(s)
 }
 func validHistory(h []Message) error {
 	pending := map[string]bool{}
@@ -1082,7 +1095,7 @@ func (e *Engine) Rollback(id string) error {
 	s.state.View.Turns--
 	s.state.View.Status = "idle"
 	s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "rollback", Content: "模型历史已回退一轮；已执行操作不会自动撤销", Status: "completed", At: timestamp()})
-	return e.save(s)
+	return e.saveNativeMutationLocked(s)
 }
 func hash(v string) string                   { s := sha256.Sum256([]byte(v)); return hex.EncodeToString(s[:]) }
 func (e *Engine) Presets() ([]Preset, error) { e.mu.Lock(); defer e.mu.Unlock(); return e.presets() }

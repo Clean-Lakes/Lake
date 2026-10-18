@@ -168,7 +168,7 @@ func (e *Engine) executeRecoveredRole(ctx context.Context, id string, c Config, 
 			s.mu.Lock()
 		}
 		s.mu.Unlock()
-		if err = e.runNativeQuestion(ctx, req, answers); err != nil {
+		if err = e.runNativeQuestion(ctx, req, answers, c); err != nil {
 			return err
 		}
 		s.mu.Lock()

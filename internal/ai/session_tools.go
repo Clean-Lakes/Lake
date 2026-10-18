@@ -256,10 +256,13 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call) (any, e
 		return questionResult(input.Questions, previous, true), nil
 	}
 	req := &QuestionRequest{ID: uid(), Questions: input.Questions}
+	s.mu.Lock()
+	questionConfig := s.state.Config
+	s.mu.Unlock()
 	if ctx.Value(adkToolContextKey{}) != nil {
 		req.Call = &call
 		req.RuntimeSessionID = "input_" + uid()
-		if err := e.runNativeQuestion(ctx, req, nil); err != nil {
+		if err := e.runNativeQuestion(ctx, req, nil, questionConfig); err != nil {
 			return nil, err
 		}
 	}
@@ -284,7 +287,7 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call) (any, e
 	select {
 	case answers := <-reply:
 		if req.RuntimeSessionID != "" {
-			if err := e.runNativeQuestion(ctx, req, answers); err != nil {
+			if err := e.runNativeQuestion(ctx, req, answers, questionConfig); err != nil {
 				return nil, err
 			}
 		}

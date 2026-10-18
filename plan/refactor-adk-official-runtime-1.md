@@ -10,13 +10,21 @@ tags: [refactor, adk, sre, runtime, migration]
 
 # Introduction
 
-![Status: Planned](https://img.shields.io/badge/status-In_progress-yellow)
+![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
 
 本方案替代 `.zcode/plans/plan-sess_5b3bcbba-5507-4fec-a756-888334739449.md` 的后续迁移安排，并接续已有 Phase 0、A/B、C0 实现。目标是让官方 ADK 负责普通聊天、SRE 四种角色、工作流与交互协议入口的模型和工具循环、工作流调度及中断恢复；Lake 负责产品数据、权限、执行器、操作账本、证据、终端与界面。
 
 “完成”必须同时满足：所有生产 Agent 入口运行 ADK、故障恢复不重放结果不明的外部操作、旧循环及回退入口已退出、Dev 验收和目标平台 CI 有证据。安装依赖、改默认值或只抽出接口，均不构成迁移完成。
 
 已进入完整实施；工作分支保持 `experiment/adk-runtime`，保留原有工作区。阶段状态按实际测试证据更新，未通过的门禁不得标为完成。
+
+## 实施时的 API 核验与路径调整
+
+- 官方 SDK 直接由 `internal/ai/adk_*.go` 托管，持久化放在无 ai 依赖的 `internal/agent/storage`；不再创建 ai→adk→ai 的循环依赖。原 scoped Engine 只保留业务状态与权限，不含旧模型循环。下表中最初拟定的 `internal/agent/adk` 生产文件，以该实际归属为准。
+- 使用官方公开 custom Agent wrapper 保留角色 RequestConfirmation 的 FunctionResponse；v2.6.0 Workflow AgentNode 会改写 user content，不能直接承担这个恢复边界。DAG 仍使用官方 WorkflowAgent/DynamicNode/RunNode。
+- Lake 的原生 provider 历史保存在官方 artifact 和 session state 中；session event ID、投影引用/校验和及 migration index 用于幂等恢复。图片正文移入 artifact。JSON 为上下文缓存，业务操作账本保持独立权威。
+- SQLite 备份采用内置 `VACUUM INTO` 一致性快照，配合 quick_check、fsync、原子替换及源文件备份，替代驱动专属 backup API。
+- 实际文件、测试与命令映射见最终验收 JSON。平台测试中保留原断言意图：Windows 检查用户私有 ACL；Linux 使用 GNU date，dash 不发送 readline 专属 Ctrl-L；终端历史检查使用 durable history，输入保留仍检查真实命令输出。
 
 ## 1. Requirements & Constraints
 

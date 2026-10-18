@@ -10,6 +10,12 @@ import (
 )
 
 func TestADKOfficialProjectionRestoresMissingHistoryCache(t *testing.T) {
+	testNativeProjectionCache(t, false)
+}
+func TestADKOfficialProjectionRestoresMissingCacheFile(t *testing.T) {
+	testNativeProjectionCache(t, true)
+}
+func testNativeProjectionCache(t *testing.T, missing bool) {
 	m, close := fakeModel(t, func(n int, input map[string]any) any {
 		if n == 1 {
 			return response("remember PROJECTION_FACT")
@@ -40,6 +46,11 @@ func TestADKOfficialProjectionRestoresMissingHistoryCache(t *testing.T) {
 	state.View.Cards = nil
 	raw, _ = json.Marshal(state)
 	_ = os.WriteFile(filepath.Join(home, "case.json"), raw, 0600)
+	if missing {
+		if err = os.Remove(filepath.Join(home, "case.json")); err != nil {
+			t.Fatal(err)
+		}
+	}
 	restored, err := New(home, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -94,5 +105,45 @@ func TestADKSecretToolArgumentsNeverReachDispatchOrPersistentEvents(t *testing.T
 		if strings.Contains(string(a.Part), marker) {
 			t.Fatal("secret reached ADK artifact")
 		}
+	}
+}
+
+func TestADKClearSurvivesLossOfLocalContextCache(t *testing.T) {
+	m, close := fakeModel(t, func(n int, input map[string]any) any {
+		if n == 1 {
+			return response("FORGOTTEN_FACT")
+		}
+		if strings.Contains(js(input["messages"]), "FORGOTTEN_FACT") {
+			t.Error("cleared history resurrected from old SDK events")
+		}
+		return response("fresh")
+	})
+	defer close()
+	home := t.TempDir()
+	e, _ := New(home, nil, nil)
+	c := Config{Model: m, Profile: "core"}
+	if err := e.Configure("case", c); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Chat(context.Background(), "case", "first", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Clear("case"); err != nil {
+		t.Fatal(err)
+	}
+	e.Shutdown()
+	if err := os.Remove(filepath.Join(home, "case.json")); err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := New(home, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer recovered.Shutdown()
+	if err = recovered.Configure("case", c); err != nil {
+		t.Fatal(err)
+	}
+	if err = recovered.Chat(context.Background(), "case", "fresh question", nil); err != nil {
+		t.Fatal(err)
 	}
 }

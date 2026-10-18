@@ -126,7 +126,7 @@ func (e *Engine) prepareADKHistory(ctx context.Context, s *session, service adks
 		}
 	}
 	digest := hash(js(previous))
-	if checkpoint != nil && checkpoint.HistoryHash == digest {
+	if checkpoint != nil && !checkpoint.Detached && checkpoint.HistoryHash == digest {
 		if _, err = service.Get(ctx, &adksession.GetRequest{AppName: "lake", UserID: "lake", SessionID: checkpoint.SessionID}); err == nil {
 			s.mu.Lock()
 			s.state.Runtime.Identity = identity
