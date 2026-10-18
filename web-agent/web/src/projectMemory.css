@@ -2,14 +2,14 @@
 .project-memory-settings,.project-memory-toolbar { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin: 16px 0; }
 .project-memory-settings label,.project-memory-toolbar label { display: flex; gap: 6px; align-items: center; }
 .project-memory-toolbar>input { flex: 1; min-width: 180px; }
-.project-memory-list { max-height: 230px; overflow: auto; border: 1px solid var(--border-color); border-radius: var(--radius-panel); }
-.project-memory-list>button { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; padding: 10px 12px; background: none; border: 0; border-bottom: 1px solid var(--border-color); cursor: pointer; }
+.project-memory-list { max-height: 230px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-panel); }
+.project-memory-list>button { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; padding: 10px 12px; background: none; border: 0; border-bottom: 1px solid var(--border); cursor: pointer; }
 .project-memory-list>button:hover { background: var(--surface-hover); }
-.project-memory-list small { opacity: .7; }
+.project-memory-list small { color: var(--text-muted); }
 .project-memory-list>p { padding: 10px 12px; }
 .project-memory-editor { padding-top: 14px; }
 .project-memory-editor label { display: block; margin: 10px 0; }
 .project-memory-editor input,.project-memory-editor select,.project-memory-editor textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 5px; }
 .project-memory-jobs { margin-top: 16px; }
-.project-memory-jobs p { font-size: 12px; opacity: .75; }
+.project-memory-jobs p { font-size: 12px; color: var(--text-secondary); }
 .project-memory-pages { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 8px; font-size: 12px; }

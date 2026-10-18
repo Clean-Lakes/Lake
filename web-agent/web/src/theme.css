@@ -44,6 +44,8 @@
   --radius-control: 5px;
   --radius-panel: 7px;
   --radius-dialog: 9px;
+  /* Regular macOS 26 window corners; the native host supplies its OS-specific value. */
+  --radius-window: 20px;
   --chart-1: #3568a5;
   --chart-2: #159b88;
   --chart-3: #cd8a25;
@@ -126,3 +128,16 @@
 /* Theme previews are local miniature surfaces, not a second application theme. */
 .theme-preview[data-preview="light"] { --surface: #ffffff; --surface-muted: #f5f5f5; --surface-subtle: #fafafa; --border: #e5e5e5; }
 .theme-preview[data-preview="dark"] { --surface: #171717; --surface-muted: #242424; --surface-subtle: #202020; --border: #333333; }
+
+/* Shared translucent material for floating workspace and queued-message bubbles. */
+:root {
+  --floating-bubble-background: color-mix(in srgb, var(--surface-subtle) 55%, transparent);
+  --floating-bubble-active: color-mix(in srgb, var(--surface-muted) 68%, transparent);
+  --floating-bubble-filter: blur(12px);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --floating-bubble-background: var(--surface-subtle); --floating-bubble-active: var(--surface-muted); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root { --floating-bubble-background: var(--surface-subtle); --floating-bubble-active: var(--surface-muted); --floating-bubble-filter: none; }
+}

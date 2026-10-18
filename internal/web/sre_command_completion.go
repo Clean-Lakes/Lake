@@ -42,6 +42,11 @@ func (s *Store) reconcileSRECommandCompletions(t *ai.SRETask) int {
 			rows := s.rows("SELECT e.id,e.terminalId,e.startedAt,e.finishedAt,e.exitCode,e.status FROM terminalEntries e JOIN terminals term ON term.id=e.terminalId WHERE e.originSessionId=? AND term.resourceId=? AND e.actor='agent' AND e.command=? AND e.startedAt>=? AND e.startedAt<=?", t.SessionID, op.ResourceID, command, op.DispatchedAt, upper)
 			candidates := []Object{}
 			for _, entry := range rows {
+				// A fresh identical read is a different dispatch. Its completion must
+				// never be used to rewrite an earlier handleless timeout as success.
+				if !knownHandle && sreEntryBelongsToLaterCall(*t, *op, command, stringOf(entry["startedAt"])) {
+					continue
+				}
 				if knownHandle && (handle["terminal_id"] != entry["terminalId"] || handle["entry_id"] != entry["id"]) {
 					continue
 				}
@@ -105,4 +110,31 @@ func (s *Store) reconcileSRECommandsForSession(session string) {
 			s.persistSRE(&task, "terminal_completion_reconciled")
 		}
 	}
+}
+
+func sreEntryBelongsToLaterCall(t ai.SRETask, original ai.SREOperation, command, started string) bool {
+	at, err := time.Parse(time.RFC3339Nano, started)
+	if err != nil {
+		return true
+	}
+	first, err := time.Parse(time.RFC3339Nano, original.DispatchedAt)
+	if err != nil {
+		return true
+	}
+	for _, a := range t.Attempts {
+		for _, other := range a.Operations {
+			if other.ID == original.ID || other.ResourceID != original.ResourceID || other.Call.Name != original.Call.Name {
+				continue
+			}
+			next, err := time.Parse(time.RFC3339Nano, other.DispatchedAt)
+			if err != nil || !next.After(first) || at.Before(next) {
+				continue
+			}
+			var args Object
+			if json.Unmarshal([]byte(other.Call.Arguments), &args) == nil && stringOf(args["command"]) == command {
+				return true
+			}
+		}
+	}
+	return false
 }

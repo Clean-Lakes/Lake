@@ -87,7 +87,9 @@ func TestInitialTerminalResizePreservesInputAndHistory(t *testing.T) {
 	b.Terminals.Input(id, tid, "printf 'preserved-", false)
 	b.Terminals.Resize(id, tid, 120, 25)
 	time.Sleep(100 * time.Millisecond)
-	if !strings.Contains(b.Terminals.Screen(id, tid, "viewport", 25, 10000), "preserved-history") {
+	// A resize can move old output from the viewport into scrollback.
+	// The durable terminal history must retain the completed command.
+	if !strings.Contains(stringOf(b.Store.History(id, tid)["output"]), "preserved-history\r\n") {
 		t.Fatal("resize cleared command history")
 	}
 	b.Terminals.Input(id, tid, "input\\n'\r", false)

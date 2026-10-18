@@ -15,10 +15,10 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/lake-workbench-dark.jpg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/lake-workbench-light.jpg">
-  <img alt="Lake 工作台：在同一对话中查看调查员、执行员、验证员与协调者的协作结果" src="docs/images/lake-workbench-light.jpg" width="1440">
+  <img alt="Lake macOS 界面预览：资源导航、专员协作与对话工作区" src="docs/images/lake-workbench-light.jpg" width="1440">
 </picture>
 
-<p align="center"><sub>专员协作与恢复验证 · 当前界面，演示数据</sub></p>
+<p align="center"><sub>macOS 界面预览 · 当前版本 · 演示数据</sub></p>
 
 ## 为运维工作而设计
 

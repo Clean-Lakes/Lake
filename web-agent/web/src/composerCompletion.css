@@ -1,6 +1,7 @@
 .composer-text { flex: 1; min-width: 0; }
 .composer-text-field { position: relative; min-width: 0; }
-.composer-text textarea { position: relative; z-index: 1; overflow-wrap: break-word; white-space: pre-wrap; }
+.composer-input-measure { position: absolute; top: 0; left: 0; visibility: hidden; }
+.composer-text textarea { cursor: text; caret-color: var(--foreground); position: relative; z-index: 1; overflow-wrap: break-word; white-space: pre-wrap; }
 .composer-ghost-viewport { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .composer-ghost { box-sizing: border-box; width: 100%; padding: 3px 0; color: var(--text-muted); font: inherit; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: break-word; }
 .composer-ghost-prefix { color: transparent; }

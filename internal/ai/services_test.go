@@ -3,6 +3,7 @@ package ai
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"net"
@@ -123,6 +124,21 @@ func TestRealSSHFilesSCPAndBothTunnelDirections(t *testing.T) {
 	}
 	if _, err = e.transfer(ctx, "case", c, "scp_transfer", map[string]any{"asset_ref": "ssh", "direction": "download", "local_path": local, "remote_path": remote}); err == nil {
 		t.Fatal("implicit overwrite allowed")
+	}
+	attachmentBytes := []byte{0, 255, 7, 128, 42}
+	attachmentSource := filepath.Join(dir, "attachment.bin")
+	if err := os.WriteFile(attachmentSource, attachmentBytes, 0600); err != nil {
+		t.Fatal(err)
+	}
+	e.Bridge = func(context.Context, string, string, map[string]any, bool) (any, error) {
+		return map[string]any{"path": attachmentSource, "sha256": fmt.Sprintf("%x", sha256.Sum256(attachmentBytes)), "sizeBytes": len(attachmentBytes)}, nil
+	}
+	attachmentTarget := filepath.Join(dir, "remote attachment.bin")
+	if _, err := e.stageAttachment(ctx, "case", c, map[string]any{"source_id": "fixture", "runtime": "ssh", "asset_ref": "ssh", "path": attachmentTarget}); err != nil {
+		t.Fatal("SSH attachment transfer", err)
+	}
+	if got, err := os.ReadFile(attachmentTarget); err != nil || string(got) != string(attachmentBytes) {
+		t.Fatal("SSH binary changed", err)
 	}
 	echo, _ := net.Listen("tcp", "127.0.0.1:0")
 	defer echo.Close()

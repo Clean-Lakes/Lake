@@ -1,0 +1,13 @@
+import {createRoot} from 'react-dom/client';
+import {AITranscript} from '../../src/AIPanel';
+import type {SessionSnapshot} from '../../../shared/contracts';
+import '../../src/styles.css';
+import '../../src/assistantProse.css';
+import '../../src/conversationDirectory.css';
+import '../../src/statusText.css';
+document.documentElement.dataset.theme=new URLSearchParams(location.search).get('theme')||'light';
+const at='2026-10-18T10:00:00Z';
+const legacy='## 结论先行\n\n**现有采样未发现新增故障，负载读数的变化更可能来自残留健康检查单元的周期触发，暂未见持续的 CPU、内存或磁盘压力。**\n\n最后一次检查未完成，后续状态仍待确认。\n\n### 一、基础健康\n\n| 项目 | 观察 |\n| --- | --- |\n| 负载 | 2.70 |\n\n### 二、采样记录\n\n'+('这是原始采样依据，不代表新一次检查已经成功。\n\n').repeat(40);
+const content=new URLSearchParams(location.search).has('legacy')?legacy:'已改好：“新建资源”只显示 SSH 主机，其他类型暂时隐藏，说明文字同步调整。\n\n界面验证通过。完整操作记录已保留，后续检查仍有一项待确认。';
+const snapshot={session:{id:'fixture'},messages:[],resources:[],actions:[],ai:{session:'fixture',status:'completed',turns:1,cardsOffset:0,cards:[{id:'reply',type:'message',status:'completed',content,at}]}} as SessionSnapshot;
+createRoot(document.getElementById('root')!).render(<main style={{maxWidth:930,margin:'28px auto',padding:'0 24px',height:'calc(100% - 56px)',overflow:'auto'}}><AITranscript snapshot={snapshot}/></main>);

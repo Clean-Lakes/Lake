@@ -46,6 +46,7 @@ export type Message = {
   role: "user" | "assistant" | "system";
   text: string;
   images?: AIImage[];
+  files?: TextFileAttachment[];
   createdAt: string;
 };
 
@@ -62,8 +63,9 @@ export type Specialist = {
 
 /** Independent child tasks, supplied by the runtime rather than inferred from tool calls. */
 export type AgentRole = "host" | "application" | "data" | "network" | "change" | "verify" | "plan" | "memory";
-export type AgentRunStatus = "queued" | "running" | "waiting_approval" | "completed" | "failed" | "cancelled" | "interrupted" | "unknown";
+export type AgentRunStatus = "queued" | "running" | "waiting_approval" | "waiting_input" | "completed" | "failed" | "cancelled" | "interrupted" | "unknown";
 export type AgentRun = {
+  liveTextId?: string; liveText?: string;
   activityPhase?: string; activityTool?: string; activityUpdatedAt?: string;
 	sreTaskId?:string;
 	sreRole?:SREAgentRole;
@@ -86,6 +88,7 @@ export type AgentRun = {
   /** Only the owning execution service can advertise individual cancellation. */
   canCancel?: boolean;
   pending?: AIApproval;
+  question?: AIQuestionRequest;
   evidence?: AgentEvidence[];
   usage?: AIUsage;
   budgetSpent?: number;
@@ -189,6 +192,7 @@ export type SessionEvent = {
   sessionId: string;
   type: "session" | "message" | "specialist" | "evidence" | "action" | "terminal";
   createdAt: string;
+  textUpdate?: {target:"card"|"agent";id:string;content:string;cardType?:string;at?:string;rootTurnId?:string;textId?:string};
 };
 
 export type TerminalHistory = {
@@ -230,7 +234,7 @@ export type ApiError = { error: string };
 export type AICard = { id: string; type: string; title?: string; content?: string; data?: unknown; status: string; at: string };
 export type ResourceImportRow = {index: number; name: string; kind: string; folder: string; error: string; host?: string; port?: number; username?: string; driver?: string; database?: string; endpoint?: string; authMethod?: string; hasCredential: boolean};
 export type ResourceImportPreview = {planId: string; name: string; notice?: string; resources: ResourceImportRow[]};
-export type TextFileAttachment = {sourceId: string; name: string};
+export type TextFileAttachment = {sourceId: string; name: string; kind?: "file"; sizeBytes?: number; sha256?: string; mimeType?: string};
 export type AIApproval = { id: string; call: { id: string; name: string; arguments: string }; target: string; risk: string; kind?: string; needsTerminal?: boolean; resourceId?: string; terminalId?: string; terminalVersion?: number; confirmation?: string; fingerprint: string; preview?: {before?: string; after?: string; resources?: ResourceImportRow[]} };
 export type AIUsage = { input: number; output: number; total: number; known?: boolean; inputKnown?: boolean; outputKnown?: boolean; cachedInput?: number | null };
 export type AIContextUsage = { window: number; windowSource?: string; modelId?: string; budget?: number; inputBudget?: number; maxOutput?: number; used: number; usedKnown?: boolean; estimated: boolean; estimatedUsed?: number; lastRequest?: AIUsage; lastRequestAt?: string };
@@ -238,7 +242,8 @@ export type AITodo = {content:string;status:"pending"|"in_progress"|"completed";
 export type AIQuestionOption = {label:string;description?:string;recommended?:boolean};
 export type AIUserQuestion = {id:string;title:string;reason?:string;options?:Array<string|AIQuestionOption>;multi_select?:boolean};
 export type AIQuestionRequest = {id:string;questions:AIUserQuestion[]};
-export type AIView = { todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
+export type AIOperationOutcome = {id:string;tool:string;target:string;status:string;handle?:string;result?:string;startedAt:string};
+export type AIView = { operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
 export type AIPreset = { id: string; title: string; content: string };
 
 export type AIImage = { id: string; mimeType: string; base64: string; sizeBytes: number; width: number; height: number; name?: string; url?: string };
@@ -263,7 +268,7 @@ export type SREAction = {tool:string;arguments:Record<string,unknown>;reason?:st
 export type SRECheck = {id:string;description:string;kind:'number_threshold'|'boolean_probe'|'manual_attestation';resourceId?:string;probe?:SREAction;path?:string;operator?:string;expected?:unknown;unit?:string;windowSeconds?:number;minSamples?:number};
 export type SREPlanStep = {id:string;role:SREAgentRole;kind:'observe'|'analyze'|'act'|'verify'|'summarize';description:string;capability?:string;dependsOn:string[];resourceIds:string[];completionChecks:string[];action?:SREAction};
 export type SREPlanRevision = {collaborationVersion?:number;id:string;taskId:string;version:number;goal:string;taskType:'query'|'investigation'|'recovery'|'change';scope:string[];steps:SREPlanStep[];acceptance:SRECheck[];changeReason:string;createdAt:string};
-export type SREOperation = {resolutionNote?:string;resolvedBy?:string;resolvedAt?:string;id:string;call:{id:string;name:string;arguments:string};digest:string;resourceId:string;status:string;preparedAt:string;dispatchedAt?:string;finishedAt?:string;approvalId?:string;result?:string};
+export type SREOperation = {risk?:string;resolutionNote?:string;resolvedBy?:string;resolvedAt?:string;id:string;call:{id:string;name:string;arguments:string};digest:string;resourceId:string;status:string;preparedAt:string;dispatchedAt?:string;finishedAt?:string;approvalId?:string;result?:string};
 export type SRERoleReport = {schemaVersion:number;summary:string;facts:{statement:string;evidenceIds:string[]}[];hypotheses:string[];unknowns:string[];nextChecks:string[]};
 export type SREStepAttempt = {reusedFromAttemptId?:string;report?:SRERoleReport;id:string;planRunId:string;stepId:string;roleRunId:string;status:string;evidence:AgentEvidence[];operations:SREOperation[];result?:string;startedAt:string;finishedAt?:string};
 export type SREPlanRun = {id:string;taskId:string;planRevisionId:string;profileVersion:number;status:string;resumeOfRunId?:string;startedAt:string;finishedAt?:string};

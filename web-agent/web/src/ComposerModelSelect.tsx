@@ -9,6 +9,7 @@ import {modelBrand} from "./modelBrand";
 type Props={available:AvailableModels&{loading:boolean};modelName:string|null;selection?:AvailableModelEntry;configured:boolean;open:boolean;disabled:boolean;onOpenChange:(open:boolean)=>void;onSelect:(model:AvailableModelEntry|string)=>void;onSettings:()=>void};
 export function ComposerModelSelect({available,modelName,selection,configured,open,disabled,onOpenChange,onSelect,onSettings}:Props) {
   const [search,setSearch]=useState("");
+  if (!configured) return <button type="button" className="composer-model-setup" disabled={disabled} onClick={onSettings} title="连接模型后即可发送，已输入的内容会保留"><Glyph name="plug" size={16}/><span>连接模型</span><Glyph name="chevron" size={12}/></button>;
   const allRows=available.entries?.map(entry=>({value:JSON.stringify([entry.providerId,entry.modelId]),label:entry.displayName,name:entry.name,group:entry.providerName,groupId:entry.providerId,model:entry as AvailableModelEntry|string}))??available.models.map(name=>({value:name,label:name,name,group:"",groupId:"",model:name as AvailableModelEntry|string}));
   const rows=available.loading?[]:allRows;
   const current=currentComposerModel(available,modelName,selection);

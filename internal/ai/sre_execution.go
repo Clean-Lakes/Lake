@@ -40,7 +40,7 @@ func (e *Engine) checkSRECall(c Config, call Call, a map[string]any) error {
 	return nil
 }
 
-func (e *Engine) PrepareSREOperation(c Config, call Call) error {
+func (e *Engine) PrepareSREOperation(c Config, call Call, risk string) error {
 	if !sreTrackedCall(c, call) {
 		return nil
 	}
@@ -52,7 +52,10 @@ func (e *Engine) PrepareSREOperation(c Config, call Call) error {
 			}
 			for _, op := range a.Operations {
 				if op.Digest == hash(call.Name+call.Arguments) {
-					if op.Status == "prepared" || op.Status == "waiting_approval" {
+					if op.Call.ID != call.ID && op.Risk == "readonly" && risk == "readonly" && op.Status == "unknown" {
+						continue // Fresh sampling, with a new durable call identity.
+					}
+					if op.Call.ID == call.ID && (op.Status == "prepared" || op.Status == "waiting_approval") {
 						return nil
 					}
 					return sreError(409, "该操作已派发或结果未明，不能再次执行")
@@ -73,16 +76,16 @@ func (e *Engine) PrepareSREOperation(c Config, call Call) error {
 			} else if len(c.sre.Step.ResourceIDs) > 0 {
 				resource = c.sre.Step.ResourceIDs[0]
 			}
-			if c.sre.FullTools {
+			if c.sre.FullTools && risk != "readonly" {
 				for _, previous := range t.Attempts {
 					for _, op := range previous.Operations {
-						if op.Status == "unknown" || op.Status == "dispatched" {
-							return sreError(409, "该工具结果未明，先核实原操作，不会重复派发")
+						if SREOperationBlocksResume(op) {
+							return sreOperationBlockError(op)
 						}
 					}
 				}
 			}
-			a.Operations = append(a.Operations, SREOperation{ID: uid(), Call: call, Digest: hash(call.Name + call.Arguments), ResourceID: resource, Status: "prepared", PreparedAt: timestamp()})
+			a.Operations = append(a.Operations, SREOperation{ID: uid(), Call: call, Digest: hash(call.Name + call.Arguments), ResourceID: resource, Risk: risk, Status: "prepared", PreparedAt: timestamp()})
 			return nil
 		}
 		return sreError(409, "操作没有绑定到实际执行步骤")
@@ -133,10 +136,20 @@ func (e *Engine) DispatchSREOperation(ctx context.Context, c Config, call Call) 
 		if t.Status != "active" && t.Status != "waiting_approval" {
 			return sreError(409, "任务已暂停或结束")
 		}
+		risk := "write"
+		for _, attempt := range t.Attempts {
+			if attempt.ID == c.sre.AttemptID {
+				for _, op := range attempt.Operations {
+					if op.Call.ID == call.ID {
+						risk = op.Risk
+					}
+				}
+			}
+		}
 		for _, attempt := range t.Attempts {
 			for _, op := range attempt.Operations {
-				if op.Status == "unknown" {
-					return sreError(409, "其他操作结果未明，先核实后再派发")
+				if risk != "readonly" && SREOperationBlocksResume(op) {
+					return sreOperationBlockError(op)
 				}
 			}
 		}
@@ -147,7 +160,7 @@ func (e *Engine) DispatchSREOperation(ctx context.Context, c Config, call Call) 
 			}
 			for j := range a.Operations {
 				op := &a.Operations[j]
-				if op.Digest == hash(call.Name+call.Arguments) {
+				if op.Call.ID == call.ID && op.Digest == hash(call.Name+call.Arguments) {
 					if op.Status != "prepared" && op.Status != "waiting_approval" {
 						return sreError(409, "操作已派发，不会自动重放")
 					}
@@ -184,7 +197,7 @@ func (e *Engine) finishSREOperation(c Config, call Call, result any, toolErr err
 			}
 			for j := range a.Operations {
 				op := &a.Operations[j]
-				if op.Digest != hash(call.Name+call.Arguments) || op.Status != "dispatched" {
+				if op.Call.ID != call.ID || op.Digest != hash(call.Name+call.Arguments) || op.Status != "dispatched" {
 					continue
 				}
 				op.FinishedAt = timestamp()
@@ -208,7 +221,7 @@ func (e *Engine) finishSREOperation(c Config, call Call, result any, toolErr err
 				if toolErr == nil && r["status"] == "running" && str(r["terminal_id"]) != "" && str(r["entry_id"]) != "" {
 					op.Status, op.FinishedAt = "dispatched", ""
 				}
-				if op.Status == "unknown" {
+				if SREOperationNeedsVerification(*op) {
 					t.Error = "操作结果不明，请核实实际状态；不会自动重放。"
 				}
 			}
@@ -285,7 +298,7 @@ func IsSRERejection(err error) bool {
 // Tool errors may be followed by another model response. Persist the dispatch
 // fact independently so prose can never turn a rejection into an execution.
 func (e *Engine) finishSREPreparation(c Config, call Call, toolErr error) {
-	if !sreTrackedCall(c, call) || toolErr == nil {
+	if !sreTrackedCall(c, call) || toolErr == nil || errors.Is(toolErr, errADKApprovalPending) {
 		return
 	}
 	_, _ = e.sreRepository.MutateSRETask(e.worker.parentID, c.sre.TaskID, 0, "operation_not_dispatched", func(t *SRETask) error {
@@ -295,7 +308,7 @@ func (e *Engine) finishSREPreparation(c Config, call Call, toolErr error) {
 			}
 			for j := range t.Attempts[i].Operations {
 				op := &t.Attempts[i].Operations[j]
-				if op.Digest != hash(call.Name+call.Arguments) || (op.Status != "prepared" && op.Status != "waiting_approval") {
+				if op.Call.ID != call.ID || op.Digest != hash(call.Name+call.Arguments) || (op.Status != "prepared" && op.Status != "waiting_approval") {
 					continue
 				}
 				op.Status = "not_executed"
@@ -326,7 +339,7 @@ func (e *Engine) unknownSREOperation(c Config, call Call) error {
 			continue
 		}
 		for _, op := range attempt.Operations {
-			if op.Digest == hash(call.Name+call.Arguments) && op.Status == "unknown" {
+			if op.Digest == hash(call.Name+call.Arguments) && SREOperationNeedsVerification(op) {
 				return errors.New("操作结果不明，请核实实际状态；不会自动重放。")
 			}
 		}
@@ -336,9 +349,17 @@ func (e *Engine) unknownSREOperation(c Config, call Call) error {
 
 func SREExecutionSummary(attempt SREStepAttempt) string {
 	for _, op := range attempt.Operations {
-		if op.Status == "unknown" || op.Status == "dispatched" {
+		if SREOperationNeedsVerification(op) {
 			return "操作结果待核实，任务已暂停；不会自动重放。"
 		}
+	}
+	for _, op := range attempt.Operations {
+		if op.Status == "dispatched" {
+			return "原操作仍在执行，等待原命令结果；不会重复派发。"
+		}
+	}
+	if sreReadCheckIncomplete(attempt) {
+		return "只读检查未完成，可重新检查；尚未取得完整结果。"
 	}
 	for _, op := range attempt.Operations {
 		if op.Status == "rejected" {

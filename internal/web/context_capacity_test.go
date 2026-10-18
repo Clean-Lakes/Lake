@@ -58,3 +58,51 @@ func TestContextMeasurementNeverFallsBackToLength(t *testing.T) {
 		t.Fatal("failed discovery became a fake limit")
 	}
 }
+
+func TestAutomaticContextBudgetFollowsModelAndMigratesLegacyDefault(t *testing.T) {
+	b, h := fixture(t)
+	id, _ := newSession(t, h)
+	selectCapacityFixture(t, h, "large", 1000000)
+	b.Store.SaveOptions(id, Object{"contextWindow": 64000})
+	options := b.configure(id, nil)
+	view, _ := b.Engine.Snapshot(id)
+	if options["contextBudgetMode"] != "auto" || view.Context.Budget != 900000 {
+		t.Fatal("legacy default still forces 64K", options["contextBudgetMode"], view.Context)
+	}
+	selectCapacityFixture(t, h, "small", 8192)
+	b.configure(id, nil)
+	view, _ = b.Engine.Snapshot(id)
+	if view.Context.Budget != 7372 || view.Context.MaxOutput >= view.Context.Budget {
+		t.Fatal("automatic budget did not follow model switch", view.Context)
+	}
+	b.configure(id, Object{"contextWindow": 64000})
+	view, _ = b.Engine.Snapshot(id)
+	if b.sessionOptions(id)["contextBudgetMode"] != "manual" || view.Context.Budget != 8192 {
+		t.Fatal("explicit budget was not manual or exceeded capacity", view.Context)
+	}
+	b.configure(id, Object{"contextBudgetMode": "auto"})
+	view, _ = b.Engine.Snapshot(id)
+	if view.Context.Budget != 7372 {
+		t.Fatal("cannot restore automatic budget", view.Context)
+	}
+}
+
+func TestLegacyCustomContextBudgetRemainsManual(t *testing.T) {
+	b, h := fixture(t)
+	id, _ := newSession(t, h)
+	selectCapacityFixture(t, h, "large", 1000000)
+	b.Store.SaveOptions(id, Object{"contextWindow": 128000})
+	options := b.configure(id, nil)
+	view, _ := b.Engine.Snapshot(id)
+	if options["contextBudgetMode"] != "manual" || view.Context.Budget != 128000 {
+		t.Fatal("custom budget overwritten", view.Context)
+	}
+}
+
+func selectCapacityFixture(t *testing.T, h *httptest.Server, name string, limit int) {
+	t.Helper()
+	config := providerFixture(name, "http://127.0.0.1:1/v1", "synthetic-capacity-fixture")
+	config["models"] = []any{Object{"id": "capacity-model", "name": name, "enabled": true, "contextWindow": limit}}
+	saved := apiTest(t, h, "POST", "/api/settings/providers", config, 201)
+	apiTest(t, h, "POST", "/api/settings/model/select", Object{"providerId": saved["savedProviderId"], "modelId": "capacity-model"}, 200)
+}

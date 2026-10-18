@@ -150,6 +150,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		cancel()
 		return nil, e
 	}
+	server.Engine.RuntimeDir = filepath.Join(options.DataDir, "adk")
 	server.Engine.SetSRERepository(store)
 	store.RecoverSRETasks()
 	if err = server.startScheduler(); err != nil {
@@ -657,6 +658,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(204)
 			return
 		}
+		if len(parts) == 5 && parts[3] == "attachments" {
+			b.attachmentRoute(w, r, id, parts[4])
+			return
+		}
 		if len(parts) == 4 {
 			switch parts[3] {
 			case "snapshot":
@@ -685,6 +690,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					b.sse(w, r, id, n)
 					return
 				}
+			case "attachments":
+				b.attachmentRoute(w, r, id, "")
+				return
 			case "text-files":
 				if method == "POST" {
 					data := body(w, r, 8<<20)
@@ -773,14 +781,14 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					reply(w, 200, b.configure(id, body(w, r, 128000)))
 					return
 				}
-				if set("abort questionReply decision cancelAgent agentDecision agentDetails clear clearReferences rollback compact restore undoFile extractPreset")[op] {
+				if set("abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails resolveOperation clear clearReferences rollback compact restore undoFile extractPreset")[op] {
 					limit := int64(128000)
 					if op == "restore" {
 						limit = 32 << 20
 					}
 					data := body(w, r, limit)
 					status := b.Store.Session(id)["status"]
-					if !set("abort questionReply decision cancelAgent agentDecision agentDetails extractPreset")[op] && (status == "investigating" || status == "waiting_approval") {
+					if !set("abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails extractPreset")[op] && (status == "investigating" || status == "waiting_approval") {
 						fail(409, "AI 正在运行，请先停止")
 					}
 					if op == "compact" || op == "undoFile" || op == "extractPreset" {

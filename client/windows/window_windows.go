@@ -91,3 +91,28 @@ func systemDPI() int {
 	dpi, _, _ := themeUser.NewProc("GetDpiForSystem").Call()
 	return int(dpi)
 }
+
+type workbenchMonitorInfo struct {
+	Size          uint32
+	Monitor, Work windows.Rect
+	Flags         uint32
+}
+
+type windowPoint struct{ X, Y int32 }
+
+type workbenchMinMaxInfo struct {
+	Reserved, MaxSize, MaxPosition, MinTrackSize, MaxTrackSize windowPoint
+}
+
+func windowMonitor(hwnd uintptr) (workbenchMonitorInfo, bool) {
+	var info workbenchMonitorInfo
+	info.Size = uint32(unsafe.Sizeof(info))
+	monitor, _, _ := themeUser.NewProc("MonitorFromWindow").Call(hwnd, 2) // nearest monitor
+	ok, _, _ := themeUser.NewProc("GetMonitorInfoW").Call(monitor, uintptr(unsafe.Pointer(&info)))
+	return info, ok != 0 && info.Work.Right > info.Work.Left && info.Work.Bottom > info.Work.Top
+}
+
+func maximizeInWorkArea(info *workbenchMinMaxInfo, monitor, work windows.Rect) {
+	info.MaxPosition = windowPoint{X: work.Left - monitor.Left, Y: work.Top - monitor.Top}
+	info.MaxSize = windowPoint{X: work.Right - work.Left, Y: work.Bottom - work.Top}
+}

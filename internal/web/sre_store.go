@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/ai"
+	"strings"
 )
 
 func sreStoreError(err *error) {
@@ -22,6 +23,8 @@ func sreStoreError(err *error) {
 func decodeSRETask(row Object) ai.SRETask {
 	var task ai.SRETask
 	must(json.Unmarshal([]byte(stringOf(required(row, "SRE task")["body"])), &task))
+	normalizeSREOperationRisks(&task)
+	normalizeSREReadBlocker(&task)
 	return task
 }
 func (s *Store) sreTask(session, id string) ai.SRETask {
@@ -83,7 +86,7 @@ func (s *Store) RestartSREInvestigation(session, taskID, requestID, mode string,
 		}
 		for _, a := range old.Attempts {
 			for _, op := range a.Operations {
-				if op.Status == "unknown" || op.Status == "dispatched" {
+				if ai.SREOperationBlocksResume(op) {
 					fail(409, "原操作尚未完成或结果未明，核实前不会重新开始")
 				}
 			}
@@ -240,12 +243,26 @@ func (s *Store) RecoverSRETasks() {
 				r := &t.Runs[i]
 				if r.Status == "running" || r.Status == "queued" || r.Status == "waiting_approval" {
 					r.Status = "interrupted"
+					for _, a := range t.Attempts {
+						if a.PlanRunID == r.ID && a.Status == "waiting_input" {
+							r.Status = "paused"
+						}
+						for _, op := range a.Operations {
+							if a.PlanRunID == r.ID && op.Status == "waiting_approval" && strings.HasPrefix(op.ApprovalID, "adk-") {
+								r.Status = "paused"
+							}
+						}
+					}
 					r.FinishedAt = now()
 				}
 			}
 			for i := range t.Attempts {
 				a := &t.Attempts[i]
-				if a.Status == "running" || a.Status == "waiting_approval" {
+				nativeWait := a.Status == "waiting_input"
+				for _, op := range a.Operations {
+					nativeWait = nativeWait || op.Status == "waiting_approval" && strings.HasPrefix(op.ApprovalID, "adk-")
+				}
+				if !nativeWait && (a.Status == "running" || a.Status == "waiting_approval") {
 					a.Status = "interrupted"
 					a.FinishedAt = now()
 				}
@@ -254,7 +271,7 @@ func (s *Store) RecoverSRETasks() {
 					if op.Status == "dispatched" {
 						op.Status = "unknown"
 					}
-					if op.Status == "waiting_approval" || op.Status == "prepared" {
+					if (op.Status == "waiting_approval" || op.Status == "prepared") && !strings.HasPrefix(op.ApprovalID, "adk-") {
 						op.Status = "interrupted"
 						op.ApprovalID = ""
 					}

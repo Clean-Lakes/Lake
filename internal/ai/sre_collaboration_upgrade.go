@@ -19,7 +19,7 @@ func needsSRECollaborationUpgrade(t SRETask) bool {
 	}
 	for _, a := range t.Attempts {
 		for _, op := range a.Operations {
-			if op.Status == "unknown" || op.Status == "dispatched" {
+			if SREOperationBlocksResume(op) {
 				return false
 			}
 		}

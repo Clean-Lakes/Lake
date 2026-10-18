@@ -103,6 +103,16 @@ func (e *Engine) Handle(ctx context.Context, method, id string, data json.RawMes
 		return nil
 	}
 	switch method {
+	case "resolveOperation":
+		var input struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+			Note   string `json:"note"`
+		}
+		if err := decode(&input); err != nil {
+			return nil, err
+		}
+		return nil, e.ResolveOperation(id, input.ID, input.Status, input.Note)
 	case "configure":
 		var c Config
 		if err := decode(&c); err != nil {
@@ -117,7 +127,7 @@ func (e *Engine) Handle(ctx context.Context, method, id string, data json.RawMes
 		if a.validate() != nil {
 			return nil, errors.New("invalid chat message")
 		}
-		err := e.ChatTurn(ctx, id, a)
+		err := e.ExecuteTurn(ctx, id, a)
 		if err != nil {
 			return nil, err
 		}
@@ -128,6 +138,16 @@ func (e *Engine) Handle(ctx context.Context, method, id string, data json.RawMes
 			return nil, err
 		}
 		return e.shellJob(ctx, id, method, a)
+	case "agentQuestionReply":
+		var input struct {
+			RunID   string              `json:"runId"`
+			ID      string              `json:"id"`
+			Answers map[string][]string `json:"answers"`
+		}
+		if err := decode(&input); err != nil {
+			return nil, err
+		}
+		return nil, e.AgentQuestionReply(id, input.RunID, input.ID, input.Answers)
 	case "questionReply":
 		var input struct {
 			ID      string              `json:"id"`

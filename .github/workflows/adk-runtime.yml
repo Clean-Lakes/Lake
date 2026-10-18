@@ -1,0 +1,46 @@
+name: Official ADK runtime acceptance
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/adk-runtime-acceptance']
+  pull_request:
+    paths: ['internal/ai/**', 'internal/agent/**', 'internal/web/**', 'go.mod', 'go.sum', '.github/workflows/adk-runtime.yml']
+permissions:
+  contents: read
+jobs:
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - run: pnpm --dir web-agent install --frozen-lockfile
+      - run: pnpm --dir web-agent build:web
+      - name: Stage embedded application
+        shell: python
+        run: |
+          import shutil
+          shutil.copytree('web-agent/web/dist', 'assets/web/dist', dirs_exist_ok=True)
+      - run: go mod verify
+      - run: python scripts/check_adk_runtime_boundary.py
+      - name: Official SDK adapters and durable services
+        run: go test ./internal/agent/... -count=1 -timeout=3m
+      - name: ADK integration, crashes, migration and SRE recovery
+        run: go test ./internal/ai ./internal/web -run 'TestADK|TestSREScheduler|TestSREPlanOnly|TestSRERestart|TestSREFullSpecialist' -count=1 -timeout=4m
+      - name: Compile native client backend
+        run: go build -o lake-acceptance ./cmd/lake
+      - name: Full Linux regression
+        if: runner.os == 'Linux'
+        run: go test ./... -count=1 -timeout=5m

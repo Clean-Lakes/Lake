@@ -75,20 +75,33 @@ func (b *Server) validateHumanMessage(id string, data Object) humanMessage {
 	}
 	message.References = append(message.References, b.contextReferences(id, message.Text, data["references"])...)
 	if value, exists := data["files"]; exists {
-		if _, valid := value.([]any); !valid {
-			fail(400, "文本附件须为数组")
+		if rows, valid := value.([]any); !valid || len(objects(value)) != len(rows) {
+			fail(400, "附件须为数组")
 		}
 	}
 	project := stringOf(b.Store.Session(id)["projectId"])
-	if len(objects(data["files"])) > 4 {
-		fail(400, "每条消息最多附加 4 个文本文件")
+	if len(objects(data["files"])) > 8 {
+		fail(400, "每条消息最多附加 8 个文件")
 	}
+	legacyCount := 0
 	for _, file := range objects(data["files"]) {
+		if attachmentID.MatchString(stringOf(file["sourceId"])) {
+			attachment, _ := b.loadAttachment(project, id, stringOf(file["sourceId"]))
+			message.Files = append(message.Files, Object{"source_id": attachment.SourceID, "name": attachment.Name, "kind": "file", "sizeBytes": attachment.Size, "sha256": attachment.SHA256, "mimeType": attachment.MIME})
+			continue
+		}
+		legacyCount++
+		if legacyCount > 4 {
+			fail(400, "每条消息最多附加 4 个旧版文本文件")
+		}
 		source := b.loadImportSource(project, id, stringOf(file["sourceId"]))
 		message.Files = append(message.Files, Object{"source_id": source.ID, "name": source.Name})
 	}
-	if message.Text == "" && len(message.Images) == 0 {
-		fail(400, "请输入消息或附加图片")
+	if message.Text == "" && len(message.Files) > 0 {
+		message.Text = "请查看附件信息，并说明可以如何处理；执行或部署前先确认目标和需求。"
+	}
+	if message.Text == "" && len(message.Images) == 0 && len(message.Files) == 0 {
+		fail(400, "请输入消息或添加附件")
 	}
 	return message
 }
@@ -144,7 +157,7 @@ func (b *Server) submitHumanMessage(id string, data Object) Object {
 		if len(message.Files) > 0 {
 			files := []Object{}
 			for _, file := range message.Files {
-				files = append(files, Object{"sourceId": file["source_id"], "name": file["name"]})
+				files = append(files, publicMessageFile(file))
 			}
 			payload["files"] = files
 		}
@@ -174,7 +187,7 @@ func (b *Server) submitHumanMessage(id string, data Object) Object {
 	}
 	b.bindManualTerminalForHuman(id, message.References, message.Reuse)
 	titleInput := b.humanMessageTitle(message)
-	result, pendingTitle := b.Store.BeginWithNaming(id, message.Text, message.Images, titleInput)
+	result, pendingTitle := b.Store.BeginWithFilesAndNaming(id, message.Text, message.Images, publicMessageFiles(message.Files), titleInput)
 	if pendingTitle && shouldGenerateSessionTitle(titleInput) {
 		b.generateSessionTitle(id, titleInput)
 	}
@@ -206,7 +219,7 @@ func (b *Server) dispatchMessageQueueLocked(id string) {
 	}
 	b.bindManualTerminalForHuman(id, message.References, message.Reuse)
 	titleInput := b.humanMessageTitle(message)
-	_, pendingTitle := b.Store.BeginQueuedMessageWithNaming(id, stringOf(head["id"]), message.Text, message.Images, titleInput)
+	_, pendingTitle := b.Store.BeginQueuedMessageWithNaming(id, stringOf(head["id"]), message.Text, message.Images, titleInput, publicMessageFiles(message.Files))
 	if pendingTitle && shouldGenerateSessionTitle(titleInput) {
 		b.generateSessionTitle(id, titleInput)
 	}
@@ -272,4 +285,21 @@ func (b *Server) messageQueueRoute(w http.ResponseWriter, r *http.Request, id st
 	b.Store.MutateMessageQueue(id, data)
 	b.dispatchMessageQueueLocked(id)
 	reply(w, 200, b.Store.MessageQueue(id))
+}
+
+func publicMessageFile(file Object) Object {
+	out := Object{"sourceId": file["source_id"], "name": file["name"]}
+	for _, key := range []string{"kind", "sizeBytes", "sha256", "mimeType"} {
+		if file[key] != nil {
+			out[key] = file[key]
+		}
+	}
+	return out
+}
+func publicMessageFiles(files []Object) []Object {
+	out := []Object{}
+	for _, file := range files {
+		out = append(out, publicMessageFile(file))
+	}
+	return out
 }

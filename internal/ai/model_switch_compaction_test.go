@@ -67,7 +67,7 @@ func TestModelSwitchCompactsCompletedTurnWithSmallHandoffAllowance(t *testing.T)
 			s.state.History = oldHistory
 			s.state.View.Cards = []Card{{ID: "evidence", Type: "operation", Content: oldHistory[3].Content, Status: "completed"}}
 			rawCard := s.state.View.Cards[0]
-			if err := e.ChatTurn(context.Background(), "case", TurnInput{UserText: "知道了", Context: contextText}); err != nil {
+			if err := e.ExecuteTurn(context.Background(), "case", TurnInput{UserText: "知道了", Context: contextText}); err != nil {
 				t.Fatal("switching models blocked a short acknowledgement:", err)
 			}
 			h := s.state.History

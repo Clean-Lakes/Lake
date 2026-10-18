@@ -37,3 +37,8 @@ test('switching the selected model does not show the preceding model percentage'
   const html=renderToStaticMarkup(createElement(ContextUsage,{view:view({window:0,budget:64000,inputBudget:55808,maxOutput:8192,used:27904,usedKnown:true,estimated:false})}));
   assert.match(html,/上下文 50.0%/);
  });
+
+test('configured model capacity caps the displayed manual input budget', () => {
+ const html=renderToStaticMarkup(createElement(ContextUsage,{view:view({window:8192,windowSource:'settings',budget:64000,inputBudget:60000,used:4096,usedKnown:true,estimated:false})}));
+ assert.match(html,/上下文 50.0%/);
+});

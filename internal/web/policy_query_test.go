@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -20,6 +21,14 @@ const mountedImageQuery = `hdiutil info 2>/dev/null | grep -E "image-path|/dev/d
 func TestReadOnlyQueryPolicy(t *testing.T) {
 	for _, test := range []struct{ command, risk string }{
 		{mountedImageQuery, "readonly"},
+		{`systemctl --failed --no-legend --plain; podman ps -a --format '{{.Names}}|{{.State}}' 2>&1 | head -30`, "readonly"},
+		{`systemctl restart nginx 2>&1`, "dangerous"},
+		{`podman ps; podman restart app`, "write"},
+		{`docker ps --host tcp://example:2375`, "write"},
+		{`ls /tmp 2>&3`, "write"},
+		{`ls /tmp 3>&1`, "write"},
+		{`ls /tmp >/tmp/report 2>&1`, "write"},
+		{`systemctl --root=/tmp start app`, "write"},
 		{bootTimeQuery, "readonly"},
 		{`echo "now: $(date '+%Y-%m-%d %H:%M:%S %Z')"`, "readonly"},
 		{`BOOT=$(echo 0); date -r "$BOOT" '+%Y'`, "readonly"},
@@ -58,7 +67,7 @@ func TestReadOnlyQueryPolicy(t *testing.T) {
 		{`printf "2">/dev/null`, "readonly"},
 		{`ls /tmp 2>/tmp/errors`, "write"},
 		{`ls /tmp 2>>/dev/null`, "write"},
-		{`ls /tmp 2>&1`, "write"},
+		{`ls /tmp 2>&1`, "readonly"},
 		{`ls /tmp 3>/dev/null`, "write"},
 		{`ls /tmp 2>`, "write"},
 		{`cat </dev/disk0`, "dangerous"},
@@ -78,6 +87,9 @@ func TestReadOnlyQueryPolicy(t *testing.T) {
 		{`ls /lake-query-fixture-does-not-exist 2>/dev/null; printf 'DONE'`, "DONE"},
 		{`printf '%s' /dev/disk | grep -E /dev/disk`, "/dev/disk"},
 	} {
+		if runtime.GOOS == "linux" {
+			test.command = strings.Replace(test.command, `date -u -r "$BOOT"`, `date -u -d "@$BOOT"`, 1)
+		}
 		b, h := fixture(t)
 		id, ref := newSession(t, h)
 		ctx := context.Background()

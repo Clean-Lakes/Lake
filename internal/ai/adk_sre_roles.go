@@ -13,12 +13,12 @@ import (
 )
 
 type sreRoleContext struct {
-	TaskID, PlanRunID, AttemptID string
-	Role                         SREAgentRole
-	Step                         SREPlanStep
-	NoTools                      bool
-	FullTools                    bool
-	dispatchRelease              func()
+	TaskID, PlanRevisionID, PlanRunID, AttemptID string
+	Role                                         SREAgentRole
+	Step                                         SREPlanStep
+	NoTools                                      bool
+	FullTools                                    bool
+	dispatchRelease                              func()
 }
 type SRERoleResult struct {
 	Report                *SRERoleReport
@@ -107,7 +107,7 @@ func (e *Engine) sreRoleCatalog(c Config) []Tool {
 	return out
 }
 
-func (e *Engine) RunSRERole(ctx context.Context, sessionID string, task SRETask, step SREPlanStep, runID, attemptID, prompt string, noTools bool) (out SRERoleResult, err error) {
+func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRETask, step SREPlanStep, runID, attemptID, prompt string, noTools bool) (out SRERoleResult, err error) {
 	s, err := e.get(sessionID)
 	if err != nil {
 		return out, err
@@ -148,6 +148,10 @@ func (e *Engine) RunSRERole(ctx context.Context, sessionID string, task SRETask,
 	if w.role == "" {
 		w.role = "host"
 	}
+	recovery, recovering := ctx.Value(sreRoleRecoveryKey{}).(sreRoleRecovery)
+	if recovering {
+		w.runID = recovery.runID
+	}
 	out.RunID = w.runID
 	child, err := New(filepath.Join(e.Dir, "children", sessionID), nil, nil)
 	if err != nil {
@@ -185,7 +189,11 @@ func (e *Engine) RunSRERole(ctx context.Context, sessionID string, task SRETask,
 	cc.Profile = "core"
 	cc.agentRole = string(step.Role)
 	cc.Model.SupportsImageOutput = false
-	cc.sre = &sreRoleContext{TaskID: task.ID, PlanRunID: runID, AttemptID: attemptID, Role: step.Role, Step: step, NoTools: noTools, FullTools: true}
+	revision := ""
+	if task.LatestPlan() != nil {
+		revision = task.LatestPlan().ID
+	}
+	cc.sre = &sreRoleContext{PlanRevisionID: revision, TaskID: task.ID, PlanRunID: runID, AttemptID: attemptID, Role: step.Role, Step: step, NoTools: noTools, FullTools: true}
 	cc.targetScope = &TargetScope{ResourceIDs: append([]string(nil), step.ResourceIDs...)}
 	if len(assets) == 1 {
 		cc.AssetRef = assets[0].ID
@@ -214,7 +222,9 @@ func (e *Engine) RunSRERole(ctx context.Context, sessionID string, task SRETask,
 	e.agentMu.Unlock()
 	defer func() { close(w.done); e.agentMu.Lock(); delete(e.agentWorkers, w.runID); e.agentMu.Unlock() }()
 	s.mu.Lock()
-	s.state.View.AgentRuns = append(s.state.View.AgentRuns, AgentRun{SRETaskID: task.ID, SRERole: step.Role, WorkflowStepID: step.ID, ID: w.runID, SessionID: sessionID, RootTurnID: turnID, Role: w.role, Name: sreRoleName(step.Role), Task: step.Description, ResourceIDs: step.ResourceIDs, Status: "running", CreatedAt: timestamp(), StartedAt: timestamp(), CanCancel: true})
+	if !recovering {
+		s.state.View.AgentRuns = append(s.state.View.AgentRuns, AgentRun{SRETaskID: task.ID, SRERole: step.Role, WorkflowStepID: step.ID, ID: w.runID, SessionID: sessionID, RootTurnID: turnID, Role: w.role, Name: sreRoleName(step.Role), Task: step.Description, ResourceIDs: step.ResourceIDs, Status: "running", CreatedAt: timestamp(), StartedAt: timestamp(), CanCancel: true})
+	}
 	err = e.save(s)
 	s.mu.Unlock()
 	if err != nil {
@@ -246,10 +256,22 @@ func (e *Engine) RunSRERole(ctx context.Context, sessionID string, task SRETask,
 		}
 	}
 	child.Emit = func(ev Event) {
+		if ev.Type == "delta" && attemptID != "" {
+			data := obj(ev.Data)
+			if str(data["kind"]) == "message" {
+				e.updateSRELiveText(s, w.runID, str(data["card_id"]), str(data["content"]))
+			}
+			return
+		}
 		if ev.Type == "historyMessage" && attemptID != "" {
 			var message Message
 			raw, _ := json.Marshal(ev.Data)
-			if json.Unmarshal(raw, &message) == nil && message.Role == "assistant" && len(message.Calls) > 0 && strings.TrimSpace(message.Content) != "" {
+			if json.Unmarshal(raw, &message) == nil && message.Role == "assistant" && strings.TrimSpace(message.Content) != "" {
+				// Flush the final (possibly unthrottled) suffix before the run ends.
+				e.updateSRELiveText(s, w.runID, "", redact(message.Content, cc))
+				if len(message.Calls) == 0 {
+					return
+				}
 				_, _ = e.sreRepository.MutateSRETask(sessionID, task.ID, 0, "role_progress", func(t *SRETask) error {
 					for i := range t.Messages {
 						m := &t.Messages[i]
@@ -270,6 +292,32 @@ func (e *Engine) RunSRERole(ctx context.Context, sessionID string, task SRETask,
 		if ev.Type == "delta" || ev.Type == "historyMessage" || ev.Type == "done" {
 			return
 		}
+		if ev.Type == "question" {
+			var req *QuestionRequest
+			if ev.Data != nil {
+				raw, _ := json.Marshal(ev.Data)
+				_ = json.Unmarshal(raw, &req)
+			}
+			_ = e.updateAgent(w, func(r *AgentRun) {
+				r.Question = req
+				if req != nil {
+					r.Status = "waiting_input"
+				} else {
+					r.Status = "running"
+				}
+			})
+			if attemptID != "" {
+				_, _ = e.sreRepository.MutateSRETask(sessionID, task.ID, 0, "role_question", func(t *SRETask) error {
+					status := "running"
+					if req != nil {
+						status = "waiting_input"
+					}
+					projectSREAttemptStatus(t, attemptID, status)
+					return nil
+				})
+			}
+
+		}
 		if ev.Type == "approval" {
 			var p Approval
 			raw, _ := json.Marshal(ev.Data)
@@ -277,7 +325,7 @@ func (e *Engine) RunSRERole(ctx context.Context, sessionID string, task SRETask,
 			_ = e.updateAgent(w, func(r *AgentRun) { r.Status = "waiting_approval"; r.Pending = &p })
 			if attemptID != "" {
 				_, _ = e.sreRepository.MutateSRETask(sessionID, task.ID, 0, "approval_requested", func(t *SRETask) error {
-					t.Status = "waiting_approval"
+					projectSREAttemptStatus(t, attemptID, "waiting_approval")
 					for i := range t.Attempts {
 						a := &t.Attempts[i]
 						if a.ID == attemptID {
@@ -295,7 +343,15 @@ func (e *Engine) RunSRERole(ctx context.Context, sessionID string, task SRETask,
 			}
 		}
 		if ev.Type == "operation" || ev.Type == "toolResult" {
-			_ = e.updateAgent(w, func(r *AgentRun) { r.Status = "running"; r.Pending = nil })
+			resumed := false
+			_ = e.updateAgent(w, func(r *AgentRun) {
+				resumed = r.Status == "waiting_approval" || r.Status == "waiting_input"
+				r.Status = "running"
+				r.Pending = nil
+			})
+			if resumed && attemptID != "" {
+				_, _ = e.sreRepository.MutateSRETask(sessionID, task.ID, 0, "role_resumed", func(t *SRETask) error { projectSREAttemptStatus(t, attemptID, "running"); return nil })
+			}
 		}
 		if e.Emit != nil {
 			e.Emit(Event{Session: sessionID, Type: "sreUpdate"})
@@ -313,7 +369,11 @@ func (e *Engine) RunSRERole(ctx context.Context, sessionID string, task SRETask,
 	if step.Role == SREVerifier && step.Action != nil {
 		prompt += "\nPerform your independent review with normal tools. The runtime will collect the exact frozen acceptance probe AFTER your tool loop, so it is newer than any operation you perform. Do not replay that probe or claim its result in advance. Frozen probe specification:\n" + js(step.Action)
 	}
-	err = child.Chat(jobCtx, w.runID, prompt, nil)
+	if recovering {
+		err = child.executeRecoveredRole(jobCtx, w.runID, cc, cancel)
+	} else {
+		err = child.ExecuteTurn(jobCtx, w.runID, TurnInput{UserText: prompt})
+	}
 	if err == nil && step.Role == SREVerifier && step.Action != nil {
 		cs, ce := child.get(w.runID)
 		if ce != nil {
@@ -378,7 +438,7 @@ func (e *Engine) RunSRERole(ctx context.Context, sessionID string, task SRETask,
 			if ce := child.Configure(w.runID, cc); ce != nil {
 				err = ce
 			} else {
-				err = child.Chat(jobCtx, w.runID, "Correct only the report format, without tools. Return JSON {schemaVersion:1,summary:string,facts:[{statement:string,evidenceIds:[exact successful IDs]}],hypotheses:[string],unknowns:[string],nextChecks:[string]}. Cite only these actually collected evidence records: "+js(out.Evidence)+"\nValidation error: "+parseErr.Error(), nil)
+				err = child.ExecuteTurn(jobCtx, w.runID, TurnInput{UserText: "Correct only the report format, without tools. Return JSON {schemaVersion:1,summary:string,facts:[{statement:string,evidenceIds:[exact successful IDs]}],hypotheses:[string],unknowns:[string],nextChecks:[string]}. Cite only these actually collected evidence records: " + js(out.Evidence) + "\nValidation error: " + parseErr.Error()})
 				if err == nil {
 					view, err = child.Snapshot(w.runID)
 					out.Usage = view.Usage
@@ -420,17 +480,15 @@ func (e *Engine) RunSRERole(ctx context.Context, sessionID string, task SRETask,
 		out.Summary = redact(out.Summary, cc)
 	}
 	_ = e.updateAgent(w, func(r *AgentRun) {
-		r.Status = "completed"
+		r.Status = sreExecutionStatus(err)
+		// Keep the last real prose visible until the task transaction replaces
+		// its progress entry with the final report. Clearing it here briefly
+		// restores the original step description between those two updates.
 		r.ActivityPhase, r.ActivityTool = "", ""
-		if err != nil {
-			r.Status = "failed"
-			if errors.Is(err, context.Canceled) {
-				r.Status = "cancelled"
-			}
-		}
 		r.Summary = utf8Prefix(out.Summary, 8192)
 		r.CanCancel = false
 		r.Pending = nil
+		r.Question = nil
 		r.FinishedAt = timestamp()
 		r.Usage = out.Usage
 		addUsage(&s.state.View.Usage, out.Usage)

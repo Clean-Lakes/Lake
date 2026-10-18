@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { Glyph } from "./Icons";
 
 export const permissionDefaults = {
   silentReadFiles: true,
@@ -11,14 +12,18 @@ export const permissionDefaults = {
   denyLocalExecution: false,
 };
 
-const fields: Array<{key: keyof typeof permissionDefaults; label: string; description: string}> = [
-  {key: "silentReadFiles", label: "静默读取文件", description: "关闭后，列目录、搜索和读取文件工具需要确认。"},
-  {key: "silentWriteFiles", label: "静默修改文件", description: "允许编辑、追加和写入文件；删除和移动由静默执行命令控制。"},
-  {key: "silentReadSQL", label: "静默执行只读 SQL", description: "关闭后，只读 SQL 和结构查询执行前需要确认。"},
-  {key: "silentCommands", label: "静默执行命令", description: "开启后，查询、修改、指定文件删除和移动及所需终端创建直接执行。仅大范围删除、磁盘擦除等毁灭性操作仍需确认。"},
-  {key: "silentTerminalCreation", label: "自动创建终端会话", description: "允许新建或关闭后重建终端；静默执行命令开启时也允许创建。首次 SSH 指纹仍须核对。"},
-  {key: "blockUnreferencedAssets", label: "拦截未 @ 引用资产", description: "每一轮仅操作本轮 @ 或上下文引用的资源。"},
-  {key: "denyLocalExecution", label: "禁止本地执行", description: "禁止 Agent 在本机执行命令或创建终端；SSH 主机不受此项限制。"},
+const groups: Array<{title: string; hint?: string; fields: Array<{key: keyof typeof permissionDefaults; label: string; description: string}>}> = [
+  {title: "免确认操作", hint: "关闭后先询问", fields: [
+    {key: "silentReadFiles", label: "读取文件", description: "浏览目录、搜索和查看文件内容。"},
+    {key: "silentWriteFiles", label: "写入文件", description: "上传和编辑文件；删除、移动按命令规则。"},
+    {key: "silentReadSQL", label: "查询数据库", description: "执行只读 SQL，查看表结构。"},
+    {key: "silentCommands", label: "运行命令", description: "包括修改、指定文件的删除和移动；大范围删除等仍需确认。"},
+    {key: "silentTerminalCreation", label: "建立终端连接", description: "新建或重连终端；首次 SSH 指纹仍需核对。"},
+  ]},
+  {title: "操作范围", fields: [
+    {key: "blockUnreferencedAssets", label: "仅限引用资源", description: "只操作本轮 @ 选择或上下文引用的资源。"},
+    {key: "denyLocalExecution", label: "禁用本机执行", description: "限制本机命令和终端，不影响 SSH 主机。"},
+  ]},
 ];
 
 export function PermissionSettings({anchor, options, disabled, error, onChange, onClose}: {
@@ -27,6 +32,7 @@ export function PermissionSettings({anchor, options, disabled, error, onChange, 
   onChange: (key: string, value: boolean) => void; onClose: () => void;
 }) {
   const panel = useRef<HTMLElement>(null);
+  const id = useId();
   const close = useRef(onClose);
   close.current = onClose;
   const [position, setPosition] = useState({left: 0, top: 0, maxHeight: 360, ready: false});
@@ -55,7 +61,7 @@ export function PermissionSettings({anchor, options, disabled, error, onChange, 
       if (!panel.current?.contains(target) && !anchor.current?.contains(target)) close.current();
     };
     update();
-    panel.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({preventScroll: true});
+    const focusFrame = requestAnimationFrame(() => panel.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({preventScroll: true}));
     const observer = new ResizeObserver(update);
     if (panel.current) observer.observe(panel.current);
     if (anchor.current) observer.observe(anchor.current);
@@ -64,20 +70,26 @@ export function PermissionSettings({anchor, options, disabled, error, onChange, 
     document.addEventListener("pointerdown", outside);
     document.addEventListener("keydown", keyboard);
     document.addEventListener("focusin", focus);
-    return () => { observer.disconnect(); window.removeEventListener("resize", update);
+    return () => { cancelAnimationFrame(focusFrame); observer.disconnect(); window.removeEventListener("resize", update);
       document.removeEventListener("scroll", update, true); document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", keyboard); document.removeEventListener("focusin", focus); };
   }, [anchor]);
   return createPortal(<section ref={panel} className="permission-popover" role="dialog" aria-label="会话权限"
     style={{left: position.left, top: position.top, maxHeight: position.maxHeight, visibility: position.ready ? "visible" : "hidden"}}>
-    <header><strong>会话权限</strong><small>自动保存</small><button type="button" className="permission-close" aria-label="关闭会话权限" onClick={() => {onClose(); anchor.current?.focus();}}>
-      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
-    </button></header>
+    <header><div><strong>执行偏好</strong><p>当前会话 · 自动保存</p></div><button type="button" className="permission-close" aria-label="关闭会话权限" onClick={() => {onClose(); anchor.current?.focus();}}><Glyph name="close" size={14}/></button></header>
     {error && <p className="form-error" role="alert">{error}</p>}
-    {fields.map(field => <div className={`permission-row ${field.key === "blockUnreferencedAssets" ? "permission-scope" : ""}`} key={field.key}>
-      <span className="permission-label" title={field.description}>{field.label}</span>
-      <button type="button" className="permission-switch" role="switch" aria-label={field.label} aria-description={field.description} title={field.description} aria-checked={Boolean(options[field.key] ?? permissionDefaults[field.key])} disabled={disabled} onClick={() => onChange(field.key, !Boolean(options[field.key] ?? permissionDefaults[field.key]))}><span/></button>
+    {groups.map((group, index) => <div className="permission-group" role="group" aria-labelledby={`${id}-group-${index}`} key={group.title}>
+      <div className="permission-group-heading"><span id={`${id}-group-${index}`}>{group.title}</span>{group.hint && <small>{group.hint}</small>}</div>
+      {group.fields.map(field => {
+        const checked = Boolean(options[field.key] ?? permissionDefaults[field.key]);
+        return <div className="permission-row" key={field.key}>
+          <div className="permission-copy"><span className="permission-label" id={`${id}-${field.key}`}>{field.label}</span><p id={`${id}-${field.key}-description`}>{field.description}</p></div>
+          <button type="button" className="permission-mode" role="switch" aria-labelledby={`${id}-${field.key}`} aria-describedby={`${id}-${field.key}-description`} aria-checked={checked} disabled={disabled} onClick={() => onChange(field.key, !checked)}>{checked ? "开启" : "关闭"}</button>
+        </div>;
+      })}
     </div>)}
-    {disabled && <p className="permission-note">本轮结束或停止后可修改</p>}
+    <p className="permission-note">允许免确认运行命令时，也会按需建立终端连接。</p>
+    {disabled && <p className="permission-note permission-locked" role="status">本轮结束或停止后可调整</p>}
+
   </section>, document.body);
 }

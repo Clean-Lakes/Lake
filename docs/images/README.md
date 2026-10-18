@@ -1,7 +1,9 @@
-# README screenshots
+# README images
 
-`lake-workbench-light.jpg` and `lake-workbench-dark.jpg` are direct browser captures of Lake’s current React application in its two themes.
+`lake-workbench-light.jpg` and `lake-workbench-dark.jpg` show the current Lake macOS workspace in light and dark themes, with the red, yellow and green window controls.
 
-The read-only fixture is `web-agent/web/test/fixtures/readme-workbench.html`. It uses the production App, resource navigation, transcript, specialist messages and composer. Resource names, conversation, versions, timestamps and metrics are fictional demonstration data. No resource commands or model requests are executed. Mutating API calls are rejected.
+These are browser-rendered presentation images of the actual React App with a standard macOS window frame, not unmodified native OS captures. Native automation overlays obscured the system window controls, so the presentation frame is rendered by the isolated fixture. The workspace, components, icons and theme come from the current application; the frame does not change shipping UI.
 
-Capture at the desktop breakpoint (1440 × 1080) using the browser screenshot API. The README uses a picture element to follow the reader’s color scheme. The previous infrastructure screenshot is no longer used.
+Capture fixture: `web-agent/web/test/fixtures/readme-macos.html`, extending the read-only `readme-workbench` fixture. All project names, resources, conversations, timestamps, versions and measurements in the images are fictional. No real data, credentials, DEV badge, developer controls, model requests or resource commands are included. Mutating API requests are rejected.
+
+Run the Vite frontend with `npm --prefix web-agent run dev:web -- --host 127.0.0.1 --port 5194 --strictPort`, then capture `/test/fixtures/readme-macos.html?theme=light` and `?theme=dark` at **1440 × 900** with the full-page browser screenshot API. The README picture element follows the reader’s color scheme.

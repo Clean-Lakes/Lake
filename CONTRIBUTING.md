@@ -40,6 +40,10 @@ Dev 忽略正式版的 `LAKE_HOME`、`LAKE_WEB_DATA_DIR` 和 `LAKE_WEB_TOKEN`。
 bin/lake web --home "$HOME/.lake-dev-cli" --port 4182 --open
 ```
 
+## Windows 本地联调
+
+Windows 本地联调使用 `python3 scripts/build_lake_windows.py --dev`，安装 `dist/windows/<version>/x86_64/dev/` 下的 Dev 包。程序和快捷方式名为 **Lake Dev**，固定数据目录为 `%USERPROFILE%\.lake-dev`；更新只替换程序文件，保留模型、项目、会话和凭据。Dev 忽略 `LAKE_HOME`，隔离运行只使用独立的 `LAKE_DEV_HOME`，不能指向正式版 `.lake`。测试脚本的随机隔离 Home 仅用于自动化验收，日常使用应启动固定位置的 Lake Dev。
+
 ## 前端界面规范
 
 新增或修改前端界面时遵循 [Lake 前端 UI 规范](docs/ui-guidelines.md)。表单下拉框统一使用 `AppSelect`，通用图标使用 `Glyph`，供应商品牌使用 `ProviderIcon`；同时验证键盘、深色主题和窄窗口布局。
@@ -50,3 +54,9 @@ bin/lake web --home "$HOME/.lake-dev-cli" --port 4182 --open
 - Go 代码用 `gofmt`；前端遵循现有 React/Vite 代码组织；macOS 客户端沿用 Swift Package 结构。改动对应功能时更新说明和必要的验证记录。
 - 不在代码、日志、截图、Issue 或提交中放模型 API Key、SSH 私钥内容。Lake 正常运行的凭据位于各自 home 下权限私有的 `secrets/`；只有显式执行已签名的 `lake secrets migrate` 才读取旧 Keychain 凭据。
 - 本地联调只检查 Dev 应用和隔离数据。正式版构建、安装与发布按 [macOS 客户端说明](client/macos/README.md) 进行。
+
+## Official ADK runtime
+
+Interactive agents use official ADK Go v2.6.0 on Go 1.26.6, including direct stdio and scheduled workflows. Runtime ownership is in `internal/ai/adk_*.go`; the shared durable session store is `internal/agent/storage`. Preserve the existing provider/executor boundaries. Do not add another model/tool loop, import SDK internals, or restore a production Go fallback. Run `python3 scripts/check_adk_runtime_boundary.py` along with Go/race/vet and frontend checks.
+
+See [runtime architecture and recovery](docs/experiments/adk-runtime.md) and [migration acceptance](docs/validation/lake-adk-runtime-final.json). Keep credentials out of SDK events, state, artifacts and test output. Use the signed build scripts and an isolated Dev home for integration. Unknown operations require reconciliation; clearing model context never clears the operation ledger or authorizes a retry.

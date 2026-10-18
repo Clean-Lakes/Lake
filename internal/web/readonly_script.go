@@ -39,6 +39,10 @@ func readonlyStatements(statements []*syntax.Stmt, vars map[string]bool) bool {
 			if redir.N != nil {
 				fd = redir.N.Value
 			}
+			// Only merge stdout/stderr. Arbitrary descriptors and paths stay protected.
+			if ok && redir.Op == syntax.DplOut && (fd == "1" || fd == "2" || fd == "") && (target == "1" || target == "2") {
+				continue
+			}
 			if !ok || target != "/dev/null" || redir.Op != syntax.RdrOut || !set("0 1 2")[fd] && fd != "" || fd == "0" {
 				return false
 			}

@@ -2,9 +2,11 @@
 .composer-model-select.app-select > .app-select-trigger { height: 28px; padding: 0 8px; gap: 7px; border: 0; background: transparent; font-size: 12px; }
 .composer-model-select.app-select > .app-select-trigger:hover:not(:disabled),.composer-model-select.app-select > .app-select-trigger[aria-expanded="true"] { background: var(--surface-hover); }
 .composer-model-select.app-select > .app-select-trigger[aria-expanded="true"]:not(:focus-visible) { outline: none; }
-.composer-model-select.model-missing > .app-select-trigger { color: var(--warning); }
+.composer-model-setup { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; white-space: nowrap; }
+.composer-model-setup:hover:not(:disabled) { background: var(--surface-hover); color: var(--foreground); }
 .composer-reasoning-select.app-select { width: auto; max-width: 132px; margin-top: 0; }
 .composer-reasoning-select.app-select > .app-select-trigger { height: 28px; padding: 0 7px; gap: 5px; border: 0; background: transparent; font-size: 12px; color: var(--text-secondary); }
+.composer-reasoning-select.app-select > .app-select-trigger:disabled { opacity: 1; color: var(--text-secondary); }
 .composer-reasoning-select.app-select > .app-select-trigger:hover:not(:disabled),.composer-reasoning-select.app-select > .app-select-trigger[aria-expanded="true"] { background: var(--surface-hover); }
 .composer-reasoning-select.app-select > .app-select-trigger[aria-expanded="true"]:not(:focus-visible) { outline: none; }
 .composer-model-popup .app-select-option { min-height: 38px; }

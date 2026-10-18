@@ -1,11 +1,17 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import {Glyph} from "./Icons";
+import {remarkAssistantProse} from "./assistantProse";
+import {remarkConversationExcerpt} from './conversationPreview';
 import type { Message } from "../../shared/contracts";
 
-export type ConversationDirectoryItem = { id: string; number: number; label: string };
-export function conversationDirectoryItems(messages: Message[], visibleIds: Set<string>): ConversationDirectoryItem[] {
+export type ConversationDirectoryItem = { id: string; number: number; label: string; summary?:string };
+export function conversationDirectoryItems(messages: Message[], visibleIds: Set<string>, summaries:ReadonlyMap<string,string>=new Map()): ConversationDirectoryItem[] {
   return messages.filter(message => message.role === "user").map((message, index) => ({
     id: message.id, number: index + 1, label: message.text.replace(/\s+/g, " ").trim() || "图片或附件",
+    ...(summaries.get(message.id)?{summary:summaries.get(message.id)}:{}),
   })).filter(item => visibleIds.has(item.id));
 }
 export function conversationTurnId(sessionId: string, entryId: string) {
@@ -21,17 +27,25 @@ export function ConversationDirectory({sessionId, items, onJump, onLatest, onOpe
   items: ConversationDirectoryItem[]; onJump: (id: string) => void; onLatest: () => void;
   onOpen?: () => void; onLoadOlder?: () => void; loading?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [previewId,setPreviewId]=useState<string|null>(null);
   const [selected, setSelected] = useState<string | null>(items[0]?.id ?? null);
-  const [panelHeight, setPanelHeight] = useState(320);
-  const [panelWidth, setPanelWidth] = useState(270);
+  const [position,setPosition]=useState({left:40,top:80,width:360});
   const root = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
+  const marks=useRef(new Map<string,HTMLButtonElement>());
+  const lastTrigger=useRef<HTMLButtonElement|null>(null);
+  const suppressFocus=useRef(false);
   const panelId = useId();
+  const hintId = `${panelId}-hint`;
+  const leaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const itemIds = JSON.stringify(items.map(item => item.id));
-  const railHeight = Math.max(28, Math.min(128, items.length * 7 + 12));
-  function close() { setOpen(false); trigger.current?.focus({preventScroll:true}); }
+  const railHeight = Math.max(28, Math.min(400, items.length * 10 + 12));
+  const preview=items.find(item=>item.id===previewId);
+  function close(restoreFocus=false){clearTimeout(leaveTimer.current);setPreviewId(null);if(restoreFocus){suppressFocus.current=true;lastTrigger.current?.focus({preventScroll:true});suppressFocus.current=false}}
+  function show(id:string){clearTimeout(leaveTimer.current);lastTrigger.current=marks.current.get(id)??null;setPreviewId(id)}
+  function leavePreview(){clearTimeout(leaveTimer.current);leaveTimer.current=setTimeout(()=>{if(!panel.current?.contains(document.activeElement))setPreviewId(null)},160)}
+  function jump(item:ConversationDirectoryItem){onJump(item.id);setSelected(item.id);close()}
+  useEffect(()=>()=>clearTimeout(leaveTimer.current),[]);
   useLayoutEffect(() => {
     const container = document.querySelector<HTMLElement>(".conversation");
     if (!container) return;
@@ -63,51 +77,51 @@ export function ConversationDirectory({sessionId, items, onJump, onLatest, onOpe
     window.addEventListener("resize",schedule);
     return()=>{cancelAnimationFrame(frame);observer.disconnect();container.removeEventListener("scroll",schedule);window.removeEventListener("resize",schedule);};
   }, [sessionId, itemIds]);
-  useLayoutEffect(() => {
-    if (!open) return;
-    const container = document.querySelector<HTMLElement>(".conversation");
-    if (!container) return;
-    function measure() {
-      const bottom = container!.getBoundingClientRect().bottom;
-      const top = trigger.current?.getBoundingClientRect().top ?? bottom;
-      setPanelHeight(Math.max(80, Math.min(420, bottom - top - 10)));
-      const left = panel.current?.getBoundingClientRect().left ?? container!.getBoundingClientRect().left;
-      setPanelWidth(Math.max(120, Math.min(270, container!.getBoundingClientRect().right - left - 10)));
+  useLayoutEffect(()=>{
+    if(!preview)return;
+    function measure(){
+      const anchor=marks.current.get(preview!.id)?.getBoundingClientRect();
+      if(!anchor)return;
+      const bounds=document.querySelector<HTMLElement>('.conversation')?.getBoundingClientRect();
+      const right=Math.min(window.innerWidth-12,bounds?.right??window.innerWidth-12);
+      const left=Math.max(12,Math.min(anchor.right+12,right-160));
+      const width=Math.max(120,Math.min(360,right-left));
+      const height=panel.current?.getBoundingClientRect().height??180;
+      const top=Math.max(12,Math.min(anchor.top+anchor.height/2-height/2,window.innerHeight-height-12));
+      setPosition(old=>old.left===left&&old.top===top&&old.width===width?old:{left,top,width});
     }
     measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(container);
-    container.addEventListener("scroll", measure);
-    return () => {observer.disconnect();container.removeEventListener("scroll", measure);};
-  }, [open]);
-  useLayoutEffect(() => {
-    if (!open) return;
-    const current = panel.current?.querySelector<HTMLElement>("[aria-current='location']");
-    const list = current?.parentElement;
-    if(!current || !list)return;
-    const itemBox=current.getBoundingClientRect(), listBox=list.getBoundingClientRect();
-    if(itemBox.top<listBox.top)list.scrollTop+=itemBox.top-listBox.top;
-    else if(itemBox.bottom>listBox.bottom)list.scrollTop+=itemBox.bottom-listBox.bottom;
-  }, [open, selected, panelHeight]);
-  useEffect(() => {
-    if (!open) return;
-    function outside(event: PointerEvent) { if (!root.current?.contains(event.target as Node)) setOpen(false); }
-    function escape(event: KeyboardEvent) { if (event.key === "Escape") { event.preventDefault(); close(); } }
-    document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", escape);
-    return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape); };
-  }, [open]);
-  const content = <div className="conversation-directory" ref={root} style={{"--directory-rail-height":`${railHeight}px`,"--directory-count":Math.max(1,items.length)} as CSSProperties}>
-    <button type="button" ref={trigger} className="conversation-directory-trigger" aria-label="会话目录" title="会话目录" aria-expanded={open} aria-controls={panelId} aria-haspopup="dialog" onClick={() => { if(!open)onOpen?.(); setOpen(!open); }}>
-      <span className="conversation-directory-marks" aria-hidden="true">{items.map(item=><span key={item.id} data-directory-item={item.id} className={`conversation-directory-mark${selected===item.id?" is-current":""}`}/>)}</span>
-    </button>
-    {open && <div ref={panel} className="conversation-directory-panel" style={{maxHeight:panelHeight,width:panelWidth}} id={panelId} role="dialog" aria-label="会话目录">
-      <header><strong>会话目录</strong><span>{items.length} 轮</span></header>
-      <nav aria-label="跳转到提问">{items.map(item => <button type="button" key={item.id} aria-label={`跳转到第 ${item.number} 轮：${item.label}`} aria-current={selected===item.id?"location":undefined} title={item.label} onClick={() => { onJump(item.id); setSelected(item.id); close(); }}><span className={`conversation-directory-row-mark${selected===item.id?" is-current":""}`} aria-hidden="true"/><span>{item.label}</span></button>)}{!items.length&&<p>暂无提问</p>}</nav>
-      {onLoadOlder&&<button type="button" className="conversation-directory-older" disabled={loading} onClick={onLoadOlder}>{loading?"正在加载…":"加载更早记录"}</button>}
-      <button type="button" className="conversation-directory-latest" onClick={() => {onLatest();close();}}>跳到最新</button>
-    </div>}
+    const observer=new ResizeObserver(measure);
+    if(panel.current)observer.observe(panel.current);
+    window.addEventListener('resize',measure);
+    document.addEventListener('scroll',measure,true);
+    return()=>{observer.disconnect();window.removeEventListener('resize',measure);document.removeEventListener('scroll',measure,true)};
+  },[previewId,preview?.summary]);
+  useEffect(()=>{
+    if(!previewId)return;
+    function outside(event:PointerEvent){if(!root.current?.contains(event.target as Node))close()}
+    function escape(event:KeyboardEvent){if(event.key==='Escape'){event.preventDefault();close(true)}}
+    document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape);
+    return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape)};
+  },[previewId]);
+  const content=<div className="conversation-directory" ref={root} style={{"--directory-rail-height":`${railHeight}px`,"--directory-count":Math.max(1,items.length)} as CSSProperties}
+    onPointerEnter={()=>clearTimeout(leaveTimer.current)} onPointerLeave={leavePreview}
+    onFocusCapture={()=>clearTimeout(leaveTimer.current)} onBlurCapture={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node)&&!event.currentTarget.matches(':hover'))leavePreview()}}>
+    <nav className="conversation-directory-marks" aria-label="会话目录">{items.map((item,index)=><button type="button" key={item.id} ref={node=>{if(node)marks.current.set(item.id,node);else marks.current.delete(item.id)}}
+      className={`conversation-directory-tick${selected===item.id?' is-current':''}${previewId===item.id?' is-previewed':''}`} data-directory-item={item.id}
+      aria-label={`跳转到第 ${item.number} 轮：${item.label}`} aria-current={selected===item.id?'location':undefined} aria-describedby={hintId} aria-expanded={previewId===item.id} aria-controls={previewId===item.id?panelId:undefined}
+      tabIndex={selected===item.id||!selected&&index===0?0:-1}
+      onPointerEnter={event=>{if(event.pointerType!=='touch')show(item.id)}} onFocus={()=>{if(!suppressFocus.current)show(item.id)}} onClick={()=>jump(item)}
+      onKeyDown={event=>{const next=event.key==='ArrowDown'?Math.min(items.length-1,index+1):event.key==='ArrowUp'?Math.max(0,index-1):event.key==='Home'?0:event.key==='End'?items.length-1:-1;if(next>=0){event.preventDefault();marks.current.get(items[next]!.id)?.focus({preventScroll:true})}}}>
+      <span className="conversation-directory-mark" aria-hidden="true"/>
+    </button>)}</nav>
+    <span className="visually-hidden" id={hintId}>悬停预览这一轮的提问与回复，点击刻度跳转。完整记录保留。</span>
+    {preview&&<section ref={panel} className="conversation-turn-preview" style={position} id={panelId} aria-label={`第 ${preview.number} 轮预览`}>
+      <button className="conversation-turn-preview-title" type="button" onClick={()=>jump(preview)}><strong>{preview.label}</strong><Glyph name="arrow" size={15}/></button>
+      <div className="conversation-turn-preview-body"><Markdown remarkPlugins={[remarkGfm,remarkAssistantProse,remarkConversationExcerpt]} skipHtml allowedElements={['p','strong','em','ul','ol','li','code','del']} unwrapDisallowed>{preview.summary||'暂无回复'}</Markdown></div>
+      {onLoadOlder&&<button type="button" className="conversation-directory-older" disabled={loading} onClick={()=>{onOpen?.();onLoadOlder()}}>{loading?'正在加载…':'加载更早记录'}</button>}
+      <button type="button" className="conversation-directory-latest" onClick={()=>{onLatest();close()}}>跳到最新</button>
+    </section>}
   </div>;
-  // Server rendering (tests) has no document; render inline there.
-  return typeof document === "undefined" ? content : createPortal(content, document.body);
+  return typeof document==='undefined'?content:createPortal(content,document.body);
 }

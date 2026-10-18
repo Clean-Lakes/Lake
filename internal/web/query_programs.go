@@ -150,6 +150,10 @@ func readonlyAwk(args []string) bool {
 
 func readonlyQueryProgram(program string, args []string) bool {
 	switch program {
+	case "systemctl":
+		return readonlySystemctl(args)
+	case "docker", "podman":
+		return readonlyContainerList(args)
 	case "sed":
 		return readonlySed(args)
 	case "awk":
@@ -251,6 +255,60 @@ func readonlyQueryProgram(program string, args []string) bool {
 			return true
 		}
 		return set("show list lst")[args[1]]
+	}
+	return true
+}
+
+// Narrow service/list queries only. Arbitrary verbs, remote overrides, unit
+// changes and container exec/create actions cannot acquire readonly status.
+func readonlySystemctl(args []string) bool {
+	verb := false
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if set("status show is-active is-failed list-units list-unit-files")[a] && !verb {
+			verb = true
+			continue
+		}
+		if set("--failed --no-legend --plain --no-pager --all --full -a -l")[a] {
+			continue
+		}
+		if set("--type --state --property -p")[a] {
+			i++
+			if i >= len(args) || !regexp.MustCompile(`^[A-Za-z0-9_,.-]+$`).MatchString(args[i]) {
+				return false
+			}
+			continue
+		}
+		if regexp.MustCompile(`^--(type|state|property)=[A-Za-z0-9_,.-]+$`).MatchString(a) {
+			continue
+		}
+		if verb && regexp.MustCompile(`^[A-Za-z0-9_.*@:-]+$`).MatchString(a) && !strings.HasPrefix(a, "-") {
+			continue
+		}
+		return false
+	}
+	return len(args) > 0
+}
+func readonlyContainerList(args []string) bool {
+	if len(args) == 0 || args[0] != "ps" {
+		return false
+	}
+	for i := 1; i < len(args); i++ {
+		a := args[i]
+		if set("--all --quiet --no-trunc --size --latest")[a] || regexp.MustCompile(`^-[aqsl]+$`).MatchString(a) {
+			continue
+		}
+		if a == "--format" || a == "--filter" || a == "-f" {
+			i++
+			if i >= len(args) || args[i] == "" {
+				return false
+			}
+			continue
+		}
+		if strings.HasPrefix(a, "--format=") || strings.HasPrefix(a, "--filter=") {
+			continue
+		}
+		return false
 	}
 	return true
 }

@@ -345,7 +345,7 @@ func TestStopTurnCancelsAllChildrenAndReturnsSlots(t *testing.T) {
 	}
 	for _, r := range v.AgentRuns {
 		if r.Status != "cancelled" || r.Pending != nil || r.CanCancel {
-			t.Fatal("active child survived stop")
+			t.Fatalf("active child survived stop: status=%s pending=%v canCancel=%v summary=%s", r.Status, r.Pending != nil, r.CanCancel, r.Summary)
 		}
 	}
 	if len(e.agentSlots) != 0 || len(e.modelSlots) != 0 || len(e.childModelSlots) != 0 {

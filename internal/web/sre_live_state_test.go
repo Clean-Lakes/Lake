@@ -91,7 +91,7 @@ func TestSREHistoricalValidationRepairIsExactAuditedAndIdempotent(t *testing.T) 
 	task, err = b.Store.LoadSRETask(sid, task.ID)
 	must(err)
 	ops := task.Attempts[0].Operations
-	if ops[0].Status != "not_executed" || ops[0].ResolvedBy != "runtime" || ops[0].ResolutionNote == "" || ops[1].Status != "unknown" || ops[2].Status != "unknown" || task.Attempts[0].Status != "unknown" {
+	if ops[0].Status != "not_executed" || ops[0].ResolvedBy != "runtime" || ops[0].ResolutionNote == "" || ops[1].Status != "unknown" || ops[2].Status != "unknown" || ops[1].Risk != "readonly" || task.Attempts[0].Status != "failed" {
 		t.Fatal("repair erased real unknown or lost proof", ops)
 	}
 	revision := task.Revision
@@ -110,7 +110,7 @@ func TestSREBlockedContinuationRepliesWithoutPromiseOrStartingRole(t *testing.T)
 	must(err)
 	_, err = b.Store.MutateSRETask(sid, task.ID, 0, "fixture", func(v *ai.SRETask) error {
 		v.Status = "paused"
-		v.Attempts = []ai.SREStepAttempt{{ID: "a", Status: "unknown", Operations: []ai.SREOperation{{ID: "op", Status: "unknown", Call: ai.Call{Name: "shell", Arguments: `{"command":"printf CHECK"}`}, Result: "context deadline exceeded"}}}}
+		v.Attempts = []ai.SREStepAttempt{{ID: "a", Status: "unknown", Operations: []ai.SREOperation{{ID: "op", Status: "unknown", Call: ai.Call{Name: "shell", Arguments: `{"command":"systemctl restart fixture.service"}`}, Result: "context deadline exceeded"}}}}
 		return nil
 	})
 	must(err)
@@ -152,30 +152,52 @@ func TestSREBlockedContinuationRepliesWithoutPromiseOrStartingRole(t *testing.T)
 }
 
 func TestSREDispatchedTimeoutRemainsUnknown(t *testing.T) {
-	b, h := fixture(t)
-	sid, rid := newSession(t, h)
-	bridge := b.Engine.Bridge
-	b.Engine.Bridge = func(ctx context.Context, sid, name string, args map[string]any, approved bool) (any, error) {
-		if name == "runtimeCommandExec" {
-			return nil, context.DeadlineExceeded
-		}
-		return bridge(ctx, sid, name, args, approved)
-	}
-	plan := ai.SREPlanRevision{Goal: "检查等待超时", TaskType: "investigation", Scope: []string{rid}, Steps: []ai.SREPlanStep{{ID: "inspect", Role: ai.SREInvestigator, Kind: "observe", Capability: "host", Description: "只读等待", ResourceIDs: []string{rid}, CompletionChecks: []string{"记录结果"}}}}
-	var calls atomic.Int32
-	closer := sreCoordinationFixture(t, b, h, sid, func(w http.ResponseWriter, input Object) {
-		if strings.Contains(jsonText(input["messages"]), "Return only a JSON plan object") {
-			emitModel(w, jsonText(plan), nil)
-			return
-		}
-		calls.Add(1)
-		emitModel(w, "等待只读命令。", []ai.Call{{ID: "timeout", Name: "shell", Arguments: jsonText(Object{"runtime": "local", "asset_ref": sreAliasForTest(rid), "command": "sleep 0.2", "timeout_ms": 1})}})
-	})
-	defer closer()
-	created := apiTest(t, h, "POST", "/api/sessions/"+sid+"/sre/tasks", Object{"goal": plan.Goal, "resourceIds": []string{rid}, "mode": "assist", "clientRequestId": "real_timeout"}, 202)
-	task := waitSRE(t, b, sid, stringOf(created["id"]), "paused")
-	if calls.Load() != 1 || len(task.Attempts) != 1 || len(task.Attempts[0].Operations) != 1 || task.Attempts[0].Operations[0].Status != "unknown" || task.Attempts[0].Operations[0].DispatchedAt == "" {
-		t.Fatal("post-dispatch failure was downgraded", task.Status, task.Error)
+	for _, risk := range []string{"readonly", "write"} {
+		t.Run(risk, func(t *testing.T) {
+			b, h := fixture(t)
+			sid, rid := newSession(t, h)
+			options := b.Store.Options(sid)
+			options["silentCommands"] = true
+			options["silentTerminalCreation"] = true
+			b.Store.SaveOptions(sid, options)
+			bridge := b.Engine.Bridge
+			b.Engine.Bridge = func(ctx context.Context, sid, name string, args map[string]any, approved bool) (any, error) {
+				if name == "runtimeCommandExec" {
+					return nil, context.DeadlineExceeded
+				}
+				return bridge(ctx, sid, name, args, approved)
+			}
+			plan := ai.SREPlanRevision{Goal: "检查等待超时", TaskType: "investigation", Scope: []string{rid}, Steps: []ai.SREPlanStep{{ID: "inspect", Role: ai.SREInvestigator, Kind: "observe", Capability: "host", Description: "记录原操作结果", ResourceIDs: []string{rid}, CompletionChecks: []string{"实际结果不能由报告代替"}}}}
+			var calls atomic.Int32
+			closer := sreCoordinationFixture(t, b, h, sid, func(w http.ResponseWriter, input Object) {
+				if strings.Contains(jsonText(input["messages"]), "Return only a JSON plan object") {
+					emitModel(w, jsonText(plan), nil)
+					return
+				}
+				if calls.Add(1) > 1 {
+					emitModel(w, jsonText(Object{"schemaVersion": 1, "summary": "没有取得完整检查结果", "facts": []Object{}, "hypotheses": []string{}, "unknowns": []string{"采样超时，结果缺失"}, "nextChecks": []string{"重新采样"}}), nil)
+					return
+				}
+				command := "sleep 0.2"
+				if risk == "write" {
+					command = "printf CHANGE >> " + quote(filepath.Join(t.TempDir(), "never-executed"))
+				}
+				emitModel(w, "等待命令结果。", []ai.Call{{ID: "timeout", Name: "shell", Arguments: jsonText(Object{"runtime": "local", "asset_ref": sreAliasForTest(rid), "command": command, "timeout_ms": 1})}})
+			})
+			defer closer()
+			created := apiTest(t, h, "POST", "/api/sessions/"+sid+"/sre/tasks", Object{"goal": plan.Goal, "resourceIds": []string{rid}, "mode": "assist", "clientRequestId": "real_timeout"}, 202)
+			task := waitSRE(t, b, sid, stringOf(created["id"]), "paused")
+			if len(task.Attempts) != 1 || len(task.Attempts[0].Operations) != 1 || task.Attempts[0].Operations[0].Status != "unknown" || task.Attempts[0].Operations[0].DispatchedAt == "" {
+				t.Fatal("lost dispatch/unknown audit", task)
+			}
+			if risk == "readonly" {
+				if calls.Load() != 2 || task.Attempts[0].Status != "failed" || strings.Contains(task.Error, "核实") || ai.CanCompleteSRETask(task) {
+					t.Fatal("read timeout blocked follow-up or fabricated completion", task.Status, task.Error, calls.Load())
+				}
+			} else if calls.Load() != 1 || task.Attempts[0].Status != "unknown" {
+				t.Fatal("unknown write did not stop specialist", task.Status, task.Error, calls.Load())
+			}
+		})
 	}
 }
 

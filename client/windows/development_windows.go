@@ -2,8 +2,15 @@
 
 package main
 
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
 // development is empty in release builds. Local dev builds inject "1" through
-// -ldflags (see dist/windows/dev/build_dev_client.py), the Windows counterpart of
+// -ldflags (scripts/build_lake_windows.py --dev), the Windows counterpart of
 // the macOS Dev bundle identifier. It labels the build, keeps its data separate
 // from release data, and takes it out of the release update channel.
 var development = ""
@@ -22,14 +29,40 @@ func windowTitle() string {
 	return "Lake " + version
 }
 
-// lakeHomeDirectory separates the development client from release data. LAKE_HOME
-// still overrides it, and the single-instance mutex is keyed by home, so a Dev
-// client and a release client run side by side.
+// The fixed, version-independent directory survives Dev executable updates.
 func lakeHomeDirectory() string {
 	if isDevelopment() {
 		return ".lake-dev"
 	}
 	return ".lake"
+}
+
+func profileHome(userHome string) (string, error) {
+	home := os.Getenv("LAKE_HOME")
+	if isDevelopment() {
+		home = os.Getenv("LAKE_DEV_HOME")
+	}
+	if home == "" {
+		home = filepath.Join(userHome, lakeHomeDirectory())
+	}
+	home, err := filepath.Abs(home)
+	if err != nil {
+		return "", err
+	}
+	if isDevelopment() {
+		release := filepath.Join(userHome, ".lake")
+		resolved := func(path string) string {
+			if real, err := filepath.EvalSymlinks(path); err == nil {
+				return real
+			}
+			return path
+		}
+		release, target := strings.ToLower(filepath.Clean(resolved(release))), strings.ToLower(filepath.Clean(resolved(home)))
+		if target == release || strings.HasPrefix(target, release+string(filepath.Separator)) {
+			return "", fmt.Errorf("Lake Dev 数据目录不能指向正式版 .lake，请使用独立的 LAKE_DEV_HOME")
+		}
+	}
+	return home, nil
 }
 
 // developmentBadge marks the development build next to the workbench brand, the

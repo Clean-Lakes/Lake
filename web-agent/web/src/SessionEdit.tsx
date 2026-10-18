@@ -1,3 +1,4 @@
+import {Glyph} from './Icons';
 import {useEffect, useRef, useState, type FormEvent} from "react";
 import type {WorkSession} from "../../shared/contracts";
 import {api, readableError} from "./api";
@@ -34,7 +35,7 @@ export function SessionEdit({session, connected, onClose, onSaved}: {
         if (!event.shiftKey && document.activeElement === last) {event.preventDefault(); first?.focus();}
       }
     }}>
-      <div className="modal-header"><span className="modal-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1 12-12a2.8 2.8 0 0 0-4-4L4 15Z"/></svg></span><button type="button" className="icon-button" aria-label="关闭编辑会话" disabled={busy} onClick={onClose}>×</button></div>
+      <div className="modal-header"><span className="modal-icon"><Glyph name="edit" size={20}/></span><button type="button" className="icon-button" aria-label="关闭编辑会话" disabled={busy} onClick={onClose}><Glyph name="close" size={14}/></button></div>
       <h2 id="edit-session-title">编辑会话</h2>
       <form onSubmit={event => void save(event)}>
         <label className="field-label">会话名称<input ref={input} value={title} maxLength={200} required autoComplete="off" disabled={busy} onChange={event => setTitle(event.target.value)}/></label>

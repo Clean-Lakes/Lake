@@ -96,6 +96,9 @@ func (e *Engine) EvaluateVerification(ctx context.Context, sessionID string, tas
 			}
 		}
 		if check.Kind == "manual_attestation" {
+			if err := e.recordSREInput(ctx, sessionID, task, "manual_attestation", runID+check.ID, nil); err != nil {
+				return v, err
+			}
 			r.Reason = check.Description + "：等待用户人工确认"
 			v.Checks = append(v.Checks, r)
 			continue
@@ -117,7 +120,7 @@ func (e *Engine) EvaluateVerification(ctx context.Context, sessionID string, tas
 			step.Action = check.Probe
 			step.Description = assigned.Description + "（" + check.Description + "）"
 			step.ResourceIDs = []string{check.ResourceID}
-			result, err := e.RunSRERole(ctx, sessionID, task, step, runID, attemptID, assignedPrompt+"Independently inspect this acceptance criterion using normal tools. The runtime collects the exact frozen probe once after your checks; do not replay it or claim a result in advance. Runtime acceptance criterion: "+js(check), false)
+			result, err := e.ExecuteSRERole(ctx, sessionID, task, step, runID, attemptID, assignedPrompt+"Independently inspect this acceptance criterion using normal tools. The runtime collects the exact frozen probe once after your checks; do not replay it or claim a result in advance. Runtime acceptance criterion: "+js(check), false)
 			roleRun = result.RunID
 			evidence = append(evidence, result.Evidence...)
 			if err != nil {
@@ -125,47 +128,40 @@ func (e *Engine) EvaluateVerification(ctx context.Context, sessionID string, tas
 				r.Reason = err.Error()
 				break
 			}
-			valid := false
+			probeSamples := []SRECheckSample{}
 			acceptanceIDs := map[string]bool{}
 			for _, id := range result.AcceptanceEvidenceIDs {
 				acceptanceIDs[id] = true
 			}
 			for _, ev := range result.Evidence {
-				if !acceptanceIDs[ev.ID] || !ev.Success || ev.SourceTruncated || after != "" && !sreAfter(ev.CollectedAt, after) || ev.ResourceID != check.ResourceID {
+				if !acceptanceIDs[ev.ID] {
 					continue
 				}
-				path, err := e.evidencePath(ev)
-				if err != nil {
+				path, readErr := e.evidencePath(ev)
+				if readErr != nil {
 					continue
 				}
-				data, err := os.ReadFile(path)
-				if err != nil {
+				data, readErr := os.ReadFile(path)
+				if readErr != nil {
 					continue
 				}
-				var raw any
-				if json.Unmarshal(data, &raw) != nil {
-					continue
-				}
-				value, ok := jsonResultPath(raw, check.Path)
-				if !ok {
-					continue
-				}
-				passed, err := checkSREValue(check, value)
-				if err != nil {
-					r.Reason = err.Error()
-					continue
-				}
-				valid = true
-				r.Samples++
-				r.Value = value
-				r.EvidenceIDs = append(r.EvidenceIDs, ev.ID)
-				if !passed {
-					r.Status = "failed"
-					r.Reason = check.Description + "：实际值未满足条件"
-				} else if r.Status != "failed" {
-					r.Reason = check.Description + "：采样满足条件"
+				probeSamples = append(probeSamples, SRECheckSample{Evidence: ev, Frozen: true, Source: data})
+			}
+			sampleCheck := check
+			sampleCheck.MinSamples = 1
+			sampleCheck.WindowSeconds = 0
+			calculated := EvaluateSREChecks(sampleCheck, probeSamples, after, 0)
+			valid := calculated.Samples > 0
+			if valid {
+				r.Samples += calculated.Samples
+				r.Value = calculated.Value
+				r.EvidenceIDs = append(r.EvidenceIDs, calculated.EvidenceIDs...)
+				if calculated.Status == "failed" || r.Status != "failed" {
+					r.Status = calculated.Status
+					r.Reason = calculated.Reason
 				}
 			}
+
 			if !valid {
 				r.Status = "inconclusive"
 				r.Reason = "探针缺少目标字段、数据过期或证据不完整"
@@ -197,7 +193,7 @@ func (e *Engine) EvaluateVerification(ctx context.Context, sessionID string, tas
 	if roleRun == "" {
 		step := assigned
 		step.Action = nil
-		result, err := e.RunSRERole(ctx, sessionID, task, step, runID, attemptID, assignedPrompt+"Independently review the assigned deliverable using the full normal toolset under inherited permissions. These are the server-calculated acceptance results. No frozen automatic probe is available, so additional checks may add evidence but cannot upgrade manual or missing criteria to automatic recovery:\n"+js(v.Checks), false)
+		result, err := e.ExecuteSRERole(ctx, sessionID, task, step, runID, attemptID, assignedPrompt+"Independently review the assigned deliverable using the full normal toolset under inherited permissions. These are the server-calculated acceptance results. No frozen automatic probe is available, so additional checks may add evidence but cannot upgrade manual or missing criteria to automatic recovery:\n"+js(v.Checks), false)
 		v.ReviewSummary = result.Summary
 		if err != nil {
 			return v, err

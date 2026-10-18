@@ -2,7 +2,10 @@
 
 package main
 
-import "testing"
+import (
+	"golang.org/x/sys/windows"
+	"testing"
+)
 
 func TestScaleWindowSize(t *testing.T) {
 	cases := []struct {
@@ -46,5 +49,27 @@ func TestFitWorkArea(t *testing.T) {
 		if width != c.width || height != c.height {
 			t.Errorf("%s: fitWorkArea(%d, %d, %d) = %dx%d, want %dx%d", c.name, c.workWidth, c.workHeight, c.dpi, width, height, c.width, c.height)
 		}
+	}
+}
+
+func TestMaximizeUsesWorkAreaOnEveryTaskbarEdge(t *testing.T) {
+	monitor := windows.Rect{Left: -1920, Top: 0, Right: 0, Bottom: 1080}
+	for name, work := range map[string]windows.Rect{
+		"bottom": {Left: -1920, Top: 0, Right: 0, Bottom: 1032},
+		"top":    {Left: -1920, Top: 48, Right: 0, Bottom: 1080},
+		"left":   {Left: -1872, Top: 0, Right: 0, Bottom: 1080},
+		"right":  {Left: -1920, Top: 0, Right: -48, Bottom: 1080},
+	} {
+		t.Run(name, func(t *testing.T) {
+			info := workbenchMinMaxInfo{MinTrackSize: windowPoint{X: 850, Y: 600}}
+			maximizeInWorkArea(&info, monitor, work)
+			left, top := monitor.Left+info.MaxPosition.X, monitor.Top+info.MaxPosition.Y
+			if (windows.Rect{Left: left, Top: top, Right: left + info.MaxSize.X, Bottom: top + info.MaxSize.Y}) != work {
+				t.Fatalf("maximized bounds escaped work area: %+v", info)
+			}
+			if info.MinTrackSize != (windowPoint{X: 850, Y: 600}) {
+				t.Fatal("minimum tracking size changed")
+			}
+		})
 	}
 }

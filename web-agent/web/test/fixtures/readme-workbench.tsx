@@ -70,5 +70,5 @@ class DemoEventSource extends EventTarget {
  close(){this.readyState=2;}
 }
 window.EventSource=DemoEventSource as unknown as typeof EventSource;
-window.lakeDesktopUpdates={platform:'macOS · Apple Silicon',command:async()=>({status:'current',currentVersion:'0.3.16',message:'当前已是最新版本',updateAvailable:false})};
+window.lakeDesktopUpdates={platform:'macOS · Apple Silicon',command:async()=>({status:'current',currentVersion:'0.3.17',message:'当前已是最新版本',updateAvailable:false})};
 createRoot(document.getElementById('root')!).render(<App/>);

@@ -1,41 +1,56 @@
-.pending-messages { max-width: 960px; margin: 0 0 9px; border: 1px solid var(--warning-border); border-radius: var(--radius-panel); background: var(--warning-soft); overflow: hidden; color: var(--warning); font-size: 12px; }
-.pending-messages-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; border-bottom: 1px solid var(--warning-border); }
-.pending-messages-header>div { display: flex; align-items: center; gap: 11px; min-width: 0; }
-.pending-messages-header strong { font-weight: 550; white-space: nowrap; }
-.pending-messages-header strong span { font-size: 11px; padding: 1px 5px; border-radius: var(--radius-control); background: var(--warning-soft); color: var(--warning); margin-left: 3px; }
-.pending-messages-header small { font-size: 11px; color: var(--warning); }
-.pending-messages button { border: 0; background: none; color: var(--warning); cursor: pointer; padding: 3px 5px; font: inherit; }
-.pending-messages-header button { font-size: 11px; color: var(--warning); white-space: nowrap; }
-.pending-messages button:disabled { opacity: .32; cursor: default; }
-.pending-messages button:hover:not(:disabled) { color: var(--warning); background: var(--warning-soft); border-radius: var(--radius-control); }
-.pending-message-list { list-style: none; margin: 0; padding: 0; max-height: 210px; overflow: auto; overscroll-behavior: contain; }
-.pending-message { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--warning-border); }
-.pending-message:last-child { border-bottom: 0; }
-.pending-message.drop-target { box-shadow: none; background: var(--warning-soft); }
-.pending-message.dragging { opacity: .45; }
-.pending-message-grip { color: var(--warning); cursor: grab; flex-shrink: 0; padding: 2px 1px; font-size: 16px; line-height: 17px; user-select: none; }
-.pending-message-grip:focus-visible,.pending-messages button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
+.pending-messages { background: transparent; box-shadow: none; max-width: 960px; margin: 0 0 8px; color: var(--text-secondary); font-size: 11.5px; }
+.pending-messages button { border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); cursor: pointer; padding: 3px 5px; font: inherit; }
+.pending-messages button:disabled { opacity: .4; cursor: default; }
+.pending-messages button:hover:not(:disabled) { color: var(--foreground); background: var(--surface-hover); }
+.pending-message-list { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow: auto; overscroll-behavior: contain; }
+.pending-message { position: relative; display: flex; align-items: center; gap: 7px; min-height: 38px; margin: 0 0 6px; padding: 5px 8px 5px 12px; border: 1px solid var(--border); border-radius: var(--radius-window); background: var(--floating-bubble-background); -webkit-backdrop-filter: var(--floating-bubble-filter); backdrop-filter: var(--floating-bubble-filter); box-shadow: 0 1px 3px color-mix(in srgb, var(--foreground) 4%, transparent); }
+.pending-message:last-child { margin-bottom: 0; }
+.pending-message:is(:hover,:focus-within,.is-editing) { background: var(--floating-bubble-active); border-color: var(--border-strong); }
+.pending-message.dragging { opacity: .6; border-color: var(--border-strong); }
+.pending-messages .pending-message-grip { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-left: -5px; padding: 0; color: var(--text-muted); cursor: grab; flex: 0 0 28px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.pending-message-list.is-sorting, .pending-message-list.is-sorting * { cursor: grabbing; }
+.pending-message:is(.drop-before,.drop-after)::after { content: ""; position: absolute; left: 14px; right: 14px; height: 2px; border-radius: 2px; background: var(--text-secondary); pointer-events: none; }
+.pending-message.drop-before::after { top: -5px; }
+.pending-message.drop-after::after { bottom: -5px; }
+.pending-message-grip:focus-visible,.pending-messages button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--radius-control); }
 .pending-message-content { min-width: 0; flex: 1; }
-.pending-message-content>p { margin: 0; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: pre-wrap; }
-.pending-message-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
-.pending-message-actions button { font-size: 14px; line-height: 18px; }
-.pending-message-attachments { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--warning); margin-top: 5px; }
-.pending-message-editor textarea { box-sizing: border-box; width: 100%; border: 1px solid var(--warning-border); background: var(--warning-soft); color: var(--warning); border-radius: var(--radius-control); padding: 8px; font: inherit; line-height: 1.6; resize: vertical; min-height: 70px; max-height: 150px; }
+.pending-message-content>p { margin: 0; line-height: 1.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pending-message-actions { display: flex; align-items: center; gap: 3px; flex-shrink: 0; padding-left: 7px; margin-left: 2px; border-left: 1px solid var(--border); }
+.pending-message-actions button { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border-radius: var(--radius-control); }
+.pending-message-actions .pending-message-edit { color: var(--text-secondary); }
+.pending-message-actions,.pending-message-grip { pointer-events: auto; }
+.pending-message-attachments { display: flex; flex-wrap: wrap; gap: 6px; font-size: 10.5px; color: var(--text-muted); margin-top: 3px; }
+.pending-message-attachments > span { display: inline-flex; align-items: center; gap: 4px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pending-message.is-editing { align-items: flex-start; padding: 8px; }
+.pending-message-editor textarea { box-sizing: border-box; width: 100%; border: 1px solid var(--border); background: var(--surface); color: var(--foreground); border-radius: var(--radius-control); padding: 8px; font: inherit; line-height: 1.6; resize: vertical; min-height: 70px; max-height: 150px; }
 .pending-message-editor>div { display: flex; align-items: center; gap: 7px; justify-content: flex-end; margin-top: 6px; }
-.pending-message-editor>div span { flex: 1; font-size: 11px; color: var(--warning); }
-.pending-messages .pending-editor-save { color: var(--warning); white-space: nowrap; }
-.pending-messages-note,.pending-messages-error { margin: 0; padding: 8px 13px; font-size: 11px; line-height: 1.5; }
-.pending-messages-note { color: var(--warning); }
+.pending-message-editor>div span { flex: 1; font-size: 10.5px; color: var(--text-muted); }
+.pending-messages .pending-editor-save { color: var(--foreground); white-space: nowrap; }
+.pending-messages-note,.pending-messages-error { margin: 0; padding: 5px 4px; font-size: 11px; line-height: 1.5; }
+.pending-messages-note { color: var(--text-secondary); }
 .pending-messages-error { color: var(--danger); }
 .composer-send-actions { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
 .composer-send-actions .queued-stop-button { background: transparent; border: 1px solid var(--border); color: var(--text-secondary); width: 32px; height: 32px; }
 .composer-send-actions .queued-stop-button:hover:not(:disabled) { background: var(--surface-hover); }
 @media (max-width:600px) {
-  .pending-messages-header small { display: none; }
-  .pending-message { padding: 8px; gap: 6px; }
-  .pending-message-actions { gap: 0; }
-  .pending-message-actions button { padding: 3px 4px; }
+  .pending-message { gap: 5px; }
   .pending-message-editor>div { flex-wrap: wrap; }
   .pending-message-editor>div span { flex-basis: 100%; }
   .composer-send-actions { gap: 5px; }
 }
+
+/* Overlay the conversation rather than painting glass on an opaque dock. */
+.composer-dock > .pending-messages {
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  width: min(960px, calc(100% - var(--session-gutter, 24px) - var(--session-gutter, 24px)));
+  margin: 0; pointer-events: none;
+}
+.workspace.has-floating-header .composer-dock > .pending-messages { left: var(--session-content-start); width: var(--session-content-width); transform: none; }
+.composer-dock > .pending-messages > * { pointer-events: auto; }
+.composer-dock:has(> .pending-messages)::before { display: none; }
+.session-view:has(.pending-messages) .timeline-list { padding-bottom: calc(32px + var(--pending-messages-height, 65px)); }
+.session-view:has(.pending-messages) .conversation { scroll-padding-bottom: var(--pending-messages-height, 65px); }
+.pending-message-list { padding: 8px 8px; margin-inline: -8px; max-height: min(194px, 35dvh); background: transparent; box-shadow: none; }
+
+.pending-queue-recovery { display: flex; justify-content: flex-end; padding: 0 4px 3px; }
+.pending-messages .pending-queue-recovery button { min-height: 22px; font-size: 10.5px; background: transparent; }

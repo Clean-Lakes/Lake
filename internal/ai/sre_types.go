@@ -81,6 +81,7 @@ type SREPlanRun struct {
 }
 
 type SREOperation struct {
+	Risk           string `json:"risk,omitempty"` // Trusted runtime policy, never a model assertion.
 	ResolutionNote string `json:"resolutionNote,omitempty"`
 	ResolvedBy     string `json:"resolvedBy,omitempty"`
 	ResolvedAt     string `json:"resolvedAt,omitempty"`

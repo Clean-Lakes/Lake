@@ -18,10 +18,13 @@ func asset(c Config, ref string) (Asset, error) {
 	}
 	return Asset{}, errors.New("asset not available in this session; call list_assets")
 }
-func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a map[string]any) (string, string, error) {
+
+// ToolRisk is the conservative built-in policy. Shell needs the trusted bridge
+// classifier to establish readonly; arbitrary MCP calls remain writes.
+func ToolRisk(name string, a map[string]any) string {
 	risk := "readonly"
 	switch name {
-	case "kill_shell", "import_resources":
+	case "call_mcp_tool", "kill_shell", "import_resources", "stage_attachment":
 		risk = "write"
 	case "shell", "terminal_execute_command":
 		risk = "write"
@@ -42,12 +45,20 @@ func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a
 			risk = "write"
 		}
 	}
+	return risk
+}
+
+func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a map[string]any) (string, string, error) {
+	risk := ToolRisk(name, a)
 	if e.Bridge != nil {
 		v, err := e.bridgeCall(ctx, id, "policy", map[string]any{"name": name, "arguments": a, "terminal_id": c.TerminalID}, false)
 		if err != nil {
 			return "", "", err
 		}
 		p := obj(v)
+		if str(p["fingerprint"]) == "" {
+			return "", "", errors.New("policy returned no target fingerprint")
+		}
 		if r := str(p["risk"]); r != "" {
 			if name == "shell" || name == "terminal_execute_command" || r == "dangerous" {
 				risk = r
@@ -113,8 +124,10 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if err = e.checkSRECall(c, call, a); err != nil {
 		return nil, err
 	}
-	if err = e.PrepareSREOperation(c, call); err != nil {
-		return nil, err
+	if sessionTool(call.Name) {
+		if err = e.PrepareSREOperation(c, call, "write"); err != nil {
+			return nil, err
+		}
 	}
 	defer func() { e.finishSREPreparation(c, call, err) }()
 	defer func() { result, err = e.recordSREToolResult(c, call, a, result, err) }()
@@ -214,7 +227,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		policyContext = obj(p)
 	}
 	ref := str(a["asset_ref"])
-	if ref == "" && !discovery && call.Name != "preview_resource_import" && call.Name != "import_resources" {
+	if ref == "" && !discovery && call.Name != "preview_resource_import" && call.Name != "import_resources" && call.Name != "inspect_attachment" {
 		ref = str(policyContext["asset_ref"])
 		if ref == "" {
 			ref = c.AssetRef
@@ -240,6 +253,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if err := enforceTargetScope(c, call.Name, a, policyContext); err != nil {
 		return nil, err
 	}
+
 	if str(policyContext["runtime"]) == "" {
 		policyContext["runtime"] = hostArguments(c, a)["runtime"]
 	}
@@ -254,7 +268,11 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		policyContext["catastrophic"] = true
 		risk = "dangerous"
 	}
-	kind, err := approvalKind(c, call.Name, risk, policyContext)
+	if err = e.PrepareSREOperation(c, call, risk); err != nil {
+		return nil, err
+	}
+	kind := ""
+	kind, err = approvalKind(c, call.Name, risk, policyContext)
 	if err != nil {
 		return nil, err
 	}
@@ -270,12 +288,24 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	}
 	cardID := uid()
 	s.mu.Lock()
-	s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "operation", Title: call.Name, Data: map[string]any{"arguments": a, "target": target, "risk": risk, "call_id": call.ID}, Status: "running", At: timestamp()})
+	foundCard := false
+	for i := range s.state.View.Cards {
+		card := &s.state.View.Cards[i]
+		if card.Type == "operation" && str(obj(card.Data)["call_id"]) == call.ID && card.Status == "pending" {
+			cardID = card.ID
+			card.Status = "running"
+			foundCard = true
+			break
+		}
+	}
+	if !foundCard {
+		s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "operation", Title: call.Name, Data: map[string]any{"arguments": a, "target": target, "risk": risk, "call_id": call.ID}, Status: "running", At: timestamp()})
+	}
 	e.notify(s, "toolCall", map[string]any{"name": call.Name})
 	s.mu.Unlock()
 	connectionPrepared := false
 	defer func() {
-		if connectionPrepared {
+		if connectionPrepared || errors.Is(err, errADKApprovalPending) {
 			return
 		}
 		s.mu.Lock()
@@ -299,45 +329,15 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	}()
 	approved := kind == "" && (risk != "readonly" || policyContext["needsTerminal"] == true)
 	if kind != "" {
-		decision := make(chan bool, 1)
 		approval := &Approval{ID: uid(), Call: call, Target: target, Risk: risk, Kind: kind, NeedsTerminal: policyContext["needsTerminal"] == true, Fingerprint: fingerprint, Preview: preview, ResourceID: str(policyContext["asset_ref"]), TerminalID: str(policyContext["terminal_id"]), TerminalGeneration: str(policyContext["generation"]), TerminalVersion: num(policyContext["terminalVersion"], 0)}
 		if risk == "dangerous" {
 			approval.Confirmation = "执行 " + target
 		}
-		s.mu.Lock()
-		s.state.View.Pending = approval
-		for i := range s.state.View.Cards {
-			if s.state.View.Cards[i].ID == cardID {
-				s.state.View.Cards[i].Status = "pending"
-			}
-		}
-		s.state.View.Status = "waiting_approval"
-		s.decision = decision
-		err = e.save(s)
-		e.notify(s, "approval", approval)
-		s.mu.Unlock()
+		approved, err = e.waitNativeApproval(ctx, s, c, approval)
 		if err != nil {
 			return nil, err
 		}
-		select {
-		case approved = <-decision:
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-		s.mu.Lock()
-		s.state.View.Pending = nil
-		for i := range s.state.View.Cards {
-			if s.state.View.Cards[i].ID == cardID {
-				s.state.View.Cards[i].Status = "running"
-			}
-		}
-		s.state.View.Status = "running"
-		s.decision = nil
-		err = e.save(s)
-		s.mu.Unlock()
-		if err != nil {
-			return nil, err
-		}
+
 		if !approved {
 			return nil, errors.New("user rejected this tool call")
 		}
@@ -359,8 +359,16 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		if kind == "terminal_open" && call.Name == "shell" && e.Bridge != nil {
 			// A connection decision authorizes setup only. Re-evaluate the requested
 			// command against the newly established terminal and its permissions.
+			setupCall := Call{ID: call.ID + "_connect", Name: "open_ssh_terminal", Arguments: call.Arguments}
+			setupOperation, setupErr := e.dispatchNativeOperation(context.WithValue(ctx, adkApprovalCallKey{}, call.ID), s, c, setupCall, "write", target, fingerprint)
+			if setupErr != nil {
+				return nil, setupErr
+			}
 			prepared, prepareErr := e.bridgeCall(ctx, sessionID, "prepare_host", map[string]any{"asset_ref": policyContext["asset_ref"], "terminal_id": a["terminal_id"]}, true)
 			err = prepareErr
+			if persistErr := e.finishNativeOperation(setupOperation, c, prepared, err); persistErr != nil {
+				err = persistErr
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -375,7 +383,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 			}
 			e.notify(s, "operation", map[string]any{"card_id": cardID})
 			s.mu.Unlock()
-			return e.invoke(ctx, s, c, call)
+			return e.invoke(context.WithValue(ctx, adkFreshConfirmationKey{}, true), s, c, call)
 		}
 	}
 	if err = ctx.Err(); err != nil {
@@ -391,7 +399,23 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		return nil, err
 	}
 	defer func() { e.finishSREOperation(c, call, result, err) }()
+	operation, operationErr := e.dispatchNativeOperation(ctx, s, c, call, risk, target, fingerprint)
+	if operationErr != nil {
+		return nil, &ToolNotExecutedError{Err: operationErr}
+	}
+	defer func() {
+		if persistErr := e.finishNativeOperation(operation, c, result, err); persistErr != nil {
+			err = persistErr
+		}
+	}()
 	switch call.Name {
+	case "stage_attachment":
+		return e.stageAttachment(ctx, sessionForTools, c, a)
+	case "inspect_attachment":
+		if e.Bridge == nil {
+			return nil, errors.New("附件需要 Lake 工作台")
+		}
+		return e.bridgeCall(ctx, sessionForTools, call.Name, a, false)
 	case "observe_host", "observe_cluster", "observe_cluster_logs", "observe_journal", "observe_logs", "observe_data", "read_evidence":
 		return e.observation(ctx, c, call.Name, a)
 	case "preview_resource_import", "import_resources":

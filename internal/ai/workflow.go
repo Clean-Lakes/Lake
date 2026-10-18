@@ -66,7 +66,7 @@ func (e *Engine) ChatWorkflow(ctx context.Context, id, goal string, steps []Work
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Minute)
 	defer cancel()
-	return e.ChatTurn(ctx, id, TurnInput{UserText: goal, References: refs, workflow: plan})
+	return e.ExecuteTurn(ctx, id, TurnInput{UserText: goal, References: refs, workflow: plan})
 }
 func (e *Engine) executeWorkflow(ctx context.Context, s *session, c Config, steps []WorkflowStep) error {
 	for _, step := range steps {

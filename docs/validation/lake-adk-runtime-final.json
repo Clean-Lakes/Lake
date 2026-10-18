@@ -1,0 +1,1225 @@
+{
+  "schemaVersion": 2,
+  "date": "2026-10-18",
+  "status": "passed",
+  "completedAt": "2026-10-18T05:42:39.955508+00:00",
+  "workingBranch": "experiment/adk-runtime",
+  "workingHeadUnchanged": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+  "testedSourceCommit": "02bd67b55d19d560a7eb73c63f832b974f7cfa14",
+  "acceptanceBranch": "codex/adk-runtime-acceptance",
+  "scope": "Isolated local synthetic providers/resources and native CI; no production-resource acceptance claim. Release home, app and credentials were not used.",
+  "versions": {
+    "officialSDK": "google.golang.org/adk/v2@v2.6.0",
+    "go": "1.26.6",
+    "genai": "1.74.0",
+    "gorm": "1.31.2",
+    "gormSQLite": "1.6.0",
+    "sqlite": "modernc.org/sqlite@v1.46.1",
+    "node": "v24.19.0"
+  },
+  "sourceIntegrity": {
+    "localVerificationCommit": "351e8a11715e06e2284c64682130453188044727",
+    "finalCISnapshot": "02bd67b55d19d560a7eb73c63f832b974f7cfa14",
+    "productionSourceIdenticalAcrossSnapshots": true,
+    "testOnlyFollowupFiles": [
+      "internal/ai/adk_outcomes_test.go",
+      "internal/ai/adk_recovery_test.go",
+      "internal/ai/engine_test.go"
+    ],
+    "documentationFollowupFiles": [
+      "docs/validation/lake-adk-runtime-final.json"
+    ],
+    "testOnlyFollowupVerification": [
+      {
+        "command": "go test -race -v ./internal/ai -run '^TestADK(ApprovalSurvivesProcessCrashAndExecutesOnce|CrashAfterExternalEffectNeverReplaysUnknownOperation|QuestionSurvivesProcessCrashWithoutReplayingTools)$' -count=3 -timeout=2m",
+        "exitCode": 0,
+        "cases": 9,
+        "log": "/tmp/lake-adk-subprocess-fixtures.log",
+        "sha256": "87c5fcbd7180a84cbc07476ee347f7f52f23e2ad8924719ba04df98004c21fd6",
+        "sourceCommit": "0f544ef29643e95cdf81e0adc353e181eb72c1e7",
+        "completedAt": "2026-10-18T05:31:55.681440+00:00"
+      },
+      {
+        "command": "go test -race ./internal/ai -run '^TestADKConcurrentApprovalExecutesActualAppendOnce$' -count=20 -timeout=2m",
+        "exitCode": 0,
+        "cases": 20,
+        "concurrentDecisionsPerCase": 24,
+        "log": "/tmp/lake-adk-concurrent-fixture.log",
+        "sha256": "fb66845d6a81ff2a162ca97ffe26f401245c16b1e5881c3c86543f37f171f84c",
+        "sourceCommit": "02bd67b55d19d560a7eb73c63f832b974f7cfa14"
+      }
+    ],
+    "digest": "409eb4c1b92f63672f2f9de338c32c59047fb8e5f62a1105983c57f2e0fa5d8f",
+    "unchangedDuringFinalVerification": true,
+    "goModSHA256": "1d2c15865f87bf76b58e5ad18a7ab71a370b960a3c43d54f5287e4b42061d181",
+    "goSumSHA256": "c245156ba2daf914f8f6c6defb7a4021e16204efd5c588868aa42c080b0c8209",
+    "note": "Local source digest includes pre-existing frontend style changes; the acceptance branch includes only scoped migration files and keeps baseline styles."
+  },
+  "localVerification": {
+    "sourceDigest": "409eb4c1b92f63672f2f9de338c32c59047fb8e5f62a1105983c57f2e0fa5d8f",
+    "acceptanceCommit": "351e8a11715e06e2284c64682130453188044727",
+    "startedAt": "2026-10-18T05:23:54.405841+00:00",
+    "branch": "experiment/adk-runtime",
+    "sourceCommit": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+    "checks": [
+      {
+        "name": "modules",
+        "command": "go mod verify",
+        "exitCode": 0,
+        "seconds": 2.373,
+        "log": "/tmp/lake-adk-verified-modules.log",
+        "sha256": "b4537ed75f533f993f371954de47e42a793b8e5b0587577de7e27fb3e50696bd"
+      },
+      {
+        "name": "go",
+        "command": "go test ./... -count=1 -timeout=5m",
+        "exitCode": 0,
+        "seconds": 120.581,
+        "log": "/tmp/lake-adk-verified-go.log",
+        "sha256": "e59ae78ee0f744a859fe61b90db767e2a082c13a3c5ea7000bc1ae938d6bd30b"
+      },
+      {
+        "name": "race",
+        "command": "go test -race ./internal/agent/... ./internal/ai ./internal/web -count=1 -timeout=5m",
+        "exitCode": 0,
+        "seconds": 218.383,
+        "log": "/tmp/lake-adk-verified-race.log",
+        "sha256": "7a09caefd849f0bcd2b5d71794494737261f214feb522523b0872d3c5062749c"
+      },
+      {
+        "name": "vet",
+        "command": "go vet ./...",
+        "exitCode": 0,
+        "seconds": 1.008,
+        "log": "/tmp/lake-adk-verified-vet.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "frontend",
+        "command": "pnpm --dir web-agent test:frontend",
+        "exitCode": 0,
+        "seconds": 1.415,
+        "log": "/tmp/lake-adk-verified-frontend.log",
+        "sha256": "fd2d445f8142898bc533403df8bc9b6983b432cf8f0105cd74bc57862468fefb"
+      },
+      {
+        "name": "typescript",
+        "command": "pnpm --dir web-agent check",
+        "exitCode": 0,
+        "seconds": 2.22,
+        "log": "/tmp/lake-adk-verified-typescript.log",
+        "sha256": "3445ecd6e28d171ec6be2e078c8051ac42c07180c19af0f5cf639967ffd3db8c"
+      },
+      {
+        "name": "web-build",
+        "command": "pnpm --dir web-agent build:web",
+        "exitCode": 0,
+        "seconds": 3.547,
+        "log": "/tmp/lake-adk-verified-web-build.log",
+        "sha256": "40454efa102b1b39306f1182feecd35f6e6054f2934582c2db54681d058c1c55"
+      },
+      {
+        "name": "boundary",
+        "command": "python3 scripts/check_adk_runtime_boundary.py",
+        "exitCode": 0,
+        "seconds": 0.167,
+        "log": "/tmp/lake-adk-verified-boundary.log",
+        "sha256": "4425050f06c8b8e57c47bb4f078dc660e4ab508d62f7930c0dd85f9f92633884"
+      },
+      {
+        "name": "signed-cli",
+        "command": "scripts/build_lake.sh",
+        "exitCode": 0,
+        "seconds": 9.569,
+        "log": "/tmp/lake-adk-verified-signed-cli.log",
+        "sha256": "192ce9434993bb35b418476366ff006fe2e8a057c01161233e4a7006ef93c6bd"
+      },
+      {
+        "name": "signed-dev",
+        "command": "scripts/build_lake_desktop.sh --dev --install",
+        "exitCode": 0,
+        "seconds": 20.471,
+        "log": "/tmp/lake-adk-verified-signed-dev.log",
+        "sha256": "766bb18e46d6487cea215cbf5d5b6f623ef67887fec215b06e97db80308492a1"
+      },
+      {
+        "name": "swift",
+        "command": "swift run --package-path client/macos --build-system native LakeUpdateTests",
+        "exitCode": 0,
+        "seconds": 3.71,
+        "log": "/tmp/lake-adk-verified-swift.log",
+        "sha256": "97b990752120a4d1be446b2deb9e4f79ea598046276aa1cbe26a7c759ae1714e"
+      },
+      {
+        "name": "installer",
+        "command": "python3 scripts/test_lake_macos_installer.py",
+        "exitCode": 0,
+        "seconds": 11.592,
+        "log": "/tmp/lake-adk-verified-installer.log",
+        "sha256": "9c2d760f073786907a174a88ee0d8cbc1c208f96dc43a41943e20cb7684e66a7"
+      },
+      {
+        "name": "diff",
+        "command": "git diff --check",
+        "exitCode": 0,
+        "seconds": 0.02,
+        "log": "/tmp/lake-adk-verified-diff.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "completedAt": "2026-10-18T05:30:29.525367+00:00"
+  },
+  "ci": [
+    {
+      "conclusion": "success",
+      "headSha": "02bd67b55d19d560a7eb73c63f832b974f7cfa14",
+      "jobs": [
+        {
+          "completedAt": "2026-10-18T05:39:32Z",
+          "conclusion": "success",
+          "databaseId": 117597417886,
+          "name": "runtime (windows-latest)",
+          "startedAt": "2026-10-18T05:36:19Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-18T05:36:22Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-18T05:36:20Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:36:27Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v4",
+              "number": 2,
+              "startedAt": "2026-10-18T05:36:22Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:29Z",
+              "conclusion": "success",
+              "name": "Run actions/setup-go@v5",
+              "number": 3,
+              "startedAt": "2026-10-18T05:36:27Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:37Z",
+              "conclusion": "success",
+              "name": "Run actions/setup-node@v4",
+              "number": 4,
+              "startedAt": "2026-10-18T05:37:29Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:41Z",
+              "conclusion": "success",
+              "name": "Run pnpm/action-setup@v4",
+              "number": 5,
+              "startedAt": "2026-10-18T05:37:37Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:46Z",
+              "conclusion": "success",
+              "name": "Run pnpm --dir web-agent install --frozen-lockfile",
+              "number": 6,
+              "startedAt": "2026-10-18T05:37:41Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:58Z",
+              "conclusion": "success",
+              "name": "Run pnpm --dir web-agent build:web",
+              "number": 7,
+              "startedAt": "2026-10-18T05:37:46Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:59Z",
+              "conclusion": "success",
+              "name": "Stage embedded application",
+              "number": 8,
+              "startedAt": "2026-10-18T05:37:58Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:38:03Z",
+              "conclusion": "success",
+              "name": "Run go mod verify",
+              "number": 9,
+              "startedAt": "2026-10-18T05:37:59Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:38:04Z",
+              "conclusion": "success",
+              "name": "Run python scripts/check_adk_runtime_boundary.py",
+              "number": 10,
+              "startedAt": "2026-10-18T05:38:03Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:38:13Z",
+              "conclusion": "success",
+              "name": "Official SDK adapters and durable services",
+              "number": 11,
+              "startedAt": "2026-10-18T05:38:04Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:39:19Z",
+              "conclusion": "success",
+              "name": "ADK integration, crashes, migration and SRE recovery",
+              "number": 12,
+              "startedAt": "2026-10-18T05:38:13Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:39:27Z",
+              "conclusion": "success",
+              "name": "Compile native client backend",
+              "number": 13,
+              "startedAt": "2026-10-18T05:39:19Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:39:27Z",
+              "conclusion": "skipped",
+              "name": "Full Linux regression",
+              "number": 14,
+              "startedAt": "2026-10-18T05:39:27Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:39:27Z",
+              "conclusion": "success",
+              "name": "Post Run pnpm/action-setup@v4",
+              "number": 25,
+              "startedAt": "2026-10-18T05:39:27Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:39:28Z",
+              "conclusion": "success",
+              "name": "Post Run actions/setup-node@v4",
+              "number": 26,
+              "startedAt": "2026-10-18T05:39:27Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:39:28Z",
+              "conclusion": "success",
+              "name": "Post Run actions/setup-go@v5",
+              "number": 27,
+              "startedAt": "2026-10-18T05:39:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:39:30Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v4",
+              "number": 28,
+              "startedAt": "2026-10-18T05:39:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:39:30Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 29,
+              "startedAt": "2026-10-18T05:39:30Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/Clean-Lakes/Lake/actions/runs/39101119783/job/117597417886"
+        },
+        {
+          "completedAt": "2026-10-18T05:38:35Z",
+          "conclusion": "success",
+          "databaseId": 117597418028,
+          "name": "runtime (ubuntu-latest)",
+          "startedAt": "2026-10-18T05:36:19Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-18T05:36:22Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-18T05:36:20Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:36:23Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v4",
+              "number": 2,
+              "startedAt": "2026-10-18T05:36:22Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:36:39Z",
+              "conclusion": "success",
+              "name": "Run actions/setup-go@v5",
+              "number": 3,
+              "startedAt": "2026-10-18T05:36:23Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:36:44Z",
+              "conclusion": "success",
+              "name": "Run actions/setup-node@v4",
+              "number": 4,
+              "startedAt": "2026-10-18T05:36:39Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:36:45Z",
+              "conclusion": "success",
+              "name": "Run pnpm/action-setup@v4",
+              "number": 5,
+              "startedAt": "2026-10-18T05:36:44Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:36:47Z",
+              "conclusion": "success",
+              "name": "Run pnpm --dir web-agent install --frozen-lockfile",
+              "number": 6,
+              "startedAt": "2026-10-18T05:36:45Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:36:58Z",
+              "conclusion": "success",
+              "name": "Run pnpm --dir web-agent build:web",
+              "number": 7,
+              "startedAt": "2026-10-18T05:36:47Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:36:58Z",
+              "conclusion": "success",
+              "name": "Stage embedded application",
+              "number": 8,
+              "startedAt": "2026-10-18T05:36:58Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:01Z",
+              "conclusion": "success",
+              "name": "Run go mod verify",
+              "number": 9,
+              "startedAt": "2026-10-18T05:36:58Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:01Z",
+              "conclusion": "success",
+              "name": "Run python scripts/check_adk_runtime_boundary.py",
+              "number": 10,
+              "startedAt": "2026-10-18T05:37:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:05Z",
+              "conclusion": "success",
+              "name": "Official SDK adapters and durable services",
+              "number": 11,
+              "startedAt": "2026-10-18T05:37:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:17Z",
+              "conclusion": "success",
+              "name": "ADK integration, crashes, migration and SRE recovery",
+              "number": 12,
+              "startedAt": "2026-10-18T05:37:05Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:22Z",
+              "conclusion": "success",
+              "name": "Compile native client backend",
+              "number": 13,
+              "startedAt": "2026-10-18T05:37:17Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:38:31Z",
+              "conclusion": "success",
+              "name": "Full Linux regression",
+              "number": 14,
+              "startedAt": "2026-10-18T05:37:22Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:38:32Z",
+              "conclusion": "success",
+              "name": "Post Run pnpm/action-setup@v4",
+              "number": 25,
+              "startedAt": "2026-10-18T05:38:31Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:38:32Z",
+              "conclusion": "success",
+              "name": "Post Run actions/setup-node@v4",
+              "number": 26,
+              "startedAt": "2026-10-18T05:38:32Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:38:32Z",
+              "conclusion": "success",
+              "name": "Post Run actions/setup-go@v5",
+              "number": 27,
+              "startedAt": "2026-10-18T05:38:32Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:38:32Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v4",
+              "number": 28,
+              "startedAt": "2026-10-18T05:38:32Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:38:32Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 29,
+              "startedAt": "2026-10-18T05:38:32Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/Clean-Lakes/Lake/actions/runs/39101119783/job/117597418028"
+        }
+      ],
+      "status": "completed",
+      "url": "https://github.com/Clean-Lakes/Lake/actions/runs/39101119783"
+    },
+    {
+      "conclusion": "success",
+      "headSha": "02bd67b55d19d560a7eb73c63f832b974f7cfa14",
+      "jobs": [
+        {
+          "completedAt": "2026-10-18T05:42:04Z",
+          "conclusion": "success",
+          "databaseId": 117597417829,
+          "name": "workbench",
+          "startedAt": "2026-10-18T05:36:23Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completedAt": "2026-10-18T05:36:26Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "startedAt": "2026-10-18T05:36:23Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:36:28Z",
+              "conclusion": "success",
+              "name": "Run actions/checkout@v4",
+              "number": 2,
+              "startedAt": "2026-10-18T05:36:26Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:36:33Z",
+              "conclusion": "success",
+              "name": "Run actions/setup-node@v4",
+              "number": 3,
+              "startedAt": "2026-10-18T05:36:28Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:36:34Z",
+              "conclusion": "success",
+              "name": "Run pnpm/action-setup@v4",
+              "number": 4,
+              "startedAt": "2026-10-18T05:36:33Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:36:58Z",
+              "conclusion": "success",
+              "name": "Run actions/setup-go@v5",
+              "number": 5,
+              "startedAt": "2026-10-18T05:36:34Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:02Z",
+              "conclusion": "success",
+              "name": "Run pnpm --dir web-agent install --frozen-lockfile",
+              "number": 6,
+              "startedAt": "2026-10-18T05:36:58Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:13Z",
+              "conclusion": "success",
+              "name": "Run pnpm --dir web-agent test:frontend && pnpm --dir web-agent build:web",
+              "number": 7,
+              "startedAt": "2026-10-18T05:37:02Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:13Z",
+              "conclusion": "success",
+              "name": "Run mkdir -p assets/web/dist && cp -R web-agent/web/dist/. assets/web/dist/",
+              "number": 8,
+              "startedAt": "2026-10-18T05:37:13Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:37:14Z",
+              "conclusion": "success",
+              "name": "Run python3 scripts/check_adk_runtime_boundary.py",
+              "number": 9,
+              "startedAt": "2026-10-18T05:37:13Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:41:31Z",
+              "conclusion": "success",
+              "name": "Run go test -race ./... && go vet ./...",
+              "number": 10,
+              "startedAt": "2026-10-18T05:37:14Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:41:47Z",
+              "conclusion": "success",
+              "name": "Run swift run --package-path client/macos --build-system native LakeUpdateTests",
+              "number": 11,
+              "startedAt": "2026-10-18T05:41:31Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:41:50Z",
+              "conclusion": "success",
+              "name": "Run swift build --package-path client/macos --build-system native --product LakeDesktop",
+              "number": 12,
+              "startedAt": "2026-10-18T05:41:47Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:42:00Z",
+              "conclusion": "success",
+              "name": "Run python3 scripts/test_lake_macos_installer.py",
+              "number": 13,
+              "startedAt": "2026-10-18T05:41:50Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:42:01Z",
+              "conclusion": "success",
+              "name": "Post Run actions/setup-go@v5",
+              "number": 23,
+              "startedAt": "2026-10-18T05:42:00Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:42:01Z",
+              "conclusion": "success",
+              "name": "Post Run pnpm/action-setup@v4",
+              "number": 24,
+              "startedAt": "2026-10-18T05:42:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:42:01Z",
+              "conclusion": "success",
+              "name": "Post Run actions/setup-node@v4",
+              "number": 25,
+              "startedAt": "2026-10-18T05:42:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:42:01Z",
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v4",
+              "number": 26,
+              "startedAt": "2026-10-18T05:42:01Z",
+              "status": "completed"
+            },
+            {
+              "completedAt": "2026-10-18T05:42:02Z",
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 27,
+              "startedAt": "2026-10-18T05:42:01Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/Clean-Lakes/Lake/actions/runs/39101119770/job/117597417829"
+        }
+      ],
+      "status": "completed",
+      "url": "https://github.com/Clean-Lakes/Lake/actions/runs/39101119770"
+    }
+  ],
+  "frontendTests": 200,
+  "targetedProjectionWindowVerification": {
+    "command": "go test -race -v ./internal/web -run '^TestADKSRERole(Approval|Question)' -count=2 -timeout=2m",
+    "exitCode": 0,
+    "cases": 8,
+    "log": "/tmp/lake-adk-projection-window-fixed.log",
+    "sha256": "cab1f10b88e8e891363dd70f5e1be36a3870a506d79b4f5f1e24675a15270a91"
+  },
+  "features": [
+    {
+      "behavior": "provider compatibility and bounded context",
+      "status": "passed",
+      "evidence": [
+        "internal/ai/provider_test.go",
+        "internal/ai/images_test.go",
+        "internal/ai/context_compaction_test.go",
+        "internal/ai/model_switch_compaction_test.go"
+      ]
+    },
+    {
+      "behavior": "official SDK services and durable history",
+      "status": "passed",
+      "evidence": [
+        "internal/agent/adk/model_test.go",
+        "internal/agent/adk/prototype_session_test.go",
+        "internal/ai/adk_projection_test.go",
+        "internal/ai/adk_services_test.go"
+      ]
+    },
+    {
+      "behavior": "all product entrypoints",
+      "status": "passed",
+      "evidence": [
+        "internal/web/adk_runtime_test.go",
+        "internal/web/workflows_test.go",
+        "internal/web/tool_bridge_test.go",
+        "internal/ai/workflow_test.go",
+        "signed stdio configure/chat"
+      ]
+    },
+    {
+      "behavior": "SRE plan, coordination, independent evidence and human attestation",
+      "status": "passed",
+      "evidence": [
+        "internal/web/sre_integration_test.go",
+        "internal/web/sre_coordination_test.go",
+        "internal/ai/sre_state_test.go"
+      ]
+    },
+    {
+      "behavior": "parallel roles, exclusive actions, dependency order, cancellation drain",
+      "status": "passed",
+      "evidence": [
+        "TestSRESchedulerParallelRoleLanesExclusiveActionAndDependencies",
+        "TestSRESchedulerFailureCancelsAndDrainsPeers"
+      ]
+    },
+    {
+      "behavior": "approval before effect survives real process crash",
+      "status": "passed",
+      "evidence": [
+        "TestADKApprovalSurvivesProcessCrashAndExecutesOnce"
+      ]
+    },
+    {
+      "behavior": "crash after external effect never replays unknown outcome",
+      "status": "passed",
+      "evidence": [
+        "TestADKCrashAfterExternalEffectNeverReplaysUnknownOperation"
+      ]
+    },
+    {
+      "behavior": "root and specialist questions survive real process crash",
+      "status": "passed",
+      "evidence": [
+        "TestADKQuestionSurvivesProcessCrashWithoutReplayingTools",
+        "TestADKSRERoleQuestionSurvivesProcessCrash",
+        "TestADKSRERoleQuestionRecoversBeforeBusinessWaitProjection"
+      ]
+    },
+    {
+      "behavior": "specialist approval preserves original role and attempt after crash",
+      "status": "passed",
+      "evidence": [
+        "TestADKSRERoleApprovalSurvivesProcessCrash",
+        "TestADKSRERoleApprovalRecoversBeforeBusinessWaitProjection"
+      ]
+    },
+    {
+      "behavior": "concurrent approval atomic claim and actual append once",
+      "status": "passed",
+      "evidence": [
+        "TestADKConcurrentApprovalExecutesActualAppendOnce"
+      ]
+    },
+    {
+      "behavior": "unknown outcome human verification and session ownership",
+      "status": "passed",
+      "evidence": [
+        "TestADKUnknownOutcomeRequiresHumanEvidenceAndCannotCrossSessions",
+        "TestSREUnknownDispatchCannotBeResumed"
+      ]
+    },
+    {
+      "behavior": "policy failures, credential filtering and failed audit prevent dispatch",
+      "status": "passed",
+      "evidence": [
+        "TestADKMissingPolicyFingerprintFailsClosed",
+        "TestADKSecretToolArgumentsNeverReachDispatchOrPersistentEvents",
+        "TestADKFailedAuditWritePreventsActualFileMutation"
+      ]
+    },
+    {
+      "behavior": "idempotent migration, incomplete history, interruption and consistent backup reopen",
+      "status": "passed",
+      "evidence": [
+        "TestADKImportsSpikeHistoryWithoutReplayingPendingEffects",
+        "TestADKInterruptedHistoryImportIsRetryableAndNeverActivatesPartialHistory"
+      ]
+    },
+    {
+      "behavior": "cache deletion restores official history; intentional clear remains cleared",
+      "status": "passed",
+      "evidence": [
+        "TestADKOfficialProjectionRestoresMissingCacheFile",
+        "TestADKClearSurvivesLossOfLocalContextCache"
+      ]
+    },
+    {
+      "behavior": "project memory permissions and versioned private artifacts",
+      "status": "passed",
+      "evidence": [
+        "TestADKArtifactsPersistVersionsRedactAndEnforceSessionScope",
+        "TestADKMemoryUsesCurrentProjectAndRejectsRevokedAccess"
+      ]
+    },
+    {
+      "behavior": "retired loops and SDK internal imports are absent",
+      "status": "passed",
+      "evidence": [
+        "scripts/check_adk_runtime_boundary.py"
+      ]
+    }
+  ],
+  "entrypoints": [
+    {
+      "entrypoint": "internal/web/agent.go:runTurn",
+      "baselineRuntime": "ADK selection or Go loop",
+      "currentRuntime": "Engine.ExecuteTurn -> official ADK Runner",
+      "targetRuntime": "official ADK Go v2.6.0",
+      "test": "internal/web/adk_runtime_test.go",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "internal/web/sre_service.go:launchSRE/followSREHandoff",
+      "baselineRuntime": "Go role loops and custom scheduler",
+      "currentRuntime": "ADK workflow and independent LlmAgent roles",
+      "targetRuntime": "official ADK Go v2.6.0",
+      "test": "internal/web/sre_full_tools_test.go",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "internal/web/workflows.go:startWorkflow/executeWorkflowRun",
+      "baselineRuntime": "Go SRE loop",
+      "currentRuntime": "same ADK SRE workflow",
+      "targetRuntime": "official ADK Go v2.6.0",
+      "test": "internal/web/workflows_test.go",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "internal/ai/workflow.go:ChatWorkflow",
+      "baselineRuntime": "Go chat + observation loops",
+      "currentRuntime": "official ADK role and summary runners",
+      "targetRuntime": "official ADK Go v2.6.0",
+      "test": "internal/ai/workflow_test.go",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "internal/ai/stdio.go:Handle(chat)",
+      "baselineRuntime": "Go chat loop",
+      "currentRuntime": "Engine.ExecuteTurn -> official ADK Runner",
+      "targetRuntime": "official ADK Go v2.6.0",
+      "test": "signed bin/lake ai configure/chat JSON protocol; internal/ai/stdio.go:Handle -> ExecuteTurn; /tmp/lake-adk-stdio-result.json",
+      "status": "passed"
+    },
+    {
+      "entrypoint": "internal/ai/sre_questions.go:AnswerSRERole",
+      "baselineRuntime": "Go role loop",
+      "currentRuntime": "ADK role runtime with no resource tools",
+      "targetRuntime": "official ADK Go v2.6.0",
+      "test": "internal/web/sre_coordination_test.go",
+      "status": "passed"
+    }
+  ],
+  "taskImplementationMapping": {
+    "TASK-004": [
+      "docs/validation/lake-adk-runtime-coverage.json"
+    ],
+    "TASK-005": [
+      "internal/ai/runtime_contract.go",
+      "internal/ai/turn_input.go"
+    ],
+    "TASK-006": [
+      "internal/ai/adk_sre_roles.go",
+      "internal/ai/agent_scope.go",
+      "internal/ai/agent_role_catalog.go"
+    ],
+    "TASK-007": [
+      "internal/ai/agent_runs.go",
+      "internal/ai/agent_evidence_records.go",
+      "internal/ai/provider_runtime.go",
+      "internal/ai/adk_observation_roles.go"
+    ],
+    "TASK-008": [
+      "internal/ai/sre_checks.go:EvaluateSREChecks",
+      "internal/ai/sre_verification.go"
+    ],
+    "TASK-009": [
+      "internal/ai/adk_outcomes_test.go",
+      "scripts/check_adk_runtime_boundary.go"
+    ],
+    "TASK-010": [
+      "internal/ai/adk_model.go",
+      "internal/ai/adk_provider_step.go"
+    ],
+    "TASK-011": [
+      "internal/ai/adk_driver.go",
+      "internal/ai/adk_provider_step.go",
+      "internal/ai/adk_session.go",
+      "internal/agent/storage/sqlite.go"
+    ],
+    "TASK-012": [
+      "internal/ai/adk_projection.go",
+      "internal/ai/adk_services.go"
+    ],
+    "TASK-013": [
+      "internal/ai/adk_projection.go",
+      "internal/ai/session_tools.go",
+      "internal/ai/context_compaction.go"
+    ],
+    "TASK-014": [
+      "internal/ai/provider_test.go",
+      "internal/ai/images_test.go",
+      "internal/ai/adk_services_test.go"
+    ],
+    "TASK-015": [
+      "internal/ai/adk_sre_roles.go",
+      "internal/ai/adk_driver.go"
+    ],
+    "TASK-016": [
+      "internal/ai/sre_orchestrator.go",
+      "internal/ai/adk_questions.go"
+    ],
+    "TASK-017": [
+      "internal/ai/adk_sre_workflow.go"
+    ],
+    "TASK-018": [
+      "internal/web/sre_service.go",
+      "internal/ai/sre_questions.go"
+    ],
+    "TASK-019": [
+      "internal/web/sre_integration_test.go",
+      "internal/web/sre_full_tools_test.go",
+      "internal/ai/sre_scheduler_test.go"
+    ],
+    "TASK-020": [
+      "internal/ai/tools.go",
+      "internal/ai/adk_approval.go",
+      "internal/ai/adk_operations.go"
+    ],
+    "TASK-021": [
+      "internal/ai/adk_driver.go",
+      "internal/ai/adk_approval.go"
+    ],
+    "TASK-022": [
+      "internal/ai/sre_execution.go",
+      "internal/ai/adk_operations.go",
+      "internal/ai/adk_evidence.go"
+    ],
+    "TASK-023": [
+      "internal/ai/adk_questions.go",
+      "internal/ai/adk_recovery.go"
+    ],
+    "TASK-024": [
+      "internal/ai/adk_recovery.go",
+      "internal/ai/adk_lifecycle.go"
+    ],
+    "TASK-025": [
+      "internal/ai/adk_recovery_test.go",
+      "internal/ai/adk_outcomes_test.go",
+      "internal/web/adk_role_recovery_test.go"
+    ],
+    "TASK-026": [
+      "internal/ai/adk_migration.go",
+      "internal/ai/adk_migration_test.go",
+      "internal/agent/storage/sqlite.go"
+    ],
+    "TASK-027": [
+      "internal/ai/adk_projection.go",
+      "internal/ai/adk_recovery.go"
+    ],
+    "TASK-028": [
+      "web-agent/web/src/AIPanel.tsx",
+      "web-agent/web/src/AgentQuestion.tsx",
+      "web-agent/web/src/SRERoleMessage.tsx"
+    ],
+    "TASK-029": [
+      "internal/ai/adk_projection_test.go",
+      "internal/ai/adk_services_test.go",
+      "internal/web/adk_runtime_test.go",
+      "docs/validation/lake-adk-mobile-dark-approval.png"
+    ],
+    "TASK-030": [
+      "internal/ai/stdio.go",
+      "internal/ai/workflow.go",
+      "internal/web/workflows.go"
+    ],
+    "TASK-031": [
+      "internal/web/agent.go",
+      "internal/web/server.go",
+      "internal/web/sre_store.go"
+    ],
+    "TASK-032": [
+      "docs/validation/lake-adk-runtime-final.json"
+    ],
+    "TASK-033": [
+      "scripts/build_lake.sh",
+      "scripts/build_lake_desktop.sh",
+      "docs/validation/lake-adk-desktop-approval.png",
+      "docs/validation/lake-adk-desktop-question.png"
+    ],
+    "TASK-034": [
+      "internal/ai/engine.go",
+      "internal/ai/adk_sre_workflow.go",
+      "internal/ai/adk_sre_roles.go"
+    ],
+    "TASK-035": [
+      "scripts/check_adk_runtime_boundary.go",
+      "internal/agent/adk/prototype_runtime_test.go"
+    ],
+    "TASK-036": [
+      "scripts/check_adk_runtime_boundary.py",
+      ".github/workflows/adk-runtime.yml"
+    ],
+    "TASK-037": [
+      "docs/experiments/adk-runtime.md",
+      "docs/sre-collaboration.md",
+      "CONTRIBUTING.md",
+      "web-agent/THIRD_PARTY_NOTICES.md",
+      "web-agent/licenses/go-runtime-modules.json"
+    ]
+  },
+  "desktop": {
+    "status": "passed",
+    "installedApp": "~/Applications/Lake Dev.app",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "isolatedHome": "/tmp/lake-adk-desktop-b804701ae6b6435c9af3e1769b76d9c3/home",
+    "approvedAppendCount": 1,
+    "rejectedAdditionalAppends": 0,
+    "questionAnswerCompleted": true,
+    "browserConsoleErrors": 0,
+    "narrowDarkLayout": {
+      "documentWidth": 390,
+      "pending": [
+        {
+          "left": 32,
+          "right": 358
+        }
+      ],
+      "width": 390
+    },
+    "screenshots": [
+      {
+        "path": "docs/validation/lake-adk-desktop-approval.png",
+        "sha256": "920c8dfa4ef6b1c06224c8833c4e692443c4352025b320f96a7b779607e25e1e",
+        "bytes": 253847
+      },
+      {
+        "path": "docs/validation/lake-adk-desktop-question.png",
+        "sha256": "4430c9b97ba3e4264d0713d5b9bf3633ede8feaa287582811516d2d0a1dbd71b",
+        "bytes": 228796
+      },
+      {
+        "path": "docs/validation/lake-adk-mobile-dark-approval.png",
+        "sha256": "6e1d787f44aaceefbb8d8601512aad38a38800cad7cd713ce2f5a77542e96aae",
+        "bytes": 29707
+      },
+      {
+        "path": "docs/validation/lake-adk-wide-completed.png",
+        "sha256": "16e053d1c931f9b60b0b374eebb6b81e6a274a9108a18ec94aa506dc9545bf25",
+        "bytes": 46802
+      },
+      {
+        "path": "docs/validation/lake-adk-desktop-restored.png",
+        "sha256": "28da2547f334081dce8d57daee217702c4a59d2247691d6bc04bafae7304e33c",
+        "bytes": 224745
+      }
+    ],
+    "build": {
+      "signatureExitCode": 0,
+      "identity": [
+        "Identifier=com.cleanlakes.lake",
+        "Authority=Lake Local Development Code Signing"
+      ],
+      "cliBytes": 50321920,
+      "installedBackendBytes": 50321920,
+      "cliSHA256": "d35ee92b870dfc7fefa7754509b2f496434b9051bffc5bb21b8e31b705bbb6fe",
+      "installedBackendSHA256": "d35ee92b870dfc7fefa7754509b2f496434b9051bffc5bb21b8e31b705bbb6fe",
+      "nodeVersion": "v24.19.0",
+      "startupMeasurement": {
+        "processColdFilesystemWarmSeconds": 0.578,
+        "method": "Launch installed signed Dev executable in an unused isolated home; measure until runtime.json appears; prebuilt binary and warm filesystem cache.",
+        "baseline": "Tracked pre-ADK HEAD was subsequently rebuilt with the same compiler and embedded frontend; see performanceComparison. Native app timing and backend process timing are separate measurements."
+      },
+      "compiledSourceCommit": "351e8a11715e06e2284c64682130453188044727",
+      "bundleId": "com.cleanlakes.lake.desktop.dev"
+    }
+  },
+  "stdio": {
+    "status": "passed",
+    "command": "signed bin/lake ai --data <isolated temporary directory>; configure + chat over JSON frames",
+    "exitCode": 0,
+    "viewStatus": "completed",
+    "runtimeCheckpoint": true,
+    "sdkDatabaseTables": [
+      "sessions",
+      "events",
+      "app_states",
+      "user_states",
+      "native_approvals",
+      "native_operations",
+      "native_evidences",
+      "sqlite_sequence",
+      "native_artifacts",
+      "native_history_migrations"
+    ],
+    "dataDirectory": "/var/folders/q9/0ld1by9n6x5cp7p8szmgnpg00000gn/T/lake-adk-stdio-igcad6lz/state"
+  },
+  "compatibleRollbackDrill": {
+    "status": "passed",
+    "method": "Stop/drain fixture; copy complete compatible home including current operation ledger; launch installed signed Dev with explicit isolated home/data; query completed snapshot and compare exact operation rows. No old snapshot overwrites later effects.",
+    "signedApp": "~/Applications/Lake Dev.app",
+    "dataCopy": "/var/folders/q9/0ld1by9n6x5cp7p8szmgnpg00000gn/T/lake-adk-compatible-restore-q4edy5nk/home",
+    "sourceHome": "/tmp/lake-adk-desktop-b804701ae6b6435c9af3e1769b76d9c3/home",
+    "startupToRuntimeSeconds": 0.404,
+    "processColdFilesystemWarm": true,
+    "restoredStatus": "completed",
+    "canonicalOperationRows": 1,
+    "operationIDsAndStatusesUnchanged": true,
+    "effectAppendCountBeforeAndAfter": 1,
+    "pendingOrUnknownOperations": 0,
+    "runtimePID": 86972,
+    "appPID": 86958,
+    "runtimeFile": "/var/folders/q9/0ld1by9n6x5cp7p8szmgnpg00000gn/T/lake-adk-compatible-restore-q4edy5nk/home/web-agent/runtime.json",
+    "compatiblePriorBinaryRollback": {
+      "status": "passed",
+      "priorSourceCommit": "2db2e836451e56df2daaff986dc110e788c8f83b",
+      "priorSignedBinarySHA256": "c66e993c54dc5b1bdeea4da5f9279ecac7f7ccfda6f63ac11e532d0894741b31",
+      "finalRuntimeSourceCommit": "351e8a11715e06e2284c64682130453188044727",
+      "method": "Restore a separate quiescent data copy with the same latest canonical ledger as the final Dev instance; run the preserved signed schema-compatible prior backend with explicit isolated home; verify completed state, identical operation IDs/statuses and no additional append; stop it.",
+      "restoredViewStatus": "completed",
+      "ledgerRowsUnchanged": true,
+      "appendCount": 1,
+      "priorProcessExitCode": 0,
+      "releaseDataAccessed": false
+    },
+    "nativeGUICompletedViewVerified": true,
+    "nativeGUISourceCommit": "351e8a11715e06e2284c64682130453188044727",
+    "drainedAndStopped": true,
+    "screenshot": "docs/validation/lake-adk-desktop-restored.png"
+  },
+  "performanceComparison": {
+    "status": "passed",
+    "baselineCommit": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+    "baselineKind": "tracked pre-ADK HEAD, exported read-only to a temporary directory; excludes uncommitted ZCode prototype",
+    "buildCommand": "LAKE_REUSE_WEB_ASSETS=1 scripts/build_lake.sh",
+    "buildExitCode": 0,
+    "baselineBinaryBytes": 29220400,
+    "finalBinaryBytes": 50321920,
+    "binaryDeltaBytes": 21101520,
+    "startupMethod": "Three fresh backend processes each with a new explicit isolated home and free loopback port; time to runtime.json; prebuilt signed binaries, Go 1.26.6, identical final frontend assets, warm filesystem cache, .01s polling. No model or external resource calls.",
+    "baselineReadinessSeconds": [
+      1.0669,
+      0.0237,
+      0.0382
+    ],
+    "finalReadinessSeconds": [
+      0.7114,
+      0.0316,
+      0.0368
+    ],
+    "baselineMedianSeconds": 0.0382,
+    "finalMedianSeconds": 0.0368,
+    "interpretation": "Small local startup sample and byte-size comparison; not a cold-filesystem benchmark or a general performance guarantee. Native Dev startup measured separately.",
+    "finalSignedBinarySHA256": "d35ee92b870dfc7fefa7754509b2f496434b9051bffc5bb21b8e31b705bbb6fe"
+  },
+  "resolvedFailures": [
+    {
+      "issue": "Concurrent approval fixture used a 3s wait that included first-use durable store initialization on Windows",
+      "fix": "Warm the SDK store before the approval race; bound shared readiness at 15s and fail immediately with terminal error diagnostics. All 24-way single-claim, consumed-status and real-file append assertions retained; 20 race repetitions passed. Product runtime unchanged.",
+      "observedRun": "https://github.com/Clean-Lakes/Lake/actions/runs/39100811080"
+    },
+    {
+      "issue": "Windows crash subprocess did not reach its approval checkpoint within the original 10s readiness window",
+      "fix": "Separate 30s readiness from execution assertions, keep child output on failure and require the complete confirmation checkpoint before killing; child timeout 60s. Runtime code unchanged. Final native Windows suite and local repeated crash fixtures pass.",
+      "observedRun": "https://github.com/Clean-Lakes/Lake/actions/runs/39100408526"
+    },
+    {
+      "issue": "Crash between a durable specialist wait and the SRE business wait projection could create a replacement plan run",
+      "fix": "Reconcile the durable original role against the current plan/attempt and pending operation before resume; preserve plan run and attempt, repair missing approval business projection, reject already-dispatched or settled operations, and clear the settled question before continuing the Runner. Deterministic approval and question projection-window crash tests passed two race repetitions (eight cases).",
+      "observedRun": "https://github.com/Clean-Lakes/Lake/actions/runs/39099896986"
+    },
+    {
+      "issue": "Windows SQLite driver registered twice",
+      "fix": "Official GORM dialector reuses existing modernc sqlite driver; native Windows tests and backend compile now pass."
+    },
+    {
+      "issue": "Windows prototype fixture file locking and POSIX-mode assertions",
+      "fix": "Close SDK store handles; validate private Windows ACL and use platform file replacement."
+    },
+    {
+      "issue": "Cancellation occasionally surfaced a SQLite transaction error as a failed child",
+      "fix": "Normalize cancelled parent context before role finalization; complete race suite passes."
+    },
+    {
+      "issue": "Platform-specific legacy fixture assumptions",
+      "fix": "Preserve assertions with GNU date, dash input semantics, durable terminal history and isolated legacy state."
+    }
+  ],
+  "timingFixtureRegression": {
+    "originalMacOSRun": "https://github.com/Clean-Lakes/Lake/actions/runs/39099338132",
+    "originalFailures": [
+      "TestSREInvestigatorCollectionDeadlineLeavesTimeForReport",
+      "TestParentContextFailureStillStopsToolTurn/deadline"
+    ],
+    "cause": "200-250ms timing began before initial durable SDK schema setup on busy race runner.",
+    "fix": "Initialize durable store before timed assertions and use 1s collection/2s tool deadline; all request-count, tool-removal, completion and cancellation assertions preserved.",
+    "targetedRaceRepetitions": 4,
+    "targetedRaceExitCode": 0
+  },
+  "designAdjustments": [
+    "SDK host is internal/ai/adk_*.go to avoid import cycles; old spike runtime is test-only.",
+    "Public custom agent wrapper preserves role confirmation envelopes; official WorkflowAgent still owns the DAG.",
+    "Official session state and artifacts hold lossless provider history; JSON is a recoverable cache.",
+    "SQLite VACUUM INTO creates a consistent private snapshot instead of a driver-specific backup API."
+  ],
+  "branchPreservation": {
+    "currentBranchUnchanged": true,
+    "originalIndexUntouched": true,
+    "unrelatedDirtyFilesPreserved": true,
+    "acceptanceBranchOnly": true,
+    "noMergeOrRelease": true
+  },
+  "remainingGates": []
+}

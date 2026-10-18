@@ -175,3 +175,32 @@ func assertTopFrame(t *testing.T, name string, entry, client windows.Rect) {
 		t.Fatalf("%s: bottom frame removed", name)
 	}
 }
+
+func TestWindowsWorkbenchMaximizePreservesTaskbarAndRestores(t *testing.T) {
+	hwnd := themeTestWindow(t, false)
+	if err := extendWorkbenchIntoTitleBar(hwnd); err != nil {
+		t.Fatal(err)
+	}
+	monitor, ok := windowMonitor(hwnd)
+	if !ok {
+		t.Fatal("monitor work area unavailable")
+	}
+	themeUser.NewProc("SendMessageW").Call(hwnd, windowCommand, scMaximize, 0)
+	zoomed, _, _ := themeUser.NewProc("IsZoomed").Call(hwnd)
+	if zoomed == 0 {
+		t.Fatal("window did not enter the native maximized state")
+	}
+	var client windows.Rect
+	themeUser.NewProc("GetClientRect").Call(hwnd, uintptr(unsafe.Pointer(&client)))
+	origin := windowPoint{}
+	themeUser.NewProc("ClientToScreen").Call(hwnd, uintptr(unsafe.Pointer(&origin)))
+	actual := windows.Rect{Left: origin.X, Top: origin.Y, Right: origin.X + client.Right, Bottom: origin.Y + client.Bottom}
+	if actual != monitor.Work {
+		t.Fatalf("maximized client = %+v, want work area %+v", actual, monitor.Work)
+	}
+	themeUser.NewProc("SendMessageW").Call(hwnd, windowCommand, scRestore, 0)
+	zoomed, _, _ = themeUser.NewProc("IsZoomed").Call(hwnd)
+	if zoomed != 0 {
+		t.Fatal("restore left the window maximized")
+	}
+}

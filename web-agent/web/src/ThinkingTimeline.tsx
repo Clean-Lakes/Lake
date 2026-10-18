@@ -1,3 +1,4 @@
+import {DisclosureSummary} from './DisclosureSummary';
 import { memo, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -9,7 +10,7 @@ function StepIcon({ name }: { name?: string }) {
     {name && /search|fetch|url/.test(name) ? <><circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6"/></> : name === "shell" || name === "terminal_read" ? <><path d="m4 6 5 5-5 5M12 17h8"/></> : <><rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="14" width="16" height="6" rx="2"/><path d="M7 7h1M7 17h1"/></>}
   </svg>;
 }
-const ToolStep = memo(function ToolStep({ card, onInspect }: { card: AICard; onInspect?: () => void }) {
+export const ToolStep = memo(function ToolStep({ card, onInspect }: { card: AICard; onInspect?: () => void }) {
   const data = card.data && typeof card.data === "object" ? card.data as Record<string, unknown> : {};
   const args = data.arguments && typeof data.arguments === "object" ? data.arguments as Record<string, unknown> : {};
   const state = card.status === "pending" ? "等待确认" : card.status === "background_running" ? "后台执行中" : card.status === "running" ? "执行中" : card.status === "failed" ? "失败" : ["interrupted", "cancelled"].includes(card.status) ? "已停止" : ["completed", "succeeded", "success"].includes(card.status) ? "已完成" : "结果待核查";
@@ -26,7 +27,7 @@ const ToolStep = memo(function ToolStep({ card, onInspect }: { card: AICard; onI
   </li>;
 }, (a, b) => sameCard(a.card, b.card) && a.onInspect === b.onInspect);
 
-const ReasonStep = memo(function ReasonStep({card}: {card: AICard}) {
+export const ReasonStep = memo(function ReasonStep({card}: {card: AICard}) {
   return card.content ? <li className="thinking-step thinking-reason"><span className="thinking-step-marker"><i/></span><div className="thinking-prose"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={{a: props => <a {...props} target="_blank" rel="noopener noreferrer"/>}}>{card.content}</Markdown></div></li> : null;
 }, (a, b) => sameCard(a.card, b.card));
 
@@ -36,7 +37,9 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
   const [rawOpen, setRawOpen] = useState(false);
   const tools = cards.filter(card => card.type !== "thinking");
   const thoughts = cards.filter(card => card.type === "thinking" && card.content);
-  const label = processDescription(cards);
+  const attention=tools.find(card=>!['running','background_running','completed','succeeded','success'].includes(card.status));
+  const state=attention?.status==='pending'?'等待确认':attention?.status==='failed'?'执行失败':attention&&['interrupted','cancelled'].includes(attention.status)?'已停止':attention?'执行结果待核查':'';
+  const label = [processDescription(cards),state].filter(Boolean).join(' · ');
   const panelId = `thinking-${cards[0]!.id}`;
   return <section className={`thinking-timeline ${live ? "is-live" : ""}`} aria-label="思考与操作过程">
     <button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => { onInspect?.(); setOpen(!open); }}>
@@ -44,7 +47,7 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
     </button>
     {open && <div className="thinking-detail-panel" id={panelId}>
       {tools.length > 0 && <ol className="thinking-steps">{tools.map(card => <ToolStep card={card} key={card.id} onInspect={onInspect}/>)}</ol>}
-      {thoughts.length > 0 && <details className="thinking-raw-records" onToggle={event => setRawOpen(event.currentTarget.open)}><summary>原始思考记录</summary>{rawOpen && <ol className="thinking-steps">{thoughts.map(card => <ReasonStep card={card} key={card.id}/>)}</ol>}</details>}
+      {thoughts.length > 0 && <details className="thinking-raw-records" onToggle={event => setRawOpen(event.currentTarget.open)}><DisclosureSummary>原始思考记录</DisclosureSummary>{rawOpen && <ol className="thinking-steps">{thoughts.map(card => <ReasonStep card={card} key={card.id}/>)}</ol>}</details>}
     </div>}
   </section>;
 }, (a, b) => a.live === b.live && a.onInspect === b.onInspect && a.cards.length === b.cards.length && a.cards.every((card, i) => sameCard(card, b.cards[i]!)));

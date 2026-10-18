@@ -10,6 +10,11 @@ import (
 // StartSRETask owns the parent session while dependency-scheduled roles run.
 // Plan revisions are immutable; an interrupted/unknown run is never replayed.
 func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, planOnly bool, userText string) (err error) {
+	done, admissionErr := e.admitRuntime()
+	if admissionErr != nil {
+		return admissionErr
+	}
+	defer done()
 	if e.sreRepository == nil {
 		return errors.New("此运行端未接入 SRE 任务仓库")
 	}
@@ -37,7 +42,9 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
 	s.state.View.Status = "running"
-	s.state.View.RootTurnID = uid()
+	if _, recovering := e.sreRecoveries.Load(sessionID + ":" + taskID); !recovering {
+		s.state.View.RootTurnID = uid()
+	}
 	s.state.RootQuestion = task.Goal
 	s.state.View.TurnStartedAt = timestamp()
 	s.state.View.TurnFinishedAt = ""
@@ -84,10 +91,7 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 		}
 		s.mu.Lock()
 		s.cancel = nil
-		s.state.View.Status = "completed"
-		if err != nil {
-			s.state.View.Status = "failed"
-		}
+		s.state.View.Status = sreExecutionStatus(err)
 		s.state.View.TurnFinishedAt = timestamp()
 		_ = e.save(s)
 		s.mu.Unlock()
@@ -153,7 +157,10 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 		}
 	}
 	if planOnly {
-		return nil
+		return e.recordSREInput(ctx, sessionID, task, "plan_review", task.LatestPlan().ID, nil)
+	}
+	if err = e.recordSREInput(ctx, sessionID, task, "plan_review", task.LatestPlan().ID, map[string][]string{"plan_review": {"start"}}); err != nil {
+		return err
 	}
 	run := task.ActiveRun()
 	if run == nil || run.Status != "queued" {
@@ -169,17 +176,7 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 	}
 	plan := *task.LatestPlan()
 	runID := task.ActiveRun().ID
-	completed := map[string]bool{}
-	for _, a := range task.Attempts {
-		if a.PlanRunID == runID {
-			for _, step := range plan.Steps {
-				if step.ID == a.StepID && SREAttemptCompleted(a, step) {
-					completed[a.StepID] = true
-				}
-			}
-		}
-	}
-	if err = e.runSREPlanSteps(ctx, sessionID, taskID, runID, plan, completed); err != nil {
+	if err = e.runSREPlanSteps(ctx, sessionID, taskID, runID, plan); err != nil {
 		return err
 	}
 
@@ -187,12 +184,12 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 		if t.Status == "waiting_approval" {
 			t.Status = "active"
 		} // All role loops have settled.
+		t.ActiveRun().Status = "completed"
+		t.ActiveRun().FinishedAt = timestamp()
 		if plan.TaskType == "query" || plan.TaskType == "investigation" {
 			t.Outcome = "inconclusive"
 			t.RecoveryStatus = "not_applicable"
 			t.RootCauseStatus = "unknown"
-			t.ActiveRun().Status = "completed"
-			t.ActiveRun().FinishedAt = timestamp()
 			return TransitionSRETask(t, "completed")
 		}
 		if !CanCompleteSRETask(*t) {
@@ -202,8 +199,6 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 		}
 		t.Outcome = "supported"
 		t.RecoveryStatus = "verified"
-		t.ActiveRun().Status = "completed"
-		t.ActiveRun().FinishedAt = timestamp()
 		return TransitionSRETask(t, "completed")
 	})
 	return err
@@ -215,13 +210,23 @@ func (e *Engine) runSREStep(ctx context.Context, sessionID, taskID, runID string
 		return err
 	}
 	attempt := SREStepAttempt{ID: uid(), PlanRunID: runID, StepID: step.ID, Status: "running", StartedAt: timestamp(), Evidence: []AgentEvidence{}, Operations: []SREOperation{}}
-	task, err = e.sreRepository.MutateSRETask(sessionID, taskID, 0, "step_started", func(t *SRETask) error {
-		if t.Status != "active" && t.Status != "waiting_approval" {
-			return sreError(409, "任务已暂停或结束")
+	recovering := false
+	for _, previous := range task.Attempts {
+		if previous.PlanRunID == runID && previous.StepID == step.ID && previous.RoleRunID != "" && e.hasRecoverableRole(sessionID, previous.RoleRunID) {
+			attempt, recovering = previous, true
+			ctx = context.WithValue(ctx, sreRoleRecoveryKey{}, sreRoleRecovery{runID: previous.RoleRunID})
+			break
 		}
-		t.Attempts = append(t.Attempts, attempt)
-		return nil
-	})
+	}
+	if !recovering {
+		task, err = e.sreRepository.MutateSRETask(sessionID, taskID, 0, "step_started", func(t *SRETask) error {
+			if t.Status != "active" && t.Status != "waiting_approval" {
+				return sreError(409, "任务已暂停或结束")
+			}
+			t.Attempts = append(t.Attempts, attempt)
+			return nil
+		})
+	}
 	if err != nil {
 		return err
 	}
@@ -245,7 +250,7 @@ func (e *Engine) runSREStep(ctx context.Context, sessionID, taskID, runID string
 			}
 		}
 	} else {
-		result, err = e.RunSRERole(ctx, sessionID, task, step, runID, attempt.ID, prompt, false)
+		result, err = e.ExecuteSRERole(ctx, sessionID, task, step, runID, attempt.ID, prompt, false)
 	}
 	roleErr := err
 	task, err = e.sreRepository.MutateSRETask(sessionID, taskID, 0, "step_finished", func(t *SRETask) error {
@@ -259,29 +264,10 @@ func (e *Engine) runSREStep(ctx context.Context, sessionID, taskID, runID string
 			a.Report = result.Report
 			a.FinishedAt = timestamp()
 			a.Evidence = result.Evidence
-			a.Status = "succeeded"
-			if roleErr != nil {
-				a.Status = "failed"
-			}
-			for _, op := range a.Operations {
-				if op.Status == "unknown" || op.Status == "dispatched" {
-					a.Status = "unknown"
-				}
-			}
-			if a.Status == "unknown" && roleErr == nil {
-				result.Summary = "操作结果待核实，任务已暂停；请先核实原操作，不会自动派发后续步骤。"
+			a.Status, roleErr = sreAttemptOutcome(*a, step, roleErr)
+			if a.Status == "unknown" {
+				result.Summary = SREExecutionSummary(*a)
 				a.Result = result.Summary
-				roleErr = errors.New(result.Summary)
-			}
-			if step.Role == SREExecutor {
-				success := false
-				for _, op := range a.Operations {
-					success = success || op.Status == "succeeded" && step.Action != nil && op.Call.Name == step.Action.Tool && sameSREArguments(op.Call.Arguments, step.Action.Arguments)
-				}
-				if !success && roleErr == nil {
-					roleErr = errors.New("执行员没有完成绑定的实际操作")
-					a.Status = "failed"
-				}
 			}
 			if roleErr != nil {
 				for j := range a.Operations {
@@ -301,6 +287,12 @@ func (e *Engine) runSREStep(ctx context.Context, sessionID, taskID, runID string
 				if a.Status == "unknown" && roleErr == nil {
 					roleErr = errors.New(result.Summary)
 				}
+			}
+		}
+		for _, a := range t.Attempts {
+			if a.ID == attempt.ID {
+				projectSREAttemptStatus(t, attempt.ID, a.Status)
+				break
 			}
 		}
 		kind := map[SREAgentRole]string{SRECoordinator: "summary", SREInvestigator: "finding", SREExecutor: "result", SREVerifier: "verification"}[step.Role]
@@ -353,8 +345,8 @@ func StartSREPlanRun(t *SRETask, version int, requestID string) error {
 	}
 	for _, a := range t.Attempts {
 		for _, op := range a.Operations {
-			if op.Status == "dispatched" || op.Status == "unknown" {
-				return sreError(409, "存在结果不明的操作；请先核实，不得重放")
+			if SREOperationBlocksResume(op) {
+				return sreOperationBlockError(op)
 			}
 		}
 	}
@@ -418,7 +410,7 @@ func (e *Engine) buildSREPlan(ctx context.Context, sessionID string, task SRETas
 	var result SRERoleResult
 	var err error
 	for tries := 0; tries < 2; tries++ {
-		result, err = e.RunSRERole(ctx, sessionID, task, step, "", "", prompt, true)
+		result, err = e.ExecuteSRERole(ctx, sessionID, task, step, "", "", prompt, true)
 		if err != nil {
 			return plan, result.RunID, err
 		}
@@ -462,8 +454,8 @@ func (e *Engine) ReviseSREPlan(sessionID, taskID string, expected int, plan SREP
 		}
 		for _, a := range t.Attempts {
 			for _, op := range a.Operations {
-				if op.Status == "unknown" || op.Status == "dispatched" {
-					return sreError(409, "先核实结果不明的操作")
+				if SREOperationBlocksResume(op) {
+					return sreOperationBlockError(op)
 				}
 			}
 		}

@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react";
 import "./windowsChrome.css";
+import {windowGestures} from "./windowGestures";
 
 type ChromeAction = "state" | "drag" | "minimize" | "maximize" | "close";
 type ChromeBridge = {command: (action: ChromeAction) => Promise<string>};
@@ -13,19 +14,21 @@ export function WindowsChrome() {
   useEffect(() => {
     if (!bridge) return;
     const refresh = () => {void bridge.command("state").then(state => setMaximized(state === "maximized")).catch(() => {});};
-    const drag = (event: PointerEvent) => {
-      if (event.button !== 0 || !(event.target instanceof Element)) return;
-      const target = event.target;
-      if (target.closest('button,a,input,select,textarea,[role="button"],[contenteditable="true"],.workbench-splitter,.windows-titlebar-controls')) return;
+    const gestures = windowGestures(event => {
+      const target = (event as MouseEvent).target;
+      if (!(target instanceof Element)) return false;
+      if (target.closest('button,a,input,select,textarea,[role="button"],[contenteditable="true"],.workbench-splitter,.windows-titlebar-controls,.modal-scrim,dialog,[role="dialog"],[role="menu"],[role="listbox"]')) return false;
       const header = target.closest(".sidebar-brand-row,.workspace-header,.terminal-panel-header");
-      if (!header && (document.querySelector(".app-shell") || event.clientY >= 48)) return;
-      event.preventDefault();
-      void bridge.command(event.detail >= 2 ? "maximize" : "drag");
-    };
+      return !!header || (event.clientY >= 0 && event.clientY < 48);
+    }, action => {void bridge.command(action).then(refresh).catch(() => {});});
     refresh();
     window.addEventListener("resize", refresh);
-    document.addEventListener("pointerdown", drag, true);
-    return () => {window.removeEventListener("resize", refresh);document.removeEventListener("pointerdown", drag, true);};
+    document.addEventListener("mousedown", gestures.down, true);
+    document.addEventListener("mousemove", gestures.move, true);
+    document.addEventListener("mouseup", gestures.cancel, true);
+    document.addEventListener("dblclick", gestures.doubleClick, true);
+    window.addEventListener("blur", gestures.cancel);
+    return () => {window.removeEventListener("resize", refresh);window.removeEventListener("blur", gestures.cancel);document.removeEventListener("mousedown", gestures.down, true);document.removeEventListener("mousemove", gestures.move, true);document.removeEventListener("mouseup", gestures.cancel, true);document.removeEventListener("dblclick", gestures.doubleClick, true);};
   }, [bridge]);
 
   if (!bridge) return null;

@@ -1,13 +1,13 @@
-import {useEffect,useId,useRef,useState,type ReactNode} from "react";
+import {useEffect,useId,useRef,useState,type ReactNode,type RefObject} from "react";
 import type {Project,WorkSession,WorkspaceTag} from "../../shared/contracts";
 import {api,readableError} from "./api";
 import {Glyph,sessionIcons} from "./Icons";
 import {NavigationMenu} from "./NavigationDelete";
 
 const colors = [{id:"gray",label:"灰色"},{id:"green",label:"绿色"},{id:"blue",label:"蓝色"},{id:"purple",label:"紫色"},{id:"orange",label:"橙色"},{id:"red",label:"红色"}] as const;
-function PresentationDialog({title,onClose,children}:{title:string;onClose:()=>void;children:ReactNode}) {
+function PresentationDialog({title,onClose,children,returnFocus}:{title:string;onClose:()=>void;children:ReactNode;returnFocus?:RefObject<HTMLElement|null>}) {
  const dialog=useRef<HTMLDialogElement>(null);
- useEffect(()=>{const previous=document.activeElement as HTMLElement|null;dialog.current?.showModal();return()=>{dialog.current?.close();previous?.focus();};},[]);
+ useEffect(()=>{const previous=document.activeElement as HTMLElement|null;dialog.current?.showModal();return()=>{dialog.current?.close();(returnFocus?.current??previous)?.focus();};},[returnFocus]);
  return <dialog ref={dialog} className="presentation-dialog" aria-label={title} onCancel={event=>{event.preventDefault();onClose();}}><div className="presentation-dialog-head"><h2>{title}</h2><button type="button" className="icon-button" aria-label={`关闭${title}`} onClick={onClose}><Glyph name="close"/></button></div>{children}</dialog>;
 }
 function ColorPicker({value,onChange}:{value:string;onChange:(value:WorkspaceTag["color"])=>void}) {
@@ -22,14 +22,14 @@ export function SessionListTags({tags}:{tags:WorkspaceTag[]}) {
  </span>;
 }
 
-export function SessionStateBadge({session}:{session:WorkSession}) {
- const statuses={idle:"待命",investigating:"调查中",waiting_approval:"待确认",completed:"已完成",failed:"需要关注"};
- return <span className={`session-state-badge state-${session.status}`}><span/>{statuses[session.status]}</span>;
+export function SessionStateBadge({session,label,status=session.status}:{session:WorkSession;label?:string;status?:WorkSession["status"]}) {
+ const statuses={idle:"待命",investigating:"调查中",waiting_approval:"待确认",completed:"回复结束",failed:"需要关注"};
+ return <span className={`session-state-badge state-${status}`}><span/>{label??statuses[status]}</span>;
 }
 
-const sessionViews=[{value:"conversation",label:"对话"},{value:"activity",label:"执行记录"},{value:"evidence",label:"证据"}] as const;
+const sessionViews=[{value:"conversation",label:"对话",icon:"chat"},{value:"activity",label:"执行记录",icon:"terminal"},{value:"evidence",label:"证据",icon:"document"}] as const;
 
-export function SessionActions({session,tags,disabled,onSaved,onRefresh,onEdit,view,onView,hasViews}:{session:WorkSession;tags:WorkspaceTag[];disabled:boolean;onSaved:(session:WorkSession)=>void;onRefresh:()=>Promise<void>;onEdit:()=>void;view:string;onView:(view:string)=>void;hasViews:boolean}) {
+export function SessionActions({session,tags,disabled,onSaved,onRefresh,onEdit,view,onView,hasViews,onDelete,className="icon-button",label="会话操作",menuPosition=null,onMenuChange}:{session:WorkSession;tags:WorkspaceTag[];disabled:boolean;onSaved:(session:WorkSession)=>void;onRefresh:()=>Promise<void>;onEdit:()=>void;view:string;onView:(view:string)=>void;hasViews:boolean;onDelete?:()=>void;className?:string;label?:string;menuPosition?:{x:number;y:number}|null;onMenuChange?:(position:{x:number;y:number}|null)=>void}) {
  const [editing,setEditing]=useState<"icons"|"tags"|null>(null);
  const [menu,setMenu]=useState<{x:number;y:number}|null>(null);
  const trigger=useRef<HTMLButtonElement>(null);
@@ -39,15 +39,18 @@ export function SessionActions({session,tags,disabled,onSaved,onRefresh,onEdit,v
  async function work(action:()=>Promise<void>) {setBusy(true);setError("");try{await action();}catch(e){setError(readableError(e));}finally{setBusy(false);}}
  async function save(icon:string,ids:string[]) {const updated=await api.saveSessionPresentation(session,icon,ids);onSaved(updated);await onRefresh();}
  const projectTags=tags.filter(tag=>tag.projectId===session.projectId);
+ const visibleMenu=onMenuChange?menuPosition:menu;
+ const changeMenu=onMenuChange??setMenu;
  return <>
-  <button type="button" ref={trigger} className="icon-button session-actions-trigger" aria-label="会话操作" aria-haspopup="menu" aria-expanded={!!menu} disabled={disabled} onClick={()=>{if(menu){setMenu(null);return;}const rect=trigger.current?.getBoundingClientRect();if(rect)setMenu({x:rect.right-220,y:rect.bottom+6});}}>⋯</button>
-  {menu&&<NavigationMenu title="会话" className="session-actions-menu" anchor={trigger} width={220} x={menu.x} y={menu.y} onClose={()=>setMenu(null)} actions={[
-   ...(hasViews?sessionViews.map(item=>({label:item.label,checked:view===item.value,run:()=>onView(item.value)})):[]),
-   {label:"重命名",disabled,run:onEdit},
-   {label:"更换图标",disabled,run:()=>{setError("");setEditing("icons");}},
-   {label:"编辑标签",disabled,run:()=>{setError("");setEditing("tags");}},
+  <button type="button" ref={trigger} className={`${className} session-actions-trigger`} title="更多操作" aria-label={label} aria-haspopup="menu" aria-expanded={!!visibleMenu} disabled={disabled} onClick={()=>{if(visibleMenu){changeMenu(null);return;}const rect=trigger.current?.getBoundingClientRect();if(rect)changeMenu({x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button>
+  {visibleMenu&&<NavigationMenu title={session.title} className="session-actions-menu" anchor={trigger} width={208} x={visibleMenu.x} y={visibleMenu.y} onClose={()=>changeMenu(null)} actions={[
+   ...(hasViews?sessionViews.map(item=>({label:item.label,icon:item.icon,checked:view===item.value,run:()=>onView(item.value)})):[]),
+   {label:"重命名",icon:"edit",separatorBefore:hasViews,disabled,run:onEdit},
+   {label:"更换图标",icon:"image",disabled,run:()=>{setError("");setEditing("icons");}},
+   {label:"编辑标签",icon:"tag",disabled,run:()=>{setError("");setEditing("tags");}},
+   ...(onDelete?[{label:"删除会话",icon:"trash" as const,separatorBefore:true,disabled,danger:true,run:onDelete}]:[]),
   ]}/>}
-  {editing&&<PresentationDialog title={editing==="icons"?"选择会话图标":"会话标签"} onClose={()=>{if(!busy)setEditing(null);}}>{editing==="icons"?<div className="session-icon-grid">{sessionIcons.map(icon=><button key={icon.id} type="button" aria-label={icon.label} aria-pressed={(session.icon??"chat")===icon.id} disabled={busy} onClick={()=>void work(async()=>{await save(icon.id,chosen.map(t=>t.id));setEditing(null);})}><Glyph name={icon.id} size={23}/><span>{icon.label}</span></button>)}</div>:<><div className="tag-picker-list">{projectTags.map(tag=><label key={tag.id}><input type="checkbox" checked={chosen.some(t=>t.id===tag.id)} disabled={busy||!chosen.some(t=>t.id===tag.id)&&chosen.length>=12} onChange={event=>void work(()=>save(session.icon??"chat",event.target.checked?[...chosen.map(t=>t.id),tag.id]:chosen.filter(t=>t.id!==tag.id).map(t=>t.id)))}/><TagChip tag={tag}/></label>)}{!projectTags.length&&<p className="presentation-note">创建标签，按主题整理项目会话。</p>}</div><form className="tag-create-form" onSubmit={event=>{event.preventDefault();void work(async()=>{const tag=await api.createTag(session.projectId,{name,color});setName("");await save(session.icon??"chat",[...chosen.map(t=>t.id),tag.id]);});}}><label>新标签<input value={name} maxLength={40} onChange={event=>setName(event.target.value)} placeholder="例如：数据库、巡检、故障排查" disabled={busy}/></label><ColorPicker value={color} onChange={setColor}/><button type="submit" className="button secondary" disabled={busy||!name.trim()||chosen.length>=12}><Glyph name="plus" size={14}/>创建并添加</button></form></>}{error&&<p className="form-error" role="alert">{error}</p>}</PresentationDialog>}
+  {editing&&<PresentationDialog returnFocus={trigger} title={editing==="icons"?"选择会话图标":"会话标签"} onClose={()=>{if(!busy)setEditing(null);}}>{editing==="icons"?<div className="session-icon-grid">{sessionIcons.map(icon=><button key={icon.id} type="button" aria-label={icon.label} aria-pressed={(session.icon??"chat")===icon.id} disabled={busy} onClick={()=>void work(async()=>{await save(icon.id,chosen.map(t=>t.id));setEditing(null);})}><Glyph name={icon.id} size={23}/><span>{icon.label}</span></button>)}</div>:<><div className="tag-picker-list">{projectTags.map(tag=><label key={tag.id}><input type="checkbox" checked={chosen.some(t=>t.id===tag.id)} disabled={busy||!chosen.some(t=>t.id===tag.id)&&chosen.length>=12} onChange={event=>void work(()=>save(session.icon??"chat",event.target.checked?[...chosen.map(t=>t.id),tag.id]:chosen.filter(t=>t.id!==tag.id).map(t=>t.id)))}/><TagChip tag={tag}/></label>)}{!projectTags.length&&<p className="presentation-note">创建标签，按主题整理项目会话。</p>}</div><form className="tag-create-form" onSubmit={event=>{event.preventDefault();void work(async()=>{const tag=await api.createTag(session.projectId,{name,color});setName("");await save(session.icon??"chat",[...chosen.map(t=>t.id),tag.id]);});}}><label>新标签<input value={name} maxLength={40} onChange={event=>setName(event.target.value)} placeholder="例如：数据库、巡检、故障排查" disabled={busy}/></label><ColorPicker value={color} onChange={setColor}/><button type="submit" className="button secondary" disabled={busy||!name.trim()||chosen.length>=12}><Glyph name="plus" size={14}/>创建并添加</button></form></>}{error&&<p className="form-error" role="alert">{error}</p>}</PresentationDialog>}
  </>;
 }
 

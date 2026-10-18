@@ -31,6 +31,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   useEffect(() => {try {localStorage.setItem(`lake.resource-folders.${project.id}`, JSON.stringify(closed));} catch {}}, [project.id, closed]);
   const [editor, setEditor] = useState<{id?: string; parentId: string | null; name: string} | null>(null);
   const [context,setContext]=useState<{id:string;x:number;y:number}|null>(null);
+  const contextAnchor=useRef<HTMLButtonElement|null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const dragSource = useRef<string | null>(null);
@@ -132,7 +133,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
     const expanded = filtering || !closed.includes(node.id);
     const siblings = childrenOf(parent); const index = siblings.findIndex(item => item.id === node.id);
     return <div className={`resource-tree-node ${dragging === node.id ? "is-dragging" : ""}`} key={node.id}>
-      <div data-resource-tree-node={node.id} onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(!blocked)setContext({id:node.id,x:event.clientX,y:event.clientY});}} className={`resource-tree-row ${drop?.id === node.id ? `drop-${drop.zone}` : ""}`} onDragOver={event => dragOver(event,node)} onDrop={event => {
+      <div data-resource-tree-node={node.id} onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(!blocked){contextAnchor.current=event.currentTarget.querySelector<HTMLButtonElement>('.navigation-more-button') ?? event.currentTarget.querySelector<HTMLButtonElement>('.resource-drag-handle');setContext({id:node.id,x:event.clientX,y:event.clientY});}}} className={`resource-tree-row ${drop?.id === node.id ? `drop-${drop.zone}` : ""}`} onDragOver={event => dragOver(event,node)} onDrop={event => {
         event.preventDefault(); event.stopPropagation();
         const source = dragSource.current || event.dataTransfer.getData("application/x-lake-resource-tree");
         if (!source || source === node.id || blocked) return;
@@ -146,11 +147,11 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
           onClick={() => {if(!suppressClick.current)setMoving(current => current === node.id ? null : node.id);}}
           onPointerDown={event=>{if(blocked || event.button!==0)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);pointerDrag.current={source:node.id,pointer:event.pointerId,x:event.clientX,y:event.clientY,active:false};pointerDrop.current=null;}}
           onPointerMove={pointerMove} onPointerUp={event=>pointerEnd(event)} onPointerCancel={event=>pointerEnd(event,true)}
-          onDragStart={event => {dragSource.current = node.id;event.dataTransfer.setData("application/x-lake-resource-tree",node.id);event.dataTransfer.effectAllowed="move";setDragging(node.id);setError("");}} onDragEnd={() => {dragSource.current = null;setDragging(null);setDrop(null);}}>⠿</button>
+          onDragStart={event => {dragSource.current = node.id;event.dataTransfer.setData("application/x-lake-resource-tree",node.id);event.dataTransfer.effectAllowed="move";setDragging(node.id);setError("");}} onDragEnd={() => {dragSource.current = null;setDragging(null);setDrop(null);}}><Glyph name="grip" size={10}/></button>
         {node.kind === "folder" ? <div className="resource-folder-row">
-          <button type="button" className="resource-folder-toggle" title={folderPath(node)} aria-expanded={expanded} onClick={() => setClosed(values => expanded ? [...values,node.id] : values.filter(id => id !== node.id))}><span className={expanded ? "folder-chevron open" : "folder-chevron"}>›</span><FolderIcon/><span className="resource-folder-name">{node.name}</span><small className="resource-folder-count" title={`${childrenOf(node.id).length} 个子项`}>{childrenOf(node.id).length}</small></button>
-          <div className="resource-folder-actions"><button type="button" className="navigation-more-button" disabled={blocked} aria-label={`管理文件夹 ${folderPath(node)}`} aria-haspopup="menu" title="更多操作" onClick={event => {const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right,y:rect.bottom});}}>⋯</button></div>
-        </div> : resource && <><div className="resource-tree-resource-content">{renderResource(resource)}</div>{!["local", "ssh"].includes(resource.kind) && <button type="button" className="navigation-more-button resource-more-button" disabled={blocked} aria-label={`管理资源 ${resource.name}`} aria-haspopup="menu" title="更多操作" onClick={event=>{const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right,y:rect.bottom});}}>⋯</button>}</>}
+          <button type="button" className="resource-folder-toggle" title={folderPath(node)} aria-expanded={expanded} onClick={() => setClosed(values => expanded ? [...values,node.id] : values.filter(id => id !== node.id))}><Glyph name="chevron" size={11} className={expanded ? "folder-chevron open" : "folder-chevron"}/><FolderIcon/><span className="resource-folder-name">{node.name}</span><small className="resource-folder-count" title={`${childrenOf(node.id).length} 个子项`}>{childrenOf(node.id).length}</small></button>
+          <div className="resource-folder-actions"><button type="button" className="navigation-more-button" disabled={blocked} aria-label={`管理文件夹 ${folderPath(node)}`} aria-haspopup="menu" title="更多操作" onClick={event => {contextAnchor.current=event.currentTarget;const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button></div>
+        </div> : resource && <><div className="resource-tree-resource-content">{renderResource(resource)}</div>{!["local", "ssh"].includes(resource.kind) && <button type="button" className="navigation-more-button resource-more-button" disabled={blocked} aria-label={`管理资源 ${resource.name}`} aria-haspopup="menu" title="更多操作" onClick={event=>{contextAnchor.current=event.currentTarget;const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button>}</>}
       </div>
       {moving === node.id && <div className="resource-move-panel" role="group" aria-label={`移动 ${resource?.name || node.name}`}>
         <div><button disabled={blocked || index === 0} onClick={() => move(node.id,parent,siblings[index-1]?.id ?? null)}>上移</button><button disabled={blocked || index === siblings.length-1} onClick={() => move(node.id,parent,siblings[index+2]?.id ?? null)}>下移</button></div>
@@ -166,15 +167,15 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   }
   const contextNode=context ? nodeMap.get(context.id) : undefined;
   const contextResource=contextNode?.resourceId ? resourceMap.get(contextNode.resourceId) : undefined;
-  return <>{context && contextNode && <NavigationMenu title={contextResource?.name || contextNode.name} x={context.x} y={context.y} onClose={()=>setContext(null)} actions={[
+  return <>{context && contextNode && <NavigationMenu title={contextResource?.name || contextNode.name} anchor={contextAnchor} x={context.x} y={context.y} onClose={()=>setContext(null)} actions={[
    ...(contextNode.kind==="folder" ? [
-    {label:"新建资源",disabled:blocked,run:()=>onAddResource(contextNode.id)},
-    {label:"新建子目录",disabled:blocked,run:()=>{setEditor({parentId:contextNode.id,name:""});setClosed(values => values.filter(id => id !== contextNode.id));}},
-    {label:"重命名文件夹",run:()=>setEditor({id:contextNode.id,parentId:contextNode.parentId,name:contextNode.name})}
+    {label:"新建资源",icon:"server" as const,disabled:blocked,run:()=>onAddResource(contextNode.id)},
+    {label:"新建子目录",icon:"folder" as const,disabled:blocked,run:()=>{setEditor({parentId:contextNode.id,name:""});setClosed(values => values.filter(id => id !== contextNode.id));}},
+    {label:"重命名",icon:"edit" as const,separatorBefore:true,run:()=>setEditor({id:contextNode.id,parentId:contextNode.parentId,name:contextNode.name})}
    ] : []),
-   {label:"移动到…",run:()=>setMoving(contextNode.id)},
-   {label:contextNode.kind==="folder"?"删除文件夹":"删除资源",danger:true,run:()=>onDelete({kind:contextNode.kind,id:contextResource?.id || contextNode.id,projectId:project.id,name:contextResource?.name || contextNode.name})}
-  ]}/>}<div className="nav-heading resources-heading"><button type="button" className="nav-section-toggle" aria-label={`${sectionExpanded ? "折叠" : "展开"}${project.name}的资源`} aria-expanded={sectionExpanded} aria-controls={`project-resources-${project.id}`} onClick={() => setSectionExpanded(value => !value)}><Glyph name="layers" size={15} className="resource-section-icon"/><span className="resource-section-label">资源 <small>{resources.length}</small></span><Glyph name="chevron" size={12} className={`resource-section-chevron ${sectionExpanded ? "chevron-open" : ""}`}/></button>{selection && <button type="button" className="bulk-group-toggle" disabled={blocked || selection.disabled || !resources.length && !tree.length} aria-label={`全选 ${project.name} 的资源和文件夹`} onClick={onSelectAll}>全选</button>}<div hidden={!!selection} className="resource-add-control" ref={addControl} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAddOpen(false); }}>
+   {label:"移动到…",icon:"arrow",run:()=>setMoving(contextNode.id)},
+   {label:contextNode.kind==="folder"?"删除目录":"删除资源",icon:"trash",separatorBefore:true,danger:true,run:()=>onDelete({kind:contextNode.kind,id:contextResource?.id || contextNode.id,projectId:project.id,name:contextResource?.name || contextNode.name})}
+  ]}/>}<div className="nav-heading resources-heading"><button type="button" className="nav-section-toggle" aria-label={`${sectionExpanded ? "折叠" : "展开"}${project.name}的资源`} aria-expanded={sectionExpanded} aria-controls={`project-resources-${project.id}`} onClick={() => setSectionExpanded(value => !value)}><span className="resource-section-label">资源 <small>{resources.length}</small></span><Glyph name="chevron" size={12} className={`resource-section-chevron ${sectionExpanded ? "chevron-open" : ""}`}/></button>{selection && <button type="button" className="bulk-group-toggle" disabled={blocked || selection.disabled || !resources.length && !tree.length} aria-label={`全选 ${project.name} 的资源和文件夹`} onClick={onSelectAll}>全选</button>}<div hidden={!!selection} className="resource-add-control" ref={addControl} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAddOpen(false); }}>
     <button type="button" ref={addButton} className="nav-add resource-create-trigger" aria-label={`在${project.name}新建资源或目录`} title="新建资源或目录" aria-haspopup="menu" aria-expanded={addOpen} aria-controls={`resource-add-${project.id}`} disabled={blocked} onPointerDown={() => { addFocusTarget.current = null; }} onKeyDown={event => {
       // Enter/Space 交给按钮原生激活（随后触发 onClick），避免再手动切换造成双重开关。
       if (event.key === "Enter" || event.key === " ") { addFocusTarget.current = "first"; return; }

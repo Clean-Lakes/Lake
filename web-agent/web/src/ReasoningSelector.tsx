@@ -6,8 +6,8 @@ import { Glyph } from "./Icons";
 
 const labels: Record<string, string> = { "": "默认", none: "关闭", minimal: "极低", low: "低", medium: "中", high: "高", xhigh: "极高", max: "最高", ultra: "Ultra" };
 
-export function ReasoningSelector({ session, modelId, disabled, onSaving }: {
-  session: string; modelId?: string | null; disabled: boolean; onSaving: (saving: boolean) => void;
+export function ReasoningSelector({ session, modelId, disabled, disabledReason, onSaving }: {
+  session: string; modelId?: string | null; disabled: boolean; disabledReason?: string; onSaving: (saving: boolean) => void;
 }) {
   const [settings, setSettings] = useState<(ReasoningSettings & { session: string }) | null>(null);
   const [open, setOpen] = useState(false), [error, setError] = useState(""), [busy, setBusy] = useState(false);
@@ -33,9 +33,10 @@ export function ReasoningSelector({ session, modelId, disabled, onSaving }: {
     } finally { setBusy(false); onSaving(false); }
   };
   const label = valid ? labels[settings.effort] ?? settings.effort : "级别不可用";
+  const hint = busy ? "正在保存思考级别…" : disabled ? disabledReason || "当前暂不能调整思考级别。" : !valid ? "思考级别读取失败，请重试。" : "";
   return <div className="reasoning-switch-wrap">
-    <AppSelect className="composer-model-select composer-reasoning-select" label="思考级别" title={`思考级别：${label}`} icon={<Glyph name="brain" size={16}/>}
-      value={valid ? settings.effort : ""} renderValue={busy ? "保存中…" : label} disabled={disabled || busy || !valid} aria-busy={busy}
+    <AppSelect className="composer-model-select composer-reasoning-select" label="思考级别" title={`思考级别：${label}${hint ? ` · ${hint}` : ""}`} icon={<Glyph name="waves" size={16}/>}
+      value={valid ? settings.effort : ""} renderValue={label} disabled={disabled || busy || !valid} aria-busy={busy}
       open={open && valid} onOpenChange={setOpen} onChange={event => void select(event.target.value)} popupMinWidth={176}
       popupHeader={<div className="composer-model-heading">思考级别</div>}>
       <option value="">默认{valid && settings.default ? `（${labels[settings.default] ?? settings.default}）` : ""}</option>

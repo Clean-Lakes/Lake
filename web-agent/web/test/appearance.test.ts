@@ -23,11 +23,26 @@ test("native appearance survives a new origin, unavailable storage, system chang
     assert.equal(native.lakeAppearance,"dark");
     assert.equal(dataset.theme,"dark");
     listeners.system({});assert.equal(dataset.theme,"dark");
+    // Releasing an explicit desktop theme can initially see the old window colour.
+    // The subsequent WebKit media change must resolve it without replacing "system".
+    dark=true;
+    appearance.setThemePreference("system");
+    assert.equal(native.lakeAppearance,"system");
+    assert.equal(dataset.theme,"dark");
+    dark=false;listeners.system({});assert.equal(dataset.theme,"light");
+    dark=true;listeners.system({});assert.equal(dataset.theme,"dark");
+    assert.equal(appearance.themePreference(),"system");
+    dark=false;listeners.system({});assert.equal(dataset.theme,"light");
     storageUnavailable=false;appearance.setThemePreference("light");
     assert.equal(stored.get("lake.appearance"),"light");
+    dark=true;listeners.system({});assert.equal(dataset.theme,"light");
     listeners.storage({key:"lake.appearance",newValue:"dark"});
     assert.equal(dataset.theme,"dark");
     assert.equal(appearance.themePreference(),"dark");
+    listeners.storage({key:"lake.appearance",newValue:"system"});
+    assert.equal(dataset.theme,"dark");
+    assert.equal(native.lakeAppearance,"system");
+    dark=false;listeners.system({});assert.equal(dataset.theme,"light");
   } finally {
     for(const[key,descriptor]of Object.entries(previous)) if(descriptor)Object.defineProperty(globalThis,key,descriptor);else Reflect.deleteProperty(globalThis,key);
   }

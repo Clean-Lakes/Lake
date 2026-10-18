@@ -162,6 +162,7 @@ export const api = {
   previewResourceImport: (projectId: string, name: string, text: string) => post<ResourceImportPreview>(`/api/projects/${encodeURIComponent(projectId)}/resource-import-preview`, {name, text}),
   previewHexhubImport: (projectId: string) => post<ResourceImportPreview>(`/api/projects/${encodeURIComponent(projectId)}/resource-import-preview`, {hexhub: true}),
   importResources: (projectId: string, planId: string, indexes: number[]) => post<{createdCount: number; skippedCount: number; updatedCount: number}>(`/api/projects/${encodeURIComponent(projectId)}/resource-import`, {planId, indexes}),
+  uploadAttachment: (sessionId: string, file: File) => request<TextFileAttachment>(`/api/sessions/${encodeURIComponent(sessionId)}/attachments`, {method:"POST",body:file,headers:{"Content-Type":"application/octet-stream","X-Lake-Filename":encodeURIComponent(file.name)}}),
   uploadTextFile: (sessionId: string, name: string, text: string) => post<TextFileAttachment>(`/api/sessions/${encodeURIComponent(sessionId)}/text-files`, {name, text}),
   aiCards: (session: string, before: number) => request<AIView>(`/api/sessions/${encodeURIComponent(session)}/ai/snapshot?before=${before}`),
   aiView: (session: string) => request<AIView>(`/api/sessions/${encodeURIComponent(session)}/ai`),

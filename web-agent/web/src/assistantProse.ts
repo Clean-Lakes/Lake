@@ -6,9 +6,9 @@ type ProseNode = {
   data?: {hProperties?: Record<string, unknown>};
 };
 
-// Recover a common generated-label typo after Markdown parsing. Restrict this
-// to literal prose with a colon: code, links, escaped Markdown and raw HTML are
-// never rewritten, and the stored response remains unchanged.
+// Recover unparsed generated strong delimiters in Chinese prose and short
+// colon labels. Operate on exact literal source spans after Markdown parsing:
+// code, links, escapes and already parsed formatting remain untouched.
 export function remarkAssistantProse() {
   return (tree: ProseNode, file: {value: unknown}) => {
     const source = String(file.value ?? "");
@@ -21,10 +21,18 @@ export function remarkAssistantProse() {
         const text = child.value;
         const pieces: ProseNode[] = [];
         let offset = 0;
-        for (const match of text.matchAll(/\*\*([^\s*][^*\n]{0,79}?[：:])([ \t]+)\*\*/gu)) {
-          const at = match.index!;
+        for (const match of text.matchAll(/\*\*(?!\*)([^\s*][^*\n]{0,4095}?)\*\*(?!\*)/gu)) {
+          const at=match.index!;
+          if(text[at-1]==='*')continue;
+          const body=match[1]!.replace(/[ \t]+$/u,'');
+          const trailing=match[1]!.slice(body.length);
+          // English literal-star expressions remain literal. Long Chinese
+          // conclusions and punctuation next to Chinese quotes are common
+          // generated prose, not restricted to an 80-character colon label.
+          if(!/\p{Script=Han}/u.test(body)&&!(trailing&&body.length<=80&&/[：:]$/u.test(body)))continue;
           if (at > offset) pieces.push({type: "text", value: text.slice(offset, at)});
-          pieces.push({type: "strong", children: [{type: "text", value: match[1]}]}, {type: "text", value: match[2]});
+          pieces.push({type: "strong", children: [{type: "text", value: body}]});
+          if(trailing)pieces.push({type:'text',value:trailing});
           offset = at + match[0].length;
         }
         if (!pieces.length) return [child];

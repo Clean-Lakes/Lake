@@ -1,3 +1,4 @@
+import {DisclosureSummary} from './DisclosureSummary';
 import type {AICard, AITodo} from "../../shared/contracts";
 import {Glyph} from "./Icons";
 
@@ -23,7 +24,7 @@ export function TaskProgress({cards}: {cards: AICard[]}) {
   const todos = turnTodos(cards);
   if (!todos.length) return null;
   return <details className="ai-task-progress">
-    <summary className="thinking-toggle">任务进度 {todos.filter(todo => todo.status === "completed").length} / {todos.length}<Glyph name="chevron" size={14}/></summary>
+    <DisclosureSummary className="thinking-toggle">任务进度 {todos.filter(todo => todo.status === "completed").length} / {todos.length}</DisclosureSummary>
     <div>{todos.map((todo, index) => <div key={index}><span>{todo.status === "completed" ? <span role="img" aria-label="已完成"><Glyph name="check" size={12}/></span> : todo.status === "in_progress" ? "进行中" : "待处理"}</span> {todo.content}</div>)}</div>
   </details>;
 }

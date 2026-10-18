@@ -75,6 +75,16 @@ func (b *Server) saveImportSource(project, session, name, value string) Object {
 	return Object{"sourceId": source.ID, "name": source.Name}
 }
 func (b *Server) loadImportSource(project, session, id string) importSource {
+	if attachmentID.MatchString(id) {
+		a, filename := b.loadAttachment(project, session, id)
+		if a.Size > importTextLimit {
+			fail(400, "资源导入的文本附件最多 1 MiB")
+		}
+		verifyAttachment(a, filename)
+		raw, err := os.ReadFile(filename)
+		must(err)
+		return importSource{id, project, session, a.Name, decodeImportFile(raw)}
+	}
 	var source importSource
 	p := b.importFilePath("source-", id)
 	if _, err := privateFile(filepath.Join(b.Models.Home, "secrets"), p); err != nil {

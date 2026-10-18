@@ -1,3 +1,4 @@
+import {Glyph} from './Icons';
 import { useState } from "react";
 import { api, readableError } from "./api";
 import { TrashIcon } from "./NavigationDelete";
@@ -28,7 +29,7 @@ export function BulkNavigationDelete({targets, onClose, onProcessed, onBusy}: {t
   }
   const sessions = remaining.filter(target => target.kind === "session").length;
   return <div className="modal-scrim"><section className="modal bulk-navigation-dialog" role="dialog" aria-modal="true" aria-labelledby="bulk-delete-title">
-    <div className="modal-header"><h2 id="bulk-delete-title">{result ? "批量删除结果" : `删除选中的 ${targets.length} 项？`}</h2><button className="icon-button" aria-label="关闭批量删除" disabled={busy} onClick={onClose}>×</button></div>
+    <div className="modal-header"><h2 id="bulk-delete-title">{result ? "批量删除结果" : `删除选中的 ${targets.length} 项？`}</h2><button className="icon-button" aria-label="关闭批量删除" disabled={busy} onClick={onClose}><Glyph name="close" size={14}/></button></div>
     {sessions > 0 && <p className="bulk-session-warning">{sessions} 个会话的对话、证据、审批和命令记录将永久删除，不可恢复。</p>}
     <p className="modal-description">资源、文件夹和项目可在“已删除”中恢复。仅删除文件夹时，其中未选中的资源和子文件夹会移到上一级。</p>
     {result && <p role="status">本次已删除 {result.removed.length} 项，失败 {result.failed.length} 项。重试只处理失败项。</p>}

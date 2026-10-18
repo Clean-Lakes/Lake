@@ -15,3 +15,10 @@ test('file write and target approvals retain their actual operation labels',()=>
  assert.equal(approvalPresentation({kind:'file_write',risk:'write',call:{name:'write'}} as Approval).title,'授权修改文件');
  assert.equal(approvalPresentation({kind:'resource_select',risk:'readonly',call:{name:'read'}} as Approval).title,'确认本次操作的目标资源');
 });
+
+test('attachment file-write confirmation explains the shared write permission',()=>{
+ const fileWrite={kind:'file_write',risk:'write',call:{name:'stage_attachment'}} as Approval;
+ assert.ok(approvalPresentation(fileWrite).note.includes('上传附件使用“静默修改文件”权限'));
+ assert.ok(approvalPresentation(fileWrite).note.includes('当前未开启'));
+ assert.ok(!approvalPresentation({...fileWrite,kind:'resource_select'}).note.includes('当前未开启'),'target selection must not claim file-write permission is off');
+});

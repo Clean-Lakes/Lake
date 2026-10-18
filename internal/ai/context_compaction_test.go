@@ -173,7 +173,7 @@ func TestLanguageReminderSurvivesEnglishToolResults(t *testing.T) {
 	})
 	defer close()
 	e := engineFor(t, model, nil)
-	if err := e.ChatTurn(context.Background(), "case", TurnInput{UserText: "新k8s集群状态如何", Context: "[LAKE_SESSION_CONTEXT]\nEnglish metadata is not the user question"}); err != nil {
+	if err := e.ExecuteTurn(context.Background(), "case", TurnInput{UserText: "新k8s集群状态如何", Context: "[LAKE_SESSION_CONTEXT]\nEnglish metadata is not the user question"}); err != nil {
 		t.Fatal(err)
 	}
 	h, _ := e.History("case")

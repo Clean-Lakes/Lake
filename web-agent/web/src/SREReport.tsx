@@ -1,15 +1,18 @@
+import {DisclosureSummary} from './DisclosureSummary';
 import {memo} from 'react';
 import Markdown,{type Components} from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type {AgentEvidence,SRERoleReport} from '../../shared/contracts';
-import {Glyph} from './Icons';
+import {remarkAssistantProse} from './assistantProse';
+import {remarkCompactReply} from './compactReply';
+import {ReplyDetailsSummary} from './ReplyDetailsSummary';
 
 // Component identity must survive live snapshots. Inline renderers remount
 // tables/links on every update, losing DOM state and flashing the transcript.
-const proseComponents:Components={a:({node,...props})=><a {...props} target="_blank" rel="noopener noreferrer"/>,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
-const prosePlugins=[remarkGfm];
-export const SREProse=memo(function SREProse({children}:{children:string}){
- return <div className="sre-prose"><Markdown remarkPlugins={prosePlugins} skipHtml components={proseComponents}>{children}</Markdown></div>;
+const proseComponents:Components={summary:ReplyDetailsSummary,a:({node,...props})=><a {...props} target="_blank" rel="noopener noreferrer"/>,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
+const prosePlugins=[remarkGfm,remarkAssistantProse];
+export const SREProse=memo(function SREProse({children,compact=false}:{children:string;compact?:boolean}){
+ return <div className="sre-prose"><Markdown remarkPlugins={compact?[...prosePlugins,remarkCompactReply]:prosePlugins} skipHtml components={proseComponents}>{children}</Markdown></div>;
 });
 
 export function sreEvidenceText(text:string,evidence:AgentEvidence[]){
@@ -19,7 +22,7 @@ export function sreEvidenceText(text:string,evidence:AgentEvidence[]){
 /** Retain older verbose replies verbatim, without inventing a short conclusion. */
 export function SRECheckpoint({body}:{body:string}){
  if([...body].length<=360)return <SREProse>{body}</SREProse>;
- return <details className="sre-node-details"><summary>查看节点小结<Glyph name="chevron" size={13}/></summary><SREProse>{body}</SREProse></details>;
+ return <details className="sre-node-details"><DisclosureSummary>查看节点小结</DisclosureSummary><SREProse>{body}</SREProse></details>;
 }
 
 /** Present recorded report fields without inferring new findings or verification status. */
@@ -33,6 +36,6 @@ export function SREReport({report,evidence,onEvidence,compact=false}:{report:SRE
  </>;
  return <div className="sre-report">
   {report.summary?.trim()&&<div className="sre-report-summary">{compact?<SRECheckpoint body={sreEvidenceText(report.summary,evidence)}/>:prose(report.summary)}</div>}
-  {compact&&hasDetails?<details className="sre-node-details"><summary>查看节点详情<Glyph name="chevron" size={13}/></summary>{details}</details>:details}
+  {compact&&hasDetails?<details className="sre-node-details"><DisclosureSummary>查看节点详情</DisclosureSummary>{details}</details>:details}
  </div>;
 }

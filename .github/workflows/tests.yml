@@ -19,10 +19,11 @@ jobs:
           version: 10.33.4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25.0'
+          go-version: '1.26.6'
       - run: pnpm --dir web-agent install --frozen-lockfile
       - run: pnpm --dir web-agent test:frontend && pnpm --dir web-agent build:web
       - run: mkdir -p assets/web/dist && cp -R web-agent/web/dist/. assets/web/dist/
+      - run: python3 scripts/check_adk_runtime_boundary.py
       - run: go test -race ./... && go vet ./...
       - run: swift run --package-path client/macos --build-system native LakeUpdateTests
       - run: swift build --package-path client/macos --build-system native --product LakeDesktop

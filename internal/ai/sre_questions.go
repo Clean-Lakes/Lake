@@ -4,6 +4,11 @@ import "context"
 
 // A role mention routes a question. It is never authority to execute an action.
 func (e *Engine) AnswerSRERole(ctx context.Context, sessionID, taskID string, role SREAgentRole, message string) (err error) {
+	done, admissionErr := e.admitRuntime()
+	if admissionErr != nil {
+		return admissionErr
+	}
+	defer done()
 	if !ValidSRERole(role) {
 		return sreError(400, "未知专员")
 	}
@@ -38,7 +43,7 @@ func (e *Engine) AnswerSRERole(ctx context.Context, sessionID, taskID string, ro
 		}
 	}()
 	step := SREPlanStep{ID: "question", Role: role, Kind: "analyze", Description: message, ResourceIDs: task.Scope}
-	result, err := e.RunSRERole(ctx, sessionID, task, step, "", "", message+"\nCurrent recorded plan and facts (not new observations):\n"+js(task.LatestPlan())+"\n"+sreHandoff(task), true)
+	result, err := e.ExecuteSRERole(ctx, sessionID, task, step, "", "", message+"\nCurrent recorded plan and facts (not new observations):\n"+js(task.LatestPlan())+"\n"+sreHandoff(task), true)
 	_, saveErr := e.sreRepository.MutateSRETask(sessionID, taskID, 0, "role_answer", func(t *SRETask) error {
 		kind := "handoff"
 		if err != nil {
