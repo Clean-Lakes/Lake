@@ -52,5 +52,12 @@
   "screenshots": [
     "lake-resource-add-to-chat.png",
     "lake-resource-add-to-chat-dark.png"
-  ]
+  ],
+  "windows": {
+    "staticChecks": true,
+    "devInstalled": true,
+    "devDataUnchanged": true,
+    "installedHashesMatch": true,
+    "nativeUIVerification": "not performed; shared frontend verified in browser"
+  }
 }
