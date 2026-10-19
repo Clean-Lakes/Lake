@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-19",
+  "scope": "Classify trusted pre-dispatch target rejection as not_executed; narrowly reconcile matching historical records; verify conversation permission changes.",
+  "validation": {
+    "fullAIRaceSuite": "passed",
+    "fullWebRaceSuite": "passed",
+    "goVet": "passed",
+    "runtimeMismatchDoesNotStartProcessOrTerminal": true,
+    "legacyRepairRequiresExactErrorToolEmptyHandleAndMatchingSessionTurn": true,
+    "legacyRepairIsAuditedAndIdempotent": true,
+    "unprovenTransportLiveHandleAndSREOutcomesRemainProtected": true,
+    "grantWriteWithinConversationAppliesToNextTurn": true,
+    "revokeWriteWithinConversationRequiresApprovalAgain": true,
+    "permissionChangesDoNotReplayRejectedCallsOrAffectOtherSessions": true
+  },
+  "localIntegration": {
+    "profile": "Lake Dev",
+    "build": "scripts/build_lake_desktop.sh --dev --install",
+    "signatureVerification": "passed",
+    "installedBackendMatchesBuild": true,
+    "backendSHA256": "e719269e3080d75abca04fba4a95af241a7de091fcefd441d26a24ec15621381"
+  },
+  "fixtureData": "Tests use isolated temporary stores, a scripted local model and temporary files. No production command is replayed."
+}

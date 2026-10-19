@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +15,67 @@ import (
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
 )
+
+func TestWritePermissionChangesTakeEffectWithinSameConversation(t *testing.T) {
+	b, h := fixture(t)
+	id, _ := newSession(t, h)
+	dir := t.TempDir()
+	paths := []string{filepath.Join(dir, "denied.md"), filepath.Join(dir, "allowed.md"), filepath.Join(dir, "revoked.md")}
+	var step atomic.Int32
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := int(step.Add(1))
+		if n%2 == 1 && n <= 5 {
+			emitModel(w, "", []ai.Call{{ID: fmt.Sprintf("write-%d", n), Name: "write", Arguments: jsonText(Object{"runtime": "local", "path": paths[(n-1)/2], "content": "explicit fixture write"})}})
+		} else {
+			emitModel(w, "本轮处理结束", nil)
+		}
+	}))
+	defer provider.Close()
+	b.Models.Save(&ai.Model{URL: provider.URL, Name: "permission update fixture", Protocol: "openai"})
+	send := func() {
+		t.Helper()
+		apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "写入本轮演示文件"}, 202)
+	}
+	finish := func() { t.Helper(); waitAI(t, b, id, "completed"); b.workers.Wait() }
+	reject := func(path string) {
+		t.Helper()
+		v := waitAI(t, b, id, "waiting_approval")
+		if v.Pending == nil || v.Pending.Kind != "file_write" {
+			t.Fatal("write did not request permission")
+		}
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatal("write happened before authorization", err)
+		}
+		apiTest(t, h, "POST", "/api/sessions/"+id+"/ai/decision", Object{"id": v.Pending.ID, "accept": false}, 200)
+		finish()
+	}
+	send()
+	reject(paths[0])
+	saved := apiTest(t, h, "POST", "/api/sessions/"+id+"/ai/configure", Object{"silentWriteFiles": true}, 200)
+	if saved["silentWriteFiles"] != true {
+		t.Fatal("permission was not saved")
+	}
+	send()
+	finish()
+	content, err := os.ReadFile(paths[1])
+	if err != nil || string(content) != "explicit fixture write" {
+		t.Fatal("mid-conversation permission did not permit the next write", err)
+	}
+	v, _ := b.Engine.Snapshot(id)
+	if v.Pending != nil || len(v.OperationOutcomes) != 0 {
+		t.Fatal("new permission left a pending approval or false unknown")
+	}
+	apiTest(t, h, "POST", "/api/sessions/"+id+"/ai/configure", Object{"silentWriteFiles": false}, 200)
+	send()
+	reject(paths[2])
+	if _, err := os.Stat(paths[0]); !os.IsNotExist(err) {
+		t.Fatal("granting permission replayed an earlier rejected write")
+	}
+	other := b.Store.CreateSession(stringOf(b.Store.Session(id)["projectId"]), "unrelated conversation", nil)
+	if b.sessionOptions(stringOf(other["id"]))["silentWriteFiles"] != false {
+		t.Fatal("permission leaked into another conversation")
+	}
+}
 
 func TestProgressiveTerminalPermissionCloseAndRecreate(t *testing.T) {
 	b, h := fixture(t)

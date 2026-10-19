@@ -28,6 +28,19 @@ func TestSREBridgeRejectedCommandNeverStartsTerminal(t *testing.T) {
 	}
 }
 
+func TestShellRuntimeMismatchNeverStartsTerminal(t *testing.T) {
+	b, h := fixture(t)
+	sid, rid := newSession(t, h)
+	_, err := b.bridge(context.Background(), sid, "runtimeCommandExec", Object{"asset_ref": rid, "runtime": "ssh", "command": "printf MUST_NOT_RUN"}, true)
+	var rejected *ai.ToolNotExecutedError
+	if !errors.As(err, &rejected) || err.Error() != "Shell runtime and asset do not match" {
+		t.Fatal("target validation was not classified as not executed", err)
+	}
+	if len(objects(b.Store.Snapshot(sid)["terminals"])) != 0 || len(b.Store.Recent(sid)) != 0 {
+		t.Fatal("target rejection started a terminal or command")
+	}
+}
+
 func TestSREInvalidCommandCanBeCorrectedWithoutUnknownBlocker(t *testing.T) {
 	b, h := fixture(t)
 	sid, rid := newSession(t, h)

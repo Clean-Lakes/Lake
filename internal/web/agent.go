@@ -614,7 +614,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 			runtime = stringOf(resource["kind"])
 		}
 		if resource["kind"] != runtime || !set("local ssh")[runtime] {
-			fail(400, "Shell runtime and asset do not match")
+			return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("Shell runtime and asset do not match")}
 		}
 		term := b.hostTerminal(ctx, id, ref, approved, explicitTerminal)
 		options := b.Store.Options(id)

@@ -144,7 +144,13 @@ func runtimeStdout(result map[string]any) string {
 	}
 	return str(result["output"])
 }
-func (e *Engine) execRuntimeInput(ctx context.Context, c Config, a map[string]any, argv []string, input io.Reader) (map[string]any, error) {
+func (e *Engine) execRuntimeInput(ctx context.Context, c Config, a map[string]any, argv []string, input io.Reader) (result map[string]any, err error) {
+	processMayHaveStarted := false
+	defer func() {
+		if err != nil && !processMayHaveStarted {
+			err = &ToolNotExecutedError{Err: err}
+		}
+	}()
 	target := str(a["runtime"])
 	if target == "" {
 		target = c.Runtime
@@ -232,7 +238,10 @@ func (e *Engine) execRuntimeInput(ctx context.Context, c Config, a map[string]an
 	stderr := &limitBuffer{limit: outputLimit}
 	cmd.Stdout = io.MultiWriter(output, stdout)
 	cmd.Stderr = io.MultiWriter(output, stderr)
-	err := cmd.Run()
+	// From this point failures may have an effect. Never infer non-execution
+	// from a transport error, timeout or a process's output text.
+	processMayHaveStarted = true
+	err = cmd.Run()
 	code := 0
 	if err != nil {
 		if exit, ok := err.(*exec.ExitError); ok {
