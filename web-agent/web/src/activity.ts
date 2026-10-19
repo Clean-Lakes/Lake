@@ -1,5 +1,24 @@
 import type { AICard, AIView } from "../../shared/contracts";
 import { compareTime } from "./timeline";
+import type {GlyphName} from './Icons';
+
+/** Use the actual tool identity, never shell text or its untrusted result. */
+export function progressGlyph(card?:AICard):GlyphName {
+ if(!card||card.type==='thinking')return 'lakeProcess';
+ const name=card.title??'';
+ if(card.type==='shell'||/shell|terminal/.test(name))return 'lakeTerminal';
+ if(/^(schedule_)/.test(name))return 'lakeSchedule';
+ if(/mcp/.test(name))return 'lakeNetwork';
+ if(name==='ask_user_question')return 'lakeQuestion';
+ if(/workflow|^todo_|^task_|investigation/.test(name))return 'lakeWorkflow';
+ if(/sql|^list_db_|^db_|redis|^observe_data$/.test(name))return 'lakeDatabase';
+ if(/docker|cluster/.test(name))return 'lakeContainer';
+ if(/search|grep|glob|fetch/.test(name))return 'lakeSearch';
+ if(/^(ls|list_files|list_resource_groups)$/.test(name))return 'lakeFolder';
+ if(/^(inspect_host|observe_host|list_assets)$/.test(name))return 'lakeHost';
+ if(/read|write|edit|append|delete|file|attachment|transfer|skill|evidence|journal|logs/.test(name))return 'lakeFile';
+ return 'lakeProcess';
+}
 
 export const toolLabels: Record<string, string> = {
  inspect_attachment:"检查附件",stage_attachment:"传输附件",

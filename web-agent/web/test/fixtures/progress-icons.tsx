@@ -1,0 +1,10 @@
+import {createRoot} from 'react-dom/client';
+import {ThinkingTimeline} from '../../src/ThinkingTimeline';
+import type {AICard} from '../../../shared/contracts';
+import '../../src/theme.css';
+import '../../src/styles.css';
+const query=new URLSearchParams(location.search);
+document.documentElement.dataset.theme=query.get('theme')==='dark'?'dark':'light';
+const rows=[['list_assets','项目资源目录'],['inspect_host','演示主机'],['shell','演示主机'],['read','演示主机'],['query_sql','演示数据库'],['web_search','公开文档'],['list_workflows','当前项目/会话'],['schedule_list','当前项目/会话']];
+const cards=rows.map(([title,target],i)=>({id:`icon-${i}`,type:'operation',title,status:i===2?'running':i===4?'failed':'completed',at:new Date().toISOString(),data:{target,arguments:title==='read'?{path:'/var/log/app.log'}:{}}})) as AICard[];
+createRoot(document.getElementById('root')!).render(<main style={{maxWidth:720,padding:'30px 24px',margin:'20px auto'}}><p style={{fontSize:12,color:'var(--text-muted)',marginBottom:22}}>Lake · 执行进度图标 · 隔离演示</p><div style={{display:'grid',gap:12}}>{cards.map(card=><ThinkingTimeline key={card.id} cards={[card]} live={card.status==='running'} resourceRow/>)}</div></main>);
