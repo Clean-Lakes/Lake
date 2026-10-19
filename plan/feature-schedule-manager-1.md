@@ -4,12 +4,12 @@ version: 1
 date_created: 2026-10-19
 last_updated: 2026-10-19
 owner: Lake
-status: In progress
+status: Completed
 tags: [feature, schedules, desktop]
 ---
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 Expose existing project schedules through the workspace menu with pause/resume and durable execution history. Do not create real schedules during verification.
 
@@ -42,7 +42,7 @@ Expose existing project schedules through the workspace menu with pause/resume a
 |------|-------------|-----------|------|
 | TASK-004 | Add contracts, api methods, ScheduledTasks.tsx/css and a project-scoped workspace-menu entry in App.tsx and SidebarUtilities.tsx. Depends on TASK-002. | ✅ | 2026-10-19 |
 | TASK-005 | Update internal/ai/prompts/question-policy.txt and schedule tool descriptions to require explicit user scheduling intent; retain operation permission checks. | ✅ | 2026-10-19 |
-| TASK-006 | Test frontend and backend, verify fictional browser states and build/install signed macOS Dev and Windows x64 Dev sequentially. Save docs/validation evidence. Depends on TASK-003, TASK-004 and TASK-005. | | |
+| TASK-006 | Test frontend and backend, verify fictional browser states and build/install signed macOS Dev and Windows x64 Dev sequentially. Save docs/validation evidence. Depends on TASK-003, TASK-004 and TASK-005. | ✅ | 2026-10-19 |
 
 ## 3. Alternatives
 
