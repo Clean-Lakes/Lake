@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "df9fc796c5a031a3fed65c5a0fdd55eb27c0b9ab",
+  "scope": "Restore selected references as inline labels in sent user messages and history, preserving current model sync and mixed editor updates",
+  "behavior": [
+    "User bubbles and queued-message previews render static icon/name labels at the original UTF-16 positions, without visible @ or remove buttons",
+    "Resource, Skill, MCP and SRE role references use their selected identities rather than guessing future bindings from text",
+    "Only already-authorized message references can supply stored display metadata; label, range and resource type are verified server-side",
+    "Stored message text and model context remain unchanged; the nullable mentions column preserves old messages and distinguishes new explicitly plain text",
+    "History keeps saved names and icons after reload, backend restart or subsequent resource rename; queue edits rebase or drop edited labels",
+    "Old messages without metadata match known complete resource names, longest first; resources renamed before this update cannot be reconstructed from missing historical identity metadata"
+  ],
+  "checks": [
+    "278 frontend tests passed",
+    "TypeScript check and production web build passed",
+    "Race-enabled mention persistence, queue, extension, attachment and original-schema migration regressions passed",
+    "Go vet ./internal/web passed",
+    "Full go test -race ./internal/web passed (223.134s)",
+    "Three reference metadata, immediate/queued persistence and reopen regressions passed in Windows x64 emulation",
+    "Fictional App browser integration sent two selected resources in the middle of prose and restored two labels in the resulting user bubble",
+    "Known legacy adjacent resource references restored as labels; explicit empty metadata left literal @ text unchanged",
+    "Dark 900px viewport had 900px document width with theme-derived label colors",
+    "Signed macOS Dev built and installed; signature verification and installed/package hashes matched",
+    "Windows Dev built, statically validated and silently installed; installed host/backend hashes matched and Dev data metadata remained unchanged"
+  ],
+  "screenshots": [
+    "lake-sent-reference-labels.png",
+    "lake-sent-reference-labels-dark.png"
+  ],
+  "windowsInstall": {
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "cf9d9eabe1fbcbc6ef0bf4959eeab6378d2b2e6b1b4e9f238099e137c8133b5e",
+    "desktopSHA256": "d3f0278dc47dd0de3c862ffbd6fe2ee4497cef84684612209be46c3027d0f71b"
+  },
+  "artifacts": {
+    "Lake-0.3.18-macos-arm64-dev.zip": {
+      "sha256": "625ac3329de08abca25120aa8042c2afcc4ed2127be228c4131afced1f39f659",
+      "size": 27892603
+    },
+    "Lake-0.3.18-macos-arm64-dev.dmg": {
+      "sha256": "908995b824661245feedb31e01b99c6ac9a1ef0164bf5ca6d05a47c57308d25c",
+      "size": 30329152
+    },
+    "Lake-Dev-0.3.18-windows-x86_64.zip": {
+      "sha256": "c5dc899a83e6fb6a7bf67090bf15968de4ddefd248cdb03074130638357ea113",
+      "size": 212118730
+    },
+    "Lake-Dev-0.3.18-windows-x86_64-setup.exe": {
+      "sha256": "66b12262cc04945b7e48f5c319ca5a2dc5e54d4525f5e45da5041a505a0eb5a8",
+      "size": 160222636
+    }
+  },
+  "limitations": [
+    "Browser integration used fictional in-memory data; no model or real host operations occurred",
+    "The legacy sqlite3 migration fixture requires CGO and ran on macOS; the three new persistence regressions ran with the Windows pure-Go SQLite driver",
+    "Native macOS UI remains unavailable to desktop automation; normal quit and reopen loads the installed Dev update",
+    "Stable release files and release profiles were not modified"
+  ]
+}
