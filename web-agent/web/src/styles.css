@@ -347,6 +347,7 @@ a { color: inherit; }
 .composer-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; color: var(--text-muted); font-size: 12px; margin-top: 8px; padding: 0 6px; gap: 4px 8px; min-width: 0; }
 .composer-input .send-button { width: 30px; height: 30px; background: transparent; color: var(--text-secondary); border-radius: var(--radius-control); }
 .composer-input .send-button:hover:not(:disabled), .composer-input .send-button.stop-button { background: var(--surface-hover); color: var(--foreground); }
+.composer-input .send-button.stop-button, .composer-input .send-button.queued-stop-button { border-radius: 50%; }
 .composer-input .send-button:disabled { background: transparent; color: var(--text-disabled); }
 .resource-detail { flex: 0 0 auto; margin: 0 auto; padding: 27px 0 70px; width: min(960px, calc(100% - 64px)); }
 .back-link { display: inline-flex; align-items: center; gap: 8px; background: transparent; border: 0; color: var(--text-secondary); font-size: 11px; padding: 5px 0; }
