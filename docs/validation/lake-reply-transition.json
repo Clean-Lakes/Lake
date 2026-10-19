@@ -1,11 +1,13 @@
 {
-  "validatedAt": "2026-10-19T02:17:24.684838+00:00",
+  "validatedAt": "2026-10-19T02:26:25.315034+00:00",
   "backend": {
     "successiveConfirmationsBefore": "reproduced failed to add event to session: stale session error",
     "successiveConfirmationsAfter": "passed with race detector; both approved effects executed exactly once",
     "finalizationBefore": "reproduced next turn admitted before final ADK projection was durable",
     "finalizationAfter": "passed with race detector; busy and running until final canonical write completes",
-    "realIncidentInspection": "read-only local metadata confirmed a followup confirmation write between runner appends; no live commands replayed"
+    "realIncidentInspection": "read-only local metadata confirmed a followup confirmation write between runner appends; no live commands replayed",
+    "approvalSuspension": "passed: terminal-creation confirmation remains separate from command confirmation",
+    "windowsX64Regression": "2 passed using the packaged PortableGit runtime and isolated temporary databases"
   },
   "transition": {
     "durationMs": 200,
@@ -93,5 +95,21 @@
     "typecheck": "passed",
     "build": "passed"
   },
-  "fullGoRaceRegression": "running"
+  "fullGoRaceRegression": "passed: go test -race ./internal/ai ./internal/web ./internal/agent/storage -count=1",
+  "devBuilds": {
+    "sourceCommit": "3bb67920",
+    "macOS": "signed, installed and launched",
+    "windows": {
+      "packageValidation": "passed: 9718 ZIP entries",
+      "install": {
+        "devDataUnchanged": true,
+        "installerExitCode": 0,
+        "backendSHA256": "1ea3296b3dcb67593dadf27f6afc2fadb89efcde61b6a539e7457b85f4727efb",
+        "desktopSHA256": "b07be59478668ba165a5565e522a65797c82f7705befaf4b309d13c0fb8c36b6"
+      },
+      "installedHashesMatchPackage": true
+    }
+  },
+  "goVet": "passed: internal/ai and internal/web",
+  "ADKBoundary": "passed"
 }

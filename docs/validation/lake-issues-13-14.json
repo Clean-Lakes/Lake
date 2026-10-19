@@ -103,7 +103,7 @@
     "desktopBuild": "passed",
     "signedDevInstalled": true,
     "manualAppConfirmation": "passed by user: close to background, Dock reopen, explicit quit",
-    "installedSourceCommit": "359815d2"
+    "installedSourceCommit": "3bb67920"
   },
   "windows": {
     "nativeTests": {
@@ -133,10 +133,15 @@
     ],
     "manualAppConfirmation": "passed by user: close to background, tray reopen, explicit quit",
     "finalDevPackage": {
-      "sourceCommit": "359815d2",
+      "sourceCommit": "3bb67920",
       "validation": "passed: 9718 ZIP entries",
-      "installation": "deferred: existing Dev app running during manual verification",
-      "stagedInstaller": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\issues-13-14\\Lake-Dev-setup.exe"
+      "installation": "passed",
+      "install": {
+        "devDataUnchanged": true,
+        "installerExitCode": 0,
+        "backendSHA256": "1ea3296b3dcb67593dadf27f6afc2fadb89efcde61b6a539e7457b85f4727efb",
+        "desktopSHA256": "b07be59478668ba165a5565e522a65797c82f7705befaf4b309d13c0fb8c36b6"
+      }
     }
   },
   "references": [
