@@ -712,9 +712,15 @@ a { color: inherit; }
 .file-preview pre { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; line-height:1.7; }
 .file-preview-source { margin-top:20px; }
 .file-preview-source > pre { margin-top:10px; }
-.file-changes-badge { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; padding: 8px 13px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface-hover); cursor: pointer; font-variant-numeric: tabular-nums; }
+.file-changes-badge { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; min-height: 28px; padding: 3px 5px; margin-left: -5px; border: 0; border-radius: var(--radius-control); background: transparent; cursor: pointer; font-variant-numeric: tabular-nums; line-height: 20px; transition: background-color 160ms ease, color 160ms ease; }
+.file-changes-badge > svg { flex: 0 0 auto; color: var(--text-muted); }
+.file-changes-label { min-width: 0; overflow-wrap: anywhere; }
+.file-changes-delta { display: inline-flex; flex-wrap: wrap; gap: 7px; }
+.file-changes-chevron { transition: transform 160ms ease; }
+.file-changes[open] > summary .file-changes-chevron { transform: rotate(90deg); }
 .file-changes-badge::-webkit-details-marker, .file-change > summary::-webkit-details-marker { display: none; }
 .file-changes-badge:hover, .file-changes[open] > summary { background: var(--surface-hover); }
+@media (prefers-reduced-motion: reduce) { .file-changes-badge, .file-changes-chevron { transition: none; } }
 .file-changes-badge:focus-visible, .file-change > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 .file-change-added { color: var(--success); white-space: nowrap; }
 .file-change-removed { color: var(--danger); white-space: nowrap; }

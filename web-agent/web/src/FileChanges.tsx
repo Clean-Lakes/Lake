@@ -18,7 +18,7 @@ export const FileChanges = memo(function FileChanges({ cards, resources, partial
   const preview=files.find(file=>file.id===selected);
   if (!files.length) return null;
   return <div className="turn-files"><nav className="turn-file-links" aria-label="本轮文件">{files.filter(file=>!file.deleted).map(file=><a key={file.id} href={hrefFor(file)} title={`${targetFor(file)||'本轮文件'} · ${file.path}`} onClick={event=>{event.preventDefault();setSelected(file.id)}}><Glyph name="document" size={14}/><span>{fileName(file.path)}</span>{files.filter(other=>fileName(other.path)===fileName(file.path)).length>1&&<small>{targetFor(file)||file.path}{file.containerId?` · ${file.containerId}`:''}</small>}</a>)}</nav><details className="file-changes">
-    <summary className="file-changes-badge"><span>{files.length} 个文件已更改{partial ? "（部分记录）" : ""}</span><Delta delta={delta}/></summary>
+    <summary className="file-changes-badge"><Glyph name="document" size={14}/><span className="file-changes-label">{files.length} 个文件已更改{partial ? "（部分记录）" : ""}</span><span className="file-changes-delta"><Delta delta={delta}/></span><Glyph name="next" size={13} className="file-changes-chevron"/></summary>
     <div className="file-changes-list">{files.map(file => {
       const target = resources.find(resource => resource.id === file.assetRef)?.name || file.target;
       return <details className="file-change" id={idFor(file)} key={file.id}>

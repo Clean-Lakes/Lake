@@ -82,10 +82,10 @@ test('each turn starts with its own metadata after the user message and before t
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  const older=html.slice(html.indexOf('id="conversation-turn-s-old"'),html.indexOf('id="conversation-turn-s-u"'));
  const current=html.slice(html.indexOf('id="conversation-turn-s-u"'));
- assert.ok(older.indexOf('历史问题')<older.indexOf('流经 2秒')&&older.indexOf('流经 2秒')<older.indexOf('历史答复'));
- assert.ok(current.indexOf('当前问题')<current.indexOf('流经 49秒')&&current.indexOf('流经 49秒')<current.indexOf('本轮答复'));
+ assert.ok(older.indexOf('历史问题')<older.indexOf('用时 2秒')&&older.indexOf('用时 2秒')<older.indexOf('历史答复'));
+ assert.ok(current.indexOf('当前问题')<current.indexOf('用时 49秒')&&current.indexOf('用时 49秒')<current.indexOf('本轮答复'));
  assert.equal((html.match(/aria-label="回答耗时"/g)||[]).length,2);
- assert.ok(!older.includes('49秒')&&!current.includes('流经 2秒'));
+ assert.ok(!older.includes('49秒')&&!current.includes('用时 2秒'));
 });
 test('only actual running operations receive the stronger execution motion',()=>{
  const render=(status:string,live:boolean)=>renderToStaticMarkup(createElement(ThinkingTimeline,{cards:[{...tool,status}],live,resourceRow:true}));
