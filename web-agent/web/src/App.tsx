@@ -70,6 +70,7 @@ import { conversationActive, sessionConnection, type StreamState } from "./conne
 import { atConversationTail, FollowScroll } from "./followScroll";
 import { type CommandPolicy, dangerConfirmation } from "../../shared/command-policy";
 import "./styles.css";
+import './fileOperationApproval.css';
 import "./messageMentions.css";
 import "./agentTasks.css";
 import "./statusText.css";
