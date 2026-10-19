@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "d8320f5faa662ddb964739cba1aaa948b7963a09",
+  "scope": "Direct hyperlinks for recorded plan/config/script outputs with in-app saved-version preview",
+  "behavior": [
+    "Real successful file diff records provide always-visible per-turn file hyperlinks before the collapsed change summary",
+    "Native dialog renders saved Markdown plans, related same-target file links, raw scripts/config and optional Markdown source",
+    "No filesystem read, backend request or command execution is added; remote images and raw HTML are not loaded",
+    "Ambiguous targets, unknown paths, URL schemes and parent traversal are not resolved as related files",
+    "Deleted records retain before-content preview in the original diff list"
+  ],
+  "checks": [
+    "TypeScript and production frontend build passed",
+    "283 frontend tests passed, including file link target IDs, failed outputs, resource/container ambiguity, relative directory scope, saved Markdown and deleted records",
+    "Actual transcript browser fixture: PLAN.md link opens formatted plan; internal restore script link opens recorded script",
+    "Escape returns focus to original plan or list link; file changes disclosure state is retained",
+    "Light theme and dark 390x640 dialog verified; dark width 356px, scrollable height 592px, no horizontal overflow",
+    "macOS Dev installed and codesign verified; installed backend/host match package",
+    "Windows Dev validated and installed; installed executable hashes match package; Dev data metadata unchanged"
+  ],
+  "screenshots": [
+    "lake-plan-file-links.png",
+    "lake-plan-file-preview.png",
+    "lake-plan-file-preview-dark.png"
+  ],
+  "windowsInstall": {
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "a9d3090edeb346785a37de4ed1c7f5ded386e37861f9e56109f1d22dd381fc02",
+    "desktopSHA256": "d6df9ac104adc29d2d7ba315b898292b84b1a0a9ab955cb2741cbe1bcff61328"
+  },
+  "limitations": [
+    "Previews show the version already saved in session records, not a fresh read of remote files",
+    "Files without recorded successful diff content do not receive invented preview links",
+    "Browser verification uses fictional data; native app UI not rechecked; normal quit/reopen loads updated Dev assets"
+  ]
+}
