@@ -49,6 +49,6 @@ export function ScheduledTasks({project,onClose,onOpenSession}:{project:Project;
  {current.message&&<p className="schedule-message">{current.message}</p>}{current.error&&<p className="schedule-error">{current.error}</p>}
  <button type="button" className="schedule-text-action" onClick={()=>void open(current.session_id)}>打开原会话<Glyph name="next" size={13}/></button>
  {task?<ScheduleHistory task={task} onOpenSession={id=>void open(id)}/>:detailLoading?<p className="schedule-empty">正在读取执行记录…</p>:null}</>}</div></div>}
- <footer className="schedule-footer">时间按本机时区显示。暂停不会中断当前执行，原有权限限制继续生效。</footer>
+ <footer className="schedule-footer">时间按本机时区显示。只读巡检需连接模型并开启项目 SRE 协作，提醒不需要。暂停不会中断当前执行。</footer>
  </section></div>;
 }

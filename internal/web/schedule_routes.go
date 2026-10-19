@@ -59,6 +59,9 @@ func (b *Server) scheduleRoute(w http.ResponseWriter, r *http.Request, name, met
 		}
 		if row.Enabled != enabled {
 			if enabled {
+				if row.Kind == "workflow" {
+					b.requireScheduledWorkflow(row.Project)
+				}
 				at, e := time.Parse(time.RFC3339, row.At)
 				if e != nil {
 					fail(400, "任务时间无效，无法恢复")

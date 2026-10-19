@@ -185,3 +185,32 @@ func TestScheduleFailedClaimHasDurableFailure(t *testing.T) {
 		t.Fatal("failure notice missing or unexpected effect")
 	}
 }
+
+func TestScheduleEnableChecksWorkflowPrerequisitesButPauseRemainsAvailable(t *testing.T) {
+	b, h := fixture(t)
+	session, _ := newSession(t, h)
+	project := stringOf(b.Store.Session(session)["projectId"])
+	row := toolSchedule{ID: ident(), Project: project, Session: session, Kind: "workflow", Enabled: false, Revision: 1, At: time.Now().Add(time.Hour).Format(time.RFC3339), Status: "scheduled"}
+	b.scheduleMu.Lock()
+	must(b.writeSchedules([]toolSchedule{row}))
+	b.scheduleMu.Unlock()
+	path := "/api/projects/" + project + "/schedules/" + row.ID
+	result := apiTest(t, h, "PATCH", path, Object{"enabled": true, "expectedRevision": 1}, 409)
+	if !strings.Contains(stringOf(result["error"]), "SRE") {
+		t.Fatal("missing prerequisite guidance")
+	}
+	b.Store.SetSREEnabled(project, true)
+	result = apiTest(t, h, "PATCH", path, Object{"enabled": true, "expectedRevision": 1}, 409)
+	if !strings.Contains(stringOf(result["error"]), "模型") {
+		t.Fatal("missing model guidance")
+	}
+	b.scheduleMu.Lock()
+	rows, err := b.readSchedules()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows[0].Enabled = true
+	must(b.writeSchedules(rows))
+	b.scheduleMu.Unlock()
+	apiTest(t, h, "PATCH", path, Object{"enabled": false, "expectedRevision": 1}, 200)
+}

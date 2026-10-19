@@ -189,6 +189,9 @@ func (b *Server) scheduleTool(ctx context.Context, id, project, name string, arg
 			return nil, errors.New("reminder message required")
 		}
 	case "workflow":
+		if row.Enabled {
+			b.requireScheduledWorkflow(project)
+		}
 		template := b.Store.Workflow(project, row.WorkflowID)
 		if template.Version != row.Version {
 			return nil, errors.New("workflow version conflict")
@@ -433,4 +436,13 @@ func finishScheduleExecution(row *toolSchedule, now time.Time) {
 	run.Error = row.Error
 	run.TaskID = row.TaskID
 	run.FinishedAt = now.Format(time.RFC3339)
+}
+
+func (b *Server) requireScheduledWorkflow(project string) {
+	if !b.Store.SREEnabled(project) {
+		fail(409, "只读巡检需要先开启当前项目的 SRE 协作")
+	}
+	if b.Models.Active() == nil {
+		fail(409, "只读巡检需要先连接 Agent 模型")
+	}
 }
