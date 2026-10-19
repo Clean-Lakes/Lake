@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-19",
+  "scope": "One resource or scoped session-tool family progress row per user turn; presentation only.",
+  "sourceBase": "4e482d515bc38fdc3e5ebf0c68555d8b4e6e2c28",
+  "checks": {
+    "frontendTests": 290,
+    "typescriptAndProductionBuild": "passed",
+    "lightTheme": {
+      "operations": 8,
+      "resourceRows": 1,
+      "failureRetained": 1,
+      "expandedThoughts": 6,
+      "expandedStatePreserved": true,
+      "rowReplacements": 0,
+      "rowRemovals": 0,
+      "rowPositionChanges": 0,
+      "scrollWrites": 0
+    },
+    "darkTheme": {
+      "operationSequence": "A, B, A, B, A",
+      "resourceRows": 2,
+      "operationsByResource": [
+        3,
+        2
+      ],
+      "rowReplacements": 0,
+      "rowRemovals": 0,
+      "scrollWrites": 0
+    },
+    "coverage": [
+      "Nonempty thinking records and intervening prose",
+      "Resource return after interleaving another resource",
+      "Failures, pending, unknown, stopped, not-executed and background states retained in the single-row summary",
+      "Distinct resource identities and ambiguous names stay separate",
+      "Context-selected and explicit calls converge for unambiguous recorded targets",
+      "New user turns reset groups; child controls remain separate",
+      "Activity view and stored records unchanged"
+    ]
+  },
+  "fixture": "web-agent/web/test/fixtures/progress-refresh.html?space&same-resource&reasoning",
+  "screenshots": [
+    "lake-single-resource-progress-light.png",
+    "lake-single-resource-progress-dark.png"
+  ],
+  "dev": {
+    "devBackendPID": 58736,
+    "currentEmbeddedAssetsVerified": [
+      "index-D7ANHjAT.css",
+      "index-DnTUkqQF.js"
+    ]
+  },
+  "data": "Fictional fixture only; no model or host calls. Native Dev restarted only after verifying no running or waiting turns."
+}

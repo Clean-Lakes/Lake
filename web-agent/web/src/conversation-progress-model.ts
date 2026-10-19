@@ -1,5 +1,5 @@
 import type {TranscriptEntry} from './timeline';
-import {transcriptGroups} from './timeline';
+import {transcriptGroups,transcriptTurns} from './timeline';
 
 export type ConversationGroup = {progress:boolean; entries:TranscriptEntry[]};
 const normalStatuses=new Set(['running','completed','succeeded','success']);
@@ -19,9 +19,9 @@ const sessionFamilies:Record<string,string>={
  list_mcp_servers:'mcp-catalog',list_mcp_tools:'mcp-server',call_mcp_tool:'mcp-server',
 };
 const familyScope:Record<string,string[]>={history:['session_id'],'tool-result':['result_id'],task:['task_id'],'mcp-server':['server_id']};
-function operationGroupKey(entry:TranscriptEntry):string|undefined {
+function operationGroupKey(entry:TranscriptEntry,targetRefs:Map<string,Set<string>>):string|undefined {
  const card=entry.card;
- if(!card||!['operation','shell'].includes(card.type)||!normalStatuses.has(card.status)||card.title==='ask_user_question')return;
+ if(!card||!['operation','shell'].includes(card.type)||card.title==='ask_user_question')return;
  const data=record(card.data),args=record(data.arguments),family=sessionFamilies[card.title??''];
  if(family){
   const scope=(familyScope[family]??[]).map(key=>text(args[key]));
@@ -33,30 +33,55 @@ function operationGroupKey(entry:TranscriptEntry):string|undefined {
  const ref=text(data.resource_id)||text(args.asset_ref);
  const target=text(data.target);
  if(!ref&&(!target||['当前项目/会话','项目资源目录'].includes(target)))return;
- return JSON.stringify([ref?['resource',ref]:['target',target],...['terminal_id','container_id','container'].map(key=>text(args[key]))]);
+ const refs=targetRefs.get(target);
+ const identity=ref||(refs?.size===1?[...refs][0]:undefined);
+ return JSON.stringify(identity?['resource',identity]:['target',target]);
 }
 
-/** Consecutive operations on one resource or one session-tool family reuse their first row. Replies,
- * attention states and child-run controls remain explicit boundaries. */
+/** One resource/family row per user turn, anchored at its first appearance.
+ * Later reasoning, prose, other resources and attention states never create
+ * another row for the same identity. Stored entries and child controls stay intact. */
 export function conversationGroups(entries:TranscriptEntry[]):ConversationGroup[] {
  const result:ConversationGroup[]=[];
- for(const group of transcriptGroups(entries)) {
-  if(group.some(entry=>entry.agentRun)){result.push({progress:false,entries:group});continue}
-  for(const entry of group){
-   // An invisible placeholder must not split an otherwise consecutive row.
-   if(entry.card?.type==='thinking'&&!entry.card.content)continue;
-   const key=operationGroupKey(entry),last=result.at(-1);
-   if(key&&last?.progress&&operationGroupKey(last.entries[0]!)===key)last.entries.push(entry);
-   else result.push({progress:!!entry.card&&['operation','shell'].includes(entry.card.type),entries:[entry]});
+ for(const turn of transcriptTurns(entries)){
+  const rows=new Map<string,ConversationGroup>();
+  let active:ConversationGroup|undefined,thoughts:ConversationGroup|undefined;
+  // Bridge explicit asset references and context-selected operations only when
+  // their recorded target identifies one unambiguous reference in this turn.
+  const targetRefs=new Map<string,Set<string>>();
+  for(const entry of turn){
+   if(!entry.card||!['operation','shell'].includes(entry.card.type))continue;
+   const data=record(entry.card.data),args=record(data.arguments),ref=text(data.resource_id)||text(args.asset_ref),target=text(data.target);
+   if(ref&&target){const refs=targetRefs.get(target)??new Set<string>();refs.add(ref);targetRefs.set(target,refs)}
+  }
+  for(const block of transcriptGroups(turn)) {
+   if(block.some(entry=>entry.agentRun)){result.push({progress:false,entries:block});continue}
+   for(const entry of block){
+    if(entry.card?.type==='thinking'){
+     if(!entry.card.content)continue;
+     const row=active??thoughts;
+     if(row)row.entries.push(entry);
+     else {thoughts={progress:true,entries:[entry]};result.push(thoughts)}
+     continue;
+    }
+    const key=operationGroupKey(entry,targetRefs);
+    if(key){
+     let row=rows.get(key);
+     if(!row){row=thoughts??{progress:true,entries:[]};if(!thoughts)result.push(row);rows.set(key,row)}
+     row.entries.push(entry);active=row;thoughts=undefined;
+    } else result.push({progress:!!entry.card&&['operation','shell'].includes(entry.card.type),entries:[entry]});
+   }
   }
  }
  return result;
 }
 
-/** Keep the current normal operation row moving while the model prepares its
- * next step. A visible reply or an attention state ends that row's live phase. */
+/** Render position is anchored at first use, so find the live row by its latest
+ * chronological entry rather than by the last displayed row. */
 export function currentProgressGroupId(entries:TranscriptEntry[],live:boolean):string|undefined {
  if(!live)return;
- const tail=conversationGroups(entries).at(-1);
- if(tail?.progress&&tail.entries.every(entry=>!!entry.card&&normalStatuses.has(entry.card.status)))return tail.entries[0]!.id;
+ const tail=entries.filter(entry=>entry.card?.type!=='thinking'||!!entry.card.content).at(-1);
+ if(!tail?.card||!normalStatuses.has(tail.card.status))return;
+ const row=conversationGroups(entries).find(group=>group.progress&&group.entries.some(entry=>entry.id===tail.id));
+ return row?.entries[0]!.id;
 }

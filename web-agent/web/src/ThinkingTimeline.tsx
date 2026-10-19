@@ -37,11 +37,15 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
   const [rawOpen, setRawOpen] = useState(false);
   const tools = cards.filter(card => card.type !== "thinking");
   const thoughts = cards.filter(card => card.type === "thinking" && card.content);
-  const attention=tools.find(card=>!['running','background_running','completed','succeeded','success'].includes(card.status));
-  const state=attention?.status==='pending'?'等待确认':attention?.status==='failed'?'执行失败':attention&&['interrupted','cancelled'].includes(attention.status)?'已停止':attention?'执行结果待核查':'';
+  const attention=tools.find(card=>!['running','completed','succeeded','success'].includes(card.status));
+  const notices=[
+    ['等待确认','pending'],['执行失败','failed'],['结果待核查','unknown'],['未执行','not_executed'],['已停止','interrupted','cancelled'],['后台执行中','background_running'],
+  ].flatMap(([label,...statuses])=>{const count=tools.filter(card=>statuses.includes(card.status)).length;return count?[tools.length>1?`${count} 项${label}`:label]:[]});
+  const state=notices.join(' · ')||(attention?'执行结果待核查':'');
   const description=resourceRow&&tools.length?toolDescription(tools.filter(card=>card.status==='running').at(-1)??tools.at(-1)!):processDescription(cards);
-  const executing=live&&!attention&&tools.some(card=>card.status==='running');
-  const progressing=live&&continuing&&!attention&&tools.length>0&&tools.every(card=>["running","completed","succeeded","success"].includes(card.status));
+  const blocked=tools.some(card=>['pending','unknown','not_executed','background_running'].includes(card.status))||!!tools.length&&!['running','completed','succeeded','success'].includes(tools.at(-1)!.status);
+  const executing=live&&!blocked&&cards.some(card=>card.status==='running');
+  const progressing=live&&continuing&&!blocked&&tools.length>0;
   const label = [description,state].filter(Boolean).join(' · ');
   const panelId = `thinking-${cards[0]!.id}`;
   return <section className={`thinking-timeline ${resourceRow ? "is-resource-row" : ""} ${live ? "is-live" : ""} ${executing ? "is-executing" : ""} ${progressing ? "is-continuing" : ""}`} aria-label="思考与操作过程">
