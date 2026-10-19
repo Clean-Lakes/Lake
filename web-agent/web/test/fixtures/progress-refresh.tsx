@@ -106,3 +106,5 @@ document.getElementById('stream-reply')!.onclick=()=>{state.ai!.cards.filter(car
 document.getElementById('complete-reply')!.onclick=()=>{state.ai!.cards.filter(card=>card.type!=='thinking').at(-1)!.status='completed';state.ai!.status='completed';state.ai!.turnFinishedAt=new Date().toISOString();update()};
 
 document.getElementById('new-narration')!.onclick=()=>{state.ai!.cards.filter(card=>card.type!=='thinking').at(-1)!.status='completed';const n=++index;state.ai!.cards.push({id:`new-note-${n}`,type:'message',status:'completed',at:stamp(++tick),content:'继续核对演示服务的运行记录，保留现有证据。'},{id:`operation-${n}`,type:'operation',title:'shell',status:'running',at:stamp(++tick),content:'',data:{target:'演示主机',arguments:{command:'uptime'}}});update()};
+
+document.getElementById('hide-fixture-controls')!.onclick=()=>{(document.querySelector('.fixture-controls') as HTMLElement).style.display='none'};

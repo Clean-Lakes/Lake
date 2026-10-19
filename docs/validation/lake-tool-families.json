@@ -1,0 +1,146 @@
+{
+  "sourceCommit": "2c4c566d2c9c802e8cd0bdffe9391499ec2e5d27",
+  "frontendTestsPassed": 262,
+  "typeScriptAndProductionBuild": "passed",
+  "toolAudit": "All current extended session tools have a tested family or explicit decision boundary. Resource catalog discovery included. Unknown project tools remain separate.",
+  "families": [
+    "workflow",
+    "schedule",
+    "progress",
+    "resource-catalog",
+    "skill",
+    "history by session_id",
+    "tool-result by result_id",
+    "task by task_id/type",
+    "MCP catalog",
+    "MCP by server_id"
+  ],
+  "boundaries": "Replies, user decisions, approvals, failed/unknown/stopped/background outcomes, child task owners, distinct handles and category transitions stay separate.",
+  "ui": {
+    "workflowPair": {
+      "rows": [
+        {
+          "id": "note",
+          "kind": "reply",
+          "top": 204.5
+        },
+        {
+          "id": "operation-0",
+          "kind": "operation",
+          "top": 250.390625
+        }
+      ],
+      "replacements": 0,
+      "removals": 0,
+      "positionChanges": 0,
+      "colorChanges": 0,
+      "scrollWrites": 0,
+      "scrollChanges": 0,
+      "animations": 0,
+      "errors": 0,
+      "executionRestarts": 0
+    },
+    "schedulePair": {
+      "rows": [
+        {
+          "id": "note",
+          "kind": "reply",
+          "top": 204.5
+        },
+        {
+          "id": "operation-0",
+          "kind": "operation",
+          "top": 250.390625
+        },
+        {
+          "id": "operation-2",
+          "kind": "operation",
+          "top": 298.78125
+        }
+      ],
+      "replacements": 0,
+      "removals": 0,
+      "positionChanges": 0,
+      "colorChanges": 0,
+      "scrollWrites": 0,
+      "scrollChanges": 0,
+      "animations": 0,
+      "errors": 0,
+      "executionRestarts": 0
+    },
+    "expandedAppend": {
+      "rows": [
+        {
+          "id": "note",
+          "kind": "reply",
+          "top": 204.5
+        },
+        {
+          "id": "operation-0",
+          "kind": "operation",
+          "top": 250.390625
+        },
+        {
+          "id": "operation-2",
+          "kind": "operation",
+          "top": 298.78125
+        }
+      ],
+      "replacements": 0,
+      "removals": 0,
+      "positionChanges": 0,
+      "colorChanges": 0,
+      "scrollWrites": 0,
+      "scrollChanges": 0,
+      "animations": 0,
+      "errors": 0,
+      "executionRestarts": 0
+    },
+    "workflowExpandedRetained": true,
+    "scheduleExpandedRetained": true,
+    "darkNarrow": {
+      "rows": [
+        {
+          "id": "note",
+          "kind": "reply",
+          "top": 204.5
+        },
+        {
+          "id": "operation-0",
+          "kind": "operation",
+          "top": 250.390625
+        },
+        {
+          "id": "operation-2",
+          "kind": "operation",
+          "top": 298.78125
+        }
+      ],
+      "replacements": 0,
+      "removals": 0,
+      "positionChanges": 0,
+      "colorChanges": 0,
+      "scrollWrites": 0,
+      "scrollChanges": 0,
+      "animations": 0,
+      "errors": 0,
+      "executionRestarts": 0
+    },
+    "data": "Fictional SSE only; no actual workflow, schedule or infrastructure calls"
+  },
+  "macDev": {
+    "installed": true,
+    "signatureVerified": true,
+    "normalRestartRequiredToLoadNewBuild": true
+  },
+  "windowsDev": {
+    "installed": true,
+    "packageCheckPassed": true,
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "704c58577161e856ebaf19fc8baac5e0661eeb8a3d9314dbd6c5e8c0ec9cf694",
+    "desktopSHA256": "67f438a0617dda45a41a48cac06e85f27dcd11199ce5077123f7ec0caf5fdd5f"
+  },
+  "backendChanges": "none in this iteration; prior AI/HTTP and Windows scheduling verification retained",
+  "releaseArtifacts": "unchanged"
+}
