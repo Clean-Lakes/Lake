@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-19",
+  "scope": "Lake semantic glyphs before compact progress labels and in expanded tool records; grouping and execution unchanged",
+  "fixtureOnly": true,
+  "expanded": "true",
+  "leadingIcons": 1,
+  "metrics": {
+    "actionAnimations": 0,
+    "actionReplacements": 0,
+    "errors": 0,
+    "executionAnimations": 0,
+    "executionName": "execution-text-sweep",
+    "executionPhase": "65.4579% 0px",
+    "height": 612,
+    "heightChanges": 0,
+    "historyReplacements": 0,
+    "lineArrivals": [],
+    "motionSamples": [],
+    "renderedRows": [
+      {
+        "id": "note",
+        "kind": "reply",
+        "top": 176.5
+      },
+      {
+        "id": "empty-thought",
+        "kind": "operation",
+        "top": 214.3984375
+      }
+    ],
+    "replyAnimations": 0,
+    "replyReplacements": 0,
+    "rowColorChanges": 0,
+    "rowPositionChanges": 0,
+    "rowRemovals": 0,
+    "rowReplacements": 0,
+    "scrollChanges": 0,
+    "scrollEvents": 0,
+    "scrollWrites": 0,
+    "snapshots": 5,
+    "statusBeforeReply": true,
+    "statusHeight": 24,
+    "statusTop": 140.5,
+    "subscriptions": 1,
+    "top": 0,
+    "updates": 3
+  },
+  "sameResourceRows": 1,
+  "frontendTests": 300,
+  "typescriptAndProductionBuild": "passed",
+  "lightAndDark": "passed",
+  "narrowViewport": {
+    "width": 390,
+    "height": 844,
+    "horizontalOverflow": false,
+    "iconSlot": 20
+  },
+  "signedDevInstalledRestartedAndAssetsVerified": true
+}

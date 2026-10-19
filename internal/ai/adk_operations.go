@@ -86,7 +86,7 @@ func (e *Engine) dispatchNativeOperation(ctx context.Context, s *session, c Conf
 				return err
 			}
 			if unknown > 0 {
-				return errors.New("先核实结果不明或仍在运行的原操作，不会自动重复派发")
+				return errors.New("先核实结果不明或仍在运行的原操作，不会自动重复派发；这是执行结果保护，不是写权限不足，调整权限或更换路径不会解除，请勿重复尝试写入")
 			}
 		}
 		var prior nativeOperation

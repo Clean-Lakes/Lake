@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-19",
+  "fixture": "progress-refresh.html?space&same-resource&reasoning",
+  "reproduction": "Expand and collapse the progress row before content overflows, then append a long answer.",
+  "beforeFix": {
+    "scrollTop": 0,
+    "scrollHeight": 831,
+    "clientHeight": 612,
+    "hiddenTail": 219
+  },
+  "afterFix": {
+    "scrollTop": 219,
+    "scrollHeight": 831,
+    "clientHeight": 612,
+    "hiddenTail": 0
+  },
+  "manualReading": {
+    "topBeforeNewContent": 0,
+    "topAfterNewContent": 0,
+    "remainingTail": 257
+  },
+  "resumeAfterReturningToBottom": {
+    "initialTailGap": -0.5,
+    "tailGapAfterNewContent": 0
+  },
+  "underflowActivityUpdate": {
+    "scrollWrites": 0,
+    "rowReplacements": 0,
+    "rowRemovals": 0,
+    "replayedArrivalAnimations": 0
+  },
+  "frontendTests": 302,
+  "typescriptAndProductionBuild": "passed",
+  "data": "Fictional full-App fixture with in-memory snapshots. No model or host operations.",
+  "signedMacDevInstalledRestartedAndAssetsVerified": true
+}

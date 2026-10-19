@@ -34,7 +34,7 @@ func (e *Engine) OperationOutcomes(id string) ([]OperationOutcome, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := e.reconcileFilePreflightOutcomes(context.Background(), id); err != nil {
+	if err := e.reconcilePreflightOutcomes(context.Background(), id); err != nil {
 		return nil, err
 	}
 	var rows []nativeOperation
@@ -126,7 +126,7 @@ func (e *Engine) ResolveOperation(id, operationID, status, note string) error {
 // Only an exact durable handle can reconcile a command. Command text or a new
 // invocation is never used to infer that an older write succeeded.
 func (e *Engine) reconcileNativeOperations(ctx context.Context, id string) error {
-	if err := e.reconcileFilePreflightOutcomes(ctx, id); err != nil {
+	if err := e.reconcilePreflightOutcomes(ctx, id); err != nil {
 		return err
 	}
 	store, err := e.adkStore()
@@ -179,22 +179,25 @@ func (e *Engine) reconcileNativeOperations(ctx context.Context, id string) error
 	return nil
 }
 
-// Older versions classified even a rejected file precondition as an unknown
-// effect. These exact errors are emitted before the mutating command starts.
+// Older versions classified rejected file preconditions and the trusted shell
+// target check as unknown effects. These exact errors precede command dispatch.
 // Never infer success, repair a generic process error, or release a live handle.
-func (e *Engine) reconcileFilePreflightOutcomes(ctx context.Context, id string) error {
+func (e *Engine) reconcilePreflightOutcomes(ctx context.Context, id string) error {
 	store, err := e.adkStore()
 	if err != nil {
 		return err
 	}
 	return store.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var rows []nativeOperation
-		if err := tx.Where("session_id = ? AND status = ? AND handle = ? AND tool IN ? AND result IN ?", id, "unknown", "", []string{"write", "edit", "multi_edit", "append", "delete"}, []string{"file changed since read; expected_hash mismatch", "file changed after preview; approval expired"}).Find(&rows).Error; err != nil {
+		if err := tx.Where("session_id = ? AND status = ? AND handle = ?", id, "unknown", "").Where("(tool IN ? AND result IN ?) OR (tool = ? AND result = ?)", []string{"write", "edit", "multi_edit", "append", "delete"}, []string{"file changed since read; expected_hash mismatch", "file changed after preview; approval expired"}, "shell", "Shell runtime and asset do not match").Find(&rows).Error; err != nil {
 			return err
 		}
 		for _, row := range rows {
 			var identity RunIdentity
 			if json.Unmarshal([]byte(row.Identity), &identity) != nil || identity.TaskID != "" {
+				continue
+			}
+			if row.Tool == "shell" && (identity.SessionID != row.SessionID || identity.RootTurnID == "" || identity.RootTurnID != row.RootTurnID) {
 				continue
 			}
 			now := time.Now()

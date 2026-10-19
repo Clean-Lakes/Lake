@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-19",
+  "sourceBase": "7cda8cf8",
+  "scope": "File read/write/append/edit/delete approval presentation. Execution and approval decisions unchanged.",
+  "tests": 296,
+  "typescriptAndProductionBuild": "passed",
+  "fixtures": [
+    "web-agent/web/test/fixtures/attachment-approval.html?write&queue",
+    "web-agent/web/test/fixtures/attachment-approval.html?write&theme=dark&confirm&child"
+  ],
+  "checks": {
+    "defaultPreviewCollapsed": true,
+    "technicalParametersCollapsed": true,
+    "exactPreparedContentPreserved": true,
+    "markdownAndSourceToggle": "passed",
+    "rootDecision": {
+      "operation": "decision",
+      "id": "synthetic-file-approval",
+      "accept": true
+    },
+    "childDecision": {
+      "operation": "agentDecision",
+      "id": "synthetic-file-approval",
+      "runId": "synthetic-child",
+      "confirmation": "执行 Local machine",
+      "accept": true
+    },
+    "wrongTargetBlocked": true,
+    "narrow": {
+      "viewport": [
+        390,
+        844
+      ],
+      "cardHeight": 418.97,
+      "horizontalOverflow": false,
+      "footerVisible": true
+    }
+  },
+  "screenshots": [
+    "lake-file-confirmation-light.png",
+    "lake-file-confirmation-dark.png",
+    "lake-file-confirmation-narrow.png"
+  ],
+  "dev": {
+    "backendPID": 61916,
+    "embeddedAssetsVerified": [
+      "index-ClWHOylb.js",
+      "index-CGGIVCZU.css"
+    ],
+    "installed": true,
+    "restartedWhenIdle": true
+  },
+  "data": "Fictional in-memory approval fixture. No real write operation or permission decision was executed."
+}

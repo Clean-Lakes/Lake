@@ -67,9 +67,11 @@ import { initialSidebarProject, sidebarSessions } from "./sidebarState";
 import { CompositionGuard, isSendKey, parseSendShortcut, sendShortcutStorageKey, type SendShortcut } from "./composerKeyboard";
 import { HostKeyTrust } from "./HostKeyTrust";
 import { conversationActive, sessionConnection, type StreamState } from "./connection";
-import { atConversationTail, FollowScroll } from "./followScroll";
+import { atConversationTail, conversationCanScroll, pausesConversationFollow, FollowScroll } from "./followScroll";
 import { type CommandPolicy, dangerConfirmation } from "../../shared/command-policy";
 import "./styles.css";
+import './fileOperationApproval.css';
+import './operationApproval.css';
 import "./messageMentions.css";
 import "./agentTasks.css";
 import "./statusText.css";
@@ -322,6 +324,10 @@ function App() {
     conversationScroll.current.following = false;
     conversationFollower.current?.stop();
   }, []);
+  const inspectConversation = useCallback(() => {
+    const box = conversationRef.current;
+    if (box && conversationCanScroll(box)) pauseFollowing();
+  }, [pauseFollowing]);
   const noticeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const notify = useCallback((message: string) => {
@@ -1377,9 +1383,19 @@ function App() {
 
       {selectedResource ? <><ResourceDetail resource={selectedResource} project={projectList.find(project => project.id === selectedResource.projectId)} sessions={catalog.sessions.filter(session => session.projectId === selectedResource.projectId)} selectedSession={selectedSession} terminalList={resourceTerminals} disabled={!connected || !!pendingOperation} onBack={() => navigate({ sessionId, resourceId: null })} onNewSession={() => openSessionDialog(selectedResource.projectId)} onSession={id => navigate({ sessionId: id, resourceId: null })} onEdit={() => setEditTerminalResource(selectedResource)} />
         </> : sessionId && selectedSession ? <div className="session-view">
-        <section id="session-view-panel" ref={conversationRef} onWheel={pauseFollowing} onPointerDown={pauseFollowing} onKeyDown={event => { if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key)) pauseFollowing(); }} onScroll={event => { if (conversationFollower.current?.animating) return; conversationScroll.current.following = atConversationTail(event.currentTarget); }} className="conversation" aria-label="会话记录">
+        <section id="session-view-panel" ref={conversationRef} onWheel={event => { if (pausesConversationFollow(event.currentTarget,event.deltaY)) pauseFollowing(); }} onPointerDown={event => {
+          // Only grabbing the native scrollbar pauses on pointer-down. Clicking
+          // text or toggling a short progress row is not a scroll gesture.
+          const box=event.currentTarget, rect=box.getBoundingClientRect();
+          if (event.target===box && (event.clientX < rect.left+box.clientLeft || event.clientX >= rect.left+box.clientLeft+box.clientWidth)) inspectConversation();
+        }} onTouchMove={inspectConversation} onPointerMove={event => { if(event.buttons===1&&window.getSelection()?.type==='Range')inspectConversation(); }} onKeyDown={event => {
+          const target=event.target as HTMLElement;
+          if(target.closest('input,textarea,[contenteditable="true"]'))return;
+          const direction=["ArrowUp","PageUp","Home"].includes(event.key)?-1:["ArrowDown","PageDown","End"].includes(event.key)?1:0;
+          if(direction&&pausesConversationFollow(event.currentTarget,direction))pauseFollowing();
+        }} onScroll={event => { if (conversationFollower.current?.animating) return; conversationScroll.current.following = atConversationTail(event.currentTarget); }} className="conversation" aria-label="会话记录">
           {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true">{loadingSessionId === sessionId && <span role="status">正在加载会话…</span>}</div> : (itemList.length || !!activeSnapshot.sre?.tasks.length) ? <div className="timeline-list">
-            {activeSnapshot?.ai ? <AITranscript key={sessionId} snapshot={activeSnapshot} mode={conversationMode} onInspect={pauseFollowing} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={!sessionConnected} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
+            {activeSnapshot?.ai ? <AITranscript key={sessionId} snapshot={activeSnapshot} mode={conversationMode} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={!sessionConnected} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
             {selectedSession.status === "investigating" && !activeSnapshot.ai && <div className="timeline-item item-thinking" role="status" aria-live="polite"><span className="timeline-point"><Glyph name="spark" size={15}/></span><div className="timeline-content"><div className="thinking-line"><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span><span>正在处理…</span></div></div></div>}
           </div> : <div className="timeline-empty"><div className="empty-icon"><Glyph name="chat" size={25}/></div><h2>从一个问题开始</h2><p>描述你看到的故障或想核实的现象。Lake 会把调查过程、证据和需要确认的操作留在这里。</p></div>}
         </section>

@@ -796,6 +796,8 @@ a { color: inherit; }
 @media (prefers-reduced-motion: reduce) { .reply-arrival { animation: none; } }
 .thinking-toggle { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 3px 0; border: 0; background: transparent; color: var(--text-muted); font: inherit; font-size: 14px; line-height: 1.6; text-align: left; cursor: pointer; }
 .thinking-toggle:hover { color: var(--text-secondary); }
+.thinking-process-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: 0 0 20px; color: inherit; margin-right: 3px; }
+.thinking-process-icon > svg { display: block; }
 .thinking-toggle:focus-visible, .thinking-tool summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: var(--radius-control); }
 .thinking-chevron { width: 14px; height: 14px; flex-shrink: 0; transition: transform .16s ease; }
 .thinking-toggle .thinking-chevron.is-open, .agent-process-details[open] > summary .thinking-chevron { transform: rotate(90deg); }

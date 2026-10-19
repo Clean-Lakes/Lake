@@ -4,7 +4,7 @@ import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {AICard,SessionSnapshot} from '../../shared/contracts';
-import {conversationGroups} from '../src/conversation-progress-model';
+import {conversationGroups,currentProgressGroupId} from '../src/conversation-progress-model';
 import {AITranscript} from '../src/AIPanel';
 
 const at='2026-10-18T08:00:00Z';
@@ -15,7 +15,7 @@ test('adding a tool appends its own row and never reclassifies the preceding rep
  const before=conversationGroups(first);
  const later=conversationGroups([...first,card('op1','operation','running'),card('second','message'),card('op2','shell','running')]);
  assert.deepEqual(later.slice(0,before.length),before);
- assert.deepEqual(later.map(g=>[g.progress,g.entries.map(e=>e.id)]),[[false,['user']],[false,['first']],[true,['op1']],[false,['second']],[true,['op2']]]);
+ assert.deepEqual(later.map(g=>[g.progress,g.entries.map(e=>e.id)]),[[false,['user']],[false,['first']],[true,['op1','op2']],[false,['second']]]);
 });
 test('plain answers and scope questions retain their own rows',()=>{
  const question={id:'question',at,message:{...user.message!,role:'assistant',text:'请确认范围'}};
@@ -36,12 +36,12 @@ test('child dispatch and SRE entries retain their existing controls',()=>{
  assert.ok(groups.every(g=>!g.progress));
  assert.deepEqual(groups[0]!.entries.map(e=>e.id),['dispatch','run']);
 });
-test('all tool rounds remain visible in order; final reply and duration stay single',()=>{
+test('all prose stays visible while one resource row retains all tool rounds',()=>{
  const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],replyTimings:[{messageId:user.message!.id,startedAt:at,finishedAt:'2026-10-18T08:01:00Z',status:'completed'}],ai:{session:'s',status:'completed',cardsOffset:0,turns:1,cards:Array.from({length:12},(_,i)=>[card(`note${i}`,'message','completed',`说明 ${i}`).card,card(`tool${i}`,'operation').card]).flat().concat([card('final','message','completed','最终结论').card])}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
  assert.ok(html.includes('说明 0')&&html.includes('说明 11')&&html.includes('最终结论'));
- assert.equal((html.match(/data-conversation-entry=/g)||[]).length,25);
- assert.equal((html.match(/class="thinking-timeline /g)||[]).length,12);
+ assert.equal((html.match(/data-conversation-entry=/g)||[]).length,14);
+ assert.equal((html.match(/class="thinking-timeline /g)||[]).length,1);
  assert.ok(!html.includes('reply-arrival'),'restored rows must not animate');
  assert.equal((html.match(/turn-status-text/g)||[]).length,1);
  const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:'activity'}));
@@ -64,12 +64,51 @@ test('consecutive operations on the same resource reuse the first row without mu
  assert.ok(html.includes('2 项')&&html.includes('data-conversation-entry="one"'));
  assert.ok(!html.includes('data-conversation-entry="two"'));
 });
-test('resource boundaries and attention states never disappear into a successful group',()=>{
+test('nonempty reasoning between resource operations stays in one stable progress row',()=>{
+ const first=card('thinking-0','thinking','running','先检查主机。');
+ const one=card('one','operation'),two=card('two','operation','running');
+ const reasoning=card('thinking-1','thinking','running','继续核对进程与连接。');
+ const entries=[first,one,reasoning,two];
+ for(let size=1;size<=entries.length;size++){
+  const groups=conversationGroups(entries.slice(0,size));
+  assert.equal(groups.length,1);
+  assert.equal(groups[0]!.progress,true);
+  assert.deepEqual(groups[0]!.entries.map(e=>e.id),entries.slice(0,size).map(e=>e.id));
+  assert.equal(currentProgressGroupId(entries.slice(0,size),true),'thinking-0');
+ }
+ const completed=entries.map(e=>({...e,card:{...e.card!,status:'completed'}}));
+ assert.deepEqual(conversationGroups(completed).map(g=>g.entries.map(e=>e.id)),[['thinking-0','one','thinking-1','two']]);
+ assert.equal(currentProgressGroupId(completed,false),undefined);
+ const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],ai:{session:'s',status:'running',cardsOffset:0,turns:1,cards:entries.map(e=>e.card)}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ assert.equal((html.match(/class="thinking-timeline /g)||[]).length,1);
+ assert.ok(html.includes('2 项')&&html.includes('data-conversation-entry="thinking-0"'));
+ assert.ok(!html.includes('分析问题'),'an operation replaces the generic label in the same row');
+ assert.ok(html.includes('is-continuing')&&html.includes('is-executing'));
+ const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:'activity'}));
+ assert.equal((activity.match(/class="thinking-timeline /g)||[]).length,1);
+});
+test('reasoning bridges workflow and schedule operations without merging domains',()=>{
+ const steps=[sessionOperation('list','list_workflows'),card('think-1','thinking'),sessionOperation('save','save_workflow'),card('think-2','thinking'),sessionOperation('create','schedule_create'),card('think-3','thinking'),sessionOperation('check','schedule_list')];
+ assert.deepEqual(conversationGroups(steps).map(g=>g.entries.map(e=>e.id)),[['list','think-1','save','think-2'],['create','think-3','check']]);
+});
+test('one resource row survives narration, other resources, errors and approvals',()=>{
+ const one=card('one','operation'),think=card('reasoning','thinking');
+ const other={...card('other','operation'),card:{...one.card,id:'other',data:{target:'另一主机'}}};
+ const approval={id:'approval',at,action:{id:'approval'} as SessionSnapshot['actions'][number]};
+ const entries=[one,think,card('note','message'),other,approval,card('error','error','failed'),card('again','thinking'),card('two','operation','running')];
+ const groups=conversationGroups(entries);
+ assert.deepEqual(groups.map(g=>g.entries.map(e=>e.id)),[['one','reasoning','two'],['note'],['other','again'],['approval'],['error']]);
+ assert.equal(currentProgressGroupId(entries,true),'one','the active row need not be last in display order');
+ const nextUser={...user,id:'next-user',message:{...user.message!,id:'next-user'}};
+ assert.deepEqual(conversationGroups([one,nextUser,card('two','operation')]).map(g=>g.entries.map(e=>e.id)),[['one'],['next-user'],['two']]);
+});
+test('resource identities stay separate while all statuses and subtargets share their resource row',()=>{
  const one=card('one','operation');
  const different={...card('other','operation'),card:{...one.card,id:'other',data:{...one.card.data,target:'另一主机'}}};
  assert.equal(conversationGroups([one,different]).length,2);
  for(const status of ['pending','failed','unknown','interrupted','cancelled','not_executed','background_running']){
-  assert.equal(conversationGroups([one,card('attention','operation',status),card('next','operation')]).length,3,status);
+  assert.deepEqual(conversationGroups([one,card('attention','operation',status),card('next','operation')])[0]!.entries.map(e=>e.id),['one','attention','next'],status);
  }
  for(const target of ['', '当前项目/会话','项目资源目录']){
   const unscoped={...one,card:{...one.card,data:{target}}};
@@ -77,9 +116,9 @@ test('resource boundaries and attention states never disappear into a successful
  }
  const scoped=(id:string,asset:string,terminal='',container='')=>({...card(id,'operation'),card:{...one.card,id,data:{target:'同名资源',arguments:{asset_ref:asset,terminal_id:terminal,container}}}});
  assert.equal(conversationGroups([scoped('a','asset1'),scoped('b','asset2')]).length,2);
- assert.equal(conversationGroups([scoped('a','asset1','t1'),scoped('b','asset1','t2')]).length,2);
- assert.equal(conversationGroups([scoped('a','asset1','','c1'),scoped('b','asset1','','c2')]).length,2);
- assert.equal(conversationGroups([one,card('note','message'),card('next','operation')]).length,3);
+ assert.equal(conversationGroups([scoped('a','asset1','t1'),scoped('b','asset1','t2')]).length,1);
+ assert.equal(conversationGroups([scoped('a','asset1','','c1'),scoped('b','asset1','','c2')]).length,1);
+ assert.equal(conversationGroups([one,card('note','message'),card('next','operation')]).length,2);
  const empty=card('empty','thinking','running','');
  assert.deepEqual(conversationGroups([one,empty,card('next','operation')])[0]!.entries.map(e=>e.id),['one','next']);
 });
@@ -107,17 +146,32 @@ test('audit all current session tools for explicit family grouping or decision b
  }
  assert.equal(conversationGroups([sessionOperation('a','list_assets'),sessionOperation('b','list_resource_groups')]).length,1);
 });
-test('family groups respect attention, prose, user choice and handle boundaries',()=>{
+test('family groups survive attention and prose but retain user turns, questions and handle identity',()=>{
  const list=sessionOperation('list','list_workflows');
  for(const status of ['pending','failed','unknown','interrupted','cancelled','not_executed','background_running']){
-  assert.equal(conversationGroups([list,sessionOperation('save','save_workflow',{},status),sessionOperation('next','list_workflows')]).length,3,status);
+  assert.equal(conversationGroups([list,sessionOperation('save','save_workflow',{},status),sessionOperation('next','list_workflows')]).length,1,status);
  }
  for(const middle of [card('note','message'),user,sessionOperation('choice','ask_user_question')]){
-  assert.equal(conversationGroups([list,middle,sessionOperation('save','save_workflow')]).length,3);
+  assert.equal(conversationGroups([list,middle,sessionOperation('save','save_workflow')]).length,middle===user?3:2);
  }
  for(const [name,key] of [['task_output','task_id'],['read_session_context','session_id'],['read_tool_result','result_id'],['call_mcp_tool','server_id']] as const){
   assert.equal(conversationGroups([sessionOperation('a',name,{[key]:'one'}),sessionOperation('b',name,{[key]:'two'})]).length,2,key);
   assert.equal(conversationGroups([sessionOperation('a',name),sessionOperation('b',name)]).length,2,'missing '+key);
  }
  assert.equal(conversationGroups([sessionOperation('a','future_unknown_tool'),sessionOperation('b','future_unknown_tool')]).length,2);
+});
+
+test('explicit and context-selected calls share a row only for an unambiguous recorded target',()=>{
+ const explicit=(id:string,ref:string)=>({...card(id,'operation'),card:{...card(id,'operation').card,data:{target:'测试主机',arguments:{asset_ref:ref}}}});
+ assert.equal(conversationGroups([card('context','operation'),explicit('ref','asset-1'),card('context-2','operation')]).length,1);
+ assert.equal(conversationGroups([explicit('a','asset-1'),explicit('b','asset-2')]).length,2,'same names do not merge different resource identities');
+ assert.equal(conversationGroups([card('context','operation'),explicit('a','asset-1'),explicit('b','asset-2')]).length,3,'ambiguous context is not assigned to a guessed resource');
+});
+test('mixed-status resource summaries keep every exceptional result visible',()=>{
+ const entries=['completed','failed','pending','unknown','not_executed','cancelled','background_running','running'].map((status,i)=>card(`tool-${i}`,'operation',status));
+ const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],ai:{session:'s',status:'running',cardsOffset:0,turns:1,cards:entries.map(e=>e.card)}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ assert.equal((html.match(/class="thinking-timeline /g)||[]).length,1);
+ for(const label of ['等待确认','执行失败','结果待核查','未执行','已停止','后台执行中','8 项'])assert.ok(html.includes(label),label);
+ assert.ok(!html.includes('is-executing'),'unresolved confirmation and unknown outcomes remain visible and static');
 });

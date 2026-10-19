@@ -6,10 +6,20 @@ import type {AICard, AIView, SessionSnapshot} from "../../shared/contracts";
 import {ThinkingTimeline} from "../src/ThinkingTimeline";
 import {AITranscript} from "../src/AIPanel";
 import {displayAiError} from "../src/aiErrors";
+import {progressGlyph} from '../src/activity';
 
 const start="2026-10-11T00:00:00Z";
 const thought:AICard={id:"thought",type:"thinking",content:"VERY_VERBOSE_RAW_REASONING",status:"running",at:start};
 const read:AICard={id:"read",type:"operation",title:"read",status:"running",at:start,data:{arguments:{path:"/tmp/example.log"},target:"Local machine"}};
+test('progress icons follow tool identity without guessing from command or result text',()=>{
+ assert.equal(progressGlyph({...read,title:'shell',content:'query_sql',data:{arguments:{command:'cat file'}}}),'lakeTerminal');
+ assert.equal(progressGlyph({...read,title:'query_sql'}),'lakeDatabase');
+ assert.equal(progressGlyph({...read,title:'list_workflows'}),'lakeWorkflow');
+ assert.equal(progressGlyph({...read,title:'future_tool',content:'shell read_file'}),'lakeProcess');
+ const html=renderToStaticMarkup(createElement(ThinkingTimeline,{cards:[{...read,title:'shell'},{...read,id:'later',status:'completed'}],live:true,resourceRow:true}));
+ assert.ok(html.includes('data-glyph="lakeTerminal"'),'active tool matches summary even if later record completed');
+ assert.equal((html.match(/thinking-process-icon/g)||[]).length,1,'group still has exactly one leading icon');
+});
 test("stalled model streams explain retained partial output and allow a follow-up",()=>{
  const text=displayAiError("model stream idle timeout; partial reply retained");
  assert.ok(text.includes("已停止等待")&&text.includes("已收到的回复和操作记录已保留")&&text.includes("继续发送"));
