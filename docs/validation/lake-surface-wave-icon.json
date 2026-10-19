@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "8f370017b7eba21bbbd719b638e8c441d717bb2c",
+  "scope": "Apply the user-selected original lake-surface waves to the live turn activity mark",
+  "design": {
+    "glyph": "shared Glyph waves",
+    "size": 18,
+    "reservedWidth": 20,
+    "cycleSeconds": 2.4,
+    "pathDelaysSeconds": [
+      0,
+      -0.35,
+      -0.7
+    ],
+    "opacityRange": [
+      0.38,
+      1
+    ],
+    "horizontalMotionPixels": [
+      -0.5,
+      0.5
+    ],
+    "color": "theme text-muted",
+    "wholeIconRotation": false
+  },
+  "behavior": [
+    "Use the original lake-surface wave direction, with staggered per-line breathing and subtle horizontal motion",
+    "Only replace the live activity mark; elapsed time, gray progress sweep and 12px following gap remain unchanged",
+    "Existing waiting/completed visibility and reduced-motion static fallback remain in place"
+  ],
+  "checks": [
+    "280 frontend tests passed",
+    "TypeScript check and production web build passed",
+    "Fictional full-App browser fixture verified shared Lucide waves rendered three paths, an 18x18px icon and no whole-icon transform",
+    "Computed live path motion used 2.4s cycle and 0/-0.35/-0.7s delays",
+    "Light theme icon color rgb(115,115,115); dark theme rgb(170,170,170)",
+    "Dark 900px view retained 18px icon and 12px metadata/progress gap with document width 900px",
+    "Signed macOS Dev built and installed; codesign verification and installed/package host/backend/layout hashes matched",
+    "Windows Dev built, statically validated and installed; installed executable hashes matched package, installer exit 0 and Dev data metadata unchanged"
+  ],
+  "screenshots": [
+    "lake-surface-wave-icon.png",
+    "lake-surface-wave-icon-dark.png"
+  ],
+  "limitations": [
+    "UI integration used synthetic fixture history without actual host operations or paid model calls",
+    "Normal quit/reopen is needed to load the installed Dev frontend; native window gestures were not changed",
+    "Stable release v0.3.18 and release profiles were not modified"
+  ],
+  "windowsInstall": {
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "eb855ec8a9219ae58d3ec2d2eea4f2a43509090fee211787fdb5a5f33cf6e26a",
+    "desktopSHA256": "9919bd6b8a60289ec55d22476dcdbbcefb0800d491ea0d6d20323fac33c066fa"
+  },
+  "artifacts": {
+    "Lake-0.3.18-macos-arm64-dev.zip": {
+      "sha256": "8468e9b0b4f8d3579e9f1029f177c87b8d2ecbc36de791fa733150c3df9c4829",
+      "size": 27893423
+    },
+    "Lake-0.3.18-macos-arm64-dev.dmg": {
+      "sha256": "6337aeac334128205b9b8f49338dc5c466f96286a68214008faa1a911afd5f0c",
+      "size": 30325934
+    },
+    "Lake-Dev-0.3.18-windows-x86_64.zip": {
+      "sha256": "8c96dc10b8c3b10b4564d7bf4cb89545ea32162b3aab73d4d84cd8bda9867c22",
+      "size": 212118928
+    },
+    "Lake-Dev-0.3.18-windows-x86_64-setup.exe": {
+      "sha256": "dd0b63c99e6a9a6c5982e1f7086e4ab1afdddf99f0fc1850882f5fae1438c130",
+      "size": 160222506
+    }
+  }
+}
