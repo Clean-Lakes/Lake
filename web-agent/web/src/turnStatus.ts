@@ -2,7 +2,7 @@ import type {AICard,AIView,ReplyTiming} from "../../shared/contracts";
 import {compareTime} from "./timeline";
 import {replyElapsed} from "./replyDurationState";
 
-/** The footer owns the whole turn's state; operation rows only describe actions. */
+/** The metadata row owns the whole turn's state; operation rows only describe actions. */
 export function turnStatus(timing:ReplyTiming|undefined,view:AIView|undefined,cards:AICard[],latestUserAt:string,now:number) {
  const live=timing ? timing.status==="running" : !!view && ["running","waiting_approval"].includes(view.status);
  const start=timing?.startedAt || latestUserAt;

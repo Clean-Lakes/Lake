@@ -48,14 +48,14 @@ test("finished history stays collapsed and describes the actual operation",()=>{
   const html=renderToStaticMarkup(createElement(ThinkingTimeline,{cards:[{...thought,status:"completed"},{...read,status:"completed"}],live:false}));
   assert.ok(html.includes("读取 example.log · Local machine"));assert.ok(!html.includes(thought.content!));
 });
-test("descriptive operations have one running state at the bottom of the turn",()=>{
+test("descriptive operations have one running state at the top of the turn",()=>{
   const view={session:"demo",status:"running",turnStartedAt:start,profile:"core",cards:[thought,read],cardsOffset:0} as AIView;
   const snapshot={session:{id:"demo"},messages:[{id:"user",role:"user",createdAt:start,text:"Read fixture"}],actions:[],ai:view} as SessionSnapshot;
   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
   assert.equal(html.split("读取 example.log · Local machine").length-1,1);
   assert.ok(!html.includes("VERY_VERBOSE_RAW_REASONING"));
   assert.equal((html.match(/turn-status-text/g)||[]).length,1);
-  assert.ok(html.indexOf("正在执行工具…")>html.indexOf("读取 example.log"));
+  assert.ok(html.indexOf("正在执行工具…")<html.indexOf("读取 example.log"));
 });
 
 test("compaction limit failures display one Chinese message with history-preservation guidance",()=>{

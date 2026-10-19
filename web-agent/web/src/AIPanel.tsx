@@ -80,6 +80,13 @@ function ReplyArrival({entryId,arrive,children}:{entryId:string;arrive:boolean;c
   const [animate] = useState(arrive);
   return <div data-conversation-entry={entryId} className={`ai-response${animate?' reply-arrival':''}`}>{children}</div>;
 }
+function TranscriptMessage({message,sessionId}:{message:SessionSnapshot["messages"][number];sessionId:string}) {
+ return <div className={`ai-chat-message ai-role-${message.role}`}>
+          {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}{message.text && <div>{message.role === "system" ? displayAiError(message.text) : message.text}</div>}
+          {message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}
+          {message.images?.map(image => <figure key={image.id} className="ai-image"><img src={image.url || `data:${image.mimeType};base64,${image.base64}`} alt={image.name || "用户附加图片"}/></figure>)}
+        </div>;
+}
 export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation" }: { mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean }) {
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
@@ -130,6 +137,8 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
     {before > 0 && <button type="button" disabled={loading} onClick={() => void loadOlder()}>{loading ? "正在加载…" : "加载更早记录"}</button>}
     {error && <p role="alert">{error}</p>}
     {turns.map((turn, index) => <div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)} key={turn[0]!.id}>
+      {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!}/>)}
+      <ReplyDuration timing={timingForTurn(turn,snapshot)} view={turn.some(entry=>entry.message?.id===latestUser?.id) ? snapshot.ai : undefined} cards={turn.flatMap(entry=>entry.card?[entry.card]:[])} latestUserAt={turn.find(entry=>entry.message?.role==="user")?.at??""}/>
       {(mode==='conversation'?conversationGroups(turn.filter(entry=>!isFileChangeCard(entry.card))):transcriptGroups(turn.filter(entry => !isFileChangeCard(entry.card) && activityEntry(entry))).map(entries=>({progress:false,entries}))).map(({entries:group,progress}) => {
         const entry = group[0]!;
         if(progress)return <ReplyArrival key={entry.id} entryId={entry.id} arrive={!restoredCardIds.current.has(entry.id)&&turn.some(item=>item.message?.id===latestUser?.id)}><ThinkingTimeline cards={group.map(item=>item.card!)} live={snapshot.ai?.status==='running'&&group.some(item=>item.card?.status==='running')} resourceRow onInspect={onInspect}/></ReplyArrival>;
@@ -142,17 +151,12 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
           return <AgentTaskList compact key={entry.id} runs={runs} resources={snapshot.resources || []} evidence={[...(snapshot.evidence || []), ...(snapshot.ai?.agentRuns || []).flatMap(run => (run.evidence || []).map(item => ({...item, specialistId:null, command:null})))]} live={live} disabled={disabled} stopping={stopping} onInspect={onInspect} onStopTurn={onStopTurn} onCancelRun={run => api.aiOperation(snapshot.session.id,"cancelAgent",{runId:run.id})} renderApproval={run => snapshot.ai && <AIPending attachments={snapshot.messages.flatMap(message=>message.files??[])} session={snapshot.session.id} runId={run.id} agentName={run.name} view={{...snapshot.ai,pending:run.pending}} refresh={() => api.aiView(snapshot.session.id)}/>}>{tools.length ? <ThinkingTimeline cards={tools} live={false} onInspect={onInspect}/> : null}</AgentTaskList>;
         }
         if (entry.card && ["thinking", "operation", "shell"].includes(entry.card.type)) return <ThinkingTimeline key={entry.id} cards={group.map(item => item.card!)} live={thinkingVisible && group.at(-1)?.id === visibleEntries.at(-1)?.id} onInspect={onInspect}/>;
-        if (entry.message) return <div key={entry.id} className={`ai-chat-message ai-role-${entry.message.role}`}>
-          {entry.message.role === "system" && <small>系统</small>}{entry.message.role === "assistant" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}{entry.message.text && <div>{entry.message.role === "system" ? displayAiError(entry.message.text) : entry.message.text}</div>}
-          {entry.message.files?.length ? <div className="message-attachments">{entry.message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(snapshot.session.id)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}
-          {entry.message.images?.map(image => <figure key={image.id} className="ai-image"><img src={image.url || `data:${image.mimeType};base64,${image.base64}`} alt={image.name || "用户附加图片"}/></figure>)}
-        </div>;
+        if (entry.message) return entry.message.role==='user'?null:<TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message}/>;
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
         return <ReplyArrival key={entry.id} entryId={entry.id} arrive={mode==='conversation'&&turn.some(item=>item.message?.id===latestUser?.id)&&!!entry.card&&['text','message'].includes(entry.card.type)&&!restoredText.current.has(entry.card.id)}>{entry.card?.type === "text" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)}/></ReplyArrival>;
       })}
       <FileChanges cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}/>
-      <ReplyDuration timing={timingForTurn(turn,snapshot)} view={turn.some(entry=>entry.message?.id===latestUser?.id) ? snapshot.ai : undefined} cards={turn.flatMap(entry=>entry.card?[entry.card]:[])} latestUserAt={turn.find(entry=>entry.message?.role==="user")?.at??""}/>
     </div>)}
 
     {mode==='activity'&&mergedSRE.filter(task=>!sreTaskFilter||task.id===sreTaskFilter).map(task=><SREEventHistory key={task.id} task={task}/>)}

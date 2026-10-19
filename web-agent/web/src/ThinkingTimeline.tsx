@@ -40,9 +40,10 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
   const attention=tools.find(card=>!['running','background_running','completed','succeeded','success'].includes(card.status));
   const state=attention?.status==='pending'?'等待确认':attention?.status==='failed'?'执行失败':attention&&['interrupted','cancelled'].includes(attention.status)?'已停止':attention?'执行结果待核查':'';
   const description=resourceRow&&tools.length?toolDescription(tools.filter(card=>card.status==='running').at(-1)??tools.at(-1)!):processDescription(cards);
+  const executing=live&&!attention&&tools.some(card=>card.status==='running');
   const label = [description,state].filter(Boolean).join(' · ');
   const panelId = `thinking-${cards[0]!.id}`;
-  return <section className={`thinking-timeline ${resourceRow ? "is-resource-row" : ""} ${live ? "is-live" : ""}`} aria-label="思考与操作过程">
+  return <section className={`thinking-timeline ${resourceRow ? "is-resource-row" : ""} ${live ? "is-live" : ""} ${executing ? "is-executing" : ""}`} aria-label="思考与操作过程">
     <button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => { onInspect?.(); setOpen(!open); }}>
       <span className="thinking-label">{label}</span>{resourceRow&&tools.length>1&&<small className="thinking-operation-count">{tools.length} 项</small>}<svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
     </button>

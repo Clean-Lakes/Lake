@@ -23,7 +23,7 @@ cards.push({id:'empty-thought',type:'thinking',status:'running',at:stamp(110.5),
 const state={session:{id:'fixture',projectId:'p',title:'进度更新稳定性',status:'investigating',createdAt:stamp(0),updatedAt:stamp(0),tags:[]},cursor:1,messages,resources:[],resourceTree:[],specialists:[],evidence:[],actions:[],terminals:[],ai:{session:'fixture',status:'running',rootTurnId:'turn',turnStartedAt:new Date().toISOString(),cards,cardsOffset:0,totalCards:cards.length,turns:12,usage:{input:0,output:0,total:0}},messageQueue:{paused:false,revision:0,lastError:'',items:[]},sre:{enabled:false,tasks:[]}} as unknown as SessionSnapshot;
 const lineArrivals:{kind:string;duration:number|undefined}[]=[];
 const motionSamples:{kind:string;y:number;opacity:number}[]=[];
-const metrics={rowReplacements:0,rowRemovals:0,rowPositionChanges:0,rowColorChanges:0,renderedRows:[] as {id:string;kind:string;top:number}[],lineArrivals,motionSamples,snapshots:0,subscriptions:0,actionReplacements:0,historyReplacements:0,actionAnimations:0,replyAnimations:0,replyReplacements:0,scrollWrites:0,scrollEvents:0,scrollChanges:0,heightChanges:0,updates:0,errors:0,top:0,height:0};
+const metrics={executionName:"",executionPhase:"",statusTop:0,statusHeight:0,statusBeforeReply:false,executionAnimations:0,rowReplacements:0,rowRemovals:0,rowPositionChanges:0,rowColorChanges:0,renderedRows:[] as {id:string;kind:string;top:number}[],lineArrivals,motionSamples,snapshots:0,subscriptions:0,actionReplacements:0,historyReplacements:0,actionAnimations:0,replyAnimations:0,replyReplacements:0,scrollWrites:0,scrollEvents:0,scrollChanges:0,heightChanges:0,updates:0,errors:0,top:0,height:0};
 const streams=new Set<FixtureStream>();
 class FixtureStream extends EventTarget {
  static OPEN=1;readyState=1;onopen:((event:Event)=>void)|null=null;onerror=null;onmessage=null;
@@ -53,13 +53,17 @@ Element.prototype.animate=function(keyframes,options){
 const descriptor=Object.getOwnPropertyDescriptor(Element.prototype,'scrollTop')!;
 Object.defineProperty(Element.prototype,'scrollTop',{...descriptor,get:descriptor.get,set(value:number){if(this.classList.contains('conversation'))metrics.scrollWrites++;descriptor.set!.call(this,value)}});
 document.addEventListener('animationstart',event=>{if((event.target as Element).matches('.conversation-progress-action > span'))metrics.actionAnimations++});
-document.addEventListener('animationstart',event=>{if((event as AnimationEvent).animationName==='reply-arrival'){metrics.replyAnimations++;const row=event.target as HTMLElement;lineArrivals.push({kind:row.querySelector('.thinking-timeline')?'action':'reply',duration:360})}});
+document.addEventListener('animationstart',event=>{if((event as AnimationEvent).animationName==='execution-text-sweep')metrics.executionAnimations++;if((event as AnimationEvent).animationName==='reply-arrival'){metrics.replyAnimations++;const row=event.target as HTMLElement;lineArrivals.push({kind:row.querySelector('.thinking-timeline')?'action':'reply',duration:360})}});
 document.addEventListener('scroll',event=>{if((event.target as Element).classList?.contains('conversation'))metrics.scrollEvents++},true);
 window.addEventListener('error',()=>metrics.errors++);
 createRoot(document.getElementById('root')!).render(<App/>);
 const previousRows=new Map<string,{node:HTMLElement;top:number;color:string}>();
 let oldAction:Element|null=null,oldTable:Element|null=null,oldReply:Element|null=null,previousTop:number|undefined,previousHeight:number|undefined;
 function measure(){
+ const label=document.querySelector('.thinking-label'),status=document.querySelector('.ai-turn:last-child > .turn-status'),reply=document.querySelector('.ai-turn:last-child [data-conversation-entry]');
+ if(label){const style=getComputedStyle(label);metrics.executionName=style.animationName;metrics.executionPhase=style.backgroundPosition;}
+ if(status){metrics.statusTop=status.getBoundingClientRect().top;metrics.statusHeight=status.getBoundingClientRect().height;metrics.statusBeforeReply=!!reply&&metrics.statusTop<reply.getBoundingClientRect().top;}
+
  const action=document.querySelector('.conversation-progress-action > span'),table=document.querySelector('.assistant-prose table'),conversation=document.querySelector<HTMLElement>('.conversation');
  for(const node of document.querySelectorAll('.reply-arrival')){const kind=node.querySelector('.thinking-timeline')?'action':'reply';
   if(node?.getAnimations().some(a=>a.playState==='running')&&motionSamples.length<120){const style=getComputedStyle(node);motionSamples.push({kind,y:new DOMMatrixReadOnly(style.transform).m42,opacity:Number(style.opacity)})}
@@ -80,9 +84,9 @@ function measure(){
  if(oldAction&&action!==oldAction)metrics.actionReplacements++;
  if(oldTable&&table!==oldTable)metrics.historyReplacements++;
  oldAction=action;oldTable=table;
- const reply=document.querySelector('.reply-arrival');
- if(oldReply&&oldReply!==reply)metrics.replyReplacements++;
- oldReply=reply;
+ const firstArrival=document.querySelector('.reply-arrival');
+ if(oldReply&&oldReply!==firstArrival)metrics.replyReplacements++;
+ oldReply=firstArrival;
  if(conversation){
   if(previousTop!==undefined&&conversation.scrollTop!==previousTop)metrics.scrollChanges++;
   if(previousHeight!==undefined&&conversation.scrollHeight!==previousHeight)metrics.heightChanges++;
@@ -93,7 +97,7 @@ function measure(){
 requestAnimationFrame(measure);
 const update=()=>{state.cursor++;state.ai!.totalCards=state.ai!.cards.length;metrics.updates++;streams.forEach(stream=>stream.emit())};
 let index=0,tick=112;
-document.getElementById('reset-metrics')!.onclick=()=>{lineArrivals.length=motionSamples.length=0;metrics.rowReplacements=metrics.rowRemovals=metrics.rowPositionChanges=metrics.rowColorChanges=0;metrics.actionReplacements=metrics.historyReplacements=metrics.actionAnimations=metrics.replyAnimations=metrics.replyReplacements=metrics.scrollWrites=metrics.scrollEvents=metrics.scrollChanges=metrics.heightChanges=metrics.updates=0};
+document.getElementById('reset-metrics')!.onclick=()=>{lineArrivals.length=motionSamples.length=0;metrics.executionAnimations=metrics.rowReplacements=metrics.rowRemovals=metrics.rowPositionChanges=metrics.rowColorChanges=0;metrics.actionReplacements=metrics.historyReplacements=metrics.actionAnimations=metrics.replyAnimations=metrics.replyReplacements=metrics.scrollWrites=metrics.scrollEvents=metrics.scrollChanges=metrics.heightChanges=metrics.updates=0};
 document.getElementById('update-line')!.onclick=()=>{state.ai!.cards.find(card=>card.id==='note')!.content=`第 ${++index} 次核对演示服务与运行记录，保留本轮原始证据。`;update()};
 document.getElementById('next-operation')!.onclick=()=>{state.ai!.cards.filter(card=>card.type==='thinking').forEach(card=>card.status='completed');state.ai!.cards.filter(card=>card.type!=='thinking').at(-1)!.status='completed';state.ai!.cards.push({id:`operation-${++index}`,type:'operation',title:'shell',status:'running',at:stamp(++tick),content:'',data:{target:query.has('same-resource')?'演示主机':`演示主机 ${index}`,arguments:{command:'uptime'}}});update()};
 document.getElementById('grow-reply')!.onclick=()=>{state.ai!.cards.filter(card=>card.type!=='thinking').at(-1)!.status='completed';state.ai!.cards.push({id:'final-reply',type:'message',status:'completed',at:stamp(++tick),content:'核对完成。\n\n'+('这里是实际新增的回复正文，新增高度应正常跟随到底部。\n\n').repeat(12)});state.ai!.status='completed';state.ai!.turnFinishedAt=new Date().toISOString();update()};
