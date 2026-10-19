@@ -39,7 +39,7 @@ test("waiting for first model data already has visible motion, independent of id
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.ok(html.includes("reply-duration-spinner") && html.includes("正在思考…"));
  const completed=renderToStaticMarkup(createElement(AITranscript,{snapshot:{...snapshot,replyTimings:[timing]}}));
- assert.ok(!completed.includes("reply-duration-spinner") && completed.includes("用时 1分钟 13秒"));
+ assert.ok(!completed.includes("reply-duration-spinner") && completed.includes("流经 1分钟 13秒"));
  assert.ok(!completed.includes("回复结束")&&!completed.includes("turn-status-mark"),"finished timing is a quiet caption without a clock or a repeated completion label");
 });
 
@@ -47,7 +47,7 @@ test("quiet completion never conceals uncertain outcomes or invents a duration",
  const render=(props:Parameters<typeof ReplyDuration>[0])=>renderToStaticMarkup(createElement(ReplyDuration,props));
  assert.equal(render({view:{status:'completed',cards:[]} as never}),'',"missing timing does not become a made-up elapsed caption");
  const uncertain=render({timing,cards:[{id:'op',at:start,type:'operation',status:'unknown'}]});
- assert.ok(uncertain.includes('用时 1分钟 13秒')&&uncertain.includes('执行结果待核查'));
+ assert.ok(uncertain.includes('流经 1分钟 13秒')&&uncertain.includes('执行结果待核查'));
  for(const [status,label] of [['cancelled','已停止'],['failed','未完成'],['interrupted','记录已中断']] as const){
   assert.ok(render({timing:{...timing,status}}).includes(label));
  }
