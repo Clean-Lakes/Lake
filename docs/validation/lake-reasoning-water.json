@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "4dd25bd9ea7add57c854c0cebe5259fd7fd73294",
+  "scope": "Replace reasoning selector icon with Lake water droplet and level-dependent waterline",
+  "design": {
+    "glyph": "shared Glyph droplet",
+    "size": 18,
+    "fillOpacity": 0.55,
+    "transitionMilliseconds": 200,
+    "resolvedDefault": "Use provider-reported default; no invented default waterline",
+    "levelText": "Preserved",
+    "liveTurnIcon": "Existing animated waves retained"
+  },
+  "checks": [
+    "TypeScript check and production web build passed",
+    "280 frontend tests passed",
+    "Real ReasoningSelector/AppSelect browser fixture with fictional in-memory settings: low/medium/high/max showed distinct waterlines",
+    "Default provider medium resolved to 50% waterline; unknown default remained unfilled",
+    "Mouse select max and keyboard Home/Enter default saved and updated icon; off resolved to no fill",
+    "Runtime-disabled control retained waterline, theme color and opacity 1",
+    "Light and dark 400px layouts visually verified; reduced-motion CSS disables waterline transition",
+    "Signed macOS Dev built and installed; codesign verified; installed host/backend hashes match package",
+    "Windows Dev package validation and installer passed; installed executables match validated package; Dev data metadata unchanged"
+  ],
+  "windowsInstall": {
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "1e4b9c14c1253375a4dcaaddd36d1a40a1cba26bca9b0c2adb0d0fb5f93b6bc3",
+    "desktopSHA256": "8616c2e2135f1ec3245f29bd04c43c77a98ca0800c2475d4391c35b47db1fcb0"
+  },
+  "screenshots": [
+    "lake-reasoning-water.png",
+    "lake-reasoning-water-dark.png"
+  ],
+  "limitations": [
+    "Browser integration uses isolated fictional model settings, no real model requests",
+    "Native app UI was not rechecked; normal quit/reopen loads installed Dev frontend",
+    "Stable release and release data untouched"
+  ]
+}
