@@ -22,6 +22,7 @@ const resources=[
  ['redis','缓存 · Redis','redis','会话与热点缓存'],
  ['docker','容器 · app-01','docker','应用容器'],
 ].map(([id,name,kind,description])=>({id,projectId:project.id,name,kind,description,status:'available'})) as Resource[];
+if(new URLSearchParams(location.search).has('scrollbar'))resources.push(...Array.from({length:30},(_,i)=>({id:`demo-host-${i}`,projectId:project.id,name:`演示主机 ${i+1}`,kind:'ssh' as const,description:'滚动条验证用虚构资源',status:'available' as const})));
 const sessions=['订单服务发布回滚','网关延迟排查','数据库连接数巡检'].map((title,i)=>({id:`demo-session-${i}`,projectId:project.id,title,status:'completed',resourceIds:resources.map(r=>r.id),createdAt:at(0),updatedAt:at(30-i),icon:'chat',tags:[]})) as WorkSession[];
 const session=sessions[0]!;
 const tree=[{id:'apps',projectId:project.id,parentId:null,kind:'folder',name:'应用服务',resourceId:null,position:0},{id:'data',projectId:project.id,parentId:null,kind:'folder',name:'数据服务',resourceId:null,position:1},...resources.map((r,i)=>({id:'node-'+r.id,projectId:project.id,parentId:['postgres','redis'].includes(r.id)?'data':'apps',kind:'resource',name:r.name,resourceId:r.id,position:i}))];

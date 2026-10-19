@@ -27,7 +27,12 @@ a { color: inherit; }
 .sidebar-add, .nav-add { width: 27px; height: 27px; display: grid; place-items: center; color: var(--text-secondary); border: 0; background: transparent; border-radius: var(--radius-control); }
 .sidebar-add:hover:not(:disabled), .nav-add:hover:not(:disabled) { background: var(--surface-selected); color: var(--foreground); }
 .sidebar-add:disabled, .nav-add:disabled { opacity: .45; }
-.project-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 10px 24px; scrollbar-width: thin; scrollbar-color: var(--text-muted) transparent; }
+.project-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 10px 24px; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+@supports not (scrollbar-color: gray transparent) {
+  .project-scroll::-webkit-scrollbar { width: 6px; }
+  .project-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 6px; }
+  .project-scroll::-webkit-scrollbar-thumb:hover, .project-scroll::-webkit-scrollbar-thumb:active { background: var(--text-muted); }
+}
 .project-group { margin-bottom: 7px; }
 .project-toggle { width: 100%; display: flex; align-items: center; gap: 9px; border: 0; background: transparent; text-align: left; color: var(--foreground); font-weight: 600; padding: 8px 7px; border-radius: var(--radius-control); font-size: 13px; }
 .project-toggle:hover, .nav-row:hover { background: var(--surface-hover); }
