@@ -82,6 +82,7 @@ function ReplyArrival({arrive,children}:{arrive:boolean;children:ReactNode}) {
 export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation" }: { mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean }) {
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
+  const restoredCardIds=useRef(new Set((snapshot.ai?.cards??[]).map(card=>card.id)));
   const restoredText=useRef(new Set([...(snapshot.ai?.cards??[]).filter(c=>!!c.content).map(c=>c.id),...(snapshot.ai?.agentRuns??[]).filter(r=>!!r.liveText).map(r=>r.liveTextId)]));
   const [sreTaskFilter,setSRETaskFilter]=useState('');
   const [olderSRE,setOlderSRE]=useState<SRETask[]>([]),[sreCursor,setSRECursor]=useState<string|undefined>(),[loadingSRE,setLoadingSRE]=useState(false);
@@ -130,7 +131,7 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
     {turns.map((turn, index) => <div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)} key={turn[0]!.id}>
       {(mode==='conversation'?conversationGroups(turn.filter(entry=>!isFileChangeCard(entry.card))):transcriptGroups(turn.filter(entry => !isFileChangeCard(entry.card) && activityEntry(entry))).map(entries=>({progress:false,entries}))).map(({entries:group,progress}) => {
         const entry = group[0]!;
-        if(progress)return <ConversationProgress key={entry.id} cards={group.map(item=>item.card!)} live={turn.some(item=>item.message?.id===latestUser?.id)&&snapshot.ai?.status==='running'} onInspect={onInspect} renderCard={card=><Card card={card} tags={snapshot.session.tags}/>}/>;
+        if(progress)return <ConversationProgress key={entry.id} cards={group.map(item=>item.card!)} restoredCardIds={restoredCardIds.current} live={turn.some(item=>item.message?.id===latestUser?.id)&&snapshot.ai?.status==='running'} onInspect={onInspect} renderCard={card=><Card card={card} tags={snapshot.session.tags}/>}/>;
         if(entry.sre){const {task}=entry.sre;const attempt=task.attempts?.find(a=>a.id===entry.sre!.entry.attemptId);const plan=task.plans?.find(p=>p.id===task.runs?.find(r=>r.id===attempt?.planRunId)?.planRevisionId);const step=plan?.steps.find(s=>s.id===attempt?.stepId);return <SRERoleMessage key={entry.id} task={task} entry={entry.sre.entry} snapshot={snapshot} animateInitial={!restoredText.current.has(snapshot.ai?.agentRuns?.find(r=>r.id===entry.sre!.entry.roleRunId)?.liveTextId)} onUpdated={()=>void api.snapshot(snapshot.session.id)} renderApproval={run=>snapshot.ai?<><AIPending attachments={snapshot.messages.flatMap(message=>message.files??[])} session={snapshot.session.id} runId={run.id} agentName={run.name} sreStep={step} view={{...snapshot.ai,pending:run.pending}} refresh={()=>api.aiView(snapshot.session.id)}/>{run.question&&<AgentQuestion session={snapshot.session.id} runId={run.id} request={run.question} refresh={()=>api.aiView(snapshot.session.id)}/>}</>:null}/>;}
         const runs = group.flatMap(item => item.agentRun ? [item.agentRun] : []);
         if (runs.length) {
@@ -145,7 +146,7 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
           {entry.message.images?.map(image => <figure key={image.id} className="ai-image"><img src={image.url || `data:${image.mimeType};base64,${image.base64}`} alt={image.name || "用户附加图片"}/></figure>)}
         </div>;
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
-        return <ReplyArrival key={entry.id} arrive={mode==='conversation'&&!!entry.card&&['text','message'].includes(entry.card.type)&&!restoredText.current.has(entry.card.id)}>{entry.card?.type === "text" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)}/></ReplyArrival>;
+        return <ReplyArrival key={entry.id} arrive={mode==='conversation'&&turn.some(item=>item.message?.id===latestUser?.id)&&!!entry.card&&['text','message'].includes(entry.card.type)&&!restoredText.current.has(entry.card.id)}>{entry.card?.type === "text" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)}/></ReplyArrival>;
       })}
       <FileChanges cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}/>

@@ -7,20 +7,23 @@ import {Glyph} from './Icons';
 import {toolDescription} from './activity';
 import {ToolStep,ReasonStep} from './ThinkingTimeline';
 import {remarkAssistantProse} from './assistantProse';
+import {useLineArrival} from './useLineArrival';
 
 /** The fixed two-line preview replaces itself as work advances. All original
  * cards remain available, in order, in the explicitly expanded history. */
-export function ConversationProgress({cards,live,onInspect,renderCard}:{cards:AICard[];live:boolean;onInspect?:()=>void;renderCard:(card:AICard)=>ReactNode}){
+export function ConversationProgress({cards,live,onInspect,renderCard,restoredCardIds}:{cards:AICard[];live:boolean;restoredCardIds?:ReadonlySet<string>;onInspect?:()=>void;renderCard:(card:AICard)=>ReactNode}){
  const [open,setOpen]=useState(false);
  const tools=cards.filter(card=>['operation','shell'].includes(card.type));
  const latest=tools.at(-1)!;
  const narration=[...cards].reverse().find(card=>['message','text'].includes(card.type)&&!!card.content);
+ const narrationLine=useLineArrival(narration?.id,live,!!restoredCardIds&&!!narration&&!restoredCardIds.has(narration.id));
+ const actionLine=useLineArrival(latest.id,live,!!restoredCardIds&&!restoredCardIds.has(latest.id));
  const panelId=`progress-${cards[0]!.id}`;
  return <section className={`conversation-progress${live?' is-live':''}`} aria-label="执行过程">
   <button type="button" className="conversation-progress-toggle" aria-expanded={open} aria-controls={panelId} aria-label={`${open?'收起':'查看'}执行过程，${tools.length} 项操作`} onClick={()=>{onInspect?.();setOpen(!open)}}>
    <span className="conversation-progress-lines">
-    <span className="conversation-progress-narration">{narration?<Markdown remarkPlugins={[remarkGfm,remarkAssistantProse]} skipHtml allowedElements={['p','strong','em','code','del']} unwrapDisallowed>{narration.content}</Markdown>:'执行过程'}</span>
-    <span className="conversation-progress-action"><span>{toolDescription(latest)}</span></span>
+    <span className="conversation-progress-narration"><span ref={narrationLine}>{narration?<Markdown remarkPlugins={[remarkGfm,remarkAssistantProse]} skipHtml allowedElements={['p','strong','em','code','del']} unwrapDisallowed>{narration.content}</Markdown>:'执行过程'}</span></span>
+    <span className="conversation-progress-action"><span ref={actionLine}>{toolDescription(latest)}</span></span>
    </span>
    <Glyph name="chevron" size={14} className={open?'is-open':''}/>
   </button>

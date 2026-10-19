@@ -768,13 +768,13 @@ a { color: inherit; }
 .conversation-progress-narration p { display: inline; margin: 0; }
 .conversation-progress-narration code { font-family: var(--font-mono); font-size: .92em; }
 .conversation-progress-action { font-size: 13px; }
-.conversation-progress-action > span { display: block; overflow: hidden; text-overflow: ellipsis; }
+.conversation-progress-narration > span, .conversation-progress-action > span { display: block; overflow: hidden; text-overflow: ellipsis; }
 .conversation-progress-toggle > svg { flex-shrink: 0; transition: transform .16s ease; }
 .conversation-progress-toggle > svg.is-open { transform: rotate(180deg); }
 .conversation-progress-history { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; padding-left: 14px; border-left: 1px solid var(--border); }
 .conversation-progress-history > .thinking-steps { margin: 0; }
-.reply-arrival { animation: reply-arrival 200ms ease-out; }
-@keyframes reply-arrival { from { opacity: .25; } to { opacity: 1; } }
+.reply-arrival { animation: reply-arrival 360ms cubic-bezier(.22,1,.36,1); }
+@keyframes reply-arrival { from { opacity: 0; transform: translateY(23px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .reply-arrival { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .conversation-progress-toggle > svg { transition: none; } }
 .thinking-toggle { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 3px 0; border: 0; background: transparent; color: var(--text-muted); font: inherit; font-size: 14px; line-height: 1.6; text-align: left; cursor: pointer; }
