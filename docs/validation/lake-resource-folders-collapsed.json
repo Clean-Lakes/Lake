@@ -20,5 +20,12 @@
     "signedDevInstalled": true,
     "nativeUIVerification": "unavailable: desktop accessibility timed out; installed app requires normal restart"
   },
-  "screenshot": "lake-resource-folders-collapsed.png"
+  "screenshot": "lake-resource-folders-collapsed.png",
+  "windows": {
+    "staticPackageChecks": true,
+    "devInstalled": true,
+    "installedHashesMatch": true,
+    "devDataUnchanged": true,
+    "nativeUIVerification": "not performed; shared UI verified in isolated browser fixture"
+  }
 }
