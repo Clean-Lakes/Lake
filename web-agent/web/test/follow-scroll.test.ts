@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { FollowScroll } from "../src/followScroll";
+import { atConversationTail, FollowScroll } from "../src/followScroll";
 import { sameCard } from "../src/cardEquality";
 
 function fixture(reduced = false) {
@@ -79,6 +79,18 @@ test("fractional browser tail stays still on activity updates and follows actual
     for (let time = 0; time < 1500; time += 16.67) f.frame(time);
     assert.ok(writes > 0); assert.equal(top, 599.5); assert.equal(f.callbacks.size, 0);
   }
+});
+
+test("reading just above the tail does not resume following until the reader reaches the bottom", () => {
+  const box = {scrollTop: 464, scrollHeight: 1000, clientHeight: 500};
+  assert.equal(atConversationTail(box), false);
+  box.scrollTop = 498;
+  assert.equal(atConversationTail(box), false);
+  box.scrollTop = 499.5;
+  assert.equal(atConversationTail(box), true);
+  box.scrollTop = 500;
+  assert.equal(atConversationTail(box), true);
+  assert.equal(atConversationTail({scrollTop: 0, scrollHeight: 300, clientHeight: 500}), true);
 });
 
 test("unchanged historical cards reuse Markdown, while streamed content and tool state invalidate it", () => {

@@ -3,11 +3,12 @@
     13,
     14
   ],
-  "validatedAt": "2026-10-19T01:53:02.926447+00:00",
+  "validatedAt": "2026-10-19T02:04:38.292873+00:00",
   "progress": {
     "cause": [
       "integer scroll geometry versus fractional clamped tail",
-      "replaced action node with repeated arrival transform"
+      "replaced action node with repeated arrival transform",
+      "following resumed within 80px after a small manual scroll"
     ],
     "before": {
       "updates": 4,
@@ -65,13 +66,35 @@
         "scrollWrites": 0,
         "scrollChanges": 0,
         "top": 2473
+      },
+      "nearTailReading": {
+        "before": {
+          "scrollWrites": 18,
+          "top": 2667.5,
+          "readingTop": 2631.5
+        },
+        "after": {
+          "actionAnimations": 0,
+          "actionReplacements": 0,
+          "errors": 0,
+          "height": 3772,
+          "heightChanges": 1,
+          "historyReplacements": 0,
+          "scrollChanges": 0,
+          "scrollEvents": 0,
+          "scrollWrites": 0,
+          "snapshots": 5,
+          "subscriptions": 1,
+          "top": 2631.5,
+          "updates": 3
+        }
       }
     },
     "fixture": "web-agent/web/test/fixtures/progress-refresh.html",
     "data": "fictional in-memory API/SSE only"
   },
   "frontend": {
-    "testsPassed": 252,
+    "testsPassed": 253,
     "typecheck": "passed",
     "productionBuild": "passed"
   },
