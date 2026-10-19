@@ -6,6 +6,16 @@ import { Glyph } from "./Icons";
 
 const labels: Record<string, string> = { "": "默认", none: "关闭", minimal: "极低", low: "低", medium: "中", high: "高", xhigh: "极高", max: "最高", ultra: "Ultra" };
 
+// An unknown model default stays unfilled; only a reported level determines the waterline.
+const waterLevels: Record<string, number> = { none: 0, minimal: .18, low: .32, medium: .5, high: .7, xhigh: .82, max: .92, ultra: 1 };
+function ReasoningIcon({ effort }: { effort: string }) {
+  const water = waterLevels[effort] ?? 0;
+  return <span className="reasoning-water-drop" aria-hidden="true">
+    <span className="reasoning-water-fill" style={{ clipPath: `inset(${(1 - water) * 100}% 0 0)` }}><Glyph name="droplet" size={18}/></span>
+    <Glyph name="droplet" size={18}/>
+  </span>;
+}
+
 export function ReasoningSelector({ session, modelId, disabled, disabledReason, onSaving }: {
   session: string; modelId?: string | null; disabled: boolean; disabledReason?: string; onSaving: (saving: boolean) => void;
 }) {
@@ -35,7 +45,7 @@ export function ReasoningSelector({ session, modelId, disabled, disabledReason, 
   const label = valid ? labels[settings.effort] ?? settings.effort : "级别不可用";
   const hint = busy ? "正在保存思考级别…" : disabled ? disabledReason || "当前暂不能调整思考级别。" : !valid ? "思考级别读取失败，请重试。" : "";
   return <div className="reasoning-switch-wrap">
-    <AppSelect className="composer-model-select composer-reasoning-select" label="思考级别" title={`思考级别：${label}${hint ? ` · ${hint}` : ""}`} icon={<Glyph name="waves" size={16}/>}
+    <AppSelect className="composer-model-select composer-reasoning-select" label="思考级别" title={`思考级别：${label}${hint ? ` · ${hint}` : ""}`} icon={<ReasoningIcon effort={valid ? settings.effort || settings.default || "" : ""}/>}
       value={valid ? settings.effort : ""} renderValue={label} disabled={disabled || busy || !valid} aria-busy={busy}
       open={open && valid} onOpenChange={setOpen} onChange={event => void select(event.target.value)} popupMinWidth={176}
       popupHeader={<div className="composer-model-heading">思考级别</div>}>
