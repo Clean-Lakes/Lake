@@ -88,6 +88,12 @@ export type Bootstrap = {
   aiRuntime?: "go" | "legacy";
 };
 
+export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"modelId"|"modelSelection"|"supportsImageInput"> & {
+  available: AvailableModels | null;
+  providers: ProviderCatalog;
+  settings: ModelSettings;
+};
+
 export const api = {
  schedules:(project:string,signal?:AbortSignal)=>request<{items:import('../../shared/contracts').ScheduledTask[]}>(`/api/projects/${encodeURIComponent(project)}/schedules`,{signal}),
  schedule:(project:string,id:string,signal?:AbortSignal)=>request<import('../../shared/contracts').ScheduledTask>(`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`,{signal}),
@@ -147,6 +153,7 @@ export const api = {
       body: JSON.stringify({ url, name, protocol, ...(supportsImageInput === undefined ? {} : { supportsImageInput }), ...(supportsImageOutput === undefined ? {} : { supportsImageOutput }), ...(apiKey === undefined ? {} : { apiKey }) }),
     }),
   availableModels: (signal?: AbortSignal) => request<AvailableModels>("/api/settings/model/available", { signal }),
+  modelState: (signal?: AbortSignal) => request<ModelSyncState>("/api/settings/model/state", { signal }),
   createProject: (name: string) => post<Project>("/api/projects", { name }),
   projectMemories: (projectId: string, query = "", includeExpired = false, includeDeleted = false, offset = 0, signal?: AbortSignal) => request<ProjectMemoryList>(`/api/projects/${encodeURIComponent(projectId)}/memory?query=${encodeURIComponent(query)}&includeExpired=${includeExpired}&includeDeleted=${includeDeleted}&offset=${offset}&limit=50`, {signal}),
   projectMemory: (projectId: string, key: string, includeDeleted = false, signal?: AbortSignal) => request<ProjectMemoryEntry>(`/api/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(key)}${includeDeleted ? "?includeDeleted=true" : ""}`, {signal}),

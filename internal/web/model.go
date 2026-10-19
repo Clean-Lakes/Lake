@@ -200,6 +200,10 @@ func (m *Models) Active() *ai.Model {
 func (m *Models) ActiveSelection() (*ai.Model, Object) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.activeSelectionLocked()
+}
+
+func (m *Models) activeSelectionLocked() (*ai.Model, Object) {
 	active := m.activeLocked()
 	if active == nil {
 		return nil, nil
@@ -238,6 +242,10 @@ func (m *Models) ActiveSelection() (*ai.Model, Object) {
 func (m *Models) Settings() Object {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.settingsLocked()
+}
+
+func (m *Models) settingsLocked() Object {
 	magpie := m.magpieModelLocked()
 	if active := m.activeMagpieModelLocked(); active != nil {
 		return Object{"source": "settings", "managedBy": "magpie", "configured": true, "url": active.URL, "name": active.Name, "keyConfigured": true, "protocol": active.Protocol, "supportsImageInput": active.SupportsImageInput, "supportsImageOutput": active.SupportsImageOutput, "providerName": "Magpie", "magpie": Object{"name": active.Name}}

@@ -418,6 +418,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, 200, Object{"modelId": ai.ModelIdentity(*model), "limit": model.ContextLimit, "source": model.ContextLimitSource})
 		return
 	}
+	if name == "/api/settings/model/state" && method == "GET" {
+		reply(w, 200, b.Models.SyncState())
+		return
+	}
 	if name == "/api/settings/model/available" && method == "GET" {
 		if result, exists := b.Models.ConfiguredProviderModels(); exists {
 			reply(w, 200, result)

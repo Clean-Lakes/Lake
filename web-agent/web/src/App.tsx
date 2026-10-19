@@ -1,6 +1,7 @@
 import {ScheduledTasks} from "./ScheduledTasks";
 import {DisclosureSummary} from './DisclosureSummary';
 import {acceptSnapshot,reuseUnchanged} from './snapshotUpdates';
+import {useAutoRefresh} from './useAutoRefresh';
 import {applyLiveText} from './liveTextUpdates';
 import {sreSessionPresentation} from './sreSessionPresentation';
 import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerMentions";
@@ -249,6 +250,12 @@ function App() {
   const [mention, setMention] = useState<{ query: string; index: number } | null>(null);
   const messageInputRef = useRef<ComposerInputHandle>(null);
   const [pendingOperation, setPendingOperation] = useState("");
+  const syncModels = useAutoRefresh(api.modelState, state => {
+    const {available, providers: _providers, settings: _settings, ...model} = state;
+    setBootstrap(current => current ? reuseUnchanged(current, {...current, ...model}) : current);
+    // Legacy discovery remains on demand; background sync only reads local state.
+    setModelMenu(current => available ? reuseUnchanged(current, {...available, loading: false}) : current.entries ? {models: [], loading: false} : current);
+  }, !!bootstrap?.authenticated && !pendingOperation);
   const [stoppingTurn, setStoppingTurn] = useState(false);
   const [notice, setNotice] = useState("");
   const [resourceTerminalMenu, setResourceTerminalMenu] = useState<string | null>(null);
@@ -831,7 +838,10 @@ function App() {
     finally {setPendingOperation("");}
   }
   async function refreshBootstrap() {
-    try { setBootstrap(await api.bootstrap()); } catch { /* The banner keeps its last known state. */ }
+    try {
+      setBootstrap(await api.bootstrap());
+      await syncModels();
+    } catch { /* Keep the last known model state during a temporary failure. */ }
   }
   async function submitAuth(event: FormEvent) {
     event.preventDefault();
