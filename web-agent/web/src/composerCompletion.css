@@ -1,10 +1,4 @@
 .composer-text { flex: 1; min-width: 0; }
-.composer-text-field { position: relative; min-width: 0; }
-.composer-input-measure { position: absolute; top: 0; left: 0; visibility: hidden; }
-.composer-text textarea { cursor: text; caret-color: var(--foreground); position: relative; z-index: 1; overflow-wrap: break-word; white-space: pre-wrap; }
-.composer-ghost-viewport { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.composer-ghost { box-sizing: border-box; width: 100%; padding: 3px 0; color: var(--text-muted); font: inherit; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: break-word; }
-.composer-ghost-prefix { color: transparent; }
 .composer-completion-hint { display: flex; align-items: center; gap: 12px; height: 20px; margin-top: 3px; }
 .composer-completion-hint button { display: inline-flex; align-items: center; gap: 5px; border: 0; padding: 0; color: var(--text-muted); background: transparent; font-size: 11px; cursor: pointer; }
 .composer-completion-hint button:hover { color: var(--foreground); }
@@ -12,9 +6,12 @@
 .composer-completion-hint kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font: inherit; line-height: 15px; }
 .composer-text.has-completion + .composer-send-actions { margin-bottom: 23px; }
 
-/* Selected references and editable prose share the same wrapping input line. */
-.composer-inline-content { display: flex; flex: 1; min-width: 0; align-items: center; flex-wrap: wrap; gap: 5px 6px; }
-.composer-inline-content > .composer-text { flex: 1 1 140px; min-width: min(140px, 100%); }
+/* One editable document: atomic references can occur anywhere in the sentence. */
+.composer-rich-input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 30px; max-height: 160px; overflow-y: auto; padding: 3px 0; border: 0; outline: none; background: transparent; color: var(--foreground); font: inherit; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; caret-color: var(--foreground); }
+.composer-rich-input[data-empty="true"]::before { content: attr(data-placeholder); color: var(--text-muted); pointer-events: none; }
+.composer-rich-input[aria-disabled="true"] { color: var(--text-muted); cursor: default; }
+.composer-inline-suggestion { color: var(--text-muted); pointer-events: none; }
+.composer-rich-input .composer-reference-token { margin: 0 2px; vertical-align: baseline; user-select: all; }
 .composer-reference-token { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; min-height: 24px; padding: 2px 6px; box-sizing: border-box; border-radius: var(--radius-control); background: var(--surface-hover); color: var(--foreground); font-size: 12px; line-height: 20px; }
 .composer-reference-token > svg { flex-shrink: 0; }
 .composer-reference-token > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -22,4 +19,3 @@
 .composer-reference-token > button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 17px; height: 18px; padding: 0; border: 0; border-radius: 3px; background: transparent; color: var(--text-muted); cursor: pointer; }
 .composer-reference-token > button:hover { color: var(--foreground); background: var(--surface-selected); }
 .composer-reference-token > button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.composer-inline-content:has(.has-completion) + .composer-send-actions { margin-bottom: 23px; }
