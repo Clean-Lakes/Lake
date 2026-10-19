@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "3503a161b4545a0d08ef5ee647792f0d4435de58",
+  "scope": "Replace elapsed-time caption 用时 with Lake wording 流经",
+  "checks": [
+    "TypeScript check and production build passed",
+    "280 frontend tests passed, including history/current-turn ordering and uncertain outcome labels",
+    "Actual AITranscript fixture completion visibly rendered 流经 1秒; running status, timing and layout unchanged",
+    "macOS Dev installed and codesign verified; installed host/backend match package",
+    "Windows Dev package validated and installed; executable hashes match package; Dev data metadata unchanged"
+  ],
+  "windowsInstall": {
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "a65ee00e568f58f37363cbb84954ad14da3d8a863c3f6c95710e528b589c4e98",
+    "desktopSHA256": "7be04b0a3696ed2477a6cef8db2f77d7e1dee9c5be211974495470d998ea2dfe"
+  },
+  "screenshots": [
+    "lake-flow-elapsed.png"
+  ],
+  "limitations": [
+    "Browser fixture used fictional transcript and no model or host operations",
+    "Native app UI not rechecked; normal quit/reopen loads installed frontend"
+  ]
+}
