@@ -43,5 +43,16 @@
   "screenshots": [
     "lake-inline-reference-tokens.png",
     "lake-inline-reference-tokens-dark.png"
-  ]
+  ],
+  "macOS": {
+    "signedDevInstalled": true,
+    "nativeUIVerification": "not performed: existing desktop accessibility timeout; shared frontend verified in browser"
+  },
+  "windows": {
+    "staticChecks": true,
+    "devInstalled": true,
+    "devDataUnchanged": true,
+    "installedHashesMatch": true,
+    "nativeUIVerification": "not performed; shared frontend verified in browser"
+  }
 }
