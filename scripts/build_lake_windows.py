@@ -113,10 +113,14 @@ def main():
         for item in ("usr/bin/sh.exe", "usr/bin/ssh.exe"):
             if not (git / item).is_file():
                 raise RuntimeError("PortableGit lacks " + item)
-        icon = (ROOT / "client/windows/icon.png").read_bytes()
-        assert icon[:8] == b"\x89PNG\r\n\x1a\n" and struct.unpack_from(">II", icon, 16) == (256, 256)
-        ico = pathlib.Path(temporary) / "Lake.ico"
-        ico.write_bytes(struct.pack("<HHH", 0, 1, 1) + struct.pack("<BBBBHHII", 0, 0, 0, 0, 1, 32, len(icon), 22) + icon)
+        # Match the runtime window/tray artwork, including native small sizes.
+        ico = ROOT / "client/windows/icon.ico"
+        icon = ico.read_bytes()
+        assert icon[:4] == b"\x00\x00\x01\x00"
+        count = struct.unpack_from("<H", icon, 4)[0]
+        assert len(icon) >= 6 + count * 16
+        sizes = {icon[6 + i * 16] or 256 for i in range(count)}
+        assert {16, 20, 24, 32, 40, 48, 64, 128, 256} <= sizes
         generated_resource = ROOT / "client/windows/rsrc_windows_amd64.syso"
         run(["go", "run", "github.com/akavel/rsrc@v0.10.2", "-arch", "amd64", "-manifest", ROOT / "client/windows/app.manifest", "-ico", ico, "-o", generated_resource])
         run(["go", "build", "-trimpath", "-ldflags", "-X main.version=" + version, "-o", resources / "lake.exe", "./cmd/lake"], env=env)
@@ -161,7 +165,7 @@ def main():
             product_version = version + ".0" if version.count(".") == 2 else version
             # Build the glob with the host's native separator. Appending a POSIX
             # slash to a Windows path makes NSIS fail to find the payload.
-            run([nsis, "-V2", *(["-DDEV_BUILD=1"] if args.dev else []), "-DAPP_NAME=" + app_name, "-DUNINSTALL_KEY=" + ("CleanLakesDev" if args.dev else "CleanLakes"), "-DVERSION=" + version, "-DPRODUCT_VERSION=" + product_version, "-DAPP_FILES=" + str(stage / "*"), "-DOUTPUT=" + str(installer), ROOT / "client/windows/installer.nsi"])
+            run([nsis, "-V2", "-INPUTCHARSET", "UTF8", *(["-DDEV_BUILD=1"] if args.dev else []), "-DAPP_NAME=" + app_name, "-DUNINSTALL_KEY=" + ("CleanLakesDev" if args.dev else "CleanLakes"), "-DVERSION=" + version, "-DPRODUCT_VERSION=" + product_version, "-DAPP_FILES=" + str(stage / "*"), "-DOUTPUT=" + str(installer), ROOT / "client/windows/installer.nsi"])
             assets.append(installer)
         for path in assets:
             path.with_name(path.name + ".sha256").write_text(sha(path) + "  " + path.name + "\n")
