@@ -18,5 +18,16 @@
   "screenshots": [
     "lake-sidebar-scrollbar-light.png",
     "lake-sidebar-scrollbar-dark.png"
-  ]
+  ],
+  "macOS": {
+    "signedDevInstalled": true,
+    "nativeUIVerification": "not performed; shared frontend verified in browser"
+  },
+  "windows": {
+    "staticChecks": true,
+    "devInstalled": true,
+    "devDataUnchanged": true,
+    "installedHashesMatch": true,
+    "nativeUIVerification": "not performed; shared frontend verified in browser"
+  }
 }
