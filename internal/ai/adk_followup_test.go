@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,7 +14,7 @@ func TestADKSuccessiveConfirmationsDoNotInvalidateRunnerSession(t *testing.T) {
 	paths := []string{filepath.Join(dir, "first.txt"), filepath.Join(dir, "second.txt")}
 	m, closeModel := fakeModel(t, func(n int, _ map[string]any) any {
 		if n <= 2 {
-			return response("", Call{ID: paths[n-1], Name: "append", Arguments: js(map[string]any{"path": paths[n-1], "content": "once\n"})})
+			return response("", Call{ID: fmt.Sprintf("fixture-append-%d", n), Name: "append", Arguments: js(map[string]any{"path": paths[n-1], "content": "once\n"})})
 		}
 		return response("both changes recorded")
 	})
@@ -28,7 +29,14 @@ func TestADKSuccessiveConfirmationsDoNotInvalidateRunnerSession(t *testing.T) {
 	for len(seen) < 2 {
 		select {
 		case err := <-result:
-			t.Fatalf("turn ended before both confirmations: %v", err)
+			history, _ := e.History("case")
+			var tools []Message
+			for _, message := range history {
+				if message.Role == "tool" {
+					tools = append(tools, message)
+				}
+			}
+			t.Fatalf("turn ended before both confirmations: %v; fixture tools: %s", err, js(tools))
 		default:
 		}
 		s.mu.Lock()

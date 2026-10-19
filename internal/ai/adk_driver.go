@@ -251,7 +251,7 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 		for event, err := range r.Run(ctx, "lake", id, content, agent.RunConfig{StreamingMode: agent.StreamingModeSSE}, runner.WithStateDelta(delta)) {
 			if err != nil {
 				if errors.Is(err, errADKApprovalPending) {
-					return nil
+					break
 				}
 				return err
 			}
