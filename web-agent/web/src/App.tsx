@@ -5,7 +5,7 @@ import {applyLiveText} from './liveTextUpdates';
 import {sreSessionPresentation} from './sreSessionPresentation';
 import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerMentions";
 import {SREModeToggle} from './SREModeToggle';
-import {filterMentions,mentionInsertion,mentionOptions,type MentionCategory,type MentionOption} from "./composerMentionState";
+import {appendResourceMention,filterMentions,mentionInsertion,mentionOptions,type MentionCategory,type MentionOption} from "./composerMentionState";
 import {ComposerTextInput} from "./ComposerTextInput";
 import {AppSelect} from "./AppSelect";
 import {ComposerModelSelect} from "./ComposerModelSelect";
@@ -927,6 +927,14 @@ function App() {
     setMessageDraft(next);setMention(null);
     requestAnimationFrame(()=>{input?.focus();input?.setSelectionRange(position,position);});
   }
+  function addResourceToConversation(resource: Resource) {
+    if (!sessionConnected || pendingOperation || bulkMode || !sessionId || selectedSession?.projectId !== resource.projectId || !mentionable.some(item=>item.id===resource.id)) return;
+    const result=appendResourceMention(messageDraft,mentionRefs,resource);
+    setMessageDraft(result.next);setMentionRefs(result.references);setMention(null);
+    setResourceTerminalMenu(null);
+    if (route.resourceId) navigate({sessionId,resourceId:null});
+    requestAnimationFrame(()=>{const input=messageInputRef.current;input?.focus({preventScroll:true});input?.setSelectionRange(result.position,result.position);});
+  }
   /** Resource ids whose "@name" still appears in the draft, so deleting the text drops the reference. */
   function mentionedResourceIds(_text: string) {
     return referencedResources(messageDraft, mentionRefs, mentionable.map(resource => resource.id));
@@ -1312,11 +1320,15 @@ function App() {
                   onSaved={saved=>{setSnapshot(current=>current&&current.session.id===saved.id?{...current,session:saved}:current);setCatalog(current=>current?{...current,sessions:current.sessions.map(s=>s.id===saved.id?saved:s)}:current);}}/>
               </div>) : <p className="nav-empty">{navigationSearch ? "没有匹配的会话" : "还没有会话"}</p>}{sessions.length > 5 && <button type="button" className="nav-show-more" aria-expanded={allSessions} onClick={() => setAllSessionGroups(items => allSessions ? items.filter(id => id !== project.id) : [...items, project.id])}>{allSessions ? "收起历史会话" : `查看全部 ${sessions.length} 个会话`}</button>}</div>
               {<ResourceTree selection={bulkSelection} onSelectAll={() => toggleBulkGroup(bulkCatalogTargets(catalog).filter(target => target.projectId === project.id && ["resource","folder"].includes(target.kind)))} onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={navigationSearch && !projectMatches ? resourceSearchNodes(project.id, catalog.resourceTree ?? [], projectResources) : catalog.resourceTree ?? []} filtering={!!navigationSearch && !projectMatches} disabled={!connected} refresh={refreshCatalog} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={(parentId) => { setSshProject(project.id); setSshParent(parentId); setSshName(""); setSshDraft(emptySSH()); setSshError(""); }} renderResource={resource => {
+                const terminalResourceRow=["local","ssh"].includes(resource.kind);
+                const addToConversationDisabled=!sessionConnected || !!pendingOperation || selectedSession?.projectId!==resource.projectId || !mentionable.some(item=>item.id===resource.id);
+                const addToConversationTitle=!selectedSession ? "请先打开一个对话" : selectedSession.projectId!==resource.projectId ? "请先打开此项目的对话" : "添加到对话";
                 const live = resourceTerminals.filter(t => t.resourceId === resource.id && t.status !== "disconnected").sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-                return <div key={resource.id} className="resource-nav-wrap" ref={resourceTerminalMenu === resource.id ? resourceMenuRef : undefined}><div className="resource-nav-row" onContextMenu={event => {if (["local", "ssh"].includes(resource.kind)) {event.preventDefault(); event.stopPropagation(); if (connected) {setResourceTerminalMenu(null); setResourceConfigContext({resource, x:event.clientX, y:event.clientY});}}}}>
+                return <div key={resource.id} className="resource-nav-wrap" ref={resourceTerminalMenu === resource.id ? resourceMenuRef : undefined}><div className={`resource-nav-row ${terminalResourceRow?"with-terminal-actions":"with-resource-actions"}`} onContextMenu={event => {if (["local", "ssh"].includes(resource.kind)) {event.preventDefault(); event.stopPropagation(); if (connected) {setResourceTerminalMenu(null); setResourceConfigContext({resource, x:event.clientX, y:event.clientY});}}}}>
                   <button id={`resource-trigger-${resource.id}`} className={`nav-row resource-row ${route.resourceId === resource.id || terminalOpen && terminalResource?.id === resource.id ? "active" : ""}`} onClick={() => { if (bulkMode) {toggleBulkTarget({kind:"resource",id:resource.id,projectId:resource.projectId,name:resource.name}); return;} if (["local", "ssh"].includes(resource.kind)) { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); } else navigate({ sessionId: route.sessionId, resourceId: resource.id }); }} aria-expanded={["local", "ssh"].includes(resource.kind) ? resourceTerminalMenu === resource.id : undefined} aria-current={route.resourceId === resource.id ? "page" : undefined}>
                     <ResourceIcon kind={resource.kind}/><span className="nav-row-text"><strong>{resource.name}</strong></span>{connected && live.some(terminal=>terminal.status==="ready"||terminal.status==="busy") && <span className="resource-indicator available resource-connection-indicator" role="img" aria-label="终端已连接" title="终端已连接"/>}{connectingResources.includes(resource.id) && <span className="resource-inline-status">连接中</span>}
                   </button>
+                  <button type="button" className="resource-terminal-button resource-add-to-chat" aria-label={`添加到对话：${resource.name}`} title={addToConversationTitle} disabled={addToConversationDisabled} onClick={()=>addResourceToConversation(resource)}><Glyph name="chatAdd" size={15}/></button>
                   {["local", "ssh"].includes(resource.kind) && <>
                     <button type="button" className="resource-terminal-button resource-terminal-quick" aria-label={`一键打开 ${resource.name} 的终端`} disabled={!connected || !persistentMode || !!pendingOperation || resource.status !== "available"} onClick={() => void openTerminalFromSidebar(resource.id)} title={connectingResources.includes(resource.id) ? "查看连接进度" : live.length ? "打开已有终端" : "创建并打开终端"}><Glyph name="terminal" size={15}/></button>
                     <button type="button" className="resource-terminal-button resource-terminal-manage" aria-label={`管理 ${resource.name} 的终端`} aria-expanded={resourceTerminalMenu === resource.id} disabled={!connected} onClick={() => { setResourceTerminalMenu(current => current === resource.id ? null : resource.id); void refreshCatalog().catch(handleFailure); }} title="管理终端"><Glyph name="more" size={16}/></button>

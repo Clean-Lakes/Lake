@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type {MCPServerConfig,Resource,SkillConfig} from "../../shared/contracts";
 import {rebaseMentions,referencedExtensions,referencedResources,rebaseExtensionReferences} from "../../shared/references";
-import {filterMentions,mentionInsertion,mentionOptions,type MentionOption} from "../src/composerMentionState";
+import {appendResourceMention,filterMentions,mentionInsertion,mentionOptions,type MentionOption} from "../src/composerMentionState";
 
 const skill:SkillConfig={name:"service-check",description:"检查服务健康",path:"/fixture/SKILL.md",source:"Lake",enabled:true,managed:true};
 const mcp:MCPServerConfig={id:"tools",name:"Team tools",transport:"http",enabled:true,url:"http://localhost:1",command:"",args:[],headersConfigured:false,envConfigured:false};
@@ -51,4 +51,28 @@ test("queue editing rebases chosen extensions and removes only deleted mentions"
  const next="@service-check 检查";
  assert.deepEqual(rebaseExtensionReferences(text,next,refs),[refs[0]]);
  assert.equal(rebaseExtensionReferences(text,"先 "+text,refs)[1]?.start,17);
+});
+
+test("sidebar resource selection appends without replacing a draft or pending @ token",()=>{
+ const resource={id:"host",name:"应用服务器 一"};
+ for(const draft of ["","检查一下","检查\n","检查 @未完成"]) {
+  const result=appendResourceMention(draft,[],resource);
+  assert.ok(result.next.startsWith(draft));
+  assert.equal(result.next.slice(result.references[0]!.start,result.references[0]!.end),"@应用服务器 一");
+  assert.equal(result.position,result.next.length);
+  assert.deepEqual(referencedResources(result.next,result.references,["host"]),["host"]);
+ }
+});
+test("sidebar references deduplicate by resource identity, retain extension references and re-add deleted mentions",()=>{
+ const original=mentionInsertion("@",1,{id:"host",name:"同名",kind:"skill",detail:""});
+ const first=appendResourceMention(original.next,[original.reference],{id:"host",name:"同名"});
+ const duplicate=appendResourceMention(first.next,first.references,{id:"host",name:"同名"});
+ assert.equal(duplicate.next,first.next);
+ assert.equal(duplicate.references.length,2);
+ assert.equal(referencedExtensions(duplicate.next,duplicate.references).length,1);
+ const other=appendResourceMention(first.next,first.references,{id:"other",name:"同名"});
+ assert.deepEqual(referencedResources(other.next,other.references,["host","other"]),["host","other"]);
+ const readded=appendResourceMention("已删除引用",first.references,{id:"host",name:"同名"});
+ assert.deepEqual(referencedResources(readded.next,readded.references,["host"]),["host"]);
+ assert.equal(readded.references.length,1);
 });

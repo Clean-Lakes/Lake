@@ -1171,3 +1171,11 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 
 .ai-turn > .turn-status { margin: 0 0 12px; flex-shrink: 0; }
 .ai-turn > .turn-status .turn-status-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Resource references, terminal shortcuts and menus keep separate, stable hit areas. */
+.sidebar .resource-nav-row.with-terminal-actions > .resource-row { padding-right: 92px; }
+.sidebar .resource-nav-row.with-resource-actions > .resource-row { padding-right: 64px; }
+.resource-nav-row.with-terminal-actions > .resource-add-to-chat { right: 60px; }
+.resource-nav-row.with-resource-actions > .resource-add-to-chat { right: 32px; }
+.sidebar.is-bulk-selecting .resource-nav-row > .resource-row { padding-right: 8px; }
+.resource-add-to-chat:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }

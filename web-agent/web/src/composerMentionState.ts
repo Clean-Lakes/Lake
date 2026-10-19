@@ -1,5 +1,5 @@
 import type {MCPServerConfig,Resource,SkillConfig} from "../../shared/contracts";
-import type {MentionKind} from "../../shared/references";
+import {rebaseMentions, type MentionKind, type MentionReference} from "../../shared/references";
 
 export type MentionOption={id:string;kind:MentionKind;name:string;detail:string};
 export type MentionCategory=MentionKind|"all";
@@ -21,4 +21,14 @@ export function mentionInsertion(draft:string,caret:number,option:MentionOption)
  const start=token?before.lastIndexOf("@"):caret;
  const label=`@${option.name}`,next=`${draft.slice(0,start)}${label} ${draft.slice(caret)}`;
  return {next,position:start+label.length+1,reference:{kind:option.kind,resourceId:option.id,label,start,end:start+label.length}};
+}
+
+/** Sidebar selection appends a real resource reference without replacing draft text or an unfinished @ query. */
+export function appendResourceMention(draft:string,references:MentionReference[],resource:Pick<Resource,"id"|"name">) {
+ const valid=rebaseMentions(draft,draft,references);
+ const existing=valid.find(ref=>(!ref.kind||ref.kind==="resource")&&ref.resourceId===resource.id);
+ if(existing)return {next:draft,references:valid,position:existing.end};
+ const prefix=draft+(draft&&!/\s$/.test(draft)?" ":"");
+ const label=`@${resource.name}`,start=prefix.length;
+ return {next:prefix+label+" ",references:[...valid,{kind:"resource" as const,resourceId:resource.id,label,start,end:start+label.length}],position:start+label.length+1};
 }
