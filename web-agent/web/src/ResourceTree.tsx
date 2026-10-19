@@ -25,10 +25,12 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
     try { return localStorage.getItem(`lake.resource-section.${project.id}`) !== "closed"; } catch { return true; }
   });
   useEffect(() => { try { localStorage.setItem(`lake.resource-section.${project.id}`, sectionExpanded ? "open" : "closed"); } catch {} }, [project.id, sectionExpanded]);
-  const [closed, setClosed] = useState<string[]>(() => {
-    try { const saved: unknown = JSON.parse(localStorage.getItem(`lake.resource-folders.${project.id}`) || "[]"); return Array.isArray(saved) ? saved.filter(id => typeof id === "string") : []; } catch { return []; }
+  // Persist explicit expansions: absent/new folders stay collapsed, including after async loads.
+  // The legacy key stored collapsed exceptions to an expanded default, so it is not reusable.
+  const [expandedFolders, setExpandedFolders] = useState<string[]>(() => {
+    try { const saved: unknown = JSON.parse(localStorage.getItem(`lake.resource-folders.expanded.${project.id}`) || "[]"); return Array.isArray(saved) ? saved.filter(id => typeof id === "string") : []; } catch { return []; }
   });
-  useEffect(() => {try {localStorage.setItem(`lake.resource-folders.${project.id}`, JSON.stringify(closed));} catch {}}, [project.id, closed]);
+  useEffect(() => {try {localStorage.setItem(`lake.resource-folders.expanded.${project.id}`, JSON.stringify(expandedFolders));} catch {}}, [project.id, expandedFolders]);
   const [editor, setEditor] = useState<{id?: string; parentId: string | null; name: string} | null>(null);
   const [context,setContext]=useState<{id:string;x:number;y:number}|null>(null);
   const contextAnchor=useRef<HTMLButtonElement|null>(null);
@@ -78,7 +80,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   };
   const move = (source: string, parentId: string | null, beforeId: string | null = null) => {
     if (source === beforeId || !canMoveInto(tree, source, parentId)) return;
-    if (parentId) setClosed(values => values.filter(id => id !== parentId));
+    if (parentId) setExpandedFolders(values => values.includes(parentId) ? values : [...values, parentId]);
     void work({operation:"move", nodeId:source, parentId, beforeId});
   };
   // Pointer capture works for mouse, trackpad and touch, including browsers
@@ -130,7 +132,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   };
   const render = (parent: string | null, depth = 0): ReactNode => childrenOf(parent).map(node => {
     const resource = node.resourceId ? resourceMap.get(node.resourceId) : undefined;
-    const expanded = filtering || !closed.includes(node.id);
+    const expanded = filtering || expandedFolders.includes(node.id);
     const siblings = childrenOf(parent); const index = siblings.findIndex(item => item.id === node.id);
     return <div className={`resource-tree-node ${dragging === node.id ? "is-dragging" : ""}`} key={node.id}>
       <div data-resource-tree-node={node.id} onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(!blocked){contextAnchor.current=event.currentTarget.querySelector<HTMLButtonElement>('.navigation-more-button') ?? event.currentTarget.querySelector<HTMLButtonElement>('.resource-drag-handle');setContext({id:node.id,x:event.clientX,y:event.clientY});}}} className={`resource-tree-row ${drop?.id === node.id ? `drop-${drop.zone}` : ""}`} onDragOver={event => dragOver(event,node)} onDrop={event => {
@@ -149,7 +151,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
           onPointerMove={pointerMove} onPointerUp={event=>pointerEnd(event)} onPointerCancel={event=>pointerEnd(event,true)}
           onDragStart={event => {dragSource.current = node.id;event.dataTransfer.setData("application/x-lake-resource-tree",node.id);event.dataTransfer.effectAllowed="move";setDragging(node.id);setError("");}} onDragEnd={() => {dragSource.current = null;setDragging(null);setDrop(null);}}><Glyph name="grip" size={10}/></button>
         {node.kind === "folder" ? <div className="resource-folder-row">
-          <button type="button" className="resource-folder-toggle" title={folderPath(node)} aria-expanded={expanded} onClick={() => setClosed(values => expanded ? [...values,node.id] : values.filter(id => id !== node.id))}><Glyph name="chevron" size={11} className={expanded ? "folder-chevron open" : "folder-chevron"}/><FolderIcon/><span className="resource-folder-name">{node.name}</span><small className="resource-folder-count" title={`${childrenOf(node.id).length} 个子项`}>{childrenOf(node.id).length}</small></button>
+          <button type="button" className="resource-folder-toggle" title={folderPath(node)} aria-expanded={expanded} onClick={() => setExpandedFolders(values => expanded ? values.filter(id => id !== node.id) : [...values,node.id])}><Glyph name="chevron" size={11} className={expanded ? "folder-chevron open" : "folder-chevron"}/><FolderIcon/><span className="resource-folder-name">{node.name}</span><small className="resource-folder-count" title={`${childrenOf(node.id).length} 个子项`}>{childrenOf(node.id).length}</small></button>
           <div className="resource-folder-actions"><button type="button" className="navigation-more-button" disabled={blocked} aria-label={`管理文件夹 ${folderPath(node)}`} aria-haspopup="menu" title="更多操作" onClick={event => {contextAnchor.current=event.currentTarget;const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button></div>
         </div> : resource && <><div className="resource-tree-resource-content">{renderResource(resource)}</div>{!["local", "ssh"].includes(resource.kind) && <button type="button" className="navigation-more-button resource-more-button" disabled={blocked} aria-label={`管理资源 ${resource.name}`} aria-haspopup="menu" title="更多操作" onClick={event=>{contextAnchor.current=event.currentTarget;const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button>}</>}
       </div>
@@ -170,7 +172,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   return <>{context && contextNode && <NavigationMenu title={contextResource?.name || contextNode.name} anchor={contextAnchor} x={context.x} y={context.y} onClose={()=>setContext(null)} actions={[
    ...(contextNode.kind==="folder" ? [
     {label:"新建资源",icon:"server" as const,disabled:blocked,run:()=>onAddResource(contextNode.id)},
-    {label:"新建子目录",icon:"folder" as const,disabled:blocked,run:()=>{setEditor({parentId:contextNode.id,name:""});setClosed(values => values.filter(id => id !== contextNode.id));}},
+    {label:"新建子目录",icon:"folder" as const,disabled:blocked,run:()=>{setEditor({parentId:contextNode.id,name:""});setExpandedFolders(values => values.includes(contextNode.id) ? values : [...values,contextNode.id]);}},
     {label:"重命名",icon:"edit" as const,separatorBefore:true,run:()=>setEditor({id:contextNode.id,parentId:contextNode.parentId,name:contextNode.name})}
    ] : []),
    {label:"移动到…",icon:"arrow",run:()=>setMoving(contextNode.id)},
