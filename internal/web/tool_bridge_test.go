@@ -108,15 +108,15 @@ func TestScheduleCRUDClaimAndRestart(t *testing.T) {
 	b.scheduleMu.Lock()
 	persisted, err := b.readSchedules()
 	b.scheduleMu.Unlock()
-	if err != nil || persisted[0].Enabled != true || persisted[0].Revision != 2 {
+	if err != nil || persisted[0].Enabled != true || persisted[0].Revision != 3 {
 		t.Fatal(persisted, err)
 	}
 	foreign, _ := newSession(t, h)
 	otherProject := stringOf(b.Store.Session(foreign)["projectId"])
-	if _, err = b.scheduleTool(ctx, foreign, otherProject, "schedule_delete", Object{"schedule_id": row["id"], "expected_revision": 2}, true); err == nil {
+	if _, err = b.scheduleTool(ctx, foreign, otherProject, "schedule_delete", Object{"schedule_id": row["id"], "expected_revision": 3}, true); err == nil {
 		t.Fatal("foreign schedule deleted")
 	}
-	if _, err = b.scheduleTool(ctx, id, project, "schedule_delete", Object{"schedule_id": row["id"], "expected_revision": 2}, true); err != nil {
+	if _, err = b.scheduleTool(ctx, id, project, "schedule_delete", Object{"schedule_id": row["id"], "expected_revision": 3}, true); err != nil {
 		t.Fatal(err)
 	}
 	// Restart normalization skips missed occurrences rather than replaying external effects.

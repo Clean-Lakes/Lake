@@ -11,7 +11,20 @@ import (
 	"time"
 )
 
+type scheduleExecution struct {
+	ID          string `json:"id"`
+	ScheduledAt string `json:"scheduled_at"`
+	StartedAt   string `json:"started_at,omitempty"`
+	FinishedAt  string `json:"finished_at,omitempty"`
+	Status      string `json:"status"`
+	Error       string `json:"error,omitempty"`
+	TaskID      string `json:"task_id,omitempty"`
+	SessionID   string `json:"session_id,omitempty"`
+}
+
 type toolSchedule struct {
+	History []scheduleExecution `json:"history,omitempty"`
+
 	ID         string `json:"id"`
 	Project    string `json:"project_id"`
 	Session    string `json:"session_id"`
@@ -70,9 +83,14 @@ func (b *Server) writeSchedules(rows []toolSchedule) error {
 	return platform.ReplaceFile(temp.Name(), b.schedulePath())
 }
 func scheduleView(row toolSchedule) Object {
+	historyCount := len(row.History)
+	row.History = nil
+	row.Options = nil
 	var out Object
 	must(json.Unmarshal([]byte(jsonText(row)), &out))
 	delete(out, "options")
+	delete(out, "history")
+	out["history_count"] = historyCount
 	return out
 }
 func (b *Server) scheduleTool(ctx context.Context, id, project, name string, args Object, approved bool) (any, error) {
@@ -212,9 +230,13 @@ func (b *Server) startScheduler() error {
 			if r.Status == "running" {
 				r.Status = "interrupted"
 				r.Error = "Lake restarted; the claimed occurrence was not replayed"
+				finishScheduleExecution(r, current)
+				r.Revision++
 			}
 			if r.Enabled && !at.After(current) {
+				appendScheduleExecution(r, scheduleExecution{ID: ident(), ScheduledAt: r.At, FinishedAt: current.Format(time.RFC3339), Status: "missed"})
 				advanceSchedule(r, current)
+				r.Revision++
 				r.Status = "missed"
 				r.Error = "Missed occurrence skipped after restart"
 			}
@@ -273,7 +295,10 @@ func (b *Server) tickSchedules(current time.Time) {
 			if e != nil || !r.Enabled || r.Status == "running" || at.After(current) {
 				continue
 			}
+			appendScheduleExecution(r, scheduleExecution{ID: ident(), ScheduledAt: r.At, StartedAt: current.Format(time.RFC3339), Status: "running", SessionID: r.Session})
 			r.Status = "running"
+			r.Error = ""
+			r.TaskID = ""
 			r.LastAt = current.Format(time.RFC3339)
 			r.Revision++
 			advanceSchedule(r, current)
@@ -296,6 +321,12 @@ func (b *Server) tickSchedules(current time.Time) {
 }
 func (b *Server) refreshScheduleTask(r *toolSchedule) {
 	defer func() {
+		if r.Status != "running" {
+			finishScheduleExecution(r, time.Now())
+			r.Revision++
+		}
+	}()
+	defer func() {
 		if recover() != nil {
 			r.Status = "failed"
 			r.Error = "scheduled task unavailable"
@@ -306,11 +337,14 @@ func (b *Server) refreshScheduleTask(r *toolSchedule) {
 		return
 	}
 	r.Status = stringOf(run["status"])
-	r.Error = stringOf(run["error"])
+	r.Error = b.Terminals.redact(stringOf(run["error"]))
+	if len(r.History) > 0 {
+		r.History[len(r.History)-1].SessionID = stringOf(run["sessionId"])
+	}
 	b.Store.AddMessage(r.Session, "system", "定时工作流「"+r.Name+"」已结束："+r.Status+"。"+r.Error, nil)
 }
 func (b *Server) executeSchedule(row toolSchedule) {
-	status, message, taskID := "completed", "", ""
+	status, message, taskID, executionSession := "completed", "", "", row.Session
 	func() {
 		defer func() {
 			if p := recover(); p != nil {
@@ -342,9 +376,11 @@ func (b *Server) executeSchedule(row toolSchedule) {
 		opts["denyLocalExecution"] = opts["denyLocalExecution"] == true || current["denyLocalExecution"] == true
 		run := b.startWorkflow(row.Project, row.WorkflowID, row.Version, opts)
 		taskID = stringOf(run["id"])
+		executionSession = stringOf(run["sessionId"])
 		status = "running"
 		b.Store.AddMessage(row.Session, "system", "定时工作流「"+row.Name+"」已开始。任务："+taskID, nil)
 	}()
+	message = b.Terminals.redact(message)
 	b.scheduleMu.Lock()
 	defer b.scheduleMu.Unlock()
 	rows, err := b.readSchedules()
@@ -356,6 +392,15 @@ func (b *Server) executeSchedule(row toolSchedule) {
 			rows[i].Status = status
 			rows[i].Error = message
 			rows[i].TaskID = taskID
+			rows[i].Revision++
+			if len(rows[i].History) > 0 {
+				last := &rows[i].History[len(rows[i].History)-1]
+				last.TaskID = taskID
+				last.SessionID = executionSession
+			}
+			if status != "running" {
+				finishScheduleExecution(&rows[i], time.Now())
+			}
 			break
 		}
 	}
@@ -366,4 +411,26 @@ func (b *Server) executeSchedule(row toolSchedule) {
 			b.Store.AddMessage(row.Session, "system", "定时任务「"+row.Name+"」失败："+message, nil)
 		}()
 	}
+}
+
+// Execution entries live in the same atomic file as claims; no external effect
+// is replayed to reconstruct historical records.
+func appendScheduleExecution(row *toolSchedule, run scheduleExecution) {
+	row.History = append(row.History, run)
+	if len(row.History) > 100 {
+		row.History = append([]scheduleExecution{}, row.History[len(row.History)-100:]...)
+	}
+}
+func finishScheduleExecution(row *toolSchedule, now time.Time) {
+	if len(row.History) == 0 {
+		return
+	}
+	run := &row.History[len(row.History)-1]
+	if run.Status != "running" {
+		return
+	}
+	run.Status = row.Status
+	run.Error = row.Error
+	run.TaskID = row.TaskID
+	run.FinishedAt = now.Format(time.RFC3339)
 }

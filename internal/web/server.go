@@ -364,6 +364,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if b.sreRoute(w, r, name, method) {
 		return
 	}
+	if b.scheduleRoute(w, r, name, method) {
+		return
+	}
 	if b.workflowRoute(w, r, name, method) {
 		return
 	}

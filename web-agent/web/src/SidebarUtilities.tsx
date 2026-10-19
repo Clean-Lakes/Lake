@@ -7,9 +7,9 @@ import {DesktopUpdate} from './DesktopUpdate';
 import './sidebarUtilities.css';
 
 /** One stable footer entry; existing workspace actions keep their original flows. */
-export function SidebarUtilities({tags,sessions,selectedTag,onSelectTag,onManageTags,onSession,onSettings,onTrash,booting,connected,modelConfigured}:{
+export function SidebarUtilities({tags,sessions,selectedTag,onSelectTag,onManageTags,onSession,onSettings,onTrash,onSchedules,booting,connected,modelConfigured}:{
  tags:WorkspaceTag[];sessions:WorkSession[];selectedTag:string|null;onSelectTag:(tag:string|null)=>void;
- onManageTags:()=>void;onSession:(id:string)=>void;onSettings:()=>void;onTrash:()=>void;
+ onManageTags:()=>void;onSession:(id:string)=>void;onSettings:()=>void;onTrash:()=>void;onSchedules?:()=>void;
  booting:boolean;connected:boolean;modelConfigured:boolean;
 }){
  const [open,setOpen]=useState(false);
@@ -54,6 +54,7 @@ export function SidebarUtilities({tags,sessions,selectedTag,onSelectTag,onManage
   }}>
    <TagNavigation tags={tags} sessions={sessions} selected={selectedTag} onSelect={onSelectTag} onManage={()=>act(onManageTags)} onSession={id=>act(()=>onSession(id))}/>
    <div className="workspace-utilities-separator"/>
+   {onSchedules&&<button type="button" className="workspace-utility-action" disabled={!connected} onClick={()=>act(onSchedules)}><Glyph name="clock" size={15}/><span>定时任务</span></button>}
    <button type="button" className="workspace-utility-action" disabled={booting} onClick={()=>act(onSettings)}><Glyph name="settings" size={15}/><span>设置</span>{!modelConfigured&&<small>待配置</small>}</button>
    <button type="button" className="workspace-utility-action" onClick={()=>act(()=>window.dispatchEvent(new Event('lake-open-updates')))}><Glyph name="refresh" size={15}/><span>检查更新</span>{unreadUpdate&&<small>新版本</small>}</button>
    <button type="button" className="workspace-utility-action" disabled={!connected} onClick={()=>act(onTrash)}><Glyph name="trash" size={15}/><span>已删除</span></button>

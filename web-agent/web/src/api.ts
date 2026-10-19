@@ -89,6 +89,9 @@ export type Bootstrap = {
 };
 
 export const api = {
+ schedules:(project:string,signal?:AbortSignal)=>request<{items:import('../../shared/contracts').ScheduledTask[]}>(`/api/projects/${encodeURIComponent(project)}/schedules`,{signal}),
+ schedule:(project:string,id:string,signal?:AbortSignal)=>request<import('../../shared/contracts').ScheduledTask>(`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`,{signal}),
+ setScheduleEnabled:(project:string,id:string,enabled:boolean,expectedRevision:number)=>request<import('../../shared/contracts').ScheduledTask>(`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({enabled,expectedRevision})}),
 	getSREEnabled:(project:string,signal?:AbortSignal)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{signal}),
 	setSREEnabled:(project:string,enabled:boolean)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{method:'PUT',body:JSON.stringify({enabled})}),
 	sreTask:(session:string,task:string)=>request<import('../../shared/contracts').SRETask>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}`),

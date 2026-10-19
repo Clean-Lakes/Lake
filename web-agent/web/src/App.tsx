@@ -1,3 +1,4 @@
+import {ScheduledTasks} from "./ScheduledTasks";
 import {DisclosureSummary} from './DisclosureSummary';
 import {acceptSnapshot,reuseUnchanged} from './snapshotUpdates';
 import {applyLiveText} from './liveTextUpdates';
@@ -168,6 +169,7 @@ function App() {
   const [serviceSettings, setServiceSettings] = useState({ driver: "postgres", host: "", port: 5432, username: "", database: "", path: "", credentialRef: "", endpoint: "unix:///var/run/docker.sock", ssh_asset_ref: "", tls: true });
   const [sshProject, setSshProject] = useState<string | null>(null);
   const [sshParent, setSshParent] = useState<string | null>(null);
+  const [scheduleProject,setScheduleProject]=useState<Project|null>(null);
   const [workflowProject, setWorkflowProject] = useState<Project | null>(null);
   const [memoryProject, setMemoryProject] = useState<Project | null>(null);
   const [tagProject, setTagProject] = useState<Project | null>(null);
@@ -1270,6 +1272,7 @@ function App() {
   </section>;
 
   return <div className={`app-shell ${terminalOpen ? "terminal-is-open" : ""}`}>
+    {scheduleProject&&<ScheduledTasks key={scheduleProject.id} project={scheduleProject} onClose={()=>setScheduleProject(null)} onOpenSession={async id=>{await refreshCatalog();setScheduleProject(null);navigate({sessionId:id,resourceId:null});}}/>}
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
     <aside className={`sidebar workspace-navigation ${mobileMenu ? "sidebar-open" : ""} ${bulkMode ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
@@ -1334,7 +1337,7 @@ function App() {
           </div>;
         }) : <div className="sidebar-empty"><Glyph name={navigationSearch ? "search" : "layers"} size={25}/><p>{navigationSearch ? "没有匹配的项目、会话或资源" : "还没有项目"}</p>{navigationSearch ? <button onClick={() => setNavigationQuery("")}>清除搜索</button> : <button onClick={openProjectDialog} disabled={!connected}>创建第一个项目</button>}</div>}
       </nav>
-      <SidebarUtilities key={sidebarProject?.id} tags={(catalog.tags??[]).filter(tag=>tag.projectId===sidebarProject?.id)} sessions={catalog.sessions} selectedTag={selectedTag} onSelectTag={setSelectedTag} onManageTags={()=>{const project=sidebarProject;if(project)setTagProject(project);else openProjectDialog();}} onSession={id=>navigate({sessionId:id,resourceId:null})} onSettings={()=>void openSettings()} onTrash={()=>setTrashOpen(true)} booting={booting} connected={connected} modelConfigured={modelConfigured}/>
+      <SidebarUtilities key={sidebarProject?.id} tags={(catalog.tags??[]).filter(tag=>tag.projectId===sidebarProject?.id)} sessions={catalog.sessions} selectedTag={selectedTag} onSelectTag={setSelectedTag} onManageTags={()=>{const project=sidebarProject;if(project)setTagProject(project);else openProjectDialog();}} onSession={id=>navigate({sessionId:id,resourceId:null})} onSettings={()=>void openSettings()} onTrash={()=>setTrashOpen(true)} onSchedules={sidebarProject?()=>setScheduleProject(sidebarProject):undefined} booting={booting} connected={connected} modelConfigured={modelConfigured}/>
 
     </aside>
 

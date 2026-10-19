@@ -277,3 +277,6 @@ export type SRECheckResult = {checkId:string;status:string;reason:string;evidenc
 export type SREVerificationResult = {reviewSummary?:string;id:string;taskId:string;planRunId:string;checks:SRECheckResult[];verdict:string;checkedAt:string};
 export type SRETask = {id:string;sessionId:string;projectId:string;requestId:string;goal:string;scope:string[];mode:'assist'|'plan_only';status:string;outcome:string;recoveryStatus:string;rootCauseStatus:string;profileId:string;profileVersion:number;revision:number;tokenBudget:number;budgetPolicy?:string;budgetSpent:number;usage:AIUsage;plans:SREPlanRevision[];runs:SREPlanRun[];attempts:SREStepAttempt[];messages:SRETranscriptEntry[];verifications:SREVerificationResult[];error?:string;createdAt:string;updatedAt:string};
 export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[]};
+
+export type ScheduleExecution={id:string;scheduled_at:string;started_at?:string;finished_at?:string;status:string;error?:string;task_id?:string;session_id?:string};
+export type ScheduledTask={id:string;project_id:string;session_id:string;name:string;at:string;interval_seconds:number;kind:'reminder'|'workflow';message?:string;workflow_id?:string;version?:number;enabled:boolean;revision:number;status:string;last_at?:string;error?:string;task_id?:string;history_count:number;history?:ScheduleExecution[]};
