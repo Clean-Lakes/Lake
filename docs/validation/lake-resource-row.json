@@ -1,0 +1,183 @@
+{
+  "sameResourceSecond": {
+    "rows": [
+      {
+        "id": "note",
+        "kind": "reply",
+        "top": 148.5
+      },
+      {
+        "id": "operation-0",
+        "kind": "operation",
+        "top": 194.3984375
+      }
+    ],
+    "replacements": 0,
+    "removals": 0,
+    "positionChanges": 0,
+    "colorChanges": 0,
+    "scrollWrites": 0,
+    "scrollChanges": 0,
+    "animations": 0,
+    "errors": 0
+  },
+  "expandedThird": {
+    "rows": [
+      {
+        "id": "note",
+        "kind": "reply",
+        "top": 148.5
+      },
+      {
+        "id": "operation-0",
+        "kind": "operation",
+        "top": 194.3984375
+      }
+    ],
+    "replacements": 0,
+    "removals": 0,
+    "positionChanges": 0,
+    "colorChanges": 0,
+    "scrollWrites": 0,
+    "scrollChanges": 0,
+    "animations": 0,
+    "errors": 0
+  },
+  "sameResourceEleven": {
+    "rows": [
+      {
+        "id": "note",
+        "kind": "reply",
+        "top": 148.5
+      },
+      {
+        "id": "operation-0",
+        "kind": "operation",
+        "top": 194.3984375
+      }
+    ],
+    "replacements": 0,
+    "removals": 0,
+    "positionChanges": 0,
+    "colorChanges": 0,
+    "scrollWrites": 0,
+    "scrollChanges": 0,
+    "animations": 0,
+    "errors": 0
+  },
+  "expandedStatePreserved": true,
+  "allStepsVisibleOnExpansion": true,
+  "proseBoundary": {
+    "rows": [
+      {
+        "id": "note",
+        "kind": "reply",
+        "top": 148.5
+      },
+      {
+        "id": "operation-0",
+        "kind": "operation",
+        "top": 194.3984375
+      },
+      {
+        "id": "new-note-11",
+        "kind": "reply",
+        "top": 242.796875
+      },
+      {
+        "id": "operation-11",
+        "kind": "operation",
+        "top": 288.6953125
+      }
+    ],
+    "replacements": 0,
+    "removals": 0,
+    "positionChanges": 0,
+    "colorChanges": 0,
+    "scrollWrites": 0,
+    "scrollChanges": 0,
+    "animations": 2,
+    "errors": 0
+  },
+  "narrowDark": {
+    "rows": [
+      {
+        "id": "note",
+        "kind": "reply",
+        "top": 148.5
+      },
+      {
+        "id": "operation-0",
+        "kind": "operation",
+        "top": 194.3984375
+      }
+    ],
+    "replacements": 0,
+    "removals": 0,
+    "positionChanges": 0,
+    "colorChanges": 0,
+    "scrollWrites": 0,
+    "scrollChanges": 0,
+    "animations": 0,
+    "errors": 0
+  },
+  "longReplyCompletion": {
+    "before": {
+      "details": 0,
+      "height": 2097,
+      "paragraphs": 41,
+      "top": 1485
+    },
+    "after": {
+      "details": 0,
+      "height": 2097,
+      "paragraphs": 41,
+      "top": 1485
+    },
+    "metrics": {
+      "rows": [
+        {
+          "id": "note",
+          "kind": "reply",
+          "top": 148.5
+        },
+        {
+          "id": "operation-0",
+          "kind": "operation",
+          "top": 194.3984375
+        },
+        {
+          "id": "stream-reply",
+          "kind": "reply",
+          "top": 242.796875
+        }
+      ],
+      "replacements": 0,
+      "removals": 0,
+      "positionChanges": 0,
+      "colorChanges": 0,
+      "scrollWrites": 0,
+      "scrollChanges": 0,
+      "animations": 0,
+      "errors": 0
+    }
+  },
+  "sourceCommit": "1be0119a40b7550dd3ef80eb26b054b9c3e54344",
+  "frontendTestsPassed": 255,
+  "typeScriptAndProductionBuild": "passed",
+  "data": "fictional fixture only",
+  "macDev": {
+    "installed": true,
+    "signatureVerified": true,
+    "runningFrontend": "older version; normal restart required"
+  },
+  "windowsDev": {
+    "installed": true,
+    "packageCheckPassed": true,
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "e03ae1bdc12c61f263e334cd1c461b6227f44406cde194be29632d4428ae764c",
+    "desktopSHA256": "0ec7c38a22d946b7a2438479ee82791be02d69c2713d247c2be3b1fe44c99869"
+  },
+  "scope": "Consecutive normal operations on the same explicit resource share their first stable row; prose, other resources, approvals and attention states remain boundaries. Expanded history retains all operations."
+}
