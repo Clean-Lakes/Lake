@@ -200,6 +200,9 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		readHash := s.state.FileReads[fileReadKey(c, a)]
 		s.mu.Unlock()
 		if str(a["expected_hash"]) == "" && readHash != "" {
+			if !validFileHash(readHash) {
+				return nil, &ToolNotExecutedError{Err: errors.New("saved file fingerprint is invalid; read the file again before writing")}
+			}
 			a["expected_hash"] = readHash
 		}
 	}

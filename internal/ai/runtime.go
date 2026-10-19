@@ -135,6 +135,15 @@ func sshBase(c *SSH, roots ...string) ([]string, error) {
 func (e *Engine) execRuntime(ctx context.Context, c Config, a map[string]any, argv []string, input string) (map[string]any, error) {
 	return e.execRuntimeInput(ctx, c, a, argv, strings.NewReader(input))
 }
+
+// Structured file adapters must not parse SSH warnings or other stderr as data.
+// The fallback supports older adapters that only provided a combined output.
+func runtimeStdout(result map[string]any) string {
+	if stdout, ok := result["stdout"].(string); ok {
+		return stdout
+	}
+	return str(result["output"])
+}
 func (e *Engine) execRuntimeInput(ctx context.Context, c Config, a map[string]any, argv []string, input io.Reader) (map[string]any, error) {
 	target := str(a["runtime"])
 	if target == "" {
@@ -367,9 +376,22 @@ func runtimeFile(ctx context.Context, e *Engine, c Config, a map[string]any, pat
 	if r["truncated"] == true {
 		return "", false, errors.New("file exceeds editing limit")
 	}
-	return str(r["output"]), true, nil
+	return runtimeStdout(r), true, nil
 }
-func (e *Engine) file(ctx context.Context, s *session, c Config, name string, a map[string]any) (any, error) {
+func fileMutation(name string) bool {
+	switch name {
+	case "write", "edit", "multi_edit", "append", "delete":
+		return true
+	}
+	return false
+}
+func (e *Engine) file(ctx context.Context, s *session, c Config, name string, a map[string]any) (result any, err error) {
+	mutationStarted := false
+	defer func() {
+		if err != nil && fileMutation(name) && !mutationStarted {
+			err = &ToolNotExecutedError{Err: err}
+		}
+	}()
 	path := str(a["path"])
 	if err := safeFile(path); err != nil {
 		return nil, err
@@ -435,6 +457,7 @@ func (e *Engine) file(ctx context.Context, s *session, c Config, name string, a 
 		command = "umask 077; mode=600; if [ -f " + quote(path) + " ]; then mode=$(stat -c '%a' -- " + quote(path) + " 2>/dev/null || stat -f '%Lp' " + quote(path) + ") || exit 1; fi; cat > " + quote(temp) + " && chmod \"$mode\" " + quote(temp) + " && mv -- " + quote(temp) + " " + quote(path)
 
 	}
+	mutationStarted = true
 	out, err := e.execRuntime(ctx, c, a, []string{"/bin/sh", "-c", command}, next)
 	if err != nil {
 		return nil, err
