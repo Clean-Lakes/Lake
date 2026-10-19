@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { atConversationTail, FollowScroll } from "../src/followScroll";
+import { atConversationTail, conversationCanScroll, pausesConversationFollow, FollowScroll } from "../src/followScroll";
 import { sameCard } from "../src/cardEquality";
 
 function fixture(reduced = false) {
@@ -15,6 +15,26 @@ function fixture(reduced = false) {
     const entries = [...callbacks]; callbacks.clear(); entries.forEach(([, callback]) => callback(time));
   }};
 }
+
+test('gestures without room to scroll never strand following; upward reading still pauses',()=>{
+ const box={scrollTop:0,scrollHeight:400,clientHeight:500};
+ assert.equal(conversationCanScroll(box),false);
+ assert.equal(pausesConversationFollow(box,-1),false);
+ assert.equal(pausesConversationFollow(box,1),false);
+ box.scrollHeight=1000;box.scrollTop=500;
+ assert.equal(pausesConversationFollow(box,1),false,'down at tail has no scroll event to resume following');
+ assert.equal(pausesConversationFollow(box,-1),true);
+ box.scrollTop=200;
+ assert.equal(pausesConversationFollow(box,1),true,'manual reading remains in control until reaching tail');
+});
+
+test('content crossing from empty space into overflow follows and stops at the new tail',()=>{
+ const f=fixture();f.box.scrollHeight=300;
+ f.follower.request();assert.equal(f.callbacks.size,0);
+ f.box.scrollHeight=900;f.follower.request();
+ for(let time=0;time<1500;time+=16.67)f.frame(time);
+ assert.equal(f.box.scrollTop,400);assert.equal(f.callbacks.size,0);
+});
 
 test("stream and resize requests coalesce, and scroll moves between snapshot arrivals", () => {
   const f = fixture();

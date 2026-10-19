@@ -106,9 +106,9 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
   useEffect(() => { setOlder([]); setOffset(null); setError(""); }, [snapshot.session.id]);
   const cards = [...older.filter(c => !snapshot.ai?.cards.some(current => current.id === c.id)), ...(snapshot.ai?.cards ?? [])];
   const before = offset ?? snapshot.ai?.cardsOffset ?? 0;
-  const loadOlder = async () => { setLoading(true); try { const page = await api.aiCards(snapshot.session.id, before); setOlder(current => [...page.cards, ...current]); setOffset(page.cardsOffset); } catch (error) { setError(readableError(error)); } finally { setLoading(false); } };
+  const loadOlder = async () => { onInspect?.(); setLoading(true); try { const page = await api.aiCards(snapshot.session.id, before); setOlder(current => [...page.cards, ...current]); setOffset(page.cardsOffset); } catch (error) { setError(readableError(error)); } finally { setLoading(false); } };
   const entries = orderedTranscript(displaySnapshot, cards, before);
-  const loadOlderSRE=async()=>{const session=snapshot.session.id;setLoadingSRE(true);try{const page=await api.sreTasks(session,sreCursor??snapshot.sre?.tasks.at(-1)?.id??'');if(selectedSession.current===session){setOlderSRE(old=>[...old,...page.items]);setSRECursor(page.nextCursor)}}catch(e){setError(readableError(e))}finally{setLoadingSRE(false)}};
+  const loadOlderSRE=async()=>{onInspect?.();const session=snapshot.session.id;setLoadingSRE(true);try{const page=await api.sreTasks(session,sreCursor??snapshot.sre?.tasks.at(-1)?.id??'');if(selectedSession.current===session){setOlderSRE(old=>[...old,...page.items]);setSRECursor(page.nextCursor)}}catch(e){setError(readableError(e))}finally{setLoadingSRE(false)}};
   const visibleEntries = entries.filter(entry => !isFileChangeCard(entry.card));
   const groups = transcriptGroups(visibleEntries);
   const activityEntry = (entry: (typeof entries)[number]) => !!(entry.sre||entry.agentRun || entry.action || entry.card && ["thinking", "operation", "shell", "diff", "error"].includes(entry.card.type));

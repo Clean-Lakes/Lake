@@ -1,6 +1,16 @@
 type ScrollBox = Pick<HTMLElement, "scrollTop" | "scrollHeight" | "clientHeight">;
 type Frames = { request: (callback: FrameRequestCallback) => number; cancel: (id: number) => void };
 
+export function conversationCanScroll(box: ScrollBox) {
+  return box.scrollHeight - box.clientHeight >= 2;
+}
+
+// A downward gesture at the tail (or any gesture before overflow) must not
+// leave following paused when the browser has no scroll event to resume it.
+export function pausesConversationFollow(box: ScrollBox, direction: number) {
+  return conversationCanScroll(box) && (direction < 0 || !atConversationTail(box));
+}
+
 // DOM heights are integers, but scrollTop and the clamped tail may be fractional.
 // Resume following only at the actual tail, including this rounding tolerance.
 export function atConversationTail(box: ScrollBox) {
