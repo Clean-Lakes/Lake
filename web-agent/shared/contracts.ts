@@ -40,11 +40,14 @@ export type WorkSession = {
 
 export type WorkspaceTag = {id: string; projectId: string; name: string; color: "gray" | "green" | "blue" | "purple" | "orange" | "red"};
 
+export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: string; label: string; start: number; end: number; resourceKind?: Resource["kind"]};
+
 export type Message = {
   id: string;
   sessionId: string;
   role: "user" | "assistant" | "system";
   text: string;
+  mentions?: MessageMention[];
   images?: AIImage[];
   files?: TextFileAttachment[];
   createdAt: string;
@@ -158,9 +161,9 @@ export type Catalog = {
   terminals?: Array<TerminalSession & { sessionTitle?: string }>;
 };
 
-export type QueuedMessage = {id: string; text: string; resourceIds: string[]; references?: Record<string,unknown>[]; images: Pick<AIImage,"id" | "name" | "mimeType">[]; files: TextFileAttachment[]; createdAt: string};
+export type QueuedMessage = {id: string; text: string; resourceIds: string[]; references?: Record<string,unknown>[]; mentions?: MessageMention[]; images: Pick<AIImage,"id" | "name" | "mimeType">[]; files: TextFileAttachment[]; createdAt: string};
 export type MessageQueue = {paused: boolean; revision: number; lastError: string; items: QueuedMessage[]};
-export type QueueOperation = {operation:"pause" | "resume"; revision:number} | {operation:"remove"; revision:number; id:string} | {operation:"edit"; revision:number; id:string; text:string; resourceIds:string[]; references?:Record<string,unknown>[]} | {operation:"reorder"; revision:number; ids:string[]};
+export type QueueOperation = {operation:"pause" | "resume"; revision:number} | {operation:"remove"; revision:number; id:string} | {operation:"edit"; revision:number; id:string; text:string; resourceIds:string[]; references?:Record<string,unknown>[]; mentions?:MessageMention[]} | {operation:"reorder"; revision:number; ids:string[]};
 export type SendMessageResult = {queued?: boolean; queuedMessageId?: string; messageQueue?: MessageQueue};
 
 export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;status:"running" | "completed" | "cancelled" | "failed" | "interrupted"};

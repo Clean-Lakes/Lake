@@ -44,12 +44,22 @@ const snapshot={session,resources,resourceTree:tree,messages:[{id:'demo-question
 const model={id:'demo-model',providerId:'demo-provider',providerName:'DeepSeek',modelId:'deepseek-chat',displayName:'DeepSeek',protocol:'openai'};
 const catalog={projects:[project],sessions,resources,resourceTree:tree,tags:[],terminals:[]};
 const bootstrap={authenticated:true,modelConfigured:true,modelName:'DeepSeek',modelId:model.modelId,modelSelection:model,terminalMode:'pty',supportsImageInput:false,aiRuntime:'go'};
+const sentTagsProof=new URLSearchParams(location.search).has('sent-tags');
+if(sentTagsProof){
+ snapshot.messages=[{id:'legacy-tags',sessionId:session.id,role:'user',text:'@订单服务 · order-api和@网关 · edge-01检查状态',createdAt:at(31)},{id:'plain-tags',sessionId:session.id,role:'user',text:'字面文字 @订单服务 · order-api',mentions:[],createdAt:at(32)}];
+ snapshot.ai!.agentRuns=[];snapshot.sre={enabled:false,tasks:[]};snapshot.replyTimings=[];
+}
 const referenceProof=new URLSearchParams(location.search).has('reference-send');
 const sentProof=document.createElement('output');sentProof.id='reference-send-proof';sentProof.hidden=true;sentProof.textContent='[]';if(referenceProof)document.body.appendChild(sentProof);
 const fetchOriginal=window.fetch.bind(window);
 window.fetch=async(input,init)=>{
  const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href);
  if(!url.pathname.startsWith('/api/'))return fetchOriginal(input,init);
+ if(sentTagsProof&&init?.method==='POST'&&url.pathname.endsWith('/messages')){
+  const payload=JSON.parse(String(init.body));
+  snapshot.messages.push({id:'sent-tags-'+snapshot.messages.length,sessionId:session.id,role:'user',text:payload.text,mentions:payload.mentions,createdAt:at(33+snapshot.messages.length)});snapshot.cursor++;
+  return new Response('{}',{headers:{'Content-Type':'application/json'}});
+ }
  if(referenceProof&&init?.method==='POST'&&url.pathname.endsWith('/messages')){const sent=JSON.parse(sentProof.textContent||'[]');sent.push(JSON.parse(String(init.body)));sentProof.textContent=JSON.stringify(sent);return new Response('{}',{headers:{'Content-Type':'application/json'}});}
  if((init?.method??'GET')!=='GET')return new Response(JSON.stringify({error:'README 演示只提供展示，不执行操作'}),{status:405,headers:{'Content-Type':'application/json'}});
  let value:unknown;

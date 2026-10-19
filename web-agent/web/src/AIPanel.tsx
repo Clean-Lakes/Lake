@@ -1,3 +1,4 @@
+import {MessageText} from './MessageText';
 import {DisclosureSummary} from './DisclosureSummary';
 import {useSmoothText} from './useSmoothText';
 import type {Components} from 'react-markdown';
@@ -80,9 +81,9 @@ function ReplyArrival({entryId,arrive,children}:{entryId:string;arrive:boolean;c
   const [animate] = useState(arrive);
   return <div data-conversation-entry={entryId} className={`ai-response${animate?' reply-arrival':''}`}>{children}</div>;
 }
-function TranscriptMessage({message,sessionId}:{message:SessionSnapshot["messages"][number];sessionId:string}) {
+function TranscriptMessage({message,sessionId,resources}:{message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"]}) {
  return <div className={`ai-chat-message ai-role-${message.role}`}>
-          {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}{message.text && <div>{message.role === "system" ? displayAiError(message.text) : message.text}</div>}
+          {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}{message.text && <div>{message.role === "system" ? displayAiError(message.text) : message.role === "user" ? <MessageText text={message.text} mentions={message.mentions} resources={resources}/> : message.text}</div>}
           {message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}
           {message.images?.map(image => <figure key={image.id} className="ai-image"><img src={image.url || `data:${image.mimeType};base64,${image.base64}`} alt={image.name || "用户附加图片"}/></figure>)}
         </div>;
@@ -137,7 +138,7 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
     {before > 0 && <button type="button" disabled={loading} onClick={() => void loadOlder()}>{loading ? "正在加载…" : "加载更早记录"}</button>}
     {error && <p role="alert">{error}</p>}
     {turns.map((turn, index) => <div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)} key={turn[0]!.id}>
-      {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!}/>)}
+      {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources}/>)}
       <ReplyDuration timing={timingForTurn(turn,snapshot)} view={turn.some(entry=>entry.message?.id===latestUser?.id) ? snapshot.ai : undefined} cards={turn.flatMap(entry=>entry.card?[entry.card]:[])} latestUserAt={turn.find(entry=>entry.message?.role==="user")?.at??""}/>
       {(mode==='conversation'?conversationGroups(turn.filter(entry=>!isFileChangeCard(entry.card))):transcriptGroups(turn.filter(entry => !isFileChangeCard(entry.card) && activityEntry(entry))).map(entries=>({progress:false,entries}))).map(({entries:group,progress}) => {
         const entry = group[0]!;

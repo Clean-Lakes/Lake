@@ -36,6 +36,7 @@ import type {
   TerminalSession,
   ResourceImportPreview,
   TextFileAttachment,
+  MessageMention,
   WorkSession,
 } from "../../shared/contracts";
 
@@ -190,8 +191,8 @@ export const api = {
   renameSession: (sessionId: string, title: string) => request<WorkSession>(`/api/sessions/${encodeURIComponent(sessionId)}`, {method: "PATCH", body: JSON.stringify({title})}),
   deleteSession: (sessionId: string) =>
     request<void>(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" }),
-  sendMessage: (sessionId: string, text: string, resourceIds: string[] = [], images: AIImage[] = [], references: Record<string, unknown>[] = [], terminalReuse?: {terminalId: string; generation: string}, files: TextFileAttachment[] = [], enqueue = false, ignoreProjectMemory = false) =>
-    post<SendMessageResult>(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, { text, ...(ignoreProjectMemory ? {ignoreProjectMemory:true} : {}), ...(enqueue ? {enqueue:true} : {}), ...(files.length ? {files} : {}), ...(terminalReuse ? {terminalReuse} : {}), ...(references.length ? { references } : {}), ...(images.length ? { images } : {}), ...(resourceIds.length ? { resourceIds } : {}) }),
+  sendMessage: (sessionId: string, text: string, resourceIds: string[] = [], images: AIImage[] = [], references: Record<string, unknown>[] = [], terminalReuse?: {terminalId: string; generation: string}, files: TextFileAttachment[] = [], enqueue = false, ignoreProjectMemory = false, mentions: MessageMention[] = []) =>
+    post<SendMessageResult>(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, { text, mentions, ...(ignoreProjectMemory ? {ignoreProjectMemory:true} : {}), ...(enqueue ? {enqueue:true} : {}), ...(files.length ? {files} : {}), ...(terminalReuse ? {terminalReuse} : {}), ...(references.length ? { references } : {}), ...(images.length ? { images } : {}), ...(resourceIds.length ? { resourceIds } : {}) }),
   messageQueue: (sessionId: string) => request<MessageQueue>(`/api/sessions/${encodeURIComponent(sessionId)}/message-queue`),
   updateMessageQueue: (sessionId: string, data: QueueOperation) => post<MessageQueue>(`/api/sessions/${encodeURIComponent(sessionId)}/message-queue`, data),
   decide: (actionId: string, decision: "approve" | "reject", confirmation?: string) =>

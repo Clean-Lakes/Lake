@@ -1,4 +1,5 @@
 import {ScheduledTasks} from "./ScheduledTasks";
+import {MessageText} from './MessageText';
 import {DisclosureSummary} from './DisclosureSummary';
 import {acceptSnapshot,reuseUnchanged} from './snapshotUpdates';
 import {useAutoRefresh} from './useAutoRefresh';
@@ -69,6 +70,7 @@ import { conversationActive, sessionConnection, type StreamState } from "./conne
 import { atConversationTail, FollowScroll } from "./followScroll";
 import { type CommandPolicy, dangerConfirmation } from "../../shared/command-policy";
 import "./styles.css";
+import "./messageMentions.css";
 import "./agentTasks.css";
 import "./statusText.css";
 import "./floatingHeader.css";
@@ -988,7 +990,7 @@ function App() {
     setPendingOperation("message");
     conversationScroll.current.following = true;
     try {
-      await api.sendMessage(targetSession, text, payload.resourceIds, imageDraft, payload.references, undefined, fileDraft, queueMode, ignoreProjectMemory);
+      await api.sendMessage(targetSession, text, payload.resourceIds, imageDraft, payload.references, undefined, fileDraft, queueMode, ignoreProjectMemory, payload.mentions);
       if (activeSession.current === targetSession) {
         setMessageDraft("");
         setImageDraft([]);
@@ -1473,7 +1475,7 @@ function TimelineNode({ entry, resourceMap, sessionTitle, disabled, pendingOpera
   const label = entry.kind === "message" ? (entry.item.role === "user" ? "" : entry.item.role === "assistant" ? "Lake" : "系统") : entry.kind === "specialist" ? "专员进度" : entry.item.risk === "readonly" ? entry.item.status === "pending" ? "等待终端交接" : "只读检查" : "待确认的操作";
   const glyph: GlyphName = entry.kind === "message" ? (entry.item.role === "assistant" ? "spark" : "chat") : entry.kind === "specialist" ? "layers" : "lock";
   return <article className={`timeline-item item-${entry.kind} ${entry.kind === "message" ? `message-${entry.item.role}` : ""}`}><span className="timeline-point"><Glyph name={glyph} size={15}/></span><div className="timeline-content"><div className="item-meta">{label && <strong>{label}</strong>}<time dateTime={entry.at} title={entry.at}>{dateLabel(entry.at)}</time></div>
-    {entry.kind === "message" && <div className="message-text">{entry.item.text}</div>}
+    {entry.kind === "message" && <div className="message-text">{entry.item.role==="user"?<MessageText text={entry.item.text} mentions={entry.item.mentions} resources={[...resourceMap.values()]}/>:entry.item.text}</div>}
     {entry.kind === "specialist" && <div className="specialist-card"><div className="specialist-head"><div><strong>{specialistLabels[entry.item.name] ?? entry.item.name}</strong><p>{entry.item.task}</p></div><span className={`pill specialist-${entry.item.status}`}><span/>{entry.item.status === "working" ? "调查中" : entry.item.status === "completed" ? "已完成" : "未完成"}</span></div>{entry.item.summary && <details className="expand-detail"><DisclosureSummary>查看专员结论</DisclosureSummary><p>{entry.item.summary}</p></details>}{!entry.item.summary && <p className="specialist-awaiting">正在收集结果，更新会显示在这里。</p>}</div>}
     {entry.kind === "action" && <div className={`approval-card ${entry.item.status !== "pending" ? "approval-resolved" : ""}`}><div className="approval-head"><span className="approval-mark"><Glyph name="lock" size={19}/></span><div><strong>{entry.item.risk === "readonly" ? entry.item.status === "pending" ? "只读检查等待终端交接" : "只读检查" : entry.item.risk === "dangerous" ? "危险操作需要再次确认" : "变更操作需要你的确认"}</strong><p>{entry.item.riskReason}</p></div><span className={`pill action-${entry.item.status}`}>{entry.item.status === "pending" && entry.item.risk === "readonly" ? "等待交接" : actionLabels[entry.item.status]}</span></div><div className="approval-grid"><div><span>目标资源</span><button className="detail-link" onClick={() => onResource(entry.item.resourceId)}>{resourceLabel(resourceMap.get(entry.item.resourceId))}</button></div><div><span>所属会话</span><strong>{sessionTitle}</strong></div></div><div className="approval-section"><span>完整命令</span><pre>{entry.item.command}</pre></div><div className="approval-notes"><div><span>为什么执行</span><p>{entry.item.reason}</p></div><div><span>可能的影响</span><p>{entry.item.impact}</p></div><div><span>如何验证</span><p>{entry.item.verification}</p></div></div>{entry.item.status === "pending" ? <><div className={`approval-handoff ${agentReady ? "ready" : ""}`}><Glyph name={agentReady ? "check" : "terminal"} size={17}/><div><strong>{agentReady ? "目标终端已交给 Agent" : "执行前需交给 Agent 输入"}</strong><p>{agentReady ? entry.item.risk === "readonly" ? "只读检查自动执行，无需逐条确认。" : "请核对完整命令和影响，再确认本次操作。" : readyTerminal ? "此资源的持续终端由你持有。交接后，只读检查自动执行，变更仍需确认。" : "先为此资源打开持续终端，并交给 Agent 输入。"}</p></div>{!agentReady && <button className="button handoff-button" onClick={() => onHandoff(entry.item)} disabled={disabled || !!pendingOperation || !persistentMode}>{pendingOperation === `handoff:${entry.item.id}` ? "准备中…" : readyTerminal ? "交给 Agent 输入" : "创建控制台并交接"}</button>}</div><div className="approval-actions"><button className="button secondary" onClick={() => onDecision(entry.item.id, "reject")} disabled={disabled || !!pendingOperation}>{pendingOperation === entry.item.id ? "处理中…" : entry.item.risk === "readonly" ? "取消检查" : "拒绝操作"}</button>{entry.item.risk !== "readonly" && <button className="button approval-button" onClick={() => onDecision(entry.item.id, "approve")} disabled={disabled || !!pendingOperation || !agentReady || !persistentMode}>{pendingOperation === entry.item.id ? "处理中…" : entry.item.risk === "dangerous" ? "继续确认风险" : "确认本次变更"}<Glyph name="arrow" size={16}/></button>}</div></> : <div className="approval-result">{entry.item.exitCode !== null ? `执行退出码：${entry.item.exitCode}。` : ""}{entry.item.status === "unknown" ? "执行结果不明，请核查实际结果后再决定下一步。" : entry.item.status === "succeeded" ? "命令已执行；是否恢复仍需按上面的方式验证。" : `当前状态：${actionLabels[entry.item.status]}。`}</div>}</div>}
   </div></article>;

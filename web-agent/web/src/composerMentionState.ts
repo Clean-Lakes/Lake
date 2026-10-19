@@ -58,7 +58,8 @@ export function composerMessage(draft:string,references:ComposerReference[],scop
   if(!ref||ref.kind==="resource"&&!resourceIds.includes(ref.resourceId))continue;
   const start=text.length;text+=ref.label;spans.push({...ref,start,end:text.length});
  }
- return {text:text.trim(),resourceIds,references:referencedExtensions(text,spans)};
+ const leading=text.length-text.trimStart().length;
+ return {text:text.trim(),resourceIds,references:referencedExtensions(text,spans),mentions:spans.map(ref=>({kind:ref.kind,id:ref.resourceId,label:ref.label,start:ref.start-leading,end:ref.end-leading}))};
 }
 /** Clipboard tokens bind only to references already selected in this editor session. */
 export function composerClipboardFragment(raw:string,known:ComposerReference[]) {

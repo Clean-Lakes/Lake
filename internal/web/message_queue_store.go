@@ -15,7 +15,7 @@ func (s *Store) messageQueue(id string) Object {
 		for _, image := range objects(payload["images"]) {
 			images = append(images, Object{"id": image["id"], "name": image["name"], "mimeType": image["mimeType"]})
 		}
-		items = append(items, Object{"id": row["id"], "text": payload["text"], "resourceIds": stringsOf(payload["resourceIds"]), "references": objects(payload["references"]), "images": images, "files": objects(payload["files"]), "createdAt": row["createdAt"]})
+		items = append(items, Object{"id": row["id"], "text": payload["text"], "resourceIds": stringsOf(payload["resourceIds"]), "references": objects(payload["references"]), "mentions": objects(payload["mentions"]), "images": images, "files": objects(payload["files"]), "createdAt": row["createdAt"]})
 	}
 	state["items"] = items
 	return state
@@ -75,6 +75,9 @@ func (s *Store) MutateMessageQueue(id string, data Object) Object {
 			payload := object(parsed(stringOf(row["payload"])))
 			payload["text"] = data["text"]
 			payload["resourceIds"] = data["resourceIds"]
+			if data["mentions"] != nil {
+				payload["mentions"] = data["mentions"]
+			}
 			if data["references"] != nil {
 				payload["references"] = data["references"]
 			}
@@ -129,6 +132,13 @@ func (s *Store) BeginQueuedMessage(id, qid, text string, images any, title strin
 }
 
 func (s *Store) BeginQueuedMessageWithNaming(id, qid, text string, images any, title string, attachments ...[]Object) (Object, bool) {
+	var files []Object
+	if len(attachments) > 0 {
+		files = attachments[0]
+	}
+	return s.BeginQueuedMessageWithMentions(id, qid, text, images, title, files, nil)
+}
+func (s *Store) BeginQueuedMessageWithMentions(id, qid, text string, images any, title string, files, mentions []Object) (Object, bool) {
 	result := s.update(func() any {
 		head := s.row("SELECT id FROM queuedMessages WHERE sessionId=? ORDER BY position,rowid LIMIT 1", id)
 		if head["id"] != qid || integer(s.row("SELECT paused FROM messageQueueState WHERE sessionId=?", id)["paused"]) != 0 {
@@ -136,9 +146,8 @@ func (s *Store) BeginQueuedMessageWithNaming(id, qid, text string, images any, t
 		}
 		pendingTitle := s.row("SELECT 1 FROM sessionNaming WHERE sessionId=? AND generated=0", id) != nil
 		message := s.begin(id, text, images, title)
-		if len(attachments) > 0 {
-			s.attachMessageFiles(id, message, attachments[0])
-		}
+		s.attachMessageFiles(id, message, files)
+		s.attachMessageMentions(id, message, mentions)
 		s.exec("DELETE FROM queuedMessages WHERE id=? AND sessionId=?", qid, id)
 		s.queueChanged(id)
 		return struct {
