@@ -45,7 +45,7 @@ func extendWorkbenchIntoTitleBar(hwnd uintptr) error {
 	return nil
 }
 
-func installWindowsChrome(window webview.WebView, endpoint string) error {
+func installWindowsChrome(window webview.WebView, endpoint string, onReady func() error) error {
 	parsed, err := url.Parse(endpoint)
 	if err != nil {
 		return err
@@ -66,13 +66,15 @@ func installWindowsChrome(window webview.WebView, endpoint string) error {
 				return "maximized", nil
 			}
 			return "normal", nil
-		case "drag", "minimize", "maximize", "close":
+		case "drag", "minimize", "maximize", "close", "ready":
 		default:
 			return "", fmt.Errorf("窗口操作无效")
 		}
 		window.Dispatch(func() {
 			hwnd := uintptr(window.Window())
 			switch action {
+			case "ready":
+				_ = onReady()
 			case "drag":
 				themeUser.NewProc("ReleaseCapture").Call()
 				themeUser.NewProc("SendMessageW").Call(hwnd, windowDrag, captionHit, 0)
@@ -95,6 +97,6 @@ func installWindowsChrome(window webview.WebView, endpoint string) error {
 	}
 	origin, _ := json.Marshal(parsed.Scheme + "://" + parsed.Host)
 	secret, _ := json.Marshal(token)
-	window.Init(fmt.Sprintf(`(()=>{if(window.top!==window||location.origin!==%s)return;const invoke=window.__lakeWindowsChrome;const token=%s;Object.defineProperty(window,'lakeWindowsChrome',{value:Object.freeze({command:action=>invoke(token,action)}),writable:false});})();`, origin, secret))
+	window.Init(fmt.Sprintf(`(()=>{if(window.top!==window||location.origin!==%s)return;const invoke=window.__lakeWindowsChrome;const token=%s;Object.defineProperty(window,'lakeWindowsChrome',{value:Object.freeze({command:action=>invoke(token,action)}),writable:false});%s})();`, origin, secret, workbenchReadyScript))
 	return nil
 }

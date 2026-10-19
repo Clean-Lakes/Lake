@@ -92,9 +92,17 @@ func installBackgroundWithNotify(hwnd uintptr, marker string, exit func(), notif
 	themeUser.NewProc("AppendMenuW").Call(s.systemMenu, 0x800, 0, 0) // MF_SEPARATOR.
 	quit, _ := windows.UTF16PtrFromString("退出 " + name)
 	themeUser.NewProc("AppendMenuW").Call(s.systemMenu, 0, trayQuit, uintptr(unsafe.Pointer(quit)))
-	icon, _, _ := themeUser.NewProc("SendMessageW").Call(hwnd, 0x7f, 2, 0) // WM_GETICON, ICON_SMALL2.
+	// Prefer the explicit Lake icon installed on the window. ICON_SMALL2 can
+	// return a system-generated icon and hide the absence of a class small icon.
+	icon, _, _ := themeUser.NewProc("SendMessageW").Call(hwnd, 0x7f, 0, 0) // WM_GETICON, ICON_SMALL.
 	if icon == 0 {
 		icon, _, _ = themeUser.NewProc("GetClassLongPtrW").Call(hwnd, ^uintptr(33))
+	}
+	if icon == 0 {
+		icon, _, _ = themeUser.NewProc("SendMessageW").Call(hwnd, 0x7f, 1, 0) // ICON_BIG.
+	}
+	if icon == 0 {
+		icon, _, _ = themeUser.NewProc("GetClassLongPtrW").Call(hwnd, ^uintptr(13)) // GCLP_HICON.
 	}
 	if icon == 0 {
 		icon, _, _ = themeUser.NewProc("LoadIconW").Call(0, 32512) // Shared fallback for test/non-packaged windows.

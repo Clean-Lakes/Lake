@@ -2,6 +2,7 @@
 // No backend, credentials, remote resources, model calls or resource operations.
 import {createRoot} from 'react-dom/client';
 import App from '../../src/App';
+import {WindowsChrome} from '../../src/WindowsChrome';
 import {setThemePreference} from '../../src/appearance';
 import type {Resource,WorkSession,SessionSnapshot,SRETask} from '../../../shared/contracts';
 import '../../src/theme.css';
@@ -41,7 +42,7 @@ const messages=[
 ].map((m,i)=>({...m,sessionId:session.id,taskId:'demo-task',revision:1,sequence:i+1,createdAt:at(m.minute),...(m.step?{attemptId:m.step,roleRunId:'role-'+m.step}:{})}));
 const task={id:'demo-task',sessionId:session.id,projectId:project.id,requestId:'demo-request',goal:'回滚订单服务并验证恢复',scope:['order-api'],mode:'assist',status:'completed',outcome:'completed',recoveryStatus:'verified',rootCauseStatus:'unknown',profileId:'lake-sre',profileVersion:1,revision:1,tokenBudget:128000,budgetSpent:0,usage:{input:0,output:0,total:0},createdAt:at(24),updatedAt:at(29),plans:[{id:'plan-v1',version:1,goal:'回滚订单服务并验证恢复',taskType:'recovery',scope:['order-api'],collaborationVersion:1,steps}],runs:[{id:'plan-run',planRevisionId:'plan-v1',status:'completed'}],attempts:steps.map((s,i)=>({id:s.id,stepId:s.id,planRunId:'plan-run',roleRunId:'role-'+s.id,status:'succeeded',evidence:[],operations:[],startedAt:at(25+i),finishedAt:at(26+i)})),messages,verifications:[]} as unknown as SRETask;
 const snapshot={session,resources,resourceTree:tree,messages:[{id:'demo-question',sessionId:session.id,role:'user',text:'订单服务发布后错误率升高，按已批准的方案回滚，并验证是否恢复。',createdAt:at(23)}],specialists:[],evidence:[],actions:[],terminals:[],cursor:1,replyTimings:[{messageId:'demo-question',startedAt:at(24),finishedAt:at(29),status:'completed'}],messageQueue:{paused:false,revision:0,lastError:'',items:[]},ai:{session:session.id,profile:'core',status:'completed',rootTurnId:'demo-turn',turns:1,turnStartedAt:at(24),turnFinishedAt:at(29),cards:[],cardsOffset:0,totalCards:0,agentRuns:steps.map((s,i)=>({id:'role-'+s.id,sessionId:session.id,rootTurnId:'demo-turn',sreTaskId:task.id,sreRole:s.role,role:s.role,task:s.description,resourceIds:['order-api'],status:'completed',createdAt:at(25+i),startedAt:at(25+i),finishedAt:at(26+i),toolCount:3})),usage:{known:true,input:17820,output:1240,total:19060}},sre:{enabled:true,tasks:[task]}} as unknown as SessionSnapshot;
-const model={id:'demo-model',providerId:'demo-provider',providerName:'DeepSeek',modelId:'deepseek-chat',displayName:'DeepSeek',protocol:'openai'};
+const model={id:'demo-model',providerId:'demo-provider',providerName:'DeepSeek',modelId:'deepseek-chat',name:'DeepSeek',displayName:'DeepSeek',protocol:'openai'};
 const catalog={projects:[project],sessions,resources,resourceTree:tree,tags:[],terminals:[]};
 const bootstrap={authenticated:true,modelConfigured:true,modelName:'DeepSeek',modelId:model.modelId,modelSelection:model,terminalMode:'pty',supportsImageInput:false,aiRuntime:'go'};
 const sentTagsProof=new URLSearchParams(location.search).has('sent-tags');
@@ -73,7 +74,7 @@ window.fetch=async(input,init)=>{
  else if(path.endsWith('/sre'))value={enabled:true};
  else if(path.endsWith('/sre/tasks'))value={items:[task],nextCursor:''};
  else if(path.endsWith('/message-queue'))value=snapshot.messageQueue;
- else if(path==='/api/settings/model/available')value={models:[model],defaultModel:model.modelId};
+ else if(path==='/api/settings/model/available')value={models:[model.name],entries:[model],activeProviderId:model.providerId,activeModelId:model.modelId};
  else return new Response(JSON.stringify({error:'Not included in the read-only README fixture'}),{status:404,headers:{'Content-Type':'application/json'}});
  return new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
 };
@@ -85,4 +86,4 @@ class DemoEventSource extends EventTarget {
 }
 window.EventSource=DemoEventSource as unknown as typeof EventSource;
 window.lakeDesktopUpdates={platform:'macOS · Apple Silicon',command:async()=>({status:'current',currentVersion:'0.3.17',message:'当前已是最新版本',updateAvailable:false})};
-createRoot(document.getElementById('root')!).render(<App/>);
+createRoot(document.getElementById('root')!).render(<><App/><WindowsChrome/></>);

@@ -126,11 +126,28 @@ func run() error {
 		return err
 	}
 	width, height, minimumWidth, minimumHeight := workbenchGeometry()
+	startup, err := beginWindowStartup("webview")
+	if err != nil {
+		return err
+	}
+	defer startup.close()
 	window := webview.NewWithOptions(webview.WebViewOptions{DataPath: profile, AutoFocus: true, WindowOptions: webview.WindowOptions{Title: windowTitle(), Width: uint(width), Height: uint(height), Center: true, IconId: 1}})
 	if window == nil {
 		return fmt.Errorf("无法创建 WebView2 窗口，请检查运行环境")
 	}
-	defer window.Destroy()
+	if err = startup.created(uintptr(window.Window())); err != nil {
+		window.Destroy()
+		return err
+	}
+	icons, err := installApplicationIcons(uintptr(window.Window()))
+	if err != nil {
+		window.Destroy()
+		return err
+	}
+	defer func() {
+		window.Destroy()
+		icons.close()
+	}()
 	if err = applyWindowColors(window.Window()); err != nil {
 		return err
 	}
@@ -142,7 +159,19 @@ func run() error {
 		return err
 	}
 	defer background.close()
-	if err = installWindowsChrome(window, endpoint); err != nil {
+	var startupFailure error
+	var startupTimer *time.Timer
+	if err = installWindowsChrome(window, endpoint, func() error {
+		if err := startup.reveal(); err != nil {
+			startupFailure = err
+			window.Terminate()
+			return err
+		}
+		if startupTimer != nil {
+			startupTimer.Stop()
+		}
+		return nil
+	}); err != nil {
 		return fmt.Errorf("无法初始化窗口操作")
 	}
 	if err = installUpdateBridge(ctx, window, endpoint, home, exe); err != nil {
@@ -152,9 +181,18 @@ func run() error {
 	if isDevelopment() {
 		window.Init(developmentBadge)
 	}
+	startupTimer = time.AfterFunc(30*time.Second, func() {
+		window.Dispatch(func() {
+			if !startup.shown {
+				startupFailure = fmt.Errorf("工作台加载超时，请重新启动 Lake")
+				window.Terminate()
+			}
+		})
+	})
+	defer startupTimer.Stop()
 	window.Navigate(endpoint)
 	window.Run()
-	return nil
+	return startupFailure
 }
 
 func awaitRuntime(ctx context.Context, data string, pid int, done <-chan error) (string, error) {
