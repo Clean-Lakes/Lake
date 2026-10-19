@@ -52,3 +52,11 @@ export function conversationGroups(entries:TranscriptEntry[]):ConversationGroup[
  }
  return result;
 }
+
+/** Keep the current normal operation row moving while the model prepares its
+ * next step. A visible reply or an attention state ends that row's live phase. */
+export function currentProgressGroupId(entries:TranscriptEntry[],live:boolean):string|undefined {
+ if(!live)return;
+ const tail=conversationGroups(entries).at(-1);
+ if(tail?.progress&&tail.entries.every(entry=>!!entry.card&&normalStatuses.has(entry.card.status)))return tail.entries[0]!.id;
+}

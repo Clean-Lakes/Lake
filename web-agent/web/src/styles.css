@@ -1160,7 +1160,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 
 /* The execution sweep only repaints text; the stable row never moves or remounts. */
 @supports ((background-clip: text) or (-webkit-background-clip: text)) {
-  .thinking-timeline.is-executing > .thinking-toggle > .thinking-label {
+  .thinking-timeline:is(.is-executing,.is-continuing) > .thinking-toggle > .thinking-label {
     background-image: linear-gradient(105deg, var(--text-muted) 0%, var(--text-muted) 35%, var(--foreground) 49%, var(--text-muted) 63%, var(--text-muted) 100%);
     background-size: 240% 100%;
     background-clip: text;
@@ -1171,10 +1171,10 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 }
 @keyframes execution-text-sweep { from { background-position: 160% 0; } to { background-position: -60% 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .thinking-timeline.is-executing > .thinking-toggle > .thinking-label { animation: none; background: none; color: var(--text-muted); }
+  .thinking-timeline:is(.is-executing,.is-continuing) > .thinking-toggle > .thinking-label { animation: none; background: none; color: var(--text-muted); }
 }
 
-.ai-turn > .turn-status { margin: 0 0 12px; flex-shrink: 0; }
+.ai-turn > .turn-status { margin: 0; flex-shrink: 0; }
 .ai-turn > .turn-status .turn-status-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Resource references, terminal shortcuts and menus keep separate, stable hit areas. */

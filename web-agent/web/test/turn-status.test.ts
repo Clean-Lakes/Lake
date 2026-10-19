@@ -93,3 +93,20 @@ test('only actual running operations receive the stronger execution motion',()=>
  assert.ok(!render('running',false).includes('is-executing'));
  for(const status of ['pending','failed','unknown','completed','background_running'])assert.ok(!render(status,true).includes('is-executing'),status);
 });
+
+test('the current normal progress row keeps moving while the model prepares its next step',()=>{
+ const s={session:{id:'s'},messages:[{id:'u',sessionId:'s',role:'user',text:'检查',createdAt:at}],resources:[],actions:[],replyTimings:[timing],ai:{...view,cards:[{...tool,status:'completed'},{id:'empty-thinking',type:'thinking',status:'running',at,content:''}]}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ assert.equal((html.match(/is-continuing/g)??[]).length,1);
+ assert.ok(!html.includes('is-executing'),'a completed tool is not labeled as executing');
+ s.ai!.cards.push({id:'reply',type:'message',status:'running',at,content:'根据结果继续分析'});
+ assert.ok(!renderToStaticMarkup(createElement(AITranscript,{snapshot:s})).includes('is-continuing'));
+ s.ai!.cards.pop();s.replyTimings=[{...timing,status:'completed',finishedAt:new Date(now).toISOString()}];s.ai!.status='completed';
+ assert.ok(!renderToStaticMarkup(createElement(AITranscript,{snapshot:s})).includes('is-continuing'));
+});
+test('waiting, failed and unknown progress rows never borrow the continuing motion',()=>{
+ for(const status of ['pending','failed','unknown','background_running']){
+  const html=renderToStaticMarkup(createElement(ThinkingTimeline,{cards:[{...tool,status}],live:true,continuing:true,resourceRow:true}));
+  assert.ok(!html.includes('is-continuing'),status);
+ }
+});

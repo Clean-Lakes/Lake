@@ -31,7 +31,7 @@ export const ReasonStep = memo(function ReasonStep({card}: {card: AICard}) {
   return card.content ? <li className="thinking-step thinking-reason"><span className="thinking-step-marker"><i/></span><div className="thinking-prose"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={{a: props => <a {...props} target="_blank" rel="noopener noreferrer"/>}}>{card.content}</Markdown></div></li> : null;
 }, (a, b) => sameCard(a.card, b.card));
 
-export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, onInspect, resourceRow=false }: { cards: AICard[]; live: boolean; onInspect?: () => void; resourceRow?:boolean }) {
+export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, onInspect, resourceRow=false, continuing=false }: { cards: AICard[]; live: boolean; onInspect?: () => void; resourceRow?:boolean; continuing?:boolean }) {
   // A compact current-action line stays closed until the user requests details.
   const [open, setOpen] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
@@ -41,9 +41,10 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
   const state=attention?.status==='pending'?'等待确认':attention?.status==='failed'?'执行失败':attention&&['interrupted','cancelled'].includes(attention.status)?'已停止':attention?'执行结果待核查':'';
   const description=resourceRow&&tools.length?toolDescription(tools.filter(card=>card.status==='running').at(-1)??tools.at(-1)!):processDescription(cards);
   const executing=live&&!attention&&tools.some(card=>card.status==='running');
+  const progressing=live&&continuing&&!attention&&tools.length>0&&tools.every(card=>["running","completed","succeeded","success"].includes(card.status));
   const label = [description,state].filter(Boolean).join(' · ');
   const panelId = `thinking-${cards[0]!.id}`;
-  return <section className={`thinking-timeline ${resourceRow ? "is-resource-row" : ""} ${live ? "is-live" : ""} ${executing ? "is-executing" : ""}`} aria-label="思考与操作过程">
+  return <section className={`thinking-timeline ${resourceRow ? "is-resource-row" : ""} ${live ? "is-live" : ""} ${executing ? "is-executing" : ""} ${progressing ? "is-continuing" : ""}`} aria-label="思考与操作过程">
     <button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => { onInspect?.(); setOpen(!open); }}>
       <span className="thinking-label">{label}</span>{resourceRow&&tools.length>1&&<small className="thinking-operation-count">{tools.length} 项</small>}<svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
     </button>
@@ -52,4 +53,4 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
       {thoughts.length > 0 && <details className="thinking-raw-records" onToggle={event => setRawOpen(event.currentTarget.open)}><DisclosureSummary>原始思考记录</DisclosureSummary>{rawOpen && <ol className="thinking-steps">{thoughts.map(card => <ReasonStep card={card} key={card.id}/>)}</ol>}</details>}
     </div>}
   </section>;
-}, (a, b) => a.resourceRow === b.resourceRow && a.live === b.live && a.onInspect === b.onInspect && a.cards.length === b.cards.length && a.cards.every((card, i) => sameCard(card, b.cards[i]!)));
+}, (a, b) => a.resourceRow === b.resourceRow && a.continuing === b.continuing && a.live === b.live && a.onInspect === b.onInspect && a.cards.length === b.cards.length && a.cards.every((card, i) => sameCard(card, b.cards[i]!)));
