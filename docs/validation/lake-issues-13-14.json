@@ -102,7 +102,8 @@
     "nativeWindowChecks": "passed: three hide/reopen cycles, retained content view, minimized restore, explicit termination allowed",
     "desktopBuild": "passed",
     "signedDevInstalled": true,
-    "manualAppConfirmation": "pending"
+    "manualAppConfirmation": "pending",
+    "installedSourceCommit": "359815d2"
   },
   "windows": {
     "nativeTests": {
@@ -117,7 +118,8 @@
     "install": {
       "installerExitCode": 0,
       "devDataUnchanged": true,
-      "installedSHA256": "e9cb1e4be65749968c45cdb961e753bd7571a2b330b8a733f47536a83c835eed"
+      "installedSHA256": "e9cb1e4be65749968c45cdb961e753bd7571a2b330b8a733f47536a83c835eed",
+      "sourceCommit": "5790e9cc"
     },
     "checks": [
       "close retains the HWND and does not invoke exit",
@@ -129,7 +131,13 @@
       "profile-scoped duplicate-launch activation",
       "native Shell_NotifyIcon version-4 registration"
     ],
-    "manualAppConfirmation": "pending"
+    "manualAppConfirmation": "pending",
+    "finalDevPackage": {
+      "sourceCommit": "359815d2",
+      "validation": "passed: 9718 ZIP entries",
+      "installation": "deferred: existing Dev app running during manual verification",
+      "stagedInstaller": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\issues-13-14\\Lake-Dev-setup.exe"
+    }
   },
   "references": [
     "https://developer.apple.com/documentation/appkit/nsapplicationdelegate/applicationshouldhandlereopen(_:hasvisiblewindows:)",
