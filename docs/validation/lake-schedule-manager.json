@@ -1,5 +1,5 @@
 {
-  "sourceCommit": "58dda9979bc483bad1c6dbad1cda075543210385",
+  "sourceCommit": "801d0d27d02c9079f92ba302d648bd63250aa66a",
   "entry": "工作区 → 定时任务 (current project)",
   "frontendTestsPassed": 259,
   "typeScriptAndProductionBuild": "passed",
@@ -10,10 +10,10 @@
   "latestTargetedScheduleRegression": "passed",
   "goVet": "passed",
   "windowsScheduleRuntime": {
-    "passed": 6,
+    "passed": 7,
     "architecture": "windows/amd64",
     "isolatedTemporaryStores": true,
-    "testBinaryCleanup": "completed"
+    "testBinaryCleanup": "completed in separate process after test process exit"
   },
   "ui": {
     "pauseResume": {
@@ -57,8 +57,9 @@
     "packageCheckPassed": true,
     "devDataUnchanged": true,
     "installerExitCode": 0,
-    "backendSHA256": "8e9b3bd0eddd6f6db2db25c55bc8aff9aacbd176a7ffb2d64b54d75146bec8bb",
-    "desktopSHA256": "b77156a4ecd6d457e94db70022dea739607f80a253f26592ebb4989cf55d1e88"
+    "backendSHA256": "3ad3bbdafdf44f21b00c01791acd7bbdae169cb5b3015be764a58d34de1e800b",
+    "desktopSHA256": "f783d30374f52a0b0e9db038cf50c15afe18f020f39cd1fb64db77258162908f"
   },
-  "releaseArtifacts": "unchanged"
+  "releaseArtifacts": "unchanged",
+  "prerequisites": "Enabling workflow inspections requires project SRE collaboration and a configured Agent model; reminders and pausing remain available. Guard and failed-enable preservation verified on macOS and Windows x64."
 }

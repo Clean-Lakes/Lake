@@ -17,6 +17,7 @@ Expose existing project schedules through the workspace menu with pause/resume a
 
 - **REQ-001**: List project schedules with frequency, next execution, enabled state, last outcome and originating session.
 - **REQ-002**: Pause/resume using revision checks; pausing prevents future occurrences without cancelling an active execution.
+- **REQ-004**: Validate project SRE collaboration and model configuration before enabling a workflow inspection; never block pausing or reminders on these requirements.
 - **REQ-003**: Persist the latest 100 executions per schedule, including running, completed, failed, interrupted and missed occurrences. Preserve existing schedule files and permission snapshots.
 - **SEC-001**: Authenticate all routes, enforce project boundaries, omit saved permission options, and never execute a schedule merely by viewing or enabling it.
 - **CON-001**: Existing schedules remain intact; creation continues through explicitly requested conversation tools. Normal manual checks must not trigger scheduling proposals.
