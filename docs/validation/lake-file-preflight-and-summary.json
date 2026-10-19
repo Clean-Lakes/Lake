@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "b1caed05ab4cbda64ffdb7ac7dfe3e4400e90cb0",
+  "scope": [
+    "SSH file fingerprint integrity and pre-dispatch classification",
+    "restore thinking/duration copy and lighten file summary"
+  ],
+  "diagnosis": [
+    "SSH stderr was parsed as file data and the cached fingerprint became **",
+    "The rejected precondition was mislabeled unknown, blocking later writes"
+  ],
+  "behavior": [
+    "Structured adapters consume stdout only and accept only valid SHA256 fingerprints",
+    "Pre-mutation file failures are not_executed; actual execution failures remain unknown",
+    "Exact legacy preflight errors reconcile with idempotent audit evidence; live handles, other errors and SRE task projections stay protected",
+    "Existing invalid fingerprints require a fresh read; no historical command is replayed",
+    "Restore 正在思考… for ordinary live thinking and 用时 for finished durations",
+    "Transparent borderless file summary with aligned icon/count/deltas/expansion arrow; hover, keyboard focus and details retained"
+  ],
+  "checks": [
+    "Go race suite passed for internal/ai and internal/web",
+    "Go vet passed for internal/ai and internal/web",
+    "Five targeted regressions passed, including synthetic SSH stderr and guarded recovery",
+    "Four portable regressions executed and passed inside Windows VM with packaged Git runtime",
+    "ADK runtime boundary check passed",
+    "283 frontend tests passed; TypeScript and production web build passed",
+    "Actual React components verified in browser: transparent background, zero border, 28px summary, all children centered at y=209; Enter toggles details",
+    "Light and dark themes visually verified",
+    "macOS installed Dev signature verified and host/backend hashes match package",
+    "Windows x64 package integrity and current embedded assets verified",
+    "Windows Dev installed: executables match validated package; Dev data metadata unchanged"
+  ],
+  "macOSInstall": {
+    "Contents/MacOS/Lake": "b18c76420be27ae4f8954afdf00515ffb088a3d3712107428e80eaf7a79e9159",
+    "Contents/Resources/lake": "659a5c1ea2b19425270485d4b73ed0862f618c5bfcc4cb01ab5351b6c39ff01e"
+  },
+  "screenshots": [
+    "lake-file-summary-light.png",
+    "lake-file-summary-dark.png"
+  ],
+  "limitations": [
+    "POSIX fake SSH process test executed on macOS, skipped on Windows",
+    "Existing affected live session was inspected read-only; recovery takes effect on updated Dev restart and next snapshot",
+    "No remote file was modified or historical command retried during diagnosis",
+    "Native UI gestures were not retested in this iteration"
+  ],
+  "windowsInstall": {
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "5763670fe01605e1273a8594a91131a2e4691dea671161e986c527cc35e09b2e",
+    "desktopSHA256": "713f197a49c3ef31b8857f7966163e2fe103a91f9123774c56909b0120adcd6c"
+  }
+}
