@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-19",
+  "scope": "Neutral compact resource selection and generic terminal/command/SQL/MCP/import approval presentation. No permission, dispatch or decision API changes.",
+  "frontendTests": 299,
+  "typescriptAndProductionBuild": "passed",
+  "fixtures": [
+    "attachment-approval.html?target&queue",
+    "attachment-approval.html?target&theme=dark&confirm&child"
+  ],
+  "checks": {
+    "lightAndDark": "passed",
+    "technicalParametersCollapsedAndExpandable": true,
+    "fullCommandAndSQLVisible": true,
+    "targetAndTerminalCreationEffectVisible": true,
+    "rootAcceptAndRejectRetainApprovalIdentity": true,
+    "childDecisionRetainsRunIdAndTargetConfirmation": true,
+    "wrongTargetDisablesAccept": true,
+    "queuedApprovalCountPreserved": true,
+    "narrowViewport": {"width":390,"height":844,"horizontalOverflow":false,"footerVisible":true},
+    "signedMacDevInstalledAndRestartedWhileIdle": true,
+    "runningFrontendMatchesBuild": true
+  },
+  "execution": "Only fictional fixtures and in-memory decisions; no real operation approved."
+}
