@@ -467,5 +467,19 @@
   },
   "frontendTests": 253,
   "typecheck": "passed",
-  "productionBuild": "passed"
+  "productionBuild": "passed",
+  "devBuilds": {
+    "sourceCommit": "84d0257a",
+    "macOS": "signed, installed, reopened; running backend serves new CSS and JS",
+    "windows": {
+      "packageValidation": "passed: 9718 entries",
+      "install": {
+        "devDataUnchanged": true,
+        "installerExitCode": 0,
+        "backendSHA256": "918650dee58e848e13caccc79afefd98a48221d0779fc5c2528efab4cb4acea7",
+        "desktopSHA256": "71b15e4a547271813dbdc57ec82a3eae08a1b9b20030ad18f882dfc9ce2e3d91"
+      },
+      "installedHashesMatchPackage": true
+    }
+  }
 }
