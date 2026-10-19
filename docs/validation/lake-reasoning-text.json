@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "09c0770a7622b454ad79867eb337dfa79c8a56d0",
+  "scope": "Chinese text-only reasoning selector",
+  "behavior": [
+    "Remove the depth glyph and hide the reasoning selector chevron; keep clickable text, combobox semantics and the shared dropdown",
+    "Keep 28px trigger height, 18px text line height, theme gray, horizontal alignment and existing hover/focus behavior",
+    "Translate the known ultra display label to 极致 without changing the API effort value"
+  ],
+  "checks": [
+    "TypeScript check and production web build passed",
+    "283 frontend tests passed",
+    "Actual ReasoningSelector fixture: no leading icon node; chevron display none; default/low/medium/high/max labels remain centered at y=134 or y=202 with exact trigger/text center equality",
+    "Mouse selected max; keyboard ArrowDown/End/Enter selected ultra displayed as 极致",
+    "Runtime-disabled control retained 极致, opacity 1, theme color and hidden chevron",
+    "Light theme and 400px dark layout visually verified",
+    "macOS Dev installed and codesign verified; installed host/backend hashes match package",
+    "Windows Dev validated and installed; installed executables match package; Dev data metadata unchanged"
+  ],
+  "windowsInstall": {
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "e5c32fd688912a6c173f19a8618ba660b98c7317220c13e80aa63c94d0f2e958",
+    "desktopSHA256": "4e7f757127d479fd950678d8973ac8e9e65925a9105d8292379c35bd4e1e7758"
+  },
+  "screenshots": [
+    "lake-reasoning-text.png",
+    "lake-reasoning-text-dark.png"
+  ],
+  "limitations": [
+    "Browser verification uses fictional model settings; no real model request",
+    "Native app UI not rechecked; normal quit/reopen loads updated Dev assets"
+  ]
+}
