@@ -12,11 +12,12 @@ test("resource and folder rows put deletion in their more menus",()=>{
  let parent:string|null=null;
  for(let depth=0;depth<10;depth++){const id=`folder-${depth}`;nodes.push({id,projectId:"p",parentId:parent,kind:"folder",name:`Level ${depth}`,resourceId:null,position:1});parent=id;}
  nodes.push({id:"db",projectId:"p",parentId:parent,kind:"resource",name:"",resourceId:"db",position:0});
- const html=renderToStaticMarkup(createElement(ResourceTree,{project,resources,nodes,disabled:false,filtering:true,renderResource:resource=>createElement("span",null,resource.name),refresh:async()=>{},onAddResource(){},onImport(){},onDelete(){}}));
+ const html=renderToStaticMarkup(createElement(ResourceTree,{project,resources,nodes,disabled:false,filtering:true,selection:{has:()=>false,toggle(){},disabled:false},renderResource:resource=>createElement("span",null,resource.name),refresh:async()=>{},onAddResource(){},onImport(){},onDelete(){}}));
  assert.ok(!html.includes('aria-label="删除资源 '));assert.ok(html.includes('aria-label="管理资源 Database"'));
  assert.equal((html.match(/aria-label="管理文件夹 /g)||[]).length,10);
  assert.ok(html.includes('margin-left:0'),"deep nesting caps indentation to retain row controls");
  assert.ok(!html.includes("navigation-delete-button"));
+ assert.ok(!html.includes('拖动或移动 Local machine')&&!html.includes('选择资源 Local machine'),"built-in local has neither a drag handle nor a bulk deletion checkbox");
  assert.equal((html.match(/class="navigation-more-button resource-more-button"/g)||[]).length,1);
 });
 
@@ -25,7 +26,7 @@ function folderMarkup(saved: Record<string,string> = {}, filtering = false) {
  Object.defineProperty(globalThis, "localStorage", {configurable:true,value:{getItem:(key:string)=>saved[key] ?? null}});
  try {
   const project={id:"p",name:"Project"} as Project;
-  const resources=[{id:"host",projectId:"p",name:"Nested host",kind:"local"}] as Resource[];
+  const resources=[{id:"host",projectId:"p",name:"Nested host",kind:"ssh"}] as Resource[];
   const nodes:ResourceTreeNode[]=[
    {id:"folder",projectId:"p",parentId:null,kind:"folder",name:"Production",resourceId:null,position:0},
    {id:"child",projectId:"p",parentId:"folder",kind:"folder",name:"Database",resourceId:null,position:0},

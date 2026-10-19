@@ -152,6 +152,7 @@ func OpenStore(dir string) (*Store, error) {
 		return nil, e
 	}
 	s.update(func() any {
+		s.ensureBuiltinLocalResources("")
 		s.seedResourceTree()
 		s.pauseMessageQueuesOnRestart()
 		s.exec("UPDATE workflowRuns SET status='interrupted',error='服务重启，工作流已中断；未自动重放',finishedAt=? WHERE status='running'", now())
@@ -471,7 +472,7 @@ func (s *Store) CreateProject(name string) Object {
 	return s.update(func() any {
 		p := Object{"id": ident(), "name": name, "createdAt": now()}
 		s.exec("INSERT INTO projects(id,name,createdAt) VALUES(?,?,?)", p["id"], name, p["createdAt"])
-		s.exec("INSERT INTO resources(id,projectId,name,kind,description,status) VALUES(?,?,?,?,?,?)", ident(), p["id"], "Local machine", "local", "This server's local command terminal (no remote host connection)", "available")
+		s.ensureBuiltinLocalResources(stringOf(p["id"]))
 		s.seedResourceTree()
 		return p
 	}).(Object)

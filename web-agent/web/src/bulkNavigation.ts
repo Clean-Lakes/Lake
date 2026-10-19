@@ -8,7 +8,7 @@ export function bulkCatalogTargets(catalog: Catalog): BulkTarget[] {
   return [
     ...catalog.projects.map(p => ({kind: "project" as const, id: p.id, projectId: p.id, name: p.name})),
     ...catalog.sessions.map(s => ({kind: "session" as const, id: s.id, projectId: s.projectId, name: s.title})),
-    ...catalog.resources.map(r => ({kind: "resource" as const, id: r.id, projectId: r.projectId, name: r.name})),
+    ...catalog.resources.filter(r => r.kind !== "local").map(r => ({kind: "resource" as const, id: r.id, projectId: r.projectId, name: r.name})),
     ...(catalog.resourceTree ?? []).filter(n => n.kind === "folder").map(n => ({kind: "folder" as const, id: n.id, projectId: n.projectId, name: n.name})),
   ];
 }
@@ -32,7 +32,8 @@ export function orderBulkDeletion(targets: BulkTarget[], catalog: Catalog): Bulk
     return count;
   };
   const rank = {session: 0, resource: 1, folder: 2, project: 3};
-  return [...targets].sort((a, b) => rank[a.kind] - rank[b.kind] || (a.kind === "folder" ? depth(b.id) - depth(a.id) : 0)).map(target => ({...target, projectName: catalog.projects.find(project => project.id === target.projectId)?.name}));
+  const locals = new Set(catalog.resources.filter(resource => resource.kind === "local").map(resource => resource.id));
+  return targets.filter(target => target.kind !== "resource" || !locals.has(target.id)).sort((a, b) => rank[a.kind] - rank[b.kind] || (a.kind === "folder" ? depth(b.id) - depth(a.id) : 0)).map(target => ({...target, projectName: catalog.projects.find(project => project.id === target.projectId)?.name}));
 }
 
 export type BulkDeleteResult = { removed: BulkTarget[]; failed: {target: BulkTarget; message: string}[] };

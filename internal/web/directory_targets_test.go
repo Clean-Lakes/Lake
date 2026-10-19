@@ -39,7 +39,11 @@ func TestQuestionAnswerRecoversDirectoryTargetInSameTurn(t *testing.T) {
 	for i := 1; i <= 27; i++ {
 		resource := b.Store.CreateResource(project, fmt.Sprintf("172.16.31.%d", i), "local", Object{})
 		hostIDs = append(hostIDs, stringOf(resource["id"]))
-		b.Store.EditResourceTree(project, Object{"operation": "move", "nodeId": resource["id"], "parentId": group})
+		// Test-only synthetic hosts execute locally; seed their legacy grouping directly.
+		b.Store.update(func() any {
+			b.Store.exec("UPDATE resourceTree SET parentId=? WHERE resourceId=?", group, resource["id"])
+			return nil
+		})
 	}
 	for _, name := range []string{"隆泰生产-sr", "隆泰生产-pg"} {
 		resource := b.Store.CreateResource(project, name, "database", Object{"driver": "postgres", "host": "192.0.2.69"})
@@ -163,7 +167,7 @@ func TestQuestionDirectoryTargetStillRequiresUnambiguousResources(t *testing.T) 
 	project := stringOf(b.Store.Session(id)["projectId"])
 	root := testDirectory(t, b, project, "志梦亿", "")
 	group := testDirectory(t, b, project, "隆泰", root)
-	host := b.Store.CreateResource(project, "172.16.31.1", "local", Object{})
+	host := b.Store.CreateResource(project, "172.16.31.1", "ssh", Object{"host": "fixture.invalid", "username": "fixture", "port": 22})
 	b.Store.EditResourceTree(project, Object{"operation": "move", "nodeId": host["id"], "parentId": group})
 	other := testDirectory(t, b, project, "测试环境", "")
 	testDirectory(t, b, project, "隆泰", other)
@@ -199,8 +203,8 @@ func TestDirectoryScopeResolvesNestedNodesAndAmbiguity(t *testing.T) {
 	root := testDirectory(t, b, project, "南京公司", "")
 	group := testDirectory(t, b, project, "新k8s集群", root)
 	workers := testDirectory(t, b, project, "Workers", group)
-	a := b.Store.CreateResource(project, "192.168.2.79", "local", Object{})
-	c := b.Store.CreateResource(project, "192.168.2.75", "local", Object{})
+	a := b.Store.CreateResource(project, "192.168.2.79", "ssh", Object{"host": "fixture.invalid", "username": "fixture", "port": 22})
+	c := b.Store.CreateResource(project, "192.168.2.75", "ssh", Object{"host": "fixture.invalid", "username": "fixture", "port": 22})
 	b.Store.EditResourceTree(project, Object{"operation": "move", "nodeId": a["id"], "parentId": group})
 	b.Store.EditResourceTree(project, Object{"operation": "move", "nodeId": c["id"], "parentId": workers})
 	snapshot := b.Store.Snapshot(id)

@@ -19,7 +19,7 @@ func TestMultiNodeChatAndContinueAreModelDecisions(t *testing.T) {
 	project := stringOf(b.Store.Session(id)["projectId"])
 	group := testDirectory(t, b, project, "新k8s集群", "")
 	for _, name := range []string{"192.168.2.75", "192.168.2.76", "192.168.2.77", "192.168.2.78", "192.168.2.79"} {
-		r := b.Store.CreateResource(project, name, "local", Object{})
+		r := b.Store.CreateResource(project, name, "ssh", Object{"host": "fixture.invalid", "username": "fixture", "port": 22})
 		b.Store.EditResourceTree(project, Object{"operation": "move", "nodeId": r["id"], "parentId": group})
 	}
 	var calls atomic.Int32

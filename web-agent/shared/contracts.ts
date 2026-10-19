@@ -186,7 +186,7 @@ export type SessionSnapshot = {
   hostKeyTrust?: SSHHostKeyTrust | null;
 };
 
-export type ResourceTreeNode = { id: string; projectId: string; parentId: string | null; kind: "folder" | "resource"; name: string; resourceId: string | null; position: number };
+export type ResourceTreeNode = { id: string; projectId: string; parentId: string | null; kind: "folder" | "resource"; name: string; resourceId: string | null; position: number; builtin?: boolean };
 
 export type SSHHostKeyTrust = { id: string; resourceId: string; host: string; port: number; algorithm: string; fingerprint: string; previousFingerprints: string[]; changed: boolean; scope: "lake" };
 
