@@ -45,6 +45,14 @@ Dev 使用 `~/.lake-dev`，与正式版数据分离。构建后的程序内嵌�
 
 </details>
 
+## 交流与反馈
+
+如果你正在使用 Lake，欢迎聊聊实际场景与改进建议。
+
+<p>
+  <img src="docs/images/wechat.svg" alt="WeChat" width="20" height="20" align="absmiddle">&nbsp; <strong>WeChat</strong>&nbsp; <code>13025452443</code>
+</p>
+
 ---
 
 [使用与开发](web-agent/README.md) · [macOS](client/macos/README.md) · [Windows](client/windows/README.md) · [贡献指南](CONTRIBUTING.md) · [Apache-2.0](LICENSE-APACHE)
