@@ -43,10 +43,13 @@ const snapshot={session,resources,resourceTree:tree,messages:[{id:'demo-question
 const model={id:'demo-model',providerId:'demo-provider',providerName:'DeepSeek',modelId:'deepseek-chat',displayName:'DeepSeek',protocol:'openai'};
 const catalog={projects:[project],sessions,resources,resourceTree:tree,tags:[],terminals:[]};
 const bootstrap={authenticated:true,modelConfigured:true,modelName:'DeepSeek',modelId:model.modelId,modelSelection:model,terminalMode:'pty',supportsImageInput:false,aiRuntime:'go'};
+const referenceProof=new URLSearchParams(location.search).has('reference-send');
+const sentProof=document.createElement('output');sentProof.id='reference-send-proof';sentProof.hidden=true;sentProof.textContent='[]';if(referenceProof)document.body.appendChild(sentProof);
 const fetchOriginal=window.fetch.bind(window);
 window.fetch=async(input,init)=>{
  const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href);
  if(!url.pathname.startsWith('/api/'))return fetchOriginal(input,init);
+ if(referenceProof&&init?.method==='POST'&&url.pathname.endsWith('/messages')){const sent=JSON.parse(sentProof.textContent||'[]');sent.push(JSON.parse(String(init.body)));sentProof.textContent=JSON.stringify(sent);return new Response('{}',{headers:{'Content-Type':'application/json'}});}
  if((init?.method??'GET')!=='GET')return new Response(JSON.stringify({error:'README 演示只提供展示，不执行操作'}),{status:405,headers:{'Content-Type':'application/json'}});
  let value:unknown;
  const path=url.pathname;

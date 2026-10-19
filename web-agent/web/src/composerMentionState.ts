@@ -1,5 +1,5 @@
 import type {MCPServerConfig,Resource,SkillConfig} from "../../shared/contracts";
-import {rebaseMentions, type MentionKind, type MentionReference} from "../../shared/references";
+import {referencedExtensions, type MentionKind} from "../../shared/references";
 
 export type MentionOption={id:string;kind:MentionKind;name:string;detail:string};
 export type MentionCategory=MentionKind|"all";
@@ -23,12 +23,29 @@ export function mentionInsertion(draft:string,caret:number,option:MentionOption)
  return {next,position:start+label.length+1,reference:{kind:option.kind,resourceId:option.id,label,start,end:start+label.length}};
 }
 
-/** Sidebar selection appends a real resource reference without replacing draft text or an unfinished @ query. */
-export function appendResourceMention(draft:string,references:MentionReference[],resource:Pick<Resource,"id"|"name">) {
- const valid=rebaseMentions(draft,draft,references);
- const existing=valid.find(ref=>(!ref.kind||ref.kind==="resource")&&ref.resourceId===resource.id);
- if(existing)return {next:draft,references:valid,position:existing.end};
- const prefix=draft+(draft&&!/\s$/.test(draft)?" ":"");
- const label=`@${resource.name}`,start=prefix.length;
- return {next:prefix+label+" ",references:[...valid,{kind:"resource" as const,resourceId:resource.id,label,start,end:start+label.length}],position:start+label.length+1};
+/** Selected tokens are separate from editable prose; their identity never depends on matching names. */
+export type ComposerReference={kind:MentionKind;resourceId:string;label:string};
+function addReference(references:ComposerReference[],option:MentionOption):ComposerReference[] {
+ return references.some(ref=>ref.kind===option.kind&&ref.resourceId===option.id)?references:[...references,{kind:option.kind,resourceId:option.id,label:`@${option.name}`}];
+}
+export function selectComposerMention(draft:string,caret:number,references:ComposerReference[],option:MentionOption) {
+ const before=draft.slice(0,caret),token=before.match(/(?:^|\s)@([^\s@]*)$/);
+ const start=token?before.lastIndexOf("@"):caret;
+ return {next:draft.slice(0,start)+draft.slice(caret),position:start,references:addReference(references,option)};
+}
+export function appendResourceMention(draft:string,references:ComposerReference[],resource:Pick<Resource,"id"|"name">) {
+ return {next:draft,position:draft.length,references:addReference(references,{id:resource.id,name:resource.name,kind:"resource",detail:""})};
+}
+export function composerResourceIds(references:ComposerReference[],scope:string[]) {
+ return [...new Set(references.filter(ref=>ref.kind==="resource"&&scope.includes(ref.resourceId)).map(ref=>ref.resourceId))];
+}
+/** Retain the existing verified extension-span protocol, without repeating tokens in the editor. */
+export function composerMessage(draft:string,references:ComposerReference[],scope:string[]) {
+ const resources=composerResourceIds(references,scope),body=draft.trim();
+ const extensions=references.filter(ref=>ref.kind!=="resource");
+ const tokens=body?extensions:references.filter(ref=>ref.kind!=="resource"||resources.includes(ref.resourceId));
+ let prefix="";
+ const spans=tokens.map(ref=>{const start=prefix.length;prefix+=ref.label+" ";return {...ref,start,end:start+ref.label.length};});
+ const text=(prefix+body).trim();
+ return {text,resourceIds:resources,references:referencedExtensions(text,spans)};
 }

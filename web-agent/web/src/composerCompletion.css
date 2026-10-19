@@ -11,3 +11,15 @@
 .composer-completion-hint button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
 .composer-completion-hint kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font: inherit; line-height: 15px; }
 .composer-text.has-completion + .composer-send-actions { margin-bottom: 23px; }
+
+/* Selected references and editable prose share the same wrapping input line. */
+.composer-inline-content { display: flex; flex: 1; min-width: 0; align-items: center; flex-wrap: wrap; gap: 5px 6px; }
+.composer-inline-content > .composer-text { flex: 1 1 140px; min-width: min(140px, 100%); }
+.composer-reference-token { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; min-height: 24px; padding: 2px 6px; box-sizing: border-box; border-radius: var(--radius-control); background: var(--surface-hover); color: var(--foreground); font-size: 12px; line-height: 20px; }
+.composer-reference-token > svg { flex-shrink: 0; }
+.composer-reference-token > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-reference-token > small { color: var(--text-muted); font-size: 10px; white-space: nowrap; }
+.composer-reference-token > button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 17px; height: 18px; padding: 0; border: 0; border-radius: 3px; background: transparent; color: var(--text-muted); cursor: pointer; }
+.composer-reference-token > button:hover { color: var(--foreground); background: var(--surface-selected); }
+.composer-reference-token > button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.composer-inline-content:has(.has-completion) + .composer-send-actions { margin-bottom: 23px; }

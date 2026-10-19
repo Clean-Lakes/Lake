@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type {MCPServerConfig,Resource,SkillConfig} from "../../shared/contracts";
 import {rebaseMentions,referencedExtensions,referencedResources,rebaseExtensionReferences} from "../../shared/references";
-import {appendResourceMention,filterMentions,mentionInsertion,mentionOptions,type MentionOption} from "../src/composerMentionState";
+import {composerMessage,composerResourceIds,selectComposerMention,appendResourceMention,filterMentions,mentionInsertion,mentionOptions,type MentionOption} from "../src/composerMentionState";
 
 const skill:SkillConfig={name:"service-check",description:"检查服务健康",path:"/fixture/SKILL.md",source:"Lake",enabled:true,managed:true};
 const mcp:MCPServerConfig={id:"tools",name:"Team tools",transport:"http",enabled:true,url:"http://localhost:1",command:"",args:[],headersConfigured:false,envConfigured:false};
@@ -53,26 +53,41 @@ test("queue editing rebases chosen extensions and removes only deleted mentions"
  assert.equal(rebaseExtensionReferences(text,"先 "+text,refs)[1]?.start,17);
 });
 
-test("sidebar resource selection appends without replacing a draft or pending @ token",()=>{
+test("sidebar tokens preserve editable prose and deduplicate by resource ID",()=>{
  const resource={id:"host",name:"应用服务器 一"};
  for(const draft of ["","检查一下","检查\n","检查 @未完成"]) {
-  const result=appendResourceMention(draft,[],resource);
-  assert.ok(result.next.startsWith(draft));
-  assert.equal(result.next.slice(result.references[0]!.start,result.references[0]!.end),"@应用服务器 一");
-  assert.equal(result.position,result.next.length);
-  assert.deepEqual(referencedResources(result.next,result.references,["host"]),["host"]);
+  const first=appendResourceMention(draft,[],resource),again=appendResourceMention(first.next,first.references,resource);
+  assert.equal(first.next,draft);
+  assert.equal(first.position,draft.length);
+  assert.equal(again.references.length,1);
+  assert.deepEqual(composerResourceIds(first.references,["host"]),["host"]);
+  assert.equal(composerMessage("检查状态",first.references,["host"]).text,"检查状态");
  }
 });
-test("sidebar references deduplicate by resource identity, retain extension references and re-add deleted mentions",()=>{
- const original=mentionInsertion("@",1,{id:"host",name:"同名",kind:"skill",detail:""});
- const first=appendResourceMention(original.next,[original.reference],{id:"host",name:"同名"});
- const duplicate=appendResourceMention(first.next,first.references,{id:"host",name:"同名"});
- assert.equal(duplicate.next,first.next);
- assert.equal(duplicate.references.length,2);
- assert.equal(referencedExtensions(duplicate.next,duplicate.references).length,1);
- const other=appendResourceMention(first.next,first.references,{id:"other",name:"同名"});
- assert.deepEqual(referencedResources(other.next,other.references,["host","other"]),["host","other"]);
- const readded=appendResourceMention("已删除引用",first.references,{id:"host",name:"同名"});
- assert.deepEqual(referencedResources(readded.next,readded.references,["host"]),["host"]);
- assert.equal(readded.references.length,1);
+test("@ selection consumes only the query; tokens survive prose edits and keep same-name identities separate",()=>{
+ const first=selectComposerMention("检查\n@ser 后续",7,[],{id:"host",name:"同名",kind:"skill",detail:""});
+ assert.equal(first.next,"检查\n 后续");
+ const resource=appendResourceMention(first.next,first.references,{id:"host",name:"同名"});
+ const other=appendResourceMention(resource.next,resource.references,{id:"other",name:"同名"});
+ assert.equal(other.references.length,3);
+ assert.deepEqual(composerResourceIds(other.references,["host","other"]),["host","other"]);
+ const payload=composerMessage("🔎 改写后的正文",other.references,["host"]);
+ assert.equal(payload.text,"@同名 🔎 改写后的正文");
+ assert.deepEqual(payload.resourceIds,["host"]);
+ assert.equal(payload.references[0]?.kind,"skill");
+ assert.equal(payload.references[0]?.start,0);
+ assert.equal(payload.references[0]?.end,3);
+ assert.equal(selectComposerMention("@",1,other.references,{id:"host",name:"同名",kind:"skill",detail:""}).references.length,3);
+});
+test("extension tokens serialize with verified UTF-16 spans and queue edits retain their identifiers",()=>{
+ let refs=selectComposerMention("@",1,[],{id:"service-check",name:"service-check",kind:"skill",detail:""}).references;
+ refs=selectComposerMention("@",1,refs,{id:"tools",name:"工具 🔎",kind:"mcp",detail:""}).references;
+ const payload=composerMessage("  检查一下  ",refs,[]);
+ assert.equal(payload.text,"@service-check @工具 🔎 检查一下");
+ assert.equal(payload.references.length,2);
+ for(const ref of payload.references)assert.equal(payload.text.slice(ref.start as number,ref.end as number),ref.label);
+ assert.deepEqual(rebaseExtensionReferences(payload.text,payload.text.replace("检查一下","再查一次"),payload.references),payload.references);
+ const onlyResource=appendResourceMention("",[],{id:"host",name:"本机"});
+ assert.equal(composerMessage("",onlyResource.references,["host"]).text,"@本机");
+ assert.equal(composerMessage("",[],[]).text,"");
 });
