@@ -1147,3 +1147,8 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .attachment-approval button:disabled { cursor: default; }
 .attachment-approval :is(button,input,summary):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media(max-width:600px) { .attachment-approval { padding: 13px; } .attachment-approval-destination > div { grid-template-columns: 42px minmax(0,1fr); gap: 8px; } }
+
+/* Updating a resource summary never changes its collapsed line height. */
+.is-resource-row > .thinking-toggle { display: flex; width: fit-content; max-width: 100%; white-space: nowrap; }
+.is-resource-row > .thinking-toggle > .thinking-label { overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.is-resource-row .thinking-operation-count { flex-shrink: 0; font-variant-numeric: tabular-nums; }

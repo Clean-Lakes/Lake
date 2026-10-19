@@ -58,6 +58,8 @@ function Chart({ card }: { card: AICard }) {
 const noTags: WorkspaceTag[] = [];
 const cardMarkdownComponents:Components={summary:ReplyDetailsSummary,a:({node,...props})=><a {...props} target="_blank" rel="noopener noreferrer"/>,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
 const Card = memo(function Card({ card, tags = noTags, animateInitial = false }: { card: AICard; tags?: WorkspaceTag[]; animateInitial?:boolean }) {
+  // Only fold reports already complete when restored, never a visible live reply.
+  const compactRestored = useRef(card.status==='completed'&&!animateInitial).current;
   const signature = conversationTagSignature(tags);
   const decorateTags = useMemo(() => remarkConversationTags(tags), [signature]);
   const assistantText = ["text", "message"].includes(card.type);
@@ -68,7 +70,7 @@ const Card = memo(function Card({ card, tags = noTags, animateInitial = false }:
   if (card.type === "chart") return <Chart card={card}/>;
   if (card.type === "diff") { const data = card.data as { before: string; after: string }; return <details className="ai-diff"><DisclosureSummary>文件变更 · {card.title}</DisclosureSummary><div className="ai-diff-columns"><pre>{data.before || "（新文件）"}</pre><pre>{data.after || "（空文件或删除）"}</pre></div></details>; }
   if (card.type === "operation") return <details className="ai-operation"><DisclosureSummary><span>{card.title}</span><small>{card.status === "pending" ? "等待确认" : card.status === "running" ? "执行中" : card.status === "failed" ? "未完成" : "已结束"}</small></DisclosureSummary><pre>{JSON.stringify(card.data, null, 2)}</pre>{card.content && <pre>{card.content}</pre>}</details>;
-  return <div className={`ai-card ai-${card.type}`}><div className={`ai-markdown${assistantText ? " assistant-prose" : ""}`}><Markdown remarkPlugins={assistantText ? [remarkGfm, remarkAssistantProse, decorateTags,...(card.status==='completed'?[remarkCompactReply]:[])] : [remarkGfm]} skipHtml components={cardMarkdownComponents}>{visibleContent}</Markdown></div>{card.status === "running" && !assistantText && <span className="ai-stream-dot"/>}</div>;
+  return <div className={`ai-card ai-${card.type}`}><div className={`ai-markdown${assistantText ? " assistant-prose" : ""}`}><Markdown remarkPlugins={assistantText ? [remarkGfm, remarkAssistantProse, decorateTags,...(card.status==='completed'&&compactRestored?[remarkCompactReply]:[])] : [remarkGfm]} skipHtml components={cardMarkdownComponents}>{visibleContent}</Markdown></div>{card.status === "running" && !assistantText && <span className="ai-stream-dot"/>}</div>;
 }, (previous, next) => sameCard(previous.card, next.card) && conversationTagSignature(previous.tags) === conversationTagSignature(next.tags));
 
 // Animate a reply's first appearance, including a completed first packet.
@@ -130,7 +132,7 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
     {turns.map((turn, index) => <div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)} key={turn[0]!.id}>
       {(mode==='conversation'?conversationGroups(turn.filter(entry=>!isFileChangeCard(entry.card))):transcriptGroups(turn.filter(entry => !isFileChangeCard(entry.card) && activityEntry(entry))).map(entries=>({progress:false,entries}))).map(({entries:group,progress}) => {
         const entry = group[0]!;
-        if(progress)return <ReplyArrival key={entry.id} entryId={entry.id} arrive={!restoredCardIds.current.has(entry.id)&&turn.some(item=>item.message?.id===latestUser?.id)}><ThinkingTimeline cards={[entry.card!]} live={snapshot.ai?.status==='running'&&entry.card!.status==='running'} onInspect={onInspect}/></ReplyArrival>;
+        if(progress)return <ReplyArrival key={entry.id} entryId={entry.id} arrive={!restoredCardIds.current.has(entry.id)&&turn.some(item=>item.message?.id===latestUser?.id)}><ThinkingTimeline cards={group.map(item=>item.card!)} live={snapshot.ai?.status==='running'&&group.some(item=>item.card?.status==='running')} resourceRow onInspect={onInspect}/></ReplyArrival>;
         if(mode==='conversation'&&entry.card?.type==='thinking'&&!entry.card.content)return null;
         if(entry.sre){const {task}=entry.sre;const attempt=task.attempts?.find(a=>a.id===entry.sre!.entry.attemptId);const plan=task.plans?.find(p=>p.id===task.runs?.find(r=>r.id===attempt?.planRunId)?.planRevisionId);const step=plan?.steps.find(s=>s.id===attempt?.stepId);return <SRERoleMessage key={entry.id} task={task} entry={entry.sre.entry} snapshot={snapshot} animateInitial={!restoredText.current.has(snapshot.ai?.agentRuns?.find(r=>r.id===entry.sre!.entry.roleRunId)?.liveTextId)} onUpdated={()=>void api.snapshot(snapshot.session.id)} renderApproval={run=>snapshot.ai?<><AIPending attachments={snapshot.messages.flatMap(message=>message.files??[])} session={snapshot.session.id} runId={run.id} agentName={run.name} sreStep={step} view={{...snapshot.ai,pending:run.pending}} refresh={()=>api.aiView(snapshot.session.id)}/>{run.question&&<AgentQuestion session={snapshot.session.id} runId={run.id} request={run.question} refresh={()=>api.aiView(snapshot.session.id)}/>}</>:null}/>;}
         const runs = group.flatMap(item => item.agentRun ? [item.agentRun] : []);

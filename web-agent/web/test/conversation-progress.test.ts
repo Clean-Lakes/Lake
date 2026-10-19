@@ -46,3 +46,39 @@ test('all tool rounds remain visible in order; final reply and duration stay sin
  const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:'activity'}));
  assert.equal((activity.match(/class="thinking-timeline /g)||[]).length,1);
 });
+
+test('consecutive operations on the same resource reuse the first row without mutating entries',()=>{
+ const first=card('one','operation'),next=card('two','operation','running');
+ const entries=[card('note','message'),first,next];
+ const before=conversationGroups(entries.slice(0,2));
+ const after=conversationGroups(entries);
+ assert.equal(after.length,2);
+ assert.equal(after[1]!.entries[0]!.id,before[1]!.entries[0]!.id);
+ assert.deepEqual(after[1]!.entries.map(e=>e.id),['one','two']);
+ assert.equal(entries.length,3);
+ assert.deepEqual(before[1]!.entries.map(e=>e.id),['one']);
+ const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],ai:{session:'s',status:'running',cardsOffset:0,turns:1,cards:entries.map(e=>e.card)}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ assert.equal((html.match(/class="thinking-timeline /g)||[]).length,1);
+ assert.ok(html.includes('2 项')&&html.includes('data-conversation-entry="one"'));
+ assert.ok(!html.includes('data-conversation-entry="two"'));
+});
+test('resource boundaries and attention states never disappear into a successful group',()=>{
+ const one=card('one','operation');
+ const different={...card('other','operation'),card:{...one.card,id:'other',data:{...one.card.data,target:'另一主机'}}};
+ assert.equal(conversationGroups([one,different]).length,2);
+ for(const status of ['pending','failed','unknown','interrupted','cancelled','not_executed','background_running']){
+  assert.equal(conversationGroups([one,card('attention','operation',status),card('next','operation')]).length,3,status);
+ }
+ for(const target of ['', '当前项目/会话','项目资源目录']){
+  const unscoped={...one,card:{...one.card,data:{target}}};
+  assert.equal(conversationGroups([unscoped,{...unscoped,id:'two'}]).length,2,target);
+ }
+ const scoped=(id:string,asset:string,terminal='',container='')=>({...card(id,'operation'),card:{...one.card,id,data:{target:'同名资源',arguments:{asset_ref:asset,terminal_id:terminal,container}}}});
+ assert.equal(conversationGroups([scoped('a','asset1'),scoped('b','asset2')]).length,2);
+ assert.equal(conversationGroups([scoped('a','asset1','t1'),scoped('b','asset1','t2')]).length,2);
+ assert.equal(conversationGroups([scoped('a','asset1','','c1'),scoped('b','asset1','','c2')]).length,2);
+ assert.equal(conversationGroups([one,card('note','message'),card('next','operation')]).length,3);
+ const empty=card('empty','thinking','running','');
+ assert.deepEqual(conversationGroups([one,empty,card('next','operation')])[0]!.entries.map(e=>e.id),['one','next']);
+});
