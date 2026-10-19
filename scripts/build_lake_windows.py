@@ -165,7 +165,7 @@ def main():
             product_version = version + ".0" if version.count(".") == 2 else version
             # Build the glob with the host's native separator. Appending a POSIX
             # slash to a Windows path makes NSIS fail to find the payload.
-            run([nsis, "-V2", *(["-DDEV_BUILD=1"] if args.dev else []), "-DAPP_NAME=" + app_name, "-DUNINSTALL_KEY=" + ("CleanLakesDev" if args.dev else "CleanLakes"), "-DVERSION=" + version, "-DPRODUCT_VERSION=" + product_version, "-DAPP_FILES=" + str(stage / "*"), "-DOUTPUT=" + str(installer), ROOT / "client/windows/installer.nsi"])
+            run([nsis, "-V2", "-INPUTCHARSET", "UTF8", *(["-DDEV_BUILD=1"] if args.dev else []), "-DAPP_NAME=" + app_name, "-DUNINSTALL_KEY=" + ("CleanLakesDev" if args.dev else "CleanLakes"), "-DVERSION=" + version, "-DPRODUCT_VERSION=" + product_version, "-DAPP_FILES=" + str(stage / "*"), "-DOUTPUT=" + str(installer), ROOT / "client/windows/installer.nsi"])
             assets.append(installer)
         for path in assets:
             path.with_name(path.name + ".sha256").write_text(sha(path) + "  " + path.name + "\n")
