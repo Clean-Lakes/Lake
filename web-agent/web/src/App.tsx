@@ -967,7 +967,7 @@ function App() {
   }
   async function sendMessage(event: FormEvent) {
     event.preventDefault();
-    const payload=composerMessage(messageDraft || (fileDraft.length ? "请查看附件信息，并说明可以如何处理；执行或部署前先确认目标和需求。" : ""),mentionRefs,mentionable.map(resource=>resource.id));
+    const payload=composerMessage(messageDraft.trim() ? messageDraft : (fileDraft.length ? "请查看附件信息，并说明可以如何处理；执行或部署前先确认目标和需求。" : ""),mentionRefs,mentionable.map(resource=>resource.id));
     const text=payload.text;
     if (!sessionId || !sessionConnected || stoppingTurn || pendingOperation) return;
     if (!modelConfigured) {setMention(null);void openSettings();return;}
