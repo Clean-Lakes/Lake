@@ -1,5 +1,5 @@
 {
-  "source": "4c3236ae",
+  "source": "d98c6e59",
   "change": "Single editable document mixes prose and atomic resource/role/extension tokens at arbitrary caret positions",
   "frontendTests": {
     "passed": 270,
@@ -55,5 +55,16 @@
   "screenshots": [
     "lake-mixed-reference-editor.png",
     "lake-mixed-reference-editor-dark.png"
-  ]
+  ],
+  "macOS": {
+    "signedDevInstalled": true,
+    "nativeUIVerification": "not performed; shared editor verified in browser; native IME not exercised"
+  },
+  "windows": {
+    "staticChecks": true,
+    "devInstalled": true,
+    "devDataUnchanged": true,
+    "installedHashesMatch": true,
+    "nativeUIVerification": "not performed; shared editor verified in browser"
+  }
 }
