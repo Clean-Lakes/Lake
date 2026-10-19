@@ -1,5 +1,5 @@
 import type {MCPServerConfig,Resource,SkillConfig} from "../../shared/contracts";
-import type {MentionKind} from "../../shared/references";
+import {referencedExtensions, type MentionKind} from "../../shared/references";
 
 export type MentionOption={id:string;kind:MentionKind;name:string;detail:string};
 export type MentionCategory=MentionKind|"all";
@@ -21,4 +21,61 @@ export function mentionInsertion(draft:string,caret:number,option:MentionOption)
  const start=token?before.lastIndexOf("@"):caret;
  const label=`@${option.name}`,next=`${draft.slice(0,start)}${label} ${draft.slice(caret)}`;
  return {next,position:start+label.length+1,reference:{kind:option.kind,resourceId:option.id,label,start,end:start+label.length}};
+}
+
+/** Each atomic reference occupies one UTF-16 code unit in the editable document. */
+export const composerToken="\ufffc";
+export type ComposerReference={kind:MentionKind;resourceId:string;label:string;position:number};
+export function replaceComposerRange(draft:string,references:ComposerReference[],start:number,end:number,text:string,inserted:ComposerReference[]=[]) {
+ start=Math.max(0,Math.min(draft.length,start));end=Math.max(start,Math.min(draft.length,end));
+ const next=draft.slice(0,start)+text+draft.slice(end),delta=text.length-(end-start);
+ const refs=references.flatMap(ref=>ref.position<start?[ref]:ref.position>=end?[{...ref,position:ref.position+delta}]:[]);
+ refs.push(...inserted.map(ref=>({...ref,position:ref.position+start})));
+ return {next,position:start+text.length,references:refs.filter(ref=>next[ref.position]===composerToken).sort((a,b)=>a.position-b.position)};
+}
+export function selectComposerMention(draft:string,caret:number,references:ComposerReference[],option:MentionOption) {
+ const before=draft.slice(0,caret),token=before.match(/@([^\s@\ufffc]*)$/);
+ const start=token?before.lastIndexOf("@"):caret;
+ const existing=references.find(ref=>ref.kind===option.kind&&ref.resourceId===option.id);
+ return replaceComposerRange(draft,references,start,caret,existing?"":composerToken,existing?[]:[{kind:option.kind,resourceId:option.id,label:`@${option.name}`,position:0}]);
+}
+export function appendResourceMention(draft:string,references:ComposerReference[],resource:Pick<Resource,"id"|"name">,caret=draft.length,end=caret) {
+ const existing=references.find(ref=>ref.kind==="resource"&&ref.resourceId===resource.id);
+ if(existing)return {next:draft,references,position:existing.position+1};
+ return replaceComposerRange(draft,references,caret,end,composerToken,[{kind:"resource",resourceId:resource.id,label:`@${resource.name}`,position:0}]);
+}
+export function composerResourceIds(references:ComposerReference[],scope:string[]) {
+ return [...new Set(references.filter(ref=>ref.kind==="resource"&&scope.includes(ref.resourceId)).map(ref=>ref.resourceId))];
+}
+/** Expand tokens in their actual sentence order, retaining verified UTF-16 extension spans. */
+export function composerMessage(draft:string,references:ComposerReference[],scope:string[]) {
+ const resourceIds=composerResourceIds(references,scope),lookup=new Map(references.map(ref=>[ref.position,ref]));
+ let text="";
+ const spans=[];
+ for(let i=0;i<draft.length;i++) {
+  if(draft[i]!==composerToken){text+=draft[i];continue;}
+  const ref=lookup.get(i);
+  if(!ref||ref.kind==="resource"&&!resourceIds.includes(ref.resourceId))continue;
+  const start=text.length;text+=ref.label;spans.push({...ref,start,end:text.length});
+ }
+ const leading=text.length-text.trimStart().length;
+ return {text:text.trim(),resourceIds,references:referencedExtensions(text,spans),mentions:spans.map(ref=>({kind:ref.kind,id:ref.resourceId,label:ref.label,start:ref.start-leading,end:ref.end-leading}))};
+}
+/** Clipboard tokens bind only to references already selected in this editor session. */
+export function composerClipboardFragment(raw:string,known:ComposerReference[]) {
+ try {
+  const data=JSON.parse(raw) as {version?:unknown;value?:unknown;references?:unknown};
+  if(data.version!==1||typeof data.value!=='string'||data.value.length>100000||!Array.isArray(data.references))return null;
+  const value=data.value,lookup=new Map(known.map(ref=>[`${ref.kind}:${ref.resourceId}`,ref]));
+  const references:ComposerReference[]=[],positions=new Set<number>();
+  for(const item of data.references){
+   if(!item||typeof item!=='object')return null;
+   const ref=item as Record<string,unknown>,position=ref.position;
+   const original=lookup.get(`${ref.kind}:${ref.resourceId}`);
+   if(!original||typeof position!=='number'||!Number.isInteger(position)||position<0||value[position]!==composerToken||positions.has(position))return null;
+   positions.add(position);references.push({...original,position});
+  }
+  if(value.split(composerToken).length-1!==references.length)return null;
+  return {value,references};
+ } catch {return null;}
 }

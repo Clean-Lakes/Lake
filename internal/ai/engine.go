@@ -22,6 +22,7 @@ type session struct {
 	mu                  sync.Mutex
 	state               State
 	cancel              context.CancelFunc
+	finalizing          bool
 	decision            chan bool
 	decisions           map[string]chan bool
 	questionReply       chan map[string][]string
@@ -347,6 +348,9 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	view := s.state.View
+	if s.finalizing {
+		view.Status, view.TurnFinishedAt = "running", ""
+	}
 	view.OperationOutcomes = outcomes
 	view.Context = contextUsage(s.state)
 	view.TotalCards = len(view.Cards)
@@ -627,8 +631,7 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		}
 		cancel()
 		s.mu.Lock()
-
-		s.cancel = nil
+		s.finalizing = true
 		s.decision = nil
 		s.decisions = nil
 		s.state.View.Pending = nil
@@ -656,11 +659,17 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		if saveErr := e.save(s); saveErr != nil && err == nil {
 			err = saveErr
 		}
-		e.notify(s, "done", map[string]any{"status": status})
 		s.mu.Unlock()
 		if persistErr := e.persistNativeProjection(context.WithoutCancel(ctx), s); persistErr != nil && err == nil {
 			err = persistErr
 		}
+		// Keep the session reserved until its final canonical write completes.
+		// A new turn must not load an ADK handle that this write makes stale.
+		s.mu.Lock()
+		s.finalizing = false
+		s.cancel = nil
+		e.notify(s, "done", map[string]any{"status": status})
+		s.mu.Unlock()
 
 	}()
 	if len(input.workflow) > 0 {

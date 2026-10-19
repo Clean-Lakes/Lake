@@ -26,5 +26,6 @@ jobs:
       - run: python3 scripts/check_adk_runtime_boundary.py
       - run: go test -race ./... && go vet ./...
       - run: swift run --package-path client/macos --build-system native LakeUpdateTests
+      - run: swift run --package-path client/macos --build-system native LakeWindowTests
       - run: swift build --package-path client/macos --build-system native --product LakeDesktop
       - run: python3 scripts/test_lake_macos_installer.py

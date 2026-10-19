@@ -1,5 +1,7 @@
 # Lake macOS
 
+点击窗口关闭按钮只隐藏工作台，保留同一个 WebView、会话、终端连接和后台任务。点击 Dock 图标、再次打开应用，或选择 Lake 菜单中的“显示工作台”恢复窗口；“退出 Lake”或 ⌘Q 才执行正常退出和后台清理。此行为不改变系统休眠规则。
+
 当前 Go/React 工作台的 AppKit + WKWebView 客户端，macOS 13+，仅 Apple Silicon（M 系列）arm64，运行不需要 Node、pnpm 或 Electron。应用启动内置签名 `lake web --port 0`，使用系统分配的 loopback 端口。已有同数据目录的 Go 服务时复用；更新客户端时保留独立启动的 CLI 服务，替换客户端后继续连接同一服务。
 
 ```sh

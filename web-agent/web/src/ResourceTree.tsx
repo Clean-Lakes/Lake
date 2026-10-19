@@ -25,10 +25,12 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
     try { return localStorage.getItem(`lake.resource-section.${project.id}`) !== "closed"; } catch { return true; }
   });
   useEffect(() => { try { localStorage.setItem(`lake.resource-section.${project.id}`, sectionExpanded ? "open" : "closed"); } catch {} }, [project.id, sectionExpanded]);
-  const [closed, setClosed] = useState<string[]>(() => {
-    try { const saved: unknown = JSON.parse(localStorage.getItem(`lake.resource-folders.${project.id}`) || "[]"); return Array.isArray(saved) ? saved.filter(id => typeof id === "string") : []; } catch { return []; }
+  // Persist explicit expansions: absent/new folders stay collapsed, including after async loads.
+  // The legacy key stored collapsed exceptions to an expanded default, so it is not reusable.
+  const [expandedFolders, setExpandedFolders] = useState<string[]>(() => {
+    try { const saved: unknown = JSON.parse(localStorage.getItem(`lake.resource-folders.expanded.${project.id}`) || "[]"); return Array.isArray(saved) ? saved.filter(id => typeof id === "string") : []; } catch { return []; }
   });
-  useEffect(() => {try {localStorage.setItem(`lake.resource-folders.${project.id}`, JSON.stringify(closed));} catch {}}, [project.id, closed]);
+  useEffect(() => {try {localStorage.setItem(`lake.resource-folders.expanded.${project.id}`, JSON.stringify(expandedFolders));} catch {}}, [project.id, expandedFolders]);
   const [editor, setEditor] = useState<{id?: string; parentId: string | null; name: string} | null>(null);
   const [context,setContext]=useState<{id:string;x:number;y:number}|null>(null);
   const contextAnchor=useRef<HTMLButtonElement|null>(null);
@@ -78,7 +80,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   };
   const move = (source: string, parentId: string | null, beforeId: string | null = null) => {
     if (source === beforeId || !canMoveInto(tree, source, parentId)) return;
-    if (parentId) setClosed(values => values.filter(id => id !== parentId));
+    if (parentId) setExpandedFolders(values => values.includes(parentId) ? values : [...values, parentId]);
     void work({operation:"move", nodeId:source, parentId, beforeId});
   };
   // Pointer capture works for mouse, trackpad and touch, including browsers
@@ -130,10 +132,11 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   };
   const render = (parent: string | null, depth = 0): ReactNode => childrenOf(parent).map(node => {
     const resource = node.resourceId ? resourceMap.get(node.resourceId) : undefined;
-    const expanded = filtering || !closed.includes(node.id);
+    const builtin = resource?.kind === "local";
+    const expanded = filtering || expandedFolders.includes(node.id);
     const siblings = childrenOf(parent); const index = siblings.findIndex(item => item.id === node.id);
     return <div className={`resource-tree-node ${dragging === node.id ? "is-dragging" : ""}`} key={node.id}>
-      <div data-resource-tree-node={node.id} onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(!blocked){contextAnchor.current=event.currentTarget.querySelector<HTMLButtonElement>('.navigation-more-button') ?? event.currentTarget.querySelector<HTMLButtonElement>('.resource-drag-handle');setContext({id:node.id,x:event.clientX,y:event.clientY});}}} className={`resource-tree-row ${drop?.id === node.id ? `drop-${drop.zone}` : ""}`} onDragOver={event => dragOver(event,node)} onDrop={event => {
+      <div data-resource-tree-node={node.id} onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(!blocked && !builtin){contextAnchor.current=event.currentTarget.querySelector<HTMLButtonElement>('.navigation-more-button') ?? event.currentTarget.querySelector<HTMLButtonElement>('.resource-drag-handle');setContext({id:node.id,x:event.clientX,y:event.clientY});}}} className={`resource-tree-row ${drop?.id === node.id ? `drop-${drop.zone}` : ""}`} onDragOver={event => dragOver(event,node)} onDrop={event => {
         event.preventDefault(); event.stopPropagation();
         const source = dragSource.current || event.dataTransfer.getData("application/x-lake-resource-tree");
         if (!source || source === node.id || blocked) return;
@@ -142,19 +145,19 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
         const zone = node.kind === "resource" ? (ratio < .5 ? "before" : "after") : ratio < .25 ? "before" : ratio > .75 ? "after" : "inside";
         const target = dropPlacement(tree,node,zone); move(source,target.parentId,target.beforeId);
       }}>
-        {(node.kind === "folder" || resource) && <BulkCheckbox selection={selection} target={node.kind === "folder" ? {kind:"folder",id:node.id,projectId:project.id,name:folderPath(node)} : {kind:"resource",id:resource!.id,projectId:project.id,name:resource!.name}}/>}
-        <button type="button" className="resource-drag-handle" aria-label={`拖动或移动 ${resource?.name || node.name}`} title="拖动排序或移动到目录；点击选择位置" disabled={blocked} draggable={false}
+        {!builtin && (node.kind === "folder" || resource) && <BulkCheckbox selection={selection} target={node.kind === "folder" ? {kind:"folder",id:node.id,projectId:project.id,name:folderPath(node)} : {kind:"resource",id:resource!.id,projectId:project.id,name:resource!.name}}/>}
+        {!builtin && <button type="button" className="resource-drag-handle" aria-label={`拖动或移动 ${resource?.name || node.name}`} title="拖动排序或移动到目录；点击选择位置" disabled={blocked} draggable={false}
           onClick={() => {if(!suppressClick.current)setMoving(current => current === node.id ? null : node.id);}}
           onPointerDown={event=>{if(blocked || event.button!==0)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);pointerDrag.current={source:node.id,pointer:event.pointerId,x:event.clientX,y:event.clientY,active:false};pointerDrop.current=null;}}
           onPointerMove={pointerMove} onPointerUp={event=>pointerEnd(event)} onPointerCancel={event=>pointerEnd(event,true)}
-          onDragStart={event => {dragSource.current = node.id;event.dataTransfer.setData("application/x-lake-resource-tree",node.id);event.dataTransfer.effectAllowed="move";setDragging(node.id);setError("");}} onDragEnd={() => {dragSource.current = null;setDragging(null);setDrop(null);}}><Glyph name="grip" size={10}/></button>
+          onDragStart={event => {dragSource.current = node.id;event.dataTransfer.setData("application/x-lake-resource-tree",node.id);event.dataTransfer.effectAllowed="move";setDragging(node.id);setError("");}} onDragEnd={() => {dragSource.current = null;setDragging(null);setDrop(null);}}><Glyph name="grip" size={10}/></button>}
         {node.kind === "folder" ? <div className="resource-folder-row">
-          <button type="button" className="resource-folder-toggle" title={folderPath(node)} aria-expanded={expanded} onClick={() => setClosed(values => expanded ? [...values,node.id] : values.filter(id => id !== node.id))}><Glyph name="chevron" size={11} className={expanded ? "folder-chevron open" : "folder-chevron"}/><FolderIcon/><span className="resource-folder-name">{node.name}</span><small className="resource-folder-count" title={`${childrenOf(node.id).length} 个子项`}>{childrenOf(node.id).length}</small></button>
+          <button type="button" className="resource-folder-toggle" title={folderPath(node)} aria-expanded={expanded} onClick={() => setExpandedFolders(values => expanded ? values.filter(id => id !== node.id) : [...values,node.id])}><Glyph name="chevron" size={11} className={expanded ? "folder-chevron open" : "folder-chevron"}/><FolderIcon/><span className="resource-folder-name">{node.name}</span><small className="resource-folder-count" title={`${childrenOf(node.id).length} 个子项`}>{childrenOf(node.id).length}</small></button>
           <div className="resource-folder-actions"><button type="button" className="navigation-more-button" disabled={blocked} aria-label={`管理文件夹 ${folderPath(node)}`} aria-haspopup="menu" title="更多操作" onClick={event => {contextAnchor.current=event.currentTarget;const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button></div>
         </div> : resource && <><div className="resource-tree-resource-content">{renderResource(resource)}</div>{!["local", "ssh"].includes(resource.kind) && <button type="button" className="navigation-more-button resource-more-button" disabled={blocked} aria-label={`管理资源 ${resource.name}`} aria-haspopup="menu" title="更多操作" onClick={event=>{contextAnchor.current=event.currentTarget;const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button>}</>}
       </div>
-      {moving === node.id && <div className="resource-move-panel" role="group" aria-label={`移动 ${resource?.name || node.name}`}>
-        <div><button disabled={blocked || index === 0} onClick={() => move(node.id,parent,siblings[index-1]?.id ?? null)}>上移</button><button disabled={blocked || index === siblings.length-1} onClick={() => move(node.id,parent,siblings[index+2]?.id ?? null)}>下移</button></div>
+      {moving === node.id && !builtin && <div className="resource-move-panel" role="group" aria-label={`移动 ${resource?.name || node.name}`}>
+        <div><button disabled={blocked || index === 0 || !!siblings[index-1]?.builtin} onClick={() => move(node.id,parent,siblings[index-1]?.id ?? null)}>上移</button><button disabled={blocked || index === siblings.length-1} onClick={() => move(node.id,parent,siblings[index+2]?.id ?? null)}>下移</button></div>
         <label>移到目录<AppSelect aria-label={`将 ${resource?.name || node.name} 移到目录`} value="" disabled={blocked} onChange={event => {if(event.target.value) move(node.id,event.target.value === "root" ? null : event.target.value);}}><option value="">选择位置…</option><option value="root">资源根层</option>{tree.filter(folder => folder.kind === "folder" && canMoveInto(tree,node.id,folder.id)).map(folder => <option value={folder.id} key={folder.id}>{folderPath(folder)}</option>)}</AppSelect></label>
       </div>}
       {node.kind === "folder" && expanded && depth < 32 && <div className="resource-folder-children" style={depth>=4 ? {marginLeft:0,paddingLeft:0,borderLeft:0}:undefined}>{render(node.id,depth+1)}{!childrenOf(node.id).length && <div data-resource-drop-inside={node.id} className={`resource-folder-empty ${drop?.id === node.id ? "drop-inside" : ""}`} onDragOver={event => {if(dragSource.current && canMoveInto(tree,dragSource.current,node.id)){event.preventDefault();event.stopPropagation();setDrop({id:node.id,zone:"inside"});}}} onDrop={event => {event.preventDefault();event.stopPropagation();if(dragSource.current)move(dragSource.current,node.id);}}>拖动资源到这里</div>}</div>}
@@ -170,7 +173,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   return <>{context && contextNode && <NavigationMenu title={contextResource?.name || contextNode.name} anchor={contextAnchor} x={context.x} y={context.y} onClose={()=>setContext(null)} actions={[
    ...(contextNode.kind==="folder" ? [
     {label:"新建资源",icon:"server" as const,disabled:blocked,run:()=>onAddResource(contextNode.id)},
-    {label:"新建子目录",icon:"folder" as const,disabled:blocked,run:()=>{setEditor({parentId:contextNode.id,name:""});setClosed(values => values.filter(id => id !== contextNode.id));}},
+    {label:"新建子目录",icon:"folder" as const,disabled:blocked,run:()=>{setEditor({parentId:contextNode.id,name:""});setExpandedFolders(values => values.includes(contextNode.id) ? values : [...values,contextNode.id]);}},
     {label:"重命名",icon:"edit" as const,separatorBefore:true,run:()=>setEditor({id:contextNode.id,parentId:contextNode.parentId,name:contextNode.name})}
    ] : []),
    {label:"移动到…",icon:"arrow",run:()=>setMoving(contextNode.id)},

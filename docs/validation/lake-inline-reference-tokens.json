@@ -1,0 +1,58 @@
+{
+  "source": "e1468fb6",
+  "change": "Selected reference tokens and editable prose share one wrapping composer line, without visible @ signs or duplicate name text",
+  "frontendTests": {
+    "passed": 268,
+    "failed": 0
+  },
+  "productionBuild": "passed",
+  "browser": {
+    "fixture": "readme-workbench.html?reference-send=1; fictional in-memory requests only",
+    "resourceSend": {
+      "text": "请检查一下服务状态。",
+      "resourceIds": [
+        "order-api",
+        "gateway"
+      ]
+    },
+    "roleSend": {
+      "text": "@调查员 请检查状态。",
+      "references": [
+        {
+          "kind": "role",
+          "role_id": "investigator",
+          "label": "@调查员",
+          "start": 0,
+          "end": 4
+        }
+      ]
+    },
+    "atSelection": "Enter consumes query into one token without sending",
+    "backspaceAtStart": "removes last token",
+    "removeButton": "removes selected token and focuses composer",
+    "afterSend": "draft and tokens cleared",
+    "dark900px": {
+      "tokenText": "网关 · edge-01",
+      "draft": "请检查服务状态。",
+      "tokenTop": 672,
+      "inputTop": 669,
+      "horizontalOverflow": false,
+      "duplicatePanel": false
+    }
+  },
+  "screenshots": [
+    "lake-inline-reference-tokens.png",
+    "lake-inline-reference-tokens-dark.png"
+  ],
+  "macOS": {
+    "signedDevInstalled": true,
+    "nativeUIVerification": "not performed: existing desktop accessibility timeout; shared frontend verified in browser"
+  },
+  "windows": {
+    "staticChecks": true,
+    "devInstalled": true,
+    "devDataUnchanged": true,
+    "installedHashesMatch": true,
+    "nativeUIVerification": "not performed; shared frontend verified in browser"
+  }
+}

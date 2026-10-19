@@ -26,6 +26,8 @@ Human questions use official WorkflowAgent `RequestInput` / `ResumeOrRequestInpu
 
 An operation is durably marked dispatched before executor entry. Transport loss or process failure leaves an unknown outcome. Only an exact original command handle can reconcile a live command. Otherwise the UI requires a human verification result and note. This is a dispatch/reconciliation discipline, not a claim of exactly-once effects across arbitrary external systems. Cancellation does not assert that a remote command stopped.
 
+File adapters parse stdout separately from stderr, so SSH connection warnings cannot become file contents, search results or SHA256 fingerprints. Cached fingerprints must be valid SHA256 values; an invalid legacy fingerprint requires a fresh read. File precondition failures before the mutating executor starts are marked not executed. Existing unknown, handle-free file operations with either exact precondition error are reconciled to not executed with append-only evidence, excluding SRE task projections. This repair never retries an operation, infers success, or releases a genuine execution failure.
+
 ## Migration, backup and rollback
 
 History import preserves original business files and SDK events, validates call/result pairs, and uses a completion marker before activating an imported session. Incomplete records are explicitly marked unknown. Import never executes a historical call. A failed import remains inactive and can be retried.

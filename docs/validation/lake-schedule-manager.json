@@ -1,0 +1,65 @@
+{
+  "sourceCommit": "801d0d27d02c9079f92ba302d648bd63250aa66a",
+  "entry": "工作区 → 定时任务 (current project)",
+  "frontendTestsPassed": 259,
+  "typeScriptAndProductionBuild": "passed",
+  "raceEnabledBackendRegression": {
+    "web": "passed, 222.488s",
+    "ai": "passed, 81.211s"
+  },
+  "latestTargetedScheduleRegression": "passed",
+  "goVet": "passed",
+  "windowsScheduleRuntime": {
+    "passed": 7,
+    "architecture": "windows/amd64",
+    "isolatedTemporaryStores": true,
+    "testBinaryCleanup": "completed in separate process after test process exit"
+  },
+  "ui": {
+    "pauseResume": {
+      "patches": 2,
+      "created": 0,
+      "lastPatch": {
+        "enabled": true,
+        "expectedRevision": 5
+      },
+      "navigated": true,
+      "listReads": 7
+    },
+    "resultNavigation": {
+      "patches": 0,
+      "created": 0,
+      "lastPatch": null,
+      "navigated": true,
+      "listReads": 1
+    },
+    "narrow": {
+      "dialogWidth": 604,
+      "horizontalOverflow": false,
+      "viewport": 640
+    },
+    "emptyState": true,
+    "revisionConflictPreservedEnabledState": true,
+    "loadError": "演示：任务读取失败，请重试",
+    "keyboardFocusTrap": true,
+    "escapeRestoresWorkspaceFocus": true,
+    "createdRealSchedules": 0,
+    "scope": "Full App with fictional project and in-memory requests only"
+  },
+  "legacyHistory": "Existing last status retained; no invented past executions; future occurrences recorded with a 100-entry bound.",
+  "macDev": {
+    "installed": true,
+    "signatureVerified": true,
+    "normalRestartNeededToLoadNewBuild": true
+  },
+  "windowsDev": {
+    "installed": true,
+    "packageCheckPassed": true,
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "3ad3bbdafdf44f21b00c01791acd7bbdae169cb5b3015be764a58d34de1e800b",
+    "desktopSHA256": "f783d30374f52a0b0e9db038cf50c15afe18f020f39cd1fb64db77258162908f"
+  },
+  "releaseArtifacts": "unchanged",
+  "prerequisites": "Enabling workflow inspections requires project SRE collaboration and a configured Agent model; reminders and pausing remain available. Guard and failed-enable preservation verified on macOS and Windows x64."
+}

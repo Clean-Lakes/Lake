@@ -1,0 +1,239 @@
+{
+  "validatedAt": "2026-10-19T02:43:16.339576+00:00",
+  "cause": "later tools regrouped earlier reply nodes into a replacing two-line preview",
+  "fix": "one stable keyed row per reply/operation; new records append without reclassifying existing text; child-run controls preserved",
+  "frontendTestsPassed": 253,
+  "typecheck": "passed",
+  "productionBuild": "passed",
+  "browser": {
+    "room": {
+      "rows": [
+        {
+          "id": "note",
+          "kind": "reply",
+          "top": 148.5
+        },
+        {
+          "id": "operation-0",
+          "kind": "operation",
+          "top": 194.3984375
+        },
+        {
+          "id": "operation-1",
+          "kind": "operation",
+          "top": 242.796875
+        },
+        {
+          "id": "new-note-2",
+          "kind": "reply",
+          "top": 291.1953125
+        },
+        {
+          "id": "operation-2",
+          "kind": "operation",
+          "top": 337.09375
+        }
+      ],
+      "replacements": 0,
+      "removals": 0,
+      "positionChanges": 0,
+      "colorChanges": 0,
+      "scrollWrites": 0,
+      "scrollChanges": 0,
+      "animations": 3,
+      "errors": 0
+    },
+    "blackReply": {
+      "rows": [
+        {
+          "id": "note",
+          "kind": "reply",
+          "top": 148.5
+        },
+        {
+          "id": "operation-0",
+          "kind": "operation",
+          "top": 194.3984375
+        },
+        {
+          "id": "operation-1",
+          "kind": "operation",
+          "top": 242.796875
+        },
+        {
+          "id": "new-note-2",
+          "kind": "reply",
+          "top": 291.1953125
+        },
+        {
+          "id": "operation-2",
+          "kind": "operation",
+          "top": 337.09375
+        },
+        {
+          "id": "stream-reply",
+          "kind": "reply",
+          "top": 385.4921875
+        }
+      ],
+      "replacements": 0,
+      "removals": 0,
+      "positionChanges": 0,
+      "colorChanges": 0,
+      "scrollWrites": 0,
+      "scrollChanges": 0,
+      "animations": 4,
+      "errors": 0
+    },
+    "completion": {
+      "rows": [
+        {
+          "id": "note",
+          "kind": "reply",
+          "top": 148.5
+        },
+        {
+          "id": "operation-0",
+          "kind": "operation",
+          "top": 194.3984375
+        },
+        {
+          "id": "operation-1",
+          "kind": "operation",
+          "top": 242.796875
+        },
+        {
+          "id": "new-note-2",
+          "kind": "reply",
+          "top": 291.1953125
+        },
+        {
+          "id": "operation-2",
+          "kind": "operation",
+          "top": 337.09375
+        },
+        {
+          "id": "stream-reply",
+          "kind": "reply",
+          "top": 385.4921875
+        }
+      ],
+      "replacements": 0,
+      "removals": 0,
+      "positionChanges": 0,
+      "colorChanges": 0,
+      "scrollWrites": 0,
+      "scrollChanges": 0,
+      "animations": 0,
+      "errors": 0
+    },
+    "overflow": {
+      "rows": [
+        {
+          "id": "note",
+          "kind": "reply",
+          "top": 3120.5625
+        },
+        {
+          "id": "operation-0",
+          "kind": "operation",
+          "top": 3166.4609375
+        },
+        {
+          "id": "new-note-1",
+          "kind": "reply",
+          "top": 3214.859375
+        },
+        {
+          "id": "operation-1",
+          "kind": "operation",
+          "top": 3260.7578125
+        }
+      ],
+      "replacements": 0,
+      "removals": 0,
+      "positionChanges": 0,
+      "colorChanges": 0,
+      "scrollWrites": 26,
+      "scrollChanges": 26,
+      "animations": 2,
+      "errors": 0,
+      "tailGap": 0
+    },
+    "manualReading": {
+      "rows": [
+        {
+          "id": "note",
+          "kind": "reply",
+          "top": 3120.5625
+        },
+        {
+          "id": "operation-0",
+          "kind": "operation",
+          "top": 3166.4609375
+        },
+        {
+          "id": "new-note-1",
+          "kind": "reply",
+          "top": 3214.859375
+        },
+        {
+          "id": "operation-1",
+          "kind": "operation",
+          "top": 3260.7578125
+        },
+        {
+          "id": "new-note-2",
+          "kind": "reply",
+          "top": 3309.15625
+        },
+        {
+          "id": "operation-2",
+          "kind": "operation",
+          "top": 3355.0546875
+        }
+      ],
+      "replacements": 0,
+      "removals": 0,
+      "positionChanges": 0,
+      "colorChanges": 0,
+      "scrollWrites": 0,
+      "scrollChanges": 0,
+      "animations": 2,
+      "errors": 0
+    },
+    "narrowDark": {
+      "rows": [
+        {
+          "id": "note",
+          "kind": "reply",
+          "top": 148.5
+        },
+        {
+          "id": "operation-0",
+          "kind": "operation",
+          "top": 194.3984375
+        },
+        {
+          "id": "new-note-1",
+          "kind": "reply",
+          "top": 242.796875
+        },
+        {
+          "id": "operation-1",
+          "kind": "operation",
+          "top": 288.6953125
+        }
+      ],
+      "replacements": 0,
+      "removals": 0,
+      "positionChanges": 0,
+      "colorChanges": 0,
+      "scrollWrites": 0,
+      "scrollChanges": 0,
+      "animations": 2,
+      "errors": 0,
+      "overflow": false
+    }
+  }
+}

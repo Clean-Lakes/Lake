@@ -34,6 +34,9 @@ func (e *Engine) OperationOutcomes(id string) ([]OperationOutcome, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := e.reconcileFilePreflightOutcomes(context.Background(), id); err != nil {
+		return nil, err
+	}
 	var rows []nativeOperation
 	// Dispatched operations still have a live execution path and use the normal
 	// progress UI. Only effects whose outcome is unknown need human verification.
@@ -123,6 +126,9 @@ func (e *Engine) ResolveOperation(id, operationID, status, note string) error {
 // Only an exact durable handle can reconcile a command. Command text or a new
 // invocation is never used to infer that an older write succeeded.
 func (e *Engine) reconcileNativeOperations(ctx context.Context, id string) error {
+	if err := e.reconcileFilePreflightOutcomes(ctx, id); err != nil {
+		return err
+	}
 	store, err := e.adkStore()
 	if err != nil {
 		return err
@@ -171,6 +177,39 @@ func (e *Engine) reconcileNativeOperations(ctx context.Context, id string) error
 		}
 	}
 	return nil
+}
+
+// Older versions classified even a rejected file precondition as an unknown
+// effect. These exact errors are emitted before the mutating command starts.
+// Never infer success, repair a generic process error, or release a live handle.
+func (e *Engine) reconcileFilePreflightOutcomes(ctx context.Context, id string) error {
+	store, err := e.adkStore()
+	if err != nil {
+		return err
+	}
+	return store.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var rows []nativeOperation
+		if err := tx.Where("session_id = ? AND status = ? AND handle = ? AND tool IN ? AND result IN ?", id, "unknown", "", []string{"write", "edit", "multi_edit", "append", "delete"}, []string{"file changed since read; expected_hash mismatch", "file changed after preview; approval expired"}).Find(&rows).Error; err != nil {
+			return err
+		}
+		for _, row := range rows {
+			var identity RunIdentity
+			if json.Unmarshal([]byte(row.Identity), &identity) != nil || identity.TaskID != "" {
+				continue
+			}
+			now := time.Now()
+			updated := tx.Model(&nativeOperation{}).Where("id = ? AND status = ? AND handle = ? AND result = ?", row.ID, "unknown", "", row.Result).Updates(map[string]any{"status": "not_executed", "finished_at": now})
+			if updated.Error != nil {
+				return updated.Error
+			}
+			if updated.RowsAffected == 1 {
+				if err := e.appendNativeEvidence(tx, &nativeEvidence{OperationID: row.ID, SessionID: row.SessionID, CallID: row.CallID, Tool: row.Tool, Status: "preflight_reconciled_not_executed", Data: js(map[string]any{"reason": row.Result, "effect_dispatched": false}), At: now}); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
 }
 
 // Legacy SRE records have no canonical runtime row. New records share the

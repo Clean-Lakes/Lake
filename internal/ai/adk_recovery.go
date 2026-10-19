@@ -27,11 +27,17 @@ func (e *Engine) resumeNativeApproval(ctx context.Context, s *session, c Config,
 		if persistErr := e.persistNativeProjection(context.WithoutCancel(ctx), s); persistErr != nil && err == nil {
 			err = persistErr
 		}
+		s.mu.Lock()
+		s.finalizing = false
+		s.cancel = nil
+		e.notify(s, "done", map[string]any{"status": s.state.View.Status, "recovered": true})
+		s.mu.Unlock()
 	}()
 	err = e.runOfficialADK(ctx, s, &c, false, cancel)
 	cancel()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.finalizing = true
 	status := "completed"
 	if err != nil {
 		status = "failed"
@@ -41,7 +47,6 @@ func (e *Engine) resumeNativeApproval(ctx context.Context, s *session, c Config,
 		reconcile(&s.state, "ADK recovery interrupted; no replay")
 		s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "error", Content: redact(err.Error(), c), Status: status, At: timestamp()})
 	}
-	s.cancel = nil
 	s.decision = nil
 	s.decisions = nil
 	s.state.View.Pending = nil
@@ -59,7 +64,6 @@ func (e *Engine) resumeNativeApproval(ctx context.Context, s *session, c Config,
 		status = "failed"
 		s.state.View.Status = status
 	}
-	e.notify(s, "done", map[string]any{"status": status, "recovered": true})
 	return err
 }
 

@@ -1,0 +1,99 @@
+{
+  "live": {
+    "beforePhase": "148.433% 0px",
+    "afterPhase": "22.0253% 0px",
+    "name": "execution-text-sweep",
+    "restarts": 0,
+    "statusHeight": 24,
+    "statusBeforeReply": true,
+    "rows": [
+      {
+        "id": "note",
+        "kind": "reply",
+        "top": 204.5
+      },
+      {
+        "id": "operation-0",
+        "kind": "operation",
+        "top": 250.3984375
+      }
+    ],
+    "replacements": 0,
+    "removals": 0,
+    "positionChanges": 0,
+    "colorChanges": 0,
+    "scrollWrites": 0,
+    "scrollChanges": 0,
+    "animations": 0,
+    "errors": 0
+  },
+  "completion": {
+    "motion": "none",
+    "statusHeight": 24,
+    "statusBeforeReply": true,
+    "rows": [
+      {
+        "id": "note",
+        "kind": "reply",
+        "top": 204.5
+      },
+      {
+        "id": "operation-0",
+        "kind": "operation",
+        "top": 250.3984375
+      }
+    ],
+    "replacements": 0,
+    "removals": 0,
+    "positionChanges": 0,
+    "colorChanges": 0,
+    "scrollWrites": 0,
+    "scrollChanges": 0,
+    "animations": 0,
+    "errors": 0
+  },
+  "darkNarrow": {
+    "motion": "execution-text-sweep",
+    "statusHeight": 24,
+    "statusBeforeReply": true,
+    "rows": [
+      {
+        "id": "note",
+        "kind": "reply",
+        "top": 204.5
+      },
+      {
+        "id": "operation-0",
+        "kind": "operation",
+        "top": 250.3984375
+      }
+    ],
+    "replacements": 0,
+    "removals": 0,
+    "positionChanges": 0,
+    "colorChanges": 0,
+    "scrollWrites": 0,
+    "scrollChanges": 0,
+    "animations": 0,
+    "errors": 0
+  },
+  "sourceCommit": "3256831cff49a81c210be7a3470a0f969f4bfa1f",
+  "frontendTestsPassed": 257,
+  "typeScriptAndProductionBuild": "passed",
+  "data": "fictional fixture only",
+  "placement": "Each user message, then its own timing/state row, then assistant narration and resource operation rows. No timing footer.",
+  "reducedMotion": "CSS disables sweep and restores solid text; state gating covered by regression tests",
+  "macDev": {
+    "installed": true,
+    "signatureVerified": true,
+    "normalRestartRequiredToLoadNewFrontend": true
+  },
+  "windowsDev": {
+    "installed": true,
+    "packageCheckPassed": true,
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "5b8937445de5033fa2c3d7b46db194185d686ac72af61b21058afe84a32c8fc2",
+    "desktopSHA256": "1d36c59e4ef8e9b3061fd920273d6a338311b8f8a987738e3f822a27f9ded294"
+  }
+}

@@ -5,6 +5,7 @@ import {renderToStaticMarkup} from "react-dom/server";
 import type {AICard,AIView,ReplyTiming,SessionSnapshot} from "../../shared/contracts";
 import {turnStatus} from "../src/turnStatus";
 import {processDescription} from "../src/activity";
+import {ThinkingTimeline} from "../src/ThinkingTimeline";
 import {AITranscript} from "../src/AIPanel";
 const at="2026-10-14T03:00:00Z";
 const now=Date.parse(at)+49_000;
@@ -61,15 +62,51 @@ test("light process labels name the file and target, bound repeated operations a
  assert.equal(describe("# free -m\necho done"),"执行命令 · 测试主机");
  assert.equal(describe("echo uname; systemctl restart nginx"),"执行命令 · 测试主机","a mention and a service mutation are not a read-only inspection");
 });
-test("the single footer follows the reply, file changes and todos; activity filtering cannot borrow a newer turn state",()=>{
- const s={session:{id:"s"},messages:[{id:"u",sessionId:"s",role:"user",text:"检查",createdAt:at}],resources:[],actions:[],evidence:[],specialists:[],replyTimings:[timing],ai:{...view,todos:[{content:"步骤已完成",status:"completed"}],cards:[{...tool,status:"completed"},{id:"reply",type:"message",status:"running",content:"最后的回复",at},{id:"edit",type:"diff",status:"completed",title:"example.conf",at,data:{before:"before",after:"after"}}]}} as SessionSnapshot;
+test("the single metadata row precedes the reply, file changes and todos; activity filtering cannot borrow a newer turn state",()=>{
+ const s={session:{id:"s"},messages:[{id:"u",sessionId:"s",role:"user",text:"检查",createdAt:at}],resources:[],actions:[],evidence:[],specialists:[],replyTimings:[timing],ai:{...view,todos:[{content:"步骤已完成",status:"completed"}],cards:[{id:"todo",type:"operation",title:"todo_write",status:"completed",at,data:{arguments:{todos:[{content:"步骤已完成",status:"completed"}]}}},{...tool,status:"completed"},{id:"reply",type:"message",status:"running",content:"最后的回复",at},{id:"edit",type:"diff",status:"completed",title:"example.conf",at,data:{before:"before",after:"after"}}]}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
  assert.equal((html.match(/class="reply-duration /g)||[]).length,1);
- assert.ok(html.indexOf('class="reply-duration ')>html.indexOf("步骤已完成"));
- assert.ok(html.indexOf('class="reply-duration ')>html.indexOf("最后的回复"));
- assert.ok(html.indexOf('class="reply-duration ')>html.indexOf("file-changes"));
+ assert.ok(html.includes('步骤已完成'));
+ assert.ok(html.indexOf('class="reply-duration ')<html.indexOf("步骤已完成"));
+ assert.ok(html.indexOf('class="reply-duration ')<html.indexOf("最后的回复"));
+ assert.ok(html.indexOf('class="reply-duration ')<html.indexOf("file-changes"));
  s.messages.push({id:"v",sessionId:"s",role:"user",text:"新提问",createdAt:"2026-10-14T03:01:00Z"});
  s.replyTimings=undefined;s.ai!.cards=[{...tool,status:"completed"}];s.ai!.turnStartedAt=s.messages[1]!.createdAt;
  const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:"activity"}));
  assert.ok(!activity.includes("reply-duration-spinner"),"the only shown activity is historical");
+});
+
+test('each turn starts with its own metadata after the user message and before the reply',()=>{
+ const old='2026-10-14T02:00:00Z';
+ const snapshot={session:{id:'s'},messages:[{id:'old',sessionId:'s',role:'user',text:'历史问题',createdAt:old},{id:'u',sessionId:'s',role:'user',text:'当前问题',createdAt:at}],resources:[],actions:[],replyTimings:[{messageId:'old',startedAt:old,finishedAt:'2026-10-14T02:00:02Z',status:'completed'},{...timing,status:'completed',finishedAt:'2026-10-14T03:00:49Z'}],ai:{...view,status:'completed',cards:[{id:'old-reply',type:'message',status:'completed',content:'历史答复',at:old},{...tool,status:'completed'},{id:'reply',type:'message',status:'completed',content:'本轮答复',at}]}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ const older=html.slice(html.indexOf('id="conversation-turn-s-old"'),html.indexOf('id="conversation-turn-s-u"'));
+ const current=html.slice(html.indexOf('id="conversation-turn-s-u"'));
+ assert.ok(older.indexOf('历史问题')<older.indexOf('用时 2秒')&&older.indexOf('用时 2秒')<older.indexOf('历史答复'));
+ assert.ok(current.indexOf('当前问题')<current.indexOf('用时 49秒')&&current.indexOf('用时 49秒')<current.indexOf('本轮答复'));
+ assert.equal((html.match(/aria-label="回答耗时"/g)||[]).length,2);
+ assert.ok(!older.includes('49秒')&&!current.includes('用时 2秒'));
+});
+test('only actual running operations receive the stronger execution motion',()=>{
+ const render=(status:string,live:boolean)=>renderToStaticMarkup(createElement(ThinkingTimeline,{cards:[{...tool,status}],live,resourceRow:true}));
+ assert.ok(render('running',true).includes('is-executing'));
+ assert.ok(!render('running',false).includes('is-executing'));
+ for(const status of ['pending','failed','unknown','completed','background_running'])assert.ok(!render(status,true).includes('is-executing'),status);
+});
+
+test('the current normal progress row keeps moving while the model prepares its next step',()=>{
+ const s={session:{id:'s'},messages:[{id:'u',sessionId:'s',role:'user',text:'检查',createdAt:at}],resources:[],actions:[],replyTimings:[timing],ai:{...view,cards:[{...tool,status:'completed'},{id:'empty-thinking',type:'thinking',status:'running',at,content:''}]}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ assert.equal((html.match(/is-continuing/g)??[]).length,1);
+ assert.ok(!html.includes('is-executing'),'a completed tool is not labeled as executing');
+ s.ai!.cards.push({id:'reply',type:'message',status:'running',at,content:'根据结果继续分析'});
+ assert.ok(!renderToStaticMarkup(createElement(AITranscript,{snapshot:s})).includes('is-continuing'));
+ s.ai!.cards.pop();s.replyTimings=[{...timing,status:'completed',finishedAt:new Date(now).toISOString()}];s.ai!.status='completed';
+ assert.ok(!renderToStaticMarkup(createElement(AITranscript,{snapshot:s})).includes('is-continuing'));
+});
+test('waiting, failed and unknown progress rows never borrow the continuing motion',()=>{
+ for(const status of ['pending','failed','unknown','background_running']){
+  const html=renderToStaticMarkup(createElement(ThinkingTimeline,{cards:[{...tool,status}],live:true,continuing:true,resourceRow:true}));
+  assert.ok(!html.includes('is-continuing'),status);
+ }
 });

@@ -1,0 +1,485 @@
+{
+  "validatedAt": "2026-10-19T02:30:02.924960+00:00",
+  "durationMs": 360,
+  "offsetPx": 23,
+  "easing": "cubic-bezier(.22,1,.36,1)",
+  "behaviour": "new line only; retained DOM node; same identity updates and completion do not replay; reduced-motion skips animation",
+  "browser": {
+    "greyOperation": {
+      "actionAnimations": 0,
+      "actionReplacements": 0,
+      "errors": 0,
+      "height": 3280,
+      "heightChanges": 0,
+      "historyReplacements": 0,
+      "lineArrivals": [
+        {
+          "duration": 360,
+          "kind": "action"
+        }
+      ],
+      "motionSamples": [
+        {
+          "kind": "action",
+          "opacity": 0,
+          "y": 23
+        },
+        {
+          "kind": "action",
+          "opacity": 0,
+          "y": 23
+        },
+        {
+          "kind": "action",
+          "opacity": 0.103493,
+          "y": 20.6196
+        },
+        {
+          "kind": "action",
+          "opacity": 0.691537,
+          "y": 7.09465
+        },
+        {
+          "kind": "action",
+          "opacity": 0.938286,
+          "y": 1.41943
+        },
+        {
+          "kind": "action",
+          "opacity": 0.991929,
+          "y": 0.185625
+        },
+        {
+          "kind": "action",
+          "opacity": 0.999853,
+          "y": 0.00338052
+        },
+        {
+          "kind": "action",
+          "opacity": 0.99998,
+          "y": 0.000455078
+        },
+        {
+          "kind": "action",
+          "opacity": 0.999997,
+          "y": 7.21672e-05
+        },
+        {
+          "kind": "action",
+          "opacity": 1,
+          "y": 3.46596e-07
+        }
+      ],
+      "replyAnimations": 0,
+      "replyReplacements": 0,
+      "scrollChanges": 0,
+      "scrollEvents": 0,
+      "scrollWrites": 0,
+      "snapshots": 3,
+      "subscriptions": 1,
+      "top": 2667.5,
+      "updates": 1
+    },
+    "sameLine": {
+      "actionAnimations": 0,
+      "actionReplacements": 0,
+      "errors": 0,
+      "height": 3280,
+      "heightChanges": 0,
+      "historyReplacements": 0,
+      "lineArrivals": [],
+      "motionSamples": [],
+      "replyAnimations": 0,
+      "replyReplacements": 0,
+      "scrollChanges": 0,
+      "scrollEvents": 0,
+      "scrollWrites": 0,
+      "snapshots": 4,
+      "subscriptions": 1,
+      "top": 2667.5,
+      "updates": 1
+    },
+    "greyNarration": {
+      "actionAnimations": 0,
+      "actionReplacements": 0,
+      "errors": 0,
+      "height": 3280,
+      "heightChanges": 0,
+      "historyReplacements": 0,
+      "lineArrivals": [
+        {
+          "duration": 360,
+          "kind": "narration"
+        },
+        {
+          "duration": 360,
+          "kind": "action"
+        }
+      ],
+      "motionSamples": [
+        {
+          "kind": "action",
+          "opacity": 0,
+          "y": 23
+        },
+        {
+          "kind": "narration",
+          "opacity": 0,
+          "y": 23
+        },
+        {
+          "kind": "action",
+          "opacity": 0,
+          "y": 23
+        },
+        {
+          "kind": "action",
+          "opacity": 0.375751,
+          "y": 14.3577
+        },
+        {
+          "kind": "action",
+          "opacity": 0.690739,
+          "y": 7.113
+        },
+        {
+          "kind": "action",
+          "opacity": 0.857807,
+          "y": 3.27043
+        },
+        {
+          "kind": "action",
+          "opacity": 0.93784,
+          "y": 1.42969
+        },
+        {
+          "kind": "action",
+          "opacity": 0.975715,
+          "y": 0.558547
+        },
+        {
+          "kind": "action",
+          "opacity": 0.991991,
+          "y": 0.184208
+        },
+        {
+          "kind": "action",
+          "opacity": 0.998186,
+          "y": 0.0417281
+        },
+        {
+          "kind": "action",
+          "opacity": 0.999852,
+          "y": 0.00339383
+        },
+        {
+          "kind": "narration",
+          "opacity": 0.999997,
+          "y": 7.09483e-05
+        },
+        {
+          "kind": "action",
+          "opacity": 1,
+          "y": 3.13476e-07
+        },
+        {
+          "kind": "narration",
+          "opacity": 1,
+          "y": 3.13476e-07
+        }
+      ],
+      "replyAnimations": 0,
+      "replyReplacements": 0,
+      "scrollChanges": 0,
+      "scrollEvents": 0,
+      "scrollWrites": 0,
+      "snapshots": 5,
+      "subscriptions": 1,
+      "top": 2667.5,
+      "updates": 1
+    },
+    "blackReply": {
+      "actionAnimations": 0,
+      "actionReplacements": 0,
+      "errors": 0,
+      "height": 3325,
+      "heightChanges": 2,
+      "historyReplacements": 0,
+      "lineArrivals": [],
+      "motionSamples": [
+        {
+          "kind": "reply",
+          "opacity": 0,
+          "y": 23
+        },
+        {
+          "kind": "reply",
+          "opacity": 0.10234,
+          "y": 20.6462
+        },
+        {
+          "kind": "reply",
+          "opacity": 0.195867,
+          "y": 18.4951
+        },
+        {
+          "kind": "reply",
+          "opacity": 0.731659,
+          "y": 6.17183
+        },
+        {
+          "kind": "reply",
+          "opacity": 0.947909,
+          "y": 1.1981
+        },
+        {
+          "kind": "reply",
+          "opacity": 0.99377,
+          "y": 0.143282
+        },
+        {
+          "kind": "reply",
+          "opacity": 0.999931,
+          "y": 0.00157699
+        },
+        {
+          "kind": "reply",
+          "opacity": 0.99998,
+          "y": 0.00047018
+        },
+        {
+          "kind": "reply",
+          "opacity": 0.999996,
+          "y": 9.10522e-05
+        },
+        {
+          "kind": "reply",
+          "opacity": 1,
+          "y": 3.44157e-07
+        }
+      ],
+      "replyAnimations": 1,
+      "replyReplacements": 0,
+      "scrollChanges": 23,
+      "scrollEvents": 23,
+      "scrollWrites": 23,
+      "snapshots": 6,
+      "subscriptions": 1,
+      "top": 2713,
+      "updates": 1
+    },
+    "completion": {
+      "actionAnimations": 0,
+      "actionReplacements": 0,
+      "errors": 0,
+      "height": 3325,
+      "heightChanges": 0,
+      "historyReplacements": 0,
+      "lineArrivals": [],
+      "motionSamples": [],
+      "replyAnimations": 0,
+      "replyReplacements": 0,
+      "scrollChanges": 0,
+      "scrollEvents": 0,
+      "scrollWrites": 0,
+      "snapshots": 7,
+      "subscriptions": 1,
+      "top": 2713,
+      "updates": 1
+    },
+    "firstActionAfterRestoredNarration": {
+      "actionAnimations": 0,
+      "actionReplacements": 0,
+      "errors": 0,
+      "height": 3280,
+      "heightChanges": 1,
+      "historyReplacements": 0,
+      "lineArrivals": [
+        {
+          "duration": 360,
+          "kind": "action"
+        }
+      ],
+      "motionSamples": [
+        {
+          "kind": "action",
+          "opacity": 0,
+          "y": 23
+        },
+        {
+          "kind": "action",
+          "opacity": 0,
+          "y": 23
+        },
+        {
+          "kind": "action",
+          "opacity": 0.101559,
+          "y": 20.6642
+        },
+        {
+          "kind": "action",
+          "opacity": 0.691199,
+          "y": 7.10242
+        },
+        {
+          "kind": "action",
+          "opacity": 0.938336,
+          "y": 1.41827
+        },
+        {
+          "kind": "action",
+          "opacity": 0.992011,
+          "y": 0.18375
+        },
+        {
+          "kind": "action",
+          "opacity": 0.999841,
+          "y": 0.00364772
+        },
+        {
+          "kind": "action",
+          "opacity": 0.99998,
+          "y": 0.000452113
+        },
+        {
+          "kind": "action",
+          "opacity": 0.999996,
+          "y": 9.27271e-05
+        },
+        {
+          "kind": "action",
+          "opacity": 1,
+          "y": 6.17598e-07
+        }
+      ],
+      "replyAnimations": 0,
+      "replyReplacements": 0,
+      "scrollChanges": 17,
+      "scrollEvents": 17,
+      "scrollWrites": 17,
+      "snapshots": 3,
+      "subscriptions": 1,
+      "top": 2667.5,
+      "updates": 1
+    },
+    "narrowDark": {
+      "metrics": {
+        "actionAnimations": 0,
+        "actionReplacements": 0,
+        "errors": 0,
+        "height": 3280,
+        "heightChanges": 0,
+        "historyReplacements": 1,
+        "lineArrivals": [
+          {
+            "duration": 360,
+            "kind": "narration"
+          },
+          {
+            "duration": 360,
+            "kind": "action"
+          }
+        ],
+        "motionSamples": [
+          {
+            "kind": "action",
+            "opacity": 0,
+            "y": 23
+          },
+          {
+            "kind": "narration",
+            "opacity": 0,
+            "y": 23
+          },
+          {
+            "kind": "action",
+            "opacity": 0,
+            "y": 23
+          },
+          {
+            "kind": "action",
+            "opacity": 0.375993,
+            "y": 14.3522
+          },
+          {
+            "kind": "action",
+            "opacity": 0.689767,
+            "y": 7.13536
+          },
+          {
+            "kind": "action",
+            "opacity": 0.857876,
+            "y": 3.26885
+          },
+          {
+            "kind": "action",
+            "opacity": 0.938391,
+            "y": 1.41702
+          },
+          {
+            "kind": "action",
+            "opacity": 0.975259,
+            "y": 0.569033
+          },
+          {
+            "kind": "action",
+            "opacity": 0.991997,
+            "y": 0.18407
+          },
+          {
+            "kind": "action",
+            "opacity": 0.998188,
+            "y": 0.041683
+          },
+          {
+            "kind": "action",
+            "opacity": 0.999854,
+            "y": 0.0033561
+          },
+          {
+            "kind": "narration",
+            "opacity": 0.999997,
+            "y": 7.04086e-05
+          },
+          {
+            "kind": "action",
+            "opacity": 1,
+            "y": 2.994e-07
+          },
+          {
+            "kind": "narration",
+            "opacity": 1,
+            "y": 2.994e-07
+          }
+        ],
+        "replyAnimations": 0,
+        "replyReplacements": 0,
+        "scrollChanges": 0,
+        "scrollEvents": 0,
+        "scrollWrites": 0,
+        "snapshots": 3,
+        "subscriptions": 1,
+        "top": 2670.5,
+        "updates": 1
+      },
+      "overflow": false
+    }
+  },
+  "frontendTests": 253,
+  "typecheck": "passed",
+  "productionBuild": "passed",
+  "devBuilds": {
+    "sourceCommit": "84d0257a",
+    "macOS": "signed, installed, reopened; running backend serves new CSS and JS",
+    "windows": {
+      "packageValidation": "passed: 9718 entries",
+      "install": {
+        "devDataUnchanged": true,
+        "installerExitCode": 0,
+        "backendSHA256": "918650dee58e848e13caccc79afefd98a48221d0779fc5c2528efab4cb4acea7",
+        "desktopSHA256": "71b15e4a547271813dbdc57ec82a3eae08a1b9b20030ad18f882dfc9ce2e3d91"
+      },
+      "installedHashesMatchPackage": true
+    }
+  }
+}

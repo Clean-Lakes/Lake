@@ -63,7 +63,7 @@ func (e *Engine) readFilePage(ctx context.Context, c Config, a map[string]any) (
 			if num(r["exitCode"], 0) != 0 || r["truncated"] == true {
 				return nil, errors.New("image read failed or exceeds size limit")
 			}
-			data, err = base64.StdEncoding.DecodeString(strings.Join(strings.Fields(str(r["output"])), ""))
+			data, err = base64.StdEncoding.DecodeString(strings.Join(strings.Fields(runtimeStdout(r)), ""))
 			if err != nil {
 				return nil, err
 			}
@@ -106,7 +106,7 @@ func (e *Engine) readFilePage(ctx context.Context, c Config, a map[string]any) (
 		if r["truncated"] == true {
 			return nil, errors.New("PDF text exceeds output limit; select a smaller pages range")
 		}
-		return textReadPage(path, str(r["output"]), offset, limit, byteOffset, "", c)
+		return textReadPage(path, runtimeStdout(r), offset, limit, byteOffset, "", c)
 	}
 	if format != "text" {
 		return nil, errors.New("unsupported read format")
@@ -145,9 +145,9 @@ func (e *Engine) readFilePage(ctx context.Context, c Config, a map[string]any) (
 		return nil, err
 	}
 	contentHash := ""
-	fields := strings.Fields(str(hashResult["output"]))
-	if num(hashResult["exitCode"], 0) == 0 && len(fields) > 0 {
-		contentHash = fields[0]
+	fields := strings.Fields(runtimeStdout(hashResult))
+	if num(hashResult["exitCode"], 0) == 0 && len(fields) > 0 && validFileHash(fields[0]) {
+		contentHash = strings.ToLower(fields[0])
 	}
 	cmd := fmt.Sprintf("sed -n '%d,%dp' %s", offset+1, offset+limit+1, quote(path))
 	if byteOffset > 0 {
@@ -160,7 +160,7 @@ func (e *Engine) readFilePage(ctx context.Context, c Config, a map[string]any) (
 	if num(r["exitCode"], 0) != 0 {
 		return nil, errors.New("file read failed")
 	}
-	text := str(r["output"])
+	text := runtimeStdout(r)
 	if strings.IndexByte(text, 0) >= 0 || !utf8.ValidString(text) {
 		return nil, errors.New("binary file cannot be read as text")
 	}
@@ -181,6 +181,18 @@ func (e *Engine) readFilePage(ctx context.Context, c Config, a map[string]any) (
 		out["source_truncated"] = true
 	}
 	return out, nil
+}
+
+func validFileHash(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, ch := range value {
+		if !(ch >= '0' && ch <= '9' || ch >= 'a' && ch <= 'f' || ch >= 'A' && ch <= 'F') {
+			return false
+		}
+	}
+	return true
 }
 func localFileRuntime(c Config, a map[string]any) bool {
 	runtime := str(a["runtime"])

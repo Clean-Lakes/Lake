@@ -1,6 +1,12 @@
 type ScrollBox = Pick<HTMLElement, "scrollTop" | "scrollHeight" | "clientHeight">;
 type Frames = { request: (callback: FrameRequestCallback) => number; cancel: (id: number) => void };
 
+// DOM heights are integers, but scrollTop and the clamped tail may be fractional.
+// Resume following only at the actual tail, including this rounding tolerance.
+export function atConversationTail(box: ScrollBox) {
+  return Math.abs(Math.max(0, box.scrollHeight - box.clientHeight) - box.scrollTop) < 2;
+}
+
 // Snapshot arrival changes the destination, not the animation cadence. All
 // geometry reads and the single scroll write are coalesced into display frames.
 export class FollowScroll {
@@ -13,7 +19,7 @@ export class FollowScroll {
     if (!this.following() || this.frame !== null) return;
     // Cursor/activity updates are not necessarily new content. Avoid starting
     // an animation and writing scrollTop again when already at the tail.
-    if (Math.abs(Math.max(0, this.box.scrollHeight - this.box.clientHeight) - this.box.scrollTop) < 0.5) return;
+    if (atConversationTail(this.box)) return;
     this.frame = this.frames.request(this.tick);
   }
   jump() {

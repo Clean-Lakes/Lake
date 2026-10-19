@@ -1,0 +1,31 @@
+{
+  "change": "Resource folders default to collapsed; explicit expansions persist per project using a new preference key",
+  "source": "c55fa6d7",
+  "frontendTests": {
+    "passed": 265,
+    "failed": 0
+  },
+  "productionBuild": "passed",
+  "browser": {
+    "fixture": "readme-workbench.html (fictional, read-only data)",
+    "initialFolders": {
+      "应用服务": "collapsed",
+      "数据服务": "collapsed"
+    },
+    "explicitExpansionAfterReload": "preserved",
+    "search": "PostgreSQL temporarily reveals 数据服务 and matching resource",
+    "clearSearch": "both folders collapsed again"
+  },
+  "macOS": {
+    "signedDevInstalled": true,
+    "nativeUIVerification": "unavailable: desktop accessibility timed out; installed app requires normal restart"
+  },
+  "screenshot": "lake-resource-folders-collapsed.png",
+  "windows": {
+    "staticPackageChecks": true,
+    "devInstalled": true,
+    "installedHashesMatch": true,
+    "devDataUnchanged": true,
+    "nativeUIVerification": "not performed; shared UI verified in isolated browser fixture"
+  }
+}

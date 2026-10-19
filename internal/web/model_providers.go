@@ -625,6 +625,10 @@ func (m *Models) ProviderInput(id string, data Object) *ai.Model {
 func (m *Models) ConfiguredProviderModels() (Object, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.configuredProviderModelsLocked()
+}
+
+func (m *Models) configuredProviderModelsLocked() (Object, bool) {
 	models, selected, _ := m.magpieModelsLocked()
 	entries := []Object{}
 	names := []string{}

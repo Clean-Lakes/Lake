@@ -261,7 +261,7 @@ func (e *Engine) remoteSearch(ctx context.Context, c Config, name string, a map[
 	if code := num(result["exitCode"], 0); code != 0 && code != 1 {
 		return nil, errors.New("file search failed")
 	}
-	output := strings.TrimSuffix(str(result["output"]), "\n")
+	output := strings.TrimSuffix(runtimeStdout(result), "\n")
 	records := []string{}
 	if output != "" {
 		records = strings.Split(output, "\n")

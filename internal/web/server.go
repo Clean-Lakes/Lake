@@ -364,6 +364,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if b.sreRoute(w, r, name, method) {
 		return
 	}
+	if b.scheduleRoute(w, r, name, method) {
+		return
+	}
 	if b.workflowRoute(w, r, name, method) {
 		return
 	}
@@ -413,6 +416,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		reply(w, 200, Object{"modelId": ai.ModelIdentity(*model), "limit": model.ContextLimit, "source": model.ContextLimitSource})
+		return
+	}
+	if name == "/api/settings/model/state" && method == "GET" {
+		reply(w, 200, b.Models.SyncState())
 		return
 	}
 	if name == "/api/settings/model/available" && method == "GET" {

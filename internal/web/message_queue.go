@@ -14,6 +14,7 @@ type humanMessage struct {
 	IgnoreProjectMemory bool
 	Images              []ai.ImageAttachment
 	References          []Object
+	Mentions            []Object
 	Files               []Object
 	Reuse               any
 }
@@ -74,6 +75,7 @@ func (b *Server) validateHumanMessage(id string, data Object) humanMessage {
 		message.References = append(message.References, Object{"asset_ref": ref, "name": resource["name"], "type": resource["kind"]})
 	}
 	message.References = append(message.References, b.contextReferences(id, message.Text, data["references"])...)
+	message.Mentions = validatedMessageMentions(message.Text, data["mentions"], message.References)
 	if value, exists := data["files"]; exists {
 		if rows, valid := value.([]any); !valid || len(objects(value)) != len(rows) {
 			fail(400, "附件须为数组")
@@ -173,6 +175,7 @@ func (b *Server) submitHumanMessage(id string, data Object) Object {
 			}
 			payload["references"] = append(context, selectedExtensions...)
 		}
+		payload["mentions"] = message.Mentions
 		if message.Reuse != nil {
 			payload["terminalReuse"] = message.Reuse
 		}
@@ -187,7 +190,7 @@ func (b *Server) submitHumanMessage(id string, data Object) Object {
 	}
 	b.bindManualTerminalForHuman(id, message.References, message.Reuse)
 	titleInput := b.humanMessageTitle(message)
-	result, pendingTitle := b.Store.BeginWithFilesAndNaming(id, message.Text, message.Images, publicMessageFiles(message.Files), titleInput)
+	result, pendingTitle := b.Store.BeginWithMentionsAndNaming(id, message.Text, message.Images, publicMessageFiles(message.Files), message.Mentions, titleInput)
 	if pendingTitle && shouldGenerateSessionTitle(titleInput) {
 		b.generateSessionTitle(id, titleInput)
 	}
@@ -219,7 +222,7 @@ func (b *Server) dispatchMessageQueueLocked(id string) {
 	}
 	b.bindManualTerminalForHuman(id, message.References, message.Reuse)
 	titleInput := b.humanMessageTitle(message)
-	_, pendingTitle := b.Store.BeginQueuedMessageWithNaming(id, stringOf(head["id"]), message.Text, message.Images, titleInput, publicMessageFiles(message.Files))
+	_, pendingTitle := b.Store.BeginQueuedMessageWithMentions(id, stringOf(head["id"]), message.Text, message.Images, titleInput, publicMessageFiles(message.Files), message.Mentions)
 	if pendingTitle && shouldGenerateSessionTitle(titleInput) {
 		b.generateSessionTitle(id, titleInput)
 	}
@@ -274,6 +277,12 @@ func (b *Server) messageQueueRoute(w http.ResponseWriter, r *http.Request, id st
 		if data["references"] != nil {
 			data["references"] = b.contextReferences(id, stringOf(data["text"]), data["references"])
 		}
+		refs := objects(data["references"])
+		for _, ref := range stringsOf(data["resourceIds"]) {
+			resource := b.Store.Resource(ref)
+			refs = append(refs, Object{"asset_ref": ref, "name": resource["name"], "type": resource["kind"]})
+		}
+		data["mentions"] = validatedMessageMentions(stringOf(data["text"]), data["mentions"], refs)
 	}
 	if data["operation"] == "reorder" {
 		if _, ok := data["ids"].([]any); !ok {

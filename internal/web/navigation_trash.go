@@ -55,6 +55,9 @@ func (s *Store) ArchiveNavigation(kind, id string) {
 		switch kind {
 		case "resource":
 			resource := s.resource(id)
+			if resource["kind"] == "local" {
+				fail(409, "本地终端为内置入口，不能删除")
+			}
 			project := stringOf(resource["projectId"])
 			s.projectIdleForDeletion(project)
 			s.resourceIdleForDeletion(id)
@@ -130,7 +133,7 @@ func (s *Store) RestoreNavigation(kind, id string) {
 			s.treeParent(project, parent, "")
 			s.exec("INSERT INTO resourceTree(id,projectId,parentId,kind,name,position) VALUES(?,?,?,'folder',?,?)", id, project, parentValue, item["name"], len(s.treeChildren(project, parent, "")))
 			for _, child := range stringsOf(payload["childrenIds"]) {
-				if s.row("SELECT id FROM resourceTree WHERE id=? AND projectId=? AND COALESCE(parentId,'')=?", child, project, parent) != nil {
+				if node := s.row("SELECT * FROM resourceTree WHERE id=? AND projectId=? AND COALESCE(parentId,'')=?", child, project, parent); node != nil && !s.builtinLocalNode(node) {
 					height := integer(s.row("WITH RECURSIVE subtree(id,depth) AS (SELECT id,1 FROM resourceTree WHERE id=? UNION ALL SELECT n.id,t.depth+1 FROM resourceTree n JOIN subtree t ON n.parentId=t.id) SELECT MAX(depth) AS height FROM subtree", child)["height"])
 					if s.treeParent(project, parent, "")+1+height <= 32 {
 						s.exec("UPDATE resourceTree SET parentId=? WHERE id=?", id, child)
@@ -156,6 +159,10 @@ func (s *Store) RestoreNavigation(kind, id string) {
 			s.treeOrder(ordered)
 		}
 		s.exec("DELETE FROM navigationTrash WHERE kind=? AND id=?", kind, id)
+		if kind == "project" {
+			s.ensureBuiltinLocalResources(project)
+			s.seedResourceTree()
+		}
 		for _, session := range s.rows("SELECT id FROM sessions WHERE projectId=?", project) {
 			s.event(stringOf(session["id"]), "session")
 		}

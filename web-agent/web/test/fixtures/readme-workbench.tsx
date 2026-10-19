@@ -22,6 +22,7 @@ const resources=[
  ['redis','缓存 · Redis','redis','会话与热点缓存'],
  ['docker','容器 · app-01','docker','应用容器'],
 ].map(([id,name,kind,description])=>({id,projectId:project.id,name,kind,description,status:'available'})) as Resource[];
+if(new URLSearchParams(location.search).has('scrollbar'))resources.push(...Array.from({length:30},(_,i)=>({id:`demo-host-${i}`,projectId:project.id,name:`演示主机 ${i+1}`,kind:'ssh' as const,description:'滚动条验证用虚构资源',status:'available' as const})));
 const sessions=['订单服务发布回滚','网关延迟排查','数据库连接数巡检'].map((title,i)=>({id:`demo-session-${i}`,projectId:project.id,title,status:'completed',resourceIds:resources.map(r=>r.id),createdAt:at(0),updatedAt:at(30-i),icon:'chat',tags:[]})) as WorkSession[];
 const session=sessions[0]!;
 const tree=[{id:'apps',projectId:project.id,parentId:null,kind:'folder',name:'应用服务',resourceId:null,position:0},{id:'data',projectId:project.id,parentId:null,kind:'folder',name:'数据服务',resourceId:null,position:1},...resources.map((r,i)=>({id:'node-'+r.id,projectId:project.id,parentId:['postgres','redis'].includes(r.id)?'data':'apps',kind:'resource',name:r.name,resourceId:r.id,position:i}))];
@@ -43,10 +44,23 @@ const snapshot={session,resources,resourceTree:tree,messages:[{id:'demo-question
 const model={id:'demo-model',providerId:'demo-provider',providerName:'DeepSeek',modelId:'deepseek-chat',displayName:'DeepSeek',protocol:'openai'};
 const catalog={projects:[project],sessions,resources,resourceTree:tree,tags:[],terminals:[]};
 const bootstrap={authenticated:true,modelConfigured:true,modelName:'DeepSeek',modelId:model.modelId,modelSelection:model,terminalMode:'pty',supportsImageInput:false,aiRuntime:'go'};
+const sentTagsProof=new URLSearchParams(location.search).has('sent-tags');
+if(sentTagsProof){
+ snapshot.messages=[{id:'legacy-tags',sessionId:session.id,role:'user',text:'@订单服务 · order-api和@网关 · edge-01检查状态',createdAt:at(31)},{id:'plain-tags',sessionId:session.id,role:'user',text:'字面文字 @订单服务 · order-api',mentions:[],createdAt:at(32)}];
+ snapshot.ai!.agentRuns=[];snapshot.sre={enabled:false,tasks:[]};snapshot.replyTimings=[];
+}
+const referenceProof=new URLSearchParams(location.search).has('reference-send');
+const sentProof=document.createElement('output');sentProof.id='reference-send-proof';sentProof.hidden=true;sentProof.textContent='[]';if(referenceProof)document.body.appendChild(sentProof);
 const fetchOriginal=window.fetch.bind(window);
 window.fetch=async(input,init)=>{
  const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href);
  if(!url.pathname.startsWith('/api/'))return fetchOriginal(input,init);
+ if(sentTagsProof&&init?.method==='POST'&&url.pathname.endsWith('/messages')){
+  const payload=JSON.parse(String(init.body));
+  snapshot.messages.push({id:'sent-tags-'+snapshot.messages.length,sessionId:session.id,role:'user',text:payload.text,mentions:payload.mentions,createdAt:at(33+snapshot.messages.length)});snapshot.cursor++;
+  return new Response('{}',{headers:{'Content-Type':'application/json'}});
+ }
+ if(referenceProof&&init?.method==='POST'&&url.pathname.endsWith('/messages')){const sent=JSON.parse(sentProof.textContent||'[]');sent.push(JSON.parse(String(init.body)));sentProof.textContent=JSON.stringify(sent);return new Response('{}',{headers:{'Content-Type':'application/json'}});}
  if((init?.method??'GET')!=='GET')return new Response(JSON.stringify({error:'README 演示只提供展示，不执行操作'}),{status:405,headers:{'Content-Type':'application/json'}});
  let value:unknown;
  const path=url.pathname;

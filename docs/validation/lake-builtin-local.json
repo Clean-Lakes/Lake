@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "af3b2e95f3d8026f55b4f7a25984fa8f086f1235",
+  "scope": "Persistent built-in local terminal entry per project",
+  "behavior": [
+    "Local resources remain at the root before folders with a quiet 内置 label",
+    "No local drag handle, move menu, deletion action or bulk deletion selection",
+    "Store/API reject local deletion and movement, including stale clients",
+    "Startup creates a missing local resource, restores old trashed entries, and promotes nested entries while retaining existing IDs, names, shell settings and history",
+    "Restoring old folders excludes local resources; archived projects remain archived, with local recovery on project restore",
+    "Normal terminal admission, independent connections, shell editing and adding to conversation remain available"
+  ],
+  "checks": [
+    "285 frontend tests passed; updated navigation render assertions also passed separately",
+    "TypeScript and production web build passed",
+    "Full internal/web race suite passed in 213.825 seconds; go vet passed",
+    "Two builtin protection/upgrade regression tests executed and passed in Windows VM",
+    "Real App fixture verified local root projection from a legacy nested node, menu and right-click deletion removal, preserved open/new/config actions, no drag handle or checkbox in bulk mode, light/dark themes",
+    "Signed macOS Dev installed; installed host/backend match packaged app",
+    "Windows x64 package verified and Dev installed; installed executables match package and installation preserved Dev data metadata"
+  ],
+  "macOSInstall": {
+    "Contents/MacOS/Lake": "7e0080fd4c0dd2f0daaaab5d1f9877c7ef86c0e02eb612d07a1d838556a3577d",
+    "Contents/Resources/lake": "a2d0d8e7161780fbff564ddfce7641f62f77d22098e96f74462cbfd8ccb88213"
+  },
+  "windowsInstall": {
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "f43eff5a68119e205ac3160780baebfab7364d898f243a5c88b2ddf1344156bc",
+    "desktopSHA256": "f9e3fe3be6024e4c3fb5e6c316e2903bc417bc12620ebe3262f9df6577ee811b"
+  },
+  "screenshots": [
+    "lake-builtin-local-root.png",
+    "lake-builtin-local-menu.png",
+    "lake-builtin-local-dark.png"
+  ],
+  "limitations": [
+    "UI verification used fictional API state and performed no terminal execution",
+    "Automatic repair on real Dev data runs when the user normally quits and reopens the updated app; tests used isolated stores",
+    "Legacy duplicate local IDs are preserved rather than merged or discarded"
+  ]
+}

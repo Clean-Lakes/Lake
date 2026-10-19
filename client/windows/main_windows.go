@@ -26,7 +26,7 @@ import (
 
 // Release builds inject the repository VERSION through -ldflags and leave
 // main.development empty; local dev builds set both (scripts/build_lake_windows.py --dev).
-var version = "0.3.18"
+var version = "0.3.19"
 
 func message(text string) {
 	title, _ := windows.UTF16PtrFromString("Lake")
@@ -91,11 +91,15 @@ func run() error {
 		return fmt.Errorf("需要 Microsoft Edge WebView2 Runtime，请运行 Lake 安装程序，或从 Microsoft 官网安装后重试")
 	}
 	digest := sha256.Sum256([]byte(home))
+	marker := fmt.Sprintf("CleanLakes.Workbench.%x", digest[:12])
 	name, _ := windows.UTF16PtrFromString(fmt.Sprintf("Local\\CleanLakes-%x", digest[:12]))
 	mutex, err := windows.CreateMutex(nil, false, name)
 	if err == windows.ERROR_ALREADY_EXISTS {
 		if mutex != 0 {
 			windows.CloseHandle(mutex)
+		}
+		if activateExistingWindow(marker) {
+			return nil
 		}
 		return fmt.Errorf("Lake 已在运行，请切换到已有窗口")
 	}
@@ -133,6 +137,11 @@ func run() error {
 	if err = extendWorkbenchIntoTitleBar(uintptr(window.Window())); err != nil {
 		return err
 	}
+	background, err := installBackgroundWindow(uintptr(window.Window()), marker, window.Terminate)
+	if err != nil {
+		return err
+	}
+	defer background.close()
 	if err = installWindowsChrome(window, endpoint); err != nil {
 		return fmt.Errorf("无法初始化窗口操作")
 	}

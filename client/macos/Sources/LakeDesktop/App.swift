@@ -1,6 +1,7 @@
 import AppKit
 import WebKit
 import LakeUpdateCore
+import LakeDesktopCore
 
 @MainActor private final class WorkbenchWindow: NSWindow {
     var shouldStartDrag: (NSEvent) -> Bool = { _ in false }
@@ -183,6 +184,8 @@ import LakeUpdateCore
             appMenu.addItem(withTitle: "检测更新…", action: #selector(checkUpdates), keyEquivalent: "")
         }
         appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "显示工作台", action: #selector(showWorkbench), keyEquivalent: "")
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "退出 " + profile.name, action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         menu.addItem(appItem)
@@ -200,8 +203,13 @@ import LakeUpdateCore
     @objc private func about() {
         NSApp.orderFrontStandardAboutPanel(options: [.applicationName: profile.name, .applicationVersion: updater.state.currentVersion])
     }
+    @objc private func showWorkbench() {
+        guard let window, !terminating else { return }
+        BackgroundWindow.show(window)
+    }
     @objc private func checkUpdates() {
         guard sameOrigin(webView?.url) else { return }
+        showWorkbench()
         webView.evaluateJavaScript("window.dispatchEvent(new Event('lake-open-updates'));", completionHandler: nil)
     }
     private func renderUpdate(_ state: UpdateState) {
@@ -229,6 +237,7 @@ import LakeUpdateCore
     }
     @objc private func updateAccessibilityChanged() { renderUpdate(updater.state) }
     func applicationDidBecomeActive(_ notification: Notification) {
+        if window != nil && !window.isVisible { showWorkbench() }
         guard ready else { return }
         renderUpdate(updater.state)
         Task { await updater.checkIfDue() }
@@ -271,7 +280,14 @@ import LakeUpdateCore
         let height = max(40, window.frame.height - window.contentLayoutRect.height)
         webView.evaluateJavaScript("document.documentElement.style.setProperty('--lake-titlebar-height', '\(height)px'); window.dispatchEvent(new Event('lake-chrome-resize'));", completionHandler: nil)
     }
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        BackgroundWindow.shouldClose(sender, terminating: terminating)
+    }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showWorkbench()
+        return false
+    }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard backend.process?.isRunning == true else { return .terminateNow }
         if terminating { return .terminateCancel }
@@ -283,6 +299,7 @@ import LakeUpdateCore
             terminating = false
             if backend.process?.isRunning != true { sender.terminate(nil) }
             else {
+                showWorkbench()
                 let alert = NSAlert()
                 alert.messageText = "Lake 后端正在退出"
                 alert.informativeText = "后台操作尚未结束，请稍后再退出。"

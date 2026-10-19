@@ -1,0 +1,63 @@
+{
+  "source": "562ee7bb",
+  "feature": "Resource sidebar add-to-conversation shortcut",
+  "frontendTests": {
+    "passed": 267,
+    "failed": 0
+  },
+  "productionBuild": "passed",
+  "browser": {
+    "fixture": "readme-workbench.html: fictional read-only API responses",
+    "draftPreserved": "检查一下这些资源 @订单服务 · order-api @订单数据库 · PostgreSQL ",
+    "duplicateSelection": "one reference chip for repeated order-api clicks",
+    "resourceIdentity": "unit tests verify IDs, duplicate labels, extension/resource distinction and deletion",
+    "focus": "message-input",
+    "resourceDetail": "returns to same conversation without losing draft",
+    "terminalButtons": [
+      {
+        "name": "reference",
+        "left": 183,
+        "right": 209
+      },
+      {
+        "name": "terminal",
+        "left": 211,
+        "right": 237
+      },
+      {
+        "name": "menu",
+        "left": 239,
+        "right": 265
+      }
+    ],
+    "nonTerminalButtons": [
+      {
+        "name": "reference",
+        "left": 211,
+        "right": 237
+      },
+      {
+        "name": "menu",
+        "left": 241,
+        "right": 267
+      }
+    ],
+    "dark900px": "reference added, input focused, controls visible; no overlap",
+    "automaticSend": false
+  },
+  "macOS": {
+    "signedDevInstalled": true,
+    "nativeVerification": "Desktop accessibility unavailable in this session; app restart required"
+  },
+  "screenshots": [
+    "lake-resource-add-to-chat.png",
+    "lake-resource-add-to-chat-dark.png"
+  ],
+  "windows": {
+    "staticChecks": true,
+    "devInstalled": true,
+    "devDataUnchanged": true,
+    "installedHashesMatch": true,
+    "nativeUIVerification": "not performed; shared frontend verified in browser"
+  }
+}

@@ -25,7 +25,12 @@ func TestClusterInspectionBatchesNodeChecksInOneModelRoundTrip(t *testing.T) {
 	nodes := []Object{}
 	for _, name := range names {
 		node := b.Store.CreateResource(project, name, "local", Object{})
-		b.Store.EditResourceTree(project, Object{"operation": "move", "nodeId": node["id"], "parentId": group})
+		// These synthetic hosts run harmless fixture commands locally; this is a
+		// legacy test layout, not an exception to the production move restriction.
+		b.Store.update(func() any {
+			b.Store.exec("UPDATE resourceTree SET parentId=? WHERE resourceId=?", group, node["id"])
+			return nil
+		})
 		nodes = append(nodes, node)
 	}
 	var modelCalls atomic.Int32

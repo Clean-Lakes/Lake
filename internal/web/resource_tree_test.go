@@ -7,9 +7,10 @@ import (
 
 func TestResourceTreeHierarchyOrderScopeAndPersistence(t *testing.T) {
 	b, h := fixture(t)
-	id, ref := newSession(t, h)
+	id, _ := newSession(t, h)
 	project := stringOf(b.Store.Session(id)["projectId"])
-	otherResource := b.Store.CreateResource(project, "second fixture", "local", Object{})
+	ref := stringOf(b.Store.CreateResource(project, "Remote fixture", "ssh", Object{"host": "fixture.invalid", "username": "fixture", "port": 22})["id"])
+	otherResource := b.Store.CreateResource(project, "second fixture", "ssh", Object{})
 	otherRef := stringOf(otherResource["id"])
 	endpoint := "/api/projects/" + project + "/resource-tree"
 	edit := func(data Object, status int) []Object {
@@ -73,7 +74,7 @@ func TestResourceTreeHierarchyOrderScopeAndPersistence(t *testing.T) {
 	}
 	edit(Object{"operation": "delete", "nodeId": ref}, 400)
 	b.Store.AssertResource(id, ref)
-	if len(stringsOf(b.Store.Session(id)["resourceIds"])) != 2 {
+	if len(stringsOf(b.Store.Session(id)["resourceIds"])) != 3 {
 		t.Fatal("folder edits restricted conversation resource references")
 	}
 	dir := b.Store.Dir
@@ -94,8 +95,8 @@ func TestResourceTreeSeedsLegacyResourcesWithoutResettingLayout(t *testing.T) {
 	b, _ := fixture(t)
 	project := b.Store.CreateProject("legacy fixture")
 	projectID := stringOf(project["id"])
-	b.Store.CreateResource(projectID, "Added first", "local", Object{})
-	b.Store.CreateResource(projectID, "Added second", "local", Object{})
+	b.Store.CreateResource(projectID, "Added first", "ssh", Object{})
+	b.Store.CreateResource(projectID, "Added second", "ssh", Object{})
 	b.Store.update(func() any { b.Store.exec("DELETE FROM resourceTree"); b.Store.seedResourceTree(); return nil })
 	rows := objects(b.Store.Catalog()["resourceTree"])
 	if len(rows) != 3 {
@@ -109,7 +110,7 @@ func TestResourceTreeSeedsLegacyResourcesWithoutResettingLayout(t *testing.T) {
 	folders := b.Store.EditResourceTree(projectID, Object{"operation": "create", "name": "Persistent folder"})
 	for _, node := range folders {
 		if node["kind"] == "folder" {
-			b.Store.EditResourceTree(projectID, Object{"operation": "move", "nodeId": rows[0]["id"], "parentId": node["id"]})
+			b.Store.EditResourceTree(projectID, Object{"operation": "move", "nodeId": rows[1]["id"], "parentId": node["id"]})
 			break
 		}
 	}

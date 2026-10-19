@@ -36,6 +36,7 @@ import type {
   TerminalSession,
   ResourceImportPreview,
   TextFileAttachment,
+  MessageMention,
   WorkSession,
 } from "../../shared/contracts";
 
@@ -88,7 +89,16 @@ export type Bootstrap = {
   aiRuntime?: "go" | "legacy";
 };
 
+export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"modelId"|"modelSelection"|"supportsImageInput"> & {
+  available: AvailableModels | null;
+  providers: ProviderCatalog;
+  settings: ModelSettings;
+};
+
 export const api = {
+ schedules:(project:string,signal?:AbortSignal)=>request<{items:import('../../shared/contracts').ScheduledTask[]}>(`/api/projects/${encodeURIComponent(project)}/schedules`,{signal}),
+ schedule:(project:string,id:string,signal?:AbortSignal)=>request<import('../../shared/contracts').ScheduledTask>(`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`,{signal}),
+ setScheduleEnabled:(project:string,id:string,enabled:boolean,expectedRevision:number)=>request<import('../../shared/contracts').ScheduledTask>(`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({enabled,expectedRevision})}),
 	getSREEnabled:(project:string,signal?:AbortSignal)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{signal}),
 	setSREEnabled:(project:string,enabled:boolean)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{method:'PUT',body:JSON.stringify({enabled})}),
 	sreTask:(session:string,task:string)=>request<import('../../shared/contracts').SRETask>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}`),
@@ -144,6 +154,7 @@ export const api = {
       body: JSON.stringify({ url, name, protocol, ...(supportsImageInput === undefined ? {} : { supportsImageInput }), ...(supportsImageOutput === undefined ? {} : { supportsImageOutput }), ...(apiKey === undefined ? {} : { apiKey }) }),
     }),
   availableModels: (signal?: AbortSignal) => request<AvailableModels>("/api/settings/model/available", { signal }),
+  modelState: (signal?: AbortSignal) => request<ModelSyncState>("/api/settings/model/state", { signal }),
   createProject: (name: string) => post<Project>("/api/projects", { name }),
   projectMemories: (projectId: string, query = "", includeExpired = false, includeDeleted = false, offset = 0, signal?: AbortSignal) => request<ProjectMemoryList>(`/api/projects/${encodeURIComponent(projectId)}/memory?query=${encodeURIComponent(query)}&includeExpired=${includeExpired}&includeDeleted=${includeDeleted}&offset=${offset}&limit=50`, {signal}),
   projectMemory: (projectId: string, key: string, includeDeleted = false, signal?: AbortSignal) => request<ProjectMemoryEntry>(`/api/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(key)}${includeDeleted ? "?includeDeleted=true" : ""}`, {signal}),
@@ -180,8 +191,8 @@ export const api = {
   renameSession: (sessionId: string, title: string) => request<WorkSession>(`/api/sessions/${encodeURIComponent(sessionId)}`, {method: "PATCH", body: JSON.stringify({title})}),
   deleteSession: (sessionId: string) =>
     request<void>(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" }),
-  sendMessage: (sessionId: string, text: string, resourceIds: string[] = [], images: AIImage[] = [], references: Record<string, unknown>[] = [], terminalReuse?: {terminalId: string; generation: string}, files: TextFileAttachment[] = [], enqueue = false, ignoreProjectMemory = false) =>
-    post<SendMessageResult>(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, { text, ...(ignoreProjectMemory ? {ignoreProjectMemory:true} : {}), ...(enqueue ? {enqueue:true} : {}), ...(files.length ? {files} : {}), ...(terminalReuse ? {terminalReuse} : {}), ...(references.length ? { references } : {}), ...(images.length ? { images } : {}), ...(resourceIds.length ? { resourceIds } : {}) }),
+  sendMessage: (sessionId: string, text: string, resourceIds: string[] = [], images: AIImage[] = [], references: Record<string, unknown>[] = [], terminalReuse?: {terminalId: string; generation: string}, files: TextFileAttachment[] = [], enqueue = false, ignoreProjectMemory = false, mentions: MessageMention[] = []) =>
+    post<SendMessageResult>(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, { text, mentions, ...(ignoreProjectMemory ? {ignoreProjectMemory:true} : {}), ...(enqueue ? {enqueue:true} : {}), ...(files.length ? {files} : {}), ...(terminalReuse ? {terminalReuse} : {}), ...(references.length ? { references } : {}), ...(images.length ? { images } : {}), ...(resourceIds.length ? { resourceIds } : {}) }),
   messageQueue: (sessionId: string) => request<MessageQueue>(`/api/sessions/${encodeURIComponent(sessionId)}/message-queue`),
   updateMessageQueue: (sessionId: string, data: QueueOperation) => post<MessageQueue>(`/api/sessions/${encodeURIComponent(sessionId)}/message-queue`, data),
   decide: (actionId: string, decision: "approve" | "reject", confirmation?: string) =>

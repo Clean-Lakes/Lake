@@ -152,6 +152,7 @@ func OpenStore(dir string) (*Store, error) {
 		return nil, e
 	}
 	s.update(func() any {
+		s.ensureBuiltinLocalResources("")
 		s.seedResourceTree()
 		s.pauseMessageQueuesOnRestart()
 		s.exec("UPDATE workflowRuns SET status='interrupted',error='服务重启，工作流已中断；未自动重放',finishedAt=? WHERE status='running'", now())
@@ -197,7 +198,7 @@ func (s *Store) migrate() error {
 			needBackup = true
 		}
 	}
-	for _, item := range [][2]string{{"messages", "files"}, {"messages", "images"}, {"actions", "terminalId"}, {"actions", "contextVersion"}, {"terminals", "contextVersion"}, {"terminals", "output"}} {
+	for _, item := range [][2]string{{"messages", "mentions"}, {"messages", "files"}, {"messages", "images"}, {"actions", "terminalId"}, {"actions", "contextVersion"}, {"terminals", "contextVersion"}, {"terminals", "output"}} {
 		found := false
 		for _, r := range s.rows("PRAGMA table_info(" + item[0] + ")") {
 			if r["name"] == item[1] {
@@ -226,7 +227,7 @@ func (s *Store) migrate() error {
 	if _, err := s.db.Exec("CREATE TABLE IF NOT EXISTS aiScopes(scope TEXT NOT NULL,projectId TEXT NOT NULL REFERENCES projects(id),resourceKind TEXT NOT NULL,resourceId TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,sessionId TEXT UNIQUE NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,PRIMARY KEY(scope,projectId,resourceKind,resourceId))"); err != nil {
 		return err
 	}
-	for _, c := range append(parityColumns, [][3]string{{"messages", "files", "TEXT NOT NULL DEFAULT '[]'"}, {"messages", "images", "TEXT NOT NULL DEFAULT '[]'"}, {"actions", "terminalId", "TEXT"}, {"actions", "contextVersion", "INTEGER"}, {"terminals", "contextVersion", "INTEGER NOT NULL DEFAULT 0"}, {"terminals", "output", "TEXT NOT NULL DEFAULT ''"}}...) {
+	for _, c := range append(parityColumns, [][3]string{{"messages", "mentions", "TEXT"}, {"messages", "files", "TEXT NOT NULL DEFAULT '[]'"}, {"messages", "images", "TEXT NOT NULL DEFAULT '[]'"}, {"actions", "terminalId", "TEXT"}, {"actions", "contextVersion", "INTEGER"}, {"terminals", "contextVersion", "INTEGER NOT NULL DEFAULT 0"}, {"terminals", "output", "TEXT NOT NULL DEFAULT ''"}}...) {
 		found := false
 		for _, r := range s.rows("PRAGMA table_info(" + c[0] + ")") {
 			if r["name"] == c[1] {
@@ -471,7 +472,7 @@ func (s *Store) CreateProject(name string) Object {
 	return s.update(func() any {
 		p := Object{"id": ident(), "name": name, "createdAt": now()}
 		s.exec("INSERT INTO projects(id,name,createdAt) VALUES(?,?,?)", p["id"], name, p["createdAt"])
-		s.exec("INSERT INTO resources(id,projectId,name,kind,description,status) VALUES(?,?,?,?,?,?)", ident(), p["id"], "Local machine", "local", "This server's local command terminal (no remote host connection)", "available")
+		s.ensureBuiltinLocalResources(stringOf(p["id"]))
 		s.seedResourceTree()
 		return p
 	}).(Object)
@@ -598,6 +599,11 @@ func (s *Store) snapshot(id string) Object {
 	messages := s.rows("SELECT * FROM messages WHERE sessionId=? ORDER BY createdAt,rowid", id)
 	for _, m := range messages {
 		m["files"] = objects(parsed(stringOf(m["files"])))
+		if m["mentions"] != nil {
+			m["mentions"] = objects(parsed(stringOf(m["mentions"])))
+		} else {
+			delete(m, "mentions")
+		}
 		images := objects(parsed(stringOf(m["images"])))
 		delete(m, "images")
 		if len(images) > 0 {
@@ -677,10 +683,14 @@ func (s *Store) BeginWithNaming(id, text string, images any, titleInput ...strin
 	return s.BeginWithFilesAndNaming(id, text, images, nil, titleInput...)
 }
 func (s *Store) BeginWithFilesAndNaming(id, text string, images any, files []Object, titleInput ...string) (Object, bool) {
+	return s.BeginWithMentionsAndNaming(id, text, images, files, nil, titleInput...)
+}
+func (s *Store) BeginWithMentionsAndNaming(id, text string, images any, files, mentions []Object, titleInput ...string) (Object, bool) {
 	result := s.update(func() any {
 		pendingTitle := s.row("SELECT 1 FROM sessionNaming WHERE sessionId=? AND generated=0", id) != nil
 		message := s.begin(id, text, images, titleInput...)
 		s.attachMessageFiles(id, message, files)
+		s.attachMessageMentions(id, message, mentions)
 		return struct {
 			message      Object
 			pendingTitle bool

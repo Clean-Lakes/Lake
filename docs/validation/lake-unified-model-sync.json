@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "b3346b09444cc332e32a1496f4cde0741f9d4899",
+  "branch": "codex/fix-progress-and-background",
+  "pullRequest": "https://github.com/Clean-Lakes/Lake/pull/15",
+  "merge": {
+    "fromThread": "01a152b6-77b2-7582-9970-222ee48fb22f",
+    "cause": "The other chat built and installed from the older primary checkout, replacing newer Dev UI updates.",
+    "resolution": "Port only the Magpie local-state API, visible 2-second/focus polling, dirty-draft preservation, tests and documentation into the current PR branch. Build both platforms sequentially from this unified source. The unrelated experimental primary checkout was preserved.",
+    "retained": [
+      "arbitrary mixed inline resource editor and UTF-16 reference positions",
+      "resource add-to-chat shortcut",
+      "collapsed folder defaults and light idle scrollbar",
+      "schedule manager and stable streamed progress",
+      "Windows Dev persistent profile, maximize gestures and background tray"
+    ]
+  },
+  "checks": [
+    "273 frontend tests passed",
+    "TypeScript check and production frontend build passed",
+    "Targeted race-enabled model sync, Magpie and provider tests passed",
+    "Go vet ./internal/web passed",
+    "Full go test -race ./internal/web passed (218.431s)",
+    "Synthetic signed-backend browser integration: closed model menu updated automatically; resource token in the middle of prose, focus and caret remained intact",
+    "Open settings detected new provider, renamed catalog model and 300K context without refresh",
+    "Unsaved provider name and Base URL survived automatic Magpie default change",
+    "macOS signing verification and installed/package host, backend and layout hashes matched",
+    "Windows x64 static package validation passed; installed host/backend hashes matched package; installer exit 0 and existing Dev data unchanged"
+  ],
+  "artifacts": {
+    "Lake-0.3.18-macos-arm64-dev.zip": {
+      "sha256": "e3c6e9fe80eca23dc8988f31c915c9b247efbcaf5d51a6079dfaa4777f2405b3",
+      "size": 27879160
+    },
+    "Lake-0.3.18-macos-arm64-dev.dmg": {
+      "sha256": "2e8804a5af5509f6e1d42112e54ed4bfdd38e64dab78c4892a14b3d146d93752",
+      "size": 30318030
+    },
+    "Lake-Dev-0.3.18-windows-x86_64.zip": {
+      "sha256": "5cb5fa81a4675adc57aeeb56bf3f9db33b570e79bc97dfaba06296460b2393f9",
+      "size": 212091753
+    },
+    "Lake-Dev-0.3.18-windows-x86_64-setup.exe": {
+      "sha256": "c018dae8e5bd94d9b59a547c4c197d57811728b22c19e68e33825435d606a8db",
+      "size": 160179181
+    }
+  },
+  "windowsInstall": {
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "c523945016ddfab4537213119cae0c859ba5c718e671a60c50149b768e2848fa",
+    "desktopSHA256": "ffacacc6ef87d54de39f6b36a417b9a581013aaabb05a7dbb0953ddaac513cfd"
+  },
+  "screenshot": "lake-unified-model-sync.png",
+  "limitations": [
+    "Integration used only an isolated temporary profile and synthetic credentials; no paid model request or real host operation.",
+    "Native macOS UI control timed out. Installed Dev requires normal quit and relaunch to load the combined version. Windows Dev was closed for installation.",
+    "Stable release v0.3.18 artifacts and release profiles were not modified."
+  ],
+  "macInstalled": {
+    "signatureVerified": true,
+    "files": {
+      "Contents/MacOS/Lake": "39f11f4a18c92df413a0ac811c188b9f4a9ed847662d22d0f4860e0bea2be61b",
+      "Contents/Resources/lake": "a01b2f0495395f58ef5565292fd547db13bd67ecd3b8ee2e8463118058dee9c2",
+      "Contents/Resources/workbench-layout.js": "5ed54278116e0f7c854af240a8a9f3e972adc45827ab47de7e61574d40cb44aa"
+    }
+  }
+}

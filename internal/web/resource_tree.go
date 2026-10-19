@@ -80,6 +80,9 @@ func (s *Store) EditResourceTree(project string, data Object) []Object {
 			s.exec("UPDATE resourceTree SET name=? WHERE id=?", text(data["name"], "目录名称", 120), id)
 		case "move":
 			n := s.treeNode(project, id)
+			if s.builtinLocalNode(n) {
+				fail(400, "本地终端为内置入口，固定在资源根目录，不能移动")
+			}
 			parentDepth := s.treeParent(project, parent, id)
 			height := integer(s.row("WITH RECURSIVE subtree(id,depth) AS (SELECT id,1 FROM resourceTree WHERE id=? UNION ALL SELECT n.id,t.depth+1 FROM resourceTree n JOIN subtree t ON n.parentId=t.id) SELECT MAX(depth) AS height FROM subtree", id)["height"])
 			if parentDepth+height > 32 {
@@ -90,6 +93,9 @@ func (s *Store) EditResourceTree(project string, data Object) []Object {
 			}
 			if before != "" {
 				target := s.treeNode(project, before)
+				if s.builtinLocalNode(target) {
+					fail(400, "本地终端固定在资源列表顶部，请选择其他排序位置")
+				}
 				if stringOf(target["parentId"]) != parent {
 					fail(400, "排序目标不属于目标目录")
 				}

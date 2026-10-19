@@ -1,0 +1,70 @@
+{
+  "source": "d98c6e59",
+  "change": "Single editable document mixes prose and atomic resource/role/extension tokens at arbitrary caret positions",
+  "frontendTests": {
+    "passed": 270,
+    "failed": 0
+  },
+  "productionBuild": "passed",
+  "browser": {
+    "fixture": "readme-workbench.html?reference-send=1: fictional, in-memory API calls only",
+    "sentence": "请比较[订单服务 · order-api]和[网关 · edge-01]的负载。",
+    "wirePayload": {
+      "text": "请比较@订单服务 · order-api和@网关 · edge-01的负载。",
+      "resourceIds": [
+        "order-api",
+        "gateway"
+      ]
+    },
+    "caretInsertion": "sidebar reference inserted between existing prose characters",
+    "edits": [
+      "Chinese text before and after tokens",
+      "connector text between two tokens",
+      "selected token deletion",
+      "remove button",
+      "select-all deletion",
+      "undo and redo preserve IDs and order"
+    ],
+    "clipboard": {
+      "internalCutPaste": "reference resource:order-api survived",
+      "foreignPlainText": "头<b>原文</b>\n续行尾",
+      "htmlInserted": false,
+      "explicitBreaks": 1,
+      "originalClipboard": "restored"
+    },
+    "newlines": {
+      "text": "第一行\n第二行@订单服务 · order-api",
+      "resourceIds": [
+        "order-api"
+      ]
+    },
+    "roleReference": {
+      "role_id": "investigator",
+      "start": 41,
+      "end": 45,
+      "label": "@调查员",
+      "text": "请比较@订单服务 · order-api和@网关 · edge-01的负载。再核对@调查员的结论。"
+    },
+    "completion": "Tab accepted 帮我查看 CPU、内存和磁盘使用情况。",
+    "dark900px": {
+      "horizontalOverflow": false,
+      "height": 30.1875,
+      "orderPreserved": true
+    }
+  },
+  "screenshots": [
+    "lake-mixed-reference-editor.png",
+    "lake-mixed-reference-editor-dark.png"
+  ],
+  "macOS": {
+    "signedDevInstalled": true,
+    "nativeUIVerification": "not performed; shared editor verified in browser; native IME not exercised"
+  },
+  "windows": {
+    "staticChecks": true,
+    "devInstalled": true,
+    "devDataUnchanged": true,
+    "installedHashesMatch": true,
+    "nativeUIVerification": "not performed; shared editor verified in browser"
+  }
+}

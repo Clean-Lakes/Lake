@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "cebd82d2",
+  "scope": "Circular composer stop controls; square stop glyph and action remain unchanged",
+  "checks": [
+    "TypeScript and production web build passed",
+    "280 frontend tests passed",
+    "Shared CSS and Glyph preview: primary 30x30 and secondary 32x32; both computed border-radius 50%",
+    "Light and dark 420px preview verified; keyboard focus outline retained",
+    "Signed macOS Dev installed and codesign verified; installed host and backend match package",
+    "Windows Dev package validation passed; installed executable hashes match validated package"
+  ],
+  "windowsInstall": {
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "03d8fb316b8990520ef42d04a07be26669e14e619e86710a3269ba9d44ad24c2",
+    "desktopSHA256": "e06c4927c07fa610589adbc319b5a2df57fccc9a2f71a82924a24fd3b179a77f"
+  },
+  "screenshots": [
+    "lake-round-stop-button.png",
+    "lake-round-stop-button-dark.png"
+  ],
+  "limitations": [
+    "Browser preview used synthetic composer markup and actual product CSS/Glyph; no model calls",
+    "Normal quit/reopen is required to load the updated Dev frontend; native app UI was not rechecked"
+  ]
+}

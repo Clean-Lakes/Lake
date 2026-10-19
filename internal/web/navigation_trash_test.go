@@ -7,7 +7,8 @@ import (
 
 func TestNavigationResourceArchiveScopeHistoryAndRestore(t *testing.T) {
 	b, h := fixture(t)
-	id, ref := newSession(t, h)
+	id, _ := newSession(t, h)
+	ref := stringOf(b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "SSH fixture", "ssh", Object{"host": "fixture.invalid", "username": "fixture", "port": 22})["id"])
 	project := stringOf(b.Store.Session(id)["projectId"])
 	resource := b.Store.CreateResource(project, "db fixture", "database", Object{"driver": "mysql", "host": "localhost", "port": 3306, "credentialRef": "synthetic-private-reference"})
 	rid := stringOf(resource["id"])
@@ -18,7 +19,7 @@ func TestNavigationResourceArchiveScopeHistoryAndRestore(t *testing.T) {
 	archive("resource", rid, 200)
 	expectPanic(t, 404, func() { b.Store.Resource(rid) })
 	expectPanic(t, 404, func() { b.Store.AssertResource(id, rid) })
-	if len(stringsOf(b.Store.Session(id)["resourceIds"])) != 1 {
+	if len(stringsOf(b.Store.Session(id)["resourceIds"])) != 2 {
 		t.Fatal("deleted resource still available")
 	}
 	trash := apiTest(t, h, "GET", "/api/navigation-trash", nil, 200)
@@ -65,7 +66,8 @@ func TestNavigationResourceArchiveScopeHistoryAndRestore(t *testing.T) {
 }
 func TestNavigationFoldersAllLevelsPromoteAndRestore(t *testing.T) {
 	b, h := fixture(t)
-	id, ref := newSession(t, h)
+	id, _ := newSession(t, h)
+	ref := stringOf(b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "SSH fixture", "ssh", Object{"host": "fixture.invalid", "username": "fixture", "port": 22})["id"])
 	project := stringOf(b.Store.Session(id)["projectId"])
 	folder := func(name, parent string) string {
 		for _, node := range b.Store.EditResourceTree(project, Object{"operation": "create", "name": name, "parentId": parent}) {
@@ -102,7 +104,8 @@ func TestNavigationFoldersAllLevelsPromoteAndRestore(t *testing.T) {
 }
 func TestNavigationProjectArchiveRestoresScopeAndBlocksMutation(t *testing.T) {
 	b, h := fixture(t)
-	id, ref := newSession(t, h)
+	id, _ := newSession(t, h)
+	ref := stringOf(b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "SSH fixture", "ssh", Object{"host": "fixture.invalid", "username": "fixture", "port": 22})["id"])
 	project := stringOf(b.Store.Session(id)["projectId"])
 	b.Store.AddMessage(id, "user", "keep this history", nil)
 	apiTest(t, h, "POST", "/api/navigation-delete", Object{"kind": "project", "id": project}, 200)
@@ -135,7 +138,8 @@ func TestNavigationArchiveIgnoresUnusableBoundProposals(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			b, h := fixture(t)
-			id, ref := newSession(t, h)
+			id, _ := newSession(t, h)
+			ref := stringOf(b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "SSH fixture", "ssh", Object{"host": "fixture.invalid", "username": "fixture", "port": 22})["id"])
 			term := b.Store.CreateTerminal(id, ref)
 			tid := stringOf(term["id"])
 			action := b.Store.AddAction(id, ref, tid, "uptime", "historical proposal")
@@ -160,7 +164,8 @@ func TestNavigationArchiveStillBlocksRunningAndUnboundProposals(t *testing.T) {
 	for _, status := range []string{"pending", "running"} {
 		t.Run(status, func(t *testing.T) {
 			b, h := fixture(t)
-			id, ref := newSession(t, h)
+			id, _ := newSession(t, h)
+			ref := stringOf(b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "SSH fixture", "ssh", Object{"host": "fixture.invalid", "username": "fixture", "port": 22})["id"])
 			term := b.Store.CreateTerminal(id, ref)
 			tid := stringOf(term["id"])
 			action := b.Store.AddAction(id, ref, tid, "uptime", "active proposal")

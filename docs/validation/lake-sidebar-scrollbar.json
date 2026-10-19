@@ -1,0 +1,33 @@
+{
+  "source": "c72b9aa1",
+  "change": "Use theme border-strong for the idle sidebar scrollbar, preserving thin width and transparent track",
+  "frontendTests": {
+    "passed": 268,
+    "failed": 0
+  },
+  "productionBuild": "passed",
+  "browser": {
+    "fixture": "readme-workbench.html?scrollbar=1: fictional resources only",
+    "lightIdle": "rgb(204, 204, 204) rgba(0, 0, 0, 0)",
+    "darkIdle": "rgb(80, 80, 80) rgba(0, 0, 0, 0)",
+    "dragScrollTop": 326,
+    "lightAfterRelease": "rgb(204, 204, 204) rgba(0, 0, 0, 0)",
+    "scrollbarWidth": "thin",
+    "scrollable": true
+  },
+  "screenshots": [
+    "lake-sidebar-scrollbar-light.png",
+    "lake-sidebar-scrollbar-dark.png"
+  ],
+  "macOS": {
+    "signedDevInstalled": true,
+    "nativeUIVerification": "not performed; shared frontend verified in browser"
+  },
+  "windows": {
+    "staticChecks": true,
+    "devInstalled": true,
+    "devDataUnchanged": true,
+    "installedHashesMatch": true,
+    "nativeUIVerification": "not performed; shared frontend verified in browser"
+  }
+}

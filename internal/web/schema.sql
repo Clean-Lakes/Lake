@@ -36,7 +36,7 @@
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY, sessionId TEXT NOT NULL REFERENCES sessions(id),
         role TEXT NOT NULL CHECK(role IN ('user','assistant','system')),
-        text TEXT NOT NULL, images TEXT NOT NULL DEFAULT '[]', createdAt TEXT NOT NULL
+        text TEXT NOT NULL, images TEXT NOT NULL DEFAULT '[]', mentions TEXT, createdAt TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS specialists (
         id TEXT PRIMARY KEY, sessionId TEXT NOT NULL REFERENCES sessions(id),

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { FollowScroll } from "../src/followScroll";
+import { atConversationTail, FollowScroll } from "../src/followScroll";
 import { sameCard } from "../src/cardEquality";
 
 function fixture(reduced = false) {
@@ -63,6 +63,34 @@ test("activity-only snapshot updates at the tail never schedule frames or write 
   f.box.scrollHeight += 100; f.follower.request();
   for(let time=0;time<1500;time+=16.67)f.frame(time);
   assert.equal(top,600); assert.ok(writes>0);
+});
+
+test("fractional browser tail stays still on activity updates and follows actual new content", () => {
+  for (const reduced of [false, true]) {
+    const f = fixture(reduced); let top = 0, writes = 0;
+    // The DOM reports integer heights even when layout clamps to a half pixel.
+    Object.defineProperty(f.box, "scrollTop", {get: () => top, set: value => {
+      writes++; top = Math.min(value, f.box.scrollHeight - f.box.clientHeight - 0.5);
+    }});
+    f.follower.jump(); writes = 0;
+    for (let i = 0; i < 100; i++) { f.follower.request(); f.frame(i * 16.67); }
+    assert.equal(writes, 0); assert.equal(f.callbacks.size, 0); assert.equal(top, 499.5);
+    f.box.scrollHeight += 100; f.follower.request();
+    for (let time = 0; time < 1500; time += 16.67) f.frame(time);
+    assert.ok(writes > 0); assert.equal(top, 599.5); assert.equal(f.callbacks.size, 0);
+  }
+});
+
+test("reading just above the tail does not resume following until the reader reaches the bottom", () => {
+  const box = {scrollTop: 464, scrollHeight: 1000, clientHeight: 500};
+  assert.equal(atConversationTail(box), false);
+  box.scrollTop = 498;
+  assert.equal(atConversationTail(box), false);
+  box.scrollTop = 499.5;
+  assert.equal(atConversationTail(box), true);
+  box.scrollTop = 500;
+  assert.equal(atConversationTail(box), true);
+  assert.equal(atConversationTail({scrollTop: 0, scrollHeight: 300, clientHeight: 500}), true);
 });
 
 test("unchanged historical cards reuse Markdown, while streamed content and tool state invalidate it", () => {
