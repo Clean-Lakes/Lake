@@ -102,7 +102,7 @@
     "nativeWindowChecks": "passed: three hide/reopen cycles, retained content view, minimized restore, explicit termination allowed",
     "desktopBuild": "passed",
     "signedDevInstalled": true,
-    "manualAppConfirmation": "pending",
+    "manualAppConfirmation": "passed by user: close to background, Dock reopen, explicit quit",
     "installedSourceCommit": "359815d2"
   },
   "windows": {
@@ -131,7 +131,7 @@
       "profile-scoped duplicate-launch activation",
       "native Shell_NotifyIcon version-4 registration"
     ],
-    "manualAppConfirmation": "pending",
+    "manualAppConfirmation": "passed by user: close to background, tray reopen, explicit quit",
     "finalDevPackage": {
       "sourceCommit": "359815d2",
       "validation": "passed: 9718 ZIP entries",

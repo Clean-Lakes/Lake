@@ -18,7 +18,7 @@ const messages=Array.from({length:12},(_,i)=>({id:`user-${i}`,sessionId:'fixture
 const cards:AICard[]=Array.from({length:11},(_,i)=>({id:`reply-${i}`,type:'message',status:'completed',at:stamp(i*10+1),content:'历史检查记录保持稳定。\n\n| 项目 | 观察 |\n| --- | --- |\n| 演示服务 | 正常 |\n\n[查看已保存证据](#evidence)'}));
 cards.push({id:'note',type:'message',status:'completed',at:stamp(111),content:'先核对演示服务与运行记录，保留本轮原始证据。'},{id:'operation-0',type:'operation',title:'shell',status:'running',at:stamp(112),content:'',data:{target:'演示主机',arguments:{command:'uptime'}}});
 const state={session:{id:'fixture',projectId:'p',title:'进度更新稳定性',status:'investigating',createdAt:stamp(0),updatedAt:stamp(0),tags:[]},cursor:1,messages,resources:[],resourceTree:[],specialists:[],evidence:[],actions:[],terminals:[],ai:{session:'fixture',status:'running',rootTurnId:'turn',turnStartedAt:new Date().toISOString(),cards,cardsOffset:0,totalCards:cards.length,turns:12,usage:{input:0,output:0,total:0}},messageQueue:{paused:false,revision:0,lastError:'',items:[]},sre:{enabled:false,tasks:[]}} as unknown as SessionSnapshot;
-const metrics={snapshots:0,subscriptions:0,actionReplacements:0,historyReplacements:0,actionAnimations:0,scrollWrites:0,scrollEvents:0,scrollChanges:0,heightChanges:0,updates:0,errors:0,top:0,height:0};
+const metrics={snapshots:0,subscriptions:0,actionReplacements:0,historyReplacements:0,actionAnimations:0,replyAnimations:0,replyReplacements:0,scrollWrites:0,scrollEvents:0,scrollChanges:0,heightChanges:0,updates:0,errors:0,top:0,height:0};
 const streams=new Set<FixtureStream>();
 class FixtureStream extends EventTarget {
  static OPEN=1;readyState=1;onopen:((event:Event)=>void)|null=null;onerror=null;onmessage=null;
@@ -42,15 +42,19 @@ window.fetch=async(input)=>{
 const descriptor=Object.getOwnPropertyDescriptor(Element.prototype,'scrollTop')!;
 Object.defineProperty(Element.prototype,'scrollTop',{...descriptor,get:descriptor.get,set(value:number){if(this.classList.contains('conversation'))metrics.scrollWrites++;descriptor.set!.call(this,value)}});
 document.addEventListener('animationstart',event=>{if((event.target as Element).matches('.conversation-progress-action > span'))metrics.actionAnimations++});
+document.addEventListener('animationstart',event=>{if((event as AnimationEvent).animationName==='reply-arrival')metrics.replyAnimations++});
 document.addEventListener('scroll',event=>{if((event.target as Element).classList?.contains('conversation'))metrics.scrollEvents++},true);
 window.addEventListener('error',()=>metrics.errors++);
 createRoot(document.getElementById('root')!).render(<App/>);
-let oldAction:Element|null=null,oldTable:Element|null=null,previousTop:number|undefined,previousHeight:number|undefined;
+let oldAction:Element|null=null,oldTable:Element|null=null,oldReply:Element|null=null,previousTop:number|undefined,previousHeight:number|undefined;
 function measure(){
  const action=document.querySelector('.conversation-progress-action > span'),table=document.querySelector('.assistant-prose table'),conversation=document.querySelector<HTMLElement>('.conversation');
  if(oldAction&&action!==oldAction)metrics.actionReplacements++;
  if(oldTable&&table!==oldTable)metrics.historyReplacements++;
  oldAction=action;oldTable=table;
+ const reply=document.querySelector('.reply-arrival');
+ if(oldReply&&oldReply!==reply)metrics.replyReplacements++;
+ oldReply=reply;
  if(conversation){
   if(previousTop!==undefined&&conversation.scrollTop!==previousTop)metrics.scrollChanges++;
   if(previousHeight!==undefined&&conversation.scrollHeight!==previousHeight)metrics.heightChanges++;
@@ -61,7 +65,9 @@ function measure(){
 requestAnimationFrame(measure);
 const update=()=>{state.cursor++;state.ai!.totalCards=state.ai!.cards.length;metrics.updates++;streams.forEach(stream=>stream.emit())};
 let index=0;
-document.getElementById('reset-metrics')!.onclick=()=>{metrics.actionReplacements=metrics.historyReplacements=metrics.actionAnimations=metrics.scrollWrites=metrics.scrollEvents=metrics.scrollChanges=metrics.heightChanges=metrics.updates=0};
+document.getElementById('reset-metrics')!.onclick=()=>{metrics.actionReplacements=metrics.historyReplacements=metrics.actionAnimations=metrics.replyAnimations=metrics.replyReplacements=metrics.scrollWrites=metrics.scrollEvents=metrics.scrollChanges=metrics.heightChanges=metrics.updates=0};
 document.getElementById('update-line')!.onclick=()=>{state.ai!.cards.find(card=>card.id==='note')!.content=`第 ${++index} 次核对演示服务与运行记录，保留本轮原始证据。`;update()};
 document.getElementById('next-operation')!.onclick=()=>{state.ai!.cards.at(-1)!.status='completed';state.ai!.cards.push({id:`operation-${++index}`,type:'operation',title:'shell',status:'running',at:stamp(112+index),content:'',data:{target:`演示主机 ${index}`,arguments:{command:'uptime'}}});update()};
-document.getElementById('grow-reply')!.onclick=()=>{state.ai!.cards.at(-1)!.status='completed';state.ai!.cards.push({id:'final-reply',type:'message',status:'completed',at:stamp(200),content:'核对完成。\n\n'+('这里是实际新增的回复正文，新增高度应正常跟随到底部。\n\n').repeat(12)});state.ai!.status='completed';update()};
+document.getElementById('grow-reply')!.onclick=()=>{state.ai!.cards.at(-1)!.status='completed';state.ai!.cards.push({id:'final-reply',type:'message',status:'completed',at:stamp(200),content:'核对完成。\n\n'+('这里是实际新增的回复正文，新增高度应正常跟随到底部。\n\n').repeat(12)});state.ai!.status='completed';state.ai!.turnFinishedAt=new Date().toISOString();update()};
+document.getElementById('stream-reply')!.onclick=()=>{state.ai!.cards.at(-1)!.status='completed';state.ai!.cards.push({id:'stream-reply',type:'message',status:'running',at:stamp(200),content:'核对完成。演示服务运行正常，原始操作记录已保留。'});update()};
+document.getElementById('complete-reply')!.onclick=()=>{state.ai!.cards.at(-1)!.status='completed';state.ai!.status='completed';state.ai!.turnFinishedAt=new Date().toISOString();update()};

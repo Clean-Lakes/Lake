@@ -1,0 +1,97 @@
+{
+  "validatedAt": "2026-10-19T02:17:24.684838+00:00",
+  "backend": {
+    "successiveConfirmationsBefore": "reproduced failed to add event to session: stale session error",
+    "successiveConfirmationsAfter": "passed with race detector; both approved effects executed exactly once",
+    "finalizationBefore": "reproduced next turn admitted before final ADK projection was durable",
+    "finalizationAfter": "passed with race detector; busy and running until final canonical write completes",
+    "realIncidentInspection": "read-only local metadata confirmed a followup confirmation write between runner appends; no live commands replayed"
+  },
+  "transition": {
+    "durationMs": 200,
+    "motion": "opacity only, once per new reply; reduced-motion disables animation",
+    "layout": "stream-only extra line removed; footer keeps its layout when completed",
+    "light": {
+      "streamArrival": {
+        "actionAnimations": 0,
+        "actionReplacements": 0,
+        "errors": 0,
+        "height": 3325,
+        "heightChanges": 2,
+        "historyReplacements": 0,
+        "replyAnimations": 1,
+        "replyReplacements": 0,
+        "scrollChanges": 23,
+        "scrollEvents": 23,
+        "scrollWrites": 23,
+        "snapshots": 3,
+        "subscriptions": 1,
+        "top": 2713,
+        "updates": 1
+      },
+      "completion": {
+        "actionAnimations": 0,
+        "actionReplacements": 0,
+        "errors": 0,
+        "height": 3325,
+        "heightChanges": 0,
+        "historyReplacements": 0,
+        "replyAnimations": 0,
+        "replyReplacements": 0,
+        "scrollChanges": 0,
+        "scrollEvents": 0,
+        "scrollWrites": 0,
+        "snapshots": 4,
+        "subscriptions": 1,
+        "top": 2713,
+        "updates": 1
+      }
+    },
+    "narrowDark": {
+      "streamArrival": {
+        "actionAnimations": 0,
+        "actionReplacements": 0,
+        "errors": 0,
+        "height": 3325,
+        "heightChanges": 2,
+        "historyReplacements": 0,
+        "replyAnimations": 1,
+        "replyReplacements": 0,
+        "scrollChanges": 22,
+        "scrollEvents": 22,
+        "scrollWrites": 22,
+        "snapshots": 3,
+        "subscriptions": 1,
+        "top": 2716,
+        "updates": 1
+      },
+      "completion": {
+        "metrics": {
+          "actionAnimations": 0,
+          "actionReplacements": 0,
+          "errors": 0,
+          "height": 3325,
+          "heightChanges": 0,
+          "historyReplacements": 0,
+          "replyAnimations": 0,
+          "replyReplacements": 0,
+          "scrollChanges": 0,
+          "scrollEvents": 0,
+          "scrollWrites": 0,
+          "snapshots": 4,
+          "subscriptions": 1,
+          "top": 2716,
+          "updates": 1
+        },
+        "overflow": false,
+        "theme": "dark"
+      }
+    }
+  },
+  "frontend": {
+    "testsPassed": 253,
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "fullGoRaceRegression": "running"
+}

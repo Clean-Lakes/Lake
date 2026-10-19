@@ -247,6 +247,7 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 		if err != nil {
 			return err
 		}
+		var followups []*adksession.Event
 		for event, err := range r.Run(ctx, "lake", id, content, agent.RunConfig{StreamingMode: agent.StreamingModeSSE}, runner.WithStateDelta(delta)) {
 			if err != nil {
 				if errors.Is(err, errADKApprovalPending) {
@@ -255,10 +256,8 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 				return err
 			}
 			if event != nil {
-				if resuming {
-					if err = e.publishFollowupConfirmations(ctx, s, sessions, id, event); err != nil {
-						return err
-					}
+				if resuming && len(event.Actions.RequestedToolConfirmations) > 0 {
+					followups = append(followups, event)
 				}
 				if event.Content != nil {
 					for _, part := range event.Content.Parts {
@@ -272,6 +271,15 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 				s.mu.Lock()
 				s.state.Runtime.EventCursor = event.ID
 				s.mu.Unlock()
+			}
+		}
+		// The Runner retains its own session handle until the iterator drains.
+		// Appending through a fresh handle inside that loop makes the Runner's
+		// next append stale. Let it store any native confirmation envelope first;
+		// then publish only the followups it did not emit, before awaiting input.
+		for _, event := range followups {
+			if err := e.publishFollowupConfirmations(ctx, s, sessions, id, event); err != nil {
+				return err
 			}
 		}
 		return d.fatal

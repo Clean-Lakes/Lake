@@ -69,8 +69,16 @@ const Card = memo(function Card({ card, tags = noTags, animateInitial = false }:
   if (card.type === "chart") return <Chart card={card}/>;
   if (card.type === "diff") { const data = card.data as { before: string; after: string }; return <details className="ai-diff"><DisclosureSummary>文件变更 · {card.title}</DisclosureSummary><div className="ai-diff-columns"><pre>{data.before || "（新文件）"}</pre><pre>{data.after || "（空文件或删除）"}</pre></div></details>; }
   if (card.type === "operation") return <details className="ai-operation"><DisclosureSummary><span>{card.title}</span><small>{card.status === "pending" ? "等待确认" : card.status === "running" ? "执行中" : card.status === "failed" ? "未完成" : "已结束"}</small></DisclosureSummary><pre>{JSON.stringify(card.data, null, 2)}</pre>{card.content && <pre>{card.content}</pre>}</details>;
-  return <div className={`ai-card ai-${card.type}`}><div className={`ai-markdown${assistantText ? " assistant-prose" : ""}`}><Markdown remarkPlugins={assistantText ? [remarkGfm, remarkAssistantProse, decorateTags,...(card.status==='completed'?[remarkCompactReply]:[])] : [remarkGfm]} skipHtml components={cardMarkdownComponents}>{visibleContent}</Markdown></div>{card.status === "running" && <span className="ai-stream-dot"/>}</div>;
+  return <div className={`ai-card ai-${card.type}`}><div className={`ai-markdown${assistantText ? " assistant-prose" : ""}`}><Markdown remarkPlugins={assistantText ? [remarkGfm, remarkAssistantProse, decorateTags,...(card.status==='completed'?[remarkCompactReply]:[])] : [remarkGfm]} skipHtml components={cardMarkdownComponents}>{visibleContent}</Markdown></div>{card.status === "running" && !assistantText && <span className="ai-stream-dot"/>}</div>;
 }, (previous, next) => sameCard(previous.card, next.card) && conversationTagSignature(previous.tags) === conversationTagSignature(next.tags));
+
+// Animate a reply's first appearance, including a completed first packet.
+// Keep the wrapper mounted through streaming/completion so updates never replay
+// the fade, replace the whole turn, or animate existing history.
+function ReplyArrival({arrive,children}:{arrive:boolean;children:ReactNode}) {
+  const [animate] = useState(arrive);
+  return <div className={`ai-response${animate?' reply-arrival':''}`}>{children}</div>;
+}
 export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation" }: { mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean }) {
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
@@ -137,7 +145,7 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
           {entry.message.images?.map(image => <figure key={image.id} className="ai-image"><img src={image.url || `data:${image.mimeType};base64,${image.base64}`} alt={image.name || "用户附加图片"}/></figure>)}
         </div>;
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
-        return <div key={entry.id} className="ai-response">{entry.card?.type === "text" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)}/></div>;
+        return <ReplyArrival key={entry.id} arrive={mode==='conversation'&&!!entry.card&&['text','message'].includes(entry.card.type)&&!restoredText.current.has(entry.card.id)}>{entry.card?.type === "text" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)}/></ReplyArrival>;
       })}
       <FileChanges cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}/>

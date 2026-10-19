@@ -45,6 +45,7 @@ test('many tool rounds render one two-line preview, final reply and single statu
  assert.equal((html.match(/class="conversation-progress"/g)||[]).length,1);
  assert.ok(html.includes('说明 11')&&!html.includes('说明 0'));
  assert.ok(html.includes('最终结论')&&html.includes('12 项操作'));
+ assert.ok(!html.includes('reply-arrival'),'restored replies must not replay arrival animations');
  assert.equal((html.match(/turn-status-text/g)||[]).length,1);
  const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:'activity'}));
  assert.ok(!activity.includes('conversation-progress-toggle'));
