@@ -26,7 +26,7 @@ import (
 
 // Release builds inject the repository VERSION through -ldflags and leave
 // main.development empty; local dev builds set both (scripts/build_lake_windows.py --dev).
-var version = "0.3.18"
+var version = "0.3.19"
 
 func message(text string) {
 	title, _ := windows.UTF16PtrFromString("Lake")
