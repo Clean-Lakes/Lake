@@ -1,10 +1,11 @@
 import {useEffect,useState} from "react";
 import type {AICard,AIView,ReplyTiming} from "../../shared/contracts";
 import {turnStatus} from "./turnStatus";
+import {Glyph} from "./Icons";
 const emptyCards:AICard[]=[];
 
 function TurnActivityMark() {
- return <svg className="reply-duration-spinner turn-activity-mark" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">{Array.from({length:8},(_,index)=><path key={index} d="M10 2v4" transform={`rotate(${index*45} 10 10)`}/>)}</svg>;
+ return <Glyph name="waves" size={18} className="reply-duration-spinner turn-activity-mark"/>;
 }
 export function ReplyDuration({timing,view,cards=emptyCards,latestUserAt=""}: {timing?:ReplyTiming;view?:AIView;cards?:AICard[];latestUserAt?:string}) {
  const [now,setNow]=useState(Date.now);
