@@ -1218,4 +1218,3 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .resource-nav-row.with-resource-actions > .resource-add-to-chat { right: 32px; }
 .sidebar.is-bulk-selecting .resource-nav-row > .resource-row { padding-right: 8px; }
 .resource-add-to-chat:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-

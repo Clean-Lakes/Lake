@@ -1,0 +1,22 @@
+{
+  "version": "0.3.19",
+  "date": "2026-10-19",
+  "verifiedSourceCommit": "8692afebeb4589fbd80307a18e3e23c888488f46",
+  "platformsToPublish": [
+    "macOS arm64"
+  ],
+  "deferred": [
+    "Windows x86_64 release package"
+  ],
+  "checks": [
+    "285 frontend tests passed",
+    "TypeScript and production web build passed",
+    "Full repository Go race tests passed, including AI (85.656s) and HTTP (213.264s)",
+    "Full repository go vet passed",
+    "ADK runtime boundary check passed",
+    "Native macOS update and window tests passed",
+    "Five macOS installer replacement/rollback tests passed"
+  ],
+  "latestSteering": "Removed visible 内置 text without changing built-in local resource protections",
+  "artifactPolicy": "Build signed regular Lake.app from merged master; no release data or credentials copied; no Windows v0.3.19 package published in this pass"
+}
