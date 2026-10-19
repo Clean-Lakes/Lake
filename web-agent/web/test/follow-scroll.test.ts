@@ -65,6 +65,22 @@ test("activity-only snapshot updates at the tail never schedule frames or write 
   assert.equal(top,600); assert.ok(writes>0);
 });
 
+test("fractional browser tail stays still on activity updates and follows actual new content", () => {
+  for (const reduced of [false, true]) {
+    const f = fixture(reduced); let top = 0, writes = 0;
+    // The DOM reports integer heights even when layout clamps to a half pixel.
+    Object.defineProperty(f.box, "scrollTop", {get: () => top, set: value => {
+      writes++; top = Math.min(value, f.box.scrollHeight - f.box.clientHeight - 0.5);
+    }});
+    f.follower.jump(); writes = 0;
+    for (let i = 0; i < 100; i++) { f.follower.request(); f.frame(i * 16.67); }
+    assert.equal(writes, 0); assert.equal(f.callbacks.size, 0); assert.equal(top, 499.5);
+    f.box.scrollHeight += 100; f.follower.request();
+    for (let time = 0; time < 1500; time += 16.67) f.frame(time);
+    assert.ok(writes > 0); assert.equal(top, 599.5); assert.equal(f.callbacks.size, 0);
+  }
+});
+
 test("unchanged historical cards reuse Markdown, while streamed content and tool state invalidate it", () => {
   const card = {id: "reason", type: "thinking", at: "2026-10-11T00:00:00Z", status: "completed", content: "**historical**", data: {target: "fixture", arguments: {command: "stat fixture"}}};
   assert.ok(sameCard(card, JSON.parse(JSON.stringify(card))));

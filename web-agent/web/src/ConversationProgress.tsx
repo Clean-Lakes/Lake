@@ -20,7 +20,7 @@ export function ConversationProgress({cards,live,onInspect,renderCard}:{cards:AI
   <button type="button" className="conversation-progress-toggle" aria-expanded={open} aria-controls={panelId} aria-label={`${open?'收起':'查看'}执行过程，${tools.length} 项操作`} onClick={()=>{onInspect?.();setOpen(!open)}}>
    <span className="conversation-progress-lines">
     <span className="conversation-progress-narration">{narration?<Markdown remarkPlugins={[remarkGfm,remarkAssistantProse]} skipHtml allowedElements={['p','strong','em','code','del']} unwrapDisallowed>{narration.content}</Markdown>:'执行过程'}</span>
-    <span className="conversation-progress-action"><span key={latest.id}>{toolDescription(latest)}</span></span>
+    <span className="conversation-progress-action"><span>{toolDescription(latest)}</span></span>
    </span>
    <Glyph name="chevron" size={14} className={open?'is-open':''}/>
   </button>

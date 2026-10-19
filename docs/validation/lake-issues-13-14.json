@@ -1,0 +1,116 @@
+{
+  "issues": [
+    13,
+    14
+  ],
+  "validatedAt": "2026-10-19T01:53:02.926447+00:00",
+  "progress": {
+    "cause": [
+      "integer scroll geometry versus fractional clamped tail",
+      "replaced action node with repeated arrival transform"
+    ],
+    "before": {
+      "updates": 4,
+      "heightChanges": 0,
+      "scrollWrites": 4,
+      "actionReplacements": 4,
+      "actionAnimations": 4
+    },
+    "after": {
+      "light": {
+        "metrics": {
+          "actionAnimations": 0,
+          "actionReplacements": 0,
+          "errors": 0,
+          "height": 3280,
+          "heightChanges": 0,
+          "historyReplacements": 0,
+          "scrollChanges": 0,
+          "scrollEvents": 0,
+          "scrollWrites": 0,
+          "snapshots": 10,
+          "subscriptions": 1,
+          "top": 2667.5,
+          "updates": 8
+        },
+        "overflow": false,
+        "theme": "light"
+      },
+      "narrowDark": {
+        "metrics": {
+          "actionAnimations": 0,
+          "actionReplacements": 0,
+          "errors": 0,
+          "height": 3280,
+          "heightChanges": 0,
+          "historyReplacements": 0,
+          "scrollChanges": 0,
+          "scrollEvents": 0,
+          "scrollWrites": 0,
+          "snapshots": 10,
+          "subscriptions": 1,
+          "top": 2670.5,
+          "updates": 8
+        },
+        "overflow": false,
+        "theme": "dark"
+      },
+      "actualContentGrowth": {
+        "heightChanges": 1,
+        "scrollWrites": 39,
+        "tailGap": 0
+      },
+      "manualHistory": {
+        "updates": 2,
+        "scrollWrites": 0,
+        "scrollChanges": 0,
+        "top": 2473
+      }
+    },
+    "fixture": "web-agent/web/test/fixtures/progress-refresh.html",
+    "data": "fictional in-memory API/SSE only"
+  },
+  "frontend": {
+    "testsPassed": 252,
+    "typecheck": "passed",
+    "productionBuild": "passed"
+  },
+  "macOS": {
+    "nativeWindowChecks": "passed: three hide/reopen cycles, retained content view, minimized restore, explicit termination allowed",
+    "desktopBuild": "passed",
+    "signedDevInstalled": true,
+    "manualAppConfirmation": "pending"
+  },
+  "windows": {
+    "nativeTests": {
+      "exitCode": 0,
+      "passed": 30,
+      "failed": [],
+      "skipped": []
+    },
+    "host": "Windows 11 ARM64 with x64 emulation",
+    "goVet": "passed",
+    "devPackageValidation": "passed",
+    "install": {
+      "installerExitCode": 0,
+      "devDataUnchanged": true,
+      "installedSHA256": "e9cb1e4be65749968c45cdb961e753bd7571a2b330b8a733f47536a83c835eed"
+    },
+    "checks": [
+      "close retains the HWND and does not invoke exit",
+      "tray mouse/keyboard reopen",
+      "maximized placement preserved",
+      "no-tray taskbar fallback",
+      "Explorer tray recreation",
+      "explicit exit and session shutdown",
+      "profile-scoped duplicate-launch activation",
+      "native Shell_NotifyIcon version-4 registration"
+    ],
+    "manualAppConfirmation": "pending"
+  },
+  "references": [
+    "https://developer.apple.com/documentation/appkit/nsapplicationdelegate/applicationshouldhandlereopen(_:hasvisiblewindows:)",
+    "https://learn.microsoft.com/windows/win32/api/shellapi/ns-shellapi-notifyicondataw",
+    "https://learn.microsoft.com/windows/win32/shell/taskbar"
+  ]
+}

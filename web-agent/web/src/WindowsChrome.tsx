@@ -36,6 +36,6 @@ export function WindowsChrome() {
   return <div className="windows-titlebar-controls" role="group" aria-label="窗口操作">
     <button type="button" title="最小化" aria-label="最小化窗口" onClick={() => run("minimize")}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5h10"/></svg></button>
     <button type="button" title={maximized ? "还原" : "最大化"} aria-label={maximized ? "还原窗口" : "最大化窗口"} onClick={() => run("maximize")}><svg viewBox="0 0 16 16" aria-hidden="true">{maximized ? <path d="M5 4.5h7v7H5zM4 11.5H3v-9h8v1"/> : <path d="M3.5 3.5h9v9h-9z"/>}</svg></button>
-    <button type="button" className="windows-close" title="关闭" aria-label="关闭窗口" onClick={() => run("close")}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9-9 9"/></svg></button>
+    <button type="button" className="windows-close" title="收起到后台" aria-label="收起到后台" onClick={() => run("close")}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9-9 9"/></svg></button>
   </div>;
 }
