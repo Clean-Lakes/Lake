@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "f9dc20fc59739bbfeebe0d8c66bf3edeb7f2699d",
+  "scope": "Tighten elapsed-time spacing and retain current gray progress motion through model continuation",
+  "behavior": [
+    "Turn stack gap reduced from 20px to 12px; metadata bottom margin reduced from 12px to zero",
+    "The latest normal operation row keeps the existing 1.9s neutral text sweep while the model prepares the next step",
+    "A visible reply or completed turn stops the continuing sweep; failed, pending, unknown and background statuses never receive the continuation class",
+    "The prior executing animation remains the same CSS animation when moving between tool-running and model-waiting phases; reduced-motion override covers both phases",
+    "Stable card IDs, operation grouping and existing reply arrival animations are retained"
+  ],
+  "checks": [
+    "280 frontend tests passed",
+    "TypeScript check and production web build passed",
+    "Fictional full-App browser fixture measured exactly 12px between 24px-high metadata and the first progress row, with 0px metadata margin",
+    "Tool return retained execution-text-sweep while the status changed to thinking",
+    "A subsequent same-resource operation reused operation-0; three transitions had zero row replacements/removals/displacement/color changes, scroll writes or execution animation restarts after measurement reset",
+    "Dark browser integration confirmed the sweep stops when visible reply prose appears, and remains stopped on completion",
+    "Dark 900px completion view had 900px document width, no horizontal overflow and retained 24px metadata height",
+    "Signed macOS Dev built/installed and signature verified; installed host/backend/layout hashes matched package",
+    "Windows Dev built, statically validated and installed; installed executables match package hashes, installer exit 0 and Dev data metadata unchanged"
+  ],
+  "screenshots": [
+    "lake-progress-spacing-motion.png",
+    "lake-progress-spacing-motion-dark.png"
+  ],
+  "limitations": [
+    "Browser verification used fictional history and in-memory SSE without paid model or host operations",
+    "Native desktop gestures were not changed; existing Dev apps need normal quit/reopen to load the installed frontend",
+    "No changes were made for the withdrawn stale-session report; stable release artifacts and profiles were not modified"
+  ],
+  "windowsInstall": {
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "ef394c4d455e42dd9a700a40a02a4fa062aec2d294a5c2ca9481440110573683",
+    "desktopSHA256": "68ae74e24a74fd1e4937814b6a3cd627e0717dba7d1bb2a8c7e9be41e626a957"
+  },
+  "artifacts": {
+    "Lake-0.3.18-macos-arm64-dev.zip": {
+      "sha256": "1c1ea921eb222661d558e98df36a42f478303f224f9c9912d22ed8db6e675969",
+      "size": 27893328
+    },
+    "Lake-0.3.18-macos-arm64-dev.dmg": {
+      "sha256": "c37d0d4fc412cc337b1e176ef022edc3c232250fbf4462d7c069f6112db97381",
+      "size": 30329497
+    },
+    "Lake-Dev-0.3.18-windows-x86_64.zip": {
+      "sha256": "eda7c65db6f13a24c1c0168bb34a315e49d9d270300f0b373dc7d312cc611c11",
+      "size": 212119134
+    },
+    "Lake-Dev-0.3.18-windows-x86_64-setup.exe": {
+      "sha256": "cb0fbd84b0d9b52cece493157376b8ee38770e6177161d76e20ab21e35feb26b",
+      "size": 160222554
+    }
+  }
+}
