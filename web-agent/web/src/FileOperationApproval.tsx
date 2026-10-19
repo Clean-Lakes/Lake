@@ -44,7 +44,7 @@ export function FileOperationApproval({approval,agentName,confirmation,onConfirm
  const {operation,args,path,content,stats,deleting,markdown,container}=info;
  const name=path.replace(/\\/g,'/').split('/').filter(Boolean).at(-1)??path;
  return <section className="attachment-approval file-operation-approval" aria-label="文件操作确认">
-  <header><Glyph name={deleting?'trash':'document'} size={18}/><div><strong>{operation.title}</strong><p>{agentName?`${agentName} · `:''}仅限本次操作</p></div><span>{approval.risk==='dangerous'?'高风险 · 等待确认':'等待确认'}</span></header>
+  <header><Glyph name="lakeConfirm" size={18}/><div><strong>{operation.title}</strong><p>{agentName?`${agentName} · `:''}仅限本次操作</p></div><span>{approval.risk==='dangerous'?'高风险 · 等待确认':'等待确认'}</span></header>
   <div className="file-approval-name"><strong>{name}</strong>{stats&&<span aria-label={`新增 ${stats.added} 行，删除 ${stats.removed} 行`}><i>+{stats.added}</i><b>−{stats.removed}</b></span>}</div>
   <dl className="attachment-approval-destination"><div><dt>目标</dt><dd>{approval.target}</dd></div>{container&&<div><dt>容器</dt><dd>{container}</dd></div>}<div><dt>位置</dt><dd className="attachment-approval-path">{path}</dd></div></dl>
   {content!==undefined&&<details className="file-approval-preview">
