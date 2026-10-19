@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
@@ -81,4 +82,42 @@ test('resource boundaries and attention states never disappear into a successful
  assert.equal(conversationGroups([one,card('note','message'),card('next','operation')]).length,3);
  const empty=card('empty','thinking','running','');
  assert.deepEqual(conversationGroups([one,empty,card('next','operation')])[0]!.entries.map(e=>e.id),['one','next']);
+});
+
+const sessionOperation=(id:string,title:string,args:Record<string,unknown>={},status='completed')=>({...card(id,'operation',status),card:{...card(id,'operation',status).card,title,data:{target:'当前项目/会话',arguments:args}}});
+test('workflow and schedule domains each reuse one row with a stable first key',()=>{
+ const before=conversationGroups([sessionOperation('list','list_workflows')]);
+ const result=conversationGroups([sessionOperation('list','list_workflows'),sessionOperation('save','save_workflow'),sessionOperation('create','schedule_create'),sessionOperation('check','schedule_list')]);
+ assert.deepEqual(result.map(group=>group.entries.map(entry=>entry.id)),[['list','save'],['create','check']]);
+ assert.equal(result[0]!.entries[0]!.id,before[0]!.entries[0]!.id);
+ assert.equal(before[0]!.entries.length,1,'a later snapshot must not mutate the earlier group');
+ const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],ai:{session:'s',status:'completed',cardsOffset:0,turns:1,cards:result.flatMap(group=>group.entries.map(entry=>entry.card))}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ assert.equal((html.match(/class="thinking-timeline /g)||[]).length,2);
+ assert.equal((html.match(/2 项/g)||[]).length,2);
+});
+test('audit all current session tools for explicit family grouping or decision boundaries',()=>{
+ const families=[['list_workflows','get_workflow_run','run_workflow','save_workflow'],['schedule_create','schedule_list','schedule_update','schedule_delete'],['todo_read','todo_write'],['load_skill'],['read_session_context'],['read_tool_result'],['task_output','task_stop'],['list_mcp_servers'],['list_mcp_tools','call_mcp_tool']];
+ const args={session_id:'history-session',result_id:'result',task_id:'task',server_id:'mcp'};
+ const names=[...readFileSync(new URL('../../../internal/ai/extended_catalog.go',import.meta.url),'utf8').matchAll(/^\s*\{"([a-z_]+)", "/gm)].map(match=>match[1]);
+ assert.deepEqual([...names].sort(),[...families.flat(),'ask_user_question'].sort(),'new session tools need an explicit grouping/boundary decision');
+ for(const family of families){
+  const entries=[...family,...family].map((name,i)=>sessionOperation(`op-${i}`,name,args));
+  assert.equal(conversationGroups(entries).length,1,family.join(','));
+ }
+ assert.equal(conversationGroups([sessionOperation('a','list_assets'),sessionOperation('b','list_resource_groups')]).length,1);
+});
+test('family groups respect attention, prose, user choice and handle boundaries',()=>{
+ const list=sessionOperation('list','list_workflows');
+ for(const status of ['pending','failed','unknown','interrupted','cancelled','not_executed','background_running']){
+  assert.equal(conversationGroups([list,sessionOperation('save','save_workflow',{},status),sessionOperation('next','list_workflows')]).length,3,status);
+ }
+ for(const middle of [card('note','message'),user,sessionOperation('choice','ask_user_question')]){
+  assert.equal(conversationGroups([list,middle,sessionOperation('save','save_workflow')]).length,3);
+ }
+ for(const [name,key] of [['task_output','task_id'],['read_session_context','session_id'],['read_tool_result','result_id'],['call_mcp_tool','server_id']] as const){
+  assert.equal(conversationGroups([sessionOperation('a',name,{[key]:'one'}),sessionOperation('b',name,{[key]:'two'})]).length,2,key);
+  assert.equal(conversationGroups([sessionOperation('a',name),sessionOperation('b',name)]).length,2,'missing '+key);
+ }
+ assert.equal(conversationGroups([sessionOperation('a','future_unknown_tool'),sessionOperation('b','future_unknown_tool')]).length,2);
 });
