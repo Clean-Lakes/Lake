@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-19",
+  "sourceCommit": "9f02002382783f24e5f97db1852a9bd4d6719f05",
+  "scope": "Restore original three fine depth ticks with horizontal icon/label/chevron alignment",
+  "design": {
+    "glyph": "shared Glyph depth / Lucide ChartNoAxesColumnIncreasing",
+    "size": 18,
+    "strokeWidth": 1.6,
+    "linecap": "round",
+    "pathCount": 3,
+    "iconTextGap": 6,
+    "triggerHeight": 28,
+    "labelLineHeight": 18,
+    "color": "theme text-secondary",
+    "levelChanges": "Keep the same static three-line shape"
+  },
+  "checks": [
+    "TypeScript check and production web build passed",
+    "283 frontend tests passed",
+    "Actual ReasoningSelector fixture verified three paths, round caps, 1.6px stroke, 18px icon and 6px gap",
+    "Icon/label/chevron centers exactly matched: default at y=134, low/medium/high/max at y=202 in both light and dark layouts",
+    "Mouse selected max successfully; runtime-disabled selector retained label, opacity 1, color and exact center alignment",
+    "400px dark layout visually verified; existing live turn waves unaffected",
+    "macOS Dev signed, installed and verified; installed host/backend hashes match package",
+    "Windows Dev package validated and installed; installed executable hashes match package; Dev data metadata unchanged"
+  ],
+  "windowsInstall": {
+    "devDataUnchanged": true,
+    "installerExitCode": 0,
+    "backendSHA256": "6ca9050436aca1b118907d9feb371d1e183b3efd9ef2c0a05e63e671bcd2e095",
+    "desktopSHA256": "1f04a1b08431957bb9822f4765e40a080fbadc50a901b4b6636b925826f838e0"
+  },
+  "screenshots": [
+    "lake-depth-lines.png",
+    "lake-depth-lines-dark.png"
+  ],
+  "limitations": [
+    "Browser verification uses fictional model settings, no live model requests",
+    "Native app UI not rechecked; normal quit/reopen loads the installed Dev frontend"
+  ]
+}
