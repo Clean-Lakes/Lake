@@ -1,15 +1,17 @@
 name: Windows x86_64 client
 on:
   workflow_dispatch:
-  push:
-    branches: [develop, master]
-    paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']
   pull_request:
+    branches: [master]
     paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']
 permissions:
   contents: read
 jobs:
   windows-amd64:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.ref == 'develop' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: windows-latest
     timeout-minutes: 25
     steps:

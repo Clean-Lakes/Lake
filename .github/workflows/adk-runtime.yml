@@ -1,14 +1,17 @@
 name: Official ADK runtime acceptance
 on:
   workflow_dispatch:
-  push:
-    branches: ['codex/adk-runtime-acceptance']
   pull_request:
+    branches: [master]
     paths: ['internal/ai/**', 'internal/agent/**', 'internal/web/**', 'go.mod', 'go.sum', '.github/workflows/adk-runtime.yml']
 permissions:
   contents: read
 jobs:
   runtime:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.ref == 'develop' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     strategy:
       fail-fast: false
       matrix:

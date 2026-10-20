@@ -53,7 +53,8 @@ Windows 本地联调使用 `python3 scripts/build_lake_windows.py --dev`，安�
 ## 提交和安全
 
 - 提交前检查 `git diff` 与暂存区，只加入本次修改。分支提交后向 `develop` 发 PR；同步最新 `origin/develop` 并处理冲突。`develop` 和 `master` 都只能经 GitHub PR 合入，禁止本地 merge 后直接 push。
-- PR 记录实际验证命令、结果、Dev 验证提交和未验证项。必需检查通过、评审意见处理完且用户明确授权后才能合并。纯文档无需虚构应用测试；涉及运行行为时按影响执行测试与 Dev 验证。
+- 日常提交及指向 `develop` 的 PR 不自动运行 CI；必须记录本地验证命令、结果、Dev 提交和未验证项。评审意见处理完且用户明确授权后才能合并；没有 CI 不表示已测试通过。纯文档无需虚构应用测试。
+- 自动验证仅在同仓库 `develop -> master` 的 PR 阶段运行，通过后才可合并；不在合并后的 master 推送重复跑。需要额外 CI 时明确手动触发。发布资产工作流沿用独立发布授权。
 - 发布按批次进行：版本、发布说明和验证材料先经 PR 合入 `develop`，再由用户授权创建 `develop -> master` 发布 PR。生产合并完成后另经发布授权才运行发布脚本；不自动给普通 PR 发版本。
 - Go 代码用 `gofmt`；前端遵循现有 React/Vite 代码组织；macOS 客户端沿用 Swift Package 结构。改动对应功能时更新说明和必要的验证记录。
 - 不在代码、日志、截图、Issue 或提交中放模型 API Key、SSH 私钥内容。Lake 正常运行的凭据位于各自 home 下权限私有的 `secrets/`；只有显式执行已签名的 `lake secrets migrate` 才读取旧 Keychain 凭据。

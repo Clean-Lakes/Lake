@@ -1,6 +1,7 @@
 name: Lake branch policy
 on:
   pull_request_target:
+    branches: [master]
     types: [opened, reopened, synchronize, edited, ready_for_review]
 permissions:
   contents: read
