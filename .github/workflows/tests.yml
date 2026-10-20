@@ -24,6 +24,7 @@ jobs:
       - run: pnpm --dir web-agent test:frontend && pnpm --dir web-agent build:web
       - run: mkdir -p assets/web/dist && cp -R web-agent/web/dist/. assets/web/dist/
       - run: python3 scripts/check_adk_runtime_boundary.py
+      - run: python3 -m unittest discover -s scripts -p 'test_branch_policy.py'
       - run: go test -race ./... && go vet ./...
       - run: swift run --package-path client/macos --build-system native LakeUpdateTests
       - run: swift run --package-path client/macos --build-system native LakeWindowTests

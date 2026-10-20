@@ -2,7 +2,7 @@ name: Windows x86_64 client
 on:
   workflow_dispatch:
   push:
-    branches: [master]
+    branches: [develop, master]
     paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']
   pull_request:
     paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']

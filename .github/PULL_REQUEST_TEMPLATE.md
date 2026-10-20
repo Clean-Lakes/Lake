@@ -1,49 +1,30 @@
-#### What type of PR is this?
-<!--
-Add one of the following kinds:
+## 变更与原因
 
-build: Changes that affect the build system or external dependencies (example scopes: gulp, broccoli, npm)
-ci: Changes to our CI configuration files and scripts (example scopes: Travis, Circle, BrowserStack, SauceLabs)
-docs: Documentation only changes
-feat: A new feature
-optimize: A new optimization
-fix: A bug fix
-perf: A code change that improves performance
-refactor: A code change that neither fixes a bug nor adds a feature
-style: Changes that do not affect the meaning of the code (white space, formatting, missing semi-colons, etc)
-test: Adding missing tests or correcting existing tests
-chore: Changes to the build process or auxiliary tools and libraries such as documentation generation
--->
+说明具体问题、最终行为及影响范围。
 
-#### Check the PR title.
-<!--
-The description of the title will be attached in Release Notes, 
-so please describe it from user-oriented, what this PR does / why we need it.
-Please check your PR title with the below requirements:
--->
-- [ ] This PR title match the format: \<type\>(optional scope): \<description\>
-- [ ] The description of this PR title is user-oriented and clear enough for others to understand.
-- [ ] Attach the PR updating the user documentation if the current PR requires user awareness at the usage level. [User docs repo](https://github.com/cloudwego/cloudwego.github.io)
+## 分支与范围
 
+- [ ] 普通开发、修复、文档、版本准备或同步 PR：目标为 `develop`，来源为独立工作分支。
+- [ ] 批次发布 PR（仅此类可选）：来源是本仓库 `develop`，目标为 `master`，已取得本次发布 PR 的明确授权。
+- [ ] 没有直接推送 `develop` / `master` 或绕过保护；标题使用 `feat/fix/docs/ci/chore/refactor/...: 描述`。
 
-#### (Optional) Translate the PR title into Chinese.
+仅选择适用的 PR 类型。完整要求见 [开发规范](https://github.com/Clean-Lakes/Lake/blob/develop/docs/development-workflow.md)。
 
+## 验证证据
 
-#### (Optional) More detailed description for this PR(en: English/zh: Chinese).
-<!--
-Provide more detailed info for review(e.g., it's recommended to provide perf data if this is a perf type PR).
--->
-en:
-zh(optional): 
+| 项目 | 命令或操作 | 结果与证据 |
+| --- | --- | --- |
+| 测试及静态检查 | | |
+| Lake Dev | 已测试提交 SHA、平台、数据目录 | 未运行时说明原因 |
+| 未验证项 | | |
 
+## 风险与回退
 
-#### (Optional) Which issue(s) this PR fixes:
-<!--
-Automatically closes linked issue when PR is merged.
-Eg: `Fixes #<issue number>`, or `Fixes (paste link of issue)`.
--->
+说明数据迁移、权限或执行语义的影响及回退方式；无相关影响时写“不涉及”。
 
-#### (optional) The PR that updates user documentation:
-<!--
-If the current PR requires user awareness at the usage level, please submit a PR to update user docs. [User docs repo](https://github.com/cloudwego/cloudwego.github.io)
--->
+## 合并与发布
+
+- [ ] 必需 CI 已通过，评审意见已处理；执行合并前确认用户明确授权。
+- [ ] 如为发布 PR，补充累计变更、版本与发布说明、Dev 验收、已知问题和生产回退方案。
+
+合并 PR 不等于授权发布 Release、推送发布标签或操作生产应用。发布和生产安装需单独明确授权。
