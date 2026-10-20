@@ -1,0 +1,79 @@
+{
+  "desktop": [
+    {
+      "height": 173.328125,
+      "name": "横图.svg",
+      "naturalHeight": 1200,
+      "naturalWidth": 1800,
+      "width": 259.984375
+    },
+    {
+      "height": 180,
+      "name": "竖图.svg",
+      "naturalHeight": 2400,
+      "naturalWidth": 900,
+      "width": 67.5
+    },
+    {
+      "height": 48,
+      "name": "小图.svg",
+      "naturalHeight": 48,
+      "naturalWidth": 48,
+      "width": 48
+    }
+  ],
+  "containers": [
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "padding": "0px"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "padding": "0px"
+    }
+  ],
+  "preview": {
+    "height": 610,
+    "naturalHeight": 1200,
+    "naturalWidth": 1800,
+    "width": 915
+  },
+  "focusReturned": true,
+  "mobile": {
+    "body": 390,
+    "images": [
+      {
+        "height": 173.328125,
+        "right": 347.984375,
+        "width": 259.984375
+      },
+      {
+        "height": 180,
+        "right": 358,
+        "width": 67.5
+      },
+      {
+        "height": 48,
+        "right": 358,
+        "width": 48
+      }
+    ],
+    "viewport": 390
+  },
+  "mobilePreview": {
+    "height": 800,
+    "left": 44.375,
+    "right": 345.625,
+    "width": 301.25
+  },
+  "dark": [
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "padding": "0px"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "padding": "0px"
+    }
+  ]
+}

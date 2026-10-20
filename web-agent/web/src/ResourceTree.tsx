@@ -7,7 +7,7 @@ import type { Project, Resource, ResourceTreeNode } from "../../shared/contracts
 import { api, readableError } from "./api";
 import { canMoveInto, dropPlacement, projectResourceTree } from "./resource-tree-model";
 
-function FolderIcon() { return <Glyph name="folder" size={16}/>; }
+function FolderIcon() { return <Glyph name="folder" size={16} className="resource-tree-folder-icon"/>; }
 export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource, onImport, onDelete, selection, onSelectAll, filtering = false}: {
   filtering?: boolean;
   selection?: BulkSelection; onSelectAll?: () => void;

@@ -1,5 +1,5 @@
 /* Document properties and tag navigation, matching Lake's neutral workspace. */
-.session-state-badge { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 550; line-height: 1.5; background: var(--surface-selected); color: var(--text-secondary); flex-shrink: 0; white-space: nowrap; }
+.session-state-badge { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 550; line-height: 1.5; background: var(--surface-selected); color: var(--session-state-color, var(--text-secondary)); flex-shrink: 0; white-space: nowrap; }
 .session-actions-trigger { width: 28px; height: 28px; font-size: 16px; line-height: 1; flex-shrink: 0; }
 .tag-chip { display: inline-flex; gap: 5px; align-items: center; font-size: 11px; font-weight: 550; padding: 3px 8px; line-height: 1.5; border-radius: 999px; background: var(--tag-soft); color: var(--tag-color); max-width: 100%; overflow-wrap: anywhere; }
 .color-gray { --tag-color: var(--text-secondary); --tag-soft: var(--surface-selected); }
@@ -12,11 +12,16 @@
 .session-list-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 4px; margin-top: 3px; min-width: 0; }
 .session-list-tag { color: var(--tag-color); background: var(--tag-soft); font-size: 11px; line-height: 1.6; padding: 0 5px; border-radius: 4px; max-width: min(100%, 100px); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-list-tags-more { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+.session-state-badge[class*="state-"] { color: var(--session-state-color, var(--text-secondary)); }
 .session-state-badge > span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.session-state-badge.state-completed { background: var(--success-soft); color: var(--success); }
-.session-state-badge.state-failed { background: var(--danger-soft); color: var(--danger); }
-.session-state-badge.state-waiting_approval { background: var(--warning-soft); color: var(--warning); }
-.session-state-badge.state-investigating { background: var(--info-soft); color: var(--info); }
+.session-state-badge.state-completed, .ai-context-usage[data-session-status="completed"] { --session-state-color: var(--success); }
+.session-state-badge.state-completed { background: var(--success-soft); }
+.session-state-badge.state-failed, .ai-context-usage[data-session-status="failed"] { --session-state-color: var(--danger); }
+.session-state-badge.state-failed { background: var(--danger-soft); }
+.session-state-badge.state-waiting_approval, .ai-context-usage[data-session-status="waiting_approval"] { --session-state-color: var(--warning); }
+.session-state-badge.state-waiting_approval { background: var(--warning-soft); }
+.session-state-badge.state-investigating, .ai-context-usage[data-session-status="investigating"] { --session-state-color: var(--info); }
+.session-state-badge.state-investigating { background: var(--info-soft); }
 .sidebar-tags { border-top: 1px solid var(--border); padding: 6px 12px 3px; flex-shrink: 0; }
 .sidebar-tags-heading { display: flex; align-items: center; justify-content: space-between; color: var(--text-muted); font-size: 12px; margin-bottom: 0; }
 .sidebar-tags-heading > span { display: flex; align-items: center; gap: 7px; }

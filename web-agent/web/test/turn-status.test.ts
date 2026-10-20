@@ -69,7 +69,7 @@ test("the single metadata row precedes the reply, file changes and todos; activi
  assert.ok(html.includes('步骤已完成'));
  assert.ok(html.indexOf('class="reply-duration ')<html.indexOf("步骤已完成"));
  assert.ok(html.indexOf('class="reply-duration ')<html.indexOf("最后的回复"));
- assert.ok(html.indexOf('class="reply-duration ')<html.indexOf("file-changes"));
+ assert.ok(!html.includes("file-changes"),"file summary waits until the running turn ends");
  s.messages.push({id:"v",sessionId:"s",role:"user",text:"新提问",createdAt:"2026-10-14T03:01:00Z"});
  s.replyTimings=undefined;s.ai!.cards=[{...tool,status:"completed"}];s.ai!.turnStartedAt=s.messages[1]!.createdAt;
  const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:"activity"}));
@@ -82,10 +82,10 @@ test('each turn starts with its own metadata after the user message and before t
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  const older=html.slice(html.indexOf('id="conversation-turn-s-old"'),html.indexOf('id="conversation-turn-s-u"'));
  const current=html.slice(html.indexOf('id="conversation-turn-s-u"'));
- assert.ok(older.indexOf('历史问题')<older.indexOf('2s')&&older.indexOf('2s')<older.indexOf('历史答复'));
- assert.ok(current.indexOf('当前问题')<current.indexOf('49s')&&current.indexOf('49s')<current.indexOf('本轮答复'));
+ assert.ok(older.indexOf('历史问题')<older.indexOf('2秒')&&older.indexOf('2秒')<older.indexOf('历史答复'));
+ assert.ok(current.indexOf('当前问题')<current.indexOf('49秒')&&current.indexOf('49秒')<current.indexOf('本轮答复'));
  assert.equal((html.match(/aria-label="回答耗时"/g)||[]).length,2);
- assert.ok(!older.includes('49s')&&!current.includes('2s'));
+ assert.ok(!older.includes('49秒')&&!current.includes('2秒'));
 });
 test('only actual running operations receive the stronger execution motion',()=>{
  const render=(status:string,live:boolean)=>renderToStaticMarkup(createElement(ThinkingTimeline,{cards:[{...tool,status}],live,resourceRow:true}));
@@ -100,7 +100,7 @@ test('the current normal progress row keeps moving while the model prepares its 
  assert.equal((html.match(/is-continuing/g)??[]).length,1);
  assert.ok(!html.includes('is-executing'),'a completed tool is not labeled as executing');
  s.ai!.cards.push({id:'reply',type:'message',status:'running',at,content:'根据结果继续分析'});
- assert.ok(!renderToStaticMarkup(createElement(AITranscript,{snapshot:s})).includes('is-continuing'));
+ assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot:s})).includes('is-continuing'),'generated prose must not stop the current sweep before the turn finishes');
  s.ai!.cards.pop();s.replyTimings=[{...timing,status:'completed',finishedAt:new Date(now).toISOString()}];s.ai!.status='completed';
  assert.ok(!renderToStaticMarkup(createElement(AITranscript,{snapshot:s})).includes('is-continuing'));
 });

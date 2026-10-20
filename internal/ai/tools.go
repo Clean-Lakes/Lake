@@ -553,10 +553,13 @@ func readonlySQL(sql string) bool {
 	if !strings.HasPrefix(s, "SELECT ") {
 		return false
 	}
-	for _, word := range []string{"INTO", "FOR UPDATE", "PG_", "DBLINK", "LOAD_FILE", "SLEEP(", "BENCHMARK("} {
+	for _, word := range []string{"INTO", "FOR UPDATE", "DBLINK", "LOAD_FILE", "SLEEP(", "BENCHMARK("} {
 		if strings.Contains(s, word) {
 			return false
 		}
+	}
+	if !readonlyPostgresNames(s) {
+		return false
 	}
 	return true
 }

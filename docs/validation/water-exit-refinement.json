@@ -1,0 +1,18 @@
+{
+  "running": {
+    "opacity": "1",
+    "phase": "42.6181% 0px"
+  },
+  "fading": {
+    "class": "workspace-header-sweep is-receding",
+    "duration": "0.7s",
+    "opacity": "0.31684",
+    "phase": "31.2792% 0px"
+  },
+  "removedAfterFade": 0,
+  "resume": {
+    "class": "workspace-header-sweep",
+    "opacity": "0.941232",
+    "phase": "72.016% 0px"
+  }
+}

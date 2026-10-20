@@ -1,0 +1,29 @@
+{
+  "light": {
+    "background": "rgb(53, 104, 165)",
+    "color": "rgb(255, 255, 255)",
+    "height": 20.5,
+    "text": "调查中",
+    "waves": true,
+    "contrast": 5.71
+  },
+  "footer": {
+    "filter": "blur(12px)",
+    "mask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 21px / 0 stretch",
+    "parentFilter": "none",
+    "pointerEvents": "none",
+    "radius": "0px"
+  },
+  "dark": {
+    "background": "rgb(155, 188, 232)",
+    "color": "rgb(16, 36, 62)",
+    "height": 20.5,
+    "waves": true,
+    "contrast": 8.0
+  },
+  "completed": {
+    "background": "rgb(24, 41, 31)",
+    "text": "回复结束",
+    "waves": false
+  }
+}

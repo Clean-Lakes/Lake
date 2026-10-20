@@ -1,8 +1,9 @@
 .status-text { display: inline-block; min-width: 0; max-width: 100%; vertical-align: middle; }
 .status-text--active { color: var(--status-text-base); }
+.turn-status .status-text { --status-text-base: var(--text-muted); --status-text-highlight: var(--foreground); }
 .agent-group-state, .agent-task-status.status-running { --status-text-base: var(--foreground); }
 @supports ((background-clip: text) or (-webkit-background-clip: text)) {
-  .status-text--active { color: transparent; -webkit-text-fill-color: transparent; /* Every stop is opaque: the letters stay readable throughout the sweep. */ background: linear-gradient(105deg, var(--status-text-base) 36%, var(--text-muted) 48%, var(--text-muted) 50%, var(--text-muted) 52%, var(--status-text-base) 64%); background-size: 250% 100%; background-clip: text; -webkit-background-clip: text; animation: status-text-sweep 1.8s linear infinite; }
+  .status-text--active { color: transparent; -webkit-text-fill-color: transparent; /* Every stop is opaque: the letters stay readable throughout the sweep. */ background: linear-gradient(105deg, var(--status-text-base) 32%, var(--status-text-highlight, var(--text-muted)) 44%, var(--status-text-highlight, var(--text-muted)) 56%, var(--status-text-base) 68%); background-size: 220% 100%; background-clip: text; -webkit-background-clip: text; animation: status-text-sweep 1.8s linear infinite; }
 }
 @keyframes status-text-sweep {
   from { background-position: 120% 0; }

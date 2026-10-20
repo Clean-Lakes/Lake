@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-20",
+  "fixture": "web-agent/web/test/fixtures/code-copy.html",
+  "screenshot": "code-copy-pill.png",
+  "checks": {
+    "layout": "Single shell command is a 46px-high, content-sized rounded block with one persistent copy icon and no run action. Multiline and long code scroll within the code area; the copy button stays outside it.",
+    "clipboard": "Actual copy and keyboard paste verified exact single-command and multiline Windows command text, including Chinese paths, spaces, quotes and final newline.",
+    "themesAndReports": "Ordinary reply and SRE renderers verified; dark SRE at a 390px viewport keeps all three copy buttons visible and contains code overflow.",
+    "content": "Shell colors preserve original text; JSON containing script-like text stays escaped. Existing tag test now verifies unchanged code text independently of presentation spans.",
+    "frontend": "314 frontend tests passed; TypeScript/Vite build passed.",
+    "installation": "Signed scripts/build_lake_desktop.sh --dev --install succeeded. Running Dev needs normal quit and reopen."
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "layers": [
+    {
+      "bottom": "0px",
+      "direction": "normal",
+      "duration": "12s",
+      "height": 42,
+      "heightBefore": "42px",
+      "maskSize": "100% 100%",
+      "top": "0px",
+      "transform": "matrix(1, 0, 0, 1, 528.871, 0)",
+      "width": "90px"
+    },
+    {
+      "bottom": "0px",
+      "direction": "normal",
+      "duration": "16s",
+      "height": 42,
+      "heightBefore": "42px",
+      "maskSize": "100% 100%",
+      "top": "0px",
+      "transform": "matrix(1, 0, 0, 1, 119.715, 0)",
+      "width": "90px"
+    }
+  ],
+  "before": [
+    "matrix(1, 0, 0, 1, 13.8482, 0)",
+    "matrix(1, 0, 0, 1, 287.324, 0)"
+  ],
+  "after": [
+    "matrix(1, 0, 0, 1, 107.688, 0)",
+    "matrix(1, 0, 0, 1, 80.7664, 0)"
+  ]
+}

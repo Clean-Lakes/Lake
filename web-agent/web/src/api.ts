@@ -108,6 +108,7 @@ export const api = {
 	sreEvidence:(session:string,task:string,evidence:string,offset=0)=>request<{source:string;nextCursor:number|null;sourceTruncated:boolean;sourceBytes:number;collectedAt:string}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}/evidence/${encodeURIComponent(evidence)}?offset=${offset}`),
 	sreExport:(session:string,task:string)=>request<{name:string;content:string}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}/export`),
   mcpServers:()=>request<{servers:MCPServerConfig[]}>("/api/settings/mcp"),
+  importMCP:(value:unknown)=>request<{servers:MCPServerConfig[]}>("/api/settings/mcp/import",{method:"POST",body:JSON.stringify(value)}),
   saveMCP:(value:Record<string,unknown>)=>request<MCPServerConfig>(`/api/settings/mcp${value.id?`/${encodeURIComponent(String(value.id))}`:""}`,{method:value.id?"PUT":"POST",body:JSON.stringify(value)}),
   deleteMCP:(id:string)=>request(`/api/settings/mcp/${encodeURIComponent(id)}`,{method:"DELETE"}),
   testMCP:(id:string)=>request<MCPToolCatalog>(`/api/settings/mcp/${encodeURIComponent(id)}/test`,{method:"POST",body:"{}"}),

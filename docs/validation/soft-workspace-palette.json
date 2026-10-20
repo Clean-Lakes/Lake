@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-20",
+  "fixture": "web-agent/web/test/fixtures/workspace-heading.html",
+  "screenshot": "soft-workspace-palette.png",
+  "palette": {
+    "sidebar": "#fafaf9",
+    "workspace": "#fcfcfc",
+    "inputAndPopover": "#ffffff"
+  },
+  "checks": {
+    "light": "Computed sidebar RGB 250/250/249 and workspace RGB 252/252/252; search RGB 238/238/238, selected session RGB 232/232/232, input RGB 255/255/255.",
+    "settings": "Light, dark and system theme previews verified in the actual settings dialog. Light/system previews match the new workspace and sidebar palette.",
+    "dark": "Actual dark workspace RGB 23/23/23 and sidebar RGB 20/20/20 verified.",
+    "native": "macOS window background and Windows paperColor synchronized with #fcfcfc; Windows runtime not exercised on macOS.",
+    "build": "TypeScript/Vite and signed macOS desktop build/install succeeded through scripts/build_lake_desktop.sh --dev --install. Running Dev needs normal quit and reopen."
+  }
+}

@@ -20,15 +20,17 @@ var Identifier = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,79}$`)
 var envName = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 type Server struct {
-	ID        string            `json:"id"`
-	Name      string            `json:"name"`
-	Transport string            `json:"transport"`
-	Enabled   bool              `json:"enabled"`
-	URL       string            `json:"url,omitempty"`
-	Command   string            `json:"command,omitempty"`
-	Args      []string          `json:"args"`
-	Headers   map[string]string `json:"headers,omitempty"`
-	Env       map[string]string `json:"env,omitempty"`
+	ID              string            `json:"id"`
+	Name            string            `json:"name"`
+	Transport       string            `json:"transport"`
+	Enabled         bool              `json:"enabled"`
+	URL             string            `json:"url,omitempty"`
+	Command         string            `json:"command,omitempty"`
+	Args            []string          `json:"args"`
+	Headers         map[string]string `json:"headers,omitempty"`
+	Env             map[string]string `json:"env,omitempty"`
+	TimeoutMS       int               `json:"timeoutMs,omitempty"`
+	ProtocolVersion string            `json:"protocolVersion,omitempty"`
 }
 type Config struct {
 	Version        int      `json:"version"`
@@ -126,6 +128,12 @@ func ValidateServer(c Server) error {
 	if c.Transport != "stdio" && c.Transport != "http" && c.Transport != "sse" {
 		return errors.New("请选择 MCP 连接方式")
 	}
+	if c.TimeoutMS != 0 && (c.TimeoutMS < 1000 || c.TimeoutMS > 300000) {
+		return errors.New("超时时间须为 1000～300000 毫秒")
+	}
+	if c.ProtocolVersion != "" && c.ProtocolVersion != "2026-07-28" && c.ProtocolVersion != "2025-11-25" && c.ProtocolVersion != "2025-06-18" && c.ProtocolVersion != "2025-03-26" && c.ProtocolVersion != "2024-11-05" {
+		return errors.New("请选择支持的 MCP 协议版本")
+	}
 	if c.Transport == "stdio" {
 		if strings.TrimSpace(c.Command) == "" || len(c.Command) > 2000 || strings.ContainsAny(c.Command, "\x00\r\n") {
 			return errors.New("请输入可执行命令，不要使用 Shell 拼接")
@@ -212,7 +220,7 @@ func (s *Store) FindServer(id string) (Server, error) {
 	return Server{}, errors.New("MCP 服务不存在")
 }
 func PublicServer(v Server) map[string]any {
-	return map[string]any{"id": v.ID, "name": v.Name, "transport": v.Transport, "enabled": v.Enabled, "url": v.URL, "command": v.Command, "args": append([]string{}, v.Args...), "headersConfigured": len(v.Headers) > 0, "envConfigured": len(v.Env) > 0}
+	return map[string]any{"id": v.ID, "name": v.Name, "transport": v.Transport, "enabled": v.Enabled, "url": v.URL, "command": v.Command, "args": append([]string{}, v.Args...), "headersConfigured": len(v.Headers) > 0, "envConfigured": len(v.Env) > 0, "timeoutMs": v.TimeoutMS, "protocolVersion": v.ProtocolVersion}
 }
 
 func ServerRevision(server Server) string {

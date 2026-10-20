@@ -96,7 +96,7 @@ export function conversationDisplayGroups(entries:TranscriptEntry[],active=false
  * chronological entry rather than by the last displayed row. */
 export function currentProgressGroupId(entries:TranscriptEntry[],live:boolean):string|undefined {
  if(!live)return;
- const tail=entries.filter(entry=>entry.card?.type!=='thinking'||!!entry.card.content).at(-1);
+ const tail=entries.filter(entry=>(entry.card?.type!=='thinking'||!!entry.card.content)&&entry.message?.role!=='assistant'&&!['message','text'].includes(entry.card?.type??'')).at(-1);
  if(!tail?.card||!normalStatuses.has(tail.card.status))return;
  const row=conversationGroups(entries).find(group=>group.progress&&group.entries.some(entry=>entry.id===tail.id));
  return row?.entries[0]!.id;

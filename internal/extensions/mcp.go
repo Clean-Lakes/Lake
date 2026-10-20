@@ -97,7 +97,7 @@ func connect(ctx context.Context, c Server) (*mcp.ClientSession, context.CancelF
 	client := mcp.NewClient(&mcp.Implementation{Name: "Lake", Version: "1"}, &mcp.ClientOptions{Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	lifetime, cancel := context.WithCancel(context.Background())
 	stop := context.AfterFunc(ctx, cancel)
-	session, err := client.Connect(lifetime, transport, nil)
+	session, err := client.Connect(lifetime, transport, &mcp.ClientSessionOptions{ProtocolVersion: c.ProtocolVersion})
 	stop()
 	if err != nil || ctx.Err() != nil {
 		cancel()
@@ -146,12 +146,16 @@ func list(ctx context.Context, session *mcp.ClientSession) ([]map[string]any, er
 	return rows, nil
 }
 func (m *Manager) Tools(ctx context.Context, id string, test bool) (any, error) {
-	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
-	defer cancel()
 	c, err := m.Store.FindServer(id)
 	if err != nil {
 		return nil, err
 	}
+	timeout := 12 * time.Second
+	if c.TimeoutMS > 0 {
+		timeout = time.Duration(c.TimeoutMS) * time.Millisecond
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	var session *mcp.ClientSession
 	if test {
 		var closeLifetime context.CancelFunc
@@ -176,12 +180,16 @@ func (m *Manager) Tools(ctx context.Context, id string, test bool) (any, error) 
 	return scrub(map[string]any{"serverId": id, "serverName": c.Name, "tools": rows, "count": len(rows)}, c), nil
 }
 func (m *Manager) Call(ctx context.Context, id, name string, args map[string]any) (any, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	c, err := m.Store.FindServer(id)
 	if err != nil {
 		return nil, err
 	}
+	timeout := 60 * time.Second
+	if c.TimeoutMS > 0 {
+		timeout = time.Duration(c.TimeoutMS) * time.Millisecond
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	session, err := m.session(ctx, c)
 	if err != nil {
 		return nil, err

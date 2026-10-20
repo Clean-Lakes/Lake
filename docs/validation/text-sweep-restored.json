@@ -1,0 +1,276 @@
+[
+  {
+    "stage": "executing",
+    "reduced": false,
+    "status": [
+      {
+        "nodeId": 1,
+        "text": "正在执行工具…",
+        "name": "status-text-sweep",
+        "phase": "17.8548% 0px",
+        "fill": "rgba(0, 0, 0, 0)",
+        "animations": [
+          {
+            "id": 1,
+            "state": "running",
+            "start": 170.1109999557957,
+            "time": 9766.089000044203
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "nodeId": 2,
+        "text": "检查系统与资源 · 演示主机",
+        "name": "execution-text-sweep",
+        "phase": "129.19% 0px",
+        "fill": "rgba(0, 0, 0, 0)",
+        "animations": [
+          {
+            "id": 2,
+            "state": "running",
+            "start": 170.1109999557957,
+            "time": 9766.089000044203
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "stage": "tool-returned",
+    "reduced": false,
+    "status": [
+      {
+        "nodeId": 1,
+        "text": "正在思考…",
+        "name": "status-text-sweep",
+        "phase": "-19.9985% 0px",
+        "fill": "rgba(0, 0, 0, 0)",
+        "animations": [
+          {
+            "id": 1,
+            "state": "running",
+            "start": 170.1109999557957,
+            "time": 10049.989000044205
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "nodeId": 2,
+        "text": "检查系统与资源 · 演示主机",
+        "name": "execution-text-sweep",
+        "phase": "96.3171% 0px",
+        "fill": "rgba(0, 0, 0, 0)",
+        "animations": [
+          {
+            "id": 2,
+            "state": "running",
+            "start": 170.1109999557957,
+            "time": 10049.989000044205
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "stage": "generating",
+    "reduced": false,
+    "status": [
+      {
+        "nodeId": 1,
+        "text": "正在生成回复…",
+        "name": "status-text-sweep",
+        "phase": "-62.0919% 0px",
+        "fill": "rgba(0, 0, 0, 0)",
+        "animations": [
+          {
+            "id": 1,
+            "state": "running",
+            "start": 170.1109999557957,
+            "time": 10365.689000044204
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "nodeId": 2,
+        "text": "检查系统与资源 · 演示主机",
+        "name": "execution-text-sweep",
+        "phase": "59.7623% 0px",
+        "fill": "rgba(0, 0, 0, 0)",
+        "animations": [
+          {
+            "id": 2,
+            "state": "running",
+            "start": 170.1109999557957,
+            "time": 10365.689000044204
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "stage": "after-timer-ticks",
+    "reduced": false,
+    "status": [
+      {
+        "nodeId": 1,
+        "text": "正在生成回复…",
+        "name": "status-text-sweep",
+        "phase": "-48.8119% 0px",
+        "fill": "rgba(0, 0, 0, 0)",
+        "animations": [
+          {
+            "id": 1,
+            "state": "running",
+            "start": 170.1109999557957,
+            "time": 341466.08900004416
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "nodeId": 2,
+        "text": "检查系统与资源 · 演示主机",
+        "name": "execution-text-sweep",
+        "phase": "1.82127% 0px",
+        "fill": "rgba(0, 0, 0, 0)",
+        "animations": [
+          {
+            "id": 2,
+            "state": "running",
+            "start": 170.1109999557957,
+            "time": 341466.08900004416
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "stage": "same-row-update",
+    "reduced": false,
+    "status": [
+      {
+        "nodeId": 1,
+        "text": "正在生成回复…",
+        "name": "status-text-sweep",
+        "phase": "-91.0385% 0px",
+        "fill": "rgba(0, 0, 0, 0)",
+        "animations": [
+          {
+            "id": 1,
+            "state": "running",
+            "start": 170.1109999557957,
+            "time": 341782.7890000442
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "nodeId": 2,
+        "text": "检查系统与资源 · 演示主机",
+        "name": "execution-text-sweep",
+        "phase": "-34.8493% 0px",
+        "fill": "rgba(0, 0, 0, 0)",
+        "animations": [
+          {
+            "id": 2,
+            "state": "running",
+            "start": 170.1109999557957,
+            "time": 341782.7890000442
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "stage": "dark-executing",
+    "reduced": false,
+    "status": [
+      {
+        "nodeId": 1,
+        "text": "正在执行工具…",
+        "name": "status-text-sweep",
+        "phase": "120% 0px",
+        "fill": "rgba(0, 0, 0, 0)",
+        "animations": [
+          {
+            "id": 1,
+            "state": "running",
+            "start": null,
+            "time": 0
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "nodeId": 2,
+        "text": "检查系统与资源 · 演示主机",
+        "name": "execution-text-sweep",
+        "phase": "160% 0px",
+        "fill": "rgba(0, 0, 0, 0)",
+        "animations": [
+          {
+            "id": 2,
+            "state": "running",
+            "start": null,
+            "time": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "stage": "failed-tool",
+    "reduced": false,
+    "status": [
+      {
+        "nodeId": 1,
+        "text": "正在思考…",
+        "name": "status-text-sweep",
+        "phase": "71.1624% 0px",
+        "fill": "rgba(0, 0, 0, 0)",
+        "animations": [
+          {
+            "id": 1,
+            "state": "running",
+            "start": 145.61799995135516,
+            "time": 11166.282000048644
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "nodeId": 2,
+        "text": "检查系统与资源 · 演示主机 · 执行失败",
+        "name": "none",
+        "phase": "0% 0%",
+        "fill": "rgb(170, 170, 170)",
+        "animations": []
+      }
+    ]
+  },
+  {
+    "stage": "completed-turn",
+    "reduced": false,
+    "status": [],
+    "rows": [
+      {
+        "nodeId": 2,
+        "text": "检查系统与资源 · 演示主机 · 执行失败",
+        "name": "none",
+        "phase": "0% 0%",
+        "fill": "rgb(170, 170, 170)",
+        "animations": []
+      }
+    ]
+  }
+]

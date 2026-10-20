@@ -1,0 +1,32 @@
+/* A curved front traverses the entire surface horizontally, rather than filling
+   upward from its bottom. The transparent tail makes each repeat seamless. */
+.lake-forward-water {
+ -webkit-mask-image:url('/lake-forward-water.svg');
+ mask-image:url('/lake-forward-water.svg');
+ -webkit-mask-size:220% 100%;
+ mask-size:220% 100%;
+ -webkit-mask-repeat:no-repeat;
+ mask-repeat:no-repeat;
+ animation:lake-water-forward 3.2s linear infinite;
+}
+@keyframes lake-water-forward {
+ 0% { -webkit-mask-position:100% 0; mask-position:100% 0; opacity:0; }
+ 12% { opacity:1; }
+ 78% { opacity:1; }
+ 100% { -webkit-mask-position:0% 0; mask-position:0% 0; opacity:0; }
+}
+.execution-icon { display:inline-grid; position:relative; flex-shrink:0; vertical-align:middle; color:inherit; --execution-icon-color:var(--info); }
+.execution-icon > .execution-icon-base,.execution-icon-water { grid-area:1 / 1; }
+.execution-icon > .execution-icon-base { color:var(--execution-icon-color); opacity:.85; }
+.execution-icon svg { display:block; width:100%; height:100%; }
+.execution-icon-water { display:block; color:var(--execution-icon-color); pointer-events:none; animation-duration:1.9s; filter:drop-shadow(0 0 1px color-mix(in srgb,var(--execution-icon-color) 45%,transparent)); }
+.execution-icon.is-active > .execution-icon-base { opacity:.4; }
+.execution-icon[data-kind="lakeDatabase"] { --execution-icon-color:var(--resource-database-foreground); }
+.execution-icon:is([data-kind="lakeContainer"],[data-kind="lakeWorkflow"],[data-kind="lakeNetwork"]) { --execution-icon-color:var(--tag-purple); }
+.execution-icon:is([data-kind="lakeFolder"],[data-kind="lakeSchedule"],[data-kind="lakeQuestion"]) { --execution-icon-color:var(--warning); }
+.execution-icon[data-kind="lakeFile"] { --execution-icon-color:var(--tag-orange); }
+@media(prefers-reduced-motion:reduce) {
+ .lake-forward-water { animation:none; }
+ .execution-icon-water { display:none; }
+ .execution-icon.is-active > .execution-icon-base { opacity:1; }
+}

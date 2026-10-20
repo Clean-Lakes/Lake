@@ -1,0 +1,374 @@
+{
+  "controls": [
+    {
+      "class": "navigation-search",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 253,
+      "x": 13,
+      "y": 107
+    },
+    {
+      "class": "nav-row session-nav-row active",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 259,
+      "x": 10,
+      "y": 223
+    },
+    {
+      "class": "nav-row resource-row ",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 259,
+      "x": 10,
+      "y": 422
+    },
+    {
+      "class": "resource-folder-toggle",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 259,
+      "x": 10,
+      "y": 467
+    },
+    {
+      "class": "nav-row resource-row ",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 246,
+      "x": 23,
+      "y": 511
+    },
+    {
+      "class": "nav-row resource-row ",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 246,
+      "x": 23,
+      "y": 556
+    },
+    {
+      "class": "resource-folder-toggle",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 259,
+      "x": 10,
+      "y": 601
+    },
+    {
+      "class": "nav-row resource-row ",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 246,
+      "x": 23,
+      "y": 645
+    },
+    {
+      "class": "nav-row resource-row ",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 246,
+      "x": 23,
+      "y": 690
+    },
+    {
+      "class": "workspace-utilities-trigger",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 253,
+      "x": 13,
+      "y": 664
+    },
+    {
+      "class": "workspace-header",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 386.875,
+      "x": 328,
+      "y": 12
+    },
+    {
+      "class": "ai-chat-message ai-role-user",
+      "fits": true,
+      "height": 45.5,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 274.890625,
+      "x": 957.109375,
+      "y": 84
+    },
+    {
+      "class": "markdown-code-block",
+      "fits": true,
+      "height": 46,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 868.328125,
+      "x": 328,
+      "y": 221.6953125
+    },
+    {
+      "class": "markdown-code-block",
+      "fits": true,
+      "height": 46,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 242.1953125,
+      "x": 328,
+      "y": 317.890625
+    },
+    {
+      "class": "composer-input",
+      "fits": true,
+      "height": 48,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 904,
+      "x": 328,
+      "y": 620
+    }
+  ],
+  "mention": [
+    {
+      "class": "mention-menu composer-mentions",
+      "height": 331.5,
+      "radius": "22px",
+      "shape": "superellipse(1.5)",
+      "width": 370
+    },
+    {
+      "class": "mention-item selected",
+      "height": 48,
+      "radius": "22px",
+      "shape": "superellipse(1.5)",
+      "width": 358
+    },
+    {
+      "class": "mention-item ",
+      "height": 48,
+      "radius": "22px",
+      "shape": "superellipse(1.5)",
+      "width": 358
+    },
+    {
+      "class": "mention-item ",
+      "height": 48,
+      "radius": "22px",
+      "shape": "superellipse(1.5)",
+      "width": 358
+    },
+    {
+      "class": "mention-item ",
+      "height": 48,
+      "radius": "22px",
+      "shape": "superellipse(1.5)",
+      "width": 358
+    },
+    {
+      "class": "mention-item ",
+      "height": 48,
+      "radius": "22px",
+      "shape": "superellipse(1.5)",
+      "width": 358
+    }
+  ],
+  "darkNarrow": [
+    {
+      "class": "navigation-search",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 273
+    },
+    {
+      "class": "nav-row session-nav-row active",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 279
+    },
+    {
+      "class": "nav-row resource-row ",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 279
+    },
+    {
+      "class": "resource-folder-toggle",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 279
+    },
+    {
+      "class": "nav-row resource-row ",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 266
+    },
+    {
+      "class": "nav-row resource-row ",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 266
+    },
+    {
+      "class": "resource-folder-toggle",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 279
+    },
+    {
+      "class": "nav-row resource-row ",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 266
+    },
+    {
+      "class": "nav-row resource-row ",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 266
+    },
+    {
+      "class": "workspace-utilities-trigger",
+      "fits": true,
+      "height": 44,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 273
+    },
+    {
+      "class": "workspace-header",
+      "fits": true,
+      "height": 48,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 274
+    },
+    {
+      "class": "ai-chat-message ai-role-user",
+      "fits": true,
+      "height": 45.5,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 274.890625
+    },
+    {
+      "class": "markdown-code-block",
+      "fits": true,
+      "height": 49,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 326
+    },
+    {
+      "class": "markdown-code-block",
+      "fits": true,
+      "height": 46,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 242.1953125
+    },
+    {
+      "class": "composer-input",
+      "fits": true,
+      "height": 48,
+      "radius": 22,
+      "shape": "superellipse(1.5)",
+      "width": 326
+    }
+  ],
+  "fallback": [
+    {
+      "class": "navigation-search",
+      "height": 44,
+      "mask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 22px / 0 stretch",
+      "maskHeight": "44px",
+      "maskWidth": "253px",
+      "width": 253
+    },
+    {
+      "class": "nav-row session-nav-row active",
+      "height": 44,
+      "mask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 22px / 0 stretch",
+      "maskHeight": "44px",
+      "maskWidth": "259px",
+      "width": 259
+    },
+    {
+      "class": "workspace-utilities-trigger",
+      "height": 44,
+      "mask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 22px / 0 stretch",
+      "maskHeight": "44px",
+      "maskWidth": "253px",
+      "width": 253
+    },
+    {
+      "class": "markdown-code-block",
+      "height": 46,
+      "mask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 22px / 0 stretch",
+      "maskHeight": "46px",
+      "maskWidth": "868.328px",
+      "width": 868.328125
+    },
+    {
+      "class": "markdown-code-block",
+      "height": 46,
+      "mask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 22px / 0 stretch",
+      "maskHeight": "46px",
+      "maskWidth": "242.195px",
+      "width": 242.1953125
+    },
+    {
+      "class": "composer-input",
+      "height": 48,
+      "mask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 22px / 0 stretch",
+      "maskHeight": "48px",
+      "maskWidth": "904px",
+      "width": 904
+    }
+  ],
+  "fallbackNarrow": {
+    "body": 390,
+    "viewport": 390
+  }
+}

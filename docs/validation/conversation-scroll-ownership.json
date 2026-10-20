@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-20",
+  "fixture": "web-agent/web/test/fixtures/workspace-heading.html",
+  "beforeScreenshot": "conversation-double-scroll-before.png",
+  "afterScreenshot": "conversation-double-scroll-after.png",
+  "normalScreenshot": "conversation-scroll-single.png",
+  "reproduction": {
+    "viewport": "850x320 with an unsent 18-line fictional draft",
+    "before": "Workspace/client height 320px, scroll height 348px and overflow auto; conversation minimum 110px; composer bottom 348px. Both workspace and conversation scrolled.",
+    "after": "Workspace and session scroll height equal 320px with overflow hidden; conversation shrinks to 82px and remains scrollable; composer bottom is exactly 320px."
+  },
+  "checks": {
+    "desktop": "At 1280x600 with the same draft, conversation is 362px tall and scrolls from 0 to 440px; workspace scrollTop stays 0 and scroll height equals the 600px viewport. Draft stays intact.",
+    "scope": "Only the floating-header session workspace is bounded. Resource pages and welcome pages retain their existing workspace scrolling.",
+    "verification": "Existing follow-scroll tests passed. TypeScript/Vite and signed scripts/build_lake_desktop.sh --dev --install passed. Running Dev needs normal quit and reopen."
+  }
+}

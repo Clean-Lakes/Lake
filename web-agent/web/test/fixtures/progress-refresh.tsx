@@ -23,6 +23,19 @@ if(query.has('progress-only'))cards.find(card=>card.id==='note')!.content='';
 if(query.has('families')){cards.find(card=>card.id==='operation-0')!.title='list_workflows';cards.find(card=>card.id==='operation-0')!.data={target:'当前项目/会话',arguments:{}}}
 cards.push({id:'empty-thought',type:'thinking',status:query.has('reasoning')?'completed':'running',at:stamp(query.has('reasoning')?111.5:110.5),content:query.has('reasoning')?'先核对演示主机的实际状态。':''});
 const state={session:{id:'fixture',projectId:'p',title:'进度更新稳定性',status:'investigating',createdAt:stamp(0),updatedAt:stamp(0),tags:[]},cursor:1,messages,resources:[],resourceTree:[],specialists:[],evidence:[],actions:[],terminals:[],ai:{session:'fixture',status:'running',rootTurnId:'turn',turnStartedAt:new Date().toISOString(),cards,cardsOffset:0,totalCards:cards.length,turns:12,usage:{input:0,output:0,total:0}},messageQueue:{paused:false,revision:0,lastError:'',items:[]},sre:{enabled:false,tasks:[]}} as unknown as SessionSnapshot;
+if(query.has('reference-time')){
+ const user=state.messages.at(-1)!;
+ const stopped=query.has('stopped');
+ state.replyTimings=[{messageId:user.id,startedAt:user.createdAt,finishedAt:new Date(Date.parse(user.createdAt)+(stopped?36000:594000)).toISOString(),status:stopped?'cancelled':'completed'}];
+ state.session.status='completed';state.ai!.status=stopped?'cancelled':'completed';
+ state.ai!.cards.forEach(card=>{if(card.status==='running')card.status='completed'});
+ if(stopped){
+  const operation=state.ai!.cards.find(card=>card.id==='operation-0')!;
+  operation.status='failed';operation.content='演示操作失败，原始输出保留。';
+  state.ai!.cards.push({...operation,id:'operation-failed-1',at:stamp(113)});
+ }
+ state.ai!.cards.push({id:'reference-answer',type:'message',status:'completed',at:stamp(114),content:'已核对演示服务的运行状态，完整执行步骤与命令结果可在上方用时入口中查看。'});
+}
 const lineArrivals:{kind:string;duration:number|undefined}[]=[];
 const motionSamples:{kind:string;y:number;opacity:number}[]=[];
 const metrics={executionName:"",executionPhase:"",statusTop:0,statusHeight:0,statusBeforeReply:false,executionAnimations:0,rowReplacements:0,rowRemovals:0,rowPositionChanges:0,rowColorChanges:0,renderedRows:[] as {id:string;kind:string;top:number}[],lineArrivals,motionSamples,snapshots:0,subscriptions:0,actionReplacements:0,historyReplacements:0,actionAnimations:0,replyAnimations:0,replyReplacements:0,scrollWrites:0,scrollEvents:0,scrollChanges:0,heightChanges:0,updates:0,errors:0,top:0,height:0};
@@ -61,6 +74,16 @@ window.addEventListener('error',()=>metrics.errors++);
 createRoot(document.getElementById('root')!).render(<App/>);
 const previousRows=new Map<string,{node:HTMLElement;top:number;color:string}>();
 let oldAction:Element|null=null,oldTable:Element|null=null,oldReply:Element|null=null,previousTop:number|undefined,previousHeight:number|undefined;
+const motionNodes=new WeakMap<Element,number>(),motionAnimations=new WeakMap<Animation,number>();
+let motionNodeId=0,motionAnimationId=0;
+function readMotion(selector:string){return [...document.querySelectorAll(selector)].map(node=>{
+ if(!motionNodes.has(node))motionNodes.set(node,++motionNodeId);
+ const style=getComputedStyle(node);
+ return {nodeId:motionNodes.get(node),text:node.textContent,name:style.animationName,phase:style.backgroundPosition,fill:style.webkitTextFillColor,animations:node.getAnimations().map(animation=>{
+  if(!motionAnimations.has(animation))motionAnimations.set(animation,++motionAnimationId);
+  return {id:motionAnimations.get(animation),state:animation.playState,start:animation.startTime,time:animation.currentTime};
+ })};
+})}
 function measure(){
  const label=document.querySelector('.thinking-label'),status=document.querySelector('.ai-turn:last-child > .turn-status'),reply=document.querySelector('.ai-turn:last-child [data-conversation-entry]');
  if(label){const style=getComputedStyle(label);metrics.executionName=style.animationName;metrics.executionPhase=style.backgroundPosition;}
@@ -94,6 +117,7 @@ function measure(){
   if(previousHeight!==undefined&&conversation.scrollHeight!==previousHeight)metrics.heightChanges++;
   metrics.top=previousTop=conversation.scrollTop;metrics.height=previousHeight=conversation.scrollHeight;
  }
+ Object.assign(metrics,{textMotion:{reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,status:readMotion('.turn-status .status-text'),rows:readMotion('.thinking-label')}});
  document.getElementById('progress-refresh-metrics')!.textContent=JSON.stringify(metrics);requestAnimationFrame(measure);
 }
 requestAnimationFrame(measure);
@@ -110,7 +134,16 @@ document.getElementById('update-line')!.onclick=()=>{state.ai!.cards.find(card=>
 document.getElementById('finish-tool')!.onclick=()=>{state.ai!.cards.filter(card=>card.type==='operation'||card.type==='shell').forEach(card=>{if(card.status==='running')card.status='completed'});update()};
 document.getElementById('fail-tool')!.onclick=()=>{const tool=state.ai!.cards.filter(card=>card.type==='operation'||card.type==='shell').at(-1)!;tool.status='failed';tool.content='演示失败：原始错误记录保留';update()};
 document.getElementById('next-reasoning')!.onclick=()=>{state.ai!.cards.filter(card=>card.type==='thinking'||card.type==='operation'||card.type==='shell').forEach(card=>{if(card.status==='running')card.status='completed'});state.ai!.cards.push({id:`reasoning-${++tick}`,type:'thinking',status:'running',at:stamp(tick),content:'继续比对演示主机的进程与连接，保留原始思考记录。'});update()};
-document.getElementById('next-operation')!.onclick=()=>{state.ai!.cards.filter(card=>card.type==='thinking').forEach(card=>card.status='completed');finishCurrent();const n=++index;const titles=['list_workflows','save_workflow','schedule_create','schedule_list'];state.ai!.cards.push({id:`operation-${n}`,type:'operation',title:query.has('families')?titles[Math.min(n,3)]!:'shell',status:'running',at:stamp(++tick),content:'',data:query.has('families')?{target:'当前项目/会话',arguments:{}}:{target:query.has('mixed-resources')?(n%2?'演示主机 B':'演示主机'):query.has('same-resource')?'演示主机':`演示主机 ${n}`,arguments:{command:'uptime'}}});update()};
+document.getElementById('next-operation')!.onclick=()=>{
+ state.ai!.cards.filter(card=>card.type==='thinking').forEach(card=>card.status='completed');finishCurrent();
+ const n=++index,titles=['list_workflows','save_workflow','schedule_create','schedule_list'];
+ const step=query.has('latest-step')?[
+  {title:'read',arguments:{path:'/reports/service.log'}},
+  {title:'execute_sql',arguments:{sql:'SELECT 1'}},
+  {title:'shell',arguments:{command:'ps -ef'}},
+ ][(n-1)%3]:undefined;
+ state.ai!.cards.push({id:`operation-${n}`,type:'operation',title:step?.title??(query.has('families')?titles[Math.min(n,3)]!:'shell'),status:'running',at:stamp(++tick),content:'',data:query.has('families')?{target:'当前项目/会话',arguments:{}}:{target:query.has('mixed-resources')?(n%2?'演示主机 B':'演示主机'):query.has('same-resource')?'演示主机':`演示主机 ${n}`,arguments:step?.arguments??{command:'uptime'}}});update();
+};
 document.getElementById('grow-reply')!.onclick=()=>{finishCurrent();state.ai!.cards.push({id:'final-reply',type:'message',status:'completed',at:stamp(++tick),content:'核对完成。\n\n'+('这里是实际新增的回复正文，新增高度应正常跟随到底部。\n\n').repeat(12)});state.ai!.status='completed';state.ai!.turnFinishedAt=new Date().toISOString();update()};
 document.getElementById('stream-reply')!.onclick=()=>{finishCurrent();state.ai!.cards.push({id:'stream-reply',type:'message',status:'running',at:stamp(++tick),content:query.has('long')?'核对已完成，完整说明保持可见。\n\n## 详细运行记录\n\n'+('新生成的内容保持原有位置，完成时继续完整展示。\n\n').repeat(40):'核对完成。演示服务运行正常，原始操作记录已保留。'});update()};
 document.getElementById('complete-reply')!.onclick=()=>{finishCurrent();state.ai!.status='completed';state.ai!.turnFinishedAt=new Date().toISOString();update()};

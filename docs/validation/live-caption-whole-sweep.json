@@ -1,0 +1,72 @@
+{
+  "samples": [
+    {
+      "stage": "thinking",
+      "reduced": false,
+      "status": [
+        {
+          "nodeId": 1,
+          "text": "用时 58分钟 20秒 · 正在思考…",
+          "name": "status-text-sweep",
+          "phase": "-59.9127% 0px",
+          "fill": "rgba(0, 0, 0, 0)",
+          "animations": [
+            {
+              "id": 1,
+              "state": "running",
+              "start": 804.4549999758601,
+              "time": 10349.345000024141
+            }
+          ]
+        }
+      ],
+      "rows": []
+    },
+    {
+      "stage": "after-timer-tick",
+      "reduced": false,
+      "status": [
+        {
+          "nodeId": 1,
+          "text": "用时 58分钟 31秒 · 正在思考…",
+          "name": "status-text-sweep",
+          "phase": "102.247% 0px",
+          "fill": "rgba(0, 0, 0, 0)",
+          "animations": [
+            {
+              "id": 1,
+              "state": "running",
+              "start": 804.4549999758601,
+              "time": 21733.145000024142
+            }
+          ]
+        }
+      ],
+      "rows": []
+    },
+    {
+      "stage": "generating",
+      "reduced": false,
+      "status": [
+        {
+          "nodeId": 1,
+          "text": "用时 58分钟 32秒 · 正在生成回复…",
+          "name": "status-text-sweep",
+          "phase": "64.474% 0px",
+          "fill": "rgba(0, 0, 0, 0)",
+          "animations": [
+            {
+              "id": 1,
+              "state": "running",
+              "start": 804.4549999758601,
+              "time": 22016.44500002414
+            }
+          ]
+        }
+      ],
+      "rows": []
+    }
+  ],
+  "tests": 334,
+  "animation": "one shared 1.8s sweep across elapsed time, separator and state; node and animation identity retained across timer ticks"
+}

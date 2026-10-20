@@ -1,0 +1,138 @@
+{
+  "light": [
+    {
+      "class": "lucide lucide-monitor resource-kind-icon kind-local",
+      "color": "rgb(85, 85, 85)",
+      "parentColor": "rgb(85, 85, 85)",
+      "selected": null
+    },
+    {
+      "class": "lucide lucide-folder resource-tree-folder-icon",
+      "color": "rgb(153, 99, 19)",
+      "parentColor": "rgb(85, 85, 85)",
+      "selected": null
+    },
+    {
+      "class": "lucide lucide-server resource-kind-icon kind-ssh",
+      "color": "rgb(53, 104, 165)",
+      "parentColor": "rgb(85, 85, 85)",
+      "selected": null
+    },
+    {
+      "class": "lucide lucide-container resource-kind-icon kind-docker",
+      "color": "rgb(105, 65, 198)",
+      "parentColor": "rgb(85, 85, 85)",
+      "selected": null
+    },
+    {
+      "class": "lucide lucide-folder resource-tree-folder-icon",
+      "color": "rgb(153, 99, 19)",
+      "parentColor": "rgb(85, 85, 85)",
+      "selected": null
+    },
+    {
+      "class": "lucide lucide-database resource-kind-icon kind-database",
+      "color": "rgb(36, 117, 97)",
+      "parentColor": "rgb(85, 85, 85)",
+      "selected": null
+    },
+    {
+      "class": "lucide lucide-database resource-kind-icon kind-redis",
+      "color": "rgb(153, 99, 19)",
+      "parentColor": "rgb(85, 85, 85)",
+      "selected": null
+    },
+    {
+      "class": "lucide lucide-server resource-kind-icon kind-ssh",
+      "color": "rgb(53, 104, 165)",
+      "parentColor": "rgb(34, 34, 34)",
+      "selected": "true"
+    },
+    {
+      "class": "lucide lucide-monitor resource-kind-icon kind-local",
+      "color": "rgb(85, 85, 85)",
+      "parentColor": "rgb(34, 34, 34)",
+      "selected": "false"
+    },
+    {
+      "class": "lucide lucide-database resource-kind-icon kind-database",
+      "color": "rgb(36, 117, 97)",
+      "parentColor": "rgb(34, 34, 34)",
+      "selected": "false"
+    },
+    {
+      "class": "lucide lucide-database resource-kind-icon kind-redis",
+      "color": "rgb(153, 99, 19)",
+      "parentColor": "rgb(34, 34, 34)",
+      "selected": "false"
+    },
+    {
+      "class": "lucide lucide-container resource-kind-icon kind-docker",
+      "color": "rgb(105, 65, 198)",
+      "parentColor": "rgb(34, 34, 34)",
+      "selected": "false"
+    }
+  ],
+  "dark": [
+    {
+      "class": "lucide lucide-monitor resource-kind-icon kind-local",
+      "color": "rgb(204, 204, 204)",
+      "parentColor": "rgb(204, 204, 204)"
+    },
+    {
+      "class": "lucide lucide-folder resource-tree-folder-icon",
+      "color": "rgb(216, 173, 99)",
+      "parentColor": "rgb(204, 204, 204)"
+    },
+    {
+      "class": "lucide lucide-server resource-kind-icon kind-ssh",
+      "color": "rgb(155, 188, 232)",
+      "parentColor": "rgb(204, 204, 204)"
+    },
+    {
+      "class": "lucide lucide-container resource-kind-icon kind-docker",
+      "color": "rgb(180, 154, 233)",
+      "parentColor": "rgb(204, 204, 204)"
+    },
+    {
+      "class": "lucide lucide-folder resource-tree-folder-icon",
+      "color": "rgb(216, 173, 99)",
+      "parentColor": "rgb(204, 204, 204)"
+    },
+    {
+      "class": "lucide lucide-database resource-kind-icon kind-database",
+      "color": "rgb(135, 203, 179)",
+      "parentColor": "rgb(204, 204, 204)"
+    },
+    {
+      "class": "lucide lucide-database resource-kind-icon kind-redis",
+      "color": "rgb(216, 173, 99)",
+      "parentColor": "rgb(204, 204, 204)"
+    },
+    {
+      "class": "lucide lucide-server resource-kind-icon kind-ssh",
+      "color": "rgb(155, 188, 232)",
+      "parentColor": "rgb(238, 238, 238)"
+    },
+    {
+      "class": "lucide lucide-monitor resource-kind-icon kind-local",
+      "color": "rgb(204, 204, 204)",
+      "parentColor": "rgb(238, 238, 238)"
+    },
+    {
+      "class": "lucide lucide-database resource-kind-icon kind-database",
+      "color": "rgb(135, 203, 179)",
+      "parentColor": "rgb(238, 238, 238)"
+    },
+    {
+      "class": "lucide lucide-database resource-kind-icon kind-redis",
+      "color": "rgb(216, 173, 99)",
+      "parentColor": "rgb(238, 238, 238)"
+    },
+    {
+      "class": "lucide lucide-container resource-kind-icon kind-docker",
+      "color": "rgb(180, 154, 233)",
+      "parentColor": "rgb(238, 238, 238)"
+    }
+  ]
+}

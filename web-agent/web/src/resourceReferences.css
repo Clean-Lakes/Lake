@@ -1,0 +1,33 @@
+/* The icon carries the resolved resource type in both the editor and sent messages. */
+/* Navigation and mention candidates share the label palette without tinting text or actions. */
+:is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon.kind-ssh { color:var(--info); }
+:is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon.kind-database { color:var(--resource-database-foreground); }
+:is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon.kind-redis { color:var(--warning); }
+:is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon.kind-docker { color:var(--tag-purple); }
+:is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon.kind-local { color:var(--text-secondary); }
+.sidebar.workspace-navigation .resource-folder-toggle > .resource-tree-folder-icon { color:var(--warning); }
+
+/* Borderless resource chips keep their original outer dimensions. */
+:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon) { border:0; }
+.composer-reference-token:has(> .resource-kind-icon) { padding:2px 6px; }
+.message-reference-token:has(> .resource-kind-icon) { padding:1px 6px; }
+:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon.kind-ssh) {
+ --resource-reference-background:var(--info-soft);
+ --resource-reference-foreground:var(--info);
+}
+:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon.kind-database) {
+ --resource-reference-background:var(--resource-database-background);
+ --resource-reference-foreground:var(--resource-database-foreground);
+}
+:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon.kind-redis) {
+ --resource-reference-background:var(--warning-soft);
+ --resource-reference-foreground:var(--warning);
+}
+:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon.kind-docker) {
+ --resource-reference-background:var(--tag-purple-soft);
+ --resource-reference-foreground:var(--tag-purple);
+}
+:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon.kind-local) {
+ --resource-reference-background:var(--surface-hover);
+ --resource-reference-foreground:var(--text-secondary);
+}

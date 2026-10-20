@@ -1,0 +1,29 @@
+[
+  {
+    "stage": "running",
+    "files": 0,
+    "metrics": "{\"fileArrivals\":0,\"durations\":[]}"
+  },
+  {
+    "stage": "write-during-running",
+    "files": 0
+  },
+  {
+    "stage": "audit",
+    "files": 1,
+    "metrics": "{\"fileArrivals\":0,\"durations\":[]}"
+  },
+  {
+    "stage": "finished",
+    "metrics": "{\"fileArrivals\":1,\"durations\":[0.36]}"
+  },
+  {
+    "stage": "update-preview-and-view-switch",
+    "metrics": "{\"fileArrivals\":1,\"durations\":[0.36]}"
+  },
+  {
+    "stage": "restored-history",
+    "metrics": "{\"fileArrivals\":1,\"durations\":[0.36]}",
+    "animation": "none"
+  }
+]

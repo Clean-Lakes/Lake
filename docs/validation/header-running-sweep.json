@@ -1,0 +1,16 @@
+{
+  "running": {
+    "animation": "workspace-header-sweep",
+    "count": 1,
+    "duration": "2.8s",
+    "height": 42,
+    "mask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 22px / 0 stretch",
+    "pointerEvents": "none",
+    "transform": "matrix(1, 0, 0, 1, -347.088, 0)",
+    "width": 373.875
+  },
+  "laterTransform": "matrix(1, 0, 0, 1, 26.6032, 0)",
+  "waitingLayers": 0,
+  "completedLayers": 0,
+  "failedLayers": 0
+}

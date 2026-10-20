@@ -1,6 +1,6 @@
 .sidebar-utilities { position: absolute; left: 13px; right: 13px; bottom: 12px; z-index: 4; pointer-events: none; }
-.workspace-utilities-trigger { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 38px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-window); color: var(--text-secondary); background: var(--floating-bubble-background); -webkit-backdrop-filter: var(--floating-bubble-filter); backdrop-filter: var(--floating-bubble-filter); pointer-events: auto; box-shadow: var(--shadow-popover); text-align: left; font-size: 12px; }
-.workspace-utilities-trigger:is(:hover,[aria-expanded="true"]) { background: var(--floating-bubble-active); border-color: var(--border-strong); color: var(--foreground); }
+.workspace-utilities-trigger { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 38px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--sidebar-row-radius,var(--radius-window)); color: var(--text-secondary); position:relative; isolation:isolate; --workspace-material:var(--floating-bubble-background); background:transparent; -webkit-backdrop-filter:none; backdrop-filter:none; pointer-events: auto; box-shadow: var(--shadow-popover); text-align: left; font-size: 12px; }
+.workspace-utilities-trigger:is(:hover,[aria-expanded="true"]) { --workspace-material:var(--floating-bubble-active); border-color: var(--border-strong); color: var(--foreground); }
 .workspace-utilities-tail { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; margin-left: auto; }
 .workspace-utilities-tail > svg { transform: rotate(-90deg); }
 .workspace-utilities-tail > svg.is-open { transform: rotate(0); }
@@ -21,3 +21,21 @@
 .workspace-utilities-popover .sidebar-tags-toggle small { margin-left: auto; }
 .workspace-utilities-popover .sidebar-tags-toggle > svg:last-child { width: 13px; }
 .workspace-utilities-popover .sidebar-tag-list { max-height: min(240px,35dvh); margin-bottom: 0; }
+
+/* A single clipped material layer prevents sharp resource icons leaking through
+   the unsupported circular corner clip of older WKWebView. */
+.workspace-utilities-glass {
+ position:absolute;
+ inset:0;
+ z-index:-1;
+ border-radius:inherit;
+ corner-shape:inherit;
+ background:var(--workspace-material);
+ -webkit-backdrop-filter:var(--floating-bubble-filter);
+ backdrop-filter:var(--floating-bubble-filter);
+ pointer-events:none;
+}
+:root.lake-corner-fallback .workspace-utilities-glass {
+ border-radius:0;
+ -webkit-mask-box-image:url('/window-corner-fill.svg') 22 fill / calc(var(--radius-window) - 1px) / 0 stretch;
+}

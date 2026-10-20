@@ -36,7 +36,7 @@ func TestResourceImportPermissions(t *testing.T) {
 }
 
 func TestFileAndSQLPermissionEffects(t *testing.T) {
-	for _, kind := range []string{"file_read", "file_write_silent", "readonly_sql"} {
+	for _, kind := range []string{"file_read", "file_write_silent", "readonly_sql", "readonly_pg_sql", "readonly_pg_sql_silent"} {
 		t.Run(kind, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "fixture")
 			permissions := DefaultPermissions()
@@ -52,13 +52,30 @@ func TestFileAndSQLPermissionEffects(t *testing.T) {
 				permissions.SilentWriteFiles = true
 				expectApproval = ""
 				call = Call{ID: call.ID, Name: "write", Arguments: js(map[string]any{"path": path, "content": marker})}
-			case "readonly_sql":
-				permissions.SilentReadSQL = false
+			case "readonly_sql", "readonly_pg_sql", "readonly_pg_sql_silent":
+				permissions.SilentReadSQL = kind == "readonly_pg_sql_silent"
 				expectApproval = "readonly_sql"
+				if permissions.SilentReadSQL {
+					expectApproval = ""
+				}
 				marker = "42"
 				os.WriteFile(path, nil, 0600)
 				assets = []Asset{{ID: "db", Kind: "database", Settings: map[string]any{"driver": "sqlite", "path": path}}}
 				call = Call{ID: call.ID, Name: "execute_sql", Arguments: js(map[string]any{"asset_ref": assetAlias("db"), "sql": "SELECT 42 AS answer"})}
+				if kind != "readonly_sql" {
+					// A real disposable SQLite table exercises the catalog-named
+					// query through dispatch and approval without a remote database.
+					db, _, err := databaseOpen(assets[0], false, "")
+					if err != nil {
+						t.Fatal(err)
+					}
+					_, err = db.Exec("CREATE TABLE pg_stat_activity(answer INTEGER); INSERT INTO pg_stat_activity VALUES(42)")
+					db.Close()
+					if err != nil {
+						t.Fatal(err)
+					}
+					call.Arguments = js(map[string]any{"asset_ref": assetAlias("db"), "sql": "SELECT answer FROM pg_stat_activity"})
+				}
 			}
 			var resultSeen atomic.Bool
 			m, close := fakeModel(t, func(n int, body map[string]any) any {
@@ -77,7 +94,9 @@ func TestFileAndSQLPermissionEffects(t *testing.T) {
 				t.Fatal(err)
 			}
 			done := make(chan error, 1)
-			go func() { done <- e.Chat(context.Background(), "case", "permission fixture", nil) }()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			go func() { done <- e.Chat(ctx, "case", "permission fixture", nil) }()
 			if expectApproval != "" {
 				p := waitApproval(t, e)
 				if p.Kind != expectApproval || resultSeen.Load() {

@@ -43,7 +43,7 @@ export function SidebarUtilities({tags,sessions,selectedTag,onSelectTag,onManage
  },[open]);
  return <>
   <div className="sidebar-utilities"><button ref={trigger} type="button" className="workspace-utilities-trigger" aria-label={unreadUpdate?"工作区，有新版本":"工作区"} aria-haspopup="dialog" aria-expanded={open} aria-controls={open?panelId:undefined} onClick={()=>setOpen(value=>!value)}>
-   <span className="workspace-utilities-icon"><Glyph name="settings" size={16}/></span><span>工作区</span>{selected&&<small title={`标签筛选：${selected.name}`}>{selected.name}</small>}<span className="workspace-utilities-tail">{unreadUpdate&&<span className="workspace-utilities-update-dot" aria-hidden="true"/>}<Glyph name="chevron" size={13} className={open?'is-open':''}/></span>
+   <span className="workspace-utilities-glass" aria-hidden="true"/><span className="workspace-utilities-icon"><Glyph name="settings" size={16}/></span><span>工作区</span>{selected&&<small title={`标签筛选：${selected.name}`}>{selected.name}</small>}<span className="workspace-utilities-tail">{unreadUpdate&&<span className="workspace-utilities-update-dot" aria-hidden="true"/>}<Glyph name="chevron" size={13} className={open?'is-open':''}/></span>
   </button></div>
   <DesktopUpdate hideTrigger onUnreadChange={setUnreadUpdate}/>
   {open&&createPortal(<div ref={panel} id={panelId} role="dialog" aria-label="工作区操作" className="workspace-utilities-popover" style={{...position,maxHeight:`calc(100dvh - ${position.bottom+8}px)`}} onKeyDown={event=>{

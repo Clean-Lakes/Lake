@@ -72,12 +72,17 @@ import LakeDesktopCore
         }
         // Native chrome applies even when attaching to an independently running older Go service.
         let headerControlsInset = 16
-        let windowCornerRadius = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 ? 20 : 10
+        let modernWindowCorners = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26
+        let windowCornerRadius = modernWindowCorners ? 22 : 10
+        let windowCornerShape = modernWindowCorners ? "superellipse(1.5)" : "round"
         let chrome = """
         document.documentElement.classList.add('lake-native');
+        if (\(modernWindowCorners) && !CSS.supports('corner-shape', 'superellipse(1.5)')) {
+          document.documentElement.classList.add('lake-corner-fallback');
+        }
         const style = document.createElement('style');
         style.textContent = `
-          html.lake-native { --lake-titlebar-height: 52px; --radius-window: \(windowCornerRadius)px; }
+          html.lake-native { --lake-titlebar-height: 52px; --radius-window: \(windowCornerRadius)px; --corner-window: \(windowCornerShape); }
           .lake-native .sidebar { padding-top: var(--lake-titlebar-height); }
           .lake-native .workspace:not(.has-floating-header) .workspace-header { min-height: var(--lake-titlebar-height); padding-right: \(headerControlsInset)px; }
           /* Web update and terminal controls share the same header inset. */
@@ -120,7 +125,7 @@ import LakeDesktopCore
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.toolbarStyle = .unified
-        window.backgroundColor = NSColor.white
+        window.backgroundColor = NSColor(calibratedWhite: 252/255, alpha: 1)
         window.minSize = NSSize(width: 850, height: 600)
         window.contentView = webView
         (window as? WorkbenchWindow)?.shouldStartDrag = { [weak self] event in
@@ -252,7 +257,7 @@ import LakeDesktopCore
             // the resolved system theme here would make it stop following macOS.
             window.appearance = body["appearance"] as? String == "system"
                 ? nil : NSAppearance(named: dark ? .darkAqua : .aqua)
-            window.backgroundColor = dark ? NSColor(calibratedWhite: 23/255, alpha: 1) : .white
+            window.backgroundColor = dark ? NSColor(calibratedWhite: 23/255, alpha: 1) : NSColor(calibratedWhite: 252/255, alpha: 1)
         }
         if let appearance = body["appearance"] as? String,
            ["light", "dark", "system"].contains(appearance) {
