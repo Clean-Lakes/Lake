@@ -2,7 +2,9 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 )
@@ -69,7 +71,10 @@ func (e *Engine) startShell(c Config, a map[string]any, command string) (any, er
 func (e *Engine) shellJob(ctx context.Context, id, method string, a map[string]any) (any, error) {
 	v, ok := e.shells.Load(id + ":" + str(a["shell_id"]))
 	if !ok {
-		return nil, errors.New("shell unavailable in this session; restarted jobs are never replayed")
+		if method == "shell_output" || method == "shellOutput" || method == "wait_shell" || method == "waitShell" {
+			return e.recordedShellOutput(ctx, id, str(a["shell_id"]))
+		}
+		return nil, errors.New("重启后仅能恢复原命令结果读取，不能通过丢失的任务句柄终止或重放命令")
 	}
 	j := v.(*shellJob)
 	if method == "kill_shell" || method == "forceKillShell" {
@@ -115,6 +120,61 @@ func (e *Engine) shellJob(ctx context.Context, id, method string, a map[string]a
 		result["error"] = jobErr.Error()
 	}
 	return result, nil
+}
+
+// Read an exact durable command record. A canonical operation ID is accepted as
+// an alias because error messages expose it; it never grants cross-session access
+// or permits execution. A disconnected command remains unknown without an exit code.
+func (e *Engine) recordedShellOutput(ctx context.Context, session, requested string) (any, error) {
+	if e.Bridge == nil || requested == "" || len(requested) > 200 {
+		return nil, errors.New("找不到此会话的原命令记录，不会重放原命令")
+	}
+	store, err := e.adkStore()
+	if err != nil {
+		return nil, err
+	}
+	var rows []nativeOperation
+	if err := store.DB.WithContext(ctx).Where("session_id = ? AND tool = ? AND (id = ? OR result LIKE ?)", session, "shell", requested, "%"+requested+"%").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		var recorded map[string]any
+		_ = json.Unmarshal([]byte(row.Result), &recorded)
+		shellID := str(recorded["shell_id"])
+		if row.ID != requested && shellID != requested {
+			continue
+		}
+		terminal, entry, ok := strings.Cut(row.Handle, ":")
+		if !ok || terminal == "" || entry == "" {
+			continue
+		}
+		value, err := e.Bridge(ctx, session, "terminal_command_status", map[string]any{"terminal_id": terminal, "entry_id": entry}, false)
+		if err != nil {
+			return nil, err
+		}
+		data := obj(value)
+		status := "unknown"
+		if data["status"] == "running" || data["running"] == true {
+			status = "running"
+		} else if data["exitCode"] != nil {
+			status = "completed"
+			if num(data["exitCode"], 0) != 0 {
+				status = "failed"
+			}
+		}
+		if shellID == "" {
+			shellID = requested
+		}
+		result := map[string]any{"shell_id": shellID, "terminal_id": terminal, "entry_id": entry, "status": status, "result": value}
+		if status == "running" {
+			result["poll_after_ms"] = 1000
+		}
+		if status == "unknown" {
+			result["notice"] = "已恢复原命令保存的输出，但没有确认退出结果；保留结果未知状态，不会重放原命令"
+		}
+		return result, nil
+	}
+	return nil, errors.New("找不到此会话中匹配的原命令记录，不会重放原命令")
 }
 func (e *Engine) cancelShells(id string) {
 	e.shells.Range(func(_, v any) bool {

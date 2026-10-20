@@ -6,10 +6,11 @@ import type {AgentEvidence,SRERoleReport} from '../../shared/contracts';
 import {remarkAssistantProse} from './assistantProse';
 import {remarkCompactReply} from './compactReply';
 import {ReplyDetailsSummary} from './ReplyDetailsSummary';
+import {MarkdownCodeBlock} from './MarkdownCodeBlock';
 
 // Component identity must survive live snapshots. Inline renderers remount
 // tables/links on every update, losing DOM state and flashing the transcript.
-const proseComponents:Components={summary:ReplyDetailsSummary,a:({node,...props})=><a {...props} target="_blank" rel="noopener noreferrer"/>,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
+const proseComponents:Components={pre:MarkdownCodeBlock,summary:ReplyDetailsSummary,a:({node,...props})=><a {...props} target="_blank" rel="noopener noreferrer"/>,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
 const prosePlugins=[remarkGfm,remarkAssistantProse];
 export const SREProse=memo(function SREProse({children,compact=false}:{children:string;compact?:boolean}){
  return <div className="sre-prose"><Markdown remarkPlugins={compact?[...prosePlugins,remarkCompactReply]:prosePlugins} skipHtml components={proseComponents}>{children}</Markdown></div>;

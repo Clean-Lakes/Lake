@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-20",
+  "cause": "An experiment/adk-runtime checkout at 06ae341b was used to install Dev over the newer integrated interface at 534069bc.",
+  "recoveryBase": "534069bc7115f536476697d635f034e0c95f8756",
+  "branch": "codex/recover-dev-interface",
+  "uiRetained": [
+    "One compact progress row per resource and turn",
+    "Original tool chronology and exceptional states",
+    "Wave activity icon and compact duration units",
+    "Live prose above progress rows",
+    "Magpie model auto synchronization"
+  ],
+  "changes": [
+    "Activity indicators and duration captions stay hidden for sub-second turns",
+    "Read-only loopback HTTP health probes use bounded curl with curlrc and proxy behavior disabled",
+    "Unresolved changes still block new mutations, with the original operation ID and target in the error",
+    "Exact completed terminal handles can settle operation state during snapshots; missing or disconnected outcomes remain unknown",
+    "Dev build provenance records its source commit, source folder, binary hash and relevant UI source hashes",
+    "Old checkout ancestry is checked before Dev installation to prevent overwriting a newer integrated build",
+    "After restart, shell_output and wait_shell can read the exact persisted terminal record by its original shell ID or canonical operation ID, within the same session only; no command is replayed"
+  ],
+  "checks": {
+    "frontend": "313 tests passed",
+    "targetedGoRace": "internal/web and internal/ai passed",
+    "goVet": "internal/web and internal/ai passed",
+    "runtimeBoundary": "passed",
+    "buildOrigin": "2 tests passed; actual old experiment checkout was rejected against the installed origin manifest",
+    "installedDev": "v0.3.21; binary hash matches manifest; actual screenshot command classification returns readonly without execution",
+    "nativeUI": "The inspected multi-resource turn retains one compact row per resource and no generic two-line execution-process placeholders",
+    "fullGoRace": "internal/ai and internal/web passed after the final shell recovery patch",
+    "shellRecovery": "Restart, operation-ID alias, original shell ID, completed/failed/running/unknown states, cross-session rejection and no-replay tests passed under the race detector",
+    "currentRuntime": "Signed repair installed; native UI control timed out during attempted reconnect, so the running Dev instance has not yet loaded the final backend repair"
+  },
+  "limits": "No production command was replayed, no unknown change was marked successful, and no release app or release secrets were modified."
+}

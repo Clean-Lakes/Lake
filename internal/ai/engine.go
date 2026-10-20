@@ -744,6 +744,21 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 		payload := js(value)
 		if toolErr != nil {
 			failure := map[string]any{"error": toolErr.Error()}
+			var notExecuted *ToolNotExecutedError
+			if errors.As(toolErr, &notExecuted) {
+				failure["outcome"] = "not_executed"
+			}
+			var blocked *nativeOperationBlockedError
+			if errors.As(toolErr, &blocked) {
+				failure["outcome"] = "not_executed"
+				failure["code"] = "unresolved_operation"
+				failure["retryable"] = false
+				failure["blocking_operation"] = map[string]any{"id": blocked.ID, "tool": blocked.Tool, "target": blocked.Target, "status": blocked.Status}
+				failure["notice"] = "本次操作没有派发。不要修改命令、更换终端或工具入口反复尝试；只读取原操作结果或继续独立的只读检查，无法核实则报告缺失结果。"
+				if recovery := blocked.recovery(); recovery != nil {
+					failure["recovery"] = recovery
+				}
+			}
 			if errors.Is(toolErr, context.DeadlineExceeded) || errors.Is(toolErr, context.Canceled) {
 				failure["outcome"] = "unknown"
 				failure["notice"] = "工具等待已中断；先核查执行状态，不要重复执行或宣称成功。"

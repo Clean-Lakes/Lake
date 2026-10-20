@@ -22,5 +22,17 @@ export function acceptSnapshot(previous:SessionSnapshot|null,next:SessionSnapsho
  // A manual refresh can finish before an earlier SSE/poll request. Never
  // roll text, approvals, or task status back when that older response arrives.
  if(next.cursor<previous.cursor)return previous;
+ // The backend sends a rolling page, not a deletion of previously displayed
+ // history. Dropping its old prefix on every tool step changes scroll height
+ // and remounts historical rows. Keep the visible page in this session snapshot;
+ // incoming cards still replace matching IDs, including their latest outcomes.
+ const before=previous.ai,after=next.ai;
+ if(before&&after&&after.cardsOffset>before.cardsOffset&&after.cardsOffset<=before.cardsOffset+before.cards.length&&
+    after.cardsOffset+after.cards.length>=before.cardsOffset+before.cards.length){
+  const fresh=new Map(after.cards.map(card=>[card.id,card]));
+  const seen=new Set(before.cards.map(card=>card.id));
+  const cards=[...before.cards.map(card=>fresh.get(card.id)??card),...after.cards.filter(card=>!seen.has(card.id))];
+  next={...next,ai:{...after,cards,cardsOffset:before.cardsOffset}};
+ }
  return reuseUnchanged(previous,next);
 }
