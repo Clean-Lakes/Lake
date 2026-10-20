@@ -956,6 +956,8 @@ a { color: inherit; }
 }
 .reply-duration { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; min-height: 24px; color: var(--text-secondary); font-size: 13px; line-height: 1.6; font-variant-numeric: tabular-nums; }
 .reply-duration svg { flex-shrink: 0; }
+.reply-duration.is-finished .turn-status-elapsed { display: inline-flex; align-items: center; gap: 7px; vertical-align: middle; }
+.reply-duration-clock { stroke-width: 1.5; }
 .reply-duration.is-finished { gap: 0; color: var(--text-muted); font-size: 11px; font-weight: 400; line-height: 1.6; }
 .reply-duration.is-live { gap: 7px; font-size: 12px; }
 .project-heading-row { display: flex; align-items: center; gap: 2px; }
