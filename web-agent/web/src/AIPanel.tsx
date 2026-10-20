@@ -130,6 +130,10 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
   const currentTurn=latestUser?turns.find(turn=>turn.some(entry=>entry.message?.id===latestUser.id))??[]:[];
   const currentTiming=timingForTurn(currentTurn,snapshot);
   const liveConversation=['running','waiting_approval'].includes(snapshot.ai?.status||'')&&(!currentTiming||currentTiming.status==='running');
+  const conversationTurnEntries=(turn:typeof entries)=>{
+    const stopped=timingForTurn(turn,snapshot)?.status==='cancelled';
+    return turn.filter(entry=>!isFileChangeCard(entry.card)&&!(stopped&&entry.card?.type==='error'&&entry.card.status==='cancelled'));
+  };
   const progressingId=currentProgressGroupId(currentTurn.filter(entry=>!isFileChangeCard(entry.card)),snapshot.ai?.status==='running'&&!snapshot.ai.question&&(!currentTiming||currentTiming.status==='running'));
   if (mode === "evidence") {
     const evidence = [...new Map([...(snapshot.evidence || []), ...(snapshot.ai?.agentRuns || []).flatMap(run => run.evidence || []),...mergedSRE.flatMap(t=>t.attempts.flatMap(a=>a.evidence??[]))].filter(item => item.sessionId === snapshot.session.id).map(item => [item.id,item])).values()];
@@ -146,7 +150,7 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
     {turns.map((turn, index) => <div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)} key={turn[0]!.id}>
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources}/>)}
       <ReplyDuration timing={timingForTurn(turn,snapshot)} view={turn.some(entry=>entry.message?.id===latestUser?.id) ? snapshot.ai : undefined} cards={turn.flatMap(entry=>entry.card?[entry.card]:[])} latestUserAt={turn.find(entry=>entry.message?.role==="user")?.at??""}/>
-      {(mode==='conversation'?conversationDisplayGroups(turn.filter(entry=>!isFileChangeCard(entry.card)),turn===currentTurn&&liveConversation):transcriptGroups(turn.filter(entry => !isFileChangeCard(entry.card) && activityEntry(entry))).map(entries=>({progress:false,entries}))).map(({entries:group,progress}) => {
+      {(mode==='conversation'?conversationDisplayGroups(conversationTurnEntries(turn),turn===currentTurn&&liveConversation):transcriptGroups(turn.filter(entry => !isFileChangeCard(entry.card) && activityEntry(entry))).map(entries=>({progress:false,entries}))).map(({entries:group,progress}) => {
         const entry = group[0]!;
         if(progress)return <ReplyArrival key={entry.id} entryId={entry.id} arrive={!restoredCardIds.current.has(entry.id)&&turn.some(item=>item.message?.id===latestUser?.id)}><ThinkingTimeline cards={group.map(item=>item.card!)} live={snapshot.ai?.status==='running'&&(group.some(item=>item.card?.status==='running')||entry.id===progressingId)} continuing={entry.id===progressingId} resourceRow onInspect={onInspect}/></ReplyArrival>;
         if(mode==='conversation'&&entry.card?.type==='thinking'&&!entry.card.content)return null;
