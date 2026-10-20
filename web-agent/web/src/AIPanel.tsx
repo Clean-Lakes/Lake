@@ -169,13 +169,27 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
   </div>;
 }
 export function AIPending({ session, view, refresh, runId, agentName,sreStep,attachments }: { attachments?:TextFileAttachment[]; session: string; view: AIView; refresh: () => Promise<unknown>; runId?: string; agentName?: string;sreStep?:SREPlanStep }) {
-  const [confirmation, setConfirmation] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  useEffect(() => { setConfirmation(""); setError(""); }, [view.pending?.id]);
+  const [confirmation, setConfirmation] = useState(""); const [requestBusy, setBusy] = useState(false); const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState<string>(); const decisionFlight = useRef<string | undefined>(undefined);
+  const currentApproval = useRef(view.pending?.id); currentApproval.current = view.pending?.id;
+  useEffect(() => { setConfirmation(""); setError(""); setSubmitted(undefined); decisionFlight.current = undefined; }, [view.pending?.id]);
   const p = view.pending; if (!p) return null;
+  const busy = requestBusy || submitted === p.id;
   const {title,note} = approvalPresentation(p);
   const opening = p.kind === "terminal_open";
   const description = p.kind === "mcp" ? p.target : p.kind === "resource_import" ? `${p.target}。下列连接会立即加入资源列表；已有连接会跳过。` : p.kind === "resource_select" ? `当前会话有多个主机资源。请确认本次使用 ${p.target}${p.needsTerminal ? "，并创建该资源的终端" : ""}；也可以拒绝后在设置的会话配置中选择目标。` : opening && p.call.name === "inspect_host" ? `为 ${p.target} 创建持续终端，并读取系统、内存和进程状态。授权只覆盖本次创建；手动关闭后会重新申请。` : p.needsTerminal ? `为 ${p.target} 创建持续终端，并执行下面这一次操作。` : `${p.target} · ${p.call.name}`;
-  const decide = async (accept: boolean) => { setBusy(true); setError(""); try { await api.aiOperation(session, runId ? "agentDecision" : "decision", { id: p.id, accept, confirmation, ...(runId ? {runId} : {}) }); await refresh(); } catch (error) { setError(readableError(error)); } finally { setBusy(false); } };
+  const decide = async (accept: boolean) => {
+    if (decisionFlight.current === p.id) return;
+    decisionFlight.current = p.id; setBusy(true); setError("");
+    try {
+      await api.aiOperation(session, runId ? "agentDecision" : "decision", { id: p.id, accept, confirmation, ...(runId ? {runId} : {}) });
+      setSubmitted(p.id); await refresh();
+    } catch (error) {
+      if (decisionFlight.current === p.id) decisionFlight.current = undefined;
+      try { await refresh(); } catch { /* Preserve the original decision error. */ }
+      if (currentApproval.current === p.id) setError(readableError(error));
+    } finally { setBusy(false); }
+  };
   let args: unknown = p.call.arguments; try { args = JSON.parse(p.call.arguments); } catch {}
   if(p.kind==="mcp"&&args&&typeof args==="object"&&"arguments" in args)args=(args as {arguments:unknown}).arguments;
   if(runId && args && typeof args === "object") args=Object.fromEntries(Object.entries(args).filter(([key])=>!["asset_ref","terminal_id","runtime"].includes(key)));

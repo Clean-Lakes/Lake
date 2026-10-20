@@ -331,7 +331,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		e.notify(s, "operation", map[string]any{"card_id": cardID})
 	}()
 	approved := kind == "" && (risk != "readonly" || policyContext["needsTerminal"] == true)
-	if kind != "" {
+	if kind != "" || resumingNativeApproval(ctx) {
 		approval := &Approval{ID: uid(), Call: call, Target: target, Risk: risk, Kind: kind, NeedsTerminal: policyContext["needsTerminal"] == true, Fingerprint: fingerprint, Preview: preview, ResourceID: str(policyContext["asset_ref"]), TerminalID: str(policyContext["terminal_id"]), TerminalGeneration: str(policyContext["generation"]), TerminalVersion: num(policyContext["terminalVersion"], 0)}
 		if risk == "dangerous" {
 			approval.Confirmation = "执行 " + target
