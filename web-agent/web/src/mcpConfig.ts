@@ -27,7 +27,7 @@ export function parseMCPArgs(text:string):string[]{
  if(started)result.push(token);
  return result;
 }
-export function formatMCPArgs(args:string[]){if(args.some(arg=>/[\r\n\t]/.test(arg)))return JSON.stringify(args);return args.map(arg=>arg&&/^[^\s"'\\[]+$/.test(arg)?arg:JSON.stringify(arg)).join(' ');}
+export function formatMCPArgs(args:string[]){if(args.some(arg=>/[\u0000-\u001f\u007f]/.test(arg)))return JSON.stringify(args);return args.map(arg=>arg&&/^[^\s"'\\[]+$/.test(arg)?arg:JSON.stringify(arg)).join(' ');}
 export function validateMCPInput(value:MCPInput){
  if(!value.name.trim())throw new Error('请填写服务名称');
  if(!Number.isInteger(value.timeoutMs)||value.timeoutMs<1000||value.timeoutMs>300000)throw new Error('超时时间须为 1000～300000 毫秒');

@@ -13,8 +13,9 @@ test('MCP named maps and mcpServers wrappers support inferred stdio, HTTP, SSE a
 test('argument editing preserves quotes, empty arguments, Windows paths, Unicode and JSON control characters',()=>{
  const args=['-y','C:\\Program Files\\工具\\server.js','',`a"b'c`,'space value','中文','[literal]'];
  assert.deepEqual(parseMCPArgs(formatMCPArgs(args)),args);
- const control=['one\ntwo','tab\tvalue','return\rvalue'];
+ const control=['one\ntwo','tab\tvalue','return\rvalue','back\bspace','form\ffeed','control\u0001value'];
  assert.deepEqual(parseMCPArgs(formatMCPArgs(control)),control);
+ for(const arg of control)assert.deepEqual(parseMCPArgs(formatMCPArgs([arg])),[arg]);
  assert.deepEqual(parseMCPArgs(`--path 'C:\\Program Files\\x' "two words"`),['--path','C:\\Program Files\\x','two words']);
  assert.throws(()=>parseMCPArgs('"unfinished'),/引号未闭合/);
  assert.throws(()=>parseMCPArgs('[1]'),/字符串数组/);
