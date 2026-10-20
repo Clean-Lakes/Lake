@@ -5,6 +5,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import type { TerminalEntry } from "../../shared/contracts";
 import { terminalOutputUpdate } from "./terminalOutput";
+import { TerminalTextInput, usesWebKitTextInput } from "./terminalTextInput";
 
 function terminalTheme() {
   const style = getComputedStyle(document.documentElement);
@@ -68,7 +69,20 @@ export function TerminalPane({ active = true, entries, output, interactive, show
     terminalRef.current = terminal;
     const themeObserver = new MutationObserver(() => { terminal.options.theme = terminalTheme(); });
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    const inputListener = terminal.onData(data => { if (propsRef.current.interactive) propsRef.current.onInput(data); });
+    const sendInput = (data: string) => { if (propsRef.current.active && propsRef.current.interactive) propsRef.current.onInput(data); };
+    const textInput = usesWebKitTextInput(navigator.platform, navigator.userAgent) ? new TerminalTextInput(sendInput) : undefined;
+    const inputListener = terminal.onData(data => textInput ? textInput.data(data) : sendInput(data));
+    const host = hostRef.current;
+    const keydown = () => textInput?.keydown();
+    const keyup = () => textInput?.keyup();
+    const compositionStart = () => textInput?.compositionStart();
+    const compositionEnd = () => textInput?.compositionEnd();
+    const committedInput = (event: Event) => textInput?.input(event as InputEvent);
+    host.addEventListener("keydown", keydown, true);
+    host.addEventListener("keyup", keyup, true);
+    host.addEventListener("compositionstart", compositionStart, true);
+    host.addEventListener("compositionend", compositionEnd);
+    host.addEventListener("input", committedInput);
     const sizeListener = terminal.onResize(({ cols, rows }) => { if (propsRef.current.active) propsRef.current.onResize(cols, rows); });
     let resizeFrame = 0;
     let resizeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -94,6 +108,12 @@ export function TerminalPane({ active = true, entries, output, interactive, show
       themeObserver.disconnect();
       clearTimeout(resizeTimer);
       inputListener.dispose();
+      host.removeEventListener("keydown", keydown, true);
+      host.removeEventListener("keyup", keyup, true);
+      host.removeEventListener("compositionstart", compositionStart, true);
+      host.removeEventListener("compositionend", compositionEnd);
+      host.removeEventListener("input", committedInput);
+      textInput?.dispose();
       sizeListener.dispose();
       previousOutput.current = "";
       if (resizeFrame) cancelAnimationFrame(resizeFrame);
