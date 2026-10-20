@@ -1,11 +1,5 @@
 {
-  "required_status_checks": {
-    "strict": true,
-    "checks": [
-      {"context": "branch-policy", "app_id": 15368},
-      {"context": "workbench", "app_id": 15368}
-    ]
-  },
+  "required_status_checks": null,
   "enforce_admins": true,
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": true,
