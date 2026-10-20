@@ -2,15 +2,17 @@
 goal: 从零实现 Lake TypeScript 运维 Agent v0.0.1，交付会话内多专员、共享终端与进度、通用 SRE 技能、Power 和证据驱动的运维闭环
 version: 0.0.1
 date_created: 2026-10-04
-last_updated: 2026-10-08
+last_updated: 2026-10-20
 owner: Lake
-status: 'Completed'
+status: 'Deprecated'
 tags: [architecture, agent, typescript, sre, operations, implementation]
 ---
 
 # Introduction
 
-![Status: Completed](https://img.shields.io/badge/status-Completed-green)
+![Status: Deprecated](https://img.shields.io/badge/status-Deprecated-red)
+
+历史规格：本 TypeScript 运行时已由 Go ADK 取代，旧源码与操作指南于 2026-10-20 移除。下文保留当时的设计和实施记录，不作为当前构建或运行说明。当前入口见 [贡献指南](../CONTRIBUTING.md) 与 [ADK 架构](../docs/experiments/adk-runtime.md)。
 
 本方案在 `codex/lake-ts-agent-v0.0.1` 分支上规划独立的 Lake Agent。分支基点为 `7de96a60`，已有未跟踪的插件目录及其他计划不属于本方案。当前文档是实施规格，2026-10-08 已开始执行。57 项实施任务及发布门禁已完成，验证环境、边界和摘要见 `docs/validation/lake-ts-agent-v0.0.1.md`。
 
