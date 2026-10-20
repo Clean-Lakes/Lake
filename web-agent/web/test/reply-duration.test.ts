@@ -28,7 +28,7 @@ test("each footer stays with its own user turn and multi-Agent replies keep one 
  assert.equal(timingForTurn([{id:"u",at:start,message:snapshot.messages[0]}],snapshot),timing);
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.equal((html.match(/aria-label="回答耗时"/g)||[]).length,2);
- assert.ok(html.includes("1分钟 13秒"));assert.ok(html.includes("4秒"));assert.ok(!html.includes("已处理"));
+ assert.ok(html.includes("1m 13s"));assert.ok(html.includes("4s"));assert.ok(!html.includes("已处理"));
  const legacy={...snapshot,replyTimings:undefined};
  assert.equal(timingForTurn([{id:"u",at:start,message:snapshot.messages[0]}],legacy),undefined);
  assert.equal(timingForTurn([{id:"v",at:snapshot.messages[1]!.createdAt,message:snapshot.messages[1]}],legacy)?.finishedAt,snapshot.ai!.turnFinishedAt);
@@ -39,7 +39,7 @@ test("waiting for first model data already has visible motion, independent of id
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.ok(html.includes("reply-duration-spinner") && html.includes("正在思考…"));
  const completed=renderToStaticMarkup(createElement(AITranscript,{snapshot:{...snapshot,replyTimings:[timing]}}));
- assert.ok(!completed.includes("reply-duration-spinner") && completed.includes("1分钟 13秒")&&completed.includes("reply-duration-clock"));
+ assert.ok(!completed.includes("reply-duration-spinner") && completed.includes("1m 13s")&&completed.includes("reply-duration-clock"));
  assert.ok(!completed.includes("回复结束")&&!completed.includes("turn-status-mark"),"finished timing uses a static clock without a repeated completion label");
 });
 
@@ -47,7 +47,7 @@ test("quiet completion never conceals uncertain outcomes or invents a duration",
  const render=(props:Parameters<typeof ReplyDuration>[0])=>renderToStaticMarkup(createElement(ReplyDuration,props));
  assert.equal(render({view:{status:'completed',cards:[]} as never}),'',"missing timing does not become a made-up elapsed caption");
  const uncertain=render({timing,cards:[{id:'op',at:start,type:'operation',status:'unknown'}]});
- assert.ok(uncertain.includes('1分钟 13秒')&&uncertain.includes('reply-duration-clock')&&uncertain.includes('执行结果待核查'));
+ assert.ok(uncertain.includes('1m 13s')&&uncertain.includes('reply-duration-clock')&&uncertain.includes('执行结果待核查'));
  for(const [status,label] of [['cancelled','已停止'],['failed','未完成'],['interrupted','记录已中断']] as const){
   assert.ok(render({timing:{...timing,status}}).includes(label));
  }
