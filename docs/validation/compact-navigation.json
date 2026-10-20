@@ -1,0 +1,94 @@
+{
+  "heightBefore": 44,
+  "heightAfter": 36,
+  "radius": 18,
+  "metrics": [
+    {
+      "class": "navigation-search",
+      "font": "14px",
+      "height": 36,
+      "mask": "",
+      "padding": "7px 10px",
+      "radius": "18px",
+      "width": 253
+    },
+    {
+      "class": "nav-row session-nav-row active",
+      "font": "14px",
+      "height": 36,
+      "mask": "",
+      "padding": "7px 40px 7px 9px",
+      "radius": "18px",
+      "width": 259
+    },
+    {
+      "class": "nav-row session-nav-row ",
+      "font": "14px",
+      "height": 36,
+      "mask": "",
+      "padding": "7px 40px 7px 9px",
+      "radius": "18px",
+      "width": 259
+    },
+    {
+      "class": "nav-row session-nav-row ",
+      "font": "14px",
+      "height": 36,
+      "mask": "",
+      "padding": "7px 40px 7px 9px",
+      "radius": "18px",
+      "width": 259
+    },
+    {
+      "class": "nav-row resource-row ",
+      "font": "14px",
+      "height": 44,
+      "mask": "",
+      "padding": "6px 92px 6px 8px",
+      "radius": "22px",
+      "width": 259
+    },
+    {
+      "class": "nav-row resource-row ",
+      "font": "14px",
+      "height": 44,
+      "mask": "",
+      "padding": "6px 92px 6px 8px",
+      "radius": "22px",
+      "width": 246
+    },
+    {
+      "class": "nav-row resource-row ",
+      "font": "14px",
+      "height": 44,
+      "mask": "",
+      "padding": "6px 64px 6px 8px",
+      "radius": "22px",
+      "width": 246
+    },
+    {
+      "class": "nav-row resource-row ",
+      "font": "14px",
+      "height": 44,
+      "mask": "",
+      "padding": "6px 64px 6px 8px",
+      "radius": "22px",
+      "width": 246
+    },
+    {
+      "class": "nav-row resource-row ",
+      "font": "14px",
+      "height": 44,
+      "mask": "",
+      "padding": "6px 64px 6px 8px",
+      "radius": "22px",
+      "width": 246
+    }
+  ],
+  "checks": [
+    "search filters to 网关延迟排查",
+    "clear search restores all sessions",
+    "active session management menu opens",
+    "native corner fallback uses compact 18px stroke mask"
+  ]
+}

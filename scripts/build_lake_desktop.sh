@@ -19,6 +19,9 @@ if [ "$development_app" -eq 1 ]; then
   lake_bundle_id=com.cleanlakes.lake.desktop.dev
 fi
 [ "$(uname -s)" = Darwin ] || { echo '此脚本用于 macOS' >&2; exit 1; }
+if [ "$development_app" -eq 1 ] && [ "$install_app" -eq 1 ]; then
+  python3 scripts/dev_build_origin.py check "$lake_repo_root" "$HOME/Applications/Lake Dev.app/Contents/Resources/build-origin.json"
+fi
 lake_identity='Lake Local Development Code Signing'
 security find-identity -v -p codesigning | grep -Fq "\"$lake_identity\"" || {
   echo '缺少持久签名身份，请先运行 scripts/setup_lake_signing.sh' >&2; exit 1;
@@ -42,6 +45,9 @@ lake_app="$lake_stage/$lake_app_name.app"
 mkdir -p "$lake_app/Contents/MacOS" "$lake_app/Contents/Resources/licenses"
 cp "$lake_swift_bin/LakeDesktop" "$lake_app/Contents/MacOS/Lake"
 cp bin/lake "$lake_app/Contents/Resources/lake"
+if [ "$development_app" -eq 1 ]; then
+  python3 scripts/dev_build_origin.py write "$lake_repo_root" "$lake_app/Contents/Resources/build-origin.json"
+fi
 cp client/macos/Resources/install-update.sh "$lake_app/Contents/Resources/"
 cp web-agent/web/src/workbenchLayout.js "$lake_app/Contents/Resources/workbench-layout.js"
 cp LICENSE-APACHE "$lake_app/Contents/Resources/licenses/Lake-APACHE"

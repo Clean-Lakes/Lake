@@ -1,0 +1,25 @@
+{
+  "returned": {
+    "base": "rgb(53, 104, 165)",
+    "baseOpacity": "0.4",
+    "duration": "1.9s",
+    "kind": "lakeTerminal",
+    "water": true
+  },
+  "file": {
+    "color": "rgb(181, 74, 22)",
+    "kind": "lakeFile",
+    "water": true
+  },
+  "failed": {
+    "color": "rgb(181, 74, 22)",
+    "kind": "lakeFile",
+    "opacity": "0.85",
+    "water": false
+  },
+  "database": {
+    "color": "rgb(36, 117, 97)",
+    "kind": "lakeDatabase",
+    "water": true
+  }
+}

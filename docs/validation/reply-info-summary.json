@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-20",
+  "design": "信息摘要",
+  "fixture": "web-agent/web/test/fixtures/reply-info.html",
+  "screenshot": "reply-info-summary.png",
+  "checks": {
+    "frontend": "320 frontend tests passed; TypeScript/Vite build passed.",
+    "prompt": "go test ./internal/ai -run TestConversationStyle -count=1 passed. Existing writing rules retain failure/unknown information and structured JSON; optional summaries use only actual identifiers and verification results.",
+    "content": "Explicit paragraph, soft-break, hard-break and all-fact bullet metadata render as definition rows. Mixed/nested lists, free prose, complete code and inline links retain their structure. Saved reply content is unchanged.",
+    "numbers": "Quantity tests preserve every character while distinguishing value and unit. IPs, versions and identifiers are not split or recolored.",
+    "copy": "Actual SRE commit copy and keyboard paste returned exactly 86a30431 with success feedback. Only a copy action is available.",
+    "links": "File links retain their original href and label; source uses the hostname and GitHub repository without credentials or query parameters. No destinations are generated from identifiers.",
+    "appearance": "Ordinary reply and SRE renderers share the same elements. Dark SRE at 390px with a long Chinese file path has no horizontal overflow; both copy buttons remain visible.",
+    "installation": "Signed scripts/build_lake_desktop.sh --dev --install completed successfully. Running Dev needs normal quit and reopen."
+  }
+}

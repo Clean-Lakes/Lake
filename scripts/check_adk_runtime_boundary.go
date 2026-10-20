@@ -20,7 +20,7 @@ func main() {
 	auxiliary := map[string]bool{"engine.go": true, "stdio.go": true, "completion.go": true, "side_completion.go": true, "image_probe.go": true, "resource_import.go": true, "context_summary.go": true, "project_memory_extraction.go": true}
 	forbiddenMethods := map[string]bool{"ChatTurn": true, "RunSRERole": true, "runSRESteps": true, "runADKTurn": true, "InvokeExternalApproved": true}
 	required := map[string]bool{"ExecuteTurn": false, "runOfficialADK": false, "ExecuteSRERole": false, "executeADKPlan": false}
-	for _, old := range []string{"internal/ai/multi_agent.go", "internal/ai/sre_scheduler.go", "internal/ai/sre_host.go", "internal/ai/external.go", "internal/web/adk_runtime.go", "cmd/adk-spike"} {
+	for _, old := range []string{"agent", "legacy/web-agent", "internal/ai/multi_agent.go", "internal/ai/sre_scheduler.go", "internal/ai/sre_host.go", "internal/ai/external.go", "internal/web/adk_runtime.go", "cmd/adk-spike"} {
 		if _, err := os.Stat(old); err == nil {
 			failures = append(failures, "retired runtime remains: "+old)
 		}

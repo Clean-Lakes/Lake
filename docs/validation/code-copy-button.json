@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-20",
+  "change": "Shared copy button for ordinary reply and SRE fenced code blocks; toolbar remains outside horizontal scrolling; exact pre text copied with success and failure feedback",
+  "checks": {
+    "frontend": "313 tests passed",
+    "build": "TypeScript/Vite and signed macOS Dev install passed",
+    "clipboard": "Ordinary reply and SRE copied and pasted original Windows command with Chinese path, spaces, quotes and newlines; fixture reported exact match",
+    "layout": "Light and dark at 337px viewport; code horizontally scrolled to right, copy button remained visible",
+    "installedSource": "Recovery worktree confirmed by build manifest; binary hash and AIPanel source hash matched",
+    "activation": "Installed; native app control still timed out, so running Dev needs one normal quit and reopen"
+  },
+  "fixture": "web-agent/web/test/fixtures/code-copy.html",
+  "screenshot": "code-copy-button.png"
+}

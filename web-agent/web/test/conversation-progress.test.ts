@@ -4,7 +4,7 @@ import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {AICard,SessionSnapshot} from '../../shared/contracts';
-import {conversationGroups,currentProgressGroupId} from '../src/conversation-progress-model';
+import {conversationDisplayGroups,conversationGroups,currentProgressGroupId} from '../src/conversation-progress-model';
 import {AITranscript} from '../src/AIPanel';
 
 const at='2026-10-18T08:00:00Z';
@@ -20,6 +20,54 @@ test('adding a tool appends its own row and never reclassifies the preceding rep
 test('plain answers and scope questions retain their own rows',()=>{
  const question={id:'question',at,message:{...user.message!,role:'assistant',text:'请确认范围'}};
  assert.ok(conversationGroups([card('reply','message'),question]).every(g=>!g.progress));
+});
+test('active prose stays above all progress rows without changing row keys or raw chronology',()=>{
+ const first=sessionOperation('workflow','list_workflows');
+ const entries=[user,first,card('note','message'),sessionOperation('schedule','schedule_create'),card('stream','text','running'),sessionOperation('saved','save_workflow')];
+ const chronological=conversationGroups(entries);
+ const display=conversationDisplayGroups(entries,true);
+ assert.deepEqual(display.map(group=>group.entries[0]!.id),['user','note','stream','workflow','schedule']);
+ assert.deepEqual(display.find(group=>group.entries[0]!.id==='workflow')!.entries.map(entry=>entry.id),['workflow','saved']);
+ assert.deepEqual(conversationGroups(entries),chronological,'presentation must not mutate the source');
+ assert.deepEqual(conversationDisplayGroups(entries,false),chronological,'completed history retains its timeline');
+ const nextUser={...user,id:'next-user',message:{...user.message!,id:'next-user'}};
+ assert.deepEqual(conversationDisplayGroups([...entries,nextUser,card('other-tool','operation'),card('other-note','message')],true).map(group=>group.entries[0]!.id),['user','note','stream','workflow','schedule','next-user','other-note','other-tool']);
+});
+test('active presentation preserves approvals, errors, questions and child controls',()=>{
+ const approval={id:'approval',at,action:{id:'approval'} as SessionSnapshot['actions'][number]};
+ const run={id:'run',at,agentRun:{id:'run'} as NonNullable<Parameters<typeof conversationGroups>[0][number]['agentRun']>};
+ const entries=[card('tool','operation','pending'),approval,card('error','error','failed'),sessionOperation('question','ask_user_question'),run,card('reply','message')];
+ const before=conversationGroups(entries),after=conversationDisplayGroups(entries,true);
+ assert.deepEqual(after.filter(group=>group.entries[0]!.id!=='reply'),before.filter(group=>group.entries[0]!.id!=='reply'));
+ assert.equal(after[0]!.entries[0]!.id,'reply');
+});
+test('conversation keeps execution in a collapsed time disclosure while activity retains its projection',()=>{
+ const oldUser={...user.message!,id:'old-user',createdAt:'2026-10-18T07:00:00Z'};
+ const oldTool={...card('old-tool','operation').card,at:'2026-10-18T07:00:01Z'};
+ const oldReply={...card('old-reply','message').card,at:'2026-10-18T07:00:02Z'};
+ for(const status of ['running','waiting_approval','completed','failed','cancelled']){
+  const s={session:{id:'s'},messages:[oldUser,user.message],actions:[],resources:[],ai:{session:'s',status,cardsOffset:0,cards:[oldTool,oldReply,card('tool','operation').card,card('reply','message').card]}} as SessionSnapshot;
+  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+  const position=(id:string)=>html.indexOf(`data-conversation-entry="${id}"`);
+  assert.ok(position('old-tool')<position('old-reply'),'historical order stays unchanged');
+  assert.ok(html.includes('class="turn-execution-details" hidden=""'),status);
+  assert.ok(html.indexOf('aria-label="执行详细过程"')<position('tool'));
+  assert.ok(position('tool')<position('reply'),'the visible reply remains outside the hidden process body');
+  const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:'activity'}));
+  assert.ok(!activity.includes('data-conversation-entry="reply"'),'activity mode keeps its own projection');
+ }
+});
+test('stopped turns show one neutral status without hiding actual errors or activity records',()=>{
+ const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],replyTimings:[{messageId:'user',startedAt:at,finishedAt:'2026-10-18T08:00:04Z',status:'cancelled'}],ai:{session:'s',status:'cancelled',cardsOffset:0,cards:[card('stop','error','cancelled','context canceled').card,card('failure','error','failed','连接已中断，请检查网络').card]}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ assert.ok(html.includes('已停止')&&html.includes('4秒'));
+ assert.ok(!html.includes('已停止本轮'));
+ assert.ok(!html.includes('data-conversation-entry="stop"'));
+ assert.ok(html.includes('连接已中断，请检查网络'));
+ const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:'activity'}));
+ assert.ok(activity.includes('data-conversation-entry="stop"'),'raw stop record remains in the activity view');
+ const noTiming={...s,replyTimings:[]};
+ assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot:noTiming})).includes('已停止本轮'),'do not remove the only stop notice if timing is unavailable');
 });
 test('operation status changes keep the same row and never absorb preceding text',()=>{
  for(const status of ['running','pending','completed','failed','unknown','interrupted','cancelled','not_executed','background_running']){
@@ -174,4 +222,33 @@ test('mixed-status resource summaries keep every exceptional result visible',()=
  assert.equal((html.match(/class="thinking-timeline /g)||[]).length,1);
  for(const label of ['等待确认','执行失败','结果待核查','未执行','已停止','后台执行中','8 项'])assert.ok(html.includes(label),label);
  assert.ok(!html.includes('is-executing'),'unresolved confirmation and unknown outcomes remain visible and static');
+});
+
+
+test('current normal progress keeps sweeping through generated prose until the turn finishes',()=>{
+ const entries=[user,card('tool','operation'),card('stream','message','running','正在汇总结果。')];
+ assert.equal(currentProgressGroupId(entries,true),'tool');
+ assert.equal(currentProgressGroupId(entries,false),undefined);
+ const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],ai:{session:'s',status:'running',cardsOffset:0,turns:1,cards:entries.flatMap(e=>e.card?[e.card]:[])}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ assert.ok(html.includes('is-continuing'));
+ assert.ok(html.includes('status-text--active'),'the live status line also sweeps');
+ const done=renderToStaticMarkup(createElement(AITranscript,{snapshot:{...s,ai:{...s.ai!,status:'completed'}}}));
+ assert.ok(!done.includes('is-continuing')&&!done.includes('status-text--active'));
+ for(const status of ['failed','pending','unknown','not_executed','interrupted','cancelled','background_running']){
+  const cards=[card('old','operation',status).card,card('new','operation','completed').card,card('stream','message','running').card];
+  const blocked=renderToStaticMarkup(createElement(AITranscript,{snapshot:{...s,ai:{...s.ai!,cards}}}));
+  assert.ok(!blocked.includes('is-continuing')&&!blocked.includes('is-executing'),status);
+ }
+});
+
+
+test('collapsed process retains commands and alerts without hiding prose or pending decision controls',()=>{
+ const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],replyTimings:[{messageId:user.message!.id,startedAt:at,finishedAt:'2026-10-18T08:09:54Z',status:'completed'}],ai:{session:'s',status:'completed',cardsOffset:0,cards:[card('tool','operation','failed').card,card('reply','message','completed','最终结果仍然可见').card]}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ assert.ok(html.includes('用时 9分钟 54秒')&&html.includes('1 项失败'));
+ assert.ok(html.includes('aria-expanded="false"')&&html.includes('执行详细过程'));
+ const bodyStart=html.indexOf('class="turn-execution-details"'),bodyEnd=html.indexOf('data-conversation-entry="reply"');
+ assert.ok(html.slice(bodyStart,bodyEnd).includes('执行失败'),'recorded tool summary remains inside the hidden process body');
+ assert.ok(html.slice(bodyEnd).includes('最终结果仍然可见'));
 });

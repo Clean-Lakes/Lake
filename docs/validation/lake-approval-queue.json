@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-20",
+  "scope": "Settle an existing native confirmation even if an earlier approved call has resolved target selection and current policy no longer requests a dialog.",
+  "baseline": "Two synthetic calls both completed, but the second decided confirmation remained at the queue head; bounded regression failed before the fix.",
+  "fixed": "Every resumed response settles its exact bound approval once. Target, tool arguments, preview, terminal generation/version, expiry, accepted value and single-use checks remain. Policy hash may differ only when current policy already authorizes the call without any new confirmation.",
+  "guards": [
+    "A changed target fingerprint blocks the second effect.",
+    "Rejecting the second confirmation produces no second effect.",
+    "Concurrent duplicate decisions produce exactly one accepted effect.",
+    "Parallel and successive confirmation queues both finish without orphaned actionable approvals."
+  ],
+  "frontend": {
+    "duplicateClick": "Successful submission remains disabled until the pending ID advances.",
+    "decisionConflict": "Refresh current state on failure; do not automatically retry an approval.",
+    "lateError": "An old decision error cannot overwrite the next approval card.",
+    "fixture": "web-agent/web/test/fixtures/approval-queue.html",
+    "realHostRequests": false
+  },
+  "checks": {
+    "targetedRace": "passed (internal/ai 8.092s)",
+    "fullRace": "passed (internal/ai 86.997s, internal/web 215.000s)",
+    "goVet": "passed",
+    "frontendTests": 302,
+    "typescript": "passed",
+    "runtimeBoundary": "passed",
+    "nativeWindows": {
+      "passedCases": 6,
+      "exitCode": 0,
+      "failedCases": 0
+    },
+    "integratedRegressions": "passed (internal/ai 5.952s, internal/web 2.231s)",
+    "integratedFrontendTests": 308,
+    "signedDev": {
+      "bootstrap": true,
+      "frontendMatchesBuild": true,
+      "backendMatchesBuild": true,
+      "signatureVerified": true,
+      "includesEarlierPermissionAndPunctuationFixes": true
+    }
+  },
+  "devIntegrationCommit": "4a9607b312e7c490799ffff44ea4a90950554ed7",
+  "existingUserOperation": "Inspected existing exit-code-0 command evidence only; did not approve, replay or mutate its operation record.",
+  "release": "Mac Dev updated with this fix and prior PR #19/#20 fixes; formal release unchanged."
+}

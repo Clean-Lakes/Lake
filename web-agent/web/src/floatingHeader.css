@@ -1,9 +1,11 @@
 /* Only the title bubble covers the scroll canvas; no full-width header strip. */
 .workspace.has-floating-header {
   container-type: inline-size;
+  overflow: hidden;
   --session-content-start: max(var(--session-gutter), calc((100cqw - 960px) / 2));
   --session-content-width: min(960px, calc(100cqw - var(--session-gutter) - var(--session-gutter)));
 }
+.workspace.has-floating-header > .session-view { overflow: hidden; }
 .workspace.has-floating-header > .workspace-header {
   position: absolute;
   z-index: 8;
@@ -16,13 +18,13 @@
   gap: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-window);
-  background: var(--surface);
+  background: transparent;
   box-shadow: var(--shadow-popover);
 }
 .workspace.has-floating-header .breadcrumbs { flex: 0 1 auto; }
 .crumb-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace.has-floating-header .crumb-slash { flex-shrink: 0; }
-.workspace.has-floating-header .conversation { container-type: normal; scrollbar-gutter: stable; scroll-padding-top: 80px; }
+.workspace.has-floating-header .conversation { container-type: normal; min-height: 0; scrollbar-gutter: stable; scroll-padding-top: 80px; }
 .workspace.has-floating-header .timeline-list {
   width: var(--session-content-width);
   margin-left: var(--session-content-start);
@@ -46,4 +48,56 @@ html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
 @media (max-width: 700px) {
   html.lake-windows-chrome .workspace.has-floating-header > .workspace-header { top: 52px; max-width: calc(100% - var(--session-gutter) - var(--session-gutter)); }
   html.lake-windows-chrome .workspace.has-floating-header .timeline-list { padding-top: 120px; }
+}
+
+/* A soft light sweep crosses the title while its contour and text stay fixed. */
+.workspace.has-floating-header > .workspace-header { isolation:isolate; }
+.workspace-header-sweep {
+  position:absolute;
+  inset:0;
+  z-index:0;
+  border-radius:inherit;
+  corner-shape:inherit;
+  overflow:hidden;
+  pointer-events:none;
+  opacity:1;
+  transition-property:opacity;
+  transition-timing-function:ease-out;
+}
+.workspace-header-sweep.is-receding { opacity:0; }
+/* Original single left-to-right sweep, without wave shapes or water lines. */
+.header-sweep-light {
+  position:absolute;
+  inset:0;
+  background:linear-gradient(105deg,transparent 20%,color-mix(in srgb,var(--info) 5%,transparent) 36%,color-mix(in srgb,var(--info) 14%,transparent) 50%,color-mix(in srgb,var(--info) 5%,transparent) 64%,transparent 80%);
+  animation:workspace-header-sweep 2.1s ease-in-out infinite;
+  will-change:transform;
+}
+@keyframes workspace-header-sweep {
+  from { transform:translate3d(-100%,0,0); }
+  to { transform:translate3d(100%,0,0); }
+}
+.workspace.has-floating-header > .workspace-header > :not(.workspace-header-sweep,.workspace-header-glass) { position:relative; z-index:2; }
+:root.lake-corner-fallback :is(.workspace-header-sweep,.workspace-header-glass) {
+  /* The nine-slice mask is the only corner clip in older WKWebView. An inherited
+     circular border-radius would cut inside it and leave a white crescent. */
+  border-radius:0;
+  -webkit-mask-box-image:url('/window-corner-fill.svg') 22 fill / calc(var(--radius-window) - 1px) / 0 stretch;
+}
+@media(prefers-reduced-motion:reduce) {
+  .workspace-header-sweep { display:none; }
+  .header-sweep-light { animation:none; will-change:auto; }
+}
+
+/* Static glass material beneath the running sweep and crisp title text. */
+.workspace-header-glass {
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  border-radius:inherit;
+  corner-shape:inherit;
+  background:var(--title-glass-sheen),var(--title-glass-background);
+  -webkit-backdrop-filter:var(--title-glass-filter);
+  backdrop-filter:var(--title-glass-filter);
+  pointer-events:none;
 }

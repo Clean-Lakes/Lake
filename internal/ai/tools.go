@@ -319,6 +319,11 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 				card.Status = "completed"
 				if err != nil {
 					card.Status = "failed"
+					var notExecuted *ToolNotExecutedError
+					var blocked *nativeOperationBlockedError
+					if errors.As(err, &notExecuted) || errors.As(err, &blocked) {
+						card.Status = "not_executed"
+					}
 					card.Content = redact(err.Error(), c)
 				} else {
 					card.Content = redact(js(result), c)
@@ -331,7 +336,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		e.notify(s, "operation", map[string]any{"card_id": cardID})
 	}()
 	approved := kind == "" && (risk != "readonly" || policyContext["needsTerminal"] == true)
-	if kind != "" {
+	if kind != "" || resumingNativeApproval(ctx) {
 		approval := &Approval{ID: uid(), Call: call, Target: target, Risk: risk, Kind: kind, NeedsTerminal: policyContext["needsTerminal"] == true, Fingerprint: fingerprint, Preview: preview, ResourceID: str(policyContext["asset_ref"]), TerminalID: str(policyContext["terminal_id"]), TerminalGeneration: str(policyContext["generation"]), TerminalVersion: num(policyContext["terminalVersion"], 0)}
 		if risk == "dangerous" {
 			approval.Confirmation = "执行 " + target
@@ -548,10 +553,13 @@ func readonlySQL(sql string) bool {
 	if !strings.HasPrefix(s, "SELECT ") {
 		return false
 	}
-	for _, word := range []string{"INTO", "FOR UPDATE", "PG_", "DBLINK", "LOAD_FILE", "SLEEP(", "BENCHMARK("} {
+	for _, word := range []string{"INTO", "FOR UPDATE", "DBLINK", "LOAD_FILE", "SLEEP(", "BENCHMARK("} {
 		if strings.Contains(s, word) {
 			return false
 		}
+	}
+	if !readonlyPostgresNames(s) {
+		return false
 	}
 	return true
 }

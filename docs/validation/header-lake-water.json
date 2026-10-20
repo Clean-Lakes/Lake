@@ -1,0 +1,26 @@
+{
+  "fallback": {
+    "height": 42,
+    "layers": [
+      {
+        "animation": "workspace-header-lake-flow",
+        "duration": "4.8s",
+        "mask": "url(\"http://127.0.0.1:5188/header-lake-wave.svg\")",
+        "transform": "matrix(1, 0, 0, 1, -349.926, 0)"
+      },
+      {
+        "animation": "workspace-header-lake-flow",
+        "duration": "6.4s",
+        "mask": "url(\"http://127.0.0.1:5188/header-lake-wave.svg\")",
+        "transform": "matrix(1, 0, 0, 1, -168.976, 0)"
+      }
+    ],
+    "mask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 21px / 0 stretch",
+    "pointerEvents": "none",
+    "radius": "0px",
+    "width": 373.875
+  },
+  "waitingLayers": 0,
+  "completedLayers": 0,
+  "failedLayers": 0
+}

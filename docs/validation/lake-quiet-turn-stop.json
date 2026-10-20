@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-20",
+  "change": "Hide duplicate cancelled error cards in conversation only when the same turn already has cancelled timing. Keep real errors, activity records and missing-timing fallback.",
+  "validation": {
+    "frontendTests": 303,
+    "typescript": "passed",
+    "adkBoundary": "passed",
+    "browser": "synthetic stopped-turn fixture, light desktop and dark 390px; one neutral status, no duplicate red error, no horizontal overflow"
+  },
+  "screenshot": "lake-quiet-turn-stop.png"
+}

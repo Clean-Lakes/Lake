@@ -1,0 +1,128 @@
+{
+  "light": [
+    {
+      "border": "1px solid color(srgb 0.207843 0.407843 0.647059 / 0.2)",
+      "height": 22,
+      "id": "resource:order-api",
+      "padding": "0px 5px",
+      "shadow": "none",
+      "width": 92.8046875
+    },
+    {
+      "border": "1px solid color(srgb 0.333333 0.333333 0.333333 / 0.2)",
+      "height": 22,
+      "id": "resource:gateway",
+      "padding": "0px 5px",
+      "shadow": "none",
+      "width": 92.8046875
+    },
+    {
+      "border": "1px solid color(srgb 0.141176 0.458824 0.380392 / 0.2)",
+      "height": 22,
+      "id": "resource:postgres",
+      "padding": "0px 5px",
+      "shadow": "none",
+      "width": 113.1015625
+    },
+    {
+      "border": "1px solid color(srgb 0.6 0.388235 0.0745098 / 0.2)",
+      "height": 22,
+      "id": "resource:redis",
+      "padding": "0px 5px",
+      "shadow": "none",
+      "width": 92.8046875
+    },
+    {
+      "border": "1px solid color(srgb 0.411765 0.254902 0.776471 / 0.2)",
+      "height": 22,
+      "id": "resource:docker",
+      "padding": "0px 5px",
+      "shadow": "none",
+      "width": 92.8046875
+    },
+    {
+      "border": "1px solid color(srgb 0.207843 0.407843 0.647059 / 0.2)",
+      "height": 24,
+      "id": "resource:order-api",
+      "padding": "1px 5px",
+      "shadow": "none",
+      "width": 114.8046875
+    },
+    {
+      "border": "1px solid color(srgb 0.333333 0.333333 0.333333 / 0.2)",
+      "height": 24,
+      "id": "resource:gateway",
+      "padding": "1px 5px",
+      "shadow": "none",
+      "width": 114.8046875
+    },
+    {
+      "border": "1px solid color(srgb 0.141176 0.458824 0.380392 / 0.2)",
+      "height": 24,
+      "id": "resource:postgres",
+      "padding": "1px 5px",
+      "shadow": "none",
+      "width": 135.1015625
+    },
+    {
+      "border": "1px solid color(srgb 0.6 0.388235 0.0745098 / 0.2)",
+      "height": 24,
+      "id": "resource:redis",
+      "padding": "1px 5px",
+      "shadow": "none",
+      "width": 114.8046875
+    },
+    {
+      "border": "1px solid color(srgb 0.411765 0.254902 0.776471 / 0.2)",
+      "height": 24,
+      "id": "resource:docker",
+      "padding": "1px 5px",
+      "shadow": "none",
+      "width": 114.8046875
+    }
+  ],
+  "dark": [
+    {
+      "border": "1px solid color(srgb 0.607843 0.737255 0.909804 / 0.2)",
+      "height": 22,
+      "id": "resource:order-api",
+      "right": 254.2109375,
+      "x": 161.40625
+    },
+    {
+      "border": "1px solid color(srgb 0.8 0.8 0.8 / 0.2)",
+      "height": 22,
+      "id": "resource:gateway",
+      "right": 254.2109375,
+      "x": 161.40625
+    },
+    {
+      "border": "1px solid color(srgb 0.529412 0.796078 0.701961 / 0.2)",
+      "height": 22,
+      "id": "resource:postgres",
+      "right": 268.2109375,
+      "x": 155.109375
+    },
+    {
+      "border": "1px solid color(srgb 0.847059 0.678431 0.388235 / 0.2)",
+      "height": 22,
+      "id": "resource:redis",
+      "right": 282.2109375,
+      "x": 189.40625
+    },
+    {
+      "border": "1px solid color(srgb 0.705882 0.603922 0.913725 / 0.2)",
+      "height": 22,
+      "id": "resource:docker",
+      "right": 282.2109375,
+      "x": 189.40625
+    },
+    {
+      "border": "1px solid color(srgb 0.529412 0.796078 0.701961 / 0.2)",
+      "height": 24,
+      "id": "resource:postgres",
+      "right": 182.1015625,
+      "x": 47
+    }
+  ]
+}

@@ -76,11 +76,27 @@ export function conversationGroups(entries:TranscriptEntry[]):ConversationGroup[
  return result;
 }
 
+/** Keep visible assistant prose above progress while a turn is still active.
+ * Reorder only the presentation groups: stable row IDs, raw tool chronology,
+ * exceptional states and decision controls remain intact. */
+export function conversationDisplayGroups(entries:TranscriptEntry[],active=false):ConversationGroup[] {
+ if(!active)return conversationGroups(entries);
+ return transcriptTurns(entries).flatMap(turn=>{
+  const groups=conversationGroups(turn);
+  const firstProgress=groups.findIndex(group=>group.progress);
+  if(firstProgress<0)return groups;
+  const isProse=(group:ConversationGroup)=>!group.progress&&group.entries.every(entry=>
+   entry.message?.role==='assistant'||!!entry.card&&['message','text'].includes(entry.card.type));
+  const tail=groups.slice(firstProgress);
+  return [...groups.slice(0,firstProgress),...tail.filter(isProse),...tail.filter(group=>!isProse(group))];
+ });
+}
+
 /** Render position is anchored at first use, so find the live row by its latest
  * chronological entry rather than by the last displayed row. */
 export function currentProgressGroupId(entries:TranscriptEntry[],live:boolean):string|undefined {
  if(!live)return;
- const tail=entries.filter(entry=>entry.card?.type!=='thinking'||!!entry.card.content).at(-1);
+ const tail=entries.filter(entry=>(entry.card?.type!=='thinking'||!!entry.card.content)&&entry.message?.role!=='assistant'&&!['message','text'].includes(entry.card?.type??'')).at(-1);
  if(!tail?.card||!normalStatuses.has(tail.card.status))return;
  const row=conversationGroups(entries).find(group=>group.progress&&group.entries.some(entry=>entry.id===tail.id));
  return row?.entries[0]!.id;

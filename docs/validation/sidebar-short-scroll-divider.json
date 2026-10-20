@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-20",
+  "fixture": "web-agent/web/test/fixtures/workspace-heading.html?scrollbar=1",
+  "screenshot": "sidebar-short-scroll-divider.png",
+  "checks": {
+    "length": "Visible thumb is 3px wide and at most 72px tall. A nearly fitting 357px list in a 312px viewport still produces a 72px thumb. No overflow produces no custom thumb.",
+    "position": "End reaches exact scrollTop 860/860; thumb bottom 648px remains above workspace bubble top 670px. Dragging back reaches scrollTop 0.",
+    "input": "ArrowDown scrolls exactly 40px; native wheel advances the list; Home/End and dragging operate on actual scroll position. Unit tests cover midpoint mapping, boundaries and tiny viewports.",
+    "divider": "Light divider RGB 229/229/229 and dark RGB 51/51/51, both 1px. Separator keyboard resize and double-click reset verified.",
+    "nativeFallback": "Desktop native scrollbar is suppressed only in the new sidebar area; touch devices use the native thin scrollbar. Main conversation scroll ownership remains separate.",
+    "validation": "323 frontend tests and TypeScript/Vite build passed. Signed scripts/build_lake_desktop.sh --dev --install passed. Running Dev needs normal quit and reopen."
+  }
+}

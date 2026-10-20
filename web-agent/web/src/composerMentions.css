@@ -1,6 +1,10 @@
-.composer-mentions.mention-menu { width: 370px; min-width: 0; max-width: min(420px,calc(100vw - 40px)); max-height: min(52vh,420px); padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+.composer-mentions.mention-menu { width: 370px; min-width: 0; max-width: min(420px,calc(100vw - 40px)); max-height: min(52vh,420px); padding: 0; display: flex; flex-direction: column; overflow: hidden; border-radius:var(--radius-window); }
+.composer-mentions .mention-item { border-radius:var(--radius-window); }
+/* Pointer and keyboard share aria-selected; hover must not paint a second row. */
+.composer-mentions .mention-item:not([aria-selected="true"]):hover { background:transparent; }
+.composer-mentions .mention-item[aria-selected="true"] { background:var(--surface-hover); }
 .mention-categories { display: flex; gap: 4px; padding: 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.mention-categories button { display: flex; align-items: center; gap: 5px; padding: 5px 8px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font-size: 12px; }
+.mention-categories button { display: flex; align-items: center; gap: 5px; padding: 5px 8px; border: 0; border-radius: var(--radius-window); background: transparent; color: var(--text-muted); font-size: 12px; }
 .mention-categories button[aria-pressed="true"],.mention-categories button:hover { background: var(--surface-hover); color: var(--foreground); }
 .mention-categories small { font-size: 10px; color: var(--text-muted); }
 .mention-results { overflow-y: auto; min-height: 0; padding: 5px; scrollbar-width: thin; }

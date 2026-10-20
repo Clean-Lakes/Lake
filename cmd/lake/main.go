@@ -236,8 +236,8 @@ const help = `Lake — Go 运维工作台（运行无需 Node.js）
   lake status                                 查看本机系统
   lake ai [--data PATH]                        Go AI stdio 接口
   lake secrets migrate --manifest FILE [--home PATH]  显式旧凭据迁移
-旧版 TypeScript Agent 的独立 grants/tasks/workflow CLI 合约已归档，
-不会自动转发到旧 Node 运行时；其历史文件保留，不会自动导入新工作台。`
+旧版 TypeScript Agent 与 Node Web 后端源码已移除，不支持其独立 grants/tasks/workflow CLI 合约。
+旧用户数据保留，不会自动导入新工作台。`
 
 func lakeHome() string {
 	if s := os.Getenv("LAKE_HOME"); s != "" {

@@ -372,10 +372,16 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	}
 }
 func (b *Server) bridge(ctx context.Context, id, name string, args Object, approved bool) (result any, err error) {
+	// Opening/binding a shell can fail before any command is submitted. Only
+	// failures before this boundary are proven to have no command side effect.
+	commandMayHaveStarted := name != "runtimeCommandExec"
 	defer func() {
 		if p := recover(); p != nil {
 			if f, ok := p.(*Failure); ok {
 				err = f
+				if !commandMayHaveStarted {
+					err = &ai.ToolNotExecutedError{Err: f}
+				}
 			} else {
 				err = fmt.Errorf("Terminal operation failed")
 			}
@@ -630,6 +636,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		}
 		copy["terminal_id"] = term["id"]
 		copy["intent"] = "Go Agent Shell 操作"
+		commandMayHaveStarted = true
 		return b.bridge(ctx, id, "terminal_execute_command", copy, approved)
 	}
 	if name == "list_ssh_terminals" {

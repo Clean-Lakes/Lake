@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-20",
+  "change": "Keep current unfinished conversation prose above grouped progress. Presentation only; stored chronology and execution controls unchanged.",
+  "validation": {
+    "frontendTests": 305,
+    "frontendPassed": 305,
+    "typescript": "passed",
+    "adkBoundary": "passed",
+    "browser": {
+      "fixture": "compact-progress.html (synthetic, no backend/model/host calls)",
+      "light": {
+        "width": 1280,
+        "proseAboveProgress": true,
+        "sameResourceRows": 1,
+        "appendPreservesExpandedDetails": true
+      },
+      "darkNarrow": {
+        "width": 390,
+        "proseAboveProgress": true,
+        "horizontalOverflow": false
+      },
+      "completion": "final reply below progress; completed history retains original order"
+    }
+  },
+  "screenshot": "lake-live-prose-above-progress.png"
+}

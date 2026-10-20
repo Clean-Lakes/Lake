@@ -1,0 +1,25 @@
+{
+  "style": {
+    "border": "1px solid rgb(238, 238, 238)",
+    "clock": false,
+    "color": "rgb(115, 115, 115)",
+    "font": "13px",
+    "lineHeight": "20px",
+    "weight": "400"
+  },
+  "keyboardToggle": true,
+  "preservedOpenOnUpdate": true,
+  "rawCommand": "uptime",
+  "liveUpdates": {
+    "expanded": "true",
+    "steps": 2
+  },
+  "collapsedError": {
+    "text": " · 1 项失败",
+    "expanded": "false"
+  },
+  "dark": {
+    "border": "1px solid rgb(44, 44, 44)",
+    "color": "rgb(170, 170, 170)"
+  }
+}

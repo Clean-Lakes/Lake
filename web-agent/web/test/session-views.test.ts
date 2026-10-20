@@ -58,7 +58,10 @@ test("conversation uses assigned tag colors in prose and leaves code, links and 
   assert.ok(html.includes('<strong><span class="conversation-tag color-green"'));
   assert.ok(html.includes('<code>MongoDB</code>'));
   assert.ok(html.includes('>MongoDB 官网</a>'));
-  assert.ok(html.includes('echo MongoDB\n</code>'));
+  const shell=html.match(/<code class="language-sh[^\"]*">([\s\S]*?)<\/code>/)?.[1];
+  assert.ok(shell);
+  assert.equal(shell.replace(/<\/?span\b[^>]*>/g,''),'echo MongoDB\n');
+  assert.ok(!shell.includes('conversation-tag'));
   assert.ok(html.includes('MongoDBBackup、/etc/MongoDB/conf、MongoDB.log'));
 });
 

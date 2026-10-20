@@ -1,0 +1,22 @@
+{
+  "showMoreHover": {
+    "background": "rgba(0, 0, 0, 0)",
+    "height": 28,
+    "hover": true,
+    "pseudo": "none"
+  },
+  "expanded": "true",
+  "resource": {
+    "background": "rgb(238, 238, 238)",
+    "height": 36,
+    "hover": true,
+    "mask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 18px / 0 stretch",
+    "radius": "18px"
+  },
+  "glass": {
+    "background": "linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.04) 42%, rgba(0, 0, 0, 0) 58%, rgba(255, 255, 255, 0.13)) repeat scroll 0% 0% / auto padding-box border-box, color(srgb 1 1 1 / 0.58) none repeat scroll 0% 0% / auto padding-box border-box",
+    "filter": "blur(18px) saturate(1.45)",
+    "mask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 21px / 0 stretch",
+    "pointerEvents": "none"
+  }
+}

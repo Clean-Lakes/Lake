@@ -1,0 +1,275 @@
+{
+  "pointer": [
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "hover": false,
+      "id": "composer-mention-resource-order-api",
+      "selected": "false"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "hover": false,
+      "id": "composer-mention-resource-gateway",
+      "selected": "false"
+    },
+    {
+      "background": "rgb(238, 238, 238)",
+      "hover": true,
+      "id": "composer-mention-resource-postgres",
+      "selected": "true"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "hover": false,
+      "id": "composer-mention-resource-redis",
+      "selected": "false"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "hover": false,
+      "id": "composer-mention-resource-docker",
+      "selected": "false"
+    }
+  ],
+  "keyboard": [
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "hover": false,
+      "id": "composer-mention-resource-order-api",
+      "selected": "false"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "hover": false,
+      "id": "composer-mention-resource-gateway",
+      "selected": "false"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "hover": true,
+      "id": "composer-mention-resource-postgres",
+      "selected": "false"
+    },
+    {
+      "background": "rgb(238, 238, 238)",
+      "hover": false,
+      "id": "composer-mention-resource-redis",
+      "selected": "true"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "hover": false,
+      "id": "composer-mention-resource-docker",
+      "selected": "false"
+    }
+  ],
+  "selectedToken": [
+    {
+      "icon": "lucide lucide-database resource-kind-icon kind-database",
+      "identity": "resource:postgres",
+      "text": "192.0.2.141-pg"
+    }
+  ],
+  "sidebarRadii": [
+    {
+      "items": [
+        {
+          "height": 36.5,
+          "radius": "20px"
+        }
+      ],
+      "name": "project"
+    },
+    {
+      "items": [
+        {
+          "height": 35,
+          "radius": "20px"
+        }
+      ],
+      "name": "search"
+    },
+    {
+      "items": [
+        {
+          "height": 34,
+          "radius": "20px"
+        },
+        {
+          "height": 34,
+          "radius": "20px"
+        },
+        {
+          "height": 34,
+          "radius": "20px"
+        }
+      ],
+      "name": "session"
+    },
+    {
+      "items": [
+        {
+          "height": 31,
+          "radius": "20px"
+        },
+        {
+          "height": 31,
+          "radius": "20px"
+        }
+      ],
+      "name": "folder"
+    },
+    {
+      "items": [
+        {
+          "height": 31,
+          "radius": "20px"
+        },
+        {
+          "height": 31,
+          "radius": "20px"
+        },
+        {
+          "height": 31,
+          "radius": "20px"
+        },
+        {
+          "height": 31,
+          "radius": "20px"
+        },
+        {
+          "height": 31,
+          "radius": "20px"
+        }
+      ],
+      "name": "folderOuter"
+    },
+    {
+      "items": [
+        {
+          "height": 31,
+          "radius": "20px"
+        },
+        {
+          "height": 31,
+          "radius": "20px"
+        },
+        {
+          "height": 31,
+          "radius": "20px"
+        }
+      ],
+      "name": "resource"
+    },
+    {
+      "items": [
+        {
+          "height": 38,
+          "radius": "20px"
+        }
+      ],
+      "name": "workspace"
+    },
+    {
+      "items": [
+        {
+          "height": 28,
+          "radius": "20px"
+        },
+        {
+          "height": 26,
+          "radius": "20px"
+        },
+        {
+          "height": 26,
+          "radius": "20px"
+        },
+        {
+          "height": 26,
+          "radius": "20px"
+        },
+        {
+          "height": 27,
+          "radius": "20px"
+        },
+        {
+          "height": 26,
+          "radius": "20px"
+        },
+        {
+          "height": 26,
+          "radius": "20px"
+        },
+        {
+          "height": 26,
+          "radius": "20px"
+        },
+        {
+          "height": 26,
+          "radius": "20px"
+        },
+        {
+          "height": 26,
+          "radius": "20px"
+        },
+        {
+          "height": 26,
+          "radius": "20px"
+        },
+        {
+          "height": 26,
+          "radius": "20px"
+        },
+        {
+          "height": 26,
+          "radius": "20px"
+        },
+        {
+          "height": 26,
+          "radius": "20px"
+        }
+      ],
+      "name": "actions"
+    }
+  ],
+  "dark": [
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "icon": "lucide lucide-server resource-kind-icon kind-ssh",
+      "radius": "20px",
+      "selected": "false"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "icon": "lucide lucide-monitor resource-kind-icon kind-local",
+      "radius": "20px",
+      "selected": "false"
+    },
+    {
+      "background": "rgb(44, 44, 44)",
+      "icon": "lucide lucide-database resource-kind-icon kind-database",
+      "radius": "20px",
+      "selected": "true"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "icon": "lucide lucide-database resource-kind-icon kind-redis",
+      "radius": "20px",
+      "selected": "false"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "icon": "lucide lucide-container resource-kind-icon kind-docker",
+      "radius": "20px",
+      "selected": "false"
+    }
+  ],
+  "narrow": {
+    "left": 36,
+    "radius": "20px",
+    "right": 354,
+    "scrollWidth": 316,
+    "selected": 1,
+    "width": 318
+  }
+}

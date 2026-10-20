@@ -20,6 +20,14 @@ test('progress icons follow tool identity without guessing from command or resul
  assert.ok(html.includes('data-glyph="lakeTerminal"'),'active tool matches summary even if later record completed');
  assert.equal((html.match(/thinking-process-icon/g)||[]).length,1,'group still has exactly one leading icon');
 });
+test('execution water stays scoped to a live running step, including stale historical cards',()=>{
+ const render=(cards:AICard[],live:boolean,continuing=false)=>renderToStaticMarkup(createElement(ThinkingTimeline,{cards,live,continuing}));
+ assert.ok(render([read],true).includes('execution-icon-water'));
+ assert.ok(!render([read],false).includes('execution-icon-water'),'a retained running record must not animate in history');
+ assert.ok(render([{...read,status:'completed'}],true,true).includes('execution-icon-water'),'the latest normal icon continues while the turn progresses');
+ assert.ok(!render([{...read,status:'completed'}],true,false).includes('execution-icon-water'),'older returned tools remain static');
+ assert.ok(!render([read,{...read,id:'approval',status:'pending'}],true).includes('execution-icon-water'),'approval blocks the group animation');
+});
 test("stalled model streams explain retained partial output and allow a follow-up",()=>{
  const text=displayAiError("model stream idle timeout; partial reply retained");
  assert.ok(text.includes("已停止等待")&&text.includes("已收到的回复和操作记录已保留")&&text.includes("继续发送"));
@@ -58,11 +66,13 @@ test("finished history stays collapsed and describes the actual operation",()=>{
   const html=renderToStaticMarkup(createElement(ThinkingTimeline,{cards:[{...thought,status:"completed"},{...read,status:"completed"}],live:false}));
   assert.ok(html.includes("读取 example.log · Local machine"));assert.ok(!html.includes(thought.content!));
 });
-test("descriptive operations have one running state at the top of the turn",()=>{
+test("descriptive operations have one running state and one latest-step caption above collapsed details",()=>{
   const view={session:"demo",status:"running",turnStartedAt:start,profile:"core",cards:[thought,read],cardsOffset:0} as AIView;
   const snapshot={session:{id:"demo"},messages:[{id:"user",role:"user",createdAt:start,text:"Read fixture"}],actions:[],ai:view} as SessionSnapshot;
   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
-  assert.equal(html.split("读取 example.log · Local machine").length-1,1);
+  assert.equal((html.match(/class="turn-current-step"/g)||[]).length,1);
+  assert.ok(html.includes('aria-label="最新步骤：读取 example.log · Local machine"'));
+  assert.ok(html.includes('hidden="" role="region" aria-label="执行详细过程"'));
   assert.ok(!html.includes("VERY_VERBOSE_RAW_REASONING"));
   assert.equal((html.match(/turn-status-text/g)||[]).length,1);
   assert.ok(html.indexOf("正在执行工具…")<html.indexOf("读取 example.log"));

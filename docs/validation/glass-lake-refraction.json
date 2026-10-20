@@ -1,0 +1,38 @@
+{
+  "running": [
+    {
+      "background": "radial-gradient(18% 130% at 48% 50%, rgba(234, 246, 255, 0.42), rgba(0, 0, 0, 0) 75%)",
+      "duration": "5.8s",
+      "mask": "none",
+      "name": "header-glass-drift",
+      "opacity": "0.613278",
+      "transform": "matrix(1, 0, 0, 1, -373.903, 0)"
+    },
+    {
+      "background": "radial-gradient(18% 130% at 48% 50%, rgba(234, 246, 255, 0.42), rgba(0, 0, 0, 0) 75%)",
+      "duration": "7.2s",
+      "mask": "none",
+      "name": "header-glass-drift",
+      "opacity": "0.99795",
+      "transform": "matrix(1, 0, 0, 1, 230.466, 0)"
+    }
+  ],
+  "exit": {
+    "class": "workspace-header-sweep is-receding",
+    "duration": "0.7s",
+    "layers": 2,
+    "opacity": "0.423632"
+  },
+  "dark": [
+    {
+      "animation": "header-glass-drift",
+      "background": "radial-gradient(18% 130% at 48% 50%, rgba(193, 224, 255, 0.08), rgba(0, 0, 0, 0) 75%)",
+      "highlight": "rgba(223, 240, 255, 0.34)"
+    },
+    {
+      "animation": "header-glass-drift",
+      "background": "radial-gradient(18% 130% at 48% 50%, rgba(193, 224, 255, 0.08), rgba(0, 0, 0, 0) 75%)",
+      "highlight": "rgba(223, 240, 255, 0.34)"
+    }
+  ]
+}

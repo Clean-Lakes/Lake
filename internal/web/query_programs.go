@@ -150,6 +150,8 @@ func readonlyAwk(args []string) bool {
 
 func readonlyQueryProgram(program string, args []string) bool {
 	switch program {
+	case "curl":
+		return readonlyHealthCurl(args)
 	case "systemctl":
 		return readonlySystemctl(args)
 	case "docker", "podman":

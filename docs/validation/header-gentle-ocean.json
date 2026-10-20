@@ -1,0 +1,20 @@
+{
+  "running": [
+    {
+      "duration": "12s",
+      "timing": "linear",
+      "transform": "matrix(1, 0, 0, 1, -65.7512, 0)",
+      "wavelength": "240px 100%"
+    },
+    {
+      "duration": "16s",
+      "timing": "linear",
+      "transform": "matrix(1, 0, 0, 1, -229.313, 0)",
+      "wavelength": "240px 100%"
+    }
+  ],
+  "exit": {
+    "duration": "0.7s",
+    "opacity": "0.452157"
+  }
+}

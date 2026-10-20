@@ -3,6 +3,8 @@ package ai
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -37,6 +39,28 @@ type nativeEvidence struct {
 	Status      string
 	Data        string
 	At          time.Time
+}
+
+type nativeOperationBlockedError struct {
+	ID, Tool, Target, Status, Handle string
+}
+
+func (e *nativeOperationBlockedError) recovery() map[string]any {
+	terminal, entry, ok := strings.Cut(e.Handle, ":")
+	if e.Tool == "shell" && ok && terminal != "" && entry != "" {
+		// shell_output is advertised to the model and accepts this exact
+		// operation ID. terminal_command_status is an internal bridge API.
+		return map[string]any{"tool": "shell_output", "arguments": map[string]any{"shell_id": e.ID}}
+	}
+	return nil
+}
+
+func (e *nativeOperationBlockedError) Error() string {
+	hint := "请核实原操作实际结果"
+	if e.recovery() != nil {
+		hint = "可用 shell_output 读取 shell_id=" + e.ID + " 的原命令记录"
+	}
+	return fmt.Sprintf("操作未派发：原操作 %s（%s，目标：%s，状态：%s）仍需核实。可继续只读检查；%s。不要更换终端或入口重复尝试，调整权限不会解除此保护", e.ID, e.Tool, e.Target, e.Status, hint)
 }
 
 func (e *Engine) dispatchNativeOperation(ctx context.Context, s *session, c Config, call Call, risk, target, fingerprint string) (*nativeOperation, error) {
@@ -81,12 +105,13 @@ func (e *Engine) dispatchNativeOperation(ctx context.Context, s *session, c Conf
 	}
 	err = store.DB.Transaction(func(tx *gorm.DB) error {
 		if risk != "readonly" {
-			var unknown int64
-			if err := tx.Model(&nativeOperation{}).Where("session_id = ? AND status IN ? AND risk <> ?", operation.SessionID, []string{"unknown", "dispatched"}, "readonly").Count(&unknown).Error; err != nil {
-				return err
+			var blocking nativeOperation
+			err := tx.Where("session_id = ? AND status IN ? AND risk <> ?", operation.SessionID, []string{"unknown", "dispatched"}, "readonly").Order("started_at, id").First(&blocking).Error
+			if err == nil {
+				return &nativeOperationBlockedError{ID: blocking.ID, Tool: blocking.Tool, Target: utf8Prefix(redact(blocking.Target, c), 120), Status: blocking.Status, Handle: blocking.Handle}
 			}
-			if unknown > 0 {
-				return errors.New("先核实结果不明或仍在运行的原操作，不会自动重复派发；这是执行结果保护，不是写权限不足，调整权限或更换路径不会解除，请勿重复尝试写入")
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
 			}
 		}
 		var prior nativeOperation

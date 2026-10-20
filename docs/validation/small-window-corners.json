@@ -1,0 +1,49 @@
+{
+  "light": [
+    {
+      "afterMask": "url(\"http://127.0.0.1:5188/window-corner-stroke-small.svg\") 8 fill / 8px / 0 stretch",
+      "beforeMask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 8px / 0 stretch",
+      "class": "session-state-badge state-completed",
+      "height": 20.5,
+      "radius": "8px",
+      "shape": "superellipse(1.5)",
+      "width": 71
+    },
+    {
+      "afterMask": "url(\"http://127.0.0.1:5188/window-corner-stroke-small.svg\") 8 fill / 8px / 0 stretch",
+      "beforeMask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 8px / 0 stretch",
+      "class": "message-reference-token",
+      "height": 22,
+      "radius": "8px",
+      "shape": "superellipse(1.5)",
+      "width": 113.1015625
+    },
+    {
+      "afterMask": "url(\"http://127.0.0.1:5188/window-corner-stroke-small.svg\") 8 fill / 8px / 0 stretch",
+      "beforeMask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 8px / 0 stretch",
+      "class": "composer-reference-token",
+      "height": 24,
+      "radius": "8px",
+      "shape": "superellipse(1.5)",
+      "width": 135.1015625
+    }
+  ],
+  "dark": [
+    {
+      "background": "rgb(24, 41, 31)",
+      "class": "session-state-badge state-completed",
+      "color": "rgb(100, 191, 138)",
+      "height": 20.5,
+      "mask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 8px / 0 stretch",
+      "radius": "8px"
+    },
+    {
+      "background": "rgb(26, 48, 40)",
+      "class": "message-reference-token",
+      "color": "rgb(135, 203, 179)",
+      "height": 22,
+      "mask": "url(\"http://127.0.0.1:5188/window-corner-fill.svg\") 22 fill / 8px / 0 stretch",
+      "radius": "8px"
+    }
+  ]
+}

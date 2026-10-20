@@ -1,0 +1,113 @@
+{
+  "nativeReference": "User-provided macOS window outer contour",
+  "deviceScale": 2,
+  "radiusCSS": 22,
+  "sampleRowsDevicePixels": [
+    1,
+    3,
+    5,
+    7,
+    9,
+    13,
+    17,
+    21,
+    25,
+    29,
+    33,
+    37,
+    41
+  ],
+  "referenceInsetsDevicePixels": [
+    27,
+    19,
+    15,
+    12,
+    10,
+    7,
+    4,
+    3,
+    2,
+    1,
+    1,
+    1,
+    1
+  ],
+  "nativeApp": {
+    "search": {
+      "insetsDevicePixels": [
+        25,
+        18,
+        15,
+        12,
+        10,
+        6,
+        4,
+        2,
+        1,
+        1,
+        0,
+        0,
+        0
+      ],
+      "maxDeviationCSSPixels": 1.0,
+      "meanDeviationCSSPixels": 0.346
+    },
+    "selectedSession": {
+      "insetsDevicePixels": [
+        25,
+        19,
+        15,
+        12,
+        10,
+        6,
+        4,
+        3,
+        2,
+        1,
+        0,
+        0,
+        0
+      ],
+      "maxDeviationCSSPixels": 1.0,
+      "meanDeviationCSSPixels": 0.231
+    },
+    "composer": {
+      "insetsDevicePixels": [
+        25,
+        19,
+        15,
+        12,
+        10,
+        6,
+        4,
+        3,
+        1,
+        1,
+        0,
+        0,
+        0
+      ],
+      "maxDeviationCSSPixels": 1.0,
+      "meanDeviationCSSPixels": 0.269
+    },
+    "workspace": {
+      "insetsDevicePixels": [
+        25,
+        18,
+        15,
+        12,
+        9,
+        6,
+        4,
+        2,
+        1,
+        1,
+        0,
+        0,
+        0
+      ],
+      "maxDeviationCSSPixels": 1.0,
+      "meanDeviationCSSPixels": 0.385
+    }
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "componentColors": [
+    {
+      "badge": "rgb(85, 85, 85)",
+      "fill": "5 100",
+      "label": "待命",
+      "ring": "rgb(85, 85, 85)",
+      "status": "idle",
+      "theme": "light"
+    },
+    {
+      "badge": "rgb(53, 104, 165)",
+      "fill": "5 100",
+      "label": "调查中",
+      "ring": "rgb(53, 104, 165)",
+      "status": "investigating",
+      "theme": "light"
+    },
+    {
+      "badge": "rgb(153, 99, 19)",
+      "fill": "5 100",
+      "label": "待确认",
+      "ring": "rgb(153, 99, 19)",
+      "status": "waiting_approval",
+      "theme": "light"
+    },
+    {
+      "badge": "rgb(22, 131, 75)",
+      "fill": "5 100",
+      "label": "回复结束",
+      "ring": "rgb(22, 131, 75)",
+      "status": "completed",
+      "theme": "light"
+    },
+    {
+      "badge": "rgb(188, 55, 55)",
+      "fill": "5 100",
+      "label": "需要关注",
+      "ring": "rgb(188, 55, 55)",
+      "status": "failed",
+      "theme": "light"
+    },
+    {
+      "badge": "rgb(204, 204, 204)",
+      "fill": "5 100",
+      "label": "待命",
+      "ring": "rgb(204, 204, 204)",
+      "status": "idle",
+      "theme": "dark"
+    },
+    {
+      "badge": "rgb(155, 188, 232)",
+      "fill": "5 100",
+      "label": "调查中",
+      "ring": "rgb(155, 188, 232)",
+      "status": "investigating",
+      "theme": "dark"
+    },
+    {
+      "badge": "rgb(216, 173, 99)",
+      "fill": "5 100",
+      "label": "待确认",
+      "ring": "rgb(216, 173, 99)",
+      "status": "waiting_approval",
+      "theme": "dark"
+    },
+    {
+      "badge": "rgb(100, 191, 138)",
+      "fill": "5 100",
+      "label": "回复结束",
+      "ring": "rgb(100, 191, 138)",
+      "status": "completed",
+      "theme": "dark"
+    },
+    {
+      "badge": "rgb(238, 133, 133)",
+      "fill": "5 100",
+      "label": "需要关注",
+      "ring": "rgb(238, 133, 133)",
+      "status": "failed",
+      "theme": "dark"
+    },
+    {
+      "badge": "rgb(238, 133, 133)",
+      "fill": "90 100",
+      "label": "调查结束 · 结论不充分",
+      "ring": "rgb(238, 133, 133)",
+      "status": "failed",
+      "theme": "dark"
+    }
+  ],
+  "appSSE": [
+    {
+      "badge": "rgb(53, 104, 165)",
+      "fill": "10 100",
+      "ring": "rgb(53, 104, 165)",
+      "status": "investigating"
+    },
+    {
+      "badge": "rgb(153, 99, 19)",
+      "fill": "15 100",
+      "ring": "rgb(153, 99, 19)",
+      "status": "waiting_approval"
+    },
+    {
+      "badge": "rgb(188, 55, 55)",
+      "fill": "20 100",
+      "ring": "rgb(188, 55, 55)",
+      "status": "failed"
+    },
+    {
+      "badge": "rgb(22, 131, 75)",
+      "fill": "25 100",
+      "ring": "rgb(22, 131, 75)",
+      "status": "completed"
+    }
+  ],
+  "nearLimit": "90% preserves session color and retains accessible/visible budget warning",
+  "frontendTests": 329
+}

@@ -42,3 +42,14 @@ test('configured model capacity caps the displayed manual input budget', () => {
  const html=renderToStaticMarkup(createElement(ContextUsage,{view:view({window:8192,windowSource:'settings',budget:64000,inputBudget:60000,used:4096,usedKnown:true,estimated:false})}));
  assert.match(html,/上下文 50.0%/);
 });
+
+
+test('context follows the supplied current session status without replacing it with a budget color', () => {
+ for(const status of ['idle','investigating','waiting_approval','completed','failed'] as const){
+  const html=renderToStaticMarkup(createElement(ContextUsage,{status,view:view({window:100,budget:100,inputBudget:100,used:90,usedKnown:true,windowSource:'settings'})}));
+  assert.match(html,new RegExp(`data-session-status="${status}"`));
+  assert.match(html,/上下文 90.0%/);
+  assert.match(html,/上下文输入预算接近或超过上限/);
+  assert.doesNotMatch(html,/class="ai-context-fill near-limit/);
+ }
+});

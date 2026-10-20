@@ -259,7 +259,7 @@ export type WorkflowCatalog = {templates:WorkflowTemplate[]; runs:WorkflowRun[]}
 
 export type NavigationTrashItem = {kind:"project" | "resource" | "folder";id:string;projectId:string;name:string;projectName:string;deletedAt:string};
 
-export interface MCPServerConfig {id:string;name:string;transport:"http"|"sse"|"stdio";enabled:boolean;url:string;command:string;args:string[];headersConfigured:boolean;envConfigured:boolean}
+export interface MCPServerConfig {id:string;name:string;transport:"http"|"sse"|"stdio";enabled:boolean;url:string;command:string;args:string[];headersConfigured:boolean;envConfigured:boolean;timeoutMs?:number;protocolVersion?:string}
 export interface MCPToolInfo {name:string;description:string;inputSchema:unknown}
 export interface MCPToolCatalog {serverId:string;serverName:string;tools:MCPToolInfo[];count:number}
 export interface SkillConfig {name:string;description:string;path:string;source:string;enabled:boolean;managed:boolean}
