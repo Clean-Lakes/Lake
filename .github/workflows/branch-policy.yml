@@ -1,0 +1,19 @@
+name: Lake branch policy
+on:
+  pull_request_target:
+    branches: [master]
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+permissions:
+  contents: read
+jobs:
+  branch-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      # Policy lives on the protected integration branch, including release PRs
+      # whose master base has not received this policy yet. Never use PR head.
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          persist-credentials: false
+      - run: python3 scripts/check_branch_policy.py

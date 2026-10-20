@@ -37,7 +37,9 @@
 <details>
 <summary>本地开发</summary>
 
-需要 Go 1.25、Node.js 24 和 pnpm。macOS 首次构建先运行 `scripts/setup_lake_signing.sh`，然后启动独立的 Lake Dev：
+日常开发从 `develop` 创建工作分支，经 PR 合入 `develop`，在 Lake Dev 验证和累积；生产只通过 `develop → master` 发布 PR 提升。开始修改前阅读 [分支与发布规范](docs/development-workflow.md) 和 [开发规范](CONTRIBUTING.md)，AI 同时遵守根目录 `AGENTS.md`。
+
+需要 Go 1.26.6（以 `go.mod` 为准）、Node.js 24 和 pnpm。macOS 首次构建先运行 `scripts/setup_lake_signing.sh`，然后启动独立的 Lake Dev：
 
 我们把自然界的几条常识，搬进了做软件的方式里。落到每一件事上，是六条共同原则——它们既是工程的，也是环保的：
 

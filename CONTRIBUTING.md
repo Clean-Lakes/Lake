@@ -1,10 +1,12 @@
 # Lake 开发规范
 
-本仓库以 `master` 为正式版基线。日常改动在独立分支完成；本地联调使用 **Lake Dev**。只有明确进行正式版构建、安装或发布时，才操作 `Lake.app` 和 `~/.lake`。
+本仓库采用 **功能分支 → PR → develop → 发布 PR → master**。`develop` 是长期开发集成分支，`master` 是生产分支；两者均禁止直接提交、推送或绕过 PR 合并。代码、修复、文档和配置修改都从最新 `origin/develop` 创建独立分支，通过 PR 进入 `develop`，先在 **Lake Dev** 累积并验证。
+
+开始工作前必须阅读 [分支与发布规范](docs/development-workflow.md)；AI 同时遵守根目录 [AGENTS.md](AGENTS.md)。创建 PR 不等于获准合并，只有用户明确授权后才执行对应合并。生产合并和发布分别需要明确授权。
 
 ## macOS 本地联调
 
-需要 macOS 13+、Apple Silicon、Go 1.25、Node.js 24.14+、pnpm 10.33.4、Swift 5.9+ 和 Xcode Command Line Tools。第一次构建先配置持久代码签名身份：
+需要 macOS 13+、Apple Silicon、Go 1.26.6（以 `go.mod` 为准）、Node.js 24.14+、pnpm 10.33.4、Swift 5.9+ 和 Xcode Command Line Tools。第一次构建先配置持久代码签名身份：
 
 ```sh
 scripts/setup_lake_signing.sh
@@ -50,7 +52,10 @@ Windows 本地联调使用 `python3 scripts/build_lake_windows.py --dev`，安�
 
 ## 提交和安全
 
-- 提交前检查 `git diff` 与暂存区，只加入本次修改。分支提交后向 `master` 发 PR；同步最新 `master` 并处理冲突后再合并。
+- 提交前检查 `git diff` 与暂存区，只加入本次修改。分支提交后向 `develop` 发 PR；同步最新 `origin/develop` 并处理冲突。`develop` 和 `master` 都只能经 GitHub PR 合入，禁止本地 merge 后直接 push。
+- 日常提交及指向 `develop` 的 PR 不自动运行 CI；必须记录本地验证命令、结果、Dev 提交和未验证项。评审意见处理完且用户明确授权后才能合并；没有 CI 不表示已测试通过。纯文档无需虚构应用测试。
+- 自动验证仅在同仓库 `develop -> master` 的 PR 阶段运行，通过后才可合并；不在合并后的 master 推送重复跑。需要额外 CI 时明确手动触发。发布资产工作流沿用独立发布授权。
+- 发布按批次进行：版本、发布说明和验证材料先经 PR 合入 `develop`，再由用户授权创建 `develop -> master` 发布 PR。生产合并完成后另经发布授权才运行发布脚本；不自动给普通 PR 发版本。
 - Go 代码用 `gofmt`；前端遵循现有 React/Vite 代码组织；macOS 客户端沿用 Swift Package 结构。改动对应功能时更新说明和必要的验证记录。
 - 不在代码、日志、截图、Issue 或提交中放模型 API Key、SSH 私钥内容。Lake 正常运行的凭据位于各自 home 下权限私有的 `secrets/`；只有显式执行已签名的 `lake secrets migrate` 才读取旧 Keychain 凭据。
 - 本地联调只检查 Dev 应用和隔离数据。正式版构建、安装与发布按 [macOS 客户端说明](client/macos/README.md) 进行。
