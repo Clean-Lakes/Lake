@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-10-20
 last_updated: 2026-10-20
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [refactor, cleanup, runtime, adk]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 当前签名构建只使用 Go 后端及 React 前端。删除未再参与产品调用的根目录 `agent/` 与 `legacy/web-agent/`，保留当前前端、Go ADK、许可归属、历史验收记录及用户数据。
 
@@ -50,7 +50,7 @@ tags: [refactor, cleanup, runtime, adk]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-005 | 依赖 TASK-003、TASK-004。执行前端测试和类型检查、完整 Go race/vet、ADK 边界检查及 `scripts/build_lake.sh` 签名构建。 | 是 | 2026-10-20 |
-| TASK-006 | 依赖 TASK-005。记录删除文件数与真实验证结果，检查变更范围与敏感信息，提交独立分支并向 master 创建 PR。 | 否 | 未完成 |
+| TASK-006 | 依赖 TASK-005。记录删除文件数与真实验证结果，检查变更范围与敏感信息，提交独立分支并向 master 创建 PR。 | 是 | 2026-10-20 |
 
 ## 3. Alternatives
 
