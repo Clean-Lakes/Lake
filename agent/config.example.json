@@ -1,5 +1,0 @@
-{
-  "schemaVersion":1,"defaultProvider":"local-model",
-  "providers":[{"id":"local-model","baseUrl":"http://127.0.0.1:9000/v1","model":"configured-model","credentialRef":"models/default","contextWindowTokens":32768,"maxOutputTokens":4096,"supportsTools":true,"supportsStreaming":true,"supportsUsageInStream":false}],
-  "profiles":[],"trustedSkillRoots":[],"limits":{}
-}

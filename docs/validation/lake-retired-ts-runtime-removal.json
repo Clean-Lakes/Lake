@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-20",
+  "scope": {
+    "deletedFiles": 241,
+    "deletedAgentFiles": 216,
+    "deletedNodeBackendFiles": 21,
+    "deletedObsoleteGuides": 4,
+    "historicalAttribution": "docs/licenses/lake-ts-agent-THIRD-PARTY-NOTICES.md",
+    "currentGoAdkAndReactPreserved": true,
+    "userHomeAndInstalledClientsModified": false
+  },
+  "validation": {
+    "goRace": {
+      "command": "go test -race ./... -count=1 -timeout=10m",
+      "result": "passed",
+      "aiSeconds": 89.907,
+      "webSeconds": 219.203
+    },
+    "goVet": "passed: go vet ./...",
+    "frontend": {
+      "tests": 302,
+      "passed": 302,
+      "failed": 0
+    },
+    "typescript": "passed",
+    "adkBoundary": "passed",
+    "retiredPathNegativeChecks": {
+      "agent": "rejected in isolated source copy",
+      "legacy/web-agent": "rejected in isolated source copy"
+    },
+    "signedBuild": {
+      "script": "scripts/build_lake.sh",
+      "signatureVerification": "codesign --verify --strict bin/lake passed",
+      "noNodeSmoke": "TestSignedReleaseWithoutNodeRuntime passed; temporary home and empty PATH; embedded web and PTY verified",
+      "help": "reports removed TS Agent and Node backend; old user data retained"
+    }
+  },
+  "references": {
+    "activeImportsAndBuildEntrypointsToRetiredRuntime": 0,
+    "historicalPlansAndValidationPreserved": true,
+    "newRelativeDocumentationLinks": "resolved"
+  }
+}

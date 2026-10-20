@@ -68,7 +68,7 @@ Lake 的核心身份与权限规则由系统策略定义。用户可以要求音
 
 当前目标是 macOS/Linux POSIX 终端；Windows PTY 未验证。系统 OpenSSH 和 Docker CLI 仍是对应能力的系统依赖。未以用户的生产模型密钥或远程服务器验证。
 
-旧 Node Web 后端与测试归档在 `legacy/web-agent/`，不参与构建或运行。旧 `agent/` TypeScript Agent 的 grants/tasks/workflow CLI 合约不同，新 Go 入口不会回退加载它；其数据文件保留，没有自动跨合约迁移。新 CLI 命令见 `lake --help`。
+旧 TypeScript Agent 和 Node Web 后端源码、测试、UI、配置及构建脚本已移除，当前仅保留 Go ADK 后端与本 React 前端。旧实现可从 Git 历史查看，历史许可归属保留在 [第三方声明](../docs/licenses/lake-ts-agent-THIRD-PARTY-NOTICES.md)。旧用户数据不删除、不自动跨合约迁移；旧 grants/tasks/workflow CLI 合约不再提供。当前命令见 `lake --help`，开发流程见 [贡献指南](../CONTRIBUTING.md)。
 
 [Go AI 说明](../docs/hexhub-ai/README.md) · [迁移计划](../plan/refactor-go-server-1.md) · [验证记录](../docs/validation/lake-go-server.md)
 
