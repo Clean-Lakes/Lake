@@ -21,6 +21,18 @@ test('plain answers and scope questions retain their own rows',()=>{
  const question={id:'question',at,message:{...user.message!,role:'assistant',text:'请确认范围'}};
  assert.ok(conversationGroups([card('reply','message'),question]).every(g=>!g.progress));
 });
+test('stopped turns show one neutral status without hiding actual errors or activity records',()=>{
+ const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],replyTimings:[{messageId:'user',startedAt:at,finishedAt:'2026-10-18T08:00:04Z',status:'cancelled'}],ai:{session:'s',status:'cancelled',cardsOffset:0,cards:[card('stop','error','cancelled','context canceled').card,card('failure','error','failed','连接已中断，请检查网络').card]}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ assert.ok(html.includes('已停止')&&html.includes('4秒'));
+ assert.ok(!html.includes('已停止本轮'));
+ assert.ok(!html.includes('data-conversation-entry="stop"'));
+ assert.ok(html.includes('连接已中断，请检查网络'));
+ const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:'activity'}));
+ assert.ok(activity.includes('data-conversation-entry="stop"'),'raw stop record remains in the activity view');
+ const noTiming={...s,replyTimings:[]};
+ assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot:noTiming})).includes('已停止本轮'),'do not remove the only stop notice if timing is unavailable');
+});
 test('operation status changes keep the same row and never absorb preceding text',()=>{
  for(const status of ['running','pending','completed','failed','unknown','interrupted','cancelled','not_executed','background_running']){
   const groups=conversationGroups([card('before','message'),card('tool','operation',status),card('next','message')]);
