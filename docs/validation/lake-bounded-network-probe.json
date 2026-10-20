@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-20",
+  "scope": "Avoid false catastrophic-command classification for fixed literal-host loops containing bounded TCP connectivity probes.",
+  "baseCommit": "9520dd7eddf4f3cb1bf2d7059f27bc0346dc1382",
+  "fixtures": "Documentation IPs and example.invalid names only; classification tests and no-op bridge; no real shell, Docker or TCP probe executed.",
+  "baseline": "Equivalent command reproduced the extra-confirmation false positive before the fix.",
+  "behavior": {
+    "grantedSilentCommands": "No extra destructive-operation confirmation for the proven probe form.",
+    "ungrantedSilentCommands": "Still requests normal command approval.",
+    "scope": "Explicit loop of at most 64 literal hosts, timeout >0 and <=30 seconds, TCP port 1..65535, probe and status echoes only.",
+    "preserved": "Unknown variables, host mutation, substitutions, added scripts, broad removal, raw-device writes and unrelated later commands remain protected. No permission defaults or execution-target rules changed."
+  },
+  "checks": {
+    "targetedRace": "passed (internal/ai 2.740s, internal/web 5.571s)",
+    "fullRace": "passed (internal/ai 86.196s, internal/web 222.551s)",
+    "goVet": "passed (internal/ai and internal/web)",
+    "windowsNativeUnitTests": {
+      "exitCode": 0,
+      "passedCases": 19,
+      "failedCases": {}
+    },
+    "signedMacDev": {
+      "bootstrapStatus": 200,
+      "bundleId": "com.cleanlakes.lake.desktop.dev",
+      "version": "0.3.21",
+      "installedBackendMatchesBuild": true,
+      "codesignVerified": true
+    },
+    "frontendTypecheckAndProductionBuild": "passed through standard signed Dev build"
+  },
+  "pendingOperations": "Existing approvals were not accepted, cleared or replayed.",
+  "release": "No formal release package was published for this fix."
+}
