@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-20",
+  "scope": "Classify trusted shell target/SSH setup failures before command submission as not_executed instead of unknown.",
+  "boundary": "runtimeCommandExec marks the start boundary immediately before terminal_execute_command; only trusted Failure panics before that boundary receive ToolNotExecutedError. Execution-stage errors remain conservative.",
+  "regressions": {
+    "initialSSHRefusal": "passed; closed loopback port only, no command entry created",
+    "retainedConnectionPause": "passed; a second attempt creates no additional connection",
+    "postSubmissionPath": "passed; execution-stage failure is not claimed unexecuted",
+    "existingRuntimeMismatch": "passed"
+  },
+  "windowsNative": {
+    "passedCases": 3,
+    "exitCode": 0,
+    "failedCases": 0
+  },
+  "signedMacDev": {
+    "bootstrapStatus": 200,
+    "installedBackendMatchesBuild": true,
+    "codesignVerified": true
+  },
+  "existingSessionRepair": {
+    "verified": "Exact recorded SSH startup failure, no command handle, no entries before recovered connection, session idle without approval pending.",
+    "method": "Host resolveOperation API with verification note and audit; no direct database writes.",
+    "outcome": "not_executed",
+    "replay": false,
+    "permissionsChanged": false
+  },
+  "historicalPolicy": "No bulk repair based on error text; genuine unknown or dispatched effects remain protected.",
+  "release": "Dev updated; formal package not published.",
+  "fullRegression": {
+    "race": "passed: internal/ai 88.508s, internal/web 222.020s",
+    "vet": "passed: internal/ai and internal/web",
+    "frontendTypecheckAndProductionBuild": "passed through standard signed Dev build"
+  }
+}
