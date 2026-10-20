@@ -319,6 +319,11 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 				card.Status = "completed"
 				if err != nil {
 					card.Status = "failed"
+					var notExecuted *ToolNotExecutedError
+					var blocked *nativeOperationBlockedError
+					if errors.As(err, &notExecuted) || errors.As(err, &blocked) {
+						card.Status = "not_executed"
+					}
 					card.Content = redact(err.Error(), c)
 				} else {
 					card.Content = redact(js(result), c)

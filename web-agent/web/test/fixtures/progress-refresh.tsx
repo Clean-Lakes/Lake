@@ -98,7 +98,12 @@ function measure(){
 }
 requestAnimationFrame(measure);
 const finishCurrent=()=>state.ai!.cards.filter(card=>card.type!=='thinking'&&card.status==='running').forEach(card=>card.status='completed');
-const update=()=>{state.cursor++;state.ai!.totalCards=state.ai!.cards.length;metrics.updates++;streams.forEach(stream=>stream.emit())};
+const update=()=>{
+ state.cursor++;state.ai!.totalCards=state.ai!.cardsOffset+state.ai!.cards.length;
+ // Reproduce the backend's rolling 300-card page with a smaller fixture page.
+ if(query.has('rolling')&&state.ai!.cards.length>14){const drop=state.ai!.cards.length-14;state.ai!.cards.splice(0,drop);state.ai!.cardsOffset+=drop;}
+ metrics.updates++;streams.forEach(stream=>stream.emit());
+};
 let index=0,tick=112;
 document.getElementById('reset-metrics')!.onclick=()=>{lineArrivals.length=motionSamples.length=0;metrics.executionAnimations=metrics.rowReplacements=metrics.rowRemovals=metrics.rowPositionChanges=metrics.rowColorChanges=0;metrics.actionReplacements=metrics.historyReplacements=metrics.actionAnimations=metrics.replyAnimations=metrics.replyReplacements=metrics.scrollWrites=metrics.scrollEvents=metrics.scrollChanges=metrics.heightChanges=metrics.updates=0};
 document.getElementById('update-line')!.onclick=()=>{state.ai!.cards.find(card=>card.id==='note')!.content=`第 ${++index} 次核对演示服务与运行记录，保留本轮原始证据。`;update()};

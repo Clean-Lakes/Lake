@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-20",
+  "cause": "Rolling recent-card pages were treated as history deletion on each new tool step, replacing older rows, shrinking content height and moving scroll position.",
+  "changes": [
+    "Retain already displayed contiguous card pages by session and merge fresh outcomes by card ID",
+    "Keep navigation, actual history truncation and noncontiguous page boundaries separate",
+    "Report execution-barrier refusals as not_executed with retryable=false and a model-visible shell_output recovery instead of an internal terminal_command_status API; preserve unknown original results"
+  ],
+  "beforeFiveSteps": {
+    "historyReplacements": 5,
+    "heightChanges": 5,
+    "scrollChanges": 5,
+    "rowPositionChanges": 10
+  },
+  "afterTwentySteps": {
+    "historyReplacements": 0,
+    "heightChanges": 0,
+    "scrollChanges": 0,
+    "rowPositionChanges": 0,
+    "rowReplacements": 0,
+    "rowRemovals": 0,
+    "replyAnimations": 0,
+    "executionAnimations": 0,
+    "errors": 0
+  },
+  "checks": {
+    "frontend": "314 tests passed",
+    "backend": "internal/ai full race passed; final no-dispatch/recovery/preflight/timeout tests passed",
+    "vet": "internal/ai passed",
+    "runtimeBoundary": "passed",
+    "expandedDetails": "Original resource row and first open command details stayed expanded after next step",
+    "build": "signed Dev 0.3.21 installed; correct worktree and binary hash verified",
+    "activation": "Installed; running Dev must reopen to load new embedded assets and backend"
+  },
+  "screenshot": "progress-page-stability.png"
+}

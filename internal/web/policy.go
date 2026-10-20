@@ -25,7 +25,7 @@ func set(s string) map[string]bool {
 }
 
 var dangerPrograms = set("sudo su doas mv rm rmdir unlink srm trash trash-put trash-empty trash-rm gtrash shred dd mkfs wipefs fdisk parted shutdown reboot halt poweroff kill killall pkill chmod chown chgrp chattr")
-var readPrograms = set("systemctl docker podman pwd uname uptime df du ls cat head tail wc grep egrep fgrep find ps free vmstat vm_stat iostat top sysctl date hostname whoami id who w stat file readlink printf echo true false sleep hdiutil awk env sort sed ss netstat lsof ifconfig route networksetup ip")
+var readPrograms = set("systemctl docker podman pwd uname uptime df du ls cat head tail wc grep egrep fgrep find ps free vmstat vm_stat iostat top sysctl date hostname whoami id who w stat file readlink printf echo true false sleep hdiutil awk env sort sed ss netstat lsof ifconfig route networksetup ip curl")
 var wrappers = set("sh bash zsh fish osascript python python3 perl ruby node awk eval exec source . env command xargs nice timeout nohup")
 var sensitive = regexp.MustCompile(`(?i)(\.lake/secrets|\.ssh/(id_|.*\.pem)|\bid_(rsa|ed25519|ecdsa|dsa)\b|(^|[/\s])\.env(\b|\.)|keychain)`)
 
@@ -267,6 +267,11 @@ func commandPolicyFlat(command string) Policy {
 		}
 		if !safe {
 			return Policy{Risk: "write", Reason: "该程序或参数可能改变状态，或暂不能可靠判定为只读；请先核对影响。"}
+		}
+		if p == "curl" {
+			// -q must be first: never inherit curlrc. Ignore proxy environment
+			// and bound requests even if the caller omitted its own timeout.
+			g = append([]string{g[0], "-q", "--globoff", "--noproxy", "*", "--max-time", "10", "--connect-timeout", "5"}, args...)
 		}
 		q := []string{}
 		for _, v := range g {

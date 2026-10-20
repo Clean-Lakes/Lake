@@ -9,11 +9,32 @@ import {ReplyDuration} from "../src/ReplyDuration";
 
 const start="2026-10-12T03:00:00Z";
 const timing:ReplyTiming={messageId:"u",startedAt:start,finishedAt:"2026-10-12T03:01:13Z",status:"completed"};
-test("completed duration stays frozen and quick answers show a meaningful duration",()=>{
+test("completed duration stays frozen and sub-second durations stay hidden",()=>{
  assert.equal(replyDurationText(timing,Date.parse(start)+9_000_000),"1分钟 13秒 · 已完成");
- assert.equal(replyDurationText({...timing,finishedAt:start},Date.now()),"不到1秒 · 已完成");
+ assert.equal(replyDurationText({...timing,finishedAt:start},Date.now()),undefined);
  assert.equal(replyDurationText({...timing,status:"running",finishedAt:""},Date.parse(start)+19000),"19秒 · 正在思考…");
  assert.equal(replyDurationText({...timing,status:"running"},Date.parse(start)+19000,true),"19秒 · 等待确认");
+});
+test("normal activity waits one second and instant completion does not flash a duration",t=>{
+ let now=Date.parse(start);
+ t.mock.method(Date,"now",()=>now);
+ const running={...timing,status:"running" as const,finishedAt:""};
+ const render=(props:Parameters<typeof ReplyDuration>[0])=>renderToStaticMarkup(createElement(ReplyDuration,props));
+ for(const elapsed of [0,500,999]){
+  now=Date.parse(start)+elapsed;
+  assert.equal(render({timing:running}),"");
+  assert.equal(render({view:{status:"running",turnStartedAt:start,cards:[]} as never}),"");
+ }
+ now=Date.parse(start)+1000;
+ const active=render({timing:running});
+ assert.ok(active.includes("reply-duration-spinner")&&active.includes("1s")&&active.includes("正在思考…"));
+ const quick={...timing,finishedAt:"2026-10-12T03:00:00.999Z"};
+ assert.equal(render({timing:quick}),"");
+ assert.ok(render({timing:{...quick,status:"failed"}}).includes("未完成"));
+ now=Date.parse(start)+100;
+ const waiting=render({timing:running,view:{status:"waiting_approval",cards:[]} as never});
+ assert.ok(waiting.includes("等待确认")&&!waiting.includes("reply-duration-spinner"));
+ assert.ok(!waiting.includes("不到1秒"));
 });
 test("cancelled and failed turns are identified; unknown endpoints do not fabricate time",()=>{
  assert.equal(replyDurationText({...timing,status:"cancelled"},Date.now()),"1分钟 13秒 · 已停止");

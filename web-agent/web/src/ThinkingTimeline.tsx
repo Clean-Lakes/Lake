@@ -10,7 +10,7 @@ import { processDescription, toolDescription, toolLabels } from "./activity";
 export const ToolStep = memo(function ToolStep({ card, onInspect }: { card: AICard; onInspect?: () => void }) {
   const data = card.data && typeof card.data === "object" ? card.data as Record<string, unknown> : {};
   const args = data.arguments && typeof data.arguments === "object" ? data.arguments as Record<string, unknown> : {};
-  const state = card.status === "pending" ? "等待确认" : card.status === "background_running" ? "后台执行中" : card.status === "running" ? "执行中" : card.status === "failed" ? "失败" : ["interrupted", "cancelled"].includes(card.status) ? "已停止" : ["completed", "succeeded", "success"].includes(card.status) ? "已完成" : "结果待核查";
+  const state = card.status === "pending" ? "等待确认" : card.status === "background_running" ? "后台执行中" : card.status === "running" ? "执行中" : card.status === "failed" ? "失败" : card.status === "not_executed" ? "未执行" : ["interrupted", "cancelled"].includes(card.status) ? "已停止" : ["completed", "succeeded", "success"].includes(card.status) ? "已完成" : "结果待核查";
   const command = typeof args.command === "string" ? args.command : "";
   return <li className={`thinking-step thinking-tool step-${card.status}`}>
     <span className="thinking-step-marker"><Glyph name={progressGlyph(card)} size={18}/></span>

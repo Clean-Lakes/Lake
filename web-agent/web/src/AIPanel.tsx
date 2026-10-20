@@ -17,6 +17,7 @@ import { ReplyDuration } from "./ReplyDuration";
 import { timingForTurn } from "./replyDurationState";
 import {displayAiError} from "./aiErrors";
 import Markdown from "react-markdown";
+import {MarkdownCodeBlock} from './MarkdownCodeBlock';
 import remarkGfm from "remark-gfm";
 import { remarkAssistantProse } from "./assistantProse";
 import {remarkCompactReply} from './compactReply';
@@ -59,7 +60,7 @@ function Chart({ card }: { card: AICard }) {
   </svg><details><DisclosureSummary>查看数据</DisclosureSummary><table><thead><tr><th>项目</th>{series.map((item, i) => <th key={i}>{item.name || "数值"}</th>)}</tr></thead><tbody>{data.labels.map((label, i) => <tr key={i}><td>{label}</td>{series.map((item, j) => <td key={j}>{item.values[i]}</td>)}</tr>)}</tbody></table></details></figure>;
 }
 const noTags: WorkspaceTag[] = [];
-const cardMarkdownComponents:Components={summary:ReplyDetailsSummary,a:({node,...props})=><a {...props} target="_blank" rel="noopener noreferrer"/>,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
+const cardMarkdownComponents:Components={pre:MarkdownCodeBlock,summary:ReplyDetailsSummary,a:({node,...props})=><a {...props} target="_blank" rel="noopener noreferrer"/>,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
 const Card = memo(function Card({ card, tags = noTags, animateInitial = false }: { card: AICard; tags?: WorkspaceTag[]; animateInitial?:boolean }) {
   // Only fold reports already complete when restored, never a visible live reply.
   const compactRestored = useRef(card.status==='completed'&&!animateInitial).current;

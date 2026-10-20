@@ -777,6 +777,13 @@ a { color: inherit; }
 .ai-markdown pre { background: var(--surface-muted); border: 1px solid var(--border); border-radius: var(--radius-control); padding: 12px; overflow: auto; white-space: pre; font-size: 12px; }
 .ai-markdown code { font-family: var(--font-mono); background: var(--surface-muted); border-radius: var(--radius-control); padding: 1px 3px; }
 .ai-markdown pre code { padding: 0; background: none; }
+.markdown-code-block { min-width: 0; max-width: 100%; margin: 11px 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-muted); }
+.markdown-code-toolbar { display: flex; justify-content: flex-end; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.markdown-code-toolbar > button { display: inline-flex; align-items: center; gap: 5px; min-height: 26px; padding: 3px 7px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.markdown-code-toolbar > button:hover { color: var(--foreground); background: var(--surface-hover); }
+.markdown-code-toolbar > button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+:is(.ai-markdown,.sre-prose) .markdown-code-block > pre { margin: 0; border: 0; border-radius: 0; padding: 12px; overflow: auto; white-space: pre; font: 12px/1.65 var(--font-mono); }
+.markdown-code-block > .markdown-code-error { margin: 0; padding: 6px 12px; color: var(--danger); font-size: 12px; }
 .ai-markdown table { border-collapse: collapse; overflow: auto; font-size: 13px; display: table; width: 100%; margin: 12px 0; }
 .ai-markdown td,.ai-markdown th { border: 1px solid var(--border); padding: 6px 10px; }
 .ai-markdown img { max-width: 100%; max-height: 520px; }
