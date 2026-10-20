@@ -25,13 +25,16 @@ func catastrophicScript(command string, depth int) bool {
 		return regexp.MustCompile(`\b(rm|shred|mkfs|wipefs|dd)\b`).MatchString(command)
 	}
 	critical := false
+	probes := boundedTCPProbeCalls(file)
 	syntax.Walk(file, func(node syntax.Node) bool {
 		if critical {
 			return false
 		}
 		switch node := node.(type) {
 		case *syntax.CallExpr:
-			critical = catastrophicCall(node.Args, depth)
+			if !probes[node] {
+				critical = catastrophicCall(node.Args, depth)
+			}
 		case *syntax.Redirect:
 			if node.Op == syntax.RdrOut || node.Op == syntax.AppOut || node.Op == syntax.RdrAll || node.Op == syntax.AppAll {
 				target, _, _ := guardWord(node.Word)
