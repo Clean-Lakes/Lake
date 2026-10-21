@@ -29,14 +29,12 @@ test('explicit IDs and exact resource names can attribute prose after mixed tool
  const wrong=say('wrong','结果完成。');wrong.card!.data={resource_id:'foreign'};
  assert.equal(project([tool('a'),wrong]).overall[0]!.id,'wrong');
 });
-test('joint stages update each resource in their actual batch and IP prefixes never select one',()=>{
+test('joint and ambiguous stages feed synthesis once rather than cloning resource previews',()=>{
  const mixed=[tool('a'),tool('b',resources[1])];
  const result=project([...mixed,say('cross','192.168.2.141 到演示数据库的传输完成。'),say('next','联合检查完成。')]);
- assert.equal(result.byResource.size,2);
- assert.deepEqual(result.byResource.get('a')!.map(entry=>entry.id),['cross','next']);
- assert.deepEqual(result.byResource.get('b')!.map(entry=>entry.id),['cross','next']);
- assert.equal(result.overall.length,0);
- assert.equal(project([...mixed,say('prefix','192.168.2.1419 状态未知。')]).byResource.size,2,'a partial IP must not pick a single owner over the actual batch');
+ assert.equal(result.byResource.size,0);
+ assert.deepEqual(result.overall.map(entry=>entry.id),['cross','next']);
+ assert.equal(project([...mixed,say('prefix','192.168.2.1419 状态未知。')]).byResource.size,0,'partial IP cannot invent an owner');
 });
 test('resource context is retained between consecutive stages but reset by generic operations',()=>{
  assert.equal(project([tool('a'),say('one','正在恢复。'),say('two','恢复完成。')]).byResource.get('a')!.length,2);
@@ -67,11 +65,25 @@ test('visible preview is under its resource even when actions are folded; previo
 });
 
 
-test('a resource batch result without full resource names still belongs to both resource rows',()=>{
- const result=project([tool('a'),tool('b',resources[1]),say('result','源库可以正常连接，缓冲池只有 128 MB。目标端没有镜像，先导出再传输。')]);
- assert.equal(result.overall.length,0);
- assert.equal(result.byResource.get('a')!.at(-1)!.id,'result');
- assert.equal(result.byResource.get('b')!.at(-1)!.id,'result');
+test('an ambiguous source/target paragraph is not copied beneath each involved resource',()=>{
+ const result=project([tool('a'),tool('b',resources[1]),say('result','传完并放好了。现在清掉目标端上一次恢复的库，再全量重建。')]);
+ assert.equal(result.byResource.size,0);
+ assert.deepEqual(result.overall.map(entry=>entry.id),['result']);
+});
+test('repeated prose with different IDs and formatting has only one projected owner',()=>{
+ const body='目标端只保留 postgres 系统库，开始全量重建。';
+ const result=project([tool('a'),say('one',body),tool('b',resources[1]),say('two',body.replace('postgres','`postgres`'))]);
+ assert.equal(result.byResource.size,0,'conflicting owners must not duplicate or invent ownership');
+ assert.deepEqual(result.overall.map(entry=>entry.id),['two']);
+ assert.ok(result.ids.has('one')&&result.ids.has('two'),'both originals remain in archived process history');
+ const same=project([tool('a'),say('one',body),say('two',body)]);
+ assert.deepEqual(same.byResource.get('a')!.map(entry=>entry.id),['two']);
+});
+test('same entry replay and a third duplicate cannot restore a conflicting owner',()=>{
+ const repeated=say('same','阶段检查已经完成，正在准备恢复。');
+ const result=project([tool('a'),repeated,repeated,tool('b',resources[1]),{...repeated,id:'other',card:{...repeated.card!,id:'other'}},tool('a2'),say('third',repeated.card!.content!)]);
+ assert.equal(result.byResource.size,0);
+ assert.equal(result.overall.length,1);
 });
 test('overall narration uses one slot below the divider, never an overall card inside execution',()=>{
  const generic=tool('generic');generic.card!.data={target:'当前项目/会话'};
@@ -79,7 +91,7 @@ test('overall narration uses one slot below the divider, never an overall card i
  const snapshot={session:{id:'s'},messages:[{id:'u',sessionId:'s',role:'user',text:'检查',createdAt:at}],actions:[],resources,ai:{session:'s',status:'running',cardsOffset:0,cards:entries.map(entry=>entry.card!)}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.ok(!html.includes('整体进展'));
- assert.equal((html.match(/data-stage-entry="result"/g)??[]).length,2);
+ assert.equal((html.match(/data-stage-entry="result"/g)??[]).length,0);
  assert.equal((html.match(/class="resource-stage-summary is-overall"/g)??[]).length,1);
  const overall=html.indexOf('class="resource-stage-summary is-overall"');
  assert.ok(overall>html.lastIndexOf('</section>'));
