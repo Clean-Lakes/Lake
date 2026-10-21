@@ -1,8 +1,8 @@
 ---
 goal: 为 Lake 实现用户可见的策略资产、纠错血缘、有界自我改进和可复现对照实验
-version: 1.1
+version: 1.2
 date_created: 2026-10-20
-last_updated: 2026-10-20
+last_updated: 2026-10-21
 owner: Lake
 status: In Progress
 tags: [feature, strategy, learning, skills, harness, adk, evaluation]
@@ -14,7 +14,7 @@ tags: [feature, strategy, learning, skills, harness, adk, evaluation]
 
 实现采用 Go，内嵌当前 Lake；复用官方 ADK 的模型与工具执行链路。借鉴 Harness² 的“提出候选—试跑—对比—合成—再次验证—积累经验”，不把 Python、OpenCode 或 Claude CLI 作为客户端运行依赖，不宣称与原版实验结果等价。
 
-任务完成必须附对应验证证据，不能以文件存在、模型输出正常或命令退出码为零替代功能验收。P0 已提交契约交付物，等待 PR 评审采用；P1～P8 尚未实现。P0 不改变应用运行行为，不表示策略功能已经可用。
+任务完成必须附对应验证证据，不能以文件存在、模型输出正常或命令退出码为零替代功能验收。P0 已经 PR #32 合入 develop，用户于 2026-10-21 要求继续 P1。P1 提示词组合与清单交付，P2～P8 尚未实现。P0 不改变应用运行行为，不表示策略功能已经可用。
 
 ## 1. 基线和现有能力
 
@@ -313,11 +313,11 @@ M2 首批 10～20 个案例，覆盖磁盘统计差异、服务日志错误路�
 
 ## 11. 分阶段实施任务
 
-每阶段一个可评审 PR；跨阶段拆分时保留默认关闭和接口兼容。P0 交付待评审，门禁未通过前不勾选 T02；其他阶段保持未完成。实现分支使用 `codex/` 前缀，并以 develop 为目标。
+每阶段一个可评审 PR；跨阶段拆分时保留默认关闭和接口兼容。P0 已合入且用户明确继续，T02 按该采用记录冻结；P1 交付随本次 PR 评审，P2～P8 保持未完成。实现分支使用 `codex/` 前缀，并以 develop 为目标。
 
 | 阶段 | 任务 | 主要落点 | 依赖和退出标准 |
 | --- | --- | --- | --- |
-| P0 契约冻结（待评审） | [x] T01 同步基线与调用链；[ ] T02 冻结三层规则分类、设置、状态/范围/预算、来源权限和 API 契约（交付就绪，待评审）；[x] T03 确定案例及基线规格 | [契约说明](../docs/design/strategy-learning-contract-v1.md)、`internal/strategy`、`testdata/cases.v1.json` | 开发评审通过后勾选 T02；无默认权限变化，夹具尚未执行 |
+| P0 契约冻结 | [x] T01 同步基线与调用链；[x] T02 冻结三层规则分类、设置、状态/范围/预算、来源权限和 API 契约（#32 合并及继续指令）；[x] T03 确定案例及基线规格 | [契约说明](../docs/design/strategy-learning-contract-v1.md)、`internal/strategy`、`testdata/cases.v1.json` | #32 已合入，用户要求继续 P1；无默认权限变化，夹具尚未执行 |
 | P1 提示词清单 | [ ] T04 抽出固定/策略/上下文组合器；[ ] T05 持久 PromptManifest；[ ] T06 当前各 profile 和角色关闭状态回归 | `catalog.go`、`engine.go`、`adk_provider_step.go`、新 strategy 适配 | P0；关闭时语义、工具目录和审批行为保持基线，实际请求可关联清单 |
 | P2 数据与血缘 | [ ] T07 迁移/备份；[ ] T08 资产修订、绑定与血缘仓库；[ ] T09 权限/脱敏/删除/并发；[ ] T10 任务 outbox/epoch | `internal/web/schema.sql`、`store.go`、`strategy_store/jobs` | P1；旧库可升级，崩溃和重复提交不产生重复采用，跨项目不可读 |
 | P3 可见资产 | [ ] T11 同源 API；[ ] T12 面板/差异/来源；[ ] T13 手写与导入导出；[ ] T14 版本解析和提示词注入；[ ] T15 总开关及三子项 | `internal/web/strategy_*`、`web-agent/web/src/Strategy*`、`internal/ai/strategy_*` | P2；达到 M1，用户可手动创建、采用、停用和回滚；默认关闭 |
@@ -391,3 +391,13 @@ M1/M2/M3 分别保持默认关闭。先在 Dev 启用，完成固定任务评估
 - T03：15 项案例规格（12 development、3 holdout）和三个实验臂已选定；未创建故障环境，未做模型试跑，也未产生收益数据。
 - 契约调整：默认预算在 v1 作为初期硬上限，补充 24 小时人工等待有效期；项目 API 使用显式 `/api/projects/:projectId/strategy` 范围，详情以 P0 契约为准。
 - 本地验证及未运行项见 [P0 验证记录](../docs/validation/lake-strategy-learning-p0.md)。后续阶段从 P1 开始，需先完成本次契约评审。
+
+
+### P1 交付记录 2026-10-21
+
+- 基线：`origin/develop@1dd1e5a6a425c569ab150ab597787b90c60043f1`。P0 经 PR #32 合入；用户明确继续 P1，按现有契约推进，不虚构独立审批记录。
+- T04：纯 Go 分层组合器和来源片段分类，关闭状态保留原字节/顺序；用户偏好不进入固定规则或内置策略 hash。
+- T05：每次实际准备 provider 请求前生成清单，覆盖动态系统附加和输出超限重试；复用现有 ADK artifact、runtime checkpoint 与原生恢复投影，不新增业务表或模型循环。
+- T06：重构前冻结 17 组提示词/工具目录 golden；增加真实 ADK 请求、stdio、profile/SRE/工作流、动态记忆/todos、持久化失败、重启/缓存丢失和 Skill 快照检查。
+- 编码澄清：结构字段顺序固定、map 键排序，有序片段/工具/Skill 数组保留真实顺序；hash 不证明来源授权或运行效果。
+- [实现说明](../docs/design/strategy-learning-prompt-manifest-v1.md)、[本地验证](../docs/validation/lake-strategy-learning-p1.md)。P2 及后续功能尚未接入。

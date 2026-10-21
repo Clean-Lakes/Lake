@@ -1,6 +1,6 @@
 # 策略学习 P0 契约 v1
 
-状态：待 PR 评审。代码与文档就绪不等于评审门禁已通过；本文件经评审采用后，P1～P7 以此契约实施。变更必须同时修改本文件、Go 契约及相应测试，不能悄悄放宽权限或默认值。
+状态：P0 已通过 [PR #32](https://github.com/Clean-Lakes/Lake/pull/32) 合入 develop；用户于 2026-10-21 明确要求继续 P1，以此契约实施。此处记录合并与继续指令，不声称存在额外的独立评审记录。变更必须同时修改本文件、Go 契约及相应测试，不能悄悄放宽权限或默认值。
 
 本期只核对调用链、定义纯数据契约和选择测试案例。不改变当前提示词、工具目录、会话执行、SQLite schema、API 路由或界面，不调用真实模型、连接资源、执行实验或自动重试。用户当前看不到策略功能，这是 P3 的交付。
 
@@ -148,3 +148,7 @@ P0 本地检查：`go test -race ./internal/strategy`、`go vet ./internal/strat
 T01 为基线/调用链核对；T02 为上述契约和纯 Go 值对象；T03 为案例与 baseline 规格。实现/验证完成后标“待评审”，仅 PR 获评审采用后冻结 P0 并进入 P1。P1 抽组合器之前先为关闭状态建立各 profile、SRE 角色、workflow/stdio 的黄金基线，不能把 P0 类型存在当作功能已接入。
 
 关联：[主开发计划](../../plan/feature-strategy-learning-1.md)、[ADK 运行时](../experiments/adk-runtime.md)、[分支规范](../development-workflow.md)。
+
+### P1 实施补充 2026-10-21
+
+组合器、请求级关联、既有 ADK artifact 持久化及固定编码规则见 [P1 清单说明](strategy-learning-prompt-manifest-v1.md)。数组保留实际顺序；仅真正无序的集合排序。P1 不实现本契约中的资产 API、预算计量或学习/纠错开关。

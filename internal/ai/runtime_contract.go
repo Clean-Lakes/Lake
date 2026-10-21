@@ -1,6 +1,9 @@
 package ai
 
-import "context"
+import (
+	"context"
+	"github.com/Clean-Lakes/Lake/internal/strategy"
+)
 
 // RunIdentity is assigned by the host, never supplied through model arguments.
 // It survives pauses and identifies every execution and its audit projection.
@@ -21,14 +24,15 @@ type RunIdentity struct {
 }
 
 type RuntimeCheckpoint struct {
-	Detached             bool              `json:"detached,omitempty"`
-	ModelRounds          int               `json:"modelRounds"`
-	PendingConfirmations map[string]string `json:"pendingConfirmations,omitempty"`
-	SchemaVersion        int               `json:"schemaVersion"`
-	SessionID            string            `json:"sessionId"`
-	HistoryHash          string            `json:"historyHash,omitempty"`
-	Identity             RunIdentity       `json:"identity"`
-	EventCursor          string            `json:"eventCursor,omitempty"`
+	PromptManifest       *strategy.ManifestRef `json:"promptManifest,omitempty"`
+	Detached             bool                  `json:"detached,omitempty"`
+	ModelRounds          int                   `json:"modelRounds"`
+	PendingConfirmations map[string]string     `json:"pendingConfirmations,omitempty"`
+	SchemaVersion        int                   `json:"schemaVersion"`
+	SessionID            string                `json:"sessionId"`
+	HistoryHash          string                `json:"historyHash,omitempty"`
+	Identity             RunIdentity           `json:"identity"`
+	EventCursor          string                `json:"eventCursor,omitempty"`
 }
 
 // RuntimeInput is the complete server-resolved turn input shared by Web, CLI,
