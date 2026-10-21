@@ -1287,8 +1287,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 
 /* Stage results belong to the resource, outside its folded raw operations. */
 .resource-stage-summary { min-width:0; margin:6px 0 0 28px; color:var(--text-secondary); font-size:14px; line-height:1.75; }
-.resource-stage-summary.is-shared { margin-left:0; }
-.resource-stage-heading { color:var(--text-muted); font-size:12px; }
+.resource-stage-summary.is-overall { margin:0; color:var(--foreground); font-size:inherit; }
 .resource-stage-current .ai-markdown > :first-child { margin-top:0; }
 .resource-stage-current .ai-markdown > :last-child { margin-bottom:0; }
 .resource-stage-history { margin-top:5px; font-size:12px; color:var(--text-muted); }

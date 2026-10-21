@@ -17,7 +17,7 @@ test('resource stages append history but use one latest slot per resource',()=>{
  const result=project(entries);
  assert.deepEqual(result.byResource.get('a')!.map(entry=>entry.id),['export','verified']);
  assert.deepEqual(result.byResource.get('b')!.map(entry=>entry.id),['restore']);
- assert.equal(result.shared.length,0);
+ assert.equal(result.overall.length,0);
  assert.equal(result.ids.size,3);
  assert.equal(entries.length,6,'projection never rewrites stored transcript');
 });
@@ -27,21 +27,23 @@ test('explicit IDs and exact resource names can attribute prose after mixed tool
  const explicit=say('explicit','本轮恢复已完成。');explicit.card!.data={resource_id:'host-b'};
  assert.equal(project([...mixed,explicit]).byResource.get('b')!.at(-1)!.id,'explicit');
  const wrong=say('wrong','结果完成。');wrong.card!.data={resource_id:'foreign'};
- assert.equal(project([tool('a'),wrong]).shared[0]!.id,'wrong');
+ assert.equal(project([tool('a'),wrong]).overall[0]!.id,'wrong');
 });
-test('cross-resource prose stays shared and IP prefixes never misattribute a resource',()=>{
+test('joint stages update each resource in their actual batch and IP prefixes never select one',()=>{
  const mixed=[tool('a'),tool('b',resources[1])];
  const result=project([...mixed,say('cross','192.168.2.141 到演示数据库的传输完成。'),say('next','联合检查完成。')]);
- assert.equal(result.byResource.size,0);
- assert.deepEqual(result.shared.map(entry=>entry.id),['cross','next']);
- assert.equal(project([...mixed,say('prefix','192.168.2.1419 状态未知。')]).shared.length,1);
+ assert.equal(result.byResource.size,2);
+ assert.deepEqual(result.byResource.get('a')!.map(entry=>entry.id),['cross','next']);
+ assert.deepEqual(result.byResource.get('b')!.map(entry=>entry.id),['cross','next']);
+ assert.equal(result.overall.length,0);
+ assert.equal(project([...mixed,say('prefix','192.168.2.1419 状态未知。')]).byResource.size,2,'a partial IP must not pick a single owner over the actual batch');
 });
 test('resource context is retained between consecutive stages but reset by generic operations',()=>{
  assert.equal(project([tool('a'),say('one','正在恢复。'),say('two','恢复完成。')]).byResource.get('a')!.length,2);
  const generic=tool('generic');generic.card!.data={target:'当前项目/会话'};
  const result=project([tool('a'),say('one','正在恢复。'),generic,say('two','其他进展。')]);
  assert.equal(result.byResource.get('a')!.length,1);
- assert.equal(result.shared[0]!.id,'two');
+ assert.equal(result.overall[0]!.id,'two');
 });
 test('real final replies stay in prose; incomplete, stopped, plain and role reports keep their presentation',()=>{
  const entries=[tool('a'),say('stage','阶段一完成。'),tool('b',resources[1]),say('final','最终总结：全部完成。')];
@@ -62,4 +64,25 @@ test('visible preview is under its resource even when actions are folded; previo
  assert.ok(!html.includes('thinking-steps'));
  assert.ok(html.indexOf('data-stage-entry="latest-stage"')<html.indexOf('class="turn-execution-body"')+html.slice(html.indexOf('class="turn-execution-body"')).indexOf('</section>'));
  assert.ok(html.includes('class="settled-reply is-archived"'),'original prose stays mounted but hidden');
+});
+
+
+test('a resource batch result without full resource names still belongs to both resource rows',()=>{
+ const result=project([tool('a'),tool('b',resources[1]),say('result','源库可以正常连接，缓冲池只有 128 MB。目标端没有镜像，先导出再传输。')]);
+ assert.equal(result.overall.length,0);
+ assert.equal(result.byResource.get('a')!.at(-1)!.id,'result');
+ assert.equal(result.byResource.get('b')!.at(-1)!.id,'result');
+});
+test('overall narration uses one slot below the divider, never an overall card inside execution',()=>{
+ const generic=tool('generic');generic.card!.data={target:'当前项目/会话'};
+ const entries=[say('plan','先看源库与目标端。'),tool('a'),tool('b',resources[1]),say('result','源库连接正常，目标端还没有镜像。'),generic,say('overall','现在准备后续整体步骤。')];
+ const snapshot={session:{id:'s'},messages:[{id:'u',sessionId:'s',role:'user',text:'检查',createdAt:at}],actions:[],resources,ai:{session:'s',status:'running',cardsOffset:0,cards:entries.map(entry=>entry.card!)}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.ok(!html.includes('整体进展'));
+ assert.equal((html.match(/data-stage-entry="result"/g)??[]).length,2);
+ assert.equal((html.match(/class="resource-stage-summary is-overall"/g)??[]).length,1);
+ const overall=html.indexOf('class="resource-stage-summary is-overall"');
+ assert.ok(overall>html.lastIndexOf('</section>'));
+ assert.ok(html.slice(overall).includes('data-stage-entry="overall"'));
+ assert.ok(!html.slice(overall).includes('data-stage-entry="plan"'),'overall preview replaces earlier narration');
 });

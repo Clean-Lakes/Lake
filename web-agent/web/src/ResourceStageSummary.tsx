@@ -3,13 +3,12 @@ import type {TranscriptEntry} from './timeline';
 import {DisclosureSummary} from './DisclosureSummary';
 
 /** Stable resource slot: new stage replaces the preview, prior stages are opt-in. */
-export function ResourceStageSummary({entries,render,shared=false}:{entries:TranscriptEntry[];render:(entry:TranscriptEntry)=>ReactNode;shared?:boolean}){
+export function ResourceStageSummary({entries,render,overall=false}:{entries:TranscriptEntry[];render:(entry:TranscriptEntry)=>ReactNode;overall?:boolean}){
  const [historyOpen,setHistoryOpen]=useState(false);
  if(!entries.length)return null;
  const latest=entries.at(-1)!;
- return <div className={`resource-stage-summary${shared?' is-shared':''}`} aria-label={shared?'整体进展':'资源阶段结果'}>
-  {shared&&<span className="resource-stage-heading">整体进展</span>}
+ return <div className={`resource-stage-summary${overall?' is-overall':''}`} aria-label={overall?'本轮进度':'资源阶段结果'}>
   <div className="resource-stage-current" data-stage-entry={latest.id}>{render(latest)}</div>
-  {entries.length>1&&<details className="resource-stage-history" onToggle={event=>setHistoryOpen(event.currentTarget.open)}><DisclosureSummary>此前进展 · {entries.length-1}</DisclosureSummary>{historyOpen&&entries.slice(0,-1).map(entry=><div className="resource-stage-record" key={entry.id}>{render(entry)}</div>)}</details>}
+  {!overall&&entries.length>1&&<details className="resource-stage-history" onToggle={event=>setHistoryOpen(event.currentTarget.open)}><DisclosureSummary>此前进展 · {entries.length-1}</DisclosureSummary>{historyOpen&&entries.slice(0,-1).map(entry=><div className="resource-stage-record" key={entry.id}>{render(entry)}</div>)}</details>}
  </div>;
 }
