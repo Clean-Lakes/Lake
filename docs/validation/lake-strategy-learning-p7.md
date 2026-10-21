@@ -1,6 +1,6 @@
 # P7 在线只读纠错验证
 
-基线为 develop `74c242c06142861ac7808e0466671dacb2023ce5`（PR #50），工作分支 `codex/strategy-learning-p7`。仅使用本地 `gh bearqy` 提交 develop PR，不合并、不触发 CI、不发布或操作生产。
+最初从 develop `74c242c06142861ac7808e0466671dacb2023ce5`（PR #50）开始；提交前同步到 `beb79736ff42504f933a16f9d31acd4f9cdce896`（含 PR #47/#51），工作分支 `codex/strategy-learning-p7`。新增进度摘要额度门禁，并复验新版执行记录/确认恢复的兼容性。仅使用本地 `gh bearqy` 提交 develop PR，不合并、不触发 CI、不发布或操作生产。
 
 ## 本地检查
 

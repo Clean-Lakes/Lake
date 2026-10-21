@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {strategyApi,strategySettingsForm,type StrategySettings,type StrategySettingsView} from '../src/strategyApi';
 import {orderedTranscript,transcriptGroups} from '../src/timeline';
+import {conversationDisplayGroups} from '../src/conversation-progress-model';
 import type {SessionSnapshot,AICard} from '../../shared/contracts';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
@@ -31,6 +32,7 @@ test('a data-only correction report remains visible with its real turn and outsi
  const entries=orderedTranscript(snapshot,[card],0);
  assert.equal(entries.at(-1)?.id,'correction');assert.deepEqual(entries.at(-1)?.card?.data,card.data);assert.equal(entries.at(-1)?.card?.content,undefined);
  assert.deepEqual(transcriptGroups(entries).map(g=>g.map(e=>e.id)),[['user'],['correction']]);
+ const visible=conversationDisplayGroups(entries,false,[]);assert.equal(visible.at(-1)?.entries[0]?.id,'correction');assert.equal(visible.at(-1)?.progress,false);
 });
 
 test('correction card exposes real stops and conservative usage without trusting model prose as recovery',()=>{
