@@ -36,6 +36,7 @@ type Engine struct {
 	CorrectionGuard  func(context.Context, string, int64, int64) error
 	correctionMu     sync.Mutex
 	onlineTask       string
+	onlineSessions   sync.Map
 	runMu            sync.Mutex
 	runs             sync.WaitGroup
 	runtimeClosed    bool

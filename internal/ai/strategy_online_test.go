@@ -102,6 +102,32 @@ func TestOnlineOfficialADKReadonlyTimeoutProposalAndRecovery(t *testing.T) {
 	}
 }
 
+func TestOnlineSQLiteExitCodeCannotBecomeSuccess(t *testing.T) {
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, func(_ context.Context, _, name string, _ map[string]any, _ bool) (any, error) {
+		if name == "runtimeCommandExec" {
+			return map[string]any{"exitCode": int64(52), "status": "completed", "output": "curl empty reply"}, nil
+		}
+		return map[string]any{"risk": "readonly", "runtime": "local"}, nil
+	})
+	s, c := enableOnline(t, e)
+	ctx := context.WithValue(context.Background(), adkToolContextKey{}, true)
+	if err := e.invokeCalls(ctx, s, &c, []Call{{ID: "sqlite_code", Name: "shell", Arguments: `{"command":"curl -sS http://127.0.0.1:12345/health"}`}}); err != nil {
+		t.Fatal(err)
+	}
+	r := onlineReport(t, e, s, c)
+	if len(r.Observations) != 1 || r.Observations[0].Success || r.Observations[0].Class != "transient" {
+		t.Fatal("SQLite int64 was treated as exit zero", r)
+	}
+	store, _ := e.adkStore()
+	var op nativeOperation
+	if err := store.DB.Where("call_id = ?", "sqlite_code").First(&op).Error; err != nil || op.Status != "failed" {
+		t.Fatal("real nonzero exit became ledger success", op.Status, err)
+	}
+	if num(json.Number("52"), 0) != 52 || num(int64(52), 0) != 52 {
+		t.Fatal("numeric bridge conversion lost an exit code")
+	}
+}
+
 func TestOnlineStopsBeforeOpaqueOrMutatingCorrection(t *testing.T) {
 	for _, tool := range []string{"shell", "execute_sql", "call_mcp_tool", "write", "delegate_investigation", "open_ssh_terminal", "stage_attachment"} {
 		t.Run(tool, func(t *testing.T) {

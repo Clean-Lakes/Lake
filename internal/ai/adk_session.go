@@ -42,6 +42,13 @@ func (e *Engine) adkStore() (*storage.Store, error) {
 			if services.err == nil {
 				services.err = recoverOnlineCorrections(services.store.DB)
 			}
+			if services.err == nil {
+				var sessions []string
+				services.err = services.store.DB.Model(&nativeCorrection{}).Distinct("session_id").Pluck("session_id", &sessions).Error
+				for _, id := range sessions {
+					e.onlineSessions.Store(id, true)
+				}
+			}
 		}
 	})
 	return services.store, services.err
