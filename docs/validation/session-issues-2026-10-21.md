@@ -143,3 +143,5 @@
 ![资源结果与底部综合总结](overall-progress-synthesis.jpg)
 
 ![深色窄窗口与迟到响应保护](overall-progress-synthesis-dark.jpg)
+
+同步 develop P6 `74c242c0` 后，实际测试源码为 `d19f92abe10604a79bdf2421b515dfb9abca5600`：前端 380 项与生产构建通过；`go test -race ./internal/strategy` 通过；`go test -race -p 1 ./internal/strategy ./internal/web -run 'Test.*(ProgressSummary|StrategyOptimization|StrategyExperiment|StrategyLearning)'` 的 Web 相关回归 53.528 秒通过（strategy 包该名称筛选没有用例，故另行整包运行）；`go vet ./internal/ai ./internal/web ./internal/strategy` 与 ADK 边界通过。前述完整 AI/Web 两包结果是同步 P6 前本轮结果，未冒充同步后完整整包回归。此后提交只补充验证记录，应用源码不变。
