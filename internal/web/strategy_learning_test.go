@@ -327,7 +327,7 @@ func TestStrategyLearningV1UpgradeBackupAndNoSecondBackup(t *testing.T) {
 		t.Fatal("duplicate backup")
 	}
 	s.db.QueryRow("SELECT version FROM strategySchemaMeta").Scan(&version)
-	if version != 2 {
+	if version != 3 {
 		t.Fatal("upgrade missing")
 	}
 }

@@ -31,6 +31,7 @@ type session struct {
 	sreReply            *sreReply
 }
 type Engine struct {
+	experiment       *strategyExperimentRuntime
 	Strategies       StrategyProvider
 	runMu            sync.Mutex
 	runs             sync.WaitGroup

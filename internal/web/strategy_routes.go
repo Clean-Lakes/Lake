@@ -293,6 +293,9 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 		reply(w, 200, strategyMust(b.Store.importStrategySkill(ctx, scope, key, in.Name, content, asset)))
 		return
 	}
+	if b.strategyExperimentRoute(w, r, ctx, scope, suffix, key) {
+		return
+	}
 	if b.strategyLearningRoute(w, r, ctx, scope, suffix, key) {
 		return
 	}

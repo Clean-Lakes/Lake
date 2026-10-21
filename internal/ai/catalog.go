@@ -97,6 +97,9 @@ func CatalogForConfig(c Config, capabilities map[string]any) []Tool {
 	return out
 }
 func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool {
+	if e.experiment != nil {
+		return e.experiment.catalog()
+	}
 	if c.sre != nil {
 		return e.sreRoleCatalog(c)
 	}

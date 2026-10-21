@@ -12,3 +12,15 @@ test('source registration and withdrawal use real message references and explici
  globalThis.fetch=async (url,options)=>{requests.push({url:String(url),method:String(options?.method),body:JSON.parse(String(options?.body))});return new Response('{}',{status:200});};
  try{await strategyLearningApi.register('/api/projects/project/strategy','actual-message');await strategyLearningApi.withdraw('/api/projects/project/strategy','source/id');await strategyLearningApi.cancel('/api/projects/project/strategy','job/id');assert.deepEqual(requests,[{url:'/api/projects/project/strategy/sources',method:'POST',body:{messageId:'actual-message'}},{url:'/api/projects/project/strategy/sources/source%2Fid',method:'DELETE',body:{}},{url:'/api/projects/project/strategy/proposals/job%2Fid/cancel',method:'POST',body:{}}]);}finally{globalThis.fetch=oldFetch;}
 });
+
+test('comparison display preserves malformed output and extracts only the visible answer',async()=>{
+ const {strategyExperimentAnswer}=await import('../src/strategyApi');
+ assert.equal(strategyExperimentAnswer(JSON.stringify({finding:'deleted_open_file',answer:'Observed evidence',evidenceIds:['observation-1']})),'Observed evidence');
+ assert.equal(strategyExperimentAnswer('partial output'),'partial output');
+ assert.equal(strategyExperimentAnswer('{"answer":false}'),'{"answer":false}');
+});
+test('experiments send precise version, case IDs and paired repetitions without authority claims',async()=>{
+ const {strategyExperimentApi}=await import('../src/strategyApi');const oldFetch=globalThis.fetch;let submitted:Record<string,unknown>={};
+ globalThis.fetch=async (_url,options)=>{submitted=JSON.parse(String(options?.body));return new Response('{"jobId":"experiment"}',{status:200});};
+ try{await strategyExperimentApi.create('/api/projects/project/strategy',{assetId:'asset',revision:2,contentHash:'exact-hash'},['SL-013'],3,['handwritten']);assert.deepEqual(submitted,{ref:{assetId:'asset',revision:2,contentHash:'exact-hash'},caseIds:['SL-013'],repetitions:3,skillNames:['handwritten']});}finally{globalThis.fetch=oldFetch;}
+});

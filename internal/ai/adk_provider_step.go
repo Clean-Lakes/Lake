@@ -123,6 +123,9 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	streamDelta := func(kind, delta string) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		if e.experiment != nil && kind == "thinking" {
+			return
+		}
 		if kind == "image" {
 			var img ImageAttachment
 			if json.Unmarshal([]byte(delta), &img) == nil {
@@ -373,5 +376,34 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 		return modelResult{}, err
 	}
 	d.lastRequestID = manifest.RequestID
+	if x := e.experiment; x != nil {
+		reserve := int64(historyCost(history) + len(js(tools)) + m.MaxOutput + 1024)
+		if x.input.Reserve == nil || x.input.Settle == nil {
+			return modelResult{}, errors.New("experiment budget unavailable")
+		}
+		if err := x.input.Reserve(reserve); err != nil {
+			return modelResult{}, err
+		}
+		x.mu.Lock()
+		x.result.Requests++
+		x.result.Manifests = append(x.result.Manifests, manifest)
+		x.mu.Unlock()
+		result, err := e.stream(ctx, m, history, tools, nil)
+		result.Message.Reasoning = ""
+		result.Message.Native = nil
+		result.Message.NativeProtocol = ""
+		result.Message.NativeModel = ""
+		if x.input.Safe != nil && !x.input.Safe(js(result.Message)) {
+			result.Message = Message{}
+			err = errors.New("unsafe experiment output")
+		}
+		x.mu.Lock()
+		addUsage(&x.result.Usage, result.Usage)
+		x.mu.Unlock()
+		if settleErr := x.input.Settle(reserve, result.Usage); settleErr != nil {
+			return result, settleErr
+		}
+		return result, err
+	}
 	return e.stream(ctx, m, history, tools, delta)
 }
