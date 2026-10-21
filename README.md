@@ -2,11 +2,13 @@
 
 # Lake
 
-**面向 SRE 的 AI 运维工作台**
+**English** · [简体中文](README.zh-CN.md)
 
-连接资源，协同排障，让执行有迹可循。
+**An AI operations workspace for SREs**
 
-[下载客户端](https://github.com/Clean-Lakes/Lake/releases) · [快速开始](#快速开始) · [SRE 协作](docs/sre-collaboration.md)
+Connect resources, troubleshoot together, and keep a clear record of every action.
+
+[Download](https://github.com/Clean-Lakes/Lake/releases) · [Quick start](#quick-start) · [SRE collaboration](docs/sre-collaboration.md)
 
 </div>
 
@@ -15,41 +17,45 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/lake-workbench-dark.jpg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/lake-workbench-light.jpg">
-  <img alt="Lake macOS 界面预览：资源导航、专员协作与对话工作区" src="docs/images/lake-workbench-light.jpg" width="1440">
+  <img alt="Lake macOS workspace with resource navigation, specialist collaboration, and conversation history" src="docs/images/lake-workbench-light.jpg" width="1440">
 </picture>
 
-<p align="center"><sub>macOS 界面预览 · 当前版本 · 演示数据</sub></p>
+<p align="center"><sub>macOS interface preview · v0.3.21 · Fictional demo data · UI shown in Chinese</sub></p>
 
-## 为运维工作而设计
+## Built for operations
 
-- **资源就在上下文里。** 按项目组织主机、数据库、Redis 和 Docker，将资源、会话和终端放在一起。
-- **过程可以追溯。** 从工具调用到操作确认，再到执行记录与证据，随时查看，也能人工接管。
-- **专员共同推进。** 开启实验性 SRE 协作，由协调者、调查员、执行员和验证员按需分工；用 Plan 跟进任务，用独立验证核对结果。
+- **Resources stay in context.** Organize hosts, databases, Redis, and Docker by project, with resources, conversations, and terminals in one workspace.
+- **Every action has a record.** Review tool calls, approval requests, execution history, and evidence, and take over manually when needed.
+- **Specialists work together.** Enable experimental SRE collaboration to coordinate investigators, executors, and verifiers. Track work with a plan and check results through independent verification.
 
-## 快速开始
+## Quick start
 
-1. [下载客户端](https://github.com/Clean-Lakes/Lake/releases)。支持 macOS Apple Silicon 与 Windows x86_64。
-2. 在设置中连接模型，或通过 [Magpie Agent](https://github.com/Clean-Lakes/magpie-agent-lake) 接入。
-3. 添加资源，描述要排查的问题。输入 `@` 可引用资源、Skills 和 MCP；开启 SRE 协作后也可引用专员。
+1. [Download the client](https://github.com/Clean-Lakes/Lake/releases) for macOS Apple Silicon or Windows x86_64.
+2. Connect a model in settings, or connect through [Magpie Agent](https://github.com/Clean-Lakes/magpie-agent-lake).
+3. Add resources and describe the problem. Type `@` to reference resources, Skills, and MCP integrations, or specialists when SRE collaboration is enabled.
 
-普通模式由 Lake 直接处理。需要多人分工时，在输入框旁开启 **SRE 协作 · 实验性**；操作沿用会话权限。[了解使用与边界 →](docs/sre-collaboration.md)
+Lake handles requests directly in standard mode. For tasks that benefit from specialist roles, enable **SRE collaboration · Experimental** beside the composer. Operations follow the conversation’s existing permissions. [Usage and limitations (Chinese) →](docs/sre-collaboration.md)
 
 <details>
-<summary>本地开发</summary>
+<summary>Local development</summary>
 
-日常开发从 `develop` 创建工作分支，经 PR 合入 `develop`，在 Lake Dev 验证和累积；生产只通过 `develop → master` 发布 PR 提升。开始修改前阅读 [分支与发布规范](docs/development-workflow.md) 和 [开发规范](CONTRIBUTING.md)，AI 同时遵守根目录 `AGENTS.md`。
+Create a working branch from `develop`, open a PR into `develop`, and validate changes in Lake Dev. Production changes reach `master` through a `develop → master` release PR. Before editing, read the [branch and release workflow](docs/development-workflow.md) and [contributing guide](CONTRIBUTING.md). AI agents must also follow the root `AGENTS.md`.
 
-需要 Go 1.26.6（以 `go.mod` 为准）、Node.js 24 和 pnpm。macOS 首次构建先运行 `scripts/setup_lake_signing.sh`，然后启动独立的 Lake Dev：
+You need Go 1.26.6 (see `go.mod`), Node.js 24, and pnpm. Before your first macOS build, run `scripts/setup_lake_signing.sh`. Then build and launch the isolated Lake Dev app:
 
-我们把自然界的几条常识，搬进了做软件的方式里。落到每一件事上，是六条共同原则——它们既是工程的，也是环保的：
+```sh
+pnpm --dir web-agent install --frozen-lockfile
+scripts/build_lake_desktop.sh --dev --install
+open "$HOME/Applications/Lake Dev.app"
+```
 
-Dev 使用 `~/.lake-dev`，与正式版数据分离。构建后的程序内嵌前端，运行时无需 Node.js。CLI 和独立 Web 开发见 [开发规范](CONTRIBUTING.md)。
+Dev uses `~/.lake-dev`, separate from production data. The built application embeds the frontend and does not require Node.js at runtime. See [Contributing](CONTRIBUTING.md) for CLI and standalone web development.
 
 </details>
 
-## 交流与反馈
+## Community and feedback
 
-如果你正在使用 Lake，欢迎聊聊实际场景与改进建议。
+Using Lake? We welcome real-world use cases and suggestions.
 
 <p>
   <img src="docs/images/wechat.svg" alt="WeChat" width="20" height="20" align="absmiddle">&nbsp; <strong>WeChat</strong>&nbsp; <code>13025452443</code>
@@ -57,4 +63,4 @@ Dev 使用 `~/.lake-dev`，与正式版数据分离。构建后的程序内嵌�
 
 ---
 
-[使用与开发](web-agent/README.md) · [macOS](client/macos/README.md) · [Windows](client/windows/README.md) · [贡献指南](CONTRIBUTING.md) · [Apache-2.0](LICENSE-APACHE)
+[Usage and development](web-agent/README.md) · [macOS](client/macos/README.md) · [Windows](client/windows/README.md) · [Contributing](CONTRIBUTING.md) · [Apache-2.0](LICENSE-APACHE)
