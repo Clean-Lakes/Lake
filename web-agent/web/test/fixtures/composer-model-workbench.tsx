@@ -7,6 +7,11 @@ const entries=[
 ];
 let selected=entries[2]!;
 const efforts:Record<string,string>={};
+const slowSave=new URLSearchParams(location.search).has('slow-save');
+const saveCalls:Array<{modelId:string;effort:string}>=[];
+const saveProof=document.createElement('output');saveProof.id='reasoning-save-proof';saveProof.hidden=true;saveProof.textContent='[]';document.body.appendChild(saveProof);
+const releases:Array<()=>void>=[];
+if(slowSave)document.addEventListener('keydown',event=>{if(event.key==='F8'){event.preventDefault();releases.shift()?.();}});
 const selections:unknown[]=[];
 const sourceProof=document.createElement('output');sourceProof.id='model-source-proof';sourceProof.hidden=true;sourceProof.textContent='[]';document.body.appendChild(sourceProof);
 window.fetch=async(input,init)=>{
@@ -19,7 +24,7 @@ window.fetch=async(input,init)=>{
  }
  if(url.pathname.endsWith('/ai/reasoning')){
   const payload=init?.method==='POST'?JSON.parse(String(init.body)):null;
-  if(payload)efforts[payload.modelId]=payload.effort;
+  if(payload){saveCalls.push(payload);saveProof.textContent=JSON.stringify(saveCalls);if(slowSave)await new Promise<void>(resolve=>releases.push(resolve));efforts[payload.modelId]=payload.effort;}
   return json({modelId:selected.modelId,levels:selected.modelId==='deepseek-v4-pro'?['low','high']:['none','low','medium','high','max'],default:'high',effort:efforts[selected.modelId]??''});
  }
  return inheritedFetch(input,init);

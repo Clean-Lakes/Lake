@@ -1,3 +1,4 @@
+.composer-model-anchor { display: contents; }
 .composer-model-select.app-select { width: auto; max-width: 240px; margin-top: 0; }
 .composer-model-select.app-select > .app-select-trigger { height: 28px; padding: 0 8px; gap: 7px; border: 0; background: transparent; font-size: 12px; }
 .composer-model-select.app-select > .app-select-trigger:hover:not(:disabled),.composer-model-select.app-select > .app-select-trigger[aria-expanded="true"] { background: var(--surface-hover); }
@@ -21,12 +22,13 @@
   backdrop-filter: var(--title-glass-filter);
   box-shadow: inset 0 1px color-mix(in srgb,var(--surface) 65%,transparent),var(--shadow-popover);
 }
-.composer-model-sources { display: flex; gap: 3px; margin: 2px 3px 5px; padding: 3px; overflow-x: auto; scrollbar-width: none; border-radius: 10px; background: color-mix(in srgb,var(--surface-hover) 55%,transparent); }
-.composer-model-sources > button { display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1 0 auto; min-width: 0; max-width: 150px; height: 28px; padding: 0 9px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 11px; cursor: pointer; }
-.composer-model-sources > button > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.composer-model-sources > button[aria-pressed="true"] { background: var(--surface); color: var(--foreground); box-shadow: 0 1px 3px color-mix(in srgb,var(--foreground) 8%,transparent); }
-.composer-model-sources > button:hover { color: var(--foreground); }
-.composer-model-sources > button:focus-visible { outline-offset: -2px; }
+.composer-model-source { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; margin: 1px 3px 5px; padding: 0 4px 0 6px; }
+.composer-model-source-name { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--text-secondary); font-size: 12px; font-weight: 500; }
+.composer-model-source-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-model-source > button { display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-secondary); }
+.composer-model-source > button:hover { background: var(--surface-hover); color: var(--foreground); }
+.composer-model-source > button > svg { transform: rotate(-90deg); }
+.composer-model-source > button:focus-visible { outline-offset: -2px; }
 .composer-model-capability { flex-shrink: 0; border-radius: var(--radius-control); padding: 2px 6px; color: var(--text-secondary); background: var(--surface-hover); font-size: 10px; font-weight: 500; }
 .composer-model-popup .app-select-group { padding: 7px 9px 3px; font-size: 10px; }
 .composer-model-popup .app-select-option { min-height: 32px; padding: 6px 9px; }
@@ -37,38 +39,30 @@
 .composer-reasoning-heading { display: flex; align-items: center; gap: 8px; min-height: 22px; margin-bottom: 2px; }
 .composer-reasoning-heading > span { color: var(--text-secondary); font-size: 11px; }
 .composer-reasoning-heading > strong { font-size: 11px; font-weight: 500; }
-/* Luminous violet capsule, with one crisp glass thumb over a quiet star field. */
-.composer-reasoning-track { position: relative; height: 28px; margin-top: 7px; border-radius: 14px; background: linear-gradient(100deg,var(--reasoning-violet-start),var(--reasoning-violet-end)); box-shadow: inset 0 1px 1px rgb(255 255 255 / .2); background-size: 180% 100%; animation: reasoning-hue-drift 9s ease-in-out infinite alternate; }
-.composer-reasoning-track::after { content: ""; position: absolute; inset: 0 0 0 calc(14px + (100% - 28px) * var(--reasoning-progress)); border-radius: inherit; background: color-mix(in srgb,var(--surface) 48%,transparent); pointer-events: none; transition: inset .32s cubic-bezier(.22,1,.36,1); }
+/* A quiet system-blue selected range, neutral remainder and fixed supported stops. */
+.composer-reasoning-track { position: relative; height: 28px; margin-top: 7px; }
+.composer-reasoning-surface { position: absolute; inset: 0; overflow: hidden; border-radius: 999px; corner-shape: round; background: var(--reasoning-track); box-shadow: inset 0 0 0 1px var(--border); pointer-events: none; }
+.composer-reasoning-fill { position: absolute; inset: 0; background: var(--reasoning-accent); clip-path: inset(0 calc((100% - 28px) * (1 - var(--reasoning-progress)) + 14px) 0 0); transition: clip-path .24s cubic-bezier(.22,1,.36,1); }
+.composer-reasoning-stop { position: absolute; top: 50%; width: 4px; height: 4px; transform: translate(-50%,-50%); border-radius: 50%; background: color-mix(in srgb,var(--foreground) 25%,transparent); }
+.composer-reasoning-stop[data-filled] { background: rgb(255 255 255 / .4); }
 .composer-reasoning-track input { position: absolute; z-index: 2; inset: -2px 0; appearance: none; -webkit-appearance: none; width: 100%; height: 32px; margin: 0; border: 0; padding: 0; background: transparent; cursor: pointer; }
 .composer-reasoning-track input::-webkit-slider-runnable-track { height: 28px; background: transparent; }
-.composer-reasoning-track input::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 28px; height: 28px; opacity: 0; }
+.composer-reasoning-track input::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 28px; height: 28px; border: 0; background: transparent; box-shadow: none; opacity: 0; }
 .composer-reasoning-track input::-moz-range-track { height: 28px; background: transparent; }
-.composer-reasoning-track input::-moz-range-thumb { width: 28px; height: 28px; opacity: 0; }
+.composer-reasoning-track input::-moz-range-thumb { width: 28px; height: 28px; border: 0; background: transparent; box-shadow: none; opacity: 0; }
 .composer-reasoning-track input:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 16px; }
 .composer-reasoning-track input:disabled { cursor: default; }
-.composer-reasoning-sparkles { position: absolute; z-index: 1; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
-.composer-reasoning-sparkles > i { position: absolute; border-radius: 50%; background: rgb(255 255 255 / .85); box-shadow: 0 0 3px rgb(255 255 255 / .25); animation: reasoning-glint-drift 7s linear infinite; }
-.composer-reasoning-thumb { position: absolute; z-index: 2; top: 0; left: calc((100% - 28px) * var(--reasoning-progress)); width: 28px; height: 28px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 50%; background: linear-gradient(150deg,var(--surface),var(--surface-subtle)); box-shadow: 0 1px 4px color-mix(in srgb,var(--foreground) 18%,transparent),inset 0 1px rgb(255 255 255 / .75); pointer-events: none; transition: left .32s cubic-bezier(.22,1.2,.36,1); }
-.composer-reasoning-track[data-dragging] .composer-reasoning-thumb,.composer-reasoning-track[data-dragging]::after { transition: none; }
-.composer-reasoning-track[data-disabled],.composer-reasoning-track[data-disabled] .composer-reasoning-sparkles > i { animation-play-state: paused; }
-@keyframes reasoning-hue-drift { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
-@keyframes reasoning-glint-drift {
-  0% { transform: translate3d(-9px,2px,0) scale(.65); opacity: 0; }
-  25% { opacity: .7; }
-  65% { opacity: .85; }
-  100% { transform: translate3d(13px,-3px,0) scale(1.08); opacity: 0; }
-}
+.composer-reasoning-thumb { corner-shape: round; position: absolute; z-index: 2; top: 0; left: calc((100% - 28px) * var(--reasoning-progress)); width: 28px; height: 28px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 50%; background: linear-gradient(150deg,var(--surface),var(--surface-subtle)); box-shadow: 0 1px 4px color-mix(in srgb,var(--foreground) 18%,transparent),inset 0 1px rgb(255 255 255 / .75); pointer-events: none; transition: left .24s cubic-bezier(.22,1.12,.36,1); }
+.composer-reasoning-track[data-dragging] .composer-reasoning-thumb,.composer-reasoning-track[data-dragging] .composer-reasoning-fill { transition: none; }
 @media(prefers-reduced-motion:reduce) {
-  .composer-reasoning-track,.composer-reasoning-sparkles > i { animation: none; }
-  .composer-reasoning-thumb,.composer-reasoning-track::after { transition: none; }
+  .composer-reasoning-thumb,.composer-reasoning-fill { transition: none; }
 }
 .composer-reasoning-scale { display: flex; justify-content: space-between; margin: 0 1px; color: var(--text-muted); font-size: 9px; line-height: 12px; }
 .composer-reasoning-hint,.composer-reasoning-error { margin: 9px 0 0; font-size: 11px; line-height: 1.5; color: var(--text-secondary); }
 .composer-reasoning-error { color: var(--danger); overflow-wrap: anywhere; }
 .composer-reasoning-error button { margin-left: 8px; border: 0; background: transparent; color: inherit; text-decoration: underline; cursor: pointer; }
 @media (pointer: coarse) {
-  .composer-model-popup .app-select-option,.composer-model-sources > button { min-height: 44px; }
+  .composer-model-popup .app-select-option,.composer-model-source > button { min-height: 44px; }
   .composer-reasoning-track { margin-block: 14px 8px; }
   .composer-reasoning-track input { inset-block: -8px; height: 44px; }
 }

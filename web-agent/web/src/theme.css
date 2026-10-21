@@ -53,8 +53,8 @@
   --chart-2: #159b88;
   --chart-3: #cd8a25;
   --chart-4: #8064be;
-  --reasoning-violet-start: #4338d5;
-  --reasoning-violet-end: #9957ff;
+  --reasoning-accent: #3683fa;
+  --reasoning-track: #e9e8e8;
   --terminal-background: #fafafa;
   --terminal-foreground: #303030;
   --terminal-selection: #dbe5f2;
@@ -75,6 +75,8 @@
 }
 
 :root[data-theme="dark"] {
+  --reasoning-accent: #4b91ff;
+  --reasoning-track: #424246;
   color-scheme: dark;
   --background: #171717;
   --surface: #1b1b1b;

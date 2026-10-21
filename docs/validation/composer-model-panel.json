@@ -1,16 +1,16 @@
 {
   "date": "2026-10-21",
   "base": "1dd1e5a6a425c569ab150ab597787b90c60043f1",
-  "scope": "Model selection and session reasoning share the existing AppSelect popover; no backend changes.",
+  "scope": "Native macOS Liquid Glass model panel reusing AppSelect content, provider arrow, blue/gray supported-level slider and stable coalesced saves. No backend changes.",
   "fixture": "web-agent/web/test/fixtures/composer-model-workbench.html?conversation-radii",
-  "screenshot": "docs/validation/composer-model-panel.png",
+  "screenshot": "docs/validation/composer-model-panel-current.jpg",
   "checks": [
-    "337 frontend tests passed; TypeScript and Vite build passed (existing chunk-size warning).",
-    "Actual App fixture: one model trigger, provider-grouped model list with vision badge, reasoning footer.",
+    "342 frontend tests passed; TypeScript, Vite build and signed Dev install passed (existing chunk-size warning).",
+    "Actual App fixture: one model trigger, provider-filtered model list with vision badge, reasoning footer.",
     "End saves deepseek-flash/max once; default saves empty effort, preserving model default semantics.",
     "Switch to deepseek-v4-pro: default/low/high stops; ArrowRight from default saves low for the new model.",
     "Model with empty levels hides reasoning section.",
-    "390x640 dark theme: long provider-grouped list scrolls, search filters to one matching model.",
+    "390x640 dark theme: long provider-filtered list scrolls, search filters to one matching model.",
     "Escape from slider closes popover and restores model trigger focus.",
     "Capability read failure exposes retry; retry restores slider.",
     "Running mode disables slider/default without issuing saves.",
@@ -18,22 +18,90 @@
   ],
   "isolation": "Only fictional in-memory API fixtures; no model calls, credentials, hosts or user settings used for browser checks.",
   "limits": [
-    "Windows native rendering and external provider APIs not exercised."
+    "Windows native rendering and external provider APIs not exercised.",
+    "Native macOS reads and provider browsing exercised without saving the user's real model/reasoning settings; slow POST/bridge checks use fictional in-memory fixtures.",
+    "Older macOS/SDK fallback compiles conditionally but was not run on older hardware."
   ],
   "refinement": {
     "desktopCardWidth": 276,
-    "fourModelCardHeight": 207,
+    "fourModelCardHeight": 204,
     "desktopRowHeight": 32,
     "railHeight": 28,
     "thumbDiameter": 28,
-    "glass": "Same --title-glass-* variables as floating title: blur(18px) saturate(145%), light/dark and reduced-transparency fallbacks.",
+    "glass": "macOS 26+ uses NSGlassEffectView.regular with transparent WKWebView content, clipped 18px corners and no WebKit focus ring. Browser/Windows/older macOS or SDK retain CSS title-glass fallback.",
     "lowViewport": "390x400: card top 8, bottom 312, max-height 304 after live resize; ResizeObserver updates placement.",
-    "detailScreenshot": "docs/validation/composer-model-panel-detail.png",
+    "detailScreenshot": "docs/validation/composer-model-panel-current-detail.jpg",
     "reset": "No reset icon or provider header. Default is the first slider stop and saves empty effort; remaining stops are only supported levels.",
-    "appearance": "Shared liquid glass; blue-violet capsule, 8 independent glints with 5.6–8.6 second fade/drift cycles; 9 second gradient drift; eased thumb for keyboard/click, continuous pointer tracking and gentle snap after release.",
+    "appearance": "28px system-blue selected range, neutral gray remainder, fixed supported-level dots and a white 28px thumb. 240ms eased movement, direct pointer tracking; reduced motion removes transition.",
     "visibleModelsPerSource": 2,
-    "sourceSwitch": "Provider buttons filter the list locally. MiMo shows only its 2 models, zero model-select POSTs; choosing mimo-v2.6-pro posts providerId=mimo and modelId=mimo-v2.6-pro. Reopening returns to the current model source.",
-    "motionProof": "Computed transforms/opacities differ across glints; real pointer drag ended at a supported high stop and cleared data-dragging. Reduced-motion CSS cancels animations/transitions; disabled state pauses ambient animation.",
+    "sourceSwitch": "One current-provider icon/name row and a right arrow; click advances provider, Left/Right keys move backward/forward. Browsing never submits model selection; only chosen providerId/modelId is saved. Reopen resets to actual selected model provider.",
     "default": "Default remains slider stop 0 with empty effort; no refresh/reset icon."
+  },
+  "nativeContentProof": {
+    "body": "rgba(0, 0, 0, 0)",
+    "bridge": {
+      "events": [
+        {
+          "action": "ready"
+        },
+        {
+          "action": "resize",
+          "height": 157
+        },
+        {
+          "action": "resize",
+          "height": 202
+        },
+        {
+          "action": "event",
+          "event": {
+            "id": "fixture",
+            "kind": "saving",
+            "saving": true
+          }
+        },
+        {
+          "action": "event",
+          "event": {
+            "id": "fixture",
+            "kind": "saving",
+            "saving": false
+          }
+        }
+      ],
+      "posts": [
+        {
+          "effort": "max",
+          "modelId": "deepseek-flash"
+        },
+        {
+          "effort": "high",
+          "modelId": "deepseek-flash"
+        }
+      ]
+    },
+    "busy": "false",
+    "card": {
+      "bottom": 202,
+      "height": 202,
+      "left": 0,
+      "right": 276,
+      "top": 0,
+      "width": 276,
+      "x": 0,
+      "y": 0
+    },
+    "filter": "none",
+    "focus": "range",
+    "html": "rgba(0, 0, 0, 0)",
+    "shadow": "none",
+    "value": "高"
+  },
+  "stableSaving": {
+    "webCard": "276x204 after supplier-arrow refinement; before that 276x207 unchanged throughout slow max/high saves.",
+    "nativeContentCard": "276x202 unchanged throughout slow max/high saves; transparent HTML/body, no CSS shadow or backdrop filter.",
+    "modelRows": "Same active/selected classes, text colors and row backgrounds while saving. Model submission locked without changing appearance.",
+    "writes": "max then high; intermediate choices coalesced, one continuous busy=true/false batch, focus stays on range, no list reload or resize during save.",
+    "nativeWindowTests": "Placement above/below anchor, visible-screen clamping, same-origin host/scheme/port rejection, hide/reopen/retained content/minimized restore/termination passed."
   }
 }

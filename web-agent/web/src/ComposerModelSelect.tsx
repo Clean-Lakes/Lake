@@ -1,40 +1,45 @@
-import {useState,type ReactNode} from "react";
+import {useState,useRef,useEffect} from "react";
 import type {AvailableModelEntry,AvailableModels} from "../../shared/contracts";
 import {AppSelect} from "./AppSelect";
 import {ProviderIcon} from "./ProviderIcon";
 import {Glyph} from "./Icons";
 import {currentComposerModel} from "./composerModelState";
+import {ReasoningSelector,type ReasoningSelectorProps} from "./ReasoningSelector";
+import {useNativeModelPanel} from "./nativeModelPanel";
 import {modelBrand} from "./modelBrand";
 
-type Props={available:AvailableModels&{loading:boolean};modelName:string|null;selection?:AvailableModelEntry;configured:boolean;open:boolean;disabled:boolean;onOpenChange:(open:boolean)=>void;onSelect:(model:AvailableModelEntry|string)=>void;onSettings:()=>void;reasoning?:ReactNode};
-export function ComposerModelSelect({available,modelName,selection,configured,open,disabled,onOpenChange,onSelect,onSettings,reasoning}:Props) {
+export type ComposerModelSelectProps={available:AvailableModels&{loading:boolean};modelName:string|null;selection?:AvailableModelEntry;configured:boolean;open:boolean;disabled:boolean;onOpenChange:(open:boolean)=>void;onSelect:(model:AvailableModelEntry|string)=>void;onSettings:()=>void;reasoning?:ReasoningSelectorProps;presentation?:number};
+export function ComposerModelSelect({available,modelName,selection,configured,open,disabled,onOpenChange,onSelect,onSettings,reasoning,presentation}:ComposerModelSelectProps) {
+  const anchor=useRef<HTMLSpanElement>(null);
+  const native=useNativeModelPanel({available,modelName,selection,configured,open,disabled,onOpenChange,onSelect,onSettings,reasoning},anchor);
   const [search,setSearch]=useState("");
   const [source,setSource]=useState<string|null>(null);
+  useEffect(()=>{setSource(selection?.providerId??null);setSearch("");},[presentation]);
   if (!configured) return <button type="button" className="composer-model-setup" disabled={disabled} onClick={onSettings} title="连接模型后即可发送，已输入的内容会保留"><Glyph name="plug" size={16}/><span>连接模型</span><Glyph name="chevron" size={12}/></button>;
   const allRows=available.entries?.map(entry=>({value:JSON.stringify([entry.providerId,entry.modelId]),label:entry.displayName,name:entry.name,group:entry.providerName,groupId:entry.providerId,model:entry as AvailableModelEntry|string}))??available.models.map(name=>({value:name,label:name,name,group:"",groupId:"",model:name as AvailableModelEntry|string}));
   const rows=available.loading?[]:allRows;
   const current=currentComposerModel(available,modelName,selection);
   const groups=[...new Set(rows.map(row=>row.groupId))];
   const activeSource=source!==null&&groups.includes(source)?source:groups.includes(current?.providerId||"")?current?.providerId||"":groups[0]||"";
+  const currentSource=rows.find(row=>row.groupId===activeSource);
+  const nextSource=groups[(groups.indexOf(activeSource)+1)%groups.length];
+  const switchSource=(direction=1)=>{setSource(groups[(groups.indexOf(activeSource)+direction+groups.length)%groups.length]??null);setSearch("");};
   const sourceRows=rows.filter(row=>row.groupId===activeSource);
   const query=search.trim().toLocaleLowerCase();
   const visible=sourceRows.filter(row=>`${row.label} ${row.name}`.toLocaleLowerCase().includes(query));
   const note=available.message&&(available.source==="magpie"||!available.models.length)?available.message:"";
   const label=configured?(current?.displayName||modelName?.split("/").pop()||"已配置"):"选择模型";
-  return <AppSelect className={`composer-model-select ${configured?"":"model-missing"}`} popupClassName="composer-model-popup" popupMinWidth={276} popupMaxHeight={420}
+  return <span ref={anchor} className="composer-model-anchor"><AppSelect nativePopup={native} selectionLocked={disabled} className={`composer-model-select ${configured?"":"model-missing"}`} popupClassName="composer-model-popup" popupMinWidth={276} popupMaxHeight={420}
     label={configured?`选择模型：${label}${current?.providerName?` · ${current.providerName}`:""}`:"选择模型"} title={modelName&&label!==modelName?`${label}\n${modelName}`:label} value={current?JSON.stringify([current.providerId,current.modelId]):modelName||""} renderValue={label}
     icon={<ProviderIcon brand={modelBrand(modelName||"",current?.displayName,current?.providerName)} size={16}/>}
     open={open} aria-busy={disabled} onOpenChange={next=>{if(next&&disabled) return;if(next) {setSearch("");setSource(current?.providerId??null);}onOpenChange(next);}}
-    onChange={event=>{const row=rows.find(row=>row.value===event.target.value);if(row) onSelect(row.model);}}
+    onChange={event=>{const row=rows.find(row=>row.value===event.target.value);if(row&&!disabled) onSelect(row.model);}}
     popupHeader={({listId,activeId})=><>
-      {groups.length>1&&<div className="composer-model-sources" role="group" aria-label="模型类型">{groups.map(group=>{
-        const row=rows.find(row=>row.groupId===group)!;
-        return <button type="button" key={group} aria-pressed={group===activeSource} onClick={()=>{setSource(group);setSearch("");}}><ProviderIcon brand={modelBrand(row.name,row.label,row.group)} size={14}/><span>{row.group||"其他模型"}</span></button>;
-      })}</div>}
+      {currentSource&&<div className="composer-model-source"><span className="composer-model-source-name"><ProviderIcon brand={modelBrand(currentSource.name,currentSource.label,currentSource.group)} size={15}/><span aria-live="polite">{currentSource.group||"其他模型"}</span></span>{groups.length>1&&<button type="button" aria-label={`切换模型供应商，当前${currentSource.group}，下一项${rows.find(row=>row.groupId===nextSource)?.group||"其他模型"}`} title="切换模型供应商" onClick={()=>switchSource()} onKeyDown={event=>{if(event.key==="ArrowLeft"||event.key==="ArrowRight"){event.preventDefault();event.stopPropagation();switchSource(event.key==="ArrowLeft"?-1:1);}}}><Glyph name="chevron" size={15}/></button>}</div>}
       {sourceRows.length>8&&<label className="composer-model-search"><Glyph name="search" size={15}/><input autoFocus role="combobox" aria-expanded={open} aria-controls={listId} aria-activedescendant={activeId} aria-autocomplete="list" aria-label="搜索模型" placeholder="搜索当前分类…" value={search} onChange={event=>setSearch(event.target.value)}/></label>}
     </>}
     emptyMessage={available.loading?"正在获取可用模型…":query?"没有找到匹配的模型":note||"暂无可用模型，请先添加供应商。"}
-    popupFooter={<>{reasoning}{note&&rows.length>0&&<p className="composer-model-note">{note}</p>}</>}
+    popupFooter={<>{reasoning&&<ReasoningSelector key={reasoning.session} {...reasoning}/>}{note&&rows.length>0&&<p className="composer-model-note">{note}</p>}</>}
     renderOption={option=>{const row=rows.find(row=>row.value===option.value)!;return <><ProviderIcon brand={modelBrand(row.name,row.label,row.group)} size={16}/><span className="composer-model-label"><span>{row.label}</span>{row.name!==row.label&&<small>{row.name}</small>}</span>{available.imageInputCapabilities?.[row.name]&&<small className="composer-model-capability">视觉</small>}</>;}}
-  >{visible.map(row=><option key={row.value} value={row.value} disabled={disabled}>{row.label}</option>)}</AppSelect>;
+  >{visible.map(row=><option key={row.value} value={row.value} disabled={disabled&&reasoning?.disabled!==false}>{row.label}</option>)}</AppSelect></span>;
 }
