@@ -83,6 +83,8 @@ test('overall narration uses one slot below the divider, never an overall card i
  assert.equal((html.match(/class="resource-stage-summary is-overall"/g)??[]).length,1);
  const overall=html.indexOf('class="resource-stage-summary is-overall"');
  assert.ok(overall>html.lastIndexOf('</section>'));
- assert.ok(html.slice(overall).includes('data-stage-entry="overall"'));
+ assert.ok(!html.slice(overall).includes('data-stage-entry="overall"'));
+ assert.ok(!html.slice(overall).includes("现在准备后续整体步骤"));
+ assert.ok(!html.slice(overall).includes("最新阶段："));
  assert.ok(!html.slice(overall).includes('data-stage-entry="plan"'),'overall preview replaces earlier narration');
 });

@@ -5,8 +5,8 @@ import type {ResourceStages} from './resourceStageProgress';
 import {toolDescription} from './activity';
 
 export type OverallProgress={facts:string;activity:string;latest?:TranscriptEntry};
-/** Summarize actual current-turn records on every snapshot, without a second
- * model request, fabricated percentage, or treating a planned action as done. */
+/** Current-turn facts provide the refresh revision and an honest loading fallback.
+ * Semantic synthesis is generated separately; these records are never quoted below. */
 export function overallProgressSummary(turn:TranscriptEntry[],groups:ConversationGroup[],stages:ResourceStages,view?:AIView):OverallProgress|undefined {
  const resources=groups.filter(group=>group.progress&&group.resource);
  if(!resources.length||turn.some(entry=>entry.agentRun||entry.sre))return;

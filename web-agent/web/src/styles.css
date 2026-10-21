@@ -1294,6 +1294,3 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .resource-stage-record { margin-top:10px; color:var(--text-secondary); }
 
 .overall-progress-facts { margin:0; line-height:1.8; }
-.overall-progress-milestone { margin-top:6px; }
-.overall-progress-label { display:block; color:var(--text-muted); font-size:12px; margin-bottom:2px; }
-.overall-progress-milestone .ai-markdown > :last-child { margin-bottom:0; }
