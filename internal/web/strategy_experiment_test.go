@@ -19,6 +19,23 @@ import (
 
 var experimentAnswers = []string{"deleted open file", "mount boundary", "journal port 8080", "OOM memory", "read-only 25006", "authentication rejected", "permission denied", "missing log provider", "湖水映月，清波入梦。", "DNS NXDOMAIN", "unknown requires reconciliation", "still running without progress", "ambiguous target: clarify", "connection clients near limit", "ImagePullBackOff registry denied"}
 
+func TestStrategyExperimentFrozenModelBudget(t *testing.T) {
+	for _, tc := range []struct {
+		model          ai.Model
+		window, output int
+	}{
+		{ai.Model{}, 64000, 2048},
+		{ai.Model{ContextLimit: 16000}, 14400, 2048},
+		{ai.Model{ContextLimit: 4096, ContextWindow: 64000, MaxOutput: 8192}, 4096, 1024},
+		{ai.Model{ContextLimit: 1000000, MaxOutput: 512}, 64000, 512},
+	} {
+		m := strategyExperimentModel(tc.model)
+		if m.ContextWindow != tc.window || m.MaxOutput != tc.output {
+			t.Fatalf("frozen capacity differs: window=%d output=%d", m.ContextWindow, m.MaxOutput)
+		}
+	}
+}
+
 func experimentProvider(t *testing.T, calls *atomic.Int32, attack bool) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

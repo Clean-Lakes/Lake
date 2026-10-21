@@ -50,12 +50,7 @@ func (b *Server) strategyExperimentRoute(w http.ResponseWriter, r *http.Request,
 			if model.Protocol != "openai" && model.Protocol != "" {
 				strategyFail(400, "unsupported_model")
 			}
-			if model.ContextWindow <= 0 {
-				model.ContextWindow = 64000
-			}
-			model.ContextWindow = min(64000, max(2048, model.ContextWindow))
-			model.MaxOutput = min(2048, max(128, model.MaxOutput))
-			model.SupportsImageOutput = false
+			*model = strategyExperimentModel(*model)
 			effective := strategyMust(b.Store.EffectiveStrategySettings(ctx))
 			cases := []strategy.Fixture{}
 			for _, id := range in.CaseIDs {
@@ -119,6 +114,21 @@ func (b *Server) strategyExperimentRoute(w http.ResponseWriter, r *http.Request,
 	}
 	strategyFail(405, "unsupported_operation")
 	return true
+}
+func strategyExperimentModel(model ai.Model) ai.Model {
+	if model.ContextWindow <= 0 {
+		model.ContextWindow = ai.AutomaticContextWindow(model.ContextLimit)
+	}
+	if model.ContextLimit >= 2048 {
+		model.ContextWindow = min(model.ContextWindow, model.ContextLimit)
+	}
+	model.ContextWindow = min(64000, max(2048, model.ContextWindow))
+	if model.MaxOutput <= 0 {
+		model.MaxOutput = 2048
+	}
+	model.MaxOutput = min(2048, model.MaxOutput, model.ContextWindow/4)
+	model.SupportsImageOutput = false
+	return model
 }
 func (b *Server) strategyExperimentReport(ctx StrategyContext, id string) (Object, error) {
 	return strategyCall(b.Store, false, func() Object {
