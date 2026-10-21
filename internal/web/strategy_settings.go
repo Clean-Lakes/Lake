@@ -4,6 +4,7 @@ import "github.com/Clean-Lakes/Lake/internal/strategy"
 
 type StrategySettingsInput struct {
 	MasterEnabled, ApplyEnabled, LearnEnabled, CorrectEnabled bool
+	OnlineCorrectEnabled                                      bool
 	Budget                                                    strategy.Budget
 }
 type StrategyEffectiveSettings struct {
@@ -37,6 +38,7 @@ func (s *Store) strategyEffective(ctx StrategyContext) StrategyEffectiveSettings
 			out.Settings.ApplyEnabled = global.ApplyEnabled && project.ApplyEnabled
 			out.Settings.LearnEnabled = global.LearnEnabled && project.LearnEnabled
 			out.Settings.CorrectEnabled = global.CorrectEnabled && project.CorrectEnabled
+			out.Settings.OnlineCorrectEnabled = global.OnlineCorrectEnabled && project.OnlineCorrectEnabled
 			out.Settings.Budget = minStrategyBudget(global.Budget, project.Budget)
 		}
 	}
@@ -44,6 +46,9 @@ func (s *Store) strategyEffective(ctx StrategyContext) StrategyEffectiveSettings
 		out.Settings.ApplyEnabled = false
 		out.Settings.LearnEnabled = false
 		out.Settings.CorrectEnabled = false
+	}
+	if !out.Settings.CorrectEnabled {
+		out.Settings.OnlineCorrectEnabled = false
 	}
 	return out
 }
@@ -72,7 +77,7 @@ func (s *Store) SetStrategySettings(ctx StrategyContext, scope strategy.Scope, k
 		if old.Revision != expected {
 			strategyFail(409, "revision_conflict")
 		}
-		value := strategy.Settings{Scope: scope, Revision: old.Revision + 1, Epoch: s.strategyAdvanceScope(scopeKey), MasterEnabled: input.MasterEnabled, ApplyEnabled: input.ApplyEnabled, LearnEnabled: input.LearnEnabled, CorrectEnabled: input.CorrectEnabled, Budget: input.Budget}
+		value := strategy.Settings{Scope: scope, Revision: old.Revision + 1, Epoch: s.strategyAdvanceScope(scopeKey), MasterEnabled: input.MasterEnabled, ApplyEnabled: input.ApplyEnabled, LearnEnabled: input.LearnEnabled, CorrectEnabled: input.CorrectEnabled, OnlineCorrectEnabled: input.OnlineCorrectEnabled, Budget: input.Budget}
 		s.strategySaveSettings(scopeKey, value)
 		if scope.Kind == strategy.UserScope {
 			s.strategyInvalidateJobs("1=1")

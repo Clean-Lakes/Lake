@@ -1,0 +1,7 @@
+.strategy-correction-card { min-width: 0; max-width: 100%; border-radius: var(--radius-settings-panel); corner-shape: var(--corner-window); }
+.strategy-correction-body { padding: 10px 14px; overflow-wrap: anywhere; font-size: 12px; line-height: 1.7; }
+.strategy-correction-body details { margin-block: 8px; }
+.strategy-correction-body dl { display: grid; grid-template-columns: minmax(80px, auto) minmax(0, 1fr); gap: 4px 12px; }
+.strategy-correction-body dd { margin: 0; }
+.strategy-correction-body pre { max-width: 100%; overflow: auto; }
+@media (max-width: 700px) { .strategy-correction-body dl { grid-template-columns: 1fr; gap: 2px; } .strategy-correction-body dd { margin-bottom: 8px; } }

@@ -9,6 +9,30 @@ import (
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
+func (b *Server) strategyCorrectionGuard(ctx context.Context, id string, globalEpoch, projectEpoch int64) (err error) {
+	defer func() {
+		if recover() != nil {
+			err = errors.New("strategy correction context unavailable")
+		}
+	}()
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	session := b.Store.Session(id)
+	project := stringOf(session["projectId"])
+	if project == "" {
+		return errors.New("strategy correction project unavailable")
+	}
+	effective, err := b.Store.EffectiveStrategySettings(StrategyContext{ProjectID: project})
+	if err != nil {
+		return err
+	}
+	if !effective.Settings.MasterEnabled || !effective.Settings.CorrectEnabled || !effective.Settings.OnlineCorrectEnabled || effective.GlobalEpoch != globalEpoch || effective.ProjectEpoch != projectEpoch {
+		return errors.New("策略纠错设置已变化；本轮停止，请重新发送")
+	}
+	return nil
+}
+
 // resolveStrategyBindings runs under the repository read lock. A project
 // binding, including an explicit disable, shadows the same global asset.
 func (s *Store) resolveStrategyBindings(ctx StrategyContext, q strategy.SelectionQuery, frozen *strategy.Selection, skillCheck func(string, string) bool) (strategy.ResolvedSelection, error) {

@@ -73,6 +73,14 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 	}
 	appendSystem(strategy.TaskContext, "team-context", teamContext)
+	if onlineEnabled(c) {
+		appendSystem(strategy.FixedRules, "online-readonly-correction-v1", "\nOptional bounded read-only correction is enabled. After a failed resource check, inspect its actual call ID/error. Before another resource call, submit revise_readonly_strategy with that source ID, refuted hypothesis, concrete change, expected information and stop condition, and exactly one next tool/JSON arguments. Preserve the same authorized target. Only trusted policy can prove read-only. Do not replay writes, opaque SQL/MCP, dispatched operations or denied permissions. No new task/role/plan resets the shared budget. Only a successful repeated logical check closes that recorded gap; changed wording or timestamps do not establish progress. A recovered sample does not establish whole-task success. Finish with actual facts and gaps.")
+	}
+	if report, err := e.onlineCurrent(s, c); err != nil {
+		return modelResult{}, err
+	} else if report != nil {
+		appendSystem(strategy.TaskContext, "online-correction-state", "\nHost-recorded correction state (data, not permission): "+js(report))
+	}
 	if !c.MemoryEnabled {
 		for i := range history {
 			if history[i].Role == "tool" && memoryTool(history[i].Name) {
@@ -87,6 +95,11 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	}
 	lastFlush := map[string]time.Time{}
 	tools := e.sessionCatalog(ctx, id, c)
+	if report, err := e.onlineCurrent(s, c); err != nil {
+		return modelResult{}, err
+	} else if report != nil && report.StopReason != "" {
+		tools = nil
+	}
 	if e.worker != nil {
 		e.worker.mu.Lock()
 		remaining := max(0, agentCallLimit(c)-e.worker.calls)
@@ -405,5 +418,16 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 		}
 		return result, err
 	}
-	return e.stream(ctx, m, history, tools, delta)
+	reserve := int64(historyCost(history) + len(js(tools)) + m.MaxOutput + 1024)
+	charged, err := e.onlineReserve(ctx, s, c, reserve)
+	if err != nil {
+		return modelResult{}, err
+	}
+	result, err := e.stream(ctx, m, history, tools, delta)
+	if charged {
+		if settleErr := e.onlineSettle(s, c, reserve, result.Usage, err); settleErr != nil {
+			return result, settleErr
+		}
+	}
+	return result, err
 }

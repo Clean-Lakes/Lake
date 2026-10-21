@@ -73,7 +73,7 @@ func (e *Engine) collectStrategySnapshot(s *session, c Config, input TurnInput, 
 		if msg.Role == "assistant" && len(msg.Calls) == 0 {
 			snapshot.AssistantText, _ = memoryUTF8Prefix(redact(msg.Content, c), 8192)
 		}
-		if msg.Role != "tool" || paired[msg.CallID] != msg.Name || msg.CallID == "" || len(snapshot.Evidence) >= 24 {
+		if msg.Role != "tool" || msg.Name == onlineRevisionTool || paired[msg.CallID] != msg.Name || msg.CallID == "" || len(snapshot.Evidence) >= 24 {
 			continue
 		}
 		status := "unverified"

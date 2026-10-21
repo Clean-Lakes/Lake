@@ -49,6 +49,8 @@ type Config struct {
 	sre                     *sreRoleContext
 	targetScope             *TargetScope
 	StrategyLearnEnabled    bool             `json:"-"`
+	StrategyCorrectEnabled  bool             `json:"-"`
+	StrategyBudget          strategy.Budget  `json:"-"`
 	StrategyGlobalEpoch     int64            `json:"-"`
 	StrategyProjectEpoch    int64            `json:"-"`
 	MemoryProjectID         string           `json:"-"`

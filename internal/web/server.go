@@ -156,6 +156,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	server.Engine.RuntimeDir = filepath.Join(options.DataDir, "adk")
 	server.Engine.SetSRERepository(store)
 	server.Engine.Strategies = server.strategyProvider
+	server.Engine.CorrectionGuard = server.strategyCorrectionGuard
 	store.RecoverSRETasks()
 	if err = server.startScheduler(); err != nil {
 		server.Close()

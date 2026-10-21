@@ -30,6 +30,18 @@ func shouldCompactResumedConversation(st State, now time.Time) bool {
 }
 
 func (e *Engine) compactForTurn(ctx context.Context, s *session, c Config, resume bool) error {
+	if report, err := e.onlineCurrent(s, c); err != nil {
+		return err
+	} else if report != nil {
+		// No unaccounted summarizer requests inside a correction budget.
+		s.mu.Lock()
+		cost := historyCost(s.state.History)
+		s.mu.Unlock()
+		if cost > (c.Model.ContextWindow-c.Model.MaxOutput)*2 {
+			return &onlineStopped{Reason: "budget_exhausted"}
+		}
+		return nil
+	}
 	if e.experiment != nil {
 		s.mu.Lock()
 		cost := historyCost(s.state.History)

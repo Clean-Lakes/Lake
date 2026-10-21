@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"github.com/Clean-Lakes/Lake/internal/ai"
+	"github.com/Clean-Lakes/Lake/internal/strategy"
 	"net/http"
 	"regexp"
 	"strings"
@@ -57,8 +58,20 @@ func TestSRELegacyTimeoutClassificationAndRestartKeepAudit(t *testing.T) {
 }
 
 func TestSREReadTimeoutCanRetryInOfficialRuntimeAndExecuteRealSample(t *testing.T) {
+	for _, online := range []bool{false, true} {
+		t.Run(map[bool]string{false: "baseline", true: "bounded_online"}[online], func(t *testing.T) { testSREReadTimeoutSample(t, online) })
+	}
+}
+
+func testSREReadTimeoutSample(t *testing.T, online bool) {
 	b, h := fixture(t)
 	sid, rid := newSession(t, h)
+	if online {
+		_, err := b.Store.SetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "online", 0, StrategySettingsInput{MasterEnabled: true, CorrectEnabled: true, OnlineCorrectEnabled: true, Budget: strategy.DefaultBudget()})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	options := b.Store.Options(sid)
 	options["silentCommands"] = true
 	options["silentTerminalCreation"] = true
@@ -80,6 +93,13 @@ func TestSREReadTimeoutCanRetryInOfficialRuntimeAndExecuteRealSample(t *testing.
 			return
 		}
 		n := rounds.Add(1)
+		if online && n == 2 {
+			emitModel(w, "", []ai.Call{{ID: "bounded-proposal", Name: "revise_readonly_strategy", Arguments: jsonText(Object{"sourceId": "first", "refutedHypothesis": "原只读检查已完成", "changes": "以新调用重新采样；保留原未知记录", "expectedInformation": "真实主机返回固定只读命令结果", "stopCondition": "权限、目标、未知变更或额度触发即停", "tool": "shell", "arguments": jsonText(Object{"asset_ref": sreAliasForTest(rid), "runtime": "local", "command": "printf SRE_FRESH_READ_SAMPLE"})})}})
+			return
+		}
+		if online && n > 2 {
+			n--
+		}
 		if n <= 2 {
 			if n == 2 && !strings.Contains(content, "可以用新的调用重新检查") {
 				t.Error("read timeout still tells model never retry")
@@ -108,6 +128,25 @@ func TestSREReadTimeoutCanRetryInOfficialRuntimeAndExecuteRealSample(t *testing.
 	ops := task.Attempts[0].Operations
 	if ops[0].Status != "unknown" || ops[0].Risk != "readonly" || ops[0].Result != "context deadline exceeded" || ops[1].Status != "succeeded" || !strings.Contains(ops[1].Result, "SRE_FRESH_READ_SAMPLE") {
 		t.Fatal("retry audit or real output lost", ops)
+	}
+	if online {
+		view, err := b.Engine.Snapshot(sid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, card := range view.Cards {
+			if card.Type == "strategy_correction" {
+				r := object(card.Data)
+				found = true
+				if r["stopReason"] != "completed" || r["recovered"] != true || integer(r["requests"]) != 3 || len(objects(r["revisions"])) != 1 || len(objects(r["openChecks"])) != 0 {
+					t.Fatal("SRE did not share/finalize online correction", r)
+				}
+			}
+		}
+		if !found {
+			t.Fatal("SRE parent report missing")
+		}
 	}
 }
 
