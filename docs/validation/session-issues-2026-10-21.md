@@ -15,7 +15,7 @@
 | 检查 | 结果 |
 | --- | --- |
 | `go test -race -p 1 ./internal/ai ./internal/web` | 两包通过，包含新输入状态事件、问题恢复、并行/连续审批、未知变更只读通道与核实后不可重放回归 |
-| `npm --prefix web-agent run test:frontend` | 364 项通过（包含资源执行树与中文等级新增回归） |
+| `npm --prefix web-agent run test:frontend` | 合并 P5 后 366 项通过（包含资源执行树与中文等级新增回归） |
 | `npm --prefix web-agent run build:web` | 类型检查与生产构建通过；存在已有的大分块提示 |
 | `python3 scripts/check_adk_runtime_boundary.py` | 通过 |
 | `git diff --check` | 通过 |
@@ -74,3 +74,6 @@
 ![按资源归组，资源展开后具体行为仍默认折叠](resource-execution-tree.jpg)
 
 ![390px 深色窗口模型名称后的中文等级](model-effort-narrow-dark.jpg)
+
+
+同步 develop 的 P5 合并 `1d2df2ce` 后，前端实际测试提交为 `b7d026460394c6165c8f778c04971568935154fd`：366 项通过，生产构建与 ADK 边界通过；新增同步内容使用既有 develop 验证记录，并补跑本分支人工输入、连续/并行确认和策略实验的 race 回归。合并前原有完整两包结果仅适用于前述历史提交，不冒充新 head 的完整后端回归。
