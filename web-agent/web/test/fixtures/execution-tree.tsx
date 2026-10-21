@@ -15,7 +15,10 @@ function Fixture(){
  const [ended,setEnded]=useState(false),[extra,setExtra]=useState(0);
  const stage=(id:string,content:string):AICard=>({id,type:'message',status:'completed',at:start,content});
  const joint=new URLSearchParams(location.search).has('joint-stages');
- const cards=joint?[stage('plan',`继续按源库检查、镜像准备与目标验证的顺序推进。当前整体进度已更新 ${extra+1} 次。`),operation('host-check','shell',resources[0]!),operation('db-query','execute_sql',resources[1]!),stage('joint-result',`源库可以正常连接，缓冲池为 128 MB。目标端没有现成镜像，正在准备导出并传输。第 ${extra+1} 次阶段检查完成。`),...(ended?[stage('final','最终总结：演示资源检查完成，原始结果保留。')]:[])]:[operation('host-check','shell',resources[0]!),stage('export-stage','导出完成，用时 3.5 秒。'),operation('db-query','execute_sql',resources[1]!),stage('restore-stage','恢复完成，用时 13.6 秒，零报错。'),operation('host-read','read',resources[0]!),...Array.from({length:extra},(_,i)=>operation('extra-'+i,'shell',resources[0]!)),{id:'reply',type:'message',status:ended?'completed':'running',at:new Date(Date.now()+1000).toISOString(),content:ended?'检查完成，两个演示资源均正常。可以通过耗时栏回看完整记录。':`演示服务器第 ${extra+1} 轮一致性核对通过。原位更新本条进展，具体操作默认折叠。`}] as AICard[];
+ const realtime=new URLSearchParams(location.search).has('live-summary');
+ const source=operation('source-export','shell',resources[0]!);source.status=extra>0?'completed':'running';
+ const target=operation('target-restore','shell',resources[1]!);target.status=extra>1?'completed':'running';
+ const cards=realtime?[stage('plan','先确认当前状态。'),source,...(extra>0?[stage('exported','导出完成：26 个库，46.3 秒，压缩包 479 MB。'),target]:[]),...(extra>1?[stage('restored','恢复完成：26 个库均已返回成功结果，开始核对一致性。')]:[]),...(ended?[stage('final','本轮检查完成，最终总结已保留。')]:[])]:joint?[stage('plan',`继续按源库检查、镜像准备与目标验证的顺序推进。当前整体进度已更新 ${extra+1} 次。`),operation('host-check','shell',resources[0]!),operation('db-query','execute_sql',resources[1]!),stage('joint-result',`源库可以正常连接，缓冲池为 128 MB。目标端没有现成镜像，正在准备导出并传输。第 ${extra+1} 次阶段检查完成。`),...(ended?[stage('final','最终总结：演示资源检查完成，原始结果保留。')]:[])]:[operation('host-check','shell',resources[0]!),stage('export-stage','导出完成，用时 3.5 秒。'),operation('db-query','execute_sql',resources[1]!),stage('restore-stage','恢复完成，用时 13.6 秒，零报错。'),operation('host-read','read',resources[0]!),...Array.from({length:extra},(_,i)=>operation('extra-'+i,'shell',resources[0]!)),{id:'reply',type:'message',status:ended?'completed':'running',at:new Date(Date.now()+1000).toISOString(),content:ended?'检查完成，两个演示资源均正常。可以通过耗时栏回看完整记录。':`演示服务器第 ${extra+1} 轮一致性核对通过。原位更新本条进展，具体操作默认折叠。`}] as AICard[];
  const snapshot={session:{id:'fixture'},resources,messages:[{id:'question',sessionId:'fixture',role:'user',text:'检查这两个演示资源的状态',createdAt:start}],actions:[],replyTimings:[{messageId:'question',startedAt:start,status:ended?'completed':'running',finishedAt:ended?new Date().toISOString():''}],ai:{session:'fixture',status:ended?'completed':'running',cardsOffset:0,cards}} as SessionSnapshot;
  return <main style={{maxWidth:880,margin:'70px auto',padding:24}}><nav aria-label="隔离验收控制" style={{display:'flex',gap:12,marginBottom:36}}><button onClick={()=>setExtra(value=>value+1)}>追加操作</button><button onClick={()=>setEnded(true)}>完成会话</button><button onClick={()=>setEnded(false)}>继续会话</button></nav><AITranscript snapshot={snapshot}/></main>;
 }
@@ -42,4 +45,11 @@ if(new URLSearchParams(location.search).has('resize-proof')){
  };
  const record=()=>{until=performance.now()+650;if(!frame)frame=requestAnimationFrame(sample);};
  window.addEventListener('resize',record);document.addEventListener('click',record);record();
+}
+
+
+if(new URLSearchParams(location.search).has('live-summary')){
+ const proof=document.createElement('output');proof.id='overall-summary-proof';proof.hidden=true;document.body.appendChild(proof);
+ let first:Element|null=null;
+ new MutationObserver(()=>{const slot=document.querySelector('.is-overall');if(!first&&slot)first=slot;proof.textContent=JSON.stringify({sameSlot:!!first&&slot===first,text:slot?.textContent});}).observe(document.getElementById('root')!,{subtree:true,childList:true,characterData:true});
 }
