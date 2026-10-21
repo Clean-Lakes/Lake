@@ -33,6 +33,10 @@ type session struct {
 type Engine struct {
 	experiment       *strategyExperimentRuntime
 	Strategies       StrategyProvider
+	CorrectionGuard  func(context.Context, string, int64, int64) error
+	correctionMu     sync.Mutex
+	onlineTask       string
+	onlineSessions   sync.Map
 	runMu            sync.Mutex
 	runs             sync.WaitGroup
 	runtimeClosed    bool
@@ -348,6 +352,9 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
+	if err := e.refreshOnlineCards(s); err != nil {
+		return View{}, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	view := s.state.View
@@ -635,6 +642,11 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			err = ctx.Err()
 		}
 		cancel()
+		if e.worker == nil {
+			if finishErr := e.onlineFinish(s, c, err); err == nil && finishErr != nil {
+				err = finishErr
+			}
+		}
 		s.mu.Lock()
 		s.finalizing = true
 		s.decision = nil
@@ -689,11 +701,16 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls []Call) error {
 	var observations []ImageAttachment
 	for _, call := range calls {
+		if err := e.onlineBeforeCall(ctx, s, *c, call); err != nil {
+			return e.onlineDeny(s, *c, call, err)
+		}
 		if _, err := e.resolveTurnStrategies(ctx, s, *c); err != nil {
 			return err
 		}
 		e.setSREActivity("tool", call.Name)
-		value, toolErr := e.invokeAfterSREHandoff(ctx, s, *c, call)
+		trace := &onlinePolicyTrace{}
+		toolCtx := context.WithValue(ctx, onlinePolicyKey{}, trace)
+		value, toolErr := e.invokeAfterSREHandoff(toolCtx, s, *c, call)
 		if errors.Is(toolErr, errADKApprovalPending) {
 			return toolErr
 		}
@@ -811,6 +828,9 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 		if err != nil {
 			return err
 		}
+		if err := e.onlineObserve(s, *c, call, trace, value, toolErr); err != nil {
+			return err
+		}
 		if err := e.unknownSREOperation(*c, call); err != nil {
 			return err
 		}
@@ -889,6 +909,12 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 		return errors.New("message exceeds configured context window")
 	}
 	timeout := e.compactionTimeout
+	if report, onlineErr := e.onlineCurrent(s, c); onlineErr != nil {
+		return onlineErr
+	} else if report != nil {
+		_, onlineErr = e.onlineUpdate(s, c, false, func(r *strategy.OnlineReport) error { return onlineStop(r, strategy.BudgetExhausted) })
+		return onlineErr
+	}
 	if timeout <= 0 {
 		timeout = 45 * time.Second
 	}

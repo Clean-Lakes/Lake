@@ -31,7 +31,7 @@ export function orderedTranscript(snapshot: SessionSnapshot, cards: AICard[], be
   const earlierUser = snapshot.messages.filter(m => m.role === "user" && compareTime(m.createdAt, earliest) < 0).at(-1)?.id;
   const entries: TranscriptEntry[] = [
     ...snapshot.messages.filter(m => (before === 0 || compareTime(m.createdAt, earliest) >= 0 || m.id === earlierUser)).map(message => ({ at: message.createdAt, id: message.id, message })),
-    ...cards.filter(card => card.type !== "compaction" && card.type !== "draft" && (!!card.content || ["operation", "chart", "diff", "image"].includes(card.type) || card.type === "thinking" && card.status === "running")).map(card => ({ at: card.at, id: card.id, card })),
+    ...cards.filter(card => card.type !== "compaction" && card.type !== "draft" && (!!card.content || ["operation", "chart", "diff", "image", "strategy_correction"].includes(card.type) || card.type === "thinking" && card.status === "running")).map(card => ({ at: card.at, id: card.id, card })),
     // The Go engine owns new tool cards. Keep earlier native approvals in their original turn.
     ...snapshot.actions.filter(action => (!snapshot.ai?.startedAt || compareTime(action.createdAt, snapshot.ai.startedAt) < 0) && (before === 0 || compareTime(action.createdAt, earliest) >= 0)).map(action => ({ at: action.createdAt, id: action.id, action })),
     ...transcriptAgentRuns(snapshot).filter(run => !run.sreTaskId&&(before === 0 || compareTime(run.createdAt, earliest) >= 0)).map(agentRun => ({ at: agentRun.createdAt, id: `agent:${agentRun.id}`, agentRun })),

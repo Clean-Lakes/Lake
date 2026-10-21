@@ -92,14 +92,15 @@ func (b Budget) Validate() error {
 // Settings revision/epoch zero means implicit, unsaved defaults. Stored
 // mutations allocate positive monotonic revisions and epochs in the host.
 type Settings struct {
-	Scope          Scope  `json:"scope"`
-	Revision       int64  `json:"revision"`
-	Epoch          int64  `json:"epoch"`
-	MasterEnabled  bool   `json:"masterEnabled"`
-	ApplyEnabled   bool   `json:"applyEnabled"`
-	LearnEnabled   bool   `json:"learnEnabled"`
-	CorrectEnabled bool   `json:"correctEnabled"`
-	Budget         Budget `json:"budget"`
+	Scope                Scope  `json:"scope"`
+	Revision             int64  `json:"revision"`
+	Epoch                int64  `json:"epoch"`
+	MasterEnabled        bool   `json:"masterEnabled"`
+	ApplyEnabled         bool   `json:"applyEnabled"`
+	LearnEnabled         bool   `json:"learnEnabled"`
+	CorrectEnabled       bool   `json:"correctEnabled"`
+	OnlineCorrectEnabled bool   `json:"onlineCorrectEnabled"`
+	Budget               Budget `json:"budget"`
 }
 
 func DefaultSettings(scope Scope) Settings {

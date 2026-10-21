@@ -110,6 +110,14 @@ func (b *Server) summarizeProgress(ctx context.Context, id, turn string, load fu
 	if turn == "" || turn != view.TurnStartedAt || !set("running waiting_approval waiting_question")[view.Status] {
 		return Object{"text": "", "pending": false}
 	}
+	// Online correction already owns a durable, bounded model budget. Keep the
+	// ordinary resource/milestone UI, but do not start a second summary request
+	// outside that budget. A historical completed report does not block a new turn.
+	for _, card := range view.Cards {
+		if card.Type == "strategy_correction" && (card.Status == "running" || view.RootTurnID != "" && stringOf(object(card.Data)["turnId"]) == view.RootTurnID) {
+			return Object{"text": "", "pending": false, "reason": "bounded_strategy_correction"}
+		}
+	}
 	input := progressSummaryInput(view)
 	model := b.Models.Active()
 	if input == "" || model == nil {

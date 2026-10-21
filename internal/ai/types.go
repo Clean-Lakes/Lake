@@ -49,6 +49,8 @@ type Config struct {
 	sre                     *sreRoleContext
 	targetScope             *TargetScope
 	StrategyLearnEnabled    bool             `json:"-"`
+	StrategyCorrectEnabled  bool             `json:"-"`
+	StrategyBudget          strategy.Budget  `json:"-"`
 	StrategyGlobalEpoch     int64            `json:"-"`
 	StrategyProjectEpoch    int64            `json:"-"`
 	MemoryProjectID         string           `json:"-"`
@@ -207,6 +209,12 @@ func num(v any, fallback int) int {
 		return int(n)
 	case int:
 		return n
+	case int64:
+		return int(n)
+	case json.Number:
+		if value, err := n.Int64(); err == nil {
+			return int(value)
+		}
 	}
 	return fallback
 }
