@@ -38,6 +38,9 @@ func (e *Engine) refreshOnlineCards(s *session) error {
 	if e.worker != nil {
 		owner = e.worker.parent
 	}
+	if _, ok := owner.onlineSessions.Load(id); !ok {
+		return nil
+	}
 	owner.correctionMu.Lock()
 	defer owner.correctionMu.Unlock()
 	var rows []nativeCorrection
@@ -274,6 +277,7 @@ func (e *Engine) onlineUpdate(s *session, c Config, create bool, fn func(*strate
 	if err := store.DB.Save(&row).Error; err != nil {
 		return nil, err
 	}
+	owner.onlineSessions.Store(sid, true)
 	parent.mu.Lock()
 	cardID := "correction_" + key
 	status := "running"
