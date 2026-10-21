@@ -1265,7 +1265,9 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .turn-execution-details { display:grid; grid-template-rows:0fr; min-width:0; opacity:0; visibility:hidden; margin-top:calc(-1 * var(--turn-entry-gap,12px)); transition:grid-template-rows 360ms cubic-bezier(.22,1,.36,1),opacity 220ms ease,margin-top 360ms cubic-bezier(.22,1,.36,1),visibility 360ms; }
 .turn-execution-details.is-open { grid-template-rows:1fr; opacity:1; visibility:visible; margin-top:0; }
 .turn-execution-content { min-height:0; overflow:hidden; }
-.turn-execution-body { display:flex; flex-direction:column; gap:12px; padding:2px 0 12px; }
+.turn-execution-body { display:flex; flex-direction:column; gap:12px; padding:2px 0 2px; }
+/* 12px row/turn gaps + 2px inset give the separator 14px on each side. */
+.turn-execution-body::after { content:""; display:block; flex:none; margin-top:2px; border-top:1px solid var(--border); }
 @media(prefers-reduced-motion:reduce) { .turn-execution-details { transition:none; } }
 @media(prefers-reduced-motion:reduce){.turn-duration-chevron { transition:none; }}
 
@@ -1282,3 +1284,12 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .message-image-preview > header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding-bottom:10px; font-size:12px; color:var(--text-muted); }
 .message-image-preview > header > span { overflow-wrap:anywhere; min-width:0; }
 .message-image-preview > img { display:block; width:auto; height:auto; max-width:min(960px,calc(100vw - 58px)); max-height:calc(100dvh - 110px); object-fit:contain; }
+
+/* Stage results belong to the resource, outside its folded raw operations. */
+.resource-stage-summary { min-width:0; margin:6px 0 0 28px; color:var(--text-secondary); font-size:14px; line-height:1.75; }
+.resource-stage-summary.is-shared { margin-left:0; }
+.resource-stage-heading { color:var(--text-muted); font-size:12px; }
+.resource-stage-current .ai-markdown > :first-child { margin-top:0; }
+.resource-stage-current .ai-markdown > :last-child { margin-bottom:0; }
+.resource-stage-history { margin-top:5px; font-size:12px; color:var(--text-muted); }
+.resource-stage-record { margin-top:10px; color:var(--text-secondary); }

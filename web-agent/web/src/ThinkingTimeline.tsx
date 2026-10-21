@@ -2,7 +2,7 @@ import type {ProgressResource} from './conversation-progress-model';
 import {ExecutionDetailsOpen} from './TurnExecutionDetails';
 import {ExecutionIcon} from './ExecutionIcon';
 import {DisclosureSummary} from './DisclosureSummary';
-import { memo, useContext, useState } from "react";
+import { memo, useContext, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AICard } from "../../shared/contracts";
@@ -30,7 +30,7 @@ export const ReasonStep = memo(function ReasonStep({card}: {card: AICard}) {
   return card.content ? <li className="thinking-step thinking-reason"><span className="thinking-step-marker"><i/></span><div className="thinking-prose"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={{a: props => <a {...props} target="_blank" rel="noopener noreferrer"/>}}>{card.content}</Markdown></div></li> : null;
 }, (a, b) => sameCard(a.card, b.card));
 
-export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, onInspect, resourceRow=false, continuing=false, resource }: { cards: AICard[]; live: boolean; onInspect?: () => void; resourceRow?:boolean; continuing?:boolean; resource?:ProgressResource }) {
+export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, onInspect, resourceRow=false, continuing=false, resource, stage }: { cards: AICard[]; live: boolean; onInspect?: () => void; resourceRow?:boolean; continuing?:boolean; resource?:ProgressResource; stage?:ReactNode }) {
   // A compact current-action line stays closed until the user requests details.
   const disclosureOpen=useContext(ExecutionDetailsOpen);
   const [open, setOpen] = useState(!resourceRow&&disclosureOpen);
@@ -57,9 +57,10 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
     <button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => { onInspect?.(); setOpen(!open); }}>
       <span className="thinking-process-icon"><ExecutionIcon card={currentTool} active={iconActive} glyph={resourceGlyph}/></span><span className="thinking-label">{label}</span>{resourceRow&&tools.length>1&&<small className="thinking-operation-count">{tools.length} 项</small>}<svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
     </button>
+    {stage}
     {open && <div className="thinking-detail-panel" id={panelId}>
       {tools.length > 0 && <ol className="thinking-steps">{tools.map(card => <ToolStep card={card} key={card.id} active={iconActive&&currentTool?.id===card.id} hideTarget={!!resource} onInspect={onInspect}/>)}</ol>}
       {thoughts.length > 0 && <details className="thinking-raw-records" onToggle={event => setRawOpen(event.currentTarget.open)}><DisclosureSummary>原始思考记录</DisclosureSummary>{rawOpen && <ol className="thinking-steps">{thoughts.map(card => <ReasonStep card={card} key={card.id}/>)}</ol>}</details>}
     </div>}
   </section>;
-}, (a, b) => a.resource?.id === b.resource?.id && a.resource?.name === b.resource?.name && a.resource?.kind === b.resource?.kind && a.resourceRow === b.resourceRow && a.continuing === b.continuing && a.live === b.live && a.onInspect === b.onInspect && a.cards.length === b.cards.length && a.cards.every((card, i) => sameCard(card, b.cards[i]!)));
+}, (a, b) => a.stage === b.stage && a.resource?.id === b.resource?.id && a.resource?.name === b.resource?.name && a.resource?.kind === b.resource?.kind && a.resourceRow === b.resourceRow && a.continuing === b.continuing && a.live === b.live && a.onInspect === b.onInspect && a.cards.length === b.cards.length && a.cards.every((card, i) => sameCard(card, b.cards[i]!)));

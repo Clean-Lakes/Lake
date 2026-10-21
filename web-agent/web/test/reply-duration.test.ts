@@ -98,21 +98,14 @@ test('live elapsed time, separator and state share one sweep while confirmation 
  assert.ok(!waiting.includes('status-text--active')&&!ended.includes('status-text--active'));
 });
 
-test('collapsed execution header follows the latest actual operation across resources and prose',()=>{
- const cards:AICard[]=[
-  {id:'a-first',type:'operation',title:'shell',status:'completed',at:start,data:{target:'演示主机 A',arguments:{command:'uptime'}}},
-  {id:'b',type:'operation',title:'execute_sql',status:'completed',at:start,data:{target:'演示数据库 B',arguments:{sql:'SELECT 1'}}},
-  {id:'a-latest',type:'operation',title:'read',status:'running',at:start,data:{target:'演示主机 A',arguments:{path:'/reports/current.txt'}}},
-  {id:'prose',type:'message',status:'running',at:start,content:'继续生成回复'},
- ];
- const html=renderToStaticMarkup(createElement(TurnExecutionDetails,{timing,cards,details:[createElement('span',{key:'details'},'完整过程')]}));
- assert.ok(html.includes('最新步骤：读取 current.txt · 演示主机 A'));
- assert.ok(html.includes('data-glyph="lakeFile"'));
- assert.ok(html.includes('turn-current-step-label'));
- assert.ok(html.includes('aria-expanded="false"')&&html.includes('aria-hidden="true" inert=""'));
- assert.equal((html.match(/class="turn-current-step"/g)??[]).length,1);
- const thoughts=renderToStaticMarkup(createElement(TurnExecutionDetails,{timing,cards:[{id:'thought',type:'thinking',status:'completed',at:start,content:'分析'}],details:[createElement('span',{key:'details'},'思考记录')]}));
- assert.ok(!thoughts.includes('turn-current-step'),'reasoning alone must not invent an executed step');
+test('finished metadata drops the last operation caption even when saved cards still say running',()=>{
+ const latest:AICard={id:'op',type:'operation',title:'shell',status:'running',at:start,data:{target:'演示主机',arguments:{command:'uptime'}}};
+ for(const status of ['completed','failed','cancelled','interrupted'] as const){
+  const html=renderToStaticMarkup(createElement(TurnExecutionDetails,{timing:{...timing,status},view:{status:'running',cards:[latest]} as never,cards:[latest],detailNotice:'2 项未执行',details:[createElement('span',{key:'details'},'完整过程')]}));
+  assert.ok(!html.includes('turn-current-step')&&!html.includes('最新步骤：'),status);
+  assert.ok(html.includes('2 项未执行')&&html.includes('aria-expanded="false"'),status);
+  assert.ok(html.includes('完整过程')&&html.includes('aria-hidden="true" inert=""'),'history is retained for manual review');
+ }
 });
 
 test('latest-step caption hides while expanded and stops sweeping on attention or completion',()=>{
@@ -133,6 +126,6 @@ test('latest-step caption hides while expanded and stops sweeping on attention o
   assert.ok(!html.includes('execution-icon-water'),status);
  }
  const ended=render({timing,latestStep:{...latestStep,status:'completed'},disclosure});
- assert.ok(ended.includes('turn-current-step')&&!ended.includes('status-text--active'));
+ assert.ok(!ended.includes('turn-current-step')&&!ended.includes('status-text--active'));
  assert.ok(!render({timing,latestStep,disclosure}).includes('execution-icon-water'),'stale running records stay static after the turn ends');
 });
