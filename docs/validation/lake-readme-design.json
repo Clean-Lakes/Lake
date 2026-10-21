@@ -1,40 +1,59 @@
 {
-  "date": "2026-10-16",
-  "purpose": "Minimal README and current-product screenshots",
+  "date": "2026-10-21",
+  "version": "0.3.21",
+  "purpose": "English default README, Chinese language switch, and refreshed master macOS presentation images",
+  "sourceCommit": "8a0f63962e4d110b8eb20eaacc464a9ca63d77cb",
+  "sourceBranch": "master",
   "assets": [
     {
       "path": "docs/images/lake-workbench-light.jpg",
-      "bytes": 79058,
-      "sha256": "5ebf76495aa6c6d42cb8b6b4d33ef267db7010305d86b4915329620c6f12f2e4"
+      "bytes": 83976,
+      "sha256": "6064b663378e8e5bf82f99934a394022c49509a9f8990b4f418d9befe4a1ca85",
+      "size": [
+        1440,
+        900
+      ]
     },
     {
       "path": "docs/images/lake-workbench-dark.jpg",
-      "bytes": 78047,
-      "sha256": "7361d90f9cf0d561aae1badc2d34b456d834d02109b27a2780c6352cbb8e9130"
+      "bytes": 83210,
+      "sha256": "8e5b187fa26170f5f54508dcf1b128454b1cc7642778a53d115eb7f303a7c980",
+      "size": [
+        1440,
+        900
+      ]
     }
   ],
-  "provenance": "Production React App rendered with fictional read-only demo records. No model calls, backend or resource commands.",
+  "provenance": "Unmodified master React App and read-only fictional fixture, rendered in Chrome with the fixture’s macOS presentation frame. Not a native OS capture. Resource folders expanded through the UI before capture. No backend or application home used.",
+  "fixture": "web-agent/web/test/fixtures/readme-macos.html",
   "checks": {
-    "relativeLinks": [
-      "CONTRIBUTING.md",
-      "LICENSE-APACHE",
-      "client/macos/README.md",
-      "client/windows/README.md",
+    "defaultLanguage": "English (README.md)",
+    "chineseTranslation": "README.zh-CN.md",
+    "languageSwitch": "Relative links in both directions",
+    "lightAndDark": "visually reviewed",
+    "viewport": [
+      1440,
+      900
+    ],
+    "trafficLights": 3,
+    "devBadge": false,
+    "realProjectOrConnectionData": false,
+    "modelOrResourceOperations": false,
+    "externalNetworkRequests": 0,
+    "pageErrors": [],
+    "horizontalOverflow": false,
+    "composerAndWorkspaceVisible": true,
+    "resourceFoldersExpanded": true,
+    "specialistRoles": 4,
+    "READMEImageLinks": [
       "docs/images/lake-workbench-dark.jpg",
       "docs/images/lake-workbench-light.jpg",
-      "docs/sre-collaboration.md",
-      "web-agent/README.md"
+      "docs/images/wechat.svg"
     ],
-    "lightAndDarkCapture": "visually reviewed",
-    "desktop": "real resource navigation, four specialist identities and completed recovery example",
-    "mobile": {
-      "viewportWidth": 390,
-      "horizontalOverflow": false
-    },
-    "quickStartAnchor": "verified",
-    "developerDetails": "collapsed by default; expansion shows signed Dev build instructions",
-    "frontendTypecheck": "passed",
-    "fixtureTypecheck": "passed"
+    "githubMarkdownRender": "Passed for both languages (GitHub Markdown API)",
+    "localLinks": "All targets exist",
+    "quickStartAnchors": "English and Chinese fragment links match their rendered headings"
   },
-  "preview": "docs/validation/lake-readme-preview.jpg"
+  "scope": "Documentation and image assets only. No application source changes; native Dev integration and application tests not run.",
+  "cleanup": "Temporary Vite host stopped after capture. No Dev or production application, home, credentials, or system theme modified."
 }
