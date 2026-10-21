@@ -16,7 +16,7 @@ func (b *Server) strategyExperimentRoute(w http.ResponseWriter, r *http.Request,
 		strategyFail(404, "project_required")
 	}
 	if suffix == "/fixtures" && r.Method == "GET" {
-		reply(w, 200, Object{"items": strategy.Fixtures(), "mode": "synthetic_snapshot", "arms": []string{"baseline", "assets"}, "correction": false})
+		reply(w, 200, Object{"items": strategy.Fixtures(), "mode": "synthetic_snapshot", "arms": []string{"baseline", "assets"}, "correction": false, "boundedOptimization": Object{"supported": true, "runs": 5, "maxRevisions": 2, "onlineCorrection": false}})
 		return true
 	}
 	if suffix == "/experiments" {
@@ -29,10 +29,11 @@ func (b *Server) strategyExperimentRoute(w http.ResponseWriter, r *http.Request,
 		}
 		if r.Method == "POST" {
 			in := strategyBody[struct {
-				Ref         strategy.RevisionRef `json:"ref"`
-				CaseIDs     []string             `json:"caseIds"`
-				Repetitions int                  `json:"repetitions"`
-				SkillNames  []string             `json:"skillNames"`
+				Ref          strategy.RevisionRef `json:"ref"`
+				CaseIDs      []string             `json:"caseIds"`
+				Repetitions  int                  `json:"repetitions"`
+				SkillNames   []string             `json:"skillNames"`
+				Optimization bool                 `json:"optimization,omitempty"`
 			}](r, "ref", "caseIds", "repetitions", "skillNames")
 			if in.Ref.Validate() != nil || len(in.CaseIDs) < 1 || len(in.CaseIDs) > 3 || len(in.SkillNames) > 4 {
 				strategyFail(400, "invalid_experiment")
@@ -81,6 +82,7 @@ func (b *Server) strategyExperimentRoute(w http.ResponseWriter, r *http.Request,
 				strategyFail(409, "skill_source_changed")
 			}
 			frozen := strategyExperimentFrozen{MemoryEpoch: integer(memory["epoch"]), Asset: view.Value, Cases: cases, Repetitions: in.Repetitions, SharedContext: shared, ContextHash: strategy.ContentHash(shared), SkillHashes: hashes, ModelRef: ai.ModelIdentity(*model), ModelHash: experimentModelHash(*model), ContextWindow: model.ContextWindow, MaxOutput: model.MaxOutput, ReasoningEffort: model.ReasoningEffort, Budget: effective.Settings.Budget}
+			frozen.Optimization = in.Optimization
 			reply(w, 200, strategyMust(b.Store.createStrategyExperiment(ctx, key, frozen)))
 			return true
 		}
@@ -102,6 +104,10 @@ func (b *Server) strategyExperimentRoute(w http.ResponseWriter, r *http.Request,
 		if r.Method == "POST" && len(parts) == 3 && parts[2] == "cancel" {
 			strategyBody[struct{}](r)
 			reply(w, 200, strategyMust(b.Store.CancelStrategyJob(ctx, id, key)))
+			return true
+		}
+		if r.Method == "POST" && len(parts) == 3 && (parts[2] == "resume" || parts[2] == "save-candidate") {
+			b.strategyOptimizationAction(w, r, ctx, id, key, parts[2])
 			return true
 		}
 		if r.Method == "DELETE" && len(parts) == 2 {
@@ -131,6 +137,16 @@ func strategyExperimentModel(model ai.Model) ai.Model {
 	return model
 }
 func (b *Server) strategyExperimentReport(ctx StrategyContext, id string) (Object, error) {
+	optimization, err := strategyCall(b.Store, false, func() bool {
+		b.Store.strategyJob(ctx, id)
+		return b.Store.row("SELECT jobId FROM strategyOptimizations WHERE jobId=?", id) != nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if optimization {
+		return b.strategyOptimizationReport(ctx, id)
+	}
 	return strategyCall(b.Store, false, func() Object {
 		job := b.Store.strategyJob(ctx, id)
 		experiment := b.Store.row("SELECT * FROM strategyExperiments WHERE jobId=?", id)

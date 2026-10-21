@@ -37,6 +37,9 @@ type Options struct {
 type Server struct {
 	Extensions         *extensions.Manager
 	draftCompletions   sync.Map
+	progressSummaryMu  sync.Mutex
+	progressSummaries  map[string]*progressSummaryState
+	progressRunning    int
 	scheduleMu         sync.Mutex
 	schedulerWorkers   sync.WaitGroup
 	workflowMu         sync.Mutex
@@ -789,6 +792,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if method == "POST" {
+				if op == "progress-summary" {
+					b.progressSummaryRoute(w, r, id)
+					return
+				}
 				if op == "reasoning" {
 					reply(w, 200, b.setReasoning(r.Context(), id, body(w, r, 16384)))
 					return

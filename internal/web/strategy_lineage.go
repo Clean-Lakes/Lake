@@ -1,6 +1,9 @@
 package web
 
-import "github.com/Clean-Lakes/Lake/internal/strategy"
+import (
+	"github.com/Clean-Lakes/Lake/internal/strategy"
+	"strings"
+)
 
 // Only existing real user messages can be registered here. Tool, evaluation
 // and Skill provenance need their own trusted adapters in P4/P5; there is no
@@ -50,6 +53,11 @@ func (s *Store) ForgetStrategySource(ctx StrategyContext, id, key string, revoke
 			status = "revoked"
 		}
 		s.exec("UPDATE strategySourceEvents SET availability=?,summary='' WHERE id=?", status, id)
+		if source["kind"] == "fixture_evaluation" && strings.HasPrefix(stringOf(source["originKey"]), "experiment:") {
+			experiment := strings.TrimPrefix(stringOf(source["originKey"]), "experiment:")
+			s.eraseStrategyExperiments("jobId=?", experiment)
+			s.strategyInvalidateJobs("id=?", experiment)
+		}
 		s.exec("UPDATE strategyLearningTurns SET snapshotJSON='' WHERE sourceId=?", id)
 		s.eraseStrategyExperiments("jobId IN (SELECT jobId FROM strategyJobSources WHERE sourceId=?)", id)
 		s.exec("UPDATE strategyProposalRuns SET resultJSON='' WHERE jobId IN (SELECT jobId FROM strategyJobSources WHERE sourceId=?)", id)
