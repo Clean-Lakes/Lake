@@ -6,7 +6,7 @@ import (
 )
 
 func TestStrategyLearningCapturesOnlyOptedInRealSignals(t *testing.T) {
-	for _, mode := range []string{"correction", "failure", "ordinary", "unknown", "unpaired", "off", "worker", "workflow", "role", "sre", "cancelled"} {
+	for _, mode := range []string{"correction", "failure", "ordinary", "unknown", "explicit_unknown", "not_executed", "tool_cancelled", "unpaired", "off", "worker", "workflow", "role", "sre", "cancelled"} {
 		t.Run(mode, func(t *testing.T) {
 			e := &Engine{}
 			s := &session{state: State{View: View{Session: "session", RootTurnID: "turn", TurnStartedAt: timestamp(), TurnFinishedAt: timestamp()}, History: []Message{}, Checkpoints: []int{0}}}
@@ -35,10 +35,19 @@ func TestStrategyLearningCapturesOnlyOptedInRealSignals(t *testing.T) {
 				status = "cancelled"
 				input.UserText = "以后请用中文回答。"
 			}
-			if mode == "failure" || mode == "unknown" || mode == "unpaired" {
+			if mode == "failure" || mode == "unknown" || mode == "explicit_unknown" || mode == "not_executed" || mode == "tool_cancelled" || mode == "unpaired" {
 				result := `{"status":"failed","error":"raw-private-diagnostics"}`
 				if mode == "unknown" {
 					result = `{"error":"interrupted","outcome":"unknown; not replayed"}`
+				}
+				if mode == "explicit_unknown" {
+					result = `{"status":"unknown","error":"unknown remote result"}`
+				}
+				if mode == "not_executed" {
+					result = `{"status":"not_executed","error":"approval denied"}`
+				}
+				if mode == "tool_cancelled" {
+					result = `{"status":"cancelled","error":"cancelled before execution"}`
 				}
 				if mode != "unpaired" {
 					s.state.History = append(s.state.History, Message{Role: "assistant", Calls: []Call{{ID: "call", Name: "read"}}})

@@ -84,7 +84,7 @@ func (e *Engine) collectStrategySnapshot(s *session, c Config, input TurnInput, 
 			}
 			if strings.HasPrefix(str(result["outcome"]), "unknown") {
 				status = "unknown"
-			} else if result["error"] != nil && result["error"] != false && result["error"] != "" {
+			} else if status == "unverified" && result["error"] != nil && result["error"] != false && result["error"] != "" {
 				status = "failed"
 			}
 		}
