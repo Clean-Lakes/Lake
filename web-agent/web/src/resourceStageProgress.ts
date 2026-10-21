@@ -2,7 +2,7 @@ import type {TranscriptEntry} from './timeline';
 import type {ConversationGroup} from './conversation-progress-model';
 import {isAssistantProse} from './completedTurnProse';
 
-export type ResourceStages={byResource:Map<string,TranscriptEntry[]>;shared:TranscriptEntry[];ids:Set<string>};
+export type ResourceStages={byResource:Map<string,TranscriptEntry[]>;overall:TranscriptEntry[];ids:Set<string>};
 const prose=(entry:TranscriptEntry)=>entry.card?.content??entry.message?.text??'';
 const object=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'?value as Record<string,unknown>:{};
 const contains=(body:string,name:string)=>{
@@ -14,12 +14,14 @@ const contains=(body:string,name:string)=>{
 };
 
 /** A view projection only: stage text replaces the previous preview, never its
- * stored evidence. Prefer explicit identity, then exact names, then a single
- * preceding resource scope. Cross-resource/ambiguous prose stays shared. */
+ * stored evidence. Prefer explicit identity, then exact names, then the preceding
+ * resource batch. A joint result belongs to every resource in that batch;
+ * unscoped narration updates the single overall progress slot below the divider. */
 export function resourceStageProgress(turn:TranscriptEntry[],groups:ConversationGroup[],live:boolean,completed:boolean):ResourceStages {
- const result:ResourceStages={byResource:new Map(),shared:[],ids:new Set()};
+ const result:ResourceStages={byResource:new Map(),overall:[],ids:new Set()};
  if(!live&&!completed||turn.some(entry=>entry.agentRun||entry.sre))return result;
  const rows=groups.filter(group=>group.progress&&group.resource);
+ if(!rows.length)return result;
  const owner=new Map(rows.flatMap(group=>group.entries.map(entry=>[entry.id,group] as const)));
  let lastTool=-1;
  turn.forEach((entry,i)=>{if(entry.card&&['operation','shell'].includes(entry.card.type))lastTool=i;});
@@ -38,15 +40,19 @@ export function resourceStageProgress(turn:TranscriptEntry[],groups:Conversation
    hasOperation=true;
    continue;
   }
-  if(!isAssistantProse(entry)||!prose(entry).trim()||!seen.size||index===final)continue;
+  if(!isAssistantProse(entry)||!prose(entry).trim()||index===final)continue;
   if(entry.card&&!['running','completed','success','succeeded'].includes(entry.card.status))continue;
   const data=object(entry.card?.data),ref=typeof data.resource_id==='string'?data.resource_id:undefined;
   const matches=[...seen].filter(row=>ref?row.resource?.id===ref:
    [row.resource?.name,row.resource?.id].some(name=>!!name&&contains(prose(entry),name)));
-  const target=matches.length===1?matches[0]:matches.length===0&&!ref&&!unknown&&scope.size===1?[...scope][0]:undefined;
-  const key=target?.entries[0]!.id;
-  if(key){const history=result.byResource.get(key)??[];history.push(entry);result.byResource.set(key,history);scope=new Set([target!]);unknown=false;}
-  else {result.shared.push(entry);scope=new Set();unknown=true;}
+  const targets=matches.length?matches:!ref&&!unknown?[...scope]:[];
+  if(targets.length){
+   for(const target of targets){
+    const key=target.entries[0]!.id,history=result.byResource.get(key)??[];
+    history.push(entry);result.byResource.set(key,history);
+   }
+   scope=new Set(targets);unknown=false;
+  } else {result.overall.push(entry);scope=new Set();unknown=true;}
   result.ids.add(entry.id);hasOperation=false;
  }
  return result;
