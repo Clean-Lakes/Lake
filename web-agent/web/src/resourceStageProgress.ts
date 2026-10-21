@@ -15,8 +15,8 @@ const contains=(body:string,name:string)=>{
 
 /** A view projection only: stage text replaces the previous preview, never its
  * stored evidence. Prefer explicit identity, then exact names, then the preceding
- * resource batch. A joint result belongs to every resource in that batch;
- * unscoped narration updates the single overall progress slot below the divider. */
+ * single-resource batch. Ambiguous/joint prose feeds the overall synthesis, never
+ * cloned into resource rows. Canonical repeated prose has one projected owner. */
 export function resourceStageProgress(turn:TranscriptEntry[],groups:ConversationGroup[],live:boolean,completed:boolean):ResourceStages {
  const result:ResourceStages={byResource:new Map(),overall:[],ids:new Set()};
  if(!live&&!completed||turn.some(entry=>entry.agentRun||entry.sre))return result;
@@ -30,6 +30,7 @@ export function resourceStageProgress(turn:TranscriptEntry[],groups:Conversation
  let final=-1;
  if(completed)turn.forEach((entry,i)=>{if(i>lastTool&&isAssistantProse(entry)&&!!prose(entry).trim()&&(!entry.card||entry.card.status==='completed'))final=i;});
  if(completed&&(lastTool<0||final<0||turn.slice(final+1).some(entry=>entry.action||entry.card?.type==='error')))return result;
+ const candidates:{entry:TranscriptEntry;target?:ConversationGroup;index:number}[]=[];
  const seen=new Set<ConversationGroup>();
  let scope=new Set<ConversationGroup>(),unknown=false,hasOperation=false;
  for(const [index,entry] of turn.entries()){
@@ -46,14 +47,25 @@ export function resourceStageProgress(turn:TranscriptEntry[],groups:Conversation
   const matches=[...seen].filter(row=>ref?row.resource?.id===ref:
    [row.resource?.name,row.resource?.id].some(name=>!!name&&contains(prose(entry),name)));
   const targets=matches.length?matches:!ref&&!unknown?[...scope]:[];
-  if(targets.length){
-   for(const target of targets){
-    const key=target.entries[0]!.id,history=result.byResource.get(key)??[];
-    history.push(entry);result.byResource.set(key,history);
-   }
-   scope=new Set(targets);unknown=false;
-  } else {result.overall.push(entry);scope=new Set();unknown=true;}
+  // A shared batch proves involvement, not ownership of each sentence. Without
+  // one explicit owner, keep the original only as input to overall synthesis.
+  candidates.push({entry,target:targets.length===1?targets[0]:undefined,index});
+  if(targets.length){scope=new Set(targets);unknown=false;}
+  else {scope=new Set();unknown=true;}
   result.ids.add(entry.id);hasOperation=false;
+ }
+ // Distinct message IDs may carry the same paragraph. Collapse formatting-only
+ // repeats; conflicting owners become joint evidence rather than two previews.
+ const unique=new Map<string,{entry:TranscriptEntry;target?:ConversationGroup;index:number}>();
+ for(const candidate of candidates){
+  const key=prose(candidate.entry).normalize('NFKC').replace(/[\s`*]/gu,'');
+  const previous=unique.get(key);
+  const target=previous&&previous.target!==candidate.target?undefined:candidate.target;
+  unique.set(key,{...candidate,target});
+ }
+ for(const {entry,target} of [...unique.values()].sort((a,b)=>a.index-b.index)){
+  if(target){const key=target.entries[0]!.id;result.byResource.set(key,[...(result.byResource.get(key)??[]),entry]);}
+  else result.overall.push(entry);
  }
  return result;
 }

@@ -145,3 +145,15 @@
 ![深色窄窗口与迟到响应保护](overall-progress-synthesis-dark.jpg)
 
 同步 develop P6 `74c242c0` 后，实际测试源码为 `d19f92abe10604a79bdf2421b515dfb9abca5600`：前端 380 项与生产构建通过；`go test -race ./internal/strategy` 通过；`go test -race -p 1 ./internal/strategy ./internal/web -run 'Test.*(ProgressSummary|StrategyOptimization|StrategyExperiment|StrategyLearning)'` 的 Web 相关回归 53.528 秒通过（strategy 包该名称筛选没有用例，故另行整包运行）；`go vet ./internal/ai ./internal/web ./internal/strategy` 与 ADK 边界通过。前述完整 AI/Web 两包结果是同步 P6 前本轮结果，未冒充同步后完整整包回归。此后提交只补充验证记录，应用源码不变。
+
+## 修正：资源阶段唯一归属与跨资源文本去重
+
+用户实际截图仍在两个资源下显示同一段“传完并放好了……”；根因为旧投影把一个多资源操作批次中的整段播报复制给全部参与资源。本节替代先前“联合阶段同时展示于各资源”的方案。现在仅唯一明确资源 ID/名称或唯一资源操作上下文可产生资源预览；联合、歧义或归属冲突的结果只参与现有底部综合总结，不新增整体进展卡片、不猜测源端/目标端归属。资源下保留自己的最新唯一结果。
+
+同时按 NFKC 规范化、忽略空白/反引号/粗体标记后的正文去重，不能只依赖消息 ID。同一资源的重复播报合并为最后一次，不虚增历史条目；不同资源重复同段时撤去资源归属，作为唯一联合证据参与总结，第三次重复也不能恢复任意归属。全部原始消息和证据保留，历史回看不删除数据。
+
+382 项前端测试与 TypeScript/Vite 生产构建通过，既有大分块提示仍在。本轮未改变后端、模型请求、操作或权限，无需重复 Go 回归。新增用例覆盖联合结果不克隆、IP 前缀不误归属、不同消息 ID/Markdown 格式重复、重复回放、第三次播报不恢复冲突归属，以及原始记录保留。虚构真实组件夹具 `?dedup-proof` 故意向两个资源注入同段原文，各资源只展示不同的独有结果；重复段落在资源预览中为零，底部为综合总结。完成后只保留最终回答，480px 深色无横向溢出。未对真实资源发送操作，未重启用户 Dev。
+
+![资源阶段唯一归属](resource-stage-no-duplicates.jpg)
+
+![去重后的深色窄窗口](resource-stage-no-duplicates-dark.jpg)
