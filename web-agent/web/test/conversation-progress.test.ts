@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import type {AICard,SessionSnapshot} from '../../shared/contracts';
+import type {AICard,Resource,SessionSnapshot} from '../../shared/contracts';
 import {conversationDisplayGroups,conversationGroups,currentProgressGroupId} from '../src/conversation-progress-model';
 import {AITranscript} from '../src/AIPanel';
 
@@ -41,7 +41,7 @@ test('active presentation preserves approvals, errors, questions and child contr
  assert.deepEqual(after.filter(group=>group.entries[0]!.id!=='reply'),before.filter(group=>group.entries[0]!.id!=='reply'));
  assert.equal(after[0]!.entries[0]!.id,'reply');
 });
-test('conversation keeps execution in a collapsed time disclosure while activity retains its projection',()=>{
+test('conversation opens the current live process and keeps historical records collapsed',()=>{
  const oldUser={...user.message!,id:'old-user',createdAt:'2026-10-18T07:00:00Z'};
  const oldTool={...card('old-tool','operation').card,at:'2026-10-18T07:00:01Z'};
  const oldReply={...card('old-reply','message').card,at:'2026-10-18T07:00:02Z'};
@@ -50,7 +50,10 @@ test('conversation keeps execution in a collapsed time disclosure while activity
   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
   const position=(id:string)=>html.indexOf(`data-conversation-entry="${id}"`);
   assert.ok(position('old-tool')<position('old-reply'),'historical order stays unchanged');
-  assert.ok(html.includes('class="turn-execution-details" hidden=""'),status);
+  assert.ok(html.includes('class="turn-execution-details" aria-hidden="true" inert=""'),status);
+  const current=html.slice(html.indexOf('id="conversation-turn-s-user"'));
+  assert.equal(current.includes('class="turn-execution-details is-open"'),['running','waiting_approval'].includes(status),status);
+  assert.ok(!current.includes('thinking-steps'),'resource operations stay folded until requested');
   assert.ok(html.indexOf('aria-label="执行详细过程"')<position('tool'));
   assert.ok(position('tool')<position('reply'),'the visible reply remains outside the hidden process body');
   const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:'activity'}));
@@ -251,4 +254,22 @@ test('collapsed process retains commands and alerts without hiding prose or pend
  const bodyStart=html.indexOf('class="turn-execution-details"'),bodyEnd=html.indexOf('data-conversation-entry="reply"');
  assert.ok(html.slice(bodyStart,bodyEnd).includes('执行失败'),'recorded tool summary remains inside the hidden process body');
  assert.ok(html.slice(bodyEnd).includes('最终结果仍然可见'));
+});
+
+
+test('catalog identity joins different actions into one resource row and never merges same-name IDs',()=>{
+ const resources=[{id:'host-a',name:'演示节点',kind:'ssh'},{id:'db-b',name:'演示数据库',kind:'database'}] as Resource[];
+ const scoped=(id:string,title:string,target:string,ref?:string)=>({...card(id,'operation'),card:{...card(id,'operation').card,title,data:{target,arguments:ref?{asset_ref:ref}:{}}}});
+ const entries=[scoped('shell','shell','演示节点','host-a'),scoped('query','execute_sql','演示数据库','db-b'),scoped('read','read','host-a'),scoped('handle','task_output','演示节点','host-a')];
+ const rows=conversationGroups(entries,resources);
+ assert.deepEqual(rows.map(row=>[row.resource?.name,row.entries.map(entry=>entry.id)]),[['演示节点',['shell','read','handle']],['演示数据库',['query']]]);
+ assert.equal(rows[0]!.resource?.kind,'ssh');
+ assert.equal(currentProgressGroupId(entries,true,resources),'shell');
+ assert.equal(conversationGroups([scoped('a','shell','同名','a'),scoped('b','read','同名','b')],[{id:'a',name:'同名'},{id:'b',name:'同名'}] as Resource[]).length,2);
+ const snapshot={session:{id:'s'},messages:[user.message],actions:[],resources,ai:{session:'s',status:'running',cardsOffset:0,cards:entries.map(entry=>entry.card)}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.equal((html.match(/class="thinking-timeline /g)||[]).length,2);
+ assert.ok(html.includes('<span class="thinking-label">演示节点</span>'));
+ assert.ok(html.includes('data-glyph="lakeDatabase"'));
+ assert.ok(!html.includes('thinking-tool-detail')&&!html.includes('thinking-steps'),'resource children and payloads are lazy');
 });

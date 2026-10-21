@@ -3,7 +3,7 @@ import type { ReasoningSettings } from "../../shared/contracts";
 import { api, readableError } from "./api";
 import { reasoningSaveQueue } from "./reasoningSaveQueue";
 
-const labels: Record<string, string> = { "": "默认", none: "关闭", minimal: "极低", low: "低", medium: "中", high: "高", xhigh: "极高", max: "最高", ultra: "极致" };
+import {reasoningLabels as labels} from "./reasoningLabels";
 
 export type ReasoningSelectorProps = {
   session: string; modelId?: string | null; disabled: boolean; disabledReason?: string; onSaving: (saving: boolean, session?:string) => void;

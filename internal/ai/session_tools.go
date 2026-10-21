@@ -270,14 +270,14 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call) (any, e
 	s.mu.Lock()
 	s.questionReply = reply
 	s.state.View.Question = req
-	err := e.save(s)
+	err := e.saveHumanInputState(s)
 	e.notify(s, "question", req)
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
 		s.questionReply = nil
 		s.state.View.Question = nil
-		_ = e.save(s)
+		_ = e.saveHumanInputState(s)
 		e.notify(s, "question", nil)
 		s.mu.Unlock()
 	}()

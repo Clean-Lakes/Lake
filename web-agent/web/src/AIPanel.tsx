@@ -1,3 +1,8 @@
+import {ReplyActivity} from './ReplyActivity';
+import {turnStatus} from './turnStatus';
+import {completedTurnInterimIds,isAssistantProse} from './completedTurnProse';
+import {SettledReply} from './SettledReply';
+import {OperationOutcomes} from './OperationOutcomes';
 import {MessageText} from './MessageText';
 import {MessageImages} from './MessageImages';
 import {DisclosureSummary} from './DisclosureSummary';
@@ -15,6 +20,10 @@ import {Glyph} from './Icons';
 import type {SREPlanStep} from '../../shared/contracts';
 import { AgentQuestion } from "./AgentQuestion";
 import { ReplyDuration } from "./ReplyDuration";
+import {overallProgressSummary} from './overall-progress-model';
+import {OverallProgressSummary} from './OverallProgressSummary';
+import {resourceStageProgress} from './resourceStageProgress';
+import {ResourceStageSummary} from './ResourceStageSummary';
 import {TurnExecutionDetails} from "./TurnExecutionDetails";
 import { timingForTurn } from "./replyDurationState";
 import {displayAiError} from "./aiErrors";
@@ -95,9 +104,12 @@ function TranscriptMessage({message,sessionId,resources}:{message:SessionSnapsho
           {!!message.images?.length&&<MessageImages images={message.images}/>}
         </div>;
 }
-export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation" }: { mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean }) {
+export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh }: { refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean }) {
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
+  // Retain an observed completion when a legacy turn has no saved timing and
+  // a newer user turn takes over the engine view. Do not restore its narration.
+  const settledTurnIds=useRef(new Set<string>());
   const restoredCardIds=useRef(new Set((snapshot.ai?.cards??[]).map(card=>card.id)));
   const restoredText=useRef(new Set([...(snapshot.ai?.cards??[]).filter(c=>!!c.content).map(c=>c.id),...(snapshot.ai?.agentRuns??[]).filter(r=>!!r.liveText).map(r=>r.liveTextId)]));
   const [sreTaskFilter,setSRETaskFilter]=useState('');
@@ -134,12 +146,14 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
   const latestUserAt = latestUser?.createdAt || "";
   const currentTurn=latestUser?turns.find(turn=>turn.some(entry=>entry.message?.id===latestUser.id))??[]:[];
   const currentTiming=timingForTurn(currentTurn,snapshot);
+  const currentTurnState=turnStatus(currentTiming,snapshot.ai,currentTurn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt,Date.now());
+  const replyWorking=snapshot.ai?.status==='running'&&currentTurnState.live&&!currentTurnState.waiting&&!stopping&&!disabled;
   const liveConversation=['running','waiting_approval'].includes(snapshot.ai?.status||'')&&(!currentTiming||currentTiming.status==='running');
   const conversationTurnEntries=(turn:typeof entries)=>{
     const stopped=timingForTurn(turn,snapshot)?.status==='cancelled';
     return turn.filter(entry=>!isFileChangeCard(entry.card)&&!(stopped&&entry.card?.type==='error'&&entry.card.status==='cancelled'));
   };
-  const progressingId=currentProgressGroupId(currentTurn.filter(entry=>!isFileChangeCard(entry.card)),snapshot.ai?.status==='running'&&!snapshot.ai.question&&(!currentTiming||currentTiming.status==='running'));
+  const progressingId=currentProgressGroupId(currentTurn.filter(entry=>!isFileChangeCard(entry.card)),snapshot.ai?.status==='running'&&!snapshot.ai.question&&(!currentTiming||currentTiming.status==='running'),snapshot.resources);
   if (mode === "evidence") {
     const evidence = [...new Map([...(snapshot.evidence || []), ...(snapshot.ai?.agentRuns || []).flatMap(run => run.evidence || []),...mergedSRE.flatMap(t=>t.attempts.flatMap(a=>a.evidence??[]))].filter(item => item.sessionId === snapshot.session.id).map(item => [item.id,item])).values()];
     const reports = cards.filter(card => ["chart", "image"].includes(card.type));
@@ -149,17 +163,29 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
     {(snapshot.sre?.tasks.length??0)>=20&&sreCursor!==''&&<button type="button" disabled={loadingSRE} onClick={()=>void loadOlderSRE()}>{loadingSRE?'正在加载…':'加载更早的 SRE 任务'}</button>}
     {mode==='activity'&&mergedSRE.length>1&&<label className="sre-task-filter">任务<AppSelect label="筛选 SRE 任务" value={sreTaskFilter} onChange={event=>setSRETaskFilter(event.target.value)}><option value="">全部任务</option>{mergedSRE.map(task=><option key={task.id} value={task.id}>{task.goal}</option>)}</AppSelect></label>}
     <ConversationDirectory key={snapshot.session.id} sessionId={snapshot.session.id} items={directoryItems} onJump={jumpTo} onLatest={() => jumpTo()} onOpen={onInspect} onLoadOlder={before > 0 ? () => void loadOlder() : undefined} loading={loading}/>
-    {mode === "activity" && !turns.length && <div className="record-empty"><h2>暂无执行记录</h2><p>工具调用、子 Agent 任务和文件变更会按轮次保留在这里。</p></div>}
+    {mode === 'activity' && <OperationOutcomes session={snapshot.session.id} operations={snapshot.ai?.operationOutcomes ?? []} running={['running', 'waiting_approval'].includes(snapshot.ai?.status ?? '')} disabled={disabled} refresh={refresh}/>}
+    {mode === "activity" && !turns.length && !snapshot.ai?.operationOutcomes?.some(operation => operation.status === "unknown") && <div className="record-empty"><h2>暂无执行记录</h2><p>工具调用、子 Agent 任务和文件变更会按轮次保留在这里。</p></div>}
     {before > 0 && <button type="button" disabled={loading} onClick={() => void loadOlder()}>{loading ? "正在加载…" : "加载更早记录"}</button>}
     {error && <p role="alert">{error}</p>}
     {turns.map((turn, index) => {
-      const groups=mode==='conversation'?conversationDisplayGroups(conversationTurnEntries(turn),turn===currentTurn&&liveConversation):transcriptGroups(turn.filter(entry=>!isFileChangeCard(entry.card)&&activityEntry(entry))).map(entries=>({progress:false,entries}));
+      const groups=mode==='conversation'?conversationDisplayGroups(conversationTurnEntries(turn),turn===currentTurn&&liveConversation,snapshot.resources):transcriptGroups(turn.filter(entry=>!isFileChangeCard(entry.card)&&activityEntry(entry))).map(entries=>({progress:false,entries}));
       const processGroups=mode==='conversation'?groups.filter(group=>group.progress):[];
+      const completed = timingForTurn(turn,snapshot)?.status ?? (turn===currentTurn?snapshot.ai?.status:undefined);
+      const turnId = turn[0]!.id;
+      if (completed==='completed') settledTurnIds.current.add(turnId);
+      else if (completed && completed!=='running') settledTurnIds.current.delete(turnId);
+      const settled = completed?completed==='completed':settledTurnIds.current.has(turnId);
+      const interimIds = mode==='conversation'?completedTurnInterimIds(turn,settled):new Set<string>();
+      const stages=resourceStageProgress(turn,processGroups,mode==='conversation'&&turn===currentTurn&&liveConversation,mode==='conversation'&&settled);
+      const overallIds=new Set(stages.overall.map(entry=>entry.id));
+      const interim = turn.filter(entry=>(interimIds.has(entry.id)&&!stages.ids.has(entry.id))||(settled&&overallIds.has(entry.id)));
+      const stageContent=(entry:typeof turn[number])=>entry.card?<Card key={entry.id} card={entry.card} tags={snapshot.session.tags}/>:entry.message?<TranscriptMessage key={entry.id} message={entry.message} sessionId={snapshot.session.id}/>:null;
       const notices=[['failed','项失败'],['pending','项待确认'],['unknown','项结果待核查'],['background_running','项后台执行中'],['not_executed','项未执行'],['interrupted','项已停止'],['cancelled','项已停止']].flatMap(([status,label])=>{const count=processGroups.flatMap(group=>group.entries).filter(entry=>entry.card?.status===status).length;return count?[`${count} ${label}`]:[];}).join(' · ');
       const timingProps={timing:timingForTurn(turn,snapshot),view:turn.some(entry=>entry.message?.id===latestUser?.id)?snapshot.ai:undefined,cards:turn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt:turn.find(entry=>entry.message?.role==='user')?.at??''};
-      const renderGroup=({entries:group,progress}:ConversationGroup)=>{
+      const overallSummary=overallProgressSummary(turn,processGroups,stages,timingProps.view);
+      const renderGroup=({entries:group,progress,resource}:ConversationGroup)=>{
         const entry = group[0]!;
-        if(progress)return <ReplyArrival key={entry.id} entryId={entry.id} arrive={!restoredCardIds.current.has(entry.id)&&turn.some(item=>item.message?.id===latestUser?.id)}><ThinkingTimeline cards={group.map(item=>item.card!)} live={snapshot.ai?.status==='running'&&(group.some(item=>item.card?.status==='running')||entry.id===progressingId)} continuing={entry.id===progressingId} resourceRow onInspect={onInspect}/></ReplyArrival>;
+        if(progress)return <ReplyArrival key={entry.id} entryId={entry.id} arrive={!restoredCardIds.current.has(entry.id)&&turn.some(item=>item.message?.id===latestUser?.id)}><ThinkingTimeline cards={group.map(item=>item.card!)} live={snapshot.ai?.status==='running'&&(group.some(item=>item.card?.status==='running')||entry.id===progressingId)} continuing={entry.id===progressingId} resource={resource} stage={stages.byResource.has(entry.id)?<ResourceStageSummary entries={stages.byResource.get(entry.id)!} render={stageContent}/>:undefined} resourceRow onInspect={onInspect}/></ReplyArrival>;
         if(mode==='conversation'&&entry.card?.type==='thinking'&&!entry.card.content)return null;
         if(entry.sre){const {task}=entry.sre;const attempt=task.attempts?.find(a=>a.id===entry.sre!.entry.attemptId);const plan=task.plans?.find(p=>p.id===task.runs?.find(r=>r.id===attempt?.planRunId)?.planRevisionId);const step=plan?.steps.find(s=>s.id===attempt?.stepId);return <SRERoleMessage key={entry.id} task={task} entry={entry.sre.entry} snapshot={snapshot} animateInitial={!restoredText.current.has(snapshot.ai?.agentRuns?.find(r=>r.id===entry.sre!.entry.roleRunId)?.liveTextId)} onUpdated={()=>void api.snapshot(snapshot.session.id)} renderApproval={run=>snapshot.ai?<><AIPending attachments={snapshot.messages.flatMap(message=>message.files??[])} session={snapshot.session.id} runId={run.id} agentName={run.name} sreStep={step} view={{...snapshot.ai,pending:run.pending}} refresh={()=>api.aiView(snapshot.session.id)}/>{run.question&&<AgentQuestion session={snapshot.session.id} runId={run.id} request={run.question} refresh={()=>api.aiView(snapshot.session.id)}/>}</>:null}/>;}
         const runs = group.flatMap(item => item.agentRun ? [item.agentRun] : []);
@@ -175,10 +201,12 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
       };
       return <div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)} key={turn[0]!.id}>
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources}/>)}
-      {mode==='conversation'?<TurnExecutionDetails {...timingProps} detailNotice={notices} details={processGroups.map(renderGroup)} onInspect={onInspect}/>:<ReplyDuration {...timingProps}/>}
-      {groups.filter(group=>!processGroups.includes(group)).map(renderGroup)}
+      {mode==='conversation'?<TurnExecutionDetails {...timingProps} detailNotice={notices} details={[...processGroups.map(renderGroup),...(interim.length?[<details className="turn-progress-prose" key="interim-prose"><DisclosureSummary>过程播报 · {interim.length}</DisclosureSummary>{interim.map(entry=><div className="ai-response" key={entry.id}>{entry.card?<Card card={entry.card}/>:entry.message?<TranscriptMessage message={entry.message} sessionId={snapshot.session.id}/>:null}</div>)}</details>]:[])]} onInspect={onInspect}/>:<ReplyDuration {...timingProps}/>}
+      {groups.filter(group=>!processGroups.includes(group)).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} collapsed={group.entries.every(entry=>interimIds.has(entry.id)||stages.ids.has(entry.id))}>{renderGroup(group)}</SettledReply>:renderGroup(group))}
+      {overallSummary&&<SettledReply collapsed={!(turn===currentTurn&&liveConversation)}><OverallProgressSummary summary={overallSummary} session={snapshot.session.id} turnStartedAt={snapshot.ai?.turnStartedAt} live={turn===currentTurn&&liveConversation}/></SettledReply>}
       <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}/>
+      {mode==='conversation'&&turn===currentTurn&&<ReplyActivity active={replyWorking}/>}
     </div>;})}
 
     {mode==='activity'&&mergedSRE.filter(task=>!sreTaskFilter||task.id===sreTaskFilter).map(task=><SREEventHistory key={task.id} task={task}/>)}

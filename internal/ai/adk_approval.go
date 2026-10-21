@@ -136,8 +136,7 @@ func (e *Engine) waitNativeApproval(ctx context.Context, s *session, c Config, p
 				s.state.View.Pending = kept[0]
 			}
 			delete(s.decisions, id)
-			s.state.View.Status = "running"
-			if err := e.save(s); waitErr == nil && err != nil {
+			if err := e.saveHumanInputState(s); waitErr == nil && err != nil {
 				waitErr = err
 			}
 			s.mu.Unlock()
@@ -192,8 +191,7 @@ func (e *Engine) waitNativeApproval(ctx context.Context, s *session, c Config, p
 		if len(kept) > 0 {
 			s.state.View.Pending = kept[0]
 		}
-		s.state.View.Status = "running"
-		err = e.save(s)
+		err = e.saveHumanInputState(s)
 		s.mu.Unlock()
 		if err != nil {
 			return false, err
@@ -238,7 +236,7 @@ func (e *Engine) waitNativeApproval(ctx context.Context, s *session, c Config, p
 			s.state.View.Cards[i].Status = "pending"
 		}
 	}
-	err = e.save(s)
+	err = e.saveHumanInputState(s)
 	e.notify(s, "approval", s.state.View.Pending)
 	s.mu.Unlock()
 	if err != nil {
@@ -328,7 +326,6 @@ func (e *Engine) settleNativeRejection(s *session, record nativeApproval) error 
 		s.state.View.Pending = kept[0]
 	}
 	delete(s.decisions, record.ID)
-	s.state.View.Status = "running"
 	for i := range s.state.View.Cards {
 		card := &s.state.View.Cards[i]
 		if str(obj(card.Data)["call_id"]) == record.CallID {
@@ -336,7 +333,7 @@ func (e *Engine) settleNativeRejection(s *session, record nativeApproval) error 
 			card.Content = "user rejected this tool call"
 		}
 	}
-	return e.save(s)
+	return e.saveHumanInputState(s)
 }
 
 func (e *Engine) decideNativeApproval(store *storage.Store, s *session, id string, accept bool, confirmation string) (chan bool, error) {

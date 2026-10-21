@@ -1,0 +1,37 @@
+.reply-activity {
+  display: grid;
+  grid-template-rows: 1fr;
+  width: 22px;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  color: var(--reasoning-accent);
+  opacity: 1;
+  /* Own the gap inside the clipped row, so shrinking cannot lift the glyph
+     into the preceding line during a resize or a rapid state change. */
+  margin-block-start: calc(-1 * var(--turn-entry-gap, 12px));
+  pointer-events: none;
+  transition: opacity 180ms ease, grid-template-rows 180ms ease;
+}
+.reply-activity-clip { min-height: 0; overflow: hidden; }
+.reply-activity-breath {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-block-start: var(--turn-entry-gap, 12px);
+  line-height: 0;
+  animation: reply-activity-breathe 2.1s ease-in-out infinite;
+}
+.reply-activity svg { display:block; transform-origin: center; animation: reply-activity-rotate 8.4s linear infinite; }
+.reply-activity.is-leaving { opacity: 0; grid-template-rows: 0fr; }
+.reply-activity.is-leaving .reply-activity-breath, .reply-activity.is-leaving svg { animation-play-state: paused; }
+@keyframes reply-activity-rotate { to { transform: rotate(360deg); } }
+@keyframes reply-activity-breathe {
+  0%, 100% { opacity: .58; transform: scale(.91); }
+  50% { opacity: .96; transform: scale(1); }
+}
+@starting-style { .reply-activity { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .reply-activity { transition: none; }
+  .reply-activity-breath, .reply-activity svg { animation: none; }
+}
