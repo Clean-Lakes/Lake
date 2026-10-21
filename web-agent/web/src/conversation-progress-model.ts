@@ -1,10 +1,25 @@
+import type {Resource} from '../../shared/contracts';
 import type {TranscriptEntry} from './timeline';
 import {transcriptGroups,transcriptTurns} from './timeline';
 
-export type ConversationGroup = {progress:boolean; entries:TranscriptEntry[]};
+export type ProgressResource = {id?:string;name:string;kind?:Resource["kind"]};
+export type ConversationGroup = {progress:boolean; entries:TranscriptEntry[];resource?:ProgressResource};
 const normalStatuses=new Set(['running','completed','succeeded','success']);
 const record=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'?value as Record<string,unknown>:{};
 const text=(value:unknown)=>typeof value==='string'?value.trim():'';
+
+// Resolve only exact, unambiguous catalog identities. A display name must never
+// combine two different resources, and no connection settings enter the view.
+function resourceFor(entry:TranscriptEntry,resources:Resource[]):ProgressResource|undefined {
+ const card=entry.card;
+ if(!card||!['operation','shell'].includes(card.type)||card.title==='ask_user_question')return;
+ const data=record(card.data),args=record(data.arguments);
+ const ref=text(data.resource_id)||text(args.asset_ref),target=text(data.target);
+ const matches=resources.filter(resource=>ref?resource.id===ref:resource.name===target||resource.id===target);
+ if(matches.length===1){const {id,name,kind}=matches[0]!;return {id,name,kind}}
+ if(ref)return {id:ref,name:target||ref};
+ if(target&&!['当前项目/会话','项目资源目录'].includes(target)&&!sessionFamilies[card.title??''])return {name:target};
+}
 
 // Session tools carry a generic target, but their actual scope is defined by
 // the tool contract. Keep domains separate instead of folding every generic
@@ -19,10 +34,11 @@ const sessionFamilies:Record<string,string>={
  list_mcp_servers:'mcp-catalog',list_mcp_tools:'mcp-server',call_mcp_tool:'mcp-server',
 };
 const familyScope:Record<string,string[]>={history:['session_id'],'tool-result':['result_id'],task:['task_id'],'mcp-server':['server_id']};
-function operationGroupKey(entry:TranscriptEntry,targetRefs:Map<string,Set<string>>):string|undefined {
+function operationGroupKey(entry:TranscriptEntry,targetRefs:Map<string,Set<string>>,resource?:ProgressResource):string|undefined {
  const card=entry.card;
  if(!card||!['operation','shell'].includes(card.type)||card.title==='ask_user_question')return;
  const data=record(card.data),args=record(data.arguments),family=sessionFamilies[card.title??''];
+ if(resource?.id)return JSON.stringify(['resource',resource.id]);
  if(family){
   const scope=(familyScope[family]??[]).map(key=>text(args[key]));
   if(scope.some(value=>!value))return;
@@ -41,7 +57,7 @@ function operationGroupKey(entry:TranscriptEntry,targetRefs:Map<string,Set<strin
 /** One resource/family row per user turn, anchored at its first appearance.
  * Later reasoning, prose, other resources and attention states never create
  * another row for the same identity. Stored entries and child controls stay intact. */
-export function conversationGroups(entries:TranscriptEntry[]):ConversationGroup[] {
+export function conversationGroups(entries:TranscriptEntry[],resources:Resource[]=[]):ConversationGroup[] {
  const result:ConversationGroup[]=[];
  for(const turn of transcriptTurns(entries)){
   const rows=new Map<string,ConversationGroup>();
@@ -64,10 +80,12 @@ export function conversationGroups(entries:TranscriptEntry[]):ConversationGroup[
      else {thoughts={progress:true,entries:[entry]};result.push(thoughts)}
      continue;
     }
-    const key=operationGroupKey(entry,targetRefs);
+    const resource=resourceFor(entry,resources);
+    const key=operationGroupKey(entry,targetRefs,resource);
     if(key){
      let row=rows.get(key);
      if(!row){row=thoughts??{progress:true,entries:[]};if(!thoughts)result.push(row);rows.set(key,row)}
+     if(resource&&!row.resource)row.resource=resource;
      row.entries.push(entry);active=row;thoughts=undefined;
     } else result.push({progress:!!entry.card&&['operation','shell'].includes(entry.card.type),entries:[entry]});
    }
@@ -79,10 +97,10 @@ export function conversationGroups(entries:TranscriptEntry[]):ConversationGroup[
 /** Keep visible assistant prose above progress while a turn is still active.
  * Reorder only the presentation groups: stable row IDs, raw tool chronology,
  * exceptional states and decision controls remain intact. */
-export function conversationDisplayGroups(entries:TranscriptEntry[],active=false):ConversationGroup[] {
- if(!active)return conversationGroups(entries);
+export function conversationDisplayGroups(entries:TranscriptEntry[],active=false,resources:Resource[]=[]):ConversationGroup[] {
+ if(!active)return conversationGroups(entries,resources);
  return transcriptTurns(entries).flatMap(turn=>{
-  const groups=conversationGroups(turn);
+  const groups=conversationGroups(turn,resources);
   const firstProgress=groups.findIndex(group=>group.progress);
   if(firstProgress<0)return groups;
   const isProse=(group:ConversationGroup)=>!group.progress&&group.entries.every(entry=>
@@ -94,10 +112,10 @@ export function conversationDisplayGroups(entries:TranscriptEntry[],active=false
 
 /** Render position is anchored at first use, so find the live row by its latest
  * chronological entry rather than by the last displayed row. */
-export function currentProgressGroupId(entries:TranscriptEntry[],live:boolean):string|undefined {
+export function currentProgressGroupId(entries:TranscriptEntry[],live:boolean,resources:Resource[]=[]):string|undefined {
  if(!live)return;
  const tail=entries.filter(entry=>(entry.card?.type!=='thinking'||!!entry.card.content)&&entry.message?.role!=='assistant'&&!['message','text'].includes(entry.card?.type??'')).at(-1);
  if(!tail?.card||!normalStatuses.has(tail.card.status))return;
- const row=conversationGroups(entries).find(group=>group.progress&&group.entries.some(entry=>entry.id===tail.id));
+ const row=conversationGroups(entries,resources).find(group=>group.progress&&group.entries.some(entry=>entry.id===tail.id));
  return row?.entries[0]!.id;
 }

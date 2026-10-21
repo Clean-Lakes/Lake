@@ -1,11 +1,13 @@
 import {useState,useRef,useEffect} from "react";
-import type {AvailableModelEntry,AvailableModels} from "../../shared/contracts";
+import type {AvailableModelEntry,AvailableModels,ReasoningSettings} from "../../shared/contracts";
 import {AppSelect} from "./AppSelect";
 import {ProviderIcon} from "./ProviderIcon";
 import {Glyph} from "./Icons";
 import {currentComposerModel} from "./composerModelState";
 import {ReasoningSelector,type ReasoningSelectorProps} from "./ReasoningSelector";
 import {useNativeModelPanel} from "./nativeModelPanel";
+import {api} from "./api";
+import {currentReasoningLabel} from "./reasoningLabels";
 import {modelBrand} from "./modelBrand";
 
 export type ProviderMenuRequest={providers:{id:string;name:string}[];value:string;anchor:{left:number;top:number;width:number;height:number}};
@@ -13,7 +15,23 @@ export type ComposerModelSelectProps={available:AvailableModels&{loading:boolean
 export function ComposerModelSelect({available,modelName,selection,configured,open,disabled,onOpenChange,onSelect,onSettings,reasoning,presentation,onProviderMenu}:ComposerModelSelectProps) {
   const anchor=useRef<HTMLSpanElement>(null);
   const providerAnchor=useRef<HTMLDivElement>(null);
-  const native=useNativeModelPanel({available,modelName,selection,configured,open,disabled,onOpenChange,onSelect,onSettings,reasoning},anchor);
+  const [level,setLevel]=useState<{session:string;providerId?:string;settings:ReasoningSettings}|null>(null);
+  const [reasoningRevision,setReasoningRevision]=useState(0);
+  const session=reasoning?.session,modelId=reasoning?.modelId,providerId=selection?.providerId;
+  useEffect(()=>{
+    let cancelled=false;
+    if(session&&modelId)void api.reasoning(session).then(settings=>{
+      if(!cancelled&&settings.modelId===modelId)setLevel({session,providerId,settings});
+    }).catch(()=>{if(!cancelled)setLevel(null);});
+    return()=>{cancelled=true;};
+  },[session,modelId,providerId,reasoningRevision]);
+  const trackedReasoning=reasoning?{...reasoning,onSaving:(saving:boolean,savingSession=reasoning.session)=>{
+    reasoning.onSaving(saving,savingSession);
+    // Native popovers have a separate webview. Re-read the saved, model-scoped
+    // setting after either surface finishes, including after it closes.
+    if(!saving&&savingSession===session)setReasoningRevision(value=>value+1);
+  }}:undefined;
+  const native=useNativeModelPanel({available,modelName,selection,configured,open,disabled,onOpenChange,onSelect,onSettings,reasoning:trackedReasoning},anchor);
   const [search,setSearch]=useState("");
   const [providerOpen,setProviderOpen]=useState(false);
   useEffect(()=>{if(!open)setProviderOpen(false);},[open]);
@@ -31,8 +49,10 @@ export function ComposerModelSelect({available,modelName,selection,configured,op
   const visible=sourceRows.filter(row=>`${row.label} ${row.name}`.toLocaleLowerCase().includes(query));
   const note=available.message&&(available.source==="magpie"||!available.models.length)?available.message:"";
   const label=configured?(current?.displayName||modelName?.split("/").pop()||"已配置"):"选择模型";
+  const levelLabel=level&&level.session===session&&level.providerId===providerId?currentReasoningLabel(level.settings,modelId):undefined;
+  const triggerLabel=<span className="composer-model-current"><span className="composer-model-name">{label}</span>{levelLabel&&<span className="composer-model-effort" title={`思考强度：${levelLabel}`}>{levelLabel}</span>}</span>;
   return <span ref={anchor} className="composer-model-anchor"><AppSelect nativePopup={native} selectionLocked={disabled} className={`composer-model-select ${configured?"":"model-missing"}`} popupClassName="composer-model-popup" popupMinWidth={276} popupMaxHeight={420}
-    label={configured?`选择模型：${label}${current?.providerName?` · ${current.providerName}`:""}`:"选择模型"} title={modelName&&label!==modelName?`${label}\n${modelName}`:label} value={current?JSON.stringify([current.providerId,current.modelId]):modelName||""} renderValue={label}
+    label={configured?`选择模型：${label}${levelLabel?` · 思考强度：${levelLabel}`:""}${current?.providerName?` · ${current.providerName}`:""}`:"选择模型"} title={modelName&&label!==modelName?`${label}\n${modelName}`:label} value={current?JSON.stringify([current.providerId,current.modelId]):modelName||""} renderValue={triggerLabel}
     icon={<ProviderIcon brand={modelBrand(modelName||"",current?.displayName,current?.providerName)} size={16}/>}
     open={open} aria-busy={disabled} onOpenChange={next=>{if(next&&disabled) return;if(next) {setSearch("");setSource(current?.providerId??null);}onOpenChange(next);}}
     onChange={event=>{const row=rows.find(row=>row.value===event.target.value);if(row&&!disabled) onSelect(row.model);}}
@@ -48,7 +68,7 @@ export function ComposerModelSelect({available,modelName,selection,configured,op
       {sourceRows.length>8&&<label className="composer-model-search"><Glyph name="search" size={15}/><input autoFocus role="combobox" aria-expanded={open} aria-controls={listId} aria-activedescendant={activeId} aria-autocomplete="list" aria-label="搜索模型" placeholder="搜索当前分类…" value={search} onChange={event=>setSearch(event.target.value)}/></label>}
     </>}
     emptyMessage={available.loading?"正在获取可用模型…":query?"没有找到匹配的模型":note||"暂无可用模型，请先添加供应商。"}
-    popupFooter={<>{reasoning&&<ReasoningSelector key={reasoning.session} {...reasoning}/>}{note&&rows.length>0&&<p className="composer-model-note">{note}</p>}</>}
+    popupFooter={<>{reasoning&&<ReasoningSelector key={reasoning.session} {...trackedReasoning!}/>}{note&&rows.length>0&&<p className="composer-model-note">{note}</p>}</>}
     renderOption={option=>{const row=rows.find(row=>row.value===option.value)!;return <><ProviderIcon brand={modelBrand(row.name,row.label,row.group)} size={16}/><span className="composer-model-label"><span>{row.label}</span>{row.name!==row.label&&<small>{row.name}</small>}</span>{available.imageInputCapabilities?.[row.name]&&<small className="composer-model-capability">视觉</small>}</>;}}
   >{visible.map(row=><option key={row.value} value={row.value} disabled={disabled&&reasoning?.disabled!==false}>{row.label}</option>)}</AppSelect></span>;
 }

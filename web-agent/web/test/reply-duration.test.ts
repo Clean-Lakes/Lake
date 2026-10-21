@@ -105,11 +105,11 @@ test('collapsed execution header follows the latest actual operation across reso
   {id:'a-latest',type:'operation',title:'read',status:'running',at:start,data:{target:'演示主机 A',arguments:{path:'/reports/current.txt'}}},
   {id:'prose',type:'message',status:'running',at:start,content:'继续生成回复'},
  ];
- const html=renderToStaticMarkup(createElement(TurnExecutionDetails,{timing:{...timing,status:'running',finishedAt:''},cards,details:[createElement('span',{key:'details'},'完整过程')]}));
+ const html=renderToStaticMarkup(createElement(TurnExecutionDetails,{timing,cards,details:[createElement('span',{key:'details'},'完整过程')]}));
  assert.ok(html.includes('最新步骤：读取 current.txt · 演示主机 A'));
  assert.ok(html.includes('data-glyph="lakeFile"'));
- assert.ok(html.includes('status-text--active turn-current-step-label'));
- assert.ok(html.includes('aria-expanded="false"')&&html.includes('hidden=""'));
+ assert.ok(html.includes('turn-current-step-label'));
+ assert.ok(html.includes('aria-expanded="false"')&&html.includes('aria-hidden="true" inert=""'));
  assert.equal((html.match(/class="turn-current-step"/g)??[]).length,1);
  const thoughts=renderToStaticMarkup(createElement(TurnExecutionDetails,{timing,cards:[{id:'thought',type:'thinking',status:'completed',at:start,content:'分析'}],details:[createElement('span',{key:'details'},'思考记录')]}));
  assert.ok(!thoughts.includes('turn-current-step'),'reasoning alone must not invent an executed step');
