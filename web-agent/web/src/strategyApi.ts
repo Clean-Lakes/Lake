@@ -56,3 +56,17 @@ export const strategyLearningApi={
  propose:(base:string,sourceIds:string[])=>request<{jobId:string}>(base,'/proposals','POST',{sourceIds,assetId:'',expectedRevision:0}),
  cancel:(base:string,id:string)=>request<StrategyMutation>(base,`/proposals/${encodeURIComponent(id)}/cancel`,'POST',{}),
 };
+
+export type StrategyFixture={id:string;split:string;domain:string;profile:string;prompt:string;version:string};
+export type StrategyExperimentSummary={id:string;status:string;errorCode:string;createdAt:string;requests:number;tokensCharged:number};
+export type StrategyExperimentRun={id:string;caseId:string;split:string;arm:string;repetition:number;status:string;candidateApplied?:boolean;repeatedObservations?:number;result?:{status:string;answer:string;runtimeId:string;resetHash:string;resetNonce:string;observed:number;violations:number;requests:number;durationMs:number;usage:{inputKnown:boolean;outputKnown:boolean;input:number;output:number};errorCode?:string;manifests:{requestId:string;runId:string;fixedRulesHash:string;builtinStrategyHash:string;toolCatalogHash:string;selectedAssets:StrategyRef[]}[];evaluation:{status:string;checks:Record<string,boolean>;limitations:string[]}}};
+export type StrategyExperimentReport={id:string;status:string;errorCode:string;mode:string;frozenHash:string;requests:number;tokensCharged:number;verdict:string;contentAvailable:boolean;contextHash?:string;modelRef?:string;modelHash?:string;skillHashes?:Record<string,string>;assetRef?:StrategyRef;runs:StrategyExperimentRun[];splits:Record<string,{candidateWins:number;regressions:number;ties:number;missing:number}>;limitations:string[]};
+export const strategyExperimentApi={
+ fixtures:(base:string)=>request<{items:StrategyFixture[]}>(base,'/fixtures'),
+ list:(base:string)=>request<{items:StrategyExperimentSummary[]}>(base,'/experiments'),
+ create:(base:string,ref:StrategyRef,caseIds:string[],repetitions:number,skillNames:string[])=>request<{jobId:string}>(base,'/experiments','POST',{ref,caseIds,repetitions,skillNames}),
+ report:(base:string,id:string)=>request<StrategyExperimentReport>(base,`/experiments/${encodeURIComponent(id)}/report`),
+ cancel:(base:string,id:string)=>request<StrategyMutation>(base,`/experiments/${encodeURIComponent(id)}/cancel`,'POST',{}),
+ erase:(base:string,id:string)=>request<StrategyMutation>(base,`/experiments/${encodeURIComponent(id)}`,'DELETE',{}),
+};
+export function strategyExperimentAnswer(answer:string){try{const value=JSON.parse(answer) as {answer?:unknown};return typeof value.answer==='string'?value.answer:answer;}catch{return answer;}}

@@ -69,6 +69,9 @@ func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a
 	return risk, hash(js(c.Assets) + js(a)), nil
 }
 func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (result any, err error) {
+	if e.experiment != nil {
+		return e.experiment.invoke(call)
+	}
 	if c.Model.Key != "" && (strings.Contains(call.Arguments, c.Model.Key) || strings.Contains(call.Arguments, strings.Trim(js(c.Model.Key), "\""))) {
 		return nil, errors.New("tool arguments cannot contain model credentials")
 	}

@@ -177,6 +177,8 @@ func (b *Server) Start() error {
 	b.workers.Add(1)
 	go b.runStrategyWorker()
 	b.workers.Add(1)
+	go b.runExperimentWorker()
+	b.workers.Add(1)
 	go func() {
 		defer b.workers.Done()
 		b.Models.RefreshStoredReasoning(b.Context)
