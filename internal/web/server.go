@@ -164,6 +164,7 @@ func (b *Server) Start() error {
 	if err := b.reconcilePersistedMemoryOutboxes(); err != nil {
 		return err
 	}
+	_ = b.reconcilePersistedStrategyOutboxes()
 	b.Store.RecoverMemoryJobs()
 	_ = b.Store.ReconcileProjectMemoryFiles()
 	l, e := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", b.options.Port))
@@ -173,6 +174,8 @@ func (b *Server) Start() error {
 	b.listener = l
 	b.workers.Add(1)
 	go b.runMemoryWorker()
+	b.workers.Add(1)
+	go b.runStrategyWorker()
 	b.workers.Add(1)
 	go func() {
 		defer b.workers.Done()

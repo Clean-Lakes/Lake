@@ -143,9 +143,10 @@ func (b *Server) configure(id string, updates Object) Object {
 	assets, directories := b.sessionAssetCatalog(id)
 	projectID := stringOf(b.Store.Session(id)["projectId"])
 	memorySettings := b.Store.MemorySettings(projectID)
+	learning, _ := b.Store.EffectiveStrategySettings(StrategyContext{ProjectID: projectID})
 	// Approvals belong to individual operations; earlier pending actions must not
 	// disable this turn's tools. invoke enforces per-operation permissions.
-	aiFailure(b.Engine.Configure(id, ai.Config{ModelProviderID: stringOf(modelSelection["providerId"]), MemoryProjectID: projectID, MemoryEnabled: memorySettings["useEnabled"] == true, MemoryExtractionEnabled: memorySettings["useEnabled"] == true && memorySettings["extractionEnabled"] == true, MemoryEpoch: integer(memorySettings["epoch"]), MemoryKnowledgeRevision: integer(memorySettings["revision"]), Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
+	aiFailure(b.Engine.Configure(id, ai.Config{StrategyLearnEnabled: learning.Settings.MasterEnabled && learning.Settings.LearnEnabled, StrategyGlobalEpoch: learning.GlobalEpoch, StrategyProjectEpoch: learning.ProjectEpoch, ModelProviderID: stringOf(modelSelection["providerId"]), MemoryProjectID: projectID, MemoryEnabled: memorySettings["useEnabled"] == true, MemoryExtractionEnabled: memorySettings["useEnabled"] == true && memorySettings["extractionEnabled"] == true, MemoryEpoch: integer(memorySettings["epoch"]), MemoryKnowledgeRevision: integer(memorySettings["revision"]), Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
 	b.Store.SaveOptions(id, options)
 	if previousPermissions != permissionVersion(options) {
 		b.revokeSessionTerminals(id)
@@ -211,6 +212,13 @@ func (b *Server) event(event ai.Event) {
 		b.syncSRESessionStatus(event.Session)
 	case "approval":
 		b.Store.Status(event.Session, "waiting_approval")
+	case "inputState":
+		switch stringOf(object(event.Data)["status"]) {
+		case "running":
+			b.Store.Status(event.Session, "investigating")
+		case "waiting_approval":
+			b.Store.Status(event.Session, "waiting_approval")
+		}
 	case "done":
 		status := stringOf(object(event.Data)["status"])
 		if status == "completed" || status == "cancelled" {
@@ -222,7 +230,7 @@ func (b *Server) event(event ai.Event) {
 		b.Store.Touch(event.Session)
 	}
 }
-func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, files []Object, ignoreProjectMemory bool) {
+func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachment, refs, files []Object, ignoreProjectMemory bool) {
 	defer b.workers.Done()
 	defer b.finishMessageQueue(id)
 	defer b.finishReplyTiming(id)
@@ -325,8 +333,9 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	if sreCoordination {
 		modelContext += b.sreConversationContext(id)
 	}
-	e = b.Engine.ExecuteTurn(turnContext, id, ai.TurnInput{SRECoordination: sreCoordination, UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
+	e = b.Engine.ExecuteTurn(turnContext, id, ai.TurnInput{StrategyMessageID: messageID, SRECoordination: sreCoordination, UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
 	if e != nil {
+		_ = b.reconcileStrategyOutboxForSession(id)
 		if b.Context.Err() != nil {
 			return
 		}
@@ -351,6 +360,7 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	view, e := b.Engine.Snapshot(id)
 	must(e)
 	_ = b.reconcileMemoryOutboxForSession(id)
+	_ = b.reconcileStrategyOutboxForSession(id)
 	for i := len(view.Cards) - 1; i >= 0; i-- {
 		if view.CardsOffset+i < before.TotalCards {
 			break

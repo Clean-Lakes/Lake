@@ -45,3 +45,14 @@ export function parseStrategyImport(text:string):StrategyDraft {
  return {title:obj.title,kind:obj.kind as StrategyKind,body:obj.body,applicability:{profiles:a.profiles as string[],resourceKinds:a.resourceKinds as string[],domainTags:a.domainTags as string[]}};
 }
 export function strategyExport(draft:StrategyDraft){return JSON.stringify({format:'lake-strategy-v1',...draft},null,2)+'\n';}
+
+export type StrategySource={id:string;kind:string;sessionId:string;turnId?:string;availability:string;createdAt:string;userText?:string;contentHash:string;outcome?:string;profile?:string;evidence?:{callId:string;tool:string;status:string;resultHash:string}[]};
+export type StrategyProposal={id:string;status:string;errorCode:string;attempts:number;createdAt:string;sourceIds:string[];assetId?:string;revision?:number;runStatus?:string;usage?:{input:number;output:number;inputKnown:boolean;outputKnown:boolean};result?:{schemaVersion:number;candidate:{title:string;reason:string;body:string;sourceIds:string[]}|null}};
+export const strategyLearningApi={
+ sources:(base:string,after='')=>request<{items:StrategySource[];nextCursor:string}>(base,`/sources?after=${encodeURIComponent(after)}`),
+ register:(base:string,messageId:string)=>request<StrategyMutation>(base,'/sources','POST',{messageId}),
+ withdraw:(base:string,id:string)=>request<StrategyMutation>(base,`/sources/${encodeURIComponent(id)}`,'DELETE',{}),
+ proposals:(base:string,after='')=>request<{items:StrategyProposal[];nextCursor:string}>(base,`/proposals?after=${encodeURIComponent(after)}`),
+ propose:(base:string,sourceIds:string[])=>request<{jobId:string}>(base,'/proposals','POST',{sourceIds,assetId:'',expectedRevision:0}),
+ cancel:(base:string,id:string)=>request<StrategyMutation>(base,`/proposals/${encodeURIComponent(id)}/cancel`,'POST',{}),
+};

@@ -195,6 +195,7 @@ func (s *Store) DeleteStrategyAsset(ctx StrategyContext, id, key string, expecte
 		}
 		s.strategyAdvanceScope(scopeKey)
 		s.exec("UPDATE strategyAssets SET title='',deletedAt=? WHERE id=?", now(), id)
+		s.strategyEraseAssetResults(id)
 		s.exec("DELETE FROM strategyRevisionContent WHERE assetId=?", id)
 		// A manual confirmation's body lives only in this asset's content rows.
 		// Erasing it also removes that source's availability to other pending jobs.

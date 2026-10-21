@@ -75,7 +75,7 @@ func (e *Engine) recoverQuestionReply(s *session, req *QuestionRequest, answers 
 	c := s.state.Config
 	c.targetScope = cloneTargetScope(s.state.TargetScope)
 	c.ReferencedAssets = validRemembered(c, s.state.ReferencedAssetIDs)
-	if err := e.save(s); err != nil {
+	if err := e.saveHumanInputState(s); err != nil {
 		cancel()
 		s.cancel = nil
 		return err

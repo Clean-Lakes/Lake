@@ -6,6 +6,12 @@ type ProseNode = {
   data?: {hProperties?: Record<string, unknown>};
 };
 
+// Models sometimes use the legal section shorthand in Chinese document
+// references. Spell it out in prose without changing stored Markdown or code.
+function sectionReferences(text: string): string {
+  return text.replace(/(^|[^\\\p{Script=Latin}\p{N}_§])§[ \t]*(\d+(?:\.\d+)*)(?![\p{Script=Latin}\p{N}_])/gu, '$1第 $2 节');
+}
+
 // Recover unparsed generated strong delimiters in Chinese prose and short
 // colon labels. Operate on exact literal source spans after Markdown parsing:
 // code, links, escapes and already parsed formatting remain untouched.
@@ -35,8 +41,12 @@ export function remarkAssistantProse() {
           if(trailing)pieces.push({type:'text',value:trailing});
           offset = at + match[0].length;
         }
-        if (!pieces.length) return [child];
+        if (!pieces.length) return [{...child, value: sectionReferences(text)}];
         if (offset < text.length) pieces.push({type: "text", value: text.slice(offset)});
+        for (const piece of pieces) {
+          if (piece.type === 'text') piece.value = sectionReferences(piece.value ?? '');
+          else for (const text of piece.children ?? []) text.value = sectionReferences(text.value ?? '');
+        }
         return pieces;
       });
       if (node.type === "paragraph") {

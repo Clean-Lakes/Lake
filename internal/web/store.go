@@ -589,6 +589,7 @@ func (s *Store) SetGeneratedTitle(id, title string) bool {
 func (s *Store) DeleteSession(id string) {
 	s.update(func() any {
 		s.session(id)
+		s.strategyEraseSessionSources(id)
 		s.exec("UPDATE terminalEntries SET actionId=NULL WHERE actionId IN (SELECT id FROM actions WHERE sessionId=?)", id)
 		s.exec("DELETE FROM terminalEntries WHERE terminalId IN (SELECT id FROM terminals WHERE sessionId=?)", id)
 		for _, table := range []string{"aiOptions", "events", "evidence", "specialists", "actions", "terminals", "messages", "sessionResources"} {

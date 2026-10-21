@@ -9,6 +9,23 @@ import {SREProse} from '../src/SREReport';
 
 const render = (text:string) => renderToStaticMarkup(createElement(Markdown,{remarkPlugins:[remarkGfm,remarkAssistantProse],skipHtml:true,children:text}));
 
+test('Chinese section references also work without spaces beside the number', () => {
+ const html = render('把§1底数同步，按§5.4门禁检查；标识 x§2 和 §3A 保留。');
+ assert.ok(html.includes('把第 1 节底数同步，按第 5.4 节门禁检查'));
+ assert.ok(html.includes('x§2 和 §3A'));
+});
+
+test('section shorthand reads as numbered sections without rewriting code, escapes or links', () => {
+ const source = 'PLAN.md：§0 说明，§6 资源，§5.4 门禁。**§1 底数**；**§2 中文 **更新。\n\n`§3`\n\n```text\n§4\n```\n\n[§5](https://example.test/#§5)\n\n\\§7';
+ const html = render(source);
+ for (const section of ['0', '6', '5.4', '1', '2']) assert.ok(html.includes(`第 ${section} 节`), html);
+ assert.ok(html.includes('<code>§3</code>'));
+ assert.ok(html.includes('§4\n</code>'));
+ assert.ok(html.includes('>§5</a>'));
+ assert.ok(html.includes('<p>\\§7</p>'));
+ assert.ok(source.includes('§5.4'));
+});
+
 test("generated colon labels with a stray closing space render as strong text",()=>{
  const source="设备在线。\n\n- **负载与内存： **4 核，内存充足。\n- **磁盘： **使用 15%。\n- **服务： **SSH 正常。\n\n**结论： **保持观察 `kdump`。";
  const html=render(source);
