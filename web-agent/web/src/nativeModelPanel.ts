@@ -8,7 +8,7 @@ export type NativeModelPanelState=Pick<ComposerModelSelectProps,"available"|"mod
   id:string;presentation:number;theme:"light"|"dark";reasoning?:Omit<ReasoningSelectorProps,"onSaving">;
   anchor:{left:number;top:number;width:number;height:number};
 };
-export type NativeModelPanelEvent={id:string;kind:"close"|"select"|"saving";value?:string;saving?:boolean;restoreFocus?:boolean};
+export type NativeModelPanelEvent={id:string;kind:"close"|"select"|"saving"|"settings";value?:string;saving?:boolean;session?:string;restoreFocus?:boolean};
 export function nativePanelCommand(message:Record<string,unknown>) {return window.lakeNativeModelPanel!.command(message);}
 
 /** Only the macOS host advertises this capability. Browser/older macOS use AppSelect's web surface. */
@@ -16,6 +16,9 @@ export function useNativeModelPanel(props:ComposerModelSelectProps,anchor:RefObj
   const id=useId(),latest=useRef(props);latest.current=props;
   const [failed,setFailed]=useState(false),[theme,setTheme]=useState(document.documentElement.dataset.theme);
   const native=window.lakeNativeModelPanel?.role==="workbench"&&!failed;
+  const savingCallback=useRef(props.reasoning?.onSaving);
+  if(props.reasoning) savingCallback.current=props.reasoning.onSaving;
+  const savingSessions=useRef(new Set<string>());
   const sent=useRef("");
   const presentation=useRef(0);
   useEffect(()=>{
@@ -26,7 +29,11 @@ export function useNativeModelPanel(props:ComposerModelSelectProps,anchor:RefObj
       const detail=(event as CustomEvent<NativeModelPanelEvent>).detail;
       if(!detail||detail.id!==id) return;
       const current=latest.current;
-      if(detail.kind==="saving"&&typeof detail.saving==="boolean") current.reasoning?.onSaving(detail.saving);
+      if(detail.kind==="saving"&&typeof detail.saving==="boolean"&&detail.session) {
+        if(detail.saving) savingSessions.current.add(detail.session);else savingSessions.current.delete(detail.session);
+        savingCallback.current?.(detail.saving,detail.session);
+      }
+      if(detail.kind==="settings") current.onSettings();
       if(detail.kind==="close") {current.onOpenChange(false);if(detail.restoreFocus) anchor.current?.querySelector("button")?.focus({preventScroll:true});}
       if(detail.kind==="select"&&!current.disabled) {
         const row=current.available.entries?.find(entry=>JSON.stringify([entry.providerId,entry.modelId])===detail.value);
@@ -36,7 +43,7 @@ export function useNativeModelPanel(props:ComposerModelSelectProps,anchor:RefObj
       }
     };
     window.addEventListener("lake-native-model-event",receive);
-    return()=>{observer.disconnect();window.removeEventListener("lake-native-model-event",receive);void nativePanelCommand({action:"close",id}).catch(()=>{});};
+    return()=>{for(const session of savingSessions.current) savingCallback.current?.(false,session);savingSessions.current.clear();observer.disconnect();window.removeEventListener("lake-native-model-event",receive);void nativePanelCommand({action:"close",id}).catch(()=>{});};
   },[native,id]);
   useLayoutEffect(()=>{
     if(!native) return;

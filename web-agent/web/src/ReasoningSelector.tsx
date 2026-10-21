@@ -6,7 +6,7 @@ import { reasoningSaveQueue } from "./reasoningSaveQueue";
 const labels: Record<string, string> = { "": "默认", none: "关闭", minimal: "极低", low: "低", medium: "中", high: "高", xhigh: "极高", max: "最高", ultra: "极致" };
 
 export type ReasoningSelectorProps = {
-  session: string; modelId?: string | null; disabled: boolean; disabledReason?: string; onSaving: (saving: boolean) => void;
+  session: string; modelId?: string | null; disabled: boolean; disabledReason?: string; onSaving: (saving: boolean, session?:string) => void;
 };
 
 /** The session's supported levels, embedded in the shared model popover. */
@@ -22,7 +22,7 @@ export function ReasoningSelector({ session, modelId, disabled, disabledReason, 
   const saves=useRef<ReturnType<typeof reasoningSaveQueue>|null>(null);
   if(!saves.current) saves.current=reasoningSaveQueue(
     request=>api.setReasoning(request.session,request.modelId,request.effort),{
-      busy:value=>{setBusy(value);current.current.onSaving(value);},
+      busy:value=>{setBusy(value);current.current.onSaving(value,current.current.session);},
       saved:(request,result,hasNext)=>{
         if(current.current.session!==request.session||current.current.modelId!==request.modelId) return;
         setSettings({...result,session:request.session});setError("");

@@ -20,6 +20,7 @@ const send=()=>window.dispatchEvent(new CustomEvent('lake-native-model-state',{d
 window.lakeNativeModelPanel={role:'panel',command:async message=>{
  events.push(message);record();
  if(message.action==='ready')queueMicrotask(send);
+ if(message.action==='providers')return (message.providers as {id:string}[]).find(provider=>provider.id!==message.value)?.id??null;
  if(message.action==='event') {
   const event=message.event as {kind:string;saving?:boolean};
   if(event.kind==='saving') {state.disabled=!!event.saving;send();}

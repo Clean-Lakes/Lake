@@ -1,4 +1,9 @@
-.model-settings-dialog.modal { width: min(980px,calc(100vw - 48px)); height: min(760px,calc(100dvh - 64px)); max-height: calc(100dvh - 32px); padding: 0; overflow: hidden; display: flex; flex-direction: column; border-radius: var(--radius-dialog); color: var(--foreground); }
+.model-settings-dialog.modal { --radius-control: var(--radius-settings-control); --radius-panel: var(--radius-settings-panel); --radius-dialog: var(--radius-settings-dialog); width: min(980px,calc(100vw - 48px)); height: min(760px,calc(100dvh - 64px)); max-height: calc(100dvh - 32px); padding: 0; overflow: hidden; display: flex; flex-direction: column; border-radius: var(--radius-dialog); color: var(--foreground); }
+.model-settings-dialog.modal:focus { outline: none; }
+/* Every rounded setting surface uses the same curve, scaled to its role. */
+.model-settings-dialog:is(.modal),.model-settings-dialog :is(input:not([type="checkbox"]),textarea,.button,.icon-button,.provider-add,.provider-item,.provider-avatar,.provider-model-list,.provider-model-editor,.provider-discovery,.provider-discovery-list,.provider-preset-card,.provider-custom-card,.provider-preset-mark,.provider-context,.provider-output-control,.provider-delete-confirm,.magpie-detail-icon,.magpie-current-model,.app-select-trigger,.app-select-popup,.app-select-option) { corner-shape: var(--corner-window); }
+.model-settings-dialog .app-select-popup { border-radius: var(--radius-panel); }
+.model-settings-dialog .app-select-option { border-radius: var(--radius-control); }
 .model-settings-header { display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0; gap: 16px; padding: 20px 24px 16px; }
 .model-settings-header h2 { margin: 0; font-size: 25px; letter-spacing: -.7px; }
 .model-settings-header p { margin: 9px 0 0; font-size: 13px; color: var(--text-secondary); }
@@ -10,12 +15,12 @@
 .provider-rail { width: 224px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--surface-muted); border-right: 1px solid var(--border); padding: 18px 12px; }
 .provider-rail-title { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 10px; font-size: 12px; color: var(--text-secondary); }
 .provider-rail-title small { margin-left: 5px; }
-.provider-add { border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 10px; background: var(--surface); color: var(--foreground); font-size: 12px; cursor: pointer; margin-bottom: 12px; flex-shrink: 0; }
+.provider-add { border: 1px solid var(--border); border-radius: var(--radius-control); padding: 10px; background: var(--surface); color: var(--foreground); font-size: 12px; cursor: pointer; margin-bottom: 12px; flex-shrink: 0; }
 .provider-list { overflow: auto; min-height: 0; }
 .provider-item { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; text-align: left; background: none; border: 1px solid transparent; border-radius: var(--radius-panel); padding: 12px 9px; cursor: pointer; margin-bottom: 4px; color: inherit; }
 .provider-item:hover { background: var(--surface-hover); }
 .provider-item.selected { background: var(--surface); border-color: var(--border); box-shadow: none; }
-.provider-avatar { display: grid; place-items: center; width: 27px; height: 27px; border-radius: var(--radius-panel); background: var(--surface-hover); color: var(--text-secondary); font-size: 12px; flex-shrink: 0; }
+.provider-avatar { display: grid; place-items: center; width: 27px; height: 27px; border-radius: var(--radius-settings-icon); background: var(--surface-hover); color: var(--text-secondary); font-size: 12px; flex-shrink: 0; }
 .magpie-provider-item { flex-shrink: 0; margin-bottom: 12px; }
 .magpie-avatar { background: #17191c; }
 .magpie-avatar img { width: 19px; height: 19px; filter: invert(1); }
@@ -50,7 +55,7 @@
 .model-settings-dialog .field-label { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 0 0 15px; }
 .model-settings-dialog .provider-connection-grid > .field-label,.model-settings-dialog .provider-model-editor .field-label { min-width: 0; margin: 0; line-height: 1.5; }
 .model-settings-dialog input:not([type="checkbox"]),.model-settings-dialog select { box-sizing: border-box; width: 100%; height: 36px; border: 1px solid var(--border); background: var(--surface); color: var(--foreground); font-size: 13px; padding: 0 11px; margin-top: 7px; outline: none; border-radius: var(--radius-control); }
-.model-settings-dialog input:focus,.model-settings-dialog select:focus { border-color: var(--border); box-shadow: var(--shadow-dialog); }
+.model-settings-dialog input:focus,.model-settings-dialog select:focus { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb,var(--focus) 12%,transparent); }
 .provider-key-row { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
 .provider-key-row input { flex: 1; min-width: 0; }
 .model-settings-dialog .provider-key-row input { margin-top: 0; }
@@ -67,7 +72,7 @@
 .provider-model-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .provider-model-name strong { font-weight: 500; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .provider-model-name small { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.provider-context { font-size: 11px; color: var(--text-secondary); background: var(--surface-muted); border: 1px solid var(--border); border-radius: var(--radius-control); padding: 2px 5px; flex-shrink: 0; }
+.provider-context { font-size: 11px; color: var(--text-secondary); background: var(--surface-muted); border: 1px solid var(--border); border-radius: var(--radius-settings-badge); padding: 2px 5px; flex-shrink: 0; }
 .provider-use { border: 0; background: none; color: var(--text-secondary); font-size: 11px; cursor: pointer; padding: 3px; white-space: nowrap; }
 .provider-use.active { color: var(--foreground); }
 .provider-row-icon { background: none; border: 0; font-size: 16px; color: var(--text-secondary); padding: 0 2px; cursor: pointer; }
@@ -85,7 +90,7 @@
 .provider-output-control { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 36px; box-sizing: border-box; margin-top: 7px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); font-size: 12px; }
 .provider-output-control .provider-switch:not(.on) { background: var(--border-strong); }
 .provider-editor-actions { display: flex; gap: 18px; justify-content: flex-end; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
-.model-settings-dialog .button { padding: 9px 15px; font-size: 12px; border-radius: var(--radius-dialog); min-height: 35px; }
+.model-settings-dialog .button { padding: 9px 15px; font-size: 12px; border-radius: var(--radius-control); min-height: 35px; }
 .danger-text { color: var(--danger); }
 .provider-empty { display: flex; align-items: center; flex-direction: column; justify-content: center; text-align: center; min-height: 270px; color: var(--text-secondary); }
 .provider-empty>span { font-size: 40px; color: var(--text-muted); }
@@ -122,7 +127,7 @@
 }
 @media (max-width:480px) {
   .model-settings-body { flex-direction: column; }
-  .provider-rail { width: auto; max-height: 150px; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .provider-rail { width: auto; max-height: min(230px,32dvh); overflow-y: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--border); }
   .provider-rail-title { padding-bottom: 4px; }
   .provider-add { margin-bottom: 6px; padding: 6px; }
   .provider-list { display: flex; gap: 5px; flex-shrink: 0; overflow-x: auto; }

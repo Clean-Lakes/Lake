@@ -11,6 +11,13 @@ const slowSave=new URLSearchParams(location.search).has('slow-save');
 const saveCalls:Array<{modelId:string;effort:string}>=[];
 const saveProof=document.createElement('output');saveProof.id='reasoning-save-proof';saveProof.hidden=true;saveProof.textContent='[]';document.body.appendChild(saveProof);
 const releases:Array<()=>void>=[];
+const sidebarChanges:unknown[]=[];
+const sidebarProof=document.createElement('output');sidebarProof.id='reasoning-sidebar-proof';sidebarProof.hidden=true;sidebarProof.textContent='[]';document.body.appendChild(sidebarProof);
+if(slowSave){
+ new MutationObserver(records=>{for(const record of records){const target=record.target as Element;if(target.closest('.sidebar'))sidebarChanges.push({attribute:record.attributeName,label:target.getAttribute('aria-label'),before:record.oldValue,after:target.getAttribute(record.attributeName!)});}sidebarProof.textContent=JSON.stringify(sidebarChanges);}).observe(document.body,{subtree:true,attributes:true,attributeOldValue:true,attributeFilter:['disabled','class','style']});
+ document.addEventListener('keydown',event=>{if(event.key==='F7'){event.preventDefault();sidebarChanges.length=0;sidebarProof.textContent='[]';}});
+}
+
 if(slowSave)document.addEventListener('keydown',event=>{if(event.key==='F8'){event.preventDefault();releases.shift()?.();}});
 const selections:unknown[]=[];
 const sourceProof=document.createElement('output');sourceProof.id='model-source-proof';sourceProof.hidden=true;sourceProof.textContent='[]';document.body.appendChild(sourceProof);

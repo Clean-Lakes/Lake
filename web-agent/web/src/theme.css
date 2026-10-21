@@ -46,6 +46,12 @@
   --radius-control: 5px;
   --radius-panel: 7px;
   --radius-dialog: 9px;
+  /* Settings surfaces: fixed scale rather than borrowing a dialog radius for controls. */
+  --radius-settings-control: 10px;
+  --radius-settings-panel: 14px;
+  --radius-settings-dialog: 22px;
+  --radius-settings-icon: 8px;
+  --radius-settings-badge: 5px;
   /* macOS 26 outer contour, checked against a native window capture at 2x. */
   --radius-window: 22px;
   --corner-window: superellipse(1.5);

@@ -24,3 +24,11 @@ export function selectPopupPosition(rect:{left:number;top:number;bottom:number;w
   const left=Math.max(margin,Math.min(rect.left,viewport.width-width-margin));
   return {left,width,maxHeight,...(upward?{bottom:viewport.height-rect.top+gap}:{top:rect.bottom+gap})};
 }
+
+/** Cascading menus prefer the left of their parent, then fit inside narrow viewports. */
+export function selectSidePopupPosition(rect:{left:number;top:number;width:number},viewport:{width:number;height:number},count:number) {
+  const width=Math.min(208,Math.max(0,viewport.width-16)),maxHeight=Math.min(288,Math.max(0,viewport.height-16));
+  const desired=Math.min(maxHeight,count*36+10);
+  const preferred=rect.left-width-6>=8?rect.left-width-6:rect.left+rect.width+6;
+  return {left:Math.max(8,Math.min(preferred,viewport.width-width-8)),top:Math.max(8,Math.min(rect.top,viewport.height-desired-8)),width,maxHeight};
+}

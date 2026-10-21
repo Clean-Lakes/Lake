@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {readFileSync,readdirSync,existsSync} from "node:fs";
 import {fileURLToPath} from "node:url";
-import {matchSelectOption,nextEnabledOption,selectPopupPosition} from "../src/selectState";
+import {matchSelectOption,nextEnabledOption,selectPopupPosition,selectSidePopupPosition} from "../src/selectState";
 import {providerBrand} from "../src/providerBrand";
 import {providerPresets} from "../src/providerPresets";
 
@@ -41,4 +41,13 @@ test("brand resolution uses known endpoints and keeps custom loopback services g
  assert.equal(providerBrand("Local","http://127.0.0.1:11434"),"ollama");
  assert.equal(providerBrand("Custom","https://api.openai.com.attacker.test/v1"),"custom");
  for(const preset of providerPresets) assert.ok(existsSync(fileURLToPath(new URL(`../public/providers/${preset.id}.svg`,import.meta.url))),`missing ${preset.id} logo`);
+});
+
+test("supplier submenu stays beside its parent or fits a narrow viewport",()=>{
+ const left=selectSidePopupPosition({left:600,top:500,width:260},{width:1200,height:800},6);
+ assert.equal(left.left+left.width+6,600);assert.equal(left.top,500);
+ const right=selectSidePopupPosition({left:20,top:20,width:260},{width:900,height:600},4);
+ assert.equal(right.left,286);
+ const narrow=selectSidePopupPosition({left:100,top:380,width:260},{width:390,height:400},12);
+ assert.ok(narrow.left>=8&&narrow.left+narrow.width<=382);assert.ok(narrow.top>=8&&narrow.top+narrow.maxHeight<=392);
 });
