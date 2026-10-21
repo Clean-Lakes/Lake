@@ -26,7 +26,7 @@ export function NativeModelPanelPage() {
       if(!popup||popup===observed) return;
       resize.disconnect();observed=popup;resize.observe(popup);
       // AppSelect retains keyboard navigation without a second visible trigger.
-      (document.querySelector('[role="combobox"]') as HTMLElement|null)?.focus({preventScroll:true});
+      if(document.activeElement===document.body) (document.querySelector('[role="combobox"]') as HTMLElement|null)?.focus({preventScroll:true});
     };
     const mutations=new MutationObserver(attach);
     mutations.observe(document.body,{childList:true,subtree:true});attach();
