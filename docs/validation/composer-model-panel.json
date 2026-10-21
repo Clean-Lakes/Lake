@@ -18,5 +18,16 @@
   "isolation": "Only fictional in-memory API fixtures; no model calls, credentials, hosts or user settings used for browser checks.",
   "limits": [
     "Windows native rendering and external provider APIs not exercised."
-  ]
+  ],
+  "refinement": {
+    "desktopCardWidth": 276,
+    "fourModelCardHeight": 304.5,
+    "desktopRowHeight": 32,
+    "railHeight": 4,
+    "thumbDiameter": 14,
+    "glass": "Same --title-glass-* variables as floating title: blur(18px) saturate(145%), light/dark and reduced-transparency fallbacks.",
+    "lowViewport": "390x400: card top 8, bottom 312, max-height 304 after live resize; ResizeObserver updates placement.",
+    "detailScreenshot": "docs/validation/composer-model-panel-detail.png",
+    "reset": "Icon-only reset retains an accessible name; current default is displayed as 默认 · 高."
+  }
 }

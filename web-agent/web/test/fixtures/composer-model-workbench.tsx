@@ -1,8 +1,11 @@
 // Actual App/composer with the existing fictional workspace; no live backend.
 import './workspace-heading';
 const inheritedFetch=window.fetch.bind(window);
-const entries=['deepseek-v4-pro','deepseek-flash'].map(name=>({providerId:'demo-provider',providerName:'DeepSeek · Lake',modelId:name,name,displayName:name}));
-let selected=entries[1]!;
+const entries=[
+ ...['mimo-v2.6-flash','mimo-v2.6-pro'].map(name=>({providerId:'mimo',providerName:'小米 MiMo',modelId:name,name,displayName:name})),
+ ...['deepseek-flash','deepseek-v4-pro'].map(name=>({providerId:'demo-provider',providerName:'DeepSeek',modelId:name,name,displayName:name})),
+];
+let selected=entries[2]!;
 const efforts:Record<string,string>={};
 window.fetch=async(input,init)=>{
  const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href);

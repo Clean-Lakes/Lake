@@ -71,7 +71,11 @@ export function AppSelect({children,value,defaultValue,onChange,disabled=false,i
     const reposition=(event:Event)=>{if (!popup.current?.contains(event.target as Node)) place();};
     document.addEventListener("pointerdown",outside,true);
     window.addEventListener("resize",reposition);window.addEventListener("scroll",reposition,true);
-    return()=>{document.removeEventListener("pointerdown",outside,true);window.removeEventListener("resize",reposition);window.removeEventListener("scroll",reposition,true);};
+    // Embedded viewports can change layout before a window resize event arrives.
+    const resizeObserver=new ResizeObserver(()=>place());
+    resizeObserver.observe(document.documentElement);
+    if(trigger.current) resizeObserver.observe(trigger.current);
+    return()=>{resizeObserver.disconnect();document.removeEventListener("pointerdown",outside,true);window.removeEventListener("resize",reposition);window.removeEventListener("scroll",reposition,true);};
   });
   useEffect(()=>{if (open) popup.current?.querySelector<HTMLElement>(`[data-option-index="${active}"]`)?.scrollIntoView({block:"nearest"});},[open,active]);
   function onKeyDown(event:KeyboardEvent<HTMLElement>) {
