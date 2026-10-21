@@ -35,9 +35,12 @@ func (e *Engine) adkStore() (*storage.Store, error) {
 	services.once.Do(func() {
 		services.store, services.err = storage.Open(filepath.Join(e.runtimeDirectory(), "sessions.sqlite"))
 		if services.err == nil {
-			services.err = services.store.DB.AutoMigrate(&nativeApproval{}, &nativeOperation{}, &nativeEvidence{}, &nativeArtifact{}, &nativeHistoryMigration{})
+			services.err = services.store.DB.AutoMigrate(&nativeApproval{}, &nativeOperation{}, &nativeEvidence{}, &nativeArtifact{}, &nativeHistoryMigration{}, &nativeCorrection{})
 			if services.err == nil {
 				services.err = services.store.DB.Model(&nativeOperation{}).Where("status = ?", "dispatched").Update("status", "unknown").Error
+			}
+			if services.err == nil {
+				services.err = recoverOnlineCorrections(services.store.DB)
 			}
 		}
 	})

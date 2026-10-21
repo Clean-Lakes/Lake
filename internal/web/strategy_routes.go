@@ -234,19 +234,20 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 					source = "inherited"
 				}
 			}
-			reply(w, 200, Object{"settings": settings, "effective": effective.Settings, "source": source, "capabilities": Object{"apply": true, "learn": true, "correct": true, "correctMode": "isolated_snapshots", "onlineCorrect": false}})
+			reply(w, 200, Object{"settings": settings, "effective": effective.Settings, "source": source, "capabilities": Object{"apply": true, "learn": true, "correct": true, "correctMode": "snapshots_and_trusted_readonly", "onlineCorrect": true}})
 			return
 		}
 		if method == "PATCH" {
 			in := strategyBody[struct {
-				ExpectedRevision int64           `json:"expectedRevision"`
-				MasterEnabled    bool            `json:"masterEnabled"`
-				ApplyEnabled     bool            `json:"applyEnabled"`
-				LearnEnabled     bool            `json:"learnEnabled"`
-				CorrectEnabled   bool            `json:"correctEnabled"`
-				Budget           strategy.Budget `json:"budget"`
+				ExpectedRevision     int64           `json:"expectedRevision"`
+				MasterEnabled        bool            `json:"masterEnabled"`
+				ApplyEnabled         bool            `json:"applyEnabled"`
+				LearnEnabled         bool            `json:"learnEnabled"`
+				CorrectEnabled       bool            `json:"correctEnabled"`
+				OnlineCorrectEnabled bool            `json:"onlineCorrectEnabled"`
+				Budget               strategy.Budget `json:"budget"`
 			}](r, "expectedRevision", "masterEnabled", "applyEnabled", "learnEnabled", "correctEnabled", "budget")
-			mutated(strategyMust(b.Store.SetStrategySettings(ctx, scope, key, in.ExpectedRevision, StrategySettingsInput{in.MasterEnabled, in.ApplyEnabled, in.LearnEnabled, in.CorrectEnabled, in.Budget})))
+			mutated(strategyMust(b.Store.SetStrategySettings(ctx, scope, key, in.ExpectedRevision, StrategySettingsInput{MasterEnabled: in.MasterEnabled, ApplyEnabled: in.ApplyEnabled, LearnEnabled: in.LearnEnabled, CorrectEnabled: in.CorrectEnabled, OnlineCorrectEnabled: in.OnlineCorrectEnabled, Budget: in.Budget})))
 			return
 		}
 	}

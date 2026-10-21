@@ -97,6 +97,14 @@ func CatalogForConfig(c Config, capabilities map[string]any) []Tool {
 	return out
 }
 func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool {
+	list := e.baseSessionCatalog(ctx, id, c)
+	if onlineEnabled(c) && (c.sre == nil || !c.sre.NoTools) {
+		list = append(list, onlineTool())
+	}
+	return list
+}
+
+func (e *Engine) baseSessionCatalog(ctx context.Context, id string, c Config) []Tool {
 	if e.experiment != nil {
 		return e.experiment.catalog()
 	}

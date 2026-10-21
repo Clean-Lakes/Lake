@@ -6,7 +6,7 @@ export type StrategyRef={assetId:string;revision:number;contentHash:string};
 export type StrategyAsset={id:string;title:string;scope:StrategyScope;kind:StrategyKind;revision:number;deleted:boolean};
 export type StrategyRevision={asset:StrategyAsset;value:{ref:StrategyRef;parentRevision:number;kind:StrategyKind;body:string;applicability:StrategyApplicability;verification:string;sourceIds:string[]};available:boolean;sourcesAvailable:boolean;skillSources?:{name:string;contentHash:string;state:string}[]};
 export type StrategyBinding={assetId:string;scope:StrategyScope;revision:number;bindingRevision:number;enabled:boolean;priority:number;exclusionGroup:string};
-export type StrategySettings={scope:StrategyScope;revision:number;epoch:number;masterEnabled:boolean;applyEnabled:boolean;learnEnabled:boolean;correctEnabled:boolean;budget:Record<string,number>};
+export type StrategySettings={scope:StrategyScope;revision:number;epoch:number;masterEnabled:boolean;applyEnabled:boolean;learnEnabled:boolean;correctEnabled:boolean;onlineCorrectEnabled?:boolean;budget:Record<string,number>};
 export type StrategySettingsView={settings:StrategySettings;effective:StrategySettings;source:string;capabilities:{apply:boolean;learn:boolean;correct:boolean}};
 export type StrategyLineage={nodes:{id:string;kind:string;revision:number;createdAt:string;availability?:string;summary?:string;contentHash?:string;sourceId?:string;sourceKind?:string}[];edges:{id:number;fromId:string;toId:string;relation:string;createdAt:string}[];nextCursor:number;hasMore:boolean;redacted:boolean};
 export type StrategyMutation={assetId?:string;revision?:number;bindingRevision?:number};
@@ -21,7 +21,7 @@ async function request<T>(base:string,path:string,method='GET',data?:unknown):Pr
 }
 export const strategyApi={
  settings:(base:string)=>request<StrategySettingsView>(base,'/settings'),
- saveSettings:(base:string,value:StrategySettings)=>request<StrategyMutation>(base,'/settings','PATCH',{expectedRevision:value.revision,masterEnabled:value.masterEnabled,applyEnabled:value.applyEnabled,learnEnabled:value.learnEnabled,correctEnabled:value.correctEnabled,budget:value.budget}),
+ saveSettings:(base:string,value:StrategySettings)=>request<StrategyMutation>(base,'/settings','PATCH',{expectedRevision:value.revision,masterEnabled:value.masterEnabled,applyEnabled:value.applyEnabled,learnEnabled:value.learnEnabled,correctEnabled:value.correctEnabled,onlineCorrectEnabled:!!value.onlineCorrectEnabled,budget:value.budget}),
  assets:(base:string,after='')=>request<{items:StrategyAsset[];nextCursor:string}>(base,`/assets?after=${encodeURIComponent(after)}`),
  create:(base:string,draft:StrategyDraft)=>request<StrategyMutation>(base,'/assets','POST',{...draft,expectedRevision:0}),
  revise:(base:string,id:string,expected:number,parent:number,draft:StrategyDraft)=>request<StrategyMutation>(base,`/assets/${encodeURIComponent(id)}/revisions`,'POST',{...draft,expectedRevision:expected,parentRevision:parent}),

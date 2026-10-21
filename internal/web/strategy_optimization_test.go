@@ -129,7 +129,7 @@ func TestStrategyOptimizationSettingsAndCaseValidation(t *testing.T) {
 	v := strategyHTTP(t, h, "GET", base+"/assets/"+asset.AssetID+"/revisions/1", "", "", 200)
 	request := Object{"ref": object(v["value"])["ref"], "caseIds": []string{"SL-001", "SL-014"}, "repetitions": 1, "skillNames": []string{}, "optimization": true}
 	capabilities := object(strategyHTTP(t, h, "GET", base+"/settings", "", "", 200)["capabilities"])
-	if capabilities["correct"] != true || capabilities["onlineCorrect"] != false || capabilities["correctMode"] != "isolated_snapshots" {
+	if capabilities["correct"] != true || capabilities["onlineCorrect"] != true || capabilities["correctMode"] != "snapshots_and_trusted_readonly" {
 		t.Fatal("incorrect capability scope")
 	}
 	settings, _ := b.Store.GetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope})

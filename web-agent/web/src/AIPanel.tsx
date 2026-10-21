@@ -1,4 +1,5 @@
 import {MessageText} from './MessageText';
+import {StrategyCorrectionCard} from './StrategyCorrectionCard';
 import {MessageImages} from './MessageImages';
 import {DisclosureSummary} from './DisclosureSummary';
 import {useSmoothText} from './useSmoothText';
@@ -75,6 +76,7 @@ const Card = memo(function Card({ card, tags = noTags, animateInitial = false }:
   const visibleContent=useSmoothText(content||"",assistantText&&card.status==="running",animateInitial);
   if (card.type === "image") { const image = card.data as AIImage; return <figure className="ai-image"><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "模型返回图片"}/><a href={`data:${image.mimeType};base64,${image.base64}`} download={image.name || `lake-image.${image.mimeType.split("/")[1]}`}>保存图片</a></figure>; }
   if (card.type === "thinking") return <details className="ai-thinking"><DisclosureSummary>思考过程 {card.status === "running" ? "· 正在生成" : ""}</DisclosureSummary><div>{card.content}</div></details>;
+  if (card.type === 'strategy_correction') return <StrategyCorrectionCard card={card}/>;
   if (card.type === "chart") return <Chart card={card}/>;
   if (card.type === "diff") { const data = card.data as { before: string; after: string }; return <details className="ai-diff"><DisclosureSummary>文件变更 · {card.title}</DisclosureSummary><div className="ai-diff-columns"><pre>{data.before || "（新文件）"}</pre><pre>{data.after || "（空文件或删除）"}</pre></div></details>; }
   if (card.type === "operation") return <details className="ai-operation"><DisclosureSummary><span>{card.title}</span><small>{card.status === "pending" ? "等待确认" : card.status === "running" ? "执行中" : card.status === "failed" ? "未完成" : "已结束"}</small></DisclosureSummary><pre>{JSON.stringify(card.data, null, 2)}</pre>{card.content && <pre>{card.content}</pre>}</details>;
@@ -116,7 +118,7 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
   const loadOlderSRE=async()=>{onInspect?.();const session=snapshot.session.id;setLoadingSRE(true);try{const page=await api.sreTasks(session,sreCursor??snapshot.sre?.tasks.at(-1)?.id??'');if(selectedSession.current===session){setOlderSRE(old=>[...old,...page.items]);setSRECursor(page.nextCursor)}}catch(e){setError(readableError(e))}finally{setLoadingSRE(false)}};
   const visibleEntries = entries.filter(entry => !isFileChangeCard(entry.card));
   const groups = transcriptGroups(visibleEntries);
-  const activityEntry = (entry: (typeof entries)[number]) => !!(entry.sre||entry.agentRun || entry.action || entry.card && ["thinking", "operation", "shell", "diff", "error"].includes(entry.card.type));
+  const activityEntry = (entry: (typeof entries)[number]) => !!(entry.sre||entry.agentRun || entry.action || entry.card && ["thinking", "operation", "shell", "diff", "error", "strategy_correction"].includes(entry.card.type));
   const filteredEntries=mode==='activity'&&sreTaskFilter?entries.filter(entry=>entry.sre&&(entry.sre.task.id===sreTaskFilter||entry.sre.task.status==='waiting_approval'||entry.sre.task.attempts.some(a=>a.operations?.some(o=>['unknown','dispatched'].includes(o.status))))):entries;
   const turns = transcriptTurns(filteredEntries).filter(turn => mode !== "activity" || turn.some(activityEntry));
   const directoryItems = conversationDirectoryItems(snapshot.messages, new Set(turns.flatMap(turn => turn.filter(entry => entry.message?.role === "user").map(entry => entry.id))),new Map(turns.flatMap(turn=>{const user=turn.find(entry=>entry.message?.role==='user');return user?[[user.id,conversationPreview(turn)] as const]:[]})));
