@@ -4,7 +4,6 @@
 .composer-model-select.app-select > .app-select-trigger[aria-expanded="true"]:not(:focus-visible) { outline: none; }
 .composer-model-setup { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; white-space: nowrap; }
 .composer-model-setup:hover:not(:disabled) { background: var(--surface-hover); color: var(--foreground); }
-.composer-model-heading { padding: 7px 9px; color: var(--text-muted); font-size: 11px; }
 .composer-model-search { display: flex; align-items: center; gap: 7px; margin: 2px 5px 7px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text-muted); }
 .composer-model-search:focus-within { border-color: var(--focus); }
 .composer-model-search input { min-width: 0; width: 100%; height: 32px; margin: 0; padding: 0; border: 0; outline: none; background: transparent; color: var(--foreground); font: inherit; font-size: 12px; }
@@ -22,13 +21,7 @@
   backdrop-filter: var(--title-glass-filter);
   box-shadow: inset 0 1px color-mix(in srgb,var(--surface) 65%,transparent),var(--shadow-popover);
 }
-.composer-provider-heading { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 38px; padding: 7px 9px; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--foreground); font: inherit; text-align: left; cursor: pointer; }
-.composer-provider-heading > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
-.composer-provider-heading > small,.composer-model-capability { flex-shrink: 0; border-radius: var(--radius-control); padding: 2px 6px; color: var(--text-secondary); background: var(--surface-hover); font-size: 10px; font-weight: 500; }
-.composer-provider-arrow { margin-left: auto; flex-shrink: 0; color: var(--text-muted); }
-.composer-provider-heading:hover { background: var(--surface-hover); }
-.composer-provider-heading:focus-visible { outline-offset: -2px; }
-.composer-model-popup .composer-model-heading { padding: 7px 9px 3px; font-size: 10px; }
+.composer-model-capability { flex-shrink: 0; border-radius: var(--radius-control); padding: 2px 6px; color: var(--text-secondary); background: var(--surface-hover); font-size: 10px; font-weight: 500; }
 .composer-model-popup .app-select-group { padding: 7px 9px 3px; font-size: 10px; }
 .composer-model-popup .app-select-option { min-height: 32px; padding: 6px 9px; }
 .composer-model-popup .composer-model-label small { font-size: 10px; }
@@ -38,34 +31,25 @@
 .composer-reasoning-heading { display: flex; align-items: center; gap: 8px; min-height: 22px; margin-bottom: 2px; }
 .composer-reasoning-heading > span { color: var(--text-secondary); font-size: 11px; }
 .composer-reasoning-heading > strong { font-size: 11px; font-weight: 500; }
-.composer-reasoning-default { display: grid; place-items: center; width: 24px; height: 22px; margin-left: auto; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); cursor: pointer; }
-.composer-reasoning-default:hover:not(:disabled) { background: var(--surface-hover); color: var(--foreground); }
-/* Keep a generous hit area around a fine rail; thumb and fill share one mapping. */
-.composer-reasoning-track { position: relative; height: 24px; }
-.composer-reasoning-track::before,.composer-reasoning-track::after { content: ""; position: absolute; top: 10px; left: 7px; height: 4px; border-radius: 2px; pointer-events: none; }
-.composer-reasoning-track::before { right: 7px; background: color-mix(in srgb,var(--text-muted) 17%,var(--surface)); box-shadow: inset 0 1px 1px color-mix(in srgb,var(--foreground) 5%,transparent); }
-.composer-reasoning-track::after { width: calc((100% - 14px) * var(--reasoning-progress)); background: linear-gradient(100deg,color-mix(in srgb,var(--chart-2) 75%,var(--surface)),var(--info)); box-shadow: inset 0 1px color-mix(in srgb,var(--surface) 16%,transparent); }
-.composer-reasoning-track input { position: absolute; z-index: 2; inset: 0; appearance: none; -webkit-appearance: none; width: 100%; height: 24px; margin: 0; border: 0; padding: 0; background: transparent; cursor: pointer; }
-.composer-reasoning-track input::-webkit-slider-runnable-track { height: 4px; background: transparent; }
-.composer-reasoning-track input::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border: 1px solid var(--border-strong); border-radius: 50%; background: linear-gradient(var(--surface),var(--surface-subtle)); box-shadow: 0 1px 3px color-mix(in srgb,var(--foreground) 15%,transparent),inset 0 1px color-mix(in srgb,var(--surface) 90%,transparent); }
-.composer-reasoning-track input::-moz-range-track { height: 4px; background: transparent; }
-.composer-reasoning-track input::-moz-range-thumb { width: 12px; height: 12px; border: 1px solid var(--border-strong); border-radius: 50%; background: linear-gradient(var(--surface),var(--surface-subtle)); box-shadow: 0 1px 3px color-mix(in srgb,var(--foreground) 15%,transparent); }
-.composer-reasoning-track input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
+/* Luminous violet capsule, with one crisp glass thumb over a quiet star field. */
+.composer-reasoning-track { position: relative; height: 28px; margin-top: 7px; border-radius: 14px; background: linear-gradient(100deg,var(--reasoning-violet-start),var(--reasoning-violet-end)); box-shadow: inset 0 1px 1px rgb(255 255 255 / .2); }
+.composer-reasoning-track::after { content: ""; position: absolute; inset: 0 0 0 calc(14px + (100% - 28px) * var(--reasoning-progress)); border-radius: inherit; background: color-mix(in srgb,var(--surface) 48%,transparent); pointer-events: none; }
+.composer-reasoning-track input { position: absolute; z-index: 2; inset: -2px 0; appearance: none; -webkit-appearance: none; width: 100%; height: 32px; margin: 0; border: 0; padding: 0; background: transparent; cursor: pointer; }
+.composer-reasoning-track input::-webkit-slider-runnable-track { height: 28px; background: transparent; }
+.composer-reasoning-track input::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 50%; background: linear-gradient(150deg,var(--surface),var(--surface-subtle)); box-shadow: 0 1px 4px color-mix(in srgb,var(--foreground) 18%,transparent),inset 0 1px rgb(255 255 255 / .75); }
+.composer-reasoning-track input::-moz-range-track { height: 28px; background: transparent; }
+.composer-reasoning-track input::-moz-range-thumb { width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 50%; background: linear-gradient(150deg,var(--surface),var(--surface-subtle)); box-shadow: 0 1px 4px color-mix(in srgb,var(--foreground) 18%,transparent); }
+.composer-reasoning-track input:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 16px; }
 .composer-reasoning-track input:disabled { cursor: default; }
-.composer-reasoning-ticks { position: absolute; z-index: 1; inset: 0 7px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
-.composer-reasoning-ticks i { width: 2px; height: 2px; border-radius: 50%; background: color-mix(in srgb,var(--text-muted) 45%,var(--surface)); }
-.composer-reasoning-ticks i[data-active] { background: color-mix(in srgb,var(--surface) 70%,transparent); }
+.composer-reasoning-sparkles { position: absolute; z-index: 1; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(circle at 7% 44%,#fff9 0 1px,transparent 1.4px),radial-gradient(circle at 11% 38%,#fff6 0 .8px,transparent 1.2px),radial-gradient(circle at 17% 63%,#fff8 0 1.2px,transparent 1.6px),radial-gradient(circle at 28% 32%,#fff8 0 .8px,transparent 1.2px),radial-gradient(circle at 43% 59%,#fff9 0 1.1px,transparent 1.5px),radial-gradient(circle at 51% 38%,#fff6 0 .8px,transparent 1.2px),radial-gradient(circle at 58% 55%,#fff9 0 1px,transparent 1.4px),radial-gradient(circle at 66% 29%,#fff8 0 .8px,transparent 1.2px),radial-gradient(circle at 77% 44%,#fffa 0 1.3px,transparent 1.7px),radial-gradient(circle at 92% 59%,#fff8 0 1.1px,transparent 1.5px); }
 .composer-reasoning-scale { display: flex; justify-content: space-between; margin: 0 1px; color: var(--text-muted); font-size: 9px; line-height: 12px; }
 .composer-reasoning-hint,.composer-reasoning-error { margin: 9px 0 0; font-size: 11px; line-height: 1.5; color: var(--text-secondary); }
 .composer-reasoning-error { color: var(--danger); overflow-wrap: anywhere; }
 .composer-reasoning-error button { margin-left: 8px; border: 0; background: transparent; color: inherit; text-decoration: underline; cursor: pointer; }
-.composer-reasoning-single { padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-hover); color: var(--foreground); font: inherit; }
 @media (pointer: coarse) {
-  .composer-model-popup .app-select-option,.composer-provider-heading { min-height: 44px; }
-  .composer-reasoning-default { width: 44px; height: 44px; }
-  .composer-reasoning-track { height: 44px; }
-  .composer-reasoning-track input { height: 44px; }
-  .composer-reasoning-track::before,.composer-reasoning-track::after { top: 20px; }
+  .composer-model-popup .app-select-option { min-height: 44px; }
+  .composer-reasoning-track { margin-block: 14px 8px; }
+  .composer-reasoning-track input { inset-block: -8px; height: 44px; }
 }
 
 @media (max-height: 520px) {

@@ -6,9 +6,9 @@
   "screenshot": "docs/validation/composer-model-panel.png",
   "checks": [
     "337 frontend tests passed; TypeScript and Vite build passed (existing chunk-size warning).",
-    "Actual App fixture: one model trigger, provider heading, model list with vision badge, reasoning footer.",
+    "Actual App fixture: one model trigger, provider-grouped model list with vision badge, reasoning footer.",
     "End saves deepseek-flash/max once; default saves empty effort, preserving model default semantics.",
-    "Switch to deepseek-v4-pro: only low/high stops; Home saves low for the new model.",
+    "Switch to deepseek-v4-pro: default/low/high stops; ArrowRight from default saves low for the new model.",
     "Model with empty levels hides reasoning section.",
     "390x640 dark theme: long provider-grouped list scrolls, search filters to one matching model.",
     "Escape from slider closes popover and restores model trigger focus.",
@@ -21,13 +21,14 @@
   ],
   "refinement": {
     "desktopCardWidth": 276,
-    "fourModelCardHeight": 304.5,
+    "fourModelCardHeight": 275.5,
     "desktopRowHeight": 32,
-    "railHeight": 4,
-    "thumbDiameter": 14,
+    "railHeight": 28,
+    "thumbDiameter": 28,
     "glass": "Same --title-glass-* variables as floating title: blur(18px) saturate(145%), light/dark and reduced-transparency fallbacks.",
     "lowViewport": "390x400: card top 8, bottom 312, max-height 304 after live resize; ResizeObserver updates placement.",
     "detailScreenshot": "docs/validation/composer-model-panel-detail.png",
-    "reset": "Icon-only reset retains an accessible name; current default is displayed as 默认 · 高."
+    "reset": "No reset icon or provider header. Default is the first slider stop and saves empty effort; remaining stops are only supported levels.",
+    "appearance": "Blue-violet capsule gradient, subtle static points of light, neutral glass thumb; shared liquid glass popover retained."
   }
 }
