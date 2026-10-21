@@ -8,6 +8,7 @@ export type StrategyRevision={asset:StrategyAsset;value:{ref:StrategyRef;parentR
 export type StrategyBinding={assetId:string;scope:StrategyScope;revision:number;bindingRevision:number;enabled:boolean;priority:number;exclusionGroup:string};
 export type StrategySettings={scope:StrategyScope;revision:number;epoch:number;masterEnabled:boolean;applyEnabled:boolean;learnEnabled:boolean;correctEnabled:boolean;onlineCorrectEnabled?:boolean;budget:Record<string,number>};
 export type StrategySettingsView={settings:StrategySettings;effective:StrategySettings;source:string;capabilities:{apply:boolean;learn:boolean;correct:boolean}};
+export function strategySettingsForm(s:StrategySettingsView):StrategySettingsView{return s.source==='inherited'?{...s,settings:{...s.settings,masterEnabled:s.effective.masterEnabled,applyEnabled:s.effective.applyEnabled,learnEnabled:s.effective.learnEnabled,correctEnabled:s.effective.correctEnabled,onlineCorrectEnabled:!!s.effective.onlineCorrectEnabled,budget:s.effective.budget}}:s;}
 export type StrategyLineage={nodes:{id:string;kind:string;revision:number;createdAt:string;availability?:string;summary?:string;contentHash?:string;sourceId?:string;sourceKind?:string}[];edges:{id:number;fromId:string;toId:string;relation:string;createdAt:string}[];nextCursor:number;hasMore:boolean;redacted:boolean};
 export type StrategyMutation={assetId?:string;revision?:number;bindingRevision?:number};
 export type StrategyDraft={title:string;kind:StrategyKind;body:string;applicability:StrategyApplicability};

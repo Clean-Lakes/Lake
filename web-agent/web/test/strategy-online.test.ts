@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {strategyApi,type StrategySettings} from '../src/strategyApi';
+import {strategyApi,strategySettingsForm,type StrategySettings,type StrategySettingsView} from '../src/strategyApi';
 import {orderedTranscript,transcriptGroups} from '../src/timeline';
 import type {SessionSnapshot,AICard} from '../../shared/contracts';
 import {createElement} from 'react';
@@ -16,6 +16,13 @@ test('online execution needs its own saved consent; old settings do not enable i
   await strategyApi.saveSettings('/api/projects/current/strategy',{...old,onlineCorrectEnabled:true});
   assert.equal(requests[0].onlineCorrectEnabled,false);assert.equal(requests[1].onlineCorrectEnabled,true);assert.equal(requests[1].expectedRevision,1);
  }finally{globalThis.fetch=oldFetch}
+});
+
+test('an unsaved project shows inherited online consent while retaining project CAS and ownership',()=>{
+ const project={scope:{kind:'project',projectId:'current'},revision:0,epoch:0,masterEnabled:false,applyEnabled:false,learnEnabled:false,correctEnabled:false,onlineCorrectEnabled:false,budget:{maxRevisions:2}} as StrategySettings;
+ const view={settings:project,effective:{...project,masterEnabled:true,correctEnabled:true,onlineCorrectEnabled:true},source:'inherited',capabilities:{apply:true,learn:true,correct:true}} satisfies StrategySettingsView;
+ const form=strategySettingsForm(view);assert.equal(form.settings.onlineCorrectEnabled,true);assert.equal(form.settings.revision,0);assert.equal(form.settings.epoch,0);assert.deepEqual(form.settings.scope,project.scope);assert.equal(view.settings.onlineCorrectEnabled,false);
+ assert.equal(strategySettingsForm({...view,source:'stored'}).settings.onlineCorrectEnabled,false);
 });
 
 test('a data-only correction report remains visible with its real turn and outside tool execution groups',()=>{

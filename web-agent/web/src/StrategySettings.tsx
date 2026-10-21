@@ -3,7 +3,7 @@ import {diffLines} from 'diff';
 import {AppSelect} from './AppSelect';
 import {Glyph} from './Icons';
 import {api,readableError} from './api';
-import {parseStrategyImport,strategyApi,strategyExport,strategyPath,type StrategyAsset,type StrategyBinding,type StrategyDraft,type StrategyKind,type StrategyLineage,type StrategyRevision,type StrategySettingsView} from './strategyApi';
+import {parseStrategyImport,strategyApi,strategySettingsForm as settingsForm,strategyExport,strategyPath,type StrategyAsset,type StrategyBinding,type StrategyDraft,type StrategyKind,type StrategyLineage,type StrategyRevision,type StrategySettingsView} from './strategyApi';
 import './strategySettings.css';
 import {StrategyExperiments} from './StrategyExperiments';
 import {StrategyLearning} from './StrategyLearning';
@@ -15,7 +15,6 @@ const relationLabels:Record<string,string>={derived_from:'来源于',adopted_as:
 function nodeLabel(n:StrategyLineage['nodes'][number]):string{return n.kind==='user_message'?(n.sourceKind==='skill_import'?'Skill 快照':'用户手写确认'):n.kind==='asset_revision'?`资产版本 v${n.revision}`:n.kind==='adoption'?'采用记录':n.kind==='correction'?'用户纠正':n.kind==='attempt'?'优化候选尝试':n.kind==='run'?'独立快照运行':n.kind==='evaluation'?'固定快照评估':'来源记录';}
 function endpointLabel(l:StrategyLineage,id:string){const n=l.nodes.find(n=>n.id===id);return n?nodeLabel(n):'受限记录';}
 const blank=():StrategyDraft=>({title:'',kind:'user_preference',body:'',applicability:{profiles:[],resourceKinds:[],domainTags:[]}});
-function settingsForm(s:StrategySettingsView):StrategySettingsView{return s.source==='inherited'?{...s,settings:{...s.settings,masterEnabled:s.effective.masterEnabled,applyEnabled:s.effective.applyEnabled,learnEnabled:s.effective.learnEnabled,correctEnabled:s.effective.correctEnabled,budget:s.effective.budget}}:s;}
 const split=(text:string)=>text.split(',').map(v=>v.trim()).filter(Boolean);
 function download(name:string,body:string,type:string){const url=URL.createObjectURL(new Blob([body],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 
