@@ -4,6 +4,7 @@ import {createRoot} from 'react-dom/client';
 import {ModelSettings} from '../../src/ModelSettings';
 import '../../src/styles.css';
 import '../../src/appSelect.css';
+import '../../src/providerIcon.css';
 import '../../src/extensionSettings.css';
 const dark=new URLSearchParams(location.search).has('dark');
 document.documentElement.dataset.theme=dark?'dark':'light';
