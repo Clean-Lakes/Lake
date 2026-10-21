@@ -1,3 +1,5 @@
+import {ReplyActivity} from './ReplyActivity';
+import {turnStatus} from './turnStatus';
 import {completedTurnInterimIds,isAssistantProse} from './completedTurnProse';
 import {SettledReply} from './SettledReply';
 import {OperationOutcomes} from './OperationOutcomes';
@@ -140,6 +142,8 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
   const latestUserAt = latestUser?.createdAt || "";
   const currentTurn=latestUser?turns.find(turn=>turn.some(entry=>entry.message?.id===latestUser.id))??[]:[];
   const currentTiming=timingForTurn(currentTurn,snapshot);
+  const currentTurnState=turnStatus(currentTiming,snapshot.ai,currentTurn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt,Date.now());
+  const replyWorking=snapshot.ai?.status==='running'&&currentTurnState.live&&!currentTurnState.waiting&&!stopping&&!disabled;
   const liveConversation=['running','waiting_approval'].includes(snapshot.ai?.status||'')&&(!currentTiming||currentTiming.status==='running');
   const conversationTurnEntries=(turn:typeof entries)=>{
     const stopped=timingForTurn(turn,snapshot)?.status==='cancelled';
@@ -193,6 +197,7 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
       {groups.filter(group=>!processGroups.includes(group)).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} collapsed={group.entries.every(entry=>interimIds.has(entry.id))}>{renderGroup(group)}</SettledReply>:renderGroup(group))}
       <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}/>
+      {mode==='conversation'&&turn===currentTurn&&<ReplyActivity active={replyWorking}/>}
     </div>;})}
 
     {mode==='activity'&&mergedSRE.filter(task=>!sreTaskFilter||task.id===sreTaskFilter).map(task=><SREEventHistory key={task.id} task={task}/>)}

@@ -15,7 +15,7 @@
 | 检查 | 结果 |
 | --- | --- |
 | `go test -race -p 1 ./internal/ai ./internal/web` | 两包通过，包含新输入状态事件、问题恢复、并行/连续审批、未知变更只读通道与核实后不可重放回归 |
-| `npm --prefix web-agent run test:frontend` | 359 项通过 |
+| `npm --prefix web-agent run test:frontend` | 362 项通过 |
 | `npm --prefix web-agent run build:web` | 类型检查与生产构建通过；存在已有的大分块提示 |
 | `python3 scripts/check_adk_runtime_boundary.py` | 通过 |
 | `git diff --check` | 通过 |
@@ -38,6 +38,18 @@
 ![深色窄窗口](session-issues-narrow-dark.jpg)
 
 ![结束后的最终回复，右上角为隔离夹具控制按钮](session-final-summary.jpg)
+
+## 补充：回复末尾的小动画
+
+按后续界面反馈，在当前回复末尾加入 Lake 蓝色八向光芒：20px 图形，22px 承载区域，8.4 秒旋转与 2.1 秒轻呼吸。复用当前轮的真实运行/等待判断，只展示一个视觉标记，不增加第二个状态播报。待确认、角色问题、停止、失败、断线和已完成的轮次不继续展示；离场暂停旋转并在 180ms 内淡出收拢。减少动态效果的 CSS 规则关闭旋转、呼吸和过渡。
+
+补充的前端回归覆盖当前轮唯一标记、首包等待、已保存的完成状态优先于延迟快照、历史轮次、待确认/角色问题及执行记录/证据视图。全部 362 项通过，类型检查与生产构建通过。此补充不改 Go 后端，沿用前述完整后端回归结果。
+
+隔离夹具中实际读到旋转矩阵随时间变化；待确认和回复结束后标记数量均为 0。浅色与深色使用主题蓝色，在 390px 窄窗口无横向溢出。没有安装或重启 Lake Dev。
+
+![浅色回复末尾标记](reply-activity-light.jpg)
+
+![深色窄窗口标记](reply-activity-narrow-dark.jpg)
 
 ## 未验证项与回退
 
