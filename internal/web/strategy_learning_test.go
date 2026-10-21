@@ -495,3 +495,54 @@ func TestStrategyLearningHTTPRealSourcesScopeAndPagination(t *testing.T) {
 	_, err := b.Store.QueueStrategyProposal(ctx, "late", StrategyJobInput{Scope: strategy.Scope{Kind: strategy.ProjectScope, ProjectID: project}, Kind: "proposal", SourceIDs: []string{source}})
 	strategyCheckError(t, err, 409)
 }
+
+func TestStrategyLearningDeletionErasesPrivateSnapshotsAndResults(t *testing.T) {
+	for _, target := range []string{"session", "asset"} {
+		t.Run(target, func(t *testing.T) {
+			b, h := fixture(t)
+			session, _ := newSession(t, h)
+			ctx := StrategyContext{ProjectID: stringOf(b.Store.Session(session)["projectId"])}
+			scope := strategy.Scope{Kind: strategy.ProjectScope, ProjectID: ctx.ProjectID}
+			enableStrategyFixture(t, b.Store)
+			text := "以后请先列证据，再提出结论。"
+			b.Store.AddMessage(session, "user", text, nil)
+			effective, _ := b.Store.EffectiveStrategySettings(ctx)
+			snapshot := ai.SealStrategySnapshot(ai.StrategyTurnSnapshot{SessionID: session, ProjectID: ctx.ProjectID, TurnID: "private-turn", StartedAt: now(), FinishedAt: now(), GlobalEpoch: effective.GlobalEpoch, ProjectEpoch: effective.ProjectEpoch, Status: "completed", Profile: "core", UserText: text, Correction: true})
+			source, err := b.Store.registerStrategyTurn(snapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			q, err := b.Store.QueueStrategyProposal(ctx, "q", StrategyJobInput{Scope: scope, Kind: "proposal", SourceIDs: []string{source}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			job, _ := b.Store.claimStrategyJob(ctx, "proposal")
+			token := stringOf(job["leaseToken"])
+			_, err = b.Store.beginStrategyProposalRun(ctx, q.JobID, token, "private-request")
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, _ := parseStrategyProposal(learningOutput(source, "Inspect before conclusions."), []string{source})
+			_, err = b.Store.saveStrategyProposalRun(ctx, q.JobID, token, result, ai.Usage{}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			b.finishStrategyProposal(ctx, job, result)
+			asset := stringOf(b.Store.row("SELECT id FROM strategyAssets LIMIT 1")["id"])
+			if target == "session" {
+				b.Store.DeleteSession(session)
+				if b.Store.row("SELECT snapshotJSON FROM strategyLearningTurns WHERE sourceId=?", source)["snapshotJSON"] != "" {
+					t.Fatal("deleted conversation retained in learning snapshot")
+				}
+			} else {
+				_, err = b.Store.DeleteStrategyAsset(ctx, asset, "delete", 1)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if b.Store.row("SELECT resultJSON FROM strategyProposalRuns WHERE jobId=?", q.JobID)["resultJSON"] != "" {
+				t.Fatal("deleted content retained in proposal result")
+			}
+		})
+	}
+}
