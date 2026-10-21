@@ -46,6 +46,14 @@
   --radius-control: 5px;
   --radius-panel: 7px;
   --radius-dialog: 9px;
+  /* Settings surfaces: fixed scale rather than borrowing a dialog radius for controls. */
+  --radius-settings-control: 10px;
+  --radius-settings-panel: 14px;
+  --radius-settings-dialog: 22px;
+  --radius-settings-icon: 8px;
+  --radius-settings-badge: 5px;
+  --radius-composer-reference: 12px;
+  --radius-message-reference: 11px;
   /* macOS 26 outer contour, checked against a native window capture at 2x. */
   --radius-window: 22px;
   --corner-window: superellipse(1.5);
@@ -53,6 +61,8 @@
   --chart-2: #159b88;
   --chart-3: #cd8a25;
   --chart-4: #8064be;
+  --reasoning-accent: #3683fa;
+  --reasoning-track: #e9e8e8;
   --terminal-background: #fafafa;
   --terminal-foreground: #303030;
   --terminal-selection: #dbe5f2;
@@ -73,6 +83,8 @@
 }
 
 :root[data-theme="dark"] {
+  --reasoning-accent: #4b91ff;
+  --reasoning-track: #424246;
   color-scheme: dark;
   --background: #171717;
   --surface: #1b1b1b;

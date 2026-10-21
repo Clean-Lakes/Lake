@@ -43,6 +43,7 @@ import LakeDesktopCore
     private let backend = Backend()
     private let updater = Updater()
     private let profile = DesktopProfile(bundleIdentifier: Bundle.main.bundleIdentifier)
+    private var modelPanel: ModelPanelHosting?
     private var origin: URL?
     private var terminating = false
     private var ready = false
@@ -110,6 +111,12 @@ import LakeDesktopCore
         }
         config.userContentController.add(self, name: "lakeChrome")
         config.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "lakeUpdates")
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            config.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "lakeModelPanel")
+            config.userContentController.addUserScript(NativeModelPanel.bridge(role: "workbench"))
+        }
+        #endif
         let updateBridge = "window.lakeDesktopUpdates = {platform:'macOS', development:\(profile.isDevelopment ? "true" : "false"), command: action => window.webkit.messageHandlers.lakeUpdates.postMessage({action})};"
         config.userContentController.addUserScript(WKUserScript(source: updateBridge, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         if let layoutURL = Bundle.main.url(forResource: "workbench-layout", withExtension: "js"),
@@ -223,6 +230,19 @@ import LakeDesktopCore
         webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('lake-desktop-update', {detail: \(json)}));", completionHandler: nil)
     }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {
+        #if compiler(>=6.2)
+        if message.name == "lakeModelPanel" {
+            guard #available(macOS 26.0, *), message.webView === webView, message.frameInfo.isMainFrame,
+                  sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any], let action = body["action"] as? String,
+                  let origin else { replyHandler(nil, "原生模型面板不可用"); return }
+            if action == "close" { modelPanel?.close(notify: false); replyHandler(true, nil); return }
+            guard action == "show", let state = body["state"] as? [String: Any] else { replyHandler(nil, "未知的面板请求"); return }
+            if modelPanel == nil { modelPanel = NativeModelPanel(parent: window, webView: webView, origin: origin) }
+            guard modelPanel?.show(state) == true else { replyHandler(nil, "模型面板位置不可用"); return }
+            replyHandler(true, nil)
+            return
+        }
+        #endif
         guard message.name == "lakeUpdates", message.frameInfo.isMainFrame,
               sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any],
               let action = body["action"] as? String, ["state", "check", "install"].contains(action) else {
@@ -247,7 +267,9 @@ import LakeDesktopCore
         renderUpdate(updater.state)
         Task { await updater.checkIfDue() }
     }
-    func windowDidResize(_ notification: Notification) { syncChromeHeight() }
+    func windowDidResize(_ notification: Notification) { modelPanel?.close(notify: true); syncChromeHeight() }
+    func windowDidMove(_ notification: Notification) { modelPanel?.close(notify: true) }
+    func windowWillMiniaturize(_ notification: Notification) { modelPanel?.close(notify: true) }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == "lakeChrome", message.frameInfo.isMainFrame,
               sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any] else { return }
@@ -286,7 +308,8 @@ import LakeDesktopCore
         webView.evaluateJavaScript("document.documentElement.style.setProperty('--lake-titlebar-height', '\(height)px'); window.dispatchEvent(new Event('lake-chrome-resize'));", completionHandler: nil)
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        BackgroundWindow.shouldClose(sender, terminating: terminating)
+        modelPanel?.close(notify: true)
+        return BackgroundWindow.shouldClose(sender, terminating: terminating)
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showWorkbench()

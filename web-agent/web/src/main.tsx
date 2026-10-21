@@ -3,6 +3,7 @@ import "./agentQuestion.css";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { NativeModelPanelPage } from "./NativeModelPanelPage";
 import "./appSelect.css";
 import "./providerIcon.css";
 import "./composerModelSelect.css";
@@ -16,4 +17,5 @@ if (window.lakeWindowsChrome) document.documentElement.classList.add("lake-windo
 
 const root = document.getElementById("root");
 if (!root) throw new Error("缺少应用挂载点");
-createRoot(root).render(<React.StrictMode><App /><WindowsChrome /></React.StrictMode>);
+const nativePanel=window.lakeNativeModelPanel?.role==="panel";
+createRoot(root).render(<React.StrictMode>{nativePanel?<NativeModelPanelPage/>:<><App /><WindowsChrome /></>}</React.StrictMode>);

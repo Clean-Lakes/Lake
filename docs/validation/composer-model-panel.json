@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-21",
+  "base": "1dd1e5a6a425c569ab150ab597787b90c60043f1",
+  "scope": "Native macOS Liquid Glass model card, opaque supplier submenu, blue/gray reasoning slider with stable per-session saves, and consistent settings corner geometry. No backend changes.",
+  "fixture": "web-agent/web/test/fixtures/composer-model-workbench.html?conversation-radii",
+  "screenshot": "docs/validation/composer-model-panel-current.jpg",
+  "checks": [
+    "343 frontend tests passed; TypeScript, Vite build, Swift release build and signed Dev install passed (existing chunk-size/linker warnings).",
+    "Actual App fixture: one model trigger, provider-filtered model list with vision badge, reasoning footer.",
+    "End saves deepseek-flash/max once; default saves empty effort, preserving model default semantics.",
+    "Switch to deepseek-v4-pro: default/low/high stops; ArrowRight from default saves low for the new model.",
+    "Model with empty levels hides reasoning section.",
+    "390x640 dark theme: long provider-filtered list scrolls, search filters to one matching model.",
+    "Escape from slider closes popover and restores model trigger focus.",
+    "Capability read failure exposes retry; retry restores slider.",
+    "Running mode disables slider/default without issuing saves.",
+    "390x640 dark: provider switching filters models; searching demo-19 in the backup source returns one model; Escape restores trigger focus."
+  ],
+  "isolation": "Only fictional in-memory API fixtures; no model calls, credentials, hosts or user settings used for browser checks.",
+  "limits": [
+    "Windows native rendering and external provider APIs not exercised.",
+    "Native macOS reads and provider browsing exercised without saving the user's real model/reasoning settings; slow POST/bridge checks use fictional in-memory fixtures.",
+    "Older macOS/SDK fallback compiles conditionally but was not run on older hardware."
+  ],
+  "refinement": {
+    "desktopCardWidth": 276,
+    "desktopRowHeight": 32,
+    "railHeight": 28,
+    "thumbDiameter": 28,
+    "glass": "macOS 26+ uses NSGlassEffectView.regular with transparent WKWebView content, clipped 18px corners and no WebKit focus ring. Browser/Windows/older macOS or SDK retain CSS title-glass fallback.",
+    "lowViewport": "390x400: card top 8, bottom 312, max-height 304 after live resize; ResizeObserver updates placement.",
+    "detailScreenshot": "docs/validation/composer-model-panel-current-detail.jpg",
+    "reset": "Default is slider stop 0 and saves empty effort; no refresh/reset icon.",
+    "appearance": "28px system-blue selected range, neutral gray remainder, fixed supported-level dots and a white 28px thumb. Track/thumb share the window curve and lighter shadow. 240ms eased movement; direct drag; reduced motion disables transition.",
+    "visibleModelsPerSource": 2,
+    "sourceSwitch": "Current-provider icon/name with arrow opens a side submenu. Supplier check and Manage models entry; clicking trigger again closes it. Browsing filters models without submitting selection. Native supplier menu is opaque, not Liquid Glass; web submenu uses shared AppSelect.",
+    "default": "Default remains slider stop 0 with empty effort; no refresh/reset icon.",
+    "twoModelCardHeight": 205
+  },
+  "stableSaving": {
+    "webCard": "276x205 for two models; stable selected/active classes and colors during slow max/high saves.",
+    "nativeContentCard": "Transparent HTML/body, no CSS shadow/filter; retained child page serializes/coalesces slow saves without reloading model options.",
+    "modelRows": "Same active/selected classes, text colors and row backgrounds while saving. Model submission locked without changing appearance.",
+    "writes": "max then high; intermediate choices coalesced, one continuous busy=true/false batch, focus stays on range, no list reload or resize during save.",
+    "nativeWindowTests": "Placement above/below anchor, visible-screen clamping, same-origin host/scheme/port rejection, hide/reopen/retained content/minimized restore/termination passed.",
+    "sidebar": "43 sidebar buttons: labels, disabled state, opacity, color and background identical before/during a slow save. MutationObserver recorded zero sidebar disabled/class/style changes. Reasoning busy state is tracked by session, separate from global pendingOperation."
+  },
+  "nativeSupplierMenu": {
+    "material": "Opaque NSPanel surface; no NSGlassEffectView/vibrancy",
+    "geometry": "208px width, 18px continuous outer corners, one physical-pixel border; NSScrollView.noBorder and focusRingType.none remove the double rim. Main model card remains native regular glass.",
+    "interaction": "Native supplier browsing exercised on macOS 26; changing browsing category kept actual selected model unchanged and main card open. Keyboard arrows/Home/End/Enter/Escape are handled by the native panel."
+  },
+  "settingsCorners": {
+    "tokens": {
+      "dialog": 22,
+      "panel": 14,
+      "control": 10,
+      "icon": 8,
+      "badge": 5
+    },
+    "curve": "Shared --corner-window; standard round fallback when unsupported. Switches/status dots retain pill/circle geometry.",
+    "checks": [
+      "Real ModelSettings component with fictional read-only providers, light 1100x720 and dark 390x720.",
+      "AppSelect popup inherits 14px outer/10px option corners; Escape closes correctly.",
+      "Inputs/ordinary buttons 10px; supplier cards/model list 14px; dialog clips contents at 22px. No horizontal viewport overflow at 390px.",
+      "Narrow supplier rail scrolls instead of hiding provider cards. Input focus uses a light focus ring, not dialog-sized shadow."
+    ],
+    "screenshots": [
+      "docs/validation/settings-corners-light.jpg",
+      "docs/validation/settings-corners-dark-narrow.jpg"
+    ],
+    "agentRules": "AGENTS.md: Corner geometry for frontend agents; docs/ui-guidelines.md: 设置界面的圆角比例"
+  }
+}
