@@ -4,13 +4,6 @@
 .composer-model-select.app-select > .app-select-trigger[aria-expanded="true"]:not(:focus-visible) { outline: none; }
 .composer-model-setup { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; white-space: nowrap; }
 .composer-model-setup:hover:not(:disabled) { background: var(--surface-hover); color: var(--foreground); }
-.composer-reasoning-select.app-select { width: auto; max-width: 132px; margin-top: 0; }
-.composer-reasoning-select.app-select > .app-select-trigger { height: 28px; padding: 0 7px; gap: 6px; border: 0; background: transparent; font-size: 12px; color: var(--text-secondary); }
-.composer-reasoning-select.app-select > .app-select-trigger:disabled { opacity: 1; color: var(--text-secondary); }
-.composer-reasoning-select.app-select > .app-select-trigger:hover:not(:disabled),.composer-reasoning-select.app-select > .app-select-trigger[aria-expanded="true"] { background: var(--surface-hover); }
-.composer-reasoning-select.app-select > .app-select-trigger[aria-expanded="true"]:not(:focus-visible) { outline: none; }
-.composer-reasoning-select .app-select-value { line-height: 18px; }
-.composer-reasoning-select .app-select-chevron { display: none; }
 .composer-model-popup .app-select-option { min-height: 38px; }
 .composer-model-heading { padding: 7px 9px; color: var(--text-muted); font-size: 11px; }
 .composer-model-search { display: flex; align-items: center; gap: 7px; margin: 2px 5px 7px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text-muted); }
@@ -25,3 +18,45 @@
 .composer-model-settings:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .composer-model-note { margin: 6px 9px; color: var(--text-secondary); font-size: 11px; line-height: 1.6; }
 @media (max-width:700px) { .composer-model-select.app-select { max-width: 180px; } }
+
+/* One compact Lake surface for source, model and reasoning. */
+.composer-model-popup { padding: 6px; border-radius: var(--radius-window); corner-shape: var(--corner-window); }
+.composer-provider-heading { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 48px; padding: 10px; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--foreground); font: inherit; text-align: left; cursor: pointer; }
+.composer-provider-heading > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
+.composer-provider-heading > small,.composer-model-capability { flex-shrink: 0; border-radius: var(--radius-control); padding: 2px 6px; color: var(--text-secondary); background: var(--surface-hover); font-size: 10px; font-weight: 500; }
+.composer-provider-arrow { margin-left: auto; flex-shrink: 0; color: var(--text-muted); }
+.composer-provider-heading:hover { background: var(--surface-hover); }
+.composer-provider-heading:focus-visible { outline-offset: -2px; }
+.composer-model-popup .composer-model-heading { padding-top: 12px; }
+.composer-model-popup .app-select-option { min-height: 42px; }
+.composer-model-popup .composer-model-label { flex: 1; }
+.composer-model-popup .app-select-footer { padding-top: 0; }
+.composer-reasoning-panel { padding: 14px 11px 10px; }
+.composer-reasoning-heading { display: flex; align-items: center; gap: 10px; min-height: 24px; margin-bottom: 13px; }
+.composer-reasoning-heading > span { color: var(--text-secondary); font-size: 12px; }
+.composer-reasoning-heading > strong { font-size: 13px; font-weight: 550; }
+.composer-reasoning-default { margin-left: auto; padding: 3px 8px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-secondary); font: inherit; font-size: 11px; cursor: pointer; }
+.composer-reasoning-default[aria-pressed="true"] { background: var(--surface-hover); color: var(--foreground); }
+.composer-reasoning-default:hover:not(:disabled) { background: var(--surface-hover); }
+.composer-reasoning-track { position: relative; height: 28px; border-radius: 14px; background: linear-gradient(100deg,var(--chart-2),var(--info)); box-shadow: inset 0 0 0 1px color-mix(in srgb,var(--foreground) 7%,transparent); }
+.composer-reasoning-track::after { content: ""; position: absolute; inset: 0 0 0 var(--reasoning-fill); border-radius: inherit; background: color-mix(in srgb,var(--surface) 68%,transparent); pointer-events: none; }
+.composer-reasoning-track input { position: absolute; z-index: 2; inset: -3px 0; appearance: none; -webkit-appearance: none; width: 100%; height: 34px; margin: 0; border: 0; padding: 0; background: transparent; cursor: pointer; }
+.composer-reasoning-track input::-webkit-slider-runnable-track { height: 28px; background: transparent; border-radius: 14px; }
+.composer-reasoning-track input::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); box-shadow: 0 1px 5px #0003; }
+.composer-reasoning-track input::-moz-range-track { height: 28px; background: transparent; }
+.composer-reasoning-track input::-moz-range-thumb { width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); box-shadow: 0 1px 5px #0003; }
+.composer-reasoning-track input:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: 16px; }
+.composer-reasoning-track input:disabled { cursor: default; }
+.composer-reasoning-ticks { position: absolute; z-index: 1; inset: 0 13px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+.composer-reasoning-ticks i { width: 3px; height: 3px; border-radius: 50%; background: color-mix(in srgb,var(--surface) 65%,transparent); }
+.composer-reasoning-scale { display: flex; justify-content: space-between; margin-top: 8px; color: var(--text-muted); font-size: 10px; }
+.composer-reasoning-hint,.composer-reasoning-error { margin: 9px 0 0; font-size: 11px; line-height: 1.5; color: var(--text-secondary); }
+.composer-reasoning-error { color: var(--danger); overflow-wrap: anywhere; }
+.composer-reasoning-error button { margin-left: 8px; border: 0; background: transparent; color: inherit; text-decoration: underline; cursor: pointer; }
+.composer-reasoning-single { padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-hover); color: var(--foreground); font: inherit; }
+@media (pointer: coarse) { .composer-reasoning-track input { inset-block: -8px; height: 44px; } }
+
+@media (max-height: 520px) {
+  .composer-model-popup { overflow-y: auto; }
+  .composer-model-popup .app-select-list { flex: 0 0 auto; max-height: 160px; }
+}

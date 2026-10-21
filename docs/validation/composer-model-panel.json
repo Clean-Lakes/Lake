@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-21",
+  "base": "1dd1e5a6a425c569ab150ab597787b90c60043f1",
+  "scope": "Model selection and session reasoning share the existing AppSelect popover; no backend changes.",
+  "fixture": "web-agent/web/test/fixtures/composer-model-workbench.html?conversation-radii",
+  "screenshot": "docs/validation/composer-model-panel.png",
+  "checks": [
+    "337 frontend tests passed; TypeScript and Vite build passed (existing chunk-size warning).",
+    "Actual App fixture: one model trigger, provider heading, model list with vision badge, reasoning footer.",
+    "End saves deepseek-flash/max once; default saves empty effort, preserving model default semantics.",
+    "Switch to deepseek-v4-pro: only low/high stops; Home saves low for the new model.",
+    "Model with empty levels hides reasoning section.",
+    "390x640 dark theme: long provider-grouped list scrolls, search filters to one matching model.",
+    "Escape from slider closes popover and restores model trigger focus.",
+    "Capability read failure exposes retry; retry restores slider.",
+    "Running mode disables slider/default without issuing saves."
+  ],
+  "isolation": "Only fictional in-memory API fixtures; no model calls, credentials, hosts or user settings used for browser checks.",
+  "limits": [
+    "Windows native rendering and external provider APIs not exercised."
+  ]
+}

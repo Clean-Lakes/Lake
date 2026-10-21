@@ -80,6 +80,8 @@ export function AppSelect({children,value,defaultValue,onChange,disabled=false,i
       if (event.key==="Tab") {if(!popup.current?.contains(event.target as Node)) close();return;}
       const target=event.target as HTMLElement;
       if(target.closest("button")&&target!==trigger.current) return;
+      // Embedded footer controls own their keyboard navigation (e.g. reasoning slider).
+      if (target instanceof HTMLInputElement && target.type === "range") return;
       const editing=target.tagName==="INPUT"||target.tagName==="TEXTAREA";
       if (["ArrowDown","ArrowUp","Home","End","Enter"," "].includes(event.key)) {
         if(editing&&[" ","Home","End"].includes(event.key)) return;
