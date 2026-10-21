@@ -1,3 +1,4 @@
+import {OperationOutcomes} from './OperationOutcomes';
 import {MessageText} from './MessageText';
 import {MessageImages} from './MessageImages';
 import {DisclosureSummary} from './DisclosureSummary';
@@ -95,7 +96,7 @@ function TranscriptMessage({message,sessionId,resources}:{message:SessionSnapsho
           {!!message.images?.length&&<MessageImages images={message.images}/>}
         </div>;
 }
-export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation" }: { mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean }) {
+export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh }: { refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean }) {
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
   const restoredCardIds=useRef(new Set((snapshot.ai?.cards??[]).map(card=>card.id)));
@@ -149,7 +150,8 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
     {(snapshot.sre?.tasks.length??0)>=20&&sreCursor!==''&&<button type="button" disabled={loadingSRE} onClick={()=>void loadOlderSRE()}>{loadingSRE?'正在加载…':'加载更早的 SRE 任务'}</button>}
     {mode==='activity'&&mergedSRE.length>1&&<label className="sre-task-filter">任务<AppSelect label="筛选 SRE 任务" value={sreTaskFilter} onChange={event=>setSRETaskFilter(event.target.value)}><option value="">全部任务</option>{mergedSRE.map(task=><option key={task.id} value={task.id}>{task.goal}</option>)}</AppSelect></label>}
     <ConversationDirectory key={snapshot.session.id} sessionId={snapshot.session.id} items={directoryItems} onJump={jumpTo} onLatest={() => jumpTo()} onOpen={onInspect} onLoadOlder={before > 0 ? () => void loadOlder() : undefined} loading={loading}/>
-    {mode === "activity" && !turns.length && <div className="record-empty"><h2>暂无执行记录</h2><p>工具调用、子 Agent 任务和文件变更会按轮次保留在这里。</p></div>}
+    {mode === 'activity' && <OperationOutcomes session={snapshot.session.id} operations={snapshot.ai?.operationOutcomes ?? []} running={['running', 'waiting_approval'].includes(snapshot.ai?.status ?? '')} disabled={disabled} refresh={refresh}/>}
+    {mode === "activity" && !turns.length && !snapshot.ai?.operationOutcomes?.some(operation => operation.status === "unknown") && <div className="record-empty"><h2>暂无执行记录</h2><p>工具调用、子 Agent 任务和文件变更会按轮次保留在这里。</p></div>}
     {before > 0 && <button type="button" disabled={loading} onClick={() => void loadOlder()}>{loading ? "正在加载…" : "加载更早记录"}</button>}
     {error && <p role="alert">{error}</p>}
     {turns.map((turn, index) => {

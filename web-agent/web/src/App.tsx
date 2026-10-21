@@ -1,3 +1,4 @@
+import {useSessionComposerDraft} from "./sessionComposerDrafts";
 import {ScheduledTasks} from "./ScheduledTasks";
 import {MessageText} from './MessageText';
 import {SidebarScrollArea} from './SidebarScrollArea';
@@ -8,7 +9,7 @@ import {applyLiveText} from './liveTextUpdates';
 import {sreSessionPresentation} from './sreSessionPresentation';
 import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerMentions";
 import {SREModeToggle} from './SREModeToggle';
-import {appendResourceMention,composerMessage,composerResourceIds,selectComposerMention,filterMentions,mentionOptions,type ComposerReference,type MentionCategory,type MentionOption} from "./composerMentionState";
+import {appendResourceMention,composerMessage,composerResourceIds,selectComposerMention,filterMentions,mentionOptions,type MentionCategory,type MentionOption} from "./composerMentionState";
 import {ComposerTextInput,type ComposerInputHandle} from "./ComposerTextInput";
 import {AppSelect} from "./AppSelect";
 import {ComposerModelSelect} from "./ComposerModelSelect";
@@ -31,7 +32,6 @@ import { SSHResourceFields, emptySSH } from "./SSHResourceFields";
 import type { SSHConnectionInput } from "../../shared/contracts";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import type {
-  AIImage,
   Action,
   Catalog,
   Message,
@@ -45,7 +45,6 @@ import type {
   TerminalHistory,
   TerminalSession,
   WorkSession,
-  TextFileAttachment,
 } from "../../shared/contracts";
 import { api, ApiRequestError, readableError, type Bootstrap } from "./api";
 import { AIControls, AITranscript } from "./AIPanel";
@@ -187,17 +186,14 @@ function App() {
   const [sshError, setSshError] = useState("");
   const [sshBusy, setSshBusy] = useState(false);
   const inputQueue = useRef<TerminalInputQueue | null>(null);
-  const [imageDraft, setImageDraft] = useState<AIImage[]>([]);
+  const {draft: composerDraft, setMessageDraft, setMentionRefs, setImageDraft, setFileDraft, setIgnoreProjectMemory, clearSubmitted} = useSessionComposerDraft(route.sessionId);
+  const {message: messageDraft, references: mentionRefs, images: imageDraft, files: fileDraft, ignoreProjectMemory} = composerDraft;
   const attachmentReading = useRef(false);
   const attachmentEpoch = useRef(0);
   useLayoutEffect(() => { attachmentEpoch.current++; }, [route.sessionId]);
-  const [fileDraft, setFileDraft] = useState<TextFileAttachment[]>([]);
   const [attachmentDragOver,setAttachmentDragOver] = useState(false);
   const [attachmentUploading,setAttachmentUploading] = useState("");
   const attachmentInputRef = useRef<HTMLInputElement>(null);
-  const [mentionRefs, setMentionRefs] = useState<ComposerReference[]>([]);
-  const [messageDraft, setMessageDraft] = useState("");
-  const [ignoreProjectMemory, setIgnoreProjectMemory] = useState(false);
   const messageComposition = useRef(new CompositionGuard());
   const [sendShortcut, setSendShortcut] = useState<SendShortcut>(() => {
     try { return parseSendShortcut(localStorage.getItem(sendShortcutStorageKey)); } catch { return "enter"; }
@@ -585,13 +581,8 @@ function App() {
       setDangerStage(false);
       setDangerText("");
     }
-    setMessageDraft("");
-    setImageDraft([]);
-    setFileDraft([]);
-    setIgnoreProjectMemory(false);
     setAgentOptionsOpen(false);
     setPermissionsOpen(false);
-    setMentionRefs([]);
     setMention(null);
   }, [sessionId]);
 
@@ -1002,13 +993,7 @@ function App() {
     conversationScroll.current.following = true;
     try {
       await api.sendMessage(targetSession, text, payload.resourceIds, imageDraft, payload.references, undefined, fileDraft, queueMode, ignoreProjectMemory, payload.mentions);
-      if (activeSession.current === targetSession) {
-        setMessageDraft("");
-        setImageDraft([]);
-        setFileDraft([]);
-        setMentionRefs([]);
-        setIgnoreProjectMemory(false);
-      }
+      clearSubmitted(targetSession, composerDraft);
       await refreshCurrent();
     } catch (error) { handleFailure(error); }
     finally { setPendingOperation(""); }
@@ -1400,8 +1385,8 @@ function App() {
           const direction=["ArrowUp","PageUp","Home"].includes(event.key)?-1:["ArrowDown","PageDown","End"].includes(event.key)?1:0;
           if(direction&&pausesConversationFollow(event.currentTarget,direction))pauseFollowing();
         }} onScroll={event => { if (conversationFollower.current?.animating) return; conversationScroll.current.following = atConversationTail(event.currentTarget); }} className="conversation" aria-label="会话记录">
-          {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true">{loadingSessionId === sessionId && <span role="status">正在加载会话…</span>}</div> : (itemList.length || !!activeSnapshot.sre?.tasks.length) ? <div className="timeline-list">
-            {activeSnapshot?.ai ? <AITranscript key={sessionId} snapshot={activeSnapshot} mode={conversationMode} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={!sessionConnected} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
+          {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true">{loadingSessionId === sessionId && <span role="status">正在加载会话…</span>}</div> : (itemList.length || !!activeSnapshot.sre?.tasks.length || !!activeSnapshot.ai?.operationOutcomes?.length) ? <div className="timeline-list">
+            {activeSnapshot?.ai ? <AITranscript key={sessionId} refresh={refreshCurrent} snapshot={activeSnapshot} mode={conversationMode} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={!sessionConnected} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
             {selectedSession.status === "investigating" && !activeSnapshot.ai && <div className="timeline-item item-thinking" role="status" aria-live="polite"><span className="timeline-point"><Glyph name="spark" size={15}/></span><div className="timeline-content"><div className="thinking-line"><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span><span>正在处理…</span></div></div></div>}
           </div> : <div className="timeline-empty"><div className="empty-icon"><Glyph name="chat" size={25}/></div><h2>从一个问题开始</h2><p>描述你看到的故障或想核实的现象。Lake 会把调查过程、证据和需要确认的操作留在这里。</p></div>}
         </section>

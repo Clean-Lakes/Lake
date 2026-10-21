@@ -1,0 +1,34 @@
+.operation-outcomes {
+  margin-block: 12px 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.operation-outcomes > p { line-height: 1.6; }
+.operation-outcome {
+  margin-block: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  corner-shape: var(--corner-window);
+  background: var(--surface);
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+.operation-outcome > details { margin-block: 10px; }
+.operation-outcome dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; }
+.operation-outcome dd { margin: 0; min-width: 0; }
+.operation-outcome pre { max-height: 200px; overflow: auto; white-space: pre-wrap; }
+.operation-outcome fieldset { display: grid; gap: 12px; min-width: 0; border: 0; padding: 0; margin: 0; }
+.operation-outcome .field-label { display: grid; gap: 7px; }
+.operation-outcome textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  corner-shape: var(--corner-window);
+  background: var(--surface);
+  color: var(--foreground);
+  resize: vertical;
+}
+.operation-outcome textarea:focus-visible { outline: 1px solid var(--focus); outline-offset: 1px; }
+.operation-outcome fieldset > button { justify-self: start; }

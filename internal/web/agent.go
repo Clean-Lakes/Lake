@@ -212,6 +212,13 @@ func (b *Server) event(event ai.Event) {
 		b.syncSRESessionStatus(event.Session)
 	case "approval":
 		b.Store.Status(event.Session, "waiting_approval")
+	case "inputState":
+		switch stringOf(object(event.Data)["status"]) {
+		case "running":
+			b.Store.Status(event.Session, "investigating")
+		case "waiting_approval":
+			b.Store.Status(event.Session, "waiting_approval")
+		}
 	case "done":
 		status := stringOf(object(event.Data)["status"])
 		if status == "completed" || status == "cancelled" {

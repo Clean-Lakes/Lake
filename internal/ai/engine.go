@@ -763,6 +763,9 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 				failure["retryable"] = false
 				failure["blocking_operation"] = map[string]any{"id": blocked.ID, "tool": blocked.Tool, "target": blocked.Target, "status": blocked.Status}
 				failure["notice"] = "本次操作没有派发。不要修改命令、更换终端或工具入口反复尝试；只读取原操作结果或继续独立的只读检查，无法核实则报告缺失结果。"
+				if blocked.Status == "unknown" {
+					failure["notice"] = str(failure["notice"]) + "人工核实入口：会话菜单 → 执行记录 → 待核实操作；填写实际结果和核实依据，不能猜测或自动重试。"
+				}
 				if recovery := blocked.recovery(); recovery != nil {
 					failure["recovery"] = recovery
 				}
