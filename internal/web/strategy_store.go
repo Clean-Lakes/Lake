@@ -211,6 +211,20 @@ func (s *Store) strategyEdge(assetID, from, to, relation string) {
 		valid = a["kind"] == "asset_revision" && b["kind"] == "evaluation" && b["aggregateId"] == assetID && b["sourceId"] != nil && s.row("SELECT 1 FROM strategySourceEvents WHERE id=? AND kind='fixture_evaluation'", b["sourceId"]) != nil
 	case "adopted_as":
 		valid = a["kind"] == "asset_revision" && b["kind"] == "adoption" && b["aggregateId"] == assetID && a["revision"] == b["revision"]
+	case "proposed_to_fix":
+		valid = a["kind"] == "attempt" && b["kind"] == "run" && b["aggregateId"] == assetID && s.row("SELECT 1 FROM strategyOptimizationCalls c JOIN strategyExperimentRuns r ON r.experimentId=c.experimentId JOIN strategyJobs j ON j.id=c.experimentId WHERE c.id=? AND r.id=? AND j.assetId=? AND r.variant='baseline_development'", strings.TrimPrefix(from, "attempt:"), strings.TrimPrefix(to, "run:"), assetID) != nil
+	case "compared_with":
+		valid = a["kind"] == "run" && b["kind"] == "run" && b["aggregateId"] == assetID && s.row("SELECT 1 FROM strategyExperimentRuns x JOIN strategyExperimentRuns y ON y.experimentId=x.experimentId JOIN strategyOptimizations o ON o.jobId=x.experimentId JOIN strategyJobs j ON j.id=o.jobId WHERE x.id=? AND y.id=? AND j.assetId=? AND x.arm='baseline' AND y.arm='assets' AND x.caseId=y.caseId", strings.TrimPrefix(from, "run:"), strings.TrimPrefix(to, "run:"), assetID) != nil
+	case "composed_from":
+		if b["aggregateId"] != assetID {
+			break
+		}
+		if a["kind"] == "attempt" {
+			call := s.row("SELECT c.* FROM strategyOptimizationCalls c JOIN strategyJobs j ON j.id=c.experimentId WHERE c.id=? AND c.stage='synthesize' AND c.status='completed' AND j.assetId=?", strings.TrimPrefix(from, "attempt:"), assetID)
+			valid = call != nil && (b["kind"] == "asset_revision" || b["kind"] == "attempt" && s.row("SELECT 1 FROM strategyOptimizationCalls WHERE id=? AND experimentId=? AND stage='propose' AND status='completed'", strings.TrimPrefix(to, "attempt:"), call["experimentId"]) != nil)
+		} else if a["kind"] == "asset_revision" && b["kind"] == "attempt" {
+			valid = s.row("SELECT 1 FROM strategyRevisions r JOIN strategyOptimizations o ON r.createdBy='optimizer:'||o.jobId JOIN strategyOptimizationCalls c ON c.experimentId=o.jobId AND c.stage='synthesize' WHERE r.assetId=? AND r.revision=? AND c.id=? AND c.status='completed'", assetID, a["revision"], strings.TrimPrefix(to, "attempt:")) != nil
+		}
 	}
 	if !valid {
 		strategyFail(400, "invalid_lineage")

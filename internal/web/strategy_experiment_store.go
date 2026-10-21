@@ -7,6 +7,7 @@ import (
 )
 
 type strategyExperimentFrozen struct {
+	Optimization    bool                   `json:"optimization,omitempty"`
 	MemoryEpoch     int                    `json:"memoryEpoch"`
 	Asset           strategy.AssetRevision `json:"asset"`
 	Cases           []strategy.Fixture     `json:"cases"`
@@ -35,12 +36,23 @@ func (s *Store) createStrategyExperiment(ctx StrategyContext, key string, frozen
 		if view.Asset.Scope != scope || !view.Available || !view.SourcesAvailable || view.Value.Ref != ref {
 			strategyFail(409, "asset_unavailable")
 		}
-		if len(frozen.Cases) < 1 || len(frozen.Cases) > 3 || frozen.Repetitions < 1 || frozen.Repetitions > 3 || len(frozen.Cases)*frozen.Repetitions*2 > frozen.Budget.MaxRuns {
+		if !frozen.Optimization && (len(frozen.Cases) < 1 || len(frozen.Cases) > 3 || frozen.Repetitions < 1 || frozen.Repetitions > 3 || len(frozen.Cases)*frozen.Repetitions*2 > frozen.Budget.MaxRuns) {
 			strategyFail(400, "run_budget")
 		}
 		effective := s.strategyEffective(ctx)
 		if frozen.Budget != effective.Settings.Budget {
 			strategyFail(409, "settings_changed")
+		}
+		if frozen.Optimization {
+			if !effective.Settings.CorrectEnabled {
+				strategyFail(409, "correction_disabled")
+			}
+			if len(frozen.Cases) != 2 || frozen.Cases[0].Split != "development" || frozen.Cases[1].Split != "holdout" || frozen.Repetitions != 1 {
+				strategyFail(400, "optimization_cases")
+			}
+			if frozen.Budget.MaxRuns < 5 || frozen.Budget.MaxRevisions < 2 {
+				strategyFail(400, "optimization_budget")
+			}
 		}
 		seen := map[string]bool{}
 		for _, f := range frozen.Cases {
@@ -53,6 +65,11 @@ func (s *Store) createStrategyExperiment(ctx StrategyContext, key string, frozen
 		result = s.strategyQueueJob(ctx, "experiment:"+strategy.ContentHash(key+digest), StrategyJobInput{Scope: scope, Kind: "experiment", AssetID: ref.AssetID, ExpectedRevision: view.Asset.Revision, SourceIDs: view.Value.SourceIDs})
 		raw := jsonText(frozen)
 		s.exec("INSERT INTO strategyExperiments(jobId,frozenJSON,frozenHash,modelRef,createdAt) VALUES(?,?,?,?,?)", result.JobID, raw, strategy.ContentHash(raw), frozen.ModelRef, now())
+		if frozen.Optimization {
+			s.strategyPlanOptimization(result.JobID, frozen)
+			s.strategySaveReceipt(scopeKey, key, digest, result)
+			return result
+		}
 		ordinal := 0
 		for ci, f := range frozen.Cases {
 			for rep := 0; rep < frozen.Repetitions; rep++ {
@@ -109,14 +126,17 @@ func (s *Store) experimentBudget(ctx StrategyContext, id, token string, reserve 
 	})
 }
 func (s *Store) recoverStrategyExperiments() {
+	s.recoverStrategyOptimizations()
 	// Snapshot tools have no resource-side effects. Unknown MODEL results remain
 	// unknown; no arm or model request is started again after a process crash.
-	s.exec("UPDATE strategyExperimentRuns SET status='unknown',finishedAt=? WHERE status='running'", now())
-	s.exec("UPDATE strategyExperimentRuns SET status='not_executed',finishedAt=? WHERE status='planned' AND experimentId IN (SELECT id FROM strategyJobs WHERE dispatchState<>'none')", now())
-	s.exec("UPDATE strategyJobs SET status=CASE WHEN status IN ('cancelled','succeeded') THEN status ELSE 'failed' END,errorCode=CASE WHEN status='succeeded' THEN errorCode ELSE 'experiment_interrupted' END,dispatchState='complete',leaseToken='',leaseUntilMs=0,updatedAt=? WHERE id IN (SELECT jobId FROM strategyExperiments) AND dispatchState<>'none' AND status IN ('leased','awaiting_reconciliation','cancelled','failed','succeeded')", now())
+	s.exec("UPDATE strategyExperimentRuns SET status='unknown',finishedAt=? WHERE status='running' AND experimentId NOT IN (SELECT jobId FROM strategyOptimizations)", now())
+	s.exec("UPDATE strategyExperimentRuns SET status='not_executed',finishedAt=? WHERE status='planned' AND experimentId IN (SELECT id FROM strategyJobs WHERE dispatchState<>'none') AND experimentId NOT IN (SELECT jobId FROM strategyOptimizations)", now())
+	s.exec("UPDATE strategyJobs SET status=CASE WHEN status IN ('cancelled','succeeded') THEN status ELSE 'failed' END,errorCode=CASE WHEN status='succeeded' THEN errorCode ELSE 'experiment_interrupted' END,dispatchState='complete',leaseToken='',leaseUntilMs=0,updatedAt=? WHERE id IN (SELECT jobId FROM strategyExperiments) AND id NOT IN (SELECT jobId FROM strategyOptimizations) AND dispatchState<>'none' AND status IN ('leased','awaiting_reconciliation','cancelled','failed','succeeded')", now())
 }
 func (s *Store) eraseStrategyExperiments(where string, args ...any) {
-	s.exec("UPDATE strategySourceEvents SET availability='tombstoned',summary='' WHERE originKey IN (SELECT 'experiment:'||jobId FROM strategyExperiments WHERE "+where+")", args...)
+	s.exec("UPDATE strategyOptimizationCalls SET resultJSON='' WHERE experimentId IN (SELECT jobId FROM strategyExperiments WHERE "+where+")", args...)
+	s.exec("UPDATE strategyOptimizations SET summaryJSON='' WHERE jobId IN (SELECT jobId FROM strategyExperiments WHERE "+where+")", args...)
+	s.exec("UPDATE strategySourceEvents SET availability='tombstoned',summary='' WHERE availability='available' AND originKey IN (SELECT 'experiment:'||jobId FROM strategyExperiments WHERE "+where+")", args...)
 	s.exec("UPDATE strategyExperimentRuns SET reportJSON='' WHERE experimentId IN (SELECT jobId FROM strategyExperiments WHERE "+where+")", args...)
 	s.exec("UPDATE strategyExperiments SET frozenJSON='' WHERE "+where, args...)
 }

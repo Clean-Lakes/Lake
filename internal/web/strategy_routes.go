@@ -234,7 +234,7 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 					source = "inherited"
 				}
 			}
-			reply(w, 200, Object{"settings": settings, "effective": effective.Settings, "source": source, "capabilities": Object{"apply": true, "learn": true, "correct": false}})
+			reply(w, 200, Object{"settings": settings, "effective": effective.Settings, "source": source, "capabilities": Object{"apply": true, "learn": true, "correct": true, "correctMode": "isolated_snapshots", "onlineCorrect": false}})
 			return
 		}
 		if method == "PATCH" {
