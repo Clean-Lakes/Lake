@@ -152,6 +152,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	}
 	server.Engine.RuntimeDir = filepath.Join(options.DataDir, "adk")
 	server.Engine.SetSRERepository(store)
+	server.Engine.Strategies = server.strategyProvider
 	store.RecoverSRETasks()
 	if err = server.startScheduler(); err != nil {
 		server.Close()
@@ -380,6 +381,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if b.providerRoute(w, r, name, method) {
+		return
+	}
+	if b.strategyRoute(w, r, name) {
 		return
 	}
 	if b.projectMemoryRoute(w, r, name, method) {

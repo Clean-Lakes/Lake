@@ -94,12 +94,13 @@ type StrategyBindingInput struct {
 	ExclusionGroup   string
 }
 type StrategyBinding struct {
-	AssetID                   string
-	Scope                     strategy.Scope
-	Revision, BindingRevision int64
-	Enabled                   bool
-	Priority                  int
-	ExclusionGroup            string
+	AssetID         string         `json:"assetId"`
+	Scope           strategy.Scope `json:"scope"`
+	Revision        int64          `json:"revision"`
+	BindingRevision int64          `json:"bindingRevision"`
+	Enabled         bool           `json:"enabled"`
+	Priority        int            `json:"priority"`
+	ExclusionGroup  string         `json:"exclusionGroup"`
 }
 
 func bindingFromRow(row Object) StrategyBinding {

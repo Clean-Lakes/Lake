@@ -60,9 +60,11 @@ func (s *Store) ForgetStrategySource(ctx StrategyContext, id, key string, revoke
 }
 
 type StrategyLineagePage struct {
-	Nodes, Edges []Object
-	NextCursor   int64
-	Redacted     bool
+	Nodes      []Object `json:"nodes"`
+	Edges      []Object `json:"edges"`
+	NextCursor int64    `json:"nextCursor"`
+	Redacted   bool     `json:"redacted"`
+	HasMore    bool     `json:"hasMore"`
 }
 
 func (s *Store) StrategyLineage(ctx StrategyContext, id string, cursor int64, limit int) (StrategyLineagePage, error) {
@@ -89,6 +91,7 @@ func (s *Store) StrategyLineage(ctx StrategyContext, id string, cursor int64, li
 				}
 				if n["sourceId"] != nil {
 					source := s.strategySource(ctx, stringOf(n["sourceId"]), false)
+					n["sourceKind"] = source["kind"]
 					n["availability"] = source["availability"]
 					n["summary"] = source["summary"]
 					n["contentHash"] = source["contentHash"]
@@ -108,6 +111,7 @@ func (s *Store) StrategyLineage(ctx StrategyContext, id string, cursor int64, li
 				}
 			}
 		}
+		out.HasMore = s.row("SELECT 1 FROM strategyLineageEdges WHERE aggregateId=? AND id>? LIMIT 1", id, out.NextCursor) != nil
 		return out
 	})
 }
