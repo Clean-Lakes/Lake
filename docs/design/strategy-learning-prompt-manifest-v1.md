@@ -42,7 +42,7 @@ Skill 只有成功走原有 load_skill 权限流程后才记录 ID、实际返�
 
 CanonicalJSON 使用固定 Go 结构字段顺序，encoding/json 的 UTF-8/HTML 转义与 map 键排序；可选字段遵循类型中的 omitempty。数组保留实际组合、工具和加载顺序，不排序后冒充实际注入顺序。P0 所述“排序后的集合”在此明确为：只有真正无序的集合才排序，P1 的有序数组不属于集合。编码 golden 位于 `internal/strategy/testdata/prompt-manifest.v1.json`。
 
-运行时权限策略版本为 lake-runtime-permissions-v1，配合 buildCommit 和 permissionSettingsHash 标识；后续权限契约变更需评审是否提升该版本。权限不由该字符串或模型决定。
+运行时权限策略版本为 lake-runtime-permissions-v1，配合 buildCommit 和 permissionSettingsHash 标识；后续权限契约变更需评审是否提升该版本。权限不由该字符串或模型决定。权限摘要记录该请求的会话配置快照；工具派发仍执行既有实时权限/目标版本校验，清单不能替代这些检查。
 
 P1 增加每次准备请求的持久化写入，磁盘错误会使请求停止。沿用现有 ADK artifact 的私有存储和保留机制；后续归档/保留策略在数据阶段统一处理。回退程序可忽略新增 JSON 字段，旧清单留存于原存储；回退不删除操作账本，也不表示外部操作回滚。
 
