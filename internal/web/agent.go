@@ -223,7 +223,7 @@ func (b *Server) event(event ai.Event) {
 		b.Store.Touch(event.Session)
 	}
 }
-func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, files []Object, ignoreProjectMemory bool) {
+func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachment, refs, files []Object, ignoreProjectMemory bool) {
 	defer b.workers.Done()
 	defer b.finishMessageQueue(id)
 	defer b.finishReplyTiming(id)
@@ -326,7 +326,7 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	if sreCoordination {
 		modelContext += b.sreConversationContext(id)
 	}
-	e = b.Engine.ExecuteTurn(turnContext, id, ai.TurnInput{SRECoordination: sreCoordination, UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
+	e = b.Engine.ExecuteTurn(turnContext, id, ai.TurnInput{StrategyMessageID: messageID, SRECoordination: sreCoordination, UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
 	if e != nil {
 		_ = b.reconcileStrategyOutboxForSession(id)
 		if b.Context.Err() != nil {

@@ -6,9 +6,9 @@ P4 在 P3 可见资产之上交付 T16–T19。入口仍为「工作区 → 设�
 
 普通 Web/Desktop 的 core、terminal2、db-query-editor 主轮次可学习。仅采集完成/失败终态中的明确纠正信号或真实配对工具失败；取消、审批挂起、隔离角色、SRE 协调器、工作流及辅助提取不产生学习来源。明确纠正信号使用保守前缀：纠正一下、请纠正、更正一下、请记住、以后请、以后不要、下次请、下次不要，以及 Correction:、Please remember、Next time。普通负面语气不作为触发依据。
 
-Engine 保存带 hash、项目/会话/轮次、开始/结束时间、profile、模型身份及授权 generation 的 outbox。用户原文最多 8192 字节，脱敏后的最后助手回复最多 8192 字节；至多 24 个工具证据仅保留真实 call ID、工具名、状态及结果 hash，不保存原始工具输出。unknown/未验证证据不证明成功；恢复时补出的 unknown 结果不算真实工具失败。队列快照最多 32768 字节，每会话最多 20 条待移交记录。
+Web 在普通消息及队列派发时把真实 messageId 作为不可从 JSON 设置的宿主字段传入 Engine。Engine 保存带用户消息 ID、hash、项目/会话/轮次、开始/结束时间、profile、模型身份及授权 generation 的 outbox。用户原文最多 8192 字节，脱敏后的最后助手回复最多 8192 字节；至多 24 个工具证据仅保留真实 call ID、工具名、状态及结果 hash，不保存原始工具输出。unknown/未验证证据不证明成功；恢复时补出的 unknown 结果不算真实工具失败。队列快照最多 32768 字节，每会话最多 20 条待移交记录。
 
-Web 适配器检查宿主真实项目、会话、用户消息文本及 hash；对当前已配置模型/终端秘密再次检查，随后登记 task_outcome 来源。轮次唯一键为 sessionId + turnId，固定自动幂等键使崩溃后重放不能重复排队。保存和排队前重新核对 generation：关闭再开启不会补学旧 outbox。正常运行在终态移交；启动时重试持久 outbox，非暂态错误安全跳过，不改变原回复。用户也可以明确提交当前项目真实 user message ID，登记为 user_correction；HTTP 不接收自报快照、哈希、actor、scope 或验证等级。
+Web 适配器按精确消息 ID 检查宿主真实项目、会话、用户消息文本及 hash，使用解析后的时间而非 RFC3339 字符串排序核对先后；对当前已配置模型/终端秘密再次检查，随后登记 task_outcome 来源。轮次唯一键为 sessionId + turnId，固定自动幂等键使崩溃后重放不能重复排队。保存和排队前重新核对 generation：关闭再开启不会补学旧 outbox。正常运行在终态移交；启动时重试持久 outbox，非暂态错误安全跳过，不改变原回复。用户也可以明确提交当前项目真实 user message ID，登记为 user_correction；HTTP 不接收自报快照、哈希、actor、scope 或验证等级。
 
 ## 一次无工具提取
 

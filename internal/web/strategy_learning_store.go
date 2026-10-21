@@ -38,9 +38,13 @@ func (s *Store) registerStrategyTurn(snapshot ai.StrategyTurnSnapshot) (string, 
 		if err != nil || start.After(time.Now().Add(time.Second)) {
 			strategyFail(400, "invalid_snapshot")
 		}
-		msg := s.row("SELECT id,text FROM messages WHERE sessionId=? AND role='user' AND text=? AND createdAt<=? ORDER BY createdAt DESC LIMIT 1", snapshot.SessionID, snapshot.UserText, snapshot.StartedAt)
+		msg := s.row("SELECT id,text,createdAt FROM messages WHERE id=? AND sessionId=? AND role='user' AND text=?", snapshot.UserMessageID, snapshot.SessionID, snapshot.UserText)
 		if msg == nil {
 			strategyFail(404, "source_unavailable")
+		}
+		created, err := time.Parse(time.RFC3339Nano, stringOf(msg["createdAt"]))
+		if err != nil || created.After(start) {
+			strategyFail(409, "source_unavailable")
 		}
 		id := ident()
 		s.exec("INSERT INTO strategySourceEvents VALUES(?,?,?,'task_outcome',?,'',?,'Completed host turn reference','available',?)", id, key, "turn:"+snapshot.TurnID, snapshot.SessionID, snapshot.SnapshotHash, now())

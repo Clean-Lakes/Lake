@@ -338,7 +338,7 @@ func TestStrategyLearningSourceLiveMessageGuardAndDedup(t *testing.T) {
 	text := "以后请只使用中文总结。"
 	msg := s.AddMessage(session, "user", text, nil)
 	effective, _ := s.EffectiveStrategySettings(ctx)
-	snapshot := ai.SealStrategySnapshot(ai.StrategyTurnSnapshot{SessionID: session, ProjectID: ctx.ProjectID, TurnID: "actual-turn", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), FinishedAt: now(), GlobalEpoch: effective.GlobalEpoch, ProjectEpoch: effective.ProjectEpoch, Status: "completed", Profile: "core", UserText: text, Correction: true})
+	snapshot := ai.SealStrategySnapshot(ai.StrategyTurnSnapshot{UserMessageID: stringOf(msg["id"]), SessionID: session, ProjectID: ctx.ProjectID, TurnID: "actual-turn", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), FinishedAt: now(), GlobalEpoch: effective.GlobalEpoch, ProjectEpoch: effective.ProjectEpoch, Status: "completed", Profile: "core", UserText: text, Correction: true})
 	source, err := s.registerStrategyTurn(snapshot)
 	if err != nil {
 		t.Fatal(err)
@@ -505,9 +505,9 @@ func TestStrategyLearningDeletionErasesPrivateSnapshotsAndResults(t *testing.T) 
 			scope := strategy.Scope{Kind: strategy.ProjectScope, ProjectID: ctx.ProjectID}
 			enableStrategyFixture(t, b.Store)
 			text := "以后请先列证据，再提出结论。"
-			b.Store.AddMessage(session, "user", text, nil)
+			msg := b.Store.AddMessage(session, "user", text, nil)
 			effective, _ := b.Store.EffectiveStrategySettings(ctx)
-			snapshot := ai.SealStrategySnapshot(ai.StrategyTurnSnapshot{SessionID: session, ProjectID: ctx.ProjectID, TurnID: "private-turn", StartedAt: now(), FinishedAt: now(), GlobalEpoch: effective.GlobalEpoch, ProjectEpoch: effective.ProjectEpoch, Status: "completed", Profile: "core", UserText: text, Correction: true})
+			snapshot := ai.SealStrategySnapshot(ai.StrategyTurnSnapshot{UserMessageID: stringOf(msg["id"]), SessionID: session, ProjectID: ctx.ProjectID, TurnID: "private-turn", StartedAt: now(), FinishedAt: now(), GlobalEpoch: effective.GlobalEpoch, ProjectEpoch: effective.ProjectEpoch, Status: "completed", Profile: "core", UserText: text, Correction: true})
 			source, err := b.Store.registerStrategyTurn(snapshot)
 			if err != nil {
 				t.Fatal(err)
@@ -544,5 +544,25 @@ func TestStrategyLearningDeletionErasesPrivateSnapshotsAndResults(t *testing.T) 
 				t.Fatal("deleted content retained in proposal result")
 			}
 		})
+	}
+}
+
+func TestStrategyLearningUsesExactMessageIdentityAndParsedTime(t *testing.T) {
+	s, ctx, _ := strategyFixture(t)
+	enableStrategyFixture(t, s)
+	session := stringOf(s.CreateSession(ctx.ProjectID, "exact message", nil)["id"])
+	text := "以后请先列证据。"
+	s.AddMessage(session, "user", text, nil)
+	actual := s.AddMessage(session, "user", text, nil)
+	effective, _ := s.EffectiveStrategySettings(ctx)
+	s.exec("UPDATE messages SET createdAt='2000-01-01T00:00:00.1Z',text='edited during turn' WHERE id=?", actual["id"])
+	snapshot := ai.SealStrategySnapshot(ai.StrategyTurnSnapshot{UserMessageID: stringOf(actual["id"]), SessionID: session, ProjectID: ctx.ProjectID, TurnID: "exact-turn", StartedAt: "2000-01-01T00:00:00.100001Z", FinishedAt: now(), Status: "completed", Profile: "core", UserText: text, Correction: true, GlobalEpoch: effective.GlobalEpoch, ProjectEpoch: effective.ProjectEpoch})
+	// An older identical user message cannot impersonate the edited actual input.
+	_, err := s.registerStrategyTurn(snapshot)
+	strategyCheckError(t, err, 404)
+	s.exec("UPDATE messages SET text=? WHERE id=?", text, actual["id"])
+	source, err := s.registerStrategyTurn(snapshot)
+	if err != nil || source == "" {
+		t.Fatal("RFC3339 trailing-zero ordering incorrectly rejected genuine input", err)
 	}
 }

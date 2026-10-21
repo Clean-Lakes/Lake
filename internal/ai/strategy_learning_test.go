@@ -11,7 +11,7 @@ func TestStrategyLearningCapturesOnlyOptedInRealSignals(t *testing.T) {
 			e := &Engine{}
 			s := &session{state: State{View: View{Session: "session", RootTurnID: "turn", TurnStartedAt: timestamp(), TurnFinishedAt: timestamp()}, History: []Message{}, Checkpoints: []int{0}}}
 			c := Config{MemoryProjectID: "project", Profile: "core", StrategyLearnEnabled: true, StrategyGlobalEpoch: 1, StrategyProjectEpoch: 2}
-			input := TurnInput{UserText: "Check current status"}
+			input := TurnInput{StrategyMessageID: "message", UserText: "Check current status"}
 			status := "completed"
 			switch mode {
 			case "correction":

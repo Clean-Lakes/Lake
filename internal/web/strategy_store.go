@@ -238,7 +238,7 @@ func (s *Store) strategySource(ctx StrategyContext, id string, requireAvailable 
 		valid := turn != nil && turn["snapshotJSON"] != "" && turn["role"] == "user" && turn["actualProject"] == turn["projectId"] && strategy.ContentHash(stringOf(turn["text"])) == turn["userHash"]
 		if valid {
 			snapshot := strategyDecode[ai.StrategyTurnSnapshot](stringOf(turn["snapshotJSON"]))
-			valid = ai.ValidStrategySnapshot(snapshot) && snapshot.SnapshotHash == source["contentHash"]
+			valid = ai.ValidStrategySnapshot(snapshot) && snapshot.SnapshotHash == source["contentHash"] && snapshot.UserMessageID == turn["userMessageId"] && snapshot.SessionID == turn["sessionId"] && snapshot.TurnID == turn["turnId"] && snapshot.ProjectID == turn["projectId"]
 		}
 		if !valid {
 			source["availability"] = "tombstoned"

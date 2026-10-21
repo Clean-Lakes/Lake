@@ -16,6 +16,7 @@ type StrategyEvidence struct {
 	ResultHash string `json:"resultHash"`
 }
 type StrategyTurnSnapshot struct {
+	UserMessageID       string             `json:"userMessageId"`
 	SessionID           string             `json:"sessionId"`
 	ProjectID           string             `json:"projectId"`
 	TurnID              string             `json:"turnId"`
@@ -49,13 +50,13 @@ func SealStrategySnapshot(s StrategyTurnSnapshot) StrategyTurnSnapshot {
 	return s
 }
 func ValidStrategySnapshot(s StrategyTurnSnapshot) bool {
-	return s.SessionID != "" && s.ProjectID != "" && s.TurnID != "" && len(js(s)) <= 32768 && s.SnapshotHash == SealStrategySnapshot(s).SnapshotHash && (s.Status == "completed" || s.Status == "failed")
+	return s.UserMessageID != "" && s.SessionID != "" && s.ProjectID != "" && s.TurnID != "" && len(js(s)) <= 32768 && s.SnapshotHash == SealStrategySnapshot(s).SnapshotHash && (s.Status == "completed" || s.Status == "failed")
 }
 func (e *Engine) collectStrategySnapshot(s *session, c Config, input TurnInput, status string) {
-	if e.worker != nil || !c.StrategyLearnEnabled || c.workflowMode || c.sreCoordinator || c.agentRole != "" || c.MemoryProjectID == "" || len(s.state.StrategyOutbox) >= 20 || len(s.state.View.PendingApprovals) > 0 || (status != "completed" && status != "failed") || redact(input.UserText, c) != input.UserText || len(input.UserText) > 8192 {
+	if input.StrategyMessageID == "" || e.worker != nil || !c.StrategyLearnEnabled || c.workflowMode || c.sreCoordinator || c.agentRole != "" || c.MemoryProjectID == "" || len(s.state.StrategyOutbox) >= 20 || len(s.state.View.PendingApprovals) > 0 || (status != "completed" && status != "failed") || redact(input.UserText, c) != input.UserText || len(input.UserText) > 8192 {
 		return
 	}
-	snapshot := StrategyTurnSnapshot{SessionID: s.state.View.Session, ProjectID: c.MemoryProjectID, TurnID: s.state.View.RootTurnID, StartedAt: s.state.View.TurnStartedAt, FinishedAt: s.state.View.TurnFinishedAt, GlobalEpoch: c.StrategyGlobalEpoch, ProjectEpoch: c.StrategyProjectEpoch, Status: status, Profile: c.Profile, UserText: input.UserText, IgnoreProjectMemory: input.IgnoreProjectMemory, Correction: StrategyCorrectionSignal(input.UserText), ModelRef: ModelIdentity(c.Model), Evidence: []StrategyEvidence{}}
+	snapshot := StrategyTurnSnapshot{UserMessageID: input.StrategyMessageID, SessionID: s.state.View.Session, ProjectID: c.MemoryProjectID, TurnID: s.state.View.RootTurnID, StartedAt: s.state.View.TurnStartedAt, FinishedAt: s.state.View.TurnFinishedAt, GlobalEpoch: c.StrategyGlobalEpoch, ProjectEpoch: c.StrategyProjectEpoch, Status: status, Profile: c.Profile, UserText: input.UserText, IgnoreProjectMemory: input.IgnoreProjectMemory, Correction: StrategyCorrectionSignal(input.UserText), ModelRef: ModelIdentity(c.Model), Evidence: []StrategyEvidence{}}
 	start := 0
 	if len(s.state.Checkpoints) > 0 {
 		start = s.state.Checkpoints[len(s.state.Checkpoints)-1]
