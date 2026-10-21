@@ -48,6 +48,9 @@ type Config struct {
 	sreCoordinator          bool
 	sre                     *sreRoleContext
 	targetScope             *TargetScope
+	StrategyLearnEnabled    bool             `json:"-"`
+	StrategyGlobalEpoch     int64            `json:"-"`
+	StrategyProjectEpoch    int64            `json:"-"`
 	MemoryProjectID         string           `json:"-"`
 	MemoryEnabled           bool             `json:"-"`
 	MemoryExtractionEnabled bool             `json:"-"`
@@ -153,6 +156,7 @@ type State struct {
 	SREHandoff             *SREHandoff                    `json:"sreHandoff,omitempty"`
 	QuestionDecisions      map[string]map[string][]string `json:"questionDecisions,omitempty"`
 	FileReads              map[string]string              `json:"fileReads,omitempty"`
+	StrategyOutbox         []StrategyTurnSnapshot         `json:"strategyOutbox,omitempty"`
 	MemoryOutbox           []MemoryTurnSnapshot           `json:"memoryOutbox,omitempty"`
 	MemoryRecentUserInputs []string                       `json:"memoryRecentUserInputs,omitempty"`
 	TargetScope            *TargetScope                   `json:"targetScope,omitempty"`

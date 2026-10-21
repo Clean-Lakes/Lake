@@ -10,6 +10,7 @@ import (
 )
 
 type humanMessage struct {
+	MessageID           string
 	Text                string
 	IgnoreProjectMemory bool
 	Images              []ai.ImageAttachment
@@ -141,7 +142,7 @@ func (b *Server) launchMessageLocked(id string, message humanMessage) {
 	}
 	b.runningMessages[id] = true
 	b.workers.Add(1)
-	go b.runTurn(id, message.Text, message.Images, message.References, message.Files, message.IgnoreProjectMemory)
+	go b.runTurn(id, message.MessageID, message.Text, message.Images, message.References, message.Files, message.IgnoreProjectMemory)
 }
 func (b *Server) submitHumanMessage(id string, data Object) Object {
 	if b.Store.ActiveWorkflowRun(id) != "" {
@@ -194,6 +195,7 @@ func (b *Server) submitHumanMessage(id string, data Object) Object {
 	if pendingTitle && shouldGenerateSessionTitle(titleInput) {
 		b.generateSessionTitle(id, titleInput)
 	}
+	message.MessageID = stringOf(result["id"])
 	b.launchMessageLocked(id, message)
 	return result
 }
@@ -222,10 +224,11 @@ func (b *Server) dispatchMessageQueueLocked(id string) {
 	}
 	b.bindManualTerminalForHuman(id, message.References, message.Reuse)
 	titleInput := b.humanMessageTitle(message)
-	_, pendingTitle := b.Store.BeginQueuedMessageWithMentions(id, stringOf(head["id"]), message.Text, message.Images, titleInput, publicMessageFiles(message.Files), message.Mentions)
+	result, pendingTitle := b.Store.BeginQueuedMessageWithMentions(id, stringOf(head["id"]), message.Text, message.Images, titleInput, publicMessageFiles(message.Files), message.Mentions)
 	if pendingTitle && shouldGenerateSessionTitle(titleInput) {
 		b.generateSessionTitle(id, titleInput)
 	}
+	message.MessageID = stringOf(result["id"])
 	b.launchMessageLocked(id, message)
 }
 func (b *Server) finishMessageQueue(id string) {

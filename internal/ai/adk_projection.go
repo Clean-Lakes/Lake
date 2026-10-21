@@ -29,6 +29,7 @@ type nativeProjectionRef struct {
 	EventID string `json:"eventId"`
 }
 type nativeProjection struct {
+	StrategyOutbox []StrategyTurnSnapshot   `json:"strategyOutbox,omitempty"`
 	PromptBaseline *strategy.PromptBaseline `json:"promptBaseline,omitempty"`
 	SkillSnapshots []strategy.SkillSnapshot `json:"skillSnapshots,omitempty"`
 	Runtime        *RuntimeCheckpoint       `json:"runtime,omitempty"`
@@ -45,7 +46,7 @@ type nativeProjection struct {
 func (e *Engine) projectionDelta(ctx context.Context, s *session, runtimeID, eventID string) (map[string]any, error) {
 	s.mu.Lock()
 	c := s.state.Config
-	raw, err := json.Marshal(nativeProjection{PromptBaseline: s.state.PromptBaseline, SkillSnapshots: s.state.SkillSnapshots, History: s.state.History, View: s.state.View, RootQuestion: s.state.RootQuestion, Runtime: s.state.Runtime, References: s.state.ReferencedAssetIDs, Scope: s.state.TargetScope})
+	raw, err := json.Marshal(nativeProjection{StrategyOutbox: s.state.StrategyOutbox, PromptBaseline: s.state.PromptBaseline, SkillSnapshots: s.state.SkillSnapshots, History: s.state.History, View: s.state.View, RootQuestion: s.state.RootQuestion, Runtime: s.state.Runtime, References: s.state.ReferencedAssetIDs, Scope: s.state.TargetScope})
 	s.mu.Unlock()
 	if err != nil {
 		return nil, err
@@ -137,6 +138,7 @@ func (e *Engine) hydrateNativeProjection(ctx context.Context, s *session) error 
 	if s.cancel != nil {
 		return nil
 	}
+	s.state.StrategyOutbox = projection.StrategyOutbox
 	s.state.PromptBaseline = projection.PromptBaseline
 	s.state.SkillSnapshots = projection.SkillSnapshots
 	s.state.History = projection.History
@@ -284,7 +286,7 @@ func (e *Engine) recoverMissingNativeState(ctx context.Context, id string) (*Sta
 	if checkpoint == nil {
 		checkpoint = &RuntimeCheckpoint{SchemaVersion: 1, SessionID: migration.RuntimeSessionID, HistoryHash: hash(js(projection.History)), Identity: RunIdentity{SessionID: id, RootTurnID: projection.View.RootTurnID}}
 	}
-	state := &State{PromptBaseline: projection.PromptBaseline, SkillSnapshots: projection.SkillSnapshots, Runtime: checkpoint, History: projection.History, View: projection.View, RootQuestion: projection.RootQuestion, ReferencedAssetIDs: projection.References, TargetScope: projection.Scope}
+	state := &State{StrategyOutbox: projection.StrategyOutbox, PromptBaseline: projection.PromptBaseline, SkillSnapshots: projection.SkillSnapshots, Runtime: checkpoint, History: projection.History, View: projection.View, RootQuestion: projection.RootQuestion, ReferencedAssetIDs: projection.References, TargetScope: projection.Scope}
 	if len(state.View.PendingApprovals) == 0 && !nativeQuestionReady(state.View.Question) && state.View.Status == "running" {
 		state.View.Status = "interrupted"
 		reconcile(state, "cache recovered after interrupted invocation; inspect recorded outcomes, no replay")

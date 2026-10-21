@@ -233,6 +233,17 @@ func (s *Store) strategySource(ctx StrategyContext, id string, requireAvailable 
 			source["availability"] = "tombstoned"
 		}
 	}
+	if source["availability"] == "available" && source["kind"] == "task_outcome" {
+		turn := s.row("SELECT t.*,m.text,m.role,x.projectId AS actualProject FROM strategyLearningTurns t LEFT JOIN messages m ON m.id=t.userMessageId LEFT JOIN sessions x ON x.id=t.sessionId WHERE t.sourceId=?", id)
+		valid := turn != nil && turn["snapshotJSON"] != "" && turn["role"] == "user" && turn["actualProject"] == turn["projectId"] && strategy.ContentHash(stringOf(turn["text"])) == turn["userHash"]
+		if valid {
+			snapshot := strategyDecode[ai.StrategyTurnSnapshot](stringOf(turn["snapshotJSON"]))
+			valid = ai.ValidStrategySnapshot(snapshot) && snapshot.SnapshotHash == source["contentHash"] && snapshot.UserMessageID == turn["userMessageId"] && snapshot.SessionID == turn["sessionId"] && snapshot.TurnID == turn["turnId"] && snapshot.ProjectID == turn["projectId"]
+		}
+		if !valid {
+			source["availability"] = "tombstoned"
+		}
+	}
 	if requireAvailable && source["availability"] != "available" {
 		strategyFail(409, "source_unavailable")
 	}

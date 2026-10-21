@@ -651,6 +651,7 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		}
 		s.state.View.Status = status
 		s.state.View.TurnFinishedAt = timestamp()
+		e.collectStrategySnapshot(s, c, input, status)
 		if err == nil {
 			e.collectMemorySnapshot(s, c, input)
 		}
