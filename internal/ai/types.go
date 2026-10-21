@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/Clean-Lakes/Lake/internal/strategy"
 	"time"
 )
 
@@ -42,7 +43,8 @@ type SSH struct {
 	KnownHosts    string `json:"-"`
 }
 type Config struct {
-	legacyInvestigations    bool // Historical runtime compatibility; never enabled by user settings.
+	ModelProviderID         string `json:"modelProviderId,omitempty"` // Logical catalog ID only; never an endpoint or credential.
+	legacyInvestigations    bool   // Historical runtime compatibility; never enabled by user settings.
 	sreCoordinator          bool
 	sre                     *sreRoleContext
 	targetScope             *TargetScope
@@ -145,6 +147,8 @@ type View struct {
 	Turns             int                `json:"turns"`
 }
 type State struct {
+	PromptBaseline         *strategy.PromptBaseline       `json:"promptBaseline,omitempty"`
+	SkillSnapshots         []strategy.SkillSnapshot       `json:"skillSnapshots,omitempty"`
 	Runtime                *RuntimeCheckpoint             `json:"runtime,omitempty"`
 	SREHandoff             *SREHandoff                    `json:"sreHandoff,omitempty"`
 	QuestionDecisions      map[string]map[string][]string `json:"questionDecisions,omitempty"`

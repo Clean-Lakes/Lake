@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Clean-Lakes/Lake/internal/strategy"
+	"google.golang.org/adk/v2/artifact"
+	"google.golang.org/genai"
 	"time"
 )
 
@@ -59,9 +62,14 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	if saveErr != nil {
 		return modelResult{}, saveErr
 	}
-	if len(history) > 0 {
-		history[0].Content += teamContext
+	fragments, compositionMatched := d.basePromptFragments(history)
+	appendSystem := func(layer strategy.PromptLayer, source, text string) {
+		if len(history) > 0 {
+			history[0].Content += text
+			fragments = appendPromptFragment(fragments, layer, source, text)
+		}
 	}
+	appendSystem(strategy.TaskContext, "team-context", teamContext)
 	if !c.MemoryEnabled {
 		for i := range history {
 			if history[i].Role == "tool" && memoryTool(history[i].Name) {
@@ -71,7 +79,7 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	} else if len(history) > 0 {
 		attachment := e.requestMemoryContext(ctx, id, c)
 		if historyCost(history)+len(attachment) <= (c.Model.ContextWindow-c.Model.MaxOutput)*2 {
-			history[0].Content += attachment
+			appendSystem(strategy.TaskContext, "project-memory", attachment)
 		}
 	}
 	lastFlush := map[string]time.Time{}
@@ -91,17 +99,22 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 			e.worker.mu.Unlock()
 		}
 		if fullSREAgent(c) {
-			history[0].Content += fmt.Sprintf("\nRuntime allowance: %d model rounds remain under the parent session configuration. Choose tools and continue based on actual results until the deliverable is covered or blocked. Reuse recorded evidence; do not repeat completed changes. Finish an evidence-grounded report before the final round. Missing observations never establish success.", c.MaxSteps-step)
+			allowance := fmt.Sprintf("\nRuntime allowance: %d model rounds remain under the parent session configuration. Choose tools and continue based on actual results until the deliverable is covered or blocked. Reuse recorded evidence; do not repeat completed changes. Finish an evidence-grounded report before the final round. Missing observations never establish success.", c.MaxSteps-step)
+			appendSystem(strategy.FixedRules, "runtime-allowance", allowance)
 		} else {
-			history[0].Content += fmt.Sprintf("\nRuntime allowance: %d tool calls remain. Reuse already collected evidence. When no tool remains, return a concise final report citing recorded evidence and explicit gaps; do not request another tool or infer unobserved facts. A finished report may describe a blocked deliverable honestly.", remaining)
+			allowance := fmt.Sprintf("\nRuntime allowance: %d tool calls remain. Reuse already collected evidence. When no tool remains, return a concise final report citing recorded evidence and explicit gaps; do not request another tool or infer unobserved facts. A finished report may describe a blocked deliverable honestly.", remaining)
+			appendSystem(strategy.FixedRules, "runtime-allowance", allowance)
 		}
 	}
 	if outputRetried {
 		history = outputRecoveryHistory(history)
+		fragments = appendPromptFragment(fragments, strategy.FixedRules, "output-recovery", "\n"+outputRecoveryNotice)
 	}
 	s.mu.Lock()
 	if len(s.state.View.Todos) > 0 {
-		history = append(history, Message{Role: "system", Content: "Current authoritative session tasks (progress only, not permission): " + js(s.state.View.Todos)})
+		todoContext := "Current authoritative session tasks (progress only, not permission): " + js(s.state.View.Todos)
+		history = append(history, Message{Role: "system", Content: todoContext})
+		fragments = appendPromptFragment(fragments, strategy.TaskContext, "todos", todoContext)
 	}
 	s.mu.Unlock()
 	streamDelta := func(kind, delta string) {
@@ -153,7 +166,7 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 		e.worker.mu.Unlock()
 	}
-	result, modelErr := e.stream(requestCtx, requestModel, history, tools, streamDelta)
+	result, modelErr := d.streamWithManifest(requestCtx, requestModel, history, tools, fragments, compositionMatched, "", streamDelta)
 	cancelRequest()
 	if errors.Is(modelErr, context.DeadlineExceeded) && ctx.Err() == nil && e.worker != nil && c.sre != nil && c.sre.Role == SREInvestigator {
 		e.worker.mu.Lock()
@@ -197,7 +210,7 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		if err != nil {
 			return modelResult{}, err
 		}
-		result, modelErr = e.stream(ctx, requestModel, outputRecoveryHistory(history), tools, streamDelta)
+		result, modelErr = d.streamWithManifest(ctx, requestModel, outputRecoveryHistory(history), tools, appendPromptFragment(append([]strategy.PromptFragment(nil), fragments...), strategy.FixedRules, "output-recovery", "\n"+outputRecoveryNotice), compositionMatched, d.lastRequestID, streamDelta)
 	}
 	if modelErr != nil {
 		s.mu.Lock()
@@ -243,4 +256,114 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	}
 
 	return result, nil
+}
+
+// streamWithManifest records a prepared request before dispatch. "Prepared"
+// does not prove the provider received it: budget, cancellation or transport
+// can still stop it. Recording never authorizes replay or resource effects.
+func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history []Message, tools []Tool, fragments []strategy.PromptFragment, matched bool, retryOf string, delta func(string, string)) (modelResult, error) {
+	e, s, c := d.engine, d.session, *d.config
+	s.mu.Lock()
+	if s.state.Runtime == nil {
+		s.mu.Unlock()
+		return modelResult{}, errors.New("prompt manifest requires an ADK runtime identity")
+	}
+	runID, turnID := s.state.Runtime.SessionID, s.state.View.RootTurnID
+	skills := []strategy.SkillSnapshot{}
+	present := map[string]string{}
+	for _, msg := range history {
+		if msg.Role == "tool" {
+			present[msg.CallID] = strategy.ContentHash(msg.Content)
+		}
+	}
+	for _, skill := range s.state.SkillSnapshots {
+		if present[skill.CallID] == skill.ResultHash {
+			skills = append(skills, skill)
+		}
+	}
+	s.mu.Unlock()
+	modelHash, err := promptModelHash(c, m)
+	if err != nil {
+		return modelResult{}, err
+	}
+	toolsHash, err := promptFingerprint(tools)
+	if err != nil {
+		return modelResult{}, err
+	}
+	permissionsHash, err := promptFingerprint(c.Permissions)
+	if err != nil {
+		return modelResult{}, err
+	}
+	// Explicit allowlist: no Asset objects, connection settings, credentials,
+	// directories or terminal contents enter this target fingerprint.
+	scopeHash, err := promptFingerprint(struct {
+		Runtime, Asset, Container, Terminal string
+		References                          []string
+		Scope                               *TargetScope
+	}{c.Runtime, c.AssetRef, c.Container, c.TerminalID, c.ReferencedAssets, c.targetScope})
+	if err != nil {
+		return modelResult{}, err
+	}
+	requestHash, err := promptFingerprint(struct {
+		Model   string
+		History []Message
+		Tools   []Tool
+	}{modelHash, history, tools})
+	if err != nil {
+		return modelResult{}, err
+	}
+	systems := []string{}
+	for _, msg := range history {
+		if msg.Role == "system" {
+			systems = append(systems, msg.Content)
+		}
+	}
+	systemHash, err := promptFingerprint(systems)
+	if err != nil {
+		return modelResult{}, err
+	}
+	commit, dirty := promptBuild()
+	profile := c.Profile
+	if profile == "" {
+		profile = "core"
+	}
+	if c.workflowMode {
+		profile = "workflow"
+	}
+	if c.sreCoordinator {
+		profile = "sre-coordination"
+	}
+	manifest := strategy.PromptManifest{
+		SchemaVersion: strategy.SchemaVersion, RequestID: uid(), RunID: runID, TurnID: turnID, Round: d.round, RetryOf: retryOf,
+		BuildCommit: commit, BuildDirty: dirty, Profile: profile, Role: c.agentRole,
+		FixedRulesHash: strategy.FragmentLayerHash(fragments, strategy.FixedRules), BuiltinStrategyHash: strategy.FragmentLayerHash(fragments, strategy.BuiltinStrategy), Fragments: fragments,
+		SelectedAssets: []strategy.RevisionRef{}, OmittedAssets: []strategy.OmittedAsset{}, SkillSnapshots: skills,
+		ModelConfigHash: modelHash, ToolCatalogHash: toolsHash, PermissionPolicyVersion: promptPermissionPolicyVersion, PermissionSettingsHash: permissionsHash, TargetScopeHash: scopeHash,
+		InputBudget: strategy.PromptInputBudget{ContextWindow: m.ContextWindow, MaxOutput: m.MaxOutput, MaxSteps: c.MaxSteps, HistoryCost: historyCost(history), ToolsCost: len(js(tools))},
+		SystemHash:  systemHash, RequestHash: requestHash, CompositionMatched: matched, PreparedAt: timestamp(),
+	}
+	raw, err := manifest.CanonicalJSON()
+	if err != nil {
+		return modelResult{}, err
+	}
+	// Labels and logical IDs are allowlisted, but fail closed if a configured
+	// secret coincides with one. Sanitizing after hashing would break integrity.
+	if redact(string(raw), c) != string(raw) {
+		return modelResult{}, errors.New("prompt manifest contains sensitive metadata")
+	}
+	name := "prompt-manifest-" + manifest.RequestID + ".json"
+	saved, err := (&nativeArtifacts{engine: e, sessionID: runID, config: c}).Save(ctx, &artifact.SaveRequest{AppName: "lake", UserID: "lake", SessionID: runID, FileName: name, Version: 1, Part: &genai.Part{Text: string(raw)}})
+	if err != nil {
+		return modelResult{}, err
+	}
+	ref := &strategy.ManifestRef{RequestID: manifest.RequestID, FileName: name, Version: saved.Version, ContentHash: strategy.ContentHash(string(raw))}
+	s.mu.Lock()
+	s.state.Runtime.PromptManifest = ref
+	err = e.save(s)
+	s.mu.Unlock()
+	if err != nil {
+		return modelResult{}, err
+	}
+	d.lastRequestID = manifest.RequestID
+	return e.stream(ctx, m, history, tools, delta)
 }

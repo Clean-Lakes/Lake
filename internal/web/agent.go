@@ -109,7 +109,8 @@ func (b *Server) configure(id string, updates Object) Object {
 		options["runtime"] = b.Store.Resource(stringOf(term["resourceId"]))["kind"]
 		options["terminal_generation"] = term["generation"]
 	}
-	model := b.Models.CachedCapacity(b.Models.Active())
+	activeModel, modelSelection := b.Models.ActiveSelection()
+	model := b.Models.CachedCapacity(activeModel)
 	if model == nil {
 		b.Store.SaveOptions(id, options)
 		if previousPermissions != permissionVersion(options) {
@@ -144,7 +145,7 @@ func (b *Server) configure(id string, updates Object) Object {
 	memorySettings := b.Store.MemorySettings(projectID)
 	// Approvals belong to individual operations; earlier pending actions must not
 	// disable this turn's tools. invoke enforces per-operation permissions.
-	aiFailure(b.Engine.Configure(id, ai.Config{MemoryProjectID: projectID, MemoryEnabled: memorySettings["useEnabled"] == true, MemoryExtractionEnabled: memorySettings["useEnabled"] == true && memorySettings["extractionEnabled"] == true, MemoryEpoch: integer(memorySettings["epoch"]), MemoryKnowledgeRevision: integer(memorySettings["revision"]), Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
+	aiFailure(b.Engine.Configure(id, ai.Config{ModelProviderID: stringOf(modelSelection["providerId"]), MemoryProjectID: projectID, MemoryEnabled: memorySettings["useEnabled"] == true, MemoryExtractionEnabled: memorySettings["useEnabled"] == true && memorySettings["extractionEnabled"] == true, MemoryEpoch: integer(memorySettings["epoch"]), MemoryKnowledgeRevision: integer(memorySettings["revision"]), Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
 	b.Store.SaveOptions(id, options)
 	if previousPermissions != permissionVersion(options) {
 		b.revokeSessionTerminals(id)
