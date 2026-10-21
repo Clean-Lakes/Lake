@@ -319,7 +319,7 @@ M2 首批 10～20 个案例，覆盖磁盘统计差异、服务日志错误路�
 | --- | --- | --- | --- |
 | P0 契约冻结 | [x] T01 同步基线与调用链；[x] T02 冻结三层规则分类、设置、状态/范围/预算、来源权限和 API 契约（#32 合并及继续指令）；[x] T03 确定案例及基线规格 | [契约说明](../docs/design/strategy-learning-contract-v1.md)、`internal/strategy`、`testdata/cases.v1.json` | #32 已合入，用户要求继续 P1；无默认权限变化，夹具尚未执行 |
 | P1 提示词清单 | [x] T04 抽出固定/策略/上下文组合器；[x] T05 持久 PromptManifest；[x] T06 当前各 profile 和角色关闭状态回归 | `catalog.go`、`engine.go`、`adk_provider_step.go`、新 strategy 适配 | P0；关闭时语义、工具目录和审批行为保持基线，实际请求可关联清单 |
-| P2 数据与血缘 | [ ] T07 迁移/备份；[ ] T08 资产修订、绑定与血缘仓库；[ ] T09 权限/脱敏/删除/并发；[ ] T10 任务 outbox/epoch | `internal/web/schema.sql`、`store.go`、`strategy_store/jobs` | P1；旧库可升级，崩溃和重复提交不产生重复采用，跨项目不可读 |
+| P2 数据与血缘 | [x] T07 迁移/备份；[x] T08 资产修订、绑定与血缘仓库；[x] T09 权限/脱敏/删除/并发；[x] T10 任务 outbox/epoch | `internal/web/schema.sql`、`store.go`、`strategy_store/jobs` | P1；旧库可升级，崩溃和重复提交不产生重复采用，跨项目不可读 |
 | P3 可见资产 | [ ] T11 同源 API；[ ] T12 面板/差异/来源；[ ] T13 手写与导入导出；[ ] T14 版本解析和提示词注入；[ ] T15 总开关及三子项 | `internal/web/strategy_*`、`web-agent/web/src/Strategy*`、`internal/ai/strategy_*` | P2；达到 M1，用户可手动创建、采用、停用和回滚；默认关闭 |
 | P4 候选学习 | [ ] T16 真实纠错/终态来源登记；[ ] T17 无工具候选提取；[ ] T18 幂等恢复与防递归；[ ] T19 候选与记忆去重 | `strategy_jobs`、候选 schema、项目记忆来源适配 | P3；失败提取不影响任务，不自动采用、扩大范围或写入正式 Skill |
 | P5 隔离评估 | [ ] T20 夹具与复位执行器；[ ] T21 独立 ADK 变体运行；[ ] T22 客观评估与泄漏隔离；[ ] T23 对比报告/保留集 | 测试夹具、`internal/ai/strategy_experiment`、Web 报告 | P4；A/B 可复现，环境复位证明、失败和未知样本全部可见 |

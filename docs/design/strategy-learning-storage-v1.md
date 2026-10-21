@@ -61,7 +61,7 @@ scope generation 独立于配置存在性，记录范围、来源、绑定或归
 
 1. queued → leased：核对权限、开关、双 generation、来源 hash、版本与截止，发放新 token。
 2. 调用前 CheckStrategyJobLease；需延长等待用 Renew，在同一上限内。Complete 再次检查，并原子保存候选、来源/血缘、回执、job 成功和 outbox；从不自动采用。
-3. 外部启动之前 PrepareStrategyDispatch 原子写 awaiting_reconciliation + intent 和稳定 runtimeId。后续适配器必须用这个 ID 建立 ADK 关联，不能先执行后登记。
+3. 外部启动之前 PrepareStrategyDispatch 原子写 awaiting_reconciliation + intent 和稳定 runtimeId。这是预留的稳定执行 scope/关联 ID，不声称已创建原生 ADK SessionID。后续适配器必须用它查回实际 checkpoint/native ID，不能先执行后登记。
 4. 重启只将“尚无派发意图”的 leased 重新排队；intent 变 unknown，已有派发绝不自动重新领取或创建替代运行。显式 AcquireStrategyReconciliation 只给查询/结算租约，Prepare 仍拒绝第二次派发。
 5. Observe 的 started/unknown/complete 必须来自可信运行时查询，不是客户端/模型声称；它可以在取消/项目归档后记录原 ID 的终态，不返回来源、不重开任务或授予新执行权。未知保持阻塞；只有 complete 且有效租约/配置/来源仍合格，才允许提交已取得的结果。
 

@@ -6,14 +6,14 @@
 
 | 项目 | 实际结果 |
 | --- | --- |
-| `go test ./...` | 首轮 exit 0，web 116.864s；最终源码复跑进行中 |
+| `go test ./...` | exit 0；最终源码 web 116.585s，其余包通过或缓存 |
 | `go test -race ./internal/ai ./internal/web ./internal/strategy` | exit 0；web 254.220s，其余缓存通过 |
-| `go test -race ./internal/web -run '^TestStrategy' -count=1` | 新增仓库/租约/迁移/子进程崩溃测试通过；最终补充用例结果待收尾 |
+| `go test -race ./internal/web -run '^TestStrategy' -count=1` | exit 0；最终补充来源创建者、DDL 换行归一及损坏内容用例后再次通过，2.693s |
 | `go vet ./...` | exit 0 |
 | `python3 scripts/check_adk_runtime_boundary.py` | exit 0；未更改或放宽边界检查 |
 | 前端 check / test:frontend / build:web | exit 0；337/337 通过；仍有既有大 chunk 提示 |
-| Markdown 链接/围栏、gofmt、diff | 最终提交前检查 |
-| 签名 Lake Dev 构建/安装及隔离旧库升级 smoke | 待执行，PR 创建前补齐 |
+| Markdown 链接/围栏、gofmt、diff | 通过；4 份 Markdown 共 20 个相对链接存在，代码围栏闭合 |
+| 签名 Lake Dev 构建/安装及隔离旧库升级 smoke | exit 0；`LAKE_REUSE_WEB_ASSETS=1 scripts/build_lake_desktop.sh --dev --install`；deep/strict 验签与隔离升级 smoke 均通过 |
 
 测试观察到：
 
@@ -29,7 +29,11 @@
 
 ## 提交、Dev 与未验证项
 
-源码/签名构建提交与后端 SHA-256 在验证结束后补充；最终 PR head 若仅补充验证文档，另在 PR 中记录。所有运行使用独立 Dev 或临时 Home，不读取/复制正式版凭据，不安装或重启正式 Lake。
+源码与签名构建提交：`20d8f58e21fa560d194415d4d95885e4e0868c6b`，构建时工作区干净（buildDirty=false）。最终 PR head 只补充验证文档与计划勾选，另在 PR 中记录；生产代码及用例与该已测提交一致。
+
+已安装 `~/Applications/Lake Dev.app`，后端 SHA-256：`654328464c52c7f46ce474d8c9eb01c145f7363d6c2bc0b02b599118de004c53`。没有重启已有 Dev 窗口，不能声称该窗口已加载新包。
+
+真实签名二进制以临时 Home、随机 loopback 端口启动 Web 两次：升级一个包含合成用户消息的旧库，带认证 bootstrap 成功且未配置模型；消息保留，P2 前快照仅一份且权限 0600；重启不重复迁移；integrity_check=ok，foreign_key_check 无结果；策略资产/设置/任务表均空，新策略 API 为 404。随后仅在临时库中置入不支持的 DDL 标记，再启动被拒绝，原 investigating 状态未被重启对账改写。全过程模型调用为 0，临时 Home 删除。所有运行使用独立 Dev 或临时 Home，不读取/复制正式版凭据，不安装或重启正式 Lake。
 
 未做 Windows 原生验证、真实 provider/资源 smoke、策略 UI 交互、学习或故障夹具效果评估。P2 没有 API/UI/模型接线，不能把仓库测试当作这些功能已交付。当前组件 schema 的保护不能追溯安装到老二进制，旧版本只能按隔离兼容副本流程查看；逻辑删除不等于擦除 SQLite WAL/历史页/备份字节。
 
