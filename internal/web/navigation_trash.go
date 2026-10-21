@@ -73,6 +73,7 @@ func (s *Store) ArchiveNavigation(kind, id string) {
 			}
 			s.trashEntry(kind, id, project, stringOf(resource["name"]), node)
 			// Evidence from a removed resource must not commit after its scope changes.
+			s.strategyArchiveProject(project)
 			s.ensureMemorySettings(project)
 			s.exec("UPDATE projectMemorySettings SET epoch=epoch+1,updatedAt=? WHERE projectId=?", now(), project)
 			s.exec("UPDATE projectMemoryJobs SET status='skipped',lastErrorCode='resource_archived',updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE projectId=?) AND status IN ('queued','retry_wait','running')", now(), project)
@@ -84,6 +85,7 @@ func (s *Store) ArchiveNavigation(kind, id string) {
 			for _, resource := range s.rows("SELECT id FROM resources WHERE projectId=?", id) {
 				s.resourceIdleForDeletion(stringOf(resource["id"]))
 			}
+			s.strategyArchiveProject(id)
 			s.ensureMemorySettings(id)
 			s.exec("UPDATE projectMemorySettings SET epoch=epoch+1,updatedAt=? WHERE projectId=?", now(), id)
 			s.exec("UPDATE projectMemoryJobs SET status='skipped',lastErrorCode='project_archived',updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE projectId=?) AND status IN ('queued','retry_wait','running')", now(), id)
