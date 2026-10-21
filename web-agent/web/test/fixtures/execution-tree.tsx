@@ -20,3 +20,26 @@ function Fixture(){
  return <main style={{maxWidth:880,margin:'70px auto',padding:24}}><nav aria-label="隔离验收控制" style={{display:'flex',gap:12,marginBottom:36}}><button onClick={()=>setExtra(value=>value+1)}>追加操作</button><button onClick={()=>setEnded(true)}>完成会话</button><button onClick={()=>setEnded(false)}>继续会话</button></nav><AITranscript snapshot={snapshot}/></main>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture/>);
+
+
+// Bounded geometry samples across real viewport changes and lifecycle clicks.
+// This records measurements only; it never corrects or clamps the production UI.
+if(new URLSearchParams(location.search).has('resize-proof')){
+ const output=document.createElement('output');output.id='activity-resize-proof';output.hidden=true;document.body.appendChild(output);
+ const samples:unknown[]=[];let until=0,frame=0;
+ const sample=()=>{
+  frame=0;
+  const mark=document.querySelector<HTMLElement>('.reply-activity');
+  const text=document.querySelector<HTMLElement>('.is-overall .ai-markdown');
+  const glyph=mark?.querySelector('svg');
+  if(mark&&text&&glyph){
+   const style=getComputedStyle(mark),textBox=text.getBoundingClientRect();
+   const clip=text.closest('.settled-reply.is-archived')?.getBoundingClientRect();
+   const paintedBottom=clip?Math.min(textBox.bottom,clip.bottom):textBox.bottom;
+   samples.push({width:document.documentElement.clientWidth,gap:glyph.getBoundingClientRect().top-textBox.bottom,paintedGap:glyph.getBoundingClientRect().top-paintedBottom,textVisible:paintedBottom>textBox.top,opacity:style.opacity,leaving:mark.classList.contains('is-leaving')});output.textContent=JSON.stringify(samples.slice(-300));
+  }
+  if(performance.now()<until)frame=requestAnimationFrame(sample);
+ };
+ const record=()=>{until=performance.now()+650;if(!frame)frame=requestAnimationFrame(sample);};
+ window.addEventListener('resize',record);document.addEventListener('click',record);record();
+}
