@@ -72,3 +72,7 @@
   .composer-model-popup { overflow-y: auto; }
   .composer-model-popup .app-select-list { flex: 0 0 auto; max-height: 160px; }
 }
+
+.composer-model-current { display:flex; align-items:center; gap:7px; min-width:0; }
+.composer-model-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.composer-model-effort { flex-shrink:0; color:var(--text-muted); font-size:11px; font-weight:400; }
