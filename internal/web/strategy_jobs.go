@@ -52,6 +52,9 @@ func (s *Store) strategyCheckJob(ctx StrategyContext, job Object) {
 	if !settings.Settings.MasterEnabled || (job["kind"] == "proposal" && !settings.Settings.LearnEnabled) || (job["kind"] == "experiment" && (!settings.Settings.LearnEnabled || !settings.Settings.ApplyEnabled)) {
 		strategyFail(409, "disabled")
 	}
+	if job["kind"] == "experiment" && !settings.Settings.CorrectEnabled && s.row("SELECT jobId FROM strategyOptimizations WHERE jobId=?", job["id"]) != nil {
+		strategyFail(409, "correction_disabled")
+	}
 	if int64(integer(job["globalEpoch"])) != settings.GlobalEpoch || int64(integer(job["projectEpoch"])) != settings.ProjectEpoch {
 		strategyFail(409, "stale_epoch")
 	}

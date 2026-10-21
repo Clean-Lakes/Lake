@@ -83,6 +83,8 @@ func (b *Server) processOneExperiment() {
 	id := ""
 	defer func() {
 		if recover() != nil && id != "" {
+			job, _ := strategyCall(b.Store, false, func() Object { return b.Store.row("SELECT leaseToken FROM strategyJobs WHERE id=?", id) })
+			_, _ = b.Store.finishOptimization(active, id, stringOf(job["leaseToken"]), "failed")
 			_, _ = b.Store.failStrategyProposal(active, id, "experiment_internal_error")
 			_, _ = b.Store.ObserveStrategyDispatch(active, id, "strategy_"+id, "complete")
 		}
@@ -106,6 +108,11 @@ func (b *Server) processOneExperiment() {
 			continue
 		}
 		active, id = scope, stringOf(job["id"])
+		optimization, _ := strategyCall(b.Store, false, func() bool { return b.Store.row("SELECT jobId FROM strategyOptimizations WHERE jobId=?", id) != nil })
+		if optimization {
+			b.executeOptimization(scope, job)
+			return
+		}
 		b.executeExperiment(scope, job)
 		return
 	}
