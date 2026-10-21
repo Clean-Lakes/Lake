@@ -204,3 +204,31 @@ func TestStrategyHTTPSettingsSecretsAndSameOrigin(t *testing.T) {
 		}
 	}
 }
+
+func TestStrategyRuntimeMissingSessionAndNewCredentialFailClosed(t *testing.T) {
+	b, h := fixture(t)
+	_, err := b.strategyProvider(context.Background(), "no-host-session", strategy.SelectionQuery{Profile: "core"}, nil)
+	strategyCheckError(t, err, 404)
+	id, _ := newSession(t, h)
+	project := stringOf(b.Store.Session(id)["projectId"])
+	ctx := StrategyContext{ProjectID: project}
+	scope := strategy.Scope{Kind: strategy.ProjectScope, ProjectID: project}
+	input := StrategyAssetInput{Title: "Old preference", Kind: strategy.UserPreference, Body: "Use historical marker synthetic-runtime-strategy-key in reports."}
+	a, err := b.Store.CreateStrategyAsset(ctx, scope, "historical", input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, _ := b.Store.GetStrategyRevision(ctx, a.AssetID, 1)
+	_, err = b.Store.BindStrategyAsset(ctx, scope, "adopt", StrategyBindingInput{Action: "adopt", Ref: v.Value.Ref})
+	if err != nil {
+		t.Fatal(err)
+	}
+	enableStrategyFixture(t, b.Store)
+	// Only later does this exact substring become a configured credential.
+	apiTest(t, h, "POST", "/api/settings/providers", providerFixture("future", "http://localhost:12345/v1", "synthetic-runtime-strategy-key"), 201)
+	_, err = b.strategyProvider(context.Background(), id, strategy.SelectionQuery{Profile: "core"}, nil)
+	strategyCheckError(t, err, 400)
+	if strings.Contains(err.Error(), "synthetic-runtime-strategy-key") {
+		t.Fatal("error disclosed the credential")
+	}
+}
