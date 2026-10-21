@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-21",
+  "scope": "Reference chip geometry and caret restoration after atomic references",
+  "fixture": "web-agent/web/test/fixtures/composer-caret.html?conversation-radii&corner-fallback",
+  "screenshot": "docs/validation/composer-reference-caret.jpg",
+  "geometry": {"editorHeight":24,"editorRadius":12,"messageHeight":22,"messageRadius":11,"curve":"shared window curve, including nine-slice fallback"},
+  "before": {"draft":"U+FFFC","logicalCaret":1,"anchor":"DIV boundary after non-editable inline-flex chip","paintedRangeHeight":0,"focused":true},
+  "after": {"draft":"U+FFFC","logicalCaret":1,"anchor":"editable marked text boundary","paintedRangeHeight":17,"focused":true},
+  "checks": [
+    "347 frontend tests passed, including four DOM-document mapping regressions; TypeScript check passed.",
+    "Keyboard and pointer mention selection both retain editor focus and a 17px caret at the chip tail.",
+    "Typing 状态如何 produces exactly U+FFFC + 状态如何, with logical caret 5 and no marker character in the draft.",
+    "Deleting text back to the chip, deleting the chip, undo and redo preserve selection and token identity.",
+    "Middle insertion preserves 前/U+FFFC/后 and typing continues before 后 at logical caret 2.",
+    "Select-all copy returns exactly the reference label, with no boundary character.",
+    "Dark 390x720 fallback rendering: visible caret, 24px chip with 12px window curve, no horizontal page overflow."
+  ],
+  "isolation": "Fictional read-only workspace; no host/model calls, sent messages, credentials or real user data in the screenshot.",
+  "limits": ["Physical Chinese IME composition and Windows native rendering were not exercised; the existing composition guard is retained."]
+}

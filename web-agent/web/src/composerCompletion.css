@@ -12,7 +12,7 @@
 .composer-rich-input[aria-disabled="true"] { color: var(--text-muted); cursor: default; }
 .composer-inline-suggestion { color: var(--text-muted); pointer-events: none; }
 .composer-rich-input .composer-reference-token { margin: 0 2px; vertical-align: baseline; user-select: all; }
-.composer-reference-token { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; min-height: 24px; padding: 2px 6px; box-sizing: border-box; border-radius: var(--radius-window); background: var(--resource-reference-background,var(--surface-hover)); color: var(--resource-reference-foreground,var(--foreground)); font-size: 12px; line-height: 20px; }
+.composer-reference-token { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; min-height: 24px; padding: 2px 6px; box-sizing: border-box; border-radius: var(--radius-composer-reference); background: var(--resource-reference-background,var(--surface-hover)); color: var(--resource-reference-foreground,var(--foreground)); font-size: 12px; line-height: 20px; }
 .composer-reference-token > svg { flex-shrink: 0; }
 .composer-reference-token > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .composer-reference-token > small { color: var(--text-muted); font-size: 10px; white-space: nowrap; }

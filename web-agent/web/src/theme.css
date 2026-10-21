@@ -52,6 +52,8 @@
   --radius-settings-dialog: 22px;
   --radius-settings-icon: 8px;
   --radius-settings-badge: 5px;
+  --radius-composer-reference: 12px;
+  --radius-message-reference: 11px;
   /* macOS 26 outer contour, checked against a native window capture at 2x. */
   --radius-window: 22px;
   --corner-window: superellipse(1.5);

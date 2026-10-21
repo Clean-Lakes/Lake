@@ -48,6 +48,8 @@
  border-radius:var(--window-corner-radius);
  corner-shape:var(--corner-window);
 }
+:root .composer-reference-token { --window-corner-radius:var(--radius-composer-reference); }
+:root .message-reference-token { --window-corner-radius:var(--radius-message-reference); }
 
 /* WKWebView versions without corner-shape use the same contour as local nine-slice
    masks. Background and border remain inherited so hover, focus and theme updates

@@ -4,7 +4,7 @@ import {Glyph} from './Icons';
 import {CompositionGuard} from './composerKeyboard';
 import {completionDelay,completionEligible,localCompletion,validCompletion} from './composerCompletion';
 import {composerClipboardFragment,composerMessage,composerToken,replaceComposerRange,type ComposerReference} from './composerMentionState';
-import {composerRangeOffsets,composerSelection,readComposerDocument,referenceKey,setComposerSelection} from './composerDocument';
+import {composerCaretCharacter,composerRangeOffsets,composerSelection,readComposerDocument,referenceKey,setComposerSelection} from './composerDocument';
 
 export type ComposerInputHandle={focus:(options?:FocusOptions)=>void;setSelectionRange:(start:number,end:number)=>void;readonly selectionStart:number;readonly selectionEnd:number;readonly value:string};
 type Props=Omit<HTMLAttributes<HTMLDivElement>,'onChange'|'onSelect'> & {value:string;references:ComposerReference[];renderReference:(ref:ComposerReference)=>ReactNode;sessionId:string;modelId?:string;modelSource?:string;history:string[];completionBlocked?:boolean;disabled?:boolean;placeholder?:string;onChange:(value:string,references:ComposerReference[],caret:number)=>void;onComplete:(value:string)=>void};
@@ -39,16 +39,19 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
   const active=root.ownerDocument.activeElement===root;
   const current=readComposerDocument(root,references),wanted=signature(value,references);
   remember(value,references,caret.current);
-  if(signature(current.value,current.references)!==wanted||root.querySelector('br:not([data-composer-break]):not([data-composer-placeholder]),div,p')){
+  const boundary=root.querySelector('[data-composer-caret]'),needsBoundary=value.endsWith(composerToken);
+  if(signature(current.value,current.references)!==wanted||root.querySelector('br:not([data-composer-break]):not([data-composer-placeholder]),div,p')||needsBoundary!==!!boundary||boundary&&boundary.textContent!==composerCaretCharacter){
    const fragment=root.ownerDocument.createDocumentFragment();const refs=new Map(references.map(ref=>[ref.position,ref]));let text='';
-   const flush=()=>{fragment.appendChild(root.ownerDocument.createTextNode(text));text='';};
+   const flush=()=>{if(text)fragment.appendChild(root.ownerDocument.createTextNode(text));text='';};
    for(let i=0;i<value.length;i++){
     if(value[i]==='\n'){flush();const br=root.ownerDocument.createElement('br');br.dataset.composerBreak='';fragment.appendChild(br);continue;}
     if(value[i]!==composerToken){text+=value[i];continue;}flush();
     const ref=refs.get(i),template=ref&&[...(templates.current?.children??[])].find(el=>el.getAttribute('data-composer-token')===referenceKey(ref));
     if(template)fragment.appendChild(template.cloneNode(true));
    }
-   flush();if(value.endsWith('\n')){const placeholder=root.ownerDocument.createElement('br');placeholder.dataset.composerPlaceholder='';fragment.appendChild(placeholder);}root.replaceChildren(fragment);
+   flush();
+   if(needsBoundary){const tail=root.ownerDocument.createElement('span');tail.dataset.composerCaret='';tail.textContent=composerCaretCharacter;fragment.appendChild(tail);}
+   if(value.endsWith('\n')){const placeholder=root.ownerDocument.createElement('br');placeholder.dataset.composerPlaceholder='';fragment.appendChild(placeholder);}root.replaceChildren(fragment);
    if(active)setComposerSelection(root,Math.min(value.length,caret.current.start),Math.min(value.length,caret.current.end));
   }
   root.querySelectorAll<HTMLButtonElement>('[data-remove-composer-token]').forEach(button=>{button.disabled=disabled;});
@@ -65,7 +68,7 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
   },completionDelay);return()=>{clearTimeout(timer);controller.abort();};
  },[value,references,sessionId,modelId,modelSource,eligible,dismissed]);
  function accept(){if(!suffix)return;const next=value+suffix;restore.current={start:next.length,end:next.length};setDismissed(next);setSuggestion(null);onComplete(next);}
- function copy(event:ClipboardEvent<HTMLDivElement>,cut=false){const range=syncSelection();if(range.start===range.end)return;const part=replaceComposerRange(value,references,range.end,value.length,'');const clipped=replaceComposerRange(part.next,part.references,0,range.start,'');const refs=new Map(clipped.references.map(ref=>[ref.position,ref]));const text=[...clipped.next.split('')].map((char,index)=>char===composerToken?refs.get(index)?.label.slice(1)??'':char).join('');event.clipboardData.setData('text/plain',text);event.clipboardData.setData('application/x-lake-composer',JSON.stringify({version:1,value:clipped.next,references:clipped.references.map(ref=>({kind:ref.kind,resourceId:ref.resourceId,position:ref.position}))}));event.preventDefault();if(cut&&!disabled)apply(range.start,range.end,'');}
+ function copy(event:ClipboardEvent<HTMLDivElement>,cut=false){const range=syncSelection();if(range.start===range.end){event.preventDefault();return;}const part=replaceComposerRange(value,references,range.end,value.length,'');const clipped=replaceComposerRange(part.next,part.references,0,range.start,'');const refs=new Map(clipped.references.map(ref=>[ref.position,ref]));const text=[...clipped.next.split('')].map((char,index)=>char===composerToken?refs.get(index)?.label.slice(1)??'':char).join('');event.clipboardData.setData('text/plain',text);event.clipboardData.setData('application/x-lake-composer',JSON.stringify({version:1,value:clipped.next,references:clipped.references.map(ref=>({kind:ref.kind,resourceId:ref.resourceId,position:ref.position}))}));event.preventDefault();if(cut&&!disabled)apply(range.start,range.end,'');}
  return <div className={`composer-text ${suffix?'has-completion':''}`}>
   <div ref={templates} hidden aria-hidden="true">{references.map(ref=><span key={`${referenceKey(ref)}:${ref.position}`} className="composer-reference-token" contentEditable={false} data-composer-token={referenceKey(ref)} title={ref.label.slice(1)}>{renderReference(ref)}<button type="button" tabIndex={-1} data-remove-composer-token="" aria-label={`移除引用 ${ref.label.slice(1)}`} disabled={disabled}><Glyph name="close" size={11}/></button></span>)}</div>
   <div {...props} ref={input} className="composer-rich-input" contentEditable={!disabled} suppressContentEditableWarning role={props.role??'textbox'} aria-label={props['aria-label']??'给 Lake 的消息'} aria-multiline="true" aria-disabled={disabled} aria-autocomplete={props['aria-autocomplete']??'inline'} aria-describedby={[props['aria-describedby'],suffix?statusId:''].filter(Boolean).join(' ')||undefined} data-placeholder={placeholder} data-empty={!value}
