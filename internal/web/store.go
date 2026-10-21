@@ -122,6 +122,10 @@ func OpenStore(dir string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	s := &Store{db: db, q: db, subscribers: map[chan Object]bool{}, Dir: dir, lockFile: lockFile}
+	if e = s.prepareStrategyMigration(); e != nil {
+		db.Close()
+		return nil, e
+	}
 	if s.row("SELECT name FROM sqlite_master WHERE type='table' AND name='projects'") != nil && s.row("SELECT name FROM sqlite_master WHERE type='table' AND name='sreTasks'") == nil {
 		backup := filepath.Join(dir, "lake-web.before-sre-"+ident()+".sqlite")
 		if _, e = db.Exec("VACUUM INTO ?", backup); e != nil {
@@ -155,6 +159,7 @@ func OpenStore(dir string) (*Store, error) {
 		s.ensureBuiltinLocalResources("")
 		s.seedResourceTree()
 		s.pauseMessageQueuesOnRestart()
+		s.recoverStrategyJobs()
 		s.exec("UPDATE workflowRuns SET status='interrupted',error='服务重启，工作流已中断；未自动重放',finishedAt=? WHERE status='running'", now())
 		s.exec("UPDATE replyTimings SET status='interrupted' WHERE status='running' AND finishedAt=''")
 		// Capture work that is unfinished NOW. Historical unknown outcomes must
@@ -281,7 +286,10 @@ func (s *Store) migrate() error {
 	if e != nil {
 		return e
 	}
-	return s.migrateProjectMemory()
+	if e := s.migrateProjectMemory(); e != nil {
+		return e
+	}
+	return s.migrateStrategy()
 }
 func (s *Store) Close() error {
 	s.mu.Lock()
