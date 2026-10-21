@@ -321,6 +321,8 @@ func (s *Store) CommitProjectMemory(project string, m MemoryMutation) Object {
 			}
 		}
 		if m.Forget {
+			s.eraseStrategyExperiments("jobId IN (SELECT id FROM strategyJobs WHERE accessProjectId=?)", project)
+			s.strategyInvalidateJobs("id IN (SELECT jobId FROM strategyExperiments WHERE jobId IN (SELECT id FROM strategyJobs WHERE accessProjectId=?))", project)
 			sources = nil
 		}
 		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(body)))

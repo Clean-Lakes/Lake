@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 )
@@ -29,6 +30,15 @@ func shouldCompactResumedConversation(st State, now time.Time) bool {
 }
 
 func (e *Engine) compactForTurn(ctx context.Context, s *session, c Config, resume bool) error {
+	if e.experiment != nil {
+		s.mu.Lock()
+		cost := historyCost(s.state.History)
+		s.mu.Unlock()
+		if cost > (c.Model.ContextWindow-c.Model.MaxOutput)*2 {
+			return errors.New("experiment context budget exhausted")
+		}
+		return nil
+	}
 	err := e.compact(ctx, s, c, resume)
 	if err == nil || !resume || ctx.Err() != nil || !strings.HasPrefix(err.Error(), "context compaction:") {
 		return err

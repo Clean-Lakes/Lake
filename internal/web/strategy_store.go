@@ -207,6 +207,8 @@ func (s *Store) strategyEdge(assetID, from, to, relation string) {
 		if relation == "supersedes" {
 			valid = valid && s.row("SELECT 1 FROM strategyRevisions WHERE assetId=? AND revision=? AND parentRevision=?", assetID, a["revision"], b["revision"]) != nil
 		}
+	case "tested_by":
+		valid = a["kind"] == "asset_revision" && b["kind"] == "evaluation" && b["aggregateId"] == assetID && b["sourceId"] != nil && s.row("SELECT 1 FROM strategySourceEvents WHERE id=? AND kind='fixture_evaluation'", b["sourceId"]) != nil
 	case "adopted_as":
 		valid = a["kind"] == "asset_revision" && b["kind"] == "adoption" && b["aggregateId"] == assetID && a["revision"] == b["revision"]
 	}

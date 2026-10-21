@@ -304,6 +304,7 @@ func (s *Store) strategyCompleteProposal(ctx StrategyContext, id, token string, 
 // Called only while OpenStore owns the process lock. Leased means no dispatch
 // intent exists, so it may return to the queue. An intent never does.
 func (s *Store) recoverStrategyJobs() {
+	s.recoverStrategyExperiments()
 	s.exec("UPDATE strategyProposalRuns SET status='unknown',errorCode='interrupted',finishedAt=? WHERE status='running'", now())
 	s.exec("UPDATE strategyJobs SET status='queued',leaseToken='',leaseUntilMs=0,updatedAt=? WHERE status='leased' AND dispatchState='none'", now())
 	s.exec("UPDATE strategyJobs SET leaseToken='',leaseUntilMs=0,dispatchState=CASE WHEN dispatchState='intent' THEN 'unknown' ELSE dispatchState END,updatedAt=? WHERE status='awaiting_reconciliation'", now())
