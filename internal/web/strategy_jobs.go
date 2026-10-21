@@ -79,62 +79,70 @@ func (s *Store) strategyCheckLease(ctx StrategyContext, job Object, token string
 	s.strategyCheckJob(ctx, job)
 }
 func (s *Store) QueueStrategyJob(ctx StrategyContext, key string, input StrategyJobInput) (StrategyMutationResult, error) {
-	return strategyCall(s, true, func() StrategyMutationResult {
-		scopeKey := s.strategyEnsureScope(ctx, input.Scope)
-		if input.Kind != "proposal" && input.Kind != "experiment" {
-			strategyFail(400, "invalid_job")
-		}
-		// Automatic global candidates may only use explicitly global sources and a
-		// global context. Promotion from a project's private history requires a new
-		// user-confirmed global revision, not a worker choosing a wider scope.
-		if input.Scope.Kind == strategy.UserScope && ctx.ProjectID != "" {
-			strategyFail(403, "global_promotion_requires_confirmation")
-		}
-		sources, sourceHash := s.strategySourceSet(ctx, input.SourceIDs)
-		input.SourceIDs = sources
-		result, replayed, digest := s.strategyReceipt(scopeKey, key, Object{"operation": "queue", "input": input})
-		if replayed {
-			s.strategyJob(ctx, result.JobID)
-			return result
-		}
-		effective := s.strategyEffective(ctx)
-		if !effective.Settings.MasterEnabled || (input.Kind == "proposal" && !effective.Settings.LearnEnabled) || (input.Kind == "experiment" && (!effective.Settings.ApplyEnabled || !effective.Settings.LearnEnabled)) {
-			strategyFail(409, "disabled")
-		}
-		var assetID any
-		if input.AssetID != "" {
-			a := s.strategyAsset(ctx, input.AssetID, false)
-			if a["scopeKey"] != scopeKey || int64(integer(a["revision"])) != input.ExpectedRevision {
-				strategyFail(409, "revision_conflict")
-			}
-			if input.Kind == "proposal" && effective.Settings.Budget.MaxRevisions == 0 {
-				strategyFail(409, "revision_disabled")
-			}
-			assetID = input.AssetID
-		} else if input.ExpectedRevision != 0 {
-			strategyFail(400, "invalid_revision")
-		}
-		id := ident()
-		stamp := now()
-		s.exec(`INSERT INTO strategyJobs(id,scopeKey,accessProjectId,kind,assetId,expectedRevision,status,globalEpoch,projectEpoch,sourceSetHash,runtimeId,dispatchState,expiresAtMs,createdAt,updatedAt)
- VALUES(?,?,?,?,?,?,'queued',?,?,?,?,'none',?,?,?)`, id, scopeKey, ctx.ProjectID, input.Kind, assetID, input.ExpectedRevision, effective.GlobalEpoch, effective.ProjectEpoch, sourceHash, "strategy_"+id, time.Now().Add(time.Duration(effective.Settings.Budget.MaxActiveSeconds)*time.Second).UnixMilli(), stamp, stamp)
-		for _, source := range sources {
-			s.exec("INSERT INTO strategyJobSources VALUES(?,?)", id, source)
-		}
-		s.strategyEvent(scopeKey, ctx.ProjectID, id, 1, "job_queued", Object{"runtimeId": "strategy_" + id, "sourceSetHash": sourceHash})
-		result = StrategyMutationResult{JobID: id}
-		s.strategySaveReceipt(scopeKey, key, digest, result)
-		return result
-	})
+	return strategyCall(s, true, func() StrategyMutationResult { return s.strategyQueueJob(ctx, key, input) })
 }
+func (s *Store) strategyQueueJob(ctx StrategyContext, key string, input StrategyJobInput) StrategyMutationResult {
+	scopeKey := s.strategyEnsureScope(ctx, input.Scope)
+	if input.Kind != "proposal" && input.Kind != "experiment" {
+		strategyFail(400, "invalid_job")
+	}
+	// Automatic global candidates may only use explicitly global sources and a
+	// global context. Promotion from a project's private history requires a new
+	// user-confirmed global revision, not a worker choosing a wider scope.
+	if input.Scope.Kind == strategy.UserScope && ctx.ProjectID != "" {
+		strategyFail(403, "global_promotion_requires_confirmation")
+	}
+	sources, sourceHash := s.strategySourceSet(ctx, input.SourceIDs)
+	input.SourceIDs = sources
+	result, replayed, digest := s.strategyReceipt(scopeKey, key, Object{"operation": "queue", "input": input})
+	if replayed {
+		s.strategyJob(ctx, result.JobID)
+		return result
+	}
+	effective := s.strategyEffective(ctx)
+	if !effective.Settings.MasterEnabled || (input.Kind == "proposal" && !effective.Settings.LearnEnabled) || (input.Kind == "experiment" && (!effective.Settings.ApplyEnabled || !effective.Settings.LearnEnabled)) {
+		strategyFail(409, "disabled")
+	}
+	var assetID any
+	if input.AssetID != "" {
+		a := s.strategyAsset(ctx, input.AssetID, false)
+		if a["scopeKey"] != scopeKey || int64(integer(a["revision"])) != input.ExpectedRevision {
+			strategyFail(409, "revision_conflict")
+		}
+		if input.Kind == "proposal" && effective.Settings.Budget.MaxRevisions == 0 {
+			strategyFail(409, "revision_disabled")
+		}
+		assetID = input.AssetID
+	} else if input.ExpectedRevision != 0 {
+		strategyFail(400, "invalid_revision")
+	}
+	id := ident()
+	stamp := now()
+	s.exec(`INSERT INTO strategyJobs(id,scopeKey,accessProjectId,kind,assetId,expectedRevision,status,globalEpoch,projectEpoch,sourceSetHash,runtimeId,dispatchState,expiresAtMs,createdAt,updatedAt)
+ VALUES(?,?,?,?,?,?,'queued',?,?,?,?,'none',?,?,?)`, id, scopeKey, ctx.ProjectID, input.Kind, assetID, input.ExpectedRevision, effective.GlobalEpoch, effective.ProjectEpoch, sourceHash, "strategy_"+id, time.Now().Add(time.Duration(effective.Settings.Budget.MaxActiveSeconds)*time.Second).UnixMilli(), stamp, stamp)
+	for _, source := range sources {
+		s.exec("INSERT INTO strategyJobSources VALUES(?,?)", id, source)
+	}
+	s.strategyEvent(scopeKey, ctx.ProjectID, id, 1, "job_queued", Object{"runtimeId": "strategy_" + id, "sourceSetHash": sourceHash})
+	result = StrategyMutationResult{JobID: id}
+	s.strategySaveReceipt(scopeKey, key, digest, result)
+	return result
+}
+
 func (s *Store) GetStrategyJob(ctx StrategyContext, id string) (Object, error) {
 	return strategyCall(s, false, func() Object { job := s.strategyJob(ctx, id); delete(job, "leaseToken"); return job })
 }
 func (s *Store) ClaimStrategyJob(ctx StrategyContext) (Object, error) {
+	return s.claimStrategyJob(ctx, "")
+}
+func (s *Store) claimStrategyJob(ctx StrategyContext, kind string) (Object, error) {
 	return strategyCall(s, true, func() Object {
 		s.strategyContext(ctx)
 		stamp := time.Now().UnixMilli()
-		for _, job := range s.rows("SELECT * FROM strategyJobs WHERE accessProjectId=? AND (status='queued' OR (status='leased' AND leaseUntilMs<=? AND dispatchState='none')) ORDER BY createdAt,id LIMIT 32", ctx.ProjectID, stamp) {
+		for _, job := range s.rows("SELECT * FROM strategyJobs WHERE accessProjectId=? AND (?='' OR kind=?) AND (status='queued' OR (status='leased' AND leaseUntilMs<=? AND dispatchState='none')) ORDER BY createdAt,id LIMIT 32", ctx.ProjectID, kind, kind, stamp) {
+			if kind == "proposal" && s.row(`SELECT 1 FROM strategyJobSources js JOIN strategyLearningTurns t ON t.sourceId=js.sourceId JOIN projectMemoryTurns mt ON mt.sessionId=t.sessionId AND mt.turnId=t.turnId JOIN projectMemoryJobs mj ON mj.turnSequence=mt.sequence WHERE js.jobId=? AND mj.status IN ('queued','running','retry_wait') LIMIT 1`, job["id"]) != nil {
+				continue
+			}
 			code := strategyValidationCode(func() { s.strategyCheckJob(ctx, job) })
 			if integer(job["attempts"]) >= strategyMaxJobClaims {
 				code = "strategy_claim_limit"
@@ -248,45 +256,55 @@ func (s *Store) AcquireStrategyReconciliation(ctx StrategyContext, id, runtimeID
 	})
 }
 func (s *Store) CompleteStrategyProposal(ctx StrategyContext, id, token string, input StrategyAssetInput) (StrategyMutationResult, error) {
-	return strategyCall(s, true, func() StrategyMutationResult {
-		job := s.strategyJob(ctx, id)
-		validateStrategyInput(input)
-		scopeKey := stringOf(job["scopeKey"])
-		key := "job-result:" + id
-		result, replayed, digest := s.strategyReceipt(scopeKey, key, Object{"operation": "proposal_result", "id": id, "input": input})
-		if replayed {
+	return strategyCall(s, true, func() StrategyMutationResult { return s.strategyCompleteProposal(ctx, id, token, input, false) })
+}
+func (s *Store) strategyCompleteProposal(ctx StrategyContext, id, token string, input StrategyAssetInput, dedup bool) StrategyMutationResult {
+	job := s.strategyJob(ctx, id)
+	validateStrategyInput(input)
+	scopeKey := stringOf(job["scopeKey"])
+	key := "job-result:" + id
+	result, replayed, digest := s.strategyReceipt(scopeKey, key, Object{"operation": "proposal_result", "id": id, "input": input})
+	if replayed {
+		return result
+	}
+	s.strategyCheckLease(ctx, job, token)
+	if job["kind"] != "proposal" || (job["status"] == "awaiting_reconciliation" && job["dispatchState"] != "complete") {
+		strategyFail(409, "reconciliation_required")
+	}
+	if dedup {
+		if result, code := s.strategyProposalDuplicate(ctx, job, input); code != "" {
+			s.strategyFinishProposal(job, code)
+			s.strategySaveReceipt(scopeKey, key, digest, result)
 			return result
 		}
-		s.strategyCheckLease(ctx, job, token)
-		if job["kind"] != "proposal" || (job["status"] == "awaiting_reconciliation" && job["dispatchState"] != "complete") {
-			strategyFail(409, "reconciliation_required")
+	}
+
+	assetID := stringOf(job["assetId"])
+	parent := int64(integer(job["expectedRevision"]))
+	var a Object
+	if assetID == "" {
+		assetID = ident()
+		s.exec("INSERT INTO strategyAssets(id,scopeKey,kind,title,revision,createdAt) VALUES(?,?,?,?,1,?)", assetID, scopeKey, input.Kind, input.Title, now())
+		a = s.strategyAsset(ctx, assetID, false)
+	} else {
+		a = s.strategyAsset(ctx, assetID, false)
+		if input.Kind != strategy.AssetKind(stringOf(a["kind"])) {
+			strategyFail(400, "immutable_asset_kind")
 		}
-		assetID := stringOf(job["assetId"])
-		parent := int64(integer(job["expectedRevision"]))
-		var a Object
-		if assetID == "" {
-			assetID = ident()
-			s.exec("INSERT INTO strategyAssets(id,scopeKey,kind,title,revision,createdAt) VALUES(?,?,?,?,1,?)", assetID, scopeKey, input.Kind, input.Title, now())
-			a = s.strategyAsset(ctx, assetID, false)
-		} else {
-			a = s.strategyAsset(ctx, assetID, false)
-			if input.Kind != strategy.AssetKind(stringOf(a["kind"])) {
-				strategyFail(400, "immutable_asset_kind")
-			}
-		}
-		s.strategyWriteRevision(ctx, a, parent+1, parent, input, s.strategyJobSources(id), strategy.SingleObservation, "job:"+id)
-		s.exec("UPDATE strategyAssets SET title=? WHERE id=?", input.Title, assetID)
-		s.exec("UPDATE strategyJobs SET status='succeeded',leaseToken='',leaseUntilMs=0,updatedAt=? WHERE id=?", now(), id)
-		result = StrategyMutationResult{AssetID: assetID, Revision: parent + 1, JobID: id}
-		s.strategySaveReceipt(scopeKey, key, digest, result)
-		s.strategyEvent(scopeKey, ctx.ProjectID, id, int64(integer(job["attempts"])), "job_succeeded", result)
-		return result
-	})
+	}
+	s.strategyWriteRevision(ctx, a, parent+1, parent, input, s.strategyJobSources(id), strategy.SingleObservation, "job:"+id)
+	s.exec("UPDATE strategyAssets SET title=? WHERE id=?", input.Title, assetID)
+	s.exec("UPDATE strategyJobs SET status='succeeded',leaseToken='',leaseUntilMs=0,updatedAt=? WHERE id=?", now(), id)
+	result = StrategyMutationResult{AssetID: assetID, Revision: parent + 1, JobID: id}
+	s.strategySaveReceipt(scopeKey, key, digest, result)
+	s.strategyEvent(scopeKey, ctx.ProjectID, id, int64(integer(job["attempts"])), "job_succeeded", result)
+	return result
 }
 
 // Called only while OpenStore owns the process lock. Leased means no dispatch
 // intent exists, so it may return to the queue. An intent never does.
 func (s *Store) recoverStrategyJobs() {
+	s.exec("UPDATE strategyProposalRuns SET status='unknown',errorCode='interrupted',finishedAt=? WHERE status='running'", now())
 	s.exec("UPDATE strategyJobs SET status='queued',leaseToken='',leaseUntilMs=0,updatedAt=? WHERE status='leased' AND dispatchState='none'", now())
 	s.exec("UPDATE strategyJobs SET leaseToken='',leaseUntilMs=0,dispatchState=CASE WHEN dispatchState='intent' THEN 'unknown' ELSE dispatchState END,updatedAt=? WHERE status='awaiting_reconciliation'", now())
 }

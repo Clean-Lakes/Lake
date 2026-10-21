@@ -34,6 +34,12 @@ func strategyMust[T any](value T, err error) T {
 }
 
 func strategyExactKeys(raw json.RawMessage, typ reflect.Type) bool {
+	if typ.Kind() == reflect.Pointer {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			return true
+		}
+		return strategyExactKeys(raw, typ.Elem())
+	}
 	if typ.Kind() != reflect.Struct {
 		return true
 	}
@@ -228,7 +234,7 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 					source = "inherited"
 				}
 			}
-			reply(w, 200, Object{"settings": settings, "effective": effective.Settings, "source": source, "capabilities": Object{"apply": true, "learn": false, "correct": false}})
+			reply(w, 200, Object{"settings": settings, "effective": effective.Settings, "source": source, "capabilities": Object{"apply": true, "learn": true, "correct": false}})
 			return
 		}
 		if method == "PATCH" {
@@ -285,6 +291,9 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 		asset := StrategyAssetInput{Title: meta.Name, Kind: in.Kind, Body: content, Applicability: in.Applicability}
 		b.strategySafeInput(asset)
 		reply(w, 200, strategyMust(b.Store.importStrategySkill(ctx, scope, key, in.Name, content, asset)))
+		return
+	}
+	if b.strategyLearningRoute(w, r, ctx, scope, suffix, key) {
 		return
 	}
 	parts := strings.Split(strings.Trim(suffix, "/"), "/")
