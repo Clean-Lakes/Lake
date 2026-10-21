@@ -10,6 +10,7 @@ type PromptLayer string
 const (
 	FixedRules      PromptLayer = "fixed_rules"
 	BuiltinStrategy PromptLayer = "builtin_strategy"
+	UserStrategy    PromptLayer = "user_strategy"
 	TaskContext     PromptLayer = "task_context"
 )
 
@@ -79,6 +80,8 @@ type PromptManifest struct {
 	TargetScopeHash         string            `json:"targetScopeHash"`
 	InputBudget             PromptInputBudget `json:"inputBudget"`
 	OmittedAssets           []OmittedAsset    `json:"omittedAssets"`
+	ProjectSettingsRevision int64             `json:"projectSettingsRevision,omitempty"`
+	ProjectEpoch            int64             `json:"projectEpoch,omitempty"`
 	SettingsRevision        int64             `json:"settingsRevision"`
 	Epoch                   int64             `json:"epoch"`
 	SystemHash              string            `json:"systemHash"`
@@ -112,6 +115,7 @@ func (m PromptManifest) CanonicalJSON() ([]byte, error) { return json.Marshal(m)
 // PromptBaseline freezes the host-assigned layer layout for the first system
 // message of a turn. It contains no prompt body and survives approval recovery.
 type PromptBaseline struct {
+	Strategy   *Selection       `json:"strategy,omitempty"`
 	SystemHash string           `json:"systemHash"`
 	Fragments  []PromptFragment `json:"fragments"`
 }

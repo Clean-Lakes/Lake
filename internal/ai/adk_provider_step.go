@@ -22,6 +22,9 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	if waiting {
 		return modelResult{}, errADKApprovalPending
 	}
+	if _, err := e.resolveTurnStrategies(ctx, s, c); err != nil {
+		return modelResult{}, err
+	}
 	step := d.round
 	if step >= c.MaxSteps {
 		return modelResult{}, errors.New("agent step budget reached")
@@ -263,6 +266,10 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 // can still stop it. Recording never authorizes replay or resource effects.
 func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history []Message, tools []Tool, fragments []strategy.PromptFragment, matched bool, retryOf string, delta func(string, string)) (modelResult, error) {
 	e, s, c := d.engine, d.session, *d.config
+	history, fragments, selection, strategyErr := d.strategyRequest(ctx, history, fragments, tools)
+	if strategyErr != nil {
+		return modelResult{}, strategyErr
+	}
 	s.mu.Lock()
 	if s.state.Runtime == nil {
 		s.mu.Unlock()
@@ -337,7 +344,8 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 		SchemaVersion: strategy.SchemaVersion, RequestID: uid(), RunID: runID, TurnID: turnID, Round: d.round, RetryOf: retryOf,
 		BuildCommit: commit, BuildDirty: dirty, Profile: profile, Role: c.agentRole,
 		FixedRulesHash: strategy.FragmentLayerHash(fragments, strategy.FixedRules), BuiltinStrategyHash: strategy.FragmentLayerHash(fragments, strategy.BuiltinStrategy), Fragments: fragments,
-		SelectedAssets: []strategy.RevisionRef{}, OmittedAssets: []strategy.OmittedAsset{}, SkillSnapshots: skills,
+		SelectedAssets: selection.Selected, OmittedAssets: selection.Omitted, SkillSnapshots: skills,
+		SettingsRevision: selection.SettingsRevision, ProjectSettingsRevision: selection.ProjectSettingsRevision, Epoch: selection.GlobalEpoch, ProjectEpoch: selection.ProjectEpoch,
 		ModelConfigHash: modelHash, ToolCatalogHash: toolsHash, PermissionPolicyVersion: promptPermissionPolicyVersion, PermissionSettingsHash: permissionsHash, TargetScopeHash: scopeHash,
 		InputBudget: strategy.PromptInputBudget{ContextWindow: m.ContextWindow, MaxOutput: m.MaxOutput, MaxSteps: c.MaxSteps, HistoryCost: historyCost(history), ToolsCost: len(js(tools))},
 		SystemHash:  systemHash, RequestHash: requestHash, CompositionMatched: matched, PreparedAt: timestamp(),

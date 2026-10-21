@@ -62,16 +62,18 @@ type StrategyAssetInput struct {
 	Applicability strategy.Applicability
 }
 type StrategyAssetView struct {
-	ID, Title string
-	Scope     strategy.Scope
-	Kind      strategy.AssetKind
-	Revision  int64
-	Deleted   bool
+	ID       string             `json:"id"`
+	Title    string             `json:"title"`
+	Scope    strategy.Scope     `json:"scope"`
+	Kind     strategy.AssetKind `json:"kind"`
+	Revision int64              `json:"revision"`
+	Deleted  bool               `json:"deleted"`
 }
 type StrategyRevisionView struct {
-	Asset                       StrategyAssetView
-	Value                       strategy.AssetRevision
-	Available, SourcesAvailable bool
+	Asset            StrategyAssetView      `json:"asset"`
+	Value            strategy.AssetRevision `json:"value"`
+	Available        bool                   `json:"available"`
+	SourcesAvailable bool                   `json:"sourcesAvailable"`
 }
 
 var strategyTag = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)

@@ -31,6 +31,7 @@ type session struct {
 	sreReply            *sreReply
 }
 type Engine struct {
+	Strategies       StrategyProvider
 	runMu            sync.Mutex
 	runs             sync.WaitGroup
 	runtimeClosed    bool
@@ -686,6 +687,9 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls []Call) error {
 	var observations []ImageAttachment
 	for _, call := range calls {
+		if _, err := e.resolveTurnStrategies(ctx, s, *c); err != nil {
+			return err
+		}
 		e.setSREActivity("tool", call.Name)
 		value, toolErr := e.invokeAfterSREHandoff(ctx, s, *c, call)
 		if errors.Is(toolErr, errADKApprovalPending) {
