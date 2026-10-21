@@ -32,6 +32,7 @@ type adkTurnDriver struct {
 	cancel                context.CancelFunc
 	round                 int
 	resume, outputRetried bool
+	lastRequestID         string
 	textID                string
 	fatal                 error
 }

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/platform"
+	"github.com/Clean-Lakes/Lake/internal/strategy"
 	"google.golang.org/genai"
 	"os"
 	"path/filepath"
@@ -606,10 +607,12 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	if s.state.View.StartedAt == "" {
 		s.state.View.StartedAt = timestamp()
 	}
-	systemPrompt := Prompt(c)
+	composition := composePrompt(c)
 	if e.worker == nil {
-		systemPrompt += "\n" + userLanguageReminder(text)
+		composition.Append(strategy.TaskContext, "turn-language", "\n"+userLanguageReminder(text))
 	}
+	systemPrompt := composition.Text()
+	s.state.PromptBaseline = &strategy.PromptBaseline{SystemHash: strategy.ContentHash(systemPrompt), Fragments: composition.Fragments()}
 	if len(s.state.History) == 0 {
 		s.state.History = append(s.state.History, Message{Role: "system", Content: systemPrompt})
 	} else {
@@ -790,6 +793,9 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 			}
 		}
 		s.state.History = append(s.state.History, Message{Role: "tool", CallID: call.ID, Name: call.Name, Content: payload})
+		if call.Name == "load_skill" && toolErr == nil && str(obj(value)["name"]) != "" && str(obj(value)["content"]) != "" {
+			s.state.SkillSnapshots = append(s.state.SkillSnapshots, strategy.SkillSnapshot{ResultHash: strategy.ContentHash(payload), ID: str(obj(value)["name"]), ContentHash: strategy.ContentHash(str(obj(value)["content"])), CallID: call.ID})
+		}
 		err := e.save(s)
 		e.notify(s, "toolResult", map[string]any{"call_id": call.ID})
 		s.mu.Unlock()
