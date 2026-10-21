@@ -1,0 +1,69 @@
+{
+  "testedCommit": "e21a9c33ff41f5cedca6b0323b4b17ed779261e0",
+  "buildDirty": false,
+  "sourcePreserved": "failed",
+  "newSample": "succeeded",
+  "sameReportAfterRestart": true,
+  "requests": 3,
+  "tokensCharged": 600,
+  "actualAssetVersion": [
+    {
+      "assetId": "6247ea3b5e5e4cd1bef4429dff48af55",
+      "contentHash": "40673c37ccf3bae9b89145bdfac034c316a2d618b54d1d6574dd8df8cd880345",
+      "revision": 1
+    }
+  ],
+  "operationCountUnchanged": true,
+  "nativeIntegrity": "ok",
+  "webIntegrity": "ok",
+  "modelFixtureOnly": true,
+  "actualLoopbackTransport": true,
+  "schemaVersion": 1,
+  "phase": "P7",
+  "baseCommit": "beb79736ff42504f933a16f9d31acd4f9cdce896",
+  "backendSHA256": "7dfcfbf069bfd55b83a540598d4d935530a66c658f4076bd820c9f050231ed4e",
+  "signedDevVerified": true,
+  "nativeCounts": {
+    "provider": 6,
+    "off": 2,
+    "on": 4,
+    "healthOff": 1,
+    "healthOn": 2,
+    "naming": 0,
+    "uiSummaries": 0
+  },
+  "go": {
+    "aiSeconds": 38.654,
+    "webSeconds": 130.472,
+    "strategy": "cached pass"
+  },
+  "race": {
+    "aiSeconds": 122.075,
+    "webSeconds": 318.4,
+    "strategy": "cached pass"
+  },
+  "vet": "pass",
+  "adkRuntimeBoundary": "pass",
+  "frontend": {
+    "tests": 386,
+    "failures": 0,
+    "typecheck": "pass",
+    "build": "pass"
+  },
+  "ui": {
+    "light": true,
+    "dark": true,
+    "narrowWindow": [
+      850,
+      600
+    ],
+    "latestDevelopExecutionLayout": true,
+    "inheritedConsent": true
+  },
+  "unverified": [
+    "Windows/Linux",
+    "paid providers",
+    "general correction benefit",
+    "P8 representative paired trials"
+  ]
+}
