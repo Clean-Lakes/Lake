@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { ReasoningSettings } from "../../shared/contracts";
 import { api, readableError } from "./api";
 
+const glints=[{x:7,y:43,size:2,phase:-1,seconds:5.8},{x:16,y:62,size:2.5,phase:-4.3,seconds:7.2},{x:27,y:31,size:1.5,phase:-2,seconds:6.4},{x:39,y:60,size:2,phase:-5.1,seconds:8.2},{x:50,y:42,size:1.8,phase:-3,seconds:5.6},{x:63,y:29,size:2,phase:-6.2,seconds:7.8},{x:75,y:50,size:2.7,phase:-2.8,seconds:6.8},{x:88,y:61,size:2,phase:-4.7,seconds:8.6}];
 const labels: Record<string, string> = { "": "默认", none: "关闭", minimal: "极低", low: "低", medium: "中", high: "高", xhigh: "极高", max: "最高", ultra: "极致" };
 
 /** The session's supported levels, embedded in the shared model popover. */
@@ -11,10 +12,12 @@ export function ReasoningSelector({ session, modelId, disabled, disabledReason, 
   const [settings, setSettings] = useState<(ReasoningSettings & { session: string }) | null>(null);
   const [error, setError] = useState(""), [busy, setBusy] = useState(false), [retry, setRetry] = useState(0);
   const [preview, setPreview] = useState<string | null>(null);
+  const [dragProgress,setDragProgress]=useState<number|null>(null);
+  const dragging=useRef(false);
   const current = useRef({ session, modelId }); current.current = { session, modelId };
   const saving = useRef(false);
   useEffect(() => {
-    let cancelled = false; setSettings(null); setError(""); setPreview(null);
+    let cancelled = false; setSettings(null); setError(""); setPreview(null); setDragProgress(null);dragging.current=false;
     if (modelId) void api.reasoning(session).then(value => {
       if (!cancelled && value.modelId === modelId) setSettings({ ...value, session });
     }).catch(error => { if (!cancelled) setError(readableError(error)); });
@@ -43,14 +46,17 @@ export function ReasoningSelector({ session, modelId, disabled, disabledReason, 
   return <section className="composer-reasoning-panel" aria-label="思考强度" aria-busy={busy}>
     <div className="composer-reasoning-heading"><span>思考强度</span><strong aria-live="polite">{label}</strong></div>
     {valid && <>
-      <div className="composer-reasoning-track" style={{"--reasoning-progress":index / (stops.length - 1)} as CSSProperties}>
+      <div className="composer-reasoning-track" data-dragging={dragProgress!==null||undefined} data-disabled={unavailable||undefined} style={{"--reasoning-progress":dragProgress??index / (stops.length - 1)} as CSSProperties}>
         <input type="range" min={0} max={stops.length - 1} step={1} value={index} aria-label="思考强度" aria-valuetext={effort ? labels[effort] ?? effort : label} disabled={unavailable}
+          onPointerDown={event=>{dragging.current=true;const rect=event.currentTarget.getBoundingClientRect();setDragProgress(Math.max(0,Math.min(1,(event.clientX-rect.left-14)/Math.max(1,rect.width-28))));}}
+          onPointerMove={event=>{if(dragging.current){const rect=event.currentTarget.getBoundingClientRect();setDragProgress(Math.max(0,Math.min(1,(event.clientX-rect.left-14)/Math.max(1,rect.width-28))));}}}
           onChange={event => setPreview(stops[Number(event.target.value)] ?? null)}
-          onPointerUp={event => void select(stops[Number(event.currentTarget.value)]!)}
-          onPointerCancel={() => setPreview(null)}
+          onPointerUp={event => {dragging.current=false;setDragProgress(null);void select(stops[Number(event.currentTarget.value)]!);}}
+          onPointerCancel={() => {dragging.current=false;setDragProgress(null);setPreview(null);}}
           onKeyUp={event => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) void select(stops[Number(event.currentTarget.value)]!); }}
-          onBlur={() => { if (preview !== null) void select(preview); }}/>
-        <span className="composer-reasoning-sparkles" aria-hidden="true"/>
+          onBlur={() => {dragging.current=false;setDragProgress(null);if (preview !== null) void select(preview); }}/>
+        <span className="composer-reasoning-sparkles" aria-hidden="true">{glints.map((glint,i)=><i key={i} style={{left:`${glint.x}%`,top:`${glint.y}%`,width:glint.size,height:glint.size,animationDelay:`${glint.phase}s`,animationDuration:`${glint.seconds}s`}}/>)}</span>
+        <span className="composer-reasoning-thumb" aria-hidden="true"/>
       </div>
       <div className="composer-reasoning-scale" aria-hidden="true"><span>默认</span><span>{labels[levels.at(-1)!] ?? levels.at(-1)}</span></div>
     </> }

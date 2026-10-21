@@ -13,7 +13,8 @@
     "390x640 dark theme: long provider-grouped list scrolls, search filters to one matching model.",
     "Escape from slider closes popover and restores model trigger focus.",
     "Capability read failure exposes retry; retry restores slider.",
-    "Running mode disables slider/default without issuing saves."
+    "Running mode disables slider/default without issuing saves.",
+    "390x640 dark: provider switching filters models; searching demo-19 in the backup source returns one model; Escape restores trigger focus."
   ],
   "isolation": "Only fictional in-memory API fixtures; no model calls, credentials, hosts or user settings used for browser checks.",
   "limits": [
@@ -21,7 +22,7 @@
   ],
   "refinement": {
     "desktopCardWidth": 276,
-    "fourModelCardHeight": 275.5,
+    "fourModelCardHeight": 207,
     "desktopRowHeight": 32,
     "railHeight": 28,
     "thumbDiameter": 28,
@@ -29,6 +30,10 @@
     "lowViewport": "390x400: card top 8, bottom 312, max-height 304 after live resize; ResizeObserver updates placement.",
     "detailScreenshot": "docs/validation/composer-model-panel-detail.png",
     "reset": "No reset icon or provider header. Default is the first slider stop and saves empty effort; remaining stops are only supported levels.",
-    "appearance": "Blue-violet capsule gradient, subtle static points of light, neutral glass thumb; shared liquid glass popover retained."
+    "appearance": "Shared liquid glass; blue-violet capsule, 8 independent glints with 5.6–8.6 second fade/drift cycles; 9 second gradient drift; eased thumb for keyboard/click, continuous pointer tracking and gentle snap after release.",
+    "visibleModelsPerSource": 2,
+    "sourceSwitch": "Provider buttons filter the list locally. MiMo shows only its 2 models, zero model-select POSTs; choosing mimo-v2.6-pro posts providerId=mimo and modelId=mimo-v2.6-pro. Reopening returns to the current model source.",
+    "motionProof": "Computed transforms/opacities differ across glints; real pointer drag ended at a supported high stop and cleared data-dragging. Reduced-motion CSS cancels animations/transitions; disabled state pauses ambient animation.",
+    "default": "Default remains slider stop 0 with empty effort; no refresh/reset icon."
   }
 }
