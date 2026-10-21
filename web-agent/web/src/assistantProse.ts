@@ -9,7 +9,7 @@ type ProseNode = {
 // Models sometimes use the legal section shorthand in Chinese document
 // references. Spell it out in prose without changing stored Markdown or code.
 function sectionReferences(text: string): string {
-  return text.replace(/(?<![\\\p{Script=Latin}\p{N}_§])§[ \t]*(\d+(?:\.\d+)*)(?![\p{Script=Latin}\p{N}_])/gu, '第 $1 节');
+  return text.replace(/(^|[^\\\p{Script=Latin}\p{N}_§])§[ \t]*(\d+(?:\.\d+)*)(?![\p{Script=Latin}\p{N}_])/gu, '$1第 $2 节');
 }
 
 // Recover unparsed generated strong delimiters in Chinese prose and short

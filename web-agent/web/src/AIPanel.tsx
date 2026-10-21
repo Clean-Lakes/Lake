@@ -1,3 +1,5 @@
+import {completedTurnInterimIds,isAssistantProse} from './completedTurnProse';
+import {SettledReply} from './SettledReply';
 import {OperationOutcomes} from './OperationOutcomes';
 import {MessageText} from './MessageText';
 import {MessageImages} from './MessageImages';
@@ -99,6 +101,9 @@ function TranscriptMessage({message,sessionId,resources}:{message:SessionSnapsho
 export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh }: { refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean }) {
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
+  // Retain an observed completion when a legacy turn has no saved timing and
+  // a newer user turn takes over the engine view. Do not restore its narration.
+  const settledTurnIds=useRef(new Set<string>());
   const restoredCardIds=useRef(new Set((snapshot.ai?.cards??[]).map(card=>card.id)));
   const restoredText=useRef(new Set([...(snapshot.ai?.cards??[]).filter(c=>!!c.content).map(c=>c.id),...(snapshot.ai?.agentRuns??[]).filter(r=>!!r.liveText).map(r=>r.liveTextId)]));
   const [sreTaskFilter,setSRETaskFilter]=useState('');
@@ -157,6 +162,13 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
     {turns.map((turn, index) => {
       const groups=mode==='conversation'?conversationDisplayGroups(conversationTurnEntries(turn),turn===currentTurn&&liveConversation):transcriptGroups(turn.filter(entry=>!isFileChangeCard(entry.card)&&activityEntry(entry))).map(entries=>({progress:false,entries}));
       const processGroups=mode==='conversation'?groups.filter(group=>group.progress):[];
+      const completed = timingForTurn(turn,snapshot)?.status ?? (turn===currentTurn?snapshot.ai?.status:undefined);
+      const turnId = turn[0]!.id;
+      if (completed==='completed') settledTurnIds.current.add(turnId);
+      else if (completed && completed!=='running') settledTurnIds.current.delete(turnId);
+      const settled = completed?completed==='completed':settledTurnIds.current.has(turnId);
+      const interimIds = mode==='conversation'?completedTurnInterimIds(turn,settled):new Set<string>();
+      const interim = turn.filter(entry=>interimIds.has(entry.id));
       const notices=[['failed','项失败'],['pending','项待确认'],['unknown','项结果待核查'],['background_running','项后台执行中'],['not_executed','项未执行'],['interrupted','项已停止'],['cancelled','项已停止']].flatMap(([status,label])=>{const count=processGroups.flatMap(group=>group.entries).filter(entry=>entry.card?.status===status).length;return count?[`${count} ${label}`]:[];}).join(' · ');
       const timingProps={timing:timingForTurn(turn,snapshot),view:turn.some(entry=>entry.message?.id===latestUser?.id)?snapshot.ai:undefined,cards:turn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt:turn.find(entry=>entry.message?.role==='user')?.at??''};
       const renderGroup=({entries:group,progress}:ConversationGroup)=>{
@@ -177,8 +189,8 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
       };
       return <div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)} key={turn[0]!.id}>
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources}/>)}
-      {mode==='conversation'?<TurnExecutionDetails {...timingProps} detailNotice={notices} details={processGroups.map(renderGroup)} onInspect={onInspect}/>:<ReplyDuration {...timingProps}/>}
-      {groups.filter(group=>!processGroups.includes(group)).map(renderGroup)}
+      {mode==='conversation'?<TurnExecutionDetails {...timingProps} detailNotice={notices} details={[...processGroups.map(renderGroup),...(interim.length?[<details className="turn-progress-prose" key="interim-prose"><DisclosureSummary>过程播报 · {interim.length}</DisclosureSummary>{interim.map(entry=><div className="ai-response" key={entry.id}>{entry.card?<Card card={entry.card}/>:entry.message?<TranscriptMessage message={entry.message} sessionId={snapshot.session.id}/>:null}</div>)}</details>]:[])]} onInspect={onInspect}/>:<ReplyDuration {...timingProps}/>}
+      {groups.filter(group=>!processGroups.includes(group)).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} collapsed={group.entries.every(entry=>interimIds.has(entry.id))}>{renderGroup(group)}</SettledReply>:renderGroup(group))}
       <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}/>
     </div>;})}
