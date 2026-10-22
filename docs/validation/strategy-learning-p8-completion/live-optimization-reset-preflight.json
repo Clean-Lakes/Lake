@@ -1,0 +1,680 @@
+{
+  "autoAdopted": false,
+  "baselineBindingChanged": false,
+  "budget": {
+    "extraReadRetries": 2,
+    "maxRevisions": 2,
+    "maxNoProgressRevisions": 2,
+    "maxConcurrentExperiments": 1,
+    "maxRuns": 6,
+    "maxOptimizationRequests": 12,
+    "maxAdditionalTokens": 100000,
+    "maxActiveSeconds": 600,
+    "userWaitTtlSeconds": 86400
+  },
+  "developmentFixture": {
+    "id": "SL-005",
+    "version": "e770107f718259fc67aeaefc4b5971a601e58fbb5bc2d68ebaf02e8c81a1797e"
+  },
+  "effectConclusion": "inconclusive",
+  "holdoutFixture": {
+    "id": "LIVE-HOLDOUT-DB",
+    "version": "825e594f205ca81a9c39b28e4b0836c2b4b7947c165f8bfa7c413075c2cf0065"
+  },
+  "mode": "resettable_live_readonly",
+  "model": "deepseek-flash",
+  "modelRef": "2760bf1fb2f89bfc6406e05fcca44ef5aa7e2acce70300817755bb24e019cdf7",
+  "providerModels": {
+    "deepseek-flash": true
+  },
+  "requests": 3,
+  "stages": [
+    {
+      "exactAssetVerified": true,
+      "result": {
+        "mode": "resettable_live_readonly",
+        "status": "failed",
+        "answer": "观测结果显示，该连接为 SQLite 且 `PRAGMA query_only=1` 处于开启状态，因此此前的 INSERT 被数据库以“attempt to write a readonly database (8)”拒绝——这是连接级只读开关的表现，而非磁盘只读、文件权限或只读事务快照导致。可读路径正常（本次观测查询返回 1 行），写入需要在该连接关闭 `query_only` 后重试；我在此只做只读诊断，未执行任何写入验证。\n\n{\"outcome\":\"diagnosed\",\"finding\":\"read_only_transaction\",\"answer\":\"该 SQLite 测试库的当前连接设置了 PRAGMA query_only=1，因此处于只读状态。读取正常（观测查询返回 1 行），但此前的 INSERT 被拒绝并报出 'attempt to write a readonly database (8)'，说明写入失败由连接级 query_only 只读开关造成，而非磁盘只读、文件权限不足或只读事务隔离。要恢复写入，需在该连接上关闭 query_only（或改用可写连接）后重试相同写入；本次仅在只读观测适配器范围内诊断，未执行或回放任何写入，也未验证写入是否成功。\",\"evidenceIds\":[\"observation-1\"]}",
+        "runtimeId": "live_5bb5300693aefa62d4f1b1a5b036f306_de903110dd7fe26ba812f3baea88b784",
+        "resetHash": "492d955ecf0c6a664ec86433c3614521f2adcf126efa94275e26798938a0aefb",
+        "resetNonce": "live_5bb5300693aefa62d4f1b1a5b036f306",
+        "observed": 1,
+        "violations": 0,
+        "requests": 2,
+        "usage": {
+          "inputKnown": true,
+          "outputKnown": true,
+          "known": true,
+          "cachedInput": 4224,
+          "input": 8316,
+          "output": 481,
+          "total": 8797
+        },
+        "durationMs": 3586,
+        "manifests": [
+          {
+            "schemaVersion": 1,
+            "requestId": "87fecfe7e8c53c38e387cd91d8f8f1eb",
+            "runId": "live_5bb5300693aefa62d4f1b1a5b036f306_de903110dd7fe26ba812f3baea88b784",
+            "turnId": "239d79065907b3e458ecfe4b8a41f75b",
+            "round": 1,
+            "buildCommit": "unknown",
+            "buildDirty": false,
+            "profile": "db-query-editor",
+            "fixedRulesHash": "85b6443e053797904d050e4498044227750f27460d74965751495862ebf2f8e2",
+            "builtinStrategyHash": "29620e8d220e0efd4db5fd71ae79ab384634b5df678108606bca54e86f3400d0",
+            "fragments": [
+              {
+                "layer": "fixed_rules",
+                "source": "identity-and-permissions",
+                "contentHash": "4c0bc783a75ccf962211c6a11fbef1870c2dc31a3b95972635b6264bf83fcfc3",
+                "bytes": 2434
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "db-query-editor",
+                "contentHash": "9cc2e39f180aff7336cbec6d47d1ab0b75a697a0fb2dfd9531f00a84db638608",
+                "bytes": 722
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "user-language-policy",
+                "contentHash": "a11e942aa20a7a672693ebfb3287e8251abd7e43f3ee8ecb252a123080f2ab1a",
+                "bytes": 270
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "user-language-policy",
+                "contentHash": "a75e4b77436a92424033bf2729640462964c047ac027f5709a049cfe5cfdf1ff",
+                "bytes": 481
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "hide-internal-ref-policy",
+                "contentHash": "881b524fd3e4dccd081a0bce91119e26eb2fde1073bde4ba6fd359c697feb429",
+                "bytes": 245
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "7fc5dcfbfa8f2910608a6ba8dcdbc9d1d142448217e9042a0f5121f1fe724387",
+                "bytes": 25
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "question-policy",
+                "contentHash": "a4c12b31920e86abf53ece3754fd400b8c0f125e432cc26e9914e5822ffb4728",
+                "bytes": 285
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "526e1bc1007a089fb51a241785850d0b8f004730ca5c542fcc93d107858efb25",
+                "bytes": 2436
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "1546fa751f547fbcd4d958f3d76c76d5b5334a8343bc6f97c6be126f39f28121",
+                "bytes": 53
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "927a1c9e2a8c1046f51ab8b1c5881ec6455048363b57e76144b1bbe5af9e9547",
+                "bytes": 128
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "aaa7fcc305a120a68168d3f5e06baf06ad2b3d33d90dcf3b91b0f4a4cdddcbbb",
+                "bytes": 521
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "59b40e6d90228d1e973750b6813a23072792b57baa848daa8593d304054b6fc4",
+                "bytes": 993
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5dd3ccc1930cb8e6b044e208d48d18681d151afc57e63d327c2050840318d275",
+                "bytes": 597
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "7c18591bc2910cd69182f91a458bb553b7f2df9654089a0ebaff5e5d661fb5b9",
+                "bytes": 688
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "edccd68d9522b0c63ddbdb71811a9364df67e3218addc8717e916faa6fce5e73",
+                "bytes": 379
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "25de3a8687555214b426a3e0b83753e6571a1aedf88fa404a05297bad576ad72",
+                "bytes": 64
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "45eb7466cefd91ebfc017ab29939970d5704ade245777e61e6a4220abb618dfc",
+                "bytes": 131
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "6e751b94d5e5e2673f60014d025cf306e0acaf5f5a2214d0e3973bca4df95c25",
+                "bytes": 68
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "7ba6ab6987d1a0a522c626ae4cfbf7830e90489d1abf5017a008e65289b1ba2b",
+                "bytes": 124
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5363a392df0fa95359c946e807faf9a333ec011ee0c9de2051f942ef78031e87",
+                "bytes": 265
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "permission-label",
+                "contentHash": "d3cea5d5d6ea87cd94e878c53f77821ec5817457003977471cdc31e4c7eb1e05",
+                "bytes": 40
+              },
+              {
+                "layer": "task_context",
+                "source": "effective-permissions",
+                "contentHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+                "bytes": 185
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "d0a6c991f6af128ac90e223d8aa0e10202475faa4a526a0823981261b932401d",
+                "bytes": 579
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "preset-label",
+                "contentHash": "0ce012f1b70ba42c6279f84d32155d54cb2b712a98b9db6597f70ba3c1970d33",
+                "bytes": 57
+              },
+              {
+                "layer": "task_context",
+                "source": "user-preferences",
+                "contentHash": "30c3b489fc1d7bb6b4050841ad95d310277084ebabb9810463f15bd048e33156",
+                "bytes": 74
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1e08bd8f02320ff40584872149bf5d7b898aff9929b9f0d555ae5c0185e0351d",
+                "bytes": 506
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "48731c832ee73a77d52507f3549203f8b5678d5d09e25b135ab840de7affb9a1",
+                "bytes": 449
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1d1f53528d178fb77a5049e5edd0f86b427cd06a36e832f4f83b37bc68951327",
+                "bytes": 264
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "0509a70d0a3f75d8dbda85bc35a69caf36a85805b4e8e3ed427e9ee560c274f4",
+                "bytes": 780
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "bfcd8e811e8f662437e49e2609541d1c9b46e9a9c9fe152b576db559bc4ac9aa",
+                "bytes": 236
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "5f99ea0419c14c2b65ef16195cc38bf2254235287dbef02afe9262c986ab29d4",
+                "bytes": 266
+              },
+              {
+                "layer": "task_context",
+                "source": "turn-language",
+                "contentHash": "3f1c5e7349ffe89e3707455dc1a70fd8e51a468b401de1b095a7dc00426a8a88",
+                "bytes": 1237
+              }
+            ],
+            "selectedAssets": [],
+            "skillSnapshots": [],
+            "modelConfigHash": "41c6c12e9148dce0f636e0e06c4e582730e2f1d071d70ec0beb96f4a9fad8f85",
+            "toolCatalogHash": "f2d899557f79f7ad6401a1421b6926ac8faeeafa7257f31f904e29b839d8eb87",
+            "permissionPolicyVersion": "lake-runtime-permissions-v1",
+            "permissionSettingsHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+            "targetScopeHash": "fdc319e38282f49bb3d98040f4ce580aaf82b1c11fcfda90dfa13d6dc2fcaace",
+            "inputBudget": {
+              "contextWindow": 64000,
+              "maxOutput": 1024,
+              "maxSteps": 3,
+              "historyCost": 17055,
+              "toolsCost": 3199
+            },
+            "omittedAssets": [],
+            "settingsRevision": 0,
+            "epoch": 0,
+            "systemHash": "c388757e4357a71de70c88df53cf74e2551111cd80313212ea228b9574727d4b",
+            "requestHash": "0910818fe94f9d7a588e45347981ce80d2d52c69eb02b24b0377ab91afa38722",
+            "compositionMatched": true,
+            "preparedAt": "2026-10-22T02:57:38.074792Z"
+          },
+          {
+            "schemaVersion": 1,
+            "requestId": "fb27b2308818a13013151d3a1a81e202",
+            "runId": "live_5bb5300693aefa62d4f1b1a5b036f306_de903110dd7fe26ba812f3baea88b784",
+            "turnId": "239d79065907b3e458ecfe4b8a41f75b",
+            "round": 2,
+            "buildCommit": "unknown",
+            "buildDirty": false,
+            "profile": "db-query-editor",
+            "fixedRulesHash": "85b6443e053797904d050e4498044227750f27460d74965751495862ebf2f8e2",
+            "builtinStrategyHash": "29620e8d220e0efd4db5fd71ae79ab384634b5df678108606bca54e86f3400d0",
+            "fragments": [
+              {
+                "layer": "fixed_rules",
+                "source": "identity-and-permissions",
+                "contentHash": "4c0bc783a75ccf962211c6a11fbef1870c2dc31a3b95972635b6264bf83fcfc3",
+                "bytes": 2434
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "db-query-editor",
+                "contentHash": "9cc2e39f180aff7336cbec6d47d1ab0b75a697a0fb2dfd9531f00a84db638608",
+                "bytes": 722
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "user-language-policy",
+                "contentHash": "a11e942aa20a7a672693ebfb3287e8251abd7e43f3ee8ecb252a123080f2ab1a",
+                "bytes": 270
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "user-language-policy",
+                "contentHash": "a75e4b77436a92424033bf2729640462964c047ac027f5709a049cfe5cfdf1ff",
+                "bytes": 481
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "hide-internal-ref-policy",
+                "contentHash": "881b524fd3e4dccd081a0bce91119e26eb2fde1073bde4ba6fd359c697feb429",
+                "bytes": 245
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "7fc5dcfbfa8f2910608a6ba8dcdbc9d1d142448217e9042a0f5121f1fe724387",
+                "bytes": 25
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "question-policy",
+                "contentHash": "a4c12b31920e86abf53ece3754fd400b8c0f125e432cc26e9914e5822ffb4728",
+                "bytes": 285
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "526e1bc1007a089fb51a241785850d0b8f004730ca5c542fcc93d107858efb25",
+                "bytes": 2436
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "1546fa751f547fbcd4d958f3d76c76d5b5334a8343bc6f97c6be126f39f28121",
+                "bytes": 53
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "927a1c9e2a8c1046f51ab8b1c5881ec6455048363b57e76144b1bbe5af9e9547",
+                "bytes": 128
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "aaa7fcc305a120a68168d3f5e06baf06ad2b3d33d90dcf3b91b0f4a4cdddcbbb",
+                "bytes": 521
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "59b40e6d90228d1e973750b6813a23072792b57baa848daa8593d304054b6fc4",
+                "bytes": 993
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5dd3ccc1930cb8e6b044e208d48d18681d151afc57e63d327c2050840318d275",
+                "bytes": 597
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "7c18591bc2910cd69182f91a458bb553b7f2df9654089a0ebaff5e5d661fb5b9",
+                "bytes": 688
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "edccd68d9522b0c63ddbdb71811a9364df67e3218addc8717e916faa6fce5e73",
+                "bytes": 379
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "25de3a8687555214b426a3e0b83753e6571a1aedf88fa404a05297bad576ad72",
+                "bytes": 64
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "45eb7466cefd91ebfc017ab29939970d5704ade245777e61e6a4220abb618dfc",
+                "bytes": 131
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "6e751b94d5e5e2673f60014d025cf306e0acaf5f5a2214d0e3973bca4df95c25",
+                "bytes": 68
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "7ba6ab6987d1a0a522c626ae4cfbf7830e90489d1abf5017a008e65289b1ba2b",
+                "bytes": 124
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5363a392df0fa95359c946e807faf9a333ec011ee0c9de2051f942ef78031e87",
+                "bytes": 265
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "permission-label",
+                "contentHash": "d3cea5d5d6ea87cd94e878c53f77821ec5817457003977471cdc31e4c7eb1e05",
+                "bytes": 40
+              },
+              {
+                "layer": "task_context",
+                "source": "effective-permissions",
+                "contentHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+                "bytes": 185
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "d0a6c991f6af128ac90e223d8aa0e10202475faa4a526a0823981261b932401d",
+                "bytes": 579
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "preset-label",
+                "contentHash": "0ce012f1b70ba42c6279f84d32155d54cb2b712a98b9db6597f70ba3c1970d33",
+                "bytes": 57
+              },
+              {
+                "layer": "task_context",
+                "source": "user-preferences",
+                "contentHash": "30c3b489fc1d7bb6b4050841ad95d310277084ebabb9810463f15bd048e33156",
+                "bytes": 74
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1e08bd8f02320ff40584872149bf5d7b898aff9929b9f0d555ae5c0185e0351d",
+                "bytes": 506
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "48731c832ee73a77d52507f3549203f8b5678d5d09e25b135ab840de7affb9a1",
+                "bytes": 449
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1d1f53528d178fb77a5049e5edd0f86b427cd06a36e832f4f83b37bc68951327",
+                "bytes": 264
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "0509a70d0a3f75d8dbda85bc35a69caf36a85805b4e8e3ed427e9ee560c274f4",
+                "bytes": 780
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "bfcd8e811e8f662437e49e2609541d1c9b46e9a9c9fe152b576db559bc4ac9aa",
+                "bytes": 236
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "5f99ea0419c14c2b65ef16195cc38bf2254235287dbef02afe9262c986ab29d4",
+                "bytes": 266
+              },
+              {
+                "layer": "task_context",
+                "source": "turn-language",
+                "contentHash": "3f1c5e7349ffe89e3707455dc1a70fd8e51a468b401de1b095a7dc00426a8a88",
+                "bytes": 1237
+              }
+            ],
+            "selectedAssets": [],
+            "skillSnapshots": [],
+            "modelConfigHash": "41c6c12e9148dce0f636e0e06c4e582730e2f1d071d70ec0beb96f4a9fad8f85",
+            "toolCatalogHash": "f2d899557f79f7ad6401a1421b6926ac8faeeafa7257f31f904e29b839d8eb87",
+            "permissionPolicyVersion": "lake-runtime-permissions-v1",
+            "permissionSettingsHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+            "targetScopeHash": "fdc319e38282f49bb3d98040f4ce580aaf82b1c11fcfda90dfa13d6dc2fcaace",
+            "inputBudget": {
+              "contextWindow": 64000,
+              "maxOutput": 1024,
+              "maxSteps": 3,
+              "historyCost": 17631,
+              "toolsCost": 3199
+            },
+            "omittedAssets": [],
+            "settingsRevision": 0,
+            "epoch": 0,
+            "systemHash": "c388757e4357a71de70c88df53cf74e2551111cd80313212ea228b9574727d4b",
+            "requestHash": "bd172b119a84cb822a2b1305847cf19999e3caeebdebc1598bef18ff07aa34b7",
+            "compositionMatched": true,
+            "preparedAt": "2026-10-22T02:57:39.322335Z"
+          }
+        ],
+        "evaluation": {
+          "status": "failed",
+          "checks": {
+            "boundary": true,
+            "classification": false,
+            "diagnostic_marker": false,
+            "evidence": false,
+            "runtime_completed": false,
+            "task_outcome": false,
+            "valid_output": false
+          },
+          "limitations": [
+            "Synthetic snapshots only; no live service recovery was executed.",
+            "Fixed structural/evidence/lexical checks do not establish semantic correctness or general improvement."
+          ]
+        },
+        "errorCode": "reset_failed"
+      },
+      "stage": "baseline_development"
+    },
+    {
+      "holdoutInput": false,
+      "inputHash": "4a56ab8a57cecb4776f6d7147479ffafaf2fd502ff9b85bac902ce548e39cc49",
+      "stage": "propose",
+      "usage": {
+        "inputKnown": false,
+        "outputKnown": false,
+        "cachedInput": null,
+        "input": 0,
+        "output": 0,
+        "total": 0
+      },
+      "valid": false
+    }
+  ],
+  "status": "stopped",
+  "stopReason": "invalid_or_budget_stopped_proposal",
+  "tokensCharged": 10348
+}
