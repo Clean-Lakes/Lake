@@ -7,7 +7,7 @@
   "windowsUITestCommit": "e9cdcd25c13b64bc5401aabedb7d5d0371f90019",
   "runtimeUnchangedAfterTest": true,
   "tasks": {
-    "T32": "pending_final_windows_ui_and_package",
+    "T32": "passed_platform_regression_and_evidence_collection",
     "T33": "passed_signed_macos_dev",
     "T34": "passed_docs_and_exit_restart"
   },
@@ -41,7 +41,7 @@
     {
       "id": 39716955769,
       "head": "e9cdcd2",
-      "result": "pending_native_ui_and_package"
+      "result": "success_native_webview2_profile_cleanup_installer_and_packaged_ssh"
     }
   ],
   "checks": [
@@ -89,6 +89,29 @@
       "name": "signed_macos_dev",
       "exitCode": 0,
       "nativeUI": "stopped correction card and budget visually checked; normal quit; all nine control trials and restart checks passed"
+    },
+    {
+      "name": "integrated_develop_approval_tests_race",
+      "tests": 3,
+      "exitCode": 0,
+      "parallelSeconds": 3.778,
+      "targetDecisionSeconds": 4.425,
+      "note": "Only source change under internal/ after runtime freeze is the upstream test deadline repair; production files unchanged."
+    },
+    {
+      "name": "windows_final_native_ui_and_packaged_runtime",
+      "runId": 39716955769,
+      "head": "e9cdcd25c13b64bc5401aabedb7d5d0371f90019",
+      "conclusion": "success",
+      "uiViewport": [
+        834,
+        561
+      ],
+      "actualWebView2": true,
+      "profileCleanupVerifiedByParent": true,
+      "installerBuilt": true,
+      "packagedSSHCredentialHelperPassed": true,
+      "artifactsAreTestOnly": true
     }
   ],
   "pairedMetrics": [
@@ -283,6 +306,11 @@
       "sourceSha256": "2bf8394f81b9fba04f51396c20b7f5636e591b5d8d60988a90e970a4e8dddf37",
       "role": "final",
       "lineEndingsNormalized": "CRLF_to_LF_only"
+    },
+    {
+      "path": "windows-final-run.json",
+      "sha256": "791953cd20b8dee93c0413329448a85065a631373732bcc7d072f2b19f14e717",
+      "role": "final"
     }
   ],
   "limitations": [
@@ -290,11 +318,17 @@
     "Representative samples are small, not statistical proof.",
     "Ordinary A/B retries can recover without the new controller; C stopped on budget/user gate.",
     "Optimization validation covers one real database task family; the 3 general holdout baselines are not candidate wins.",
-    "Keep baseline; no candidate saved/adopted; default switches remain off."
+    "Keep baseline; no candidate saved/adopted; default switches remain off.",
+    "Live M2 stages are driven by the opt-in acceptance host; real fixtures are not enabled through the product Web P6 coordinator. Durable coordinator behavior remains covered by credential-free regression."
   ],
   "releaseAcceptancePassed": false,
   "remainingPromotionGates": [
     "No winner from current real model samples; do not promote candidate or claim general benefit.",
     "No production rollout authorized."
-  ]
+  ],
+  "integratedDevelopCommit": "d37af5deecf4eb5c488c896f2bebfb79f9f0cb11",
+  "integrationTestCommit": "15711455cb42b291620e2ad217fd59a859e7e4a0",
+  "evidenceNormalization": "Stored JSON uses LF; original artifact sha256 also retained when CRLF changed. No JSON field values changed.",
+  "acceptanceEvidenceComplete": true,
+  "retryScopeLimitation": "First two resumed runs repeated the already-passed frontend suite because the legacy step lacked a condition. Fixed before runs 39716339580 and 39716955769; those skip all already-passed suites."
 }
