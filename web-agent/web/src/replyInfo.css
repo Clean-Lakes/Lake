@@ -1,5 +1,5 @@
 :is(.ai-markdown.assistant-prose,.sre-prose):has(> .reply-info-facts) { padding:24px 28px; border:1px solid var(--border); border-radius:calc(var(--radius-panel) + 9px); background:var(--surface); font-size:14px; line-height:1.85; min-width:0; }
-:is(.ai-markdown.assistant-prose,.sre-prose):has(> .reply-info-facts) > :is(h1,h2,h3,h4) { font-size:18px; line-height:1.5; font-weight:var(--font-weight-medium); margin:0 0 14px; }
+:is(.ai-markdown.assistant-prose,.sre-prose):has(> .reply-info-facts) > :is(h1,h2,h3,h4) { font-size:18px; line-height:1.5; font-weight:var(--font-weight-semibold); margin:0 0 14px; }
 :is(.ai-markdown.assistant-prose,.sre-prose) .reply-info-facts { display:grid; gap:9px; margin:18px 0 0; padding:0; }
 .reply-info-facts > div { display:grid; grid-template-columns:58px minmax(0,1fr); column-gap:12px; align-items:baseline; min-width:0; }
 .reply-info-facts dt { font-size:12px; font-weight:var(--font-weight-ui); color:var(--text-muted); }
