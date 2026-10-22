@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-16",
+  "changes": [
+    "Bounded persistent-command wait timeout returns a trusted live terminal/entry handle; the agent follows the original command through wait_shell instead of treating the whole role as cancelled.",
+    "Only unique exact command/resource/origin-session/runtime-dispatch provenance plus a terminal completion status and non-null exit code can reconcile a legacy unknown operation.",
+    "Known live handles bind reconciliation to the exact terminal entry; actual transport errors without handles remain unknown.",
+    "new_task checks unfinished tasks before handoff; explicit restart_task atomically retains/cancels a paused read-only task and creates the same-goal/scope investigation without bypassing unresolved operations.",
+    "Same-session specialists on the same SSH host/configuration/fingerprint share one human trust decision."
+  ],
+  "validation": {
+    "goFull": {
+      "internal/ai": "passed",
+      "internal/web": "passed, 102.086s"
+    },
+    "raceRelated": {
+      "internal/ai": "passed, 2.970s",
+      "internal/web": "passed, 36.892s",
+      "filter": "TestSRE|TestParallelSpecialists|TestLakeGlobalHostTrust|TestForegroundPersistentCommandHonorsTimeout"
+    },
+    "realIsolatedCommand": {
+      "markerWrites": 1,
+      "originalWaitTimedOut": true,
+      "originalCommandCompleted": true,
+      "roleCompletedWithoutReplay": true
+    },
+    "provenanceNegativeCases": [
+      "ambiguous matches",
+      "wrong origin session",
+      "outside legacy dispatch window",
+      "missing exit code"
+    ],
+    "restart": "atomic rollback on unresolved operation, preserved goal/scope/history, idempotency, end-to-end model handoff plan-only creation passed",
+    "hostTrust": "parallel accept and reject both wake all peers; no authentication during fingerprint probe"
+  },
+  "dev": {
+    "signedBuildInstall": "passed",
+    "restart": "verified, 10 sessions available",
+    "liveReadOnlyAudit": {
+      "memoryTask": "paused, original command succeeded with runtime provenance, no unresolved operations",
+      "otherUnprovenTransportOperation": "still unknown",
+      "nativeContinueTaskButton": "visible and enabled"
+    },
+    "resourceCommandsStartedByThisFix": 0
+  },
+  "limits": [
+    "A command exit code does not complete the specialist report or verify business recovery. The existing investigation remains paused until the user continues it.",
+    "True transport failures, incomplete terminal records and ambiguous matches are not automatically resolved.",
+    "Host identity confirmation remains a human decision."
+  ]
+}

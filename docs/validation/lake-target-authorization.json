@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-11",
+  "status": "passed",
+  "destructiveOperations": "single-use target confirmation regardless of silence",
+  "rejection": "synthetic source preserved, no trash destination",
+  "terminalBinding": "exact retained ID or unique candidate; ambiguous/mismatched candidates blocked",
+  "closedBinding": "recreation, no fallback to another ready terminal",
+  "multipleHosts": "target confirmation required; rejected target has no effects; confirmed target retained",
+  "modelContext": "terminal-tagged evidence; newer inspect result takes priority",
+  "goRace": "full suite plus final focused tests passed",
+  "goVet": "passed",
+  "reactBuild": "passed",
+  "frontendTests": 4,
+  "codesign": "verified",
+  "signedNoNodeRuntime": "passed",
+  "browser": "final signed approval UI and reject/no-effect passed",
+  "productionFileChanges": false,
+  "binarySha256": "0e6b66c4d424cf05b1324f3f333139fa2c2acfbf6b114cd54f35c1769368177c"
+}

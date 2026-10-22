@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-12",
+  "behavior": "Opening resource terminals does not create or navigate to a chat",
+  "nativeChrome": {
+    "opens": 2,
+    "visibleChatsBefore": 7,
+    "visibleChatsAfter": 7,
+    "sameChatList": true,
+    "sameLiveTerminalIds": true,
+    "activeChatPreserved": "目前我能操作哪些资源",
+    "sshPromptVisible": true
+  },
+  "automated": {
+    "frontendTests": 47,
+    "goWebRace": "passed (116.090s)",
+    "goAiRace": "passed",
+    "targeted": [
+      "no-chat project opens shell and runs command without visible chat",
+      "concurrent runtime scope reuse",
+      "project isolation",
+      "existing chats preserved",
+      "empty automatic terminal AI scopes omitted; meaningful chats retained"
+    ]
+  },
+  "build": "scripts/build_lake.sh, signed Lake Local Development Code Signing"
+}

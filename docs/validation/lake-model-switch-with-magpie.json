@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-15",
+  "changes": [
+    "Connection tests allow 1024 output tokens and use the lowest supported reasoning effort. A valid output-limit response confirms connectivity; authentication errors and incomplete streams still fail.",
+    "Lake stores an explicit native/Magpie source preference and includes both sources in the composer.",
+    "Settings distinguish Magpie connectivity from the currently selected provider."
+  ],
+  "validation": {
+    "go_web_race": "passed",
+    "go_ai_race": "passed",
+    "frontend_tests": {
+      "passed": 131,
+      "failed": 0
+    },
+    "typescript": "passed",
+    "signed_dev_build_install": "passed",
+    "ui": [
+      "Created and saved an Anthropic provider while Magpie remained connected.",
+      "Tested an Anthropic max_tokens response and observed connection success.",
+      "Selected manual mimo-v2.5-pro and observed current-use state while Magpie stayed connected.",
+      "Switched back to Magpie and then selected the manual model through the composer."
+    ]
+  },
+  "scope": "UI network verification used a local synthetic provider and a separate temporary Lake home. No release configuration or production model API was used.",
+  "screenshots": [
+    "lake-model-switch-with-magpie.png",
+    "lake-model-menu-magpie-and-manual.png"
+  ]
+}

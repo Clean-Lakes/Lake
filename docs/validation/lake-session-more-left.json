@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "change": "Left-align the sidebar view-all / collapse-history action with the section boundary instead of session text",
+  "style": {
+    "marginLeft": "7px",
+    "horizontalPadding": "0px",
+    "textAlign": "left"
+  },
+  "verification": {
+    "typescriptAndWebBuild": "passed via signed Dev build script",
+    "native": "Dev restarted at localhost:64255; view-all expanded 11 sessions and collapse restored the five recent sessions; left alignment visually checked",
+    "signature": "verified",
+    "whitespace": "passed",
+    "note": "CSS-only change, no behavior unit tests added or rerun"
+  },
+  "screenshot": "lake-session-more-left-dev.png"
+}

@@ -1,0 +1,19 @@
+{
+  "name": "Lake Dev",
+  "version": "0.3.18",
+  "installLocation": "C:\\Users\\lingyunxieqing\\AppData\\Local\\Programs\\Lake Dev",
+  "home": "C:\\Users\\lingyunxieqing\\.lake-dev",
+  "exeSHA256": "31e566d6deb49ae0398119e60c88a0cc905653f75a10a1b50a66e23387a0730e",
+  "shortcutPresent": true,
+  "silentInstallExitCode": 0,
+  "devDataMetadataUnchanged": true,
+  "installedDevRunning": false,
+  "processes": [],
+  "userConfirmation": {
+    "confirmedAt": "2026-10-18T14:13:12.356912+00:00",
+    "source": "user manual verification",
+    "devBadgeVisible": true,
+    "existingModelConfigurationRetained": true,
+    "doubleClickMaximizesWithTaskbarVisible": true
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-15",
+  "scope": "Unified chat composer model selector and manufacturer icons",
+  "implementation": [
+    "ComposerModelSelect uses AppSelect with shared popup, keyboard navigation and focus handling",
+    "Searchable source groups, model IDs and fixed settings footer",
+    "Manufacturer identification handles routed and namespaced model IDs",
+    "Aggregators and local runtimes are not used as unknown-model manufacturer logos",
+    "Twenty local brand SVG assets verified against provenance hashes",
+    "Popup follows layout changes while open"
+  ],
+  "checks": {
+    "frontendTests": {
+      "passed": 140,
+      "failed": 0
+    },
+    "typescript": "passed during signed build",
+    "signedDevBuild": "scripts/build_lake_desktop.sh --dev --install",
+    "sourceWhitespace": "git diff --check passed",
+    "localAssetHashes": 20
+  },
+  "runtimeChecks": [
+    "Eleven models in two isolated sources with duplicate GPT names",
+    "GPT, Claude, Gemini, MiMo, DeepSeek, Qwen, GLM, Kimi and MiniMax option icons loaded",
+    "Search + Enter changes the actual configured model",
+    "Source search selects the correct provider for identical model names",
+    "Focus returns to trigger after asynchronous selection",
+    "Empty search reports no matches",
+    "Escape and outside interaction close the popup",
+    "Model settings footer opens by keyboard",
+    "Existing settings API format dropdown still exposes six options",
+    "Dark theme and 430px viewport bounds verified",
+    "Native Dev displays two MiMo model rows and the current-model icon",
+    "Native Escape closes popup and restores trigger focus"
+  ],
+  "screenshots": [
+    "lake-composer-model-select.png",
+    "lake-composer-model-select-dark.png",
+    "lake-composer-model-select-mobile.png",
+    "lake-composer-model-select-native.png"
+  ],
+  "dataIsolation": "Switching tests used a fresh temporary standalone home and synthetic loopback endpoint. Native Dev was inspected without changing its configured model or credentials.",
+  "documentation": "docs/ui-guidelines.md",
+  "cleanup": "Temporary browser tab closed, viewport override reset, isolated backend and Vite stopped. Final signed Lake Dev relaunched."
+}

@@ -1,0 +1,177 @@
+{
+  "test": "Real configured model and real selected SSH nodes; new isolated conversation; model chose task split",
+  "elapsedSeconds": 158.739,
+  "state": "cancelled",
+  "blockedApproval": {
+    "kind": "terminal_open",
+    "tool": "shell"
+  },
+  "timingIncludesApprovals": true,
+  "comparableSpeedupBaseline": false,
+  "productionMutations": false,
+  "modelUsageSynthetic": false,
+  "runs": [
+    {
+      "role": "host",
+      "status": "completed",
+      "failure": null,
+      "toolCount": 9,
+      "budgetSpent": 25633,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 2816,
+        "input": 24464,
+        "output": 1169,
+        "total": 25633
+      },
+      "successfulObservations": 5,
+      "failedObservations": 0
+    },
+    {
+      "role": "host",
+      "status": "completed",
+      "failure": null,
+      "toolCount": 6,
+      "budgetSpent": 18039,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4608,
+        "input": 17056,
+        "output": 983,
+        "total": 18039
+      },
+      "successfulObservations": 4,
+      "failedObservations": 0
+    },
+    {
+      "role": "host",
+      "status": "completed",
+      "failure": null,
+      "toolCount": 7,
+      "budgetSpent": 25481,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1024,
+        "input": 24043,
+        "output": 1438,
+        "total": 25481
+      },
+      "successfulObservations": 6,
+      "failedObservations": 0
+    },
+    {
+      "role": "host",
+      "status": "completed",
+      "failure": null,
+      "toolCount": 8,
+      "budgetSpent": 21994,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 2816,
+        "input": 20663,
+        "output": 1331,
+        "total": 21994
+      },
+      "successfulObservations": 4,
+      "failedObservations": 0
+    },
+    {
+      "role": "host",
+      "status": "completed",
+      "failure": null,
+      "toolCount": 6,
+      "budgetSpent": 17943,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4608,
+        "input": 16925,
+        "output": 1018,
+        "total": 17943
+      },
+      "successfulObservations": 4,
+      "failedObservations": 0
+    },
+    {
+      "role": "data",
+      "status": "completed",
+      "failure": null,
+      "toolCount": 9,
+      "budgetSpent": 37741,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1792,
+        "input": 33832,
+        "output": 3909,
+        "total": 37741
+      },
+      "successfulObservations": 7,
+      "failedObservations": 1
+    },
+    {
+      "role": "data",
+      "status": "completed",
+      "failure": null,
+      "toolCount": 7,
+      "budgetSpent": 25469,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 23300,
+        "output": 2169,
+        "total": 25469
+      },
+      "successfulObservations": 6,
+      "failedObservations": 1
+    },
+    {
+      "role": "verify",
+      "status": "completed",
+      "failure": null,
+      "toolCount": 1,
+      "budgetSpent": 6408,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 384,
+        "input": 5757,
+        "output": 651,
+        "total": 6408
+      },
+      "successfulObservations": 0,
+      "failedObservations": 0
+    }
+  ],
+  "errorKinds": [
+    "context canceled"
+  ],
+  "chineseProgress": true,
+  "chineseFinalReply": false,
+  "usage": {
+    "inputKnown": true,
+    "outputKnown": true,
+    "known": true,
+    "cachedInput": 109952,
+    "input": 268719,
+    "output": 17105,
+    "total": 285824
+  },
+  "childBatchCompletedSeconds": 140.8,
+  "testStopReason": "Harness stopped at a newly requested parent shell terminal approval after all eight children completed; parent final answer was not measured. The context canceled error is from the test abort.",
+  "childBatchCompleted": true,
+  "childActualUsage": 178708
+}

@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "change": "Hide the permanent sidebar divider; reveal a neutral resize hint only on hover",
+  "implementation": [
+    "Transparent 1px border preserves existing sidebar geometry",
+    "Existing 8px splitter hit area remains",
+    "Pointer hover shows 1px --border-strong line",
+    "Keyboard focus keeps the existing visible theme focus line",
+    "No changes to pointer drag, reset or keyboard resize control flow"
+  ],
+  "verification": {
+    "lightAndDark": "Transparent border and no default splitter pseudo-element confirmed",
+    "hover": {
+      "lineWidth": "1px",
+      "lightColor": "rgb(204, 204, 204)"
+    },
+    "keyboardResize": "280 to 290 with ArrowRight; ArrowLeft returns to 280",
+    "doubleClickReset": "Returned to 280 after resizing",
+    "narrow": "390px viewport: fixed sidebar, splitter hidden, no horizontal overflow",
+    "typescriptAndWebBuild": "passed via signed Dev script",
+    "native": "Final Dev restarted and loaded localhost:63658; default hidden border visually inspected",
+    "signature": "verified",
+    "whitespace": "passed"
+  },
+  "screenshots": [
+    "lake-sidebar-hidden-border-light.png",
+    "lake-sidebar-hidden-border-dark.png",
+    "lake-sidebar-hidden-border-dev.png"
+  ],
+  "data": "Fictional browser data and visual Dev verification. Release app unchanged."
+}

@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-11",
+  "status": "passed",
+  "configuredWindowAndContextEstimate": "separate from cumulative usage",
+  "cacheParsing": [
+    "OpenAI/Azure cached token details",
+    "Responses input token details",
+    "DeepSeek prompt_cache_hit_tokens",
+    "Claude cache read input",
+    "Gemini cachedContentTokenCount"
+  ],
+  "unknownFields": "null cache and per-field known flags preserved",
+  "streamingUsage": "partial frames merged; repeated frames do not add twice",
+  "contextLifecycle": [
+    "normal request",
+    "compaction",
+    "clear",
+    "restore",
+    "rollback",
+    "restart"
+  ],
+  "browser": "click open, Esc close, reported cache values and unknown cache/output verified",
+  "goRace": "go test -race ./... passed",
+  "goVet": "passed",
+  "frontendTests": 4,
+  "reactBuild": "passed",
+  "signature": "verified",
+  "commercialModelCalls": 0,
+  "productionDataEdits": false,
+  "binarySha256": "21d31d3ccb2110183f9a26d2e0f9c7fd0db673701e9346219305d7dd19683536"
+}

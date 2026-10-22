@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-12",
+  "frontendTypecheck": "passed",
+  "frontendTests": 62,
+  "providerTargetedRaceTests": "passed",
+  "goFullRaceSuite": "failed outside provider settings",
+  "goFullRaceFailures": [
+    "TestIndependentAgentsParallelAndVerified: child context window exceeded",
+    "TestChildCancellationAndApprovalOwnership: agent journal race / missing approvals",
+    "TestAIImportApprovalAndCurrentTurnAssets: Engine.SnapshotPage pending pointer race"
+  ],
+  "legacyMigration": "passed including arbitrary complete endpoint preservation",
+  "credentialIsolation": "passed for testing, discovery, activation, clearing and deletion",
+  "explicitContextCapacity": "passed",
+  "uiAddProviderAndModel": "passed",
+  "uiSwitchWithoutReload": "passed",
+  "uiDisabledProviderExcludedFromComposer": "passed",
+  "uiDraftPreservedOnProviderSwitch": "passed",
+  "uiConversationTab": "passed",
+  "uiDesktopViewport": "1280x720",
+  "uiNarrowViewport": "390x844; footer visible, no dialog horizontal overflow",
+  "buildCommand": "scripts/build_lake_desktop.sh --install",
+  "signedInstallation": "/Users/lingyunxieqing/Applications/Lake.app",
+  "userBackendReplaced": false,
+  "clientRestarted": false,
+  "userBackendPidPreserved": 77202,
+  "liveTerminalsPreserved": 5,
+  "screenshot": "lake-model-provider-settings.png",
+  "data": "synthetic isolated test home; no production credentials used"
+}

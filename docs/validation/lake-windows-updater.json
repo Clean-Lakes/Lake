@@ -1,0 +1,52 @@
+{
+  "feature": "Windows client updater",
+  "version": "0.3.3",
+  "entry": "Left sidebar below Settings",
+  "updateSource": "https://api.github.com/repos/Clean-Lakes/Lake/releases?per_page=100",
+  "installFlow": [
+    "strict stable master Windows x86_64 release selection",
+    "HTTPS download",
+    "GitHub digest + SHA256 + size verification",
+    "native installation confirmation",
+    "private ACL job + copied updater helper",
+    "capture parent handle and creation time",
+    "wait for full client/backend exit",
+    "NSIS per-user silent installation",
+    "automatic client restart"
+  ],
+  "checks": {
+    "policyAndHTTPTests": "passed on macOS with race detector; 91.5% statement coverage",
+    "frontendRegressionTests": "78 passed",
+    "updaterUI": "headless Chromium with mocked native bridge: available state, download progress, busy button, Escape, hidden in ordinary browser passed",
+    "windowsGoVet": "passed",
+    "windowsTestCrossCompile": "passed",
+    "NSISAndWindowsPackageBuild": "passed",
+    "zipCRCAndSHA256": "passed",
+    "windowsNativeRuntime": "not executed: current host is macOS"
+  },
+  "packages": {
+    "Lake-0.3.3-windows-x86_64.zip": {
+      "size": 191290831,
+      "sha256": "e2166c7dd8e031bf6221ae7f11fb6ba81fb3813e62d95dcc29bd8774833ebbec"
+    },
+    "Lake-0.3.3-windows-x86_64-setup.exe": {
+      "size": 94946976,
+      "sha256": "778c26b410489abd0ae52f0da40cdf8377ff368f720b75c70a870a4db876e722"
+    }
+  },
+  "releasePublication": {
+    "status": "completed",
+    "url": "https://github.com/Clean-Lakes/Lake/releases/tag/v0.3.3",
+    "workflow": {
+      "id": 38230897723,
+      "url": "https://github.com/Clean-Lakes/Lake/actions/runs/38230897723"
+    },
+    "assetsVerified": [
+      "Lake-0.3.3-windows-x86_64.zip",
+      "Lake-0.3.3-windows-x86_64.zip.sha256",
+      "Lake-0.3.3-windows-x86_64-setup.exe",
+      "Lake-0.3.3-windows-x86_64-setup.exe.sha256"
+    ],
+    "existingMacAssets": "preserved"
+  }
+}

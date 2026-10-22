@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-12",
+  "typecheck": "passed",
+  "frontendTests": 72,
+  "browserRunningConversationIndicators": 2,
+  "browserStoppedConversationIndicatorRemoved": true,
+  "browserRotationTransformChangedBetweenObservations": true,
+  "sharedAgentAndConversationIndicator": "ActivityIndicator.tsx",
+  "waitingOrFinishedAgentsRotate": false,
+  "reducedMotion": "CSS disables rotation and state fades",
+  "build": "scripts/build_lake_desktop.sh --install",
+  "userBackendReplaced": false,
+  "userBackendPid": 77202,
+  "liveUserTerminals": 3,
+  "screenshot": "lake-session-activity.png",
+  "data": "synthetic isolated model and sessions"
+}

@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-15",
+  "features": {
+    "quickAccess": [
+      "OpenAI",
+      "Anthropic",
+      "Google Gemini",
+      "DeepSeek",
+      "通义千问",
+      "智谱 GLM",
+      "Kimi",
+      "小米 MiMo",
+      "MiniMax",
+      "硅基流动",
+      "OpenRouter",
+      "本地 Ollama"
+    ],
+    "customAPI": true,
+    "modelSelection": [
+      "Search",
+      "Select across search results",
+      "Select current results",
+      "Existing model markers",
+      "Explicit batch import",
+      "256 saved models per provider",
+      "Imported context/image/reasoning metadata"
+    ]
+  },
+  "backend": {
+    "pagination": [
+      "Anthropic after_id",
+      "Gemini pageToken"
+    ],
+    "deduplication": true,
+    "discoveryBounds": {
+      "maxModels": 2048,
+      "maxPages": 20,
+      "timeoutSeconds": 10
+    },
+    "credentialSafeErrors": true
+  },
+  "validation": {
+    "frontend": {
+      "passed": 133,
+      "failed": 0
+    },
+    "go_web_race": "passed",
+    "go_ai_race": "passed",
+    "typescript_signed_dev_build_install": "passed",
+    "ui": {
+      "apiReturnedModels": 300,
+      "initiallySelected": 0,
+      "crossSearchSelectedModels": 2,
+      "savedModels": [
+        "gpt-test-001",
+        "mimo-test-300"
+      ],
+      "unselectedModelNotAdded": true,
+      "savedContextWindow": 128000,
+      "savedImageInputDetected": false,
+      "existingModelMarkers": 2,
+      "overLimitImportBlocked": true,
+      "cancelLeavesDraftClean": true,
+      "desktopPickerAndConfirmationVisibleAfterSearch": true,
+      "mobileHorizontalOverflow": false,
+      "nativeDevQuickSetupVisible": true
+    }
+  },
+  "verificationScope": "Endpoint presets reference official provider documentation. Network import and save verification used an isolated temporary Lake home and a synthetic local API. No real provider credentials or release data were used.",
+  "screenshots": [
+    "lake-provider-quick-setup.png",
+    "lake-provider-model-picker.png"
+  ]
+}

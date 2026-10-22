@@ -1,0 +1,61 @@
+{
+  "branch": "experiment/adk-runtime",
+  "change": [
+    "会话顶部标题与状态改为内容宽度的悬浮圆角气泡，取消横向分隔线。",
+    "更新入口移至左侧底部，设置和已删除之间；更新弹窗 portal 到 body。",
+    "原顶部会话操作并入侧栏对应会话菜单，保留对话、执行记录、证据、重命名、图标、标签和删除。",
+    "窄窗口长标题省略，完整名称可悬浮查看；Windows 避开窗口控制区；编辑弹窗和 Escape 恢复菜单入口焦点。"
+  ],
+  "verification": {
+    "typescript": "passed",
+    "frontend_tests": 244,
+    "diff_check": "passed",
+    "signed_macos_dev_build_install_launch": "passed",
+    "browser": {
+      "header_width": 432.4609375,
+      "breadcrumb_width": 402.4609375,
+      "header_padding_and_border": 30,
+      "scroll_canvas_top": 0,
+      "floating_header_top_before_and_after_scroll": 12,
+      "scroll_top": 746.5,
+      "actual_text_passes_behind_header": true,
+      "desktop_no_horizontal_overflow": true,
+      "narrow": {
+        "viewport_width": 390,
+        "header_left": 32,
+        "header_right": 358,
+        "no_horizontal_overflow": true,
+        "update_dialog_attached_to_body": true,
+        "update_dialog_bounds": [
+          18,
+          169.3984375,
+          372,
+          674.59375
+        ]
+      },
+      "windows_css_layout_only": {
+        "window_controls_start": 1142,
+        "long_header_right": 1124,
+        "gap": 18
+      },
+      "menu_view_switching": "passed",
+      "icon_dialog_focus_return": "passed",
+      "menu_escape_focus_return": "passed",
+      "other_session_delete_target": "correct target, cancelled without deletion",
+      "update_dialog_open_and_close": "passed using synthetic local update bridge"
+    },
+    "native": "实际窗口确认内容宽度气泡、正文顶部穿行、左侧更新入口；侧栏菜单包含所有原操作。"
+  },
+  "screenshots": [
+    "lake-floating-header-dev.png",
+    "lake-floating-header-scroll.png",
+    "lake-floating-header-menu.png",
+    "lake-floating-header-dark.png",
+    "lake-floating-header-narrow.png",
+    "lake-floating-header-update-narrow.png"
+  ],
+  "notes": [
+    "测试未调用远程资源或模型，未提交编辑和删除操作。",
+    "Windows 验证仅为浏览器 CSS 布局，未运行 Windows 客户端。"
+  ]
+}

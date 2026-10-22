@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-15",
+  "change": "Chat composer model selector: borderless transparent trigger; subtle hover/open background; keyboard focus indicator retained",
+  "validation": [
+    "Signed Lake Dev build, installation and relaunch passed",
+    "Current MiMo icon, name and chevron visible without border",
+    "Model list opens and Escape closes it; configured selection unchanged",
+    "TypeScript and production frontend build passed; git diff --check passed"
+  ],
+  "screenshot": "lake-model-borderless.png"
+}

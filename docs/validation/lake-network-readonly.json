@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-11",
+  "status": "passed",
+  "rootCause": [
+    "awk always categorized as arbitrary code",
+    "no-argument env categorized as command wrapper",
+    "default command gate included readonly queries"
+  ],
+  "newBehavior": "recognized readonly queries auto-run on authorized bound terminals regardless of silentCommands",
+  "pureAwk": "stdin-only literal programs; no external commands, input/output redirection, script/input files or environment/argv access",
+  "networkUtilities": [
+    "netstat",
+    "lsof",
+    "ss",
+    "ip show/list",
+    "ifconfig queries",
+    "route get/show/list",
+    "networksetup get/list"
+  ],
+  "manualAndAgent": "same Go classifier; frontend no longer uses stale JS risk implementation",
+  "ordinaryWrites": "respect silentCommands; default approval",
+  "destructiveCommands": "retain single-use target confirmation",
+  "targetAndCreation": "unchanged progressive selection/creation checks",
+  "goRace": "full suite and final focused network tests passed",
+  "goVet": "passed",
+  "frontendTests": 4,
+  "reactBuild": "passed",
+  "browser": "AI network query completed with silence off; manual awk sum returned 5 without confirmation",
+  "signature": "verified",
+  "commercialModelCalls": 0,
+  "binarySha256": "51b44c347053344d44beb2ea387efe360bba4a060841dde988bf33e6c28e1966"
+}

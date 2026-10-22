@@ -1,0 +1,61 @@
+{
+  "version": "0.3.18",
+  "development": true,
+  "binaryArchitecture": "amd64",
+  "phase": "complete",
+  "results": [
+    {
+      "name": "desktop",
+      "exitCode": 0,
+      "passedCases": 24,
+      "failedCases": [],
+      "seconds": 1.81,
+      "log": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-73aac6a1\\logs\\desktop.log"
+    },
+    {
+      "name": "platform",
+      "exitCode": 0,
+      "passedCases": 2,
+      "failedCases": [],
+      "seconds": 0.47,
+      "log": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-73aac6a1\\logs\\platform.log"
+    },
+    {
+      "name": "ai",
+      "exitCode": 0,
+      "passedCases": 36,
+      "failedCases": [],
+      "seconds": 7.2,
+      "log": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-73aac6a1\\logs\\ai.log"
+    },
+    {
+      "name": "web",
+      "exitCode": 0,
+      "passedCases": 36,
+      "failedCases": [],
+      "seconds": 32.56,
+      "log": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-73aac6a1\\logs\\web.log"
+    }
+  ],
+  "guiTest": "pending",
+  "packageSHA256": "1d0beef32418f7f60e544e65f917878a566a078476de265dc833825894e2c2ac",
+  "root": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-73aac6a1",
+  "nativeArchitecture": "ARM64",
+  "os": "Microsoft Windows 11 专业版",
+  "home": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-73aac6a1\\home",
+  "desktop": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-73aac6a1\\package\\Lake Dev\\Lake.exe",
+  "backendVersion": "Lake 0.3.18 · Go backend · React frontend",
+  "webViewExitCode": 0,
+  "launcher": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-73aac6a1\\Open-Lake-Test.cmd",
+  "passed": true,
+  "executionMode": "Windows 11 ARM64 VM, AMD64 binaries under x64 emulation",
+  "nativeX64HardwareTested": false,
+  "installedDevGuiTest": "passed: user confirmed DEV badge, retained model configuration, and double-click maximize with taskbar visible",
+  "installedDevUserConfirmation": {
+    "confirmedAt": "2026-10-18T14:13:12.356912+00:00",
+    "source": "user manual verification",
+    "devBadgeVisible": true,
+    "existingModelConfigurationRetained": true,
+    "doubleClickMaximizesWithTaskbarVisible": true
+  }
+}

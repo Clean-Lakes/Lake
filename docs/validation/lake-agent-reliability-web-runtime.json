@@ -1,0 +1,11 @@
+{
+  "origin": "http://localhost:4180",
+  "pid": 99920,
+  "previousPid": 76452,
+  "authenticatedCatalog": true,
+  "sessionsPreserved": true,
+  "webHTML": true,
+  "resourceCount": 132,
+  "sessionCount": 8,
+  "previousSessionCount": 8
+}

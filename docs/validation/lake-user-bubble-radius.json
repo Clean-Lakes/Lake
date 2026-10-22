@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "status": "passed",
+  "change": "User message bubbles now share --radius-window with the composer and native window corners.",
+  "checks": {
+    "typescript": "passed",
+    "frontend": { "passed": 229, "failed": 0 },
+    "diffCheck": "passed",
+    "lightDarkNarrow": "passed; bubble and composer both 20px; narrow document and viewport both 390px",
+    "nativeDev": "passed; installed Dev shows the rounded user bubble and restored current conversation",
+    "buildInstall": "scripts/build_lake_desktop.sh --dev --install passed",
+    "signature": "codesign --verify --deep --strict passed",
+    "installedBackendMatchesBuild": "606e595ae89a3a4ac49889c0525d107724ad396acaba47259b4af612b26e363d"
+  },
+  "screenshots": [
+    "lake-user-bubble-radius-light.png",
+    "lake-user-bubble-radius-dark.png",
+    "lake-user-bubble-radius-narrow.png",
+    "lake-user-bubble-radius-detail.png",
+    "lake-user-bubble-radius-dev.png"
+  ],
+  "notes": "Browser validation used synthetic fixture data. No model messages or resource commands sent. Release app/data and existing uncommitted work preserved."
+}

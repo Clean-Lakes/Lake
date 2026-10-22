@@ -1,0 +1,37 @@
+{
+  "branch": "experiment/adk-runtime",
+  "change": "输入框上下内边距从 12px 收紧到 8px；桌面单行高度从 56px 降为 48px，横向长度、圆角和文字字号保留。窄窗口上下内边距同步为 8px。",
+  "verification": {
+    "typescript": "passed",
+    "frontend_tests": 244,
+    "diff_check": "passed",
+    "browser": {
+      "desktop_single": {
+        "width": 904,
+        "height": 48,
+        "left": 328,
+        "right": 1232
+      },
+      "three_lines": {
+        "width": 904,
+        "height": 89,
+        "focused": true
+      },
+      "cleared_narrow": {
+        "width": 326,
+        "height": 48,
+        "left": 32,
+        "right": 358,
+        "focused": true,
+        "horizontal_overflow": false
+      }
+    },
+    "signed_dev_build_install_launch": "passed",
+    "native_visual": "passed"
+  },
+  "screenshots": [
+    "lake-compact-input-dev.png",
+    "lake-compact-input-detail.png",
+    "lake-compact-input-narrow.png"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "change": "Reasoning selector uses the shared Lucide Waves icon instead of Brain",
+  "appearance": {
+    "size": 16,
+    "strokeWidth": 1.7,
+    "lightColor": "rgb(85, 85, 85)",
+    "darkColor": "rgb(204, 204, 204)"
+  },
+  "verification": {
+    "typescript": "passed",
+    "browser": "Actual reasoning selector renders waves, opens correct default/low/medium/high options and closes with Escape",
+    "signedDevBuild": "passed via scripts/build_lake_desktop.sh --dev --install",
+    "native": "Dev quit and restarted, new backend localhost:60309 loaded reasoning selector; screenshot saved",
+    "note": "Icon-only change; no new behavior tests added. Existing reasoning settings and disabled guards unchanged."
+  },
+  "screenshots": [
+    "lake-reasoning-waves-detail.png",
+    "lake-reasoning-waves-dark.png",
+    "lake-reasoning-waves-dev.png"
+  ]
+}

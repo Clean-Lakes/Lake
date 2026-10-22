@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-19",
+  "scope": "Automatically synchronize Magpie model configuration into the Lake composer and open model settings",
+  "behavior": {
+    "visiblePollMilliseconds": 2000,
+    "immediateRefresh": ["initial authenticated load", "window focus", "page visibility restored"],
+    "source": "Private local Magpie bridge configuration, read without upstream discovery or configuration writes",
+    "preserved": ["manual provider selection", "new provider drafts", "dirty saved-provider drafts", "last successful state during temporary failures"],
+    "requestHandling": ["no overlapping automatic polls", "manual refresh supersedes pending polls", "abort and ignore obsolete responses on pause or unmount", "10-second request timeout"]
+  },
+  "checks": [
+    "pnpm --dir web-agent check passed",
+    "pnpm --dir web-agent test:frontend: 254 tests passed",
+    "go test -race ./internal/web passed (229.269s)",
+    "go test -race ./internal/web -run 'TestModelSync|TestMagpie|TestProviders' -count=1 passed",
+    "go vet ./internal/web passed",
+    "python3 scripts/check_adk_runtime_boundary.py passed",
+    "scripts/build_lake_desktop.sh --dev --install passed using Node 24.14.0 and persistent Lake Local Development Code Signing",
+    "Installed Dev backend matched the signed bin/lake and its running /api/settings/model/state endpoint returned the new state schema"
+  ],
+  "browserVerification": [
+    "Started the signed Lake backend with a unique temporary home, free loopback port, synthetic credentials, and synthetic Magpie configuration",
+    "Changed the bridge default while the model menu remained closed; the composer updated automatically",
+    "Changed names, context capacity, and catalog membership while settings remained open; the UI updated without refresh",
+    "Changed the bridge default while an unsaved provider draft was open; its name and URL stayed intact",
+    "The refreshed catalog retained the unsaved draft when switching back to Magpie"
+  ],
+  "screenshot": "lake-magpie-auto-sync.png",
+  "limitations": "Runtime integration used an isolated synthetic bridge, not an external Magpie account or paid model calls. Only Lake Dev was installed and restarted; the release application and its credentials were not modified."
+}

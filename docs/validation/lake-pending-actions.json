@@ -1,0 +1,28 @@
+{
+  "request": "重新设计待发送区，恢复清楚可见的重新编辑和排序按钮",
+  "changes": [
+    "编辑采用图标加文字，与移除按钮常驻，不依赖悬停",
+    "多条消息提供调整顺序入口，展开后显示常驻拖动手柄及上下移按钮",
+    "单条消息保留编辑与移除；无需排序",
+    "保留工作区相同气泡材质和正文穿透、自动高度预留"
+  ],
+  "validation": {
+    "typecheck": "passed",
+    "frontendTests": 245,
+    "failures": 0,
+    "singleMessage": "mouse click edits successfully; save updates text; queue pauses; focus returns to edit",
+    "sorting": "down button changes order; grip ArrowUp restores order and follows the moved row; first up/last down disabled",
+    "visibility": "body focused and no row hovered: edit/remove opacity 1 and pointer-events auto; all expanded row actions opacity 1",
+    "narrow": "390x844; queue and controls inside viewport; editor reachable; no horizontal overflow",
+    "errorRecovery": "simulated pause 503 shows readable alert; original queued text preserved and editor not opened",
+    "glass": "shared 55% background and 12px blur remain; transcript scrolls behind overlay",
+    "desktop": "build_lake_desktop.sh --dev --install signed successfully; idle Dev restarted; release app untouched"
+  },
+  "data": "all queue interactions use fictional in-memory fixtures; no model calls or real queue changes",
+  "screenshots": [
+    "lake-pending-actions-expanded.png",
+    "lake-pending-actions-detail.png",
+    "lake-pending-actions-dark.png",
+    "lake-pending-actions-narrow.png"
+  ]
+}

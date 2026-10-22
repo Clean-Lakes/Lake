@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-13",
+  "effect": "Opaque grey/green text with a dark highlight sweeping across letters every 1.8 seconds",
+  "surfaces": [
+    "Lake thinking",
+    "Lake tool progress",
+    "Lake aggregation",
+    "running child Agent"
+  ],
+  "waitingApproval": "static",
+  "completed": "static",
+  "reducedMotion": "static",
+  "checks": {
+    "browserFrames": "background position changes; opacity 1; dimensions stable; no duplicate text or extra spinning indicators",
+    "frontendTests": "80 passed",
+    "typeCheck": "passed",
+    "signedBuild": "passed",
+    "servedCss": "status-text-sweep verified on 4180"
+  },
+  "pushed": false
+}

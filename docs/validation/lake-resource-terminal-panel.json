@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-11",
+  "frontendTests": 47,
+  "typeCheck": "passed",
+  "signedBuild": "verified",
+  "productionOrigin": "http://localhost:4177",
+  "checks": {
+    "sidebarOpenTerminal": true,
+    "rightPanelAnimation": true,
+    "createSessionWhenMissing": true,
+    "localCommandOutput": true,
+    "sshCommand": "pwd",
+    "sshOutput": "/root",
+    "collapsePreservesConnection": true,
+    "reopenReusesTerminal": true,
+    "commandFocusAfterExecutionAndReopen": true
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "imageBytesReachedModel": true,
+  "fileReferenceReachedModel": true,
+  "cwdReachedModel": true,
+  "userImagePersisted": true,
+  "scopeReplyCompleted": true,
+  "scope": "d0e8415f25958faa2e944cfb87960e6e",
+  "terminal": "4603d21181c97dcace9b8e973c7f96b7",
+  "date": "2026-10-11",
+  "branch": "claude/lake-web-agent-v1",
+  "binarySHA256": "ff12e64185a27781f8ac44d9fde1ac580447db28a2b6c827362eaf1fb352ccea",
+  "frontendTests": 36,
+  "browserConsoleErrors": 0,
+  "goAllPassed": true,
+  "goRacePassed": true
+}

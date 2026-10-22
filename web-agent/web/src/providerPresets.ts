@@ -11,6 +11,7 @@ export const providerPresets:ProviderPreset[] = [
   {id:"glm",name:"智谱 GLM",subtitle:"BigModel 开放平台",baseURL:"https://open.bigmodel.cn/api/paas/v4",protocol:"openai",docs:"https://docs.bigmodel.cn/cn/api/introduction"},
   {id:"kimi",name:"Kimi",subtitle:"月之暗面 · 中国区",baseURL:"https://api.moonshot.cn/v1",protocol:"openai",docs:"https://platform.kimi.com/blog/posts/kimi-api-quick-start-guide"},
   {id:"mimo",name:"小米 MiMo",subtitle:"MiMo 开放平台",baseURL:"https://api.xiaomimimo.com/v1",protocol:"openai",docs:"https://mimo.mi.com/docs/zh-CN/api/model/list-models"},
+  {id:"hunyuan",name:"腾讯混元",subtitle:"TokenHub · 混元及多厂商模型",baseURL:"https://tokenhub.tencentmaas.com",protocol:"claude",docs:"https://cloud.tencent.com/document/product/1823/130078"},
   {id:"minimax",name:"MiniMax",subtitle:"MiniMax 开放平台 · 中国区",baseURL:"https://api.minimax.cn/v1",protocol:"openai",docs:"https://platform.minimax.cn/docs/api-reference/text-openai-api"},
   {id:"siliconflow",name:"硅基流动",subtitle:"多厂商模型 · 中国区",baseURL:"https://api.siliconflow.cn/v1",protocol:"openai",docs:"https://docs.siliconflow.cn/docs/userguide/quickstart"},
   {id:"openrouter",name:"OpenRouter",subtitle:"多厂商模型聚合",baseURL:"https://openrouter.ai/api/v1",protocol:"openai",docs:"https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties"},

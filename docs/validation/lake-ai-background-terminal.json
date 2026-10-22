@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-12",
+  "behavior": {
+    "ordinaryChatUsesOwnedBackgroundShell": true,
+    "openManualTabDoesNotSelectAIExecutionTerminal": true,
+    "resourceMentionDoesNotAutomaticallyReuseManualShell": true,
+    "expiredImplicitManualBindingsCleared": true,
+    "resourceListAndCountsExcludeManagedShells": true,
+    "closeAllManualTerminalsPreservesAIConnection": true,
+    "explicitReuseRetainsGenerationAndApprovalChecks": true
+  },
+  "tests": {
+    "targetedWebRace": "passed, 13.010s",
+    "fullWebRace": "passed, 131.786s",
+    "frontend": "51 passed",
+    "typecheck": "passed",
+    "fixtures": "Ordinary AI chat with two manual shells, unfinished manual input and an old binding uses a separate managed shell; subsequent turn reuses that shell; background shell omitted from resource list; manual close-all leaves background ready",
+    "realModelCalls": false
+  },
+  "deployment": {
+    "build": "scripts/build_lake.sh; persistent Lake Local Development Code Signing identity; strict verification passed",
+    "bundle": "index-D-CFaczq.js",
+    "origin": "http://localhost:4177",
+    "idleConnectionsReconnected": 2,
+    "nativeChrome": "Resource menu shows only two user terminals; open action autofocus and Escape dismissal verified",
+    "commandsReplayed": false
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-16",
+  "observedCause": "The running conversation resumed plan v1 created before concurrent roles. All five observation deliverables belonged to investigator; coordinator analysis depended on all five; no verifier step existed. One role working at a time was the declared plan behavior, not a missing Dev restart.",
+  "changes": [
+    "Stamp newly model-built plans with collaborationVersion. Eligible paused legacy read-only investigations obtain a model-planned collaboration revision before continuation.",
+    "Keep the original goal, scope, acceptance, deliverables and dependency edges; require at least two substantive ready roles. Completed observations carry source identity and original collection/completion times with reusedFromAttemptId; they are not resampled or used as fresh independent acceptance.",
+    "Reject contract changes, new acts, removed prerequisite edges, incomplete role distribution, or final summaries that ignore added reviews. In-flight/change/unknown-result plans do not migrate. Cancellation preserves the original plan.",
+    "Show legacy sequential ordering and distinguish carried completion records with 已沿用."
+  ],
+  "checks": {
+    "goAll": "passed (AI 17.533s; Web 104.226s)",
+    "goRace": "passed (AI 35.263s; Web 144.756s)",
+    "targetedLegacyRace": "passed (AI 1.585s; Web 2.396s)",
+    "realContinuationIntegration": "Model produced one new revision; two real role model requests overlapped at a barrier and read actual temporary files; completed observation was carried exactly once without rerun; original revision/provenance/times retained.",
+    "constraintsAndCancellation": "passed contract rejection cases, final-summary review dependencies and cancelled continuation without model or resource work.",
+    "frontend": {
+      "passed": 181,
+      "failed": 0
+    },
+    "TypeScript": "passed",
+    "visualQA": "Actual Plan/role components with synthetic data: carried completion, two independently live roles; light desktop and dark narrow viewport without horizontal overflow. Narrow screenshot uses viewport capture because full-page capture distorted the image while DOM layout was correct.",
+    "signedDevBuildAndSignature": "passed scripts/build_lake_desktop.sh --dev --install and codesign --verify --deep --strict",
+    "devReload": "Passed: explicitly requested by user after being informed of the unfinished terminal; signed Dev native/backend restarted, new runtime process confirmed and 8 session snapshots healthy. Unknown-operation records retained; no task resumed.",
+    "diffWhitespace": "passed"
+  },
+  "productionPlanRewritten": false,
+  "productionTaskStarted": false,
+  "releaseRestarted": false,
+  "devRestarted": true,
+  "screenshots": [
+    "lake-sre-legacy-plan-upgrade.png",
+    "lake-sre-legacy-plan-upgrade-mobile-dark.png"
+  ],
+  "screenshotData": "Actual components rendered with synthetic scenario; not the live production plan."
+}

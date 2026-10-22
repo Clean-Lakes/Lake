@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-13",
+  "runtime": "Chrome + isolated Go fixture API",
+  "passed": true,
+  "noStandaloneTrashIcons": true,
+  "hostResourceFolderSessionProjectMenus": true,
+  "deleteConfirmationRetained": true,
+  "bulkDeletionRetained": true,
+  "noDataDeleted": true,
+  "errors": []
+}

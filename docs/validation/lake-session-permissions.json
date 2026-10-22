@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-11",
+  "status": "passed",
+  "backendRuntime": "go",
+  "nodeRuntimeRequired": false,
+  "resourceTerminalClose": {
+    "single": true,
+    "allRetainedSessions": true,
+    "resourceAssociationEnforced": true,
+    "historyPreserved": true
+  },
+  "progressiveAuthorization": {
+    "beforeProcessCreation": true,
+    "rejectNoEffect": true,
+    "liveReuse": true,
+    "manualCloseFreshApproval": true,
+    "staleDecisionRejected": true,
+    "separateCommandApproval": true
+  },
+  "permissionDefaults": {
+    "silentReadFiles": true,
+    "silentWriteFiles": false,
+    "silentReadSQL": true,
+    "silentCommands": false,
+    "silentTerminalCreation": false,
+    "blockUnreferencedAssets": false,
+    "denyLocalExecution": false
+  },
+  "browser": {
+    "initialAllow": true,
+    "resourceClose": true,
+    "recreateAllow": true,
+    "recreateReject": true,
+    "preferencePersistence": true,
+    "separateConversations": true,
+    "narrowAndDesktopLayouts": true,
+    "temporaryViewportReset": true
+  },
+  "realCommercialModelCallsThisFeature": false,
+  "productionSSHOperations": false,
+  "signedBinaryWithoutNode": "passed",
+  "images": [
+    "lake-resource-terminal-menu.png",
+    "lake-session-permissions.png",
+    "lake-terminal-recreate-approval.png"
+  ],
+  "binarySha256": "95d5cb651e55245252ad637f3be8641320d2c077f638ca93833c7c1187e623e6"
+}

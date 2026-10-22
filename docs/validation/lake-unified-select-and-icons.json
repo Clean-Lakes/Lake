@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-15",
+  "scope": "Unified form dropdowns and provider brand icons",
+  "dropdownCount": 23,
+  "components": {
+    "SSHResourceFields.tsx": 2,
+    "App.tsx": 4,
+    "Workflows.tsx": 1,
+    "ProjectMemory.tsx": 1,
+    "AIPanel.tsx": 10,
+    "ModelSettings.tsx": 3,
+    "ResourceTree.tsx": 1,
+    "TerminalConfigEdit.tsx": 1
+  },
+  "verification": {
+    "frontendTests": {
+      "passed": 138,
+      "failed": 0
+    },
+    "typescript": "passed",
+    "diffWhitespace": "passed",
+    "signedDevBuild": "scripts/build_lake_desktop.sh --dev --install",
+    "codesign": "--verify --deep --strict passed",
+    "nativeApp": "/Users/lingyunxieqing/Applications/Lake Dev.app"
+  },
+  "runtimeChecks": [
+    "Click and real change events",
+    "Home/End/Enter and text lookup",
+    "Escape preserves settings dialog",
+    "Tab and outside click close",
+    "Popup belongs to modal accessibility tree",
+    "1280x520 popup flips above trigger",
+    "430x840 popup stays inside viewport",
+    "Light and dark themes",
+    "All 12 local brand SVGs loaded",
+    "SSH login mode and shell update correctly",
+    "Switching SSH login mode clears synthetic password",
+    "MySQL selection updates port to 3306",
+    "Signed native Dev popup and icons displayed",
+    "Native accessibility activation focuses the trigger",
+    "Native Escape closes only the popup and restores focus",
+    "Native End/Enter changes format to Ollama; Home/Enter restores OpenAI"
+  ],
+  "screenshots": [
+    "lake-unified-select.png",
+    "lake-unified-select-native.png",
+    "lake-unified-select-dark.png",
+    "lake-unified-select-mobile.png",
+    "lake-provider-brand-icons.png"
+  ],
+  "dataIsolation": "Runtime checks used a temporary standalone home and synthetic-only credentials; no provider configuration was saved in the native Dev app.",
+  "documentation": [
+    "docs/ui-guidelines.md",
+    "CONTRIBUTING.md",
+    "AGENTS.md"
+  ],
+  "cleanup": "Temporary browser tab and isolated backend/Vite stopped; native test draft removed."
+}

@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-16",
+  "reportedFailure": "SRE investigator collected 18 evidence records and 15 successful operation records, then failed during context summarization; all operations and duplicate fatal errors were shown inline.",
+  "diagnosis": {
+    "protocol": "openai-response",
+    "contextWindow": 64000,
+    "maxOutput": 8192,
+    "error": "context compaction: model response incomplete",
+    "evidenceCount": 18,
+    "successfulOperationCount": 15
+  },
+  "changes": [
+    "Classify Responses incomplete output ceilings and reject incomplete whole JSON responses as well as streamed responses; retain reported usage.",
+    "Retry pure summary requests at most once for incomplete responses or output limits. Automatic maintenance can then safely reduce model-only tool previews, reserving at least 1/16 of the input allocation. Original user/system messages, call arguments and IDs, raw durable operation records and cancellation remain intact.",
+    "Partial model summaries are never committed. Irreducible input and cancellation still stop; manual compaction failure preserves original history.",
+    "Collapse successful operations under one disclosure. Keep unknown, failed, unexecuted and approval-related records directly visible.",
+    "Translate known compaction errors and deduplicate matching parent error/system copies only within the same turn and within five seconds of the owning attempt completion. Persistent audit records are unchanged."
+  ],
+  "checks": {
+    "targetedRecovery": "passed; two failed summaries followed by deterministic recovery and another successful model round; no historical tool dispatch",
+    "responsesProtocol": "passed streamed and whole incomplete responses, output-limit classification and usage accounting",
+    "recordedFailureOfflineDiagnostic": {
+      "passed": true,
+      "originalHistoryCost": 101966,
+      "projectedHistoryCost": 48491,
+      "catalogCost": 52961,
+      "combinedInputCost": 101452,
+      "inputBudget": 111616,
+      "originalConstraintsAndCallIdentitiesPreserved": true,
+      "modelRequests": 0,
+      "toolRequests": 0
+    },
+    "goAll": "passed (AI 16.074s; Web 99.780s)",
+    "goRace": "passed (AI 30.588s; Web 138.745s)",
+    "typeScript": "passed",
+    "frontendTests": {
+      "passed": 178,
+      "failed": 0
+    },
+    "frontendRegression": "passed operation grouping, visible unknown-result resolution, same-attempt duplicate removal and retention of another turn failure",
+    "visualQA": "passed default compact view, expandable operation original, dark theme, 390px viewport with equal page/scroll widths",
+    "signedDevBuildAndSignature": "passed",
+    "nativeDev": "confirmed persisted historical message shows 18-evidence disclosure, 15-operation disclosure and translated failure",
+    "healthySnapshotsAfterReload": 8
+  },
+  "restartAudit": "All model sessions were idle. One noninteractive agent terminal retained busy status despite four completed entries and no unfinished entries; confirmed before Dev reload.",
+  "onlineTaskReplayed": false,
+  "releaseRestarted": false,
+  "screenshots": [
+    "lake-sre-records-compact.png",
+    "lake-sre-records-compact-dark.png",
+    "lake-sre-records-compact-mobile.png"
+  ],
+  "screenshotData": "Synthetic data rendered with the actual role message component."
+}

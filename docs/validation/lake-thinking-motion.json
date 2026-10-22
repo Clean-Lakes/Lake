@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-12",
+  "effect": [
+    "text shimmer, 2.25 seconds",
+    "floating drop and pulsing water ripple"
+  ],
+  "states": {
+    "running": "animated",
+    "waitingApproval": "static",
+    "completed": "static"
+  },
+  "reducedMotion": "static text and icon when prefers-reduced-motion is reduce",
+  "verification": [
+    "TypeScript and signed build passed",
+    "Actual React components rendered in native Chrome preview for running, operation, approval and complete states",
+    "Updated CSS asset served on 4177",
+    "Workbench recovery confirmed; three idle manual terminals reconnected"
+  ],
+  "modelCallsForPreview": 0
+}

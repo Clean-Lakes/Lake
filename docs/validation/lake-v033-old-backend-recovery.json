@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-12",
+  "release": "v0.3.3",
+  "cause": "Installed 0.3.3 client reused an older standalone 4177 backend; package and source commit contained the new features",
+  "before": {
+    "bundle": "index-BRC5yX1O.js",
+    "providerApiStatus": 404
+  },
+  "after": {
+    "bundle": "index-CFtAegMX.js",
+    "providerApiStatus": 200,
+    "frontendMarkers": [
+      "供应商",
+      "resource-import-preview",
+      "message-queue",
+      "挂起消息"
+    ],
+    "idleConnectionsReconnected": 3,
+    "commandsReplayed": false
+  },
+  "nativeClient": "Native computer-use selection resolved a legacy backup window or timed out; no client window was terminated. A complete client restart is still needed to discard the cached page/authentication."
+}

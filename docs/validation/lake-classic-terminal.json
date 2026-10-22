@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-12",
+  "origin": "http://localhost:4177",
+  "frontendTests": 48,
+  "goRaceTests": "passed",
+  "signature": "verified",
+  "shell": "bash",
+  "classicTheme": true,
+  "realPrompt": true,
+  "rawUserInput": true,
+  "historyReplay": true,
+  "tabCompletion": true,
+  "commands": [
+    {
+      "command": "pwd",
+      "exitCode": 0
+    },
+    {
+      "command": "pwd",
+      "exitCode": 0
+    },
+    {
+      "command": "whoami",
+      "exitCode": 0
+    }
+  ],
+  "managedIdleInputStillDenied": true,
+  "agentOwnershipStillEnforced": true
+}

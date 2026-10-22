@@ -1,0 +1,68 @@
+{
+  "status": "passed",
+  "timestamp": "2026-10-18T17:53:46.643243+08:00",
+  "branch": "experiment/adk-runtime",
+  "head": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+  "scope": "Implement approved lightweight workspace sidebar with conversations and resources together",
+  "changes": [
+    "Unframed project switcher, compact brand and Dev label",
+    "Transparent new-chat entry with Cmd+N / Ctrl+N using existing dialog",
+    "Quiet session selection, compact tree rows and plain counts",
+    "Shared Glyph icons; existing resource menus and online dot retained",
+    "Sidebar footer, tags, search and history remain available"
+  ],
+  "checks": {
+    "typescript": "passed",
+    "frontend": {
+      "passed": 224,
+      "failed": 0,
+      "log": "/tmp/lake-workspace-sidebar-frontend.log"
+    },
+    "diff_check": "passed",
+    "light_dark_narrow": "passed",
+    "narrow": {
+      "viewport": 390,
+      "sidebar_width": 300,
+      "sidebar_scroll_width": 299
+    },
+    "new_chat_default": {
+      "background": "transparent",
+      "border_width": "0px"
+    },
+    "new_chat_button_and_keyboard": "Existing creation dialog opened and cancelled, no session created",
+    "search": "matched expected resource; clear restored list",
+    "folder_collapse_expand": "passed",
+    "terminal_menu": "passed; online green dot retained",
+    "native_Dev_shortcut": "Cmd+N opened expected dialog, then cancelled",
+    "native_Dev_final_launch": "passed"
+  },
+  "build": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "log": "/tmp/lake-workspace-sidebar-build.log",
+    "app": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "version": "0.3.17",
+    "signature": "verified deep strict",
+    "backendSha256": "673551912fd228812d3aa5e9af430c4b23114d5c0e66b0b167cc1b4d2db86856",
+    "workspace_binary_matches": true,
+    "appPid": 41492,
+    "backendPid": 41495
+  },
+  "sourceSha256": {
+    "web-agent/web/src/sidebarWorkspace.css": "f2945263871da8227c6e191ace8eaa20c15e0a450e2ada0d157ec9f1e424dd19",
+    "web-agent/web/src/styles.css": "57900b498f411a159c99dede8924cf233abb88fea2138ea42dc48680c4a46bad",
+    "web-agent/web/src/App.tsx": "8be35437b4827348c33800e93fb5001818f07ad36d636b529bffe5bd1b5acfd4",
+    "web-agent/web/src/ResourceTree.tsx": "ebfeece85c6d3e97a125495ed273c772003c14c0fada277017c339646626b982"
+  },
+  "screenshots": [
+    "lake-lightweight-workspace-light.png",
+    "lake-lightweight-workspace-dark.png",
+    "lake-lightweight-workspace-narrow.png",
+    "lake-lightweight-workspace-dev.png"
+  ],
+  "validation_resources": "Synthetic in-browser fixture; native Dev only UI inspection and cancelled creation dialog",
+  "resource_commands_sent": false,
+  "model_requests_sent": false,
+  "test_sessions_created": false,
+  "permission_settings_changed": false
+}

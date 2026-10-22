@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-12",
+  "behavior": "Resource terminal picker uses friendly names, omits disconnected entries and supports multiple terminals per SSH resource",
+  "nativeChrome": {
+    "friendlyNamesVerified": true,
+    "listContainsNoInternalIds": true,
+    "duplicateConnectionCreatedFromList": true,
+    "onlineCountBeforeCreation": 3,
+    "onlineCountAfterCreation": 4,
+    "creationDidNotAddChat": true,
+    "terminalReadyAfterCreation": true,
+    "userChangedTerminalStateDuringVerification": true,
+    "currentOnlineCount": 1,
+    "currentUserStatePreserved": true
+  },
+  "tests": {
+    "frontendPassed": 48,
+    "targetedGoRace": "resource terminal list, resource scopes and terminal scopes passed"
+  },
+  "build": "scripts/build_lake.sh signed Lake Local Development Code Signing"
+}

@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-16",
+  "change": "SRE mode toggle displays a small experimental badge in both enabled and disabled states. Tooltip and accessible description explain that the feature is still being tested.",
+  "label": "实验性",
+  "tooltip": "实验性功能，仍在测试中。在此项目启用四个专员、Plan 与独立验证。",
+  "checks": {
+    "typeScript": "passed",
+    "frontendTests": "176 passed, 0 failed",
+    "signedDevBuildAndSignatureVerification": "passed",
+    "nativeDevUI": "confirmed visible badge and accessible test-feature hint",
+    "restart": "Dev only, after all eight sessions were idle"
+  },
+  "screenshot": "lake-sre-experimental-label.png",
+  "releaseRestarted": false
+}

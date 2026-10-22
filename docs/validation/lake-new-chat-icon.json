@@ -1,0 +1,12 @@
+{
+  "branch": "experiment/adk-runtime",
+  "change": "侧栏新建会话入口只显示编辑图标，保留 28px 点击区域、悬浮名称与快捷键及无障碍名称。",
+  "verification": {
+    "typescript": "passed",
+    "frontend_tests": 244,
+    "diff_check": "passed",
+    "dev_signed_build_install": "passed",
+    "native": "已确认仅显示图标，点击打开开启新会话弹窗，取消后返回原会话，未创建测试会话。"
+  },
+  "screenshot": "lake-new-chat-icon-dev.png"
+}
