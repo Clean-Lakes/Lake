@@ -14,6 +14,9 @@ func composePrompt(c Config) strategy.Composition {
 	p.AppendComposition(composeProfile(c))
 	p.Append(strategy.FixedRules, "separator", "\n")
 	p.AppendComposition(embeddedPrompt("conversation-style"))
+	if c.ConversationMode == ModePlan {
+		p.Append(strategy.FixedRules, "plan-mode", planModePrompt)
+	}
 	return p
 }
 
