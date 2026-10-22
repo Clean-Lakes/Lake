@@ -30,9 +30,9 @@
 .plan-list-back{display:inline-flex;align-items:center;gap:6px;margin-bottom:10px}
 .plan-list-back>svg{transform:rotate(180deg)}
 .plan-list-header h2,.plan-detail-heading{outline:none}
-.plan-detail-heading{font-size:13px;font-weight:400;color:var(--text-muted);margin:0 0 16px}
+.plan-detail-heading{font-size:13px;font-weight:500;color:var(--text-muted);margin:0 0 16px}
 .plan-list-title{min-width:0;flex:1;overflow-wrap:anywhere;font-size:15px;line-height:1.6}
-.plan-list-title small{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;font-weight:400;color:var(--text-muted);margin-top:4px}
+.plan-list-title small{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;font-weight:500;color:var(--text-muted);margin-top:4px}
 .plan-list-content{padding:0 0 24px;overflow-wrap:anywhere}
 .plan-list-content .assistant-markdown{min-width:0}
 .plan-list .plan-mode-error .button{margin-left:12px}
