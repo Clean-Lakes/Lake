@@ -30,5 +30,5 @@
   color: var(--foreground);
   resize: vertical;
 }
-.operation-outcome textarea:focus-visible { outline: 1px solid var(--focus); outline-offset: 1px; }
+.operation-outcome textarea:focus-visible { outline: 1px solid var(--focus-outline); outline-offset: 1px; }
 .operation-outcome fieldset > button { justify-self: start; }

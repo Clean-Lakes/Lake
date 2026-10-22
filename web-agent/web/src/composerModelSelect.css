@@ -51,7 +51,7 @@
 .composer-reasoning-track input::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 28px; height: 28px; border: 0; background: transparent; box-shadow: none; opacity: 0; }
 .composer-reasoning-track input::-moz-range-track { height: 28px; background: transparent; }
 .composer-reasoning-track input::-moz-range-thumb { width: 28px; height: 28px; border: 0; background: transparent; box-shadow: none; opacity: 0; }
-.composer-reasoning-track input:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 16px; corner-shape: var(--corner-window); }
+.composer-reasoning-track input:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 3px; border-radius: 16px; corner-shape: var(--corner-window); }
 .composer-reasoning-track input:disabled { cursor: default; }
 .composer-reasoning-thumb { corner-shape: var(--corner-window); position: absolute; z-index: 2; top: 0; left: calc((100% - 28px) * var(--reasoning-progress)); width: 28px; height: 28px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 50%; background: linear-gradient(150deg,var(--surface),var(--surface-subtle)); box-shadow: 0 1px 2px color-mix(in srgb,var(--foreground) 10%,transparent),inset 0 1px rgb(255 255 255 / .75); pointer-events: none; transition: left .24s cubic-bezier(.22,1.12,.36,1); }
 .composer-reasoning-track[data-dragging] .composer-reasoning-thumb,.composer-reasoning-track[data-dragging] .composer-reasoning-fill { transition: none; }

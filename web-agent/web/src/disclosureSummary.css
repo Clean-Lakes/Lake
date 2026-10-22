@@ -2,7 +2,7 @@
 .lake-disclosure-summary.lake-disclosure-summary::-webkit-details-marker { display: none; }
 .lake-disclosure-summary.lake-disclosure-summary::marker { content: ''; }
 .lake-disclosure-summary.lake-disclosure-summary:hover { background: var(--surface-hover); color: var(--foreground); }
-.lake-disclosure-summary.lake-disclosure-summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.lake-disclosure-summary.lake-disclosure-summary:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
 .lake-disclosure-summary > .lake-disclosure-chevron { flex-shrink: 0; transition: transform .12s ease; }
 details[open] > .lake-disclosure-summary > .lake-disclosure-chevron { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .lake-disclosure-summary.lake-disclosure-summary,.lake-disclosure-summary > .lake-disclosure-chevron { transition: none; } }

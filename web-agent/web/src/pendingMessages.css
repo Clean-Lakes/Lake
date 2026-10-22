@@ -12,7 +12,7 @@
 .pending-message:is(.drop-before,.drop-after)::after { content: ""; position: absolute; left: 14px; right: 14px; height: 2px; border-radius: 2px; background: var(--text-secondary); pointer-events: none; }
 .pending-message.drop-before::after { top: -5px; }
 .pending-message.drop-after::after { bottom: -5px; }
-.pending-message-grip:focus-visible,.pending-messages button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--radius-control); }
+.pending-message-grip:focus-visible,.pending-messages button:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: -2px; border-radius: var(--radius-control); }
 .pending-message-content { min-width: 0; flex: 1; }
 .pending-message-content>p { margin: 0; line-height: 1.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pending-message-actions { display: flex; align-items: center; gap: 3px; flex-shrink: 0; padding-left: 7px; margin-left: 2px; border-left: 1px solid var(--border); }

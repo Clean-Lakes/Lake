@@ -110,7 +110,7 @@
 .model-conversation-memory input { accent-color: var(--text-muted); }
 .model-conversation-memory .settings-note { margin: 8px 0 18px 22px; }
 .model-settings-dialog button:disabled { opacity: .45; cursor: default; }
-.model-settings-dialog :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.model-settings-dialog :focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
 @media (max-width:700px) {
   .model-settings-dialog.modal { width: calc(100vw - 24px); height: calc(100dvh - 32px); }
   .model-settings-header { padding: 20px; }

@@ -21,7 +21,7 @@
 .file-operation-approval .attachment-approval-effect.is-delete { color: var(--danger); }
 .file-operation-approval > footer { margin-top: 12px; padding-top: 12px; }
 .file-operation-approval > footer button { min-height: 32px; }
-.file-operation-approval .file-approval-content:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.file-operation-approval .file-approval-content:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: -2px; }
 @media(max-width:600px) {
  .file-operation-approval { padding: 13px; }
  .file-approval-content { padding: 10px; }

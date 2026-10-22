@@ -17,6 +17,6 @@
 .mention-footer button,.mention-error button { display: inline-flex; align-items: center; gap: 3px; padding: 2px; border: 0; background: transparent; color: var(--foreground); font-size: var(--font-size-ui); }
 .mention-error { padding: 8px 10px; font-size: var(--font-size-ui); color: var(--text-muted); }
 .mention-error button { margin-left: 6px; }
-.mention-categories button:focus-visible,.mention-footer button:focus-visible,.mention-error button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.mention-categories button:focus-visible,.mention-footer button:focus-visible,.mention-error button:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 1px; }
 .reference-chips > span { display: inline-flex; align-items: center; gap: 5px; }
 @container lake-composer (max-width: 420px) { .composer-mentions.mention-menu { left: 4px; width: calc(100% - 8px); max-width: calc(100% - 8px); } .mention-categories { gap: 1px; padding: 5px; } .mention-categories button { padding: 5px 6px; } }
