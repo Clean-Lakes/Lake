@@ -1,0 +1,1568 @@
+{
+  "schemaVersion": 1,
+  "phase": "P8",
+  "date": "2026-10-22",
+  "baseCommit": "a783981ade1631d1466fcf6e8d785410bf88dfbb",
+  "testedCommit": "14845828e57264ab56df9111bd6253b6985b4331",
+  "releaseAcceptancePassed": false,
+  "productionChanged": false,
+  "ciDispatched": false,
+  "versionChanged": false,
+  "tasks": {
+    "T32": "incomplete_windows_target_validation",
+    "T33": "passed_macos_dev",
+    "T34": "passed_documentation_and_exit_drill"
+  },
+  "remainingGates": [
+    "Windows native regression and desktop acceptance",
+    "Real provider compatibility smoke with explicitly configured Dev credentials",
+    "Representative real-model paired runs: at least three per arm, fixed hard checks and holdouts",
+    "Full M2 resettable real-service fault environment and effectiveness acceptance"
+  ],
+  "toolchain": {
+    "go": "1.26.6",
+    "node": "24.18.0",
+    "pnpm": "10.33.4"
+  },
+  "checks": [
+    {
+      "name": "macos_full_go",
+      "command": "go test ./... -count=1 -timeout=8m",
+      "exitCode": 0,
+      "aiSeconds": 39.964,
+      "webSeconds": 136.245,
+      "note": "Before test-only fixes; repaired tests subsequently revalidated below."
+    },
+    {
+      "name": "macos_final_ai",
+      "command": "go test ./internal/ai -count=1 -timeout=5m",
+      "exitCode": 0,
+      "seconds": 53.449
+    },
+    {
+      "name": "macos_ai_race",
+      "command": "go test -race ./internal/ai -count=1 -timeout=6m",
+      "exitCode": 0,
+      "seconds": 143.072
+    },
+    {
+      "name": "macos_web_race",
+      "command": "go test -race ./internal/web -count=1 -timeout=10m",
+      "exitCode": 0,
+      "seconds": 346.736
+    },
+    {
+      "name": "macos_strategy_race",
+      "command": "go test -race ./internal/ai ./internal/web ./internal/strategy -count=1 -timeout=10m",
+      "package": "internal/strategy",
+      "packagePassed": true,
+      "seconds": 3.308,
+      "overallExitCode": 1,
+      "note": "Web failed on the test Store replacement race in this initial combined run; fixed and fully rerun above."
+    },
+    {
+      "name": "recovery_race_repetitions",
+      "command": "go test -race ./internal/web -run '^TestStrategyOptimizationExplicitResumeKeepsBudgetAndCompletedRunIdentity$' -count=3 -timeout=4m",
+      "exitCode": 0,
+      "seconds": 34.338
+    },
+    {
+      "name": "linux_full_go_and_vet",
+      "command": "go test ./... -count=1 -timeout=8m && go vet ./...",
+      "exitCode": 0,
+      "aiSeconds": 54.322,
+      "webSeconds": 105.477,
+      "os": "linux",
+      "architecture": "arm64",
+      "network": "none",
+      "imageDigest": "sha256:0d1d3a794be25f809dd2cb3160d8c73276c4056a9f8242a138e908ddeee7b6b6",
+      "sourceCommit": "14845828e57264ab56df9111bd6253b6985b4331"
+    },
+    {
+      "name": "compaction_repetitions",
+      "count": 5,
+      "macosSeconds": 1.979,
+      "linuxSeconds": 0.84,
+      "exitCode": 0
+    },
+    {
+      "name": "vet_macos",
+      "command": "go vet ./...",
+      "exitCode": 0
+    },
+    {
+      "name": "adk_boundary",
+      "command": "python3 scripts/check_adk_runtime_boundary.py",
+      "exitCode": 0
+    },
+    {
+      "name": "branch_policy",
+      "command": "python3 -m unittest discover -s scripts -p 'test_branch_policy.py'",
+      "exitCode": 0,
+      "passed": 4
+    },
+    {
+      "name": "frontend",
+      "cwd": "web-agent",
+      "commands": [
+        "corepack pnpm check",
+        "corepack pnpm test:frontend",
+        "corepack pnpm build:web"
+      ],
+      "exitCode": 0,
+      "passed": 386,
+      "skipped": 0
+    },
+    {
+      "name": "runner_negative_cases",
+      "cases": [
+        "toolchain_failure",
+        "nonzero_test_exit",
+        "successful_exit_with_no_tests"
+      ],
+      "allRejected": true
+    }
+  ],
+  "regression": {
+    "schemaVersion": 1,
+    "kind": "strategy_regression",
+    "status": "passed",
+    "startedAt": "2026-10-22T01:51:57.271680+00:00",
+    "commit": "14845828e57264ab56df9111bd6253b6985b4331",
+    "dirty": false,
+    "platform": {
+      "os": "Darwin",
+      "architecture": "arm64"
+    },
+    "go": "go version go1.26.6 darwin/arm64",
+    "modelBenefitEvaluated": false,
+    "desktopEvaluated": false,
+    "suites": [
+      {
+        "command": [
+          "go",
+          "test",
+          "-json",
+          "./internal/strategy",
+          "-count=1",
+          "-timeout=3m"
+        ],
+        "exitCode": 0,
+        "seconds": 1.166,
+        "passed": true,
+        "packages": {
+          "github.com/Clean-Lakes/Lake/internal/strategy": "pass"
+        },
+        "tests": [
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestAssetRevisionPreservesExactBytesAndSourceIdentity",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestAssetRevisionPreservesExactBytesAndSourceIdentity/cyclic_parent",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestAssetRevisionPreservesExactBytesAndSourceIdentity/duplicate_source",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestAssetRevisionPreservesExactBytesAndSourceIdentity/empty_body",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestAssetRevisionPreservesExactBytesAndSourceIdentity/empty_source",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestAssetRevisionPreservesExactBytesAndSourceIdentity/invalid_utf8",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestAssetRevisionPreservesExactBytesAndSourceIdentity/missing_parent",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestAssetRevisionPreservesExactBytesAndSourceIdentity/missing_source",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestAssetRevisionPreservesExactBytesAndSourceIdentity/oversized_body",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestAssetRevisionPreservesExactBytesAndSourceIdentity/unknown_kind",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestAssetRevisionPreservesExactBytesAndSourceIdentity/unknown_revision",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestAssetRevisionPreservesExactBytesAndSourceIdentity/unknown_verification",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestAssetRevisionPreservesExactBytesAndSourceIdentity/uppercase_hash",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestBudgetNeverTreatsMissingBoundsAsUnlimited",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestBudgetNeverTreatsMissingBoundsAsUnlimited/active_time",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestBudgetNeverTreatsMissingBoundsAsUnlimited/extra_retries",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestBudgetNeverTreatsMissingBoundsAsUnlimited/human_wait",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestBudgetNeverTreatsMissingBoundsAsUnlimited/model_calls",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestBudgetNeverTreatsMissingBoundsAsUnlimited/negative_retries",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestBudgetNeverTreatsMissingBoundsAsUnlimited/no_progress",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestBudgetNeverTreatsMissingBoundsAsUnlimited/parallel_candidates",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestBudgetNeverTreatsMissingBoundsAsUnlimited/revision_reset",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestBudgetNeverTreatsMissingBoundsAsUnlimited/rollouts",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestBudgetNeverTreatsMissingBoundsAsUnlimited/tokens",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestDefaultSettingsAreInert",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestOnlineProgressRequiresClosingSameTrustedCheck",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestP0CaseManifest",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestPromptCompositionPreservesBytesAndLayerIdentity",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestPromptManifestCanonicalGolden",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestResolveStrategySelection",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestScopeAndSettingsRejectAmbiguousOwnership",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestSnapshotJudgeRequiresClassificationAndObservedEvidence",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestSnapshotProgressRequiresFixedGainWithoutHardRegression",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/strategy",
+            "test": "TestSnapshotRegistryResetAndJudgeIsolation",
+            "status": "pass"
+          }
+        ]
+      },
+      {
+        "command": [
+          "go",
+          "test",
+          "-json",
+          "./internal/ai",
+          "./internal/web",
+          "-run",
+          "^(TestStrategy|TestOnline)",
+          "-count=1",
+          "-timeout=5m"
+        ],
+        "exitCode": 0,
+        "seconds": 20.789,
+        "passed": true,
+        "packages": {
+          "github.com/Clean-Lakes/Lake/internal/ai": "pass",
+          "github.com/Clean-Lakes/Lake/internal/web": "pass"
+        },
+        "tests": [
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineBudgetUnknownUsageRevocationAndStrictProposal",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineBudgetUnknownUsageRevocationAndStrictProposal/requests",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineBudgetUnknownUsageRevocationAndStrictProposal/retry",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineBudgetUnknownUsageRevocationAndStrictProposal/revisions",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineBudgetUnknownUsageRevocationAndStrictProposal/time",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineBudgetUnknownUsageRevocationAndStrictProposal/tokens",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineClosingAnotherFailureDoesNotEraseOriginalGap",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineFailureCategoriesAndDisabledCompatibility",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineFailureCategoriesAndDisabledCompatibility/capability",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineFailureCategoriesAndDisabledCompatibility/permission",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineFailureCategoriesAndDisabledCompatibility/target",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineFailureCategoriesAndDisabledCompatibility/unknown_write",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineFinalTextCannotCloseFailedCheck",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineNoProgressAndUnresolvedOriginalGap",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineOfficialADKReadonlyTimeoutProposalAndRecovery",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineSQLiteExitCodeCannotBecomeSuccess",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineSREExplicitContinuePreservesBudgetAndWaitTTL",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineSharedRoleBudgetConcurrentReservationAndRecovery",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineStopsBeforeOpaqueOrMutatingCorrection",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineStopsBeforeOpaqueOrMutatingCorrection/call_mcp_tool",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineStopsBeforeOpaqueOrMutatingCorrection/delegate_investigation",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineStopsBeforeOpaqueOrMutatingCorrection/execute_sql",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineStopsBeforeOpaqueOrMutatingCorrection/open_ssh_terminal",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineStopsBeforeOpaqueOrMutatingCorrection/shell",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineStopsBeforeOpaqueOrMutatingCorrection/stage_attachment",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestOnlineStopsBeforeOpaqueOrMutatingCorrection/write",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyAssetsActualRequestManifestAndNoAuthorityChange",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/core",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/db-query-editor",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/default",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/legacy-investigation",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/memory",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/permissions-denied",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/permissions-silent",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/preset",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/role-coordinator",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/role-executor",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/role-investigator",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/role-verifier",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/sre-dispatch",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/terminal2",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/text-only",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/unknown",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyCompositionKeepsAuthorityOutsideStrategy/workflow",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/core",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/db-query-editor",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/default",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/legacy-investigation",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/memory",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/permissions-denied",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/permissions-silent",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/preset",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/role-coordinator",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/role-executor",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/role-investigator",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/role-verifier",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/sre-dispatch",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/terminal2",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/text-only",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/unknown",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDisabledPromptGolden/workflow",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyDuplicateLoadedSkillAndInputBudget",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyExperimentResetFailureAndNoHostFallback",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/cancelled",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/correction",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/explicit_unknown",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/failure",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/not_executed",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/off",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/ordinary",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/role",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/sre",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/tool_cancelled",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/unknown",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/unpaired",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/worker",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyLearningCapturesOnlyOptedInRealSignals/workflow",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestAcrossProfilesRolesAndStdio",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestAcrossProfilesRolesAndStdio/core",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestAcrossProfilesRolesAndStdio/db-query-editor",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestAcrossProfilesRolesAndStdio/role-coordinator",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestAcrossProfilesRolesAndStdio/role-executor",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestAcrossProfilesRolesAndStdio/role-investigator",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestAcrossProfilesRolesAndStdio/role-verifier",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestAcrossProfilesRolesAndStdio/sre-dispatch",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestAcrossProfilesRolesAndStdio/terminal2",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestAcrossProfilesRolesAndStdio/workflow",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestFailurePreventsProviderDispatch",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestModelAllowlistAndRestoredHistory",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestPrecedesActualRequestAndSurvivesRestart",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyManifestRecordsOutputRecoveryAsDistinctRequest",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategyRevocationBeforeToolPreventsExecutionAndRedispatch",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/ai",
+            "test": "TestStrategySkillSnapshotsUseLoadedBytesWithoutRereading",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyContextCannotBeDecodedAndCorruptContentCannotBeAdopted",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyCrashHelper",
+            "status": "skip"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyDeletionInvalidatesSourcesAndArchiveKeepsReconciliation",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyDisableDoesNotInventAdoption",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentActualADKProcessCrashNeverReplaysArms",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentAllRegisteredSnapshotsAndIndependentADK",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentCancellationAndSourceRevocationStopsRemainingArms",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentCancellationAndSourceRevocationStopsRemainingArms/archive",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentCancellationAndSourceRevocationStopsRemainingArms/cancel",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentCancellationAndSourceRevocationStopsRemainingArms/settings",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentCancellationAndSourceRevocationStopsRemainingArms/source",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentCrashHelper",
+            "status": "skip"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentFreezesSharedMemorySkillsAndRejectsSkillChanges",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentFreezesSharedMemorySkillsAndRejectsSkillChanges/same-context",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentFreezesSharedMemorySkillsAndRejectsSkillChanges/skill-changed",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentFrozenModelBudget",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentHoldoutRepetitionsRegressionAndBoundary",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentSchemaUpgradeTransactionRollback",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentSettingsBudgetPrivacyAndAuthorization",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentUnknownUsageAndRequestBudget",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyExperimentV2MigrationSnapshot",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyHTTPScopeCASAndStrictSchema",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyHTTPSettingsSecretsAndSameOrigin",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyJobsDefaultOffLeaseCASAndAtomicCommit",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyJobsReclaimBoundsAndCrossProjectScope",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyJobsStaleWorkersCannotCommit",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyJobsStaleWorkersCannotCommit/asset-deleted",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyJobsStaleWorkersCannotCommit/disable",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyJobsStaleWorkersCannotCommit/lease-expired",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyJobsStaleWorkersCannotCommit/project-archived",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyJobsStaleWorkersCannotCommit/revision-edited",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyJobsStaleWorkersCannotCommit/source-edited",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyJobsStaleWorkersCannotCommit/source-revoked",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningActualProcessCrashRecovery",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningActualProcessCrashRecovery/result",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningActualProcessCrashRecovery/running",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningAutomaticNewTurnAndNoRecursion",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningCommitFailureRetriesOnlyDurableResult",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningCrashHelper",
+            "status": "skip"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDeletionErasesPrivateSnapshotsAndResults",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDeletionErasesPrivateSnapshotsAndResults/asset",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDeletionErasesPrivateSnapshotsAndResults/session",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDispatchFailureCancellationAndBudgets",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDispatchFailureCancellationAndBudgets/budget",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDispatchFailureCancellationAndBudgets/cancel",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDispatchFailureCancellationAndBudgets/disable",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDispatchFailureCancellationAndBudgets/invalid",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDispatchFailureCancellationAndBudgets/no_candidate",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDispatchFailureCancellationAndBudgets/secret",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDispatchFailureCancellationAndBudgets/withdraw",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDurableResultRecoveryAndNoRedispatch",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDurableResultRecoveryAndNoRedispatch/before_dispatch",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDurableResultRecoveryAndNoRedispatch/committed",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDurableResultRecoveryAndNoRedispatch/result",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningDurableResultRecoveryAndNoRedispatch/running",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningHTTPRealSourcesScopeAndPagination",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningMemoryDedupAndSourceDeletion",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningSourceLiveMessageGuardAndDedup",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningStrictResultSchema",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningUsesExactMessageIdentityAndParsedTime",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyLearningV1UpgradeBackupAndNoSecondBackup",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyMigrationBackupAndFutureGuard",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyMigrationFailureRollsBackNewSchema",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOnlineHTTPOptionalFlagDefaultsOff",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOnlineOptInInheritanceAndFreshGuard",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOnlineProgressDoesNotStartUnbudgetedSummary",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationActualProviderCrashNeverReplaysUnknownCall",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationCheckpointCrashHelper",
+            "status": "skip"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationExplicitResumeKeepsBudgetAndCompletedRunIdentity",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationExplicitResumeKeepsBudgetAndCompletedRunIdentity/baseline_checkpoint",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationExplicitResumeKeepsBudgetAndCompletedRunIdentity/exhausted_time",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationExplicitResumeKeepsBudgetAndCompletedRunIdentity/expired_wait",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationExplicitResumeKeepsBudgetAndCompletedRunIdentity/final_result",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationExplicitResumeKeepsBudgetAndCompletedRunIdentity/proposal_result",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationExplicitResumeKeepsBudgetAndCompletedRunIdentity/stale_epoch",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationMemoryForgetErasesCandidateCopies",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationParserRejectsForgedSourcesAndAuthority",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationRevocationDuringAuxiliaryCallDropsLateCandidate",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationRevocationDuringAuxiliaryCallDropsLateCandidate/cancel",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationRevocationDuringAuxiliaryCallDropsLateCandidate/erase",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationRevocationDuringAuxiliaryCallDropsLateCandidate/settings",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationRevocationDuringAuxiliaryCallDropsLateCandidate/source",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationSettingsAndCaseValidation",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationStopsForNoProgressRegressionAndBudget",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationStopsForNoProgressRegressionAndBudget/budget",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationStopsForNoProgressRegressionAndBudget/no_candidate",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationStopsForNoProgressRegressionAndBudget/no_progress",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationStopsForNoProgressRegressionAndBudget/regression",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationStopsForNoProgressRegressionAndBudget/same_synthesis",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationStopsForNoProgressRegressionAndBudget/unknown_usage",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationSynthesisRevalidationHoldoutAndExplicitSave",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationV3MigrationBackupAndRollback",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationV3MigrationBackupAndRollback/rollback",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyOptimizationV3MigrationBackupAndRollback/upgrade",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyProcessCrashKeepsSingleCommitAndDispatchIdentity",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyProcessCrashKeepsSingleCommitAndDispatchIdentity/committed",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyProcessCrashKeepsSingleCommitAndDispatchIdentity/intent",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyProcessCrashKeepsSingleCommitAndDispatchIdentity/leased",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyProcessCrashKeepsSingleCommitAndDispatchIdentity/transaction",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyRepositoryScopeSecretsAndTombstones",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyRepositoryTransactionRollbackAndConcurrentCAS",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyRepositoryVersionsBindingsAndIdempotency",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyRuntimeMissingSessionAndNewCredentialFailClosed",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyRuntimePrecedenceAndRevocation",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategySettingsDefaultInheritanceAndEpoch",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategySkillImportPermissionsAndSourceChanges",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategySwitchOffCancelsInFlightRequest",
+            "status": "pass"
+          },
+          {
+            "package": "github.com/Clean-Lakes/Lake/internal/web",
+            "test": "TestStrategyWebApplyOffOnNewRevisionAndProjectCap",
+            "status": "pass"
+          }
+        ]
+      }
+    ],
+    "finishedAt": "2026-10-22T01:52:19.399953+00:00"
+  },
+  "devAcceptance": {
+    "schemaVersion": 1,
+    "kind": "deterministic_dev_acceptance",
+    "commit": "14845828e57264ab56df9111bd6253b6985b4331",
+    "buildDirty": false,
+    "modelBenefitEvaluated": false,
+    "home": "/var/folders/vd/tpn95_y535g6h9b4fkgmlc380000gn/T/lake-p8-acceptance-r3awxgb4",
+    "status": "passed",
+    "runs": [
+      {
+        "repetition": 1,
+        "arm": "A",
+        "sessionId": "5cf7a232029488c4decfefffc2792ab3",
+        "healthReads": 1,
+        "modelRequests": 2,
+        "fixtureTokens": 400,
+        "seconds": 0.237,
+        "assetHash": "010b65fe364b79147a8d64eb6d24b9332666acafff5ba4ee49f68aee9040e58d",
+        "manifestVerified": true,
+        "ledgerVerified": true,
+        "completedRestartVerified": false,
+        "outcome": "source_failure_retained"
+      },
+      {
+        "repetition": 1,
+        "arm": "B",
+        "sessionId": "c07ebd391e6bffce81a8672801e56c20",
+        "healthReads": 1,
+        "modelRequests": 2,
+        "fixtureTokens": 400,
+        "seconds": 0.241,
+        "assetHash": "010b65fe364b79147a8d64eb6d24b9332666acafff5ba4ee49f68aee9040e58d",
+        "manifestVerified": true,
+        "ledgerVerified": true,
+        "completedRestartVerified": false,
+        "outcome": "source_failure_retained"
+      },
+      {
+        "repetition": 1,
+        "arm": "C",
+        "sessionId": "298180adeafbb1a102d25c77574bb21e",
+        "healthReads": 2,
+        "modelRequests": 4,
+        "fixtureTokens": 800,
+        "seconds": 0.58,
+        "assetHash": "010b65fe364b79147a8d64eb6d24b9332666acafff5ba4ee49f68aee9040e58d",
+        "manifestVerified": true,
+        "ledgerVerified": true,
+        "completedRestartVerified": true,
+        "outcome": "gap_closed"
+      },
+      {
+        "repetition": 2,
+        "arm": "B",
+        "sessionId": "4c220a2c8b7913b74adc88b50015e866",
+        "healthReads": 1,
+        "modelRequests": 2,
+        "fixtureTokens": 400,
+        "seconds": 0.233,
+        "assetHash": "010b65fe364b79147a8d64eb6d24b9332666acafff5ba4ee49f68aee9040e58d",
+        "manifestVerified": true,
+        "ledgerVerified": true,
+        "completedRestartVerified": false,
+        "outcome": "source_failure_retained"
+      },
+      {
+        "repetition": 2,
+        "arm": "C",
+        "sessionId": "6388b3211ea633c922af54534d6563c9",
+        "healthReads": 2,
+        "modelRequests": 4,
+        "fixtureTokens": 800,
+        "seconds": 0.69,
+        "assetHash": "010b65fe364b79147a8d64eb6d24b9332666acafff5ba4ee49f68aee9040e58d",
+        "manifestVerified": true,
+        "ledgerVerified": true,
+        "completedRestartVerified": true,
+        "outcome": "gap_closed"
+      },
+      {
+        "repetition": 2,
+        "arm": "A",
+        "sessionId": "ea7e81d650703532d76722f82ae37f7f",
+        "healthReads": 1,
+        "modelRequests": 2,
+        "fixtureTokens": 400,
+        "seconds": 0.23,
+        "assetHash": "010b65fe364b79147a8d64eb6d24b9332666acafff5ba4ee49f68aee9040e58d",
+        "manifestVerified": true,
+        "ledgerVerified": true,
+        "completedRestartVerified": false,
+        "outcome": "source_failure_retained"
+      },
+      {
+        "repetition": 3,
+        "arm": "C",
+        "sessionId": "c5b4f38b8c76db0abb03e08dadeb2418",
+        "healthReads": 2,
+        "modelRequests": 4,
+        "fixtureTokens": 800,
+        "seconds": 0.587,
+        "assetHash": "010b65fe364b79147a8d64eb6d24b9332666acafff5ba4ee49f68aee9040e58d",
+        "manifestVerified": true,
+        "ledgerVerified": true,
+        "completedRestartVerified": true,
+        "outcome": "gap_closed"
+      },
+      {
+        "repetition": 3,
+        "arm": "A",
+        "sessionId": "9a6a087ffa1b11f24fdba7caded8152f",
+        "healthReads": 1,
+        "modelRequests": 2,
+        "fixtureTokens": 400,
+        "seconds": 0.23,
+        "assetHash": "010b65fe364b79147a8d64eb6d24b9332666acafff5ba4ee49f68aee9040e58d",
+        "manifestVerified": true,
+        "ledgerVerified": true,
+        "completedRestartVerified": false,
+        "outcome": "source_failure_retained"
+      },
+      {
+        "repetition": 3,
+        "arm": "B",
+        "sessionId": "4368c1bf6747a8d36c34598eff4ac197",
+        "healthReads": 1,
+        "modelRequests": 2,
+        "fixtureTokens": 400,
+        "seconds": 0.249,
+        "assetHash": "010b65fe364b79147a8d64eb6d24b9332666acafff5ba4ee49f68aee9040e58d",
+        "manifestVerified": true,
+        "ledgerVerified": true,
+        "completedRestartVerified": false,
+        "outcome": "source_failure_retained"
+      }
+    ],
+    "nativeUI": "manual_review_required",
+    "exitDrill": {
+      "revokedStatus": "cancelled",
+      "healthReads": 1,
+      "assetPreserved": true,
+      "reenableReplayed": false,
+      "simpleRequests": 1,
+      "retainedStopReason": "cancelled"
+    },
+    "uiSessionId": "b3cba2f6fb7c7d7ef6677023484ea628",
+    "uiProjectId": "9ae5ab6cf945c752b61bea931c7d6fad",
+    "uiHome": "/var/folders/vd/tpn95_y535g6h9b4fkgmlc380000gn/T/lake-p8-acceptance-r3awxgb4/native-exit",
+    "restart": {
+      "sameReport": true,
+      "operationCountUnchanged": true,
+      "modelRequestsUnchanged": true,
+      "nativeIntegrity": "ok",
+      "webIntegrity": "ok"
+    }
+  },
+  "manualUI": {
+    "commit": "14845828e57264ab56df9111bd6253b6985b4331",
+    "platform": "macOS arm64",
+    "review": "passed",
+    "light": true,
+    "dark": true,
+    "narrowWindow": [
+      850,
+      600
+    ],
+    "tabAndShiftTabStayInConfirmation": true,
+    "escapePreservesDraft": true,
+    "enterConfirmsDiscard": true,
+    "deletePromptAndCancelReviewed": true,
+    "deletePromptReviewedAt": "b7a9368a58607cd1d86d80e9d41ab6f9520311e8",
+    "inheritedSwitchesCorrect": true,
+    "originalWindowAndLightRestored": true,
+    "devQuitNormally": true,
+    "screenshots": [
+      "images/strategy-learning-p8/confirmation-light.png",
+      "images/strategy-learning-p8/confirmation-dark-narrow.png"
+    ]
+  },
+  "observedFailuresAndFixes": [
+    {
+      "failure": "100ms compaction live-status assertion raced with its deadline under Linux load",
+      "fix": "Separate barrier-based live-status test; retain original timeout/history/retry assertions"
+    },
+    {
+      "failure": "Race in P6 recovery test between replacing Server.Store and schedule ticker read",
+      "fix": "Use existing scheduleMu in the test around close/reopen/replacement; preserve real subprocess crashes"
+    },
+    {
+      "failure": "Native strategy panel relied on window.confirm; Tab could escape initial inline confirmation",
+      "fix": "Inline explicit confirmation, inert editor and explicit Tab/ShiftTab handling, rebuilt signed Dev and revalidated"
+    }
+  ],
+  "interpretation": "Deterministic model control-flow reliability only. No real-model benefit, significance, general recovery rate or complete production-readiness claim."
+}
