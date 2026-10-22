@@ -58,8 +58,13 @@ func runTargetPolicyApproval(t *testing.T, rejectSecond, changeFingerprint bool)
 	result := make(chan error, 1)
 	go func() { result <- e.Chat(ctx, "case", "resolve two fixture targets", nil) }()
 	seen := map[string]bool{}
-	for deadline := time.Now().Add(4 * time.Second); time.Now().Before(deadline); {
+	// Wait for the actual turn result within its existing bounded context.
+	// A second, shorter wall clock can expire after all decisions/effects have
+	// completed while Windows is still persisting the final ADK response.
+	for {
 		select {
+		case <-ctx.Done():
+			t.Fatalf("confirmation did not finish within turn context: decisions=%d, effects=%d: %v", len(seen), executed.Load(), ctx.Err())
 		case err := <-result:
 			wantEffects := int32(2)
 			if rejectSecond || changeFingerprint {
@@ -86,7 +91,6 @@ func runTargetPolicyApproval(t *testing.T, rejectSecond, changeFingerprint bool)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	t.Fatalf("decided target card remained queued: decisions=%d, effects=%d", len(seen), executed.Load())
 }
 
 func TestADKParallelConfirmationsAdvanceWithoutRepeatingDecidedCard(t *testing.T) {
@@ -110,13 +114,11 @@ func TestADKParallelConfirmationsAdvanceWithoutRepeatingDecidedCard(t *testing.T
 	result := make(chan error, 1)
 	go func() { result <- e.Chat(ctx, "case", "append to four fixture files", nil) }()
 	seen := map[string]bool{}
-	deadline := time.NewTimer(5 * time.Second)
-	defer deadline.Stop()
 	for len(seen) < 4 {
 		select {
 		case err := <-result:
 			t.Fatalf("turn ended after %d/4 decisions: %v", len(seen), err)
-		case <-deadline.C:
+		case <-ctx.Done():
 			v, _ := e.Snapshot("case")
 			t.Fatalf("approval queue stalled after %d/4 decisions; pending=%s", len(seen), js(v.Pending))
 		default:
