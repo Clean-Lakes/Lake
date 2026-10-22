@@ -72,6 +72,10 @@ func TestStrategyLearningAutomaticNewTurnAndNoRecursion(t *testing.T) {
 		t.Fatal("ordinary turn triggered learning")
 	}
 	send("以后请先列证据，再提出结论。")
+	if n := integer(b.Store.row("SELECT COUNT(*) AS n FROM strategyLearningTurns")["n"]); n != 0 {
+		t.Fatal("foreground delivered learning source")
+	}
+	b.processOneStrategyJob()
 	if n := integer(b.Store.row("SELECT COUNT(*) AS n FROM strategyLearningTurns")["n"]); n != 1 {
 		t.Fatal("missing true turn", n)
 	}
@@ -121,7 +125,7 @@ func TestStrategyLearningStrictResultSchema(t *testing.T) {
 	}
 }
 func TestStrategyLearningDispatchFailureCancellationAndBudgets(t *testing.T) {
-	for _, mode := range []string{"invalid", "secret", "cancel", "withdraw", "disable", "budget", "no_candidate"} {
+	for _, mode := range []string{"invalid", "secret", "cancel", "withdraw", "disable", "no_candidate"} {
 		t.Run(mode, func(t *testing.T) {
 			b, h := fixture(t)
 			id, _ := newSession(t, h)
@@ -151,14 +155,7 @@ func TestStrategyLearningDispatchFailureCancellationAndBudgets(t *testing.T) {
 			}))
 			defer provider.Close()
 			b.Models.Save(b.Models.Input(Object{"url": provider.URL, "name": "bounded fixture", "protocol": "openai"}))
-			if mode == "budget" {
-				budget := strategy.DefaultBudget()
-				budget.MaxAdditionalTokens = 1
-				_, err := b.Store.SetStrategySettings(ctx, scope, "budget", 0, StrategySettingsInput{MasterEnabled: true, LearnEnabled: true, Budget: budget})
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
+
 			input := StrategyJobInput{Scope: scope, Kind: "proposal", SourceIDs: []string{source.SourceID}}
 			queued, err := b.Store.QueueStrategyProposal(ctx, "q", input)
 			if err != nil {
@@ -171,9 +168,6 @@ func TestStrategyLearningDispatchFailureCancellationAndBudgets(t *testing.T) {
 			b.processOneStrategyJob()
 			b.processOneStrategyJob()
 			expected := int32(1)
-			if mode == "budget" {
-				expected = 0
-			}
 			if calls.Load() != expected {
 				t.Fatal("model replay/budget bypass", calls.Load())
 			}

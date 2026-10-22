@@ -5,7 +5,28 @@ import (
 	"time"
 )
 
+type auxiliaryModelKey struct{}
+type reservedLearningSlotKey struct{}
+
+// Only trusted background coordination uses this nonblocking admission. A
+// queued auxiliary task never waits ahead of interactive requests for a slot.
+func (e *Engine) TryStrategyModelSlot(ctx context.Context) (context.Context, func(), bool) {
+	if ctx.Err() != nil {
+		return ctx, func() {}, false
+	}
+	select {
+	case e.modelSlots <- struct{}{}:
+		return context.WithValue(ctx, reservedLearningSlotKey{}, e.modelSlots), func() { <-e.modelSlots }, true
+	default:
+		return ctx, func() {}, false
+	}
+}
+
 func (e *Engine) stream(ctx context.Context, model Model, history []Message, tools []Tool, delta func(string, string)) (modelResult, error) {
+	if e.ModelActivity != nil && ctx.Value(auxiliaryModelKey{}) != true {
+		releaseActivity := e.ModelActivity()
+		defer releaseActivity()
+	}
 	e.setSREActivity("waiting_model", "")
 	if e.worker != nil {
 		w := e.worker
@@ -16,12 +37,14 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 		}
 		defer func() { <-w.parent.childModelSlots }()
 	}
-	select {
-	case e.modelSlots <- struct{}{}:
-	case <-ctx.Done():
-		return modelResult{}, ctx.Err()
+	if held, ok := ctx.Value(reservedLearningSlotKey{}).(chan struct{}); !ok || held != e.modelSlots {
+		select {
+		case e.modelSlots <- struct{}{}:
+		case <-ctx.Done():
+			return modelResult{}, ctx.Err()
+		}
+		defer func() { <-e.modelSlots }()
 	}
-	defer func() { <-e.modelSlots }()
 	e.setSREActivity("thinking", "")
 	if e.worker != nil {
 		w := e.worker

@@ -344,7 +344,6 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 	}
 	e = b.Engine.ExecuteTurn(turnContext, id, ai.TurnInput{StrategyMessageID: messageID, SRECoordination: sreCoordination, UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
 	if e != nil {
-		_ = b.reconcileStrategyOutboxForSession(id)
 		if b.Context.Err() != nil {
 			return
 		}
@@ -369,7 +368,6 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 	view, e := b.Engine.Snapshot(id)
 	must(e)
 	_ = b.reconcileMemoryOutboxForSession(id)
-	_ = b.reconcileStrategyOutboxForSession(id)
 	for i := len(view.Cards) - 1; i >= 0; i-- {
 		if view.CardsOffset+i < before.TotalCards {
 			break

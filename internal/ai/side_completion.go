@@ -12,6 +12,7 @@ import (
 // The "context budget" wording is load-bearing. Callers branch on it to tell a
 // prompt that cannot fit from a transient provider failure.
 func (e *Engine) sideCompletion(ctx context.Context, model Model, messages []Message, budgetError string) (string, Usage, error) {
+	ctx = context.WithValue(ctx, auxiliaryModelKey{}, true)
 	model.SupportsImageOutput = false
 	if model.ContextWindow <= 0 {
 		model.ContextWindow = 64000

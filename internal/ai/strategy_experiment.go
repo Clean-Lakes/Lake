@@ -174,6 +174,7 @@ func (e *Engine) RunStrategyVariant(ctx context.Context, in StrategyVariantInput
 	defer child.Shutdown()
 	child.RuntimeDir = filepath.Join(in.Home, "adk")
 	child.modelSlots = e.modelSlots
+	child.ModelActivity = e.ModelActivity
 	child.childModelSlots = e.childModelSlots
 	child.experiment = runtime
 	if in.Asset != nil {

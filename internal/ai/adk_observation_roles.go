@@ -96,6 +96,7 @@ func (e *Engine) runInvestigations(ctx context.Context, s *session, c Config, sp
 		}
 		child.worker = w
 		child.modelSlots = e.modelSlots
+		child.ModelActivity = e.ModelActivity
 		child.collectionSlots = e.collectionSlots
 		w.child = child
 		child.Bridge = func(ctx context.Context, _ string, name string, a map[string]any, approved bool) (any, error) {
