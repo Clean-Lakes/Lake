@@ -853,7 +853,7 @@ function App() {
       const [available,current] = await Promise.all([api.availableModels(),api.bootstrap()]);
       setBootstrap(current);
       setModelMenu({ ...available, loading: false });
-    } catch (error) {setModelMenu({ loading: false, models: [], message: readableError(error) });}
+    } catch (error) {const message=readableError(error);setModelMenu(current=>({...current,loading:false,message}));notify(message);}
   }
   async function switchModel(model: string | AvailableModelEntry) {
     if (pendingOperation||reasoningSaving.size) return;
