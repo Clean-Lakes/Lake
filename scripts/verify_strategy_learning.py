@@ -35,7 +35,7 @@ def main():
         "startedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain")),
         "platform": {"os": platform.system(), "architecture": platform.machine()},
-        "go": subprocess.check_output(["go", "version"], text=True).strip(),
+        "go": None,
         "modelBenefitEvaluated": False, "desktopEvaluated": False, "suites": [],
     }
 
@@ -46,6 +46,8 @@ def main():
     save()
     failed = False
     try:
+        report["go"] = subprocess.check_output(["go", "version"], text=True,
+                                               stderr=subprocess.DEVNULL).strip()
         for command in SUITES:
             start = time.monotonic()
             # Output can contain test diagnostics. Keep it in a private local
