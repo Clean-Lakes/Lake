@@ -472,3 +472,84 @@ func TestOnlineClosingAnotherFailureDoesNotEraseOriginalGap(t *testing.T) {
 		t.Fatal("closing a different gap invented original recovery", r)
 	}
 }
+
+func TestOnlineMemoryToolErrorsDoNotInterruptOfficialADK(t *testing.T) {
+	for _, name := range []string{"list_project_memories", "read_project_memory", "save_project_memory", "forget_project_memory"} {
+		t.Run(name, func(t *testing.T) {
+			var requests, calls atomic.Int32
+			m, close := fakeModel(t, func(_ int, body map[string]any) any {
+				if requests.Add(1) == 1 {
+					return response("", Call{ID: "memory", Name: name, Arguments: `{"key":"preference","type":"feedback","description":"format","body":"facts before conclusions","expectedRevision":0}`})
+				}
+				if !strings.Contains(js(body), "explicit_memory_intent_required") {
+					t.Error("normal tool rejection was hidden")
+				}
+				return response("Memory was not changed; continuing the answer.")
+			})
+			defer close()
+			e := engineFor(t, m, func(_ context.Context, _, tool string, _ map[string]any, _ bool) (any, error) {
+				if tool == "project_memory_index" {
+					return nil, nil
+				}
+				if tool == name {
+					calls.Add(1)
+					return nil, errors.New("explicit_memory_intent_required")
+				}
+				t.Error("unexpected bridge dispatch", tool)
+				return nil, errors.New("not authorized")
+			})
+			s, c := enableOnline(t, e)
+			c.MemoryEnabled = true
+			c.MemoryProjectID = "project"
+			if err := e.Configure("case", c); err != nil {
+				t.Fatal(err)
+			}
+			if err := e.Chat(context.Background(), "case", "纠正一下，以后请先列事实。", nil); err != nil {
+				t.Fatal("memory error escaped normal tool handling", err)
+			}
+			if requests.Load() != 2 || calls.Load() != 1 {
+				t.Fatal("tool/model replay", requests.Load(), calls.Load())
+			}
+			report, err := e.onlineCurrent(s, c)
+			if err != nil || report != nil {
+				t.Fatal("memory created durable resource correction", err)
+			}
+			view, _ := e.Snapshot("case")
+			if view.Status != "completed" {
+				t.Fatal("ordinary reply did not complete", view.Status)
+			}
+			for _, card := range view.Cards {
+				if card.Type == "strategy_correction" {
+					t.Fatal("misleading correction card")
+				}
+			}
+		})
+	}
+}
+
+func TestOnlineMemoryResultsCannotChangeExistingResourceGap(t *testing.T) {
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+	s, c := enableOnline(t, e)
+	if err := e.onlineObserve(s, c, Call{ID: "failed-resource", Name: "read", Arguments: `{"path":"/fixture"}`}, &onlinePolicyTrace{ReadOnly: true, TargetHash: "target"}, nil, context.DeadlineExceeded); err != nil {
+		t.Fatal(err)
+	}
+	before := js(onlineReport(t, e, s, c))
+	for _, name := range []string{"list_project_memories", "read_project_memory", "save_project_memory", "forget_project_memory"} {
+		for _, toolErr := range []error{nil, errors.New("explicit_memory_intent_required"), errors.New("memory_revision_conflict")} {
+			if err := e.onlineObserve(s, c, Call{ID: "memory", Name: name}, &onlinePolicyTrace{ReadOnly: true, TargetHash: "target"}, map[string]any{"success": true}, toolErr); err != nil {
+				t.Fatal(err)
+			}
+			if js(onlineReport(t, e, s, c)) != before {
+				t.Fatal("memory result altered resource evidence, stop reason or budget", name)
+			}
+		}
+	}
+	// The observation exclusion must not become permission to mutate memory in
+	// the middle of a bounded readonly correction.
+	if err := e.onlineBeforeCall(context.Background(), s, c, Call{ID: "write", Name: "save_project_memory", Arguments: `{"key":"x"}`}); err == nil {
+		t.Fatal("memory observation exclusion bypassed active correction admission")
+	}
+	if onlineReport(t, e, s, c).StopReason != strategy.PermissionBlocked {
+		t.Fatal("active readonly boundary was weakened")
+	}
+}

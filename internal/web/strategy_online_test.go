@@ -32,6 +32,7 @@ func TestStrategyOnlineOptInInheritanceAndFreshGuard(t *testing.T) {
 		t.Fatal("missing online consent accepted")
 	}
 	in.OnlineCorrectEnabled = true
+	in.OnlineConsentVersion = strategy.OnlineConsentVersion
 	_, err = b.Store.SetStrategySettings(StrategyContext{}, global, "online", 1, in)
 	if err != nil {
 		t.Fatal(err)
@@ -57,6 +58,7 @@ func TestStrategyOnlineOptInInheritanceAndFreshGuard(t *testing.T) {
 		t.Fatal("stale role dispatched after revocation")
 	}
 	in.OnlineCorrectEnabled = true
+	in.OnlineConsentVersion = strategy.OnlineConsentVersion
 	_, err = b.Store.SetStrategySettings(ctx, local, "allow", 1, in)
 	if err != nil {
 		t.Fatal(err)
@@ -87,6 +89,7 @@ func TestStrategyOnlineHTTPOptionalFlagDefaultsOff(t *testing.T) {
 	}
 	body["expectedRevision"] = 1
 	body["onlineCorrectEnabled"] = true
+	body["onlineConsentVersion"] = strategy.OnlineConsentVersion
 	strategyHTTP(t, h, "PATCH", "/api/strategy/settings", "new-client", jsonText(body), 200)
 	effective, _ := b.Store.EffectiveStrategySettings(StrategyContext{ProjectID: project})
 	if !effective.Settings.OnlineCorrectEnabled {

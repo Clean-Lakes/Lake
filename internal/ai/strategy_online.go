@@ -585,6 +585,12 @@ func (e *Engine) onlineObserve(s *session, c Config, call Call, trace *onlinePol
 	if class == "controller_stopped" {
 		return nil
 	}
+	// Memory consent/CAS is independent of resource correction, even in an
+	// explicitly enabled experiment. Admission still forbids writes while a
+	// correction is active; memory success cannot close a resource check.
+	if memoryTool(call.Name) {
+		return nil
+	}
 	// Session bookkeeping, questions and reports do not start optimization.
 	if sessionTool(call.Name) && call.Name != "call_mcp_tool" || strings.HasPrefix(call.Name, "sre_") || call.Name == "render_chart" || call.Name == "read_evidence" || call.Name == "list_assets" || call.Name == "list_resource_groups" {
 		return nil

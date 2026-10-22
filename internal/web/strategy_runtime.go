@@ -42,8 +42,11 @@ func (s *Store) resolveStrategyBindings(ctx StrategyContext, q strategy.Selectio
 		if ctx.ProjectID != "" {
 			result.Selection.ProjectSettingsRevision = s.strategySettings(strategy.Scope{Kind: strategy.ProjectScope, ProjectID: ctx.ProjectID}).Revision
 		}
-		if frozen != nil && (frozen.GlobalEpoch != result.Selection.GlobalEpoch || frozen.ProjectEpoch != result.Selection.ProjectEpoch) {
-			strategyFail(409, "turn_invalidated")
+		if frozen != nil && len(frozen.Selected) == 0 {
+			// No asset was injected. Do not introduce a newly adopted asset into
+			// an existing turn, or stop ordinary work for a learning epoch change.
+			result.Selection = *frozen
+			return result
 		}
 		if effective.Settings.MasterEnabled && effective.Settings.ApplyEnabled {
 			rows := s.rows(`SELECT b.* FROM strategyBindings b JOIN strategyAssets a ON a.id=b.assetId
@@ -85,6 +88,11 @@ func (s *Store) resolveStrategyBindings(ctx StrategyContext, q strategy.Selectio
 		}
 		if frozen != nil && !reflect.DeepEqual(result.Selection.Selected, frozen.Selected) {
 			strategyFail(409, "turn_invalidated")
+		}
+		if frozen != nil {
+			// The exact adopted revisions and current source permissions still
+			// match. Learning settings may change without revoking this context.
+			result.Selection = *frozen
 		}
 		return result
 	})

@@ -234,7 +234,7 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 					source = "inherited"
 				}
 			}
-			reply(w, 200, Object{"settings": settings, "effective": effective.Settings, "source": source, "capabilities": Object{"apply": true, "learn": true, "correct": true, "correctMode": "snapshots_and_trusted_readonly", "onlineCorrect": true}})
+			reply(w, 200, Object{"settings": settings, "effective": effective.Settings, "source": source, "capabilities": Object{"apply": true, "learn": true, "correct": true, "correctMode": "isolated_experiments", "onlineCorrect": true, "onlineConsentVersion": strategy.OnlineConsentVersion}})
 			return
 		}
 		if method == "PATCH" {
@@ -245,9 +245,18 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 				LearnEnabled         bool            `json:"learnEnabled"`
 				CorrectEnabled       bool            `json:"correctEnabled"`
 				OnlineCorrectEnabled bool            `json:"onlineCorrectEnabled"`
+				OnlineConsentVersion int             `json:"onlineConsentVersion"`
 				Budget               strategy.Budget `json:"budget"`
 			}](r, "expectedRevision", "masterEnabled", "applyEnabled", "learnEnabled", "correctEnabled", "budget")
-			mutated(strategyMust(b.Store.SetStrategySettings(ctx, scope, key, in.ExpectedRevision, StrategySettingsInput{MasterEnabled: in.MasterEnabled, ApplyEnabled: in.ApplyEnabled, LearnEnabled: in.LearnEnabled, CorrectEnabled: in.CorrectEnabled, OnlineCorrectEnabled: in.OnlineCorrectEnabled, Budget: in.Budget})))
+			before := strategyMust(b.Store.EffectiveStrategySettings(ctx))
+			result := strategyMust(b.Store.SetStrategySettings(ctx, scope, key, in.ExpectedRevision, StrategySettingsInput{MasterEnabled: in.MasterEnabled, ApplyEnabled: in.ApplyEnabled, LearnEnabled: in.LearnEnabled, CorrectEnabled: in.CorrectEnabled, OnlineCorrectEnabled: in.OnlineCorrectEnabled, OnlineConsentVersion: in.OnlineConsentVersion, Budget: in.Budget}))
+			after := strategyMust(b.Store.EffectiveStrategySettings(ctx))
+			// Learning-only changes must not cancel a normal foreground turn.
+			// Active experimental controllers still fence any stale settings epoch.
+			if before.Settings.MasterEnabled && before.Settings.ApplyEnabled && !(after.Settings.MasterEnabled && after.Settings.ApplyEnabled) || before.Settings.OnlineCorrectEnabled {
+				b.Engine.InvalidateStrategies(ctx.ProjectID)
+			}
+			reply(w, 200, result)
 			return
 		}
 	}
