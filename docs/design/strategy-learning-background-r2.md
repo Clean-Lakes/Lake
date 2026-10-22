@@ -33,4 +33,15 @@
 
 本地回归包括：慢辅助模型被前台抢占、未知预留与不重发、槽位占满无派发/收费、在线预算独立、项目记忆积压不阻塞、日限额重启保留、UTF-8 裁剪/证据状态、交付故障/满队列重试、Ack 不重写会话、崩溃去重、关闭再开 epoch 拒绝旧来源、模型 payload 不含宿主锚点。原有撤回、迟到提交、CAS 与原生操作账本回归保留。
 
-完整本地检查与签名 Dev 结果记录在后续验收段；不运行手动 CI，不发布生产，不以确定性夹具证明模型收益。
+## 本地验收结果
+
+代码提交 `279107893689f27f49b30db5cbe471325cdc6a44`，干净源码签名构建；后续验收记录提交只更新文档。原始计数与后端 SHA-256 见 [R2 验收记录](../validation/lake-strategy-learning-r2.json)。
+
+- `go test ./...`、`go vet ./...` 通过。
+- `go test -race ./internal/ai ./internal/web ./internal/strategy -run '^(TestStrategy|TestOnline|TestSRE|TestMultiAgent)' -count=1 -timeout=8m` 通过；包括完整 handoff 故障与重启回归。
+- `python3 scripts/check_adk_runtime_boundary.py` 通过。
+- 在 `web-agent` 执行 `corepack pnpm check`、`corepack pnpm test:frontend`（418/418）、`corepack pnpm build:web` 通过；保留已有大 bundle 提示。
+- `scripts/run_lake_dev.sh` 生成签名后端和新 Web 资源，无 ZIP/DMG。全新私有 Home、无密钥 loopback SSE 夹具通过官方 ADK 发出 2 次业务请求和 1 次后台请求；后台等待期间前台约 0.112 秒完成。停止/重启后未知预留保留、自动重发 0、候选 0、纠错停止卡 0，两份 SQLite integrity_check 均为 ok。
+- 固定 `~/.lake-dev` 已直接运行上述代码，应用/学习选择保留，在线实验关闭。原生 Dev 中检查明暗主题、920×760 窄窗口、文字换行、滚动、输入/键盘焦点与边缘裁切；恢复原浅色主题和窗口尺寸。未向真实模型发送验收请求。
+
+未触发手动 CI、未发布生产，未将 macOS 验证宣称为 Windows 实测。不以确定性夹具证明模型收益。
