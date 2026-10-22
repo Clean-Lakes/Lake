@@ -1,15 +1,84 @@
 package web
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
 )
+
+func TestPlanModeSSEPublishesDelta(t *testing.T) {
+	_, h := fixture(t)
+	id, _ := newSession(t, h)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", h.URL+"/api/sessions/"+id+"/events?after=0", nil)
+	req.Host = "localhost:4177"
+	req.Header.Set("Authorization", "Bearer synthetic-test-auth-token")
+	response, err := h.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != 200 {
+		t.Fatal("SSE status", response.StatusCode)
+	}
+	saved := apiTest(t, h, "POST", "/api/sessions/"+id+"/ai/mode", Object{"mode": ai.ModePlan}, 200)
+	scanner := bufio.NewScanner(response.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		var event Object
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &event); err != nil {
+			t.Fatal(err)
+		}
+		if event["conversationMode"] == ai.ModePlan {
+			if event["type"] != "session" || integer(event["seq"]) != integer(saved["cursor"]) {
+				t.Fatal("incorrect SSE delta")
+			}
+			return
+		}
+	}
+	t.Fatal("mode delta did not reach SSE client", scanner.Err())
+}
+
+func TestPlanModePublishesOrderedDeltaWithoutTranscriptOrResourceChanges(t *testing.T) {
+	b, h := fixture(t)
+	id, _ := newSession(t, h)
+	before := b.Store.Snapshot(id)
+	events, unsubscribe := b.Store.Subscribe()
+	defer unsubscribe()
+	for _, mode := range []string{ai.ModePlan, ai.ModeDefault} {
+		saved := apiTest(t, h, "POST", "/api/sessions/"+id+"/ai/mode", Object{"mode": mode}, 200)
+		if saved["mode"] != mode || integer(saved["cursor"]) <= integer(before["cursor"]) {
+			t.Fatal("mode save did not return its event cursor")
+		}
+		select {
+		case event := <-events:
+			if event["type"] != "session" || event["sessionId"] != id || event["conversationMode"] != mode || integer(event["seq"]) != integer(saved["cursor"]) {
+				t.Fatal("mode event is not a matching ordered delta")
+			}
+		case <-time.After(time.Second):
+			t.Fatal("mode update did not reach live subscribers")
+		}
+		after := b.Store.Snapshot(id)
+		for _, key := range []string{"session", "resources", "resourceTree", "terminals", "messages"} {
+			if jsonText(before[key]) != jsonText(after[key]) {
+				t.Fatal("mode change modified unrelated state: " + key)
+			}
+		}
+		before = after
+	}
+}
 
 func TestPlanModeReviewReviseAndExecuteCurrentProposal(t *testing.T) {
 	b, h := fixture(t)
@@ -75,6 +144,11 @@ func TestPlanModeReviewReviseAndExecuteCurrentProposal(t *testing.T) {
 	if view.ProposedPlan == nil || view.ProposedPlan.ID == firstID {
 		t.Fatal("revision did not replace proposal")
 	}
+	plansPath := "/api/sessions/" + id + "/ai/plans"
+	plans := objects(apiTest(t, h, "GET", plansPath, nil, 200)["plans"])
+	if len(plans) != 2 || plans[0]["id"] != view.ProposedPlan.ID || plans[1]["id"] != firstID {
+		t.Fatal("plan revisions missing from list")
+	}
 	executePath := "/api/sessions/" + id + "/ai/executePlan"
 	apiTest(t, h, "POST", executePath, Object{"planId": firstID}, 409)
 	// Restore the independent project setting only after proving Plan bypassed it.
@@ -85,6 +159,9 @@ func TestPlanModeReviewReviseAndExecuteCurrentProposal(t *testing.T) {
 	view = waitAI(t, b, id, "completed")
 	if view.ProposedPlan != nil || b.conversationMode(id) != ai.ModeDefault || requests.Load() != 3 {
 		t.Fatal("execution did not consume proposal exactly once")
+	}
+	if len(objects(apiTest(t, h, "GET", plansPath, nil, 200)["plans"])) != 2 {
+		t.Fatal("execution removed plan history")
 	}
 }
 

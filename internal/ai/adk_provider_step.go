@@ -231,6 +231,35 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 		result, modelErr = d.streamWithManifest(ctx, requestModel, outputRecoveryHistory(history), tools, appendPromptFragment(append([]strategy.PromptFragment(nil), fragments...), strategy.FixedRules, "output-recovery", "\n"+outputRecoveryNotice), compositionMatched, d.lastRequestID, streamDelta)
 	}
+	if errors.Is(modelErr, ErrInvalidModelToolCall) && !d.invalidToolRetried && ctx.Err() == nil {
+		// The provider validates the entire batch before returning it to ADK.
+		// Regenerate that rejected response once; no tool from it was dispatched.
+		d.invalidToolRetried = true
+		s.mu.Lock()
+		addUsage(&s.state.View.Usage, result.Usage)
+		kept := s.state.View.Cards[:0]
+		for _, card := range s.state.View.Cards {
+			if card.ID != textID && card.ID != thinkID {
+				kept = append(kept, card)
+			}
+		}
+		s.state.View.Cards = kept
+		s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "notice", Content: "模型返回的工具调用格式无效，正在重新生成；已有调查结果保留", Status: "completed", At: timestamp()})
+		textID, thinkID = uid(), uid()
+		d.textID = textID
+		s.state.View.Cards = append(s.state.View.Cards, Card{ID: thinkID, Type: "thinking", Status: "running", At: timestamp()}, Card{ID: textID, Type: "message", Status: "running", At: timestamp()})
+		err = e.save(s)
+		e.notify(s, "compact", nil)
+		s.mu.Unlock()
+		if err != nil {
+			return modelResult{}, err
+		}
+		recoveryHistory := append([]Message(nil), history...)
+		if len(recoveryHistory) > 0 && recoveryHistory[0].Role == "system" {
+			recoveryHistory[0].Content += "\n" + toolCallRecoveryNotice
+		}
+		result, modelErr = d.streamWithManifest(ctx, requestModel, recoveryHistory, tools, appendPromptFragment(append([]strategy.PromptFragment(nil), fragments...), strategy.FixedRules, "tool-call-recovery", "\n"+toolCallRecoveryNotice), compositionMatched, d.lastRequestID, streamDelta)
+	}
 	if modelErr != nil {
 		s.mu.Lock()
 		addUsage(&s.state.View.Usage, result.Usage)
@@ -276,6 +305,8 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 
 	return result, nil
 }
+
+const toolCallRecoveryNotice = "The previous response was rejected before tool dispatch because a tool call was malformed or duplicated. None of that response's tool calls were executed. Regenerate the response using valid JSON objects matching the tool schemas and distinct call IDs. If awaiting a user decision, use ask_user_question once with the required questions; never assume an answer. Reuse previous successful tool results and do not repeat completed operations. Preserve the current conversation mode, target scope and all permission restrictions."
 
 // streamWithManifest records a prepared request before dispatch. "Prepared"
 // does not prove the provider received it: budget, cancellation or transport

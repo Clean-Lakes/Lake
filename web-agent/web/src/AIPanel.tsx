@@ -1,4 +1,5 @@
-import {PlanActions,planMarkdown} from './PlanMode';
+import {PlanReference,planMarkdown} from './PlanMode';
+import {conversationPlanEntry} from './planConversation';
 import {ReplyActivity} from './ReplyActivity';
 import {turnStatus} from './turnStatus';
 import {completedTurnInterimIds,isAssistantProse} from './completedTurnProse';
@@ -74,11 +75,12 @@ function Chart({ card }: { card: AICard }) {
 }
 const noTags: WorkspaceTag[] = [];
 const cardMarkdownComponents:Components={...replyInfoComponents,pre:MarkdownCodeBlock,summary:ReplyDetailsSummary,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
-const Card = memo(function Card({ card, tags = noTags, animateInitial = false }: { card: AICard; tags?: WorkspaceTag[]; animateInitial?:boolean }) {
+const Card = memo(function Card({ card, tags = noTags, animateInitial = false,onOpenPlans }: { card: AICard; tags?: WorkspaceTag[]; animateInitial?:boolean;onOpenPlans?:()=>void }) {
   const assistantText = ["text", "message"].includes(card.type);
   const isPlan=!!card.content?.trimStart().startsWith("<proposed_plan>");
   const content = card.type === "error" ? card.status === "cancelled" ? "已停止本轮" : displayAiError(card.content || "") : isPlan ? planMarkdown(card.content||"") : card.content;
   const visibleContent=useSmoothText(content||"",assistantText&&card.status==="running",animateInitial);
+  if(card.type==='plan_reference')return <PlanReference state={(card.data as {state:'saved'|'writing'|'incomplete'}).state} onOpen={onOpenPlans}/>;
   if (card.type === "image") { const image = card.data as AIImage; return <figure className="ai-image"><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "模型返回图片"}/><a href={`data:${image.mimeType};base64,${image.base64}`} download={image.name || `lake-image.${image.mimeType.split("/")[1]}`}>保存图片</a></figure>; }
   if (card.type === "thinking") return <details className="ai-thinking"><DisclosureSummary>思考过程 {card.status === "running" ? "· 正在生成" : ""}</DisclosureSummary><div>{card.content}</div></details>;
   if (card.type === 'strategy_correction') return <StrategyCorrectionCard card={card}/>;
@@ -86,7 +88,7 @@ const Card = memo(function Card({ card, tags = noTags, animateInitial = false }:
   if (card.type === "diff") { const data = card.data as { before: string; after: string }; return <details className="ai-diff"><DisclosureSummary>文件变更 · {card.title}</DisclosureSummary><div className="ai-diff-columns"><pre>{data.before || "（新文件）"}</pre><pre>{data.after || "（空文件或删除）"}</pre></div></details>; }
   if (card.type === "operation") return <details className="ai-operation"><DisclosureSummary><span>{card.title}</span><small>{card.status === "pending" ? "等待确认" : card.status === "running" ? "执行中" : card.status === "failed" ? "未完成" : "已结束"}</small></DisclosureSummary><pre>{JSON.stringify(card.data, null, 2)}</pre>{card.content && <pre>{card.content}</pre>}</details>;
   return <div className={`ai-card ai-${card.type}`}>{assistantText ? <AssistantMarkdown tags={tags}>{visibleContent}</AssistantMarkdown> : <div className="ai-markdown"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={cardMarkdownComponents}>{visibleContent}</Markdown></div>}{card.status === "running" && !assistantText && <span className="ai-stream-dot"/>}</div>;
-}, (previous, next) => sameCard(previous.card, next.card) && conversationTagSignature(previous.tags) === conversationTagSignature(next.tags));
+}, (previous, next) => sameCard(previous.card, next.card) && conversationTagSignature(previous.tags) === conversationTagSignature(next.tags)&&previous.onOpenPlans===next.onOpenPlans);
 
 // Animate a reply's first appearance, including a completed first packet.
 // Keep the wrapper mounted through streaming/completion so updates never replay
@@ -102,13 +104,13 @@ function TranscriptMessage({message,sessionId,resources}:{message:SessionSnapsho
           {!!message.images?.length&&<MessageImages images={message.images}/>}
         </div>;
 }
-type TranscriptProps = {onRevisePlan?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
+type TranscriptProps = {onOpenPlans?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
 export function AITranscript(props: TranscriptProps) {
   const {snapshot} = props;
   const resources = useMemo(() => (snapshot.resources ?? []).filter(resource => !resource.projectId || resource.projectId === snapshot.session.projectId), [snapshot.resources, snapshot.session.projectId]);
   return <ObjectReferencesProvider key={snapshot.session.id} resources={resources} tasks={snapshot.ai?.agentRuns}><AITranscriptContent {...props}/></ObjectReferencesProvider>;
 }
-function AITranscriptContent({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh, onRevisePlan }: TranscriptProps) {
+function AITranscriptContent({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh, onOpenPlans }: TranscriptProps) {
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
   // Retain an observed completion when a legacy turn has no saved timing and
@@ -128,7 +130,7 @@ function AITranscriptContent({ snapshot, renderAction, onInspect, onStopTurn, st
   const cards = [...older.filter(c => !snapshot.ai?.cards.some(current => current.id === c.id)), ...(snapshot.ai?.cards ?? [])];
   const before = offset ?? snapshot.ai?.cardsOffset ?? 0;
   const loadOlder = async () => { onInspect?.(); setLoading(true); try { const page = await api.aiCards(snapshot.session.id, before); setOlder(current => [...page.cards, ...current]); setOffset(page.cardsOffset); } catch (error) { setError(readableError(error)); } finally { setLoading(false); } };
-  const entries = orderedTranscript(displaySnapshot, cards, before);
+  const entries = orderedTranscript(displaySnapshot, cards, before).map(entry=>mode==='conversation'?conversationPlanEntry(entry,{planMode:snapshot.conversationMode==='plan',live:snapshot.ai?.status==='running',currentPlanId:snapshot.ai?.proposedPlan?.id}):entry);
   const loadOlderSRE=async()=>{onInspect?.();const session=snapshot.session.id;setLoadingSRE(true);try{const page=await api.sreTasks(session,sreCursor??snapshot.sre?.tasks.at(-1)?.id??'');if(selectedSession.current===session){setOlderSRE(old=>[...old,...page.items]);setSRECursor(page.nextCursor)}}catch(e){setError(readableError(e))}finally{setLoadingSRE(false)}};
   const visibleEntries = entries.filter(entry => !isFileChangeCard(entry.card));
   const groups = transcriptGroups(visibleEntries);
@@ -201,7 +203,7 @@ function AITranscriptContent({ snapshot, renderAction, onInspect, onStopTurn, st
         if (entry.card && ["thinking", "operation", "shell"].includes(entry.card.type)) return <ThinkingTimeline key={entry.id} cards={group.map(item => item.card!)} live={thinkingVisible && group.at(-1)?.id === visibleEntries.at(-1)?.id} onInspect={onInspect}/>;
         if (entry.message) return entry.message.role==='user'?null:<TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message}/>;
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
-        return <ReplyArrival key={entry.id} entryId={entry.id} arrive={mode==='conversation'&&turn.some(item=>item.message?.id===latestUser?.id)&&!!entry.card&&['text','message'].includes(entry.card.type)&&!restoredText.current.has(entry.card.id)}>{entry.card?.type === "text" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)}/>{mode==='conversation' && snapshot.conversationMode==='plan' && snapshot.ai?.status==='completed' && snapshot.ai.proposedPlan?.id===entry.card?.id && <PlanActions key={entry.card!.id} disabled={disabled||!!snapshot.messageQueue?.items.length} onRevise={()=>onRevisePlan?.()} onExecute={async()=>{await api.executePlan(snapshot.session.id,entry.card!.id);await refresh?.();}}/>}</ReplyArrival>;
+        return <ReplyArrival key={entry.id} entryId={entry.id} arrive={mode==='conversation'&&turn.some(item=>item.message?.id===latestUser?.id)&&!!entry.card&&['text','message'].includes(entry.card.type)&&!restoredText.current.has(entry.card.id)}>{entry.card?.type === "text" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)} onOpenPlans={onOpenPlans}/></ReplyArrival>;
       };
       return <ReplyReferenceScope key={turn[0]!.id} cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}><div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)}>
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources}/>)}

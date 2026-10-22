@@ -17,7 +17,14 @@ export function planComposerDraft<T extends {position:number}>(draft:string,refe
 // Keep persisted assistant history lossless; the protocol tags are presentation
 // metadata, never user-facing Markdown or authority to execute by themselves.
 export function planMarkdown(text:string):string {
- return text.replace(/^\s*<proposed_plan>\s*\n?/,'').replace(/\n?\s*<\/proposed_plan>\s*$/,'');
+ let fence='';
+ return text.split('\n').filter(line=>{
+  const trimmed=line.trim();
+  if(fence){if(trimmed.startsWith(fence)&&new RegExp(`^${fence[0]}+[ \\t\\r]*$`).test(trimmed))fence='';return true;}
+  const marker=trimmed.match(/^(`{3,}|~{3,})/);
+  if(marker){fence=marker[0];return true;}
+  return trimmed!=='<proposed_plan>'&&trimmed!=='</proposed_plan>';
+ }).join('\n');
 }
 
 export function PlanModeToggle({mode='default',disabled=false,disabledReason,onChange}:{mode?:ConversationMode;disabled?:boolean;disabledReason?:string;onChange:(mode:ConversationMode)=>Promise<unknown>}) {
@@ -42,4 +49,8 @@ export function PlanActions({disabled=false,onExecute,onRevise}:{disabled?:boole
   }}><Glyph name="arrow" size={14}/>{busy?'正在开始…':'执行计划'}</button></div>
   {error&&<p className="plan-mode-error" role="alert">{error}</p>}
  </section>;
+}
+
+export function PlanReference({state,onOpen}:{state:'saved'|'writing'|'incomplete';onOpen?:()=>void}) {
+ return <section className="plan-reference" aria-label="计划状态"><Glyph name="document" size={17}/><span>{state==='saved'?'计划已保存':state==='writing'?'正在生成计划…':'计划未完成'}</span>{onOpen&&<button type="button" onClick={onOpen}>查看计划列表<Glyph name="next" size={13}/></button>}</section>;
 }

@@ -27,7 +27,7 @@ export function SessionStateBadge({session,label,status=session.status}:{session
  return <span className={`session-state-badge state-${status}`}><span/>{label??statuses[status]}</span>;
 }
 
-const sessionViews=[{value:"conversation",label:"对话",icon:"chat"},{value:"activity",label:"执行记录",icon:"terminal"},{value:"evidence",label:"证据",icon:"document"}] as const;
+const sessionViews=[{value:"conversation",label:"对话",icon:"chat"},{value:"plans",label:"计划",icon:"document"},{value:"activity",label:"执行记录",icon:"terminal"},{value:"evidence",label:"证据",icon:"document"}] as const;
 
 export function SessionActions({session,tags,disabled,onSaved,onRefresh,onEdit,view,onView,hasViews,onDelete,className="icon-button",label="会话操作",menuPosition=null,onMenuChange}:{session:WorkSession;tags:WorkspaceTag[];disabled:boolean;onSaved:(session:WorkSession)=>void;onRefresh:()=>Promise<void>;onEdit:()=>void;view:string;onView:(view:string)=>void;hasViews:boolean;onDelete?:()=>void;className?:string;label?:string;menuPosition?:{x:number;y:number}|null;onMenuChange?:(position:{x:number;y:number}|null)=>void}) {
  const [editing,setEditing]=useState<"icons"|"tags"|null>(null);
@@ -39,13 +39,14 @@ export function SessionActions({session,tags,disabled,onSaved,onRefresh,onEdit,v
  async function work(action:()=>Promise<void>) {setBusy(true);setError("");try{await action();}catch(e){setError(readableError(e));}finally{setBusy(false);}}
  async function save(icon:string,ids:string[]) {const updated=await api.saveSessionPresentation(session,icon,ids);onSaved(updated);await onRefresh();}
  const projectTags=tags.filter(tag=>tag.projectId===session.projectId);
+ const menuViews=sessionViews.filter(item=>hasViews||item.value==='plans');
  const visibleMenu=onMenuChange?menuPosition:menu;
  const changeMenu=onMenuChange??setMenu;
  return <>
   <button type="button" ref={trigger} className={`${className} session-actions-trigger`} title="更多操作" aria-label={label} aria-haspopup="menu" aria-expanded={!!visibleMenu} disabled={disabled} onClick={()=>{if(visibleMenu){changeMenu(null);return;}const rect=trigger.current?.getBoundingClientRect();if(rect)changeMenu({x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button>
   {visibleMenu&&<NavigationMenu title={session.title} className="session-actions-menu" anchor={trigger} width={208} x={visibleMenu.x} y={visibleMenu.y} onClose={()=>changeMenu(null)} actions={[
-   ...(hasViews?sessionViews.map(item=>({label:item.label,icon:item.icon,checked:view===item.value,run:()=>onView(item.value)})):[]),
-   {label:"重命名",icon:"edit",separatorBefore:hasViews,disabled,run:onEdit},
+   ...menuViews.map(item=>({label:item.label,icon:item.icon,checked:view===item.value,run:()=>onView(item.value)})),
+   {label:"重命名",icon:"edit",separatorBefore:true,disabled,run:onEdit},
    {label:"更换图标",icon:"image",disabled,run:()=>{setError("");setEditing("icons");}},
    {label:"编辑标签",icon:"tag",disabled,run:()=>{setError("");setEditing("tags");}},
    ...(onDelete?[{label:"删除会话",icon:"trash" as const,separatorBefore:true,disabled,danger:true,run:onDelete}]:[]),
