@@ -129,7 +129,7 @@ func TestStrategyOptimizationSettingsAndCaseValidation(t *testing.T) {
 	v := strategyHTTP(t, h, "GET", base+"/assets/"+asset.AssetID+"/revisions/1", "", "", 200)
 	request := Object{"ref": object(v["value"])["ref"], "caseIds": []string{"SL-001", "SL-014"}, "repetitions": 1, "skillNames": []string{}, "optimization": true}
 	capabilities := object(strategyHTTP(t, h, "GET", base+"/settings", "", "", 200)["capabilities"])
-	if capabilities["correct"] != true || capabilities["onlineCorrect"] != true || capabilities["correctMode"] != "snapshots_and_trusted_readonly" {
+	if capabilities["correct"] != true || capabilities["onlineCorrect"] != true || capabilities["correctMode"] != "isolated_experiments" || integer(capabilities["onlineConsentVersion"]) != strategy.OnlineConsentVersion {
 		t.Fatal("incorrect capability scope")
 	}
 	settings, _ := b.Store.GetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope})
@@ -358,8 +358,17 @@ func TestStrategyOptimizationRevocationDuringAuxiliaryCallDropsLateCandidate(t *
 			if calls.Load() != 3 || r["canSave"] != false || b.Store.row("SELECT resultJSON FROM strategyOptimizationCalls WHERE experimentId=? AND stage='propose'", id)["resultJSON"] != "" {
 				t.Fatal("late candidate escaped fence", mode, calls.Load())
 			}
-			if integer(r["tokensCharged"]) != 45 {
-				t.Fatal("late usage lost", r["tokensCharged"])
+			// Cancellation can win before the provider's usage frame is read.
+			// Known usage settles to 45; an unknown result must retain its full
+			// reservation rather than inventing/refunding the missing 15 tokens.
+			aux := b.Store.row("SELECT usageJSON,reservedTokens FROM strategyOptimizationCalls WHERE experimentId=? AND stage='propose'", id)
+			usage := strategyDecode[ai.Usage](stringOf(aux["usageJSON"]))
+			want := 30 + integer(aux["reservedTokens"])
+			if usage.InputKnown && usage.OutputKnown {
+				want = 45
+			}
+			if integer(r["tokensCharged"]) != want {
+				t.Fatal("late usage lost or unknown reservation refunded", r["tokensCharged"], want)
 			}
 		})
 	}

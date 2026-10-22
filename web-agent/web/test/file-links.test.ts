@@ -4,7 +4,7 @@ import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {FileChanges} from '../src/FileChanges';
 import {FilePreview} from '../src/FilePreview';
-import {fileName,linkedFile} from '../src/fileLinks';
+import {fileName,fileFormat,linkedFile} from '../src/fileLinks';
 import {summarizeFileChanges} from '../src/file-changes-model';
 import type {AICard} from '../../shared/contracts';
 const diff=(id:string,path:string,extra:Record<string,unknown>={}):AICard=>({id,type:'diff',title:path,status:'completed',at:'',data:{runtime:'ssh',assetRef:'host-a',before:'',after:'# 已保存的方案',existed:false,...extra}});
@@ -38,4 +38,28 @@ test('preview renders saved Markdown and related file links without loading remo
  const deleted=files(diff('3','/plans/old.sh',{before:'old recorded content',after:'',existed:true,deleted:true}));
  const old=renderToStaticMarkup(createElement(FilePreview,{file:deleted[0]!,files:deleted,target:'演示主机',hrefFor:()=> '#old',onOpen:()=>{},onClose:()=>{}}));
  assert.ok(old.includes('已删除，显示变更前内容')&&old.includes('old recorded content'));
+});
+
+test('successful local file outputs have preview cards while remote, container and failed writes do not',()=>{
+ const cards=[
+  diff('1','/Users/demo/PLAN.md',{runtime:'local',assetRef:'local',existed:false}),
+  diff('2','/Users/demo/deploy.yaml',{runtime:'local',assetRef:'local'}),
+  diff('3','/srv/remote.md',{runtime:'ssh'}),
+  diff('4','/srv/container.md',{runtime:'local',containerId:'sandbox'}),
+  {...diff('5','/Users/demo/failed.md',{runtime:'local'}),status:'failed'},
+  diff('6','/Users/demo/deleted.md',{runtime:'local',deleted:true}),
+ ];
+ const html=renderToStaticMarkup(createElement(FileChanges,{resources:[],cards}));
+ assert.equal(html.split('class="generated-file-card"').length-1,2);
+ assert.ok(html.includes('aria-label="打开 PLAN.md"')&&html.includes('本机 · Markdown'));
+ assert.ok(html.includes('aria-label="打开 deploy.yaml"')&&html.includes('本机 · YAML'));
+ for(const name of ['remote.md','container.md','failed.md','deleted.md'])assert.ok(!html.includes(`aria-label="打开 ${name}"`));
+ assert.ok(html.includes('remote.md')&&html.includes('container.md')&&html.includes('已删除'));
+ assert.ok(html.includes('file-changes-badge')&&html.includes('变更前')&&html.includes('变更后'));
+});
+test('same-name local output cards retain paths and file formats handle both platforms',()=>{
+ const html=renderToStaticMarkup(createElement(FileChanges,{resources:[],cards:[diff('1','/Users/demo/one/PLAN.md',{runtime:'local'}),diff('2','/Users/demo/two/PLAN.md',{runtime:'local'})]}));
+ assert.ok(html.includes('class="generated-file-meta">本机 · Markdown<span>/Users/demo/one/PLAN.md</span>'));
+ assert.ok(html.includes('class="generated-file-meta">本机 · Markdown<span>/Users/demo/two/PLAN.md</span>'));
+ for(const [path,label] of [['C:\\work\\Plan.MD','Markdown'],['/tmp/a.yml','YAML'],['/tmp/a.sh','Shell 脚本'],['/tmp/report.csv','CSV'],['/tmp/.profile','文件']])assert.equal(fileFormat(path!),label);
 });

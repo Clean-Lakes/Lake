@@ -1,0 +1,17 @@
+{
+  "sourceCommit": "a1d7ede11cbe26f3991aa2639593f5fc1f1c49f1",
+  "backendSHA256": "e965656241a410e92cbf2b672d055a806379ea728504d1cc800a31a3fe101453",
+  "model": "deterministic SSE, official ADK, actual loopback curl",
+  "modelBenefitEvaluated": false,
+  "longContextUTF8Bytes": 63000,
+  "ordinaryModelRequests": 3,
+  "actualHealthSamples": 2,
+  "firstCurlExitCode": 52,
+  "correctionCards": 0,
+  "legacyConsentRetired": true,
+  "legacyConsentAuditPreserved": true,
+  "applyChoicePreserved": true,
+  "learnChoicePreserved": true,
+  "postMigrationTask": "completed",
+  "status": "passed"
+}

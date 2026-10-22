@@ -720,6 +720,19 @@ a { color: inherit; }
 .turn-file-links a:hover, .file-change-path a:hover { color:var(--foreground); text-decoration-color:currentColor; }
 .turn-file-links svg { flex:0 0 auto; }
 .turn-file-links small { color:var(--text-muted); font-size:11px; }
+.generated-file-card { display:flex; align-items:center; gap:12px; flex-basis:100%; min-width:0; padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-settings-panel); corner-shape:var(--corner-window); background:var(--surface-subtle); }
+.turn-file-links .generated-file-main { display:flex; flex:1; min-width:0; gap:10px; color:var(--foreground); text-decoration:none; }
+.generated-file-icon { display:grid; place-items:center; flex:0 0 36px; height:36px; border:1px solid var(--border); border-radius:8px; corner-shape:var(--corner-window); background:var(--surface); color:var(--reasoning-accent); }
+.generated-file-copy { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.generated-file-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; line-height:1.5; }
+.turn-file-links .generated-file-meta { display:flex; gap:8px; min-width:0; font-size:10.5px; line-height:1.5; }
+.generated-file-meta > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.generated-file-open { flex-shrink:0; min-height:28px; padding:3px 9px; border:1px solid var(--border); border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); color:var(--foreground); background:var(--surface); font:inherit; font-size:11px; cursor:pointer; }
+.generated-file-open:hover { background:var(--surface-hover); border-color:var(--border-strong); }
+.generated-file-main:focus-visible,.generated-file-open:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+@media (pointer:coarse) { .generated-file-open { min-height:44px; } }
+@media (max-width:480px) { .generated-file-card { gap:8px; padding:9px; } .generated-file-icon { flex-basis:32px; height:32px; } }
+
 .file-change-path a { color:inherit; text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--border-strong); }
 .file-preview { width:min(860px,calc(100vw - 32px)); max-height:calc(100dvh - 48px); padding:0; border:1px solid var(--border); border-radius:var(--radius-panel); background:var(--surface); color:var(--foreground); box-shadow:var(--shadow-popover); }
 .file-preview::backdrop { background:var(--overlay); }

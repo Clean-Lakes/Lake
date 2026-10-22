@@ -1,6 +1,12 @@
 import type {FileChange} from './file-changes-model';
 
 export function fileName(path:string) {return path.replaceAll('\\','/').split('/').filter(Boolean).at(-1)||path;}
+export function fileFormat(path:string) {
+ const extension=fileName(path).match(/[^.]\.([a-z\d]{1,12})$/i)?.[1]?.toLowerCase();
+ if(!extension)return '文件';
+ const formats:Record<string,string>={md:'Markdown',markdown:'Markdown',mdown:'Markdown',yml:'YAML',yaml:'YAML',json:'JSON',txt:'文本',sh:'Shell 脚本',bash:'Shell 脚本',zsh:'Shell 脚本',ps1:'PowerShell 脚本',py:'Python',js:'JavaScript',ts:'TypeScript'};
+ return formats[extension]||extension.toUpperCase();
+}
 
 // Resolve only unique files already recorded in this turn. A path alone must
 // never select another host/container or cause an arbitrary filesystem read.
