@@ -6,3 +6,4 @@ internal/ai/testdata/*.json text eol=lf
 internal/strategy/testdata/*.json text eol=lf
 internal/web/*.sql text eol=lf
 internal/web/hooks/*.txt text eol=lf
+docs/validation/strategy-learning-p8-completion/*.json text eol=lf

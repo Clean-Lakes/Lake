@@ -1,0 +1,19 @@
+{
+  "model": "deepseek-flash",
+  "modelRef": "2760bf1fb2f89bfc6406e05fcca44ef5aa7e2acce70300817755bb24e019cdf7",
+  "passed": true,
+  "protocol": "openai",
+  "providerVersion": "not_exposed",
+  "reasoningEffort": "low",
+  "seed": "not_exposed",
+  "sourceCommit": "0b726ea9d1506d5ad8e6c3a82bd39c1db14143c1",
+  "usage": {
+    "inputKnown": true,
+    "outputKnown": true,
+    "known": true,
+    "cachedInput": 0,
+    "input": 56,
+    "output": 22,
+    "total": 78
+  }
+}

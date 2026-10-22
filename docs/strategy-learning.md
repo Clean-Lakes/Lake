@@ -125,6 +125,19 @@ python3 scripts/test_strategy_learning_dev.py \
 
 脚本校验当前干净提交、Dev Bundle ID、签名和后端 hash，创建全新私有 Home，只使用无密钥 loopback 模型夹具。A/B/C 各运行 3 次，轮换顺序、每臂独立 Home、服务状态复位；随后在原生 Dev 演练运行中关闭、重新开启及无关对话。提示窗口准备好后，检查面板、版本、确认步骤、浅/深色、窄窗口与键盘，**正常退出这一个 Dev**；脚本再用同一个签名后端检查重启不重放、报告/预算保留和两个 SQLite 库完整性。UI 是否合格需人工另记，脚本不会自动打勾。不要同时开第二个后端使用该 Home。
 
-可靠性脚本的模型输出被固定，只能说明控制流与成本计数符合预期。推广前仍需用用户明确配置的 Dev 模型，在冻结的代表真实任务上每臂至少 3 次配对试验，保留所有失败、提供方版本/seed（支持时）、相同 Skills/记忆快照、模型请求/token、耗时、未知费用及固定硬检查；不足时结论为未评估或 inconclusive。完整 M2 的可复位真实服务故障环境也未由快照代替。
+可靠性脚本的模型输出被固定，只能说明控制流与成本计数符合预期。[补充验收](validation/lake-strategy-learning-p8-completion.md) 使用明确配置的 Dev 模型，记录了 16 个真实隔离案例、三类任务每臂三次配对和数据库任务族的 M2 真实执行链。结果为 inconclusive：C 臂有停止样本，合成候选未通过固定保留检查，保留基线。三类通用保留案例的基线不能当作合成候选的胜出证据；没有跨模型或生产推广结论。
+
+真实验收测试默认跳过，仅在显式指定 Dev 模型时访问该提供方、产生实际请求用量；不从正式 Home 导入凭据。在干净源码上执行，三个报告必须指向本机私有位置：
+
+```sh
+LAKE_P8_SOURCE_COMMIT="$(git rev-parse HEAD)" \
+LAKE_P8_DEV_MODEL_HOME="$HOME/.lake-dev" LAKE_P8_REAL_SERVICES=1 \
+LAKE_P8_SMOKE_REPORT=/tmp/lake-p8-provider.json \
+LAKE_P8_LIVE_REPORT=/tmp/lake-p8-services.json \
+LAKE_P8_OPTIMIZATION_REPORT=/tmp/lake-p8-optimization.json \
+go test -race ./internal/web -run '^TestP8Real' -v -count=1 -timeout=30m
+```
+
+测试要求本机可用的 Docker（预置 `docker.io/library/postgres:17-alpine`，记录实际镜像 ID）、curl、lsof 和非 root 文件权限身份；只创建并清理自己的临时容器/文件/监听器。宿主负责制造和复位故障，Actor 只有准确的只读观察权限。`LiveRead` 是 Go 宿主专用回调，不能由 HTTP 或模型设置；普通界面的实验仍为合成快照。运行完成只表示完整采样和记录，不表示答案全部通过或候选可采用。
 
 CI 仍只在同仓库 `develop → master` 提升 PR 自动运行，或用户明确要求手动触发；日常 `develop` PR 不运行。ADK 平台工作流补充 Linux/Windows 专项报告。macOS 容器/交叉编译不能替代 Windows 实测；平台结果未收齐时不得宣称发布验收全部完成。
