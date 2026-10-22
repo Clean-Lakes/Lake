@@ -123,10 +123,9 @@ func TestManualCompactionTimeoutPreservesHistoryAndAllowsRetry(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("summary did not start")
 	}
-	v, _ := e.Snapshot("case")
-	if v.Cards[len(v.Cards)-1].Status != "running" {
-		t.Fatal("no live compaction status")
-	}
+	// This deliberately short deadline may already have expired by the time
+	// the test goroutine is scheduled. Check live visibility independently
+	// below, while the provider is held behind an explicit barrier.
 	select {
 	case err := <-done:
 		if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "context compaction:") {
@@ -147,6 +146,50 @@ func TestManualCompactionTimeoutPreservesHistoryAndAllowsRetry(t *testing.T) {
 	s.mu.Unlock()
 	if err := e.Compact(context.Background(), "case"); err != nil {
 		t.Fatal("cannot retry", err)
+	}
+}
+
+func TestManualCompactionShowsRunningBeforeCompletion(t *testing.T) {
+	requested, release := make(chan struct{}), make(chan struct{})
+	m, closeModel := fakeModel(t, func(_ int, _ map[string]any) any {
+		close(requested)
+		<-release
+		return response("保留 node-a 和不重启的限制；继续检查服务。")
+	})
+	defer closeModel()
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	e := engineFor(t, m, nil)
+	e.compactionTimeout = 10 * time.Second
+	seedIdleConversation(t, e, 12000)
+	done := make(chan error, 1)
+	go func() { done <- e.Compact(context.Background(), "case") }()
+	select {
+	case <-requested:
+	case <-time.After(3 * time.Second):
+		t.Fatal("summary did not start")
+	}
+	v, err := e.Snapshot("case")
+	if err != nil || len(v.Cards) == 0 || v.Cards[len(v.Cards)-1].Status != "running" {
+		t.Fatal("no live compaction status", err)
+	}
+	close(release)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("released summary did not finish")
+	}
+	v, _ = e.Snapshot("case")
+	if v.Cards[len(v.Cards)-1].Status != "completed" {
+		t.Fatal("completed compaction retained live status")
 	}
 }
 
