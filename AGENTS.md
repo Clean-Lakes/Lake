@@ -21,6 +21,7 @@
 - On macOS, build and install the app used for local integration with `scripts/build_lake_desktop.sh --dev --install`; launch `~/Applications/Lake Dev.app`. This script calls the signed `scripts/build_lake.sh` build. Do not install the regular `Lake.app` for local development or restart it as part of a Dev iteration.
 - Keep Dev and release separate: Dev uses bundle ID `com.cleanlakes.lake.desktop.dev` and `~/.lake-dev`; release uses `com.cleanlakes.lake.desktop` and `~/.lake`. Never point `LAKE_DEV_HOME`, `LAKE_DEV_WEB_DATA_DIR`, `--lake-home`, or `--lake-data` at release data, and do not copy or symlink release secrets into Dev.
 - For standalone web development, pass an explicit isolated `--home` path and a free loopback port. Do not run a second backend against a home already in use by the Dev app. See `CONTRIBUTING.md` for the workflow.
+- For Go/React-only iteration without ZIP/DMG packaging, normally quit Lake Dev, then run `scripts/run_lake_dev.sh`. It builds the signed backend and fresh Web assets using only `~/.lake-dev`; reopening the installed Dev app attaches to that backend. The terminal owns this backend and must stop it before another iteration. Native-client changes still use the signed desktop build/install workflow above.
 
 # Frontend UI consistency
 
