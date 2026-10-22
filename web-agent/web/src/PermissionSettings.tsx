@@ -27,9 +27,9 @@ const groups: Array<{title: string; hint?: string; fields: Array<{key: keyof typ
   ]},
 ];
 
-export function PermissionSettings({anchor, options, disabled, error, onChange, onClose}: {
+export function PermissionSettings({anchor, options, disabled, saving=false, error, onChange, onClose}: {
   anchor: RefObject<HTMLButtonElement | null>;
-  options: Record<string, unknown>; disabled: boolean; error?: string;
+  options: Record<string, unknown>; disabled: boolean; saving?: boolean; error?: string;
   onChange: (key: string, value: boolean) => void; onClose: () => void;
 }) {
   const panel = useRef<HTMLElement>(null);
@@ -75,7 +75,7 @@ export function PermissionSettings({anchor, options, disabled, error, onChange, 
       document.removeEventListener("scroll", update, true); document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", keyboard); document.removeEventListener("focusin", focus); };
   }, [anchor]);
-  return createPortal(<section ref={panel} className="permission-popover" role="dialog" aria-label="会话权限"
+  return createPortal(<section ref={panel} className="permission-popover" role="dialog" aria-label="会话权限" aria-busy={saving}
     style={{left: position.left, top: position.top, maxHeight: position.maxHeight, visibility: position.ready ? "visible" : "hidden"}}>
     <header><strong className="permission-heading"><Glyph name="waves" size={18}/>执行偏好</strong><span className="permission-save-state">自动保存</span><button type="button" className="permission-close" aria-label="关闭会话权限" onClick={() => {onClose(); anchor.current?.focus();}}><Glyph name="close" size={14}/></button></header>
     {error && <p className="form-error" role="alert">{error}</p>}
@@ -85,7 +85,7 @@ export function PermissionSettings({anchor, options, disabled, error, onChange, 
         const checked = Boolean(options[field.key] ?? permissionDefaults[field.key]);
         return <div className="permission-row" key={field.key}>
           <div className="permission-copy"><span className="permission-label" id={`${id}-${field.key}`}>{field.label}</span></div>
-          <button type="button" className="permission-mode" role="switch" aria-labelledby={`${id}-${field.key}`} aria-describedby={`${id}-${field.key}-description`} aria-checked={checked} disabled={disabled} onClick={() => onChange(field.key, !checked)}>{checked ? "开启" : "关闭"}</button>
+          <button type="button" className="permission-mode" role="switch" aria-labelledby={`${id}-${field.key}`} aria-describedby={`${id}-${field.key}-description`} aria-checked={checked} disabled={disabled} aria-disabled={disabled||saving} onClick={() => {if(!saving&&!disabled)onChange(field.key, !checked);}}>{checked ? "开启" : "关闭"}</button>
         </div>;
       })}</div>
     </div>)}
