@@ -47,6 +47,8 @@
 .sidebar.workspace-navigation .session-nav-row { min-height: 36px; padding: 7px 9px; gap: 9px; margin-bottom: 2px; border-radius: var(--sidebar-row-radius); }
 .sidebar.workspace-navigation .session-nav-row .nav-row-text strong { font-weight: 400; }
 .sidebar.workspace-navigation .session-nav-row.active .nav-row-text strong { font-weight: 500; }
+.sidebar.workspace-navigation .nav-row:not(:disabled) .nav-row-text strong,
+.sidebar.workspace-navigation .resource-folder-toggle:not(:disabled) .resource-folder-name { color:var(--foreground); }
 /* The live state and the menu own separate space, including the non-hovered active row. */
 .sidebar.workspace-navigation .nav-row-wrap > .session-nav-row,
 .sidebar.workspace-navigation .nav-row-wrap:is(:hover,:focus-within) > .session-nav-row { padding-right: 40px; }
