@@ -43,6 +43,7 @@ type SSH struct {
 	KnownHosts    string `json:"-"`
 }
 type Config struct {
+	ConversationMode        string `json:"conversationMode,omitempty"`
 	ModelProviderID         string `json:"modelProviderId,omitempty"` // Logical catalog ID only; never an endpoint or credential.
 	legacyInvestigations    bool   // Historical runtime compatibility; never enabled by user settings.
 	sreCoordinator          bool
@@ -128,6 +129,7 @@ type Approval struct {
 	Fingerprint        string `json:"fingerprint"`
 }
 type View struct {
+	ProposedPlan      *ProposedPlan      `json:"proposedPlan,omitempty"`
 	OperationOutcomes []OperationOutcome `json:"operationOutcomes,omitempty"`
 	PendingApprovals  []*Approval        `json:"pendingApprovals,omitempty"`
 	Todos             []Todo             `json:"todos,omitempty"`

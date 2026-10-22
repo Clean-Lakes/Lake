@@ -51,7 +51,7 @@ func TestADKCrashApprovalHelper(t *testing.T) {
 		t.Fatal(err)
 	}
 	model := Model{URL: os.Getenv("LAKE_ADK_CRASH_PROVIDER"), Name: "fixture", Protocol: "openai", ContextWindow: 64000, MaxOutput: 8192}
-	if err = engine.Configure("case", Config{Model: model, Profile: "core", Workspace: dir, Permissions: &Permissions{SilentCommands: effect, SilentTerminalCreation: effect, SilentReadFiles: true, SilentReadSQL: true}}); err != nil {
+	if err = engine.Configure("case", Config{ConversationMode: os.Getenv("LAKE_ADK_CRASH_MODE"), Model: model, Profile: "core", Workspace: dir, Permissions: &Permissions{SilentCommands: effect, SilentTerminalCreation: effect, SilentReadFiles: true, SilentReadSQL: true}}); err != nil {
 		t.Fatal(err)
 	}
 	if err = engine.Chat(context.Background(), "case", "write the test file", nil); err != nil {

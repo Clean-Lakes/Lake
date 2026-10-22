@@ -761,6 +761,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				fail(404, "API route not found")
 			}
 			if method == "GET" {
+				if op == "mode" {
+					reply(w, 200, Object{"mode": b.conversationMode(id)})
+					return
+				}
 				if op == "reasoning" {
 					reply(w, 200, b.reasoningSettings(r.Context(), id))
 					return
@@ -771,6 +775,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					// must not overwrite a more recent reasoning selection.
 					delete(options, "reasoningEffort")
 					delete(options, "reasoningModelId")
+					delete(options, "conversationMode")
 					reply(w, 200, options)
 					return
 				}
@@ -793,6 +798,14 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if method == "POST" {
+				if op == "mode" {
+					reply(w, 200, b.setConversationMode(id, body(w, r, 16384)))
+					return
+				}
+				if op == "executePlan" {
+					reply(w, 202, b.executeProposedPlan(id, body(w, r, 16384)))
+					return
+				}
 				if op == "progress-summary" {
 					b.progressSummaryRoute(w, r, id)
 					return
@@ -802,7 +815,11 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				if op == "configure" {
-					reply(w, 200, b.configure(id, body(w, r, 128000)))
+					updates := body(w, r, 128000)
+					if _, exists := updates["conversationMode"]; exists {
+						fail(400, "请通过模式切换入口修改会话模式")
+					}
+					reply(w, 200, b.configure(id, updates))
 					return
 				}
 				if set("abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails resolveOperation clear clearReferences rollback compact restore undoFile extractPreset")[op] {
