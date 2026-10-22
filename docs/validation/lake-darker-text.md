@@ -24,3 +24,16 @@ The existing Markdown fixture was inspected in light desktop and 430 px dark vie
 Native UI access returned `timeoutReached` three times, including a fresh application lookup. The package is installed, but restarting the currently running Lake Dev and native acceptance of this weight change remain manual. No production app or data was accessed. No remote write.
 
 Installed backend SHA-256: `eaee507c23cba23a9ddba6a34b15b8098b15b8e9b429879f4d10336391ce3e7d`.
+
+
+## Follow-up: synchronize gray interface text
+
+Feature commit `aeffb8b0` shares the system-first font stack between UI and prose and uses 500 as the UI base weight. Sidebar names/groups, plan metadata, elapsed-time disclosures, model effort and SRE controls no longer explicitly drop to 400. Gray colors, font sizes and code/terminal typography retain separate semantics; code/pre/kbd/samp keep a 400 base weight.
+
+Signed Dev integration `1d41f48249ad70978b9b4f60d2b4efffe24a2081` built and installed successfully, including TypeScript/Vite validation. Deep/strict codesign and diff checks passed. No new automated test for this CSS change.
+
+Isolated backend browser acceptance covered sidebar names/groups, workspace entry, plan status, composer placeholder, permissions/Plan/SRE toolbar and elapsed time. All compute to 500 using the same system font stack. Gray metadata remains rgb(115,115,115) in light and rgb(170,170,170) in dark, with secondary controls rgb(74,74,74). Keyboard focus and 430 px dark layout were visually inspected; no horizontal overflow. Screenshots: `/tmp/lake-muted-font-light.png`, `/tmp/lake-muted-font-dark-narrow.png`. Browser task 31 finished; isolated backend stopped.
+
+Native access still returned `timeoutReached`; the installed package requires a manual full quit/reopen of Lake Dev to load the latest UI. No production app/data access, model/resource operation, remote write or PR update.
+
+Installed backend SHA-256: `ae8f6fde7685ae1008e18c0a5d4048196c60d3035da6f0d791e85ed1d31ab0fb`.
