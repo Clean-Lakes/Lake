@@ -8,6 +8,15 @@ export function mentionTypeLabel(option:MentionOption):string {
 }
 export type MentionCategory=MentionKind|"all";
 export const mentionCategories=[{kind:"all",label:"全部"},{kind:"resource",label:"资源"},{kind:"skill",label:"Skills"},{kind:"mcp",label:"MCP"},{kind:"role",label:"专员"}] as const;
+export function visibleMentionCategories(options:MentionOption[]) {
+ return mentionCategories.filter(group=>group.kind!=="role"||options.some(option=>option.kind==="role"));
+}
+export function nextMentionCategory(category:MentionCategory,options:MentionOption[],event:{key:string;metaKey?:boolean;ctrlKey?:boolean;altKey?:boolean;shiftKey?:boolean}):MentionCategory|null {
+ if((event.key!=="ArrowLeft"&&event.key!=="ArrowRight")||event.metaKey||event.ctrlKey||event.altKey||event.shiftKey)return null;
+ const categories=visibleMentionCategories(options);
+ const index=categories.findIndex(group=>group.kind===category);
+ return categories[(index+(event.key==="ArrowLeft"?-1:1)+categories.length)%categories.length]!.kind;
+}
 export function mentionOptions(resources:Resource[],skills:SkillConfig[],servers:MCPServerConfig[],sreEnabled=false):MentionOption[] {
  return [
   ...resources.map(r=>({id:r.id,kind:"resource" as const,resourceKind:r.kind,name:r.name,detail:r.status==="available"?"可用资源":"不可用资源"})),

@@ -9,7 +9,7 @@ import {applyLiveText} from './liveTextUpdates';
 import {sreSessionPresentation} from './sreSessionPresentation';
 import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerMentions";
 import {SREModeToggle} from './SREModeToggle';
-import {appendResourceMention,composerMessage,composerResourceIds,selectComposerMention,filterMentions,mentionOptions,type MentionCategory,type MentionOption} from "./composerMentionState";
+import {appendResourceMention,composerMessage,composerResourceIds,selectComposerMention,filterMentions,mentionOptions,nextMentionCategory,type MentionCategory,type MentionOption} from "./composerMentionState";
 import {ComposerTextInput,type ComposerInputHandle} from "./ComposerTextInput";
 import {AppSelect} from "./AppSelect";
 import {ComposerModelSelect} from "./ComposerModelSelect";
@@ -1396,6 +1396,8 @@ function App() {
             if (messageComposition.current.ignores(event.nativeEvent)) return;
             if (mention) {
               if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setMention(null); return; }
+              const category=nextMentionCategory(mentionCategory,allMentionOptions,event);
+              if(category!==null){event.preventDefault();setMentionCategory(category);setMention({...mention,index:0});return;}
               if (!mentionMatches.length) { if(event.key==="Enter")event.preventDefault(); return; }
               if (event.key === "ArrowDown") { event.preventDefault(); setMention({ ...mention, index: (mentionIndex + 1) % mentionMatches.length }); return; }
               if (event.key === "ArrowUp") { event.preventDefault(); setMention({ ...mention, index: (mentionIndex - 1 + mentionMatches.length) % mentionMatches.length }); return; }
