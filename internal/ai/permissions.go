@@ -27,6 +27,9 @@ func RequiresApproval(c Config, name, risk string, context map[string]any) (bool
 }
 
 func approvalKind(c Config, name, risk string, context map[string]any) (string, error) {
+	if err := checkPlanOperation(c, name, risk); err != nil {
+		return "", err
+	}
 	if name == "list_assets" || name == "list_resource_groups" {
 		return "", nil
 	}

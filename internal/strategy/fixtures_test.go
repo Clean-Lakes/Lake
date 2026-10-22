@@ -56,3 +56,14 @@ func TestSnapshotJudgeRequiresClassificationAndObservedEvidence(t *testing.T) {
 		t.Fatal("boundary violation ignored")
 	}
 }
+
+func TestLiveFixtureContextPreservesContractWithoutSnapshotProvenance(t *testing.T) {
+	f, _ := FindFixture("SL-005")
+	live := f.ActorContextForMode(true)
+	if strings.Contains(live, "No database connection exists") || strings.Contains(live, "Isolated synthetic snapshot evaluation") || !strings.Contains(live, "SELECT * FROM fixture_observations") || !strings.Contains(live, "no arbitrary") {
+		t.Fatal("live provenance broadened authority or mislabeled actual observation")
+	}
+	if f.ActorContext() != f.ActorContextForMode(false) {
+		t.Fatal("default snapshot prompt changed")
+	}
+}

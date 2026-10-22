@@ -169,6 +169,7 @@ export type SendMessageResult = {queued?: boolean; queuedMessageId?: string; mes
 export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;status:"running" | "completed" | "cancelled" | "failed" | "interrupted"};
 
 export type SessionSnapshot = {
+ conversationMode?: ConversationMode;
 	sre?:SRESnapshot;
  replyTimings?:ReplyTiming[];
   messageQueue?: MessageQueue;
@@ -246,7 +247,9 @@ export type AIQuestionOption = {label:string;description?:string;recommended?:bo
 export type AIUserQuestion = {id:string;title:string;reason?:string;options?:Array<string|AIQuestionOption>;multi_select?:boolean};
 export type AIQuestionRequest = {id:string;questions:AIUserQuestion[]};
 export type AIOperationOutcome = {id:string;tool:string;target:string;status:string;handle?:string;result?:string;startedAt:string};
-export type AIView = { operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
+export type ConversationMode = "default" | "plan";
+export type ProposedPlan = {id:string;content:string;at:string};
+export type AIView = { proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
 export type AIPreset = { id: string; title: string; content: string };
 
 export type AIImage = { id: string; mimeType: string; base64: string; sizeBytes: number; width: number; height: number; name?: string; url?: string };

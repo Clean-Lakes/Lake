@@ -101,6 +101,9 @@ func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool
 	if onlineEnabled(c) && (c.sre == nil || !c.sre.NoTools) {
 		list = append(list, onlineTool())
 	}
+	if c.ConversationMode == ModePlan {
+		list = planCatalog(list)
+	}
 	return list
 }
 

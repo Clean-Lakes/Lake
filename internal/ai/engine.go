@@ -260,6 +260,9 @@ func (e *Engine) notify(s *session, kind string, v any) {
 	}
 }
 func (e *Engine) Configure(id string, c Config) error {
+	if !ValidConversationMode(c.ConversationMode) {
+		return errors.New("invalid conversation mode")
+	}
 	if c.MultiAgentMode != "" && c.MultiAgentMode != "off" && c.MultiAgentMode != "auto" {
 		return errors.New("invalid multi-agent mode")
 	}
@@ -331,7 +334,7 @@ func (e *Engine) Configure(id string, c Config) error {
 		s.state.LastRequestAt = ""
 		s.state.ContextMeasurement = nil
 	}
-	if s.state.Config.MemoryEnabled != c.MemoryEnabled || s.state.Config.Profile != c.Profile || s.state.Config.Model.SupportsImageInput != c.Model.SupportsImageInput {
+	if s.state.Config.MemoryEnabled != c.MemoryEnabled || s.state.Config.Profile != c.Profile || s.state.Config.Model.SupportsImageInput != c.Model.SupportsImageInput || s.state.Config.ConversationMode != c.ConversationMode {
 		// These settings change which stored material is sent without necessarily
 		// changing its serialized history size. The old input cannot anchor it.
 		s.state.ContextMeasurement = nil
@@ -527,7 +530,16 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		return errors.New("session busy")
 	}
 	c := s.state.Config
-	c.sreCoordinator = input.SRECoordination && e.worker == nil && (c.Profile == "core" || c.Profile == "")
+	c.sreCoordinator = c.ConversationMode != ModePlan && input.SRECoordination && e.worker == nil && (c.Profile == "core" || c.Profile == "")
+	if c.ConversationMode == ModePlan {
+		c.StrategyCorrectEnabled = false
+		c.StrategyLearnEnabled = false
+		c.MemoryExtractionEnabled = false
+		if len(input.workflow) > 0 {
+			s.mu.Unlock()
+			return errors.New("Plan 模式不能运行工作流")
+		}
+	}
 	if input.IgnoreProjectMemory {
 		c.MemoryEnabled = false
 		c.MemoryExtractionEnabled = false
@@ -603,6 +615,8 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	s.cancel = cancel
 	s.state.Config.ReferencedAssets = append([]string(nil), c.ReferencedAssets...)
 	s.state.View.Status = "running"
+	s.state.View.ProposedPlan = nil
+	firstCard := len(s.state.View.Cards)
 	s.state.View.RootTurnID = uid()
 	s.state.SREHandoff = nil
 	s.sreReply = nil
@@ -664,6 +678,9 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		}
 		s.state.View.Status = status
 		s.state.View.TurnFinishedAt = timestamp()
+		if err == nil && c.ConversationMode == ModePlan {
+			captureProposedPlan(s, firstCard)
+		}
 		e.collectStrategySnapshot(s, c, input, status)
 		if err == nil {
 			e.collectMemorySnapshot(s, c, input)

@@ -1,0 +1,334 @@
+{
+  "schemaVersion": 1,
+  "phase": "P8_completion",
+  "date": "2026-10-22",
+  "baseCommit": "6e7b8434e5472397491249e230dfeb69dafcf4bc",
+  "testedRuntimeCommit": "0b726ea9d1506d5ad8e6c3a82bd39c1db14143c1",
+  "windowsUITestCommit": "e9cdcd25c13b64bc5401aabedb7d5d0371f90019",
+  "runtimeUnchangedAfterTest": true,
+  "tasks": {
+    "T32": "passed_platform_regression_and_evidence_collection",
+    "T33": "passed_signed_macos_dev",
+    "T34": "passed_docs_and_exit_restart"
+  },
+  "productionChanged": false,
+  "versionChanged": false,
+  "promotionApproved": false,
+  "effectConclusion": "inconclusive",
+  "candidateAdopted": false,
+  "ciAuthorization": "one Windows acceptance; only failed/uncompleted items retried",
+  "ciRuns": [
+    {
+      "id": 39711904383,
+      "head": "c6fb4f6",
+      "result": "failed_ui; native_backend_tests_passed"
+    },
+    {
+      "id": 39712932016,
+      "head": "e0e683f",
+      "result": "failed_crlf_goldens; web_regression_passed"
+    },
+    {
+      "id": 39715610651,
+      "head": "0b726ea",
+      "result": "contracts_ai_passed; ui_settings_badge_locator_failed"
+    },
+    {
+      "id": 39716339580,
+      "head": "3eb9049",
+      "result": "settings_locator_passed; confirmation_stale_node_and_profile_cleanup_failed"
+    },
+    {
+      "id": 39716955769,
+      "head": "e9cdcd2",
+      "result": "success_native_webview2_profile_cleanup_installer_and_packaged_ssh"
+    }
+  ],
+  "checks": [
+    {
+      "name": "macos_full_go",
+      "command": "go test ./... -count=1 -timeout=8m",
+      "exitCode": 0,
+      "aiSeconds": 57.342,
+      "webSeconds": 167.406
+    },
+    {
+      "name": "macos_race",
+      "command": "go test -race ./internal/ai ./internal/web ./internal/strategy -count=1 -timeout=12m",
+      "exitCode": 0,
+      "aiSeconds": 141.157,
+      "webSeconds": 384.914,
+      "strategySeconds": 2.451
+    },
+    {
+      "name": "macos_vet_and_adk_boundary",
+      "exitCode": 0
+    },
+    {
+      "name": "linux_arm64_full_go_and_vet",
+      "exitCode": 0,
+      "network": "none",
+      "image": "sha256:0d1d3a794be25f809dd2cb3160d8c73276c4056a9f8242a138e908ddeee7b6b6",
+      "aiSeconds": 23.81,
+      "webSeconds": 45.206
+    },
+    {
+      "name": "real_provider_and_live_acceptance_race",
+      "command": "go test -race ./internal/web -run '^TestP8Real' -v -count=1 -timeout=30m",
+      "exitCode": 0,
+      "seconds": 209.943,
+      "note": "Driver completion does not mean model-quality checks passed."
+    },
+    {
+      "name": "frontend_source_byte_identity",
+      "comparison": "git diff --exit-code 1484582 0b726ea -- web-agent",
+      "exitCode": 0,
+      "inheritedTests": 386
+    },
+    {
+      "name": "signed_macos_dev",
+      "exitCode": 0,
+      "nativeUI": "stopped correction card and budget visually checked; normal quit; all nine control trials and restart checks passed"
+    },
+    {
+      "name": "integrated_develop_approval_tests_race",
+      "tests": 3,
+      "exitCode": 0,
+      "parallelSeconds": 3.778,
+      "targetDecisionSeconds": 4.425,
+      "note": "Only source change under internal/ after runtime freeze is the upstream test deadline repair; production files unchanged."
+    },
+    {
+      "name": "windows_final_native_ui_and_packaged_runtime",
+      "runId": 39716955769,
+      "head": "e9cdcd25c13b64bc5401aabedb7d5d0371f90019",
+      "conclusion": "success",
+      "uiViewport": [
+        834,
+        561
+      ],
+      "actualWebView2": true,
+      "profileCleanupVerifiedByParent": true,
+      "installerBuilt": true,
+      "packagedSSHCredentialHelperPassed": true,
+      "artifactsAreTestOnly": true
+    }
+  ],
+  "pairedMetrics": [
+    {
+      "case": "LIVE-01",
+      "arm": "A",
+      "samples": 3,
+      "strictPassed": 3,
+      "requests": 6,
+      "tokensCharged": 104701,
+      "seconds": 9.374,
+      "reads": 3
+    },
+    {
+      "case": "LIVE-01",
+      "arm": "B",
+      "samples": 3,
+      "strictPassed": 3,
+      "requests": 6,
+      "tokensCharged": 106281,
+      "seconds": 9.915,
+      "reads": 3
+    },
+    {
+      "case": "LIVE-01",
+      "arm": "C",
+      "samples": 3,
+      "strictPassed": 3,
+      "requests": 6,
+      "tokensCharged": 108556,
+      "seconds": 9.078,
+      "reads": 3
+    },
+    {
+      "case": "LIVE-04",
+      "arm": "A",
+      "samples": 3,
+      "strictPassed": 3,
+      "requests": 6,
+      "tokensCharged": 104999,
+      "seconds": 9.831,
+      "reads": 3
+    },
+    {
+      "case": "LIVE-04",
+      "arm": "B",
+      "samples": 3,
+      "strictPassed": 3,
+      "requests": 6,
+      "tokensCharged": 106527,
+      "seconds": 10.373,
+      "reads": 3
+    },
+    {
+      "case": "LIVE-04",
+      "arm": "C",
+      "samples": 3,
+      "strictPassed": 3,
+      "requests": 6,
+      "tokensCharged": 108948,
+      "seconds": 11.14,
+      "reads": 3
+    },
+    {
+      "case": "LIVE-07",
+      "arm": "A",
+      "samples": 3,
+      "strictPassed": 3,
+      "requests": 9,
+      "tokensCharged": 159592,
+      "seconds": 17.335,
+      "reads": 8
+    },
+    {
+      "case": "LIVE-07",
+      "arm": "B",
+      "samples": 3,
+      "strictPassed": 3,
+      "requests": 9,
+      "tokensCharged": 161203,
+      "seconds": 16.402,
+      "reads": 6
+    },
+    {
+      "case": "LIVE-07",
+      "arm": "C",
+      "samples": 3,
+      "strictPassed": 0,
+      "requests": 6,
+      "tokensCharged": 112785,
+      "seconds": 13.021,
+      "reads": 3
+    }
+  ],
+  "realBaseline": {
+    "samples": 16,
+    "strictPassed": 13,
+    "holdouts": 3
+  },
+  "realOptimization": {
+    "variants": 5,
+    "auxiliaryRequests": 2,
+    "requests": 12,
+    "tokensCharged": 50592,
+    "candidateEligibleForReview": false,
+    "reason": "synthesis holdout failed fixed classification check",
+    "scope": "SQLite task family only; no whole-suite or production benefit claim"
+  },
+  "evidence": [
+    {
+      "path": "provider.json",
+      "sha256": "63c4409071d5c84cd4e7038f91129b38638bac79d5a04834894a5baa8a94affb",
+      "role": "final"
+    },
+    {
+      "path": "real-services.json",
+      "sha256": "b86f8bc0ebc62a80c8e02124dc871db47432c937abe73868a72d848b1b878ad0",
+      "role": "final"
+    },
+    {
+      "path": "live-optimization.json",
+      "sha256": "df4ac9dbd6e4ebc6aae5de9e721f342af1726c01ec5758c75c51ae2091ac5ab8",
+      "role": "final"
+    },
+    {
+      "path": "signed-dev.json",
+      "sha256": "ec68926bfac67806785784289dac300a958ea1349572423c322c5975017716f7",
+      "role": "final"
+    },
+    {
+      "path": "macos-regression.json",
+      "sha256": "38aa6c51fa962b4b409a6e503dd3c0370e45319700695508b166aa5d40729247",
+      "role": "final"
+    },
+    {
+      "path": "windows-contracts-ai.json",
+      "sha256": "cb5bed497f40f4bad729a6b3e7b49d35e8bc8f2e1b31bc282d3c034e62737dc2",
+      "role": "final",
+      "sourceSha256": "5114492ff8b69992cb88ccd2171c8e05b49d1faaa5e991276fbfadd4f7f6ceb6",
+      "lineEndingsNormalized": "CRLF_to_LF_only"
+    },
+    {
+      "path": "windows-ui-preflight.json",
+      "sha256": "9354f9bc497cfe43bb1c1eef29f02c22e3e0fa5d3e58891882bd8e00ad9f018e",
+      "role": "preflight_or_interrupted_not_effect_evidence"
+    },
+    {
+      "path": "windows-crlf-preflight.json",
+      "sha256": "46c3545b4cf358b1732000ed3e9ce734cde368dbc26be620994b93423a294807",
+      "role": "preflight_or_interrupted_not_effect_evidence",
+      "sourceSha256": "e26caf10df07e05d91e904e7bb17b1c0ad049764003ac735ae379156d4db1fd6",
+      "lineEndingsNormalized": "CRLF_to_LF_only"
+    },
+    {
+      "path": "provider-preflight.json",
+      "sha256": "0c245e848fed5e921228f7069262627db701f258109acf1681c4e3b0c4ffcb1e",
+      "role": "preflight_or_interrupted_not_effect_evidence"
+    },
+    {
+      "path": "real-services-setup-preflight.json",
+      "sha256": "b748de30055dfb60f0c72355ec0defa2502b0e45aaa4ef53d2acd2a387cdd234",
+      "role": "preflight_or_interrupted_not_effect_evidence"
+    },
+    {
+      "path": "real-services-budget-preflight.json",
+      "sha256": "763060a0a654f2e0e9ad19a5b4607d499cecd9fa3183170615cd60e9844a299e",
+      "role": "preflight_or_interrupted_not_effect_evidence"
+    },
+    {
+      "path": "real-services-interrupted.json",
+      "sha256": "68d18454d13054a8fe6b97641685c2d09ea417c0f8b1640ce8ea9fa5f1b95a54",
+      "role": "preflight_or_interrupted_not_effect_evidence"
+    },
+    {
+      "path": "live-optimization-reset-preflight.json",
+      "sha256": "dee05013b8256ac808cc14fe9ed5cce3db8357670cc7c79371a60beee4883f3a",
+      "role": "preflight_or_interrupted_not_effect_evidence"
+    },
+    {
+      "path": "live-optimization-preflight.json",
+      "sha256": "080cc39ff2bf5e17bb62adb4d294af8a6fbfdecad878dc5ae868ec8e59bf2c6b",
+      "role": "preflight_or_interrupted_not_effect_evidence"
+    },
+    {
+      "path": "windows-confirmation-preflight.json",
+      "sha256": "577618630006bee3aa45007d92ce8a99c63aadf698d7f4f674620d08a5b50c5d",
+      "role": "preflight_not_effect_evidence"
+    },
+    {
+      "path": "windows-ui.json",
+      "sha256": "2bf8394f81b9fba04f51396c20b7f5636e591b5d8d60988a90e970a4e8dddf37",
+      "sourceSha256": "2bf8394f81b9fba04f51396c20b7f5636e591b5d8d60988a90e970a4e8dddf37",
+      "role": "final",
+      "lineEndingsNormalized": "CRLF_to_LF_only"
+    },
+    {
+      "path": "windows-final-run.json",
+      "sha256": "791953cd20b8dee93c0413329448a85065a631373732bcc7d072f2b19f14e717",
+      "role": "final"
+    }
+  ],
+  "limitations": [
+    "One explicitly configured DeepSeek Flash model; seed/provider build/monetary cost not exposed.",
+    "Representative samples are small, not statistical proof.",
+    "Ordinary A/B retries can recover without the new controller; C stopped on budget/user gate.",
+    "Optimization validation covers one real database task family; the 3 general holdout baselines are not candidate wins.",
+    "Keep baseline; no candidate saved/adopted; default switches remain off.",
+    "Live M2 stages are driven by the opt-in acceptance host; real fixtures are not enabled through the product Web P6 coordinator. Durable coordinator behavior remains covered by credential-free regression."
+  ],
+  "releaseAcceptancePassed": false,
+  "remainingPromotionGates": [
+    "No winner from current real model samples; do not promote candidate or claim general benefit.",
+    "No production rollout authorized."
+  ],
+  "integratedDevelopCommit": "d37af5deecf4eb5c488c896f2bebfb79f9f0cb11",
+  "integrationTestCommit": "15711455cb42b291620e2ad217fd59a859e7e4a0",
+  "evidenceNormalization": "Stored JSON uses LF; original artifact sha256 also retained when CRLF changed. No JSON field values changed.",
+  "acceptanceEvidenceComplete": true,
+  "retryScopeLimitation": "First two resumed runs repeated the already-passed frontend suite because the legacy step lacked a condition. Fixed before runs 39716339580 and 39716955769; those skip all already-passed suites."
+}

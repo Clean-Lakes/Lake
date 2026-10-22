@@ -1,0 +1,9 @@
+# Embedded prompts, schemas and canonical fixtures must have identical bytes
+# on Windows and Unix. Do not regenerate golden hashes for CRLF checkouts.
+internal/ai/prompts/*.txt text eol=lf
+internal/ai/tool-catalog.json text eol=lf
+internal/ai/testdata/*.json text eol=lf
+internal/strategy/testdata/*.json text eol=lf
+internal/web/*.sql text eol=lf
+internal/web/hooks/*.txt text eol=lf
+docs/validation/strategy-learning-p8-completion/*.json text eol=lf

@@ -166,3 +166,15 @@ test("active directory entry follows reading position in either scroll direction
   assert.equal(activeDirectoryItem(positions,100),"start");
   assert.equal(activeDirectoryItem([],0),null);
 });
+
+test("reviewed plans retain actions and inline references after renderer integration", () => {
+  const s=snapshot();
+  s.conversationMode='plan';
+  s.ai!.proposedPlan={id:'reply',text:'检查 MongoDB'};
+  s.ai!.cards=[{id:'reply',type:'text',status:'completed',at,content:'<proposed_plan>\n# 检查计划\n\n检查 MongoDB 8.0\n</proposed_plan>'}];
+  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,onRevisePlan:()=>{}}));
+  assert.ok(html.includes('检查计划'));
+  assert.ok(html.includes('data-object-kind="software"'));
+  assert.ok(html.includes('执行计划') && html.includes('修改计划'));
+  assert.ok(!html.includes('proposed_plan'));
+});

@@ -98,13 +98,14 @@ func (e *Engine) publishFollowupConfirmations(ctx context.Context, s *session, s
 
 func nativePolicyHash(c Config) string {
 	return hash(js(struct {
+		Mode        string
 		Permissions *Permissions
 		Scope       *TargetScope
 		References  []string
 		Assets      []Asset
 		Terminal    string
 		SRE         *sreRoleContext
-	}{c.Permissions, c.targetScope, c.ReferencedAssets, c.Assets, c.TerminalID, c.sre}))
+	}{c.ConversationMode, c.Permissions, c.targetScope, c.ReferencedAssets, c.Assets, c.TerminalID, c.sre}))
 }
 
 func (e *Engine) waitNativeApproval(ctx context.Context, s *session, c Config, p *Approval) (accepted bool, waitErr error) {

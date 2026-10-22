@@ -186,6 +186,12 @@ func (b *Server) submitHumanMessage(id string, data Object) Object {
 		return result
 	}
 	// A deliberate new message after stopping starts a fresh queue cycle.
+	return b.beginHumanMessageLocked(id, message)
+}
+
+// Caller holds messageMu across mode selection, message admission and launch.
+func (b *Server) beginHumanMessageLocked(id string, message humanMessage) Object {
+	queue := b.Store.MessageQueue(id)
 	if queue["paused"] == true {
 		b.Store.MutateMessageQueue(id, Object{"operation": "resume", "revision": queue["revision"]})
 	}

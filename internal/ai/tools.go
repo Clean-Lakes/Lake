@@ -69,8 +69,11 @@ func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a
 	return risk, hash(js(c.Assets) + js(a)), nil
 }
 func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (result any, err error) {
+	if err := checkPlanOperation(c, call.Name, "readonly"); err != nil {
+		return nil, err
+	}
 	if e.experiment != nil {
-		return e.experiment.invoke(call)
+		return e.experiment.invoke(ctx, call)
 	}
 	// Approval recovery can enter invoke directly. It must obey the same frozen
 	// correction gate as ordinary ADK calls, including opaque session tools.

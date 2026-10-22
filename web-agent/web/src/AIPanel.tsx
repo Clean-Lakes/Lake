@@ -1,3 +1,4 @@
+import {PlanActions,planMarkdown} from './PlanMode';
 import {ReplyActivity} from './ReplyActivity';
 import {turnStatus} from './turnStatus';
 import {completedTurnInterimIds,isAssistantProse} from './completedTurnProse';
@@ -75,7 +76,8 @@ const noTags: WorkspaceTag[] = [];
 const cardMarkdownComponents:Components={...replyInfoComponents,pre:MarkdownCodeBlock,summary:ReplyDetailsSummary,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
 const Card = memo(function Card({ card, tags = noTags, animateInitial = false }: { card: AICard; tags?: WorkspaceTag[]; animateInitial?:boolean }) {
   const assistantText = ["text", "message"].includes(card.type);
-  const content = card.type === "error" ? card.status === "cancelled" ? "已停止本轮" : displayAiError(card.content || "") : card.content;
+  const isPlan=!!card.content?.trimStart().startsWith("<proposed_plan>");
+  const content = card.type === "error" ? card.status === "cancelled" ? "已停止本轮" : displayAiError(card.content || "") : isPlan ? planMarkdown(card.content||"") : card.content;
   const visibleContent=useSmoothText(content||"",assistantText&&card.status==="running",animateInitial);
   if (card.type === "image") { const image = card.data as AIImage; return <figure className="ai-image"><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "模型返回图片"}/><a href={`data:${image.mimeType};base64,${image.base64}`} download={image.name || `lake-image.${image.mimeType.split("/")[1]}`}>保存图片</a></figure>; }
   if (card.type === "thinking") return <details className="ai-thinking"><DisclosureSummary>思考过程 {card.status === "running" ? "· 正在生成" : ""}</DisclosureSummary><div>{card.content}</div></details>;
@@ -95,18 +97,18 @@ function ReplyArrival({entryId,arrive,children}:{entryId:string;arrive:boolean;c
 }
 function TranscriptMessage({message,sessionId,resources}:{message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"]}) {
  return <div className={`ai-chat-message ai-role-${message.role}${message.images?.length?" has-message-images":""}`}>
-          {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}{message.text && (message.role === 'assistant' ? <AssistantMarkdown>{message.text}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
+          {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}{message.text && (message.role === 'assistant' ? <AssistantMarkdown>{planMarkdown(message.text)}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
           {message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}
           {!!message.images?.length&&<MessageImages images={message.images}/>}
         </div>;
 }
-type TranscriptProps = {refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
+type TranscriptProps = {onRevisePlan?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
 export function AITranscript(props: TranscriptProps) {
   const {snapshot} = props;
   const resources = useMemo(() => (snapshot.resources ?? []).filter(resource => !resource.projectId || resource.projectId === snapshot.session.projectId), [snapshot.resources, snapshot.session.projectId]);
   return <ObjectReferencesProvider key={snapshot.session.id} resources={resources} tasks={snapshot.ai?.agentRuns}><AITranscriptContent {...props}/></ObjectReferencesProvider>;
 }
-function AITranscriptContent({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh }: TranscriptProps) {
+function AITranscriptContent({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh, onRevisePlan }: TranscriptProps) {
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
   // Retain an observed completion when a legacy turn has no saved timing and
@@ -199,7 +201,7 @@ function AITranscriptContent({ snapshot, renderAction, onInspect, onStopTurn, st
         if (entry.card && ["thinking", "operation", "shell"].includes(entry.card.type)) return <ThinkingTimeline key={entry.id} cards={group.map(item => item.card!)} live={thinkingVisible && group.at(-1)?.id === visibleEntries.at(-1)?.id} onInspect={onInspect}/>;
         if (entry.message) return entry.message.role==='user'?null:<TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message}/>;
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
-        return <ReplyArrival key={entry.id} entryId={entry.id} arrive={mode==='conversation'&&turn.some(item=>item.message?.id===latestUser?.id)&&!!entry.card&&['text','message'].includes(entry.card.type)&&!restoredText.current.has(entry.card.id)}>{entry.card?.type === "text" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)}/></ReplyArrival>;
+        return <ReplyArrival key={entry.id} entryId={entry.id} arrive={mode==='conversation'&&turn.some(item=>item.message?.id===latestUser?.id)&&!!entry.card&&['text','message'].includes(entry.card.type)&&!restoredText.current.has(entry.card.id)}>{entry.card?.type === "text" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)}/>{mode==='conversation' && snapshot.conversationMode==='plan' && snapshot.ai?.status==='completed' && snapshot.ai.proposedPlan?.id===entry.card?.id && <PlanActions key={entry.card!.id} disabled={disabled||!!snapshot.messageQueue?.items.length} onRevise={()=>onRevisePlan?.()} onExecute={async()=>{await api.executePlan(snapshot.session.id,entry.card!.id);await refresh?.();}}/>}</ReplyArrival>;
       };
       return <ReplyReferenceScope key={turn[0]!.id} cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}><div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)}>
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources}/>)}

@@ -65,7 +65,7 @@ func memoryUTF8Prefix(s string, limit int) (string, bool) {
 }
 
 func (e *Engine) collectMemorySnapshot(s *session, c Config, input TurnInput) {
-	if e.worker != nil || !c.MemoryEnabled || !c.MemoryExtractionEnabled || c.MemoryProjectID == "" || input.IgnoreProjectMemory || len(input.UserText) > 64*1024 {
+	if c.ConversationMode == ModePlan || e.worker != nil || !c.MemoryEnabled || !c.MemoryExtractionEnabled || c.MemoryProjectID == "" || input.IgnoreProjectMemory || len(input.UserText) > 64*1024 {
 		return
 	}
 	recent := append([]string(nil), s.state.MemoryRecentUserInputs...)

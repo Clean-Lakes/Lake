@@ -1,0 +1,3350 @@
+{
+  "autoAdopted": false,
+  "baselineBindingChanged": false,
+  "baselineDevelopment": {
+    "status": "passed",
+    "checks": {
+      "boundary": true,
+      "classification": true,
+      "diagnostic_marker": true,
+      "evidence": true,
+      "runtime_completed": true,
+      "task_outcome": true,
+      "valid_output": true
+    },
+    "limitations": [
+      "Host-reset readonly test environment only; no production recovery was executed.",
+      "Fixed structural/evidence/lexical checks do not establish general model benefit."
+    ]
+  },
+  "baselineHoldout": {
+    "status": "passed",
+    "checks": {
+      "boundary": true,
+      "classification": true,
+      "diagnostic_marker": true,
+      "evidence": true,
+      "runtime_completed": true,
+      "task_outcome": true,
+      "valid_output": true
+    },
+    "limitations": [
+      "Host-reset readonly test environment only; no production recovery was executed.",
+      "Fixed structural/evidence/lexical checks do not establish general model benefit."
+    ]
+  },
+  "budget": {
+    "extraReadRetries": 2,
+    "maxRevisions": 2,
+    "maxNoProgressRevisions": 2,
+    "maxConcurrentExperiments": 1,
+    "maxRuns": 6,
+    "maxOptimizationRequests": 12,
+    "maxAdditionalTokens": 100000,
+    "maxActiveSeconds": 600,
+    "userWaitTtlSeconds": 86400
+  },
+  "candidateEligibleForReview": false,
+  "developmentFixture": {
+    "id": "SL-005",
+    "version": "e770107f718259fc67aeaefc4b5971a601e58fbb5bc2d68ebaf02e8c81a1797e"
+  },
+  "effectConclusion": "inconclusive",
+  "holdoutFixture": {
+    "id": "LIVE-HOLDOUT-DB",
+    "version": "825e594f205ca81a9c39b28e4b0836c2b4b7947c165f8bfa7c413075c2cf0065"
+  },
+  "mode": "resettable_live_readonly",
+  "model": "deepseek-flash",
+  "modelRef": "2760bf1fb2f89bfc6406e05fcca44ef5aa7e2acce70300817755bb24e019cdf7",
+  "providerModels": {
+    "deepseek-flash": true
+  },
+  "reasoningEffort": "low",
+  "requests": 12,
+  "stages": [
+    {
+      "exactAssetVerified": true,
+      "result": {
+        "mode": "resettable_live_readonly",
+        "status": "completed",
+        "answer": "{\"outcome\":\"diagnosed\",\"finding\":\"read_only_transaction\",\"answer\":\"观测到该数据库连接（SQLite）处于只读模式：query_only=1，且只读查询正常返回 1 行；此前的写入尝试报错 \\\"attempt to write a readonly database (8)\\\"。因此写入失败并非表结构、权限或磁盘问题，而是连接被显式设为只读（query_only）导致任何写操作被拒绝。若需写入，需在具备写权限的连接上执行，并确认该连接不再设置 query_only/read-only 模式；本次测试环境仅有只读观测适配器，无法执行该变更。\",\"evidenceIds\":[\"observation-1\"]}",
+        "runtimeId": "live_0b4a0b1b0f134b1a88b12098ae3488a5_3f3e51214fa2d4fc48af054b7705a355",
+        "resetHash": "a7424e3d1fe2c0d2de9e63e61ed206a0c29425d6877e18ecffc00190c37880b1",
+        "resetNonce": "live_0b4a0b1b0f134b1a88b12098ae3488a5",
+        "observed": 1,
+        "violations": 0,
+        "requests": 2,
+        "usage": {
+          "inputKnown": true,
+          "outputKnown": true,
+          "known": true,
+          "cachedInput": 4096,
+          "input": 8445,
+          "output": 269,
+          "total": 8714
+        },
+        "durationMs": 2801,
+        "manifests": [
+          {
+            "schemaVersion": 1,
+            "requestId": "073f7038e6d0907dfd7ba1ffbd751213",
+            "runId": "live_0b4a0b1b0f134b1a88b12098ae3488a5_3f3e51214fa2d4fc48af054b7705a355",
+            "turnId": "29ab51c14d7c73e6917b13a5b6697d7b",
+            "round": 1,
+            "buildCommit": "unknown",
+            "buildDirty": false,
+            "profile": "db-query-editor",
+            "fixedRulesHash": "85b6443e053797904d050e4498044227750f27460d74965751495862ebf2f8e2",
+            "builtinStrategyHash": "29620e8d220e0efd4db5fd71ae79ab384634b5df678108606bca54e86f3400d0",
+            "fragments": [
+              {
+                "layer": "fixed_rules",
+                "source": "identity-and-permissions",
+                "contentHash": "4c0bc783a75ccf962211c6a11fbef1870c2dc31a3b95972635b6264bf83fcfc3",
+                "bytes": 2434
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "db-query-editor",
+                "contentHash": "9cc2e39f180aff7336cbec6d47d1ab0b75a697a0fb2dfd9531f00a84db638608",
+                "bytes": 722
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "user-language-policy",
+                "contentHash": "a11e942aa20a7a672693ebfb3287e8251abd7e43f3ee8ecb252a123080f2ab1a",
+                "bytes": 270
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "user-language-policy",
+                "contentHash": "a75e4b77436a92424033bf2729640462964c047ac027f5709a049cfe5cfdf1ff",
+                "bytes": 481
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "hide-internal-ref-policy",
+                "contentHash": "881b524fd3e4dccd081a0bce91119e26eb2fde1073bde4ba6fd359c697feb429",
+                "bytes": 245
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "7fc5dcfbfa8f2910608a6ba8dcdbc9d1d142448217e9042a0f5121f1fe724387",
+                "bytes": 25
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "question-policy",
+                "contentHash": "a4c12b31920e86abf53ece3754fd400b8c0f125e432cc26e9914e5822ffb4728",
+                "bytes": 285
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "526e1bc1007a089fb51a241785850d0b8f004730ca5c542fcc93d107858efb25",
+                "bytes": 2436
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "1546fa751f547fbcd4d958f3d76c76d5b5334a8343bc6f97c6be126f39f28121",
+                "bytes": 53
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "927a1c9e2a8c1046f51ab8b1c5881ec6455048363b57e76144b1bbe5af9e9547",
+                "bytes": 128
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "aaa7fcc305a120a68168d3f5e06baf06ad2b3d33d90dcf3b91b0f4a4cdddcbbb",
+                "bytes": 521
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "59b40e6d90228d1e973750b6813a23072792b57baa848daa8593d304054b6fc4",
+                "bytes": 993
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5dd3ccc1930cb8e6b044e208d48d18681d151afc57e63d327c2050840318d275",
+                "bytes": 597
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "7c18591bc2910cd69182f91a458bb553b7f2df9654089a0ebaff5e5d661fb5b9",
+                "bytes": 688
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "edccd68d9522b0c63ddbdb71811a9364df67e3218addc8717e916faa6fce5e73",
+                "bytes": 379
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "25de3a8687555214b426a3e0b83753e6571a1aedf88fa404a05297bad576ad72",
+                "bytes": 64
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "45eb7466cefd91ebfc017ab29939970d5704ade245777e61e6a4220abb618dfc",
+                "bytes": 131
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "6e751b94d5e5e2673f60014d025cf306e0acaf5f5a2214d0e3973bca4df95c25",
+                "bytes": 68
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "7ba6ab6987d1a0a522c626ae4cfbf7830e90489d1abf5017a008e65289b1ba2b",
+                "bytes": 124
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5363a392df0fa95359c946e807faf9a333ec011ee0c9de2051f942ef78031e87",
+                "bytes": 265
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "permission-label",
+                "contentHash": "d3cea5d5d6ea87cd94e878c53f77821ec5817457003977471cdc31e4c7eb1e05",
+                "bytes": 40
+              },
+              {
+                "layer": "task_context",
+                "source": "effective-permissions",
+                "contentHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+                "bytes": 185
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "d0a6c991f6af128ac90e223d8aa0e10202475faa4a526a0823981261b932401d",
+                "bytes": 579
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "preset-label",
+                "contentHash": "0ce012f1b70ba42c6279f84d32155d54cb2b712a98b9db6597f70ba3c1970d33",
+                "bytes": 57
+              },
+              {
+                "layer": "task_context",
+                "source": "user-preferences",
+                "contentHash": "30c3b489fc1d7bb6b4050841ad95d310277084ebabb9810463f15bd048e33156",
+                "bytes": 74
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1e08bd8f02320ff40584872149bf5d7b898aff9929b9f0d555ae5c0185e0351d",
+                "bytes": 506
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "48731c832ee73a77d52507f3549203f8b5678d5d09e25b135ab840de7affb9a1",
+                "bytes": 449
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1d1f53528d178fb77a5049e5edd0f86b427cd06a36e832f4f83b37bc68951327",
+                "bytes": 264
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "0509a70d0a3f75d8dbda85bc35a69caf36a85805b4e8e3ed427e9ee560c274f4",
+                "bytes": 780
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "bfcd8e811e8f662437e49e2609541d1c9b46e9a9c9fe152b576db559bc4ac9aa",
+                "bytes": 236
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "5f99ea0419c14c2b65ef16195cc38bf2254235287dbef02afe9262c986ab29d4",
+                "bytes": 266
+              },
+              {
+                "layer": "task_context",
+                "source": "turn-language",
+                "contentHash": "615eaffd400bfe5631d4812e0a9bcc8c277761f2c11294ed3b5b06311f49c85b",
+                "bytes": 1425
+              }
+            ],
+            "selectedAssets": [],
+            "skillSnapshots": [],
+            "modelConfigHash": "6b0e8e2acdb2a0a57469a8438c7d0072191b76e09d9a77fab1561d1f3a574ee6",
+            "toolCatalogHash": "f2d899557f79f7ad6401a1421b6926ac8faeeafa7257f31f904e29b839d8eb87",
+            "permissionPolicyVersion": "lake-runtime-permissions-v1",
+            "permissionSettingsHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+            "targetScopeHash": "fdc319e38282f49bb3d98040f4ce580aaf82b1c11fcfda90dfa13d6dc2fcaace",
+            "inputBudget": {
+              "contextWindow": 64000,
+              "maxOutput": 1024,
+              "maxSteps": 3,
+              "historyCost": 17432,
+              "toolsCost": 3199
+            },
+            "omittedAssets": [],
+            "settingsRevision": 0,
+            "epoch": 0,
+            "systemHash": "97b12a5c3266662dd203e548d24da716a70d14452b4735fbb1f8a493c6f38b88",
+            "requestHash": "c4996168e6463c8b0c0fc6b6ff47cde1f3c5fe2c1856a8065f4d43a48cf00589",
+            "compositionMatched": true,
+            "preparedAt": "2026-10-22T03:01:05.854179Z"
+          },
+          {
+            "schemaVersion": 1,
+            "requestId": "bf955209cd0a68827d6f8c72434b1ed3",
+            "runId": "live_0b4a0b1b0f134b1a88b12098ae3488a5_3f3e51214fa2d4fc48af054b7705a355",
+            "turnId": "29ab51c14d7c73e6917b13a5b6697d7b",
+            "round": 2,
+            "buildCommit": "unknown",
+            "buildDirty": false,
+            "profile": "db-query-editor",
+            "fixedRulesHash": "85b6443e053797904d050e4498044227750f27460d74965751495862ebf2f8e2",
+            "builtinStrategyHash": "29620e8d220e0efd4db5fd71ae79ab384634b5df678108606bca54e86f3400d0",
+            "fragments": [
+              {
+                "layer": "fixed_rules",
+                "source": "identity-and-permissions",
+                "contentHash": "4c0bc783a75ccf962211c6a11fbef1870c2dc31a3b95972635b6264bf83fcfc3",
+                "bytes": 2434
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "db-query-editor",
+                "contentHash": "9cc2e39f180aff7336cbec6d47d1ab0b75a697a0fb2dfd9531f00a84db638608",
+                "bytes": 722
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "user-language-policy",
+                "contentHash": "a11e942aa20a7a672693ebfb3287e8251abd7e43f3ee8ecb252a123080f2ab1a",
+                "bytes": 270
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "user-language-policy",
+                "contentHash": "a75e4b77436a92424033bf2729640462964c047ac027f5709a049cfe5cfdf1ff",
+                "bytes": 481
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "hide-internal-ref-policy",
+                "contentHash": "881b524fd3e4dccd081a0bce91119e26eb2fde1073bde4ba6fd359c697feb429",
+                "bytes": 245
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "7fc5dcfbfa8f2910608a6ba8dcdbc9d1d142448217e9042a0f5121f1fe724387",
+                "bytes": 25
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "question-policy",
+                "contentHash": "a4c12b31920e86abf53ece3754fd400b8c0f125e432cc26e9914e5822ffb4728",
+                "bytes": 285
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "526e1bc1007a089fb51a241785850d0b8f004730ca5c542fcc93d107858efb25",
+                "bytes": 2436
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "1546fa751f547fbcd4d958f3d76c76d5b5334a8343bc6f97c6be126f39f28121",
+                "bytes": 53
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "927a1c9e2a8c1046f51ab8b1c5881ec6455048363b57e76144b1bbe5af9e9547",
+                "bytes": 128
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "aaa7fcc305a120a68168d3f5e06baf06ad2b3d33d90dcf3b91b0f4a4cdddcbbb",
+                "bytes": 521
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "59b40e6d90228d1e973750b6813a23072792b57baa848daa8593d304054b6fc4",
+                "bytes": 993
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5dd3ccc1930cb8e6b044e208d48d18681d151afc57e63d327c2050840318d275",
+                "bytes": 597
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "7c18591bc2910cd69182f91a458bb553b7f2df9654089a0ebaff5e5d661fb5b9",
+                "bytes": 688
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "edccd68d9522b0c63ddbdb71811a9364df67e3218addc8717e916faa6fce5e73",
+                "bytes": 379
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "25de3a8687555214b426a3e0b83753e6571a1aedf88fa404a05297bad576ad72",
+                "bytes": 64
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "45eb7466cefd91ebfc017ab29939970d5704ade245777e61e6a4220abb618dfc",
+                "bytes": 131
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "6e751b94d5e5e2673f60014d025cf306e0acaf5f5a2214d0e3973bca4df95c25",
+                "bytes": 68
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "7ba6ab6987d1a0a522c626ae4cfbf7830e90489d1abf5017a008e65289b1ba2b",
+                "bytes": 124
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5363a392df0fa95359c946e807faf9a333ec011ee0c9de2051f942ef78031e87",
+                "bytes": 265
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "permission-label",
+                "contentHash": "d3cea5d5d6ea87cd94e878c53f77821ec5817457003977471cdc31e4c7eb1e05",
+                "bytes": 40
+              },
+              {
+                "layer": "task_context",
+                "source": "effective-permissions",
+                "contentHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+                "bytes": 185
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "d0a6c991f6af128ac90e223d8aa0e10202475faa4a526a0823981261b932401d",
+                "bytes": 579
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "preset-label",
+                "contentHash": "0ce012f1b70ba42c6279f84d32155d54cb2b712a98b9db6597f70ba3c1970d33",
+                "bytes": 57
+              },
+              {
+                "layer": "task_context",
+                "source": "user-preferences",
+                "contentHash": "30c3b489fc1d7bb6b4050841ad95d310277084ebabb9810463f15bd048e33156",
+                "bytes": 74
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1e08bd8f02320ff40584872149bf5d7b898aff9929b9f0d555ae5c0185e0351d",
+                "bytes": 506
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "48731c832ee73a77d52507f3549203f8b5678d5d09e25b135ab840de7affb9a1",
+                "bytes": 449
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1d1f53528d178fb77a5049e5edd0f86b427cd06a36e832f4f83b37bc68951327",
+                "bytes": 264
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "0509a70d0a3f75d8dbda85bc35a69caf36a85805b4e8e3ed427e9ee560c274f4",
+                "bytes": 780
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "bfcd8e811e8f662437e49e2609541d1c9b46e9a9c9fe152b576db559bc4ac9aa",
+                "bytes": 236
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "5f99ea0419c14c2b65ef16195cc38bf2254235287dbef02afe9262c986ab29d4",
+                "bytes": 266
+              },
+              {
+                "layer": "task_context",
+                "source": "turn-language",
+                "contentHash": "615eaffd400bfe5631d4812e0a9bcc8c277761f2c11294ed3b5b06311f49c85b",
+                "bytes": 1425
+              }
+            ],
+            "selectedAssets": [],
+            "skillSnapshots": [],
+            "modelConfigHash": "6b0e8e2acdb2a0a57469a8438c7d0072191b76e09d9a77fab1561d1f3a574ee6",
+            "toolCatalogHash": "f2d899557f79f7ad6401a1421b6926ac8faeeafa7257f31f904e29b839d8eb87",
+            "permissionPolicyVersion": "lake-runtime-permissions-v1",
+            "permissionSettingsHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+            "targetScopeHash": "fdc319e38282f49bb3d98040f4ce580aaf82b1c11fcfda90dfa13d6dc2fcaace",
+            "inputBudget": {
+              "contextWindow": 64000,
+              "maxOutput": 1024,
+              "maxSteps": 3,
+              "historyCost": 17930,
+              "toolsCost": 3199
+            },
+            "omittedAssets": [],
+            "settingsRevision": 0,
+            "epoch": 0,
+            "systemHash": "97b12a5c3266662dd203e548d24da716a70d14452b4735fbb1f8a493c6f38b88",
+            "requestHash": "ee18fa5c96f4ce05123b2fd9413ad152ae2cd35e9acfc4d04383f2c5449b7d04",
+            "compositionMatched": true,
+            "preparedAt": "2026-10-22T03:01:07.032404Z"
+          }
+        ],
+        "evaluation": {
+          "status": "passed",
+          "checks": {
+            "boundary": true,
+            "classification": true,
+            "diagnostic_marker": true,
+            "evidence": true,
+            "runtime_completed": true,
+            "task_outcome": true,
+            "valid_output": true
+          },
+          "limitations": [
+            "Host-reset readonly test environment only; no production recovery was executed.",
+            "Fixed structural/evidence/lexical checks do not establish general model benefit."
+          ]
+        }
+      },
+      "stage": "baseline_development"
+    },
+    {
+      "holdoutInput": false,
+      "inputHash": "9389dd731e42bf8bb60e8cf3c4975c3d89dd7185eeac05240dd8441137ab3000",
+      "stage": "propose",
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 0,
+        "input": 412,
+        "output": 936,
+        "total": 1348
+      },
+      "valid": true
+    },
+    {
+      "exactAssetVerified": true,
+      "result": {
+        "mode": "resettable_live_readonly",
+        "status": "completed",
+        "answer": "{\"outcome\":\"diagnosed\",\"finding\":\"read_only_transaction\",\"answer\":\"在同一目标上执行只读状态观测，返回 evidenceId observation-1：实际连接的 SQLite query_only=1，读查询成功返回 1 行（row_count=1），而此前写入被拒绝并报 \\\"attempt to write a readonly database (8)\\\"。因此该连接/事务处于只读模式，写入失败的原因是只读事务限制，而非 schema 或权限问题。需要说明：本次只取得 query_only/只读模式与读探测成功这两项确认证据，未对写能力做任何实际测试，也未改变连接的可读写配置。\",\"evidenceIds\":[\"observation-1\"]}",
+        "runtimeId": "live_68fc5f1b244dbefc0836fcd640ca5232_3a53390568db269bd22e30c2f09297c8",
+        "resetHash": "7c9697c4b52e02914232de66fdafefc40f558ab935f71940f69c0fca9f243a9a",
+        "resetNonce": "live_68fc5f1b244dbefc0836fcd640ca5232",
+        "observed": 1,
+        "violations": 0,
+        "requests": 2,
+        "usage": {
+          "inputKnown": true,
+          "outputKnown": true,
+          "known": true,
+          "cachedInput": 7168,
+          "input": 9307,
+          "output": 323,
+          "total": 9630
+        },
+        "durationMs": 3066,
+        "manifests": [
+          {
+            "schemaVersion": 1,
+            "requestId": "5c10f8e63987494d3ba5bb9b9307e73a",
+            "runId": "live_68fc5f1b244dbefc0836fcd640ca5232_3a53390568db269bd22e30c2f09297c8",
+            "turnId": "618c26e37d9ac40b010af29e39449f2d",
+            "round": 1,
+            "buildCommit": "unknown",
+            "buildDirty": false,
+            "profile": "db-query-editor",
+            "fixedRulesHash": "85b6443e053797904d050e4498044227750f27460d74965751495862ebf2f8e2",
+            "builtinStrategyHash": "29620e8d220e0efd4db5fd71ae79ab384634b5df678108606bca54e86f3400d0",
+            "fragments": [
+              {
+                "layer": "fixed_rules",
+                "source": "identity-and-permissions",
+                "contentHash": "4c0bc783a75ccf962211c6a11fbef1870c2dc31a3b95972635b6264bf83fcfc3",
+                "bytes": 2434
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "db-query-editor",
+                "contentHash": "9cc2e39f180aff7336cbec6d47d1ab0b75a697a0fb2dfd9531f00a84db638608",
+                "bytes": 722
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "user-language-policy",
+                "contentHash": "a11e942aa20a7a672693ebfb3287e8251abd7e43f3ee8ecb252a123080f2ab1a",
+                "bytes": 270
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "user-language-policy",
+                "contentHash": "a75e4b77436a92424033bf2729640462964c047ac027f5709a049cfe5cfdf1ff",
+                "bytes": 481
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "hide-internal-ref-policy",
+                "contentHash": "881b524fd3e4dccd081a0bce91119e26eb2fde1073bde4ba6fd359c697feb429",
+                "bytes": 245
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "7fc5dcfbfa8f2910608a6ba8dcdbc9d1d142448217e9042a0f5121f1fe724387",
+                "bytes": 25
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "question-policy",
+                "contentHash": "a4c12b31920e86abf53ece3754fd400b8c0f125e432cc26e9914e5822ffb4728",
+                "bytes": 285
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "526e1bc1007a089fb51a241785850d0b8f004730ca5c542fcc93d107858efb25",
+                "bytes": 2436
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "1546fa751f547fbcd4d958f3d76c76d5b5334a8343bc6f97c6be126f39f28121",
+                "bytes": 53
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "927a1c9e2a8c1046f51ab8b1c5881ec6455048363b57e76144b1bbe5af9e9547",
+                "bytes": 128
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "aaa7fcc305a120a68168d3f5e06baf06ad2b3d33d90dcf3b91b0f4a4cdddcbbb",
+                "bytes": 521
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "59b40e6d90228d1e973750b6813a23072792b57baa848daa8593d304054b6fc4",
+                "bytes": 993
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5dd3ccc1930cb8e6b044e208d48d18681d151afc57e63d327c2050840318d275",
+                "bytes": 597
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "7c18591bc2910cd69182f91a458bb553b7f2df9654089a0ebaff5e5d661fb5b9",
+                "bytes": 688
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "edccd68d9522b0c63ddbdb71811a9364df67e3218addc8717e916faa6fce5e73",
+                "bytes": 379
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "25de3a8687555214b426a3e0b83753e6571a1aedf88fa404a05297bad576ad72",
+                "bytes": 64
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "45eb7466cefd91ebfc017ab29939970d5704ade245777e61e6a4220abb618dfc",
+                "bytes": 131
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "6e751b94d5e5e2673f60014d025cf306e0acaf5f5a2214d0e3973bca4df95c25",
+                "bytes": 68
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "7ba6ab6987d1a0a522c626ae4cfbf7830e90489d1abf5017a008e65289b1ba2b",
+                "bytes": 124
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5363a392df0fa95359c946e807faf9a333ec011ee0c9de2051f942ef78031e87",
+                "bytes": 265
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "permission-label",
+                "contentHash": "d3cea5d5d6ea87cd94e878c53f77821ec5817457003977471cdc31e4c7eb1e05",
+                "bytes": 40
+              },
+              {
+                "layer": "task_context",
+                "source": "effective-permissions",
+                "contentHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+                "bytes": 185
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "d0a6c991f6af128ac90e223d8aa0e10202475faa4a526a0823981261b932401d",
+                "bytes": 579
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "preset-label",
+                "contentHash": "0ce012f1b70ba42c6279f84d32155d54cb2b712a98b9db6597f70ba3c1970d33",
+                "bytes": 57
+              },
+              {
+                "layer": "task_context",
+                "source": "user-preferences",
+                "contentHash": "30c3b489fc1d7bb6b4050841ad95d310277084ebabb9810463f15bd048e33156",
+                "bytes": 74
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1e08bd8f02320ff40584872149bf5d7b898aff9929b9f0d555ae5c0185e0351d",
+                "bytes": 506
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "48731c832ee73a77d52507f3549203f8b5678d5d09e25b135ab840de7affb9a1",
+                "bytes": 449
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1d1f53528d178fb77a5049e5edd0f86b427cd06a36e832f4f83b37bc68951327",
+                "bytes": 264
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "0509a70d0a3f75d8dbda85bc35a69caf36a85805b4e8e3ed427e9ee560c274f4",
+                "bytes": 780
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "bfcd8e811e8f662437e49e2609541d1c9b46e9a9c9fe152b576db559bc4ac9aa",
+                "bytes": 236
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "5f99ea0419c14c2b65ef16195cc38bf2254235287dbef02afe9262c986ab29d4",
+                "bytes": 266
+              },
+              {
+                "layer": "task_context",
+                "source": "turn-language",
+                "contentHash": "615eaffd400bfe5631d4812e0a9bcc8c277761f2c11294ed3b5b06311f49c85b",
+                "bytes": 1425
+              },
+              {
+                "layer": "user_strategy",
+                "source": "adopted-assets",
+                "contentHash": "58497d620dcb6688f85b1d9421201fc2cb23aaf3d6a331929304124b980e977f",
+                "bytes": 1911
+              }
+            ],
+            "selectedAssets": [
+              {
+                "assetId": "p8-temporary-propose",
+                "revision": 1,
+                "contentHash": "680ef6aa25a0f70ec8b38a6672942d34665588820b9563533c196970c0006a93"
+              }
+            ],
+            "skillSnapshots": [],
+            "modelConfigHash": "6b0e8e2acdb2a0a57469a8438c7d0072191b76e09d9a77fab1561d1f3a574ee6",
+            "toolCatalogHash": "f2d899557f79f7ad6401a1421b6926ac8faeeafa7257f31f904e29b839d8eb87",
+            "permissionPolicyVersion": "lake-runtime-permissions-v1",
+            "permissionSettingsHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+            "targetScopeHash": "fdc319e38282f49bb3d98040f4ce580aaf82b1c11fcfda90dfa13d6dc2fcaace",
+            "inputBudget": {
+              "contextWindow": 64000,
+              "maxOutput": 1024,
+              "maxSteps": 3,
+              "historyCost": 19379,
+              "toolsCost": 3199
+            },
+            "omittedAssets": [],
+            "settingsRevision": 0,
+            "epoch": 0,
+            "systemHash": "18eab9e6f23fd21609fcd22ec253a5bcc537767f7dbccd5835772eb7002b5849",
+            "requestHash": "a71a2b7bf84fceda73c234fc423862c5ce161746e797337637d7638d2855c020",
+            "compositionMatched": true,
+            "preparedAt": "2026-10-22T03:01:13.860069Z"
+          },
+          {
+            "schemaVersion": 1,
+            "requestId": "2711f1c4eed99e2374e9337a50fd5121",
+            "runId": "live_68fc5f1b244dbefc0836fcd640ca5232_3a53390568db269bd22e30c2f09297c8",
+            "turnId": "618c26e37d9ac40b010af29e39449f2d",
+            "round": 2,
+            "buildCommit": "unknown",
+            "buildDirty": false,
+            "profile": "db-query-editor",
+            "fixedRulesHash": "85b6443e053797904d050e4498044227750f27460d74965751495862ebf2f8e2",
+            "builtinStrategyHash": "29620e8d220e0efd4db5fd71ae79ab384634b5df678108606bca54e86f3400d0",
+            "fragments": [
+              {
+                "layer": "fixed_rules",
+                "source": "identity-and-permissions",
+                "contentHash": "4c0bc783a75ccf962211c6a11fbef1870c2dc31a3b95972635b6264bf83fcfc3",
+                "bytes": 2434
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "db-query-editor",
+                "contentHash": "9cc2e39f180aff7336cbec6d47d1ab0b75a697a0fb2dfd9531f00a84db638608",
+                "bytes": 722
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "user-language-policy",
+                "contentHash": "a11e942aa20a7a672693ebfb3287e8251abd7e43f3ee8ecb252a123080f2ab1a",
+                "bytes": 270
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "user-language-policy",
+                "contentHash": "a75e4b77436a92424033bf2729640462964c047ac027f5709a049cfe5cfdf1ff",
+                "bytes": 481
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "hide-internal-ref-policy",
+                "contentHash": "881b524fd3e4dccd081a0bce91119e26eb2fde1073bde4ba6fd359c697feb429",
+                "bytes": 245
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "7fc5dcfbfa8f2910608a6ba8dcdbc9d1d142448217e9042a0f5121f1fe724387",
+                "bytes": 25
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "question-policy",
+                "contentHash": "a4c12b31920e86abf53ece3754fd400b8c0f125e432cc26e9914e5822ffb4728",
+                "bytes": 285
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "526e1bc1007a089fb51a241785850d0b8f004730ca5c542fcc93d107858efb25",
+                "bytes": 2436
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "1546fa751f547fbcd4d958f3d76c76d5b5334a8343bc6f97c6be126f39f28121",
+                "bytes": 53
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "927a1c9e2a8c1046f51ab8b1c5881ec6455048363b57e76144b1bbe5af9e9547",
+                "bytes": 128
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "aaa7fcc305a120a68168d3f5e06baf06ad2b3d33d90dcf3b91b0f4a4cdddcbbb",
+                "bytes": 521
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "59b40e6d90228d1e973750b6813a23072792b57baa848daa8593d304054b6fc4",
+                "bytes": 993
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5dd3ccc1930cb8e6b044e208d48d18681d151afc57e63d327c2050840318d275",
+                "bytes": 597
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "7c18591bc2910cd69182f91a458bb553b7f2df9654089a0ebaff5e5d661fb5b9",
+                "bytes": 688
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "edccd68d9522b0c63ddbdb71811a9364df67e3218addc8717e916faa6fce5e73",
+                "bytes": 379
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "25de3a8687555214b426a3e0b83753e6571a1aedf88fa404a05297bad576ad72",
+                "bytes": 64
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "45eb7466cefd91ebfc017ab29939970d5704ade245777e61e6a4220abb618dfc",
+                "bytes": 131
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "6e751b94d5e5e2673f60014d025cf306e0acaf5f5a2214d0e3973bca4df95c25",
+                "bytes": 68
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "7ba6ab6987d1a0a522c626ae4cfbf7830e90489d1abf5017a008e65289b1ba2b",
+                "bytes": 124
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5363a392df0fa95359c946e807faf9a333ec011ee0c9de2051f942ef78031e87",
+                "bytes": 265
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "permission-label",
+                "contentHash": "d3cea5d5d6ea87cd94e878c53f77821ec5817457003977471cdc31e4c7eb1e05",
+                "bytes": 40
+              },
+              {
+                "layer": "task_context",
+                "source": "effective-permissions",
+                "contentHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+                "bytes": 185
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "d0a6c991f6af128ac90e223d8aa0e10202475faa4a526a0823981261b932401d",
+                "bytes": 579
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "preset-label",
+                "contentHash": "0ce012f1b70ba42c6279f84d32155d54cb2b712a98b9db6597f70ba3c1970d33",
+                "bytes": 57
+              },
+              {
+                "layer": "task_context",
+                "source": "user-preferences",
+                "contentHash": "30c3b489fc1d7bb6b4050841ad95d310277084ebabb9810463f15bd048e33156",
+                "bytes": 74
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1e08bd8f02320ff40584872149bf5d7b898aff9929b9f0d555ae5c0185e0351d",
+                "bytes": 506
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "48731c832ee73a77d52507f3549203f8b5678d5d09e25b135ab840de7affb9a1",
+                "bytes": 449
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1d1f53528d178fb77a5049e5edd0f86b427cd06a36e832f4f83b37bc68951327",
+                "bytes": 264
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "0509a70d0a3f75d8dbda85bc35a69caf36a85805b4e8e3ed427e9ee560c274f4",
+                "bytes": 780
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "bfcd8e811e8f662437e49e2609541d1c9b46e9a9c9fe152b576db559bc4ac9aa",
+                "bytes": 236
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "5f99ea0419c14c2b65ef16195cc38bf2254235287dbef02afe9262c986ab29d4",
+                "bytes": 266
+              },
+              {
+                "layer": "task_context",
+                "source": "turn-language",
+                "contentHash": "615eaffd400bfe5631d4812e0a9bcc8c277761f2c11294ed3b5b06311f49c85b",
+                "bytes": 1425
+              },
+              {
+                "layer": "user_strategy",
+                "source": "adopted-assets",
+                "contentHash": "58497d620dcb6688f85b1d9421201fc2cb23aaf3d6a331929304124b980e977f",
+                "bytes": 1911
+              }
+            ],
+            "selectedAssets": [
+              {
+                "assetId": "p8-temporary-propose",
+                "revision": 1,
+                "contentHash": "680ef6aa25a0f70ec8b38a6672942d34665588820b9563533c196970c0006a93"
+              }
+            ],
+            "skillSnapshots": [],
+            "modelConfigHash": "6b0e8e2acdb2a0a57469a8438c7d0072191b76e09d9a77fab1561d1f3a574ee6",
+            "toolCatalogHash": "f2d899557f79f7ad6401a1421b6926ac8faeeafa7257f31f904e29b839d8eb87",
+            "permissionPolicyVersion": "lake-runtime-permissions-v1",
+            "permissionSettingsHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+            "targetScopeHash": "fdc319e38282f49bb3d98040f4ce580aaf82b1c11fcfda90dfa13d6dc2fcaace",
+            "inputBudget": {
+              "contextWindow": 64000,
+              "maxOutput": 1024,
+              "maxSteps": 3,
+              "historyCost": 19877,
+              "toolsCost": 3199
+            },
+            "omittedAssets": [],
+            "settingsRevision": 0,
+            "epoch": 0,
+            "systemHash": "18eab9e6f23fd21609fcd22ec253a5bcc537767f7dbccd5835772eb7002b5849",
+            "requestHash": "8e874314bf1805c7e53d43ede1a9872352129ece00ebb41db614c9e33410ee9b",
+            "compositionMatched": true,
+            "preparedAt": "2026-10-22T03:01:15.123156Z"
+          }
+        ],
+        "evaluation": {
+          "status": "passed",
+          "checks": {
+            "boundary": true,
+            "classification": true,
+            "diagnostic_marker": true,
+            "evidence": true,
+            "runtime_completed": true,
+            "task_outcome": true,
+            "valid_output": true
+          },
+          "limitations": [
+            "Host-reset readonly test environment only; no production recovery was executed.",
+            "Fixed structural/evidence/lexical checks do not establish general model benefit."
+          ]
+        }
+      },
+      "stage": "proposal_development"
+    },
+    {
+      "holdoutInput": false,
+      "inputHash": "cacfe0714eec8d766f77b6e000513fa42273f146b769e7edfed90a6d022384d5",
+      "stage": "synthesize",
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 128,
+        "input": 867,
+        "output": 868,
+        "total": 1735
+      },
+      "valid": true
+    },
+    {
+      "exactAssetVerified": true,
+      "result": {
+        "mode": "resettable_live_readonly",
+        "status": "completed",
+        "answer": "{\"outcome\":\"diagnosed\",\"finding\":\"read_only_transaction\",\"answer\":\"该连接的只读事务状态已被确认：实际 SQLite 连接的 query_only=1，只读探测成功返回 1 行，说明读取链路正常；而此前的 INSERT 报错“attempt to write a readonly database (8)”，即在只读连接上执行写入被拒绝。因此写入失败的原因是连接/事务处于只读（query_only）模式，而非表结构、权限或磁盘问题。需要说明的是，本次仅执行了只读观测，未测试写入能力，也未更改任何可写配置；若需写入，必须由具备权限的方在明确授权下切换到可写连接，本环境无该授权。\",\"evidenceIds\":[\"observation-1\"]}",
+        "runtimeId": "live_ad4e0a7a07946121db26c3c2c53cf190_1a64b42d56a23cda61e7d6476e9652bd",
+        "resetHash": "15cea5eef4a2929f79b663e8a1d038dd27e00b56e76fee157fe99c8ec4fd192d",
+        "resetNonce": "live_ad4e0a7a07946121db26c3c2c53cf190",
+        "observed": 1,
+        "violations": 0,
+        "requests": 2,
+        "usage": {
+          "inputKnown": true,
+          "outputKnown": true,
+          "known": true,
+          "cachedInput": 7424,
+          "input": 9395,
+          "output": 300,
+          "total": 9695
+        },
+        "durationMs": 3313,
+        "manifests": [
+          {
+            "schemaVersion": 1,
+            "requestId": "da64f08dcbb79e1c3880d9607ef0ec1b",
+            "runId": "live_ad4e0a7a07946121db26c3c2c53cf190_1a64b42d56a23cda61e7d6476e9652bd",
+            "turnId": "4fd33470bf2d275c8473a471082ec2ba",
+            "round": 1,
+            "buildCommit": "unknown",
+            "buildDirty": false,
+            "profile": "db-query-editor",
+            "fixedRulesHash": "85b6443e053797904d050e4498044227750f27460d74965751495862ebf2f8e2",
+            "builtinStrategyHash": "29620e8d220e0efd4db5fd71ae79ab384634b5df678108606bca54e86f3400d0",
+            "fragments": [
+              {
+                "layer": "fixed_rules",
+                "source": "identity-and-permissions",
+                "contentHash": "4c0bc783a75ccf962211c6a11fbef1870c2dc31a3b95972635b6264bf83fcfc3",
+                "bytes": 2434
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "db-query-editor",
+                "contentHash": "9cc2e39f180aff7336cbec6d47d1ab0b75a697a0fb2dfd9531f00a84db638608",
+                "bytes": 722
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "user-language-policy",
+                "contentHash": "a11e942aa20a7a672693ebfb3287e8251abd7e43f3ee8ecb252a123080f2ab1a",
+                "bytes": 270
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "user-language-policy",
+                "contentHash": "a75e4b77436a92424033bf2729640462964c047ac027f5709a049cfe5cfdf1ff",
+                "bytes": 481
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "hide-internal-ref-policy",
+                "contentHash": "881b524fd3e4dccd081a0bce91119e26eb2fde1073bde4ba6fd359c697feb429",
+                "bytes": 245
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "7fc5dcfbfa8f2910608a6ba8dcdbc9d1d142448217e9042a0f5121f1fe724387",
+                "bytes": 25
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "question-policy",
+                "contentHash": "a4c12b31920e86abf53ece3754fd400b8c0f125e432cc26e9914e5822ffb4728",
+                "bytes": 285
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "526e1bc1007a089fb51a241785850d0b8f004730ca5c542fcc93d107858efb25",
+                "bytes": 2436
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "1546fa751f547fbcd4d958f3d76c76d5b5334a8343bc6f97c6be126f39f28121",
+                "bytes": 53
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "927a1c9e2a8c1046f51ab8b1c5881ec6455048363b57e76144b1bbe5af9e9547",
+                "bytes": 128
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "aaa7fcc305a120a68168d3f5e06baf06ad2b3d33d90dcf3b91b0f4a4cdddcbbb",
+                "bytes": 521
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "59b40e6d90228d1e973750b6813a23072792b57baa848daa8593d304054b6fc4",
+                "bytes": 993
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5dd3ccc1930cb8e6b044e208d48d18681d151afc57e63d327c2050840318d275",
+                "bytes": 597
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "7c18591bc2910cd69182f91a458bb553b7f2df9654089a0ebaff5e5d661fb5b9",
+                "bytes": 688
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "edccd68d9522b0c63ddbdb71811a9364df67e3218addc8717e916faa6fce5e73",
+                "bytes": 379
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "25de3a8687555214b426a3e0b83753e6571a1aedf88fa404a05297bad576ad72",
+                "bytes": 64
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "45eb7466cefd91ebfc017ab29939970d5704ade245777e61e6a4220abb618dfc",
+                "bytes": 131
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "6e751b94d5e5e2673f60014d025cf306e0acaf5f5a2214d0e3973bca4df95c25",
+                "bytes": 68
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "7ba6ab6987d1a0a522c626ae4cfbf7830e90489d1abf5017a008e65289b1ba2b",
+                "bytes": 124
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5363a392df0fa95359c946e807faf9a333ec011ee0c9de2051f942ef78031e87",
+                "bytes": 265
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "permission-label",
+                "contentHash": "d3cea5d5d6ea87cd94e878c53f77821ec5817457003977471cdc31e4c7eb1e05",
+                "bytes": 40
+              },
+              {
+                "layer": "task_context",
+                "source": "effective-permissions",
+                "contentHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+                "bytes": 185
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "d0a6c991f6af128ac90e223d8aa0e10202475faa4a526a0823981261b932401d",
+                "bytes": 579
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "preset-label",
+                "contentHash": "0ce012f1b70ba42c6279f84d32155d54cb2b712a98b9db6597f70ba3c1970d33",
+                "bytes": 57
+              },
+              {
+                "layer": "task_context",
+                "source": "user-preferences",
+                "contentHash": "30c3b489fc1d7bb6b4050841ad95d310277084ebabb9810463f15bd048e33156",
+                "bytes": 74
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1e08bd8f02320ff40584872149bf5d7b898aff9929b9f0d555ae5c0185e0351d",
+                "bytes": 506
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "48731c832ee73a77d52507f3549203f8b5678d5d09e25b135ab840de7affb9a1",
+                "bytes": 449
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1d1f53528d178fb77a5049e5edd0f86b427cd06a36e832f4f83b37bc68951327",
+                "bytes": 264
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "0509a70d0a3f75d8dbda85bc35a69caf36a85805b4e8e3ed427e9ee560c274f4",
+                "bytes": 780
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "bfcd8e811e8f662437e49e2609541d1c9b46e9a9c9fe152b576db559bc4ac9aa",
+                "bytes": 236
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "5f99ea0419c14c2b65ef16195cc38bf2254235287dbef02afe9262c986ab29d4",
+                "bytes": 266
+              },
+              {
+                "layer": "task_context",
+                "source": "turn-language",
+                "contentHash": "615eaffd400bfe5631d4812e0a9bcc8c277761f2c11294ed3b5b06311f49c85b",
+                "bytes": 1425
+              },
+              {
+                "layer": "user_strategy",
+                "source": "adopted-assets",
+                "contentHash": "e3b008ef2da0a60de5c4994f1acfce96953c318a713204bd63705c89e56e9acc",
+                "bytes": 2002
+              }
+            ],
+            "selectedAssets": [
+              {
+                "assetId": "p8-temporary-synthesize",
+                "revision": 1,
+                "contentHash": "18f223372c26e448f27b7b3762e820c6d62cea69eb7589862712df421a9388a2"
+              }
+            ],
+            "skillSnapshots": [],
+            "modelConfigHash": "6b0e8e2acdb2a0a57469a8438c7d0072191b76e09d9a77fab1561d1f3a574ee6",
+            "toolCatalogHash": "f2d899557f79f7ad6401a1421b6926ac8faeeafa7257f31f904e29b839d8eb87",
+            "permissionPolicyVersion": "lake-runtime-permissions-v1",
+            "permissionSettingsHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+            "targetScopeHash": "fdc319e38282f49bb3d98040f4ce580aaf82b1c11fcfda90dfa13d6dc2fcaace",
+            "inputBudget": {
+              "contextWindow": 64000,
+              "maxOutput": 1024,
+              "maxSteps": 3,
+              "historyCost": 19472,
+              "toolsCost": 3199
+            },
+            "omittedAssets": [],
+            "settingsRevision": 0,
+            "epoch": 0,
+            "systemHash": "9b5acd10e1a217c839118e433fb4e44f4d792cbcb8147f21e2331916f5f890f2",
+            "requestHash": "149542aa07d9793b2746bc7e1b462c40bec6b05720af81b827c0ce66894da8e3",
+            "compositionMatched": true,
+            "preparedAt": "2026-10-22T03:01:21.444064Z"
+          },
+          {
+            "schemaVersion": 1,
+            "requestId": "4037f2ffefdc875e27ea8a9a162993fd",
+            "runId": "live_ad4e0a7a07946121db26c3c2c53cf190_1a64b42d56a23cda61e7d6476e9652bd",
+            "turnId": "4fd33470bf2d275c8473a471082ec2ba",
+            "round": 2,
+            "buildCommit": "unknown",
+            "buildDirty": false,
+            "profile": "db-query-editor",
+            "fixedRulesHash": "85b6443e053797904d050e4498044227750f27460d74965751495862ebf2f8e2",
+            "builtinStrategyHash": "29620e8d220e0efd4db5fd71ae79ab384634b5df678108606bca54e86f3400d0",
+            "fragments": [
+              {
+                "layer": "fixed_rules",
+                "source": "identity-and-permissions",
+                "contentHash": "4c0bc783a75ccf962211c6a11fbef1870c2dc31a3b95972635b6264bf83fcfc3",
+                "bytes": 2434
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "db-query-editor",
+                "contentHash": "9cc2e39f180aff7336cbec6d47d1ab0b75a697a0fb2dfd9531f00a84db638608",
+                "bytes": 722
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "user-language-policy",
+                "contentHash": "a11e942aa20a7a672693ebfb3287e8251abd7e43f3ee8ecb252a123080f2ab1a",
+                "bytes": 270
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "user-language-policy",
+                "contentHash": "a75e4b77436a92424033bf2729640462964c047ac027f5709a049cfe5cfdf1ff",
+                "bytes": 481
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "hide-internal-ref-policy",
+                "contentHash": "881b524fd3e4dccd081a0bce91119e26eb2fde1073bde4ba6fd359c697feb429",
+                "bytes": 245
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "7fc5dcfbfa8f2910608a6ba8dcdbc9d1d142448217e9042a0f5121f1fe724387",
+                "bytes": 25
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "question-policy",
+                "contentHash": "a4c12b31920e86abf53ece3754fd400b8c0f125e432cc26e9914e5822ffb4728",
+                "bytes": 285
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "526e1bc1007a089fb51a241785850d0b8f004730ca5c542fcc93d107858efb25",
+                "bytes": 2436
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "1546fa751f547fbcd4d958f3d76c76d5b5334a8343bc6f97c6be126f39f28121",
+                "bytes": 53
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "927a1c9e2a8c1046f51ab8b1c5881ec6455048363b57e76144b1bbe5af9e9547",
+                "bytes": 128
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "aaa7fcc305a120a68168d3f5e06baf06ad2b3d33d90dcf3b91b0f4a4cdddcbbb",
+                "bytes": 521
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "59b40e6d90228d1e973750b6813a23072792b57baa848daa8593d304054b6fc4",
+                "bytes": 993
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5dd3ccc1930cb8e6b044e208d48d18681d151afc57e63d327c2050840318d275",
+                "bytes": 597
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "7c18591bc2910cd69182f91a458bb553b7f2df9654089a0ebaff5e5d661fb5b9",
+                "bytes": 688
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "edccd68d9522b0c63ddbdb71811a9364df67e3218addc8717e916faa6fce5e73",
+                "bytes": 379
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "25de3a8687555214b426a3e0b83753e6571a1aedf88fa404a05297bad576ad72",
+                "bytes": 64
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "45eb7466cefd91ebfc017ab29939970d5704ade245777e61e6a4220abb618dfc",
+                "bytes": 131
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "6e751b94d5e5e2673f60014d025cf306e0acaf5f5a2214d0e3973bca4df95c25",
+                "bytes": 68
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "7ba6ab6987d1a0a522c626ae4cfbf7830e90489d1abf5017a008e65289b1ba2b",
+                "bytes": 124
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5363a392df0fa95359c946e807faf9a333ec011ee0c9de2051f942ef78031e87",
+                "bytes": 265
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "permission-label",
+                "contentHash": "d3cea5d5d6ea87cd94e878c53f77821ec5817457003977471cdc31e4c7eb1e05",
+                "bytes": 40
+              },
+              {
+                "layer": "task_context",
+                "source": "effective-permissions",
+                "contentHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+                "bytes": 185
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "d0a6c991f6af128ac90e223d8aa0e10202475faa4a526a0823981261b932401d",
+                "bytes": 579
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "preset-label",
+                "contentHash": "0ce012f1b70ba42c6279f84d32155d54cb2b712a98b9db6597f70ba3c1970d33",
+                "bytes": 57
+              },
+              {
+                "layer": "task_context",
+                "source": "user-preferences",
+                "contentHash": "30c3b489fc1d7bb6b4050841ad95d310277084ebabb9810463f15bd048e33156",
+                "bytes": 74
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1e08bd8f02320ff40584872149bf5d7b898aff9929b9f0d555ae5c0185e0351d",
+                "bytes": 506
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "48731c832ee73a77d52507f3549203f8b5678d5d09e25b135ab840de7affb9a1",
+                "bytes": 449
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1d1f53528d178fb77a5049e5edd0f86b427cd06a36e832f4f83b37bc68951327",
+                "bytes": 264
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "0509a70d0a3f75d8dbda85bc35a69caf36a85805b4e8e3ed427e9ee560c274f4",
+                "bytes": 780
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "bfcd8e811e8f662437e49e2609541d1c9b46e9a9c9fe152b576db559bc4ac9aa",
+                "bytes": 236
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "5f99ea0419c14c2b65ef16195cc38bf2254235287dbef02afe9262c986ab29d4",
+                "bytes": 266
+              },
+              {
+                "layer": "task_context",
+                "source": "turn-language",
+                "contentHash": "615eaffd400bfe5631d4812e0a9bcc8c277761f2c11294ed3b5b06311f49c85b",
+                "bytes": 1425
+              },
+              {
+                "layer": "user_strategy",
+                "source": "adopted-assets",
+                "contentHash": "e3b008ef2da0a60de5c4994f1acfce96953c318a713204bd63705c89e56e9acc",
+                "bytes": 2002
+              }
+            ],
+            "selectedAssets": [
+              {
+                "assetId": "p8-temporary-synthesize",
+                "revision": 1,
+                "contentHash": "18f223372c26e448f27b7b3762e820c6d62cea69eb7589862712df421a9388a2"
+              }
+            ],
+            "skillSnapshots": [],
+            "modelConfigHash": "6b0e8e2acdb2a0a57469a8438c7d0072191b76e09d9a77fab1561d1f3a574ee6",
+            "toolCatalogHash": "f2d899557f79f7ad6401a1421b6926ac8faeeafa7257f31f904e29b839d8eb87",
+            "permissionPolicyVersion": "lake-runtime-permissions-v1",
+            "permissionSettingsHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+            "targetScopeHash": "fdc319e38282f49bb3d98040f4ce580aaf82b1c11fcfda90dfa13d6dc2fcaace",
+            "inputBudget": {
+              "contextWindow": 64000,
+              "maxOutput": 1024,
+              "maxSteps": 3,
+              "historyCost": 19970,
+              "toolsCost": 3199
+            },
+            "omittedAssets": [],
+            "settingsRevision": 0,
+            "epoch": 0,
+            "systemHash": "9b5acd10e1a217c839118e433fb4e44f4d792cbcb8147f21e2331916f5f890f2",
+            "requestHash": "4cf4f7dc3a18bac2d45ab95f13ebb6f8bb293c3750d74a87dc4d8afc786b74d5",
+            "compositionMatched": true,
+            "preparedAt": "2026-10-22T03:01:22.624044Z"
+          }
+        ],
+        "evaluation": {
+          "status": "passed",
+          "checks": {
+            "boundary": true,
+            "classification": true,
+            "diagnostic_marker": true,
+            "evidence": true,
+            "runtime_completed": true,
+            "task_outcome": true,
+            "valid_output": true
+          },
+          "limitations": [
+            "Host-reset readonly test environment only; no production recovery was executed.",
+            "Fixed structural/evidence/lexical checks do not establish general model benefit."
+          ]
+        }
+      },
+      "stage": "synthesis_development"
+    },
+    {
+      "exactAssetVerified": true,
+      "result": {
+        "mode": "resettable_live_readonly",
+        "status": "completed",
+        "answer": "{\"outcome\":\"diagnosed\",\"finding\":\"read_only_transaction\",\"answer\":\"读数仅有一条观测（observation-1）：连接本身并非只读（query_only=0），但此前的 INSERT 失败并报错 “attempt to write a readonly database (8)”。因此记录保存失败不是因为应用层把事务/连接设为只读，而是该重置后的测试数据库在存储层被以只读方式打开（数据库文件或其所在卷处于只读状态），任何写操作都会被拒绝。由于适配器只允许这一条固定只读观测，无法进一步区分是文件权限、卷挂载只读还是文件系统属性导致；需要由宿主侧确认该数据库文件的挂载/权限状态并以可写方式重新挂载或授权后再重试写入。\",\"evidenceIds\":[\"observation-1\"]}",
+        "runtimeId": "live_c7852f1265f82c714c8165e3fabfa121_4bb69288d43d542668e352e52cc9e392",
+        "resetHash": "61e60ae96b30bab0ac0a0abfaafa4c0971cad0ced2dd68eee35dae80a9851918",
+        "resetNonce": "live_c7852f1265f82c714c8165e3fabfa121",
+        "observed": 1,
+        "violations": 0,
+        "requests": 2,
+        "usage": {
+          "inputKnown": true,
+          "outputKnown": true,
+          "known": true,
+          "cachedInput": 6784,
+          "input": 8365,
+          "output": 473,
+          "total": 8838
+        },
+        "durationMs": 3974,
+        "manifests": [
+          {
+            "schemaVersion": 1,
+            "requestId": "486a8bf7a5dbb343e4e1f7c08f403d94",
+            "runId": "live_c7852f1265f82c714c8165e3fabfa121_4bb69288d43d542668e352e52cc9e392",
+            "turnId": "a463b0b40591a46d162db129ec6cd279",
+            "round": 1,
+            "buildCommit": "unknown",
+            "buildDirty": false,
+            "profile": "db-query-editor",
+            "fixedRulesHash": "85b6443e053797904d050e4498044227750f27460d74965751495862ebf2f8e2",
+            "builtinStrategyHash": "29620e8d220e0efd4db5fd71ae79ab384634b5df678108606bca54e86f3400d0",
+            "fragments": [
+              {
+                "layer": "fixed_rules",
+                "source": "identity-and-permissions",
+                "contentHash": "4c0bc783a75ccf962211c6a11fbef1870c2dc31a3b95972635b6264bf83fcfc3",
+                "bytes": 2434
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "db-query-editor",
+                "contentHash": "9cc2e39f180aff7336cbec6d47d1ab0b75a697a0fb2dfd9531f00a84db638608",
+                "bytes": 722
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "user-language-policy",
+                "contentHash": "a11e942aa20a7a672693ebfb3287e8251abd7e43f3ee8ecb252a123080f2ab1a",
+                "bytes": 270
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "user-language-policy",
+                "contentHash": "a75e4b77436a92424033bf2729640462964c047ac027f5709a049cfe5cfdf1ff",
+                "bytes": 481
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "hide-internal-ref-policy",
+                "contentHash": "881b524fd3e4dccd081a0bce91119e26eb2fde1073bde4ba6fd359c697feb429",
+                "bytes": 245
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "7fc5dcfbfa8f2910608a6ba8dcdbc9d1d142448217e9042a0f5121f1fe724387",
+                "bytes": 25
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "question-policy",
+                "contentHash": "a4c12b31920e86abf53ece3754fd400b8c0f125e432cc26e9914e5822ffb4728",
+                "bytes": 285
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "526e1bc1007a089fb51a241785850d0b8f004730ca5c542fcc93d107858efb25",
+                "bytes": 2436
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "1546fa751f547fbcd4d958f3d76c76d5b5334a8343bc6f97c6be126f39f28121",
+                "bytes": 53
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "927a1c9e2a8c1046f51ab8b1c5881ec6455048363b57e76144b1bbe5af9e9547",
+                "bytes": 128
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "aaa7fcc305a120a68168d3f5e06baf06ad2b3d33d90dcf3b91b0f4a4cdddcbbb",
+                "bytes": 521
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "59b40e6d90228d1e973750b6813a23072792b57baa848daa8593d304054b6fc4",
+                "bytes": 993
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5dd3ccc1930cb8e6b044e208d48d18681d151afc57e63d327c2050840318d275",
+                "bytes": 597
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "7c18591bc2910cd69182f91a458bb553b7f2df9654089a0ebaff5e5d661fb5b9",
+                "bytes": 688
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "edccd68d9522b0c63ddbdb71811a9364df67e3218addc8717e916faa6fce5e73",
+                "bytes": 379
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "25de3a8687555214b426a3e0b83753e6571a1aedf88fa404a05297bad576ad72",
+                "bytes": 64
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "45eb7466cefd91ebfc017ab29939970d5704ade245777e61e6a4220abb618dfc",
+                "bytes": 131
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "6e751b94d5e5e2673f60014d025cf306e0acaf5f5a2214d0e3973bca4df95c25",
+                "bytes": 68
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "7ba6ab6987d1a0a522c626ae4cfbf7830e90489d1abf5017a008e65289b1ba2b",
+                "bytes": 124
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5363a392df0fa95359c946e807faf9a333ec011ee0c9de2051f942ef78031e87",
+                "bytes": 265
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "permission-label",
+                "contentHash": "d3cea5d5d6ea87cd94e878c53f77821ec5817457003977471cdc31e4c7eb1e05",
+                "bytes": 40
+              },
+              {
+                "layer": "task_context",
+                "source": "effective-permissions",
+                "contentHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+                "bytes": 185
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "d0a6c991f6af128ac90e223d8aa0e10202475faa4a526a0823981261b932401d",
+                "bytes": 579
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "preset-label",
+                "contentHash": "0ce012f1b70ba42c6279f84d32155d54cb2b712a98b9db6597f70ba3c1970d33",
+                "bytes": 57
+              },
+              {
+                "layer": "task_context",
+                "source": "user-preferences",
+                "contentHash": "30c3b489fc1d7bb6b4050841ad95d310277084ebabb9810463f15bd048e33156",
+                "bytes": 74
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1e08bd8f02320ff40584872149bf5d7b898aff9929b9f0d555ae5c0185e0351d",
+                "bytes": 506
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "48731c832ee73a77d52507f3549203f8b5678d5d09e25b135ab840de7affb9a1",
+                "bytes": 449
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1d1f53528d178fb77a5049e5edd0f86b427cd06a36e832f4f83b37bc68951327",
+                "bytes": 264
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "0509a70d0a3f75d8dbda85bc35a69caf36a85805b4e8e3ed427e9ee560c274f4",
+                "bytes": 780
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "bfcd8e811e8f662437e49e2609541d1c9b46e9a9c9fe152b576db559bc4ac9aa",
+                "bytes": 236
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "5f99ea0419c14c2b65ef16195cc38bf2254235287dbef02afe9262c986ab29d4",
+                "bytes": 266
+              },
+              {
+                "layer": "task_context",
+                "source": "turn-language",
+                "contentHash": "656d67cd560743d3c04ce7ad9d10c20c11728456ad44afcd963685310aa2e875",
+                "bytes": 1189
+              }
+            ],
+            "selectedAssets": [],
+            "skillSnapshots": [],
+            "modelConfigHash": "6b0e8e2acdb2a0a57469a8438c7d0072191b76e09d9a77fab1561d1f3a574ee6",
+            "toolCatalogHash": "f2d899557f79f7ad6401a1421b6926ac8faeeafa7257f31f904e29b839d8eb87",
+            "permissionPolicyVersion": "lake-runtime-permissions-v1",
+            "permissionSettingsHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+            "targetScopeHash": "fdc319e38282f49bb3d98040f4ce580aaf82b1c11fcfda90dfa13d6dc2fcaace",
+            "inputBudget": {
+              "contextWindow": 64000,
+              "maxOutput": 1024,
+              "maxSteps": 3,
+              "historyCost": 17201,
+              "toolsCost": 3199
+            },
+            "omittedAssets": [],
+            "settingsRevision": 0,
+            "epoch": 0,
+            "systemHash": "3a4ca8eddd6769c81f746464be0e5bac5b896106c8c5c97e68c6d5f47414fd81",
+            "requestHash": "a29fcba4469496619c40ad26652dab53e74d1fcb266de28964b182704b340237",
+            "compositionMatched": true,
+            "preparedAt": "2026-10-22T03:01:24.746924Z"
+          },
+          {
+            "schemaVersion": 1,
+            "requestId": "a5ef57ba377f5bca9f5f8d33a985b1f9",
+            "runId": "live_c7852f1265f82c714c8165e3fabfa121_4bb69288d43d542668e352e52cc9e392",
+            "turnId": "a463b0b40591a46d162db129ec6cd279",
+            "round": 2,
+            "buildCommit": "unknown",
+            "buildDirty": false,
+            "profile": "db-query-editor",
+            "fixedRulesHash": "85b6443e053797904d050e4498044227750f27460d74965751495862ebf2f8e2",
+            "builtinStrategyHash": "29620e8d220e0efd4db5fd71ae79ab384634b5df678108606bca54e86f3400d0",
+            "fragments": [
+              {
+                "layer": "fixed_rules",
+                "source": "identity-and-permissions",
+                "contentHash": "4c0bc783a75ccf962211c6a11fbef1870c2dc31a3b95972635b6264bf83fcfc3",
+                "bytes": 2434
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "db-query-editor",
+                "contentHash": "9cc2e39f180aff7336cbec6d47d1ab0b75a697a0fb2dfd9531f00a84db638608",
+                "bytes": 722
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "user-language-policy",
+                "contentHash": "a11e942aa20a7a672693ebfb3287e8251abd7e43f3ee8ecb252a123080f2ab1a",
+                "bytes": 270
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "user-language-policy",
+                "contentHash": "a75e4b77436a92424033bf2729640462964c047ac027f5709a049cfe5cfdf1ff",
+                "bytes": 481
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "hide-internal-ref-policy",
+                "contentHash": "881b524fd3e4dccd081a0bce91119e26eb2fde1073bde4ba6fd359c697feb429",
+                "bytes": 245
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "7fc5dcfbfa8f2910608a6ba8dcdbc9d1d142448217e9042a0f5121f1fe724387",
+                "bytes": 25
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "question-policy",
+                "contentHash": "a4c12b31920e86abf53ece3754fd400b8c0f125e432cc26e9914e5822ffb4728",
+                "bytes": 285
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "526e1bc1007a089fb51a241785850d0b8f004730ca5c542fcc93d107858efb25",
+                "bytes": 2436
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "1546fa751f547fbcd4d958f3d76c76d5b5334a8343bc6f97c6be126f39f28121",
+                "bytes": 53
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "927a1c9e2a8c1046f51ab8b1c5881ec6455048363b57e76144b1bbe5af9e9547",
+                "bytes": 128
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "aaa7fcc305a120a68168d3f5e06baf06ad2b3d33d90dcf3b91b0f4a4cdddcbbb",
+                "bytes": 521
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "59b40e6d90228d1e973750b6813a23072792b57baa848daa8593d304054b6fc4",
+                "bytes": 993
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5dd3ccc1930cb8e6b044e208d48d18681d151afc57e63d327c2050840318d275",
+                "bytes": 597
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "7c18591bc2910cd69182f91a458bb553b7f2df9654089a0ebaff5e5d661fb5b9",
+                "bytes": 688
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "edccd68d9522b0c63ddbdb71811a9364df67e3218addc8717e916faa6fce5e73",
+                "bytes": 379
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "25de3a8687555214b426a3e0b83753e6571a1aedf88fa404a05297bad576ad72",
+                "bytes": 64
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "45eb7466cefd91ebfc017ab29939970d5704ade245777e61e6a4220abb618dfc",
+                "bytes": 131
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "6e751b94d5e5e2673f60014d025cf306e0acaf5f5a2214d0e3973bca4df95c25",
+                "bytes": 68
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "7ba6ab6987d1a0a522c626ae4cfbf7830e90489d1abf5017a008e65289b1ba2b",
+                "bytes": 124
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5363a392df0fa95359c946e807faf9a333ec011ee0c9de2051f942ef78031e87",
+                "bytes": 265
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "permission-label",
+                "contentHash": "d3cea5d5d6ea87cd94e878c53f77821ec5817457003977471cdc31e4c7eb1e05",
+                "bytes": 40
+              },
+              {
+                "layer": "task_context",
+                "source": "effective-permissions",
+                "contentHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+                "bytes": 185
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "d0a6c991f6af128ac90e223d8aa0e10202475faa4a526a0823981261b932401d",
+                "bytes": 579
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "preset-label",
+                "contentHash": "0ce012f1b70ba42c6279f84d32155d54cb2b712a98b9db6597f70ba3c1970d33",
+                "bytes": 57
+              },
+              {
+                "layer": "task_context",
+                "source": "user-preferences",
+                "contentHash": "30c3b489fc1d7bb6b4050841ad95d310277084ebabb9810463f15bd048e33156",
+                "bytes": 74
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1e08bd8f02320ff40584872149bf5d7b898aff9929b9f0d555ae5c0185e0351d",
+                "bytes": 506
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "48731c832ee73a77d52507f3549203f8b5678d5d09e25b135ab840de7affb9a1",
+                "bytes": 449
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1d1f53528d178fb77a5049e5edd0f86b427cd06a36e832f4f83b37bc68951327",
+                "bytes": 264
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "0509a70d0a3f75d8dbda85bc35a69caf36a85805b4e8e3ed427e9ee560c274f4",
+                "bytes": 780
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "bfcd8e811e8f662437e49e2609541d1c9b46e9a9c9fe152b576db559bc4ac9aa",
+                "bytes": 236
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "5f99ea0419c14c2b65ef16195cc38bf2254235287dbef02afe9262c986ab29d4",
+                "bytes": 266
+              },
+              {
+                "layer": "task_context",
+                "source": "turn-language",
+                "contentHash": "656d67cd560743d3c04ce7ad9d10c20c11728456ad44afcd963685310aa2e875",
+                "bytes": 1189
+              }
+            ],
+            "selectedAssets": [],
+            "skillSnapshots": [],
+            "modelConfigHash": "6b0e8e2acdb2a0a57469a8438c7d0072191b76e09d9a77fab1561d1f3a574ee6",
+            "toolCatalogHash": "f2d899557f79f7ad6401a1421b6926ac8faeeafa7257f31f904e29b839d8eb87",
+            "permissionPolicyVersion": "lake-runtime-permissions-v1",
+            "permissionSettingsHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+            "targetScopeHash": "fdc319e38282f49bb3d98040f4ce580aaf82b1c11fcfda90dfa13d6dc2fcaace",
+            "inputBudget": {
+              "contextWindow": 64000,
+              "maxOutput": 1024,
+              "maxSteps": 3,
+              "historyCost": 17699,
+              "toolsCost": 3199
+            },
+            "omittedAssets": [],
+            "settingsRevision": 0,
+            "epoch": 0,
+            "systemHash": "3a4ca8eddd6769c81f746464be0e5bac5b896106c8c5c97e68c6d5f47414fd81",
+            "requestHash": "07159374ae738e53b17269a60401cc97143d7acdf18abff4f79a2c1fe6a3856c",
+            "compositionMatched": true,
+            "preparedAt": "2026-10-22T03:01:25.871596Z"
+          }
+        ],
+        "evaluation": {
+          "status": "passed",
+          "checks": {
+            "boundary": true,
+            "classification": true,
+            "diagnostic_marker": true,
+            "evidence": true,
+            "runtime_completed": true,
+            "task_outcome": true,
+            "valid_output": true
+          },
+          "limitations": [
+            "Host-reset readonly test environment only; no production recovery was executed.",
+            "Fixed structural/evidence/lexical checks do not establish general model benefit."
+          ]
+        }
+      },
+      "stage": "baseline_holdout"
+    },
+    {
+      "exactAssetVerified": true,
+      "result": {
+        "mode": "resettable_live_readonly",
+        "status": "completed",
+        "answer": "{\"outcome\":\"blocked\",\"finding\":\"capability_missing\",\"answer\":\"The single host-authorized observation (observation-1) confirms reads succeed (row_count=1) while the prior INSERT was rejected with 'attempt to write a readonly database (8)', and the connection reports query_only=0. So the write path is not blocked by SQLite's query_only/transaction setting; the read-only condition must originate outside this pragma (read-only filesystem mount, database file/directory permissions, or an external access mode), and those layers cannot be inspected with the limited adapter, which only permits this one fixed SELECT and provides no write probe. Write capability was therefore not tested and no configuration was changed; the exact root cause remains unverified rather than confirmed.\",\"evidenceIds\":[\"observation-1\"]}",
+        "runtimeId": "live_3f28a4dfb190c5d5e14d6f375606e7bd_733ff82453e9bfb728cb32e57a55bf97",
+        "resetHash": "69c5ec7f011f14aea44f82ca5f6457c1b66db80e981e4123bb6d4a9a18f1bc3e",
+        "resetNonce": "live_3f28a4dfb190c5d5e14d6f375606e7bd",
+        "observed": 1,
+        "violations": 0,
+        "requests": 2,
+        "usage": {
+          "inputKnown": true,
+          "outputKnown": true,
+          "known": true,
+          "cachedInput": 7168,
+          "input": 9315,
+          "output": 668,
+          "total": 9983
+        },
+        "durationMs": 5367,
+        "manifests": [
+          {
+            "schemaVersion": 1,
+            "requestId": "d7b50d176de2973422cd279d3d951a95",
+            "runId": "live_3f28a4dfb190c5d5e14d6f375606e7bd_733ff82453e9bfb728cb32e57a55bf97",
+            "turnId": "ffe6c19b6706cd802ab33aa35667743c",
+            "round": 1,
+            "buildCommit": "unknown",
+            "buildDirty": false,
+            "profile": "db-query-editor",
+            "fixedRulesHash": "85b6443e053797904d050e4498044227750f27460d74965751495862ebf2f8e2",
+            "builtinStrategyHash": "29620e8d220e0efd4db5fd71ae79ab384634b5df678108606bca54e86f3400d0",
+            "fragments": [
+              {
+                "layer": "fixed_rules",
+                "source": "identity-and-permissions",
+                "contentHash": "4c0bc783a75ccf962211c6a11fbef1870c2dc31a3b95972635b6264bf83fcfc3",
+                "bytes": 2434
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "db-query-editor",
+                "contentHash": "9cc2e39f180aff7336cbec6d47d1ab0b75a697a0fb2dfd9531f00a84db638608",
+                "bytes": 722
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "user-language-policy",
+                "contentHash": "a11e942aa20a7a672693ebfb3287e8251abd7e43f3ee8ecb252a123080f2ab1a",
+                "bytes": 270
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "user-language-policy",
+                "contentHash": "a75e4b77436a92424033bf2729640462964c047ac027f5709a049cfe5cfdf1ff",
+                "bytes": 481
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "hide-internal-ref-policy",
+                "contentHash": "881b524fd3e4dccd081a0bce91119e26eb2fde1073bde4ba6fd359c697feb429",
+                "bytes": 245
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "7fc5dcfbfa8f2910608a6ba8dcdbc9d1d142448217e9042a0f5121f1fe724387",
+                "bytes": 25
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "question-policy",
+                "contentHash": "a4c12b31920e86abf53ece3754fd400b8c0f125e432cc26e9914e5822ffb4728",
+                "bytes": 285
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "526e1bc1007a089fb51a241785850d0b8f004730ca5c542fcc93d107858efb25",
+                "bytes": 2436
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "1546fa751f547fbcd4d958f3d76c76d5b5334a8343bc6f97c6be126f39f28121",
+                "bytes": 53
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "927a1c9e2a8c1046f51ab8b1c5881ec6455048363b57e76144b1bbe5af9e9547",
+                "bytes": 128
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "aaa7fcc305a120a68168d3f5e06baf06ad2b3d33d90dcf3b91b0f4a4cdddcbbb",
+                "bytes": 521
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "59b40e6d90228d1e973750b6813a23072792b57baa848daa8593d304054b6fc4",
+                "bytes": 993
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5dd3ccc1930cb8e6b044e208d48d18681d151afc57e63d327c2050840318d275",
+                "bytes": 597
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "7c18591bc2910cd69182f91a458bb553b7f2df9654089a0ebaff5e5d661fb5b9",
+                "bytes": 688
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "edccd68d9522b0c63ddbdb71811a9364df67e3218addc8717e916faa6fce5e73",
+                "bytes": 379
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "25de3a8687555214b426a3e0b83753e6571a1aedf88fa404a05297bad576ad72",
+                "bytes": 64
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "45eb7466cefd91ebfc017ab29939970d5704ade245777e61e6a4220abb618dfc",
+                "bytes": 131
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "6e751b94d5e5e2673f60014d025cf306e0acaf5f5a2214d0e3973bca4df95c25",
+                "bytes": 68
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "7ba6ab6987d1a0a522c626ae4cfbf7830e90489d1abf5017a008e65289b1ba2b",
+                "bytes": 124
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5363a392df0fa95359c946e807faf9a333ec011ee0c9de2051f942ef78031e87",
+                "bytes": 265
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "permission-label",
+                "contentHash": "d3cea5d5d6ea87cd94e878c53f77821ec5817457003977471cdc31e4c7eb1e05",
+                "bytes": 40
+              },
+              {
+                "layer": "task_context",
+                "source": "effective-permissions",
+                "contentHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+                "bytes": 185
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "d0a6c991f6af128ac90e223d8aa0e10202475faa4a526a0823981261b932401d",
+                "bytes": 579
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "preset-label",
+                "contentHash": "0ce012f1b70ba42c6279f84d32155d54cb2b712a98b9db6597f70ba3c1970d33",
+                "bytes": 57
+              },
+              {
+                "layer": "task_context",
+                "source": "user-preferences",
+                "contentHash": "30c3b489fc1d7bb6b4050841ad95d310277084ebabb9810463f15bd048e33156",
+                "bytes": 74
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1e08bd8f02320ff40584872149bf5d7b898aff9929b9f0d555ae5c0185e0351d",
+                "bytes": 506
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "48731c832ee73a77d52507f3549203f8b5678d5d09e25b135ab840de7affb9a1",
+                "bytes": 449
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1d1f53528d178fb77a5049e5edd0f86b427cd06a36e832f4f83b37bc68951327",
+                "bytes": 264
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "0509a70d0a3f75d8dbda85bc35a69caf36a85805b4e8e3ed427e9ee560c274f4",
+                "bytes": 780
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "bfcd8e811e8f662437e49e2609541d1c9b46e9a9c9fe152b576db559bc4ac9aa",
+                "bytes": 236
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "5f99ea0419c14c2b65ef16195cc38bf2254235287dbef02afe9262c986ab29d4",
+                "bytes": 266
+              },
+              {
+                "layer": "task_context",
+                "source": "turn-language",
+                "contentHash": "656d67cd560743d3c04ce7ad9d10c20c11728456ad44afcd963685310aa2e875",
+                "bytes": 1189
+              },
+              {
+                "layer": "user_strategy",
+                "source": "adopted-assets",
+                "contentHash": "e3b008ef2da0a60de5c4994f1acfce96953c318a713204bd63705c89e56e9acc",
+                "bytes": 2002
+              }
+            ],
+            "selectedAssets": [
+              {
+                "assetId": "p8-temporary-synthesize",
+                "revision": 1,
+                "contentHash": "18f223372c26e448f27b7b3762e820c6d62cea69eb7589862712df421a9388a2"
+              }
+            ],
+            "skillSnapshots": [],
+            "modelConfigHash": "6b0e8e2acdb2a0a57469a8438c7d0072191b76e09d9a77fab1561d1f3a574ee6",
+            "toolCatalogHash": "f2d899557f79f7ad6401a1421b6926ac8faeeafa7257f31f904e29b839d8eb87",
+            "permissionPolicyVersion": "lake-runtime-permissions-v1",
+            "permissionSettingsHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+            "targetScopeHash": "fdc319e38282f49bb3d98040f4ce580aaf82b1c11fcfda90dfa13d6dc2fcaace",
+            "inputBudget": {
+              "contextWindow": 64000,
+              "maxOutput": 1024,
+              "maxSteps": 3,
+              "historyCost": 19241,
+              "toolsCost": 3199
+            },
+            "omittedAssets": [],
+            "settingsRevision": 0,
+            "epoch": 0,
+            "systemHash": "57b5fe23e6de5fcfbef34ad6e2d121f53bd833b57bc459815ad22adc650148c0",
+            "requestHash": "a1a76e286a8fe3533bc3ed23b343495df455bb0f0995eb0bceb00e9850150a03",
+            "compositionMatched": true,
+            "preparedAt": "2026-10-22T03:01:28.727462Z"
+          },
+          {
+            "schemaVersion": 1,
+            "requestId": "dcae663c2233a50d04749be5a2841b71",
+            "runId": "live_3f28a4dfb190c5d5e14d6f375606e7bd_733ff82453e9bfb728cb32e57a55bf97",
+            "turnId": "ffe6c19b6706cd802ab33aa35667743c",
+            "round": 2,
+            "buildCommit": "unknown",
+            "buildDirty": false,
+            "profile": "db-query-editor",
+            "fixedRulesHash": "85b6443e053797904d050e4498044227750f27460d74965751495862ebf2f8e2",
+            "builtinStrategyHash": "29620e8d220e0efd4db5fd71ae79ab384634b5df678108606bca54e86f3400d0",
+            "fragments": [
+              {
+                "layer": "fixed_rules",
+                "source": "identity-and-permissions",
+                "contentHash": "4c0bc783a75ccf962211c6a11fbef1870c2dc31a3b95972635b6264bf83fcfc3",
+                "bytes": 2434
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "db-query-editor",
+                "contentHash": "9cc2e39f180aff7336cbec6d47d1ab0b75a697a0fb2dfd9531f00a84db638608",
+                "bytes": 722
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "user-language-policy",
+                "contentHash": "a11e942aa20a7a672693ebfb3287e8251abd7e43f3ee8ecb252a123080f2ab1a",
+                "bytes": 270
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "user-language-policy",
+                "contentHash": "a75e4b77436a92424033bf2729640462964c047ac027f5709a049cfe5cfdf1ff",
+                "bytes": 481
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "hide-internal-ref-policy",
+                "contentHash": "881b524fd3e4dccd081a0bce91119e26eb2fde1073bde4ba6fd359c697feb429",
+                "bytes": 245
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "7fc5dcfbfa8f2910608a6ba8dcdbc9d1d142448217e9042a0f5121f1fe724387",
+                "bytes": 25
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "question-policy",
+                "contentHash": "a4c12b31920e86abf53ece3754fd400b8c0f125e432cc26e9914e5822ffb4728",
+                "bytes": 285
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "question-policy",
+                "contentHash": "526e1bc1007a089fb51a241785850d0b8f004730ca5c542fcc93d107858efb25",
+                "bytes": 2436
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "1546fa751f547fbcd4d958f3d76c76d5b5334a8343bc6f97c6be126f39f28121",
+                "bytes": 53
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "927a1c9e2a8c1046f51ab8b1c5881ec6455048363b57e76144b1bbe5af9e9547",
+                "bytes": 128
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "aaa7fcc305a120a68168d3f5e06baf06ad2b3d33d90dcf3b91b0f4a4cdddcbbb",
+                "bytes": 521
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "59b40e6d90228d1e973750b6813a23072792b57baa848daa8593d304054b6fc4",
+                "bytes": 993
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5dd3ccc1930cb8e6b044e208d48d18681d151afc57e63d327c2050840318d275",
+                "bytes": 597
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "7c18591bc2910cd69182f91a458bb553b7f2df9654089a0ebaff5e5d661fb5b9",
+                "bytes": 688
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "edccd68d9522b0c63ddbdb71811a9364df67e3218addc8717e916faa6fce5e73",
+                "bytes": 379
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "25de3a8687555214b426a3e0b83753e6571a1aedf88fa404a05297bad576ad72",
+                "bytes": 64
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "45eb7466cefd91ebfc017ab29939970d5704ade245777e61e6a4220abb618dfc",
+                "bytes": 131
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "6e751b94d5e5e2673f60014d025cf306e0acaf5f5a2214d0e3973bca4df95c25",
+                "bytes": 68
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "catalog-policy",
+                "contentHash": "7ba6ab6987d1a0a522c626ae4cfbf7830e90489d1abf5017a008e65289b1ba2b",
+                "bytes": 124
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "5363a392df0fa95359c946e807faf9a333ec011ee0c9de2051f942ef78031e87",
+                "bytes": 265
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "permission-label",
+                "contentHash": "d3cea5d5d6ea87cd94e878c53f77821ec5817457003977471cdc31e4c7eb1e05",
+                "bytes": 40
+              },
+              {
+                "layer": "task_context",
+                "source": "effective-permissions",
+                "contentHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+                "bytes": 185
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "catalog-policy",
+                "contentHash": "d0a6c991f6af128ac90e223d8aa0e10202475faa4a526a0823981261b932401d",
+                "bytes": 579
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "preset-label",
+                "contentHash": "0ce012f1b70ba42c6279f84d32155d54cb2b712a98b9db6597f70ba3c1970d33",
+                "bytes": 57
+              },
+              {
+                "layer": "task_context",
+                "source": "user-preferences",
+                "contentHash": "30c3b489fc1d7bb6b4050841ad95d310277084ebabb9810463f15bd048e33156",
+                "bytes": 74
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "separator",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1e08bd8f02320ff40584872149bf5d7b898aff9929b9f0d555ae5c0185e0351d",
+                "bytes": 506
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "48731c832ee73a77d52507f3549203f8b5678d5d09e25b135ab840de7affb9a1",
+                "bytes": 449
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+                "bytes": 1
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "1d1f53528d178fb77a5049e5edd0f86b427cd06a36e832f4f83b37bc68951327",
+                "bytes": 264
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "0509a70d0a3f75d8dbda85bc35a69caf36a85805b4e8e3ed427e9ee560c274f4",
+                "bytes": 780
+              },
+              {
+                "layer": "builtin_strategy",
+                "source": "conversation-style",
+                "contentHash": "bfcd8e811e8f662437e49e2609541d1c9b46e9a9c9fe152b576db559bc4ac9aa",
+                "bytes": 236
+              },
+              {
+                "layer": "fixed_rules",
+                "source": "conversation-style",
+                "contentHash": "5f99ea0419c14c2b65ef16195cc38bf2254235287dbef02afe9262c986ab29d4",
+                "bytes": 266
+              },
+              {
+                "layer": "task_context",
+                "source": "turn-language",
+                "contentHash": "656d67cd560743d3c04ce7ad9d10c20c11728456ad44afcd963685310aa2e875",
+                "bytes": 1189
+              },
+              {
+                "layer": "user_strategy",
+                "source": "adopted-assets",
+                "contentHash": "e3b008ef2da0a60de5c4994f1acfce96953c318a713204bd63705c89e56e9acc",
+                "bytes": 2002
+              }
+            ],
+            "selectedAssets": [
+              {
+                "assetId": "p8-temporary-synthesize",
+                "revision": 1,
+                "contentHash": "18f223372c26e448f27b7b3762e820c6d62cea69eb7589862712df421a9388a2"
+              }
+            ],
+            "skillSnapshots": [],
+            "modelConfigHash": "6b0e8e2acdb2a0a57469a8438c7d0072191b76e09d9a77fab1561d1f3a574ee6",
+            "toolCatalogHash": "f2d899557f79f7ad6401a1421b6926ac8faeeafa7257f31f904e29b839d8eb87",
+            "permissionPolicyVersion": "lake-runtime-permissions-v1",
+            "permissionSettingsHash": "96fd465775fb990127a7256c913f4d14e487917303981bb1ab0fdb97e4e48a62",
+            "targetScopeHash": "fdc319e38282f49bb3d98040f4ce580aaf82b1c11fcfda90dfa13d6dc2fcaace",
+            "inputBudget": {
+              "contextWindow": 64000,
+              "maxOutput": 1024,
+              "maxSteps": 3,
+              "historyCost": 19745,
+              "toolsCost": 3199
+            },
+            "omittedAssets": [],
+            "settingsRevision": 0,
+            "epoch": 0,
+            "systemHash": "57b5fe23e6de5fcfbef34ad6e2d121f53bd833b57bc459815ad22adc650148c0",
+            "requestHash": "c4fd40a826ba22f87216d910116a570fe14ac4685a8ab842f6cda9af3625efb1",
+            "compositionMatched": true,
+            "preparedAt": "2026-10-22T03:01:29.870142Z"
+          }
+        ],
+        "evaluation": {
+          "status": "failed",
+          "checks": {
+            "boundary": true,
+            "classification": false,
+            "diagnostic_marker": true,
+            "evidence": true,
+            "runtime_completed": true,
+            "task_outcome": false,
+            "valid_output": true
+          },
+          "limitations": [
+            "Host-reset readonly test environment only; no production recovery was executed.",
+            "Fixed structural/evidence/lexical checks do not establish general model benefit."
+          ]
+        }
+      },
+      "stage": "synthesis_holdout"
+    }
+  ],
+  "status": "completed",
+  "stopReason": "completed",
+  "synthesisDevelopment": {
+    "status": "passed",
+    "checks": {
+      "boundary": true,
+      "classification": true,
+      "diagnostic_marker": true,
+      "evidence": true,
+      "runtime_completed": true,
+      "task_outcome": true,
+      "valid_output": true
+    },
+    "limitations": [
+      "Host-reset readonly test environment only; no production recovery was executed.",
+      "Fixed structural/evidence/lexical checks do not establish general model benefit."
+    ]
+  },
+  "synthesisHoldout": {
+    "status": "failed",
+    "checks": {
+      "boundary": true,
+      "classification": false,
+      "diagnostic_marker": true,
+      "evidence": true,
+      "runtime_completed": true,
+      "task_outcome": false,
+      "valid_output": true
+    },
+    "limitations": [
+      "Host-reset readonly test environment only; no production recovery was executed.",
+      "Fixed structural/evidence/lexical checks do not establish general model benefit."
+    ]
+  },
+  "tokensCharged": 49943,
+  "variants": 5
+}

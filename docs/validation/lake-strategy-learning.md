@@ -1,5 +1,7 @@
 # P8 策略学习验收记录
 
+本文保留 PR #54 提交时的历史验收状态；后续真实模型、真实服务、Windows 与最终结论见 [P8 补充验收](lake-strategy-learning-p8-completion.md) 及 [补充 JSON](lake-strategy-learning-p8-completion.json)。不要将下述“未运行”当作后续补充验收的当前状态。
+
 2026-10-22，从 `origin/develop@a783981ade1631d1466fcf6e8d785410bf88dfbb`（P7 PR #53 已合并）创建 `codex/strategy-learning-p8`。使用本地 `gh bearqy`，仅提交 develop PR，不合并、不触发 CI、不发布或操作生产。
 
 **交付状态：Dev 验收工具、使用说明及退出演练已完成；完整发布验收尚未放行。** T33（macOS Dev）和 T34 已验证，T32 保留未完成：Windows 目标平台结果、真实 provider smoke 及推广用代表任务配对效果未取得，完整 M2 的真实故障环境仍未补齐。没有用合成模型替代这些门槛。
