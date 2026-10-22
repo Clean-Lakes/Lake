@@ -2,6 +2,8 @@
 :root {
   color-scheme: light;
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-size-ui: 13px;
+  --font-size-body: 14px;
   --font-weight-ui: 430;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
