@@ -10,7 +10,7 @@
 .composer-model-search input { min-width: 0; width: 100%; height: 32px; margin: 0; padding: 0; border: 0; outline: none; background: transparent; color: var(--foreground); font: inherit; font-size: 12px; }
 .composer-model-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .composer-model-label > span { overflow-wrap: anywhere; }
-.composer-model-label small { color: var(--text-muted); font-size: 11px; font-weight: 400; overflow-wrap: anywhere; }
+.composer-model-label small { color: var(--text-muted); font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
 .composer-model-note { margin: 6px 9px; color: var(--text-secondary); font-size: 11px; line-height: 1.6; }
 @media (max-width:700px) { .composer-model-select.app-select { max-width: 180px; } }
 
@@ -75,4 +75,4 @@
 
 .composer-model-current { display:flex; align-items:center; gap:7px; min-width:0; }
 .composer-model-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.composer-model-effort { flex-shrink:0; color:var(--text-muted); font-size:11px; font-weight:400; }
+.composer-model-effort { flex-shrink:0; color:var(--text-muted); font-size:11px; font-weight:500; }

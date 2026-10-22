@@ -42,11 +42,11 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
  .sidebar-scroll-area > .project-scroll { scrollbar-width:thin; }
  .sidebar-scroll-area > .project-scroll::-webkit-scrollbar { display:block; width:6px; }
 }
-.sidebar.workspace-navigation .nav-heading { margin: 0 7px 5px; font-size: 11px; font-weight: 400; color: var(--text-muted); }
+.sidebar.workspace-navigation .nav-heading { margin: 0 7px 5px; font-size: 11px; font-weight: 500; color: var(--text-muted); }
 .sidebar.workspace-navigation .nav-section-toggle { min-height: 26px; gap: 5px; padding: 3px 0; }
 .sidebar.workspace-navigation .session-group-count { display: none; }
 .sidebar.workspace-navigation .session-nav-row { min-height: 36px; padding: 7px 9px; gap: 9px; margin-bottom: 2px; border-radius: var(--sidebar-row-radius); }
-.sidebar.workspace-navigation .session-nav-row .nav-row-text strong { font-weight: 400; }
+.sidebar.workspace-navigation .session-nav-row .nav-row-text strong { font-weight: 500; }
 .sidebar.workspace-navigation .session-nav-row.active .nav-row-text strong { font-weight: 500; }
 .sidebar.workspace-navigation .nav-row:not(:disabled) .nav-row-text strong,
 .sidebar.workspace-navigation .resource-folder-toggle:not(:disabled) .resource-folder-name { color:var(--foreground); }
@@ -60,7 +60,7 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .session-edit,.sidebar.workspace-navigation .session-more { padding: 0; width: 26px; height: 26px; }
 .sidebar.workspace-navigation .nav-row-wrap:is(:hover,:focus-within) :is(.session-edit,.session-more) { background: var(--surface-hover); }
 .sidebar.workspace-navigation .nav-row-wrap:has(.active):is(:hover,:focus-within) :is(.session-edit,.session-more) { background: var(--surface-selected); }
-.sidebar.workspace-navigation .resources-heading { margin: 16px 4px 5px; padding: 14px 3px 0; border-top: 1px solid var(--border); border-bottom: 0; color: var(--text-muted); font-weight: 400; }
+.sidebar.workspace-navigation .resources-heading { margin: 16px 4px 5px; padding: 14px 3px 0; border-top: 1px solid var(--border); border-bottom: 0; color: var(--text-muted); font-weight: 500; }
 .sidebar.workspace-navigation .resources-heading .nav-section-toggle { gap: 6px; }
 .sidebar.workspace-navigation .resource-section-label { gap: 7px; }
 .sidebar.workspace-navigation .resource-section-label > small { padding: 0; border-radius: 0; background: transparent; color: var(--text-muted); font-size: 11px; }
@@ -79,7 +79,7 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .resource-folder-actions { right: 2px; top: 50%; transform: translateY(-50%); }
 .sidebar.workspace-navigation .resource-folder-actions .navigation-more-button { padding: 0; width: 26px; height: 26px; }
 .sidebar.workspace-navigation .resource-row { min-height: 36px; padding: 6px 8px; border-radius: var(--sidebar-row-radius); }
-.sidebar.workspace-navigation .resource-row .nav-row-text strong { font-size: 12px; font-weight: 400; }
+.sidebar.workspace-navigation .resource-row .nav-row-text strong { font-size: 12px; font-weight: 500; }
 .sidebar.workspace-navigation .resource-more-button { top: 50%; transform: translateY(-50%); padding: 0; width: 26px; height: 26px; }
 .sidebar.workspace-navigation .sidebar-tags { padding: 8px 13px 0; }
 .sidebar.workspace-navigation .sidebar-tags-toggle { padding: 6px 7px; }
