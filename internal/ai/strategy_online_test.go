@@ -55,6 +55,20 @@ func TestOnlineOfficialADKReadonlyTimeoutProposalAndRecovery(t *testing.T) {
 		case 1:
 			return response("", Call{ID: "failed_read", Name: "shell", Arguments: `{"command":"pwd"}`})
 		case 2:
+			if !strings.Contains(js(body), "copy sourceId exactly from host pending.callId") {
+				t.Error("missing focused source identity guidance")
+			}
+			found := false
+			for _, raw := range arr(body["tools"]) {
+				fn := obj(obj(raw)["function"])
+				if fn["name"] == onlineRevisionTool {
+					p := obj(obj(obj(fn["parameters"])["properties"])["sourceId"])
+					found = js(p["enum"]) == `["failed_read"]`
+				}
+			}
+			if !found {
+				t.Error("proposal schema did not pin the host's failed call ID")
+			}
 			return response("", proposal("failed_read", "shell", `{"command":"pwd"}`))
 		case 3:
 			return response("", Call{ID: "fresh_read", Name: "shell", Arguments: `{"command":"pwd"}`})
@@ -579,5 +593,18 @@ func TestOnlineKnownTerminalFailureDoesNotInventUnknownOutcome(t *testing.T) {
 				t.Fatal("untrusted command became retryable or its failure disappeared")
 			}
 		})
+	}
+}
+
+func TestOnlineProposalCannotSubstituteTerminalEntryForCallID(t *testing.T) {
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+	s, c := enableOnline(t, e)
+	if err := e.onlineObserve(s, c, Call{ID: "failed-tool-call", Name: "read", Arguments: `{"path":"/fixture"}`}, &onlinePolicyTrace{ReadOnly: true, TargetHash: "target"}, map[string]any{"id": "terminal-entry"}, context.DeadlineExceeded); err != nil {
+		t.Fatal(err)
+	}
+	_, err := e.onlinePropose(context.Background(), s, c, proposal("terminal-entry", "read", `{"path":"/fixture"}`))
+	var stopped *onlineStopped
+	if !errors.As(err, &stopped) || stopped.Reason != strategy.AwaitingUser || len(onlineReport(t, e, s, c).Revisions) != 0 {
+		t.Fatal("schema guidance weakened host source validation", err)
 	}
 }

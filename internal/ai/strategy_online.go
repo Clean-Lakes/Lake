@@ -96,7 +96,7 @@ func onlineTool() Tool {
 	}
 	schema := objectSchema(props, "sourceId", "refutedHypothesis", "changes", "expectedInformation", "stopCondition", "tool", "arguments")
 	schema["additionalProperties"] = false
-	return Tool{Name: onlineRevisionTool, Description: "Submit one bounded read-only correction after an actual failed tool call. sourceId must be that call ID. Describe the refuted hypothesis, concrete changes, expected information and stop condition. tool/arguments (JSON object encoded as a string) specify exactly ONE next check on the SAME authorized target. No permission bypass, writes, opaque MCP, arbitrary SQL, delegation or background calls. A proposal is not evidence or permission. The runtime alone judges progress; a final answer never proves recovery.", Parameters: schema}
+	return Tool{Name: onlineRevisionTool, Description: "Submit one bounded read-only correction after an actual failed tool call. sourceId must equal pending.callId from the host-recorded correction state, NOT the id/entry_id/terminalId inside a command result. Describe the refuted hypothesis, concrete changes, expected information and stop condition. tool/arguments (JSON object encoded once as a string) specify exactly ONE next check on the SAME authorized target. Preserve the original command and argument fields for a repeat sample; do not append echo, pipelines or success wrappers that hide its exit code. No permission bypass, writes, opaque MCP, arbitrary SQL, delegation or background calls. A proposal is not evidence or permission. The runtime alone judges progress; a final answer never proves recovery.", Parameters: schema}
 }
 
 func (e *Engine) onlineOwner(s *session, c Config) (*Engine, *session, string, string, string) {

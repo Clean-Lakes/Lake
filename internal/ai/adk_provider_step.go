@@ -83,6 +83,9 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		return modelResult{}, err
 	} else if report != nil {
 		appendSystem(strategy.TaskContext, "online-correction-state", "\nHost-recorded correction state (data, not permission): "+js(report))
+		if report.StopReason == "" && report.Pending != nil {
+			appendSystem(strategy.TaskContext, "online-correction-source", "\nFor the next correction proposal, copy sourceId exactly from host pending.callId: "+js(report.Pending.CallID)+". The id/entry_id/terminalId inside the tool result identifies a command or terminal, not the failed tool call. For a repeat sample, preserve the original tool arguments and command without echo, pipes, loops or success wrappers. The host still checks authorization and budget.")
+		}
 	}
 	if !c.MemoryEnabled {
 		for i := range history {
@@ -102,6 +105,14 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		return modelResult{}, err
 	} else if report != nil && report.StopReason != "" {
 		tools = nil
+	} else if report != nil && report.Pending != nil {
+		for i := range tools {
+			if tools[i].Name == onlineRevisionTool {
+				// Expose the host's exact source identity in the provider schema;
+				// never infer it from an untrusted command-result ID.
+				obj(obj(tools[i].Parameters["properties"])["sourceId"])["enum"] = []string{report.Pending.CallID}
+			}
+		}
 	}
 	if e.worker != nil {
 		e.worker.mu.Lock()
