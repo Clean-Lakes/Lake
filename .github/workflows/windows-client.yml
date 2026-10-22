@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [master]
-    paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']
+    paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'scripts/verify_strategy_learning.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']
 permissions:
   contents: read
 jobs:
@@ -60,6 +60,24 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test ./client/windows -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: P8 strategy regression and actual Windows WebView2 acceptance
+        shell: pwsh
+        run: |
+          python scripts/verify_strategy_learning.py --report "${{ runner.temp }}/strategy-learning-windows.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:LAKE_P8_REQUIRED_WINDOWS_UI = '1'
+          $env:LAKE_P8_WINDOWS_REPORT = '${{ runner.temp }}/strategy-learning-windows-ui.json'
+          go test -v ./client/windows -run '^TestWindowsStrategyConfirmationInRealWebView$' -count=1 -timeout=2m
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy-learning-windows-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/strategy-learning-windows.json
+            ${{ runner.temp }}/strategy-learning-windows-ui.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Build installer after native runtime tests
         run: python scripts/build_lake_windows.py --reuse-web
       - name: Prepare the actual packaged desktop for SSH tests
