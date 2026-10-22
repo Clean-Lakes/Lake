@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-22",
+  "bundleId": "com.cleanlakes.lake.desktop.dev",
+  "version": "0.3.21",
+  "installedApp": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+  "testedCommit": "755f2e0221ce65e24349a0a9b821d43382952d5f",
+  "uiCommit": "0f6d3447",
+  "build": "scripts/build_lake_desktop.sh --dev --install: passed",
+  "restart": "Lake Dev quit through app menu, relaunched from installed app path",
+  "verification": "Native Lake Dev permission popover visually verified: two columns, white surface, neutral enabled buttons, collapsed help; seven current permission values unchanged",
+  "productionApp": "Not installed or restarted",
+  "sourceIntegration": "Local integration branch retains installed Dev ancestry; merge changed no file content"
+}
