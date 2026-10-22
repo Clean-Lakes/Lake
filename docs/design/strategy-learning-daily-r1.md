@@ -16,9 +16,9 @@ HTTP 只修改学习开关不取消普通轮次；关闭正在应用的能力、
 
 - 当前在线实验同意版本为 `2`。PATCH 设置新增可选 `onlineConsentVersion`，只有 `onlineCorrectEnabled=true` 且版本为 `2` 才保存有效在线同意；仍需全局/项目、master/correct 等已有交集限制。
 - 缺少版本的旧客户端即便回传 true，也按在线关闭保存，不阻止它关闭学习或修改应用。未知的非零同意版本返回参数错误。
-- 启动在任务恢复之前、同一事务中处理旧 true：保存只读 `legacyOnlineConsent`（原启用值、设置 revision、epoch），清除可执行 true，递增 revision/epoch，并产生 `online_consent_retired_v2` 审计摘要。旧值不只留在文档或 UI，旧二进制读到的执行字段也已关闭。
+- 使用设置 JSON 的 `runtimePolicyVersion=2` 标记 R1 迁移，不增加 SQL 表。启动在任务恢复之前、同一事务中处理旧 true：保存只读 `legacyOnlineConsent`（原启用值、设置 revision、epoch），清除可执行 true，递增 revision/epoch，并产生 `online_consent_retired_v2` 审计摘要。旧值不只留在文档或 UI，旧二进制读到的执行字段也已关闭。
 - 没有修改 SQL schema、资产正文、血缘和既有操作账本。JSON 字段扩展随原设置存储；迁移幂等，后续保存保留旧同意记录。
-- 旧范围内尚未派发的实验任务取消，原因 `online_consent_retired`。在途/未知任务的 runtime ID、dispatchState 和待核实状态保留，由已有恢复核实与 epoch 检查阻止自动重放/失效提交，不重置预算或伪造成功。已停止的在线轮次和历史卡片保留。
+- 旧设置范围内尚未派发的实验任务（含未启用在线的旧快照优化）取消，原因 `online_consent_retired`。在途/未知任务的 runtime ID、dispatchState 和待核实状态保留，由已有恢复核实与 epoch 检查阻止自动重放/失效提交，不重置预算或伪造成功。已停止的在线轮次和历史卡片保留。
 
 ## 界面与实验边界
 
@@ -38,4 +38,4 @@ HTTP 只修改学习开关不取消普通轮次；关闭正在应用的能力、
 - 四种项目记忆工具错误保持普通结果；候选提取与记忆授权分离；明确记忆授权仍有效；候选单次观察且不自动采用。
 - 原有在线权限、审批、未知操作恢复及隔离实验回归继续运行；在线测试显式选择版本 2，不加入测试专用生产绕过开关。
 
-实际命令、提交 SHA、Dev 验证及未验证平台见阶段 PR。没有触发手动 CI，不操作生产应用。
+签名后端 `a1d7ede11cbe26f3991aa2639593f5fc1f1c49f1` 在独立临时 Home 运行并重启，经过 HTTP → 官方 ADK → 真实 curl，长上下文与旧同意迁移均通过，见 [R1 签名后端验收数据](../validation/lake-strategy-learning-r1.json)。这里固定模型决策，不证明模型收益。完整命令、最终提交和界面验证见阶段 PR；Windows 未验收，没有触发手动 CI，不操作生产应用。
