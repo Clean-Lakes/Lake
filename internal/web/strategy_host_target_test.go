@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
-	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
 func TestStrategyHostInspectionUsesPolicyResolvedTarget(t *testing.T) {
@@ -90,14 +89,13 @@ func TestStrategyHostInspectionDoesNotGuessOrBypassLocalDenial(t *testing.T) {
 				project := stringOf(b.Store.Session(id)["projectId"])
 				b.Store.CreateResource(project, "unselected SSH fixture", "ssh", Object{"host": "fixture.invalid", "username": "fixture"})
 			}
-			_, err := b.Store.SetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "host-denial", 0, StrategySettingsInput{MasterEnabled: true, CorrectEnabled: true, OnlineCorrectEnabled: true, Budget: strategy.DefaultBudget()})
-			if err != nil {
-				t.Fatal(err)
-			}
 			var calls atomic.Int32
 			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				calls.Add(1)
-				emitModel(w, "", []ai.Call{{ID: "inspect-denied", Name: "inspect_host", Arguments: `{"runtime":"local"}`}})
+				if calls.Add(1) == 1 {
+					emitModel(w, "", []ai.Call{{ID: "inspect-denied", Name: "inspect_host", Arguments: `{"runtime":"local"}`}})
+					return
+				}
+				emitModel(w, "目标未明确或本机执行被禁用，未派发检查。", nil)
 			}))
 			defer provider.Close()
 			b.Models.Save(&ai.Model{URL: provider.URL, Name: "host-denial-fixture", Protocol: "openai"})
@@ -105,28 +103,13 @@ func TestStrategyHostInspectionDoesNotGuessOrBypassLocalDenial(t *testing.T) {
 			apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "检查主机状态"}, 202)
 			b.workers.Wait()
 			view, _ := b.Engine.Snapshot(id)
-			if view.Status != "failed" || calls.Load() != 1 || len(b.Store.ResourceTerminals(ref)) != 0 {
-				t.Fatal("denied inspection executed or retried", mode, view.Status, calls.Load())
+			if view.Status != "completed" || calls.Load() != 2 || len(b.Store.ResourceTerminals(ref)) != 0 {
+				t.Fatal("denied inspection executed or repeated", mode, view.Status, calls.Load())
 			}
-			want := strategy.TargetAmbiguous
-			if mode == "deny_local" {
-				want = strategy.PermissionBlocked
-			}
-			found := false
 			for _, card := range view.Cards {
-				if card.Type == "operation" {
-					t.Fatal("denied inspection reached dispatch")
+				if card.Type == "operation" || card.Type == "strategy_correction" {
+					t.Fatal("ordinary denial dispatched or created correction", mode, card.Type)
 				}
-				if card.Type == "strategy_correction" {
-					var report strategy.OnlineReport
-					if json.Unmarshal([]byte(jsonText(card.Data)), &report) != nil {
-						t.Fatal("invalid correction report")
-					}
-					found = report.StopReason == want
-				}
-			}
-			if !found {
-				t.Fatal("denial reason lost", mode)
 			}
 		})
 	}
