@@ -1,0 +1,39 @@
+[
+  {
+    "callbackArguments": "0",
+    "stats": {
+      "calls": 4,
+      "labels": [
+        "SRE 协作实验型"
+      ],
+      "states": [
+        "false",
+        "true",
+        "false",
+        "true"
+      ],
+      "widths": [
+        102.015625
+      ]
+    },
+    "theme": "light"
+  },
+  {
+    "callbackArguments": "0",
+    "stats": {
+      "calls": 2,
+      "labels": [
+        "SRE 协作实验型"
+      ],
+      "states": [
+        "false",
+        "true",
+        "false"
+      ],
+      "widths": [
+        102.015625
+      ]
+    },
+    "theme": "dark"
+  }
+]

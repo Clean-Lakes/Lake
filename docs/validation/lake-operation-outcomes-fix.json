@@ -1,0 +1,75 @@
+{
+  "status": "passed",
+  "verifiedAt": "2026-10-18T14:00:31.840550+08:00",
+  "branch": "experiment/adk-runtime",
+  "head": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+  "changesCommitted": false,
+  "behavior": [
+    "Only unknown non-readonly operation outcomes request human verification.",
+    "Dispatched operations retain normal tool progress and durable replay protection.",
+    "Interrupted operations still require verification after restart."
+  ],
+  "files": {
+    "internal/ai/adk_outcomes.go": "47603f0dae0fbe71c95dc78bf238dd521062adf02e8475ffcd7df78d280fde67",
+    "internal/ai/adk_outcomes_test.go": "8be0efab1ba9e27cb18a7385b87dba8aa307210277a99e585ab3309857733b96",
+    "web-agent/web/src/AIPanel.tsx": "e5f0890c2d67bf82f5e91e19a6b5c50a03152c46fed888df37f67dc0d310b265",
+    "web-agent/web/test/operation-outcomes.test.ts": "b93d7a43e0c8693feccf9838a9c5029e4b0618b35e54b4c0167b480c0eb3164c"
+  },
+  "checks": [
+    {
+      "command": "go test -race ./internal/ai ./internal/web -count=1 -timeout=5m",
+      "exitCode": 0,
+      "log": "/tmp/lake-outcome-fix-go-tests.log"
+    },
+    {
+      "command": "pnpm --dir web-agent test:frontend",
+      "exitCode": 0,
+      "testsPassed": 203,
+      "log": "/tmp/lake-outcome-fix-frontend-tests.log"
+    },
+    {
+      "command": "pnpm --dir web-agent check",
+      "exitCode": 0
+    },
+    {
+      "command": "go vet ./internal/ai ./internal/web",
+      "exitCode": 0,
+      "log": "/tmp/lake-outcome-fix-vet.log"
+    },
+    {
+      "command": "python3 scripts/check_adk_runtime_boundary.py",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    },
+    {
+      "command": "scripts/build_lake_desktop.sh --dev --install",
+      "exitCode": 0,
+      "log": "/tmp/lake-outcome-fix-build.log"
+    },
+    {
+      "command": "codesign --verify --deep --strict ~/Applications/Lake Dev.app",
+      "exitCode": 0
+    }
+  ],
+  "regressions": {
+    "reproducedBeforeFix": true,
+    "covers": [
+      "running progress without verification",
+      "mixed running and unknown outcomes",
+      "completed and failed outcomes",
+      "cross-session isolation",
+      "restart changes unconfirmed dispatched effects to unknown",
+      "running ledger and manual verdict protection"
+    ]
+  },
+  "installedApp": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+  "bundleID": "com.cleanlakes.lake.desktop.dev",
+  "binarySHA256": "6a22e7da0fe618008a222c8bca008a466ca64da165e6e48edfaf4d8bcbf8e118",
+  "devWindowLoaded": true,
+  "devOrigin": "http://localhost:51662",
+  "screenshot": "docs/validation/lake-operation-outcomes-dev.png",
+  "scope": "Automated tests use fixtures and temporary homes. Existing Dev opened and loaded; no commands dispatched to user servers."
+}

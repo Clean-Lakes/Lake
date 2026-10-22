@@ -1,0 +1,44 @@
+{
+  "feature": "本机与 SSH 终端配置编辑",
+  "entries": [
+    "资源右键菜单",
+    "终端管理面板的编辑配置",
+    "资源详情"
+  ],
+  "fields": [
+    "资源名称",
+    "SSH 主机/端口/用户/Shell/认证方式",
+    "密码/私钥/口令替换",
+    "本机默认 Shell"
+  ],
+  "behavior": {
+    "existingSecretsNotEchoed": true,
+    "blankCredentialsRetained": true,
+    "modeChangesRequireFreshCredentials": true,
+    "unrelatedCredentialReferencesRejected": true,
+    "connectionChangesRequireClosedTerminalsAndIdleProject": true,
+    "namesCanBeChangedSeparately": true,
+    "nameOnlyFormSendsNoConnectionChanges": true,
+    "inFlightOldTargetRejected": true,
+    "historyAndResourceIdentityRetained": true,
+    "explicitDefaultShellHonored": true
+  },
+  "validation": {
+    "fullWebRace": "passed: 86.594s",
+    "finalAffectedRegressionRace": "passed: 5.926s",
+    "typescriptAndVite": "passed",
+    "signedBuild": "scripts/build_lake.sh; codesign --verify --strict passed",
+    "goVetWeb": "passed",
+    "gitDiffCheck": "passed",
+    "browser": "Verified SSH prefill, password empty/optional, key required after mode change, Escape cancel, local default Shell dialog; no user connection configurations changed during UI checks",
+    "realSSHOperationsForThisTask": false
+  },
+  "runtime": {
+    "origin": "http://localhost:4180",
+    "pid": 39474,
+    "sessionIDsPreserved": true,
+    "resourceIDsPreserved": true,
+    "signatureVerified": true
+  },
+  "push": false
+}

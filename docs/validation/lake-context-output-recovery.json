@@ -1,0 +1,57 @@
+{
+  "reproducedFromExistingSessionReadOnly": true,
+  "modelContextCapacity": 1000000,
+  "sessionContextAllocation": 64000,
+  "outputTokenCeiling": 8192,
+  "inputTokenAllocation": 55808,
+  "previousMeasuredInputTokens": 73930,
+  "summaryRequestBudgetBytes": 111616,
+  "oldSummaryFit": false,
+  "correctedSummaryFit": true,
+  "oldCandidateRequestCost": 125877,
+  "intermediateCandidateRequestCost": 100444,
+  "nativeInstalledBackendUpdated": false,
+  "pushed": false,
+  "checks": {
+    "aiAndWebRace": true,
+    "webRaceSeconds": 80.438,
+    "finalAiRaceSeconds": 22.026,
+    "frontendTests": 88,
+    "goVet": true,
+    "boundedOutputRecoveryNoToolReplay": true,
+    "explicitReasoningPreserved": true,
+    "failedPartialUsageConservativelyCharged": true,
+    "typescriptViteBuild": true,
+    "cliSignatureVerified": true,
+    "appSignatureVerified": true,
+    "dmgAndZipDigestsVerified": true,
+    "architecture": "arm64"
+  },
+  "additions": {
+    "clipboardImagePaste": [
+      "main composer",
+      "terminal AI composer"
+    ],
+    "waitingAnimation": "spinner and opaque text sweep active before first delta",
+    "imageUnsupportedModel": "preview retained; sending blocked with model capability explanation"
+  },
+  "clipboardBrowserValidation": {
+    "shortcut": "Meta+V",
+    "imagePreviews": 1,
+    "imageDimensions": [
+      1051,
+      202
+    ],
+    "typedTextPreserved": true,
+    "plainTextPasteVerified": true,
+    "testMessageSent": false,
+    "testDraftCleared": true,
+    "originalClipboardRestored": true,
+    "fullThumbnailAndFileNameVerified": true,
+    "screenshot": "docs/validation/lake-clipboard-image-preview.png"
+  },
+  "runtimeValidation": "docs/validation/lake-context-output-recovery-runtime.json",
+  "localInstaller": "dist/macos/0.3.4/arm64/Lake-0.3.4-macos-arm64.dmg",
+  "codeFixesPushed": false,
+  "documentationCommit": "78a287ce"
+}

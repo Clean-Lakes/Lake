@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-13",
+  "runtime": "Chrome + isolated Go PTY shells with controlled request delays",
+  "passed": true,
+  "slowCreateDoesNotBlockOtherHost": true,
+  "otherHostAcceptsInput": true,
+  "pendingRevisitDoesNotDuplicate": true,
+  "lateSuccessDoesNotStealSelection": true,
+  "lateFailureDoesNotReplaceOtherHost": true,
+  "retryAfterFailure": true,
+  "delayedContextDoesNotStealSelection": true,
+  "errors": []
+}

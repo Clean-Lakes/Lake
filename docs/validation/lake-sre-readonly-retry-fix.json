@@ -1,0 +1,163 @@
+{
+  "status": "passed",
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "head": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+  "uncommittedChanges": true,
+  "sourceSHA256": {
+    "internal/ai/sre_operation_policy.go": "7a1eee43da198e711563e18e2976040b5eaf1e5abe2dae20ad706e6c23d188b9",
+    "internal/ai/sre_execution.go": "6e2e1636f1b8b910815c1a89f81319549f10e971663f30291c33040c415fb147",
+    "internal/ai/sre_state.go": "447f3f6a7faff4ec9330c04ed9b54eae0f0c3ade4bfbfa1bbc0b646f7937d832",
+    "internal/ai/sre_types.go": "96692c8a8362c343b794a3ff98fef80d4af88bc9d5dda4bd7cc0b52a3683c08c",
+    "internal/ai/tools.go": "4ee704812d229e6a8358fa8164b917d63a174fd5717eeab1f7d88c6f0ed2e259",
+    "internal/ai/engine.go": "a1209290e96d00f624d2b2304fdbab904a548ee933a4cd86b33d8f5091cc18e9",
+    "internal/ai/session_tools.go": "5ec725817ee807e1235da126b037a1f9e0af9aae42cff2f432744b17faf39779",
+    "internal/ai/sre_tools.go": "746f0852409129b2452ceee00440ef5e16f348bafbf4f7b20fa3ca66105f48a4",
+    "internal/ai/sre_orchestrator.go": "904745d1bcf27552e7233d17f7fb4cb1bf42d829344b0efb081ea9e0fa9b2fb2",
+    "internal/ai/sre_coordination.go": "efee213cad6e6c09e77281707ccf040b562c36d5b6baa20b39d1090cf61a655c",
+    "internal/ai/sre_collaboration_upgrade.go": "d3da592b4b5572e9da37e5b956a7791792504a7452425fb3da18ed82e2571f75",
+    "internal/web/sre_operation_policy.go": "53e3769e75a709e003df6ea5a5ef9f4417fc3a970570310481ece357b2c4f5af",
+    "internal/web/sre_command_completion.go": "89f6dc9bcc8025d9c5cf856d4b57219a7fe33558b5b34bca141e956936fe4ec8",
+    "internal/web/sre_service.go": "130590f3fd18e7125a9ff74ebd859174342602898430e081f72d76cf6a7af60b",
+    "internal/web/sre_store.go": "d859cafef1d3af19c8f860bc825d175d4c80cecab6615dd9385f8e5962653c19",
+    "internal/web/reply_timing.go": "a4390c3b735a6c445cd6db8ef2c931e15c82a8dd59e6fdf5ca90be909a0df555",
+    "internal/web/agent.go": "25e140e5783619520363dc95e9d8877d4ac1baed244f86899bca3c50eb385dc7",
+    "internal/web/policy.go": "ebeebd97c31c71a9ffdb834482ed7aab3ad8a9c795454c9383e055d9e54b22d1",
+    "internal/web/readonly_script.go": "c7521825cf815e7847f1f4e1f66cb36bf11e4cb8f4b7cd3d21c6fe953b766468",
+    "internal/web/query_programs.go": "7a7b74f7585c0ea1841128f7476f36c28f2ecf20db11f5afec8ef16e939adb4d",
+    "web-agent/shared/contracts.ts": "db54ccf235fb7bd037b1880da3f0431f5bedc48812c8510669f04ec31df50ff2",
+    "web-agent/web/src/sreOperationPolicy.ts": "cec9bee4820ab9b4bba945d9e688b810f4505363d68c765d5c36ea79b37b7a90",
+    "web-agent/web/src/sreSessionPresentation.ts": "332d211a0b5929149d08a7b5b88378468c33995e402d33664728f18faddb9d2a",
+    "web-agent/web/src/sreTranscript.ts": "a6efc3937a98b1f1f38437c4fd9f4e4a99dab18e82234a08632859dc977e47b4",
+    "web-agent/web/src/SREPlanCard.tsx": "d0f572fcae80bf6b6ff998e627851663f7e6f64d30cfbd62e90c5c0276d69ccb",
+    "web-agent/web/src/SREBlockers.tsx": "d6292fb5d485c33054624867f9ef3f6645db7765de2fb62295d7d8fb321ca97f",
+    "web-agent/web/src/SRERoleMessage.tsx": "454e7a4043c26873b7a9ffe4f421a3a86177312196004815a805bd29080e46bd",
+    "web-agent/web/src/SessionPresentation.tsx": "9a2f0859a76bdf68cf122c62f2ffd439ebda7c80a5c71ca6a8252e8836c2cbc1",
+    "web-agent/web/src/turnStatus.ts": "7632052e68b3680b3bc702c0453dba1cc9bc2a2c73545586666df2e8e991acd5",
+    "web-agent/web/src/App.tsx": "bf927627bd5e487caddf5cbe17e108cfc4ac227b8145c86956aa3903ad1386f6"
+  },
+  "coverage": [
+    "Trusted runtime risk persisted on SRE operation records; conservative classification of legacy exact tool arguments",
+    "Read-only timeout permits fresh call identity, task continuation, and atomic read-only restart",
+    "Unknown writes and dangerous/unclassified operations still require verification; intervening dispatch checked again before resource effects",
+    "Dispatched operations show progress and original-handle waiting, with no human verdict for a running operation",
+    "Fresh read completion cannot be attributed to an earlier handleless timeout",
+    "Only a successful fresh sample covers a read gap; failed, rejected, or unexecuted retries cannot claim completion",
+    "Official ADK runner and real local command retry exercised with a synthetic first transport timeout",
+    "Paused SRE task survives model done event and reply timing finalization",
+    "Header distinguishes paused/unknown changes/completed/inconclusive task, and reply footer says reply ended",
+    "Historical operation call/result/status and messages preserved"
+  ],
+  "tests": [
+    {
+      "command": "go test -race ./internal/ai ./internal/web -count=1 -timeout=6m",
+      "log": "/tmp/lake-sre-policy-acceptance.log",
+      "status": "passed",
+      "packageSeconds": {
+        "internal/ai": 92.111,
+        "internal/web": 229.498
+      }
+    },
+    {
+      "command": "go test -race ./internal/ai ./internal/web -run <new risk and retry regressions> -count=1",
+      "log": "/tmp/lake-sre-policy-race-focused.log",
+      "status": "passed"
+    },
+    {
+      "command": "go test -race ./internal/web -run <legacy audit, unknown write continuation, read/write timeout> -count=1",
+      "log": "/tmp/lake-sre-policy-legacy-tests.log",
+      "status": "passed"
+    },
+    {
+      "command": "pnpm --dir web-agent test:frontend",
+      "count": 211,
+      "log": "/tmp/lake-sre-frontend.log",
+      "status": "passed"
+    },
+    {
+      "command": "pnpm --dir web-agent check",
+      "log": "/tmp/lake-sre-ts.log",
+      "status": "passed"
+    },
+    {
+      "command": "go vet ./internal/ai ./internal/web",
+      "log": "/tmp/lake-sre-policy-vet.log",
+      "status": "passed"
+    },
+    {
+      "command": "python3 scripts/check_adk_runtime_boundary.py",
+      "log": "/tmp/lake-sre-policy-boundary.log",
+      "status": "passed"
+    },
+    {
+      "command": "scripts/build_lake_desktop.sh --dev --install",
+      "log": "/tmp/lake-sre-policy-build.log",
+      "status": "passed"
+    },
+    {
+      "command": "codesign --verify --deep --strict ~/Applications/Lake Dev.app",
+      "status": "passed"
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed"
+    }
+  ],
+  "gui": {
+    "isolatedFixture": "web-agent/web/test/fixtures/sre-operation-policy.html",
+    "lightAndDarkVerified": true,
+    "readTimeoutHasContinueButtonAndNoVerification": true,
+    "unknownChangeHasVerificationAndActualRecordLink": true,
+    "runningHasProgressAndNoVerification": true,
+    "successfulReplyFooterSaysReplyEnded": true,
+    "screenshots": [
+      "docs/validation/lake-sre-read-timeout.png",
+      "docs/validation/lake-sre-read-timeout-dark.png",
+      "docs/validation/lake-sre-change-unknown.png",
+      "docs/validation/lake-sre-running-progress.png",
+      "docs/validation/lake-sre-change-unknown-dark.png",
+      "docs/validation/lake-sre-readonly-retry-dev.png"
+    ]
+  },
+  "devHistoryBefore": {
+    "session": "c1bcbbdaa81087704bcd7c27e7c861b1",
+    "messageCount": 50,
+    "messagesSHA256": "658a631defcc0ff822a7109314e07a79e421ece4cc5d8465d5d42905915b318e",
+    "unknownOperationFactsSHA256": "2e7bac273ae847a58c63f1d181e18b8d883eeffc5dfa930f11b9743e46cddb5b",
+    "unknownCount": 1
+  },
+  "devHistoryAfter": {
+    "session": "c1bcbbdaa81087704bcd7c27e7c861b1",
+    "messageCount": 50,
+    "messagesSHA256": "658a631defcc0ff822a7109314e07a79e421ece4cc5d8465d5d42905915b318e",
+    "unknownOperationFactsSHA256": "2e7bac273ae847a58c63f1d181e18b8d883eeffc5dfa930f11b9743e46cddb5b",
+    "unknownCount": 1
+  },
+  "devHistoryUnchanged": true,
+  "installedLegacyReadTimeouts": [
+    {
+      "taskStatus": "paused",
+      "operationID": "fbde5adb699c8fce3403c2dba7706807",
+      "risk": "readonly",
+      "status": "unknown",
+      "hasOriginalTimeout": true,
+      "taskErrorRequiresHumanVerification": false
+    }
+  ],
+  "installedDev": {
+    "path": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleID": "com.cleanlakes.lake.desktop.dev",
+    "version": "0.3.17",
+    "backendSHA256": "8cd61640525ea8f731f7ccc36a31544fdf2f4579d350daccfa15eae66d6a4f97",
+    "backendPID": 22093,
+    "appPID": 22083,
+    "matchesWorkspaceBinary": true,
+    "signatureVerified": true,
+    "nativeHeader": "任务已暂停",
+    "nativeFooter": "回复结束",
+    "nativeInputAvailable": true,
+    "noUserMessagesOrResourceCommandsSentDuringNativeAcceptance": true,
+    "screenshot": "docs/validation/lake-sre-readonly-retry-dev.png"
+  },
+  "temporaryPreviewStopped": true
+}

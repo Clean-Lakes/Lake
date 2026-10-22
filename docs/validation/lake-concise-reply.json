@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "request": "默认回复采用简洁对话，减少分级结论、长篇报告、整段加粗和大表格",
+  "changes": {
+    "generation": "所有 Prompt 配置追加统一对话风格：直接说明实际结果，一两段补充关键依据、验证和必要限制；通常 2～5 句，不设置输出 token 硬上限。用户明确要求详细报告、完整表格、步骤或代码时保留必要细节。",
+    "sre": "最终汇总改为一两段短正文，不再强制 3～5 点；保留节点小结节奏、结构化报告 schema、事实、引用和未知字段。",
+    "existingReplies": "对带明确开头结论且超过 700 字符的旧分节报告，复用开头原文并收起完整报告；主视图不再展示模板式结论标题或整段加粗。完整原文和表格仍可展开。无明确开头、代码或媒体型回复不编造摘要。",
+    "boundaries": "运行中正文、错误和确认控件不折叠；未完成与待确认说明保留在主视图；不改变任务状态、权限、历史或操作记录。"
+  },
+  "checks": {
+    "typescript": "passed",
+    "frontendTests": {"passed": 244, "failed": 0},
+    "aiPackageRace": "go test -race ./internal/ai passed in 85.801s",
+    "modelRequestIntegration": "隔离假模型验证实际请求带有统一风格规则，旧历史和用户明确的详细报告请求仍存在；未调用真实模型或执行远程检查。",
+    "profiles": ["core", "terminal2", "db-query-editor", "SRE coordinator", "workflow", "specialist JSON schema"],
+    "diffCheck": "passed",
+    "browser": "旧报告默认显示开头两段和限制，展开后原始结论标题、分节与表格仍存在；简短回复直接展示两段，无标题。",
+    "themes": ["light", "dark"],
+    "narrow": {"viewportWidth": 390, "documentWidth": 390, "shortReplyParagraphs": 2, "shortReplyHeadings": 0}
+  },
+  "dev": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "signature": "codesign --verify --deep --strict passed",
+    "installedApp": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "version": "0.3.17",
+    "backendSha256": "53aa839667f8d73f7eefe797f64a8279e8f2b91098ffd59445337cca4cde8b27",
+    "sourceBinaryMatchesInstalledBackend": true,
+    "address": "localhost:62113",
+    "acceptance": "原会话报告已变为两段正文加查看详细结果，运行环境拦截和未完成说明仍可见；展开恢复原始结论标题、基础健康分节和表格，随后重新收起。Dev 保持运行，没有重新发送消息或采样。",
+    "releaseAppTouched": false
+  },
+  "screenshots": ["lake-concise-reply-detail.png", "lake-concise-reply-legacy.png", "lake-concise-reply-expanded.png", "lake-concise-reply-short.png", "lake-concise-reply-dark.png", "lake-concise-reply-narrow.png", "lake-concise-reply-dev.png"],
+  "logs": ["/tmp/lake-concise-reply-ts.log", "/tmp/lake-concise-reply-tests.log", "/tmp/lake-concise-reply-go.log", "/tmp/lake-concise-reply-ai-race.log", "/tmp/lake-concise-reply-build.log"]
+}

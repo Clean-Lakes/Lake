@@ -1,0 +1,64 @@
+{
+  "status": "passed",
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "head": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+  "uncommittedChanges": true,
+  "finding": "stage_attachment already uses silentWriteFiles. Clarified permission descriptions and attachment confirmation copy; added positive and negative runtime regression coverage. No new permission and no change to user permission settings.",
+  "sourceSHA256": {
+    "internal/ai/permissions.go": "1bf01ecd217b25afebcf6f9c488412c335893caa4da72ab23fb0bd93ce9f1e07",
+    "internal/ai/attachments_test.go": "3edb7ced0008e4e0d74722eb570df669f9e4797fc44bac26ebc2cbe1b7c41cb0",
+    "internal/web/attachments_test.go": "afd6e4ef3614847b69f03432544a5339c70c2cce00081ba0e315daa892121b6a",
+    "web-agent/web/src/PermissionSettings.tsx": "bc055dc7eaaf65aa1f0d9c7ec5e823c0cde6bd95301e33bb3d1d72641da9628c",
+    "web-agent/web/src/approvalPresentation.ts": "7ec7ffafd76d425ca3fcd534bb5d963892e4b88fbafa3d5aa5ad45499edcc820",
+    "web-agent/web/test/approval-presentation.test.ts": "51cd561faacf0ae852a14e001d402702b959d5b1cb4e19670ecf42a0f4429d46",
+    "docs/chat-attachments.md": "6d7a5c153d8186d9c0cf194a632c924b9359b304f02314d45786d1413ad7d2f8"
+  },
+  "tests": [
+    {
+      "command": "go test -race ./internal/ai ./internal/web -run \"TestStageAttachment|TestAttachmentTransferPermission|TestADKAttachment\" -count=1 -timeout=90s",
+      "log": "/tmp/lake-upload-write-permission-go.log",
+      "status": "passed",
+      "coverage": "12 local/SSH/container permission combinations, 4 official ADK execution combinations, existing transfer approval/rejection and actual archive deployment"
+    },
+    {
+      "command": "pnpm --dir web-agent test:frontend",
+      "count": 212,
+      "log": "/tmp/lake-upload-write-permission-frontend.log",
+      "status": "passed"
+    },
+    {
+      "command": "pnpm --dir web-agent check",
+      "log": "/tmp/lake-upload-write-permission-ts.log",
+      "status": "passed"
+    },
+    {
+      "command": "scripts/build_lake_desktop.sh --dev --install",
+      "log": "/tmp/lake-upload-write-permission-build.log",
+      "status": "passed"
+    },
+    {
+      "command": "codesign --verify --deep --strict ~/Applications/Lake Dev.app",
+      "status": "passed"
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed"
+    }
+  ],
+  "installedDev": {
+    "path": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleID": "com.cleanlakes.lake.desktop.dev",
+    "backendSHA256": "bab8c9379d62ff207660c579be0bf3805187ac9161c790c2149f739591b7244c",
+    "matchesWorkspaceBinary": true,
+    "launchedAndNativeUIVerified": true
+  },
+  "nativeUI": {
+    "writePermissionLabel": "静默修改文件",
+    "descriptionIncludesAttachmentUpload": true,
+    "writePermissionOn": false,
+    "userPermissionsChanged": false,
+    "screenshot": "docs/validation/lake-upload-write-permission-dev.png"
+  },
+  "resourceCommandsSentDuringNativeAcceptance": false
+}

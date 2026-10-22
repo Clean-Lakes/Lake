@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-11",
+  "realConfiguredModel": true,
+  "productionSSHOperations": false,
+  "turns": [
+    {
+      "memoryEvidence": true,
+      "answerHasNumericMemory": true,
+      "platform": "Darwin",
+      "checkCount": 8
+    },
+    {
+      "memoryEvidence": true,
+      "answerHasNumericMemory": true,
+      "platform": "Darwin",
+      "checkCount": 8
+    }
+  ],
+  "persistentTerminalReused": true,
+  "status": "passed"
+}

@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-18",
+  "status": "passed",
+  "branch": "experiment/adk-runtime",
+  "change": "SRE toggle retains native enabled appearance and focus during saves; aria-busy/aria-disabled and a synchronous submission guard suppress duplicate writes. Actual running/disconnected constraints still disable switching, with a default cursor and reason tooltip.",
+  "checks": {
+    "typescript": "passed; also validated in signed build",
+    "frontendTests": { "passed": 229, "failed": 0 },
+    "delayedSave": "pointer cursor, opacity 1, identical 100.015625x28px bounds and unchanged text/badge colors while pending; nativeDisabled=false; aria-disabled and aria-busy=true; focus retained",
+    "duplicates": "repeated click and native Return during a held request produced only one request",
+    "success": "state changes after confirmed save and snapshot refresh",
+    "failureRetry": "failure preserved the confirmed enabled value and allowed retry",
+    "runningConstraint": "nativeDisabled=true, default cursor and explanatory tooltip; forced click did not issue a request",
+    "lightDarkNarrow": "passed; narrow viewport and document width both 390px",
+    "diffCheck": "passed",
+    "nativeDev": "installed app launched and current conversation restored; real project SRE setting not modified by tests",
+    "buildInstall": "scripts/build_lake_desktop.sh --dev --install passed",
+    "signature": "codesign --verify --deep --strict passed",
+    "installedBackendMatchesBuild": "777fdb611d0c926b15d39f3fcbffef9c28bbb88dacc3b2b06fa93e10043753a7"
+  },
+  "screenshots": [
+    "lake-sre-toggle-feedback-saving.png",
+    "lake-sre-toggle-feedback-dark.png",
+    "lake-sre-toggle-feedback-narrow.png",
+    "lake-sre-toggle-feedback-dev.png",
+    "lake-sre-toggle-feedback-detail.png"
+  ],
+  "notes": "Interaction tests used synthetic requests in the real SREModeToggle component. Release app/data, real permissions and existing uncommitted work preserved."
+}

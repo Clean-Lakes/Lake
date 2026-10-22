@@ -1,0 +1,24 @@
+{
+  "feature": "automatic Windows caption colors",
+  "windows11": "native DWM colors, capability detected",
+  "windows10": "non-client compatibility painting with native window interaction",
+  "highContrast": "system colors",
+  "checks": {
+    "windowsGoVet": "passed",
+    "windowsSmokeTestCompilation": "passed",
+    "windowsRuntimeExecution": "not run on macOS",
+    "zipCRC": "passed",
+    "architecture": "amd64",
+    "checksums": "passed"
+  },
+  "packages": {
+    "Lake-0.3.3-windows-x86_64.zip": {
+      "sha256": "cfc342473affc3edaaf1f27f8779196c449a32602300304ab577e17c325117f7",
+      "bytes": 191099308
+    },
+    "Lake-0.3.3-windows-x86_64-setup.exe": {
+      "sha256": "cee827bb68be95ff82198830054cd411db2088411b52b8bd843b7ccf661b07f8",
+      "bytes": 94761205
+    }
+  }
+}

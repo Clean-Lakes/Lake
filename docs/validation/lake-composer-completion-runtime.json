@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-15",
+  "feature": "聊天输入框灰色行内文字补齐",
+  "runtime": {
+    "backend": "signed bin/lake with isolated temporary home",
+    "provider": "loopback synthetic OpenAI-compatible SSE endpoint; no external model requests",
+    "frontend": "Vite and signed Lake Dev installed with scripts/build_lake_desktop.sh --dev --install"
+  },
+  "verified": [
+    "Current selected model is called after a 650ms pause; request contains no agent tools.",
+    "Model continuation remains outside textarea value until Tab acceptance; accepting keeps focus and caret at the end without sending.",
+    "Escape preserves the typed draft and dismisses its suggestion.",
+    "Enter sends only the typed text while a ghost suggestion is visible.",
+    "@Loc resource menu consumes Tab and inserts @Local machine before completion handling.",
+    "Caret moved into the draft hides suggestions; Shift+Tab preserves navigation.",
+    "Model HTTP 503 leaves the matching current-session history suggestion available.",
+    "Completion disabled: no request for disabled test draft; setting remains off after reload.",
+    "Desktop light/dark and 430x840 viewport: wrapping aligned, no horizontal page overflow.",
+    "12-line draft: textarea capped at 160px, extra suggestion lines included in its scroll range; Tab resets extra padding.",
+    "Installed Lake Dev starts successfully and displays the persisted default-on completion setting; native model configuration unchanged.",
+    "No browser error logs at the end of verification."
+  ],
+  "automated": {
+    "typescript": "pass (standalone check and production build)",
+    "frontend": "147 tests passed including completion eligibility, fallback, suffix validation and existing IME keyboard guards",
+    "go": "go test -race ./internal/ai ./internal/web passed; completion HTTP tests rerun after final validation change",
+    "cancellation": "TestComposerCompletionCancelsPreviousDraft proves superseded provider request cancellation and cleanup"
+  },
+  "ime_validation": "CompositionGuard and completion eligibility covered by automated tests; no native input-method switching used.",
+  "screenshots": [
+    "lake-composer-completion.png",
+    "lake-composer-completion-dark.png",
+    "lake-composer-completion-mobile.png",
+    "lake-composer-completion-settings-native.png"
+  ],
+  "documentation": [
+    "docs/ui-guidelines.md",
+    "web-agent/README.md"
+  ]
+}

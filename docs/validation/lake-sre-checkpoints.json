@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-16",
+  "changes": [
+    "Node checkpoint and terminal summary receive different runtime output instructions.",
+    "Only terminal coordinator summarize publishes summary kind; analyze publishes finding.",
+    "Investigator summary no longer concatenates every fact and unknown; structured report remains available in task handoffs.",
+    "Node evidence details and older verbose node replies default closed.",
+    "Redundant runtime completion placeholders are omitted only when the exact attempt has its own completed reply."
+  ],
+  "validation": {
+    "frontendTests": 191,
+    "typecheck": "passed",
+    "goTests": "internal/ai and internal/web passed",
+    "race": "passed: internal/ai 30.702s; internal/web 143.308s",
+    "browser": {
+      "syntheticData": true,
+      "realComponents": [
+        "AITranscript",
+        "SRERoleMessage",
+        "SREReport"
+      ],
+      "defaultRoleReplies": 3,
+      "terminalSummaryReplies": 1,
+      "defaultExpandedNodeDetails": 0,
+      "structuredDetailsExpandable": true,
+      "legacyNodeReplyExpandable": true,
+      "mobileDark": {
+        "viewport": [
+          390,
+          844
+        ],
+        "horizontalOverflow": false
+      }
+    }
+  },
+  "dev": {
+    "signedBuildInstall": "passed",
+    "restart": "verified: new backend PID and all 9 sessions available",
+    "nativeUI": {
+      "loaded": true,
+      "nodeDetails": 3,
+      "legacyNodeRepliesCollapsed": 5,
+      "emptyComposer": true
+    }
+  },
+  "screenshots": [
+    "lake-sre-checkpoints.png",
+    "lake-sre-checkpoints-mobile-dark.png"
+  ],
+  "limits": [
+    "Existing persisted reports are retained verbatim; the new output instructions apply to future role runs.",
+    "Conciseness is a model output instruction; evidence, runtime allowance and specialist tool capabilities are preserved."
+  ]
+}

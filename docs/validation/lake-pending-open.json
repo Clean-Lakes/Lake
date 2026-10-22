@@ -1,0 +1,23 @@
+{
+  "changes": [
+    "visible title only 接下来; quantity/status retained for screen readers",
+    "remove collapse/expand state and controls; render all queue items directly",
+    "header and its buttons have no background including hover/focus/active",
+    "retain icon editing, removal, drag/keyboard ordering and message glass"
+  ],
+  "verification": {
+    "typecheck": "passed",
+    "frontendTests": 245,
+    "rowsOnLoad": 3,
+    "headerBackground": "rgba(0, 0, 0, 0)",
+    "headerBackdropFilter": "none",
+    "hoveredQueueActionBackground": "rgba(0, 0, 0, 0)",
+    "screenReaderStatusClip": "rect(0px, 0px, 0px, 0px)",
+    "keyboardSort": "ArrowDown reorders without collapse state",
+    "edit": "third item opens directly; Escape restores focus",
+    "narrow": "390x844; no horizontal overflow",
+    "desktop": "signed Dev build installed successfully"
+  },
+  "fixture": "fictional in-memory workbench queue; no real queue changes",
+  "screenshot": "lake-pending-open.png"
+}

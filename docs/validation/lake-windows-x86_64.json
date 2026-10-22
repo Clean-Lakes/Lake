@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-12",
+  "platform": "Windows x86_64; Windows 10 1809+/Windows 11",
+  "client": "WebView2 with in-process current Go backend",
+  "sqlite": "Windows pure-Go driver; Unix mattn driver retained",
+  "terminals": "ConPTY and included PortableGit Bash/SSH",
+  "validation": {
+    "frontendTests": "78 passed",
+    "unixRace": "internal/web, internal/ai, internal/platform and cmd/lake passed; web 150.665s",
+    "windowsCompilation": "client, CLI and Windows-only test executable compiled with CGO disabled",
+    "package": "ZIP integrity, PE amd64 headers, embedded manifest, packaged runtime and SHA-256 verified",
+    "macOSCLI": "built with scripts/build_lake.sh and strict persistent signature verification passed",
+    "windowsRuntime": "not executed on this macOS host; .github/workflows/windows-client.yml provides native smoke tests",
+    "authenticode": "not configured"
+  },
+  "assets": {
+    "Lake-0.3.3-windows-x86_64-setup.exe": {
+      "size": 94721202,
+      "sha256": "32bb4b7265fc31856edb2426d21316bcaeea786645201f9666e953f4c66c5992"
+    },
+    "Lake-0.3.3-windows-x86_64.zip": {
+      "size": 191042087,
+      "sha256": "220319aaf7c026f7f4bdc26f39a0ddd26c8b584f4854c37e681e199ba45b05ae"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "change": "Pause repeated SSH terminal authorization after connection failure; classify safe startup errors; restore retained failure; explicit retry or configuration repair permits a fresh approval",
+  "productionRootCause": "All 5 retained SSH failures include host key verification failed",
+  "retainedFailureEligible": true,
+  "checks": [
+    "go test ./... passed (internal/web 75.887s)",
+    "Targeted race: failure suppression, retry intent, progressive recreation, real SSH PTY passed (14.477s)",
+    "go vet ./internal/web ./internal/ai passed",
+    "Signed scripts/build_lake.sh build and strict verification passed"
+  ],
+  "origin": "http://localhost:4177",
+  "pid": 7973,
+  "binarySha256": "40f42359c356c8bfcf7267ddb560256c3a739d1065fe5bfb0f3ade7215864295",
+  "realModelRequestsSent": false,
+  "realRemoteConnectionsAttempted": false,
+  "knownHostsChanged": false
+}

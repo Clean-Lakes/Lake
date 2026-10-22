@@ -1,0 +1,46 @@
+{
+  "environment": "Chromium browser with simulated desktop chrome and fictional in-memory API responses",
+  "macos": {
+    "banners": 0,
+    "composer": [
+      328,
+      904,
+      48
+    ],
+    "header": [
+      328,
+      12,
+      40.5
+    ],
+    "inputEnabled": true,
+    "placeholder": "想让 Lake 帮你做什么？"
+  },
+  "windows": {
+    "banners": 0,
+    "composer": [
+      328,
+      904,
+      48
+    ],
+    "header": [
+      328,
+      12,
+      40.5
+    ],
+    "inputEnabled": true,
+    "placeholder": "想让 Lake 帮你做什么？"
+  },
+  "checks": {
+    "noModelBanner": true,
+    "draftEditableWithoutModel": true,
+    "draftRetainedAfterClosingSettings": true,
+    "sendWithoutModelOpensSettings": true,
+    "modelSelectionRetainsDraft": true,
+    "noAutoSendAfterModelSelection": true,
+    "noCompletionRequestsWithoutModel": true,
+    "firstLaunchWithoutProjectHasModelSetup": true,
+    "narrowDarkNoOverflow": true
+  },
+  "frontendTestsPassed": 251,
+  "typecheckPassed": true
+}

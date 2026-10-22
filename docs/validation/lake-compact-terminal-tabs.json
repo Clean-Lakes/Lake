@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-12",
+  "change": "Compact terminal tabs without visible horizontal scrollbar",
+  "ui": [
+    "short terminal labels for the current resource",
+    "green active indicator and light selected background",
+    "close button moved to the right with hover/focus emphasis",
+    "overflow remains accessible through gestures and the terminal list",
+    "active tab is revealed on selection and panel opening"
+  ],
+  "validation": [
+    "TypeScript check passed through build_lake.sh",
+    "Signed build and deployed CSS asset verified on 4177"
+  ],
+  "nativeBrowser": "User changed the active page during visual inspection; subsequent read confirmed the workbench was running. User interaction and ongoing investigation were preserved."
+}

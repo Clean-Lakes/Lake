@@ -15,7 +15,7 @@ const families:[string,RegExp][]=[
   ["meta",/^llama(?:[-\s.\d]|$)/i],
   ["mistral",/^(?:mistral|mixtral|codestral|devstral|magistral|ministral|pixtral)(?:[-\s.\d]|$)/i],
   ["doubao",/^(?:doubao|seed)(?:[-\s.\d]|$)/i],
-  ["hunyuan",/^hunyuan(?:[-\s._\d]|$)/i],
+  ["hunyuan",/^(?:hunyuan|hy\d+)(?:[-\s._\d]|$)/i],
   ["cohere",/^command(?:[-\s.]|$)/i],
   ["stepfun",/^step(?:[-\s.\d]|$)/i],
   ["baidu",/^ernie(?:[-\s.\d]|$)/i],

@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-13",
+  "runtime": "Chrome + isolated Go PTY shells; separate owner sessions/projects",
+  "passed": true,
+  "hosts": 2,
+  "switchCycles": 6,
+  "screensRetained": true,
+  "panelReopenRetained": true,
+  "connectionsPerHost": 1,
+  "resizeRequests": 24,
+  "resizeSettled": true,
+  "chineseOutput": true,
+  "closingActiveSelectsOtherHost": true,
+  "errors": []
+}

@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-11",
+  "status": "passed",
+  "reportedQuery": "hdiutil info with grep device-path pattern and stderr suppression",
+  "savedSilentSetting": "preserved true",
+  "readonlyRecognition": "passed",
+  "actualPTYExecution": "passed without approval when silent enabled",
+  "disabledSilence": "ordinary readonly approval; no dangerous target confirmation",
+  "protectedDeviceAndCredentialCommands": "passed",
+  "nullRedirectionAndQuotedNumericArguments": "actual PTY output verified",
+  "combinedGrepOptions": "pattern-file raw-device checks preserved",
+  "raceTests": "full suite and final query tests passed",
+  "vet": "passed",
+  "codesign": "verified",
+  "nodeRuntimeDependency": false,
+  "binarySha256": "24393bc8aecc528e6a0d6c5ad357909b69d295fd5bc2d1c6a78f4a0c303f1458"
+}

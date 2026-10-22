@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "changes": [
+    "Lake execution preferences grouped into confirmation rules and scope; descriptions visible; quiet state buttons retain switch semantics",
+    "shared 208px navigation menus with 30px rows, icons, groups and one hover/focus fill",
+    "resource menu stable anchor for Escape and editor focus"
+  ],
+  "validation": {
+    "frontendTests": 245,
+    "failures": 0,
+    "typescript": "passed",
+    "browser": [
+      "all seven permission controls toggled by pointer and restored by Space in isolated state",
+      "Escape closes and returns focus",
+      "seven disabled controls and save error verified",
+      "390x480 permission panel fully within viewport, internal scroll 122px, last control reachable, no horizontal overflow",
+      "directory rename/create editor focused, move panel opens; no mutations submitted",
+      "End focuses delete, exactly one highlight; Escape returns directory trigger",
+      "light and dark screenshots inspected"
+    ],
+    "native": "signed Dev installed and restarted; native AX confirmed new descriptions, groups and controls at localhost:52362; no permission changes submitted",
+    "signature": "build script verified"
+  },
+  "screenshots": [
+    "lake-permission-panel-light.png",
+    "lake-permission-panel-dark.png",
+    "lake-permission-panel-narrow.png",
+    "lake-folder-menu-light.png",
+    "lake-folder-menu-dark.png"
+  ]
+}

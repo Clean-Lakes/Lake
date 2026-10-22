@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-10-18T17:52:07.093968+08:00",
+  "change": "Removed automatic OperationOutcomes verification panel and its form from AIControls, including after SRE interruption.",
+  "preserved": "Actual operation state and execution records; no operations are resolved or replayed by this UI change.",
+  "checks": {
+    "typescript": "passed",
+    "frontend": {
+      "passed": 223,
+      "failed": 0
+    },
+    "statesWithoutAutomaticPanel": [
+      "running",
+      "completed",
+      "cancelled",
+      "failed",
+      "interrupted"
+    ],
+    "signature": "deep strict verified"
+  },
+  "dev": {
+    "build": "scripts/build_lake_desktop.sh --dev --install",
+    "installed": true,
+    "restarted": true,
+    "nativeLoaded": "passed",
+    "composerVisible": true,
+    "automaticPanelVisible": false
+  },
+  "screenshot": "lake-no-outcome-popup-dev.png"
+}

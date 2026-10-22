@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-15",
+  "changes": [
+    "Arranged provider connection fields into a two-column grid.",
+    "Grouped model ID/display name and context/image capabilities into aligned rows.",
+    "Replaced the image-output checkbox with a labeled switch.",
+    "Added distinct editor headings and add/edit action labels, removed the empty-list border during editing, and clarified the supplier save step.",
+    "Automatically scrolls the model editor into view on opening; narrow windows use a single column."
+  ],
+  "validation": {
+    "typescript_and_signed_dev_build_install": "passed",
+    "frontend_tests": {
+      "passed": 131,
+      "failed": 0
+    },
+    "desktop": {
+      "viewport": "1280x720",
+      "editor_height": 287.5,
+      "editor_fully_visible_on_open": true,
+      "field_rows_aligned": true,
+      "horizontal_overflow": false
+    },
+    "mobile": {
+      "viewport": "430x840",
+      "columns": 1,
+      "horizontal_overflow": false,
+      "submit_and_required_error_reachable": true
+    },
+    "interactions": [
+      "Empty model ID validation",
+      "Add model with a display name and context limit",
+      "Toggle image output and set image input",
+      "Save provider and observe the saved model",
+      "Cancel editing without changing the original model"
+    ],
+    "native_dev_relaunched_and_editor_verified": true
+  },
+  "screenshots": [
+    "lake-model-editor-compact.png",
+    "lake-model-editor-mobile.png",
+    "lake-model-editor-native.png"
+  ],
+  "scope": "Save and validation tests used an isolated temporary home and synthetic local endpoint; the native Dev window was returned to its blank supplier/model editor."
+}

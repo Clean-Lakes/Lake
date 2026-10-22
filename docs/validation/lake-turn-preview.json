@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "request": "按参考图改为悬停单个会话刻度时展示该轮提问与回复卡片，替代整份目录浮层",
+  "change": {
+    "rail": "每轮独立刻度，当前轮与悬停轮以较长刻度强调；默认透明背景",
+    "card": "短标题加最多四行回复摘录，圆角中性表面，显示在对应刻度旁；最多一张卡片，移出收起",
+    "source": "仅使用同轮已保存回复，SRE 优先使用匹配 attempt 的报告 summary；不把工具输出、工具前的过程说明或原始 JSON 当作回复，不额外调用模型",
+    "markdown": "先解析 Markdown 再将展示 AST 限为 640 个 Unicode 码点，保留加粗和列表边界；CSS 进一步限制标题两行、正文四行",
+    "navigation": "点击刻度或卡片标题跳转；方向键切换、Enter 跳转、Escape 关闭并恢复焦点；保留加载旧记录和跳到最新入口",
+    "history": "不修改持久历史或消息内容"
+  },
+  "checks": {
+    "typescript": "passed",
+    "frontendTests": {"passed": 242, "failed": 0},
+    "diffCheck": "passed",
+    "hover": "指针进入第三条刻度显示圆角提问和对应回复，未发生跳转或触发阅读回调；移出后收起",
+    "switch": "第三条切到第四条时只保留一张卡片，标题和正文同步切换",
+    "keyboard": "方向键切换，Tab 可进入卡片标题，Escape 从卡片内关闭并将焦点恢复到对应刻度",
+    "jump": "点击第三轮卡片标题准确跳转 u2，未生成新会话或消息",
+    "themes": ["light", "dark"],
+    "narrow": {"viewportWidth": 390, "documentWidth": 390, "cardLeft": 68, "cardRight": 378, "cardBottom": 463.1328125, "viewportHeight": 844}
+  },
+  "dev": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "signature": "codesign --verify --deep --strict passed",
+    "installedApp": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "version": "0.3.17",
+    "backendSha256": "4f2f4153c48cd13fb815a5865b8d6e44d5f518a04cd552b8c73968cdbd0a9ec6",
+    "sourceBinaryMatchesInstalledBackend": true,
+    "address": "localhost:59748",
+    "acceptance": "真实会话第 26 轮展示在查一下标题与该轮结论摘录；不再显示整份目录列表。实机截图后移出刻度并收起卡片，Dev 保持运行。没有发送消息或执行远程命令。",
+    "releaseAppTouched": false
+  },
+  "screenshots": ["lake-turn-preview-detail.png", "lake-turn-preview-dark.png", "lake-turn-preview-light.png", "lake-turn-preview-narrow.png", "lake-turn-preview-dev.png"],
+  "logs": ["/tmp/lake-turn-preview-ts.log", "/tmp/lake-turn-preview-tests.log", "/tmp/lake-turn-preview-build.log"]
+}

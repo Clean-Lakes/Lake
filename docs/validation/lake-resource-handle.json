@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "problem": "12px grip overflowed its 10px button, and the old absolute hit area overlapped the folder toggle by 3px",
+  "fix": {
+    "gripIcon": 10,
+    "buttonSize": [
+      10,
+      24
+    ],
+    "leftOffset": -10,
+    "alignment": "Vertically centered; handle ends at the primary row boundary without shifting names"
+  },
+  "verification": {
+    "typescript": "passed",
+    "resourceTreeTests": {
+      "pass": 4,
+      "fail": 0
+    },
+    "browser": [
+      "All 11 root/nested folder and leaf controls measured: zero overlap and icon fits",
+      "Root drag handle starts at viewport x=0, not outside the scroll surface",
+      "Folder icon-box gap is 4px",
+      "Folder collapse and reopen work",
+      "Clicking grip opens the correct move panel, second click closes it",
+      "Arrow hit-test resolves to folder toggle; grip hit-test resolves to drag handle",
+      "Keyboard focus keeps grip visible at opacity 1",
+      "Light and dark themes checked"
+    ],
+    "signedBuildAndInstall": "passed",
+    "native": "Dev restarted and loaded localhost:49270; actual directory grip spacing visually inspected",
+    "signature": "verified",
+    "whitespace": "passed"
+  },
+  "screenshots": [
+    "lake-resource-handle-light.png",
+    "lake-resource-handle-dark.png",
+    "lake-resource-handle-dev.png"
+  ],
+  "data": "Browser fixture uses fictional nested folders; no resource move or remote operation performed. Release app and unrelated changes preserved."
+}

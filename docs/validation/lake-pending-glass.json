@@ -1,0 +1,72 @@
+{
+  "request": "待发送消息复用工作区悬浮气泡颜色、透明度及正文穿透效果",
+  "material": {
+    "sharedVariables": "theme.css --floating-bubble-*",
+    "normalOpacity": 0.55,
+    "activeOpacity": 0.68,
+    "backdropBlurPx": 12,
+    "radius": "--radius-window",
+    "shadow": "--shadow-popover",
+    "reducedTransparency": "opaque surface and no blur; source verified"
+  },
+  "layout": {
+    "queue": "absolute above composer dock, overlapping conversation canvas",
+    "dockGradientWhileQueued": "none",
+    "scrollReserve": "ResizeObserver measures pending panel; transcript end padding only",
+    "single": {
+      "panelHeight": 67,
+      "reserve": 75,
+      "rowHeight": 32,
+      "width": 960
+    },
+    "expanded3": {
+      "panelHeight": 137,
+      "reserve": 145
+    },
+    "editing3": {
+      "panelHeight": 213,
+      "reserve": 221
+    },
+    "cleared": {
+      "queuePresent": false,
+      "reserveVariable": "removed",
+      "timelinePaddingBottom": 32,
+      "dockGradient": "restored"
+    },
+    "textThrough": {
+      "rowY": [
+        752,
+        784
+      ],
+      "underlyingParagraphY": [
+        747.8125,
+        773.0078125
+      ],
+      "sameScrollCanvas": true
+    }
+  },
+  "verification": {
+    "typecheck": "passed",
+    "frontendTests": 245,
+    "frontendFailures": 0,
+    "lightAndDark": "computed material matches workspace exactly; visually inspected",
+    "narrow": "390x844; no horizontal overflow; editing visible; queue internally scrolls",
+    "interactions": [
+      "expand",
+      "pause on edit",
+      "save text",
+      "restore edit focus",
+      "Escape cancel",
+      "remove final item and clear reserve"
+    ],
+    "consoleErrors": [],
+    "desktop": "signed build_lake_desktop.sh --dev --install succeeded; Lake Dev restarted idle and loaded navigation/composer",
+    "fixture": "workspace-utilities.html?queue&scroll; fictional in-memory API only; no model or host operations"
+  },
+  "screenshots": [
+    "lake-pending-glass-light.png",
+    "lake-pending-glass-dark.png",
+    "lake-pending-glass-narrow.png",
+    "lake-pending-glass-detail.png"
+  ]
+}

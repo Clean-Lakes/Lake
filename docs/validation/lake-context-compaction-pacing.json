@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-16",
+  "issue": "Automatic context compaction repeats after one or two tool batches",
+  "readOnlyDiagnosis": {
+    "compactionsRecordedAtDiagnosis": 16,
+    "configuredBudgetTokens": 64000,
+    "reservedOutputTokens": 8192,
+    "latestReportedInputTokens": 27611,
+    "estimatedContextTokensAtSnapshot": 55652,
+    "cause": "The automatic trigger used serialized bytes divided by two even when provider input usage was available. Fitting immediately below that trigger left little space for the next tool batch."
+  },
+  "changes": [
+    "Persist the normal request's history/tool-size anchor and use reported input plus a 10 percent margin and conservatively estimated new material.",
+    "Count cached input as occupied context. Use the previous conservative estimate for unknown or stale measurements.",
+    "Invalidate anchors on summary, preview projection, clear, restore, rollback, model switch, or changes to memory/profile/image projection.",
+    "Before requesting a model summary, try reducing old model-only tool previews to 75 percent of the input allocation with meaningful space recovered. Preserve the latest complete batch and original operation cards.",
+    "Use model summaries when previews cannot create enough space. Summarize older complete turns even when fixed overhead prevents retaining a nominal 16 KB summary reserve; do not commit no-op automatic previews.",
+    "Keep the user's context/output budgets and existing execution permissions unchanged."
+  ],
+  "regressions": [
+    "Fourteen real read-tool batches against a temporary log exceed the old byte trigger but produce no compaction when reported input remains below the allocation.",
+    "Measurement anchors survive reload and include subsequent assistant/tool content and tool-catalog growth.",
+    "Unknown, zero, stale-model and changed-projection measurements fall back conservatively.",
+    "Old output preview reduction preserves latest raw results, user messages, call pairing, full operation records and enough space for a subsequent small batch.",
+    "High reported input still triggers a summary when the byte estimate is smaller; fixed overhead must not turn this into no-op maintenance.",
+    "Existing forced summary, output-limit retry, failure preservation, SRE investigation and context counter regressions remain covered."
+  ],
+  "deployment": {
+    "target": "Lake Dev.app",
+    "buildCommand": "scripts/build_lake_desktop.sh --dev --install",
+    "releaseRestarted": false,
+    "releaseDataModified": false,
+    "productionOperationsReplayed": false,
+    "devRestartedAfterIdleCheck": true,
+    "existingDevSessionSnapshotsLoaded": 8
+  },
+  "checks": {
+    "goAllBeforeFinalBoundaryRefinement": "passed (AI and Web)",
+    "goRaceAiWebBeforeFinalBoundaryRefinement": "passed (AI 42.450s, Web 136.140s)",
+    "finalAiRace": "ok  \tgithub.com/Clean-Lakes/Lake/internal/ai\t31.722s",
+    "signedDevBuildAndVerification": "passed"
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "status": "passed",
+  "timestamp": "2026-10-18T17:38:45.805943+08:00",
+  "branch": "experiment/adk-runtime",
+  "head": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+  "scope": "Smooth incremental display of live assistant replies and SRE progress; stable Markdown renderers. Reference is the perceived Codex streaming rhythm, without claiming its private implementation.",
+  "behavior": {
+    "initial_and_historical_text": "immediate",
+    "live_appends": "grapheme-safe, frame scheduled, about 30 updates per second",
+    "max_packet_catchup_ms": 200,
+    "completion_cancellation_replacement": "immediate canonical content",
+    "reduced_motion_or_hidden": "flush and cancel pending animation",
+    "persistence_runtime_status": "unchanged"
+  },
+  "checks": {
+    "typescript": "passed",
+    "frontend": {
+      "passed": 221,
+      "failed": 0,
+      "new_reveal_cases": 5
+    },
+    "diff_check": "passed",
+    "strict_mode_fixture": true,
+    "light_and_dark": {
+      "network_packets": 4,
+      "presentation_mutations": 29,
+      "table_replacements": 0,
+      "link_replacements": 0,
+      "final_source_length": 311,
+      "complete_content": "verified"
+    },
+    "reduced_motion": {
+      "network_packets": 4,
+      "presentation_mutations": 5,
+      "table_replacements": 0,
+      "link_replacements": 0,
+      "final_source_length": 311
+    },
+    "narrow": {
+      "viewport": 390,
+      "document_width": 390,
+      "passed": true
+    },
+    "stop_flush": "passed",
+    "native_Dev_loaded": "passed"
+  },
+  "build": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "log": "/tmp/lake-text-reveal-build.log",
+    "app": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "version": "0.3.17",
+    "signature": "verified deep strict",
+    "backendSha256": "1b7fcb031bd641e670b91f750abe34d71f064f6a18c461fac521958683c389b4",
+    "appPid": 30948,
+    "backendPid": 30960
+  },
+  "screenshots": [
+    "lake-text-reveal-light.png",
+    "lake-text-reveal-dark.png",
+    "lake-text-reveal-reduced.png",
+    "lake-text-reveal-narrow.png",
+    "lake-text-reveal-dev.png"
+  ],
+  "sourceSha256": {
+    "web-agent/web/src/textReveal.ts": "ca74f5cae57b19f7d197491c94eb26e08e8880df2421acabe4030e2c5ee81ac2",
+    "web-agent/web/src/useSmoothText.ts": "fb1706264bcf6a35f0f670d67bfa85497ac66d6d6ca28b076dfed2d361d26f66",
+    "web-agent/web/src/AIPanel.tsx": "cb905f2014f5ca8800a115752fae8088ed1346edba2d7cc7fac81f0d91171ea9",
+    "web-agent/web/src/SRERoleMessage.tsx": "24271275e8f11f2d2114382ea9776c6410eec28a756460b47c8f537e072fa3db",
+    "web-agent/web/test/text-reveal.test.ts": "7a7e8d9aab0a206d808216a971c9e6aad928d0d44f965816e0ec91d3f5d549cc"
+  },
+  "resource_commands_sent": false,
+  "model_requests_sent": false,
+  "permissions_changed": false
+}

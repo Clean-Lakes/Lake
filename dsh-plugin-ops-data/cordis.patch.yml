@@ -1,0 +1,11 @@
+# LAKE 运维数据层。安装后由 plugin_manager 写入 profile 的补丁层；
+# 这里的 config 是默认值，用户在 cordis.patch.yml 中按 id 覆盖即可。
+- insert:
+    - id: ops-data
+      name: '@clean-lakes/dsh-plugin-ops-data'
+      config:
+        databasePath: ''
+        maxRows: 50
+        legacyImport:
+          enabled: false
+          path: ''

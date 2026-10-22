@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "change": "手动新建资源弹窗仅提供 SSH 主机，说明改为添加 SSH 主机，其他新建类型暂隐藏",
+  "scope": "仅调整创建入口的选项与说明，保留已有其他资源及服务实现",
+  "validation": {
+    "typescript": "passed",
+    "frontendTests": {"passed": 234, "failed": 0},
+    "diffCheck": "passed",
+    "browser": "真实 App 隔离数据中展开类型列表，只有 SSH 主机；取消后正常返回，未提交资源或凭据",
+    "nativeDev": "签名安装并启动后，从真实项目新建资源打开弹窗；说明仅提 SSH，类型列表唯一选项为 SSH 主机。验收后取消并保留 Dev 运行。",
+    "build": "scripts/build_lake_desktop.sh --dev --install",
+    "signature": "codesign --verify --deep --strict passed",
+    "backendSha256": "696df5b35855a3913d1735f3d186cebeb611403e9556788e24ef3c0131ae0feb",
+    "installedBackendMatches": true,
+    "devAddress": "localhost:55122",
+    "releaseAppTouched": false
+  },
+  "screenshots": ["lake-ssh-only-create.png", "lake-ssh-only-dev.png"],
+  "logs": ["/tmp/lake-ssh-only-ts.log", "/tmp/lake-ssh-only-tests.log", "/tmp/lake-ssh-only-build.log"]
+}

@@ -1,0 +1,29 @@
+{
+  "changes": [
+    "requestAnimationFrame scroll interpolation independent of snapshot cadence",
+    "one geometry read/write per animation frame",
+    "completed Markdown cards/steps memoized across snapshot JSON updates",
+    "CSS thinking animation uses transform and opacity with static glow",
+    "continuous SSE refresh uses a bounded throttle instead of postponing until stream silence",
+    "manual wheel/pointer/keyboard reading interrupts follow",
+    "device-pixel rounding converges and stops the frame loop"
+  ],
+  "tests": {
+    "frontend": "23 passed",
+    "typescript": "passed",
+    "signedBuild": "scripts/build_lake.sh passed"
+  },
+  "service": {
+    "origin": "http://localhost:4177",
+    "pid": 46181,
+    "bundle": [
+      "/assets/index-CHWhGDJB.js"
+    ],
+    "binarySHA256": "b554a47728a5ebb1253fa8e587a5a8cc6869eb7ccde233b293c3cb176fa8ea4b"
+  },
+  "syntheticStreamingFixture": true,
+  "browserMetrics": "lake-smooth-streaming-metrics.json",
+  "screenshot": "lake-smooth-streaming-example.png",
+  "realModelRequests": false,
+  "realRemoteConnections": false
+}

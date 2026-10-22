@@ -1,0 +1,4 @@
+.DS_Store
+.openai/local/
+*.tar.gz
+*.log

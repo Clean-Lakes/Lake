@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-11",
+  "ui": {
+    "position": "beside model selector",
+    "deepseek": [
+      "default",
+      "none",
+      "low",
+      "high",
+      "max"
+    ],
+    "gpt-5.2": [
+      "default",
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+    ],
+    "reloadPreservesSelection": true,
+    "unknownModelHidesSelector": true
+  },
+  "capturedRequest": {
+    "model": "magpie/deepseek/deepseek-flash",
+    "effort": "max",
+    "thinking": {
+      "type": "enabled"
+    }
+  },
+  "checks": {
+    "typescript": "passed",
+    "frontendTests": 47,
+    "backendRace": "passed",
+    "reasoningAdapterAndSessionTests": "passed"
+  },
+  "screenshot": "lake-reasoning-levels.png",
+  "sources": [
+    "https://api-docs.deepseek.com/guides/thinking_mode/",
+    "https://api-docs.deepseek.com/api/list-models/",
+    "https://developers.openai.com/api/docs/models/gpt-5.2",
+    "https://platform.claude.com/docs/en/build-with-claude/effort",
+    "https://ai.google.dev/gemini-api/docs/generate-content/thinking"
+  ]
+}

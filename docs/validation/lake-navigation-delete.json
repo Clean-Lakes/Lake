@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-12",
+  "frontendTypecheck": "passed",
+  "frontendTests": 79,
+  "navigationTargetedRaceTests": "passed",
+  "fullWebRaceSuite": "passed",
+  "fullGoRaceSuite": "failed: unrelated TestProfilesAndSchemaValidation expects 42 tools, current catalog has 43",
+  "verified": [
+    "always visible project/folder/resource trash buttons including Local machine",
+    "custom right-click menu instead of browser Back/Reload",
+    "resource deletion and restoration",
+    "nonempty nested folder deletion promotes contents; restore regroups unchanged children",
+    "project deletion hides and restores resources and sessions",
+    "sibling ordering preserved on restore",
+    "archived resources excluded from active scopes and resource-tree seeding",
+    "busy project/terminal/approval deletion rejected",
+    "credential references and history preserved without exposing credentials in trash",
+    "deep folder indentation capped to keep controls accessible"
+  ],
+  "productionItemsDeleted": 0,
+  "signedBuild": "scripts/build_lake_desktop.sh --install",
+  "installedVersion": "0.3.3",
+  "clientRestarted": false,
+  "userBackendReplaced": false,
+  "userBackendPid": 42476,
+  "liveUserTerminals": 9,
+  "currentUserFrontendMatchesBuild": false,
+  "screenshot": "lake-navigation-delete-menu.png",
+  "data": "isolated synthetic project/resources only"
+}

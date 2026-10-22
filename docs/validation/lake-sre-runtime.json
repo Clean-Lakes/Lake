@@ -1,0 +1,32 @@
+{
+  "fixture": "synthetic model / actual local observation and write",
+  "taskStatus": "completed",
+  "attempts": 4,
+  "operations": 1,
+  "operationStatuses": [
+    "succeeded"
+  ],
+  "roles": [
+    "coordinator",
+    "investigator",
+    "executor",
+    "verifier"
+  ],
+  "verificationVerdicts": [
+    "passed"
+  ],
+  "rootCauseStatus": "unknown",
+  "preservedAfterBackendRestart": true,
+  "nativeWindow": "not verified; macOS locked",
+  "writeSha256": "5efba9576ddc3f4cf3e812597058c42f0d177fd44f016a6ba6ef6041398a8655",
+  "rejection": {
+    "status": "rejected",
+    "attempts": 3,
+    "executionMessage": "本次操作已拒绝，未执行变更；任务已暂停。"
+  },
+  "revision": {
+    "versions": 3,
+    "newRunCreatedByRevision": false,
+    "newActionDispatchedByRevision": false
+  }
+}

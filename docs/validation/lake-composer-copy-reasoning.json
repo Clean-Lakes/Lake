@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-18",
+  "status": "passed",
+  "branch": "experiment/adk-runtime",
+  "changes": [
+    "Default composer placeholder is 想让 Lake 帮你做什么？; queue, approval and setup hints retained.",
+    "Reasoning trigger retains full opacity and normal text/icon colors while unavailable; native disabled constraints remain.",
+    "Saving retains the current label and geometry; tooltip explains saving, running, disconnected or unavailable state."
+  ],
+  "checks": {
+    "typescript": "passed; also checked by signed build",
+    "frontendTests": { "passed": 229, "failed": 0 },
+    "diffCheck": "passed",
+    "idleAndRunning": "same opacity 1 and text/icon rgb(85,85,85) in light theme; running has default cursor and native disabled=true",
+    "runningRestriction": "forced click did not open the reasoning menu",
+    "save": "delayed synthetic save retained 默认, 78px width and opacity 1; saved value changed to 高 after response",
+    "mentions": "@ menu still exposes resources, Skills, MCP and SRE roles",
+    "lightDarkNarrow": "passed; narrow viewport and document width both 390px",
+    "nativeDev": "new placeholder visible and current conversation restored after install; active server check was allowed to reach stopped state before quitting Dev",
+    "buildInstall": "scripts/build_lake_desktop.sh --dev --install passed",
+    "signature": "codesign --verify --deep --strict passed",
+    "installedBackendMatchesBuild": "6a277c9a7734ccc6ff001f007ed4cb6a8ee4468a9a7a54ba494238a95b24a67e"
+  },
+  "screenshots": [
+    "lake-composer-copy-reasoning-light.png",
+    "lake-composer-copy-reasoning-running.png",
+    "lake-composer-copy-reasoning-dark.png",
+    "lake-composer-copy-reasoning-narrow.png",
+    "lake-composer-copy-reasoning-detail.png",
+    "lake-composer-copy-reasoning-dev.png"
+  ],
+  "notes": "Interaction tests used synthetic fetch data. Real reasoning preferences, model messages, resource commands, release app/data and existing uncommitted work were unchanged by validation."
+}

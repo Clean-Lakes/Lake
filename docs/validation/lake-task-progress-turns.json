@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-16",
+  "issue": "The session-wide todo list was displayed under the newest user message, so old completed tasks appeared in a new turn before any task update.",
+  "change": "Render each turn's latest successful todo_write operation. Keep old progress with its original turn. Do not treat todo_read, running/failed writes, missing paginated records or the global todo cache as new progress. Empty successful writes clear that turn's display.",
+  "modelTaskStateChanged": false,
+  "validation": {
+    "typeScript": "passed",
+    "frontendTests": "172 passed, including six new task progress regressions",
+    "signedDevBuild": "passed: scripts/build_lake_desktop.sh --dev --install",
+    "signatureVerification": "passed",
+    "isolatedBrowser": "Two actual HTTP chat turns with a local synthetic model; the first writes three completed tasks and the second asks about FTP without writing tasks. The global prior todo cache deliberately remains populated. Only the first turn displays 3/3 and its task details.",
+    "screenshot": "lake-task-progress-turns.jpg",
+    "productionModelOrServerCalls": false,
+    "releaseRestarted": false
+  }
+}

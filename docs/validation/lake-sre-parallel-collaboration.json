@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-16",
+  "request": "Multiple complete SRE specialists work concurrently, post their own replies/status and collaborate in the same conversation.",
+  "changes": [
+    "Dependency-ready independent roles run concurrently, one active step per fixed role. Actions are exclusive, dependencies and per-resource dispatch locks remain in force.",
+    "sre_team_update publishes runtime-bound role messages and directed peer review requests. sre_team_read returns bounded status/messages and authorized current-task recorded sources.",
+    "Every model round sees a bounded current team board; collected sources are persisted immediately for peers to read before the collecting specialist finishes.",
+    "Role progress remains independently live; final replies append at finish time. Directed recipient names render inline. Progress/team messages do not repeat the full evidence/operation journal; a live approval appears once per role run.",
+    "First failure cancels and drains all in-flight roles before the parent session is released. Shared claims/sources do not count as fresh independent verification."
+  ],
+  "checks": {
+    "parallelIntegration": "Passed: 3 actual specialist model requests held at a barrier simultaneously; each read a real temporary file, sent a directed request, read a peer recorded source and sent a directed reply. Six persisted exchanges, four completed attempts including a dependency-gated final summary.",
+    "crossTaskSourceIsolation": "Passed: each specialist was denied a source from another task/session while authorized peer source reads succeeded.",
+    "scheduler": "Passed: same-role serialization, independent role overlap, exclusive action scheduling, dependency ordering, original failure retention and peer cancellation/draining.",
+    "authorization": "Existing SRE parent-permission and approval regression suite passed; shared source reads enforce assigned child resources and current parent permissions.",
+    "goAll": "passed (AI 16.724s; Web 101.168s)",
+    "goRace": "passed (AI 31.068s; Web 141.331s)",
+    "finalExchangeRace": "passed; final request/reply plus cross-task-denial variant",
+    "frontendTests": {
+      "passed": 180,
+      "failed": 0
+    },
+    "TypeScript": "passed",
+    "visualQA": "Passed: actual SRERoleMessage and SREPlanCard rendered with synthetic data; three live role statuses, directed request/reply, light/dark themes and narrow viewport with no horizontal overflow.",
+    "signedDevBuildAndSignature": "passed using scripts/build_lake_desktop.sh --dev --install; codesign --verify --deep --strict",
+    "nativeDev": "Reloaded signed Dev only after all model sessions were idle and the composer was empty. Confirmed new runtime origin, working conversation controls and 8 healthy session snapshots.",
+    "planValidation": "all required sections/frontmatter, 5 completed tasks and unique declaration identifiers passed",
+    "diffWhitespace": "passed"
+  },
+  "existingPlans": "Original dependencies retained; only new/revised model plans can redistribute independent steps. No saved/live production plan was silently rewritten or resumed.",
+  "sreModeChanged": false,
+  "productionTaskStarted": false,
+  "releaseRestarted": false,
+  "screenshots": [
+    "lake-sre-parallel-collaboration.png",
+    "lake-sre-parallel-collaboration-dark.png",
+    "lake-sre-parallel-collaboration-mobile.png"
+  ],
+  "screenshotData": "Synthetic scenario with actual shared UI components; no production model/tool calls."
+}

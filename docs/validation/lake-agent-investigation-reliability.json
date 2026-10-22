@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-13",
+  "changes": [
+    "Provider usage settlement refunds unused reservations; pending reservations wait for settlement",
+    "Cumulative child/turn allocation scales within 32K–64K and 128K–256K; optional requested verifier receives reserved capacity",
+    "Typed host, service journal and Kubernetes workload/log observation tools match assigned roles/resources",
+    "Tool errors preserve evidence diagnostics; bounded final report phase closes observation tools",
+    "df available percentage computed from available/total; no inferred eviction threshold"
+  ],
+  "checks": {
+    "aiAndWebRace": "passed; 19.038s / 81.810s",
+    "followupAgentClusterRace": "passed; 8.010s",
+    "eightJobRegression": "passed",
+    "goVetAI": "passed",
+    "gitDiffCheck": "passed",
+    "signedBuild": "scripts/build_lake.sh; codesign --verify --strict passed"
+  },
+  "realEvidenceFixture": {
+    "signedCLI": true,
+    "nodes": 5,
+    "tasks": 7,
+    "completed": 7,
+    "successfulObservations": 12,
+    "modelSynthetic": true,
+    "speedBenchmark": false
+  },
+  "realModel": {
+    "model": "workbuddy-ai-plugin/deepseek-v4.1-flash",
+    "newIsolatedConversation": true,
+    "tasks": 8,
+    "completed": 8,
+    "childBatchSeconds": 140.8,
+    "successfulObservations": 36,
+    "failedObservations": 2,
+    "childActualUsage": 178708,
+    "parentFinalAnswerMeasured": false,
+    "parentStopReason": "Harness stopped at a newly requested parent shell terminal approval after all eight children completed; parent final answer was not measured. The context canceled error is from the test abort.",
+    "speedupProven": false
+  },
+  "productionMutations": false,
+  "gitPush": false,
+  "web": {
+    "origin": "http://localhost:4180",
+    "pid": 99920,
+    "previousPid": 76452,
+    "authenticatedCatalog": true,
+    "sessionsPreserved": true,
+    "webHTML": true,
+    "resourceCount": 132,
+    "sessionCount": 8,
+    "previousSessionCount": 8
+  }
+}
