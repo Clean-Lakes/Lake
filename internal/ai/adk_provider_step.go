@@ -73,6 +73,9 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 	}
 	appendSystem(strategy.TaskContext, "team-context", teamContext)
+	if c.StrategyLearnEnabled && c.MemoryProjectID != "" && !c.workflowMode && !c.sreCoordinator && c.agentRole == "" {
+		appendSystem(strategy.FixedRules, "strategy-learning-candidate-boundary-v1", "\nStrategy candidate learning is host-managed. The opted-in host observes new explicit corrections and can extract an unadopted strategy candidate after this turn. It does not require save_project_memory, forget_project_memory or Skill edits. A preference correction alone does not authorize a project-memory write; memory tools retain their independent explicit-consent and revision checks. If a memory tool rejects a write, do not claim it was saved or repeat it to bypass consent. Continue answering the current request from the available evidence; candidate extraction and human adoption are separate steps, and a candidate is not automatically applied.")
+	}
 	if onlineEnabled(c) {
 		appendSystem(strategy.FixedRules, "online-readonly-correction-v1", "\nOptional bounded read-only correction is enabled. After a failed resource check, inspect its actual call ID/error. Before another resource call, submit revise_readonly_strategy with that source ID, refuted hypothesis, concrete change, expected information and stop condition, and exactly one next tool/JSON arguments. Preserve the same authorized target. Only trusted policy can prove read-only. Do not replay writes, opaque SQL/MCP, dispatched operations or denied permissions. No new task/role/plan resets the shared budget. Only a successful repeated logical check closes that recorded gap; changed wording or timestamps do not establish progress. A recovered sample does not establish whole-task success. Finish with actual facts and gaps.")
 	}
@@ -80,6 +83,9 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		return modelResult{}, err
 	} else if report != nil {
 		appendSystem(strategy.TaskContext, "online-correction-state", "\nHost-recorded correction state (data, not permission): "+js(report))
+		if report.StopReason == "" && report.Pending != nil {
+			appendSystem(strategy.TaskContext, "online-correction-source", "\nFor the next correction proposal, copy sourceId exactly from host pending.callId: "+js(report.Pending.CallID)+". The id/entry_id/terminalId inside the tool result identifies a command or terminal, not the failed tool call. For a repeat sample, preserve the original tool arguments and command without echo, pipes, loops or success wrappers. The host still checks authorization and budget.")
+		}
 	}
 	if !c.MemoryEnabled {
 		for i := range history {
@@ -99,6 +105,34 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		return modelResult{}, err
 	} else if report != nil && report.StopReason != "" {
 		tools = nil
+	} else if report != nil {
+		nextTool := ""
+		if len(report.Revisions) > 0 && report.Revisions[len(report.Revisions)-1].CallID == "" {
+			nextTool = report.Revisions[len(report.Revisions)-1].Tool
+		}
+		available := make([]Tool, 0, len(tools))
+		for i := range tools {
+			name := tools[i].Name
+			bookkeeping := name == "read_evidence" || name == "read_tool_result" || name == "sre_team_read" || name == "sre_team_update" || name == "todo_write"
+			allowed := name == onlineRevisionTool || bookkeeping || nextTool != "" && name == nextTool
+			if report.Recovered && report.Pending == nil {
+				allowed = allowed || onlineReadOnly(name, "readonly", nil, e.Bridge != nil)
+			}
+			if !allowed {
+				continue
+			}
+			if tools[i].Name == onlineRevisionTool {
+				// Expose the host's exact source identity in the provider schema;
+				// never infer it from an untrusted command-result ID.
+				if report.Pending != nil {
+					obj(obj(tools[i].Parameters["properties"])["sourceId"])["enum"] = []string{report.Pending.CallID}
+				}
+			}
+			available = append(available, tools[i])
+		}
+		// Advertise only tools the current correction stage can admit. This
+		// reduces request/reservation cost; runtime policy remains authoritative.
+		tools = available
 	}
 	if e.worker != nil {
 		e.worker.mu.Lock()
@@ -184,6 +218,16 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 			requestCtx, cancelRequest = context.WithDeadline(ctx, e.worker.sreReportAt)
 		}
 		e.worker.mu.Unlock()
+	}
+	if report, reportErr := e.onlineCurrent(s, c); reportErr != nil {
+		cancelRequest()
+		return modelResult{}, reportErr
+	} else if report != nil && report.StopReason == "" && report.Recovered && report.Pending == nil {
+		reserve := int64(historyCost(history) + len(js(tools)) + requestModel.MaxOutput + 1024)
+		if reserve > report.Budget.MaxAdditionalTokens-report.TokensCharged {
+			tools = nil
+			appendSystem(strategy.TaskContext, "online-correction-report-only", "\nAll recorded correction gaps are closed. The remaining shared budget does not admit another tool-bearing request. Finish a report from recorded evidence only, preserving the original failures and any wider-task gaps. Do not execute further checks or claim whole-task/business recovery. This report still uses the same token/request budget.")
+		}
 	}
 	result, modelErr := d.streamWithManifest(requestCtx, requestModel, history, tools, fragments, compositionMatched, "", streamDelta)
 	cancelRequest()

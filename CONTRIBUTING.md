@@ -42,6 +42,18 @@ Dev 忽略正式版的 `LAKE_HOME`、`LAKE_WEB_DATA_DIR` 和 `LAKE_WEB_TOKEN`。
 bin/lake web --home "$HOME/.lake-dev-cli" --port 4182 --open
 ```
 
+### macOS Go/React 快速运行（不制作安装包）
+
+仅修改 Go/React 时，先正常退出 **Lake Dev**，再从仓库根目录运行：
+
+```sh
+scripts/run_lake_dev.sh
+```
+
+脚本使用项目固定 pnpm 构建新页面，经 `scripts/build_lake.sh` 签名构建后端，然后在固定 `~/.lake-dev` 和随机 loopback 端口运行；不生成 ZIP/DMG、不替换应用。后端就绪后打开已安装的 `~/Applications/Lake Dev.app`，窗口会连接该 Home 的健康后端，沿用现有 Dev 模型/项目/开关。当前源码必须包含已安装 Dev 的来源提交，路径链接到正式数据时拒绝启动。
+
+这个后端由终端管理，关闭 Dev 窗口不会停止它。下一次运行前先在原终端 Ctrl+C，等待进程正常结束；不要让两个后端共用 Home，也不要清理旧运行账本来强行启动。原生 Swift、安装或更新逻辑变化仍走上面的完整签名桌面构建；独立且不影响日常 Dev 数据的测试继续使用显式临时 Home。
+
 ## Windows 本地联调
 
 Windows 本地联调使用 `python3 scripts/build_lake_windows.py --dev`，安装 `dist/windows/<version>/x86_64/dev/` 下的 Dev 包。程序和快捷方式名为 **Lake Dev**，固定数据目录为 `%USERPROFILE%\.lake-dev`；更新只替换程序文件，保留模型、项目、会话和凭据。Dev 忽略 `LAKE_HOME`，隔离运行只使用独立的 `LAKE_DEV_HOME`，不能指向正式版 `.lake`。测试脚本的随机隔离 Home 仅用于自动化验收，日常使用应启动固定位置的 Lake Dev。

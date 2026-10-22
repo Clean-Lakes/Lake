@@ -55,8 +55,36 @@ func TestOnlineOfficialADKReadonlyTimeoutProposalAndRecovery(t *testing.T) {
 		case 1:
 			return response("", Call{ID: "failed_read", Name: "shell", Arguments: `{"command":"pwd"}`})
 		case 2:
+			if !strings.Contains(js(body), "copy sourceId exactly from host pending.callId") {
+				t.Error("missing focused source identity guidance")
+			}
+			found := false
+			for _, raw := range arr(body["tools"]) {
+				fn := obj(obj(raw)["function"])
+				if fn["name"] == "shell" || fn["name"] == "write" || fn["name"] == "call_mcp_tool" {
+					t.Error("pre-proposal request advertised an inadmissible resource tool")
+				}
+				if fn["name"] == onlineRevisionTool {
+					p := obj(obj(obj(fn["parameters"])["properties"])["sourceId"])
+					found = js(p["enum"]) == `["failed_read"]`
+				}
+			}
+			if !found {
+				t.Error("proposal schema did not pin the host's failed call ID")
+			}
 			return response("", proposal("failed_read", "shell", `{"command":"pwd"}`))
 		case 3:
+			found := false
+			for _, raw := range arr(body["tools"]) {
+				fn := obj(obj(raw)["function"])
+				found = found || fn["name"] == "shell"
+				if fn["name"] == "write" || fn["name"] == "call_mcp_tool" || fn["name"] == "inspect_host" {
+					t.Error("approved proposal exposed unrelated mutating tools")
+				}
+			}
+			if !found {
+				t.Error("approved next tool was not advertised")
+			}
 			return response("", Call{ID: "fresh_read", Name: "shell", Arguments: `{"command":"pwd"}`})
 		case 4:
 			return response("已取得该检查的结果；这不证明整个任务恢复。")
@@ -470,5 +498,208 @@ func TestOnlineClosingAnotherFailureDoesNotEraseOriginalGap(t *testing.T) {
 	r := onlineReport(t, e, s, c)
 	if r.Recovered || r.StopReason != strategy.BudgetExhausted || len(r.OpenChecks) != 1 || r.OpenChecks[0].CallID != "original" || !r.Revisions[1].Progress {
 		t.Fatal("closing a different gap invented original recovery", r)
+	}
+}
+
+func TestOnlineMemoryToolErrorsDoNotInterruptOfficialADK(t *testing.T) {
+	for _, name := range []string{"list_project_memories", "read_project_memory", "save_project_memory", "forget_project_memory"} {
+		t.Run(name, func(t *testing.T) {
+			var requests, calls atomic.Int32
+			m, close := fakeModel(t, func(_ int, body map[string]any) any {
+				if requests.Add(1) == 1 {
+					return response("", Call{ID: "memory", Name: name, Arguments: `{"key":"preference","type":"feedback","description":"format","body":"facts before conclusions","expectedRevision":0}`})
+				}
+				if !strings.Contains(js(body), "explicit_memory_intent_required") {
+					t.Error("normal tool rejection was hidden")
+				}
+				return response("Memory was not changed; continuing the answer.")
+			})
+			defer close()
+			e := engineFor(t, m, func(_ context.Context, _, tool string, _ map[string]any, _ bool) (any, error) {
+				if tool == "project_memory_index" {
+					return nil, nil
+				}
+				if tool == name {
+					calls.Add(1)
+					return nil, errors.New("explicit_memory_intent_required")
+				}
+				t.Error("unexpected bridge dispatch", tool)
+				return nil, errors.New("not authorized")
+			})
+			s, c := enableOnline(t, e)
+			c.MemoryEnabled = true
+			c.MemoryProjectID = "project"
+			if err := e.Configure("case", c); err != nil {
+				t.Fatal(err)
+			}
+			if err := e.Chat(context.Background(), "case", "纠正一下，以后请先列事实。", nil); err != nil {
+				t.Fatal("memory error escaped normal tool handling", err)
+			}
+			if requests.Load() != 2 || calls.Load() != 1 {
+				t.Fatal("tool/model replay", requests.Load(), calls.Load())
+			}
+			report, err := e.onlineCurrent(s, c)
+			if err != nil || report != nil {
+				t.Fatal("memory created durable resource correction", err)
+			}
+			view, _ := e.Snapshot("case")
+			if view.Status != "completed" {
+				t.Fatal("ordinary reply did not complete", view.Status)
+			}
+			for _, card := range view.Cards {
+				if card.Type == "strategy_correction" {
+					t.Fatal("misleading correction card")
+				}
+			}
+		})
+	}
+}
+
+func TestOnlineMemoryResultsCannotChangeExistingResourceGap(t *testing.T) {
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+	s, c := enableOnline(t, e)
+	if err := e.onlineObserve(s, c, Call{ID: "failed-resource", Name: "read", Arguments: `{"path":"/fixture"}`}, &onlinePolicyTrace{ReadOnly: true, TargetHash: "target"}, nil, context.DeadlineExceeded); err != nil {
+		t.Fatal(err)
+	}
+	before := js(onlineReport(t, e, s, c))
+	for _, name := range []string{"list_project_memories", "read_project_memory", "save_project_memory", "forget_project_memory"} {
+		for _, toolErr := range []error{nil, errors.New("explicit_memory_intent_required"), errors.New("memory_revision_conflict")} {
+			if err := e.onlineObserve(s, c, Call{ID: "memory", Name: name}, &onlinePolicyTrace{ReadOnly: true, TargetHash: "target"}, map[string]any{"success": true}, toolErr); err != nil {
+				t.Fatal(err)
+			}
+			if js(onlineReport(t, e, s, c)) != before {
+				t.Fatal("memory result altered resource evidence, stop reason or budget", name)
+			}
+		}
+	}
+	// The observation exclusion must not become permission to mutate memory in
+	// the middle of a bounded readonly correction.
+	if err := e.onlineBeforeCall(context.Background(), s, c, Call{ID: "write", Name: "save_project_memory", Arguments: `{"key":"x"}`}); err == nil {
+		t.Fatal("memory observation exclusion bypassed active correction admission")
+	}
+	if onlineReport(t, e, s, c).StopReason != strategy.PermissionBlocked {
+		t.Fatal("active readonly boundary was weakened")
+	}
+}
+
+func TestOnlineKnownTerminalFailureDoesNotInventUnknownOutcome(t *testing.T) {
+	for _, outcome := range []string{"completed", "running", "bridge_error"} {
+		t.Run(outcome, func(t *testing.T) {
+			e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+			s, c := enableOnline(t, e)
+			value := map[string]any{"status": "completed", "exitCode": 52}
+			var toolErr error
+			want := strategy.PermissionBlocked
+			if outcome == "running" {
+				value = map[string]any{"status": "running"}
+				want = strategy.AwaitingReconciliation
+			} else if outcome == "bridge_error" {
+				toolErr = errors.New("bridge disconnected after dispatch")
+				want = strategy.AwaitingReconciliation
+			}
+			err := e.onlineObserve(s, c, Call{ID: "sample", Name: "shell", Arguments: `{"command":"curl -sS --max-time 2 http://127.0.0.1:53545/fail/user"}`}, &onlinePolicyTrace{Dispatched: true, TargetHash: "target"}, value, toolErr)
+			var stopped *onlineStopped
+			if !errors.As(err, &stopped) || stopped.Reason != want {
+				t.Fatal("known receipt and unknown dispatch were conflated", outcome, err)
+			}
+			r := onlineReport(t, e, s, c)
+			if r.Recovered || len(r.Revisions) != 0 || len(r.OpenChecks) != 1 || r.Observations[0].TrustedReadOnly {
+				t.Fatal("untrusted command became retryable or its failure disappeared")
+			}
+		})
+	}
+}
+
+func TestOnlineProposalCannotSubstituteTerminalEntryForCallID(t *testing.T) {
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+	s, c := enableOnline(t, e)
+	if err := e.onlineObserve(s, c, Call{ID: "failed-tool-call", Name: "read", Arguments: `{"path":"/fixture"}`}, &onlinePolicyTrace{ReadOnly: true, TargetHash: "target"}, map[string]any{"id": "terminal-entry"}, context.DeadlineExceeded); err != nil {
+		t.Fatal(err)
+	}
+	_, err := e.onlinePropose(context.Background(), s, c, proposal("terminal-entry", "read", `{"path":"/fixture"}`))
+	var stopped *onlineStopped
+	if !errors.As(err, &stopped) || stopped.Reason != strategy.AwaitingUser || len(onlineReport(t, e, s, c).Revisions) != 0 {
+		t.Fatal("schema guidance weakened host source validation", err)
+	}
+}
+
+func TestOnlineRecoveredCheckCanFinishWithoutToolSchemaWithinBudget(t *testing.T) {
+	var samples atomic.Int32
+	m, close := fakeModel(t, func(n int, body map[string]any) any {
+		var out any
+		switch n {
+		case 1:
+			return response("", Call{ID: "failed", Name: "shell", Arguments: `{"command":"pwd"}`})
+		case 2:
+			out = response("", proposal("failed", "shell", `{"command":"pwd"}`))
+		case 3:
+			out = response("", Call{ID: "sample", Name: "shell", Arguments: `{"command":"pwd"}`})
+		case 4:
+			if len(arr(body["tools"])) != 0 || !strings.Contains(js(body), "remaining shared budget does not admit another tool-bearing request") {
+				t.Error("recovered check did not switch to a bounded report-only request")
+			}
+			return response("此检查已取得结果，不代表业务恢复。")
+		default:
+			t.Error("unexpected request", n)
+			return response("停止。")
+		}
+		obj(out)["usage"] = map[string]any{"prompt_tokens": 30000, "completion_tokens": 1}
+		return out
+	})
+	defer close()
+	e := engineFor(t, m, func(_ context.Context, _, name string, _ map[string]any, _ bool) (any, error) {
+		if name == "runtimeCommandExec" {
+			if samples.Add(1) == 1 {
+				return nil, context.DeadlineExceeded
+			}
+			return map[string]any{"exitCode": 0, "status": "completed", "output": "/fixture"}, nil
+		}
+		return map[string]any{"risk": "readonly", "runtime": "local"}, nil
+	})
+	s, c := enableOnline(t, e)
+	if err := e.Chat(context.Background(), "case", "检查当前目录", nil); err != nil {
+		t.Fatal(err)
+	}
+	r := onlineReport(t, e, s, c)
+	if r.StopReason != strategy.Completed || !r.Recovered || r.TokensCharged != 60016 || r.Requests != 3 || r.TokensCharged > r.Budget.MaxAdditionalTokens || samples.Load() != 2 {
+		t.Fatal("report reset, exceeded or failed the shared budget", r.StopReason, r.TokensCharged, r.Requests)
+	}
+}
+
+func TestOnlineReportOnlyCannotExceedRemainingBudget(t *testing.T) {
+	var requests, samples atomic.Int32
+	m, close := fakeModel(t, func(n int, _ map[string]any) any {
+		requests.Add(1)
+		var out any
+		switch n {
+		case 1:
+			return response("", Call{ID: "failed", Name: "shell", Arguments: `{"command":"pwd"}`})
+		case 2:
+			out = response("", proposal("failed", "shell", `{"command":"pwd"}`))
+		case 3:
+			out = response("", Call{ID: "sample", Name: "shell", Arguments: `{"command":"pwd"}`})
+		default:
+			t.Error("report-only request bypassed insufficient budget")
+			return response("停止。")
+		}
+		obj(out)["usage"] = map[string]any{"prompt_tokens": 45000, "completion_tokens": 1}
+		return out
+	})
+	defer close()
+	e := engineFor(t, m, func(_ context.Context, _, name string, _ map[string]any, _ bool) (any, error) {
+		if name == "runtimeCommandExec" {
+			if samples.Add(1) == 1 {
+				return nil, context.DeadlineExceeded
+			}
+			return map[string]any{"exitCode": 0, "status": "completed"}, nil
+		}
+		return map[string]any{"risk": "readonly", "runtime": "local"}, nil
+	})
+	s, c := enableOnline(t, e)
+	var stopped *onlineStopped
+	err := e.Chat(context.Background(), "case", "检查当前目录", nil)
+	r := onlineReport(t, e, s, c)
+	if !errors.As(err, &stopped) || r.StopReason != strategy.BudgetExhausted || requests.Load() != 3 || samples.Load() != 2 || !r.Recovered || r.TokensCharged != 90002 {
+		t.Fatal("report-only bypassed or reset budget", err, r.StopReason, requests.Load(), r.TokensCharged)
 	}
 }

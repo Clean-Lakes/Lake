@@ -96,7 +96,7 @@ func onlineTool() Tool {
 	}
 	schema := objectSchema(props, "sourceId", "refutedHypothesis", "changes", "expectedInformation", "stopCondition", "tool", "arguments")
 	schema["additionalProperties"] = false
-	return Tool{Name: onlineRevisionTool, Description: "Submit one bounded read-only correction after an actual failed tool call. sourceId must be that call ID. Describe the refuted hypothesis, concrete changes, expected information and stop condition. tool/arguments (JSON object encoded as a string) specify exactly ONE next check on the SAME authorized target. No permission bypass, writes, opaque MCP, arbitrary SQL, delegation or background calls. A proposal is not evidence or permission. The runtime alone judges progress; a final answer never proves recovery.", Parameters: schema}
+	return Tool{Name: onlineRevisionTool, Description: "Submit one bounded read-only correction after an actual failed tool call. sourceId must equal pending.callId from the host-recorded correction state, NOT the id/entry_id/terminalId inside a command result. Describe the refuted hypothesis, concrete changes, expected information and stop condition. tool/arguments (JSON object encoded once as a string) specify exactly ONE next check on the SAME authorized target. Preserve the original command and argument fields for a repeat sample; do not append echo, pipelines or success wrappers that hide its exit code. No permission bypass, writes, opaque MCP, arbitrary SQL, delegation or background calls. A proposal is not evidence or permission. The runtime alone judges progress; a final answer never proves recovery.", Parameters: schema}
 }
 
 func (e *Engine) onlineOwner(s *session, c Config) (*Engine, *session, string, string, string) {
@@ -585,6 +585,12 @@ func (e *Engine) onlineObserve(s *session, c Config, call Call, trace *onlinePol
 	if class == "controller_stopped" {
 		return nil
 	}
+	// Project memory has its own consent/CAS boundary. Its errors remain normal
+	// tool results, never resource failures or evidence closing a resource gap.
+	// This does not bypass admission for memory writes during an active correction.
+	if memoryTool(call.Name) {
+		return nil
+	}
 	// Session bookkeeping, questions and reports do not start optimization.
 	if sessionTool(call.Name) && call.Name != "call_mcp_tool" || strings.HasPrefix(call.Name, "sre_") || call.Name == "render_chart" || call.Name == "read_evidence" || call.Name == "list_assets" || call.Name == "list_resource_groups" {
 		return nil
@@ -635,6 +641,12 @@ func (e *Engine) onlineObserve(s *session, c Config, call Call, trace *onlinePol
 		}
 		if !trace.ReadOnly && !trace.Dispatched && class != "unknown" {
 			return onlineStop(r, strategy.AwaitingUser)
+		}
+		// A completed terminal receipt is a known outcome, even when policy
+		// cannot authorize readonly replay of the command. Stop at that boundary
+		// without suggesting the operation itself still needs reconciliation.
+		if !trace.ReadOnly && trace.Dispatched && toolErr == nil && class != "unknown" && obj(value)["status"] == "completed" && obj(value)["exitCode"] != nil {
+			return onlineStop(r, strategy.PermissionBlocked)
 		}
 		if !trace.ReadOnly || class == "unknown" && (obj(value)["status"] == "running" || obj(value)["running"] == true || obj(value)["status"] == "dispatched") {
 			return onlineStop(r, strategy.AwaitingReconciliation)
