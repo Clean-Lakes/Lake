@@ -761,6 +761,12 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				fail(404, "API route not found")
 			}
 			if method == "GET" {
+				if op == "plans" {
+					plans, err := b.Engine.ProposedPlans(id)
+					aiFailure(err)
+					reply(w, 200, Object{"plans": plans})
+					return
+				}
 				if op == "mode" {
 					reply(w, 200, Object{"mode": b.conversationMode(id)})
 					return

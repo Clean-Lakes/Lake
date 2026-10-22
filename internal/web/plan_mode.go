@@ -31,9 +31,20 @@ func (b *Server) setConversationMode(id string, data Object) Object {
 	b.messageMu.Lock()
 	defer b.messageMu.Unlock()
 	b.assertModeChangeIdleLocked(id)
-	b.configure(id, Object{"conversationMode": mode})
-	b.Store.Touch(id)
-	return Object{"mode": mode}
+	// Mode changes do not change messages, resources or terminals. Publish a
+	// small presentation delta instead of making every client reload the page.
+	var saved Object
+	b.configureWithSave(id, Object{"conversationMode": mode}, func(id string, options Object) {
+		saved = b.Store.update(func() any {
+			b.Store.session(id)
+			b.Store.exec("INSERT INTO aiOptions(sessionId,value) VALUES(?,?) ON CONFLICT(sessionId) DO UPDATE SET value=excluded.value", id, jsonText(options))
+			b.Store.event(id, "session")
+			event := b.Store.events[len(b.Store.events)-1]
+			event["conversationMode"] = mode
+			return Object{"mode": mode, "cursor": event["seq"]}
+		}).(Object)
+	})
+	return saved
 }
 
 func (b *Server) executeProposedPlan(id string, data Object) Object {

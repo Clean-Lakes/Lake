@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 )
@@ -64,6 +65,7 @@ When ready, return a self-contained Markdown plan in the user's language with a 
 // Called under the session lock only after a successful planning turn. A
 // clarification round with no final assistant text does not create a proposal.
 func captureProposedPlan(s *session, firstCard int) {
+	archiveProposedPlan(s)
 	s.state.View.ProposedPlan = nil
 	if s.state.View.Question != nil {
 		return
@@ -71,19 +73,106 @@ func captureProposedPlan(s *session, firstCard int) {
 	for i := len(s.state.View.Cards) - 1; i >= firstCard; i-- {
 		card := s.state.View.Cards[i]
 		if card.Type == "message" && strings.TrimSpace(card.Content) != "" {
-			content := strings.TrimSpace(card.Content)
-			if !strings.HasPrefix(content, "<proposed_plan>") || !strings.HasSuffix(content, "</proposed_plan>") {
-				return
-			}
-			content = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(content, "<proposed_plan>"), "</proposed_plan>"))
-			if content == "" {
+			content, ok := proposedPlanContent(card.Content)
+			if !ok {
 				return
 			}
 			s.state.View.ProposedPlan = &ProposedPlan{ID: card.ID, Content: content, At: card.At}
+			archiveProposedPlan(s)
 			return
 		}
 		if card.Type == "operation" {
 			return // Text preceding the last tool is a progress update, not a plan.
 		}
 	}
+}
+
+// A provider may introduce its plan before the tagged block or add a closing
+// note. Only the single explicit block is executable; prose and fenced examples
+// outside it never become part of the approved content.
+func proposedPlanContent(text string) (string, bool) {
+	lines := strings.Split(text, "\n")
+	start, end := -1, -1
+	fence := ""
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if fence != "" {
+			if strings.HasPrefix(trimmed, fence) && strings.Trim(trimmed, string(fence[0])+" \t\r") == "" {
+				fence = ""
+			}
+			continue
+		}
+		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+			marker := trimmed[0]
+			length := 0
+			for length < len(trimmed) && trimmed[length] == marker {
+				length++
+			}
+			fence = trimmed[:length]
+			continue
+		}
+		switch trimmed {
+		case "<proposed_plan>":
+			if start >= 0 {
+				return "", false
+			}
+			start = i
+		case "</proposed_plan>":
+			if start < 0 || end >= 0 {
+				return "", false
+			}
+			end = i
+		}
+	}
+	if start < 0 || end <= start {
+		return "", false
+	}
+	content := strings.TrimSpace(strings.Join(lines[start+1:end], "\n"))
+	return content, content != ""
+}
+
+// Mark only proposals accepted by the runtime, never arbitrary tagged prose.
+// Keeping the marker on the durable card also survives native ADK recovery.
+func archiveProposedPlan(s *session) {
+	if plan := s.state.View.ProposedPlan; plan != nil {
+		for i := range s.state.View.Cards {
+			card := &s.state.View.Cards[i]
+			if card.ID == plan.ID {
+				data := obj(card.Data)
+				data["proposedPlan"] = true
+				card.Data = data
+				return
+			}
+		}
+	}
+}
+
+// ProposedPlans reads the full durable history independently of transcript
+// pagination, including complete tagged legacy replies for review. Listing a
+// legacy block never promotes it to the current executable ProposedPlan.
+func (e *Engine) ProposedPlans(id string) ([]ProposedPlan, error) {
+	s, err := e.get(id)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	plans := []ProposedPlan{}
+	for i := len(s.state.View.Cards) - 1; i >= 0; i-- {
+		card := s.state.View.Cards[i]
+		if card.Type != "message" {
+			continue
+		}
+		if card.Status != "completed" && obj(card.Data)["proposedPlan"] != true && (s.state.View.ProposedPlan == nil || s.state.View.ProposedPlan.ID != card.ID) {
+			continue
+		}
+		content, ok := proposedPlanContent(card.Content)
+		if !ok {
+			continue
+		}
+		plans = append(plans, ProposedPlan{ID: card.ID, Content: content, At: card.At})
+	}
+	var clean []ProposedPlan
+	err = json.Unmarshal(safeJSON([]byte(js(plans)), s.state.Config), &clean)
+	return clean, err
 }

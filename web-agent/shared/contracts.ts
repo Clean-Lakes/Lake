@@ -192,6 +192,7 @@ export type ResourceTreeNode = { id: string; projectId: string; parentId: string
 export type SSHHostKeyTrust = { id: string; resourceId: string; host: string; port: number; algorithm: string; fingerprint: string; previousFingerprints: string[]; changed: boolean; scope: "lake" };
 
 export type SessionEvent = {
+	conversationMode?: ConversationMode;
   seq: number;
   sessionId: string;
   type: "session" | "message" | "specialist" | "evidence" | "action" | "terminal";
@@ -248,6 +249,7 @@ export type AIUserQuestion = {id:string;title:string;reason?:string;options?:Arr
 export type AIQuestionRequest = {id:string;questions:AIUserQuestion[]};
 export type AIOperationOutcome = {id:string;tool:string;target:string;status:string;handle?:string;result?:string;startedAt:string};
 export type ConversationMode = "default" | "plan";
+export type ConversationModeUpdate = {mode:ConversationMode;cursor:number};
 export type ProposedPlan = {id:string;content:string;at:string};
 export type AIView = { proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
 export type AIPreset = { id: string; title: string; content: string };

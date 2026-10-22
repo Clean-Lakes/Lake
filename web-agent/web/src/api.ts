@@ -96,7 +96,8 @@ export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"model
 };
 
 export const api = {
- setConversationMode:(session:string,mode:import('../../shared/contracts').ConversationMode)=>post<{mode:import('../../shared/contracts').ConversationMode}>(`/api/sessions/${encodeURIComponent(session)}/ai/mode`,{mode}),
+ plans:(session:string)=>request<{plans:import('../../shared/contracts').ProposedPlan[]}>(`/api/sessions/${encodeURIComponent(session)}/ai/plans`),
+ setConversationMode:(session:string,mode:import('../../shared/contracts').ConversationMode)=>post<import('../../shared/contracts').ConversationModeUpdate>(`/api/sessions/${encodeURIComponent(session)}/ai/mode`,{mode}),
  executePlan:(session:string,planId:string)=>post<SendMessageResult>(`/api/sessions/${encodeURIComponent(session)}/ai/executePlan`,{planId}),
  progressSummary:(session:string,turnStartedAt:string)=>post<{text:string;pending:boolean}>(`/api/sessions/${encodeURIComponent(session)}/ai/progress-summary`,{turnStartedAt}),
  schedules:(project:string,signal?:AbortSignal)=>request<{items:import('../../shared/contracts').ScheduledTask[]}>(`/api/projects/${encodeURIComponent(project)}/schedules`,{signal}),

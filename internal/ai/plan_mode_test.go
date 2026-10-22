@@ -98,8 +98,54 @@ func TestPlanModeEnforcesDenialsAndPersistsProposal(t *testing.T) {
 	if err != nil || restored.ProposedPlan == nil || restored.ProposedPlan.ID != view.ProposedPlan.ID {
 		t.Fatal("proposal not persisted", err)
 	}
+	plans, err := reloaded.ProposedPlans("case")
+	if err != nil || len(plans) != 1 || plans[0].ID != view.ProposedPlan.ID || strings.Contains(plans[0].Content, "<proposed_plan>") {
+		t.Fatal("plan list did not survive restart", err)
+	}
 	if err := e.ExecuteTurn(context.Background(), "case", TurnInput{UserText: "调整计划", workflow: []WorkflowStep{{}}}); err == nil {
 		t.Fatal("Plan accepted workflow execution")
+	}
+}
+
+func TestPlanModeHistorySurvivesRevisionsExecutionAndCardPagination(t *testing.T) {
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1/v1/chat/completions", Name: "fixture", Protocol: "openai"}, nil)
+	s, _ := e.get("case")
+	s.mu.Lock()
+	s.state.View.Cards = []Card{{ID: "first", Type: "message", Content: "<proposed_plan>\n# First\n</proposed_plan>", At: timestamp()}}
+	// Compatibility: the previous Dev stored the current proposal without a marker.
+	s.state.View.ProposedPlan = &ProposedPlan{ID: "first", Content: "# First", At: timestamp()}
+	archiveProposedPlan(s)
+	s.state.View.ProposedPlan = nil
+	for i := 0; i < 320; i++ {
+		s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "message", Content: "ordinary answer"})
+	}
+	firstCard := len(s.state.View.Cards)
+	s.state.View.Cards = append(s.state.View.Cards, Card{ID: "revised", Type: "message", Content: "<proposed_plan>\n# Revised\n</proposed_plan>", At: timestamp()})
+	captureProposedPlan(s, firstCard)
+	// Executing/starting another turn consumes only the executable pointer.
+	s.state.View.ProposedPlan = nil
+	s.state.View.Cards = append(s.state.View.Cards, Card{ID: "unaccepted", Type: "message", Content: "<proposed_plan>\n# Not a successful planning turn\n</proposed_plan>"})
+	err := e.save(s)
+	s.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := New(e.Dir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reloaded.Shutdown()
+	view, err := reloaded.Snapshot("case")
+	if err != nil || view.CardsOffset == 0 {
+		t.Fatal("fixture does not exercise pagination", err)
+	}
+	plans, err := reloaded.ProposedPlans("case")
+	if err != nil || len(plans) != 2 || plans[0].ID != "revised" || plans[1].ID != "first" {
+		t.Fatalf("history lost or unaccepted prose listed: %+v, %v", plans, err)
+	}
+	other, err := reloaded.ProposedPlans("other")
+	if err != nil || len(other) != 0 {
+		t.Fatal("plans leaked to another session", err)
 	}
 }
 
@@ -137,6 +183,48 @@ func TestCapturePlanDoesNotReuseProgressOrEarlierTurn(t *testing.T) {
 	captureProposedPlan(s, 0)
 	if s.state.View.ProposedPlan != nil {
 		t.Fatal("ordinary answer or clarification promoted to executable plan")
+	}
+}
+
+func TestPlanModeCapturesOnlyExplicitBlockWithSurroundingProse(t *testing.T) {
+	const body = "# 完整性检查计划\n\n1. 核对对象。\n2. 确认后抽查数据。"
+	block := "<proposed_plan>\n" + body + "\n</proposed_plan>"
+	for _, text := range []string{block, "已确认范围：全部数据库。\n\n" + block, "说明\n" + block + "\n请审阅后执行。"} {
+		content, ok := proposedPlanContent(text)
+		if !ok || content != body {
+			t.Fatal("intro or outro hid a complete plan")
+		}
+		s := &session{}
+		s.state.View.Cards = []Card{{ID: "proposal", Type: "message", Content: text}}
+		captureProposedPlan(s, 0)
+		if s.state.View.ProposedPlan == nil || s.state.View.ProposedPlan.Content != body {
+			t.Fatal("non-plan prose entered executable content")
+		}
+	}
+	for _, text := range []string{"这是建议，并非完整计划。", "<proposed_plan>\n未完成", block + "\n" + block, "```xml\n" + block + "\n```", "> <proposed_plan>\nquoted\n> </proposed_plan>", "<proposed_plan>\n<proposed_plan>\nnested\n</proposed_plan>\n</proposed_plan>"} {
+		if _, ok := proposedPlanContent(text); ok {
+			t.Fatal("ambiguous, unfinished or example text became executable")
+		}
+	}
+	withCode := "<proposed_plan>\n# 验证\n\n```sql\nSELECT 1;\n```\n</proposed_plan>"
+	if content, ok := proposedPlanContent(withCode); !ok || !strings.Contains(content, "SELECT 1;") {
+		t.Fatal("plan code fence was lost")
+	}
+}
+
+func TestPlanModeLegacyPlanRemainsReviewableWithoutBecomingExecutable(t *testing.T) {
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1/v1/chat/completions", Name: "fixture"}, nil)
+	s, _ := e.get("case")
+	s.mu.Lock()
+	s.state.View.Cards = []Card{{ID: "legacy", Type: "message", Status: "completed", Content: "已确认范围。\n<proposed_plan>\n# 旧计划\n\n1. 核对。\n</proposed_plan>"}, {ID: "failed", Type: "message", Status: "failed", Content: "<proposed_plan>\n未完成\n</proposed_plan>"}}
+	s.mu.Unlock()
+	plans, err := e.ProposedPlans("case")
+	if err != nil || len(plans) != 1 || plans[0].ID != "legacy" || plans[0].Content != "# 旧计划\n\n1. 核对。" {
+		t.Fatal("legacy plan lost when chat body is hidden", err)
+	}
+	view, err := e.Snapshot("case")
+	if err != nil || view.ProposedPlan != nil {
+		t.Fatal("reviewing legacy plan granted execution authority", err)
 	}
 }
 

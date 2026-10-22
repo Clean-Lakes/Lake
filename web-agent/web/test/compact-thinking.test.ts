@@ -11,6 +11,11 @@ import {progressGlyph} from '../src/activity';
 const start="2026-10-11T00:00:00Z";
 const thought:AICard={id:"thought",type:"thinking",content:"VERY_VERBOSE_RAW_REASONING",status:"running",at:start};
 const read:AICard={id:"read",type:"operation",title:"read",status:"running",at:start,data:{arguments:{path:"/tmp/example.log"},target:"Local machine"}};
+test('malformed model calls explain that planning can continue with existing evidence',()=>{
+ const message=displayAiError('invalid or duplicate model tool call: arguments must be a JSON object');
+ assert.match(message,/本轮未完成/);assert.match(message,/已有调查结果和消息已保留/);assert.match(message,/原会话继续/);
+ assert.doesNotMatch(message,/invalid or duplicate/);
+});
 test('progress icons follow tool identity without guessing from command or result text',()=>{
  assert.equal(progressGlyph({...read,title:'shell',content:'query_sql',data:{arguments:{command:'cat file'}}}),'lakeTerminal');
  assert.equal(progressGlyph({...read,title:'query_sql'}),'lakeDatabase');

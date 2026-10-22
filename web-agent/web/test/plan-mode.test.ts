@@ -31,6 +31,9 @@ test('Reviewed plan presents explicit execute and revise actions, both unavailab
   assert.equal(planMarkdown('<proposed_plan>\n# 计划\n\n1. 验证\n</proposed_plan>'),'# 计划\n\n1. 验证');
   assert.equal(planMarkdown('<proposed_plan>\n# 正在规划'),'# 正在规划');
   assert.equal(planMarkdown('普通回复'),'普通回复');
+  assert.equal(planMarkdown('已确认范围。\n\n<proposed_plan>\n# 计划\n\n1. 验证\n</proposed_plan>\n请审阅。'),'已确认范围。\n\n# 计划\n\n1. 验证\n请审阅。');
+  const example='协议示例：\n```xml\n<proposed_plan>\n示例\n</proposed_plan>\n```';
+  assert.equal(planMarkdown(example),example);
  });
 
 test('inline Plan commands preserve atomic resource and skill references after removing the prefix',()=>{

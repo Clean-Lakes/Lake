@@ -615,6 +615,7 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	s.cancel = cancel
 	s.state.Config.ReferencedAssets = append([]string(nil), c.ReferencedAssets...)
 	s.state.View.Status = "running"
+	archiveProposedPlan(s)
 	s.state.View.ProposedPlan = nil
 	firstCard := len(s.state.View.Cards)
 	s.state.View.RootTurnID = uid()

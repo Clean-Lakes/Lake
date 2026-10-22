@@ -1,7 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {acceptSnapshot,reuseUnchanged} from '../src/snapshotUpdates';
+import {acceptSnapshot,applyConversationMode,reuseUnchanged} from '../src/snapshotUpdates';
 import type {SessionSnapshot} from '../../shared/contracts';
+
+test('a saved Plan mode only updates mode and cursor, retaining resource, terminal and transcript objects',()=>{
+ const before={session:{id:'s'},cursor:10,conversationMode:'default',resources:[{id:'host'}],resourceTree:[{id:'folder'}],terminals:[{id:'terminal'}],messages:[{id:'question'}],ai:{cards:[{id:'reply',content:'正文'}]}} as unknown as SessionSnapshot;
+ const next=applyConversationMode(before,'s',{mode:'plan',cursor:11})!;
+ assert.equal(next.conversationMode,'plan');assert.equal(next.cursor,11);
+ for(const key of ['session','resources','resourceTree','terminals','messages','ai'] as const)assert.equal(next[key],before[key],key);
+ assert.equal(applyConversationMode(next,'s',{mode:'plan',cursor:11}),next);
+ assert.equal(before.conversationMode,'default');
+});
+test('late mode replies and replies for another session cannot overwrite newer conversation state',()=>{
+ const before={session:{id:'s'},cursor:12,conversationMode:'default'} as unknown as SessionSnapshot;
+ assert.equal(applyConversationMode(before,'s',{mode:'plan',cursor:11}),before);
+ assert.equal(applyConversationMode(before,'other',{mode:'plan',cursor:13}),before);
+ assert.equal(applyConversationMode(null,'s',{mode:'plan',cursor:13}),null);
+ assert.equal(applyConversationMode(before,'s',{mode:'plan',cursor:NaN}),before);
+ const next=applyConversationMode(before,'s',{mode:'plan',cursor:13})!;
+ assert.equal(acceptSnapshot(next,{...before,cursor:12}),next);
+ assert.equal(applyConversationMode(next,'s',{mode:'default',cursor:14})!.conversationMode,'default');
+});
 
 test('polling identical JSON retains the catalog and all transcript branches',()=>{
  const before={session:{id:'s'},cursor:10,ai:{cards:[{id:'reply',content:'正文'}]},sre:{tasks:[{id:'task',messages:[{body:'已采集'}]}]}} as unknown as SessionSnapshot;

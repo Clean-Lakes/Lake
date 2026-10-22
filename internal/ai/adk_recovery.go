@@ -25,6 +25,7 @@ func (e *Engine) NeedsADKRecovery(id string) bool {
 func (e *Engine) resumeNativeApproval(ctx context.Context, s *session, c Config, cancel context.CancelFunc) (err error) {
 	s.mu.Lock()
 	firstCard := len(s.state.View.Cards)
+	archiveProposedPlan(s)
 	s.state.View.ProposedPlan = nil
 	s.mu.Unlock()
 	if c.ConversationMode == ModePlan {
