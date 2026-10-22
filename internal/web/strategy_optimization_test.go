@@ -503,18 +503,32 @@ func TestStrategyOptimizationExplicitResumeKeepsBudgetAndCompletedRunIdentity(t 
 			base := "/api/projects/" + project + "/strategy"
 			id := createOptimizationHTTP(t, h, base, asset)
 			dir := b.Store.Dir
-			b.Store.Close()
-			binary, _ := os.Executable()
-			child := exec.Command(binary, "-test.run=^TestStrategyOptimizationCheckpointCrashHelper$", "-test.timeout=30s")
-			child.Env = append(os.Environ(), "LAKE_P6_BOUNDARY=1", "LAKE_P6_HOME="+b.options.Home, "LAKE_P6_PROJECT="+project, "LAKE_P6_BOUNDARY_POINT="+point)
-			out, err := child.CombinedOutput()
-			if exited, ok := err.(*exec.ExitError); !ok || exited.ExitCode() != 23 {
-				t.Fatalf("boundary crash failed %s %v", out, err)
+			// The fixture owns a live schedule ticker. Its Store pointer is
+			// immutable in production; this test alone replaces it to simulate
+			// recovery. Pause schedule reads across each replacement.
+			reopen := func(beforeOpen func()) {
+				t.Helper()
+				b.scheduleMu.Lock()
+				defer b.scheduleMu.Unlock()
+				b.Store.Close()
+				if beforeOpen != nil {
+					beforeOpen()
+				}
+				store, err := OpenStore(dir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				b.Store = store
 			}
-			b.Store, err = OpenStore(dir)
-			if err != nil {
-				t.Fatal(err)
-			}
+			reopen(func() {
+				binary, _ := os.Executable()
+				child := exec.Command(binary, "-test.run=^TestStrategyOptimizationCheckpointCrashHelper$", "-test.timeout=30s")
+				child.Env = append(os.Environ(), "LAKE_P6_BOUNDARY=1", "LAKE_P6_HOME="+b.options.Home, "LAKE_P6_PROJECT="+project, "LAKE_P6_BOUNDARY_POINT="+point)
+				out, err := child.CombinedOutput()
+				if exited, ok := err.(*exec.ExitError); !ok || exited.ExitCode() != 23 {
+					t.Fatalf("boundary crash failed %s %v", out, err)
+				}
+			})
 			b.processOneExperiment()
 			r := optimizationReport(t, b, ctx, id)
 			first := objects(r["runs"])[0]
@@ -529,11 +543,7 @@ func TestStrategyOptimizationExplicitResumeKeepsBudgetAndCompletedRunIdentity(t 
 				t.Fatal("checkpoint auto resumed", r["stopReason"], calls.Load())
 			}
 			waitUntil := r["waitUntilMs"]
-			b.Store.Close()
-			b.Store, err = OpenStore(dir)
-			if err != nil {
-				t.Fatal(err)
-			}
+			reopen(nil)
 			if optimizationReport(t, b, ctx, id)["waitUntilMs"] != waitUntil {
 				t.Fatal("restart extended wait TTL")
 			}
