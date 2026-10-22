@@ -1,5 +1,7 @@
 # Screenshot-based typography calibration
 
+Follow-up: the user requested stronger global text and a smaller composer toolbar. Current 500 weight and 12px/10px toolbar sizes are documented in [focus and compact composer validation](lake-focus-and-compact-toolbar.md); the 430-weight measurements below are historical.
+
 Supersedes the 13px sizing/default-Codex comparison in `lake-two-text-styles.md` and older parity notes.
 
 The user supplied a current side-by-side screenshot (`codex-clipboard-debae833-320b-4efe-a2ea-afa81508b6f7.png`, 2952×1722). Its ordinary Codex text was visibly larger than Lake despite both matching packaged defaults in a separate browser. Measuring text ink bands in that original image found approximately 26px vs 24px for black text/sidebar samples and 24px vs 22px for elapsed captions. The source defaults were not a reliable proxy for the user’s currently displayed Codex window.
