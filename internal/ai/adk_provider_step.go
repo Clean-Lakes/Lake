@@ -105,14 +105,34 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		return modelResult{}, err
 	} else if report != nil && report.StopReason != "" {
 		tools = nil
-	} else if report != nil && report.Pending != nil {
+	} else if report != nil {
+		nextTool := ""
+		if len(report.Revisions) > 0 && report.Revisions[len(report.Revisions)-1].CallID == "" {
+			nextTool = report.Revisions[len(report.Revisions)-1].Tool
+		}
+		available := make([]Tool, 0, len(tools))
 		for i := range tools {
+			name := tools[i].Name
+			bookkeeping := name == "read_evidence" || name == "read_tool_result" || name == "sre_team_read" || name == "sre_team_update" || name == "todo_write"
+			allowed := name == onlineRevisionTool || bookkeeping || nextTool != "" && name == nextTool
+			if report.Recovered && report.Pending == nil {
+				allowed = allowed || onlineReadOnly(name, "readonly", nil, e.Bridge != nil)
+			}
+			if !allowed {
+				continue
+			}
 			if tools[i].Name == onlineRevisionTool {
 				// Expose the host's exact source identity in the provider schema;
 				// never infer it from an untrusted command-result ID.
-				obj(obj(tools[i].Parameters["properties"])["sourceId"])["enum"] = []string{report.Pending.CallID}
+				if report.Pending != nil {
+					obj(obj(tools[i].Parameters["properties"])["sourceId"])["enum"] = []string{report.Pending.CallID}
+				}
 			}
+			available = append(available, tools[i])
 		}
+		// Advertise only tools the current correction stage can admit. This
+		// reduces request/reservation cost; runtime policy remains authoritative.
+		tools = available
 	}
 	if e.worker != nil {
 		e.worker.mu.Lock()

@@ -61,6 +61,9 @@ func TestOnlineOfficialADKReadonlyTimeoutProposalAndRecovery(t *testing.T) {
 			found := false
 			for _, raw := range arr(body["tools"]) {
 				fn := obj(obj(raw)["function"])
+				if fn["name"] == "shell" || fn["name"] == "write" || fn["name"] == "call_mcp_tool" {
+					t.Error("pre-proposal request advertised an inadmissible resource tool")
+				}
 				if fn["name"] == onlineRevisionTool {
 					p := obj(obj(obj(fn["parameters"])["properties"])["sourceId"])
 					found = js(p["enum"]) == `["failed_read"]`
@@ -71,6 +74,17 @@ func TestOnlineOfficialADKReadonlyTimeoutProposalAndRecovery(t *testing.T) {
 			}
 			return response("", proposal("failed_read", "shell", `{"command":"pwd"}`))
 		case 3:
+			found := false
+			for _, raw := range arr(body["tools"]) {
+				fn := obj(obj(raw)["function"])
+				found = found || fn["name"] == "shell"
+				if fn["name"] == "write" || fn["name"] == "call_mcp_tool" || fn["name"] == "inspect_host" {
+					t.Error("approved proposal exposed unrelated mutating tools")
+				}
+			}
+			if !found {
+				t.Error("approved next tool was not advertised")
+			}
 			return response("", Call{ID: "fresh_read", Name: "shell", Arguments: `{"command":"pwd"}`})
 		case 4:
 			return response("已取得该检查的结果；这不证明整个任务恢复。")
