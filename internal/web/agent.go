@@ -109,7 +109,8 @@ func (b *Server) configure(id string, updates Object) Object {
 		options["runtime"] = b.Store.Resource(stringOf(term["resourceId"]))["kind"]
 		options["terminal_generation"] = term["generation"]
 	}
-	model := b.Models.CachedCapacity(b.Models.Active())
+	activeModel, modelSelection := b.Models.ActiveSelection()
+	model := b.Models.CachedCapacity(activeModel)
 	if model == nil {
 		b.Store.SaveOptions(id, options)
 		if previousPermissions != permissionVersion(options) {
@@ -142,9 +143,10 @@ func (b *Server) configure(id string, updates Object) Object {
 	assets, directories := b.sessionAssetCatalog(id)
 	projectID := stringOf(b.Store.Session(id)["projectId"])
 	memorySettings := b.Store.MemorySettings(projectID)
+	learning, _ := b.Store.EffectiveStrategySettings(StrategyContext{ProjectID: projectID})
 	// Approvals belong to individual operations; earlier pending actions must not
 	// disable this turn's tools. invoke enforces per-operation permissions.
-	aiFailure(b.Engine.Configure(id, ai.Config{MemoryProjectID: projectID, MemoryEnabled: memorySettings["useEnabled"] == true, MemoryExtractionEnabled: memorySettings["useEnabled"] == true && memorySettings["extractionEnabled"] == true, MemoryEpoch: integer(memorySettings["epoch"]), MemoryKnowledgeRevision: integer(memorySettings["revision"]), Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
+	aiFailure(b.Engine.Configure(id, ai.Config{StrategyCorrectEnabled: learning.Settings.MasterEnabled && learning.Settings.CorrectEnabled && learning.Settings.OnlineCorrectEnabled, StrategyBudget: learning.Settings.Budget, StrategyLearnEnabled: learning.Settings.MasterEnabled && learning.Settings.LearnEnabled, StrategyGlobalEpoch: learning.GlobalEpoch, StrategyProjectEpoch: learning.ProjectEpoch, ModelProviderID: stringOf(modelSelection["providerId"]), MemoryProjectID: projectID, MemoryEnabled: memorySettings["useEnabled"] == true, MemoryExtractionEnabled: memorySettings["useEnabled"] == true && memorySettings["extractionEnabled"] == true, MemoryEpoch: integer(memorySettings["epoch"]), MemoryKnowledgeRevision: integer(memorySettings["revision"]), Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
 	b.Store.SaveOptions(id, options)
 	if previousPermissions != permissionVersion(options) {
 		b.revokeSessionTerminals(id)
@@ -210,6 +212,13 @@ func (b *Server) event(event ai.Event) {
 		b.syncSRESessionStatus(event.Session)
 	case "approval":
 		b.Store.Status(event.Session, "waiting_approval")
+	case "inputState":
+		switch stringOf(object(event.Data)["status"]) {
+		case "running":
+			b.Store.Status(event.Session, "investigating")
+		case "waiting_approval":
+			b.Store.Status(event.Session, "waiting_approval")
+		}
 	case "done":
 		status := stringOf(object(event.Data)["status"])
 		if status == "completed" || status == "cancelled" {
@@ -221,7 +230,7 @@ func (b *Server) event(event ai.Event) {
 		b.Store.Touch(event.Session)
 	}
 }
-func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, files []Object, ignoreProjectMemory bool) {
+func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachment, refs, files []Object, ignoreProjectMemory bool) {
 	defer b.workers.Done()
 	defer b.finishMessageQueue(id)
 	defer b.finishReplyTiming(id)
@@ -324,8 +333,9 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	if sreCoordination {
 		modelContext += b.sreConversationContext(id)
 	}
-	e = b.Engine.ExecuteTurn(turnContext, id, ai.TurnInput{SRECoordination: sreCoordination, UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
+	e = b.Engine.ExecuteTurn(turnContext, id, ai.TurnInput{StrategyMessageID: messageID, SRECoordination: sreCoordination, UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
 	if e != nil {
+		_ = b.reconcileStrategyOutboxForSession(id)
 		if b.Context.Err() != nil {
 			return
 		}
@@ -350,6 +360,7 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	view, e := b.Engine.Snapshot(id)
 	must(e)
 	_ = b.reconcileMemoryOutboxForSession(id)
+	_ = b.reconcileStrategyOutboxForSession(id)
 	for i := len(view.Cards) - 1; i >= 0; i-- {
 		if view.CardsOffset+i < before.TotalCards {
 			break
@@ -372,10 +383,16 @@ func (b *Server) runTurn(id, message string, images []ai.ImageAttachment, refs, 
 	}
 }
 func (b *Server) bridge(ctx context.Context, id, name string, args Object, approved bool) (result any, err error) {
+	// Opening/binding a shell can fail before any command is submitted. Only
+	// failures before this boundary are proven to have no command side effect.
+	commandMayHaveStarted := name != "runtimeCommandExec"
 	defer func() {
 		if p := recover(); p != nil {
 			if f, ok := p.(*Failure); ok {
 				err = f
+				if !commandMayHaveStarted {
+					err = &ai.ToolNotExecutedError{Err: f}
+				}
 			} else {
 				err = fmt.Errorf("Terminal operation failed")
 			}
@@ -630,6 +647,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		}
 		copy["terminal_id"] = term["id"]
 		copy["intent"] = "Go Agent Shell 操作"
+		commandMayHaveStarted = true
 		return b.bridge(ctx, id, "terminal_execute_command", copy, approved)
 	}
 	if name == "list_ssh_terminals" {

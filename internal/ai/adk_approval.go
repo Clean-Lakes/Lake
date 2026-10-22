@@ -22,6 +22,11 @@ type adkToolContextKey struct{}
 type adkFreshConfirmationKey struct{}
 type adkApprovalCallKey struct{}
 
+func resumingNativeApproval(ctx context.Context) bool {
+	tc, _ := ctx.Value(adkToolContextKey{}).(agent.Context)
+	return tc != nil && tc.ToolConfirmation() != nil && ctx.Value(adkFreshConfirmationKey{}) != true
+}
+
 // NativeApproval is the durable server-owned binding. The UI supplies only its
 // ID and decision. Neither model arguments nor a resume payload grant access.
 type nativeApproval struct {
@@ -131,8 +136,7 @@ func (e *Engine) waitNativeApproval(ctx context.Context, s *session, c Config, p
 				s.state.View.Pending = kept[0]
 			}
 			delete(s.decisions, id)
-			s.state.View.Status = "running"
-			if err := e.save(s); waitErr == nil && err != nil {
+			if err := e.saveHumanInputState(s); waitErr == nil && err != nil {
 				waitErr = err
 			}
 			s.mu.Unlock()
@@ -148,7 +152,13 @@ func (e *Engine) waitNativeApproval(ctx context.Context, s *session, c Config, p
 		s.mu.Lock()
 		sessionID, turnID := s.state.View.Session, s.state.View.RootTurnID
 		s.mu.Unlock()
-		if record.SessionID != sessionID || record.RootTurnID != turnID || record.CallID != p.Call.ID || original.Call.Name != p.Call.Name || record.CallHash != hash(p.Call.Arguments) || record.Fingerprint != p.Fingerprint || original.Target != p.Target || record.PreviewHash != hash(js(p.Preview)) || original.TerminalGeneration != p.TerminalGeneration || original.TerminalVersion != p.TerminalVersion || record.PolicyHash != nativePolicyHash(c) || !time.Now().Before(record.ExpiresAt) {
+		// A preceding approved call may bind the target, so current policy no
+		// longer requests confirmation. Still settle this exact response once;
+		// otherwise its decided card remains at the front of the queue forever.
+		// The current policy has already authorized the call in that case, while
+		// target, arguments, preview, expiry and single-use checks remain binding.
+		policyChanged := p.Kind != "" && record.PolicyHash != nativePolicyHash(c)
+		if record.SessionID != sessionID || record.RootTurnID != turnID || record.CallID != p.Call.ID || original.Call.Name != p.Call.Name || record.CallHash != hash(p.Call.Arguments) || record.Fingerprint != p.Fingerprint || original.Target != p.Target || record.PreviewHash != hash(js(p.Preview)) || original.TerminalGeneration != p.TerminalGeneration || original.TerminalVersion != p.TerminalVersion || policyChanged || !time.Now().Before(record.ExpiresAt) {
 			return false, errors.New("target or terminal context changed; approval expired")
 		}
 		if record.Status != "decided" || record.Accepted != confirmation.Confirmed {
@@ -181,8 +191,7 @@ func (e *Engine) waitNativeApproval(ctx context.Context, s *session, c Config, p
 		if len(kept) > 0 {
 			s.state.View.Pending = kept[0]
 		}
-		s.state.View.Status = "running"
-		err = e.save(s)
+		err = e.saveHumanInputState(s)
 		s.mu.Unlock()
 		if err != nil {
 			return false, err
@@ -227,7 +236,7 @@ func (e *Engine) waitNativeApproval(ctx context.Context, s *session, c Config, p
 			s.state.View.Cards[i].Status = "pending"
 		}
 	}
-	err = e.save(s)
+	err = e.saveHumanInputState(s)
 	e.notify(s, "approval", s.state.View.Pending)
 	s.mu.Unlock()
 	if err != nil {
@@ -317,7 +326,6 @@ func (e *Engine) settleNativeRejection(s *session, record nativeApproval) error 
 		s.state.View.Pending = kept[0]
 	}
 	delete(s.decisions, record.ID)
-	s.state.View.Status = "running"
 	for i := range s.state.View.Cards {
 		card := &s.state.View.Cards[i]
 		if str(obj(card.Data)["call_id"]) == record.CallID {
@@ -325,7 +333,7 @@ func (e *Engine) settleNativeRejection(s *session, record nativeApproval) error 
 			card.Content = "user rejected this tool call"
 		}
 	}
-	return e.save(s)
+	return e.saveHumanInputState(s)
 }
 
 func (e *Engine) decideNativeApproval(store *storage.Store, s *session, id string, accept bool, confirmation string) (chan bool, error) {

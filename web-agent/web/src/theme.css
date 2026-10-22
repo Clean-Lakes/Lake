@@ -4,13 +4,13 @@
   --font-ui: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --status-text-base: var(--text-secondary);
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --background: #ffffff;
+  --background: #fcfcfc;
   --surface: #ffffff;
   --surface-subtle: #fafafa;
   --surface-muted: #f5f5f5;
   --surface-hover: #eeeeee;
   --surface-selected: #e8e8e8;
-  --sidebar: #f5f5f5;
+  --sidebar: #fafaf9;
   --foreground: #222222;
   --text-secondary: #555555;
   --text-muted: #737373;
@@ -34,6 +34,8 @@
   --danger-border: #efc9c9;
   --info: #3568a5;
   --info-soft: #eff5fd;
+  --resource-database-foreground: #247561;
+  --resource-database-background: #ecf7f2;
   --tag-purple: #6941c6;
   --tag-purple-soft: #eee8fc;
   --tag-orange: #b54a16;
@@ -44,12 +46,23 @@
   --radius-control: 5px;
   --radius-panel: 7px;
   --radius-dialog: 9px;
-  /* Regular macOS 26 window corners; the native host supplies its OS-specific value. */
-  --radius-window: 20px;
+  /* Settings surfaces: fixed scale rather than borrowing a dialog radius for controls. */
+  --radius-settings-control: 10px;
+  --radius-settings-panel: 14px;
+  --radius-settings-dialog: 22px;
+  --radius-settings-icon: 8px;
+  --radius-settings-badge: 5px;
+  --radius-composer-reference: 12px;
+  --radius-message-reference: 11px;
+  /* macOS 26 outer contour, checked against a native window capture at 2x. */
+  --radius-window: 22px;
+  --corner-window: superellipse(1.5);
   --chart-1: #3568a5;
   --chart-2: #159b88;
   --chart-3: #cd8a25;
   --chart-4: #8064be;
+  --reasoning-accent: #3683fa;
+  --reasoning-track: #e9e8e8;
   --terminal-background: #fafafa;
   --terminal-foreground: #303030;
   --terminal-selection: #dbe5f2;
@@ -70,6 +83,8 @@
 }
 
 :root[data-theme="dark"] {
+  --reasoning-accent: #4b91ff;
+  --reasoning-track: #424246;
   color-scheme: dark;
   --background: #171717;
   --surface: #1b1b1b;
@@ -101,6 +116,8 @@
   --danger-border: #603333;
   --info: #9bbce8;
   --info-soft: #202b3d;
+  --resource-database-foreground: #87cbb3;
+  --resource-database-background: #1a3028;
   --tag-purple: #b49ae9;
   --tag-purple-soft: #2d2442;
   --tag-orange: #e8a375;
@@ -126,8 +143,8 @@
 }
 
 /* Theme previews are local miniature surfaces, not a second application theme. */
-.theme-preview[data-preview="light"] { --surface: #ffffff; --surface-muted: #f5f5f5; --surface-subtle: #fafafa; --border: #e5e5e5; }
-.theme-preview[data-preview="dark"] { --surface: #171717; --surface-muted: #242424; --surface-subtle: #202020; --border: #333333; }
+.theme-preview[data-preview="light"] { --background: #fcfcfc; --sidebar: #fafaf9; --surface: #ffffff; --surface-muted: #f5f5f5; --surface-subtle: #fafafa; --border: #e5e5e5; }
+.theme-preview[data-preview="dark"] { --background: #171717; --sidebar: #141414; --surface: #171717; --surface-muted: #242424; --surface-subtle: #202020; --border: #333333; }
 
 /* Shared translucent material for floating workspace and queued-message bubbles. */
 :root {
@@ -140,4 +157,21 @@
 }
 @media (prefers-reduced-transparency: reduce) {
   :root { --floating-bubble-background: var(--surface-subtle); --floating-bubble-active: var(--surface-muted); --floating-bubble-filter: none; }
+}
+
+/* Floating title glass: neutral tint, a soft edge reflection and live backdrop. */
+:root {
+ --title-glass-background:color-mix(in srgb,var(--surface) 58%,transparent);
+ --title-glass-filter:blur(18px) saturate(145%);
+ --title-glass-sheen:linear-gradient(135deg,rgb(255 255 255 / .3),rgb(255 255 255 / .04) 42%,transparent 58%,rgb(255 255 255 / .13));
+}
+:root[data-theme="dark"] {
+ --title-glass-background:color-mix(in srgb,var(--surface) 68%,transparent);
+ --title-glass-sheen:linear-gradient(135deg,rgb(255 255 255 / .14),transparent 48%,rgb(255 255 255 / .035));
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+ :root,:root[data-theme="dark"] { --title-glass-background:var(--surface); --title-glass-sheen:linear-gradient(transparent,transparent); }
+}
+@media(prefers-reduced-transparency:reduce) {
+ :root,:root[data-theme="dark"] { --title-glass-background:var(--surface); --title-glass-filter:none; --title-glass-sheen:linear-gradient(transparent,transparent); }
 }

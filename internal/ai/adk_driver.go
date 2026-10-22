@@ -32,6 +32,7 @@ type adkTurnDriver struct {
 	cancel                context.CancelFunc
 	round                 int
 	resume, outputRetried bool
+	lastRequestID         string
 	textID                string
 	fatal                 error
 }
@@ -370,5 +371,8 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 	}
 	err = e.save(s)
 	s.mu.Unlock()
+	if err == nil {
+		err = e.onlineCheckCompletion(s, *c)
+	}
 	return err
 }

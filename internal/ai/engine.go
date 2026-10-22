@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/platform"
+	"github.com/Clean-Lakes/Lake/internal/strategy"
 	"google.golang.org/genai"
 	"os"
 	"path/filepath"
@@ -30,6 +31,12 @@ type session struct {
 	sreReply            *sreReply
 }
 type Engine struct {
+	experiment       *strategyExperimentRuntime
+	Strategies       StrategyProvider
+	CorrectionGuard  func(context.Context, string, int64, int64) error
+	correctionMu     sync.Mutex
+	onlineTask       string
+	onlineSessions   sync.Map
 	runMu            sync.Mutex
 	runs             sync.WaitGroup
 	runtimeClosed    bool
@@ -345,6 +352,9 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
+	if err := e.refreshOnlineCards(s); err != nil {
+		return View{}, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	view := s.state.View
@@ -606,10 +616,12 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	if s.state.View.StartedAt == "" {
 		s.state.View.StartedAt = timestamp()
 	}
-	systemPrompt := Prompt(c)
+	composition := composePrompt(c)
 	if e.worker == nil {
-		systemPrompt += "\n" + userLanguageReminder(text)
+		composition.Append(strategy.TaskContext, "turn-language", "\n"+userLanguageReminder(text))
 	}
+	systemPrompt := composition.Text()
+	s.state.PromptBaseline = &strategy.PromptBaseline{SystemHash: strategy.ContentHash(systemPrompt), Fragments: composition.Fragments()}
 	if len(s.state.History) == 0 {
 		s.state.History = append(s.state.History, Message{Role: "system", Content: systemPrompt})
 	} else {
@@ -630,6 +642,11 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			err = ctx.Err()
 		}
 		cancel()
+		if e.worker == nil {
+			if finishErr := e.onlineFinish(s, c, err); err == nil && finishErr != nil {
+				err = finishErr
+			}
+		}
 		s.mu.Lock()
 		s.finalizing = true
 		s.decision = nil
@@ -647,6 +664,7 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		}
 		s.state.View.Status = status
 		s.state.View.TurnFinishedAt = timestamp()
+		e.collectStrategySnapshot(s, c, input, status)
 		if err == nil {
 			e.collectMemorySnapshot(s, c, input)
 		}
@@ -683,8 +701,16 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls []Call) error {
 	var observations []ImageAttachment
 	for _, call := range calls {
+		if err := e.onlineBeforeCall(ctx, s, *c, call); err != nil {
+			return e.onlineDeny(s, *c, call, err)
+		}
+		if _, err := e.resolveTurnStrategies(ctx, s, *c); err != nil {
+			return err
+		}
 		e.setSREActivity("tool", call.Name)
-		value, toolErr := e.invokeAfterSREHandoff(ctx, s, *c, call)
+		trace := &onlinePolicyTrace{}
+		toolCtx := context.WithValue(ctx, onlinePolicyKey{}, trace)
+		value, toolErr := e.invokeAfterSREHandoff(toolCtx, s, *c, call)
 		if errors.Is(toolErr, errADKApprovalPending) {
 			return toolErr
 		}
@@ -744,6 +770,24 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 		payload := js(value)
 		if toolErr != nil {
 			failure := map[string]any{"error": toolErr.Error()}
+			var notExecuted *ToolNotExecutedError
+			if errors.As(toolErr, &notExecuted) {
+				failure["outcome"] = "not_executed"
+			}
+			var blocked *nativeOperationBlockedError
+			if errors.As(toolErr, &blocked) {
+				failure["outcome"] = "not_executed"
+				failure["code"] = "unresolved_operation"
+				failure["retryable"] = false
+				failure["blocking_operation"] = map[string]any{"id": blocked.ID, "tool": blocked.Tool, "target": blocked.Target, "status": blocked.Status}
+				failure["notice"] = "本次操作没有派发。不要修改命令、更换终端或工具入口反复尝试；只读取原操作结果或继续独立的只读检查，无法核实则报告缺失结果。"
+				if blocked.Status == "unknown" {
+					failure["notice"] = str(failure["notice"]) + "人工核实入口：会话菜单 → 执行记录 → 待核实操作；填写实际结果和核实依据，不能猜测或自动重试。"
+				}
+				if recovery := blocked.recovery(); recovery != nil {
+					failure["recovery"] = recovery
+				}
+			}
 			if errors.Is(toolErr, context.DeadlineExceeded) || errors.Is(toolErr, context.Canceled) {
 				failure["outcome"] = "unknown"
 				failure["notice"] = "工具等待已中断；先核查执行状态，不要重复执行或宣称成功。"
@@ -775,10 +819,16 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 			}
 		}
 		s.state.History = append(s.state.History, Message{Role: "tool", CallID: call.ID, Name: call.Name, Content: payload})
+		if call.Name == "load_skill" && toolErr == nil && str(obj(value)["name"]) != "" && str(obj(value)["content"]) != "" {
+			s.state.SkillSnapshots = append(s.state.SkillSnapshots, strategy.SkillSnapshot{ResultHash: strategy.ContentHash(payload), ID: str(obj(value)["name"]), ContentHash: strategy.ContentHash(str(obj(value)["content"])), CallID: call.ID})
+		}
 		err := e.save(s)
 		e.notify(s, "toolResult", map[string]any{"call_id": call.ID})
 		s.mu.Unlock()
 		if err != nil {
+			return err
+		}
+		if err := e.onlineObserve(s, *c, call, trace, value, toolErr); err != nil {
 			return err
 		}
 		if err := e.unknownSREOperation(*c, call); err != nil {
@@ -859,6 +909,12 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 		return errors.New("message exceeds configured context window")
 	}
 	timeout := e.compactionTimeout
+	if report, onlineErr := e.onlineCurrent(s, c); onlineErr != nil {
+		return onlineErr
+	} else if report != nil {
+		_, onlineErr = e.onlineUpdate(s, c, false, func(r *strategy.OnlineReport) error { return onlineStop(r, strategy.BudgetExhausted) })
+		return onlineErr
+	}
 	if timeout <= 0 {
 		timeout = 45 * time.Second
 	}

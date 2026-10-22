@@ -19,7 +19,6 @@
 ## 日常开发
 
 ```sh
-gh auth switch --hostname github.com --user bearqy
 gh api user --jq .login
 git status --short --branch
 git fetch origin
@@ -32,13 +31,27 @@ git push -u origin codex/example-change
 gh pr create --repo Clean-Lakes/Lake --base develop --head codex/example-change
 ```
 
-这是示例，不要求重复切换账号或创建分支。先检查当前状态，已有合适工作分支可继续使用。Git 推送认证也必须使用 `bearqy`，其他应用切换了活跃账号时重新核对，不借其他存储账号获得管理权限。
+这是示例，不要求重复切换账号或创建分支。先检查当前状态，已有合适工作分支可继续使用。账号选择和多账号认证遵循下节，不将某位维护者的本地账号作为所有参与者的前提。
 
 PR 目标必须显式写 `develop`，即使 GitHub 默认分支尚未正确配置。历史未合并日常 PR 改为 `develop` 后，重新检查 diff、冲突、审查状态和本地验证；变更 base 可能使旧审批失效，不能依据旧结果立即合并。
 
 每项工作使用 PR 模板，说明具体行为、测试证据、未验证项、数据/权限影响和回退方法。日常 develop PR 提供本地验证；生产提升 PR 必须通过自动检查。评审意见解决后才具备技术合并条件。对 AI，“开发/修复/提交/创建 PR”不包括“合并”；只有用户明确授权合并对应 PR 后才执行，不能自行开启 auto-merge。
 
 普通 PR 可 squash，保持变更可回退；不要删除长期分支。未完成或验证失败时保持 PR 打开或草稿，不能虚构通过，也不能为了合并删除测试、跳过门禁或放宽权限边界。
+
+### GitHub 账号与多账号认证
+
+仓库不绑定个人用户名。开发者使用本人已授权、具备对应操作权限的 GitHub 账号；AI 遵守用户在当前任务中明确指定的账号。历史验收记录中的操作账号仅用于审计，不是后续参与者的身份要求。
+
+执行 GitHub 写操作前，用 `gh api user --jq .login` 核对实际 API 身份，并检查该身份对目标仓库的权限。需要切换账号时，由开发者自行选择，或依据当前用户的明确指示执行 `gh auth switch --hostname github.com --user <已授权账号>`；AI 不因缺少某个预设用户名而自动切换，也不借另一个已存账号绕过权限不足。
+
+Git 推送使用的身份也必须与本任务选定的已授权账号一致。`gh` 的 API 身份、Git credential helper / SSH 身份和提交作者 `user.name` / `user.email` 是不同配置；设置提交作者或切换 `gh` 不能证明推送凭据已匹配。HTTPS 推送可在本次命令中显式使用 `gh` 的凭据助手：
+
+```sh
+git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push
+```
+
+上述命令适用于 GitHub HTTPS remote，不修改全局 Git 配置。若存在 `GH_TOKEN` / `GITHUB_TOKEN` 等环境认证覆盖，或 remote 使用 SSH，应先核对实际生效的身份；不要打印 token、凭据助手返回内容或私钥。身份不符或权限不足时停止该写操作并说明原因，不能通过换账号自动重试。
 
 ## 在开发环境积累
 

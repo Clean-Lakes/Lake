@@ -20,6 +20,22 @@ func (b *Server) extensionRoute(w http.ResponseWriter, r *http.Request, path str
 		return false
 	}
 	store := b.Extensions.Store
+	if path == "/api/settings/mcp/import" && r.Method == "POST" {
+		data := body(w, r, 100000)
+		raw, _ := json.Marshal(data)
+		rows, err := extensions.ParseServerImport(raw)
+		extensionError(err)
+		for i := range rows {
+			rows[i].ID = ident()
+		}
+		extensionError(store.ImportServers(rows))
+		public := []Object{}
+		for _, row := range rows {
+			public = append(public, extensions.PublicServer(row))
+		}
+		reply(w, 200, Object{"servers": public})
+		return true
+	}
 	if path == "/api/settings/mcp" && r.Method == "GET" {
 		c, err := store.Read()
 		extensionError(err)
@@ -41,8 +57,15 @@ func (b *Server) extensionRoute(w http.ResponseWriter, r *http.Request, path str
 			next.ID = ident()
 		} else {
 			next.ID = strings.TrimPrefix(path, "/api/settings/mcp/")
-			if _, err := store.FindServer(next.ID); err != nil {
+			old, err := store.FindServer(next.ID)
+			if err != nil {
 				fail(404, "MCP 服务不存在")
+			}
+			if _, ok := data["timeoutMs"]; !ok {
+				next.TimeoutMS = old.TimeoutMS
+			}
+			if _, ok := data["protocolVersion"]; !ok {
+				next.ProtocolVersion = old.ProtocolVersion
 			}
 		}
 		if clear, _ := data["clearHeaders"].(bool); clear {

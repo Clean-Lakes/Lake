@@ -1,4 +1,11 @@
+import {ReplyActivity} from './ReplyActivity';
+import {turnStatus} from './turnStatus';
+import {completedTurnInterimIds,isAssistantProse} from './completedTurnProse';
+import {SettledReply} from './SettledReply';
+import {OperationOutcomes} from './OperationOutcomes';
 import {MessageText} from './MessageText';
+import {StrategyCorrectionCard} from './StrategyCorrectionCard';
+import {MessageImages} from './MessageImages';
 import {DisclosureSummary} from './DisclosureSummary';
 import {useSmoothText} from './useSmoothText';
 import type {Components} from 'react-markdown';
@@ -14,9 +21,17 @@ import {Glyph} from './Icons';
 import type {SREPlanStep} from '../../shared/contracts';
 import { AgentQuestion } from "./AgentQuestion";
 import { ReplyDuration } from "./ReplyDuration";
+import {overallProgressSummary} from './overall-progress-model';
+import {OverallProgressSummary} from './OverallProgressSummary';
+import {resourceStageProgress} from './resourceStageProgress';
+import {ResourceStageSummary} from './ResourceStageSummary';
+import {TurnExecutionDetails} from "./TurnExecutionDetails";
 import { timingForTurn } from "./replyDurationState";
 import {displayAiError} from "./aiErrors";
 import Markdown from "react-markdown";
+import {MarkdownCodeBlock} from './MarkdownCodeBlock';
+import {remarkReplyInfo} from './replyInfo';
+import {replyInfoComponents} from './ReplyInfoElements';
 import remarkGfm from "remark-gfm";
 import { remarkAssistantProse } from "./assistantProse";
 import {remarkCompactReply} from './compactReply';
@@ -30,7 +45,7 @@ import { TaskProgress } from "./TaskProgress";
 import { isFileChangeCard } from "./file-changes-model";
 import { sameCard } from "./cardEquality";
 import { ThinkingTimeline } from "./ThinkingTimeline";
-import {conversationGroups,currentProgressGroupId} from './conversation-progress-model';
+import {conversationDisplayGroups,currentProgressGroupId,type ConversationGroup} from './conversation-progress-model';
 import {conversationPreview} from './conversationPreview';
 import { PermissionSettings, permissionDefaults } from "./PermissionSettings";
 import { api, readableError } from "./api";
@@ -59,7 +74,7 @@ function Chart({ card }: { card: AICard }) {
   </svg><details><DisclosureSummary>查看数据</DisclosureSummary><table><thead><tr><th>项目</th>{series.map((item, i) => <th key={i}>{item.name || "数值"}</th>)}</tr></thead><tbody>{data.labels.map((label, i) => <tr key={i}><td>{label}</td>{series.map((item, j) => <td key={j}>{item.values[i]}</td>)}</tr>)}</tbody></table></details></figure>;
 }
 const noTags: WorkspaceTag[] = [];
-const cardMarkdownComponents:Components={summary:ReplyDetailsSummary,a:({node,...props})=><a {...props} target="_blank" rel="noopener noreferrer"/>,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
+const cardMarkdownComponents:Components={...replyInfoComponents,pre:MarkdownCodeBlock,summary:ReplyDetailsSummary,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
 const Card = memo(function Card({ card, tags = noTags, animateInitial = false }: { card: AICard; tags?: WorkspaceTag[]; animateInitial?:boolean }) {
   // Only fold reports already complete when restored, never a visible live reply.
   const compactRestored = useRef(card.status==='completed'&&!animateInitial).current;
@@ -70,10 +85,11 @@ const Card = memo(function Card({ card, tags = noTags, animateInitial = false }:
   const visibleContent=useSmoothText(content||"",assistantText&&card.status==="running",animateInitial);
   if (card.type === "image") { const image = card.data as AIImage; return <figure className="ai-image"><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "模型返回图片"}/><a href={`data:${image.mimeType};base64,${image.base64}`} download={image.name || `lake-image.${image.mimeType.split("/")[1]}`}>保存图片</a></figure>; }
   if (card.type === "thinking") return <details className="ai-thinking"><DisclosureSummary>思考过程 {card.status === "running" ? "· 正在生成" : ""}</DisclosureSummary><div>{card.content}</div></details>;
+  if (card.type === 'strategy_correction') return <StrategyCorrectionCard card={card}/>;
   if (card.type === "chart") return <Chart card={card}/>;
   if (card.type === "diff") { const data = card.data as { before: string; after: string }; return <details className="ai-diff"><DisclosureSummary>文件变更 · {card.title}</DisclosureSummary><div className="ai-diff-columns"><pre>{data.before || "（新文件）"}</pre><pre>{data.after || "（空文件或删除）"}</pre></div></details>; }
   if (card.type === "operation") return <details className="ai-operation"><DisclosureSummary><span>{card.title}</span><small>{card.status === "pending" ? "等待确认" : card.status === "running" ? "执行中" : card.status === "failed" ? "未完成" : "已结束"}</small></DisclosureSummary><pre>{JSON.stringify(card.data, null, 2)}</pre>{card.content && <pre>{card.content}</pre>}</details>;
-  return <div className={`ai-card ai-${card.type}`}><div className={`ai-markdown${assistantText ? " assistant-prose" : ""}`}><Markdown remarkPlugins={assistantText ? [remarkGfm, remarkAssistantProse, decorateTags,...(card.status==='completed'&&compactRestored?[remarkCompactReply]:[])] : [remarkGfm]} skipHtml components={cardMarkdownComponents}>{visibleContent}</Markdown></div>{card.status === "running" && !assistantText && <span className="ai-stream-dot"/>}</div>;
+  return <div className={`ai-card ai-${card.type}`}><div className={`ai-markdown${assistantText ? " assistant-prose" : ""}`}><Markdown remarkPlugins={assistantText ? [remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateTags,...(card.status==='completed'&&compactRestored?[remarkCompactReply]:[])] : [remarkGfm]} skipHtml components={cardMarkdownComponents}>{visibleContent}</Markdown></div>{card.status === "running" && !assistantText && <span className="ai-stream-dot"/>}</div>;
 }, (previous, next) => sameCard(previous.card, next.card) && conversationTagSignature(previous.tags) === conversationTagSignature(next.tags));
 
 // Animate a reply's first appearance, including a completed first packet.
@@ -84,15 +100,18 @@ function ReplyArrival({entryId,arrive,children}:{entryId:string;arrive:boolean;c
   return <div data-conversation-entry={entryId} className={`ai-response${animate?' reply-arrival':''}`}>{children}</div>;
 }
 function TranscriptMessage({message,sessionId,resources}:{message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"]}) {
- return <div className={`ai-chat-message ai-role-${message.role}`}>
-          {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}{message.text && <div>{message.role === "system" ? displayAiError(message.text) : message.role === "user" ? <MessageText text={message.text} mentions={message.mentions} resources={resources}/> : message.text}</div>}
+ return <div className={`ai-chat-message ai-role-${message.role}${message.images?.length?" has-message-images":""}`}>
+          {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}{message.text && <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : message.role === "user" ? <MessageText text={message.text} mentions={message.mentions} resources={resources}/> : message.text}</div>}
           {message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}
-          {message.images?.map(image => <figure key={image.id} className="ai-image"><img src={image.url || `data:${image.mimeType};base64,${image.base64}`} alt={image.name || "用户附加图片"}/></figure>)}
+          {!!message.images?.length&&<MessageImages images={message.images}/>}
         </div>;
 }
-export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation" }: { mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean }) {
+export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh }: { refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean }) {
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
+  // Retain an observed completion when a legacy turn has no saved timing and
+  // a newer user turn takes over the engine view. Do not restore its narration.
+  const settledTurnIds=useRef(new Set<string>());
   const restoredCardIds=useRef(new Set((snapshot.ai?.cards??[]).map(card=>card.id)));
   const restoredText=useRef(new Set([...(snapshot.ai?.cards??[]).filter(c=>!!c.content).map(c=>c.id),...(snapshot.ai?.agentRuns??[]).filter(r=>!!r.liveText).map(r=>r.liveTextId)]));
   const [sreTaskFilter,setSRETaskFilter]=useState('');
@@ -111,7 +130,7 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
   const loadOlderSRE=async()=>{onInspect?.();const session=snapshot.session.id;setLoadingSRE(true);try{const page=await api.sreTasks(session,sreCursor??snapshot.sre?.tasks.at(-1)?.id??'');if(selectedSession.current===session){setOlderSRE(old=>[...old,...page.items]);setSRECursor(page.nextCursor)}}catch(e){setError(readableError(e))}finally{setLoadingSRE(false)}};
   const visibleEntries = entries.filter(entry => !isFileChangeCard(entry.card));
   const groups = transcriptGroups(visibleEntries);
-  const activityEntry = (entry: (typeof entries)[number]) => !!(entry.sre||entry.agentRun || entry.action || entry.card && ["thinking", "operation", "shell", "diff", "error"].includes(entry.card.type));
+  const activityEntry = (entry: (typeof entries)[number]) => !!(entry.sre||entry.agentRun || entry.action || entry.card && ["thinking", "operation", "shell", "diff", "error", "strategy_correction"].includes(entry.card.type));
   const filteredEntries=mode==='activity'&&sreTaskFilter?entries.filter(entry=>entry.sre&&(entry.sre.task.id===sreTaskFilter||entry.sre.task.status==='waiting_approval'||entry.sre.task.attempts.some(a=>a.operations?.some(o=>['unknown','dispatched'].includes(o.status))))):entries;
   const turns = transcriptTurns(filteredEntries).filter(turn => mode !== "activity" || turn.some(activityEntry));
   const directoryItems = conversationDirectoryItems(snapshot.messages, new Set(turns.flatMap(turn => turn.filter(entry => entry.message?.role === "user").map(entry => entry.id))),new Map(turns.flatMap(turn=>{const user=turn.find(entry=>entry.message?.role==='user');return user?[[user.id,conversationPreview(turn)] as const]:[]})));
@@ -129,7 +148,14 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
   const latestUserAt = latestUser?.createdAt || "";
   const currentTurn=latestUser?turns.find(turn=>turn.some(entry=>entry.message?.id===latestUser.id))??[]:[];
   const currentTiming=timingForTurn(currentTurn,snapshot);
-  const progressingId=currentProgressGroupId(currentTurn.filter(entry=>!isFileChangeCard(entry.card)),snapshot.ai?.status==='running'&&!snapshot.ai.question&&(!currentTiming||currentTiming.status==='running'));
+  const currentTurnState=turnStatus(currentTiming,snapshot.ai,currentTurn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt,Date.now());
+  const replyWorking=snapshot.ai?.status==='running'&&currentTurnState.live&&!currentTurnState.waiting&&!stopping&&!disabled;
+  const liveConversation=['running','waiting_approval'].includes(snapshot.ai?.status||'')&&(!currentTiming||currentTiming.status==='running');
+  const conversationTurnEntries=(turn:typeof entries)=>{
+    const stopped=timingForTurn(turn,snapshot)?.status==='cancelled';
+    return turn.filter(entry=>!isFileChangeCard(entry.card)&&!(stopped&&entry.card?.type==='error'&&entry.card.status==='cancelled'));
+  };
+  const progressingId=currentProgressGroupId(currentTurn.filter(entry=>!isFileChangeCard(entry.card)),snapshot.ai?.status==='running'&&!snapshot.ai.question&&(!currentTiming||currentTiming.status==='running'),snapshot.resources);
   if (mode === "evidence") {
     const evidence = [...new Map([...(snapshot.evidence || []), ...(snapshot.ai?.agentRuns || []).flatMap(run => run.evidence || []),...mergedSRE.flatMap(t=>t.attempts.flatMap(a=>a.evidence??[]))].filter(item => item.sessionId === snapshot.session.id).map(item => [item.id,item])).values()];
     const reports = cards.filter(card => ["chart", "image"].includes(card.type));
@@ -139,15 +165,29 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
     {(snapshot.sre?.tasks.length??0)>=20&&sreCursor!==''&&<button type="button" disabled={loadingSRE} onClick={()=>void loadOlderSRE()}>{loadingSRE?'正在加载…':'加载更早的 SRE 任务'}</button>}
     {mode==='activity'&&mergedSRE.length>1&&<label className="sre-task-filter">任务<AppSelect label="筛选 SRE 任务" value={sreTaskFilter} onChange={event=>setSRETaskFilter(event.target.value)}><option value="">全部任务</option>{mergedSRE.map(task=><option key={task.id} value={task.id}>{task.goal}</option>)}</AppSelect></label>}
     <ConversationDirectory key={snapshot.session.id} sessionId={snapshot.session.id} items={directoryItems} onJump={jumpTo} onLatest={() => jumpTo()} onOpen={onInspect} onLoadOlder={before > 0 ? () => void loadOlder() : undefined} loading={loading}/>
-    {mode === "activity" && !turns.length && <div className="record-empty"><h2>暂无执行记录</h2><p>工具调用、子 Agent 任务和文件变更会按轮次保留在这里。</p></div>}
+    {mode === 'activity' && <OperationOutcomes session={snapshot.session.id} operations={snapshot.ai?.operationOutcomes ?? []} running={['running', 'waiting_approval'].includes(snapshot.ai?.status ?? '')} disabled={disabled} refresh={refresh}/>}
+    {mode === "activity" && !turns.length && !snapshot.ai?.operationOutcomes?.some(operation => operation.status === "unknown") && <div className="record-empty"><h2>暂无执行记录</h2><p>工具调用、子 Agent 任务和文件变更会按轮次保留在这里。</p></div>}
     {before > 0 && <button type="button" disabled={loading} onClick={() => void loadOlder()}>{loading ? "正在加载…" : "加载更早记录"}</button>}
     {error && <p role="alert">{error}</p>}
-    {turns.map((turn, index) => <div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)} key={turn[0]!.id}>
-      {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources}/>)}
-      <ReplyDuration timing={timingForTurn(turn,snapshot)} view={turn.some(entry=>entry.message?.id===latestUser?.id) ? snapshot.ai : undefined} cards={turn.flatMap(entry=>entry.card?[entry.card]:[])} latestUserAt={turn.find(entry=>entry.message?.role==="user")?.at??""}/>
-      {(mode==='conversation'?conversationGroups(turn.filter(entry=>!isFileChangeCard(entry.card))):transcriptGroups(turn.filter(entry => !isFileChangeCard(entry.card) && activityEntry(entry))).map(entries=>({progress:false,entries}))).map(({entries:group,progress}) => {
+    {turns.map((turn, index) => {
+      const groups=mode==='conversation'?conversationDisplayGroups(conversationTurnEntries(turn),turn===currentTurn&&liveConversation,snapshot.resources):transcriptGroups(turn.filter(entry=>!isFileChangeCard(entry.card)&&activityEntry(entry))).map(entries=>({progress:false,entries}));
+      const processGroups=mode==='conversation'?groups.filter(group=>group.progress):[];
+      const completed = timingForTurn(turn,snapshot)?.status ?? (turn===currentTurn?snapshot.ai?.status:undefined);
+      const turnId = turn[0]!.id;
+      if (completed==='completed') settledTurnIds.current.add(turnId);
+      else if (completed && completed!=='running') settledTurnIds.current.delete(turnId);
+      const settled = completed?completed==='completed':settledTurnIds.current.has(turnId);
+      const interimIds = mode==='conversation'?completedTurnInterimIds(turn,settled):new Set<string>();
+      const stages=resourceStageProgress(turn,processGroups,mode==='conversation'&&turn===currentTurn&&liveConversation,mode==='conversation'&&settled);
+      const overallIds=new Set(stages.overall.map(entry=>entry.id));
+      const interim = turn.filter(entry=>(interimIds.has(entry.id)&&!stages.ids.has(entry.id))||(settled&&overallIds.has(entry.id)));
+      const stageContent=(entry:typeof turn[number])=>entry.card?<Card key={entry.id} card={entry.card} tags={snapshot.session.tags}/>:entry.message?<TranscriptMessage key={entry.id} message={entry.message} sessionId={snapshot.session.id}/>:null;
+      const notices=[['failed','项失败'],['pending','项待确认'],['unknown','项结果待核查'],['background_running','项后台执行中'],['not_executed','项未执行'],['interrupted','项已停止'],['cancelled','项已停止']].flatMap(([status,label])=>{const count=processGroups.flatMap(group=>group.entries).filter(entry=>entry.card?.status===status).length;return count?[`${count} ${label}`]:[];}).join(' · ');
+      const timingProps={timing:timingForTurn(turn,snapshot),view:turn.some(entry=>entry.message?.id===latestUser?.id)?snapshot.ai:undefined,cards:turn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt:turn.find(entry=>entry.message?.role==='user')?.at??''};
+      const overallSummary=overallProgressSummary(turn,processGroups,stages,timingProps.view);
+      const renderGroup=({entries:group,progress,resource}:ConversationGroup)=>{
         const entry = group[0]!;
-        if(progress)return <ReplyArrival key={entry.id} entryId={entry.id} arrive={!restoredCardIds.current.has(entry.id)&&turn.some(item=>item.message?.id===latestUser?.id)}><ThinkingTimeline cards={group.map(item=>item.card!)} live={snapshot.ai?.status==='running'&&(group.some(item=>item.card?.status==='running')||entry.id===progressingId)} continuing={entry.id===progressingId} resourceRow onInspect={onInspect}/></ReplyArrival>;
+        if(progress)return <ReplyArrival key={entry.id} entryId={entry.id} arrive={!restoredCardIds.current.has(entry.id)&&turn.some(item=>item.message?.id===latestUser?.id)}><ThinkingTimeline cards={group.map(item=>item.card!)} live={snapshot.ai?.status==='running'&&(group.some(item=>item.card?.status==='running')||entry.id===progressingId)} continuing={entry.id===progressingId} resource={resource} stage={stages.byResource.has(entry.id)?<ResourceStageSummary entries={stages.byResource.get(entry.id)!} render={stageContent}/>:undefined} resourceRow onInspect={onInspect}/></ReplyArrival>;
         if(mode==='conversation'&&entry.card?.type==='thinking'&&!entry.card.content)return null;
         if(entry.sre){const {task}=entry.sre;const attempt=task.attempts?.find(a=>a.id===entry.sre!.entry.attemptId);const plan=task.plans?.find(p=>p.id===task.runs?.find(r=>r.id===attempt?.planRunId)?.planRevisionId);const step=plan?.steps.find(s=>s.id===attempt?.stepId);return <SRERoleMessage key={entry.id} task={task} entry={entry.sre.entry} snapshot={snapshot} animateInitial={!restoredText.current.has(snapshot.ai?.agentRuns?.find(r=>r.id===entry.sre!.entry.roleRunId)?.liveTextId)} onUpdated={()=>void api.snapshot(snapshot.session.id)} renderApproval={run=>snapshot.ai?<><AIPending attachments={snapshot.messages.flatMap(message=>message.files??[])} session={snapshot.session.id} runId={run.id} agentName={run.name} sreStep={step} view={{...snapshot.ai,pending:run.pending}} refresh={()=>api.aiView(snapshot.session.id)}/>{run.question&&<AgentQuestion session={snapshot.session.id} runId={run.id} request={run.question} refresh={()=>api.aiView(snapshot.session.id)}/>}</>:null}/>;}
         const runs = group.flatMap(item => item.agentRun ? [item.agentRun] : []);
@@ -160,22 +200,42 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
         if (entry.message) return entry.message.role==='user'?null:<TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message}/>;
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
         return <ReplyArrival key={entry.id} entryId={entry.id} arrive={mode==='conversation'&&turn.some(item=>item.message?.id===latestUser?.id)&&!!entry.card&&['text','message'].includes(entry.card.type)&&!restoredText.current.has(entry.card.id)}>{entry.card?.type === "text" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)}/></ReplyArrival>;
-      })}
-      <FileChanges cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
+      };
+      return <div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)} key={turn[0]!.id}>
+      {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources}/>)}
+      {mode==='conversation'?<TurnExecutionDetails {...timingProps} detailNotice={notices} details={[...processGroups.map(renderGroup),...(interim.length?[<details className="turn-progress-prose" key="interim-prose"><DisclosureSummary>过程播报 · {interim.length}</DisclosureSummary>{interim.map(entry=><div className="ai-response" key={entry.id}>{entry.card?<Card card={entry.card}/>:entry.message?<TranscriptMessage message={entry.message} sessionId={snapshot.session.id}/>:null}</div>)}</details>]:[])]} onInspect={onInspect}/>:<ReplyDuration {...timingProps}/>}
+      {groups.filter(group=>!processGroups.includes(group)).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} collapsed={group.entries.every(entry=>interimIds.has(entry.id)||stages.ids.has(entry.id))}>{renderGroup(group)}</SettledReply>:renderGroup(group))}
+      {overallSummary&&<SettledReply collapsed={!(turn===currentTurn&&liveConversation)}><OverallProgressSummary summary={overallSummary} session={snapshot.session.id} turnStartedAt={snapshot.ai?.turnStartedAt} live={turn===currentTurn&&liveConversation}/></SettledReply>}
+      <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}/>
-    </div>)}
+      {mode==='conversation'&&turn===currentTurn&&<ReplyActivity active={replyWorking}/>}
+    </div>;})}
 
     {mode==='activity'&&mergedSRE.filter(task=>!sreTaskFilter||task.id===sreTaskFilter).map(task=><SREEventHistory key={task.id} task={task}/>)}
   </div>;
 }
 export function AIPending({ session, view, refresh, runId, agentName,sreStep,attachments }: { attachments?:TextFileAttachment[]; session: string; view: AIView; refresh: () => Promise<unknown>; runId?: string; agentName?: string;sreStep?:SREPlanStep }) {
-  const [confirmation, setConfirmation] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  useEffect(() => { setConfirmation(""); setError(""); }, [view.pending?.id]);
+  const [confirmation, setConfirmation] = useState(""); const [requestBusy, setBusy] = useState(false); const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState<string>(); const decisionFlight = useRef<string | undefined>(undefined);
+  const currentApproval = useRef(view.pending?.id); currentApproval.current = view.pending?.id;
+  useEffect(() => { setConfirmation(""); setError(""); setSubmitted(undefined); decisionFlight.current = undefined; }, [view.pending?.id]);
   const p = view.pending; if (!p) return null;
+  const busy = requestBusy || submitted === p.id;
   const {title,note} = approvalPresentation(p);
   const opening = p.kind === "terminal_open";
   const description = p.kind === "mcp" ? p.target : p.kind === "resource_import" ? `${p.target}。下列连接会立即加入资源列表；已有连接会跳过。` : p.kind === "resource_select" ? `当前会话有多个主机资源。请确认本次使用 ${p.target}${p.needsTerminal ? "，并创建该资源的终端" : ""}；也可以拒绝后在设置的会话配置中选择目标。` : opening && p.call.name === "inspect_host" ? `为 ${p.target} 创建持续终端，并读取系统、内存和进程状态。授权只覆盖本次创建；手动关闭后会重新申请。` : p.needsTerminal ? `为 ${p.target} 创建持续终端，并执行下面这一次操作。` : `${p.target} · ${p.call.name}`;
-  const decide = async (accept: boolean) => { setBusy(true); setError(""); try { await api.aiOperation(session, runId ? "agentDecision" : "decision", { id: p.id, accept, confirmation, ...(runId ? {runId} : {}) }); await refresh(); } catch (error) { setError(readableError(error)); } finally { setBusy(false); } };
+  const decide = async (accept: boolean) => {
+    if (decisionFlight.current === p.id) return;
+    decisionFlight.current = p.id; setBusy(true); setError("");
+    try {
+      await api.aiOperation(session, runId ? "agentDecision" : "decision", { id: p.id, accept, confirmation, ...(runId ? {runId} : {}) });
+      setSubmitted(p.id); await refresh();
+    } catch (error) {
+      if (decisionFlight.current === p.id) decisionFlight.current = undefined;
+      try { await refresh(); } catch { /* Preserve the original decision error. */ }
+      if (currentApproval.current === p.id) setError(readableError(error));
+    } finally { setBusy(false); }
+  };
   let args: unknown = p.call.arguments; try { args = JSON.parse(p.call.arguments); } catch {}
   if(p.kind==="mcp"&&args&&typeof args==="object"&&"arguments" in args)args=(args as {arguments:unknown}).arguments;
   if(runId && args && typeof args === "object") args=Object.fromEntries(Object.entries(args).filter(([key])=>!["asset_ref","terminal_id","runtime"].includes(key)));

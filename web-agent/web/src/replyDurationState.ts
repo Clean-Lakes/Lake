@@ -19,8 +19,8 @@ export function replyElapsed(timing:ReplyTiming,now:number):string|undefined {
  if (timing.status==="interrupted") return;
  const start=Date.parse(timing.startedAt),end=timing.status==="running" ? now : Date.parse(timing.finishedAt);
  const milliseconds=end-start;
- if (!Number.isFinite(milliseconds) || milliseconds<0) return;
- return milliseconds<1000 ? "不到1秒" : formatElapsed(Math.floor(milliseconds/1000));
+ if (!Number.isFinite(milliseconds) || milliseconds<1000) return;
+ return formatElapsed(Math.floor(milliseconds/1000));
 }
 export function replyDurationText(timing:ReplyTiming,now:number,waiting=false,state?:string):string|undefined {
  const duration=replyElapsed(timing,now);

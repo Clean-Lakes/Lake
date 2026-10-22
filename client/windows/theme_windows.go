@@ -27,7 +27,7 @@ func init() {
 }
 
 const (
-	paperColor   = 0x00ffffff // COLORREF for --background: #ffffff.
+	paperColor   = 0x00fcfcfc // COLORREF for --background: #fcfcfc.
 	inkColor     = 0x00222222 // --foreground: #222222.
 	lineColor    = 0x00e5e5e5 // --border: #e5e5e5.
 	themeRefresh = 0x8031

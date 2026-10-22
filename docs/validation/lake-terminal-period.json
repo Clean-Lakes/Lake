@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-20",
+  "scope": "Mac WebKit punctuation delivered as committed input without a usable keypress, including English full stop.",
+  "fixture": {
+    "path": "web-agent/web/test/fixtures/terminal-text-input.html",
+    "baseline": "Same real TerminalPane with compatibility path disabled: textarea contains period, onInput receives nothing.",
+    "fixed": "Input-only event delivers exactly one period; full English punctuation and Chinese punctuation sequences also preserved.",
+    "realNetworkOrShellCalls": false
+  },
+  "nativeMac": {
+    "standardKeySequence": "a..b",
+    "observed": "a..b",
+    "enterPressed": false,
+    "terminal": "Disposable local Dev terminal only; cleared and closed after verification.",
+    "limitation": "Original failure of a physical ABC period key did not reproduce locally; input-only path reproduced and fixed. Accessibility automation text insertion is not a substitute for hardware IME validation."
+  },
+  "checks": {
+    "frontendTests": 308,
+    "typescript": "passed",
+    "productionBuild": "passed",
+    "signedDevBuildInstallAndRestart": "passed",
+    "backendMatchesSignedBuild": true,
+    "servedFrontendMatchesBuild": true
+  },
+  "preserved": [
+    "screen-reader mode",
+    "normal key input without duplication",
+    "xterm-owned composition and paste",
+    "input ordering before Enter",
+    "Windows/Chromium existing path"
+  ],
+  "upstreamReference": "https://github.com/xtermjs/xterm.js/pull/5614",
+  "release": "Dev only; formal package not published."
+}

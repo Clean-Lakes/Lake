@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/Clean-Lakes/Lake/internal/strategy"
 	"time"
 )
 
@@ -42,10 +43,16 @@ type SSH struct {
 	KnownHosts    string `json:"-"`
 }
 type Config struct {
-	legacyInvestigations    bool // Historical runtime compatibility; never enabled by user settings.
+	ModelProviderID         string `json:"modelProviderId,omitempty"` // Logical catalog ID only; never an endpoint or credential.
+	legacyInvestigations    bool   // Historical runtime compatibility; never enabled by user settings.
 	sreCoordinator          bool
 	sre                     *sreRoleContext
 	targetScope             *TargetScope
+	StrategyLearnEnabled    bool             `json:"-"`
+	StrategyCorrectEnabled  bool             `json:"-"`
+	StrategyBudget          strategy.Budget  `json:"-"`
+	StrategyGlobalEpoch     int64            `json:"-"`
+	StrategyProjectEpoch    int64            `json:"-"`
 	MemoryProjectID         string           `json:"-"`
 	MemoryEnabled           bool             `json:"-"`
 	MemoryExtractionEnabled bool             `json:"-"`
@@ -145,10 +152,13 @@ type View struct {
 	Turns             int                `json:"turns"`
 }
 type State struct {
+	PromptBaseline         *strategy.PromptBaseline       `json:"promptBaseline,omitempty"`
+	SkillSnapshots         []strategy.SkillSnapshot       `json:"skillSnapshots,omitempty"`
 	Runtime                *RuntimeCheckpoint             `json:"runtime,omitempty"`
 	SREHandoff             *SREHandoff                    `json:"sreHandoff,omitempty"`
 	QuestionDecisions      map[string]map[string][]string `json:"questionDecisions,omitempty"`
 	FileReads              map[string]string              `json:"fileReads,omitempty"`
+	StrategyOutbox         []StrategyTurnSnapshot         `json:"strategyOutbox,omitempty"`
 	MemoryOutbox           []MemoryTurnSnapshot           `json:"memoryOutbox,omitempty"`
 	MemoryRecentUserInputs []string                       `json:"memoryRecentUserInputs,omitempty"`
 	TargetScope            *TargetScope                   `json:"targetScope,omitempty"`
@@ -199,6 +209,12 @@ func num(v any, fallback int) int {
 		return int(n)
 	case int:
 		return n
+	case int64:
+		return int(n)
+	case json.Number:
+		if value, err := n.Int64(); err == nil {
+			return int(value)
+		}
 	}
 	return fallback
 }

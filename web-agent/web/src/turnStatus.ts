@@ -9,7 +9,7 @@ export function turnStatus(timing:ReplyTiming|undefined,view:AIView|undefined,ca
  const currentCards=start ? cards.filter(card=>compareTime(card.at,start)>=0) : [];
  const compacting=!!start && view?.cards.some(card=>card.type==="compaction"&&card.status==="running"&&compareTime(card.at,start)>=0);
  const runs=(view?.agentRuns??[]).filter(run=>run.sessionId===view?.session && (view?.rootTurnId&&run.rootTurnId ? run.rootTurnId===view.rootTurnId : !!start&&compareTime(run.createdAt,start)>=0));
- const waiting=live && (view?.status==="waiting_approval" || !!view?.question || currentCards.some(card=>card.status==="pending") || runs.some(run=>run.status==="waiting_approval"));
+ const waiting=live && (view?.status==="waiting_approval" || !!view?.question || currentCards.some(card=>card.status==="pending") || runs.some(run=>run.status==="waiting_approval"||run.status==="waiting_input"||!!run.question));
  let state:string|undefined;
  if(live) {
   if(view?.question) state="等待你的选择";

@@ -1,0 +1,40 @@
+{
+  "motion": [
+    {
+      "duration": "8.4s",
+      "swell": "header-glass-swell",
+      "swellDuration": "6.4s",
+      "timing": "linear"
+    },
+    {
+      "duration": "10.8s",
+      "swell": "header-glass-swell",
+      "swellDuration": "6.4s",
+      "timing": "linear"
+    }
+  ],
+  "labels": [
+    {
+      "background": "rgb(236, 247, 242)",
+      "border": "0px",
+      "borderStyle": "none",
+      "class": "message-reference-token",
+      "color": "rgb(36, 117, 97)",
+      "height": 22,
+      "maskInset": "0px",
+      "padding": "1px 6px",
+      "width": 113.1015625
+    },
+    {
+      "background": "rgb(236, 247, 242)",
+      "border": "0px",
+      "borderStyle": "none",
+      "class": "composer-reference-token",
+      "color": "rgb(36, 117, 97)",
+      "height": 24,
+      "maskInset": "0px",
+      "padding": "2px 6px",
+      "width": 135.1015625
+    }
+  ]
+}

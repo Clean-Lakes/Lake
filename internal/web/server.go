@@ -37,6 +37,9 @@ type Options struct {
 type Server struct {
 	Extensions         *extensions.Manager
 	draftCompletions   sync.Map
+	progressSummaryMu  sync.Mutex
+	progressSummaries  map[string]*progressSummaryState
+	progressRunning    int
 	scheduleMu         sync.Mutex
 	schedulerWorkers   sync.WaitGroup
 	workflowMu         sync.Mutex
@@ -152,6 +155,8 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	}
 	server.Engine.RuntimeDir = filepath.Join(options.DataDir, "adk")
 	server.Engine.SetSRERepository(store)
+	server.Engine.Strategies = server.strategyProvider
+	server.Engine.CorrectionGuard = server.strategyCorrectionGuard
 	store.RecoverSRETasks()
 	if err = server.startScheduler(); err != nil {
 		server.Close()
@@ -163,6 +168,7 @@ func (b *Server) Start() error {
 	if err := b.reconcilePersistedMemoryOutboxes(); err != nil {
 		return err
 	}
+	_ = b.reconcilePersistedStrategyOutboxes()
 	b.Store.RecoverMemoryJobs()
 	_ = b.Store.ReconcileProjectMemoryFiles()
 	l, e := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", b.options.Port))
@@ -172,6 +178,10 @@ func (b *Server) Start() error {
 	b.listener = l
 	b.workers.Add(1)
 	go b.runMemoryWorker()
+	b.workers.Add(1)
+	go b.runStrategyWorker()
+	b.workers.Add(1)
+	go b.runExperimentWorker()
 	b.workers.Add(1)
 	go func() {
 		defer b.workers.Done()
@@ -380,6 +390,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if b.providerRoute(w, r, name, method) {
+		return
+	}
+	if b.strategyRoute(w, r, name) {
 		return
 	}
 	if b.projectMemoryRoute(w, r, name, method) {
@@ -780,6 +793,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if method == "POST" {
+				if op == "progress-summary" {
+					b.progressSummaryRoute(w, r, id)
+					return
+				}
 				if op == "reasoning" {
 					reply(w, 200, b.setReasoning(r.Context(), id, body(w, r, 16384)))
 					return

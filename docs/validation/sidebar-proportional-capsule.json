@@ -1,0 +1,37 @@
+{
+  "metrics": {
+    "content": 1412,
+    "idleOpacity": "0",
+    "position": 0,
+    "rowRadius": "20px",
+    "searchRadius": "20px",
+    "thumbHeight": 186.078125,
+    "viewport": 552
+  },
+  "afterNativeWheel": {
+    "height": 186.078125,
+    "opacity": "0",
+    "top": 293.3597717285156,
+    "value": "360"
+  },
+  "drag": {
+    "range": 860,
+    "scrollTop": 297
+  },
+  "wheel": [
+    {
+      "delta": 360,
+      "mode": 0,
+      "prevented": false,
+      "before": 360,
+      "after": 360
+    },
+    {
+      "delta": -72,
+      "mode": 0,
+      "prevented": false,
+      "before": 0,
+      "after": 0
+    }
+  ]
+}

@@ -2,10 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type {MCPServerConfig,Resource,SkillConfig} from "../../shared/contracts";
 import {rebaseMentions,referencedExtensions,referencedResources,rebaseExtensionReferences} from "../../shared/references";
-import {composerClipboardFragment,composerToken,replaceComposerRange,composerMessage,composerResourceIds,selectComposerMention,appendResourceMention,filterMentions,mentionInsertion,mentionOptions,type MentionOption} from "../src/composerMentionState";
+import {composerClipboardFragment,composerToken,replaceComposerRange,composerMessage,composerResourceIds,selectComposerMention,appendResourceMention,filterMentions,mentionInsertion,mentionOptions,mentionTypeLabel,type MentionOption} from "../src/composerMentionState";
 
 const skill:SkillConfig={name:"service-check",description:"检查服务健康",path:"/fixture/SKILL.md",source:"Lake",enabled:true,managed:true};
 const mcp:MCPServerConfig={id:"tools",name:"Team tools",transport:"http",enabled:true,url:"http://localhost:1",command:"",args:[],headersConfigured:false,envConfigured:false};
+test('same-name resource candidates retain their real types and distinct selection IDs',()=>{
+ const kinds:Resource['kind'][]=['ssh','database','redis','docker','local'];
+ const options=mentionOptions(kinds.map(kind=>({id:kind,name:'192.0.2.141',kind,status:'available'} as Resource)),[],[]);
+ assert.deepEqual(options.map(o=>o.resourceKind),kinds);
+ assert.deepEqual(options.map(mentionTypeLabel),['SSH 主机','数据库','Redis','容器','本机']);
+ assert.deepEqual(filterMentions(options,'数据库','resource').map(o=>o.id),['database']);
+ const picked=selectComposerMention('@141',4,[],options[1]!);
+ assert.deepEqual(composerMessage(picked.next,picked.references,kinds).resourceIds,['database']);
+});
 test("mentions expose enabled Skills and MCP services without mixing same-name identities",()=>{
  const resources=[{id:"tools",name:"Team tools",status:"available"}] as Resource[];
  const options=mentionOptions(resources,[skill,{...skill,name:"disabled",enabled:false}],[mcp,{...mcp,id:"off",enabled:false}]);

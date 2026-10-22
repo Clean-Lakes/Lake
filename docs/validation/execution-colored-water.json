@@ -1,0 +1,40 @@
+{
+  "running": {
+    "color": "#3568a5",
+    "height": 18,
+    "kind": "lakeTerminal",
+    "maskPosition": "62.5227% 0px",
+    "motion": "lake-water-forward",
+    "water": true,
+    "width": 18
+  },
+  "returnedLayers": 0,
+  "file": {
+    "color": "#b54a16",
+    "kind": "lakeFile",
+    "water": true
+  },
+  "database": {
+    "color": "#247561",
+    "kind": "lakeDatabase",
+    "water": true
+  },
+  "expanded": [
+    {
+      "kind": "lakeTerminal",
+      "state": "thinking-step thinking-tool step-completed",
+      "water": false
+    },
+    {
+      "kind": "lakeFile",
+      "state": "thinking-step thinking-tool step-completed",
+      "water": false
+    },
+    {
+      "kind": "lakeDatabase",
+      "state": "thinking-step thinking-tool step-running",
+      "water": true
+    }
+  ],
+  "failedLayers": 0
+}

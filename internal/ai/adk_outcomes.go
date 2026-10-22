@@ -34,7 +34,9 @@ func (e *Engine) OperationOutcomes(id string) ([]OperationOutcome, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := e.reconcilePreflightOutcomes(context.Background(), id); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := e.reconcileNativeOperations(ctx, id); err != nil {
 		return nil, err
 	}
 	var rows []nativeOperation

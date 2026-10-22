@@ -1,0 +1,22 @@
+{
+  "component": "MCPSettings",
+  "fixture": "web-agent/web/test/fixtures/mcp-import.html",
+  "validation": {
+    "form_json_roundtrip": "quoted Unicode and Windows paths preserved",
+    "batch_import": "2 imported; no automatic connection calls",
+    "duplicate_batch": "rejected; record count unchanged",
+    "invalid_json": "blocked before API call",
+    "json_file": "selected synthetic file loaded into editor",
+    "keyboard_tabs": "arrow switch moves focus",
+    "responsive_390px": "no horizontal overflow",
+    "dark_theme": "dark card and readable text"
+  },
+  "tests": {
+    "frontend_passed": 327,
+    "extensions_race": "passed",
+    "web_import_routes_race": "passed",
+    "typescript_build": "passed"
+  },
+  "installed_app": "~/Applications/Lake Dev.app",
+  "signing_verification": "passed"
+}

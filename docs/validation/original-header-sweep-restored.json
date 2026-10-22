@@ -1,0 +1,17 @@
+{
+  "running": {
+    "animation": "workspace-header-sweep",
+    "background": "linear-gradient(105deg, rgba(0, 0, 0, 0) 20%, color(srgb 0.207843 0.407843 0.647059 / 0.05) 36%, color(srgb 0.207843 0.407843 0.647059 / 0.14) 50%, color(srgb 0.207843 0.407843 0.647059 / 0.05) 64%, rgba(0, 0, 0, 0) 80%)",
+    "duration": "2.8s",
+    "height": 42,
+    "layers": 1,
+    "mask": "",
+    "pointerEvents": "none",
+    "transform": "matrix(1, 0, 0, 1, -323.022, 0)",
+    "waveLayers": 0
+  },
+  "ended": {
+    "header": "HexHub 服务器/订单服务发布回滚回复结束",
+    "layers": 0
+  }
+}

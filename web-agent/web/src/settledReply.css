@@ -1,0 +1,9 @@
+.settled-reply { display: grid; grid-template-rows: 1fr; opacity: 1; margin-block-start: 0; transition: margin-block-start 360ms cubic-bezier(.22, 1, .36, 1), grid-template-rows 360ms cubic-bezier(.22, 1, .36, 1), opacity 220ms ease; }
+.settled-reply-content { min-height: 0; }
+/* Expanded text must keep its intrinsic wrapped height in a flex column. */
+.settled-reply:not(.is-archived) { flex-shrink: 0; }
+.settled-reply:not(.is-archived) > .settled-reply-content { min-height: min-content; }
+.settled-reply.is-archived { grid-template-rows: 0fr; opacity: 0; margin-block-start: calc(-1 * var(--turn-entry-gap, 12px)); pointer-events: none; }
+.settled-reply.is-archived .settled-reply-content { overflow: hidden; }
+.turn-progress-prose > .ai-response { margin-block: 12px; }
+@media (prefers-reduced-motion: reduce) { .settled-reply { transition: none; } }

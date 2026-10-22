@@ -1,5 +1,7 @@
+import {useSessionComposerDraft} from "./sessionComposerDrafts";
 import {ScheduledTasks} from "./ScheduledTasks";
 import {MessageText} from './MessageText';
+import {SidebarScrollArea} from './SidebarScrollArea';
 import {DisclosureSummary} from './DisclosureSummary';
 import {acceptSnapshot,reuseUnchanged} from './snapshotUpdates';
 import {useAutoRefresh} from './useAutoRefresh';
@@ -7,7 +9,7 @@ import {applyLiveText} from './liveTextUpdates';
 import {sreSessionPresentation} from './sreSessionPresentation';
 import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerMentions";
 import {SREModeToggle} from './SREModeToggle';
-import {appendResourceMention,composerMessage,composerResourceIds,selectComposerMention,filterMentions,mentionOptions,type ComposerReference,type MentionCategory,type MentionOption} from "./composerMentionState";
+import {appendResourceMention,composerMessage,composerResourceIds,selectComposerMention,filterMentions,mentionOptions,type MentionCategory,type MentionOption} from "./composerMentionState";
 import {ComposerTextInput,type ComposerInputHandle} from "./ComposerTextInput";
 import {AppSelect} from "./AppSelect";
 import {ComposerModelSelect} from "./ComposerModelSelect";
@@ -30,7 +32,6 @@ import { SSHResourceFields, emptySSH } from "./SSHResourceFields";
 import type { SSHConnectionInput } from "../../shared/contracts";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import type {
-  AIImage,
   Action,
   Catalog,
   Message,
@@ -44,17 +45,16 @@ import type {
   TerminalHistory,
   TerminalSession,
   WorkSession,
-  TextFileAttachment,
 } from "../../shared/contracts";
 import { api, ApiRequestError, readableError, type Bootstrap } from "./api";
 import { AIControls, AITranscript } from "./AIPanel";
 import { AgentIcon, type AgentIconName } from "./AgentIcon";
 import { Glyph, ResourceIcon, type GlyphName } from "./Icons";
+import {HeaderSweep} from "./HeaderSweep";
 import { SessionActions, SessionListTags, TagManager, SessionStateBadge } from "./SessionPresentation";
 import "./sessionPresentation.css";
 import "./conversationDirectory.css";
 import { ContextUsage } from "./ContextUsage";
-import { ReasoningSelector } from "./ReasoningSelector";
 import { uniqueTerminalRows } from "./terminalAIState";
 import { TerminalPane, type TerminalHandle } from "./TerminalPane";
 import { TerminalInputQueue } from "./terminalInputQueue";
@@ -186,17 +186,14 @@ function App() {
   const [sshError, setSshError] = useState("");
   const [sshBusy, setSshBusy] = useState(false);
   const inputQueue = useRef<TerminalInputQueue | null>(null);
-  const [imageDraft, setImageDraft] = useState<AIImage[]>([]);
+  const {draft: composerDraft, setMessageDraft, setMentionRefs, setImageDraft, setFileDraft, setIgnoreProjectMemory, clearSubmitted} = useSessionComposerDraft(route.sessionId);
+  const {message: messageDraft, references: mentionRefs, images: imageDraft, files: fileDraft, ignoreProjectMemory} = composerDraft;
   const attachmentReading = useRef(false);
   const attachmentEpoch = useRef(0);
   useLayoutEffect(() => { attachmentEpoch.current++; }, [route.sessionId]);
-  const [fileDraft, setFileDraft] = useState<TextFileAttachment[]>([]);
   const [attachmentDragOver,setAttachmentDragOver] = useState(false);
   const [attachmentUploading,setAttachmentUploading] = useState("");
   const attachmentInputRef = useRef<HTMLInputElement>(null);
-  const [mentionRefs, setMentionRefs] = useState<ComposerReference[]>([]);
-  const [messageDraft, setMessageDraft] = useState("");
-  const [ignoreProjectMemory, setIgnoreProjectMemory] = useState(false);
   const messageComposition = useRef(new CompositionGuard());
   const [sendShortcut, setSendShortcut] = useState<SendShortcut>(() => {
     try { return parseSendShortcut(localStorage.getItem(sendShortcutStorageKey)); } catch { return "enter"; }
@@ -250,6 +247,7 @@ function App() {
   const [permissionsOpen, setPermissionsOpen] = useState(false);
   const permissionButtonRef = useRef<HTMLButtonElement>(null);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [reasoningSaving,setReasoningSaving]=useState<ReadonlySet<string>>(()=>new Set());
   const [modelMenu, setModelMenu] = useState<AvailableModels & { loading: boolean }>({ loading: false, models: [], message: "" });
   const [mention, setMention] = useState<{ query: string; index: number } | null>(null);
   const messageInputRef = useRef<ComposerInputHandle>(null);
@@ -583,13 +581,8 @@ function App() {
       setDangerStage(false);
       setDangerText("");
     }
-    setMessageDraft("");
-    setImageDraft([]);
-    setFileDraft([]);
-    setIgnoreProjectMemory(false);
     setAgentOptionsOpen(false);
     setPermissionsOpen(false);
-    setMentionRefs([]);
     setMention(null);
   }, [sessionId]);
 
@@ -672,6 +665,8 @@ function App() {
 
   const activeSnapshot = snapshot?.session.id === sessionId ? snapshot : sessionId && catalog?.sessions.some(session => session.id === sessionId) ? snapshotCache.current.get(sessionId) ?? null : null;
   const selectedSession = activeSnapshot?.session ?? catalog?.sessions.find(item => item.id === sessionId);
+  const currentSessionPresentation = selectedSession ? sreSessionPresentation(selectedSession,activeSnapshot?.sre?.tasks) : {};
+  const currentSessionStatus = currentSessionPresentation.status ?? selectedSession?.status;
   const selectedResource = catalog?.resources.find(item => item.id === route.resourceId);
   const selectedProjectId = selectedResource?.projectId ?? selectedSession?.projectId;
   useEffect(() => {
@@ -835,7 +830,7 @@ function App() {
     } catch (error) {setModelMenu({ loading: false, models: [], message: readableError(error) });}
   }
   async function switchModel(model: string | AvailableModelEntry) {
-    if (pendingOperation) return;
+    if (pendingOperation||reasoningSaving.size) return;
     setPendingOperation("model");
     try {
       if (typeof model === "string") {
@@ -988,7 +983,7 @@ function App() {
     event.preventDefault();
     const payload=composerMessage(messageDraft.trim() ? messageDraft : (fileDraft.length ? "请查看附件信息，并说明可以如何处理；执行或部署前先确认目标和需求。" : ""),mentionRefs,mentionable.map(resource=>resource.id));
     const text=payload.text;
-    if (!sessionId || !sessionConnected || stoppingTurn || pendingOperation) return;
+    if (!sessionId || !sessionConnected || stoppingTurn || pendingOperation || reasoningSaving.has(sessionId)) return;
     if (!modelConfigured) {setMention(null);void openSettings();return;}
     if (!text && !imageDraft.length) return;
     if (imageDraft.length && !bootstrap?.supportsImageInput) { handleFailure(new Error("当前模型未启用图片输入，请切换到支持图片的模型后发送。")); return; }
@@ -998,13 +993,7 @@ function App() {
     conversationScroll.current.following = true;
     try {
       await api.sendMessage(targetSession, text, payload.resourceIds, imageDraft, payload.references, undefined, fileDraft, queueMode, ignoreProjectMemory, payload.mentions);
-      if (activeSession.current === targetSession) {
-        setMessageDraft("");
-        setImageDraft([]);
-        setFileDraft([]);
-        setMentionRefs([]);
-        setIgnoreProjectMemory(false);
-      }
+      clearSubmitted(targetSession, composerDraft);
       await refreshCurrent();
     } catch (error) { handleFailure(error); }
     finally { setPendingOperation(""); }
@@ -1308,9 +1297,9 @@ function App() {
         <ProjectSwitcher projects={projectList} value={sidebarProject.id} onChange={id=>{setSidebarProjectId(id);setNavigationQuery("");setSelectedTag(null);setBulkMode(false);setBulkSelected([]);const session=catalog.sessions.filter(item=>item.projectId===id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];navigate({sessionId:session?.id??null,resourceId:null});}}/>
         <button type="button" className="icon-button" aria-label={`管理项目 ${sidebarProject.name}`} title="更多操作" aria-haspopup="menu" disabled={!connected} onClick={event=>{const rect=event.currentTarget.getBoundingClientRect();setProjectContext({project:sidebarProject,x:rect.right,y:rect.bottom});}}><Glyph name="more" size={16}/></button>
       </div>}
-      <label className="navigation-search"><Glyph name="search" size={15}/><input ref={navigationInput} type="search" value={navigationQuery} onChange={event => setNavigationQuery(event.target.value)} placeholder="搜索当前项目…" aria-label="搜索当前项目"/>{navigationQuery ? <button type="button" aria-label="清除搜索" onClick={() => setNavigationQuery("")}><Glyph name="close" size={13}/></button> : <span className="navigation-search-key">{/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}</span>}</label>
+      <label className="navigation-search"><Glyph name="search" size={15}/><input ref={navigationInput} type="search" value={navigationQuery} onChange={event => setNavigationQuery(event.target.value)} placeholder="搜索当前项目…" aria-label="搜索当前项目"/>{navigationQuery ? <button type="button" aria-label="清除搜索" onClick={() => setNavigationQuery("")}><Glyph name="close" size={13}/></button> : <span className="navigation-search-key">{/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}</span>}<span className="navigation-search-divider" aria-hidden="true"/></label>
       {bulkMode && <div className="bulk-navigation-toolbar"><button type="button" onClick={()=>{setBulkMode(false);setBulkSelected([]);}}>完成</button><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
-      <nav className="project-scroll">
+      <SidebarScrollArea>
         {sidebarProject&&<div className="nav-heading sidebar-session-heading" hidden={bulkMode}>
           <button type="button" className="nav-section-toggle" aria-label={`${sidebarSessionsExpanded?"折叠":"展开"}${sidebarProject.name}的会话`} aria-expanded={sidebarSessionsExpanded} aria-controls={navigationProjects.length?`project-sessions-${sidebarProject.id}`:undefined} disabled={!navigationProjects.length} onClick={()=>setClosedSessionGroups(items=>sidebarSessionsExpanded?[...items,sidebarProject.id]:items.filter(id=>id!==sidebarProject.id))}><Glyph name="chevron" size={13} className={sidebarSessionsExpanded?"chevron-open":""}/><span>{navigationSearch?"匹配会话":allSessionGroups.includes(sidebarProject.id)?"全部会话":"最近会话"}</span></button>
           <button type="button" ref={newSessionButton} className="sidebar-new-session" hidden={bulkMode} disabled={!connected||!!pendingOperation} aria-label="新对话" aria-keyshortcuts="Meta+N Control+N" title={`新对话（${/Mac/.test(navigator.platform)?'⌘ N':'Ctrl N'}）`} onClick={()=>{setClosedSessionGroups(items=>items.filter(id=>id!==sidebarProject.id));openSessionDialog(sidebarProject.id);}}><Glyph name="edit" size={14}/></button>
@@ -1366,15 +1355,17 @@ function App() {
             </div>
           </div>;
         }) : <div className="sidebar-empty"><Glyph name={navigationSearch ? "search" : "layers"} size={25}/><p>{navigationSearch ? "没有匹配的项目、会话或资源" : "还没有项目"}</p>{navigationSearch ? <button onClick={() => setNavigationQuery("")}>清除搜索</button> : <button onClick={openProjectDialog} disabled={!connected}>创建第一个项目</button>}</div>}
-      </nav>
+      </SidebarScrollArea>
       <SidebarUtilities key={sidebarProject?.id} tags={(catalog.tags??[]).filter(tag=>tag.projectId===sidebarProject?.id)} sessions={catalog.sessions} selectedTag={selectedTag} onSelectTag={setSelectedTag} onManageTags={()=>{const project=sidebarProject;if(project)setTagProject(project);else openProjectDialog();}} onSession={id=>navigate({sessionId:id,resourceId:null})} onSettings={()=>void openSettings()} onTrash={()=>setTrashOpen(true)} onSchedules={sidebarProject?()=>setScheduleProject(sidebarProject):undefined} booting={booting} connected={connected} modelConfigured={modelConfigured}/>
 
     </aside>
 
     <main className={`workspace${selectedSession&&!selectedResource?" has-floating-header":""}`} onDragOver={event=>{if(selectedSession&&!selectedResource&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(!selectedSession||selectedResource||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       <header className="workspace-header">
+        {selectedSession && !selectedResource && <span className="workspace-header-glass" aria-hidden="true"/>}
+        {selectedSession && !selectedResource && <HeaderSweep key={selectedSession.id} active={currentSessionStatus === "investigating"}/>}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
-        <div className="breadcrumbs"><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span><strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/><span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong>{selectedSession && !selectedResource && <SessionStateBadge session={selectedSession} {...sreSessionPresentation(selectedSession,activeSnapshot?.sre?.tasks)}/>}</div>
+        <div className="breadcrumbs"><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span><strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/><span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong>{selectedSession && !selectedResource && <SessionStateBadge session={selectedSession} {...currentSessionPresentation}/>}</div>
       </header>
 
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}
@@ -1394,13 +1385,13 @@ function App() {
           const direction=["ArrowUp","PageUp","Home"].includes(event.key)?-1:["ArrowDown","PageDown","End"].includes(event.key)?1:0;
           if(direction&&pausesConversationFollow(event.currentTarget,direction))pauseFollowing();
         }} onScroll={event => { if (conversationFollower.current?.animating) return; conversationScroll.current.following = atConversationTail(event.currentTarget); }} className="conversation" aria-label="会话记录">
-          {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true">{loadingSessionId === sessionId && <span role="status">正在加载会话…</span>}</div> : (itemList.length || !!activeSnapshot.sre?.tasks.length) ? <div className="timeline-list">
-            {activeSnapshot?.ai ? <AITranscript key={sessionId} snapshot={activeSnapshot} mode={conversationMode} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={!sessionConnected} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
+          {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true">{loadingSessionId === sessionId && <span role="status">正在加载会话…</span>}</div> : (itemList.length || !!activeSnapshot.sre?.tasks.length || !!activeSnapshot.ai?.operationOutcomes?.length) ? <div className="timeline-list">
+            {activeSnapshot?.ai ? <AITranscript key={sessionId} refresh={refreshCurrent} snapshot={activeSnapshot} mode={conversationMode} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={!sessionConnected} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
             {selectedSession.status === "investigating" && !activeSnapshot.ai && <div className="timeline-item item-thinking" role="status" aria-live="polite"><span className="timeline-point"><Glyph name="spark" size={15}/></span><div className="timeline-content"><div className="thinking-line"><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span><span>正在处理…</span></div></div></div>}
           </div> : <div className="timeline-empty"><div className="empty-icon"><Glyph name="chat" size={25}/></div><h2>从一个问题开始</h2><p>描述你看到的故障或想核实的现象。Lake 会把调查过程、证据和需要确认的操作留在这里。</p></div>}
         </section>
         <div className="composer-dock">{activeSnapshot?.ai && <AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/>}<PendingMessages key={sessionId} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/><form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">给 Lake 的消息</label><div className={`composer-input${attachmentDragOver?" attachment-drop-active":""}`}>
-          {mention && <ComposerMentions options={mentionMatches} allOptions={allMentionOptions} index={mentionIndex} category={mentionCategory} onCategory={kind=>{setMentionCategory(kind);setMention({...mention,index:0});}} onSelect={insertMention} loading={mentionExtensions.loading} error={mentionExtensions.error} onReload={mentionExtensions.reload} onClose={()=>setMention(null)} onImport={()=>{const target=projectList.find(item=>item.id===selectedSession?.projectId);setMention(null);if(target){setImportHexhub(true);setImportProject(target);}}}/>}
+          {mention && <ComposerMentions options={mentionMatches} allOptions={allMentionOptions} index={mentionIndex} category={mentionCategory} onActive={index=>setMention(current=>current&&current.index!==index?{...current,index}:current)} onCategory={kind=>{setMentionCategory(kind);setMention({...mention,index:0});}} onSelect={insertMention} loading={mentionExtensions.loading} error={mentionExtensions.error} onReload={mentionExtensions.reload} onClose={()=>setMention(null)} onImport={()=>{const target=projectList.find(item=>item.id===selectedSession?.projectId);setMention(null);if(target){setImportHexhub(true);setImportProject(target);}}}/>}
           {attachmentUploading&&<p className="attachment-upload-status" role="status">正在上传：{attachmentUploading}</p>}{attachmentDragOver&&<p className="attachment-upload-status" role="status">松开以添加文件 · 每个最多 512 MiB</p>}{fileDraft.length > 0 && <div className="text-file-drafts">{fileDraft.map(file => <span key={file.sourceId}><Glyph name="file" size={14}/>{file.name}{file.sizeBytes!==undefined&&<small>{fileSize(file.sizeBytes)}</small>}<button type="button" aria-label={`移除 ${file.name}`} onClick={() => setFileDraft(files => files.filter(item => item.sourceId !== file.sourceId))}><Glyph name="close" size={14}/></button></span>)}</div>}{imageDraft.length > 0 && <div className="image-drafts">{imageDraft.map(image => <figure key={image.id}><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "待发送图片"}/><figcaption title={image.name}>{image.name || "剪贴板图片"}</figcaption><button type="button" aria-label={`移除 ${image.name || "图片"}`} onClick={() => setImageDraft(images => images.filter(item => item.id !== image.id))}><Glyph name="close" size={14}/></button></figure>)}</div>}{modelConfigured && imageDraft.length > 0 && !bootstrap?.supportsImageInput && <p className="composer-image-hint" role="status">当前模型不接受图片输入，请切换模型或在模型设置中手动调整。</p>}<div className="composer-body"><ComposerTextInput key={sessionId} sessionId={sessionId!} references={mentionRefs} renderReference={ref=><>{ref.kind==="role"?<AgentIcon role={ref.resourceId as AgentIconName} size={14}/>:ref.kind==="resource"?<ResourceIcon kind={resourceMap.get(ref.resourceId)?.kind??"ssh"} size={13}/>:<Glyph name={ref.kind==="skill"?"book":"plug"} size={13}/>}<span>{ref.label.slice(1)}</span>{ref.kind!=="resource"&&<small>{ref.kind==="role"?"专员":ref.kind==="skill"?"Skill":"MCP"}</small>}</>} modelId={bootstrap?.modelId??undefined} modelSource={bootstrap?.modelSelection?.providerId} history={(activeSnapshot?.messages??[]).filter(message=>message.role==="user").slice(-8).map(message=>message.text)} completionBlocked={!!mention||!completionEnabled||!modelConfigured} onComplete={next=>{setMessageDraft(next);syncMention(next,next.length);}} id="message-input" ref={messageInputRef} role="combobox" aria-haspopup="listbox" aria-autocomplete={mention?"list":"inline"} aria-expanded={!!mention} aria-controls={mention?"composer-mention-options":undefined} aria-activedescendant={mention&&mentionMatches[mentionIndex]?mentionOptionId(mentionMatches[mentionIndex]!):undefined} placeholder={queueMode ? "继续输入，稍后发送…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : "想让 Lake 帮你做什么？"} value={messageDraft} onPaste={event => { const files = clipboardFiles(event.clipboardData); if (!files.length) return; event.preventDefault(); void attachFiles(files); }} onChange={(value,refs,caret)=>{setMessageDraft(value);setMentionRefs(refs);syncMention(value,caret);}} disabled={!sessionConnected || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {
             if (messageComposition.current.ignores(event.nativeEvent)) return;
             if (mention) {
@@ -1412,9 +1403,9 @@ function App() {
               if (event.key === "Escape") { event.preventDefault(); setMention(null); return; }
             }
             if (isSendKey(event.nativeEvent, sendShortcut)) { event.preventDefault(); event.currentTarget.closest("form")?.requestSubmit(); }
-          }}/><div className="composer-send-actions">{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止本轮" title="停止本轮，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${turnActive && !hasMessageDraft ? " stop-button" : ""}`} type={turnActive && !hasMessageDraft ? "button" : "submit"} aria-label={turnActive && !hasMessageDraft ? "停止本轮" : !modelConfigured ? "连接模型" : queueMode ? "加入待发送队列" : "发送消息"} title={turnActive && !hasMessageDraft ? "停止本轮" : !modelConfigured ? "连接模型，保留当前草稿" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`} aria-busy={stoppingTurn} onClick={turnActive && !hasMessageDraft ? () => void stopCurrentTurn() : undefined} disabled={turnActive && !hasMessageDraft ? stoppingTurn || !sessionConnected : !sessionConnected || !!pendingOperation || stoppingTurn || (modelConfigured && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}><Glyph name={turnActive && !hasMessageDraft ? "stop" : !modelConfigured ? "plug" : "return"} size={16}/></button></div></div></div><div className="composer-foot"><input ref={attachmentInputRef} className="visually-hidden" type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加任意文件或图片，也可拖入或粘贴文件" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}>权限</button>}{activeSnapshot&&<SREModeToggle snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive} disabledReason={!sessionConnected?"连接恢复后可切换 SRE 协作。":"本轮运行中，结束后可切换 SRE 协作。"}/> }<div className="composer-status"><div className="model-switch-wrap">
-          <ComposerModelSelect available={modelMenu} modelName={bootstrap?.modelName??null} selection={bootstrap?.modelSelection??undefined} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void switchModel(model)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}}/>
-        </div>{activeSnapshot?.ai && <ReasoningSelector key={sessionId} session={sessionId} modelId={bootstrap?.modelId} disabled={!sessionConnected || turnActive || !!pendingOperation} disabledReason={!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。"} onSaving={saving => setPendingOperation(current => saving ? "reasoning" : current === "reasoning" ? "" : current)}/>}{activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} compact/>}</div></div></form></div>
+          }}/><div className="composer-send-actions">{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止本轮" title="停止本轮，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${turnActive && !hasMessageDraft ? " stop-button" : ""}`} type={turnActive && !hasMessageDraft ? "button" : "submit"} aria-label={turnActive && !hasMessageDraft ? "停止本轮" : !modelConfigured ? "连接模型" : queueMode ? "加入待发送队列" : "发送消息"} title={turnActive && !hasMessageDraft ? "停止本轮" : !modelConfigured ? "连接模型，保留当前草稿" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`} aria-busy={stoppingTurn} onClick={turnActive && !hasMessageDraft ? () => void stopCurrentTurn() : undefined} disabled={turnActive && !hasMessageDraft ? stoppingTurn || !sessionConnected : !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || stoppingTurn || (modelConfigured && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}><Glyph name={turnActive && !hasMessageDraft ? "stop" : !modelConfigured ? "plug" : "return"} size={16}/></button></div></div></div><div className="composer-foot"><input ref={attachmentInputRef} className="visually-hidden" type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加任意文件或图片，也可拖入或粘贴文件" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}>权限</button>}{activeSnapshot&&<SREModeToggle snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive} disabledReason={!sessionConnected?"连接恢复后可切换 SRE 协作。":"本轮运行中，结束后可切换 SRE 协作。"}/> }<div className="composer-status"><div className="model-switch-wrap">
+          <ComposerModelSelect available={modelMenu} modelName={bootstrap?.modelName??null} selection={bootstrap?.modelSelection??undefined} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation||reasoningSaving.size>0} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void switchModel(model)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}} reasoning={activeSnapshot?.ai ? {session:sessionId,modelId:bootstrap?.modelId,disabled:!sessionConnected || turnActive || !!pendingOperation,disabledReason:!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。",onSaving:(saving,savingSession=sessionId) => setReasoningSaving(current=>{const next=new Set(current);if(saving)next.add(savingSession);else next.delete(savingSession);return next;})}:undefined}/>
+        </div>{activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} status={currentSessionStatus} compact/>}</div></div></form></div>
       </div> : <div className="welcome-view"><div className="welcome-content"><Brand/><h1>今天要处理什么问题？</h1><p>从项目开始一段会话。Lake 会把调查、证据和需要你确认的操作留在对话中。</p>{!projectList.length ? <button className="button primary" disabled={!connected} onClick={openProjectDialog}>创建第一个项目<Glyph name="arrow" size={17}/></button> : <button className="button primary" disabled={!connected} onClick={() => openSessionDialog(sidebarProject?.id??projectList[0].id)}>开始新会话<Glyph name="arrow" size={17}/></button>}{!modelConfigured && !booting && <button type="button" className="welcome-connect-model" onClick={() => void openSettings()}><Glyph name="plug" size={15}/>连接模型<Glyph name="arrow" size={14}/></button>}</div></div>}
     </main>
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[
@@ -1438,7 +1429,7 @@ function App() {
     {bulkConfirmation && <BulkNavigationDelete targets={bulkConfirmation} onClose={() => setBulkConfirmation(null)} onProcessed={bulkProcessed} onBusy={busy => setPendingOperation(current => busy ? "bulk-delete" : current === "bulk-delete" ? "" : current)}/>}
     {navigationDelete && <NavigationDelete target={navigationDelete} onClose={()=>setNavigationDelete(null)} onDeleted={async()=>{setResourceTerminalMenu(null);if(navigationDelete.kind==="project" && selectedSession?.projectId===navigationDelete.id)navigate({sessionId:null,resourceId:null});else if(navigationDelete.kind==="resource"&&route.resourceId===navigationDelete.id)navigate({sessionId:route.sessionId,resourceId:null});await refreshCatalog();if(navigationDelete.kind!=="project")await refreshCurrent();}}/>}
     {trashOpen && <NavigationTrash onClose={()=>setTrashOpen(false)} onRestored={async()=>{await refreshCatalog();await refreshCurrent();}}/>}
-    {settingsOpen && <ModelSettings onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined} onProjectMemory={selectedProjectId ? () => {const project=projectList.find(p=>p.id===selectedProjectId);if(project){setSettingsOpen(false);setMemoryProject(project);}} : undefined} projectName={projectList.find(p=>p.id===selectedProjectId)?.name} ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>}
+    {settingsOpen && <ModelSettings onClose={() => setSettingsOpen(false)} onChanged={refreshBootstrap} sendShortcut={sendShortcut} onShortcutChange={setSendShortcut} completionEnabled={completionEnabled} onCompletionEnabledChange={setCompletionEnabled} onSessionConfig={activeSnapshot?.ai && !selectedResource ? () => {setSettingsOpen(false);setAgentOptionsOpen(true);} : undefined} onProjectMemory={selectedProjectId ? () => {const project=projectList.find(p=>p.id===selectedProjectId);if(project){setSettingsOpen(false);setMemoryProject(project);}} : undefined} projectId={sidebarProject?.id} projectName={sidebarProject?.name} ignoreProjectMemory={ignoreProjectMemory} onIgnoreProjectMemoryChange={setIgnoreProjectMemory}/>}
     {importProject && <ResourceImport project={importProject} hexhub={importHexhub} refresh={refreshCatalog} onClose={() => { setImportProject(null); setImportHexhub(false); }} onImported={notify}/>}
     {sshProject && <div className="modal-scrim"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="ssh-title"><div className="modal-header"><span className="modal-icon"><Glyph name="server" size={20}/></span><button className="icon-button" aria-label="关闭" disabled={sshBusy} onClick={() => { setSshProject(null); setSshParent(null); setSshDraft(emptySSH()); }}><Glyph name="close"/></button></div><h2 id="ssh-title">新建资源</h2><p className="modal-description">添加 SSH 主机，供项目会话使用。{sshParent ? `资源会创建在「${sshParentName}」目录下。` : ""}</p><form onSubmit={createSsh}><label className="field-label">类型<AppSelect value={resourceKind} onChange={event => { setResourceKind(event.target.value); setSshDraft(current => ({...current, password: "", passphrase: "", privateKey: undefined, identityFile: undefined})); setServiceSettings(v => ({ ...v, port: event.target.value === "redis" ? 6379 : 5432 })); }}>{[["ssh", "SSH 主机"]].map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}</AppSelect></label>
       <label className="field-label">资源名称<input required maxLength={120} value={sshName} onChange={event => setSshName(event.target.value)} autoFocus/></label>

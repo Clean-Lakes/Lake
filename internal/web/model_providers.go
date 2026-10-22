@@ -699,3 +699,21 @@ func (m *Models) syncLegacyProviderLocked(cfg *ai.Model) {
 	m.saveProviderCatalogLocked(catalog)
 	m.removeProviderKeyLocked(previous)
 }
+
+// Only inspect credentials already referenced by configured providers; never
+// scan arbitrary files. Return a boolean, never secret material or a match.
+func (m *Models) strategyContainsProviderSecret(text string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	catalog, exists := m.readProviderCatalogLocked()
+	if !exists {
+		return false
+	}
+	for _, p := range catalog.Providers {
+		key, ok := m.providerKeyLocked(p.CredentialRef)
+		if ok && key != "" && strings.Contains(text, key) {
+			return true
+		}
+	}
+	return false
+}

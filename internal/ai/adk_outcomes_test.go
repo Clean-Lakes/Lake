@@ -79,6 +79,36 @@ func TestADKUnknownOutcomeRequiresHumanEvidenceAndCannotCrossSessions(t *testing
 	}
 }
 
+func TestHumanResolutionUnblocksNewWriteWithoutReplayingOriginal(t *testing.T) {
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+	s, _ := e.get("case")
+	c := s.state.Config
+	ctx := context.WithValue(context.Background(), adkToolContextKey{}, true)
+	original := Call{ID: "original", Name: "append", Arguments: `{}`}
+	op, err := e.dispatchNativeOperation(ctx, s, c, original, "write", "fixture", "fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, _ := e.adkStore()
+	if err = store.DB.Model(&nativeOperation{}).Where("id = ?", op.ID).Update("status", "unknown").Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.Handle(ctx, "resolveOperation", "case", []byte(js(map[string]any{"id": op.ID, "status": "not_executed", "note": "checked the original fixture; no effect occurred"}))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.dispatchNativeOperation(ctx, s, c, original, "write", "fixture", "fixture"); err == nil {
+		t.Fatal("human resolution enabled replay of the original call")
+	}
+	if _, err = e.dispatchNativeOperation(ctx, s, c, Call{ID: "new", Name: "append", Arguments: `{}`}, "write", "fixture", "fixture"); err != nil {
+		t.Fatal("verified outcome still blocks a new write", err)
+	}
+	var evidence int64
+	store.DB.Model(&nativeEvidence{}).Where("operation_id = ? AND status = ?", op.ID, "resolved_not_executed").Count(&evidence)
+	if evidence != 1 {
+		t.Fatal("human verification did not retain exactly one audit record")
+	}
+}
+
 func TestADKOperationOutcomesOnlyRequireVerificationWhenUnknown(t *testing.T) {
 	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
 	store, err := e.adkStore()

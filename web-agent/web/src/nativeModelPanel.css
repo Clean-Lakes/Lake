@@ -1,0 +1,5 @@
+/* This page exists only inside the macOS native glass panel. Never stack CSS glass on it. */
+html.lake-native-model-panel,html.lake-native-model-panel body,html.lake-native-model-panel #root { background: transparent; min-height: 0; height: auto; overflow: hidden; }
+.lake-native-model-panel .composer-model-anchor { display: contents; }
+.lake-native-model-panel .composer-model-select { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden; margin: 0; }
+.lake-native-model-panel .composer-model-popup { position: relative; inset: auto !important; width: 100% !important; max-height: 420px !important; border: 0; border-radius: 0; background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }

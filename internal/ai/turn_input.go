@@ -6,6 +6,7 @@ import (
 )
 
 type TurnInput struct {
+	StrategyMessageID   string       `json:"-"`
 	SRECoordination     bool         `json:"-"`
 	IgnoreProjectMemory bool         `json:"ignoreProjectMemory,omitempty"`
 	TargetScope         *TargetScope `json:"-"`

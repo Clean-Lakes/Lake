@@ -1,5 +1,7 @@
 # Lake TS Agent v0.0.1 验证记录
 
+历史验收材料：对应 TypeScript 运行时已退役，源码与旧操作指南于 2026-10-20 移除。以下仅记录当时的验证，不构成当前运行入口；当前架构见 [Go ADK 说明](../experiments/adk-runtime.md)。
+
 日期：2026-10-08。分支：`codex/lake-ts-agent-v0.0.1`。发布门禁通过的本地候选版本，未推送；外部 provider 和生产环境未执行验收。
 
 Agent 循环、历史、上下文、预算、专员工单、共享终端和持久运维执行为本分支新实现。运行时不导入旧 Lake/ZCode/Tianshu Agent 内核。

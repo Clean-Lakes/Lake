@@ -23,8 +23,13 @@ const resources=[
  ['redis','缓存 · Redis','redis','会话与热点缓存'],
  ['docker','容器 · app-01','docker','应用容器'],
 ].map(([id,name,kind,description])=>({id,projectId:project.id,name,kind,description,status:'available'})) as Resource[];
+if(new URLSearchParams(location.search).has('mention-types')){
+ resources.forEach(resource=>{resource.name=resource.id==='postgres'?'192.0.2.141-pg':'192.0.2.141';});
+ resources.find(resource=>resource.id==='gateway')!.kind='local';
+}
 if(new URLSearchParams(location.search).has('scrollbar'))resources.push(...Array.from({length:30},(_,i)=>({id:`demo-host-${i}`,projectId:project.id,name:`演示主机 ${i+1}`,kind:'ssh' as const,description:'滚动条验证用虚构资源',status:'available' as const})));
 const sessions=['订单服务发布回滚','网关延迟排查','数据库连接数巡检'].map((title,i)=>({id:`demo-session-${i}`,projectId:project.id,title,status:'completed',resourceIds:resources.map(r=>r.id),createdAt:at(0),updatedAt:at(30-i),icon:'chat',tags:[]})) as WorkSession[];
+if(new URLSearchParams(location.search).has('sidebar-backgrounds'))sessions.push(...Array.from({length:13},(_,i)=>({...sessions[0]!,id:`extra-session-${i}`,title:`演示会话 ${i+4}`,updatedAt:at(10)})));
 const session=sessions[0]!;
 const tree=[{id:'apps',projectId:project.id,parentId:null,kind:'folder',name:'应用服务',resourceId:null,position:0},{id:'data',projectId:project.id,parentId:null,kind:'folder',name:'数据服务',resourceId:null,position:1},...resources.map((r,i)=>({id:'node-'+r.id,projectId:project.id,parentId:['postgres','redis'].includes(r.id)?'data':'apps',kind:'resource',name:r.name,resourceId:r.id,position:i}))];
 const steps=[
@@ -45,6 +50,33 @@ const snapshot={session,resources,resourceTree:tree,messages:[{id:'demo-question
 const model={id:'demo-model',providerId:'demo-provider',providerName:'DeepSeek',modelId:'deepseek-chat',name:'DeepSeek',displayName:'DeepSeek',protocol:'openai'};
 const catalog={projects:[project],sessions,resources,resourceTree:tree,tags:[],terminals:[]};
 const bootstrap={authenticated:true,modelConfigured:true,modelName:'DeepSeek',modelId:model.modelId,modelSelection:model,terminalMode:'pty',supportsImageInput:false,aiRuntime:'go'};
+if(new URLSearchParams(location.search).has('conversation-radii')){
+ const resource=resources.find(value=>value.id==='postgres')!;
+ const label='@'+resource.name;
+ snapshot.messages=[{id:'demo-question',sessionId:session.id,role:'user',text:label+' 帮我核对归档命令。',mentions:[{kind:'resource',id:resource.id,label,start:0,end:label.length,resourceKind:resource.kind}],createdAt:at(23)}];
+ snapshot.sre={enabled:false,tasks:[]};snapshot.ai!.agentRuns=[];
+ const command='cd /d E:\\example && "C:\\Program Files\\7-Zip\\7z.exe" a -t7z -mx=0 -ms=off -mmt=12 "E:\\example-all.7z" *';
+ snapshot.ai!.cards=[{id:'radii-reply',type:'message',status:'completed',at:at(29),content:'可以整目录归档，命令如下：\n\n```bat\n'+command+'\n```\n\n完成后检查归档完整性：\n\n```bat\n7z t E:\\example-all.7z\n```\n\n长命令可以横向滚动，右侧按钮复制完整内容。'}];
+ snapshot.ai!.cardsOffset=0;snapshot.ai!.totalCards=1;
+}
+if(new URLSearchParams(location.search).has('glass-header')){
+ snapshot.ai!.cards=[{id:'glass-reply',type:'message',status:'completed',at:at(29),content:Array.from({length:24},(_,i)=>`第 ${i+1} 项演示检查：服务正常，原始记录保留。\n\n只有标题下方的内容透过玻璃模糊，标题文字保持清晰。`).join('\n\n')}];
+ snapshot.ai!.cardsOffset=0;snapshot.ai!.totalCards=1;
+}
+if(new URLSearchParams(location.search).has('resource-label-colors')){
+ const requests=['检查服务状态','查看本机资源','查询数据库','检查缓存','查看容器'];
+ snapshot.messages=resources.map((resource,index)=>{const label='@'+resource.name;return {id:'label-'+resource.id,sessionId:session.id,role:'user',text:label+' '+requests[index],mentions:[{kind:'resource',id:resource.id,label,start:0,end:label.length,resourceKind:resource.kind}],createdAt:at(23+index)};});
+ snapshot.sre={enabled:false,tasks:[]};snapshot.ai!.agentRuns=[];snapshot.ai!.cards=[];snapshot.ai!.cardsOffset=0;snapshot.ai!.totalCards=0;snapshot.replyTimings=[];
+}
+if(new URLSearchParams(location.search).has('image-messages')){
+ const picture=(id:string,width:number,height:number,color:string)=>({id,name:id+'.svg',width,height,mimeType:'image/svg+xml',base64:'',sizeBytes:0,url:'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="${color}"/><circle cx="${width*.72}" cy="${height*.25}" r="${Math.min(width,height)*.12}" fill="#dceadf"/><path d="M0 ${height*.85} L${width*.4} ${height*.35} L${width} ${height*.9} V${height} H0Z" fill="#55766c"/><text x="${width*.08}" y="${height*.17}" fill="white" font-family="sans-serif" font-size="${Math.min(width,height)*.07}">${width} × ${height}</text></svg>`)});
+ snapshot.messages=[
+  {id:'image-user-1',sessionId:session.id,role:'user',text:'这两张图帮我看一下',images:[picture('横图',1800,1200,'#789b92'),picture('竖图',900,2400,'#7f8eac')],createdAt:at(31)},
+  {id:'image-user-2',sessionId:session.id,role:'user',text:'',images:[picture('小图',48,48,'#8a9b72')],createdAt:at(32)},
+  {id:'text-user',sessionId:session.id,role:'user',text:'普通文字仍保留原来的气泡。',createdAt:at(33)},
+ ];
+ snapshot.ai!.cards=[];snapshot.ai!.agentRuns=[];snapshot.sre={enabled:false,tasks:[]};snapshot.replyTimings=[];
+}
 const sentTagsProof=new URLSearchParams(location.search).has('sent-tags');
 if(sentTagsProof){
  snapshot.messages=[{id:'legacy-tags',sessionId:session.id,role:'user',text:'@订单服务 · order-api和@网关 · edge-01检查状态',createdAt:at(31)},{id:'plain-tags',sessionId:session.id,role:'user',text:'字面文字 @订单服务 · order-api',mentions:[],createdAt:at(32)}];
@@ -75,15 +107,35 @@ window.fetch=async(input,init)=>{
  else if(path.endsWith('/sre/tasks'))value={items:[task],nextCursor:''};
  else if(path.endsWith('/message-queue'))value=snapshot.messageQueue;
  else if(path==='/api/settings/model/available')value={models:[model.name],entries:[model],activeProviderId:model.providerId,activeModelId:model.modelId};
+ else if(path==='/api/settings/skills')value={skills:[],roots:[]};
+ else if(path==='/api/settings/mcp')value={servers:[]};
  else return new Response(JSON.stringify({error:'Not included in the read-only README fixture'}),{status:404,headers:{'Content-Type':'application/json'}});
  return new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
 };
+const demoStreams=new Set<DemoEventSource>();
 class DemoEventSource extends EventTarget {
  static CONNECTING=0;static OPEN=1;static CLOSED=2;readyState=1;
- onopen:((e:Event)=>void)|null=null;onerror=null;onmessage=null;
- constructor(..._args:unknown[]){super();queueMicrotask(()=>this.onopen?.(new Event('open')));}
- close(){this.readyState=2;}
+ onopen:((e:Event)=>void)|null=null;onerror=null;onmessage:((e:MessageEvent<string>)=>void)|null=null;
+ constructor(..._args:unknown[]){super();demoStreams.add(this);queueMicrotask(()=>this.onopen?.(new Event('open')));}
+ close(){this.readyState=2;demoStreams.delete(this);}
 }
 window.EventSource=DemoEventSource as unknown as typeof EventSource;
 window.lakeDesktopUpdates={platform:'macOS · Apple Silicon',command:async()=>({status:'current',currentVersion:'0.3.17',message:'当前已是最新版本',updateAvailable:false})};
 createRoot(document.getElementById('root')!).render(<><App/><WindowsChrome/></>);
+
+// Exercise the real App SSE -> snapshot -> header/composer path with safe local data.
+if(new URLSearchParams(location.search).has('live-context')){
+ snapshot.sre={enabled:false,tasks:[]};
+ snapshot.ai!.context={modelId:model.modelId,window:100000,windowSource:'settings',budget:100000,inputBudget:100000,usedKnown:true,used:5000};
+ const controls=document.createElement('nav');controls.setAttribute('aria-label','上下文实时验收');Object.assign(controls.style,{position:'fixed',top:'80px',right:'20px',zIndex:'100',display:'flex',gap:'8px'});
+ for(const [value,label] of [['investigating','调查中'],['waiting_approval','待确认'],['completed','回复结束'],['failed','需要关注']] as const){
+  const button=document.createElement('button');button.textContent=label;button.onclick=()=>{
+   snapshot.session.status=value;
+   snapshot.ai!.status=value==='investigating'?'running':value;
+   snapshot.ai!.context!.used=(snapshot.ai!.context!.used??0)+5000;
+   snapshot.cursor++;
+   for(const stream of demoStreams)stream.onmessage?.(new MessageEvent('message',{data:JSON.stringify({sessionId:session.id,type:'session',seq:snapshot.cursor})}));
+  };controls.appendChild(button);
+ }
+ document.body.appendChild(controls);
+}

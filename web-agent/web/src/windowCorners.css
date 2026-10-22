@@ -1,0 +1,134 @@
+/* Major surfaces share one visible corner contour, not just a CSS radius value.
+   Both dimensions must fit two complete corners to prevent browser scaling. */
+:root :is(
+ .sidebar.workspace-navigation .project-switcher,
+ .sidebar.workspace-navigation .navigation-search,
+ .sidebar.workspace-navigation .session-nav-row,
+ .sidebar.workspace-navigation .resource-row,
+ .sidebar.workspace-navigation .resource-folder-toggle,
+ .sidebar.workspace-navigation .resource-tree-row,
+ .sidebar.workspace-navigation .resource-folder-row,
+ .sidebar.workspace-navigation .resource-nav-row,
+ .sidebar.workspace-navigation .sidebar-settings,
+ .workspace-utilities-trigger,
+ .workspace.has-floating-header > .workspace-header,
+ .composer-input,
+ .ai-role-user:not(.has-message-images),
+ .ai-role-user.has-message-images > .user-message-text,
+ .markdown-code-block,
+ .composer-mentions.mention-menu,
+ .composer-mentions .mention-item
+) {
+ min-width:calc(var(--window-corner-radius,var(--radius-window)) * 2);
+ min-height:calc(var(--window-corner-radius,var(--radius-window)) * 2);
+ border-radius:var(--window-corner-radius,var(--radius-window));
+ corner-shape:var(--corner-window);
+}
+
+/* Compact desktop navigation scales the window curve without clipping its corners. */
+:root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row) {
+ --window-corner-radius:18px;
+ --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
+ --window-corner-stroke-slice:18;
+}
+@media(pointer:coarse) {
+ :root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row) {
+  min-height:44px;
+  --window-corner-radius:var(--radius-window);
+  --window-corner-stroke-image:url('/window-corner-stroke.svg');
+  --window-corner-stroke-slice:22;
+ }
+}
+
+/* Compact badges retain their size and use the same curve at a smaller scale. */
+:root :is(.session-state-badge,.composer-reference-token,.message-reference-token) {
+ --window-corner-radius:8px;
+ --window-corner-stroke-image:url('/window-corner-stroke-small.svg');
+ --window-corner-stroke-slice:8;
+ border-radius:var(--window-corner-radius);
+ corner-shape:var(--corner-window);
+}
+:root .composer-reference-token { --window-corner-radius:var(--radius-composer-reference); }
+:root .message-reference-token { --window-corner-radius:var(--radius-message-reference); }
+
+/* WKWebView versions without corner-shape use the same contour as local nine-slice
+   masks. Background and border remain inherited so hover, focus and theme updates
+   are native CSS changes; no observer or per-frame JavaScript is needed. */
+:root.lake-corner-fallback :is(
+ .sidebar.workspace-navigation .project-switcher,
+ .sidebar.workspace-navigation .navigation-search,
+ .sidebar.workspace-navigation .session-nav-row,
+ .sidebar.workspace-navigation .resource-row,
+ .sidebar.workspace-navigation .resource-folder-toggle,
+ .sidebar.workspace-navigation .resource-tree-row,
+ .sidebar.workspace-navigation .resource-folder-row,
+ .sidebar.workspace-navigation .resource-nav-row,
+ .sidebar.workspace-navigation .sidebar-settings,
+ .workspace-utilities-trigger,
+ .workspace.has-floating-header > .workspace-header,
+ .composer-input,
+ .ai-role-user:not(.has-message-images),
+ .ai-role-user.has-message-images > .user-message-text,
+ .markdown-code-block,
+ .composer-mentions.mention-menu,
+ .composer-mentions .mention-item,
+ .session-state-badge,
+ .composer-reference-token,
+ .message-reference-token
+) {
+ --window-corner-inset:0px;
+ isolation:isolate;
+ -webkit-background-clip:text;
+ background-clip:text;
+ border-image:linear-gradient(transparent,transparent) 1;
+ overflow:visible;
+ &::before,&::after {
+  content:"";
+  position:absolute;
+  inset:var(--window-corner-tag-inset,var(--window-corner-inset,0px));
+  z-index:-1;
+  box-sizing:border-box;
+  pointer-events:none;
+  border-radius:0;
+ }
+ &::before {
+  background:inherit;
+  -webkit-background-clip:border-box;
+  background-clip:border-box;
+  -webkit-mask-box-image:url('/window-corner-fill.svg') 22 fill / var(--window-corner-radius,var(--radius-window)) / 0 stretch;
+ }
+ &::after {
+  border-color:inherit;
+  border-style:inherit;
+  border-width:var(--window-corner-radius,var(--radius-window));
+  -webkit-mask-box-image:var(--window-corner-stroke-image,url('/window-corner-stroke.svg')) var(--window-corner-stroke-slice,22) fill / var(--window-corner-radius,var(--radius-window)) / 0 stretch;
+ }
+}
+:root.lake-corner-fallback :is(
+ .sidebar.workspace-navigation .navigation-search,
+ .workspace-utilities-trigger,
+ .workspace.has-floating-header > .workspace-header,
+ .composer-input,
+ .markdown-code-block,
+ .composer-mentions.mention-menu
+) { --window-corner-inset:-1px; }
+:root.lake-corner-fallback :is(
+ .sidebar.workspace-navigation .project-switcher,
+ .sidebar.workspace-navigation .navigation-search,
+ .sidebar.workspace-navigation .session-nav-row,
+ .sidebar.workspace-navigation .resource-row,
+ .sidebar.workspace-navigation .resource-folder-toggle,
+ .sidebar.workspace-navigation .resource-tree-row,
+ .sidebar.workspace-navigation .resource-folder-row,
+ .sidebar.workspace-navigation .resource-nav-row,
+ .sidebar.workspace-navigation .sidebar-settings,
+ .workspace-utilities-trigger,
+ .composer-input,
+ .ai-role-user:not(.has-message-images),
+ .ai-role-user.has-message-images > .user-message-text,
+ .markdown-code-block,
+ .composer-mentions .mention-item,
+ .session-state-badge,
+ .composer-reference-token,
+ .message-reference-token
+) { position:relative; }

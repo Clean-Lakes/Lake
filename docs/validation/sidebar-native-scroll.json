@@ -1,0 +1,15 @@
+{
+  "initialTop": 0,
+  "inputDelta": 288,
+  "events": "[{\"delta\":288,\"mode\":0,\"prevented\":false,\"before\":288,\"after\":288}]",
+  "position": {
+    "range": 860,
+    "top": 288
+  },
+  "thumbValue": "288",
+  "end": {
+    "top": 860,
+    "max": 860
+  },
+  "tests": 333
+}

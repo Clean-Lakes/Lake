@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-20",
+  "design": "工作区抬头",
+  "changes": [
+    "Muted 16px Lake brand; unboxed 11px DEV label aligned right",
+    "Primary 16px project title, existing project selector and separate more menu",
+    "Persistent 35px rounded search with shortcut, clear control and separator before sessions"
+  ],
+  "checks": {
+    "frontend": "314 tests passed; TypeScript/Vite build passed",
+    "nativeBadgeCompatibility": "Actual later-injected native badge rule is overridden by scoped workspace CSS; computed brand/project/DEV sizes are 16/16/11px and badge border is 0",
+    "interactions": "Project switching both ways, project actions, Cmd+K, filtering and clearing search passed in the real App fixture",
+    "darkAndLongNames": "Long project name ellipsizes without header overflow or collision with arrow and more button",
+    "mobile": "390px window: navigation opens/closes, DEV reserves 58px for close button; no header overflow",
+    "installation": "Signed scripts/build_lake_desktop.sh --dev --install succeeded; installed branch and binary hash verified",
+    "activation": "Native UI control timed out; running Dev needs normal quit and reopen",
+    "projectChevronAlignment": "Arrow follows both short project names with a 9px gap; long names ellipsize with the same gap and 6px clearance before the separate more button; no overflow. Verified project switching both ways, dark long-name fixture, TypeScript/Vite build and signed Dev install.",
+    "projectTriggerBackground": "Closed, hovered and expanded project trigger stays transparent in light and dark themes. Escape restores a visible 1px keyboard focus outline; selected menu item retains its checkmark and background. Signed Dev build and install passed.",
+    "searchCapsule": "Actual search and workspace button both have 20px radius, 253px width and edges at 13/266px in a 280px sidebar. Search filtering and clear verified; signed Dev build/install passed."
+  },
+  "fixture": "web-agent/web/test/fixtures/workspace-heading.html",
+  "screenshot": "workspace-heading.png",
+  "menuScreenshot": "workspace-project-menu.png",
+  "searchScreenshot": "search-workspace-capsule.png"
+}

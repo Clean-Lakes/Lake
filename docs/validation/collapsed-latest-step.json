@@ -1,0 +1,78 @@
+{
+  "before": [
+    {
+      "nodeId": 1,
+      "text": "用时 59分钟 23秒 · 正在执行工具…",
+      "name": "status-text-sweep",
+      "phase": "-104.427% 0px",
+      "fill": "rgba(0, 0, 0, 0)",
+      "animations": [
+        {
+          "id": 1,
+          "state": "running",
+          "start": 177.9960000421852,
+          "time": 73683.20399995781
+        }
+      ]
+    },
+    {
+      "nodeId": 5,
+      "text": "执行 SQL · 演示主机",
+      "name": "status-text-sweep",
+      "phase": "115.562% 0px",
+      "fill": "rgba(0, 0, 0, 0)",
+      "animations": [
+        {
+          "id": 4,
+          "state": "running",
+          "start": 45027.916999999434,
+          "time": 28833.283000000563
+        }
+      ]
+    }
+  ],
+  "after": [
+    {
+      "nodeId": 1,
+      "text": "用时 59分钟 38秒 · 正在执行工具…",
+      "name": "status-text-sweep",
+      "phase": "97.7995% 0px",
+      "fill": "rgba(0, 0, 0, 0)",
+      "animations": [
+        {
+          "id": 1,
+          "state": "running",
+          "start": 177.9960000421852,
+          "time": 88366.50399995781
+        }
+      ]
+    },
+    {
+      "nodeId": 5,
+      "text": "检查进程与连接 · 演示主机 B",
+      "name": "status-text-sweep",
+      "phase": "77.7889% 0px",
+      "fill": "rgba(0, 0, 0, 0)",
+      "animations": [
+        {
+          "id": 4,
+          "state": "running",
+          "start": 45027.916999999434,
+          "time": 43516.583000000566
+        }
+      ]
+    }
+  ],
+  "narrow": {
+    "viewport": 390,
+    "headerWidth": 326,
+    "scrollWidth": 326,
+    "summaryOverflow": "ellipsis"
+  },
+  "checks": [
+    "File -> SQL -> shell step and semantic icon update",
+    "Latest step follows A -> B -> A chronology, independent of grouped display order",
+    "Click expand and Space collapse preserve all three original operations",
+    "Header and latest-step DOM/animation identities remain stable across SSE update"
+  ]
+}

@@ -1,0 +1,29 @@
+[
+  {
+    "animation": "workspace-header-sweep",
+    "background": "linear-gradient(105deg, rgba(0, 0, 0, 0) 20%, color(srgb 0.207843 0.407843 0.647059 / 0.1) 36%, color(srgb 0.207843 0.407843 0.647059 / 0.24) 50%, color(srgb 0.207843 0.407843 0.647059 / 0.1) 64%, rgba(0, 0, 0, 0) 80%)",
+    "base": "#555555",
+    "class": "workspace-header-sweep",
+    "duration": "2.8s",
+    "highlight": "",
+    "text": ""
+  },
+  {
+    "animation": "status-text-sweep",
+    "background": "linear-gradient(105deg, rgb(115, 115, 115) 32%, rgb(34, 34, 34) 44%, rgb(34, 34, 34) 56%, rgb(115, 115, 115) 68%)",
+    "base": "#737373",
+    "class": "status-text status-text--active ",
+    "duration": "1.8s",
+    "highlight": "#222222",
+    "text": "用时 58分钟 22秒 · 正在执行工具…"
+  },
+  {
+    "animation": "status-text-sweep",
+    "background": "linear-gradient(105deg, rgb(115, 115, 115) 32%, rgb(34, 34, 34) 44%, rgb(34, 34, 34) 56%, rgb(115, 115, 115) 68%)",
+    "base": "#737373",
+    "class": "status-text status-text--active turn-current-step-label",
+    "duration": "1.8s",
+    "highlight": "#222222",
+    "text": "检查系统与资源 · 演示主机"
+  }
+]

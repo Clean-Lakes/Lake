@@ -77,3 +77,25 @@ test("paginated history identifies an incomplete turn instead of claiming full t
   const html = renderToStaticMarkup(createElement(FileChanges, { cards: [diff("1", "/tmp/a", "old", "new")], resources: [], partial: true }));
   assert.ok(html.includes("1 个文件已更改（部分记录）"));
 });
+
+
+test('conversation file links and totals wait for the turn end while audit details remain available',()=>{
+ const user={id:'u',role:'user',text:'修改配置',createdAt:'2026-10-11T00:00:00Z'};
+ const snapshot={session:{id:'s'},messages:[user],actions:[],resources:[],ai:{session:'s',status:'running',cards:[diff('1','/tmp/PLAN.md','old','new')],cardsOffset:0,totalCards:1}} as SessionSnapshot;
+ for(const status of ['running','waiting_approval']){
+  snapshot.ai!.status=status;
+  const live=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+  assert.ok(!live.includes('turn-files')&&!live.includes('本轮文件'));
+  const audit=renderToStaticMarkup(createElement(AITranscript,{snapshot,mode:'activity'}));
+  assert.ok(audit.includes('turn-files')&&audit.includes('PLAN.md'));
+ }
+ snapshot.ai!.status='completed';
+ snapshot.replyTimings=[{messageId:'u',status:'running',startedAt:user.createdAt,finishedAt:''}];
+ assert.ok(!renderToStaticMarkup(createElement(AITranscript,{snapshot})).includes('turn-files'),'wait for the whole turn even if engine completion arrives first');
+ for(const status of ['completed','failed','cancelled','interrupted'] as const){
+  snapshot.replyTimings=[{messageId:'u',status,startedAt:user.createdAt,finishedAt:'2026-10-11T00:01:00Z'}];
+  const ended=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+  assert.ok(ended.includes('turn-files')&&ended.includes('PLAN.md')&&ended.includes('1 个文件已更改'),status);
+  assert.ok(!ended.includes('reply-arrival'),'restored history never replays the arrival');
+ }
+});

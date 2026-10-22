@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [master]
-    paths: ['internal/ai/**', 'internal/agent/**', 'internal/web/**', 'go.mod', 'go.sum', '.github/workflows/adk-runtime.yml']
+    paths: ['internal/ai/**', 'internal/agent/**', 'internal/web/**', 'internal/strategy/**', 'scripts/verify_strategy_learning.py', 'go.mod', 'go.sum', '.github/workflows/adk-runtime.yml']
 permissions:
   contents: read
 jobs:
@@ -42,6 +42,15 @@ jobs:
         run: go test ./internal/agent/... -count=1 -timeout=3m
       - name: ADK integration, crashes, migration and SRE recovery
         run: go test ./internal/ai ./internal/web -run 'TestADK|TestSREScheduler|TestSREPlanOnly|TestSRERestart|TestSREFullSpecialist' -count=1 -timeout=4m
+      - name: Strategy settings, assets, crashes, bounded optimization and readonly correction
+        run: python scripts/verify_strategy_learning.py --report "${{ runner.temp }}/strategy-learning.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy-learning-${{ runner.os }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/strategy-learning.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Compile native client backend
         run: go build -o lake-acceptance ./cmd/lake
       - name: Full Linux regression

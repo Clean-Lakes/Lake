@@ -22,24 +22,58 @@ type connection struct {
 	fingerprint string
 	cancel      context.CancelFunc
 }
+
+// A connection attempt is shared only by callers of the same server revision.
+// Its result is published by closing done; no network work holds Manager.mu.
+type connectionAttempt struct {
+	fingerprint string
+	done        chan struct{}
+	cancel      context.CancelFunc
+	session     *mcp.ClientSession
+	err         error
+}
+
 type Manager struct {
 	Store       *Store
 	mu          sync.Mutex
 	connections map[string]connection
+	pending     map[string]*connectionAttempt
+	retiring    sync.WaitGroup
 	closed      bool
 }
 
 func (c connection) close() { c.cancel(); _ = c.session.Close() }
 func NewManager(store *Store) *Manager {
-	return &Manager{Store: store, connections: map[string]connection{}}
+	return &Manager{Store: store, connections: map[string]connection{}, pending: map[string]*connectionAttempt{}}
 }
 func (m *Manager) Invalidate(id string) {
 	m.mu.Lock()
 	v, ok := m.connections[id]
 	delete(m.connections, id)
+	attempt := m.pending[id]
+	delete(m.pending, id)
 	m.mu.Unlock()
+	if attempt != nil {
+		attempt.cancel()
+	}
 	if ok {
 		v.close()
+	}
+}
+
+// A failed request may belong to a connection replaced while it was in flight.
+// It must not disconnect the replacement or cancel its handshake.
+func (m *Manager) invalidateSession(id string, session *mcp.ClientSession) {
+	m.mu.Lock()
+	old, ok := m.connections[id]
+	if ok && old.session == session {
+		delete(m.connections, id)
+	} else {
+		ok = false
+	}
+	m.mu.Unlock()
+	if ok {
+		old.close()
 	}
 }
 func (m *Manager) Close() {
@@ -47,13 +81,19 @@ func (m *Manager) Close() {
 	m.closed = true
 	old := m.connections
 	m.connections = map[string]connection{}
+	pending := m.pending
+	m.pending = map[string]*connectionAttempt{}
 	m.mu.Unlock()
+	for _, attempt := range pending {
+		attempt.cancel()
+	}
 	var wg sync.WaitGroup
 	for _, v := range old {
 		wg.Add(1)
 		go func(c connection) { defer wg.Done(); c.close() }(v)
 	}
 	wg.Wait()
+	m.retiring.Wait()
 }
 
 type headerTransport struct {
@@ -97,7 +137,7 @@ func connect(ctx context.Context, c Server) (*mcp.ClientSession, context.CancelF
 	client := mcp.NewClient(&mcp.Implementation{Name: "Lake", Version: "1"}, &mcp.ClientOptions{Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	lifetime, cancel := context.WithCancel(context.Background())
 	stop := context.AfterFunc(ctx, cancel)
-	session, err := client.Connect(lifetime, transport, nil)
+	session, err := client.Connect(lifetime, transport, &mcp.ClientSessionOptions{ProtocolVersion: c.ProtocolVersion})
 	stop()
 	if err != nil || ctx.Err() != nil {
 		cancel()
@@ -112,24 +152,72 @@ func (m *Manager) session(ctx context.Context, c Server) (*mcp.ClientSession, er
 	if !c.Enabled {
 		return nil, errors.New("MCP 服务已停用")
 	}
-	fingerprint, _ := json.Marshal(c)
+	fingerprint := ServerRevision(c)
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.closed {
+		m.mu.Unlock()
 		return nil, errors.New("MCP 已关闭")
 	}
-	if old, ok := m.connections[c.ID]; ok {
-		if old.fingerprint == string(fingerprint) {
-			return old.session, nil
-		}
-		old.close()
-		delete(m.connections, c.ID)
+	old, hasOld := m.connections[c.ID]
+	if hasOld && old.fingerprint == fingerprint {
+		m.mu.Unlock()
+		return old.session, nil
 	}
-	session, cancel, err := connect(ctx, c)
+	attempt := m.pending[c.ID]
+	if attempt != nil && attempt.fingerprint == fingerprint {
+		m.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-attempt.done:
+			return attempt.session, attempt.err
+		}
+	}
+	// Reconfiguration can cancel an old handshake without waiting for it to
+	// finish. A late result cannot replace the newer revision in the cache.
+	delete(m.connections, c.ID)
+	dialCtx, cancel := context.WithCancel(ctx)
+	next := &connectionAttempt{fingerprint: fingerprint, done: make(chan struct{}), cancel: cancel}
+	m.pending[c.ID] = next
+	// Register before unlocking so Close cannot miss a retiring connection.
+	if hasOld {
+		m.retiring.Add(1)
+	}
+	m.mu.Unlock()
+	if attempt != nil {
+		attempt.cancel()
+	}
+	if hasOld {
+		// SDK Close gracefully waits for in-flight calls. Retire the old session
+		// without delaying the new handshake or replaying those calls.
+		go func() { defer m.retiring.Done(); old.close() }()
+	}
+	session, closeLifetime, err := connect(dialCtx, c)
+	cancel()
+	m.mu.Lock()
+	if m.closed || m.pending[c.ID] != next {
+		err = errors.New("MCP 已关闭或配置已变更，请重新发起调用")
+	} else {
+		delete(m.pending, c.ID)
+		if err == nil {
+			m.connections[c.ID] = connection{session, fingerprint, closeLifetime}
+		}
+	}
+	if err == nil {
+		next.session = session
+	}
+	next.err = err
+	close(next.done)
+	m.mu.Unlock()
 	if err != nil {
+		if closeLifetime != nil {
+			closeLifetime()
+		}
+		if session != nil {
+			_ = session.Close()
+		}
 		return nil, err
 	}
-	m.connections[c.ID] = connection{session, string(fingerprint), cancel}
 	return session, nil
 }
 func list(ctx context.Context, session *mcp.ClientSession) ([]map[string]any, error) {
@@ -146,12 +234,16 @@ func list(ctx context.Context, session *mcp.ClientSession) ([]map[string]any, er
 	return rows, nil
 }
 func (m *Manager) Tools(ctx context.Context, id string, test bool) (any, error) {
-	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
-	defer cancel()
 	c, err := m.Store.FindServer(id)
 	if err != nil {
 		return nil, err
 	}
+	timeout := 12 * time.Second
+	if c.TimeoutMS > 0 {
+		timeout = time.Duration(c.TimeoutMS) * time.Millisecond
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	var session *mcp.ClientSession
 	if test {
 		var closeLifetime context.CancelFunc
@@ -169,26 +261,30 @@ func (m *Manager) Tools(ctx context.Context, id string, test bool) (any, error) 
 	rows, err := list(ctx, session)
 	if err != nil {
 		if !test {
-			m.Invalidate(id)
+			m.invalidateSession(id, session)
 		}
 		return nil, err
 	}
 	return scrub(map[string]any{"serverId": id, "serverName": c.Name, "tools": rows, "count": len(rows)}, c), nil
 }
 func (m *Manager) Call(ctx context.Context, id, name string, args map[string]any) (any, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	c, err := m.Store.FindServer(id)
 	if err != nil {
 		return nil, err
 	}
+	timeout := 60 * time.Second
+	if c.TimeoutMS > 0 {
+		timeout = time.Duration(c.TimeoutMS) * time.Millisecond
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	session, err := m.session(ctx, c)
 	if err != nil {
 		return nil, err
 	}
 	rows, err := list(ctx, session)
 	if err != nil {
-		m.Invalidate(id)
+		m.invalidateSession(id, session)
 		return nil, err
 	}
 	found := false
@@ -203,7 +299,7 @@ func (m *Manager) Call(ctx context.Context, id, name string, args map[string]any
 	}
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
 	if err != nil {
-		m.Invalidate(id)
+		m.invalidateSession(id, session)
 		return nil, errors.New("MCP 工具调用失败或已取消")
 	}
 	raw, err := json.Marshal(result)

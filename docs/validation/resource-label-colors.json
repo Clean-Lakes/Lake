@@ -1,0 +1,182 @@
+{
+  "light": [
+    {
+      "background": "rgb(239, 245, 253)",
+      "foreground": "rgb(53, 104, 165)",
+      "icon": "lucide lucide-server resource-kind-icon kind-ssh",
+      "id": "resource:order-api",
+      "contrast": 5.21
+    },
+    {
+      "background": "rgb(238, 238, 238)",
+      "foreground": "rgb(85, 85, 85)",
+      "icon": "lucide lucide-monitor resource-kind-icon kind-local",
+      "id": "resource:gateway",
+      "contrast": 6.43
+    },
+    {
+      "background": "rgb(236, 247, 242)",
+      "foreground": "rgb(36, 117, 97)",
+      "icon": "lucide lucide-database resource-kind-icon kind-database",
+      "id": "resource:postgres",
+      "contrast": 5.05
+    },
+    {
+      "background": "rgb(255, 248, 235)",
+      "foreground": "rgb(153, 99, 19)",
+      "icon": "lucide lucide-database resource-kind-icon kind-redis",
+      "id": "resource:redis",
+      "contrast": 4.79
+    },
+    {
+      "background": "rgb(238, 232, 252)",
+      "foreground": "rgb(105, 65, 198)",
+      "icon": "lucide lucide-container resource-kind-icon kind-docker",
+      "id": "resource:docker",
+      "contrast": 5.54
+    },
+    {
+      "background": "rgb(239, 245, 253)",
+      "foreground": "rgb(53, 104, 165)",
+      "icon": "lucide lucide-server resource-kind-icon kind-ssh",
+      "id": "resource:order-api",
+      "contrast": 5.21
+    },
+    {
+      "background": "rgb(238, 238, 238)",
+      "foreground": "rgb(85, 85, 85)",
+      "icon": "lucide lucide-monitor resource-kind-icon kind-local",
+      "id": "resource:gateway",
+      "contrast": 6.43
+    },
+    {
+      "background": "rgb(236, 247, 242)",
+      "foreground": "rgb(36, 117, 97)",
+      "icon": "lucide lucide-database resource-kind-icon kind-database",
+      "id": "resource:postgres",
+      "contrast": 5.05
+    },
+    {
+      "background": "rgb(255, 248, 235)",
+      "foreground": "rgb(153, 99, 19)",
+      "icon": "lucide lucide-database resource-kind-icon kind-redis",
+      "id": "resource:redis",
+      "contrast": 4.79
+    },
+    {
+      "background": "rgb(238, 232, 252)",
+      "foreground": "rgb(105, 65, 198)",
+      "icon": "lucide lucide-container resource-kind-icon kind-docker",
+      "id": "resource:docker",
+      "contrast": 5.54
+    }
+  ],
+  "dark": [
+    {
+      "background": "rgb(32, 43, 61)",
+      "bounds": {
+        "right": 254.2109375,
+        "x": 161.40625
+      },
+      "foreground": "rgb(155, 188, 232)",
+      "id": "resource:order-api",
+      "contrast": 7.29
+    },
+    {
+      "background": "rgb(44, 44, 44)",
+      "bounds": {
+        "right": 254.2109375,
+        "x": 161.40625
+      },
+      "foreground": "rgb(204, 204, 204)",
+      "id": "resource:gateway",
+      "contrast": 8.7
+    },
+    {
+      "background": "rgb(26, 48, 40)",
+      "bounds": {
+        "right": 268.2109375,
+        "x": 155.109375
+      },
+      "foreground": "rgb(135, 203, 179)",
+      "id": "resource:postgres",
+      "contrast": 7.5
+    },
+    {
+      "background": "rgb(45, 38, 26)",
+      "bounds": {
+        "right": 282.2109375,
+        "x": 189.40625
+      },
+      "foreground": "rgb(216, 173, 99)",
+      "id": "resource:redis",
+      "contrast": 7.18
+    },
+    {
+      "background": "rgb(45, 36, 66)",
+      "bounds": {
+        "right": 282.2109375,
+        "x": 189.40625
+      },
+      "foreground": "rgb(180, 154, 233)",
+      "id": "resource:docker",
+      "contrast": 6.06
+    },
+    {
+      "background": "rgb(32, 43, 61)",
+      "bounds": {
+        "right": 161.8046875,
+        "x": 47
+      },
+      "foreground": "rgb(155, 188, 232)",
+      "id": "resource:order-api",
+      "contrast": 7.29
+    },
+    {
+      "background": "rgb(44, 44, 44)",
+      "bounds": {
+        "right": 280.609375,
+        "x": 165.8046875
+      },
+      "foreground": "rgb(204, 204, 204)",
+      "id": "resource:gateway",
+      "contrast": 8.7
+    },
+    {
+      "background": "rgb(26, 48, 40)",
+      "bounds": {
+        "right": 182.1015625,
+        "x": 47
+      },
+      "foreground": "rgb(135, 203, 179)",
+      "id": "resource:postgres",
+      "contrast": 7.5
+    },
+    {
+      "background": "rgb(45, 38, 26)",
+      "bounds": {
+        "right": 300.90625,
+        "x": 186.1015625
+      },
+      "foreground": "rgb(216, 173, 99)",
+      "id": "resource:redis",
+      "contrast": 7.18
+    },
+    {
+      "background": "rgb(45, 36, 66)",
+      "bounds": {
+        "right": 161.8046875,
+        "x": 47
+      },
+      "foreground": "rgb(180, 154, 233)",
+      "id": "resource:docker",
+      "contrast": 6.06
+    }
+  ],
+  "narrow": {
+    "bodyWidth": 390,
+    "inputScrollWidth": 260,
+    "inputWidth": 260,
+    "viewport": 390
+  }
+}
