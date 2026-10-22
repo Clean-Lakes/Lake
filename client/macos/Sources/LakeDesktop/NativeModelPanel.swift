@@ -38,6 +38,13 @@ import LakeDesktopCore
         return NSFont(descriptor: descriptor, size: 13) ?? base
     }()
 
+    static let selectedFont: NSFont = {
+        let descriptor = font.fontDescriptor.addingAttributes([
+            .variation: [NSNumber(value: 0x77676874): NSNumber(value: 500)]
+        ])
+        return NSFont(descriptor: descriptor, size: 13) ?? font
+    }()
+
     static func foreground(_ appearance: NSAppearance) -> NSColor {
         if appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua {
             return NSColor(white: 223.0 / 255.0, alpha: 1)
@@ -62,7 +69,7 @@ import LakeDesktopCore
     override func draw(_ dirtyRect: NSRect) {
         if hovered { NSColor.unemphasizedSelectedContentBackgroundColor.setFill(); NSBezierPath(roundedRect: bounds, xRadius: 9, yRadius: 9).fill() }
         let paragraph = NSMutableParagraphStyle(); paragraph.lineBreakMode = .byTruncatingTail
-        (title as NSString).draw(in: NSRect(x: 10, y: (bounds.height - 17) / 2, width: bounds.width - 40, height: 17), withAttributes: [.font: ModelMenuTypography.font, .foregroundColor: ModelMenuTypography.foreground(effectiveAppearance), .paragraphStyle: paragraph])
+        (title as NSString).draw(in: NSRect(x: 10, y: (bounds.height - 17) / 2, width: bounds.width - 40, height: 17), withAttributes: [.font: checked ? ModelMenuTypography.selectedFont : ModelMenuTypography.font, .foregroundColor: ModelMenuTypography.foreground(effectiveAppearance), .paragraphStyle: paragraph])
         if checked, let image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)?.withSymbolConfiguration(.init(paletteColors: [.labelColor])) { image.draw(in: NSRect(x: bounds.width - 24, y: (bounds.height - 13) / 2, width: 13, height: 13)) }
     }
 }
