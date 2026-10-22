@@ -13,11 +13,11 @@
 .session-plans-page-header{margin-bottom:28px}
 .session-plans-page-header>.button{display:inline-flex;align-items:center;gap:6px;margin-bottom:24px}
 .session-plans-page-header>.button>svg{transform:rotate(180deg)}
-.session-plans-page-header h1{font-size:24px;font-weight:var(--font-weight-medium);line-height:1.4;margin:0;outline:none}
+.session-plans-page-header h1{font-size:24px;font-weight:var(--font-weight-semibold);line-height:1.4;margin:0;outline:none}
 .session-plans-page-header>p{font-size:14px;color:var(--text-muted);line-height:1.6;overflow-wrap:anywhere;margin:7px 0 0}
 .plan-list{display:flex;flex-direction:column;min-width:0;font-size:14px;gap:0}
 .plan-list-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}
-.plan-list-header h2{font-size:18px;font-weight:var(--font-weight-medium);margin:0 0 6px}
+.plan-list-header h2{font-size:18px;font-weight:var(--font-weight-semibold);margin:0 0 6px}
 .plan-list-header p,.plan-list-loading{font-size:13px;color:var(--text-muted);margin:0;line-height:1.6}
 .plan-catalog{list-style:none;padding:0;margin:0;border-top:1px solid var(--border)}
 .plan-catalog>li{border-bottom:1px solid var(--border)}

@@ -63,7 +63,7 @@
 .provider-text-button { border: 0; background: none; color: var(--text-secondary); padding: 6px 0; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .provider-text-button:hover { color: var(--foreground); }
 .provider-model-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 24px 0 12px; }
-.provider-model-heading h4 { margin: 0; font-size: 12px; font-weight:var(--font-weight-medium); color: var(--text-secondary); }
+.provider-model-heading h4 { margin: 0; font-size: 12px; font-weight:var(--font-weight-semibold); color: var(--text-secondary); }
 .provider-model-heading small { font-size: 11px; margin-left: 5px; }
 .provider-model-heading>div { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .provider-model-list { border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }

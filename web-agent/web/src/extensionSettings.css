@@ -24,7 +24,7 @@
 .extension-actions {display:flex;align-items:center;gap:10px;margin-top:24px;padding-top:16px;border-top:1px solid var(--border);}
 .extension-actions > span {flex:1;}
 .extension-tools {margin-top:20px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-panel);}
-.extension-tools h4 {display:flex;align-items:center;gap:7px;margin:0 0 9px;font-size:12px;color:var(--success);font-weight:var(--font-weight-medium);}
+.extension-tools h4 {display:flex;align-items:center;gap:7px;margin:0 0 9px;font-size:12px;color:var(--success);font-weight:var(--font-weight-semibold);}
 .extension-tools details {font-size:12px;padding:10px 0;border-top:1px solid var(--border);}
 .extension-tools summary {cursor:pointer;overflow-wrap:anywhere;}
 .extension-tools pre {max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text-secondary);font-size:11px;}
