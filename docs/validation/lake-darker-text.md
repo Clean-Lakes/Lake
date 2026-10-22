@@ -1,5 +1,7 @@
 # Darker workbench text — local Dev validation
 
+Final parameter values and full audit: [Codex typography parity](lake-typography-parity.md). The later reference-based audit supersedes the earlier 500-weight experiments below.
+
 Date: 2026-10-22. Feature commit: `8b6eb11d`; base: origin/develop `48c08c6d`.
 
 Light primary text changes from #222222 to #0d0d0d; secondary text changes from #555555 to #4a4a4a. Sidebar session, resource and folder names use the shared primary text token. Muted metadata, font family/size/weight and dark-theme palette retain their semantics.
