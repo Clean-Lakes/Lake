@@ -3,7 +3,7 @@
 .sidebar.workspace-navigation .sidebar-brand-row { position: relative; padding: 8px 18px 21px; min-height: 52px; }
 .sidebar.workspace-navigation .brand { gap: 7px; }
 .sidebar.workspace-navigation .brand > strong { font-size: 16px; font-weight:var(--font-weight-medium); letter-spacing: -.4px; color: var(--text-muted); }
-.lake-development .sidebar.workspace-navigation .sidebar-brand-row .brand::after { content: "DEV"; position: absolute; top: 10px; right: 18px; border: 0; padding: 0; border-radius: 0; font:var(--font-weight-ui) var(--font-size-ui)/20px var(--font-ui); letter-spacing: 1.2px; color: var(--text-muted); }
+.lake-development .sidebar.workspace-navigation .sidebar-brand-row .brand::after { content: "Dev"; position: static; display: grid; place-items: center; box-sizing: border-box; min-width: 30px; height: 18px; padding: 0 6px; border: 0; border-radius: var(--radius-settings-badge); background: var(--surface-hover); font:var(--font-weight-ui) var(--font-size-badge)/18px var(--font-ui); letter-spacing: 0; color: var(--text-muted); }
 .sidebar.workspace-navigation .sidebar-project-picker { margin: 0 18px 11px; padding: 0; min-height: 36px; border: 0; background: transparent; gap: 6px; }
 .sidebar.workspace-navigation .project-switcher { min-height: 36px; padding: 7px 0; gap: 9px; font-size: var(--font-size-ui); font-weight:var(--font-weight-medium); letter-spacing: -.2px; border-radius: var(--sidebar-row-radius); background: transparent; }
 .sidebar.workspace-navigation .project-switcher > span { flex: 0 1 auto; }
@@ -11,9 +11,14 @@
 .sidebar.workspace-navigation .project-switcher > svg:last-child { width: 13px; color: var(--text-muted); }
 .sidebar.workspace-navigation .sidebar-project-picker .icon-button { width: 28px; height: 28px; padding: 0; color: var(--text-muted); }
 .sidebar.workspace-navigation .navigation-search { position: relative; margin: 0 13px 34px; padding: 7px 10px; min-height: 36px; background: var(--surface-hover); border-radius: var(--sidebar-row-radius); }
-.sidebar.workspace-navigation .navigation-search > .navigation-search-divider { position: absolute; left: 0; right: 0; bottom: -20px; height: 1px; background: var(--border); pointer-events: none; }
+.sidebar-brand-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.sidebar.workspace-navigation .sidebar-search-trigger { width: 28px; height: 28px; padding: 0; color: var(--text-muted); border-radius: 50%; }
+.sidebar-search-trigger:is(:hover,[aria-expanded="true"]) { color: var(--foreground); background: var(--surface-hover); }
+.sidebar-search-popover { position: absolute; top: calc(100% + 6px); left: 13px; right: 13px; z-index: 30; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius-settings-panel); background: var(--surface); box-shadow: var(--shadow-popover); }
+.sidebar.workspace-navigation .sidebar-search-popover .navigation-search { margin: 0; min-height: 38px; padding: 8px 10px; border-radius: var(--radius-settings-control); }
+.sidebar-navigation-divider { flex: 0 0 1px; height: 1px; margin: 8px 13px 16px; background: var(--border); }
+@media(pointer:coarse) { .sidebar.workspace-navigation .sidebar-search-trigger { width: 44px; height: 44px; } }
 .sidebar.workspace-navigation .navigation-search-key { font-size: var(--font-size-ui); }
-@media(max-width:700px) { .lake-development .sidebar.workspace-navigation .sidebar-brand-row .brand::after { right: 58px; } }
 @media(pointer:coarse) {
  .sidebar.workspace-navigation .project-switcher { min-height: 44px; }
  .sidebar.workspace-navigation .sidebar-project-picker .icon-button { width: 40px; height: 44px; }

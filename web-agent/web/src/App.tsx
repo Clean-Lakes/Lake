@@ -219,6 +219,35 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [navigationQuery, setNavigationQuery] = useState("");
   const navigationInput = useRef<HTMLInputElement>(null);
+  const navigationSearchButton = useRef<HTMLButtonElement>(null);
+  const navigationSearchRoot = useRef<HTMLDivElement>(null);
+  const [navigationSearchOpen, setNavigationSearchOpen] = useState(false);
+  useEffect(() => {
+    if (!navigationSearchOpen) return;
+    navigationInput.current?.focus({preventScroll: true});
+    navigationInput.current?.select();
+    const outside = (event: MouseEvent) => {
+      if (navigationSearchRoot.current?.contains(event.target as Node)) return;
+      // Close after the clicked result handles its action, so filtering cannot
+      // move rows underneath the pointer before the click is dispatched.
+      setNavigationSearchOpen(false);
+      setNavigationQuery("");
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.isComposing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setNavigationSearchOpen(false);
+      setNavigationQuery("");
+      navigationSearchButton.current?.focus({preventScroll: true});
+    };
+    document.addEventListener("click", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("click", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [navigationSearchOpen]);
   const newSessionButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
@@ -229,10 +258,11 @@ function App() {
         if(!button||button.disabled||button.hidden||document.querySelector('[role="dialog"],.modal-scrim'))return;
         event.preventDefault();button.click();return;
       }
-      if(event.key.toLowerCase()!=="k")return;
+      if(event.key.toLowerCase()!=="k" || document.querySelector('dialog[open],[role="dialog"],.modal-scrim'))return;
       event.preventDefault();
       if (matchMedia("(max-width:700px)").matches) setMobileMenu(true);
-      requestAnimationFrame(() => navigationInput.current?.focus());
+      setNavigationSearchOpen(true);
+      requestAnimationFrame(() => { navigationInput.current?.focus({preventScroll: true}); navigationInput.current?.select(); });
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
@@ -1339,13 +1369,22 @@ function App() {
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
     <aside className={`sidebar workspace-navigation ${mobileMenu ? "sidebar-open" : ""} ${bulkMode ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
-      <div className="sidebar-brand-row"><Brand icon={false}/><button className="icon-button mobile-only" title="关闭导航" aria-label="关闭导航" onClick={() => setMobileMenu(false)}><Glyph name="close"/></button></div>
+      <div className="sidebar-brand-row" ref={navigationSearchRoot}>
+        <Brand icon={false}/>
+        <div className="sidebar-brand-actions">
+          <button ref={navigationSearchButton} type="button" className="icon-button sidebar-search-trigger" aria-label="搜索当前项目" aria-expanded={navigationSearchOpen} aria-controls={navigationSearchOpen ? "navigation-search-panel" : undefined} aria-keyshortcuts="Meta+K Control+K" title={`搜索当前项目（${/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}）`} onClick={() => {setNavigationSearchOpen(open => !open); if (navigationSearchOpen) setNavigationQuery("");}}><Glyph name="search" size={18}/></button>
+          <button className="icon-button mobile-only" title="关闭导航" aria-label="关闭导航" onClick={() => {setMobileMenu(false);setNavigationSearchOpen(false);setNavigationQuery("");}}><Glyph name="close"/></button>
+        </div>
+        {navigationSearchOpen && <div className="sidebar-search-popover" id="navigation-search-panel" role="search" aria-label="项目搜索">
+          <label className="navigation-search"><Glyph name="search" size={15}/><input ref={navigationInput} type="search" value={navigationQuery} onChange={event => setNavigationQuery(event.target.value)} placeholder="搜索当前项目…" aria-label="搜索当前项目"/>{navigationQuery ? <button type="button" aria-label="清除搜索" onClick={() => {setNavigationQuery("");navigationInput.current?.focus();}}><Glyph name="close" size={13}/></button> : <span className="navigation-search-key">{/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}</span>}</label>
+        </div>}
+      </div>
       {sidebarProject && <div className="sidebar-project-picker">
         <BulkCheckbox target={{kind:"project",id:sidebarProject.id,projectId:sidebarProject.id,name:sidebarProject.name}} selection={bulkSelection}/>
-        <ProjectSwitcher projects={projectList} value={sidebarProject.id} onChange={id=>{setSidebarProjectId(id);setNavigationQuery("");setSelectedTag(null);setBulkMode(false);setBulkSelected([]);const session=catalog.sessions.filter(item=>item.projectId===id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];navigate({sessionId:session?.id??null,resourceId:null});}}/>
+        <ProjectSwitcher projects={projectList} value={sidebarProject.id} onChange={id=>{setSidebarProjectId(id);setNavigationSearchOpen(false);setNavigationQuery("");setSelectedTag(null);setBulkMode(false);setBulkSelected([]);const session=catalog.sessions.filter(item=>item.projectId===id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];navigate({sessionId:session?.id??null,resourceId:null});}}/>
         <button type="button" className="icon-button" aria-label={`管理项目 ${sidebarProject.name}`} title="更多操作" aria-haspopup="menu" disabled={!connected} onClick={event=>{const rect=event.currentTarget.getBoundingClientRect();setProjectContext({project:sidebarProject,x:rect.right,y:rect.bottom});}}><Glyph name="more" size={16}/></button>
       </div>}
-      <label className="navigation-search"><Glyph name="search" size={15}/><input ref={navigationInput} type="search" value={navigationQuery} onChange={event => setNavigationQuery(event.target.value)} placeholder="搜索当前项目…" aria-label="搜索当前项目"/>{navigationQuery ? <button type="button" aria-label="清除搜索" onClick={() => setNavigationQuery("")}><Glyph name="close" size={13}/></button> : <span className="navigation-search-key">{/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}</span>}<span className="navigation-search-divider" aria-hidden="true"/></label>
+      <div className="sidebar-navigation-divider" aria-hidden="true"/>
       {bulkMode && <div className="bulk-navigation-toolbar"><button type="button" onClick={()=>{setBulkMode(false);setBulkSelected([]);}}>完成</button><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
       <SidebarScrollArea>
         {sidebarProject&&<div className="nav-heading sidebar-session-heading" hidden={bulkMode}>
