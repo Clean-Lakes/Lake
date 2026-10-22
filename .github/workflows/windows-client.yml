@@ -1,6 +1,12 @@
 name: Windows x86_64 client
 on:
   workflow_dispatch:
+    inputs:
+      p8_resume:
+        description: 'Only retry P8 failed/uncompleted acceptance; prior native backend checks already passed'
+        required: false
+        default: false
+        type: boolean
   pull_request:
     branches: [master]
     paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'scripts/verify_strategy_learning.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']
@@ -49,6 +55,7 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as env:
               env.write('LAKE_PORTABLE_ROOT=' + str(runtime) + '\n')
       - name: Test Windows locks, SQLite, ACLs and ConPTY
+        if: ${{ !inputs.p8_resume }}
         shell: pwsh
         run: |
           $env:CGO_ENABLED = '0'
@@ -58,7 +65,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test ./internal/platform -run '^TestSSHFileOption' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go test ./client/windows -count=1 -timeout 1m
+          go test ./client/windows -skip '^TestWindowsStrategyConfirmationInRealWebView$' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: P8 strategy regression and actual Windows WebView2 acceptance
         shell: pwsh

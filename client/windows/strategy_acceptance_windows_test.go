@@ -76,18 +76,22 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
 		t.Fatal("UI callback setup failed")
 	}
 	window.Init(`document.addEventListener('DOMContentLoaded',()=>{(async()=>{
- const wait=async f=>{const until=Date.now()+30000;while(Date.now()<until){const value=f();if(value)return value;await new Promise(r=>setTimeout(r,30));}throw Error('ui_readiness_timeout');};
- const button=(root,text)=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent.trim()===text);
- const choose=async(root,text)=>{(await wait(()=>button(root,text))).click();};
+ let phase='initial_document';
+ const wait=async f=>{const until=Date.now()+30000;while(Date.now()<until){const value=f();if(value)return value;await new Promise(r=>setTimeout(r,30));}throw Error('ui_readiness_timeout:'+phase+':'+document.readyState+':'+document.body.innerText.slice(0,180));};
+ const button=(root,text)=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent.trim()===text || b.getAttribute('aria-label')===text);
+ const choose=async(root,text)=>{phase='button:'+text;(await wait(()=>button(root,text))).click();};
  const assert=(value,code)=>{if(!value)throw Error(code);};
  await choose(document,'工作区'); await choose(document,'设置');
  (await wait(()=>document.querySelector('#strategy-settings-tab'))).click();
+ phase='strategy_panel';
  let panel=await wait(()=>document.querySelector('#strategy-settings-panel'));
  await choose(panel,'新建');
+ phase='title_field';
  const title=await wait(()=>panel.querySelector('input[maxlength="240"]'));
  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(title,'P8 unsaved Windows draft');
  title.dispatchEvent(new Event('input',{bubbles:true}));
  await choose(panel,'新建');
+ phase='unsaved_confirmation';
  let confirmation=await wait(()=>panel.querySelector('[aria-label="确认策略操作"]'));
  let buttons=confirmation.querySelectorAll('button');
  assert(document.activeElement===buttons[0],'initial_cancel_focus');
