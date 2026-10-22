@@ -56,13 +56,13 @@ test("conversation uses assigned tag colors in prose and leaves code, links and 
   assert.equal((html.match(/conversation-tag color-purple/g)||[]).length,2);
   assert.equal((html.match(/conversation-tag color-green/g)||[]).length,1);
   assert.ok(html.includes('<strong><span class="conversation-tag color-green"'));
-  assert.ok(html.includes('<code>MongoDB</code>'));
+  assert.ok(html.includes('data-object-kind="software"') && html.includes('>MongoDB</span>'));
   assert.ok(html.includes('>MongoDB 官网</a>'));
   const shell=html.match(/<code class="language-sh[^\"]*">([\s\S]*?)<\/code>/)?.[1];
   assert.ok(shell);
   assert.equal(shell.replace(/<\/?span\b[^>]*>/g,''),'echo MongoDB\n');
   assert.ok(!shell.includes('conversation-tag'));
-  assert.ok(html.includes('MongoDBBackup、/etc/MongoDB/conf、MongoDB.log'));
+  assert.ok(html.replace(/<[^>]*>/g,'').includes('MongoDBBackup、/etc/MongoDB/conf、MongoDB.log'));
 });
 
 test("removing, recoloring and renaming session tags changes existing replies without adding unrelated tags", () => {
