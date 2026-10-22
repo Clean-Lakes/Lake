@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "change": "Increase workspace bubble transparency",
+  "opacity": {
+    "default": {
+      "before": 0.72,
+      "after": 0.55
+    },
+    "hoverOrOpen": {
+      "before": 0.82,
+      "after": 0.68
+    }
+  },
+  "verification": {
+    "typescriptAndWebBuild": "passed through signed build script",
+    "native": "Dev restarted and loaded localhost:62780; screenshot visually inspected",
+    "signature": "verified",
+    "note": "CSS-only adjustment; no behavior tests rerun. Existing blur, foreground colors, red update dot and accessibility fallbacks preserved."
+  },
+  "screenshot": "lake-workspace-transparency-dev.png"
+}

@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-13",
+  "runtime": "Chrome + isolated Go API and PTY; only fixture data deleted",
+  "passed": true,
+  "allResourceAndFolderSelection": true,
+  "sessionAndMixedDeletion": true,
+  "confirmationWarnsPermanentSessions": true,
+  "partialFailureReported": true,
+  "connectedHostProtected": true,
+  "retryDoesNotReplayDeletedSession": true,
+  "folderRemovalPromotesUnselectedResource": true,
+  "resourceAndNestedFolderRestore": true,
+  "projectSelectionExcludesPermanentChildDeletion": true,
+  "projectRestorePreservesSession": true,
+  "errors": []
+}

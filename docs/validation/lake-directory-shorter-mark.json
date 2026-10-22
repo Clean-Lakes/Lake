@@ -1,0 +1,12 @@
+{
+  "branch": "experiment/adk-runtime",
+  "change": "当前轮次深色刻度由 22px 缩短为 20px，默认及悬停预览保持一致。粗细、位置和点击区域不变。",
+  "verification": {
+    "typescript": "passed",
+    "frontend_tests": 244,
+    "diff_check": "passed",
+    "signed_dev_build_install_launch": "passed",
+    "native_visual": "passed"
+  },
+  "screenshot": "lake-directory-shorter-mark-dev.png"
+}

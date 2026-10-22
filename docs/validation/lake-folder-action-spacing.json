@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "change": "Reserve a stable 40px trailing slot for folder actions; separate counts from the 26px more button; release slot in bulk mode.",
+  "checks": {
+    "typescript": "passed",
+    "frontendTests": {"passed": 223, "failed": 0},
+    "diffCheck": "passed",
+    "lightDarkNarrow": "passed in isolated resource-status fixture; narrow viewport 390x844",
+    "measuredSpacing": "13 CSS pixels between count and button hit area; count x unchanged before and after focus",
+    "moreMenu": "opens existing folder management menu",
+    "nativeDev": "verified actual 南京公司 37 row with visible more button; restored folder expansion and original conversation",
+    "buildInstall": "scripts/build_lake_desktop.sh --dev --install passed; Dev launched",
+    "signature": "codesign --verify --deep --strict passed",
+    "backendSHA256": "f3d5b0617a6a607e8aebc6bf1725c4ee77562783d2e07cd677201327b54863c4"
+  },
+  "screenshots": [
+    "lake-folder-action-spacing-light.png",
+    "lake-folder-action-spacing-dark.png",
+    "lake-folder-action-spacing-narrow.png",
+    "lake-folder-action-spacing-detail.png",
+    "lake-folder-action-spacing-dev-focused.png",
+    "lake-folder-action-spacing-dev.png"
+  ],
+  "notes": "No resource commands or model messages sent; release app and data untouched; existing uncommitted work preserved."
+}

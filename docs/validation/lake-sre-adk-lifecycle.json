@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-10-18T18:42:13.218933+08:00",
+  "scope": "SRE native ADK graph scheduling and lifecycle projection",
+  "sdk": "google.golang.org/adk/v2 v2.6.0",
+  "removed": [
+    "custom runtime running/completed maps",
+    "manual ready-node scheduling loop",
+    "manual goroutine dispatch and results channel",
+    "manual peer cancellation/drain implementation",
+    "normal scheduling from business attempt succeeded flags",
+    "duplicated per-role wait/task status mapping"
+  ],
+  "adkOwned": [
+    "FunctionNode execution and structured Output",
+    "dependency edges and JoinNode fan-in",
+    "failure cancellation and peer draining",
+    "official SessionService node result persistence"
+  ],
+  "lakeRetained": [
+    "immutable plan and resource scope",
+    "same-role serialization and action exclusivity compiled to graph constraints",
+    "permissions and resource locks",
+    "actual operation identities, unknown outcomes and completed-effect deduplication",
+    "legacy import and effect commit/checkpoint gap handling",
+    "budget, evidence and business acceptance",
+    "public status fields as compatibility projections"
+  ],
+  "recovery": "Explicit retry uses successful native node outputs from the same immutable plan-run session. It is a new invocation; the existing child Runner handles approval/question resume.",
+  "checks": {
+    "targetedBackendRace": "passed",
+    "backendRace": {
+      "passed": true,
+      "output": [
+        "ok  \tgithub.com/Clean-Lakes/Lake/internal/ai\t97.952s",
+        "ok  \tgithub.com/Clean-Lakes/Lake/internal/web\t254.637s"
+      ]
+    },
+    "frontend": {
+      "passed": 234,
+      "failed": 0
+    },
+    "typescript": "passed",
+    "runtimeBoundary": "passed",
+    "diffCheck": "passed"
+  },
+  "build": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "installed": true,
+    "signature": "deep strict verified",
+    "backendSHA256": "696df5b35855a3913d1735f3d186cebeb611403e9556788e24ef3c0131ae0feb",
+    "nativeRestart": "deferred: final native AX snapshot confirms a user turn remains active"
+  },
+  "limits": [
+    "Tests use synthetic model/provider/resource fixtures and temporary databases. No production resource command was dispatched.",
+    "An active Dev turn is not interrupted to load the new build."
+  ],
+  "sourceSHA256": {
+    "internal/ai/adk_sre_workflow.go": "540fc5b91f4995649ccc20b1cca920e15e125fd53ea6f62e830479bcf33e2cae",
+    "internal/ai/sre_lifecycle.go": "1b191a2644879b6e72e2a7f68810507127e5dc94001e54e6351d8bc53aad700d",
+    "internal/ai/sre_orchestrator.go": "a901bf3bcb6ee3f634fdc0fd02361e9eb96a75747836babdc52124048500b1fa",
+    "internal/ai/adk_sre_roles.go": "8541bde8327334b1b6187254124f2a236a20a6903066b8ffe017bb1be6058e93",
+    "internal/ai/sre_scheduler_test.go": "10217801117207f2f061ec5ede9205128ed8e70c0ff14d851621dc4cf4f51aaf",
+    "internal/ai/sre_lifecycle_test.go": "e4bf30508f7513f7832de88983a23f1a06fb2fe4623cb2f41d800aa1661bbc21"
+  }
+}

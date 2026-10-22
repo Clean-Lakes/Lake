@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "change": "Workspace bubble floats over the full-height sidebar scroll surface with translucent blur",
+  "implementation": {
+    "overlay": "absolute bottom 12px, side inset 13px",
+    "surface": "72% neutral surface plus 12px standard/WebKit backdrop blur",
+    "hover": "82% neutral surface, still translucent",
+    "pointerEvents": "overlay wrapper none; bubble auto",
+    "scrollEnd": "72px padding and scroll padding ensure final resource can clear the bubble",
+    "fallback": "Opaque neutral surface for reduced transparency or unsupported backdrop filter"
+  },
+  "checks": {
+    "typescript": "passed",
+    "frontend": {
+      "pass": 245,
+      "fail": 0
+    },
+    "browser": {
+      "lightAndDark": "passed",
+      "overlayHitTest": "resource row remains behind bubble; side gap hits resource node",
+      "scroll": "PageDown moves sidebar while bubble top stays 670px",
+      "lastItem": {
+        "bottom": 633.09375,
+        "bubbleTop": 670,
+        "scrollAtMaximum": true
+      },
+      "narrow": {
+        "viewport": [
+          390,
+          844
+        ],
+        "sidebarPosition": "fixed",
+        "bubbleBounds": [
+          13,
+          794,
+          286,
+          832
+        ],
+        "listBottom": 844,
+        "horizontalOverflow": false,
+        "menuOpens": true
+      }
+    },
+    "signedDevInstall": "passed",
+    "native": "Dev restarted and loaded localhost:61294; final screenshot inspected",
+    "whitespace": "passed"
+  },
+  "screenshots": [
+    "lake-workspace-through-detail.png",
+    "lake-workspace-through-light.png",
+    "lake-workspace-through-dark.png",
+    "lake-workspace-through-dev.png"
+  ],
+  "data": "Fictional local browser fixture plus visual Dev verification; no remote resource operations or credentials read. Release app unchanged."
+}

@@ -1,0 +1,57 @@
+{
+  "branch": "experiment/adk-runtime",
+  "change": [
+    "菜单宽度 208px、操作行高 30px；视图、会话设置、删除三组以细线分隔。",
+    "所有项目左侧采用共享 Glyph，文字起点一致；当前视图右侧勾选。",
+    "鼠标悬浮其他项目时清除旧焦点底色，避免双高亮。",
+    "菜单按真实高度避让屏幕边界，保留键盘与焦点行为。"
+  ],
+  "verification": {
+    "typescript": "passed",
+    "frontend_tests": 244,
+    "diff_check": "passed",
+    "browser": {
+      "width": 208,
+      "row_heights": [
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30
+      ],
+      "label_left_positions": [
+        95,
+        95,
+        95,
+        95,
+        95,
+        95,
+        95
+      ],
+      "separators": 2,
+      "hover_highlight_rows": 1,
+      "arrow_navigation": "passed",
+      "end_skips_separators": "passed",
+      "view_switch_checked": "passed",
+      "escape_focus_return": "passed",
+      "dark_theme": "passed",
+      "short_viewport": {
+        "width": 390,
+        "height": 360,
+        "menu_top": 84.3046875,
+        "menu_bottom": 352
+      }
+    },
+    "signed_dev_build_install_launch": "passed",
+    "native_menu_visual": "passed"
+  },
+  "screenshots": [
+    "lake-session-menu-detail.png",
+    "lake-session-menu-light.png",
+    "lake-session-menu-dark.png",
+    "lake-session-menu-narrow.png",
+    "lake-session-menu-dev.png"
+  ]
+}

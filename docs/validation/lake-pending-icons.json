@@ -1,0 +1,20 @@
+{
+  "changes": [
+    "remove up/down arrow buttons",
+    "remove visible edit label; keep pencil icon and accessible name",
+    "retain draggable handles and keyboard sorting",
+    "retain always-visible edit/remove and glass material"
+  ],
+  "checks": {
+    "typecheck": "passed",
+    "frontendTests": 245,
+    "visibleArrowButtons": 0,
+    "editButtonText": "empty",
+    "iconButtonWidth": 26,
+    "keyboardSort": "ArrowDown moves message and preserves remaining order",
+    "edit": "pencil click opens editor; Escape returns focus",
+    "narrow": "390x844; no overflow; all action buttons within viewport"
+  },
+  "fixture": "fictional in-memory queue only",
+  "screenshot": "lake-pending-icons.png"
+}

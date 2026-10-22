@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-18",
+  "status": "passed",
+  "branch": "experiment/adk-runtime",
+  "scope": "Direct SSE item text updates for ordinary replies, reasoning and SRE live prose; display-frame batching without a fixed 30fps ceiling.",
+  "reference": {
+    "url": "https://learn.chatgpt.com/docs/app-server",
+    "documentedBehavior": "Agent message deltas update a named item; item completion is authoritative.",
+    "limit": "Codex desktop's private rendering scheduler and exact frame timings were not available. Lake retains its ADK runtime and uses its own compatible item update and snapshot recovery design."
+  },
+  "behavior": {
+    "liveConnection": "Addressed text prefixes travel in SSE events and update only the matching card or agent run; same-frame events are batched. No per-packet full session fetch.",
+    "providerNotificationIntervalMs": 16,
+    "display": "requestAnimationFrame with grapheme boundaries and existing bounded catch-up; no fixed 32ms publish throttle",
+    "history": "Unchanged message, task, resource and Markdown branches retained",
+    "recovery": "Unknown targets, structural changes, completion and replay use canonical snapshots; replay does not persist another copy of live text",
+    "ordering": "Session, root turn, item identity and cursor checks reject stale events; final snapshot wins over queued text frames"
+  },
+  "checks": {
+    "typescript": "passed; also checked by final signed build",
+    "frontend": { "passed": 229, "failed": 0, "newCases": 6 },
+    "goRaceFull": { "internal/web": "passed, 250.604s", "internal/ai": "passed, 99.295s" },
+    "finalSRELiveRace": "passed, 2.224s",
+    "sseReplayAndLiveRace": "passed 10 repetitions, 2.518s",
+    "goVet": "passed",
+    "diffCheck": "passed",
+    "fullAppLight": { "networkPackets": 3, "snapshotsBefore": 2, "snapshotsAfter": 2, "subscriptions": 1, "srePaints": 53, "replyPaints": 53, "historyReplacements": 0, "errors": 0 },
+    "fullAppDark": { "networkPackets": 3, "snapshotsAfter": 2, "subscriptions": 1, "historyReplacements": 0, "errors": 0 },
+    "reconnect": "recovered via snapshot, text retained and no history replacement",
+    "completion": "one canonical snapshot stopped activity and displayed reply end",
+    "reducedMotion": { "partialPaints": 0, "historyReplacements": 0, "snapshotsAfter": 2 },
+    "narrow": { "viewport": 390, "documentWidth": 390, "passed": true },
+    "nativeDev": "installed app launched, current conversation and composer restored; no real model or resource request submitted"
+  },
+  "build": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "app": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "signature": "codesign --verify --deep --strict passed",
+    "backendSHA256": "9546fe9050b3c79f47ae6726fa3ccc2b8b3f74f9d3b52d39554e86b7d0e2f93b",
+    "installedBackendMatchesBuild": true
+  },
+  "screenshots": [
+    "lake-live-event-refresh-light.png",
+    "lake-live-event-refresh-dark.png",
+    "lake-live-event-refresh-reduced.png",
+    "lake-live-event-refresh-narrow.png",
+    "lake-live-event-refresh-dev.png",
+    "lake-live-event-refresh-detail.png"
+  ],
+  "notes": "Browser exercised the real App against synthetic fetch and SSE. Go tests used temporary stores and synthetic providers. Release app/data, permissions and existing uncommitted work were preserved."
+}

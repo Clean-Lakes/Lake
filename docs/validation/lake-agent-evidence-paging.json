@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-13",
+  "observedFailure": {
+    "sessionId": "63ee4d624105162033c2ec1a86451a2d",
+    "tasks": 8,
+    "actualChildTokens": 195765,
+    "turnTokenLimit": 256000,
+    "remainingTokens": 60235,
+    "reason": "Old 8-task cumulative admission cap; error conflated task count and token allocation",
+    "otherFailures": [
+      "One child summary could not fit fixed 20K-character overhead in its 16K context",
+      "Verifier received globally clipped preview and failed evidence-ID validation"
+    ]
+  },
+  "changes": {
+    "batchTasksMax": 8,
+    "turnTasksMax": 24,
+    "existingFinishedBatchesPermitFollowup": true,
+    "tokenLimitsUnchanged": true,
+    "indexPagination": {
+      "defaultRecords": 8,
+      "maximumRecords": 16,
+      "optionalRunFilter": true
+    },
+    "sourcePaging": {
+      "maximumPageBytes": 4096,
+      "defaultPageBytes": 2048,
+      "privateRedactedSourceFiles": true,
+      "maximumStoredSourceBytes": 262144,
+      "currentSessionAndTurnOnly": true,
+      "legacyLostOutputRecovered": false,
+      "producerTruncationMarked": true
+    },
+    "defaultPreviewMetadataBounded": true,
+    "summaryInputFitsActualSerializedRequest": true,
+    "modelRequestsStillCountUsage": true
+  },
+  "validation": {
+    "fullAiWebRace": "passed: AI 20.566s, Web 82.274s",
+    "finalAiRace": "passed: 20.386s",
+    "finalWebAgentContextRace": "passed: 5.196s",
+    "finalCursorCompactionEvidenceRace": "passed: 2.899s",
+    "regressions": [
+      "Full Chinese source tail reconstructed across process restart with UTF-8 byte pages",
+      "Private 0600 source files and fixture credential redaction",
+      "Cross-session/cross-turn/unknown-ID and arbitrary path rejection",
+      "Existing 8 tasks with 195765 tokens permits successful ninth investigator",
+      "Task count and real token exhaustion return different errors",
+      "Source line truncation marker preserves nonzero exit code",
+      "16K child summary completes with long assignment",
+      "Context preview preserves evidence ID and offset even at 512 bytes"
+    ],
+    "signedBuild": "scripts/build_lake.sh; codesign --verify --strict passed",
+    "goVetAI": "passed",
+    "gitDiffCheck": "passed"
+  },
+  "web": {
+    "origin": "http://localhost:4180",
+    "pid": 8977,
+    "previousPid": 99920,
+    "authenticatedCatalog": true,
+    "sessionIDsPreserved": true,
+    "resourceIDsPreserved": true,
+    "signedBinaryVerified": true
+  },
+  "productionCommandsExecutedForThisFix": false,
+  "push": false
+}

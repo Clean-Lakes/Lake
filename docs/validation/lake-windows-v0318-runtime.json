@@ -1,0 +1,65 @@
+{
+  "version": "0.3.18",
+  "binaryArchitecture": "amd64",
+  "phase": "complete",
+  "results": [
+    {
+      "name": "desktop",
+      "exitCode": 0,
+      "passedCases": 15,
+      "failedCases": [],
+      "seconds": 2.75,
+      "log": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-e4530d34\\logs\\desktop.log"
+    },
+    {
+      "name": "platform",
+      "exitCode": 0,
+      "passedCases": 2,
+      "failedCases": [],
+      "seconds": 0.51,
+      "log": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-e4530d34\\logs\\platform.log"
+    },
+    {
+      "name": "ai",
+      "exitCode": 0,
+      "passedCases": 36,
+      "failedCases": [],
+      "seconds": 7.68,
+      "log": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-e4530d34\\logs\\ai.log"
+    },
+    {
+      "name": "web",
+      "exitCode": 0,
+      "passedCases": 36,
+      "failedCases": [],
+      "seconds": 33.8,
+      "log": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-e4530d34\\logs\\web.log"
+    }
+  ],
+  "guiTest": {
+    "status": "passed",
+    "scope": "initial packaged desktop startup and visual rendering; no model configured",
+    "process": {
+      "path": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-e4530d34\\package\\Lake\\Lake.exe",
+      "id": 12824,
+      "responding": true,
+      "windowTitle": "Lake 0.3.18",
+      "windowHandle": 721652
+    },
+    "screenshot": "docs/validation/lake-windows-v0318-gui.png"
+  },
+  "root": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-e4530d34",
+  "nativeArchitecture": "ARM64",
+  "os": "Microsoft Windows 11 专业版",
+  "home": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-e4530d34\\home",
+  "desktop": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-e4530d34\\package\\Lake\\Lake.exe",
+  "backendVersion": "Lake 0.3.18 · Go backend · React frontend",
+  "webViewExitCode": 0,
+  "launcher": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-e4530d34\\Open-Lake-Test.cmd",
+  "passed": true,
+  "executionMode": "Windows 11 ARM64 with x64 emulation",
+  "nativeX64HardwareTest": "not performed",
+  "installerWizardTest": "not performed",
+  "passedScope": "automated runtime tests and readiness probes; GUI tracked separately",
+  "shortLauncher": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\Open-v0318.cmd"
+}

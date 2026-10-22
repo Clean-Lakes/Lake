@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-12",
+  "frontendTypecheck": "passed",
+  "frontendTests": 72,
+  "goFullRaceSuite": "passed",
+  "queueTargetedRaceTests": "passed",
+  "verified": [
+    "per-session FIFO without overlapping turns",
+    "editing, removal and revision conflicts",
+    "button and keyboard ordering",
+    "native browser drag ordering",
+    "queueing with composer Enter shortcut",
+    "composer remains editable while replying; stop remains available",
+    "queue persists on browser reload",
+    "automatic dispatch after completion without reload",
+    "abort/failure/restart preserve and pause remaining entries",
+    "resource/file isolation and revalidation at dispatch",
+    "image payload excluded from queue snapshots",
+    "changed image capability pauses incompatible pending message",
+    "concurrent submissions do not lose or overlap turns"
+  ],
+  "browserRequestOrder": [
+    "你好",
+    "明白",
+    "好的"
+  ],
+  "buildCommand": "scripts/build_lake_desktop.sh --install",
+  "signedInstalledApp": "/Users/lingyunxieqing/Applications/Lake.app",
+  "clientRestarted": false,
+  "userBackendReplaced": false,
+  "userBackendPidPreserved": 77202,
+  "liveTerminalsPreserved": 5,
+  "screenshot": "lake-message-queue.png",
+  "data": "isolated synthetic backend/model only"
+}

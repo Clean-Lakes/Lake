@@ -1,0 +1,43 @@
+{
+  "status": "passed",
+  "timestamp": "2026-10-18T17:29:19.842554+08:00",
+  "branch": "experiment/adk-runtime",
+  "changes": [
+    "Preserve green terminal connection dot on hover/focus without terminal count",
+    "Use shared Ellipsis Glyph for terminal management",
+    "26px zero-padding buttons and safe spacing"
+  ],
+  "checks": {
+    "typescript": "passed",
+    "frontend": {
+      "passed": 216,
+      "failed": 0
+    },
+    "diff_check": "passed",
+    "light_dark_narrow": "passed",
+    "button_svg_within_bounds": true,
+    "button_width": 26,
+    "button_padding": 0,
+    "green_dot_width": 6,
+    "unknown_terminal_green_dots": 0,
+    "busy_terminal_green_dots": 1,
+    "native_Dev_menu": "passed",
+    "native_Dev_launched": true
+  },
+  "build": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "signedApp": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "backendSha256": "b47dea350f0e6f15e750047b9d1bf2a2878b8c625bfab1c230c570dbee63cbda",
+    "log": "/tmp/lake-sidebar-status-build.log"
+  },
+  "screenshots": [
+    "lake-resource-status-row.png",
+    "lake-resource-status-light.png",
+    "lake-resource-status-dark.png",
+    "lake-resource-status-narrow.png",
+    "lake-resource-status-dev.png"
+  ],
+  "gui_fixture": "Real App sidebar with synthetic API/terminal state; no backend or resource operations",
+  "resource_commands_sent": false
+}

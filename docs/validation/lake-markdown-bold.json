@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "problem": "中文整句加粗、中文引号或括号旁的成对双星号，以及闭合标记前的多余空格，会以字面星号显示。旧兼容逻辑只覆盖短冒号标签。",
+  "change": "在 Markdown 解析后的原文一致普通文本节点中兼容中文成对加粗；保留末尾空白与原始存储内容。普通回复、SRE 正文和精简进展预览共用同一逻辑。",
+  "boundaries": "代码、链接、显式转义、HTML、三重星号、未闭合标记及英文普通星号表达保持原样；不补造闭合标记或修改原始消息。",
+  "checks": {
+    "typescript": "passed",
+    "frontendTests": {"passed": 238, "failed": 0},
+    "addedRegressionTests": ["截图整段结论及超过 80 字的结论", "中文引号、括号及多个错误加粗片段", "代码、转义、链接、三重与未闭合星号边界", "SRE 报告和表格使用相同修复"],
+    "diffCheck": "passed",
+    "browser": {"ordinaryStrongElements": 6, "weight": "600", "specialistStrongElements": 6, "tables": 1, "codeAndEscapesPreserved": true},
+    "themes": ["light", "dark"],
+    "narrow": {"viewportWidth": 390, "documentWidth": 390}
+  },
+  "dev": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "signature": "codesign --verify --deep --strict passed",
+    "installedApp": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "version": "0.3.17",
+    "backendSha256": "79b48abf7886522fe9f2aaf0a618ee94ebd03e6d815cd7f1b1f66601c84403cd",
+    "sourceBinaryMatchesInstalledBackend": true,
+    "address": "localhost:56994",
+    "acceptance": "通过原会话目录定位第 26 轮，截图中的结论整段已正确加粗、未显示双星号。systemd 括号说明的字面双星号也已消失。没有重新发送消息或执行远程命令。",
+    "releaseAppTouched": false
+  },
+  "screenshots": ["lake-markdown-bold-light.png", "lake-markdown-bold-dark.png", "lake-markdown-bold-narrow.png", "lake-markdown-bold-detail.png", "lake-markdown-bold-dev.png"],
+  "logs": ["/tmp/lake-markdown-bold-ts.log", "/tmp/lake-markdown-bold-tests.log", "/tmp/lake-markdown-bold-build.log"]
+}

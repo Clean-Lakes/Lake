@@ -1,0 +1,30 @@
+{
+  "branch": "experiment/adk-runtime",
+  "change": "桌面会话正文与输入框共享对称 48px 左右留白，为会话刻度增加呼吸空间；窄窗口保留 32px。",
+  "verification": {
+    "typescript": "passed",
+    "frontend_tests": 244,
+    "diff_check": "passed",
+    "browser_measurement": [
+      {
+        "viewport": 1280,
+        "timeline_left": 48,
+        "timeline_right": 48,
+        "composer_left": 48,
+        "composer_right": 48,
+        "horizontal_overflow": false
+      },
+      {
+        "viewport": 390,
+        "timeline_left": 32,
+        "timeline_right": 32,
+        "composer_left": 32,
+        "composer_right": 32,
+        "horizontal_overflow": false
+      }
+    ],
+    "signed_dev_build_install_launch": "passed",
+    "native_visual": "passed"
+  },
+  "screenshot": "lake-balanced-gutter-dev.png"
+}

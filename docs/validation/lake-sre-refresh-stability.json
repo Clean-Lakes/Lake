@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-16",
+  "scope": "SRE rendering stability and truthful approval labels",
+  "frontendTests": {
+    "passed": 188,
+    "failed": 0
+  },
+  "typecheck": "passed",
+  "goTargetedTests": [
+    "TestSREExecutorUsesInheritedSilentWritePermission",
+    "TestSREFullToolsRefreshParentPermissionIntersection"
+  ],
+  "browserRegression": {
+    "fixture": "web-agent/web/test/fixtures/sre-refresh.html",
+    "syntheticData": true,
+    "snapshotIntervalMs": 120,
+    "beforeFix": {
+      "replacedTableAndLinkNodes": 2748
+    },
+    "afterFix": {
+      "snapshots": 1370,
+      "replacedTableAndLinkNodes": 0,
+      "historyScrollTop": 200,
+      "historyScrollTopAfterAppend": 200,
+      "elapsedAdvancedThroughMinuteBoundary": true,
+      "newContentFollowed": true,
+      "finalTail": 1034,
+      "finalScrollTop": 1034
+    },
+    "approvalFixture": "web-agent/web/test/fixtures/sre-approval.html",
+    "approvalActionsSubmitted": 0
+  },
+  "liveRuntimeReadOnlyAudit": {
+    "planTaskType": "investigation",
+    "roles": [
+      "investigator",
+      "verifier",
+      "coordinator"
+    ],
+    "executorsStarted": 0,
+    "silentCommands": true,
+    "silentWriteFiles": false
+  },
+  "dev": {
+    "signedBuildAndInstall": "passed",
+    "restart": "verified: new loopback origin, all 9 sessions available, native UI loaded"
+  },
+  "screenshots": [
+    "lake-sre-refresh-stability.png",
+    "lake-sre-approval-copy.png"
+  ],
+  "limits": [
+    "Browser regression uses actual frontend components with synthetic snapshots; it does not execute production resource commands.",
+    "Extra confirmation for opaque nested shell scripts remains required; only its misleading delete/move label changed."
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "change": "Move unified send/stop button to composer footer after model selection",
+  "checks": [
+    "TypeScript check passed",
+    "Vite build passed",
+    "Signed scripts/build_lake.sh build passed",
+    "Actual localhost page visually verified"
+  ],
+  "origin": "http://localhost:4177",
+  "pid": 93359,
+  "asset": "index-CDlbEIr1.js",
+  "screenshot": "docs/validation/lake-send-bottom-right.png",
+  "sentModelRequests": false
+}

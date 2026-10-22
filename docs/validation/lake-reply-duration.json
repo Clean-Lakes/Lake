@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-12",
+  "frontendTypecheck": "passed",
+  "frontendTests": 78,
+  "goFullRaceSuite": "passed",
+  "timingTargetedRaceTests": "passed",
+  "liveCounter": "observed update from less than 1 second to 8 seconds",
+  "finalDurations": [
+    "回答耗时 16秒",
+    "回答耗时 不到1秒"
+  ],
+  "unchangedAfterReload": true,
+  "beforeQueuedDispatchTimingCount": 1,
+  "pendingMessageCountAtThatTime": 1,
+  "historicalPersistence": "passed across subsequent turns and Store reopen",
+  "cancelAndFailureStatus": "passed",
+  "interruptedTurnsInventFinishTime": false,
+  "duplicateLatestTurnElapsedRemoved": true,
+  "signedBuild": "scripts/build_lake_desktop.sh --install",
+  "installedVersion": "0.3.3",
+  "clientRestarted": false,
+  "userBackendReplaced": false,
+  "userBackendPid": 42476,
+  "liveUserTerminals": 0,
+  "screenshot": "lake-reply-duration.png",
+  "data": "isolated synthetic provider and sessions",
+  "currentUserBackendServesLatestFrontend": false
+}

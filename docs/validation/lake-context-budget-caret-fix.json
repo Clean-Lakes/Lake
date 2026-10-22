@@ -1,0 +1,118 @@
+{
+  "status": "passed",
+  "verifiedAt": "2026-10-18T14:17:17.299664+08:00",
+  "branch": "experiment/adk-runtime",
+  "head": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+  "changesCommitted": false,
+  "installed": {
+    "mode": "auto",
+    "modelCapacity": 1048576,
+    "budget": 943718,
+    "outputReserved": 8192,
+    "historyPreserved": true,
+    "operationCardsPreserved": true,
+    "historyMessages": 14,
+    "cards": 165
+  },
+  "binarySHA256": "2593f6d6458a5e8d0481b74205998f279fa10f1d58bce308157b708a9e22e28b",
+  "files": {
+    "internal/ai/context_budget.go": "1a8fff55d307489549f318d252a3763c6b318caddadd76c2e256382185b1a658",
+    "internal/ai/context_budget_test.go": "1e69cae8154804e51262d413a868376aa041f693de678fe3678e486bb0428657",
+    "internal/ai/engine.go": "a2119d30f1bd582bac471dbe4a98ea76bca834c0fc8de385210e6a70acf32f0f",
+    "internal/ai/adk_driver.go": "addf33ae0fd3c0e8576f69abaf96141863eff9bda7e6a1c27d26780e199d7412",
+    "internal/ai/adk_projection.go": "4640ef33ebf976585899939a25b84623dbc2f693437f43b5bf71a5fd4b973d19",
+    "internal/ai/adk_model.go": "ed5de2f197f5fa1ef3f76e4b49abca99ee98bffb141bd3e73c8883c677bfaed1",
+    "internal/web/agent.go": "8daaf9e230545e42b2652a6c2ba94ef9bfccbda08b47345bec1a1de267ed5e35",
+    "internal/web/context_capacity_test.go": "1578c160bde68db52ffc7e4351e4844344d425ffad2d19741ad68810ee2ad927",
+    "web-agent/web/src/AIPanel.tsx": "b109f1960455cd2a69db2139657a4007ad36396d3c6b0b8c230fdc9ef9a9f577",
+    "web-agent/web/src/ContextUsage.tsx": "8f90a0be06a891c937343f07febf51190fbe40793295f9b300db8b96ed945463",
+    "web-agent/web/src/ComposerTextInput.tsx": "4ba790221124a2c9cbb2fee48ab452566213721103de6eaab851dcecca5dde34",
+    "web-agent/web/src/composerCompletion.css": "b666c2c9520c2412999495c6c8ed1d499f0b8eedbd2c8f33cbb2c49c163b7fe5",
+    "web-agent/web/test/context.test.ts": "16de8c20aeaf45320403c515413a7016a9a6574116fa48e12cdbf26c447d4755",
+    "docs/ui-guidelines.md": "715276ada2cd807ffcfb661cfaaad61365dce64fce1c32287e4d00a67f47e2ec"
+  },
+  "checks": [
+    {
+      "command": "go test -race ./internal/ai ./internal/web -count=1 -timeout=5m",
+      "exitCode": 0,
+      "log": "/tmp/lake-context-fix-go-tests.log"
+    },
+    {
+      "command": "go test -race ./internal/web -count=1 -timeout=5m",
+      "exitCode": 0,
+      "log": "/tmp/lake-context-fix-web-final.log",
+      "note": "Final source after removing unnecessary metadata discovery from the chat path."
+    },
+    {
+      "command": "pnpm --dir web-agent test:frontend",
+      "exitCode": 0,
+      "testsPassed": 204,
+      "log": "/tmp/lake-context-fix-frontend.log"
+    },
+    {
+      "command": "pnpm --dir web-agent check",
+      "exitCode": 0
+    },
+    {
+      "command": "go vet ./internal/ai ./internal/web",
+      "exitCode": 0
+    },
+    {
+      "command": "python3 scripts/check_adk_runtime_boundary.py",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    },
+    {
+      "command": "scripts/build_lake_desktop.sh --dev --install",
+      "exitCode": 0,
+      "log": "/tmp/lake-context-fix-build.log"
+    },
+    {
+      "command": "codesign --verify --deep --strict ~/Applications/Lake Dev.app",
+      "exitCode": 0
+    }
+  ],
+  "budgetPolicy": {
+    "automaticKnownCapacityFraction": 0.9,
+    "maximumAutomaticBudget": 2000000,
+    "unknownCapacityFallback": 64000,
+    "outputReservedSeparately": true,
+    "legacyDefault64000": "auto",
+    "legacyCustomBudget": "manual",
+    "manualBudgetClampedToKnownCapacity": true,
+    "sharedSDKAndProviderCompactionGate": true,
+    "summaryTargetInputFraction": 0.75,
+    "existingIdleResumeHandoffPolicyPreserved": true
+  },
+  "uiVerification": {
+    "isolatedFixture": true,
+    "light": {
+      "caretColor": "rgb(34, 34, 34)",
+      "cursor": "text",
+      "multilineHeight": 71,
+      "singleLineHeight": 30,
+      "focusAndSelectionPreserved": true
+    },
+    "dark": {
+      "caretColor": "rgb(238, 238, 238)",
+      "background": "rgb(27, 27, 27)",
+      "cursor": "text",
+      "focusAndSelectionPreserved": true
+    },
+    "nativeDev": {
+      "loaded": true,
+      "acceptedText": true,
+      "cursorNavigationAndInsertion": "光标 -> Left -> insert 验 -> 光验标",
+      "testDraftCleared": true,
+      "messagesSent": 0
+    },
+    "screenshots": [
+      "docs/validation/lake-composer-caret-dark.png",
+      "docs/validation/lake-context-caret-dev.png"
+    ]
+  },
+  "scope": "Synthetic models/resources for automated and isolated UI tests. Existing Dev session configured through its local API without running resource commands. Release app/data untouched."
+}

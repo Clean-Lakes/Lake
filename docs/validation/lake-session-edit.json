@@ -1,0 +1,25 @@
+{
+  "feature": "会话名称编辑",
+  "ui": [
+    "侧栏铅笔入口",
+    "右键菜单编辑会话",
+    "预填名称并全选",
+    "Escape 取消，未保存名称保持不变",
+    "侧栏、顶部及缓存同步更新"
+  ],
+  "validation": {
+    "backendRace": "passed: 1.890s; active session metadata preserved, naming lock, restart persistence, invalid input and missing-Origin PATCH rejection",
+    "typescript": "passed",
+    "viteProductionBuild": "passed",
+    "signedBuild": "scripts/build_lake.sh; codesign strict verification passed",
+    "browser": "live Web 4180; pencil/menu open and initial text selection/cancel verified; browser did not rename existing user sessions",
+    "gitPush": false
+  },
+  "runtime": {
+    "origin": "http://localhost:4180",
+    "pid": 21676,
+    "sessionIDsPreserved": true,
+    "resourceIDsPreserved": true,
+    "signatureVerified": true
+  }
+}

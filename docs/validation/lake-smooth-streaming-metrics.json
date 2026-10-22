@@ -1,0 +1,18 @@
+{
+  "syntheticStreamingFixture": true,
+  "historicalReplies": 45,
+  "paragraphsPerHistoricalReply": 18,
+  "eventIntervalMs": 180,
+  "before": {
+    "longTasks": "1",
+    "metrics": "{\"frames\":966,\"medianFrameMs\":8.300000000000182,\"p95FrameMs\":9.399999999999636,\"scrollFrames\":42,\"maxScrollJump\":35048}",
+    "top": 36450
+  },
+  "after": {
+    "bottomGap": 0,
+    "longTasks": "1",
+    "metrics": "{\"frames\":1044,\"medianFrameMs\":8.300000000000182,\"p95FrameMs\":9,\"scrollFrames\":744,\"maxScrollJump\":35031}"
+  },
+  "measurementWindowSeconds": 8.7,
+  "note": "Measured browser frame cadence is not guaranteed production FPS. MaxScrollJump includes initial baseline placement; scrollFrames shows how many sampled frames changed position."
+}

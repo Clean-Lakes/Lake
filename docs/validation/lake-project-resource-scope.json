@@ -1,0 +1,21 @@
+{
+  "change": "Sessions dynamically expose all resources in their project; creation has no resource selection",
+  "checks": [
+    "go test ./... passed; internal/web 74.997s",
+    "Targeted project-resource and isolation race tests passed",
+    "13 frontend tests passed",
+    "TypeScript check and Vite build passed",
+    "Signed scripts/build_lake.sh build and strict signature verification passed",
+    "All 4 retained production sessions expose both project resources",
+    "Creation dialog has no resource checkboxes; @ menu lists both project resources"
+  ],
+  "origin": "http://localhost:4177",
+  "pid": 98556,
+  "asset": "index-DocUcASA.js",
+  "screenshots": [
+    "docs/validation/lake-project-session-no-selection.png",
+    "docs/validation/lake-project-resource-references.png"
+  ],
+  "sentModelRequests": false,
+  "productionSessionsCreatedForVerification": false
+}

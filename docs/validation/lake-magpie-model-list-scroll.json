@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-15",
+  "issue": "The generic model-list overflow:hidden rule overrode Magpie overflow-y:auto and clipped all models after the first rows.",
+  "fix": "Use a more specific selector after the base list rule, a viewport-aware maximum height, stable scrollbar space, and keyboard focus for the model region.",
+  "validation": {
+    "typescript_and_signed_dev_build": "passed",
+    "modelCount": 68,
+    "computedOverflowY": "auto",
+    "listClientHeight": 322,
+    "listScrollHeight": 4011,
+    "maxScrollTop": 3689,
+    "wheelScrollReachedEnd": true,
+    "selectedLastModel": "magpie-model-68",
+    "dev_installed_and_relaunched": true
+  },
+  "scope": "An isolated temporary Lake home with synthetic local model configuration; no release data or credentials used.",
+  "screenshot": "lake-magpie-model-list-scroll.png"
+}

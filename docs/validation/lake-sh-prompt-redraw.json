@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-13",
+  "issue": "Interactive sh prompt is truncated or overwritten after terminal resize",
+  "cause": "Bash running as sh counted Lake readiness and CWD frames as visible PS1 columns",
+  "reproduction": {
+    "runtime": "local /bin/sh (Bash POSIX mode), no SSH",
+    "before": "resize from 120 to 80 columns truncated the prompt",
+    "after": "complete prompt after resizing to 120, 80, 50 and 100 columns and Ctrl-L redraw"
+  },
+  "fix": "Mark only the hidden prompt frames with Bash nonprinting delimiters; preserve other POSIX sh implementations",
+  "productionObservation": {
+    "encodingReplacementCharacters": 0,
+    "selectedShell": "sh",
+    "existingBackendServedOlderAssets": true
+  },
+  "verification": {
+    "targetedRace": "passed",
+    "vet": "passed"
+  },
+  "deployment": "signed local CLI build; running production connections retained; published v0.3.6 packages unchanged"
+}

@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-12",
+  "behavior": "Reuse existing manual terminal for chats while hiding Lake commands/output in manual console",
+  "nativeChrome": {
+    "boundOriginalTerminal": true,
+    "originalGenerationRetained": true,
+    "physicalTerminalCountBefore": 3,
+    "physicalTerminalCountAfter": 3,
+    "modelMessagesSent": 0,
+    "temporaryEmptyChatRemoved": true
+  },
+  "tests": {
+    "frontend": 47,
+    "goWebRace": "passed, 120.389s",
+    "goAiRace": "passed",
+    "targetedRace": "passed after final lifecycle adjustments",
+    "checks": [
+      "existing manual shell and cwd retained across bash/zsh/sh/fish",
+      "Agent command stdout retained in chat audit but not visible console",
+      "no new terminal creation approval or duplicate connection",
+      "user input returned after turn and cancelled waiter",
+      "normal command approval retained",
+      "ambiguous/stale/cross-project/unfinished input rejected",
+      "permission revocation returns manual input without reviving grants"
+    ]
+  },
+  "build": "signed scripts/build_lake.sh",
+  "realModelCallsForValidation": 0
+}

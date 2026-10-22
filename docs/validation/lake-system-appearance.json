@@ -1,0 +1,12 @@
+{
+  "fix": "macOS window clears explicit appearance for system preference, allowing WebKit to inherit and observe macOS appearance",
+  "validation": {
+    "frontendTests": 245,
+    "frontendFailures": 0,
+    "typescript": "passed in signed build",
+    "signedDevBuild": "passed and installed",
+    "native": "old pinned dark reproduced; new Dev starts with saved system selected in light appearance; dark to system switches back to light immediately",
+    "simulatedSystemChanges": "light/dark both directions; explicit preference unaffected; cross-tab system preference"
+  },
+  "branch": "experiment/adk-runtime"
+}

@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-16",
+  "reportedBug": "Reasoning options rendered inline beneath the composer, overlapping the model and reasoning controls.",
+  "cause": "ReasoningSelector still rendered a legacy custom model-menu/model-switch whose base layout styles no longer exist.",
+  "changes": [
+    "Replace the legacy menu with shared AppSelect, including the portal, viewport positioning, selection state and keyboard behavior.",
+    "Use Glyph brain and shared chevron/check icons.",
+    "Use the same 28px transparent composer trigger styling as the model selector; remove obsolete reasoning-menu styles.",
+    "Preserve existing session/model capability checks, supported levels, default level, save API and disabled state."
+  ],
+  "checks": {
+    "typeScript": "passed",
+    "frontendTests": {
+      "passed": 176,
+      "failed": 0
+    },
+    "desktopPopup": "1200px viewport; popup bottom 750px, trigger top 756px; opens above the footer without altering layout",
+    "keyboard": "ArrowDown then Enter selects low and saves through the existing API shape in an isolated stub; Escape closes and focuses the trigger",
+    "disabled": "disabling closes the popup and prevents selection",
+    "darkTheme": "passed using shared theme variables",
+    "narrowViewport": "390px viewport; popup bounds 202..382px; page scrollWidth 390px; no clipping or horizontal overflow",
+    "signedDevBuildAndSignature": "passed",
+    "nativeDev": "new combobox confirmed; later observed correctly disabled during user-started execution; no live reasoning settings changed"
+  },
+  "screenshots": [
+    "lake-reasoning-select-light.png",
+    "lake-reasoning-select-dark.png",
+    "lake-reasoning-select-mobile.png",
+    "lake-reasoning-select-native.png",
+    "lake-reasoning-select-popup.png"
+  ],
+  "testData": "Expanded popup screenshots use real composer controls with isolated synthetic reasoning settings; no production model requests. Native screenshot shows installed Dev footer.",
+  "releaseRestarted": false
+}

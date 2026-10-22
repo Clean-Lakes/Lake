@@ -1,0 +1,127 @@
+{
+  "version": "0.3.18",
+  "status": "published",
+  "sourceCommit": "f232815c604c89e412446415edbbddce367ad137",
+  "sourceTree": "b9bdd278464a8bf6495d2ce4c66aa7eb75ac0c51",
+  "pullRequest": "https://github.com/Clean-Lakes/Lake/pull/12",
+  "frontend": {
+    "testsPassed": 251,
+    "node": "24.14.0",
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "go": {
+    "race": "passed",
+    "vet": "passed",
+    "adkBoundary": "passed"
+  },
+  "macos": {
+    "version": "0.3.18",
+    "development": false,
+    "architecture": "arm64",
+    "bundleId": "com.cleanlakes.lake.desktop",
+    "signingIdentity": "Lake Local Development Code Signing",
+    "artifacts": {
+      "Lake-0.3.18-macos-arm64.zip": {
+        "sha256": "d49d1ac9701e4d9539cb55aedf76c90a45edd7c3dac66474f6408f76f091315a",
+        "size": 27864921
+      },
+      "Lake-0.3.18-macos-arm64.dmg": {
+        "sha256": "681f5bfba6a9a1f3ffe51342e7aad94a61b97a603a48b84e28fc0eb706920131",
+        "size": 30319444
+      }
+    },
+    "checks": [
+      "bundle identity and version",
+      "deep strict code signature",
+      "persistent signing identity",
+      "ZIP CRC and paths",
+      "DMG integrity",
+      "SHA-256 sidecars",
+      "arm64 native host"
+    ],
+    "passed": true
+  },
+  "windows": {
+    "packageValidation": "passed",
+    "runtimeCasesPassed": 98,
+    "runtimeHost": "Windows 11 ARM64 with x64 emulation",
+    "gui": "Dev equivalent manually confirmed: DEV badge, persistent model settings and maximize with taskbar visible"
+  },
+  "assets": {
+    "Lake-0.3.18-macos-arm64.zip": {
+      "sha256": "d49d1ac9701e4d9539cb55aedf76c90a45edd7c3dac66474f6408f76f091315a",
+      "size": 27864921
+    },
+    "Lake-0.3.18-macos-arm64.dmg": {
+      "sha256": "681f5bfba6a9a1f3ffe51342e7aad94a61b97a603a48b84e28fc0eb706920131",
+      "size": 30319444
+    },
+    "Lake-0.3.18-windows-x86_64.zip": {
+      "sha256": "74a46dd8fe6548dc45f31c42792a1bf4f2a35cadc60ed69d32330eba8862d121",
+      "size": 211962669
+    },
+    "Lake-0.3.18-windows-x86_64-setup.exe": {
+      "sha256": "36873c3a8a5a92ceb9d4d90a5e9209f2a4b09f811e609c908f3848de5e914a17",
+      "size": 112316155
+    }
+  },
+  "releaseCommit": "2d66b70e5a763ff93ad5f78acedcccb209af74ac",
+  "releaseTag": "v0.3.18",
+  "validatedSourceTreeMatchesMaster": true,
+  "allPRsMerged": true,
+  "ci": {
+    "macos": "passed",
+    "windowsX64": "passed",
+    "adkLinux": "passed",
+    "adkWindows": "passed"
+  },
+  "releaseUrl": "https://github.com/Clean-Lakes/Lake/releases/tag/v0.3.18",
+  "publishedAt": "2026-10-18T14:32:37Z",
+  "verifiedAt": "2026-10-18T14:32:55.758400+00:00",
+  "latest": true,
+  "remoteAssetSHA256Verified": true,
+  "openPullRequests": 0,
+  "remoteAssets": {
+    "Lake-0.3.18-macos-arm64.dmg": {
+      "url": "https://github.com/Clean-Lakes/Lake/releases/download/v0.3.18/Lake-0.3.18-macos-arm64.dmg",
+      "digest": "sha256:681f5bfba6a9a1f3ffe51342e7aad94a61b97a603a48b84e28fc0eb706920131",
+      "size": 30319444
+    },
+    "Lake-0.3.18-macos-arm64.dmg.sha256": {
+      "url": "https://github.com/Clean-Lakes/Lake/releases/download/v0.3.18/Lake-0.3.18-macos-arm64.dmg.sha256",
+      "digest": "sha256:66af58a72b62cced6913b6a82be12443c4c4b426c04b438ba50acb06eb2dd877",
+      "size": 94
+    },
+    "Lake-0.3.18-macos-arm64.zip": {
+      "url": "https://github.com/Clean-Lakes/Lake/releases/download/v0.3.18/Lake-0.3.18-macos-arm64.zip",
+      "digest": "sha256:d49d1ac9701e4d9539cb55aedf76c90a45edd7c3dac66474f6408f76f091315a",
+      "size": 27864921
+    },
+    "Lake-0.3.18-macos-arm64.zip.sha256": {
+      "url": "https://github.com/Clean-Lakes/Lake/releases/download/v0.3.18/Lake-0.3.18-macos-arm64.zip.sha256",
+      "digest": "sha256:a09a6426a25330e2b406c24118f8c57360bc00fe278ee0508bde6cb124fd16b7",
+      "size": 94
+    },
+    "Lake-0.3.18-windows-x86_64-setup.exe": {
+      "url": "https://github.com/Clean-Lakes/Lake/releases/download/v0.3.18/Lake-0.3.18-windows-x86_64-setup.exe",
+      "digest": "sha256:36873c3a8a5a92ceb9d4d90a5e9209f2a4b09f811e609c908f3848de5e914a17",
+      "size": 112316155
+    },
+    "Lake-0.3.18-windows-x86_64-setup.exe.sha256": {
+      "url": "https://github.com/Clean-Lakes/Lake/releases/download/v0.3.18/Lake-0.3.18-windows-x86_64-setup.exe.sha256",
+      "digest": "sha256:767d946ef9d502b6d51b1601f675a03373f78a859925529197cb110b4e94f3bf",
+      "size": 103
+    },
+    "Lake-0.3.18-windows-x86_64.zip": {
+      "url": "https://github.com/Clean-Lakes/Lake/releases/download/v0.3.18/Lake-0.3.18-windows-x86_64.zip",
+      "digest": "sha256:74a46dd8fe6548dc45f31c42792a1bf4f2a35cadc60ed69d32330eba8862d121",
+      "size": 211962669
+    },
+    "Lake-0.3.18-windows-x86_64.zip.sha256": {
+      "url": "https://github.com/Clean-Lakes/Lake/releases/download/v0.3.18/Lake-0.3.18-windows-x86_64.zip.sha256",
+      "digest": "sha256:9fdb552bf8d2f454538b31bc8e36bfbad479be0a15c20089fde3b9ce766d492d",
+      "size": 97
+    }
+  }
+}

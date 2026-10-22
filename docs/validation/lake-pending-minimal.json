@@ -1,0 +1,24 @@
+{
+  "changes": [
+    "remove entire visible queue header and pause control",
+    "render message bubbles directly; retain editing, removal, drag/keyboard sorting",
+    "show transparent resume action only for paused non-editing queues; no automatic resume",
+    "keep hidden accessible queue status and existing glass material"
+  ],
+  "verification": {
+    "typecheck": "passed",
+    "frontendTests": 245,
+    "headerPresent": false,
+    "normalVisibleButtons": [
+      "edit",
+      "remove"
+    ],
+    "threeMessagePanelHeight": 136,
+    "editSaveResume": "second message saved; resume control appears; explicit resume restores unpaused state and hides recovery action",
+    "cancelResume": "Escape exits editor and retains reachable resume action",
+    "narrow": "390x844, no horizontal overflow; recovery action inside viewport with transparent background",
+    "desktop": "signed Dev build and install"
+  },
+  "data": "fictional in-memory fixtures only; real queue not touched",
+  "screenshot": "lake-pending-minimal.png"
+}

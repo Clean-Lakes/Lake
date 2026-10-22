@@ -1,0 +1,55 @@
+{
+  "features": [
+    "nested resource folders",
+    "create/rename/remove folders",
+    "folder removal promotes children and preserves resource identity",
+    "mouse/trackpad/touch pointer dragging",
+    "drag before/after siblings or into a folder",
+    "move back to root",
+    "click move controls for keyboard/touch",
+    "SQLite hierarchy and ordering",
+    "browser-local collapse preferences"
+  ],
+  "scope": "resources inside each project; all conversations retain access to all project resources",
+  "checks": [
+    "legacy resource order migrated to root",
+    "cross-project and cycle rejection",
+    "invalid parent/before target rollback",
+    "depth constraint for whole subtree",
+    "same resource identities and project memberships after production migration"
+  ],
+  "tests": {
+    "fullGo": "passed (web 90.226s)",
+    "targetedRace": "passed (2.020s)",
+    "frontend": "27 passed",
+    "typescript": "passed",
+    "goVet": "passed",
+    "signedBuild": "scripts/build_lake.sh passed"
+  },
+  "browserQA": {
+    "isolatedRealGoServer": true,
+    "createdFolders": [
+      "生产环境",
+      "数据库"
+    ],
+    "resourceDragIntoNestedFolder": true,
+    "folderDragToTop": true,
+    "clickMove": true,
+    "refreshPersistence": true,
+    "serviceRestartPersistence": true,
+    "collapsePersistence": true,
+    "screenshot": "lake-resource-tree.png"
+  },
+  "service": {
+    "origin": "http://localhost:4177",
+    "pid": 52284,
+    "bundle": [
+      "/assets/index-C5D_nkYo.js"
+    ],
+    "binarySHA256": "43c4d8caf7756244463b99b23c85b8e76149e5254b6bf24e07fccac89bd8ad47"
+  },
+  "privatePreMigrationBackup": "/Users/lingyunxieqing/.lake/web-agent/lake-web.before-resource-folders-11d533264ccf441b9e302e1030e92aaf.sqlite",
+  "actualRemoteConnections": false,
+  "actualModelRequests": false,
+  "userResourcesReorganizedByAgent": false
+}

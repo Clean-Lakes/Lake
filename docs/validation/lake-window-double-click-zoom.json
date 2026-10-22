@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-12",
+  "change": "Double-click an eligible native header to zoom and restore; retain header dragging",
+  "checks": [
+    "single click preserves frame",
+    "header drag moves frame",
+    "double click increases window area",
+    "next double click restores original frame",
+    "non-header content does not trigger custom zoom",
+    "signed installed app verified"
+  ],
+  "clientRestarted": false
+}
