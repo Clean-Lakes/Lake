@@ -585,6 +585,12 @@ func (e *Engine) onlineObserve(s *session, c Config, call Call, trace *onlinePol
 	if class == "controller_stopped" {
 		return nil
 	}
+	// Project memory has its own consent/CAS boundary. Its errors remain normal
+	// tool results, never resource failures or evidence closing a resource gap.
+	// This does not bypass admission for memory writes during an active correction.
+	if memoryTool(call.Name) {
+		return nil
+	}
 	// Session bookkeeping, questions and reports do not start optimization.
 	if sessionTool(call.Name) && call.Name != "call_mcp_tool" || strings.HasPrefix(call.Name, "sre_") || call.Name == "render_chart" || call.Name == "read_evidence" || call.Name == "list_assets" || call.Name == "list_resource_groups" {
 		return nil
