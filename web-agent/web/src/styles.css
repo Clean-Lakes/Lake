@@ -125,8 +125,8 @@ a { color: inherit; }
 .permission-label { color: var(--foreground); font-size: 12px; line-height: 1.5; }
 .permission-mode { flex-shrink: 0; min-width: 44px; min-height: 26px; padding: 3px 8px; border: 1px solid transparent; border-radius: var(--radius-settings-control); corner-shape: var(--corner-window); background: transparent; color: var(--text-muted); font: inherit; font-size: 10.5px; cursor: pointer; }
 .permission-mode[aria-checked="true"] { color: var(--foreground); background: var(--surface-hover); }
-.permission-mode:hover:not(:disabled) { background: var(--surface-hover); color: var(--foreground); }
-.permission-mode:disabled { cursor: default; }
+.permission-mode:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--surface-hover); color: var(--foreground); }
+.permission-mode:disabled,.permission-mode[aria-disabled="true"] { cursor: default; }
 .permission-popover button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .permission-help { margin-top: 10px; color: var(--text-muted); font-size: 10.5px; }
 .permission-help > summary { min-height: 26px; font-size: 10.5px; }

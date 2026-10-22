@@ -10,10 +10,22 @@ function Fixture(){
  const anchor=useRef<HTMLButtonElement>(null);
  const [open,setOpen]=useState(false),[options,setOptions]=useState({...permissionDefaults});
  const [busy,setBusy]=useState(params.has('busy'));
- return <main style={{height:'100dvh',padding:24,display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
+ const [saving,setSaving]=useState(false),[saveError,setSaveError]=useState(''),[saves,setSaves]=useState(0);
+ const save=(key:string,value:boolean)=>{
+  if(saving||busy)return;
+  setSaves(count=>count+1);
+  if(!params.has('save-delay')){setOptions(current=>({...current,[key]:value}));return;}
+  setSaving(true);setSaveError('');
+  window.setTimeout(()=>{
+   if(params.has('save-error'))setSaveError('保存失败，请重试。');
+   else setOptions(current=>({...current,[key]:value}));
+   setSaving(false);
+  },800);
+ };
+ return <main data-save-count={saves} style={{height:'100dvh',padding:24,display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
   <div><h2>Lake · 执行偏好</h2><p>隔离交互验证，不连接资源。</p><button type="button" onClick={()=>setBusy(value=>!value)}>模拟执行状态：{busy?'进行中':'空闲'}</button></div>
   <div><button type="button" className="composer-permission-button" ref={anchor} aria-label="会话权限" aria-expanded={open} onClick={()=>setOpen(value=>!value)}>权限</button></div>
-  {open&&<PermissionSettings anchor={anchor} options={options} disabled={busy} error={params.has('error')?'保存失败，请重试。':undefined} onClose={()=>setOpen(false)} onChange={(key,value)=>setOptions(current=>({...current,[key]:value}))}/>}
+  {open&&<PermissionSettings anchor={anchor} options={options} disabled={busy} saving={saving} error={saveError|| (params.has('error')?'保存失败，请重试。':undefined)} onClose={()=>setOpen(false)} onChange={save}/>}
  </main>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture/>);
