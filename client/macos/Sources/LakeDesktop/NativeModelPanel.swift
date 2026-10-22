@@ -40,7 +40,7 @@ import LakeDesktopCore
 
     static let selectedFont: NSFont = {
         let descriptor = font.fontDescriptor.addingAttributes([
-            .variation: [NSNumber(value: 0x77676874): NSNumber(value: 500)]
+            .variation: [NSNumber(value: 0x77676874): NSNumber(value: 430)]
         ])
         return NSFont(descriptor: descriptor, size: 13) ?? font
     }()

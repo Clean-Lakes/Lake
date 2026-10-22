@@ -4,18 +4,18 @@
 .composer-mentions .mention-item:not([aria-selected="true"]):hover { background:transparent; }
 .composer-mentions .mention-item[aria-selected="true"] { background:var(--surface-hover); }
 .mention-categories { display: flex; gap: 4px; padding: 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.mention-categories button { display: flex; align-items: center; gap: 5px; padding: 5px 8px; border: 0; border-radius: var(--radius-window); background: transparent; color: var(--text-muted); font-size: 12px; }
+.mention-categories button { display: flex; align-items: center; gap: 5px; padding: 5px 8px; border: 0; border-radius: var(--radius-window); background: transparent; color: var(--text-muted); font-size: var(--font-size-ui); }
 .mention-categories button[aria-pressed="true"],.mention-categories button:hover { background: var(--surface-hover); color: var(--foreground); }
-.mention-categories small { font-size: 10px; color: var(--text-muted); }
+.mention-categories small { font-size: var(--font-size-ui); color: var(--text-muted); }
 .mention-results { overflow-y: auto; min-height: 0; padding: 5px; scrollbar-width: thin; }
 .composer-mentions .mention-copy { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
-.mention-copy strong { overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight:var(--font-weight-medium); }
+.mention-copy strong { overflow: hidden; text-overflow: ellipsis; font-size: var(--font-size-ui); font-weight:var(--font-weight-medium); }
 .composer-mentions .mention-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.composer-mentions .mention-kind { flex: 0 0 auto; font-size: 10px; color: var(--text-muted); }
-.mention-empty { margin: 0; padding: 18px 10px; font-size: 12px; color: var(--text-muted); }
-.mention-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; padding: 8px 10px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 10px; }
-.mention-footer button,.mention-error button { display: inline-flex; align-items: center; gap: 3px; padding: 2px; border: 0; background: transparent; color: var(--foreground); font-size: 11px; }
-.mention-error { padding: 8px 10px; font-size: 11px; color: var(--text-muted); }
+.composer-mentions .mention-kind { flex: 0 0 auto; font-size: var(--font-size-ui); color: var(--text-muted); }
+.mention-empty { margin: 0; padding: 18px 10px; font-size: var(--font-size-ui); color: var(--text-muted); }
+.mention-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; padding: 8px 10px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: var(--font-size-ui); }
+.mention-footer button,.mention-error button { display: inline-flex; align-items: center; gap: 3px; padding: 2px; border: 0; background: transparent; color: var(--foreground); font-size: var(--font-size-ui); }
+.mention-error { padding: 8px 10px; font-size: var(--font-size-ui); color: var(--text-muted); }
 .mention-error button { margin-left: 6px; }
 .mention-categories button:focus-visible,.mention-footer button:focus-visible,.mention-error button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .reference-chips > span { display: inline-flex; align-items: center; gap: 5px; }

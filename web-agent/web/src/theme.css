@@ -3,10 +3,10 @@
   color-scheme: light;
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-size-ui: 13px;
-  --font-size-body: 14px;
+  --font-size-body: var(--font-size-ui);
   --font-weight-ui: 430;
   --font-weight-normal: 400;
-  --font-weight-medium: 500;
+  --font-weight-medium: var(--font-weight-ui);
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
   --font-prose: var(--font-ui);
@@ -20,7 +20,7 @@
   --surface-selected: #e8e8e8;
   --sidebar: #fafaf9;
   --foreground: #1a1c1f;
-  --text-secondary: rgb(26 28 31 / 70%);
+  --text-secondary: var(--text-muted);
   --text-muted: rgb(26 28 31 / 50%);
   --text-disabled: var(--text-muted);
   --border: #e5e5e5;
@@ -102,7 +102,7 @@
   --surface-selected: #333333;
   --sidebar: #141414;
   --foreground: #dfdfdf;
-  --text-secondary: rgb(255 255 255 / 70%);
+  --text-secondary: var(--text-muted);
   --text-muted: rgb(255 255 255 / 50%);
   --text-disabled: var(--text-muted);
   --border: #333333;
@@ -186,6 +186,6 @@
 
 /* Match the desktop reference's premultiplied neutral text colors where supported. */
 @supports (color:color-mix(in oklab,red,transparent)) {
-  :root { --text-secondary:color-mix(in oklab,var(--foreground) 70%,transparent); --text-muted:color-mix(in oklab,var(--foreground) 50%,transparent); }
-  :root[data-theme="dark"] { --text-secondary:color-mix(in oklab,#fff 70%,transparent); --text-muted:color-mix(in oklab,#fff 50%,transparent); }
+  :root { --text-secondary:var(--text-muted); --text-muted:color-mix(in oklab,var(--foreground) 50%,transparent); }
+  :root[data-theme="dark"] { --text-secondary:var(--text-muted); --text-muted:color-mix(in oklab,#fff 50%,transparent); }
 }
