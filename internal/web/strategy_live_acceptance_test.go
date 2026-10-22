@@ -32,6 +32,13 @@ import (
 func p8DevModel(t *testing.T) ai.Model {
 	t.Helper()
 	home := os.Getenv("LAKE_P8_DEV_MODEL_HOME")
+	if expected := os.Getenv("LAKE_P8_SOURCE_COMMIT"); expected != "" {
+		actual, err := exec.Command("git", "rev-parse", "HEAD").Output()
+		dirty, dirtyErr := exec.Command("git", "status", "--porcelain").Output()
+		if err != nil || dirtyErr != nil || strings.TrimSpace(string(actual)) != expected || strings.TrimSpace(string(dirty)) != "" {
+			t.Fatal("final acceptance requires the specified clean source commit")
+		}
+	}
 	if home == "" {
 		t.Skip("explicit Dev model acceptance not requested")
 	}
@@ -63,7 +70,7 @@ func TestP8RealProviderSmoke(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	answer, usage, err := engine.ExtractStrategyProposal(ctx, model, []ai.Message{{Role: "system", Content: "Return exactly a JSON object with ok:true. No tools."}, {Role: "user", Content: "Verify this explicitly configured Lake Dev model can complete a bounded request."}})
-	record := Object{"model": model.Name, "reasoningEffort": model.ReasoningEffort, "modelRef": ai.ModelIdentity(model), "protocol": model.Protocol, "usage": usage, "passed": false, "providerVersion": "not_exposed", "seed": "not_exposed"}
+	record := Object{"sourceCommit": os.Getenv("LAKE_P8_SOURCE_COMMIT"), "model": model.Name, "reasoningEffort": model.ReasoningEffort, "modelRef": ai.ModelIdentity(model), "protocol": model.Protocol, "usage": usage, "passed": false, "providerVersion": "not_exposed", "seed": "not_exposed"}
 	var value struct {
 		OK bool `json:"ok"`
 	}
@@ -112,6 +119,7 @@ type p8Meter struct {
 	jobID                 string
 	usageUnknown          bool
 	jobUsageUnknown       bool
+	enforceJobBudget      bool
 }
 
 func (m *p8Meter) newJob() { m.mu.Lock(); defer m.mu.Unlock(); m.jobRequests = 0; m.jobTokens = 0 }
@@ -134,7 +142,7 @@ func (m *p8Meter) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 	reserve := int64(len(raw)) + output
 	m.mu.Lock()
-	if r.URL.String() != m.endpoint || m.requests >= 160 || m.jobRequests >= 12 || m.jobTokens+reserve > 100000 || m.tokens+reserve > 2000000 || time.Since(m.started) > 30*time.Minute {
+	if r.URL.String() != m.endpoint || m.requests >= 160 || m.jobRequests >= 12 || (m.enforceJobBudget && m.jobTokens+reserve > 100000) || m.tokens+reserve > 2000000 || time.Since(m.started) > 30*time.Minute {
 		m.mu.Unlock()
 		return nil, errors.New("acceptance budget or provider boundary reached")
 	}
@@ -652,7 +660,7 @@ func TestP8RealServicesPairedAcceptance(t *testing.T) {
 	meter := &p8Meter{base: base, endpoint: model.URL, versions: map[string]bool{}, started: time.Now(), journal: filepath.Join(root, "provider-reservations.json")}
 	ai.HTTPClient = &http.Client{Transport: meter, Timeout: 90 * time.Second}
 	defer func() { ai.HTTPClient = old }()
-	report := Object{"schemaVersion": 1, "mode": "real_service_readonly_diagnostics", "model": model.Name, "reasoningEffort": model.ReasoningEffort, "modelRef": ai.ModelIdentity(model), "providerVersion": "captured_from_responses", "seed": "not_exposed", "effectConclusion": "inconclusive", "autoAdopted": false, "status": "running", "runs": []p8Trial{}, "frozenFixtureHash": strategy.ContentHash(jsonText(p8LiveSpecs)), "sharedMemoryHash": strategy.ContentHash("empty"), "sharedSkillsHash": strategy.ContentHash("empty"), "limits": Object{"perJobRequests": 12, "perJobTokens": 100000, "perJobRuns": 6, "totalRequests": 160, "totalTokens": 2000000}}
+	report := Object{"schemaVersion": 1, "sourceCommit": os.Getenv("LAKE_P8_SOURCE_COMMIT"), "mode": "real_service_readonly_diagnostics", "model": model.Name, "reasoningEffort": model.ReasoningEffort, "modelRef": ai.ModelIdentity(model), "providerVersion": "captured_from_responses", "seed": "not_exposed", "effectConclusion": "inconclusive", "autoAdopted": false, "status": "running", "runs": []p8Trial{}, "frozenFixtureHash": strategy.ContentHash(jsonText(p8LiveSpecs)), "sharedMemoryHash": strategy.ContentHash("empty"), "sharedSkillsHash": strategy.ContentHash("empty"), "limits": Object{"perJobRequests": 12, "onlineCorrectionBudget": strategy.DefaultBudget(), "normalMaxSteps": 4, "perJobRuns": 6, "totalRequests": 160, "totalTokens": 2000000}}
 	path := os.Getenv("LAKE_P8_LIVE_REPORT")
 	save := func() { p8Save(t, path, report, model.Key) }
 	defer func() {
@@ -711,6 +719,7 @@ func TestP8RealServicesBoundedOptimization(t *testing.T) {
 		base = http.DefaultTransport
 	}
 	meter := &p8Meter{base: base, endpoint: model.URL, versions: map[string]bool{}, started: time.Now(), journal: filepath.Join(root, "provider-reservations.json")}
+	meter.enforceJobBudget = true
 	ai.HTTPClient = &http.Client{Transport: meter, Timeout: 90 * time.Second}
 	defer func() { ai.HTTPClient = old }()
 	engine, err := ai.New(filepath.Join(root, "coordinator"), nil, nil)
@@ -725,7 +734,7 @@ func TestP8RealServicesBoundedOptimization(t *testing.T) {
 	holdout.Prompt = "Investigate the failure to save a record on this independently reset database."
 	holdout.Version = strategy.ContentHash(development.Version + "independent-uri-readonly-v1")
 	initial := strategy.AssetRevision{Ref: strategy.RevisionRef{AssetID: "p8-live-seed", Revision: 1, ContentHash: strategy.ContentHash(p8Method)}, Kind: strategy.DomainProcedure, Body: p8Method, SourceIDs: []string{"p8-user-confirmed-method"}, Verification: strategy.UserConfirmed}
-	report := Object{"status": "running", "mode": "resettable_live_readonly", "model": model.Name, "reasoningEffort": model.ReasoningEffort, "modelRef": ai.ModelIdentity(model), "budget": strategy.DefaultBudget(), "autoAdopted": false, "baselineBindingChanged": false, "developmentFixture": Object{"id": development.ID, "version": development.Version}, "holdoutFixture": Object{"id": holdout.ID, "version": holdout.Version}, "stages": []Object{}, "stopReason": "", "effectConclusion": "inconclusive"}
+	report := Object{"schemaVersion": 1, "sourceCommit": os.Getenv("LAKE_P8_SOURCE_COMMIT"), "status": "running", "mode": "resettable_live_readonly", "model": model.Name, "reasoningEffort": model.ReasoningEffort, "modelRef": ai.ModelIdentity(model), "budget": strategy.DefaultBudget(), "autoAdopted": false, "baselineBindingChanged": false, "developmentFixture": Object{"id": development.ID, "version": development.Version}, "holdoutFixture": Object{"id": holdout.ID, "version": holdout.Version}, "stages": []Object{}, "stopReason": "", "effectConclusion": "inconclusive"}
 	path := os.Getenv("LAKE_P8_OPTIMIZATION_REPORT")
 	save := func() { p8Save(t, path, report, model.Key) }
 	defer func() {
