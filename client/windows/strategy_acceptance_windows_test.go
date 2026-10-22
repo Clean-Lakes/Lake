@@ -56,7 +56,7 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
 	if origin == "" {
 		t.Fatal("isolated backend readiness timed out")
 	}
-	window := webview.NewWithOptions(webview.WebViewOptions{DataPath: filepath.Join(home, "webview"), WindowOptions: webview.WindowOptions{Title: "Lake P8 Windows acceptance", Width: 850, Height: 600}})
+	window := webview.NewWithOptions(webview.WebViewOptions{DataPath: filepath.Join(home, "webview"), WindowOptions: webview.WindowOptions{Title: "Lake P8 Windows acceptance", Width: 1280, Height: 800}})
 	if window == nil {
 		t.Fatal("WebView2 window creation failed")
 	}
@@ -74,6 +74,13 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
 		window.Dispatch(window.Destroy)
 	}); err != nil {
 		t.Fatal("UI callback setup failed")
+	}
+	if err = window.Bind("__p8Resize", func() {
+		window.Dispatch(func() {
+			themeUser.NewProc("SetWindowPos").Call(uintptr(window.Window()), 0, 0, 0, 850, 600, 0x0002|0x0004)
+		})
+	}); err != nil {
+		t.Fatal("native resize binding unavailable")
 	}
 	window.Init(`document.addEventListener('DOMContentLoaded',()=>{(async()=>{
  let phase='initial_document';
@@ -112,7 +119,7 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
  dark.click(); await wait(()=>dark.getAttribute('aria-checked')==='true');
  document.querySelector('#strategy-settings-tab').click();
  panel=await wait(()=>document.querySelector('#strategy-settings-panel'));
- assert(innerWidth<=900,'narrow_window_not_exercised');
+ await window.__p8Resize(); phase='native_narrow_resize';await wait(()=>innerWidth<=900);assert(innerWidth<=900,'narrow_window_not_exercised');
  await window.__p8Result(JSON.stringify({passed:true,actualBackend:true,actualWebView2:true,defaultNoModel:true,tab:true,shiftTab:true,escapePreservedDraft:true,confirmedDiscard:true,dark:true,viewportWidth:innerWidth,viewportHeight:innerHeight}));
  })().catch(error=>window.__p8Result(JSON.stringify({passed:false,error:String(error.message)})));});`)
 	timer := time.AfterFunc(50*time.Second, func() { window.Dispatch(window.Destroy) })
