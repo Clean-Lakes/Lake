@@ -70,7 +70,7 @@ func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a
 }
 func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (result any, err error) {
 	if e.experiment != nil {
-		return e.experiment.invoke(call)
+		return e.experiment.invoke(ctx, call)
 	}
 	// Approval recovery can enter invoke directly. It must obey the same frozen
 	// correction gate as ordinary ADK calls, including opaque session tools.

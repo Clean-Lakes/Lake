@@ -7,6 +7,12 @@ on:
         required: false
         default: false
         type: boolean
+      p8_checks:
+        description: 'Select failed P8 checks to retry; results from other runs remain separate evidence'
+        required: false
+        default: all
+        type: choice
+        options: [all, contracts-ai, native-ui-only]
   pull_request:
     branches: [master]
     paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'scripts/verify_strategy_learning.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']
@@ -68,10 +74,17 @@ jobs:
           go test ./client/windows -skip '^TestWindowsStrategyConfirmationInRealWebView$' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: P8 strategy regression and actual Windows WebView2 acceptance
+        env:
+          LAKE_P8_CHECKS: ${{ inputs.p8_checks }}
         shell: pwsh
         run: |
-          python scripts/verify_strategy_learning.py --report "${{ runner.temp }}/strategy-learning-windows.json"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($env:LAKE_P8_CHECKS -eq 'contracts-ai') {
+            python scripts/verify_strategy_learning.py --report "${{ runner.temp }}/strategy-learning-windows.json" --packages internal/strategy internal/ai
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } elseif ($env:LAKE_P8_CHECKS -ne 'native-ui-only') {
+            python scripts/verify_strategy_learning.py --report "${{ runner.temp }}/strategy-learning-windows.json"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           $env:LAKE_P8_REQUIRED_WINDOWS_UI = '1'
           $env:LAKE_P8_WINDOWS_REPORT = '${{ runner.temp }}/strategy-learning-windows-ui.json'
           go test -v ./client/windows -run '^TestWindowsStrategyConfirmationInRealWebView$' -count=1 -timeout=2m
