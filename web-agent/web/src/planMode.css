@@ -36,7 +36,7 @@
 .plan-list-content{padding:0 0 24px;overflow-wrap:anywhere}
 .plan-list-content .assistant-markdown{min-width:0}
 .plan-list .plan-mode-error .button{margin-left:12px}
-.plan-reference {display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:32px;padding:8px 0;color:var(--text-muted);font-size:13px}
+.plan-reference {display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:32px;padding:8px 0;color:var(--text-muted);font-size:var(--font-size-body)}
 .plan-reference>svg{flex-shrink:0}
 .plan-reference button{display:inline-flex;align-items:center;gap:4px;border:0;background:transparent;color:var(--foreground);font:inherit;cursor:pointer;padding:4px 6px;border-radius:var(--radius-control)}
 .plan-reference button:hover{background:var(--surface-hover)}
