@@ -14,8 +14,6 @@
 .sidebar-brand-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .sidebar.workspace-navigation .sidebar-search-trigger { width: 28px; height: 28px; padding: 0; color: var(--text-muted); border-radius: 50%; }
 .sidebar-search-trigger:is(:hover,[aria-expanded="true"]) { color: var(--foreground); background: var(--surface-hover); }
-.sidebar-search-popover { position: absolute; top: calc(100% + 6px); left: 13px; right: 13px; z-index: 30; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius-settings-panel); background: var(--surface); box-shadow: var(--shadow-popover); }
-.sidebar.workspace-navigation .sidebar-search-popover .navigation-search { margin: 0; min-height: 38px; padding: 8px 10px; border-radius: var(--radius-settings-control); }
 .sidebar-navigation-divider { flex: 0 0 1px; height: 1px; margin: 8px 13px 16px; background: var(--border); }
 @media(pointer:coarse) { .sidebar.workspace-navigation .sidebar-search-trigger { width: 44px; height: 44px; } }
 .sidebar.workspace-navigation .navigation-search-key { font-size: var(--font-size-ui); }
