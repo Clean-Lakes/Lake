@@ -85,7 +85,9 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
 	window.Init(`document.addEventListener('DOMContentLoaded',()=>{(async()=>{
  let phase='initial_document';
  const wait=async f=>{const until=Date.now()+30000;while(Date.now()<until){const value=f();if(value)return value;await new Promise(r=>setTimeout(r,30));}throw Error('ui_readiness_timeout:'+phase+':'+document.readyState+':'+document.body.innerText.slice(0,180));};
- const button=(root,text)=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent.trim()===text || b.getAttribute('aria-label')===text);
+ // A first-run settings button includes a separate "待配置" badge. Match its
+ // visible label, while retaining exact matching for ordinary text buttons.
+ const button=(root,text)=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent.trim()===text || b.getAttribute('aria-label')===text || Array.from(b.querySelectorAll(':scope > span')).some(label=>label.textContent.trim()===text));
  const choose=async(root,text)=>{phase='button:'+text;(await wait(()=>button(root,text))).click();};
  const assert=(value,code)=>{if(!value)throw Error(code);};
  await choose(document,'工作区'); await choose(document,'设置');

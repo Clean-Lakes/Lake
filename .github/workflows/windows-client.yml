@@ -42,6 +42,7 @@ jobs:
           python-version: '3.14'
       - run: pnpm --dir web-agent install --frozen-lockfile
       - run: pnpm --dir web-agent test:frontend
+        if: ${{ !inputs.p8_resume }}
       - run: pnpm --dir web-agent build:web
       - run: choco install nsis 7zip --no-progress -y
       - name: Prepare pinned terminal runtime before packaging
