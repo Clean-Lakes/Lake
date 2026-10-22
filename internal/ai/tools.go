@@ -509,7 +509,15 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		if e.Bridge == nil {
 			return nil, errors.New("host session bridge unavailable")
 		}
-		value, err := e.bridgeCall(ctx, sessionID, "inspectHost", hostArguments(c, a), approved)
+		inspectionArgs := hostArguments(c, a)
+		// Policy may resolve an omitted target from the current binding or the
+		// unique project host. Execute that validated target, rather than sending
+		// the original empty profile ref to the host bridge.
+		inspectionArgs["asset_ref"] = ref
+		if str(a["runtime"]) == "" && str(policyContext["runtime"]) != "" {
+			inspectionArgs["runtime"] = policyContext["runtime"]
+		}
+		value, err := e.bridgeCall(ctx, sessionID, "inspectHost", inspectionArgs, approved)
 		if err != nil {
 			return nil, err
 		}
