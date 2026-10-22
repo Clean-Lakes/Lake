@@ -39,7 +39,8 @@ export function ComposerModelSelect({available,modelName,selection,configured,op
   useEffect(()=>{setSource(selection?.providerId??null);setSearch("");},[presentation]);
   if (!configured) return <button type="button" className="composer-model-setup" disabled={disabled} onClick={onSettings} title="连接模型后即可发送，已输入的内容会保留"><Glyph name="plug" size={16}/><span>连接模型</span><Glyph name="chevron" size={12}/></button>;
   const allRows=available.entries?.map(entry=>({value:JSON.stringify([entry.providerId,entry.modelId]),label:entry.displayName,name:entry.name,group:entry.providerName,groupId:entry.providerId,model:entry as AvailableModelEntry|string}))??available.models.map(name=>({value:name,label:name,name,group:"",groupId:"",model:name as AvailableModelEntry|string}));
-  const rows=available.loading?[]:allRows;
+  // Refreshing the catalog must not remove cached rows or resize an open panel.
+  const rows=allRows;
   const current=currentComposerModel(available,modelName,selection);
   const groups=[...new Set(rows.map(row=>row.groupId))];
   const activeSource=source!==null&&groups.includes(source)?source:groups.includes(current?.providerId||"")?current?.providerId||"":groups[0]||"";

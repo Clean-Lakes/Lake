@@ -3,7 +3,7 @@ import type { AICard, Resource } from "../../shared/contracts";
 import { sameCard } from "./cardEquality";
 import { summarizeFileChanges, type LineDelta } from "./file-changes-model";
 import {FilePreview} from './FilePreview';
-import {fileName} from './fileLinks';
+import {fileName,fileFormat} from './fileLinks';
 import {Glyph} from './Icons';
 
 function Delta({ delta }: { delta: LineDelta | null }) {
@@ -25,7 +25,14 @@ export const FileChanges = memo(function FileChanges({ cards, resources, partial
   const targetFor=(file:typeof files[number])=>resources.find(resource=>resource.id===file.assetRef)?.name||file.target;
   const preview=files.find(file=>file.id===selected);
   if (!files.length || live && deferUntilEnd) return null;
-  return <div className={`turn-files${arrive?" reply-arrival":""}`}><nav className="turn-file-links" aria-label="本轮文件">{files.filter(file=>!file.deleted).map(file=><a key={file.id} href={hrefFor(file)} title={`${targetFor(file)||'本轮文件'} · ${file.path}`} onClick={event=>{event.preventDefault();setSelected(file.id)}}><Glyph name="document" size={14}/><span>{fileName(file.path)}</span>{files.filter(other=>fileName(other.path)===fileName(file.path)).length>1&&<small>{targetFor(file)||file.path}{file.containerId?` · ${file.containerId}`:''}</small>}</a>)}</nav><details className="file-changes">
+  return <div className={`turn-files${arrive?" reply-arrival":""}`}><nav className="turn-file-links" aria-label="本轮文件">{files.filter(file=>!file.deleted).map(file=>{
+    const duplicate=files.some(other=>other.id!==file.id&&fileName(other.path)===fileName(file.path));
+    if(file.runtime==='local'&&!file.containerId)return <div className="generated-file-card" key={file.id}>
+      <a className="generated-file-main" href={hrefFor(file)} title={file.path} onClick={event=>{event.preventDefault();setSelected(file.id)}}><span className="generated-file-icon"><Glyph name="document" size={20}/></span><span className="generated-file-copy"><span className="generated-file-name">{fileName(file.path)}</span><small className="generated-file-meta">本机 · {fileFormat(file.path)}{duplicate&&<span>{file.path}</span>}</small></span></a>
+      <button type="button" className="generated-file-open" aria-label={`打开 ${fileName(file.path)}`} title={file.path} onClick={()=>setSelected(file.id)}>打开</button>
+    </div>;
+    return <a key={file.id} href={hrefFor(file)} title={`${targetFor(file)||'本轮文件'} · ${file.path}`} onClick={event=>{event.preventDefault();setSelected(file.id)}}><Glyph name="document" size={14}/><span>{fileName(file.path)}</span>{duplicate&&<small>{targetFor(file)||file.path}{file.containerId?` · ${file.containerId}`:''}</small>}</a>;
+  })}</nav><details className="file-changes">
     <summary className="file-changes-badge"><Glyph name="document" size={14}/><span className="file-changes-label">{files.length} 个文件已更改{partial ? "（部分记录）" : ""}</span><span className="file-changes-delta"><Delta delta={delta}/></span><Glyph name="next" size={13} className="file-changes-chevron"/></summary>
     <div className="file-changes-list">{files.map(file => {
       const target = resources.find(resource => resource.id === file.assetRef)?.name || file.target;

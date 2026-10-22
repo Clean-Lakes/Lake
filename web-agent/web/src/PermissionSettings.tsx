@@ -1,6 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Glyph } from "./Icons";
+import {DisclosureSummary} from "./DisclosureSummary";
 
 export const permissionDefaults = {
   silentReadFiles: true,
@@ -26,9 +27,9 @@ const groups: Array<{title: string; hint?: string; fields: Array<{key: keyof typ
   ]},
 ];
 
-export function PermissionSettings({anchor, options, disabled, error, onChange, onClose}: {
+export function PermissionSettings({anchor, options, disabled, saving=false, error, onChange, onClose}: {
   anchor: RefObject<HTMLButtonElement | null>;
-  options: Record<string, unknown>; disabled: boolean; error?: string;
+  options: Record<string, unknown>; disabled: boolean; saving?: boolean; error?: string;
   onChange: (key: string, value: boolean) => void; onClose: () => void;
 }) {
   const panel = useRef<HTMLElement>(null);
@@ -74,21 +75,21 @@ export function PermissionSettings({anchor, options, disabled, error, onChange, 
       document.removeEventListener("scroll", update, true); document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", keyboard); document.removeEventListener("focusin", focus); };
   }, [anchor]);
-  return createPortal(<section ref={panel} className="permission-popover" role="dialog" aria-label="会话权限"
+  return createPortal(<section ref={panel} className="permission-popover" role="dialog" aria-label="会话权限" aria-busy={saving}
     style={{left: position.left, top: position.top, maxHeight: position.maxHeight, visibility: position.ready ? "visible" : "hidden"}}>
-    <header><div><strong>执行偏好</strong><p>当前会话 · 自动保存</p></div><button type="button" className="permission-close" aria-label="关闭会话权限" onClick={() => {onClose(); anchor.current?.focus();}}><Glyph name="close" size={14}/></button></header>
+    <header><strong className="permission-heading"><Glyph name="waves" size={18}/>执行偏好</strong><span className="permission-save-state">自动保存</span><button type="button" className="permission-close" aria-label="关闭会话权限" onClick={() => {onClose(); anchor.current?.focus();}}><Glyph name="close" size={14}/></button></header>
     {error && <p className="form-error" role="alert">{error}</p>}
     {groups.map((group, index) => <div className="permission-group" role="group" aria-labelledby={`${id}-group-${index}`} key={group.title}>
       <div className="permission-group-heading"><span id={`${id}-group-${index}`}>{group.title}</span>{group.hint && <small>{group.hint}</small>}</div>
-      {group.fields.map(field => {
+      <div className="permission-group-items">{group.fields.map(field => {
         const checked = Boolean(options[field.key] ?? permissionDefaults[field.key]);
         return <div className="permission-row" key={field.key}>
-          <div className="permission-copy"><span className="permission-label" id={`${id}-${field.key}`}>{field.label}</span><p id={`${id}-${field.key}-description`}>{field.description}</p></div>
-          <button type="button" className="permission-mode" role="switch" aria-labelledby={`${id}-${field.key}`} aria-describedby={`${id}-${field.key}-description`} aria-checked={checked} disabled={disabled} onClick={() => onChange(field.key, !checked)}>{checked ? "开启" : "关闭"}</button>
+          <div className="permission-copy"><span className="permission-label" id={`${id}-${field.key}`}>{field.label}</span></div>
+          <button type="button" className="permission-mode" role="switch" aria-labelledby={`${id}-${field.key}`} aria-describedby={`${id}-${field.key}-description`} aria-checked={checked} disabled={disabled} aria-disabled={disabled||saving} onClick={() => {if(!saving&&!disabled)onChange(field.key, !checked);}}>{checked ? "开启" : "关闭"}</button>
         </div>;
-      })}
+      })}</div>
     </div>)}
-    <p className="permission-note">允许免确认运行命令时，也会按需建立终端连接。</p>
+    <details className="permission-help"><DisclosureSummary>操作说明</DisclosureSummary><dl>{groups.flatMap(group=>group.fields).map(field=><div key={field.key}><dt>{field.label}</dt><dd id={`${id}-${field.key}-description`}>{field.description}</dd></div>)}</dl><p className="permission-note">允许免确认运行命令时，也会按需建立终端连接。</p></details>
     {disabled && <p className="permission-note permission-locked" role="status">本轮结束或停止后可调整</p>}
 
   </section>, document.body);
