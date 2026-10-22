@@ -2,6 +2,7 @@
 :root {
   color-scheme: light;
   --font-ui: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-prose: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --status-text-base: var(--text-secondary);
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --background: #fcfcfc;
