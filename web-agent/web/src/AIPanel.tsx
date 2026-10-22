@@ -31,15 +31,13 @@ import { timingForTurn } from "./replyDurationState";
 import {displayAiError} from "./aiErrors";
 import Markdown from "react-markdown";
 import {MarkdownCodeBlock} from './MarkdownCodeBlock';
-import {remarkReplyInfo} from './replyInfo';
 import {replyInfoComponents} from './ReplyInfoElements';
 import remarkGfm from "remark-gfm";
-import { remarkAssistantProse } from "./assistantProse";
-import {remarkCompactReply} from './compactReply';
 import {ReplyDetailsSummary} from './ReplyDetailsSummary';
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { AIImage, AICard, AIView, AIPreset, TextFileAttachment, SessionSnapshot, TerminalSession, WorkspaceTag } from "../../shared/contracts";
-import { conversationTagSignature, remarkConversationTags } from "./conversationTags";
+import { conversationTagSignature } from "./conversationTags";
+import {AssistantMarkdown, ObjectReferencesProvider, ReplyReferenceScope} from './AssistantMarkdown';
 import { orderedTranscript, transcriptGroups, transcriptTurns } from "./timeline";
 import { FileChanges } from "./FileChanges";
 import { TaskProgress } from "./TaskProgress";
@@ -77,10 +75,6 @@ function Chart({ card }: { card: AICard }) {
 const noTags: WorkspaceTag[] = [];
 const cardMarkdownComponents:Components={...replyInfoComponents,pre:MarkdownCodeBlock,summary:ReplyDetailsSummary,table:({node,...props})=><div className="markdown-table-scroll"><table {...props}/></div>};
 const Card = memo(function Card({ card, tags = noTags, animateInitial = false }: { card: AICard; tags?: WorkspaceTag[]; animateInitial?:boolean }) {
-  // Only fold reports already complete when restored, never a visible live reply.
-  const compactRestored = useRef(card.status==='completed'&&!animateInitial).current;
-  const signature = conversationTagSignature(tags);
-  const decorateTags = useMemo(() => remarkConversationTags(tags), [signature]);
   const assistantText = ["text", "message"].includes(card.type);
   const isPlan=!!card.content?.trimStart().startsWith("<proposed_plan>");
   const content = card.type === "error" ? card.status === "cancelled" ? "已停止本轮" : displayAiError(card.content || "") : isPlan ? planMarkdown(card.content||"") : card.content;
@@ -91,7 +85,7 @@ const Card = memo(function Card({ card, tags = noTags, animateInitial = false }:
   if (card.type === "chart") return <Chart card={card}/>;
   if (card.type === "diff") { const data = card.data as { before: string; after: string }; return <details className="ai-diff"><DisclosureSummary>文件变更 · {card.title}</DisclosureSummary><div className="ai-diff-columns"><pre>{data.before || "（新文件）"}</pre><pre>{data.after || "（空文件或删除）"}</pre></div></details>; }
   if (card.type === "operation") return <details className="ai-operation"><DisclosureSummary><span>{card.title}</span><small>{card.status === "pending" ? "等待确认" : card.status === "running" ? "执行中" : card.status === "failed" ? "未完成" : "已结束"}</small></DisclosureSummary><pre>{JSON.stringify(card.data, null, 2)}</pre>{card.content && <pre>{card.content}</pre>}</details>;
-  return <div className={`ai-card ai-${card.type}`}><div className={`ai-markdown${assistantText ? " assistant-prose" : ""}`}><Markdown remarkPlugins={assistantText ? [remarkGfm, remarkAssistantProse, remarkReplyInfo, decorateTags,...(card.status==='completed'&&compactRestored&&!isPlan?[remarkCompactReply]:[])] : [remarkGfm]} skipHtml components={cardMarkdownComponents}>{visibleContent}</Markdown></div>{card.status === "running" && !assistantText && <span className="ai-stream-dot"/>}</div>;
+  return <div className={`ai-card ai-${card.type}`}>{assistantText ? <AssistantMarkdown tags={tags}>{visibleContent}</AssistantMarkdown> : <div className="ai-markdown"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={cardMarkdownComponents}>{visibleContent}</Markdown></div>}{card.status === "running" && !assistantText && <span className="ai-stream-dot"/>}</div>;
 }, (previous, next) => sameCard(previous.card, next.card) && conversationTagSignature(previous.tags) === conversationTagSignature(next.tags));
 
 // Animate a reply's first appearance, including a completed first packet.
@@ -103,12 +97,18 @@ function ReplyArrival({entryId,arrive,children}:{entryId:string;arrive:boolean;c
 }
 function TranscriptMessage({message,sessionId,resources}:{message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"]}) {
  return <div className={`ai-chat-message ai-role-${message.role}${message.images?.length?" has-message-images":""}`}>
-          {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}{message.text && <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : message.role === "user" ? <MessageText text={message.text} mentions={message.mentions} resources={resources}/> : planMarkdown(message.text)}</div>}
+          {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}{message.text && (message.role === 'assistant' ? <AssistantMarkdown>{planMarkdown(message.text)}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
           {message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}
           {!!message.images?.length&&<MessageImages images={message.images}/>}
         </div>;
 }
-export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh, onRevisePlan }: {onRevisePlan?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean }) {
+type TranscriptProps = {onRevisePlan?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
+export function AITranscript(props: TranscriptProps) {
+  const {snapshot} = props;
+  const resources = useMemo(() => (snapshot.resources ?? []).filter(resource => !resource.projectId || resource.projectId === snapshot.session.projectId), [snapshot.resources, snapshot.session.projectId]);
+  return <ObjectReferencesProvider key={snapshot.session.id} resources={resources} tasks={snapshot.ai?.agentRuns}><AITranscriptContent {...props}/></ObjectReferencesProvider>;
+}
+function AITranscriptContent({ snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh, onRevisePlan }: TranscriptProps) {
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
   // Retain an observed completion when a legacy turn has no saved timing and
@@ -203,7 +203,7 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
         return <ReplyArrival key={entry.id} entryId={entry.id} arrive={mode==='conversation'&&turn.some(item=>item.message?.id===latestUser?.id)&&!!entry.card&&['text','message'].includes(entry.card.type)&&!restoredText.current.has(entry.card.id)}>{entry.card?.type === "text" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)}/>{mode==='conversation' && snapshot.conversationMode==='plan' && snapshot.ai?.status==='completed' && snapshot.ai.proposedPlan?.id===entry.card?.id && <PlanActions key={entry.card!.id} disabled={disabled||!!snapshot.messageQueue?.items.length} onRevise={()=>onRevisePlan?.()} onExecute={async()=>{await api.executePlan(snapshot.session.id,entry.card!.id);await refresh?.();}}/>}</ReplyArrival>;
       };
-      return <div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)} key={turn[0]!.id}>
+      return <ReplyReferenceScope key={turn[0]!.id} cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}><div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)}>
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources}/>)}
       {mode==='conversation'?<TurnExecutionDetails {...timingProps} detailNotice={notices} details={[...processGroups.map(renderGroup),...(interim.length?[<details className="turn-progress-prose" key="interim-prose"><DisclosureSummary>过程播报 · {interim.length}</DisclosureSummary>{interim.map(entry=><div className="ai-response" key={entry.id}>{entry.card?<Card card={entry.card}/>:entry.message?<TranscriptMessage message={entry.message} sessionId={snapshot.session.id}/>:null}</div>)}</details>]:[])]} onInspect={onInspect}/>:<ReplyDuration {...timingProps}/>}
       {groups.filter(group=>!processGroups.includes(group)).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} collapsed={group.entries.every(entry=>interimIds.has(entry.id)||stages.ids.has(entry.id))}>{renderGroup(group)}</SettledReply>:renderGroup(group))}
@@ -211,7 +211,7 @@ export function AITranscript({ snapshot, renderAction, onInspect, onStopTurn, st
       <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}/>
       {mode==='conversation'&&turn===currentTurn&&<ReplyActivity active={replyWorking}/>}
-    </div>;})}
+    </div></ReplyReferenceScope>;})}
 
     {mode==='activity'&&mergedSRE.filter(task=>!sreTaskFilter||task.id===sreTaskFilter).map(task=><SREEventHistory key={task.id} task={task}/>)}
   </div>;

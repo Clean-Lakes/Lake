@@ -1,0 +1,37 @@
+.ai-markdown.assistant-prose .object-reference {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: min(calc(100% - 4px), 32em);
+  box-sizing: border-box;
+  margin-inline: 2px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--resource-reference-background, var(--surface-subtle));
+  color: var(--resource-reference-foreground, var(--text-secondary));
+  font-family: var(--font-ui);
+  font-size: .93em;
+  font-weight: 400;
+  line-height: 1.55;
+  vertical-align: baseline;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: none;
+  transform: none;
+}
+.ai-markdown.assistant-prose .object-reference[data-object-kind="resource"] { min-height: 22px; border: 0; border-radius: var(--radius-message-reference, 11px); corner-shape: var(--corner-window, round); }
+.object-reference > svg { flex: none; align-self: center; }
+.object-reference-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ai-markdown.assistant-prose button.object-reference { cursor: pointer; }
+.ai-markdown.assistant-prose button.object-reference:hover { background: var(--surface-hover); color: var(--foreground); border-color: var(--border-strong); transform: none; }
+.ai-markdown.assistant-prose button.object-reference:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ai-markdown.assistant-prose span.object-reference { cursor: default; }
+.object-reference-details { width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 48px); box-sizing: border-box; margin: auto; padding: 18px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-settings-dialog, var(--radius-dialog)); corner-shape: var(--corner-window, round); background: var(--surface); color: var(--foreground); box-shadow: var(--shadow-dialog); font: 14px/1.7 var(--font-ui); }
+.object-reference-details::backdrop { background: var(--overlay); }
+.object-reference-details > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 400; }
+.object-reference-details > header > span { display: flex; align-items: center; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.object-reference-details dl { margin: 20px 0 0; }
+.object-reference-details dl > div { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 16px; margin-top: 10px; }
+.object-reference-details dt { color: var(--text-muted); }
+.object-reference-details dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }

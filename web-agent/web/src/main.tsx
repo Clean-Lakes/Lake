@@ -9,6 +9,7 @@ import "./providerIcon.css";
 import "./composerModelSelect.css";
 import "./composerCompletion.css";
 import "./assistantProse.css";
+import "./objectReferences.css";
 import { initializeAppearance } from "./appearance";
 import { WindowsChrome } from "./WindowsChrome";
 

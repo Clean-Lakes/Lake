@@ -92,7 +92,7 @@ test('report display hides empty sections and never invents a reference for abse
 
 test('specialist Markdown renders tables and code while suppressing raw HTML and unsafe URLs',()=>{
  const html=renderToStaticMarkup(createElement(SREProse,{children:'### 检查结果\n\n| 指标 | 数值 |\n| --- | --- |\n| 磁盘 | 17% |\n\n`/var/log`\n\n<script>alert(1)</script>\n\n[危险](javascript:alert(1))'}));
- assert.ok(html.includes('<h3>检查结果</h3>'));assert.ok(html.includes('markdown-table-scroll'));assert.ok(html.includes('<code>/var/log</code>'));assert.ok(!html.includes('<script>'));assert.ok(!html.includes('javascript:'));
+ assert.ok(html.includes('<h3>检查结果</h3>'));assert.ok(html.includes('markdown-table-scroll'));assert.ok(html.includes('data-object-kind="file"')&&html.includes('>/var/log</span>'));assert.ok(!html.includes('<script>'));assert.ok(!html.includes('javascript:'));
 });
 
 test('successful SRE operations collapse together while unknown outcomes stay visible',()=>{
@@ -166,14 +166,13 @@ test('untracked tool approval is reflected by the same role in Plan and conversa
 });
 
 
-test('node reports keep only the checkpoint expanded and retain full evidence details',()=>{
+test('node reports display the complete result while retaining evidence references',()=>{
  const html=renderToStaticMarkup(createElement(SREReport,{compact:true,report:roleReport,evidence:reportEvidence,onEvidence:()=>{}}));
- assert.ok(html.indexOf('根分区使用率')<html.indexOf('<details'));
- assert.ok(/<details class="sre-node-details"><summary[^>]*>查看节点详情/.test(html));
- assert.ok(!/<details[^>]* open/.test(html));
+ assert.ok(html.includes('根分区使用率'));
+ assert.ok(!html.includes('<details'));
  assert.ok(html.includes('查看证据 1：磁盘与挂载检查'));assert.ok(html.includes('尚未确认'));
 });
-test('legacy coordinator analysis is a node reply; only the actual summarize step stays expanded',()=>{
+test('legacy coordinator analysis keeps its stage and all reply content stays expanded',()=>{
  const t=task();const base=t.plans[0]!.steps[0]!;
  t.plans[0]!.steps=[{...base,id:'analysis',role:'coordinator',kind:'analyze'},{...base,id:'final',role:'coordinator',kind:'summarize'}];
  t.runs=[{id:'run',taskId:t.id,planRevisionId:'plan',profileVersion:1,status:'completed',startedAt:at}];
@@ -185,7 +184,7 @@ test('legacy coordinator analysis is a node reply; only the actual summarize ste
  assert.equal(sreReplyStage(t,analysis),'node');assert.equal(sreReplyStage(t,final),'final');
  assert.equal(sreReplyStage(t,{...analysis,kind:'error'}),null);assert.equal(sreReplyStage(t,{...analysis,kind:'collaboration'}),null);
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:snapshot([t])}));
- assert.equal((html.match(/查看节点小结/g)??[]).length,1);assert.ok(html.includes(final.body));assert.ok(html.includes(body));
+ assert.equal((html.match(/查看节点小结/g)??[]).length,0);assert.ok(html.includes(final.body));assert.ok(html.includes(body));
 });
 test('completed status duplicates disappear only when their own node reply is present',()=>{
  const t=task();const status=message({id:'status',kind:'status',source:'runtime',attemptId:'a',body:'本步工作已完成。'});
