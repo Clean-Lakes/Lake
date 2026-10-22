@@ -12,7 +12,7 @@
 .sidebar.workspace-navigation .sidebar-project-picker .icon-button { width: 28px; height: 28px; padding: 0; color: var(--text-muted); }
 .sidebar.workspace-navigation .navigation-search { position: relative; margin: 0 13px 34px; padding: 7px 10px; min-height: 36px; background: var(--surface-hover); border-radius: var(--sidebar-row-radius); }
 .sidebar.workspace-navigation .navigation-search > .navigation-search-divider { position: absolute; left: 0; right: 0; bottom: -20px; height: 1px; background: var(--border); pointer-events: none; }
-.sidebar.workspace-navigation .navigation-search-key { font-size: 11px; }
+.sidebar.workspace-navigation .navigation-search-key { font-size: var(--font-size-ui); }
 html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { height: 48px; min-height: 48px; margin-block: 0; }
 @media(max-width:700px) { .lake-development .sidebar.workspace-navigation .sidebar-brand-row .brand::after { right: 58px; } }
 @media(pointer:coarse) {
@@ -42,7 +42,7 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
  .sidebar-scroll-area > .project-scroll { scrollbar-width:thin; }
  .sidebar-scroll-area > .project-scroll::-webkit-scrollbar { display:block; width:6px; }
 }
-.sidebar.workspace-navigation .nav-heading { margin: 0 7px 5px; font-size: 11px; font-weight:var(--font-weight-ui); color: var(--text-muted); }
+.sidebar.workspace-navigation .nav-heading { margin: 0 7px 5px; font-size: var(--font-size-ui); font-weight:var(--font-weight-ui); color: var(--text-muted); }
 .sidebar.workspace-navigation .nav-section-toggle { min-height: 26px; gap: 5px; padding: 3px 0; }
 .sidebar.workspace-navigation .session-group-count { display: none; }
 .sidebar.workspace-navigation .session-nav-row { min-height: 36px; padding: 7px 9px; gap: 9px; margin-bottom: 2px; border-radius: var(--sidebar-row-radius); }
@@ -56,34 +56,34 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation.is-bulk-selecting .nav-row-wrap > .session-nav-row,
 .sidebar.workspace-navigation.is-bulk-selecting .nav-row-wrap:is(:hover,:focus-within) > .session-nav-row { padding-right: 9px; }
 .sidebar.workspace-navigation .nav-row-text > small { display: none; }
-.sidebar.workspace-navigation .nav-show-more { margin: 5px 0 18px 7px; padding: 4px 0; min-height:28px; border-radius:0; background:transparent; font-size: 11px; text-align: left; }
+.sidebar.workspace-navigation .nav-show-more { margin: 5px 0 18px 7px; padding: 4px 0; min-height:28px; border-radius:0; background:transparent; font-size: var(--font-size-ui); text-align: left; }
 .sidebar.workspace-navigation .session-edit,.sidebar.workspace-navigation .session-more { padding: 0; width: 26px; height: 26px; }
 .sidebar.workspace-navigation .nav-row-wrap:is(:hover,:focus-within) :is(.session-edit,.session-more) { background: var(--surface-hover); }
 .sidebar.workspace-navigation .nav-row-wrap:has(.active):is(:hover,:focus-within) :is(.session-edit,.session-more) { background: var(--surface-selected); }
 .sidebar.workspace-navigation .resources-heading { margin: 16px 4px 5px; padding: 14px 3px 0; border-top: 1px solid var(--border); border-bottom: 0; color: var(--text-muted); font-weight:var(--font-weight-ui); }
 .sidebar.workspace-navigation .resources-heading .nav-section-toggle { gap: 6px; }
 .sidebar.workspace-navigation .resource-section-label { gap: 7px; }
-.sidebar.workspace-navigation .resource-section-label > small { padding: 0; border-radius: 0; background: transparent; color: var(--text-muted); font-size: 11px; }
+.sidebar.workspace-navigation .resource-section-label > small { padding: 0; border-radius: 0; background: transparent; color: var(--text-muted); font-size: var(--font-size-ui); }
 .sidebar.workspace-navigation .resource-section-chevron { width: 11px; height: 11px; }
 .sidebar.workspace-navigation :is(.resource-tree-row,.resource-folder-row,.resource-nav-row) { border-radius:var(--sidebar-row-radius); }
 .sidebar.workspace-navigation .resource-folder-row { padding: 0; }
-.sidebar.workspace-navigation .resource-folder-toggle { min-height: 36px; padding: 5px 4px; gap: 7px; font-size: 13px; border-radius: var(--sidebar-row-radius); }
+.sidebar.workspace-navigation .resource-folder-toggle { min-height: 36px; padding: 5px 4px; gap: 7px; font-size: var(--font-size-ui); border-radius: var(--sidebar-row-radius); }
 .sidebar.workspace-navigation .resource-folder-row .resource-folder-toggle { padding-right: 40px; }
 .sidebar.workspace-navigation.is-bulk-selecting .resource-folder-row .resource-folder-toggle { padding-right: 4px; }
 .sidebar.workspace-navigation .resource-folder-toggle:hover { background: var(--surface-hover); }
 .sidebar.workspace-navigation .resource-folder-name { flex: 1; }
-.sidebar.workspace-navigation .resource-folder-count { margin-left: auto; font-size: 11px; }
+.sidebar.workspace-navigation .resource-folder-count { margin-left: auto; font-size: var(--font-size-ui); }
 .sidebar.workspace-navigation .folder-chevron { flex: 0 0 11px; width: 11px; height: 11px; transform: rotate(-90deg); }
 .sidebar.workspace-navigation .folder-chevron.open { transform: rotate(0); }
 .sidebar.workspace-navigation .resource-folder-children { margin-left: 13px; }
 .sidebar.workspace-navigation .resource-folder-actions { right: 2px; top: 50%; transform: translateY(-50%); }
 .sidebar.workspace-navigation .resource-folder-actions .navigation-more-button { padding: 0; width: 26px; height: 26px; }
 .sidebar.workspace-navigation .resource-row { min-height: 36px; padding: 6px 8px; border-radius: var(--sidebar-row-radius); }
-.sidebar.workspace-navigation .resource-row .nav-row-text strong { font-size: 12px; font-weight:var(--font-weight-ui); }
+.sidebar.workspace-navigation .resource-row .nav-row-text strong { font-size: var(--font-size-ui); font-weight:var(--font-weight-ui); }
 .sidebar.workspace-navigation .resource-more-button { top: 50%; transform: translateY(-50%); padding: 0; width: 26px; height: 26px; }
 .sidebar.workspace-navigation .sidebar-tags { padding: 8px 13px 0; }
 .sidebar.workspace-navigation .sidebar-tags-toggle { padding: 6px 7px; }
-.sidebar.workspace-navigation .sidebar-tags-toggle small { font-size: 11px; }
+.sidebar.workspace-navigation .sidebar-tags-toggle small { font-size: var(--font-size-ui); }
 .sidebar.workspace-navigation .sidebar-footer { padding: 0 13px 12px; }
 .sidebar.workspace-navigation .sidebar-settings { min-height: 32px; padding: 7px; border-radius:var(--sidebar-row-radius); }
 /* Icon targets share the row curvature, clamped to a circle at their own size. */
