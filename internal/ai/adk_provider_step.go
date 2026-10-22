@@ -219,6 +219,16 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 		e.worker.mu.Unlock()
 	}
+	if report, reportErr := e.onlineCurrent(s, c); reportErr != nil {
+		cancelRequest()
+		return modelResult{}, reportErr
+	} else if report != nil && report.StopReason == "" && report.Recovered && report.Pending == nil {
+		reserve := int64(historyCost(history) + len(js(tools)) + requestModel.MaxOutput + 1024)
+		if reserve > report.Budget.MaxAdditionalTokens-report.TokensCharged {
+			tools = nil
+			appendSystem(strategy.TaskContext, "online-correction-report-only", "\nAll recorded correction gaps are closed. The remaining shared budget does not admit another tool-bearing request. Finish a report from recorded evidence only, preserving the original failures and any wider-task gaps. Do not execute further checks or claim whole-task/business recovery. This report still uses the same token/request budget.")
+		}
+	}
 	result, modelErr := d.streamWithManifest(requestCtx, requestModel, history, tools, fragments, compositionMatched, "", streamDelta)
 	cancelRequest()
 	if errors.Is(modelErr, context.DeadlineExceeded) && ctx.Err() == nil && e.worker != nil && c.sre != nil && c.sre.Role == SREInvestigator {

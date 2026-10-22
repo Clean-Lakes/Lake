@@ -622,3 +622,84 @@ func TestOnlineProposalCannotSubstituteTerminalEntryForCallID(t *testing.T) {
 		t.Fatal("schema guidance weakened host source validation", err)
 	}
 }
+
+func TestOnlineRecoveredCheckCanFinishWithoutToolSchemaWithinBudget(t *testing.T) {
+	var samples atomic.Int32
+	m, close := fakeModel(t, func(n int, body map[string]any) any {
+		var out any
+		switch n {
+		case 1:
+			return response("", Call{ID: "failed", Name: "shell", Arguments: `{"command":"pwd"}`})
+		case 2:
+			out = response("", proposal("failed", "shell", `{"command":"pwd"}`))
+		case 3:
+			out = response("", Call{ID: "sample", Name: "shell", Arguments: `{"command":"pwd"}`})
+		case 4:
+			if len(arr(body["tools"])) != 0 || !strings.Contains(js(body), "remaining shared budget does not admit another tool-bearing request") {
+				t.Error("recovered check did not switch to a bounded report-only request")
+			}
+			return response("此检查已取得结果，不代表业务恢复。")
+		default:
+			t.Error("unexpected request", n)
+			return response("停止。")
+		}
+		obj(out)["usage"] = map[string]any{"prompt_tokens": 30000, "completion_tokens": 1}
+		return out
+	})
+	defer close()
+	e := engineFor(t, m, func(_ context.Context, _, name string, _ map[string]any, _ bool) (any, error) {
+		if name == "runtimeCommandExec" {
+			if samples.Add(1) == 1 {
+				return nil, context.DeadlineExceeded
+			}
+			return map[string]any{"exitCode": 0, "status": "completed", "output": "/fixture"}, nil
+		}
+		return map[string]any{"risk": "readonly", "runtime": "local"}, nil
+	})
+	s, c := enableOnline(t, e)
+	if err := e.Chat(context.Background(), "case", "检查当前目录", nil); err != nil {
+		t.Fatal(err)
+	}
+	r := onlineReport(t, e, s, c)
+	if r.StopReason != strategy.Completed || !r.Recovered || r.TokensCharged != 60016 || r.Requests != 3 || r.TokensCharged > r.Budget.MaxAdditionalTokens || samples.Load() != 2 {
+		t.Fatal("report reset, exceeded or failed the shared budget", r.StopReason, r.TokensCharged, r.Requests)
+	}
+}
+
+func TestOnlineReportOnlyCannotExceedRemainingBudget(t *testing.T) {
+	var requests, samples atomic.Int32
+	m, close := fakeModel(t, func(n int, _ map[string]any) any {
+		requests.Add(1)
+		var out any
+		switch n {
+		case 1:
+			return response("", Call{ID: "failed", Name: "shell", Arguments: `{"command":"pwd"}`})
+		case 2:
+			out = response("", proposal("failed", "shell", `{"command":"pwd"}`))
+		case 3:
+			out = response("", Call{ID: "sample", Name: "shell", Arguments: `{"command":"pwd"}`})
+		default:
+			t.Error("report-only request bypassed insufficient budget")
+			return response("停止。")
+		}
+		obj(out)["usage"] = map[string]any{"prompt_tokens": 45000, "completion_tokens": 1}
+		return out
+	})
+	defer close()
+	e := engineFor(t, m, func(_ context.Context, _, name string, _ map[string]any, _ bool) (any, error) {
+		if name == "runtimeCommandExec" {
+			if samples.Add(1) == 1 {
+				return nil, context.DeadlineExceeded
+			}
+			return map[string]any{"exitCode": 0, "status": "completed"}, nil
+		}
+		return map[string]any{"risk": "readonly", "runtime": "local"}, nil
+	})
+	s, c := enableOnline(t, e)
+	var stopped *onlineStopped
+	err := e.Chat(context.Background(), "case", "检查当前目录", nil)
+	r := onlineReport(t, e, s, c)
+	if !errors.As(err, &stopped) || r.StopReason != strategy.BudgetExhausted || requests.Load() != 3 || samples.Load() != 2 || !r.Recovered || r.TokensCharged != 90002 {
+		t.Fatal("report-only bypassed or reset budget", err, r.StopReason, requests.Load(), r.TokensCharged)
+	}
+}
