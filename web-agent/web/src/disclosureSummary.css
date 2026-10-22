@@ -1,4 +1,4 @@
-.lake-disclosure-summary.lake-disclosure-summary { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 24px; padding: 2px 4px; margin-left: -4px; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font-size: 11px; font-weight: 500; line-height: 1.6; list-style: none; cursor: pointer; transition: color .12s ease, background .12s ease; }
+.lake-disclosure-summary.lake-disclosure-summary { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 24px; padding: 2px 4px; margin-left: -4px; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font-size: 11px; font-weight:var(--font-weight-ui); line-height: 1.6; list-style: none; cursor: pointer; transition: color .12s ease, background .12s ease; }
 .lake-disclosure-summary.lake-disclosure-summary::-webkit-details-marker { display: none; }
 .lake-disclosure-summary.lake-disclosure-summary::marker { content: ''; }
 .lake-disclosure-summary.lake-disclosure-summary:hover { background: var(--surface-hover); color: var(--foreground); }

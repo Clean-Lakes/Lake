@@ -1,10 +1,10 @@
-.ai-markdown.assistant-prose { max-width: 860px; color: var(--foreground); font-family:var(--font-prose); font-size: 14px; font-weight:500; line-height: 1.85; overflow-wrap: anywhere; }
+.ai-markdown.assistant-prose { max-width: 860px; color: var(--foreground); font-family:var(--font-prose); font-size: 14px; font-weight:var(--font-weight-ui); line-height: 1.85; overflow-wrap: anywhere; }
 .ai-markdown.assistant-prose > :first-child { margin-top: 0; }
 .ai-markdown.assistant-prose > :last-child { margin-bottom: 0; }
 .ai-markdown.assistant-prose p { margin: 0 0 16px; line-height: inherit; }
-.ai-markdown.assistant-prose strong { font-weight: 600; }
+.ai-markdown.assistant-prose strong { font-weight:var(--font-weight-semibold); }
 div.ai-markdown.assistant-prose:has(> .reply-info-facts) { padding: 0; border: 0; border-radius: 0; background: none; }
-div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { font-weight: 600; }
+div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { font-weight:var(--font-weight-semibold); }
 .ai-markdown.assistant-prose .reply-number { font-weight: inherit; }
 .ai-markdown.assistant-prose ul,.ai-markdown.assistant-prose ol { margin: 16px 0 20px; padding-inline-start: 1.5em; }
 .ai-markdown.assistant-prose li { margin: 9px 0; padding-inline-start: 4px; }
@@ -12,11 +12,11 @@ div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { fo
 .ai-markdown.assistant-prose li > p { margin: 0; }
 .ai-markdown.assistant-prose li > p + p { margin-top: 8px; }
 .ai-markdown.assistant-prose li > ul,.ai-markdown.assistant-prose li > ol { margin: 8px 0 12px; }
-.ai-markdown.assistant-prose :not(pre) > code { padding: 2px 5px; border-radius: 4px; background: var(--surface-muted); font-size: .9em; font-weight:400; }
+.ai-markdown.assistant-prose :not(pre) > code { padding: 2px 5px; border-radius: 4px; background: var(--surface-muted); font-size: .9em; font-weight:var(--font-weight-normal); }
 .ai-markdown.assistant-prose pre { margin: 16px 0 20px; padding: 14px 16px; line-height: 1.65; }
-.ai-markdown.assistant-prose pre { font-weight:400; }
-.ai-markdown.assistant-prose pre code { font-size: 12px; font-weight:400; }
-.ai-markdown.assistant-prose h1,.ai-markdown.assistant-prose h2,.ai-markdown.assistant-prose h3,.ai-markdown.assistant-prose h4 { margin: 24px 0 12px; line-height: 1.5; font-weight: 600; }
+.ai-markdown.assistant-prose pre { font-weight:var(--font-weight-normal); }
+.ai-markdown.assistant-prose pre code { font-size: 12px; font-weight:var(--font-weight-normal); }
+.ai-markdown.assistant-prose h1,.ai-markdown.assistant-prose h2,.ai-markdown.assistant-prose h3,.ai-markdown.assistant-prose h4 { margin: 24px 0 12px; line-height: 1.5; font-weight:var(--font-weight-semibold); }
 .ai-markdown.assistant-prose h1 { font-size: 22px; }
 .ai-markdown.assistant-prose h2 { font-size: 19px; }
 .ai-markdown.assistant-prose h3 { font-size: 16px; }
@@ -31,7 +31,7 @@ div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { fo
 .ai-markdown.assistant-prose td :not(pre) > code,.ai-markdown.assistant-prose td > code { padding: 0; background: none; }
 .sre-report-facts > li > .sre-prose > .assistant-prose { display: inline; }
 .sre-report-facts > li > .sre-prose > .assistant-prose > p:last-child { display: inline; margin: 0; }
-.sre-report-section h4 { font-weight: 600; }
+.sre-report-section h4 { font-weight:var(--font-weight-semibold); }
 @media (max-width: 600px) {
   .ai-markdown.assistant-prose ul,.ai-markdown.assistant-prose ol { padding-inline-start: 1.35em; }
   .ai-markdown.assistant-prose li { padding-inline-start: 2px; }

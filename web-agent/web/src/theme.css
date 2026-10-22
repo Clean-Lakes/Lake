@@ -1,7 +1,12 @@
 /* The sole palette for the active Lake workbench, including native and terminal surfaces. */
 :root {
   color-scheme: light;
-  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-weight-ui: 430;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
   --font-prose: var(--font-ui);
   --status-text-base: var(--text-secondary);
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
@@ -12,10 +17,10 @@
   --surface-hover: #eeeeee;
   --surface-selected: #e8e8e8;
   --sidebar: #fafaf9;
-  --foreground: #0d0d0d;
-  --text-secondary: #4a4a4a;
-  --text-muted: #737373;
-  --text-disabled: #999999;
+  --foreground: #1a1c1f;
+  --text-secondary: rgb(26 28 31 / 70%);
+  --text-muted: rgb(26 28 31 / 50%);
+  --text-disabled: var(--text-muted);
   --border: #e5e5e5;
   --border-strong: #cccccc;
   --primary: #17345c;
@@ -94,10 +99,10 @@
   --surface-hover: #2c2c2c;
   --surface-selected: #333333;
   --sidebar: #141414;
-  --foreground: #eeeeee;
-  --text-secondary: #cccccc;
-  --text-muted: #aaaaaa;
-  --text-disabled: #777777;
+  --foreground: #dfdfdf;
+  --text-secondary: rgb(255 255 255 / 70%);
+  --text-muted: rgb(255 255 255 / 50%);
+  --text-disabled: var(--text-muted);
   --border: #333333;
   --border-strong: #505050;
   --primary: #9bbce8;

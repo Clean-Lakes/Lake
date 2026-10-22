@@ -1,14 +1,14 @@
 /* Document properties and tag navigation, matching Lake's neutral workspace. */
-.session-state-badge { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 550; line-height: 1.5; background: var(--surface-selected); color: var(--session-state-color, var(--text-secondary)); flex-shrink: 0; white-space: nowrap; }
+.session-state-badge { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight:var(--font-weight-medium); line-height: 1.5; background: var(--surface-selected); color: var(--session-state-color, var(--text-secondary)); flex-shrink: 0; white-space: nowrap; }
 .session-actions-trigger { width: 28px; height: 28px; font-size: 16px; line-height: 1; flex-shrink: 0; }
-.tag-chip { display: inline-flex; gap: 5px; align-items: center; font-size: 11px; font-weight: 550; padding: 3px 8px; line-height: 1.5; border-radius: 999px; background: var(--tag-soft); color: var(--tag-color); max-width: 100%; overflow-wrap: anywhere; }
+.tag-chip { display: inline-flex; gap: 5px; align-items: center; font-size: 11px; font-weight:var(--font-weight-medium); padding: 3px 8px; line-height: 1.5; border-radius: 999px; background: var(--tag-soft); color: var(--tag-color); max-width: 100%; overflow-wrap: anywhere; }
 .color-gray { --tag-color: var(--text-secondary); --tag-soft: var(--surface-selected); }
 .color-green { --tag-color: var(--success); --tag-soft: var(--success-soft); }
 .color-blue { --tag-color: var(--info); --tag-soft: var(--info-soft); }
 .color-purple { --tag-color: var(--tag-purple); --tag-soft: var(--tag-purple-soft); }
 .color-orange { --tag-color: var(--tag-orange); --tag-soft: var(--tag-orange-soft); }
 .color-red { --tag-color: var(--danger); --tag-soft: var(--danger-soft); }
-.conversation-tag { color: var(--tag-color); background: var(--tag-soft); border-radius: 4px; padding: 1px 5px; font-weight: 550; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.conversation-tag { color: var(--tag-color); background: var(--tag-soft); border-radius: 4px; padding: 1px 5px; font-weight:var(--font-weight-medium); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .session-list-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 4px; margin-top: 3px; min-width: 0; }
 .session-list-tag { color: var(--tag-color); background: var(--tag-soft); font-size: 11px; line-height: 1.6; padding: 0 5px; border-radius: 4px; max-width: min(100%, 100px); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-list-tags-more { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
@@ -40,7 +40,7 @@
 .presentation-dialog { border: 1px solid var(--border); border-radius: var(--radius-dialog); background: var(--surface); color: var(--foreground); box-shadow: var(--shadow-dialog); padding: 22px; width: min(420px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; }
 .presentation-dialog::backdrop { background: var(--overlay); }
 .presentation-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
-.presentation-dialog-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.presentation-dialog-head h2 { margin: 0; font-size: 17px; font-weight:var(--font-weight-semibold); }
 .session-icon-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
 .session-icon-grid button { display: flex; align-items: center; flex-direction: column; gap: 9px; padding: 13px 4px; border: 1px solid var(--border); border-radius: var(--radius-panel); color: var(--text-secondary); background: var(--surface); font-size: 11px; }
 .session-icon-grid button:hover, .session-icon-grid button[aria-pressed="true"] { background: var(--surface-selected); color: var(--foreground); border-color: var(--border-strong); }

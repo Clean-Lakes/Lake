@@ -5,7 +5,7 @@
 .agent-emblem { display: grid; place-items: center; flex: 0 0 36px; background: transparent; color: var(--primary); height: 26px; flex-basis: 26px; border-radius: 0; }
 .agent-lead-copy { flex: 1; min-width: 0; }
 .agent-lead-copy > div { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.agent-lead-copy strong { font-size: 14px; font-weight: 500; }
+.agent-lead-copy strong { font-size: 14px; font-weight:var(--font-weight-medium); }
 .agent-group-state { display: inline-flex; align-items: center; gap: 6px; color: var(--agent-accent); font-size: 12px; }
 .agent-lead-copy p { margin: 5px 0 0; color: var(--agent-muted); font-size: 13px; line-height: 1.6; }
 .agent-task-body { margin: 18px 0 0 17px; border-left: 1px solid var(--agent-line); padding-left: 28px; margin-left: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-panel); }
@@ -18,7 +18,7 @@
 .agent-task-role { display: flex; color: var(--agent-accent); }
 .agent-task-copy { min-width: 0; }
 .agent-task-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 7px; }
-.agent-task-title strong { font-size: 14px; font-weight: 500; color: var(--agent-ink); }
+.agent-task-title strong { font-size: 14px; font-weight:var(--font-weight-medium); color: var(--agent-ink); }
 .agent-task-title > span { font-size: 12px; color: var(--agent-muted); overflow-wrap: anywhere; }
 .agent-task-description { display: block; margin-top: 3px; font-size: 12px; color: var(--agent-muted); line-height: 1.6; overflow-wrap: anywhere; }
 .agent-task-status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; color: var(--agent-muted); }
@@ -34,7 +34,7 @@
 .agent-task-detail dd { margin: 0; color: var(--agent-ink); overflow-wrap: anywhere; }
 .agent-duration { font-variant-numeric: tabular-nums; }
 .agent-task-result { margin-top: 12px; }
-.agent-task-result strong { font-weight: 500; }
+.agent-task-result strong { font-weight:var(--font-weight-medium); }
 .agent-task-result p { margin: 5px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .agent-task-evidence { margin-top: 12px; }
 .agent-task-evidence > summary, .agent-coordinator-detail > summary { color: var(--agent-muted); cursor: pointer; }

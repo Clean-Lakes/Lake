@@ -2,7 +2,7 @@
 .lake-question-heading { display: flex; align-items: flex-start; gap: 10px; }
 .lake-question-count { flex: 0 0 auto; border-radius: 20px; padding: 4px 9px; background: var(--surface-hover); color: var(--text-secondary); font-size: 13px; }
 .lake-question-heading > strong { flex: 1; padding-top: 4px; line-height: 1.5; font-size: 14px; overflow-wrap: anywhere; }
-.lake-question-heading small { margin-left: 8px; font-size: inherit; font-weight: normal; }
+.lake-question-heading small { margin-left: 8px; font-size: inherit; font-weight:var(--font-weight-ui); }
 .lake-question button { border: 1px solid var(--border); padding: 7px 11px; border-radius: var(--radius-control); background: var(--surface); color: inherit; cursor: pointer; font-size: 13px; }
 .lake-question-heading > button { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; min-height: 26px; border: none; background: transparent; padding: 3px 6px; font-size: 22px; line-height: 1.2; }
 .lake-question button:focus-visible,.lake-question textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -12,7 +12,7 @@
 .lake-question .lake-question-option { display: flex; flex-direction: row; align-items: center; gap: 16px; margin: 6px 0; padding: 12px; border: 1px solid transparent; border-radius: var(--radius-control); background: var(--surface-subtle); cursor: pointer; }
 .lake-question-option.is-selected { border-color: var(--border-strong); background: var(--surface); }
 .lake-question-option > span { flex: 1; min-width: 0; }
-.lake-question-option strong { font-size: 13px; line-height: 1.4; font-weight: 500; }
+.lake-question-option strong { font-size: 13px; line-height: 1.4; font-weight:var(--font-weight-medium); }
 .lake-question-option small { display: block; margin-top: 5px; color: var(--text-muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .lake-question-option em { display: inline-block; margin-left: 8px; padding: 1px 5px; border-radius: 4px; background: var(--surface-hover); color: var(--text-secondary); font-size: 10px; font-style: normal; }
 .lake-question-option input { flex: 0 0 auto; width: 16px; height: 16px; accent-color: var(--primary); }
