@@ -219,7 +219,10 @@ private final class TransparentPanelWebView: WKWebView {
               JSONSerialization.isValidJSONObject(state), let data = try? JSONSerialization.data(withJSONObject: state), data.count <= 524288 else { return false }
         self.state = state
         wantsOpen = true
-        panel.appearance = NSAppearance(named: state["theme"] as? String == "dark" ? .darkAqua : .aqua)
+        let appearanceName: NSAppearance.Name = state["theme"] as? String == "dark" ? .darkAqua : .aqua
+        if panel.appearance?.name != appearanceName {
+            panel.appearance = NSAppearance(named: appearanceName)
+        }
         sendState()
         place()
         if ready && measured { present() }
@@ -233,8 +236,11 @@ private final class TransparentPanelWebView: WKWebView {
         let rect = NSRect(x: x, y: mainWebView.isFlipped ? y : mainWebView.bounds.height - y - anchorHeight, width: width, height: anchorHeight)
         let onScreen = parent.convertToScreen(mainWebView.convert(rect, to: nil))
         anchorOnScreen = onScreen
-        panel.setFrame(ModelPanelGeometry.frame(anchor: onScreen, visible: screen.visibleFrame, height: height), display: true)
-        panel.invalidateShadow()
+        let frame = ModelPanelGeometry.frame(anchor: onScreen, visible: screen.visibleFrame, height: height)
+        if panel.frame != frame {
+            panel.setFrame(frame, display: true)
+            panel.invalidateShadow()
+        }
     }
 
     private func present() {

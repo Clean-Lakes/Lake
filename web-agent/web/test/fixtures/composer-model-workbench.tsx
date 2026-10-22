@@ -8,6 +8,10 @@ const entries=[
 let selected=entries[2]!;
 const efforts:Record<string,string>={};
 const slowSave=new URLSearchParams(location.search).has('slow-save');
+const slowMenu=new URLSearchParams(location.search).has('slow-menu');
+let menuFail=false;
+const menuGates:Array<()=>void>=[];
+window.addEventListener('keydown',event=>{if(!slowMenu)return;if(event.key==='F6'){event.preventDefault();menuGates.shift()?.();}if(event.key==='F5'){event.preventDefault();menuFail=true;}});
 const saveCalls:Array<{modelId:string;effort:string}>=[];
 const saveProof=document.createElement('output');saveProof.id='reasoning-save-proof';saveProof.hidden=true;saveProof.textContent='[]';document.body.appendChild(saveProof);
 const releases:Array<()=>void>=[];
@@ -25,7 +29,7 @@ window.fetch=async(input,init)=>{
  const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href);
  const json=(value:unknown)=>new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
  if(url.pathname==='/api/bootstrap')return json({...await (await inheritedFetch(input,init)).json(),modelName:selected.name,modelId:selected.modelId,modelSelection:selected,supportsImageInput:true});
- if(url.pathname==='/api/settings/model/available')return json({models:entries.map(m=>m.name),entries,activeProviderId:selected.providerId,activeModelId:selected.modelId,imageInputCapabilities:{'deepseek-flash':true}});
+ if(url.pathname==='/api/settings/model/available'){if(slowMenu)await new Promise<void>(resolve=>menuGates.push(resolve));if(menuFail)return new Response(JSON.stringify({error:'演示模型列表暂时不可用'}),{status:503,headers:{'Content-Type':'application/json'}});return json({models:entries.map(m=>m.name),entries,activeProviderId:selected.providerId,activeModelId:selected.modelId,imageInputCapabilities:{'deepseek-flash':true}});}
  if(url.pathname==='/api/settings/model/select'){
   const payload=JSON.parse(String(init?.body));selections.push(payload);sourceProof.textContent=JSON.stringify(selections);selected=entries.find(entry=>entry.modelId===payload.modelId)!;return json({});
  }
