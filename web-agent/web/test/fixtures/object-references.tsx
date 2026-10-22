@@ -1,5 +1,6 @@
 // Isolated fictional objects. No backend, model, credential or file requests.
 import {useState} from 'react';
+import {initializeFocusModality} from '../../src/focusModality';
 import {createRoot} from 'react-dom/client';
 import {AssistantMarkdown, ObjectReferencesProvider, ReplyReferenceScope} from '../../src/AssistantMarkdown';
 import {SREProse} from '../../src/SREReport';
@@ -9,6 +10,7 @@ import '../../src/styles.css';
 import '../../src/assistantProse.css';
 import '../../src/objectReferences.css';
 import '../../src/sreCollaboration.css';
+initializeFocusModality();
 const theme = new URLSearchParams(location.search).get('theme') || 'light';
 document.documentElement.dataset.theme = theme;
 const resources: Resource[] = [

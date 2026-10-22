@@ -5,7 +5,7 @@
 .lake-question-heading small { margin-left: 8px; font-size: inherit; font-weight:var(--font-weight-ui); }
 .lake-question button { border: 1px solid var(--border); padding: 7px 11px; border-radius: var(--radius-control); background: var(--surface); color: inherit; cursor: pointer; font-size: var(--font-size-ui); }
 .lake-question-heading > button { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; min-height: 26px; border: none; background: transparent; padding: 3px 6px; font-size: 22px; line-height: 1.2; }
-.lake-question button:focus-visible,.lake-question textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.lake-question button:focus-visible,.lake-question textarea:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
 .lake-question button:disabled { opacity: .45; cursor: default; }
 .lake-question fieldset { border: 0; margin: 16px 0; padding: 0; min-width: 0; max-height: min(46vh,420px); overflow-y: auto; }
 .lake-question-reason { margin: 0 0 12px; color: var(--text-secondary); line-height: 1.5; font-size: var(--font-size-ui); }

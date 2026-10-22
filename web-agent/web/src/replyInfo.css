@@ -9,7 +9,7 @@
 :is(.ai-markdown.assistant-prose,.sre-prose) .reply-commit-token > code { padding-right:2px; }
 .reply-commit-token > button { display:inline-flex; align-items:center; justify-content:center; flex:none; width:22px; height:24px; padding:3px; border:0; border-radius:4px; color:var(--text-muted); background:transparent; cursor:pointer; }
 .reply-commit-token > button:hover { color:var(--foreground); background:var(--surface-hover); }
-.reply-commit-token > button:focus-visible { outline:2px solid var(--focus); outline-offset:1px; }
+.reply-commit-token > button:focus-visible { outline:2px solid var(--focus-outline); outline-offset:1px; }
 .reply-copy-error { font-size:var(--font-size-ui); color:var(--danger); }
 .reply-number { font-weight:var(--font-weight-medium); font-variant-numeric:tabular-nums; }
 .reply-unit { color:var(--text-muted); font-size: inherit; }

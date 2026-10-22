@@ -1,7 +1,7 @@
 .app-select { display: block; width: 100%; min-width: 0; margin-top: 7px; }
 .app-select > .app-select-trigger { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; height: 36px; padding: 0 11px; box-sizing: border-box; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--foreground); font: inherit; font-size: var(--font-size-ui); font-weight:var(--font-weight-ui); text-align: left; cursor: pointer; }
 .app-select > .app-select-trigger:hover:not(:disabled) { border-color: var(--border-strong); }
-.app-select > .app-select-trigger:focus-visible,.app-select > .app-select-trigger[aria-expanded="true"] { outline: 2px solid var(--focus); outline-offset: 2px; }
+.app-select > .app-select-trigger:focus-visible,.app-select > .app-select-trigger[aria-expanded="true"] { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
 .app-select > .app-select-trigger:disabled { cursor: default; opacity: .45; }
 .app-select-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-select-icon { display: flex; flex-shrink: 0; color: var(--text-secondary); }

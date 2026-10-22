@@ -60,7 +60,7 @@
 .workflow-finish strong { font-size: var(--font-size-ui); }
 .workflow-finish p,.workflow-note { font-size: var(--font-size-ui); color: var(--text-secondary); line-height: 1.8; margin: 6px 0 0; }
 .workflow-editor-actions { display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 15px; }
-.workflow-dialog button:focus-visible,.workflow-dialog input:focus-visible,.workflow-dialog select:focus-visible,.workflow-dialog textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.workflow-dialog button:focus-visible,.workflow-dialog input:focus-visible,.workflow-dialog select:focus-visible,.workflow-dialog textarea:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
 @media (max-width:720px) {
   .workflow-dialog { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); }
   .workflow-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0,1fr); }

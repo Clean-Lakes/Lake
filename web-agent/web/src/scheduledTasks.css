@@ -7,7 +7,7 @@
 .schedule-toolbar { display: flex; align-items: center; justify-content: space-between; margin: 0 24px 10px; font-size: var(--font-size-ui); color: var(--text-muted); }
 .schedule-text-action { display: inline-flex; align-items: center; gap: 4px; padding: 4px 0; background: transparent; color: var(--text-secondary); border: 0; font: inherit; font-size: var(--font-size-ui); cursor: pointer; }
 .schedule-text-action:hover { color: var(--foreground); }
-.schedule-text-action:focus-visible, .schedule-list > button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--radius-control); }
+.schedule-text-action:focus-visible, .schedule-list > button:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: -2px; border-radius: var(--radius-control); }
 .schedule-layout { display: grid; grid-template-columns: 280px minmax(0,1fr); min-height: 240px; overflow: hidden; border-top: 1px solid var(--border); }
 .schedule-list { padding: 10px; overflow-y: auto; border-right: 1px solid var(--border); }
 .schedule-list > button { display: block; width: 100%; padding: 12px; margin: 0 0 4px; text-align: left; border: 0; border-radius: var(--radius-control); background: transparent; color: inherit; font: inherit; cursor: pointer; overflow-wrap: anywhere; }

@@ -36,7 +36,7 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar-scroll-thumb:is(.is-visible,:hover,:focus-visible) { opacity:1; pointer-events:auto; }
 .sidebar-scroll-thumb::before { content:""; position:absolute; top:0; bottom:0; left:4px; width:3px; border-radius:3px; background:var(--border-strong); }
 .sidebar-scroll-thumb:hover::before, .sidebar-scroll-thumb:active::before { background:var(--text-muted); }
-.sidebar-scroll-thumb:focus-visible { outline:1px solid var(--focus); outline-offset:1px; }
+.sidebar-scroll-thumb:focus-visible { outline:1px solid var(--focus-outline); outline-offset:1px; }
 @media(pointer:coarse) {
  .sidebar-scroll-thumb { display:none; }
  .sidebar-scroll-area > .project-scroll { scrollbar-width:thin; }

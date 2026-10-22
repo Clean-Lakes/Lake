@@ -23,7 +23,7 @@
 .plan-catalog>li{border-bottom:1px solid var(--border)}
 .plan-catalog-row{display:flex;align-items:center;gap:12px;width:100%;padding:18px 12px;border:0;background:transparent;color:var(--foreground);font:inherit;text-align:left;cursor:pointer;border-radius:var(--radius-control)}
 .plan-catalog-row:hover{background:var(--surface-hover)}
-.plan-catalog-row:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.plan-catalog-row:focus-visible{outline:2px solid var(--focus-outline);outline-offset:-2px}
 .plan-catalog-row>svg{flex-shrink:0;color:var(--text-muted)}
 .plan-catalog-title{font-weight:var(--font-weight-medium)}
 .plan-catalog-open {flex-shrink:0;font-size: var(--font-size-body);color:var(--text-muted)}
@@ -40,7 +40,7 @@
 .plan-reference>svg{flex-shrink:0}
 .plan-reference button{display:inline-flex;align-items:center;gap:4px;border:0;background:transparent;color:var(--foreground);font:inherit;cursor:pointer;padding:4px 6px;border-radius:var(--radius-control)}
 .plan-reference button:hover{background:var(--surface-hover)}
-.plan-reference button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.plan-reference button:focus-visible{outline:2px solid var(--focus-outline);outline-offset:2px}
 @media(pointer:coarse){.plan-reference button{min-height:44px}}
 @media(max-width:600px){.plan-catalog-open { font-size: var(--font-size-body);display:none}.plan-catalog-row{padding:16px 6px;gap:10px}}
 @media(max-width:400px){.plan-actions-buttons{gap:6px}.plan-actions-buttons .button { font-size: var(--font-size-ui);padding:7px 10px}.plan-mode-toggle{gap:4px}}

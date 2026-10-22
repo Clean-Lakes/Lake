@@ -29,6 +29,7 @@
   --primary-hover: #102746;
   --on-primary: #ffffff;
   --focus: #5278a6;
+  --focus-outline: var(--focus);
   --selection: #dae6f5;
   --success: #16834b;
   --success-soft: #edf8f1;
@@ -89,6 +90,9 @@
   --paper: var(--background);
   --border-color: var(--border);
 }
+
+/* Pointer-triggered autofocus stays functional without a keyboard focus ring. */
+:root[data-input-modality="pointer"] { --focus-outline: transparent; }
 
 :root[data-theme="dark"] {
   --reasoning-accent: #4b91ff;

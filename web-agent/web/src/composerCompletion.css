@@ -2,7 +2,7 @@
 .composer-completion-hint { display: flex; align-items: center; gap: 12px; height: 20px; margin-top: 3px; }
 .composer-completion-hint button { display: inline-flex; align-items: center; gap: 5px; border: 0; padding: 0; color: var(--text-muted); background: transparent; font-size: var(--font-size-ui); cursor: pointer; }
 .composer-completion-hint button:hover { color: var(--foreground); }
-.composer-completion-hint button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
+.composer-completion-hint button:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; border-radius: var(--radius-control); }
 .composer-completion-hint kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font: inherit; line-height: 15px; }
 .composer-text.has-completion + .composer-send-actions { margin-bottom: 23px; }
 
@@ -18,4 +18,4 @@
 .composer-reference-token > small { color: var(--text-muted); font-size: inherit; white-space: nowrap; }
 .composer-reference-token > button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 17px; height: 18px; padding: 0; border: 0; border-radius: var(--radius-window); background: transparent; color: inherit; opacity: .7; cursor: pointer; }
 .composer-reference-token > button:hover { opacity: 1; background: color-mix(in srgb,currentColor 12%,transparent); }
-.composer-reference-token > button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.composer-reference-token > button:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 1px; }
