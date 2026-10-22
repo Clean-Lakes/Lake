@@ -3,9 +3,9 @@
 .sidebar.workspace-navigation .sidebar-brand-row { position: relative; padding: 8px 18px 21px; min-height: 52px; }
 .sidebar.workspace-navigation .brand { gap: 7px; }
 .sidebar.workspace-navigation .brand > strong { font-size: 16px; font-weight:var(--font-weight-medium); letter-spacing: -.4px; color: var(--text-muted); }
-.lake-development .sidebar.workspace-navigation .sidebar-brand-row .brand::after { content: "DEV"; position: absolute; top: 10px; right: 18px; border: 0; padding: 0; border-radius: 0; font:var(--font-weight-ui) 11px/20px var(--font-ui); letter-spacing: 1.2px; color: var(--text-muted); }
+.lake-development .sidebar.workspace-navigation .sidebar-brand-row .brand::after { content: "DEV"; position: absolute; top: 10px; right: 18px; border: 0; padding: 0; border-radius: 0; font:var(--font-weight-ui) var(--font-size-ui)/20px var(--font-ui); letter-spacing: 1.2px; color: var(--text-muted); }
 .sidebar.workspace-navigation .sidebar-project-picker { margin: 0 18px 11px; padding: 0; min-height: 36px; border: 0; background: transparent; gap: 6px; }
-.sidebar.workspace-navigation .project-switcher { min-height: 36px; padding: 7px 0; gap: 9px; font-size: 16px; font-weight:var(--font-weight-medium); letter-spacing: -.2px; border-radius: var(--sidebar-row-radius); background: transparent; }
+.sidebar.workspace-navigation .project-switcher { min-height: 36px; padding: 7px 0; gap: 9px; font-size: var(--font-size-ui); font-weight:var(--font-weight-medium); letter-spacing: -.2px; border-radius: var(--sidebar-row-radius); background: transparent; }
 .sidebar.workspace-navigation .project-switcher > span { flex: 0 1 auto; }
 .sidebar.workspace-navigation .project-switcher > svg:first-child { color: var(--foreground); }
 .sidebar.workspace-navigation .project-switcher > svg:last-child { width: 13px; color: var(--text-muted); }
@@ -18,7 +18,7 @@
  .sidebar.workspace-navigation .project-switcher { min-height: 44px; }
  .sidebar.workspace-navigation .sidebar-project-picker .icon-button { width: 40px; height: 44px; }
  .sidebar.workspace-navigation .navigation-search { min-height: 40px; }
- .sidebar.workspace-navigation .navigation-search input { font-size: 16px; }
+ .sidebar.workspace-navigation .navigation-search input { font-size: var(--font-size-ui); }
 }
 .sidebar.workspace-navigation .sidebar-new-session { display: flex; align-items: center; justify-content: center; flex: 0 0 28px; width: 28px; height: 28px; margin: 0; padding: 0; border: 0; border-radius: var(--sidebar-row-radius); background: transparent; color: var(--text-secondary); font: inherit; }
 .sidebar.workspace-navigation .sidebar-new-session[hidden] { display: none; }

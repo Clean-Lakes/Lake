@@ -19,14 +19,14 @@
 .pending-message-actions button { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border-radius: var(--radius-control); }
 .pending-message-actions .pending-message-edit { color: var(--text-secondary); }
 .pending-message-actions,.pending-message-grip { pointer-events: auto; }
-.pending-message-attachments { display: flex; flex-wrap: wrap; gap: 6px; font-size: 10.5px; color: var(--text-muted); margin-top: 3px; }
+.pending-message-attachments { display: flex; flex-wrap: wrap; gap: 6px; font-size: var(--font-size-ui); color: var(--text-muted); margin-top: 3px; }
 .pending-message-attachments > span { display: inline-flex; align-items: center; gap: 4px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pending-message.is-editing { align-items: flex-start; padding: 8px; }
 .pending-message-editor textarea { box-sizing: border-box; width: 100%; border: 1px solid var(--border); background: var(--surface); color: var(--foreground); border-radius: var(--radius-control); padding: 8px; font: inherit; line-height: 1.6; resize: vertical; min-height: 70px; max-height: 150px; }
 .pending-message-editor>div { display: flex; align-items: center; gap: 7px; justify-content: flex-end; margin-top: 6px; }
-.pending-message-editor>div span { flex: 1; font-size: 10.5px; color: var(--text-muted); }
+.pending-message-editor>div span { flex: 1; font-size: var(--font-size-ui); color: var(--text-muted); }
 .pending-messages .pending-editor-save { color: var(--foreground); white-space: nowrap; }
-.pending-messages-note,.pending-messages-error { margin: 0; padding: 5px 4px; font-size: 11px; line-height: 1.5; }
+.pending-messages-note,.pending-messages-error { margin: 0; padding: 5px 4px; font-size: var(--font-size-ui); line-height: 1.5; }
 .pending-messages-note { color: var(--text-secondary); }
 .pending-messages-error { color: var(--danger); }
 .composer-send-actions { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
@@ -53,4 +53,4 @@
 .pending-message-list { padding: 8px 8px; margin-inline: -8px; max-height: min(194px, 35dvh); background: transparent; box-shadow: none; }
 
 .pending-queue-recovery { display: flex; justify-content: flex-end; padding: 0 4px 3px; }
-.pending-messages .pending-queue-recovery button { min-height: 22px; font-size: 10.5px; background: transparent; }
+.pending-messages .pending-queue-recovery button { min-height: 22px; font-size: var(--font-size-ui); background: transparent; }

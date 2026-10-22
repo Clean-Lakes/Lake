@@ -5,7 +5,7 @@
 .plan-actions>p {display:flex;align-items:center;gap:8px;margin:0 0 12px;color:var(--text-secondary);font-size: var(--font-size-body);line-height:1.7}
 .plan-actions>p>svg{flex-shrink:0}
 .plan-actions-buttons{display:flex;gap:8px;flex-wrap:wrap}
-.plan-actions-buttons .button {display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:7px 12px;font-size:12px}
+.plan-actions-buttons .button {display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:7px 12px;font-size:var(--font-size-ui)}
 .plan-actions>.plan-mode-error { font-size: var(--font-size-body);display:block;margin:10px 0 0;color:var(--danger)}
 .plan-mode-hint {width:min(960px,100%);box-sizing:border-box;padding:0 6px;margin:0 auto 8px;color:var(--text-secondary);font-size: var(--font-size-body);line-height:1.6}
 .session-plans-page{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
