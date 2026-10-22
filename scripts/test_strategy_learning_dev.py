@@ -173,7 +173,8 @@ class Lake:
     def switches(self, mode):
         settings = self.api('/api/strategy/settings')['settings']
         values = dict(zip(FLAGS, (mode != 'A', mode != 'A', False, mode in ('C', 'Exit'), mode in ('C', 'Exit'))))
-        values.update(expectedRevision=settings['revision'], budget=settings['budget'])
+        values.update(expectedRevision=settings['revision'], budget=settings['budget'],
+                      onlineConsentVersion=2 if values['onlineCorrectEnabled'] else 0)
         self.api('/api/strategy/settings', 'PATCH', values)
 
     def session(self, project, title):

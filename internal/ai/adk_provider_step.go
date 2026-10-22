@@ -73,6 +73,9 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 	}
 	appendSystem(strategy.TaskContext, "team-context", teamContext)
+	if c.StrategyLearnEnabled && c.MemoryProjectID != "" && !c.workflowMode && !c.sreCoordinator && c.agentRole == "" {
+		appendSystem(strategy.FixedRules, "strategy-learning-candidate-boundary-v1", "\nStrategy candidate learning is host-managed. The opted-in host observes new explicit corrections and can extract an unadopted strategy candidate after this turn. It does not require save_project_memory, forget_project_memory or Skill edits. A preference correction alone does not authorize a project-memory write; memory tools retain their independent explicit-consent and revision checks. If a memory tool rejects a write, do not claim it was saved or repeat it to bypass consent. Continue answering the current request from the available evidence; candidate extraction and human adoption are separate steps, and a candidate is not automatically applied.")
+	}
 	if onlineEnabled(c) {
 		appendSystem(strategy.FixedRules, "online-readonly-correction-v1", "\nOptional bounded read-only correction is enabled. After a failed resource check, inspect its actual call ID/error. Before another resource call, submit revise_readonly_strategy with that source ID, refuted hypothesis, concrete change, expected information and stop condition, and exactly one next tool/JSON arguments. Preserve the same authorized target. Only trusted policy can prove read-only. Do not replay writes, opaque SQL/MCP, dispatched operations or denied permissions. No new task/role/plan resets the shared budget. Only a successful repeated logical check closes that recorded gap; changed wording or timestamps do not establish progress. A recovered sample does not establish whole-task success. Finish with actual facts and gaps.")
 	}

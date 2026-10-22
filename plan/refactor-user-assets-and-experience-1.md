@@ -1,10 +1,10 @@
 ---
 goal: 收敛策略学习，积累用户可控资产并复用有证据的经验，使后台学习不阻塞任务
-version: 1.0
+version: 1.1
 date_created: 2026-10-22
 last_updated: 2026-10-22
 owner: Lake
-status: Planned
+status: In Progress
 tags: [refactor, strategy, learning, user-assets, experience]
 ---
 
@@ -12,7 +12,7 @@ tags: [refactor, strategy, learning, user-assets, experience]
 
 本计划接替[策略学习与改进开发计划](feature-strategy-learning-1.md)的后续开发方向：重点保留用户级资产、来源血缘和经验复用；在线纠错默认关闭；学习在后台生成待审核候选，不参与当前任务的成败判定。模型原有的分析、根据工具结果调整调查步骤等能力继续通过官方 ADK 执行，不强制经过额外的策略修订流程。
 
-**本次只交付实现盘点和开发计划，没有修改运行代码、已有开关或 Dev 数据。** 以下 R1～R5 均未实施；旧 P0～P8 的交付和收益结论保留为历史证据，不能把本计划的目标当作当前行为。
+R0 盘点文档经 PR #68 合入。当前已实施 R1 的日常任务隔离和旧在线同意迁移，见 [R1 契约与验收](../docs/design/strategy-learning-daily-r1.md)；R2～R5 仍未实施。旧 P0～P8 的交付和收益结论保留为历史证据，不能把尚未实施的目标当作当前行为。
 
 ## 1. 基线与收敛理由
 
@@ -143,7 +143,7 @@ tags: [refactor, strategy, learning, user-assets, experience]
 | 阶段 | 状态 | 交付与完成条件 |
 | --- | --- | --- |
 | R0 实现盘点与方向冻结 | [x] 文档交付 | 本计划、旧计划承接说明、现状与目标区分；保留 P8 inconclusive 结论 |
-| R1 隔离日常任务与在线纠错 | [ ] | 默认/老设置/在途任务兼容契约；普通模式完全绕开控制器；可选资产故障分级；PR #67 按通用修复/实验专属修复逐项评审。先验证真实任务不再被策略状态中断 |
+| R1 隔离日常任务与在线纠错 | [x] 实施与本地验收 | 日常路径绕开控制器，在线实验须版本 2 新同意；旧同意保留审计并停用；可选资产故障分级、学习变更不取消普通任务。PR #67 的主机修复/快跑拆为 #69/#70，记忆边界纳入 R1，其余在线专属改动保留在 #67；未知操作不重放。见 R1 验收记录 |
 | R2 后台学习不阻塞任务 | [ ] | 前台最小 outbox、异步转交、前台优先调度、独立预算、取消与未知调用处理；慢模型、队列/候选入库失败不影响主任务 |
 | R3 用户资产审核与晋升 | [ ] | 在原库上补齐生命周期契约；用户级创建/项目候选晋升、来源权限、拒绝去重、版本采用/撤回；界面聚焦资产与待审核 |
 | R4 条件匹配与经验复用 | [ ] | 有界相关性选择、适用条件/待复核、去重和冲突解释、准确版本使用日志、用户反馈；错误泛化可快速停用与回滚 |
@@ -188,4 +188,4 @@ R1～R4 运行对应的 Go/前端检查、故障与隔离测试，并通过真�
 
 依赖现有业务 SQLite、官方 ADK、模型辅助 completion、项目来源与权限体系；无 Harness²/Python 客户端依赖，也不新增向量库。最大的实施风险是错误泛化、来源晋升泄露、共享模型并发争用，以及辅助故障与主存储故障划分不清。R1～R4 的契约与验收分别覆盖这些风险。
 
-执行遵循 [AGENTS.md](../AGENTS.md)、[CONTRIBUTING.md](../CONTRIBUTING.md) 和[开发工作流](../docs/development-workflow.md)：普通 PR 目标为 develop，本地检查，合并须明确授权；只在 develop → master 的批次发布 PR 运行自动验证。历史 Windows CI 的单次授权不延伸到本计划。当前文档不授权任何 PR 合并、Release、生产安装或数据迁移。
+执行遵循 [AGENTS.md](../AGENTS.md)、[CONTRIBUTING.md](../CONTRIBUTING.md) 和[开发工作流](../docs/development-workflow.md)：普通 PR 目标为 develop，本地检查，合并须明确授权；只在 develop → master 的批次发布 PR 运行自动验证。历史 Windows CI 的单次授权不延伸到本计划。阶段开发授权不等于 PR 合并、Release 或生产安装授权；数据迁移限于对应阶段明确实现和验证的范围。

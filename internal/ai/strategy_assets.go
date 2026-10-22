@@ -54,11 +54,28 @@ func (e *Engine) resolveTurnStrategies(ctx context.Context, s *session, c Config
 	allowed := c.Permissions == nil || !c.Permissions.DenyLocalExecution && c.Permissions.SilentReadFiles
 	result, err := e.Strategies(ctx, id, strategy.SelectionQuery{Profile: profile, ResourceKinds: kinds, SkillReadAllowed: allowed}, frozen)
 	if err != nil {
-		return empty, errors.New("策略设置、来源或适用范围已变化；本轮已停止，请重新发送以使用最新配置")
+		if ctx.Err() != nil {
+			return empty, ctx.Err()
+		}
+		if frozen != nil && len(frozen.Selected) > 0 {
+			// Already-used content cannot be safely retained when its source or
+			// permission can no longer be validated. Never fail open here.
+			return empty, errors.New("已使用的策略来源或权限无法确认；本轮已停止，请重新发送")
+		}
+		// Optional enrichment has not entered the model context. Freeze an empty
+		// selection, retain a safe diagnostic, and continue the normal ADK turn.
+		result = empty
+		err = nil
+		result.Selection.Omitted = append(result.Selection.Omitted, strategy.OmittedAsset{Reason: "asset_service_unavailable"})
 	}
 	for _, v := range result.Assets {
 		if redact(v.Body, c) != v.Body {
-			return empty, errors.New("策略正文包含敏感内容，已停止注入")
+			if frozen != nil && len(frozen.Selected) > 0 {
+				return empty, errors.New("已使用的策略正文包含敏感内容；本轮已停止")
+			}
+			result = empty
+			result.Selection.Omitted = append(result.Selection.Omitted, strategy.OmittedAsset{Reason: "sensitive_content"})
+			break
 		}
 	}
 	s.mu.Lock()
@@ -128,7 +145,7 @@ func (e *Engine) InvalidateStrategies(projectID string) {
 	e.mu.Unlock()
 	for _, s := range all {
 		s.mu.Lock()
-		if s.cancel != nil && s.state.PromptBaseline != nil && s.state.PromptBaseline.Strategy != nil && (projectID == "" || s.state.Config.MemoryProjectID == projectID) {
+		if s.cancel != nil && s.state.PromptBaseline != nil && s.state.PromptBaseline.Strategy != nil && (len(s.state.PromptBaseline.Strategy.Selected) > 0 || s.state.Config.StrategyCorrectEnabled) && (projectID == "" || s.state.Config.MemoryProjectID == projectID) {
 			s.cancel()
 		}
 		s.mu.Unlock()
