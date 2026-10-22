@@ -181,3 +181,9 @@
 @media(prefers-reduced-transparency:reduce) {
  :root,:root[data-theme="dark"] { --title-glass-background:var(--surface); --title-glass-filter:none; --title-glass-sheen:linear-gradient(transparent,transparent); }
 }
+
+/* Match the desktop reference's premultiplied neutral text colors where supported. */
+@supports (color:color-mix(in oklab,red,transparent)) {
+  :root { --text-secondary:color-mix(in oklab,var(--foreground) 70%,transparent); --text-muted:color-mix(in oklab,var(--foreground) 50%,transparent); }
+  :root[data-theme="dark"] { --text-secondary:color-mix(in oklab,#fff 70%,transparent); --text-muted:color-mix(in oklab,#fff 50%,transparent); }
+}
