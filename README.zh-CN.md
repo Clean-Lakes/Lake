@@ -36,6 +36,8 @@
 
 普通模式由 Lake 直接处理。需要多人分工时，在输入框旁开启 **SRE 协作 · 实验性**；操作沿用会话权限。[了解使用与边界 →](docs/sre-collaboration.md)
 
+策略资产、候选学习与有界只读纠错目前为默认关闭的实验能力。手写资产、版本采用、来源追溯、预算及退出方法见[使用说明](docs/strategy-learning.md)。
+
 <details>
 <summary>本地开发</summary>
 

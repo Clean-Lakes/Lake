@@ -36,6 +36,8 @@ Connect resources, troubleshoot together, and keep a clear record of every actio
 
 Lake handles requests directly in standard mode. For tasks that benefit from specialist roles, enable **SRE collaboration · Experimental** beside the composer. Operations follow the conversation’s existing permissions. [Usage and limitations (Chinese) →](docs/sre-collaboration.md)
 
+Strategy assets, candidate learning, and bounded read-only correction are experimental and off by default. See the [usage and exit guide (Chinese)](docs/strategy-learning.md) for scope, version adoption, budgets, and validation limits.
+
 <details>
 <summary>Local development</summary>
 
