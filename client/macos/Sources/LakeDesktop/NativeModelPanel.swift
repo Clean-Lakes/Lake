@@ -33,14 +33,14 @@ import LakeDesktopCore
     static let font: NSFont = {
         let base = NSFont.systemFont(ofSize: 14)
         let descriptor = base.fontDescriptor.addingAttributes([
-            .variation: [NSNumber(value: 0x77676874): NSNumber(value: 430)] // OpenType wght
+            .variation: [NSNumber(value: 0x77676874): NSNumber(value: 500)] // OpenType wght
         ])
         return NSFont(descriptor: descriptor, size: 14) ?? base
     }()
 
     static let selectedFont: NSFont = {
         let descriptor = font.fontDescriptor.addingAttributes([
-            .variation: [NSNumber(value: 0x77676874): NSNumber(value: 430)]
+            .variation: [NSNumber(value: 0x77676874): NSNumber(value: 500)]
         ])
         return NSFont(descriptor: descriptor, size: 14) ?? font
     }()

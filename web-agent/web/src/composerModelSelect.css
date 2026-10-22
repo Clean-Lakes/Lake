@@ -1,9 +1,9 @@
 .composer-model-anchor { display: contents; }
 .composer-model-select.app-select { width: auto; max-width: 240px; margin-top: 0; }
-.composer-model-select.app-select > .app-select-trigger { height: 28px; padding: 0 8px; gap: 7px; border: 0; background: transparent; font-size: var(--font-size-ui); }
+.composer-model-select.app-select > .app-select-trigger { height: 28px; padding: 0 8px; gap: 7px; border: 0; background: transparent; font-size: var(--font-size-toolbar); }
 .composer-model-select.app-select > .app-select-trigger:hover:not(:disabled),.composer-model-select.app-select > .app-select-trigger[aria-expanded="true"] { background: var(--surface-hover); }
 .composer-model-select.app-select > .app-select-trigger[aria-expanded="true"]:not(:focus-visible) { outline: none; }
-.composer-model-setup { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-secondary); font: inherit; font-size: var(--font-size-ui); white-space: nowrap; }
+.composer-model-setup { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-secondary); font: inherit; font-size: var(--font-size-toolbar); white-space: nowrap; }
 .composer-model-setup:hover:not(:disabled) { background: var(--surface-hover); color: var(--foreground); }
 .composer-model-search { display: flex; align-items: center; gap: 7px; margin: 2px 5px 7px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text-muted); }
 .composer-model-search:focus-within { border-color: var(--focus); }
@@ -75,4 +75,4 @@
 
 .composer-model-current { display:flex; align-items:center; gap:7px; min-width:0; }
 .composer-model-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.composer-model-effort { flex-shrink:0; color:var(--text-muted); font-size: var(--font-size-ui); font-weight:var(--font-weight-ui); }
+.composer-model-effort { flex-shrink:0; color:var(--text-muted); font-size: var(--font-size-toolbar); font-weight:var(--font-weight-ui); }
