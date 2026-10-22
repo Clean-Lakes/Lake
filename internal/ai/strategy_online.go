@@ -642,6 +642,12 @@ func (e *Engine) onlineObserve(s *session, c Config, call Call, trace *onlinePol
 		if !trace.ReadOnly && !trace.Dispatched && class != "unknown" {
 			return onlineStop(r, strategy.AwaitingUser)
 		}
+		// A completed terminal receipt is a known outcome, even when policy
+		// cannot authorize readonly replay of the command. Stop at that boundary
+		// without suggesting the operation itself still needs reconciliation.
+		if !trace.ReadOnly && trace.Dispatched && toolErr == nil && class != "unknown" && obj(value)["status"] == "completed" && obj(value)["exitCode"] != nil {
+			return onlineStop(r, strategy.PermissionBlocked)
+		}
 		if !trace.ReadOnly || class == "unknown" && (obj(value)["status"] == "running" || obj(value)["running"] == true || obj(value)["status"] == "dispatched") {
 			return onlineStop(r, strategy.AwaitingReconciliation)
 		}

@@ -553,3 +553,31 @@ func TestOnlineMemoryResultsCannotChangeExistingResourceGap(t *testing.T) {
 		t.Fatal("active readonly boundary was weakened")
 	}
 }
+
+func TestOnlineKnownTerminalFailureDoesNotInventUnknownOutcome(t *testing.T) {
+	for _, outcome := range []string{"completed", "running", "bridge_error"} {
+		t.Run(outcome, func(t *testing.T) {
+			e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+			s, c := enableOnline(t, e)
+			value := map[string]any{"status": "completed", "exitCode": 52}
+			var toolErr error
+			want := strategy.PermissionBlocked
+			if outcome == "running" {
+				value = map[string]any{"status": "running"}
+				want = strategy.AwaitingReconciliation
+			} else if outcome == "bridge_error" {
+				toolErr = errors.New("bridge disconnected after dispatch")
+				want = strategy.AwaitingReconciliation
+			}
+			err := e.onlineObserve(s, c, Call{ID: "sample", Name: "shell", Arguments: `{"command":"curl -sS --max-time 2 http://127.0.0.1:53545/fail/user"}`}, &onlinePolicyTrace{Dispatched: true, TargetHash: "target"}, value, toolErr)
+			var stopped *onlineStopped
+			if !errors.As(err, &stopped) || stopped.Reason != want {
+				t.Fatal("known receipt and unknown dispatch were conflated", outcome, err)
+			}
+			r := onlineReport(t, e, s, c)
+			if r.Recovered || len(r.Revisions) != 0 || len(r.OpenChecks) != 1 || r.Observations[0].TrustedReadOnly {
+				t.Fatal("untrusted command became retryable or its failure disappeared")
+			}
+		})
+	}
+}
