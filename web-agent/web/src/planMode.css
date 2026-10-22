@@ -13,11 +13,11 @@
 .session-plans-page-header{margin-bottom:28px}
 .session-plans-page-header>.button{display:inline-flex;align-items:center;gap:6px;margin-bottom:24px}
 .session-plans-page-header>.button>svg{transform:rotate(180deg)}
-.session-plans-page-header h1{font-size:24px;font-weight:500;line-height:1.4;margin:0;outline:none}
+.session-plans-page-header h1{font-size:24px;font-weight:var(--font-weight-medium);line-height:1.4;margin:0;outline:none}
 .session-plans-page-header>p{font-size:14px;color:var(--text-muted);line-height:1.6;overflow-wrap:anywhere;margin:7px 0 0}
 .plan-list{display:flex;flex-direction:column;min-width:0;font-size:14px;gap:0}
 .plan-list-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}
-.plan-list-header h2{font-size:18px;font-weight:500;margin:0 0 6px}
+.plan-list-header h2{font-size:18px;font-weight:var(--font-weight-medium);margin:0 0 6px}
 .plan-list-header p,.plan-list-loading{font-size:13px;color:var(--text-muted);margin:0;line-height:1.6}
 .plan-catalog{list-style:none;padding:0;margin:0;border-top:1px solid var(--border)}
 .plan-catalog>li{border-bottom:1px solid var(--border)}
@@ -25,14 +25,14 @@
 .plan-catalog-row:hover{background:var(--surface-hover)}
 .plan-catalog-row:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .plan-catalog-row>svg{flex-shrink:0;color:var(--text-muted)}
-.plan-catalog-title{font-weight:500}
+.plan-catalog-title{font-weight:var(--font-weight-medium)}
 .plan-catalog-open{flex-shrink:0;font-size:12px;color:var(--text-muted)}
 .plan-list-back{display:inline-flex;align-items:center;gap:6px;margin-bottom:10px}
 .plan-list-back>svg{transform:rotate(180deg)}
 .plan-list-header h2,.plan-detail-heading{outline:none}
-.plan-detail-heading{font-size:13px;font-weight:500;color:var(--text-muted);margin:0 0 16px}
+.plan-detail-heading{font-size:13px;font-weight:var(--font-weight-ui);color:var(--text-muted);margin:0 0 16px}
 .plan-list-title{min-width:0;flex:1;overflow-wrap:anywhere;font-size:15px;line-height:1.6}
-.plan-list-title small{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;font-weight:500;color:var(--text-muted);margin-top:4px}
+.plan-list-title small{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;font-weight:var(--font-weight-ui);color:var(--text-muted);margin-top:4px}
 .plan-list-content{padding:0 0 24px;overflow-wrap:anywhere}
 .plan-list-content .assistant-markdown{min-width:0}
 .plan-list .plan-mode-error .button{margin-left:12px}

@@ -32,7 +32,7 @@
 .workflow-delete span { width: 100%; }
 .workflow-editor { display: flex; flex-direction: column; gap: 15px; padding: 22px 25px; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .workflow-editor>.workflow-section-head { margin-bottom: 0; }
-.workflow-editor label { display: flex; flex-direction: column; gap: 7px; font-size: 12px; font-weight: 500; }
+.workflow-editor label { display: flex; flex-direction: column; gap: 7px; font-size: 12px; font-weight:var(--font-weight-medium); }
 .workflow-editor input:not([type=checkbox]),.workflow-editor textarea,.workflow-editor select { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--foreground); padding: 9px 11px; font: inherit; line-height: 1.6; }
 .workflow-editor textarea { resize: vertical; }
 .workflow-steps-head { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; flex-wrap: wrap; }

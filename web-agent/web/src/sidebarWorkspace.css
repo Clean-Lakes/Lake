@@ -2,10 +2,10 @@
 .sidebar.workspace-navigation { --sidebar-row-radius:var(--radius-window); }
 .sidebar.workspace-navigation .sidebar-brand-row { position: relative; height: 36px; min-height: 36px; margin: 8px 0 10px; padding: 0 16px; }
 .sidebar.workspace-navigation .brand { gap: 7px; }
-.sidebar.workspace-navigation .brand > strong { font-size: 20px; line-height: 1; font-weight: 600; letter-spacing: -.9px; color: var(--foreground); }
-.lake-development .sidebar.workspace-navigation .sidebar-brand-row .brand::after { content: "Dev"; position: absolute; top: 50%; right: 16px; transform: translateY(-50%); display: grid; place-items: center; box-sizing: border-box; min-width: 30px; height: 18px; border: 0; padding: 0 6px; border-radius: var(--radius-settings-badge); corner-shape: var(--corner-window); background: var(--surface-hover); font: 400 10px/18px var(--font-ui); letter-spacing: 0; color: var(--text-muted); }
+.sidebar.workspace-navigation .brand > strong { font-size: 20px; line-height: 1; font-weight:var(--font-weight-semibold); letter-spacing: -.9px; color: var(--foreground); }
+.lake-development .sidebar.workspace-navigation .sidebar-brand-row .brand::after { content: "Dev"; position: absolute; top: 50%; right: 16px; transform: translateY(-50%); display: grid; place-items: center; box-sizing: border-box; min-width: 30px; height: 18px; border: 0; padding: 0 6px; border-radius: var(--radius-settings-badge); corner-shape: var(--corner-window); background: var(--surface-hover); font:var(--font-weight-ui) 10px/18px var(--font-ui); letter-spacing: 0; color: var(--text-muted); }
 .sidebar.workspace-navigation .sidebar-project-picker { margin: 0 18px 11px; padding: 0; min-height: 36px; border: 0; background: transparent; gap: 6px; }
-.sidebar.workspace-navigation .project-switcher { min-height: 36px; padding: 7px 0; gap: 9px; font-size: 16px; font-weight: 500; letter-spacing: -.2px; border-radius: var(--sidebar-row-radius); background: transparent; }
+.sidebar.workspace-navigation .project-switcher { min-height: 36px; padding: 7px 0; gap: 9px; font-size: 16px; font-weight:var(--font-weight-medium); letter-spacing: -.2px; border-radius: var(--sidebar-row-radius); background: transparent; }
 .sidebar.workspace-navigation .project-switcher > span { flex: 0 1 auto; }
 .sidebar.workspace-navigation .project-switcher > svg:first-child { color: var(--foreground); }
 .sidebar.workspace-navigation .project-switcher > svg:last-child { width: 13px; color: var(--text-muted); }
@@ -42,12 +42,12 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
  .sidebar-scroll-area > .project-scroll { scrollbar-width:thin; }
  .sidebar-scroll-area > .project-scroll::-webkit-scrollbar { display:block; width:6px; }
 }
-.sidebar.workspace-navigation .nav-heading { margin: 0 7px 5px; font-size: 11px; font-weight: 500; color: var(--text-muted); }
+.sidebar.workspace-navigation .nav-heading { margin: 0 7px 5px; font-size: 11px; font-weight:var(--font-weight-ui); color: var(--text-muted); }
 .sidebar.workspace-navigation .nav-section-toggle { min-height: 26px; gap: 5px; padding: 3px 0; }
 .sidebar.workspace-navigation .session-group-count { display: none; }
 .sidebar.workspace-navigation .session-nav-row { min-height: 36px; padding: 7px 9px; gap: 9px; margin-bottom: 2px; border-radius: var(--sidebar-row-radius); }
-.sidebar.workspace-navigation .session-nav-row .nav-row-text strong { font-weight: 500; }
-.sidebar.workspace-navigation .session-nav-row.active .nav-row-text strong { font-weight: 500; }
+.sidebar.workspace-navigation .session-nav-row .nav-row-text strong { font-weight:var(--font-weight-ui); }
+.sidebar.workspace-navigation .session-nav-row.active .nav-row-text strong { font-weight:var(--font-weight-medium); }
 .sidebar.workspace-navigation .nav-row:not(:disabled) .nav-row-text strong,
 .sidebar.workspace-navigation .resource-folder-toggle:not(:disabled) .resource-folder-name { color:var(--foreground); }
 /* The live state and the menu own separate space, including the non-hovered active row. */
@@ -60,7 +60,7 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .session-edit,.sidebar.workspace-navigation .session-more { padding: 0; width: 26px; height: 26px; }
 .sidebar.workspace-navigation .nav-row-wrap:is(:hover,:focus-within) :is(.session-edit,.session-more) { background: var(--surface-hover); }
 .sidebar.workspace-navigation .nav-row-wrap:has(.active):is(:hover,:focus-within) :is(.session-edit,.session-more) { background: var(--surface-selected); }
-.sidebar.workspace-navigation .resources-heading { margin: 16px 4px 5px; padding: 14px 3px 0; border-top: 1px solid var(--border); border-bottom: 0; color: var(--text-muted); font-weight: 500; }
+.sidebar.workspace-navigation .resources-heading { margin: 16px 4px 5px; padding: 14px 3px 0; border-top: 1px solid var(--border); border-bottom: 0; color: var(--text-muted); font-weight:var(--font-weight-ui); }
 .sidebar.workspace-navigation .resources-heading .nav-section-toggle { gap: 6px; }
 .sidebar.workspace-navigation .resource-section-label { gap: 7px; }
 .sidebar.workspace-navigation .resource-section-label > small { padding: 0; border-radius: 0; background: transparent; color: var(--text-muted); font-size: 11px; }
@@ -79,7 +79,7 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .resource-folder-actions { right: 2px; top: 50%; transform: translateY(-50%); }
 .sidebar.workspace-navigation .resource-folder-actions .navigation-more-button { padding: 0; width: 26px; height: 26px; }
 .sidebar.workspace-navigation .resource-row { min-height: 36px; padding: 6px 8px; border-radius: var(--sidebar-row-radius); }
-.sidebar.workspace-navigation .resource-row .nav-row-text strong { font-size: 12px; font-weight: 500; }
+.sidebar.workspace-navigation .resource-row .nav-row-text strong { font-size: 12px; font-weight:var(--font-weight-ui); }
 .sidebar.workspace-navigation .resource-more-button { top: 50%; transform: translateY(-50%); padding: 0; width: 26px; height: 26px; }
 .sidebar.workspace-navigation .sidebar-tags { padding: 8px 13px 0; }
 .sidebar.workspace-navigation .sidebar-tags-toggle { padding: 6px 7px; }

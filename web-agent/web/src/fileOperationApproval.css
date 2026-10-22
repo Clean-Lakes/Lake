@@ -1,9 +1,9 @@
 .file-operation-approval { max-width: 860px; padding: 16px 18px; }
 .file-approval-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; margin: 15px 0 10px; }
-.file-approval-name > strong { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.file-approval-name > strong { font-size: 13px; font-weight:var(--font-weight-medium); overflow-wrap: anywhere; }
 .file-approval-name > span { display: inline-flex; gap: 8px; font: 11px var(--font-mono); white-space: nowrap; }
 .file-approval-name i { font-style: normal; color: var(--success); }
-.file-approval-name b { font-weight: 400; color: var(--danger); }
+.file-approval-name b { font-weight:var(--font-weight-ui); color: var(--danger); }
 .file-approval-preview { min-width: 0; margin-top: 14px; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
 .file-operation-approval .file-approval-preview > summary { display: flex; align-items: center; gap: 9px; width: 100%; max-width: none; min-height: 34px; margin: 0; padding: 4px 11px; border-radius: 0; color: var(--text-secondary); background: var(--surface-subtle); font-size: 11px; }
 .file-approval-preview-head > svg { margin-left: auto; }
