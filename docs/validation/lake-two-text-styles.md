@@ -1,5 +1,7 @@
 # Ordinary text: two visual styles
 
+Current sizing/color and actual native verification are recorded in [screenshot calibration](lake-codex-screenshot-calibration.md); its 14px calibration supersedes the 13px checks below.
+
 This supersedes the ordinary-text sizing and weight choices in `lake-typography-parity.md` and `lake-darker-text.md` following the user’s latest screenshot feedback.
 
 - Feature commit: `4c4eee69`; signed Dev integration tested: `b128c15f`.
