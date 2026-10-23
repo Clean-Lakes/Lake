@@ -63,13 +63,15 @@ func (s *Store) resolveStrategyBindings(ctx StrategyContext, q strategy.Selectio
 				if q.Profile == "isolated_role" {
 					reason = "unsupported_context"
 				}
-				if integer(row["enabled"]) == 0 {
-					reason = "disabled"
-				} else if !v.Available || !v.SourcesAvailable {
+				if !v.Available || !v.SourcesAvailable {
 					reason = "source_unavailable"
+				} else if v.Review.Decision == "rejected" {
+					reason = "rejected"
+				} else if integer(row["enabled"]) == 0 {
+					reason = "disabled"
 				}
-				for _, sourceID := range v.Value.SourceIDs {
-					source := s.strategySource(ctx, sourceID, false)
+
+				for _, source := range s.strategyRuntimeSources(ctx, v.Value.Ref) {
 					if source["kind"] == "skill_import" {
 						parts := strings.Split(stringOf(source["originKey"]), ":")
 						if !q.SkillReadAllowed {
@@ -162,4 +164,23 @@ func (s *Store) importStrategySkill(ctx StrategyContext, scope strategy.Scope, k
 		s.strategySaveReceipt(scopeKey, key, digest, result)
 		return result
 	})
+}
+
+// Private promotion dependencies are checked by the host, never copied into the
+// global revision/API/prompt. Skill permissions and source hashes still apply.
+func (s *Store) strategyRuntimeSources(ctx StrategyContext, ref strategy.RevisionRef) []Object {
+	out := []Object{}
+	if !s.strategyPromotionAvailable(ref.AssetID, ref.Revision) {
+		return out
+	}
+	for _, row := range s.rows(`SELECT x.* FROM strategySourceEvents x JOIN strategyRevisionSources rs ON rs.sourceId=x.id WHERE rs.assetId=? AND rs.revision=?
+ UNION SELECT x.* FROM strategyPromotions p JOIN strategyRevisionSources rs ON rs.assetId=p.originAssetId AND rs.revision=p.originRevision JOIN strategySourceEvents x ON x.id=rs.sourceId WHERE p.assetId=? AND p.revision=?`, ref.AssetID, ref.Revision, ref.AssetID, ref.Revision) {
+		scope := scopeFromRow(row)
+		sourceContext := ctx
+		if scope.Kind == strategy.ProjectScope {
+			sourceContext = StrategyContext{ProjectID: scope.ProjectID}
+		}
+		out = append(out, s.strategySource(sourceContext, stringOf(row["id"]), false))
+	}
+	return out
 }

@@ -124,7 +124,7 @@ func (b *Server) strategyLearningRoute(w http.ResponseWriter, r *http.Request, c
 	if len(parts) == 2 && parts[0] == "sources" && r.Method == "DELETE" {
 		strategyBody[struct{}](r)
 		result := strategyMust(b.Store.ForgetStrategySource(ctx, parts[1], key, true))
-		b.Engine.InvalidateStrategies(ctx.ProjectID)
+		b.Engine.InvalidateStrategies("")
 		reply(w, 200, result)
 		return true
 	}

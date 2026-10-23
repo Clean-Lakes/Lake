@@ -61,6 +61,7 @@ func (s *Store) ForgetStrategySource(ctx StrategyContext, id, key string, revoke
 		s.exec("UPDATE strategyLearningTurns SET snapshotJSON='' WHERE sourceId=?", id)
 		s.eraseStrategyExperiments("jobId IN (SELECT jobId FROM strategyJobSources WHERE sourceId=?)", id)
 		s.exec("UPDATE strategyProposalRuns SET resultJSON='' WHERE jobId IN (SELECT jobId FROM strategyJobSources WHERE sourceId=?)", id)
+		s.pruneStrategyDerivedContent()
 		s.strategyAdvanceScope(scopeKey)
 		s.strategyInvalidateJobs("id IN (SELECT jobId FROM strategyJobSources WHERE sourceId=?)", id)
 		s.strategyEvent(scopeKey, "", id, s.strategyGeneration(scopeKey), "source_"+status, Object{"sourceId": id})

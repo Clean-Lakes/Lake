@@ -3,15 +3,17 @@ export type StrategyScope={kind:'user'|'project';projectId?:string};
 export type StrategyKind='user_preference'|'domain_procedure'|'tool_guidance'|'report_guidance';
 export type StrategyApplicability={profiles:string[];resourceKinds:string[];domainTags:string[]};
 export type StrategyRef={assetId:string;revision:number;contentHash:string};
-export type StrategyAsset={id:string;title:string;scope:StrategyScope;kind:StrategyKind;revision:number;deleted:boolean};
-export type StrategyRevision={asset:StrategyAsset;value:{ref:StrategyRef;parentRevision:number;kind:StrategyKind;body:string;applicability:StrategyApplicability;verification:string;sourceIds:string[]};available:boolean;sourcesAvailable:boolean;skillSources?:{name:string;contentHash:string;state:string}[]};
+export type StrategyAsset={id:string;title:string;scope:StrategyScope;kind:StrategyKind;revision:number;deleted:boolean;reviewStatus?:string};
+export type StrategyAssessment={conditions:string;evidence:string;limitations:string};
+export type StrategyReview={decision:string;decisionRevision:number;reasonCode:string};
+export type StrategyRevision={asset:StrategyAsset;value:{ref:StrategyRef;parentRevision:number;kind:StrategyKind;body:string;applicability:StrategyApplicability;verification:string;sourceIds:string[]};available:boolean;sourcesAvailable:boolean;review:StrategyReview;assessment:StrategyAssessment;skillSources?:{name:string;contentHash:string;state:string}[]};
 export type StrategyBinding={assetId:string;scope:StrategyScope;revision:number;bindingRevision:number;enabled:boolean;priority:number;exclusionGroup:string};
 export type StrategySettings={scope:StrategyScope;revision:number;epoch:number;masterEnabled:boolean;applyEnabled:boolean;learnEnabled:boolean;correctEnabled:boolean;onlineCorrectEnabled?:boolean;onlineConsentVersion?:number;legacyOnlineConsent?:{enabled:boolean;settingsRevision:number;epoch:number};budget:Record<string,number>};
 export type StrategySettingsView={settings:StrategySettings;effective:StrategySettings;source:string;capabilities:{apply:boolean;learn:boolean;correct:boolean;onlineCorrect?:boolean;onlineConsentVersion?:number}};
 export function strategySettingsForm(s:StrategySettingsView):StrategySettingsView{return s.source==='inherited'?{...s,settings:{...s.settings,masterEnabled:s.effective.masterEnabled,applyEnabled:s.effective.applyEnabled,learnEnabled:s.effective.learnEnabled,correctEnabled:s.effective.correctEnabled,onlineCorrectEnabled:!!s.effective.onlineCorrectEnabled,onlineConsentVersion:s.effective.onlineConsentVersion,budget:s.effective.budget}}:s;}
 export type StrategyLineage={nodes:{id:string;kind:string;revision:number;createdAt:string;availability?:string;summary?:string;contentHash?:string;sourceId?:string;sourceKind?:string}[];edges:{id:number;fromId:string;toId:string;relation:string;createdAt:string}[];nextCursor:number;hasMore:boolean;redacted:boolean};
 export type StrategyMutation={assetId?:string;revision?:number;bindingRevision?:number};
-export type StrategyDraft={title:string;kind:StrategyKind;body:string;applicability:StrategyApplicability};
+export type StrategyDraft={title:string;kind:StrategyKind;body:string;applicability:StrategyApplicability;assessment?:StrategyAssessment};
 export function strategyPath(projectId:string){return projectId?`/api/projects/${encodeURIComponent(projectId)}/strategy`:'/api/strategy';}
 const pendingMutations=new Map<string,string>();
 async function request<T>(base:string,path:string,method='GET',data?:unknown):Promise<T>{
@@ -30,6 +32,8 @@ export const strategyApi={
  revision:(base:string,id:string,version:number)=>request<StrategyRevision>(base,`/assets/${encodeURIComponent(id)}/revisions/${version}`),
  binding:(base:string,id:string)=>request<{binding:StrategyBinding|null}>(base,`/assets/${encodeURIComponent(id)}/bindings`),
  bind:(base:string,id:string,action:string,ref:StrategyRef,binding:StrategyBinding|null,priority:number,exclusionGroup:string)=>request<StrategyMutation>(base,`/assets/${encodeURIComponent(id)}/bindings`,'POST',{action,ref,expectedRevision:binding?.bindingRevision||0,priority,exclusionGroup}),
+ review:(base:string,ref:StrategyRef,expectedDecisionRevision:number,decision:string,reasonCode:string)=>request<StrategyMutation>(base,`/assets/${encodeURIComponent(ref.assetId)}/review`,'POST',{ref,expectedDecisionRevision,decision,reasonCode}),
+ promote:(base:string,ref:StrategyRef,draft:StrategyDraft,confirmed:boolean)=>request<StrategyMutation>(base,`/assets/${encodeURIComponent(ref.assetId)}/promote`,'POST',{ref,confirmed,draft:{...draft,expectedRevision:0}}),
  lineage:(base:string,id:string,cursor=0)=>request<StrategyLineage>(base,`/assets/${encodeURIComponent(id)}/lineage?cursor=${cursor}`),
  remove:(base:string,id:string,expected:number)=>request<StrategyMutation>(base,`/assets/${encodeURIComponent(id)}`,'DELETE',{expectedRevision:expected}),
  importSkill:(base:string,name:string)=>request<StrategyMutation>(base,'/imports/skill','POST',{expectedRevision:0,name,kind:'domain_procedure',applicability:{profiles:[],resourceKinds:[],domainTags:[]}}),
@@ -43,7 +47,9 @@ export function parseStrategyImport(text:string):StrategyDraft {
  if(obj.format!=='lake-strategy-v1'||typeof obj.title!=='string'||typeof obj.body!=='string'||!['user_preference','domain_procedure','tool_guidance','report_guidance'].includes(String(obj.kind)))throw new Error('策略文件格式无效');
  const a=obj.applicability as Record<string,unknown>;
  if(!a||!['profiles','resourceKinds','domainTags'].every(k=>Array.isArray(a[k])&&(a[k] as unknown[]).every(v=>typeof v==='string')))throw new Error('适用条件无效');
- return {title:obj.title,kind:obj.kind as StrategyKind,body:obj.body,applicability:{profiles:a.profiles as string[],resourceKinds:a.resourceKinds as string[],domainTags:a.domainTags as string[]}};
+ let assessment:StrategyAssessment|undefined;
+ if(obj.assessment!==undefined){const notes=obj.assessment as Record<string,unknown>;if(!notes||!['conditions','evidence','limitations'].every(k=>typeof notes[k]==='string'))throw new Error('经验说明无效');assessment={conditions:String(notes.conditions),evidence:String(notes.evidence),limitations:String(notes.limitations)};}
+ return {...(assessment?{assessment}:{}),title:obj.title,kind:obj.kind as StrategyKind,body:obj.body,applicability:{profiles:a.profiles as string[],resourceKinds:a.resourceKinds as string[],domainTags:a.domainTags as string[]}};
 }
 export function strategyExport(draft:StrategyDraft){return JSON.stringify({format:'lake-strategy-v1',...draft},null,2)+'\n';}
 

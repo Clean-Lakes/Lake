@@ -682,6 +682,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			b.Terminals.CloseSession(id)
 			b.revokeSessionTerminals(id)
 			b.Store.DeleteSession(id)
+			b.Engine.InvalidateStrategies("")
 			b.resetConnectionFailures(id)
 			w.WriteHeader(204)
 			return
