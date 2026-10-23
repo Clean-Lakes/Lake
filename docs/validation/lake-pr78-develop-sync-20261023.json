@@ -1,0 +1,19 @@
+{
+  "pullRequest": 78,
+  "date": "2026-10-23",
+  "testedCodeCommit": "b960e1fccfc25f67ef61c7c4f224f1264203114a",
+  "gate": "operationalMemoryV2Ready=false，未更改；合并基础代码不启用 V2 迁移或能力。",
+  "resolution": "服务端合并 Memory 与 Strategy 两组状态字段；保留 V2 页面以及 V1 共享字体。",
+  "checks": [
+    "go test -race ./internal/web ./internal/ai -run Test.*Memory|Test.*Strategy.*Memory -count=1: passed",
+    "go vet ./internal/web ./internal/ai: passed",
+    "python3 scripts/check_adk_runtime_boundary.py: passed",
+    "scripts/build_lake.sh: TypeScript/Vite/signed Go passed",
+    "pnpm --dir web-agent test:frontend: 435 passed"
+  ],
+  "devIntegration": "当前已安装本地 Dev 集成 a842dd49 包含本 PR 原始代码并保持 V2 关闭；同步候选构建签名后端，不声称对真实 Home 启用了 V2。",
+  "notEnabled": [
+    "实际模型语义验收、完整平台验收和旧版降级演练仍未完成，继续阻止 V2 启用。"
+  ],
+  "authorization": "用户明确要求合并 #75～#79 到 develop，包含本门控 PR；未授权启用 V2、master 合并或发布。"
+}
