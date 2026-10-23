@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/ai"
 	"io"
@@ -37,10 +38,16 @@ func emitModel(w http.ResponseWriter, content string, calls []ai.Call) {
 }
 func waitAI(t *testing.T, b *Server, id, want string) ai.View {
 	t.Helper()
-	until := time.Now().Add(8 * time.Second)
+	until := time.Now().Add(30 * time.Second)
 	for time.Now().Before(until) {
 		v, e := b.Engine.Snapshot(id)
 		if e != nil {
+			// A status read can briefly hit the native store's query deadline
+			// while Windows is committing a turn. Retry within the same bound.
+			if errors.Is(e, context.DeadlineExceeded) && time.Now().Before(until) {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
 			t.Fatal(e)
 		}
 		if v.Status == want {

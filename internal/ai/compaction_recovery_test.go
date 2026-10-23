@@ -42,10 +42,15 @@ func TestAutomaticCompactionRecoversFromFailedSummaryWithoutReplayingTools(t *te
 	})
 	defer close()
 	m.Protocol = "openai-response"
+	m.ContextWindow = 72000
 	m.MaxOutput = 8192
 	e := engineFor(t, m, nil)
 	s, _ := e.get("case")
-	h := []Message{{Role: "system", Content: strings.Repeat("policy ", 400)}, {Role: "user", Content: strings.Repeat("scope ", 3000)}}
+	question := "分析已有证据即可。"
+	// Keep the real turn policy in the immutable history and provision room for
+	// the current tool catalog when Chat restores the policy on the next turn.
+	policy := composePrompt(s.state.Config).Text() + "\n" + userLanguageReminder(question)
+	h := []Message{{Role: "system", Content: policy}, {Role: "user", Content: strings.Repeat("scope ", 3000)}}
 	for i := 0; i < 19; i++ {
 		id := fmt.Sprintf("collected-%d", i)
 		h = append(h, Message{Role: "assistant", Calls: []Call{{ID: id, Name: "shell", Arguments: js(map[string]any{"command": "readonly observation " + strings.Repeat("scope ", 20)})}}}, Message{Role: "tool", CallID: id, Name: "shell", Content: js(map[string]any{"evidence_id": id, "exitCode": 0, "output": strings.Repeat("observed ", 400)})})
@@ -53,7 +58,7 @@ func TestAutomaticCompactionRecoversFromFailedSummaryWithoutReplayingTools(t *te
 	s.state.History = h
 	s.state.Checkpoints = []int{0}
 	s.state.View.Cards = []Card{{ID: "raw", Type: "operation", Content: h[3].Content, Status: "completed"}}
-	s.state.LastRequest = &Usage{InputKnown: true, Input: 52000}
+	s.state.LastRequest = &Usage{InputKnown: true, Input: m.ContextWindow - m.MaxOutput}
 	s.state.ContextMeasurement = &ContextMeasurement{ModelID: ModelIdentity(m), HistoryCost: historyCost(h), ToolsCost: len(js(e.sessionCatalog(context.Background(), "case", s.state.Config)))}
 	if err := e.compact(context.Background(), s, s.state.Config, false); err != nil {
 		t.Fatal(err)
@@ -66,7 +71,7 @@ func TestAutomaticCompactionRecoversFromFailedSummaryWithoutReplayingTools(t *te
 			t.Fatal("recovery changed tool identities")
 		}
 	}
-	if err := e.Chat(context.Background(), "case", "分析已有证据即可。", nil); err != nil || replies != 1 {
+	if err := e.Chat(context.Background(), "case", question, nil); err != nil || replies != 1 {
 		t.Fatal("did not continue after safe context recovery", err, replies)
 	}
 }
