@@ -1,0 +1,29 @@
+{
+  "validatedAt": "2026-10-23T09:53:02.032611+00:00",
+  "codeCommit": "c0678afc5cd71a8718e367b31a47a5e31bc91750",
+  "installedDevCommit": "5d1d8287377a54aa7e69fd1dc2ce8a76426127a1",
+  "scope": "New-resource AppSelect only; existing resource records, service execution and APIs unchanged",
+  "enabled": [
+    "ssh",
+    "kubernetes"
+  ],
+  "disabled": [
+    "mysql",
+    "postgres",
+    "redis",
+    "apisix",
+    "prometheus",
+    "victoriametrics"
+  ],
+  "checks": [
+    "Signed scripts/build_lake_desktop.sh --dev --install passed, including TypeScript and Vite build",
+    "Installed build clean; backend SHA256 and deep application signature verified",
+    "Waited for zero active sessions and busy terminals, normally quit and reopened Dev",
+    "Native dropdown visually shows six unavailable resource types in gray",
+    "Keyboard End/Enter skips disabled entries and selects Kubernetes, rendering its Kubeconfig form",
+    "Closed empty form; no resource or connection credential created"
+  ],
+  "frontendTests": "No new tests for this reversible option-state change; shared AppSelect already handles disabled pointer and keyboard selection",
+  "pr": "https://github.com/Clean-Lakes/Lake/pull/82",
+  "release": "No release application/data modified"
+}
