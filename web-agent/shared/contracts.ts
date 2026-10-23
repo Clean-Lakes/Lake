@@ -8,10 +8,14 @@ export type Project = {
   createdAt: string;
 };
 
-export type ProjectMemorySettings = { projectId: string; useEnabled: boolean; extractionEnabled: boolean; epoch: number; revision: number; settingsRevision: number; publishedRevision: number };
-export type ProjectMemoryEntry = { projectId: string; key: string; type: "user" | "feedback" | "project" | "reference"; description: string; body?: string; revision: number; projectRevision: number; verification: string; validUntil: string; expired: boolean; deletedAt: string; createdAt: string; updatedAt: string; sources?: Array<{kind: string; sessionId?: string; turnId?: string; at: string; excerpt?: string}> };
+export type MemoryKnowledgeKind = "preference" | "procedure" | "topology" | "configuration" | "incident_lesson";
+export type MemorySource = {sourceId?:string; kind:string; sessionId?:string; turnId?:string; messageId?:string; evidenceId?:string; at?:string; observedAt?:string; assertedAt?:string; excerpt?:string; outcome?:string};
+export type MemoryAccess = {key:string; revision:number; kind:"index"|"read"; scopeSignature?:string; offsetLine?:number; byteOffset?:number; bytesRead?:number; at:string; observedAt?:string; historical?:boolean};
+export type MemoryCandidate = {candidateId:string; candidateHash:string; baseKey:string; baseRevision:number; reason:string; status:string; createdAt:string; expiresAt:string; proposal:Partial<ProjectMemoryEntry>};
+export type ProjectMemorySettings = {memorySchemaVersion?:number; projectId: string; useEnabled: boolean; extractionEnabled: boolean; epoch: number; revision: number; settingsRevision: number; publishedRevision: number };
+export type ProjectMemoryEntry = {knowledgeKind?:MemoryKnowledgeKind; scopeKind?:"project"|"resources"; resourceIds?:string[]; resourceNames?:string[]; subject?:Record<string,unknown>; factKey?:string; alwaysReference?:boolean; eligibility?:string; reviewState?:string; observedAt?:string; assertedAt?:string; historical?:boolean; projectId: string; key: string; type: "user" | "feedback" | "project" | "reference"; description: string; body?: string; revision: number; projectRevision: number; verification: string; validUntil: string; expired: boolean; deletedAt: string; createdAt: string; updatedAt: string; sources?: MemorySource[] };
 export type ProjectMemoryList = { settings: ProjectMemorySettings; items: ProjectMemoryEntry[]; total: number; projectRevision: number };
-export type ProjectMemoryJob = { jobId: string; status: string; attempts: number; lastErrorCode: string; createdAt: string; updatedAt: string; usageJSON: string };
+export type ProjectMemoryJob = {dispatchCount?:number;unknownAttempts?:number;knownTokens?:number; jobId: string; status: string; attempts: number; lastErrorCode: string; createdAt: string; updatedAt: string; usageJSON: string };
 
 export type Resource = {
   id: string;
@@ -254,7 +258,7 @@ export type AIOperationOutcome = {id:string;tool:string;target:string;status:str
 export type ConversationMode = "default" | "plan";
 export type ConversationModeUpdate = {mode:ConversationMode;cursor:number};
 export type ProposedPlan = {id:string;content:string;at:string};
-export type AIView = { proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
+export type AIView = { proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; memoryAccess?: MemoryAccess[]; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
 export type AIPreset = { id: string; title: string; content: string };
 
 export type AIImage = { id: string; mimeType: string; base64: string; sizeBytes: number; width: number; height: number; name?: string; url?: string };

@@ -103,6 +103,9 @@ func boundedMemoryIndex(rows []Object) string {
 // SQLite owns the logical commit. This projection is serialized per Store and can
 // always be rebuilt after a crash, without another model request.
 func (s *Store) PublishProjectMemory(project string) error {
+	if s.memoryV2 {
+		return s.publishMemoryV2(project)
+	}
 	s.memoryPublishMu.Lock()
 	defer s.memoryPublishMu.Unlock()
 	snapshot := s.read(func() any {
@@ -175,6 +178,9 @@ func (s *Store) PublishProjectMemory(project string) error {
 
 func (s *Store) ReconcileProjectMemoryFiles() error {
 	projects := s.read(func() any {
+		if s.memoryV2 {
+			return s.rows("SELECT m.projectId FROM projectMemorySettings m JOIN projects ON projects.id=m.projectId WHERE " + activeProjectsSQL)
+		}
 		return s.rows("SELECT m.projectId FROM projectMemorySettings m JOIN projects ON projects.id=m.projectId WHERE m.publishedRevision<m.revision AND " + activeProjectsSQL)
 	}).([]Object)
 	for _, row := range projects {

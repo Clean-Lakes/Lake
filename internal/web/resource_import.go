@@ -786,6 +786,7 @@ func (b *Server) commitResourceImport(project, session, id string, indexes any) 
 			}
 		}
 		b.Store.SyncImportedLogins(project, updates)
+		b.invalidateMemoryExtraction(project, "resource_changed")
 		for _, session := range objects(b.Store.Catalog()["sessions"]) {
 			if session["projectId"] == project {
 				b.resetConnectionFailures(stringOf(session["id"]))

@@ -83,17 +83,24 @@ type queryer interface {
 	Exec(string, ...any) (sql.Result, error)
 }
 type Store struct {
-	mu              sync.Mutex
-	memoryPublishMu sync.Mutex
-	db              *sql.DB
-	q               queryer
-	events          []Object
-	subscribers     map[chan Object]bool
-	Dir             string
-	lockFile        *os.File
+	mu               sync.Mutex
+	memoryPublishMu  sync.Mutex
+	memoryV2         bool
+	memoryV2Wanted   bool
+	memoryIndexCache map[string]memoryIndexCacheEntry
+	db               *sql.DB
+	q                queryer
+	events           []Object
+	subscribers      map[chan Object]bool
+	Dir              string
+	lockFile         *os.File
 }
 
 func OpenStore(dir string) (*Store, error) {
+	return openStore(dir, operationalMemoryV2Ready)
+}
+
+func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
 	if e := platform.MkdirAll(dir, 0700); e != nil {
 		return nil, e
 	}
@@ -121,7 +128,11 @@ func OpenStore(dir string) (*Store, error) {
 		return nil, e
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{db: db, q: db, subscribers: map[chan Object]bool{}, Dir: dir, lockFile: lockFile}
+	s := &Store{db: db, q: db, subscribers: map[chan Object]bool{}, Dir: dir, lockFile: lockFile, memoryV2Wanted: memoryV2Wanted}
+	if e = s.checkMemoryV2Compatibility(); e != nil {
+		db.Close()
+		return nil, e
+	}
 	if e = s.prepareStrategyMigration(); e != nil {
 		db.Close()
 		return nil, e
@@ -289,6 +300,11 @@ func (s *Store) migrate() error {
 	}
 	if e := s.migrateProjectMemory(); e != nil {
 		return e
+	}
+	if s.memoryV2Wanted {
+		if e := s.migrateMemoryV2(); e != nil {
+			return e
+		}
 	}
 	return s.migrateStrategy()
 }
@@ -508,6 +524,9 @@ func (s *Store) CreateResource(project, name, kind string, config Object) Object
 		id := ident()
 		s.exec("INSERT INTO resources(id,projectId,name,kind,description,status) VALUES(?,?,?,?,?,?)", id, project, name, kind, description, "available")
 		s.exec("INSERT INTO resourceConnections(resourceId,config) VALUES(?,?)", id, jsonText(config))
+		if s.memoryV2 {
+			s.exec("INSERT INTO resourceMemoryGenerations(resourceId,generation,updatedAt,reason) VALUES(?,1,?,'created')", id, now())
+		}
 		s.seedResourceTree()
 		for _, session := range s.rows("SELECT id FROM sessions WHERE projectId=?", project) {
 			s.event(stringOf(session["id"]), "session")

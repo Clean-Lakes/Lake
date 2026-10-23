@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
@@ -134,6 +135,16 @@ func (b *Server) messageBusyLocked(id string) bool {
 	return view.Status == "running" || view.Status == "waiting_approval" || view.Pending != nil
 }
 func (b *Server) launchMessageLocked(id string, message humanMessage) {
+	if b.Store.memoryV2 {
+		b.PauseMemoryExtractionForForeground()
+		b.memoryLastForeground = time.Now()
+		b.memoryReads.Range(func(key, value any) bool {
+			if strings.HasPrefix(key.(string), id+":") {
+				b.memoryReads.Delete(key)
+			}
+			return true
+		})
+	}
 	if b.runningMessages == nil {
 		b.runningMessages = map[string]bool{}
 	}
@@ -245,6 +256,9 @@ func (b *Server) finishMessageQueue(id string) {
 	b.messageMu.Lock()
 	defer b.messageMu.Unlock()
 	delete(b.runningMessages, id)
+	if b.Store.memoryV2 {
+		b.memoryLastForeground = time.Now()
+	}
 	if b.Context.Err() != nil {
 		return
 	}

@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
-func (e *Engine) recordObservation(c Config, resourceID, title string, value any, toolErr error) (any, error) {
+func (e *Engine) recordObservation(c Config, resourceID, title string, value any, toolErr error, starts ...time.Time) (any, error) {
 	w := e.worker
+	memoryToolName := title
 	if result := obj(value); result["output"] != nil {
 		value = map[string]any{"output": result["output"], "exitCode": result["exitCode"], "truncated": result["truncated"]}
 		for _, key := range []string{"identity", "metric", "namespace", "pod", "container", "disks", "disk_note"} {
@@ -42,6 +44,31 @@ func (e *Engine) recordObservation(c Config, resourceID, title string, value any
 	if obj(value)["exitCode"] != nil {
 		code := num(obj(value)["exitCode"], 0)
 		ev.ExitCode = &code
+	}
+	if c.MemorySchemaVersion == 2 && c.MemoryResourceGenerations[resourceID] > 0 {
+		record := MemoryEvidenceContext{CallID: ev.ID, EvidenceID: ev.ID, ResourceBindings: []MemoryResourceBinding{{ResourceID: resourceID, Generation: c.MemoryResourceGenerations[resourceID]}}, StartedAt: ev.CollectedAt, FinishedAt: ev.CollectedAt, Outcome: memoryEvidenceEligible(value, toolErr), ExitCode: ev.ExitCode, Truncated: ev.SourceTruncated, ClaimSupport: "text_excerpt", Excerpt: utf8Prefix(content, 2048)}
+		if toolErr == nil {
+			record.Claims = memoryStructuredClaims(memoryToolName, value)
+			if redact(js(record.Claims), c) != js(record.Claims) {
+				record.Claims = nil
+			}
+			if len(record.Claims) > 0 {
+				record.ClaimSupport = "structured_result"
+			}
+		}
+		if len(starts) > 0 {
+			record.StartedAt = starts[0].UTC().Format(time.RFC3339Nano)
+		}
+		w.session.mu.Lock()
+		if w.session.state.View.RootTurnID == w.turnID {
+			if w.session.state.MemoryEvidenceContexts == nil {
+				w.session.state.MemoryEvidenceContexts = map[string]MemoryEvidenceContext{}
+			}
+			if len(w.session.state.MemoryEvidenceContexts) < 64 {
+				w.session.state.MemoryEvidenceContexts[ev.ID] = record
+			}
+		}
+		w.session.mu.Unlock()
 	}
 	if err := w.parent.updateAgent(w, func(r *AgentRun) { r.Evidence = append(r.Evidence, ev); r.EvidenceIDs = append(r.EvidenceIDs, ev.ID) }); err != nil {
 		return nil, err

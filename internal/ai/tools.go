@@ -173,6 +173,9 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		return e.invokeSessionTool(ctx, s, c, call, a)
 	}
 	if memoryTool(call.Name) {
+		if e.worker != nil && c.MemorySchemaVersion == 2 {
+			return nil, errors.New("project memory is owned by the main conversation")
+		}
 		if !c.MemoryEnabled || c.MemoryProjectID == "" || e.worker != nil && (c.sre == nil || !c.sre.FullTools) || e.Bridge == nil {
 			return nil, errors.New("project memory unavailable")
 		}
@@ -425,6 +428,10 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		return nil, err
 	}
 	defer func() { e.finishSREOperation(c, call, result, err) }()
+	memoryStarted := time.Now()
+	defer func() {
+		e.recordMemoryToolContext(s, c, call, str(policyContext["asset_ref"]), memoryStarted, result, err)
+	}()
 	operation, operationErr := e.dispatchNativeOperation(ctx, s, c, call, risk, target, fingerprint)
 	if operationErr != nil {
 		return nil, &ToolNotExecutedError{Err: operationErr}
