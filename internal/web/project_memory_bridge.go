@@ -195,9 +195,12 @@ func (b *Server) projectMemoryBridge(ctx context.Context, id, name string, args 
 		return nil, errors.New("memory tool requires an active user turn")
 	}
 	if name == "forget_project_memory" {
-		entry := b.Store.ReadProjectMemory(project, key, false)
-		if !strings.Contains(strings.ToLower(userText), strings.ToLower(key)) && !strings.Contains(userText, stringOf(entry["description"])) {
-			return nil, errors.New("memory_to_forget_not_identified")
+		history, err := b.Engine.History(id)
+		if err != nil {
+			return nil, err
+		}
+		if !b.Store.identifiesMemoryToForget(project, userText, key, history, memoryForgetRetryTurns(objects(snapshot["messages"]))) {
+			return nil, errors.New("memory_to_forget_not_identified: nothing was deleted; ask the user to identify one memory by title or key. Do not retry with guessed keys or rewrite memory to bypass deletion")
 		}
 		return b.Store.CommitProjectMemory(project, MemoryMutation{Key: key, ExpectedRevision: memoryRevision(args["expectedRevision"]), Forget: true, OriginSessionID: id, OriginTurnID: view.RootTurnID, SourceKind: "user"}), nil
 	}
