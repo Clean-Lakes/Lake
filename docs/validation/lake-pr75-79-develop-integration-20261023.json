@@ -1,0 +1,43 @@
+{
+  "pullRequests": [
+    75,
+    76,
+    77,
+    78,
+    79
+  ],
+  "date": "2026-10-23",
+  "testedCodeCommit": "7f94107fcbfd8f6afadd4e5bd47a2c05eb4f3a61",
+  "target": "develop",
+  "scope": "截图中的五个 PR；不包括 #82 资源类型或其他未授权 PR。",
+  "checks": [
+    {
+      "command": "go test -race ./internal/web ./internal/ai -run Test.*Memory|Test.*Strategy.*Memory|TestUnknownMutationDoesNotLockNewOperations|TestUnfinishedMutationDoesNotBypassNewCallApproval|TestDuplicateOperationReportsNoDispatchAndCallableRecovery|TestSessionNavigation -count=1",
+      "result": "passed: web 18.701s; ai 12.410s"
+    },
+    {
+      "command": "go vet ./internal/web ./internal/ai",
+      "result": "passed"
+    },
+    {
+      "command": "python3 scripts/check_adk_runtime_boundary.py",
+      "result": "passed"
+    },
+    {
+      "command": "scripts/build_lake.sh",
+      "result": "TypeScript/Vite/Go persistent signed build passed"
+    },
+    {
+      "command": "pnpm --dir web-agent test:frontend",
+      "result": "435 passed"
+    }
+  ],
+  "gate": "operationalMemoryV2Ready=false；V2 仍不启用，不迁移真实 Home。",
+  "devEvidence": "此前本地 Dev 集成 a842dd49 已包含五项功能原提交；本次对最新 develop 的组合完成竞态回归和签名后端构建。未把该 Dev 安装描述为本次最终 SHA；未覆盖正在使用且包含 #82 的 Dev。",
+  "limitations": [
+    "未重跑 Windows 原生界面或实际远端命令",
+    "未完成 V2 真实模型语义矩阵、完整平台启用验收或旧版降级演练，仍不允许开启 V2",
+    "不是全量 Go 套件通过声明，未把缺席 CI 作为验证证据"
+  ],
+  "mergeMethod": "GitHub PR merge commit，校验 head SHA；未直推 develop/master，未使用 admin/auto-merge 或发布。"
+}
