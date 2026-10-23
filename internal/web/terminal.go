@@ -288,12 +288,7 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 			l.startupExitCode = &code
 		}
 		l.mu.Unlock()
-		// Drain final OpenSSH stderr before classifying a failed handshake.
-		select {
-		case <-readDone:
-		case <-time.After(500 * time.Millisecond):
-		}
-		t.closeLive(l, "Terminal connection closed")
+		t.closeAfterOutput(l, readDone, "Terminal connection closed")
 	}()
 	// Drain the PTY before writing initialization. Echo and continuation prompts
 	// can fill its output buffer and block a large write; do not hold l.mu while
@@ -303,7 +298,9 @@ func (t *Terminals) open(ctx context.Context, id, ref, selectedShell string, int
 	// canonical queues or race line-editor mode changes and lose bytes.
 	_, e = f.WriteString(terminalInitTrigger + "\n")
 	if e != nil {
-		t.closeLive(l, "Connection initialization failed")
+		// A fast SSH failure can close the input side before its stderr is read.
+		// Do not discard that final diagnostic by closing the PTY immediately.
+		t.closeAfterOutput(l, readDone, "Connection initialization failed")
 	}
 	select {
 	case <-ctx.Done():
@@ -804,6 +801,25 @@ func (t *Terminals) closeOwned(id, tid string) {
 		t.store.TerminalStatus(id, tid, "disconnected")
 	}
 }
+
+// Failed remote startup needs its final stderr before publishing a fixed,
+// credential-free error category. A bounded drain also covers a failed init write.
+func (t *Terminals) closeAfterOutput(l *liveTerminal, readDone <-chan struct{}, reason string) {
+	drain := 500 * time.Millisecond
+	l.mu.Lock()
+	if l.remote && !l.ready {
+		drain = 2 * time.Second
+	}
+	l.mu.Unlock()
+	timer := time.NewTimer(drain)
+	defer timer.Stop()
+	select {
+	case <-readDone:
+	case <-timer.C:
+	}
+	t.closeLive(l, reason)
+}
+
 func (t *Terminals) closeLive(l *liveTerminal, reason string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
