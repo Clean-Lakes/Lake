@@ -110,6 +110,10 @@ func (b *Server) runMemoryWorker() {
 }
 
 func (b *Server) processOneMemoryJob() {
+	if b.Store.memoryV2 {
+		b.processMemoryV2Job()
+		return
+	}
 	b.messageMu.Lock()
 	busy := len(b.runningMessages) > 0
 	b.messageMu.Unlock()

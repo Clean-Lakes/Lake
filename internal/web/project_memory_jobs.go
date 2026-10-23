@@ -22,6 +22,10 @@ type MemoryExtractMutation struct {
 
 func (s *Store) RecoverMemoryJobs() {
 	s.update(func() any {
+		if s.memoryV2 {
+			s.exec("UPDATE projectMemoryJobAttemptsV2 SET status='interrupted',reason='restart',finishedAt=? WHERE finishedAt=''", now())
+			s.exec("UPDATE projectMemoryJobs SET attempts=max(0,attempts-1) WHERE status='running'")
+		}
 		s.exec("UPDATE projectMemoryJobs SET status='queued',leaseOwner='',leaseToken='',leaseUntilMs=0,updatedAt=? WHERE status='running'", now())
 		return nil
 	})
@@ -29,6 +33,10 @@ func (s *Store) RecoverMemoryJobs() {
 
 func (s *Store) PruneMemoryArtifacts() {
 	s.update(func() any {
+		if s.memoryV2 {
+			s.exec("UPDATE projectMemoryCandidatesV2 SET status='expired',proposalJSON='' WHERE status='pending' AND expiresAt<=?", now())
+			s.exec("DELETE FROM projectMemoryJobAttemptsV2 WHERE startedAt<?", time.Now().UTC().Add(-30*24*time.Hour).Format(time.RFC3339Nano))
+		}
 		sevenDays := time.Now().UTC().AddDate(0, 0, -7).Format(time.RFC3339Nano)
 		thirtyDays := time.Now().UTC().AddDate(0, 0, -30).Format(time.RFC3339Nano)
 		s.exec(`UPDATE projectMemoryTurns SET snapshotJSON='' WHERE snapshotJSON<>'' AND sequence IN (
@@ -40,6 +48,10 @@ WHERE (j.status IN ('succeeded','no_op') AND j.updatedAt<?) OR (j.status IN ('sk
 
 func (s *Store) ClaimMemoryJob() Object {
 	return s.update(func() any {
+		if s.memoryV2 {
+			s.exec("UPDATE projectMemoryJobs SET status='queued' WHERE status='budget_wait' AND nextAttemptAtMs<=?", time.Now().UnixMilli())
+			s.exec("UPDATE projectMemoryJobs SET status='skipped',lastErrorCode='queue_expired',updatedAt=? WHERE status IN ('queued','retry_wait','budget_wait') AND createdAt<?", now(), time.Now().UTC().Add(-7*24*time.Hour).Format(time.RFC3339Nano))
+		}
 		row := s.row(`SELECT j.*,t.projectId,t.sessionId,t.turnId,t.epoch,t.knowledgeBaseRevision,t.snapshotJSON,t.snapshotHash,t.modelRefJSON
 FROM projectMemoryJobs j JOIN projectMemoryTurns t ON t.sequence=j.turnSequence
 JOIN projects ON projects.id=t.projectId
@@ -253,6 +265,24 @@ func (s *Store) RetryMemoryJob(project, jobID string, expectedRevision int) Obje
 		var snapshot ai.MemoryTurnSnapshot
 		if json.Unmarshal([]byte(stringOf(row["snapshotJSON"])), &snapshot) != nil || !ai.ValidMemorySnapshot(snapshot) {
 			fail(410, "Memory snapshot expired")
+		}
+		if s.memoryV2 {
+			at, err := time.Parse(time.RFC3339Nano, snapshot.CapturedAt)
+			if integer(s.row("SELECT count(*) AS n FROM projectMemoryJobs j JOIN projectMemoryTurns t ON t.sequence=j.turnSequence WHERE t.projectId=? AND j.status IN ('queued','running','retry_wait','budget_wait')", project)["n"]) >= 100 {
+				fail(429, "Project memory queue is full")
+			}
+			if snapshot.SchemaVersion != 2 || err != nil || time.Since(at) > 7*24*time.Hour || snapshot.Epoch != integer(settings["epoch"]) {
+				fail(409, "Memory snapshot invalidated; use new evidence")
+			}
+			for _, evidence := range snapshot.Evidence {
+				if evidence.Context != nil {
+					for _, binding := range evidence.Context.ResourceBindings {
+						if integer(s.row("SELECT generation FROM resourceMemoryGenerations WHERE resourceId=?", binding.ResourceID)["generation"]) != binding.Generation {
+							fail(409, "Memory source resource changed")
+						}
+					}
+				}
+			}
 		}
 		snapshot.Epoch = integer(settings["epoch"])
 		snapshot = ai.SealMemorySnapshot(snapshot)

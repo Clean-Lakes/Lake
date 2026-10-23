@@ -133,7 +133,7 @@ func (e *Engine) baseSessionCatalog(ctx context.Context, id string, c Config) []
 	if c.Profile != "terminal2" || e.Bridge == nil {
 		list := Catalog(c.Profile)
 		if c.MemoryEnabled && e.Bridge != nil {
-			list = append(list, projectMemoryTools()...)
+			list = append(list, projectMemoryTools(c)...)
 		}
 		if c.legacyInvestigations && c.MultiAgentMode == "auto" && (c.Profile == "core" || c.Profile == "") {
 			list = append(list, delegationTools()...)
@@ -149,7 +149,7 @@ func (e *Engine) baseSessionCatalog(ctx context.Context, id string, c Config) []
 	}
 	list := CatalogForConfig(c, caps)
 	if c.MemoryEnabled {
-		list = append(list, projectMemoryTools()...)
+		list = append(list, projectMemoryTools(c)...)
 	}
 	return e.configuredExtensionTools(c, list)
 }

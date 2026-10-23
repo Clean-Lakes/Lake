@@ -5,32 +5,58 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 )
 
 type MemoryEvidence struct {
-	CallID    string `json:"callId"`
-	Name      string `json:"name"`
-	Excerpt   string `json:"excerpt"`
-	Completed bool   `json:"completed"`
-	Truncated bool   `json:"truncated,omitempty"`
+	CallID    string                 `json:"callId"`
+	Name      string                 `json:"name"`
+	Excerpt   string                 `json:"excerpt"`
+	Completed bool                   `json:"completed"`
+	Truncated bool                   `json:"truncated,omitempty"`
+	Context   *MemoryEvidenceContext `json:"context,omitempty"`
+}
+
+type MemoryResourceBinding struct {
+	ResourceID string `json:"resourceId"`
+	Generation int    `json:"generation"`
+}
+
+// Constructed by the executor after target resolution, never decoded from model
+// arguments or tool stdout. Completed execution does not establish semantic truth.
+type MemoryEvidenceContext struct {
+	CallID           string                  `json:"callId"`
+	EvidenceID       string                  `json:"evidenceId,omitempty"`
+	ResourceBindings []MemoryResourceBinding `json:"resourceBindings"`
+	StartedAt        string                  `json:"startedAt"`
+	FinishedAt       string                  `json:"finishedAt"`
+	Outcome          string                  `json:"outcome"`
+	ExitCode         *int                    `json:"exitCode,omitempty"`
+	Truncated        bool                    `json:"truncated,omitempty"`
+	ClaimSupport     string                  `json:"claimSupport"`
+	Excerpt          string                  `json:"excerpt,omitempty"`
+	Claims           []MemoryClaim           `json:"claims,omitempty"`
 }
 
 type MemoryTurnSnapshot struct {
-	ProjectID             string           `json:"projectId"`
-	SessionID             string           `json:"sessionId"`
-	TurnID                string           `json:"turnId"`
-	Epoch                 int              `json:"epoch"`
-	KnowledgeBaseRevision int              `json:"knowledgeBaseRevision"`
-	UserText              string           `json:"userText"`
-	RecentUserInputs      []string         `json:"recentUserInputs,omitempty"`
-	AssistantText         string           `json:"assistantText"`
-	Evidence              []MemoryEvidence `json:"evidence,omitempty"`
-	ModelRef              string           `json:"modelRef"`
-	CapturedAt            string           `json:"capturedAt"`
-	SnapshotHash          string           `json:"snapshotHash"`
+	SchemaVersion         int                     `json:"schemaVersion,omitempty"`
+	SourceMessageID       string                  `json:"sourceMessageId,omitempty"`
+	TargetBindings        []MemoryResourceBinding `json:"targetBindings,omitempty"`
+	ProjectID             string                  `json:"projectId"`
+	SessionID             string                  `json:"sessionId"`
+	TurnID                string                  `json:"turnId"`
+	Epoch                 int                     `json:"epoch"`
+	KnowledgeBaseRevision int                     `json:"knowledgeBaseRevision"`
+	UserText              string                  `json:"userText"`
+	RecentUserInputs      []string                `json:"recentUserInputs,omitempty"`
+	AssistantText         string                  `json:"assistantText"`
+	Evidence              []MemoryEvidence        `json:"evidence,omitempty"`
+	ModelRef              string                  `json:"modelRef"`
+	CapturedAt            string                  `json:"capturedAt"`
+	SnapshotHash          string                  `json:"snapshotHash"`
 }
 
 func memorySignal(text string) bool {
@@ -98,6 +124,23 @@ func (e *Engine) collectMemorySnapshot(s *session, c Config, input TurnInput) {
 		}
 	}
 	snapshot := MemoryTurnSnapshot{ProjectID: c.MemoryProjectID, SessionID: s.state.View.Session, TurnID: s.state.View.RootTurnID, Epoch: c.MemoryEpoch, KnowledgeBaseRevision: c.MemoryKnowledgeRevision, UserText: redact(input.UserText, c), RecentUserInputs: recent, ModelRef: ModelIdentity(c.Model), CapturedAt: s.state.View.TurnFinishedAt}
+	if c.MemorySchemaVersion == 2 {
+		snapshot.SchemaVersion = 2
+		snapshot.SourceMessageID = input.StrategyMessageID
+		refs := c.ReferencedAssets
+		if c.targetScope != nil {
+			if c.targetScope.NeedsClarification {
+				refs = nil
+			} else {
+				refs = c.targetScope.ResourceIDs
+			}
+		}
+		for _, ref := range refs {
+			if generation := c.MemoryResourceGenerations[ref]; generation > 0 {
+				snapshot.TargetBindings = append(snapshot.TargetBindings, MemoryResourceBinding{ResourceID: ref, Generation: generation})
+			}
+		}
+	}
 	for i := len(segment) - 1; i >= 0; i-- {
 		if segment[i].Role == "assistant" && len(segment[i].Calls) == 0 {
 			snapshot.AssistantText, _ = memoryUTF8Prefix(redact(segment[i].Content, c), 24*1024)
@@ -117,9 +160,33 @@ func (e *Engine) collectMemorySnapshot(s *session, c Config, input TurnInput) {
 		usedEvidence += len(excerpt)
 		var result map[string]any
 		valid := json.Unmarshal([]byte(text), &result) == nil && result != nil
-		status, _ := result["status"].(string)
-		completed := valid && result["error"] == nil && status != "failed" && status != "cancelled" && status != "unknown"
-		snapshot.Evidence = append(snapshot.Evidence, MemoryEvidence{CallID: message.CallID, Name: message.Name, Excerpt: excerpt, Completed: completed, Truncated: truncated})
+		completed := valid && memoryEvidenceEligible(result, nil) == "completed_success"
+		evidence := MemoryEvidence{CallID: message.CallID, Name: message.Name, Excerpt: excerpt, Completed: completed, Truncated: truncated}
+		if snapshot.SchemaVersion == 2 {
+			if trusted, ok := s.state.MemoryEvidenceContexts[message.CallID]; ok {
+				evidence.Context = &trusted
+				evidence.Completed = trusted.Outcome == "completed_success"
+			} else {
+				evidence.Completed = false
+			}
+		}
+		snapshot.Evidence = append(snapshot.Evidence, evidence)
+	}
+	if snapshot.SchemaVersion == 2 {
+		keys := []string{}
+		for key := range s.state.MemoryEvidenceContexts {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			trusted := s.state.MemoryEvidenceContexts[key]
+			if trusted.EvidenceID == "" || len(snapshot.Evidence) >= 24 || usedEvidence >= 24*1024 {
+				continue
+			}
+			excerpt, truncated := memoryUTF8Prefix(trusted.Excerpt, min(2048, 24*1024-usedEvidence))
+			usedEvidence += len(excerpt)
+			snapshot.Evidence = append(snapshot.Evidence, MemoryEvidence{CallID: key, Name: "recorded_observation", Excerpt: excerpt, Completed: trusted.Outcome == "completed_success", Truncated: truncated, Context: &trusted})
+		}
 	}
 	bytes, _ := json.Marshal(snapshot)
 	if len(bytes) > 128*1024 {

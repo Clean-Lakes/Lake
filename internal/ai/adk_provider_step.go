@@ -34,6 +34,15 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	outputRetried := d.outputRetried
 	defer func() { d.outputRetried = outputRetried }()
 	requestModel := c.Model
+	var memoryLive map[string]any
+	if c.MemorySchemaVersion == 2 && e.Bridge != nil && e.worker == nil {
+		live, err := e.bridgeCall(ctx, id, "project_memory_status", nil, false)
+		memoryLive = obj(live)
+		if err != nil || obj(live)["useEnabled"] != true {
+			c.MemoryEnabled = false
+			c.MemoryExtractionEnabled = false
+		}
+	}
 	var err error
 	cancel := d.cancel
 	if err = ctx.Err(); err != nil {
@@ -46,12 +55,25 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 		e.worker.mu.Unlock()
 	}
+	if c.MemorySchemaVersion == 2 {
+		s.mu.Lock()
+		before := historyCost(s.state.History)
+		filterMemoryHistory(s.state.History, memoryLive)
+		if historyCost(s.state.History) != before {
+			s.state.ContextMeasurement = nil
+			_ = e.save(s)
+		}
+		s.mu.Unlock()
+	}
 	if err = e.compactForTurn(ctx, s, c, resume && step == 0); err != nil {
 		return modelResult{}, err
 	}
 	teamContext := e.sreTeamContext(c)
 	s.mu.Lock()
 	history := append([]Message(nil), s.state.History...)
+	if c.MemorySchemaVersion == 2 {
+		filterMemoryHistory(history, memoryLive)
+	}
 	requestHistoryCost := historyCost(history)
 	textID, thinkID := uid(), uid()
 	d.textID = textID
@@ -84,20 +106,22 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	} else if report != nil {
 		appendSystem(strategy.TaskContext, "online-correction-state", "\nHost-recorded correction state (data, not permission): "+js(report))
 	}
+	tools := e.sessionCatalog(ctx, id, c)
 	if !c.MemoryEnabled {
 		for i := range history {
 			if history[i].Role == "tool" && memoryTool(history[i].Name) {
 				history[i].Content = "[project memory disabled]"
+				history[i].Native = nil
 			}
 		}
 	} else if len(history) > 0 {
-		attachment := e.requestMemoryContext(ctx, id, c)
+		memoryBudget := max(0, (c.Model.ContextWindow-c.Model.MaxOutput)*2-historyCost(history)-len(js(tools)))
+		attachment := e.requestMemoryContext(ctx, id, c, memoryBudget)
 		if historyCost(history)+len(attachment) <= (c.Model.ContextWindow-c.Model.MaxOutput)*2 {
 			appendSystem(strategy.TaskContext, "project-memory", attachment)
 		}
 	}
 	lastFlush := map[string]time.Time{}
-	tools := e.sessionCatalog(ctx, id, c)
 	if report, err := e.onlineCurrent(s, c); err != nil {
 		return modelResult{}, err
 	} else if report != nil && report.StopReason != "" {

@@ -27,6 +27,7 @@ import (
 )
 
 type Options struct {
+	memoryV2ForTest                 bool // Package-private fixture injection; no CLI/environment override.
 	Home, DataDir, Token, DevOrigin string
 	Port                            int
 	Open                            bool
@@ -35,45 +36,50 @@ type Options struct {
 	Output                          io.Writer
 }
 type Server struct {
-	Extensions         *extensions.Manager
-	draftCompletions   sync.Map
-	progressSummaryMu  sync.Mutex
-	progressSummaries  map[string]*progressSummaryState
-	progressRunning    int
-	scheduleMu         sync.Mutex
-	schedulerWorkers   sync.WaitGroup
-	workflowMu         sync.Mutex
-	workflowCancels    map[string]context.CancelFunc
-	messageMu          sync.Mutex
-	runningMessages    map[string]bool
-	bindingMu          sync.Mutex
-	accessMu           sync.Mutex
-	terminalGrants     map[string]TerminalAccess
-	terminalWriters    map[string]string
-	manualBindings     map[string]TerminalAccess
-	manualBorrowers    map[string]string
-	Store              *Store
-	Models             *Models
-	HexHubMCP          string
-	HexHubLocalAssets  func(context.Context) ([]Object, error)
-	Terminals          *Terminals
-	Engine             *ai.Engine
-	Context            context.Context
-	cancel             context.CancelFunc
-	options            Options
-	token              string
-	generated          bool
-	workers            sync.WaitGroup
-	closeOnce          sync.Once
-	gate               sync.RWMutex
-	closed             bool
-	http               *http.Server
-	listener           net.Listener
-	streamSlots        chan struct{}
-	connectionMu       sync.Mutex
-	connectionFailures map[string]hostConnectionFailure
-	hostKeyMu          sync.Mutex
-	hostKeyPrompts     map[string]*sshTrustPrompt
+	Extensions           *extensions.Manager
+	draftCompletions     sync.Map
+	memoryReads          sync.Map
+	memoryCancel         context.CancelFunc
+	memoryJobID          string
+	memoryLease          string
+	memoryLastForeground time.Time
+	progressSummaryMu    sync.Mutex
+	progressSummaries    map[string]*progressSummaryState
+	progressRunning      int
+	scheduleMu           sync.Mutex
+	schedulerWorkers     sync.WaitGroup
+	workflowMu           sync.Mutex
+	workflowCancels      map[string]context.CancelFunc
+	messageMu            sync.Mutex
+	runningMessages      map[string]bool
+	bindingMu            sync.Mutex
+	accessMu             sync.Mutex
+	terminalGrants       map[string]TerminalAccess
+	terminalWriters      map[string]string
+	manualBindings       map[string]TerminalAccess
+	manualBorrowers      map[string]string
+	Store                *Store
+	Models               *Models
+	HexHubMCP            string
+	HexHubLocalAssets    func(context.Context) ([]Object, error)
+	Terminals            *Terminals
+	Engine               *ai.Engine
+	Context              context.Context
+	cancel               context.CancelFunc
+	options              Options
+	token                string
+	generated            bool
+	workers              sync.WaitGroup
+	closeOnce            sync.Once
+	gate                 sync.RWMutex
+	closed               bool
+	http                 *http.Server
+	listener             net.Listener
+	streamSlots          chan struct{}
+	connectionMu         sync.Mutex
+	connectionFailures   map[string]hostConnectionFailure
+	hostKeyMu            sync.Mutex
+	hostKeyPrompts       map[string]*sshTrustPrompt
 }
 
 func New(ctx context.Context, options Options) (server *Server, err error) {
@@ -130,7 +136,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	}
 	child, cancel := context.WithCancel(ctx)
 	server = &Server{Context: child, cancel: cancel, options: options, token: token, generated: generated, streamSlots: make(chan struct{}, 4)}
-	store, e := OpenStore(options.DataDir)
+	store, e := openStore(options.DataDir, operationalMemoryV2Ready || options.memoryV2ForTest)
 	if e != nil {
 		cancel()
 		return nil, e

@@ -14,6 +14,9 @@ func (s *Store) ensureBuiltinLocalResources(project string) {
 		}
 		for _, resource := range locals {
 			id := resource["id"]
+			if s.memoryV2 {
+				s.exec("INSERT OR IGNORE INTO resourceMemoryGenerations(resourceId,generation,updatedAt,reason) VALUES(?,1,?,'created')", id, now())
+			}
 			s.exec("DELETE FROM navigationTrash WHERE kind='resource' AND id=?", id)
 			if node := s.row("SELECT id,parentId FROM resourceTree WHERE resourceId=?", id); node != nil && stringOf(node["parentId"]) != "" {
 				position := len(s.treeChildren(pid, "", ""))

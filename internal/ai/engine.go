@@ -260,6 +260,10 @@ func (e *Engine) notify(s *session, kind string, v any) {
 	}
 }
 func (e *Engine) Configure(id string, c Config) error {
+	if e.worker != nil && c.MemorySchemaVersion == 2 {
+		c.MemoryEnabled = false
+		c.MemoryExtractionEnabled = false
+	}
 	if !ValidConversationMode(c.ConversationMode) {
 		return errors.New("invalid conversation mode")
 	}
@@ -577,6 +581,8 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			s.state.TargetScope = nil
 		}
 		c.targetScope = cloneTargetScope(s.state.TargetScope)
+		s.state.MemoryEvidenceContexts = nil
+		s.state.View.MemoryAccess = nil
 		if c.targetScope != nil {
 			c.AssetRef, c.TerminalID, c.Runtime = "", "", "local"
 		}

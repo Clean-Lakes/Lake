@@ -112,6 +112,8 @@ func memoryType(t string) bool {
 }
 
 type MemoryMutation struct {
+	Details          *MemoryDetails
+	Claim            Object
 	Key              string
 	Type             string
 	Description      string
@@ -122,6 +124,7 @@ type MemoryMutation struct {
 	Verification     string
 	OriginSessionID  string
 	OriginTurnID     string
+	OriginMessageID  string
 	SourceKind       string
 	Forget           bool
 }
@@ -153,7 +156,11 @@ func (s *Store) memorySettings(project string) Object {
 	s.activeProject(project)
 	row := s.row("SELECT * FROM projectMemorySettings WHERE projectId=?", project)
 	if row == nil {
-		return Object{"projectId": project, "useEnabled": true, "extractionEnabled": true, "epoch": 0, "revision": 0, "settingsRevision": 0, "publishedRevision": 0}
+		row = Object{"projectId": project, "useEnabled": 1, "extractionEnabled": 1, "epoch": 0, "revision": 0, "settingsRevision": 0, "publishedRevision": 0}
+	}
+	row["memorySchemaVersion"] = 1
+	if s.memoryV2 {
+		row["memorySchemaVersion"] = 2
 	}
 	row["useEnabled"] = integer(row["useEnabled"]) != 0
 	row["extractionEnabled"] = integer(row["extractionEnabled"]) != 0
@@ -182,7 +189,7 @@ func (s *Store) SetMemorySettings(project string, use, extraction bool, expected
 		}
 		s.exec("UPDATE projectMemorySettings SET useEnabled=?,extractionEnabled=?,epoch=?,settingsRevision=settingsRevision+1,updatedAt=? WHERE projectId=?", use, extraction, epoch, now(), project)
 		if !use || !extraction {
-			s.exec("UPDATE projectMemoryJobs SET status='skipped',lastErrorCode='memory_disabled',updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE projectId=?) AND status IN ('queued','retry_wait','running')", now(), project)
+			s.exec("UPDATE projectMemoryJobs SET status='skipped',lastErrorCode='memory_disabled',updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE projectId=?) AND status IN ('queued','retry_wait','running','budget_wait')", now(), project)
 		}
 		return s.memorySettings(project)
 	}).(Object)
@@ -222,6 +229,9 @@ func (s *Store) ListProjectMemories(project, query string, offset, limit int, in
 	if offset < 0 || limit < 1 || limit > 50 || utf8.RuneCountInString(query) > 160 {
 		fail(400, "Invalid memory query")
 	}
+	if s.memoryV2 {
+		return s.listMemoriesV2(project, query, offset, limit, includeExpired, includeDeleted)
+	}
 	return s.read(func() any {
 		settings := s.memorySettings(project)
 		rows := s.rows("SELECT * FROM projectMemories WHERE projectId=? ORDER BY updatedAt DESC,key", project)
@@ -256,6 +266,9 @@ func (s *Store) ReadProjectMemory(project, key string, includeDeleted bool) Obje
 	if !validMemoryKey(key) {
 		fail(400, "Invalid memory key")
 	}
+	if s.memoryV2 {
+		return s.readMemoryV2(project, key, includeDeleted)
+	}
 	return s.read(func() any {
 		s.activeProject(project)
 		row := required(s.row("SELECT * FROM projectMemories WHERE projectId=? AND key=?", project, key), "Memory")
@@ -267,6 +280,9 @@ func (s *Store) ReadProjectMemory(project, key string, includeDeleted bool) Obje
 }
 
 func (s *Store) CommitProjectMemory(project string, m MemoryMutation) Object {
+	if s.memoryV2 {
+		return s.CommitMemoryV2(project, m)
+	}
 	validateMemoryMutation(m)
 	result := s.update(func() any {
 		s.ensureMemorySettings(project)
@@ -330,7 +346,7 @@ func (s *Store) CommitProjectMemory(project string, m MemoryMutation) Object {
 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(projectId,key) DO UPDATE SET type=excluded.type,description=excluded.description,body=excluded.body,markdown=excluded.markdown,revision=excluded.revision,projectRevision=excluded.projectRevision,contentHash=excluded.contentHash,originSessionId=excluded.originSessionId,originTurnId=excluded.originTurnId,lastSourceSessionId=excluded.lastSourceSessionId,lastSourceTurnId=excluded.lastSourceTurnId,sourceIdsJSON='[]',sourceSummaryJSON=excluded.sourceSummaryJSON,resourceIdsJSON='[]',verification=excluded.verification,observedAt='',validUntil=excluded.validUntil,createdAt=excluded.createdAt,updatedAt=excluded.updatedAt,deletedAt=excluded.deletedAt`,
 			project, m.Key, kind, description, body, markdown, revision+1, next, hash, originSession, originTurn, lastSession, lastTurn, jsonText(sources), verification, validUntil, createdAt, t, deletedAt)
 		s.exec("UPDATE projectMemorySettings SET revision=?,epoch=?,updatedAt=? WHERE projectId=?", next, epoch, t, project)
-		s.exec("UPDATE projectMemoryJobs SET status='skipped',lastErrorCode='memory_changed',updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE projectId=?) AND status IN ('queued','retry_wait','running')", t, project)
+		s.exec("UPDATE projectMemoryJobs SET status='skipped',lastErrorCode='memory_changed',updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE projectId=?) AND status IN ('queued','retry_wait','running','budget_wait')", t, project)
 		commitID := ident()
 		s.exec("INSERT INTO projectMemoryCommits(commitId,projectId,revision,mutationKeysJSON,createdAt) VALUES(?,?,?,?,?)", commitID, project, next, jsonText([]string{m.Key}), t)
 		return Object{"commitId": commitID, "projectRevision": next, "revision": revision + 1, "key": m.Key, "deleted": m.Forget}
@@ -344,6 +360,9 @@ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(projectId,key) DO UPDA
 func (s *Store) listMemoryRows(project string) ([]Object, int) {
 	s.activeProject(project)
 	settings := s.memorySettings(project)
+	if s.memoryV2 {
+		return s.rows("SELECT * FROM projectMemoryEntriesV2 WHERE projectId=? AND deletedAt='' ORDER BY key", project), integer(settings["revision"])
+	}
 	return s.rows("SELECT * FROM projectMemories WHERE projectId=? AND deletedAt='' ORDER BY key", project), integer(settings["revision"])
 }
 
@@ -367,6 +386,9 @@ func memoryIndex(rows []Object) string {
 }
 
 func (s *Store) ProjectMemoryIndex(project string) string {
+	if s.memoryV2 {
+		return stringOf(s.BuildScopedMemoryIndex(memoryReadScope{Project: project, InputBudget: 64000}, "", 3072)["index"])
+	}
 	return s.read(func() any {
 		rows, _ := s.listMemoryRows(project)
 		active := []Object{}

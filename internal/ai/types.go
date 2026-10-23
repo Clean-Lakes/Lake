@@ -43,40 +43,42 @@ type SSH struct {
 	KnownHosts    string `json:"-"`
 }
 type Config struct {
-	ConversationMode        string `json:"conversationMode,omitempty"`
-	ModelProviderID         string `json:"modelProviderId,omitempty"` // Logical catalog ID only; never an endpoint or credential.
-	legacyInvestigations    bool   // Historical runtime compatibility; never enabled by user settings.
-	sreCoordinator          bool
-	sre                     *sreRoleContext
-	targetScope             *TargetScope
-	StrategyLearnEnabled    bool             `json:"-"`
-	StrategyCorrectEnabled  bool             `json:"-"`
-	StrategyBudget          strategy.Budget  `json:"-"`
-	StrategyGlobalEpoch     int64            `json:"-"`
-	StrategyProjectEpoch    int64            `json:"-"`
-	MemoryProjectID         string           `json:"-"`
-	MemoryEnabled           bool             `json:"-"`
-	MemoryExtractionEnabled bool             `json:"-"`
-	MemoryEpoch             int              `json:"-"`
-	MemoryKnowledgeRevision int              `json:"-"`
-	Directories             []AssetDirectory `json:"directories,omitempty"`
-	agentRole               string
-	workflowMode            bool
-	MultiAgentMode          string       `json:"multiAgentMode,omitempty"`
-	Permissions             *Permissions `json:"permissions,omitempty"`
-	ReferencedAssets        []string     `json:"-"`
-	AuthSecrets             []string     `json:"-"`
-	CredentialDir           string       `json:"-"`
-	Model                   Model        `json:"model"`
-	Profile                 string       `json:"profile"`
-	UserPrompt              string       `json:"userPrompt,omitempty"`
-	Runtime                 string       `json:"runtime,omitempty"`
-	AssetRef                string       `json:"asset_ref,omitempty"`
-	Container               string       `json:"container_id,omitempty"`
-	TerminalID              string       `json:"terminal_id,omitempty"`
-	Assets                  []Asset      `json:"assets"`
-	MaxSteps                int          `json:"maxSteps,omitempty"`
-	Workspace               string       `json:"workspace,omitempty"`
+	ConversationMode          string `json:"conversationMode,omitempty"`
+	ModelProviderID           string `json:"modelProviderId,omitempty"` // Logical catalog ID only; never an endpoint or credential.
+	legacyInvestigations      bool   // Historical runtime compatibility; never enabled by user settings.
+	sreCoordinator            bool
+	sre                       *sreRoleContext
+	targetScope               *TargetScope
+	StrategyLearnEnabled      bool             `json:"-"`
+	StrategyCorrectEnabled    bool             `json:"-"`
+	StrategyBudget            strategy.Budget  `json:"-"`
+	StrategyGlobalEpoch       int64            `json:"-"`
+	StrategyProjectEpoch      int64            `json:"-"`
+	MemoryProjectID           string           `json:"-"`
+	MemoryEnabled             bool             `json:"-"`
+	MemoryExtractionEnabled   bool             `json:"-"`
+	MemoryEpoch               int              `json:"-"`
+	MemoryKnowledgeRevision   int              `json:"-"`
+	MemorySchemaVersion       int              `json:"-"`
+	MemoryResourceGenerations map[string]int   `json:"-"`
+	Directories               []AssetDirectory `json:"directories,omitempty"`
+	agentRole                 string
+	workflowMode              bool
+	MultiAgentMode            string       `json:"multiAgentMode,omitempty"`
+	Permissions               *Permissions `json:"permissions,omitempty"`
+	ReferencedAssets          []string     `json:"-"`
+	AuthSecrets               []string     `json:"-"`
+	CredentialDir             string       `json:"-"`
+	Model                     Model        `json:"model"`
+	Profile                   string       `json:"profile"`
+	UserPrompt                string       `json:"userPrompt,omitempty"`
+	Runtime                   string       `json:"runtime,omitempty"`
+	AssetRef                  string       `json:"asset_ref,omitempty"`
+	Container                 string       `json:"container_id,omitempty"`
+	TerminalID                string       `json:"terminal_id,omitempty"`
+	Assets                    []Asset      `json:"assets"`
+	MaxSteps                  int          `json:"maxSteps,omitempty"`
+	Workspace                 string       `json:"workspace,omitempty"`
 }
 type Call struct {
 	ID        string `json:"id"`
@@ -135,6 +137,7 @@ type View struct {
 	Todos             []Todo             `json:"todos,omitempty"`
 	Question          *QuestionRequest   `json:"question,omitempty"`
 	MemoryStatus      string             `json:"memoryStatus,omitempty"`
+	MemoryAccess      []MemoryAccess     `json:"memoryAccess,omitempty"`
 	AgentRuns         []AgentRun         `json:"agentRuns,omitempty"`
 	DelegatedUsage    Usage              `json:"delegatedUsage,omitempty"`
 	RootTurnID        string             `json:"rootTurnId,omitempty"`
@@ -154,26 +157,27 @@ type View struct {
 	Turns             int                `json:"turns"`
 }
 type State struct {
-	PromptBaseline         *strategy.PromptBaseline       `json:"promptBaseline,omitempty"`
-	SkillSnapshots         []strategy.SkillSnapshot       `json:"skillSnapshots,omitempty"`
-	Runtime                *RuntimeCheckpoint             `json:"runtime,omitempty"`
-	SREHandoff             *SREHandoff                    `json:"sreHandoff,omitempty"`
-	QuestionDecisions      map[string]map[string][]string `json:"questionDecisions,omitempty"`
-	FileReads              map[string]string              `json:"fileReads,omitempty"`
-	StrategyOutbox         []StrategyTurnSnapshot         `json:"strategyOutbox,omitempty"`
-	MemoryOutbox           []MemoryTurnSnapshot           `json:"memoryOutbox,omitempty"`
-	MemoryRecentUserInputs []string                       `json:"memoryRecentUserInputs,omitempty"`
-	TargetScope            *TargetScope                   `json:"targetScope,omitempty"`
-	RootQuestion           string                         `json:"rootQuestion,omitempty"`
-	ReferencedAssetIDs     []string                       `json:"referencedAssetIds,omitempty"`
-	LastRequest            *Usage                         `json:"lastRequest,omitempty"`
-	LastRequestAt          string                         `json:"lastRequestAt,omitempty"`
-	ContextMeasurement     *ContextMeasurement            `json:"contextMeasurement,omitempty"`
-	View                   View                           `json:"view"`
-	History                []Message                      `json:"history"`
-	Checkpoints            []int                          `json:"checkpoints"`
-	Config                 Config                         `json:"config"`
-	Undo                   []FileUndo                     `json:"undo,omitempty"`
+	PromptBaseline         *strategy.PromptBaseline         `json:"promptBaseline,omitempty"`
+	SkillSnapshots         []strategy.SkillSnapshot         `json:"skillSnapshots,omitempty"`
+	Runtime                *RuntimeCheckpoint               `json:"runtime,omitempty"`
+	SREHandoff             *SREHandoff                      `json:"sreHandoff,omitempty"`
+	QuestionDecisions      map[string]map[string][]string   `json:"questionDecisions,omitempty"`
+	FileReads              map[string]string                `json:"fileReads,omitempty"`
+	StrategyOutbox         []StrategyTurnSnapshot           `json:"strategyOutbox,omitempty"`
+	MemoryOutbox           []MemoryTurnSnapshot             `json:"memoryOutbox,omitempty"`
+	MemoryEvidenceContexts map[string]MemoryEvidenceContext `json:"memoryEvidenceContexts,omitempty"`
+	MemoryRecentUserInputs []string                         `json:"memoryRecentUserInputs,omitempty"`
+	TargetScope            *TargetScope                     `json:"targetScope,omitempty"`
+	RootQuestion           string                           `json:"rootQuestion,omitempty"`
+	ReferencedAssetIDs     []string                         `json:"referencedAssetIds,omitempty"`
+	LastRequest            *Usage                           `json:"lastRequest,omitempty"`
+	LastRequestAt          string                           `json:"lastRequestAt,omitempty"`
+	ContextMeasurement     *ContextMeasurement              `json:"contextMeasurement,omitempty"`
+	View                   View                             `json:"view"`
+	History                []Message                        `json:"history"`
+	Checkpoints            []int                            `json:"checkpoints"`
+	Config                 Config                           `json:"config"`
+	Undo                   []FileUndo                       `json:"undo,omitempty"`
 }
 type FileUndo struct {
 	TargetHash string `json:"targetHash,omitempty"`

@@ -71,6 +71,7 @@ func (s *Store) ArchiveNavigation(kind, id string) {
 			if node == nil {
 				node = Object{}
 			}
+			s.BumpMemoryResourceGeneration(id, "resource_archived")
 			s.trashEntry(kind, id, project, stringOf(resource["name"]), node)
 			// Evidence from a removed resource must not commit after its scope changes.
 			s.strategyArchiveProject(project)
@@ -89,6 +90,9 @@ func (s *Store) ArchiveNavigation(kind, id string) {
 			s.ensureMemorySettings(id)
 			s.exec("UPDATE projectMemorySettings SET epoch=epoch+1,updatedAt=? WHERE projectId=?", now(), id)
 			s.exec("UPDATE projectMemoryJobs SET status='skipped',lastErrorCode='project_archived',updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE projectId=?) AND status IN ('queued','retry_wait','running')", now(), id)
+			for _, resource := range s.rows("SELECT id FROM resources WHERE projectId=?", id) {
+				s.BumpMemoryResourceGeneration(stringOf(resource["id"]), "project_archived")
+			}
 			s.trashEntry(kind, id, id, stringOf(project["name"]), Object{})
 		default:
 			fail(400, "删除对象类型无效")
@@ -128,8 +132,12 @@ func (s *Store) RestoreNavigation(kind, id string) {
 		switch kind {
 		case "project":
 			required(s.row("SELECT id FROM projects WHERE id=?", id), "Project")
+			for _, resource := range s.rows("SELECT id FROM resources WHERE projectId=?", id) {
+				s.BumpMemoryResourceGeneration(stringOf(resource["id"]), "project_restored")
+			}
 		case "resource":
 			required(s.row("SELECT id FROM resources WHERE id=? AND projectId=?", id, project), "Resource")
+			s.BumpMemoryResourceGeneration(id, "resource_restored")
 			s.exec("INSERT INTO resourceTree(id,projectId,parentId,kind,resourceId,position) VALUES(?,?,?,'resource',?,?)", id, project, parentValue, id, len(s.treeChildren(project, parent, "")))
 		case "folder":
 			s.treeParent(project, parent, "")
@@ -200,6 +208,13 @@ func (b *Server) navigationTrashRoute(w http.ResponseWriter, r *http.Request, na
 	} else {
 		b.Store.RestoreNavigation(kind, id)
 	}
+	project := id
+	if kind == "resource" {
+		project = b.Store.read(func() any {
+			return stringOf(b.Store.row("SELECT projectId FROM resources WHERE id=?", id)["projectId"])
+		}).(string)
+	}
+	b.invalidateMemoryExtraction(project, "resource_changed")
 	reply(w, 200, Object{"items": b.Store.NavigationTrash()})
 	return true
 }

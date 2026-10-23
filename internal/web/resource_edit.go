@@ -70,8 +70,10 @@ func mergeSSHResourceEdit(old, input Object) Object {
 func (s *Store) EditTerminalResource(id, name string, config Object, changed bool) Object {
 	return s.update(func() any {
 		resource := s.resource(id)
+		s.InvalidateMemoryIndexCache()
 		project := stringOf(resource["projectId"])
 		if changed {
+			s.BumpMemoryResourceGeneration(id, "connection_changed")
 			s.projectIdleForDeletion(project)
 			s.resourceIdleForChange(id, "修改连接配置")
 		}
@@ -161,6 +163,7 @@ func (b *Server) editTerminalResourceRoute(w http.ResponseWriter, r *http.Reques
 	}()
 	saved = true
 	if changed {
+		b.invalidateMemoryExtraction(stringOf(resource["projectId"]), "resource_changed")
 		for _, session := range objects(b.Store.Catalog()["sessions"]) {
 			if session["projectId"] == resource["projectId"] {
 				b.resetConnectionFailures(stringOf(session["id"]))
