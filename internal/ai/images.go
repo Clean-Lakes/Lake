@@ -89,6 +89,7 @@ func historyCost(history []Message) int {
 	total := 0
 	for _, m := range history {
 		copy := m
+		copy.HostTurnID = ""
 		copy.Images = nil
 		copy.Native = nil
 		total += len(js(copy))
@@ -99,6 +100,7 @@ func historyCost(history []Message) int {
 func summaryMessages(history []Message) []Message {
 	out := []Message{}
 	for _, m := range history {
+		m.HostTurnID = ""
 		m.Native = nil
 		if len(m.Images) > 0 {
 			images := append([]ImageAttachment(nil), m.Images...)

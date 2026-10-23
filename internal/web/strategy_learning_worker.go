@@ -86,14 +86,28 @@ func (b *Server) processOneStrategyJob() {
 	var activeContext StrategyContext
 	activeID := ""
 	defer func() {
-		if recover() != nil && activeID != "" {
-			_, _ = b.Store.failStrategyProposal(activeContext, activeID, "learning_internal_error")
+		if recover() != nil {
+			b.strategyHandoffStatus.Store("learning_internal_error")
+			if activeID != "" {
+				_, _ = b.Store.failStrategyProposal(activeContext, activeID, "learning_internal_error")
+			}
 		}
 	}()
+	if !b.strategyWorkerMu.TryLock() {
+		return
+	}
+	defer b.strategyWorkerMu.Unlock()
 	b.messageMu.Lock()
-	busy := len(b.runningMessages) > 0
+	if len(b.runningMessages) > 0 || b.strategyForeground > 0 || b.Context.Err() != nil {
+		b.messageMu.Unlock()
+		return
+	}
+	background, cancelBackground := context.WithCancel(b.Context)
+	b.strategyLearningCancel = cancelBackground
 	b.messageMu.Unlock()
-	if busy || b.Context.Err() != nil {
+	defer func() { cancelBackground(); b.messageMu.Lock(); b.strategyLearningCancel = nil; b.messageMu.Unlock() }()
+	b.processStrategyOutboxes(background)
+	if background.Err() != nil {
 		return
 	}
 	// Reconcile durable results before claiming fresh work. An ambiguous dispatch
@@ -127,7 +141,7 @@ func (b *Server) processOneStrategyJob() {
 		return
 	}
 	projects, err := strategyCall(b.Store, false, func() []Object {
-		return b.Store.rows(`SELECT DISTINCT j.accessProjectId FROM strategyJobs j WHERE j.kind='proposal' AND (j.status='queued' OR (j.status='leased' AND j.dispatchState='none' AND j.leaseUntilMs<=?)) AND NOT EXISTS (SELECT 1 FROM strategyJobSources js JOIN strategyLearningTurns t ON t.sourceId=js.sourceId JOIN projectMemoryTurns mt ON mt.sessionId=t.sessionId AND mt.turnId=t.turnId JOIN projectMemoryJobs mj ON mj.turnSequence=mt.sequence WHERE js.jobId=j.id AND mj.status IN ('queued','running','retry_wait')) ORDER BY j.createdAt LIMIT 32`, time.Now().UnixMilli())
+		return b.Store.rows(`SELECT DISTINCT j.accessProjectId FROM strategyJobs j WHERE j.kind='proposal' AND (j.status='queued' OR (j.status='leased' AND j.dispatchState='none' AND j.leaseUntilMs<=?)) ORDER BY j.createdAt LIMIT 32`, time.Now().UnixMilli())
 	})
 	if err != nil {
 		return
@@ -137,12 +151,12 @@ func (b *Server) processOneStrategyJob() {
 		job, e := b.Store.claimStrategyJob(ctx, "proposal")
 		if e == nil && job != nil {
 			activeContext, activeID = ctx, stringOf(job["id"])
-			b.executeStrategyProposal(ctx, job)
+			b.executeStrategyProposal(background, ctx, job)
 			return
 		}
 	}
 }
-func (b *Server) executeStrategyProposal(scope StrategyContext, job Object) {
+func (b *Server) executeStrategyProposal(background context.Context, scope StrategyContext, job Object) {
 	id, token := stringOf(job["id"]), stringOf(job["leaseToken"])
 	fail := func(code string) { _, _ = b.Store.failStrategyProposal(scope, id, code) }
 	data, err := b.Store.strategyProposalData(scope, id, token)
@@ -166,31 +180,47 @@ func (b *Server) executeStrategyProposal(scope StrategyContext, job Object) {
 		index = ""
 	}
 	data["existingMemory"] = index
-	content := jsonText(data)
-	if len(content) > 32768 || !b.strategySafeText(content) {
+	if !b.strategySafeText(jsonText(data)) {
 		fail("unsafe_source")
 		return
 	}
-	effective, err := b.Store.EffectiveStrategySettings(scope)
-	if err != nil {
-		fail("disabled")
-		return
-	}
-	budget := effective.Settings.Budget
-	remaining := budget.MaxAdditionalTokens - int64(len(content)+len(strategyProposalPrompt)+256)
-	if budget.MaxOptimizationRequests < 1 || remaining < 128 {
-		fail("token_budget")
+	limits := strategy.DefaultLearningLimits()
+	content, fits := strategyLearningContent(data)
+	if !fits {
+		fail("input_budget")
 		return
 	}
 	configured := *model
-	configured.MaxOutput = int(min(int64(4096), remaining))
+	if configured.ContextWindow <= 0 {
+		configured.ContextWindow = 64000
+	}
+	configured.MaxOutput = min(limits.MaxOutputTokens, configured.ContextWindow/4)
 	if model.MaxOutput > 0 {
 		configured.MaxOutput = min(configured.MaxOutput, model.MaxOutput)
 	}
-	deadline := min(int64(integer(job["expiresAtMs"])), time.Now().Add(60*time.Second).UnixMilli())
-	ctx, cancel := context.WithDeadline(b.Context, time.UnixMilli(deadline))
+	inputBytes := ai.StrategyLearningInputBytes([]ai.Message{{Role: "system", Content: strategyProposalPrompt}, {Role: "user", Content: content}})
+	if configured.MaxOutput <= 0 || (inputBytes+2)/3+configured.MaxOutput >= configured.ContextWindow {
+		fail("input_budget")
+		return
+	}
+	deadline := min(int64(integer(job["expiresAtMs"])), time.Now().Add(time.Duration(limits.DeadlineSeconds)*time.Second).UnixMilli())
+	ctx, cancel := context.WithDeadline(background, time.UnixMilli(deadline))
 	defer cancel()
-	if _, err = b.Store.beginStrategyProposalRun(scope, id, token, strategy.ContentHash(jsonText(Object{"extractor": strategyExtractorVersion, "prompt": strategyProposalPrompt, "data": data, "modelRef": ai.ModelIdentity(configured), "maxOutput": configured.MaxOutput, "contextWindow": configured.ContextWindow}))); err != nil {
+	if ctx.Err() != nil {
+		b.deferStrategyProposal(scope, id, token, "foreground_deferred")
+		return
+	}
+	ctx, releaseSlot, ready := b.Engine.TryStrategyModelSlot(ctx)
+	if !ready {
+		b.deferStrategyProposal(scope, id, token, "model_busy")
+		return
+	}
+	defer releaseSlot()
+	if _, err = b.Store.beginStrategyProposalRun(scope, id, token, strategy.ContentHash(jsonText(Object{"extractor": strategyExtractorVersion, "prompt": strategyProposalPrompt, "content": content, "modelRef": ai.ModelIdentity(configured), "maxOutput": configured.MaxOutput, "contextWindow": configured.ContextWindow})), inputBytes+configured.MaxOutput); err != nil {
+		if e, ok := err.(*StrategyError); ok && e.Code == "strategy_learning_daily_budget" {
+			b.deferStrategyProposal(scope, id, token, "learning_daily_budget")
+			return
+		}
 		fail("dispatch_conflict")
 		return
 	}
@@ -221,8 +251,11 @@ func (b *Server) executeStrategyProposal(scope StrategyContext, job Object) {
 	<-watchStopped
 	code := ""
 	var result strategyProposalResult
-	if callErr != nil {
+	if callErr != nil || ctx.Err() != nil {
 		code = "model_error"
+		if background.Err() != nil && b.Context.Err() == nil {
+			code = "foreground_preempted"
+		}
 	} else {
 		sources, _ := strategyCall(b.Store, false, func() []string { return b.Store.strategyJobSources(id) })
 		result, err = parseStrategyProposal(output, sources)
@@ -241,6 +274,16 @@ func (b *Server) executeStrategyProposal(scope StrategyContext, job Object) {
 		return
 	}
 	b.finishStrategyProposal(scope, job, result)
+}
+
+func (b *Server) strategyForegroundModel() func() {
+	b.messageMu.Lock()
+	b.strategyForeground++
+	if b.strategyLearningCancel != nil {
+		b.strategyLearningCancel()
+	}
+	b.messageMu.Unlock()
+	return func() { b.messageMu.Lock(); b.strategyForeground--; b.messageMu.Unlock() }
 }
 func (b *Server) finishStrategyProposal(ctx StrategyContext, job Object, result strategyProposalResult) {
 	id, token := stringOf(job["id"]), stringOf(job["leaseToken"])
@@ -278,4 +321,13 @@ func (b *Server) finishStrategyProposal(ctx StrategyContext, job Object, result 
 			})
 		}
 	}
+}
+
+// Only a provably undispatched lease may return to the queue. Admission delays
+// do not consume retries, daily requests or unknown provider reservations.
+func (b *Server) deferStrategyProposal(scope StrategyContext, id, token, reason string) {
+	_, _ = strategyCall(b.Store, true, func() bool {
+		b.Store.exec("UPDATE strategyJobs SET status='queued',leaseToken='',leaseUntilMs=0,attempts=MAX(0,attempts-1),errorCode=?,updatedAt=? WHERE id=? AND accessProjectId=? AND leaseToken=? AND dispatchState='none' AND status='leased'", reason, now(), id, scope.ProjectID, token)
+		return true
+	})
 }

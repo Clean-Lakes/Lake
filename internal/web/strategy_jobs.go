@@ -112,17 +112,24 @@ func (s *Store) strategyQueueJob(ctx StrategyContext, key string, input Strategy
 		if a["scopeKey"] != scopeKey || int64(integer(a["revision"])) != input.ExpectedRevision {
 			strategyFail(409, "revision_conflict")
 		}
-		if input.Kind == "proposal" && effective.Settings.Budget.MaxRevisions == 0 {
-			strategyFail(409, "revision_disabled")
-		}
 		assetID = input.AssetID
 	} else if input.ExpectedRevision != 0 {
 		strategyFail(400, "invalid_revision")
 	}
+	ttl := time.Duration(effective.Settings.Budget.MaxActiveSeconds) * time.Second
+	if input.Kind == "proposal" {
+		limits := strategy.DefaultLearningLimits()
+		pending := s.row("SELECT COUNT(*) AS total,COALESCE(SUM(CASE WHEN accessProjectId=? THEN 1 ELSE 0 END),0) AS projectTotal FROM strategyJobs WHERE kind='proposal' AND status IN ('queued','leased','awaiting_reconciliation')", ctx.ProjectID)
+		if integer(pending["total"]) >= limits.MaxQueued || integer(pending["projectTotal"]) >= limits.MaxProjectQueued {
+			strategyFail(409, "learning_queue_full")
+		}
+		ttl = time.Duration(limits.MaxQueueAgeSeconds) * time.Second
+	}
+
 	id := ident()
 	stamp := now()
 	s.exec(`INSERT INTO strategyJobs(id,scopeKey,accessProjectId,kind,assetId,expectedRevision,status,globalEpoch,projectEpoch,sourceSetHash,runtimeId,dispatchState,expiresAtMs,createdAt,updatedAt)
- VALUES(?,?,?,?,?,?,'queued',?,?,?,?,'none',?,?,?)`, id, scopeKey, ctx.ProjectID, input.Kind, assetID, input.ExpectedRevision, effective.GlobalEpoch, effective.ProjectEpoch, sourceHash, "strategy_"+id, time.Now().Add(time.Duration(effective.Settings.Budget.MaxActiveSeconds)*time.Second).UnixMilli(), stamp, stamp)
+ VALUES(?,?,?,?,?,?,'queued',?,?,?,?,'none',?,?,?)`, id, scopeKey, ctx.ProjectID, input.Kind, assetID, input.ExpectedRevision, effective.GlobalEpoch, effective.ProjectEpoch, sourceHash, "strategy_"+id, time.Now().Add(ttl).UnixMilli(), stamp, stamp)
 	for _, source := range sources {
 		s.exec("INSERT INTO strategyJobSources VALUES(?,?)", id, source)
 	}
@@ -143,9 +150,6 @@ func (s *Store) claimStrategyJob(ctx StrategyContext, kind string) (Object, erro
 		s.strategyContext(ctx)
 		stamp := time.Now().UnixMilli()
 		for _, job := range s.rows("SELECT * FROM strategyJobs WHERE accessProjectId=? AND (?='' OR kind=?) AND (status='queued' OR (status='leased' AND leaseUntilMs<=? AND dispatchState='none')) ORDER BY createdAt,id LIMIT 32", ctx.ProjectID, kind, kind, stamp) {
-			if kind == "proposal" && s.row(`SELECT 1 FROM strategyJobSources js JOIN strategyLearningTurns t ON t.sourceId=js.sourceId JOIN projectMemoryTurns mt ON mt.sessionId=t.sessionId AND mt.turnId=t.turnId JOIN projectMemoryJobs mj ON mj.turnSequence=mt.sequence WHERE js.jobId=? AND mj.status IN ('queued','running','retry_wait') LIMIT 1`, job["id"]) != nil {
-				continue
-			}
 			code := strategyValidationCode(func() { s.strategyCheckJob(ctx, job) })
 			if integer(job["attempts"]) >= strategyMaxJobClaims {
 				code = "strategy_claim_limit"

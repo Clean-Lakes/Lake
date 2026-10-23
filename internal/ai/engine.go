@@ -60,6 +60,7 @@ type Engine struct {
 	RuntimeDir       string
 	Bridge           Bridge
 	Emit             func(Event)
+	ModelActivity    func() func() // Trusted host foreground priority; no provider/session mutation.
 	tunnels          sync.Map
 	shells           sync.Map
 	shellMu          sync.Mutex
@@ -642,7 +643,7 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	} else {
 		s.state.History[0] = Message{Role: "system", Content: systemPrompt}
 	}
-	s.state.History = append(s.state.History, Message{Role: "user", Content: redact(message, c), Images: images})
+	s.state.History = append(s.state.History, Message{HostTurnID: s.state.View.RootTurnID, Role: "user", Content: redact(message, c), Images: images})
 	err = e.save(s)
 	s.mu.Unlock()
 	if err != nil {
