@@ -1,5 +1,7 @@
 package web
 
+import "sort"
+
 func optionalTreeID(value any) string {
 	if value == nil {
 		return ""
@@ -38,10 +40,27 @@ func (s *Store) treeParent(project, parent, moving string) int {
 }
 
 func (s *Store) treeChildren(project, parent, exclude string) []Object {
-	return s.rows("SELECT * FROM resourceTree WHERE projectId=? AND COALESCE(parentId,'')=? AND id!=? ORDER BY position,id", project, parent, exclude)
+	return s.rows("SELECT n.* FROM resourceTree n LEFT JOIN resources r ON r.id=n.resourceId WHERE n.projectId=? AND COALESCE(n.parentId,'')=? AND n.id!=? ORDER BY CASE WHEN r.kind='local' THEN -1 WHEN n.kind='folder' THEN 0 ELSE 1 END,n.position,n.id", project, parent, exclude)
 }
 
 func (s *Store) treeOrder(nodes []Object) {
+	// Preserve manual ordering within each group while folders stay above assets.
+	locals := map[string]bool{}
+	for _, r := range s.rows("SELECT id FROM resources WHERE kind='local'") {
+		locals[stringOf(r["id"])] = true
+	}
+	sort.SliceStable(nodes, func(i, j int) bool {
+		rank := func(n Object) int {
+			if locals[stringOf(n["resourceId"])] {
+				return -1
+			}
+			if n["kind"] == "folder" {
+				return 0
+			}
+			return 1
+		}
+		return rank(nodes[i]) < rank(nodes[j])
+	})
 	for i, n := range nodes {
 		s.exec("UPDATE resourceTree SET position=? WHERE id=?", i, n["id"])
 	}
@@ -107,6 +126,15 @@ func (s *Store) EditResourceTree(project string, data Object) []Object {
 			}
 			s.exec("UPDATE resourceTree SET parentId=? WHERE id=?", parentValue, id)
 			children := s.treeChildren(project, parent, id)
+			if before != "" && s.treeNode(project, before)["kind"] != n["kind"] {
+				before = ""
+				for _, child := range children {
+					if child["kind"] == "resource" && !s.builtinLocalNode(child) {
+						before = stringOf(child["id"])
+						break
+					}
+				}
+			}
 			ordered := []Object{}
 			for _, child := range children {
 				if child["id"] == before {

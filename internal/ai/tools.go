@@ -247,6 +247,9 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		}
 		policyContext = obj(p)
 	}
+	if call.Name == "query_kubernetes" {
+		policyContext["kubernetesLogs"] = a["metric"] == "logs"
+	}
 	ref := str(a["asset_ref"])
 	if ref == "" && !discovery && call.Name != "preview_resource_import" && call.Name != "import_resources" && call.Name != "inspect_attachment" {
 		ref = str(policyContext["asset_ref"])
@@ -485,6 +488,8 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		return e.database(ctx, c, call.Name, a)
 	case "redis_command":
 		return e.redis(ctx, c, a)
+	case "query_kubernetes":
+		return e.queryKubernetes(ctx, c, a)
 	case "list_docker_containers", "docker_container_logs", "docker_container_action":
 		return e.docker(ctx, c, call.Name, a)
 	case "open_ssh_tunnel", "close_ssh_tunnel", "scp_transfer":

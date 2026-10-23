@@ -94,6 +94,10 @@ func approvalKind(c Config, name, risk string, context map[string]any) (string, 
 		return "", nil
 	}
 	switch name {
+	case "query_kubernetes":
+		if context["kubernetesLogs"] == true && !p.SilentReadFiles {
+			return "file_read", nil
+		}
 	case "observe_logs", "observe_journal", "observe_cluster_logs":
 		if !p.SilentReadFiles {
 			return "file_read", nil
