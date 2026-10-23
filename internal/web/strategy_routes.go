@@ -21,10 +21,11 @@ type strategyAssetRequest struct {
 	Kind             strategy.AssetKind     `json:"kind"`
 	Body             string                 `json:"body"`
 	Applicability    strategy.Applicability `json:"applicability"`
+	Assessment       strategy.Assessment    `json:"assessment"`
 }
 
 func (r strategyAssetRequest) input() StrategyAssetInput {
-	return StrategyAssetInput{Title: r.Title, Kind: r.Kind, Body: r.Body, Applicability: r.Applicability}
+	return StrategyAssetInput{Title: r.Title, Kind: r.Kind, Body: r.Body, Applicability: r.Applicability, Assessment: r.Assessment}
 }
 func strategyMust[T any](value T, err error) T {
 	if err != nil {
@@ -220,7 +221,7 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 		}
 	}
 	mutated := func(result StrategyMutationResult) {
-		b.Engine.InvalidateStrategies(ctx.ProjectID)
+		b.Engine.InvalidateStrategies("")
 		reply(w, 200, result)
 	}
 	if suffix == "/settings" {
@@ -320,6 +321,35 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 				strategyFail(404, "asset_unavailable")
 			}
 		}
+		if len(parts) == 3 && parts[2] == "review" && method == "POST" {
+			owner()
+			in := strategyBody[struct {
+				Ref                      strategy.RevisionRef `json:"ref"`
+				ExpectedDecisionRevision int64                `json:"expectedDecisionRevision"`
+				Decision                 string               `json:"decision"`
+				ReasonCode               string               `json:"reasonCode"`
+			}](r, "ref", "expectedDecisionRevision", "decision", "reasonCode")
+			result := strategyMust(b.Store.ReviewStrategyRevision(ctx, id, key, in.Ref, in.ExpectedDecisionRevision, in.Decision, in.ReasonCode))
+			if in.Decision == "rejected" {
+				b.Engine.InvalidateStrategies("")
+			}
+			reply(w, 200, result)
+			return
+		}
+		if len(parts) == 3 && parts[2] == "promote" && method == "POST" {
+			owner()
+			in := strategyBody[struct {
+				Ref       strategy.RevisionRef `json:"ref"`
+				Confirmed bool                 `json:"confirmed"`
+				Draft     strategyAssetRequest `json:"draft"`
+			}](r, "ref", "confirmed", "draft")
+			if in.Draft.ExpectedRevision != 0 || in.Draft.ParentRevision != 0 {
+				strategyFail(400, "invalid_revision")
+			}
+			b.strategySafeInput(in.Draft.input())
+			reply(w, 200, strategyMust(b.Store.PromoteStrategyRevision(ctx, id, key, in.Ref, in.Draft.input(), in.Confirmed)))
+			return
+		}
 		if len(parts) == 2 && method == "DELETE" {
 			owner()
 			in := strategyBody[struct {
@@ -386,7 +416,7 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 				}
 				return out
 			}))
-			reply(w, 200, Object{"asset": v.Asset, "value": v.Value, "available": v.Available, "sourcesAvailable": v.SourcesAvailable, "skillSources": status})
+			reply(w, 200, Object{"asset": v.Asset, "value": v.Value, "available": v.Available, "sourcesAvailable": v.SourcesAvailable, "skillSources": status, "review": v.Review, "assessment": v.Assessment})
 			return
 		}
 		if len(parts) == 3 && parts[2] == "bindings" {

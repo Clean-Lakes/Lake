@@ -61,6 +61,9 @@ func (s *Store) strategyCheckJob(ctx StrategyContext, job Object) {
 	if int64(integer(job["expiresAtMs"])) <= time.Now().UnixMilli() {
 		strategyFail(409, "job_expired")
 	}
+	if job["kind"] == "proposal" && s.row("SELECT 1 FROM strategyRejections WHERE scopeKey=? AND sourceSetHash=?", job["scopeKey"], job["sourceSetHash"]) != nil {
+		strategyFail(409, "rejected_source")
+	}
 	_, hash := s.strategySourceSet(ctx, s.strategyJobSources(stringOf(job["id"])))
 	if hash != job["sourceSetHash"] {
 		strategyFail(409, "source_changed")
@@ -115,6 +118,9 @@ func (s *Store) strategyQueueJob(ctx StrategyContext, key string, input Strategy
 		assetID = input.AssetID
 	} else if input.ExpectedRevision != 0 {
 		strategyFail(400, "invalid_revision")
+	}
+	if input.Kind == "proposal" && s.row("SELECT 1 FROM strategyRejections WHERE scopeKey=? AND sourceSetHash=?", scopeKey, sourceHash) != nil {
+		strategyFail(409, "rejected_source")
 	}
 	ttl := time.Duration(effective.Settings.Budget.MaxActiveSeconds) * time.Second
 	if input.Kind == "proposal" {
@@ -277,6 +283,12 @@ func (s *Store) strategyCompleteProposal(ctx StrategyContext, id, token string, 
 	s.strategyCheckLease(ctx, job, token)
 	if job["kind"] != "proposal" || (job["status"] == "awaiting_reconciliation" && job["dispatchState"] != "complete") {
 		strategyFail(409, "reconciliation_required")
+	}
+	if s.row("SELECT 1 FROM strategyRejections WHERE scopeKey=? AND (sourceSetHash=? OR contentHash=?)", scopeKey, job["sourceSetHash"], strategy.ContentHash(strategyComparableBody(input.Body))) != nil {
+		s.strategyFinishProposal(job, "rejected_candidate")
+		result = StrategyMutationResult{JobID: id}
+		s.strategySaveReceipt(scopeKey, key, digest, result)
+		return result
 	}
 	if dedup {
 		if result, code := s.strategyProposalDuplicate(ctx, job, input); code != "" {

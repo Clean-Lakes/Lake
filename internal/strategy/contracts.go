@@ -168,6 +168,13 @@ type Applicability struct {
 	DomainTags    []string `json:"domainTags,omitempty"`
 }
 
+// Assessment is user-authored evidence/limits, never a provider verification claim.
+type Assessment struct {
+	Conditions  string `json:"conditions"`
+	Evidence    string `json:"evidence"`
+	Limitations string `json:"limitations"`
+}
+
 // AssetRevision is immutable. Lifecycle and adoption belong to later events
 // and bindings, never an in-place edit of this payload or its source files.
 type AssetRevision struct {
