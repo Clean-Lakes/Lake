@@ -415,43 +415,6 @@ func number(v any) float64 {
 	}
 	return 0
 }
-func validateService(kind string, v Object) Object {
-	allowed := set("driver host port username database path credentialRef tls sslmode db endpoint ssh_asset_ref")
-	if len(v) == 0 {
-		fail(400, "Connection settings required")
-	}
-	for k := range v {
-		if !allowed[k] {
-			fail(400, "Unsupported connection field; credentials must use credentialRef")
-		}
-	}
-	if len(jsonText(v)) > 4000 {
-		fail(400, "Connection settings too large")
-	}
-	if ref, ok := v["credentialRef"]; ok {
-		if _, ok := ref.(string); !ok {
-			fail(400, "Invalid credential reference")
-		}
-		if stringOf(ref) == "" {
-			delete(v, "credentialRef")
-		}
-	}
-	if endpoint := stringOf(v["endpoint"]); strings.ContainsAny(endpoint, "@?") {
-		fail(400, "Endpoint must not contain credentials")
-	}
-	if kind == "redis" || kind == "database" && v["driver"] != "sqlite" {
-		if !hostPattern.MatchString(stringOf(v["host"])) {
-			fail(400, "Explicit connection host required")
-		}
-		if v["port"] != nil && (number(v["port"]) != float64(integer(v["port"])) || integer(v["port"]) < 1 || integer(v["port"]) > 65535) {
-			fail(400, "Connection port must be 1..65535")
-		}
-	}
-	if kind == "database" && !set("postgres mysql sqlite")[stringOf(v["driver"])] {
-		fail(400, "Database driver must be postgres, mysql or sqlite")
-	}
-	return v
-}
 
 // Cache only provider metadata, never credentials. A missing limit stays unknown.
 type modelCapacity struct {

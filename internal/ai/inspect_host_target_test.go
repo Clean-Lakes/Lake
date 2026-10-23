@@ -50,6 +50,21 @@ func TestInspectHostCarriesResolvedSSHRuntimeWithoutOverridingExplicitRuntime(t 
 			if executions.Load() != 1 {
 				t.Fatal("inspection replayed")
 			}
+			s, _ := e.get("case")
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			found := false
+			for _, card := range s.state.View.Cards {
+				if card.Title == "inspect_host" {
+					found = true
+					if str(obj(card.Data)["resource_id"]) != "ssh-target" {
+						t.Fatal("operation did not record its resolved catalog identity")
+					}
+				}
+			}
+			if !found {
+				t.Fatal("missing operation record")
+			}
 		})
 	}
 }

@@ -208,3 +208,57 @@ func TestBackgroundShellAndCancellation(t *testing.T) {
 		t.Fatal(value, err)
 	}
 }
+
+func TestRedisACLUsernameFromResourceSettings(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "redis.json"), []byte(`{"password":"synthetic-redis-pass"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	done := make(chan error, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			done <- err
+			return
+		}
+		defer conn.Close()
+		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+		reader := bufio.NewReader(conn)
+		for _, expected := range []string{`["AUTH","app-user","synthetic-redis-pass"]`, `["SELECT","3"]`, `["PING"]`} {
+			request, err := respRead(reader, 0)
+			if err != nil {
+				done <- err
+				return
+			}
+			if js(request) != expected {
+				done <- fmt.Errorf("Redis command shape mismatch")
+				return
+			}
+			if _, err = io.WriteString(conn, "+OK\r\n"); err != nil {
+				done <- err
+				return
+			}
+		}
+		done <- nil
+	}()
+	engine, err := New(t.TempDir(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	as := Asset{ID: "redis", Kind: "redis", Settings: map[string]any{"host": "127.0.0.1", "port": listener.Addr().(*net.TCPAddr).Port, "username": "app-user", "db": 3, "credentialRef": "redis.json"}}
+	_, err = engine.redis(context.Background(), Config{Assets: []Asset{as}, CredentialDir: root}, map[string]any{"asset_ref": "redis", "command": "PING"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = <-done; err != nil {
+		t.Fatal(err)
+	}
+}

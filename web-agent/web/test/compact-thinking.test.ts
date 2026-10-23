@@ -100,3 +100,13 @@ test("automatic output recovery shows a single notice while previous compaction 
  const snapshot={session:{id:"demo"},messages:[{id:"user",role:"user",createdAt:start,text:"继续调查"}],actions:[],ai:{session:"demo",status:"running",cards:[{id:"retry",type:"notice",content:"模型回复达到单次输出上限，正在缩短回复后重试；已完成的操作保留",status:"completed",at:start}],cardsOffset:0}} as SessionSnapshot;
  assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot})).includes("正在缩短回复后重试"));
 });
+
+test('resource summaries reuse the exact catalog resource icon; lookup retains its search identity',()=>{
+ for(const kind of ['local','ssh','database','redis','docker','kubernetes','apisix','prometheus','victoriametrics'] as const){
+  const html=renderToStaticMarkup(createElement(ThinkingTimeline,{cards:[read],live:true,resourceRow:true,resource:{id:'fixture',name:'fixture',kind}}));
+  assert.ok(html.includes(`data-kind="${kind}"`),kind);
+  assert.ok(html.includes(`resource-kind-icon kind-${kind}`),kind);
+  assert.ok(!html.includes('data-kind="lakeHost"'),kind);
+ }
+ assert.equal(progressGlyph({...read,title:'list_assets'}),'lakeSearch');
+});

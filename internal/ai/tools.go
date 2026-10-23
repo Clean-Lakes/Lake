@@ -247,7 +247,11 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		}
 		policyContext = obj(p)
 	}
+	if call.Name == "query_kubernetes" {
+		policyContext["kubernetesLogs"] = a["metric"] == "logs"
+	}
 	ref := str(a["asset_ref"])
+	resourceID := ""
 	if ref == "" && !discovery && call.Name != "preview_resource_import" && call.Name != "import_resources" && call.Name != "inspect_attachment" {
 		ref = str(policyContext["asset_ref"])
 		if ref == "" {
@@ -260,6 +264,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 			return nil, e
 		}
 		target = as.Name
+		resourceID = as.ID
 		if c.targetScope != nil && str(a["terminal_id"]) != "" && str(a["asset_ref"]) == "" {
 			c.AssetRef = as.ID
 			if as.Kind == "local" || as.Kind == "ssh" {
@@ -311,6 +316,10 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		}
 	}
 	cardID := uid()
+	cardData := map[string]any{"arguments": a, "target": target, "risk": risk, "call_id": call.ID}
+	if resourceID != "" {
+		cardData["resource_id"] = resourceID
+	}
 	s.mu.Lock()
 	foundCard := false
 	for i := range s.state.View.Cards {
@@ -318,12 +327,13 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		if card.Type == "operation" && str(obj(card.Data)["call_id"]) == call.ID && card.Status == "pending" {
 			cardID = card.ID
 			card.Status = "running"
+			card.Data = cardData
 			foundCard = true
 			break
 		}
 	}
 	if !foundCard {
-		s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "operation", Title: call.Name, Data: map[string]any{"arguments": a, "target": target, "risk": risk, "call_id": call.ID}, Status: "running", At: timestamp()})
+		s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "operation", Title: call.Name, Data: cardData, Status: "running", At: timestamp()})
 	}
 	e.notify(s, "toolCall", map[string]any{"name": call.Name})
 	s.mu.Unlock()
@@ -485,6 +495,8 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		return e.database(ctx, c, call.Name, a)
 	case "redis_command":
 		return e.redis(ctx, c, a)
+	case "query_kubernetes":
+		return e.queryKubernetes(ctx, c, a)
 	case "list_docker_containers", "docker_container_logs", "docker_container_action":
 		return e.docker(ctx, c, call.Name, a)
 	case "open_ssh_tunnel", "close_ssh_tunnel", "scp_transfer":

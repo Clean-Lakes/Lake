@@ -465,9 +465,13 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 	}
 	if name == "policy" {
 		params := object(args["arguments"])
+		callName := stringOf(args["name"])
 		selected := stringOf(params["terminal_id"])
 		if selected == "" {
 			selected = tid
+		}
+		if set("query_kubernetes observe_cluster observe_cluster_logs")[callName] {
+			selected = ""
 		}
 		var terminal Object
 		targetName := ""
@@ -482,7 +486,6 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 				break
 			}
 		}
-		callName := stringOf(args["name"])
 		ref := stringOf(params["asset_ref"])
 		if ref == "" && terminal != nil {
 			ref = stringOf(terminal["resourceId"])
@@ -530,6 +533,10 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		if resource != nil && resource["kind"] == "ssh" && (fileCall || callName == "open_ssh_terminal" || set("shell inspect_host terminal_execute_command ssh_terminal_send terminal_send_input ssh_terminal_key terminal_send_key")[callName] && (terminal == nil || terminal["status"] == "disconnected")) {
 			b.checkHostConnectionFailure(ctx, id, stringOf(resource["id"]))
 		}
+		if callName == "query_kubernetes" || resource != nil && resource["kind"] == "kubernetes" && set("observe_cluster observe_cluster_logs")[callName] {
+			terminal = nil
+			targetName = stringOf(resource["name"])
+		}
 		p := CommandPolicy(command)
 		frozenTerminal := Object{}
 		for _, k := range []string{"id", "sessionId", "resourceId", "status", "holder", "contextVersion", "generation", "cwd", "shell"} {
@@ -553,6 +560,9 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		}
 		hash := sha256.Sum256([]byte(jsonText(hashData)))
 		v := Object{"fingerprint": fmt.Sprintf("%x", hash), "target": targetName}
+		if callName == "query_kubernetes" && params["metric"] == "logs" {
+			v["kubernetesLogs"] = true
+		}
 		if terminal != nil {
 			v["terminal_id"] = terminal["id"]
 			v["terminalVersion"] = terminal["contextVersion"]

@@ -122,7 +122,7 @@ func validateStrategyInput(in StrategyAssetInput) {
 				valid = set("core terminal2 db-query-editor")[v]
 			}
 			if i == 1 {
-				valid = set("local ssh database docker redis")[v]
+				valid = set("local ssh database docker redis kubernetes apisix prometheus victoriametrics")[v]
 			}
 			if !valid || seen[v] {
 				strategyFail(400, "invalid_applicability")

@@ -57,6 +57,7 @@ func Catalog(profile string) []Tool {
 		Tool{"stage_attachment", "Copy an uploaded attachment to an explicit absolute path on a local host, SSH asset or Docker container. Provide source_id from LAKE_ATTACHMENTS, runtime and asset_ref; container targets also need container_id. The destination parent must already exist. Preserves exact file bytes, verifies SHA256, refuses existing destinations unless overwrite=true, and follows file-write permission/approval. This only transfers; inspect archives first, then use shell tools for safe extraction, deployment and actual verification. Never fabricate the source_id or include base64 bytes in commands.", map[string]any{"type": "object", "properties": map[string]any{"source_id": map[string]any{"type": "string"}, "path": map[string]any{"type": "string"}, "runtime": map[string]any{"type": "string", "enum": []string{"local", "ssh", "container"}}, "asset_ref": map[string]any{"type": "string"}, "container_id": map[string]any{"type": "string"}, "overwrite": map[string]any{"type": "boolean"}, "timeout_ms": map[string]any{"type": "number"}}, "required": []string{"source_id", "path", "runtime", "asset_ref"}}},
 	)
 	list = append(list, extendedTools()...)
+	list = append(list, kubernetesQueryTool())
 	enrichFileSchemas(list)
 	for i := range list {
 		normalizeDescriptions(list[i].Parameters)

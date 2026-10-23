@@ -542,6 +542,15 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, 200, Object{"closed": len(terminals)})
 		return
 	}
+	if len(parts) == 5 && parts[0] == "api" && parts[1] == "projects" && parts[3] == "resources" && parts[4] == "test" && method == "POST" {
+		b.Store.Project(parts[2])
+		data := body(w, r, 8<<20)
+		if data["kind"] != "kubernetes" {
+			fail(400, "当前仅支持测试 Kubernetes 连接")
+		}
+		reply(w, 200, testKubernetesConnection(r.Context(), b.Models.Home, object(data["settings"])))
+		return
+	}
 	if len(parts) == 4 && parts[0] == "api" && parts[1] == "projects" && method == "POST" {
 		limit := int64(16384)
 		if parts[3] == "resources" || parts[3] == "resource-import-preview" {
@@ -583,15 +592,24 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				b.fileResource(parts[2], result, parent)
 				reply(w, 201, result)
 				return
-			} else if set("database docker redis")[kind] {
-				config = validateService(kind, object(data["settings"]))
+			} else if set("database docker redis kubernetes apisix prometheus victoriametrics")[kind] {
+				b.Store.Project(parts[2])
+				var cleanup func()
+				config, cleanup = prepareService(b.Models.Home, kind, object(data["settings"]))
+				created := false
+				defer func() {
+					if !created {
+						cleanup()
+					}
+				}()
+				result := b.Store.CreateResource(parts[2], text(data["name"], "name", 120), kind, config)
+				created = true
+				b.fileResource(parts[2], result, parent)
+				reply(w, 201, result)
+				return
 			} else {
 				fail(400, "Unsupported resource type")
 			}
-			result := b.Store.CreateResource(parts[2], text(data["name"], "name", 120), kind, config)
-			b.fileResource(parts[2], result, parent)
-			reply(w, 201, result)
-			return
 		case "sessions":
 			validateIDs(data["resourceIds"])
 			title := ""
