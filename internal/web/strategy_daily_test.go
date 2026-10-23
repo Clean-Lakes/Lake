@@ -65,6 +65,14 @@ func TestStrategyDailyLongContextRetriesActualFailedReadWithoutCorrectionBudget(
 	apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "检查健康端点，失败可按当前证据调整调查。以下是历史资料：" + strings.Repeat("历史", 10500)}, 202)
 	b.workers.Wait()
 	view, _ := b.Engine.Snapshot(id)
+	t.Logf("retry fixture: status=%s modelRequests=%d healthSamples=%d", view.Status, requests.Load(), samples.Load())
+	for _, terminal := range objects(b.Store.Snapshot(id)["terminals"]) {
+		for _, entry := range objects(b.Store.History(id, stringOf(terminal["id"]))["entries"]) {
+			output := stringOf(entry["output"])
+			// Report only status, numeric codes and booleans, never command output.
+			t.Logf("retry fixture command: status=%s exitCode=%v outputBytes=%d missingExecutable=%t recovered=%t", stringOf(entry["status"]), entry["exitCode"], len(output), strings.Contains(output, "command not found") || strings.Contains(output, "No such file"), strings.Contains(output, "daily-real-read"))
+		}
+	}
 	if view.Status != "completed" || requests.Load() != 3 || samples.Load() != 2 {
 		t.Fatal("ordinary retry interrupted or replayed", view.Status, requests.Load(), samples.Load())
 	}
