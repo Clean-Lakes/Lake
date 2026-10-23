@@ -185,6 +185,10 @@ func (e *Engine) execRuntimeInput(ctx context.Context, c Config, a map[string]an
 		executable = "docker"
 		cmdargs = dockerArgs
 		if host != nil {
+			host, err = e.prepareRuntimeSSH(ctx, host, str(as.Settings["ssh_asset_ref"]))
+			if err != nil {
+				return nil, err
+			}
 			sshTarget = host
 			base, err := sshBase(host, c.CredentialDir)
 			if err != nil {
@@ -199,13 +203,16 @@ func (e *Engine) execRuntimeInput(ctx context.Context, c Config, a map[string]an
 		if err != nil || as.Kind != "ssh" {
 			return nil, errors.New("SSH runtime requires a session SSH asset")
 		}
-		sshTarget = as.SSH
-		base, err := sshBase(as.SSH, c.CredentialDir)
+		sshTarget, err = e.prepareRuntimeSSH(ctx, as.SSH, as.ID)
+		if err != nil {
+			return nil, err
+		}
+		base, err := sshBase(sshTarget, c.CredentialDir)
 		if err != nil {
 			return nil, err
 		}
 		executable = "ssh"
-		cmdargs = append(base, "-p", fmt.Sprint(as.SSH.Port), "-l", as.SSH.Username, as.SSH.Host, cmdline)
+		cmdargs = append(base, "-p", fmt.Sprint(sshTarget.Port), "-l", sshTarget.Username, sshTarget.Host, cmdline)
 	} else if target != "container" && target != "local" {
 		return nil, errors.New("unknown runtime")
 	}
@@ -250,11 +257,11 @@ func (e *Engine) execRuntimeInput(ctx context.Context, c Config, a map[string]an
 			return nil, errors.New("runtime process could not start")
 		}
 	}
-	if executable == "ssh" && code == 255 {
-		return nil, errors.New("SSH connection failed; verify host trust and credentials")
-	}
 	if ctx.Err() != nil {
 		return nil, fmt.Errorf("runtime interrupted; outcome unknown: %w", ctx.Err())
+	}
+	if executable == "ssh" && code == 255 {
+		return nil, runtimeSSHFailure(stderr.String())
 	}
 	return map[string]any{"output": redact(output.String(), c), "stdout": redact(stdout.String(), c), "stderr": redact(stderr.String(), c), "exitCode": code, "truncated": output.Len() >= output.limit}, nil
 }

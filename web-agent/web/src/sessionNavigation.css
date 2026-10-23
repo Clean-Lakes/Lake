@@ -1,0 +1,15 @@
+.session-nav-group { min-height: 32px; margin-bottom: 9px; }
+.session-nav-group-title { display: flex; align-items: center; gap: 7px; min-height: 32px; padding: 3px 9px; color: var(--text-muted); font: inherit; }
+.session-nav-empty { margin: 2px 9px 8px; color: var(--text-muted); font: inherit; }
+.session-sort-row { position: relative; padding-left: 15px; }
+.session-sort-row.is-bulk { padding-left: 0; }
+.session-drag-handle { position: absolute; left: 0; top: 4px; display: grid; place-items: center; width: 15px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--text-muted); opacity: 0; cursor: grab; }
+.session-sort-row:is(:hover,:focus-within) > .session-drag-handle { opacity: 1; }
+.session-drag-handle:disabled { cursor: default; }
+.session-sort-row.is-dragging { opacity: .45; }
+.session-sort-row:is(.drop-before,.drop-after)::after { content: ''; position: absolute; left: 17px; right: 8px; height: 2px; background: var(--focus); pointer-events: none; }
+.session-sort-row.drop-before::after { top: -1px; }
+.session-sort-row.drop-after::after { bottom: 0; }
+.session-nav-group.is-drop-group { background: var(--surface-hover); border-radius: var(--sidebar-row-radius); }
+.session-navigation-error { margin: 6px 9px; color: var(--danger); font: inherit; }
+@media (hover: none) { .session-drag-handle { opacity: 1; } }

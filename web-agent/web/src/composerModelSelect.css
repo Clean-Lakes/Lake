@@ -36,7 +36,7 @@
 .composer-model-popup .composer-model-label small { font-size: var(--font-size-ui); }
 .composer-model-popup .composer-model-label { flex: 1; }
 .composer-model-popup .app-select-footer { padding-top: 0; }
-.composer-reasoning-panel { padding: 9px 10px 7px; }
+.composer-reasoning-panel { padding: 9px 10px 12px; }
 .composer-reasoning-heading { display: flex; align-items: center; gap: 8px; min-height: 22px; margin-bottom: 2px; }
 .composer-reasoning-heading > span { color: var(--text-secondary); font-size: var(--font-size-ui); }
 .composer-reasoning-heading > strong { font-size: var(--font-size-ui); font-weight:var(--font-weight-medium); }
@@ -58,7 +58,7 @@
 @media(prefers-reduced-motion:reduce) {
   .composer-reasoning-thumb,.composer-reasoning-fill { transition: none; }
 }
-.composer-reasoning-scale { display: flex; justify-content: space-between; margin: 0 1px; color: var(--text-muted); font-size: var(--font-size-ui); line-height: 12px; }
+.composer-reasoning-scale { display: flex; justify-content: space-between; margin: 6px 1px 0; color: var(--text-muted); font-size: var(--font-size-ui); line-height: 1.5; }
 .composer-reasoning-hint,.composer-reasoning-error { margin: 9px 0 0; font-size: var(--font-size-ui); line-height: 1.5; color: var(--text-secondary); }
 .composer-reasoning-error { color: var(--danger); overflow-wrap: anywhere; }
 .composer-reasoning-error button { margin-left: 8px; border: 0; background: transparent; color: inherit; text-decoration: underline; cursor: pointer; }

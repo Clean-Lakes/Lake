@@ -36,6 +36,9 @@ export type WorkSession = {
   icon?: string;
   tags?: WorkspaceTag[];
   presentationRevision?: number;
+  pinned?: boolean;
+  navigationPosition?: number;
+  navigationRevision?: number;
 };
 
 export type WorkspaceTag = {id: string; projectId: string; name: string; color: "gray" | "green" | "blue" | "purple" | "orange" | "red"};
