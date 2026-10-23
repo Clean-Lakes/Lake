@@ -533,7 +533,7 @@ func onlineFailure(err error, value any) string {
 	if errors.As(err, &stopped) {
 		return "controller_stopped"
 	}
-	var blocked *nativeOperationBlockedError
+	var blocked *nativeOperationReplayError
 	if errors.As(err, &blocked) {
 		return "unknown"
 	}
