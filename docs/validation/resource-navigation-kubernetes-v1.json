@@ -74,9 +74,12 @@
     "isolatedBackendStopped": true
   },
   "nativeDev": {
-    "installedCommit": "82e039b6aa6a9c92dad290fb1b52693ef18172da",
-    "activated": false,
-    "reason": "Existing Dev conversation and terminal command were still running; no forced restart or interruption"
+    "installedCommit": "fddf5b29f278a72121a58abaf40bacf98c49aff0",
+    "activated": true,
+    "cleanBuild": true,
+    "backendHashMatches": true,
+    "deepSignatureValid": true,
+    "verification": "Waited until active sessions and busy terminals were both zero. Native control initially timed out; terminated only the verified idle Dev app/backend with SIGTERM, then reopened the installed Dev app. New embedded CSS is served; actual sidebar shows folders above standalone resources."
   },
   "limitations": [
     "Real cluster connectivity/RBAC not exercised; only synthetic servers and credentials used",
