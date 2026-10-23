@@ -1,0 +1,16 @@
+{
+  "pullRequests": [
+    76,
+    77
+  ],
+  "date": "2026-10-23",
+  "testedCodeCommit": "d49643bb9c4ae4ccf3ed7ab5067cd61be3ba5089",
+  "resolution": "上下文卡片使用新 contextUsage.css，移除旧布局；保留 #75 的共享字体和键盘焦点样式。同步并保留期间已合入的 #83 R5 变更。",
+  "checks": [
+    "go test -race ./internal/ai ./internal/web -run Test(UnknownMutationDoesNotLockNewOperations|UnfinishedMutationDoesNotBypassNewCallApproval|DuplicateOperationReportsNoDispatchAndCallableRecovery|SnapshotReconcilesOnlyExactCompletedTerminalHandle|RestartDoesNotRepeatHistoricalUnknownOutcomeWarnings) -count=1: passed before R5 sync; R5 sync does not change these operation files",
+    "scripts/build_lake.sh after R5 sync: passed",
+    "pnpm --dir web-agent test:frontend after R5 sync: passed"
+  ],
+  "devIntegration": "此前本地集成 a842dd49 已包含 #76/#77 的原提交；不把该安装描述为本次同步 SHA 的新桌面包。",
+  "scope": "仅 develop PR 合并，V2 保持关闭，未发布或操作正式版。"
+}
