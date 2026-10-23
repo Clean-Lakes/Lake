@@ -1,0 +1,12 @@
+# Centered workspace search
+
+The sidebar’s persistent project search field is replaced by a shared Glyph magnifier at the right of the brand row. Dev sits beside Lake. Clicking the icon or Command/Ctrl+K opens a native modal dialog centered in the workbench; the underlying sidebar remains stable. Default results are up to nine recent conversations; queries match accessible conversation/resource names and project names. Results show project context. Resources open details without executing commands or opening terminals. New conversation is a supported quick action, not an invented file/folder operation.
+
+- Feature commits: `892129d1` (header entry) and `69ae755f` (centered dialog).
+- Signed installed Dev tested: `0dd13f19c6d4149884a198ab348079e1beccae45`.
+- Frontend TypeScript check passed; all 418 frontend tests passed. Signed Dev build/install and deep strict signature verification passed.
+- Isolated Vite/main-UI test with the synthetic home `/tmp/lake-plan-toggle-20261022/home`, loopback ports 5190/51384. A second synthetic project/session was created only in this fixture for cross-project coverage. No model requests, remote commands or credential changes.
+- Confirmed centered 620px desktop dialog (horizontal center offset zero), automatic input focus, recent rows/project labels, ArrowDown selection, empty-query-result Enter staying open, multiword cross-project matching and Enter navigation, resource details navigation, Escape focus restoration, backdrop dismissal, Command+K query selection and protection while another creation dialog is open. New-conversation shortcut opens the existing creation dialog and was cancelled without submission. A pre-existing composer draft remained after navigating away and returning.
+- At 430px, dark dialog measured 396px wide with 17px side margins, no document/dialog horizontal overflow; input retained focus. Touch rows/close target retain 44px hit areas.
+- Browser TaskSpace 37 finished; isolated backend/Vite processes stopped.
+- Actual running Dev served `index-Dj2J5WHS.js` / `index-CSnw_zaK.css`, matching the new installed build. Native accessibility calls intermittently timed out, but an app-window screenshot succeeded and directly showed the top-right magnifier, inline Dev badge, removed full-width field and centered search dialog with recent conversations/project labels/new-conversation action. No claim of agent-initiated restart is made; the fresh Dev process was independently verified.

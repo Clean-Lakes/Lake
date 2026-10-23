@@ -11,5 +11,5 @@
 .project-memory-editor label { display: block; margin: 10px 0; }
 .project-memory-editor input,.project-memory-editor select,.project-memory-editor textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 5px; }
 .project-memory-jobs { margin-top: 16px; }
-.project-memory-jobs p { font-size: 12px; color: var(--text-secondary); }
-.project-memory-pages { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 8px; font-size: 12px; }
+.project-memory-jobs p { font-size: var(--font-size-ui); color: var(--text-secondary); }
+.project-memory-pages { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 8px; font-size: var(--font-size-ui); }
