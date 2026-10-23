@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-23",
+  "scope": [
+    "approved Logo in welcome content; text-only sidebar",
+    "neutral two-row model/project welcome",
+    "hover and keyboard user-message copy; touch targets"
+  ],
+  "codeCommit": "dee630f71268b0c8a8c5fb738a66455e173b61c4",
+  "devIntegrationCommit": "9ca05afbcf2b9fee95a9ef239200b00c0d920eb1",
+  "platform": "macOS arm64",
+  "runtime": {
+    "node": "24.19.0",
+    "pnpm": "10.33.4"
+  },
+  "checks": {
+    "featureFrontend": {
+      "command": "pnpm --dir web-agent test:frontend",
+      "passed": 435,
+      "failed": 0
+    },
+    "integratedFrontend": {
+      "command": "pnpm --dir web-agent test:frontend",
+      "passed": 444,
+      "failed": 0
+    },
+    "typecheckAndBuild": {
+      "command": "scripts/build_lake_desktop.sh --dev --install",
+      "passed": true,
+      "cleanSource": true,
+      "signature": "Lake Local Development Code Signing",
+      "deepSignatureVerified": true,
+      "backendHashMatchesManifest": true
+    },
+    "format": "git diff --check passed"
+  },
+  "integration": {
+    "normalHome": "~/.lake-dev",
+    "isolatedHomes": [
+      "/tmp/lake-welcome-logo-oippquzy",
+      "/tmp/lake-logo-native-2241tlpu"
+    ],
+    "welcome": [
+      "light/dark themes and narrow/low-height layout",
+      "keyboard focus and hover",
+      "open model settings, create project, open new-session dialog",
+      "exactly one welcome logo and no sidebar logo"
+    ],
+    "copy": [
+      "hidden at rest, revealed on bubble hover",
+      "visible while pointer moves from bubble to button",
+      "Tab/Enter access",
+      "exact payload for plain text, reference, multiline, repeated spaces, Chinese/English and emoji (clipboard API captured in isolated browser)",
+      "successful feedback and automatic reset",
+      "clipboard rejection feedback",
+      "touch buttons 44x44 and no horizontal document overflow at 390px",
+      "image+text includes copy, image-only has no text-copy button",
+      "actual signed native WebView click resolved system clipboard write and displayed 已复制消息"
+    ],
+    "modelRequests": 0,
+    "normalDevRestored": true,
+    "releaseDataModified": false,
+    "syntheticDataOnly": true
+  },
+  "screenshots": {
+    "source": "compiled signed Dev backend in isolated browser, not a mockup",
+    "captureIntegrationCommit": "a5859f5e71ce0cca884dcbb01ce47c135c693185",
+    "note": "Welcome content is unchanged in final code; later commits add message copying and move its stylesheet import.",
+    "files": [
+      "first-launch-welcome-light.png",
+      "first-launch-welcome-dark.png",
+      "first-launch-welcome-mobile.png"
+    ]
+  },
+  "notVerified": [
+    "Windows native application",
+    "No Go tests rerun: no Go, runtime, credentials or service logic changed."
+  ],
+  "resolvedValidationIssue": "Moved message action CSS from the React module to the shared stylesheet so existing Node server-render tests can import AITranscript without a CSS loader."
+}

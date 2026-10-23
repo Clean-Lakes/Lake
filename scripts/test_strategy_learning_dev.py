@@ -188,9 +188,19 @@ class Lake:
     def snapshot(self, session):
         return self.api('/api/sessions/' + session + '/ai/snapshot')
 
-    def finish(self, session):
+    def send_and_finish(self, session, text):
+        # Message acceptance is asynchronous: a queued message can coexist with
+        # the preceding turn's terminal snapshot. Dispatch once and wait for a
+        # different root turn, rather than passing from the old answer.
+        previous = self.snapshot(session).get('rootTurnId', '')
+        self.api('/api/sessions/' + session + '/messages', 'POST', {'text': text})
+        return self.finish(session, previous_turn=previous)
+
+    def finish(self, session, *, previous_turn=None):
         def done():
             view = self.snapshot(session)
+            if previous_turn is not None and (not view.get('rootTurnId') or view['rootTurnId'] == previous_turn):
+                return None
             require(view['status'] != 'waiting_approval', 'unexpected approval in readonly fixture')
             return view if view['status'] in ('completed', 'failed', 'cancelled', 'interrupted') else None
         return wait_for(done, 70)
@@ -272,8 +282,7 @@ def main():
                 lake.switches(mode)
                 session = lake.session(project, f'P8 {mode} #{repetition}')
                 start = time.monotonic()
-                lake.api('/api/sessions/' + session + '/messages', 'POST', {'text': '检查已授权的本机健康端点，保留实际失败与响应。'})
-                view = lake.finish(session)
+                view = lake.send_and_finish(session, '检查已授权的本机健康端点，保留实际失败与响应。')
                 require(view['status'] == 'completed', 'paired task did not complete')
                 correction = reports(view)
                 require(health.counts['health'] == (2 if mode == 'C' else 1), 'unexpected resource operation count')
@@ -338,8 +347,7 @@ def main():
         provider.mode, provider.assets = 'Simple', True
         simple = lake.session(project, 'P8 无关对话不触发纠错')
         before = provider.counts['provider']
-        lake.api('/api/sessions/' + simple + '/messages', 'POST', {'text': '只回复收到，不需要工具。'})
-        require(lake.finish(simple)['status'] == 'completed', 'ordinary turn failed')
+        require(lake.send_and_finish(simple, '只回复收到，不需要工具。')['status'] == 'completed', 'ordinary turn failed')
         require(provider.counts['provider'] == before + 1 and health.counts['health'] == 1, 're-enable replayed old work')
         require(not reports(lake.snapshot(simple)), 'unrelated conversation started correction')
         report['exitDrill'] = {'revokedStatus': stopped['status'], 'healthReads': 1,

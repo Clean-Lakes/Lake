@@ -1,3 +1,4 @@
+import {UserMessageCopy} from './UserMessageCopy';
 import {MemoryAccessSummary} from "./MemoryAccessSummary";
 import type {MemoryAccess} from "../../shared/contracts";
 import {PlanReference,planMarkdown} from './PlanMode';
@@ -105,6 +106,7 @@ function TranscriptMessage({message,sessionId,resources}:{message:SessionSnapsho
           {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}{message.text && (message.role === 'assistant' ? <AssistantMarkdown>{planMarkdown(message.text)}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
           {message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}
           {!!message.images?.length&&<MessageImages images={message.images}/>}
+          {message.role==='user'&&!!message.text&&<UserMessageCopy text={message.text}/>}
         </div>;
 }
 type TranscriptProps = {onOpenMemory?:()=>void;sourceMessageId?:string;onSourceLocated?:()=>void;onOpenPlans?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
