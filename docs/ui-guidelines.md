@@ -332,7 +332,7 @@ SRE 输出节奏按实际 Plan 节点区分：observe/analyze/act/verify 完成�
 
 ## 首次使用与空工作台
 
-欢迎页由 WelcomePage 承载，使用已批准的 Lake 山水 Logo，高清母版来自 assets/branding/lake-app-icon.png，前端通过 LakeLogo 复用本地资源。侧栏品牌及连接工作台入口使用同一 Logo，不以工具图标代替品牌。不使用英文标语、轨道装饰、步骤编号、模型厂商展示或宣传式文案。
+欢迎页由 WelcomePage 承载，使用已批准的 Lake 山水 Logo，高清母版来自 assets/branding/lake-app-icon.png，前端通过 LakeLogo 复用本地资源。Logo 只在欢迎页主区域展示；侧栏保留 Lake 文字品牌，不额外添加 Logo。连接工作台入口复用同一 Logo，不以工具图标代替品牌。不使用英文标语、轨道装饰、步骤编号、模型厂商展示或宣传式文案。
 
 首次进入显示“欢迎使用 Lake”和“连接模型 / 创建项目”两项操作，以共享圆角面板中的两行呈现；两个入口独立可用，不强制配置顺序。已有项目时显示项目名称和新建会话入口，模型状态只依据 bootstrap.modelConfigured 展示“已配置”，不编造连接状态。未创建项目时侧栏只显示“暂无项目”与新建入口，不使用伪加载占位。
 

@@ -1363,7 +1363,7 @@ function App() {
     }}/>}
     <aside className={`sidebar workspace-navigation ${mobileMenu ? "sidebar-open" : ""} ${bulkMode ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
       <div className="sidebar-brand-row">
-        <Brand/>
+        <Brand icon={false}/>
         <div className="sidebar-brand-actions">
           <button type="button" className="icon-button sidebar-search-trigger" aria-label="搜索会话和资源" aria-haspopup="dialog" aria-expanded={navigationSearchOpen} aria-controls={navigationSearchOpen ? "workspace-search-dialog" : undefined} aria-keyshortcuts="Meta+K Control+K" title={`搜索（${/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}）`} onClick={() => setNavigationSearchOpen(true)}><Glyph name="search" size={18}/></button>
           <button className="icon-button mobile-only" title="关闭导航" aria-label="关闭导航" onClick={() => setMobileMenu(false)}><Glyph name="close"/></button>
