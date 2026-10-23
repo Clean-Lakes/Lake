@@ -14,10 +14,13 @@ import (
 )
 
 type StrategyVariantInput struct {
-	RunID, Home   string
-	Fixture       strategy.Fixture
-	Model         Model
-	Asset         *strategy.AssetRevision
+	RunID, Home string
+	Fixture     strategy.Fixture
+	Model       Model
+	Asset       *strategy.AssetRevision
+	// Host-only daily selector for offline reuse acceptance. It cannot be supplied
+	// by HTTP/model data and must not be combined with forced exact injection.
+	Strategies    StrategyProvider `json:"-"`
 	SharedContext string
 	// LiveRead is a trusted host-only adapter for a resettable, readonly test
 	// environment. It cannot be supplied by a model or the HTTP experiment API.
@@ -56,6 +59,9 @@ type strategyExperimentRuntime struct {
 }
 
 func (r *strategyExperimentRuntime) catalog() []Tool {
+	if r.input.Fixture.ReplayOnly() {
+		return []Tool{}
+	}
 	name := "read"
 	if r.input.Fixture.Profile == "db-query-editor" {
 		name = "execute_sql"
@@ -95,7 +101,7 @@ func (r *strategyExperimentRuntime) invoke(ctx context.Context, call Call) (any,
 	} else {
 		allowed = call.Name == "read" && len(a) == 1 && a["path"] == "/fixture/observations.json"
 	}
-	if !allowed || r.input.Fixture.ID == "SL-009" {
+	if !allowed || r.input.Fixture.ID == "SL-009" || r.input.Fixture.ReplayOnly() {
 		return deny()
 	}
 	var raw []byte
@@ -140,12 +146,19 @@ func (e *Engine) RunStrategyVariant(ctx context.Context, in StrategyVariantInput
 		out.ErrorCode = "unsupported_model"
 		return
 	}
+	if in.Strategies != nil && in.Asset != nil || in.Fixture.ReplayOnly() && in.LiveRead != nil {
+		out.ErrorCode = "invalid_reuse_input"
+		return
+	}
 	if err := os.Mkdir(in.Home, 0700); err != nil {
 		out.ErrorCode = "reset_failed"
 		return
 	}
 	raw := in.Fixture.ActorMaterial()
 	mode := "synthetic_snapshot"
+	if in.Fixture.ReplayOnly() {
+		mode = "readonly_replay"
+	}
 	if in.LiveRead != nil {
 		if len(in.LiveResetProof) != 64 || strings.Trim(in.LiveResetProof, "0123456789abcdef") != "" {
 			out.ErrorCode = "reset_failed"
@@ -177,6 +190,9 @@ func (e *Engine) RunStrategyVariant(ctx context.Context, in StrategyVariantInput
 	child.ModelActivity = e.ModelActivity
 	child.childModelSlots = e.childModelSlots
 	child.experiment = runtime
+	if in.Strategies != nil {
+		child.Strategies = in.Strategies
+	}
 	if in.Asset != nil {
 		asset := *in.Asset
 		child.Strategies = func(_ context.Context, _ string, q strategy.SelectionQuery, _ *strategy.Selection) (strategy.ResolvedSelection, error) {

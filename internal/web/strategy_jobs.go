@@ -49,11 +49,11 @@ func (s *Store) strategyJobSources(id string) []string {
 }
 func (s *Store) strategyCheckJob(ctx StrategyContext, job Object) {
 	settings := s.strategyEffective(ctx)
-	if !settings.Settings.MasterEnabled || (job["kind"] == "proposal" && !settings.Settings.LearnEnabled) || (job["kind"] == "experiment" && (!settings.Settings.LearnEnabled || !settings.Settings.ApplyEnabled)) {
+	if !settings.Settings.MasterEnabled || (job["kind"] == "proposal" && !settings.Settings.LearnEnabled) || (job["kind"] == "experiment" && !settings.Settings.ApplyEnabled) {
 		strategyFail(409, "disabled")
 	}
-	if job["kind"] == "experiment" && !settings.Settings.CorrectEnabled && s.row("SELECT jobId FROM strategyOptimizations WHERE jobId=?", job["id"]) != nil {
-		strategyFail(409, "correction_disabled")
+	if job["kind"] == "experiment" && s.row("SELECT jobId FROM strategyOptimizations WHERE jobId=?", job["id"]) != nil {
+		strategyFail(410, "optimization_retired")
 	}
 	if int64(integer(job["globalEpoch"])) != settings.GlobalEpoch || int64(integer(job["projectEpoch"])) != settings.ProjectEpoch {
 		strategyFail(409, "stale_epoch")
@@ -106,7 +106,7 @@ func (s *Store) strategyQueueJob(ctx StrategyContext, key string, input Strategy
 		return result
 	}
 	effective := s.strategyEffective(ctx)
-	if !effective.Settings.MasterEnabled || (input.Kind == "proposal" && !effective.Settings.LearnEnabled) || (input.Kind == "experiment" && (!effective.Settings.ApplyEnabled || !effective.Settings.LearnEnabled)) {
+	if !effective.Settings.MasterEnabled || (input.Kind == "proposal" && !effective.Settings.LearnEnabled) || (input.Kind == "experiment" && !effective.Settings.ApplyEnabled) {
 		strategyFail(409, "disabled")
 	}
 	var assetID any

@@ -1,8 +1,8 @@
 package web
 
 import (
-	"context"
-	"encoding/json"
+	"github.com/Clean-Lakes/Lake/internal/ai"
+	"github.com/Clean-Lakes/Lake/internal/strategy"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,580 +11,236 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
-
-	"github.com/Clean-Lakes/Lake/internal/ai"
-	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
-const optimizationFirstBody = "Method revision one: read the authorized observation, distinguish deleted open files from directory totals, and ground each conclusion in the observed evidence. Stop on permission or unknown operations."
-const optimizationSynthesisBody = "Method revision two: first establish the selected resource and authorization, then read the authorized observation. Check whether live file handles explain directory/disk discrepancies. Cite observations and explicitly retain unresolved gaps; never claim actual recovery from simulation."
-
-func optimizationProvider(t *testing.T, calls *atomic.Int32, mode string, hook func(Object, bool)) *httptest.Server {
+// Seed the on-disk v4-v6 format, not a production optimizer or permissive route.
+// Retirement replaces the old execution tests with historical-read, withdrawal,
+// lease/dispatch denial and real process-crash compatibility checks.
+func seedLegacyOptimization(t *testing.T, s *Store, state string) (StrategyContext, string, string) {
 	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		var data Object
-		_ = json.NewDecoder(r.Body).Decode(&data)
-		messages := objects(data["messages"])
-		raw := jsonText(messages)
-		aux := strings.Contains(raw, "Lake bounded snapshot optimizer v1")
-		if strings.Contains(raw, "snapshot-judge-v1") || strings.Contains(raw, "diagnostic_marker") {
-			t.Error("hidden judge leaked")
-		}
-		if hook != nil {
-			hook(data, aux)
-		}
-		if aux {
-			if len(messages) != 2 || len(objects(data["tools"])) != 0 {
-				t.Error("optimizer received tools/history")
-			}
-			if strings.Contains(raw, "Investigate connection pressure") || strings.Contains(raw, "fixture-redis") || strings.Contains(raw, "candidateWins") || strings.Contains(raw, "evaluation") {
-				t.Error("holdout or judge feedback leaked into optimizer")
-			}
-			input := object(parsed(stringOf(messages[1]["content"])))
-			if !strings.Contains(jsonText(input["developmentRuns"]), "720GB") {
-				t.Error("actual observed development evidence missing")
-			}
-			ids := []string{}
-			for _, run := range objects(input["developmentRuns"]) {
-				ids = append(ids, stringOf(run["runId"]))
-			}
-			body := optimizationFirstBody
-			if input["stage"] == "synthesize" {
-				body = optimizationSynthesisBody
-				if mode == "same_synthesis" {
-					body = optimizationFirstBody
-				}
-			}
-			candidate := any(Object{"body": body, "reason": "Observed behavior does not consistently ground the diagnosis in the available evidence; only this snapshot is known.", "refutedHypothesis": "Directory totals necessarily equal allocated filesystem bytes.", "changes": "Inspect current observations before forming an evidence-linked diagnosis.", "expectedInformation": "Whether selected observations support the current explanation.", "stopCondition": "Stop on denied access, unknown operation, no new information or exhausted budget.", "sourceRunIds": ids})
-			if mode == "no_candidate" {
-				candidate = nil
-			}
-			if mode == "unknown_usage" {
-				w.Header().Set("Content-Type", "text/event-stream")
-				_, _ = w.Write([]byte("data: " + jsonText(Object{"choices": []Object{{"index": 0, "delta": Object{"content": jsonText(Object{"schemaVersion": 1, "candidate": candidate})}, "finish_reason": "stop"}}}) + "\n\ndata: [DONE]\n\n"))
-			} else {
-				emitModel(w, jsonText(Object{"schemaVersion": 1, "candidate": candidate}), nil)
-			}
-			return
-		}
-		hasTool := false
-		for _, m := range messages {
-			hasTool = hasTool || m["role"] == "tool"
-		}
-		if !hasTool {
-			emitModel(w, "", []ai.Call{{ID: "observe", Name: "read", Arguments: `{"path":"/fixture/observations.json"}`}})
-			return
-		}
-		finding, answer := "deleted_open_file", "deleted open file occupies disk; synthetic evidence only."
-		if !strings.Contains(raw, "Method revision") && mode != "no_progress" {
-			finding = "mount_boundary"
-		}
-		if strings.Contains(raw, "Investigate connection pressure") {
-			finding = "redis_connection_pressure"
-			answer = "connection clients near limit; snapshot only."
-			if mode == "regression" && strings.Contains(raw, "Method revision two") {
-				finding = "mount_boundary"
-			}
-		}
-		emitModel(w, jsonText(Object{"outcome": "diagnosed", "finding": finding, "answer": answer, "evidenceIds": []string{"observation-1"}}), nil)
-	}))
-}
-func createOptimizationHTTP(t *testing.T, h *httptest.Server, base string, asset StrategyMutationResult) string {
-	t.Helper()
-	v := strategyHTTP(t, h, "GET", base+"/assets/"+asset.AssetID+"/revisions/1", "", "", 200)
-	q := strategyHTTP(t, h, "POST", base+"/experiments", ident(), jsonText(Object{"ref": object(v["value"])["ref"], "caseIds": []string{"SL-001", "SL-014"}, "repetitions": 1, "skillNames": []string{}, "optimization": true}), 200)
-	return stringOf(q["jobId"])
-}
-func optimizationReport(t *testing.T, b *Server, ctx StrategyContext, id string) Object {
-	t.Helper()
-	r, err := b.strategyExperimentReport(ctx, id)
-	if err != nil {
-		t.Fatal(err)
+	ctx := StrategyContext{ProjectID: stringOf(s.CreateProject("Legacy optimizer compatibility")["id"])}
+	scope := strategy.Scope{Kind: strategy.ProjectScope, ProjectID: ctx.ProjectID}
+	a := createStrategyFixture(t, s, ctx, scope, ident(), "Legacy private seed method")
+	v, e := s.GetStrategyRevision(ctx, a.AssetID, 1)
+	if e != nil {
+		t.Fatal(e)
 	}
-	return strategyDecode[Object](jsonText(r))
-}
-func TestStrategyOptimizationParserRejectsForgedSourcesAndAuthority(t *testing.T) {
-	c := strategyOptimizationCandidate{Body: optimizationFirstBody, Reason: "Observed gap", RefutedHypothesis: "Unsupported assumption", Changes: "Read evidence", ExpectedInformation: "Current evidence", StopCondition: "No new information", SourceRunIDs: []string{"genuine"}}
-	text := jsonText(strategyOptimizationOutput{SchemaVersion: 1, Candidate: &c})
-	if _, err := parseStrategyOptimization(text, []string{"genuine"}); err != nil {
-		t.Fatal(err)
+	job, e := s.QueueStrategyJob(ctx, ident(), StrategyJobInput{Scope: scope, Kind: "experiment", AssetID: a.AssetID, ExpectedRevision: 1, SourceIDs: v.Value.SourceIDs})
+	if e != nil {
+		t.Fatal(e)
 	}
-	for _, invalid := range []string{strings.Replace(text, `"genuine"`, `"forged"`, 1), strings.Replace(text, `"body":`, `"verified":true,"body":`, 1), strings.Replace(text, `"schemaVersion":1`, `"schemaVersion":1,"schemaVersion":1`, 1), text + " {}", strings.Replace(text, `"changes":"Read evidence"`, `"changes":null`, 1)} {
-		if _, err := parseStrategyOptimization(invalid, []string{"genuine"}); err == nil {
-			t.Fatal("untrusted optimizer schema accepted")
+	f := strategyExperimentFrozen{Optimization: true, Asset: v.Value, Cases: []strategy.Fixture{strategy.Fixtures()[0], strategy.Fixtures()[13]}, Repetitions: 1, Budget: strategy.DefaultBudget(), SkillHashes: map[string]string{}}
+	_, e = strategyCall(s, true, func() bool {
+		raw := jsonText(f)
+		s.exec("INSERT INTO strategyExperiments(jobId,frozenJSON,frozenHash,modelRef,requests,tokensCharged,createdAt) VALUES(?,?,?,'legacy-model',2,4096,?)", job.JobID, raw, strategy.ContentHash(raw), now())
+		reason := ""
+		if state == "checkpoint" {
+			reason = "awaiting_user"
 		}
+		s.exec("INSERT INTO strategyOptimizations(jobId,stage,stopReason,activeMs) VALUES(?,3,?,50)", job.JobID, reason)
+		candidate := strategyOptimizationOutput{SchemaVersion: 1, Candidate: &strategyOptimizationCandidate{Body: "Legacy private candidate", SourceRunIDs: []string{"legacy-run"}}}
+		first := "planned"
+		result := ""
+		if state != "queued" {
+			first = "completed"
+			result = jsonText(candidate)
+		}
+		s.exec("INSERT INTO strategyOptimizationCalls(id,experimentId,stage,status,requestHash,resultJSON,usageJSON,reservedTokens) VALUES(?,?,'propose',?,'frozen-request',?,'{\"input\":10,\"output\":5,\"inputKnown\":true,\"outputKnown\":true}',2048)", ident(), job.JobID, first, result)
+		second := "planned"
+		if state == "unknown" {
+			second = "running"
+		}
+		s.exec("INSERT INTO strategyOptimizationCalls(id,experimentId,stage,status,requestHash,reservedTokens) VALUES(?,?,'synthesize',?,'inflight-request',2048)", ident(), job.JobID, second)
+		run := ai.StrategyVariantResult{Status: "completed", RuntimeID: "legacy-runtime", Answer: "Legacy private answer", Evaluation: strategy.FixtureEvaluation{Status: "passed"}}
+		s.exec("INSERT INTO strategyExperimentRuns(id,experimentId,ordinal,caseId,arm,repetition,status,runtimeId,reportJSON,variant) VALUES(?,?,1,'SL-001','baseline',1,'completed','legacy-runtime',?,'baseline_development')", ident(), job.JobID, jsonText(run))
+		s.exec("INSERT INTO strategyExperimentRuns(id,experimentId,ordinal,caseId,arm,repetition,status,variant) VALUES(?,?,2,'SL-014','assets',1,'planned','synthesis_holdout')", ident(), job.JobID)
+		if state == "checkpoint" {
+			s.exec("UPDATE strategyJobs SET status='awaiting_reconciliation',dispatchState='complete' WHERE id=?", job.JobID)
+		}
+		if state == "unknown" {
+			s.exec("UPDATE strategyJobs SET status='awaiting_reconciliation',dispatchState='intent',leaseToken='old-lease',leaseUntilMs=1 WHERE id=?", job.JobID)
+		}
+		if state == "settled" {
+			s.exec("UPDATE strategyJobs SET status='succeeded',dispatchState='complete' WHERE id=?", job.JobID)
+			s.exec("UPDATE strategyOptimizations SET stopReason='completed' WHERE jobId=?", job.JobID)
+		}
+		return true
+	})
+	if e != nil {
+		t.Fatal(e)
 	}
+	return ctx, job.JobID, a.SourceID
 }
-func TestStrategyOptimizationSettingsAndCaseValidation(t *testing.T) {
+func TestStrategyOptimizationRetiredHTTPAndNoProviderDispatch(t *testing.T) {
 	b, h := fixture(t)
-	session, _ := newSession(t, h)
-	project := stringOf(b.Store.Session(session)["projectId"])
+	enableStrategyFixture(t, b.Store)
 	var calls atomic.Int32
-	provider := optimizationProvider(t, &calls, "", nil)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); emitModel(w, "unexpected", nil) }))
 	defer provider.Close()
-	_, asset := experimentSetup(t, b, project, provider, "Observe evidence before conclusions.")
-	base := "/api/projects/" + project + "/strategy"
-	v := strategyHTTP(t, h, "GET", base+"/assets/"+asset.AssetID+"/revisions/1", "", "", 200)
-	request := Object{"ref": object(v["value"])["ref"], "caseIds": []string{"SL-001", "SL-014"}, "repetitions": 1, "skillNames": []string{}, "optimization": true}
-	capabilities := object(strategyHTTP(t, h, "GET", base+"/settings", "", "", 200)["capabilities"])
-	if capabilities["correct"] != true || capabilities["onlineCorrect"] != true || capabilities["correctMode"] != "isolated_experiments" || integer(capabilities["onlineConsentVersion"]) != strategy.OnlineConsentVersion {
-		t.Fatal("incorrect capability scope")
+	b.Models.Save(&ai.Model{URL: provider.URL, Name: "retirement-fixture", Protocol: "openai"})
+	ctx, id, _ := seedLegacyOptimization(t, b.Store, "queued")
+	base := "/api/projects/" + ctx.ProjectID + "/strategy"
+	f := strategyHTTP(t, h, "GET", base+"/fixtures", "", "", 200)
+	if object(f["boundedOptimization"])["supported"] != false {
+		t.Fatal("retired actor advertised")
 	}
-	settings, _ := b.Store.GetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope})
-	_, err := b.Store.SetStrategySettings(StrategyContext{}, settings.Scope, ident(), settings.Revision, StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: true, CorrectEnabled: false, Budget: settings.Budget})
-	if err != nil {
-		t.Fatal(err)
+	// Even legacy idempotency keys cannot revive an old creation receipt.
+	for _, key := range []string{"new", "old"} {
+		strategyHTTP(t, h, "POST", base+"/experiments", key, jsonText(Object{"ref": strategy.RevisionRef{}, "caseIds": []string{}, "repetitions": 1, "skillNames": []string{}, "optimization": true}), 410)
 	}
-	strategyHTTP(t, h, "POST", base+"/experiments", ident(), jsonText(request), 409)
-	settings, _ = b.Store.GetStrategySettings(StrategyContext{}, settings.Scope)
-	_, err = b.Store.SetStrategySettings(StrategyContext{}, settings.Scope, ident(), settings.Revision, StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: true, CorrectEnabled: true, Budget: settings.Budget})
-	if err != nil {
-		t.Fatal(err)
+	for _, action := range []string{"resume", "save-candidate"} {
+		strategyHTTP(t, h, "POST", base+"/experiments/"+id+"/"+action, ident(), `{}`, 410)
 	}
-	request["caseIds"] = []string{"SL-014", "SL-001"}
-	strategyHTTP(t, h, "POST", base+"/experiments", ident(), jsonText(request), 400)
-	request["caseIds"] = []string{"SL-001", "SL-014"}
-	request["repetitions"] = 3
-	strategyHTTP(t, h, "POST", base+"/experiments", ident(), jsonText(request), 400)
-	request["repetitions"] = 1
-	request["verified"] = true
-	strategyHTTP(t, h, "POST", base+"/experiments", ident(), jsonText(request), 400)
-	delete(request, "verified")
-	settings, _ = b.Store.GetStrategySettings(StrategyContext{}, settings.Scope)
-	budget := settings.Budget
-	budget.MaxRevisions = 1
-	_, err = b.Store.SetStrategySettings(StrategyContext{}, settings.Scope, ident(), settings.Revision, StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: true, CorrectEnabled: true, Budget: budget})
-	if err != nil {
-		t.Fatal(err)
+	b.processOneExperiment()
+	job, e := b.Store.ClaimStrategyJob(ctx)
+	if e != nil || job != nil || calls.Load() != 0 {
+		t.Fatal("retired job dispatched", e)
 	}
-	strategyHTTP(t, h, "POST", base+"/experiments", ident(), jsonText(request), 400)
-	if calls.Load() != 0 || b.Store.row("SELECT 1 FROM strategyOptimizations") != nil {
-		t.Fatal("invalid/disabled request dispatched work")
+	report := strategyHTTP(t, h, "GET", base+"/experiments/"+id+"/report", "", "", 200)
+	if report["retired"] != true || report["canSave"] != false || report["canResume"] != false {
+		t.Fatal("historical actions remained available")
+	}
+}
+func TestStrategyOptimizationRetirementRecoveryPreservesUnknownAndCompletedIdentity(t *testing.T) {
+	for _, state := range []string{"queued", "checkpoint", "unknown", "settled"} {
+		t.Run(state, func(t *testing.T) {
+			s, _, _ := strategyFixture(t)
+			enableStrategyFixture(t, s)
+			ctx, id, _ := seedLegacyOptimization(t, s, state)
+			dir := s.Dir
+			before, _ := strategyCall(s, false, func() string {
+				return jsonText(s.row("SELECT frozenHash,requests,tokensCharged FROM strategyExperiments WHERE jobId=?", id)) + jsonText(s.rows("SELECT id,requestHash,reservedTokens,usageJSON FROM strategyOptimizationCalls WHERE experimentId=? ORDER BY stage", id)) + jsonText(s.row("SELECT id,runtimeId,reportJSON FROM strategyExperimentRuns WHERE experimentId=? AND ordinal=1", id))
+			})
+			s.Close()
+			s, e := OpenStore(dir)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer s.Close()
+			job, e := s.GetStrategyJob(ctx, id)
+			if e != nil {
+				t.Fatal(e)
+			}
+			expected := "cancelled"
+			if state == "unknown" {
+				expected = "awaiting_reconciliation"
+			}
+			if state == "settled" {
+				expected = "succeeded"
+			}
+			if job["status"] != expected || state == "unknown" && job["dispatchState"] != "unknown" {
+				t.Fatal("uncertainty/outcome changed", job["status"], job["dispatchState"])
+			}
+			after, _ := strategyCall(s, false, func() string {
+				return jsonText(s.row("SELECT frozenHash,requests,tokensCharged FROM strategyExperiments WHERE jobId=?", id)) + jsonText(s.rows("SELECT id,requestHash,reservedTokens,usageJSON FROM strategyOptimizationCalls WHERE experimentId=? ORDER BY stage", id)) + jsonText(s.row("SELECT id,runtimeId,reportJSON FROM strategyExperimentRuns WHERE experimentId=? AND ordinal=1", id))
+			})
+			if before != after {
+				t.Fatal("settled usage, artifact or identity changed")
+			}
+			if job, e := s.ClaimStrategyJob(ctx); e != nil || job != nil {
+				t.Fatal("retired job reclaimed", e)
+			}
+			s.Close()
+			s, e = OpenStore(dir)
+			if e != nil {
+				t.Fatal(e)
+			}
+			events, _ := strategyCall(s, false, func() int {
+				return integer(s.row("SELECT count(*) AS n FROM strategyEvents WHERE aggregateId=? AND type='optimization_retired'", id)["n"])
+			})
+			if state != "settled" && events != 1 {
+				t.Fatal("retirement not idempotent", events)
+			}
+		})
 	}
 }
 func TestStrategyOptimizationMemoryForgetErasesCandidateCopies(t *testing.T) {
 	b, h := fixture(t)
-	session, _ := newSession(t, h)
-	project := stringOf(b.Store.Session(session)["projectId"])
-	var calls atomic.Int32
-	provider := optimizationProvider(t, &calls, "", nil)
-	defer provider.Close()
-	ctx, asset := experimentSetup(t, b, project, provider, "Observe evidence before conclusions.")
-	b.Store.CommitProjectMemory(project, MemoryMutation{Key: "test-preference", Type: "user", Description: "test preference", Body: "Prefer explicit evidence.", Verification: "user-stated"})
-	id := createOptimizationHTTP(t, h, "/api/projects/"+project+"/strategy", asset)
-	b.processOneExperiment()
-	if optimizationReport(t, b, ctx, id)["stopReason"] != "completed" {
-		t.Fatal("optimization failed")
+	enableStrategyFixture(t, b.Store)
+	ctx, id, source := seedLegacyOptimization(t, b.Store, "checkpoint")
+	base := "/api/projects/" + ctx.ProjectID + "/strategy"
+	before := strategyHTTP(t, h, "GET", base+"/experiments/"+id+"/report", "", "", 200)
+	if !strings.Contains(jsonText(before), "Legacy private candidate") {
+		t.Fatal("historical candidate unreadable")
 	}
-	b.Store.CommitProjectMemory(project, MemoryMutation{Key: "test-preference", ExpectedRevision: 1, Forget: true})
-	r := optimizationReport(t, b, ctx, id)
-	if r["contentAvailable"] != false || b.Store.row("SELECT 1 FROM strategyOptimizationCalls WHERE experimentId=? AND resultJSON<>''", id) != nil {
-		t.Fatal("forgotten memory retained in optimizer")
+	if _, e := b.Store.ForgetStrategySource(ctx, source, ident(), true); e != nil {
+		t.Fatal(e)
 	}
-}
-func TestStrategyOptimizationSynthesisRevalidationHoldoutAndExplicitSave(t *testing.T) {
-	b, h := fixture(t)
-	session, _ := newSession(t, h)
-	project := stringOf(b.Store.Session(session)["projectId"])
-	var calls atomic.Int32
-	provider := optimizationProvider(t, &calls, "", nil)
-	defer provider.Close()
-	ctx, asset := experimentSetup(t, b, project, provider, "Observe evidence before conclusions.")
-	base := "/api/projects/" + project + "/strategy"
-	id := createOptimizationHTTP(t, h, base, asset)
-	b.processOneExperiment()
-	report := optimizationReport(t, b, ctx, id)
-	if report["stopReason"] != "completed" || report["verdict"] != "candidate_better_on_selected_snapshots" || calls.Load() != 12 || integer(report["requests"]) != 12 || report["canSave"] != true {
-		t.Fatalf("bad optimization: %s calls=%d", jsonText(report), calls.Load())
+	after := strategyHTTP(t, h, "GET", base+"/experiments/"+id+"/report", "", "", 200)
+	if after["contentAvailable"] != false || strings.Contains(jsonText(after), "Legacy private") {
+		t.Fatal("withdrawal retained historical private text")
 	}
-	runs := objects(report["runs"])
-	if len(runs) != 5 || len(objects(report["calls"])) != 2 {
-		t.Fatal("missing runs/calls")
-	}
-	identities := map[string]bool{}
-	hashes := map[string]string{}
-	for _, run := range runs {
-		result := object(run["result"])
-		runtime := stringOf(result["runtimeId"])
-		if runtime == "" || identities[runtime] {
-			t.Fatal("shared runtime")
-		}
-		identities[runtime] = true
-		caseID := stringOf(run["caseId"])
-		if old := hashes[caseID]; old != "" && old != result["resetHash"] {
-			t.Fatal("different initial state")
-		}
-		hashes[caseID] = stringOf(result["resetHash"])
-		for _, m := range objects(result["manifests"]) {
-			n := len(objects(m["selectedAssets"]))
-			if run["arm"] == "baseline" && n != 0 || run["arm"] == "assets" && n != 1 {
-				t.Fatal("candidate isolation")
-			}
-		}
-	}
-	if integer(b.Store.row("SELECT revision FROM strategyAssets WHERE id=?", asset.AssetID)["revision"]) != 1 || b.Store.row("SELECT 1 FROM strategyBindings") != nil {
-		t.Fatal("automatic save/adoption")
-	}
-	other := stringOf(b.Store.CreateProject("other")["id"])
-	strategyHTTP(t, h, "GET", "/api/projects/"+other+"/strategy/experiments/"+id, "", "", 404)
-	saved := strategyHTTP(t, h, "POST", base+"/experiments/"+id+"/save-candidate", "save-once", `{"expectedRevision":1}`, 200)
-	again := strategyHTTP(t, h, "POST", base+"/experiments/"+id+"/save-candidate", "save-once", `{"expectedRevision":1}`, 200)
-	if saved["revision"] != float64(2) || jsonText(saved) != jsonText(again) {
-		t.Fatal("duplicate candidate commit")
-	}
-	v, err := b.Store.GetStrategyRevision(ctx, asset.AssetID, 2)
-	if err != nil || v.Value.Body != optimizationSynthesisBody || v.Value.Verification != strategy.FixtureValidated || b.Store.row("SELECT 1 FROM strategyBindings") != nil {
-		t.Fatal("candidate persistence", v, err)
-	}
-	lineage, err := b.Store.StrategyLineage(ctx, asset.AssetID, 0, 50)
-	if err != nil {
-		t.Fatal(err)
-	}
-	relations := map[string]int{}
-	for _, edge := range lineage.Edges {
-		relations[stringOf(edge["relation"])]++
-	}
-	for _, name := range []string{"tested_by", "composed_from", "compared_with", "proposed_to_fix"} {
-		if relations[name] == 0 {
-			t.Fatal("missing lineage", name)
-		}
-	}
-	if strings.Contains(jsonText(report["experience"]), "holdout") || strings.Contains(jsonText(report), "sharedContext") || strings.Contains(jsonText(report), "leaseToken") {
-		t.Fatal("private snapshot exported")
-	}
-	source := b.Store.row("SELECT id FROM strategySourceEvents WHERE originKey=?", "experiment:"+id)
-	if _, err = b.Store.ForgetStrategySource(ctx, stringOf(source["id"]), "withdraw-eval", true); err != nil {
-		t.Fatal(err)
-	}
-	b.pruneErasedExperiments()
-	cleared := optimizationReport(t, b, ctx, id)
-	if cleared["contentAvailable"] != false || b.Store.row("SELECT frozenJSON FROM strategyExperiments WHERE jobId=?", id)["frozenJSON"] != "" {
-		t.Fatal("experiment erasure")
-	}
-	for _, run := range objects(cleared["runs"]) {
-		if run["result"] != nil {
-			t.Fatal("erased runtime content exported")
-		}
-	}
-	if b.Store.row("SELECT 1 FROM strategyOptimizationCalls WHERE experimentId=? AND resultJSON<>''", id) != nil {
-		t.Fatal("optimizer body copy survived")
-	}
-}
-func TestStrategyOptimizationStopsForNoProgressRegressionAndBudget(t *testing.T) {
-	for _, mode := range []string{"no_progress", "same_synthesis", "no_candidate", "regression", "budget", "unknown_usage"} {
-		t.Run(mode, func(t *testing.T) {
-			b, h := fixture(t)
-			session, _ := newSession(t, h)
-			project := stringOf(b.Store.Session(session)["projectId"])
-			var calls atomic.Int32
-			provider := optimizationProvider(t, &calls, mode, nil)
-			defer provider.Close()
-			ctx, asset := experimentSetup(t, b, project, provider, "Observe evidence before conclusions.")
-			base := "/api/projects/" + project + "/strategy"
-			if mode == "budget" || mode == "unknown_usage" {
-				settings, _ := b.Store.GetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope})
-				budget := settings.Budget
-				budget.MaxOptimizationRequests = 3
-				_, err := b.Store.SetStrategySettings(StrategyContext{}, settings.Scope, ident(), settings.Revision, StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: true, CorrectEnabled: true, Budget: budget})
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
-			id := createOptimizationHTTP(t, h, base, asset)
-			b.processOneExperiment()
-			r := optimizationReport(t, b, ctx, id)
-			expected := "no_progress"
-			if mode == "no_candidate" {
-				expected = "no_candidate"
-			}
-			if mode == "regression" {
-				expected = "regression"
-			}
-			if mode == "budget" || mode == "unknown_usage" {
-				expected = "budget_exhausted"
-			}
-			if r["stopReason"] != expected || r["canSave"] != false || calls.Load() > 12 {
-				t.Fatal("incorrect stop", mode, r["stopReason"], calls.Load())
-			}
-			strategyHTTP(t, h, "POST", base+"/experiments/"+id+"/save-candidate", ident(), `{"expectedRevision":1}`, 409)
-			if mode == "regression" && r["verdict"] != "regression" {
-				t.Fatal("holdout regression hidden")
-			}
-			if mode == "budget" && calls.Load() != 3 {
-				t.Fatal("budget per stage reset", calls.Load())
-			}
-			if mode == "unknown_usage" && integer(r["tokensCharged"]) <= 1000 {
-				t.Fatal("unknown auxiliary usage refunded", r["tokensCharged"])
-			}
-		})
-	}
-}
-func TestStrategyOptimizationRevocationDuringAuxiliaryCallDropsLateCandidate(t *testing.T) {
-	for _, mode := range []string{"cancel", "source", "settings", "erase"} {
-		t.Run(mode, func(t *testing.T) {
-			b, h := fixture(t)
-			session, _ := newSession(t, h)
-			project := stringOf(b.Store.Session(session)["projectId"])
-			ctx := StrategyContext{ProjectID: project}
-			var calls atomic.Int32
-			id := ""
-			source := ""
-			provider := optimizationProvider(t, &calls, "", func(_ Object, aux bool) {
-				if !aux {
-					return
-				}
-				switch mode {
-				case "cancel":
-					_, _ = b.Store.CancelStrategyJob(ctx, id, ident())
-				case "source":
-					_, _ = b.Store.ForgetStrategySource(ctx, source, ident(), true)
-				case "settings":
-					settings, _ := b.Store.GetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope})
-					_, _ = b.Store.SetStrategySettings(StrategyContext{}, settings.Scope, ident(), settings.Revision, StrategySettingsInput{Budget: settings.Budget})
-				case "erase":
-					_, _ = b.Store.CancelStrategyJob(ctx, id, ident())
-					_, _ = strategyCall(b.Store, true, func() bool { b.Store.eraseStrategyExperiments("jobId=?", id); return true })
-				}
-			})
-			defer provider.Close()
-			_, asset := experimentSetup(t, b, project, provider, "Observe evidence before conclusions.")
-			source = asset.SourceID
-			base := "/api/projects/" + project + "/strategy"
-			id = createOptimizationHTTP(t, h, base, asset)
-			b.processOneExperiment()
-			r := optimizationReport(t, b, ctx, id)
-			if calls.Load() != 3 || r["canSave"] != false || b.Store.row("SELECT resultJSON FROM strategyOptimizationCalls WHERE experimentId=? AND stage='propose'", id)["resultJSON"] != "" {
-				t.Fatal("late candidate escaped fence", mode, calls.Load())
-			}
-			// Cancellation can win before the provider's usage frame is read.
-			// Known usage settles to 45; an unknown result must retain its full
-			// reservation rather than inventing/refunding the missing 15 tokens.
-			aux := b.Store.row("SELECT usageJSON,reservedTokens FROM strategyOptimizationCalls WHERE experimentId=? AND stage='propose'", id)
-			usage := strategyDecode[ai.Usage](stringOf(aux["usageJSON"]))
-			want := 30 + integer(aux["reservedTokens"])
-			if usage.InputKnown && usage.OutputKnown {
-				want = 45
-			}
-			if integer(r["tokensCharged"]) != want {
-				t.Fatal("late usage lost or unknown reservation refunded", r["tokensCharged"], want)
-			}
-		})
-	}
-}
-func TestStrategyOptimizationActualProviderCrashNeverReplaysUnknownCall(t *testing.T) {
-	b, h := fixture(t)
-	session, _ := newSession(t, h)
-	project := stringOf(b.Store.Session(session)["projectId"])
-	var calls atomic.Int32
-	kill := make(chan *os.Process, 1)
-	provider := optimizationProvider(t, &calls, "", func(_ Object, aux bool) {
-		if aux {
-			process := <-kill
-			_ = process.Kill()
-		}
-	})
-	defer provider.Close()
-	ctx, asset := experimentSetup(t, b, project, provider, "Observe evidence before conclusions.")
-	base := "/api/projects/" + project + "/strategy"
-	id := createOptimizationHTTP(t, h, base, asset)
-	dir := b.Store.Dir
-	b.Store.Close()
-	binary, _ := os.Executable()
-	child := exec.Command(binary, "-test.run=^TestStrategyExperimentCrashHelper$", "-test.timeout=30s")
-	child.Env = append(os.Environ(), "LAKE_P5_CRASH=1", "LAKE_P5_CRASH_HOME="+b.options.Home)
-	if err := child.Start(); err != nil {
-		t.Fatal(err)
-	}
-	kill <- child.Process
-	wait := make(chan error, 1)
-	go func() { wait <- child.Wait() }()
-	select {
-	case err := <-wait:
-		if err == nil {
-			t.Fatal("child did not crash")
-		}
-	case <-time.After(30 * time.Second):
-		_ = child.Process.Kill()
-		t.Fatal("optimizer not reached")
-	}
-	var err error
-	b.Store, err = OpenStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b.processOneExperiment()
-	r := optimizationReport(t, b, ctx, id)
-	if calls.Load() != 3 || r["stopReason"] != "awaiting_reconciliation" || r["canResume"] != false || integer(r["tokensCharged"]) <= 400 {
-		t.Fatal("unknown optimizer replayed", r["stopReason"], calls.Load())
-	}
-	strategyHTTP(t, h, "POST", base+"/experiments/"+id+"/resume", ident(), `{}`, 409)
+	other := stringOf(b.Store.CreateProject("Other project")["id"])
+	strategyHTTP(t, h, "GET", "/api/projects/"+other+"/strategy/experiments/"+id+"/report", "", "", 404)
 }
 func TestStrategyOptimizationCheckpointCrashHelper(t *testing.T) {
-	if os.Getenv("LAKE_P6_BOUNDARY") != "1" {
-		t.Skip("subprocess fixture")
+	dir := os.Getenv("LAKE_R5_CRASH_DIR")
+	if dir == "" {
+		return
 	}
-	b, err := New(context.Background(), Options{Home: os.Getenv("LAKE_P6_HOME"), Port: 4177, Token: "synthetic-test-auth-token"})
-	if err != nil {
-		t.Fatal(err)
+	s, e := OpenStore(dir)
+	if e != nil {
+		os.Exit(3)
 	}
-	ctx := StrategyContext{ProjectID: os.Getenv("LAKE_P6_PROJECT")}
-	job, err := b.Store.claimStrategyJob(ctx, "experiment")
-	if err != nil || job == nil {
-		t.Fatal(err)
+	enableStrategyFixture(t, s)
+	seedLegacyOptimization(t, s, "unknown")
+	os.Exit(0)
+}
+func TestStrategyOptimizationCrashIntentRemainsUnknownAndNeverReplayed(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "store")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestStrategyOptimizationCheckpointCrashHelper$")
+	cmd.Env = append(os.Environ(), "LAKE_R5_CRASH_DIR="+dir)
+	if err := cmd.Run(); err != nil {
+		t.Fatal("crash fixture failed")
 	}
-	id, token := stringOf(job["id"]), stringOf(job["leaseToken"])
-	row := b.Store.row("SELECT frozenJSON FROM strategyExperiments WHERE jobId=?", id)
-	f := strategyDecode[strategyExperimentFrozen](stringOf(row["frozenJSON"]))
-	if _, err = b.Store.PrepareStrategyDispatch(ctx, id, token); err != nil {
-		t.Fatal(err)
+	s, e := OpenStore(dir)
+	if e != nil {
+		t.Fatal(e)
 	}
-	_, err = strategyCall(b.Store, true, func() bool {
-		b.Store.exec("UPDATE strategyOptimizations SET activationStartedMs=? WHERE jobId=?", time.Now().UnixMilli(), id)
+	defer s.Close()
+	_, e = strategyCall(s, false, func() bool {
+		job := s.row("SELECT * FROM strategyJobs WHERE kind='experiment'")
+		if job["dispatchState"] != "unknown" || job["status"] != "awaiting_reconciliation" {
+			t.Fatal("crashed intent lost uncertainty")
+		}
+		call := s.row("SELECT * FROM strategyOptimizationCalls WHERE stage='synthesize'")
+		if call["status"] != "unknown" || call["requestHash"] != "inflight-request" || integer(call["reservedTokens"]) != 2048 {
+			t.Fatal("crash changed dispatched reservation")
+		}
 		return true
 	})
-	if err != nil {
-		t.Fatal(err)
+	if e != nil {
+		t.Fatal(e)
 	}
-	m := b.Models.ResolveModelIdentity(f.ModelRef)
-	m.ContextWindow = f.ContextWindow
-	m.MaxOutput = f.MaxOutput
-	root := filepath.Join(b.options.DataDir, "strategy-experiments")
-	_ = os.MkdirAll(root, 0700)
-	if _, code := b.optimizationRun(context.Background(), ctx, id, token, "baseline_development", root, f, *m, nil); code != "" {
-		t.Fatal(code)
-	}
-	if _, err = b.Store.checkpointOptimization(ctx, id, token, 1); err != nil {
-		t.Fatal(err)
-	}
-	if os.Getenv("LAKE_P6_BOUNDARY_POINT") == "proposal_result" {
-		if candidate, code := b.optimizationModel(context.Background(), ctx, id, token, "propose", f, *m); code != "" || candidate == nil {
-			t.Fatal(code)
-		}
-	}
-	if os.Getenv("LAKE_P6_BOUNDARY_POINT") == "final_result" {
-		for stage := 1; stage <= 6; stage++ {
-			if stage == 1 || stage == 3 {
-				name := "propose"
-				if stage == 3 {
-					name = "synthesize"
-				}
-				if c, code := b.optimizationModel(context.Background(), ctx, id, token, name, f, *m); code != "" || c == nil {
-					t.Fatal(code)
-				}
-			} else {
-				variant := map[int]string{2: "proposal_development", 4: "synthesis_development", 5: "baseline_holdout", 6: "synthesis_holdout"}[stage]
-				var asset *strategy.AssetRevision
-				if stage != 5 {
-					name := "synthesize"
-					if stage == 2 {
-						name = "propose"
-					}
-					asset, err = b.optimizationAsset(id, name, f)
-					if err != nil {
-						t.Fatal(err)
-					}
-				}
-				if _, code := b.optimizationRun(context.Background(), ctx, id, token, variant, root, f, *m, asset); code != "" {
-					t.Fatal(code)
-				}
-			}
-			if stage < 6 {
-				if _, err = b.Store.checkpointOptimization(ctx, id, token, stage+1); err != nil {
-					t.Fatal(err)
-				}
-			}
-		}
-	}
-	os.Exit(23)
 }
-func TestStrategyOptimizationExplicitResumeKeepsBudgetAndCompletedRunIdentity(t *testing.T) {
-	for _, point := range []string{"baseline_checkpoint", "proposal_result", "final_result", "expired_wait", "exhausted_time", "stale_epoch"} {
-		t.Run(point, func(t *testing.T) {
-			b, h := fixture(t)
-			session, _ := newSession(t, h)
-			project := stringOf(b.Store.Session(session)["projectId"])
-			var calls atomic.Int32
-			provider := optimizationProvider(t, &calls, "", nil)
-			defer provider.Close()
-			ctx, asset := experimentSetup(t, b, project, provider, "Observe evidence before conclusions.")
-			base := "/api/projects/" + project + "/strategy"
-			id := createOptimizationHTTP(t, h, base, asset)
-			dir := b.Store.Dir
-			// The fixture owns a live schedule ticker. Its Store pointer is
-			// immutable in production; this test alone replaces it to simulate
-			// recovery. Pause schedule reads across each replacement.
-			reopen := func(beforeOpen func()) {
-				t.Helper()
-				b.scheduleMu.Lock()
-				defer b.scheduleMu.Unlock()
-				b.Store.Close()
-				if beforeOpen != nil {
-					beforeOpen()
-				}
-				store, err := OpenStore(dir)
-				if err != nil {
-					t.Fatal(err)
-				}
-				b.Store = store
-			}
-			reopen(func() {
-				binary, _ := os.Executable()
-				child := exec.Command(binary, "-test.run=^TestStrategyOptimizationCheckpointCrashHelper$", "-test.timeout=30s")
-				child.Env = append(os.Environ(), "LAKE_P6_BOUNDARY=1", "LAKE_P6_HOME="+b.options.Home, "LAKE_P6_PROJECT="+project, "LAKE_P6_BOUNDARY_POINT="+point)
-				out, err := child.CombinedOutput()
-				if exited, ok := err.(*exec.ExitError); !ok || exited.ExitCode() != 23 {
-					t.Fatalf("boundary crash failed %s %v", out, err)
-				}
-			})
-			b.processOneExperiment()
-			r := optimizationReport(t, b, ctx, id)
-			first := objects(r["runs"])[0]
-			wantCalls := int32(2)
-			if point == "proposal_result" {
-				wantCalls = 3
-			}
-			if point == "final_result" {
-				wantCalls = 12
-			}
-			if r["canResume"] != true || r["stopReason"] != "awaiting_user" || calls.Load() != wantCalls {
-				t.Fatal("checkpoint auto resumed", r["stopReason"], calls.Load())
-			}
-			waitUntil := r["waitUntilMs"]
-			reopen(nil)
-			if optimizationReport(t, b, ctx, id)["waitUntilMs"] != waitUntil {
-				t.Fatal("restart extended wait TTL")
-			}
-			if point == "expired_wait" || point == "exhausted_time" || point == "stale_epoch" {
-				if point == "expired_wait" {
-					b.Store.update(func() any {
-						b.Store.exec("UPDATE strategyOptimizations SET waitUntilMs=1 WHERE jobId=?", id)
-						return nil
-					})
-				}
-				if point == "exhausted_time" {
-					b.Store.update(func() any {
-						b.Store.exec("UPDATE strategyOptimizations SET activeMs=600000 WHERE jobId=?", id)
-						return nil
-					})
-				}
-				if point == "stale_epoch" {
-					settings, _ := b.Store.GetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope})
-					_, _ = b.Store.SetStrategySettings(StrategyContext{}, settings.Scope, ident(), settings.Revision, StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: true, CorrectEnabled: true, Budget: settings.Budget})
-				}
-				strategyHTTP(t, h, "POST", base+"/experiments/"+id+"/resume", ident(), `{}`, 409)
-				if calls.Load() != 2 {
-					t.Fatal("invalid resume issued provider request")
-				}
-				return
-			}
-			strategyHTTP(t, h, "POST", base+"/experiments/"+id+"/resume", "resume-once", `{}`, 200)
-			b.processOneExperiment()
-			r = optimizationReport(t, b, ctx, id)
-			if calls.Load() != 12 || r["stopReason"] != "completed" || integer(r["requests"]) != 12 || object(objects(r["runs"])[0]["result"])["runtimeId"] != object(first["result"])["runtimeId"] {
-				t.Fatal("resume replayed baseline/reset budget", calls.Load(), r["stopReason"])
-			}
-		})
+
+// Explicit local rollback acceptance fixture. Normal tests never write outside
+// TempDir or start another binary. The caller opens this retired v6 Home with
+// the prior signed Dev binary and checks identity/withdrawal before reopening it.
+func TestR5PrepareCompatibilityFixture(t *testing.T) {
+	home := os.Getenv("LAKE_R5_COMPAT_HOME")
+	if home == "" {
+		t.Skip("explicit isolated compatibility fixture only")
 	}
+	if !filepath.IsAbs(home) || filepath.Base(home) != "home" || !strings.HasPrefix(filepath.Base(filepath.Dir(home)), "lake-r5-compat-") {
+		t.Fatal("private temporary compatibility Home required")
+	}
+	s, e := OpenStore(filepath.Join(home, "web-agent"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	enableStrategyFixture(t, s)
+	for _, state := range []string{"queued", "checkpoint", "unknown"} {
+		seedLegacyOptimization(t, s, state)
+	}
+	ctx, _, source := seedLegacyOptimization(t, s, "settled")
+	if _, e = s.ForgetStrategySource(ctx, source, ident(), true); e != nil {
+		t.Fatal(e)
+	}
+	s.Close()
+	s, e = OpenStore(filepath.Join(home, "web-agent"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	s.Close()
 }
