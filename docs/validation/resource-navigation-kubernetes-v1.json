@@ -1,0 +1,87 @@
+{
+  "feature": "Folder-first resource navigation and native Kubernetes conversation queries",
+  "date": "2026-10-23",
+  "testedCodeCommit": "5d37c082fd681843bfa0968f38b1454f048f0154",
+  "catalogBaselineCommit": "4c5e8ce7",
+  "checks": [
+    {
+      "command": "go test -race ./internal/kubernetes ./internal/ai ./internal/web -run 'Test(Queries|Query|NativeKubernetes|KubernetesResourceWorks|Kubeconfig|KubernetesProbe|ResourceTree|ChildToolsMatch|ClusterRead|ClusterObservation|DirectoryScope|Plan)' -count=1",
+      "result": "passed",
+      "packageSeconds": {
+        "kubernetes": 1.716,
+        "ai": 4.74,
+        "web": 5.795
+      }
+    },
+    {
+      "command": "go test ./internal/ai -run '(Catalog|Schema|Prompt|Permission|SRE.*Tool|Tool.*Risk)' -count=1",
+      "result": "passed after adding explicit query_kubernetes assertion and reviewing/refreshing expected prompt/catalog goldens",
+      "seconds": 1.919
+    },
+    {
+      "command": "pnpm --dir web-agent test:frontend",
+      "result": "441 passed",
+      "node": "24.14.0"
+    },
+    {
+      "command": "go vet ./internal/kubernetes ./internal/ai ./internal/web; python3 scripts/check_adk_runtime_boundary.py; git diff --check",
+      "result": "passed"
+    },
+    {
+      "command": "scripts/build_lake.sh; scripts/build_lake_desktop.sh --dev --install; codesign --verify --deep --strict ~/Applications/Lake Dev.app",
+      "result": "passed",
+      "installedCommit": "82e039b6aa6a9c92dad290fb1b52693ef18172da",
+      "cleanOrigin": true,
+      "installedBackendSHA256Matches": true
+    }
+  ],
+  "conversationRegression": {
+    "mode": "Fake model + synthetic TLS Kubernetes API, real HTTP resource creation and real conversation/runtime/policy/tool/result chain",
+    "checks": [
+      "Kubeconfig CA and Bearer token used only by execution layer",
+      "Referenced Nanjing-k1 resolves saved context production without requiring display-name equality",
+      "Prior local terminal and bound target are not adopted or used",
+      "list_assets advertises direct endpoint/context and native capabilities",
+      "Actual projected node Ready/version reaches the model and completed conversation",
+      "Raw credentials, annotations and Pod spec do not enter model/public history",
+      "Cross-scope, unreferenced, arbitrary path/credential/command/mutation queries rejected before network",
+      "RBAC errors and redirects do not disclose upstream response bodies; Basic/Bearer reflections redacted",
+      "Pagination, projection/source bounds and log time/byte/line limits tested"
+    ]
+  },
+  "browser": {
+    "tool": "ego-browser",
+    "isolatedHome": "/tmp/lake-resource-nav-k8s-v1-home",
+    "resources": 45,
+    "folders": 3,
+    "checks": [
+      "Folders created after existing resources render first at each level; built-in local entry remains fixed",
+      "Pointer drag sorts folders and resources independently",
+      "Dragging right into a folder moves the resource and opens the folder",
+      "600 ms folder hover opens target",
+      "Sidebar edge auto-scroll observed while pointer held",
+      "Escape cancels without moving or opening a stale move panel; subsequent click still works",
+      "Arrow keys reorder within type and preserve keyboard focus",
+      "Order and parent persist after page reload",
+      "Light and dark 520x820 layout visually reviewed with no horizontal overflow"
+    ],
+    "screenshots": [
+      "resource-navigation-kubernetes-light.png",
+      "resource-navigation-kubernetes-drop.png",
+      "resource-navigation-kubernetes-dark-narrow.png"
+    ],
+    "finished": true,
+    "isolatedBackendStopped": true
+  },
+  "nativeDev": {
+    "installedCommit": "82e039b6aa6a9c92dad290fb1b52693ef18172da",
+    "activated": false,
+    "reason": "Existing Dev conversation and terminal command were still running; no forced restart or interruption"
+  },
+  "limitations": [
+    "Real cluster connectivity/RBAC not exercised; only synthetic servers and credentials used",
+    "Dedicated native Kubernetes operations are read-only; external kubeconfig plugins/files remain unsupported",
+    "Full Web/AI suite not rerun; prior unrelated full-Web timing limitation remains in resource-types-v1.json"
+  ],
+  "release": "No release application/data modified; PR 82 remains open"
+}
