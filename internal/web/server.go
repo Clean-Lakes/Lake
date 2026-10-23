@@ -542,6 +542,15 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, 200, Object{"closed": len(terminals)})
 		return
 	}
+	if len(parts) == 5 && parts[0] == "api" && parts[1] == "projects" && parts[3] == "resources" && parts[4] == "test" && method == "POST" {
+		b.Store.Project(parts[2])
+		data := body(w, r, 8<<20)
+		if data["kind"] != "kubernetes" {
+			fail(400, "当前仅支持测试 Kubernetes 连接")
+		}
+		reply(w, 200, testKubernetesConnection(r.Context(), b.Models.Home, object(data["settings"])))
+		return
+	}
 	if len(parts) == 4 && parts[0] == "api" && parts[1] == "projects" && method == "POST" {
 		limit := int64(16384)
 		if parts[3] == "resources" || parts[3] == "resource-import-preview" {

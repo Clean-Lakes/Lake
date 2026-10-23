@@ -16,9 +16,13 @@ func prepareService(home, kind string, input Object) (config Object, cleanup fun
 	config = Object{}
 	secrets := Object{}
 	for key, value := range input {
-		if key == "password" || key == "token" || key == "apiKey" {
+		if key == "password" || key == "token" || key == "apiKey" || key == "kubeconfig" {
 			secret, ok := value.(string)
-			if !ok || len(secret) > 16384 || strings.ContainsAny(secret, "\r\n\x00") {
+			limit, invalidCharacters := 16384, "\r\n\x00"
+			if key == "kubeconfig" {
+				limit, invalidCharacters = kubeconfigLimit, "\x00"
+			}
+			if !ok || len(secret) > limit || strings.ContainsAny(secret, invalidCharacters) {
 				fail(400, "凭据格式无效")
 			}
 			if secret != "" {
@@ -38,6 +42,9 @@ func prepareService(home, kind string, input Object) (config Object, cleanup fun
 		}
 		if kind == "kubernetes" {
 			allowed = set("token")
+			if config["authMethod"] == "kubeconfig" {
+				allowed = set("kubeconfig")
+			}
 		}
 		if kind == "prometheus" || kind == "victoriametrics" {
 			allowed = set("password token")
@@ -52,6 +59,9 @@ func prepareService(home, kind string, input Object) (config Object, cleanup fun
 		}
 	}
 	config = validateService(kind, config)
+	if kind == "kubernetes" {
+		config = normalizeKubernetesSettings(config, secrets)
+	}
 	root := filepath.Join(home, "secrets")
 	if ref := stringOf(config["credentialRef"]); ref != "" {
 		if _, err := privateFile(root, ref); err != nil {
@@ -89,7 +99,7 @@ func validateService(kind string, input Object) Object {
 		"database":        "driver host port username database path credentialRef tls sslmode",
 		"redis":           "host port username db credentialRef tls",
 		"docker":          "endpoint ssh_asset_ref",
-		"kubernetes":      "endpoint context namespace credentialRef",
+		"kubernetes":      "endpoint context namespace credentialRef authMethod requestTimeout tlsMode",
 		"apisix":          "endpoint credentialRef",
 		"prometheus":      "endpoint username credentialRef",
 		"victoriametrics": "endpoint username credentialRef",
@@ -107,7 +117,7 @@ func validateService(kind string, input Object) Object {
 		if !allowed[key] {
 			fail(400, "Unsupported connection field; credentials must use credentialRef")
 		}
-		if key == "port" || key == "db" {
+		if key == "port" || key == "db" || key == "requestTimeout" {
 			switch value.(type) {
 			case int, int64, float64:
 			default:
@@ -118,7 +128,7 @@ func validateService(kind string, input Object) Object {
 			if _, ok := value.(bool); !ok {
 				fail(400, "TLS must be boolean")
 			}
-		} else if key != "port" && key != "db" {
+		} else if key != "port" && key != "db" && key != "requestTimeout" {
 			text, ok := value.(string)
 			if !ok || strings.ContainsAny(text, "\r\n\x00") {
 				fail(400, "Connection fields must be text")
@@ -172,7 +182,28 @@ func validateService(kind string, input Object) Object {
 			fail(400, "Endpoint must not contain credentials")
 		}
 	}
-	if set("kubernetes apisix prometheus victoriametrics")[kind] {
+	if kind == "kubernetes" {
+		if v["authMethod"] == nil {
+			v["authMethod"] = "token"
+		}
+		if !set("kubeconfig token")[stringOf(v["authMethod"])] {
+			fail(400, "不支持的 Kubernetes 认证方式")
+		}
+		if v["requestTimeout"] == nil {
+			v["requestTimeout"] = 10
+		}
+		if n := number(v["requestTimeout"]); n != float64(integer(v["requestTimeout"])) || n < 1 || n > 60 {
+			fail(400, "Kubernetes 超时须为 1～60 秒的整数")
+		}
+		if v["tlsMode"] == nil {
+			v["tlsMode"] = "config"
+		}
+		if !set("config verify skip")[stringOf(v["tlsMode"])] {
+			fail(400, "不支持的 TLS 验证方式")
+		}
+		validateKubeNamespace(stringOf(v["namespace"]))
+	}
+	if set("kubernetes apisix prometheus victoriametrics")[kind] && !(kind == "kubernetes" && v["authMethod"] == "kubeconfig" && v["endpoint"] == nil) {
 		endpoint := strings.TrimSpace(stringOf(v["endpoint"]))
 		u, err := url.Parse(endpoint)
 		if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || strings.ContainsAny(endpoint, "?#\\") || strings.ContainsAny(endpoint, " \t") {
