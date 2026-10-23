@@ -15,7 +15,11 @@ function resourceFor(entry:TranscriptEntry,resources:Resource[]):ProgressResourc
  if(!card||!['operation','shell'].includes(card.type)||card.title==='ask_user_question')return;
  const data=record(card.data),args=record(data.arguments);
  const ref=text(data.resource_id)||text(args.asset_ref),target=text(data.target);
- const matches=resources.filter(resource=>ref?resource.id===ref:resource.name===target||resource.id===target);
+ // New records carry the resolved catalog ID. Older calls use opaque a_ aliases;
+ // only an exact, unique recorded target can recover their catalog identity.
+ const id=text(data.resource_id);
+ const byId=resources.filter(resource=>resource.id===(id||ref));
+ const matches=id?byId:byId.length?byId:resources.filter(resource=>ref&&!/^a_[0-9a-f]{16}$/.test(ref)?false:resource.name===target||resource.id===target);
  if(matches.length===1){const {id,name,kind}=matches[0]!;return {id,name,kind}}
  if(ref)return {id:ref,name:target||ref};
  if(target&&!['当前项目/会话','项目资源目录'].includes(target)&&!sessionFamilies[card.title??''])return {name:target};

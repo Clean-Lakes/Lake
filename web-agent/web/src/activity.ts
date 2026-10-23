@@ -13,9 +13,9 @@ export function progressGlyph(card?:AICard):GlyphName {
  if(/workflow|^todo_|^task_|investigation/.test(name))return 'lakeWorkflow';
  if(/sql|^list_db_|^db_|redis|^observe_data$/.test(name))return 'lakeDatabase';
  if(/docker|cluster|kubernetes/.test(name))return 'lakeContainer';
- if(/search|grep|glob|fetch/.test(name))return 'lakeSearch';
+ if(/search|grep|glob|fetch/.test(name)||name==='list_assets')return 'lakeSearch';
  if(/^(ls|list_files|list_resource_groups)$/.test(name))return 'lakeFolder';
- if(/^(inspect_host|observe_host|list_assets)$/.test(name))return 'lakeHost';
+ if(/^(inspect_host|observe_host)$/.test(name))return 'lakeHost';
  if(/read|write|edit|append|delete|file|attachment|transfer|skill|evidence|journal|logs/.test(name))return 'lakeFile';
  return 'lakeProcess';
 }

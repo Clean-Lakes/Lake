@@ -1,10 +1,11 @@
 import {useEffect,useState} from 'react';
 import type {OverallProgress} from './overall-progress-model';
 import {api} from './api';
+import {ReplyActivity} from './ReplyActivity';
 
 /** A single semantic summary, generated from authoritative current-turn records.
  * Resource paragraphs stay in their resource rows; they are never quoted here. */
-export function OverallProgressSummary({summary,session,turnStartedAt,live=false}:{summary:OverallProgress;session?:string;turnStartedAt?:string;live?:boolean}){
+export function OverallProgressSummary({summary,session,turnStartedAt,live=false,working=false}:{summary:OverallProgress;session?:string;turnStartedAt?:string;live?:boolean;working?:boolean}){
  const scope=`${session??''}:${turnStartedAt??''}`;
  const [result,setResult]=useState({scope:'',text:''});
  const revision=JSON.stringify([summary.facts,summary.activity,summary.latest?.id,summary.latest?.card?.content,summary.latest?.message?.text]);
@@ -27,5 +28,6 @@ export function OverallProgressSummary({summary,session,turnStartedAt,live=false
  const text=result.scope===scope?result.text:'';
  return <div className="resource-stage-summary is-overall" aria-label="本轮进度">
   <p className="overall-progress-facts">{text||summary.activity}</p>
+  <ReplyActivity active={working}/>
  </div>;
 }

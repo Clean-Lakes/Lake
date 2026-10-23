@@ -1313,4 +1313,4 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .resource-stage-history { margin-top:5px; font-size:var(--font-size-ui); color:var(--text-muted); }
 .resource-stage-record { margin-top:10px; color:var(--text-secondary); }
 
-.overall-progress-facts { margin:0; line-height:1.8; }
+.overall-progress-facts { margin:0; line-height:1.8; overflow-wrap:anywhere; }
