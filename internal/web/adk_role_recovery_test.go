@@ -85,14 +85,16 @@ func testADKRoleCrash(t *testing.T, question bool, projectionWindow ...bool) {
 	h.Close()
 	b.Close()
 	binary, _ := os.Executable()
-	child := exec.Command(binary, "-test.run=^TestADKSRERoleCrashHelper$", "-test.timeout=30s")
+	child := exec.Command(binary, "-test.run=^TestADKSRERoleCrashHelper$", "-test.timeout=60s")
 	child.Env = append(os.Environ(), "LAKE_ADK_ROLE_HELPER=1", "LAKE_ADK_ROLE_HOME="+home, "LAKE_ADK_ROLE_SESSION="+session, "LAKE_ADK_ROLE_TASK="+taskID)
 	if err = child.Start(); err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = child.Process.Kill(); _ = child.Wait() }()
 	var pending ai.AgentRun
-	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); {
+	// Cold native SQLite setup in a Windows subprocess can exceed 15 seconds.
+	// Wait for the same durable parent/child state before deliberately crashing.
+	for deadline := time.Now().Add(45 * time.Second); time.Now().Before(deadline); {
 		raw, _ := os.ReadFile(filepath.Join(home, "web-agent", "ai", session+".json"))
 		var state ai.State
 		_ = json.Unmarshal(raw, &state)

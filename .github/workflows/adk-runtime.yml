@@ -45,7 +45,7 @@ jobs:
       # This fixture uses only synthetic models and a loopback health server.
       # Keep its diagnostics separate from private strategy request logs.
       - name: Actual Windows local HTTP retry regression
-        if: runner.os == 'Windows'
+        if: always() && runner.os == 'Windows'
         run: go test -v ./internal/web -run '^TestStrategyDailyLongContextRetriesActualFailedReadWithoutCorrectionBudget$' -count=1 -timeout=5m
       - name: Strategy settings, assets, crashes, bounded optimization and readonly correction
         run: python scripts/verify_strategy_learning.py --report "${{ runner.temp }}/strategy-learning.json"
