@@ -582,6 +582,9 @@ func (t *Terminals) Execute(id, tid, actor, command, actionID string) Object {
 	executable := command
 	if p.Risk == "readonly" {
 		executable = p.Safe
+		if runtime.GOOS == "windows" && !l.remote {
+			executable = windowsReadonlyCommand(executable, l.cmd.Path)
+		}
 		if l.shell == "fish" {
 			// Fish has no POSIX `command -p`. Run the already validated
 			// read-only form with the system Shell in this terminal's cwd.
