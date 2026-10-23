@@ -81,12 +81,17 @@ func (s *Store) resolveStrategyBindings(ctx StrategyContext, q strategy.Selectio
 						}
 					}
 				}
-				candidates = append(candidates, strategy.Candidate{Value: v.Value, Priority: integer(row["priority"]), ExclusionGroup: stringOf(row["exclusionGroup"]), UnavailableReason: reason})
+				policy, model, toolHashes := s.strategyReusePolicy(v.Value.Ref.AssetID, v.Value.Ref.Revision, v.Value.Kind)
+				if reason == "" {
+					reason = strategyReuseReason(policy, v.Value.Kind, model, toolHashes, q)
+				}
+				candidates = append(candidates, strategy.Candidate{Reuse: policy, Value: v.Value, Priority: integer(row["priority"]), ExclusionGroup: stringOf(row["exclusionGroup"]), UnavailableReason: reason})
 			}
-			resolved := strategy.Resolve(candidates, q, 8192)
+			resolved := strategy.Resolve(candidates, q, strategy.MaxAssetPromptBytes)
 			result.Assets = resolved.Assets
 			result.Selection.Selected = resolved.Selection.Selected
 			result.Selection.Omitted = resolved.Selection.Omitted
+			result.Selection.Reasons = resolved.Selection.Reasons
 		}
 		if frozen != nil && !reflect.DeepEqual(result.Selection.Selected, frozen.Selected) {
 			strategyFail(409, "turn_invalidated")

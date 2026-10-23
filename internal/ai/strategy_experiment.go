@@ -185,7 +185,10 @@ func (e *Engine) RunStrategyVariant(ctx context.Context, in StrategyVariantInput
 					return strategy.ResolvedSelection{}, err
 				}
 			}
-			return strategy.Resolve([]strategy.Candidate{{Value: asset}}, q, 8192), nil
+			// Isolated paired evaluation explicitly selects this exact asset; daily
+			// task retrieval does not choose whether the B arm receives it.
+			q.TaskText = ""
+			return strategy.Resolve([]strategy.Candidate{{Value: asset}}, q, strategy.MaxAssetPromptBytes), nil
 		}
 	}
 	kind := "local"

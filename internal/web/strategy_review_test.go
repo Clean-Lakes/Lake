@@ -230,7 +230,7 @@ func TestStrategyReviewV4MigrationPrivateBackupRollbackAndExistingAdoption(t *te
 			dir := s.Dir
 			s.Close()
 			db, _ := openSQLite(filepath.Join(dir, "lake-web.sqlite"))
-			_, err := db.Exec("DROP TABLE strategyReviews;DROP TABLE strategyAssessments;DROP TABLE strategyPromotions;DROP TABLE strategyRejections;DROP TABLE strategySchemaMeta;CREATE TABLE strategySchemaMeta(version INTEGER PRIMARY KEY CHECK(version=4),schemaHash TEXT NOT NULL);INSERT INTO strategySchemaMeta VALUES(4,?)", strategySchemaV4Hash())
+			_, err := db.Exec("DROP TABLE strategyUsageFeedback; DROP TABLE strategyReusePolicies; DROP TABLE strategyReviews;DROP TABLE strategyAssessments;DROP TABLE strategyPromotions;DROP TABLE strategyRejections;DROP TABLE strategySchemaMeta;CREATE TABLE strategySchemaMeta(version INTEGER PRIMARY KEY CHECK(version=4),schemaHash TEXT NOT NULL);INSERT INTO strategySchemaMeta VALUES(4,?)", strategySchemaV4Hash())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -266,7 +266,7 @@ func TestStrategyReviewV4MigrationPrivateBackupRollbackAndExistingAdoption(t *te
 			defer db.Close()
 			var version int
 			db.QueryRow("SELECT version FROM strategySchemaMeta").Scan(&version)
-			want := 5
+			want := 6
 			if conflict {
 				want = 4
 			}

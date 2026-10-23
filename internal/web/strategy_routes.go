@@ -22,10 +22,11 @@ type strategyAssetRequest struct {
 	Body             string                 `json:"body"`
 	Applicability    strategy.Applicability `json:"applicability"`
 	Assessment       strategy.Assessment    `json:"assessment"`
+	Reuse            *strategy.ReusePolicy  `json:"reuse,omitempty"`
 }
 
 func (r strategyAssetRequest) input() StrategyAssetInput {
-	return StrategyAssetInput{Title: r.Title, Kind: r.Kind, Body: r.Body, Applicability: r.Applicability, Assessment: r.Assessment}
+	return StrategyAssetInput{Title: r.Title, Kind: r.Kind, Body: r.Body, Applicability: r.Applicability, Assessment: r.Assessment, Reuse: r.Reuse}
 }
 func strategyMust[T any](value T, err error) T {
 	if err != nil {
@@ -281,7 +282,7 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 				strategyFail(400, "invalid_revision")
 			}
 			b.strategySafeInput(in.input())
-			reply(w, 200, strategyMust(b.Store.CreateStrategyAsset(ctx, scope, key, in.input())))
+			reply(w, 200, strategyMust(b.Store.CreateStrategyAsset(ctx, scope, key, b.strategyCaptureReuse(in.input()))))
 			return
 		}
 	}
@@ -302,6 +303,9 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 		asset := StrategyAssetInput{Title: meta.Name, Kind: in.Kind, Body: content, Applicability: in.Applicability}
 		b.strategySafeInput(asset)
 		reply(w, 200, strategyMust(b.Store.importStrategySkill(ctx, scope, key, in.Name, content, asset)))
+		return
+	}
+	if b.strategyReuseRoute(w, r, ctx, scope, suffix, key) {
 		return
 	}
 	if b.strategyExperimentRoute(w, r, ctx, scope, suffix, key) {
@@ -347,7 +351,7 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 				strategyFail(400, "invalid_revision")
 			}
 			b.strategySafeInput(in.Draft.input())
-			reply(w, 200, strategyMust(b.Store.PromoteStrategyRevision(ctx, id, key, in.Ref, in.Draft.input(), in.Confirmed)))
+			reply(w, 200, strategyMust(b.Store.PromoteStrategyRevision(ctx, id, key, in.Ref, b.strategyCaptureReuse(in.Draft.input()), in.Confirmed)))
 			return
 		}
 		if len(parts) == 2 && method == "DELETE" {
@@ -383,7 +387,7 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 				owner()
 				in := strategyBody[strategyAssetRequest](r, "expectedRevision", "parentRevision", "title", "kind", "body", "applicability")
 				b.strategySafeInput(in.input())
-				reply(w, 200, strategyMust(b.Store.ReviseStrategyAsset(ctx, id, key, in.ExpectedRevision, in.ParentRevision, in.input())))
+				reply(w, 200, strategyMust(b.Store.ReviseStrategyAsset(ctx, id, key, in.ExpectedRevision, in.ParentRevision, b.strategyCaptureReuse(in.input()))))
 				return
 			}
 		}
@@ -394,7 +398,7 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 			}
 			v := strategyMust(b.Store.GetStrategyRevision(ctx, id, version))
 			if v.Available {
-				b.strategySafeInput(StrategyAssetInput{Title: v.Asset.Title, Kind: v.Value.Kind, Body: v.Value.Body, Applicability: v.Value.Applicability})
+				b.strategySafeInput(StrategyAssetInput{Title: v.Asset.Title, Kind: v.Value.Kind, Body: v.Value.Body, Applicability: v.Value.Applicability, Assessment: v.Assessment, Reuse: &v.Reuse})
 			}
 			status := strategyMust(strategyCall(b.Store, false, func() []Object {
 				out := []Object{}
@@ -416,7 +420,7 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 				}
 				return out
 			}))
-			reply(w, 200, Object{"asset": v.Asset, "value": v.Value, "available": v.Available, "sourcesAvailable": v.SourcesAvailable, "skillSources": status, "review": v.Review, "assessment": v.Assessment})
+			reply(w, 200, Object{"asset": v.Asset, "value": v.Value, "available": v.Available, "sourcesAvailable": v.SourcesAvailable, "skillSources": status, "review": v.Review, "assessment": v.Assessment, "reuse": v.Reuse, "reuseStatus": b.strategyRevisionReuseStatus(v)})
 			return
 		}
 		if len(parts) == 3 && parts[2] == "bindings" {

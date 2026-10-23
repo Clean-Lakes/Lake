@@ -61,6 +61,9 @@ type StrategyAssetInput struct {
 	Body          string
 	Applicability strategy.Applicability
 	Assessment    strategy.Assessment
+	Reuse         *strategy.ReusePolicy
+	ModelHash     string
+	ToolHashes    map[string]string
 }
 type StrategyAssetView struct {
 	ID           string             `json:"id"`
@@ -78,6 +81,7 @@ type StrategyRevisionView struct {
 	SourcesAvailable bool                   `json:"sourcesAvailable"`
 	Review           StrategyReview         `json:"review"`
 	Assessment       strategy.Assessment    `json:"assessment"`
+	Reuse            strategy.ReusePolicy   `json:"reuse"`
 }
 
 var strategyTag = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
@@ -89,6 +93,14 @@ func strategySafeText(text string, maxBytes int) {
 	}
 }
 func validateStrategyInput(in StrategyAssetInput) {
+	if in.Reuse != nil && in.Reuse.Validate(in.Kind) != nil {
+		strategyFail(400, "invalid_reuse_policy")
+	}
+	if in.Reuse != nil {
+		for _, keyword := range in.Reuse.Keywords {
+			strategySafeText(keyword, 64)
+		}
+	}
 	strategySafeText(in.Title, 240)
 	if strings.ContainsAny(in.Title, "\r\n") {
 		strategyFail(400, "invalid_title")
@@ -309,6 +321,11 @@ func (s *Store) strategyWriteRevision(ctx StrategyContext, a Object, revision, p
 		s.strategyEdge(stringOf(a["id"]), node, revisionNode(stringOf(a["id"]), parent), "supersedes")
 	}
 	s.exec("INSERT INTO strategyAssessments VALUES(?,?,?)", a["id"], revision, jsonText(in.Assessment))
+	policy := s.strategyDefaultReuse(in.Kind)
+	if in.Reuse != nil {
+		policy = *in.Reuse
+	}
+	s.exec("INSERT INTO strategyReusePolicies VALUES(?,?,?,?,?)", a["id"], revision, jsonText(policy), in.ModelHash, jsonText(in.ToolHashes))
 	s.exec("UPDATE strategyAssets SET revision=? WHERE id=?", revision, a["id"])
 	s.strategyEvent(stringOf(a["scopeKey"]), "", stringOf(a["id"]), revision, "revision_created", Object{"contentHash": strategy.ContentHash(in.Body), "sources": sourceHash})
 }
@@ -383,6 +400,7 @@ func (s *Store) strategyRevisionView(ctx StrategyContext, id string, revision in
 	if view.Available && (view.Value.Validate() != nil || strategy.ContentHash(stringOf(content["applicability"])) != r["applicabilityHash"]) {
 		strategyFail(500, "revision_integrity_error")
 	}
+	view.Reuse, _, _ = s.strategyReusePolicy(id, revision, view.Value.Kind)
 	view.Review = s.strategyReview(id, revision)
 	view.Asset.ReviewStatus = s.strategyReview(id, int64(integer(a["revision"]))).Decision
 	if row := s.row("SELECT body FROM strategyAssessments WHERE assetId=? AND revision=?", id, revision); row != nil {
@@ -393,6 +411,7 @@ func (s *Store) strategyRevisionView(ctx StrategyContext, id string, revision in
 		view.Available = false
 		view.Value.Body = ""
 		view.Assessment = strategy.Assessment{}
+		view.Reuse = s.strategyDefaultReuse(view.Value.Kind)
 	}
 	items := []Object{}
 	for _, sourceID := range view.Value.SourceIDs {

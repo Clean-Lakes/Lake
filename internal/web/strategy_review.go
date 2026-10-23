@@ -124,6 +124,7 @@ func (s *Store) pruneStrategyDerivedContent() {
 	for _, r := range s.rows("SELECT DISTINCT rs.assetId,rs.revision,a.scopeKey FROM strategyRevisionSources rs JOIN strategySourceEvents x ON x.id=rs.sourceId JOIN strategyAssets a ON a.id=rs.assetId JOIN strategyRevisionContent c ON c.assetId=rs.assetId AND c.revision=rs.revision WHERE x.availability<>'available'") {
 		s.exec("DELETE FROM strategyRevisionContent WHERE assetId=? AND revision=?", r["assetId"], r["revision"])
 		s.exec("DELETE FROM strategyAssessments WHERE assetId=? AND revision=?", r["assetId"], r["revision"])
+		s.exec("DELETE FROM strategyReusePolicies WHERE assetId=? AND revision=?", r["assetId"], r["revision"])
 		s.exec("UPDATE strategyBindings SET enabled=0,bindingRevision=bindingRevision+1 WHERE assetId=? AND revision=?", r["assetId"], r["revision"])
 		s.strategyEraseAssetResults(stringOf(r["assetId"]))
 		s.strategyAdvanceScope(stringOf(r["scopeKey"]))
@@ -136,6 +137,7 @@ func (s *Store) pruneStrategyDerivedContent() {
 		}
 		s.exec("DELETE FROM strategyRevisionContent WHERE assetId=? AND revision=?", id, revision)
 		s.exec("DELETE FROM strategyAssessments WHERE assetId=? AND revision=?", id, revision)
+		s.exec("DELETE FROM strategyReusePolicies WHERE assetId=? AND revision=?", id, revision)
 		s.exec("UPDATE strategyBindings SET enabled=0,bindingRevision=bindingRevision+1 WHERE assetId=? AND revision=?", id, revision)
 		s.strategyEraseAssetResults(id)
 		s.strategyAdvanceScope("user")
