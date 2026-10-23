@@ -1,0 +1,1535 @@
+{
+  "sourceCommit": "5597425bff1f60b5d567f0e7cf2623718cf688dd",
+  "backendSHA256": "7fd683ed0233a9264d202bd77facb01dc5e51c4cfbd854ce8224237b3ebfebd7",
+  "modelName": "deepseek-flash",
+  "startedAt": "2026-10-23T08:43:42.670604+00:00",
+  "projects": {
+    "A": "83f6b12f7bcc76a6439ed6c32fb32f59",
+    "B": "172b3d2f51f21fa3f952112c9845722e"
+  },
+  "trials": {
+    "baseline": {
+      "sessionId": "aa39935bba1c0154a194f088e8c72756",
+      "project": "A",
+      "prompt": "请根据这些回放数据写一份巡检简报：服务 demo-api，请求 120 次，失败 3 次。只有上述历史数据，没有实时探测结果。不调用工具。",
+      "status": "completed",
+      "answer": "**demo-api 巡检简报（回放数据分析）**\n\n数据来源：本次分析仅使用历史回放数据，未进行任何实时探测；以下结论反映的是回放时段内的状态，不代表当前服务的实际运行情况。\n\n- 总请求数 120 次，其中成功 117 次，失败 3 次；成功率 97.5%，错误率 2.5%。\n- 属于低失败率水平；虽然 3 次失败没有被判定为服务不可用级问题，但仍需关注它们的分布特征。\n\n建议：回放数据未包含错误码、失败时间点和接口分布，因此无法判断这 3 次失败是瞬时抖动、单接口异常还是依赖服务超时。建议补充按时间与接口维度的失败明细；如需确认当前状态，再进行一次实时探测或日志核对。",
+      "durationMs": 3384,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 512,
+        "input": 17433,
+        "output": 262,
+        "total": 17695
+      },
+      "history": [
+        {
+          "feedback": [],
+          "omitted": [],
+          "preparedAt": "2026-10-23T08:43:42.851217Z",
+          "reasons": null,
+          "requestId": "a40830145b08b4444d3f9ae91f5f927f",
+          "selected": [],
+          "status": "prepared",
+          "turnId": "c37684aae2d0453fdb2d8b814258101b"
+        }
+      ],
+      "pendingApprovals": 0,
+      "cardTypes": [
+        "thinking",
+        "message"
+      ]
+    },
+    "correction": {
+      "sessionId": "aa39935bba1c0154a194f088e8c72756",
+      "project": "A",
+      "prompt": "纠正一下：以后我的巡检简报固定使用三个标题：“观察：”“判断：”“待核实：”。观察只写已有事实，判断注明不确定性，待核实列出缺少的证据。这是一条报告偏好，不要调用工具或写入项目记忆。",
+      "status": "completed",
+      "answer": "明白了。今后我会固定使用以下三个标题：「观察：」「判断：」「待核实：」。这条偏好只在本会话内生效，我没有调用工具，也没有写入项目记忆。下面按新格式重排刚才的简报：\n\n**demo-api 巡检简报（回放数据）**\n\n观察：回放数据显示，请求共 120 次，失败 3 次，成功 117 次，成功率 97.5%，错误率 2.5%。这些结果不含实时探测。\n\n判断：失败率处于较低水平，因此很可能不会构成服务不可用级问题；但由于缺少失败时间点和接口分布，不能排除个别接口或依赖服务存在局部异常的可能。\n\n待核实：缺少错误码分布、失败发生的时间点、失败请求对应的接口或依赖链路，以及当前实时探测或日志核对结果。",
+      "durationMs": null,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4480,
+        "input": 35547,
+        "output": 526,
+        "total": 36073
+      },
+      "history": [
+        {
+          "feedback": [],
+          "omitted": [],
+          "preparedAt": "2026-10-23T08:43:56.285644Z",
+          "reasons": null,
+          "requestId": "e8f3c015cd5a49b50a87a8f7dd6e4d4e",
+          "selected": [],
+          "status": "prepared",
+          "turnId": "2d82398e71dd4aa522d09ecd781ec049"
+        }
+      ],
+      "pendingApprovals": 0,
+      "cardTypes": [
+        "thinking",
+        "message",
+        "thinking",
+        "message"
+      ],
+      "rootTurnId": "2d82398e71dd4aa522d09ecd781ec049",
+      "timingNote": "Initial capture read old terminal; actual new root was recaptured without redispatch. No reliable per-turn wall duration retained."
+    },
+    "before_adoption": {
+      "sessionId": "cc714e79b30d1ed824d463bac817bb87",
+      "project": "A",
+      "prompt": "请生成巡检简报：服务 demo-worker，请求 80 次，失败 0 次。资料仅为回放，没有实时验证。不调用工具。",
+      "status": "completed",
+      "rootTurnId": "0e590c133e550047399f47052db16cfc",
+      "answer": "**巡检简报（回放数据，非实时）**\n\n- 服务：`demo-worker`\n- 请求数：80 次\n- 失败数：0 次（失败率 0%）\n- 数据性质：回放资料，未经实时验证\n\n结论：回放区间内 `demo-worker` 的请求全部成功，未发现失败迹象。但本简报仅反映历史回放快照，不代表当前运行状态——若要确认服务此刻健康状况，需要另行采集实时指标（进程、端口、日志与延迟分布）。",
+      "durationMs": 2065,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 3968,
+        "input": 17412,
+        "output": 137,
+        "total": 17549
+      },
+      "history": [
+        {
+          "feedback": [],
+          "omitted": [],
+          "preparedAt": "2026-10-23T08:46:27.454146Z",
+          "reasons": null,
+          "requestId": "5bb38298f3515d808c4f270fd0bcbe61",
+          "selected": [],
+          "status": "prepared",
+          "turnId": "0e590c133e550047399f47052db16cfc"
+        }
+      ],
+      "pendingApprovals": 0,
+      "cardTypes": [
+        "thinking",
+        "message"
+      ]
+    },
+    "after_adoption": {
+      "sessionId": "1ed679b90c6314d6037eb102da16ede0",
+      "project": "A",
+      "prompt": "请生成巡检简报：服务 demo-worker，请求 80 次，失败 0 次。资料仅为回放，没有实时验证。不调用工具。",
+      "status": "completed",
+      "rootTurnId": "8aa898adc45ab077a5b6ee902e4c55d0",
+      "answer": "观察：服务 demo-worker 在本次记录中请求 80 次、失败 0 次，失败率为 0%。资料仅为回放数据，未做实时验证。\n\n判断：按回放数据看，该时段可用性表现正常，没有出现失败请求；由于未接入实时数据，这一判断具有不确定性，不能据此认定当前线上状态同样健康。样本量 80 次，只能覆盖较短的观察窗口，不足以反映流量峰值或异常场景下的表现。\n\n待核实：缺少实时请求量与失败率的采集证据、观测时间窗口与采样口径、服务实例与版本信息、延迟分布等性能指标，以及依赖方（下游服务、数据库、队列）的健康状态。建议在获得授权后对 demo-worker 做一次实时检查再出结论。",
+      "durationMs": 2901,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4096,
+        "input": 17660,
+        "output": 185,
+        "total": 17845
+      },
+      "history": [
+        {
+          "feedback": [],
+          "omitted": [],
+          "preparedAt": "2026-10-23T08:46:48.263919Z",
+          "reasons": [
+            {
+              "ref": {
+                "assetId": "dd4e52783bdf3d6189efb5187636d43e",
+                "revision": 2,
+                "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+              },
+              "reason": "task_keyword",
+              "score": 1
+            }
+          ],
+          "requestId": "aaf8506cf3c95c5992881394e2095fa8",
+          "selected": [
+            {
+              "assetId": "dd4e52783bdf3d6189efb5187636d43e",
+              "revision": 2,
+              "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+            }
+          ],
+          "status": "prepared",
+          "turnId": "8aa898adc45ab077a5b6ee902e4c55d0"
+        }
+      ],
+      "pendingApprovals": 0,
+      "cardTypes": [
+        "thinking",
+        "message"
+      ]
+    },
+    "cross_project": {
+      "sessionId": "4ca029a935dcf6c44ee6e0b3c1c3e083",
+      "project": "B",
+      "prompt": "请生成巡检简报：服务 demo-cache，请求 200 次，失败 7 次。资料仅为回放，没有实时验证。不调用工具。",
+      "status": "completed",
+      "rootTurnId": "bdfb84e7f6cfb021835fc35169c9fd1b",
+      "answer": "**观察：** 根据回放资料，服务 demo-cache 共发起 200 次请求，其中 7 次失败，失败率约为 3.5%（93% 成功，200 次请求中 193 次成功）。以上数字来自记录，未经实时复核，也没有时间窗口、失败类型和影响范围等信息。\n\n**判断：** 失败率处于偏低但不可忽略的水平，如果该服务设定的错误率阈值（SLO）低于 3.5%，就属于需要关注的情况；但不排除其中部分失败来自客户端重试或预期内拒绝，实际可用性可能优于表面数字。由于没有实时验证，本次不能据此认定 demo-cache 当前是否存在故障。\n\n**待核实：** 缺少统计时间窗口与采样口径、7 次失败的错误码或异常分布、是否集中在某一节点或某一次发布之后、当前实时错误率与延迟指标，以及该服务的 SLO 阈值和是否触发过告警。建议后续以实时日志和监控面板复核后再下结论。",
+      "durationMs": 2933,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 512,
+        "input": 17647,
+        "output": 272,
+        "total": 17919
+      },
+      "history": [
+        {
+          "feedback": [],
+          "omitted": [],
+          "preparedAt": "2026-10-23T08:46:58.476393Z",
+          "reasons": [
+            {
+              "ref": {
+                "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+                "revision": 1,
+                "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+              },
+              "reason": "task_keyword",
+              "score": 1
+            }
+          ],
+          "requestId": "574084f7ff455d2222b4df34a7475b29",
+          "selected": [
+            {
+              "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+              "revision": 1,
+              "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+            }
+          ],
+          "status": "prepared",
+          "turnId": "bdfb84e7f6cfb021835fc35169c9fd1b"
+        }
+      ],
+      "pendingApprovals": 0,
+      "cardTypes": [
+        "thinking",
+        "message"
+      ]
+    },
+    "method_correction": {
+      "sessionId": "b232083b98041b700461e54bed679a6b",
+      "project": "A",
+      "prompt": "请记住一条维护报告方法：只有 traffic_drained=true 时，只能说明流量已摘除，不能推断维护完成或业务恢复。此时建议表述为“等待维护完成”，并注明“未验证恢复”。这是一条待审核的方法建议，不是已验证的成功经验。不调用工具或写入项目记忆。",
+      "status": "completed",
+      "rootTurnId": "2a226cd5a28c0e00e8702c54c9a61960",
+      "answer": "我记下了这条方法建议，并明确把它作为**待审核**的建议保留，尚未纳入已验证的成功经验。要点如下：\n\n- `traffic_drained=true` 只能证明流量已摘除，不能据此推断维护已完成或业务已恢复。\n- 因此报告中应写“等待维护完成”，并同时标注“未验证恢复”。\n- 只有拿到维护完成、健康检查或业务验证类的独立证据，才可以改变这个表述。\n\n按你的要求，我没有调用任何工具，也没有写入项目记忆。",
+      "durationMs": 2647,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 3968,
+        "input": 17508,
+        "output": 154,
+        "total": 17662
+      },
+      "history": [
+        {
+          "feedback": [],
+          "omitted": [
+            {
+              "ref": {
+                "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+                "revision": 1,
+                "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+              },
+              "reason": "not_relevant"
+            },
+            {
+              "ref": {
+                "assetId": "dd4e52783bdf3d6189efb5187636d43e",
+                "revision": 2,
+                "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+              },
+              "reason": "not_relevant"
+            }
+          ],
+          "preparedAt": "2026-10-23T08:47:05.5117Z",
+          "reasons": null,
+          "requestId": "a0882d34269d7c895e4d6293c323bced",
+          "selected": [],
+          "status": "prepared",
+          "turnId": "2a226cd5a28c0e00e8702c54c9a61960"
+        }
+      ],
+      "pendingApprovals": 0,
+      "cardTypes": [
+        "thinking",
+        "message"
+      ]
+    },
+    "method_match": {
+      "sessionId": "52c825ac4001cb6cde6dd79202eed9c9",
+      "project": "A",
+      "prompt": "请分析维护回放：target=demo-api，traffic_drained=true，没有其他结果。给出当前判断及下一步建议，不调用工具。",
+      "status": "completed",
+      "rootTurnId": "6b30ab9b016897a4118fd03319ce6d42",
+      "answer": "当前判断：目前唯一的确定证据是 `target=demo-api` 的流量已摘除（`traffic_drained=true`）。这只说明该目标不再接收线上流量，既不能推断维护已经完成，也不能推断业务已恢复。由于回放中没有维护完成记录、健康检查或业务验证等独立证据，因此当前状态应视为“等待维护完成”，恢复情况“未验证恢复”。\n\n下一步建议：先补齐三类证据再下结论——维护任务本身的执行结果（部署/变更是否成功、有无报错）、实例健康状态（进程与监听端口、健康检查接口、关键错误日志）、以及恢复流量后的业务验证（成功率、延迟、错误率基线对比）。在维护完成并有健康检查通过之前，保持流量摘除状态；确认无误后再灰度放量并观察关键指标。本次未调用任何工具，以上仅为基于给定回放的推断。",
+      "durationMs": 2874,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 3968,
+        "input": 17678,
+        "output": 248,
+        "total": 17926
+      },
+      "history": [
+        {
+          "feedback": [],
+          "omitted": [
+            {
+              "ref": {
+                "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+                "revision": 1,
+                "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+              },
+              "reason": "not_relevant"
+            },
+            {
+              "ref": {
+                "assetId": "dd4e52783bdf3d6189efb5187636d43e",
+                "revision": 2,
+                "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+              },
+              "reason": "not_relevant"
+            }
+          ],
+          "preparedAt": "2026-10-23T08:47:41.286646Z",
+          "reasons": [
+            {
+              "ref": {
+                "assetId": "0d7108176cd165ffd5114e9ee7cba0e1",
+                "revision": 2,
+                "contentHash": "d2ba310689c2bd2e104d5fd6e01034a0cf39647823cafda78d15c850def9efe4"
+              },
+              "reason": "task_keyword",
+              "score": 1
+            }
+          ],
+          "requestId": "2601fe58ae8e01de830aeaf7580f3087",
+          "selected": [
+            {
+              "assetId": "0d7108176cd165ffd5114e9ee7cba0e1",
+              "revision": 2,
+              "contentHash": "d2ba310689c2bd2e104d5fd6e01034a0cf39647823cafda78d15c850def9efe4"
+            }
+          ],
+          "status": "prepared",
+          "turnId": "6b30ab9b016897a4118fd03319ce6d42"
+        }
+      ],
+      "pendingApprovals": 0,
+      "cardTypes": [
+        "thinking",
+        "message"
+      ]
+    },
+    "method_unrelated": {
+      "sessionId": "efd47fe2145cb5ba8b132dae92a30234",
+      "project": "A",
+      "prompt": "请把 Hello 翻译成中文，不调用工具。",
+      "status": "completed",
+      "rootTurnId": "97d390e6e9ad9805e0f1c1408fb70868",
+      "answer": "“Hello”的中文是“你好”。",
+      "durationMs": 1642,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 3968,
+        "input": 17346,
+        "output": 10,
+        "total": 17356
+      },
+      "history": [
+        {
+          "feedback": [],
+          "omitted": [
+            {
+              "ref": {
+                "assetId": "0d7108176cd165ffd5114e9ee7cba0e1",
+                "revision": 2,
+                "contentHash": "d2ba310689c2bd2e104d5fd6e01034a0cf39647823cafda78d15c850def9efe4"
+              },
+              "reason": "not_relevant"
+            },
+            {
+              "ref": {
+                "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+                "revision": 1,
+                "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+              },
+              "reason": "not_relevant"
+            },
+            {
+              "ref": {
+                "assetId": "dd4e52783bdf3d6189efb5187636d43e",
+                "revision": 2,
+                "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+              },
+              "reason": "not_relevant"
+            }
+          ],
+          "preparedAt": "2026-10-23T08:47:57.072462Z",
+          "reasons": null,
+          "requestId": "1a58dcd2b2d7ffa1cc85ac235e552387",
+          "selected": [],
+          "status": "prepared",
+          "turnId": "97d390e6e9ad9805e0f1c1408fb70868"
+        }
+      ],
+      "pendingApprovals": 0,
+      "cardTypes": [
+        "thinking",
+        "message"
+      ]
+    },
+    "current_request": {
+      "sessionId": "0eac94ca9411ad4eeed93c719019e16b",
+      "project": "B",
+      "prompt": "请生成巡检简报：服务 demo-api，请求 100 次，失败 1 次。本轮只用一句话回答，不要分标题。资料仅为回放。不调用工具。",
+      "status": "completed",
+      "rootTurnId": "037aa6f088d90fb7822c9de060991c9e",
+      "answer": "巡检简报：demo-api 本轮请求 100 次、失败 1 次，成功率 99%，整体可用但存在单次失败，需核实该失败的时间点、错误类型及是否为偶发抖动（回放资料，未做实时核验）。",
+      "durationMs": 2873,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 3968,
+        "input": 17659,
+        "output": 111,
+        "total": 17770
+      },
+      "history": [
+        {
+          "feedback": [],
+          "omitted": [],
+          "preparedAt": "2026-10-23T08:47:58.816638Z",
+          "reasons": [
+            {
+              "ref": {
+                "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+                "revision": 1,
+                "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+              },
+              "reason": "task_keyword",
+              "score": 1
+            }
+          ],
+          "requestId": "1bc321e26d615505ec2c314abf66269d",
+          "selected": [
+            {
+              "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+              "revision": 1,
+              "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+            }
+          ],
+          "status": "prepared",
+          "turnId": "037aa6f088d90fb7822c9de060991c9e"
+        }
+      ],
+      "pendingApprovals": 0,
+      "cardTypes": [
+        "thinking",
+        "message"
+      ]
+    },
+    "after_suspend": {
+      "sessionId": "904e8d3d262e4af4d1ad1e24c2271d9e",
+      "project": "B",
+      "prompt": "请生成巡检简报：服务 demo-cache，请求 200 次，失败 7 次。资料仅为回放，没有实时验证。不调用工具。",
+      "status": "completed",
+      "rootTurnId": "cfa8394a559a6e437e63eacbb13bafe9",
+      "answer": "**巡检简报 · demo-cache**\n\n- 服务：demo-cache\n- 请求总数：200 次\n- 失败次数：7 次\n- 失败率：3.5%（成功 193 次，成功率 96.5%）\n- 判定：整体可用，失败率处于偏低水平；但 3.5% 已接近需要关注的区间上沿，建议对照该服务的告警阈值确认是否越线。\n\n数据性质说明：本简报仅依据回放资料整理，未做任何实时采集或验证，失败率、成功次数均为算术推算值，不代表当前线上状态。如需确认实时健康度，需另行对目标主机或容器取数核对。",
+      "durationMs": 2873,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4096,
+        "input": 17417,
+        "output": 229,
+        "total": 17646
+      },
+      "history": [
+        {
+          "feedback": [],
+          "omitted": [
+            {
+              "ref": {
+                "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+                "revision": 1,
+                "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+              },
+              "reason": "disabled"
+            }
+          ],
+          "preparedAt": "2026-10-23T08:48:04.817012Z",
+          "reasons": null,
+          "requestId": "5254d6a761c191dfd6b08ffe271d1d08",
+          "selected": [],
+          "status": "prepared",
+          "turnId": "cfa8394a559a6e437e63eacbb13bafe9"
+        }
+      ],
+      "pendingApprovals": 0,
+      "cardTypes": [
+        "thinking",
+        "message"
+      ]
+    }
+  },
+  "reportRef": {
+    "assetId": "dd4e52783bdf3d6189efb5187636d43e",
+    "revision": 2,
+    "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+  },
+  "methodRef": {
+    "assetId": "0d7108176cd165ffd5114e9ee7cba0e1",
+    "revision": 2,
+    "contentHash": "d2ba310689c2bd2e104d5fd6e01034a0cf39647823cafda78d15c850def9efe4"
+  },
+  "globalRef": {
+    "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+    "revision": 1,
+    "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+  },
+  "helperValidation": {
+    "status": "completed",
+    "sessionId": "904e8d3d262e4af4d1ad1e24c2271d9e",
+    "priorRootTurnId": "cfa8394a559a6e437e63eacbb13bafe9",
+    "rootTurnId": "eafc414f51fd754d2de56539824396bf",
+    "answer": "已核对",
+    "usage": {
+      "inputKnown": true,
+      "outputKnown": true,
+      "known": true,
+      "cachedInput": 8064,
+      "input": 35220,
+      "output": 232,
+      "total": 35452
+    }
+  },
+  "recordedAt": "2026-10-23T08:54:30.390052+00:00",
+  "mode": "signed_fixed_Dev_HTTP_ADK_plus_native_UI",
+  "modelReasoningEffort": "low",
+  "functionalChecks": {
+    "S1_background_candidate": true,
+    "S2_review_without_adoption": true,
+    "S2_exact_adoption": true,
+    "S3_user_asset_reused": true,
+    "S3_private_lineage_denied": true,
+    "S4_relevant_selection": true,
+    "S4_unrelated_omitted": true,
+    "S5_current_request_priority": true,
+    "S5_project_suspend": true,
+    "all_turns_completed": true,
+    "no_tool_cards": true,
+    "no_online_correction_cards": true,
+    "helper_waits_for_new_root": true,
+    "one_manifest_per_scenario_turn": true
+  },
+  "functionalConclusion": "passed",
+  "answerQualityConclusion": "not_all_correct",
+  "generalBenefit": "inconclusive",
+  "qualityFindings": [
+    {
+      "trial": "cross_project",
+      "observed": "193 successes out of 200, but also says 93% success",
+      "expected": "96.5% success",
+      "status": "retained_unfixed_model_output",
+      "rerun": false
+    }
+  ],
+  "limitations": [
+    "10 constructed scenario turns plus 1 harness verification; not a field study or statistical proof.",
+    "Method-like source was classified as report_guidance; conditional relevance was verified, not domain_procedure model/tool invalidation.",
+    "Natural-language preconditions and arbitrary semantic correctness are not host-verified.",
+    "Same-name provider weights and monetary cost unavailable.",
+    "Initial correction capture raced its queued message; recaptured the actual new root without dispatching it again."
+  ],
+  "requestCounts": {
+    "scenarioMain": 10,
+    "helperMain": 1,
+    "background": 2,
+    "total": 13,
+    "mainKnownTokens": 195552,
+    "backgroundKnownTokens": 1936,
+    "totalKnownTokens": 197488
+  },
+  "events": {
+    "inspect_A": {
+      "sources": {
+        "items": [
+          {
+            "availability": "available",
+            "contentHash": "c23f231c54b72b077992276837ff903a021ff0dfd719354018015112a13ce603",
+            "createdAt": "2026-10-23T08:47:11.28637Z",
+            "evidence": [],
+            "id": "0c9b87f48a36d3a3ad824e6bd9285420",
+            "kind": "task_outcome",
+            "outcome": "completed",
+            "profile": "core",
+            "sessionId": "b232083b98041b700461e54bed679a6b",
+            "summary": "Completed host turn reference",
+            "turnId": "2a226cd5a28c0e00e8702c54c9a61960",
+            "userText": "请记住一条维护报告方法：只有 traffic_drained=true 时，只能说明流量已摘除，不能推断维护完成或业务恢复。此时建议表述为“等待维护完成”，并注明“未验证恢复”。这是一条待审核的方法建议，不是已验证的成功经验。不调用工具或写入项目记忆。"
+          },
+          {
+            "availability": "available",
+            "contentHash": "bbad8589b67ee28ca529eb84dd01f254688e41da477f34430032a16ea31d6aa8",
+            "createdAt": "2026-10-23T08:44:01.29112Z",
+            "evidence": [],
+            "id": "ac7a1096611bf49a8dc7a04f13b17ac1",
+            "kind": "task_outcome",
+            "outcome": "completed",
+            "profile": "core",
+            "sessionId": "aa39935bba1c0154a194f088e8c72756",
+            "summary": "Completed host turn reference",
+            "turnId": "2d82398e71dd4aa522d09ecd781ec049",
+            "userText": "纠正一下：以后我的巡检简报固定使用三个标题：“观察：”“判断：”“待核实：”。观察只写已有事实，判断注明不确定性，待核实列出缺少的证据。这是一条报告偏好，不要调用工具或写入项目记忆。"
+          }
+        ],
+        "nextCursor": ""
+      },
+      "jobs": {
+        "backgroundStatus": "",
+        "budget": {
+          "requests": 2,
+          "resetsAt": "2026-10-24T00:00:00Z",
+          "tokens": 1936
+        },
+        "items": [
+          {
+            "assetId": "0d7108176cd165ffd5114e9ee7cba0e1",
+            "attempts": 1,
+            "createdAt": "2026-10-23T08:47:11.288259Z",
+            "dispatchState": "complete",
+            "errorCode": "",
+            "id": "afa774a72b3671876eec5fafe9fbf202",
+            "result": {
+              "schemaVersion": 1,
+              "candidate": {
+                "title": "维护报告：仅流量摘除时标注“未验证恢复”",
+                "kind": "report_guidance",
+                "body": "当维护报告中的唯一证据是 traffic_drained=true 时，只说明流量已摘除；不要推断维护已完成或业务已恢复。此时使用“等待维护完成”并注明“未验证恢复”，除非有维护完成、健康检查或业务验证的独立证据。",
+                "reason": "用户在一条纠正性任务中明确要求记住这条报告方法，并强调它是待审核的方法建议、不是已验证的成功经验；来源未提供工具证据或验证结果，因此正文采用条件式表述。",
+                "sourceIds": [
+                  "0c9b87f48a36d3a3ad824e6bd9285420"
+                ]
+              }
+            },
+            "revision": 1,
+            "runStatus": "succeeded",
+            "runtimeId": "strategy_afa774a72b3671876eec5fafe9fbf202",
+            "sourceIds": [
+              "0c9b87f48a36d3a3ad824e6bd9285420"
+            ],
+            "status": "succeeded",
+            "updatedAt": "2026-10-23T08:47:13.394657Z",
+            "usage": {
+              "budgetVersion": "learning-v1",
+              "cachedInput": 128,
+              "input": 559,
+              "inputKnown": true,
+              "known": true,
+              "output": 253,
+              "outputKnown": true,
+              "reservedTokens": 4458,
+              "tokensCharged": 812,
+              "total": 812
+            }
+          },
+          {
+            "assetId": "dd4e52783bdf3d6189efb5187636d43e",
+            "attempts": 1,
+            "createdAt": "2026-10-23T08:44:01.293766Z",
+            "dispatchState": "complete",
+            "errorCode": "",
+            "id": "2bfdc30ea77f85fd17849afc9b3f7a33",
+            "result": {
+              "schemaVersion": 1,
+              "candidate": {
+                "title": "巡检简报固定使用「观察／判断／待核实」三标题",
+                "kind": "report_guidance",
+                "body": "生成巡检简报时，固定使用「观察：」「判断：」「待核实：」三个标题：观察只写已有事实，判断须注明不确定性，待核实列出缺少的证据。",
+                "reason": "用户在一条带纠正标记的完成回合中明确、具体地陈述了该报告格式偏好，并说明各标题的写法要求，具备可复用性。限制：仅单一来源，未调用工具或写入项目记忆，也未经验证；适用范围限于巡检简报格式，不涉及其他报告或项目事实。",
+                "sourceIds": [
+                  "ac7a1096611bf49a8dc7a04f13b17ac1"
+                ]
+              }
+            },
+            "revision": 1,
+            "runStatus": "succeeded",
+            "runtimeId": "strategy_2bfdc30ea77f85fd17849afc9b3f7a33",
+            "sourceIds": [
+              "ac7a1096611bf49a8dc7a04f13b17ac1"
+            ],
+            "status": "succeeded",
+            "updatedAt": "2026-10-23T08:44:04.912096Z",
+            "usage": {
+              "budgetVersion": "learning-v1",
+              "cachedInput": 128,
+              "input": 609,
+              "inputKnown": true,
+              "known": true,
+              "output": 515,
+              "outputKnown": true,
+              "reservedTokens": 4683,
+              "tokensCharged": 1124,
+              "total": 1124
+            }
+          }
+        ],
+        "limits": {
+          "version": "learning-v1",
+          "maxInputBytes": 8192,
+          "maxOutputTokens": 2048,
+          "deadlineSeconds": 30,
+          "maxDailyRequests": 12,
+          "maxDailyTokens": 61440,
+          "maxQueueAgeSeconds": 172800,
+          "maxQueued": 100,
+          "maxProjectQueued": 20
+        },
+        "nextCursor": ""
+      },
+      "assets": {
+        "items": [
+          {
+            "id": "0d7108176cd165ffd5114e9ee7cba0e1",
+            "title": "维护报告：仅流量摘除时标注“未验证恢复”",
+            "scope": {
+              "kind": "project",
+              "projectId": "83f6b12f7bcc76a6439ed6c32fb32f59"
+            },
+            "kind": "report_guidance",
+            "revision": 1,
+            "deleted": false,
+            "reviewStatus": "pending"
+          },
+          {
+            "id": "dd4e52783bdf3d6189efb5187636d43e",
+            "title": "巡检简报固定使用「观察／判断／待核实」三标题",
+            "scope": {
+              "kind": "project",
+              "projectId": "83f6b12f7bcc76a6439ed6c32fb32f59"
+            },
+            "kind": "report_guidance",
+            "revision": 2,
+            "deleted": false,
+            "reviewStatus": "accepted"
+          }
+        ],
+        "nextCursor": ""
+      }
+    },
+    "report_candidate": {
+      "job": {
+        "assetId": "dd4e52783bdf3d6189efb5187636d43e",
+        "attempts": 1,
+        "createdAt": "2026-10-23T08:44:01.293766Z",
+        "dispatchState": "complete",
+        "errorCode": "",
+        "id": "2bfdc30ea77f85fd17849afc9b3f7a33",
+        "result": {
+          "schemaVersion": 1,
+          "candidate": {
+            "title": "巡检简报固定使用「观察／判断／待核实」三标题",
+            "kind": "report_guidance",
+            "body": "生成巡检简报时，固定使用「观察：」「判断：」「待核实：」三个标题：观察只写已有事实，判断须注明不确定性，待核实列出缺少的证据。",
+            "reason": "用户在一条带纠正标记的完成回合中明确、具体地陈述了该报告格式偏好，并说明各标题的写法要求，具备可复用性。限制：仅单一来源，未调用工具或写入项目记忆，也未经验证；适用范围限于巡检简报格式，不涉及其他报告或项目事实。",
+            "sourceIds": [
+              "ac7a1096611bf49a8dc7a04f13b17ac1"
+            ]
+          }
+        },
+        "revision": 1,
+        "runStatus": "succeeded",
+        "runtimeId": "strategy_2bfdc30ea77f85fd17849afc9b3f7a33",
+        "sourceIds": [
+          "ac7a1096611bf49a8dc7a04f13b17ac1"
+        ],
+        "status": "succeeded",
+        "updatedAt": "2026-10-23T08:44:04.912096Z",
+        "usage": {
+          "budgetVersion": "learning-v1",
+          "cachedInput": 128,
+          "input": 609,
+          "inputKnown": true,
+          "known": true,
+          "output": 515,
+          "outputKnown": true,
+          "reservedTokens": 4683,
+          "tokensCharged": 1124,
+          "total": 1124
+        }
+      },
+      "revision": {
+        "assessment": {
+          "conditions": "",
+          "evidence": "",
+          "limitations": ""
+        },
+        "asset": {
+          "id": "dd4e52783bdf3d6189efb5187636d43e",
+          "title": "巡检简报固定使用「观察／判断／待核实」三标题",
+          "scope": {
+            "kind": "project",
+            "projectId": "83f6b12f7bcc76a6439ed6c32fb32f59"
+          },
+          "kind": "report_guidance",
+          "revision": 1,
+          "deleted": false,
+          "reviewStatus": "accepted"
+        },
+        "available": true,
+        "reuse": {
+          "keywords": [],
+          "general": true,
+          "validUntil": "",
+          "needsReview": false
+        },
+        "reuseStatus": "",
+        "review": {
+          "decision": "accepted",
+          "decisionRevision": 1,
+          "reasonCode": "reviewed"
+        },
+        "skillSources": [],
+        "sourcesAvailable": true,
+        "value": {
+          "ref": {
+            "assetId": "dd4e52783bdf3d6189efb5187636d43e",
+            "revision": 1,
+            "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+          },
+          "parentRevision": 0,
+          "kind": "report_guidance",
+          "body": "生成巡检简报时，固定使用「观察：」「判断：」「待核实：」三个标题：观察只写已有事实，判断须注明不确定性，待核实列出缺少的证据。",
+          "applicability": {
+            "profiles": [
+              "core"
+            ]
+          },
+          "verification": "single_observation",
+          "sourceIds": [
+            "ac7a1096611bf49a8dc7a04f13b17ac1"
+          ]
+        }
+      },
+      "lineage": {
+        "nodes": [
+          {
+            "aggregateId": "dd4e52783bdf3d6189efb5187636d43e",
+            "createdAt": "2026-10-23T08:44:04.909996Z",
+            "id": "revision:dd4e52783bdf3d6189efb5187636d43e:1",
+            "kind": "asset_revision",
+            "revision": 1,
+            "scopeKey": "project:83f6b12f7bcc76a6439ed6c32fb32f59",
+            "sourceId": null
+          },
+          {
+            "aggregateId": "",
+            "availability": "available",
+            "contentHash": "bbad8589b67ee28ca529eb84dd01f254688e41da477f34430032a16ea31d6aa8",
+            "createdAt": "2026-10-23T08:44:01.291511Z",
+            "id": "source:ac7a1096611bf49a8dc7a04f13b17ac1",
+            "kind": "task",
+            "revision": 0,
+            "scopeKey": "project:83f6b12f7bcc76a6439ed6c32fb32f59",
+            "sourceId": "ac7a1096611bf49a8dc7a04f13b17ac1",
+            "sourceKind": "task_outcome",
+            "summary": "Completed host turn reference"
+          }
+        ],
+        "edges": [
+          {
+            "actor": "local",
+            "aggregateId": "dd4e52783bdf3d6189efb5187636d43e",
+            "createdAt": "2026-10-23T08:44:04.910134Z",
+            "fromId": "revision:dd4e52783bdf3d6189efb5187636d43e:1",
+            "id": 8,
+            "relation": "derived_from",
+            "toId": "source:ac7a1096611bf49a8dc7a04f13b17ac1"
+          }
+        ],
+        "nextCursor": 8,
+        "redacted": false,
+        "hasMore": false
+      }
+    },
+    "report_confirmed": {
+      "assessment": {
+        "conditions": "用于巡检简报报告偏好",
+        "evidence": "本次 Dev 明确纠正来源；未经独立效果验证。",
+        "limitations": "不证明业务恢复，不授权工具操作。"
+      },
+      "asset": {
+        "id": "dd4e52783bdf3d6189efb5187636d43e",
+        "title": "巡检简报固定使用「观察／判断／待核实」三标题",
+        "scope": {
+          "kind": "project",
+          "projectId": "83f6b12f7bcc76a6439ed6c32fb32f59"
+        },
+        "kind": "report_guidance",
+        "revision": 2,
+        "deleted": false,
+        "reviewStatus": "accepted"
+      },
+      "available": true,
+      "reuse": {
+        "keywords": [
+          "巡检简报"
+        ],
+        "general": false,
+        "validUntil": "",
+        "needsReview": false
+      },
+      "reuseStatus": "",
+      "review": {
+        "decision": "accepted",
+        "decisionRevision": 0,
+        "reasonCode": ""
+      },
+      "skillSources": [],
+      "sourcesAvailable": true,
+      "value": {
+        "ref": {
+          "assetId": "dd4e52783bdf3d6189efb5187636d43e",
+          "revision": 2,
+          "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+        },
+        "parentRevision": 1,
+        "kind": "report_guidance",
+        "body": "生成巡检简报时，固定使用「观察：」「判断：」「待核实：」三个标题：观察只写已有事实，判断须注明不确定性，待核实列出缺少的证据。",
+        "applicability": {
+          "profiles": [
+            "core"
+          ],
+          "resourceKinds": [
+            "local"
+          ]
+        },
+        "verification": "user_confirmed",
+        "sourceIds": [
+          "925eb4aaf1270d0b711fa4203fdc34ea",
+          "ac7a1096611bf49a8dc7a04f13b17ac1"
+        ]
+      }
+    },
+    "reportBinding": {
+      "binding": {
+        "assetId": "dd4e52783bdf3d6189efb5187636d43e",
+        "scope": {
+          "kind": "project",
+          "projectId": "83f6b12f7bcc76a6439ed6c32fb32f59"
+        },
+        "revision": 2,
+        "bindingRevision": 1,
+        "enabled": true,
+        "priority": 0,
+        "exclusionGroup": ""
+      }
+    },
+    "globalBeforeAdoption": {
+      "revision": {
+        "assessment": {
+          "conditions": "用于巡检简报报告偏好",
+          "evidence": "本次 Dev 明确纠正来源；未经独立效果验证。",
+          "limitations": "不证明业务恢复，不授权工具操作。"
+        },
+        "asset": {
+          "id": "1a7fdd2a63860324faa9793685d62b7a",
+          "title": "巡检简报固定使用「观察／判断／待核实」三标题",
+          "scope": {
+            "kind": "user"
+          },
+          "kind": "report_guidance",
+          "revision": 1,
+          "deleted": false,
+          "reviewStatus": "accepted"
+        },
+        "available": true,
+        "reuse": {
+          "keywords": [
+            "巡检简报"
+          ],
+          "general": false,
+          "validUntil": "",
+          "needsReview": false
+        },
+        "reuseStatus": "",
+        "review": {
+          "decision": "accepted",
+          "decisionRevision": 0,
+          "reasonCode": ""
+        },
+        "skillSources": [],
+        "sourcesAvailable": true,
+        "value": {
+          "ref": {
+            "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+            "revision": 1,
+            "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+          },
+          "parentRevision": 0,
+          "kind": "report_guidance",
+          "body": "生成巡检简报时，固定使用「观察：」「判断：」「待核实：」三个标题：观察只写已有事实，判断须注明不确定性，待核实列出缺少的证据。",
+          "applicability": {
+            "profiles": [
+              "core"
+            ],
+            "resourceKinds": [
+              "local"
+            ]
+          },
+          "verification": "user_confirmed",
+          "sourceIds": [
+            "66d533b08e6f1a2bbe29cd74cbd41a52"
+          ]
+        }
+      },
+      "binding": {
+        "binding": null
+      }
+    },
+    "globalAfterAdoption": {
+      "binding": {
+        "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+        "scope": {
+          "kind": "user"
+        },
+        "revision": 1,
+        "bindingRevision": 1,
+        "enabled": true,
+        "priority": 0,
+        "exclusionGroup": ""
+      }
+    },
+    "crossProjectPrivateLineageStatus": 404,
+    "globalViewFromB": {
+      "assessment": {
+        "conditions": "用于巡检简报报告偏好",
+        "evidence": "本次 Dev 明确纠正来源；未经独立效果验证。",
+        "limitations": "不证明业务恢复，不授权工具操作。"
+      },
+      "asset": {
+        "id": "1a7fdd2a63860324faa9793685d62b7a",
+        "title": "巡检简报固定使用「观察／判断／待核实」三标题",
+        "scope": {
+          "kind": "user"
+        },
+        "kind": "report_guidance",
+        "revision": 1,
+        "deleted": false,
+        "reviewStatus": "accepted"
+      },
+      "available": true,
+      "reuse": {
+        "keywords": [
+          "巡检简报"
+        ],
+        "general": false,
+        "validUntil": "",
+        "needsReview": false
+      },
+      "reuseStatus": "",
+      "review": {
+        "decision": "accepted",
+        "decisionRevision": 0,
+        "reasonCode": ""
+      },
+      "skillSources": [],
+      "sourcesAvailable": true,
+      "value": {
+        "ref": {
+          "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+          "revision": 1,
+          "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+        },
+        "parentRevision": 0,
+        "kind": "report_guidance",
+        "body": "生成巡检简报时，固定使用「观察：」「判断：」「待核实：」三个标题：观察只写已有事实，判断须注明不确定性，待核实列出缺少的证据。",
+        "applicability": {
+          "profiles": [
+            "core"
+          ],
+          "resourceKinds": [
+            "local"
+          ]
+        },
+        "verification": "user_confirmed",
+        "sourceIds": [
+          "66d533b08e6f1a2bbe29cd74cbd41a52"
+        ]
+      }
+    },
+    "method_candidate": {
+      "job": {
+        "assetId": "0d7108176cd165ffd5114e9ee7cba0e1",
+        "attempts": 1,
+        "createdAt": "2026-10-23T08:47:11.288259Z",
+        "dispatchState": "complete",
+        "errorCode": "",
+        "id": "afa774a72b3671876eec5fafe9fbf202",
+        "result": {
+          "schemaVersion": 1,
+          "candidate": {
+            "title": "维护报告：仅流量摘除时标注“未验证恢复”",
+            "kind": "report_guidance",
+            "body": "当维护报告中的唯一证据是 traffic_drained=true 时，只说明流量已摘除；不要推断维护已完成或业务已恢复。此时使用“等待维护完成”并注明“未验证恢复”，除非有维护完成、健康检查或业务验证的独立证据。",
+            "reason": "用户在一条纠正性任务中明确要求记住这条报告方法，并强调它是待审核的方法建议、不是已验证的成功经验；来源未提供工具证据或验证结果，因此正文采用条件式表述。",
+            "sourceIds": [
+              "0c9b87f48a36d3a3ad824e6bd9285420"
+            ]
+          }
+        },
+        "revision": 1,
+        "runStatus": "succeeded",
+        "runtimeId": "strategy_afa774a72b3671876eec5fafe9fbf202",
+        "sourceIds": [
+          "0c9b87f48a36d3a3ad824e6bd9285420"
+        ],
+        "status": "succeeded",
+        "updatedAt": "2026-10-23T08:47:13.394657Z",
+        "usage": {
+          "budgetVersion": "learning-v1",
+          "cachedInput": 128,
+          "input": 559,
+          "inputKnown": true,
+          "known": true,
+          "output": 253,
+          "outputKnown": true,
+          "reservedTokens": 4458,
+          "tokensCharged": 812,
+          "total": 812
+        }
+      },
+      "revision": {
+        "assessment": {
+          "conditions": "",
+          "evidence": "",
+          "limitations": ""
+        },
+        "asset": {
+          "id": "0d7108176cd165ffd5114e9ee7cba0e1",
+          "title": "维护报告：仅流量摘除时标注“未验证恢复”",
+          "scope": {
+            "kind": "project",
+            "projectId": "83f6b12f7bcc76a6439ed6c32fb32f59"
+          },
+          "kind": "report_guidance",
+          "revision": 1,
+          "deleted": false,
+          "reviewStatus": "pending"
+        },
+        "available": true,
+        "reuse": {
+          "keywords": [],
+          "general": true,
+          "validUntil": "",
+          "needsReview": false
+        },
+        "reuseStatus": "",
+        "review": {
+          "decision": "pending",
+          "decisionRevision": 0,
+          "reasonCode": ""
+        },
+        "skillSources": [],
+        "sourcesAvailable": true,
+        "value": {
+          "ref": {
+            "assetId": "0d7108176cd165ffd5114e9ee7cba0e1",
+            "revision": 1,
+            "contentHash": "d2ba310689c2bd2e104d5fd6e01034a0cf39647823cafda78d15c850def9efe4"
+          },
+          "parentRevision": 0,
+          "kind": "report_guidance",
+          "body": "当维护报告中的唯一证据是 traffic_drained=true 时，只说明流量已摘除；不要推断维护已完成或业务已恢复。此时使用“等待维护完成”并注明“未验证恢复”，除非有维护完成、健康检查或业务验证的独立证据。",
+          "applicability": {
+            "profiles": [
+              "core"
+            ]
+          },
+          "verification": "single_observation",
+          "sourceIds": [
+            "0c9b87f48a36d3a3ad824e6bd9285420"
+          ]
+        }
+      },
+      "lineage": {
+        "nodes": [
+          {
+            "aggregateId": "0d7108176cd165ffd5114e9ee7cba0e1",
+            "createdAt": "2026-10-23T08:47:13.394443Z",
+            "id": "revision:0d7108176cd165ffd5114e9ee7cba0e1:1",
+            "kind": "asset_revision",
+            "revision": 1,
+            "scopeKey": "project:83f6b12f7bcc76a6439ed6c32fb32f59",
+            "sourceId": null
+          },
+          {
+            "aggregateId": "",
+            "availability": "available",
+            "contentHash": "c23f231c54b72b077992276837ff903a021ff0dfd719354018015112a13ce603",
+            "createdAt": "2026-10-23T08:47:11.286444Z",
+            "id": "source:0c9b87f48a36d3a3ad824e6bd9285420",
+            "kind": "task",
+            "revision": 0,
+            "scopeKey": "project:83f6b12f7bcc76a6439ed6c32fb32f59",
+            "sourceId": "0c9b87f48a36d3a3ad824e6bd9285420",
+            "sourceKind": "task_outcome",
+            "summary": "Completed host turn reference"
+          }
+        ],
+        "edges": [
+          {
+            "actor": "local",
+            "aggregateId": "0d7108176cd165ffd5114e9ee7cba0e1",
+            "createdAt": "2026-10-23T08:47:13.394518Z",
+            "fromId": "revision:0d7108176cd165ffd5114e9ee7cba0e1:1",
+            "id": 16,
+            "relation": "derived_from",
+            "toId": "source:0c9b87f48a36d3a3ad824e6bd9285420"
+          }
+        ],
+        "nextCursor": 16,
+        "redacted": false,
+        "hasMore": false
+      }
+    },
+    "method_confirmed": {
+      "assessment": {
+        "conditions": "用于仅限 traffic_drained=true 的维护回放",
+        "evidence": "本次 Dev 明确纠正来源；未经独立效果验证。",
+        "limitations": "不证明业务恢复，不授权工具操作。"
+      },
+      "asset": {
+        "id": "0d7108176cd165ffd5114e9ee7cba0e1",
+        "title": "维护报告：仅流量摘除时标注“未验证恢复”",
+        "scope": {
+          "kind": "project",
+          "projectId": "83f6b12f7bcc76a6439ed6c32fb32f59"
+        },
+        "kind": "report_guidance",
+        "revision": 2,
+        "deleted": false,
+        "reviewStatus": "accepted"
+      },
+      "available": true,
+      "reuse": {
+        "keywords": [
+          "维护回放"
+        ],
+        "general": false,
+        "validUntil": "",
+        "needsReview": false
+      },
+      "reuseStatus": "",
+      "review": {
+        "decision": "accepted",
+        "decisionRevision": 0,
+        "reasonCode": ""
+      },
+      "skillSources": [],
+      "sourcesAvailable": true,
+      "value": {
+        "ref": {
+          "assetId": "0d7108176cd165ffd5114e9ee7cba0e1",
+          "revision": 2,
+          "contentHash": "d2ba310689c2bd2e104d5fd6e01034a0cf39647823cafda78d15c850def9efe4"
+        },
+        "parentRevision": 1,
+        "kind": "report_guidance",
+        "body": "当维护报告中的唯一证据是 traffic_drained=true 时，只说明流量已摘除；不要推断维护已完成或业务已恢复。此时使用“等待维护完成”并注明“未验证恢复”，除非有维护完成、健康检查或业务验证的独立证据。",
+        "applicability": {
+          "profiles": [
+            "core"
+          ],
+          "resourceKinds": [
+            "local"
+          ]
+        },
+        "verification": "user_confirmed",
+        "sourceIds": [
+          "0c9b87f48a36d3a3ad824e6bd9285420",
+          "f00ab4752d726640f8af657d40f113d1"
+        ]
+      }
+    },
+    "feedback": {
+      "items": [
+        {
+          "feedback": [
+            {
+              "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+              "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41",
+              "feedbackRevision": 1,
+              "outcome": "harmful",
+              "revision": 1
+            }
+          ],
+          "omitted": [],
+          "preparedAt": "2026-10-23T08:47:58.816638Z",
+          "reasons": [
+            {
+              "ref": {
+                "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+                "revision": 1,
+                "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+              },
+              "reason": "task_keyword",
+              "score": 1
+            }
+          ],
+          "requestId": "1bc321e26d615505ec2c314abf66269d",
+          "selected": [
+            {
+              "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+              "revision": 1,
+              "contentHash": "91b06ff5964ad453e50bf660a789fa10455b7680ccb026f1afd47f7dc15ced41"
+            }
+          ],
+          "status": "prepared",
+          "turnId": "037aa6f088d90fb7822c9de060991c9e"
+        }
+      ],
+      "nextCursor": ""
+    },
+    "globalBindingAfterBStopped": {
+      "binding": {
+        "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+        "scope": {
+          "kind": "user"
+        },
+        "revision": 1,
+        "bindingRevision": 1,
+        "enabled": true,
+        "priority": 0,
+        "exclusionGroup": ""
+      }
+    },
+    "globalSettingsAfter": {
+      "capabilities": {
+        "apply": true,
+        "correct": true,
+        "correctMode": "isolated_experiments",
+        "learn": true,
+        "onlineConsentVersion": 2,
+        "onlineCorrect": true
+      },
+      "effective": {
+        "scope": {
+          "kind": "user"
+        },
+        "revision": 2,
+        "epoch": 4,
+        "masterEnabled": true,
+        "applyEnabled": true,
+        "learnEnabled": true,
+        "correctEnabled": true,
+        "onlineCorrectEnabled": false,
+        "onlineConsentVersion": 0,
+        "runtimePolicyVersion": 2,
+        "legacyOnlineConsent": {
+          "enabled": true,
+          "settingsRevision": 1,
+          "epoch": 1
+        },
+        "budget": {
+          "extraReadRetries": 2,
+          "maxRevisions": 2,
+          "maxNoProgressRevisions": 2,
+          "maxConcurrentExperiments": 1,
+          "maxRuns": 6,
+          "maxOptimizationRequests": 12,
+          "maxAdditionalTokens": 100000,
+          "maxActiveSeconds": 600,
+          "userWaitTtlSeconds": 86400
+        }
+      },
+      "settings": {
+        "scope": {
+          "kind": "user"
+        },
+        "revision": 2,
+        "epoch": 4,
+        "masterEnabled": true,
+        "applyEnabled": true,
+        "learnEnabled": true,
+        "correctEnabled": true,
+        "onlineCorrectEnabled": false,
+        "onlineConsentVersion": 0,
+        "runtimePolicyVersion": 2,
+        "legacyOnlineConsent": {
+          "enabled": true,
+          "settingsRevision": 1,
+          "epoch": 1
+        },
+        "budget": {
+          "extraReadRetries": 2,
+          "maxRevisions": 2,
+          "maxNoProgressRevisions": 2,
+          "maxConcurrentExperiments": 1,
+          "maxRuns": 6,
+          "maxOptimizationRequests": 12,
+          "maxAdditionalTokens": 100000,
+          "maxActiveSeconds": 600,
+          "userWaitTtlSeconds": 86400
+        }
+      },
+      "source": "saved"
+    },
+    "learningAfter": {
+      "backgroundStatus": "",
+      "budget": {
+        "requests": 2,
+        "resetsAt": "2026-10-24T00:00:00Z",
+        "tokens": 1936
+      },
+      "items": [
+        {
+          "assetId": "0d7108176cd165ffd5114e9ee7cba0e1",
+          "attempts": 1,
+          "createdAt": "2026-10-23T08:47:11.288259Z",
+          "dispatchState": "complete",
+          "errorCode": "",
+          "id": "afa774a72b3671876eec5fafe9fbf202",
+          "result": {
+            "schemaVersion": 1,
+            "candidate": {
+              "title": "维护报告：仅流量摘除时标注“未验证恢复”",
+              "kind": "report_guidance",
+              "body": "当维护报告中的唯一证据是 traffic_drained=true 时，只说明流量已摘除；不要推断维护已完成或业务已恢复。此时使用“等待维护完成”并注明“未验证恢复”，除非有维护完成、健康检查或业务验证的独立证据。",
+              "reason": "用户在一条纠正性任务中明确要求记住这条报告方法，并强调它是待审核的方法建议、不是已验证的成功经验；来源未提供工具证据或验证结果，因此正文采用条件式表述。",
+              "sourceIds": [
+                "0c9b87f48a36d3a3ad824e6bd9285420"
+              ]
+            }
+          },
+          "revision": 1,
+          "runStatus": "succeeded",
+          "runtimeId": "strategy_afa774a72b3671876eec5fafe9fbf202",
+          "sourceIds": [
+            "0c9b87f48a36d3a3ad824e6bd9285420"
+          ],
+          "status": "succeeded",
+          "updatedAt": "2026-10-23T08:47:13.394657Z",
+          "usage": {
+            "budgetVersion": "learning-v1",
+            "cachedInput": 128,
+            "input": 559,
+            "inputKnown": true,
+            "known": true,
+            "output": 253,
+            "outputKnown": true,
+            "reservedTokens": 4458,
+            "tokensCharged": 812,
+            "total": 812
+          }
+        },
+        {
+          "assetId": "dd4e52783bdf3d6189efb5187636d43e",
+          "attempts": 1,
+          "createdAt": "2026-10-23T08:44:01.293766Z",
+          "dispatchState": "complete",
+          "errorCode": "",
+          "id": "2bfdc30ea77f85fd17849afc9b3f7a33",
+          "result": {
+            "schemaVersion": 1,
+            "candidate": {
+              "title": "巡检简报固定使用「观察／判断／待核实」三标题",
+              "kind": "report_guidance",
+              "body": "生成巡检简报时，固定使用「观察：」「判断：」「待核实：」三个标题：观察只写已有事实，判断须注明不确定性，待核实列出缺少的证据。",
+              "reason": "用户在一条带纠正标记的完成回合中明确、具体地陈述了该报告格式偏好，并说明各标题的写法要求，具备可复用性。限制：仅单一来源，未调用工具或写入项目记忆，也未经验证；适用范围限于巡检简报格式，不涉及其他报告或项目事实。",
+              "sourceIds": [
+                "ac7a1096611bf49a8dc7a04f13b17ac1"
+              ]
+            }
+          },
+          "revision": 1,
+          "runStatus": "succeeded",
+          "runtimeId": "strategy_2bfdc30ea77f85fd17849afc9b3f7a33",
+          "sourceIds": [
+            "ac7a1096611bf49a8dc7a04f13b17ac1"
+          ],
+          "status": "succeeded",
+          "updatedAt": "2026-10-23T08:44:04.912096Z",
+          "usage": {
+            "budgetVersion": "learning-v1",
+            "cachedInput": 128,
+            "input": 609,
+            "inputKnown": true,
+            "known": true,
+            "output": 515,
+            "outputKnown": true,
+            "reservedTokens": 4683,
+            "tokensCharged": 1124,
+            "total": 1124
+          }
+        }
+      ],
+      "limits": {
+        "version": "learning-v1",
+        "maxInputBytes": 8192,
+        "maxOutputTokens": 2048,
+        "deadlineSeconds": 30,
+        "maxDailyRequests": 12,
+        "maxDailyTokens": 61440,
+        "maxQueueAgeSeconds": 172800,
+        "maxQueued": 100,
+        "maxProjectQueued": 20
+      },
+      "nextCursor": ""
+    }
+  },
+  "cleanup": {
+    "ownedGlobalBindingDisabled": true,
+    "trialProjectsRetained": true,
+    "trialLearningDisabled": true,
+    "originalSettingsValuesPreserved": true,
+    "globalEpochBefore": 2,
+    "globalEpochAfter": 4,
+    "nativeOriginalSelectionRestored": true,
+    "globalBindingAfterCleanup": {
+      "binding": {
+        "assetId": "1a7fdd2a63860324faa9793685d62b7a",
+        "scope": {
+          "kind": "user"
+        },
+        "revision": 1,
+        "bindingRevision": 2,
+        "enabled": false,
+        "priority": 0,
+        "exclusionGroup": ""
+      }
+    }
+  },
+  "harnessRegression": {
+    "before": "finish accepted previous completed snapshot before queued new turn started",
+    "fix": "send once, wait for different nonempty rootTurnId before reading terminal result",
+    "unitTests": 5,
+    "nativeUI": {
+      "pendingCandidateAndNoAdoption": true,
+      "reviewConfirmation": true,
+      "crossProjectManifestRefAndKeyword": true
+    }
+  },
+  "usageSemantics": "Per-snapshot usage is cumulative within a session; totals use only each distinct session final snapshot, including helper check."
+}

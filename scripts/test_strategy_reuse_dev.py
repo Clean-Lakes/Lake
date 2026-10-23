@@ -75,8 +75,7 @@ def main():
                       'silentCommands': False, 'silentReadSQL': False, 'silentTerminalCreation': False,
                       'blockUnreferencedAssets': True, 'reasoningEffort': 'low', 'reasoningModelId': model['modelId']})
             start = time.monotonic()
-            lake.api('/api/sessions/' + sid + '/messages', 'POST', {'text': question})
-            view = lake.finish(sid)
+            view = lake.send_and_finish(sid, question)
             answer = '\n'.join(c.get('content', '') for c in view.get('cards', []) if c['type'] == 'message')
             history = lake.api(base + '/usage?sessionId=' + sid)['items']
             selected = history[0]['selected'] if history else []
