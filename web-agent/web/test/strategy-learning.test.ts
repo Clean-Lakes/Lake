@@ -25,8 +25,8 @@ test('experiments send precise version, case IDs and paired repetitions without 
  try{await strategyExperimentApi.create('/api/projects/project/strategy',{assetId:'asset',revision:2,contentHash:'exact-hash'},['SL-013'],3,['handwritten']);assert.deepEqual(submitted,{ref:{assetId:'asset',revision:2,contentHash:'exact-hash'},caseIds:['SL-013'],repetitions:3,skillNames:['handwritten']});}finally{globalThis.fetch=oldFetch;}
 });
 
-test('bounded optimization, explicit resume and saving preserve scoped identity without adoption',async()=>{
- const {strategyExperimentApi}=await import('../src/strategyApi');const oldFetch=globalThis.fetch;const seen:{url:string;body:unknown}[]=[];
- globalThis.fetch=async(url,options)=>{seen.push({url:String(url),body:JSON.parse(String(options?.body))});return new Response('{"jobId":"optimizer"}',{status:200});};
- try{const base='/api/projects/project/strategy';const ref={assetId:'asset',revision:1,contentHash:'frozen'};await strategyExperimentApi.optimize(base,ref,['SL-001','SL-014'],['handwritten']);await strategyExperimentApi.resume(base,'job/id');await strategyExperimentApi.saveCandidate(base,'job/id',4);assert.deepEqual(seen,[{url:base+'/experiments',body:{ref,caseIds:['SL-001','SL-014'],repetitions:1,skillNames:['handwritten'],optimization:true}},{url:base+'/experiments/job%2Fid/resume',body:{}},{url:base+'/experiments/job%2Fid/save-candidate',body:{expectedRevision:4}}]);}finally{globalThis.fetch=oldFetch;}
+test('retired optimizer exposes no create, resume or candidate-save client action',async()=>{
+ const {strategyExperimentApi}=await import('../src/strategyApi');
+ for(const key of ['optimize','resume','saveCandidate'])assert.ok(!(key in strategyExperimentApi));
+ assert.equal(typeof strategyExperimentApi.report,'function');assert.equal(typeof strategyExperimentApi.erase,'function');
 });

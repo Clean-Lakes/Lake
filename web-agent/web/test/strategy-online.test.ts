@@ -49,7 +49,7 @@ test('daily controls keep online consent inside a closed experiment section and 
  const view={settings,effective:settings,source:'saved',capabilities:{apply:true,learn:true,correct:true}};
  const html=renderToStaticMarkup(createElement(StrategySwitches,{view,disabled:false,onChange:()=>{},onSave:()=>{}}));
  assert.match(html,/积累待审核候选/);assert.match(html,/旧版试用的在线纠错同意已停用/);
- assert.match(html,/<details><summary>隔离实验/);assert.ok(!html.includes('<details open'));
+ assert.match(html,/<details><summary>在线实验/);assert.ok(!html.includes('<details open'));
  const experiment=html.slice(html.indexOf('<details>'),html.indexOf('</details>'));
  assert.match(experiment,/我同意本版本的在线只读纠错实验/);assert.match(experiment,/提前停止任务/);
 });
