@@ -44,7 +44,7 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
   const state=notices.join(' · ')||(attention?'执行结果待核查':'');
   const currentTool=tools.filter(card=>card.status==='running').at(-1)??tools.at(-1);
   const description=resource?.name??(resourceRow&&currentTool?toolDescription(currentTool):processDescription(cards));
-  const resourceGlyph=resource?.kind?({ssh:"lakeHost",local:"lakeHost",database:"lakeDatabase",redis:"lakeDatabase",docker:"lakeContainer"} as const)[resource.kind]:resource?"lakeHost":undefined;
+  const resourceGlyph=resource?.kind?({ssh:"lakeHost",local:"lakeHost",database:"lakeDatabase",redis:"lakeDatabase",docker:"lakeContainer",kubernetes:"lakeContainer",apisix:"lakeHost",prometheus:"lakeDatabase",victoriametrics:"lakeDatabase"} as const)[resource.kind]:resource?"lakeHost":undefined;
   const blocked=tools.some(card=>!['running','completed','succeeded','success'].includes(card.status));
   const executing=live&&!blocked&&cards.some(card=>card.status==='running');
   const progressing=live&&continuing&&!blocked&&tools.length>0;

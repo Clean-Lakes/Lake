@@ -6,7 +6,7 @@
       );
       CREATE TABLE IF NOT EXISTS resources (
         id TEXT PRIMARY KEY, projectId TEXT NOT NULL REFERENCES projects(id),
-        name TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('local','ssh','database','docker','redis')),
+        name TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('local','ssh','database','docker','redis','kubernetes','apisix','prometheus','victoriametrics')),
         description TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('available','unavailable'))
       );
       CREATE TABLE IF NOT EXISTS sessions (

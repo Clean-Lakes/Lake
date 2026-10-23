@@ -33,7 +33,7 @@ const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\
 const softwarePattern = new RegExp(`(?:${software.map(([name]) => escapePattern(name)).join('|')})(?:[ \\t]+v?\\d+(?:\\.\\d+){0,3}(?:[-+][a-zA-Z0-9]+(?:[.-][a-zA-Z0-9]+)*)?)?`, 'gi');
 const pathPattern = /(?:[a-zA-Z]:[\\/]|\/|\.\.?\/)[^\s<>"'`，。；：、！？（）\[\]{}()]+/gu;
 const filePattern = /[\w.-]+\.(?:conf|config|log|json|ya?ml|toml|ini|env|md|txt|csv|sql|sh|tsx?|jsx?|py|go|html|css|xml)\b/gi;
-const resourceNames = {local: '本机', ssh: 'SSH 主机', database: '数据库', docker: '容器资源', redis: 'Redis 资源'};
+const resourceNames = {local: '本机', ssh: 'SSH 主机', database: '数据库', docker: '容器资源', redis: 'Redis 资源', kubernetes:'Kubernetes 集群', apisix:'APISIX 网关', prometheus:'Prometheus', victoriametrics:'VictoriaMetrics'};
 
 function addAlias(catalog: ObjectCatalog, alias: string, reference: ObjectReference) {
   const key = alias.trim().toLowerCase();

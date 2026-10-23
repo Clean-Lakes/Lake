@@ -217,7 +217,7 @@ func (s *Store) migrate() error {
 	}
 	for _, table := range []string{"resources", "terminals"} {
 		sql := stringOf(s.row("SELECT sql FROM sqlite_master WHERE name=?", table)["sql"])
-		if strings.Contains(sql, "CHECK(kind = 'local')") || strings.Contains(sql, "CHECK(kind IN ('local','ssh'))") || strings.Contains(sql, "CHECK(status IN ('ready','busy','disconnected','unknown'))") {
+		if strings.Contains(sql, "CHECK(kind IN ('local','ssh','database','docker','redis'))") || strings.Contains(sql, "CHECK(kind = 'local')") || strings.Contains(sql, "CHECK(kind IN ('local','ssh'))") || strings.Contains(sql, "CHECK(status IN ('ready','busy','disconnected','unknown'))") {
 			needBackup = true
 		}
 	}
@@ -253,8 +253,8 @@ func (s *Store) migrate() error {
 		old := stringOf(s.row("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", table)["sql"])
 		next := old
 		if table == "resources" {
-			for _, v := range []string{"CHECK(kind = 'local')", "CHECK(kind IN ('local','ssh'))"} {
-				next = strings.ReplaceAll(next, v, "CHECK(kind IN ('local','ssh','database','docker','redis'))")
+			for _, v := range []string{"CHECK(kind = 'local')", "CHECK(kind IN ('local','ssh'))", "CHECK(kind IN ('local','ssh','database','docker','redis'))"} {
+				next = strings.ReplaceAll(next, v, "CHECK(kind IN ('local','ssh','database','docker','redis','kubernetes','apisix','prometheus','victoriametrics'))")
 			}
 		} else {
 			next = strings.ReplaceAll(next, "CHECK(status IN ('ready','busy','disconnected','unknown'))", "CHECK(status IN ('connecting','ready','busy','disconnected','unknown'))")

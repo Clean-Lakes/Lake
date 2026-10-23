@@ -17,7 +17,7 @@ export type Resource = {
   id: string;
   projectId: string;
   name: string;
-  kind: "local" | "ssh" | "database" | "docker" | "redis";
+  kind: "local" | "ssh" | "database" | "docker" | "redis" | "kubernetes" | "apisix" | "prometheus" | "victoriametrics";
   settings?: Record<string, unknown>;
   ssh?: SSHConnection;
   description: string;

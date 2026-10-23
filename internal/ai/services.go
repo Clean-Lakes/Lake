@@ -370,8 +370,12 @@ func (e *Engine) redis(ctx context.Context, c Config, a map[string]any) (any, er
 	}
 	if creds["password"] != "" {
 		auth := []string{"AUTH"}
-		if creds["username"] != "" {
-			auth = append(auth, creds["username"])
+		username := creds["username"]
+		if username == "" {
+			username = str(as.Settings["username"])
+		}
+		if username != "" {
+			auth = append(auth, username)
 		}
 		auth = append(auth, creds["password"])
 		if _, err = send(auth); err != nil {

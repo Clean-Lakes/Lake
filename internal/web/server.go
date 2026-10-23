@@ -577,15 +577,24 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				b.fileResource(parts[2], result, parent)
 				reply(w, 201, result)
 				return
-			} else if set("database docker redis")[kind] {
-				config = validateService(kind, object(data["settings"]))
+			} else if set("database docker redis kubernetes apisix prometheus victoriametrics")[kind] {
+				b.Store.Project(parts[2])
+				var cleanup func()
+				config, cleanup = prepareService(b.Models.Home, kind, object(data["settings"]))
+				created := false
+				defer func() {
+					if !created {
+						cleanup()
+					}
+				}()
+				result := b.Store.CreateResource(parts[2], text(data["name"], "name", 120), kind, config)
+				created = true
+				b.fileResource(parts[2], result, parent)
+				reply(w, 201, result)
+				return
 			} else {
 				fail(400, "Unsupported resource type")
 			}
-			result := b.Store.CreateResource(parts[2], text(data["name"], "name", 120), kind, config)
-			b.fileResource(parts[2], result, parent)
-			reply(w, 201, result)
-			return
 		case "sessions":
 			validateIDs(data["resourceIds"])
 			title := ""
