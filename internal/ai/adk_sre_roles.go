@@ -161,6 +161,7 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 	child.worker = w
 	w.child = child
 	child.modelSlots = e.modelSlots
+	child.ModelActivity = e.ModelActivity
 	child.collectionSlots = e.collectionSlots
 	child.sreRepository = e.sreRepository
 	child.Bridge = func(ctx context.Context, _ string, name string, a map[string]any, approved bool) (any, error) {

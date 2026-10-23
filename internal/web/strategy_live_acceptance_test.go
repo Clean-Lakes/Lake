@@ -108,6 +108,9 @@ func p8Save(t *testing.T, path string, value any, secret string) {
 // identity. Missing usage retains the byte-conservative reservation.
 // HTTPClient is restored; this opted-in test never runs in parallel.
 type p8Meter struct {
+	maxRequests           int
+	maxTokens             int64
+	maxDuration           time.Duration
 	mu                    sync.Mutex
 	base                  http.RoundTripper
 	endpoint              string
@@ -142,7 +145,17 @@ func (m *p8Meter) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 	reserve := int64(len(raw)) + output
 	m.mu.Lock()
-	if r.URL.String() != m.endpoint || m.requests >= 160 || m.jobRequests >= 12 || (m.enforceJobBudget && m.jobTokens+reserve > 100000) || m.tokens+reserve > 2000000 || time.Since(m.started) > 30*time.Minute {
+	requestLimit, tokenLimit, durationLimit := m.maxRequests, m.maxTokens, m.maxDuration
+	if requestLimit == 0 {
+		requestLimit = 160
+	}
+	if tokenLimit == 0 {
+		tokenLimit = 2000000
+	}
+	if durationLimit == 0 {
+		durationLimit = 30 * time.Minute
+	}
+	if r.URL.String() != m.endpoint || m.requests >= requestLimit || m.jobRequests >= 12 || (m.enforceJobBudget && m.jobTokens+reserve > 100000) || m.tokens+reserve > tokenLimit || time.Since(m.started) > durationLimit {
 		m.mu.Unlock()
 		return nil, errors.New("acceptance budget or provider boundary reached")
 	}

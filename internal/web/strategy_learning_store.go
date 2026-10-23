@@ -14,7 +14,7 @@ const strategyExtractorVersion = "proposal-v1"
 // snapshots. Real user input is rechecked against the business session/message.
 func (s *Store) registerStrategyTurn(snapshot ai.StrategyTurnSnapshot) (string, error) {
 	return strategyCall(s, true, func() string {
-		if !ai.ValidStrategySnapshot(snapshot) {
+		if !ai.ValidStrategySnapshot(snapshot) || snapshot.Deferred {
 			strategyFail(400, "invalid_snapshot")
 		}
 		ctx := StrategyContext{ProjectID: snapshot.ProjectID}
@@ -162,14 +162,26 @@ func (s *Store) strategyProposalData(ctx StrategyContext, id, token string) (Obj
 		return data
 	})
 }
-func (s *Store) beginStrategyProposalRun(ctx StrategyContext, id, token, requestHash string) (Object, error) {
+func (s *Store) beginStrategyProposalRun(ctx StrategyContext, id, token, requestHash string, reservations ...int) (Object, error) {
 	return strategyCall(s, true, func() Object {
 		job := s.strategyJob(ctx, id)
 		s.strategyCheckLease(ctx, job, token)
 		if job["dispatchState"] != "none" || s.row("SELECT 1 FROM strategyProposalRuns WHERE jobId=?", id) != nil {
 			strategyFail(409, "reconciliation_required")
 		}
-		s.exec("INSERT INTO strategyProposalRuns(jobId,runtimeId,status,requestHash,leaseHash,startedAt) VALUES(?,?,'running',?,?,?)", id, job["runtimeId"], requestHash, strategy.ContentHash(token), now())
+		limits := strategy.DefaultLearningLimits()
+		reserve := limits.MaxInputBytes + limits.MaxOutputTokens
+		if len(reservations) > 0 {
+			reserve = reservations[0]
+		}
+		if reserve < 1 || reserve > limits.MaxInputBytes+limits.MaxOutputTokens {
+			strategyFail(400, "invalid_learning_reservation")
+		}
+		usage := s.strategyLearningUsage()
+		if integer(usage["requests"]) >= limits.MaxDailyRequests || integer(usage["tokens"])+reserve > limits.MaxDailyTokens {
+			strategyFail(409, "learning_daily_budget")
+		}
+		s.exec("INSERT INTO strategyProposalRuns(jobId,runtimeId,status,requestHash,leaseHash,usageJSON,startedAt) VALUES(?,?,'running',?,?,?,?)", id, job["runtimeId"], requestHash, strategy.ContentHash(token), jsonText(Object{"reservedTokens": reserve, "tokensCharged": reserve, "budgetVersion": limits.Version}), now())
 		s.exec("UPDATE strategyJobs SET status='awaiting_reconciliation',dispatchState='started',updatedAt=? WHERE id=?", now(), id)
 		return s.strategyJob(ctx, id)
 	})
@@ -180,7 +192,7 @@ func (s *Store) saveStrategyProposalRun(ctx StrategyContext, id, token string, r
 		if job == nil {
 			strategyFail(409, "lease_expired")
 		}
-		run := s.row("SELECT status,leaseHash FROM strategyProposalRuns WHERE jobId=?", id)
+		run := s.row("SELECT status,leaseHash,usageJSON FROM strategyProposalRuns WHERE jobId=?", id)
 		if run == nil || run["status"] != "running" || run["leaseHash"] != strategy.ContentHash(token) {
 			strategyFail(409, "settled_dispatch")
 		}
@@ -188,6 +200,9 @@ func (s *Store) saveStrategyProposalRun(ctx StrategyContext, id, token string, r
 		body := ""
 		if code != "" {
 			status = "failed"
+			if (code == "foreground_preempted" || code == "model_error") && !(usage.InputKnown && usage.OutputKnown) {
+				status = "unknown"
+			}
 		} else {
 			if job["status"] == "cancelled" {
 				status, code = "failed", "cancelled"
@@ -195,8 +210,19 @@ func (s *Store) saveStrategyProposalRun(ctx StrategyContext, id, token string, r
 				body = jsonText(result)
 			}
 		}
-		s.exec("UPDATE strategyProposalRuns SET status=?,resultJSON=?,usageJSON=?,errorCode=?,finishedAt=? WHERE jobId=?", status, body, jsonText(usage), code, now(), id)
-		s.exec("UPDATE strategyJobs SET dispatchState='complete',updatedAt=? WHERE id=?", now(), id)
+		budget := strategyDecode[Object](stringOf(run["usageJSON"]))
+		charged := integer(budget["reservedTokens"])
+		if usage.InputKnown && usage.OutputKnown && usage.Input >= 0 && usage.Output >= 0 {
+			charged = usage.Input + usage.Output
+		}
+		settled := strategyDecode[Object](jsonText(usage))
+		settled["reservedTokens"], settled["tokensCharged"], settled["budgetVersion"] = budget["reservedTokens"], charged, budget["budgetVersion"]
+		s.exec("UPDATE strategyProposalRuns SET status=?,resultJSON=?,usageJSON=?,errorCode=?,finishedAt=? WHERE jobId=?", status, body, jsonText(settled), code, now(), id)
+		dispatch := "complete"
+		if status == "unknown" {
+			dispatch = "unknown"
+		}
+		s.exec("UPDATE strategyJobs SET dispatchState=?,updatedAt=? WHERE id=?", dispatch, now(), id)
 		return true
 	})
 }
@@ -213,4 +239,14 @@ func (s *Store) failStrategyProposal(ctx StrategyContext, id, code string) (bool
 		s.strategyEvent(stringOf(job["scopeKey"]), ctx.ProjectID, id, int64(integer(job["attempts"])), "job_failed", Object{"code": code})
 		return true
 	})
+}
+
+// Caller holds the Store transaction/read lock. Historical unknown usage is
+// conservatively charged too, so upgrades and restarts cannot reset the cap.
+func (s *Store) strategyLearningUsage() Object {
+	limits := strategy.DefaultLearningLimits()
+	day := time.Now().UTC()
+	usage := s.row(`SELECT COUNT(*) AS requests,COALESCE(SUM(COALESCE(json_extract(usageJSON,'$.tokensCharged'),json_extract(usageJSON,'$.reservedTokens'),CASE WHEN json_extract(usageJSON,'$.inputKnown')=1 AND json_extract(usageJSON,'$.outputKnown')=1 AND json_extract(usageJSON,'$.input')>=0 AND json_extract(usageJSON,'$.output')>=0 THEN json_extract(usageJSON,'$.input')+json_extract(usageJSON,'$.output') ELSE ? END)),0) AS tokens FROM strategyProposalRuns WHERE startedAt>=?`, limits.MaxInputBytes+limits.MaxOutputTokens, day.Format("2006-01-02"))
+	usage["resetsAt"] = time.Date(day.Year(), day.Month(), day.Day()+1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	return usage
 }

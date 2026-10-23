@@ -98,6 +98,7 @@ export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"model
 };
 
 export const api = {
+ moveSessionNavigation:(project:string,data:{sessionId:string;pinned:boolean;beforeId:string|null;revision:number})=>post<WorkSession>(`/api/projects/${encodeURIComponent(project)}/session-navigation`,data),
  plans:(session:string)=>request<{plans:import('../../shared/contracts').ProposedPlan[]}>(`/api/sessions/${encodeURIComponent(session)}/ai/plans`),
  setConversationMode:(session:string,mode:import('../../shared/contracts').ConversationMode)=>post<import('../../shared/contracts').ConversationModeUpdate>(`/api/sessions/${encodeURIComponent(session)}/ai/mode`,{mode}),
  executePlan:(session:string,planId:string)=>post<SendMessageResult>(`/api/sessions/${encodeURIComponent(session)}/ai/executePlan`,{planId}),

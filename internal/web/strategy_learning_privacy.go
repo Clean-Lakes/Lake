@@ -13,6 +13,7 @@ func (s *Store) strategyEraseSessionSources(sessionID string) {
 	s.exec("UPDATE strategyLearningTurns SET snapshotJSON='' WHERE sessionId=?", sessionID)
 	s.exec("UPDATE strategySourceEvents SET availability='tombstoned',summary='' WHERE sessionId=?", sessionID)
 	s.strategyInvalidateJobs("id IN (SELECT j.jobId FROM strategyJobSources j JOIN strategySourceEvents e ON e.id=j.sourceId WHERE e.sessionId=?)", sessionID)
+	s.pruneStrategyDerivedContent()
 	for _, scope := range scopes {
 		key := stringOf(scope["scopeKey"])
 		generation := s.strategyAdvanceScope(key)

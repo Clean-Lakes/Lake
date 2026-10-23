@@ -152,6 +152,9 @@ func (b *Server) launchMessageLocked(id string, message humanMessage) {
 		fail(409, "本轮仍在结束，请稍后发送")
 	}
 	b.runningMessages[id] = true
+	if b.strategyLearningCancel != nil {
+		b.strategyLearningCancel()
+	}
 	b.workers.Add(1)
 	go b.runTurn(id, message.MessageID, message.Text, message.Images, message.References, message.Files, message.IgnoreProjectMemory)
 }

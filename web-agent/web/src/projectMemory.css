@@ -11,8 +11,8 @@
 .project-memory-editor label { display: block; margin: 10px 0; }
 .project-memory-editor input,.project-memory-editor select,.project-memory-editor textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 5px; }
 .project-memory-jobs { margin-top: 16px; }
-.project-memory-jobs p { font-size: 12px; color: var(--text-secondary); }
-.project-memory-pages { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 8px; font-size: 12px; }
+.project-memory-jobs p { font-size: var(--font-size-ui); color: var(--text-secondary); }
+.project-memory-pages { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 8px; font-size: var(--font-size-ui); }
 .modal.memory-v2-modal { display: flex; flex-direction: column; width: min(960px,calc(100vw - 24px)); max-width: calc(100vw - 24px); height: min(800px,calc(100dvh - 36px)); max-height: calc(100dvh - 36px); overflow: hidden; border-radius: var(--radius-settings-dialog,22px); corner-shape: var(--corner-window); box-sizing: border-box; }
 .memory-v2-modal>.modal-header,.memory-v2-modal>.project-memory-settings,.memory-v2-modal>.memory-v2-toolbar,.memory-v2-modal>.memory-tabs,.memory-v2-modal>.form-error { flex-shrink: 0; }
 .memory-v2-modal input,.memory-v2-modal textarea,.memory-v2-modal button { font-family: inherit; }

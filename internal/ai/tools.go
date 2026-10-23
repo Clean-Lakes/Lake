@@ -212,6 +212,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	s.mu.Lock()
 	sessionID := s.state.View.Session
 	s.mu.Unlock()
+	ctx = context.WithValue(ctx, runtimeSSHSessionKey{}, sessionID)
 	if strings.Contains(" write edit multi_edit append delete ", " "+call.Name+" ") {
 		s.mu.Lock()
 		readHash := s.state.FileReads[fileReadKey(c, a)]
@@ -340,7 +341,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 				if err != nil {
 					card.Status = "failed"
 					var notExecuted *ToolNotExecutedError
-					var blocked *nativeOperationBlockedError
+					var blocked *nativeOperationReplayError
 					if errors.As(err, &notExecuted) || errors.As(err, &blocked) {
 						card.Status = "not_executed"
 					}

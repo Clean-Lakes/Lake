@@ -8,8 +8,8 @@ import (
 func TestStrategyLearningCapturesOnlyOptedInRealSignals(t *testing.T) {
 	for _, mode := range []string{"correction", "failure", "ordinary", "unknown", "explicit_unknown", "not_executed", "tool_cancelled", "unpaired", "off", "worker", "workflow", "role", "sre", "cancelled"} {
 		t.Run(mode, func(t *testing.T) {
-			e := &Engine{}
-			s := &session{state: State{View: View{Session: "session", RootTurnID: "turn", TurnStartedAt: timestamp(), TurnFinishedAt: timestamp()}, History: []Message{}, Checkpoints: []int{0}}}
+			e := &Engine{sessions: map[string]*session{}}
+			s := &session{state: State{View: View{Session: "session", RootTurnID: "turn", TurnStartedAt: timestamp(), TurnFinishedAt: timestamp()}, History: []Message{{Role: "user", HostTurnID: "turn", Content: "fixture"}}, Checkpoints: []int{0}}}
 			c := Config{MemoryProjectID: "project", Profile: "core", StrategyLearnEnabled: true, StrategyGlobalEpoch: 1, StrategyProjectEpoch: 2}
 			input := TurnInput{StrategyMessageID: "message", UserText: "Check current status"}
 			status := "completed"
@@ -54,13 +54,26 @@ func TestStrategyLearningCapturesOnlyOptedInRealSignals(t *testing.T) {
 				}
 				s.state.History = append(s.state.History, Message{Role: "tool", CallID: "call", Name: "read", Content: result})
 			}
+			e.sessions["session"] = s
+			s.state.Config = c
 			e.collectStrategySnapshot(s, c, input, status)
+			wantEvent := mode != "off" && mode != "worker" && mode != "workflow" && mode != "role" && mode != "sre" && mode != "cancelled"
 			want := mode == "correction" || mode == "failure"
-			if (len(s.state.StrategyOutbox) == 1) != want {
+			if (len(s.state.StrategyOutbox) == 1) != wantEvent {
 				t.Fatal("incorrect capture", mode, len(s.state.StrategyOutbox))
 			}
-			if want {
-				snapshot := s.state.StrategyOutbox[0]
+			if wantEvent {
+				event := s.state.StrategyOutbox[0]
+				if !event.Deferred || event.UserText != "" || event.AssistantText != "" || len(event.Evidence) != 0 {
+					t.Fatal("foreground captured full source")
+				}
+				snapshot, eligible, err := e.MaterializeStrategySnapshot(event, input.UserText)
+				if err != nil || eligible != want {
+					t.Fatal("incorrect background signal", mode, eligible, err)
+				}
+				if !eligible {
+					return
+				}
 				if !ValidStrategySnapshot(snapshot) || snapshot.GlobalEpoch != 1 || snapshot.ProjectEpoch != 2 {
 					t.Fatal("invalid sealed snapshot")
 				}

@@ -83,8 +83,12 @@ func (b *Server) processOneExperiment() {
 	id := ""
 	defer func() {
 		if recover() != nil && id != "" {
-			job, _ := strategyCall(b.Store, false, func() Object { return b.Store.row("SELECT leaseToken FROM strategyJobs WHERE id=?", id) })
-			_, _ = b.Store.finishOptimization(active, id, stringOf(job["leaseToken"]), "failed")
+			// Preserve the ordinary snapshot panic cleanup previously shared with
+			// the retired optimizer; a running call is unknown, never replayable.
+			_, _ = strategyCall(b.Store, true, func() bool {
+				b.Store.exec("UPDATE strategyExperimentRuns SET status=CASE WHEN status='running' THEN 'unknown' ELSE 'not_executed' END,finishedAt=? WHERE experimentId=? AND status IN ('running','planned')", now(), id)
+				return true
+			})
 			_, _ = b.Store.failStrategyProposal(active, id, "experiment_internal_error")
 			_, _ = b.Store.ObserveStrategyDispatch(active, id, "strategy_"+id, "complete")
 		}
@@ -96,7 +100,7 @@ func (b *Server) processOneExperiment() {
 		return
 	}
 	projects, err := strategyCall(b.Store, false, func() []Object {
-		return b.Store.rows("SELECT DISTINCT j.accessProjectId FROM strategyJobs j JOIN strategyExperiments e ON e.jobId=j.id WHERE j.status='queued' ORDER BY j.createdAt LIMIT 32")
+		return b.Store.rows("SELECT DISTINCT j.accessProjectId FROM strategyJobs j JOIN strategyExperiments e ON e.jobId=j.id WHERE j.status='queued' AND NOT EXISTS(SELECT 1 FROM strategyOptimizations o WHERE o.jobId=j.id) ORDER BY j.createdAt LIMIT 32")
 	})
 	if err != nil {
 		return
@@ -108,11 +112,6 @@ func (b *Server) processOneExperiment() {
 			continue
 		}
 		active, id = scope, stringOf(job["id"])
-		optimization, _ := strategyCall(b.Store, false, func() bool { return b.Store.row("SELECT jobId FROM strategyOptimizations WHERE jobId=?", id) != nil })
-		if optimization {
-			b.executeOptimization(scope, job)
-			return
-		}
 		b.executeExperiment(scope, job)
 		return
 	}

@@ -16,7 +16,7 @@ func (b *Server) strategyExperimentRoute(w http.ResponseWriter, r *http.Request,
 		strategyFail(404, "project_required")
 	}
 	if suffix == "/fixtures" && r.Method == "GET" {
-		reply(w, 200, Object{"items": strategy.Fixtures(), "mode": "synthetic_snapshot", "arms": []string{"baseline", "assets"}, "correction": false, "boundedOptimization": Object{"supported": true, "runs": 5, "maxRevisions": 2, "onlineCorrection": false}})
+		reply(w, 200, Object{"items": strategy.Fixtures(), "mode": "synthetic_snapshot", "arms": []string{"baseline", "assets"}, "correction": false, "boundedOptimization": Object{"supported": false, "retired": true, "onlineCorrection": false}})
 		return true
 	}
 	if suffix == "/experiments" {
@@ -35,6 +35,9 @@ func (b *Server) strategyExperimentRoute(w http.ResponseWriter, r *http.Request,
 				SkillNames   []string             `json:"skillNames"`
 				Optimization bool                 `json:"optimization,omitempty"`
 			}](r, "ref", "caseIds", "repetitions", "skillNames")
+			if in.Optimization {
+				strategyFail(410, "optimization_retired")
+			}
 			if in.Ref.Validate() != nil || len(in.CaseIDs) < 1 || len(in.CaseIDs) > 3 || len(in.SkillNames) > 4 {
 				strategyFail(400, "invalid_experiment")
 			}
@@ -107,7 +110,7 @@ func (b *Server) strategyExperimentRoute(w http.ResponseWriter, r *http.Request,
 			return true
 		}
 		if r.Method == "POST" && len(parts) == 3 && (parts[2] == "resume" || parts[2] == "save-candidate") {
-			b.strategyOptimizationAction(w, r, ctx, id, key, parts[2])
+			strategyFail(410, "optimization_retired")
 			return true
 		}
 		if r.Method == "DELETE" && len(parts) == 2 {

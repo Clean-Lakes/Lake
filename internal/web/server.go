@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -80,6 +81,13 @@ type Server struct {
 	connectionFailures   map[string]hostConnectionFailure
 	hostKeyMu            sync.Mutex
 	hostKeyPrompts       map[string]*sshTrustPrompt
+
+	strategyHandoffStatus  atomic.Value // safe reason code only; never waits on the worker gate.
+	strategyWorkerMu       sync.Mutex
+	strategyLearningCancel context.CancelFunc // guarded by messageMu; admission never waits for auxiliary work.
+	strategyForeground     int                // foreground model activity, including workflow/role calls.
+	strategyRecoveryLoaded bool               // guarded by strategyWorkerMu
+	strategyOutboxPending  map[string]bool    // only registered durable outboxes, not historical backfill.
 }
 
 func New(ctx context.Context, options Options) (server *Server, err error) {
@@ -163,6 +171,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	server.Engine.SetSRERepository(store)
 	server.Engine.Strategies = server.strategyProvider
 	server.Engine.CorrectionGuard = server.strategyCorrectionGuard
+	server.Engine.ModelActivity = server.strategyForegroundModel
 	store.RecoverSRETasks()
 	if err = server.startScheduler(); err != nil {
 		server.Close()
@@ -174,7 +183,6 @@ func (b *Server) Start() error {
 	if err := b.reconcilePersistedMemoryOutboxes(); err != nil {
 		return err
 	}
-	_ = b.reconcilePersistedStrategyOutboxes()
 	b.Store.RecoverMemoryJobs()
 	_ = b.Store.ReconcileProjectMemoryFiles()
 	l, e := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", b.options.Port))
@@ -680,6 +688,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			b.Terminals.CloseSession(id)
 			b.revokeSessionTerminals(id)
 			b.Store.DeleteSession(id)
+			b.Engine.InvalidateStrategies("")
 			b.resetConnectionFailures(id)
 			w.WriteHeader(204)
 			return

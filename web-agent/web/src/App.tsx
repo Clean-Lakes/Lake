@@ -65,9 +65,11 @@ import { TerminalInputQueue } from "./terminalInputQueue";
 import { TerminalSidePanel } from "./TerminalSidePanel";
 import { reusableResourceTerminal, onlineTerminalOptions, panelTerminalSessions, ResourceTerminalConnections } from "./resourceTerminalState";
 import { ResourceTree } from "./ResourceTree";
-import { resourceSearchNodes } from "./navigationSearch";
+import { WorkspaceSearch } from "./WorkspaceSearch";
 import { ResourceTerminalMenu } from "./ResourceTerminalMenu";
-import { initialSidebarProject, sidebarSessions } from "./sidebarState";
+import { initialSidebarProject } from "./sidebarState";
+import {SessionNavigation} from "./SessionNavigation";
+import {sortSessionNavigation} from "./sessionNavigationModel";
 import { CompositionGuard, isSendKey, parseSendShortcut, sendShortcutStorageKey, type SendShortcut } from "./composerKeyboard";
 import { HostKeyTrust } from "./HostKeyTrust";
 import { conversationActive, sessionConnection, type StreamState } from "./connection";
@@ -156,6 +158,8 @@ function App() {
   }, [snapshot]);
   const [sidebarProjectId, setSidebarProjectId] = useState<string | null>(null);
   const [allSessionGroups, setAllSessionGroups] = useState<string[]>([]);
+  const [sessionNavigationBusy,setSessionNavigationBusy]=useState(false);
+  const sessionNavigationSaving=useRef(false);
   const [closedSessionGroups, setClosedSessionGroups] = useState<string[]>(() => {
     try { const saved: unknown = JSON.parse(localStorage.getItem("lake.closed-session-groups") || "[]"); return Array.isArray(saved) ? saved.filter(id => typeof id === "string") : []; } catch { return []; }
   });
@@ -218,8 +222,7 @@ function App() {
   const [trashOpen,setTrashOpen]=useState(false);
   const [projectContext,setProjectContext]=useState<{project:Project;x:number;y:number}|null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [navigationQuery, setNavigationQuery] = useState("");
-  const navigationInput = useRef<HTMLInputElement>(null);
+  const [navigationSearchOpen, setNavigationSearchOpen] = useState(false);
   const newSessionButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
@@ -227,13 +230,12 @@ function App() {
       if(event.key.toLowerCase()==="n"){
         if(/Mac/.test(navigator.platform)?!event.metaKey:!event.ctrlKey)return;
         const button=newSessionButton.current;
-        if(!button||button.disabled||button.hidden||document.querySelector('[role="dialog"],.modal-scrim'))return;
+        if(!button||button.disabled||button.hidden||document.querySelector('dialog[open],[role="dialog"],.modal-scrim'))return;
         event.preventDefault();button.click();return;
       }
-      if(event.key.toLowerCase()!=="k")return;
+      if(event.key.toLowerCase()!=="k" || document.querySelector('dialog[open],[role="dialog"],.modal-scrim'))return;
       event.preventDefault();
-      if (matchMedia("(max-width:700px)").matches) setMobileMenu(true);
-      requestAnimationFrame(() => navigationInput.current?.focus());
+      setNavigationSearchOpen(true);
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
@@ -794,6 +796,19 @@ function App() {
     setCatalog(data);
     return data;
   }, []);
+  async function moveSessionNavigation(session:WorkSession,pinned:boolean,beforeId:string|null) {
+    if(sessionNavigationSaving.current) throw new Error("正在保存会话顺序，请稍后重试");
+    sessionNavigationSaving.current=true;setSessionNavigationBusy(true);
+    try {
+      await api.moveSessionNavigation(session.projectId,{sessionId:session.id,pinned,beforeId,revision:session.navigationRevision??0});
+      await refreshCatalog();
+      requestAnimationFrame(()=>{
+        const row=[...document.querySelectorAll<HTMLElement>('[data-session-nav-id]')].find(row=>row.dataset.sessionNavId===session.id);
+        row?.querySelector<HTMLButtonElement>('.session-drag-handle')?.focus({preventScroll:true});
+      });
+    } catch(error) { await refreshCatalog().catch(()=>{}); throw error; }
+    finally {sessionNavigationSaving.current=false;setSessionNavigationBusy(false);}
+  }
   useEffect(() => {
     if (!bootstrap?.authenticated) return;
     let disposed=false, syncing=false;
@@ -1288,12 +1303,8 @@ function App() {
 
   const projectList = [...catalog.projects].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const sidebarProject = projectList.find(project => project.id === (sidebarProjectId ?? selectedProjectId)) ?? projectList[0];
-  const navigationSearch = navigationQuery.trim().toLocaleLowerCase();
-  const sidebarSessionsExpanded=!!navigationSearch||!closedSessionGroups.includes(sidebarProject?.id??"");
-  const matchesNavigation = (name: string) => name.toLocaleLowerCase().includes(navigationSearch);
-  const navigationProjects = projectList.filter(project => project.id === sidebarProject?.id && (!selectedTag || catalog.tags?.some(tag=>tag.id===selectedTag&&tag.projectId===project.id)) && (!navigationSearch || matchesNavigation(project.name)
-    || catalog.sessions.some(session => session.projectId === project.id && matchesNavigation(session.title))
-    || catalog.resources.some(resource => resource.projectId === project.id && matchesNavigation(resource.name))));
+  const sidebarSessionsExpanded=!closedSessionGroups.includes(sidebarProject?.id??"");
+  const navigationProjects = projectList.filter(project => project.id === sidebarProject?.id && (!selectedTag || catalog.tags?.some(tag=>tag.id===selectedTag&&tag.projectId===project.id)));
   const itemList = activeSnapshot ? timelineItems(activeSnapshot) : [];
   const terminalDrawer = <section className="terminal-panel-content" aria-label="会话持续终端">
     <div className="terminal-panel-header">
@@ -1339,43 +1350,56 @@ function App() {
     {scheduleProject&&<ScheduledTasks key={scheduleProject.id} project={scheduleProject} onClose={()=>setScheduleProject(null)} onOpenSession={async id=>{await refreshCatalog();setScheduleProject(null);navigate({sessionId:id,resourceId:null});}}/>}
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
+    {navigationSearchOpen && <WorkspaceSearch projects={projectList} sessions={catalog.sessions} resources={catalog.resources} canCreate={!!sidebarProject && connected && !pendingOperation} onClose={() => setNavigationSearchOpen(false)} onNewSession={() => {if(sidebarProject)openSessionDialog(sidebarProject.id);}} onChoose={entry => {
+      setSidebarProjectId(entry.projectId);setSelectedTag(null);setBulkMode(false);setBulkSelected([]);
+      setClosedSessionGroups(items => items.filter(id => id !== entry.projectId));
+      if(entry.kind === "session") navigate({sessionId:entry.id,resourceId:null});
+      else {
+        const context = selectedSession?.projectId === entry.projectId ? selectedSession.id : catalog.sessions.filter(session => session.projectId === entry.projectId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0]?.id ?? null;
+        navigate({sessionId:context,resourceId:entry.id});
+      }
+    }}/>}
     <aside className={`sidebar workspace-navigation ${mobileMenu ? "sidebar-open" : ""} ${bulkMode ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
-      <div className="sidebar-brand-row"><Brand icon={false}/><button className="icon-button mobile-only" title="关闭导航" aria-label="关闭导航" onClick={() => setMobileMenu(false)}><Glyph name="close"/></button></div>
+      <div className="sidebar-brand-row">
+        <Brand icon={false}/>
+        <div className="sidebar-brand-actions">
+          <button type="button" className="icon-button sidebar-search-trigger" aria-label="搜索会话和资源" aria-haspopup="dialog" aria-expanded={navigationSearchOpen} aria-controls={navigationSearchOpen ? "workspace-search-dialog" : undefined} aria-keyshortcuts="Meta+K Control+K" title={`搜索（${/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}）`} onClick={() => setNavigationSearchOpen(true)}><Glyph name="search" size={18}/></button>
+          <button className="icon-button mobile-only" title="关闭导航" aria-label="关闭导航" onClick={() => setMobileMenu(false)}><Glyph name="close"/></button>
+        </div>
+      </div>
       {sidebarProject && <div className="sidebar-project-picker">
         <BulkCheckbox target={{kind:"project",id:sidebarProject.id,projectId:sidebarProject.id,name:sidebarProject.name}} selection={bulkSelection}/>
-        <ProjectSwitcher projects={projectList} value={sidebarProject.id} onChange={id=>{setSidebarProjectId(id);setNavigationQuery("");setSelectedTag(null);setBulkMode(false);setBulkSelected([]);const session=catalog.sessions.filter(item=>item.projectId===id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];navigate({sessionId:session?.id??null,resourceId:null});}}/>
+        <ProjectSwitcher projects={projectList} value={sidebarProject.id} onChange={id=>{setSidebarProjectId(id);setNavigationSearchOpen(false);setSelectedTag(null);setBulkMode(false);setBulkSelected([]);const session=catalog.sessions.filter(item=>item.projectId===id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];navigate({sessionId:session?.id??null,resourceId:null});}}/>
         <button type="button" className="icon-button" aria-label={`管理项目 ${sidebarProject.name}`} title="更多操作" aria-haspopup="menu" disabled={!connected} onClick={event=>{const rect=event.currentTarget.getBoundingClientRect();setProjectContext({project:sidebarProject,x:rect.right,y:rect.bottom});}}><Glyph name="more" size={16}/></button>
       </div>}
-      <label className="navigation-search"><Glyph name="search" size={15}/><input ref={navigationInput} type="search" value={navigationQuery} onChange={event => setNavigationQuery(event.target.value)} placeholder="搜索当前项目…" aria-label="搜索当前项目"/>{navigationQuery ? <button type="button" aria-label="清除搜索" onClick={() => setNavigationQuery("")}><Glyph name="close" size={13}/></button> : <span className="navigation-search-key">{/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}</span>}<span className="navigation-search-divider" aria-hidden="true"/></label>
+      <div className="sidebar-navigation-divider" aria-hidden="true"/>
       {bulkMode && <div className="bulk-navigation-toolbar"><button type="button" onClick={()=>{setBulkMode(false);setBulkSelected([]);}}>完成</button><span>已选 {bulkSelected.length} 项</span><button type="button" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkSelected([])}>清空</button><button type="button" className="danger-text" disabled={!bulkSelected.length || !!pendingOperation} onClick={() => setBulkConfirmation(orderBulkDeletion(bulkSelected, catalog))}>删除所选</button></div>}
       <SidebarScrollArea>
         {sidebarProject&&<div className="nav-heading sidebar-session-heading" hidden={bulkMode}>
-          <button type="button" className="nav-section-toggle" aria-label={`${sidebarSessionsExpanded?"折叠":"展开"}${sidebarProject.name}的会话`} aria-expanded={sidebarSessionsExpanded} aria-controls={navigationProjects.length?`project-sessions-${sidebarProject.id}`:undefined} disabled={!navigationProjects.length} onClick={()=>setClosedSessionGroups(items=>sidebarSessionsExpanded?[...items,sidebarProject.id]:items.filter(id=>id!==sidebarProject.id))}><Glyph name="chevron" size={13} className={sidebarSessionsExpanded?"chevron-open":""}/><span>{navigationSearch?"匹配会话":allSessionGroups.includes(sidebarProject.id)?"全部会话":"最近会话"}</span></button>
+          <button type="button" className="nav-section-toggle" aria-label={`${sidebarSessionsExpanded?"折叠":"展开"}${sidebarProject.name}的会话`} aria-expanded={sidebarSessionsExpanded} aria-controls={navigationProjects.length?`project-sessions-${sidebarProject.id}`:undefined} disabled={!navigationProjects.length} onClick={()=>setClosedSessionGroups(items=>sidebarSessionsExpanded?[...items,sidebarProject.id]:items.filter(id=>id!==sidebarProject.id))}><Glyph name="chevron" size={13} className={sidebarSessionsExpanded?"chevron-open":""}/><span>会话</span></button>
           <button type="button" ref={newSessionButton} className="sidebar-new-session" hidden={bulkMode} disabled={!connected||!!pendingOperation} aria-label="新对话" aria-keyshortcuts="Meta+N Control+N" title={`新对话（${/Mac/.test(navigator.platform)?'⌘ N':'Ctrl N'}）`} onClick={()=>{setClosedSessionGroups(items=>items.filter(id=>id!==sidebarProject.id));openSessionDialog(sidebarProject.id);}}><Glyph name="edit" size={14}/></button>
         </div>}
         {navigationProjects.length ? navigationProjects.map(project => {
-          const sessionsExpanded = !!navigationSearch || !closedSessionGroups.includes(project.id);
-          const projectMatches = matchesNavigation(project.name);
-          const sessions = catalog.sessions.filter(session => session.projectId === project.id && (!selectedTag || session.tags?.some(tag=>tag.id===selectedTag)) && (!navigationSearch || projectMatches || matchesNavigation(session.title))).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+          const sessionsExpanded = !closedSessionGroups.includes(project.id);
+          const sessions = catalog.sessions.filter(session => session.projectId === project.id && (!selectedTag || session.tags?.some(tag=>tag.id===selectedTag)));
           const allSessions = allSessionGroups.includes(project.id);
-          const visibleSessions = sidebarSessions(sessions, route.sessionId, !!navigationSearch || allSessions);
-          const projectResources = catalog.resources.filter(resource => resource.projectId === project.id && (!navigationSearch || projectMatches || matchesNavigation(resource.name)));
+          const projectResources = catalog.resources.filter(resource => resource.projectId === project.id);
           return <div className="project-group" key={project.id}>
             <div className="project-contents">
               {showWorkflows && <button type="button" className="workflow-entry" onClick={() => setWorkflowProject(project)} disabled={!connected}><Glyph name="layers" size={15}/>运维工作流</button>}
-              {bulkMode&&<div className="nav-heading"><button type="button" className="nav-section-toggle" aria-label={`${sessionsExpanded ? "折叠" : "展开"}${project.name}的会话`} aria-expanded={sessionsExpanded} aria-controls={`project-sessions-${project.id}`} onClick={() => setClosedSessionGroups(items => sessionsExpanded ? [...items, project.id] : items.filter(id => id !== project.id))}><Glyph name="chevron" size={13} className={sessionsExpanded ? "chevron-open" : ""}/><span>{navigationSearch?"匹配会话":allSessions?"全部会话":"最近会话"} <small className="session-group-count">{sessions.length}</small></span></button>{bulkMode && <button className="bulk-group-toggle" type="button" disabled={!connected || !!pendingOperation || !sessions.length} aria-label={`全选 ${project.name} 的会话`} onClick={() => toggleBulkGroup(sessions.map(session => ({kind:"session",id:session.id,projectId:project.id,name:session.title})))}>全选</button>}</div>}
-              <div id={`project-sessions-${project.id}`} hidden={!sessionsExpanded}>{sessions.length ? visibleSessions.map(session => <div className={`nav-row-wrap ${bulkMode ? "bulk-session-row" : ""}`} key={session.id} onContextMenu={event => {event.preventDefault(); if (connected) {setProjectContext(null); setSessionContext({session, x: event.clientX, y: event.clientY});}}}>
+              {bulkMode&&<div className="nav-heading"><button type="button" className="nav-section-toggle" aria-label={`${sessionsExpanded ? "折叠" : "展开"}${project.name}的会话`} aria-expanded={sessionsExpanded} aria-controls={`project-sessions-${project.id}`} onClick={() => setClosedSessionGroups(items => sessionsExpanded ? [...items, project.id] : items.filter(id => id !== project.id))}><Glyph name="chevron" size={13} className={sessionsExpanded ? "chevron-open" : ""}/><span>{allSessions?"全部会话":"最近会话"} <small className="session-group-count">{sessions.length}</small></span></button>{bulkMode && <button className="bulk-group-toggle" type="button" disabled={!connected || !!pendingOperation || !sessions.length} aria-label={`全选 ${project.name} 的会话`} onClick={() => toggleBulkGroup(sessions.map(session => ({kind:"session",id:session.id,projectId:project.id,name:session.title})))}>全选</button>}</div>}
+              <div id={`project-sessions-${project.id}`} hidden={!sessionsExpanded}><SessionNavigation sessions={sessions} selectedId={route.sessionId} showAll={allSessions} bulkMode={bulkMode} disabled={!connected||!!pendingOperation||sessionNavigationBusy} onMove={moveSessionNavigation} onShowAll={()=>setAllSessionGroups(items=>allSessions?items.filter(id=>id!==project.id):[...items,project.id])} renderSession={session => <div className={`nav-row-wrap ${bulkMode ? "bulk-session-row" : ""}`} key={session.id} onContextMenu={event => {event.preventDefault(); if (connected) {setProjectContext(null); setSessionContext({session, x: event.clientX, y: event.clientY});}}}>
                 <BulkCheckbox target={{kind:"session",id:session.id,projectId:session.projectId,name:session.title}} selection={bulkSelection}/>
                 <button className={`nav-row session-nav-row ${route.sessionId === session.id && !route.resourceId ? "active" : ""}`} onClick={() => bulkMode ? toggleBulkTarget({kind:"session",id:session.id,projectId:session.projectId,name:session.title}) : navigate({ sessionId: session.id, resourceId: null })} aria-current={route.sessionId === session.id && !route.resourceId ? "page" : undefined}>
                   <Glyph name={session.icon??"chat"} size={16}/><span className="nav-row-text"><strong>{session.title}</strong><SessionListTags tags={session.tags??[]}/><small>{sessionLabels[session.status]}</small></span>{session.status === "investigating" && <span className="session-activity" title="正在回复"><ActivityIndicator/></span>}{session.status === "waiting_approval" && <span className="attention-dot" title="等待确认"/>}
                 </button>
-                <SessionActions session={session} tags={catalog.tags??[]} className="session-more" label={`管理会话 ${session.title}`} disabled={!connected||!!pendingOperation}
+                <SessionActions session={session} tags={catalog.tags??[]} className="session-more" label={`管理会话 ${session.title}`} disabled={!connected||!!pendingOperation||sessionNavigationBusy} onPin={()=>void moveSessionNavigation(session,!session.pinned,sortSessionNavigation(catalog.sessions.filter(s=>s.projectId===session.projectId&&!!s.pinned===!session.pinned))[0]?.id??null).catch(handleFailure)}
                   menuPosition={sessionContext?.session.id===session.id?sessionContext:null} onMenuChange={position=>setSessionContext(position?{session,...position}:null)}
                   view={session.id===selectedSession?.id?(isPlansPage?'plans':conversationMode):''} hasViews={session.id===selectedSession?.id&&!!activeSnapshot?.ai} onView={value=>{if(value==='plans'){openSessionPlans(session.id);return;}if(isPlansPage)navigate({sessionId:session.id,resourceId:null});pauseFollowing();setConversationMode(value as "conversation"|"activity"|"evidence");conversationRef.current?.scrollTo({top:0});setMobileMenu(false);}}
                   onEdit={()=>setEditSession(session)} onDelete={()=>{setDeleteError("");setDeleteTarget(session);}} onRefresh={async()=>{await refreshCatalog();}}
                   onSaved={saved=>{setSnapshot(current=>current&&current.session.id===saved.id?{...current,session:saved}:current);setCatalog(current=>current?{...current,sessions:current.sessions.map(s=>s.id===saved.id?saved:s)}:current);}}/>
-              </div>) : <p className="nav-empty">{navigationSearch ? "没有匹配的会话" : "还没有会话"}</p>}{sessions.length > 5 && <button type="button" className="nav-show-more" aria-expanded={allSessions} onClick={() => setAllSessionGroups(items => allSessions ? items.filter(id => id !== project.id) : [...items, project.id])}>{allSessions ? "收起历史会话" : `查看全部 ${sessions.length} 个会话`}</button>}</div>
-              {<ResourceTree selection={bulkSelection} onSelectAll={() => toggleBulkGroup(bulkCatalogTargets(catalog).filter(target => target.projectId === project.id && ["resource","folder"].includes(target.kind)))} onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={navigationSearch && !projectMatches ? resourceSearchNodes(project.id, catalog.resourceTree ?? [], projectResources) : catalog.resourceTree ?? []} filtering={!!navigationSearch && !projectMatches} disabled={!connected} refresh={refreshCatalog} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={(parentId) => { setSshProject(project.id); setSshParent(parentId); setSshName(""); setSshDraft(emptySSH()); setSshError(""); }} renderResource={resource => {
+              </div>}/></div>
+              {<ResourceTree selection={bulkSelection} onSelectAll={() => toggleBulkGroup(bulkCatalogTargets(catalog).filter(target => target.projectId === project.id && ["resource","folder"].includes(target.kind)))} onDelete={setNavigationDelete} project={project} resources={projectResources} nodes={catalog.resourceTree ?? []} disabled={!connected} refresh={refreshCatalog} onImport={() => { setImportHexhub(false); setImportProject(project); }} onAddResource={(parentId) => { setSshProject(project.id); setSshParent(parentId); setSshName(""); setSshDraft(emptySSH()); setSshError(""); }} renderResource={resource => {
                 const terminalResourceRow=["local","ssh"].includes(resource.kind);
                 const addToConversationDisabled=!sessionConnected || !!pendingOperation || selectedSession?.projectId!==resource.projectId || !mentionable.some(item=>item.id===resource.id);
                 const addToConversationTitle=!selectedSession ? "请先打开一个对话" : selectedSession.projectId!==resource.projectId ? "请先打开此项目的对话" : "添加到对话";
@@ -1403,7 +1427,7 @@ function App() {
               }}/>}
             </div>
           </div>;
-        }) : <div className="sidebar-empty"><Glyph name={navigationSearch ? "search" : "layers"} size={25}/><p>{navigationSearch ? "没有匹配的项目、会话或资源" : "还没有项目"}</p>{navigationSearch ? <button onClick={() => setNavigationQuery("")}>清除搜索</button> : <button onClick={openProjectDialog} disabled={!connected}>创建第一个项目</button>}</div>}
+        }) : <div className="sidebar-empty"><Glyph name="layers" size={25}/><p>还没有项目</p><button onClick={openProjectDialog} disabled={!connected}>创建第一个项目</button></div>}
       </SidebarScrollArea>
       <SidebarUtilities key={sidebarProject?.id} tags={(catalog.tags??[]).filter(tag=>tag.projectId===sidebarProject?.id)} sessions={catalog.sessions} selectedTag={selectedTag} onSelectTag={setSelectedTag} onManageTags={()=>{const project=sidebarProject;if(project)setTagProject(project);else openProjectDialog();}} onSession={id=>navigate({sessionId:id,resourceId:null})} onSettings={()=>void openSettings()} onTrash={()=>setTrashOpen(true)} onSchedules={sidebarProject?()=>setScheduleProject(sidebarProject):undefined} booting={booting} connected={connected} modelConfigured={modelConfigured}/>
 

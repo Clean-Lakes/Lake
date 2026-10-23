@@ -1,7 +1,17 @@
 /* The sole palette for the active Lake workbench, including native and terminal surfaces. */
 :root {
   color-scheme: light;
-  --font-ui: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-size-ui: 14px;
+  --font-size-body: var(--font-size-ui);
+  --font-size-toolbar: 12px;
+  --font-size-badge: 10px;
+  --font-weight-ui: 500;
+  --font-weight-normal: 450;
+  --font-weight-medium: var(--font-weight-ui);
+  --font-weight-semibold: 650;
+  --font-weight-bold: 750;
+  --font-prose: var(--font-ui);
   --status-text-base: var(--text-secondary);
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --background: #fcfcfc;
@@ -11,16 +21,17 @@
   --surface-hover: #eeeeee;
   --surface-selected: #e8e8e8;
   --sidebar: #fafaf9;
-  --foreground: #222222;
-  --text-secondary: #555555;
-  --text-muted: #737373;
-  --text-disabled: #999999;
+  --foreground: #1a1c1f;
+  --text-secondary: var(--text-muted);
+  --text-muted: #8e8f90;
+  --text-disabled: var(--text-muted);
   --border: #e5e5e5;
   --border-strong: #cccccc;
   --primary: #17345c;
   --primary-hover: #102746;
   --on-primary: #ffffff;
   --focus: #5278a6;
+  --focus-outline: var(--focus);
   --selection: #dae6f5;
   --success: #16834b;
   --success-soft: #edf8f1;
@@ -82,6 +93,9 @@
   --border-color: var(--border);
 }
 
+/* Pointer-triggered autofocus stays functional without a keyboard focus ring. */
+:root[data-input-modality="pointer"] { --focus-outline: transparent; }
+
 :root[data-theme="dark"] {
   --reasoning-accent: #4b91ff;
   --reasoning-track: #424246;
@@ -93,10 +107,10 @@
   --surface-hover: #2c2c2c;
   --surface-selected: #333333;
   --sidebar: #141414;
-  --foreground: #eeeeee;
-  --text-secondary: #cccccc;
-  --text-muted: #aaaaaa;
-  --text-disabled: #777777;
+  --foreground: #dfdfdf;
+  --text-secondary: var(--text-muted);
+  --text-muted: rgb(255 255 255 / 50%);
+  --text-disabled: var(--text-muted);
   --border: #333333;
   --border-strong: #505050;
   --primary: #9bbce8;
@@ -174,4 +188,10 @@
 }
 @media(prefers-reduced-transparency:reduce) {
  :root,:root[data-theme="dark"] { --title-glass-background:var(--surface); --title-glass-filter:none; --title-glass-sheen:linear-gradient(transparent,transparent); }
+}
+
+/* Match the desktop reference's premultiplied neutral text colors where supported. */
+@supports (color:color-mix(in oklab,red,transparent)) {
+  :root { --text-secondary:var(--text-muted); --text-muted:#8e8f90; }
+  :root[data-theme="dark"] { --text-secondary:var(--text-muted); --text-muted:color-mix(in oklab,#fff 50%,transparent); }
 }

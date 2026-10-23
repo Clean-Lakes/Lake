@@ -215,6 +215,12 @@ func (s *Store) BindStrategyAsset(ctx StrategyContext, scope strategy.Scope, key
 		}
 		if enabled {
 			view := s.strategyRevisionView(ctx, input.Ref.AssetID, input.Ref.Revision)
+			if view.Review.Decision == "rejected" {
+				strategyFail(409, "review_required")
+			}
+			if view.Review.Decision == "pending" {
+				s.exec("INSERT INTO strategyReviews VALUES(?,?,'accepted',1,'reviewed',?)", input.Ref.AssetID, input.Ref.Revision, now())
+			}
 			if !view.Available || !view.SourcesAvailable {
 				strategyFail(409, "source_unavailable")
 			}
@@ -252,12 +258,15 @@ func (s *Store) DeleteStrategyAsset(ctx StrategyContext, id, key string, expecte
 		s.exec("UPDATE strategyAssets SET title='',deletedAt=? WHERE id=?", now(), id)
 		s.strategyEraseAssetResults(id)
 		s.exec("DELETE FROM strategyRevisionContent WHERE assetId=?", id)
+		s.exec("DELETE FROM strategyAssessments WHERE assetId=?", id)
+		s.exec("DELETE FROM strategyReusePolicies WHERE assetId=?", id)
 		// A manual confirmation's body lives only in this asset's content rows.
 		// Erasing it also removes that source's availability to other pending jobs.
 		s.exec("UPDATE strategySourceEvents SET availability='tombstoned',summary='' WHERE kind='manual_authoring' AND id IN (SELECT sourceId FROM strategyRevisionSources WHERE assetId=?)", id)
 		s.strategyInvalidateJobs("id IN (SELECT j.jobId FROM strategyJobSources j JOIN strategySourceEvents x ON x.id=j.sourceId WHERE x.availability<>'available')")
 		s.exec("UPDATE strategyBindings SET enabled=0,bindingRevision=bindingRevision+1 WHERE assetId=?", id)
 		s.strategyInvalidateJobs("assetId=?", id)
+		s.pruneStrategyDerivedContent()
 		s.strategyEvent(scopeKey, "", id, expected, "asset_deleted", Object{"id": id})
 		result = StrategyMutationResult{AssetID: id, Revision: expected}
 		s.strategySaveReceipt(scopeKey, key, digest, result)
@@ -284,5 +293,8 @@ func (s *Store) strategyArchiveProject(project string) {
 	key := s.strategyEnsureScope(StrategyContext{ProjectID: project}, scope)
 	s.strategyAdvanceScope(key)
 	s.strategyInvalidateJobs("accessProjectId=? OR scopeKey=?", project, key)
+	// Archival is a privacy boundary even if restored later.
+	s.exec("UPDATE strategySourceEvents SET availability='revoked',summary='' WHERE scopeKey=?", key)
+	s.pruneStrategyDerivedContent()
 	s.strategyEvent(key, project, key, s.strategyGeneration(key), "scope_revoked", Object{"projectId": project})
 }

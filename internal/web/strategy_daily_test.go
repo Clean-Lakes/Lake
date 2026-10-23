@@ -132,6 +132,8 @@ func TestStrategyLearningToggleDoesNotCancelTurnUsingAdoptedAsset(t *testing.T) 
 	scope := strategy.Scope{Kind: strategy.ProjectScope, ProjectID: project}
 	enableStrategyFixture(t, b.Store)
 	in := strategyInput("Preserve facts separately from hypotheses.")
+	in.Kind = strategy.ReportGuidance
+	in.Reuse = &strategy.ReusePolicy{General: true}
 	in.Applicability = strategy.Applicability{}
 	created, err := b.Store.CreateStrategyAsset(ctx, scope, "asset", in)
 	if err != nil {

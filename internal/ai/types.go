@@ -86,6 +86,7 @@ type Call struct {
 	Arguments string `json:"arguments"`
 }
 type Message struct {
+	HostTurnID     string            `json:"hostTurnId,omitempty"` // Durable host anchor; never sent to providers.
 	Images         []ImageAttachment `json:"images,omitempty"`
 	NativeProtocol string            `json:"nativeProtocol,omitempty"`
 	NativeModel    string            `json:"nativeModel,omitempty"`

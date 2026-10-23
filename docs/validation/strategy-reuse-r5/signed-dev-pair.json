@@ -1,0 +1,97 @@
+{
+  "sourceCommit": "0478f752558a72cadf23089517524422a7398f96",
+  "backendSHA256": "9c0d573dc458426c4b01a7b914c0598d81192af878039530111c16b01652ca9a",
+  "model": "deepseek-flash",
+  "mode": "running_signed_Dev_HTTP_ADK",
+  "status": "recorded",
+  "requestLimit": 2,
+  "projectId": "43b6482efbdcfcf77dce0163ea072a2c",
+  "onlineCorrection": false,
+  "backgroundLearning": false,
+  "generalBenefit": "inconclusive",
+  "trials": [
+    {
+      "arm": "baseline",
+      "sessionId": "067a46b9ab6718eac48b13e7d0775947",
+      "status": "completed",
+      "durationMs": 2581,
+      "checks": {
+        "completed": true,
+        "onePreparedRequest": true,
+        "selection": true,
+        "factTrace": true,
+        "preferredHeadings": false
+      },
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 512,
+        "input": 17429,
+        "output": 181,
+        "total": 17610
+      },
+      "selected": [],
+      "requestIds": [
+        "52ceaad43638988732fcbac9d1af09d1"
+      ],
+      "answer": "简报（基于只读回放材料，非实时状态，不代表已恢复或当前可用性）\n\nR5-DEMO 的 trace `R5-DEMO-OBS-20261023` 回放显示 20 次请求中有 1 次失败，失败率 5%，其余 19 次正常。数据来自历史回放快照，不含实时指标，也不能据此判断故障已恢复；若需当前状态，需另做实时核查。\n\ntarget：`R5-DEMO`\ntrace：`R5-DEMO-OBS-20261023`\nrequests：20\nfailed：1（5%）"
+    },
+    {
+      "arm": "assets",
+      "sessionId": "9a52a3b5c1214df66780d614ec6359b5",
+      "status": "completed",
+      "durationMs": 1688,
+      "checks": {
+        "completed": true,
+        "onePreparedRequest": true,
+        "selection": true,
+        "factTrace": true,
+        "preferredHeadings": true
+      },
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4096,
+        "input": 17666,
+        "output": 108,
+        "total": 17774
+      },
+      "selected": [
+        {
+          "assetId": "10f01c56a234fe15f62c8ea28d6ff66d",
+          "revision": 1,
+          "contentHash": "8c4fe8e501882360b9f0c0234a8b2c3f320dc8810b9ad8e1c62e262855c39e92"
+        }
+      ],
+      "requestIds": [
+        "45e540a4eb10e0e1c39f706575e4fc8d"
+      ],
+      "answer": "观察：target=R5-DEMO；trace=R5-DEMO-OBS-20261023；requests=20；failed=1。\n\n判断：根据回放资料，共 20 次请求中 1 次失败，失败占比约 5%。\n\n限制：以上内容仅来自只读回放材料，不代表实时状态，也不能说明已恢复；未调用任何工具、未读写文件、未访问网络。"
+    }
+  ],
+  "assetRef": {
+    "assetId": "10f01c56a234fe15f62c8ea28d6ff66d",
+    "revision": 1,
+    "contentHash": "8c4fe8e501882360b9f0c0234a8b2c3f320dc8810b9ad8e1c62e262855c39e92"
+  },
+  "proposalCount": 0,
+  "limitations": [
+    "Two constructed tasks, not independent field evidence or statistical proof.",
+    "Provider version/seed and monetary amount unavailable; no automatic adoption from results."
+  ],
+  "temporaryProjectArchived": true,
+  "nativeThemes": [
+    "light",
+    "dark"
+  ],
+  "nativeWidths": [
+    2560,
+    850
+  ],
+  "originalThemeProjectWindowRestored": true,
+  "oldOptimizerButtonsAbsent": true,
+  "manualPairEnabledWithLearningOff": true,
+  "sharedSelectKeyboardAndClippingChecked": true
+}

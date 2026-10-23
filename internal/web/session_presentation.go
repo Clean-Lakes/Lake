@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS sessionPresentation(sessionId TEXT PRIMARY KEY REFERE
 CREATE TABLE IF NOT EXISTS sessionTags(sessionId TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,tagId TEXT NOT NULL REFERENCES workspaceTags(id) ON DELETE CASCADE,PRIMARY KEY(sessionId,tagId));`
 
 func (s *Store) decorateSession(r Object) {
+	s.decorateSessionNavigation(r)
 	p := s.row("SELECT icon,revision FROM sessionPresentation WHERE sessionId=?", r["id"])
 	r["icon"], r["presentationRevision"] = "chat", 0
 	if p != nil {
@@ -117,6 +118,10 @@ func (s *Store) SetSessionPresentation(id string, data Object) Object {
 
 func (b *Server) presentationRoute(w http.ResponseWriter, r *http.Request, name, method string) bool {
 	p := strings.Split(strings.Trim(name, "/"), "/")
+	if len(p) == 4 && p[0] == "api" && p[1] == "projects" && p[3] == "session-navigation" && method == "POST" {
+		reply(w, 200, b.Store.MoveSessionNavigation(p[2], body(w, r, 8192)))
+		return true
+	}
 	if len(p) == 4 && p[0] == "api" && p[1] == "projects" && p[3] == "tags" && method == "POST" {
 		reply(w, 201, b.Store.CreateWorkspaceTag(p[2], body(w, r, 4096)))
 		return true

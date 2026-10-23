@@ -1,0 +1,19 @@
+{
+  "pullRequest": 75,
+  "date": "2026-10-23",
+  "testedCodeCommit": "1f4968ece5cf88cb4888ad5afc3804c1d8d9818d",
+  "base": "bb7228e39006b2707246ed00c2e5e52182122007",
+  "resolution": "保留 develop 新增策略复用字段样式，同时使用 Dev 统一字体 token。",
+  "checks": [
+    "go test -race ./internal/ai ./internal/web -run Test.*(SessionNavigation|SSH.*Trust|Trust.*SSH|HostTrust|SSHFailure) -count=1: passed",
+    "pnpm --dir web-agent test:frontend: 429 passed",
+    "scripts/build_lake.sh: TypeScript/Vite/signed Go build passed",
+    "go vet ./internal/web ./internal/ai: passed",
+    "python3 scripts/check_adk_runtime_boundary.py: passed"
+  ],
+  "devIntegration": "此前安装并运行的本地集成 a842dd49 包含原 PR head 44c4f580；本次 develop 同步候选完成签名后端构建，未把既有安装描述为本 SHA 的原生重新安装。",
+  "limitations": [
+    "本次未重跑 Windows 原生 UI；没有自动 CI，不据此声称全量测试通过。"
+  ],
+  "authorization": "用户明确要求合并截图中的 PR #75～#79 到 develop；不授权 master 或发布。"
+}

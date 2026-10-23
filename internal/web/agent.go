@@ -344,7 +344,6 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 	}
 	e = b.Engine.ExecuteTurn(turnContext, id, ai.TurnInput{StrategyMessageID: messageID, SRECoordination: sreCoordination, UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
 	if e != nil {
-		_ = b.reconcileStrategyOutboxForSession(id)
 		if b.Context.Err() != nil {
 			return
 		}
@@ -369,7 +368,6 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 	view, e := b.Engine.Snapshot(id)
 	must(e)
 	_ = b.reconcileMemoryOutboxForSession(id)
-	_ = b.reconcileStrategyOutboxForSession(id)
 	for i := len(view.Cards) - 1; i >= 0; i-- {
 		if view.CardsOffset+i < before.TotalCards {
 			break
@@ -423,6 +421,17 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		a, filename := b.loadAttachment(stringOf(b.Store.Session(id)["projectId"]), id, stringOf(args["source_id"]))
 		verifyAttachment(a, filename)
 		return Object{"path": filename, "sha256": a.SHA256, "sizeBytes": a.Size}, nil
+	}
+	if name == "verify_runtime_ssh" {
+		resource := b.hostResource(id, stringOf(args["asset_ref"]))
+		if resource["kind"] != "ssh" {
+			fail(400, "SSH host required")
+		}
+		path := b.Terminals.hostKeyPath(object(resource["ssh"]))
+		if b.Terminals.HostKeyApproval != nil && b.Terminals.KnownHosts == "" {
+			path = b.Terminals.HostKeyApproval(ctx, id, stringOf(resource["id"]))
+		}
+		return Object{"knownHosts": path}, nil
 	}
 	if name == "policy" && stringOf(args["name"]) == "inspect_attachment" {
 		a, _ := b.loadAttachment(stringOf(b.Store.Session(id)["projectId"]), id, stringOf(object(args["arguments"])["source_id"]))
