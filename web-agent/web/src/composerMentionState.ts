@@ -2,7 +2,7 @@ import type {MCPServerConfig,Resource,SkillConfig} from "../../shared/contracts"
 import {referencedExtensions, type MentionKind} from "../../shared/references";
 
 export type MentionOption={id:string;kind:MentionKind;name:string;detail:string;resourceKind?:Resource['kind']};
-const resourceMentionLabels:Record<Resource['kind'],string>={ssh:'SSH 主机',database:'数据库',redis:'Redis',docker:'容器',local:'本机'};
+const resourceMentionLabels:Record<Resource['kind'],string>={ssh:'SSH 主机',database:'数据库',redis:'Redis',docker:'容器',local:'本机',kubernetes:'Kubernetes',apisix:'APISIX',prometheus:'Prometheus',victoriametrics:'VictoriaMetrics'};
 export function mentionTypeLabel(option:MentionOption):string {
  return option.kind==='resource'?(option.resourceKind&&resourceMentionLabels[option.resourceKind]||'资源'):option.kind==='skill'?'Skill':option.kind==='mcp'?'MCP':'专员';
 }

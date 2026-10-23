@@ -1,0 +1,72 @@
+{
+  "title": "资源类型扩充 v1",
+  "date": "2026-10-23",
+  "base": "develop",
+  "testedSourceCommit": "a8961587c2e2376a43ffb660f0559edea1a3e52a",
+  "scope": [
+    "Kubernetes (kubernetes)",
+    "MySQL (database/mysql)",
+    "PostgreSQL (database/postgres)",
+    "Redis (redis)",
+    "APISIX (apisix)",
+    "Prometheus (prometheus)",
+    "VictoriaMetrics (victoriametrics)"
+  ],
+  "behavior": [
+    "添加表单、默认端口、字段白名单与端点校验、目录归属和已有会话资源可见性",
+    "凭据写入当前 Lake Home 的私有文件，资源设置仅保存 credentialRef；失败创建清理新凭据",
+    "旧资源类型 CHECK 约束迁移前备份，保留既有资源和关联，重复启动不重复迁移",
+    "类型详情、资源图标、聊天引用标签和策略适用类型同步扩充"
+  ],
+  "checks": [
+    {
+      "command": "go test -race ./internal/web ./internal/ai -run 'Test(ServiceResource|OriginalPrototypeSchemaMigration|CreateResourceFiles|RedisACL|RedisWire|Strategy.*Reuse)' -count=1",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir web-agent test:frontend",
+      "result": "429 passed on Node 24.19.0"
+    },
+    {
+      "command": "go vet ./internal/web ./internal/ai",
+      "result": "passed"
+    },
+    {
+      "command": "python3 scripts/check_adk_runtime_boundary.py",
+      "result": "passed"
+    },
+    {
+      "command": "scripts/build_lake.sh",
+      "result": "passed: TypeScript, Vite and persistent signed binary build; existing Vite chunk-size warning"
+    },
+    {
+      "command": "codesign --verify --strict bin/lake",
+      "result": "passed"
+    }
+  ],
+  "browser": {
+    "method": "ego-browser against signed bin/lake web",
+    "home": "/tmp/lake-resource-types-v1-home",
+    "origin": "http://localhost:4197",
+    "verified": [
+      "K8s 与 VictoriaMetrics 真实表单保存及重启后资源保留",
+      "MySQL 3306、PostgreSQL 5432、Redis 6379 默认端口",
+      "切换资源类型清空密码/Token 草稿",
+      "下拉框 Escape 保留外层弹窗，第二次 Escape 关闭弹窗",
+      "浅色和深色主题；520×820 窄窗口无水平溢出",
+      "保存后的资源页面不包含合成 Token"
+    ],
+    "screenshots": [
+      "resource-types-v1-light.png",
+      "resource-types-v1-dark-narrow.png"
+    ]
+  },
+  "limitations": [
+    "Kubernetes/APISIX/Prometheus/VictoriaMetrics v1 仅资源登记与会话引用；未新增这些类型的专用连接、查询、操作工具，也未接触真实服务。保存不测试连接；已有 MySQL/PostgreSQL/Redis 服务执行能力沿用。",
+    "K8s 本次提供 API Server、上下文、命名空间和可选 Bearer Token；未提供 kubeconfig、客户端证书上传或自定义 CA。",
+    "全量 go test -race ./internal/web ./internal/ai 和 go test ./internal/web 在同步 develop 前的运行均仅 TestNetworkQueryRunsWithoutRepeatApproval 超过 8 秒等待窗口；该用例单独竞态重跑通过（5.533 秒）。没有修改或放宽该用例；不能将全量套件标为通过。",
+    "scripts/build_lake_desktop.sh --dev --install 被 Dev 来源保护阻止：当前分支不包含已安装 Dev 的 a8a346030e7c 提交。未覆盖或重启该 Dev；原生桌面验收未完成。使用隔离 Home 的签名 Web 运行完成表单检查。"
+  ],
+  "migrationRollback": "回退前备份当前数据；需要旧程序完全恢复时使用 lake-web.before-go-*.sqlite 迁移前快照，并评估迁移后新增数据的保留；不自动删除 secrets 文件。",
+  "release": "未合并 PR、未发布、未操作正式版或正式版数据"
+}
