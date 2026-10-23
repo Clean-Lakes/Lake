@@ -174,6 +174,7 @@ func (e *Engine) RunStrategyVariant(ctx context.Context, in StrategyVariantInput
 	defer child.Shutdown()
 	child.RuntimeDir = filepath.Join(in.Home, "adk")
 	child.modelSlots = e.modelSlots
+	child.ModelActivity = e.ModelActivity
 	child.childModelSlots = e.childModelSlots
 	child.experiment = runtime
 	if in.Asset != nil {
@@ -184,7 +185,10 @@ func (e *Engine) RunStrategyVariant(ctx context.Context, in StrategyVariantInput
 					return strategy.ResolvedSelection{}, err
 				}
 			}
-			return strategy.Resolve([]strategy.Candidate{{Value: asset}}, q, 8192), nil
+			// Isolated paired evaluation explicitly selects this exact asset; daily
+			// task retrieval does not choose whether the B arm receives it.
+			q.TaskText = ""
+			return strategy.Resolve([]strategy.Candidate{{Value: asset}}, q, strategy.MaxAssetPromptBytes), nil
 		}
 	}
 	kind := "local"

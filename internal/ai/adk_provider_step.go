@@ -394,7 +394,7 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 		SchemaVersion: strategy.SchemaVersion, RequestID: uid(), RunID: runID, TurnID: turnID, Round: d.round, RetryOf: retryOf,
 		BuildCommit: commit, BuildDirty: dirty, Profile: profile, Role: c.agentRole,
 		FixedRulesHash: strategy.FragmentLayerHash(fragments, strategy.FixedRules), BuiltinStrategyHash: strategy.FragmentLayerHash(fragments, strategy.BuiltinStrategy), Fragments: fragments,
-		SelectedAssets: selection.Selected, OmittedAssets: selection.Omitted, SkillSnapshots: skills,
+		SelectedAssets: selection.Selected, OmittedAssets: selection.Omitted, SkillSnapshots: skills, AssetSelectionReasons: selection.Reasons,
 		SettingsRevision: selection.SettingsRevision, ProjectSettingsRevision: selection.ProjectSettingsRevision, Epoch: selection.GlobalEpoch, ProjectEpoch: selection.ProjectEpoch,
 		ModelConfigHash: modelHash, ToolCatalogHash: toolsHash, PermissionPolicyVersion: promptPermissionPolicyVersion, PermissionSettingsHash: permissionsHash, TargetScopeHash: scopeHash,
 		InputBudget: strategy.PromptInputBudget{ContextWindow: m.ContextWindow, MaxOutput: m.MaxOutput, MaxSteps: c.MaxSteps, HistoryCost: historyCost(history), ToolsCost: len(js(tools))},

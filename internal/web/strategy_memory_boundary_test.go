@@ -101,6 +101,7 @@ func TestStrategyMemoryDenialKeepsTurnAndCandidateLearningIndependent(t *testing
 			} else if b.Store.row("SELECT key FROM projectMemories WHERE projectId=? AND key=?", project, "answer-format") != nil {
 				t.Fatal("denied memory write changed durable memory")
 			}
+			b.processOneStrategyJob()
 			if integer(b.Store.row("SELECT COUNT(*) AS n FROM strategyLearningTurns WHERE sessionId=?", id)["n"]) != 1 {
 				t.Fatal("explicit correction source lost")
 			}

@@ -16,6 +16,10 @@ type StrategyEvidence struct {
 	ResultHash string `json:"resultHash"`
 }
 type StrategyTurnSnapshot struct {
+	Deferred            bool               `json:"deferred,omitempty"`
+	HistoryStart        int                `json:"historyStart,omitempty"`
+	HistoryEnd          int                `json:"historyEnd,omitempty"`
+	UserTextHash        string             `json:"userTextHash,omitempty"`
 	UserMessageID       string             `json:"userMessageId"`
 	SessionID           string             `json:"sessionId"`
 	ProjectID           string             `json:"projectId"`
@@ -52,21 +56,62 @@ func SealStrategySnapshot(s StrategyTurnSnapshot) StrategyTurnSnapshot {
 func ValidStrategySnapshot(s StrategyTurnSnapshot) bool {
 	return s.UserMessageID != "" && s.SessionID != "" && s.ProjectID != "" && s.TurnID != "" && len(js(s)) <= 32768 && s.SnapshotHash == SealStrategySnapshot(s).SnapshotHash && (s.Status == "completed" || s.Status == "failed")
 }
+
+// Foreground capture only seals bounded source references. No history walk,
+// result hashing, queue transaction, auxiliary call or projection acknowledgement.
 func (e *Engine) collectStrategySnapshot(s *session, c Config, input TurnInput, status string) {
-	if input.StrategyMessageID == "" || e.worker != nil || !c.StrategyLearnEnabled || c.workflowMode || c.sreCoordinator || c.agentRole != "" || c.MemoryProjectID == "" || len(s.state.StrategyOutbox) >= 20 || len(s.state.View.PendingApprovals) > 0 || (status != "completed" && status != "failed") || redact(input.UserText, c) != input.UserText || len(input.UserText) > 8192 {
+	if input.StrategyMessageID == "" || e.worker != nil || !c.StrategyLearnEnabled || c.workflowMode || c.sreCoordinator || c.agentRole != "" || c.ConversationMode == ModePlan || c.MemoryProjectID == "" || len(s.state.StrategyOutbox) >= 20 || len(s.state.View.PendingApprovals) > 0 || (status != "completed" && status != "failed") || len(input.UserText) > 8192 {
 		return
 	}
-	snapshot := StrategyTurnSnapshot{UserMessageID: input.StrategyMessageID, SessionID: s.state.View.Session, ProjectID: c.MemoryProjectID, TurnID: s.state.View.RootTurnID, StartedAt: s.state.View.TurnStartedAt, FinishedAt: s.state.View.TurnFinishedAt, GlobalEpoch: c.StrategyGlobalEpoch, ProjectEpoch: c.StrategyProjectEpoch, Status: status, Profile: c.Profile, UserText: input.UserText, IgnoreProjectMemory: input.IgnoreProjectMemory, Correction: StrategyCorrectionSignal(input.UserText), ModelRef: ModelIdentity(c.Model), Evidence: []StrategyEvidence{}}
 	start := 0
 	if len(s.state.Checkpoints) > 0 {
 		start = s.state.Checkpoints[len(s.state.Checkpoints)-1]
 	}
-	if start < 0 || start > len(s.state.History) {
+	if start >= 0 && start < len(s.state.History) && s.state.History[start].Role == "system" {
+		start++
+	}
+	if start < 0 || start >= len(s.state.History) || s.state.History[start].HostTurnID != s.state.View.RootTurnID {
 		return
 	}
+	snapshot := StrategyTurnSnapshot{Deferred: true, HistoryStart: start, HistoryEnd: len(s.state.History), UserTextHash: hash(input.UserText), UserMessageID: input.StrategyMessageID, SessionID: s.state.View.Session, ProjectID: c.MemoryProjectID, TurnID: s.state.View.RootTurnID, StartedAt: s.state.View.TurnStartedAt, FinishedAt: s.state.View.TurnFinishedAt, GlobalEpoch: c.StrategyGlobalEpoch, ProjectEpoch: c.StrategyProjectEpoch, Status: status, Profile: c.Profile, IgnoreProjectMemory: input.IgnoreProjectMemory, Correction: StrategyCorrectionSignal(input.UserText), ModelRef: ModelIdentity(c.Model)}
+	s.state.StrategyOutbox = append(s.state.StrategyOutbox, SealStrategySnapshot(snapshot))
+}
+
+// Materialization is background-only. A shifted/compacted/deleted source is
+// omitted, never substituted with another turn or learned from arbitrary history.
+func (e *Engine) MaterializeStrategySnapshot(event StrategyTurnSnapshot, userText string) (StrategyTurnSnapshot, bool, error) {
+	if !event.Deferred {
+		return event, ValidStrategySnapshot(event), nil
+	}
+	if !ValidStrategySnapshot(event) || hash(userText) != event.UserTextHash {
+		return StrategyTurnSnapshot{}, false, nil
+	}
+	s, err := e.get(event.SessionID)
+	if err != nil {
+		return StrategyTurnSnapshot{}, false, err
+	}
+	s.mu.Lock()
+	if s.cancel != nil || s.finalizing {
+		s.mu.Unlock()
+		return StrategyTurnSnapshot{}, false, errors.New("strategy session busy")
+	}
+	start, end := event.HistoryStart, event.HistoryEnd
+	if start < 0 || end > len(s.state.History) || start >= end || s.state.History[start].HostTurnID != event.TurnID {
+		s.mu.Unlock()
+		return StrategyTurnSnapshot{}, false, nil
+	}
+	history := append([]Message(nil), s.state.History[start:end]...)
+	c := s.state.Config
+	s.mu.Unlock()
+	if redact(userText, c) != userText {
+		return StrategyTurnSnapshot{}, false, nil
+	}
+	snapshot := event
+	snapshot.Deferred, snapshot.HistoryStart, snapshot.HistoryEnd, snapshot.UserTextHash = false, 0, 0, ""
+	snapshot.UserText, snapshot.Evidence = userText, []StrategyEvidence{}
 	paired := map[string]string{}
 	failed := false
-	for _, msg := range s.state.History[start:] {
+	for _, msg := range history {
 		for _, call := range msg.Calls {
 			paired[call.ID] = call.Name
 		}
@@ -94,10 +139,12 @@ func (e *Engine) collectStrategySnapshot(s *session, c Config, input TurnInput, 
 	}
 	// Explicit correction or a real paired tool failure, never sentiment alone.
 	if !snapshot.Correction && !failed {
-		return
+		return StrategyTurnSnapshot{}, false, nil
 	}
-	s.state.StrategyOutbox = append(s.state.StrategyOutbox, SealStrategySnapshot(snapshot))
+
+	return SealStrategySnapshot(snapshot), true, nil
 }
+
 func (e *Engine) StrategyOutbox(id string) ([]StrategyTurnSnapshot, error) {
 	s, err := e.get(id)
 	if err != nil {
@@ -107,28 +154,45 @@ func (e *Engine) StrategyOutbox(id string) ([]StrategyTurnSnapshot, error) {
 	defer s.mu.Unlock()
 	return append([]StrategyTurnSnapshot{}, s.state.StrategyOutbox...), nil
 }
+
+// The host commits a separate durable handoff receipt before acknowledging.
+// Never rewrite the canonical session/projection for optional queue housekeeping.
 func (e *Engine) AckStrategyOutbox(id, turn, digest string) error {
 	s, err := e.get(id)
 	if err != nil {
 		return err
 	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	for i, item := range s.state.StrategyOutbox {
 		if item.TurnID == turn {
 			if item.SnapshotHash != digest {
-				s.mu.Unlock()
 				return errors.New("strategy snapshot conflict")
 			}
 			s.state.StrategyOutbox = append(s.state.StrategyOutbox[:i], s.state.StrategyOutbox[i+1:]...)
-			err = e.save(s)
 			break
 		}
 	}
-	s.mu.Unlock()
-	if err != nil {
-		return err
+	return nil
+}
+func (e *Engine) PendingStrategySessions() []string {
+	e.mu.Lock()
+	sessions := make([]*session, 0, len(e.sessions))
+	for _, s := range e.sessions {
+		sessions = append(sessions, s)
 	}
-	return e.persistNativeProjection(context.Background(), s)
+	e.mu.Unlock()
+	ids := []string{}
+	for _, s := range sessions {
+		if !s.mu.TryLock() {
+			continue
+		}
+		if s.cancel == nil && !s.finalizing && len(s.state.StrategyOutbox) > 0 {
+			ids = append(ids, s.state.View.Session)
+		}
+		s.mu.Unlock()
+	}
+	return ids
 }
 func (e *Engine) PersistedStrategyOutboxes() ([]StrategyTurnSnapshot, error) {
 	entries, err := os.ReadDir(e.Dir)
@@ -155,6 +219,8 @@ func (e *Engine) PersistedStrategyOutboxes() ([]StrategyTurnSnapshot, error) {
 }
 
 // One auxiliary completion, without session, tools or feedback into learning.
+func StrategyLearningInputBytes(messages []Message) int { return historyCost(messages) }
+
 func (e *Engine) ExtractStrategyProposal(ctx context.Context, m Model, messages []Message) (string, Usage, error) {
 	if len(messages) != 2 || messages[0].Role != "system" || messages[1].Role != "user" {
 		return "", Usage{}, errors.New("invalid strategy extraction input")
