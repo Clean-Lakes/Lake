@@ -1,0 +1,14 @@
+{
+  "sourceCommit": "0478f752558a72cadf23089517524422a7398f96",
+  "priorSourceCommit": "43496a7a675fa99db319156daceb0b3ef591009e",
+  "status": "passed",
+  "schemaVersion": 6,
+  "unknownCallsPreserved": 1,
+  "requestIdentityAndUsagePreserved": true,
+  "frozenHashesPreserved": true,
+  "retiredCheckpointNotResumedByPriorBinary": true,
+  "onlineConsentNotRevived": true,
+  "priorBinaryOpenedIsolatedCopy": true,
+  "newBinaryReopened": true,
+  "releaseDataAccessed": false
+}

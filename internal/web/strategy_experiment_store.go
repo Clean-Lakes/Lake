@@ -25,6 +25,9 @@ type strategyExperimentFrozen struct {
 
 func (s *Store) createStrategyExperiment(ctx StrategyContext, key string, frozen strategyExperimentFrozen) (StrategyMutationResult, error) {
 	return strategyCall(s, true, func() StrategyMutationResult {
+		if frozen.Optimization {
+			strategyFail(410, "optimization_retired")
+		}
 		scope := strategy.Scope{Kind: strategy.ProjectScope, ProjectID: ctx.ProjectID}
 		scopeKey := s.strategyEnsureScope(ctx, scope)
 		result, replayed, digest := s.strategyReceipt(scopeKey, key, Object{"operation": "experiment", "frozen": frozen})
@@ -36,23 +39,12 @@ func (s *Store) createStrategyExperiment(ctx StrategyContext, key string, frozen
 		if view.Asset.Scope != scope || !view.Available || !view.SourcesAvailable || view.Value.Ref != ref {
 			strategyFail(409, "asset_unavailable")
 		}
-		if !frozen.Optimization && (len(frozen.Cases) < 1 || len(frozen.Cases) > 3 || frozen.Repetitions < 1 || frozen.Repetitions > 3 || len(frozen.Cases)*frozen.Repetitions*2 > frozen.Budget.MaxRuns) {
+		if len(frozen.Cases) < 1 || len(frozen.Cases) > 3 || frozen.Repetitions < 1 || frozen.Repetitions > 3 || len(frozen.Cases)*frozen.Repetitions*2 > frozen.Budget.MaxRuns {
 			strategyFail(400, "run_budget")
 		}
 		effective := s.strategyEffective(ctx)
 		if frozen.Budget != effective.Settings.Budget {
 			strategyFail(409, "settings_changed")
-		}
-		if frozen.Optimization {
-			if !effective.Settings.CorrectEnabled {
-				strategyFail(409, "correction_disabled")
-			}
-			if len(frozen.Cases) != 2 || frozen.Cases[0].Split != "development" || frozen.Cases[1].Split != "holdout" || frozen.Repetitions != 1 {
-				strategyFail(400, "optimization_cases")
-			}
-			if frozen.Budget.MaxRuns < 5 || frozen.Budget.MaxRevisions < 2 {
-				strategyFail(400, "optimization_budget")
-			}
 		}
 		seen := map[string]bool{}
 		for _, f := range frozen.Cases {
@@ -65,11 +57,6 @@ func (s *Store) createStrategyExperiment(ctx StrategyContext, key string, frozen
 		result = s.strategyQueueJob(ctx, "experiment:"+strategy.ContentHash(key+digest), StrategyJobInput{Scope: scope, Kind: "experiment", AssetID: ref.AssetID, ExpectedRevision: view.Asset.Revision, SourceIDs: view.Value.SourceIDs})
 		raw := jsonText(frozen)
 		s.exec("INSERT INTO strategyExperiments(jobId,frozenJSON,frozenHash,modelRef,createdAt) VALUES(?,?,?,?,?)", result.JobID, raw, strategy.ContentHash(raw), frozen.ModelRef, now())
-		if frozen.Optimization {
-			s.strategyPlanOptimization(result.JobID, frozen)
-			s.strategySaveReceipt(scopeKey, key, digest, result)
-			return result
-		}
 		ordinal := 0
 		for ci, f := range frozen.Cases {
 			for rep := 0; rep < frozen.Repetitions; rep++ {

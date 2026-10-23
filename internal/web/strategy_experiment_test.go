@@ -517,3 +517,27 @@ func TestStrategyExperimentSchemaUpgradeTransactionRollback(t *testing.T) {
 		t.Fatal("partial experiment table committed")
 	}
 }
+
+func TestStrategyExperimentManualPairDoesNotRequireBackgroundLearning(t *testing.T) {
+	b, h := fixture(t)
+	sid, _ := newSession(t, h)
+	ctx := StrategyContext{ProjectID: stringOf(b.Store.Session(sid)["projectId"])}
+	scope := strategy.Scope{Kind: strategy.ProjectScope, ProjectID: ctx.ProjectID}
+	_, err := b.Store.SetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "manual-only", 0, StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: false, Budget: strategy.DefaultBudget()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls atomic.Int32
+	provider := experimentProvider(t, &calls, false)
+	defer provider.Close()
+	b.Models.Save(&ai.Model{URL: provider.URL, Name: "manual-only", Protocol: "openai"})
+	a := createStrategyFixture(t, b.Store, ctx, scope, "manual-method", "A reviewed manual method.")
+	v, _ := b.Store.GetStrategyRevision(ctx, a.AssetID, 1)
+	base := "/api/projects/" + ctx.ProjectID + "/strategy"
+	q := strategyHTTP(t, h, "POST", base+"/experiments", ident(), jsonText(Object{"ref": v.Value.Ref, "caseIds": []string{"SL-001"}, "repetitions": 1, "skillNames": []string{}}), 200)
+	b.processOneExperiment()
+	report := strategyHTTP(t, h, "GET", base+"/experiments/"+stringOf(q["jobId"])+"/report", "", "", 200)
+	if report["status"] != "succeeded" || calls.Load() != 4 {
+		t.Fatal("manual pair waited for background learning")
+	}
+}
