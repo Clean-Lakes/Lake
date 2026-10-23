@@ -1,6 +1,8 @@
 .session-nav-group { min-height: 32px; margin-bottom: 9px; }
 .session-nav-group-title { display: flex; align-items: center; gap: 7px; min-height: 32px; padding: 3px 9px; color: var(--text-muted); font: inherit; }
 .session-nav-empty { margin: 2px 9px 8px; color: var(--text-muted); font: inherit; }
+.session-nav-group.is-empty-pin-drop { display: flex; align-items: center; min-height: 36px; border: 1px dashed var(--border-strong); border-radius: var(--sidebar-row-radius); }
+.is-empty-pin-drop .session-nav-empty { margin: 8px 9px; }
 .session-sort-row { position: relative; padding-left: 15px; }
 .session-sort-row.is-bulk { padding-left: 0; }
 .session-drag-handle { position: absolute; left: 0; top: 4px; display: grid; place-items: center; width: 15px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--text-muted); opacity: 0; cursor: grab; }
