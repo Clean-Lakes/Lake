@@ -1,0 +1,26 @@
+.ai-context-popover { position: fixed; z-index: 120; box-sizing: border-box; width: min(292px, calc(100vw - 24px)); padding-bottom: 8px; }
+.ai-context-panel { box-sizing: border-box; width: 100%; max-height: calc(100dvh - 32px); padding: 14px 16px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-settings-panel); corner-shape: var(--corner-window); background: var(--surface); box-shadow: var(--shadow-popover); color: var(--foreground); font: var(--font-weight-ui, 500) var(--font-size-ui, 14px)/1.5 var(--font-ui); }
+.ai-context-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ai-context-heading strong { font: inherit; font-weight: var(--font-weight-semibold, 600); }
+.ai-context-heading > span { font-variant-numeric: tabular-nums; }
+.ai-context-budget { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 12px; color: var(--text-secondary); }
+.ai-context-budget > span:last-child { font-variant-numeric: tabular-nums; }
+.ai-context-panel small { font: inherit; color: var(--text-muted); }
+.ai-context-meter { display: flex; height: 5px; margin: 8px 0 14px; overflow: hidden; border-radius: 4px; background: var(--surface-muted); }
+.ai-context-meter > span { background: var(--session-state-color, var(--text-secondary)); border-radius: inherit; }
+.ai-context-panel dl { margin: 0; }
+.ai-context-panel dl > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 4px 0; }
+.ai-context-panel dt { color: var(--text-secondary); }
+.ai-context-panel dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ai-context-details { margin-top: 12px; border-top: 1px solid var(--border); }
+.ai-context-details > summary { display: flex; align-items: center; justify-content: space-between; min-height: 28px; padding-top: 10px; color: var(--text-secondary); list-style: none; cursor: pointer; }
+.ai-context-details > summary::-webkit-details-marker { display: none; }
+.ai-context-details > summary .glyph { transition: transform 120ms; }
+.ai-context-details[open] > summary .glyph { transform: rotate(180deg); }
+.ai-context-details > summary:focus-visible { outline: 2px solid var(--focus-outline, var(--focus)); outline-offset: 3px; border-radius: var(--radius-control); }
+.ai-context-details dl { margin-top: 10px; }
+.ai-context-panel .ai-context-total { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+.ai-context-panel p { margin: 10px 0 0; color: var(--text-muted); font: inherit; }
+.ai-context-panel .ai-context-budget-warning { color: var(--warning); }
+@media (hover: none) { .ai-context-details > summary { min-height: 44px; padding-top: 0; } }
+@media (prefers-reduced-motion: reduce) { .ai-context-details > summary .glyph { transition: none; } }
