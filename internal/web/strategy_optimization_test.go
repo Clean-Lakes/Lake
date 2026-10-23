@@ -145,6 +145,7 @@ func TestStrategyOptimizationRetirementRecoveryPreservesUnknownAndCompletedIdent
 			if e != nil {
 				t.Fatal(e)
 			}
+			defer s.Close() // The final reopened handle must close before Windows TempDir cleanup.
 			events, _ := strategyCall(s, false, func() int {
 				return integer(s.row("SELECT count(*) AS n FROM strategyEvents WHERE aggregateId=? AND type='optimization_retired'", id)["n"])
 			})

@@ -22,19 +22,16 @@ func TestStrategyDailyLongContextRetriesActualFailedReadWithoutCorrectionBudget(
 			t.Error("unexpected health path")
 		}
 		if samples.Add(1) == 1 {
-			conn, _, err := w.(http.Hijacker).Hijack()
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			conn.Close()
+			// An HTTP failure is deterministic across Unix and Windows curl;
+			// abruptly closing a socket can report either EOF or a reset.
+			http.Error(w, "temporary health failure", http.StatusServiceUnavailable)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"healthy":true,"evidence":"daily-real-read"}`)
 	}))
 	defer health.Close()
-	command := "curl -sS --max-time 2 " + health.URL + "/health"
+	command := "curl -fsS --max-time 2 " + health.URL + "/health"
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request Object
 		_ = json.NewDecoder(r.Body).Decode(&request)
@@ -45,7 +42,7 @@ func TestStrategyDailyLongContextRetriesActualFailedReadWithoutCorrectionBudget(
 		if n <= 2 {
 			if n == 2 {
 				messages := objects(request["messages"])
-				if !strings.Contains(stringOf(messages[len(messages)-1]["content"]), `"exitCode":52`) {
+				if !strings.Contains(stringOf(messages[len(messages)-1]["content"]), `"exitCode":22`) {
 					t.Error("actual initial curl failure missing")
 				}
 			}
