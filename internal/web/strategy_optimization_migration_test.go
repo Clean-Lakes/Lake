@@ -55,7 +55,7 @@ func TestStrategyOptimizationV3MigrationBackupAndRollback(t *testing.T) {
 			db, _ = openSQLite(filepath.Join(dir, "lake-web.sqlite"))
 			defer db.Close()
 			db.QueryRow("SELECT version FROM strategySchemaMeta").Scan(&version)
-			want := 5
+			want := 6
 			if conflict {
 				want = 3
 			}

@@ -80,6 +80,7 @@ type PromptManifest struct {
 	TargetScopeHash         string            `json:"targetScopeHash"`
 	InputBudget             PromptInputBudget `json:"inputBudget"`
 	OmittedAssets           []OmittedAsset    `json:"omittedAssets"`
+	AssetSelectionReasons   []SelectionReason `json:"assetSelectionReasons,omitempty"`
 	ProjectSettingsRevision int64             `json:"projectSettingsRevision,omitempty"`
 	ProjectEpoch            int64             `json:"projectEpoch,omitempty"`
 	SettingsRevision        int64             `json:"settingsRevision"`

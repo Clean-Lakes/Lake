@@ -259,6 +259,7 @@ func (s *Store) DeleteStrategyAsset(ctx StrategyContext, id, key string, expecte
 		s.strategyEraseAssetResults(id)
 		s.exec("DELETE FROM strategyRevisionContent WHERE assetId=?", id)
 		s.exec("DELETE FROM strategyAssessments WHERE assetId=?", id)
+		s.exec("DELETE FROM strategyReusePolicies WHERE assetId=?", id)
 		// A manual confirmation's body lives only in this asset's content rows.
 		// Erasing it also removes that source's availability to other pending jobs.
 		s.exec("UPDATE strategySourceEvents SET availability='tombstoned',summary='' WHERE kind='manual_authoring' AND id IN (SELECT sourceId FROM strategyRevisionSources WHERE assetId=?)", id)
