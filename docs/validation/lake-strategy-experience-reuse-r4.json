@@ -1,0 +1,134 @@
+{
+  "sourceCommit": "43496a7a675fa99db319156daceb0b3ef591009e",
+  "buildDirty": false,
+  "backendSHA256": "d753de8800f269619223d72b0c4d3f4f22a4d3fdc38f9fe81fac6ae8b2d1b055",
+  "modelBenefitEvaluated": false,
+  "provider": "deterministic loopback SSE through official ADK",
+  "platform": "darwin/arm64",
+  "status": "passed",
+  "ordinaryModelRequests": 5,
+  "auxiliaryRequests": 0,
+  "matchedOrder": true,
+  "unrelatedSelected": 0,
+  "maxSelected": 3,
+  "omissionReasons": [
+    "asset_count",
+    "exclusion_conflict",
+    "expired",
+    "not_relevant",
+    "review_required"
+  ],
+  "preparedUsageBodyFree": true,
+  "forgedAndCrossProjectRejected": true,
+  "helpfulFeedbackPersisted": true,
+  "harmfulProjectStop": true,
+  "otherProjectBindingPreserved": true,
+  "newRevisionDidNotReplaceBinding": true,
+  "modelChangeOmittedMethod": true,
+  "restartExtraRequests": 0,
+  "schemaVersion": 6,
+  "businessDBIntegrity": "ok",
+  "adkDBIntegrity": "ok",
+  "validatedAt": "2026-10-23T07:05:40.311880+00:00",
+  "baseCommit": "c8cb35cf1eb0122222cfaccf1b2f4d2d4d1c1a4d",
+  "checks": {
+    "goAll": {
+      "command": "go test ./...",
+      "status": "passed"
+    },
+    "race": {
+      "command": "go test -race ./internal/ai ./internal/web ./internal/strategy -run '^(TestStrategy|TestReuse|TestResolve|TestOnline|TestSRE|TestMultiAgent)' -count=1 -timeout=8m",
+      "status": "passed"
+    },
+    "vet": {
+      "command": "go vet ./...",
+      "status": "passed"
+    },
+    "adkBoundary": {
+      "command": "python3 scripts/check_adk_runtime_boundary.py",
+      "status": "passed"
+    },
+    "frontend": {
+      "directory": "web-agent",
+      "commands": [
+        "corepack pnpm check",
+        "corepack pnpm test:frontend",
+        "corepack pnpm build:web"
+      ],
+      "tests": 426,
+      "passed": 426,
+      "failed": 0,
+      "buildWarning": "Existing Vite bundle over 500 kB"
+    },
+    "diff": {
+      "command": "git diff origin/develop --check",
+      "status": "passed"
+    }
+  },
+  "signedDev": {
+    "command": "scripts/run_lake_dev.sh",
+    "fixedHome": "~/.lake-dev",
+    "codeSigningVerified": true,
+    "packaging": false,
+    "schemaVersion": 6,
+    "v5CompatibilityBackupMode": "0600",
+    "businessIntegrity": "ok",
+    "foreignKeyErrors": 0,
+    "settingsPreserved": {
+      "masterEnabled": true,
+      "applyEnabled": true,
+      "learnEnabled": true,
+      "onlineCorrectEnabled": false
+    }
+  },
+  "nativeUI": {
+    "platform": "macOS/arm64",
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "widths": [
+      2560,
+      850
+    ],
+    "keywordEntryAndRevisionSave": true,
+    "keywordsSaved": [
+      "磁盘",
+      "报告"
+    ],
+    "validityDateRendered": true,
+    "reviewCheckboxSaved": true,
+    "currentProjectSessionSelect": "shared AppSelect; keyboard Down/Enter/Escape and popup clipping inspected",
+    "existingPreparedManifestVisible": true,
+    "realUserFeedbackModified": false,
+    "fixtureProjectArchivedRecoverably": true,
+    "themeProjectAndWindowRestored": true,
+    "note": "Feedback semantics verified through the real HTTP/official ADK integration; no real-provider task was sent in fixed Dev."
+  },
+  "regressionCoverage": [
+    "English boundary and explicit Chinese substring relevance",
+    "UTF8 root task <=8 KiB; max3 assets; <=4 KiB conservative envelope including JSON escaping",
+    "CRLF/trim duplicate body; existing Skill/memory/context duplicate suppression",
+    "Applicability and exclusion-group conflicts; expiry and pending review; changed model/tool fingerprints",
+    "Prepared exact-version history/cursor; real request check; forged ref/request and cross-project rejection",
+    "Feedback CAS and idempotent receipt; old request cannot suspend newer binding; rollback after rejected suspension",
+    "Feedback does not call a model; project stop leaves global/other-project adoption enabled",
+    "v5-to-v6 backup, transactional rollback and legacy procedure review requirement",
+    "Existing R1/R2/R3 revocation, optional failure, privacy, worker and permission regressions"
+  ],
+  "notValidated": [
+    "Windows native UI (no manual CI used)",
+    "Actual provider/model benefit; R5 paired evaluation remains pending",
+    "Silent model alias upgrades and arbitrary environment/software version detection"
+  ],
+  "priorPR": {
+    "number": 80,
+    "reviewedHead": "2da70ae6d0be08a113f7a3f1b56194c8cde28329",
+    "mergedTo": "develop",
+    "mergeCommit": "c8cb35cf1eb0122222cfaccf1b2f4d2d4d1c1a4d",
+    "topicLocalAndRemoteDeleted": true,
+    "alsoCleanedMergedPR72Branch": true,
+    "pr67": "left open; branch retained",
+    "alsoCleanedMergedPR71Branch": true
+  }
+}
