@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -251,6 +252,67 @@ func TestFirstSSHConnectionCombinesTrustAndTerminalCreation(t *testing.T) {
 }
 
 func knownPeerPrefix(port int) string { return "[127.0.0.1]:" + strconv.Itoa(port) + " " }
+
+func TestDirectSSHFileReadUsesHostTrustWithoutCreatingTerminal(t *testing.T) {
+	for _, accept := range []bool{true, false} {
+		t.Run(strconv.FormatBool(accept), func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			b, h := fixture(t)
+			id, _ := newSession(t, h)
+			var authentications atomic.Int32
+			port, _ := credentialSSHServer(t, "synthetic-read-password", nil, func(config *ssh.ServerConfig) {
+				original := config.PasswordCallback
+				config.PasswordCallback = func(meta ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+					authentications.Add(1)
+					return original(meta, password)
+				}
+			})
+			config, cleanup := prepareSSH(b.Models.Home, Object{"host": "127.0.0.1", "port": port, "username": "fixture", "authMethod": "password", "password": "synthetic-read-password"})
+			defer cleanup()
+			resource := b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "Direct file read fixture", "ssh", config)
+			ref := stringOf(resource["id"])
+			file := filepath.Join(t.TempDir(), "status.txt")
+			must(os.WriteFile(file, []byte("DIRECT_READ_TRUSTED"), 0600))
+			var calls atomic.Int32
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if calls.Add(1) == 1 {
+					emitModel(w, "", []ai.Call{{ID: "direct-read", Name: "read", Arguments: jsonText(Object{"runtime": "ssh", "asset_ref": ai.AssetAlias(ref), "path": file})}})
+					return
+				}
+				emitModel(w, "读取流程结束", nil)
+			}))
+			defer provider.Close()
+			b.Models.Save(&ai.Model{URL: provider.URL, Name: "direct SSH trust fixture", Protocol: "openai"})
+			apiTest(t, h, "POST", "/api/sessions/"+id+"/ai/configure", Object{"silentReadFiles": true}, 200)
+			apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "读取这台主机的状态文件", "resourceIds": []string{ref}}, 202)
+			prompt := waitHostTrust(t, b, id)
+			if authentications.Load() != 0 {
+				t.Fatal("direct file tool authenticated before host trust")
+			}
+			if len(objects(b.Store.Snapshot(id)["terminals"])) != 0 {
+				t.Fatal("file trust flow created an unrelated terminal")
+			}
+			apiTest(t, h, "POST", "/api/sessions/"+id+"/host-key", Object{"id": prompt["id"], "accept": accept, "fingerprint": prompt["fingerprint"]}, 200)
+			view := waitAI(t, b, id, "completed")
+			b.workers.Wait()
+			read := false
+			for _, card := range view.Cards {
+				if card.Title == "read" && card.Status == "completed" && strings.Contains(card.Content, "DIRECT_READ_TRUSTED") {
+					read = true
+				}
+			}
+			if read != accept {
+				t.Fatal("direct file read did not follow fingerprint decision")
+			}
+			if !accept && authentications.Load() != 0 {
+				t.Fatal("denied host still authenticated")
+			}
+			if len(objects(b.Store.Snapshot(id)["terminals"])) != 0 {
+				t.Fatal("direct read left a terminal")
+			}
+		})
+	}
+}
 
 func TestParallelSpecialistsShareOneHostTrustDecision(t *testing.T) {
 	for _, accept := range []bool{true, false} {

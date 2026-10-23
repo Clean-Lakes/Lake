@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-16",
+  "issue": "Multi-resource mentions cleared the singular host binding without persisting a trusted target set. Follow-up references to these two directories became unresolved navigation scopes, and re-mentioning the nodes still caused per-resource selection prompts.",
+  "changes": [
+    "Persist the exact explicitly referenced resource IDs as a target scope when more than one resource is selected.",
+    "Revalidate that resource selection against the current project inventory on subsequent turns; do not expand it to remembered resources or new project members, and require clarification if a selected member disappears.",
+    "Interpret relative directory references against an already confirmed scope while retaining the existing unknown/ambiguous project-folder safeguards.",
+    "Recognize concrete unique IPs in actual submitted human question answers and apply the recovered scope before subsequent tools in the same batch.",
+    "Preserve ordinary file, command, terminal, host-trust and resource-boundary permissions."
+  ],
+  "regressions": [
+    "Three selected local fixture resources each perform actual directory reads across four HTTP turns: initial multi-mention, image-like directory follow-up text, a continuation, and repeated multi-mention. No target-selection prompt is generated.",
+    "Selection survives model-history compaction and engine state reload; a further follow-up reads all three nodes.",
+    "A remembered but unselected fourth resource cannot execute a directory read.",
+    "Revoking silentReadFiles still requires file_read authorization and does not ask to select the already selected target again.",
+    "Submitted IP choices recover an unresolved scope and permit the already queued same-batch read. Unsubmitted defaults, vague permission statements, negated addresses and duplicate resource names do not authorize a guessed target.",
+    "Deleted, missing or foreign selection members fail closed rather than silently shrinking or widening the target set. Existing directory and unqualified multi-host regressions remain covered."
+  ],
+  "productionOperationsReplayed": false,
+  "userPermissionSettingsModified": false,
+  "releaseRestarted": false,
+  "deploymentTarget": "Lake Dev.app",
+  "checks": {
+    "goTestAll": "passed (Web 87.565s)",
+    "goRaceWebAi": "passed (Web 120.842s, AI cached)",
+    "signedDevBuildAndVerification": "passed",
+    "devRestart": "passed after idle check; eight existing session snapshots healthy"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "change": "Unread update indicator moved to workspace button trailing edge and changed to red",
+  "appearance": {
+    "size": 6,
+    "lightColor": "rgb(188, 55, 55)",
+    "darkColor": "rgb(238, 133, 133)",
+    "location": "Before trailing expansion chevron"
+  },
+  "verification": {
+    "typescript": "passed",
+    "relatedFrontendTests": {
+      "pass": 2,
+      "fail": 0
+    },
+    "browser": [
+      "Available unread version shows red dot with accessible label",
+      "Opening/closing workspace retains dot",
+      "Viewing update dialog and closing clears dot",
+      "No available update shows no dot",
+      "Light and dark palettes checked"
+    ],
+    "signedBuildAndInstall": "passed",
+    "native": "Dev restarted and loaded localhost:62100; workspace remains present; no fake available state injected into Dev",
+    "whitespace": "passed"
+  },
+  "screenshots": [
+    "lake-workspace-update-dot-detail.png",
+    "lake-workspace-update-dot-dark.png",
+    "lake-workspace-update-dot-dev.png"
+  ],
+  "data": "Available-version screenshots use a local mocked bridge with fictional 0.3.18; no real version announcement or installation was simulated in Dev."
+}

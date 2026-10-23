@@ -1,0 +1,12 @@
+# Pointer focus and compact composer validation
+
+Latest user feedback supersedes older typography weight choices: ordinary text now uses 500 weight regardless of color, code 450 and headings 650. Body/sidebar stay at 14px; the composer toolbar uses 12px and its experimental badge 10px. Control hit areas remain unchanged. Native provider labels follow 500 as well.
+
+- Feature commits: `f77c8249` (focus modality) and `2b18ca50` (compact toolbar/stronger text).
+- Signed installed Dev tested: `74ab913b9bc89aa30178f635400cf3e0fb164f92`; signed build/install and deep strict signature verification passed. The installed Dev was normally quit through its app menu, relaunched, and visually inspected in the real WKWebView.
+- Shared `focusModality.ts` observes captured pointer and navigation-key events. Focus outlines use `--focus-outline`, transparent for pointer operations and the theme focus color for keyboard navigation. DOM focus, native dialog behavior, Escape and return focus are preserved. Input borders still use `--focus`.
+- All 418 frontend tests passed after the focus change. Signed build type/build checks passed after the following theme/native-label adjustment.
+- Isolated browser fixture, light/dark: mouse opening focuses the dialog close button without a painted outline; Enter opening shows the theme outline; Escape closes and returns focus to the reference; subsequent mouse closing leaves the restored reference outline transparent. The single-control native dialog Tab traversal was not used as proof of a close-button focus ring; Enter opening and Escape restoration were directly verified.
+- Native Dev: opened the same user-reported object detail by clicking its reference; screenshot confirmed the close button had no blue frame. Local private capture `/tmp/lake-focus-native-pointer.jpg` is not committed. Browser TaskSpace 35 finished and Vite fixture PID 7263 stopped.
+- Isolated main UI: sampled sidebar names, gray headings, saved-plan status/action, elapsed and composer input all computed 14px/500; permission/Plan/SRE/model entries 12px/500 and experimental badge 10px/500. At a 430px viewport, no document horizontal overflow. TaskSpace 36 finished and isolated loopback backend stopped.
+- Actual restarted Dev inspected again after the latest weight/toolbar build; local private screenshot `/tmp/lake-compact-strong-native.jpg` not committed. No model calls, remote commands or resource mutations were performed.

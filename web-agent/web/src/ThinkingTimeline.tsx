@@ -44,7 +44,6 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
   const state=notices.join(' · ')||(attention?'执行结果待核查':'');
   const currentTool=tools.filter(card=>card.status==='running').at(-1)??tools.at(-1);
   const description=resource?.name??(resourceRow&&currentTool?toolDescription(currentTool):processDescription(cards));
-  const resourceGlyph=resource?.kind?({ssh:"lakeHost",local:"lakeHost",database:"lakeDatabase",redis:"lakeDatabase",docker:"lakeContainer"} as const)[resource.kind]:resource?"lakeHost":undefined;
   const blocked=tools.some(card=>!['running','completed','succeeded','success'].includes(card.status));
   const executing=live&&!blocked&&cards.some(card=>card.status==='running');
   const progressing=live&&continuing&&!blocked&&tools.length>0;
@@ -55,7 +54,7 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
   const panelId = `thinking-${cards[0]!.id}`;
   return <section className={`thinking-timeline ${resourceRow ? "is-resource-row" : ""} ${live ? "is-live" : ""} ${executing ? "is-executing" : ""} ${progressing ? "is-continuing" : ""}`} aria-label="思考与操作过程">
     <button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => { onInspect?.(); setOpen(!open); }}>
-      <span className="thinking-process-icon"><ExecutionIcon card={currentTool} active={iconActive} glyph={resourceGlyph}/></span><span className="thinking-label">{label}</span>{resourceRow&&tools.length>1&&<small className="thinking-operation-count">{tools.length} 项</small>}<svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
+      <span className="thinking-process-icon"><ExecutionIcon card={currentTool} active={iconActive} resourceKind={resource?.kind}/></span><span className="thinking-label">{label}</span>{resourceRow&&tools.length>1&&<small className="thinking-operation-count">{tools.length} 项</small>}<svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
     </button>
     {stage}
     {open && <div className="thinking-detail-panel" id={panelId}>

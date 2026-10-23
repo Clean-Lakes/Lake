@@ -5,6 +5,7 @@ import "github.com/Clean-Lakes/Lake/internal/strategy"
 type StrategySettingsInput struct {
 	MasterEnabled, ApplyEnabled, LearnEnabled, CorrectEnabled bool
 	OnlineCorrectEnabled                                      bool
+	OnlineConsentVersion                                      int
 	Budget                                                    strategy.Budget
 }
 type StrategyEffectiveSettings struct {
@@ -29,6 +30,7 @@ func (s *Store) strategyEffective(ctx StrategyContext) StrategyEffectiveSettings
 	s.strategyContext(ctx)
 	global := s.strategySettings(strategy.Scope{Kind: strategy.UserScope})
 	out := StrategyEffectiveSettings{Settings: global, GlobalEpoch: s.strategyGeneration("user")}
+	out.Settings.OnlineCorrectEnabled = global.OnlineCorrectEnabled && global.OnlineConsentVersion == strategy.OnlineConsentVersion
 	if ctx.ProjectID != "" {
 		scope := strategy.Scope{Kind: strategy.ProjectScope, ProjectID: ctx.ProjectID}
 		project := s.strategySettings(scope)
@@ -38,7 +40,7 @@ func (s *Store) strategyEffective(ctx StrategyContext) StrategyEffectiveSettings
 			out.Settings.ApplyEnabled = global.ApplyEnabled && project.ApplyEnabled
 			out.Settings.LearnEnabled = global.LearnEnabled && project.LearnEnabled
 			out.Settings.CorrectEnabled = global.CorrectEnabled && project.CorrectEnabled
-			out.Settings.OnlineCorrectEnabled = global.OnlineCorrectEnabled && project.OnlineCorrectEnabled
+			out.Settings.OnlineCorrectEnabled = out.Settings.OnlineCorrectEnabled && project.OnlineCorrectEnabled && project.OnlineConsentVersion == strategy.OnlineConsentVersion
 			out.Settings.Budget = minStrategyBudget(global.Budget, project.Budget)
 		}
 	}
@@ -77,7 +79,17 @@ func (s *Store) SetStrategySettings(ctx StrategyContext, scope strategy.Scope, k
 		if old.Revision != expected {
 			strategyFail(409, "revision_conflict")
 		}
-		value := strategy.Settings{Scope: scope, Revision: old.Revision + 1, Epoch: s.strategyAdvanceScope(scopeKey), MasterEnabled: input.MasterEnabled, ApplyEnabled: input.ApplyEnabled, LearnEnabled: input.LearnEnabled, CorrectEnabled: input.CorrectEnabled, OnlineCorrectEnabled: input.OnlineCorrectEnabled, Budget: input.Budget}
+		if input.OnlineConsentVersion != 0 && input.OnlineConsentVersion != strategy.OnlineConsentVersion {
+			strategyFail(400, "invalid_online_consent")
+		}
+		// Old clients may echo the old true flag while changing learning. Accept
+		// their update without granting experimental execution or blocking opt-out.
+		online := input.OnlineCorrectEnabled && input.OnlineConsentVersion == strategy.OnlineConsentVersion
+		consent := 0
+		if online {
+			consent = strategy.OnlineConsentVersion
+		}
+		value := strategy.Settings{Scope: scope, Revision: old.Revision + 1, Epoch: s.strategyAdvanceScope(scopeKey), MasterEnabled: input.MasterEnabled, ApplyEnabled: input.ApplyEnabled, LearnEnabled: input.LearnEnabled, CorrectEnabled: input.CorrectEnabled, OnlineCorrectEnabled: online, OnlineConsentVersion: consent, RuntimePolicyVersion: strategy.OnlineConsentVersion, LegacyOnlineConsent: old.LegacyOnlineConsent, Budget: input.Budget}
 		s.strategySaveSettings(scopeKey, value)
 		if scope.Kind == strategy.UserScope {
 			s.strategyInvalidateJobs("1=1")
@@ -89,6 +101,44 @@ func (s *Store) SetStrategySettings(ctx StrategyContext, scope strategy.Scope, k
 		s.strategySaveReceipt(scopeKey, key, digest, result)
 		return result
 	})
+}
+
+// Runs transactionally on startup, before job recovery. Keep the old consent as
+// data, while clearing the executable flag so an older build cannot revive it.
+// No table/schema change, source erasure, operation replay or budget refund.
+func (s *Store) retireLegacyOnlineConsent() {
+	for _, row := range s.rows("SELECT scopeKey,body FROM strategySettings") {
+		old := strategyDecode[strategy.Settings](stringOf(row["body"]))
+		legacyOnline := old.OnlineCorrectEnabled && old.OnlineConsentVersion != strategy.OnlineConsentVersion
+		if old.RuntimePolicyVersion == strategy.OnlineConsentVersion && !legacyOnline {
+			continue
+		}
+		key := stringOf(row["scopeKey"])
+		value := old
+		if legacyOnline && value.LegacyOnlineConsent == nil {
+			value.LegacyOnlineConsent = &strategy.OnlineConsentRecord{Enabled: true, SettingsRevision: old.Revision, Epoch: old.Epoch}
+		}
+		if legacyOnline {
+			value.OnlineCorrectEnabled = false
+			value.OnlineConsentVersion = 0
+		}
+		value.RuntimePolicyVersion = strategy.OnlineConsentVersion
+		value.Revision++
+		value.Epoch = s.strategyAdvanceScope(key)
+		s.strategySaveSettings(key, value)
+		where, args := "1=1", []any{}
+		if old.Scope.Kind == strategy.ProjectScope {
+			where, args = "scopeKey=? OR accessProjectId=?", []any{key, old.Scope.ProjectID}
+		}
+		// Unknown/dispatched jobs remain unknown/dispatched, with the same runtime
+		// identity. Epoch checks fence stale commits; recovery never replays them.
+		s.exec("UPDATE strategyJobs SET status='cancelled',leaseToken='',leaseUntilMs=0,errorCode='online_consent_retired',updatedAt=? WHERE kind='experiment' AND status IN ('queued','leased') AND dispatchState='none' AND ("+where+")", append([]any{now()}, args...)...)
+		event := "daily_policy_migrated_v2"
+		if legacyOnline {
+			event = "online_consent_retired_v2"
+		}
+		s.strategyEvent(key, old.Scope.ProjectID, key, value.Revision, event, value)
+	}
 }
 
 type StrategyBindingInput struct {
@@ -165,6 +215,12 @@ func (s *Store) BindStrategyAsset(ctx StrategyContext, scope strategy.Scope, key
 		}
 		if enabled {
 			view := s.strategyRevisionView(ctx, input.Ref.AssetID, input.Ref.Revision)
+			if view.Review.Decision == "rejected" {
+				strategyFail(409, "review_required")
+			}
+			if view.Review.Decision == "pending" {
+				s.exec("INSERT INTO strategyReviews VALUES(?,?,'accepted',1,'reviewed',?)", input.Ref.AssetID, input.Ref.Revision, now())
+			}
 			if !view.Available || !view.SourcesAvailable {
 				strategyFail(409, "source_unavailable")
 			}
@@ -202,12 +258,15 @@ func (s *Store) DeleteStrategyAsset(ctx StrategyContext, id, key string, expecte
 		s.exec("UPDATE strategyAssets SET title='',deletedAt=? WHERE id=?", now(), id)
 		s.strategyEraseAssetResults(id)
 		s.exec("DELETE FROM strategyRevisionContent WHERE assetId=?", id)
+		s.exec("DELETE FROM strategyAssessments WHERE assetId=?", id)
+		s.exec("DELETE FROM strategyReusePolicies WHERE assetId=?", id)
 		// A manual confirmation's body lives only in this asset's content rows.
 		// Erasing it also removes that source's availability to other pending jobs.
 		s.exec("UPDATE strategySourceEvents SET availability='tombstoned',summary='' WHERE kind='manual_authoring' AND id IN (SELECT sourceId FROM strategyRevisionSources WHERE assetId=?)", id)
 		s.strategyInvalidateJobs("id IN (SELECT j.jobId FROM strategyJobSources j JOIN strategySourceEvents x ON x.id=j.sourceId WHERE x.availability<>'available')")
 		s.exec("UPDATE strategyBindings SET enabled=0,bindingRevision=bindingRevision+1 WHERE assetId=?", id)
 		s.strategyInvalidateJobs("assetId=?", id)
+		s.pruneStrategyDerivedContent()
 		s.strategyEvent(scopeKey, "", id, expected, "asset_deleted", Object{"id": id})
 		result = StrategyMutationResult{AssetID: id, Revision: expected}
 		s.strategySaveReceipt(scopeKey, key, digest, result)
@@ -234,5 +293,8 @@ func (s *Store) strategyArchiveProject(project string) {
 	key := s.strategyEnsureScope(StrategyContext{ProjectID: project}, scope)
 	s.strategyAdvanceScope(key)
 	s.strategyInvalidateJobs("accessProjectId=? OR scopeKey=?", project, key)
+	// Archival is a privacy boundary even if restored later.
+	s.exec("UPDATE strategySourceEvents SET availability='revoked',summary='' WHERE scopeKey=?", key)
+	s.pruneStrategyDerivedContent()
 	s.strategyEvent(key, project, key, s.strategyGeneration(key), "scope_revoked", Object{"projectId": project})
 }

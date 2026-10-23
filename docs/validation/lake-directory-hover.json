@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "request": "会话刻度提供鼠标悬停预览，并说明精简会话的效果",
+  "behavior": {
+    "pointer": "120ms 悬停后预览真实提问，移出 160ms 后收起；刻度与浮层之间可连续移动",
+    "pin": "点击或键盘激活固定目录，再次点击、点击外部或 Escape 关闭",
+    "focus": "Escape 恢复刻度按钮焦点；浮层内有键盘焦点时不因指针移出而隐藏",
+    "passivePreview": "只悬停不触发 onOpen，不暂停正文跟随；固定或定位才进入阅读状态",
+    "copy": "按提问快速定位，完整记录保留",
+    "compactConversation": "主视图在两行内更新普通进展，最终结论单独显示；完整过程可展开，并可通过提问目录定位历史",
+    "content": "仅展示已有真实提问，不新增模型摘要请求，不改变持久历史"
+  },
+  "checks": {
+    "typescript": "passed",
+    "frontendTests": {"passed": 234, "failed": 0},
+    "diffCheck": "passed",
+    "hover": "Pointer entering the rail hover area expands the panel; fixed-directory counter remains zero",
+    "leave": "Moving the pointer outside via scrolling closes an unpinned preview",
+    "pinned": "Keyboard Enter opens and pins; moving the pointer outside does not close",
+    "keyboard": "Escape closes and returns focus to the rail trigger",
+    "navigation": "Selecting the fourth question records u3 and jumps to its actual turn",
+    "themes": ["light", "dark"],
+    "narrow": {"viewportWidth": 390, "documentWidth": 390, "panelLeft": 56, "panelRight": 326, "panelBottom": 805.75, "viewportHeight": 844, "preservedItems": 20}
+  },
+  "dev": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "installedApp": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "version": "0.3.17",
+    "signature": "codesign --verify --deep --strict passed",
+    "backendSha256": "7ebad9984cbea8bee33449e64e18a6e3c7cce1ea1c1c928eff9b12b90fe49d31",
+    "sourceBinaryMatchesInstalledBackend": true,
+    "launch": "passed, localhost:53597",
+    "acceptance": "Real 26-turn conversation directory opens with the concise explanation and existing question previews; Escape closes it. The user conversation was paused before installation and no remote operation was triggered.",
+    "releaseAppTouched": false
+  },
+  "screenshots": ["lake-directory-hover-light.png", "lake-directory-hover-dark.png", "lake-directory-hover-narrow.png", "lake-directory-hover-detail.png", "lake-directory-hover-dev.png"],
+  "logs": ["/tmp/lake-directory-hover-ts.log", "/tmp/lake-directory-hover-tests.log", "/tmp/lake-directory-hover-build.log"]
+}

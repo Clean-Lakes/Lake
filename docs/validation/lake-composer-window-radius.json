@@ -1,0 +1,45 @@
+{
+  "status": "passed",
+  "timestamp": "2026-10-18T17:33:51.457725+08:00",
+  "branch": "experiment/adk-runtime",
+  "head": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+  "change": "Composer corner radius follows native window size: 20px on macOS 26, 10px on earlier macOS. Both responsive layouts use the same CSS token.",
+  "checks": {
+    "typescript": "passed",
+    "frontend": {
+      "passed": 216,
+      "failed": 0
+    },
+    "diff_check": "passed",
+    "embedded_production_css_token": "20px",
+    "light_computed_radius": "20px",
+    "dark_computed_radius": "20px",
+    "narrow_computed_radius": "20px",
+    "narrow_viewport": 390,
+    "narrow_document_width": 390,
+    "native_swift_build": "passed",
+    "native_Dev_launch_and_visual_comparison": "passed"
+  },
+  "build": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "log": "/tmp/lake-composer-radius-build.log",
+    "app": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "version": "0.3.17",
+    "signature": "verified deep strict",
+    "backendSha256": "eb0efaf69bc95a7a4689905e1883e58503c386bcc4f557a4526ed110f749519d"
+  },
+  "sourceSha256": {
+    "web-agent/web/src/theme.css": "244ec2baf7001e4ad2c1e4410dadea72de72ed2443ffff019300b36a240be6dc",
+    "web-agent/web/src/styles.css": "8c68b9bf1d5647183e9eac280fc7a6b6fb041bfa87308e3ccdaa08d3f7028ef8",
+    "client/macos/Sources/LakeDesktop/App.swift": "b57470ae49e9b66ff5c996bb1f869efa96ad122626c888874f4d5ab10799388f"
+  },
+  "screenshots": [
+    "lake-composer-radius-light.png",
+    "lake-composer-radius-dark.png",
+    "lake-composer-radius-narrow.png",
+    "lake-composer-radius-dev.png"
+  ],
+  "resource_commands_sent": false,
+  "permissions_changed": false
+}

@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-12",
+  "frontendTests": 59,
+  "frontendTypecheck": "passed",
+  "goRaceSuite": "passed",
+  "importTargetedRaceTests": "passed",
+  "uiImportWithoutReload": "passed",
+  "unconnectedResourceIndicatorCount": 0,
+  "signatureBuild": "scripts/build_lake_desktop.sh --install",
+  "clientRestarted": false,
+  "userBackendReplaced": false,
+  "screenshot": "lake-text-resource-import.png"
+}

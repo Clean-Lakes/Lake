@@ -28,7 +28,7 @@ window.lakeNativeModelPanel={role:'panel',command:async message=>{
  return true;
 }};
 const gates:Array<()=>void>=[];
-window.addEventListener('keydown',event=>{if(event.key==='F8'){event.preventDefault();gates.shift()?.();}});
+window.addEventListener('keydown',event=>{if(event.key==='F6'||event.key==='F7'){event.preventDefault();state.available={...state.available,loading:event.key==='F6'};send();}if(event.key==='F8'){event.preventDefault();gates.shift()?.();}});
 let effort='low';
 window.fetch=async(input,init)=>{
  const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href);

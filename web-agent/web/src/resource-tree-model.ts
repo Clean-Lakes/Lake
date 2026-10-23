@@ -9,7 +9,18 @@ export function projectResourceTree(projectId: string, nodes: ResourceTreeNode[]
 }
 
 export function treeChildren(nodes: ResourceTreeNode[], parent: string | null): ResourceTreeNode[] {
-  return nodes.filter(node => node.parentId === parent).sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
+  return nodes.filter(node => node.parentId === parent).sort(compareTreeNodes);
+}
+
+export function compareTreeNodes(a: ResourceTreeNode,b: ResourceTreeNode): number {
+  const rank=(node:ResourceTreeNode)=>node.builtin?-1:node.kind==='folder'?0:1;
+  return rank(a)-rank(b)||a.position-b.position||a.id.localeCompare(b.id);
+}
+
+// Vertical movement sorts siblings; move right over a folder's middle to nest.
+export function treeDropZone(target:ResourceTreeNode,ratio:number,offsetX:number):'before'|'inside'|'after' {
+  if(target.kind==='folder'&&offsetX>=48&&ratio>=.25&&ratio<=.75)return 'inside';
+  return ratio<.5?'before':'after';
 }
 
 export function canMoveInto(nodes: ResourceTreeNode[], source: string, parent: string | null): boolean {
@@ -24,10 +35,12 @@ export function canMoveInto(nodes: ResourceTreeNode[], source: string, parent: s
   return map.has(source);
 }
 
-export function dropPlacement(nodes: ResourceTreeNode[], target: ResourceTreeNode, zone: "before" | "inside" | "after") {
-  if (target.builtin) return {parentId: null, beforeId: treeChildren(nodes, null).find(node => !node.builtin)?.id ?? null};
+export function dropPlacement(nodes: ResourceTreeNode[], target: ResourceTreeNode, zone: "before" | "inside" | "after",sourceId?:string) {
+  const source=nodes.find(node=>node.id===sourceId);
+  const siblings=treeChildren(nodes,target.parentId).filter(node=>node.id!==sourceId&&!node.builtin);
+  if (target.builtin) return {parentId: null, beforeId: siblings.find(node=>!source||node.kind===source.kind)?.id ?? null};
   if (zone === "inside" && target.kind === "folder") return {parentId: target.id, beforeId: null};
-  const siblings = treeChildren(nodes, target.parentId);
+  if(source&&source.kind!==target.kind)return {parentId:target.parentId,beforeId:siblings.find(node=>node.kind==='resource')?.id??null};
   const next = siblings[siblings.findIndex(node => node.id === target.id) + 1];
   return {parentId: target.parentId, beforeId: zone === "before" ? target.id : next?.id ?? null};
 }

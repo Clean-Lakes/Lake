@@ -215,6 +215,10 @@ func listDirectoryAssets(c Config, a map[string]any) (any, error) {
 		if as.SSH != nil {
 			info["host"] = as.SSH.Host
 		}
+		if as.Kind == "kubernetes" {
+			info["endpoint"], info["context"], info["namespace"] = str(as.Settings["endpoint"]), str(as.Settings["context"]), str(as.Settings["namespace"])
+			info["query_tool"] = "query_kubernetes"
+		}
 		if r := str(as.Settings["ssh_asset_ref"]); r != "" {
 			info["ssh_asset_ref"] = assetAlias(r)
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
@@ -53,6 +54,10 @@ func latestRealUserText(messages []Object) string {
 }
 
 func memoryBodyPage(body string, offsetLine, byteOffset, limitLines int) (string, int, int, bool, error) {
+	return memoryBodyPageLimit(body, offsetLine, byteOffset, limitLines, 4096)
+}
+
+func memoryBodyPageLimit(body string, offsetLine, byteOffset, limitLines, maxBytes int) (string, int, int, bool, error) {
 	lines := strings.SplitAfter(body, "\n")
 	if offsetLine < 0 || offsetLine >= len(lines) || byteOffset < 0 || byteOffset > len(lines[offsetLine]) || !utf8.ValidString(lines[offsetLine][byteOffset:]) {
 		return "", 0, 0, false, errors.New("invalid_memory_page")
@@ -64,7 +69,7 @@ func memoryBodyPage(body string, offsetLine, byteOffset, limitLines int) (string
 			start = byteOffset
 		}
 		remaining := lines[line][start:]
-		room := 4096 - out.Len()
+		room := maxBytes - out.Len()
 		if room == 0 && len(remaining) > 0 {
 			return out.String(), line, start, true, nil
 		}
@@ -95,8 +100,31 @@ func (b *Server) projectMemoryBridge(ctx context.Context, id, name string, args 
 	session := b.Store.Session(id)
 	project := stringOf(session["projectId"])
 	settings := b.Store.MemorySettings(project)
+	if name == "project_memory_status" {
+		if b.Store.memoryV2 && settings["useEnabled"] == true {
+			scope, err := b.ResolveMemoryReadScope(id)
+			if err != nil {
+				return nil, err
+			}
+			b.Store.read(func() any {
+				current, historical := Object{}, Object{}
+				for _, row := range b.Store.scopedMemoryRows(scope, true) {
+					historical[stringOf(row["key"])] = row["revision"]
+					if b.Store.EvaluateMemoryEligibility(row, time.Now().UTC()) == "eligible" {
+						current[stringOf(row["key"])] = row["revision"]
+					}
+				}
+				settings["currentRevisions"], settings["historicalRevisions"] = current, historical
+				return nil
+			})
+		}
+		return settings, nil
+	}
 	if settings["useEnabled"] != true {
 		return nil, errors.New("project memory disabled")
+	}
+	if b.Store.memoryV2 && (name == "project_memory_index" || name == "list_project_memories" || name == "read_project_memory") {
+		return b.memoryV2Read(ctx, id, name, args)
 	}
 	if name == "project_memory_index" {
 		return Object{"index": b.Store.ProjectMemoryIndex(project), "revision": settings["revision"]}, nil
@@ -147,6 +175,12 @@ func (b *Server) projectMemoryBridge(ctx context.Context, id, name string, args 
 		return nil, errors.New("unknown project memory operation")
 	}
 	snapshot := b.Store.Snapshot(id)
+	userMessageID := ""
+	for _, message := range objects(snapshot["messages"]) {
+		if message["role"] == "user" {
+			userMessageID = stringOf(message["id"])
+		}
+	}
 	userText := latestRealUserText(objects(snapshot["messages"]))
 	operation := "save"
 	if name == "forget_project_memory" {
@@ -161,9 +195,12 @@ func (b *Server) projectMemoryBridge(ctx context.Context, id, name string, args 
 		return nil, errors.New("memory tool requires an active user turn")
 	}
 	if name == "forget_project_memory" {
-		entry := b.Store.ReadProjectMemory(project, key, false)
-		if !strings.Contains(strings.ToLower(userText), strings.ToLower(key)) && !strings.Contains(userText, stringOf(entry["description"])) {
-			return nil, errors.New("memory_to_forget_not_identified")
+		history, err := b.Engine.History(id)
+		if err != nil {
+			return nil, err
+		}
+		if !b.Store.identifiesMemoryToForget(project, userText, key, history, memoryForgetRetryTurns(objects(snapshot["messages"]))) {
+			return nil, errors.New("memory_to_forget_not_identified: nothing was deleted; ask the user to identify one memory by title or key. Do not retry with guessed keys or rewrite memory to bypass deletion")
 		}
 		return b.Store.CommitProjectMemory(project, MemoryMutation{Key: key, ExpectedRevision: memoryRevision(args["expectedRevision"]), Forget: true, OriginSessionID: id, OriginTurnID: view.RootTurnID, SourceKind: "user"}), nil
 	}
@@ -176,5 +213,9 @@ func (b *Server) projectMemoryBridge(ctx context.Context, id, name string, args 
 		return nil, errors.New("credentials cannot be saved in project memory")
 	}
 	restore, _ := args["restoreDeleted"].(bool)
-	return b.Store.CommitProjectMemory(project, MemoryMutation{Key: key, Type: stringOf(args["type"]), Description: stringOf(args["description"]), Body: body, ExpectedRevision: memoryRevision(args["expectedRevision"]), RestoreDeleted: restore, Verification: "user-stated", OriginSessionID: id, OriginTurnID: view.RootTurnID, SourceKind: "user"}), nil
+	var details *MemoryDetails
+	if b.Store.memoryV2 {
+		details = b.validateMemoryToolDetails(id, args)
+	}
+	return b.Store.CommitProjectMemory(project, MemoryMutation{Details: details, Key: key, Type: stringOf(args["type"]), Description: stringOf(args["description"]), Body: body, ExpectedRevision: memoryRevision(args["expectedRevision"]), RestoreDeleted: restore, Verification: "user-stated", OriginSessionID: id, OriginTurnID: view.RootTurnID, OriginMessageID: userMessageID, SourceKind: "user"}), nil
 }

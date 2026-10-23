@@ -1,20 +1,22 @@
 ---
 goal: 为 Lake 实现用户可见的策略资产、纠错血缘、有界自我改进和可复现对照实验
-version: 1.3
+version: 1.4
 date_created: 2026-10-20
-last_updated: 2026-10-21
+last_updated: 2026-10-22
 owner: Lake
-status: In Progress
+status: Superseded
 tags: [feature, strategy, learning, skills, harness, adk, evaluation]
 ---
 
 # Lake 策略学习与改进开发计划
 
+> **后续开发以 [用户资产积累与经验复用计划](refactor-user-assets-and-experience-1.md)为准（2026-10-22）。** 本文保留 P0～P8 的原始范围、交付与验收记录；其中在线纠错、递归优化及阶段默认策略不再代表后续投入方向。P8 的收益结论仍为 inconclusive。新计划只完成盘点，尚未修改运行代码或已有开关。
+
 本计划将提示词改进、用户提示词资产、来源血缘、有界纠错及开关对比组织为可分阶段交付的功能。用户能够查看学到了什么、为什么形成、在哪些场景生效，并编辑、停用或回滚。首期通过隔离故障环境证明策略效果，再开放正常任务中的只读纠错。
 
 实现采用 Go，内嵌当前 Lake；复用官方 ADK 的模型与工具执行链路。借鉴 Harness² 的“提出候选—试跑—对比—合成—再次验证—积累经验”，不把 Python、OpenCode 或 Claude CLI 作为客户端运行依赖，不宣称与原版实验结果等价。
 
-任务完成必须附对应验证证据，不能以文件存在、模型输出正常或命令退出码为零替代功能验收。P0 已经 PR #32 合入 develop，用户于 2026-10-21 要求继续 P1。P1 经 PR #38 合入；P2 经 PR #39 合入；P3 经 PR #40 合入；P4 经 PR #46 合入；P5 经 PR #48 合入；P6 经 PR #50 合入；P7 经 PR #53 合入；P8 已交付 macOS Dev 验收、使用说明和退出演练，T32 的 Windows 目标平台与完整推广门槛仍待补齐。P0 不改变应用运行行为，不表示策略功能已经可用。
+任务完成必须附对应验证证据，不能以文件存在、模型输出正常或命令退出码为零替代功能验收。P0 已经 PR #32 合入 develop，用户于 2026-10-21 要求继续 P1。P1 经 PR #38 合入；P2 经 PR #39 合入；P3 经 PR #40 合入；P4 经 PR #46 合入；P5 经 PR #48 合入；P6 经 PR #50 合入；P7 经 PR #53 合入；P8 已补真实 Dev provider、16 个真实隔离案例、27 次代表任务配对和数据库任务族的 M2 真实执行链；Windows 原生/打包验收已通过，T32 平台回归与采样证据已收齐。效果为 inconclusive，未采用候选或授权生产推广。P0 不改变应用运行行为，不表示策略功能已经可用。
 
 ## 1. 基线和现有能力
 
@@ -313,7 +315,7 @@ M2 首批 10～20 个案例，覆盖磁盘统计差异、服务日志错误路�
 
 ## 11. 分阶段实施任务
 
-每阶段一个可评审 PR；跨阶段拆分时保留默认关闭和接口兼容。P0 已合入且用户明确继续，T02 按该采用记录冻结；P1 已合入；P2 经 PR #39 合入；P3 经 PR #40 合入；P4 经 PR #46 合入；P5 经 PR #48 合入；P6 经 PR #50 合入；P7 经 PR #53 合入；P8 T33/T34 已完成，T32 的完整平台与推广门禁保持未完成。实现分支使用 `codex/` 前缀，并以 develop 为目标。
+每阶段一个可评审 PR；跨阶段拆分时保留默认关闭和接口兼容。P0 已合入且用户明确继续，T02 按该采用记录冻结；P1 已合入；P2 经 PR #39 合入；P3 经 PR #40 合入；P4 经 PR #46 合入；P5 经 PR #48 合入；P6 经 PR #50 合入；P7 经 PR #53 合入；P8 T33/T34 已完成；真实模型与真实服务补充报告已取得，T32 平台回归与采样证据已收齐。测试完成与推广收益分别记录。实现分支使用 `codex/` 前缀，并以 develop 为目标。
 
 | 阶段 | 任务 | 主要落点 | 依赖和退出标准 |
 | --- | --- | --- | --- |
@@ -325,7 +327,7 @@ M2 首批 10～20 个案例，覆盖磁盘统计差异、服务日志错误路�
 | P5 隔离评估 | [x] T20 合成快照夹具与复位执行器；[x] T21 独立 ADK 变体运行；[x] T22 客观评估与泄漏隔离；[x] T23 对比报告/保留集 | 测试夹具、`internal/ai/strategy_experiment`、Web 报告 | P4；A/B 可复现，环境复位证明、失败和未知样本全部可见 |
 | P6 有界优化 | [x] T24 有界快照提案/试跑/合成状态机；[x] T25 全链总预算与重试归一；[x] T26 合成复验与开发经验元数据；[x] T27 跨进程结果恢复/显式继续/取消 | `internal/strategy`、ADK 适配、实验任务协调 | P5；本期为快照模式，所有路径有上限；真实服务环境与完整 M2 效果验收仍未满足 |
 | P7 在线只读 | [x] T28 接入可信只读分类；[x] T29 结构化进展与停止；[x] T30 SRE 权限/未知/继续联动；[x] T31 任务卡与观察统计 | 工具 policy、SRE/ADK 接口、strategy 事件与 UI | P6；达到 M3，不重放外部修改，不重复计入既有底层重试 |
-| P8 发布验收 | [ ] T32 全套回归与平台验证；[x] T33 Dev 手工验收（macOS）；[x] T34 使用文档/验证记录/开关退出演练 | `docs/strategy-learning.md`、`docs/validation/lake-strategy-learning.*`、CI | 所有前序；macOS/Linux 后端与 Dev 退出已验收，Windows/真实模型及完整 M2 推广证据未齐，不自动发布正式版 |
+| P8 发布验收 | [x] T32 全套回归与平台验证；[x] T33 Dev 手工验收（macOS）；[x] T34 使用文档/验证记录/开关退出演练 | `docs/strategy-learning.md`、`docs/validation/lake-strategy-learning.*`、CI | 所有前序；macOS/Linux/Windows 平台与真实模型/真实环境采样完成；效果 inconclusive，保留基线。M2 实时优化链限数据库任务族，不宣称全任务/生产收益，不自动发布正式版 |
 
 实施从 T01 开始，不跨过 P1/P2 直接写自我重试循环。M1、M2、M3 可以分别交付；P7 不属于只完成 M1 时的验收要求。
 
@@ -471,3 +473,15 @@ M1/M2/M3 分别保持默认关闭。先在 Dev 启用，完成固定任务评估
 - T34：[使用说明](../docs/strategy-learning.md)、[验证矩阵与门禁](../docs/validation/lake-strategy-learning.md)、[机器可读记录](../docs/validation/lake-strategy-learning.json)。运行中关闭阻止新增采样，重新开启不重放旧任务，保留资产、失败、保守用量及审计；不恢复旧库覆盖账本。
 - 验收修复：原生资产确认改为内联两步/键盘操作；压缩 live 检查与 100ms 超时分离；测试中恢复 Store 与调度 ticker 的真实 race 使用现有锁同步。预算、范围、权限和验收条件未放宽。
 - 待补：Windows 目标平台结果、用户明确配置 Dev 模型的真实 provider smoke、冻结代表任务每臂至少三次配对及完整 M2 可复位真实服务故障环境。T32/整体发布门禁未通过，不能用固定模型样本替代；不改 VERSION，不创建生产提升 PR、标签或发布。
+
+
+### P8 补充真实验收记录 2026-10-22
+
+- PR #54 已合入 develop@`6e7b843`，本次通过独立 `codex/strategy-learning-p8-completion -> develop` PR 补交证据，不再操作已合并 PR 的 draft 状态。
+- 实际 runtime 与签名 Dev：`0b726ea9d1506d5ad8e6c3a82bd39c1db14143c1`，启动时干净。后续源码仅 Windows 测试/重试工作流变化，生产 Go/Web 源码字节一致；最终文档另外提交。
+- macOS 全量 Go、完整 AI/Web/strategy race、vet、ADK AST、95 个顶层策略专项通过；实际 Linux arm64 全量 Go/vet 通过。前端与上期 386 项/类型检查/构建的源码字节一致。签名 Dev 重新完成 9 个确定性样本、运行中关闭、普通问答、原生正常退出与同库重启无重放。
+- DeepSeek Flash（明确配置的 Dev 模型）真实 smoke 通过；16 个独立真实环境基线、三类任务 A/B/C 各 3 次共 27 配对均完整记录。Skills/记忆为空且一致、独立 Home/会话/nonce、固定隐藏检查，保留全部失败/未知与实际成本，不筛最好样本。
+- M2 使用现有官方 ADK 变体执行器的宿主只读回调，实际 SQLite 环境复位，完成五变体+两辅助、12 请求/50592 token；合成候选未通过保留集分类检查，未保存或采用。优化链只验证数据库任务族，不代表该候选在其余通用保留案例上有效。普通 UI 仍是合成快照，不能从 HTTP/模型开启实时宿主权限。
+- 配对 A/B 各 9/9，C 6/9；瞬时断连三次 C 分别 awaiting_user、awaiting_user、budget_exhausted。当前结论 inconclusive，保留基线，不扩大预算/权限、不改评分、不宣称通用提升。
+- 用户授权一次 Windows CI，失败仅重跑失败/未完成项；保留实际各次失败记录与分包通过结果。Windows 最终原生/打包及包内 SSH 在 run 39716955769 全部通过，T32 平台回归与采样记录完成。早期重试曾重复前端测试，已修正后续重试范围；证据完整保留。
+- 证据与原始报告：[P8 补充记录](../docs/validation/lake-strategy-learning-p8-completion.md)、[机器可读索引](../docs/validation/lake-strategy-learning-p8-completion.json)。没有修改 VERSION、默认开关或生产资源，没有创建发布 PR/标签/Release。

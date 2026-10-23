@@ -1,0 +1,93 @@
+{
+  "branch": "experiment/adk-runtime",
+  "change": "悬浮标题、正文容器和输入框共用工作区内容起点与宽度，滚动条不再对正文左侧额外占位。",
+  "verification": {
+    "typescript": "passed",
+    "frontend_tests": 244,
+    "diff_check": "passed",
+    "browser_measurements": [
+      {
+        "boxes": [
+          {
+            "element": "workspace-header",
+            "left": 328,
+            "right": 760.4609375,
+            "width": 432.4609375
+          },
+          {
+            "element": "timeline-list",
+            "left": 328,
+            "right": 1232,
+            "width": 904
+          },
+          {
+            "element": "composer-input",
+            "left": 328,
+            "right": 1232,
+            "width": 904
+          }
+        ],
+        "overflow": false,
+        "scrollbarSpace": 0,
+        "viewport": 1280
+      },
+      {
+        "boxes": [
+          {
+            "element": "workspace-header",
+            "left": 620,
+            "right": 1052.4609375,
+            "width": 432.4609375
+          },
+          {
+            "element": "timeline-list",
+            "left": 620,
+            "right": 1580,
+            "width": 960
+          },
+          {
+            "element": "composer-input",
+            "left": 620,
+            "right": 1580,
+            "width": 960
+          }
+        ],
+        "overflow": false,
+        "scrollbarSpace": 0,
+        "viewport": 1920
+      },
+      {
+        "boxes": [
+          {
+            "element": "workspace-header",
+            "left": 32,
+            "right": 317,
+            "width": 285
+          },
+          {
+            "element": "timeline-list",
+            "left": 32,
+            "right": 358,
+            "width": 326
+          },
+          {
+            "element": "composer-input",
+            "left": 32,
+            "right": 358,
+            "width": 326
+          }
+        ],
+        "overflow": false,
+        "scrollbarSpace": 0,
+        "viewport": 390
+      }
+    ],
+    "context_popover_position": "within viewport",
+    "signed_dev_build_install_launch": "passed",
+    "native_visual": "passed"
+  },
+  "screenshots": [
+    "lake-chat-alignment-dev.png",
+    "lake-chat-alignment-narrow.png"
+  ]
+}

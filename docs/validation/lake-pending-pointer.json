@@ -1,0 +1,37 @@
+{
+  "requests": [
+    "remove rectangular backdrop around queued bubbles",
+    "make drag handles easier to use"
+  ],
+  "changes": [
+    "outer panel/list explicitly transparent without shadows",
+    "replace broad clipped bubble shadows with light individual 1px/3px shadows",
+    "28x28 handle hit area; captured pointer; 4px movement threshold",
+    "row-midpoint insertion markers; auto scroll at list edges",
+    "cancel on pointer cancellation/lost capture or Escape; reject changed revisions",
+    "restore focus and reveal moved handle after successful reorder"
+  ],
+  "verification": {
+    "typecheck": "passed",
+    "frontendTests": 248,
+    "failures": 0,
+    "nativeBrowserDrag": "actual CUA drag first to last and last to first; expected persisted in-memory order",
+    "outsideDrop": "actual drag outside list leaves order unchanged",
+    "longQueue": "12 messages; fixture delivers edge pointermove while real pointer press held, RAF scroll reaches 323px; pointercancel leaves all 12 original IDs in order",
+    "narrowDark": "390x844; actual drag first to last, edit/save/resume pass; no horizontal overflow",
+    "handleHitbox": [
+      28,
+      28
+    ],
+    "outerAndListBackground": "rgba(0, 0, 0, 0)",
+    "outerAndListShadow": "none",
+    "bubbleBackground": "shared 55% translucent material",
+    "consoleErrors": [],
+    "desktop": "signed Dev build installed successfully"
+  },
+  "data": "fictional in-memory fixtures only; no real queue, model or host operations",
+  "screenshots": [
+    "lake-pending-pointer.png",
+    "lake-pending-pointer-narrow.png"
+  ]
+}

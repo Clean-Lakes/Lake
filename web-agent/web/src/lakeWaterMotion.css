@@ -25,6 +25,11 @@
 .execution-icon:is([data-kind="lakeContainer"],[data-kind="lakeWorkflow"],[data-kind="lakeNetwork"]) { --execution-icon-color:var(--tag-purple); }
 .execution-icon:is([data-kind="lakeFolder"],[data-kind="lakeSchedule"],[data-kind="lakeQuestion"]) { --execution-icon-color:var(--warning); }
 .execution-icon[data-kind="lakeFile"] { --execution-icon-color:var(--tag-orange); }
+.execution-icon:is([data-kind="database"],[data-kind="prometheus"],[data-kind="victoriametrics"]) { --execution-icon-color:var(--resource-database-foreground); }
+.execution-icon:is([data-kind="docker"],[data-kind="kubernetes"]) { --execution-icon-color:var(--tag-purple); }
+.execution-icon[data-kind="local"] { --execution-icon-color:var(--text-secondary); }
+.execution-icon[data-kind="redis"] { --execution-icon-color:var(--warning); }
+.execution-icon .resource-kind-icon { color:inherit; }
 @media(prefers-reduced-motion:reduce) {
  .lake-forward-water { animation:none; }
  .execution-icon-water { display:none; }

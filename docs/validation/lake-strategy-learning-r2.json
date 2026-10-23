@@ -1,0 +1,40 @@
+{
+  "sourceCommit": "279107893689f27f49b30db5cbe471325cdc6a44",
+  "buildDirty": false,
+  "backendSHA256": "3a57f2e2c887568b3143e97e30d2e0037a90b2d157c4155aa7c7d6b6e8158c5a",
+  "modelBenefitEvaluated": false,
+  "provider": "deterministic loopback SSE, official ADK",
+  "status": "passed",
+  "ordinaryModelRequests": 2,
+  "auxiliaryRequests": 1,
+  "foregroundSeconds": 0.112,
+  "foregroundCompletedBeforeAuxiliaryRelease": true,
+  "unknownReservationPreservedAfterRestart": true,
+  "automaticReplays": 0,
+  "candidates": 0,
+  "correctionCards": 0,
+  "businessDBIntegrity": "ok",
+  "adkDBIntegrity": "ok",
+  "platform": "darwin/arm64",
+  "checks": {
+    "goFull": "passed",
+    "raceStrategyOnlineSREMultiAgent": "passed",
+    "goVet": "passed",
+    "adkRuntimeBoundary": "passed",
+    "frontendTypecheck": "passed",
+    "frontendTests": {
+      "passed": 418,
+      "failed": 0
+    },
+    "frontendBuild": "passed",
+    "nativeDevUI": {
+      "light": "passed",
+      "dark": "passed",
+      "narrowWindow": "passed",
+      "keyboardFocusAndClipping": "passed",
+      "originalAppearanceRestored": true
+    }
+  },
+  "manualCIDispatched": false,
+  "productionReleased": false
+}

@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "changes": [
+    "Compact borderless queue above composer, next-message preview and expandable full list",
+    "Single message has no drag or move controls; edit/remove reveal on hover or focus, all controls visible on touch devices",
+    "Shorter queue placeholder; no duplicate queued-success toast; live count/status retained",
+    "Editing pauses queue; cancel/save returns focus; keyboard reordering expands list to keep moved item focused"
+  ],
+  "measurements": {
+    "singleQueueHeight": 57,
+    "singleRowHeight": 32,
+    "desktopWidth": 960,
+    "narrowViewport": [
+      390,
+      844
+    ],
+    "narrowQueueWidth": 342,
+    "horizontalOverflow": false
+  },
+  "verification": {
+    "typescript": "passed",
+    "frontendTests": 245,
+    "frontendFailures": 0,
+    "browser": [
+      "single preview and hidden action controls inspected",
+      "edit Enter save preserved resource IDs; Escape cancel and save return focus to correct edit button",
+      "pause/resume requests use current queue revision",
+      "new messages update count while collapsed preview remains one row",
+      "ArrowDown reorder expands list, preserves messages and moved grip focus",
+      "expanded three-item queue and file attachment retained through editing",
+      "save failure retains original item and displays error",
+      "remove last item hides empty queue",
+      "disconnected controls disabled",
+      "light/dark and narrow screenshots inspected"
+    ],
+    "signedDevBuild": "passed, installed, signature verified",
+    "native": "restarted only after live conversation completed; Dev loaded localhost:53659 with historical messages intact and empty queue; no model request or queue mutation performed for validation"
+  },
+  "screenshots": [
+    "lake-pending-compact-light.png",
+    "lake-pending-compact-dark.png",
+    "lake-pending-compact-narrow.png"
+  ]
+}

@@ -7,7 +7,7 @@ import (
 )
 
 func clusterLogObservationTool() Tool {
-	return Tool{Name: "observe_cluster_logs", Description: "Read logs of one exact Kubernetes Pod on an assigned control-plane/local resource after verifying cluster identity. Obtain namespace, Pod and container names from observe_cluster pods; never guess log filenames. Bounded to 150 lines, 64 KiB and 1..60 minutes. previous optionally reads the last terminated container's logs. No exec, Secret, raw kubeconfig, arbitrary selector or mutation is accepted. Deep may use this to investigate Redis/database workloads on SSH hosts without a database connection.", Parameters: map[string]any{"type": "object", "properties": map[string]any{"asset_ref": map[string]any{"type": "string"}, "namespace": map[string]any{"type": "string"}, "pod": map[string]any{"type": "string"}, "container": map[string]any{"type": "string"}, "context": map[string]any{"type": "string"}, "kubeconfig": clusterConfigSchema(), "since_minutes": map[string]any{"type": "integer", "minimum": 1, "maximum": 60}, "previous": map[string]any{"type": "boolean"}}, "required": []string{"asset_ref", "namespace", "pod"}}}
+	return Tool{Name: "observe_cluster_logs", Description: "Read logs of one exact Kubernetes Pod. An assigned Kubernetes resource uses its saved API endpoint and Kubeconfig directly, without SSH; omit context/kubeconfig and discover Pod/container names through observe_cluster first. Assigned control-plane/local SSH resources use kubectl after matching cluster identity. Obtain namespace, Pod and container names from observe_cluster pods; never guess log filenames. Bounded to 150 lines, 64 KiB and 1..60 minutes. previous optionally reads the last terminated container's logs. No exec, Secret, raw kubeconfig, arbitrary selector or mutation is accepted. Deep may use this to investigate Redis/database workloads on SSH hosts without a database connection.", Parameters: map[string]any{"type": "object", "properties": map[string]any{"asset_ref": map[string]any{"type": "string"}, "namespace": map[string]any{"type": "string"}, "pod": map[string]any{"type": "string"}, "container": map[string]any{"type": "string"}, "context": map[string]any{"type": "string"}, "kubeconfig": clusterConfigSchema(), "since_minutes": map[string]any{"type": "integer", "minimum": 1, "maximum": 60}, "previous": map[string]any{"type": "boolean"}}, "required": []string{"asset_ref", "namespace", "pod"}}}
 }
 
 var kubeObjectName = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$`)
@@ -48,6 +48,9 @@ func clusterLogCommand(a map[string]any) (string, error) {
 }
 
 func (e *Engine) observeClusterLogs(ctx context.Context, c Config, as Asset, a map[string]any) (any, error) {
+	if as.Kind == "kubernetes" {
+		return queryKubernetesAsset(ctx, c, as, a)
+	}
 	if as.Kind != "local" && as.Kind != "ssh" {
 		return nil, errors.New("Pod 日志仅支持分配的本机或 SSH 主机")
 	}

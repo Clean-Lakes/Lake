@@ -1,0 +1,31 @@
+{
+  "port": 4180,
+  "projectId": "0051f83aadde6a27ffc1c29830d397f3",
+  "sessionId": "2a3bc582d6443c7696826803642fb6f8",
+  "resourceId": "f660c11a6bbb490f3c0fa02e77fdd698",
+  "terminalId": "3c1d8e3988ef84216a48298e46aa5c3e",
+  "generation": "c1b3c4f7ba3837f9931c057047273761",
+  "scopeSessionId": "3a8aeea3983eec726ed064441b441716",
+  "checks": {
+    "signedRuntimeWithoutNode": true,
+    "cwdObserved": true,
+    "unapprovedAdoptionDenied": true,
+    "adoptAndTransfer": true,
+    "abortPreservesRunningCommand": true,
+    "terminalGenerationPreserved": true,
+    "scopeConversationReply": true,
+    "cwdInjectedIntoActualModelRequest": true,
+    "scopeRecovery": true,
+    "restartScopeRecovery": true,
+    "recreatedGenerationWarning": true,
+    "restartRequiresNewAdoption": true,
+    "priorConversationRetained": true,
+    "explicitAdoptionRemembersResource": true
+  },
+  "date": "2026-10-11",
+  "branch": "claude/lake-web-agent-v1",
+  "binarySHA256": "08288a2ca05fbf4274a387b344b8782bfcea1f54da92c7a3721655f96e4d8e8b",
+  "signingAuthority": "Lake Local Development Code Signing",
+  "browserConsoleErrors": 0,
+  "frontendTestsPassed": 35
+}

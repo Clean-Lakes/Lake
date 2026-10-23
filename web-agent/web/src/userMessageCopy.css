@@ -1,0 +1,12 @@
+.ai-role-user { position:relative; }
+.user-message-actions { position:absolute; top:8px; right:100%; display:flex; width:34px; padding-right:6px; opacity:0; pointer-events:none; white-space:normal; }
+.user-message-copy { display:grid; place-items:center; flex:none; width:28px; height:28px; padding:0; border:0; border-radius:var(--radius-settings-icon); corner-shape:var(--corner-window); color:var(--text-secondary); background:transparent; cursor:pointer; }
+.ai-role-user:hover > .user-message-actions,.ai-role-user:focus-within > .user-message-actions { opacity:1; pointer-events:auto; }
+.user-message-copy:hover { color:var(--foreground); background:var(--surface-hover); }
+.user-message-copy:focus-visible { outline:2px solid var(--focus-outline); outline-offset:1px; }
+.user-message-actions[data-state="error"] > button { color:var(--danger); }
+@media(hover:none),(pointer:coarse) {
+ .ai-role-user:has(> .user-message-actions) { max-width:calc(100% - 50px); }
+ .user-message-actions { top:0; width:50px; opacity:1; pointer-events:auto; }
+ .user-message-copy { width:44px; height:44px; }
+}

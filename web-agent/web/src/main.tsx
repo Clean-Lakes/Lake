@@ -9,10 +9,13 @@ import "./providerIcon.css";
 import "./composerModelSelect.css";
 import "./composerCompletion.css";
 import "./assistantProse.css";
+import "./objectReferences.css";
 import { initializeAppearance } from "./appearance";
+import { initializeFocusModality } from "./focusModality";
 import { WindowsChrome } from "./WindowsChrome";
 
 initializeAppearance();
+initializeFocusModality();
 if (window.lakeWindowsChrome) document.documentElement.classList.add("lake-windows-chrome");
 
 const root = document.getElementById("root");

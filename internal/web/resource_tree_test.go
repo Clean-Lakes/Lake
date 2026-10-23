@@ -5,6 +5,45 @@ import (
 	"testing"
 )
 
+func TestResourceTreeGroupsFoldersBeforeAssetsAndKeepsManualOrder(t *testing.T) {
+	b, h := fixture(t)
+	sid, local := newSession(t, h)
+	project := stringOf(b.Store.Session(sid)["projectId"])
+	first := stringOf(b.Store.CreateResource(project, "First", "ssh", Object{})["id"])
+	second := stringOf(b.Store.CreateResource(project, "Second", "ssh", Object{})["id"])
+	create := func(name string) string {
+		for _, node := range b.Store.EditResourceTree(project, Object{"operation": "create", "name": name}) {
+			if node["name"] == name {
+				return stringOf(node["id"])
+			}
+		}
+		t.Fatal("folder missing")
+		return ""
+	}
+	a, z := create("A"), create("Z")
+	check := func(want ...string) {
+		t.Helper()
+		got := []string{}
+		for _, n := range b.Store.treeChildren(project, "", "") {
+			if stringOf(n["resourceId"]) != local {
+				got = append(got, stringOf(n["id"]))
+			}
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("wrong grouped order: %v", got)
+		}
+	}
+	check(a, z, first, second)
+	b.Store.EditResourceTree(project, Object{"operation": "move", "nodeId": z, "beforeId": a})
+	check(z, a, first, second)
+	// A resource dropped around a folder lands at the beginning of the resource group.
+	b.Store.EditResourceTree(project, Object{"operation": "move", "nodeId": second, "beforeId": z})
+	check(z, a, second, first)
+	// A folder dropped after assets remains the last folder, not below standalone assets.
+	b.Store.EditResourceTree(project, Object{"operation": "move", "nodeId": z})
+	check(a, z, second, first)
+}
+
 func TestResourceTreeHierarchyOrderScopeAndPersistence(t *testing.T) {
 	b, h := fixture(t)
 	id, _ := newSession(t, h)

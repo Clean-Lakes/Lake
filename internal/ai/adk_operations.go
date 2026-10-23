@@ -41,11 +41,11 @@ type nativeEvidence struct {
 	At          time.Time
 }
 
-type nativeOperationBlockedError struct {
+type nativeOperationReplayError struct {
 	ID, Tool, Target, Status, Handle string
 }
 
-func (e *nativeOperationBlockedError) recovery() map[string]any {
+func (e *nativeOperationReplayError) recovery() map[string]any {
 	terminal, entry, ok := strings.Cut(e.Handle, ":")
 	if e.Tool == "shell" && ok && terminal != "" && entry != "" {
 		// shell_output is advertised to the model and accepts this exact
@@ -55,12 +55,12 @@ func (e *nativeOperationBlockedError) recovery() map[string]any {
 	return nil
 }
 
-func (e *nativeOperationBlockedError) Error() string {
-	hint := "请核实原操作实际结果"
+func (e *nativeOperationReplayError) Error() string {
+	hint := "原操作结果保留在执行记录中"
 	if e.recovery() != nil {
 		hint = "可用 shell_output 读取 shell_id=" + e.ID + " 的原命令记录"
 	}
-	return fmt.Sprintf("操作未派发：原操作 %s（%s，目标：%s，状态：%s）仍需核实。可继续只读检查；%s。不要更换终端或入口重复尝试，调整权限不会解除此保护", e.ID, e.Tool, e.Target, e.Status, hint)
+	return fmt.Sprintf("操作未重复派发：调用 %s（%s，目标：%s，状态：%s）已经登记；%s。后续新操作按当前权限执行，不受此记录锁定", e.ID, e.Tool, e.Target, e.Status, hint)
 }
 
 func (e *Engine) dispatchNativeOperation(ctx context.Context, s *session, c Config, call Call, risk, target, fingerprint string) (*nativeOperation, error) {
@@ -104,23 +104,27 @@ func (e *Engine) dispatchNativeOperation(ctx context.Context, s *session, c Conf
 		operation.ID = identity.OperationID
 	}
 	err = store.DB.Transaction(func(tx *gorm.DB) error {
-		if risk != "readonly" {
-			var blocking nativeOperation
-			err := tx.Where("session_id = ? AND status IN ? AND risk <> ?", operation.SessionID, []string{"unknown", "dispatched"}, "readonly").Order("started_at, id").First(&blocking).Error
-			if err == nil {
-				return &nativeOperationBlockedError{ID: blocking.ID, Tool: blocking.Tool, Target: utf8Prefix(redact(blocking.Target, c), 120), Status: blocking.Status, Handle: blocking.Handle}
-			}
-			if !errors.Is(err, gorm.ErrRecordNotFound) {
-				return err
-			}
-		}
+		// Prior unknown/running operations do not create a session-wide lock.
+		// Preserve durable invocation identity and exact unfinished-call replay
+		// protection while allowing different commands through normal permissions.
 		var prior nativeOperation
 		query := tx.First(&prior, "id = ?", operation.ID)
 		if query.Error == nil {
-			return errors.New("操作已派发或结果未明，不能再次执行")
+			return &nativeOperationReplayError{ID: prior.ID, Tool: prior.Tool, Target: utf8Prefix(redact(prior.Target, c), 120), Status: prior.Status, Handle: prior.Handle}
 		}
 		if !errors.Is(query.Error, gorm.ErrRecordNotFound) {
 			return query.Error
+		}
+		// Recovery can regenerate a provider call with a fresh ID. Only an exact
+		// unfinished tool/arguments/target match is a replay, not another command.
+		if risk != "readonly" {
+			query := tx.Where("session_id = ? AND tool = ? AND args_hash = ? AND target = ? AND status IN ?", operation.SessionID, call.Name, operation.ArgsHash, target, []string{"unknown", "dispatched"}).Order("started_at, id").First(&prior)
+			if query.Error == nil {
+				return &nativeOperationReplayError{ID: prior.ID, Tool: prior.Tool, Target: utf8Prefix(redact(prior.Target, c), 120), Status: prior.Status, Handle: prior.Handle}
+			}
+			if !errors.Is(query.Error, gorm.ErrRecordNotFound) {
+				return query.Error
+			}
 		}
 		approvalCallID := call.ID
 		if original, ok := ctx.Value(adkApprovalCallKey{}).(string); ok {

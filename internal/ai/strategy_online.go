@@ -533,7 +533,7 @@ func onlineFailure(err error, value any) string {
 	if errors.As(err, &stopped) {
 		return "controller_stopped"
 	}
-	var blocked *nativeOperationBlockedError
+	var blocked *nativeOperationReplayError
 	if errors.As(err, &blocked) {
 		return "unknown"
 	}
@@ -583,6 +583,12 @@ func (e *Engine) onlineObserve(s *session, c Config, call Call, trace *onlinePol
 		}
 	}
 	if class == "controller_stopped" {
+		return nil
+	}
+	// Memory consent/CAS is independent of resource correction, even in an
+	// explicitly enabled experiment. Admission still forbids writes while a
+	// correction is active; memory success cannot close a resource check.
+	if memoryTool(call.Name) {
 		return nil
 	}
 	// Session bookkeeping, questions and reports do not start optimization.

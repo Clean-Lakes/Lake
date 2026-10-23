@@ -1,0 +1,130 @@
+{
+  "status": "passed",
+  "verifiedAt": "2026-10-18T14:40:27.798668+08:00",
+  "branch": "experiment/adk-runtime",
+  "head": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+  "changesCommitted": false,
+  "fileSHA256": {
+    "internal/web/attachments.go": "2264c6eb10823f543f3a3deddebda4b799fb42435c08f091d3cbefd803747b52",
+    "internal/web/attachments_test.go": "3b820d357f93db6c6fd2abe956e6d51c92325c51aada3bc999ad4c3eb79f91b5",
+    "internal/web/agent.go": "cee04967b2ca653a164539830bb57febc176e40bcb74318ecc422b034e118cdc",
+    "internal/web/message_queue.go": "924a026c25fe5825e5b5eb73d055a2ab6d2d652890f7b690e0305f07cbdfae17",
+    "internal/web/message_queue_store.go": "1f828b9d4c98bd87cbe05f541b7e6443a94272717b942383527214f7846e4ca1",
+    "internal/web/store.go": "3ae25dbbb28c47bba3a89f9f17d86ae1326884ff4c9d006167180d70d03405d2",
+    "internal/web/resource_import.go": "183c873f7a71a2a9e048f1fdb180758aab7bd67c0519b321f3db5dfd10470f80",
+    "internal/web/server.go": "cf1d4e7a9816d0f8237c8767325b84ef8a3d9836e3eca15f45b97c7c9bff5cdf",
+    "internal/ai/attachments.go": "db54401da4eb5b43fffff02c8c65cb3cecfc1bdd42a7cc5fe23b48b32bb49533",
+    "internal/ai/attachments_test.go": "4319d9d5be10eeedc7f5116fec7b3c3bdd64e8827fe72dd65a67cdb5ac95d483",
+    "internal/ai/catalog.go": "761253611afe2c6de379def7806c609d4b05a650e0123a05405138f2701184e0",
+    "internal/ai/tools.go": "7d17cb5303121c58426405b4b7b77403943c9c9215d8c1f4ca392ecb9a6a5e94",
+    "internal/ai/permissions.go": "1bf01ecd217b25afebcf6f9c488412c335893caa4da72ab23fb0bd93ce9f1e07",
+    "internal/ai/directory_targets.go": "abdb10f6825abf116fb6427851b79a28a2c7ec6e529061fe6dadff4b78082689",
+    "internal/ai/sre_tools.go": "1f34e86f2d3cabf1688e0ef5edafb1eeb82a6faa67957a41d259cbbd68f598d8",
+    "internal/ai/runtime.go": "988ee1a1c774e5659c90e8964f47e1e02b457f2aa311309af996266c574d1e31",
+    "internal/ai/services_test.go": "2933249aeb084b4543faebb42e57fec2c8edf11086c9d643ccf83264df5e0baa",
+    "web-agent/web/src/fileAttachments.ts": "46d3085d35e093f5a9d3113f3d1cde4c40eff2ba2a30e1b7c53683b6cc53e5d0",
+    "web-agent/web/src/App.tsx": "f6bbfb0b61191c529013a2ad45d83f37794abc4ec2ad729ac51179070a5dbc62",
+    "web-agent/web/src/AIPanel.tsx": "85750f0f81253d83de2fdd3b23eaf5803c6f04736a7215eaf0e5ec76e193c187",
+    "web-agent/web/src/api.ts": "74e35290ce07335af389ad5f96a4ecc51d055a95007a44ebf975d99c5b6eb420",
+    "web-agent/web/src/approvalPresentation.ts": "841a9aeebe3c0a6294b12bb91488bdc8c24d41e897ebe2178ac24dc55b434a37",
+    "web-agent/web/src/activity.ts": "29546f1ff853a28307967b26df7332cdc135a3400e3a8aac5668b2e47155b0a8",
+    "web-agent/shared/contracts.ts": "331cc10209db710e446f96c4b7fb24e070dc9b2d16938dc1418a443843c5b427",
+    "client/macos/Sources/LakeDesktop/App.swift": "77cab1db0dcd3cacc97d4659534fa05bc2a66a180cbc77907fcc1775ed26fbfb"
+  },
+  "limits": {
+    "fileBytes": 536870912,
+    "filesPerMessage": 8,
+    "archivePreviewEntries": 2000,
+    "tarPreviewDecompressedBytes": 33554432,
+    "textPreviewSourceBytes": 1048576
+  },
+  "capabilities": [
+    "Select, drop and clipboard file attachment upload without MIME allowlist",
+    "Streaming binary storage with private permissions and session/project ownership",
+    "Attachment metadata retained in message history and pending queue across restart",
+    "Bounded archive inspection and unsafe path/link detection",
+    "Approved, SHA256-verified local/SSH/container file staging with explicit overwrite",
+    "Existing command/file tools extract, deploy and validate on the selected resource",
+    "Native macOS attachment download save panel"
+  ],
+  "checks": [
+    {
+      "command": "go test -race ./internal/ai ./internal/web -count=1 -timeout=5m",
+      "exitCode": 0,
+      "log": "/tmp/lake-attachments-go-tests.log"
+    },
+    {
+      "command": "pnpm --dir web-agent test:frontend",
+      "testsPassed": 207,
+      "exitCode": 0,
+      "log": "/tmp/lake-attachments-frontend.log"
+    },
+    {
+      "command": "pnpm --dir web-agent check",
+      "exitCode": 0
+    },
+    {
+      "command": "go vet ./internal/ai ./internal/web",
+      "exitCode": 0
+    },
+    {
+      "command": "python3 scripts/check_adk_runtime_boundary.py",
+      "exitCode": 0
+    },
+    {
+      "command": "swift run --package-path client/macos --build-system native LakeUpdateTests",
+      "exitCode": 0,
+      "log": "/tmp/lake-attachments-swift-tests.log"
+    },
+    {
+      "command": "scripts/build_lake_desktop.sh --dev --install",
+      "exitCode": 0,
+      "log": "/tmp/lake-attachments-build.log"
+    },
+    {
+      "command": "codesign --verify --deep --strict ~/Applications/Lake Dev.app",
+      "exitCode": 0
+    }
+  ],
+  "acceptance": {
+    "actualZIPStagedAndExtractedThroughADK": true,
+    "deployedBinaryContentsVerified": true,
+    "approvalRejectionCreatesNoTarget": true,
+    "silentCommandsCannotBypassFileWriteApproval": true,
+    "actualLoopbackSSHBinaryTransferVerified": true,
+    "crossSessionRejected": true,
+    "tamperedOriginalRejected": true,
+    "emptyFileAndUnknownMIMEAccepted": true,
+    "failedOversizeUploadCleaned": true,
+    "queueAndMessageMetadataReopened": true,
+    "nativeFinderZIPClipboardPaste": true,
+    "nativeClipboardStoredBytes": [
+      {
+        "bytes": 155,
+        "sha256Verified": true,
+        "fileMode": "0o600"
+      }
+    ],
+    "nativeTestDraftRemoved": true,
+    "realUserResourceCommandsExecuted": 0,
+    "fixtureMultiFilePicker": true,
+    "fixtureReactDropEventEndToEnd": true,
+    "nativeOSDragAcrossWindowsTested": false,
+    "httpDownloadBytesVerified": true,
+    "nativeDownloadDelegateCompiled": true,
+    "nativeDownloadSavePanelManuallyTested": false
+  },
+  "installed": {
+    "path": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleID": "com.cleanlakes.lake.desktop.dev",
+    "backendSHA256": "4a92c77100fed5229df1d52760ec58f176a9c47e87b32f820edd0854777f0dd9",
+    "sameAsBuiltBinary": true,
+    "launched": true,
+    "screenshot": "docs/validation/lake-file-attachments-dev.png"
+  },
+  "notes": [
+    "Synthetic package and temporary targets only; no deployment to a user server.",
+    "Native Finder clipboard was exercised; browser drag testing used a visible fixture control dispatching a real DOM DataTransfer drop event.",
+    "Current checkout and original dirty changes retained; release app/data untouched."
+  ]
+}

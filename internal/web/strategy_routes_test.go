@@ -145,8 +145,13 @@ func TestStrategySkillImportPermissionsAndSourceChanges(t *testing.T) {
 	ctx := StrategyContext{ProjectID: project}
 	scope := strategy.Scope{Kind: strategy.ProjectScope, ProjectID: project}
 	enableStrategyFixture(t, b.Store)
-	v, _ := b.Store.GetStrategyRevision(ctx, asset, 1)
-	_, err := b.Store.BindStrategyAsset(ctx, scope, "adopt", StrategyBindingInput{Action: "adopt", Ref: v.Value.Ref})
+	// This test checks Skill permissions after explicit R4 qualification.
+	_, err := b.Store.ReviseStrategyAsset(ctx, asset, "qualify", 1, 1, StrategyAssetInput{Title: "Qualified Skill", Kind: strategy.DomainProcedure, Body: body, Applicability: strategy.Applicability{}, Reuse: &strategy.ReusePolicy{Keywords: []string{"report"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, _ := b.Store.GetStrategyRevision(ctx, asset, 2)
+	_, err = b.Store.BindStrategyAsset(ctx, scope, "adopt", StrategyBindingInput{Action: "adopt", Ref: v.Value.Ref})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +173,7 @@ func TestStrategySkillImportPermissionsAndSourceChanges(t *testing.T) {
 	if err != nil || len(result.Assets) != 0 || result.Selection.Omitted[0].Reason != "skill_source_changed" {
 		t.Fatal(result, err)
 	}
-	_, err = b.Store.ReviseStrategyAsset(ctx, asset, "revise", 1, 1, StrategyAssetInput{Title: "revised", Kind: strategy.DomainProcedure, Body: "User authored replacement.", Applicability: strategy.Applicability{}})
+	_, err = b.Store.ReviseStrategyAsset(ctx, asset, "revise", 2, 2, StrategyAssetInput{Title: "revised", Kind: strategy.DomainProcedure, Body: "User authored replacement.", Applicability: strategy.Applicability{}})
 	if err != nil {
 		t.Fatal(err)
 	}

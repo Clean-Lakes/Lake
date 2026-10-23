@@ -93,6 +93,7 @@ func (e *Engine) observation(ctx context.Context, c Config, name string, a map[s
 	}
 	defer func() { <-slots }()
 	var value any
+	memoryObservationStarted := time.Now()
 	switch name {
 	case "observe_cluster":
 		value, err = e.observeCluster(ctx, c, as, a)
@@ -180,7 +181,7 @@ func (e *Engine) observation(ctx context.Context, c Config, name string, a map[s
 			err = errors.New("日志路径不存在、不是普通文件或指向符号链接；请使用实际日志路径，或改用 observe_journal / observe_cluster_logs，不要重复猜路径")
 		}
 	}
-	result, recordErr := e.recordObservation(c, as.ID, name, value, err)
+	result, recordErr := e.recordObservation(c, as.ID, name, value, err, memoryObservationStarted)
 	if cacheRead && recordErr == nil {
 		w.mu.Lock()
 		if w.sreObservations == nil {

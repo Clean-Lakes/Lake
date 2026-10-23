@@ -21,6 +21,7 @@ func (e *Engine) resolveTurnStrategies(ctx context.Context, s *session, c Config
 	}
 	s.mu.Lock()
 	id := s.state.View.Session
+	task := strategy.BoundedTask(s.state.RootQuestion)
 	var frozen *strategy.Selection
 	if b := s.state.PromptBaseline; b != nil {
 		frozen = b.Strategy
@@ -52,13 +53,30 @@ func (e *Engine) resolveTurnStrategies(ctx context.Context, s *session, c Config
 		kinds = append(kinds, "local")
 	}
 	allowed := c.Permissions == nil || !c.Permissions.DenyLocalExecution && c.Permissions.SilentReadFiles
-	result, err := e.Strategies(ctx, id, strategy.SelectionQuery{Profile: profile, ResourceKinds: kinds, SkillReadAllowed: allowed}, frozen)
+	result, err := e.Strategies(ctx, id, strategy.SelectionQuery{Profile: profile, ResourceKinds: kinds, SkillReadAllowed: allowed, TaskText: task, ModelHash: StrategyReuseModelHash(c.Model), ToolHash: strategy.ContentHash(js(Catalog(profile)))}, frozen)
 	if err != nil {
-		return empty, errors.New("策略设置、来源或适用范围已变化；本轮已停止，请重新发送以使用最新配置")
+		if ctx.Err() != nil {
+			return empty, ctx.Err()
+		}
+		if frozen != nil && len(frozen.Selected) > 0 {
+			// Already-used content cannot be safely retained when its source or
+			// permission can no longer be validated. Never fail open here.
+			return empty, errors.New("已使用的策略来源或权限无法确认；本轮已停止，请重新发送")
+		}
+		// Optional enrichment has not entered the model context. Freeze an empty
+		// selection, retain a safe diagnostic, and continue the normal ADK turn.
+		result = empty
+		err = nil
+		result.Selection.Omitted = append(result.Selection.Omitted, strategy.OmittedAsset{Reason: "asset_service_unavailable"})
 	}
 	for _, v := range result.Assets {
 		if redact(v.Body, c) != v.Body {
-			return empty, errors.New("策略正文包含敏感内容，已停止注入")
+			if frozen != nil && len(frozen.Selected) > 0 {
+				return empty, errors.New("已使用的策略正文包含敏感内容；本轮已停止")
+			}
+			result = empty
+			result.Selection.Omitted = append(result.Selection.Omitted, strategy.OmittedAsset{Reason: "sensitive_content"})
+			break
 		}
 	}
 	s.mu.Lock()
@@ -77,22 +95,26 @@ func (d *adkTurnDriver) strategyRequest(ctx context.Context, history []Message, 
 	}
 	selection := result.Selection
 	selection.Selected = []strategy.RevisionRef{}
-	remaining := min(8192, max(0, (d.config.Model.ContextWindow-d.config.Model.MaxOutput)*2-historyCost(history)-len(js(tools))))
+	remaining := min(strategy.MaxAssetPromptBytes, max(0, (d.config.Model.ContextWindow-d.config.Model.MaxOutput)*2-historyCost(history)-len(js(tools))))
 	selected := []strategy.AssetRevision{}
 	for _, a := range result.Assets {
 		reason := ""
 		for _, m := range history {
-			matched := strings.Contains(m.Content, a.Body)
+			body := strategy.ComparableContent(a.Body)
+			matched := body != "" && strings.Contains(strategy.ComparableContent(m.Content), body)
 			if m.Role == "tool" && (m.Name == "load_skill" || memoryTool(m.Name)) {
 				var data map[string]any
 				if json.Unmarshal([]byte(m.Content), &data) == nil {
-					matched = matched || str(data["body"]) == a.Body || str(data["content"]) == a.Body
+					matched = matched || body != "" && (strings.Contains(strategy.ComparableContent(str(data["body"])), body) || strings.Contains(strategy.ComparableContent(str(data["content"])), body))
 				}
 			}
 			if matched {
 				reason = "duplicate_context"
 				break
 			}
+		}
+		if reason == "" && len(selected) >= strategy.MaxSelectedAssets {
+			reason = "asset_count"
 		}
 		if reason == "" && strategy.AssetPromptCost(a) > remaining {
 			reason = "input_budget"
@@ -105,6 +127,15 @@ func (d *adkTurnDriver) strategyRequest(ctx context.Context, history []Message, 
 		selected = append(selected, a)
 		selection.Selected = append(selection.Selected, a.Ref)
 	}
+	reasons := []strategy.SelectionReason{}
+	for _, reason := range result.Selection.Reasons {
+		for _, ref := range selection.Selected {
+			if reason.Ref == ref {
+				reasons = append(reasons, reason)
+			}
+		}
+	}
+	selection.Reasons = reasons
 	if len(selected) > 0 && len(history) > 0 {
 		// Encode content as data; a body cannot terminate this structure or create
 		// another protocol role. Fixed execution permissions remain authoritative.
@@ -128,9 +159,15 @@ func (e *Engine) InvalidateStrategies(projectID string) {
 	e.mu.Unlock()
 	for _, s := range all {
 		s.mu.Lock()
-		if s.cancel != nil && s.state.PromptBaseline != nil && s.state.PromptBaseline.Strategy != nil && (projectID == "" || s.state.Config.MemoryProjectID == projectID) {
+		if s.cancel != nil && s.state.PromptBaseline != nil && s.state.PromptBaseline.Strategy != nil && (len(s.state.PromptBaseline.Strategy.Selected) > 0 || s.state.Config.StrategyCorrectEnabled) && (projectID == "" || s.state.Config.MemoryProjectID == projectID) {
 			s.cancel()
 		}
 		s.mu.Unlock()
 	}
+}
+
+// Deliberately excludes endpoint URLs, headers, credentials, output budgets and
+// reasoning settings. Silent provider alias updates cannot be detected here.
+func StrategyReuseModelHash(m Model) string {
+	return strategy.ContentHash(js(struct{ Name, Protocol string }{m.Name, protocol(m)}))
 }

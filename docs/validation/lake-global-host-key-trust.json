@@ -1,0 +1,36 @@
+{
+  "scope": "Lake home",
+  "trustIdentity": "canonical hostname/address + SSH port",
+  "storage": "~/.lake/secrets/ssh-host-<peer-sha256>.known_hosts",
+  "filePermissions": "0600",
+  "verified": [
+    "reuse across resources, projects and conversations",
+    "reuse after service restart",
+    "no credentials sent by fingerprint probe",
+    "no terminal created before initial confirmation",
+    "changed fingerprint requires confirmation",
+    "reject leaves previous pin unchanged",
+    "initial readonly creation combines trust and terminal permission"
+  ],
+  "tests": {
+    "fullGo": "passed (web 78.953s)",
+    "targetedRace": "passed (20.509s)",
+    "goVet": "passed",
+    "frontend": "18 passed",
+    "typescript": "passed",
+    "signedBuild": "scripts/build_lake.sh passed"
+  },
+  "service": {
+    "pid": 35937,
+    "origin": "http://localhost:4177",
+    "bundle": [
+      "/assets/index-BT_6Ppwj.js"
+    ],
+    "binarySHA256": "7cdbc8744ea0146caf37a95dcb0bbb08e9d3f0333ee77eb7fc2bee4575590ae8"
+  },
+  "screenshot": "docs/validation/lake-global-host-key-dialog.png",
+  "syntheticUIExample": true,
+  "realRemoteConnections": false,
+  "realModelRequests": false,
+  "realFingerprintAcceptedByAgent": false
+}

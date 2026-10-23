@@ -23,6 +23,16 @@ func (e *Engine) NeedsADKRecovery(id string) bool {
 // resumeNativeApproval reconstructs the official Runner from durable state. It
 // does not create a new user turn or re-run the original user request.
 func (e *Engine) resumeNativeApproval(ctx context.Context, s *session, c Config, cancel context.CancelFunc) (err error) {
+	s.mu.Lock()
+	firstCard := len(s.state.View.Cards)
+	archiveProposedPlan(s)
+	s.state.View.ProposedPlan = nil
+	s.mu.Unlock()
+	if c.ConversationMode == ModePlan {
+		c.StrategyCorrectEnabled = false
+		c.StrategyLearnEnabled = false
+		c.MemoryExtractionEnabled = false
+	}
 	defer func() {
 		if persistErr := e.persistNativeProjection(context.WithoutCancel(ctx), s); persistErr != nil && err == nil {
 			err = persistErr
@@ -54,6 +64,9 @@ func (e *Engine) resumeNativeApproval(ctx context.Context, s *session, c Config,
 	s.state.View.Question = nil
 	s.state.View.Status = status
 	s.state.View.TurnFinishedAt = timestamp()
+	if err == nil && c.ConversationMode == ModePlan {
+		captureProposedPlan(s, firstCard)
+	}
 	for i := range s.state.View.Cards {
 		card := &s.state.View.Cards[i]
 		if card.Status == "running" || card.Status == "pending" {

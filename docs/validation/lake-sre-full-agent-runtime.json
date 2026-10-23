@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-16",
+  "reportedFailure": "An investigator stopped with the legacy child-agent usage limit after four tool calls and 57024 reported cumulative tokens.",
+  "cause": "Normal tools were available, but actual SRE workers still used legacy per-child/per-turn cumulative quotas, 32 tool calls, 34 model rounds, reduced context/output settings and an investigation deadline. Typed verifiers were also restricted to summarizing a fixed sample.",
+  "changes": [
+    "SRE child journals retain actual usage accounting, but no longer enforce legacy Scout/Beacon per-child or per-turn quotas. Durable SRE task reservations remain enforced.",
+    "Operational specialists inherit the parent's model context, output ceiling, preferences and maxSteps; normal context maintenance and external cancellation remain available. No SRE sampler call cap or fixed ten-minute role deadline remains.",
+    "Separate task-wide cumulative usage from the single-request context window using a recorded parent-loop-v1 allocation: creation-time contextWindow times maxSteps. Continuing a task does not reset its usage or renew the new-policy allocation.",
+    "Continuing an old default-budget task upgrades that default policy without resetting spent usage. Explicit non-default allocations remain unchanged.",
+    "All operational roles receive recorded task facts as untrusted handoff context. Pure plan serialization and report-format repair remain tool-free stages.",
+    "Verifiers run their normal tool loop with or without fixed automatic criteria. Runtime acceptance probes are then collected after the review; only the exact returned runtime-owned evidence IDs count toward automatic checks. Extra observations cannot satisfy or multiply frozen samples."
+  ],
+  "regressions": {
+    "longInvestigation": {
+      "actualTemporaryFileReads": 35,
+      "specialistModelRounds": 36,
+      "syntheticProviderUsagePerRound": 30500,
+      "legacyUsagePreserved": 50000,
+      "finalTaskUsage": 1148000,
+      "inheritedContextWindow": 128000,
+      "inheritedMaxOutput": 8192,
+      "inheritedMaxSteps": 40,
+      "taskBudget": 5120000,
+      "completed": true
+    },
+    "verifier": "Actual independent status and file reads in three cases: passed fixed criterion, failed fixed criterion, and no automatic probe. Fixed criteria count one designated sample despite additional independent observations. No-probe review stays inconclusive.",
+    "budgetAccounting": "SRE accounting can exceed legacy child and turn caps, settles actual usage, and preserves cancellation. Existing legacy limits remain covered by their original tests.",
+    "boundaryChecks": "Parent permission intersection, actual operation approvals, resource isolation, no replay of unknown dispatches, fresh independent verification and disabled ordinary-mode delegation remain covered."
+  },
+  "productionModelRequests": false,
+  "productionOperationsReplayed": false,
+  "deploymentTarget": "Lake Dev.app",
+  "releaseRestarted": false,
+  "diagnosedPausedTask": {
+    "tokenBudget": 256000,
+    "budgetSpent": 186659,
+    "policy": "legacy default; upgraded only on explicit continuation; not restarted during development"
+  },
+  "checks": {
+    "goAll": "passed (Web 99.280s)",
+    "goRace": "passed (AI 33.065s; Web 138.372s)",
+    "typeScript": "passed",
+    "signedDevBuildAndSignatureVerification": "passed",
+    "devReload": "passed after idle check; eight existing snapshots healthy"
+  }
+}

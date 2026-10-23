@@ -34,13 +34,22 @@ func (s *Store) EnqueueMemoryTurn(snapshot ai.MemoryTurnSnapshot) (err error) {
 			settings = s.memorySettings(snapshot.ProjectID)
 		}
 		outcome, status := "pending", "queued"
+		code := ""
+		if s.memoryV2 {
+			if snapshot.SchemaVersion != 2 {
+				outcome, status, code = "skipped", "skipped", "legacy_snapshot"
+			}
+			if integer(s.row("SELECT count(*) AS n FROM projectMemoryJobs j JOIN projectMemoryTurns t ON t.sequence=j.turnSequence WHERE t.projectId=? AND j.status IN ('queued','running','retry_wait','budget_wait')", snapshot.ProjectID)["n"]) >= 100 {
+				outcome, status, code = "skipped", "skipped", "queue_limit"
+			}
+		}
 		if integer(settings["epoch"]) != snapshot.Epoch || settings["useEnabled"] != true || settings["extractionEnabled"] != true {
 			outcome, status = "skipped", "skipped"
 		}
 		nowAt := now()
 		s.exec("INSERT INTO projectMemoryTurns(projectId,sessionId,turnId,epoch,knowledgeBaseRevision,snapshotJSON,snapshotHash,modelRefJSON,outcome,createdAt,processedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?)", snapshot.ProjectID, snapshot.SessionID, snapshot.TurnID, snapshot.Epoch, snapshot.KnowledgeBaseRevision, jsonText(snapshot), snapshot.SnapshotHash, jsonText(Object{"modelRef": snapshot.ModelRef}), outcome, nowAt, "")
 		sequence := int64(integer(s.row("SELECT sequence FROM projectMemoryTurns WHERE projectId=? AND sessionId=? AND turnId=?", snapshot.ProjectID, snapshot.SessionID, snapshot.TurnID)["sequence"]))
-		s.exec("INSERT INTO projectMemoryJobs(jobId,turnSequence,status,nextAttemptAtMs,createdAt,updatedAt) VALUES(?,?,?,?,?,?)", ident(), sequence, status, time.Now().UnixMilli(), nowAt, nowAt)
+		s.exec("INSERT INTO projectMemoryJobs(jobId,turnSequence,status,nextAttemptAtMs,createdAt,updatedAt,lastErrorCode) VALUES(?,?,?,?,?,?,?)", ident(), sequence, status, time.Now().UnixMilli(), nowAt, nowAt, code)
 		return nil
 	})
 	return nil

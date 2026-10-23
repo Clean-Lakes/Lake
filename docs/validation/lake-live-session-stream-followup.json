@@ -1,0 +1,87 @@
+{
+  "timestamp": "2026-10-18T17:50:13.444680+08:00",
+  "scope": "SRE actual text deltas, first packet reveal, stable session subscriptions and monotonic snapshot application",
+  "rootCauses": [
+    "SRE child callbacks dropped delta events and updated prose only after historyMessage",
+    "new nonempty reply cards initialized the reveal hook with the whole first packet",
+    "bootstrap object replacement restarted the session subscription",
+    "concurrent refreshes could apply an older snapshot over newer content",
+    "clearing live text before the final task transaction temporarily restored the original step description"
+  ],
+  "changes": [
+    "forward redacted cumulative child message text without taking the child lock again",
+    "retain live prose in the parent run without rewriting the task audit per packet",
+    "extract only the received summary string from structured report JSON",
+    "reveal first packets for new replies and show restored text immediately",
+    "reuse unchanged catalog/snapshot branches and reject older snapshot cursors",
+    "retain session stream across model metadata refreshes"
+  ],
+  "checks": {
+    "typescript": "passed",
+    "frontend": {
+      "passed": 224,
+      "failed": 0
+    },
+    "targetedBackendRace": [
+      "TestSRELiveProseExtractsPartialSummary",
+      "TestSRERolePublishesTextBeforeProviderCompletes"
+    ],
+    "fullBackendRace": {
+      "passed": true,
+      "output": [
+        "ok  \tgithub.com/Clean-Lakes/Lake/internal/ai\t113.392s",
+        "ok  \tgithub.com/Clean-Lakes/Lake/internal/web\t277.124s"
+      ]
+    }
+  },
+  "browser": {
+    "fixture": "web-agent/web/test/fixtures/live-session-stream.html",
+    "fullApp": true,
+    "syntheticFetchAndSSE": true,
+    "normalMotion": {
+      "sourcePackets": 3,
+      "SREPaints": 21,
+      "SREPartialPaints": 17,
+      "replyPaints": 21,
+      "replyPartialPaints": 17,
+      "historicalTableAndLinkReplacements": 0,
+      "subscriptions": 1,
+      "closes": 0,
+      "errors": 0
+    },
+    "modelMenuMetadataRefresh": {
+      "subscriptionsBefore": 1,
+      "subscriptionsAfter": 1,
+      "closes": 0,
+      "historicalTableAndLinkReplacements": 0
+    },
+    "reducedMotion": {
+      "sourcePackets": 3,
+      "SREPaints": 4,
+      "replyPaints": 4,
+      "partialPaints": 0,
+      "historicalTableAndLinkReplacements": 0,
+      "subscriptions": 1,
+      "closes": 0,
+      "errors": 0,
+      "watchAndHMR": false
+    },
+    "screenshots": [
+      "lake-live-session-stream-dark.png",
+      "lake-live-session-stream-reduced.png"
+    ]
+  },
+  "dev": {
+    "build": "scripts/build_lake_desktop.sh --dev --install",
+    "installed": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "signature": "deep strict verified",
+    "backendSHA256": "171077cbf984e87fe9677ea7ef73328d37b27274da7b8cc7ccbc2bb58d810139",
+    "restarted": true,
+    "newOrigin": "http://localhost:53982",
+    "restoredExistingSession": true
+  },
+  "limits": [
+    "Browser stream delivery is synthetic; backend regression uses a local HTTP SSE provider. No real model request or remote host command was executed.",
+    "Other work changed App.tsx during QA; final reduced-motion QA uses a preview with HMR and file watching disabled."
+  ]
+}

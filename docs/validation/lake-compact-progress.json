@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "request": "同轮普通过程播报和工具提示合并为一到两行原位更新，避免持续追加占满对话",
+  "implementation": {
+    "presentationOnly": true,
+    "preview": "最新一条实际工具调用前的说明与最近操作，两行固定高度",
+    "history": "默认折叠；展开后按原顺序查看全部说明、操作参数和原始输出",
+    "finalReply": "保留单独的完整正文和原有实时文本流，不按文字猜测结束状态",
+    "boundaries": "不跨用户轮次、系统消息、审批、错误、未知或停止状态、子 Agent 与 SRE 专员控制",
+    "activityView": "维持原有完整执行记录视图",
+    "storageChanged": false,
+    "codexPrivateFrontendParityClaimed": false
+  },
+  "checks": {
+    "typescript": "passed",
+    "frontendTests": {"passed": 234, "failed": 0},
+    "diffCheck": "passed",
+    "twelveConsecutiveUpdates": {"beforeHeightPx": 55, "afterHeightPx": 55, "previewCount": 1, "statusLineCount": 1},
+    "keyboardExpansion": "Enter expands the history",
+    "completeHistory": "5 original commentary cards and 5 tool records; first original command and output inspected",
+    "expandedUpdate": "Expanded history and the first open tool details remain open after another step",
+    "uncertainOutcome": "Separate visible execution-result verification label; final footer remains uncertain",
+    "finalReply": "Full Markdown and table remain outside collapsed process",
+    "themes": ["light", "dark"],
+    "narrow": {"viewportWidthPx": 390, "documentWidthPx": 390, "previewHeightPx": 55},
+    "fullAppStreamRegression": {"packets": 3, "snapshotsDuringStream": 2, "snapshotsBeforeStream": 2, "subscriptions": 1, "historyReplacements": 0, "rootReplyPaints": 53, "rootReplyPartialPaints": 51, "specialistPaints": 53, "errors": 0}
+  },
+  "dev": {
+    "build": "scripts/build_lake_desktop.sh --dev --install",
+    "installedApp": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "version": "0.3.17",
+    "signature": "codesign --verify --deep --strict passed",
+    "backendSha256": "a02ffa8663a7c7f8487e8ebdc8b7cd37c4dfed6743a6bb85fc76251572cc3190",
+    "sourceBinaryMatchesInstalledBackend": true,
+    "launch": "passed, localhost:52284",
+    "nativeAcceptance": "Existing real user turn shows a collapsed 14-operation process; expansion retains the earlier CPU/load commentary and completed original tool records. The separate failed operation and stopped-turn status remain visible. Restored collapsed state afterwards.",
+    "userInvestigationInterrupted": false,
+    "releaseAppTouched": false
+  },
+  "screenshots": [
+    "lake-compact-progress-light.png",
+    "lake-compact-progress-dark.png",
+    "lake-compact-progress-narrow.png",
+    "lake-compact-progress-expanded.png",
+    "lake-compact-progress-final.png",
+    "lake-compact-progress-detail.png",
+    "lake-compact-progress-dev.png"
+  ],
+  "logs": ["/tmp/lake-compact-progress-ts.log", "/tmp/lake-compact-progress-tests.log", "/tmp/lake-compact-progress-build.log"]
+}

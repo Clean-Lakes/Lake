@@ -1,4 +1,13 @@
-import type {SessionSnapshot} from '../../shared/contracts';
+import type {ConversationModeUpdate,SessionSnapshot} from '../../shared/contracts';
+
+// Both the save response and the live event carry the same ordered mode delta.
+// Keep every unrelated branch intact and reject replies from an older session
+// revision (including a late save response after a newer mode event).
+export function applyConversationMode(previous:SessionSnapshot|null,session:string,update:ConversationModeUpdate):SessionSnapshot|null {
+ if(!previous||previous.session.id!==session||!Number.isSafeInteger(update.cursor)||update.cursor<previous.cursor)return previous;
+ if(previous.conversationMode===update.mode&&previous.cursor===update.cursor)return previous;
+ return {...previous,conversationMode:update.mode,cursor:update.cursor};
+}
 
 // Network JSON recreates every object. Retain unchanged branches so periodic
 // catalog polling and activity-only snapshots do not repaint the conversation.

@@ -1,0 +1,11 @@
+{
+  "branch": "experiment/adk-runtime",
+  "change": "新对话笔图标与资源加号共用 var(--text-secondary)，大小和位置不变。",
+  "verification": {
+    "typescript": "passed",
+    "frontend_tests": 244,
+    "signed_dev_build_install_launch": "passed",
+    "native_visual": "passed"
+  },
+  "screenshot": "lake-pencil-color-dev.png"
+}

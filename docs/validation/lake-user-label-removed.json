@@ -1,0 +1,14 @@
+{
+  "change": "Remove user message author label in AITranscript and legacy TimelineNode",
+  "checked": [
+    "TypeScript and Vite production build passed",
+    "scripts/build_lake.sh signed build and strict verification passed",
+    "Actual localhost page inspected; user bubble has no author label"
+  ],
+  "origin": "http://localhost:4177",
+  "pid": 91357,
+  "asset": "index-Bi1i6tgb.js",
+  "binarySha256": "f1cfd084fd82461cdf59eede2ba3271b3d096ff50ebe089e5b7f9c28f1b21e5c",
+  "screenshot": "docs/validation/lake-user-label-removed.png",
+  "sentModelRequests": false
+}

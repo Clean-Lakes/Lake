@@ -1,0 +1,60 @@
+{
+  "status": "passed",
+  "timestamp": "2026-10-18T17:26:47.775556+08:00",
+  "branch": "experiment/adk-runtime",
+  "head": "06ae341b6bbd22342f0a9046e7cc1e58ac2ad43b",
+  "scope": "Readable attachment upload approval using Clean Lakes theme",
+  "checks": {
+    "frontend": {
+      "passed": 216,
+      "failed": 0,
+      "log": "/tmp/lake-attachment-ui-frontend.log"
+    },
+    "typescript": "passed",
+    "diff_check": "passed",
+    "light_theme": "passed",
+    "dark_theme": "passed",
+    "narrow_390x844": {
+      "passed": true,
+      "documentWidth": 390,
+      "cardWidth": 350
+    },
+    "mocked_decisions": {
+      "upload": true,
+      "cancel": true,
+      "typed_confirmation_blocks_until_match": true,
+      "child_decision_preserves_run_and_approval_ids": true
+    },
+    "technical_parameters": "collapsed by default, exact arguments retained"
+  },
+  "build": {
+    "command": "scripts/build_lake_desktop.sh --dev --install",
+    "log": "/tmp/lake-attachment-ui-build.log",
+    "app": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "bundleId": "com.cleanlakes.lake.desktop.dev",
+    "version": "0.3.17",
+    "signature": "verified deep strict",
+    "backendSha256": "38cb5516b2c96280af6a43402140014e793e31437a58df4c4ceb969ce22c8270",
+    "launched": true,
+    "appPid": 25493,
+    "backendPid": 25497
+  },
+  "screenshots": [
+    "lake-attachment-approval-light.png",
+    "lake-attachment-approval-dark.png",
+    "lake-attachment-approval-narrow.png",
+    "lake-attachment-approval-dev-started.png"
+  ],
+  "safety": {
+    "real_resource_commands_sent": false,
+    "permission_settings_changed": false,
+    "gui_approval_validation": "isolated fixture; native Dev startup verified"
+  },
+  "sourceSha256": {
+    "web-agent/web/src/AttachmentApproval.tsx": "058012bcc3c471080847dc0b085f7c42def1e74e1d0e8d22d86ecbf195f20699",
+    "web-agent/web/src/AIPanel.tsx": "9ca3784f762c556c60df2e50596688cba20cd221d1a6fa07052c3322ccd5f03f",
+    "web-agent/web/src/styles.css": "9acfd2b33a68fa7da263ef5a642bbe24b6fd702556c1c2a4b86780fdfa676ee9",
+    "web-agent/web/test/attachment-approval.test.ts": "3027776b7a1e94f0c1787723ab3c101b4a97d57310236f3a92855b49d5688e48",
+    "web-agent/web/test/fixtures/attachment-approval.tsx": "601a1e5bb2002ec9bab537e3ee134791293f936b1f8a99970f1b493b3ee21a01"
+  }
+}

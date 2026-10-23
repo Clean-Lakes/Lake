@@ -105,7 +105,7 @@ func TestStrategyDuplicateLoadedSkillAndInputBudget(t *testing.T) {
 	c := s.state.Config
 	s.mu.Unlock()
 	d := adkTurnDriver{engine: e, session: s, config: &c}
-	history := []Message{{Role: "system", Content: Prompt(c)}, {Role: "tool", Name: "load_skill", Content: js(map[string]any{"content": body})}}
+	history := []Message{{Role: "system", Content: Prompt(c)}, {Role: "tool", Name: "load_skill", Content: js(map[string]any{"content": "Header\r\n" + strings.ReplaceAll(body, "\n", "\r\n") + "\r\nFooter"})}}
 	result, _, selection, err := d.strategyRequest(context.Background(), history, nil, nil)
 	if err != nil || len(selection.Selected) != 0 || selection.Omitted[0].Reason != "duplicate_context" || result[0].Content != history[0].Content {
 		t.Fatal(selection, err)

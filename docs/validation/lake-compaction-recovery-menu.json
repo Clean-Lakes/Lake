@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-12",
+  "compaction": {
+    "summaryUsesIndependentLowReasoning": true,
+    "outputLimitRetriesSummaryOnlyOnce": true,
+    "failedSummaryPreservesHistoryAndCheckpoints": true,
+    "duplicateSystemErrorSuppressed": true,
+    "legacyDuplicateLocalizedAndFiltered": true
+  },
+  "resourceMenu": {
+    "portalOutsideNarrowSidebar": true,
+    "widthPixels": 320,
+    "separateOpenAndNewActions": true,
+    "chronologicalFriendlyTerminalOrdinals": true,
+    "autofocusAfterVisibleVerifiedInNativeChrome": true
+  },
+  "validation": {
+    "frontendTestsPassed": 50,
+    "goAIRaceSuite": "passed",
+    "targetedGoWebTests": "compaction duplicate, conversation and resource terminal tests passed",
+    "nativeChrome": "One Chinese compaction error and roomy terminal management menu with five live connections verified",
+    "escapeVerification": "Interrupted by user changing Chrome; no further UI input sent",
+    "realModelRetry": "Not sent; recovery exercised with synthetic provider responses"
+  },
+  "deployment": {
+    "build": "scripts/build_lake.sh; Lake Local Development Code Signing; strict signature verification passed",
+    "origin": "http://localhost:4177",
+    "bundle": "index-DC3luqDg.js",
+    "idleTerminalsReconnected": 5,
+    "currentChatBinding": "Rebound disconnected selection to its existing owned Agent terminal on the same resource",
+    "permissionsChanged": false,
+    "commandsReplayed": false
+  }
+}

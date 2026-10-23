@@ -84,7 +84,7 @@ func TestProjectMemoryExplicitToolSaveAndForget(t *testing.T) {
 		mu.Unlock()
 		switch current {
 		case 1:
-			emitModel(w, "", []ai.Call{{ID: "remember", Name: "save_project_memory", Arguments: jsonText(Object{"key": "release-rule", "type": "project", "description": "发布规则", "body": "本项目发布前先备份。", "expectedRevision": 0})}})
+			emitModel(w, "", []ai.Call{{ID: "remember", Name: "save_project_memory", Arguments: jsonText(Object{"key": "release-rule", "type": "project", "description": "本项目所有发布/变更方案固定按影响范围、执行步骤、验证方法、回退方案四段顺序组织", "body": "发布方案采用影响范围、执行步骤、验证方法、回退方案四段格式。", "expectedRevision": 0})}})
 		case 3:
 			emitModel(w, "", []ai.Call{{ID: "forget", Name: "forget_project_memory", Arguments: jsonText(Object{"key": "release-rule", "expectedRevision": 1})}})
 		default:
@@ -94,13 +94,13 @@ func TestProjectMemoryExplicitToolSaveAndForget(t *testing.T) {
 	defer provider.Close()
 	b.Models.Save(&ai.Model{URL: provider.URL, Name: "memory tool fixture", Protocol: "openai"})
 	apiTest(t, h, "POST", "/api/sessions/"+session+"/ai/configure", Object{"asset_ref": ref}, 200)
-	apiTest(t, h, "POST", "/api/sessions/"+session+"/messages", Object{"text": "请记住：本项目发布前先备份。"}, 202)
+	apiTest(t, h, "POST", "/api/sessions/"+session+"/messages", Object{"text": "请记住：本项目发布方案按影响范围、执行步骤、验证方法、回退方案四段组织。"}, 202)
 	waitAI(t, b, session, "completed")
 	b.workers.Wait()
-	if got := stringOf(b.Store.ReadProjectMemory(project, "release-rule", false)["body"]); got != "本项目发布前先备份。" {
+	if got := stringOf(b.Store.ReadProjectMemory(project, "release-rule", false)["body"]); got != "发布方案采用影响范围、执行步骤、验证方法、回退方案四段格式。" {
 		t.Fatalf("tool did not save: %q", got)
 	}
-	apiTest(t, h, "POST", "/api/sessions/"+session+"/messages", Object{"text": "请忘记 release-rule 这条项目记忆。"}, 202)
+	apiTest(t, h, "POST", "/api/sessions/"+session+"/messages", Object{"text": "请忘记刚才保存的发布方案格式约定。"}, 202)
 	waitAI(t, b, session, "completed")
 	b.workers.Wait()
 	if stringOf(b.Store.ReadProjectMemory(project, "release-rule", true)["deletedAt"]) == "" {

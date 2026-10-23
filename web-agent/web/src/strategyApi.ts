@@ -3,15 +3,18 @@ export type StrategyScope={kind:'user'|'project';projectId?:string};
 export type StrategyKind='user_preference'|'domain_procedure'|'tool_guidance'|'report_guidance';
 export type StrategyApplicability={profiles:string[];resourceKinds:string[];domainTags:string[]};
 export type StrategyRef={assetId:string;revision:number;contentHash:string};
-export type StrategyAsset={id:string;title:string;scope:StrategyScope;kind:StrategyKind;revision:number;deleted:boolean};
-export type StrategyRevision={asset:StrategyAsset;value:{ref:StrategyRef;parentRevision:number;kind:StrategyKind;body:string;applicability:StrategyApplicability;verification:string;sourceIds:string[]};available:boolean;sourcesAvailable:boolean;skillSources?:{name:string;contentHash:string;state:string}[]};
+export type StrategyAsset={id:string;title:string;scope:StrategyScope;kind:StrategyKind;revision:number;deleted:boolean;reviewStatus?:string};
+export type StrategyAssessment={conditions:string;evidence:string;limitations:string};
+export type StrategyReview={decision:string;decisionRevision:number;reasonCode:string};
+export type StrategyReuse={keywords:string[];general:boolean;validUntil:string;needsReview:boolean};
+export type StrategyRevision={asset:StrategyAsset;value:{ref:StrategyRef;parentRevision:number;kind:StrategyKind;body:string;applicability:StrategyApplicability;verification:string;sourceIds:string[]};available:boolean;sourcesAvailable:boolean;review:StrategyReview;assessment:StrategyAssessment;reuse:StrategyReuse;reuseStatus?:string;skillSources?:{name:string;contentHash:string;state:string}[]};
 export type StrategyBinding={assetId:string;scope:StrategyScope;revision:number;bindingRevision:number;enabled:boolean;priority:number;exclusionGroup:string};
-export type StrategySettings={scope:StrategyScope;revision:number;epoch:number;masterEnabled:boolean;applyEnabled:boolean;learnEnabled:boolean;correctEnabled:boolean;onlineCorrectEnabled?:boolean;budget:Record<string,number>};
-export type StrategySettingsView={settings:StrategySettings;effective:StrategySettings;source:string;capabilities:{apply:boolean;learn:boolean;correct:boolean}};
-export function strategySettingsForm(s:StrategySettingsView):StrategySettingsView{return s.source==='inherited'?{...s,settings:{...s.settings,masterEnabled:s.effective.masterEnabled,applyEnabled:s.effective.applyEnabled,learnEnabled:s.effective.learnEnabled,correctEnabled:s.effective.correctEnabled,onlineCorrectEnabled:!!s.effective.onlineCorrectEnabled,budget:s.effective.budget}}:s;}
+export type StrategySettings={scope:StrategyScope;revision:number;epoch:number;masterEnabled:boolean;applyEnabled:boolean;learnEnabled:boolean;correctEnabled:boolean;onlineCorrectEnabled?:boolean;onlineConsentVersion?:number;legacyOnlineConsent?:{enabled:boolean;settingsRevision:number;epoch:number};budget:Record<string,number>};
+export type StrategySettingsView={settings:StrategySettings;effective:StrategySettings;source:string;capabilities:{apply:boolean;learn:boolean;correct:boolean;onlineCorrect?:boolean;onlineConsentVersion?:number}};
+export function strategySettingsForm(s:StrategySettingsView):StrategySettingsView{return s.source==='inherited'?{...s,settings:{...s.settings,masterEnabled:s.effective.masterEnabled,applyEnabled:s.effective.applyEnabled,learnEnabled:s.effective.learnEnabled,correctEnabled:s.effective.correctEnabled,onlineCorrectEnabled:!!s.effective.onlineCorrectEnabled,onlineConsentVersion:s.effective.onlineConsentVersion,budget:s.effective.budget}}:s;}
 export type StrategyLineage={nodes:{id:string;kind:string;revision:number;createdAt:string;availability?:string;summary?:string;contentHash?:string;sourceId?:string;sourceKind?:string}[];edges:{id:number;fromId:string;toId:string;relation:string;createdAt:string}[];nextCursor:number;hasMore:boolean;redacted:boolean};
 export type StrategyMutation={assetId?:string;revision?:number;bindingRevision?:number};
-export type StrategyDraft={title:string;kind:StrategyKind;body:string;applicability:StrategyApplicability};
+export type StrategyDraft={title:string;kind:StrategyKind;body:string;applicability:StrategyApplicability;assessment?:StrategyAssessment;reuse?:StrategyReuse};
 export function strategyPath(projectId:string){return projectId?`/api/projects/${encodeURIComponent(projectId)}/strategy`:'/api/strategy';}
 const pendingMutations=new Map<string,string>();
 async function request<T>(base:string,path:string,method='GET',data?:unknown):Promise<T>{
@@ -22,7 +25,7 @@ async function request<T>(base:string,path:string,method='GET',data?:unknown):Pr
 }
 export const strategyApi={
  settings:(base:string)=>request<StrategySettingsView>(base,'/settings'),
- saveSettings:(base:string,value:StrategySettings)=>request<StrategyMutation>(base,'/settings','PATCH',{expectedRevision:value.revision,masterEnabled:value.masterEnabled,applyEnabled:value.applyEnabled,learnEnabled:value.learnEnabled,correctEnabled:value.correctEnabled,onlineCorrectEnabled:!!value.onlineCorrectEnabled,budget:value.budget}),
+ saveSettings:(base:string,value:StrategySettings)=>request<StrategyMutation>(base,'/settings','PATCH',{expectedRevision:value.revision,masterEnabled:value.masterEnabled,applyEnabled:value.applyEnabled,learnEnabled:value.learnEnabled,correctEnabled:value.correctEnabled,onlineCorrectEnabled:!!value.onlineCorrectEnabled&&value.onlineConsentVersion===2,onlineConsentVersion:value.onlineCorrectEnabled&&value.onlineConsentVersion===2?2:0,budget:value.budget}),
  assets:(base:string,after='')=>request<{items:StrategyAsset[];nextCursor:string}>(base,`/assets?after=${encodeURIComponent(after)}`),
  create:(base:string,draft:StrategyDraft)=>request<StrategyMutation>(base,'/assets','POST',{...draft,expectedRevision:0}),
  revise:(base:string,id:string,expected:number,parent:number,draft:StrategyDraft)=>request<StrategyMutation>(base,`/assets/${encodeURIComponent(id)}/revisions`,'POST',{...draft,expectedRevision:expected,parentRevision:parent}),
@@ -30,6 +33,8 @@ export const strategyApi={
  revision:(base:string,id:string,version:number)=>request<StrategyRevision>(base,`/assets/${encodeURIComponent(id)}/revisions/${version}`),
  binding:(base:string,id:string)=>request<{binding:StrategyBinding|null}>(base,`/assets/${encodeURIComponent(id)}/bindings`),
  bind:(base:string,id:string,action:string,ref:StrategyRef,binding:StrategyBinding|null,priority:number,exclusionGroup:string)=>request<StrategyMutation>(base,`/assets/${encodeURIComponent(id)}/bindings`,'POST',{action,ref,expectedRevision:binding?.bindingRevision||0,priority,exclusionGroup}),
+ review:(base:string,ref:StrategyRef,expectedDecisionRevision:number,decision:string,reasonCode:string)=>request<StrategyMutation>(base,`/assets/${encodeURIComponent(ref.assetId)}/review`,'POST',{ref,expectedDecisionRevision,decision,reasonCode}),
+ promote:(base:string,ref:StrategyRef,draft:StrategyDraft,confirmed:boolean)=>request<StrategyMutation>(base,`/assets/${encodeURIComponent(ref.assetId)}/promote`,'POST',{ref,confirmed,draft:{...draft,expectedRevision:0}}),
  lineage:(base:string,id:string,cursor=0)=>request<StrategyLineage>(base,`/assets/${encodeURIComponent(id)}/lineage?cursor=${cursor}`),
  remove:(base:string,id:string,expected:number)=>request<StrategyMutation>(base,`/assets/${encodeURIComponent(id)}`,'DELETE',{expectedRevision:expected}),
  importSkill:(base:string,name:string)=>request<StrategyMutation>(base,'/imports/skill','POST',{expectedRevision:0,name,kind:'domain_procedure',applicability:{profiles:[],resourceKinds:[],domainTags:[]}}),
@@ -43,17 +48,22 @@ export function parseStrategyImport(text:string):StrategyDraft {
  if(obj.format!=='lake-strategy-v1'||typeof obj.title!=='string'||typeof obj.body!=='string'||!['user_preference','domain_procedure','tool_guidance','report_guidance'].includes(String(obj.kind)))throw new Error('策略文件格式无效');
  const a=obj.applicability as Record<string,unknown>;
  if(!a||!['profiles','resourceKinds','domainTags'].every(k=>Array.isArray(a[k])&&(a[k] as unknown[]).every(v=>typeof v==='string')))throw new Error('适用条件无效');
- return {title:obj.title,kind:obj.kind as StrategyKind,body:obj.body,applicability:{profiles:a.profiles as string[],resourceKinds:a.resourceKinds as string[],domainTags:a.domainTags as string[]}};
+ let assessment:StrategyAssessment|undefined;
+ if(obj.assessment!==undefined){const notes=obj.assessment as Record<string,unknown>;if(!notes||!['conditions','evidence','limitations'].every(k=>typeof notes[k]==='string'))throw new Error('经验说明无效');assessment={conditions:String(notes.conditions),evidence:String(notes.evidence),limitations:String(notes.limitations)};}
+ let reuse:StrategyReuse|undefined;
+ if(obj.reuse!==undefined){const p=obj.reuse as Record<string,unknown>;if(!p||!Array.isArray(p.keywords)||!p.keywords.every(v=>typeof v==='string')||typeof p.general!=='boolean'||typeof p.validUntil!=='string'||typeof p.needsReview!=='boolean')throw new Error('复用条件无效');reuse={keywords:p.keywords as string[],general:p.general,validUntil:p.validUntil,needsReview:p.needsReview};}
+ return {...(reuse?{reuse}:{}),...(assessment?{assessment}:{}),title:obj.title,kind:obj.kind as StrategyKind,body:obj.body,applicability:{profiles:a.profiles as string[],resourceKinds:a.resourceKinds as string[],domainTags:a.domainTags as string[]}};
 }
 export function strategyExport(draft:StrategyDraft){return JSON.stringify({format:'lake-strategy-v1',...draft},null,2)+'\n';}
 
 export type StrategySource={id:string;kind:string;sessionId:string;turnId?:string;availability:string;createdAt:string;userText?:string;contentHash:string;outcome?:string;profile?:string;evidence?:{callId:string;tool:string;status:string;resultHash:string}[]};
-export type StrategyProposal={id:string;status:string;errorCode:string;attempts:number;createdAt:string;sourceIds:string[];assetId?:string;revision?:number;runStatus?:string;usage?:{input:number;output:number;inputKnown:boolean;outputKnown:boolean};result?:{schemaVersion:number;candidate:{title:string;reason:string;body:string;sourceIds:string[]}|null}};
+export type StrategyLearningStatus={limits?:{maxInputBytes:number;maxOutputTokens:number;deadlineSeconds:number;maxDailyRequests:number;maxDailyTokens:number};budget?:{requests:number;tokens:number;resetsAt:string};backgroundStatus?:string|null};
+export type StrategyProposal={id:string;status:string;errorCode:string;attempts:number;createdAt:string;sourceIds:string[];assetId?:string;revision?:number;runStatus?:string;usage?:{input:number;output:number;inputKnown:boolean;outputKnown:boolean;reservedTokens?:number;tokensCharged?:number};result?:{schemaVersion:number;candidate:{title:string;reason:string;body:string;sourceIds:string[]}|null}};
 export const strategyLearningApi={
  sources:(base:string,after='')=>request<{items:StrategySource[];nextCursor:string}>(base,`/sources?after=${encodeURIComponent(after)}`),
  register:(base:string,messageId:string)=>request<StrategyMutation>(base,'/sources','POST',{messageId}),
  withdraw:(base:string,id:string)=>request<StrategyMutation>(base,`/sources/${encodeURIComponent(id)}`,'DELETE',{}),
- proposals:(base:string,after='')=>request<{items:StrategyProposal[];nextCursor:string}>(base,`/proposals?after=${encodeURIComponent(after)}`),
+ proposals:(base:string,after='')=>request<StrategyLearningStatus&{items:StrategyProposal[];nextCursor:string}>(base,`/proposals?after=${encodeURIComponent(after)}`),
  propose:(base:string,sourceIds:string[])=>request<{jobId:string}>(base,'/proposals','POST',{sourceIds,assetId:'',expectedRevision:0}),
  cancel:(base:string,id:string)=>request<StrategyMutation>(base,`/proposals/${encodeURIComponent(id)}/cancel`,'POST',{}),
 };
@@ -66,11 +76,15 @@ export const strategyExperimentApi={
  fixtures:(base:string)=>request<{items:StrategyFixture[]}>(base,'/fixtures'),
  list:(base:string)=>request<{items:StrategyExperimentSummary[]}>(base,'/experiments'),
  create:(base:string,ref:StrategyRef,caseIds:string[],repetitions:number,skillNames:string[])=>request<{jobId:string}>(base,'/experiments','POST',{ref,caseIds,repetitions,skillNames}),
- optimize:(base:string,ref:StrategyRef,caseIds:string[],skillNames:string[])=>request<{jobId:string}>(base,'/experiments','POST',{ref,caseIds,repetitions:1,skillNames,optimization:true}),
- resume:(base:string,id:string)=>request<StrategyMutation>(base,`/experiments/${encodeURIComponent(id)}/resume`,'POST',{}),
- saveCandidate:(base:string,id:string,expectedRevision:number)=>request<StrategyMutation>(base,`/experiments/${encodeURIComponent(id)}/save-candidate`,'POST',{expectedRevision}),
  report:(base:string,id:string)=>request<StrategyExperimentReport>(base,`/experiments/${encodeURIComponent(id)}/report`),
  cancel:(base:string,id:string)=>request<StrategyMutation>(base,`/experiments/${encodeURIComponent(id)}/cancel`,'POST',{}),
  erase:(base:string,id:string)=>request<StrategyMutation>(base,`/experiments/${encodeURIComponent(id)}`,'DELETE',{}),
 };
 export function strategyExperimentAnswer(answer:string){try{const value=JSON.parse(answer) as {answer?:unknown};return typeof value.answer==='string'?value.answer:answer;}catch{return answer;}}
+
+export type StrategyUsage={requestId:string;turnId:string;preparedAt:string;status:'prepared';selected:StrategyRef[];omitted:{ref:StrategyRef;reason:string}[];reasons?:{ref:StrategyRef;reason:string;score:number}[];feedback:{assetId:string;revision:number;contentHash:string;outcome:string;feedbackRevision:number}[]};
+export const strategyUsageApi={
+ sessions:(base:string)=>request<{sessions:{id:string;title:string}[]}>(base,'/usage'),
+ history:(base:string,sessionId:string,before='')=>request<{items:StrategyUsage[];nextCursor:string}>(base,`/usage?sessionId=${encodeURIComponent(sessionId)}&before=${encodeURIComponent(before)}`),
+ feedback:(base:string,sessionId:string,requestId:string,ref:StrategyRef,expectedRevision:number,outcome:string,suspend=false)=>request<StrategyMutation>(base,`/usage/${encodeURIComponent(requestId)}/feedback`,'POST',{sessionId,ref,expectedRevision,outcome,suspend}),
+};

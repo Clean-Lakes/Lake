@@ -21,6 +21,7 @@ var HTTPClient = &http.Client{Timeout: 5 * time.Minute}
 var ErrModelOutputLimit = errors.New("model output limit reached")
 var ErrModelStreamIdle = errors.New("model stream idle timeout; partial reply retained")
 var ErrModelIncomplete = errors.New("model response incomplete")
+var ErrInvalidModelToolCall = errors.New("invalid or duplicate model tool call")
 
 type modelResult struct {
 	Message Message
@@ -698,12 +699,24 @@ func (a *accumulator) consume(v map[string]any, whole bool) error {
 			}
 		case "response.function_call_arguments.delta":
 			a.call(i).Arguments += str(v["delta"])
+		case "response.function_call_arguments.done":
+			if arguments, ok := v["arguments"].(string); ok {
+				a.call(i).Arguments = arguments
+			}
 		case "response.output_item.done":
-			a.native[i] = obj(v["item"])
+			if err := a.responseItem(i, obj(v["item"])); err != nil {
+				return err
+			}
 			a.responseImage(a.native[i])
 		case "response.completed":
 			a.completed = true
-			a.use(obj(obj(v["response"])["usage"]))
+			response := obj(v["response"])
+			a.use(obj(response["usage"]))
+			for index, item := range arr(response["output"]) {
+				if err := a.responseItem(index, obj(item)); err != nil {
+					return err
+				}
+			}
 		case "response.failed", "response.incomplete":
 			response := obj(v["response"])
 			a.use(obj(response["usage"]))
@@ -842,6 +855,33 @@ func (a *accumulator) consume(v map[string]any, whole bool) error {
 	}
 	return nil
 }
+
+// Responses done events carry the complete arguments. They replace the
+// streamed prefix; concatenating them would duplicate JSON, while ignoring
+// them loses late metadata or arguments from compatible providers.
+func (a *accumulator) responseItem(index int, item map[string]any) error {
+	a.native[index] = item
+	if str(item["type"]) != "function_call" {
+		return nil
+	}
+	call := a.call(index)
+	for _, field := range []struct {
+		name   string
+		target *string
+	}{{"call_id", &call.ID}, {"name", &call.Name}} {
+		if value := str(item[field.name]); value != "" {
+			if *field.target != "" && *field.target != value {
+				return fmt.Errorf("%w: conflicting function identity", ErrInvalidModelToolCall)
+			}
+			*field.target = value
+		}
+	}
+	if arguments, ok := item["arguments"].(string); ok {
+		call.Arguments = arguments
+	}
+	return nil
+}
+
 func (a *accumulator) finish() (modelResult, error) {
 	if !a.completed {
 		return modelResult{Usage: a.usage}, ErrModelIncomplete
@@ -860,14 +900,20 @@ func (a *accumulator) finish() (modelResult, error) {
 		if c.Arguments == "" {
 			c.Arguments = "{}"
 		}
-		if _, e := args(*c); e != nil || c.Name == "" || ids[c.ID] {
-			return modelResult{}, errors.New("invalid or duplicate model tool call")
+		if _, e := args(*c); e != nil {
+			return modelResult{Usage: a.usage}, fmt.Errorf("%w: arguments must be a JSON object", ErrInvalidModelToolCall)
+		}
+		if c.Name == "" || ids[c.ID] {
+			return modelResult{Usage: a.usage}, fmt.Errorf("%w: missing function name or duplicate call ID", ErrInvalidModelToolCall)
 		}
 		ids[c.ID] = true
 		a.msg.Calls = append(a.msg.Calls, *c)
 		if n := a.native[i]; n != nil && a.p == "claude" {
 			arg, _ := args(*c)
 			n["input"] = arg
+		}
+		if n := a.native[i]; n != nil && a.p == "openai-response" && str(n["type"]) == "function_call" {
+			n["call_id"], n["name"], n["arguments"] = c.ID, c.Name, c.Arguments
 		}
 	}
 	keys = nil

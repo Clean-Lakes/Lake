@@ -270,6 +270,19 @@ test('catalog identity joins different actions into one resource row and never m
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.equal((html.match(/class="thinking-timeline /g)||[]).length,2);
  assert.ok(html.includes('<span class="thinking-label">演示节点</span>'));
- assert.ok(html.includes('data-glyph="lakeDatabase"'));
+ assert.ok(html.includes('data-kind="database"')&&html.includes('resource-kind-icon kind-database'));
  assert.ok(!html.includes('thinking-tool-detail')&&!html.includes('thinking-steps'),'resource children and payloads are lazy');
+});
+
+test('opaque legacy aliases recover only a unique exact catalog target; recorded IDs win',()=>{
+ const resources=[{id:'pg',name:'数据库',kind:'database'},{id:'cluster',name:'集群',kind:'kubernetes'}] as Resource[];
+ const operation=(data:Record<string,unknown>)=>({...card('op','operation'),card:{...card('op','operation').card,data}});
+ const legacy=operation({target:'数据库',arguments:{asset_ref:'a_0123456789abcdef'}});
+ assert.deepEqual(conversationGroups([legacy],resources)[0]!.resource,{id:'pg',name:'数据库',kind:'database'});
+ const explicit=operation({resource_id:'cluster',target:'数据库',arguments:{asset_ref:'a_0123456789abcdef'}});
+ assert.equal(conversationGroups([explicit],resources)[0]!.resource?.kind,'kubernetes');
+ const ambiguous=[...resources,{id:'other',name:'数据库',kind:'ssh'}] as Resource[];
+ assert.equal(conversationGroups([legacy],ambiguous)[0]!.resource?.kind,undefined);
+ const missing=operation({resource_id:'removed',target:'数据库'});
+ assert.equal(conversationGroups([missing],resources)[0]!.resource?.kind,undefined,'missing recorded ID must not borrow another resource');
 });

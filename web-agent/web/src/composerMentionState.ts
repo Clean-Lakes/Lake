@@ -2,12 +2,21 @@ import type {MCPServerConfig,Resource,SkillConfig} from "../../shared/contracts"
 import {referencedExtensions, type MentionKind} from "../../shared/references";
 
 export type MentionOption={id:string;kind:MentionKind;name:string;detail:string;resourceKind?:Resource['kind']};
-const resourceMentionLabels:Record<Resource['kind'],string>={ssh:'SSH 主机',database:'数据库',redis:'Redis',docker:'容器',local:'本机'};
+const resourceMentionLabels:Record<Resource['kind'],string>={ssh:'SSH 主机',database:'数据库',redis:'Redis',docker:'容器',local:'本机',kubernetes:'Kubernetes',apisix:'APISIX',prometheus:'Prometheus',victoriametrics:'VictoriaMetrics'};
 export function mentionTypeLabel(option:MentionOption):string {
  return option.kind==='resource'?(option.resourceKind&&resourceMentionLabels[option.resourceKind]||'资源'):option.kind==='skill'?'Skill':option.kind==='mcp'?'MCP':'专员';
 }
 export type MentionCategory=MentionKind|"all";
 export const mentionCategories=[{kind:"all",label:"全部"},{kind:"resource",label:"资源"},{kind:"skill",label:"Skills"},{kind:"mcp",label:"MCP"},{kind:"role",label:"专员"}] as const;
+export function visibleMentionCategories(options:MentionOption[]) {
+ return mentionCategories.filter(group=>group.kind!=="role"||options.some(option=>option.kind==="role"));
+}
+export function nextMentionCategory(category:MentionCategory,options:MentionOption[],event:{key:string;metaKey?:boolean;ctrlKey?:boolean;altKey?:boolean;shiftKey?:boolean}):MentionCategory|null {
+ if((event.key!=="ArrowLeft"&&event.key!=="ArrowRight")||event.metaKey||event.ctrlKey||event.altKey||event.shiftKey)return null;
+ const categories=visibleMentionCategories(options);
+ const index=categories.findIndex(group=>group.kind===category);
+ return categories[(index+(event.key==="ArrowLeft"?-1:1)+categories.length)%categories.length]!.kind;
+}
 export function mentionOptions(resources:Resource[],skills:SkillConfig[],servers:MCPServerConfig[],sreEnabled=false):MentionOption[] {
  return [
   ...resources.map(r=>({id:r.id,kind:"resource" as const,resourceKind:r.kind,name:r.name,detail:r.status==="available"?"可用资源":"不可用资源"})),

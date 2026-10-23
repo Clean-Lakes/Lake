@@ -69,8 +69,11 @@ func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a
 	return risk, hash(js(c.Assets) + js(a)), nil
 }
 func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (result any, err error) {
+	if err := checkPlanOperation(c, call.Name, "readonly"); err != nil {
+		return nil, err
+	}
 	if e.experiment != nil {
-		return e.experiment.invoke(call)
+		return e.experiment.invoke(ctx, call)
 	}
 	// Approval recovery can enter invoke directly. It must obey the same frozen
 	// correction gate as ordinary ADK calls, including opaque session tools.
@@ -170,6 +173,9 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		return e.invokeSessionTool(ctx, s, c, call, a)
 	}
 	if memoryTool(call.Name) {
+		if e.worker != nil && c.MemorySchemaVersion == 2 {
+			return nil, errors.New("project memory is owned by the main conversation")
+		}
 		if !c.MemoryEnabled || c.MemoryProjectID == "" || e.worker != nil && (c.sre == nil || !c.sre.FullTools) || e.Bridge == nil {
 			return nil, errors.New("project memory unavailable")
 		}
@@ -206,6 +212,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	s.mu.Lock()
 	sessionID := s.state.View.Session
 	s.mu.Unlock()
+	ctx = context.WithValue(ctx, runtimeSSHSessionKey{}, sessionID)
 	if strings.Contains(" write edit multi_edit append delete ", " "+call.Name+" ") {
 		s.mu.Lock()
 		readHash := s.state.FileReads[fileReadKey(c, a)]
@@ -240,7 +247,11 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		}
 		policyContext = obj(p)
 	}
+	if call.Name == "query_kubernetes" {
+		policyContext["kubernetesLogs"] = a["metric"] == "logs"
+	}
 	ref := str(a["asset_ref"])
+	resourceID := ""
 	if ref == "" && !discovery && call.Name != "preview_resource_import" && call.Name != "import_resources" && call.Name != "inspect_attachment" {
 		ref = str(policyContext["asset_ref"])
 		if ref == "" {
@@ -253,6 +264,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 			return nil, e
 		}
 		target = as.Name
+		resourceID = as.ID
 		if c.targetScope != nil && str(a["terminal_id"]) != "" && str(a["asset_ref"]) == "" {
 			c.AssetRef = as.ID
 			if as.Kind == "local" || as.Kind == "ssh" {
@@ -304,6 +316,10 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		}
 	}
 	cardID := uid()
+	cardData := map[string]any{"arguments": a, "target": target, "risk": risk, "call_id": call.ID}
+	if resourceID != "" {
+		cardData["resource_id"] = resourceID
+	}
 	s.mu.Lock()
 	foundCard := false
 	for i := range s.state.View.Cards {
@@ -311,12 +327,13 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		if card.Type == "operation" && str(obj(card.Data)["call_id"]) == call.ID && card.Status == "pending" {
 			cardID = card.ID
 			card.Status = "running"
+			card.Data = cardData
 			foundCard = true
 			break
 		}
 	}
 	if !foundCard {
-		s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "operation", Title: call.Name, Data: map[string]any{"arguments": a, "target": target, "risk": risk, "call_id": call.ID}, Status: "running", At: timestamp()})
+		s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "operation", Title: call.Name, Data: cardData, Status: "running", At: timestamp()})
 	}
 	e.notify(s, "toolCall", map[string]any{"name": call.Name})
 	s.mu.Unlock()
@@ -334,7 +351,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 				if err != nil {
 					card.Status = "failed"
 					var notExecuted *ToolNotExecutedError
-					var blocked *nativeOperationBlockedError
+					var blocked *nativeOperationReplayError
 					if errors.As(err, &notExecuted) || errors.As(err, &blocked) {
 						card.Status = "not_executed"
 					}
@@ -421,6 +438,10 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		return nil, err
 	}
 	defer func() { e.finishSREOperation(c, call, result, err) }()
+	memoryStarted := time.Now()
+	defer func() {
+		e.recordMemoryToolContext(s, c, call, str(policyContext["asset_ref"]), memoryStarted, result, err)
+	}()
 	operation, operationErr := e.dispatchNativeOperation(ctx, s, c, call, risk, target, fingerprint)
 	if operationErr != nil {
 		return nil, &ToolNotExecutedError{Err: operationErr}
@@ -474,6 +495,8 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		return e.database(ctx, c, call.Name, a)
 	case "redis_command":
 		return e.redis(ctx, c, a)
+	case "query_kubernetes":
+		return e.queryKubernetes(ctx, c, a)
 	case "list_docker_containers", "docker_container_logs", "docker_container_action":
 		return e.docker(ctx, c, call.Name, a)
 	case "open_ssh_tunnel", "close_ssh_tunnel", "scp_transfer":
@@ -506,7 +529,15 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		if e.Bridge == nil {
 			return nil, errors.New("host session bridge unavailable")
 		}
-		value, err := e.bridgeCall(ctx, sessionID, "inspectHost", hostArguments(c, a), approved)
+		inspectionArgs := hostArguments(c, a)
+		// Policy may resolve an omitted target from the current binding or the
+		// unique project host. Execute that validated target, rather than sending
+		// the original empty profile ref to the host bridge.
+		inspectionArgs["asset_ref"] = ref
+		if str(a["runtime"]) == "" && str(policyContext["runtime"]) != "" {
+			inspectionArgs["runtime"] = policyContext["runtime"]
+		}
+		value, err := e.bridgeCall(ctx, sessionID, "inspectHost", inspectionArgs, approved)
 		if err != nil {
 			return nil, err
 		}

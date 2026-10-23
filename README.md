@@ -28,6 +28,10 @@ Connect resources, troubleshoot together, and keep a clear record of every actio
 - **Every action has a record.** Review tool calls, approval requests, execution history, and evidence, and take over manually when needed.
 - **Specialists work together.** Enable experimental SRE collaboration to coordinate investigators, executors, and verifiers. Track work with a plan and check results through independent verification.
 
+## Plan mode
+
+Choose **Plan** beside the composer or enter `/plan` to toggle planning; `/plan <goal>` starts a planning request. Lake investigates with read-only tools, asks about material choices, and presents a reviewable plan. Revise it in the conversation or choose **Execute plan** to continue under the existing session permissions. Mode and plans persist per conversation; stale or duplicate executions are rejected.
+
 ## Quick start
 
 1. [Download the client](https://github.com/Clean-Lakes/Lake/releases) for macOS Apple Silicon or Windows x86_64.
@@ -36,7 +40,7 @@ Connect resources, troubleshoot together, and keep a clear record of every actio
 
 Lake handles requests directly in standard mode. For tasks that benefit from specialist roles, enable **SRE collaboration · Experimental** beside the composer. Operations follow the conversation’s existing permissions. [Usage and limitations (Chinese) →](docs/sre-collaboration.md)
 
-Strategy assets, candidate learning, and bounded read-only correction are experimental and off by default. See the [usage and exit guide (Chinese)](docs/strategy-learning.md) for scope, version adoption, budgets, and validation limits.
+Strategy assets, candidate learning, and bounded read-only correction are experimental and off by default, including in release builds. They are not stable features. See the [usage and exit guide (Chinese)](docs/strategy-learning.md) for scope, version adoption, budgets, and validation limits.
 
 <details>
 <summary>Local development</summary>

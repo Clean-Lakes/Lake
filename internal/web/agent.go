@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var defaults = Object{"multiAgentMode": "off", "agentRuntime": "adk", "reasoningEffort": "", "reasoningModelId": "", "profile": "core", "runtime": "local", "asset_ref": "", "container_id": "", "terminal_id": "", "terminal_generation": "", "userPrompt": "", "contextBudgetMode": "auto", "contextWindow": 64000, "maxOutput": 8192, "maxSteps": 500, "silentReadFiles": true, "silentWriteFiles": false, "silentReadSQL": true, "silentCommands": true, "silentTerminalCreation": true, "blockUnreferencedAssets": false, "denyLocalExecution": false}
+var defaults = Object{"conversationMode": "default", "multiAgentMode": "off", "agentRuntime": "adk", "reasoningEffort": "", "reasoningModelId": "", "profile": "core", "runtime": "local", "asset_ref": "", "container_id": "", "terminal_id": "", "terminal_generation": "", "userPrompt": "", "contextBudgetMode": "auto", "contextWindow": 64000, "maxOutput": 8192, "maxSteps": 500, "silentReadFiles": true, "silentWriteFiles": false, "silentReadSQL": true, "silentCommands": true, "silentTerminalCreation": true, "blockUnreferencedAssets": false, "denyLocalExecution": false}
 
 func (b *Server) sessionOptions(id string) Object {
 	options := Object{}
@@ -44,7 +44,16 @@ func (b *Server) sessionOptions(id string) Object {
 }
 
 func (b *Server) configure(id string, updates Object) Object {
+	return b.configureWithSave(id, updates, b.Store.SaveOptions)
+}
+
+// Mode-only saves use an ordered presentation delta; other configuration
+// changes keep the full invalidation used by existing clients.
+func (b *Server) configureWithSave(id string, updates Object, saveOptions func(string, Object)) Object {
 	options := b.sessionOptions(id)
+	if mode, exists := updates["conversationMode"]; exists && mode != ai.ModeDefault && mode != ai.ModePlan {
+		fail(400, "Invalid conversation mode")
+	}
 	if _, explicit := updates["contextWindow"]; explicit && updates["contextBudgetMode"] == nil {
 		options["contextBudgetMode"] = "manual"
 	}
@@ -112,7 +121,7 @@ func (b *Server) configure(id string, updates Object) Object {
 	activeModel, modelSelection := b.Models.ActiveSelection()
 	model := b.Models.CachedCapacity(activeModel)
 	if model == nil {
-		b.Store.SaveOptions(id, options)
+		saveOptions(id, options)
 		if previousPermissions != permissionVersion(options) {
 			b.revokeSessionTerminals(id)
 		}
@@ -146,8 +155,8 @@ func (b *Server) configure(id string, updates Object) Object {
 	learning, _ := b.Store.EffectiveStrategySettings(StrategyContext{ProjectID: projectID})
 	// Approvals belong to individual operations; earlier pending actions must not
 	// disable this turn's tools. invoke enforces per-operation permissions.
-	aiFailure(b.Engine.Configure(id, ai.Config{StrategyCorrectEnabled: learning.Settings.MasterEnabled && learning.Settings.CorrectEnabled && learning.Settings.OnlineCorrectEnabled, StrategyBudget: learning.Settings.Budget, StrategyLearnEnabled: learning.Settings.MasterEnabled && learning.Settings.LearnEnabled, StrategyGlobalEpoch: learning.GlobalEpoch, StrategyProjectEpoch: learning.ProjectEpoch, ModelProviderID: stringOf(modelSelection["providerId"]), MemoryProjectID: projectID, MemoryEnabled: memorySettings["useEnabled"] == true, MemoryExtractionEnabled: memorySettings["useEnabled"] == true && memorySettings["extractionEnabled"] == true, MemoryEpoch: integer(memorySettings["epoch"]), MemoryKnowledgeRevision: integer(memorySettings["revision"]), Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
-	b.Store.SaveOptions(id, options)
+	aiFailure(b.Engine.Configure(id, ai.Config{ConversationMode: stringOf(options["conversationMode"]), StrategyCorrectEnabled: learning.Settings.MasterEnabled && learning.Settings.CorrectEnabled && learning.Settings.OnlineCorrectEnabled, StrategyBudget: learning.Settings.Budget, StrategyLearnEnabled: learning.Settings.MasterEnabled && learning.Settings.LearnEnabled, StrategyGlobalEpoch: learning.GlobalEpoch, StrategyProjectEpoch: learning.ProjectEpoch, ModelProviderID: stringOf(modelSelection["providerId"]), MemoryProjectID: projectID, MemorySchemaVersion: integer(memorySettings["memorySchemaVersion"]), MemoryResourceGenerations: b.Store.memoryGenerationSnapshot(projectID), MemoryEnabled: memorySettings["useEnabled"] == true, MemoryExtractionEnabled: memorySettings["useEnabled"] == true && memorySettings["extractionEnabled"] == true, MemoryEpoch: integer(memorySettings["epoch"]), MemoryKnowledgeRevision: integer(memorySettings["revision"]), Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
+	saveOptions(id, options)
 	if previousPermissions != permissionVersion(options) {
 		b.revokeSessionTerminals(id)
 	}
@@ -265,7 +274,7 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 		fail(400, "尚未配置模型")
 	}
 	options := b.configure(id, nil)
-	sreCoordination := options["profile"] == "core" && len(files) == 0 && b.Store.SREEnabled(stringOf(b.Store.Session(id)["projectId"]))
+	sreCoordination := options["conversationMode"] != ai.ModePlan && options["profile"] == "core" && len(files) == 0 && b.Store.SREEnabled(stringOf(b.Store.Session(id)["projectId"]))
 	simpleConversation := !sreCoordination && ai.IsBriefConversation(message) && len(refs) == 0 && len(images) == 0 && len(files) == 0
 	var targetScope *ai.TargetScope
 	var directoryAssets []ai.Asset
@@ -335,7 +344,6 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 	}
 	e = b.Engine.ExecuteTurn(turnContext, id, ai.TurnInput{StrategyMessageID: messageID, SRECoordination: sreCoordination, UserText: message, Context: modelContext, References: refs, Images: images, TargetScope: targetScope, IgnoreProjectMemory: ignoreProjectMemory})
 	if e != nil {
-		_ = b.reconcileStrategyOutboxForSession(id)
 		if b.Context.Err() != nil {
 			return
 		}
@@ -360,7 +368,6 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 	view, e := b.Engine.Snapshot(id)
 	must(e)
 	_ = b.reconcileMemoryOutboxForSession(id)
-	_ = b.reconcileStrategyOutboxForSession(id)
 	for i := len(view.Cards) - 1; i >= 0; i-- {
 		if view.CardsOffset+i < before.TotalCards {
 			break
@@ -404,7 +411,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 	if projectTool(name) {
 		return b.projectToolBridge(ctx, id, name, args, approved)
 	}
-	if name == "project_memory_index" || name == "list_project_memories" || name == "read_project_memory" || name == "save_project_memory" || name == "forget_project_memory" {
+	if name == "project_memory_status" || name == "project_memory_index" || name == "list_project_memories" || name == "read_project_memory" || name == "save_project_memory" || name == "forget_project_memory" {
 		return b.projectMemoryBridge(ctx, id, name, args)
 	}
 	if name == "attachment_source" || name == "inspect_attachment" {
@@ -414,6 +421,17 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		a, filename := b.loadAttachment(stringOf(b.Store.Session(id)["projectId"]), id, stringOf(args["source_id"]))
 		verifyAttachment(a, filename)
 		return Object{"path": filename, "sha256": a.SHA256, "sizeBytes": a.Size}, nil
+	}
+	if name == "verify_runtime_ssh" {
+		resource := b.hostResource(id, stringOf(args["asset_ref"]))
+		if resource["kind"] != "ssh" {
+			fail(400, "SSH host required")
+		}
+		path := b.Terminals.hostKeyPath(object(resource["ssh"]))
+		if b.Terminals.HostKeyApproval != nil && b.Terminals.KnownHosts == "" {
+			path = b.Terminals.HostKeyApproval(ctx, id, stringOf(resource["id"]))
+		}
+		return Object{"knownHosts": path}, nil
 	}
 	if name == "policy" && stringOf(args["name"]) == "inspect_attachment" {
 		a, _ := b.loadAttachment(stringOf(b.Store.Session(id)["projectId"]), id, stringOf(object(args["arguments"])["source_id"]))
@@ -447,9 +465,13 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 	}
 	if name == "policy" {
 		params := object(args["arguments"])
+		callName := stringOf(args["name"])
 		selected := stringOf(params["terminal_id"])
 		if selected == "" {
 			selected = tid
+		}
+		if set("query_kubernetes observe_cluster observe_cluster_logs")[callName] {
+			selected = ""
 		}
 		var terminal Object
 		targetName := ""
@@ -464,7 +486,6 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 				break
 			}
 		}
-		callName := stringOf(args["name"])
 		ref := stringOf(params["asset_ref"])
 		if ref == "" && terminal != nil {
 			ref = stringOf(terminal["resourceId"])
@@ -512,6 +533,10 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		if resource != nil && resource["kind"] == "ssh" && (fileCall || callName == "open_ssh_terminal" || set("shell inspect_host terminal_execute_command ssh_terminal_send terminal_send_input ssh_terminal_key terminal_send_key")[callName] && (terminal == nil || terminal["status"] == "disconnected")) {
 			b.checkHostConnectionFailure(ctx, id, stringOf(resource["id"]))
 		}
+		if callName == "query_kubernetes" || resource != nil && resource["kind"] == "kubernetes" && set("observe_cluster observe_cluster_logs")[callName] {
+			terminal = nil
+			targetName = stringOf(resource["name"])
+		}
 		p := CommandPolicy(command)
 		frozenTerminal := Object{}
 		for _, k := range []string{"id", "sessionId", "resourceId", "status", "holder", "contextVersion", "generation", "cwd", "shell"} {
@@ -535,6 +560,9 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		}
 		hash := sha256.Sum256([]byte(jsonText(hashData)))
 		v := Object{"fingerprint": fmt.Sprintf("%x", hash), "target": targetName}
+		if callName == "query_kubernetes" && params["metric"] == "logs" {
+			v["kubernetesLogs"] = true
+		}
 		if terminal != nil {
 			v["terminal_id"] = terminal["id"]
 			v["terminalVersion"] = terminal["contextVersion"]

@@ -1,0 +1,136 @@
+{
+  "test": "Real configured model and real selected SSH nodes; new isolated conversation; model chose task split",
+  "elapsedSeconds": 124.8,
+  "state": "cancelled",
+  "blockedApproval": {
+    "kind": "terminal_open",
+    "tool": "shell"
+  },
+  "timingIncludesApprovals": true,
+  "comparableSpeedupBaseline": false,
+  "productionMutations": false,
+  "modelUsageSynthetic": false,
+  "runs": [
+    {
+      "role": "host",
+      "status": "failed",
+      "failure": "本轮多 Agent 用量预算已达到上限",
+      "toolCount": 12,
+      "budgetSpent": 20767,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 10368,
+        "input": 18695,
+        "output": 2072,
+        "total": 20767
+      },
+      "successfulObservations": 9,
+      "failedObservations": 1
+    },
+    {
+      "role": "host",
+      "status": "failed",
+      "failure": "子 Agent 用量预算已达到上限",
+      "toolCount": 11,
+      "budgetSpent": 25641,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 12672,
+        "input": 23344,
+        "output": 2297,
+        "total": 25641
+      },
+      "successfulObservations": 8,
+      "failedObservations": 1
+    },
+    {
+      "role": "host",
+      "status": "failed",
+      "failure": "本轮多 Agent 用量预算已达到上限",
+      "toolCount": 10,
+      "budgetSpent": 18461,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 6400,
+        "input": 16289,
+        "output": 2172,
+        "total": 18461
+      },
+      "successfulObservations": 9,
+      "failedObservations": 0
+    },
+    {
+      "role": "host",
+      "status": "failed",
+      "failure": "本轮多 Agent 用量预算已达到上限",
+      "toolCount": 8,
+      "budgetSpent": 20878,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 10112,
+        "input": 18840,
+        "output": 2038,
+        "total": 20878
+      },
+      "successfulObservations": 6,
+      "failedObservations": 1
+    },
+    {
+      "role": "host",
+      "status": "failed",
+      "failure": "本轮多 Agent 用量预算已达到上限",
+      "toolCount": 10,
+      "budgetSpent": 16057,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 6400,
+        "input": 14456,
+        "output": 1601,
+        "total": 16057
+      },
+      "successfulObservations": 6,
+      "failedObservations": 1
+    },
+    {
+      "role": "data",
+      "status": "failed",
+      "failure": "子 Agent 用量预算已达到上限",
+      "toolCount": 9,
+      "budgetSpent": 21569,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 6144,
+        "input": 19606,
+        "output": 1963,
+        "total": 21569
+      },
+      "successfulObservations": 7,
+      "failedObservations": 2
+    }
+  ],
+  "errorKinds": [
+    "context canceled"
+  ],
+  "chineseResponse": false,
+  "usage": {
+    "inputKnown": true,
+    "outputKnown": true,
+    "known": true,
+    "cachedInput": 127232,
+    "input": 219826,
+    "output": 18159,
+    "total": 237985
+  }
+}

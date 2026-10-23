@@ -34,8 +34,8 @@ func (e *Engine) sreFullCatalog(c Config) []Tool {
 	if c.sre != nil && c.sre.AttemptID != "" {
 		out = append(out, sreTeamTools()...)
 	}
-	if c.MemoryEnabled && e.Bridge != nil {
-		out = append(out, projectMemoryTools()...)
+	if c.MemoryEnabled && e.Bridge != nil && (c.MemorySchemaVersion != 2 || e.worker == nil) {
+		out = append(out, projectMemoryTools(c)...)
 	}
 	return e.configuredExtensionTools(c, out)
 }

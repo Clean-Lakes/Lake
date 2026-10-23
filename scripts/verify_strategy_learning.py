@@ -28,14 +28,21 @@ def git(*args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", required=True, type=pathlib.Path)
+    parser.add_argument("--packages", nargs="+", choices=["internal/strategy", "internal/ai", "internal/web"], default=["internal/strategy", "internal/ai", "internal/web"])
     args = parser.parse_args()
+    suites=[]
+    if "internal/strategy" in args.packages:
+        suites.append(SUITES[0])
+    runtime=["./"+p for p in args.packages if p!="internal/strategy"]
+    if runtime:
+        suites.append(["go","test","-json",*runtime,"-run","^(TestStrategy|TestOnline)","-count=1","-timeout=5m"])
     args.report.parent.mkdir(parents=True, exist_ok=True)
     report = {
         "schemaVersion": 1, "kind": "strategy_regression", "status": "running",
         "startedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain")),
         "platform": {"os": platform.system(), "architecture": platform.machine()},
-        "go": None,
+        "go": None, "packagesRequested": args.packages,
         "modelBenefitEvaluated": False, "desktopEvaluated": False, "suites": [],
     }
 
@@ -48,7 +55,7 @@ def main():
     try:
         report["go"] = subprocess.check_output(["go", "version"], text=True,
                                                stderr=subprocess.DEVNULL).strip()
-        for command in SUITES:
+        for command in suites:
             start = time.monotonic()
             # Output can contain test diagnostics. Keep it in a private local
             # file; publish only identities/statuses, never request bodies.

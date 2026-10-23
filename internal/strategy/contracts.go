@@ -92,15 +92,27 @@ func (b Budget) Validate() error {
 // Settings revision/epoch zero means implicit, unsaved defaults. Stored
 // mutations allocate positive monotonic revisions and epochs in the host.
 type Settings struct {
-	Scope                Scope  `json:"scope"`
-	Revision             int64  `json:"revision"`
-	Epoch                int64  `json:"epoch"`
-	MasterEnabled        bool   `json:"masterEnabled"`
-	ApplyEnabled         bool   `json:"applyEnabled"`
-	LearnEnabled         bool   `json:"learnEnabled"`
-	CorrectEnabled       bool   `json:"correctEnabled"`
-	OnlineCorrectEnabled bool   `json:"onlineCorrectEnabled"`
-	Budget               Budget `json:"budget"`
+	Scope                Scope                `json:"scope"`
+	Revision             int64                `json:"revision"`
+	Epoch                int64                `json:"epoch"`
+	MasterEnabled        bool                 `json:"masterEnabled"`
+	ApplyEnabled         bool                 `json:"applyEnabled"`
+	LearnEnabled         bool                 `json:"learnEnabled"`
+	CorrectEnabled       bool                 `json:"correctEnabled"`
+	OnlineCorrectEnabled bool                 `json:"onlineCorrectEnabled"`
+	OnlineConsentVersion int                  `json:"onlineConsentVersion"`
+	RuntimePolicyVersion int                  `json:"runtimePolicyVersion"`
+	LegacyOnlineConsent  *OnlineConsentRecord `json:"legacyOnlineConsent,omitempty"`
+	Budget               Budget               `json:"budget"`
+}
+
+// A saved v1 trial flag is not consent to the isolated experimental path.
+const OnlineConsentVersion = 2
+
+type OnlineConsentRecord struct {
+	Enabled          bool  `json:"enabled"`
+	SettingsRevision int64 `json:"settingsRevision"`
+	Epoch            int64 `json:"epoch"`
 }
 
 func DefaultSettings(scope Scope) Settings {
@@ -154,6 +166,13 @@ type Applicability struct {
 	Profiles      []string `json:"profiles,omitempty"`
 	ResourceKinds []string `json:"resourceKinds,omitempty"`
 	DomainTags    []string `json:"domainTags,omitempty"`
+}
+
+// Assessment is user-authored evidence/limits, never a provider verification claim.
+type Assessment struct {
+	Conditions  string `json:"conditions"`
+	Evidence    string `json:"evidence"`
+	Limitations string `json:"limitations"`
 }
 
 // AssetRevision is immutable. Lifecycle and adoption belong to later events

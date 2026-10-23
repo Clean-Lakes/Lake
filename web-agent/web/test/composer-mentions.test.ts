@@ -2,7 +2,29 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type {MCPServerConfig,Resource,SkillConfig} from "../../shared/contracts";
 import {rebaseMentions,referencedExtensions,referencedResources,rebaseExtensionReferences} from "../../shared/references";
-import {composerClipboardFragment,composerToken,replaceComposerRange,composerMessage,composerResourceIds,selectComposerMention,appendResourceMention,filterMentions,mentionInsertion,mentionOptions,mentionTypeLabel,type MentionOption} from "../src/composerMentionState";
+import {composerClipboardFragment,composerToken,replaceComposerRange,composerMessage,composerResourceIds,selectComposerMention,appendResourceMention,filterMentions,mentionInsertion,mentionOptions,nextMentionCategory,mentionTypeLabel,type MentionOption} from "../src/composerMentionState";
+
+test("left and right cycle visible categories including empty categories",()=>{
+ assert.equal(nextMentionCategory("all",[],{key:"ArrowRight"}),"resource");
+ assert.equal(nextMentionCategory("resource",[],{key:"ArrowRight"}),"skill");
+ assert.equal(nextMentionCategory("skill",[],{key:"ArrowRight"}),"mcp");
+ assert.equal(nextMentionCategory("mcp",[],{key:"ArrowRight"}),"all");
+ assert.equal(nextMentionCategory("all",[],{key:"ArrowLeft"}),"mcp");
+ const options=mentionOptions([],[],[],true);
+ assert.equal(nextMentionCategory("mcp",options,{key:"ArrowRight"}),"role");
+ assert.equal(nextMentionCategory("role",options,{key:"ArrowRight"}),"all");
+ assert.equal(nextMentionCategory("all",options,{key:"ArrowLeft"}),"role");
+});
+test("category navigation preserves modified arrows and other keys",()=>{
+ for(const key of ["ArrowLeft","ArrowRight"]){
+  for(const modifier of ["shiftKey","metaKey","ctrlKey","altKey"]){
+   assert.equal(nextMentionCategory("all",[],{key,[modifier]:true}),null);
+  }
+ }
+ for(const key of ["ArrowUp","ArrowDown","Enter","Tab","Escape"]){
+  assert.equal(nextMentionCategory("all",[],{key}),null);
+ }
+});
 
 const skill:SkillConfig={name:"service-check",description:"检查服务健康",path:"/fixture/SKILL.md",source:"Lake",enabled:true,managed:true};
 const mcp:MCPServerConfig={id:"tools",name:"Team tools",transport:"http",enabled:true,url:"http://localhost:1",command:"",args:[],headersConfigured:false,envConfigured:false};

@@ -83,17 +83,24 @@ type queryer interface {
 	Exec(string, ...any) (sql.Result, error)
 }
 type Store struct {
-	mu              sync.Mutex
-	memoryPublishMu sync.Mutex
-	db              *sql.DB
-	q               queryer
-	events          []Object
-	subscribers     map[chan Object]bool
-	Dir             string
-	lockFile        *os.File
+	mu               sync.Mutex
+	memoryPublishMu  sync.Mutex
+	memoryV2         bool
+	memoryV2Wanted   bool
+	memoryIndexCache map[string]memoryIndexCacheEntry
+	db               *sql.DB
+	q                queryer
+	events           []Object
+	subscribers      map[chan Object]bool
+	Dir              string
+	lockFile         *os.File
 }
 
 func OpenStore(dir string) (*Store, error) {
+	return openStore(dir, operationalMemoryV2Ready)
+}
+
+func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
 	if e := platform.MkdirAll(dir, 0700); e != nil {
 		return nil, e
 	}
@@ -121,7 +128,11 @@ func OpenStore(dir string) (*Store, error) {
 		return nil, e
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{db: db, q: db, subscribers: map[chan Object]bool{}, Dir: dir, lockFile: lockFile}
+	s := &Store{db: db, q: db, subscribers: map[chan Object]bool{}, Dir: dir, lockFile: lockFile, memoryV2Wanted: memoryV2Wanted}
+	if e = s.checkMemoryV2Compatibility(); e != nil {
+		db.Close()
+		return nil, e
+	}
 	if e = s.prepareStrategyMigration(); e != nil {
 		db.Close()
 		return nil, e
@@ -142,7 +153,7 @@ func OpenStore(dir string) (*Store, error) {
 		return nil, e
 	}
 	platform.Chmod(path, 0600)
-	if _, e = db.Exec(presentationSchema); e != nil {
+	if _, e = db.Exec(presentationSchema + sessionNavigationSchema); e != nil {
 		db.Close()
 		return nil, e
 	}
@@ -159,6 +170,7 @@ func OpenStore(dir string) (*Store, error) {
 		s.ensureBuiltinLocalResources("")
 		s.seedResourceTree()
 		s.pauseMessageQueuesOnRestart()
+		s.retireLegacyOnlineConsent()
 		s.recoverStrategyJobs()
 		s.exec("UPDATE workflowRuns SET status='interrupted',error='服务重启，工作流已中断；未自动重放',finishedAt=? WHERE status='running'", now())
 		s.exec("UPDATE replyTimings SET status='interrupted' WHERE status='running' AND finishedAt=''")
@@ -216,7 +228,7 @@ func (s *Store) migrate() error {
 	}
 	for _, table := range []string{"resources", "terminals"} {
 		sql := stringOf(s.row("SELECT sql FROM sqlite_master WHERE name=?", table)["sql"])
-		if strings.Contains(sql, "CHECK(kind = 'local')") || strings.Contains(sql, "CHECK(kind IN ('local','ssh'))") || strings.Contains(sql, "CHECK(status IN ('ready','busy','disconnected','unknown'))") {
+		if strings.Contains(sql, "CHECK(kind IN ('local','ssh','database','docker','redis'))") || strings.Contains(sql, "CHECK(kind = 'local')") || strings.Contains(sql, "CHECK(kind IN ('local','ssh'))") || strings.Contains(sql, "CHECK(status IN ('ready','busy','disconnected','unknown'))") {
 			needBackup = true
 		}
 	}
@@ -252,8 +264,8 @@ func (s *Store) migrate() error {
 		old := stringOf(s.row("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", table)["sql"])
 		next := old
 		if table == "resources" {
-			for _, v := range []string{"CHECK(kind = 'local')", "CHECK(kind IN ('local','ssh'))"} {
-				next = strings.ReplaceAll(next, v, "CHECK(kind IN ('local','ssh','database','docker','redis'))")
+			for _, v := range []string{"CHECK(kind = 'local')", "CHECK(kind IN ('local','ssh'))", "CHECK(kind IN ('local','ssh','database','docker','redis'))"} {
+				next = strings.ReplaceAll(next, v, "CHECK(kind IN ('local','ssh','database','docker','redis','kubernetes','apisix','prometheus','victoriametrics'))")
 			}
 		} else {
 			next = strings.ReplaceAll(next, "CHECK(status IN ('ready','busy','disconnected','unknown'))", "CHECK(status IN ('connecting','ready','busy','disconnected','unknown'))")
@@ -288,6 +300,11 @@ func (s *Store) migrate() error {
 	}
 	if e := s.migrateProjectMemory(); e != nil {
 		return e
+	}
+	if s.memoryV2Wanted {
+		if e := s.migrateMemoryV2(); e != nil {
+			return e
+		}
 	}
 	return s.migrateStrategy()
 }
@@ -467,7 +484,7 @@ func (s *Store) Catalog() Object {
 			resources = append(resources, s.resource(stringOf(r["id"])))
 		}
 		sessions := []Object{}
-		for _, r := range s.rows("SELECT id FROM sessions WHERE " + activeSessionsSQL + " AND NOT EXISTS (SELECT 1 FROM aiScopes a WHERE a.sessionId=sessions.id AND (a.scope='resource-terminal' OR (a.scope='enhanced-terminal' AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.sessionId=sessions.id)))) ORDER BY createdAt DESC,rowid DESC") {
+		for _, r := range s.rows("SELECT id FROM sessions WHERE " + sidebarVisibleSessionsSQL + " ORDER BY createdAt DESC,rowid DESC") {
 			sessions = append(sessions, s.session(stringOf(r["id"])))
 		}
 		return Object{"tags": s.rows("SELECT t.* FROM workspaceTags t WHERE NOT EXISTS(SELECT 1 FROM navigationTrash d WHERE d.kind='project' AND d.id=t.projectId) ORDER BY name,id"), "projects": s.rows("SELECT * FROM projects WHERE " + activeProjectsSQL + " ORDER BY createdAt,id"), "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE NOT EXISTS(SELECT 1 FROM navigationTrash d WHERE d.kind='project' AND d.id=resourceTree.projectId) ORDER BY position,id"), "sessions": sessions, "terminals": s.rows("SELECT t.id,t.sessionId,t.resourceId,t.status,t.holder,t.contextVersion,t.createdAt,s.title AS sessionTitle FROM terminals t JOIN sessions s ON s.id=t.sessionId WHERE t.status!='disconnected' ORDER BY t.createdAt,t.rowid")}
@@ -507,6 +524,9 @@ func (s *Store) CreateResource(project, name, kind string, config Object) Object
 		id := ident()
 		s.exec("INSERT INTO resources(id,projectId,name,kind,description,status) VALUES(?,?,?,?,?,?)", id, project, name, kind, description, "available")
 		s.exec("INSERT INTO resourceConnections(resourceId,config) VALUES(?,?)", id, jsonText(config))
+		if s.memoryV2 {
+			s.exec("INSERT INTO resourceMemoryGenerations(resourceId,generation,updatedAt,reason) VALUES(?,1,?,'created')", id, now())
+		}
 		s.seedResourceTree()
 		for _, session := range s.rows("SELECT id FROM sessions WHERE projectId=?", project) {
 			s.event(stringOf(session["id"]), "session")

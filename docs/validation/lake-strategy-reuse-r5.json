@@ -1,0 +1,117 @@
+{
+  "sourceCommit": "0478f752558a72cadf23089517524422a7398f96",
+  "baseCommit": "bb7228e39006b2707246ed00c2e5e52182122007",
+  "validatedAt": "2026-10-23T07:50:39.245552+00:00",
+  "functionalStatus": "passed",
+  "generalBenefit": "inconclusive",
+  "replaySummary": {
+    "costAmount": "unknown",
+    "generalBenefit": "inconclusive",
+    "groups": {
+      "applicable_experience": {
+        "missing": 0,
+        "regressions": 0,
+        "ties": 8,
+        "wins": 10
+      },
+      "negative_transfer": {
+        "missing": 0,
+        "regressions": 0,
+        "ties": 18,
+        "wins": 0
+      },
+      "private_convention": {
+        "missing": 0,
+        "regressions": 0,
+        "ties": 2,
+        "wins": 16
+      },
+      "report_preference": {
+        "missing": 0,
+        "regressions": 0,
+        "ties": 0,
+        "wins": 18
+      }
+    },
+    "knownUsageTokens": {
+      "assets": 342150,
+      "baseline": 330955,
+      "delta": 11195,
+      "pairsWithUnknownUsage": 0
+    },
+    "measuredDurationMs": {
+      "assets": 122351,
+      "baseline": 138325,
+      "delta": -15974
+    },
+    "missing": 0,
+    "paired": 72,
+    "recommendation": "keep_opt_in_no_scope_expansion",
+    "regressions": 0,
+    "replayConclusion": "improvement_on_frozen_replays",
+    "ties": 28,
+    "wins": 44
+  },
+  "realProviderRequests": 144,
+  "additionalSignedDevRequests": 2,
+  "backgroundRequests": 0,
+  "sourceDirty": false,
+  "signedBackendSHA256": "9c0d573dc458426c4b01a7b914c0598d81192af878039530111c16b01652ca9a",
+  "schemaVersion": 6,
+  "noNewSchemaOrDroppedHistory": true,
+  "checks": {
+    "go": "go test ./... passed",
+    "race": "go test -race ./internal/ai ./internal/web ./internal/strategy -run '^(TestStrategy|TestReuse|TestOnline|TestSRE|TestMultiAgent)' -count=1 -timeout=8m passed",
+    "finalWorkerAndCompatibilityRace": "go test -race ./internal/web -run '^(TestStrategyExperiment|TestStrategyOptimization)' -count=1 -timeout=4m passed",
+    "vet": "go vet ./... passed",
+    "adk": "python3 scripts/check_adk_runtime_boundary.py passed",
+    "frontend": "web-agent: corepack pnpm check; test:frontend 426/426; build:web passed",
+    "python": "python3 -m py_compile scripts/test_strategy_reuse_dev.py passed"
+  },
+  "nativeUI": {
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "widths": [
+      2560,
+      850
+    ],
+    "oldOptimizerActionsAbsent": true,
+    "onlineConsentRemainsClosedAndOff": true,
+    "manualPairDoesNotRequireLearning": true,
+    "sharedSelectKeyboardFocusAndClipping": true,
+    "originalThemeProjectWindowRestored": true,
+    "ownedTemporaryProjectArchivedRecoverably": true
+  },
+  "fixedDev": {
+    "running": true,
+    "home": "~/.lake-dev",
+    "packaged": false,
+    "installedNativeAppReplaced": false,
+    "integrity": "ok",
+    "adkIntegrity": "ok",
+    "foreignKeyErrors": 0,
+    "settingsPreserved": {
+      "masterEnabled": true,
+      "applyEnabled": true,
+      "learnEnabled": true,
+      "onlineCorrectEnabled": false
+    }
+  },
+  "priorPR": {
+    "number": 81,
+    "reviewedHead": "0175c7944f46b9393e74ed8f1c5d2d09e15fc3c3",
+    "mergedTo": "develop",
+    "mergeCommit": "bb7228e39006b2707246ed00c2e5e52182122007",
+    "localAndRemoteTopicBranchDeleted": true,
+    "pr67": "left open; branch retained"
+  },
+  "notValidated": [
+    "Windows native UI; no manual CI dispatched",
+    "Independent longitudinal user field study; correction/review burden and rejection rates",
+    "Monetary cost and immutable provider weight version; no pricing supplied",
+    "Controlled causal latency improvement; two Dev trial calls overlapped part of the campaign"
+  ],
+  "recommendation": "Keep user-owned assets and optional background candidates; do not expand default automatic application; future rubric changes need new holdouts."
+}

@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-11",
+  "status": "passed",
+  "creation": "no title input; resource selection only",
+  "naming": "first meaningful message; no extra model request",
+  "placeholder": "新会话",
+  "persistence": "stable across later messages and restart",
+  "legacyNames": "preserved",
+  "credentials": "redacted before title derivation",
+  "goRace": "full suite passed",
+  "goVet": "passed",
+  "frontendTests": 4,
+  "reactBuild": "passed",
+  "browser": "creation and immediate sidebar/heading rename verified before terminal authorization",
+  "codesign": "verified",
+  "binarySha256": "afa841f7050230116cec0477e18e86fa4f8aa6d0c0af6476425826b18eb878c1"
+}

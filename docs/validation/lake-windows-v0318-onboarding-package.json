@@ -1,0 +1,56 @@
+{
+  "version": "0.3.18",
+  "runtime_execution": "not performed by this static validator",
+  "artifacts": {
+    "Lake-0.3.18-windows-x86_64.zip": {
+      "size": 211961670,
+      "sha256": "2efbe0ebff0d24a8220a8a6c183d6853bf5dcfe5d6117d5525e52c4cc3f728ba"
+    },
+    "Lake-0.3.18-windows-x86_64-setup.exe": {
+      "size": 112327056,
+      "sha256": "2a96dbcebbb30c8ee61134e23ade48f90fccc9e2b5c0d5782a6aec4cf4d52013"
+    }
+  },
+  "executables": {
+    "Lake.exe": {
+      "machine": 34404,
+      "optional_magic": 523,
+      "subsystem": 2,
+      "sha256": "69ea9e15156a43b6c90468d7bd1fed5283610cbd02e784749436dfc2a1d1b0be"
+    },
+    "resources/lake.exe": {
+      "machine": 34404,
+      "optional_magic": 523,
+      "subsystem": 3,
+      "sha256": "1f2d992162e1b4bfd18a2780972d26048c1e28d68d579c0316808e21f03e1eee"
+    },
+    "resources/git/usr/bin/bash.exe": {
+      "machine": 34404,
+      "optional_magic": 523,
+      "subsystem": 3,
+      "sha256": "5490d0da5e7cf9d92068cc48fcc590f2bcf8564add8ff91c3b5fe541eb2d72e3"
+    },
+    "resources/git/usr/bin/ssh.exe": {
+      "machine": 34404,
+      "optional_magic": 523,
+      "subsystem": 3,
+      "sha256": "c84594a323ee6afc04d9faf614a05be6dc9a2faecd856268a854084fea17fd44"
+    }
+  },
+  "zip_entries": 9721,
+  "installer_header": {
+    "machine": 332,
+    "optional_magic": 267,
+    "subsystem": 2
+  },
+  "checks": [
+    "SHA-256 sidecars",
+    "ZIP CRC and safe paths",
+    "x64 PE and GUI/console subsystems",
+    "current embedded frontend assets",
+    "pinned runtime and provenance",
+    "licenses",
+    "NSIS archive integrity"
+  ],
+  "passed": true
+}

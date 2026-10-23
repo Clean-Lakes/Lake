@@ -67,7 +67,7 @@ func testSREReadTimeoutSample(t *testing.T, online bool) {
 	b, h := fixture(t)
 	sid, rid := newSession(t, h)
 	if online {
-		_, err := b.Store.SetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "online", 0, StrategySettingsInput{MasterEnabled: true, CorrectEnabled: true, OnlineCorrectEnabled: true, Budget: strategy.DefaultBudget()})
+		_, err := b.Store.SetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "online", 0, StrategySettingsInput{MasterEnabled: true, CorrectEnabled: true, OnlineCorrectEnabled: true, OnlineConsentVersion: strategy.OnlineConsentVersion, Budget: strategy.DefaultBudget()})
 		if err != nil {
 			t.Fatal(err)
 		}

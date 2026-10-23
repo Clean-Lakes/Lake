@@ -5,7 +5,7 @@ import {NavigationMenu,type NavigationDeleteTarget} from "./NavigationDelete";
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent, type ReactNode } from "react";
 import type { Project, Resource, ResourceTreeNode } from "../../shared/contracts";
 import { api, readableError } from "./api";
-import { canMoveInto, dropPlacement, projectResourceTree } from "./resource-tree-model";
+import { canMoveInto, compareTreeNodes, dropPlacement, projectResourceTree, treeDropZone } from "./resource-tree-model";
 
 function FolderIcon() { return <Glyph name="folder" size={16} className="resource-tree-folder-icon"/>; }
 export function ResourceTree({project, resources, nodes, disabled, renderResource, refresh, onAddResource, onImport, onDelete, selection, onSelectAll, filtering = false}: {
@@ -19,7 +19,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   const nodeMap = new Map(tree.map(node => [node.id, node]));
   const children = new Map<string | null, ResourceTreeNode[]>();
   for (const node of tree) { const siblings = children.get(node.parentId) ?? []; siblings.push(node); children.set(node.parentId,siblings); }
-  for (const siblings of children.values()) siblings.sort((a,b)=>a.position-b.position || a.id.localeCompare(b.id));
+  for (const siblings of children.values()) siblings.sort(compareTreeNodes);
   const childrenOf = (parent: string | null) => children.get(parent) ?? [];
   const [sectionExpanded, setSectionExpanded] = useState(() => {
     try { return localStorage.getItem(`lake.resource-section.${project.id}`) !== "closed"; } catch { return true; }
@@ -37,12 +37,44 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
   const [moving, setMoving] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const dragSource = useRef<string | null>(null);
-  const pointerDrag = useRef<{source:string; pointer:number; x:number; y:number; active:boolean} | null>(null);
+  const pointerDrag = useRef<{source:string; pointer:number; x:number; y:number; currentX:number; currentY:number; active:boolean; scroll:HTMLElement|null} | null>(null);
   const pointerDrop = useRef<{parentId:string|null; beforeId:string|null} | null>(null);
+  const pointerUpdate=useRef<(x:number,y:number)=>void>(()=>{});
+  const focusAfterMove=useRef<string|null>(null);
+  const root=useRef<HTMLDivElement>(null);
   const suppressClick = useRef(false);
   const [drop, setDrop] = useState<{id: string; zone: "before" | "inside" | "after"} | null>(null);
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const blocked = disabled || busy || filtering;
+  useEffect(()=>{
+    if(!dragging||drop?.zone!=='inside'||drop.id==='root'||expandedFolders.includes(drop.id))return;
+    const timer=setTimeout(()=>setExpandedFolders(values=>values.includes(drop.id)?values:[...values,drop.id]),600);
+    return ()=>clearTimeout(timer);
+  },[dragging,drop,expandedFolders]);
+  useEffect(()=>{
+    if(busy||!focusAfterMove.current)return;
+    root.current?.querySelector<HTMLButtonElement>(`[data-resource-tree-node="${CSS.escape(focusAfterMove.current)}"] .resource-drag-handle`)?.focus();
+    focusAfterMove.current=null;
+  },[busy,nodes]);
+  useEffect(()=>{
+    if(!dragging)return;
+    let frame=0;
+    const cancel=()=>{suppressClick.current=true;pointerDrag.current=null;pointerDrop.current=null;dragSource.current=null;setDragging(null);setDrop(null);};
+    const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();cancel();}};
+    const tick=()=>{
+      const drag=pointerDrag.current,scroll=drag?.scroll;
+      if(drag?.active&&scroll){
+        const rect=scroll.getBoundingClientRect();
+        if(drag.currentX>=rect.left&&drag.currentX<=rect.right){
+          const edge=48;const speed=drag.currentY<rect.top+edge?-Math.min(12,(rect.top+edge-drag.currentY)/4):drag.currentY>rect.bottom-edge?Math.min(12,(drag.currentY-rect.bottom+edge)/4):0;
+          if(speed){scroll.scrollTop+=speed;pointerUpdate.current(drag.currentX,drag.currentY);}
+        }
+      }
+      frame=requestAnimationFrame(tick);
+    };
+    frame=requestAnimationFrame(tick);document.addEventListener('keydown',key);
+    return ()=>{cancelAnimationFrame(frame);document.removeEventListener('keydown',key);};
+  },[dragging]);
   useEffect(()=>{
     if(editor?.id && !nodes.some(node=>node.id===editor.id))setEditor(null);
     if(context && !tree.some(node=>node.id===context.id))setContext(null);
@@ -83,14 +115,18 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
     if (parentId) setExpandedFolders(values => values.includes(parentId) ? values : [...values, parentId]);
     void work({operation:"move", nodeId:source, parentId, beforeId});
   };
+  const placementMarker=(source:string,target:ResourceTreeNode,zone:'before'|'inside'|'after',place:{parentId:string|null;beforeId:string|null}):typeof drop=>{
+    if(zone==='inside')return {id:target.id,zone};
+    if(place.beforeId)return {id:place.beforeId,zone:'before'};
+    const last=childrenOf(place.parentId).filter(node=>node.id!==source&&!node.builtin).at(-1);
+    return last?{id:last.id,zone:'after'}:{id:place.parentId??'root',zone:'inside'};
+  };
   // Pointer capture works for mouse, trackpad and touch, including browsers
   // whose embedded web view does not provide native HTML drag sessions.
-  const pointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+  const updatePointerDrop = (x:number,y:number) => {
     const drag = pointerDrag.current;
-    if (!drag || drag.pointer !== event.pointerId || blocked) return;
-    if (!drag.active && Math.hypot(event.clientX-drag.x,event.clientY-drag.y) < 5) return;
-    if (!drag.active) {drag.active=true;dragSource.current=drag.source;setDragging(drag.source);}
-    const target = document.elementFromPoint(event.clientX,event.clientY);
+    if (!drag||blocked)return;
+    const target = document.elementFromPoint(x,y);
     const inside = target?.closest<HTMLElement>("[data-resource-drop-inside]");
     const row = target?.closest<HTMLElement>("[data-resource-tree-node]");
     let place: {parentId:string|null;beforeId:string|null} | null = null;
@@ -101,14 +137,22 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
     } else if(row) {
       const node=tree.find(node=>node.id===row.dataset.resourceTreeNode);
       if(node && node.id!==drag.source) {
-        const bounds=row.getBoundingClientRect();const ratio=(event.clientY-bounds.top)/Math.max(1,bounds.height);
-        const zone=node.kind==="resource" ? (ratio<.5 ? "before":"after") : ratio<.25 ? "before":ratio>.75 ? "after":"inside";
-        const candidate=dropPlacement(tree,node,zone);
-        if(canMoveInto(tree,drag.source,candidate.parentId)){place=candidate;marker={id:node.id,zone};}
+        const bounds=row.getBoundingClientRect();const ratio=(y-bounds.top)/Math.max(1,bounds.height);
+        const zone=treeDropZone(node,ratio,x-bounds.left);
+        const candidate=dropPlacement(tree,node,zone,drag.source);
+        if(canMoveInto(tree,drag.source,candidate.parentId)){place=candidate;marker=placementMarker(drag.source,node,zone,candidate);}
       }
     }
     pointerDrop.current=place;
     setDrop(current=>current?.id===marker?.id && current?.zone===marker?.zone ? current:marker);
+  };
+  pointerUpdate.current=updatePointerDrop;
+  const pointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+    const drag=pointerDrag.current;if(!drag||drag.pointer!==event.pointerId||blocked)return;
+    drag.currentX=event.clientX;drag.currentY=event.clientY;
+    if(!drag.active&&Math.hypot(event.clientX-drag.x,event.clientY-drag.y)<5)return;
+    if(!drag.active){drag.active=true;dragSource.current=drag.source;setDragging(drag.source);}
+    updatePointerDrop(event.clientX,event.clientY);
   };
   const pointerEnd = (event: PointerEvent<HTMLButtonElement>, cancelled = false) => {
     const drag=pointerDrag.current;
@@ -116,7 +160,7 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
     pointerDrag.current=null;
     if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
     const place=pointerDrop.current;pointerDrop.current=null;
-    if(drag.active){suppressClick.current=true;setTimeout(()=>{suppressClick.current=false;},0);if(!cancelled && place)move(drag.source,place.parentId,place.beforeId);}
+    if(drag.active){suppressClick.current=true;if(!cancelled && place)move(drag.source,place.parentId,place.beforeId);}
     dragSource.current=null;setDragging(null);setDrop(null);
   };
   const dragOver = (event: DragEvent<HTMLElement>, node: ResourceTreeNode) => {
@@ -124,17 +168,18 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
     if (!source || blocked || source === node.id) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     const ratio = (event.clientY - bounds.top) / Math.max(1, bounds.height);
-    const zone = node.kind === "resource" ? (ratio < .5 ? "before" : "after") : ratio < .25 ? "before" : ratio > .75 ? "after" : "inside";
-    const placement = dropPlacement(tree, node, zone);
+    const zone = treeDropZone(node,ratio,event.clientX-bounds.left);
+    const placement = dropPlacement(tree, node, zone,source);
     if (!canMoveInto(tree, source, placement.parentId)) return;
     event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = "move";
-    setDrop(current => current?.id === node.id && current.zone === zone ? current : {id:node.id,zone});
+    const marker=placementMarker(source,node,zone,placement);
+    setDrop(current => current?.id === marker?.id && current?.zone === marker?.zone ? current : marker);
   };
   const render = (parent: string | null, depth = 0): ReactNode => childrenOf(parent).map(node => {
     const resource = node.resourceId ? resourceMap.get(node.resourceId) : undefined;
     const builtin = resource?.kind === "local";
     const expanded = filtering || expandedFolders.includes(node.id);
-    const siblings = childrenOf(parent); const index = siblings.findIndex(item => item.id === node.id);
+    const siblings = childrenOf(parent).filter(item=>item.kind===node.kind&&!item.builtin); const index = siblings.findIndex(item => item.id === node.id);
     return <div className={`resource-tree-node ${dragging === node.id ? "is-dragging" : ""}`} key={node.id}>
       <div data-resource-tree-node={node.id} onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(!blocked && !builtin){contextAnchor.current=event.currentTarget.querySelector<HTMLButtonElement>('.navigation-more-button') ?? event.currentTarget.querySelector<HTMLButtonElement>('.resource-drag-handle');setContext({id:node.id,x:event.clientX,y:event.clientY});}}} className={`resource-tree-row ${drop?.id === node.id ? `drop-${drop.zone}` : ""}`} onDragOver={event => dragOver(event,node)} onDrop={event => {
         event.preventDefault(); event.stopPropagation();
@@ -142,15 +187,16 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
         if (!source || source === node.id || blocked) return;
         const bounds = event.currentTarget.getBoundingClientRect();
         const ratio = (event.clientY - bounds.top) / Math.max(1,bounds.height);
-        const zone = node.kind === "resource" ? (ratio < .5 ? "before" : "after") : ratio < .25 ? "before" : ratio > .75 ? "after" : "inside";
-        const target = dropPlacement(tree,node,zone); move(source,target.parentId,target.beforeId);
+        const zone = treeDropZone(node,ratio,event.clientX-bounds.left);
+        const target = dropPlacement(tree,node,zone,source); move(source,target.parentId,target.beforeId);
       }}>
         {!builtin && (node.kind === "folder" || resource) && <BulkCheckbox selection={selection} target={node.kind === "folder" ? {kind:"folder",id:node.id,projectId:project.id,name:folderPath(node)} : {kind:"resource",id:resource!.id,projectId:project.id,name:resource!.name}}/>}
-        {!builtin && <button type="button" className="resource-drag-handle" aria-label={`拖动或移动 ${resource?.name || node.name}`} title="拖动排序或移动到目录；点击选择位置" disabled={blocked} draggable={false}
-          onClick={() => {if(!suppressClick.current)setMoving(current => current === node.id ? null : node.id);}}
-          onPointerDown={event=>{if(blocked || event.button!==0)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);pointerDrag.current={source:node.id,pointer:event.pointerId,x:event.clientX,y:event.clientY,active:false};pointerDrop.current=null;}}
-          onPointerMove={pointerMove} onPointerUp={event=>pointerEnd(event)} onPointerCancel={event=>pointerEnd(event,true)}
-          onDragStart={event => {dragSource.current = node.id;event.dataTransfer.setData("application/x-lake-resource-tree",node.id);event.dataTransfer.effectAllowed="move";setDragging(node.id);setError("");}} onDragEnd={() => {dragSource.current = null;setDragging(null);setDrop(null);}}><Glyph name="grip" size={10}/></button>}
+        {!builtin && <button type="button" className="resource-drag-handle" aria-label={`拖动或移动 ${resource?.name || node.name}`} title="上下拖动排序，向右拖入目录；也可按上下方向键或点击选择位置" disabled={blocked} draggable={false}
+          onClick={() => {if(suppressClick.current){suppressClick.current=false;return;}setMoving(current => current === node.id ? null : node.id);}}
+          onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){suppressClick.current=false;return;}if(blocked||!['ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();const next=event.key==='ArrowUp'?index-1:index+1;if(next<0||next>=siblings.length)return;focusAfterMove.current=node.id;move(node.id,parent,event.key==='ArrowUp'?siblings[next]!.id:siblings[next+1]?.id??null);}}
+          onPointerDown={event=>{if(blocked || event.button!==0)return;event.preventDefault();suppressClick.current=false;event.currentTarget.setPointerCapture(event.pointerId);pointerDrag.current={source:node.id,pointer:event.pointerId,x:event.clientX,y:event.clientY,currentX:event.clientX,currentY:event.clientY,active:false,scroll:event.currentTarget.closest<HTMLElement>('.project-scroll')};pointerDrop.current=null;}}
+          onPointerMove={pointerMove} onPointerUp={event=>pointerEnd(event)} onPointerCancel={event=>pointerEnd(event,true)} onLostPointerCapture={event=>pointerEnd(event,true)}
+          onDragStart={event => {dragSource.current = node.id;event.dataTransfer.setData("application/x-lake-resource-tree",node.id);event.dataTransfer.effectAllowed="move";setDragging(node.id);setError("");}} onDragEnd={() => {dragSource.current = null;setDragging(null);setDrop(null);}}><Glyph name="grip" size={12}/></button>}
         {node.kind === "folder" ? <div className="resource-folder-row">
           <button type="button" className="resource-folder-toggle" title={folderPath(node)} aria-expanded={expanded} onClick={() => setExpandedFolders(values => expanded ? values.filter(id => id !== node.id) : [...values,node.id])}><Glyph name="chevron" size={11} className={expanded ? "folder-chevron open" : "folder-chevron"}/><FolderIcon/><span className="resource-folder-name">{node.name}</span><small className="resource-folder-count" title={`${childrenOf(node.id).length} 个子项`}>{childrenOf(node.id).length}</small></button>
           <div className="resource-folder-actions"><button type="button" className="navigation-more-button" disabled={blocked} aria-label={`管理文件夹 ${folderPath(node)}`} aria-haspopup="menu" title="更多操作" onClick={event => {contextAnchor.current=event.currentTarget;const rect=event.currentTarget.getBoundingClientRect();setContext({id:node.id,x:rect.right-208,y:rect.bottom+6});}}><Glyph name="more" size={15}/></button></div>
@@ -198,16 +244,17 @@ export function ResourceTree({project, resources, nodes, disabled, renderResourc
         items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowUp" ? -1 : 1) + items.length) % items.length]?.focus();
       }
     }}>
-      <button type="button" role="menuitem" onClick={() => { setAddOpen(false); onAddResource(null); }}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h.01M7 17.5h.01M11 6.5h7M11 17.5h7"/></svg><span>新建资源<small>SSH 主机</small></span></button>
+      <button type="button" role="menuitem" onClick={() => { setAddOpen(false); onAddResource(null); }}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h.01M7 17.5h.01M11 6.5h7M11 17.5h7"/></svg><span>新建资源<small>主机、数据库、集群、网关与监控</small></span></button>
       <button type="button" role="menuitem" onClick={() => { setAddOpen(false); onImport(); }}><FolderIcon/><span>导入资源<small>文本、JSON、CSV、HexHub、连接说明</small></span></button>
       <button type="button" role="menuitem" onClick={() => { setAddOpen(false); setSectionExpanded(true); setEditor({parentId:null,name:""}); }}><FolderIcon/>新建目录</button>
     </div>}
-  </div></div>{(sectionExpanded || filtering) && <div id={`project-resources-${project.id}`} className="resource-tree" aria-label={`${project.name} 资源目录`}>
+  </div></div>{(sectionExpanded || filtering) && <div id={`project-resources-${project.id}`} className="resource-tree" ref={root} aria-label={`${project.name} 资源目录`}>
     {editor && <form className="resource-folder-editor" onSubmit={event => {event.preventDefault();void work({operation:editor.id ? "rename":"create",nodeId:editor.id,parentId:editor.parentId,name:editor.name.trim()});}}>
       <label>{editor.id ? "目录名称" : editor.parentId ? "新建子目录" : "新建目录"}<input aria-label="目录名称" autoFocus maxLength={120} value={editor.name} disabled={busy} onChange={event => setEditor({...editor,name:event.target.value})}/></label>
       <div><button type="submit" disabled={blocked || !editor.name.trim()}>{busy ? "保存中…":"保存"}</button><button type="button" disabled={busy} onClick={() => setEditor(null)}>取消</button></div>
     </form>}
     {error && <p className="form-error" role="alert">{error}</p>}
+    {dragging && <div className="resource-drag-status" role="status">{drop ? `${drop.zone==='inside'?'移入':drop.zone==='before'?'排在前面：':'排在后面：'}${drop.id==='root'?'资源根层':resourceMap.get(nodeMap.get(drop.id)?.resourceId??'')?.name??nodeMap.get(drop.id)?.name??''}` : '上下拖动排序，向右拖入目录'} · Esc 取消</div>}
     {render(null)}
     {!tree.length && <p className="nav-empty">暂无资源</p>}
     {dragging && <div data-resource-drop-inside="" className={`resource-root-drop ${drop?.id === "root" ? "drop-inside" : ""}`} onDragOver={event=>{event.preventDefault();setDrop({id:"root",zone:"inside"});}} onDrop={event=>{event.preventDefault();if(dragSource.current)move(dragSource.current,null);}}>移到资源根层</div>}

@@ -1,9 +1,9 @@
 /* The icon carries the resolved resource type in both the editor and sent messages. */
 /* Navigation and mention candidates share the label palette without tinting text or actions. */
-:is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon.kind-ssh { color:var(--info); }
-:is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon.kind-database { color:var(--resource-database-foreground); }
+:is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon:is(.kind-ssh,.kind-apisix) { color:var(--info); }
+:is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon:is(.kind-database,.kind-victoriametrics,.kind-prometheus) { color:var(--resource-database-foreground); }
 :is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon.kind-redis { color:var(--warning); }
-:is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon.kind-docker { color:var(--tag-purple); }
+:is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon:is(.kind-docker,.kind-kubernetes) { color:var(--tag-purple); }
 :is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon.kind-local { color:var(--text-secondary); }
 .sidebar.workspace-navigation .resource-folder-toggle > .resource-tree-folder-icon { color:var(--warning); }
 
@@ -11,11 +11,11 @@
 :is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon) { border:0; }
 .composer-reference-token:has(> .resource-kind-icon) { padding:2px 6px; }
 .message-reference-token:has(> .resource-kind-icon) { padding:1px 6px; }
-:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon.kind-ssh) {
+:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon:is(.kind-ssh,.kind-apisix)) {
  --resource-reference-background:var(--info-soft);
  --resource-reference-foreground:var(--info);
 }
-:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon.kind-database) {
+:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon:is(.kind-database,.kind-victoriametrics,.kind-prometheus)) {
  --resource-reference-background:var(--resource-database-background);
  --resource-reference-foreground:var(--resource-database-foreground);
 }
@@ -23,7 +23,7 @@
  --resource-reference-background:var(--warning-soft);
  --resource-reference-foreground:var(--warning);
 }
-:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon.kind-docker) {
+:is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon:is(.kind-docker,.kind-kubernetes)) {
  --resource-reference-background:var(--tag-purple-soft);
  --resource-reference-foreground:var(--tag-purple);
 }

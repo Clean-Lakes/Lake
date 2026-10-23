@@ -1,0 +1,72 @@
+{
+  "validatedAt": "2026-10-23T09:40:11.221688+00:00",
+  "codeCommit": "3e346f6e",
+  "nativeDev": {
+    "installedCommit": "fddf5b29f278a72121a58abaf40bacf98c49aff0",
+    "activated": true,
+    "cleanBuild": true,
+    "backendHashMatches": true,
+    "deepSignatureValid": true,
+    "verification": "Waited until active sessions and busy terminals were both zero. Native control initially timed out; terminated only the verified idle Dev app/backend with SIGTERM, then reopened the installed Dev app. New embedded CSS is served; actual sidebar shows folders above standalone resources."
+  },
+  "changes": [
+    "Resolved catalog resource IDs are recorded on tool operations, including resumed approvals; legacy opaque aliases recover only exact unique target identities",
+    "Resource summaries use the shared ResourceIcon for all nine actual resource kinds; catalog lookup uses search; specific tool steps retain tool identity",
+    "Overall progress owns its activity mark after the final wrapped line in normal block flow",
+    "Archived prose expands immediately to intrinsic height; only collapse animates and clips"
+  ],
+  "checks": {
+    "frontend": {
+      "passed": 444,
+      "typescript": "passed"
+    },
+    "goRace": {
+      "command": "go test -race ./internal/ai ./internal/web -run 'Test(InspectHostCarries|KubernetesResourceWorks|NativeKubernetes|Directory|.*Approval|.*Scope)' -count=1",
+      "aiSeconds": 15.187,
+      "webSeconds": 50.288
+    },
+    "goVet": "internal/ai passed",
+    "adkRuntimeBoundary": "passed",
+    "signedDevBuild": "scripts/build_lake_desktop.sh --dev --install passed",
+    "browser": {
+      "tool": "ego-browser",
+      "finished": true,
+      "plainReopenFrames": 30,
+      "plainReopenOverlaps": 0,
+      "minimumGapPx": 13.7568,
+      "narrowProgressLines": 11,
+      "progressMarkGapPx": 17.2664,
+      "checks": [
+        "All nine resource icons visually checked in light theme",
+        "Dark theme, narrow text column, appended long Chinese progress and plain reply visually checked",
+        "Completion removes activity; resume shows one activity mark; no viewport horizontal overflow"
+      ]
+    },
+    "webkit": {
+      "engine": "native WKWebView using the same production React components and CSS with synthetic fetch",
+      "viewportWidths": [
+        1100,
+        520
+      ],
+      "pageZoom": [
+        0.85,
+        0.9,
+        1,
+        1.25
+      ],
+      "reopenFrames": 45,
+      "reopenOverlaps": 0,
+      "minimumGapPx": 14.2193
+    }
+  },
+  "reproduction": "The stable long-text replay did not overlap. During completed-to-running prose restoration, the old expansion transition placed the activity above the last text line (text bottom 450.38px; mark top 179.40px). The immediate-expansion fix removes this transient overlap.",
+  "screenshots": [
+    "resource-reply-icons-light.png",
+    "resource-reply-wrap-dark-narrow.png"
+  ],
+  "limitations": [
+    "No real model or cluster request was made for UI validation",
+    "Full Web/AI suites were not rerun; prior full-suite timing limitation is unchanged"
+  ],
+  "release": "PR 82 remains open; no release application/data modified"
+}

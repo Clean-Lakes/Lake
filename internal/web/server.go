@@ -23,10 +23,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type Options struct {
+	memoryV2ForTest                 bool // Package-private fixture injection; no CLI/environment override.
 	Home, DataDir, Token, DevOrigin string
 	Port                            int
 	Open                            bool
@@ -35,45 +37,57 @@ type Options struct {
 	Output                          io.Writer
 }
 type Server struct {
-	Extensions         *extensions.Manager
-	draftCompletions   sync.Map
-	progressSummaryMu  sync.Mutex
-	progressSummaries  map[string]*progressSummaryState
-	progressRunning    int
-	scheduleMu         sync.Mutex
-	schedulerWorkers   sync.WaitGroup
-	workflowMu         sync.Mutex
-	workflowCancels    map[string]context.CancelFunc
-	messageMu          sync.Mutex
-	runningMessages    map[string]bool
-	bindingMu          sync.Mutex
-	accessMu           sync.Mutex
-	terminalGrants     map[string]TerminalAccess
-	terminalWriters    map[string]string
-	manualBindings     map[string]TerminalAccess
-	manualBorrowers    map[string]string
-	Store              *Store
-	Models             *Models
-	HexHubMCP          string
-	HexHubLocalAssets  func(context.Context) ([]Object, error)
-	Terminals          *Terminals
-	Engine             *ai.Engine
-	Context            context.Context
-	cancel             context.CancelFunc
-	options            Options
-	token              string
-	generated          bool
-	workers            sync.WaitGroup
-	closeOnce          sync.Once
-	gate               sync.RWMutex
-	closed             bool
-	http               *http.Server
-	listener           net.Listener
-	streamSlots        chan struct{}
-	connectionMu       sync.Mutex
-	connectionFailures map[string]hostConnectionFailure
-	hostKeyMu          sync.Mutex
-	hostKeyPrompts     map[string]*sshTrustPrompt
+	Extensions           *extensions.Manager
+	draftCompletions     sync.Map
+	memoryReads          sync.Map
+	memoryCancel         context.CancelFunc
+	memoryJobID          string
+	memoryLease          string
+	memoryLastForeground time.Time
+	progressSummaryMu    sync.Mutex
+	progressSummaries    map[string]*progressSummaryState
+	progressRunning      int
+	scheduleMu           sync.Mutex
+	schedulerWorkers     sync.WaitGroup
+	workflowMu           sync.Mutex
+	workflowCancels      map[string]context.CancelFunc
+	messageMu            sync.Mutex
+	runningMessages      map[string]bool
+	bindingMu            sync.Mutex
+	accessMu             sync.Mutex
+	terminalGrants       map[string]TerminalAccess
+	terminalWriters      map[string]string
+	manualBindings       map[string]TerminalAccess
+	manualBorrowers      map[string]string
+	Store                *Store
+	Models               *Models
+	HexHubMCP            string
+	HexHubLocalAssets    func(context.Context) ([]Object, error)
+	Terminals            *Terminals
+	Engine               *ai.Engine
+	Context              context.Context
+	cancel               context.CancelFunc
+	options              Options
+	token                string
+	generated            bool
+	workers              sync.WaitGroup
+	closeOnce            sync.Once
+	gate                 sync.RWMutex
+	closed               bool
+	http                 *http.Server
+	listener             net.Listener
+	streamSlots          chan struct{}
+	connectionMu         sync.Mutex
+	connectionFailures   map[string]hostConnectionFailure
+	hostKeyMu            sync.Mutex
+	hostKeyPrompts       map[string]*sshTrustPrompt
+
+	strategyHandoffStatus  atomic.Value // safe reason code only; never waits on the worker gate.
+	strategyWorkerMu       sync.Mutex
+	strategyLearningCancel context.CancelFunc // guarded by messageMu; admission never waits for auxiliary work.
+	strategyForeground     int                // foreground model activity, including workflow/role calls.
+	strategyRecoveryLoaded bool               // guarded by strategyWorkerMu
+	strategyOutboxPending  map[string]bool    // only registered durable outboxes, not historical backfill.
 }
 
 func New(ctx context.Context, options Options) (server *Server, err error) {
@@ -130,7 +144,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	}
 	child, cancel := context.WithCancel(ctx)
 	server = &Server{Context: child, cancel: cancel, options: options, token: token, generated: generated, streamSlots: make(chan struct{}, 4)}
-	store, e := OpenStore(options.DataDir)
+	store, e := openStore(options.DataDir, operationalMemoryV2Ready || options.memoryV2ForTest)
 	if e != nil {
 		cancel()
 		return nil, e
@@ -157,6 +171,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	server.Engine.SetSRERepository(store)
 	server.Engine.Strategies = server.strategyProvider
 	server.Engine.CorrectionGuard = server.strategyCorrectionGuard
+	server.Engine.ModelActivity = server.strategyForegroundModel
 	store.RecoverSRETasks()
 	if err = server.startScheduler(); err != nil {
 		server.Close()
@@ -168,7 +183,6 @@ func (b *Server) Start() error {
 	if err := b.reconcilePersistedMemoryOutboxes(); err != nil {
 		return err
 	}
-	_ = b.reconcilePersistedStrategyOutboxes()
 	b.Store.RecoverMemoryJobs()
 	_ = b.Store.ReconcileProjectMemoryFiles()
 	l, e := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", b.options.Port))
@@ -528,6 +542,15 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, 200, Object{"closed": len(terminals)})
 		return
 	}
+	if len(parts) == 5 && parts[0] == "api" && parts[1] == "projects" && parts[3] == "resources" && parts[4] == "test" && method == "POST" {
+		b.Store.Project(parts[2])
+		data := body(w, r, 8<<20)
+		if data["kind"] != "kubernetes" {
+			fail(400, "当前仅支持测试 Kubernetes 连接")
+		}
+		reply(w, 200, testKubernetesConnection(r.Context(), b.Models.Home, object(data["settings"])))
+		return
+	}
 	if len(parts) == 4 && parts[0] == "api" && parts[1] == "projects" && method == "POST" {
 		limit := int64(16384)
 		if parts[3] == "resources" || parts[3] == "resource-import-preview" {
@@ -569,15 +592,24 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				b.fileResource(parts[2], result, parent)
 				reply(w, 201, result)
 				return
-			} else if set("database docker redis")[kind] {
-				config = validateService(kind, object(data["settings"]))
+			} else if set("database docker redis kubernetes apisix prometheus victoriametrics")[kind] {
+				b.Store.Project(parts[2])
+				var cleanup func()
+				config, cleanup = prepareService(b.Models.Home, kind, object(data["settings"]))
+				created := false
+				defer func() {
+					if !created {
+						cleanup()
+					}
+				}()
+				result := b.Store.CreateResource(parts[2], text(data["name"], "name", 120), kind, config)
+				created = true
+				b.fileResource(parts[2], result, parent)
+				reply(w, 201, result)
+				return
 			} else {
 				fail(400, "Unsupported resource type")
 			}
-			result := b.Store.CreateResource(parts[2], text(data["name"], "name", 120), kind, config)
-			b.fileResource(parts[2], result, parent)
-			reply(w, 201, result)
-			return
 		case "sessions":
 			validateIDs(data["resourceIds"])
 			title := ""
@@ -674,6 +706,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			b.Terminals.CloseSession(id)
 			b.revokeSessionTerminals(id)
 			b.Store.DeleteSession(id)
+			b.Engine.InvalidateStrategies("")
 			b.resetConnectionFailures(id)
 			w.WriteHeader(204)
 			return
@@ -761,6 +794,16 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				fail(404, "API route not found")
 			}
 			if method == "GET" {
+				if op == "plans" {
+					plans, err := b.Engine.ProposedPlans(id)
+					aiFailure(err)
+					reply(w, 200, Object{"plans": plans})
+					return
+				}
+				if op == "mode" {
+					reply(w, 200, Object{"mode": b.conversationMode(id)})
+					return
+				}
 				if op == "reasoning" {
 					reply(w, 200, b.reasoningSettings(r.Context(), id))
 					return
@@ -771,6 +814,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					// must not overwrite a more recent reasoning selection.
 					delete(options, "reasoningEffort")
 					delete(options, "reasoningModelId")
+					delete(options, "conversationMode")
 					reply(w, 200, options)
 					return
 				}
@@ -793,6 +837,14 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if method == "POST" {
+				if op == "mode" {
+					reply(w, 200, b.setConversationMode(id, body(w, r, 16384)))
+					return
+				}
+				if op == "executePlan" {
+					reply(w, 202, b.executeProposedPlan(id, body(w, r, 16384)))
+					return
+				}
 				if op == "progress-summary" {
 					b.progressSummaryRoute(w, r, id)
 					return
@@ -802,7 +854,11 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				if op == "configure" {
-					reply(w, 200, b.configure(id, body(w, r, 128000)))
+					updates := body(w, r, 128000)
+					if _, exists := updates["conversationMode"]; exists {
+						fail(400, "请通过模式切换入口修改会话模式")
+					}
+					reply(w, 200, b.configure(id, updates))
 					return
 				}
 				if set("abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails resolveOperation clear clearReferences rollback compact restore undoFile extractPreset")[op] {

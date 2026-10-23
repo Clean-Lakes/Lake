@@ -1,0 +1,43 @@
+{
+  "silentCommands": "ordinary queries, changes, specified deletions/moves, complex shell scripts and required terminal creation execute without per-command approval",
+  "confirmationExamples": [
+    "rm -rf ./*",
+    "root/home directory clearing",
+    "nested broad deletion in sh -c or command substitution",
+    "raw disk overwrites and filesystem erasure"
+  ],
+  "retainedChecks": [
+    "resource/project scope",
+    "multiple-terminal binding",
+    "deny local execution",
+    "referenced assets restriction",
+    "global SSH host fingerprint"
+  ],
+  "verified": [
+    "find -exec stat executes on a real local persistent PTY without approval",
+    "ordinary sh -c executes silently",
+    "ordinary nested touch executes silently",
+    "unapproved broad deletion in command substitution has no effect",
+    "normal move/delete follow silence",
+    "ambiguous target still requires selection"
+  ],
+  "tests": {
+    "fullGo": "passed (web 89.430s)",
+    "targetedRace": "passed (web 17.668s; latest nested 12.859s; final guard 1.661s)",
+    "frontend": "18 passed",
+    "goVet": "passed",
+    "typescript": "passed",
+    "signedBuild": "scripts/build_lake.sh passed"
+  },
+  "service": {
+    "origin": "http://localhost:4177",
+    "pid": 41613,
+    "bundle": [
+      "/assets/index-DZEKYCwJ.js"
+    ],
+    "binarySHA256": "a2267d889cae1d321a511c54083eb737c51b344018668d08b3d0eb49668daeae"
+  },
+  "actualModelRequests": false,
+  "actualRemoteConnections": false,
+  "existingSessionPreferencesPreserved": true
+}

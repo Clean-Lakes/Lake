@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-13",
+  "native": "Actual NSButton green palette/background and CALayer animation assertions passed in LakeUpdateTests",
+  "windowsFrontend": {
+    "passed": true,
+    "automaticGreenPulse": true,
+    "checkAndNetworkFailureKeepKnownUpdate": true,
+    "viewingStopsPulseButKeepsGreen": true,
+    "newerVersionPulsesAgain": true,
+    "installationStopsPulse": true,
+    "reducedMotionKeepsStaticGreen": true,
+    "noUpdateRestoresNormalColor": true,
+    "errors": []
+  },
+  "automaticCheckIntervalMinutes": 5
+}

@@ -5,7 +5,7 @@ import { CompositionGuard, isSendKey, parseSendShortcut } from "../src/composerK
 test("IME candidate confirmation and navigation bypass sending and mention selection", () => {
   const guard = new CompositionGuard();
   guard.start();
-  for (const key of ["Enter", "Tab", "ArrowDown", "Escape"]) assert.equal(guard.ignores({key}, 100), true);
+  for (const key of ["Enter", "Tab", "ArrowDown", "ArrowLeft", "ArrowRight", "Escape"]) assert.equal(guard.ignores({key}, 100), true);
   guard.end(100);
   assert.equal(guard.ignores({key: "Enter", isComposing: true}, 200), true);
   assert.equal(guard.ignores({key: "Enter", isComposing: false, keyCode: 229}, 200), true);

@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-13",
+  "reportedSession": "795dbe4718036a972520ca6dc56a1fe7",
+  "failure": "current tool turn exceeds context budget",
+  "configuredContextWindow": 64000,
+  "providerCapacity": 1000000,
+  "cause": "Only previous complete user turns could be compacted; the initial tool turn had no supported boundary. English progress persisted despite general language policy.",
+  "changes": [
+    "Compact complete tool batches within a user turn, including after an earlier checkpoint.",
+    "Preserve original current user text, latest complete batch, tool-call identifiers, and full redacted operation cards.",
+    "Use explicit marked previews when a single result exceeds the model context allocation.",
+    "Place per-turn language guidance in the root system prompt; respect explicit language requests and other scripts.",
+    "Localize context-budget failures."
+  ],
+  "offlineActualHistoryReplay": {
+    "beforeEstimatedBytes": 124192,
+    "afterEstimatedBytes": 77312,
+    "budgetBytes": 111616,
+    "summaryRequests": 1,
+    "toolExecutions": 0,
+    "rawRecordsPreserved": true,
+    "originalQuestionPreserved": true
+  },
+  "realModelLanguageProbe": {
+    "initialGeneralPolicyOnly": "failed",
+    "explicitCurrentTurnChineseGuidance": "passed",
+    "chineseCharacters": 64,
+    "toolExecutions": 0,
+    "productionClusterInspected": false
+  },
+  "checks": {
+    "aiRaceBeforeFinalBoundaryChange": "passed 14.049s",
+    "webRace": "passed 88.003s",
+    "finalTargetedAiRace": "passed 3.438s",
+    "frontendTests": "80 passed",
+    "signedBuild": "passed",
+    "finalAiRace": "passed 13.768s"
+  },
+  "productionBenchmarkRerun": false,
+  "pushed": false,
+  "debugWeb": {
+    "origin": "http://localhost:4180",
+    "updated": true
+  }
+}

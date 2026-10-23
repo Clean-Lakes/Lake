@@ -60,6 +60,7 @@ type Engine struct {
 	RuntimeDir       string
 	Bridge           Bridge
 	Emit             func(Event)
+	ModelActivity    func() func() // Trusted host foreground priority; no provider/session mutation.
 	tunnels          sync.Map
 	shells           sync.Map
 	shellMu          sync.Mutex
@@ -260,6 +261,13 @@ func (e *Engine) notify(s *session, kind string, v any) {
 	}
 }
 func (e *Engine) Configure(id string, c Config) error {
+	if e.worker != nil && c.MemorySchemaVersion == 2 {
+		c.MemoryEnabled = false
+		c.MemoryExtractionEnabled = false
+	}
+	if !ValidConversationMode(c.ConversationMode) {
+		return errors.New("invalid conversation mode")
+	}
 	if c.MultiAgentMode != "" && c.MultiAgentMode != "off" && c.MultiAgentMode != "auto" {
 		return errors.New("invalid multi-agent mode")
 	}
@@ -331,7 +339,7 @@ func (e *Engine) Configure(id string, c Config) error {
 		s.state.LastRequestAt = ""
 		s.state.ContextMeasurement = nil
 	}
-	if s.state.Config.MemoryEnabled != c.MemoryEnabled || s.state.Config.Profile != c.Profile || s.state.Config.Model.SupportsImageInput != c.Model.SupportsImageInput {
+	if s.state.Config.MemoryEnabled != c.MemoryEnabled || s.state.Config.Profile != c.Profile || s.state.Config.Model.SupportsImageInput != c.Model.SupportsImageInput || s.state.Config.ConversationMode != c.ConversationMode {
 		// These settings change which stored material is sent without necessarily
 		// changing its serialized history size. The old input cannot anchor it.
 		s.state.ContextMeasurement = nil
@@ -527,7 +535,16 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		return errors.New("session busy")
 	}
 	c := s.state.Config
-	c.sreCoordinator = input.SRECoordination && e.worker == nil && (c.Profile == "core" || c.Profile == "")
+	c.sreCoordinator = c.ConversationMode != ModePlan && input.SRECoordination && e.worker == nil && (c.Profile == "core" || c.Profile == "")
+	if c.ConversationMode == ModePlan {
+		c.StrategyCorrectEnabled = false
+		c.StrategyLearnEnabled = false
+		c.MemoryExtractionEnabled = false
+		if len(input.workflow) > 0 {
+			s.mu.Unlock()
+			return errors.New("Plan 模式不能运行工作流")
+		}
+	}
 	if input.IgnoreProjectMemory {
 		c.MemoryEnabled = false
 		c.MemoryExtractionEnabled = false
@@ -565,6 +582,8 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			s.state.TargetScope = nil
 		}
 		c.targetScope = cloneTargetScope(s.state.TargetScope)
+		s.state.MemoryEvidenceContexts = nil
+		s.state.View.MemoryAccess = nil
 		if c.targetScope != nil {
 			c.AssetRef, c.TerminalID, c.Runtime = "", "", "local"
 		}
@@ -603,6 +622,9 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	s.cancel = cancel
 	s.state.Config.ReferencedAssets = append([]string(nil), c.ReferencedAssets...)
 	s.state.View.Status = "running"
+	archiveProposedPlan(s)
+	s.state.View.ProposedPlan = nil
+	firstCard := len(s.state.View.Cards)
 	s.state.View.RootTurnID = uid()
 	s.state.SREHandoff = nil
 	s.sreReply = nil
@@ -627,7 +649,7 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	} else {
 		s.state.History[0] = Message{Role: "system", Content: systemPrompt}
 	}
-	s.state.History = append(s.state.History, Message{Role: "user", Content: redact(message, c), Images: images})
+	s.state.History = append(s.state.History, Message{HostTurnID: s.state.View.RootTurnID, Role: "user", Content: redact(message, c), Images: images})
 	err = e.save(s)
 	s.mu.Unlock()
 	if err != nil {
@@ -664,6 +686,9 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		}
 		s.state.View.Status = status
 		s.state.View.TurnFinishedAt = timestamp()
+		if err == nil && c.ConversationMode == ModePlan {
+			captureProposedPlan(s, firstCard)
+		}
 		e.collectStrategySnapshot(s, c, input, status)
 		if err == nil {
 			e.collectMemorySnapshot(s, c, input)
@@ -774,17 +799,14 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 			if errors.As(toolErr, &notExecuted) {
 				failure["outcome"] = "not_executed"
 			}
-			var blocked *nativeOperationBlockedError
-			if errors.As(toolErr, &blocked) {
+			var replay *nativeOperationReplayError
+			if errors.As(toolErr, &replay) {
 				failure["outcome"] = "not_executed"
-				failure["code"] = "unresolved_operation"
+				failure["code"] = "duplicate_operation"
 				failure["retryable"] = false
-				failure["blocking_operation"] = map[string]any{"id": blocked.ID, "tool": blocked.Tool, "target": blocked.Target, "status": blocked.Status}
-				failure["notice"] = "本次操作没有派发。不要修改命令、更换终端或工具入口反复尝试；只读取原操作结果或继续独立的只读检查，无法核实则报告缺失结果。"
-				if blocked.Status == "unknown" {
-					failure["notice"] = str(failure["notice"]) + "人工核实入口：会话菜单 → 执行记录 → 待核实操作；填写实际结果和核实依据，不能猜测或自动重试。"
-				}
-				if recovery := blocked.recovery(); recovery != nil {
+				failure["original_operation"] = map[string]any{"id": replay.ID, "tool": replay.Tool, "target": replay.Target, "status": replay.Status}
+				failure["notice"] = "同一调用已经登记，本次没有重复派发。可读取原操作结果；后续新操作按当前权限执行，旧记录不会锁定命令通道，也不能把未知结果当作成功。"
+				if recovery := replay.recovery(); recovery != nil {
 					failure["recovery"] = recovery
 				}
 			}

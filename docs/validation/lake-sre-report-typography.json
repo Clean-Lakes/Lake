@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-16",
+  "request": "Improve SRE specialist text layout and styling while retaining Lake's existing conversation UI.",
+  "changes": [
+    "Expose the existing persisted role report in the frontend contract and render its actual summary, facts, hypotheses, unknowns and next checks without rewriting findings.",
+    "Limit body width to 820px, use 14px text with 1.85 line height, separate report sections and list items, and keep small unframed lake-ecosystem avatars.",
+    "Render specialist Markdown safely, including code, headings, lists and horizontally scrollable tables. Preserve a body fallback for historical records without structured reports.",
+    "Evidence citations map only to the current attempt, expand the actual message's evidence disclosure, focus its summary and load the existing source through the read-only paging endpoint.",
+    "Progress, errors and user messages never substitute an older report. Empty sections stay hidden. Missing evidence IDs cannot produce invented citations."
+  ],
+  "checks": {
+    "typeScript": "passed",
+    "frontendTests": {"passed": 176, "failed": 0},
+    "reportSectionsAndReferences": "passed: recorded sections, exact citations, unknown IDs, empty sections and stale-report exclusions",
+    "markdownSafety": "passed: code and GFM table support; raw HTML and javascript URLs suppressed",
+    "desktopLightAndDark": "passed at 1200px viewport; report width 820px; no horizontal page overflow",
+    "narrowLayout": "passed at 390px viewport (375px content area); 297px body; zero overflowing report elements",
+    "evidenceInteraction": "passed in isolated real-component preview: citation expands both disclosures, focuses the selected source summary and shows paged source",
+    "signedDevBuild": "scripts/build_lake_desktop.sh --dev --install passed",
+    "signatureVerification": "codesign --verify --deep --strict passed",
+    "devReload": "reloaded after all eight sessions were idle; native AX tree confirms saved historical findings now show report sections and citations"
+  },
+  "screenshots": [
+    "lake-sre-report-typography-light.png",
+    "lake-sre-report-typography-dark.png",
+    "lake-sre-report-typography-mobile.png",
+    "lake-sre-report-typography-evidence.png"
+  ],
+  "screenshotData": "Isolated synthetic reports rendered with actual SRERoleMessage and SREReport components. Evidence requests are stubbed; no user credentials or model requests.",
+  "releaseRestarted": false,
+  "onlineTaskResumed": false
+}

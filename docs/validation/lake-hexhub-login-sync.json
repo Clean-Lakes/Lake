@@ -1,0 +1,32 @@
+{
+  "feature": "HexHub local login sync and import bulk selection",
+  "localReadOnlyProbe": {
+    "mcpAssets": 131,
+    "validCandidates": 131,
+    "withCredential": 129,
+    "sshMissingLogin": 0,
+    "actualImportPerformed": false
+  },
+  "checks": {
+    "webRaceSeconds": 84.871,
+    "affectedRaceSeconds": 2.443,
+    "goVet": true,
+    "typescriptViteBuild": true,
+    "signatureVerified": true,
+    "diffCheck": true
+  },
+  "browserValidation": {
+    "realHexHubPreviewRows": 131,
+    "missingSSHLogin": 0,
+    "selectNoneChecked": 0,
+    "zeroSelectionImportDisabled": true,
+    "selectAllChecked": 131,
+    "invalidRowExcluded": true,
+    "actualImportPerformed": false,
+    "finalRuntimePreviewVerified": true,
+    "screenshot": "docs/validation/lake-hexhub-login-sync.png"
+  },
+  "currentRuntime": "http://localhost:4180",
+  "pushed": false,
+  "runtimeValidation": "docs/validation/lake-hexhub-login-sync-runtime.json"
+}

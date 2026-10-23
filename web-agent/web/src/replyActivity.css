@@ -8,10 +8,12 @@
   opacity: 1;
   /* Own the gap inside the clipped row, so shrinking cannot lift the glyph
      into the preceding line during a resize or a rapid state change. */
-  margin-block-start: calc(-1 * var(--turn-entry-gap, 12px));
   pointer-events: none;
   transition: opacity 180ms ease, grid-template-rows 180ms ease;
 }
+/* Only the direct flex child compensates for the turn gap. A progress summary
+   owns its mark in normal block flow, after the final wrapped text line. */
+.ai-turn > .reply-activity { margin-block-start: calc(-1 * var(--turn-entry-gap, 12px)); }
 .reply-activity-clip { min-height: 0; overflow: hidden; }
 .reply-activity-breath {
   display: grid;

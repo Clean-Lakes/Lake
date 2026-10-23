@@ -60,20 +60,28 @@ type StrategyAssetInput struct {
 	Kind          strategy.AssetKind
 	Body          string
 	Applicability strategy.Applicability
+	Assessment    strategy.Assessment
+	Reuse         *strategy.ReusePolicy
+	ModelHash     string
+	ToolHashes    map[string]string
 }
 type StrategyAssetView struct {
-	ID       string             `json:"id"`
-	Title    string             `json:"title"`
-	Scope    strategy.Scope     `json:"scope"`
-	Kind     strategy.AssetKind `json:"kind"`
-	Revision int64              `json:"revision"`
-	Deleted  bool               `json:"deleted"`
+	ID           string             `json:"id"`
+	Title        string             `json:"title"`
+	Scope        strategy.Scope     `json:"scope"`
+	Kind         strategy.AssetKind `json:"kind"`
+	Revision     int64              `json:"revision"`
+	Deleted      bool               `json:"deleted"`
+	ReviewStatus string             `json:"reviewStatus"`
 }
 type StrategyRevisionView struct {
 	Asset            StrategyAssetView      `json:"asset"`
 	Value            strategy.AssetRevision `json:"value"`
 	Available        bool                   `json:"available"`
 	SourcesAvailable bool                   `json:"sourcesAvailable"`
+	Review           StrategyReview         `json:"review"`
+	Assessment       strategy.Assessment    `json:"assessment"`
+	Reuse            strategy.ReusePolicy   `json:"reuse"`
 }
 
 var strategyTag = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
@@ -85,11 +93,24 @@ func strategySafeText(text string, maxBytes int) {
 	}
 }
 func validateStrategyInput(in StrategyAssetInput) {
+	if in.Reuse != nil && in.Reuse.Validate(in.Kind) != nil {
+		strategyFail(400, "invalid_reuse_policy")
+	}
+	if in.Reuse != nil {
+		for _, keyword := range in.Reuse.Keywords {
+			strategySafeText(keyword, 64)
+		}
+	}
 	strategySafeText(in.Title, 240)
 	if strings.ContainsAny(in.Title, "\r\n") {
 		strategyFail(400, "invalid_title")
 	}
 	strategySafeText(in.Body, strategy.MaxContentBytes)
+	for _, text := range []string{in.Assessment.Conditions, in.Assessment.Evidence, in.Assessment.Limitations} {
+		if text != "" {
+			strategySafeText(text, 2000)
+		}
+	}
 	for i, values := range [][]string{in.Applicability.Profiles, in.Applicability.ResourceKinds, in.Applicability.DomainTags} {
 		if len(values) > 16 {
 			strategyFail(400, "invalid_applicability")
@@ -101,7 +122,7 @@ func validateStrategyInput(in StrategyAssetInput) {
 				valid = set("core terminal2 db-query-editor")[v]
 			}
 			if i == 1 {
-				valid = set("local ssh database docker redis")[v]
+				valid = set("local ssh database docker redis kubernetes apisix prometheus victoriametrics")[v]
 			}
 			if !valid || seen[v] {
 				strategyFail(400, "invalid_applicability")
@@ -162,7 +183,7 @@ func (s *Store) strategyAsset(ctx StrategyContext, id string, deleted bool) Obje
 	return a
 }
 func assetView(a Object) StrategyAssetView {
-	return StrategyAssetView{stringOf(a["id"]), stringOf(a["title"]), scopeFromRow(a), strategy.AssetKind(stringOf(a["kind"])), int64(integer(a["revision"])), stringOf(a["deletedAt"]) != ""}
+	return StrategyAssetView{stringOf(a["id"]), stringOf(a["title"]), scopeFromRow(a), strategy.AssetKind(stringOf(a["kind"])), int64(integer(a["revision"])), stringOf(a["deletedAt"]) != "", ""}
 }
 func strategyDecode[T any](text string) T { var v T; must(json.Unmarshal([]byte(text), &v)); return v }
 func (s *Store) strategyEvent(scopeKey, accessProject, aggregate string, revision int64, kind string, payload any) {
@@ -202,6 +223,9 @@ func (s *Store) strategyEdge(assetID, from, to, relation string) {
 	switch relation {
 	case "derived_from":
 		valid = a["kind"] == "asset_revision" && b["sourceId"] != nil && s.row("SELECT 1 FROM strategyRevisionSources WHERE assetId=? AND revision=? AND sourceId=?", assetID, a["revision"], b["sourceId"]) != nil
+		if !valid && a["kind"] == "asset_revision" && b["kind"] == "asset_revision" {
+			valid = s.row("SELECT 1 FROM strategyPromotions WHERE assetId=? AND revision=? AND originAssetId=? AND originRevision=?", assetID, a["revision"], b["aggregateId"], b["revision"]) != nil
+		}
 	case "supersedes", "reverted_to":
 		valid = a["kind"] == "asset_revision" && b["kind"] == "asset_revision" && b["aggregateId"] == assetID && integer(a["revision"]) > integer(b["revision"])
 		if relation == "supersedes" {
@@ -296,6 +320,12 @@ func (s *Store) strategyWriteRevision(ctx StrategyContext, a Object, revision, p
 	if parent > 0 {
 		s.strategyEdge(stringOf(a["id"]), node, revisionNode(stringOf(a["id"]), parent), "supersedes")
 	}
+	s.exec("INSERT INTO strategyAssessments VALUES(?,?,?)", a["id"], revision, jsonText(in.Assessment))
+	policy := s.strategyDefaultReuse(in.Kind)
+	if in.Reuse != nil {
+		policy = *in.Reuse
+	}
+	s.exec("INSERT INTO strategyReusePolicies VALUES(?,?,?,?,?)", a["id"], revision, jsonText(policy), in.ModelHash, jsonText(in.ToolHashes))
 	s.exec("UPDATE strategyAssets SET revision=? WHERE id=?", revision, a["id"])
 	s.strategyEvent(stringOf(a["scopeKey"]), "", stringOf(a["id"]), revision, "revision_created", Object{"contentHash": strategy.ContentHash(in.Body), "sources": sourceHash})
 }
@@ -334,7 +364,12 @@ func (s *Store) ReviseStrategyAsset(ctx StrategyContext, id, key string, expecte
 		}
 		source := s.strategyManualSource(stringOf(a["scopeKey"]), "manual:"+strategy.ContentHash(key)+":"+digest, in.Body)
 		revision := expected + 1
-		s.strategyWriteRevision(ctx, a, revision, parent, in, []string{source}, strategy.UserConfirmed, "local_user")
+		sources := []string{source}
+		for _, row := range s.rows("SELECT DISTINCT x.id FROM strategyRevisionSources rs JOIN strategySourceEvents x ON x.id=rs.sourceId WHERE rs.assetId=? AND rs.revision IN (?,?) AND x.kind<>'manual_authoring'", id, parent, expected) {
+			sources = append(sources, stringOf(row["id"]))
+		}
+		s.strategyWriteRevision(ctx, a, revision, parent, in, sources, strategy.UserConfirmed, "local_user")
+		s.exec("INSERT INTO strategyPromotions SELECT assetId,?,originAssetId,originRevision,originHash FROM strategyPromotions WHERE assetId=? AND revision IN (?,?) ORDER BY revision DESC LIMIT 1", revision, id, parent, expected)
 		s.exec("UPDATE strategyAssets SET title=? WHERE id=?", in.Title, id)
 		result = StrategyMutationResult{AssetID: id, Revision: revision, SourceID: source}
 		s.strategySaveReceipt(stringOf(a["scopeKey"]), key, digest, result)
@@ -365,6 +400,19 @@ func (s *Store) strategyRevisionView(ctx StrategyContext, id string, revision in
 	if view.Available && (view.Value.Validate() != nil || strategy.ContentHash(stringOf(content["applicability"])) != r["applicabilityHash"]) {
 		strategyFail(500, "revision_integrity_error")
 	}
+	view.Reuse, _, _ = s.strategyReusePolicy(id, revision, view.Value.Kind)
+	view.Review = s.strategyReview(id, revision)
+	view.Asset.ReviewStatus = s.strategyReview(id, int64(integer(a["revision"]))).Decision
+	if row := s.row("SELECT body FROM strategyAssessments WHERE assetId=? AND revision=?", id, revision); row != nil {
+		view.Assessment = strategyDecode[strategy.Assessment](stringOf(row["body"]))
+	}
+	if !s.strategyPromotionAvailable(id, revision) {
+		view.SourcesAvailable = false
+		view.Available = false
+		view.Value.Body = ""
+		view.Assessment = strategy.Assessment{}
+		view.Reuse = s.strategyDefaultReuse(view.Value.Kind)
+	}
 	items := []Object{}
 	for _, sourceID := range view.Value.SourceIDs {
 		source := s.strategySource(ctx, sourceID, false)
@@ -383,7 +431,9 @@ func (s *Store) ListStrategyAssets(ctx StrategyContext, scope strategy.Scope, af
 		}
 		out := []StrategyAssetView{}
 		for _, a := range s.rows("SELECT * FROM strategyAssets WHERE scopeKey=? AND deletedAt='' AND id>? ORDER BY id LIMIT ?", key, after, limit) {
-			out = append(out, assetView(a))
+			v := assetView(a)
+			v.ReviewStatus = s.strategyReview(v.ID, v.Revision).Decision
+			out = append(out, v)
 		}
 		return out
 	})

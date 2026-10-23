@@ -155,7 +155,9 @@ func TestInteractiveOutputOnlyHistorySkipsCommandEntries(t *testing.T) {
 	if len(objects(full["entries"])) == 0 || len(objects(compact["entries"])) != 0 {
 		t.Fatal("output-only history must omit command entries")
 	}
-	if compact["output"] != full["output"] || object(compact["terminal"])["interactive"] != true {
+	// The live shell can append its prompt between these two HTTP reads.
+	// Every byte already returned by the full snapshot must still be present.
+	if !strings.HasPrefix(stringOf(compact["output"]), stringOf(full["output"])) || !strings.Contains(stringOf(compact["output"]), "output-only-check\r\n") || object(compact["terminal"])["interactive"] != true {
 		t.Fatal("output-only history lost terminal output or metadata")
 	}
 }

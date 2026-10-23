@@ -1,0 +1,14 @@
+{
+  "actualBackend": true,
+  "actualWebView2": true,
+  "confirmedDiscard": true,
+  "dark": true,
+  "defaultNoModel": true,
+  "escapePreservedDraft": true,
+  "passed": true,
+  "platform": "windows/amd64",
+  "shiftTab": true,
+  "tab": true,
+  "viewportHeight": 561,
+  "viewportWidth": 834
+}

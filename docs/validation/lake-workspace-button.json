@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "change": "Sidebar footer merged into one floating workspace bubble",
+  "behavior": [
+    "One stable 工作区 entry replaces standalone tags, settings, update and trash controls",
+    "Tag navigation keeps project filtering, related sessions and management",
+    "Selected tag stays visible on the footer trigger",
+    "Updater remains mounted while the popover is closed; unread update badge persists until viewed",
+    "Settings, update and deleted-list flows are reused; disabled guards remain"
+  ],
+  "appearance": {
+    "radius": "20px via --radius-window",
+    "height": "38px",
+    "separator": "removed",
+    "background": "--surface-subtle",
+    "shadow": "--shadow-popover",
+    "border": "1px --border"
+  },
+  "verification": {
+    "typescript": "passed in final signed build",
+    "frontend": {
+      "passed": 245,
+      "failed": 0,
+      "note": "After component change; final follow-up changed only bubble CSS and documentation"
+    },
+    "browser": [
+      "Light and dark",
+      "390px viewport bounds left13/right253/top639/bottom792 before cosmetic bubble follow-up; no horizontal overflow",
+      "ArrowDown, Home and End navigate visible controls",
+      "Escape closes and restores trigger focus",
+      "Outside click closes without stealing input focus",
+      "Tag selection filters session rows and persists visibly on trigger",
+      "Settings and deleted dialogs open through original callbacks",
+      "Update dialog opens; closing restores workspace focus and clears unread badge"
+    ],
+    "bubble": [
+      "20px computed radius",
+      "Top separator computed 0px",
+      "Light and dark screenshots",
+      "Menu still expands after bubble styling"
+    ],
+    "native": [
+      "Signed installation verified",
+      "Final Dev restarted using native UI",
+      "New backend localhost:59620 loaded workspace entry",
+      "Final screenshot saved"
+    ],
+    "whitespace": "passed"
+  },
+  "installation": "scripts/build_lake_desktop.sh --dev --install",
+  "screenshots": [
+    "lake-workspace-bubble-detail.png",
+    "lake-workspace-bubble-light.png",
+    "lake-workspace-bubble-dark.png",
+    "lake-workspace-bubble-dev.png",
+    "lake-workspace-button-detail.png",
+    "lake-workspace-button-light.png",
+    "lake-workspace-button-dark.png",
+    "lake-workspace-button-narrow.png",
+    "lake-workspace-button-dev.png"
+  ],
+  "data": "Browser verification uses fictional project records and a local mock updater. No model or remote host operations. Release app and release data unchanged."
+}

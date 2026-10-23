@@ -1,0 +1,49 @@
+{
+  "version": "0.3.4",
+  "commit": "6b0c432aba26511f91797de9dbf311d53de5cb21",
+  "architecture": "arm64",
+  "assets": {
+    "Lake-0.3.4-macos-arm64.zip": {
+      "size": 14364965,
+      "sha256": "dffea4079939cc63315562fec82a4ead7f99aaa1a1b278a37aaa744ad5416da7"
+    },
+    "Lake-0.3.4-macos-arm64.dmg": {
+      "size": 15067225,
+      "sha256": "757ae20e4a498eb77e8a547d1714deccb3abaf26a7d97c3ef6698f75607e047c"
+    }
+  },
+  "verification": {
+    "zipCRC": "passed",
+    "bundleVersion": "0.3.4",
+    "signature": "deep strict verified",
+    "sameSignerAsInstalledClient": true,
+    "embeddedCLI": "0.3.4 arm64",
+    "dmgChecksum": "passed"
+  },
+  "release": {
+    "url": "https://github.com/Clean-Lakes/Lake/releases/tag/v0.3.4",
+    "target": "master",
+    "sourceTag": "6b0c432aba26511f91797de9dbf311d53de5cb21",
+    "publishedAssetsVerified": [
+      "Lake-0.3.4-macos-arm64.dmg",
+      "Lake-0.3.4-macos-arm64.dmg.sha256",
+      "Lake-0.3.4-macos-arm64.zip",
+      "Lake-0.3.4-macos-arm64.zip.sha256"
+    ]
+  },
+  "tests": {
+    "frontend": "80 passed",
+    "go": "go test -race ./... passed",
+    "vet": "go vet ./... passed",
+    "macOSUpdatePolicy": "4 groups passed",
+    "macOSInstaller": "4 tests passed",
+    "masterMacOSCI": "passed"
+  },
+  "windowsSourceCrossCompile": "passed",
+  "windowsCI": {
+    "run": "https://github.com/Clean-Lakes/Lake/actions/runs/38343115881",
+    "status": "failure",
+    "step": "Run python scripts/build_lake_windows.py",
+    "scope": "Windows installer CI; this release request publishes macOS assets"
+  }
+}

@@ -447,7 +447,7 @@ func directoryModelContext(groups []ai.AssetDirectory, scope *ai.TargetScope, as
 				}
 			}
 		}
-		context += "\n[LAKE_TARGET_SCOPE]\n" + jsonText(Object{"folder_paths": scope.Paths, "needsClarification": scope.NeedsClarification, "resources": selected}) + "\nThis target overrides prior terminal/host bindings. Select actual asset aliases from list_assets; do not use an unrelated host or local kubeconfig."
+		context += "\n[LAKE_TARGET_SCOPE]\n" + jsonText(Object{"folder_paths": scope.Paths, "needsClarification": scope.NeedsClarification, "resources": selected}) + "\nThis is a resource target scope, not a request to inspect resources. Use it only if the current user request requires resource access, including relevant contextual follow-ups. For that work it overrides prior terminal/host bindings; resolve actual asset aliases from list_assets when needed, and do not use an unrelated host or local kubeconfig."
 	}
 	return context
 }

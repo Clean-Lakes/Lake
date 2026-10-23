@@ -1,0 +1,46 @@
+.plan-mode-toggle{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.plan-mode-toggle[aria-pressed="true"]{color:var(--foreground);background:var(--surface-hover);box-shadow:inset 0 0 0 1px var(--border)}
+.plan-mode-error {color:var(--danger);font-size: var(--font-size-body);overflow-wrap:anywhere}
+.plan-actions{margin-top:16px;padding:14px 0;border-top:1px solid var(--border);max-width:860px}
+.plan-actions>p {display:flex;align-items:center;gap:8px;margin:0 0 12px;color:var(--text-secondary);font-size: var(--font-size-body);line-height:1.7}
+.plan-actions>p>svg{flex-shrink:0}
+.plan-actions-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.plan-actions-buttons .button {display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:7px 12px;font-size:var(--font-size-ui)}
+.plan-actions>.plan-mode-error { font-size: var(--font-size-body);display:block;margin:10px 0 0;color:var(--danger)}
+.plan-mode-hint {width:min(960px,100%);box-sizing:border-box;padding:0 6px;margin:0 auto 8px;color:var(--text-secondary);font-size: var(--font-size-body);line-height:1.6}
+.session-plans-page{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
+.session-plans-page-inner{width:min(960px,calc(100% - var(--session-gutter,24px) - var(--session-gutter,24px)));margin:0 auto;padding:28px 0 48px;box-sizing:border-box}
+.session-plans-page-header{margin-bottom:28px}
+.session-plans-page-header>.button{display:inline-flex;align-items:center;gap:6px;margin-bottom:24px}
+.session-plans-page-header>.button>svg{transform:rotate(180deg)}
+.session-plans-page-header h1{font-size:24px;font-weight:var(--font-weight-semibold);line-height:1.4;margin:0;outline:none}
+.session-plans-page-header>p {font-size: var(--font-size-body);color:var(--text-muted);line-height:1.6;overflow-wrap:anywhere;margin:7px 0 0}
+.plan-list {display:flex;flex-direction:column;min-width:0;font-size: var(--font-size-body);gap:0}
+.plan-list-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}
+.plan-list-header h2{font-size:18px;font-weight:var(--font-weight-semibold);margin:0 0 6px}
+.plan-list-header p,.plan-list-loading {font-size: var(--font-size-body);color:var(--text-muted);margin:0;line-height:1.6}
+.plan-catalog{list-style:none;padding:0;margin:0;border-top:1px solid var(--border)}
+.plan-catalog>li{border-bottom:1px solid var(--border)}
+.plan-catalog-row{display:flex;align-items:center;gap:12px;width:100%;padding:18px 12px;border:0;background:transparent;color:var(--foreground);font:inherit;text-align:left;cursor:pointer;border-radius:var(--radius-control)}
+.plan-catalog-row:hover{background:var(--surface-hover)}
+.plan-catalog-row:focus-visible{outline:2px solid var(--focus-outline);outline-offset:-2px}
+.plan-catalog-row>svg{flex-shrink:0;color:var(--text-muted)}
+.plan-catalog-title{font-weight:var(--font-weight-medium)}
+.plan-catalog-open {flex-shrink:0;font-size: var(--font-size-body);color:var(--text-muted)}
+.plan-list-back{display:inline-flex;align-items:center;gap:6px;margin-bottom:10px}
+.plan-list-back>svg{transform:rotate(180deg)}
+.plan-list-header h2,.plan-detail-heading { font-size: var(--font-size-body);outline:none}
+.plan-detail-heading {font-size: var(--font-size-body);font-weight:var(--font-weight-ui);color:var(--text-muted);margin:0 0 16px}
+.plan-list-title {min-width:0;flex:1;overflow-wrap:anywhere;font-size: var(--font-size-body);line-height:1.6}
+.plan-list-title small {display:flex;gap:12px;flex-wrap:wrap;font-size: var(--font-size-body);font-weight:var(--font-weight-ui);color:var(--text-muted);margin-top:4px}
+.plan-list-content{padding:0 0 24px;overflow-wrap:anywhere}
+.plan-list-content .assistant-markdown{min-width:0}
+.plan-list .plan-mode-error .button{margin-left:12px}
+.plan-reference {display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:32px;padding:8px 0;color:var(--text-muted);font-size:var(--font-size-body)}
+.plan-reference>svg{flex-shrink:0}
+.plan-reference button{display:inline-flex;align-items:center;gap:4px;border:0;background:transparent;color:var(--foreground);font:inherit;cursor:pointer;padding:4px 6px;border-radius:var(--radius-control)}
+.plan-reference button:hover{background:var(--surface-hover)}
+.plan-reference button:focus-visible{outline:2px solid var(--focus-outline);outline-offset:2px}
+@media(pointer:coarse){.plan-reference button{min-height:44px}}
+@media(max-width:600px){.plan-catalog-open { font-size: var(--font-size-body);display:none}.plan-catalog-row{padding:16px 6px;gap:10px}}
+@media(max-width:400px){.plan-actions-buttons{gap:6px}.plan-actions-buttons .button { font-size: var(--font-size-ui);padding:7px 10px}.plan-mode-toggle{gap:4px}}

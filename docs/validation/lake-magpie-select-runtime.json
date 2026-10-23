@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-15",
+  "scope": "Magpie-connected composer model selector runtime verification",
+  "environment": {
+    "home": "isolated temporary home",
+    "magpieCatalogModels": 68,
+    "manualModels": 2,
+    "bridge": "Real Lake Magpie bridge reader with synthetic credentials and a loopback model endpoint",
+    "frontend": "Verified both Vite development page and signed binary embedded production assets"
+  },
+  "fixes": [
+    "Bootstrap now supplies public selection metadata so opaque Magpie routes display labels and manufacturer icons before opening the menu",
+    "Selection presentation follows provider/model identity instead of the first matching name across sources",
+    "Manufacturer parsing supports human labels with slash-separated routing notes",
+    "Opening the menu refreshes bootstrap alongside the catalog to follow changes to the Magpie default",
+    "Current-model presentation remains available during catalog loading"
+  ],
+  "runtimeChecks": [
+    "70 options rendered in Magpie and manual source groups; source search returns all 68 Magpie entries",
+    "Magpie settings page reports 68 models",
+    "Switch between identical model names in Magpie and manual sources without mixing labels or icons",
+    "Reload retains the selected source and correct label/icon before opening the menu",
+    "Synthetic chat completed with OK; captured loopback request used route/opaque-claude-check",
+    "Changes to the Magpie default appear on menu open without page reload",
+    "Legacy bridge without a catalog shows its single model",
+    "Disconnect falls back to saved manual models; reconnect restores the Magpie group and saved selection",
+    "430px viewport: long labels/IDs wrap, trigger truncates with a full tooltip, selected check and settings footer remain visible",
+    "Embedded production page renders 70 options with zero missing brand images in dark mode"
+  ],
+  "checks": {
+    "frontendTests": {
+      "passed": 144,
+      "failed": 0
+    },
+    "goWebRaceTests": "go test -race ./internal/web passed (116.199s)",
+    "typescript": "passed in signed build",
+    "signedDevBuild": "scripts/build_lake_desktop.sh --dev --install passed",
+    "whitespace": "git diff --check passed"
+  },
+  "limitations": "This verifies Lake’s real integration reader, APIs, selection persistence, chat routing, and browser UI using an isolated synthetic Magpie bridge. It does not validate an external Magpie account, plugin installation, or paid upstream model service.",
+  "screenshots": [
+    "lake-magpie-select-verified.png",
+    "lake-magpie-select-dark.png",
+    "lake-magpie-select-long-mobile.png"
+  ],
+  "privacy": "No production model configuration or credentials were copied or changed. Public bootstrap metadata was regression-tested not to expose keys, credential references, or endpoint URLs.",
+  "cleanup": "Temporary tab closed, viewport reset, isolated Vite/backend stopped; final signed Lake Dev installed and relaunched. Native startup exposes the saved model name and actual provider without opening the menu."
+}

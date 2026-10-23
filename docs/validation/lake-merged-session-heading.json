@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "scope": "Merge recent sessions heading and new conversation action into one transparent compact row",
+  "checks": {
+    "typescript": "passed",
+    "frontendTests": { "passed": 223, "failed": 0 },
+    "diffCheck": "passed",
+    "lightTheme": "passed; both buttons share center y=147; 32px heading; transparent backgrounds",
+    "darkTheme": "passed",
+    "narrow390x844": "passed; heading and action remain on one row",
+    "collapse": "passed; session list collapses and new conversation remains available",
+    "newConversation": "passed; existing dialog opens; cancelled without creating a session",
+    "emptySearch": "passed; new conversation remains available with no matches",
+    "keyboard": "passed; Command+N opens existing dialog during search and in installed Dev",
+    "nativeDev": "passed; installed Dev displays merged row and Command+N opens existing dialog",
+    "signedBuildInstall": "scripts/build_lake_desktop.sh --dev --install completed successfully",
+    "codesignDeepStrict": "passed",
+    "installedBackendMatchesBuild": "c93e04434f4fa43753c1c721f1b1e9070b6493fb016ba4afe132a5d094f82b62"
+  },
+  "screenshots": [
+    "lake-merged-session-heading-light.png",
+    "lake-merged-session-heading-dark.png",
+    "lake-merged-session-heading-narrow.png",
+    "lake-merged-session-heading-dev.png",
+    "lake-merged-session-heading-detail.png"
+  ],
+  "notes": [
+    "Browser validation used isolated synthetic resource-status fixture data.",
+    "No model messages, resource operations or new sessions were submitted.",
+    "Release app, release data and permissions were unchanged.",
+    "Existing uncommitted migration and unrelated work were preserved."
+  ]
+}

@@ -47,6 +47,8 @@ func resourceAgentCapabilities(kind string) map[string]string {
 		return map[string]string{"host": "host metrics, bounded disk usage, deleted file handles, service journal, Kubernetes status", "application": "log files, service journal, Kubernetes workload status and Pod logs", "data": "Kubernetes data-workload status and Pod logs; direct database/Redis metrics require a database/Redis resource"}
 	case "database", "redis":
 		return map[string]string{"data": "fixed read-only database/Redis health, connections and activity metrics"}
+	case "kubernetes":
+		return map[string]string{"host": "saved Kubernetes API identity, node readiness and resource capacity; no SSH needed", "application": "saved Kubernetes API Pod status, warning events and bounded Pod logs", "data": "saved Kubernetes API data-workload status and bounded Pod logs"}
 	}
 	return map[string]string{}
 }
@@ -55,10 +57,11 @@ func childObservationTools(role string, assets []Asset) []Tool {
 	if role == "verify" {
 		return observationTools(role)
 	}
-	host, data := false, false
+	host, data, cluster := false, false, false
 	for _, as := range assets {
 		host = host || as.Kind == "local" || as.Kind == "ssh"
 		data = data || as.Kind == "database" || as.Kind == "redis"
+		cluster = cluster || as.Kind == "kubernetes"
 	}
 	list := []Tool{}
 	for _, tool := range observationTools(role) {
@@ -74,6 +77,12 @@ func childObservationTools(role string, assets []Asset) []Tool {
 	}
 	if host && (role == "host" || role == "application") {
 		list = append(list, journalObservationTool())
+	}
+	if cluster && !host {
+		list = append(list, clusterObservationTool())
+		if role == "application" || role == "data" {
+			list = append(list, clusterLogObservationTool())
+		}
 	}
 	return list
 }

@@ -1,0 +1,137 @@
+{
+  "test": "signed backend, real read-only SSH observations, synthetic planning/report model",
+  "elapsedSeconds": 4.628,
+  "state": "completed",
+  "runs": [
+    {
+      "role": "host",
+      "status": "completed",
+      "toolCount": 2,
+      "observations": [
+        {
+          "title": "主机指标快照",
+          "success": true,
+          "exitCode": 0,
+          "error": null
+        },
+        {
+          "title": "Kubernetes 集群观察",
+          "success": true,
+          "exitCode": 0,
+          "error": null
+        }
+      ],
+      "budgetSpent": 2200
+    },
+    {
+      "role": "host",
+      "status": "completed",
+      "toolCount": 2,
+      "observations": [
+        {
+          "title": "主机指标快照",
+          "success": true,
+          "exitCode": 0,
+          "error": null
+        },
+        {
+          "title": "主机指标快照",
+          "success": true,
+          "exitCode": 0,
+          "error": null
+        }
+      ],
+      "budgetSpent": 2200
+    },
+    {
+      "role": "host",
+      "status": "completed",
+      "toolCount": 1,
+      "observations": [
+        {
+          "title": "主机指标快照",
+          "success": true,
+          "exitCode": 0,
+          "error": null
+        }
+      ],
+      "budgetSpent": 2200
+    },
+    {
+      "role": "host",
+      "status": "completed",
+      "toolCount": 2,
+      "observations": [
+        {
+          "title": "主机指标快照",
+          "success": true,
+          "exitCode": 0,
+          "error": null
+        },
+        {
+          "title": "主机指标快照",
+          "success": true,
+          "exitCode": 0,
+          "error": null
+        }
+      ],
+      "budgetSpent": 2200
+    },
+    {
+      "role": "application",
+      "status": "completed",
+      "toolCount": 3,
+      "observations": [
+        {
+          "title": "服务日志片段",
+          "success": true,
+          "exitCode": 0,
+          "error": null
+        },
+        {
+          "title": "Kubernetes 集群观察",
+          "success": true,
+          "exitCode": 0,
+          "error": null
+        },
+        {
+          "title": "Kubernetes Pod 日志",
+          "success": true,
+          "exitCode": 0,
+          "error": null
+        }
+      ],
+      "budgetSpent": 3300
+    },
+    {
+      "role": "data",
+      "status": "completed",
+      "toolCount": 2,
+      "observations": [
+        {
+          "title": "Kubernetes 集群观察",
+          "success": true,
+          "exitCode": 0,
+          "error": null
+        },
+        {
+          "title": "Kubernetes Pod 日志",
+          "success": true,
+          "exitCode": 0,
+          "error": null
+        }
+      ],
+      "budgetSpent": 3300
+    },
+    {
+      "role": "verify",
+      "status": "completed",
+      "toolCount": 1,
+      "observations": [],
+      "budgetSpent": 2200
+    }
+  ],
+  "productionMutations": false,
+  "modelUsageSynthetic": true,
+  "productionModelSpeedBenchmark": false
+}

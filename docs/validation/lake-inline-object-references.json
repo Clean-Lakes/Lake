@@ -1,0 +1,70 @@
+{
+  "light": {
+    "overflow": false,
+    "labels": [
+      {
+        "text": "PostgreSQL 15.8",
+        "weight": "400",
+        "height": 22.171875,
+        "border": "1px",
+        "radius": "5px"
+      },
+      {
+        "text": "PostGIS 3.4.3",
+        "weight": "400",
+        "height": 22.171875,
+        "border": "1px",
+        "radius": "5px"
+      },
+      {
+        "text": "141 源库",
+        "weight": "400",
+        "height": 22,
+        "border": "0px",
+        "radius": "11px"
+      },
+      {
+        "text": "78 目标库",
+        "weight": "400",
+        "height": 22,
+        "border": "0px",
+        "radius": "11px"
+      }
+    ],
+    "cells": [
+      {
+        "weight": "400",
+        "border": "0px"
+      },
+      {
+        "weight": "400",
+        "border": "0px"
+      },
+      {
+        "weight": "400",
+        "border": "0px"
+      }
+    ]
+  },
+  "resourceDialog": "141 源库类型数据库地址192.0.2.141端口5432",
+  "focusRestored": "查看数据库 · 141 源库",
+  "filePreview": true,
+  "sre": {
+    "labels": 4,
+    "weights": [
+      "400",
+      "400",
+      "400",
+      "400"
+    ]
+  },
+  "narrow": {
+    "width": 390,
+    "scrollWidth": 390
+  },
+  "longLabel": {
+    "width": 390,
+    "scrollWidth": 390,
+    "ellipsis": "ellipsis"
+  }
+}

@@ -1,9 +1,21 @@
 name: Windows x86_64 client
 on:
   workflow_dispatch:
+    inputs:
+      p8_resume:
+        description: 'Only retry P8 failed/uncompleted acceptance; prior native backend checks already passed'
+        required: false
+        default: false
+        type: boolean
+      p8_checks:
+        description: 'Select failed P8 checks to retry; results from other runs remain separate evidence'
+        required: false
+        default: all
+        type: choice
+        options: [all, contracts-ai, native-ui-only]
   pull_request:
     branches: [master]
-    paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']
+    paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'scripts/verify_strategy_learning.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']
 permissions:
   contents: read
 jobs:
@@ -30,6 +42,7 @@ jobs:
           python-version: '3.14'
       - run: pnpm --dir web-agent install --frozen-lockfile
       - run: pnpm --dir web-agent test:frontend
+        if: ${{ !inputs.p8_resume }}
       - run: pnpm --dir web-agent build:web
       - run: choco install nsis 7zip --no-progress -y
       - name: Prepare pinned terminal runtime before packaging
@@ -49,6 +62,7 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as env:
               env.write('LAKE_PORTABLE_ROOT=' + str(runtime) + '\n')
       - name: Test Windows locks, SQLite, ACLs and ConPTY
+        if: ${{ !inputs.p8_resume }}
         shell: pwsh
         run: |
           $env:CGO_ENABLED = '0'
@@ -58,8 +72,33 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test ./internal/platform -run '^TestSSHFileOption' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go test ./client/windows -count=1 -timeout 1m
+          go test ./client/windows -skip '^TestWindowsStrategyConfirmationInRealWebView$' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: P8 strategy regression and actual Windows WebView2 acceptance
+        env:
+          LAKE_P8_CHECKS: ${{ inputs.p8_checks }}
+        shell: pwsh
+        run: |
+          if ($env:LAKE_P8_CHECKS -eq 'contracts-ai') {
+            python scripts/verify_strategy_learning.py --report "${{ runner.temp }}/strategy-learning-windows.json" --packages internal/strategy internal/ai
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } elseif ($env:LAKE_P8_CHECKS -ne 'native-ui-only') {
+            python scripts/verify_strategy_learning.py --report "${{ runner.temp }}/strategy-learning-windows.json"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $env:LAKE_P8_REQUIRED_WINDOWS_UI = '1'
+          $env:LAKE_P8_WINDOWS_REPORT = '${{ runner.temp }}/strategy-learning-windows-ui.json'
+          go test -v ./client/windows -run '^TestWindowsStrategyConfirmationInRealWebView$' -count=1 -timeout=2m
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy-learning-windows-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/strategy-learning-windows.json
+            ${{ runner.temp }}/strategy-learning-windows-ui.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Build installer after native runtime tests
         run: python scripts/build_lake_windows.py --reuse-web
       - name: Prepare the actual packaged desktop for SSH tests

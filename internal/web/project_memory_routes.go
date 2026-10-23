@@ -57,6 +57,9 @@ func (b *Server) projectMemoryRoute(w http.ResponseWriter, r *http.Request, name
 		return false
 	}
 	project := parts[2]
+	if b.Store.memoryV2 && b.memoryV2Route(w, r, parts, method) {
+		return true
+	}
 	if len(parts) == 4 && parts[3] == "memory" {
 		if method != "GET" {
 			fail(405, "Method not allowed")
@@ -73,7 +76,22 @@ func (b *Server) projectMemoryRoute(w http.ResponseWriter, r *http.Request, name
 		case "PATCH":
 			data := body(w, r, 4096)
 			memoryFields(data, "useEnabled", "extractionEnabled", "expectedRevision")
-			reply(w, 200, b.Store.SetMemorySettings(project, memoryBool(data["useEnabled"], "useEnabled"), memoryBool(data["extractionEnabled"], "extractionEnabled"), memoryRevision(data["expectedRevision"])))
+			use, extraction, expected := memoryBool(data["useEnabled"], "useEnabled"), memoryBool(data["extractionEnabled"], "extractionEnabled"), memoryRevision(data["expectedRevision"])
+			result := func() Object {
+				b.messageMu.Lock()
+				defer b.messageMu.Unlock()
+				result := b.Store.SetMemorySettings(project, use, extraction, expected)
+				if b.Store.memoryV2 && (!use || !extraction) && b.memoryCancel != nil {
+					jobProject := b.Store.read(func() any {
+						return stringOf(b.Store.row("SELECT t.projectId FROM projectMemoryTurns t JOIN projectMemoryJobs j ON j.turnSequence=t.sequence WHERE j.jobId=?", b.memoryJobID)["projectId"])
+					}).(string)
+					if jobProject == project {
+						b.memoryCancel()
+					}
+				}
+				return result
+			}()
+			reply(w, 200, result)
 		default:
 			fail(405, "Method not allowed")
 		}

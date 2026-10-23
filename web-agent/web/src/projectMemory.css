@@ -11,5 +11,51 @@
 .project-memory-editor label { display: block; margin: 10px 0; }
 .project-memory-editor input,.project-memory-editor select,.project-memory-editor textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 5px; }
 .project-memory-jobs { margin-top: 16px; }
-.project-memory-jobs p { font-size: 12px; color: var(--text-secondary); }
-.project-memory-pages { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 8px; font-size: 12px; }
+.project-memory-jobs p { font-size: var(--font-size-ui); color: var(--text-secondary); }
+.project-memory-pages { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 8px; font-size: var(--font-size-ui); }
+.modal.memory-v2-modal { display: flex; flex-direction: column; width: min(960px,calc(100vw - 24px)); max-width: calc(100vw - 24px); height: min(800px,calc(100dvh - 36px)); max-height: calc(100dvh - 36px); overflow: hidden; border-radius: var(--radius-settings-dialog,22px); corner-shape: var(--corner-window); box-sizing: border-box; }
+.memory-v2-modal>.modal-header,.memory-v2-modal>.project-memory-settings,.memory-v2-modal>.memory-v2-toolbar,.memory-v2-modal>.memory-tabs,.memory-v2-modal>.form-error { flex-shrink: 0; }
+.memory-v2-modal input,.memory-v2-modal textarea,.memory-v2-modal button { font-family: inherit; }
+.memory-v2-modal .modal-header h2 { margin: 0; }
+.memory-v2-modal .modal-description { margin: 8px 0; }
+.memory-v2-toolbar { display: flex; align-items: center; gap: 10px; margin: 14px 0; }
+.memory-v2-toolbar>input { flex: 1; min-width: 0; border-radius: var(--radius-settings-control,10px); }
+.memory-tabs { display: flex; border-bottom: 1px solid var(--border); gap: 4px; overflow-x: auto; }
+.memory-tabs button { padding: 9px 12px; border: 0; background: transparent; color: var(--text-muted); white-space: nowrap; cursor: pointer; }
+.memory-tabs button.is-active { color: var(--foreground); box-shadow: inset 0 -2px var(--focus); }
+.memory-v2-layout { display: grid; flex: 1; min-height: 0; overflow: hidden; }
+.memory-v2-layout.has-detail { grid-template-columns: minmax(200px,0.8fr) minmax(0,1.2fr); }
+.memory-v2-list { min-width: 0; min-height: 0; height: 100%; overflow: auto; }
+.memory-list-row { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 13px 10px; width: 100%; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--foreground); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.memory-list-row.is-selected,.memory-list-row:hover { background: var(--surface-hover); }
+.memory-list-row strong { font-weight: 500; }
+.memory-list-row small,.memory-state,.memory-facts { font-size: 12px; color: var(--text-muted); }
+.memory-empty { padding: 22px 10px; color: var(--text-muted); }
+.memory-detail { border-left: 1px solid var(--border); min-width: 0; min-height: 0; height: 100%; box-sizing: border-box; padding: 14px 0 0 20px; overflow: auto; }
+.memory-detail header,.memory-candidates header { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.memory-detail h3,.memory-candidates h3 { margin: 0 0 8px; font-size: 15px; }
+.memory-detail .field-label,.memory-candidates .field-label { display: block; margin: 12px 0; font-size: 12px; font-weight: 500; }
+.memory-detail .field-label input,.memory-detail .field-label textarea,.memory-v2-toolbar>input { font: 400 13px/1.6 var(--font-ui); color: var(--foreground); background: var(--surface); border: 1px solid var(--border-strong); padding: 8px 10px; }
+.memory-detail .app-select { width: 100%; }
+.memory-detail input:not([type=checkbox]),.memory-detail textarea { width: 100%; margin-top: 6px; box-sizing: border-box; border-radius: var(--radius-settings-control,10px); }
+.memory-facts { display: flex; gap: 12px; flex-wrap: wrap; margin: 6px 0 14px; }
+.memory-resource-picker { max-height: 150px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-settings-panel,14px); margin: 12px 0; }
+.memory-resource-picker label,.memory-check { display: flex; align-items: center; gap: 8px; margin: 7px 0; }
+.memory-resource-picker span { min-width: 0; overflow-wrap: anywhere; }
+.memory-technical-fields { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
+.memory-times { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 8px 14px; font-size: 12px; }
+.memory-times dt { color: var(--text-muted); }.memory-times dd { margin: 0; overflow-wrap: anywhere; }
+.memory-sources { border-top: 1px solid var(--border); margin-top: 18px; font-size: 12px; }
+.memory-sources>div { padding: 10px 0; }.memory-sources p,.memory-compare p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.memory-detail .memory-detail-back { display: none; }.memory-candidates { padding: 16px 10px; border-top: 1px solid var(--border); }
+.memory-compare { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 14px; }.memory-compare section { min-width: 0; }
+.memory-access-summary { margin: 8px 0; color: var(--text-muted); font-size: 12px; }.memory-access-summary p { display: flex; gap: 12px; flex-wrap: wrap; }.memory-access-summary button { border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.memory-v2-modal button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.memory-v2-modal>.project-memory-jobs { flex-shrink: 0; max-height: 160px; overflow: auto; }
+@media(max-width:640px) { .modal.memory-v2-modal { padding: 16px; }.memory-v2-toolbar { flex-wrap: wrap; }.memory-v2-toolbar>input { flex-basis: 100%; }.memory-v2-layout.has-detail { display: block; }.memory-v2-layout.has-detail>.memory-v2-list { display: none; }.memory-detail { border-left: 0; padding-left: 0; }.memory-detail .memory-detail-back { display: inline-flex; margin-bottom: 14px; }.memory-tabs button { padding: 9px; }.memory-technical-fields { grid-template-columns: minmax(0,1fr); gap: 0; } }
+
+.memory-v2-toolbar>.app-select { width: 160px; margin-top: 0; flex-shrink: 0; }
+.memory-v2-modal .app-select-trigger { border-radius: var(--radius-settings-control,10px); }
+@media(pointer:coarse) { .memory-v2-modal button,.memory-resource-picker label { min-height: 44px; } }
+
+.memory-editor-fields { border: 0; padding: 0; margin: 0; min-width: 0; }

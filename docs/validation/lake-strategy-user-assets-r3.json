@@ -1,0 +1,56 @@
+{
+  "sourceCommit": "ed51284943e04dafb6a0c091bcf115fbb9b90f71",
+  "buildDirty": false,
+  "backendSHA256": "922e0d18a78acf0634004baecc5b0756812e18150bfdfa55e7221f9856acea2c",
+  "modelBenefitEvaluated": false,
+  "provider": "deterministic loopback SSE through official ADK",
+  "platform": "darwin/arm64",
+  "status": "passed",
+  "ordinaryModelRequests": 3,
+  "auxiliaryRequests": 2,
+  "candidateInitiallyPending": true,
+  "noAutomaticAdoption": true,
+  "explicitReviewedPromotion": true,
+  "crossProjectReuse": true,
+  "privateOriginRedacted": true,
+  "newRevisionDidNotReplaceBinding": true,
+  "withdrawalErasedBothPromotedRevisions": true,
+  "rejectedSourceNotDispatched": true,
+  "restartExtraRequests": 0,
+  "schemaVersion": 5,
+  "businessDBIntegrity": "ok",
+  "adkDBIntegrity": "ok",
+  "checks": {
+    "goFull": "passed",
+    "raceStrategyOnlineSREMultiAgent": "passed",
+    "raceFinalStrategyOnlineWeb": "passed",
+    "goVet": "passed",
+    "adkRuntimeBoundary": "passed",
+    "frontendTypecheck": "passed",
+    "frontendTests": {
+      "passed": 423,
+      "failed": 0
+    },
+    "frontendBuild": "passed",
+    "migrationV4BackupAndRollback": "passed",
+    "nativeDevUI": {
+      "light": "passed",
+      "dark": "passed",
+      "narrow920x760": "passed",
+      "sharedDropdownAndKeyboardFocus": "passed",
+      "reviewAndPromotionEscapeCancel": "passed",
+      "promotionRequiresCheckedPreview": "passed",
+      "temporaryFixtureArchived": true,
+      "originalAppearanceAndProjectRestored": true
+    }
+  },
+  "fixedDev": {
+    "schemaVersion": 5,
+    "privateV4CompatibilityBackup": true,
+    "applyEnabled": true,
+    "learnEnabled": true,
+    "onlineCorrectEnabled": false
+  },
+  "manualCIDispatched": false,
+  "productionReleased": false
+}

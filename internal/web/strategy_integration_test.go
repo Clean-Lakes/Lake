@@ -94,6 +94,17 @@ func TestStrategySwitchOffCancelsInFlightRequest(t *testing.T) {
 	defer func() { close(release); provider.Close() }()
 
 	b.Models.Save(&ai.Model{URL: provider.URL, Name: "strategy cancel fixture", Protocol: "openai", ContextWindow: 200000, MaxOutput: 1024})
+	project := stringOf(b.Store.Session(id)["projectId"])
+	ctx := StrategyContext{ProjectID: project}
+	scope := strategy.Scope{Kind: strategy.ProjectScope, ProjectID: project}
+	asset, err := b.Store.CreateStrategyAsset(ctx, scope, "in-flight-asset", StrategyAssetInput{Title: "Report style", Kind: strategy.ReportGuidance, Body: "Keep facts and hypotheses separate."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, _ := b.Store.GetStrategyRevision(ctx, asset.AssetID, 1)
+	if _, err := b.Store.BindStrategyAsset(ctx, scope, "adopt-in-flight", StrategyBindingInput{Action: "adopt", Ref: v.Value.Ref}); err != nil {
+		t.Fatal(err)
+	}
 	settings := Object{"expectedRevision": 0, "masterEnabled": true, "applyEnabled": true, "learnEnabled": false, "correctEnabled": false, "budget": strategy.DefaultBudget()}
 	strategyHTTP(t, h, "PATCH", "/api/strategy/settings", "enable", jsonText(settings), 200)
 	apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "回复收到。"}, 202)

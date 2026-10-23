@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-13",
+  "runtime": "Chrome + isolated Go PTY + fixture desktop update bridge",
+  "passed": true,
+  "oneClickCreates": true,
+  "oneClickReusesSameConnection": true,
+  "noChatCreated": true,
+  "managementMenuPreserved": true,
+  "chineseScreenAndTabMenus": true,
+  "copyPasteAndClear": true,
+  "releaseNotesVisibleAndScrollable": true,
+  "errors": []
+}

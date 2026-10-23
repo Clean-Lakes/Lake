@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
@@ -134,6 +135,16 @@ func (b *Server) messageBusyLocked(id string) bool {
 	return view.Status == "running" || view.Status == "waiting_approval" || view.Pending != nil
 }
 func (b *Server) launchMessageLocked(id string, message humanMessage) {
+	if b.Store.memoryV2 {
+		b.PauseMemoryExtractionForForeground()
+		b.memoryLastForeground = time.Now()
+		b.memoryReads.Range(func(key, value any) bool {
+			if strings.HasPrefix(key.(string), id+":") {
+				b.memoryReads.Delete(key)
+			}
+			return true
+		})
+	}
 	if b.runningMessages == nil {
 		b.runningMessages = map[string]bool{}
 	}
@@ -141,6 +152,9 @@ func (b *Server) launchMessageLocked(id string, message humanMessage) {
 		fail(409, "本轮仍在结束，请稍后发送")
 	}
 	b.runningMessages[id] = true
+	if b.strategyLearningCancel != nil {
+		b.strategyLearningCancel()
+	}
 	b.workers.Add(1)
 	go b.runTurn(id, message.MessageID, message.Text, message.Images, message.References, message.Files, message.IgnoreProjectMemory)
 }
@@ -186,6 +200,12 @@ func (b *Server) submitHumanMessage(id string, data Object) Object {
 		return result
 	}
 	// A deliberate new message after stopping starts a fresh queue cycle.
+	return b.beginHumanMessageLocked(id, message)
+}
+
+// Caller holds messageMu across mode selection, message admission and launch.
+func (b *Server) beginHumanMessageLocked(id string, message humanMessage) Object {
+	queue := b.Store.MessageQueue(id)
 	if queue["paused"] == true {
 		b.Store.MutateMessageQueue(id, Object{"operation": "resume", "revision": queue["revision"]})
 	}
@@ -236,6 +256,9 @@ func (b *Server) finishMessageQueue(id string) {
 	b.messageMu.Lock()
 	defer b.messageMu.Unlock()
 	delete(b.runningMessages, id)
+	if b.Store.memoryV2 {
+		b.memoryLastForeground = time.Now()
+	}
 	if b.Context.Err() != nil {
 		return
 	}

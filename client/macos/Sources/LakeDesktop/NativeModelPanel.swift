@@ -28,6 +28,31 @@ import LakeDesktopCore
     }
 }
 
+// Keep the AppKit-drawn menu aligned with theme.css and the desktop reference.
+@MainActor private enum ModelMenuTypography {
+    static let font: NSFont = {
+        let base = NSFont.systemFont(ofSize: 14)
+        let descriptor = base.fontDescriptor.addingAttributes([
+            .variation: [NSNumber(value: 0x77676874): NSNumber(value: 500)] // OpenType wght
+        ])
+        return NSFont(descriptor: descriptor, size: 14) ?? base
+    }()
+
+    static let selectedFont: NSFont = {
+        let descriptor = font.fontDescriptor.addingAttributes([
+            .variation: [NSNumber(value: 0x77676874): NSNumber(value: 500)]
+        ])
+        return NSFont(descriptor: descriptor, size: 14) ?? font
+    }()
+
+    static func foreground(_ appearance: NSAppearance) -> NSColor {
+        if appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua {
+            return NSColor(white: 223.0 / 255.0, alpha: 1)
+        }
+        return NSColor(srgbRed: 26.0 / 255.0, green: 28.0 / 255.0, blue: 31.0 / 255.0, alpha: 1)
+    }
+}
+
 @MainActor private final class ProviderChoiceButton: NSButton {
     var hovered = false { didSet { needsDisplay = true } }
     var checked = false
@@ -44,7 +69,7 @@ import LakeDesktopCore
     override func draw(_ dirtyRect: NSRect) {
         if hovered { NSColor.unemphasizedSelectedContentBackgroundColor.setFill(); NSBezierPath(roundedRect: bounds, xRadius: 9, yRadius: 9).fill() }
         let paragraph = NSMutableParagraphStyle(); paragraph.lineBreakMode = .byTruncatingTail
-        (title as NSString).draw(in: NSRect(x: 10, y: (bounds.height - 17) / 2, width: bounds.width - 40, height: 17), withAttributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor, .paragraphStyle: paragraph])
+        (title as NSString).draw(in: NSRect(x: 10, y: (bounds.height - 17) / 2, width: bounds.width - 40, height: 17), withAttributes: [.font: checked ? ModelMenuTypography.selectedFont : ModelMenuTypography.font, .foregroundColor: ModelMenuTypography.foreground(effectiveAppearance), .paragraphStyle: paragraph])
         if checked, let image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)?.withSymbolConfiguration(.init(paletteColors: [.labelColor])) { image.draw(in: NSRect(x: bounds.width - 24, y: (bounds.height - 13) / 2, width: 13, height: 13)) }
     }
 }
@@ -219,7 +244,10 @@ private final class TransparentPanelWebView: WKWebView {
               JSONSerialization.isValidJSONObject(state), let data = try? JSONSerialization.data(withJSONObject: state), data.count <= 524288 else { return false }
         self.state = state
         wantsOpen = true
-        panel.appearance = NSAppearance(named: state["theme"] as? String == "dark" ? .darkAqua : .aqua)
+        let appearanceName: NSAppearance.Name = state["theme"] as? String == "dark" ? .darkAqua : .aqua
+        if panel.appearance?.name != appearanceName {
+            panel.appearance = NSAppearance(named: appearanceName)
+        }
         sendState()
         place()
         if ready && measured { present() }
@@ -233,8 +261,11 @@ private final class TransparentPanelWebView: WKWebView {
         let rect = NSRect(x: x, y: mainWebView.isFlipped ? y : mainWebView.bounds.height - y - anchorHeight, width: width, height: anchorHeight)
         let onScreen = parent.convertToScreen(mainWebView.convert(rect, to: nil))
         anchorOnScreen = onScreen
-        panel.setFrame(ModelPanelGeometry.frame(anchor: onScreen, visible: screen.visibleFrame, height: height), display: true)
-        panel.invalidateShadow()
+        let frame = ModelPanelGeometry.frame(anchor: onScreen, visible: screen.visibleFrame, height: height)
+        if panel.frame != frame {
+            panel.setFrame(frame, display: true)
+            panel.invalidateShadow()
+        }
     }
 
     private func present() {

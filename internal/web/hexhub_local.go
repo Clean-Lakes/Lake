@@ -200,6 +200,7 @@ func (s *Store) SyncImportedLogins(project string, updates map[string]Object) {
 			s.resourceIdleForChange(id, "同步登录信息")
 		}
 		for id, config := range updates {
+			s.BumpMemoryResourceGeneration(id, "login_changed")
 			if s.resource(id)["kind"] == "ssh" {
 				s.exec("UPDATE resources SET description=? WHERE id=?", stringOf(config["username"])+"@"+stringOf(config["host"])+":"+jsonText(integer(config["port"])), id)
 			}

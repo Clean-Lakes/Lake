@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "scope": "Lightweight UI consistency pass",
+  "changes": [
+    "Conversation ticks are 8px in default, current and hover states",
+    "Shared DisclosureSummary replaces native solid triangles for secondary details, evidence and technical parameters",
+    "Completed replies display quiet 11px elapsed text without a clock or redundant completion label",
+    "Stopped, failed, interrupted, background and uncertain outcomes remain visible; absent timing never invents elapsed time",
+    "Queued messages use neutral theme surfaces and shared action icons",
+    "Agent questions, workflows and project memory use shared theme tokens including dark mode",
+    "Close, edit, reorder and update status symbols use Glyph",
+    "Resource drag handle and expanded process thought records also use shared icons and disclosure styling",
+    "Menu actions focus their stable trigger before opening dialogs, preserving rename cancellation focus"
+  ],
+  "checks": {
+    "typescript": "passed",
+    "frontend": {
+      "passed": 245,
+      "failed": 0
+    },
+    "diffWhitespace": "passed",
+    "browser": [
+      "Light and dark actual React components",
+      "390px viewport has no horizontal document overflow",
+      "Details expand by mouse; Enter collapses and retains summary focus",
+      "Full original reply and Markdown table remain inside expanded details",
+      "Arrow rotates 90 degrees; native marker hidden",
+      "Completed timing has 0 SVG icons and font size 11px",
+      "Failure and unknown-result labels retained",
+      "Question selection enables submit and question collapse works",
+      "Full workspace, session menu, rename dialog opening and cancel smoke checked",
+      "Rename cancel restores focus to its session menu trigger"
+    ],
+    "native": [
+      "Final app loaded and restored the current conversation",
+      "Completed reply shows 用时 11秒",
+      "Placeholder and compact input visible",
+      "Session menu and Escape checked"
+    ]
+  },
+  "desktop": {
+    "build": "scripts/build_lake_desktop.sh --dev --install",
+    "status": "Signed Dev build and installation passed",
+    "path": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "restart": "Final installed Dev was quit and relaunched through native UI; loaded new loopback backend at localhost:57999",
+    "limitation": "Native automation initially timed out; user manual restart restored connection. Final signed installation was subsequently restarted and verified through native UI."
+  },
+  "screenshots": [
+    "lake-equal-ticks-detail.png",
+    "lake-ui-refinement-duration.png",
+    "lake-ui-refinement-light.png",
+    "lake-ui-refinement-dark.png",
+    "lake-ui-refinement-narrow.png",
+    "lake-ui-refinement-workspace.png",
+    "lake-ui-refinement-menu-dev.png",
+    "lake-ui-refinement-dev.png"
+  ],
+  "data": "Fictional browser fixtures; no model, remote host or credential access. Existing branch and unrelated changes preserved."
+}

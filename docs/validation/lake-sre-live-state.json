@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-16",
+  "request": "Show sustained specialist execution activity and fix blocked continuation, unknown-result misclassification and Plan/role status conflicts highlighted in screenshots.",
+  "changes": [
+    "Persist actual specialist activity phase/tool and update it at model wait/thinking, tool execution and resource lock wait. Render sustained spinner/highlight, elapsed time, real tool count and evidence count. Stop execution motion for ended, paused, approval and unknown states; reduced-motion CSS disables both animations.",
+    "Verification uses the original assigned step ID, deliverable, completion conditions and assigned resources. Preserve real independent review summary when no fixed acceptance exists, without claiming automatic recovery.",
+    "Trusted pre-execution bridge checks return ToolNotExecutedError; record not_executed rather than unknown. Real post-dispatch errors/timeouts remain unknown. Startup repair is limited to exact legacy runtime Invalid command plus provably invalid local command input; it records runtime provenance and never dispatches.",
+    "Check unknown/dispatched blockers when preparing continue/revise handoff, give the model actionable guidance and retain the formal final answer instead of provisional unexecuted promises from this turn. Raw tool/decision history is retained.",
+    "Plan prioritizes unknown and approval states, including approval for untracked file tools. A scoped View-and-verify control opens/focuses the exact operation record and its existing resolution form; running unresolved work can first be paused by the user. Newer task revision wins even when an anchored message is unchanged."
+  ],
+  "checks": {
+    "goAll": "passed (AI 18.271s; Web 109.745s)",
+    "goRace": "passed (AI 37.543s; Web 152.218s)",
+    "frontend": {
+      "passed": 185,
+      "failed": 0
+    },
+    "TypeScript": "passed",
+    "preExecution": "Real invalid multiline bridge command created no terminal; in the full role loop it was recorded not_executed and a corrected command actually succeeded.",
+    "realTimeout": "A real dispatched sleep command with a 1ms wait remained unknown and stopped the model loop.",
+    "historicalRepair": "Exact invalid-command rejection was audited and corrected once; transport timeout and valid command carrying the same error text remained unknown; repeated recovery was idempotent.",
+    "blockedContinuation": "Model got the blocker, returned formal actionable guidance, started zero specialist runs and its earlier promise was not retained as final conversational text.",
+    "verifier": "Actual assigned deliverable/step and thinking activity observed in live model requests; normal full tool loop and exact runtime acceptance sampling remained intact, no-probe review summary retained.",
+    "visual": "Real components with synthetic data. Two independent activity rows, actual 0.9s spinner transform, timer changed from 16s to 53s and later 1m32s. Unknown/paused/approval modes had zero active indicators. Inspect control opened the exact details and focused its summary; existing verification form opened without submitting a decision. Dark narrow viewport had equal client/scroll widths (390px).",
+    "reducedMotion": "Both animation rules have a prefers-reduced-motion override; OS preference emulation was not available for a live browser check.",
+    "signedDev": "passed scripts/build_lake_desktop.sh --dev --install and codesign verification; final bundle reloaded.",
+    "healthySnapshots": 9,
+    "nativeVisualAfterReload": "not available: Mac locked; synthetic actual-component QA completed before reload.",
+    "diffWhitespace": "passed",
+    "planValidation": "required sections, unique identifiers and five completed tasks passed"
+  },
+  "liveDataAudit": {
+    "correctedInvalidCommandOperations": 1,
+    "realTimeoutUnknownPreserved": 1,
+    "tasksLeftPaused": true,
+    "taskReplayed": false,
+    "activeAgentsAfterRestart": 0
+  },
+  "restartAudit": "All model tasks idle. Three noninteractive terminals had completed command entries; one noninteractive terminal had no entries and no dispatched command. No command was running. Restarted Dev only; release unchanged.",
+  "screenshots": [
+    "lake-sre-live-activity.png",
+    "lake-sre-unknown-action.png",
+    "lake-sre-live-activity-mobile-dark.png"
+  ],
+  "screenshotData": "Synthetic data rendered by actual production components, not an online task execution."
+}

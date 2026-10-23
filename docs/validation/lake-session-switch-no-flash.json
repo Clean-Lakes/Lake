@@ -1,0 +1,20 @@
+{
+  "change": "Separate session loading from outage; session-tagged connectivity, 800ms outage debounce, delayed lightweight loading, bounded in-memory snapshots",
+  "checks": [
+    "18 frontend tests passed",
+    "TypeScript and Vite production build passed",
+    "Signed scripts/build_lake.sh build and strict signature verification passed",
+    "Actual localhost refresh and first/warm session switches visually inspected"
+  ],
+  "origin": "http://localhost:4177",
+  "pid": 13083,
+  "asset": "index-BCvhBJkv.js",
+  "snapshotCacheLimit": 8,
+  "loadingDelayMs": 250,
+  "warningDelayMs": 800,
+  "screenshot": "docs/validation/lake-session-no-flash.png",
+  "verificationLimits": [
+    "Browser timing/frame sampling unavailable; no per-frame measurements claimed"
+  ],
+  "sentModelRequests": false
+}

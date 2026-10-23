@@ -34,6 +34,15 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	outputRetried := d.outputRetried
 	defer func() { d.outputRetried = outputRetried }()
 	requestModel := c.Model
+	var memoryLive map[string]any
+	if c.MemorySchemaVersion == 2 && e.Bridge != nil && e.worker == nil {
+		live, err := e.bridgeCall(ctx, id, "project_memory_status", nil, false)
+		memoryLive = obj(live)
+		if err != nil || obj(live)["useEnabled"] != true {
+			c.MemoryEnabled = false
+			c.MemoryExtractionEnabled = false
+		}
+	}
 	var err error
 	cancel := d.cancel
 	if err = ctx.Err(); err != nil {
@@ -46,12 +55,25 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 		e.worker.mu.Unlock()
 	}
+	if c.MemorySchemaVersion == 2 {
+		s.mu.Lock()
+		before := historyCost(s.state.History)
+		filterMemoryHistory(s.state.History, memoryLive)
+		if historyCost(s.state.History) != before {
+			s.state.ContextMeasurement = nil
+			_ = e.save(s)
+		}
+		s.mu.Unlock()
+	}
 	if err = e.compactForTurn(ctx, s, c, resume && step == 0); err != nil {
 		return modelResult{}, err
 	}
 	teamContext := e.sreTeamContext(c)
 	s.mu.Lock()
 	history := append([]Message(nil), s.state.History...)
+	if c.MemorySchemaVersion == 2 {
+		filterMemoryHistory(history, memoryLive)
+	}
 	requestHistoryCost := historyCost(history)
 	textID, thinkID := uid(), uid()
 	d.textID = textID
@@ -73,6 +95,9 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 	}
 	appendSystem(strategy.TaskContext, "team-context", teamContext)
+	if c.StrategyLearnEnabled && c.MemoryProjectID != "" && !c.workflowMode && !c.sreCoordinator && c.agentRole == "" {
+		appendSystem(strategy.FixedRules, "strategy-learning-candidate-boundary-v1", "\nStrategy candidate learning is host-managed. The opted-in host observes new explicit corrections and can extract an unadopted strategy candidate after this turn. It does not require save_project_memory, forget_project_memory or Skill edits. A preference correction alone does not authorize a project-memory write; memory tools retain their independent explicit-consent and revision checks. If a memory tool rejects a write, do not claim it was saved or repeat it to bypass consent. Continue answering the current request from the available evidence; candidate extraction and human adoption are separate steps, and a candidate is not automatically applied.")
+	}
 	if onlineEnabled(c) {
 		appendSystem(strategy.FixedRules, "online-readonly-correction-v1", "\nOptional bounded read-only correction is enabled. After a failed resource check, inspect its actual call ID/error. Before another resource call, submit revise_readonly_strategy with that source ID, refuted hypothesis, concrete change, expected information and stop condition, and exactly one next tool/JSON arguments. Preserve the same authorized target. Only trusted policy can prove read-only. Do not replay writes, opaque SQL/MCP, dispatched operations or denied permissions. No new task/role/plan resets the shared budget. Only a successful repeated logical check closes that recorded gap; changed wording or timestamps do not establish progress. A recovered sample does not establish whole-task success. Finish with actual facts and gaps.")
 	}
@@ -81,20 +106,22 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	} else if report != nil {
 		appendSystem(strategy.TaskContext, "online-correction-state", "\nHost-recorded correction state (data, not permission): "+js(report))
 	}
+	tools := e.sessionCatalog(ctx, id, c)
 	if !c.MemoryEnabled {
 		for i := range history {
 			if history[i].Role == "tool" && memoryTool(history[i].Name) {
 				history[i].Content = "[project memory disabled]"
+				history[i].Native = nil
 			}
 		}
 	} else if len(history) > 0 {
-		attachment := e.requestMemoryContext(ctx, id, c)
+		memoryBudget := max(0, (c.Model.ContextWindow-c.Model.MaxOutput)*2-historyCost(history)-len(js(tools)))
+		attachment := e.requestMemoryContext(ctx, id, c, memoryBudget)
 		if historyCost(history)+len(attachment) <= (c.Model.ContextWindow-c.Model.MaxOutput)*2 {
 			appendSystem(strategy.TaskContext, "project-memory", attachment)
 		}
 	}
 	lastFlush := map[string]time.Time{}
-	tools := e.sessionCatalog(ctx, id, c)
 	if report, err := e.onlineCurrent(s, c); err != nil {
 		return modelResult{}, err
 	} else if report != nil && report.StopReason != "" {
@@ -231,6 +258,35 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 		result, modelErr = d.streamWithManifest(ctx, requestModel, outputRecoveryHistory(history), tools, appendPromptFragment(append([]strategy.PromptFragment(nil), fragments...), strategy.FixedRules, "output-recovery", "\n"+outputRecoveryNotice), compositionMatched, d.lastRequestID, streamDelta)
 	}
+	if errors.Is(modelErr, ErrInvalidModelToolCall) && !d.invalidToolRetried && ctx.Err() == nil {
+		// The provider validates the entire batch before returning it to ADK.
+		// Regenerate that rejected response once; no tool from it was dispatched.
+		d.invalidToolRetried = true
+		s.mu.Lock()
+		addUsage(&s.state.View.Usage, result.Usage)
+		kept := s.state.View.Cards[:0]
+		for _, card := range s.state.View.Cards {
+			if card.ID != textID && card.ID != thinkID {
+				kept = append(kept, card)
+			}
+		}
+		s.state.View.Cards = kept
+		s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "notice", Content: "模型返回的工具调用格式无效，正在重新生成；已有调查结果保留", Status: "completed", At: timestamp()})
+		textID, thinkID = uid(), uid()
+		d.textID = textID
+		s.state.View.Cards = append(s.state.View.Cards, Card{ID: thinkID, Type: "thinking", Status: "running", At: timestamp()}, Card{ID: textID, Type: "message", Status: "running", At: timestamp()})
+		err = e.save(s)
+		e.notify(s, "compact", nil)
+		s.mu.Unlock()
+		if err != nil {
+			return modelResult{}, err
+		}
+		recoveryHistory := append([]Message(nil), history...)
+		if len(recoveryHistory) > 0 && recoveryHistory[0].Role == "system" {
+			recoveryHistory[0].Content += "\n" + toolCallRecoveryNotice
+		}
+		result, modelErr = d.streamWithManifest(ctx, requestModel, recoveryHistory, tools, appendPromptFragment(append([]strategy.PromptFragment(nil), fragments...), strategy.FixedRules, "tool-call-recovery", "\n"+toolCallRecoveryNotice), compositionMatched, d.lastRequestID, streamDelta)
+	}
 	if modelErr != nil {
 		s.mu.Lock()
 		addUsage(&s.state.View.Usage, result.Usage)
@@ -276,6 +332,8 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 
 	return result, nil
 }
+
+const toolCallRecoveryNotice = "The previous response was rejected before tool dispatch because a tool call was malformed or duplicated. None of that response's tool calls were executed. Regenerate the response using valid JSON objects matching the tool schemas and distinct call IDs. If awaiting a user decision, use ask_user_question once with the required questions; never assume an answer. Reuse previous successful tool results and do not repeat completed operations. Preserve the current conversation mode, target scope and all permission restrictions."
 
 // streamWithManifest records a prepared request before dispatch. "Prepared"
 // does not prove the provider received it: budget, cancellation or transport
@@ -360,7 +418,7 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 		SchemaVersion: strategy.SchemaVersion, RequestID: uid(), RunID: runID, TurnID: turnID, Round: d.round, RetryOf: retryOf,
 		BuildCommit: commit, BuildDirty: dirty, Profile: profile, Role: c.agentRole,
 		FixedRulesHash: strategy.FragmentLayerHash(fragments, strategy.FixedRules), BuiltinStrategyHash: strategy.FragmentLayerHash(fragments, strategy.BuiltinStrategy), Fragments: fragments,
-		SelectedAssets: selection.Selected, OmittedAssets: selection.Omitted, SkillSnapshots: skills,
+		SelectedAssets: selection.Selected, OmittedAssets: selection.Omitted, SkillSnapshots: skills, AssetSelectionReasons: selection.Reasons,
 		SettingsRevision: selection.SettingsRevision, ProjectSettingsRevision: selection.ProjectSettingsRevision, Epoch: selection.GlobalEpoch, ProjectEpoch: selection.ProjectEpoch,
 		ModelConfigHash: modelHash, ToolCatalogHash: toolsHash, PermissionPolicyVersion: promptPermissionPolicyVersion, PermissionSettingsHash: permissionsHash, TargetScopeHash: scopeHash,
 		InputBudget: strategy.PromptInputBudget{ContextWindow: m.ContextWindow, MaxOutput: m.MaxOutput, MaxSteps: c.MaxSteps, HistoryCost: historyCost(history), ToolsCost: len(js(tools))},

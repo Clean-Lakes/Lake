@@ -14,7 +14,7 @@ func TestOriginalPrototypeSchemaMigration(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	old := strings.ReplaceAll(schema, "CHECK(kind IN ('local','ssh','database','docker','redis'))", "CHECK(kind = 'local')")
+	old := strings.ReplaceAll(schema, "CHECK(kind IN ('local','ssh','database','docker','redis','kubernetes','apisix','prometheus','victoriametrics'))", "CHECK(kind = 'local')")
 	old = strings.ReplaceAll(old, "CHECK(status IN ('connecting','ready','busy','disconnected','unknown'))", "CHECK(status IN ('ready','busy','disconnected','unknown'))")
 	old = strings.ReplaceAll(old, "images TEXT NOT NULL DEFAULT '[]', ", "")
 	old = strings.ReplaceAll(old, "mentions TEXT, ", "")

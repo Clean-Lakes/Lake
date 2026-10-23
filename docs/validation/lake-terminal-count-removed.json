@@ -1,0 +1,39 @@
+{
+  "status": "passed",
+  "date": "2026-10-18",
+  "branch": "experiment/adk-runtime",
+  "change": "Removed terminal count badge and its green dot from resource sidebar rows. Connection progress and terminal management remain available.",
+  "filesSHA256": {
+    "web-agent/web/src/App.tsx": "7828eeaf011dc3d7509cfae2f9f1d273375fdaf2348a53e5f1c520a6a7145a4c",
+    "web-agent/web/src/styles.css": "f971385661d2f9cd214cf3a8585754354149050abfa8cbd80d69b2e79dcbb601"
+  },
+  "tests": {
+    "frontend": {
+      "passed": 212,
+      "log": "/tmp/lake-terminal-badge-frontend.log"
+    },
+    "typescript": {
+      "status": "passed",
+      "log": "/tmp/lake-terminal-badge-ts.log"
+    },
+    "signedDevBuild": {
+      "status": "passed",
+      "log": "/tmp/lake-terminal-badge-build.log"
+    },
+    "diffCheck": "passed"
+  },
+  "dev": {
+    "path": "/Users/lingyunxieqing/Applications/Lake Dev.app",
+    "backendSHA256": "871216c0a6bce3183114b0aa0a8b853f8837bccad5aaee929fffedc23291fe63",
+    "matchesWorkspaceBinary": true,
+    "signatureVerified": true,
+    "launched": true
+  },
+  "nativeAcceptance": {
+    "resourceRowHasNoTerminalCount": true,
+    "existingTerminalTabVisible": true,
+    "temporarySearchCleared": true,
+    "resourceCommandsSent": false,
+    "screenshot": "docs/validation/lake-terminal-count-removed-dev.png"
+  }
+}

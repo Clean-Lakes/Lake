@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-12",
+  "behavior": {
+    "compositionGuardPrecedesMentionSelection": true,
+    "nativeCompositionAndKeyCode229Protected": true,
+    "compositionEndBeforeConfirmingEnterProtected": true,
+    "sendShortcuts": ["Enter", "Command / Ctrl + Enter"],
+    "default": "Enter; Shift + Enter inserts a newline",
+    "preference": "Settings > Conversation > Send shortcut; immediate local persistence",
+    "modifiedModePlainEnter": "newline"
+  },
+  "validation": {
+    "frontendTestsPassed": 56,
+    "focusedCases": "IME active state, candidate/navigation keys, reversed compositionend/keydown ordering, legacy keyCode 229, modifiers, repeated key, persistence parsing",
+    "typecheckAndSignedBuild": "passed via scripts/build_lake.sh",
+    "nativeChrome": "Updated workbench loaded and send-button tooltip reflects Enter; settings interaction interrupted by user changing Chrome",
+    "physicalIMETest": "Not performed; event ordering covered by automated tests",
+    "testMessagesSent": 0
+  },
+  "deployment": {
+    "origin": "http://localhost:4177",
+    "bundle": "index-BRC5yX1O.js",
+    "idleConnectionsRestored": 3,
+    "runningTurn": "Initial restart check refused while active; restarted only after the turn completed",
+    "commandsReplayed": false
+  }
+}

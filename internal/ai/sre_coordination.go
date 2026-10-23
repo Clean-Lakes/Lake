@@ -104,7 +104,7 @@ func (e *Engine) sreCoordinationCatalog(c Config) []Tool {
 		}
 	}
 	if c.MemoryEnabled && e.Bridge != nil {
-		for _, tool := range projectMemoryTools() {
+		for _, tool := range projectMemoryTools(c) {
 			if tool.Name == "project_memory_index" || tool.Name == "list_project_memories" || tool.Name == "read_project_memory" {
 				out = append(out, tool)
 			}

@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-13",
+  "policy": "The main model selects delegation, task split, assigned targets and review timing. Child models choose observation tools. Runtime enforces permissions and budgets only.",
+  "removed": [
+    "keyword/count-based automatic survey",
+    "pre-model host inspection",
+    "fixed child observation prelude",
+    "automatic Beacon on final reply"
+  ],
+  "added": [
+    "Scout read-only Kubernetes identity/nodes/pods/events/resources tool",
+    "server-owned resource aliases, names, evidence timestamps and verification status",
+    "separate terminal-creation and command approvals for model-requested shell",
+    "unparsed child tool markup marked failed"
+  ],
+  "validation": {
+    "aiRaceSeconds": 13.356,
+    "webRaceSeconds": 81.466,
+    "followupCoreAndWebRacePassed": true,
+    "frontendTypecheckPassed": true,
+    "frontendTestsPassed": true,
+    "browser": {
+      "modelDirectedScouts": 5,
+      "modelDirectedBeacon": 1,
+      "parallelChildModelPeak": 3,
+      "noObservationsBeforeModelDecision": true,
+      "childModelsChooseTheirTools": true,
+      "followupModelDeclinedNewAgents": true,
+      "javascriptErrors": []
+    },
+    "clusterIdentityFormatting": "real kubectl local config fixture; no cluster connection",
+    "clusterStatusQueries": "isolated fake kubectl executor; target-mismatch refusal verified",
+    "liveProductionBenchmark": "not rerun in this change; no speedup claim"
+  },
+  "webOrigin": "http://localhost:4180",
+  "workflowsEntryHidden": true,
+  "pushed": false
+}

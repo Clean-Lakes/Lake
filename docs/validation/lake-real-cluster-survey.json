@@ -1,0 +1,152 @@
+{
+  "testedAt": "2026-10-12",
+  "origin": "http://localhost:4180",
+  "query": "查看新k8s集群所有节点的状态和资源占用，只读检查。",
+  "project": "HexHub 服务器",
+  "folder": "志梦亿/南京公司/新k8s集群",
+  "nodeCount": 5,
+  "tests": [
+    {
+      "case": "parallel",
+      "sessionId": "e0501c891fac3a94f7cb8fd9f72deea4",
+      "model": "deepseek/deepseek-flash",
+      "contextWindow": 64000,
+      "status": "failed",
+      "wallSeconds": 295.705,
+      "reviewWaitSeconds": 231.062,
+      "elapsedExcludingReviewWaitSeconds": 64.643,
+      "approvalCount": 6,
+      "rootToolCalls": 10,
+      "agents": [
+        {
+          "role": "host",
+          "status": "completed",
+          "name": "Scout",
+          "startedAt": "2026-10-12T10:49:48.442155Z",
+          "finishedAt": "2026-10-12T10:50:07.985349Z"
+        },
+        {
+          "role": "host",
+          "status": "completed",
+          "name": "Scout",
+          "startedAt": "2026-10-12T10:49:48.507201Z",
+          "finishedAt": "2026-10-12T10:50:04.329489Z"
+        },
+        {
+          "role": "host",
+          "status": "completed",
+          "name": "Scout",
+          "startedAt": "2026-10-12T10:49:48.463335Z",
+          "finishedAt": "2026-10-12T10:49:56.582713Z"
+        },
+        {
+          "role": "host",
+          "status": "completed",
+          "name": "Scout",
+          "startedAt": "2026-10-12T10:49:48.486153Z",
+          "finishedAt": "2026-10-12T10:49:57.423902Z"
+        },
+        {
+          "role": "host",
+          "status": "completed",
+          "name": "Scout",
+          "startedAt": "2026-10-12T10:49:48.424136Z",
+          "finishedAt": "2026-10-12T10:49:58.516542Z"
+        },
+        {
+          "role": "verify",
+          "status": "completed",
+          "name": "Beacon",
+          "startedAt": "2026-10-12T10:50:08.102914Z",
+          "finishedAt": "2026-10-12T10:50:17.759781Z"
+        }
+      ],
+      "failure": "current tool turn exceeds context budget"
+    },
+    {
+      "case": "serial",
+      "sessionId": "7ef560e987240a02734c3416b83e4689",
+      "model": "deepseek/deepseek-flash",
+      "contextWindow": 64000,
+      "status": "failed",
+      "wallSeconds": 771.807,
+      "reviewWaitSeconds": 719.188,
+      "elapsedExcludingReviewWaitSeconds": 52.618,
+      "approvalCount": 20,
+      "rootToolCalls": 21,
+      "agents": [],
+      "failure": "current tool turn exceeds context budget"
+    },
+    {
+      "case": "parallel-retest",
+      "sessionId": "bd33e803513e56301ed8126883552a16",
+      "model": "deepseek/deepseek-flash",
+      "contextWindow": 128000,
+      "status": "completed",
+      "wallSeconds": 594.283,
+      "reviewWaitSeconds": 478.641,
+      "elapsedExcludingReviewWaitSeconds": 115.642,
+      "approvalCount": 11,
+      "rootToolCalls": 16,
+      "agents": [
+        {
+          "role": "host",
+          "status": "completed",
+          "name": "Scout",
+          "startedAt": "2026-10-12T10:58:30.845993Z",
+          "finishedAt": "2026-10-12T10:58:38.492479Z"
+        },
+        {
+          "role": "host",
+          "status": "completed",
+          "name": "Scout",
+          "startedAt": "2026-10-12T10:58:30.826813Z",
+          "finishedAt": "2026-10-12T10:58:38.937694Z"
+        },
+        {
+          "role": "host",
+          "status": "completed",
+          "name": "Scout",
+          "startedAt": "2026-10-12T10:58:30.869082Z",
+          "finishedAt": "2026-10-12T10:58:38.966125Z"
+        },
+        {
+          "role": "host",
+          "status": "completed",
+          "name": "Scout",
+          "startedAt": "2026-10-12T10:58:30.888729Z",
+          "finishedAt": "2026-10-12T10:58:47.001359Z"
+        },
+        {
+          "role": "host",
+          "status": "completed",
+          "name": "Scout",
+          "startedAt": "2026-10-12T10:58:30.809037Z",
+          "finishedAt": "2026-10-12T10:58:44.09834Z"
+        },
+        {
+          "role": "verify",
+          "status": "completed",
+          "name": "Beacon",
+          "startedAt": "2026-10-12T10:58:47.117786Z",
+          "finishedAt": "2026-10-12T10:58:56.68955Z"
+        },
+        {
+          "role": "verify",
+          "status": "failed",
+          "name": "Beacon",
+          "startedAt": "2026-10-12T11:07:57.173329Z",
+          "finishedAt": "2026-10-12T11:08:09.194494Z"
+        }
+      ],
+      "allScoutsFinishedSeconds": 16.265,
+      "initialVerificationFinishedSeconds": 25.954,
+      "issues": [
+        "Follow-up command labelled 192.168.2.79 actually targeted resource 192.168.2.77; final chart incorrectly reports 79 root usage as 11% versus original Scout 40%.",
+        "A later Beacon verification failed; initial Beacon verification had completed."
+      ]
+    }
+  ],
+  "conclusion": "Parallel sampling works. No reliable end-to-end speedup claim: 64K auto/off both failed context budget; 128K retry completed but wrong follow-up resource mapping and a later failed verification remain.",
+  "changesPushed": false
+}

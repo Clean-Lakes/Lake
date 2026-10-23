@@ -8,7 +8,7 @@ import (
 )
 
 func clusterObservationTool() Tool {
-	return Tool{Name: "observe_cluster", Description: "Read Kubernetes identity or status through kubectl on an assigned local/SSH node. Choose metric identity, nodes, pods, events or resources; optional context and a listed standard kubeconfig path select the configuration on that node. Never read raw kubeconfig or credentials. No command, Secret, environment or mutation is accepted. The runtime matches observed node IPs against selected SSH targets before status reads. If identity fails, inspect the returned raw error, use a selected control-plane node/configuration, or report the gap; do not repeat all status metrics against the same failed context. kubelet active alone is not Kubernetes Ready. Scope and permissions remain those of the parent.", Parameters: map[string]any{"type": "object", "properties": map[string]any{"asset_ref": map[string]any{"type": "string"}, "metric": map[string]any{"type": "string", "enum": []string{"identity", "nodes", "pods", "events", "resources"}}, "context": map[string]any{"type": "string"}, "kubeconfig": clusterConfigSchema(), "namespace": map[string]any{"type": "string", "description": "Optional exact namespace for pods/events; omit for other metrics."}}, "required": []string{"asset_ref", "metric"}}}
+	return Tool{Name: "observe_cluster", Description: "Read Kubernetes identity/status on an assigned resource. A Kubernetes-type resource uses its saved API endpoint/Kubeconfig directly; its display name is an alias and need not match the YAML cluster name. Omit context and kubeconfig for this resource type; never switch to SSH or local config. Lists are bounded/paginated and partial results are not complete cluster counts. Assigned local/SSH nodes use kubectl with optional context/standard kubeconfig path and require observed node IPs to match the selected SSH targets. Choose identity, nodes, pods, events or resources (capacity, not current usage). Never read raw kubeconfig, Secret, Pod spec or credentials; no command/exec/mutation. Report network/RBAC/identity failures without repeating all metrics on a failed target. kubelet active alone is not Kubernetes Ready. Scope and permissions remain those of the parent.", Parameters: map[string]any{"type": "object", "properties": map[string]any{"asset_ref": map[string]any{"type": "string"}, "metric": map[string]any{"type": "string", "enum": []string{"identity", "nodes", "pods", "events", "resources"}}, "context": map[string]any{"type": "string"}, "kubeconfig": clusterConfigSchema(), "namespace": map[string]any{"type": "string", "description": "Optional exact namespace for pods/events; saved namespace is used for Kubernetes resources."}}, "required": []string{"asset_ref", "metric"}}}
 }
 
 func clusterConfigSchema() map[string]any {
@@ -109,6 +109,9 @@ func clusterIdentity(output string, expectedIPs []string) (map[string]any, error
 }
 
 func (e *Engine) observeCluster(ctx context.Context, c Config, as Asset, a map[string]any) (any, error) {
+	if as.Kind == "kubernetes" {
+		return queryKubernetesAsset(ctx, c, as, a)
+	}
 	if as.Kind != "ssh" && as.Kind != "local" {
 		return nil, errors.New("Scout 只能通过分配的本机或 SSH 节点查询集群")
 	}

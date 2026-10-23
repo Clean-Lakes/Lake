@@ -1,0 +1,47 @@
+{
+  "rootCause": [
+    "simple acknowledgement started repeated broad du diagnostics",
+    "running PTY jobs returned null instead of partial output",
+    "wait_shell accepted a multi-minute per-call wait",
+    "busy background terminals could leave a finished conversation button in Stop mode"
+  ],
+  "changes": [
+    "local acknowledgement/greeting replies skip model and tool calls without explicit references/images",
+    "owner-scoped PTY partial output",
+    "each wait_shell bounded to 5 seconds without cancelling the underlying command",
+    "three unchanged polls stop repeated waiting and finish the reply truthfully",
+    "foreground PTY commands honor timeout and end the turn on deadline",
+    "completed conversation button ignores unrelated background terminal activity",
+    "instant replies omit redundant zero-second timer"
+  ],
+  "tests": {
+    "fullGo": "passed (web 94.226s)",
+    "targetedRace": "passed (web 8.044s; ai 6.723s)",
+    "frontend": "32 passed",
+    "typescript": "passed",
+    "goVet": "passed",
+    "signedBuild": "scripts/build_lake.sh passed"
+  },
+  "isolatedBrowserQA": {
+    "userText": "好的",
+    "response": "好的。",
+    "measuredBackendTurnMs": 10.025,
+    "modelInferenceRequests": 0,
+    "terminalsCreated": 0,
+    "toolCalls": 0,
+    "status": "completed",
+    "screenshot": "lake-simple-reply-completed.png"
+  },
+  "identifiedOldDiagnosticTurnStopped": true,
+  "service": {
+    "pid": 62388,
+    "origin": "http://localhost:4177",
+    "bundle": [
+      "/assets/index-DjuUuuY7.js"
+    ],
+    "binarySHA256": "73a1178a1b570d1053ab55f38eef468e30282315626ac23ddf0a9161b27073fd"
+  },
+  "realModelRequestsForVerification": false,
+  "realRemoteConnections": false,
+  "acknowledgementShortcutSupersededBy": "lake-context-replies.json"
+}

@@ -1,0 +1,5 @@
+{
+  "error": "ui_readiness_timeout:button:确认操作:complete:Lake\nP8 Windows isolated acceptance\nCtrl K\n最近会话\n\n还没有会话\n\n资源\n1\nLocal machine\n工作区\n项目\n/\n概览\nLake\n今天要处理什么问题？\n\n从项目开始一段会话。Lake 会把调查、证据和需要你确认的操作留在对话中。\n\n开始新会话\n连接模型\n策略资产\n\n维护可见的工作偏好与方法，明确采用后应用",
+  "passed": false,
+  "platform": "windows/amd64"
+}

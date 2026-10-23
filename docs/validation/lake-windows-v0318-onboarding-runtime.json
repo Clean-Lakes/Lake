@@ -1,0 +1,65 @@
+{
+  "version": "0.3.18",
+  "binaryArchitecture": "amd64",
+  "phase": "complete",
+  "results": [
+    {
+      "name": "desktop",
+      "exitCode": 0,
+      "passedCases": 15,
+      "failedCases": [],
+      "seconds": 1.91,
+      "log": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-49f4bda9\\logs\\desktop.log"
+    },
+    {
+      "name": "platform",
+      "exitCode": 0,
+      "passedCases": 2,
+      "failedCases": [],
+      "seconds": 0.58,
+      "log": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-49f4bda9\\logs\\platform.log"
+    },
+    {
+      "name": "ai",
+      "exitCode": 0,
+      "passedCases": 36,
+      "failedCases": [],
+      "seconds": 7.37,
+      "log": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-49f4bda9\\logs\\ai.log"
+    },
+    {
+      "name": "web",
+      "exitCode": 0,
+      "passedCases": 36,
+      "failedCases": [],
+      "seconds": 33.54,
+      "log": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-49f4bda9\\logs\\web.log"
+    }
+  ],
+  "guiTest": {
+    "status": "startup observed",
+    "scope": "rebuilt package window render observed; native gestures awaiting user confirmation",
+    "process": {
+      "id": 12492,
+      "title": "Lake 0.3.18",
+      "responding": true,
+      "path": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-49f4bda9\\package\\Lake\\Lake.exe"
+    },
+    "screenshot": "docs/validation/lake-windows-v0318-onboarding-gui.png"
+  },
+  "packageSHA256": "2efbe0ebff0d24a8220a8a6c183d6853bf5dcfe5d6117d5525e52c4cc3f728ba",
+  "root": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-49f4bda9",
+  "nativeArchitecture": "ARM64",
+  "os": "Microsoft Windows 11 专业版",
+  "home": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-49f4bda9\\home",
+  "desktop": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-49f4bda9\\package\\Lake\\Lake.exe",
+  "backendVersion": "Lake 0.3.18 · Go backend · React frontend",
+  "webViewExitCode": 0,
+  "launcher": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\v0.3.18 test-49f4bda9\\Open-Lake-Test.cmd",
+  "passed": true,
+  "shortLauncher": "C:\\Users\\lingyunxieqing\\AppData\\Local\\LakeTest\\Open-v0318.cmd",
+  "executionMode": "Windows 11 ARM64 with x64 emulation",
+  "nativeX64HardwareTest": "not performed",
+  "installerWizardTest": "not performed",
+  "passedScope": "automated runtime tests and readiness probes; GUI tracked separately"
+}
