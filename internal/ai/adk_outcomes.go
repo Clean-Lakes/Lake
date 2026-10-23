@@ -42,7 +42,7 @@ func (e *Engine) OperationOutcomes(id string) ([]OperationOutcome, error) {
 	var rows []nativeOperation
 	// Dispatched operations still have a live execution path and use the normal
 	// progress UI. Only effects whose outcome is unknown need human verification.
-	// The dispatch guard independently checks both states to prevent replay.
+	// These records do not lock new calls; durable invocation IDs prevent replay.
 	if err = store.DB.Where("session_id = ? AND status = ? AND risk <> ?", id, "unknown", "readonly").Order("started_at").Find(&rows).Error; err != nil {
 		return nil, err
 	}

@@ -86,16 +86,18 @@ func TestLegacyShellTargetRejectionIsNarrowAuditedAndUnblocksWrites(t *testing.T
 	if err = store.DB.Model(&nativeEvidence{}).Where("operation_id = ? AND status = ?", "rejected", "preflight_reconciled_not_executed").Count(&count).Error; err != nil || count != 1 {
 		t.Fatal("missing or duplicated audit", count, err)
 	}
-	// A genuine unknown still blocks dispatch, regardless of granted permissions.
+	// Genuine unknown outcomes stay in the audit without locking a new,
+	// explicitly permitted operation.
 	ctx := context.WithValue(context.Background(), adkToolContextKey{}, true)
 	call := Call{ID: "new-write", Name: "write", Arguments: js(map[string]any{"path": filepath.Join(c.Workspace, "PLAN.md"), "content": "new explicit operation"})}
-	if _, err = e.invoke(ctx, s, c, call); err == nil {
-		t.Fatal("genuine unknown outcome did not block write")
+	if _, err = e.invoke(ctx, s, c, call); err != nil {
+		t.Fatal("genuine unknown outcome locked a new permitted write", err)
 	}
 	// Isolate the proven-rejection case without changing the other fixture facts.
 	if err = store.DB.Where("id <> ?", "rejected").Delete(&nativeOperation{}).Error; err != nil {
 		t.Fatal(err)
 	}
+	call.ID = "after-repair"
 	if _, err = e.invoke(ctx, s, c, call); err != nil {
 		t.Fatal("rejected preflight still blocked explicitly permitted write", err)
 	}

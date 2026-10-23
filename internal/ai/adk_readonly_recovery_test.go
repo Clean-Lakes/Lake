@@ -3,12 +3,13 @@ package ai
 import (
 	"context"
 	"encoding/json"
-	"strings"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
 
-func TestUnknownMutationAllowsIndependentReadonlyButBlocksAnotherWrite(t *testing.T) {
+func TestUnknownMutationDoesNotLockNewOperations(t *testing.T) {
 	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
 	s, _ := e.get("case")
 	c := s.state.Config
@@ -25,17 +26,68 @@ func TestUnknownMutationAllowsIndependentReadonlyButBlocksAnotherWrite(t *testin
 	if err := e.finishNativeOperation(op, c, map[string]any{"exitCode": 0}, nil); err != nil {
 		t.Fatal(err)
 	}
-	_, err = e.dispatchNativeOperation(ctx, s, c, Call{ID: "new-change", Name: "write", Arguments: "{}"}, "write", "fixture-host", "fixture")
-	if err == nil || !strings.Contains(err.Error(), "original-change") || !strings.Contains(err.Error(), "fixture-host") {
-		t.Fatal("write guard lost the exact original operation", err)
-	}
-	if !strings.Contains(err.Error(), "shell_output") || !strings.Contains(err.Error(), "shell_id=original-change") || strings.Contains(err.Error(), "terminal_command_status") {
-		t.Fatal("write guard must offer a model-visible recovery tool", err)
+	for _, target := range []string{"fixture-host", "another-host"} {
+		call := Call{ID: "new-change-" + target, Name: "write", Arguments: "{}"}
+		next, err := e.dispatchNativeOperation(ctx, s, c, call, "write", target, "fixture")
+		if err != nil || next == nil {
+			t.Fatal("old unknown operation locked a new write", target, err)
+		}
+		if err := e.finishNativeOperation(next, c, map[string]any{"exitCode": 0}, nil); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.dispatchNativeOperation(ctx, s, c, call, "write", target, "fixture"); err == nil {
+			t.Fatal("same durable invocation replayed")
+		}
 	}
 	var preserved nativeOperation
 	store.DB.First(&preserved, "id = ?", unknown.ID)
 	if preserved.Status != "unknown" {
-		t.Fatal("a fresh read invented an outcome for an old change")
+		t.Fatal("a new operation invented an outcome for an old change")
+	}
+}
+
+func TestUnfinishedMutationDoesNotBypassNewCallApproval(t *testing.T) {
+	for _, status := range []string{"unknown", "dispatched"} {
+		for _, approve := range []bool{false, true} {
+			t.Run(status+map[bool]string{false: "_deny", true: "_allow"}[approve], func(t *testing.T) {
+				target := filepath.Join(t.TempDir(), "effect")
+				model, close := fakeModel(t, func(n int, _ map[string]any) any {
+					if n == 1 {
+						return response("", Call{ID: "fresh-append", Name: "append", Arguments: js(map[string]any{"path": target, "content": "new operation\n"})})
+					}
+					return response("complete")
+				})
+				defer close()
+				e := engineFor(t, model, nil)
+				store, err := e.adkStore()
+				if err != nil {
+					t.Fatal(err)
+				}
+				old := nativeOperation{ID: "old-change", SessionID: "case", Tool: "shell", Risk: "write", Status: status, StartedAt: time.Now()}
+				if err = store.DB.Create(&old).Error; err != nil {
+					t.Fatal(err)
+				}
+				done := make(chan error, 1)
+				go func() { done <- e.Chat(context.Background(), "case", "append to the fixture", nil) }()
+				approval := waitApproval(t, e)
+				if _, err = os.Stat(target); !os.IsNotExist(err) {
+					t.Fatal("old record bypassed the new operation's approval")
+				}
+				if err = e.Decision("case", approval.ID, approve, approval.Confirmation); err != nil {
+					t.Fatal(err)
+				}
+				if err = <-done; err != nil {
+					t.Fatal(err)
+				}
+				content, err := os.ReadFile(target)
+				if approve && (err != nil || string(content) != "new operation\n") || !approve && !os.IsNotExist(err) {
+					t.Fatal("new operation ignored the current approval", approve, err)
+				}
+				if err = store.DB.First(&old, "id = ?", old.ID).Error; err != nil || old.Status != status {
+					t.Fatal("new operation changed an unfinished historical result", err)
+				}
+			})
+		}
 	}
 }
 
@@ -79,7 +131,7 @@ func TestSnapshotReconcilesOnlyExactCompletedTerminalHandle(t *testing.T) {
 	}
 }
 
-func TestBlockedOperationReportsNoDispatchAndCallableRecovery(t *testing.T) {
+func TestDuplicateOperationReportsNoDispatchAndCallableRecovery(t *testing.T) {
 	executions := 0
 	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, func(_ context.Context, _, tool string, _ map[string]any, _ bool) (any, error) {
 		switch tool {
@@ -96,12 +148,18 @@ func TestBlockedOperationReportsNoDispatchAndCallableRecovery(t *testing.T) {
 	c := s.state.Config
 	c.Permissions = &Permissions{SilentCommands: true}
 	store, _ := e.adkStore()
-	row := nativeOperation{ID: "original-change", SessionID: "case", Tool: "shell", Risk: "write", Status: "unknown", Target: "original-host", Handle: "terminal:entry", Result: `{"shell_id":"original-shell"}`, StartedAt: time.Now()}
-	if err := store.DB.Create(&row).Error; err != nil {
+	ctx := context.WithValue(context.Background(), adkToolContextKey{}, true)
+	call := Call{ID: "duplicate-call", Name: "shell", Arguments: `{"command":"rpm -qa"}`}
+	original, err := e.dispatchNativeOperation(ctx, s, c, call, "write", "original-host", "fixture")
+	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := context.WithValue(context.Background(), adkToolContextKey{}, true)
-	if err := e.invokeCalls(ctx, s, &c, []Call{{ID: "blocked-call", Name: "shell", Arguments: `{"command":"rpm -qa"}`}}); err != nil {
+	row := *original
+	row.Status, row.Handle, row.Result = "unknown", "terminal:entry", `{"shell_id":"original-shell"}`
+	if err := store.DB.Save(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := e.invokeCalls(ctx, s, &c, []Call{call}); err != nil {
 		t.Fatal(err)
 	}
 	if executions != 0 {
@@ -114,7 +172,7 @@ func TestBlockedOperationReportsNoDispatchAndCallableRecovery(t *testing.T) {
 	if err := json.Unmarshal([]byte(s.state.History[len(s.state.History)-1].Content), &failure); err != nil {
 		t.Fatal(err)
 	}
-	if failure["outcome"] != "not_executed" || failure["code"] != "unresolved_operation" || failure["retryable"] != false {
+	if failure["outcome"] != "not_executed" || failure["code"] != "duplicate_operation" || failure["retryable"] != false || failure["blocking_operation"] != nil {
 		t.Fatalf("missing actionable refusal: %#v", failure)
 	}
 	recovery := obj(failure["recovery"])
@@ -127,5 +185,12 @@ func TestBlockedOperationReportsNoDispatchAndCallableRecovery(t *testing.T) {
 	}
 	if err := store.DB.First(&row, "id = ?", row.ID).Error; err != nil || row.Status != "unknown" {
 		t.Fatal("refusal/read changed original unknown outcome", err)
+	}
+	call.ID, call.Arguments = "fresh-call", `{"command":"uname -a"}`
+	if err := e.invokeCalls(ctx, s, &c, []Call{call}); err != nil {
+		t.Fatal(err)
+	}
+	if executions != 1 {
+		t.Fatal("old unknown operation blocked a fresh permitted shell call", executions)
 	}
 }
