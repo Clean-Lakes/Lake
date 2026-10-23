@@ -2,6 +2,7 @@
 @import "./settledReply.css";
 @import './operationOutcomes.css';
 @import "./theme.css";
+@import "./contextUsage.css";
 @import "./resourceReferences.css";
 @import "./lakeWaterMotion.css";
 @import "./windowCorners.css";
@@ -902,21 +903,9 @@ a { color: inherit; }
 .ai-context-trigger svg { width: 23px; height: 23px; flex-shrink: 0; transform: rotate(-90deg); fill: none; stroke-width: 2; }
 .ai-context-track { stroke: var(--border); }
 .ai-context-fill { stroke: var(--session-state-color, var(--text-secondary)); stroke-linecap: round; }
-.ai-context-panel .ai-context-budget-warning { color: var(--warning); }
 .ai-context-trigger:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
-.ai-context-panel { position: absolute; z-index: 30; bottom: calc(100% + 9px); right: 0; width: min(330px, calc(100vw - 60px)); padding: 17px 19px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: none; color: var(--text-secondary); }
-.ai-context-panel > strong { display: block; text-align: center; font-size: var(--font-size-ui); }
-.ai-context-window { justify-content: center; align-items: baseline; font-size: 24px; font-weight:var(--font-weight-semibold); margin: 9px 0 16px; }
-.ai-context-window small { font-size: var(--font-size-ui); font-weight:var(--font-weight-ui); }
-.ai-context-panel dl { margin: 0; }
-.ai-context-panel dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 12px; padding: 7px 0; }
-.ai-context-panel dt { color: var(--text-secondary); }
-.ai-context-panel dd { margin: 0; font-variant-numeric: tabular-nums; }
-.ai-context-panel .ai-context-total { margin-top: 7px; padding-top: 12px; border-top: 1px solid var(--border); }
-.ai-context-panel p { font-size: var(--font-size-ui); line-height: 1.6; margin: 11px 0 0; color: var(--text-secondary); }
 @media (max-width: 700px) {
   .composer-status { flex-wrap: wrap; justify-content: flex-end; }
-  .ai-context-panel { right: 0; left: auto; }
 }
 .ai-approval-terminal code { overflow-wrap: anywhere; font-size: 12px; }
 .ai-pending-actions { position: sticky; bottom: -14px; z-index: 1; background: var(--warning-soft); padding: 10px 0 4px; border-top: 1px solid var(--warning-border); }
