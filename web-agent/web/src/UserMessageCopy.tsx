@@ -1,6 +1,5 @@
 import {useEffect,useState} from 'react';
 import {Glyph} from './Icons';
-import './userMessageCopy.css';
 
 export function UserMessageCopy({text}:{text:string}){
  const [state,setState]=useState<'idle'|'copied'|'error'>('idle');
