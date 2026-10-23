@@ -26,4 +26,15 @@ R3 为旧 API 新增可选 assessment；含新结构的写入重试仍由摘要/
 
 ## 验收
 
-回归覆盖 A08/A09：准确版本审核/晋升、伪造字段和跨项目拒绝、公开视图与受限血缘、无自动采用、编辑不换绑定、撤回沿编辑链生效、重启不复活、同来源/同正文拒绝去重、项目归档/恢复、Skill 权限及在途跨项目撤回取消；同时保留迁移回滚、未知调用和原生操作账本回归。详细本地验证 SHA、签名 Dev 与界面结果在完成后追加。不触发手动 CI 或生产发布。
+回归覆盖 A08/A09：准确版本审核/晋升、伪造字段和跨项目拒绝、公开视图与受限血缘、无自动采用、编辑不换绑定、撤回沿编辑链生效、重启不复活、同来源/同正文拒绝去重、项目归档/恢复、Skill 权限及在途跨项目撤回取消；同时保留迁移回滚、未知调用和原生操作账本回归。
+
+代码提交 `ed51284943e04dafb6a0c091bcf115fbb9b90f71`，干净源码签名构建；验收记录提交仅改文档。计数及后端 SHA-256 见 [R3 验收记录](../validation/lake-strategy-user-assets-r3.json)。
+
+- `go test ./...`、`go vet ./...` 与 `python3 scripts/check_adk_runtime_boundary.py` 通过。
+- `go test -race ./internal/ai ./internal/web ./internal/strategy -run '^(TestStrategy|TestOnline|TestSRE|TestMultiAgent)' -count=1 -timeout=8m` 通过；最后补充 Skill 依赖检查后，再运行 `go test -race ./internal/web -run '^(TestStrategy|TestOnline)' -count=1 -timeout=6m` 通过。
+- `web-agent` 中运行 `corepack pnpm check`、`corepack pnpm test:frontend`（423/423）、`corepack pnpm build:web` 通过；保留已有大 bundle 提示。
+- `scripts/run_lake_dev.sh` 签名构建并直接运行，无 ZIP/DMG。全新私有 Home 的 loopback SSE/官方 ADK 演练真实采集两个候选，发出 3 次业务、2 次无工具辅助请求；准确审核晋升后项目 B 实际模型请求含公开正文，不含原私有正文。编辑仍采用旧版，来源撤回后两个晋升版本均不可读；拒绝同来源返回 409、重启额外模型请求 0，两份 SQLite integrity_check 和业务 foreign_key_check 通过。
+- 原生 Dev 检查明暗主题、920×760、共享下拉的方向键/选中/焦点和边缘裁切；审核与晋升确认均以 Escape 返回，不产生写入。晋升预览勾选前按钮禁用，勾选后可进入最终确认。仅用明确标记的临时项目检查表单，随后归档；恢复原项目、浅色主题及窗口尺寸，未改用户已有资产。
+- 固定 `~/.lake-dev` 已运行 R3，schema v5 和权限 0600 的 v4 兼容副本已核实，应用/学习保持开启，在线纠错关闭。无真实供应商验收调用。
+
+未触发手动 CI、生产发布或安装包构建；macOS 结果不代表 Windows 实测，也不证明模型收益。
