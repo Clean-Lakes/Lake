@@ -1,3 +1,4 @@
+import {LakeLogo} from "./LakeLogo";
 import {WelcomePage,WelcomeSidebar} from "./WelcomePage";
 import {useSessionComposerDraft} from "./sessionComposerDrafts";
 import {ScheduledTasks} from "./ScheduledTasks";
@@ -1362,7 +1363,7 @@ function App() {
     }}/>}
     <aside className={`sidebar workspace-navigation ${mobileMenu ? "sidebar-open" : ""} ${bulkMode ? "is-bulk-selecting" : ""}`} aria-label="项目导航" inert={compactNavigation && !mobileMenu} aria-hidden={compactNavigation && !mobileMenu}>
       <div className="sidebar-brand-row">
-        <Brand icon={false}/>
+        <Brand/>
         <div className="sidebar-brand-actions">
           <button type="button" className="icon-button sidebar-search-trigger" aria-label="搜索会话和资源" aria-haspopup="dialog" aria-expanded={navigationSearchOpen} aria-controls={navigationSearchOpen ? "workspace-search-dialog" : undefined} aria-keyshortcuts="Meta+K Control+K" title={`搜索（${/Mac/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}）`} onClick={() => setNavigationSearchOpen(true)}><Glyph name="search" size={18}/></button>
           <button className="icon-button mobile-only" title="关闭导航" aria-label="关闭导航" onClick={() => setMobileMenu(false)}><Glyph name="close"/></button>
@@ -1525,7 +1526,7 @@ function App() {
 }
 
 function Brand({ large = false, icon = true }: { large?: boolean; icon?: boolean }) {
-  return <div className={`brand ${large ? "brand-large" : ""}`}>{icon && <AgentIcon role="lake" size={large ? 32 : 25}/>}<strong>Lake</strong></div>;
+  return <div className={`brand ${large ? "brand-large" : ""}`}>{icon && <LakeLogo size={large ? 40 : 27} decorative/>}<strong>Lake</strong></div>;
 }
 
 function ResourceDetail({ resource, project, sessions, selectedSession, terminalList, disabled, onBack, onNewSession, onSession, onEdit }: {
