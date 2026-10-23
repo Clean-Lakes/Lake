@@ -1,4 +1,5 @@
 .strategy-settings{min-height:0;overflow:auto;padding:16px 24px;flex:1;color:var(--foreground)}
+.strategy-settings .strategy-experimental-note{margin:0 0 14px;line-height:1.65}
 .strategy-settings fieldset{border:1px solid var(--border);border-radius:var(--radius-panel);padding:12px;margin:0 0 14px;min-width:0}
 .strategy-settings legend{font-weight:var(--font-weight-medium);font-size:var(--font-size-ui);padding:0 5px}.strategy-settings .field-label{margin:10px 0}.strategy-settings input,.strategy-settings textarea{max-width:100%}
 .strategy-scope{display:grid;grid-template-columns:minmax(180px,280px) 1fr;gap:18px;align-items:center}
