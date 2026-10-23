@@ -3,13 +3,17 @@ package web
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
+	"github.com/hinshun/vt10x"
 )
 
 func TestShellConnectionFailureIsNotAnUnknownCommand(t *testing.T) {
@@ -56,3 +60,53 @@ func TestShellDispatchBoundaryDoesNotProveLaterErrorsUnexecuted(t *testing.T) {
 		t.Fatal("execution-stage failure incorrectly claimed no dispatch", err)
 	}
 }
+
+// A failed init write must not publish an empty generic error while the reader
+// still owns the final SSH diagnostic. No command has been dispatched here.
+func TestShellStartupInitFailureDrainsFinalDiagnostic(t *testing.T) {
+	b, h := fixture(t)
+	id, ref := newSession(t, h)
+	terminal := b.Store.CreateTerminal(id, ref)
+	l := &liveTerminal{id: stringOf(terminal["id"]), session: id, remote: true,
+		readyMarker: "\x1eLAKE_READY_delayed_fixture\x1f", connected: make(chan struct{}),
+		cmd: &exec.Cmd{}, pty: startupDrainFixtureDevice{}, screen: vt10x.New(vt10x.WithSize(100, 30))}
+	readDone, done, started := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	go func() {
+		close(started)
+		b.Terminals.closeAfterOutput(l, readDone, "Connection initialization failed")
+		close(done)
+	}()
+	defer func() {
+		select {
+		case <-readDone:
+		default:
+			close(readDone)
+		}
+		<-done
+	}()
+	<-started
+	select {
+	case <-l.connected:
+		t.Fatal("startup failure published before the stderr reader finished")
+	case <-time.After(30 * time.Millisecond):
+	}
+	b.Terminals.receive(l, "ssh: connect to host 127.0.0.1 port 1: Connection refused\r\n")
+	close(readDone)
+	<-done
+	l.mu.Lock()
+	err := l.connectErr
+	l.mu.Unlock()
+	if err == nil || !strings.Contains(err.Error(), "SSH 端口拒绝连接") {
+		t.Fatal("final SSH diagnostic was lost")
+	}
+	if len(objects(b.Store.History(id, l.id)["entries"])) != 0 {
+		t.Fatal("failed startup dispatched a command")
+	}
+}
+
+type startupDrainFixtureDevice struct{}
+
+func (startupDrainFixtureDevice) Read([]byte) (int, error)          { return 0, io.EOF }
+func (startupDrainFixtureDevice) Write(b []byte) (int, error)       { return len(b), nil }
+func (startupDrainFixtureDevice) WriteString(s string) (int, error) { return len(s), nil }
+func (startupDrainFixtureDevice) Close() error                      { return nil }
