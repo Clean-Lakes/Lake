@@ -1,0 +1,31 @@
+/* Keep first-use content quiet, readable and consistent with native panels. */
+.workspace.is-welcome { container:welcome-workspace / inline-size; }
+.workspace.is-welcome > .workspace-header { border-bottom-color:transparent; background:transparent; }
+.workspace.is-welcome > .workspace-header .breadcrumbs { display:none; }
+.lake-brand-logo { display:block; flex:none; object-fit:contain; border-radius:24%; corner-shape:var(--corner-window); }
+.welcome-start { --welcome-muted:color-mix(in srgb,var(--foreground) 62%,var(--background)); flex:1 0 auto; display:flex; align-items:center; justify-content:center; padding:56px 32px 104px; }
+.welcome-start-inner { width:100%; max-width:424px; min-width:0; }
+.welcome-intro { display:flex; flex-direction:column; align-items:center; text-align:center; }
+.welcome-intro > .lake-brand-logo { box-shadow:0 5px 18px -10px color-mix(in srgb,var(--foreground) 24%,transparent); }
+.welcome-intro h1 { margin:24px 0 0; color:var(--foreground); font-size:30px; line-height:1.4; font-weight:var(--font-weight-semibold); letter-spacing:-.7px; }
+.welcome-intro p { max-width:100%; margin:12px 0 0; color:var(--welcome-muted); font-size:14px; line-height:1.8; font-weight:var(--font-weight-normal); overflow-wrap:anywhere; }
+.welcome-setup-actions { margin-top:34px; border:1px solid var(--border); border-radius:var(--radius-settings-panel); corner-shape:var(--corner-window); overflow:hidden; background:var(--surface); }
+.welcome-setup-row { display:flex; align-items:center; gap:15px; width:100%; min-height:88px; padding:20px 22px; border:0; background:transparent; color:var(--foreground); text-align:left; font:inherit; cursor:pointer; }
+.welcome-setup-row + .welcome-setup-row { border-top:1px solid var(--border); }
+.welcome-setup-row:hover:not(:disabled) { background:var(--surface-subtle); }
+.welcome-setup-row:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-3px; border-radius:12px; }
+.welcome-setup-row:disabled { opacity:.5; cursor:default; }
+.welcome-row-icon { display:grid; place-items:center; width:26px; flex:none; color:var(--text-secondary); }
+.welcome-row-copy { display:flex; flex-direction:column; gap:7px; flex:1; min-width:0; }
+.welcome-row-copy > strong { color:var(--foreground); font-size:14px; font-weight:var(--font-weight-medium); }
+.welcome-row-copy > span { color:var(--welcome-muted); font-size:12px; line-height:1.6; font-weight:var(--font-weight-normal); overflow-wrap:anywhere; }
+.welcome-row-arrow { flex:none; color:var(--text-secondary); }
+.welcome-row-state { display:inline-flex; align-items:center; gap:4px; flex:none; color:var(--success); font-size:11px; font-weight:var(--font-weight-normal); }
+.welcome-start-note { margin:21px 0 0; color:var(--text-secondary); text-align:center; font-size:12px; line-height:1.8; font-weight:var(--font-weight-normal); }
+.welcome-sidebar { padding:18px 16px; color:var(--text-secondary); }
+.welcome-sidebar-heading { display:flex; align-items:center; justify-content:space-between; font-size:12px; }
+.welcome-sidebar-heading > button { width:26px; height:26px; }
+.welcome-sidebar p { margin:28px 0 8px; font-size:12px; font-weight:var(--font-weight-normal); }
+.welcome-sidebar small { display:block; font-size:11px; line-height:1.8; font-weight:var(--font-weight-normal); }
+@container welcome-workspace (max-width:520px) { .welcome-start { padding:38px 24px 72px; } .welcome-intro h1 { font-size:27px; } .welcome-setup-row { padding:19px 17px; gap:12px; } }
+@media(max-height:620px) { .welcome-start { align-items:flex-start; padding-top:32px; padding-bottom:40px; } .welcome-intro > .lake-brand-logo { width:64px; height:64px; } .welcome-intro h1 { margin-top:18px; } .welcome-setup-actions { margin-top:26px; } }
