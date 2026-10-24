@@ -32,7 +32,7 @@ func (t *Terminals) InterruptCommand(origin, tid, generation, eid string) {
 func stoppedCommandObservation(entry Object) Object {
 	if stringOf(entry["stopRequestedAt"]) != "" {
 		entry["userStopped"] = true
-		entry["notice"] = "用户已请求终止这条 SSH 命令；不代表执行成功，不要自动重试该命令。其他资源的操作继续按原计划进行。"
+		entry["notice"] = "用户已请求终止这条终端命令；不代表执行成功，不要自动重试该命令。其他资源的操作继续按原计划进行。"
 	}
 	return entry
 }

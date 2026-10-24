@@ -1,7 +1,7 @@
 import type {AICard, TerminalEntry, TerminalHistory, TerminalSession} from '../../shared/contracts';
 
 export type MiniBoxScope = {session:string;terminals:TerminalSession[];startedAt:string;endedAt?:string;live:boolean;waiting?:boolean;connected:boolean};
-export const isSSHCommand = (card:AICard) => ['shell','terminal_execute_command'].includes(card.title ?? '');
+export const isTerminalCommand = (card:AICard) => ['shell','terminal_execute_command'].includes(card.title ?? '');
 
 export function miniEntries(history:TerminalHistory,scope:MiniBoxScope,resource:string) {
   if(history.terminal.resourceId!==resource || !history.terminal.generation)return [];

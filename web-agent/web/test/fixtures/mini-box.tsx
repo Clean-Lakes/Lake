@@ -11,9 +11,9 @@ const params=new URLSearchParams(location.search);
 if(params.get('theme')==='dark')document.documentElement.dataset.theme='dark';
 let session='mini-box',status='running',revision=1,broken=false,denied=false;
 const started=new Date(Date.now()-10000).toISOString();
-const resources=[{id:'host-a',projectId:'p',name:'192.0.2.2',kind:'ssh'},{id:'host-b',projectId:'p',name:'192.0.2.3',kind:'ssh'}] as Resource[];
+const resources=[{id:'host-a',projectId:'p',name:params.has('local')?'Local machine':'192.0.2.2',kind:params.has('local')?'local':'ssh'},{id:'host-b',projectId:'p',name:'192.0.2.3',kind:'ssh'}] as Resource[];
 const terminals=resources.map((resource,i)=>({id:'terminal-'+i,sessionId:'mini-box',resourceId:resource.id,generation:'generation-'+i,status:'busy',holder:'agent',writerSessionId:'mini-box',createdAt:started})) as TerminalSession[];
-const entries=terminals.map((terminal,i)=>({id:'entry-'+i,terminalId:terminal.id,generation:terminal.generation,actor:'agent',originSessionId:'mini-box',command:i?'find /srv -maxdepth 2 -type f':'kubectl get pods -n demo',output:i?'/srv/app/config.yaml\r\n':'NAME           READY   STATUS\r\ndemo-api       1/1     Running\r\n',status:'running',exitCode:null,startedAt:started,createdAt:started,finishedAt:null,cwd:'/srv'})) as TerminalEntry[];
+const entries=terminals.map((terminal,i)=>({id:'entry-'+i,terminalId:terminal.id,generation:terminal.generation,actor:'agent',originSessionId:'mini-box',command:i?'find /srv -maxdepth 2 -type f':params.has('local')?'for i in 1 2 3 4 5; do printf "local step %s\\n" "$i"; sleep 1; done':'kubectl get pods -n demo',output:i?'/srv/app/config.yaml\r\n':params.has('local')?'local step 1\r\n':'NAME           READY   STATUS\r\ndemo-api       1/1     Running\r\n',status:'running',exitCode:null,startedAt:started,createdAt:started,finishedAt:null,cwd:'/srv'})) as TerminalEntry[];
 const notices:CommandStopNotice[]=[];
 const proof=document.createElement('output');proof.id='mini-box-proof';proof.hidden=true;document.body.appendChild(proof);
 const requests:Array<{path:string;method:string;body?:unknown}>=[];
@@ -42,7 +42,7 @@ window.fetch=async(input,init)=>{
 function Fixture(){
  const [,render]=useState(0);
  useEffect(()=>{const timer=setInterval(()=>{
-  entries.forEach((entry,i)=>{if(entry.status==='running')entry.output+=i?`/srv/app/file-${revision}.txt\r\n`:`demo-worker-${revision}  1/1  Running\r\n`;});revision++;
+  entries.forEach((entry,i)=>{if(entry.status==='running')entry.output+=i?`/srv/app/file-${revision}.txt\r\n`:params.has('local')?`local step ${revision}\r\n`:`demo-worker-${revision}  1/1  Running\r\n`;});revision++;
   proof.textContent=JSON.stringify({requests,entries,notices,status,session});render(value=>value+1);
  },400);return()=>clearInterval(timer);},[]);
  const cards=entries.map((entry,i)=>({id:'call-'+i,type:'operation',title:'shell',status:entry.stopRequestedAt?'interrupted':entry.status,at:started,data:{resource_id:resources[i]!.id,target:resources[i]!.name,arguments:{command:entry.command}}})) as AICard[];

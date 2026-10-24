@@ -10,7 +10,8 @@ import {MiniBoxParticles} from './MiniBoxParticles';
 const TerminalPane=lazy(()=>import('./TerminalPane').then(module=>({default:module.TerminalPane})));
 
 const observeOnly=()=>{};
-export function MiniBox({scope,resource,cards,onInspect}:{scope:MiniBoxScope;resource:string;cards:AICard[];onInspect?:()=>void}) {
+export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScope;resource:string;kind:'local'|'ssh';cards:AICard[];onInspect?:()=>void}) {
+  const protocol=kind==='local'?'本机':'SSH';
   const {histories,stale,refresh}=useMiniBox(scope,resource);
   const target=miniTarget(histories);
   const [open,setOpen]=useState(true),[pending,setPending]=useState(''),[error,setError]=useState('');
@@ -31,10 +32,10 @@ export function MiniBox({scope,resource,cards,onInspect}:{scope:MiniBoxScope;res
     catch{setError('终止未确认，请核查当前命令状态。');setPending('');refresh();}
   }
   return <div className="mini-box-container">
-    <section className={`mini-box${active?' is-operating':''}${open?'':' is-collapsed'}`} aria-label="Mini Box SSH 命令终端">
+    <section className={`mini-box${active?' is-operating':''}${open?'':' is-collapsed'}`} aria-label={`Mini Box ${protocol} 命令终端`}>
       <span className="mini-box-material" aria-hidden="true"/>
       {active&&<MiniBoxParticles/>}
-      <header className="mini-box-header"><Glyph name="terminal" size={15}/><span className="mini-box-title">执行命令</span><small className="mini-box-protocol">SSH</small>
+      <header className="mini-box-header"><Glyph name="terminal" size={15}/><span className="mini-box-title">执行命令</span><small className="mini-box-protocol">{protocol}</small>
         <span className={`mini-box-status${active?' is-active':''}`} role="status"><i aria-hidden="true"/><span>{status}</span></span>
         <button type="button" className="mini-box-stop" disabled={!canStop} title="只终止此资源当前命令，其他资源继续" onClick={()=>void stop()}><Glyph name="stop" size={11}/>终止</button>
         <button type="button" className="mini-box-toggle" aria-label={open?'收起 mini 终端':'展开 mini 终端'} aria-expanded={open} onClick={()=>{setOpen(!open);onInspect?.();}}><Glyph name="chevron" size={13}/></button>
