@@ -85,7 +85,6 @@ import './fileOperationApproval.css';
 import './operationApproval.css';
 import "./messageMentions.css";
 import "./agentTasks.css";
-import "./statusText.css";
 import "./floatingHeader.css";
 import "./workbenchLayout.js";
 

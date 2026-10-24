@@ -68,7 +68,7 @@ Element.prototype.animate=function(keyframes,options){
 const descriptor=Object.getOwnPropertyDescriptor(Element.prototype,'scrollTop')!;
 Object.defineProperty(Element.prototype,'scrollTop',{...descriptor,get:descriptor.get,set(value:number){if(this.classList.contains('conversation'))metrics.scrollWrites++;descriptor.set!.call(this,value)}});
 document.addEventListener('animationstart',event=>{if((event.target as Element).matches('.conversation-progress-action > span'))metrics.actionAnimations++});
-document.addEventListener('animationstart',event=>{if((event as AnimationEvent).animationName==='execution-text-sweep')metrics.executionAnimations++;if((event as AnimationEvent).animationName==='reply-arrival'){metrics.replyAnimations++;const row=event.target as HTMLElement;lineArrivals.push({kind:row.querySelector('.thinking-timeline')?'action':'reply',duration:360})}});
+document.addEventListener('animationstart',event=>{if((event as AnimationEvent).animationName==='status-text-sweep'&&(event.target as Element).matches('.thinking-label'))metrics.executionAnimations++;if((event as AnimationEvent).animationName==='reply-arrival'){metrics.replyAnimations++;const row=event.target as HTMLElement;lineArrivals.push({kind:row.querySelector('.thinking-timeline')?'action':'reply',duration:360})}});
 document.addEventListener('scroll',event=>{if((event.target as Element).classList?.contains('conversation'))metrics.scrollEvents++},true);
 window.addEventListener('error',()=>metrics.errors++);
 createRoot(document.getElementById('root')!).render(<App/>);
@@ -79,7 +79,7 @@ let motionNodeId=0,motionAnimationId=0;
 function readMotion(selector:string){return [...document.querySelectorAll(selector)].map(node=>{
  if(!motionNodes.has(node))motionNodes.set(node,++motionNodeId);
  const style=getComputedStyle(node);
- return {nodeId:motionNodes.get(node),text:node.textContent,name:style.animationName,phase:style.backgroundPosition,fill:style.webkitTextFillColor,animations:node.getAnimations().map(animation=>{
+ return {nodeId:motionNodes.get(node),text:node.textContent,name:style.animationName,phase:style.backgroundPosition,fill:style.webkitTextFillColor,animations:node.getAnimations().filter(animation=>'animationName' in animation).map(animation=>{
   if(!motionAnimations.has(animation))motionAnimations.set(animation,++motionAnimationId);
   return {id:motionAnimations.get(animation),state:animation.playState,start:animation.startTime,time:animation.currentTime};
  })};
@@ -131,6 +131,8 @@ const update=()=>{
 let index=0,tick=112;
 document.getElementById('reset-metrics')!.onclick=()=>{lineArrivals.length=motionSamples.length=0;metrics.executionAnimations=metrics.rowReplacements=metrics.rowRemovals=metrics.rowPositionChanges=metrics.rowColorChanges=0;metrics.actionReplacements=metrics.historyReplacements=metrics.actionAnimations=metrics.replyAnimations=metrics.replyReplacements=metrics.scrollWrites=metrics.scrollEvents=metrics.scrollChanges=metrics.heightChanges=metrics.updates=0};
 document.getElementById('update-line')!.onclick=()=>{state.ai!.cards.find(card=>card.id==='note')!.content=`第 ${++index} 次核对演示服务与运行记录，保留本轮原始证据。`;update()};
+document.getElementById('wait-approval')!.onclick=()=>{state.ai!.status='waiting_approval';update()};
+document.getElementById('resume-motion')!.onclick=()=>{state.ai!.status='running';update()};
 document.getElementById('finish-tool')!.onclick=()=>{state.ai!.cards.filter(card=>card.type==='operation'||card.type==='shell').forEach(card=>{if(card.status==='running')card.status='completed'});update()};
 document.getElementById('fail-tool')!.onclick=()=>{const tool=state.ai!.cards.filter(card=>card.type==='operation'||card.type==='shell').at(-1)!;tool.status='failed';tool.content='演示失败：原始错误记录保留';update()};
 document.getElementById('next-reasoning')!.onclick=()=>{state.ai!.cards.filter(card=>card.type==='thinking'||card.type==='operation'||card.type==='shell').forEach(card=>{if(card.status==='running')card.status='completed'});state.ai!.cards.push({id:`reasoning-${++tick}`,type:'thinking',status:'running',at:stamp(tick),content:'继续比对演示主机的进程与连接，保留原始思考记录。'});update()};
