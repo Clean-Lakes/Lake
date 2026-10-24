@@ -8,5 +8,9 @@
 .settled-reply:not(.is-archived) > .settled-reply-content { min-height: min-content; }
 .settled-reply.is-archived { grid-template-rows: 0fr; opacity: 0; margin-block-start: calc(-1 * var(--turn-entry-gap, 12px)); pointer-events: none; }
 .settled-reply.is-archived .settled-reply-content { overflow: hidden; }
+.settled-reply.is-awaiting-reply { display:none; }
+.settled-reply.is-presenting-reply { animation:reply-handoff-in 240ms cubic-bezier(.22,1,.36,1) both; }
+.settled-reply.is-presenting-reply > .settled-reply-content { min-height:0; overflow:hidden; }
+@keyframes reply-handoff-in { from { grid-template-rows:0fr; opacity:0; transform:translateY(6px); } to { grid-template-rows:1fr; opacity:1; transform:translateY(0); } }
 .turn-progress-prose > .ai-response { margin-block: 12px; }
-@media (prefers-reduced-motion: reduce) { .settled-reply { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .settled-reply { transition: none; animation:none; } }
