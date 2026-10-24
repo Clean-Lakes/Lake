@@ -81,6 +81,7 @@ func (b *Server) sessionSnapshot(id string) Object {
 	snap["conversationMode"] = b.conversationMode(id)
 	snap["aiBinding"] = Object{"terminalId": opts["terminal_id"], "generation": opts["terminal_generation"]}
 	snap["terminals"] = own
+	snap["commandStopNotices"] = b.Store.commandStopNotices(id)
 	snap["sre"] = b.sreSnapshot(id)
 	return snap
 }

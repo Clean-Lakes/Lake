@@ -661,6 +661,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		if resource["kind"] != runtime || !set("local ssh")[runtime] {
 			return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("Shell runtime and asset do not match")}
 		}
+		b.Store.assertCommandNotStopped(id, ref, stringOf(args["command"]))
 		term := b.hostTerminal(ctx, id, ref, approved, explicitTerminal)
 		options := b.Store.Options(id)
 		if options["asset_ref"] == ref || approved && stringOf(options["asset_ref"]) == "" {
@@ -757,7 +758,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		entry := b.Store.Entry(b.terminalOwner(id, tid, false), tid, stringOf(args["entry_id"]))
 		entry["output"] = tail(stringOf(entry["output"]), 16000)
 		entry["partial"] = entry["status"] == "running"
-		return entry, nil
+		return stoppedCommandObservation(entry), nil
 	}
 	observed := Object{}
 	read := func() string {
@@ -782,6 +783,9 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		b.Terminals.Close(id, tid)
 		return Object{"closed": true}, nil
 	case "terminal_execute_command":
+		commandMayHaveStarted = false
+		b.Store.assertCommandNotStopped(id, stringOf(target["resourceId"]), stringOf(args["command"]))
+		commandMayHaveStarted = true
 		if b.Terminals.Capabilities(id, tid)["commandBlocks"] != true {
 			return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("Terminal command-block integration unavailable")}
 		}

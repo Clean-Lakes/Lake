@@ -1,8 +1,10 @@
 import type {ProgressResource} from './conversation-progress-model';
+import {MiniBox} from './MiniBox';
+import {isTerminalCommand,type MiniBoxScope} from './miniBoxModel';
 import {ExecutionDetailsOpen} from './TurnExecutionDetails';
 import {ExecutionIcon} from './ExecutionIcon';
 import {DisclosureSummary} from './DisclosureSummary';
-import { memo, useContext, useState, type ReactNode } from "react";
+import { memo, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AICard } from "../../shared/contracts";
@@ -30,11 +32,20 @@ export const ReasonStep = memo(function ReasonStep({card}: {card: AICard}) {
   return card.content ? <li className="thinking-step thinking-reason"><span className="thinking-step-marker"><i/></span><div className="thinking-prose"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={{a: props => <a {...props} target="_blank" rel="noopener noreferrer"/>}}>{card.content}</Markdown></div></li> : null;
 }, (a, b) => sameCard(a.card, b.card));
 
-export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, onInspect, resourceRow=false, continuing=false, resource, stage }: { cards: AICard[]; live: boolean; onInspect?: () => void; resourceRow?:boolean; continuing?:boolean; resource?:ProgressResource; stage?:ReactNode }) {
+export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, onInspect, resourceRow=false, continuing=false, resource, stage,miniScope }: { cards: AICard[]; live: boolean; onInspect?: () => void; resourceRow?:boolean; continuing?:boolean; resource?:ProgressResource; stage?:ReactNode;miniScope?:MiniBoxScope }) {
   // A compact current-action line stays closed until the user requests details.
   const disclosureOpen=useContext(ExecutionDetailsOpen);
+  const terminalKind=resource?.kind==='ssh'||resource?.kind==='local'?resource.kind:undefined;
+  const miniCards=terminalKind&&resource?.id&&miniScope?cards.filter(isTerminalCommand):[];
   const [open, setOpen] = useState(!resourceRow&&disclosureOpen);
+  const inspected=useRef(false),autoOpened=useRef(false);
+  useEffect(()=>{
+    if(!autoOpened.current&&!inspected.current&&live&&miniCards.length) {
+      autoOpened.current=true;setOpen(true);
+    }
+  },[live,miniCards.length]);
   const [rawOpen, setRawOpen] = useState(false);
+  const [commandsOpen,setCommandsOpen]=useState(false);
   const tools = cards.filter(card => card.type !== "thinking");
   const thoughts = cards.filter(card => card.type === "thinking" && card.content);
   const attention=tools.find(card=>!['running','completed','succeeded','success'].includes(card.status));
@@ -53,13 +64,13 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
   const label = [description,state].filter(Boolean).join(' · ');
   const panelId = `thinking-${cards[0]!.id}`;
   return <section className={`thinking-timeline ${resourceRow ? "is-resource-row" : ""} ${live ? "is-live" : ""} ${executing ? "is-executing" : ""} ${progressing ? "is-continuing" : ""}`} aria-label="思考与操作过程">
-    <button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => { onInspect?.(); setOpen(!open); }}>
+    <button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => { inspected.current=true;onInspect?.(); setOpen(!open); }}>
       <span className="thinking-process-icon"><ExecutionIcon card={currentTool} active={iconActive} resourceKind={resource?.kind}/></span><span className="thinking-label">{label}</span>{resourceRow&&tools.length>1&&<small className="thinking-operation-count">{tools.length} 项</small>}<svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
     </button>
     {stage}
     {open && <div className="thinking-detail-panel" id={panelId}>
-      {tools.length > 0 && <ol className="thinking-steps">{tools.map(card => <ToolStep card={card} key={card.id} active={iconActive&&currentTool?.id===card.id} hideTarget={!!resource} onInspect={onInspect}/>)}</ol>}
+      {tools.length > 0 && <ol className="thinking-steps">{tools.map(card => miniCards.includes(card)?card.id===miniCards[0]!.id?<li className="thinking-step thinking-tool" key={card.id}><span className="thinking-step-marker"><ExecutionIcon card={card} size={20}/></span><MiniBox scope={miniScope!} resource={resource!.id!} kind={terminalKind!} cards={miniCards} onInspect={onInspect}/><details className="mini-box-audit" onToggle={event=>setCommandsOpen(event.currentTarget.open)}><DisclosureSummary>原始命令记录 · {miniCards.length}</DisclosureSummary>{commandsOpen&&<ol className="thinking-steps">{miniCards.map(item=><ToolStep card={item} key={item.id} hideTarget onInspect={onInspect}/>)}</ol>}</details></li>:null:<ToolStep card={card} key={card.id} active={iconActive&&currentTool?.id===card.id} hideTarget={!!resource} onInspect={onInspect}/>)}</ol>}
       {thoughts.length > 0 && <details className="thinking-raw-records" onToggle={event => setRawOpen(event.currentTarget.open)}><DisclosureSummary>原始思考记录</DisclosureSummary>{rawOpen && <ol className="thinking-steps">{thoughts.map(card => <ReasonStep card={card} key={card.id}/>)}</ol>}</details>}
     </div>}
   </section>;
-}, (a, b) => a.stage === b.stage && a.resource?.id === b.resource?.id && a.resource?.name === b.resource?.name && a.resource?.kind === b.resource?.kind && a.resourceRow === b.resourceRow && a.continuing === b.continuing && a.live === b.live && a.onInspect === b.onInspect && a.cards.length === b.cards.length && a.cards.every((card, i) => sameCard(card, b.cards[i]!)));
+}, (a, b) => a.miniScope === b.miniScope && a.stage === b.stage && a.resource?.id === b.resource?.id && a.resource?.name === b.resource?.name && a.resource?.kind === b.resource?.kind && a.resourceRow === b.resourceRow && a.continuing === b.continuing && a.live === b.live && a.onInspect === b.onInspect && a.cards.length === b.cards.length && a.cards.every((card, i) => sameCard(card, b.cards[i]!)));

@@ -1033,6 +1033,10 @@ func (b *Server) terminalRoute(w http.ResponseWriter, r *http.Request, id, tid, 
 		b.Terminals.Interrupt(id, tid)
 		reply(w, 202, Object{"interrupted": true})
 		return
+	case "interrupt-command":
+		b.Terminals.InterruptCommand(id, tid, text(data["generation"], "generation", 100), text(data["entryId"], "entryId", 100))
+		reply(w, 202, Object{"stopRequested": true})
+		return
 	case "commands":
 		if data["actor"] != "user" && data["actor"] != "agent" {
 			fail(400, "actor must be user or agent")

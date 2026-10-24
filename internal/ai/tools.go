@@ -358,6 +358,9 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 					card.Content = redact(err.Error(), c)
 				} else {
 					card.Content = redact(js(result), c)
+					if str(obj(result)["stopRequestedAt"]) != "" {
+						card.Status = "interrupted"
+					}
 					if len(card.Content) > 32000 {
 						card.Content = card.Content[:32000] + " [TRUNCATED]"
 					}

@@ -149,6 +149,7 @@ export type TerminalSession = {
 };
 
 export type TerminalEntry = {
+  stopRequestedAt?: string | null;
   status: "running" | "completed" | "unknown"; generation: string; cwd: string | null; startedAt: string | null; finishedAt: string | null; originSessionId: string | null;
   id: string;
   terminalId: string;
@@ -176,6 +177,7 @@ export type SendMessageResult = {queued?: boolean; queuedMessageId?: string; mes
 export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;status:"running" | "completed" | "cancelled" | "failed" | "interrupted"};
 
 export type SessionSnapshot = {
+  commandStopNotices?: CommandStopNotice[];
  conversationMode?: ConversationMode;
 	sre?:SRESnapshot;
  replyTimings?:ReplyTiming[];
@@ -193,6 +195,8 @@ export type SessionSnapshot = {
   ai?: AIView;
   hostKeyTrust?: SSHHostKeyTrust | null;
 };
+
+export type CommandStopNotice = {entryId:string;terminalId:string;resourceId:string;resourceName:string;requestedAt:string;status:string;exitCode:number|null;finishedAt:string|null};
 
 export type ResourceTreeNode = { id: string; projectId: string; parentId: string | null; kind: "folder" | "resource"; name: string; resourceId: string | null; position: number; builtin?: boolean };
 
