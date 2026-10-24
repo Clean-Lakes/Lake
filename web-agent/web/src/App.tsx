@@ -68,6 +68,9 @@ import { uniqueTerminalRows } from "./terminalAIState";
 import { TerminalPane, type TerminalHandle } from "./TerminalPane";
 import { TerminalInputQueue } from "./terminalInputQueue";
 import { TerminalSidePanel } from "./TerminalSidePanel";
+import {SSHExecutionGlow, SSHExecutionPanel} from './SSHExecutionPanel';
+import {useSSHExecution} from './useSSHExecution';
+import {executionIsActive} from './sshExecution';
 import { reusableResourceTerminal, onlineTerminalOptions, panelTerminalSessions, ResourceTerminalConnections } from "./resourceTerminalState";
 import { ResourceTree } from "./ResourceTree";
 import { WorkspaceSearch } from "./WorkspaceSearch";
@@ -723,6 +726,16 @@ function App() {
     return () => clearTimeout(timer);
   }, [sessionId, !!activeSnapshot, visibleSessionError]);
   const sessionConnected = connected && !!activeSnapshot && !!selectedSession;
+  const sshExecution = useSSHExecution(route.resourceId || isPlansPage ? null : activeSnapshot, sessionConnected, terminalRevision);
+  const [dismissedSSHExecution, setDismissedSSHExecution] = useState('');
+  const [openedSSHExecution, setOpenedSSHExecution] = useState('');
+  const liveSSHExecution = ['running','waiting_approval'].includes(activeSnapshot?.ai?.status ?? '');
+  useEffect(() => {
+    if (sshExecution.history && liveSSHExecution) setOpenedSSHExecution(sshExecution.key);
+  }, [!!sshExecution.history, sshExecution.key, liveSSHExecution]);
+  const showSSHExecution = !!sshExecution.history && (liveSSHExecution || openedSSHExecution === sshExecution.key) && dismissedSSHExecution !== sshExecution.key && !terminalOpen;
+  const terminalPanelOpen = terminalOpen || showSSHExecution;
+  const sshOperating = showSSHExecution && !sshExecution.stale && executionIsActive(sshExecution.history, activeSnapshot?.ai?.status, sessionConnected);
   const modelConfigured = bootstrap?.modelConfigured === true;
   const persistentMode = bootstrap?.terminalMode === "pty";
   const terminalConnected = terminalContext ? !!bootstrap && !!catalog && resourceTerminalConnected : sessionConnected;
@@ -794,7 +807,7 @@ function App() {
 
   useLayoutEffect(() => {
     conversationFollower.current?.request();
-  }, [activeSnapshot?.cursor, terminalOpen]);
+  }, [activeSnapshot?.cursor, terminalPanelOpen]);
 
   const refreshCatalog = useCallback(async (signal?: AbortSignal) => {
     const data = await api.catalog(signal);
@@ -1107,6 +1120,7 @@ function App() {
   async function openTerminalFor(resourceId: string, forceNew = false) {
     const resource = resourceMap.get(resourceId);
     if (!resource || !bootstrap || !catalog || pendingOperation || !persistentMode) return;
+    setDismissedSSHExecution(sshExecution.key);
     setResourceTerminalMenu(null);
     setTerminalOpeningResource(resourceId);
     setTerminalError(""); setCommandDraft(""); setCommandError(""); setConfirmedCommand(null);
@@ -1350,7 +1364,8 @@ function App() {
     </div>
   </section>;
 
-  return <div className={`app-shell ${terminalOpen ? "terminal-is-open" : ""}`}>
+  return <div className={`app-shell ${terminalPanelOpen ? "terminal-is-open" : ""}`}>
+    <SSHExecutionGlow active={sshOperating}/>
     {scheduleProject&&<ScheduledTasks key={scheduleProject.id} project={scheduleProject} onClose={()=>setScheduleProject(null)} onOpenSession={async id=>{await refreshCatalog();setScheduleProject(null);navigate({sessionId:id,resourceId:null});}}/>}
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
@@ -1443,6 +1458,7 @@ function App() {
         {selectedSession && !selectedResource && !isPlansPage && <HeaderSweep key={selectedSession.id} active={currentSessionStatus === "investigating"}/>}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
         <div className="breadcrumbs"><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span><strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/><span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong>{selectedSession && !selectedResource && <SessionStateBadge session={selectedSession} {...currentSessionPresentation}/>}</div>
+        {!!sshExecution.history && !showSSHExecution && <button type="button" className="icon-button" aria-label="查看 Lake SSH 执行终端" title="查看 Lake 执行的命令与实时输出" onClick={() => { setTerminalOpen(false); setOpenedSSHExecution(sshExecution.key); setDismissedSSHExecution(''); }}><Glyph name="terminal" size={17}/></button>}
       </header>
 
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}
@@ -1492,7 +1508,7 @@ function App() {
       {label: "新建终端", disabled: !!pendingOperation || connectingResources.includes(terminalTabContext.terminal.resourceId), run: () => { void openTerminalFor(terminalTabContext.terminal.resourceId, true); }},
       {label: "关闭终端", disabled: !!pendingOperation, run: () => { void closeTerminalTab(terminalTabContext.terminal); }},
     ]}/>}
-    <TerminalSidePanel open={terminalOpen} onClose={closeTerminalPanel} onOpen={() => { revealActiveTerminalTab(); if (!commandBusy && currentTerminal?.holder === "user" && currentTerminal.status === "ready") terminalControlRef.current?.focus(); }}>{terminalDrawer}</TerminalSidePanel>
+    <TerminalSidePanel open={terminalPanelOpen} onClose={() => { if (showSSHExecution) { setDismissedSSHExecution(sshExecution.key); messageInputRef.current?.focus({preventScroll:true}); } else closeTerminalPanel(); }} onOpen={() => { if (showSSHExecution) return; revealActiveTerminalTab(); if (!commandBusy && currentTerminal?.holder === "user" && currentTerminal.status === "ready") terminalControlRef.current?.focus(); }}><div className="terminal-panel-view" hidden={showSSHExecution}>{terminalDrawer}</div>{showSSHExecution && <SSHExecutionPanel key={sshExecution.key} histories={sshExecution.histories} resources={activeSnapshot?.resources ?? []} status={activeSnapshot?.ai?.status} stale={sshExecution.stale} onClose={() => { setDismissedSSHExecution(sshExecution.key); messageInputRef.current?.focus({preventScroll:true}); }}/>}</TerminalSidePanel>
     {commandEditorOpen && <div className="modal-scrim"><section className="modal" role="dialog" aria-modal="true" aria-label="运行完整命令"><div className="modal-header"><h2>运行完整命令</h2><button type="button" className="icon-button" aria-label="关闭命令输入" onClick={() => setCommandEditorOpen(false)}><Glyph name="close"/></button></div><form className="command-form" onSubmit={reviewCommand}><label htmlFor="command-input">发送到 {resourceLabel(terminalResource)} 的命令</label><div className="command-input-row"><textarea ref={commandInputRef} id="command-input" rows={2} spellCheck={false} placeholder="输入单行命令，Enter 执行" value={commandDraft} onChange={event => { setCommandDraft(event.target.value); setCommandError(""); }} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} disabled={!terminalConnected || !persistentMode || currentTerminal?.holder !== "user" || currentTerminal.status !== "ready" || commandBusy}/><button type="submit" className="button command-button" disabled={!commandDraft.trim() || !terminalConnected || !persistentMode || currentTerminal?.holder !== "user" || currentTerminal.status !== "ready" || commandBusy}>执行<Glyph name="arrow" size={15}/></button></div>{commandError && <p className="form-error" role="alert">{commandError}</p>}<p>只读命令直接执行，变更命令需确认。运行交互程序时，可在上方终端输入按键。{currentTerminal?.holder !== "user" && currentTerminal?.status === "ready" ? "请先接管输入。" : ""}{currentTerminal?.status === "unknown" ? "执行结果不明，请先核查，避免重复提交。" : ""}</p></form></section></div>}
     {terminalContext && resourceTerminalSnapshot?.hostKeyTrust && <HostKeyTrust session={terminalContext.sessionId} prompt={resourceTerminalSnapshot.hostKeyTrust} disabled={!terminalConnected} refresh={refreshResourceTerminal}/>}
     {activeSnapshot?.hostKeyTrust && (!terminalContext || terminalContext.sessionId !== activeSnapshot.session.id) && <HostKeyTrust session={activeSnapshot.session.id} prompt={activeSnapshot.hostKeyTrust} disabled={!sessionConnected} refresh={refreshCurrent}/>}
