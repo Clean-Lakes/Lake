@@ -4,7 +4,7 @@ import {isTerminalCommand,type MiniBoxScope} from './miniBoxModel';
 import {ExecutionDetailsOpen} from './TurnExecutionDetails';
 import {ExecutionIcon} from './ExecutionIcon';
 import {DisclosureSummary} from './DisclosureSummary';
-import { memo, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useContext, useRef, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AICard } from "../../shared/contracts";
@@ -33,17 +33,15 @@ export const ReasonStep = memo(function ReasonStep({card}: {card: AICard}) {
 }, (a, b) => sameCard(a.card, b.card));
 
 export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, onInspect, resourceRow=false, continuing=false, resource, stage,miniScope }: { cards: AICard[]; live: boolean; onInspect?: () => void; resourceRow?:boolean; continuing?:boolean; resource?:ProgressResource; stage?:ReactNode;miniScope?:MiniBoxScope }) {
-  // A compact current-action line stays closed until the user requests details.
+  // Host command previews open in the dispatch render, before history arrives.
   const disclosureOpen=useContext(ExecutionDetailsOpen);
   const terminalKind=resource?.kind==='ssh'||resource?.kind==='local'?resource.kind:undefined;
   const miniCards=terminalKind&&resource?.id&&miniScope?cards.filter(isTerminalCommand):[];
   const [open, setOpen] = useState(!resourceRow&&disclosureOpen);
   const inspected=useRef(false),autoOpened=useRef(false);
-  useEffect(()=>{
-    if(!autoOpened.current&&!inspected.current&&live&&miniCards.length) {
-      autoOpened.current=true;setOpen(true);
-    }
-  },[live,miniCards.length]);
+  if(!autoOpened.current&&!inspected.current&&miniScope?.live&&miniCards.length) {
+    autoOpened.current=true;setOpen(true);
+  }
   const [rawOpen, setRawOpen] = useState(false);
   const [commandsOpen,setCommandsOpen]=useState(false);
   const tools = cards.filter(card => card.type !== "thinking");
@@ -69,7 +67,7 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
     </button>
     {stage}
     {open && <div className="thinking-detail-panel" id={panelId}>
-      {tools.length > 0 && <ol className="thinking-steps">{tools.map(card => miniCards.includes(card)?card.id===miniCards[0]!.id?<li className="thinking-step thinking-tool" key={card.id}><span className="thinking-step-marker"><ExecutionIcon card={card} size={20}/></span><MiniBox scope={miniScope!} resource={resource!.id!} kind={terminalKind!} cards={miniCards} onInspect={onInspect}/><details className="mini-box-audit" onToggle={event=>setCommandsOpen(event.currentTarget.open)}><DisclosureSummary>原始命令记录 · {miniCards.length}</DisclosureSummary>{commandsOpen&&<ol className="thinking-steps">{miniCards.map(item=><ToolStep card={item} key={item.id} hideTarget onInspect={onInspect}/>)}</ol>}</details></li>:null:<ToolStep card={card} key={card.id} active={iconActive&&currentTool?.id===card.id} hideTarget={!!resource} onInspect={onInspect}/>)}</ol>}
+      {tools.length > 0 && <ol className="thinking-steps">{tools.map(card => miniCards.includes(card)?card.id===miniCards[0]!.id?<li className="thinking-step thinking-tool" key={card.id}><span className="thinking-step-marker"><ExecutionIcon card={card} size={20}/></span><MiniBox scope={miniScope!} resource={resource!.id!} kind={terminalKind!} cards={miniCards} onInspect={onInspect}/><details className="mini-box-audit" onToggle={event=>setCommandsOpen(event.currentTarget.open)}><DisclosureSummary>原始执行记录 · {miniCards.length}</DisclosureSummary>{commandsOpen&&<ol className="thinking-steps">{miniCards.map(item=><ToolStep card={item} key={item.id} hideTarget onInspect={onInspect}/>)}</ol>}</details></li>:null:<ToolStep card={card} key={card.id} active={iconActive&&currentTool?.id===card.id} hideTarget={!!resource} onInspect={onInspect}/>)}</ol>}
       {thoughts.length > 0 && <details className="thinking-raw-records" onToggle={event => setRawOpen(event.currentTarget.open)}><DisclosureSummary>原始思考记录</DisclosureSummary>{rawOpen && <ol className="thinking-steps">{thoughts.map(card => <ReasonStep card={card} key={card.id}/>)}</ol>}</details>}
     </div>}
   </section>;

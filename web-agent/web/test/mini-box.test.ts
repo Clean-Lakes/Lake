@@ -19,7 +19,8 @@ test('local and SSH command records use the same mini terminal while other resou
  assert.ok(render('local').includes('Mini Box 本机 命令终端'));
  assert.ok(render('ssh').includes('Mini Box SSH 命令终端'));
  assert.ok(!render('kubernetes').includes('Mini Box'));
- assert.ok(!render('local','inspect_host').includes('Mini Box'));
+ assert.ok(render('local','inspect_host').includes('Mini Box 本机 命令终端'));
+ assert.ok(!render('local','read').includes('Mini Box'));
 });
 
 test('mini SSH data stays within the exact session, resource, turn and terminal generation',()=>{

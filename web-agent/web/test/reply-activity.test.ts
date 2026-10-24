@@ -53,8 +53,19 @@ test('overall progress owns the activity mark in the same normal-flow content bl
  const s=snapshot();
  s.resources=[{id:'pg',name:'数据库',kind:'database'}] as SessionSnapshot['resources'];
  s.ai!.cards.unshift({id:'op',type:'operation',title:'query_sql',status:'completed',at,data:{resource_id:'pg',target:'数据库'}});
+ s.ai!.cards=s.ai!.cards.filter(card=>card.type==='operation');
  const html=render(s);
  const summary=html.slice(html.indexOf('aria-label="本轮进度"'));
  assert.match(summary,/<p class="overall-progress-facts">[^<]+<\/p><div class="reply-activity"/);
  assert.equal((html.match(/class="reply-activity"/g)??[]).length,1);
+});
+
+test('the streamed answer owns the activity mark while progress closes without replaying it',()=>{
+ const s=snapshot();
+ s.resources=[{id:'pg',name:'数据库',kind:'database'}] as SessionSnapshot['resources'];
+ s.ai!.cards.unshift({id:'op',type:'operation',title:'query_sql',status:'completed',at,data:{resource_id:'pg',target:'数据库'}});
+ const html=render(s);
+ assert.equal((html.match(/class="reply-activity"/g)??[]).length,1);
+ assert.ok(html.includes('class="settled-reply is-archived"'));
+ assert.ok(!html.slice(html.indexOf('aria-label="本轮进度"')).includes('</p><div class="reply-activity"'),'hidden progress does not carry a second live mark');
 });

@@ -2,13 +2,31 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import type {AICard, AgentRun, SessionSnapshot} from '../../shared/contracts';
+import type {AICard, AgentRun, Resource, SessionSnapshot} from '../../shared/contracts';
 import type {TranscriptEntry} from '../src/timeline';
-import {completedTurnInterimIds} from '../src/completedTurnProse';
+import {completedTurnInterimIds,trailingTurnReplyId} from '../src/completedTurnProse';
+import {resourceStageProgress} from '../src/resourceStageProgress';
+import {conversationGroups} from '../src/conversation-progress-model';
 import {AITranscript} from '../src/AIPanel';
 
 const card = (id: string, type: string, content = id): TranscriptEntry => ({id, at: '2026-10-21T00:00:01Z', card: {id, at: '2026-10-21T00:00:01Z', type, content, status: 'completed'}});
 const turn = [card('interim', 'message', '先核对测试节点。'), card('tool', 'operation'), card('final', 'message', '最终结果：测试服务正常。')];
+
+test('a streaming reply after tools stays in the main body until another tool proves it interim',()=>{
+ const resource={id:'host',name:'测试主机',kind:'local'} as Resource;
+ const tool=card('check','operation');tool.card!.title='inspect_host';tool.card!.data={resource_id:resource.id};
+ const reply=card('answer','message','测试主机运行正常。');reply.card!.status='running';
+ const entries=[tool,reply];
+ const id=trailingTurnReplyId(entries);
+ assert.equal(id,'answer');
+ assert.equal(resourceStageProgress(entries,conversationGroups(entries,[resource]),true,false,id).ids.has('answer'),false);
+ reply.card!.status='completed';
+ assert.equal(trailingTurnReplyId(entries),'answer','completion must not move the same node back into progress');
+ const next=card('next','operation');next.card!.data={resource_id:resource.id};
+ assert.equal(trailingTurnReplyId([...entries,next]),undefined);
+ assert.equal(resourceStageProgress([...entries,next],conversationGroups([...entries,next],[resource]),true,false).ids.has('answer'),true);
+ assert.equal(trailingTurnReplyId([...entries,card('failure','error')]),undefined);
+});
 
 test('completed tool turns archive only narration before the real final response', () => {
   assert.deepEqual([...completedTurnInterimIds(turn, true)], ['interim']);

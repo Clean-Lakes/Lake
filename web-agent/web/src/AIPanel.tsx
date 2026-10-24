@@ -1,4 +1,5 @@
 import {MiniBoxCompletionNotice} from './MiniBox';
+import {isTerminalCommand} from './miniBoxModel';
 import {UserMessageCopy} from './UserMessageCopy';
 import {MemoryAccessSummary} from "./MemoryAccessSummary";
 import type {MemoryAccess} from "../../shared/contracts";
@@ -6,7 +7,7 @@ import {PlanReference,planMarkdown} from './PlanMode';
 import {conversationPlanEntry} from './planConversation';
 import {ReplyActivity} from './ReplyActivity';
 import {turnStatus} from './turnStatus';
-import {completedTurnInterimIds,isAssistantProse} from './completedTurnProse';
+import {completedTurnInterimIds,isAssistantProse,trailingTurnReplyId} from './completedTurnProse';
 import {SettledReply} from './SettledReply';
 import {OperationOutcomes} from './OperationOutcomes';
 import {MessageText} from './MessageText';
@@ -197,7 +198,8 @@ function AITranscriptContent({ onOpenMemory,sourceMessageId,onSourceLocated,snap
       else if (completed && completed!=='running') settledTurnIds.current.delete(turnId);
       const settled = completed?completed==='completed':settledTurnIds.current.has(turnId);
       const interimIds = mode==='conversation'?completedTurnInterimIds(turn,settled):new Set<string>();
-      const stages=resourceStageProgress(turn,processGroups,mode==='conversation'&&turn===currentTurn&&liveConversation,mode==='conversation'&&settled);
+      const presentedReply=mode==='conversation'?trailingTurnReplyId(turn):undefined;
+      const stages=resourceStageProgress(turn,processGroups,mode==='conversation'&&turn===currentTurn&&liveConversation,mode==='conversation'&&settled,presentedReply);
       const overallIds=new Set(stages.overall.map(entry=>entry.id));
       const interim = turn.filter(entry=>(interimIds.has(entry.id)&&!stages.ids.has(entry.id))||(settled&&overallIds.has(entry.id)));
       const stageContent=(entry:typeof turn[number])=>entry.card?<Card key={entry.id} card={entry.card} tags={snapshot.session.tags}/>:entry.message?<TranscriptMessage key={entry.id} message={entry.message} sessionId={snapshot.session.id}/>:null;
@@ -209,7 +211,7 @@ function AITranscriptContent({ onOpenMemory,sourceMessageId,onSourceLocated,snap
       const miniScope={session:snapshot.session.id,terminals:snapshot.terminals??[],startedAt:miniStartedAt,endedAt:miniEndedAt,live:turn===currentTurn&&liveConversation,waiting:snapshot.ai?.status==='waiting_approval',connected:!disabled};
       const renderGroup=({entries:group,progress,resource}:ConversationGroup)=>{
         const entry = group[0]!;
-        if(progress)return <ReplyArrival key={entry.id} entryId={entry.id} arrive={!restoredCardIds.current.has(entry.id)&&turn.some(item=>item.message?.id===latestUser?.id)}><ThinkingTimeline cards={group.map(item=>item.card!)} live={snapshot.ai?.status==='running'&&(group.some(item=>item.card?.status==='running')||entry.id===progressingId)} continuing={entry.id===progressingId} miniScope={mode==='conversation'?miniScope:undefined} resource={resource} stage={stages.byResource.has(entry.id)?<ResourceStageSummary entries={stages.byResource.get(entry.id)!} render={stageContent}/>:undefined} resourceRow onInspect={onInspect}/></ReplyArrival>;
+        if(progress)return <ReplyArrival key={entry.id} entryId={entry.id} arrive={!restoredCardIds.current.has(entry.id)&&turn.some(item=>item.message?.id===latestUser?.id)&&!(miniScope.live&&(resource?.kind==='ssh'||resource?.kind==='local')&&group.some(item=>item.card&&isTerminalCommand(item.card)))}><ThinkingTimeline cards={group.map(item=>item.card!)} live={snapshot.ai?.status==='running'&&(group.some(item=>item.card?.status==='running')||entry.id===progressingId)} continuing={entry.id===progressingId} miniScope={mode==='conversation'?miniScope:undefined} resource={resource} stage={stages.byResource.has(entry.id)?<ResourceStageSummary entries={stages.byResource.get(entry.id)!} render={stageContent}/>:undefined} resourceRow onInspect={onInspect}/></ReplyArrival>;
         if(mode==='conversation'&&entry.card?.type==='thinking'&&!entry.card.content)return null;
         if(entry.sre){const {task}=entry.sre;const attempt=task.attempts?.find(a=>a.id===entry.sre!.entry.attemptId);const plan=task.plans?.find(p=>p.id===task.runs?.find(r=>r.id===attempt?.planRunId)?.planRevisionId);const step=plan?.steps.find(s=>s.id===attempt?.stepId);return <SRERoleMessage key={entry.id} task={task} entry={entry.sre.entry} snapshot={snapshot} animateInitial={!restoredText.current.has(snapshot.ai?.agentRuns?.find(r=>r.id===entry.sre!.entry.roleRunId)?.liveTextId)} onUpdated={()=>void api.snapshot(snapshot.session.id)} renderApproval={run=>snapshot.ai?<><AIPending attachments={snapshot.messages.flatMap(message=>message.files??[])} session={snapshot.session.id} runId={run.id} agentName={run.name} sreStep={step} view={{...snapshot.ai,pending:run.pending}} refresh={()=>api.aiView(snapshot.session.id)}/>{run.question&&<AgentQuestion session={snapshot.session.id} runId={run.id} request={run.question} refresh={()=>api.aiView(snapshot.session.id)}/>}</>:null}/>;}
         const runs = group.flatMap(item => item.agentRun ? [item.agentRun] : []);
@@ -227,11 +229,11 @@ function AITranscriptContent({ onOpenMemory,sourceMessageId,onSourceLocated,snap
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources}/>)}
       {mode==='conversation'?<TurnExecutionDetails {...timingProps} detailNotice={notices} details={[...processGroups.map(renderGroup),...(interim.length?[<details className="turn-progress-prose" key="interim-prose"><DisclosureSummary>过程播报 · {interim.length}</DisclosureSummary>{interim.map(entry=><div className="ai-response" key={entry.id}>{entry.card?<Card card={entry.card}/>:entry.message?<TranscriptMessage message={entry.message} sessionId={snapshot.session.id}/>:null}</div>)}</details>]:[])]} onInspect={onInspect}/>:<ReplyDuration {...timingProps}/>}
       {groups.filter(group=>!processGroups.includes(group)).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} collapsed={group.entries.every(entry=>interimIds.has(entry.id)||stages.ids.has(entry.id))}>{renderGroup(group)}</SettledReply>:renderGroup(group))}
-      {overallSummary&&<SettledReply collapsed={!(turn===currentTurn&&liveConversation)}><OverallProgressSummary summary={overallSummary} session={snapshot.session.id} turnStartedAt={snapshot.ai?.turnStartedAt} live={turn===currentTurn&&liveConversation} working={mode==='conversation'&&turn===currentTurn&&replyWorking}/></SettledReply>}
+      {overallSummary&&<SettledReply collapsed={!(turn===currentTurn&&liveConversation)||!!presentedReply}><OverallProgressSummary summary={overallSummary} session={snapshot.session.id} turnStartedAt={snapshot.ai?.turnStartedAt} live={turn===currentTurn&&liveConversation&&!presentedReply} working={mode==='conversation'&&turn===currentTurn&&replyWorking&&!presentedReply}/></SettledReply>}
       <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}/>
       {mode==='conversation'&&!(turn===currentTurn&&liveConversation)&&<MiniBoxCompletionNotice notices={snapshot.commandStopNotices??[]} startedAt={miniStartedAt} endedAt={miniEndedAt}/>}
-      {mode==='conversation'&&turn===currentTurn&&!overallSummary&&<ReplyActivity active={replyWorking}/>}
+      {mode==='conversation'&&turn===currentTurn&&(!overallSummary||!!presentedReply)&&<ReplyActivity active={replyWorking}/>}
     </div></ReplyReferenceScope>;})}
 
     {mode==='activity'&&mergedSRE.filter(task=>!sreTaskFilter||task.id===sreTaskFilter).map(task=><SREEventHistory key={task.id} task={task}/>)}

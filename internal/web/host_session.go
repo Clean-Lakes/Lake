@@ -133,11 +133,16 @@ func (b *Server) inspectHost(ctx context.Context, id string, args Object, approv
 	defer cancel()
 	tid := stringOf(t["id"])
 	checks := []Object{}
+	var stopped Object
 	run := func(command string) Object {
 		// These fixed commands pass the same read-only policy as model tools.
+		b.Store.assertCommandNotStopped(id, ref, command)
 		entry := b.Terminals.Execute(id, tid, "agent", command, "")
-		result := b.Terminals.Wait(ctx, id, tid, stringOf(entry["id"]))
+		result := stoppedCommandObservation(b.Terminals.Wait(ctx, id, tid, stringOf(entry["id"])))
 		checks = append(checks, Object{"command": command, "output": tail(stringOf(result["output"]), 12000), "exitCode": result["exitCode"], "collectedAt": now()})
+		if stringOf(result["stopRequestedAt"]) != "" {
+			stopped = result
+		}
 		return result
 	}
 	osResult := run("uname -s")
@@ -152,6 +157,9 @@ func (b *Server) inspectHost(ctx context.Context, id string, args Object, approv
 		commands = append(commands, "ps -eo pid,pcpu,pmem,rss,comm | head -n 12")
 	}
 	for _, command := range commands {
+		if stopped != nil {
+			break
+		}
 		run(command)
 	}
 	options := b.Store.Options(id)
@@ -159,7 +167,13 @@ func (b *Server) inspectHost(ctx context.Context, id string, args Object, approv
 		options["terminal_id"] = tid
 		b.Store.SaveOptions(id, options)
 	}
-	return Object{"bound": options["asset_ref"] == ref, "asset_ref": ref, "name": r["name"], "runtime": r["kind"], "terminal_id": tid, "status": b.terminalForSession(id, tid)["status"], "platform": platform, "checks": checks, "collectedAt": now()}
+	result := Object{"bound": options["asset_ref"] == ref, "asset_ref": ref, "name": r["name"], "runtime": r["kind"], "terminal_id": tid, "status": b.terminalForSession(id, tid)["status"], "platform": platform, "checks": checks, "collectedAt": now()}
+	if stopped != nil {
+		for _, key := range []string{"stopRequestedAt", "userStopped", "notice"} {
+			result[key] = stopped[key]
+		}
+	}
+	return result
 }
 
 // Resolve an operation target from exact IDs, a retained binding, or a unique

@@ -271,7 +271,8 @@ test('catalog identity joins different actions into one resource row and never m
  assert.equal((html.match(/class="thinking-timeline /g)||[]).length,2);
  assert.ok(html.includes('<span class="thinking-label">演示节点</span>'));
  assert.ok(html.includes('data-kind="database"')&&html.includes('resource-kind-icon kind-database'));
- assert.ok(!html.includes('thinking-tool-detail')&&!html.includes('thinking-steps'),'resource children and payloads are lazy');
+ assert.ok(html.includes('Mini Box SSH 命令终端'),'the host command preview is visible in its dispatch render');
+ assert.ok(!html.includes('thinking-tool-detail'),'original payloads remain lazy');
 });
 
 test('opaque legacy aliases recover only a unique exact catalog target; recorded IDs win',()=>{

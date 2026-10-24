@@ -1,7 +1,8 @@
 import type {AICard, TerminalEntry, TerminalHistory, TerminalSession} from '../../shared/contracts';
 
 export type MiniBoxScope = {session:string;terminals:TerminalSession[];startedAt:string;endedAt?:string;live:boolean;waiting?:boolean;connected:boolean};
-export const isTerminalCommand = (card:AICard) => ['shell','terminal_execute_command'].includes(card.title ?? '');
+// Host inspection also executes real command blocks through the same terminal.
+export const isTerminalCommand = (card:AICard) => ['shell','terminal_execute_command','inspect_host'].includes(card.title ?? '');
 
 export function miniEntries(history:TerminalHistory,scope:MiniBoxScope,resource:string) {
   if(history.terminal.resourceId!==resource || !history.terminal.generation)return [];
@@ -33,6 +34,8 @@ export function miniRecordedOutput(card:AICard|undefined) {
   const data=card.data as {arguments?:{command?:unknown}}|undefined;
   const command=typeof data?.arguments?.command==='string'?data.arguments.command:'';
   let output=card.content??'';
-  try {const value=JSON.parse(output);if(typeof value.output==='string')output=value.output;}catch{/* Retain the recorded text, never infer a live terminal handle. */}
+  try {const value=JSON.parse(output);if(typeof value.output==='string')output=value.output;
+    else if(Array.isArray(value.checks))output=value.checks.filter((check:unknown):check is {command:string;output:string}=>!!check&&typeof check==='object'&&typeof (check as {command?:unknown}).command==='string'&&typeof (check as {output?:unknown}).output==='string').map((check:{command:string;output:string})=>`$ ${check.command}\r\n${check.output}`).join('\r\n\r\n');
+  }catch{/* Retain the recorded text, never infer a live terminal handle. */}
   return `${command?`$ ${command}\r\n`:''}${output}`;
 }

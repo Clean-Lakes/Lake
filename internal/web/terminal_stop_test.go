@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -12,6 +13,65 @@ import (
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
 )
+
+func TestMiniBoxInspectionIsVisibleAndStopsRemainingChecks(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("uses the bounded macOS top sampling command as a live inspection fixture")
+	}
+	b, h := fixture(t)
+	id, _ := newSession(t, h)
+	allowFixtureHost(b, id)
+	var calls atomic.Int32
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body Object
+		json.NewDecoder(r.Body).Decode(&body)
+		if calls.Add(1) == 1 {
+			emitModel(w, "", []ai.Call{{ID: "inspect", Name: "inspect_host", Arguments: `{"runtime":"local"}`}})
+			return
+		}
+		messages := objects(body["messages"])
+		last := stringOf(messages[len(messages)-1]["content"])
+		if !strings.Contains(last, `"userStopped":true`) || !strings.Contains(last, "不要自动重试") {
+			t.Error("inspection lost the user's stop", last)
+		}
+		emitModel(w, "已停止本机检查，部分结果保留。", nil)
+	}))
+	defer provider.Close()
+	apiTest(t, h, "PUT", "/api/settings/model", Object{"url": provider.URL, "name": "fixture"}, 200)
+	apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "检查本机"}, 202)
+	var terminal, entry Object
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) && entry == nil {
+		for _, candidate := range objects(b.Store.Snapshot(id)["terminals"]) {
+			for _, row := range objects(b.Store.History(id, stringOf(candidate["id"]))["entries"]) {
+				if row["command"] == "top -l 2 -s 1 -o cpu -n 10" && row["status"] == "running" {
+					terminal, entry = candidate, row
+				}
+			}
+		}
+		if entry == nil {
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	if entry == nil {
+		t.Fatal("live inspection command was not observed")
+	}
+	snapshot := apiTest(t, h, "GET", "/api/sessions/"+id+"/snapshot", nil, 200)
+	visible := false
+	for _, card := range objects(object(snapshot["ai"])["cards"]) {
+		visible = visible || card["title"] == "inspect_host" && card["status"] == "running"
+	}
+	if !visible {
+		t.Fatal("running inspection card arrived after its result")
+	}
+	apiTest(t, h, "POST", "/api/sessions/"+id+"/terminals/"+stringOf(terminal["id"])+"/interrupt-command", Object{"generation": terminal["generation"], "entryId": entry["id"]}, 202)
+	waitAI(t, b, id, "completed")
+	for _, row := range objects(b.Store.History(id, stringOf(terminal["id"]))["entries"]) {
+		if row["command"] == "top -l 1 -o mem -n 10" {
+			t.Fatal("inspection dispatched a later check after the user stopped it")
+		}
+	}
+}
 
 func startStopFixture(t *testing.T, b *Server, id, resource, command string) (Object, Object) {
 	t.Helper()

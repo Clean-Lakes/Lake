@@ -18,8 +18,8 @@ export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScop
   const currentKey=target?`${target.history.terminal.id}:${target.entry.id}`:'';
   const stopping=!!target&&(!!target.entry.stopRequestedAt||pending===currentKey);
   const canStop=miniCanStop(target,scope,stale)&&!stopping;
-  const active=canStop&&!scope.waiting;
   const last=cards.at(-1);
+  const active=scope.live&&scope.connected&&!stale&&!stopping&&!scope.waiting&&(last?.status==='running'||target?.entry.status==='running');
   const status=stale?'连接暂时中断':stopping?target?.entry.status==='running'?'正在终止…':'用户已终止 · 结果待核查'
     :active?'AI 正在执行':target?.entry.status==='running'?'命令仍在运行':target?.entry.status==='unknown'?'结果待核查'
     :target?.entry.exitCode!=null&&target.entry.exitCode!==0?'执行失败':target?'已完成'
