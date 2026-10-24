@@ -2,10 +2,9 @@
 import {useEffect, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import type {SessionSnapshot, TerminalEntry, TerminalHistory, TerminalSession} from '../../../shared/contracts';
-import {SSHExecutionGlow, SSHExecutionPanel} from '../../src/SSHExecutionPanel';
+import {SSHExecutionPanel} from '../../src/SSHExecutionPanel';
 import {TerminalSidePanel} from '../../src/TerminalSidePanel';
 import {useSSHExecution} from '../../src/useSSHExecution';
-import {executionIsActive} from '../../src/sshExecution';
 import '../../src/styles.css';
 import '../../src/theme.css';
 
@@ -43,11 +42,9 @@ function Fixture() {
   const snapshot = {session:{id:session},resources,terminals:[term],ai:{turnStartedAt:start,status}} as SessionSnapshot;
   const execution = useSSHExecution(snapshot,true,tick);
   const open = !!execution.history && !dismissed && !manual;
-  const glow = open && !execution.stale && executionIsActive(execution.history,status,true);
   return <div className={`app-shell ${open||manual?'terminal-is-open':''}`}>
-    <SSHExecutionGlow active={glow}/>
     <aside className="sidebar" style={{padding:24}}><strong>Lake <small>DEV · 效果预览</small></strong><p>实时执行终端</p><p>演示 SSH 服务器</p><small>此页只使用虚构数据</small></aside>
-    <main className="workspace" style={{padding:32,overflowY:'auto'}}><h2>检查服务运行状态</h2><p>正在读取服务日志，确认请求是否正常。</p><p>右侧展开真实终端组件，蓝色流光覆盖整个窗口边缘。</p>
+    <main className="workspace" style={{padding:32,overflowY:'auto'}}><h2>检查服务运行状态</h2><p>正在读取服务日志，确认请求是否正常。</p><p>右侧展开真实终端组件，蓝色流光仅覆盖终端面板。</p>
       <nav aria-label="试用控制" style={{display:'flex',gap:12,flexWrap:'wrap'}}>
         <button onClick={()=>{setDismissed(false);setManual(false);}}>展开执行终端</button>
         <button onClick={()=>{const last=entries.at(-1);if(last){last.status='completed';last.exitCode=0;}entries.push({id:'demo-next-'+entries.length,terminalId:term.id,generation:term.generation,actor:'agent',originSessionId:'demo',command:'df -h /srv/demo',output:'Filesystem       Size  Used Avail Use% Mounted on\r\n/dev/demo         80G   24G   56G  30% /srv/demo\r\n',status:'running',startedAt:new Date().toISOString(),createdAt:new Date().toISOString(),finishedAt:null,exitCode:null,cwd:'/srv/demo'});setTick(value=>value+1);}}>执行下一条命令</button>

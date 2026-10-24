@@ -68,9 +68,8 @@ import { uniqueTerminalRows } from "./terminalAIState";
 import { TerminalPane, type TerminalHandle } from "./TerminalPane";
 import { TerminalInputQueue } from "./terminalInputQueue";
 import { TerminalSidePanel } from "./TerminalSidePanel";
-import {SSHExecutionGlow, SSHExecutionPanel} from './SSHExecutionPanel';
+import {SSHExecutionPanel} from './SSHExecutionPanel';
 import {useSSHExecution} from './useSSHExecution';
-import {executionIsActive} from './sshExecution';
 import { reusableResourceTerminal, onlineTerminalOptions, panelTerminalSessions, ResourceTerminalConnections } from "./resourceTerminalState";
 import { ResourceTree } from "./ResourceTree";
 import { WorkspaceSearch } from "./WorkspaceSearch";
@@ -735,7 +734,6 @@ function App() {
   }, [!!sshExecution.history, sshExecution.key, liveSSHExecution]);
   const showSSHExecution = !!sshExecution.history && (liveSSHExecution || openedSSHExecution === sshExecution.key) && dismissedSSHExecution !== sshExecution.key && !terminalOpen;
   const terminalPanelOpen = terminalOpen || showSSHExecution;
-  const sshOperating = showSSHExecution && !sshExecution.stale && executionIsActive(sshExecution.history, activeSnapshot?.ai?.status, sessionConnected);
   const modelConfigured = bootstrap?.modelConfigured === true;
   const persistentMode = bootstrap?.terminalMode === "pty";
   const terminalConnected = terminalContext ? !!bootstrap && !!catalog && resourceTerminalConnected : sessionConnected;
@@ -1365,7 +1363,6 @@ function App() {
   </section>;
 
   return <div className={`app-shell ${terminalPanelOpen ? "terminal-is-open" : ""}`}>
-    <SSHExecutionGlow active={sshOperating}/>
     {scheduleProject&&<ScheduledTasks key={scheduleProject.id} project={scheduleProject} onClose={()=>setScheduleProject(null)} onOpenSession={async id=>{await refreshCatalog();setScheduleProject(null);navigate({sessionId:id,resourceId:null});}}/>}
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}

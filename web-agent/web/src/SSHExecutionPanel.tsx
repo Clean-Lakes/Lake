@@ -7,7 +7,7 @@ import './sshExecution.css';
 
 const observeOnly = () => {};
 
-export function SSHExecutionGlow({active}: {active: boolean}) {
+function SSHExecutionGlow({active}: {active: boolean}) {
   return active ? <div className="ssh-execution-glow" aria-hidden="true"><span/><span/></div> : null;
 }
 
@@ -23,6 +23,7 @@ export function SSHExecutionPanel({histories, resources, status, stale, onClose}
     : active ? 'Lake 正在操作' : entry?.status === 'unknown' ? '结果待核查'
     : entry?.status === 'running' ? '命令仍在运行' : entry?.exitCode !== null && entry?.exitCode !== 0 ? '命令执行失败' : '命令已结束';
   return <section className={`terminal-panel-content ssh-execution-panel${active ? ' is-operating' : ''}`} aria-label="Lake SSH 执行终端">
+    <SSHExecutionGlow active={active}/>
     <header className="terminal-panel-header">
       <Glyph name="terminal" size={17}/><strong>SSH 执行终端</strong>
       <button type="button" className="icon-button" aria-label="收起执行终端" title="收起终端，任务继续执行" onClick={onClose}><Glyph name="close" size={17}/></button>
