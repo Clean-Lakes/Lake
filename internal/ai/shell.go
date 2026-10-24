@@ -113,6 +113,12 @@ func (e *Engine) shellJob(ctx context.Context, id, method string, a map[string]a
 		}
 	}
 	result := map[string]any{"shell_id": j.id, "status": status, "result": value}
+	if stopped := str(obj(value)["stopRequestedAt"]); stopped != "" {
+		result["stopRequestedAt"] = stopped
+		result["userStopped"] = true
+		result["notice"] = obj(value)["notice"]
+		result["status"] = "interrupted"
+	}
 	if status == "running" {
 		result["poll_after_ms"] = 1000
 	}
@@ -218,10 +224,13 @@ func (e *Engine) trackBridgeShell(session string, result any, a map[string]any) 
 		if err != nil {
 			job.status = "failed"
 		}
+		if str(obj(result)["stopRequestedAt"]) != "" {
+			job.status = "interrupted"
+		}
 		status := job.status
 		job.mu.Unlock()
 		content := js(result)
-		if err != nil {
+		if err != nil && str(obj(result)["stopRequestedAt"]) == "" {
 			content = err.Error()
 		}
 		e.shellCard(session, id, content, status, false)
