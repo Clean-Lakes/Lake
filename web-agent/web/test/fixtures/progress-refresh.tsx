@@ -129,6 +129,8 @@ const update=()=>{
  metrics.updates++;streams.forEach(stream=>stream.emit());
 };
 let index=0,tick=112;
+document.getElementById('queue-followup')!.onclick=()=>{const queue=state.messageQueue!;queue.items.push({id:`queued-${++index}`,text:'再检查磁盘空间，保留已有结果。',resourceIds:[],images:[],files:[],createdAt:stamp(++tick)});queue.revision++;update()};
+document.getElementById('consume-followup')!.onclick=()=>{const queue=state.messageQueue!;const item=queue.items.shift();if(!item)return;queue.revision++;finishCurrent();state.messages.push({id:item.id,sessionId:'fixture',role:'user',text:item.text,createdAt:stamp(++tick)});state.ai!.rootTurnId=item.id;state.ai!.turnStartedAt=stamp(tick);update()};
 document.getElementById('reset-metrics')!.onclick=()=>{lineArrivals.length=motionSamples.length=0;metrics.executionAnimations=metrics.rowReplacements=metrics.rowRemovals=metrics.rowPositionChanges=metrics.rowColorChanges=0;metrics.actionReplacements=metrics.historyReplacements=metrics.actionAnimations=metrics.replyAnimations=metrics.replyReplacements=metrics.scrollWrites=metrics.scrollEvents=metrics.scrollChanges=metrics.heightChanges=metrics.updates=0};
 document.getElementById('update-line')!.onclick=()=>{state.ai!.cards.find(card=>card.id==='note')!.content=`第 ${++index} 次核对演示服务与运行记录，保留本轮原始证据。`;update()};
 document.getElementById('wait-approval')!.onclick=()=>{state.ai!.status='waiting_approval';update()};

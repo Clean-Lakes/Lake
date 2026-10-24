@@ -103,8 +103,9 @@ function ReplyArrival({entryId,arrive,children}:{entryId:string;arrive:boolean;c
   const [animate] = useState(arrive);
   return <div data-conversation-entry={entryId} className={`ai-response${animate?' reply-arrival':''}`}>{children}</div>;
 }
-function TranscriptMessage({message,sessionId,resources}:{message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"]}) {
- return <div className={`ai-chat-message ai-role-${message.role}${message.images?.length?" has-message-images":""}`}>
+function TranscriptMessage({message,sessionId,resources,arrive=false}:{message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"];arrive?:boolean}) {
+ const [animate]=useState(()=>arrive&&!document.hidden&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+ return <div className={`ai-chat-message ai-role-${message.role}${message.images?.length?" has-message-images":""}${animate?" user-message-arrival":""}`}>
           {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}{message.text && (message.role === 'assistant' ? <AssistantMarkdown>{planMarkdown(message.text)}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
           {message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}
           {!!message.images?.length&&<MessageImages images={message.images}/>}
@@ -123,6 +124,7 @@ function AITranscriptContent({ onOpenMemory,sourceMessageId,onSourceLocated,snap
   // Retain an observed completion when a legacy turn has no saved timing and
   // a newer user turn takes over the engine view. Do not restore its narration.
   const settledTurnIds=useRef(new Set<string>());
+  const restoredMessageIds=useRef(new Set(snapshot.messages.map(message=>message.id)));
   const restoredCardIds=useRef(new Set((snapshot.ai?.cards??[]).map(card=>card.id)));
   const restoredText=useRef(new Set([...(snapshot.ai?.cards??[]).filter(c=>!!c.content).map(c=>c.id),...(snapshot.ai?.agentRuns??[]).filter(r=>!!r.liveText).map(r=>r.liveTextId)]));
   const [sreTaskFilter,setSRETaskFilter]=useState('');
@@ -227,7 +229,7 @@ function AITranscriptContent({ onOpenMemory,sourceMessageId,onSourceLocated,snap
         return <ReplyArrival key={entry.id} entryId={entry.id} arrive={entry.id!==presentedReply&&mode==='conversation'&&turn.some(item=>item.message?.id===latestUser?.id)&&!!entry.card&&['text','message'].includes(entry.card.type)&&!restoredText.current.has(entry.card.id)}>{entry.card?.type === "text" && <div className="response-identity"><AgentIcon role="lake" size={18}/><strong>Lake</strong></div>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)} onOpenPlans={onOpenPlans} onOpenMemory={onOpenMemory}/></ReplyArrival>;
       };
       return <ReplyReferenceScope key={turn[0]!.id} cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}><div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)}>
-      {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources}/>)}
+      {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources} arrive={entry.message!.id===latestUser?.id&&!restoredMessageIds.current.has(entry.message!.id)}/>)}
       {mode==='conversation'?<TurnExecutionDetails {...timingProps} presentingReply={presentingReply} detailNotice={notices} details={[...processGroups.map(renderGroup),...(interim.length?[<details className="turn-progress-prose" key="interim-prose"><DisclosureSummary>过程播报 · {interim.length}</DisclosureSummary>{interim.map(entry=><div className="ai-response" key={entry.id}>{entry.card?<Card card={entry.card}/>:entry.message?<TranscriptMessage message={entry.message} sessionId={snapshot.session.id}/>:null}</div>)}</details>]:[])]} onInspect={onInspect}/>:<ReplyDuration {...timingProps}/>}
       {groups.filter(group=>!processGroups.includes(group)).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} handoff={presentingReply&&group.entries[0]!.id===presentedReply&&turn.some(entry=>entry.message?.id===latestUser?.id)&&!group.entries.some(entry=>restoredText.current.has(entry.card?.id??entry.id))} collapsed={group.entries.every(entry=>interimIds.has(entry.id)||stages.ids.has(entry.id))}>{renderGroup(group)}{group.entries[0]!.id===presentedReply&&turn===currentTurn&&<ReplyActivity active={replyWorking}/>}</SettledReply>:renderGroup(group))}
       {overallSummary&&<SettledReply collapsed={!(turn===currentTurn&&liveConversation)||!!presentedReply}><OverallProgressSummary summary={overallSummary} session={snapshot.session.id} turnStartedAt={snapshot.ai?.turnStartedAt} live={turn===currentTurn&&liveConversation&&!presentedReply} working={mode==='conversation'&&turn===currentTurn&&replyWorking&&!presentedReply}/></SettledReply>}
