@@ -3,6 +3,7 @@ import { Eye, EyeOff, Pin, Waves, GripVertical, Ellipsis, Search, Layers, Folder
 const icons = {eye:Eye,eyeOff:EyeOff,pin:Pin,waves:Waves,grip:GripVertical,more:Ellipsis,search:Search,layers:Layers,folder:Folder,shield:ShieldCheck,plus:Plus,chevron:ChevronDown,terminal:Terminal,chat:MessageCircle,chatAdd:MessageCirclePlus,server:Server,arrow:ArrowRight,up:ArrowUp,down:ArrowDown,close:X,menu:Menu,refresh:RefreshCw,check:Check,alert:TriangleAlert,spark:Sparkles,clock:Clock,lock:Lock,link:Link,send:Send,return:CornerDownLeft,stop:Square,copy:Copy,expand:Maximize2,settings:Settings,trash:Trash2,database:Database,docker:Container,local:Monitor,redis:Database,kubernetes:Layers,apisix:Network,prometheus:ChartNoAxesCombined,victoriametrics:Database,network:Network,code:Code,chart:ChartNoAxesCombined,bug:Bug,book:BookOpen,document:FileText,box:Box,tag:Tag,tags:Tags,filter:SlidersHorizontal,panel:PanelLeft,edit:Pencil,next:ChevronRight,plug:Plug,image:Image,brain:Brain} satisfies Record<string,LucideIcon>;
 const lakeWaterline='M4 19c2-1.6 4 1.6 6 0s4 1.6 6 0 3 1 4 .3';
 const lakeIcons={
+ lakePilot:'M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-4.6-3.4-2.2 4.6-4.6 2.2 2.2-4.6 4.6-2.2Z',
  lakeActivity:'M12 3v6M12 15v6M3 12h6M15 12h6M5.6 5.6l4.2 4.2M14.2 14.2l4.2 4.2M5.6 18.4l4.2-4.2M14.2 9.8l4.2-4.2',
  lakeConfirm:'m8 7.5 2.5 2.5 5-5M4 14.1c2-2 4 2 6 0s4 2 6 0 3 1.4 4 .5M4 18.1c2-2 4 2 6 0s4 2 6 0 3 1.4 4 .5',
  lakeTerminal:'M4 14V4h16v10M7 7l3 3-3 3M13 13h4 '+lakeWaterline,
