@@ -287,7 +287,7 @@ Lake Pilot 是统一的运维协作入口：继承现有 SRE 专员协作能力�
 - `SRETask.pilot` 保存 `autoAdvance/settingsRevision/decisions`，`SREPlanStep.assignmentId` 表示工作项归属。未建立第二套任务/调度器。工作项导航按原计划/attempt 归属计算；旧计划缺少归属时按角色、领域和资源分组，只作视图兼容。
 - 候选使用原 `QuestionRequest.pilot` 和 ADK 人工输入等待，原 request ID 与候选 ID 绑定当前计划/步骤/attempt。决策事务写入原任务，操作参数冻结后按指纹检查；不另建 choice HTTP API 或重复的中断 Runner。普通同伴消息不使有效选择失效，原等待重启恢复已有进程崩溃回归。
 - 目前方向选择只委托当前候选集合。步骤委托与自动推进可继续当前步骤；跨批次持续方向委托、步骤局部 hold、多阶段执行/验证与结构化业务完成条件尚未实现。
-- 只读取证的 guided/automatic 真实操作、设置冲突/迁移/任务快照、角色/attempt 隔离和前端真实组件夹具已有测试。签名构建可完成；全量 Go 本地测试存在基线失败，已安装 Lake Dev 的来源保护阻止覆盖。完整 Dev 验收仍未完成，不能合并草稿。详见 [实际验证](../docs/validation/lake-pilot.md)。
+- 只读取证的 guided/automatic 真实操作、设置冲突/迁移/任务快照、角色/attempt 隔离和前端真实组件夹具已有测试。签名构建可完成；全量 Go 本地测试存在基线失败。首次 Dev 来源保护曾阻止覆盖，现已通过保留安装来源历史的本机联调分支安装验证。选择区已改为紧凑方向选择、单一主执行按钮和按需展开的操作/参数，长步骤与重复说明收紧。完整 Dev 故障验收仍未完成，不能合并草稿。详见 [实际验证](../docs/validation/lake-pilot.md)。
 
 ## 2. Implementation Steps
 
