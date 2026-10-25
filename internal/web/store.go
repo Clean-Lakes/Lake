@@ -205,7 +205,7 @@ func (s *Store) migrate() error {
 	if s.row("SELECT name FROM sqlite_master WHERE type='table' AND name='projectMemories'") == nil {
 		needBackup = true
 	}
-	parityColumns := [][3]string{{"terminals", "generation", "TEXT NOT NULL DEFAULT ''"}, {"terminals", "outputCapturedAt", "TEXT"}, {"terminals", "cwd", "TEXT"}, {"terminals", "shell", "TEXT NOT NULL DEFAULT 'sh'"}, {"terminalEntries", "status", "TEXT NOT NULL DEFAULT 'unknown'"}, {"terminalEntries", "generation", "TEXT NOT NULL DEFAULT ''"}, {"terminalEntries", "cwd", "TEXT"}, {"terminalEntries", "startedAt", "TEXT"}, {"terminalEntries", "finishedAt", "TEXT"}, {"terminalEntries", "originSessionId", "TEXT"}}
+	parityColumns := [][3]string{{"terminals", "generation", "TEXT NOT NULL DEFAULT ''"}, {"terminals", "outputCapturedAt", "TEXT"}, {"terminals", "cwd", "TEXT"}, {"terminals", "shell", "TEXT NOT NULL DEFAULT 'sh'"}, {"terminalEntries", "status", "TEXT NOT NULL DEFAULT 'unknown'"}, {"terminalEntries", "generation", "TEXT NOT NULL DEFAULT ''"}, {"terminalEntries", "cwd", "TEXT"}, {"terminalEntries", "startedAt", "TEXT"}, {"terminalEntries", "finishedAt", "TEXT"}, {"terminalEntries", "originSessionId", "TEXT"}, {"terminalEntries", "stopRequestedAt", "TEXT"}}
 	for _, c := range parityColumns {
 		found := false
 		for _, row := range s.rows("PRAGMA table_info(" + c[0] + ")") {
@@ -812,7 +812,7 @@ func (s *Store) Control(id, tid string, holder any) Object {
 func (s *Store) History(id, tid string) Object {
 	return s.read(func() any {
 		t := s.terminal(id, tid)
-		rows := s.rows("SELECT id,terminalId,actor,command,output,exitCode,createdAt,status,generation,cwd,startedAt,finishedAt,originSessionId FROM terminalEntries WHERE terminalId=? ORDER BY rowid DESC LIMIT 500", tid)
+		rows := s.rows("SELECT id,terminalId,actor,command,output,exitCode,createdAt,status,generation,cwd,startedAt,finishedAt,originSessionId,stopRequestedAt FROM terminalEntries WHERE terminalId=? ORDER BY rowid DESC LIMIT 500", tid)
 		for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
 			rows[i], rows[j] = rows[j], rows[i]
 		}
@@ -828,7 +828,7 @@ func (s *Store) TerminalOutput(id, tid string) Object {
 func (s *Store) Entry(id, tid, eid string) Object {
 	return s.read(func() any {
 		s.terminal(id, tid)
-		return required(s.row("SELECT id,terminalId,actor,command,output,exitCode,createdAt,status,generation,cwd,startedAt,finishedAt,originSessionId FROM terminalEntries WHERE id=? AND terminalId=?", eid, tid), "Command")
+		return required(s.row("SELECT id,terminalId,actor,command,output,exitCode,createdAt,status,generation,cwd,startedAt,finishedAt,originSessionId,stopRequestedAt FROM terminalEntries WHERE id=? AND terminalId=?", eid, tid), "Command")
 	}).(Object)
 }
 func (s *Store) Recent(id string) []Object {
@@ -871,7 +871,7 @@ func (s *Store) BeginCommand(id, tid, actor, command, actionID string, origins .
 		s.exec("INSERT INTO terminalEntries(id,terminalId,actor,command,output,exitCode,actionId,createdAt,status,generation,cwd,startedAt,originSessionId) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", eid, tid, actor, command, "", nil, aid, now(), "running", t["generation"], t["cwd"], now(), origin)
 		s.exec("UPDATE terminals SET status='busy',contextVersion=contextVersion+1 WHERE id=?", tid)
 		s.event(id, "terminal")
-		return s.row("SELECT id,terminalId,actor,command,output,exitCode,createdAt,status,generation,cwd,startedAt,finishedAt,originSessionId FROM terminalEntries WHERE id=?", eid)
+		return s.row("SELECT id,terminalId,actor,command,output,exitCode,createdAt,status,generation,cwd,startedAt,finishedAt,originSessionId,stopRequestedAt FROM terminalEntries WHERE id=?", eid)
 	}).(Object)
 }
 func (s *Store) Output(id, tid, eid, output, jobOutput string) {

@@ -242,6 +242,8 @@ export const api = {
       `/api/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}/interrupt`,
       {},
     ),
+  terminalInterruptCommand: (sessionId: string, terminalId: string, generation: string, entryId: string) =>
+    post<{stopRequested:boolean}>(`/api/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}/interrupt-command`, {generation, entryId}),
   terminalInput: (sessionId: string, terminalId: string, data: string) =>
     post<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}/input`, { data }),
   terminalResize: (sessionId: string, terminalId: string, cols: number, rows: number) =>

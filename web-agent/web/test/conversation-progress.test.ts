@@ -41,7 +41,7 @@ test('active presentation preserves approvals, errors, questions and child contr
  assert.deepEqual(after.filter(group=>group.entries[0]!.id!=='reply'),before.filter(group=>group.entries[0]!.id!=='reply'));
  assert.equal(after[0]!.entries[0]!.id,'reply');
 });
-test('conversation opens the current live process and keeps historical records collapsed',()=>{
+test('conversation keeps history folded and closes its process before presenting an answer',()=>{
  const oldUser={...user.message!,id:'old-user',createdAt:'2026-10-18T07:00:00Z'};
  const oldTool={...card('old-tool','operation').card,at:'2026-10-18T07:00:01Z'};
  const oldReply={...card('old-reply','message').card,at:'2026-10-18T07:00:02Z'};
@@ -52,7 +52,7 @@ test('conversation opens the current live process and keeps historical records c
   assert.ok(position('old-tool')<position('old-reply'),'historical order stays unchanged');
   assert.ok(html.includes('class="turn-execution-details" aria-hidden="true" inert=""'),status);
   const current=html.slice(html.indexOf('id="conversation-turn-s-user"'));
-  assert.equal(current.includes('class="turn-execution-details is-open"'),['running','waiting_approval'].includes(status),status);
+  assert.equal(current.includes('class="turn-execution-details is-open"'),status==='waiting_approval',status);
   assert.ok(!current.includes('thinking-steps'),'resource operations stay folded until requested');
   assert.ok(html.indexOf('aria-label="执行详细过程"')<position('tool'));
   assert.ok(position('tool')<position('reply'),'the visible reply remains outside the hidden process body');
@@ -271,7 +271,8 @@ test('catalog identity joins different actions into one resource row and never m
  assert.equal((html.match(/class="thinking-timeline /g)||[]).length,2);
  assert.ok(html.includes('<span class="thinking-label">演示节点</span>'));
  assert.ok(html.includes('data-kind="database"')&&html.includes('resource-kind-icon kind-database'));
- assert.ok(!html.includes('thinking-tool-detail')&&!html.includes('thinking-steps'),'resource children and payloads are lazy');
+ assert.ok(html.includes('Mini Box SSH 命令终端'),'the host command preview is visible in its dispatch render');
+ assert.ok(!html.includes('thinking-tool-detail'),'original payloads remain lazy');
 });
 
 test('opaque legacy aliases recover only a unique exact catalog target; recorded IDs win',()=>{

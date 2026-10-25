@@ -53,13 +53,13 @@ test('real final replies stay in prose; incomplete, stopped, plain and role repo
  assert.equal(project([...entries,{id:'agent',at,agentRun:{id:'role'}} as TranscriptEntry]).ids.size,0);
 });
 test('visible preview is under its resource even when actions are folded; previous stages are lazy',()=>{
- const entries=[tool('a'),say('old-stage','第一阶段结果'),tool('a2'),say('latest-stage','最新阶段结果')];
+ const entries=[tool('a'),say('old-stage','第一阶段结果'),tool('a2'),say('latest-stage','最新阶段结果'),tool('ongoing')];
  const snapshot={session:{id:'s'},messages:[{id:'u',sessionId:'s',role:'user',text:'检查',createdAt:at}],actions:[],resources,ai:{session:'s',status:'running',cardsOffset:0,cards:entries.map(entry=>entry.card!)}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.ok(html.includes('data-stage-entry="latest-stage"'));
  assert.ok(!html.includes('data-stage-entry="old-stage"'));
  assert.ok(html.includes('此前进展 · 1'));
- assert.ok(!html.includes('thinking-steps'));
+ assert.ok(html.includes('Mini Box SSH 命令终端'),'current command preview opens without waiting for history');
  assert.ok(html.indexOf('data-stage-entry="latest-stage"')<html.indexOf('class="turn-execution-body"')+html.slice(html.indexOf('class="turn-execution-body"')).indexOf('</section>'));
  assert.ok(html.includes('class="settled-reply is-archived"'),'original prose stays mounted but hidden');
 });

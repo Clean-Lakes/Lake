@@ -757,6 +757,11 @@ func (t *Terminals) Interrupt(id, tid string) {
 	if l.closed {
 		fail(409, "Terminal disconnected")
 	}
+	t.interruptLocked(l)
+}
+
+// Caller holds the live terminal lock throughout job validation and signalling.
+func (t *Terminals) interruptLocked(l *liveTerminal) {
 	if l.job != nil {
 		l.job.changed = true
 		job := l.job
