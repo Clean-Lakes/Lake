@@ -5,7 +5,7 @@ import {Glyph} from './Icons';
 import {miniCanStop,miniTarget,type MiniBoxScope} from './miniBoxModel';
 import {miniAnomalyLine,miniPreview,miniPreviewRows,miniReadableOutput,miniRecordedEntry,miniRecordedEntries,retainMiniPreview,miniExecutionStatus,type MiniPreview} from './miniBoxPreview';
 import {useMiniBox} from './useMiniBox';
-import {MiniBoxParticles} from './MiniBoxParticles';
+import {MiniBoxControl} from './MiniBoxControl';
 
 export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScope;resource:string;kind:'local'|'ssh';cards:AICard[];onInspect?:()=>void}) {
   const protocol=kind==='local'?'本机':'SSH';
@@ -55,7 +55,7 @@ export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScop
   return <div className="mini-box-container">
     <section className={`mini-box${active?' is-operating':''}${open?'':' is-collapsed'}`} aria-label={`Mini Box ${protocol} 命令终端`}>
       <span className="mini-box-material" aria-hidden="true"/>
-      {active&&<MiniBoxParticles/>}
+      <MiniBoxControl active={active}/>
       <header className="mini-box-header"><Glyph name="terminal" size={15}/><span className="mini-box-title">执行命令</span><small className="mini-box-protocol">{protocol}</small>
         <span className={`mini-box-status${active?' is-active':''}`} role="status"><i aria-hidden="true"/><span>{status}</span></span>
         <button type="button" className="mini-box-stop" disabled={!canStop} title="只终止此资源当前命令，其他资源继续" onClick={()=>void stop()}><Glyph name="stop" size={11}/>终止</button>

@@ -17,7 +17,6 @@
 .mini-box-toggle:hover { background:var(--surface-hover); }
 .mini-box.is-collapsed { height:36px; }
 .mini-box.is-collapsed .mini-box-toggle svg { transform:rotate(-90deg); }
-.mini-box-particles { position:absolute; z-index:2; inset:0; width:100%; height:100%; border-radius:inherit; corner-shape:inherit; pointer-events:none; }
 .mini-box-error,.mini-box-completion-note { margin:8px 0 0; color:var(--text-muted); font-size:var(--font-size-toolbar); line-height:1.7; }
 .mini-box-completion-note { display:flex; align-items:flex-start; gap:8px; }
 .mini-box-completion-note svg { flex-shrink:0; margin-top:4px; }
@@ -63,3 +62,30 @@
 @container (max-width:330px) { .mini-box-expand small { display:none; } .mini-box-footer { gap:6px; } }
 
 .mini-box .mini-box-footer .mini-box-anomalies:hover { color:var(--danger); text-decoration:underline; }
+
+
+/* Ego-style controlled perimeter, confined to this Mini Box. The browser owns
+   the orbit; real lifecycle changes only pause it and fade the layer. */
+@property --mini-control-angle { syntax:"<angle>"; initial-value:0deg; inherits:false; }
+.mini-box-control {
+  position:absolute; z-index:2; inset:0; border-radius:inherit; corner-shape:inherit;
+  pointer-events:none; opacity:0;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--reasoning-accent) 62%,transparent),inset 0 0 15px color-mix(in srgb,var(--reasoning-accent) 12%,transparent);
+  transition:opacity 600ms ease;
+}
+.mini-box-control::before {
+  content:""; position:absolute; inset:0; border-radius:inherit; corner-shape:inherit; padding:1.5px;
+  background:conic-gradient(from var(--mini-control-angle),transparent 0deg,color-mix(in srgb,var(--reasoning-accent) 25%,transparent) 70deg,var(--reasoning-accent) 130deg,color-mix(in srgb,var(--reasoning-accent) 65%,var(--surface)) 160deg,transparent 210deg,transparent 360deg);
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor; mask-composite:exclude;
+  animation:mini-box-control-orbit 5.2s linear infinite paused;
+}
+.mini-box-control[data-active="true"] { opacity:1; transition-duration:240ms; }
+.mini-box-control[data-active="true"]::before { animation-play-state:running; }
+.mini-box-control[data-suspended="true"]::before { animation-play-state:paused; }
+@keyframes mini-box-control-orbit { from { --mini-control-angle:0deg; } to { --mini-control-angle:360deg; } }
+@media(prefers-reduced-motion:reduce) {
+  .mini-box-control { transition:none!important; }
+  .mini-box-control::before { animation-duration:5.2s!important; animation-iteration-count:infinite!important; animation-play-state:paused!important; }
+}

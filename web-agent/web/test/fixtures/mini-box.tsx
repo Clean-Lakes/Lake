@@ -65,6 +65,7 @@ function Fixture(){
   <button onClick={()=>{finishCommands();reply={id:'final-answer',at:new Date().toISOString(),type:'message',status:'running',content:'检查结果：两台主机均已返回结果。'};render(value=>value+1);}}>生成总结</button>
   <button onClick={()=>{if(reply)reply.content+='\n\n这是直接追加到最终正文的详细说明，原始命令和已收到的输出仍可回看。';render(value=>value+1);}}>追加总结</button>
   <button onClick={()=>{nextTool={id:'next-tool',at:new Date().toISOString(),type:'operation',title:'inspect_host',status:'running',data:{resource_id:'host-a',target:resources[0]!.name}};render(value=>value+1);}}>继续执行</button>
+  <button onClick={()=>{status=status==='waiting_approval'?'running':'waiting_approval';render(value=>value+1);}}>等待或继续</button>
   <button onClick={()=>{broken=!broken;render(value=>value+1);}}>切换断线</button>
   <button onClick={()=>{denied=!denied;render(value=>value+1);}}>切换权限</button>
   <button onClick={()=>{session=session==='mini-box'?'other-session':'mini-box';render(value=>value+1);}}>切换会话</button>
