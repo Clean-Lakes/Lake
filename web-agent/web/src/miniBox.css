@@ -64,12 +64,12 @@
 .mini-box .mini-box-footer .mini-box-anomalies:hover { color:var(--danger); text-decoration:underline; }
 
 
-/* Keep the rounded 2px mask fixed. Only the inner, prepainted gradient rotates,
-   avoiding a custom-property gradient repaint on every WebKit frame. */
+/* A short blue head with a fading trail follows the real rounded perimeter.
+   The fixed mask clips the wider SVG strokes to the shared 2px window curve. */
 .mini-box-control {
   position:absolute; z-index:2; inset:0; border-radius:inherit; corner-shape:inherit;
   pointer-events:none; opacity:0;
-  box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--reasoning-accent) 18%,transparent),inset 0 0 18px color-mix(in srgb,var(--reasoning-accent) 12%,transparent);
+  box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--reasoning-accent) 6%,transparent),inset 0 0 12px color-mix(in srgb,var(--reasoning-accent) 6%,transparent);
   transition:opacity 600ms ease;
 }
 .mini-box-control-flow {
@@ -79,17 +79,19 @@
   -webkit-mask-composite:xor; mask-composite:exclude;
   overflow:hidden;
 }
-.mini-box-control-flow::before {
-  content:""; position:absolute; left:50%; top:50%; width:max(142%,204px); aspect-ratio:1;
-  translate:-50% -50%; transform:rotate(0deg);
-  background:conic-gradient(color-mix(in srgb,var(--reasoning-accent) 45%,transparent) 0deg,color-mix(in srgb,var(--reasoning-accent) 45%,transparent) 45deg,color-mix(in srgb,var(--reasoning-accent) 75%,transparent) 100deg,color-mix(in srgb,var(--reasoning-accent) 95%,transparent) 150deg,color-mix(in srgb,var(--reasoning-accent) 75%,transparent) 200deg,color-mix(in srgb,var(--reasoning-accent) 45%,transparent) 255deg,color-mix(in srgb,var(--reasoning-accent) 45%,transparent) 360deg);
+.mini-box-control-flow > svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+.mini-box-control-flow rect {
+  fill:none; stroke:var(--reasoning-accent); stroke-width:8px; stroke-linecap:round;
   animation:mini-box-control-orbit 5.2s linear infinite paused;
 }
+.mini-box-control-flow .mini-box-band-tail { stroke-dasharray:18 82; stroke-opacity:.14; animation-delay:-4.472s; }
+.mini-box-control-flow .mini-box-band-middle { stroke-dasharray:10 90; stroke-opacity:.34; animation-delay:-4.888s; }
+.mini-box-band-head { stroke-dasharray:4 96; stroke-opacity:1; }
 .mini-box-control[data-active="true"] { opacity:1; transition-duration:240ms; }
-.mini-box-control[data-active="true"] .mini-box-control-flow::before { animation-play-state:running; will-change:transform; }
-.mini-box-control[data-suspended="true"] .mini-box-control-flow::before { animation-play-state:paused; }
-@keyframes mini-box-control-orbit { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+.mini-box-control[data-active="true"] rect { animation-play-state:running; }
+.mini-box-control[data-suspended="true"] rect { animation-play-state:paused; }
+@keyframes mini-box-control-orbit { from { stroke-dashoffset:0; } to { stroke-dashoffset:-100; } }
 @media(prefers-reduced-motion:reduce) {
   .mini-box-control { transition:none!important; }
-  .mini-box-control-flow::before { animation-duration:5.2s!important; animation-iteration-count:infinite!important; animation-play-state:paused!important; }
+  .mini-box-control-flow rect { animation-duration:5.2s!important; animation-iteration-count:infinite!important; animation-play-state:paused!important; }
 }

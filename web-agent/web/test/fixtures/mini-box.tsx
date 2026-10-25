@@ -46,6 +46,7 @@ window.fetch=async(input,init)=>{
 function Fixture(){
  const [,render]=useState(0);
  useEffect(()=>{const timer=setInterval(()=>{
+  if(params.has('still-output'))return;
   entries.forEach((entry,i)=>{if(entry.status==='running')entry.output+=i?`/srv/app/file-${revision}.txt\r\n`:params.has('local')?`local step ${revision}\r\n`:`demo-worker-${revision}  1/1  Running\r\n`;});revision++;
   proof.textContent=JSON.stringify({requests,entries,notices,status,session,historyDelivered});render(value=>value+1);
  },400);return()=>clearInterval(timer);},[]);
