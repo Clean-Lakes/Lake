@@ -1,5 +1,5 @@
 import {MiniBoxCompletionNotice} from './MiniBox';
-import {isTerminalCommand} from './miniBoxModel';
+import {hasParallelMiniResources,isTerminalCommand} from './miniBoxModel';
 import {UserMessageCopy} from './UserMessageCopy';
 import {MemoryAccessSummary} from "./MemoryAccessSummary";
 import type {MemoryAccess} from "../../shared/contracts";
@@ -211,7 +211,7 @@ function AITranscriptContent({ onOpenMemory,sourceMessageId,onSourceLocated,snap
       const overallSummary=overallProgressSummary(turn,processGroups,stages,timingProps.view);
       const miniStartedAt=timingProps.timing?.startedAt||timingProps.latestUserAt||turn[0]!.at;
       const miniEndedAt=turns[index+1]?.find(entry=>entry.message?.role==='user')?.at;
-      const miniScope={session:snapshot.session.id,terminals:snapshot.terminals??[],startedAt:miniStartedAt,endedAt:miniEndedAt,live:turn===currentTurn&&liveConversation,waiting:snapshot.ai?.status==='waiting_approval',connected:!disabled};
+      const miniScope={session:snapshot.session.id,terminals:snapshot.terminals??[],startedAt:miniStartedAt,endedAt:miniEndedAt,live:turn===currentTurn&&liveConversation,waiting:snapshot.ai?.status==='waiting_approval',connected:!disabled,parallel:turn===currentTurn&&liveConversation&&hasParallelMiniResources(processGroups,snapshot.terminals??[],snapshot.session.id)};
       const renderGroup=({entries:group,progress,resource}:ConversationGroup)=>{
         const entry = group[0]!;
         if(progress)return <ReplyArrival key={entry.id} entryId={entry.id} arrive={!restoredCardIds.current.has(entry.id)&&turn.some(item=>item.message?.id===latestUser?.id)&&!(miniScope.live&&(resource?.kind==='ssh'||resource?.kind==='local')&&group.some(item=>item.card&&isTerminalCommand(item.card)))}><ThinkingTimeline cards={group.map(item=>item.card!)} live={snapshot.ai?.status==='running'&&(group.some(item=>item.card?.status==='running')||entry.id===progressingId)} continuing={entry.id===progressingId} miniScope={mode==='conversation'?miniScope:undefined} resource={resource} stage={stages.byResource.has(entry.id)?<ResourceStageSummary entries={stages.byResource.get(entry.id)!} render={stageContent}/>:undefined} resourceRow onInspect={onInspect}/></ReplyArrival>;

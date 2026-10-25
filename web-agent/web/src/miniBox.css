@@ -95,3 +95,6 @@
   .mini-box-control { transition:none!important; }
   .mini-box-control-flow rect { animation-duration:5.2s!important; animation-iteration-count:infinite!important; animation-play-state:paused!important; }
 }
+
+.mini-box .mini-box-folded-anomalies { flex-shrink:0; border:0; background:transparent; color:var(--danger); font:inherit; font-size:11px; white-space:nowrap; padding:2px 3px; min-height:22px; border-radius:5px; cursor:pointer; }
+.mini-box .mini-box-folded-anomalies:hover { text-decoration:underline; }

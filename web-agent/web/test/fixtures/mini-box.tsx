@@ -9,7 +9,7 @@ import '../../src/assistantProse.css';
 
 const params=new URLSearchParams(location.search);
 if(params.get('theme')==='dark')document.documentElement.dataset.theme='dark';
-let session='mini-box',status='running',revision=1,broken=false,denied=false,historyDelivered=0;
+let session='mini-box',status='running',revision=1,broken=false,denied=false,historyDelivered=0,secondEnabled=!params.has('single');
 const started=new Date(Date.now()-10000).toISOString();
 const resources=[{id:'host-a',projectId:'p',name:params.has('local')?'Local machine':'192.0.2.2',kind:params.has('local')?'local':'ssh'},{id:'host-b',projectId:'p',name:'192.0.2.3',kind:'ssh'}] as Resource[];
 const terminals=resources.map((resource,i)=>({id:'terminal-'+i,sessionId:'mini-box',resourceId:resource.id,generation:'generation-'+i,status:'busy',holder:'agent',writerSessionId:'mini-box',createdAt:started})) as TerminalSession[];
@@ -50,12 +50,14 @@ function Fixture(){
   entries.forEach((entry,i)=>{if(entry.status==='running')entry.output+=i?`/srv/app/file-${revision}.txt\r\n`:params.has('local')?`local step ${revision}\r\n`:`demo-worker-${revision}  1/1  Running\r\n`;});revision++;
   proof.textContent=JSON.stringify({requests,entries,notices,status,session,historyDelivered});render(value=>value+1);
  },400);return()=>clearInterval(timer);},[]);
- const cards=entries.map((entry,i)=>({id:'call-'+i,type:'operation',title:params.has('inspect')||params.has('inspect-sequence')?'inspect_host':'shell',status:entry.stopRequestedAt?'interrupted':params.has('inspect-sequence')&&i===0&&status==='running'?'running':entry.status,at:params.has('inspect-sequence')?started:entry.startedAt??started,data:{resource_id:resources[i]!.id,target:resources[i]!.name,arguments:params.has('inspect')||params.has('inspect-sequence')?{}:{command:entry.command}}})) as AICard[];
+ const cards=entries.filter((_,i)=>i===0||secondEnabled).map((entry,i)=>({id:'call-'+i,type:'operation',title:params.has('inspect')||params.has('inspect-sequence')?'inspect_host':'shell',status:entry.stopRequestedAt?'interrupted':params.has('inspect-sequence')&&i===0&&status==='running'?'running':entry.status,at:params.has('inspect-sequence')?started:entry.startedAt??started,data:{resource_id:resources[i]!.id,target:resources[i]!.name,arguments:params.has('inspect')||params.has('inspect-sequence')?{}:{command:entry.command}}})) as AICard[];
  if(reply)cards.push({...reply});
  if(nextTool)cards.push({...nextTool});
  const snapshot={session:{id:session,projectId:'p'},resources,terminals,messages:[{id:'user',sessionId:session,role:'user',text:'检查这两台主机的运行情况。',createdAt:started}],actions:[],cursor:revision,commandStopNotices:notices,replyTimings:[{messageId:'user',startedAt:started,status:status==='running'?'running':'completed',finishedAt:status==='completed'?new Date().toISOString():''}],ai:{session,status,cards,turnStartedAt:started,cardsOffset:0,totalCards:cards.length}} as SessionSnapshot;
  return <main style={{maxWidth:1040,margin:'40px auto',padding:'0 28px'}}><nav aria-label="Mini Box 隔离验收" style={{display:'flex',flexWrap:'wrap',gap:12,marginBottom:40}}>
   <span>虚构资源 · Mini Box 验收</span>
+  <button onClick={()=>{secondEnabled=true;render(value=>value+1);}}>第二台开始</button>
+  <button onClick={()=>{entries[1]!.status='completed';entries[1]!.exitCode=0;terminals[1]!.status='ready';render(value=>value+1);}}>第二台结束</button>
   <button onClick={()=>{entries[0]!.output+='\x1b[31mERROR: fixture permission denied\x1b[0m\r\nservice account cannot read pods\r\n';render(value=>value+1);}}>注入异常</button>
   <button onClick={()=>{entries[0]!.output+=Array.from({length:200},(_,i)=>`ordinary output ${revision}-${i}\r\n`).join('');render(value=>value+1);}}>追加大量普通输出</button>
   <button onClick={()=>{entries[0]!.output=entries[0]!.output.slice(-90);render(value=>value+1);}}>模拟尾部截断</button>

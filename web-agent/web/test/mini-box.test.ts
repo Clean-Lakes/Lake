@@ -3,7 +3,7 @@ import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {TerminalEntry,TerminalHistory} from '../../shared/contracts';
-import {miniCanStop,miniControlActive,miniEntries,miniTarget,type MiniBoxScope} from '../src/miniBoxModel';
+import {hasParallelMiniResources,miniCanStop,miniControlActive,miniEntries,miniTarget,type MiniBoxScope} from '../src/miniBoxModel';
 import {MiniBoxCompletionNotice} from '../src/MiniBox';
 import {ThinkingTimeline} from '../src/ThinkingTimeline';
 import {ExecutionDetailsOpen} from '../src/TurnExecutionDetails';
@@ -61,4 +61,17 @@ test('AI control spans the short command gaps inside a running host inspection',
  assert.equal(miniControlActive(scope,card,completed,false,true),false);
  assert.equal(miniControlActive(scope,card,miniTarget([history([entry({status:'unknown'})])]),false,false),false);
  assert.equal(miniControlActive(scope,card,miniTarget([history([entry({stopRequestedAt:at})])]),false,false),false);
+});
+
+test('parallel defaults count distinct executing host resources instead of commands or other resource kinds',()=>{
+ const group=(id:string,kind='ssh',status='running',title='shell')=>({resource:{id,kind},entries:[{card:{id:`call-${id}`,type:'operation',title,status,at}}]});
+ assert.equal(hasParallelMiniResources([group('a'),group('b','local')],[],'s'),true);
+ assert.equal(hasParallelMiniResources([group('a'),group('a')],[],'s'),false);
+ assert.equal(hasParallelMiniResources([group('a'),group('b','kubernetes')],[],'s'),false);
+ assert.equal(hasParallelMiniResources([group('a'),group('b','ssh','completed')],[],'s'),false);
+ assert.equal(hasParallelMiniResources([group('a'),group('b','ssh','running','read')],[],'s'),false);
+ const busy={...history().terminal,resourceId:'b',sessionId:'s'};
+ assert.equal(hasParallelMiniResources([group('a'),group('b','ssh','completed')],[busy],'s'),true);
+ assert.equal(hasParallelMiniResources([group('a'),group('b','ssh','completed')],[{...busy,holder:'user'}],'s'),false);
+ assert.equal(hasParallelMiniResources([group('a'),group('b','ssh','completed')],[{...busy,writerSessionId:'foreign'}],'s'),false);
 });

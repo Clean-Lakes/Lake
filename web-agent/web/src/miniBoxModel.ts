@@ -1,6 +1,6 @@
 import type {AICard, TerminalHistory, TerminalSession} from '../../shared/contracts';
 
-export type MiniBoxScope = {session:string;terminals:TerminalSession[];startedAt:string;endedAt?:string;live:boolean;waiting?:boolean;connected:boolean};
+export type MiniBoxScope = {session:string;terminals:TerminalSession[];startedAt:string;endedAt?:string;live:boolean;waiting?:boolean;connected:boolean;parallel?:boolean};
 // Host inspection also executes real command blocks through the same terminal.
 export const isTerminalCommand = (card:AICard) => ['shell','terminal_execute_command','inspect_host'].includes(card.title ?? '');
 
@@ -31,4 +31,17 @@ export function miniControlActive(scope:MiniBoxScope,card:AICard|undefined,targe
   if(!scope.live||!scope.connected||scope.waiting||stale||stopping||target?.entry.stopRequestedAt)return false;
   if(target?.entry.status==='unknown'||target?.history.terminal.status==='disconnected'||target?.history.terminal.status==='unknown')return false;
   return card?.status==='running'||target?.entry.status==='running';
+}
+
+export function hasParallelMiniResources(groups:Array<{resource?:{id?:string;kind?:string};entries:Array<{card?:AICard}>}>,terminals:TerminalSession[],session:string) {
+  const active=new Set<string>();
+  for(const group of groups){
+    const resource=group.resource;
+    if(!resource?.id||!['local','ssh'].includes(resource.kind??''))continue;
+    const commands=group.entries.flatMap(entry=>entry.card&&isTerminalCommand(entry.card)?[entry.card]:[]);
+    if(!commands.length)continue;
+    const busy=terminals.some(terminal=>terminal.resourceId===resource.id&&!!terminal.generation&&terminal.status==='busy'&&terminal.holder==='agent'&&(terminal.writerSessionId??terminal.sessionId)===session);
+    if(busy||commands.some(card=>['running','background_running'].includes(card.status)))active.add(resource.id);
+  }
+  return active.size>1;
 }

@@ -11,7 +11,12 @@ export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScop
   const protocol=kind==='local'?'本机':'SSH';
   const {histories,stale,refresh}=useMiniBox(scope,resource);
   const target=miniTarget(histories);
-  const [open,setOpen]=useState(true),[fullOpen,setFullOpen]=useState(false),[pending,setPending]=useState(''),[error,setError]=useState(''),[jump,setJump]=useState(0);
+  const [open,setOpen]=useState(!scope.parallel),[fullOpen,setFullOpen]=useState(false),[pending,setPending]=useState(''),[error,setError]=useState(''),[jump,setJump]=useState(0);
+  const disclosure=useRef({manual:false,autoFolded:!!scope.parallel});
+  // Entering parallel execution folds untouched boxes once. A later completion
+  // never expands them again, and every explicit viewing choice wins.
+  if(scope.parallel&&!disclosure.current.manual&&!disclosure.current.autoFolded){disclosure.current.autoFolded=true;setOpen(false);}
+  function inspect(){disclosure.current.manual=true;onInspect?.();}
   const detailId=useId(),detail=useRef<HTMLDivElement>(null);
   const observed=useRef<{scope:string;entries:Map<string,{output:string;preview:MiniPreview}>}>({scope:'',entries:new Map()});
   const observationScope=JSON.stringify([scope.session,resource,scope.startedAt,scope.endedAt]);
@@ -58,16 +63,17 @@ export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScop
       <MiniBoxControl active={active}/>
       <header className="mini-box-header"><Glyph name="terminal" size={15}/><span className="mini-box-title">执行命令</span><small className="mini-box-protocol">{protocol}</small>
         <span className={`mini-box-status${active?' is-active':''}`} role="status"><i aria-hidden="true"/><span>{status}</span></span>
+        {!open&&anomalyCount>0&&<button type="button" className="mini-box-folded-anomalies" title="展开并定位异常线索" onClick={()=>{setOpen(true);setFullOpen(true);setJump(value=>value+1);inspect();}}>异常 {anomalyCount}</button>}
         <button type="button" className="mini-box-stop" disabled={!canStop} title="只终止此资源当前命令，其他资源继续" onClick={()=>void stop()}><Glyph name="stop" size={11}/>终止</button>
-        <button type="button" className="mini-box-toggle" aria-label={open?'收起 mini 终端':'展开 mini 终端'} aria-expanded={open} onClick={()=>{setOpen(!open);if(open)setFullOpen(false);onInspect?.();}}><Glyph name="chevron" size={13}/></button>
+        <button type="button" className="mini-box-toggle" aria-label={open?'收起 mini 终端':'展开 mini 终端'} aria-expanded={open} onClick={()=>{setOpen(!open);if(open)setFullOpen(false);inspect();}}><Glyph name="chevron" size={13}/></button>
       </header>
       <div className="mini-box-preview" hidden={!open}>
         <div className="mini-box-command" title={current?.entry.command||'等待命令派发'}><span aria-hidden="true">$</span><code>{current?.entry.command?current.entry.command.replace(/\r?\n/g,' ⏎ '):'等待命令派发…'}</code></div>
         <div className="mini-box-output" aria-label="关键输出预览">{rows.length?rows.map((line,index)=><div key={index} className={line.anomaly?'mini-box-output-line is-anomaly':'mini-box-output-line'} title={line.text}><span>{line.text}</span>{line.count>1&&<small>× {line.count}</small>}</div>):<div className="mini-box-output-empty">{current?.entry.status==='running'?'等待命令输出…':'暂无输出'}</div>}</div>
         <footer className="mini-box-footer">
-          {anomalyCount>0&&<button type="button" className="mini-box-anomalies" onClick={()=>{setFullOpen(true);setJump(value=>value+1);onInspect?.();}}>异常线索 {anomalyCount}</button>}
+          {anomalyCount>0&&<button type="button" className="mini-box-anomalies" onClick={()=>{setFullOpen(true);setJump(value=>value+1);inspect();}}>异常线索 {anomalyCount}</button>}
           {current?.entry.exitCode!=null&&<span className={current.entry.exitCode!==0?'mini-box-exit is-failed':'mini-box-exit'}>退出码 {current.entry.exitCode}</span>}
-          <button type="button" className="mini-box-expand" aria-expanded={fullOpen} aria-controls={detailId} onClick={()=>{setFullOpen(!fullOpen);onInspect?.();}}>{fullOpen?'收起':retainedOnly?'保留输出':'完整输出'}<small> · {lineCount} 行</small><Glyph name="chevron" size={11}/></button>
+          <button type="button" className="mini-box-expand" aria-expanded={fullOpen} aria-controls={detailId} onClick={()=>{setFullOpen(!fullOpen);inspect();}}>{fullOpen?'收起':retainedOnly?'保留输出':'完整输出'}<small> · {lineCount} 行</small><Glyph name="chevron" size={11}/></button>
         </footer>
       </div>
     </section>
