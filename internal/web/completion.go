@@ -28,7 +28,7 @@ func (b *Server) completeDraft(w http.ResponseWriter, r *http.Request, id string
 	if expected := stringOf(data["modelId"]); expected != "" && expected != identity {
 		fail(409, "当前模型已变更")
 	}
-	if utf8.RuneCountInString(strings.TrimSpace(draft)) < 4 {
+	if strings.TrimSpace(draft) == "" {
 		reply(w, 200, Object{"suffix": "", "modelId": identity})
 		return
 	}

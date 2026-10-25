@@ -8,7 +8,7 @@ const commonPrompts=[
 ];
 export function completionEligible(value:string,start:number,end:number,focused:boolean,composing:boolean,blocked:boolean):boolean {
  const length=Array.from(value.trim()).length;
- return focused&&!composing&&!blocked&&start===value.length&&end===value.length&&(value===''||length>=4)&&length<=2000&&!/[。！？.!?]\s*$/.test(value)&&!value.endsWith("\n")&&!/-----BEGIN|(?:api[_-]?key|password|secret|token)\s*[:=]/i.test(value);
+ return focused&&!composing&&!blocked&&start===value.length&&end===value.length&&(value===''||length>0)&&length<=2000&&!/[。！？.!?]\s*$/.test(value)&&!value.endsWith("\n")&&!/-----BEGIN|(?:api[_-]?key|password|secret|token)\s*[:=]/i.test(value);
 }
 export function validCompletion(suffix:unknown):suffix is string {
  return typeof suffix==="string"&&suffix.trim().length>0&&Array.from(suffix).length<=120&&!/[\r\n\x00@]/.test(suffix);

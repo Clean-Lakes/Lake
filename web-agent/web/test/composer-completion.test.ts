@@ -5,7 +5,7 @@ import {completionEligible,localCompletion,validCompletion} from "../src/compose
 test("completion only runs for focused drafts with a collapsed caret at the end",()=>{
  const text="帮我检查";
  assert.equal(completionEligible(text,4,4,true,false,false),true);
- for(const args of [[text,2,2,true,false,false],[text,0,4,true,false,false],[text,4,4,false,false,false],[text,4,4,true,true,false],[text,4,4,true,false,true],["帮我",2,2,true,false,false],["检查完成。",5,5,true,false,false],["api_key=synthetic",17,17,true,false,false]] as const) assert.equal(completionEligible(...args),false);
+ for(const args of [[text,2,2,true,false,false],[text,0,4,true,false,false],[text,4,4,false,false,false],[text,4,4,true,true,false],[text,4,4,true,false,true],["检查完成。",5,5,true,false,false],["api_key=synthetic",17,17,true,false,false]] as const) assert.equal(completionEligible(...args),false);
 });
 test("local fallback favors current-session history while keeping the typed prefix intact",()=>{
  assert.equal(localCompletion("帮我检查",["帮我检查 CPU 使用率","帮我检查 Redis 主从状态"])," Redis 主从状态");
@@ -36,4 +36,11 @@ test("consumed empty suggestions advance without duplicates or cycling back",()=
  const all=new Set<string>();let next:string;
  while((next=localCompletion('',[],all))){assert.ok(!all.has(next));all.add(next);assert.ok(all.size<=4);}
  assert.equal(all.size,4);assert.equal(localCompletion('',[],all),'');
+});
+
+test("one to three typed characters can request model completion without a local match",()=>{
+ for(const text of ["这","这确","这确实","h","hi"]){
+  assert.equal(completionEligible(text,text.length,text.length,true,false,false),true);
+  assert.equal(localCompletion(text,[]),"");
+ }
 });
