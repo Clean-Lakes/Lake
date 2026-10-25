@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,9 +17,10 @@ import (
 
 func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 	for _, scenario := range []struct {
-		name                          string
-		automatic, adaptive, recovery bool
-	}{{name: "guided"}, {name: "automatic", automatic: true}, {name: "delegated_direction", adaptive: true}, {name: "automatic_read_recovery", automatic: true, adaptive: true, recovery: true}} {
+		name                                                    string
+		automatic, adaptive, recovery, finishRepair, unresolved bool
+		maxSteps                                                int
+	}{{name: "guided"}, {name: "automatic", automatic: true}, {name: "delegated_direction", adaptive: true}, {name: "automatic_read_recovery", automatic: true, adaptive: true, recovery: true}, {name: "automatic_completion_repair", automatic: true, adaptive: true, recovery: true, finishRepair: true}, {name: "completion_stops_if_unresolved", automatic: true, adaptive: true, recovery: true, finishRepair: true, unresolved: true}, {name: "completion_preserves_round_budget", automatic: true, adaptive: true, recovery: true, finishRepair: true, maxSteps: 4}} {
 		t.Run(scenario.name, func(t *testing.T) {
 			automatic, adaptive, recovery := scenario.automatic, scenario.adaptive, scenario.recovery
 			b, h := fixture(t)
@@ -34,6 +36,7 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 				t.Fatal(err)
 			}
 			plan := ai.SREPlanRevision{Goal: "核对日志", TaskType: "investigation", Scope: []string{resource}, Steps: []ai.SREPlanStep{{ID: "logs", Role: ai.SREInvestigator, Kind: "observe", Capability: "application", Description: "收集日志证据", ResourceIDs: []string{resource}, CompletionChecks: []string{"取得真实日志"}}, {ID: "summary", Role: ai.SRECoordinator, Kind: "summarize", Description: "归纳事实和缺口", ResourceIDs: []string{resource}, DependsOn: []string{"logs"}, CompletionChecks: []string{"引用证据"}}}}
+			var repairRequests atomic.Int32
 			refPattern := regexp.MustCompile(`a_[a-f0-9]{16}`)
 			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == "GET" {
@@ -44,6 +47,9 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 				_ = json.NewDecoder(r.Body).Decode(&input)
 				messages := objects(input["messages"])
 				content := jsonText(messages)
+				if strings.Contains(content, "[PILOT_COMPLETION_REPAIR]") {
+					repairRequests.Add(1)
+				}
 				system := ""
 				if len(messages) > 0 {
 					system = stringOf(messages[0]["content"])
@@ -95,6 +101,10 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 						emitModel(w, "", []ai.Call{{ID: "collect_alternative", Name: "observe_logs", Arguments: jsonText(Object{"asset_ref": arguments["asset_ref"], "path": alternativePath})}})
 						return
 					}
+					if scenario.finishRepair && (scenario.unresolved || !strings.Contains(content, "[PILOT_COMPLETION_REPAIR]")) {
+						emitModel(w, jsonText(Object{"schemaVersion": 1, "summary": "采样已完成", "facts": []Object{{"statement": "已读取替代日志", "evidenceIds": regexp.MustCompile(`ev_[a-f0-9]{32}`).FindAllString(content, -1)}}, "hypotheses": []string{}, "unknowns": []string{}, "nextChecks": []string{}}), nil)
+						return
+					}
 					if recovery && !inspected {
 						emitModel(w, "", []ai.Call{{ID: "inspect_gap", Name: "pilot_read_recovery", Arguments: "{}"}})
 						return
@@ -130,6 +140,9 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 			defer provider.Close()
 			apiTest(t, h, "PUT", "/api/settings/model", Object{"url": provider.URL, "name": "pilot-fixture", "protocol": "openai"}, 200)
 			allowFixtureHost(b, session)
+			if scenario.maxSteps > 0 {
+				apiTest(t, h, "POST", "/api/sessions/"+session+"/ai/configure", Object{"maxSteps": scenario.maxSteps}, 200)
+			}
 			apiTest(t, h, "PUT", "/api/projects/"+project+"/pilot", Object{"enabled": true, "autoAdvance": automatic, "expectedRevision": 0}, 200)
 			created := apiTest(t, h, "POST", "/api/sessions/"+session+"/sre/tasks", Object{"goal": "核对日志", "resourceIds": []string{resource}, "mode": "assist", "clientRequestId": "pilot_run"}, 202)
 			id := stringOf(created["id"])
@@ -169,6 +182,25 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 				apiTest(t, h, "POST", "/api/sessions/"+session+"/ai/agentQuestionReply", Object{"runId": pending.ID, "id": pending.Question.ID, "answers": Object{pending.Question.Questions[0].ID: []string{answer}}}, 200)
 			}
 			task := waitSRE(t, b, session, id, "completed", "paused")
+			if scenario.unresolved || scenario.maxSteps > 0 {
+				expected := int32(1)
+				if scenario.maxSteps > 0 {
+					expected = 0
+				}
+				if task.Status != "paused" || repairRequests.Load() != expected || len(task.Attempts) != 1 || len(task.Attempts[0].Operations) != 2 || len(task.Attempts[0].ReadRecoveries) != 0 {
+					t.Fatalf("completion repair widened its allowance or lost the gap: status=%s requests=%d attempts=%d", task.Status, repairRequests.Load(), len(task.Attempts))
+				}
+				return
+			}
+			if scenario.finishRepair && scenario.maxSteps == 0 {
+				persisted, loadErr := b.Store.LoadSRETask(session, id)
+				if loadErr != nil || len(persisted.Attempts) == 0 || persisted.Attempts[0].CompletionRepair == nil || persisted.Attempts[0].CompletionRepair.MaxRounds > 8 {
+					t.Fatal("completion continuation lost its durable bound", loadErr)
+				}
+			}
+			if scenario.finishRepair && repairRequests.Load() == 0 {
+				t.Fatal("completion was not validated before closing the role")
+			}
 			if task.Status != "completed" {
 				t.Fatalf("Pilot did not complete actual evidence work: %s", task.Error)
 			}

@@ -76,3 +76,12 @@ type PilotReadRecovery struct {
 	Reason                  string   `json:"reason"`
 	CreatedAt               string   `json:"createdAt"`
 }
+
+// One completion continuation belongs to the original attempt, not a new job.
+// Persist its allowance so recovering the ADK role cannot renew the bound.
+type PilotCompletionRepair struct {
+	RoleRunID               string `json:"roleRunId"`
+	MaxRounds               int    `json:"maxRounds"`
+	OriginalRemainingRounds int    `json:"originalRemainingRounds"`
+	StartedAt               string `json:"startedAt"`
+}

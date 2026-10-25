@@ -202,7 +202,20 @@ func TestPilotLongTaskCompletesAcrossParallelRolesAndResume(t *testing.T) {
 					t.Fatal("resume failed", err)
 				}
 			}
-			task := waitSRE(t, b, session, id, "completed", "paused")
+			// This deliberately dispatches >120 real operations; race instrumentation
+			// costs much more than the short-role fixtures' 45 second settle window.
+			deadline := time.Now().Add(150 * time.Second)
+			var task ai.SRETask
+			for {
+				task, _ = b.Store.LoadSRETask(session, id)
+				if task.Status == "completed" || task.Status == "paused" {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("long task did not settle: status=%s attempts=%d", task.Status, len(task.Attempts))
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
 			if task.Status != "completed" {
 				for _, a := range task.Attempts {
 					successful := 0

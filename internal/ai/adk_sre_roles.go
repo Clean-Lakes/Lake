@@ -178,6 +178,7 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 		child.Bridge = nil
 	}
 	cc := c
+	cc.MaxSteps = pilotRoleRoundLimit(task, attemptID, w.runID, cc.MaxSteps)
 	cc.sreCoordinator = false
 	cc.Assets = assets
 	cc.Directories = nil
@@ -382,6 +383,10 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 	} else {
 		err = child.ExecuteTurn(jobCtx, w.runID, TurnInput{UserText: prompt})
 	}
+	remainingRounds := cc.MaxSteps
+	if err == nil && cc.sre.Pilot != nil && !noTools {
+		remainingRounds, err = child.repairPilotReadCompletion(jobCtx, w.runID, cc)
+	}
 	if err == nil && step.Role == SREVerifier && step.Action != nil {
 		cs, ce := child.get(w.runID)
 		if ce != nil {
@@ -437,7 +442,10 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 		if parseErr == nil {
 			parseErr = ValidateSRERoleReport(report, out.Evidence)
 		}
-		if parseErr != nil {
+		if parseErr != nil && remainingRounds == 0 {
+			err = parseErr
+		}
+		if parseErr != nil && remainingRounds > 0 {
 			cc.sre.NoTools = true
 			w.mu.Lock()
 			w.finalizing = true

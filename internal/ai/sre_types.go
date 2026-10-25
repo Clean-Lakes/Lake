@@ -100,19 +100,20 @@ type SREOperation struct {
 }
 
 type SREStepAttempt struct {
-	ReadRecoveries      []PilotReadRecovery `json:"readRecoveries,omitempty"`
-	Report              *SRERoleReport      `json:"report,omitempty"`
-	ReusedFromAttemptID string              `json:"reusedFromAttemptId,omitempty"`
-	ID                  string              `json:"id"`
-	PlanRunID           string              `json:"planRunId"`
-	StepID              string              `json:"stepId"`
-	RoleRunID           string              `json:"roleRunId"`
-	Status              string              `json:"status"`
-	Evidence            []AgentEvidence     `json:"evidence"`
-	Operations          []SREOperation      `json:"operations"`
-	Result              string              `json:"result,omitempty"`
-	StartedAt           string              `json:"startedAt"`
-	FinishedAt          string              `json:"finishedAt,omitempty"`
+	CompletionRepair    *PilotCompletionRepair `json:"completionRepair,omitempty"`
+	ReadRecoveries      []PilotReadRecovery    `json:"readRecoveries,omitempty"`
+	Report              *SRERoleReport         `json:"report,omitempty"`
+	ReusedFromAttemptID string                 `json:"reusedFromAttemptId,omitempty"`
+	ID                  string                 `json:"id"`
+	PlanRunID           string                 `json:"planRunId"`
+	StepID              string                 `json:"stepId"`
+	RoleRunID           string                 `json:"roleRunId"`
+	Status              string                 `json:"status"`
+	Evidence            []AgentEvidence        `json:"evidence"`
+	Operations          []SREOperation         `json:"operations"`
+	Result              string                 `json:"result,omitempty"`
+	StartedAt           string                 `json:"startedAt"`
+	FinishedAt          string                 `json:"finishedAt,omitempty"`
 }
 
 type SREFact struct {

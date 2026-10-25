@@ -183,3 +183,19 @@ func TestPilotOutstandingReadContextOffersOnlyFreshCompleteCandidates(t *testing
 		t.Fatal("resolved gap kept prompting retries")
 	}
 }
+
+func TestPilotCompletionRepairRoundLimitSurvivesRoleRecovery(t *testing.T) {
+	task := SRETask{Attempts: []SREStepAttempt{{ID: "own", CompletionRepair: &PilotCompletionRepair{RoleRunID: "run", MaxRounds: 8, OriginalRemainingRounds: 20}}}}
+	if got := pilotRoleRoundLimit(task, "own", "run", 160); got != 8 {
+		t.Fatal("recovery renewed repair rounds", got)
+	}
+	if got := pilotRoleRoundLimit(task, "own", "run", 3); got != 3 {
+		t.Fatal("repair widened parent allowance", got)
+	}
+	if got := pilotRoleRoundLimit(task, "other", "run", 160); got != 160 {
+		t.Fatal("repair crossed attempts")
+	}
+	if got := pilotRoleRoundLimit(task, "own", "other", 160); got != 160 {
+		t.Fatal("repair crossed roles")
+	}
+}
