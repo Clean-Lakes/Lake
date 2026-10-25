@@ -451,15 +451,18 @@ func (e *Engine) buildSREPlan(ctx context.Context, sessionID string, task SRETas
 func sreHandoff(t SRETask) string {
 	rows := []map[string]any{}
 	for _, a := range t.Attempts {
-		if a.Result != "" || len(a.Evidence) > 0 {
-			rows = append(rows, map[string]any{"stepId": a.StepID, "status": a.Status, "result": a.Result, "report": a.Report, "evidence": a.Evidence, "operations": a.Operations})
+		if a.Result != "" || len(a.Evidence) > 0 || len(a.Operations) > 0 || len(a.ReadRecoveries) > 0 {
+			rows = append(rows, map[string]any{"stepId": a.StepID, "status": a.Status, "result": a.Result, "report": a.Report, "evidence": a.Evidence, "operations": a.Operations, "readRecoveries": a.ReadRecoveries})
 		}
 	}
+	// Overview comes first so source clipping cannot erase later step outcomes.
+	header := "Recorded task overview:\n" + js(sreHandoffOverview(t)) + "\nSource detail preview (read full authorized evidence with sre_team_read when needed):\n"
 	text := js(rows)
-	if len(text) > 16000 {
-		text = utf8Prefix(text, 16000) + " [TRUNCATED]"
+	limit := max(0, 16000-len(header)-len(" [TRUNCATED]"))
+	if len(text) > limit {
+		text = utf8Prefix(text, limit) + " [TRUNCATED]"
 	}
-	return text
+	return header + text
 }
 
 func (e *Engine) ReviseSREPlan(sessionID, taskID string, expected int, plan SREPlanRevision) (SRETask, error) {
