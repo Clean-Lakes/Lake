@@ -21,7 +21,9 @@ test('Pilot uses gray/foreground textual enablement state and remains off by def
  assert.match(off,/Lake Pilot/);assert.match(off,/aria-pressed="false"/);assert.match(off,/pilot-mode-toggle/);assert.ok(!off.includes('SRE 协作'));assert.ok(!off.includes('role="switch"'));
  const on=renderToStaticMarkup(createElement(LakePilotControl,{snapshot:{...snapshot,sre:{...snapshot.sre!,enabled:true,pilot:{enabled:true,autoAdvance:false,revision:1}}},onUpdated:async()=>{}}));
  assert.match(on,/aria-pressed="true"/);
- assert.ok(!off.includes('role="slider"'));assert.match(on,/role="slider"/);assert.match(on,/向右滑动解锁自动推进/);assert.ok(!on.includes('Lake Pilot 设置'));
+ assert.ok(!off.includes('role="slider"')&&!on.includes('role="slider"'));assert.match(off,/data-mode="off"/);assert.match(on,/data-mode="manual"/);assert.ok(!on.includes('pilot-auto-badge'));
+ const auto=renderToStaticMarkup(createElement(LakePilotControl,{snapshot:{...snapshot,sre:{...snapshot.sre!,enabled:true,pilot:{enabled:true,autoAdvance:true,revision:2}}},onUpdated:async()=>{}}));
+ assert.match(auto,/data-mode="auto"/);assert.match(auto,/pilot-auto-badge/);assert.match(auto,/>AUTO<\/span>/);assert.match(auto,/点击关闭 Lake Pilot/);
 });
 
 test('Each real Agent work item has its own steps and exactly one historical anchor',()=>{
