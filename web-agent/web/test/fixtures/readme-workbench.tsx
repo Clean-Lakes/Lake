@@ -5,6 +5,7 @@ import App from '../../src/App';
 import {WindowsChrome} from '../../src/WindowsChrome';
 import {setThemePreference} from '../../src/appearance';
 import type {Resource,WorkSession,SessionSnapshot,SRETask} from '../../../shared/contracts';
+import {islandFixture, type IslandFixtureState} from './pilot-island-data';
 import '../../src/theme.css';
 import '../../src/appSelect.css';
 import '../../src/providerIcon.css';
@@ -50,6 +51,24 @@ const snapshot={session,resources,resourceTree:tree,messages:[{id:'demo-question
 const model={id:'demo-model',providerId:'demo-provider',providerName:'DeepSeek',modelId:'deepseek-chat',name:'DeepSeek',displayName:'DeepSeek',protocol:'openai'};
 const catalog={projects:[project],sessions,resources,resourceTree:tree,tags:[],terminals:[]};
 const bootstrap={authenticated:true,modelConfigured:true,modelName:'DeepSeek',modelId:model.modelId,modelSelection:model,terminalMode:'pty',supportsImageInput:false,aiRuntime:'go'};
+const islandQuery = new URLSearchParams(location.search).get('pilot-island');
+const islandWrites: string[] = [];
+function applyIsland(state: IslandFixtureState) {
+ const incoming = islandFixture(state, session.id, project.id);
+ project.name = 'HexHub 服务器'; session.title = '主机资源状态检查';
+ session.status = ['paused','failed','finished','cancelled'].includes(state) ? 'completed' : 'investigating';
+ snapshot.ai = {...snapshot.ai!, ...incoming.ai!}; snapshot.sre = incoming.sre;
+ if (['paused','failed','finished','cancelled'].includes(state)) {
+  snapshot.ai.status = 'completed';
+  for (const agent of snapshot.ai.agentRuns ?? []) if (agent.status === 'running') agent.status = state === 'finished' ? 'completed' : 'interrupted';
+ }
+ snapshot.sre!.tasks[0]!.revision = snapshot.cursor + 1;
+ snapshot.messages = [{id:'island-user',sessionId:session.id,role:'user',text:'只读检查主机资源与日志来源。',createdAt:'2026-10-26T00:01:00Z'}];
+}
+if (islandQuery) {
+ applyIsland(islandQuery as IslandFixtureState);
+ if (new URLSearchParams(location.search).has('long-title')) session.title = '主机资源状态检查与六个业务服务日志来源独立复核'.repeat(4);
+}
 if(new URLSearchParams(location.search).has('conversation-radii')){
  const resource=resources.find(value=>value.id==='postgres')!;
  const label='@'+resource.name;
@@ -88,6 +107,7 @@ const fetchOriginal=window.fetch.bind(window);
 window.fetch=async(input,init)=>{
  const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href);
  if(!url.pathname.startsWith('/api/'))return fetchOriginal(input,init);
+ if(islandQuery&&(init?.method??'GET')!=='GET')islandWrites.push(url.pathname);
  if(sentTagsProof&&init?.method==='POST'&&url.pathname.endsWith('/messages')){
   const payload=JSON.parse(String(init.body));
   snapshot.messages.push({id:'sent-tags-'+snapshot.messages.length,sessionId:session.id,role:'user',text:payload.text,mentions:payload.mentions,createdAt:at(33+snapshot.messages.length)});snapshot.cursor++;
@@ -122,6 +142,15 @@ class DemoEventSource extends EventTarget {
 window.EventSource=DemoEventSource as unknown as typeof EventSource;
 window.lakeDesktopUpdates={platform:'macOS · Apple Silicon',command:async()=>({status:'current',currentVersion:'0.3.17',message:'当前已是最新版本',updateAvailable:false})};
 createRoot(document.getElementById('root')!).render(<><App/><WindowsChrome/></>);
+
+if (islandQuery) {
+ const emit = () => {snapshot.cursor++;for(const stream of demoStreams)stream.onmessage?.(new MessageEvent('message',{data:JSON.stringify({sessionId:session.id,type:'session',seq:snapshot.cursor})}));};
+ Object.assign(window, {lakeIslandQA: {
+  state(value: IslandFixtureState) {applyIsland(value);emit();},
+  pulse(value: number) {for(const agent of snapshot.ai!.agentRuns ?? []) {agent.toolCount=value;agent.activityUpdatedAt=new Date().toISOString();}emit();},
+  writes: islandWrites,
+ }});
+}
 
 // Exercise the real App SSE -> snapshot -> header/composer path with safe local data.
 if(new URLSearchParams(location.search).has('live-context')){

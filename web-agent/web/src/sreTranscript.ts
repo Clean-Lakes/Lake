@@ -1,4 +1,5 @@
 import {sreBlocksResume,sreNeedsVerification,sreIncompleteRead} from './sreOperationPolicy';
+import {pilotStepStatus} from './pilotPresentation';
 import type {SRETask,SREAgentRole,SREPlanStep,SREStepAttempt,SessionSnapshot,AgentRun} from '../../shared/contracts';
 
 export const sreRoles:Record<SREAgentRole,{name:string;description:string}>={coordinator:{name:'协调者',description:'计划与调度'},investigator:{name:'调查员',description:'只读取证'},executor:{name:'执行员',description:'受控执行'},verifier:{name:'验证员',description:'独立复测'}};
@@ -25,6 +26,7 @@ export const sreTaskActive=(task:SRETask)=>['draft','active','waiting_input','wa
 export function sreCanStart(task:SRETask){return !!task.plans?.length&&['draft','paused','waiting_input'].includes(task.status)&&!task.attempts?.some(a=>a.operations?.some(sreBlocksResume))}
 
 export function sreStepStatus(task:SRETask,step:SREPlanStep,runs:AgentRun[]=[]){
+ if(task.pilot&&task.plans.at(-1))return pilotStepStatus(task,task.plans.at(-1)!,step,runs);
  const attempt=sreStepAttempt(task,step);
  if(!attempt)return 'pending';
  const run=runs.find(r=>r.id===attempt.roleRunId&&r.sreTaskId===task.id);

@@ -16,6 +16,9 @@ import {applyLiveText} from './liveTextUpdates';
 import {sreSessionPresentation} from './sreSessionPresentation';
 import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerMentions";
 import {LakePilotControl} from './LakePilotControl';
+import {PilotStatusIsland} from './PilotStatusIsland';
+import {pilotIslandModel} from './pilotIslandModel';
+import './pilotIsland.css';
 import './pilot.css';
 import {appendResourceMention,composerMessage,composerResourceIds,selectComposerMention,filterMentions,mentionOptions,nextMentionCategory,type MentionCategory,type MentionOption} from "./composerMentionState";
 import {ComposerTextInput,type ComposerInputHandle} from "./ComposerTextInput";
@@ -700,6 +703,7 @@ function App() {
   const currentSessionPresentation = selectedSession ? sreSessionPresentation(selectedSession,activeSnapshot?.sre?.tasks) : {};
   const currentSessionStatus = currentSessionPresentation.status ?? selectedSession?.status;
   const selectedResource = catalog?.resources.find(item => item.id === route.resourceId);
+  const headerPilot = !selectedResource && !isPlansPage ? pilotIslandModel(activeSnapshot) : null;
   const selectedProjectId = selectedResource?.projectId ?? selectedSession?.projectId;
   useEffect(() => {
     if (selectedProjectId) setSidebarProjectId(selectedProjectId);
@@ -1423,11 +1427,15 @@ function App() {
     </aside>
 
     <main className={`workspace${!selectedSession&&!selectedResource?" is-welcome":""}${selectedSession&&!selectedResource&&!isPlansPage?" has-floating-header":""}`} onDragOver={event=>{if(selectedSession&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(!selectedSession||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
-      <header className="workspace-header">
+      <header className={`workspace-header${headerPilot ? ' has-pilot-island' : ''}`}>
         {selectedSession && !selectedResource && !isPlansPage && <span className="workspace-header-glass" aria-hidden="true"/>}
-        {selectedSession && !selectedResource && !isPlansPage && <HeaderSweep key={selectedSession.id} active={currentSessionStatus === "investigating"}/>}
+        {selectedSession && !selectedResource && !isPlansPage && !headerPilot && <HeaderSweep key={selectedSession.id} active={currentSessionStatus === "investigating"}/>}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
-        <div className="breadcrumbs"><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span><strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/><span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong>{selectedSession && !selectedResource && <SessionStateBadge session={selectedSession} {...currentSessionPresentation}/>}</div>
+        <div className="breadcrumbs"><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span><strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/><span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong>{selectedSession && !selectedResource && !headerPilot && <SessionStateBadge session={selectedSession} {...currentSessionPresentation}/>}</div>
+        {headerPilot && <PilotStatusIsland key={`${selectedSession?.id}:${headerPilot.taskId}:${headerPilot.planId ?? ''}`} model={headerPilot} onInspect={targetId => {
+          pauseFollowing(); setConversationMode('conversation');
+          requestAnimationFrame(() => {const target = document.getElementById(targetId); target?.focus({preventScroll: true}); target?.scrollIntoView({block: 'start'});});
+        }}/>}
       </header>
 
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}

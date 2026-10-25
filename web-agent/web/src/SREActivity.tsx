@@ -8,9 +8,12 @@ export function sreRoleLiveState(task:SRETask,entry:SRETranscriptEntry,run?:Agen
  const current=task.runs?.at(-1);
  const owned=!!run&&(!run.sreTaskId||run.sreTaskId===task.id)&&(!attempt||!current||attempt.planRunId===current.id);
  const unknown=attempt?.operations?.some(o=>o.status==='unknown'&&(!task.pilot||o.risk!=='readonly'))??false;
- const waiting=owned&&(!!run?.pending||run?.status==='waiting_approval');
- const active=entry.kind==='progress'&&owned&&run?.status==='running'&&['active','waiting_approval'].includes(task.status)&&!waiting&&!unknown&&!run?.question?.pilot&&(!attempt||attempt.status==='running');
- const label=unknown?'结果待核实':waiting?'等待确认':owned&&run?.question?.pilot?'等待选择':task.pilot&&!active&&sreIncompleteRead(attempt?.operations,attempt?.readRecoveries)?'检查未完成':owned&&run?.status!=='running'?(sreStatus[run!.status]??run!.status):!['active','waiting_approval'].includes(task.status)?(sreStatus[task.status]??task.status):active?'执行中':entry.kind==='progress'?'状态待更新':'已结束';
+ const liveTask=['active','waiting_approval'].includes(task.status);
+ const liveRun=owned&&liveTask&&!!run&&['running','queued','waiting_input','waiting_approval'].includes(run.status)&&(!attempt||['running','queued','waiting_input','waiting_approval'].includes(attempt.status));
+ const waiting=liveRun&&(!!run?.pending||run?.status==='waiting_approval');
+ const question=liveRun&&!!run?.question;
+ const active=entry.kind==='progress'&&owned&&run?.status==='running'&&['active','waiting_approval'].includes(task.status)&&!waiting&&!unknown&&!question&&(!attempt||attempt.status==='running');
+ const label=unknown?'结果待核实':waiting?'等待确认':question?(run?.question?.pilot?'等待选择':'等待补充'):task.pilot&&!active&&sreIncompleteRead(attempt?.operations,attempt?.readRecoveries)?'检查未完成':owned&&run?.status!=='running'?(sreStatus[run!.status]??run!.status):!['active','waiting_approval'].includes(task.status)?(sreStatus[task.status]??task.status):active?'执行中':entry.kind==='progress'?'状态待更新':'已结束';
  return {active,label,waiting,unknown};
 }
 export function sreActivityLabel(run:AgentRun){

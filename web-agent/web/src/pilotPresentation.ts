@@ -29,11 +29,13 @@ export function pilotStepStatus(task:SRETask,plan:SREPlanRevision,step:SREPlanSt
  const attempt=task.attempts.filter(value=>value.planRunId===run?.id&&value.stepId===step.id).at(-1);
  if(!attempt)return 'pending';
  if(attempt.operations?.some(sreNeedsVerification))return 'unknown';
+ const agent=['running','waiting_input','waiting_approval'].includes(attempt.status)?runs.find(value=>value.id===attempt.roleRunId&&value.sreTaskId===task.id&&!['completed','failed','cancelled','interrupted'].includes(value.status)):undefined;
+ if(agent?.pending||agent?.status==='waiting_approval')return 'waiting_approval';
+ if(agent?.question||agent?.status==='waiting_input')return 'waiting_input';
  if(attempt.operations?.some(value=>value.status==='dispatched'))return 'running';
+ if(agent?.status==='queued')return 'queued';
  if(!task.pilot||!['running','waiting_input','waiting_approval'].includes(attempt.status)){if(sreIncompleteRead(attempt.operations??[],attempt.readRecoveries??[]))return 'failed';}
- const agent=runs.find(value=>value.id===attempt.roleRunId&&value.sreTaskId===task.id);
- if(agent?.question)return 'waiting_input';
- if(agent?.pending||attempt.operations?.some(value=>value.status==='waiting_approval'))return 'waiting_approval';
+ if(attempt.operations?.some(value=>value.status==='waiting_approval'))return 'waiting_approval';
  // Completed commands do not replace the actual step's deliverable outcome.
  return attempt.status;
 }
