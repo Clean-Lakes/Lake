@@ -83,3 +83,14 @@ test('Actual replacement reads remove the incomplete projection while unknown ch
  const active={...task,pilot:{autoAdvance:true,settingsRevision:1},attempts:[{...task.attempts[0]!,operations}]} as SRETask;
  assert.equal(pilotStepStatus(active,task.plans[0]!,task.plans[0]!.steps[0]!),'running');
 });
+
+
+test('Pilot continues displaying active work while adapting a read failure; changes remain blocked',()=>{
+ const current={...task,status:'active',pilot:{autoAdvance:true,settingsRevision:1}} as SRETask;
+ const failed={id:'old',risk:'readonly',status:'unknown',call:{name:'grep',arguments:'{}'}} as SREOperation;
+ const attempt={...task.attempts[0]!,status:'running',operations:[failed]} as SRETask['attempts'][number];
+ const run={id:'agent',sreTaskId:task.id,status:'running'} as Parameters<typeof sreRoleLiveState>[2];
+ const active=sreRoleLiveState(current,entry,run,attempt);assert.equal(active.active,true);assert.equal(active.label,'执行中');
+ const ended=sreRoleLiveState({...current,status:'paused'},entry,run,{...attempt,status:'failed'});assert.equal(ended.active,false);assert.equal(ended.label,'检查未完成');
+ const change=sreRoleLiveState(current,entry,run,{...attempt,operations:[{...failed,risk:'write'}]});assert.equal(change.active,false);assert.equal(change.label,'结果待核实');
+});

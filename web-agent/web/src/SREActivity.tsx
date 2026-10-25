@@ -1,15 +1,16 @@
 import {useEffect,useState} from 'react';
 import type {AgentRun,SRETask,SREStepAttempt,SRETranscriptEntry} from '../../shared/contracts';
 import {StatusText} from './StatusText';
+import {sreIncompleteRead} from './sreOperationPolicy';
 import {sreStatus} from './sreTranscript';
 
 export function sreRoleLiveState(task:SRETask,entry:SRETranscriptEntry,run?:AgentRun,attempt?:SREStepAttempt){
  const current=task.runs?.at(-1);
  const owned=!!run&&(!run.sreTaskId||run.sreTaskId===task.id)&&(!attempt||!current||attempt.planRunId===current.id);
- const unknown=attempt?.operations?.some(o=>o.status==='unknown')??false;
+ const unknown=attempt?.operations?.some(o=>o.status==='unknown'&&(!task.pilot||o.risk!=='readonly'))??false;
  const waiting=owned&&(!!run?.pending||run?.status==='waiting_approval');
  const active=entry.kind==='progress'&&owned&&run?.status==='running'&&['active','waiting_approval'].includes(task.status)&&!waiting&&!unknown&&!run?.question?.pilot&&(!attempt||attempt.status==='running');
- const label=unknown?'结果待核实':waiting?'等待确认':owned&&run?.question?.pilot?'等待选择':owned&&run?.status!=='running'?(sreStatus[run!.status]??run!.status):!['active','waiting_approval'].includes(task.status)?(sreStatus[task.status]??task.status):active?'执行中':entry.kind==='progress'?'状态待更新':'已结束';
+ const label=unknown?'结果待核实':waiting?'等待确认':owned&&run?.question?.pilot?'等待选择':task.pilot&&!active&&sreIncompleteRead(attempt?.operations,attempt?.readRecoveries)?'检查未完成':owned&&run?.status!=='running'?(sreStatus[run!.status]??run!.status):!['active','waiting_approval'].includes(task.status)?(sreStatus[task.status]??task.status):active?'执行中':entry.kind==='progress'?'状态待更新':'已结束';
  return {active,label,waiting,unknown};
 }
 export function sreActivityLabel(run:AgentRun){
