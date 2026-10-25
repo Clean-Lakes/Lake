@@ -3,7 +3,7 @@ import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {TerminalEntry,TerminalHistory} from '../../shared/contracts';
-import {miniCanStop,miniEntries,miniTarget,type MiniBoxScope} from '../src/miniBoxModel';
+import {miniCanStop,miniControlActive,miniEntries,miniTarget,type MiniBoxScope} from '../src/miniBoxModel';
 import {MiniBoxCompletionNotice} from '../src/MiniBox';
 import {ThinkingTimeline} from '../src/ThinkingTimeline';
 import {ExecutionDetailsOpen} from '../src/TurnExecutionDetails';
@@ -48,4 +48,17 @@ test('compact preview retains every raw command line and excludes manual screen 
 test('turn-end notice names only resources with a user stop in that turn',()=>{
  const html=renderToStaticMarkup(createElement(MiniBoxCompletionNotice,{startedAt:at,notices:[{entryId:'e',terminalId:'t',resourceId:'r',resourceName:'SSH A',requestedAt:at,status:'unknown',exitCode:null,finishedAt:at},{entryId:'old',terminalId:'old',resourceId:'old',resourceName:'Old resource',requestedAt:'2026-10-23T00:00:00Z',status:'unknown',exitCode:null,finishedAt:null}]}));
  assert.ok(html.includes('SSH A'));assert.ok(!html.includes('Old resource'));assert.ok(html.includes('需核查'));
+});
+
+test('AI control spans the short command gaps inside a running host inspection',()=>{
+ const card={id:'inspection',type:'operation',title:'inspect_host',status:'running',at};
+ const completed=miniTarget([history([entry({status:'completed',exitCode:0})])]);
+ assert.equal(miniControlActive(scope,card,completed,false,false),true);
+ assert.equal(miniControlActive(scope,{...card,status:'completed'},completed,false,false),false);
+ assert.equal(miniControlActive(scope,card,miniTarget([history()]),false,false),true);
+ for(const options of [{...scope,live:false},{...scope,connected:false},{...scope,waiting:true}])assert.equal(miniControlActive(options,card,completed,false,false),false);
+ assert.equal(miniControlActive(scope,card,completed,true,false),false);
+ assert.equal(miniControlActive(scope,card,completed,false,true),false);
+ assert.equal(miniControlActive(scope,card,miniTarget([history([entry({status:'unknown'})])]),false,false),false);
+ assert.equal(miniControlActive(scope,card,miniTarget([history([entry({stopRequestedAt:at})])]),false,false),false);
 });

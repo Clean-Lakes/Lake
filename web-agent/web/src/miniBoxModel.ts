@@ -24,3 +24,11 @@ export function miniCanStop(target:ReturnType<typeof miniTarget>,scope:MiniBoxSc
     &&target.entry.status==='running'&&target.history.terminal.status==='busy'&&target.history.terminal.holder==='agent'
     &&(!target.history.terminal.writerSessionId||target.history.terminal.writerSessionId===scope.session);
 }
+
+// inspect_host owns a sequence of command entries. A completed sample does not
+// release AI control while its parent operation is still running.
+export function miniControlActive(scope:MiniBoxScope,card:AICard|undefined,target:ReturnType<typeof miniTarget>,stale:boolean,stopping:boolean) {
+  if(!scope.live||!scope.connected||scope.waiting||stale||stopping||target?.entry.stopRequestedAt)return false;
+  if(target?.entry.status==='unknown'||target?.history.terminal.status==='disconnected'||target?.history.terminal.status==='unknown')return false;
+  return card?.status==='running'||target?.entry.status==='running';
+}

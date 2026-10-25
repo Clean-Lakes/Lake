@@ -2,7 +2,7 @@ import {useId,useLayoutEffect,useRef,useState} from 'react';
 import type {AICard,CommandStopNotice} from '../../shared/contracts';
 import {api} from './api';
 import {Glyph} from './Icons';
-import {miniCanStop,miniTarget,type MiniBoxScope} from './miniBoxModel';
+import {miniCanStop,miniControlActive,miniTarget,type MiniBoxScope} from './miniBoxModel';
 import {miniAnomalyLine,miniPreview,miniPreviewRows,miniReadableOutput,miniRecordedEntry,miniRecordedEntries,retainMiniPreview,miniExecutionStatus,type MiniPreview} from './miniBoxPreview';
 import {useMiniBox} from './useMiniBox';
 import {MiniBoxControl} from './MiniBoxControl';
@@ -44,7 +44,7 @@ export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScop
   const currentKey=target?`${target.history.terminal.id}:${target.entry.id}`:'';
   const stopping=!!target&&(!!target.entry.stopRequestedAt||pending===currentKey);
   const canStop=miniCanStop(target,scope,stale)&&!stopping&&!dispatching;
-  const active=scope.live&&scope.connected&&!stale&&!stopping&&!scope.waiting&&current?.entry.status==='running'&&(last?.status==='running'||target?.entry.status==='running');
+  const active=miniControlActive(scope,cards.find(card=>card.status==='running'),target,stale,stopping);
   const status=miniExecutionStatus({entry:current?.entry,card:last,stale,stopping,active,anomalies:preview.anomalies.length,dispatching});
   async function stop(){
     if(!canStop||!target)return;

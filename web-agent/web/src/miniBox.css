@@ -64,28 +64,32 @@
 .mini-box .mini-box-footer .mini-box-anomalies:hover { color:var(--danger); text-decoration:underline; }
 
 
-/* Ego-style controlled perimeter, confined to this Mini Box. The browser owns
-   the orbit; real lifecycle changes only pause it and fade the layer. */
-@property --mini-control-angle { syntax:"<angle>"; initial-value:0deg; inherits:false; }
+/* Keep the rounded 2px mask fixed. Only the inner, prepainted gradient rotates,
+   avoiding a custom-property gradient repaint on every WebKit frame. */
 .mini-box-control {
   position:absolute; z-index:2; inset:0; border-radius:inherit; corner-shape:inherit;
   pointer-events:none; opacity:0;
   box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--reasoning-accent) 18%,transparent),inset 0 0 18px color-mix(in srgb,var(--reasoning-accent) 12%,transparent);
   transition:opacity 600ms ease;
 }
-.mini-box-control::before {
-  content:""; position:absolute; inset:0; border-radius:inherit; corner-shape:inherit; padding:2px;
-  background:conic-gradient(from var(--mini-control-angle),color-mix(in srgb,var(--reasoning-accent) 45%,transparent) 0deg,color-mix(in srgb,var(--reasoning-accent) 45%,transparent) 45deg,color-mix(in srgb,var(--reasoning-accent) 75%,transparent) 100deg,color-mix(in srgb,var(--reasoning-accent) 95%,transparent) 150deg,color-mix(in srgb,var(--reasoning-accent) 75%,transparent) 200deg,color-mix(in srgb,var(--reasoning-accent) 45%,transparent) 255deg,color-mix(in srgb,var(--reasoning-accent) 45%,transparent) 360deg);
+.mini-box-control-flow {
+  position:absolute; inset:0; border-radius:inherit; corner-shape:inherit; padding:2px;
   -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
   mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
   -webkit-mask-composite:xor; mask-composite:exclude;
+  overflow:hidden;
+}
+.mini-box-control-flow::before {
+  content:""; position:absolute; left:50%; top:50%; width:max(142%,204px); aspect-ratio:1;
+  translate:-50% -50%; transform:rotate(0deg);
+  background:conic-gradient(color-mix(in srgb,var(--reasoning-accent) 45%,transparent) 0deg,color-mix(in srgb,var(--reasoning-accent) 45%,transparent) 45deg,color-mix(in srgb,var(--reasoning-accent) 75%,transparent) 100deg,color-mix(in srgb,var(--reasoning-accent) 95%,transparent) 150deg,color-mix(in srgb,var(--reasoning-accent) 75%,transparent) 200deg,color-mix(in srgb,var(--reasoning-accent) 45%,transparent) 255deg,color-mix(in srgb,var(--reasoning-accent) 45%,transparent) 360deg);
   animation:mini-box-control-orbit 5.2s linear infinite paused;
 }
 .mini-box-control[data-active="true"] { opacity:1; transition-duration:240ms; }
-.mini-box-control[data-active="true"]::before { animation-play-state:running; }
-.mini-box-control[data-suspended="true"]::before { animation-play-state:paused; }
-@keyframes mini-box-control-orbit { from { --mini-control-angle:0deg; } to { --mini-control-angle:360deg; } }
+.mini-box-control[data-active="true"] .mini-box-control-flow::before { animation-play-state:running; will-change:transform; }
+.mini-box-control[data-suspended="true"] .mini-box-control-flow::before { animation-play-state:paused; }
+@keyframes mini-box-control-orbit { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
 @media(prefers-reduced-motion:reduce) {
   .mini-box-control { transition:none!important; }
-  .mini-box-control::before { animation-duration:5.2s!important; animation-iteration-count:infinite!important; animation-play-state:paused!important; }
+  .mini-box-control-flow::before { animation-duration:5.2s!important; animation-iteration-count:infinite!important; animation-play-state:paused!important; }
 }

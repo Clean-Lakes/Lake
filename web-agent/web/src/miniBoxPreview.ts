@@ -81,7 +81,11 @@ export function miniExecutionStatus({entry,card,stale,stopping,active,anomalies,
  if(stopping)return entry?.status==='running'?'正在终止…':'用户已终止 · 结果待核查';
  if(dispatching)return '等待命令派发';
  if(entry?.status==='unknown')return '结果待核查';
- if(entry?.status==='completed'&&entry.exitCode!=null)return entry.exitCode!==0?'执行失败':anomalies?'命令已退出 · 有异常线索':'已完成';
+ if(entry?.status==='completed'&&entry.exitCode!=null){
+  if(entry.exitCode!==0)return '执行失败';
+  if(active)return anomalies?'继续执行 · 有异常线索':'AI 正在继续';
+  return anomalies?'命令已退出 · 有异常线索':'已完成';
+ }
  if(active)return 'AI 正在执行';
  if(entry?.status==='running')return '命令仍在运行';
  if(entry&&card?.status!=='pending')return entry.exitCode===null?'退出状态待核查':'记录输出';

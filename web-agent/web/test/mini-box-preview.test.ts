@@ -41,6 +41,8 @@ test('execution truth and text hints remain separate when a command exits or is 
  const entry={id:'e',command:'demo',output:'ERROR: observed',status:'completed' as const,exitCode:0};
  const options={entry,card:undefined,stale:false,stopping:false,active:false,anomalies:1,dispatching:false};
  assert.equal(miniExecutionStatus(options),'命令已退出 · 有异常线索');
+ assert.equal(miniExecutionStatus({...options,active:true}),'继续执行 · 有异常线索');
+ assert.equal(miniExecutionStatus({...options,active:true,anomalies:0}),'AI 正在继续');
  assert.equal(miniExecutionStatus({...options,entry:{...entry,exitCode:2}}),'执行失败');
  assert.equal(miniExecutionStatus({...options,entry:{...entry,exitCode:null}}),'退出状态待核查');
  assert.equal(miniExecutionStatus({...options,entry:{...entry,status:'unknown'},active:true}),'结果待核查');

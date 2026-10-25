@@ -9,5 +9,5 @@ export function MiniBoxControl({active}:{active:boolean}) {
   sync();document.addEventListener('visibilitychange',sync);
   return()=>document.removeEventListener('visibilitychange',sync);
  },[]);
- return <span ref={ref} className="mini-box-control" data-active={active} aria-hidden="true"/>;
+ return <span ref={ref} className="mini-box-control" data-active={active} aria-hidden="true"><span className="mini-box-control-flow"/></span>;
 }
