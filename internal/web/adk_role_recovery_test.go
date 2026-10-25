@@ -32,6 +32,7 @@ func TestADKSRERoleCrashHelper(t *testing.T) {
 
 func TestADKSRERoleApprovalSurvivesProcessCrash(t *testing.T) { testADKRoleCrash(t, false) }
 func TestADKSRERoleQuestionSurvivesProcessCrash(t *testing.T) { testADKRoleCrash(t, true) }
+func TestPilotChoiceSurvivesProcessCrash(t *testing.T)        { testADKRoleCrash(t, true, false, true) }
 func TestADKSRERoleQuestionRecoversBeforeBusinessWaitProjection(t *testing.T) {
 	testADKRoleCrash(t, true, true)
 }
@@ -39,6 +40,7 @@ func TestADKSRERoleApprovalRecoversBeforeBusinessWaitProjection(t *testing.T) {
 	testADKRoleCrash(t, false, true)
 }
 func testADKRoleCrash(t *testing.T, question bool, projectionWindow ...bool) {
+	pilot := len(projectionWindow) > 1 && projectionWindow[1]
 	home := t.TempDir()
 	b, err := New(context.Background(), Options{Home: home, Token: "synthetic-test-auth-token"})
 	if err != nil {
@@ -47,6 +49,11 @@ func testADKRoleCrash(t *testing.T, question bool, projectionWindow ...bool) {
 	h := httptest.NewServer(b)
 	session, resource := newSession(t, h)
 	target := filepath.Join(home, "effect.txt")
+	if pilot {
+		if err := os.WriteFile(target, []byte("PILOT_CRASH_SOURCE"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	plan := ai.SREPlanRevision{Goal: "append fixture once", TaskType: "investigation", Scope: []string{resource}, Steps: []ai.SREPlanStep{{ID: "inspect", Role: ai.SRECoordinator, Kind: "analyze", Description: "append exact fixture", CompletionChecks: []string{"record actual append result"}, ResourceIDs: []string{resource}}}}
 	providerClose := sreCoordinationFixture(t, b, h, session, func(w http.ResponseWriter, input Object) {
 		content := jsonText(input["messages"])
@@ -55,8 +62,24 @@ func testADKRoleCrash(t *testing.T, question bool, projectionWindow ...bool) {
 			return
 		}
 		seen := false
+		pilotChosen, pilotRead := false, false
 		for _, m := range objects(input["messages"]) {
 			seen = seen || m["role"] == "tool" && (m["name"] == "append" || m["name"] == "ask_user_question")
+			pilotChosen = pilotChosen || m["role"] == "tool" && m["name"] == "pilot_offer_directions"
+			pilotRead = pilotRead || m["role"] == "tool" && m["name"] == "read"
+		}
+		if pilot {
+			args := Object{"asset_ref": sreAliasForTest(resource), "path": target}
+			if !pilotChosen {
+				emitModel(w, "", []ai.Call{{ID: "pilot-choice", Name: "pilot_offer_directions", Arguments: jsonText(Object{"directions": []Object{{"id": "inspect", "title": "核对隔离文件", "reason": "取得恢复后的实际证据", "operations": []Object{{"id": "read_source", "title": "读取原文件", "tool": "read", "arguments": args}}}}})}})
+				return
+			}
+			if !pilotRead {
+				emitModel(w, "", []ai.Call{{ID: "pilot-read", Name: "read", Arguments: jsonText(args)}})
+				return
+			}
+			emitModel(w, "已读取隔离文件并保存结果。", nil)
+			return
 		}
 		if !seen {
 			if question {
@@ -69,6 +92,11 @@ func testADKRoleCrash(t *testing.T, question bool, projectionWindow ...bool) {
 		emitModel(w, "recorded actual result", nil)
 	})
 	defer providerClose()
+	if pilot {
+		project := stringOf(b.Store.Session(session)["projectId"])
+		settings := b.Store.PilotSettings(project)
+		apiTest(t, h, "PUT", "/api/projects/"+project+"/pilot", Object{"enabled": true, "expectedRevision": settings["revision"]}, 200)
+	}
 	created := apiTest(t, h, "POST", "/api/sessions/"+session+"/sre/tasks", Object{"goal": plan.Goal, "resourceIds": []string{resource}, "mode": "plan_only", "clientRequestId": "adk_role_crash"}, 202)
 	taskID := stringOf(created["id"])
 	for deadline := time.Now().Add(5 * time.Second); ; {
@@ -153,7 +181,11 @@ func testADKRoleCrash(t *testing.T, question bool, projectionWindow ...bool) {
 	defer rh.Close()
 	defer recovered.Close()
 	if question {
-		apiTest(t, rh, "POST", "/api/sessions/"+session+"/ai/agentQuestionReply", Object{"runId": pending.ID, "id": pending.Question.ID, "answers": Object{"scope": []string{"fixture only"}}}, 200)
+		answers := Object{"scope": []string{"fixture only"}}
+		if pilot {
+			answers = Object{pending.Question.Questions[0].ID: []string{jsonText(Object{"level": "command", "directionId": "inspect", "operationIds": []string{"read_source"}})}}
+		}
+		apiTest(t, rh, "POST", "/api/sessions/"+session+"/ai/agentQuestionReply", Object{"runId": pending.ID, "id": pending.Question.ID, "answers": answers}, 200)
 	} else {
 		apiTest(t, rh, "POST", "/api/sessions/"+session+"/ai/agentDecision", Object{"runId": pending.ID, "id": pending.Pending.ID, "accept": true, "confirmation": pending.Pending.Confirmation}, 200)
 	}
@@ -165,8 +197,11 @@ func testADKRoleCrash(t *testing.T, question bool, projectionWindow ...bool) {
 	if !question && (err != nil || string(data) != "once\n") {
 		t.Fatalf("effect not exactly once: %q %v", data, err)
 	}
-	if question && !os.IsNotExist(err) {
+	if question && !pilot && !os.IsNotExist(err) {
 		t.Fatal("question recovery executed an unrequested resource write")
+	}
+	if pilot && (err != nil || string(data) != "PILOT_CRASH_SOURCE" || task.Pilot == nil || len(task.Pilot.Decisions) != 1 || len(task.Attempts[0].Operations) != 1 || task.Attempts[0].Operations[0].Status != "succeeded") {
+		t.Fatal("Pilot crash recovery lost identity or repeated/omitted its effect", err)
 	}
 	if len(task.Attempts) != 1 || task.Attempts[0].RoleRunID != pending.ID {
 		t.Fatal("recovery created a replacement attempt")

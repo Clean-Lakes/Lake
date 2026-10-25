@@ -18,6 +18,7 @@ type sreRoleContext struct {
 	Step                                         SREPlanStep
 	NoTools                                      bool
 	FullTools                                    bool
+	Pilot                                        *PilotTaskPolicy
 	dispatchRelease                              func()
 }
 type SRERoleResult struct {
@@ -194,7 +195,7 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 	if task.LatestPlan() != nil {
 		revision = task.LatestPlan().ID
 	}
-	cc.sre = &sreRoleContext{PlanRevisionID: revision, TaskID: task.ID, PlanRunID: runID, AttemptID: attemptID, Role: step.Role, Step: step, NoTools: noTools, FullTools: true}
+	cc.sre = &sreRoleContext{PlanRevisionID: revision, TaskID: task.ID, PlanRunID: runID, AttemptID: attemptID, Role: step.Role, Step: step, NoTools: noTools, FullTools: true, Pilot: task.Pilot}
 	cc.targetScope = &TargetScope{ResourceIDs: append([]string(nil), step.ResourceIDs...)}
 	if len(assets) == 1 {
 		cc.AssetRef = assets[0].ID
@@ -204,6 +205,12 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 	}
 	b, _ := embedded.ReadFile("prompts/sre-" + string(step.Role) + ".txt")
 	cc.UserPrompt = string(b)
+	if task.Pilot != nil && !noTools {
+		cc.UserPrompt += "\n[LAKE PILOT]\nYou are working on your assigned step only. Before a new resource operation in guided mode, call pilot_offer_directions with concrete choices and exact commands, then execute only the selected operations. The user may delegate this step. Never treat a selection as approval for changes. Keep your own role, targets, evidence and completion criteria distinct from peers. Internal team communication and reading existing evidence do not require a choice. Do not finish with an unexecuted promise."
+		if task.Pilot.AutoAdvance {
+			cc.UserPrompt += "\nThis task uses automatic advance: choose the suitable direction and execute within current permissions; do not ask for path selection. Normal approvals remain required."
+		}
+	}
 	if attemptID != "" {
 		cc.UserPrompt += sreOutputInstruction(step)
 	}

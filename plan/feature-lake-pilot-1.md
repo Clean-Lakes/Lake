@@ -1,6 +1,6 @@
 ---
 goal: 统一 Lake Pilot 与 SRE 协作，提供各 Agent 的独立步骤和默认自动推进设置
-version: 1.4
+version: 1.5
 date_created: 2026-10-25
 last_updated: 2026-10-25
 owner: Lake
@@ -279,6 +279,16 @@ Lake Pilot 是统一的运维协作入口：继承现有 SRE 专员协作能力�
 
 初版不增加新的自动修复循环、角色数量配置页、四角色工作台、全局免审批选项或另一套任务系统；这些不作为完成本方案的前置条件。
 
+### 1.12 首个工作切片的实际实现
+
+开发分支已同步到 `origin/develop` 的 `c8c91efaf0ab94ce2aa3a08a701d97bf04d99be3`，草稿 PR 为 #98。以下是当前代码事实，前述完整目标中未列为完成的部分仍需实现：
+
+- 设置及一次性默认关闭迁移已实现；主开关使用原文字按钮，自动推进通过原 NavigationMenu 的 checkbox 子项配置。旧后台没有 `SRESnapshot.pilot` 时回退原 SRE 入口，该可选设置对象同时承担当前版本能力标记。
+- `SRETask.pilot` 保存 `autoAdvance/settingsRevision/decisions`，`SREPlanStep.assignmentId` 表示工作项归属。未建立第二套任务/调度器。工作项导航按原计划/attempt 归属计算；旧计划缺少归属时按角色、领域和资源分组，只作视图兼容。
+- 候选使用原 `QuestionRequest.pilot` 和 ADK 人工输入等待，原 request ID 与候选 ID 绑定当前计划/步骤/attempt。决策事务写入原任务，操作参数冻结后按指纹检查；不另建 choice HTTP API 或重复的中断 Runner。普通同伴消息不使有效选择失效，原等待重启恢复已有进程崩溃回归。
+- 目前方向选择只委托当前候选集合。步骤委托与自动推进可继续当前步骤；跨批次持续方向委托、步骤局部 hold、多阶段执行/验证与结构化业务完成条件尚未实现。
+- 只读取证的 guided/automatic 真实操作、设置冲突/迁移/任务快照、角色/attempt 隔离和前端真实组件夹具已有测试。签名构建可完成；全量 Go 本地测试存在基线失败，已安装 Lake Dev 的来源保护阻止覆盖。完整 Dev 验收仍未完成，不能合并草稿。详见 [实际验证](../docs/validation/lake-pilot.md)。
+
 ## 2. Implementation Steps
 
 按阶段推进；任务依赖显式列出。任务仅在真实实现及验证后更新为完成；草稿 PR 不表示全部能力已交付。
@@ -290,7 +300,7 @@ Lake Pilot 是统一的运维协作入口：继承现有 SRE 专员协作能力�
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
 | TASK-001 | 在 `internal/ai/sre_types.go`、`web-agent/shared/contracts.ts` 和新增 `internal/ai/pilot_types.go` 定义第 1.6 节增量：工作项、步骤归属、结构化完成条件、动作策略、choiceRevision、批次和决策交接状态；新增 `pilot_state.go` 的 `PilotProgress`、`PilotAssignmentProgress`、`ValidatePilotDecision`，验证每步唯一归属。旧冻结计划只作视图兼容；历史指纹不改。新增 `pilot_state_test.go`。无前置依赖。 | No | — |
-| TASK-002 | 在 `internal/web/schema.sql`、`store.go:migrate` 扩展 `sreProjectSettings` 的 autoAdvance/revision，通过一次性迁移统一默认关闭并保留旧设置来源；新增 `pilot_settings.go:GetPilotSettings/SetPilotSettings`，统一锁序和活动校验；`sre_store.go:SREEnabled/SetSREEnabled` 与旧 `sre_routes.go:sreRoute` 经同一服务读写。新增 `pilot_settings_test.go`。依赖 TASK-001。 | No | — |
+| TASK-002 | 在 `internal/web/schema.sql`、`store.go:migrate` 扩展 `sreProjectSettings` 的 autoAdvance/revision，通过一次性迁移统一默认关闭并保留旧设置来源；新增 `pilot_settings.go:GetPilotSettings/SetPilotSettings`，统一锁序和活动校验；`sre_store.go:SREEnabled/SetSREEnabled` 与旧 `sre_routes.go:sreRoute` 经同一服务读写。新增 `pilot_settings_test.go`。无前置依赖；设置所需类型已随本切片实现。 | Yes | 2026-10-25 |
 | TASK-003 | 扩展 `internal/web/sre_store.go:CreateSRETask/MutateSRETask` 保存策略快照、方向、决策、批次及操作引用；新增 `pilot_store.go:SavePilotDecision/SavePilotDirections`，按第 1.11 节在业务事务内认领等待并幂等保存，校验 session/task/assignment/step/interrupt 归属与 choiceRevision，不以无关 task revision 失效选择。新增 `pilot_store_test.go`。不建第二套 pilotTasks 表。依赖 TASK-001、TASK-002。 | No | — |
 
 ### Implementation Phase 2

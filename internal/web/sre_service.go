@@ -26,7 +26,8 @@ func (b *Server) sreSnapshot(session string) *ai.SRESnapshot {
 	if err != nil {
 		return nil
 	}
-	return &ai.SRESnapshot{FeatureVersion: 1, Enabled: b.Store.SREEnabled(project), Tasks: tasks}
+	settings := b.Store.PilotSettings(project)
+	return &ai.SRESnapshot{FeatureVersion: 1, Enabled: settings["enabled"] == true, Tasks: tasks, Pilot: &ai.PilotSettings{Enabled: settings["enabled"] == true, AutoAdvance: settings["autoAdvance"] == true, Revision: integer(settings["revision"])}}
 }
 func (b *Server) activeSRETask(session string) *ai.SRETask {
 	tasks, err := b.Store.ListSRETasks(session, 50, "")
@@ -105,7 +106,7 @@ func (b *Server) syncSRESessionStatus(session string) {
 func (b *Server) createSRETask(session, goal, mode, requestID string, scope []string) ai.SRETask {
 	return b.createSRETaskWithReferences(session, goal, mode, requestID, scope, true)
 }
-func (b *Server) createSRETaskWithReferences(session, goal, mode, requestID string, scope []string, explicitSelection bool) ai.SRETask {
+func (b *Server) createSRETaskWithReferences(session, goal, mode, requestID string, scope []string, explicitSelection bool, savedWorkflow ...bool) ai.SRETask {
 	if b.Terminals.containsCredential(goal) {
 		fail(400, "任务目标不能包含凭据")
 	}
@@ -125,7 +126,11 @@ func (b *Server) createSRETaskWithReferences(session, goal, mode, requestID stri
 	if explicitSelection {
 		sreFailure(b.Engine.RegisterSREReferences(session, scope))
 	}
-	t, err := b.Store.CreateSRETask(ai.SRETask{SessionID: session, Goal: goal, Scope: scope, Mode: mode, RequestID: requestID, TokenBudget: b.Engine.SREBudget(session), BudgetPolicy: ai.SREFullAgentBudgetPolicy})
+	task := ai.SRETask{SessionID: session, Goal: goal, Scope: scope, Mode: mode, RequestID: requestID, TokenBudget: b.Engine.SREBudget(session), BudgetPolicy: ai.SREFullAgentBudgetPolicy}
+	if len(savedWorkflow) > 0 && savedWorkflow[0] {
+		task.Pilot = &ai.PilotTaskPolicy{AutoAdvance: true}
+	}
+	t, err := b.Store.CreateSRETask(task)
 	sreFailure(err)
 	return t
 }

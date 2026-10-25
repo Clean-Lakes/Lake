@@ -44,6 +44,9 @@ func sreTrackedCall(c Config, call Call) bool {
 	if c.sre == nil || c.sre.AttemptID == "" {
 		return false
 	}
+	if c.sre.Pilot != nil && !pilotInternalTool(call.Name) {
+		return true
+	}
 	if !c.sre.FullTools {
 		return c.sre.Role == SREExecutor
 	}

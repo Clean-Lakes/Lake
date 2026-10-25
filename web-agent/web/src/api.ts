@@ -107,6 +107,8 @@ export const api = {
  schedule:(project:string,id:string,signal?:AbortSignal)=>request<import('../../shared/contracts').ScheduledTask>(`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`,{signal}),
  setScheduleEnabled:(project:string,id:string,enabled:boolean,expectedRevision:number)=>request<import('../../shared/contracts').ScheduledTask>(`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({enabled,expectedRevision})}),
 	getSREEnabled:(project:string,signal?:AbortSignal)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{signal}),
+	getPilotSettings:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').PilotSettings>(`/api/projects/${encodeURIComponent(project)}/pilot`,{signal}),
+	setPilotSettings:(project:string,updates:{enabled?:boolean;autoAdvance?:boolean;expectedRevision:number})=>request<import('../../shared/contracts').PilotSettings>(`/api/projects/${encodeURIComponent(project)}/pilot`,{method:'PUT',body:JSON.stringify(updates)}),
 	setSREEnabled:(project:string,enabled:boolean)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{method:'PUT',body:JSON.stringify({enabled})}),
 	sreTask:(session:string,task:string)=>request<import('../../shared/contracts').SRETask>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}`),
 	sreTasks:(session:string,cursor='')=>request<{items:import('../../shared/contracts').SRETask[];nextCursor:string}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks?limit=20&cursor=${encodeURIComponent(cursor)}`),

@@ -128,7 +128,7 @@ CREATE INDEX IF NOT EXISTS workflow_runs_project ON workflowRuns(projectId,creat
         PRIMARY KEY(kind,id)
       );
 
-      CREATE TABLE IF NOT EXISTS sreProjectSettings(projectId TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)));
+      CREATE TABLE IF NOT EXISTS sreProjectSettings(projectId TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),autoAdvance INTEGER NOT NULL DEFAULT 0 CHECK(autoAdvance IN (0,1)),revision INTEGER NOT NULL DEFAULT 0,pilotVersion INTEGER NOT NULL DEFAULT 0,legacyEnabled INTEGER,pilotConfigured INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS sreTasks(id TEXT PRIMARY KEY,sessionId TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,projectId TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,requestId TEXT NOT NULL,status TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,createdAt TEXT NOT NULL,updatedAt TEXT NOT NULL,UNIQUE(sessionId,requestId));
       CREATE INDEX IF NOT EXISTS sreTasks_session ON sreTasks(sessionId,createdAt,id);
       CREATE UNIQUE INDEX IF NOT EXISTS sreTasks_one_active ON sreTasks(sessionId) WHERE status IN ('draft','active','waiting_input','waiting_approval','paused');

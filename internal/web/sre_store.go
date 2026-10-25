@@ -55,6 +55,9 @@ func (s *Store) createSRETaskLocked(task ai.SRETask) ai.SRETask {
 		required(s.row("SELECT id FROM resources WHERE id=? AND projectId=?", rid, project), "Task resource")
 	}
 	task.ID, task.ProjectID, task.ProfileID, task.ProfileVersion, task.Status, task.Revision = ident(), project, "lake.sre.assisted", 1, "draft", 1
+	if settings := s.row("SELECT autoAdvance,revision,pilotConfigured FROM sreProjectSettings WHERE projectId=?", project); task.Pilot == nil && integer(settings["pilotConfigured"]) == 1 {
+		task.Pilot = &ai.PilotTaskPolicy{AutoAdvance: integer(settings["autoAdvance"]) == 1, SettingsRevision: integer(settings["revision"])}
+	}
 	task.CreatedAt, task.UpdatedAt = now(), now()
 	task.RecoveryStatus, task.RootCauseStatus = "unverified", "unknown"
 	s.exec("INSERT INTO sreTasks(id,sessionId,projectId,requestId,status,revision,body,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?)", task.ID, task.SessionID, project, task.RequestID, task.Status, task.Revision, jsonText(task), task.CreatedAt, task.UpdatedAt)
@@ -224,10 +227,8 @@ func (s *Store) SREEnabled(project string) bool {
 func (s *Store) SetSREEnabled(project string, enabled bool) {
 	s.update(func() any {
 		required(s.row("SELECT id FROM projects WHERE id=?", project), "Project")
-		s.exec("INSERT INTO sreProjectSettings(projectId,enabled) VALUES(?,?) ON CONFLICT(projectId) DO UPDATE SET enabled=excluded.enabled", project, enabled)
-		for _, row := range s.rows("SELECT id FROM sessions WHERE projectId=?", project) {
-			s.event(stringOf(row["id"]), "session")
-		}
+		s.exec("INSERT INTO sreProjectSettings(projectId,enabled,pilotVersion,revision) VALUES(?,?,1,1) ON CONFLICT(projectId) DO UPDATE SET enabled=excluded.enabled,revision=sreProjectSettings.revision+1", project, enabled)
+		s.pilotSettingsEvents(project)
 		return nil
 	})
 }

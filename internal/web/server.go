@@ -385,6 +385,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, 200, Object{"authenticated": true, "modelConfigured": model != nil, "modelName": modelName, "modelId": modelID, "modelSelection": selection, "supportsImageInput": imageInput, "terminalMode": "pty", "aiRuntime": "go", "backendRuntime": "go"})
 		return
 	}
+	if b.pilotSettingsRoute(w, r, name, method) {
+		return
+	}
 	if b.sreRoute(w, r, name, method) {
 		return
 	}

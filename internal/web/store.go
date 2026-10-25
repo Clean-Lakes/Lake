@@ -206,6 +206,8 @@ func (s *Store) migrate() error {
 		needBackup = true
 	}
 	parityColumns := [][3]string{{"terminals", "generation", "TEXT NOT NULL DEFAULT ''"}, {"terminals", "outputCapturedAt", "TEXT"}, {"terminals", "cwd", "TEXT"}, {"terminals", "shell", "TEXT NOT NULL DEFAULT 'sh'"}, {"terminalEntries", "status", "TEXT NOT NULL DEFAULT 'unknown'"}, {"terminalEntries", "generation", "TEXT NOT NULL DEFAULT ''"}, {"terminalEntries", "cwd", "TEXT"}, {"terminalEntries", "startedAt", "TEXT"}, {"terminalEntries", "finishedAt", "TEXT"}, {"terminalEntries", "originSessionId", "TEXT"}, {"terminalEntries", "stopRequestedAt", "TEXT"}}
+	parityColumns = append(parityColumns, [][3]string{{"sreProjectSettings", "autoAdvance", "INTEGER NOT NULL DEFAULT 0"}, {"sreProjectSettings", "revision", "INTEGER NOT NULL DEFAULT 0"}, {"sreProjectSettings", "pilotVersion", "INTEGER NOT NULL DEFAULT 0"}, {"sreProjectSettings", "legacyEnabled", "INTEGER"}}...)
+	parityColumns = append(parityColumns, [3]string{"sreProjectSettings", "pilotConfigured", "INTEGER NOT NULL DEFAULT 0"})
 	for _, c := range parityColumns {
 		found := false
 		for _, row := range s.rows("PRAGMA table_info(" + c[0] + ")") {
@@ -256,6 +258,9 @@ func (s *Store) migrate() error {
 				return e
 			}
 		}
+	}
+	if _, err := s.db.Exec("UPDATE sreProjectSettings SET legacyEnabled=enabled,enabled=0,autoAdvance=0,pilotVersion=1,revision=revision+1 WHERE pilotVersion=0"); err != nil {
+		return err
 	}
 	if _, err := s.db.Exec("UPDATE terminalEntries SET status='completed' WHERE status='unknown' AND exitCode IS NOT NULL"); err != nil {
 		return err

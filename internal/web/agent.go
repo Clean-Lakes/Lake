@@ -183,6 +183,19 @@ func (b *Server) sessionAssetCatalog(id string) ([]ai.Asset, []ai.AssetDirectory
 	return assets, directories
 }
 func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any, error) {
+	if method == "agentQuestionReply" || method == "agentDecision" {
+		view, err := b.Engine.Snapshot(id)
+		if err == nil {
+			for _, run := range view.AgentRuns {
+				if run.ID == stringOf(object(data)["runId"]) && run.SRETaskID != "" {
+					task, loadErr := b.Store.LoadSRETask(id, run.SRETaskID)
+					if loadErr == nil && task.Pilot != nil && !b.Store.SREEnabled(task.ProjectID) {
+						return nil, &ai.SREError{Status: 409, Message: "请先开启 Lake Pilot，再继续该任务"}
+					}
+				}
+			}
+		}
+	}
 	if method == "agentQuestionReply" && b.Engine.NeedsRoleRecovery(id, stringOf(object(data)["runId"])) || method == "questionReply" && b.Engine.NeedsQuestionRecovery(id) || method == "agentDecision" && b.Engine.NeedsRoleRecovery(id, stringOf(object(data)["runId"])) || method == "decision" && b.Engine.NeedsADKRecovery(id) {
 		b.configure(id, nil)
 	}

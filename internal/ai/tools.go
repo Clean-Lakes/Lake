@@ -138,6 +138,12 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if err = e.checkSRECall(c, call, a); err != nil {
 		return nil, err
 	}
+	if call.Name == "pilot_offer_directions" {
+		return e.offerPilotDirections(ctx, s, c, call)
+	}
+	if err = e.checkPilotCall(c, call, a); err != nil {
+		return nil, err
+	}
 	if sessionTool(call.Name) {
 		if err = e.PrepareSREOperation(c, call, "write"); err != nil {
 			return nil, err
@@ -170,6 +176,11 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		}
 	}
 	if sessionTool(call.Name) {
+		if !pilotInternalTool(call.Name) {
+			if err = pilotRoleAllowed(c, "write"); err != nil {
+				return nil, err
+			}
+		}
 		return e.invokeSessionTool(ctx, s, c, call, a)
 	}
 	if memoryTool(call.Name) {
@@ -295,6 +306,9 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		risk = "dangerous"
 	}
 	if err = e.PrepareSREOperation(c, call, risk); err != nil {
+		return nil, err
+	}
+	if err = pilotRoleAllowed(c, risk); err != nil {
 		return nil, err
 	}
 	kind := ""

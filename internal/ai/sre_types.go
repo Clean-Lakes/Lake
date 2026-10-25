@@ -44,6 +44,7 @@ type SREAction struct {
 }
 
 type SREPlanStep struct {
+	AssignmentID     string       `json:"assignmentId,omitempty"`
 	ID               string       `json:"id"`
 	Role             SREAgentRole `json:"role"`
 	Kind             string       `json:"kind"`
@@ -165,6 +166,7 @@ type SREVerificationResult struct {
 }
 
 type SRETask struct {
+	Pilot           *PilotTaskPolicy        `json:"pilot,omitempty"`
 	Requests        map[string]string       `json:"requests,omitempty"`
 	ID              string                  `json:"id"`
 	SessionID       string                  `json:"sessionId"`
@@ -204,9 +206,10 @@ type SREEvent struct {
 }
 
 type SRESnapshot struct {
-	FeatureVersion int       `json:"featureVersion"`
-	Enabled        bool      `json:"enabled"`
-	Tasks          []SRETask `json:"tasks"`
+	FeatureVersion int            `json:"featureVersion"`
+	Enabled        bool           `json:"enabled"`
+	Tasks          []SRETask      `json:"tasks"`
+	Pilot          *PilotSettings `json:"pilot,omitempty"`
 }
 
 func (t *SRETask) LatestPlan() *SREPlanRevision {
