@@ -13,6 +13,10 @@ func pilotReadRecoveryTool() Tool {
 // Recovery is a reference to completed evidence, never a new outcome for the
 // failed operation. Every consumer rechecks the referenced original ledger.
 func pilotReadRecoveryValid(a SREStepAttempt, recovery PilotReadRecovery) bool {
+	return pilotReadRecoveryIssue(a, recovery) == ""
+}
+
+func pilotReadRecoveryIssue(a SREStepAttempt, recovery PilotReadRecovery) string {
 	var failed *SREOperation
 	for i := range a.Operations {
 		if a.Operations[i].ID == recovery.FailedOperationID {
@@ -20,45 +24,64 @@ func pilotReadRecoveryValid(a SREStepAttempt, recovery PilotReadRecovery) bool {
 			break
 		}
 	}
-	if failed == nil || failed.ResourceID == "" || failed.Risk != "readonly" || (failed.Status != "unknown" && failed.Status != "failed") || len(recovery.ReplacementOperationIDs) == 0 || len(recovery.ReplacementOperationIDs) > 12 || strings.TrimSpace(recovery.Reason) == "" {
-		return false
+	if failed == nil || failed.ResourceID == "" || failed.Risk != "readonly" || (failed.Status != "unknown" && failed.Status != "failed") {
+		return "原操作不是本步骤已执行失败的只读检查，请选择 read_gap=true 的 operation_id。"
+	}
+	if len(recovery.ReplacementOperationIDs) == 0 || len(recovery.ReplacementOperationIDs) > 12 || strings.TrimSpace(recovery.Reason) == "" {
+		return "请提供1–12项实际替代操作及关联理由。"
 	}
 	ended, err := time.Parse(time.RFC3339Nano, failed.FinishedAt)
 	if err != nil {
-		return false
+		return "原检查尚无明确结束时间，请等待原操作结束。"
 	}
 	seen := map[string]bool{}
 	for _, id := range recovery.ReplacementOperationIDs {
 		if id == failed.ID || seen[id] {
-			return false
+			return "替代操作不能重复或引用原失败操作：" + id
 		}
 		seen[id] = true
-		found := false
-		for _, replacement := range a.Operations {
-			if replacement.ID != id {
-				continue
+		var replacement *SREOperation
+		for i := range a.Operations {
+			if a.Operations[i].ID == id {
+				replacement = &a.Operations[i]
+				break
 			}
-			started, startErr := time.Parse(time.RFC3339Nano, replacement.DispatchedAt)
-			finished, finishErr := time.Parse(time.RFC3339Nano, replacement.FinishedAt)
-			found = replacement.Risk == "readonly" && replacement.Status == "succeeded" && replacement.ResourceID == failed.ResourceID && startErr == nil && finishErr == nil && !started.Before(ended) && !finished.Before(started)
-			if found {
-				proof := false
-				for _, evidenceID := range replacement.EvidenceIDs {
-					for _, ev := range a.Evidence {
-						if ev.ID == evidenceID && ev.Success && ev.HasSource && !ev.SourceTruncated && ev.ResourceID == failed.ResourceID && !sreAfter(failed.FinishedAt, ev.CollectedAt) {
-							proof = true
-						}
-					}
-				}
-				found = proof
-			}
-			break
 		}
-		if !found {
-			return false
+		if replacement == nil {
+			return "替代 operation_id 不属于当前步骤，请使用操作ID而非证据ID：" + id
+		}
+		if replacement.Risk != "readonly" || replacement.Status != "succeeded" || replacement.ResourceID != failed.ResourceID {
+			return "替代操作须为同资源实际完成的只读采样：" + id
+		}
+		started, startErr := time.Parse(time.RFC3339Nano, replacement.DispatchedAt)
+		finished, finishErr := time.Parse(time.RFC3339Nano, replacement.FinishedAt)
+		if startErr != nil || finishErr != nil || finished.Before(started) {
+			return "替代操作缺少有效起止时间，请等待采样实际结束：" + id
+		}
+		if started.Before(ended) {
+			return "替代采样早于原检查失败，请在失败后采集新的结果，再使用新操作ID：" + id
+		}
+		proof, truncated := false, false
+		for _, evidenceID := range replacement.EvidenceIDs {
+			for _, ev := range a.Evidence {
+				if ev.ID != evidenceID || !ev.Success || !ev.HasSource || ev.ResourceID != failed.ResourceID || sreAfter(failed.FinishedAt, ev.CollectedAt) {
+					continue
+				}
+				if ev.SourceTruncated {
+					truncated = true
+					continue
+				}
+				proof = true
+			}
+		}
+		if !proof {
+			if truncated {
+				return "替代操作的来源被截断，不能作为完整替代证据；请使用范围明确且完整返回的计数或检查，新采样后再关联：" + id
+			}
+			return "替代操作没有完整成功来源证据，请重新取得实际采样：" + id
 		}
 	}
-	return true
+	return ""
 }
 
 func pilotReadCovered(a SREStepAttempt, failed SREOperation) bool {
@@ -126,8 +149,8 @@ func (e *Engine) pilotReadRecovery(c Config, call Call) (any, error) {
 					}
 				}
 				recovery := PilotReadRecovery{FailedOperationID: input.Failed, ReplacementOperationIDs: input.Replacements, Reason: input.Reason, CreatedAt: timestamp()}
-				if !pilotReadRecoveryValid(*a, recovery) {
-					return sreError(409, "替代检查不符合要求：须为同一次步骤、同一资源、失败之后实际完成的只读检查，并有完整成功证据；结果不明的变更不能在此处理。")
+				if issue := pilotReadRecoveryIssue(*a, recovery); issue != "" {
+					return sreError(409, issue)
 				}
 				for _, old := range a.ReadRecoveries {
 					if old.FailedOperationID == input.Failed && js(old.ReplacementOperationIDs) == js(input.Replacements) && old.Reason == input.Reason {

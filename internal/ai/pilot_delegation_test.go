@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -138,5 +139,47 @@ func TestPilotExplicitChoiceOverridesAutomaticDefault(t *testing.T) {
 	repo.task.Attempts = []SREStepAttempt{pilotRecoveryAttempt()}
 	if _, err := child.pilotReadRecovery(c, Call{Arguments: js(map[string]any{"failed_operation_id": "failed", "replacement_operation_ids": []string{"replacement"}, "reason": "alternative"})}); err == nil {
 		t.Fatal("automatic default covered fixed command failure")
+	}
+}
+
+func TestPilotOutstandingReadContextOffersOnlyFreshCompleteCandidates(t *testing.T) {
+	_, _, c, repo := pilotDelegationFixture(t, "step")
+	a := pilotRecoveryAttempt()
+	old := a.Operations[1]
+	old.ID = "older"
+	old.DispatchedAt = "2026-10-25T09:00:00Z"
+	a.Operations = append(a.Operations, old)
+	repo.task.Attempts = []SREStepAttempt{a}
+	policy := pilotRolePolicyContext(repo.task, c)
+	gaps := policy["read_gaps"].([]map[string]any)
+	if len(gaps) != 1 || gaps[0]["operation_id"] != "failed" {
+		t.Fatal("missing actual gap")
+	}
+	candidates := gaps[0]["eligible_replacement_operations"].([]map[string]any)
+	if len(candidates) != 1 || candidates[0]["operation_id"] != "replacement" {
+		t.Fatal("offered stale or invalid evidence", candidates)
+	}
+	recovery := PilotReadRecovery{FailedOperationID: "failed", ReplacementOperationIDs: []string{"replacement"}, Reason: "real alternative"}
+	for _, variant := range []string{"old", "partial", "missing"} {
+		sample := pilotRecoveryAttempt()
+		want := ""
+		switch variant {
+		case "old":
+			sample.Operations[1].DispatchedAt = "2026-10-25T09:00:00Z"
+			want = "早于"
+		case "partial":
+			sample.Evidence[0].SourceTruncated = true
+			want = "截断"
+		case "missing":
+			sample.Operations[1].EvidenceIDs = nil
+			want = "来源证据"
+		}
+		if issue := pilotReadRecoveryIssue(sample, recovery); !strings.Contains(issue, want) {
+			t.Fatalf("%s lost actionable cause: %s", variant, issue)
+		}
+	}
+	repo.task.Attempts[0].ReadRecoveries = []PilotReadRecovery{recovery}
+	if _, found := pilotRolePolicyContext(repo.task, c)["read_gaps"]; found {
+		t.Fatal("resolved gap kept prompting retries")
 	}
 }

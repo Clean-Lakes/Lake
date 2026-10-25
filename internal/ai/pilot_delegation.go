@@ -85,6 +85,32 @@ func (e *Engine) savePilotDirectionBatch(choice *PilotChoice, decision *PilotCho
 
 func pilotRolePolicyContext(task SRETask, c Config) map[string]any {
 	policy := map[string]any{"mode": pilotExecutionMode(task, c.sre.PlanRevisionID, c.sre.Step.ID, c.sre.AttemptID), "step_id": c.sre.Step.ID, "notice": "Command selection is exact. Direction delegation allows new validated command batches under the SAME direction ID, title and purpose via pilot_offer_directions, without another user choice. Step/automatic delegation allows changing directions and commands within your assigned role, targets and permissions. After a failed read, either report failure or obtain a real alternative sample and use pilot_read_recovery to link the replacement. Never clear unknown changes or claim recovery without normal independent verification."}
+	gaps := []map[string]any{}
+	for _, a := range task.Attempts {
+		if a.ID != c.sre.AttemptID {
+			continue
+		}
+		for _, failed := range a.Operations {
+			if !pilotReadFailureOutstanding(a, failed) {
+				continue
+			}
+			candidates := []map[string]any{}
+			for i := len(a.Operations) - 1; i >= 0 && len(candidates) < 6; i-- {
+				op := a.Operations[i]
+				if pilotReadRecoveryValid(a, PilotReadRecovery{FailedOperationID: failed.ID, ReplacementOperationIDs: []string{op.ID}, Reason: "candidate"}) {
+					candidates = append(candidates, map[string]any{"operation_id": op.ID, "tool": op.Call.Name, "arguments": redact(op.Call.Arguments, c)})
+				}
+			}
+			gaps = append(gaps, map[string]any{"operation_id": failed.ID, "tool": failed.Call.Name, "arguments": redact(failed.Call.Arguments, c), "eligible_replacement_operations": candidates})
+			if len(gaps) >= 4 {
+				break
+			}
+		}
+	}
+	if len(gaps) > 0 {
+		policy["read_gaps"] = gaps
+		policy["completion_notice"] = "These original reads are still incomplete. Before reporting completion, select an appropriate real replacement and link its operation ID using pilot_read_recovery. Candidates satisfy provenance and timing only: independently decide whether they cover the original check. If none fits, collect a new complete sample within your delegation or explicitly report incomplete. A partial read with source_truncated=true cannot substitute for a complete check."
+	}
 	if d := pilotLatestDecision(task.Pilot, c.sre.PlanRevisionID, c.sre.Step.ID, c.sre.AttemptID); d != nil {
 		policy["direction"] = d.Direction
 		policy["direction_id"] = d.Selection.DirectionID
