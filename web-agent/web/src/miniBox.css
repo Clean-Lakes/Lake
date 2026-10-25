@@ -15,10 +15,6 @@
 .mini-box-stop:disabled { color:var(--text-muted); border-color:var(--border); background:transparent; opacity:.55; }
 .mini-box-toggle { width:26px; padding:0; border:0; color:var(--text-muted); }
 .mini-box-toggle:hover { background:var(--surface-hover); }
-.mini-box-viewport { height:106px; min-width:0; overflow:hidden; }
-.mini-box .terminal-screen { height:100%; padding:8px 10px; background:transparent; }
-.mini-box-viewport > pre { height:100%; overflow:auto; margin:0; padding:8px 10px; font:13px/1.3 var(--font-mono); color:var(--terminal-foreground); }
-.mini-box .xterm-viewport { scrollbar-width:thin; }
 .mini-box.is-collapsed { height:36px; }
 .mini-box.is-collapsed .mini-box-toggle svg { transform:rotate(-90deg); }
 .mini-box-particles { position:absolute; z-index:2; inset:0; width:100%; height:100%; border-radius:inherit; corner-shape:inherit; pointer-events:none; }
@@ -31,3 +27,39 @@
 @container (max-width:330px) { .mini-box-status > span { display:none; } }
 @media(prefers-reduced-transparency:reduce) { .mini-box-material { backdrop-filter:none; background:var(--surface); } }
 @supports not (backdrop-filter:blur(1px)) { .mini-box-material { background:var(--surface); } }
+
+/* A stable command and three preview lines; raw output expands separately. */
+.mini-box-preview { height:106px; display:flex; flex-direction:column; }
+.mini-box-preview[hidden] { display:none; }
+.mini-box-command { display:flex; align-items:center; flex:0 0 25px; gap:7px; padding:0 10px; min-width:0; font:12px/20px var(--font-mono); color:var(--foreground); }
+.mini-box-command > span { color:var(--text-muted); }
+.mini-box-command code { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:inherit; background:none; padding:0; }
+.mini-box-output { flex:1; min-height:0; padding:0 10px; color:var(--terminal-foreground); font:12px/17px var(--font-mono); }
+.mini-box-output-line { display:flex; gap:6px; min-width:0; height:17px; }
+.mini-box-output-line > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:pre; }
+.mini-box-output-line > small { flex-shrink:0; color:var(--text-muted); font:inherit; }
+.mini-box-output-line.is-anomaly { color:var(--danger); }
+.mini-box-output-empty { color:var(--text-muted); }
+.mini-box-footer { display:flex; align-items:center; gap:10px; flex:0 0 26px; padding:0 10px; min-width:0; font-size:11px; color:var(--text-muted); }
+.mini-box-footer button,.mini-box-details button { display:inline-flex; align-items:center; justify-content:center; gap:4px; border:0; background:transparent; color:inherit; padding:2px 0; min-height:22px; border-radius:5px; font:inherit; cursor:pointer; }
+.mini-box-footer button:hover { color:var(--foreground); }
+.mini-box-footer .mini-box-anomalies { color:var(--danger); white-space:nowrap; }
+.mini-box-exit { white-space:nowrap; }
+.mini-box-exit.is-failed { color:var(--danger); }
+.mini-box-footer .mini-box-expand { margin-left:auto; white-space:nowrap; }
+.mini-box-expand small { font:inherit; }
+.mini-box-expand[aria-expanded="true"] svg { transform:rotate(180deg); }
+.mini-box-details { margin-top:8px; border:1px solid var(--border); border-radius:var(--radius-settings-panel); corner-shape:var(--corner-window); overflow:hidden; background:var(--surface); }
+.mini-box-details > header { display:flex; align-items:center; justify-content:space-between; padding:5px 10px; color:var(--text-muted); font-size:var(--font-size-toolbar); border-bottom:1px solid var(--border); }
+.mini-box-details button { width:24px; }
+.mini-box-raw { position:relative; max-height:280px; overflow:auto; padding:10px; font:12px/1.6 var(--font-mono); color:var(--terminal-foreground); }
+.mini-box-raw pre { margin:0; padding:0; white-space:pre; font:inherit; background:none; color:inherit; }
+.mini-box-raw .mini-box-raw-command { margin-bottom:5px; color:var(--foreground); }
+.mini-box-raw-entry + .mini-box-raw-entry { margin-top:14px; }
+.mini-box-raw .is-anomaly,.mini-box-retained-anomaly { color:var(--danger); }
+.mini-box-retained-anomaly { margin-block:6px; }
+.mini-box-retention-note { margin:0; padding:7px 10px; color:var(--text-muted); font-size:11px; line-height:1.5; border-bottom:1px solid var(--border); }
+.mini-box button:focus-visible,.mini-box-details button:focus-visible,.mini-box-raw:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }
+@container (max-width:330px) { .mini-box-expand small { display:none; } .mini-box-footer { gap:6px; } }
+
+.mini-box .mini-box-footer .mini-box-anomalies:hover { color:var(--danger); text-decoration:underline; }

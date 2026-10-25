@@ -1,30 +1,51 @@
-import {lazy,Suspense,useState} from 'react';
+import {useId,useLayoutEffect,useRef,useState} from 'react';
 import type {AICard,CommandStopNotice} from '../../shared/contracts';
 import {api} from './api';
 import {Glyph} from './Icons';
-import {miniCanStop,miniOutput,miniRecordedOutput,miniTarget,type MiniBoxScope} from './miniBoxModel';
+import {miniCanStop,miniTarget,type MiniBoxScope} from './miniBoxModel';
+import {miniAnomalyLine,miniPreview,miniPreviewRows,miniReadableOutput,miniRecordedEntry,miniRecordedEntries,retainMiniPreview,miniExecutionStatus,type MiniPreview} from './miniBoxPreview';
 import {useMiniBox} from './useMiniBox';
 import {MiniBoxParticles} from './MiniBoxParticles';
 
-// Load the browser-only emulator only when a mini viewport is actually shown.
-const TerminalPane=lazy(()=>import('./TerminalPane').then(module=>({default:module.TerminalPane})));
-
-const observeOnly=()=>{};
 export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScope;resource:string;kind:'local'|'ssh';cards:AICard[];onInspect?:()=>void}) {
   const protocol=kind==='local'?'本机':'SSH';
   const {histories,stale,refresh}=useMiniBox(scope,resource);
   const target=miniTarget(histories);
-  const [open,setOpen]=useState(true),[pending,setPending]=useState(''),[error,setError]=useState('');
+  const [open,setOpen]=useState(true),[fullOpen,setFullOpen]=useState(false),[pending,setPending]=useState(''),[error,setError]=useState(''),[jump,setJump]=useState(0);
+  const detailId=useId(),detail=useRef<HTMLDivElement>(null);
+  const observed=useRef<{scope:string;entries:Map<string,{output:string;preview:MiniPreview}>}>({scope:'',entries:new Map()});
+  const observationScope=JSON.stringify([scope.session,resource,scope.startedAt,scope.endedAt]);
+  if(observed.current.scope!==observationScope)observed.current={scope:observationScope,entries:new Map()};
+  const liveEntries=histories.flatMap(history=>history.entries.map(entry=>({entry,key:`${history.terminal.id}:${history.terminal.generation}:${entry.id}`}))).sort((a,b)=>Date.parse(a.entry.startedAt??a.entry.createdAt)-Date.parse(b.entry.startedAt??b.entry.createdAt));
+  const recorded=miniRecordedEntry(cards.at(-1));
+  const records=liveEntries.length?liveEntries:miniRecordedEntries(cards).map(entry=>({entry,key:`recorded:${entry.id}`}));
+  const allowed=new Set(records.map(row=>row.key));
+  for(const key of observed.current.entries.keys())if(!allowed.has(key))observed.current.entries.delete(key);
+  const analyzed=records.map(row=>{
+    const previous=observed.current.entries.get(row.key);
+    if(previous&&previous.output===row.entry.output)return {...row,preview:previous.preview};
+    const preview=retainMiniPreview(previous,row.entry.output);
+    observed.current.entries.set(row.key,{output:row.entry.output,preview});
+    return {...row,preview};
+  });
+  const last=cards.at(-1);
+  const dispatching=!!target&&last?.status==='running'&&Date.parse(last.at)>Date.parse(target.entry.startedAt??target.entry.createdAt);
+  const current=dispatching&&recorded?{entry:recorded,preview:miniPreview(recorded.output)}:analyzed.find(row=>row.entry.id===target?.entry.id)??analyzed.at(-1);
+  const preview=current?.preview??miniPreview('');
+  const rows=miniPreviewRows(preview,preview.anomalies[0]);
+  const anomalyCount=analyzed.reduce((count,row)=>count+row.preview.anomalies.length,0);
+  const retainedOnly=analyzed.some(row=>row.preview.retainedOnly);
+  const lineCount=analyzed.reduce((count,row)=>count+row.preview.lineCount,0);
+  useLayoutEffect(()=>{
+    if(!fullOpen||!jump||!detail.current)return;
+    const issue=detail.current.querySelector<HTMLElement>('[data-mini-anomaly]');
+    if(issue){detail.current.scrollTop+=issue.getBoundingClientRect().top-detail.current.getBoundingClientRect().top-8;detail.current.focus({preventScroll:true});}
+  },[fullOpen,jump]);
   const currentKey=target?`${target.history.terminal.id}:${target.entry.id}`:'';
   const stopping=!!target&&(!!target.entry.stopRequestedAt||pending===currentKey);
-  const canStop=miniCanStop(target,scope,stale)&&!stopping;
-  const last=cards.at(-1);
-  const active=scope.live&&scope.connected&&!stale&&!stopping&&!scope.waiting&&(last?.status==='running'||target?.entry.status==='running');
-  const status=stale?'连接暂时中断':stopping?target?.entry.status==='running'?'正在终止…':'用户已终止 · 结果待核查'
-    :active?'AI 正在执行':target?.entry.status==='running'?'命令仍在运行':target?.entry.status==='unknown'?'结果待核查'
-    :target?.entry.exitCode!=null&&target.entry.exitCode!==0?'执行失败':target?'已完成'
-    :last?.status==='running'?'等待命令派发':last?.status==='pending'?'等待确认':last?.status==='failed'?'执行失败':'记录输出';
-  const output=target?miniOutput(target.history.entries):miniRecordedOutput(last);
+  const canStop=miniCanStop(target,scope,stale)&&!stopping&&!dispatching;
+  const active=scope.live&&scope.connected&&!stale&&!stopping&&!scope.waiting&&current?.entry.status==='running'&&(last?.status==='running'||target?.entry.status==='running');
+  const status=miniExecutionStatus({entry:current?.entry,card:last,stale,stopping,active,anomalies:preview.anomalies.length,dispatching});
   async function stop(){
     if(!canStop||!target)return;
     setPending(currentKey);setError('');onInspect?.();
@@ -38,12 +59,27 @@ export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScop
       <header className="mini-box-header"><Glyph name="terminal" size={15}/><span className="mini-box-title">执行命令</span><small className="mini-box-protocol">{protocol}</small>
         <span className={`mini-box-status${active?' is-active':''}`} role="status"><i aria-hidden="true"/><span>{status}</span></span>
         <button type="button" className="mini-box-stop" disabled={!canStop} title="只终止此资源当前命令，其他资源继续" onClick={()=>void stop()}><Glyph name="stop" size={11}/>终止</button>
-        <button type="button" className="mini-box-toggle" aria-label={open?'收起 mini 终端':'展开 mini 终端'} aria-expanded={open} onClick={()=>{setOpen(!open);onInspect?.();}}><Glyph name="chevron" size={13}/></button>
+        <button type="button" className="mini-box-toggle" aria-label={open?'收起 mini 终端':'展开 mini 终端'} aria-expanded={open} onClick={()=>{setOpen(!open);if(open)setFullOpen(false);onInspect?.();}}><Glyph name="chevron" size={13}/></button>
       </header>
-      <div className="mini-box-viewport" hidden={!open}>
-        {typeof window==='undefined'?<pre>{output}</pre>:<Suspense fallback={<pre>{output}</pre>}><TerminalPane key={target?`${target.history.terminal.id}:${target.history.terminal.generation}`:'recorded'} active={open} entries={[]} output={output} interactive={false} showCommandEntries={false} transparentBackground onInput={observeOnly} onResize={observeOnly}/></Suspense>}
+      <div className="mini-box-preview" hidden={!open}>
+        <div className="mini-box-command" title={current?.entry.command||'等待命令派发'}><span aria-hidden="true">$</span><code>{current?.entry.command?current.entry.command.replace(/\r?\n/g,' ⏎ '):'等待命令派发…'}</code></div>
+        <div className="mini-box-output" aria-label="关键输出预览">{rows.length?rows.map((line,index)=><div key={index} className={line.anomaly?'mini-box-output-line is-anomaly':'mini-box-output-line'} title={line.text}><span>{line.text}</span>{line.count>1&&<small>× {line.count}</small>}</div>):<div className="mini-box-output-empty">{current?.entry.status==='running'?'等待命令输出…':'暂无输出'}</div>}</div>
+        <footer className="mini-box-footer">
+          {anomalyCount>0&&<button type="button" className="mini-box-anomalies" onClick={()=>{setFullOpen(true);setJump(value=>value+1);onInspect?.();}}>异常线索 {anomalyCount}</button>}
+          {current?.entry.exitCode!=null&&<span className={current.entry.exitCode!==0?'mini-box-exit is-failed':'mini-box-exit'}>退出码 {current.entry.exitCode}</span>}
+          <button type="button" className="mini-box-expand" aria-expanded={fullOpen} aria-controls={detailId} onClick={()=>{setFullOpen(!fullOpen);onInspect?.();}}>{fullOpen?'收起':retainedOnly?'保留输出':'完整输出'}<small> · {lineCount} 行</small><Glyph name="chevron" size={11}/></button>
+        </footer>
       </div>
     </section>
+    {fullOpen&&<section id={detailId} className="mini-box-details" aria-label="原始命令输出">
+      <header><span>原始命令输出</span><button type="button" aria-label="收起完整输出" onClick={()=>setFullOpen(false)}><Glyph name="close" size={13}/></button></header>
+      {retainedOnly&&<p className="mini-box-retention-note">终端记录有容量上限，以下显示已保留的输出；已观察到的异常线索单独保留。</p>}
+      <div ref={detail} className="mini-box-raw" tabIndex={0} aria-label="原始输出记录">{analyzed.map(({entry,key,preview:recordPreview})=><div className="mini-box-raw-entry" key={key}>
+        <pre className="mini-box-raw-command">$ {entry.command||'命令记录'}</pre>
+        {recordPreview.anomalies.filter(issue=>!miniReadableOutput(entry.output).includes(issue.text)).map((issue,index)=><div key={index} data-mini-anomaly className="mini-box-retained-anomaly"><small>先前观察到的异常线索</small><pre>{issue.text}{issue.context?'\n'+issue.context:''}</pre></div>)}
+        <pre>{miniReadableOutput(entry.output).split('\n').map((line,index)=><span key={index} data-mini-anomaly={miniAnomalyLine(line)?'':undefined} className={miniAnomalyLine(line)?'is-anomaly':undefined}>{line}{'\n'}</span>)}</pre>
+      </div>)}</div>
+    </section>}
     {error&&<p className="mini-box-error" role="alert">{error}</p>}
   </div>;
 }

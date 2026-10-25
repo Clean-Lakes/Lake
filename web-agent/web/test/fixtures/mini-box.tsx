@@ -49,12 +49,18 @@ function Fixture(){
   entries.forEach((entry,i)=>{if(entry.status==='running')entry.output+=i?`/srv/app/file-${revision}.txt\r\n`:params.has('local')?`local step ${revision}\r\n`:`demo-worker-${revision}  1/1  Running\r\n`;});revision++;
   proof.textContent=JSON.stringify({requests,entries,notices,status,session,historyDelivered});render(value=>value+1);
  },400);return()=>clearInterval(timer);},[]);
- const cards=entries.map((entry,i)=>({id:'call-'+i,type:'operation',title:params.has('inspect')?'inspect_host':'shell',status:entry.stopRequestedAt?'interrupted':entry.status,at:started,data:{resource_id:resources[i]!.id,target:resources[i]!.name,arguments:params.has('inspect')?{}:{command:entry.command}}})) as AICard[];
+ const cards=entries.map((entry,i)=>({id:'call-'+i,type:'operation',title:params.has('inspect')?'inspect_host':'shell',status:entry.stopRequestedAt?'interrupted':entry.status,at:entry.startedAt??started,data:{resource_id:resources[i]!.id,target:resources[i]!.name,arguments:params.has('inspect')?{}:{command:entry.command}}})) as AICard[];
  if(reply)cards.push({...reply});
  if(nextTool)cards.push({...nextTool});
  const snapshot={session:{id:session,projectId:'p'},resources,terminals,messages:[{id:'user',sessionId:session,role:'user',text:'检查这两台主机的运行情况。',createdAt:started}],actions:[],cursor:revision,commandStopNotices:notices,replyTimings:[{messageId:'user',startedAt:started,status:status==='running'?'running':'completed',finishedAt:status==='completed'?new Date().toISOString():''}],ai:{session,status,cards,turnStartedAt:started,cardsOffset:0,totalCards:cards.length}} as SessionSnapshot;
  return <main style={{maxWidth:1040,margin:'40px auto',padding:'0 28px'}}><nav aria-label="Mini Box 隔离验收" style={{display:'flex',flexWrap:'wrap',gap:12,marginBottom:40}}>
   <span>虚构资源 · Mini Box 验收</span>
+  <button onClick={()=>{entries[0]!.output+='\x1b[31mERROR: fixture permission denied\x1b[0m\r\nservice account cannot read pods\r\n';render(value=>value+1);}}>注入异常</button>
+  <button onClick={()=>{entries[0]!.output+=Array.from({length:200},(_,i)=>`ordinary output ${revision}-${i}\r\n`).join('');render(value=>value+1);}}>追加大量普通输出</button>
+  <button onClick={()=>{entries[0]!.output=entries[0]!.output.slice(-90);render(value=>value+1);}}>模拟尾部截断</button>
+  <button onClick={()=>{entries[0]!.status='completed';entries[0]!.exitCode=0;terminals[0]!.status='ready';render(value=>value+1);}}>命令退出码零</button>
+  <button onClick={()=>{entries[0]!.status='completed';entries[0]!.exitCode=2;terminals[0]!.status='ready';render(value=>value+1);}}>命令退出码非零</button>
+  <button onClick={()=>{entries[0]={...entries[0]!,id:`replacement-${++revision}`,command:'df -h',output:'Filesystem Size Used Avail\r\n/dev/demo 100G 20G 80G\r\n',startedAt:new Date().toISOString(),status:'running',exitCode:null};terminals[0]!.status='busy';render(value=>value+1);}}>下一条命令</button>
   <button onClick={()=>{status='completed';finishCommands();if(reply)reply.status='completed';revision++;render(value=>value+1);}}>结束会话</button>
   <button onClick={()=>{finishCommands();reply={id:'final-answer',at:new Date().toISOString(),type:'message',status:'running',content:'检查结果：两台主机均已返回结果。'};render(value=>value+1);}}>生成总结</button>
   <button onClick={()=>{if(reply)reply.content+='\n\n这是直接追加到最终正文的详细说明，原始命令和已收到的输出仍可回看。';render(value=>value+1);}}>追加总结</button>

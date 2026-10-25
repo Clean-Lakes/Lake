@@ -42,6 +42,7 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
   if(!autoOpened.current&&!inspected.current&&miniScope?.live&&miniCards.length) {
     autoOpened.current=true;setOpen(true);
   }
+  const hasOpened=useRef(open);if(open)hasOpened.current=true;
   const [rawOpen, setRawOpen] = useState(false);
   const [commandsOpen,setCommandsOpen]=useState(false);
   const tools = cards.filter(card => card.type !== "thinking");
@@ -66,7 +67,7 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
       <span className="thinking-process-icon"><ExecutionIcon card={currentTool} active={iconActive} resourceKind={resource?.kind}/></span><span className="thinking-label">{label}</span>{resourceRow&&tools.length>1&&<small className="thinking-operation-count">{tools.length} 项</small>}<svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
     </button>
     {stage}
-    {open && <div className="thinking-detail-panel" id={panelId}>
+    {(open||hasOpened.current&&miniCards.length>0) && <div className="thinking-detail-panel" id={panelId} hidden={!open} inert={!open}>
       {tools.length > 0 && <ol className="thinking-steps">{tools.map(card => miniCards.includes(card)?card.id===miniCards[0]!.id?<li className="thinking-step thinking-tool" key={card.id}><span className="thinking-step-marker"><ExecutionIcon card={card} size={20}/></span><MiniBox scope={miniScope!} resource={resource!.id!} kind={terminalKind!} cards={miniCards} onInspect={onInspect}/><details className="mini-box-audit" onToggle={event=>setCommandsOpen(event.currentTarget.open)}><DisclosureSummary>原始执行记录 · {miniCards.length}</DisclosureSummary>{commandsOpen&&<ol className="thinking-steps">{miniCards.map(item=><ToolStep card={item} key={item.id} hideTarget onInspect={onInspect}/>)}</ol>}</details></li>:null:<ToolStep card={card} key={card.id} active={iconActive&&currentTool?.id===card.id} hideTarget={!!resource} onInspect={onInspect}/>)}</ol>}
       {thoughts.length > 0 && <details className="thinking-raw-records" onToggle={event => setRawOpen(event.currentTarget.open)}><DisclosureSummary>原始思考记录</DisclosureSummary>{rawOpen && <ol className="thinking-steps">{thoughts.map(card => <ReasonStep card={card} key={card.id}/>)}</ol>}</details>}
     </div>}

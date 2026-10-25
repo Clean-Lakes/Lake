@@ -3,11 +3,11 @@ import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {TerminalEntry,TerminalHistory} from '../../shared/contracts';
-import {miniCanStop,miniEntries,miniOutput,miniTarget,type MiniBoxScope} from '../src/miniBoxModel';
+import {miniCanStop,miniEntries,miniTarget,type MiniBoxScope} from '../src/miniBoxModel';
 import {MiniBoxCompletionNotice} from '../src/MiniBox';
 import {ThinkingTimeline} from '../src/ThinkingTimeline';
 import {ExecutionDetailsOpen} from '../src/TurnExecutionDetails';
-import {terminalOutputUpdate} from '../src/terminalOutput';
+import {miniReadableOutput,miniPreview,miniPreviewRows} from '../src/miniBoxPreview';
 
 const at='2026-10-24T10:00:00Z';
 const scope:MiniBoxScope={session:'s',terminals:[],startedAt:at,live:true,connected:true};
@@ -37,10 +37,13 @@ test('each resource mini targets its actual running command and disables stale o
  assert.equal(miniCanStop(miniTarget([{...history(),terminal:{...history().terminal,writerSessionId:'foreign'}}]),scope,false),false);
  assert.equal(miniTarget([history([entry({status:'completed'}),entry({id:'live',status:'running'})])])?.entry.id,'live');
 });
-test('PTY output appends without screen resets and never uses raw manual screen history',()=>{
- const first=miniOutput([entry()]),next=miniOutput([entry({output:'host\r\n'})]);
- assert.deepEqual(terminalOutputUpdate(first,next),{text:'t\r\n',reset:false});
- assert.ok(!next.includes(history().output));
+test('compact preview retains every raw command line and excludes manual screen history',()=>{
+ const h=history([entry({output:'first\r\nsecond\r\nthird\r\nfourth\r\n'})]);
+ const command=miniEntries(h,scope,'r')[0]!;
+ const raw=miniReadableOutput(command.output),preview=miniPreview(command.output);
+ assert.equal(raw,'first\nsecond\nthird\nfourth\n');
+ assert.deepEqual(miniPreviewRows(preview,undefined).map(row=>row.text),['second','third','fourth']);
+ assert.ok(!raw.includes(h.output));
 });
 test('turn-end notice names only resources with a user stop in that turn',()=>{
  const html=renderToStaticMarkup(createElement(MiniBoxCompletionNotice,{startedAt:at,notices:[{entryId:'e',terminalId:'t',resourceId:'r',resourceName:'SSH A',requestedAt:at,status:'unknown',exitCode:null,finishedAt:at},{entryId:'old',terminalId:'old',resourceId:'old',resourceName:'Old resource',requestedAt:'2026-10-23T00:00:00Z',status:'unknown',exitCode:null,finishedAt:null}]}));
