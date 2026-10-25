@@ -20,7 +20,8 @@ export function pilotWorkForEntry(task:SRETask,entry:SRETranscriptEntry,runs:Age
  const anchor=task.messages.filter(owns).sort((a,b)=>a.sequence-b.sequence||a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id))[0];
  if(anchor?.id!==entry.id)return null;
  const states=steps.map(value=>({step:value,status:pilotStepStatus(task,plan,value,runs)}));
- return {id:JSON.stringify([task.id,plan.id,key]),plan,steps:states,completed:states.filter(value=>value.status==='succeeded').length};
+ const repeatsDescription=entry.kind==='progress'&&entry.body.replace(/\s+/g,'')===step.description.replace(/\s+/g,'');
+ return {id:JSON.stringify([task.id,plan.id,key]),plan,steps:states,completed:states.filter(value=>value.status==='succeeded').length,repeatsDescription};
 }
 
 export function pilotStepStatus(task:SRETask,plan:SREPlanRevision,step:SREPlanStep,runs:AgentRun[]=[]):string{

@@ -7,6 +7,7 @@ import {LakePilotControl} from '../src/LakePilotControl';
 import {PilotAgentWork} from '../src/PilotAgentWork';
 import {pilotWorkForEntry,pilotStepStatus} from '../src/pilotPresentation';
 import {PilotChoiceQuestion} from '../src/PilotChoiceQuestion';
+import {sreRoleLiveState} from '../src/SREActivity';
 
 const at='2026-10-25T00:00:00Z';
 const entry:SRETranscriptEntry={id:'first',sessionId:'session',taskId:'task',roleId:'investigator',roleRunId:'agent',kind:'progress',body:'正在采集',revision:1,sequence:1,createdAt:at,attemptId:'attempt'};
@@ -24,7 +25,7 @@ test('Each real Agent work item has its own steps and exactly one historical anc
  const work=pilotWorkForEntry(task,entry);
  assert.deepEqual(work?.steps.map(value=>value.step.description),['收集日志','核对假设']);
  assert.equal(pilotWorkForEntry(task,task.messages[1]!),null);
- const html=renderToStaticMarkup(createElement(PilotAgentWork,{task,entry}));
+ const html=renderToStaticMarkup(createElement(PilotAgentWork,{work}));
  assert.ok(html.includes('收集日志'));assert.ok(!html.includes('读取数据库状态'));assert.ok(!html.includes('执行变更'));assert.match(html,/0 \/ 2/);
  assert.equal(pilotWorkForEntry(task,{...entry,source:'user'}),null);
 });
@@ -37,9 +38,26 @@ test('Commands and unrelated plan revisions cannot inflate the displayed step pr
  assert.equal(pilotWorkForEntry(newer,entry)?.completed,0);
 });
 
+test('Only the exact repeated step description is suppressed; findings and full inspection text stay available',()=>{
+ const repeated={...entry,body:task.plans[0]!.steps[0]!.description};
+ const withRepeated={...task,messages:[repeated,...task.messages.slice(1)]};
+ const work=pilotWorkForEntry(withRepeated,repeated);
+ assert.equal(work?.repeatsDescription,true);
+ assert.equal(work?.steps[0]!.step.description,repeated.body);
+ assert.equal(pilotWorkForEntry(task,entry)?.repeatsDescription,false);
+ assert.equal(pilotWorkForEntry({...withRepeated,messages:[{...repeated,kind:'finding'}]},{...repeated,kind:'finding'})?.repeatsDescription,false);
+});
+
+test('A Pilot choice wait has a specific label and never shows running activity',()=>{
+ const current={...task,status:'active'} as SRETask;
+ const run={id:'agent',sreTaskId:task.id,status:'running',question:{pilot:{}}} as Parameters<typeof sreRoleLiveState>[2];
+ const state=sreRoleLiveState(current,entry,run,task.attempts[0]);
+ assert.equal(state.label,'等待选择');assert.equal(state.active,false);
+});
+
 test('Guided choices are nested directions and concrete unchecked changes, not ordinary skippable questions',()=>{
  const request:AIQuestionRequest={id:'choice',questions:[{id:'pilot',title:'选择'}],pilot:{sessionId:'session',taskId:'task',planRevisionId:'plan',stepId:'logs',attemptId:'attempt',role:'investigator',directions:[{id:'logs',title:'检查应用日志',reason:'核对故障时间',recommended:true,operations:[{id:'read',title:'查看日志',tool:'shell',arguments:{command:'journalctl -u demo'},risk:'readonly'},{id:'change',title:'修正配置',tool:'write',arguments:{path:'/tmp/config'},risk:'write'}]}]}};
  const html=renderToStaticMarkup(createElement(PilotChoiceQuestion,{session:'session',request,refresh:async()=>{}}));
- assert.match(html,/交给 Lake 完成本步骤/);assert.match(html,/按此方向继续/);assert.match(html,/执行所选检查/);assert.match(html,/journalctl -u demo/);
+ assert.match(html,/本步骤交给 Lake/);assert.match(html,/按此方向继续/);assert.match(html,/选择具体操作/);assert.match(html,/工具与参数/);assert.match(html,/journalctl -u demo/);assert.ok(!html.includes(' open=')&&!html.includes('<details open'));
  assert.equal((html.match(/checked=""/g)??[]).length,1);assert.ok(!html.includes('其他 / 补充'));
 });

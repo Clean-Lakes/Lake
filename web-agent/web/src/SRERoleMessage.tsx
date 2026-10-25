@@ -13,6 +13,7 @@ import {SREActivity,sreRoleLiveState} from './SREActivity';
 import {StatusText} from './StatusText';
 import {displayAiError} from './aiErrors';
 import {PilotAgentWork} from './PilotAgentWork';
+import {pilotWorkForEntry} from './pilotPresentation';
 
 function SREEvidence({task,evidence,register}:{task:SRETask;evidence:AgentEvidence;register:(node:HTMLDetailsElement|null)=>void}){
  const [source,setSource]=useState(''),[cursor,setCursor]=useState<number|null>(0),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -37,6 +38,7 @@ export function SRERoleMessage({task,entry,snapshot,renderApproval,onUpdated,ani
  const report=entry.kind==='finding'&&entry.source!=='user'?attempt?.report:undefined;
  const nodeReply=sreReplyStage(task,entry)==='node';
  const live=sreRoleLiveState(task,entry,run,attempt);
+ const pilotWork=snapshot.sre?.pilot?pilotWorkForEntry(task,entry,snapshot.ai?.agentRuns):null;
  const visibleBody=useSmoothText(body,live.active&&entry.source!=='user');
  const showRecords=['finding','result','verification','error'].includes(entry.kind);
  const approvalAnchor=task.messages?.find(m=>m.roleRunId===entry.roleRunId&&m.kind==='progress')??task.messages?.filter(m=>m.roleRunId===entry.roleRunId).at(-1);
@@ -46,8 +48,8 @@ export function SRERoleMessage({task,entry,snapshot,renderApproval,onUpdated,ani
  const operationRecord=(op:NonNullable<typeof attempt>['operations'][number])=><details className="sre-operation-record" id={`sre-operation-${op.id}`} key={op.id}><DisclosureSummary><Glyph name="terminal" size={13}/>{op.call.name} · {sreOperationLabel(op)}</DisclosureSummary><pre>{op.call.arguments}</pre>{op.result&&<pre>{op.result}</pre>}{op.resolutionNote&&<p>人工核实 · {op.resolutionNote}</p>}{sreNeedsVerification(op)&&['paused','waiting_input'].includes(task.status)&&<button type="button" onClick={()=>{setResolveId(op.id);setResolveNote('');setResolveError('')}}>记录核实结果</button>}</details>;
  return <article className={`sre-role-message sre-role-${entry.roleId}${entry.kind==='status'?' sre-role-status':''}`} id={`sre-message-${entry.id}`} data-role={entry.roleId}>
   <span className="sre-role-avatar">{entry.source==='user'?<Glyph name="chat" size={18}/>:<AgentIcon role={entry.roleId} size={22}/>}</span><div className="sre-role-content"><header><strong>{entry.source==='user'?'你':role.name}</strong><small>{entry.source==='user'?'计划与操作记录':role.description}</small><>{entry.toRoleId&&sreRoles[entry.toRoleId]&&<span className="sre-role-recipient"><Glyph name="arrow" size={12}/>{sreRoles[entry.toRoleId].name}</span>}</><time>{new Date(entry.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</time>{['progress','status'].includes(entry.kind)&&<span className={`sre-role-live-state${live.active?' is-active':''}`} role="status"><StatusText text={live.label} active={live.active}/></span>}</header>
-   {snapshot.sre?.pilot&&<PilotAgentWork task={task} entry={entry} runs={snapshot.ai?.agentRuns}/>}
-   <div className={`sre-role-body${entry.kind==='error'?' sre-role-error':''}`}>{entry.kind==='progress'&&run?.liveText?<LiveProse key={run.liveTextId} text={sreEvidenceText(run.liveText,attempt?.evidence??[])} active={live.active} animateInitial={animateInitial}/>:report?<SREReport compact report={report} evidence={attempt?.evidence??[]} onEvidence={showEvidence}/>:nodeReply?<SRECheckpoint body={body}/>:<SREProse compact={['summary','finding'].includes(entry.kind)}>{visibleBody}</SREProse>}</div>
+   {pilotWork&&<PilotAgentWork work={pilotWork}/>}
+   {(!pilotWork?.repeatsDescription||!!run?.liveText)&&<div className={`sre-role-body${entry.kind==='error'?' sre-role-error':''}`}>{entry.kind==='progress'&&run?.liveText?<LiveProse key={run.liveTextId} text={sreEvidenceText(run.liveText,attempt?.evidence??[])} active={live.active} animateInitial={animateInitial}/>:report?<SREReport compact report={report} evidence={attempt?.evidence??[]} onEvidence={showEvidence}/>:nodeReply?<SRECheckpoint body={body}/>:<SREProse compact={['summary','finding'].includes(entry.kind)}>{visibleBody}</SREProse>}</div>}
    {live.active&&run&&<SREActivity run={run} attempt={attempt}/>}
    {firstPlan&&<SREPlanCard enabled={snapshot.sre?.enabled===true} task={task} resources={snapshot.resources} agentRuns={snapshot.ai?.agentRuns} onUpdated={onUpdated}/>}
    {showRecords&&!!attempt?.evidence?.length&&<details ref={evidenceList} className="sre-evidence-list"><DisclosureSummary>{attempt.evidence.length} 项证据<span>查看原始输出</span></DisclosureSummary>{attempt.evidence.map(ev=><SREEvidence key={ev.id} task={task} evidence={ev} register={node=>{if(node)evidenceItems.current.set(ev.id,node);else evidenceItems.current.delete(ev.id)}}/>)}</details>}

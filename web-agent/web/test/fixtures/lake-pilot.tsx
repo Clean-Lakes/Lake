@@ -17,6 +17,7 @@ const query=new URLSearchParams(location.search);
 document.documentElement.dataset.theme=query.get('theme')==='dark'?'dark':'light';
 let server:PilotSettings={enabled:false,autoAdvance:false,revision:0};
 let requests=0,decisions=0;
+let lastSelection:unknown=null;
 window.fetch=async(input,init)=>{
  const path=String(input);requests++;
  if(path==='/api/projects/fixture/pilot'&&init?.method==='PUT'){
@@ -26,6 +27,7 @@ window.fetch=async(input,init)=>{
   return new Response(JSON.stringify(server),{headers:{'Content-Type':'application/json'}});
  }
  if(path==='/api/sessions/fixture/ai/agentQuestionReply'&&init?.method==='POST'){
+  const data=JSON.parse(String(init.body));lastSelection=JSON.parse((Object.values(data.answers)[0] as string[])[0]!);
   decisions++;return new Response('{}',{headers:{'Content-Type':'application/json'}});
  }
  return new Response(JSON.stringify({error:'隔离验收禁止访问后端'}),{status:403});
@@ -46,15 +48,20 @@ const bodies:Record<string,string>={scope:'本次检查订单服务与代理配�
 const task={id:'fixture-task',sessionId:'fixture',projectId:'fixture',status:'completed',goal:'核对订单服务',scope:['fixture-host'],revision:1,recoveryStatus:'verified',rootCauseStatus:'confirmed',plans:[{id:'plan',steps}],runs:[{id:'run',planRevisionId:'plan',status:'completed'}],attempts:steps.map(step=>({id:step.id,stepId:step.id,planRunId:'run',roleRunId:step.id,status:'succeeded',evidence:[],operations:[],startedAt:at,finishedAt:at})),messages:steps.map((step,index)=>({id:'message-'+step.id,sessionId:'fixture',taskId:'fixture-task',roleId:step.role,roleRunId:step.id,attemptId:step.id,kind:step.kind==='summarize'?'summary':'finding',body:bodies[step.id],revision:1,sequence:index+1,createdAt:new Date(Date.parse(at)+index*60000).toISOString()})),verifications:[]} as SRETask;
 const choice:AIQuestionRequest={id:'fixture-choice',questions:[{id:'pilot',title:'选择处理方向'}],pilot:{sessionId:'fixture',taskId:'fixture-task',planRevisionId:'plan',stepId:'logs',attemptId:'logs',role:'investigator',directions:[{id:'logs',title:'检查应用运行状态',reason:'确认应用进程与监听端口。',recommended:true,operations:[{id:'status',title:'查看服务状态',tool:'shell',arguments:{command:'systemctl status order-service --no-pager'},risk:'readonly'},{id:'ports',title:'检查监听端口',tool:'shell',arguments:{command:'ss -lntp'},risk:'readonly'},{id:'logs',title:'查看启动日志',tool:'shell',arguments:{command:'journalctl -u order-service -n 100 --no-pager'},risk:'readonly'}]},{id:'config',title:'核对代理配置',reason:'检查上游目标是否匹配。',operations:[{id:'read',title:'读取代理配置',tool:'read',arguments:{path:'/etc/nginx/conf.d/order.conf'},risk:'readonly'}]}]}};
 
+const hostDescription='在演示主机上只读取系统基础指标：date、uptime、load average（1/5/15 分钟）、free -m 完整输出、根分区 df -h /，以及 swap 启用情况。不得执行任何写操作、重启或配置变更。';
+const hostTask={...task,status:'waiting_input',plans:[{...task.plans[0]!,steps:[{...steps[2]!,description:hostDescription}]}],runs:[{...task.runs[0]!,status:'running'}],attempts:[{...task.attempts[2]!,status:'running'}],messages:[{...task.messages[2]!,kind:'progress',body:hostDescription}]} as SRETask;
+const hostChoice:AIQuestionRequest={...choice,pilot:{...choice.pilot!,directions:[{id:'overview',title:'只读主机概览快照',reason:'读取负载、内存、磁盘与 swap 概览。',recommended:true,operations:[{id:'overview',title:'读取主机概览指标',tool:'observe_host',arguments:{asset_ref:'a_fixture_host',metric:'overview'},risk:'readonly'}]}]}};
+
 function Fixture(){
  const [settings,setSettings]=useState(server),[,render]=useState(0);
  const snapshot={session:{id:'fixture',projectId:'fixture'},ai:{profile:'core',status:'completed',agentRuns:[]},resources:[{id:'fixture-host',name:'隔离测试主机'}],sre:{enabled:settings.enabled,pilot:settings,tasks:[task]}} as SessionSnapshot;
  const refresh=async()=>{setSettings({...server});render(value=>value+1)};
+ const hostSnapshot={...snapshot,ai:{...snapshot.ai,agentRuns:[{id:'logs',sreTaskId:hostTask.id,status:'waiting_input',question:hostChoice}]},sre:{...snapshot.sre,tasks:[hostTask]}} as SessionSnapshot;
  return <main style={{maxWidth:query.get('width')==='390'?390:900,margin:'28px auto',padding:'0 24px'}}>
   <p style={{color:'var(--text-muted)',fontSize:'var(--font-size-toolbar)'}}>Lake Pilot · 隔离测试数据，不连接实际资源</p>
   <div className="composer-foot" style={{margin:'16px 0 28px'}}><span>权限</span><LakePilotControl snapshot={snapshot} onUpdated={refresh}/></div>
-  {query.get('view')==='choice'?<PilotChoiceQuestion request={choice} session="fixture" runId="logs" refresh={refresh}/>:task.messages.filter(message=>['scope','phenomenon','change','verify'].includes(message.attemptId??'')).map(entry=><SRERoleMessage key={entry.id} task={task} entry={entry} snapshot={snapshot} renderApproval={()=>null} onUpdated={()=>{}}/>)}
-  <output aria-label="隔离请求统计" style={{color:'var(--text-muted)',fontSize:'var(--font-size-toolbar)',overflowWrap:'anywhere'}}>{JSON.stringify({requests,decisions,...settings})}</output>
+  {query.get('view')==='host'?<SRERoleMessage task={hostTask} entry={hostTask.messages[0]!} snapshot={hostSnapshot} renderApproval={()=><PilotChoiceQuestion request={hostChoice} session="fixture" runId="logs" refresh={refresh}/>} onUpdated={()=>{}}/>:query.get('view')==='choice'?<PilotChoiceQuestion request={choice} session="fixture" runId="logs" refresh={refresh}/>:task.messages.filter(message=>['scope','phenomenon','change','verify'].includes(message.attemptId??'')).map(entry=><SRERoleMessage key={entry.id} task={task} entry={entry} snapshot={snapshot} renderApproval={()=>null} onUpdated={()=>{}}/>)}
+  <output aria-label="隔离请求统计" style={{color:'var(--text-muted)',fontSize:'var(--font-size-toolbar)',overflowWrap:'anywhere'}}>{JSON.stringify({requests,decisions,lastSelection,...settings})}</output>
  </main>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><Fixture/></React.StrictMode>);

@@ -8,8 +8,8 @@ export function sreRoleLiveState(task:SRETask,entry:SRETranscriptEntry,run?:Agen
  const owned=!!run&&(!run.sreTaskId||run.sreTaskId===task.id)&&(!attempt||!current||attempt.planRunId===current.id);
  const unknown=attempt?.operations?.some(o=>o.status==='unknown')??false;
  const waiting=owned&&(!!run?.pending||run?.status==='waiting_approval');
- const active=entry.kind==='progress'&&owned&&run?.status==='running'&&['active','waiting_approval'].includes(task.status)&&!waiting&&!unknown&&(!attempt||attempt.status==='running');
- const label=unknown?'结果待核实':waiting?'等待确认':owned&&run?.status!=='running'?(sreStatus[run!.status]??run!.status):!['active','waiting_approval'].includes(task.status)?(sreStatus[task.status]??task.status):active?'执行中':entry.kind==='progress'?'状态待更新':'已结束';
+ const active=entry.kind==='progress'&&owned&&run?.status==='running'&&['active','waiting_approval'].includes(task.status)&&!waiting&&!unknown&&!run?.question?.pilot&&(!attempt||attempt.status==='running');
+ const label=unknown?'结果待核实':waiting?'等待确认':owned&&run?.question?.pilot?'等待选择':owned&&run?.status!=='running'?(sreStatus[run!.status]??run!.status):!['active','waiting_approval'].includes(task.status)?(sreStatus[task.status]??task.status):active?'执行中':entry.kind==='progress'?'状态待更新':'已结束';
  return {active,label,waiting,unknown};
 }
 export function sreActivityLabel(run:AgentRun){

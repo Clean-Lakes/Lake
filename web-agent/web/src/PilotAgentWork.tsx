@@ -1,12 +1,10 @@
 import {useState} from 'react';
-import type {AgentRun,SRETask,SRETranscriptEntry} from '../../shared/contracts';
 import {Glyph} from './Icons';
 import {pilotWorkForEntry} from './pilotPresentation';
 import {sreStatus} from './sreTranscript';
 
-export function PilotAgentWork({task,entry,runs=[]}:{task:SRETask;entry:SRETranscriptEntry;runs?:AgentRun[]}){
+export function PilotAgentWork({work}:{work:ReturnType<typeof pilotWorkForEntry>}){
  const [inspected,setInspected]=useState('');
- const work=pilotWorkForEntry(task,entry,runs);
  if(!work)return null;
  const selected=work.steps.find(value=>value.step.id===inspected);
  return <div className="pilot-agent-work">
