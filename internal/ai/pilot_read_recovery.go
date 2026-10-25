@@ -7,7 +7,7 @@ import (
 )
 
 func pilotReadRecoveryTool() Tool {
-	return Tool{Name: "pilot_read_recovery", Description: "Inspect your own current step's operation ledger with {}. If a read failed, you may stop and report failure, or collect alternative real evidence within your delegation. After an actual successful replacement, submit failed_operation_id, replacement_operation_ids and reason to retain the failed audit record while covering that read gap. Only flexible direction/step/automatic delegation permits replacement. Exact selected commands, unknown changes, other steps/resources, unfinished or older samples cannot be resolved here. This never executes a command or changes resource permissions.", Parameters: objectSchema(map[string]any{"failed_operation_id": stringSchema(), "replacement_operation_ids": arraySchema(stringSchema()), "reason": stringSchema()})}
+	return Tool{Name: "pilot_read_recovery", Description: "Inspect your own current step's operation ledger with {}. If a read failed, you may stop and report failure, or collect alternative real evidence within your delegation. After an actual successful replacement, submit failed_operation_id, replacement_operation_ids and reason to retain the failed audit record while covering that read gap. Only operations returned with read_gap=true need replacement. Policy-denied/not_executed operations never need recovery; do not associate them. Only flexible direction/step/automatic delegation permits replacement. Exact selected commands, unknown changes, other steps/resources, unfinished or older samples cannot be resolved here. This never executes a command or changes resource permissions.", Parameters: objectSchema(map[string]any{"failed_operation_id": stringSchema(), "replacement_operation_ids": arraySchema(stringSchema()), "reason": stringSchema()})}
 }
 
 // Recovery is a reference to completed evidence, never a new outcome for the
@@ -109,20 +109,25 @@ func (e *Engine) pilotReadRecovery(c Config, call Call) (any, error) {
 		}
 		task, err = e.sreRepository.MutateSRETask(e.worker.parentID, c.sre.TaskID, 0, "pilot_read_recovery", func(t *SRETask) error {
 			if t.Pilot == nil || t.LatestPlan() == nil || t.LatestPlan().ID != c.sre.PlanRevisionID || (t.Status != "active" && t.Status != "waiting_approval") {
-				return errors.New("Pilot step no longer active")
+				return sreError(409, "当前步骤已停止，请使用正在执行的步骤记录。")
 			}
 			mode := pilotExecutionMode(*t, c.sre.PlanRevisionID, c.sre.Step.ID, c.sre.AttemptID)
 			if mode != "direction" && mode != "step" && mode != "automatic" {
-				return errors.New("exact command selection cannot be replaced; report failure or obtain a new user choice")
+				return sreError(409, "已锁定具体命令，不能自行替换；请报告失败或重新取得用户选择。")
 			}
 			for i := range t.Attempts {
 				a := &t.Attempts[i]
 				if a.ID != c.sre.AttemptID || a.StepID != c.sre.Step.ID {
 					continue
 				}
+				for _, failed := range a.Operations {
+					if failed.ID == input.Failed && (failed.Risk != "readonly" || (failed.Status != "failed" && failed.Status != "unknown")) {
+						return sreError(409, "该操作不是已执行失败的只读检查，无需关联替代结果；请选择 read_gap=true 的操作，策略拒绝或未执行的命令不属于取证缺口。")
+					}
+				}
 				recovery := PilotReadRecovery{FailedOperationID: input.Failed, ReplacementOperationIDs: input.Replacements, Reason: input.Reason, CreatedAt: timestamp()}
 				if !pilotReadRecoveryValid(*a, recovery) {
-					return errors.New("replacement must be a later successful read on the same resource and attempt; unknown changes remain blocked")
+					return sreError(409, "替代检查不符合要求：须为同一次步骤、同一资源、失败之后实际完成的只读检查，并有完整成功证据；结果不明的变更不能在此处理。")
 				}
 				for _, old := range a.ReadRecoveries {
 					if old.FailedOperationID == input.Failed && js(old.ReplacementOperationIDs) == js(input.Replacements) && old.Reason == input.Reason {
@@ -132,7 +137,7 @@ func (e *Engine) pilotReadRecovery(c Config, call Call) (any, error) {
 				a.ReadRecoveries = append(a.ReadRecoveries, recovery)
 				return nil
 			}
-			return errors.New("Pilot attempt expired")
+			return sreError(409, "步骤执行记录已过期，请读取当前步骤记录。")
 		})
 		if err != nil {
 			return nil, err

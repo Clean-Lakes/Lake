@@ -324,7 +324,7 @@ func pilotAttemptError(task SRETask, attempt SREStepAttempt, step SREPlanStep) e
 	}
 	for _, operation := range attempt.Operations {
 		if pilotReadFailureOutstanding(attempt, operation) {
-			return errors.New("只读检查仍有缺口：可以在当前委托范围内取得替代证据并用 pilot_read_recovery 关联，或将本步报告为失败")
+			return errors.New("本步骤仍有未完成的只读检查，尚未通过验收。已保留取得的证据，可继续检查或结束任务。")
 		}
 	}
 	if step.Kind == "observe" || step.Kind == "act" {

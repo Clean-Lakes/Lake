@@ -82,7 +82,7 @@ func (e *Engine) recordSREToolResult(c Config, call Call, a map[string]any, resu
 		return result, toolErr
 	}
 	observationErr := toolErr
-	if observationErr == nil && obj(result)["exitCode"] != nil && num(obj(result)["exitCode"], 0) != 0 {
+	if observationErr == nil && obj(result)["exitCode"] != nil && num(obj(result)["exitCode"], 0) != 0 && !(c.sre.Pilot != nil && e.sreCallReadOnly(c, call) && sreReadNoMatches(call, result)) {
 		observationErr = errors.New("工具退出码非零，不能作为成功证据")
 	}
 	if observationErr == nil && (obj(result)["status"] == "running" || obj(result)["status"] == "unknown" || obj(result)["running"] == true) {

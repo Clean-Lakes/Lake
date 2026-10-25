@@ -16,11 +16,11 @@ import (
 
 func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 	for _, scenario := range []struct {
-		name                string
-		automatic, adaptive bool
-	}{{name: "guided"}, {name: "automatic", automatic: true}, {name: "delegated_direction", adaptive: true}} {
+		name                          string
+		automatic, adaptive, recovery bool
+	}{{name: "guided"}, {name: "automatic", automatic: true}, {name: "delegated_direction", adaptive: true}, {name: "automatic_read_recovery", automatic: true, adaptive: true, recovery: true}} {
 		t.Run(scenario.name, func(t *testing.T) {
-			automatic, adaptive := scenario.automatic, scenario.adaptive
+			automatic, adaptive, recovery := scenario.automatic, scenario.adaptive, scenario.recovery
 			b, h := fixture(t)
 			session, resource := newSession(t, h)
 			project := stringOf(b.Store.Session(session)["projectId"])
@@ -54,8 +54,21 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 				}
 				if strings.Contains(system, "Lake's investigator") {
 					chosen, collected, reselected, alternativeCollected := false, false, false, false
+					inspected, rejected, recovered := false, false, false
+					var ledger Object
 					for _, message := range messages {
 						if message["role"] == "tool" {
+							if message["tool_call_id"] == "inspect_gap" {
+								inspected = true
+								_ = json.Unmarshal([]byte(stringOf(message["content"])), &ledger)
+							}
+							if message["tool_call_id"] == "invalid_recovery" {
+								rejected = true
+								if !strings.Contains(stringOf(message["content"]), "无需关联替代结果") {
+									t.Errorf("lost durable validation cause: %s", stringOf(message["content"]))
+								}
+							}
+							recovered = recovered || message["tool_call_id"] == "link_recovery"
 							chosen = chosen || message["tool_call_id"] == "choose_path"
 							collected = collected || message["tool_call_id"] == "collect_logs"
 							reselected = reselected || message["tool_call_id"] == "choose_replacement"
@@ -68,6 +81,9 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 						return
 					}
 					if !collected {
+						if recovery {
+							arguments["path"] = filepath.Join(dir, "does-not-exist.log")
+						}
 						emitModel(w, "", []ai.Call{{ID: "collect_logs", Name: "observe_logs", Arguments: jsonText(arguments)}})
 						return
 					}
@@ -77,6 +93,32 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 					}
 					if adaptive && !alternativeCollected {
 						emitModel(w, "", []ai.Call{{ID: "collect_alternative", Name: "observe_logs", Arguments: jsonText(Object{"asset_ref": arguments["asset_ref"], "path": alternativePath})}})
+						return
+					}
+					if recovery && !inspected {
+						emitModel(w, "", []ai.Call{{ID: "inspect_gap", Name: "pilot_read_recovery", Arguments: "{}"}})
+						return
+					}
+					if recovery && !recovered {
+						failed, replacement := "", ""
+						for _, op := range objects(ledger["operations"]) {
+							if op["read_gap"] == true {
+								failed = stringOf(op["operation_id"])
+							}
+							if op["status"] == "succeeded" {
+								replacement = stringOf(op["operation_id"])
+							}
+						}
+						if failed == "" || replacement == "" {
+							t.Error("actual ledger lost failure or replacement")
+						}
+						id := "link_recovery"
+						target := failed
+						if !rejected {
+							id = "invalid_recovery"
+							target = replacement
+						}
+						emitModel(w, "", []ai.Call{{ID: id, Name: "pilot_read_recovery", Arguments: jsonText(Object{"failed_operation_id": target, "replacement_operation_ids": []string{replacement}, "reason": "实际替代日志采样"})}})
 						return
 					}
 					ids := regexp.MustCompile(`ev_[a-f0-9]{32}`).FindAllString(content, -1)
@@ -143,7 +185,7 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 					}
 				}
 			}
-			if adaptive && len(task.Pilot.DirectionBatches) != 1 {
+			if adaptive && !automatic && len(task.Pilot.DirectionBatches) != 1 {
 				t.Fatal("replacement batch did not reuse the original direction decision")
 			}
 			found, alternativeFound := false, false
@@ -157,7 +199,16 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 			if adaptive && !alternativeFound {
 				t.Fatal("new direction batch did not collect real alternative evidence")
 			}
-			if !found {
+			if recovery {
+				linked := false
+				for _, attempt := range task.Attempts {
+					linked = linked || len(attempt.ReadRecoveries) == 1
+				}
+				if !linked || !alternativeFound {
+					t.Fatal("real Store did not persist actual replacement evidence")
+				}
+			}
+			if !found && !recovery {
 				t.Fatal("no actual source evidence")
 			}
 		})

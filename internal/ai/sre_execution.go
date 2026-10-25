@@ -215,7 +215,7 @@ func (e *Engine) finishSREOperation(c Config, call Call, result any, toolErr err
 					}
 				}
 				r := obj(result)
-				if r["exitCode"] != nil && num(r["exitCode"], 0) != 0 {
+				if r["exitCode"] != nil && num(r["exitCode"], 0) != 0 && !(toolErr == nil && c.sre.Pilot != nil && op.Risk == "readonly" && sreReadNoMatches(call, result)) {
 					op.Status = "failed"
 				}
 				if r["status"] == "running" || r["status"] == "unknown" || r["running"] == true || r["shell_id"] != nil && r["exitCode"] == nil {
