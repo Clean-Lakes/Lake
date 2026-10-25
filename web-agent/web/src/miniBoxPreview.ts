@@ -83,10 +83,10 @@ export function miniExecutionStatus({entry,card,stale,stopping,active,anomalies,
  if(entry?.status==='unknown')return '结果待核查';
  if(entry?.status==='completed'&&entry.exitCode!=null){
   if(entry.exitCode!==0)return '执行失败';
-  if(active)return anomalies?'继续执行 · 有异常线索':'AI 正在继续';
+  if(active)return anomalies?'Lake 正在操作 · 有异常线索':'Lake 正在操作';
   return anomalies?'命令已退出 · 有异常线索':'已完成';
  }
- if(active)return 'AI 正在执行';
+ if(active)return 'Lake 正在操作';
  if(entry?.status==='running')return '命令仍在运行';
  if(entry&&card?.status!=='pending')return entry.exitCode===null?'退出状态待核查':'记录输出';
  return card?.status==='running'?'等待命令派发':card?.status==='pending'?'等待确认':card?.status==='failed'?'执行失败':'记录输出';
