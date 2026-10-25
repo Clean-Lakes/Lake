@@ -1,7 +1,19 @@
 .pilot-control{display:inline-flex;align-items:center;gap:0;flex-shrink:0}
 .sre-mode-toggle.pilot-mode-toggle[aria-pressed="false"],.sre-mode-toggle.pilot-mode-toggle[aria-pressed="false"]:hover{color:var(--text-muted)}
 .sre-mode-toggle.pilot-mode-toggle[aria-pressed="true"],.sre-mode-toggle.pilot-mode-toggle[aria-pressed="true"]:hover{color:var(--foreground)}
-.pilot-settings-trigger{padding-inline:2px}
+.pilot-auto-advance{order:-1;flex:1 0 100%;display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr);align-items:center;gap:0 14px;margin-bottom:6px;min-width:0}
+.pilot-auto-track{position:relative;height:44px;padding:4px;background:var(--surface-muted);border:1px solid var(--border);border-radius:var(--radius-settings-control);corner-shape:var(--corner-window);user-select:none}
+.pilot-auto-label{display:flex;height:100%;align-items:center;justify-content:center;padding-left:28px;color:var(--text-muted);font-size:var(--font-size-toolbar);white-space:nowrap;pointer-events:none}
+.pilot-auto-track[data-enabled=true] .pilot-auto-label{padding-left:0;padding-right:28px;color:var(--foreground)}
+.pilot-auto-thumb{position:absolute;top:4px;left:calc(4px + (100% - 50px) * var(--pilot-slide));width:42px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:var(--radius-settings-control);corner-shape:var(--corner-window);background:var(--surface);color:var(--foreground);cursor:grab;touch-action:none;transition:left .22s ease,background-color .12s ease}
+.pilot-auto-thumb:focus-visible{outline:2px solid var(--focus-outline);outline-offset:2px}
+.pilot-auto-thumb:hover{background:var(--surface-hover)}
+.pilot-auto-thumb::before{content:"";position:absolute;inset:-5px -1px}
+.pilot-auto-track.is-dragging .pilot-auto-thumb{transition:none;cursor:grabbing}
+.pilot-auto-track[data-disabled=true] .pilot-auto-thumb{cursor:default;color:var(--text-muted)}
+.pilot-auto-hint{margin:0;color:var(--text-muted);font-size:var(--font-size-toolbar);line-height:1.6}
+.pilot-auto-error{grid-column:1/-1;margin:8px 0 0;color:var(--danger);font-size:var(--font-size-toolbar);line-height:1.6}
+@media(prefers-reduced-motion:reduce){.pilot-auto-thumb{transition:none}}
 .menu-action-description{display:block;white-space:normal;color:var(--text-muted);font-size:var(--font-size-toolbar);font-weight:var(--font-weight-normal);line-height:1.6;margin-top:5px}
 .pilot-agent-work{margin:8px 0 12px;min-width:0}
 .pilot-step-navigation{display:flex;align-items:center;gap:12px;max-width:100%;color:var(--text-muted);font-size:var(--font-size-toolbar)}
@@ -51,3 +63,5 @@
 .pilot-directions[data-single="true"]+.pilot-command-options{margin-left:0}
 
 .pilot-selection-mode{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:6px;color:var(--text-muted)}
+
+@container lake-composer (max-width:520px){.pilot-auto-advance{grid-template-columns:minmax(0,1fr);gap:6px}.pilot-auto-hint{margin:0 4px}}

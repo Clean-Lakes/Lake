@@ -21,6 +21,7 @@ test('Pilot uses gray/foreground textual enablement state and remains off by def
  assert.match(off,/Lake Pilot/);assert.match(off,/aria-pressed="false"/);assert.match(off,/pilot-mode-toggle/);assert.ok(!off.includes('SRE 协作'));assert.ok(!off.includes('role="switch"'));
  const on=renderToStaticMarkup(createElement(LakePilotControl,{snapshot:{...snapshot,sre:{...snapshot.sre!,enabled:true,pilot:{enabled:true,autoAdvance:false,revision:1}}},onUpdated:async()=>{}}));
  assert.match(on,/aria-pressed="true"/);
+ assert.ok(!off.includes('role="slider"'));assert.match(on,/role="slider"/);assert.match(on,/向右滑动解锁自动推进/);assert.ok(!on.includes('Lake Pilot 设置'));
 });
 
 test('Each real Agent work item has its own steps and exactly one historical anchor',()=>{
