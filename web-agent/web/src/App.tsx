@@ -79,7 +79,7 @@ import {sortSessionNavigation} from "./sessionNavigationModel";
 import { CompositionGuard, isSendKey, parseSendShortcut, sendShortcutStorageKey, type SendShortcut } from "./composerKeyboard";
 import { HostKeyTrust } from "./HostKeyTrust";
 import { conversationActive, sessionConnection, type StreamState } from "./connection";
-import { atConversationTail, conversationCanScroll, pausesConversationFollow, FollowScroll } from "./followScroll";
+import { atConversationTail, conversationCanScroll, pausesConversationFollow, FollowScroll, observeConversationGrowth } from "./followScroll";
 import { type CommandPolicy, dangerConfirmation } from "../../shared/command-policy";
 import "./styles.css";
 import './fileOperationApproval.css';
@@ -777,24 +777,9 @@ function App() {
     const resume=conversationResume.current.get(key);
     if(resume){conversationResume.current.delete(key);conversationScroll.current={key,following:resume.following};container.scrollTop=resume.top;if(resume.following)follower.jump();}
     else follower.jump();
-    const observer = new ResizeObserver(() => follower.request());
-    observer.observe(container);
-    let content = container.firstElementChild;
-    if (content) observer.observe(content);
-    const children = new MutationObserver(() => {
-      if (content === container.firstElementChild) return;
-      if (content) observer.unobserve(content);
-      content = container.firstElementChild;
-      if (content) observer.observe(content);
-      follower.request();
-    });
-    children.observe(container, {childList: true});
-    return () => { children.disconnect(); observer.disconnect(); follower.stop(); conversationFollower.current = null; };
+    const stopObserving = observeConversationGrowth(container, () => follower.request());
+    return () => { stopObserving(); follower.stop(); conversationFollower.current = null; };
   }, [activeSnapshot?.session.id, route.resourceId,isPlansPage]);
-
-  useLayoutEffect(() => {
-    conversationFollower.current?.request();
-  }, [activeSnapshot?.cursor, terminalOpen]);
 
   const refreshCatalog = useCallback(async (signal?: AbortSignal) => {
     const data = await api.catalog(signal);

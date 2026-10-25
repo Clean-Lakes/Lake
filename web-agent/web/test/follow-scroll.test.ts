@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { atConversationTail, conversationCanScroll, pausesConversationFollow, FollowScroll } from "../src/followScroll";
+import { atConversationTail, conversationCanScroll, pausesConversationFollow, FollowScroll, observeConversationGrowth } from "../src/followScroll";
 import { sameCard } from "../src/cardEquality";
 
 function fixture(reduced = false) {
@@ -119,4 +119,24 @@ test("unchanged historical cards reuse Markdown, while streamed content and tool
   assert.equal(sameCard(card, {...card, content: "**updated**"}), false);
   assert.equal(sameCard(card, {...card, status: "pending"}), false);
   assert.equal(sameCard(card, {...card, data: {target: "different host"}}), false);
+});
+
+
+test('conversation observes actual growth, not same-height metadata or content shrink',()=>{
+ const previousResize=globalThis.ResizeObserver,previousMutation=globalThis.MutationObserver;
+ let resize=()=>{},replace=()=>{},disconnected=0,requests=0;
+ globalThis.ResizeObserver=class {constructor(callback:()=>void){resize=callback}observe(){}unobserve(){}disconnect(){disconnected++}} as unknown as typeof ResizeObserver;
+ globalThis.MutationObserver=class {constructor(callback:()=>void){replace=callback}observe(){}disconnect(){disconnected++}} as unknown as typeof MutationObserver;
+ try {
+  const container={scrollHeight:900,clientHeight:400,clientWidth:700,firstElementChild:{}} as unknown as HTMLElement;
+  const stop=observeConversationGrowth(container,()=>requests++);
+  for(let i=0;i<100;i++)resize();assert.equal(requests,0);
+  Object.assign(container,{scrollHeight:940});resize();assert.equal(requests,1);
+  Object.assign(container,{scrollHeight:900});resize();assert.equal(requests,1);
+  Object.assign(container,{firstElementChild:{}});replace();assert.equal(requests,1);
+  Object.assign(container,{scrollHeight:920});resize();assert.equal(requests,2,'growth uses the post-collapse baseline');
+  Object.assign(container,{clientWidth:600});resize();assert.equal(requests,3);
+  Object.assign(container,{clientHeight:350});resize();assert.equal(requests,4);
+  stop();assert.equal(disconnected,2);
+ } finally {globalThis.ResizeObserver=previousResize;globalThis.MutationObserver=previousMutation}
 });

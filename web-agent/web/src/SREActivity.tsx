@@ -29,9 +29,10 @@ export function sreActivityLabel(run:AgentRun){
 }
 export function SREActivity({run,attempt,calm=false}:{run:AgentRun;attempt?:SREStepAttempt;calm?:boolean}){
  const [now,setNow]=useState(Date.now);
- useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),calm?10000:1000);return()=>clearInterval(timer)},[calm]);
- const seconds=Math.max(0,Math.floor((now-Date.parse(run.startedAt??run.createdAt))/1000));
+ useEffect(()=>{if(calm)return;const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer)},[calm]);
+ const activityTime=calm?Date.parse(run.activityUpdatedAt??run.startedAt??run.createdAt):now;
+ const seconds=Math.max(0,Math.floor((activityTime-Date.parse(run.startedAt??run.createdAt))/1000));
  const elapsed=Number.isFinite(seconds)?seconds>=60?`${Math.floor(seconds/60)}分${seconds%60}秒`:`${seconds}秒`:'';
  const evidence=Math.max(run.evidence?.length??0,attempt?.evidence?.length??0);
- return <div className="sre-live-activity" aria-label="专员正在执行"><span className="sre-activity-orbit" aria-hidden="true"/><span role="status"><StatusText active={!calm} text={sreActivityLabel(run)}/></span>{elapsed&&<time aria-label={`已运行${elapsed}`}>{elapsed}</time>}{(run.toolCount??0)>0&&<span>已调用 {run.toolCount} 次工具</span>}{evidence>0&&<span>已采集 {evidence} 项证据</span>}</div>
+ return <div className={`sre-live-activity${calm?' is-calm':''}`} aria-label="专员正在执行"><span className="sre-activity-orbit" aria-hidden="true"/><span role="status"><StatusText active={!calm} text={sreActivityLabel(run)}/></span>{elapsed&&<time title={calm?'最近一次活动时的运行用时':undefined} aria-label={`${calm?'最近活动时':''}已运行${elapsed}`}>{elapsed}</time>}{(run.toolCount??0)>0&&<span>已调用 {run.toolCount} 次工具</span>}{evidence>0&&<span>已采集 {evidence} 项证据</span>}</div>
 }

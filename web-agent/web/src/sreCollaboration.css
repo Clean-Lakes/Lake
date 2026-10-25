@@ -60,3 +60,7 @@
 .sre-live-record{margin:4px 0 12px;font-size:var(--font-size-toolbar);color:var(--text-muted)}
 .sre-live-record>summary{width:fit-content;max-width:100%}
 .sre-live-record>.sre-prose{margin-top:8px;color:var(--text-secondary);max-height:240px;overflow:auto}
+
+/* Pilot activity changes in place; it never owns a periodic repaint. */
+.sre-live-activity.is-calm .sre-activity-orbit{animation:none}
+.sre-live-activity.is-calm>[role="status"]{flex:0 0 13em;white-space:nowrap}

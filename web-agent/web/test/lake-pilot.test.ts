@@ -71,7 +71,7 @@ test('Pilot live narration stays behind a collapsed record and does not replace 
  const snapshot={session:{id:'session',projectId:'project'},resources:[],sre:{enabled:true,pilot:{enabled:true,autoAdvance:true,revision:1},tasks:[active]},ai:{agentRuns:[{id:'agent',sreTaskId:task.id,status:'running',createdAt:at,startedAt:at,liveTextId:'new-model-part',liveText:'不断变化的内部播报',activityPhase:'tool',activityTool:'grep'}]}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(SRERoleMessage,{task:active,entry:own,snapshot,renderApproval:()=>null,onUpdated:()=>{}}));
  assert.ok(!html.includes('class="sre-role-body"'));assert.ok(!html.includes('status-text--active'));
- assert.match(html,/<details class="sre-live-record">/);assert.match(html,/运行详情/);assert.match(html,/不断变化的内部播报/);
+ assert.match(html,/<div class="sre-live-activity is-calm"/);assert.match(html,/<details class="sre-live-record">/);assert.match(html,/运行详情/);assert.match(html,/不断变化的内部播报/);
 });
 
 test('Actual replacement reads remove the incomplete projection while unknown changes stay blocked',()=>{

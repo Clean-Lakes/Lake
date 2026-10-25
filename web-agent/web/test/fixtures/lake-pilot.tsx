@@ -1,10 +1,11 @@
 // Real components and synthetic records. All fetches stay inside this fixture;
 // no backend, model, SSH connection or resource operation can be reached.
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useState,useRef} from 'react';
 import {createRoot} from 'react-dom/client';
 import type {AIQuestionRequest,PilotSettings,SessionSnapshot,SREPlanStep,SRETask} from '../../../shared/contracts';
 import {SRERoleMessage} from '../../src/SRERoleMessage';
 import {LakePilotControl} from '../../src/LakePilotControl';
+import {FollowScroll,observeConversationGrowth,atConversationTail} from '../../src/followScroll';
 import {PilotChoiceQuestion} from '../../src/PilotChoiceQuestion';
 import '../../src/theme.css';
 import '../../src/styles.css';
@@ -52,6 +53,34 @@ const hostDescription='在演示主机上只读取系统基础指标：date、up
 const hostTask={...task,status:'waiting_input',plans:[{...task.plans[0]!,steps:[{...steps[2]!,description:hostDescription}]}],runs:[{...task.runs[0]!,status:'running'}],attempts:[{...task.attempts[2]!,status:'running'}],messages:[{...task.messages[2]!,kind:'progress',body:hostDescription}]} as SRETask;
 const hostChoice:AIQuestionRequest={...choice,pilot:{...choice.pilot!,directions:[{id:'overview',title:'只读主机概览快照',reason:'读取负载、内存、磁盘与 swap 概览。',recommended:true,operations:[{id:'overview',title:'读取主机概览指标',tool:'observe_host',arguments:{asset_ref:'a_fixture_host',metric:'overview'},risk:'readonly'}]}]}};
 
+
+function ScrollFixture(){
+ const box=useRef<HTMLDivElement>(null),follower=useRef<FollowScroll|null>(null),following=useRef(true);
+ const [pulse,setPulse]=useState(0),[rows,setRows]=useState(0);
+ useEffect(()=>{const timer=setInterval(()=>setPulse(value=>value>=30?value:value+1),80);return()=>clearInterval(timer)},[]);
+ useEffect(()=>{
+  const container=box.current!;
+  const stats={requests:0,writes:0,get animating(){return follower.current?.animating??false}};
+  const descriptor=Object.getOwnPropertyDescriptor(Element.prototype,'scrollTop')!;
+  Object.defineProperty(container,'scrollTop',{configurable:true,get(){return descriptor.get!.call(container)},set(value){stats.writes++;descriptor.set!.call(container,value)}});
+  const scroll=new FollowScroll(container,()=>following.current);follower.current=scroll;scroll.jump();
+  (window as unknown as {pilotScrollQA:typeof stats}).pilotScrollQA=stats;
+  stats.writes=0;
+  const stop=observeConversationGrowth(container,()=>{stats.requests++;scroll.request()});
+  return()=>{stop();scroll.stop();delete (container as unknown as {scrollTop?:number}).scrollTop};
+ },[]);
+ const current={...hostTask,status:'active',pilot:{autoAdvance:true,settingsRevision:1}} as SRETask;
+ const snapshot={session:{id:'fixture',projectId:'fixture'},resources:[],sre:{enabled:true,pilot:server,tasks:[current]},ai:{status:'running',agentRuns:[{id:'logs',sreTaskId:current.id,status:'running',createdAt:at,startedAt:at,activityUpdatedAt:new Date(Date.parse(at)+pulse*1000).toISOString(),activityPhase:pulse%2?'tool':'thinking',activityTool:'grep',toolCount:pulse,evidence:Array.from({length:pulse},(_,i)=>({id:String(i)}))}]}} as SessionSnapshot;
+ return <main style={{maxWidth:query.get('width')==='390'?390:900,margin:'24px auto',padding:24}}>
+  <p>仅验证滚动，不连接资源</p><button onClick={()=>setRows(value=>value+1)}>新增内容行</button><button onClick={()=>setRows(0)}>收起新增行</button>
+  <div ref={box} tabIndex={0} className="fixture-scroll" style={{height:280,overflow:'auto',overflowAnchor:'none',marginTop:16}} onWheel={()=>{following.current=false;follower.current?.stop()}} onKeyDown={event=>{if(event.key==='PageUp'){following.current=false;follower.current?.stop()}}} onScroll={()=>{if(!follower.current?.animating)following.current=atConversationTail(box.current!)}}><div>
+   <div style={{height:450}}>历史记录占位</div>
+   <SRERoleMessage task={current} entry={current.messages[0]!} snapshot={snapshot} renderApproval={()=>null} onUpdated={()=>{}}/>
+   {Array.from({length:rows},(_,i)=><p className="fixture-new-row" key={i}>新增的实际内容行 {i+1}</p>)}
+  </div></div><output>{JSON.stringify({pulse,rows,requests})}</output>
+ </main>;
+}
+
 function Fixture(){
  const [settings,setSettings]=useState(server),[,render]=useState(0);
  const [pulse,setPulse]=useState(0);useEffect(()=>{if(query.get('view')!=='live')return;const timer=setInterval(()=>setPulse(value=>value>=30?value:value+1),80);return()=>clearInterval(timer)},[]);
@@ -67,4 +96,4 @@ function Fixture(){
   <output aria-label="隔离请求统计" style={{color:'var(--text-muted)',fontSize:'var(--font-size-toolbar)',overflowWrap:'anywhere'}}>{JSON.stringify({pulse,requests,decisions,lastSelection,...settings})}</output>
  </main>;
 }
-createRoot(document.getElementById('root')!).render(<React.StrictMode><Fixture/></React.StrictMode>);
+createRoot(document.getElementById('root')!).render(<React.StrictMode>{query.get('view')==='scroll'?<ScrollFixture/>:<Fixture/>}</React.StrictMode>);
