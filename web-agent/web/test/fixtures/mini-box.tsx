@@ -11,9 +11,10 @@ const params=new URLSearchParams(location.search);
 if(params.get('theme')==='dark')document.documentElement.dataset.theme='dark';
 let session='mini-box',status='running',revision=1,broken=false,denied=false,historyDelivered=0,secondEnabled=!params.has('single');
 const started=new Date(Date.now()-10000).toISOString();
-const resources=[{id:'host-a',projectId:'p',name:params.has('local')?'Local machine':'192.0.2.2',kind:params.has('local')?'local':'ssh'},{id:'host-b',projectId:'p',name:'192.0.2.3',kind:'ssh'}] as Resource[];
+const resources=[{id:'host-a',projectId:'p',name:params.has('local')?'Local machine':'192.0.2.2',kind:params.has('local')?'local':'ssh'},{id:'host-b',projectId:'p',name:'192.0.2.3',kind:'ssh'},...(params.has('third')?[{id:'host-c',projectId:'p',name:'192.0.2.4',kind:'ssh'}]:[])] as Resource[];
 const terminals=resources.map((resource,i)=>({id:'terminal-'+i,sessionId:'mini-box',resourceId:resource.id,generation:'generation-'+i,status:'busy',holder:'agent',writerSessionId:'mini-box',createdAt:started})) as TerminalSession[];
 const entries=terminals.map((terminal,i)=>({id:'entry-'+i,terminalId:terminal.id,generation:terminal.generation,actor:'agent',originSessionId:'mini-box',command:i?'find /srv -maxdepth 2 -type f':params.has('local')?'for i in 1 2 3 4 5; do printf "local step %s\\n" "$i"; sleep 1; done':'kubectl get pods -n demo',output:i?'/srv/app/config.yaml\r\n':params.has('local')?'local step 1\r\n':'NAME           READY   STATUS\r\ndemo-api       1/1     Running\r\n',status:'running',exitCode:null,startedAt:started,createdAt:started,finishedAt:null,cwd:'/srv'})) as TerminalEntry[];
+if(params.has('partial'))entries.slice(0,-1).forEach((entry,i)=>{entry.status='completed';entry.exitCode=0;terminals[i]!.status='ready';});
 const notices:CommandStopNotice[]=[];
 let reply:AICard|undefined,nextTool:AICard|undefined;
 const finishCommands=()=>entries.forEach((entry,i)=>{if(entry.status==='running'){entry.status='completed';entry.exitCode=0;terminals[i]!.status='ready';}});
@@ -24,7 +25,7 @@ window.fetch=async(input,init)=>{
  const path=String(input),method=init?.method??'GET';
  if(path.endsWith('/ai/progress-summary'))return new Response(JSON.stringify({text:'正在核对两台主机的运行状态。',pending:false}));
  requests.push({path,method,body:init?.body?JSON.parse(String(init.body)):undefined});
- const index=path.includes('/terminal-1/')?1:0;
+ const index=terminals.findIndex(terminal=>path.includes(`/${terminal.id}/`));
  if(path.endsWith('/history')){
   const captured=JSON.stringify({terminal:terminals[index],entries:[entries[index]],output:'PRIVATE_MANUAL_SCREEN'} as TerminalHistory);
   if(params.has('delay'))await new Promise(resolve=>setTimeout(resolve,1200));

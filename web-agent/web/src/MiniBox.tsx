@@ -11,11 +11,11 @@ export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScop
   const protocol=kind==='local'?'本机':'SSH';
   const {histories,stale,refresh}=useMiniBox(scope,resource);
   const target=miniTarget(histories);
-  const [open,setOpen]=useState(!scope.parallel),[fullOpen,setFullOpen]=useState(false),[pending,setPending]=useState(''),[error,setError]=useState(''),[jump,setJump]=useState(0);
-  const disclosure=useRef({manual:false,autoFolded:!!scope.parallel});
-  // Entering parallel execution folds untouched boxes once. A later completion
+  const [open,setOpen]=useState(!scope.multiResource),[fullOpen,setFullOpen]=useState(false),[pending,setPending]=useState(''),[error,setError]=useState(''),[jump,setJump]=useState(0);
+  const disclosure=useRef({manual:false,autoFolded:!!scope.multiResource});
+  // Adding a second host folds untouched boxes once. A later completion
   // never expands them again, and every explicit viewing choice wins.
-  if(scope.parallel&&!disclosure.current.manual&&!disclosure.current.autoFolded){disclosure.current.autoFolded=true;setOpen(false);}
+  if(scope.multiResource&&!disclosure.current.manual&&!disclosure.current.autoFolded){disclosure.current.autoFolded=true;setOpen(false);}
   function inspect(){disclosure.current.manual=true;onInspect?.();}
   const detailId=useId(),detail=useRef<HTMLDivElement>(null);
   const observed=useRef<{scope:string;entries:Map<string,{output:string;preview:MiniPreview}>}>({scope:'',entries:new Map()});

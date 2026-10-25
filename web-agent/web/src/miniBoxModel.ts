@@ -1,6 +1,6 @@
 import type {AICard, TerminalHistory, TerminalSession} from '../../shared/contracts';
 
-export type MiniBoxScope = {session:string;terminals:TerminalSession[];startedAt:string;endedAt?:string;live:boolean;waiting?:boolean;connected:boolean;parallel?:boolean};
+export type MiniBoxScope = {session:string;terminals:TerminalSession[];startedAt:string;endedAt?:string;live:boolean;waiting?:boolean;connected:boolean;multiResource?:boolean};
 // Host inspection also executes real command blocks through the same terminal.
 export const isTerminalCommand = (card:AICard) => ['shell','terminal_execute_command','inspect_host'].includes(card.title ?? '');
 
@@ -33,15 +33,13 @@ export function miniControlActive(scope:MiniBoxScope,card:AICard|undefined,targe
   return card?.status==='running'||target?.entry.status==='running';
 }
 
-export function hasParallelMiniResources(groups:Array<{resource?:{id?:string;kind?:string};entries:Array<{card?:AICard}>}>,terminals:TerminalSession[],session:string) {
-  const active=new Set<string>();
+// Layout is based on every host command in this turn, including completed
+// commands. A fast host must not disappear from the count before the next starts.
+export function hasMultipleMiniResources(groups:Array<{resource?:{id?:string;kind?:string};entries:Array<{card?:AICard}>}>) {
+  const resources=new Set<string>();
   for(const group of groups){
     const resource=group.resource;
-    if(!resource?.id||!['local','ssh'].includes(resource.kind??''))continue;
-    const commands=group.entries.flatMap(entry=>entry.card&&isTerminalCommand(entry.card)?[entry.card]:[]);
-    if(!commands.length)continue;
-    const busy=terminals.some(terminal=>terminal.resourceId===resource.id&&!!terminal.generation&&terminal.status==='busy'&&terminal.holder==='agent'&&(terminal.writerSessionId??terminal.sessionId)===session);
-    if(busy||commands.some(card=>['running','background_running'].includes(card.status)))active.add(resource.id);
+    if(resource?.id&&['local','ssh'].includes(resource.kind??'')&&group.entries.some(entry=>entry.card&&isTerminalCommand(entry.card)))resources.add(resource.id);
   }
-  return active.size>1;
+  return resources.size>1;
 }
