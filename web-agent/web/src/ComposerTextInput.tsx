@@ -95,7 +95,6 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
     if(event.key==='Escape'&&eligible){event.preventDefault();event.stopPropagation();setDismissed(value);setSuggestion(null);return;}
     if(event.key==='Tab'&&suffix&&!event.shiftKey&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.repeat&&!completionBlocked){event.preventDefault();accept();}
    }}/>
-  {suffix&&<div className="composer-completion-hint"><button type="button" aria-label="接受补齐建议" onMouseDown={event=>event.preventDefault()} onClick={accept}><kbd>Tab</kbd>补齐</button><button type="button" aria-label="忽略补齐建议" onMouseDown={event=>event.preventDefault()} onClick={()=>{setDismissed(value);setSuggestion(null);}}><kbd>Esc</kbd>忽略</button></div>}
   <span id={statusId} className="visually-hidden" role="status">{suffix?`补齐建议：${suffix} 按 Tab 接受，Escape 忽略。`:''}</span>
  </div>;
 });
