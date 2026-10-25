@@ -1,6 +1,6 @@
 // Real components and synthetic records. All fetches stay inside this fixture;
 // no backend, model, SSH connection or resource operation can be reached.
-import React,{useState} from 'react';
+import React,{useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import type {AIQuestionRequest,PilotSettings,SessionSnapshot,SREPlanStep,SRETask} from '../../../shared/contracts';
 import {SRERoleMessage} from '../../src/SRERoleMessage';
@@ -54,14 +54,17 @@ const hostChoice:AIQuestionRequest={...choice,pilot:{...choice.pilot!,directions
 
 function Fixture(){
  const [settings,setSettings]=useState(server),[,render]=useState(0);
+ const [pulse,setPulse]=useState(0);useEffect(()=>{if(query.get('view')!=='live')return;const timer=setInterval(()=>setPulse(value=>value>=30?value:value+1),80);return()=>clearInterval(timer)},[]);
  const snapshot={session:{id:'fixture',projectId:'fixture'},ai:{profile:'core',status:'completed',agentRuns:[]},resources:[{id:'fixture-host',name:'隔离测试主机'}],sre:{enabled:settings.enabled,pilot:settings,tasks:[task]}} as SessionSnapshot;
  const refresh=async()=>{setSettings({...server});render(value=>value+1)};
  const hostSnapshot={...snapshot,ai:{...snapshot.ai,agentRuns:[{id:'logs',sreTaskId:hostTask.id,status:'waiting_input',question:hostChoice}]},sre:{...snapshot.sre,tasks:[hostTask]}} as SessionSnapshot;
+ const liveTask={...hostTask,status:'active',pilot:{autoAdvance:true,settingsRevision:1},messages:[{...hostTask.messages[0]!,...(pulse?{body:`内部过程 ${pulse}`,source:'model'}:{})}]} as SRETask;
+ const liveSnapshot={...hostSnapshot,sre:{...hostSnapshot.sre,tasks:[liveTask]},ai:{...hostSnapshot.ai,agentRuns:[{id:'logs',sreTaskId:liveTask.id,status:'running',liveTextId:`part-${pulse}`,liveText:pulse?`内部过程 ${pulse}`:'',activityPhase:'tool',activityTool:pulse%2?'grep':'read',toolCount:pulse,createdAt:at,startedAt:at}]}} as SessionSnapshot;
  return <main style={{maxWidth:query.get('width')==='390'?390:900,margin:'28px auto',padding:'0 24px'}}>
   <p style={{color:'var(--text-muted)',fontSize:'var(--font-size-toolbar)'}}>Lake Pilot · 隔离测试数据，不连接实际资源</p>
   <div className="composer-foot" style={{margin:'16px 0 28px'}}><span>权限</span><LakePilotControl snapshot={snapshot} onUpdated={refresh}/></div>
-  {query.get('view')==='host'?<SRERoleMessage task={hostTask} entry={hostTask.messages[0]!} snapshot={hostSnapshot} renderApproval={()=><PilotChoiceQuestion request={hostChoice} session="fixture" runId="logs" refresh={refresh}/>} onUpdated={()=>{}}/>:query.get('view')==='choice'?<PilotChoiceQuestion request={choice} session="fixture" runId="logs" refresh={refresh}/>:task.messages.filter(message=>['scope','phenomenon','change','verify'].includes(message.attemptId??'')).map(entry=><SRERoleMessage key={entry.id} task={task} entry={entry} snapshot={snapshot} renderApproval={()=>null} onUpdated={()=>{}}/>)}
-  <output aria-label="隔离请求统计" style={{color:'var(--text-muted)',fontSize:'var(--font-size-toolbar)',overflowWrap:'anywhere'}}>{JSON.stringify({requests,decisions,lastSelection,...settings})}</output>
+  {query.get('view')==='live'?<SRERoleMessage task={liveTask} entry={liveTask.messages[0]!} snapshot={liveSnapshot} renderApproval={()=>null} onUpdated={()=>{}}/>:query.get('view')==='host'?<SRERoleMessage task={hostTask} entry={hostTask.messages[0]!} snapshot={hostSnapshot} renderApproval={()=><PilotChoiceQuestion request={hostChoice} session="fixture" runId="logs" refresh={refresh}/>} onUpdated={()=>{}}/>:query.get('view')==='choice'?<PilotChoiceQuestion request={choice} session="fixture" runId="logs" refresh={refresh}/>:task.messages.filter(message=>['scope','phenomenon','change','verify'].includes(message.attemptId??'')).map(entry=><SRERoleMessage key={entry.id} task={task} entry={entry} snapshot={snapshot} renderApproval={()=>null} onUpdated={()=>{}}/>)}
+  <output aria-label="隔离请求统计" style={{color:'var(--text-muted)',fontSize:'var(--font-size-toolbar)',overflowWrap:'anywhere'}}>{JSON.stringify({pulse,requests,decisions,lastSelection,...settings})}</output>
  </main>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><Fixture/></React.StrictMode>);

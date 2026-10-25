@@ -108,7 +108,7 @@ func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool
 			}
 		}
 		list = filtered
-		list = append(list, pilotChoiceTool())
+		list = append(list, pilotChoiceTool(), pilotReadRecoveryTool())
 	}
 	if onlineEnabled(c) && (c.sre == nil || !c.sre.NoTools) {
 		list = append(list, onlineTool())

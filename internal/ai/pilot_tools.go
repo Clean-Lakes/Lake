@@ -83,21 +83,13 @@ func (e *Engine) offerPilotDirections(ctx context.Context, s *session, c Config,
 	if json.Unmarshal(safeJSON([]byte(js(choice)), c), &safeChoice) != nil || js(safeChoice) != js(choice) {
 		return nil, errors.New("Pilot 候选包含需要隐藏的信息，请通过已配置的资源凭据执行")
 	}
-	task, loadErr := e.sreRepository.LoadSRETask(choice.SessionID, choice.TaskID)
+	task, loadErr := e.activePilotTask(c)
 	if loadErr != nil {
 		return nil, loadErr
 	}
-	delegated := false
-	if task.Pilot != nil {
-		for i := len(task.Pilot.Decisions) - 1; i >= 0; i-- {
-			previous := task.Pilot.Decisions[i]
-			if previous.PlanRevisionID == choice.PlanRevisionID && previous.StepID == choice.StepID && previous.AttemptID == choice.AttemptID {
-				delegated = previous.Selection.Level == "step"
-				break
-			}
-		}
-	}
-	if c.sre.Pilot.AutoAdvance || delegated {
+	decision := pilotLatestDecision(task.Pilot, choice.PlanRevisionID, choice.StepID, choice.AttemptID)
+	mode := pilotExecutionMode(task, choice.PlanRevisionID, choice.StepID, choice.AttemptID)
+	if mode == "automatic" || mode == "step" {
 		direction := choice.Directions[0]
 		for _, value := range choice.Directions {
 			if value.Recommended {
@@ -107,12 +99,26 @@ func (e *Engine) offerPilotDirections(ctx context.Context, s *session, c Config,
 		}
 		return map[string]any{"selection": PilotSelection{Level: "direction", DirectionID: direction.ID}, "direction": direction, "automatic": true}, nil
 	}
+	if decision != nil && decision.Selection.Level == "direction" {
+		if decision.Direction == nil {
+			return e.askQuestion(ctx, s, call, choice)
+		} // Older records lack an immutable direction purpose.
+		for _, direction := range choice.Directions {
+			if direction.ID != decision.Selection.DirectionID {
+				continue
+			}
+			if err := e.savePilotDirectionBatch(choice, decision, direction); err != nil {
+				return nil, err
+			}
+			return map[string]any{"selection": decision.Selection, "direction": direction, "delegatedDirection": true}, nil
+		}
+	}
 	return e.askQuestion(ctx, s, call, choice)
 }
 
 func pilotInternalTool(name string) bool {
 	switch name {
-	case "pilot_offer_directions", "sre_team_read", "sre_team_update", "ask_user_question", "todo_read", "todo_write", "read_evidence", "read_tool_result", "read_session_context", "load_skill", "list_assets", "list_resource_groups", "list_mcp_servers", "list_project_memories", "read_project_memory", "list_workflows", "get_workflow_run", "schedule_list", "task_output", "shell_output", "wait_shell", "read_terminal_screen":
+	case "pilot_read_recovery", "pilot_offer_directions", "sre_team_read", "sre_team_update", "ask_user_question", "todo_read", "todo_write", "read_evidence", "read_tool_result", "read_session_context", "load_skill", "list_assets", "list_resource_groups", "list_mcp_servers", "list_project_memories", "read_project_memory", "list_workflows", "get_workflow_run", "schedule_list", "task_output", "shell_output", "wait_shell", "read_terminal_screen":
 		return true
 	}
 	return false
@@ -204,6 +210,13 @@ func (e *Engine) recordPilotSelection(req *QuestionRequest, answers map[string][
 			return errors.New("Pilot step attempt expired")
 		}
 		decision := PilotChoiceDecision{RequestID: req.ID, PlanRevisionID: choice.PlanRevisionID, StepID: choice.StepID, AttemptID: choice.AttemptID, Selection: selection, Operations: operations, CreatedAt: timestamp()}
+		for i := range choice.Directions {
+			if choice.Directions[i].ID == selection.DirectionID {
+				value := choice.Directions[i]
+				decision.Direction = &value
+				break
+			}
+		}
 		for _, operation := range operations {
 			decision.Fingerprints = append(decision.Fingerprints, pilotFingerprint(operation.Tool, operation.Arguments))
 		}
@@ -217,17 +230,12 @@ func (e *Engine) checkPilotCall(c Config, call Call, args map[string]any) error 
 	if c.sre == nil || c.sre.Pilot == nil || c.sre.NoTools || pilotInternalTool(call.Name) {
 		return nil
 	}
-	if e.sreRepository == nil || e.worker == nil {
-		return errors.New("Pilot execution context unavailable")
-	}
-	task, err := e.sreRepository.LoadSRETask(e.worker.parentID, c.sre.TaskID)
+	task, err := e.activePilotTask(c)
 	if err != nil {
 		return err
 	}
-	if task.Pilot == nil || task.LatestPlan() == nil || task.LatestPlan().ID != c.sre.PlanRevisionID || task.Status != "active" && task.Status != "waiting_approval" {
-		return errors.New("Pilot plan changed or paused; choose from the current active plan")
-	}
-	if task.Pilot.AutoAdvance {
+	mode := pilotExecutionMode(task, c.sre.PlanRevisionID, c.sre.Step.ID, c.sre.AttemptID)
+	if mode == "automatic" || mode == "step" {
 		return nil
 	}
 	fingerprint := pilotFingerprint(call.Name, args)
@@ -242,13 +250,14 @@ func (e *Engine) checkPilotCall(c Config, call Call, args map[string]any) error 
 		if decision.Selection.Level == "cancel" {
 			return errors.New("Pilot selection was cancelled; stop this step without executing")
 		}
-		for _, operation := range decision.Operations {
+		operations := pilotDecisionOperations(task, &decision)
+		for _, operation := range operations {
 			if fingerprint == pilotFingerprint(operation.Tool, operation.Arguments) {
 				for _, dep := range operation.DependsOn {
 					var required *PilotOperationCandidate
-					for i := range decision.Operations {
-						if decision.Operations[i].ID == dep {
-							required = &decision.Operations[i]
+					for i := range operations {
+						if operations[i].ID == dep {
+							required = &operations[i]
 						}
 					}
 					completed := false
@@ -300,7 +309,7 @@ func pilotAttemptError(task SRETask, attempt SREStepAttempt, step SREPlanStep) e
 	if decision != nil && decision.Selection.Level == "cancel" {
 		return errors.New("用户暂不执行本步骤，已保留现场")
 	}
-	if decision != nil {
+	if decision != nil && decision.Selection.Level == "command" {
 		for _, chosen := range decision.Operations {
 			completed := false
 			for _, operation := range attempt.Operations {
@@ -311,6 +320,11 @@ func pilotAttemptError(task SRETask, attempt SREStepAttempt, step SREPlanStep) e
 			if !completed {
 				return errors.New("所选检查尚未全部完成，不能将本步骤标记完成")
 			}
+		}
+	}
+	for _, operation := range attempt.Operations {
+		if pilotReadFailureOutstanding(attempt, operation) {
+			return errors.New("只读检查仍有缺口：可以在当前委托范围内取得替代证据并用 pilot_read_recovery 关联，或将本步报告为失败")
 		}
 	}
 	if step.Kind == "observe" || step.Kind == "act" {

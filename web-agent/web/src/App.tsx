@@ -519,7 +519,7 @@ function App() {
         if (!refreshTimer) refreshTimer = setTimeout(() => {
           refreshTimer = null;
           void refresh();
-        }, event.type === "terminal" ? 250 : 16);
+        }, event.type === "terminal" ? 250 : 180);
       } catch { /* Keep the current snapshot if an unrelated SSE frame arrives. */ }
     };
     const stopPolling = () => { if (pollTimer) clearInterval(pollTimer); pollTimer = null; };

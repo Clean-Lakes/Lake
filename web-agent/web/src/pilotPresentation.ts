@@ -30,7 +30,7 @@ export function pilotStepStatus(task:SRETask,plan:SREPlanRevision,step:SREPlanSt
  if(!attempt)return 'pending';
  if(attempt.operations?.some(sreNeedsVerification))return 'unknown';
  if(attempt.operations?.some(value=>value.status==='dispatched'))return 'running';
- if(sreIncompleteRead(attempt.operations??[]))return 'failed';
+ if(!task.pilot||!['running','waiting_input','waiting_approval'].includes(attempt.status)){if(sreIncompleteRead(attempt.operations??[],attempt.readRecoveries??[]))return 'failed';}
  const agent=runs.find(value=>value.id===attempt.roleRunId&&value.sreTaskId===task.id);
  if(agent?.question)return 'waiting_input';
  if(agent?.pending||attempt.operations?.some(value=>value.status==='waiting_approval'))return 'waiting_approval';

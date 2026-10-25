@@ -200,6 +200,9 @@ func (e *Engine) finishSREOperation(c Config, call Call, result any, toolErr err
 				if op.Call.ID != call.ID || op.Digest != hash(call.Name+call.Arguments) || op.Status != "dispatched" {
 					continue
 				}
+				if c.sre.Pilot != nil && str(obj(result)["evidence_id"]) != "" {
+					op.EvidenceIDs = []string{str(obj(result)["evidence_id"])}
+				}
 				op.FinishedAt = timestamp()
 				op.Result = utf8Prefix(redact(js(result), c), 8192)
 				op.Status = "succeeded"

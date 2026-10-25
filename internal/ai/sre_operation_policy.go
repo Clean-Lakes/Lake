@@ -22,7 +22,7 @@ func sreReadCheckIncomplete(a SREStepAttempt) bool {
 		if key == "" {
 			key = hash(op.Call.Name + op.Call.Arguments)
 		}
-		if op.Status == "unknown" {
+		if op.Status == "unknown" && !pilotReadCovered(a, op) {
 			pending[key] = true
 		}
 		if op.Status == "succeeded" {

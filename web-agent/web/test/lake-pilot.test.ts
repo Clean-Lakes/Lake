@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import type {AIQuestionRequest,SessionSnapshot,SRETask,SRETranscriptEntry} from '../../shared/contracts';
+import type {AIQuestionRequest,SessionSnapshot,SRETask,SRETranscriptEntry,SREOperation,PilotReadRecovery} from '../../shared/contracts';
 import {LakePilotControl} from '../src/LakePilotControl';
 import {PilotAgentWork} from '../src/PilotAgentWork';
 import {pilotWorkForEntry,pilotStepStatus} from '../src/pilotPresentation';
 import {PilotChoiceQuestion} from '../src/PilotChoiceQuestion';
 import {sreRoleLiveState} from '../src/SREActivity';
+import {SRERoleMessage} from '../src/SRERoleMessage';
+import {sreIncompleteRead} from '../src/sreOperationPolicy';
 
 const at='2026-10-25T00:00:00Z';
 const entry:SRETranscriptEntry={id:'first',sessionId:'session',taskId:'task',roleId:'investigator',roleRunId:'agent',kind:'progress',body:'正在采集',revision:1,sequence:1,createdAt:at,attemptId:'attempt'};
@@ -60,4 +62,24 @@ test('Guided choices are nested directions and concrete unchecked changes, not o
  const html=renderToStaticMarkup(createElement(PilotChoiceQuestion,{session:'session',request,refresh:async()=>{}}));
  assert.match(html,/本步骤交给 Lake/);assert.match(html,/按此方向继续/);assert.match(html,/选择具体操作/);assert.match(html,/工具与参数/);assert.match(html,/journalctl -u demo/);assert.ok(!html.includes(' open=')&&!html.includes('<details open'));
  assert.equal((html.match(/checked=""/g)??[]).length,1);assert.ok(!html.includes('其他 / 补充'));
+});
+
+
+test('Pilot live narration stays behind a collapsed record and does not replace the main step text',()=>{
+ const own={...entry,body:task.plans[0]!.steps[0]!.description};
+ const active={...task,status:'active',pilot:{autoAdvance:true,settingsRevision:1},messages:[own]} as SRETask;
+ const snapshot={session:{id:'session',projectId:'project'},resources:[],sre:{enabled:true,pilot:{enabled:true,autoAdvance:true,revision:1},tasks:[active]},ai:{agentRuns:[{id:'agent',sreTaskId:task.id,status:'running',createdAt:at,startedAt:at,liveTextId:'new-model-part',liveText:'不断变化的内部播报',activityPhase:'tool',activityTool:'grep'}]}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(SRERoleMessage,{task:active,entry:own,snapshot,renderApproval:()=>null,onUpdated:()=>{}}));
+ assert.ok(!html.includes('class="sre-role-body"'));assert.ok(!html.includes('status-text--active'));
+ assert.match(html,/<details class="sre-live-record">/);assert.match(html,/运行详情/);assert.match(html,/不断变化的内部播报/);
+});
+
+test('Actual replacement reads remove the incomplete projection while unknown changes stay blocked',()=>{
+ const operations=[{id:'old',risk:'readonly',status:'unknown',resourceId:'host',call:{name:'grep',arguments:'{}'},finishedAt:'2026-10-25T10:00:30Z'},{id:'new',risk:'readonly',status:'succeeded',resourceId:'host',evidenceIds:['evidence'],call:{name:'read',arguments:'{}'},dispatchedAt:'2026-10-25T10:00:31Z',finishedAt:'2026-10-25T10:00:32Z'}] as SREOperation[];
+ const recovery={failedOperationId:'old',replacementOperationIds:['new'],reason:'完整的替代日志',createdAt:'2026-10-25T10:00:33Z'} as PilotReadRecovery;
+ assert.equal(sreIncompleteRead(operations),true);assert.equal(sreIncompleteRead(operations,[recovery]),false);
+ assert.equal(sreIncompleteRead([{...operations[0]!},{...operations[1]!,resourceId:'foreign'}],[recovery]),true);
+ assert.equal(sreIncompleteRead([{...operations[0]!},{...operations[1]!,evidenceIds:[]}],[recovery]),true);
+ const active={...task,pilot:{autoAdvance:true,settingsRevision:1},attempts:[{...task.attempts[0]!,operations}]} as SRETask;
+ assert.equal(pilotStepStatus(active,task.plans[0]!,task.plans[0]!.steps[0]!),'running');
 });

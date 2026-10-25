@@ -41,7 +41,7 @@ func TestSRERiskGateReadTimeoutCanResampleWithoutReplayingChanges(t *testing.T) 
 					t.Fatal(err)
 				}
 				child.finishSREOperation(c, call, map[string]any{"exitCode": 0}, nil)
-				if repo.task.Attempts[0].Operations[0] != previous {
+				if js(repo.task.Attempts[0].Operations[0]) != js(previous) {
 					t.Fatal("original audit changed")
 				}
 				if repo.task.Attempts[1].Operations[0].Status != "succeeded" {

@@ -49,3 +49,5 @@
 .pilot-choice .pilot-choice-primary:disabled{color:var(--text-muted)}
 .pilot-directions[data-single="true"] .pilot-direction-reason{margin-left:0}
 .pilot-directions[data-single="true"]+.pilot-command-options{margin-left:0}
+
+.pilot-selection-mode{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:6px;color:var(--text-muted)}

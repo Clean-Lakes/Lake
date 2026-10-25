@@ -92,6 +92,26 @@ func (e *Engine) recordSREToolResult(c Config, call Call, a map[string]any, resu
 	if recordErr != nil && observationErr == nil {
 		return result, recordErr
 	}
+	if c.sre.Pilot != nil && str(obj(value)["evidence_id"]) != "" {
+		_, linkErr := e.sreRepository.MutateSRETask(e.worker.parentID, c.sre.TaskID, 0, "pilot_operation_evidence", func(task *SRETask) error {
+			for i := range task.Attempts {
+				if task.Attempts[i].ID != c.sre.AttemptID {
+					continue
+				}
+				for j := range task.Attempts[i].Operations {
+					op := &task.Attempts[i].Operations[j]
+					if op.Call.ID == call.ID {
+						op.EvidenceIDs = []string{str(obj(value)["evidence_id"])}
+						return nil
+					}
+				}
+			}
+			return nil
+		})
+		if linkErr != nil && toolErr == nil {
+			return result, linkErr
+		}
+	}
 	if result == nil {
 		return value, toolErr
 	}

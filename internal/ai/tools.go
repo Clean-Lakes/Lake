@@ -141,6 +141,9 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if call.Name == "pilot_offer_directions" {
 		return e.offerPilotDirections(ctx, s, c, call)
 	}
+	if call.Name == "pilot_read_recovery" {
+		return e.pilotReadRecovery(c, call)
+	}
 	if err = e.checkPilotCall(c, call, a); err != nil {
 		return nil, err
 	}

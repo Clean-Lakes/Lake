@@ -56,3 +56,7 @@
 @media(prefers-reduced-motion:reduce){.sre-activity-orbit{animation:none}.sre-live-activity .status-text--active,.sre-role-live-state .status-text--active{animation:none;background:none;color:var(--status-text-base);-webkit-text-fill-color:currentColor}}
 
 .sre-node-details{font-size:var(--font-size-ui);color:var(--text-secondary);margin:5px 0 0}.sre-node-details>summary{display:flex;align-items:center;gap:7px;width:fit-content;list-style:none;cursor:pointer;color:var(--text-muted);font-size:var(--font-size-ui);padding:3px 0}.sre-node-details>summary::-webkit-details-marker{display:none}.sre-node-details>summary svg{transition:transform .15s ease}.sre-node-details[open]>summary svg{transform:rotate(180deg)}.sre-node-details[open]>.sre-prose{margin-top:10px}.sre-report-summary:has(+.sre-node-details){margin-bottom:6px}
+
+.sre-live-record{margin:4px 0 12px;font-size:var(--font-size-toolbar);color:var(--text-muted)}
+.sre-live-record>summary{width:fit-content;max-width:100%}
+.sre-live-record>.sre-prose{margin-top:8px;color:var(--text-secondary);max-height:240px;overflow:auto}

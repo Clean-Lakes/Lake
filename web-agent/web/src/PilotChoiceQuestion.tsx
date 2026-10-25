@@ -35,13 +35,14 @@ function PilotChoice({session,request,refresh,runId}:Props){
     {value.id===direction.id&&value.reason&&<p className="pilot-direction-reason" title={value.reason}>{value.reason}</p>}
    </div>)}
   </fieldset>
-  <details key={direction.id} className="pilot-command-options" onToggle={event=>{if(event.currentTarget.open)setChecked(value=>value[direction.id]===undefined?{...value,[direction.id]:operations}:value)}}>
+  <details key={direction.id} className="pilot-command-options">
    <DisclosureSummary>选择具体操作<small>{direction.operations.length} 项</small></DisclosureSummary>
    <fieldset disabled={busy}><legend className="visually-hidden">选择具体命令或操作</legend>{direction.operations.map(operation=><div className="pilot-operation" key={operation.id}>
     <label className="pilot-operation-option"><input type="checkbox" checked={operations.includes(operation.id)} onChange={()=>setChecked(value=>({...value,[direction.id]:operations.includes(operation.id)?operations.filter(id=>id!==operation.id):[...operations,operation.id]}))}/><span className="pilot-operation-title">{operation.title}</span><small>{operation.risk==='readonly'?'只读':'变更'}</small></label>
     {typeof operation.arguments.command==='string'?<code className="pilot-command-preview">{operation.arguments.command}</code>:null}
     <details className="pilot-operation-parameters"><DisclosureSummary>工具与参数</DisclosureSummary><pre>{operation.tool}{'\n'}{JSON.stringify(operation.arguments,null,2)}</pre></details>
    </div>)}</fieldset>
+   <div className="pilot-selection-mode"><span>{selected===undefined?'Lake 可在此方向调整检查方法':'仅执行选定的操作集合'}</span><button type="button" disabled={busy} onClick={()=>setChecked(value=>{if(value[direction.id]===undefined)return {...value,[direction.id]:operations};const next={...value};delete next[direction.id];return next})}>{selected===undefined?'仅执行所选操作':'允许 Lake 调整'}</button></div>
    {!valid&&<p className="pilot-selection-hint">{operations.length?'请同时选择所需的前置操作。':'请选择至少一项操作。'}</p>}
   </details>
   {error&&<p className="form-error" role="alert">{error}</p>}

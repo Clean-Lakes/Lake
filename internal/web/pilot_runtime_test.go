@@ -15,14 +15,22 @@ import (
 )
 
 func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
-	for _, automatic := range []bool{false, true} {
-		t.Run(map[bool]string{false: "guided", true: "automatic"}[automatic], func(t *testing.T) {
+	for _, scenario := range []struct {
+		name                string
+		automatic, adaptive bool
+	}{{name: "guided"}, {name: "automatic", automatic: true}, {name: "delegated_direction", adaptive: true}} {
+		t.Run(scenario.name, func(t *testing.T) {
+			automatic, adaptive := scenario.automatic, scenario.adaptive
 			b, h := fixture(t)
 			session, resource := newSession(t, h)
 			project := stringOf(b.Store.Session(session)["projectId"])
 			dir, _ := filepath.EvalSymlinks(t.TempDir())
 			logPath := filepath.Join(dir, "service.log")
 			if err := os.WriteFile(logPath, []byte("PILOT_REAL_SOURCE connection refused\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			alternativePath := filepath.Join(dir, "alternative.log")
+			if err := os.WriteFile(alternativePath, []byte("PILOT_ALTERNATIVE_SOURCE\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
 			plan := ai.SREPlanRevision{Goal: "核对日志", TaskType: "investigation", Scope: []string{resource}, Steps: []ai.SREPlanStep{{ID: "logs", Role: ai.SREInvestigator, Kind: "observe", Capability: "application", Description: "收集日志证据", ResourceIDs: []string{resource}, CompletionChecks: []string{"取得真实日志"}}, {ID: "summary", Role: ai.SRECoordinator, Kind: "summarize", Description: "归纳事实和缺口", ResourceIDs: []string{resource}, DependsOn: []string{"logs"}, CompletionChecks: []string{"引用证据"}}}}
@@ -45,11 +53,13 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 					return
 				}
 				if strings.Contains(system, "Lake's investigator") {
-					chosen, collected := false, false
+					chosen, collected, reselected, alternativeCollected := false, false, false, false
 					for _, message := range messages {
 						if message["role"] == "tool" {
 							chosen = chosen || message["tool_call_id"] == "choose_path"
 							collected = collected || message["tool_call_id"] == "collect_logs"
+							reselected = reselected || message["tool_call_id"] == "choose_replacement"
+							alternativeCollected = alternativeCollected || message["tool_call_id"] == "collect_alternative"
 						}
 					}
 					arguments := Object{"asset_ref": refPattern.FindString(content), "path": logPath}
@@ -59,6 +69,14 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 					}
 					if !collected {
 						emitModel(w, "", []ai.Call{{ID: "collect_logs", Name: "observe_logs", Arguments: jsonText(arguments)}})
+						return
+					}
+					if adaptive && !reselected {
+						emitModel(w, "", []ai.Call{{ID: "choose_replacement", Name: "pilot_offer_directions", Arguments: jsonText(Object{"directions": []Object{{"id": "logs", "title": "查看启动日志", "reason": "先收集故障时间的实际记录", "operations": []Object{{"id": "read_alternative", "title": "读取替代日志", "tool": "observe_logs", "arguments": Object{"asset_ref": arguments["asset_ref"], "path": alternativePath}}}}}})}})
+						return
+					}
+					if adaptive && !alternativeCollected {
+						emitModel(w, "", []ai.Call{{ID: "collect_alternative", Name: "observe_logs", Arguments: jsonText(Object{"asset_ref": arguments["asset_ref"], "path": alternativePath})}})
 						return
 					}
 					ids := regexp.MustCompile(`ev_[a-f0-9]{32}`).FindAllString(content, -1)
@@ -103,6 +121,9 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 					}
 				}
 				answer := jsonText(Object{"level": "command", "directionId": "logs", "operationIds": []string{"read_logs"}})
+				if adaptive {
+					answer = jsonText(Object{"level": "direction", "directionId": "logs"})
+				}
 				apiTest(t, h, "POST", "/api/sessions/"+session+"/ai/agentQuestionReply", Object{"runId": pending.ID, "id": pending.Question.ID, "answers": Object{pending.Question.Questions[0].ID: []string{answer}}}, 200)
 			}
 			task := waitSRE(t, b, session, id, "completed", "paused")
@@ -115,12 +136,26 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 			if !automatic && len(task.Pilot.Decisions) != 1 {
 				t.Fatal("choice was not persisted exactly once")
 			}
-			found := false
+			for _, attempt := range task.Attempts {
+				for _, op := range attempt.Operations {
+					if op.Status == "succeeded" && op.Call.Name == "observe_logs" && len(op.EvidenceIDs) == 0 {
+						t.Fatal("real operation lost its evidence linkage")
+					}
+				}
+			}
+			if adaptive && len(task.Pilot.DirectionBatches) != 1 {
+				t.Fatal("replacement batch did not reuse the original direction decision")
+			}
+			found, alternativeFound := false, false
 			for _, attempt := range task.Attempts {
 				for _, evidence := range attempt.Evidence {
 					page := apiTest(t, h, "GET", "/api/sessions/"+session+"/sre/tasks/"+id+"/evidence/"+evidence.ID, nil, 200)
 					found = found || strings.Contains(stringOf(page["source"]), "PILOT_REAL_SOURCE")
+					alternativeFound = alternativeFound || strings.Contains(stringOf(page["source"]), "PILOT_ALTERNATIVE_SOURCE")
 				}
+			}
+			if adaptive && !alternativeFound {
+				t.Fatal("new direction batch did not collect real alternative evidence")
 			}
 			if !found {
 				t.Fatal("no actual source evidence")

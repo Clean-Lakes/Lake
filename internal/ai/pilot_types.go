@@ -12,6 +12,7 @@ type PilotTaskPolicy struct {
 	AutoAdvance      bool                  `json:"autoAdvance"`
 	SettingsRevision int                   `json:"settingsRevision"`
 	Decisions        []PilotChoiceDecision `json:"decisions,omitempty"`
+	DirectionBatches []PilotDirectionBatch `json:"directionBatches,omitempty"`
 }
 
 type PilotOperationCandidate struct {
@@ -48,6 +49,7 @@ type PilotSelection struct {
 }
 
 type PilotChoiceDecision struct {
+	Direction      *PilotDirection           `json:"direction,omitempty"`
 	RequestID      string                    `json:"requestId"`
 	PlanRevisionID string                    `json:"planRevisionId"`
 	StepID         string                    `json:"stepId"`
@@ -56,4 +58,21 @@ type PilotChoiceDecision struct {
 	Fingerprints   []string                  `json:"fingerprints,omitempty"`
 	Operations     []PilotOperationCandidate `json:"operations,omitempty"`
 	CreatedAt      string                    `json:"createdAt"`
+}
+
+// A new command batch inherits one human direction decision, never a step
+// delegation. The original decision and attempted operations remain immutable.
+type PilotDirectionBatch struct {
+	ID          string                    `json:"id"`
+	DecisionID  string                    `json:"decisionId"`
+	DirectionID string                    `json:"directionId"`
+	Operations  []PilotOperationCandidate `json:"operations"`
+	CreatedAt   string                    `json:"createdAt"`
+}
+
+type PilotReadRecovery struct {
+	FailedOperationID       string   `json:"failedOperationId"`
+	ReplacementOperationIDs []string `json:"replacementOperationIds"`
+	Reason                  string   `json:"reason"`
+	CreatedAt               string   `json:"createdAt"`
 }
