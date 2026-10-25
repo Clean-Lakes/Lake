@@ -28,9 +28,11 @@ func TestDraftCompletionIsTextOnlyAndPreservesContinuationSpacing(t *testing.T) 
 		fmt.Fprintf(w, "data: %s\n\n", body)
 	}))
 	defer remote.Close()
-	suffix, err := CompleteDraft(context.Background(), Model{Name: "gpt-6-test", URL: remote.URL}, "Check Nginx", []string{"Check Redis status"})
-	if err != nil || suffix != " logs and explain the errors." {
-		t.Fatalf("unexpected suffix %q (%v)", suffix, err)
+	for _, draft := range []string{"Check Nginx", "这", "这确", "这确实", "hi"} {
+		suffix, err := CompleteDraft(context.Background(), Model{Name: "gpt-6-test", URL: remote.URL}, draft, []string{"Check Redis status"})
+		if err != nil || suffix != " logs and explain the errors." {
+			t.Fatalf("draft %q: unexpected suffix %q (%v)", draft, suffix, err)
+		}
 	}
 }
 func TestDraftCompletionSkipsCredentialsAndRejectsUnsafeOrUnstructuredOutput(t *testing.T) {
@@ -44,7 +46,7 @@ func TestDraftCompletionSkipsCredentialsAndRejectsUnsafeOrUnstructuredOutput(t *
 	}))
 	defer remote.Close()
 	model := Model{Name: "test", URL: remote.URL}
-	for _, draft := range []string{"hi", "password=synthetic-only", "-----BEGIN PRIVATE KEY-----\nsynthetic\n-----END PRIVATE KEY-----"} {
+	for _, draft := range []string{"", "   ", "password=synthetic-only", "-----BEGIN PRIVATE KEY-----\nsynthetic\n-----END PRIVATE KEY-----"} {
 		got, err := CompleteDraft(context.Background(), model, draft, nil)
 		if err != nil || got != "" {
 			t.Fatal("unsafe draft must have no completion")
