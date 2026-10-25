@@ -13,12 +13,12 @@ export function completionEligible(value:string,start:number,end:number,focused:
 export function validCompletion(suffix:unknown):suffix is string {
  return typeof suffix==="string"&&suffix.trim().length>0&&Array.from(suffix).length<=120&&!/[\r\n\x00@]/.test(suffix);
 }
-export function localCompletion(value:string,history:string[]):string {
+export function localCompletion(value:string,history:string[],consumed:ReadonlySet<string>=new Set()):string {
  const candidates=[...history.slice(-8).reverse(),...commonPrompts];
  for(const candidate of candidates) {
   if(candidate.length>320||/[\r\n@]|-----BEGIN|(?:api[_-]?key|password|secret|token)\s*[:=]/i.test(candidate)||!candidate.toLocaleLowerCase().startsWith(value.toLocaleLowerCase())) continue;
   const suffix=Array.from(candidate.slice(value.length)).slice(0,80).join("");
-  if(validCompletion(suffix)) return suffix;
+  if(validCompletion(suffix)&&!consumed.has((value+suffix).trim())) return suffix;
  }
  return "";
 }

@@ -27,3 +27,13 @@ test("empty focused drafts offer a safe local suggestion without needing typed c
  assert.equal(localCompletion('',['帮我查看内存使用情况。','帮我检查服务状态。']),'帮我检查服务状态。');
  assert.equal(localCompletion('',['帮我检查服务状态。','password=synthetic-only','@prod 重启','多行\n表达']),'帮我检查服务状态。');
 });
+
+test("consumed empty suggestions advance without duplicates or cycling back",()=>{
+ const consumed=new Set(['三台再试试']);
+ assert.equal(localCompletion('',['新的表达','三台再试试',' 三台再试试 '],consumed),'新的表达');
+ const long='x'.repeat(100);consumed.add(long.slice(0,80));
+ assert.notEqual(localCompletion('',[long],consumed),long.slice(0,80));
+ const all=new Set<string>();let next:string;
+ while((next=localCompletion('',[],all))){assert.ok(!all.has(next));all.add(next);assert.ok(all.size<=4);}
+ assert.equal(all.size,4);assert.equal(localCompletion('',[],all),'');
+});
