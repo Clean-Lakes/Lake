@@ -1,4 +1,5 @@
 export const completionDelay=650;
+export const emptyCompletionDelay=120;
 const commonPrompts=[
  "帮我检查服务运行状态，分析异常原因并给出处理建议。",
  "帮我查看 CPU、内存和磁盘使用情况。",
@@ -7,7 +8,7 @@ const commonPrompts=[
 ];
 export function completionEligible(value:string,start:number,end:number,focused:boolean,composing:boolean,blocked:boolean):boolean {
  const length=Array.from(value.trim()).length;
- return focused&&!composing&&!blocked&&start===value.length&&end===value.length&&length>=4&&length<=2000&&!/[。！？.!?]\s*$/.test(value)&&!value.endsWith("\n")&&!/-----BEGIN|(?:api[_-]?key|password|secret|token)\s*[:=]/i.test(value);
+ return focused&&!composing&&!blocked&&start===value.length&&end===value.length&&(value===''||length>=4)&&length<=2000&&!/[。！？.!?]\s*$/.test(value)&&!value.endsWith("\n")&&!/-----BEGIN|(?:api[_-]?key|password|secret|token)\s*[:=]/i.test(value);
 }
 export function validCompletion(suffix:unknown):suffix is string {
  return typeof suffix==="string"&&suffix.trim().length>0&&Array.from(suffix).length<=120&&!/[\r\n\x00@]/.test(suffix);

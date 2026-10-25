@@ -18,3 +18,12 @@ test("history and generated suffixes cannot introduce broken mentions, multiline
  for(const value of [null,"","   ","\nanswer","@server","x".repeat(121)]) assert.equal(validCompletion(value),false);
  assert.equal(validCompletion(" logs"),true);
 });
+
+test("empty focused drafts offer a safe local suggestion without needing typed characters",()=>{
+ assert.equal(completionEligible('',0,0,true,false,false),true);
+ for(const flags of [[false,false,false],[true,true,false],[true,false,true]] as const)assert.equal(completionEligible('',0,0,...flags),false);
+ assert.equal(completionEligible('   ',3,3,true,false,false),false);
+ assert.equal(localCompletion('',[]),'帮我检查服务运行状态，分析异常原因并给出处理建议。');
+ assert.equal(localCompletion('',['帮我查看内存使用情况。','帮我检查服务状态。']),'帮我检查服务状态。');
+ assert.equal(localCompletion('',['帮我检查服务状态。','password=synthetic-only','@prod 重启','多行\n表达']),'帮我检查服务状态。');
+});
