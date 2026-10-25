@@ -3,6 +3,8 @@
 .mini-box-material { position:absolute; z-index:-1; inset:0; border-radius:inherit; background:linear-gradient(130deg,color-mix(in srgb,var(--surface) 88%,transparent),color-mix(in srgb,var(--surface-muted) 70%,transparent)); backdrop-filter:blur(14px) saturate(1.1); box-shadow:inset 0 1px 0 color-mix(in srgb,var(--surface) 85%,transparent); pointer-events:none; }
 .mini-box-header { display:flex; align-items:center; gap:8px; height:36px; padding:0 10px; border-bottom:1px solid color-mix(in srgb,var(--border) 55%,transparent); font-size:var(--font-size-toolbar); color:var(--text-muted); }
 .mini-box-title { color:var(--foreground); white-space:nowrap; }
+.mini-box-header .mini-box-header-command { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:12px/20px var(--font-mono); background:none; padding:0; }
+.mini-box.is-collapsed .mini-box-status,.mini-box.is-collapsed .mini-box-protocol { flex-shrink:0; }
 .mini-box-header > svg { flex-shrink:0; }
 .mini-box-protocol { font-size:inherit; }
 .mini-box-status { display:flex; gap:6px; align-items:center; margin-left:auto; min-width:0; }

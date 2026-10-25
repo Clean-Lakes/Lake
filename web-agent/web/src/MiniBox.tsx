@@ -36,6 +36,8 @@ export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScop
   const last=cards.at(-1);
   const dispatching=!!target&&last?.status==='running'&&Date.parse(last.at)>Date.parse(target.entry.startedAt??target.entry.createdAt);
   const current=dispatching&&recorded?{entry:recorded,preview:miniPreview(recorded.output)}:analyzed.find(row=>row.entry.id===target?.entry.id)??analyzed.at(-1);
+  const command=current?.entry.command||'';
+  const commandLabel=command?command.replace(/\r?\n/g,' ⏎ '):'等待命令派发…';
   const preview=current?.preview??miniPreview('');
   const rows=miniPreviewRows(preview,preview.anomalies[0]);
   const anomalyCount=analyzed.reduce((count,row)=>count+row.preview.anomalies.length,0);
@@ -61,14 +63,14 @@ export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScop
     <section className={`mini-box${active?' is-operating':''}${open?'':' is-collapsed'}`} aria-label={`Mini Box ${protocol} 命令终端`}>
       <span className="mini-box-material" aria-hidden="true"/>
       <MiniBoxControl active={active}/>
-      <header className="mini-box-header"><Glyph name="terminal" size={15}/><span className="mini-box-title">执行命令</span><small className="mini-box-protocol">{protocol}</small>
+      <header className="mini-box-header"><Glyph name="terminal" size={15}/>{open?<span className="mini-box-title">执行命令</span>:<code className="mini-box-title mini-box-header-command" title={command||commandLabel}>{commandLabel}</code>}<small className="mini-box-protocol">{protocol}</small>
         <span className={`mini-box-status${active?' is-active':''}`} role="status"><i aria-hidden="true"/><span>{status}</span></span>
         {!open&&anomalyCount>0&&<button type="button" className="mini-box-folded-anomalies" title="展开并定位异常线索" onClick={()=>{setOpen(true);setFullOpen(true);setJump(value=>value+1);inspect();}}>异常 {anomalyCount}</button>}
         <button type="button" className="mini-box-stop" disabled={!canStop} title="只终止此资源当前命令，其他资源继续" onClick={()=>void stop()}><Glyph name="stop" size={11}/>终止</button>
         <button type="button" className="mini-box-toggle" aria-label={open?'收起 mini 终端':'展开 mini 终端'} aria-expanded={open} onClick={()=>{setOpen(!open);if(open)setFullOpen(false);inspect();}}><Glyph name="chevron" size={13}/></button>
       </header>
       <div className="mini-box-preview" hidden={!open}>
-        <div className="mini-box-command" title={current?.entry.command||'等待命令派发'}><span aria-hidden="true">$</span><code>{current?.entry.command?current.entry.command.replace(/\r?\n/g,' ⏎ '):'等待命令派发…'}</code></div>
+        <div className="mini-box-command" title={command||commandLabel}><span aria-hidden="true">$</span><code>{commandLabel}</code></div>
         <div className="mini-box-output" aria-label="关键输出预览">{rows.length?rows.map((line,index)=><div key={index} className={line.anomaly?'mini-box-output-line is-anomaly':'mini-box-output-line'} title={line.text}><span>{line.text}</span>{line.count>1&&<small>× {line.count}</small>}</div>):<div className="mini-box-output-empty">{current?.entry.status==='running'?'等待命令输出…':'暂无输出'}</div>}</div>
         <footer className="mini-box-footer">
           {anomalyCount>0&&<button type="button" className="mini-box-anomalies" onClick={()=>{setFullOpen(true);setJump(value=>value+1);inspect();}}>异常线索 {anomalyCount}</button>}
