@@ -73,7 +73,7 @@ export function pilotIslandModel(snapshot: SessionSnapshot | null | undefined): 
   const failed = steps.some(s => s.status === 'failed');
   let label = '正在调度', tone: PilotIslandModel['tone'] = 'active';
   if (unresolved) { label = '变更待核实'; tone = 'attention'; }
-  else if (task.status === 'paused' && dispatched) label = '正在暂停';
+  else if (task.status === 'paused' && dispatched) { label = '正在暂停'; tone = 'neutral'; }
   else if (task.status === 'cancelled') { label = '已取消'; tone = 'neutral'; }
   else if (task.status === 'failed' || failed) { label = '检查未完成'; tone = 'failed'; }
   else if (task.status === 'paused') { label = '已暂停'; tone = 'neutral'; }
@@ -115,4 +115,9 @@ export function pilotIslandFocus(model:PilotIslandModel){
  const peer=ranked.find(role=>role!==primary&&role.status==='running')??ranked.find(role=>role!==primary&&['waiting_input','waiting_approval','unknown','queued'].includes(role.status));
  const secondary=peer?`${peer.name} · ${peer.status==='running'?peer.action??(peer.role==='verifier'?'独立复核':'执行中'):pilotRoleStatus(peer)}`:model.detail.includes('结论不充分')?'结论不充分':primary?.description??model.label;
  return {primary,action,secondary};
+}
+
+/** A draining operation stays visible after pause, but never animates the task. */
+export function pilotIslandAnimating(model:PilotIslandModel|null|undefined){
+ return !!model&&['active','draft'].includes(model.status)&&model.tone==='active'&&model.roles.some(role=>role.status==='running');
 }

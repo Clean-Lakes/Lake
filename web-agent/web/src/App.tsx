@@ -19,7 +19,7 @@ import {sreSessionPresentation} from './sreSessionPresentation';
 import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerMentions";
 import {LakePilotControl} from './LakePilotControl';
 import {PilotHeaderState} from './PilotHeaderState';
-import {pilotIslandModel} from './pilotIslandModel';
+import {pilotIslandAnimating,pilotIslandModel} from './pilotIslandModel';
 import './pilotIsland.css';
 import './pilot.css';
 import {appendResourceMention,composerMessage,composerResourceIds,selectComposerMention,filterMentions,mentionOptions,nextMentionCategory,type MentionCategory,type MentionOption} from "./composerMentionState";
@@ -719,13 +719,18 @@ function AppContent() {
     seenInspectorTasks.current.add(key);
     if((!inspector.selection||inspector.selection.sessionId!==activeSnapshot.session.id||inspector.selection.automatic)&&['draft','active','waiting_input','waiting_approval'].includes(headerPilot.status))inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,tab:'plan',automatic:true});
   },[headerPilot?.taskId,sessionId]);
-  const inspectorAvailable=!!activeSnapshot&&!selectedResource&&!isPlansPage&&(!!headerPilot||inspector.lastSelection?.sessionId===sessionId||activeSnapshot.ai?.cards.some(card=>['operation','shell','thinking'].includes(card.type)));
+  const defaultInspectorTask=activeSnapshot?.sre?.tasks?.filter(task=>task.sessionId===sessionId&&((task.plans?.length??0)>0||(task.attempts?.length??0)>0)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
+  const inspectorAvailable=!!activeSnapshot?.ai&&!selectedResource&&!isPlansPage;
   const reopenInspector=()=>{
     if(!activeSnapshot)return;
     pauseFollowing();
     if(inspector.lastSelection?.sessionId===sessionId){inspector.open({...inspector.lastSelection,automatic:false});return;}
     if(headerPilot){inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,tab:'plan'});return;}
-    [...document.querySelectorAll<HTMLButtonElement>('.conversation .turn-duration-disclosure')].at(-1)?.click();
+    const latestTurn=[...document.querySelectorAll<HTMLElement>('.conversation .ai-turn')].at(-1);
+    const execution=latestTurn?.querySelector<HTMLButtonElement>('.turn-duration-disclosure');
+    if(execution){execution.click();return;}
+    if(defaultInspectorTask){inspector.open({sessionId:activeSnapshot.session.id,taskId:defaultInspectorTask.id,tab:'plan'});return;}
+    inspector.open({sessionId:activeSnapshot.session.id,tab:'execution'});
   };
   const selectedProjectId = selectedResource?.projectId ?? selectedSession?.projectId;
   useEffect(() => {
@@ -1449,13 +1454,13 @@ function AppContent() {
 
     </aside>
 
-    <main className={`workspace${inspectorAvailable&&!inspectorOpen?" has-inspector-entry":""}${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${selectedSession&&!selectedResource&&!isPlansPage?" has-floating-header":""}`} onDragOver={event=>{if(selectedSession&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(!selectedSession||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
+    <main className={`workspace${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${selectedSession&&!selectedResource&&!isPlansPage?" has-floating-header":""}`} onDragOver={event=>{if(selectedSession&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(!selectedSession||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       <header className={`workspace-header${headerPilot ? ' has-pilot-island' : ''}`}>
         {selectedSession && !selectedResource && !isPlansPage && <span className="workspace-header-glass" aria-hidden="true"/>}
-        {selectedSession && !selectedResource && !isPlansPage && <HeaderSweep key={`sweep-${selectedSession.id}`} active={currentSessionStatus === "investigating"&&(!headerPilot||headerPilot.tone==='active'&&headerPilot.roles.some(role=>role.status==='running'))}/>}
+        {selectedSession && !selectedResource && !isPlansPage && <HeaderSweep key={`sweep-${selectedSession.id}`} active={!!activeSnapshot&&currentSessionStatus === "investigating"&&(headerPilot?pilotIslandAnimating(headerPilot):activeSnapshot?.ai?activeSnapshot.ai.status==='running'&&!activeSnapshot.ai.question:true)}/>}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
         <div className="breadcrumbs"><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span><strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/><span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong></div>
-        {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} status={currentSessionStatus} normal={<SessionStateBadge session={selectedSession} {...currentSessionPresentation}/>} onInspect={targetId => {
+        {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...currentSessionPresentation}/>} onInspect={targetId => {
           if(!activeSnapshot||!headerPilot)return;
           pauseFollowing();
           const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
@@ -1463,7 +1468,6 @@ function AppContent() {
           inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry?.attemptId,tab:entry?'execution':'plan'});
         }}/>}
       </header>
-      {inspectorAvailable&&<button type="button" hidden={inspectorOpen} className="workspace-inspector-entry" aria-controls="session-task-inspector" aria-expanded={inspectorOpen} aria-label="展开计划与执行" title="展开计划与执行" onClick={reopenInspector}><Glyph name="panel" size={16}/><span>计划与执行</span></button>}
 
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}
       {connection.warning && warningSessionId === sessionId && <div className="system-banner offline-banner" role="alert"><Glyph name="alert" size={18}/><span>{visibleSessionError || "实时连接已断开。当前内容可能不是最新状态，操作已暂停。"}</span><button onClick={() => sessionId ? setSessionReload(value => value + 1) : void loadApp()}><Glyph name="refresh" size={15}/>重试</button></div>}
@@ -1504,7 +1508,7 @@ function AppContent() {
             if (isSendKey(event.nativeEvent, sendShortcut)) { event.preventDefault(); event.currentTarget.closest("form")?.requestSubmit(); }
           }}/><div className="composer-send-actions">{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止本轮" title="停止本轮，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${turnActive && !hasMessageDraft ? " stop-button" : ""}`} type={turnActive && !hasMessageDraft ? "button" : "submit"} aria-label={turnActive && !hasMessageDraft ? "停止本轮" : !modelConfigured ? "连接模型" : queueMode ? "加入待发送队列" : "发送消息"} title={turnActive && !hasMessageDraft ? "停止本轮" : !modelConfigured ? "连接模型，保留当前草稿" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`} aria-busy={stoppingTurn} onClick={turnActive && !hasMessageDraft ? () => void stopCurrentTurn() : undefined} disabled={turnActive && !hasMessageDraft ? stoppingTurn || !sessionConnected : !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || (modelConfigured && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}><Glyph name={turnActive && !hasMessageDraft ? "stop" : !modelConfigured ? "plug" : "return"} size={16}/></button></div></div></div><div className="composer-foot"><input ref={attachmentInputRef} className="visually-hidden" type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加任意文件或图片，也可拖入或粘贴文件" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}><Glyph name="lakePermission" size={16}/>权限</button>}{activeSnapshot&&<PlanModeToggle key={sessionId} mode={activeSnapshot.conversationMode} disabled={!sessionConnected||turnActive||!!pendingOperation||reasoningSaving.has(sessionId)||modeSaving.has(sessionId)||!!activeSnapshot.messageQueue?.items.length} onChange={changeConversationMode}/>} {activeSnapshot&&<LakePilotControl key={activeSnapshot.session.projectId} snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive} disabledReason={!sessionConnected?"连接恢复后可切换 Lake Pilot。":"本轮运行中，结束后可切换 Lake Pilot。"}/> }<div className="composer-status"><div className="model-switch-wrap">
           <ComposerModelSelect available={modelMenu} modelName={bootstrap?.modelName??null} selection={bootstrap?.modelSelection??undefined} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation||reasoningSaving.size>0} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void switchModel(model)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}} reasoning={activeSnapshot?.ai ? {session:sessionId,modelId:bootstrap?.modelId,disabled:!sessionConnected || turnActive || !!pendingOperation,disabledReason:!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。",onSaving:(saving,savingSession=sessionId) => setReasoningSaving(current=>{const next=new Set(current);if(saving)next.add(savingSession);else next.delete(savingSession);return next;})}:undefined}/>
-        </div>{activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} status={currentSessionStatus} compact/>}</div></div></form></div>
+        </div>{activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} compact/>}</div></div></form></div>
       </div>{activeSnapshot&&<SessionInspector key={sessionId} snapshot={activeSnapshot} connected={sessionConnected&&!modeSaving.has(sessionId)} onUpdated={()=>void refreshCurrent()}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
     </main>
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[

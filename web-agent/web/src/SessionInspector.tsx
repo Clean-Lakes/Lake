@@ -49,6 +49,7 @@ export function SessionInspector({snapshot,connected,onUpdated}:{snapshot:Sessio
     </div>
     <div role="tabpanel" id="inspector-execution-panel" aria-labelledby="inspector-execution-tab" hidden={target.tab!=='execution'}>
      {task&&<><label className="inspector-step-select">查看步骤<AppSelect value={selected?.attempt.id??''} onChange={event=>choose('execution',event.target.value)} disabled={!selected}>{!selected&&<option value="">尚无执行记录</option>}{options.map(({step,attempt})=><option key={attempt.id} value={attempt.id}>{sreRoles[step.role].name} · {step.description}</option>)}</AppSelect></label>{selected&&<div className="inspector-attempt-heading"><AgentIcon role={selected.step.role} size={20}/><strong>{sreRoles[selected.step.role].name}</strong><span>{sreStatus[attemptStatus]??attemptStatus}</span><p>{selected.step.description}</p></div>}{currentEntry?<SRERoleMessage key={`${task.id}:${currentEntry.attemptId}`} detailsOnly connected={connected} task={task} entry={currentEntry} snapshot={snapshot} onUpdated={onUpdated} renderApproval={()=>null}/>:<p className="inspector-empty">本步骤尚无执行记录。</p>}</>}
+     {!task&&!target.turnId&&<p className="inspector-empty">本轮尚无执行记录。</p>}
      <div ref={inspector.setHost} className="inspector-turn-host"/>
     </div>
    </div>

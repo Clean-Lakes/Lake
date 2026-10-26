@@ -68,13 +68,12 @@
 @media (max-width:700px) { .session-inspector { padding-top:0; } .session-inspector-scroll { padding:18px; } }
 @media (prefers-reduced-motion:reduce) { .session-inspector,.session-inspector.is-closing { animation:none; } }
 
-.workspace-inspector-entry { position:absolute; right:18px; top:16px; z-index:9; display:flex; align-items:center; gap:7px; min-height:32px; padding:5px 9px; color:var(--text-muted); border:1px solid var(--border); border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); background:var(--surface); font-size:var(--font-size-ui); cursor:pointer; }
-.workspace-inspector-entry:hover { color:var(--foreground); background:var(--surface-hover); }
-.workspace.has-inspector-entry > .workspace-header { max-width:calc(100% - var(--session-content-start) - 150px); }
 .inspector-plan-context { margin:0 0 18px; color:var(--text-muted); font-size:var(--font-size-ui); }
 .inspector-plan-context > p { font-size:var(--font-size-ui); line-height:1.7; margin:12px 0 0; overflow-wrap:anywhere; }
-@media(max-width:1180px) { .workspace-inspector-entry span { display:none; } .workspace-inspector-entry { width:32px; justify-content:center; padding:0; right:14px; } .workspace.has-inspector-entry > .workspace-header { max-width:calc(100% - var(--session-content-start) - 58px); } }
-html.lake-windows-chrome .workspace-inspector-entry { right:156px; }
-@media(max-width:700px) { html.lake-windows-chrome .workspace-inspector-entry { top:54px; right:14px; } }
-
-.workspace-inspector-entry[hidden] { display:none; }
+.header-inspector-toggle { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; margin-left:4px; padding:0; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); color:var(--text-muted); background:transparent; cursor:pointer; }
+.header-inspector-toggle:hover { color:var(--foreground); background:var(--surface-hover); }
+.header-inspector-toggle:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
+.header-inspector-toggle > svg { transition:transform 220ms cubic-bezier(.22,1,.36,1); }
+.header-inspector-toggle[aria-expanded=true] > svg { transform:rotate(180deg); }
+.pilot-island[data-motion=paused] .pilot-ring-value { transition:none; }
+@media(prefers-reduced-motion:reduce) { .header-inspector-toggle > svg { transition:none; } }

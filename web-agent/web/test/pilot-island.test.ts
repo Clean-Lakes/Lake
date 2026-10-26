@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {pilotIslandModel} from '../src/pilotIslandModel';
+import {pilotIslandAnimating,pilotIslandModel} from '../src/pilotIslandModel';
 import {PilotStatusIsland} from '../src/PilotStatusIsland';
 import {islandFixture} from './fixtures/pilot-island-data';
 import {sreStepStatus} from '../src/sreTranscript';
@@ -68,6 +68,12 @@ test('pause is neutral despite stale agent activity; in-flight commands still di
   assert.ok(paused.steps.every(s => s.status !== 'running'));
   const stopping = pilotIslandModel(islandFixture('stopping'))!;
   assert.equal(stopping.label, '正在暂停'); assert.match(stopping.detail, /原操作仍在执行/);
+  assert.equal(stopping.tone,'neutral');
+  assert.equal(pilotIslandAnimating(stopping),false);
+  assert.equal(pilotIslandAnimating({...stopping,tone:'active'}),false);
+  assert.equal(pilotIslandAnimating(paused),false);
+  assert.equal(pilotIslandAnimating(pilotIslandModel(islandFixture())),true);
+  assert.equal(pilotIslandAnimating(pilotIslandModel(islandFixture('unknown'))),false);
   assert.equal(stopping.roles.find(r => r.role === 'verifier')!.status, 'paused');
 });
 
