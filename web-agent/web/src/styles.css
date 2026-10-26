@@ -1268,7 +1268,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .is-resource-row > .thinking-toggle > .thinking-chevron { flex:none; }
 .is-resource-row .thinking-operation-count { flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
-.ai-turn > .turn-status { margin: 0; flex-shrink: 0; }
+.ai-turn > .turn-status { margin: 0; flex-shrink: 0; overflow-anchor:none; }
 .ai-turn > .turn-status .turn-status-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Resource references, terminal shortcuts and menus keep separate, stable hit areas. */

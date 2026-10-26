@@ -4,7 +4,7 @@ import {createContext,useEffect,useId,useRef,useState,type ReactNode} from 'reac
 import {ReplyDuration,type ReplyDurationProps} from './ReplyDuration';
 import {turnStatus} from './turnStatus';
 export const ExecutionDetailsOpen=createContext(false);
-export function TurnExecutionDetails({details,onInspect,presentingReply=false,sessionId,children,...timing}:{sessionId?:string;children?:ReactNode;details:ReactNode[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
+export function TurnExecutionDetails({details,onInspect,presentingReply=false,hideLive=false,sessionId,children,...timing}:{hideLive?:boolean;sessionId?:string;children?:ReactNode;details:ReactNode[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
  const id=useId();
  const inspector=useSessionInspector();
  const selection=inspector?.selection;
@@ -38,5 +38,5 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,se
  const summary=<ReplyDuration key="turn-duration" {...timing} latestStep={latestStep} disclosure={summaryDisclosure}/>;
  const body=inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{details}</div></ExecutionDetailsOpen.Provider>,inspector.host)
   :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{shownDetails}</ExecutionDetailsOpen.Provider></div></div></div>;
- return <>{!live&&summary}{children}{body}{live&&summary}</>;
+ return <>{!live&&summary}{children}{body}{live&&!hideLive&&summary}</>;
 }

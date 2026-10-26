@@ -157,3 +157,12 @@ test('side detail entry keeps a horizontal navigation arrow while inline disclos
  const inline=renderToStaticMarkup(createElement(ReplyDuration,{timing,disclosure:{open:true,controls:'inline-details',onToggle:()=>{}}}));
  assert.ok(inline.includes('data-placement="inline"')&&inline.includes('收起执行详细过程'));
 });
+
+test('Pilot hides the running turn timer without reserving space and restores ordinary finished timing',()=>{
+ const body=createElement('p',{},'专员正文');
+ const live=renderToStaticMarkup(createElement(TurnExecutionDetails,{hideLive:true,timing:{...timing,status:'running',finishedAt:''},details:[],children:body}));
+ assert.equal(live,'<p>专员正文</p>');
+ const ended=renderToStaticMarkup(createElement(TurnExecutionDetails,{hideLive:true,timing,details:[],children:body}));
+ assert.ok(ended.includes('用时 1分钟 13秒')&&ended.includes('is-finished'));
+ assert.ok(ended.indexOf('用时')<ended.indexOf('专员正文'));
+});

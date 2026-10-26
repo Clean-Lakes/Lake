@@ -80,6 +80,9 @@ function applyIsland(state: IslandFixtureState) {
  }
  snapshot.sre!.tasks[0]!.revision = snapshot.cursor + 1;
  snapshot.messages = [{id:'island-user',sessionId:session.id,role:'user',text:'只读检查主机资源与日志来源。',createdAt:'2026-10-26T00:01:00Z'}];
+ const ended=['paused','failed','finished','cancelled'].includes(state);
+ snapshot.ai.turnFinishedAt=ended?'2026-10-26T00:03:00Z':'';
+ snapshot.replyTimings=[{messageId:'island-user',startedAt:'2026-10-26T00:01:00Z',finishedAt:snapshot.ai.turnFinishedAt,status:ended?'completed':'running'}];
 }
 if (islandQuery) {
  applyIsland(islandQuery as IslandFixtureState);
@@ -178,6 +181,11 @@ if (islandQuery) {
    const t=snapshot.sre!.tasks[0]!,id='qa-stream-tail';
    const message={id,taskId:t.id,sessionId:session.id,roleId:'coordinator',kind:'summary',source:'runtime',sequence:999,revision:count,createdAt:'2026-10-26T00:01:01Z',body:Array.from({length:count},(_,i)=>`新增结果第${i+1}行：只读模拟检查，保留真实证据。`).join('\n\n')} as SRETask['messages'][number];
    t.messages=t.messages.filter(m=>m.id!==id);t.messages.push(message);emit();
+  },
+  repeatRole(count:number){
+   const t=snapshot.sre!.tasks[0]!;
+   for(let i=0;i<count;i++)t.messages.push({id:'qa-status-'+t.messages.length,taskId:t.id,sessionId:session.id,roleId:'coordinator',roleRunId:'role-scope',kind:'status',source:'runtime',sequence:100+t.messages.length,revision:1,createdAt:'2026-10-26T00:01:30Z',body:'已核对原命令的终端完成记录，未重发命令。'});
+   emit();
   },
   laterOrdinaryTurn(){snapshot.ai!.turnStartedAt="2027-01-01T00:00:00Z";snapshot.ai!.rootTurnId="ordinary-later";session.status="completed";emit();},
   mode(enabled:boolean){snapshot.sre!.pilot!.enabled=enabled;emit();},

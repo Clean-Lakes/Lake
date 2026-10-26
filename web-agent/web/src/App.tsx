@@ -813,6 +813,11 @@ function AppContent() {
     return () => { stopObserving(); follower.stop(); conversationFollower.current = null; };
   }, [activeSnapshot?.session.id, route.resourceId,isPlansPage]);
 
+  // Final metadata moves the same elapsed row above the reply. Settle the
+  // latest reply before paint; a history reader never opts back into following.
+  useLayoutEffect(() => { conversationFollower.current?.jump(); },
+    [activeSnapshot?.replyTimings?.at(-1)?.finishedAt,activeSnapshot?.ai?.turnFinishedAt]);
+
   const refreshCatalog = useCallback(async (signal?: AbortSignal) => {
     const data = await api.catalog(signal);
     setCatalog(data);
@@ -1484,7 +1489,7 @@ function AppContent() {
           if(target.closest('input,textarea,[contenteditable="true"]'))return;
           const direction=["ArrowUp","PageUp","Home"].includes(event.key)?-1:["ArrowDown","PageDown","End"].includes(event.key)?1:0;
           if(direction&&pausesConversationFollow(event.currentTarget,direction,conversationScroll.current.following))pauseFollowing();
-        }} onScroll={event => { if (conversationFollower.current?.animating) return; conversationScroll.current.following = followsConversationScroll(event.currentTarget,conversationScroll.current.following); }} className="conversation" aria-label="会话记录">
+        }} onScroll={event => { if (conversationFollower.current?.animating) return; conversationScroll.current.following = followsConversationScroll(event.currentTarget,conversationScroll.current.following); if(conversationScroll.current.following)conversationFollower.current?.request(); }} className="conversation" aria-label="会话记录">
           {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true">{loadingSessionId === sessionId && <span role="status">正在加载会话…</span>}</div> : (itemList.length || !!activeSnapshot.sre?.tasks.length || !!activeSnapshot.ai?.operationOutcomes?.length) ? <div className="timeline-list">
             {activeSnapshot?.ai ? <AITranscript key={sessionId} onOpenMemory={()=>{const project=projectList.find(item=>item.id===selectedProjectId);if(project)setMemoryProject(project)}} sourceMessageId={memorySourceJump?.sessionId===sessionId?memorySourceJump.messageId:undefined} onSourceLocated={()=>setMemorySourceJump(null)} refresh={refreshCurrent} snapshot={activeSnapshot} mode={conversationMode} onOpenPlans={openPlans} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={!sessionConnected || modeSaving.has(sessionId)} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
             {selectedSession.status === "investigating" && !activeSnapshot.ai && <div className="timeline-item item-thinking" role="status" aria-live="polite"><span className="timeline-point"><Glyph name="spark" size={15}/></span><div className="timeline-content"><div className="thinking-line"><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span><span>正在处理…</span></div></div></div>}

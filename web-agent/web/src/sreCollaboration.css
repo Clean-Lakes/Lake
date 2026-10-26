@@ -66,3 +66,13 @@
 
 /* Keep the plan disclosure label and its chevron on the same line. */
 .sre-plan>footer>details>summary{white-space:nowrap}
+
+/* Pilot roles use the ordinary reply typography and one compact activity row. */
+.sre-role-conversation { display:block; position:relative; max-width:none; margin:0; }
+.sre-role-conversation > .sre-role-avatar { position:absolute; top:0; left:0; width:22px; height:25px; }
+.sre-role-conversation .sre-role-content > header { padding-left:32px; }
+.sre-role-conversation .sre-role-body { max-width:none; font-size:var(--font-size-body); padding:12px 0; line-height:inherit; }
+.sre-role-conversation .sre-conversation-activity { flex-wrap:wrap; margin:0; padding:0; border:0; font-size:var(--font-size-body); }
+.sre-conversation-activity .turn-duration-disclosure { flex-wrap:wrap; row-gap:4px; }
+.sre-conversation-activity > svg,.sre-conversation-activity button > svg { flex:none; }
+.sre-role-conversation.sre-role-status .sre-role-body { color:var(--foreground); }
