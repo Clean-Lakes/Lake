@@ -173,6 +173,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	server.Engine.CorrectionGuard = server.strategyCorrectionGuard
 	server.Engine.ModelActivity = server.strategyForegroundModel
 	store.RecoverSRETasks()
+	server.reconcileStaleSREStatuses()
 	if err = server.startScheduler(); err != nil {
 		server.Close()
 		return nil, err
@@ -383,6 +384,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			imageInput = model.SupportsImageInput
 		}
 		reply(w, 200, Object{"authenticated": true, "modelConfigured": model != nil, "modelName": modelName, "modelId": modelID, "modelSelection": selection, "supportsImageInput": imageInput, "terminalMode": "pty", "aiRuntime": "go", "backendRuntime": "go"})
+		return
+	}
+	if b.pilotSettingsRoute(w, r, name, method) {
 		return
 	}
 	if b.sreRoute(w, r, name, method) {

@@ -26,7 +26,7 @@ Connect resources, troubleshoot together, and keep a clear record of every actio
 
 - **Resources stay in context.** Organize hosts, databases, Redis, and Docker by project, with resources, conversations, and terminals in one workspace.
 - **Every action has a record.** Review tool calls, approval requests, execution history, and evidence, and take over manually when needed.
-- **Specialists work together.** Enable experimental SRE collaboration to coordinate investigators, executors, and verifiers. Track work with a plan and check results through independent verification.
+- **Specialists work together.** Enable Lake Pilot to coordinate investigators, executors, and verifiers. Follow each specialist’s steps, choose directions or commands, and check results through independent verification.
 
 ## Plan mode
 
@@ -38,7 +38,7 @@ Choose **Plan** beside the composer or enter `/plan` to toggle planning; `/plan 
 2. Connect a model in settings, or connect through [Magpie Agent](https://github.com/Clean-Lakes/magpie-agent-lake).
 3. Add resources and describe the problem. Type `@` to reference resources, Skills, and MCP integrations, or specialists when SRE collaboration is enabled.
 
-Lake handles requests directly in standard mode. For tasks that benefit from specialist roles, enable **SRE collaboration · Experimental** beside the composer. Operations follow the conversation’s existing permissions. [Usage and limitations (Chinese) →](docs/sre-collaboration.md)
+Lake handles requests directly in standard mode. For tasks that benefit from specialist roles, enable **Lake Pilot** beside the composer; it is off by default. Its **Auto advance** setting lets Lake choose operations for new tasks while retaining existing approvals. [Usage and current development scope (Chinese) →](docs/lake-pilot.md)
 
 Strategy assets, candidate learning, and bounded read-only correction are experimental and off by default, including in release builds. They are not stable features. See the [usage and exit guide (Chinese)](docs/strategy-learning.md) for scope, version adoption, budgets, and validation limits.
 

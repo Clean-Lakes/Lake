@@ -282,7 +282,7 @@ func (b *Server) executeWorkflowRun(ctx context.Context, cancel context.CancelFu
 		summaryID += "_"
 	}
 	steps = append(steps, ai.SREPlanStep{ID: summaryID, Role: ai.SRECoordinator, Kind: "summarize", Description: "汇总工作流调查事实、缺失证据和建议", ResourceIDs: refs, DependsOn: []string{previous}, CompletionChecks: []string{"基于真实证据汇总，不宣称未经验证的恢复"}})
-	task := b.createSRETask(id, template.Goal, "assist", "workflow_"+runID, refs)
+	task := b.createSRETaskWithReferences(id, template.Goal, "assist", "workflow_"+runID, refs, true, true)
 	plan := ai.SREPlanRevision{Goal: template.Goal, TaskType: "investigation", Scope: refs, Steps: steps, Acceptance: []ai.SRECheck{}, ChangeReason: "已保存工作流通过 SRE 专员执行"}
 	if _, err := b.Engine.ReviseSREPlan(id, task.ID, 0, plan); err != nil {
 		message = err.Error()

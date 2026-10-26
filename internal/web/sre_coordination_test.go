@@ -292,16 +292,26 @@ func TestSRETextOnlyReplyRequiresExplicitModelCompletion(t *testing.T) {
 	for _, repair := range []bool{true, false} {
 		t.Run(map[bool]string{true: "model_finishes_answer", false: "model_never_decides"}[repair], func(t *testing.T) {
 			b, h := fixture(t)
-			session, _ := newSession(t, h)
+
+			session, resource := newSession(t, h)
+			old, err := b.Store.CreateSRETask(ai.SRETask{SessionID: session, RequestID: "historical", Goal: "历史只读检查", Scope: []string{resource}, Mode: "plan_only"})
+			must(err)
+			_, err = b.Store.MutateSRETask(session, old.ID, 0, "completed", func(v *ai.SRETask) error { v.Status = "completed"; v.Outcome = "inconclusive"; return nil })
+			must(err)
 			var roots atomic.Int32
 			closeProvider := sreCoordinationFixture(t, b, h, session, func(w http.ResponseWriter, input Object) {
 				if !strings.Contains(jsonText(input["messages"]), "conversation owner") {
 					emitModel(w, "metadata", nil)
 					return
 				}
-				if roots.Add(1) > 1 && repair {
-					emitSREReply(w, "answer", "1+1 等于 2。")
-					return
+				if roots.Add(1) > 1 {
+					if input["tool_choice"] != "required" || len(objects(input["tools"])) != 2 {
+						t.Error("terminal correction must require a decision and exclude discovery/resource tools")
+					}
+					if repair {
+						emitSREReply(w, "answer", "1+1 等于 2。")
+						return
+					}
 				}
 				emitModel(w, "我先看一下。", nil)
 			})
@@ -310,7 +320,7 @@ func TestSRETextOnlyReplyRequiresExplicitModelCompletion(t *testing.T) {
 			awaitQueueWorkers(t, b)
 			view, _ := b.Engine.Snapshot(session)
 			tasks, _ := b.Store.ListSRETasks(session, 20, "")
-			if roots.Load() != 2 || len(tasks) != 0 {
+			if roots.Load() != 2 || len(tasks) != 1 {
 				t.Fatal("completion correction started a task or retried indefinitely")
 			}
 			if repair {
@@ -318,7 +328,7 @@ func TestSRETextOnlyReplyRequiresExplicitModelCompletion(t *testing.T) {
 				if view.Status != "completed" || messages[len(messages)-1]["text"] != "1+1 等于 2。" {
 					t.Fatal("model's final answer was lost")
 				}
-			} else if view.Status != "failed" {
+			} else if view.Status != "failed" || b.Store.Session(session)["status"] != "failed" {
 				t.Fatal("undecided promise was reported completed", view.Status)
 			}
 		})
@@ -365,5 +375,95 @@ func TestSREExplicitRestartCreatesFreshReadOnlyPlanWithoutLateConflict(t *testin
 			}
 		}
 		t.Fatal("explicit restart hit a late active-task conflict or lost audit")
+	}
+}
+
+func TestSRECompletedRestartUsesFreshTurnFactsAndKeepsHistory(t *testing.T) {
+	b, h := fixture(t)
+	sid, rid := newSession(t, h)
+	old, err := b.Store.CreateSRETask(ai.SRETask{SessionID: sid, RequestID: "old_investigation", Goal: "检查测试内存", Scope: []string{rid}, Mode: "assist", TokenBudget: 128000})
+	must(err)
+	_, err = b.Store.MutateSRETask(sid, old.ID, 0, "paused", func(t *ai.SRETask) error {
+		t.Status = "completed"
+		t.Outcome = "inconclusive"
+		t.Plans = []ai.SREPlanRevision{{TaskType: "investigation", Scope: []string{rid}}}
+		return nil
+	})
+	must(err)
+	plan := ai.SREPlanRevision{Goal: old.Goal, TaskType: "investigation", Scope: []string{rid}, Steps: []ai.SREPlanStep{{ID: "inspect", Role: ai.SREInvestigator, Kind: "observe", Capability: "host", Description: "只读检查测试内存", ResourceIDs: []string{rid}, CompletionChecks: []string{"真实证据"}}}}
+	closer := sreCoordinationFixture(t, b, h, sid, func(w http.ResponseWriter, input Object) {
+		content := jsonText(input["messages"])
+		if strings.Contains(content, "conversation owner") {
+			if !strings.Contains(content, "LAKE_SRE_TURN_FACTS") || !strings.Contains(content, "readonly_restart_available") {
+				t.Error("fresh turn facts missing from provider request")
+			}
+			if !strings.Contains(jsonText(input["tools"]), "restart_task") {
+				t.Error("model cannot choose an explicit restart")
+			}
+			emitModel(w, "", []ai.Call{{ID: "restart-original", Name: "sre_collaborate", Arguments: jsonText(Object{"action": "restart_task", "task_id": old.ID, "mode": "plan_only"})}})
+			return
+		}
+		if strings.Contains(content, "Return only a JSON plan object") {
+			emitModel(w, jsonText(plan), nil)
+			return
+		}
+		t.Error("plan-only restart dispatched a resource role")
+		emitModel(w, "unexpected", nil)
+	})
+	defer closer()
+	apiTest(t, h, "POST", "/api/sessions/"+sid+"/messages", Object{"text": "重新来，先给计划"}, 202)
+	awaitQueueWorkers(t, b)
+	tasks, err := b.Store.ListSRETasks(sid, 20, "")
+	must(err)
+	if len(tasks) != 2 || tasks[0].ID == old.ID || tasks[0].Status != "draft" || len(tasks[0].Plans) != 1 || tasks[1].Status != "completed" {
+		for _, task := range tasks {
+			t.Log("restart task state", task.ID, task.Status, len(task.Plans), task.Error)
+		}
+		view, _ := b.Engine.Snapshot(sid)
+		for _, card := range view.Cards {
+			if card.Type == "error" {
+				t.Log("handoff error", card.Content)
+			}
+		}
+		t.Fatal("explicit restart hit a late active-task conflict or lost audit")
+	}
+}
+
+func TestSRENewGoalStartsWithoutCancellingHistoricalPausedTask(t *testing.T) {
+	b, h := fixture(t)
+	sid, rid := newSession(t, h)
+	old := stalePausedTask(t, b, sid, rid)
+	retained, err := b.Store.LoadSRETask(sid, old.ID)
+	must(err)
+	nextResource := b.Store.CreateResource(stringOf(b.Store.Session(sid)["projectId"]), "独立目标", "ssh", Object{"host": "192.0.2.99", "port": 22, "username": "fixture"})
+	nextID := stringOf(nextResource["id"])
+	plan := ai.SREPlanRevision{Goal: "诊断新的目标", TaskType: "investigation", Scope: []string{nextID}, Steps: []ai.SREPlanStep{{ID: "inspect", Role: ai.SREInvestigator, Kind: "observe", Capability: "host", Description: "检查独立目标", ResourceIDs: []string{nextID}, CompletionChecks: []string{"获得新证据"}}}}
+	closeProvider := sreCoordinationFixture(t, b, h, sid, func(w http.ResponseWriter, input Object) {
+		content := jsonText(input["messages"])
+		if strings.Contains(content, "Return only a JSON plan object") {
+			emitModel(w, jsonText(plan), nil)
+			return
+		}
+		if !strings.Contains(content, "conversation owner") {
+			emitModel(w, "metadata", nil)
+			return
+		}
+		if !strings.Contains(content, "do not reserve a session slot") {
+			t.Error("model was not told the obsolete task slot rule was removed")
+		}
+		emitModel(w, "", []ai.Call{{ID: "new-independent", Name: "sre_collaborate", Arguments: jsonText(Object{"action": "new_task", "goal": plan.Goal, "asset_refs": []string{sreAliasForTest(nextID)}, "mode": "plan_only"})}})
+	})
+	defer closeProvider()
+	apiTest(t, h, "POST", "/api/sessions/"+sid+"/messages", Object{"text": "给独立目标制定诊断计划"}, 202)
+	awaitQueueWorkers(t, b)
+	tasks, err := b.Store.ListSRETasks(sid, 20, "")
+	must(err)
+	if len(tasks) != 2 || tasks[0].ID == old.ID || tasks[0].Scope[0] != nextID || len(tasks[0].Plans) != 1 {
+		t.Fatal("new goal was blocked by old task", tasks)
+	}
+	saved, err := b.Store.LoadSRETask(sid, old.ID)
+	must(err)
+	if jsonText(saved) != jsonText(retained) {
+		t.Fatal("new goal cancelled or rewrote old task")
 	}
 }

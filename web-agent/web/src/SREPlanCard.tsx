@@ -14,7 +14,7 @@ export function SREPlanCard({task,resources,onUpdated,enabled=true,agentRuns=[]}
  const unresolved=sreUnresolvedOperations(task),currentRun=task.runs?.at(-1),awaiting=task.attempts?.some(a=>a.planRunId===currentRun?.id&&agentRuns.some(r=>r.id===a.roleRunId&&r.sreTaskId===task.id&&(r.pending||r.status==='waiting_approval'))),hasRunning=task.attempts?.some(a=>a.operations?.some(o=>o.status==='dispatched')),planStatus=unresolved.length?'unknown':hasRunning?'running':awaiting?'waiting_approval':task.status;
  const control=(action:string)=>work(()=>api.sreOperation(task.sessionId,task.id,'control',{action,expectedRevision:task.revision,clientRequestId:crypto.randomUUID()}));
  const exportDraft=()=>work(async()=>{const value=await api.sreExport(task.sessionId,task.id);const blob=new Blob([value.content],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='lake-runbook-draft.json';a.click();URL.revokeObjectURL(url)});
- return <section className="sre-plan" aria-label="SRE 任务计划">
+ return <section className="sre-plan" id={`sre-plan-${task.id}`} tabIndex={-1} aria-label="SRE 任务计划">
   <header><span><Glyph name="document" size={16}/><strong>Plan · {plan.goal}</strong><small>v{plan.version}</small></span><span className={`sre-state state-${planStatus}`}>{sreStatus[planStatus]??planStatus}</span></header>
   <p className="sre-plan-goal">目标：{plan.acceptance?.length?plan.acceptance.map(c=>c.description).join('；'):plan.goal}</p>
   <p className="sre-plan-scope">范围：{plan.scope.map(id=>resources.find(r=>r.id===id)?.name??'资源不可用').join('、')}</p>

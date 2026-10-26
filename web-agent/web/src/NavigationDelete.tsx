@@ -6,7 +6,7 @@ import {api,readableError} from "./api";
 
 export type NavigationDeleteTarget = {kind:"project" | "resource" | "folder";id:string;projectId:string;name:string};
 export function TrashIcon() {return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13M10 11v5M14 11v5"/></svg>;}
-export function NavigationMenu({title,x,y,actions,onClose,className="",width,anchor}: {title:string;x:number;y:number;actions:{label:string;icon?:GlyphName;separatorBefore?:boolean;danger?:boolean;disabled?:boolean;checked?:boolean;run:()=>void}[];onClose:()=>void;className?:string;width?:number;anchor?:RefObject<HTMLButtonElement|null>}) {
+export function NavigationMenu({title,x,y,actions,onClose,className="",width,anchor}: {title:string;x:number;y:number;actions:{label:string;description?:string;icon?:GlyphName;separatorBefore?:boolean;danger?:boolean;disabled?:boolean;checked?:boolean;selectionType?:'radio'|'checkbox';run:()=>void}[];onClose:()=>void;className?:string;width?:number;anchor?:RefObject<HTMLButtonElement|null>}) {
  const menu=useRef<HTMLDivElement>(null);
  const [position,setPosition]=useState({left:x,top:y});
  useLayoutEffect(()=>{
@@ -31,10 +31,10 @@ export function NavigationMenu({title,x,y,actions,onClose,className="",width,anc
  },[]);
  return createPortal(<div ref={menu} role="menu" aria-label={`${title} 管理菜单`} className={`navigation-context-menu ${className}`} style={{width,...position}} onContextMenu={event=>event.preventDefault()} onPointerMove={event=>{const button=(event.target as Element).closest<HTMLButtonElement>('button');if(button&&!button.disabled&&document.activeElement!==button)button.focus({preventScroll:true});}} onKeyDown={event=>{if(!["ArrowDown","ArrowUp","Home","End"].includes(event.key))return;event.preventDefault();const buttons=[...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];const index=buttons.indexOf(document.activeElement as HTMLButtonElement);buttons[event.key==="Home"?0:event.key==="End"?buttons.length-1:(index+(event.key==="ArrowUp"?-1:1)+buttons.length)%buttons.length]?.focus();}}><small title={title}>{title}</small>{actions.map((action,index)=><Fragment key={action.label}>
   {action.separatorBefore&&index>0&&<div role="separator" className="navigation-menu-separator"/>}
-  <button type="button" role={action.checked===undefined?"menuitem":"menuitemradio"} aria-checked={action.checked} disabled={action.disabled} className={action.danger?"danger-text":""} onClick={()=>{anchor?.current?.focus();onClose();action.run();}}>
+  <button type="button" role={action.checked===undefined?"menuitem":action.selectionType==='checkbox'?"menuitemcheckbox":"menuitemradio"} aria-checked={action.checked} disabled={action.disabled} className={action.danger?"danger-text":""} onClick={()=>{anchor?.current?.focus();onClose();action.run();}}>
    {action.icon?<Glyph name={action.icon} size={15}/>:action.danger?<TrashIcon/>:null}
    {!action.icon&&action.checked!==undefined&&<span className="menu-selection-mark">{action.checked&&<Glyph name="check" size={14}/>}</span>}
-   <span className="menu-action-label">{action.label}</span>
+   <span className="menu-action-label">{action.label}{action.description&&<small className="menu-action-description">{action.description}</small>}</span>
    {action.icon&&action.checked!==undefined&&<span className="menu-selection-mark menu-selection-end">{action.checked&&<Glyph name="check" size={14}/>}</span>}
   </button>
  </Fragment>)}</div>,document.body);

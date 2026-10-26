@@ -49,13 +49,13 @@ test('conversation keeps history folded and closes its process before presenting
   const s={session:{id:'s'},messages:[oldUser,user.message],actions:[],resources:[],ai:{session:'s',status,cardsOffset:0,cards:[oldTool,oldReply,card('tool','operation').card,card('reply','message').card]}} as SessionSnapshot;
   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
   const position=(id:string)=>html.indexOf(`data-conversation-entry="${id}"`);
-  assert.ok(position('old-tool')<position('old-reply'),'historical order stays unchanged');
+  assert.ok(position('old-reply')<position('old-tool'),'recorded operations stay below the reply');
   assert.ok(html.includes('class="turn-execution-details" aria-hidden="true" inert=""'),status);
   const current=html.slice(html.indexOf('id="conversation-turn-s-user"'));
   assert.equal(current.includes('class="turn-execution-details is-open"'),status==='waiting_approval',status);
   assert.ok(!current.includes('thinking-steps'),'resource operations stay folded until requested');
   assert.ok(html.indexOf('aria-label="执行详细过程"')<position('tool'));
-  assert.ok(position('tool')<position('reply'),'the visible reply remains outside the hidden process body');
+  assert.ok(position('reply')<position('tool'),'the gray process stays beneath the visible reply');
   const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:'activity'}));
   assert.ok(!activity.includes('data-conversation-entry="reply"'),'activity mode keeps its own projection');
  }
@@ -251,9 +251,10 @@ test('collapsed process retains commands and alerts without hiding prose or pend
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
  assert.ok(html.includes('用时 9分钟 54秒')&&html.includes('1 项失败'));
  assert.ok(html.includes('aria-expanded="false"')&&html.includes('执行详细过程'));
- const bodyStart=html.indexOf('class="turn-execution-details"'),bodyEnd=html.indexOf('data-conversation-entry="reply"');
- assert.ok(html.slice(bodyStart,bodyEnd).includes('执行失败'),'recorded tool summary remains inside the hidden process body');
- assert.ok(html.slice(bodyEnd).includes('最终结果仍然可见'));
+ const bodyStart=html.indexOf('class="turn-execution-details"'),replyEnd=html.indexOf('data-conversation-entry="reply"');
+ assert.ok(replyEnd<bodyStart,'final reply remains above the elapsed line and process disclosure');
+ assert.ok(html.slice(bodyStart).includes('执行失败'),'recorded tool summary remains inside the hidden process body');
+ assert.ok(html.slice(replyEnd,bodyStart).includes('最终结果仍然可见'));
 });
 
 
@@ -286,4 +287,36 @@ test('opaque legacy aliases recover only a unique exact catalog target; recorded
  assert.equal(conversationGroups([legacy],ambiguous)[0]!.resource?.kind,undefined);
  const missing=operation({resource_id:'removed',target:'数据库'});
  assert.equal(conversationGroups([missing],resources)[0]!.resource?.kind,undefined,'missing recorded ID must not borrow another resource');
+});
+
+
+test('background failures and handle reads stay beneath the dispatch resource, not a later context target',()=>{
+ const resources=[{id:'a',name:'主机 A',kind:'ssh'},{id:'b',name:'主机 B',kind:'ssh'}] as Resource[];
+ const dispatch=(id:string,rid:string,job:string)=>({...card(id,'operation'),card:{...card(id,'operation').card,data:{resource_id:rid,target:'主机 '+rid.toUpperCase()},content:JSON.stringify({shell_id:job,terminal_id:'terminal-'+rid,entry_id:'entry-'+id})}});
+ const failed={...card('job-b','shell','failed','原命令等待失败，结果未确认'),card:{...card('job-b','shell','failed','原命令等待失败，结果未确认').card,title:'后台命令',data:undefined}};
+ const follow={...card('read-job-b','operation'),card:{...card('read-job-b','operation').card,title:'shell_output',data:{resource_id:'a',target:'主机 A',arguments:{shell_id:'job-b'}},content:JSON.stringify({shell_id:'job-b',status:'failed'})}};
+ const entries=[dispatch('dispatch-a','a','job-a'),dispatch('dispatch-b','b','job-b'),failed,follow];
+ const groups=conversationGroups(entries,resources);
+ assert.deepEqual(groups.map(g=>[g.resource?.id,g.entries.map(e=>e.id)]),[['a',['dispatch-a']],['b',['dispatch-b','job-b','read-job-b']]]);
+ assert.equal(follow.card.data.resource_id,'a','view projection must not rewrite the saved payload');
+ const snapshot={session:{id:'s'},messages:[user.message],actions:[],resources,ai:{session:'s',status:'running',cardsOffset:0,cards:entries.map(e=>e.card)}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.equal((html.match(/class="thinking-timeline /g)||[]).length,2,'no orphan generic execution rows');
+ assert.ok(html.includes('主机 B · 1 项执行失败'));
+ assert.equal(groups[1]!.entries.find(e=>e.id==='job-b')?.card?.content,'原命令等待失败，结果未确认','raw failure stays in its resource disclosure');
+ // A new user turn may read the same exact old handle, but does not move the
+ // background job out of the turn where it was launched.
+ const later=conversationGroups([...entries,user,{...follow,id:'later-read'}],resources);
+ assert.deepEqual(later.at(-1)?.entries.map(e=>e.id),['later-read']);
+ assert.equal(later.at(-1)?.resource?.id,'b');
+ const liveDisplay=conversationDisplayGroups([...entries,user,{...follow,id:'later-read'}],true,resources);
+ assert.equal(liveDisplay.at(-1)?.resource?.id,'b','live presentation retains exact ownership across turns');
+ const persisted={...failed,card:{...failed.card,data:{resource_id:'b',target:'主机 B',shell_id:'job-b'}}};
+ const pruned=conversationGroups([persisted,follow],resources);
+ assert.equal(pruned.length,1,'recorded background identity survives a pruned dispatch card');
+ assert.equal(pruned[0]?.resource?.id,'b');
+ const missing=conversationGroups([dispatch('unrelated','a','other'),failed],resources);
+ assert.equal(missing[1]?.resource,undefined,'nearby resource cannot guess an unknown job owner');
+ const conflict=conversationGroups([dispatch('one','a','job-b'),dispatch('two','b','job-b'),failed],resources);
+ assert.equal(conflict.at(-1)?.resource,undefined,'conflicting handle owners stay explicit and unassigned');
 });

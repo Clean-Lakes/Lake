@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 )
 
 // SREHandoff is a model-requested orchestration choice, never an operation approval.
@@ -87,7 +88,7 @@ func (e *Engine) finishSREReply(s *session, textID string) (bool, error) {
 }
 
 func sreCoordinationTool() Tool {
-	return Tool{Name: "sre_collaborate", Description: "Choose an SRE collaboration handoff using the conversation and recorded task context. Use only when specialist work, a Plan, a task change, or a specialist answer is actually needed. Plain conversation and clarifications are normal replies, not tool calls. Resolve targets from context and resource discovery; @ selection is not mandatory unless current permissions require it. new_task needs a concrete goal and 1..8 known asset_refs and no unfinished task. If the user explicitly asks to start over, restart_task atomically ends a paused read-only investigation and creates a fresh one with its exact goal and scope, retaining all prior evidence; it never bypasses an unresolved operation or restarts a change task. continue_task resumes the current plan; eligible legacy read-only investigations first get a model-planned collaboration revision with completed evidence retained; revise_plan supplies the user's contextual clarification as goal. ask_role asks a named specialist about recorded facts. mode=plan_only saves a draft without running steps. This call grants no execution permission. Call once; the runtime hands off after this reply, so do not claim a result before recorded execution.", Parameters: objectSchema(map[string]any{
+	return Tool{Name: "sre_collaborate", Description: "Choose an SRE collaboration handoff using the conversation and recorded task context. Use only when specialist work, a Plan, a task change, or a specialist answer is actually needed. Plain conversation and clarifications are normal replies, not tool calls. Resolve targets from context and resource discovery; @ selection is not mandatory unless current permissions require it. new_task needs a concrete goal and 1..8 known asset_refs. Existing tasks do not reserve a session slot: start a new independent task without cancelling or completing older tasks. When the user asks to rerun a previous read-only investigation, restart_task creates a fresh task with its exact goal and scope. It accepts paused/draft/waiting-input or completed investigations; completed records remain unchanged and active old investigations are atomically cancelled, retaining all prior evidence; it never bypasses an unresolved operation or restarts a change task. continue_task resumes the current plan; eligible legacy read-only investigations first get a model-planned collaboration revision with completed evidence retained; revise_plan supplies the user's contextual clarification as goal. ask_role asks a named specialist about recorded facts. mode=plan_only saves a draft without running steps. This call grants no execution permission. Call once; the runtime hands off after this reply, so do not claim a result before recorded execution.", Parameters: objectSchema(map[string]any{
 		"action":  map[string]any{"type": "string", "enum": []string{"new_task", "restart_task", "continue_task", "revise_plan", "ask_role", "pause_task", "cancel_task"}},
 		"task_id": stringSchema(), "goal": stringSchema(), "asset_refs": arraySchema(stringSchema()),
 		"mode": map[string]any{"type": "string", "enum": []string{"assist", "plan_only"}},
@@ -128,15 +129,6 @@ func (e *Engine) validateSREHandoff(sessionID string, c Config, h SREHandoff) (S
 	}
 	switch h.Action {
 	case "new_task":
-		existing, err := e.sreRepository.ListSRETasks(sessionID, 50, "")
-		if err != nil {
-			return h, err
-		}
-		for _, task := range existing {
-			if SRETaskActive(task.Status) {
-				return h, errors.New("当前会话仍有未结束任务，本轮没有新建任务。请根据上下文选择 continue_task，用户明确要求重新开始只读调查时选择 restart_task，或明确要求结束旧任务时选择 cancel_task；不要承诺已重新开始，也不要通过新任务绕过待核实操作。无法继续时用 sre_reply 说明实际阻塞。")
-			}
-		}
 		if strings.TrimSpace(h.Goal) == "" || len(h.ResourceIDs) < 1 || len(h.ResourceIDs) > 8 {
 			return h, errors.New("new_task requires a contextual goal and 1..8 resolved assets; clarify missing information before requesting a handoff")
 		}
@@ -178,28 +170,18 @@ func (e *Engine) validateSREHandoff(sessionID string, c Config, h SREHandoff) (S
 		if err != nil {
 			return h, err
 		}
-		if h.Action != "ask_role" && !SRETaskActive(task.Status) {
+		if h.Action != "ask_role" && h.Action != "restart_task" && !SRETaskActive(task.Status) {
 			return h, errors.New("task already ended")
 		}
 		if h.Action == "restart_task" {
-			if task.Status != "paused" && task.Status != "waiting_input" && task.Status != "draft" {
-				return h, errors.New("只能重新开始已暂停的只读调查")
-			}
-			if plan := task.LatestPlan(); plan != nil {
-				if plan.TaskType != "investigation" && plan.TaskType != "query" {
-					return h, errors.New("变更任务不能自动重新开始")
-				}
-				for _, step := range plan.Steps {
-					if step.Kind == "act" {
-						return h, errors.New("含变更步骤的任务不能自动重新开始")
-					}
-				}
+			if err := ValidateSRERestart(task); err != nil {
+				return h, err
 			}
 			if h.Goal != "" {
 				return h, errors.New("restart_task retains the original goal and exact scope")
 			}
 		}
-		if h.Action == "continue_task" || h.Action == "revise_plan" || h.Action == "restart_task" {
+		if h.Action == "continue_task" || h.Action == "revise_plan" {
 			for _, a := range task.Attempts {
 				for _, op := range a.Operations {
 					if SREOperationBlocksResume(op) {
@@ -305,4 +287,78 @@ func (e *Engine) invokeAfterSREHandoff(ctx context.Context, s *session, c Config
 		return nil, errors.New("terminal conversation decision prepared; this remaining call was not executed")
 	}
 	return e.invoke(ctx, s, c, call)
+}
+
+// Repeating finished work creates a new observation, never replays a change or
+// edits the old result. The store repeats this check inside its transaction.
+func ValidateSRERestart(task SRETask) error {
+	if task.Status != "paused" && task.Status != "waiting_input" && task.Status != "draft" && task.Status != "completed" {
+		return errors.New("只能重新开始已暂停或已完成的只读调查")
+	}
+	if p := task.LatestPlan(); p != nil {
+		if p.TaskType != "investigation" && p.TaskType != "query" {
+			return errors.New("变更任务不能自动重新开始")
+		}
+		for _, step := range p.Steps {
+			if step.Kind == "act" {
+				return errors.New("含变更步骤的任务不能自动重新开始")
+			}
+		}
+	} else if task.Status == "completed" {
+		return errors.New("已完成任务缺少只读计划，不能直接重新开始")
+	}
+	for _, a := range task.Attempts {
+		for _, op := range a.Operations {
+			if SREOperationBlocksResume(op) {
+				return errors.New("原操作尚未完成或结果未明，核实前不会重新开始")
+			}
+			if task.Status == "completed" && op.Risk != "readonly" && op.Status != "not_executed" && op.Status != "rejected" {
+				return errors.New("包含非只读操作的历史任务不能自动重跑")
+			}
+		}
+	}
+	return nil
+}
+
+// Rebuilt after compaction for every model request. Historical reports cannot
+// become evidence of execution in this turn merely because they were summarized.
+func (e *Engine) sreCurrentTurnContext(s *session) string {
+	s.mu.Lock()
+	sid, turn, started := s.state.View.Session, s.state.View.RootTurnID, s.state.View.TurnStartedAt
+	s.mu.Unlock()
+	if e.sreRepository == nil {
+		return ""
+	}
+	tasks, err := e.sreRepository.ListSRETasks(sid, 5, "")
+	if err != nil {
+		return ""
+	}
+	facts := []map[string]any{}
+	for _, t := range tasks {
+		updated, _ := time.Parse(time.RFC3339Nano, t.UpdatedAt)
+		begin, _ := time.Parse(time.RFC3339Nano, started)
+		facts = append(facts, map[string]any{"task_id": t.ID, "status": t.Status, "createdAt": t.CreatedAt, "updatedAt": t.UpdatedAt, "historical": !begin.IsZero() && !updated.IsZero() && updated.Before(begin), "readonly_restart_available": ValidateSRERestart(t) == nil})
+	}
+	return "\n[LAKE_SRE_TURN_FACTS]\n" + js(map[string]any{"turn_id": turn, "startedAt": started, "tasks": facts}) + "\nThis parent coordination turn has not executed new resource work. Historical reports, hashes and file timestamps do not prove a fresh run. Resolve the current user's intent from the conversation. Historical tasks do not reserve a session slot or require cancellation before new_task; create a new independent task for a new goal. A request to repeat or continue actual work needs sre_collaborate; restart_task can rerun a completed read-only investigation without reconstructing its goal/scope. Use sre_reply only for an actual explanation, historical question or necessary clarification; never claim old work just executed in this turn. These facts do not grant operation permission."
+}
+
+// DeepSeek rejects forced function choice while thinking is enabled. Only the
+// one-time decision serialization uses non-thinking; the user's saved model and
+// all specialist reasoning remain unchanged. The compatibility request is hashed.
+// https://api-docs.deepseek.com/guides/thinking_mode/
+func terminalDecisionModel(m Model) Model {
+	switch protocol(m) {
+	case "openai", "openai-response", "azure-gpt":
+		if strings.HasPrefix(modelSlug(m), "deepseek-") {
+			builtin := m
+			builtin.Reasoning = nil
+			if !ValidReasoningEffort(builtin, "none") {
+				return m
+			}
+			m.Reasoning = nil
+			m.ReasoningEffort = "none"
+		}
+		m.requireToolCall = true
+	}
+	return m
 }

@@ -4,6 +4,10 @@ import {isAssistantProse} from './completedTurnProse';
 
 export type ResourceStages={byResource:Map<string,TranscriptEntry[]>;overall:TranscriptEntry[];ids:Set<string>};
 const prose=(entry:TranscriptEntry)=>entry.card?.content??entry.message?.text??'';
+/** Compact visual caption only; the original Markdown stays in the disclosure. */
+export function resourceStagePreview(entry?:TranscriptEntry):string {
+ return entry?prose(entry).replace(/!?\[([^\]]*)\]\([^)]*\)/g,'$1').replace(/`+|\*\*|__/g,'').replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|>\s*)/gm,'').replace(/\s+/g,' ').trim():'';
+}
 const object=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'?value as Record<string,unknown>:{};
 const contains=(body:string,name:string)=>{
  if(name.length<3)return false;

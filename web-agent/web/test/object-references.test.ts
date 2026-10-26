@@ -66,6 +66,18 @@ test('standalone object inline code becomes a reference but configuration names 
   assert.equal((html.match(/<button/g) ?? []).length, 1);
 });
 
+test('table comparison headings remain labels while body file references still work', () => {
+  const source = '| 总行数 现/基/Δ | ERROR 现/基/Δ | 来源 |\n| --- | --- | --- |\n| 4000/4000/0 | 8/6/+2 | `/var/log/messages` |';
+  for (const html of [render(source), renderToStaticMarkup(createElement(SREProse, {children: source}))]) {
+    const header = html.match(/<thead>([\s\S]*?)<\/thead>/)?.[1];
+    assert.ok(header?.includes('总行数 现/基/Δ'));
+    assert.ok(!header.includes('data-object-kind'));
+    assert.ok(html.includes('data-object-kind="file"'));
+    assert.ok(html.includes('/var/log/messages'));
+    assert.ok(html.includes('4000/4000/0'));
+  }
+});
+
 test('turn-scoped recorded files can be inspected and ambiguous filenames remain ordinary text', () => {
   const cards = [{id: 'diff', type: 'diff', title: '/srv/nginx.conf', status: 'completed', at, data: {runtime: 'ssh', assetRef: host.id, before: '', after: 'events {}', existed: false}}];
   const html = renderToStaticMarkup(createElement(ObjectReferencesProvider, {resources, children: createElement(ReplyReferenceScope, {cards, children: createElement(AssistantMarkdown, {children: '已更新 `/srv/nginx.conf`。'})})}));

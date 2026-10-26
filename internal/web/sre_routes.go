@@ -23,6 +23,11 @@ func (b *Server) sreRoute(w http.ResponseWriter, r *http.Request, name, method s
 			if !ok || len(data) != 1 {
 				fail(400, "仅支持 enabled 布尔字段")
 			}
+			b.messageMu.Lock()
+			defer b.messageMu.Unlock()
+			if b.Store.SREEnabled(id) != enabled {
+				b.assertPilotSettingsIdleLocked(id)
+			}
 			b.Store.SetSREEnabled(id, enabled)
 			reply(w, 200, Object{"enabled": enabled})
 		default:

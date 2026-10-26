@@ -14,13 +14,13 @@
 .session-list-tags-more { font-size: var(--font-size-ui); color: var(--text-muted); flex-shrink: 0; }
 .session-state-badge[class*="state-"] { color: var(--session-state-color, var(--text-secondary)); }
 .session-state-badge > span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.session-state-badge.state-completed, .ai-context-usage[data-session-status="completed"] { --session-state-color: var(--success); }
+.session-state-badge.state-completed, .ai-context-usage[data-session-status="completed"], .pilot-island-progress[data-session-status="completed"] { --session-state-color: var(--success); }
 .session-state-badge.state-completed { background: var(--success-soft); }
-.session-state-badge.state-failed, .ai-context-usage[data-session-status="failed"] { --session-state-color: var(--danger); }
+.session-state-badge.state-failed, .ai-context-usage[data-session-status="failed"], .pilot-island-progress[data-session-status="failed"] { --session-state-color: var(--danger); }
 .session-state-badge.state-failed { background: var(--danger-soft); }
-.session-state-badge.state-waiting_approval, .ai-context-usage[data-session-status="waiting_approval"] { --session-state-color: var(--warning); }
+.session-state-badge.state-waiting_approval, .ai-context-usage[data-session-status="waiting_approval"], .pilot-island-progress[data-session-status="waiting_approval"] { --session-state-color: var(--warning); }
 .session-state-badge.state-waiting_approval { background: var(--warning-soft); }
-.session-state-badge.state-investigating, .ai-context-usage[data-session-status="investigating"] { --session-state-color: var(--info); }
+.session-state-badge.state-investigating, .ai-context-usage[data-session-status="investigating"], .pilot-island-progress[data-session-status="investigating"] { --session-state-color: var(--info); }
 .session-state-badge.state-investigating { background: var(--info-soft); }
 .sidebar-tags { border-top: 1px solid var(--border); padding: 6px 12px 3px; flex-shrink: 0; }
 .sidebar-tags-heading { display: flex; align-items: center; justify-content: space-between; color: var(--text-muted); font-size: var(--font-size-ui); margin-bottom: 0; }

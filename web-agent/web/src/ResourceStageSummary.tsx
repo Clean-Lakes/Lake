@@ -2,7 +2,7 @@ import {useState,type ReactNode} from 'react';
 import type {TranscriptEntry} from './timeline';
 import {DisclosureSummary} from './DisclosureSummary';
 
-/** Stable resource slot: new stage replaces the preview, prior stages are opt-in. */
+/** Expanded resource progress: preserve the full latest stage and opt-in history. */
 export function ResourceStageSummary({entries,render}:{entries:TranscriptEntry[];render:(entry:TranscriptEntry)=>ReactNode}){
  const [historyOpen,setHistoryOpen]=useState(false);
  if(!entries.length)return null;

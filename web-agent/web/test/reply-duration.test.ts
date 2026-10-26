@@ -28,7 +28,7 @@ test("normal activity waits one second and instant completion does not flash a d
  }
  now=Date.parse(start)+1000;
  const active=render({timing:running});
- assert.ok(active.includes("reply-duration-spinner")&&active.includes("用时 1秒")&&active.includes("正在思考…"));
+ assert.ok(active.includes("reply-duration-spinner")&&!active.includes("用时")&&active.includes("正在思考…"));
  const quick={...timing,finishedAt:"2026-10-12T03:00:00.999Z"};
  assert.equal(render({timing:quick}),"");
  assert.ok(render({timing:{...quick,status:"failed"}}).includes("未完成"));
@@ -86,15 +86,16 @@ test('elapsed disclosure matches the Chinese reference and exposes a real access
 });
 
 
-test('live elapsed time, separator and state share one sweep while confirmation and completion stay static',()=>{
+test('live state sweeps quietly without an elapsed line; completion reveals the duration',()=>{
  const running={...timing,status:'running' as const,finishedAt:''};
  const html=renderToStaticMarkup(createElement(ReplyDuration,{timing:running}));
  const active=html.match(/<span class="status-text status-text--active [^"]*">([\s\S]*?)<\/span><\/span>/)?.[1]??'';
- assert.ok(active.includes('turn-status-elapsed')&&active.includes('用时 '));
- assert.ok(active.includes(' · ')&&active.includes('正在思考…'));
+ assert.ok(!active.includes('turn-status-elapsed')&&!active.includes('用时 '));
+ assert.ok(active.includes('正在思考…'));
  assert.equal((html.match(/status-text--active/g)||[]).length,1);
  const waiting=renderToStaticMarkup(createElement(ReplyDuration,{timing:running,view:{status:'waiting_approval',cards:[]} as never}));
  const ended=renderToStaticMarkup(createElement(ReplyDuration,{timing}));
+ assert.ok(ended.includes('用时 1分钟 13秒'));
  assert.ok(!waiting.includes('status-text--active')&&!ended.includes('status-text--active'));
 });
 

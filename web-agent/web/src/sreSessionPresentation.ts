@@ -1,8 +1,10 @@
 import type {SRETask,WorkSession} from '../../shared/contracts';
 import {sreNeedsVerification} from './sreOperationPolicy';
-export function sreSessionPresentation(session:WorkSession,tasks:SRETask[]=[]):{label?:string;status?:WorkSession['status']}{
+import {sreTaskOwnsTurn,sreTaskInFlight} from './sreTaskTurn';
+export function sreSessionPresentation(session:WorkSession,tasks:SRETask[]=[],turnStartedAt?:string):{label?:string;status?:WorkSession['status']}{
  if(session.status==='investigating'||session.status==='waiting_approval')return {};
- const t=tasks.find(t=>['draft','active','paused','waiting_input','waiting_approval'].includes(t.status))??tasks[0];
+ const current=tasks.filter(t=>sreTaskOwnsTurn(t,turnStartedAt));
+ const t=current.find(sreTaskInFlight)??current.find(t=>['draft','active','paused','waiting_input','waiting_approval'].includes(t.status))??current[0];
  if(!t)return {};
  if(t.attempts?.some(a=>a.operations?.some(sreNeedsVerification)))return {label:'变更待核实',status:'failed'};
  if(t.attempts?.some(a=>a.operations?.some(op=>op.status==='dispatched')))return {label:'原操作仍在执行',status:'investigating'};

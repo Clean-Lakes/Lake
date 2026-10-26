@@ -53,6 +53,43 @@ func TestReplyTimingPersistsPerMessageAndExcludesQueueWaiting(t *testing.T) {
 		t.Fatal("deleted session orphaned timings")
 	}
 }
+func TestHistoricalPausedSRETaskDoesNotFailLaterReplyTiming(t *testing.T) {
+	b, h := fixture(t)
+	id, resource := newSession(t, h)
+	task, err := b.Store.CreateSRETask(ai.SRETask{SessionID: id, RequestID: "historical_pause", Goal: "历史暂停任务", Scope: []string{resource}, Mode: "plan_only", TokenBudget: 128000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = b.Store.MutateSRETask(id, task.ID, 0, "paused_fixture", func(v *ai.SRETask) error { v.Status = "paused"; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	b.Store.update(func() any {
+		saved := b.Store.sreTask(id, task.ID)
+		saved.UpdatedAt = "2020-01-01T00:00:00Z"
+		b.Store.exec("UPDATE sreTasks SET body=?,updatedAt=? WHERE id=?", jsonText(saved), saved.UpdatedAt, task.ID)
+		return nil
+	})
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			fmt.Fprint(w, `{"data":[]}`)
+			return
+		}
+		emitModel(w, "本轮检查已完成。", nil)
+	}))
+	defer provider.Close()
+	defer b.Close()
+	b.Models.Save(&ai.Model{URL: provider.URL + "/v1/chat/completions", Name: "historical-pause-fixture", Protocol: "openai"})
+	message := apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "再查一下"}, 202)
+	awaitQueueWorkers(t, b)
+	rows := objects(b.Store.Snapshot(id)["replyTimings"])
+	if len(rows) != 1 || rows[0]["messageId"] != message["id"] || rows[0]["status"] != "completed" {
+		t.Fatal("historical pause failed a completed reply", rows)
+	}
+	if b.Store.Session(id)["status"] != "completed" {
+		t.Fatal("historical pause kept the session failed")
+	}
+}
+
 func TestReplyTimingFinalizesCompletionFailureAndAbort(t *testing.T) {
 	for _, mode := range []string{"completed", "failed", "cancelled"} {
 		t.Run(mode, func(t *testing.T) {

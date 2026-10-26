@@ -23,6 +23,7 @@ type UserQuestion struct {
 	MultiSelect bool             `json:"multi_select,omitempty"`
 }
 type QuestionRequest struct {
+	Pilot            *PilotChoice        `json:"pilot,omitempty"`
 	Answers          map[string][]string `json:"answers,omitempty"`
 	Call             *Call               `json:"call,omitempty"`
 	RuntimeSessionID string              `json:"runtimeSessionId,omitempty"`
@@ -224,14 +225,19 @@ func (e *Engine) sessionApprovalTarget(ctx context.Context, s *session, call Cal
 	return err
 }
 
-func (e *Engine) askQuestion(ctx context.Context, s *session, call Call) (any, error) {
+func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot ...*PilotChoice) (any, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 	var input struct {
 		Questions []UserQuestion `json:"questions"`
 	}
-	if json.Unmarshal([]byte(call.Arguments), &input) != nil || len(input.Questions) < 1 || len(input.Questions) > 3 {
+	if len(pilot) > 0 && pilot[0] != nil {
+		input.Questions = []UserQuestion{{ID: "pilot_" + hash(js(pilot[0].Directions))[:12], Title: "选择当前步骤的方向或命令"}}
+	} else if json.Unmarshal([]byte(call.Arguments), &input) != nil {
+		return nil, errors.New("invalid question arguments")
+	}
+	if len(input.Questions) < 1 || len(input.Questions) > 3 {
 		return nil, errors.New("questions must contain 1..3 items")
 	}
 	seen := map[string]bool{}
@@ -256,6 +262,9 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call) (any, e
 		return questionResult(input.Questions, previous, true), nil
 	}
 	req := &QuestionRequest{ID: uid(), Questions: input.Questions}
+	if len(pilot) > 0 {
+		req.Pilot = pilot[0]
+	}
 	s.mu.Lock()
 	questionConfig := s.state.Config
 	s.mu.Unlock()
@@ -322,6 +331,9 @@ func (e *Engine) ReplyQuestionWithTarget(id, requestID string, answers map[strin
 		return errors.New("question expired")
 	}
 	if err := validateQuestionAnswers(req, answers); err != nil {
+		return err
+	}
+	if err := e.recordPilotSelection(req, answers); err != nil {
 		return err
 	}
 	if scope != nil {
@@ -400,6 +412,10 @@ func (e *Engine) configuredExtensionTools(c Config, list []Tool) []Tool {
 }
 
 func validateQuestionAnswers(req *QuestionRequest, answers map[string][]string) error {
+	if req.Pilot != nil {
+		_, _, err := pilotSelection(req, answers)
+		return err
+	}
 	allowed := map[string]UserQuestion{}
 	for _, q := range req.Questions {
 		allowed[q.ID] = q

@@ -32,7 +32,7 @@ export const ReasonStep = memo(function ReasonStep({card}: {card: AICard}) {
   return card.content ? <li className="thinking-step thinking-reason"><span className="thinking-step-marker"><i/></span><div className="thinking-prose"><Markdown remarkPlugins={[remarkGfm]} skipHtml components={{a: props => <a {...props} target="_blank" rel="noopener noreferrer"/>}}>{card.content}</Markdown></div></li> : null;
 }, (a, b) => sameCard(a.card, b.card));
 
-export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, onInspect, resourceRow=false, continuing=false, resource, stage,miniScope }: { cards: AICard[]; live: boolean; onInspect?: () => void; resourceRow?:boolean; continuing?:boolean; resource?:ProgressResource; stage?:ReactNode;miniScope?:MiniBoxScope }) {
+export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, onInspect, resourceRow=false, continuing=false, resource, stage,stagePreview,miniScope }: { cards: AICard[]; live: boolean; onInspect?: () => void; resourceRow?:boolean; continuing?:boolean; resource?:ProgressResource; stage?:ReactNode;stagePreview?:string;miniScope?:MiniBoxScope }) {
   // Host command previews open in the dispatch render, before history arrives.
   const disclosureOpen=useContext(ExecutionDetailsOpen);
   const terminalKind=resource?.kind==='ssh'||resource?.kind==='local'?resource.kind:undefined;
@@ -62,14 +62,14 @@ export const ThinkingTimeline = memo(function ThinkingTimeline({ cards, live, on
     : executing);
   const label = [description,state].filter(Boolean).join(' · ');
   const panelId = `thinking-${cards[0]!.id}`;
-  return <section className={`thinking-timeline ${resourceRow ? "is-resource-row" : ""} ${live ? "is-live" : ""} ${executing ? "is-executing" : ""} ${progressing ? "is-continuing" : ""}`} aria-label="思考与操作过程">
-    <button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} onClick={() => { inspected.current=true;onInspect?.(); setOpen(!open); }}>
-      <span className="thinking-process-icon"><ExecutionIcon card={currentTool} active={iconActive} resourceKind={resource?.kind}/></span><span className="thinking-label">{label}</span>{resourceRow&&tools.length>1&&<small className="thinking-operation-count">{tools.length} 项</small>}<svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
+  return <section className={`thinking-timeline ${resourceRow ? "is-resource-row" : ""} ${live ? "is-live" : ""} ${executing ? "is-executing" : ""} ${progressing ? "is-continuing" : ""} ${stagePreview ? "has-stage-preview" : ""}`} aria-label="思考与操作过程">
+    <button type="button" className="thinking-toggle" aria-expanded={open} aria-controls={panelId} title={stagePreview ? `${label} · ${stagePreview}` : undefined} onClick={() => { inspected.current=true;onInspect?.(); setOpen(!open); }}>
+      <span className="thinking-process-icon"><ExecutionIcon card={currentTool} active={iconActive} resourceKind={resource?.kind}/></span><span className="thinking-label">{label}</span>{resourceRow&&tools.length>1&&<small className="thinking-operation-count">{tools.length} 项</small>}{stagePreview&&<span className="thinking-label thinking-stage-preview">{stagePreview}</span>}<svg className={`thinking-chevron ${open ? "is-open" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
     </button>
-    {stage}
     {(open||hasOpened.current&&miniCards.length>0) && <div className="thinking-detail-panel" id={panelId} hidden={!open} inert={!open}>
+      {stage}
       {tools.length > 0 && <ol className="thinking-steps">{tools.map(card => miniCards.includes(card)?card.id===miniCards[0]!.id?<li className="thinking-step thinking-tool" key={card.id}><span className="thinking-step-marker"><ExecutionIcon card={card} size={20}/></span><MiniBox scope={miniScope!} resource={resource!.id!} kind={terminalKind!} cards={miniCards} onInspect={onInspect}/><details className="mini-box-audit" onToggle={event=>setCommandsOpen(event.currentTarget.open)}><DisclosureSummary>原始执行记录 · {miniCards.length}</DisclosureSummary>{commandsOpen&&<ol className="thinking-steps">{miniCards.map(item=><ToolStep card={item} key={item.id} hideTarget onInspect={onInspect}/>)}</ol>}</details></li>:null:<ToolStep card={card} key={card.id} active={iconActive&&currentTool?.id===card.id} hideTarget={!!resource} onInspect={onInspect}/>)}</ol>}
       {thoughts.length > 0 && <details className="thinking-raw-records" onToggle={event => setRawOpen(event.currentTarget.open)}><DisclosureSummary>原始思考记录</DisclosureSummary>{rawOpen && <ol className="thinking-steps">{thoughts.map(card => <ReasonStep card={card} key={card.id}/>)}</ol>}</details>}
     </div>}
   </section>;
-}, (a, b) => a.miniScope === b.miniScope && a.stage === b.stage && a.resource?.id === b.resource?.id && a.resource?.name === b.resource?.name && a.resource?.kind === b.resource?.kind && a.resourceRow === b.resourceRow && a.continuing === b.continuing && a.live === b.live && a.onInspect === b.onInspect && a.cards.length === b.cards.length && a.cards.every((card, i) => sameCard(card, b.cards[i]!)));
+}, (a, b) => a.miniScope === b.miniScope && a.stage === b.stage && a.stagePreview === b.stagePreview && a.resource?.id === b.resource?.id && a.resource?.name === b.resource?.name && a.resource?.kind === b.resource?.kind && a.resourceRow === b.resourceRow && a.continuing === b.continuing && a.live === b.live && a.onInspect === b.onInspect && a.cards.length === b.cards.length && a.cards.every((card, i) => sameCard(card, b.cards[i]!)));

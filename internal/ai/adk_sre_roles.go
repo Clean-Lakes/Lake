@@ -18,6 +18,7 @@ type sreRoleContext struct {
 	Step                                         SREPlanStep
 	NoTools                                      bool
 	FullTools                                    bool
+	Pilot                                        *PilotTaskPolicy
 	dispatchRelease                              func()
 }
 type SRERoleResult struct {
@@ -177,6 +178,7 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 		child.Bridge = nil
 	}
 	cc := c
+	cc.MaxSteps = pilotRoleRoundLimit(task, attemptID, w.runID, cc.MaxSteps)
 	cc.sreCoordinator = false
 	cc.Assets = assets
 	cc.Directories = nil
@@ -194,7 +196,7 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 	if task.LatestPlan() != nil {
 		revision = task.LatestPlan().ID
 	}
-	cc.sre = &sreRoleContext{PlanRevisionID: revision, TaskID: task.ID, PlanRunID: runID, AttemptID: attemptID, Role: step.Role, Step: step, NoTools: noTools, FullTools: true}
+	cc.sre = &sreRoleContext{PlanRevisionID: revision, TaskID: task.ID, PlanRunID: runID, AttemptID: attemptID, Role: step.Role, Step: step, NoTools: noTools, FullTools: true, Pilot: task.Pilot}
 	cc.targetScope = &TargetScope{ResourceIDs: append([]string(nil), step.ResourceIDs...)}
 	if len(assets) == 1 {
 		cc.AssetRef = assets[0].ID
@@ -204,6 +206,12 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 	}
 	b, _ := embedded.ReadFile("prompts/sre-" + string(step.Role) + ".txt")
 	cc.UserPrompt = string(b)
+	if task.Pilot != nil && !noTools {
+		cc.UserPrompt += "\n[LAKE PILOT]\nYou are working on your assigned step only. At the FIRST guided resource operation, offer 2..4 distinct step-level strategies with concrete next commands. Investigators and verifiers must not self-exempt because a task is read-only, limited to one directory or begins with reading a manifest; those constraints still allow different methods. A single strategy is allowed only for a runtime-frozen action or terminal summary gap, with single_direction_reason. Cover the whole assigned step: do not turn ls, one file, grep, a fallback or a retry into a new direction. After the user chooses, retain that direction ID, title and reason verbatim for all continuation batches and do not request consent again inside that purpose. Exact command selections freeze the chosen operations. A selected direction delegates command choice within that same direction: propose replacement batches with its original ID, title and purpose using pilot_offer_directions; the runtime accepts them without another user selection. Step delegation and automatic advance permit choosing other directions and commands within your role and assigned targets: execute directly, without repeatedly calling pilot_offer_directions. Batch independent known reads into one tool turn where supported; collect each source once unless a new observation or independent verifier requires a reread. Structured facts and peer evidence are already handed off; do not repeatedly poll sre_team_read or publish acknowledgments. Coordinator consumes specialist reports and writes the final answer once; do not redo their counts or tables unless a specific evidence conflict requires it. After a failed read either report failure clearly or collect a successful alternative and use pilot_read_recovery to link the replacement before finishing. Before the final report, check pilot_execution_policy.read_gaps and resolve actual gaps or explicitly report incomplete. The structured grep tool normalizes no matches to exitCode 0; when raw grep exit status is required use one simple shell grep -c call. Shell results already include exitCode: do not add echo $? or a wrapper just to obtain it. Do not repeatedly republish narration or widen searches without new evidence. Never treat a selection as approval for changes. Keep your own role, targets, evidence and completion criteria distinct from peers. Internal team communication and reading existing evidence do not require a choice. Do not finish with an unexecuted promise."
+		if task.Pilot.AutoAdvance {
+			cc.UserPrompt += "\nThis task uses automatic advance: choose the suitable direction and execute within current permissions; do not ask for path selection. Normal approvals remain required."
+		}
+	}
 	if attemptID != "" {
 		cc.UserPrompt += sreOutputInstruction(step)
 	}
@@ -375,6 +383,10 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 	} else {
 		err = child.ExecuteTurn(jobCtx, w.runID, TurnInput{UserText: prompt})
 	}
+	remainingRounds := cc.MaxSteps
+	if err == nil && cc.sre.Pilot != nil && !noTools {
+		remainingRounds, err = child.repairPilotReadCompletion(jobCtx, w.runID, cc)
+	}
 	if err == nil && step.Role == SREVerifier && step.Action != nil {
 		cs, ce := child.get(w.runID)
 		if ce != nil {
@@ -430,7 +442,10 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 		if parseErr == nil {
 			parseErr = ValidateSRERoleReport(report, out.Evidence)
 		}
-		if parseErr != nil {
+		if parseErr != nil && remainingRounds == 0 {
+			err = parseErr
+		}
+		if parseErr != nil && remainingRounds > 0 {
 			cc.sre.NoTools = true
 			w.mu.Lock()
 			w.finalizing = true

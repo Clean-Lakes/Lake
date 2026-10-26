@@ -168,6 +168,7 @@ func (e *Engine) AgentQuestionReply(parentID, runID, requestID string, answers m
 		return err
 	}
 	child.worker = &agentWorker{parent: e, parentID: parentID, runID: runID}
+	child.sreRepository = e.sreRepository
 	defer child.Shutdown()
 	s, err := child.get(runID)
 	if err != nil {
@@ -180,6 +181,9 @@ func (e *Engine) AgentQuestionReply(parentID, runID, requestID string, answers m
 		return errors.New("question expired")
 	}
 	if err = validateQuestionAnswers(req, answers); err != nil {
+		return err
+	}
+	if err = child.recordPilotSelection(req, answers); err != nil {
 		return err
 	}
 	req.Answers = answers

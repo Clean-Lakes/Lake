@@ -270,7 +270,7 @@ func (e *Engine) command(ctx context.Context, c Config, a map[string]any, comman
 		return nil, errors.New("invalid command")
 	}
 	if a["run_in_background"] == true {
-		return e.startShell(c, a, command)
+		return e.startShell(c, a, command, obj(ctx.Value(backgroundShellSourceKey{})))
 	}
 	return e.execRuntime(ctx, c, a, []string{"/bin/sh", "-c", command}, "")
 }

@@ -110,3 +110,10 @@ test('resource summaries reuse the exact catalog resource icon; lookup retains i
  }
  assert.equal(progressGlyph({...read,title:'list_assets'}),'lakeSearch');
 });
+
+
+test('internal Pilot recovery instructions become a clear task outcome without rewriting reports',()=>{
+ const message='只读检查仍有缺口：可以在当前委托范围内取得替代证据并用 pilot_read_recovery 关联，或将本步报告为失败';
+ const text=displayAiError(message);assert.ok(text.includes('未通过验收'));assert.ok(text.includes('已保留'));assert.ok(!text.includes('pilot_read_recovery'));
+ const report='调查说明：pilot_read_recovery 返回错误';assert.equal(displayAiError(report),report);
+});

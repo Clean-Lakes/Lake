@@ -1,6 +1,8 @@
-import type {AICard, TerminalHistory, TerminalSession} from '../../shared/contracts';
+import type {AICard, TerminalHistory, TerminalSession, TerminalEntry} from '../../shared/contracts';
 
-export type MiniBoxScope = {session:string;terminals:TerminalSession[];startedAt:string;endedAt?:string;live:boolean;waiting?:boolean;connected:boolean;multiResource?:boolean};
+export type MiniCommandScope = {owned:string[];calls:Array<{id:string;resource:string;command:string;startedAt:string;terminalId?:string;entryId?:string}>};
+
+export type MiniBoxScope = {session:string;terminals:TerminalSession[];startedAt:string;endedAt?:string;live:boolean;waiting?:boolean;connected:boolean;multiResource?:boolean;commandScope?:MiniCommandScope};
 // Host inspection also executes real command blocks through the same terminal.
 export const isTerminalCommand = (card:AICard) => ['shell','terminal_execute_command','inspect_host'].includes(card.title ?? '');
 
@@ -10,7 +12,21 @@ export function miniEntries(history:TerminalHistory,scope:MiniBoxScope,resource:
   if(!Number.isFinite(start))return [];
   return history.entries.filter(entry=>entry.actor==='agent'&&entry.originSessionId===scope.session
     &&entry.terminalId===history.terminal.id&&entry.generation===history.terminal.generation
-    &&Date.parse(entry.startedAt??entry.createdAt)>=start&&Date.parse(entry.startedAt??entry.createdAt)<end);
+    &&Date.parse(entry.startedAt??entry.createdAt)>=start&&Date.parse(entry.startedAt??entry.createdAt)<end&&miniEntryOwned(entry,scope,resource));
+}
+
+// A Pilot role shares its parent session with peers. Exact recorded handles win;
+// otherwise only the uniquely latest matching dispatch can own the entry.
+function miniEntryOwned(entry:TerminalEntry,scope:MiniBoxScope,resource:string){
+  if(!scope.commandScope)return true;
+  const time=Date.parse(entry.startedAt??entry.createdAt);
+  const matches=scope.commandScope.calls.filter(call=>call.resource===resource&&call.command===entry.command
+    &&(!call.terminalId||call.terminalId===entry.terminalId)
+    &&(call.entryId?call.entryId===entry.id:time>=Date.parse(call.startedAt)&&time-Date.parse(call.startedAt)<=2000));
+  const exact=matches.filter(call=>!!call.entryId);
+  const latest=Math.max(...matches.map(call=>Date.parse(call.startedAt)));
+  const owners=exact.length?exact:matches.filter(call=>Date.parse(call.startedAt)===latest);
+  return owners.length===1&&scope.commandScope.owned.includes(owners[0]!.id);
 }
 
 export function miniTarget(histories:TerminalHistory[]) {

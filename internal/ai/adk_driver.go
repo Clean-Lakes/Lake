@@ -24,6 +24,7 @@ import (
 
 type adkTurnDriver struct {
 	decision              bool
+	terminalRecovery      bool
 	denied                map[string]bool
 	toolMu                sync.Mutex
 	engine                *Engine
@@ -355,6 +356,7 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 		return err
 	}
 	if c.sreCoordinator && !d.decision {
+		d.terminalRecovery = true
 		s.mu.Lock()
 		s.state.History = append(s.state.History, Message{Role: "system", Content: sreDecisionReminder})
 		s.mu.Unlock()

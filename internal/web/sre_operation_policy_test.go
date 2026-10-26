@@ -152,9 +152,9 @@ func testSREReadTimeoutSample(t *testing.T, online bool) {
 
 func TestSREDoneCannotOverwritePausedTaskOrReplyTiming(t *testing.T) {
 	b, sid, _, task := sreStoreFixture(t)
+	b.Store.Begin(sid, "retry", nil)
 	_, err := b.Store.MutateSRETask(sid, task.ID, 0, "paused_fixture", func(v *ai.SRETask) error { v.Status = "paused"; return nil })
 	must(err)
-	b.Store.Begin(sid, "retry", nil)
 	b.event(ai.Event{Session: sid, Type: "done", Data: Object{"status": "completed"}})
 	b.finishReplyTiming(sid)
 	if b.Store.Session(sid)["status"] != "failed" {

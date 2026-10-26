@@ -99,6 +99,17 @@ func CatalogForConfig(c Config, capabilities map[string]any) []Tool {
 }
 func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool {
 	list := e.baseSessionCatalog(ctx, id, c)
+	if c.sre != nil && c.sre.Pilot != nil && !c.sre.NoTools && len(list) > 0 {
+		// Durable project knowledge remains owned by the parent conversation.
+		filtered := make([]Tool, 0, len(list))
+		for _, tool := range list {
+			if tool.Name != "save_project_memory" && tool.Name != "forget_project_memory" {
+				filtered = append(filtered, tool)
+			}
+		}
+		list = filtered
+		list = append(list, pilotChoiceTool(), pilotReadRecoveryTool())
+	}
 	if onlineEnabled(c) && (c.sre == nil || !c.sre.NoTools) {
 		list = append(list, onlineTool())
 	}

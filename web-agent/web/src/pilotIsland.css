@@ -1,0 +1,56 @@
+/* Current action, peer activity and measured plan progress share one quiet row. */
+.pilot-island{flex:0 0 auto;min-width:0;--pilot-island-color:var(--text-muted)}
+.pilot-island[data-tone="active"]{--pilot-island-color:var(--info)}
+.pilot-island[data-tone="attention"]{--pilot-island-color:var(--warning)}
+.pilot-island[data-tone="failed"]{--pilot-island-color:var(--danger)}
+.pilot-island-trigger{display:flex;align-items:center;gap:12px;height:32px;margin:0;padding:0 0 0 14px;border:0;border-left:1px solid var(--border);border-radius:0;background:transparent;color:var(--foreground);font:inherit;font-size:var(--font-size-ui);text-align:start;cursor:pointer}
+.pilot-island-trigger:hover{background:transparent}
+.pilot-island-trigger:focus-visible{outline:2px solid var(--focus-outline);outline-offset:-2px}
+.pilot-action-avatar{display:inline-flex;flex-shrink:0}
+.pilot-island-action{display:flex;flex-direction:column;justify-content:center;gap:1px;width:210px;min-width:0;line-height:17px}
+.pilot-island-action-line{display:flex;align-items:center;gap:8px;min-width:0}
+.pilot-island-action strong{font:inherit;flex-shrink:0}
+.pilot-action-state-dot{display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:var(--pilot-island-color);vertical-align:1px}
+.pilot-island-action-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pilot-island[data-tone="attention"] .pilot-island-action-label,.pilot-island[data-tone="failed"] .pilot-island-action-label{color:var(--pilot-island-color)}
+.pilot-island-action>small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted);font-size:var(--font-size-toolbar);line-height:14px}
+.pilot-island-progress{color:var(--session-state-color,var(--text-muted));transition:color 160ms ease;display:flex;align-items:center;gap:9px;flex-shrink:0}
+.pilot-island-ended{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0;border:1.5px solid currentColor;border-radius:50%;color:inherit}
+.pilot-island-ring{width:28px;height:28px;flex-shrink:0;stroke-width:2.1;stroke-linecap:round}
+.pilot-ring-track{stroke:var(--border)}
+.pilot-ring-value{stroke:var(--session-state-color,var(--pilot-island-color));transition:stroke-dasharray 240ms ease,stroke 160ms ease}
+.pilot-island-progress>svg:last-child{color:var(--text-muted);transition:transform 220ms cubic-bezier(.22,1,.36,1)}
+.pilot-island-trigger[aria-expanded="true"] .pilot-island-progress>svg:last-child{transform:rotate(180deg)}
+.header-state-area{display:flex;align-items:center;flex:0 0 auto;min-width:0}
+.header-morph-slot{display:block;overflow:hidden;flex:0 0 auto;opacity:0;transition:width 280ms cubic-bezier(.22,1,.36,1),opacity 120ms ease}
+.header-morph-slot.is-visible{opacity:1}
+.header-morph-content{display:flex;align-items:center;width:max-content;min-height:32px}
+.header-normal-state .session-state-badge{margin-left:0}
+.workspace.has-floating-header>.workspace-header{min-height:54px}
+.workspace.has-floating-header .crumb-project{flex:0 0 auto;max-width:16ch}
+@container(max-width:900px){.workspace.has-floating-header .crumb-project,.workspace.has-floating-header .crumb-slash{display:none}.pilot-island-action{width:170px}}
+@container(max-width:700px){.pilot-island-trigger{padding-left:9px;gap:9px}.pilot-island-action{width:145px}}
+@container(max-width:480px){.pilot-action-avatar{display:none}.pilot-island-action{width:94px}.pilot-island-action-line{gap:5px}.pilot-island-action-line>strong{display:none}.pilot-island-progress{gap:6px}.pilot-island-ring,.pilot-island-ended{width:24px;height:24px}.workspace.has-floating-header .breadcrumbs>svg,.workspace.has-floating-header .breadcrumbs strong>svg{display:none}}
+@media(prefers-reduced-motion:reduce){.header-morph-slot,.pilot-ring-value,.pilot-island-progress,.pilot-island-progress>svg:last-child{transition:none}}
+.pilot-island-panel { position: fixed; z-index: 75; width: min(420px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-settings-panel); corner-shape: var(--corner-window); background: var(--surface); color: var(--foreground); box-shadow: var(--shadow-popover); font-size: var(--font-size-ui); }
+.pilot-island-panel[data-state="closing"] { opacity:0; pointer-events:none; }
+.pilot-island-panel:focus { outline: none; }
+.pilot-island-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pilot-island-panel strong { font-size: inherit; font-weight: var(--font-weight-ui); }
+.pilot-island-detail { margin: 8px 0 12px; color: var(--text-muted); line-height: 1.6; }
+.pilot-island-detail.tone-attention { color: var(--warning); }
+.pilot-island-detail.tone-failed { color: var(--danger); }
+.pilot-island-role-row { padding: 4px 0; border-top: 1px solid var(--border); }
+.pilot-island-role-row > button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px; border: 0; border-radius: var(--radius-settings-control); corner-shape: var(--corner-window); background: transparent; color: var(--foreground); font: inherit; text-align: start; cursor: pointer; }
+.pilot-island-role-row > button:not(:disabled):hover { background: var(--surface-hover); }
+.pilot-island-role-row > button:disabled { opacity: 1; cursor: default; }
+.pilot-island-role-row > button > svg { flex-shrink: 0; }
+.pilot-island-role-copy { flex: 1; min-width: 0; }
+.pilot-island-role-copy > strong,.pilot-island-role-copy > small { display: block; font-size: inherit; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pilot-island-role-copy > small { color: var(--text-muted); margin-top: 4px; }
+.pilot-island-role-count { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-muted); }
+.pilot-island-role-state { width: 4em; flex-shrink: 0; white-space: nowrap; color: var(--text-muted); text-align: end; }
+.pilot-island-role-state.role-state-running { color: var(--info); }
+.pilot-island-role-state:is(.role-state-waiting_input,.role-state-waiting_approval,.role-state-unknown) { color: var(--warning); }
+.pilot-island-role-state.role-state-failed { color: var(--danger); }
+.pilot-island-plan-link { display: flex; align-items: center; gap: 7px; width: 100%; margin-top: 4px; padding: 12px 0 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; color: var(--text-muted); font: inherit; cursor: pointer; }

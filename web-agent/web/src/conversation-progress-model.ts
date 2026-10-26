@@ -25,6 +25,34 @@ function resourceFor(entry:TranscriptEntry,resources:Resource[]):ProgressResourc
  if(target&&!['当前项目/会话','项目资源目录'].includes(target)&&!sessionFamilies[card.title??''])return {name:target};
 }
 
+// Background cards in older histories have no resource payload. Only the
+// actual dispatch result's shell_id can establish ownership; wait/output cards
+// may carry a stale context target and must never define the job's resource.
+function backgroundResources(entries:TranscriptEntry[],resources:Resource[]){
+ const owners=new Map<string,ProgressResource|undefined>();
+ for(const entry of entries){
+  const card=entry.card;
+  if(!card)continue;
+  let handle='';
+  if(card.type==='shell'&&text(record(card.data).resource_id))handle=card.id;
+  else if(card.type==='operation'&&['shell','terminal_execute_command'].includes(card.title??'')){
+   let result:Record<string,unknown>;try{result=record(JSON.parse(card.content??''))}catch{continue}
+   handle=text(result.shell_id);
+  }
+  if(!handle)continue;
+  const owner=resourceFor(entry,resources),prior=owners.get(handle);
+  if(!owners.has(handle))owners.set(handle,owner);
+  else if(!prior||!owner||(prior.id||prior.name)!==(owner.id||owner.name))owners.set(handle,undefined);
+ }
+ return owners;
+}
+function backgroundResource(entry:TranscriptEntry,owners:Map<string,ProgressResource|undefined>){
+ const card=entry.card;if(!card)return;
+ const args=record(record(card.data).arguments);
+ const handle=card.type==='shell'?card.id:['wait_shell','shell_output','kill_shell','waitShell','shellOutput','forceKillShell'].includes(card.title??'')?text(args.shell_id):'';
+ return handle?owners.get(handle):undefined;
+}
+
 // Session tools carry a generic target, but their actual scope is defined by
 // the tool contract. Keep domains separate instead of folding every generic
 // “current project/session” row together. Handle-based tools need a real handle.
@@ -61,8 +89,9 @@ function operationGroupKey(entry:TranscriptEntry,targetRefs:Map<string,Set<strin
 /** One resource/family row per user turn, anchored at its first appearance.
  * Later reasoning, prose, other resources and attention states never create
  * another row for the same identity. Stored entries and child controls stay intact. */
-export function conversationGroups(entries:TranscriptEntry[],resources:Resource[]=[]):ConversationGroup[] {
+export function conversationGroups(entries:TranscriptEntry[],resources:Resource[]=[],knownBackground?:Map<string,ProgressResource|undefined>):ConversationGroup[] {
  const result:ConversationGroup[]=[];
+ const background=knownBackground??backgroundResources(entries,resources);
  for(const turn of transcriptTurns(entries)){
   const rows=new Map<string,ConversationGroup>();
   let active:ConversationGroup|undefined,thoughts:ConversationGroup|undefined;
@@ -84,7 +113,7 @@ export function conversationGroups(entries:TranscriptEntry[],resources:Resource[
      else {thoughts={progress:true,entries:[entry]};result.push(thoughts)}
      continue;
     }
-    const resource=resourceFor(entry,resources);
+    const resource=backgroundResource(entry,background)??resourceFor(entry,resources);
     const key=operationGroupKey(entry,targetRefs,resource);
     if(key){
      let row=rows.get(key);
@@ -103,8 +132,9 @@ export function conversationGroups(entries:TranscriptEntry[],resources:Resource[
  * exceptional states and decision controls remain intact. */
 export function conversationDisplayGroups(entries:TranscriptEntry[],active=false,resources:Resource[]=[]):ConversationGroup[] {
  if(!active)return conversationGroups(entries,resources);
+ const background=backgroundResources(entries,resources);
  return transcriptTurns(entries).flatMap(turn=>{
-  const groups=conversationGroups(turn,resources);
+  const groups=conversationGroups(turn,resources,background);
   const firstProgress=groups.findIndex(group=>group.progress);
   if(firstProgress<0)return groups;
   const isProse=(group:ConversationGroup)=>!group.progress&&group.entries.every(entry=>

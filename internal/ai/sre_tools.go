@@ -44,6 +44,9 @@ func sreTrackedCall(c Config, call Call) bool {
 	if c.sre == nil || c.sre.AttemptID == "" {
 		return false
 	}
+	if c.sre.Pilot != nil && !pilotInternalTool(call.Name) {
+		return true
+	}
 	if !c.sre.FullTools {
 		return c.sre.Role == SREExecutor
 	}
@@ -79,7 +82,7 @@ func (e *Engine) recordSREToolResult(c Config, call Call, a map[string]any, resu
 		return result, toolErr
 	}
 	observationErr := toolErr
-	if observationErr == nil && obj(result)["exitCode"] != nil && num(obj(result)["exitCode"], 0) != 0 {
+	if observationErr == nil && obj(result)["exitCode"] != nil && num(obj(result)["exitCode"], 0) != 0 && !(c.sre.Pilot != nil && e.sreCallReadOnly(c, call) && sreReadNoMatches(call, result)) {
 		observationErr = errors.New("工具退出码非零，不能作为成功证据")
 	}
 	if observationErr == nil && (obj(result)["status"] == "running" || obj(result)["status"] == "unknown" || obj(result)["running"] == true) {
@@ -88,6 +91,26 @@ func (e *Engine) recordSREToolResult(c Config, call Call, a map[string]any, resu
 	value, recordErr := e.recordObservation(c, as.ID, call.Name, result, observationErr)
 	if recordErr != nil && observationErr == nil {
 		return result, recordErr
+	}
+	if c.sre.Pilot != nil && str(obj(value)["evidence_id"]) != "" {
+		_, linkErr := e.sreRepository.MutateSRETask(e.worker.parentID, c.sre.TaskID, 0, "pilot_operation_evidence", func(task *SRETask) error {
+			for i := range task.Attempts {
+				if task.Attempts[i].ID != c.sre.AttemptID {
+					continue
+				}
+				for j := range task.Attempts[i].Operations {
+					op := &task.Attempts[i].Operations[j]
+					if op.Call.ID == call.ID {
+						op.EvidenceIDs = []string{str(obj(value)["evidence_id"])}
+						return nil
+					}
+				}
+			}
+			return nil
+		})
+		if linkErr != nil && toolErr == nil {
+			return result, linkErr
+		}
 	}
 	if result == nil {
 		return value, toolErr

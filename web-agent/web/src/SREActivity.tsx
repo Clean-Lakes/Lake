@@ -1,15 +1,19 @@
 import {useEffect,useState} from 'react';
 import type {AgentRun,SRETask,SREStepAttempt,SRETranscriptEntry} from '../../shared/contracts';
 import {StatusText} from './StatusText';
+import {sreIncompleteRead} from './sreOperationPolicy';
 import {sreStatus} from './sreTranscript';
 
 export function sreRoleLiveState(task:SRETask,entry:SRETranscriptEntry,run?:AgentRun,attempt?:SREStepAttempt){
  const current=task.runs?.at(-1);
  const owned=!!run&&(!run.sreTaskId||run.sreTaskId===task.id)&&(!attempt||!current||attempt.planRunId===current.id);
- const unknown=attempt?.operations?.some(o=>o.status==='unknown')??false;
- const waiting=owned&&(!!run?.pending||run?.status==='waiting_approval');
- const active=entry.kind==='progress'&&owned&&run?.status==='running'&&['active','waiting_approval'].includes(task.status)&&!waiting&&!unknown&&(!attempt||attempt.status==='running');
- const label=unknown?'结果待核实':waiting?'等待确认':owned&&run?.status!=='running'?(sreStatus[run!.status]??run!.status):!['active','waiting_approval'].includes(task.status)?(sreStatus[task.status]??task.status):active?'执行中':entry.kind==='progress'?'状态待更新':'已结束';
+ const unknown=attempt?.operations?.some(o=>o.status==='unknown'&&(!task.pilot||o.risk!=='readonly'))??false;
+ const liveTask=['active','waiting_approval'].includes(task.status);
+ const liveRun=owned&&liveTask&&!!run&&['running','queued','waiting_input','waiting_approval'].includes(run.status)&&(!attempt||['running','queued','waiting_input','waiting_approval'].includes(attempt.status));
+ const waiting=liveRun&&(!!run?.pending||run?.status==='waiting_approval');
+ const question=liveRun&&!!run?.question;
+ const active=entry.kind==='progress'&&owned&&run?.status==='running'&&['active','waiting_approval'].includes(task.status)&&!waiting&&!unknown&&!question&&(!attempt||attempt.status==='running');
+ const label=unknown?'结果待核实':waiting?'等待确认':question?(run?.question?.pilot?'等待选择':'等待补充'):task.pilot&&!active&&sreIncompleteRead(attempt?.operations,attempt?.readRecoveries)?'检查未完成':owned&&run?.status!=='running'?(sreStatus[run!.status]??run!.status):!['active','waiting_approval'].includes(task.status)?(sreStatus[task.status]??task.status):active?'执行中':entry.kind==='progress'?'状态待更新':'已结束';
  return {active,label,waiting,unknown};
 }
 export function sreActivityLabel(run:AgentRun){
@@ -26,11 +30,12 @@ export function sreActivityLabel(run:AgentRun){
  if(['execute_sql','redis_command','list_db_objects','db_table_ddl'].includes(name))return '正在检查数据服务';
  return '正在处理工具调用';
 }
-export function SREActivity({run,attempt}:{run:AgentRun;attempt?:SREStepAttempt}){
+export function SREActivity({run,attempt,snapshotClock=false}:{run:AgentRun;attempt?:SREStepAttempt;snapshotClock?:boolean}){
  const [now,setNow]=useState(Date.now);
- useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer)},[]);
- const seconds=Math.max(0,Math.floor((now-Date.parse(run.startedAt??run.createdAt))/1000));
+ useEffect(()=>{if(snapshotClock)return;const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer)},[snapshotClock]);
+ const activityTime=snapshotClock?Date.parse(run.activityUpdatedAt??run.startedAt??run.createdAt):now;
+ const seconds=Math.max(0,Math.floor((activityTime-Date.parse(run.startedAt??run.createdAt))/1000));
  const elapsed=Number.isFinite(seconds)?seconds>=60?`${Math.floor(seconds/60)}分${seconds%60}秒`:`${seconds}秒`:'';
  const evidence=Math.max(run.evidence?.length??0,attempt?.evidence?.length??0);
- return <div className="sre-live-activity" aria-label="专员正在执行"><span className="sre-activity-orbit" aria-hidden="true"/><span role="status"><StatusText active text={sreActivityLabel(run)}/></span>{elapsed&&<time aria-label={`已运行${elapsed}`}>{elapsed}</time>}{(run.toolCount??0)>0&&<span>已调用 {run.toolCount} 次工具</span>}{evidence>0&&<span>已采集 {evidence} 项证据</span>}</div>
+ return <div className={`sre-live-activity${snapshotClock?' is-stable':''}`} aria-label="专员正在执行"><span className="sre-activity-orbit" aria-hidden="true"/><span role="status"><StatusText active text={sreActivityLabel(run)}/></span>{elapsed&&<time title={snapshotClock?'最近一次活动时的运行用时':undefined} aria-label={`${snapshotClock?'最近活动时':''}已运行${elapsed}`}>{elapsed}</time>}{(run.toolCount??0)>0&&<span>已调用 {run.toolCount} 次工具</span>}{evidence>0&&<span>已采集 {evidence} 项证据</span>}</div>
 }

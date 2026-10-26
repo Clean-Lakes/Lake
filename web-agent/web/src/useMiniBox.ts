@@ -6,6 +6,7 @@ import {miniEntries,type MiniBoxScope} from './miniBoxModel';
 export function useMiniBox(scope:MiniBoxScope,resource:string) {
   const key=JSON.stringify([scope.session,resource,scope.startedAt,scope.endedAt]);
   const candidates=JSON.stringify(scope.terminals.filter(term=>term.resourceId===resource&&term.generation).map(({id,generation})=>({id,generation})));
+  const commandScope=JSON.stringify(scope.commandScope??null);
   const [state,setState]=useState<{key:string;histories:TerminalHistory[];stale:boolean}>({key:'',histories:[],stale:false});
   const refreshRef=useRef(()=>{});
   useEffect(()=>{
@@ -32,8 +33,8 @@ export function useMiniBox(scope:MiniBoxScope,resource:string) {
     const timer=scope.live?setInterval(()=>void refresh(),650):undefined;
     const visibility=()=>{if(!document.hidden)void refresh();};document.addEventListener('visibilitychange',visibility);
     return()=>{disposed=true;controller.abort();clearInterval(timer);refreshRef.current=()=>{};document.removeEventListener('visibilitychange',visibility);};
-  },[key,candidates,scope.live,scope.connected]);
+  },[key,candidates,scope.live,scope.connected,commandScope]);
   const currentTerminals=JSON.parse(candidates) as Array<{id:string;generation:string}>;
-  const histories=state.key===key?state.histories.filter(history=>currentTerminals.some(term=>term.id===history.terminal.id&&term.generation===history.terminal.generation)):[];
+  const histories=state.key===key?state.histories.filter(history=>currentTerminals.some(term=>term.id===history.terminal.id&&term.generation===history.terminal.generation)).map(history=>({...history,entries:miniEntries(history,scope,resource)})).filter(history=>history.entries.length>0):[];
   return {histories,stale:!scope.connected||state.key===key&&state.stale,refresh:()=>refreshRef.current()};
 }
