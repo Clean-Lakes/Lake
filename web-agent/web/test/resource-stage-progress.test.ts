@@ -5,7 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import type {Resource,SessionSnapshot} from '../../shared/contracts';
 import type {TranscriptEntry} from '../src/timeline';
 import {conversationGroups} from '../src/conversation-progress-model';
-import {resourceStageProgress} from '../src/resourceStageProgress';
+import {resourceStageProgress,resourceStagePreview} from '../src/resourceStageProgress';
 import {AITranscript} from '../src/AIPanel';
 const at='2026-10-21T01:00:00Z';
 const resources=[{id:'host-a',name:'192.168.2.141',kind:'ssh'},{id:'host-b',name:'演示数据库',kind:'database'}] as Resource[];
@@ -52,7 +52,7 @@ test('real final replies stay in prose; incomplete, stopped, plain and role repo
  assert.equal(project([tool('a')],false,true).ids.size,0);
  assert.equal(project([...entries,{id:'agent',at,agentRun:{id:'role'}} as TranscriptEntry]).ids.size,0);
 });
-test('visible preview is under its resource even when actions are folded; previous stages are lazy',()=>{
+test('the latest progress caption shares its resource header; full text and prior stages are disclosed',()=>{
  const entries=[tool('a'),say('old-stage','第一阶段结果'),tool('a2'),say('latest-stage','最新阶段结果'),tool('ongoing')];
  const snapshot={session:{id:'s'},messages:[{id:'u',sessionId:'s',role:'user',text:'检查',createdAt:at}],actions:[],resources,ai:{session:'s',status:'running',cardsOffset:0,cards:entries.map(entry=>entry.card!)}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
@@ -94,4 +94,16 @@ test('multi-resource execution keeps its resource rows without an extra overall 
  assert.ok(!html.includes('is-overall'));
  assert.ok(html.includes('源库')&&html.includes('目标端'));
  assert.ok(!html.includes('class="reply-activity"'));
+});
+
+test('a collapsed resource keeps its compact caption while full Markdown is lazy',()=>{
+ const entries=[tool('db',resources[1]),say('stage','**恢复正常**，继续读取 `status.json`。\n下一步核对 [完整记录](/record)。'),tool('db2',resources[1])];
+ const snapshot={session:{id:'s'},messages:[{id:'u',sessionId:'s',role:'user',text:'检查',createdAt:at}],actions:[],resources,ai:{session:'s',status:'running',cardsOffset:0,cards:entries.map(entry=>entry.card!)}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ const caption=resourceStagePreview(entries[1]);
+ assert.equal(caption,'恢复正常，继续读取 status.json。 下一步核对 完整记录。');
+ assert.ok(html.includes('class="thinking-label thinking-stage-preview"'));
+ assert.ok(html.includes(caption));
+ assert.ok(html.includes('aria-expanded="false"'));
+ assert.ok(!html.includes('data-stage-entry="stage"'),'full stage mounts only when the resource is expanded');
 });

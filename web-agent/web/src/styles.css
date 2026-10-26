@@ -359,6 +359,9 @@ a { color: inherit; }
 .command-button:hover:not(:disabled) { background: var(--surface-selected); }
 .composer-dock { position: relative; z-index: 2; flex: 0 0 auto; width: 100%; padding: 8px var(--session-gutter, 24px) 16px; background: var(--background); }
 .composer-dock::before { content: ""; position: absolute; bottom: 100%; left: 0; right: 0; height: 40px; background: linear-gradient(to bottom, transparent, var(--background)); pointer-events: none; }
+/* Approval and question surfaces share the composer's responsive content rail. */
+.composer-session-controls { width:min(960px,100%); min-width:0; margin-inline:auto; }
+.composer-session-controls > :is(.attachment-approval,.ai-pending,.agent-question) { width:100%; max-width:none; }
 .composer { position: relative; container-type: inline-size; container-name: lake-composer; width: min(960px, 100%); margin-inline: auto; padding: 0; background: transparent; border: 0; box-shadow: none; }
 .composer-input { padding: 8px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-window); background: var(--surface); box-shadow: var(--shadow-popover); }
 .composer-body { display: flex; align-items: flex-end; gap: 10px; }
@@ -1240,6 +1243,10 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 /* Updating a resource summary never changes its collapsed line height. */
 .is-resource-row > .thinking-toggle { display: flex; width: fit-content; max-width: 100%; white-space: nowrap; }
 .is-resource-row > .thinking-toggle > .thinking-label { overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.is-resource-row.has-stage-preview > .thinking-toggle { width:100%; }
+.is-resource-row.has-stage-preview > .thinking-toggle > .thinking-label:not(.thinking-stage-preview) { flex:0 1 auto; max-width:40%; }
+.is-resource-row.has-stage-preview .thinking-stage-preview { flex:1; margin-left:5px; text-align:left; }
+.is-resource-row > .thinking-toggle > .thinking-chevron { flex:none; }
 .is-resource-row .thinking-operation-count { flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
 .ai-turn > .turn-status { margin: 0; flex-shrink: 0; }
@@ -1287,8 +1294,9 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .message-image-preview > header > span { overflow-wrap:anywhere; min-width:0; }
 .message-image-preview > img { display:block; width:auto; height:auto; max-width:min(960px,calc(100vw - 58px)); max-height:calc(100dvh - 110px); object-fit:contain; }
 
-/* Stage results belong to the resource, outside its folded raw operations. */
+/* Full resource progress stays inside the shared resource disclosure. */
 .resource-stage-summary { min-width:0; margin:6px 0 0 28px; color:var(--text-secondary); font-size:var(--font-size-ui); line-height:1.75; }
+.resource-stage-summary + .thinking-steps { margin-top:10px; }
 .resource-stage-current .ai-markdown > :first-child { margin-top:0; }
 .resource-stage-current .ai-markdown > :last-child { margin-bottom:0; }
 .resource-stage-history { margin-top:5px; font-size:var(--font-size-ui); color:var(--text-muted); }

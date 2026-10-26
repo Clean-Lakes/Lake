@@ -31,7 +31,7 @@
   margin-right: 0;
   padding-top: 80px;
 }
-.workspace.has-floating-header .composer { width: var(--session-content-width); }
+.workspace.has-floating-header :is(.composer,.composer-session-controls) { width: var(--session-content-width); }
 .workspace.has-floating-header > .workspace-header + .system-banner { margin-top: 72px; }
 .sidebar-footer .desktop-update-trigger { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; color: var(--text-secondary); }
 .session-nav-row.active ~ .session-actions-trigger { opacity: 1; }
