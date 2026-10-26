@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { atConversationTail, conversationCanScroll, pausesConversationFollow, FollowScroll, observeConversationGrowth } from "../src/followScroll";
+import { atConversationTail, conversationCanScroll, pausesConversationFollow, followsConversationScroll, FollowScroll, observeConversationGrowth } from "../src/followScroll";
 import { sameCard } from "../src/cardEquality";
 
 function fixture(reduced = false) {
@@ -139,4 +139,20 @@ test('conversation observes actual growth, not same-height metadata or content s
   Object.assign(container,{clientHeight:350});resize();assert.equal(requests,4);
   stop();assert.equal(disconnected,2);
  } finally {globalThis.ResizeObserver=previousResize;globalThis.MutationObserver=previousMutation}
+});
+
+test('layout scroll events cannot cancel line-growth following, but reader gestures still pause',()=>{
+ const f=fixture();f.follower.jump();
+ // The last frame/scroll anchoring can dispatch after new layout has grown.
+ f.box.scrollTop-=40;
+ assert.equal(followsConversationScroll(f.box,true),true);
+ assert.equal(pausesConversationFollow(f.box,80,true),false,'downward catch-up keeps a running follow');
+ f.box.scrollHeight+=120;f.follower.request();
+ for(let time=0;time<1500;time+=16.67)f.frame(time);
+ assert.equal(f.box.scrollTop,620);
+ assert.equal(pausesConversationFollow(f.box,-80,true),true,'intentional upward reading pauses');
+ f.pause();f.box.scrollTop-=80;f.box.scrollHeight+=100;f.follower.request();
+ assert.equal(f.callbacks.size,0);assert.equal(followsConversationScroll(f.box,false),false);
+ f.box.scrollTop=f.box.scrollHeight-f.box.clientHeight;
+ assert.equal(followsConversationScroll(f.box,false),true,'manually reaching the tail resumes following');
 });

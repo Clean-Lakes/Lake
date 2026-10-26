@@ -159,6 +159,11 @@ if (islandQuery) {
   state(value: IslandFixtureState) {applyIsland(value);emit();},
   pulse(value: number) {for(const agent of snapshot.ai!.agentRuns ?? []) {agent.toolCount=value;agent.activityUpdatedAt=new Date().toISOString();}emit();},
   presentationStatus(value:WorkSession['status'],verified=false){session.status=value;if(verified){const t=snapshot.sre!.tasks[0]!;t.outcome='completed';t.recoveryStatus='verified';}emit();},
+  streamLines(count:number){
+   const t=snapshot.sre!.tasks[0]!,id='qa-stream-tail';
+   const message={id,taskId:t.id,sessionId:session.id,roleId:'coordinator',kind:'summary',source:'runtime',sequence:999,revision:count,createdAt:'2026-10-26T00:01:01Z',body:Array.from({length:count},(_,i)=>`新增结果第${i+1}行：只读模拟检查，保留真实证据。`).join('\n\n')} as SRETask['messages'][number];
+   t.messages=t.messages.filter(m=>m.id!==id);t.messages.push(message);emit();
+  },
   laterOrdinaryTurn(){snapshot.ai!.turnStartedAt="2027-01-01T00:00:00Z";snapshot.ai!.rootTurnId="ordinary-later";session.status="completed";emit();},
   mode(enabled:boolean){snapshot.sre!.pilot!.enabled=enabled;emit();},
   resourceStep(count:number){
