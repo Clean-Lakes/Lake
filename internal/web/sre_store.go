@@ -41,9 +41,6 @@ func (s *Store) createSRETaskLocked(task ai.SRETask) ai.SRETask {
 	if old := s.row("SELECT body FROM sreTasks WHERE sessionId=? AND requestId=?", task.SessionID, task.RequestID); old != nil {
 		return decodeSRETask(old)
 	}
-	if s.row("SELECT id FROM sreTasks WHERE sessionId=? AND status IN ('draft','active','waiting_input','waiting_approval','paused')", task.SessionID) != nil {
-		fail(409, "当前会话已有活动任务，请先继续或结束该任务")
-	}
 	project := stringOf(sess["projectId"])
 	if task.Goal == "" || task.RequestID == "" || len(task.Goal) > 4000 || len(task.Scope) > 8 || len(task.Scope) == 0 {
 		fail(400, "任务需有目标、请求标识和 1–8 个明确资源")

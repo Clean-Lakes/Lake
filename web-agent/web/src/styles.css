@@ -1262,6 +1262,9 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 
 /* Compact elapsed-time disclosure, matching the quiet reference row. */
 .reply-duration, .reply-duration.is-finished, .reply-duration.is-live { min-height:29px; padding:0 0 7px; margin:0; border-bottom:1px solid var(--surface-hover); gap:6px; color:var(--text-muted); font-size: var(--font-size-body); font-weight:var(--font-weight-ui); line-height:20px; }
+.reply-duration.is-live { border-bottom:0; padding-bottom:0; }
+.reply-duration.is-revealed { animation:reply-duration-reveal 340ms cubic-bezier(.22,1,.36,1) both; }
+@keyframes reply-duration-reveal { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
 /* Keep the swept caption and plain exception count on the same text baseline. */
 .reply-duration .status-text { vertical-align:baseline; }
 .turn-duration-disclosure { display:flex; align-items:center; gap:6px; width:100%; min-width:0; padding:0; border:0; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
@@ -1278,7 +1281,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .turn-execution-content { min-height:0; overflow:hidden; }
 .turn-execution-body { display:flex; flex-direction:column; gap:12px; padding:2px 0 2px; }
 @media(prefers-reduced-motion:reduce) { .turn-execution-details { transition:none; } }
-@media(prefers-reduced-motion:reduce){.turn-duration-chevron { transition:none; }}
+@media(prefers-reduced-motion:reduce){.turn-duration-chevron { transition:none; }.reply-duration.is-revealed { animation:none; }}
 
 /* Uploaded images stand on their own; only accompanying text gets a bubble. */
 .ai-role-user.has-message-images { display:flex; flex-direction:column; align-items:flex-end; gap:8px; padding:0; background:transparent; border:0; border-radius:0; box-shadow:none; }

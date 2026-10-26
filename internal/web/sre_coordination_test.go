@@ -428,3 +428,42 @@ func TestSRECompletedRestartUsesFreshTurnFactsAndKeepsHistory(t *testing.T) {
 		t.Fatal("explicit restart hit a late active-task conflict or lost audit")
 	}
 }
+
+func TestSRENewGoalStartsWithoutCancellingHistoricalPausedTask(t *testing.T) {
+	b, h := fixture(t)
+	sid, rid := newSession(t, h)
+	old := stalePausedTask(t, b, sid, rid)
+	retained, err := b.Store.LoadSRETask(sid, old.ID)
+	must(err)
+	nextResource := b.Store.CreateResource(stringOf(b.Store.Session(sid)["projectId"]), "独立目标", "ssh", Object{"host": "192.0.2.99", "port": 22, "username": "fixture"})
+	nextID := stringOf(nextResource["id"])
+	plan := ai.SREPlanRevision{Goal: "诊断新的目标", TaskType: "investigation", Scope: []string{nextID}, Steps: []ai.SREPlanStep{{ID: "inspect", Role: ai.SREInvestigator, Kind: "observe", Capability: "host", Description: "检查独立目标", ResourceIDs: []string{nextID}, CompletionChecks: []string{"获得新证据"}}}}
+	closeProvider := sreCoordinationFixture(t, b, h, sid, func(w http.ResponseWriter, input Object) {
+		content := jsonText(input["messages"])
+		if strings.Contains(content, "Return only a JSON plan object") {
+			emitModel(w, jsonText(plan), nil)
+			return
+		}
+		if !strings.Contains(content, "conversation owner") {
+			emitModel(w, "metadata", nil)
+			return
+		}
+		if !strings.Contains(content, "do not reserve a session slot") {
+			t.Error("model was not told the obsolete task slot rule was removed")
+		}
+		emitModel(w, "", []ai.Call{{ID: "new-independent", Name: "sre_collaborate", Arguments: jsonText(Object{"action": "new_task", "goal": plan.Goal, "asset_refs": []string{sreAliasForTest(nextID)}, "mode": "plan_only"})}})
+	})
+	defer closeProvider()
+	apiTest(t, h, "POST", "/api/sessions/"+sid+"/messages", Object{"text": "给独立目标制定诊断计划"}, 202)
+	awaitQueueWorkers(t, b)
+	tasks, err := b.Store.ListSRETasks(sid, 20, "")
+	must(err)
+	if len(tasks) != 2 || tasks[0].ID == old.ID || tasks[0].Scope[0] != nextID || len(tasks[0].Plans) != 1 {
+		t.Fatal("new goal was blocked by old task", tasks)
+	}
+	saved, err := b.Store.LoadSRETask(sid, old.ID)
+	must(err)
+	if jsonText(saved) != jsonText(retained) {
+		t.Fatal("new goal cancelled or rewrote old task")
+	}
+}

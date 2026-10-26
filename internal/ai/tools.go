@@ -354,6 +354,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	}
 	e.notify(s, "toolCall", map[string]any{"name": call.Name})
 	s.mu.Unlock()
+	ctx = context.WithValue(ctx, backgroundShellSourceKey{}, map[string]any{"resource_id": resourceID, "target": target, "parent_card_id": cardID, "call_id": call.ID})
 	connectionPrepared := false
 	defer func() {
 		if connectionPrepared || errors.Is(err, errADKApprovalPending) {
@@ -790,11 +791,11 @@ func (e *Engine) bridgeCall(ctx context.Context, id, name string, a map[string]a
 	if errors.As(err, &waiting) && ctx.Err() == nil && (name == "runtimeCommandExec" || name == "terminal_execute_command") && str(obj(result)["terminal_id"]) != "" && str(obj(result)["entry_id"]) != "" {
 		// Keep the original command; expose wait/output handles instead of
 		// aborting this specialist and cancelling all parallel peers.
-		return e.trackBridgeShell(id, result, a)
+		return e.trackBridgeShell(id, result, a, obj(ctx.Value(backgroundShellSourceKey{})))
 	}
 	continued := obj(result)["timed_out"] == true && str(obj(result)["status"]) == "running"
 	if err == nil && (a["run_in_background"] == true || continued) && (name == "runtimeCommandExec" || name == "terminal_execute_command") {
-		return e.trackBridgeShell(id, result, a)
+		return e.trackBridgeShell(id, result, a, obj(ctx.Value(backgroundShellSourceKey{})))
 	}
 	return result, err
 }

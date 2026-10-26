@@ -17,7 +17,7 @@ test('normal replies and model waiting keep status metadata without a blue loadi
  const s=snapshot();
  assert.equal(hasActivity(render(s)),false);
  assert.ok(render(s).includes('正在核对测试数据。'));
- assert.equal((render(s).match(/aria-label="回答耗时"/g)??[]).length,1);
+ assert.equal((render(s).match(/aria-label="执行状态"/g)??[]).length,1);
  s.ai!.cards=[];assert.equal(hasActivity(render(s)),false);
  for(const status of ['completed','failed','cancelled','waiting_approval'])assert.equal(hasActivity(render(snapshot(status))),false);
 });

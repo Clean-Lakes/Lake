@@ -144,13 +144,13 @@ func TestSRECompletedReadOnlyRestartKeepsAuditAndUsesCurrentPilot(t *testing.T) 
 	if duplicate.ID != fresh.ID {
 		t.Fatal("retry duplicated the new task")
 	}
-	if _, err = b.Store.RestartSREInvestigation(sid, old.ID, "conflicting_repeat", "assist", 128000); err == nil {
-		t.Fatal("second active task allowed")
+	if _, err = b.Store.RestartSREInvestigation(sid, old.ID, "another_repeat", "assist", 128000); err != nil {
+		t.Fatal("prior draft blocked a separately requested repeat", err)
 	}
 	saved, err = b.Store.LoadSRETask(sid, old.ID)
 	must(err)
 	if jsonText(saved) != jsonText(old) {
-		t.Fatal("failed restart modified history")
+		t.Fatal("additional restart modified completed history")
 	}
 	if _, err = b.Store.RestartSREInvestigation("foreign", old.ID, "foreign_repeat", "assist", 128000); err == nil {
 		t.Fatal("cross-session restart allowed")
@@ -239,5 +239,76 @@ func TestSREHistoricalCompletionCannotOverrideLaterOrdinaryReply(t *testing.T) {
 	b.syncSRESessionStatus(sid)
 	if b.Store.Session(sid)["status"] != "failed" {
 		t.Fatal("historical pause hid an unknown change")
+	}
+}
+
+func TestSRETasksDoNotReserveSessionSlots(t *testing.T) {
+	for _, status := range []string{"draft", "paused", "waiting_input", "waiting_approval", "active"} {
+		t.Run(status, func(t *testing.T) {
+			b, sid, rid, old := sreStoreFixture(t)
+			saved, err := b.Store.MutateSRETask(sid, old.ID, 0, "fixture", func(v *ai.SRETask) error { v.Status = status; return nil })
+			must(err)
+			fresh, err := b.Store.CreateSRETask(ai.SRETask{SessionID: sid, RequestID: "independent", Goal: "独立的新任务", Scope: []string{rid}, Mode: "plan_only", TokenBudget: 128000})
+			must(err)
+			if fresh.ID == old.ID || fresh.Goal != "独立的新任务" {
+				t.Fatal("new goal reused old task")
+			}
+			retained, err := b.Store.LoadSRETask(sid, old.ID)
+			must(err)
+			if jsonText(retained) != jsonText(saved) {
+				t.Fatal("creating a task changed prior task history")
+			}
+			duplicate, err := b.Store.CreateSRETask(ai.SRETask{SessionID: sid, RequestID: "independent"})
+			must(err)
+			if duplicate.ID != fresh.ID {
+				t.Fatal("request retry duplicated new task")
+			}
+		})
+	}
+}
+
+func TestSRELegacySessionSlotIndexIsRemovedOnOpen(t *testing.T) {
+	dir := t.TempDir()
+	store, err := OpenStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := stringOf(store.CreateProject("Legacy task slot")["id"])
+	resource := stringOf(store.CreateResource(project, "演示主机", "local", Object{})["id"])
+	session := stringOf(store.CreateSession(project, "独立目标", []string{resource})["id"])
+	old, err := store.CreateSRETask(ai.SRETask{SessionID: session, RequestID: "old", Goal: "旧目标", Scope: []string{resource}, Mode: "plan_only"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err = store.MutateSRETask(session, old.ID, 0, "paused_fixture", func(task *ai.SRETask) error { task.Status = "paused"; return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.db.Exec("CREATE UNIQUE INDEX sreTasks_one_active ON sreTasks(sessionId) WHERE status IN ('draft','active','waiting_input','waiting_approval','paused')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err = OpenStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if row := store.row("SELECT name FROM sqlite_master WHERE type='index' AND name='sreTasks_one_active'"); row != nil {
+		t.Fatal("legacy session slot index survived reopen")
+	}
+	fresh, err := store.CreateSRETask(ai.SRETask{SessionID: session, RequestID: "fresh", Goal: "新目标", Scope: []string{resource}, Mode: "plan_only"})
+	if err != nil || fresh.ID == old.ID {
+		t.Fatal("legacy paused task blocked the new goal", err)
+	}
+	retained, err := store.LoadSRETask(session, old.ID)
+	if err != nil || jsonText(retained) != jsonText(old) {
+		t.Fatal("migration changed the old task", err)
+	}
+	duplicate, err := store.CreateSRETask(ai.SRETask{SessionID: session, RequestID: "fresh"})
+	if err != nil || duplicate.ID != fresh.ID {
+		t.Fatal("request identity lost on upgrade", err)
 	}
 }
