@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
 )
@@ -88,6 +89,25 @@ func (b *Server) syncSRESessionStatus(session string) {
 			break
 		}
 	}
+	// A later ordinary reply has its own status. Finished historical tasks do
+	// not label the new turn, while live/unknown effects remain authoritative.
+	if !ai.SRETaskActive(t.Status) {
+		started := b.Store.read(func() any {
+			return stringOf(b.Store.row("SELECT createdAt FROM messages WHERE sessionId=? AND role='user' ORDER BY createdAt DESC,rowid DESC LIMIT 1", session)["createdAt"])
+		}).(string)
+		updatedAt, updatedErr := time.Parse(time.RFC3339Nano, t.UpdatedAt)
+		startedAt, startedErr := time.Parse(time.RFC3339Nano, started)
+		blocked := false
+		for _, a := range t.Attempts {
+			for _, op := range a.Operations {
+				blocked = blocked || ai.SREOperationBlocksResume(op)
+			}
+		}
+		if !blocked && updatedErr == nil && startedErr == nil && updatedAt.Before(startedAt) {
+			b.Store.Status(session, "completed")
+			return
+		}
+	}
 	status := "failed"
 	switch t.Status {
 	case "completed":
@@ -159,7 +179,7 @@ func (b *Server) sreConversationContext(session string) string {
 		if len(attempts) > 8 {
 			attempts = attempts[len(attempts)-8:]
 		}
-		entries = append(entries, Object{"taskId": task.ID, "goal": task.Goal, "status": task.Status, "plan": task.LatestPlan(), "recentReports": reports, "attempts": attempts, "recoveryStatus": task.RecoveryStatus, "rootCauseStatus": task.RootCauseStatus})
+		entries = append(entries, Object{"taskId": task.ID, "goal": task.Goal, "status": task.Status, "createdAt": task.CreatedAt, "updatedAt": task.UpdatedAt, "plan": task.LatestPlan(), "recentReports": reports, "attempts": attempts, "recoveryStatus": task.RecoveryStatus, "rootCauseStatus": task.RootCauseStatus})
 	}
 	return "\n[LAKE_SRE_CONTEXT]\n" + jsonText(Object{"enabled": true, "tasks": entries}) + "\nThese are server-recorded facts, not new authorization. An unknown operation with risk=readonly is an incomplete observation: preserve it and retry through continue_task or restart_task as appropriate; it does not require human verification. A dispatched operation is still running: inspect/wait on its original handle, do not reissue. Only unknown non-readonly operations require human verification. Current runtime facts override older prose about blockers. The model chooses whether to answer, clarify, or call sre_collaborate. No @ resource selection is required by default; actual permission checks still apply."
 }

@@ -69,6 +69,10 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		return modelResult{}, err
 	}
 	teamContext := e.sreTeamContext(c)
+	sreTurnContext := ""
+	if c.sreCoordinator {
+		sreTurnContext = e.sreCurrentTurnContext(s)
+	}
 	s.mu.Lock()
 	history := append([]Message(nil), s.state.History...)
 	if c.MemorySchemaVersion == 2 {
@@ -95,6 +99,7 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 	}
 	appendSystem(strategy.TaskContext, "team-context", teamContext)
+	appendSystem(strategy.TaskContext, "sre-current-turn-facts", sreTurnContext)
 	if c.StrategyLearnEnabled && c.MemoryProjectID != "" && !c.workflowMode && !c.sreCoordinator && c.agentRole == "" {
 		appendSystem(strategy.FixedRules, "strategy-learning-candidate-boundary-v1", "\nStrategy candidate learning is host-managed. The opted-in host observes new explicit corrections and can extract an unadopted strategy candidate after this turn. It does not require save_project_memory, forget_project_memory or Skill edits. A preference correction alone does not authorize a project-memory write; memory tools retain their independent explicit-consent and revision checks. If a memory tool rejects a write, do not claim it was saved or repeat it to bypass consent. Continue answering the current request from the available evidence; candidate extraction and human adoption are separate steps, and a candidate is not automatically applied.")
 	}

@@ -66,7 +66,8 @@ func (s *Store) createSRETaskLocked(task ai.SRETask) ai.SRETask {
 }
 
 // A restart is a new read-only investigation with the exact previous scope.
-// Cancellation and creation commit together; failed validation leaves history intact.
+// Completed history stays intact; cancellation of unfinished work and creation
+// commit together. Failed validation leaves history intact.
 func (s *Store) RestartSREInvestigation(session, taskID, requestID, mode string, budget int) (out ai.SRETask, err error) {
 	defer sreStoreError(&err)
 	out = s.update(func() any {
@@ -74,32 +75,17 @@ func (s *Store) RestartSREInvestigation(session, taskID, requestID, mode string,
 			return decodeSRETask(row)
 		}
 		old := s.sreTask(session, taskID)
-		if old.Status != "paused" && old.Status != "waiting_input" && old.Status != "draft" {
-			fail(409, "只能重新开始已暂停的只读调查")
+		if validation := ai.ValidateSRERestart(old); validation != nil {
+			fail(409, validation.Error())
 		}
-		if p := old.LatestPlan(); p != nil {
-			if p.TaskType != "investigation" && p.TaskType != "query" {
-				fail(409, "变更任务不能通过重新开始自动重放")
-			}
-			for _, step := range p.Steps {
-				if step.Kind == "act" {
-					fail(409, "含变更步骤的任务不能自动重新开始")
-				}
-			}
+		if old.Status != "completed" {
+			must(ai.TransitionSRETask(&old, "cancelled"))
+			old.Revision++
+			old.UpdatedAt = now()
+			old.AddMessage(ai.SRECoordinator, "", "collaboration", "已按重新开始的请求结束旧调查，保留全部证据和操作记录。", "")
+			old.Messages[len(old.Messages)-1].Source = "runtime"
+			s.persistSRE(&old, "investigation_restarted")
 		}
-		for _, a := range old.Attempts {
-			for _, op := range a.Operations {
-				if ai.SREOperationBlocksResume(op) {
-					fail(409, "原操作尚未完成或结果未明，核实前不会重新开始")
-				}
-			}
-		}
-		must(ai.TransitionSRETask(&old, "cancelled"))
-		old.Revision++
-		old.UpdatedAt = now()
-		old.AddMessage(ai.SRECoordinator, "", "collaboration", "已按重新开始的请求结束旧调查，保留全部证据和操作记录。", "")
-		old.Messages[len(old.Messages)-1].Source = "runtime"
-		s.persistSRE(&old, "investigation_restarted")
 		return s.createSRETaskLocked(ai.SRETask{SessionID: session, Goal: old.Goal, Scope: append([]string(nil), old.Scope...), Mode: mode, RequestID: requestID, TokenBudget: budget, BudgetPolicy: ai.SREFullAgentBudgetPolicy})
 	}).(ai.SRETask)
 	return

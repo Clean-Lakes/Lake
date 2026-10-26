@@ -367,3 +367,54 @@ func TestSREExplicitRestartCreatesFreshReadOnlyPlanWithoutLateConflict(t *testin
 		t.Fatal("explicit restart hit a late active-task conflict or lost audit")
 	}
 }
+
+func TestSRECompletedRestartUsesFreshTurnFactsAndKeepsHistory(t *testing.T) {
+	b, h := fixture(t)
+	sid, rid := newSession(t, h)
+	old, err := b.Store.CreateSRETask(ai.SRETask{SessionID: sid, RequestID: "old_investigation", Goal: "检查测试内存", Scope: []string{rid}, Mode: "assist", TokenBudget: 128000})
+	must(err)
+	_, err = b.Store.MutateSRETask(sid, old.ID, 0, "paused", func(t *ai.SRETask) error {
+		t.Status = "completed"
+		t.Outcome = "inconclusive"
+		t.Plans = []ai.SREPlanRevision{{TaskType: "investigation", Scope: []string{rid}}}
+		return nil
+	})
+	must(err)
+	plan := ai.SREPlanRevision{Goal: old.Goal, TaskType: "investigation", Scope: []string{rid}, Steps: []ai.SREPlanStep{{ID: "inspect", Role: ai.SREInvestigator, Kind: "observe", Capability: "host", Description: "只读检查测试内存", ResourceIDs: []string{rid}, CompletionChecks: []string{"真实证据"}}}}
+	closer := sreCoordinationFixture(t, b, h, sid, func(w http.ResponseWriter, input Object) {
+		content := jsonText(input["messages"])
+		if strings.Contains(content, "conversation owner") {
+			if !strings.Contains(content, "LAKE_SRE_TURN_FACTS") || !strings.Contains(content, "readonly_restart_available") {
+				t.Error("fresh turn facts missing from provider request")
+			}
+			if !strings.Contains(jsonText(input["tools"]), "restart_task") {
+				t.Error("model cannot choose an explicit restart")
+			}
+			emitModel(w, "", []ai.Call{{ID: "restart-original", Name: "sre_collaborate", Arguments: jsonText(Object{"action": "restart_task", "task_id": old.ID, "mode": "plan_only"})}})
+			return
+		}
+		if strings.Contains(content, "Return only a JSON plan object") {
+			emitModel(w, jsonText(plan), nil)
+			return
+		}
+		t.Error("plan-only restart dispatched a resource role")
+		emitModel(w, "unexpected", nil)
+	})
+	defer closer()
+	apiTest(t, h, "POST", "/api/sessions/"+sid+"/messages", Object{"text": "重新来，先给计划"}, 202)
+	awaitQueueWorkers(t, b)
+	tasks, err := b.Store.ListSRETasks(sid, 20, "")
+	must(err)
+	if len(tasks) != 2 || tasks[0].ID == old.ID || tasks[0].Status != "draft" || len(tasks[0].Plans) != 1 || tasks[1].Status != "completed" {
+		for _, task := range tasks {
+			t.Log("restart task state", task.ID, task.Status, len(task.Plans), task.Error)
+		}
+		view, _ := b.Engine.Snapshot(sid)
+		for _, card := range view.Cards {
+			if card.Type == "error" {
+				t.Log("handoff error", card.Content)
+			}
+		}
+		t.Fatal("explicit restart hit a late active-task conflict or lost audit")
+	}
+}

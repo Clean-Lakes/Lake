@@ -116,3 +116,94 @@ func TestSREHumanResolutionIsAuditableAndCannotVerifyRecovery(t *testing.T) {
 		t.Fatal("resolved operation changed again")
 	}
 }
+
+func TestSRECompletedReadOnlyRestartKeepsAuditAndUsesCurrentPilot(t *testing.T) {
+	b, sid, rid, old := sreStoreFixture(t)
+	old, err := b.Store.MutateSRETask(sid, old.ID, 0, "completed_fixture", func(v *ai.SRETask) error {
+		v.Status = "completed"
+		v.Outcome = "inconclusive"
+		v.Plans = []ai.SREPlanRevision{{TaskType: "investigation", Scope: []string{rid}, Steps: []ai.SREPlanStep{{ID: "observe", Kind: "observe"}}}}
+		v.Attempts = []ai.SREStepAttempt{{ID: "a", Status: "succeeded", Operations: []ai.SREOperation{{ID: "o", Risk: "readonly", Status: "succeeded"}}}}
+		return nil
+	})
+	must(err)
+	enabled, automatic := true, true
+	b.Store.UpdatePilotSettings(stringOf(b.Store.Session(sid)["projectId"]), 0, &enabled, &automatic)
+	fresh, err := b.Store.RestartSREInvestigation(sid, old.ID, "repeat_finished", "plan_only", 128000)
+	must(err)
+	if fresh.ID == old.ID || fresh.Goal != old.Goal || jsonText(fresh.Scope) != jsonText(old.Scope) || fresh.Pilot == nil || !fresh.Pilot.AutoAdvance || len(fresh.Attempts) != 0 {
+		t.Fatal("rerun did not create a fresh observation with current defaults")
+	}
+	saved, err := b.Store.LoadSRETask(sid, old.ID)
+	must(err)
+	if jsonText(saved) != jsonText(old) {
+		t.Fatal("rerun rewrote completed history")
+	}
+	duplicate, err := b.Store.RestartSREInvestigation(sid, old.ID, "repeat_finished", "plan_only", 128000)
+	must(err)
+	if duplicate.ID != fresh.ID {
+		t.Fatal("retry duplicated the new task")
+	}
+	if _, err = b.Store.RestartSREInvestigation(sid, old.ID, "conflicting_repeat", "assist", 128000); err == nil {
+		t.Fatal("second active task allowed")
+	}
+	saved, err = b.Store.LoadSRETask(sid, old.ID)
+	must(err)
+	if jsonText(saved) != jsonText(old) {
+		t.Fatal("failed restart modified history")
+	}
+	if _, err = b.Store.RestartSREInvestigation("foreign", old.ID, "foreign_repeat", "assist", 128000); err == nil {
+		t.Fatal("cross-session restart allowed")
+	}
+}
+
+func TestSRECompletedRestartCannotReplayChangesOrUnfinishedOperations(t *testing.T) {
+	for _, tc := range []struct{ name, kind, risk, status string }{{"change-plan", "act", "readonly", "succeeded"}, {"prior-change", "observe", "change", "succeeded"}, {"unknown-change", "observe", "change", "unknown"}, {"still-dispatched", "observe", "readonly", "dispatched"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			b, sid, _, old := sreStoreFixture(t)
+			old, err := b.Store.MutateSRETask(sid, old.ID, 0, "fixture", func(v *ai.SRETask) error {
+				v.Status = "completed"
+				v.Plans = []ai.SREPlanRevision{{TaskType: "investigation", Steps: []ai.SREPlanStep{{Kind: tc.kind}}}}
+				v.Attempts = []ai.SREStepAttempt{{Operations: []ai.SREOperation{{Risk: tc.risk, Status: tc.status}}}}
+				return nil
+			})
+			must(err)
+			if _, err = b.Store.RestartSREInvestigation(sid, old.ID, "unsafe_repeat", "assist", 128000); err == nil {
+				t.Fatal("unsafe replay accepted")
+			}
+			saved, err := b.Store.LoadSRETask(sid, old.ID)
+			must(err)
+			if saved.Revision != old.Revision {
+				t.Fatal("rejected restart changed history")
+			}
+		})
+	}
+}
+
+func TestSREHistoricalCompletionCannotOverrideLaterOrdinaryReply(t *testing.T) {
+	b, sid, _, old := sreStoreFixture(t)
+	_, err := b.Store.MutateSRETask(sid, old.ID, 0, "fixture", func(v *ai.SRETask) error { v.Status = "completed"; v.Outcome = "inconclusive"; return nil })
+	must(err)
+	// Different fractional precision must not break the chronological comparison.
+	b.Store.update(func() any {
+		task := b.Store.sreTask(sid, old.ID)
+		task.UpdatedAt = "2020-01-01T00:00:00Z"
+		b.Store.exec("UPDATE sreTasks SET body=?,updatedAt=? WHERE id=?", jsonText(task), task.UpdatedAt, old.ID)
+		return nil
+	})
+	b.Store.AddMessage(sid, "user", "解释刚才的结果，不要重跑", nil)
+	b.syncSRESessionStatus(sid)
+	if b.Store.Session(sid)["status"] != "completed" {
+		t.Fatal("historical result overwrote ordinary reply status")
+	}
+	_, err = b.Store.MutateSRETask(sid, old.ID, 0, "unknown_fixture", func(v *ai.SRETask) error {
+		v.Attempts = []ai.SREStepAttempt{{Operations: []ai.SREOperation{{Risk: "change", Status: "unknown"}}}}
+		return nil
+	})
+	must(err)
+	b.Store.AddMessage(sid, "user", "解释未核实状态", nil)
+	b.syncSRESessionStatus(sid)
+	if b.Store.Session(sid)["status"] != "failed" {
+		t.Fatal("ordinary reply hid an unknown change")
+	}
+}

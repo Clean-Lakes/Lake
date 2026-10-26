@@ -21,3 +21,15 @@ test('only a successful fresh read covers a previous timeout',async()=>{
  const original={risk:'readonly',status:'unknown',digest:'query',call:{name:'shell',arguments:'{}'}} as import('../../shared/contracts').SREOperation;
  for(const status of ['prepared','not_executed','failed','rejected','succeeded'])assert.equal(sreIncompleteRead([original,{...original,status}]),status!=='succeeded');
 });
+
+ test('a later ordinary turn does not inherit a historical terminal result',()=>{
+  const old={status:'completed',outcome:'inconclusive',updatedAt:'2026-10-26T00:00:00Z',attempts:[]} as unknown as SRETask;
+  assert.deepEqual(sreSessionPresentation(session,[old],'2026-10-26T00:00:00.001Z'),{});
+  assert.equal(sreSessionPresentation(session,[old],'2026-10-25T00:00:00Z').status,'failed');
+  for(const status of ['failed','cancelled'])assert.deepEqual(sreSessionPresentation(session,[{...old,status} as SRETask],'2026-10-26T00:00:01Z'),{});
+  assert.equal(sreSessionPresentation(session,[{...old,status:'paused'} as SRETask],'2026-10-26T00:00:01Z').label,'任务已暂停');
+  for(const [status,risk,label] of [['unknown','change','变更待核实'],['dispatched','readonly','原操作仍在执行']]){
+   const task={...old,attempts:[{operations:[{status,risk}]}]} as unknown as SRETask;
+   assert.equal(sreSessionPresentation(session,[task],'2026-10-26T00:00:01Z').label,label);
+  }
+ });
