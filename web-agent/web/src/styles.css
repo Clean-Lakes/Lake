@@ -908,7 +908,7 @@ a { color: inherit; }
 .composer-status .ai-context-trigger { height: 28px; padding: 0 5px; gap: 5px; white-space: nowrap; font: inherit; font-size: var(--font-size-toolbar); }
 .composer-status .ai-context-trigger svg { width: 18px; height: 18px; }
 .settings-session-entry { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 17px; padding-bottom: 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); font-size: var(--font-size-ui); }
-.composer-permission-button { display: inline-flex; align-items: center; flex: 0 0 auto; align-self: center; height: 28px; padding: 0 4px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-secondary); font-size: var(--font-size-toolbar); cursor: pointer; }
+.composer-permission-button { display: inline-flex; align-items: center; gap:6px; white-space:nowrap; flex: 0 0 auto; align-self: center; height: 28px; padding: 0 4px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-secondary); font-size: var(--font-size-toolbar); cursor: pointer; }
 .composer-permission-button:hover, .composer-permission-button[aria-expanded="true"] { background: var(--surface-hover); color: var(--foreground); }
 .composer-permission-button:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
 .host-key-facts { display: grid; gap: 14px; margin: 22px 0; }
