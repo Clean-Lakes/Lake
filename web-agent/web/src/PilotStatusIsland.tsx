@@ -38,8 +38,11 @@ export function PilotStatusIsland({model, onInspect,visible=true,status}: {model
     return () => {observer.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true);};
   }, [open]);
   useLayoutEffect(()=>{
+    // Release a completed exit only after React has detached the panel. Its
+    // filled transparent frame must survive until that commit, or it flashes.
+    if(!present||!visible){motion.current?.cancel();motion.current=null;return;}
     const node=panel.current;
-    if(!node||!present||!position)return;
+    if(!node||!position)return;
     if(!visible||document.hidden||window.matchMedia('(prefers-reduced-motion: reduce)').matches||!node.animate){
       motion.current?.cancel();motion.current=null;if(!open)setPresent(false);return;
     }
@@ -50,7 +53,11 @@ export function PilotStatusIsland({model, onInspect,visible=true,status}: {model
     motion.current?.cancel();
     const animation=node.animate([from,open?expanded:closed],{duration:open?220:160,easing:'cubic-bezier(.22,1,.36,1)',fill:'both'});
     motion.current=animation;
-    animation.onfinish=()=>{if(motion.current!==animation)return;motion.current=null;animation.cancel();if(!open)setPresent(false)};
+    animation.onfinish=()=>{
+      if(motion.current!==animation)return;
+      if(open){motion.current=null;animation.cancel();}
+      else setPresent(false);
+    };
   },[open,present,!!position,visible]);
   // The first positioning pass mounts the panel hidden. Focus only once that
   // pass made it visible; hidden elements cannot receive keyboard focus.
