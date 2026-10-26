@@ -13,59 +13,22 @@ const snapshot = (status = 'running'): SessionSnapshot => ({
 const render = (s: SessionSnapshot, props = {}) => renderToStaticMarkup(createElement(AITranscript, {snapshot: s, ...props}));
 const hasActivity = (html: string) => html.includes('class="reply-activity"');
 
-test('one visual activity mark follows the current reply and remains during model waiting', () => {
-  const s = snapshot();
-  const html = render(s);
-  assert.equal((html.match(/class="reply-activity"/g) ?? []).length, 1);
-  assert.ok(html.indexOf('class="reply-activity"') > html.indexOf('正在核对测试数据。'));
-  assert.ok(html.includes('class="reply-activity" aria-hidden="true"'));
-  assert.equal((html.match(/aria-label="回答耗时"/g) ?? []).length, 1, 'metadata remains the single status owner');
-  s.ai!.cards = [];
-  assert.ok(hasActivity(render(s)), 'model waiting before its first text is still active');
-});
-
-test('finished, stopped, waiting, disconnected and historical views do not suggest ongoing generation', () => {
-  for (const status of ['completed', 'failed', 'cancelled', 'interrupted', 'waiting_approval']) assert.ok(!hasActivity(render(snapshot(status))), status);
-  const s = snapshot();
-  assert.ok(!hasActivity(render(s, {disabled: true})));
-  assert.ok(!hasActivity(render(s, {stopping: true})));
-  assert.ok(!hasActivity(render(s, {mode: 'activity'})));
-  assert.ok(!hasActivity(render(s, {mode: 'evidence'})));
-  s.replyTimings = [{messageId: 'user', startedAt: at, finishedAt: '2026-10-21T00:00:02Z', status: 'completed'}];
-  assert.ok(!hasActivity(render(s)), 'saved completion wins over a delayed running snapshot');
-});
-
-test('human questions and pending decisions suppress the reply activity, including role input', () => {
-  const s = snapshot();
-  s.ai!.question = {id: 'question', questions: []};
-  assert.ok(!hasActivity(render(s)));
-  s.ai!.question = undefined;
-  s.ai!.cards.push({id: 'approval', type: 'operation', title: 'append', at, status: 'pending'});
-  assert.ok(!hasActivity(render(s)));
-  s.ai!.cards.pop();
-  s.ai!.agentRuns = [{id:'role', sessionId:'fixture', rootTurnId:'turn', role:'host', task:'核对', resourceIds:[], createdAt:at, status:'waiting_input'}];
-  assert.ok(!hasActivity(render(s)));
-  s.ai!.agentRuns[0]!.rootTurnId = 'older-turn';
-  assert.ok(hasActivity(render(s)), 'an earlier role question must not freeze this turn');
-});
-
-test('overall progress owns the activity mark in the same normal-flow content block',()=>{
+test('normal replies and model waiting keep status metadata without a blue loading glyph',()=>{
  const s=snapshot();
- s.resources=[{id:'pg',name:'数据库',kind:'database'}] as SessionSnapshot['resources'];
- s.ai!.cards.unshift({id:'op',type:'operation',title:'query_sql',status:'completed',at,data:{resource_id:'pg',target:'数据库'}});
- s.ai!.cards=s.ai!.cards.filter(card=>card.type==='operation');
- const html=render(s);
- const summary=html.slice(html.indexOf('aria-label="本轮进度"'));
- assert.match(summary,/<p class="overall-progress-facts">[^<]+<\/p><div class="reply-activity"/);
- assert.equal((html.match(/class="reply-activity"/g)??[]).length,1);
+ assert.equal(hasActivity(render(s)),false);
+ assert.ok(render(s).includes('正在核对测试数据。'));
+ assert.equal((render(s).match(/aria-label="回答耗时"/g)??[]).length,1);
+ s.ai!.cards=[];assert.equal(hasActivity(render(s)),false);
+ for(const status of ['completed','failed','cancelled','waiting_approval'])assert.equal(hasActivity(render(snapshot(status))),false);
 });
 
-test('the streamed answer owns the activity mark while progress closes without replaying it',()=>{
- const s=snapshot();
- s.resources=[{id:'pg',name:'数据库',kind:'database'}] as SessionSnapshot['resources'];
- s.ai!.cards.unshift({id:'op',type:'operation',title:'query_sql',status:'completed',at,data:{resource_id:'pg',target:'数据库'}});
- const html=render(s);
- assert.equal((html.match(/class="reply-activity"/g)??[]).length,1);
- assert.ok(html.includes('class="settled-reply is-archived"'));
- assert.ok(!html.slice(html.indexOf('aria-label="本轮进度"')).includes('</p><div class="reply-activity"'),'hidden progress does not carry a second live mark');
+test('resource execution and streamed final prose have neither an overall row nor a loading mark',()=>{
+ const s=snapshot();s.resources=[{id:'pg',name:'数据库',kind:'database'},{id:'cache',name:'缓存',kind:'redis'}] as SessionSnapshot['resources'];
+ s.ai!.cards.unshift(...s.resources.map(r=>({id:'op-'+r.id,type:'operation',title:'query_sql',status:'completed',at,data:{resource_id:r.id,target:r.name}})));
+ for(const status of ['running','completed']){
+  s.ai!.status=status;const html=render(s);
+  assert.ok(html.includes('数据库')&&html.includes('缓存'));
+  assert.ok(html.includes('正在核对测试数据。'));
+  assert.equal(hasActivity(html),false);assert.ok(!html.includes('aria-label="本轮进度"'));
+ }
 });

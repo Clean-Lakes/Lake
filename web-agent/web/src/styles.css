@@ -1,6 +1,5 @@
 @import './miniBox.css';
 @import "./userMessageCopy.css";
-@import "./replyActivity.css";
 @import "./settledReply.css";
 @import './operationOutcomes.css';
 @import "./theme.css";
@@ -1292,10 +1291,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 
 /* Stage results belong to the resource, outside its folded raw operations. */
 .resource-stage-summary { min-width:0; margin:6px 0 0 28px; color:var(--text-secondary); font-size:var(--font-size-ui); line-height:1.75; }
-.resource-stage-summary.is-overall { margin:0; color:var(--foreground); font-size:inherit; }
 .resource-stage-current .ai-markdown > :first-child { margin-top:0; }
 .resource-stage-current .ai-markdown > :last-child { margin-bottom:0; }
 .resource-stage-history { margin-top:5px; font-size:var(--font-size-ui); color:var(--text-muted); }
 .resource-stage-record { margin-top:10px; color:var(--text-secondary); }
-
-.overall-progress-facts { margin:0; line-height:1.8; overflow-wrap:anywhere; }

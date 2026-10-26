@@ -85,18 +85,13 @@ test('same entry replay and a third duplicate cannot restore a conflicting owner
  assert.equal(result.byResource.size,0);
  assert.equal(result.overall.length,1);
 });
-test('overall narration uses one slot below the divider, never an overall card inside execution',()=>{
+test('multi-resource execution keeps its resource rows without an extra overall progress row',()=>{
  const generic=tool('generic');generic.card!.data={target:'当前项目/会话'};
  const entries=[say('plan','先看源库与目标端。'),tool('a'),tool('b',resources[1]),say('result','源库连接正常，目标端还没有镜像。'),generic,say('overall','现在准备后续整体步骤。')];
  const snapshot={session:{id:'s'},messages:[{id:'u',sessionId:'s',role:'user',text:'检查',createdAt:at}],actions:[],resources,ai:{session:'s',status:'running',cardsOffset:0,cards:entries.map(entry=>entry.card!)}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
- assert.ok(!html.includes('整体进展'));
- assert.equal((html.match(/data-stage-entry="result"/g)??[]).length,0);
- assert.equal((html.match(/class="resource-stage-summary is-overall"/g)??[]).length,1);
- const overall=html.indexOf('class="resource-stage-summary is-overall"');
- assert.ok(overall>html.lastIndexOf('</section>'));
- assert.ok(!html.slice(overall).includes('data-stage-entry="overall"'));
- assert.ok(!html.slice(overall).includes("现在准备后续整体步骤"));
- assert.ok(!html.slice(overall).includes("最新阶段："));
- assert.ok(!html.slice(overall).includes('data-stage-entry="plan"'),'overall preview replaces earlier narration');
+ assert.ok(!html.includes('aria-label="本轮进度"'));
+ assert.ok(!html.includes('is-overall'));
+ assert.ok(html.includes('源库')&&html.includes('目标端'));
+ assert.ok(!html.includes('class="reply-activity"'));
 });
