@@ -20,7 +20,25 @@ def check(repo, manifest):
     if not isinstance(installed, str) or not re.fullmatch(r"[0-9a-f]{40}", installed):
         raise ValueError("Dev 构建来源记录无效，请先核对已安装应用的来源")
     if git(repo, "merge-base", "--is-ancestor", installed, "HEAD").returncode != 0:
-        raise ValueError("当前工作区缺少已安装 Lake Dev 的提交，已阻止旧代码覆盖。请使用包含提交 " + installed[:12] + " 的工作区；已安装版本来源：" + str(data.get("sourceRoot", "未知")))
+        # Squash/cherry-pick integration changes commit identities. An exact
+        # preserved build-source tree in HEAD's recent first-parent history
+        # proves the same baseline as ancestry: every installed path and mode
+        # outside docs/ must survive unchanged. Documentation is not a desktop
+        # build input; additional files do not remove the installed baseline.
+        # Never infer equivalence for a dirty install or from an unknown commit.
+        equivalent = False
+        if data.get("dirty") is False and git(repo, "cat-file", "-e", installed + "^{commit}").returncode == 0:
+            history = git(repo, "rev-list", "--first-parent", "--max-count=64", "HEAD")
+            if history.returncode == 0:
+                for candidate in history.stdout.splitlines():
+                    diff = git(repo, "diff", "--no-ext-diff", "--quiet", "--no-renames", "--diff-filter=DMRTUXB", installed, candidate, "--", ".", ":(exclude)docs/**")
+                    if diff.returncode == 0:
+                        equivalent = True
+                        break
+                    if diff.returncode != 1:
+                        break
+        if not equivalent:
+            raise ValueError("当前工作区缺少已安装 Lake Dev 的提交或可核验的完整源码基线，已阻止旧代码覆盖。请使用包含提交 " + installed[:12] + " 的工作区；已安装版本来源：" + str(data.get("sourceRoot", "未知")))
 
 
 def write(repo, manifest):
