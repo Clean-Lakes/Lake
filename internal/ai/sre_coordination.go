@@ -321,7 +321,7 @@ func ValidateSRERestart(task SRETask) error {
 			if SREOperationBlocksResume(op) {
 				return errors.New("原操作尚未完成或结果未明，核实前不会重新开始")
 			}
-			if task.Status == "completed" && op.Risk != "readonly" {
+			if task.Status == "completed" && op.Risk != "readonly" && op.Status != "not_executed" && op.Status != "rejected" {
 				return errors.New("包含非只读操作的历史任务不能自动重跑")
 			}
 		}

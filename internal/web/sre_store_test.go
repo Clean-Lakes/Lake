@@ -123,7 +123,7 @@ func TestSRECompletedReadOnlyRestartKeepsAuditAndUsesCurrentPilot(t *testing.T) 
 		v.Status = "completed"
 		v.Outcome = "inconclusive"
 		v.Plans = []ai.SREPlanRevision{{TaskType: "investigation", Scope: []string{rid}, Steps: []ai.SREPlanStep{{ID: "observe", Kind: "observe"}}}}
-		v.Attempts = []ai.SREStepAttempt{{ID: "a", Status: "succeeded", Operations: []ai.SREOperation{{ID: "o", Risk: "readonly", Status: "succeeded"}}}}
+		v.Attempts = []ai.SREStepAttempt{{ID: "a", Status: "succeeded", Operations: []ai.SREOperation{{ID: "o", Risk: "readonly", Status: "succeeded"}, {ID: "blocked", Risk: "write", Status: "not_executed"}, {ID: "declined", Risk: "write", Status: "rejected"}}}}
 		return nil
 	})
 	must(err)
