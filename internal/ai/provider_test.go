@@ -174,3 +174,38 @@ func TestProtocolSwitchAndReusedCallIDs(t *testing.T) {
 		}
 	}
 }
+
+func TestTerminalRecoveryRequiresToolCallOnlyForSupportedProtocol(t *testing.T) {
+	for _, p := range []string{"openai", "openai-response", "azure-gpt", "claude", "gemini", "ollama"} {
+		m := Model{URL: "https://example.test/v1", Name: "fixture", Protocol: p, MaxOutput: 1024, requireToolCall: true}
+		_, body, err := modelPayload(m, []Message{{Role: "user", Content: "complete the decision"}}, []Tool{sreReplyTool(), sreCoordinationTool()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := p == "openai" || p == "openai-response" || p == "azure-gpt"
+		if (body["tool_choice"] == "required") != expected {
+			t.Fatal("unexpected recovery tool policy", p)
+		}
+		m.requireToolCall = false
+		_, ordinary, err := modelPayload(m, []Message{{Role: "user", Content: "hello"}}, []Tool{sreReplyTool()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ordinary["tool_choice"] != nil {
+			t.Fatal("ordinary request forced tool calling", p)
+		}
+		m.requireToolCall = true
+		_, empty, err := modelPayload(m, []Message{{Role: "user", Content: "hello"}}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if empty["tool_choice"] != nil {
+			t.Fatal("empty catalog forced tool calling", p)
+		}
+	}
+	a, _ := promptModelHash(Config{}, Model{})
+	b, _ := promptModelHash(Config{}, Model{requireToolCall: true})
+	if a == b {
+		t.Fatal("manifest omitted terminal recovery policy")
+	}
+}

@@ -11,6 +11,7 @@ import (
 )
 
 type Model struct {
+	requireToolCall     bool                 // runtime-only terminal-decision recovery; never persisted as user configuration
 	ReasoningEffort     string               `json:"reasoningEffort,omitempty"`
 	Reasoning           *ReasoningCapability `json:"reasoningCapability,omitempty"`
 	SupportsImageInput  bool                 `json:"supportsImageInput,omitempty"`

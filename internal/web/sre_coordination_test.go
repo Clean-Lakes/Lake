@@ -292,16 +292,26 @@ func TestSRETextOnlyReplyRequiresExplicitModelCompletion(t *testing.T) {
 	for _, repair := range []bool{true, false} {
 		t.Run(map[bool]string{true: "model_finishes_answer", false: "model_never_decides"}[repair], func(t *testing.T) {
 			b, h := fixture(t)
-			session, _ := newSession(t, h)
+
+			session, resource := newSession(t, h)
+			old, err := b.Store.CreateSRETask(ai.SRETask{SessionID: session, RequestID: "historical", Goal: "历史只读检查", Scope: []string{resource}, Mode: "plan_only"})
+			must(err)
+			_, err = b.Store.MutateSRETask(session, old.ID, 0, "completed", func(v *ai.SRETask) error { v.Status = "completed"; v.Outcome = "inconclusive"; return nil })
+			must(err)
 			var roots atomic.Int32
 			closeProvider := sreCoordinationFixture(t, b, h, session, func(w http.ResponseWriter, input Object) {
 				if !strings.Contains(jsonText(input["messages"]), "conversation owner") {
 					emitModel(w, "metadata", nil)
 					return
 				}
-				if roots.Add(1) > 1 && repair {
-					emitSREReply(w, "answer", "1+1 等于 2。")
-					return
+				if roots.Add(1) > 1 {
+					if input["tool_choice"] != "required" || len(objects(input["tools"])) != 2 {
+						t.Error("terminal correction must require a decision and exclude discovery/resource tools")
+					}
+					if repair {
+						emitSREReply(w, "answer", "1+1 等于 2。")
+						return
+					}
 				}
 				emitModel(w, "我先看一下。", nil)
 			})
@@ -310,7 +320,7 @@ func TestSRETextOnlyReplyRequiresExplicitModelCompletion(t *testing.T) {
 			awaitQueueWorkers(t, b)
 			view, _ := b.Engine.Snapshot(session)
 			tasks, _ := b.Store.ListSRETasks(session, 20, "")
-			if roots.Load() != 2 || len(tasks) != 0 {
+			if roots.Load() != 2 || len(tasks) != 1 {
 				t.Fatal("completion correction started a task or retried indefinitely")
 			}
 			if repair {
@@ -318,7 +328,7 @@ func TestSRETextOnlyReplyRequiresExplicitModelCompletion(t *testing.T) {
 				if view.Status != "completed" || messages[len(messages)-1]["text"] != "1+1 等于 2。" {
 					t.Fatal("model's final answer was lost")
 				}
-			} else if view.Status != "failed" {
+			} else if view.Status != "failed" || b.Store.Session(session)["status"] != "failed" {
 				t.Fatal("undecided promise was reported completed", view.Status)
 			}
 		})
