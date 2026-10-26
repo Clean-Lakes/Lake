@@ -23,8 +23,7 @@ function newestTask(tasks: SRETask[], session: SessionSnapshot['session'], start
   // replace the task that actually ran in this turn (including its failure).
   const start=time(startedAt??'');
   const touched=current.filter(t=>start&&time(t.updatedAt)>=start);
-  const candidates=touched.length?touched:current;
-  return candidates.find(sreTaskInFlight)??candidates.find(t=>['active','waiting_approval'].includes(t.status))??candidates[0];
+  return touched[0]??current.find(sreTaskInFlight)??current.find(t=>['active','waiting_approval'].includes(t.status))??current[0];
 }
 
 function roleState(states: PilotIslandStep[]) {

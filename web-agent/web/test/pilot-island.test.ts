@@ -179,4 +179,6 @@ test('current failed investigation takes precedence over a historical draining t
  assert.equal(pilotIslandModel(s)?.label,'检查未完成');
  assert.equal(pilotIslandAnimating(pilotIslandModel(s)),false);
  assert.equal(JSON.stringify(historical),saved,'historical ledger must remain intact');
+ historical.status='cancelled';historical.updatedAt='2026-10-26T00:02:00Z';
+ assert.equal(pilotIslandModel(s)?.taskId,current.id,'late cleanup of an old dispatch must not replace the current task');
 });
