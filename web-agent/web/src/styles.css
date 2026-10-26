@@ -1270,8 +1270,6 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .turn-execution-details.is-open { grid-template-rows:1fr; opacity:1; visibility:visible; margin-top:0; }
 .turn-execution-content { min-height:0; overflow:hidden; }
 .turn-execution-body { display:flex; flex-direction:column; gap:12px; padding:2px 0 2px; }
-/* 12px row/turn gaps + 2px inset give the separator 14px on each side. */
-.turn-execution-body::after { content:""; display:block; flex:none; margin-top:2px; border-top:1px solid var(--border); }
 @media(prefers-reduced-motion:reduce) { .turn-execution-details { transition:none; } }
 @media(prefers-reduced-motion:reduce){.turn-duration-chevron { transition:none; }}
 
