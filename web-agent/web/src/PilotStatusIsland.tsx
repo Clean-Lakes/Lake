@@ -41,13 +41,14 @@ export function PilotStatusIsland({model, onInspect,visible=true}: {model: Pilot
     return () => {document.removeEventListener('pointerdown', outside); document.removeEventListener('focusin', focus); document.removeEventListener('keydown', key);};
   }, [open]);
   const {primary,action,secondary}=pilotIslandFocus(model);
+  const ended=model.tone==='neutral'&&['completed','cancelled'].includes(model.status);
   const progress=model.total?Math.max(0,Math.min(100,model.completed/model.total*100)):0;
   const inspect = (target: string) => {close(); onInspect(target);};
   return <div className="pilot-island" data-tone={model.tone} data-pilot-task={model.taskId}>
     <button ref={trigger} type="button" className="pilot-island-trigger" aria-label={`Lake Pilot：${model.detail}。${primary?.name??''}：${action}。${secondary}。查看专员进度`} aria-haspopup="dialog" disabled={!visible} aria-expanded={visible&&open} aria-controls={open ? panelId : undefined} title={model.detail} onClick={() => setOpen(value => !value)}>
       {primary&&<span className={`pilot-action-avatar role-state-${primary.status}`} aria-hidden="true"><AgentIcon role={primary.role} size={22}/></span>}
       <span className="pilot-island-action" aria-hidden="true"><span className="pilot-island-action-line">{primary&&<strong>{primary.name}</strong>}<span className="pilot-island-action-label" title={action}>{model.tone!=='active'&&<i className="pilot-action-state-dot"/>}{action}</span></span><small title={secondary}>{secondary}</small></span>
-      <span className="pilot-island-progress" aria-hidden="true"><svg className="pilot-island-ring" viewBox="0 0 28 28" fill="none"><circle className="pilot-ring-track" cx="14" cy="14" r="10"/><circle className="pilot-ring-value" opacity={model.completed>0?1:0} cx="14" cy="14" r="10" pathLength="100" strokeDasharray={`${progress} 100`} transform="rotate(-90 14 14)"/></svg><span className="pilot-island-count">{model.total?<>{model.completed}<span> / {model.total}</span></>:'—'}</span><Glyph name="chevron" size={12}/></span>
+      <span className="pilot-island-progress" aria-hidden="true">{ended?<span className="pilot-island-ended" title={model.status==='completed'?'任务已结束':'任务已取消'}><Glyph name={model.status==='completed'?'check':'close'} size={16}/></span>:<svg className="pilot-island-ring" viewBox="0 0 28 28" fill="none"><circle className="pilot-ring-track" cx="14" cy="14" r="10"/><circle className="pilot-ring-value" opacity={model.completed>0?1:0} cx="14" cy="14" r="10" pathLength="100" strokeDasharray={`${progress} 100`} transform="rotate(-90 14 14)"/></svg>}<span className="pilot-island-count">{model.total?<>{model.completed}<span> / {model.total}</span></>:'—'}</span><Glyph name="chevron" size={12}/></span>
     </button>
     <span className="visually-hidden" role="status" aria-live="polite">{model.detail}</span>
     {visible&&open && createPortal(<section ref={panel} id={panelId} className="pilot-island-panel" role="dialog" aria-labelledby={headingId} tabIndex={-1} style={{left: position?.left ?? 12, top: position?.top ?? 12, visibility: position ? undefined : 'hidden'}}>

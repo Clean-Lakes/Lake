@@ -63,3 +63,6 @@
 
 /* Stable sizing and snapshot timing are independent of browser-owned motion. */
 .sre-live-activity.is-stable>[role="status"]{flex:0 0 13em;white-space:nowrap}
+
+/* Keep the plan disclosure label and its chevron on the same line. */
+.sre-plan>footer>details>summary{white-space:nowrap}

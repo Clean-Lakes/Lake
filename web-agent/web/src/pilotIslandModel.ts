@@ -10,7 +10,7 @@ const terminal = new Set(['completed', 'failed', 'cancelled']);
 export type PilotIslandStep = {step: SREPlanStep; status: string};
 export type PilotIslandRole = {role: SREAgentRole; name: string; status: string; completed: number; total: number; description: string; action?:string; messageId?: string; waitKind?: 'choice'|'input'};
 export type PilotIslandModel = {
-  taskId: string; planId?: string; label: string; detail: string; tone: 'neutral'|'active'|'attention'|'failed';
+  taskId: string; status: SRETask['status']; planId?: string; label: string; detail: string; tone: 'neutral'|'active'|'attention'|'failed';
   completed: number; total: number; steps: PilotIslandStep[]; roles: PilotIslandRole[]; visibleRoles: PilotIslandRole[];
 };
 
@@ -96,7 +96,7 @@ export function pilotIslandModel(snapshot: SessionSnapshot | null | undefined): 
     queued.length && !stopped ? `${queued.length} 位专员排队中` : '',
     steps.length ? `已完成 ${completed} / ${steps.length} 步骤` : '计划尚未生成'].filter(Boolean).join(' · ');
   const focus = roles.filter(r => working.has(r.status) || ['unknown', 'failed', 'paused', 'interrupted'].includes(r.status));
-  return {taskId: task.id, planId: plan?.id, label, detail, tone, completed, total: steps.length, steps, roles, visibleRoles: focus.length ? focus : roles};
+  return {taskId: task.id, status:task.status, planId: plan?.id, label, detail, tone, completed, total: steps.length, steps, roles, visibleRoles: focus.length ? focus : roles};
 }
 
 export function pilotRoleStatus(role: PilotIslandRole) {

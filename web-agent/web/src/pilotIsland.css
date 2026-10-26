@@ -15,6 +15,7 @@
 .pilot-island[data-tone="attention"] .pilot-island-action-label,.pilot-island[data-tone="failed"] .pilot-island-action-label{color:var(--pilot-island-color)}
 .pilot-island-action>small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted);font-size:var(--font-size-toolbar);line-height:14px}
 .pilot-island-progress{display:flex;align-items:center;gap:9px;flex-shrink:0}
+.pilot-island-ended{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0;border:1.5px solid var(--text-muted);border-radius:50%;color:var(--text-muted)}
 .pilot-island-ring{width:28px;height:28px;flex-shrink:0;stroke-width:2.1;stroke-linecap:round}
 .pilot-ring-track{stroke:var(--border)}
 .pilot-ring-value{stroke:var(--pilot-island-color);transition:stroke-dasharray 240ms ease,stroke 160ms ease}
@@ -29,7 +30,7 @@
 .workspace.has-floating-header .crumb-project{flex:0 0 auto;max-width:16ch}
 @container(max-width:900px){.workspace.has-floating-header .crumb-project,.workspace.has-floating-header .crumb-slash{display:none}.pilot-island-action{width:170px}}
 @container(max-width:700px){.pilot-island-trigger{padding-left:9px;gap:9px}.pilot-island-action{width:145px}}
-@container(max-width:480px){.pilot-action-avatar{display:none}.pilot-island-action{width:94px}.pilot-island-action-line{gap:5px}.pilot-island-action-line>strong{display:none}.pilot-island-progress{gap:6px}.pilot-island-ring{width:24px;height:24px}.workspace.has-floating-header .breadcrumbs>svg,.workspace.has-floating-header .breadcrumbs strong>svg{display:none}}
+@container(max-width:480px){.pilot-action-avatar{display:none}.pilot-island-action{width:94px}.pilot-island-action-line{gap:5px}.pilot-island-action-line>strong{display:none}.pilot-island-progress{gap:6px}.pilot-island-ring,.pilot-island-ended{width:24px;height:24px}.workspace.has-floating-header .breadcrumbs>svg,.workspace.has-floating-header .breadcrumbs strong>svg{display:none}}
 @media(prefers-reduced-motion:reduce){.header-morph-slot,.pilot-ring-value{transition:none}}
 .pilot-island-panel { position: fixed; z-index: 75; width: min(420px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-settings-panel); corner-shape: var(--corner-window); background: var(--surface); color: var(--foreground); box-shadow: var(--shadow-popover); font-size: var(--font-size-ui); }
 .pilot-island-panel:focus { outline: none; }

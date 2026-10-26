@@ -138,3 +138,16 @@ test('current action prioritizes intervention, keeps peer activity and real coun
  assert.equal(pilotIslandFocus(pilotIslandModel(islandFixture('paused'))!).action,'已暂停');
  assert.equal(pilotIslandFocus(pilotIslandModel(islandFixture('unknown'))!).action,'待核实');
 });
+
+
+test('terminal task status replaces the progress ring without claiming recovery verification',()=>{
+ const render=(snapshot:ReturnType<typeof islandFixture>)=>renderToStaticMarkup(createElement(PilotStatusIsland,{model:pilotIslandModel(snapshot)!,onInspect(){}}));
+ const finished=render(islandFixture('finished'));
+ assert.ok(finished.includes('pilot-island-ended')&&!finished.includes('pilot-island-ring'));
+ assert.ok(finished.includes('任务已结束')&&finished.includes('结论不充分'));
+ assert.ok(!finished.includes('验收已通过'));
+ const active=islandFixture('finished');active.sre!.tasks[0]!.status='active';
+ assert.ok(render(active).includes('pilot-island-ring'));
+ assert.ok(render(islandFixture('cancelled')).includes('任务已取消'));
+ assert.ok(render(islandFixture('unknown')).includes('pilot-island-ring'));
+});

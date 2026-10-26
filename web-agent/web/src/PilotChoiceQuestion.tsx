@@ -1,4 +1,4 @@
-import {useRef,useState} from 'react';
+import {useLayoutEffect,useRef,useState} from 'react';
 import type {AIQuestionRequest,PilotSelection} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {DisclosureSummary} from './DisclosureSummary';
@@ -13,6 +13,24 @@ export function PilotChoiceQuestion(props:Props){
 
 function PilotChoice({session,request,refresh,runId}:Props){
  const choice=request.pilot!;
+ const surface=useRef<HTMLElement>(null),entrance=useRef<Animation|null>(null);
+ const settleEntrance=()=>{entrance.current?.cancel();entrance.current=null};
+ useLayoutEffect(()=>{
+  const node=surface.current;
+  if(!node||document.hidden||window.matchMedia('(prefers-reduced-motion: reduce)').matches||!node.animate)return;
+  const height=node.getBoundingClientRect().height,style=getComputedStyle(node);
+  // The request key owns this entrance. Counter updates and selection changes
+  // keep the mounted controls, animation clock and user focus intact.
+  const animation=node.animate([
+   {height:'0px',opacity:0,transform:'translateY(6px)',overflow:'clip',marginTop:'0px',marginBottom:'0px'},
+   {height:`${height}px`,opacity:1,transform:'translateY(0)',overflow:'clip',marginTop:style.marginTop,marginBottom:style.marginBottom},
+  ],{duration:280,easing:'cubic-bezier(.22,1,.36,1)'});
+  entrance.current=animation;
+  animation.onfinish=()=>{if(entrance.current===animation)entrance.current=null};
+  const settle=()=>{animation.cancel();if(entrance.current===animation)entrance.current=null};
+  window.addEventListener('resize',settle);
+  return()=>{window.removeEventListener('resize',settle);settle()};
+ },[]);
  const [directionId,setDirectionId]=useState(()=>choice.directions.find(direction=>direction.recommended)?.id??choice.directions[0]?.id??'');
  const [checked,setChecked]=useState<Record<string,string[]>>({});
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -27,7 +45,7 @@ function PilotChoice({session,request,refresh,runId}:Props){
   try{await api.aiOperation(session,runId?'agentQuestionReply':'questionReply',{id:request.id,...(runId?{runId}:{}),answers:{[request.questions[0]!.id]:[JSON.stringify(selection)]}});await refresh()}
   catch(e){setError(readableError(e));submitting.current=false;setBusy(false)}
  }
- return <section className="pilot-choice" aria-label="选择当前步骤的方向或命令" aria-busy={busy}>
+ return <section ref={surface} onFocusCapture={settleEntrance} className="pilot-choice" aria-label="选择当前步骤的方向或命令" aria-busy={busy}>
   <div className="pilot-choice-heading"><span className="pilot-choice-prompt">请选择处理方向</span><button type="button" className="pilot-choice-delegate" disabled={busy} onClick={()=>void submit({level:'step'})}>交给 Lake 完成本步骤<Glyph name="arrow" size={12}/></button></div>
   <fieldset className="pilot-directions" disabled={busy} data-single={choice.directions.length===1}><legend className="visually-hidden">选择处理方向</legend>
    {choice.directions.map(value=><div className="pilot-direction" data-selected={value.id===direction.id} key={value.id}>
