@@ -48,6 +48,13 @@ const messages=[
 ].map((m,i)=>({...m,sessionId:session.id,taskId:'demo-task',revision:1,sequence:i+1,createdAt:at(m.minute),...(m.step?{attemptId:m.step,roleRunId:'role-'+m.step}:{})}));
 const task={id:'demo-task',sessionId:session.id,projectId:project.id,requestId:'demo-request',goal:'回滚订单服务并验证恢复',scope:['order-api'],mode:'assist',status:'completed',outcome:'completed',recoveryStatus:'verified',rootCauseStatus:'unknown',profileId:'lake-sre',profileVersion:1,revision:1,tokenBudget:128000,budgetSpent:0,usage:{input:0,output:0,total:0},createdAt:at(24),updatedAt:at(29),plans:[{id:'plan-v1',version:1,goal:'回滚订单服务并验证恢复',taskType:'recovery',scope:['order-api'],collaborationVersion:1,steps}],runs:[{id:'plan-run',planRevisionId:'plan-v1',status:'completed'}],attempts:steps.map((s,i)=>({id:s.id,stepId:s.id,planRunId:'plan-run',roleRunId:'role-'+s.id,status:'succeeded',evidence:[],operations:[],startedAt:at(25+i),finishedAt:at(26+i)})),messages,verifications:[]} as unknown as SRETask;
 const snapshot={session,resources,resourceTree:tree,messages:[{id:'demo-question',sessionId:session.id,role:'user',text:'订单服务发布后错误率升高，按已批准的方案回滚，并验证是否恢复。',createdAt:at(23)}],specialists:[],evidence:[],actions:[],terminals:[],cursor:1,replyTimings:[{messageId:'demo-question',startedAt:at(24),finishedAt:at(29),status:'completed'}],messageQueue:{paused:false,revision:0,lastError:'',items:[]},ai:{session:session.id,profile:'core',status:'completed',rootTurnId:'demo-turn',turns:1,turnStartedAt:at(24),turnFinishedAt:at(29),cards:[],cardsOffset:0,totalCards:0,agentRuns:steps.map((s,i)=>({id:'role-'+s.id,sessionId:session.id,rootTurnId:'demo-turn',sreTaskId:task.id,sreRole:s.role,role:s.role,task:s.description,resourceIds:['order-api'],status:'completed',createdAt:at(25+i),startedAt:at(25+i),finishedAt:at(26+i),toolCount:3})),usage:{known:true,input:17820,output:1240,total:19060}},sre:{enabled:true,tasks:[task]}} as unknown as SessionSnapshot;
+if(new URLSearchParams(location.search).has('inspector-ordinary')){
+ snapshot.sre={enabled:false,tasks:[]};snapshot.ai!.agentRuns=[];
+ snapshot.messages[0]!.text='只读核对两个演示资源的日志。';
+ snapshot.ai!.cards=resources.slice(0,2).map((resource,i)=>({id:`inspector-read-${i}`,type:'operation',title:'read',at:at(25+i),status:'completed',content:'演示日志读取完成。',data:{resource_id:resource.id,target:resource.name,arguments:{path:'/tmp/lake-inspector-fixture.log'}}}));
+ snapshot.ai!.cards.push({id:'inspector-answer',type:'message',at:at(29),status:'completed',content:'两个演示资源的日志已核对，原始记录可从下方用时入口查看。'});
+ snapshot.ai!.totalCards=snapshot.ai!.cards.length;
+}
 if(new URLSearchParams(location.search).has('responsive-approval')){
  session.status='waiting_approval';
  snapshot.sre={enabled:false,tasks:[]};snapshot.ai!.agentRuns=[];

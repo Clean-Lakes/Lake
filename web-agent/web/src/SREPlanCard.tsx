@@ -2,24 +2,25 @@ import {DisclosureSummary} from './DisclosureSummary';
 import {useState} from 'react';
 import type {SRETask,Resource,AgentRun} from '../../shared/contracts';
 import {Glyph} from './Icons';
+import {AgentIcon} from './AgentIcon';
 import {api,readableError} from './api';
 import {SREBlockers,sreUnresolvedOperations} from './SREBlockers';
 import {displayAiError} from './aiErrors';
 import {sreRoles,sreStatus,sreStepAttempt,sreTaskActive,sreCanStart,sreStepStatus} from './sreTranscript';
 
-export function SREPlanCard({task,resources,onUpdated,enabled=true,agentRuns=[]}:{task:SRETask;resources:Resource[];agentRuns?:AgentRun[];onUpdated:()=>void;enabled?:boolean}){
+export function SREPlanCard({task,resources,onUpdated,enabled=true,agentRuns=[],inspector=false,onInspectStep}:{inspector?:boolean;onInspectStep?:(stepId:string)=>void;task:SRETask;resources:Resource[];agentRuns?:AgentRun[];onUpdated:()=>void;enabled?:boolean}){
  const plan=task.plans?.at(-1);const [busy,setBusy]=useState(false),[error,setError]=useState(''),[editing,setEditing]=useState(false),[goal,setGoal]=useState(''),[steps,setSteps]=useState<string[]>([]);
  const work=async(fn:()=>Promise<unknown>)=>{setBusy(true);setError('');try{await fn();onUpdated()}catch(e){setError(readableError(e))}finally{setBusy(false)}};
  if(!plan)return null;
  const unresolved=sreUnresolvedOperations(task),currentRun=task.runs?.at(-1),awaiting=task.attempts?.some(a=>a.planRunId===currentRun?.id&&agentRuns.some(r=>r.id===a.roleRunId&&r.sreTaskId===task.id&&(r.pending||r.status==='waiting_approval'))),hasRunning=task.attempts?.some(a=>a.operations?.some(o=>o.status==='dispatched')),planStatus=unresolved.length?'unknown':hasRunning?'running':awaiting?'waiting_approval':task.status;
  const control=(action:string)=>work(()=>api.sreOperation(task.sessionId,task.id,'control',{action,expectedRevision:task.revision,clientRequestId:crypto.randomUUID()}));
  const exportDraft=()=>work(async()=>{const value=await api.sreExport(task.sessionId,task.id);const blob=new Blob([value.content],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='lake-runbook-draft.json';a.click();URL.revokeObjectURL(url)});
- return <section className="sre-plan" id={`sre-plan-${task.id}`} tabIndex={-1} aria-label="SRE 任务计划">
+ return <section className={`sre-plan${inspector?' inspector-plan':''}`} id={`sre-plan-${task.id}`} tabIndex={-1} aria-label="SRE 任务计划">
   <header><span><Glyph name="document" size={16}/><strong>Plan · {plan.goal}</strong><small>v{plan.version}</small></span><span className={`sre-state state-${planStatus}`}>{sreStatus[planStatus]??planStatus}</span></header>
   <p className="sre-plan-goal">目标：{plan.acceptance?.length?plan.acceptance.map(c=>c.description).join('；'):plan.goal}</p>
   <p className="sre-plan-scope">范围：{plan.scope.map(id=>resources.find(r=>r.id===id)?.name??'资源不可用').join('、')}</p>
   {!plan.collaborationVersion&&sreTaskActive(task)&&plan.steps.filter(s=>s.role==='investigator').length>1&&!plan.steps.some(s=>s.role==='verifier'||s.role==='executor')&&<p className="sre-plan-scheduling">当前为顺序分工：调查员先完成采集，协调者再汇总。</p>}
-  <ol>{plan.steps.map(step=>{const attempt=sreStepAttempt(task,step),status=sreStepStatus(task,step,agentRuns);return <li key={step.id}><span className={`sre-step-mark status-${status}`}><Glyph name={status==='succeeded'?'check':status==='running'?'clock':status==='unknown'||status==='failed'?'alert':'clock'} size={13}/></span><span className="sre-step-description">{step.description}</span><small>{sreRoles[step.role].name}</small><span className={`sre-state state-${status}`} title={attempt?.reusedFromAttemptId?'沿用已有完成记录，未重新执行':undefined}>{attempt?.reusedFromAttemptId?'已沿用':sreStatus[status]??status}</span></li>})}</ol>
+  <ol>{plan.steps.map(step=>{const attempt=sreStepAttempt(task,step),status=sreStepStatus(task,step,agentRuns);return <li key={step.id}><span className={`sre-step-mark status-${status}`}><Glyph name={status==='succeeded'?'check':status==='running'?'clock':status==='unknown'||status==='failed'?'alert':'clock'} size={13}/></span><span className="sre-step-description">{inspector?<button type="button" className="inspector-plan-step" disabled={!attempt} onClick={()=>onInspectStep?.(step.id)}>{step.description}<small><AgentIcon role={step.role} size={14}/>{sreRoles[step.role].name} · {attempt?.reusedFromAttemptId?'已沿用':sreStatus[status]??status}</small></button>:step.description}</span>{!inspector&&<><small>{sreRoles[step.role].name}</small><span className={`sre-state state-${status}`} title={attempt?.reusedFromAttemptId?'沿用已有完成记录，未重新执行':undefined}>{attempt?.reusedFromAttemptId?'已沿用':sreStatus[status]??status}</span></>}</li>})}</ol>
   {hasRunning&&<p className="sre-plan-scheduling" role="status">原操作仍在执行，等待原命令结果；不会重复派发。</p>}
   <SREBlockers task={task} resources={resources} onUpdated={onUpdated}/>
   {task.error&&!(unresolved.length&&(task.error.includes('结果不明')||task.error.includes('结果待核实')))&&<p className="sre-task-error" role="status">{displayAiError(task.error)}</p>}

@@ -1,3 +1,4 @@
+import {sessionInspectorId,useSessionInspector} from './SessionInspectorContext';
 import {useEffect, useId, useLayoutEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import type {WorkSession} from '../../shared/contracts';
@@ -6,6 +7,8 @@ import {Glyph} from './Icons';
 import {pilotRoleStatus,pilotIslandFocus, type PilotIslandModel} from './pilotIslandModel';
 
 export function PilotStatusIsland({model, onInspect,visible=true,status}: {model: PilotIslandModel; status?:WorkSession['status']; visible?:boolean; onInspect: (targetId: string) => void}) {
+  const inspector=useSessionInspector();
+  const inspectorOpen=inspector?.selection?.taskId===model.taskId;
   const [open, setOpen] = useState(false), [present,setPresent]=useState(false);
   const motion=useRef<Animation|null>(null);
   const [position, setPosition] = useState<{left: number; top: number; above:boolean; width:number} | null>(null);
@@ -80,7 +83,7 @@ export function PilotStatusIsland({model, onInspect,visible=true,status}: {model
   const progress=model.total?Math.max(0,Math.min(100,model.completed/model.total*100)):0;
   const inspect = (target: string) => {close(); onInspect(target);};
   return <div className="pilot-island" data-tone={model.tone} data-pilot-task={model.taskId}>
-    <button ref={trigger} type="button" className="pilot-island-trigger" aria-label={`Lake Pilot：${model.detail}。${primary?.name??''}：${action}。${secondary}。查看专员进度`} aria-haspopup="dialog" disabled={!visible} aria-expanded={visible&&open} aria-controls={open ? panelId : undefined} title={model.detail} onClick={() => {if(open)close();else{setPresent(true);setOpen(true);}}}>
+    <button ref={trigger} type="button" className="pilot-island-trigger" aria-label={`Lake Pilot：${model.detail}。${primary?.name??''}：${action}。${secondary}。查看专员进度`} aria-haspopup={inspector?undefined:"dialog"} disabled={!visible} aria-expanded={visible&&(inspector?inspectorOpen:open)} aria-controls={inspector?sessionInspectorId:open ? panelId : undefined} title={model.detail} onClick={() => {if(inspector){if(inspectorOpen)inspector.close();else onInspect(`sre-plan-${model.taskId}`);}else if(open)close();else{setPresent(true);setOpen(true);}}}>
       {primary&&<span className={`pilot-action-avatar role-state-${primary.status}`} aria-hidden="true"><AgentIcon role={primary.role} size={22}/></span>}
       <span className="pilot-island-action" aria-hidden="true"><span className="pilot-island-action-line">{primary&&<strong>{primary.name}</strong>}<span className="pilot-island-action-label" title={action}>{model.tone!=='active'&&<i className="pilot-action-state-dot"/>}{action}</span></span><small title={secondary}>{secondary}</small></span>
       <span className="pilot-island-progress" data-session-status={status} aria-hidden="true">{ended?<span className="pilot-island-ended" title={model.status==='completed'?'任务已结束':'任务已取消'}><Glyph name={model.status==='completed'?'check':'close'} size={16}/></span>:<svg className="pilot-island-ring" viewBox="0 0 28 28" fill="none"><circle className="pilot-ring-track" cx="14" cy="14" r="10"/><circle className="pilot-ring-value" opacity={model.completed>0?1:0} cx="14" cy="14" r="10" pathLength="100" strokeDasharray={`${progress} 100`} transform="rotate(-90 14 14)"/></svg>}<Glyph name="chevron" size={12}/></span>
