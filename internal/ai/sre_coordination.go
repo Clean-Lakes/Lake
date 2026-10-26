@@ -350,3 +350,24 @@ func (e *Engine) sreCurrentTurnContext(s *session) string {
 	}
 	return "\n[LAKE_SRE_TURN_FACTS]\n" + js(map[string]any{"turn_id": turn, "startedAt": started, "tasks": facts}) + "\nThis parent coordination turn has not executed new resource work. Historical reports, hashes and file timestamps do not prove a fresh run. Resolve the current user's intent from the conversation. A request to repeat or continue actual work needs sre_collaborate; restart_task can rerun a completed read-only investigation without reconstructing its goal/scope. Use sre_reply only for an actual explanation, historical question or necessary clarification; never claim old work just executed in this turn. These facts do not grant operation permission."
 }
+
+// DeepSeek rejects forced function choice while thinking is enabled. Only the
+// one-time decision serialization uses non-thinking; the user's saved model and
+// all specialist reasoning remain unchanged. The compatibility request is hashed.
+// https://api-docs.deepseek.com/guides/thinking_mode/
+func terminalDecisionModel(m Model) Model {
+	switch protocol(m) {
+	case "openai", "openai-response", "azure-gpt":
+		if strings.HasPrefix(modelSlug(m), "deepseek-") {
+			builtin := m
+			builtin.Reasoning = nil
+			if !ValidReasoningEffort(builtin, "none") {
+				return m
+			}
+			m.Reasoning = nil
+			m.ReasoningEffort = "none"
+		}
+		m.requireToolCall = true
+	}
+	return m
+}

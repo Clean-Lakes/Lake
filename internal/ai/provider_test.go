@@ -209,3 +209,24 @@ func TestTerminalRecoveryRequiresToolCallOnlyForSupportedProtocol(t *testing.T) 
 		t.Fatal("manifest omitted terminal recovery policy")
 	}
 }
+
+func TestTerminalDecisionDeepSeekThinkingCompatibilityIsRequestLocal(t *testing.T) {
+	for _, p := range []string{"openai", "openai-response"} {
+		cap := ReasoningCapability{Levels: []string{"low", "high", "max"}, Default: "high", Source: "provider"}
+		original := Model{URL: "https://api.deepseek.com/v1", Name: "deepseek-flash", Protocol: p, Reasoning: &cap, ReasoningEffort: "high", MaxOutput: 8192}
+		recovery := terminalDecisionModel(original)
+		_, body, err := modelPayload(recovery, []Message{{Role: "user", Content: "finish decision"}}, []Tool{sreReplyTool()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if body["tool_choice"] != "required" {
+			t.Fatal("decision not required")
+		}
+		if p == "openai-response" && obj(body["reasoning"])["effort"] != "none" || p == "openai" && obj(body["thinking"])["type"] != "disabled" {
+			t.Fatal("incompatible forced thinking request")
+		}
+		if original.ReasoningEffort != "high" || original.Reasoning != &cap || len(cap.Levels) != 3 || recovery.MaxOutput != original.MaxOutput {
+			t.Fatal("recovery modified saved reasoning or token ceiling")
+		}
+	}
+}

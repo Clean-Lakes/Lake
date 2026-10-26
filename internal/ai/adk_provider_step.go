@@ -114,10 +114,7 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	tools := e.sessionCatalog(ctx, id, c)
 	if c.sreCoordinator && d.terminalRecovery {
 		tools = []Tool{sreReplyTool(), sreCoordinationTool()}
-		switch protocol(requestModel) {
-		case "openai", "openai-response", "azure-gpt":
-			requestModel.requireToolCall = true
-		}
+		requestModel = terminalDecisionModel(requestModel)
 		appendSystem(strategy.FixedRules, "sre-terminal-recovery", "\nSubmit exactly one terminal function call now: sre_reply with the complete actual answer, or sre_collaborate with the contextual work request. This is the existing one-time decision correction, not a new resource execution or permission. Plain prose cannot finish this coordination turn.")
 	}
 	if !c.MemoryEnabled {
