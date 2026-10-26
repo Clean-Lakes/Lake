@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import type {AIQuestionRequest,SessionSnapshot,SRETask,SRETranscriptEntry,SREOperation,PilotReadRecovery} from '../../shared/contracts';
+import type {AgentRun,AIQuestionRequest,SessionSnapshot,SRETask,SRETranscriptEntry,SREOperation,PilotReadRecovery} from '../../shared/contracts';
 import {LakePilotControl} from '../src/LakePilotControl';
 import {PilotAgentWork} from '../src/PilotAgentWork';
 import {pilotWorkForEntry,pilotStepStatus} from '../src/pilotPresentation';
@@ -73,8 +73,8 @@ test('Pilot live narration stays behind a collapsed record and does not replace 
  const active={...task,status:'active',pilot:{autoAdvance:true,settingsRevision:1},messages:[own]} as SRETask;
  const snapshot={session:{id:'session',projectId:'project'},resources:[],sre:{enabled:true,pilot:{enabled:true,autoAdvance:true,revision:1},tasks:[active]},ai:{agentRuns:[{id:'agent',sreTaskId:task.id,status:'running',createdAt:at,startedAt:at,liveTextId:'new-model-part',liveText:'不断变化的内部播报',activityPhase:'tool',activityTool:'grep'}]}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(SRERoleMessage,{task:active,entry:own,snapshot,renderApproval:()=>null,onUpdated:()=>{}}));
- assert.ok(!html.includes('class="sre-role-body"'));assert.ok(!html.includes('status-text--active'));
- assert.match(html,/<div class="sre-live-activity is-calm"/);assert.match(html,/<details class="sre-live-record">/);assert.match(html,/运行详情/);assert.match(html,/不断变化的内部播报/);
+ assert.ok(!html.includes('class="sre-role-body"'));assert.ok(html.includes('status-text--active'));
+ assert.match(html,/<div class="sre-live-activity is-stable"/);assert.match(html,/<details class="sre-live-record">/);assert.match(html,/运行详情/);assert.match(html,/不断变化的内部播报/);
 });
 
 test('Actual replacement reads remove the incomplete projection while unknown changes stay blocked',()=>{
@@ -96,4 +96,18 @@ test('Pilot continues displaying active work while adapting a read failure; chan
  const active=sreRoleLiveState(current,entry,run,attempt);assert.equal(active.active,true);assert.equal(active.label,'执行中');
  const ended=sreRoleLiveState({...current,status:'paused'},entry,run,{...attempt,status:'failed'});assert.equal(ended.active,false);assert.equal(ended.label,'检查未完成');
  const change=sreRoleLiveState(current,entry,run,{...attempt,operations:[{...failed,risk:'write'}]});assert.equal(change.active,false);assert.equal(change.label,'结果待核实');
+});
+
+
+test('Pilot step motion follows the actual current specialist, never paused, waiting or stale work',()=>{
+ const activeTask={...task,status:'active'} as SRETask;
+ const run={id:'agent',sreTaskId:task.id,status:'running'} as AgentRun;
+ const moving=(t:SRETask,r=run)=>pilotWorkForEntry(t,entry,[r])?.steps.find(x=>x.step.id==='logs')?.active;
+ assert.equal(moving(activeTask),true);
+ for(const status of ['paused','completed','failed','cancelled'] as const)assert.equal(moving({...activeTask,status}),false,status);
+ for(const status of ['queued','completed','waiting_input','waiting_approval'] as const)assert.equal(moving(activeTask,{...run,status}),false,status);
+ assert.equal(moving(activeTask,{...run,question:{id:'wait',questions:[]}}),false);
+ assert.equal(moving(activeTask,{...run,sreTaskId:'foreign'}),false);
+ const revised={...activeTask,runs:[...activeTask.runs,{...activeTask.runs[0]!,id:'new-run',planRevisionId:'different-plan'}]};
+ assert.equal(moving(revised),false);
 });

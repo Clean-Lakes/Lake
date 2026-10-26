@@ -19,7 +19,14 @@ export function pilotWorkForEntry(task:SRETask,entry:SRETranscriptEntry,runs:Age
  };
  const anchor=task.messages.filter(owns).sort((a,b)=>a.sequence-b.sequence||a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id))[0];
  if(anchor?.id!==entry.id)return null;
- const states=steps.map(value=>({step:value,status:pilotStepStatus(task,plan,value,runs)}));
+ const states=steps.map(value=>{
+  const status=pilotStepStatus(task,plan,value,runs);
+  const latestRun=task.runs.filter(item=>item.planRevisionId===plan.id).at(-1);
+  const latestAttempt=task.attempts.filter(item=>item.planRunId===latestRun?.id&&item.stepId===value.id).at(-1);
+  const agent=runs.find(item=>item.id===latestAttempt?.roleRunId&&item.sreTaskId===task.id);
+  const active=status==='running'&&['active','waiting_approval'].includes(task.status)&&latestRun?.id===task.runs.at(-1)?.id&&agent?.status==='running'&&!agent.pending&&!agent.question;
+  return {step:value,status,active};
+ });
  const repeatsDescription=entry.kind==='progress'&&entry.body.replace(/\s+/g,'')===step.description.replace(/\s+/g,'');
  return {id:JSON.stringify([task.id,plan.id,key]),plan,steps:states,completed:states.filter(value=>value.status==='succeeded').length,repeatsDescription};
 }
