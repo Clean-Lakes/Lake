@@ -23,7 +23,7 @@ div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { fo
 .ai-markdown.assistant-prose h4 { font-size: var(--font-size-body); }
 .ai-markdown.assistant-prose p.assistant-summary { margin: 0 0 16px; padding: 0; border: 0; border-radius: 0; background: none; }
 .ai-markdown.assistant-prose .markdown-table-scroll { min-width: 0; max-width: 100%; overscroll-behavior-x: contain; }
-.ai-markdown.assistant-prose table { width: max-content; min-width: 100%; max-width: none; margin: 12px 0; border-collapse: collapse; font-size: var(--font-size-ui); line-height: 1.7; font-variant-numeric: tabular-nums; }
+.ai-markdown.assistant-prose table { width: max-content; min-width: 100%; max-width: none; margin: 0; border-collapse: collapse; font-size: var(--font-size-ui); line-height: 1.7; font-variant-numeric: tabular-nums; }
 .assistant-reply-details { margin: 12px 0 0; }
 .assistant-reply-details[open] > summary { margin-bottom: 14px; }
 .ai-markdown.assistant-prose td,.ai-markdown.assistant-prose th { max-width: 36ch; padding: 6px 10px; border: 1px solid var(--border); text-align: start; vertical-align: top; white-space: normal; overflow-wrap: break-word; word-break: normal; }

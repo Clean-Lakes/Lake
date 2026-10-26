@@ -825,7 +825,7 @@ a { color: inherit; }
 .markdown-code-block .markdown-code-command { color: var(--terminal-blue); }
 .markdown-code-block > .markdown-code-error { grid-column: 1 / -1; margin: 0; padding: 6px; color: var(--danger); font-size: 12px; }
 @media(pointer:coarse) { .markdown-code-toolbar > button { width: 44px; height: 44px; } .markdown-code-block > pre { align-self: center; } }
-.ai-markdown table { border-collapse: collapse; overflow: auto; font-size: var(--font-size-ui); display: table; width: 100%; margin: 12px 0; }
+.ai-markdown table { border-collapse: collapse; font-size: var(--font-size-ui); display: table; width: 100%; margin: 12px 0; }
 .ai-markdown td,.ai-markdown th { border: 1px solid var(--border); padding: 6px 10px; }
 .ai-markdown img { max-width: 100%; max-height: 520px; }
 .ai-markdown li { margin: 4px 0; }
@@ -1117,7 +1117,17 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .evidence-record header{ display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .evidence-record small{ color: var(--text-muted); font-size: var(--font-size-ui); }
 .evidence-record pre{ white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 12px; }
-.markdown-table-scroll{ overflow: auto; width: 100%; }
+/* The scroll box owns both the scrollbar lane and the paragraph spacing.
+   Keep overlay scrollbars inside this box, away from the next paragraph. */
+.markdown-table-scroll{ box-sizing:border-box; width:100%; min-width:0; max-width:100%; overflow-x:auto; overflow-y:hidden; margin:12px 0 16px; padding-bottom:8px; overscroll-behavior-x:contain; scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
+.markdown-table-scroll > table{ margin:0; }
+@supports selector(::-webkit-scrollbar) {
+ .markdown-table-scroll{ scrollbar-width:auto; scrollbar-color:auto; }
+ .markdown-table-scroll::-webkit-scrollbar{ height:6px; width:6px; }
+ .markdown-table-scroll::-webkit-scrollbar-track,.markdown-table-scroll::-webkit-scrollbar-corner{ background:transparent; }
+ .markdown-table-scroll::-webkit-scrollbar-thumb{ border:0; border-radius:999px; background:var(--border-strong); }
+ .markdown-table-scroll::-webkit-scrollbar-thumb:hover{ background:var(--text-muted); }
+}
 .resource-nav-row:hover .nav-row, .resource-nav-row:focus-within .nav-row{ padding-right: 64px; }
 .resource-terminal-manage[aria-expanded="true"]{ opacity: 1; }
 .resource-folder-row:hover .resource-folder-actions, .resource-folder-row:focus-within .resource-folder-actions{ opacity: 1; }
