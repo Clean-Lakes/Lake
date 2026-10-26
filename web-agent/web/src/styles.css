@@ -1145,10 +1145,29 @@ input[type="checkbox"]{ accent-color: var(--primary); }
   .ai-pending > .ai-diff-columns { grid-template-columns: minmax(0, 1fr); }
 }
 
-@container lake-composer (max-width: 520px) {
-  .composer-foot { gap: 3px 6px; }
-  .composer-status { flex: 1 1 180px; justify-content: flex-end; flex-wrap: wrap; min-width: 0; max-width: 100%; margin-left: auto; }
-  .composer-status .model-switch-wrap { max-width: min(240px, 60cqw); }
+/* Use the actual conversation width when navigation, inspector and terminal coexist. */
+@container lake-composer (max-width: 620px) {
+ .composer-foot { justify-content:flex-start; flex-wrap:nowrap; gap:4px; padding-inline:0; }
+ .composer-foot > :is(.image-attach-button,.composer-permission-button,.pilot-control) { flex-shrink:0; }
+ .composer-foot .composer-permission-button { gap:4px; padding-inline:3px; }
+ .composer-foot .composer-status { flex:1 1 0; flex-wrap:nowrap; gap:2px; min-width:72px; max-width:none; margin-left:auto; }
+ .composer-foot .composer-status .model-switch-wrap { flex:0 1 auto; min-width:0; max-width:100%; }
+ .composer-foot .composer-model-select.app-select { max-width:100%; }
+ .composer-foot .composer-model-select.app-select > .app-select-trigger { gap:4px; padding-inline:4px; }
+ .composer-foot .composer-model-current { gap:4px; }
+ .composer-foot .ai-context-usage { flex:none; }
+ .composer-foot .ai-context-trigger { padding-inline:3px; }
+}
+@container lake-composer (max-width: 480px) {
+ .composer-foot .composer-tool-label { display:none; }
+ .composer-foot > .composer-permission-button { justify-content:center; width:28px; padding:0; }
+}
+@container lake-composer (max-width: 360px) {
+ .composer-foot .composer-model-effort { display:none; }
+}
+@container lake-composer (max-width: 300px) {
+ .composer-foot .pilot-mode-label { display:none; }
+ .composer-foot .pilot-mode-toggle { min-width:28px; justify-content:center; }
 }
 
 /* Compact project navigation: a single project, conversations and resources together. */

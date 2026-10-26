@@ -48,7 +48,7 @@ export function LakePilotControl({snapshot,onUpdated,disabled,disabledReason}:{s
   })();
  };
  return <><span className="pilot-control">
-  <button type="button" className="composer-permission-button sre-mode-toggle pilot-mode-toggle" data-mode={mode} aria-label={`Lake Pilot：${modeLabel[mode]}；点击${nextLabel[mode]}`} aria-pressed={settings.enabled} aria-busy={busy} aria-disabled={!!disabled} aria-describedby={hintId} disabled={disabled} title={hint} onClick={cycle}><Glyph name="lakePilot" size={16}/>Lake Pilot{mode==='auto'&&<span className="pilot-auto-badge" aria-hidden="true">AUTO</span>}</button>
+  <button type="button" className="composer-permission-button sre-mode-toggle pilot-mode-toggle" data-mode={mode} aria-label={`Lake Pilot：${modeLabel[mode]}；点击${nextLabel[mode]}`} aria-pressed={settings.enabled} aria-busy={busy} aria-disabled={!!disabled} aria-describedby={hintId} disabled={disabled} title={hint} onClick={cycle}><Glyph name="lakePilot" size={16}/><span className="pilot-mode-label">Lake Pilot</span>{mode==='auto'&&<span className="pilot-auto-badge" aria-hidden="true">AUTO</span>}</button>
  </span><span id={hintId} className="visually-hidden" role="status">{busy?'正在保存 Lake Pilot 设置…':hint}</span>
  {error&&<span role="alert" className="sre-toggle-error">{error}</span>}</>;
 }

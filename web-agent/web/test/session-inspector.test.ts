@@ -1,3 +1,6 @@
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {InspectorTaskSummary,inspectorProgress} from '../src/InspectorTaskSummary';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {islandFixture} from './fixtures/pilot-island-data';
@@ -30,4 +33,29 @@ test('steps without dispatched attempts do not acquire another step’s records'
  assert.ok(!inspectorAttempts(task).some(item=>item.step.id==='disk'));
  assert.equal(inspectedAttempt(task,'attempt-logs')!.step.id,'logs');
  assert.equal(inspectedAttempt(task,'attempt-verify-logs')!.step.id,'verify-logs');
+});
+
+
+test('all completed steps remain distinct from an inconclusive finding',()=>{
+ const task=islandFixture('finished').sre!.tasks[0]!;
+ const html=renderToStaticMarkup(createElement(InspectorTaskSummary,{task,title:'主机检查'}));
+ assert.equal(inspectorProgress(task).completed,8);
+ assert.ok(html.includes('步骤全部完成')&&html.includes('结论不充分'));
+ assert.ok(html.includes('aria-valuenow="8"')&&html.includes('data-tone="attention"'));
+ assert.ok(!html.includes('恢复已验证'));
+ const revised={...task,plans:[...task.plans,{...task.plans[0]!,id:'new-plan',version:2}]};
+ assert.equal(inspectorProgress(revised).completed,0,'old run success cannot fill a revised plan');
+});
+
+test('paused and ended tasks cannot keep stale running segment states',()=>{
+ const snapshot=islandFixture(),task=snapshot.sre!.tasks[0]!;
+ assert.ok(inspectorProgress(task).steps.some(step=>step.status==='running'));
+ for(const status of ['paused','cancelled','failed','completed']){
+  const progress=inspectorProgress({...task,status});
+  assert.equal(progress.completed,3);
+  assert.ok(!progress.steps.some(step=>step.status==='running'),status);
+ }
+ const unknown=islandFixture('unknown').sre!.tasks[0]!;
+ const html=renderToStaticMarkup(createElement(InspectorTaskSummary,{task:unknown,title:'待核实'}));
+ assert.ok(html.includes('执行结果待核实')&&!html.includes('恢复已验证'));
 });

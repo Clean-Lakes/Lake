@@ -35,7 +35,7 @@ export function PlanModeToggle({mode='default',disabled=false,disabledReason,onC
  return <><button type="button" className="composer-permission-button plan-mode-toggle" aria-label="Plan 模式" aria-pressed={enabled} aria-busy={busy} disabled={disabled||busy} title={hint} onClick={()=>{
   if(saving.current||disabled)return;saving.current=true;setBusy(true);setError('');
   void onChange(enabled?'default':'plan').catch(error=>setError(readableError(error))).finally(()=>{saving.current=false;setBusy(false);});
- }}><Glyph name="document" size={14}/><span>Plan</span></button>{error&&<span className="plan-mode-error" role="alert">{error}</span>}</>;
+ }}><Glyph name="document" size={14}/><span className="composer-tool-label">Plan</span></button>{error&&<span className="plan-mode-error" role="alert">{error}</span>}</>;
 }
 
 export function PlanActions({disabled=false,onExecute,onRevise}:{disabled?:boolean;onExecute:()=>Promise<unknown>;onRevise:()=>void}) {
