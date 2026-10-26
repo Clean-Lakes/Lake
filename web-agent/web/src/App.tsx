@@ -708,9 +708,25 @@ function AppContent() {
   const currentSessionStatus = currentSessionPresentation.status ?? selectedSession?.status;
   const selectedResource = catalog?.resources.find(item => item.id === route.resourceId);
   useEffect(()=>{inspector.reset();},[sessionId,route.resourceId,isPlansPage]);
-  useLayoutEffect(()=>{if(inspector.selection?.sessionId===sessionId)pauseFollowing();},[inspector.selection]);
+  useLayoutEffect(()=>{if(inspector.selection?.sessionId===sessionId&&!inspector.selection.automatic)pauseFollowing();},[inspector.selection]);
   const inspectorOpen=!!activeSnapshot&&inspector.selection?.sessionId===activeSnapshot.session.id&&!selectedResource&&!isPlansPage;
   const headerPilot = !selectedResource && !isPlansPage ? pilotIslandModel(activeSnapshot) : null;
+  const seenInspectorTasks=useRef(new Set<string>());
+  useEffect(()=>{
+    if(!headerPilot||!activeSnapshot)return;
+    const key=JSON.stringify([activeSnapshot.session.id,headerPilot.taskId]);
+    if(seenInspectorTasks.current.has(key))return;
+    seenInspectorTasks.current.add(key);
+    if((!inspector.selection||inspector.selection.sessionId!==activeSnapshot.session.id||inspector.selection.automatic)&&['draft','active','waiting_input','waiting_approval'].includes(headerPilot.status))inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,tab:'plan',automatic:true});
+  },[headerPilot?.taskId,sessionId]);
+  const inspectorAvailable=!!activeSnapshot&&!selectedResource&&!isPlansPage&&(!!headerPilot||inspector.lastSelection?.sessionId===sessionId||activeSnapshot.ai?.cards.some(card=>['operation','shell','thinking'].includes(card.type)));
+  const reopenInspector=()=>{
+    if(!activeSnapshot)return;
+    pauseFollowing();
+    if(inspector.lastSelection?.sessionId===sessionId){inspector.open({...inspector.lastSelection,automatic:false});return;}
+    if(headerPilot){inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,tab:'plan'});return;}
+    [...document.querySelectorAll<HTMLButtonElement>('.conversation .turn-duration-disclosure')].at(-1)?.click();
+  };
   const selectedProjectId = selectedResource?.projectId ?? selectedSession?.projectId;
   useEffect(() => {
     if (selectedProjectId) setSidebarProjectId(selectedProjectId);
@@ -1433,10 +1449,10 @@ function AppContent() {
 
     </aside>
 
-    <main className={`workspace${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${selectedSession&&!selectedResource&&!isPlansPage?" has-floating-header":""}`} onDragOver={event=>{if(selectedSession&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(!selectedSession||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
+    <main className={`workspace${inspectorAvailable&&!inspectorOpen?" has-inspector-entry":""}${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${selectedSession&&!selectedResource&&!isPlansPage?" has-floating-header":""}`} onDragOver={event=>{if(selectedSession&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(!selectedSession||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       <header className={`workspace-header${headerPilot ? ' has-pilot-island' : ''}`}>
         {selectedSession && !selectedResource && !isPlansPage && <span className="workspace-header-glass" aria-hidden="true"/>}
-        {selectedSession && !selectedResource && !isPlansPage && !headerPilot && <HeaderSweep key={`sweep-${selectedSession.id}`} active={currentSessionStatus === "investigating"}/>}
+        {selectedSession && !selectedResource && !isPlansPage && <HeaderSweep key={`sweep-${selectedSession.id}`} active={currentSessionStatus === "investigating"&&(!headerPilot||headerPilot.tone==='active'&&headerPilot.roles.some(role=>role.status==='running'))}/>}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
         <div className="breadcrumbs"><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span><strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/><span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong></div>
         {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} status={currentSessionStatus} normal={<SessionStateBadge session={selectedSession} {...currentSessionPresentation}/>} onInspect={targetId => {
@@ -1447,6 +1463,7 @@ function AppContent() {
           inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry?.attemptId,tab:entry?'execution':'plan'});
         }}/>}
       </header>
+      {inspectorAvailable&&<button type="button" hidden={inspectorOpen} className="workspace-inspector-entry" aria-controls="session-task-inspector" aria-expanded={inspectorOpen} aria-label="展开计划与执行" title="展开计划与执行" onClick={reopenInspector}><Glyph name="panel" size={16}/><span>计划与执行</span></button>}
 
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}
       {connection.warning && warningSessionId === sessionId && <div className="system-banner offline-banner" role="alert"><Glyph name="alert" size={18}/><span>{visibleSessionError || "实时连接已断开。当前内容可能不是最新状态，操作已暂停。"}</span><button onClick={() => sessionId ? setSessionReload(value => value + 1) : void loadApp()}><Glyph name="refresh" size={15}/>重试</button></div>}

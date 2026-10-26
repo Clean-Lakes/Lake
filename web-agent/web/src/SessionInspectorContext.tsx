@@ -1,8 +1,8 @@
 import {createContext,useCallback,useContext,useMemo,useEffect,useRef,useState,type ReactNode} from 'react';
 import type {SRETask} from '../../shared/contracts';
 
-export type InspectorSelection={sessionId:string;taskId?:string;task?:SRETask;attemptId?:string;evidenceId?:string;turnId?:string;tab:'plan'|'execution'};
-type InspectorState={selection:InspectorSelection|null;host:HTMLDivElement|null;open:(target:InspectorSelection)=>void;close:()=>void;reset:()=>void;setHost:(node:HTMLDivElement|null)=>void};
+export type InspectorSelection={sessionId:string;taskId?:string;task?:SRETask;attemptId?:string;evidenceId?:string;turnId?:string;automatic?:boolean;tab:'plan'|'execution'};
+type InspectorState={selection:InspectorSelection|null;lastSelection:InspectorSelection|null;host:HTMLDivElement|null;open:(target:InspectorSelection)=>void;close:()=>void;reset:()=>void;setHost:(node:HTMLDivElement|null)=>void};
 const InspectorContext=createContext<InspectorState|null>(null);
 export const useSessionInspector=()=>useContext(InspectorContext);
 export const sessionInspectorId='session-task-inspector';
@@ -19,13 +19,13 @@ function retainConversation(){
 }
 
 export function SessionInspectorProvider({children}:{children:ReactNode}){
- const [selection,setSelection]=useState<InspectorSelection|null>(null),[host,setHost]=useState<HTMLDivElement|null>(null);
+ const [selection,setSelection]=useState<InspectorSelection|null>(null),[lastSelection,setLastSelection]=useState<InspectorSelection|null>(null),[host,setHost]=useState<HTMLDivElement|null>(null);
  const opener=useRef<HTMLElement|null>(null),frame=useRef<number|undefined>(undefined);
  useEffect(()=>()=>{if(frame.current)cancelAnimationFrame(frame.current);},[]);
  const open=useCallback((target:InspectorSelection)=>{
   const restore=retainConversation();
   if(document.activeElement instanceof HTMLElement&&!document.activeElement.closest(`#${sessionInspectorId}`))opener.current=document.activeElement;
-  setSelection(target);
+  setSelection(target);setLastSelection(target);
   if(frame.current)cancelAnimationFrame(frame.current);
   frame.current=requestAnimationFrame(restore);
  },[]);
@@ -34,7 +34,7 @@ export function SessionInspectorProvider({children}:{children:ReactNode}){
   if(frame.current)cancelAnimationFrame(frame.current);
   frame.current=requestAnimationFrame(()=>{restore();if(opener.current?.isConnected)opener.current.focus({preventScroll:true});});
  },[]);
- const reset=useCallback(()=>{if(frame.current)cancelAnimationFrame(frame.current);setSelection(null);opener.current=null;},[]);
- const value=useMemo(()=>({selection,host,setHost,open,close,reset}),[selection,host,open,close,reset]);
+ const reset=useCallback(()=>{if(frame.current)cancelAnimationFrame(frame.current);setSelection(null);setLastSelection(null);opener.current=null;},[]);
+ const value=useMemo(()=>({selection,lastSelection,host,setHost,open,close,reset}),[selection,lastSelection,host,open,close,reset]);
  return <InspectorContext.Provider value={value}>{children}</InspectorContext.Provider>;
 }

@@ -26,7 +26,7 @@ export function SessionInspector({snapshot,connected,onUpdated}:{snapshot:Sessio
  const plan=task?.plans?.at(-1);
  const selected=task?inspectedAttempt(task,target?.attemptId):undefined;
  useLayoutEffect(()=>{
-  if(selection&&panel.current&&!panel.current.contains(document.activeElement))panel.current.focus({preventScroll:true});
+  if(selection&&!selection.automatic&&panel.current&&!panel.current.contains(document.activeElement))panel.current.focus({preventScroll:true});
  },[selection]);
  if((!present&&!selection)||!target||target.sessionId!==snapshot.session.id)return null;
  const completed=plan?.steps.filter(step=>sreStepStatus(task!,step,snapshot.ai?.agentRuns)==='succeeded').length??0;
@@ -34,7 +34,7 @@ export function SessionInspector({snapshot,connected,onUpdated}:{snapshot:Sessio
  if(selected&&!options.some(item=>item.attempt.id===selected.attempt.id))options.unshift(selected);
  const currentEntry=selected&&task?(task.messages?.find(entry=>entry.attemptId===selected.attempt.id&&entry.kind==='progress')??task.messages?.find(entry=>entry.attemptId===selected.attempt.id)??{id:`inspector-${selected.attempt.id}`,sessionId:task.sessionId,taskId:task.id,roleId:selected.step.role,roleRunId:selected.attempt.roleRunId,attemptId:selected.attempt.id,kind:'progress',body:'',source:'runtime',sequence:0,revision:0,createdAt:selected.attempt.startedAt} satisfies SRETranscriptEntry):undefined;
  const attemptStatus=selected&&task?(selected.attempt.planRunId===task.runs?.at(-1)?.id?sreStepStatus(task,selected.step,snapshot.ai?.agentRuns):selected.attempt.status):'';
- const choose=(tab:'plan'|'execution',attemptId=target.attemptId)=>inspector.open({...target,tab,attemptId,evidenceId:undefined});
+ const choose=(tab:'plan'|'execution',attemptId=target.attemptId)=>inspector.open({...target,tab,attemptId,evidenceId:undefined,automatic:false});
  return <aside ref={panel} id={sessionInspectorId} tabIndex={-1} className={`session-inspector${selection?' is-open':' is-closing'}`} inert={!selection} aria-hidden={!selection} aria-label="任务检查" onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();event.stopPropagation();inspector.close();}}}>
   <header className="session-inspector-heading"><div><strong>任务检查</strong><p>{snapshot.session.title}{task?' · Lake Pilot':''}</p></div><button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={16}/></button></header>
   <div className="session-inspector-tabs" role="tablist" aria-label="任务视图" onKeyDown={event=>{if(task&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();choose(event.key==='Home'?'plan':event.key==='End'?'execution':target.tab==='plan'?'execution':'plan');requestAnimationFrame(()=>panel.current?.querySelector<HTMLButtonElement>('[role=tab][aria-selected=true]')?.focus());}}}>
@@ -43,7 +43,7 @@ export function SessionInspector({snapshot,connected,onUpdated}:{snapshot:Sessio
   </div>
   <ObjectReferencesProvider resources={snapshot.resources} tasks={snapshot.ai?.agentRuns}>
    <div className="session-inspector-scroll">
-    {task&&<section className="inspector-task-summary"><strong>{plan?.goal??'正在制定任务计划'}</strong><span>{completed} / {plan?.steps.length??0} 步</span><p>{sreStatus[task.status]??task.status}{task.outcome==='inconclusive'?' · 结论不充分':''}</p>{!!plan?.steps.length&&<div className="inspector-step-segments" aria-hidden="true">{plan.steps.map(step=><i key={step.id} data-state={sreStepStatus(task,step,snapshot.ai?.agentRuns)}/>)}</div>}</section>}
+    {task&&<section className="inspector-task-summary"><strong title={plan?.goal}>{snapshot.session.title}</strong><span>{completed} / {plan?.steps.length??0} 步</span><p>{sreStatus[task.status]??task.status}{task.outcome==='inconclusive'?' · 结论不充分':''}</p>{!!plan?.steps.length&&<div className="inspector-step-segments" aria-hidden="true">{plan.steps.map(step=><i key={step.id} data-state={sreStepStatus(task,step,snapshot.ai?.agentRuns)}/>)}</div>}</section>}
     <div role="tabpanel" id="inspector-plan-panel" aria-labelledby="inspector-plan-tab" hidden={target.tab!=='plan'}>
      {task&&plan?<SREPlanCard task={task} resources={snapshot.resources} agentRuns={snapshot.ai?.agentRuns} enabled={connected&&snapshot.sre?.enabled===true} onUpdated={onUpdated} inspector onInspectStep={stepId=>{const attempt=inspectorAttempts(task).find(item=>item.step.id===stepId)?.attempt;if(attempt)choose('execution',attempt.id);}}/>:<p className="inspector-empty">计划生成后会显示在这里。</p>}
     </div>
