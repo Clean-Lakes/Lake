@@ -1,5 +1,7 @@
 package web
 
+import "time"
+
 func (s *Store) FinishReplyTiming(id, status string) {
 	s.update(func() any {
 		row := s.row("SELECT messageId FROM replyTimings WHERE sessionId=? AND status='running' AND finishedAt='' ORDER BY startedAt DESC LIMIT 1", id)
@@ -30,7 +32,25 @@ func (b *Server) finishReplyTiming(id string) {
 		}
 	}
 	if b.Store.Session(id)["status"] == "failed" && status != "cancelled" {
-		status = "failed"
+		independent := false
+		if status == "completed" {
+			if view, err := b.Engine.Snapshot(id); err == nil {
+				if tasks, err := b.Store.ListSRETasks(id, 50, ""); err == nil {
+					for _, row := range b.Store.ReplyTimingRows(id) {
+						if row["status"] != "running" {
+							continue
+						}
+						start, err := time.Parse(time.RFC3339Nano, stringOf(row["startedAt"]))
+						if err == nil {
+							independent = b.independentReplyCompleted(id, tasks, view, start, time.Now().UTC())
+						}
+					}
+				}
+			}
+		}
+		if !independent {
+			status = "failed"
+		}
 	}
 	b.Store.FinishReplyTiming(id, status)
 }

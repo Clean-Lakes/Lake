@@ -313,7 +313,7 @@ func pilotRoleAllowed(c Config, risk string) error {
 		return nil
 	}
 	if c.sre.Role != SREExecutor {
-		return errors.New("this Lake Pilot specialist is read-only; hand proposed changes to the executor")
+		return errors.New("this Lake Pilot specialist is read-only; this call was NOT executed. For diagnostics, use recognized read-only commands directly, without shell functions, set/export, wrappers or scripts. A peer's terminal output is not your independent sample. Hand actual proposed changes to the executor")
 	}
 	return nil
 }

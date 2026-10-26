@@ -151,7 +151,22 @@ func readonlyAwk(args []string) bool {
 func readonlyQueryProgram(program string, args []string) bool {
 	switch program {
 	case "curl":
-		return readonlyHealthCurl(args)
+		return readonlyHealthCurl(args) || readonlyConnectivityHead(args)
+	case "ping", "ping6":
+		return readonlyPing(args)
+	case "getent":
+		return len(args) == 2 && set("hosts ahosts ahostsv4 ahostsv6")[args[0]] && diagnosticHost(args[1])
+	case "nslookup":
+		return (len(args) == 1 || len(args) == 2) && diagnosticHost(args[0]) && (len(args) == 1 || diagnosticHost(args[1]))
+	case "ethtool":
+		return len(args) == 1 && diagnosticInterface(args[0]) || len(args) == 2 && set("-i -k -S --driver --show-features --statistics")[args[0]] && diagnosticInterface(args[1])
+	case "dmesg":
+		for _, arg := range args {
+			if !set("-T --ctime --decode -x")[arg] {
+				return false
+			}
+		}
+		return true
 	case "systemctl":
 		return readonlySystemctl(args)
 	case "docker", "podman":

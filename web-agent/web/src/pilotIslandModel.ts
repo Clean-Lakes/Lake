@@ -19,7 +19,11 @@ function newestTask(tasks: SRETask[], session: SessionSnapshot['session'], start
   const time = (value: string) => Date.parse(value) || 0;
   const current=tasks.filter(t=>t.sessionId===session.id&&t.projectId===session.projectId&&sreTaskOwnsTurn(t,startedAt))
     .sort((a,b)=>time(b.createdAt)-time(a.createdAt)||b.id.localeCompare(a.id));
-  return current.find(sreTaskInFlight)??current.find(t=>['active','waiting_approval'].includes(t.status))??current[0];
+  // A historical draining operation remains in the ledger, but must not
+  // replace the task that actually ran in this turn (including its failure).
+  const start=time(startedAt??'');
+  const touched=current.filter(t=>start&&time(t.updatedAt)>=start);
+  return touched[0]??current.find(sreTaskInFlight)??current.find(t=>['active','waiting_approval'].includes(t.status))??current[0];
 }
 
 function roleState(states: PilotIslandStep[]) {
@@ -73,7 +77,7 @@ export function pilotIslandModel(snapshot: SessionSnapshot | null | undefined): 
   const failed = steps.some(s => s.status === 'failed');
   let label = '正在调度', tone: PilotIslandModel['tone'] = 'active';
   if (unresolved) { label = '变更待核实'; tone = 'attention'; }
-  else if (task.status === 'paused' && dispatched) label = '正在暂停';
+  else if (task.status === 'paused' && dispatched) { label = '正在暂停'; tone = 'neutral'; }
   else if (task.status === 'cancelled') { label = '已取消'; tone = 'neutral'; }
   else if (task.status === 'failed' || failed) { label = '检查未完成'; tone = 'failed'; }
   else if (task.status === 'paused') { label = '已暂停'; tone = 'neutral'; }
@@ -115,4 +119,9 @@ export function pilotIslandFocus(model:PilotIslandModel){
  const peer=ranked.find(role=>role!==primary&&role.status==='running')??ranked.find(role=>role!==primary&&['waiting_input','waiting_approval','unknown','queued'].includes(role.status));
  const secondary=peer?`${peer.name} · ${peer.status==='running'?peer.action??(peer.role==='verifier'?'独立复核':'执行中'):pilotRoleStatus(peer)}`:model.detail.includes('结论不充分')?'结论不充分':primary?.description??model.label;
  return {primary,action,secondary};
+}
+
+/** A draining operation stays visible after pause, but never animates the task. */
+export function pilotIslandAnimating(model:PilotIslandModel|null|undefined){
+ return !!model&&['active','draft'].includes(model.status)&&model.tone==='active'&&model.roles.some(role=>role.status==='running');
 }

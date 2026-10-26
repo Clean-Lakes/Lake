@@ -76,7 +76,11 @@ func (e *Engine) PrepareSREOperation(c Config, call Call, risk string) error {
 			} else if len(c.sre.Step.ResourceIDs) > 0 {
 				resource = c.sre.Step.ResourceIDs[0]
 			}
-			if c.sre.FullTools && risk != "readonly" {
+			// Record forbidden proposals so the role gate can explain that THIS
+			// call never ran. A peer's live command must not masquerade as this
+			// proposal's execution handle and cause the role to cite peer output.
+			roleDenied := c.sre.Pilot != nil && c.sre.Role != SREExecutor && risk != "readonly"
+			if c.sre.FullTools && risk != "readonly" && !roleDenied {
 				for _, previous := range t.Attempts {
 					for _, op := range previous.Operations {
 						if SREOperationBlocksResume(op) {

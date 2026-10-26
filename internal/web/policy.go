@@ -25,7 +25,7 @@ func set(s string) map[string]bool {
 }
 
 var dangerPrograms = set("sudo su doas mv rm rmdir unlink srm trash trash-put trash-empty trash-rm gtrash shred dd mkfs wipefs fdisk parted shutdown reboot halt poweroff kill killall pkill chmod chown chgrp chattr")
-var readPrograms = set("systemctl docker podman pwd uname uptime df du ls cat head tail wc grep egrep fgrep find ps free vmstat vm_stat iostat top sysctl date hostname whoami id who w stat file readlink printf echo true false sleep hdiutil awk env sort sed ss netstat lsof ifconfig route networksetup ip curl")
+var readPrograms = set("systemctl docker podman pwd uname uptime df du ls cat head tail wc grep egrep fgrep find ps free vmstat vm_stat iostat top sysctl date hostname whoami id who w stat file readlink printf echo true false sleep hdiutil awk env sort sed ss netstat lsof ifconfig route networksetup ip curl ping ping6 getent nslookup ethtool dmesg")
 var wrappers = set("sh bash zsh fish osascript python python3 perl ruby node awk eval exec source . env command xargs nice timeout nohup")
 var sensitive = regexp.MustCompile(`(?i)(\.lake/secrets|\.ssh/(id_|.*\.pem)|\bid_(rsa|ed25519|ecdsa|dsa)\b|(^|[/\s])\.env(\b|\.)|keychain)`)
 
@@ -281,13 +281,23 @@ func commandPolicyFlat(command string) Policy {
 		if i > 0 {
 			prefix = joins[i-1] + " "
 		}
-		rendered := prefix + "command -p " + strings.Join(q, " ")
+		rendered := prefix + strings.Join(readonlyProgramPrefix(g[0]), " ") + " " + strings.Join(q, " ")
 		if len(redirects[i]) > 0 {
 			rendered += " " + strings.Join(redirects[i], " ")
 		}
 		safeGroups = append(safeGroups, rendered)
 	}
 	return Policy{Risk: "readonly", Reason: "完整命令仅包含可识别的只读检查，无写入或危险操作。", Safe: strings.Join(safeGroups, " ")}
+}
+
+// POSIX command -p omits /sbin on common Linux hosts. Resolve system network
+// tools through env with a fixed trusted path, never the user's PATH/functions.
+// env affects only this child; it does not change the persistent shell's PATH.
+func readonlyProgramPrefix(program string) []string {
+	if set("ip ss ethtool ping ping6 ifconfig route networksetup sysctl")[program] {
+		return []string{"command", "-p", "env", "PATH=/usr/bin:/bin:/usr/sbin:/sbin"}
+	}
+	return []string{"command", "-p"}
 }
 func validCommand(s string) bool {
 	if strings.TrimSpace(s) == "" || len([]rune(s)) > 2000 {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {pilotIslandModel} from '../src/pilotIslandModel';
+import {pilotIslandAnimating,pilotIslandModel} from '../src/pilotIslandModel';
 import {PilotStatusIsland} from '../src/PilotStatusIsland';
 import {islandFixture} from './fixtures/pilot-island-data';
 import {sreStepStatus} from '../src/sreTranscript';
@@ -68,6 +68,12 @@ test('pause is neutral despite stale agent activity; in-flight commands still di
   assert.ok(paused.steps.every(s => s.status !== 'running'));
   const stopping = pilotIslandModel(islandFixture('stopping'))!;
   assert.equal(stopping.label, '正在暂停'); assert.match(stopping.detail, /原操作仍在执行/);
+  assert.equal(stopping.tone,'neutral');
+  assert.equal(pilotIslandAnimating(stopping),false);
+  assert.equal(pilotIslandAnimating({...stopping,tone:'active'}),false);
+  assert.equal(pilotIslandAnimating(paused),false);
+  assert.equal(pilotIslandAnimating(pilotIslandModel(islandFixture())),true);
+  assert.equal(pilotIslandAnimating(pilotIslandModel(islandFixture('unknown'))),false);
   assert.equal(stopping.roles.find(r => r.role === 'verifier')!.status, 'paused');
 });
 
@@ -160,4 +166,19 @@ test('historical paused Pilot does not replace a later independent turn; in-flig
  assert.equal(pilotIslandModel(s),null,'an old incomplete read does not label the later turn');
  t.attempts[0]!.operations[0]!.risk='write';
  assert.equal(pilotIslandModel(s)?.label,'变更待核实');
+});
+
+test('current failed investigation takes precedence over a historical draining task',()=>{
+ const s=islandFixture('failed'), current=s.sre!.tasks[0]!;
+ s.ai!.status='failed';
+ const historical=structuredClone(islandFixture('stopping').sre!.tasks[0]!);
+ historical.id='historical-drain'; historical.createdAt=historical.updatedAt='2026-10-25T00:00:00Z';
+ s.sre!.tasks.push(historical);
+ const saved=JSON.stringify(historical);
+ assert.equal(pilotIslandModel(s)?.taskId,current.id);
+ assert.equal(pilotIslandModel(s)?.label,'检查未完成');
+ assert.equal(pilotIslandAnimating(pilotIslandModel(s)),false);
+ assert.equal(JSON.stringify(historical),saved,'historical ledger must remain intact');
+ historical.status='cancelled';historical.updatedAt='2026-10-26T00:02:00Z';
+ assert.equal(pilotIslandModel(s)?.taskId,current.id,'late cleanup of an old dispatch must not replace the current task');
 });

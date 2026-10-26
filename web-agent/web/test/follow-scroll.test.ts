@@ -156,3 +156,14 @@ test('layout scroll events cannot cancel line-growth following, but reader gestu
  f.box.scrollTop=f.box.scrollHeight-f.box.clientHeight;
  assert.equal(followsConversationScroll(f.box,false),true,'manually reaching the tail resumes following');
 });
+
+test('completion relocation keeps the latest reply visible without pulling a history reader',()=>{
+ const f=fixture();f.follower.jump();
+ // The browser anchors the relocated elapsed caption without changing height.
+ f.box.scrollTop-=200;
+ assert.equal(followsConversationScroll(f.box,true),true);
+ f.follower.request();for(let t=0;t<1500;t+=16.67)f.frame(t);
+ assert.equal(f.box.scrollTop,500);
+ f.pause();f.box.scrollTop=180;f.follower.jump();
+ assert.equal(f.box.scrollTop,180,'completion does not resume intentional history reading');
+});

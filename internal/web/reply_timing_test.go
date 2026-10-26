@@ -145,3 +145,59 @@ func TestReplyTimingFinalizesCompletionFailureAndAbort(t *testing.T) {
 		})
 	}
 }
+
+func TestHistoricalOutstandingOperationDoesNotFailIndependentReply(t *testing.T) {
+	for _, status := range []string{"dispatched", "unknown"} {
+		t.Run(status, func(t *testing.T) {
+			b, h := fixture(t)
+			defer b.Close()
+			id, resource := newSession(t, h)
+			task := stalePausedTask(t, b, id, resource)
+			_, err := b.Store.MutateSRETask(id, task.ID, 0, "old_operation", func(v *ai.SRETask) error {
+				v.Attempts = []ai.SREStepAttempt{{Operations: []ai.SREOperation{{ID: "old-op", Risk: "write", Status: status}}}}
+				return nil
+			})
+			must(err)
+			backdateTask(t, b, id, task.ID)
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "GET" {
+					fmt.Fprint(w, `{"data":[]}`)
+					return
+				}
+				emitModel(w, "独立检查已完成，旧操作仍需单独核实。", nil)
+			}))
+			defer provider.Close()
+			b.Models.Save(&ai.Model{URL: provider.URL + "/v1/chat/completions", Name: "independent-reply", Protocol: "openai"})
+			message := apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "解释当前状态，不重放旧操作"}, 202)
+			awaitQueueWorkers(t, b)
+			messageID := stringOf(message["id"])
+			if got := storedTimingStatus(b, id, messageID); got != "completed" {
+				t.Fatalf("old %s failed completed reply: %s", status, got)
+			}
+			if b.Store.Session(id)["status"] != "failed" {
+				t.Fatal("old unresolved session warning was hidden")
+			}
+			b.Store.SetReplyTimingStatus(id, messageID, "failed")
+			b.reconcileStaleSREStatuses()
+			if storedTimingStatus(b, id, messageID) != "completed" {
+				t.Fatal("latest proven completion was not reconciled")
+			}
+			saved, err := b.Store.LoadSRETask(id, task.ID)
+			if err != nil || saved.Status != "paused" || saved.Attempts[0].Operations[0].Status != status {
+				t.Fatal("reconciliation changed task or operation", err)
+			}
+			if b.Store.Session(id)["status"] != "failed" {
+				t.Fatal("reconciliation cleared outstanding operation warning")
+			}
+			view, err := b.Engine.Snapshot(id)
+			must(err)
+			rows := b.Store.ReplyTimingRows(id)
+			start, _ := time.Parse(time.RFC3339Nano, stringOf(rows[0]["startedAt"]))
+			end, _ := time.Parse(time.RFC3339Nano, stringOf(rows[0]["finishedAt"]))
+			view.OperationOutcomes = []ai.OperationOutcome{{Status: "unknown", StartedAt: start}}
+			if b.independentReplyCompleted(id, []ai.SRETask{saved}, view, start, end) {
+				t.Fatal("current turn unknown operation became completed")
+			}
+		})
+	}
+}

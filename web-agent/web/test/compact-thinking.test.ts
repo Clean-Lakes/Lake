@@ -80,7 +80,7 @@ test("live execution opens its resource row without duplicating the latest actio
   assert.ok(html.includes('class="turn-execution-details is-open" aria-hidden="false"'));
   assert.ok(!html.includes("VERY_VERBOSE_RAW_REASONING"));
   assert.equal((html.match(/turn-status-text/g)||[]).length,1);
-  assert.ok(html.indexOf("正在执行工具…")<html.indexOf("Local machine"));
+  assert.ok(html.indexOf("正在执行工具…")>html.indexOf("Local machine"));
 });
 
 test("compaction limit failures display one Chinese message with history-preservation guidance",()=>{
