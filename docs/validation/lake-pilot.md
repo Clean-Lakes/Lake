@@ -531,3 +531,12 @@ Pilot 活动条取消独立计时器和持续旋转，计数及状态原位更�
 - 签名 Dev app/ZIP/DMG 构建并安装，strict codesign 通过；安装包来源为干净的 `1f6f8b6`，后端 SHA256 `a698138ed621357477f0e11c2811f911d3eabf08550cec732642bc1e08ba7653` 与签名二进制一致。安装后检查运行中的 Dev PID 仍为84787，尚未把新包视为已加载；用户此前表示自行正常退出并重开 Dev。正式版、生产资源与发布流程未操作。
 
 隔离界面截图：[运行中浅色](lake-reply-footer-20261026/live-light.png)、[运行中390px深色](lake-reply-footer-20261026/live-dark-390.png)、[结束后390px深色](lake-reply-footer-20261026/done-dark-390.png)。固定历史时间仅用于呈现形式，不是实际会话耗时。PR98 仍指向 `develop`，未合并。
+
+## 2026-10-26：用时分隔线移到上方
+
+代码 `edb8a4ff`；签名 Dev 验证提交 `932cbfe81c6a66d8e155799055b735d43d63fdbb`。完成态用时行改为上边框及 7px 上内边距，移除下边框；运行态上下边框均为 0，仍在完成时淡入，不改变正文和灰色进度的位置。
+
+- 前端 496 项测试、类型检查、生产构建、diff 检查通过。ego-browser 空间33的隔离转录夹具测得：运行时上/下边框均0且无用时，结束后上边框1px、下边框0、上内边距7px，`reply-duration-reveal` 动画存在；390px深色无横向溢出，浅色桌面和深色窄窗截图已目检。空间33结束、Vite停止。
+- `scripts/build_lake_desktop.sh --dev --install` 完成 Dev 签名安装；strict codesign 通过，安装来源 clean，后端 SHA256 `b624e836389a60da9576da271c57c664de11908ba915e9202fa3e6f668d691f2` 与包内一致。安装后运行 PID 仍为96497，未将已安装包当作已加载。只改前端样式与 UI 规范，之前完整 Go/ADK 验证基线仍适用。
+
+截图：[浅色完成态](lake-elapsed-line-20261026/finished-light.png)、[390px深色完成态](lake-elapsed-line-20261026/finished-dark-390.png)。PR98 保持草稿，未合并；未操作生产应用或资源。
