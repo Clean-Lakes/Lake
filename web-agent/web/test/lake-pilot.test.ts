@@ -63,8 +63,8 @@ test('A Pilot choice wait has a specific label and never shows running activity'
 test('Guided choices are nested directions and concrete unchecked changes, not ordinary skippable questions',()=>{
  const request:AIQuestionRequest={id:'choice',questions:[{id:'pilot',title:'选择'}],pilot:{sessionId:'session',taskId:'task',planRevisionId:'plan',stepId:'logs',attemptId:'attempt',role:'investigator',directions:[{id:'logs',title:'检查应用日志',reason:'核对故障时间',recommended:true,operations:[{id:'read',title:'查看日志',tool:'shell',arguments:{command:'journalctl -u demo'},risk:'readonly'},{id:'change',title:'修正配置',tool:'write',arguments:{path:'/tmp/config'},risk:'write'}]}]}};
  const html=renderToStaticMarkup(createElement(PilotChoiceQuestion,{session:'session',request,refresh:async()=>{}}));
- assert.match(html,/本步骤交给 Lake/);assert.match(html,/按此方向继续/);assert.match(html,/选择具体操作/);assert.match(html,/工具与参数/);assert.match(html,/journalctl -u demo/);assert.ok(!html.includes(' open=')&&!html.includes('<details open'));
- assert.equal((html.match(/checked=""/g)??[]).length,1);assert.ok(!html.includes('其他 / 补充'));
+ assert.match(html,/交给 Lake 完成本步骤/);assert.match(html,/确认方向并继续/);assert.match(html,/选择具体操作/);assert.match(html,/工具与参数/);assert.match(html,/journalctl -u demo/);assert.ok(!html.includes(' open=')&&!html.includes('<details open'));
+ assert.equal((html.match(/checked=""/g)??[]).length,2);assert.match(html,/data-selected="true"/);assert.match(html,/type="radio"/);assert.ok(!html.includes('其他 / 补充'));
 });
 
 

@@ -10,7 +10,7 @@ import (
 func pilotChoiceTool() Tool {
 	operation := objectSchema(map[string]any{"id": stringSchema(), "title": stringSchema(), "tool": stringSchema(), "arguments": map[string]any{"type": "object", "additionalProperties": true}, "dependsOn": arraySchema(stringSchema())}, "id", "title", "tool", "arguments")
 	direction := objectSchema(map[string]any{"id": stringSchema(), "title": stringSchema(), "reason": stringSchema(), "recommended": map[string]any{"type": "boolean"}, "operations": arraySchema(operation)}, "id", "title", "reason", "operations")
-	return Tool{Name: "pilot_offer_directions", Description: "For the CURRENT assigned step, propose 1..3 meaningful directions with exact tool names/arguments and dependency IDs. This does not execute a resource operation or approve changes. In guided Lake Pilot, wait for the user's direction/command choice; in automatic mode use the recommended direction. Do not change the plan or invent commands whose parameters depend on observations not yet collected. All chosen resource operations still require their normal permissions and approvals.", Parameters: objectSchema(map[string]any{"directions": arraySchema(direction)}, "directions")}
+	return Tool{Name: "pilot_offer_directions", Description: "For the CURRENT assigned step, normally propose 2..4 genuinely different step-level strategies (coverage, source or method), with exact tool names/arguments and dependency IDs for the next executable batch. One direction is appropriate only when the user fixed the method or no other safe useful strategy exists. Never present individual ls/read/grep commands as successive directions, or duplicate strategies with different labels. A strategy covers the entire assigned step, including ordinary reads and fallbacks in that purpose. Reuse the selected direction ID, title and reason verbatim for every continuation batch; do not ask again per file, tool or retry. In step/automatic mode execute directly; this tool is unnecessary unless proposing a guided choice. This does not execute a resource operation or approve changes. In guided Lake Pilot, wait for the user's direction/command choice; in automatic mode use the recommended direction. Do not change the plan or invent commands whose parameters depend on observations not yet collected. All chosen resource operations still require their normal permissions and approvals.", Parameters: objectSchema(map[string]any{"directions": arraySchema(direction)}, "directions")}
 }
 
 func pilotFingerprint(name string, args map[string]any) string { return hash(name + js(args)) }
@@ -25,8 +25,8 @@ func (e *Engine) offerPilotDirections(ctx context.Context, s *session, c Config,
 	if err := decodeSREJSON(call.Arguments, &input); err != nil {
 		return nil, err
 	}
-	if len(input.Directions) < 1 || len(input.Directions) > 3 {
-		return nil, errors.New("provide 1..3 concrete directions")
+	if len(input.Directions) < 1 || len(input.Directions) > 4 {
+		return nil, errors.New("provide 1..4 concrete directions")
 	}
 	choice := &PilotChoice{SessionID: e.worker.parentID, TaskID: c.sre.TaskID, PlanRevisionID: c.sre.PlanRevisionID, StepID: c.sre.Step.ID, AttemptID: c.sre.AttemptID, Role: c.sre.Role, Directions: input.Directions}
 	names := map[string]Tool{}
@@ -99,13 +99,31 @@ func (e *Engine) offerPilotDirections(ctx context.Context, s *session, c Config,
 		}
 		return map[string]any{"selection": PilotSelection{Level: "direction", DirectionID: direction.ID}, "direction": direction, "automatic": true}, nil
 	}
+	if decision != nil && decision.Selection.Level == "command" {
+		fixed := PilotDirection{ID: decision.Selection.DirectionID, Operations: decision.Operations}
+		if decision.Direction != nil {
+			fixed.Title, fixed.Reason = decision.Direction.Title, decision.Direction.Reason
+		}
+		for _, direction := range choice.Directions {
+			if pilotDirectionSignature(direction) == pilotDirectionSignature(fixed) {
+				// Re-presenting the identical selected calls grants nothing new.
+				// Keep original operation IDs and dependencies for the exact gate.
+				return map[string]any{"selection": decision.Selection, "direction": fixed, "fixedCommands": true}, nil
+			}
+		}
+	}
 	if decision != nil && decision.Selection.Level == "direction" {
 		if decision.Direction == nil {
 			return e.askQuestion(ctx, s, call, choice)
 		} // Older records lack an immutable direction purpose.
 		for _, direction := range choice.Directions {
 			if direction.ID != decision.Selection.DirectionID {
-				continue
+				// The model may rename an ID between batches. Only an exact
+				// immutable purpose is an alias; never infer semantic consent.
+				if direction.Title != decision.Direction.Title || direction.Reason != decision.Direction.Reason {
+					continue
+				}
+				direction.ID = decision.Selection.DirectionID
 			}
 			if err := e.savePilotDirectionBatch(choice, decision, direction); err != nil {
 				return nil, err
@@ -113,6 +131,7 @@ func (e *Engine) offerPilotDirections(ctx context.Context, s *session, c Config,
 			return map[string]any{"selection": decision.Selection, "direction": direction, "delegatedDirection": true}, nil
 		}
 	}
+	choice.Directions = pilotDistinctDirections(choice.Directions)
 	return e.askQuestion(ctx, s, call, choice)
 }
 

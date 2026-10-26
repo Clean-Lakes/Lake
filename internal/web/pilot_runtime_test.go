@@ -17,10 +17,10 @@ import (
 
 func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 	for _, scenario := range []struct {
-		name                                                    string
-		automatic, adaptive, recovery, finishRepair, unresolved bool
-		maxSteps                                                int
-	}{{name: "guided"}, {name: "automatic", automatic: true}, {name: "delegated_direction", adaptive: true}, {name: "automatic_read_recovery", automatic: true, adaptive: true, recovery: true}, {name: "automatic_completion_repair", automatic: true, adaptive: true, recovery: true, finishRepair: true}, {name: "completion_stops_if_unresolved", automatic: true, adaptive: true, recovery: true, finishRepair: true, unresolved: true}, {name: "completion_preserves_round_budget", automatic: true, adaptive: true, recovery: true, finishRepair: true, maxSteps: 4}} {
+		name                                                           string
+		automatic, adaptive, recovery, finishRepair, unresolved, alias bool
+		maxSteps                                                       int
+	}{{name: "guided"}, {name: "automatic", automatic: true}, {name: "delegated_direction", adaptive: true}, {name: "renamed_direction", adaptive: true, alias: true}, {name: "automatic_read_recovery", automatic: true, adaptive: true, recovery: true}, {name: "automatic_completion_repair", automatic: true, adaptive: true, recovery: true, finishRepair: true}, {name: "completion_stops_if_unresolved", automatic: true, adaptive: true, recovery: true, finishRepair: true, unresolved: true}, {name: "completion_preserves_round_budget", automatic: true, adaptive: true, recovery: true, finishRepair: true, maxSteps: 4}} {
 		t.Run(scenario.name, func(t *testing.T) {
 			automatic, adaptive, recovery := scenario.automatic, scenario.adaptive, scenario.recovery
 			b, h := fixture(t)
@@ -55,6 +55,9 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 					system = stringOf(messages[0]["content"])
 				}
 				if strings.Contains(content, "Return only a JSON plan object") {
+					if !strings.Contains(content, "use ONE coordinator step: the final summarize") {
+						t.Error("Pilot planner lost lean coordinator guidance")
+					}
 					emitModel(w, jsonText(plan), nil)
 					return
 				}
@@ -94,7 +97,11 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 						return
 					}
 					if adaptive && !reselected {
-						emitModel(w, "", []ai.Call{{ID: "choose_replacement", Name: "pilot_offer_directions", Arguments: jsonText(Object{"directions": []Object{{"id": "logs", "title": "查看启动日志", "reason": "先收集故障时间的实际记录", "operations": []Object{{"id": "read_alternative", "title": "读取替代日志", "tool": "observe_logs", "arguments": Object{"asset_ref": arguments["asset_ref"], "path": alternativePath}}}}}})}})
+						directionID := "logs"
+						if scenario.alias {
+							directionID = "renamed-logs"
+						}
+						emitModel(w, "", []ai.Call{{ID: "choose_replacement", Name: "pilot_offer_directions", Arguments: jsonText(Object{"directions": []Object{{"id": directionID, "title": "查看启动日志", "reason": "先收集故障时间的实际记录", "operations": []Object{{"id": "read_alternative", "title": "读取替代日志", "tool": "observe_logs", "arguments": Object{"asset_ref": arguments["asset_ref"], "path": alternativePath}}}}}})}})
 						return
 					}
 					if adaptive && !alternativeCollected {

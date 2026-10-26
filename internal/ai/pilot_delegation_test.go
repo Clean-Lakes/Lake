@@ -199,3 +199,83 @@ func TestPilotCompletionRepairRoundLimitSurvivesRoleRecovery(t *testing.T) {
 		t.Fatal("repair crossed roles")
 	}
 }
+
+func TestPilotDirectionAliasKeepsOriginalConsentAndRejectsBroaderPurpose(t *testing.T) {
+	child, s, c, repo := pilotDelegationFixture(t, "direction")
+	direction := *repo.task.Pilot.Decisions[0].Direction
+	direction.ID = "renamed-by-model"
+	direction.Operations = []PilotOperationCandidate{{ID: "next", Title: "继续核对日志", Tool: "read", Arguments: map[string]any{"path": "/tmp/next.log"}}}
+	value, err := child.offerPilotDirections(context.Background(), s, c, Call{Name: "pilot_offer_directions", Arguments: js(map[string]any{"directions": []PilotDirection{direction}})})
+	if err != nil || obj(value)["delegatedDirection"] != true {
+		t.Fatal("equivalent purpose asked again", err)
+	}
+	canonical, ok := obj(value)["direction"].(PilotDirection)
+	if !ok || canonical.ID != "logs" || len(repo.task.Pilot.Decisions) != 1 || repo.task.Pilot.DirectionBatches[0].DirectionID != "logs" {
+		t.Fatal("consent identity changed", value)
+	}
+	if err = child.checkPilotCall(c, Call{Name: "read"}, direction.Operations[0].Arguments); err != nil {
+		t.Fatal(err)
+	}
+	if child.checkPilotCall(c, Call{Name: "read"}, map[string]any{"path": "/tmp/not-proposed"}) == nil {
+		t.Fatal("alias granted unvalidated operation")
+	}
+	// Renaming an ID must not defeat the purpose check on the persistence path.
+	direction.Reason = "检查其他资源"
+	choice := &PilotChoice{SessionID: "case", TaskID: "task", PlanRevisionID: "plan", StepID: "logs", AttemptID: "attempt"}
+	direction.ID = "logs"
+	if child.savePilotDirectionBatch(choice, &repo.task.Pilot.Decisions[0], direction) == nil {
+		t.Fatal("changed purpose acquired old consent")
+	}
+}
+
+func TestPilotDistinctStrategiesCompareCallsAndDependencies(t *testing.T) {
+	op := PilotOperationCandidate{ID: "read", Tool: "read", Title: "读取", Arguments: map[string]any{"path": "/tmp/one.log"}}
+	a := PilotDirection{ID: "a", Title: "完整读取", Operations: []PilotOperationCandidate{op}}
+	b := a
+	b.ID = "b"
+	b.Title = "另一种名称"
+	b.Recommended = true
+	b.Operations = append([]PilotOperationCandidate(nil), a.Operations...)
+	b.Operations[0].ID = "renamed"
+	c := a
+	c.ID = "c"
+	c.Operations = []PilotOperationCandidate{{ID: "other", Tool: "read", Arguments: map[string]any{"path": "/tmp/two.log"}}}
+	got := pilotDistinctDirections([]PilotDirection{a, b, c})
+	if len(got) != 2 || got[0].ID != "b" || !got[0].Recommended || got[1].ID != "c" {
+		t.Fatal("relabelled duplicate survived", got)
+	}
+	second := PilotOperationCandidate{ID: "second", Tool: "read", Arguments: map[string]any{"path": "/tmp/two.log"}, DependsOn: []string{"read"}}
+	a.Operations = append(a.Operations, second)
+	b.Operations = append(b.Operations, second)
+	b.Operations[1].ID = "also-renamed"
+	b.Operations[1].DependsOn = []string{"renamed"}
+	if len(pilotDistinctDirections([]PilotDirection{a, b})) != 1 {
+		t.Fatal("renamed dependencies created fake choice")
+	}
+	b.Operations[1].DependsOn = nil
+	if len(pilotDistinctDirections([]PilotDirection{a, b})) != 2 {
+		t.Fatal("different dependency graph lost")
+	}
+	b.Operations[1].Tool = "shell"
+	if pilotDirectionSignature(a) == pilotDirectionSignature(b) {
+		t.Fatal("different tool merged")
+	}
+}
+
+func TestPilotRepeatedFixedCommandsReuseExactDecision(t *testing.T) {
+	child, s, c, repo := pilotDelegationFixture(t, "command")
+	direction := *repo.task.Pilot.Decisions[0].Direction
+	direction.ID = "renamed"
+	direction.Operations = append([]PilotOperationCandidate(nil), direction.Operations...)
+	direction.Operations[0].ID = "renamed-op"
+	value, err := child.offerPilotDirections(context.Background(), s, c, Call{Name: "pilot_offer_directions", Arguments: js(map[string]any{"directions": []PilotDirection{direction}})})
+	if err != nil || obj(value)["fixedCommands"] != true {
+		t.Fatal("same exact commands asked again", err)
+	}
+	if len(repo.task.Pilot.Decisions) != 1 || len(repo.task.Pilot.DirectionBatches) != 0 {
+		t.Fatal("repetition changed consent")
+	}
+	if child.checkPilotCall(c, Call{Name: "read"}, map[string]any{"path": "/tmp/different.log"}) == nil {
+		t.Fatal("fixed command broadened")
+	}
+}

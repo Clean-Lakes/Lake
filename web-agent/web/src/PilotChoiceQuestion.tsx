@@ -28,17 +28,18 @@ function PilotChoice({session,request,refresh,runId}:Props){
   catch(e){setError(readableError(e));submitting.current=false;setBusy(false)}
  }
  return <section className="pilot-choice" aria-label="选择当前步骤的方向或命令" aria-busy={busy}>
-  <div className="pilot-choice-heading"><span>处理方向</span><button type="button" className="pilot-choice-delegate" disabled={busy} onClick={()=>void submit({level:'step'})}>本步骤交给 Lake<Glyph name="arrow" size={12}/></button></div>
+  <div className="pilot-choice-heading"><span className="pilot-choice-prompt">请选择处理方向</span><button type="button" className="pilot-choice-delegate" disabled={busy} onClick={()=>void submit({level:'step'})}>交给 Lake 完成本步骤<Glyph name="arrow" size={12}/></button></div>
   <fieldset className="pilot-directions" disabled={busy} data-single={choice.directions.length===1}><legend className="visually-hidden">选择处理方向</legend>
-   {choice.directions.map(value=><div className="pilot-direction" key={value.id}>
-    <label className="pilot-direction-option">{choice.directions.length>1&&<input type="radio" name={`pilot-direction-${request.id}`} checked={value.id===direction.id} onChange={()=>setDirectionId(value.id)}/>}<span className="pilot-direction-title" title={value.title}>{value.title}</span>{value.recommended&&<small>推荐</small>}</label>
+   {choice.directions.map(value=><div className="pilot-direction" data-selected={value.id===direction.id} key={value.id}>
+    <label className="pilot-direction-option"><input type="radio" aria-label={value.title} name={`pilot-direction-${request.id}`} checked={value.id===direction.id} onChange={()=>setDirectionId(value.id)}/><span className="pilot-direction-title" title={value.title}>{value.title}</span>{value.recommended&&<small>推荐</small>}</label>
     {value.id===direction.id&&value.reason&&<p className="pilot-direction-reason" title={value.reason}>{value.reason}</p>}
    </div>)}
   </fieldset>
+  <p className="pilot-choice-scope">选择方向后，Lake 将在此方向内继续检查；展开具体操作可锁定命令。</p>
   <details key={direction.id} className="pilot-command-options">
    <DisclosureSummary>选择具体操作<small>{direction.operations.length} 项</small></DisclosureSummary>
    <fieldset disabled={busy}><legend className="visually-hidden">选择具体命令或操作</legend>{direction.operations.map(operation=><div className="pilot-operation" key={operation.id}>
-    <label className="pilot-operation-option"><input type="checkbox" checked={operations.includes(operation.id)} onChange={()=>setChecked(value=>({...value,[direction.id]:operations.includes(operation.id)?operations.filter(id=>id!==operation.id):[...operations,operation.id]}))}/><span className="pilot-operation-title">{operation.title}</span><small>{operation.risk==='readonly'?'只读':'变更'}</small></label>
+    <label className="pilot-operation-option"><input type="checkbox" aria-label={operation.title} checked={operations.includes(operation.id)} onChange={()=>setChecked(value=>({...value,[direction.id]:operations.includes(operation.id)?operations.filter(id=>id!==operation.id):[...operations,operation.id]}))}/><span className="pilot-operation-title">{operation.title}</span><small>{operation.risk==='readonly'?'只读':'变更'}</small></label>
     {typeof operation.arguments.command==='string'?<code className="pilot-command-preview">{operation.arguments.command}</code>:null}
     <details className="pilot-operation-parameters"><DisclosureSummary>工具与参数</DisclosureSummary><pre>{operation.tool}{'\n'}{JSON.stringify(operation.arguments,null,2)}</pre></details>
    </div>)}</fieldset>
@@ -46,6 +47,6 @@ function PilotChoice({session,request,refresh,runId}:Props){
    {!valid&&<p className="pilot-selection-hint">{operations.length?'请同时选择所需的前置操作。':'请选择至少一项操作。'}</p>}
   </details>
   {error&&<p className="form-error" role="alert">{error}</p>}
-  <div className="pilot-choice-footer"><button type="button" className="pilot-choice-cancel" disabled={busy} onClick={()=>void submit({level:'cancel'})}>暂不执行</button><button type="button" className="pilot-choice-primary" disabled={busy||!valid} onClick={()=>void submit(selected===undefined?{level:'direction',directionId:direction.id}:{level:'command',directionId:direction.id,operationIds:operations})}>{busy?'正在提交…':selected===undefined?'按此方向继续':`执行所选 ${operations.length} 项`}<Glyph name="arrow" size={12}/></button></div>
+  <div className="pilot-choice-footer"><button type="button" className="pilot-choice-cancel" disabled={busy} onClick={()=>void submit({level:'cancel'})}>暂不执行</button><button type="button" className="pilot-choice-primary" disabled={busy||!valid} onClick={()=>void submit(selected===undefined?{level:'direction',directionId:direction.id}:{level:'command',directionId:direction.id,operationIds:operations})}>{busy?'正在提交…':selected===undefined?'确认方向并继续':`执行所选 ${operations.length} 项`}<Glyph name="arrow" size={12}/></button></div>
  </section>;
 }
