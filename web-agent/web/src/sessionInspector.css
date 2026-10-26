@@ -60,7 +60,7 @@
 .session-inspector [hidden] { display:none!important; }
 @keyframes inspector-arrive { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
 @keyframes inspector-depart { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(10px); } }
-@media (max-width:1180px) {
+@media (max-width:700px) {
  .workspace.has-session-inspector { --inspector-width:0px; }
  .session-inspector { position:absolute; top:0; bottom:0; right:0; width:min(382px,100%); box-shadow:var(--shadow-popover); z-index:10; }
  .session-inspector-heading { padding-top:19px; }
@@ -77,3 +77,12 @@
 .header-inspector-toggle[aria-expanded=true] > svg { transform:rotate(180deg); }
 .pilot-island[data-motion=paused] .pilot-ring-value { transition:none; }
 @media(prefers-reduced-motion:reduce) { .header-inspector-toggle > svg { transition:none; } }
+
+/* While AppKit changes the outer frame, the conversation keeps its pre-open width. */
+.workspace.inspector-window-sizing {
+ --session-content-start:max(var(--session-gutter),calc((var(--inspector-main-width) - 960px)/2));
+ --session-content-width:min(960px,calc(var(--inspector-main-width) - var(--session-gutter) - var(--session-gutter)));
+}
+.workspace.inspector-window-sizing .session-layout > .session-view { flex:0 0 var(--inspector-main-width); width:var(--inspector-main-width); }
+.workspace.inspector-window-sizing > .workspace-header { max-width:calc(var(--inspector-main-width) - var(--session-content-start) - 16px); }
+.workspace.inspector-window-sizing .session-inspector.is-closing { position:relative; right:auto; top:auto; bottom:auto; }

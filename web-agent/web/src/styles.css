@@ -1261,8 +1261,8 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .resource-add-to-chat:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 1px; }
 
 /* Compact elapsed-time disclosure, matching the quiet reference row. */
-.reply-duration, .reply-duration.is-finished, .reply-duration.is-live { min-height:29px; padding:7px 0 0; margin:0; border-top:1px solid var(--surface-hover); gap:6px; color:var(--text-muted); font-size: var(--font-size-body); font-weight:var(--font-weight-ui); line-height:20px; }
-.reply-duration.is-live { border-top:0; padding-top:0; }
+.reply-duration, .reply-duration.is-finished, .reply-duration.is-live { min-height:29px; padding:0 0 8px; margin:0; border-bottom:1px solid var(--surface-hover); gap:6px; color:var(--text-muted); font-size: var(--font-size-body); font-weight:var(--font-weight-ui); line-height:20px; }
+.reply-duration.is-live { border-top:0; }
 .reply-duration.is-revealed { animation:reply-duration-reveal 340ms cubic-bezier(.22,1,.36,1) both; }
 @keyframes reply-duration-reveal { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
 /* Keep the swept caption and plain exception count on the same text baseline. */

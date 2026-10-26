@@ -52,7 +52,7 @@ if(new URLSearchParams(location.search).has('inspector-ordinary')){
  snapshot.sre={enabled:false,tasks:[]};snapshot.ai!.agentRuns=[];
  snapshot.messages[0]!.text='只读核对两个演示资源的日志。';
  snapshot.ai!.cards=resources.slice(0,2).map((resource,i)=>({id:`inspector-read-${i}`,type:'operation',title:'read',at:at(25+i),status:'completed',content:'演示日志读取完成。',data:{resource_id:resource.id,target:resource.name,arguments:{path:'/tmp/lake-inspector-fixture.log'}}}));
- snapshot.ai!.cards.push({id:'inspector-answer',type:'message',at:at(29),status:'completed',content:'两个演示资源的日志已核对，原始记录可从下方用时入口查看。'});
+ snapshot.ai!.cards.push({id:'inspector-answer',type:'message',at:at(29),status:'completed',content:'两个演示资源的日志已核对，原始记录可从上方用时入口查看。'});
  snapshot.ai!.totalCards=snapshot.ai!.cards.length;
 }
 if(new URLSearchParams(location.search).has('responsive-approval')){

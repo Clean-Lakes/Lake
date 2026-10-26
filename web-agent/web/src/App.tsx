@@ -1,3 +1,4 @@
+import {useInspectorWindow} from './inspectorWindow';
 import {SessionInspectorProvider,useSessionInspector} from './SessionInspectorContext';
 import {SessionInspector} from './SessionInspector';
 import {ServiceResourceFields} from "./ServiceResourceFields";
@@ -710,6 +711,7 @@ function AppContent() {
   useEffect(()=>{inspector.reset();},[sessionId,route.resourceId,isPlansPage]);
   useLayoutEffect(()=>{if(inspector.selection?.sessionId===sessionId&&!inspector.selection.automatic)pauseFollowing();},[inspector.selection]);
   const inspectorOpen=!!activeSnapshot&&inspector.selection?.sessionId===activeSnapshot.session.id&&!selectedResource&&!isPlansPage;
+  useInspectorWindow(inspectorOpen);
   const headerPilot = !selectedResource && !isPlansPage ? pilotIslandModel(activeSnapshot) : null;
   const seenInspectorTasks=useRef(new Set<string>());
   useEffect(()=>{

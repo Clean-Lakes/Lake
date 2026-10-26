@@ -47,6 +47,7 @@ import LakeDesktopCore
     private var origin: URL?
     private var terminating = false
     private var ready = false
+    private var inspectorExpansion: InspectorWindowExpansion?
     private var dragRegions: [NSRect] = []
     private var dragExcluded: [NSRect] = []
 
@@ -110,6 +111,8 @@ import LakeDesktopCore
             config.userContentController.addUserScript(WKUserScript(source: developmentBadge, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         }
         config.userContentController.add(self, name: "lakeChrome")
+        config.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "lakeInspectorWindow")
+        config.userContentController.addUserScript(WKUserScript(source: "window.lakeInspectorWindow = {setOpen: open => window.webkit.messageHandlers.lakeInspectorWindow.postMessage({open})};", injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "lakeUpdates")
         #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
@@ -230,6 +233,13 @@ import LakeDesktopCore
         webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('lake-desktop-update', {detail: \(json)}));", completionHandler: nil)
     }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {
+        if message.name == "lakeInspectorWindow" {
+            guard message.webView === webView, message.frameInfo.isMainFrame,
+                  sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any],
+                  let open = body["open"] as? Bool else { replyHandler(nil, "窗口请求不可用"); return }
+            setInspectorOpen(open, reply: replyHandler)
+            return
+        }
         #if compiler(>=6.2)
         if message.name == "lakeModelPanel" {
             guard #available(macOS 26.0, *), message.webView === webView, message.frameInfo.isMainFrame,
@@ -301,6 +311,39 @@ import LakeDesktopCore
         }
         dragRegions = rectangles("regions")
         dragExcluded = rectangles("excluded")
+    }
+    private func setInspectorOpen(_ open: Bool, reply: @escaping (Any?, String?) -> Void) {
+        let current = window.frame
+        var target = current
+        var added: CGFloat = 0
+        if open {
+            if let expansion = inspectorExpansion { added = expansion.addedWidth }
+            else {
+                let expansion = InspectorWindowExpansion(frame: current,
+                    visible: window.screen?.visibleFrame ?? current,
+                    fullscreen: window.styleMask.contains(.fullScreen))
+                inspectorExpansion = expansion
+                target = expansion.expanded
+                added = expansion.addedWidth
+            }
+        } else if let expansion = inspectorExpansion {
+            target = expansion.closing(current: current, minimumWidth: window.minSize.width)
+            inspectorExpansion = nil
+        }
+        let result: [String: Any] = ["addedWidth": Double(added)]
+        guard target != current else { reply(result, nil); return }
+        modelPanel?.close(notify: true)
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.24
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            window.animator().setFrame(target, display: true)
+        }, completionHandler: { reply(result, nil) })
+    }
+    func applicationWillTerminate(_ notification: Notification) {
+        if let expansion = inspectorExpansion {
+            window.setFrame(expansion.closing(current: window.frame, minimumWidth: window.minSize.width), display: false)
+            window.saveFrame(usingName: "LakeWorkbench")
+        }
     }
     private func syncChromeHeight() {
         guard sameOrigin(webView?.url) else { return }
@@ -385,6 +428,12 @@ import LakeDesktopCore
         panel.allowsMultipleSelection = parameters.allowsMultipleSelection
         panel.canChooseDirectories = parameters.allowsDirectories
         panel.beginSheetModal(for: window) { result in completionHandler(result == .OK ? panel.urls : nil) }
+    }
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        if let expansion = inspectorExpansion {
+            window.setFrame(expansion.closing(current: window.frame, minimumWidth: window.minSize.width), display: true)
+            inspectorExpansion = nil
+        }
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         guard sameOrigin(webView.url) else { return }

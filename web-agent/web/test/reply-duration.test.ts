@@ -86,11 +86,12 @@ test('elapsed disclosure matches the Chinese reference and exposes a real access
 });
 
 
-test('live state sweeps quietly without an elapsed line; completion reveals the duration',()=>{
+test('live elapsed header sweeps quietly; completion freezes the duration',t=>{
+ t.mock.method(Date,'now',()=>Date.parse(start)+19000);
  const running={...timing,status:'running' as const,finishedAt:''};
  const html=renderToStaticMarkup(createElement(ReplyDuration,{timing:running}));
  const active=html.match(/<span class="status-text status-text--active [^"]*">([\s\S]*?)<\/span><\/span>/)?.[1]??'';
- assert.ok(!active.includes('turn-status-elapsed')&&!active.includes('用时 '));
+ assert.ok(active.includes('turn-status-elapsed')&&active.includes('已处理 19秒')&&!active.includes('用时 '));
  assert.ok(active.includes('正在思考…'));
  assert.equal((html.match(/status-text--active/g)||[]).length,1);
  const waiting=renderToStaticMarkup(createElement(ReplyDuration,{timing:running,view:{status:'waiting_approval',cards:[]} as never}));
@@ -129,4 +130,13 @@ test('latest-step caption hides while expanded and stops sweeping on attention o
  const ended=render({timing,latestStep:{...latestStep,status:'completed'},disclosure});
  assert.ok(!ended.includes('turn-current-step')&&!ended.includes('status-text--active'));
  assert.ok(!render({timing,latestStep,disclosure}).includes('execution-icon-water'),'stale running records stay static after the turn ends');
+});
+
+test('Pilot elapsed header does not repeat specialist activity or invent missing timing',t=>{
+ t.mock.method(Date,'now',()=>Date.parse(start)+19000);
+ const running={...timing,status:'running' as const,finishedAt:''};
+ const html=renderToStaticMarkup(createElement(ReplyDuration,{timing:running,elapsedOnly:true,view:{status:'running',cards:[],agentRuns:[{sessionId:'s',status:'running',createdAt:start}],session:'s'} as never}));
+ assert.ok(html.includes('已处理 19秒'));
+ assert.ok(!html.includes('子任务执行中')&&!html.includes('reply-duration-spinner'));
+ assert.equal(renderToStaticMarkup(createElement(ReplyDuration,{elapsedOnly:true,view:{status:'running',cards:[]} as never})), '');
 });
