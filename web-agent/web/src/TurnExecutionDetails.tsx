@@ -29,6 +29,15 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,se
   return()=>clearTimeout(timer);
  },[retiringDetails]);
  const latestStep=timing.cards?.filter(card=>['operation','shell'].includes(card.type)).at(-1);
- if(inspector&&sessionId)return <><ReplyDuration {...timing} latestStep={latestStep} disclosure={details.length?{open:inspecting,controls:sessionInspectorId,onToggle:()=>{onInspect?.();if(inspecting)inspector.close();else{if(sessionId)inspector.open({sessionId,turnId:id,tab:'execution'});}}}:undefined}/>{children}{inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{details}</div></ExecutionDetailsOpen.Provider>,inspector.host)}</>;
- return <><ReplyDuration {...timing} latestStep={latestStep} disclosure={details.length?{open,controls:id,onToggle:()=>{onInspect?.();setDisclosure({active,open:!open});}}:undefined}/>{children}{details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{shownDetails}</ExecutionDetailsOpen.Provider></div></div></div>}</>;
+ const summaryDisclosure=details.length?{open:inspector&&sessionId?inspecting:open,controls:inspector&&sessionId?sessionInspectorId:id,onToggle:()=>{
+  onInspect?.();
+  if(inspector&&sessionId){if(inspecting)inspector.close();else inspector.open({sessionId,turnId:id,tab:'execution'});}
+  else setDisclosure({active,open:!open});
+ }}:undefined;
+ // Keep a keyed status node as new prose arrives. It follows live content,
+ // then moves above the reply once the saved turn timing is final.
+ const summary=<ReplyDuration key="turn-duration" {...timing} latestStep={latestStep} disclosure={summaryDisclosure}/>;
+ const body=inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{details}</div></ExecutionDetailsOpen.Provider>,inspector.host)
+  :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{shownDetails}</ExecutionDetailsOpen.Provider></div></div></div>;
+ return <>{!live&&summary}{children}{body}{live&&summary}</>;
 }
