@@ -1,0 +1,59 @@
+{
+  "runtimeSource": "93e30ff29b8327e0fd1a4f98354f97012f0b7f48",
+  "task": "e66459ec46de54d1082a33d2ee717774",
+  "session": "082667abee150bf2ba9bd6e4d4776edf",
+  "status": "completed",
+  "steps": 3,
+  "choices": 2,
+  "alternativesPerChoice": [
+    3,
+    3
+  ],
+  "operations": 67,
+  "coordinatorResourceOperations": 0,
+  "secondsAfterChoices": 114.34,
+  "totalSeconds": 276.29,
+  "outOfScopeOperations": 0,
+  "rowsIndependentlyChecked": {
+    "service-1": {
+      "lines": 4000,
+      "ERROR": 8,
+      "WARN": 14
+    },
+    "service-2": {
+      "lines": 4000,
+      "ERROR": 9,
+      "WARN": 15
+    },
+    "service-3": {
+      "lines": 4000,
+      "ERROR": 10,
+      "WARN": 16
+    },
+    "service-4": {
+      "lines": 4000,
+      "ERROR": 11,
+      "WARN": 17
+    },
+    "service-5": {
+      "lines": 4000,
+      "ERROR": 12,
+      "WARN": 18
+    },
+    "service-6": {
+      "lines": 4000,
+      "ERROR": 13,
+      "WARN": 19
+    }
+  },
+  "historicalBaselineUnknownsKept": true,
+  "codeHead": "95592ac6a2ab5ee304a4983725f508d22b42091d",
+  "finalInstalledDevSource": "77f8aed75ed760a2ed11e6a225dd13c4d2a5cb25",
+  "frontendTests": 490,
+  "trackedGoSuitePassed": true,
+  "pilotAndVerifierRacePassed": true,
+  "vetPassed": true,
+  "adkBoundaryPassed": true,
+  "devDefaultRestoredToOff": true,
+  "productionResourcesUsed": false
+}
