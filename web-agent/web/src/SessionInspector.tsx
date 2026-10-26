@@ -54,6 +54,5 @@ export function SessionInspector({snapshot,connected,onUpdated}:{snapshot:Sessio
     </div>
    </div>
   </ObjectReferencesProvider>
-  <footer className="session-inspector-footer"><span>主对话保持在当前位置</span><button type="button" onClick={inspector.close}>返回对话<Glyph name="arrow" size={13}/></button></footer>
  </aside>;
 }
