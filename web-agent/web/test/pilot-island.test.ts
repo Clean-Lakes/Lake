@@ -167,3 +167,16 @@ test('historical paused Pilot does not replace a later independent turn; in-flig
  t.attempts[0]!.operations[0]!.risk='write';
  assert.equal(pilotIslandModel(s)?.label,'变更待核实');
 });
+
+test('current failed investigation takes precedence over a historical draining task',()=>{
+ const s=islandFixture('failed'), current=s.sre!.tasks[0]!;
+ s.ai!.status='failed';
+ const historical=structuredClone(islandFixture('stopping').sre!.tasks[0]!);
+ historical.id='historical-drain'; historical.createdAt=historical.updatedAt='2026-10-25T00:00:00Z';
+ s.sre!.tasks.push(historical);
+ const saved=JSON.stringify(historical);
+ assert.equal(pilotIslandModel(s)?.taskId,current.id);
+ assert.equal(pilotIslandModel(s)?.label,'检查未完成');
+ assert.equal(pilotIslandAnimating(pilotIslandModel(s)),false);
+ assert.equal(JSON.stringify(historical),saved,'historical ledger must remain intact');
+});

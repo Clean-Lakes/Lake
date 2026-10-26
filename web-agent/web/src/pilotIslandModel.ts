@@ -19,7 +19,12 @@ function newestTask(tasks: SRETask[], session: SessionSnapshot['session'], start
   const time = (value: string) => Date.parse(value) || 0;
   const current=tasks.filter(t=>t.sessionId===session.id&&t.projectId===session.projectId&&sreTaskOwnsTurn(t,startedAt))
     .sort((a,b)=>time(b.createdAt)-time(a.createdAt)||b.id.localeCompare(a.id));
-  return current.find(sreTaskInFlight)??current.find(t=>['active','waiting_approval'].includes(t.status))??current[0];
+  // A historical draining operation remains in the ledger, but must not
+  // replace the task that actually ran in this turn (including its failure).
+  const start=time(startedAt??'');
+  const touched=current.filter(t=>start&&time(t.updatedAt)>=start);
+  const candidates=touched.length?touched:current;
+  return candidates.find(sreTaskInFlight)??candidates.find(t=>['active','waiting_approval'].includes(t.status))??candidates[0];
 }
 
 function roleState(states: PilotIslandStep[]) {
