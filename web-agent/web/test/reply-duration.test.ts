@@ -147,3 +147,13 @@ test('a completed timed reply explicitly shows completion without borrowing task
  const failed=renderToStaticMarkup(createElement(ReplyDuration,{timing:{...timing,status:'failed'}}));
  assert.ok(failed.includes('未完成')&&!failed.includes('已完成'));
 });
+
+test('side detail entry keeps a horizontal navigation arrow while inline disclosure retains its direction',()=>{
+ for(const open of [false,true]){
+  const html=renderToStaticMarkup(createElement(ReplyDuration,{timing,disclosure:{open,side:true,controls:'session-task-inspector',onToggle:()=>{}}}));
+  assert.ok(html.includes('data-placement="side"')&&html.includes('在右侧查看执行详细过程'));
+  assert.ok(html.includes(`aria-expanded="${open}"`)&&html.includes('aria-controls="session-task-inspector"'));
+ }
+ const inline=renderToStaticMarkup(createElement(ReplyDuration,{timing,disclosure:{open:true,controls:'inline-details',onToggle:()=>{}}}));
+ assert.ok(inline.includes('data-placement="inline"')&&inline.includes('收起执行详细过程'));
+});

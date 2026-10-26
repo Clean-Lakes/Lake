@@ -1293,7 +1293,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .turn-current-step > svg { flex:0 0 18px; }
 .turn-current-step .turn-current-step-label { display:block; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .turn-duration-chevron { flex:none; color:var(--text-muted); transition:transform 160ms ease; }
-.turn-duration-disclosure[aria-expanded=true] .turn-duration-chevron { transform:rotate(90deg); }
+.turn-duration-disclosure:not([data-placement=side])[aria-expanded=true] .turn-duration-chevron { transform:rotate(90deg); }
 .turn-duration-disclosure:focus-visible { outline:2px solid var(--focus-outline); outline-offset:3px; border-radius:3px; }
 .turn-execution-details { display:grid; grid-template-rows:0fr; min-width:0; opacity:0; visibility:hidden; margin-top:calc(-1 * var(--turn-entry-gap,12px)); transition:grid-template-rows 360ms cubic-bezier(.22,1,.36,1),opacity 220ms ease,margin-top 360ms cubic-bezier(.22,1,.36,1),visibility 360ms; }
 .turn-execution-details.is-open { grid-template-rows:1fr; opacity:1; visibility:visible; margin-top:0; }

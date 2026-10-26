@@ -1,4 +1,5 @@
 import {createContext,useCallback,useContext,useMemo,useEffect,useRef,useState,type ReactNode} from 'react';
+import {atConversationTail} from './followScroll';
 import type {SRETask} from '../../shared/contracts';
 
 export type InspectorSelection={sessionId:string;taskId?:string;task?:SRETask;attemptId?:string;evidenceId?:string;turnId?:string;automatic?:boolean;tab:'plan'|'execution'};
@@ -12,6 +13,9 @@ export const sessionInspectorId='session-task-inspector';
 function retainConversation(){
  const box=document.querySelector<HTMLElement>('.conversation');
  if(!box)return()=>{};
+ // A reader already at the latest reply keeps the tail through reflow. Only
+ // history reading needs a message anchor; opening a pane never pauses following.
+ if(atConversationTail(box))return()=>{box.scrollTop=Math.max(0,box.scrollHeight-box.clientHeight);};
  const top=box.getBoundingClientRect().top;
  const anchor=[...box.querySelectorAll<HTMLElement>('.sre-role-message,.ai-response,.ai-chat-message')].find(node=>node.getBoundingClientRect().bottom>top+80);
  const offset=anchor?.getBoundingClientRect().top;

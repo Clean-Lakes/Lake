@@ -709,7 +709,6 @@ function AppContent() {
   const currentSessionStatus = currentSessionPresentation.status ?? selectedSession?.status;
   const selectedResource = catalog?.resources.find(item => item.id === route.resourceId);
   useEffect(()=>{inspector.reset();},[sessionId,route.resourceId,isPlansPage]);
-  useLayoutEffect(()=>{if(inspector.selection?.sessionId===sessionId&&!inspector.selection.automatic)pauseFollowing();},[inspector.selection]);
   const inspectorOpen=!!activeSnapshot&&inspector.selection?.sessionId===activeSnapshot.session.id&&!selectedResource&&!isPlansPage;
   useInspectorWindow(inspectorOpen);
   const headerPilot = !selectedResource && !isPlansPage ? pilotIslandModel(activeSnapshot) : null;
@@ -725,7 +724,6 @@ function AppContent() {
   const inspectorAvailable=!!activeSnapshot?.ai&&!selectedResource&&!isPlansPage;
   const reopenInspector=()=>{
     if(!activeSnapshot)return;
-    pauseFollowing();
     if(inspector.lastSelection?.sessionId===sessionId){inspector.open({...inspector.lastSelection,automatic:false});return;}
     if(headerPilot){inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,tab:'plan'});return;}
     const latestTurn=[...document.querySelectorAll<HTMLElement>('.conversation .ai-turn')].at(-1);
@@ -1464,7 +1462,6 @@ function AppContent() {
         <div className="breadcrumbs"><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span><strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/><span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong></div>
         {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...currentSessionPresentation}/>} onInspect={targetId => {
           if(!activeSnapshot||!headerPilot)return;
-          pauseFollowing();
           const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
           const entry=task?.messages?.find(m=>`sre-message-${m.id}`===targetId);
           inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry?.attemptId,tab:entry?'execution':'plan'});

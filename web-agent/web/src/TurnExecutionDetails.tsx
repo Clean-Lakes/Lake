@@ -29,10 +29,9 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,se
   return()=>clearTimeout(timer);
  },[retiringDetails]);
  const latestStep=timing.cards?.filter(card=>['operation','shell'].includes(card.type)).at(-1);
- const summaryDisclosure=details.length?{open:inspector&&sessionId?inspecting:open,controls:inspector&&sessionId?sessionInspectorId:id,onToggle:()=>{
-  onInspect?.();
-  if(inspector&&sessionId){if(inspecting)inspector.close();else inspector.open({sessionId,turnId:id,tab:'execution'});}
-  else setDisclosure({active,open:!open});
+ const summaryDisclosure=details.length?{open:inspector&&sessionId?inspecting:open,controls:inspector&&sessionId?sessionInspectorId:id,side:!!(inspector&&sessionId),onToggle:()=>{
+  if(inspector&&sessionId)inspector.open({sessionId,turnId:id,tab:'execution'});
+  else {onInspect?.();setDisclosure({active,open:!open});}
  }}:undefined;
  // Keep a keyed status node as new prose arrives. It follows live content,
  // then moves above the reply once the saved turn timing is final.
