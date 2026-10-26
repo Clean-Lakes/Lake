@@ -1,4 +1,5 @@
 import {useLayoutEffect,useRef,useState,type ReactNode} from 'react';
+import type {WorkSession} from '../../shared/contracts';
 import type {PilotIslandModel} from './pilotIslandModel';
 import {PilotStatusIsland} from './PilotStatusIsland';
 
@@ -15,10 +16,10 @@ function HeaderMorphSlot({visible,children,className=''}:{visible:boolean;childr
  return <div className={`header-morph-slot ${className}${visible?' is-visible':''}`} style={{width:visible?width:0}} aria-hidden={!visible} inert={!visible}><div ref={content} className="header-morph-content">{children}</div></div>;
 }
 
-export function PilotHeaderState({model,normal,onInspect}:{model:PilotIslandModel|null;normal:ReactNode;onInspect:(target:string)=>void}){
+export function PilotHeaderState({model,status,normal,onInspect}:{model:PilotIslandModel|null;status?:WorkSession['status'];normal:ReactNode;onInspect:(target:string)=>void}){
  const retained=useRef<PilotIslandModel|null>(model);if(model)retained.current=model;
  return <div className="header-state-area">
   <HeaderMorphSlot visible={!model} className="header-normal-state">{normal}</HeaderMorphSlot>
-  <HeaderMorphSlot visible={!!model} className="header-pilot-state">{retained.current&&<PilotStatusIsland model={retained.current} visible={!!model} onInspect={onInspect}/>}</HeaderMorphSlot>
+  <HeaderMorphSlot visible={!!model} className="header-pilot-state">{retained.current&&<PilotStatusIsland model={retained.current} status={status} visible={!!model} onInspect={onInspect}/>}</HeaderMorphSlot>
  </div>;
 }

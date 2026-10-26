@@ -158,6 +158,7 @@ if (islandQuery) {
  Object.assign(window, {lakeIslandQA: {
   state(value: IslandFixtureState) {applyIsland(value);emit();},
   pulse(value: number) {for(const agent of snapshot.ai!.agentRuns ?? []) {agent.toolCount=value;agent.activityUpdatedAt=new Date().toISOString();}emit();},
+  presentationStatus(value:WorkSession['status'],verified=false){session.status=value;if(verified){const t=snapshot.sre!.tasks[0]!;t.outcome='completed';t.recoveryStatus='verified';}emit();},
   mode(enabled:boolean){snapshot.sre!.pilot!.enabled=enabled;emit();},
   resourceStep(count:number){
    const task=snapshot.sre!.tasks[0]!,attempt=task.attempts.find(a=>a.stepId==='logs')!;
