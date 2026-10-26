@@ -295,10 +295,19 @@ func TestPilotInitialChoicesNeedDistinctStrategiesOrExplicitConstraint(t *testin
 	if err == nil || !strings.Contains(err.Error(), "2..4 distinct") {
 		t.Fatal("cosmetic alternatives reached human question", err)
 	}
-	if pilotChoiceDiversityError(&PilotChoice{Directions: []PilotDirection{direction}, SingleDirectionReason: "用户明确指定只能读取该文件"}) != nil {
+	if pilotChoiceDiversityError(&PilotChoice{Directions: []PilotDirection{direction}, SingleDirectionReason: "已冻结的明确操作"}, true) != nil {
 		t.Fatal("fixed method forced fake alternatives")
 	}
-	if pilotChoiceDiversityError(&PilotChoice{Directions: []PilotDirection{direction, b}}) != nil {
+	if pilotChoiceDiversityError(&PilotChoice{Directions: []PilotDirection{direction, b}}, false) != nil {
 		t.Fatal("multiple strategies rejected")
+	}
+}
+
+func TestPilotReadOnlyScopeCannotExcuseSingletonInvestigation(t *testing.T) {
+	d := PilotDirection{ID: "only"}
+	for _, reason := range []string{"任务限定该目录只读，需先看清单", "只读取一个文件", "先读取manifest才能继续"} {
+		if pilotChoiceDiversityError(&PilotChoice{Directions: []PilotDirection{d}, SingleDirectionReason: reason}, false) == nil {
+			t.Fatal("model self-exempted from alternatives", reason)
+		}
 	}
 }
