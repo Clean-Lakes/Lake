@@ -151,3 +151,13 @@ test('terminal task status replaces the progress ring without claiming recovery 
  assert.ok(render(islandFixture('cancelled')).includes('任务已取消'));
  assert.ok(render(islandFixture('unknown')).includes('pilot-island-ring'));
 });
+
+test('historical paused Pilot does not replace a later independent turn; in-flight effects remain visible',()=>{
+ const s=islandFixture('paused');s.ai!.turnStartedAt='2027-01-01T00:00:00Z';s.ai!.status='completed';
+ assert.equal(pilotIslandModel(s),null);
+ const t=s.sre!.tasks[0]!;
+ t.attempts[0]!.operations=[{status:'unknown',risk:'readonly'}] as typeof t.attempts[number]['operations'];
+ assert.equal(pilotIslandModel(s),null,'an old incomplete read does not label the later turn');
+ t.attempts[0]!.operations[0]!.risk='write';
+ assert.equal(pilotIslandModel(s)?.label,'变更待核实');
+});

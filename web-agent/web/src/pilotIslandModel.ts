@@ -3,6 +3,7 @@ import {pilotStepStatus} from './pilotPresentation';
 import {sreNeedsVerification} from './sreOperationPolicy';
 import {sreRoles} from './sreTranscript';
 import {sreActivityLabel} from './SREActivity';
+import {sreTaskOwnsTurn,sreTaskInFlight} from './sreTaskTurn';
 
 const order: SREAgentRole[] = ['coordinator', 'investigator', 'executor', 'verifier'];
 const working = new Set(['running', 'queued', 'waiting_input', 'waiting_approval']);
@@ -14,10 +15,11 @@ export type PilotIslandModel = {
   completed: number; total: number; steps: PilotIslandStep[]; roles: PilotIslandRole[]; visibleRoles: PilotIslandRole[];
 };
 
-function newestTask(tasks: SRETask[], session: SessionSnapshot['session']) {
+function newestTask(tasks: SRETask[], session: SessionSnapshot['session'], startedAt?:string) {
   const time = (value: string) => Date.parse(value) || 0;
-  return tasks.filter(t => t.sessionId === session.id && t.projectId === session.projectId)
-    .sort((a, b) => time(b.createdAt) - time(a.createdAt) || b.id.localeCompare(a.id))[0];
+  const current=tasks.filter(t=>t.sessionId===session.id&&t.projectId===session.projectId&&sreTaskOwnsTurn(t,startedAt))
+    .sort((a,b)=>time(b.createdAt)-time(a.createdAt)||b.id.localeCompare(a.id));
+  return current.find(sreTaskInFlight)??current.find(t=>['active','waiting_approval'].includes(t.status))??current[0];
 }
 
 function roleState(states: PilotIslandStep[]) {
@@ -30,12 +32,10 @@ function roleState(states: PilotIslandStep[]) {
 /** Project the current plan and its latest attempts, never tool counts or prose. */
 export function pilotIslandModel(snapshot: SessionSnapshot | null | undefined): PilotIslandModel | null {
   if (!snapshot?.sre?.pilot?.enabled || snapshot.ai?.profile && snapshot.ai.profile !== 'core') return null;
-  const saved = newestTask(snapshot.sre.tasks ?? [], snapshot.session);
+  const saved = newestTask(snapshot.sre.tasks ?? [], snapshot.session,snapshot.ai?.turnStartedAt);
   if (!saved) return null;
   // Go's not-yet-populated slices can arrive as JSON null during planning.
   const task = {...saved, plans: saved.plans ?? [], runs: saved.runs ?? [], attempts: saved.attempts ?? [], messages: saved.messages ?? []};
-  // An old finished Pilot task must not replace the status of a later ordinary turn.
-  if (terminal.has(task.status) && snapshot.ai?.turnStartedAt && Date.parse(task.updatedAt) < Date.parse(snapshot.ai.turnStartedAt)) return null;
   const plan = task.plans.at(-1);
   const run = task.runs.filter(r => r.planRevisionId === plan?.id).at(-1);
   const attempts = task.attempts.filter(a => a.planRunId === run?.id);

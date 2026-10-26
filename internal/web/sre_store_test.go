@@ -206,4 +206,38 @@ func TestSREHistoricalCompletionCannotOverrideLaterOrdinaryReply(t *testing.T) {
 	if b.Store.Session(sid)["status"] != "failed" {
 		t.Fatal("ordinary reply hid an unknown change")
 	}
+	// A pause or question left over from an earlier turn stays resumable in the
+	// transcript but must not fail the later ordinary reply.
+	for _, status := range []string{"paused", "waiting_input", "draft"} {
+		_, err = b.Store.MutateSRETask(sid, old.ID, 0, "stale_"+status, func(v *ai.SRETask) error {
+			v.Status = status
+			v.Attempts = nil
+			return nil
+		})
+		must(err)
+		b.Store.update(func() any {
+			task := b.Store.sreTask(sid, old.ID)
+			task.UpdatedAt = "2020-01-01T00:00:00Z"
+			b.Store.exec("UPDATE sreTasks SET body=?,updatedAt=? WHERE id=?", jsonText(task), task.UpdatedAt, old.ID)
+			return nil
+		})
+		b.Store.AddMessage(sid, "user", "继续回答上一个问题", nil)
+		b.syncSRESessionStatus(sid)
+		if b.Store.Session(sid)["status"] != "completed" {
+			t.Fatal("historical " + status + " overwrote ordinary reply status")
+		}
+	}
+	// Unresolved effects keep the session blocked even when the task is old.
+	b.Store.update(func() any {
+		task := b.Store.sreTask(sid, old.ID)
+		task.Attempts = []ai.SREStepAttempt{{Operations: []ai.SREOperation{{Risk: "change", Status: "unknown"}}}}
+		task.UpdatedAt = "2020-01-01T00:00:00Z"
+		b.Store.exec("UPDATE sreTasks SET body=?,updatedAt=? WHERE id=?", jsonText(task), task.UpdatedAt, old.ID)
+		return nil
+	})
+	b.Store.AddMessage(sid, "user", "解释旧任务未核实状态", nil)
+	b.syncSRESessionStatus(sid)
+	if b.Store.Session(sid)["status"] != "failed" {
+		t.Fatal("historical pause hid an unknown change")
+	}
 }

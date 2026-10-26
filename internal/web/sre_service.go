@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
 )
@@ -78,35 +77,42 @@ func (b *Server) syncSRESessionStatus(session string) {
 		b.Store.Status(session, "failed")
 		return
 	}
-	if len(tasks) == 0 {
-		b.Store.Status(session, "completed")
-		return
-	}
-	t := &tasks[0]
+	b.Store.Status(session, b.sreSessionStatus(session, tasks))
+}
+
+// sreSessionStatus derives the session state from recorded SRE tasks. A pause,
+// question or plan draft left over from an earlier turn stays resumable in the
+// transcript but must not label the new turn; live work and unresolved
+// operations remain authoritative.
+func (b *Server) sreSessionStatus(session string, tasks []ai.SRETask) string {
+	started := b.Store.read(func() any {
+		return stringOf(b.Store.row("SELECT createdAt FROM messages WHERE sessionId=? AND role='user' ORDER BY createdAt DESC,rowid DESC LIMIT 1", session)["createdAt"])
+	}).(string)
+
+	var t *ai.SRETask
+	priority := 0
 	for i := range tasks {
-		if ai.SRETaskActive(tasks[i].Status) {
-			t = &tasks[i]
-			break
+		if !ai.SRETaskOwnsTurn(tasks[i], started) {
+			continue
 		}
-	}
-	// A later ordinary reply has its own status. Finished historical tasks do
-	// not label the new turn, while live/unknown effects remain authoritative.
-	if !ai.SRETaskActive(t.Status) {
-		started := b.Store.read(func() any {
-			return stringOf(b.Store.row("SELECT createdAt FROM messages WHERE sessionId=? AND role='user' ORDER BY createdAt DESC,rowid DESC LIMIT 1", session)["createdAt"])
-		}).(string)
-		updatedAt, updatedErr := time.Parse(time.RFC3339Nano, t.UpdatedAt)
-		startedAt, startedErr := time.Parse(time.RFC3339Nano, started)
-		blocked := false
-		for _, a := range t.Attempts {
+		score := 1
+		if tasks[i].Status == "active" || tasks[i].Status == "waiting_approval" {
+			score = 2
+		}
+		for _, a := range tasks[i].Attempts {
 			for _, op := range a.Operations {
-				blocked = blocked || ai.SREOperationBlocksResume(op)
+				if ai.SREOperationBlocksResume(op) {
+					score = 3
+				}
 			}
 		}
-		if !blocked && updatedErr == nil && startedErr == nil && updatedAt.Before(startedAt) {
-			b.Store.Status(session, "completed")
-			return
+		if score > priority {
+			t = &tasks[i]
+			priority = score
 		}
+	}
+	if t == nil {
+		return "completed"
 	}
 	status := "failed"
 	switch t.Status {
@@ -121,7 +127,7 @@ func (b *Server) syncSRESessionStatus(session string) {
 	case "paused", "waiting_input":
 		status = "failed"
 	}
-	b.Store.Status(session, status)
+	return status
 }
 func (b *Server) createSRETask(session, goal, mode, requestID string, scope []string) ai.SRETask {
 	return b.createSRETaskWithReferences(session, goal, mode, requestID, scope, true)

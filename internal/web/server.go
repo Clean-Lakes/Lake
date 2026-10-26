@@ -173,6 +173,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	server.Engine.CorrectionGuard = server.strategyCorrectionGuard
 	server.Engine.ModelActivity = server.strategyForegroundModel
 	store.RecoverSRETasks()
+	server.reconcileStaleSREStatuses()
 	if err = server.startScheduler(); err != nil {
 		server.Close()
 		return nil, err

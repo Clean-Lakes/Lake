@@ -1,5 +1,7 @@
 package ai
 
+import "time"
+
 // Missing risk on a legacy/custom repository record is conservative. Only the
 // trusted policy can establish that a call is safe to sample again.
 func SREOperationNeedsVerification(op SREOperation) bool {
@@ -61,4 +63,22 @@ func (e *Engine) sreCallReadOnly(c Config, call Call) bool {
 		}
 	}
 	return false
+}
+
+// Historical paused/draft/input tasks remain resumable but do not own a later
+// independent reply. Live dispatch and unknown changes remain authoritative.
+func SRETaskOwnsTurn(task SRETask, startedAt string) bool {
+	if task.Status == "active" || task.Status == "waiting_approval" {
+		return true
+	}
+	for _, a := range task.Attempts {
+		for _, op := range a.Operations {
+			if SREOperationBlocksResume(op) {
+				return true
+			}
+		}
+	}
+	start, se := time.Parse(time.RFC3339Nano, startedAt)
+	updated, ue := time.Parse(time.RFC3339Nano, task.UpdatedAt)
+	return se != nil || ue != nil || !updated.Before(start)
 }
