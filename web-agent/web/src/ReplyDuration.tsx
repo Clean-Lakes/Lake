@@ -14,7 +14,7 @@ export type ReplyDurationProps={elapsedOnly?:boolean;timing?:ReplyTiming;view?:A
 export function ReplyDuration({timing,view,cards=emptyCards,latestUserAt="",disclosure,detailNotice,latestStep,elapsedOnly=false}:ReplyDurationProps) {
  const [now,setNow]=useState(Date.now);
  const {text,duration,state,live,waiting}=turnStatus(timing,view,cards,latestUserAt,now);
- const visibleState=elapsedOnly?undefined:!live&&state==="回复结束"?undefined:state;
+ const visibleState=elapsedOnly?undefined:!live&&state==="回复结束"?(duration?"已完成":undefined):state;
  const [presence,setPresence]=useState({live,reveal:false});
  if(presence.live!==live)setPresence({live,reveal:!live});
 

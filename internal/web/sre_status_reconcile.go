@@ -11,10 +11,9 @@ import (
 // itself stays paused and resumable; only a session status and reply timing
 // that were derived from that stale state are corrected.
 //
-// The pass is deliberately narrow: it runs once per process start, touches
-// only sessions whose current SRE state no longer labels the latest turn, and
-// requires the engine's persisted latest turn to have completed. Task history,
-// operations, messages and evidence are never rewritten.
+// The pass is deliberately narrow: only the latest persisted engine outcome
+// can prove completion. Outstanding historical operations keep their session
+// warning; correcting reply metadata never resolves or retries an operation.
 func (b *Server) reconcileStaleSREStatuses() {
 	defer func() { recover() }()
 	for _, session := range b.Store.SRESessionIDs() {
@@ -22,80 +21,77 @@ func (b *Server) reconcileStaleSREStatuses() {
 			continue
 		}
 		tasks, err := b.Store.ListSRETasks(session, 50, "")
-		if err != nil || b.sreSessionStatus(session, tasks) != "completed" {
+		if err != nil {
 			continue
 		}
 		view, err := b.Engine.Snapshot(session)
-		if err != nil || view.Status != "completed" || view.TurnStartedAt == "" || view.TurnFinishedAt == "" {
+		if err != nil || view.Status != "completed" {
 			continue
 		}
-		stalePause := false
-		for _, task := range tasks {
-			if set("paused waiting_input draft")[task.Status] && !ai.SRETaskOwnsTurn(task, view.TurnStartedAt) {
-				stalePause = true
-			}
-		}
-		if stalePause && b.repairStaleReplyTimings(session, tasks, view) {
+		if b.repairStaleReplyTimings(session, tasks, view) && b.sreSessionStatus(session, tasks) == "completed" {
 			b.Store.RepairSessionStatus(session, "completed")
 		}
 	}
 }
 
-// repairStaleReplyTimings restores the recorded outcome of turns that ended
-// normally but were marked failed from a stale pause. Only the latest engine
-// turn has a provable model outcome; earlier failed timings stay unchanged.
-// A failed timing is left untouched when the turn shows its own failure: task activity
-// inside the turn, a system message, or an error card. Timings older than the
-// retained card window are skipped because a pruned error card could otherwise
-// look like a stale pause.
+// Only the latest persisted engine outcome can prove a stale timing wrong.
+// Earlier failures, task/operation history and outstanding session warnings stay intact.
 func (b *Server) repairStaleReplyTimings(session string, tasks []ai.SRETask, view ai.View) bool {
-	if view.Pending != nil || len(view.PendingApprovals) > 0 || view.Question != nil {
-		return false
-	}
-	for _, op := range view.OperationOutcomes {
-		if op.Status == "unknown" || op.Status == "dispatched" {
-			return false
-		}
-	}
-	modelStart, startErr := time.Parse(time.RFC3339Nano, view.TurnStartedAt)
-	modelEnd, endErr := time.Parse(time.RFC3339Nano, view.TurnFinishedAt)
-	if startErr != nil || endErr != nil || modelEnd.Before(modelStart) {
-		return false
-	}
-	if len(view.Cards) == 0 {
-		return false
-	}
-	coveredFrom, err := time.Parse(time.RFC3339Nano, view.Cards[0].At)
-	if err != nil {
-		return false
-	}
-	if view.CardsOffset == 0 {
-		// The view retains every card of this session; nothing hinted at a
-		// failure before the first retained card.
-		coveredFrom = time.Time{}
-	}
 	for _, timing := range b.Store.ReplyTimingRows(session) {
-		if !set("failed completed")[stringOf(timing["status"])] || stringOf(timing["finishedAt"]) == "" {
+		if !set("failed completed")[stringOf(timing["status"])] {
 			continue
 		}
-		start, startErr := time.Parse(time.RFC3339Nano, stringOf(timing["startedAt"]))
-		end, endErr := time.Parse(time.RFC3339Nano, stringOf(timing["finishedAt"]))
-		if startErr != nil || endErr != nil || end.Before(start) || start.Before(coveredFrom) || modelStart.Before(start) || modelEnd.After(end) {
+		start, se := time.Parse(time.RFC3339Nano, stringOf(timing["startedAt"]))
+		end, ee := time.Parse(time.RFC3339Nano, stringOf(timing["finishedAt"]))
+		if se != nil || ee != nil || !b.independentReplyCompleted(session, tasks, view, start, end) {
 			continue
 		}
-		if sreTaskTouched(tasks, start, end) {
-			continue
-		}
-		assistant, system := b.Store.ReplyMessageWindow(session, start, end)
-		if !assistant || system || errorCardBetween(view.Cards, start, end) {
-			continue
-		}
-		if stringOf(timing["status"]) == "failed" {
+		if timing["status"] == "failed" {
 			b.Store.SetReplyTimingStatus(session, stringOf(timing["messageId"]), "completed")
 		}
 		return true
 	}
 	return false
+}
+
+// A legacy paused task can still own an outstanding operation and the session
+// warning without turning a later, independently completed reply into a failure.
+func (b *Server) independentReplyCompleted(session string, tasks []ai.SRETask, view ai.View, start, end time.Time) bool {
+	if view.Status != "completed" || view.Pending != nil || len(view.PendingApprovals) > 0 || view.Question != nil {
+		return false
+	}
+	modelStart, se := time.Parse(time.RFC3339Nano, view.TurnStartedAt)
+	modelEnd, ee := time.Parse(time.RFC3339Nano, view.TurnFinishedAt)
+	if se != nil || ee != nil || end.Before(start) || modelEnd.Before(modelStart) || modelStart.Before(start) || modelEnd.After(end) {
+		return false
+	}
+	historicalPause := false
+	for _, task := range tasks {
+		updated, err := time.Parse(time.RFC3339Nano, task.UpdatedAt)
+		if err != nil {
+			return false
+		}
+		if updated.Before(start) && set("paused waiting_input draft")[task.Status] {
+			historicalPause = true
+		}
+	}
+	if !historicalPause || sreTaskTouched(tasks, start, end) {
+		return false
+	}
+	for _, op := range view.OperationOutcomes {
+		if (op.Status == "unknown" || op.Status == "dispatched") && (op.StartedAt.IsZero() || !op.StartedAt.Before(start)) {
+			return false
+		}
+	}
+	if len(view.Cards) == 0 {
+		return false
+	}
+	coveredFrom, err := time.Parse(time.RFC3339Nano, view.Cards[0].At)
+	if err != nil || view.CardsOffset > 0 && start.Before(coveredFrom) {
+		return false
+	}
+	assistant, system := b.Store.ReplyMessageWindow(session, start, end)
+	return assistant && !system && !errorCardBetween(view.Cards, start, end)
 }
 
 func sreTaskTouched(tasks []ai.SRETask, start, end time.Time) bool {

@@ -140,3 +140,10 @@ test('Pilot elapsed header does not repeat specialist activity or invent missing
  assert.ok(!html.includes('子任务执行中')&&!html.includes('reply-duration-spinner'));
  assert.equal(renderToStaticMarkup(createElement(ReplyDuration,{elapsedOnly:true,view:{status:'running',cards:[]} as never})), '');
 });
+
+test('a completed timed reply explicitly shows completion without borrowing task failure',()=>{
+ const html=renderToStaticMarkup(createElement(ReplyDuration,{timing}));
+ assert.ok(html.includes('已完成')&&!html.includes('未完成'));
+ const failed=renderToStaticMarkup(createElement(ReplyDuration,{timing:{...timing,status:'failed'}}));
+ assert.ok(failed.includes('未完成')&&!failed.includes('已完成'));
+});

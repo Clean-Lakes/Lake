@@ -1,5 +1,7 @@
 type RevealFrames = {request:(callback:FrameRequestCallback)=>number;cancel:(id:number)=>void;now:()=>number};
 const segmenter=new Intl.Segmenter(undefined,{granularity:'grapheme'});
+export const TEXT_REVEAL_MAX_LAG_MS=80;
+const MIN_GRAPHEMES_PER_SECOND=320;
 
 // Presentation only: canonical content and completion state never wait for frames.
 // Initial/restored text is immediate; only append updates of a live reply animate.
@@ -18,8 +20,13 @@ export class TextReveal {
   this.source=text;
   // Segment only the pending suffix, keeping all previously visible text stable.
   this.boundaries=Array.from(segmenter.segment(text.slice(this.shown.length)),s=>this.shown.length+s.index+s.segment.length);
-  this.deadline=this.frames.now()+200;
-  if(this.frame===null)this.frame=this.frames.request(this.tick);
+  // Keep a fixed catch-up window while text is pending. Frequent packets must
+  // not keep extending the deadline and leave the display behind the source.
+  if(this.frame===null){
+   this.previousTime=this.frames.now();
+   this.deadline=this.previousTime+TEXT_REVEAL_MAX_LAG_MS;
+   this.frame=this.frames.request(this.tick);
+  }
  }
  flush(text=this.source){
   this.stop();this.source=text;
@@ -32,10 +39,12 @@ export class TextReveal {
   const elapsed=this.previousTime===null?16.67:Math.max(0,time-this.previousTime);
   this.previousTime=time;
   const remaining=this.boundaries.length;
-  this.credit+=Math.max(80,remaining*10)*Math.min(elapsed,64)/1000;
-  const count=Math.min(remaining,Math.floor(this.credit));
+  const catchUpRate=remaining*1000/Math.max(8,this.deadline-time);
+  this.credit+=Math.max(MIN_GRAPHEMES_PER_SECOND,catchUpRate)*Math.min(elapsed,64)/1000;
+  // A frame with pending graphemes always paints, including 120/144Hz panels.
+  const count=Math.min(remaining,Math.max(1,Math.floor(this.credit)));
   if(count>0){
-   this.credit-=count;
+   this.credit=Math.max(0,this.credit-count);
    const offset=this.boundaries[count-1]!;
    this.boundaries=this.boundaries.slice(count);
    this.shown=this.source.slice(0,offset);this.publish(this.shown);
