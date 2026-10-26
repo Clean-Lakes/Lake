@@ -35,6 +35,7 @@ function PilotChoice({session,request,refresh,runId}:Props){
     {value.id===direction.id&&value.reason&&<p className="pilot-direction-reason" title={value.reason}>{value.reason}</p>}
    </div>)}
   </fieldset>
+  {choice.directions.length===1&&choice.singleDirectionReason&&<p className="pilot-choice-scope">仅此方向：{choice.singleDirectionReason}</p>}
   <p className="pilot-choice-scope">选择方向后，Lake 将在此方向内继续检查；展开具体操作可锁定命令。</p>
   <details key={direction.id} className="pilot-command-options">
    <DisclosureSummary>选择具体操作<small>{direction.operations.length} 项</small></DisclosureSummary>

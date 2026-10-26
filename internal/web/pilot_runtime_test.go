@@ -86,7 +86,7 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 					}
 					arguments := Object{"asset_ref": refPattern.FindString(content), "path": logPath}
 					if !automatic && !chosen {
-						emitModel(w, "", []ai.Call{{ID: "choose_path", Name: "pilot_offer_directions", Arguments: jsonText(Object{"directions": []Object{{"id": "logs", "title": "查看启动日志", "reason": "先收集故障时间的实际记录", "recommended": true, "operations": []Object{{"id": "read_logs", "title": "读取服务日志", "tool": "observe_logs", "arguments": arguments}}}}})}})
+						emitModel(w, "", []ai.Call{{ID: "choose_path", Name: "pilot_offer_directions", Arguments: jsonText(Object{"directions": []Object{{"id": "logs", "title": "查看启动日志", "reason": "先收集故障时间的实际记录", "recommended": true, "operations": []Object{{"id": "read_logs", "title": "读取服务日志", "tool": "observe_logs", "arguments": arguments}}}, {"id": "alternative-source", "title": "交叉核对替代来源", "reason": "从已知替代日志交叉收集证据", "operations": []Object{{"id": "read_other", "title": "读取另一日志来源", "tool": "observe_logs", "arguments": Object{"asset_ref": arguments["asset_ref"], "path": alternativePath}}}}}})}})
 						return
 					}
 					if !collected {
@@ -175,6 +175,9 @@ func TestPilotGuidedAndAutomaticRunThroughRealRoleAndEvidence(t *testing.T) {
 				if pending.Question == nil {
 					task, _ := b.Store.LoadSRETask(session, id)
 					t.Fatalf("no real Pilot wait: %s %s", task.Status, task.Error)
+				}
+				if len(pending.Question.Pilot.Directions) != 2 {
+					t.Fatal("guided runtime lost distinct alternatives")
 				}
 				before, _ := b.Store.LoadSRETask(session, id)
 				for _, attempt := range before.Attempts {

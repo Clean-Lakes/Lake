@@ -279,3 +279,26 @@ func TestPilotRepeatedFixedCommandsReuseExactDecision(t *testing.T) {
 		t.Fatal("fixed command broadened")
 	}
 }
+
+func TestPilotInitialChoicesNeedDistinctStrategiesOrExplicitConstraint(t *testing.T) {
+	child, s, c, repo := pilotDelegationFixture(t, "direction")
+	direction := *repo.task.Pilot.Decisions[0].Direction
+	repo.task.Pilot.Decisions = nil
+	_, err := child.offerPilotDirections(context.Background(), s, c, Call{Name: "pilot_offer_directions", Arguments: js(map[string]any{"directions": []PilotDirection{direction}})})
+	if err == nil || !strings.Contains(err.Error(), "2..4 distinct") {
+		t.Fatal("singleton reached human question", err)
+	}
+	b := direction
+	b.ID = "same-command"
+	b.Title = "别名方向"
+	_, err = child.offerPilotDirections(context.Background(), s, c, Call{Name: "pilot_offer_directions", Arguments: js(map[string]any{"directions": []PilotDirection{direction, b}})})
+	if err == nil || !strings.Contains(err.Error(), "2..4 distinct") {
+		t.Fatal("cosmetic alternatives reached human question", err)
+	}
+	if pilotChoiceDiversityError(&PilotChoice{Directions: []PilotDirection{direction}, SingleDirectionReason: "用户明确指定只能读取该文件"}) != nil {
+		t.Fatal("fixed method forced fake alternatives")
+	}
+	if pilotChoiceDiversityError(&PilotChoice{Directions: []PilotDirection{direction, b}}) != nil {
+		t.Fatal("multiple strategies rejected")
+	}
+}

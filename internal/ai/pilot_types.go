@@ -33,13 +33,14 @@ type PilotDirection struct {
 }
 
 type PilotChoice struct {
-	SessionID      string           `json:"sessionId"`
-	TaskID         string           `json:"taskId"`
-	PlanRevisionID string           `json:"planRevisionId"`
-	StepID         string           `json:"stepId"`
-	AttemptID      string           `json:"attemptId"`
-	Role           SREAgentRole     `json:"role"`
-	Directions     []PilotDirection `json:"directions"`
+	SessionID             string           `json:"sessionId"`
+	TaskID                string           `json:"taskId"`
+	PlanRevisionID        string           `json:"planRevisionId"`
+	StepID                string           `json:"stepId"`
+	AttemptID             string           `json:"attemptId"`
+	Role                  SREAgentRole     `json:"role"`
+	Directions            []PilotDirection `json:"directions"`
+	SingleDirectionReason string           `json:"singleDirectionReason,omitempty"`
 }
 
 type PilotSelection struct {

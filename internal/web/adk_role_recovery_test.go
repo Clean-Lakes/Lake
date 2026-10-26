@@ -71,7 +71,7 @@ func testADKRoleCrash(t *testing.T, question bool, projectionWindow ...bool) {
 		if pilot {
 			args := Object{"asset_ref": sreAliasForTest(resource), "path": target}
 			if !pilotChosen {
-				emitModel(w, "", []ai.Call{{ID: "pilot-choice", Name: "pilot_offer_directions", Arguments: jsonText(Object{"directions": []Object{{"id": "inspect", "title": "核对隔离文件", "reason": "取得恢复后的实际证据", "operations": []Object{{"id": "read_source", "title": "读取原文件", "tool": "read", "arguments": args}}}}})}})
+				emitModel(w, "", []ai.Call{{ID: "pilot-choice", Name: "pilot_offer_directions", Arguments: jsonText(Object{"single_direction_reason": "此恢复夹具要求只读取指定的唯一文件，不允许检查其他来源", "directions": []Object{{"id": "inspect", "title": "核对隔离文件", "reason": "取得恢复后的实际证据", "operations": []Object{{"id": "read_source", "title": "读取原文件", "tool": "read", "arguments": args}}}}})}})
 				return
 			}
 			if !pilotRead {

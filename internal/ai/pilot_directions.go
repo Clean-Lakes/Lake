@@ -1,6 +1,10 @@
 package ai
 
-import "sort"
+import (
+	"errors"
+	"sort"
+	"strings"
+)
 
 // Operation IDs and prose are presentation. Compare the actual calls and their
 // prerequisite graph, so relabeling the same batch does not create a new choice.
@@ -37,4 +41,16 @@ func pilotDistinctDirections(directions []PilotDirection) []PilotDirection {
 		result = append(result, direction)
 	}
 	return result
+}
+
+// Only new human decisions need alternatives; continuation batches never enter
+// this check. Do not force invented commands when only one method is safe.
+func pilotChoiceDiversityError(choice *PilotChoice) error {
+	if len(choice.SingleDirectionReason) > 1000 {
+		return errors.New("single_direction_reason must be at most 1000 bytes")
+	}
+	if len(choice.Directions) == 1 && strings.TrimSpace(choice.SingleDirectionReason) == "" {
+		return errors.New("Before asking the user, provide 2..4 distinct step-level strategies with different useful methods or sources, not renamed identical commands. If the user's fixed method or an observed safety constraint truly rules out alternatives, supply single_direction_reason explaining that constraint. Do not ask once per file or retry; continue an already selected purpose with its original ID, title and reason")
+	}
+	return nil
 }
