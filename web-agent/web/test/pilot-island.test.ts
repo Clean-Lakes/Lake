@@ -113,3 +113,14 @@ test('planning has no invented steps, percentage or unused execution role', () =
   empty.sre!.tasks = null as never;
   assert.equal(pilotIslandModel(empty), null);
 });
+
+// The server uses waiting_approval for aggregate question waits too. A concrete
+// Pilot question identifies the actual intervention, while real approvals win.
+test('aggregate approval state does not mislabel concrete Pilot choices',()=>{
+ const snapshot=islandFixture('choice');snapshot.sre!.tasks[0]!.status='waiting_approval';
+ assert.equal(pilotIslandModel(snapshot)!.label,'等待选择');
+ const ordinary=snapshot.ai!.agentRuns!.find(a=>a.question)!;delete ordinary.question!.pilot;
+ assert.equal(pilotIslandModel(snapshot)!.label,'等待补充');
+ const approval=islandFixture('approval');approval.sre!.tasks[0]!.status='waiting_approval';
+ assert.equal(pilotIslandModel(approval)!.label,'等待审批');
+});

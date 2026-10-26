@@ -75,9 +75,10 @@ export function pilotIslandModel(snapshot: SessionSnapshot | null | undefined): 
   else if (task.status === 'failed' || failed) { label = '检查未完成'; tone = 'failed'; }
   else if (task.status === 'paused') { label = '已暂停'; tone = 'neutral'; }
   else if (task.status === 'completed') { label = task.recoveryStatus === 'verified' ? '验收已通过' : '调查结束'; tone = 'neutral'; }
-  else if (approvals.length || task.status === 'waiting_approval') { label = '等待审批'; tone = 'attention'; }
+  else if (approvals.length) { label = '等待审批'; tone = 'attention'; }
   else if (choices.length) { label = '等待选择'; tone = 'attention'; }
   else if (inputs.length || task.status === 'waiting_input') { label = '等待补充'; tone = 'attention'; }
+  else if (task.status === 'waiting_approval') { label = '等待审批'; tone = 'attention'; }
   else if (!plan) {label = planning?.status === 'running' ? '制定计划' : '准备计划'; tone = planning?.status === 'running' ? 'active' : 'neutral';}
   else if (task.status === 'draft') { label = '计划待开始'; tone = 'neutral'; }
   else if (active.length > 1) label = '并行协作';
