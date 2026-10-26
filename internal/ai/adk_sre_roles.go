@@ -143,9 +143,22 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 			}
 		}
 	}
-	jobCtx, cancel := context.WithCancel(ctx)
+	var jobCtx context.Context
+	var cancel context.CancelFunc
+	automaticInvestigation := task.Pilot != nil && task.Pilot.AutoAdvance && step.Role == SREInvestigator && attemptID != ""
+	// Automatic Pilot investigations must leave time to report what was actually
+	// observed instead of collecting indefinitely under the parent's 500 rounds.
+	// Manual selection and approval waits keep their existing lifetime.
+	if automaticInvestigation {
+		jobCtx, cancel = context.WithTimeout(ctx, 9*time.Minute)
+	} else {
+		jobCtx, cancel = context.WithCancel(ctx)
+	}
 	defer cancel()
 	w := &agentWorker{parent: e, session: s, parentID: sessionID, runID: uid(), turnID: turnID, role: step.Capability, assets: step.ResourceIDs, ctx: jobCtx, cancel: cancel, done: make(chan struct{}), reads: map[string]int{}, sreTaskID: task.ID, sreQuestion: step.ID == "question" && noTools && attemptID == ""}
+	if automaticInvestigation {
+		w.sreReportAt = time.Now().Add(6 * time.Minute)
+	}
 	if w.role == "" {
 		w.role = "host"
 	}
@@ -454,7 +467,7 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 			if ce := child.Configure(w.runID, cc); ce != nil {
 				err = ce
 			} else {
-				err = child.ExecuteTurn(jobCtx, w.runID, TurnInput{UserText: "Correct only the report format, without tools. Return JSON {schemaVersion:1,summary:string,facts:[{statement:string,evidenceIds:[exact successful IDs]}],hypotheses:[string],unknowns:[string],nextChecks:[string]}. Cite only these actually collected evidence records: " + js(out.Evidence) + "\nValidation error: " + parseErr.Error()})
+				err = child.ExecuteTurn(jobCtx, w.runID, TurnInput{UserText: sreReportCorrectionPrompt(report, out.Evidence, parseErr)})
 				if err == nil {
 					view, err = child.Snapshot(w.runID)
 					out.Usage = view.Usage
@@ -534,6 +547,38 @@ func ValidateSRERoleReport(report SRERoleReport, evidence []AgentEvidence) error
 		}
 	}
 	return nil
+}
+
+// Report correction needs only evidence identities. Including the full
+// excerpts can turn a long read-only investigation into an invalid chat turn
+// before the model gets a chance to fix an otherwise usable report.
+func sreReportCorrectionPrompt(report SRERoleReport, evidence []AgentEvidence, validationErr error) string {
+	const maxIDs = 256
+	owned := make(map[string]bool, len(evidence))
+	for _, ev := range evidence {
+		if ev.Success {
+			owned[ev.ID] = true
+		}
+	}
+	ids := make([]string, 0, min(len(owned), maxIDs))
+	seen := make(map[string]bool, len(owned))
+	add := func(id string) {
+		if owned[id] && !seen[id] && len(ids) < maxIDs {
+			ids = append(ids, id)
+			seen[id] = true
+		}
+	}
+	// Keep citations from the attempted report first, then offer recent valid
+	// evidence. The complete records remain in the durable evidence store.
+	for _, fact := range report.Facts {
+		for _, id := range fact.EvidenceIDs {
+			add(id)
+		}
+	}
+	for i := len(evidence) - 1; i >= 0; i-- {
+		add(evidence[i].ID)
+	}
+	return "Correct only the report format, without tools. Return JSON {schemaVersion:1,summary:string,facts:[{statement:string,evidenceIds:[exact successful IDs]}],hypotheses:[string],unknowns:[string],nextChecks:[string]}. Cite only successful evidence IDs from this bounded catalog: " + js(ids) + "\nValidation error: " + utf8Prefix(validationErr.Error(), 1000)
 }
 
 func sreRoleName(role SREAgentRole) string {
