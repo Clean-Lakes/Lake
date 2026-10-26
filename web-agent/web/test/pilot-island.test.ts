@@ -16,7 +16,8 @@ test('Pilot island follows actual parallel specialists and completed steps, neve
   for (const a of snapshot.ai!.agentRuns!) {a.toolCount = 200; a.activityUpdatedAt = '2026-10-26T12:00:00Z'; a.liveText = '持续叙述';}
   assert.deepEqual(pilotIslandModel(snapshot), model);
   const html = renderToStaticMarkup(createElement(PilotStatusIsland, {model, onInspect() {}}));
-  assert.equal((html.match(/class="step-/g) ?? []).length, 8);
+  assert.ok(html.includes('stroke-dasharray="37.5 100"'));
+  assert.ok(html.includes('pilot-island-action') && html.includes('pilot-island-ring'));
   assert.ok(!html.includes('持续叙述') && !html.includes('workspace-header-sweep'));
   const three = pilotIslandModel(islandFixture('parallel3'))!;
   assert.deepEqual(three.visibleRoles.map(r => r.role), ['coordinator', 'investigator', 'verifier']);
@@ -123,4 +124,17 @@ test('aggregate approval state does not mislabel concrete Pilot choices',()=>{
  assert.equal(pilotIslandModel(snapshot)!.label,'等待补充');
  const approval=islandFixture('approval');approval.sre!.tasks[0]!.status='waiting_approval';
  assert.equal(pilotIslandModel(approval)!.label,'等待审批');
+});
+
+test('current action prioritizes intervention, keeps peer activity and real counts',async()=>{
+ const {pilotIslandFocus}=await import('../src/pilotIslandModel');
+ const snapshot=islandFixture();
+ const investigator=snapshot.ai!.agentRuns!.find(a=>a.workflowStepId==='logs')!;
+ investigator.activityPhase='tool';investigator.activityTool='read';
+ let focus=pilotIslandFocus(pilotIslandModel(snapshot)!);
+ assert.equal(focus.primary?.role,'investigator');assert.equal(focus.action,'读取文件与日志');assert.match(focus.secondary,/验证员/);
+ focus=pilotIslandFocus(pilotIslandModel(islandFixture('choice'))!);
+ assert.equal(focus.action,'等待选择');assert.match(focus.secondary,/验证员/);
+ assert.equal(pilotIslandFocus(pilotIslandModel(islandFixture('paused'))!).action,'已暂停');
+ assert.equal(pilotIslandFocus(pilotIslandModel(islandFixture('unknown'))!).action,'待核实');
 });

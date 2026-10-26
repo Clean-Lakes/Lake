@@ -57,3 +57,6 @@
 .pilot-choice .pilot-choice-primary:disabled{color:var(--background);opacity:.45}
 
 .pilot-selection-mode{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:6px;color:var(--text-muted)}
+
+.pilot-resource-execution{margin:10px 0;min-width:0}
+.pilot-resource-execution>.thinking-timeline+.thinking-timeline{margin-top:8px}

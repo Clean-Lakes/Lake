@@ -2,15 +2,15 @@ import {useEffect, useId, useLayoutEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {AgentIcon} from './AgentIcon';
 import {Glyph} from './Icons';
-import {pilotRoleStatus, type PilotIslandModel} from './pilotIslandModel';
+import {pilotRoleStatus,pilotIslandFocus, type PilotIslandModel} from './pilotIslandModel';
 
-export function PilotStatusIsland({model, onInspect}: {model: PilotIslandModel; onInspect: (targetId: string) => void}) {
+export function PilotStatusIsland({model, onInspect,visible=true}: {model: PilotIslandModel; visible?:boolean; onInspect: (targetId: string) => void}) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{left: number; top: number} | null>(null);
   const trigger = useRef<HTMLButtonElement>(null), panel = useRef<HTMLElement>(null);
   const panelId = useId(), headingId = useId();
   const close = (restore = false) => {setOpen(false); if (restore) trigger.current?.focus({preventScroll: true});};
-  useEffect(() => {setOpen(false);}, [model.taskId, model.planId]);
+  useEffect(() => {setOpen(false);}, [model.taskId, model.planId,visible]);
   useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
@@ -40,21 +40,17 @@ export function PilotStatusIsland({model, onInspect}: {model: PilotIslandModel; 
     document.addEventListener('pointerdown', outside); document.addEventListener('focusin', focus); document.addEventListener('keydown', key);
     return () => {document.removeEventListener('pointerdown', outside); document.removeEventListener('focusin', focus); document.removeEventListener('keydown', key);};
   }, [open]);
-  const roleNames = model.visibleRoles.map(r => r.name).join(' + ');
+  const {primary,action,secondary}=pilotIslandFocus(model);
+  const progress=model.total?Math.max(0,Math.min(100,model.completed/model.total*100)):0;
   const inspect = (target: string) => {close(); onInspect(target);};
   return <div className="pilot-island" data-tone={model.tone} data-pilot-task={model.taskId}>
-    <button ref={trigger} type="button" className="pilot-island-trigger" aria-label={`Lake Pilot：${model.detail}。查看专员进度`} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? panelId : undefined} title={model.detail} onClick={() => setOpen(value => !value)}>
-      {!!model.visibleRoles.length && <span className="pilot-island-roles" aria-hidden="true">
-        <span className="pilot-island-avatars">{model.visibleRoles.map(r => <span key={r.role} className={`pilot-island-avatar role-state-${r.status}`} title={`${r.name} · ${pilotRoleStatus(r)}`}><AgentIcon role={r.role} size={17}/><i/></span>)}</span>
-        <span className="pilot-island-role-names">{model.visibleRoles.length > 2 ? `${model.visibleRoles.length} 位专员` : roleNames}</span>
-      </span>}
-      <span className="pilot-island-progress">
-        <span className="pilot-island-summary"><span className="pilot-island-label"><i/><span>{model.label}</span></span><span className="pilot-island-count">{model.total ? <>{model.completed}<span> / {model.total}</span></> : '—'}</span><Glyph name="chevron" size={12}/></span>
-        <span className="pilot-island-track" aria-hidden="true">{model.steps.map(s => <i key={s.step.id} className={`step-${s.status}`}/>)}</span>
-      </span>
+    <button ref={trigger} type="button" className="pilot-island-trigger" aria-label={`Lake Pilot：${model.detail}。${primary?.name??''}：${action}。${secondary}。查看专员进度`} aria-haspopup="dialog" disabled={!visible} aria-expanded={visible&&open} aria-controls={open ? panelId : undefined} title={model.detail} onClick={() => setOpen(value => !value)}>
+      {primary&&<span className={`pilot-action-avatar role-state-${primary.status}`} aria-hidden="true"><AgentIcon role={primary.role} size={22}/></span>}
+      <span className="pilot-island-action" aria-hidden="true"><span className="pilot-island-action-line">{primary&&<strong>{primary.name}</strong>}<span className="pilot-island-action-label" title={action}>{model.tone!=='active'&&<i className="pilot-action-state-dot"/>}{action}</span></span><small title={secondary}>{secondary}</small></span>
+      <span className="pilot-island-progress" aria-hidden="true"><svg className="pilot-island-ring" viewBox="0 0 28 28" fill="none"><circle className="pilot-ring-track" cx="14" cy="14" r="10"/><circle className="pilot-ring-value" opacity={model.completed>0?1:0} cx="14" cy="14" r="10" pathLength="100" strokeDasharray={`${progress} 100`} transform="rotate(-90 14 14)"/></svg><span className="pilot-island-count">{model.total?<>{model.completed}<span> / {model.total}</span></>:'—'}</span><Glyph name="chevron" size={12}/></span>
     </button>
     <span className="visually-hidden" role="status" aria-live="polite">{model.detail}</span>
-    {open && createPortal(<section ref={panel} id={panelId} className="pilot-island-panel" role="dialog" aria-labelledby={headingId} tabIndex={-1} style={{left: position?.left ?? 12, top: position?.top ?? 12, visibility: position ? undefined : 'hidden'}}>
+    {visible&&open && createPortal(<section ref={panel} id={panelId} className="pilot-island-panel" role="dialog" aria-labelledby={headingId} tabIndex={-1} style={{left: position?.left ?? 12, top: position?.top ?? 12, visibility: position ? undefined : 'hidden'}}>
       <header><strong id={headingId}>Lake Pilot</strong><button type="button" className="icon-button" aria-label="关闭专员进度" onClick={() => close(true)}><Glyph name="close" size={15}/></button></header>
       <p className={`pilot-island-detail tone-${model.tone}`}>{model.detail}</p>
       <div className="pilot-island-role-list">{model.roles.map(role => <div className="pilot-island-role-row" key={role.role}><button type="button" disabled={!role.messageId} aria-label={`查看${role.name}：${role.description}`} onClick={() => {if (role.messageId) inspect(`sre-message-${role.messageId}`);}}>

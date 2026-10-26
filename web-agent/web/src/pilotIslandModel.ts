@@ -2,12 +2,13 @@ import type {SessionSnapshot, SREAgentRole, SREPlanStep, SRETask} from '../../sh
 import {pilotStepStatus} from './pilotPresentation';
 import {sreNeedsVerification} from './sreOperationPolicy';
 import {sreRoles} from './sreTranscript';
+import {sreActivityLabel} from './SREActivity';
 
 const order: SREAgentRole[] = ['coordinator', 'investigator', 'executor', 'verifier'];
 const working = new Set(['running', 'queued', 'waiting_input', 'waiting_approval']);
 const terminal = new Set(['completed', 'failed', 'cancelled']);
 export type PilotIslandStep = {step: SREPlanStep; status: string};
-export type PilotIslandRole = {role: SREAgentRole; name: string; status: string; completed: number; total: number; description: string; messageId?: string; waitKind?: 'choice'|'input'};
+export type PilotIslandRole = {role: SREAgentRole; name: string; status: string; completed: number; total: number; description: string; action?:string; messageId?: string; waitKind?: 'choice'|'input'};
 export type PilotIslandModel = {
   taskId: string; planId?: string; label: string; detail: string; tone: 'neutral'|'active'|'attention'|'failed';
   completed: number; total: number; steps: PilotIslandStep[]; roles: PilotIslandRole[]; visibleRoles: PilotIslandRole[];
@@ -60,7 +61,9 @@ export function pilotIslandModel(snapshot: SessionSnapshot | null | undefined): 
     const waitingAttempt = attempts.filter(a => a.stepId === own.find(s => s.status === 'waiting_input')?.step.id).at(-1);
     const waitingAgent = agents.find(a => a.id === waitingAttempt?.roleRunId);
     const waitKind: PilotIslandRole['waitKind'] = status === 'waiting_input' ? waitingAgent?.question?.pilot ? 'choice' : 'input' : undefined;
-    return [{role, name: sreRoles[role].name, status, completed: own.filter(s => s.status === 'succeeded').length, total: own.length, description: current?.step.description ?? (own.length ? '本角色步骤已完成' : '制定任务计划'), messageId, waitKind}];
+    const currentAgent=agents.find(a=>a.sreRole===role&&a.workflowStepId===current?.step.id&&a.status==='running'&&!a.pending&&!a.question);
+    const action=status==='running'&&currentAgent?sreActivityLabel(currentAgent).replace(/^正在/,''):undefined;
+    return [{action,role, name: sreRoles[role].name, status, completed: own.filter(s => s.status === 'succeeded').length, total: own.length, description: current?.step.description ?? (own.length ? '本角色步骤已完成' : '制定任务计划'), messageId, waitKind}];
   });
   const active = roles.filter(r => r.status === 'running');
   const queued = roles.filter(r => r.status === 'queued');
@@ -99,4 +102,17 @@ export function pilotIslandModel(snapshot: SessionSnapshot | null | undefined): 
 export function pilotRoleStatus(role: PilotIslandRole) {
   if (role.status === 'waiting_input' && role.waitKind === 'input') return '等待补充';
   return ({running: '执行中', queued: '排队中', waiting_input: '等待选择', waiting_approval: '等待审批', unknown: '待核实', failed: '未完成', paused: '已暂停', interrupted: '已中断', succeeded: '已完成', pending: '待开始'} as Record<string, string>)[role.status] ?? '待开始';
+}
+
+/** Show the role requiring attention first, then the actual working specialist. */
+export function pilotIslandFocus(model:PilotIslandModel){
+ const priority=['unknown','waiting_approval','waiting_input','failed','running','queued','paused','interrupted','succeeded','pending'];
+ const preferred: SREAgentRole[]=['investigator','executor','verifier','coordinator'];
+ const ranked=[...model.visibleRoles].sort((a,b)=>priority.indexOf(a.status)-priority.indexOf(b.status)||preferred.indexOf(a.role)-preferred.indexOf(b.role));
+ const primary=ranked[0];
+ const stopped=model.tone==='neutral'||model.tone==='failed';
+ const action=stopped?model.label:primary?.status==='running'?primary.action??model.label:primary?pilotRoleStatus(primary):model.label;
+ const peer=ranked.find(role=>role!==primary&&role.status==='running')??ranked.find(role=>role!==primary&&['waiting_input','waiting_approval','unknown','queued'].includes(role.status));
+ const secondary=peer?`${peer.name} · ${peer.status==='running'?peer.action??(peer.role==='verifier'?'独立复核':'执行中'):pilotRoleStatus(peer)}`:model.detail.includes('结论不充分')?'结论不充分':primary?.description??model.label;
+ return {primary,action,secondary};
 }

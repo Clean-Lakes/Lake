@@ -41,7 +41,7 @@
 }
 /* Reserve the native Windows window controls, without extending the bubble. */
 html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
-  max-width: calc(100% - var(--session-gutter) - 156px);
+  max-width: calc(100% - var(--session-content-start) - 156px);
   height: auto;
   user-select: none;
 }

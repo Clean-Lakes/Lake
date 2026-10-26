@@ -1,33 +1,36 @@
-/* A single quiet row inside Lake's existing glass title bubble. */
-.pilot-island { flex: 0 0 auto; min-width: 0; --pilot-island-color: var(--text-muted); }
-.pilot-island[data-tone="active"] { --pilot-island-color: var(--info); }
-.pilot-island[data-tone="attention"] { --pilot-island-color: var(--warning); }
-.pilot-island[data-tone="failed"] { --pilot-island-color: var(--danger); }
-.pilot-island-trigger { display: flex; align-items: center; gap: 14px; height: 30px; margin: 0; padding: 0 0 0 14px; border: 0; border-left: 1px solid var(--border); border-radius: 0; background: transparent; color: var(--foreground); font: inherit; font-size: var(--font-size-ui); text-align: start; cursor: pointer; }
-.pilot-island-trigger:hover { background: transparent; }
-.pilot-island-trigger:focus-visible { outline: 2px solid var(--info); outline-offset: 4px; }
-.pilot-island-roles { display: flex; align-items: center; gap: 9px; width: 164px; min-width: 0; }
-.pilot-island-avatars { display: inline-flex; align-items: center; flex-shrink: 0; gap: 5px; }
-.pilot-island-avatar { display: inline-flex; position: relative; }
-.pilot-island-avatar i { display: none; position: absolute; width: 4px; height: 4px; right: -2px; top: 0; border-radius: 50%; }
-.pilot-island-avatar.role-state-running i { display: block; background: var(--info); }
-.pilot-island-avatar.role-state-queued i { display: block; background: var(--text-muted); }
-.pilot-island-avatar:is(.role-state-waiting_input,.role-state-waiting_approval,.role-state-unknown) i { display: block; background: var(--warning); }
-.pilot-island-role-names { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pilot-island-progress { display: flex; flex-direction: column; justify-content: center; gap: 4px; width: 184px; min-width: 0; }
-.pilot-island-summary { display: flex; align-items: center; gap: 8px; min-width: 0; line-height: 20px; }
-.pilot-island-label { display: inline-flex; align-items: center; gap: 5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pilot-island-label > i { width: 5px; height: 5px; border-radius: 50%; background: var(--pilot-island-color); flex-shrink: 0; }
-.pilot-island-label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pilot-island-count { flex-shrink: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.pilot-island-count > span { color: var(--text-muted); }
-.pilot-island-summary > svg { flex-shrink: 0; color: var(--text-muted); }
-.pilot-island-track { display: flex; gap: 3px; width: 100%; height: 3px; }
-.pilot-island-track > i { flex: 1; min-width: 0; border-radius: 2px; background: var(--border-strong); }
-.pilot-island-track > .step-succeeded { background: var(--foreground); }
-.pilot-island-track > .step-running { background: var(--info); }
-.pilot-island-track > :is(.step-waiting_input,.step-waiting_approval,.step-unknown) { background: var(--warning); }
-.pilot-island-track > .step-failed { background: var(--danger); }
+/* Current action, peer activity and measured plan progress share one quiet row. */
+.pilot-island{flex:0 0 auto;min-width:0;--pilot-island-color:var(--text-muted)}
+.pilot-island[data-tone="active"]{--pilot-island-color:var(--info)}
+.pilot-island[data-tone="attention"]{--pilot-island-color:var(--warning)}
+.pilot-island[data-tone="failed"]{--pilot-island-color:var(--danger)}
+.pilot-island-trigger{display:flex;align-items:center;gap:12px;height:32px;margin:0;padding:0 0 0 14px;border:0;border-left:1px solid var(--border);border-radius:0;background:transparent;color:var(--foreground);font:inherit;font-size:var(--font-size-ui);text-align:start;cursor:pointer}
+.pilot-island-trigger:hover{background:transparent}
+.pilot-island-trigger:focus-visible{outline:2px solid var(--focus-outline);outline-offset:-2px}
+.pilot-action-avatar{display:inline-flex;flex-shrink:0}
+.pilot-island-action{display:flex;flex-direction:column;justify-content:center;gap:1px;width:210px;min-width:0;line-height:17px}
+.pilot-island-action-line{display:flex;align-items:center;gap:8px;min-width:0}
+.pilot-island-action strong{font:inherit;flex-shrink:0}
+.pilot-action-state-dot{display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:var(--pilot-island-color);vertical-align:1px}
+.pilot-island-action-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pilot-island[data-tone="attention"] .pilot-island-action-label,.pilot-island[data-tone="failed"] .pilot-island-action-label{color:var(--pilot-island-color)}
+.pilot-island-action>small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted);font-size:var(--font-size-toolbar);line-height:14px}
+.pilot-island-progress{display:flex;align-items:center;gap:9px;flex-shrink:0}
+.pilot-island-ring{width:28px;height:28px;flex-shrink:0;stroke-width:2.1;stroke-linecap:round}
+.pilot-ring-track{stroke:var(--border)}
+.pilot-ring-value{stroke:var(--pilot-island-color);transition:stroke-dasharray 240ms ease,stroke 160ms ease}
+.pilot-island-count{font-variant-numeric:tabular-nums;white-space:nowrap}
+.pilot-island-count>span,.pilot-island-progress>svg:last-child{color:var(--text-muted)}
+.header-state-area{display:flex;align-items:center;flex:0 0 auto;min-width:0}
+.header-morph-slot{display:block;overflow:hidden;flex:0 0 auto;opacity:0;transition:width 280ms cubic-bezier(.22,1,.36,1),opacity 120ms ease}
+.header-morph-slot.is-visible{opacity:1}
+.header-morph-content{display:flex;align-items:center;width:max-content;min-height:32px}
+.header-normal-state .session-state-badge{margin-left:0}
+.workspace.has-floating-header>.workspace-header{min-height:54px}
+.workspace.has-floating-header .crumb-project{flex:0 0 auto;max-width:16ch}
+@container(max-width:900px){.workspace.has-floating-header .crumb-project,.workspace.has-floating-header .crumb-slash{display:none}.pilot-island-action{width:170px}}
+@container(max-width:700px){.pilot-island-trigger{padding-left:9px;gap:9px}.pilot-island-action{width:145px}}
+@container(max-width:480px){.pilot-action-avatar{display:none}.pilot-island-action{width:94px}.pilot-island-action-line{gap:5px}.pilot-island-action-line>strong{display:none}.pilot-island-progress{gap:6px}.pilot-island-ring{width:24px;height:24px}.workspace.has-floating-header .breadcrumbs>svg,.workspace.has-floating-header .breadcrumbs strong>svg{display:none}}
+@media(prefers-reduced-motion:reduce){.header-morph-slot,.pilot-ring-value{transition:none}}
 .pilot-island-panel { position: fixed; z-index: 75; width: min(420px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-settings-panel); corner-shape: var(--corner-window); background: var(--surface); color: var(--foreground); box-shadow: var(--shadow-popover); font-size: var(--font-size-ui); }
 .pilot-island-panel:focus { outline: none; }
 .pilot-island-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -49,19 +52,3 @@
 .pilot-island-role-state:is(.role-state-waiting_input,.role-state-waiting_approval,.role-state-unknown) { color: var(--warning); }
 .pilot-island-role-state.role-state-failed { color: var(--danger); }
 .pilot-island-plan-link { display: flex; align-items: center; gap: 7px; width: 100%; margin-top: 4px; padding: 12px 0 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; color: var(--text-muted); font: inherit; cursor: pointer; }
-.workspace.has-floating-header > .workspace-header.has-pilot-island .breadcrumbs { flex: 1 1 auto; }
-.workspace.has-floating-header > .workspace-header.has-pilot-island .crumb-project { max-width: 16ch; }
-@container (max-width: 900px) {
-  .has-pilot-island .crumb-project,.has-pilot-island .crumb-slash { display: none; }
-  .has-pilot-island .pilot-island-role-names { display: none; }
-  .has-pilot-island .pilot-island-roles { width: 80px; }
-  .has-pilot-island .pilot-island-progress { width: 164px; }
-}
-@container (max-width: 700px) {
-  .has-pilot-island .pilot-island-trigger { padding-left: 9px; gap: 9px; }
-  .has-pilot-island .pilot-island-progress { width: 148px; }
-}
-@container (max-width: 480px) {
-  .has-pilot-island .pilot-island-roles,.has-pilot-island .breadcrumbs > svg,.has-pilot-island .breadcrumbs strong > svg { display: none; }
-  .has-pilot-island .pilot-island-progress { width: 154px; }
-}

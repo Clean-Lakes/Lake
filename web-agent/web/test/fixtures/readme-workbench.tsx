@@ -53,6 +53,7 @@ const catalog={projects:[project],sessions,resources,resourceTree:tree,tags:[],t
 const bootstrap={authenticated:true,modelConfigured:true,modelName:'DeepSeek',modelId:model.modelId,modelSelection:model,terminalMode:'pty',supportsImageInput:false,aiRuntime:'go'};
 const islandQuery = new URLSearchParams(location.search).get('pilot-island');
 const islandWrites: string[] = [];
+const fixtureHistories:import('../../../shared/contracts').TerminalHistory[]=[];
 function applyIsland(state: IslandFixtureState) {
  const incoming = islandFixture(state, session.id, project.id);
  project.name = 'HexHub 服务器'; session.title = '主机资源状态检查';
@@ -114,6 +115,12 @@ window.fetch=async(input,init)=>{
   return new Response('{}',{headers:{'Content-Type':'application/json'}});
  }
  if(referenceProof&&init?.method==='POST'&&url.pathname.endsWith('/messages')){const sent=JSON.parse(sentProof.textContent||'[]');sent.push(JSON.parse(String(init.body)));sentProof.textContent=JSON.stringify(sent);return new Response('{}',{headers:{'Content-Type':'application/json'}});}
+ if(islandQuery&&url.pathname===`/api/projects/${project.id}/pilot`&&init?.method==='PUT'){
+  const update=JSON.parse(String(init.body)),settings=snapshot.sre!.pilot!;
+  if(update.expectedRevision!==settings.revision)return new Response('{}',{status:409});
+  Object.assign(settings,{enabled:update.enabled,autoAdvance:update.autoAdvance,revision:settings.revision+1});
+  return new Response(JSON.stringify(settings),{headers:{'Content-Type':'application/json'}});
+ }
  if((init?.method??'GET')!=='GET')return new Response(JSON.stringify({error:'README 演示只提供展示，不执行操作'}),{status:405,headers:{'Content-Type':'application/json'}});
  let value:unknown;
  const path=url.pathname;
@@ -123,6 +130,8 @@ window.fetch=async(input,init)=>{
  else if(path.endsWith('/ai/reasoning'))value={modelId:model.modelId,effort:'',default:'',levels:[]};
  else if(path.endsWith('/ai/options'))value={profile:'core',multiAgentMode:'off',contextWindow:64000,maxOutput:8192,maxSteps:500,silentReadFiles:true,silentWriteFiles:false,silentReadSQL:true,silentCommands:true};
  else if(path==='/api/ai/presets'||path.endsWith('/ai/references')||path.endsWith('/terminals/available'))value=[];
+ else if(islandQuery&&path.endsWith('/pilot'))value=snapshot.sre!.pilot;
+ else if(islandQuery&&path.endsWith('/history'))value=fixtureHistories.find(h=>path.includes('/'+h.terminal.id+'/'))??{entries:[]};
  else if(path.endsWith('/sre'))value={enabled:true};
  else if(path.endsWith('/sre/tasks'))value={items:[task],nextCursor:''};
  else if(path.endsWith('/message-queue'))value=snapshot.messageQueue;
@@ -141,6 +150,7 @@ class DemoEventSource extends EventTarget {
 }
 window.EventSource=DemoEventSource as unknown as typeof EventSource;
 window.lakeDesktopUpdates={platform:'macOS · Apple Silicon',command:async()=>({status:'current',currentVersion:'0.3.17',message:'当前已是最新版本',updateAvailable:false})};
+if(new URLSearchParams(location.search).has('windows'))window.lakeWindowsChrome={command:async()=>"normal"};
 createRoot(document.getElementById('root')!).render(<><App/><WindowsChrome/></>);
 
 if (islandQuery) {
@@ -148,6 +158,17 @@ if (islandQuery) {
  Object.assign(window, {lakeIslandQA: {
   state(value: IslandFixtureState) {applyIsland(value);emit();},
   pulse(value: number) {for(const agent of snapshot.ai!.agentRuns ?? []) {agent.toolCount=value;agent.activityUpdatedAt=new Date().toISOString();}emit();},
+  mode(enabled:boolean){snapshot.sre!.pilot!.enabled=enabled;emit();},
+  resourceStep(count:number){
+   const task=snapshot.sre!.tasks[0]!,attempt=task.attempts.find(a=>a.stepId==='logs')!;
+   const peer=task.attempts.find(a=>a.stepId==='verify-logs')!;
+   const stamp='2026-10-26T00:01:00Z';
+   const operation=(id:string,resourceId:string,status='dispatched')=>({id,resourceId,preparedAt:stamp,dispatchedAt:stamp,status,risk:'readonly',call:{id,name:'shell',arguments:JSON.stringify({command:'hostname'})},result:JSON.stringify({terminal_id:'fixture-'+resourceId,entry_id:id,output:'owned '+id+'\n',exitCode:0})}) as typeof attempt.operations[number];
+   attempt.operations=[operation('mine-a','order-api'),...(count>1?[operation('mine-b','gateway')]:[]),...(count>2?[operation('mine-a-next','order-api','succeeded')]:[])];
+   peer.operations=[operation('peer-a','order-api')];
+   fixtureHistories.splice(0,fixtureHistories.length,...['order-api',...(count>1?['gateway']:[])].map(resourceId=>({terminal:{id:'fixture-'+resourceId,resourceId,generation:'fixture-g',status:'busy',holder:'agent',writerSessionId:session.id},entries:[...attempt.operations,...peer.operations].filter(op=>op.resourceId===resourceId).map(op=>({id:op.id,terminalId:'fixture-'+resourceId,generation:'fixture-g',actor:'agent',originSessionId:session.id,command:'hostname',output:op.id.startsWith('peer')?'PEER-ONLY-OUTPUT':'OWN-'+op.id+'\n',status:op.status==='succeeded'?'completed':'running',exitCode:op.status==='succeeded'?0:null,startedAt:stamp,createdAt:stamp,finishedAt:null,cwd:null})),output:'NEVER-MANUAL-SCREEN'} as import('../../../shared/contracts').TerminalHistory)));
+   snapshot.terminals=fixtureHistories.map(h=>h.terminal);emit();
+  },
   writes: islandWrites,
  }});
 }

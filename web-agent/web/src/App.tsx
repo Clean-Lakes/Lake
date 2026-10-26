@@ -16,7 +16,7 @@ import {applyLiveText} from './liveTextUpdates';
 import {sreSessionPresentation} from './sreSessionPresentation';
 import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerMentions";
 import {LakePilotControl} from './LakePilotControl';
-import {PilotStatusIsland} from './PilotStatusIsland';
+import {PilotHeaderState} from './PilotHeaderState';
 import {pilotIslandModel} from './pilotIslandModel';
 import './pilotIsland.css';
 import './pilot.css';
@@ -1431,8 +1431,8 @@ function App() {
         {selectedSession && !selectedResource && !isPlansPage && <span className="workspace-header-glass" aria-hidden="true"/>}
         {selectedSession && !selectedResource && !isPlansPage && !headerPilot && <HeaderSweep key={selectedSession.id} active={currentSessionStatus === "investigating"}/>}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
-        <div className="breadcrumbs"><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span><strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/><span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong>{selectedSession && !selectedResource && !headerPilot && <SessionStateBadge session={selectedSession} {...currentSessionPresentation}/>}</div>
-        {headerPilot && <PilotStatusIsland key={`${selectedSession?.id}:${headerPilot.taskId}:${headerPilot.planId ?? ''}`} model={headerPilot} onInspect={targetId => {
+        <div className="breadcrumbs"><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span><strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/><span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong></div>
+        {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={selectedSession.id} model={headerPilot} normal={<SessionStateBadge session={selectedSession} {...currentSessionPresentation}/>} onInspect={targetId => {
           pauseFollowing(); setConversationMode('conversation');
           requestAnimationFrame(() => {const target = document.getElementById(targetId); target?.focus({preventScroll: true}); target?.scrollIntoView({block: 'start'});});
         }}/>}
