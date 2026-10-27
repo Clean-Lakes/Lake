@@ -26,7 +26,7 @@
 .island-terminal .terminal-panel-header { width:max-content; max-width:100%; min-width:0; min-height:44px; height:44px; border:0; background:transparent; padding:0 14px 0 18px; gap:12px; }
 .island-terminal .terminal-panel-header > strong { flex:0 1 auto; max-width:170px; display:flex; align-items:center; gap:9px; font-weight:var(--font-weight-medium); }
 .island-terminal .terminal-panel-header > strong > svg { flex:none; }
-.island-terminal .terminal-island-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.terminal-island-switcher .terminal-island-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .island-terminal .terminal-tab-dot { width:5px; height:5px; flex:none; }
 .island-terminal .terminal-header-actions { width:0; overflow:hidden; opacity:0; pointer-events:none; gap:0; transition:width 180ms ease,opacity 140ms ease; }
 .island-terminal:is(:hover,:focus-within) .terminal-header-actions { width:100px; opacity:1; pointer-events:auto; }
@@ -69,3 +69,6 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 @media(prefers-reduced-motion:reduce) { .terminal-action-menu,.terminal-list-menu { animation:none; } .terminal-island-switcher > svg { transition:none; } }
 
 .terminal-island-number { flex:none; font-weight:var(--font-weight-normal); }
+
+/* One terminal viewport; the shared island owns host and terminal selection. */
+.terminal-panel-content > .terminal-panel-header .terminal-island-switcher { max-width:calc(100% - 118px); }

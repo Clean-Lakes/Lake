@@ -146,7 +146,7 @@ window.fetch=async(input,init)=>{
  if(linkedIsland){
   const path=url.pathname;let value:unknown;
   if(path.endsWith('/terminal-context'))value={sessionId:session.id};
-  else if(path.endsWith('/history'))value={terminal:linkedTerminals.find(item=>path.includes('/'+item.id+'/'))??linkedTerminals[0],entries:[],output:'$ uptime\r\nload averages: 0.12 0.18 0.15\r\n$ '};
+  else if(path.endsWith('/history')){const terminal=linkedTerminals.find(item=>path.includes('/'+item.id+'/'))??linkedTerminals[0]!;value={terminal,entries:[],output:`$ # ${terminal.resourceId} / ${terminal.id}\r\n$ uptime\r\nload averages: 0.12 0.18 0.15\r\n$ `};}
   else if(path.endsWith('/terminals')&&path.includes('/resources/'))value={terminals:linkedTerminals.filter(item=>path.includes('/resources/'+item.resourceId+'/'))};
   else if(path.endsWith('/terminals')&&init?.method==='POST')value=linkedTerminals[0];
   else if(path.endsWith('/resize')||path.endsWith('/input'))value={};

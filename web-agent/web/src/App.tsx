@@ -310,7 +310,6 @@ function AppContent() {
   const [connectingResources, setConnectingResources] = useState<string[]>([]);
   const [localShell,setLocalShell]=useState("bash");
   const terminalControlRef = useRef<TerminalHandle | null>(null);
-  const terminalTabsRef = useRef<HTMLDivElement>(null);
   const [terminalOptionsOpen, setTerminalOptionsOpen] = useState(false);
   const [terminalListOpen, setTerminalListOpen] = useState(false);
   const terminalOptionsPopup=useTerminalPopover(terminalOptionsOpen,()=>setTerminalOptionsOpen(false));
@@ -789,14 +788,6 @@ function AppContent() {
     if (next) selectTerminalTab(next);
     else { setTerminalId(null); setTerminalHistory(null); }
   }, [currentTerminal?.status, terminalId, terminalOptions]);
-  function revealActiveTerminalTab() {
-    const scroller = terminalTabsRef.current;
-    const active = scroller?.querySelector<HTMLElement>(".terminal-tab-wrap.selected");
-    if (!terminalOpen || !scroller || !active) return;
-    if (active.offsetLeft < scroller.scrollLeft) scroller.scrollLeft = active.offsetLeft;
-    else if (active.offsetLeft + active.offsetWidth > scroller.scrollLeft + scroller.clientWidth) scroller.scrollLeft = active.offsetLeft + active.offsetWidth - scroller.clientWidth;
-  }
-  useLayoutEffect(revealActiveTerminalTab, [terminalId, terminalOpen, terminalOptions.length]);
   useEffect(() => {
     if (!terminalOpen || commandBusy || currentTerminal?.holder !== "user" || currentTerminal.status !== "ready") return;
     const frame = requestAnimationFrame(() => terminalControlRef.current?.focus());
@@ -1355,9 +1346,9 @@ function AppContent() {
           inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry?.attemptId,tab:entry?'execution':'plan'});
         }}/>}
       </header>;
-  const terminalListMenu=terminalListOpen && <div className="terminal-list-menu" ref={terminalListPopup.menu} id="terminal-switcher" role="group" aria-label="已打开的终端">{terminalOptions.map(({terminal: item, label}) => <button type="button" key={item.id} aria-current={terminalId===item.id} onClick={() => selectTerminalTab(item)}><Glyph name="terminal" size={14}/><span>{label}</span><small>{terminalLabels[item.status]}</small></button>)}{!terminalOptions.length && <span>暂无在线终端</span>}{terminalResource && <button type="button" disabled={!!pendingOperation || !terminalConnected || connectingResources.includes(terminalResource.id)} onClick={() => { setTerminalListOpen(false); void openTerminalFor(terminalResource.id, true); }}><Glyph name="plus" size={14}/><span>新建终端</span></button>}</div>;
+  const terminalListMenu=terminalListOpen && <div className="terminal-list-menu" ref={terminalListPopup.menu} id="terminal-switcher" role="group" aria-label="已打开的终端">{terminalOptions.map(({terminal: item, label}) => <button type="button" key={item.id} aria-current={terminalId===item.id} onContextMenu={event=>{event.preventDefault();setTerminalTabContext({terminal:item,x:event.clientX,y:event.clientY});}} onClick={() => selectTerminalTab(item)}><Glyph name="terminal" size={14}/><span>{label}</span><small>{terminalLabels[item.status]}</small></button>)}{!terminalOptions.length && <span>暂无在线终端</span>}{terminalResource && <button type="button" disabled={!!pendingOperation || !terminalConnected || connectingResources.includes(terminalResource.id)} onClick={() => { setTerminalListOpen(false); void openTerminalFor(terminalResource.id, true); }}><Glyph name="plus" size={14}/><span>新建终端</span></button>}</div>;
   const terminalHeading=<div className="terminal-panel-header">
-      {sharedIsland?<button ref={terminalListPopup.trigger} type="button" className="terminal-island-switcher" aria-label={`切换终端，当前 ${activeTerminalOption?.label??terminalResource?.name??"终端"}，共 ${terminalOptions.length} 个终端`} aria-expanded={terminalListOpen} aria-controls={terminalListOpen?"terminal-switcher":undefined} onClick={()=>{setTerminalOptionsOpen(false);setTerminalListOpen(value=>!value);}}><Glyph name="lakeTerminal" size={18}/><span className="terminal-island-title" title={activeTerminalOption?.label}>{terminalResource?.name??"终端"}</span>{terminalOptions.length>1&&<small className="terminal-island-number">{activeTerminalOption?.shortLabel}</small>}{currentTerminal&&<span className={`terminal-tab-dot ${currentTerminal.status}`} aria-label={terminalLabels[currentTerminal.status]}/>}{terminalOptions.length>1&&<small className="terminal-island-count" title={`${terminalOptions.length} 个终端`}>{terminalOptions.length}</small>}<Glyph name="chevron" size={12} className={terminalListOpen?"is-open":""}/></button>:<strong>终端</strong>}
+      <button ref={terminalListPopup.trigger} type="button" className="terminal-island-switcher" aria-label={`切换终端，当前 ${activeTerminalOption?.label??terminalResource?.name??"终端"}，共 ${terminalOptions.length} 个终端`} aria-expanded={terminalListOpen} aria-controls={terminalListOpen?"terminal-switcher":undefined} onClick={()=>{setTerminalOptionsOpen(false);setTerminalListOpen(value=>!value);}}><Glyph name="lakeTerminal" size={18}/><span className="terminal-island-title" title={activeTerminalOption?.label}>{terminalResource?.name??"终端"}</span>{terminalOptions.length>1&&<small className="terminal-island-number">{activeTerminalOption?.shortLabel}</small>}{currentTerminal&&<span className={`terminal-tab-dot ${currentTerminal.status}`} aria-label={terminalLabels[currentTerminal.status]}/>}{terminalOptions.length>1&&<small className="terminal-island-count" title={`${terminalOptions.length} 个终端`}>{terminalOptions.length}</small>}<Glyph name="chevron" size={12} className={terminalListOpen?"is-open":""}/></button>
       <div className="terminal-header-actions">
         <button type="button" className="icon-button" aria-label="清屏" title="清屏" onClick={() => terminalControlRef.current?.clear()}><Glyph name="refresh" size={16}/></button>
         <button type="button" className="icon-button" aria-label="新建终端" title="新建终端" disabled={!terminalResource || !!pendingOperation || connectingResources.includes(terminalResource.id)} onClick={() => terminalResource && void openTerminalFor(terminalResource.id, true)}><Glyph name="plus" size={17}/></button>
@@ -1371,18 +1362,10 @@ function AppContent() {
         {currentTerminal?.status === "busy" && <button type="button" onClick={() => { setTerminalOptionsOpen(false); void interruptTerminal(); }}>中断命令</button>}
         {currentTerminal?.status !== "disconnected" && terminalId && <button type="button" onClick={() => { setTerminalOptionsOpen(false); void disconnectTerminal(); }}>断开连接</button>}
       </div>}
-      {sharedIsland&&terminalListMenu}
+      {terminalListMenu}
     </div>;
   const terminalDrawer = <section className="terminal-panel-content" aria-label="会话持续终端">
     {!sharedIsland&&terminalHeading}
-    <div className="terminal-tab-bar">
-      {!sharedIsland&&<button ref={!sharedIsland?terminalListPopup.trigger:undefined} type="button" className="terminal-list-button" aria-expanded={terminalListOpen} onClick={() => {setTerminalOptionsOpen(false);setTerminalListOpen(value => !value);}}><Glyph name="menu" size={15}/>列表<Glyph name="chevron" size={13}/></button>}
-      <div className="terminal-tabs" ref={terminalTabsRef} role="tablist" aria-label="选择终端">{terminalOptions.map(({terminal: item, label}) => <div className={`terminal-tab-wrap ${terminalId === item.id ? "selected" : ""}`} key={item.id} onContextMenu={event => { event.preventDefault(); setTerminalTabContext({terminal: item, x: event.clientX, y: event.clientY}); }}>
-        <button type="button" role="tab" aria-label={label} title={label} aria-selected={terminalId === item.id} className="terminal-tab" onClick={() => selectTerminalTab(item)}><Glyph name="terminal" size={14}/><span className="terminal-tab-label">{label}</span><span className={`terminal-tab-dot ${item.status}`}/></button>
-        <button type="button" className="terminal-tab-close" aria-label={`关闭 ${label}`} title="关闭终端" disabled={!!pendingOperation} onClick={() => void closeTerminalTab(item)}><Glyph name="close" size={12}/></button>
-      </div>)}</div>
-      {!sharedIsland&&terminalListMenu}
-    </div>
     <div className="drawer-body">
       {!terminalId && (terminalError ? <div className="terminal-load-error" role="alert">{terminalError}{terminalOpeningResource && <button type="button" disabled={!!pendingOperation} onClick={() => void openTerminalFor(terminalOpeningResource)}>重新连接</button>}</div> : <div className="terminal-placeholder" role="status">{terminalOpeningResource && connectingResources.includes(terminalOpeningResource) ? `正在连接 ${terminalResource?.name || "终端"}…` : "暂无在线终端，点击上方 + 新建终端"}</div>)}
       <div className="terminal-session">
@@ -1537,7 +1520,7 @@ function AppContent() {
       {label: "新建终端", disabled: !!pendingOperation || connectingResources.includes(terminalTabContext.terminal.resourceId), run: () => { void openTerminalFor(terminalTabContext.terminal.resourceId, true); }},
       {label: "关闭终端", disabled: !!pendingOperation, run: () => { void closeTerminalTab(terminalTabContext.terminal); }},
     ]}/>}
-    <TerminalSidePanel open={terminalOpen} onClose={closeTerminalPanel} onOpen={() => { revealActiveTerminalTab(); if (!commandBusy && currentTerminal?.holder === "user" && currentTerminal.status === "ready") terminalControlRef.current?.focus(); }}>{terminalDrawer}</TerminalSidePanel>
+    <TerminalSidePanel open={terminalOpen} onClose={closeTerminalPanel} onOpen={() => { if (!commandBusy && currentTerminal?.holder === "user" && currentTerminal.status === "ready") terminalControlRef.current?.focus(); }}>{terminalDrawer}</TerminalSidePanel>
     {commandEditorOpen && <div className="modal-scrim"><section className="modal" role="dialog" aria-modal="true" aria-label="运行完整命令"><div className="modal-header"><h2>运行完整命令</h2><button type="button" className="icon-button" aria-label="关闭命令输入" onClick={() => setCommandEditorOpen(false)}><Glyph name="close"/></button></div><form className="command-form" onSubmit={reviewCommand}><label htmlFor="command-input">发送到 {resourceLabel(terminalResource)} 的命令</label><div className="command-input-row"><textarea ref={commandInputRef} id="command-input" rows={2} spellCheck={false} placeholder="输入单行命令，Enter 执行" value={commandDraft} onChange={event => { setCommandDraft(event.target.value); setCommandError(""); }} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} disabled={!terminalConnected || !persistentMode || currentTerminal?.holder !== "user" || currentTerminal.status !== "ready" || commandBusy}/><button type="submit" className="button command-button" disabled={!commandDraft.trim() || !terminalConnected || !persistentMode || currentTerminal?.holder !== "user" || currentTerminal.status !== "ready" || commandBusy}>执行<Glyph name="arrow" size={15}/></button></div>{commandError && <p className="form-error" role="alert">{commandError}</p>}<p>只读命令直接执行，变更命令需确认。运行交互程序时，可在上方终端输入按键。{currentTerminal?.holder !== "user" && currentTerminal?.status === "ready" ? "请先接管输入。" : ""}{currentTerminal?.status === "unknown" ? "执行结果不明，请先核查，避免重复提交。" : ""}</p></form></section></div>}
     {terminalContext && resourceTerminalSnapshot?.hostKeyTrust && <HostKeyTrust session={terminalContext.sessionId} prompt={resourceTerminalSnapshot.hostKeyTrust} disabled={!terminalConnected} refresh={refreshResourceTerminal}/>}
     {activeSnapshot?.hostKeyTrust && (!terminalContext || terminalContext.sessionId !== activeSnapshot.session.id) && <HostKeyTrust session={activeSnapshot.session.id} prompt={activeSnapshot.hostKeyTrust} disabled={!sessionConnected} refresh={refreshCurrent}/>}
