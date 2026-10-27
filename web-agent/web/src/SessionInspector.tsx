@@ -1,3 +1,4 @@
+import {createPortal} from 'react-dom';
 import {InspectorTaskSummary} from './InspectorTaskSummary';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SessionSnapshot,SRETranscriptEntry} from '../../shared/contracts';
@@ -11,7 +12,7 @@ import {sreRoles,sreStatus,sreStepStatus} from './sreTranscript';
 import {inspectedTask,inspectedAttempt,inspectorAttempts} from './sessionInspectorModel';
 import {sessionInspectorId,useSessionInspector,type InspectorSelection} from './SessionInspectorContext';
 
-export function SessionInspector({snapshot,connected,onUpdated}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void}){
+export function SessionInspector({snapshot,connected,onUpdated,headerHost}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;headerHost?:HTMLDivElement|null}){
  const inspector=useSessionInspector()!;
  const selection=inspector.selection?.sessionId===snapshot.session.id?inspector.selection:null;
  const retained=useRef<InspectorSelection|null>(selection);
@@ -35,12 +36,12 @@ export function SessionInspector({snapshot,connected,onUpdated}:{snapshot:Sessio
  const currentEntry=selected&&task?(task.messages?.find(entry=>entry.attemptId===selected.attempt.id&&entry.kind==='progress')??task.messages?.find(entry=>entry.attemptId===selected.attempt.id)??{id:`inspector-${selected.attempt.id}`,sessionId:task.sessionId,taskId:task.id,roleId:selected.step.role,roleRunId:selected.attempt.roleRunId,attemptId:selected.attempt.id,kind:'progress',body:'',source:'runtime',sequence:0,revision:0,createdAt:selected.attempt.startedAt} satisfies SRETranscriptEntry):undefined;
  const attemptStatus=selected&&task?(selected.attempt.planRunId===task.runs?.at(-1)?.id?sreStepStatus(task,selected.step,snapshot.ai?.agentRuns):selected.attempt.status):'';
  const choose=(tab:'plan'|'execution',attemptId=target.attemptId)=>inspector.open({...target,tab,attemptId,evidenceId:undefined,automatic:false});
+ const tabs=<div className="session-inspector-tabs" role="tablist" aria-label="任务视图" onKeyDown={event=>{if(task&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();choose(event.key==='Home'?'plan':event.key==='End'?'execution':target.tab==='plan'?'execution':'plan');requestAnimationFrame(()=>(headerHost??panel.current)?.querySelector<HTMLButtonElement>('[role=tab][aria-selected=true]')?.focus());}}}>
+  <button type="button" role="tab" id="inspector-plan-tab" aria-selected={target.tab==='plan'} aria-controls="inspector-plan-panel" tabIndex={target.tab==='plan'?0:-1} disabled={!task} onClick={()=>choose('plan')}>{headerHost?'计划':'任务计划'}</button>
+  <button type="button" role="tab" id="inspector-execution-tab" aria-selected={target.tab==='execution'} aria-controls="inspector-execution-panel" tabIndex={target.tab==='execution'?0:-1} onClick={()=>choose('execution',selected?.attempt.id)}>{headerHost?'执行':'执行详情'}</button>
+ </div>;
  return <aside ref={panel} id={sessionInspectorId} tabIndex={-1} className={`session-inspector${selection?' is-open':' is-closing'}`} inert={!selection} aria-hidden={!selection} aria-label="任务检查" onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();event.stopPropagation();inspector.close();}}}>
-  <header className="session-inspector-heading"><div><strong>任务检查</strong><p>{task?'Lake Pilot · 计划与执行':snapshot.session.title}</p></div><button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={16}/></button></header>
-  <div className="session-inspector-tabs" role="tablist" aria-label="任务视图" onKeyDown={event=>{if(task&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();choose(event.key==='Home'?'plan':event.key==='End'?'execution':target.tab==='plan'?'execution':'plan');requestAnimationFrame(()=>panel.current?.querySelector<HTMLButtonElement>('[role=tab][aria-selected=true]')?.focus());}}}>
-   <button type="button" role="tab" id="inspector-plan-tab" aria-selected={target.tab==='plan'} aria-controls="inspector-plan-panel" tabIndex={target.tab==='plan'?0:-1} disabled={!task} onClick={()=>choose('plan')}>任务计划</button>
-   <button type="button" role="tab" id="inspector-execution-tab" aria-selected={target.tab==='execution'} aria-controls="inspector-execution-panel" tabIndex={target.tab==='execution'?0:-1} onClick={()=>choose('execution',selected?.attempt.id)}>执行详情</button>
-  </div>
+  {headerHost?createPortal(<header className="island-inspector-heading"><strong><Glyph name="document" size={18}/>任务检查</strong>{tabs}<button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={14}/></button></header>,headerHost):<><header className="session-inspector-heading"><div><strong>任务检查</strong><p>{task?'Lake Pilot · 计划与执行':snapshot.session.title}</p></div><button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={16}/></button></header>{tabs}</>}
   <ObjectReferencesProvider resources={snapshot.resources} tasks={snapshot.ai?.agentRuns}>
    <div className="session-inspector-scroll">
     {task&&<InspectorTaskSummary task={task} title={snapshot.session.title} runs={snapshot.ai?.agentRuns}/>}

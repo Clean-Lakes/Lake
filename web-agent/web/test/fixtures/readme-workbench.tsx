@@ -68,6 +68,8 @@ const catalog={projects:[project],sessions,resources,resourceTree:tree,tags:[],t
 const bootstrap={authenticated:true,modelConfigured:true,modelName:'DeepSeek',modelId:model.modelId,modelSelection:model,terminalMode:'pty',supportsImageInput:false,aiRuntime:'go'};
 const islandQuery = new URLSearchParams(location.search).get('pilot-island');
 const islandWrites: string[] = [];
+const linkedIsland=new URLSearchParams(location.search).has('linked-island');
+const linkedTerminal={id:'linked-terminal',resourceId:'order-api',generation:'linked-g',status:'ready',holder:'user',interactive:true,writerSessionId:session.id};
 const fixtureHistories:import('../../../shared/contracts').TerminalHistory[]=[];
 function applyIsland(state: IslandFixtureState) {
  const incoming = islandFixture(state, session.id, project.id);
@@ -138,6 +140,15 @@ window.fetch=async(input,init)=>{
   if(update.expectedRevision!==settings.revision)return new Response('{}',{status:409});
   Object.assign(settings,{enabled:update.enabled,autoAdvance:update.autoAdvance,revision:settings.revision+1});
   return new Response(JSON.stringify(settings),{headers:{'Content-Type':'application/json'}});
+ }
+ if(linkedIsland){
+  const path=url.pathname;let value:unknown;
+  if(path.endsWith('/terminal-context'))value={sessionId:session.id};
+  else if(path.endsWith('/history'))value={terminal:linkedTerminal,entries:[],output:'$ uptime\r\nload averages: 0.12 0.18 0.15\r\n$ '};
+  else if(path.endsWith('/terminals')&&path.includes('/resources/'))value={terminals:[linkedTerminal]};
+  else if(path.endsWith('/terminals')&&init?.method==='POST')value=linkedTerminal;
+  else if(path.endsWith('/resize')||path.endsWith('/input'))value={};
+  if(value!==undefined)return new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
  }
  if((init?.method??'GET')!=='GET')return new Response(JSON.stringify({error:'README 演示只提供展示，不执行操作'}),{status:405,headers:{'Content-Type':'application/json'}});
  let value:unknown;

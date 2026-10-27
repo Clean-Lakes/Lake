@@ -18,7 +18,8 @@
     .workbench-splitter:hover::after, .workbench-splitter:focus-visible::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:2px; background:var(--focus); }
     .workbench-splitter-sidebar { left:calc(var(--sidebar-width) - 4px); }
     .workbench-splitter-sidebar:hover:not(:focus-visible)::after { width:1px; background:var(--border-strong); }
-    .workbench-splitter-terminal, .workbench-splitter-inspector { left:-4px; }
+    .workbench-splitter-terminal, .workbench-splitter-inspector { left:0; }
+    .workbench-splitter-terminal::after, .workbench-splitter-inspector::after { left:0; }
     .workbench-resizing .session-inspector { animation:none !important; }
     .workbench-resizing, .workbench-resizing * { cursor:col-resize !important; user-select:none !important; }
     .workbench-resizing .app-shell, .workbench-resizing .terminal-side-panel { transition:none !important; }
@@ -109,7 +110,7 @@
     const bridge = window.webkit?.messageHandlers?.lakeChrome;
     if (!bridge || !shell) return;
     const rect = element => { const r = element.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; };
-    const headers = [...shell.querySelectorAll('.workspace-header, .terminal-panel-header')].filter(element => element.getBoundingClientRect().width > 0);
+    const headers = [...shell.querySelectorAll('.workspace-header, .terminal-panel-header, .island-inspector-heading')].filter(element => element.getBoundingClientRect().width > 0);
     const sidebar = shell.querySelector('.sidebar');
     const height = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--lake-titlebar-height')) || 52;
     const regions = headers.map(rect);

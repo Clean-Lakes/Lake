@@ -1,3 +1,4 @@
+import {WorkbenchIsland,useWideWorkbench} from './WorkbenchIsland';
 import {useInspectorWindow} from './inspectorWindow';
 import {SessionInspectorProvider,useSessionInspector} from './SessionInspectorContext';
 import {SessionInspector} from './SessionInspector';
@@ -136,6 +137,8 @@ function timelineItems(snapshot: SessionSnapshot): TimelineItem[] {
 
 function AppContent() {
   const inspector=useSessionInspector()!;
+  const wideWorkbench=useWideWorkbench();
+  const [islandInspectorHost,setIslandInspectorHost]=useState<HTMLDivElement|null>(null);
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
   const [authRequired, setAuthRequired] = useState(false);
   const [authInput, setAuthInput] = useState("");
@@ -1333,9 +1336,22 @@ function AppContent() {
   const sidebarSessionsExpanded=!closedSessionGroups.includes(sidebarProject?.id??"");
   const navigationProjects = projectList.filter(project => project.id === sidebarProject?.id && (!selectedTag || catalog.tags?.some(tag=>tag.id===selectedTag&&tag.projectId===project.id)));
   const itemList = activeSnapshot ? timelineItems(activeSnapshot) : [];
-  const terminalDrawer = <section className="terminal-panel-content" aria-label="会话持续终端">
-    <div className="terminal-panel-header">
-      <strong>终端</strong>
+  const sharedIsland=sessionHeader&&wideWorkbench;
+  const headerSweep=sessionHeader&&<HeaderSweep key={`sweep-${selectedSession.id}`} active={!!activeSnapshot&&currentSessionStatus === "investigating"&&(headerPilot?pilotIslandAnimating(headerPilot):activeSnapshot?.ai?activeSnapshot.ai.status==='running'&&!activeSnapshot.ai.question:true)}/>;
+  const workspaceHeading=<header className={`workspace-header${headerPilot ? ' has-pilot-island' : ''}`}>
+        {sessionHeader && <span className="workspace-header-glass" aria-hidden="true"/>}
+        {!sharedIsland&&headerSweep}
+        <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
+        <div className="breadcrumbs">{!sessionHeader&&<><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span></>}<strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/><span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong></div>
+        {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...currentSessionPresentation}/>} onInspect={targetId => {
+          if(!activeSnapshot||!headerPilot)return;
+          const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
+          const entry=task?.messages?.find(m=>`sre-message-${m.id}`===targetId);
+          inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry?.attemptId,tab:entry?'execution':'plan'});
+        }}/>}
+      </header>;
+  const terminalHeading=<div className="terminal-panel-header">
+      <strong>{sharedIsland?<><Glyph name="lakeTerminal" size={18}/><span className="terminal-island-title" title={terminalResource?.name??"终端"}>{terminalResource?.name??"终端"}</span>{currentTerminal&&<span className={`terminal-tab-dot ${currentTerminal.status}`} aria-label={terminalLabels[currentTerminal.status]}/>}</>:"终端"}</strong>
       <div className="terminal-header-actions">
         <button type="button" className="icon-button" aria-label="清屏" title="清屏" onClick={() => terminalControlRef.current?.clear()}><Glyph name="refresh" size={16}/></button>
         <button type="button" className="icon-button" aria-label="新建终端" title="新建终端" disabled={!terminalResource || !!pendingOperation || connectingResources.includes(terminalResource.id)} onClick={() => terminalResource && void openTerminalFor(terminalResource.id, true)}><Glyph name="plus" size={17}/></button>
@@ -1349,7 +1365,9 @@ function AppContent() {
         {currentTerminal?.status === "busy" && <button type="button" onClick={() => { setTerminalOptionsOpen(false); void interruptTerminal(); }}>中断命令</button>}
         {currentTerminal?.status !== "disconnected" && terminalId && <button type="button" onClick={() => { setTerminalOptionsOpen(false); void disconnectTerminal(); }}>断开连接</button>}
       </div>}
-    </div>
+    </div>;
+  const terminalDrawer = <section className="terminal-panel-content" aria-label="会话持续终端">
+    {!sharedIsland&&terminalHeading}
     <div className="terminal-tab-bar">
       <button type="button" className="terminal-list-button" aria-expanded={terminalListOpen} onClick={() => setTerminalListOpen(value => !value)}><Glyph name="menu" size={15}/>列表<Glyph name="chevron" size={13}/></button>
       <div className="terminal-tabs" ref={terminalTabsRef} role="tablist" aria-label="选择终端">{terminalOptions.map(({terminal: item, label}) => <div className={`terminal-tab-wrap ${terminalId === item.id ? "selected" : ""}`} key={item.id} onContextMenu={event => { event.preventDefault(); setTerminalTabContext({terminal: item, x: event.clientX, y: event.clientY}); }}>
@@ -1373,7 +1391,7 @@ function AppContent() {
     </div>
   </section>;
 
-  return <div className={`app-shell ${terminalOpen ? "terminal-is-open" : ""}`}>
+  return <div className={`app-shell ${terminalOpen ? "terminal-is-open" : ""}${sharedIsland?" has-workbench-island":""}`}>
     {scheduleProject&&<ScheduledTasks key={scheduleProject.id} project={scheduleProject} onClose={()=>setScheduleProject(null)} onOpenSession={async id=>{await refreshCatalog();setScheduleProject(null);navigate({sessionId:id,resourceId:null});}}/>}
     {showWorkflows && workflowProject && <Workflows key={workflowProject.id} project={workflowProject} resources={catalog.resources.filter(resource => resource.projectId === workflowProject.id)} modelConfigured={modelConfigured} onClose={() => setWorkflowProject(null)} onOpenRun={async run => { await refreshCatalog(); setWorkflowProject(null); navigate({sessionId:run.sessionId,resourceId:null}); }}/>}
     {mobileMenu && <button className="mobile-scrim" aria-label="关闭项目导航" onClick={() => setMobileMenu(false)}/>}
@@ -1460,19 +1478,9 @@ function AppContent() {
 
     </aside>
 
+    {sharedIsland&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={terminalHeading} inspectorOpen={inspectorOpen} terminalOpen={terminalOpen} onInspectorHost={setIslandInspectorHost}/>}
     <main className={`workspace${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":""}`} onDragOver={event=>{if(selectedSession&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(!selectedSession||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
-      <header className={`workspace-header${headerPilot ? ' has-pilot-island' : ''}`}>
-        {sessionHeader && <span className="workspace-header-glass" aria-hidden="true"/>}
-        {sessionHeader && <HeaderSweep key={`sweep-${selectedSession.id}`} active={!!activeSnapshot&&currentSessionStatus === "investigating"&&(headerPilot?pilotIslandAnimating(headerPilot):activeSnapshot?.ai?activeSnapshot.ai.status==='running'&&!activeSnapshot.ai.question:true)}/>}
-        <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
-        <div className="breadcrumbs">{!sessionHeader&&<><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span></>}<strong><Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession?.icon??'document'} size={15}/><span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong></div>
-        {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...currentSessionPresentation}/>} onInspect={targetId => {
-          if(!activeSnapshot||!headerPilot)return;
-          const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
-          const entry=task?.messages?.find(m=>`sre-message-${m.id}`===targetId);
-          inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry?.attemptId,tab:entry?'execution':'plan'});
-        }}/>}
-      </header>
+      {!sharedIsland&&workspaceHeading}
 
       {!persistentMode && <div className="system-banner model-banner" role="status"><Glyph name="alert" size={18}/><span>服务端不支持持续终端。请核对服务端版本。</span></div>}
       {connection.warning && warningSessionId === sessionId && <div className="system-banner offline-banner" role="alert"><Glyph name="alert" size={18}/><span>{visibleSessionError || "实时连接已断开。当前内容可能不是最新状态，操作已暂停。"}</span><button onClick={() => sessionId ? setSessionReload(value => value + 1) : void loadApp()}><Glyph name="refresh" size={15}/>重试</button></div>}
@@ -1514,7 +1522,7 @@ function AppContent() {
           }}/><div className="composer-send-actions">{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止本轮" title="停止本轮，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${turnActive && !hasMessageDraft ? " stop-button" : ""}`} type={turnActive && !hasMessageDraft ? "button" : "submit"} aria-label={turnActive && !hasMessageDraft ? "停止本轮" : !modelConfigured ? "连接模型" : queueMode ? "加入待发送队列" : "发送消息"} title={turnActive && !hasMessageDraft ? "停止本轮" : !modelConfigured ? "连接模型，保留当前草稿" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`} aria-busy={stoppingTurn} onClick={turnActive && !hasMessageDraft ? () => void stopCurrentTurn() : undefined} disabled={turnActive && !hasMessageDraft ? stoppingTurn || !sessionConnected : !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || (modelConfigured && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}><Glyph name={turnActive && !hasMessageDraft ? "stop" : !modelConfigured ? "plug" : "return"} size={16}/></button></div></div></div><div className="composer-foot"><input ref={attachmentInputRef} className="visually-hidden" type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加任意文件或图片，也可拖入或粘贴文件" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}><Glyph name="lakePermission" size={16}/><span className="composer-tool-label">权限</span></button>}{activeSnapshot&&<PlanModeToggle key={sessionId} mode={activeSnapshot.conversationMode} disabled={!sessionConnected||turnActive||!!pendingOperation||reasoningSaving.has(sessionId)||modeSaving.has(sessionId)||!!activeSnapshot.messageQueue?.items.length} onChange={changeConversationMode}/>} {activeSnapshot&&<LakePilotControl key={activeSnapshot.session.projectId} snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive} disabledReason={!sessionConnected?"连接恢复后可切换 Lake Pilot。":"本轮运行中，结束后可切换 Lake Pilot。"}/> }<div className="composer-status"><div className="model-switch-wrap">
           <ComposerModelSelect available={modelMenu} modelName={bootstrap?.modelName??null} selection={bootstrap?.modelSelection??undefined} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation||reasoningSaving.size>0} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void switchModel(model)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}} reasoning={activeSnapshot?.ai ? {session:sessionId,modelId:bootstrap?.modelId,disabled:!sessionConnected || turnActive || !!pendingOperation,disabledReason:!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。",onSaving:(saving,savingSession=sessionId) => setReasoningSaving(current=>{const next=new Set(current);if(saving)next.add(savingSession);else next.delete(savingSession);return next;})}:undefined}/>
         </div>{activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} compact/>}</div></div></form></div>
-      </div>{activeSnapshot&&<SessionInspector key={sessionId} snapshot={activeSnapshot} connected={sessionConnected&&!modeSaving.has(sessionId)} onUpdated={()=>void refreshCurrent()}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
+      </div>{activeSnapshot&&<SessionInspector key={sessionId} headerHost={sharedIsland?islandInspectorHost:null} snapshot={activeSnapshot} connected={sessionConnected&&!modeSaving.has(sessionId)} onUpdated={()=>void refreshCurrent()}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
     </main>
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[
       {label: "打开终端", run: () => selectTerminalTab(terminalTabContext.terminal)},
