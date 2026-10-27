@@ -1,5 +1,5 @@
 /* Lightweight workspace: conversations and resources share one quiet sidebar. */
-.sidebar.workspace-navigation { --sidebar-row-radius:var(--radius-window); }
+.sidebar.workspace-navigation { --sidebar-row-radius:var(--radius-window); border-right:0; }
 .sidebar.workspace-navigation .sidebar-brand-row { position: relative; height: 36px; min-height: 36px; margin: 8px 0 10px; padding: 0 16px; }
 .sidebar.workspace-navigation .brand { gap: 7px; }
 .sidebar.workspace-navigation .brand > strong { font-size: 20px; line-height: 1; font-weight:var(--font-weight-semibold); letter-spacing: -.9px; color: var(--foreground); }
@@ -13,7 +13,7 @@
 .sidebar-brand-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .sidebar.workspace-navigation .sidebar-search-trigger { width: 28px; height: 28px; padding: 0; color: var(--text-muted); border-radius: 50%; }
 .sidebar-search-trigger:is(:hover,[aria-expanded="true"]) { color: var(--foreground); background: var(--surface-hover); }
-.sidebar-navigation-divider { flex: 0 0 1px; height: 1px; margin: 8px 13px 16px; background: var(--border); }
+.sidebar-navigation-gap { flex:0 0 0; margin:8px 13px 16px; }
 @media(pointer:coarse) { .sidebar.workspace-navigation .sidebar-search-trigger { width: 44px; height: 44px; } }
 .sidebar.workspace-navigation .navigation-search-key { font-size: var(--font-size-ui); }
 html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { height: 48px; min-height: 48px; margin-block: 0; }
@@ -62,7 +62,7 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .session-edit,.sidebar.workspace-navigation .session-more { padding: 0; width: 26px; height: 26px; }
 .sidebar.workspace-navigation .nav-row-wrap:is(:hover,:focus-within) :is(.session-edit,.session-more) { background: var(--surface-hover); }
 .sidebar.workspace-navigation .nav-row-wrap:has(.active):is(:hover,:focus-within) :is(.session-edit,.session-more) { background: var(--surface-selected); }
-.sidebar.workspace-navigation .resources-heading { margin: 16px 4px 5px; padding: 14px 3px 0; border-top: 1px solid var(--border); border-bottom: 0; color: var(--text-muted); font-weight:var(--font-weight-ui); }
+.sidebar.workspace-navigation .resources-heading { margin: 16px 4px 5px; padding: 14px 3px 0; border-top:0; border-bottom:0; color: var(--text-muted); font-weight:var(--font-weight-ui); }
 .sidebar.workspace-navigation .resources-heading .nav-section-toggle { gap: 4px; }
 .sidebar.workspace-navigation .resource-section-label { gap: 7px; }
 .sidebar.workspace-navigation .resource-section-label > small { padding: 0; border-radius: 0; background: transparent; color: var(--text-muted); font-size: var(--font-size-ui); }
@@ -105,3 +105,9 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .resource-folder-toggle { position:relative; padding-left:var(--sidebar-row-inset); }
 .sidebar.workspace-navigation .resource-folder-toggle > .folder-chevron { position:absolute; left:0; width:9px; height:9px; }
 .sidebar.workspace-navigation.is-bulk-selecting .resource-tree-row { padding-left:0; }
+
+/* The navigation edge keeps its resize hit area, without a permanent divider. */
+.app-shell > .workbench-splitter-sidebar::after { content:''; position:absolute; top:calc(50% - 16px); bottom:auto; left:3px; width:3px; height:32px; border-radius:2px; background:var(--text-muted); opacity:0; transition:opacity 160ms ease; }
+.app-shell > .workbench-splitter.workbench-splitter-sidebar:is(:hover,:focus-visible,.is-dragging)::after { top:calc(50% - 16px); bottom:auto; left:3px; width:3px; opacity:.7; background:var(--text-muted); }
+.app-shell > .workbench-splitter.workbench-splitter-sidebar:is(:focus-visible,.is-dragging)::after { background:var(--info); opacity:1; }
+@media(prefers-reduced-motion:reduce) { .app-shell > .workbench-splitter-sidebar::after { transition:none; } }
