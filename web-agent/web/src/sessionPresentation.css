@@ -58,7 +58,7 @@
 .tag-manager-list > div { display: flex; align-items: center; gap: 4px; padding: 5px 0; }
 .tag-manager-list > div .tag-chip { margin-right: auto; }
 .tag-delete-confirm { background: var(--danger-soft); padding: 10px; border-radius: var(--radius-panel); font-size: var(--font-size-ui); }
-.tag-delete-confirm button { border: 1px solid var(--border); background: var(--surface); padding: 5px 8px; color: var(--foreground); border-radius: 4px; margin-right: 8px; }
+.tag-delete-confirm button { border: 1px solid var(--border); background: var(--surface); padding: 5px 8px; color: var(--foreground); border-radius: var(--radius-control); margin-right: 8px; }
 .breadcrumbs > svg, .breadcrumbs strong > svg { flex-shrink: 0; color: var(--text-secondary); }
 .breadcrumbs strong { display: flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-brand-row .brand > strong { font-size: 19px; }

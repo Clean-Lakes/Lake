@@ -27,8 +27,8 @@
 .composer-model-provider.app-select > .app-select-trigger:hover { background: var(--surface-hover); }
 .composer-model-provider .app-select-chevron { transform: rotate(-90deg); }
 .composer-model-provider.app-select > .app-select-trigger[aria-expanded="true"]:not(:focus-visible) { outline: none; }
-.composer-provider-popup { font-size: var(--font-size-ui); border-radius: 18px; corner-shape: var(--corner-window); background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
-.composer-provider-popup .app-select-option { min-height: 32px; padding: 6px 9px; border-radius: 9px; }
+.composer-provider-popup { padding: 5px; font-size: var(--font-size-ui); border-radius: 18px; corner-shape: var(--corner-window); background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.composer-provider-popup .app-select-option { min-height: 32px; padding: 6px 9px; border-radius: 13px; corner-shape: var(--corner-window); }
 .composer-provider-popup .app-select-group { height: 1px; padding: 0; margin: 5px 0; background: var(--border); font-size: 0; }
 .composer-model-capability { flex-shrink: 0; border-radius: var(--radius-control); padding: 2px 6px; color: var(--text-secondary); background: var(--surface-hover); font-size: var(--font-size-ui); font-weight:var(--font-weight-medium); }
 .composer-model-popup .app-select-group { padding: 7px 9px 3px; font-size: var(--font-size-ui); }

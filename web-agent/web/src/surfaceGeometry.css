@@ -1,0 +1,38 @@
+/* Shared geometry for floating forms and actionable panels. Keep the compact
+   transcript scale outside these surfaces; model menus own their inset scale. */
+:where(.modal, dialog, .schedule-dialog, .workflow-dialog, .desktop-update-dialog, .lake-question, .ai-pending,
+ .approval-card, .attachment-approval, .ai-options, .sre-plan, .agent-task-body, .agent-task-detail,
+ .resource-folder-editor, .resource-move-panel, .resource-add-menu,
+ .resource-terminal-menu, .navigation-context-menu, .terminal-action-menu,
+ .terminal-list-menu, .workspace-utilities-popover, .mention-menu,
+ .composer-mention-menu, .app-select-popup, .conversation-turn-preview) {
+ --radius-control: var(--radius-settings-control);
+ --radius-panel: var(--radius-settings-panel);
+ --radius-dialog: var(--radius-settings-dialog);
+ corner-shape: var(--corner-window);
+}
+
+:where(.modal, dialog, .schedule-dialog, .workflow-dialog, .desktop-update-dialog, .lake-question, .ai-pending,
+ .approval-card, .attachment-approval, .ai-options, .sre-plan, .agent-task-body, .agent-task-detail,
+ .resource-folder-editor, .resource-move-panel)
+ :where(.button, .icon-button, .app-select-trigger, .app-select-option,
+ textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+ fieldset, pre, .form-error, .settings-test, .confirm-facts, .confirm-command-text,
+ .resource-import-rows, .project-memory-list, .theme-choice, .theme-preview,
+ .extension-item, .extension-tools, .extension-root-default, .mcp-editor-card,
+ .mcp-server-row, .mcp-scope-value, .mcp-mode-tabs, .mcp-mode-tabs > button, .memory-resource-picker,
+ .workflow-step, .workflow-finish, .tag-delete-confirm, .file-approval-preview) {
+ corner-shape: var(--corner-window);
+}
+
+:where(.app-select-trigger, .app-select-option,
+ .resource-add-menu > button, .resource-terminal-item button,
+ .resource-folder-editor button, .resource-move-panel button,
+ .navigation-context-menu > button, .terminal-action-menu button,
+ .terminal-list-menu button, .workspace-utility-action, .mention-item,
+ .schedule-list > button, .desktop-update-links > a, .lake-question button, .lake-question-option,
+ .lake-question-other, .agent-task-row > details > summary) {
+ corner-shape: var(--corner-window);
+}
+
+.modal .modal-icon { border-radius: var(--radius-settings-icon); corner-shape: var(--corner-window); }
