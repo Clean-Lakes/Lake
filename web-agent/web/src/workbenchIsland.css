@@ -6,7 +6,6 @@
 .lake-workbench-island [hidden] { display:none!important; }
 .island-conversation { grid-column:1; container-type:inline-size; }
 .island-inspector { grid-column:2; }
-.island-terminal { grid-column:3; }
 .lake-workbench-island .workspace-header { justify-content:flex-start; position:relative; display:flex; align-items:center; gap:10px; min-width:0; min-height:44px; height:44px; width:100%; padding:5px 14px; border:0; border-radius:0; background:transparent; box-shadow:none; }
 .lake-workbench-island .workspace-header > .workspace-header-glass { display:none; }
 .lake-workbench-island .workspace-header > :not(.workspace-header-sweep) { position:relative; z-index:2; }
@@ -23,27 +22,18 @@
 .lake-workbench-island .session-inspector-tabs { border:0; padding:0; gap:18px; }
 .lake-workbench-island .session-inspector-tabs button { min-height:34px; padding:8px 0; white-space:nowrap; }
 .lake-workbench-island .session-inspector-tabs button[aria-selected=true]::after { bottom:0; height:1.5px; }
-.island-terminal .terminal-panel-header { width:max-content; max-width:100%; min-width:0; min-height:44px; height:44px; border:0; background:transparent; padding:0 14px 0 18px; gap:12px; }
-.island-terminal .terminal-panel-header > strong { flex:0 1 auto; max-width:170px; display:flex; align-items:center; gap:9px; font-weight:var(--font-weight-medium); }
-.island-terminal .terminal-panel-header > strong > svg { flex:none; }
 .terminal-island-switcher .terminal-island-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.island-terminal .terminal-tab-dot { width:5px; height:5px; flex:none; }
-.island-terminal .terminal-header-actions { width:0; overflow:hidden; opacity:0; pointer-events:none; gap:0; transition:width 180ms ease,opacity 140ms ease; }
-.island-terminal:is(:hover,:focus-within) .terminal-header-actions { width:100px; opacity:1; pointer-events:auto; }
-.island-terminal .terminal-header-actions .icon-button { width:25px; }
 .app-shell.has-workbench-island .session-inspector { padding-top:var(--inspector-island-inset,72px); }
-.app-shell.has-workbench-island .terminal-panel-content { padding-top:var(--terminal-island-inset,72px); }
 .app-shell.has-workbench-island .workspace.has-floating-header > .system-banner { margin-top:80px; }
 html.lake-windows-chrome .lake-workbench-island { top:52px; }
 html.lake-windows-chrome .app-shell.has-workbench-island .session-inspector { padding-top:calc(48px + var(--inspector-island-inset,72px)); }
-html.lake-windows-chrome .app-shell.has-workbench-island .terminal-panel-content { padding-top:calc(48px + var(--terminal-island-inset,72px)); }
 html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { padding-top:120px; }
 
 @container(max-width:480px) { .lake-workbench-island .pilot-island-action-line > strong { display:inline; } }
 
-.lake-workbench-island > :is(.island-inspector,.island-terminal):not([hidden]) { animation:island-controls-arrive 180ms ease-out both; }
+.lake-workbench-island > .island-inspector:not([hidden]) { animation:island-controls-arrive 180ms ease-out both; }
 @keyframes island-controls-arrive { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:translateY(0); } }
-@media(prefers-reduced-motion:reduce) { .lake-workbench-island > :is(.island-inspector,.island-terminal) { animation:none!important; } }
+@media(prefers-reduced-motion:reduce) { .lake-workbench-island > .island-inspector { animation:none!important; } }
 
 .lake-workbench-island[data-linked=false] { transition:width 280ms cubic-bezier(.22,1,.36,1); }
 .workbench-resizing .lake-workbench-island { transition:none; }
@@ -52,7 +42,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 .lake-workbench-island .session-inspector-tabs button:disabled { display:none; }
 .island-inspector-heading > .icon-button { opacity:0; pointer-events:none; transition:opacity 140ms ease; }
 .island-inspector:is(:hover,:focus-within) .island-inspector-heading > .icon-button { opacity:1; pointer-events:auto; }
-@media(hover:none) { .island-inspector-heading > .icon-button { opacity:1; pointer-events:auto; } .island-terminal .terminal-header-actions { width:100px; opacity:1; pointer-events:auto; } }
+@media(hover:none) { .island-inspector-heading > .icon-button { opacity:1; pointer-events:auto; } }
 
 .lake-workbench-island .pilot-action-avatar { display:flex; }
 .lake-workbench-island .pilot-island-action-line > strong { display:inline; }
@@ -62,7 +52,6 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 .terminal-island-switcher > svg:last-child { transition:transform 180ms ease; }
 .terminal-island-switcher > .is-open { transform:rotate(180deg); }
 .terminal-island-count { font-variant-numeric:tabular-nums; color:var(--text-muted); font-weight:var(--font-weight-normal); }
-.island-terminal .terminal-list-menu { left:auto; right:7px; width:280px; max-width:calc(100vw - 32px); background:var(--surface); }
 .terminal-list-menu button[aria-current=true] { color:var(--foreground); background:var(--surface-hover); }
 .terminal-action-menu,.terminal-list-menu { animation:terminal-menu-arrive 140ms ease-out; }
 @keyframes terminal-menu-arrive { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
@@ -70,7 +59,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 
 .terminal-island-number { flex:none; font-weight:var(--font-weight-normal); }
 
-/* One terminal viewport; the shared island owns host and terminal selection. */
+/* One terminal viewport; its independent header owns host and terminal selection. */
 .terminal-panel-content > .terminal-panel-header .terminal-island-switcher { max-width:calc(100% - 118px); }
 
 /* Quiet pane boundaries: a generous invisible rail reveals only a short grip. */
