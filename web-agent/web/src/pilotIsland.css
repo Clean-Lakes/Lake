@@ -19,8 +19,7 @@
 .pilot-island-ring{width:28px;height:28px;flex-shrink:0;stroke-width:2.1;stroke-linecap:round}
 .pilot-ring-track{stroke:var(--border)}
 .pilot-ring-value{stroke:var(--session-state-color,var(--pilot-island-color));transition:stroke-dasharray 240ms ease,stroke 160ms ease}
-.pilot-island-progress>svg:last-child{color:var(--text-muted);transition:transform 220ms cubic-bezier(.22,1,.36,1)}
-.pilot-island-trigger[aria-expanded="true"] .pilot-island-progress>svg:last-child{transform:rotate(180deg)}
+.pilot-island-progress>svg:last-child{color:var(--text-muted)}
 .header-state-area{display:flex;align-items:center;flex:0 0 auto;min-width:0}
 .header-morph-slot{display:block;overflow:hidden;flex:0 0 auto;opacity:0;transition:width 280ms cubic-bezier(.22,1,.36,1),opacity 120ms ease}
 .header-morph-slot.is-visible{opacity:1}

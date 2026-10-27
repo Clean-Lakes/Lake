@@ -120,8 +120,6 @@
 .header-inspector-toggle { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; margin-left:4px; padding:0; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); color:var(--text-muted); background:transparent; cursor:pointer; }
 .header-inspector-toggle:hover { color:var(--foreground); background:var(--surface-hover); }
 .header-inspector-toggle:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
-.header-inspector-toggle > svg { transition:transform 220ms cubic-bezier(.22,1,.36,1); }
-.header-inspector-toggle[aria-expanded=true] > svg { transform:rotate(180deg); }
 .pilot-island[data-motion=paused] .pilot-ring-value { transition:none; }
 @media(prefers-reduced-motion:reduce) { .header-inspector-toggle > svg { transition:none; } }
 
