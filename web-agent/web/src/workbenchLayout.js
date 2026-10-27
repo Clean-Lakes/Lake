@@ -4,10 +4,10 @@
   if (window.lakeWorkbenchLayout) return;
   window.lakeWorkbenchLayout = true;
   const key = 'lake.workbench.widths';
-  let preferred = { sidebar: 280, terminal: 400 };
+  let preferred = { sidebar: 280, terminal: 400, inspector: 382 };
   try {
     const saved = window.lakeWorkbenchWidths || JSON.parse(localStorage.getItem(key) || '{}');
-    for (const pane of ['sidebar', 'terminal']) {
+    for (const pane of ['sidebar', 'terminal', 'inspector']) {
       const [min, max] = pane === 'sidebar' ? [200, 420] : [280, 900];
       if (Number.isFinite(saved[pane]) && saved[pane] >= min && saved[pane] <= max) preferred[pane] = saved[pane];
     }
@@ -18,7 +18,8 @@
     .workbench-splitter:hover::after, .workbench-splitter:focus-visible::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:2px; background:var(--focus); }
     .workbench-splitter-sidebar { left:calc(var(--sidebar-width) - 4px); }
     .workbench-splitter-sidebar:hover:not(:focus-visible)::after { width:1px; background:var(--border-strong); }
-    .workbench-splitter-terminal { left:0; }
+    .workbench-splitter-terminal, .workbench-splitter-inspector { left:-4px; }
+    .workbench-resizing .session-inspector { animation:none !important; }
     .workbench-resizing, .workbench-resizing * { cursor:col-resize !important; user-select:none !important; }
     .workbench-resizing .app-shell, .workbench-resizing .terminal-side-panel { transition:none !important; }
     .ai-context-panel { position:fixed; z-index:60; bottom:auto; right:auto; overflow-y:auto; }
@@ -41,6 +42,11 @@
     const width = shell?.clientWidth || innerWidth;
     const sidebar = clamp(preferred.sidebar, 200, Math.min(420, width - 320));
     const terminal = clamp(preferred.terminal, 280, Math.max(280, width - sidebar - 320));
+    if (pane === 'inspector') {
+      const workspace = shell.querySelector('.workspace');
+      const available = workspace?.clientWidth || 0;
+      return [280, Math.max(280, Math.min(900, available - (innerWidth <= 700 ? 0 : 320)))];
+    }
     if (pane === 'sidebar') return [200, Math.max(200, Math.min(420, width - 320 - (width > 1100 && shell.classList.contains('terminal-is-open') ? terminal : 0)))];
     return [280, Math.max(280, Math.min(900, width <= 1100 ? width - 40 : width - sidebar - 320))];
   }
@@ -51,10 +57,10 @@
   }
   function apply() {
     if (!shell) return;
-    for (const pane of ['sidebar', 'terminal']) {
+    for (const pane of ['sidebar', 'terminal', 'inspector']) {
       const [min, max] = limits(pane);
       const width = clamp(preferred[pane], min, max);
-      shell.style.setProperty(pane === 'sidebar' ? '--sidebar-width' : '--terminal-panel-width', `${width}px`);
+      shell.style.setProperty(pane === 'sidebar' ? '--sidebar-width' : pane === 'terminal' ? '--terminal-panel-width' : '--inspector-preferred-width', `${width}px`);
       const handle = shell.querySelector(`.workbench-splitter-${pane}`);
       if (handle) for (const [name, value] of [['valuemin', min], ['valuemax', max], ['valuenow', width]]) handle.setAttribute(`aria-${name}`, String(value));
     }
@@ -66,12 +72,12 @@
     handle.tabIndex = 0;
     handle.setAttribute('role', 'separator');
     handle.setAttribute('aria-orientation', 'vertical');
-    handle.setAttribute('aria-label', pane === 'sidebar' ? '调整项目导航宽度' : '调整终端宽度');
+    handle.setAttribute('aria-label', pane === 'sidebar' ? '调整项目导航宽度' : pane === 'terminal' ? '调整终端宽度' : '调整任务检查宽度');
     handle.title = '拖动调整宽度，双击恢复默认；方向键微调';
     handle.addEventListener('pointerdown', event => {
       if (event.button !== 0) return;
       event.preventDefault();
-      const element = shell.querySelector(pane === 'sidebar' ? '.sidebar' : '.terminal-side-panel');
+      const element = shell.querySelector(pane === 'sidebar' ? '.sidebar' : pane === 'terminal' ? '.terminal-side-panel' : '.session-inspector');
       active = { pane, x: event.clientX, width: element.getBoundingClientRect().width, pointer: event.pointerId };
       handle.setPointerCapture(event.pointerId);
       document.documentElement.classList.add('workbench-resizing');
@@ -87,7 +93,7 @@
     handle.addEventListener('pointerup', finish);
     handle.addEventListener('pointercancel', finish);
     handle.addEventListener('lostpointercapture', finish);
-    handle.addEventListener('dblclick', () => { preferred[pane] = pane === 'sidebar' ? 280 : 400; apply(); save(); schedule(); });
+    handle.addEventListener('dblclick', () => { preferred[pane] = pane === 'sidebar' ? 280 : pane === 'terminal' ? 400 : 382; apply(); save(); schedule(); });
     handle.addEventListener('keydown', event => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();
@@ -148,6 +154,8 @@
     addHandle(shell, 'sidebar');
     const terminal = shell.querySelector('.terminal-side-panel');
     if (terminal) addHandle(terminal, 'terminal');
+    const inspector = shell.querySelector('.session-inspector.is-open');
+    if (inspector) addHandle(inspector, 'inspector');
     apply(); syncChrome(); placeContextPanel();
   }
   function schedule() { if (!frame) frame = requestAnimationFrame(sync); }
