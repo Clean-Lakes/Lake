@@ -7,20 +7,22 @@
 .island-conversation { grid-column:1; container-type:inline-size; }
 .island-inspector { grid-column:2; }
 .island-terminal { grid-column:3; }
-/* Thin material plates share the island's single backdrop pass. Text and menus
-   remain above the material; only its opacity responds to hover and focus. */
-.lake-workbench-island > :is(.island-conversation,.island-inspector,.island-terminal)::before {
- content:''; position:absolute; inset:3px 4px; z-index:-1; pointer-events:none;
- border-radius:calc(var(--radius-window) - 4px); corner-shape:var(--corner-window);
- border:1px solid color-mix(in srgb,var(--foreground) 8%,transparent);
- background:linear-gradient(145deg,color-mix(in srgb,var(--foreground) 8%,transparent),transparent 55%,color-mix(in srgb,var(--foreground) 2%,transparent)),color-mix(in srgb,var(--surface) 52%,transparent);
- box-shadow:inset 0 1px 0 color-mix(in srgb,var(--foreground) 5%,transparent),0 2px 5px rgb(0 0 0 / 6%);
+/* The outer frame is 22px. A uniform 4px inset gives the inner plate an
+   18px curve; both use windowCorners.css, including its WKWebView contour. */
+.island-module-glass {
+ --window-corner-radius:calc(var(--radius-window) - 4px);
+ --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
+ --window-corner-stroke-slice:18;
+ position:absolute; inset:3px; z-index:-1; pointer-events:none;
+ border:1px solid color-mix(in srgb,var(--foreground) 5%,transparent);
+ background:var(--title-glass-sheen),color-mix(in srgb,var(--surface) 42%,transparent);
+ box-shadow:inset 0 1px 0 color-mix(in srgb,var(--foreground) 3%,transparent);
  opacity:0; transition:opacity 160ms ease;
 }
-.lake-workbench-island[data-linked=true] > :is(.island-conversation,.island-inspector,.island-terminal)::before { opacity:.82; }
-.lake-workbench-island[data-linked=true] > :is(.island-conversation,.island-inspector,.island-terminal):is(:hover,:focus-within)::before { opacity:1; }
-@media(prefers-reduced-motion:reduce) { .lake-workbench-island > :is(.island-conversation,.island-inspector,.island-terminal)::before { transition:none; } }
-@media(prefers-reduced-transparency:reduce) { .lake-workbench-island > :is(.island-conversation,.island-inspector,.island-terminal)::before { background:var(--surface); } }
+.lake-workbench-island[data-linked=true] .island-module-glass { opacity:.86; }
+.lake-workbench-island[data-linked=true] > :is(.island-conversation,.island-terminal):is(:hover,:focus-within) > .island-module-glass { opacity:1; }
+@media(prefers-reduced-motion:reduce) { .island-module-glass { transition:none; } }
+@media(prefers-reduced-transparency:reduce) { .island-module-glass { background:var(--surface); } }
 .lake-workbench-island .workspace-header { justify-content:flex-start; position:relative; display:flex; align-items:center; gap:10px; min-width:0; min-height:44px; height:44px; width:100%; padding:5px 14px; border:0; border-radius:0; background:transparent; box-shadow:none; }
 .lake-workbench-island .workspace-header > .workspace-header-glass { display:none; }
 .lake-workbench-island .workspace-header > :not(.workspace-header-sweep) { position:relative; z-index:2; }

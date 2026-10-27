@@ -13,6 +13,7 @@
  .workspace-utilities-trigger,
  .workspace.has-floating-header > .workspace-header,
  .lake-workbench-island,
+ .island-module-glass,
  .composer-input,
  .ai-role-user:not(.has-message-images),
  .ai-role-user.has-message-images > .user-message-text,
@@ -68,6 +69,7 @@
  .workspace-utilities-trigger,
  .workspace.has-floating-header > .workspace-header,
  .lake-workbench-island,
+ .island-module-glass,
  .composer-input,
  .ai-role-user:not(.has-message-images),
  .ai-role-user.has-message-images > .user-message-text,
@@ -111,6 +113,7 @@
  .workspace-utilities-trigger,
  .workspace.has-floating-header > .workspace-header,
  .lake-workbench-island,
+ .island-module-glass,
  .composer-input,
  .markdown-code-block,
  .composer-mentions.mention-menu

@@ -59,8 +59,8 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
  return <div ref={root} className="lake-workbench-island" data-linked={inspectorOpen||terminalOpen} role="group" aria-label="Lake Island 工作台">
   <span className="workspace-header-glass" aria-hidden="true"/>
   {activity}
-  <div className="island-conversation">{conversation}</div>
+  <div className="island-conversation"><span className="island-module-glass" aria-hidden="true"/>{conversation}</div>
   <div ref={onInspectorHost} className="island-inspector" hidden={!inspectorOpen}/>
-  <div className="island-terminal" hidden={!terminalOpen}>{terminal}</div>
+  <div className="island-terminal" hidden={!terminalOpen}><span className="island-module-glass" aria-hidden="true"/>{terminal}</div>
  </div>;
 }
