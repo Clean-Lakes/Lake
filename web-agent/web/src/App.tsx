@@ -1347,7 +1347,7 @@ function AppContent() {
         }}/>}
       </header>;
   const terminalListMenu=terminalListOpen && <div className="terminal-list-menu" ref={terminalListPopup.menu} id="terminal-switcher" role="group" aria-label="已打开的终端">
-    {terminalOptions.map(({terminal: item, label}) => <button type="button" key={item.id} aria-current={terminalId===item.id} onContextMenu={event=>{event.preventDefault();setTerminalTabContext({terminal:item,x:event.clientX,y:event.clientY});}} onClick={() => selectTerminalTab(item)}><Glyph name="terminal" size={14}/><span>{label}</span><small>{terminalLabels[item.status]}</small></button>)}
+    {terminalOptions.map(({terminal: item, label, shortLabel}) => <button type="button" key={item.id} aria-label={label} title={label} aria-current={terminalId===item.id} onContextMenu={event=>{event.preventDefault();setTerminalTabContext({terminal:item,x:event.clientX,y:event.clientY});}} onClick={() => selectTerminalTab(item)}><Glyph name="terminal" size={14}/><span>{resourceLabel(resourceMap.get(item.resourceId))}</span><span className="terminal-list-number">· {shortLabel}</span><small>{terminalLabels[item.status]}</small></button>)}
     {!terminalOptions.length && <span>暂无在线终端</span>}
     {terminalResource && <button type="button" disabled={!!pendingOperation || !terminalConnected || connectingResources.includes(terminalResource.id)} onClick={() => { setTerminalListOpen(false); void openTerminalFor(terminalResource.id, true); }}><Glyph name="plus" size={14}/><span>新建终端</span></button>}
     {sharedIsland && <div className="terminal-list-settings">
