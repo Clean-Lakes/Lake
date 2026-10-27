@@ -1346,16 +1346,16 @@ function AppContent() {
         }}/>}
       </header>;
   const terminalListMenu=terminalListOpen && <div className="terminal-list-menu" ref={terminalListPopup.menu} id="terminal-switcher" role="group" aria-label="已打开的终端">
-    {terminalOptions.map(({terminal: item, label, shortLabel}) => <button type="button" key={item.id} aria-label={label} title={label} aria-current={terminalId===item.id} onContextMenu={event=>{event.preventDefault();setTerminalTabContext({terminal:item,x:event.clientX,y:event.clientY});}} onClick={() => selectTerminalTab(item)}><Glyph name="terminal" size={14}/><span>{resourceLabel(resourceMap.get(item.resourceId))}</span><span className="terminal-list-number">· {shortLabel}</span><small>{terminalLabels[item.status]}</small></button>)}
+    {terminalOptions.map(({terminal: item, label, shortLabel}) => <button type="button" className="terminal-picker-item" key={item.id} aria-label={label} title={label} aria-current={terminalId===item.id} onContextMenu={event=>{event.preventDefault();setTerminalTabContext({terminal:item,x:event.clientX,y:event.clientY});}} onClick={() => selectTerminalTab(item)}><Glyph name="terminal" size={14}/><span className="terminal-picker-copy"><span className="terminal-picker-name">{resourceLabel(resourceMap.get(item.resourceId))}</span><span className="terminal-picker-meta"><span>{shortLabel}</span><small>{terminalLabels[item.status]}</small></span></span></button>)}
     {!terminalOptions.length && <span>暂无在线终端</span>}
     {terminalResource && <button type="button" disabled={!!pendingOperation || !terminalConnected || connectingResources.includes(terminalResource.id)} onClick={() => { setTerminalListOpen(false); void openTerminalFor(terminalResource.id, true); }}><Glyph name="plus" size={14}/><span>新建终端</span></button>}
     {sharedIsland && <div className="terminal-list-settings">
       <label>本地 Shell<AppSelect value={localShell} onChange={event => setLocalShell(event.target.value)}>{["bash","zsh","sh","fish"].map(shell => <option key={shell}>{shell}</option>)}</AppSelect></label>
-      <button type="button" onClick={() => {terminalControlRef.current?.clear();setTerminalListOpen(false);}}>清屏</button>
-      <button type="button" disabled={!currentTerminal || currentTerminal.status !== "ready" || currentTerminal.holder !== "user"} onClick={() => {setTerminalListOpen(false);setCommandEditorOpen(true);}}>运行完整命令…</button>
-      {!terminalContext && currentTerminal?.holder === "user" && currentTerminal.status === "ready" && <button type="button" onClick={() => {setTerminalListOpen(false);void changeHolder("agent");}}>交给终端专员</button>}
-      {currentTerminal?.status === "busy" && <button type="button" onClick={() => {setTerminalListOpen(false);void interruptTerminal();}}>中断命令</button>}
-      {currentTerminal?.status !== "disconnected" && terminalId && <button type="button" onClick={() => {setTerminalListOpen(false);void disconnectTerminal();}}>断开连接</button>}
+      <button type="button" onClick={() => {terminalControlRef.current?.clear();setTerminalListOpen(false);}}><Glyph name="refresh" size={14}/><span>清屏</span></button>
+      <button type="button" disabled={!currentTerminal || currentTerminal.status !== "ready" || currentTerminal.holder !== "user"} onClick={() => {setTerminalListOpen(false);setCommandEditorOpen(true);}}><Glyph name="terminal" size={14}/><span>运行完整命令…</span></button>
+      {!terminalContext && currentTerminal?.holder === "user" && currentTerminal.status === "ready" && <button type="button" onClick={() => {setTerminalListOpen(false);void changeHolder("agent");}}><Glyph name="lakePilot" size={14}/><span>交给终端专员</span></button>}
+      {currentTerminal?.status === "busy" && <button type="button" onClick={() => {setTerminalListOpen(false);void interruptTerminal();}}><Glyph name="stop" size={14}/><span>中断命令</span></button>}
+      {currentTerminal?.status !== "disconnected" && terminalId && <button type="button" onClick={() => {setTerminalListOpen(false);void disconnectTerminal();}}><Glyph name="plug" size={14}/><span>断开连接</span></button>}
       <button type="button" title="退出终端面板，保留连接" onClick={() => {setTerminalListOpen(false);closeTerminalPanel();}}><Glyph name="close" size={14}/><span>退出终端</span></button>
     </div>}
   </div>;

@@ -71,11 +71,22 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 .island-terminal .terminal-island-switcher { flex:1; width:100%; max-width:none; }
 .island-terminal .terminal-island-switcher > svg:last-child { margin-left:auto; transform:none; transition:none; }
 .terminal-island-count { font-variant-numeric:tabular-nums; color:var(--text-muted); font-weight:var(--font-weight-normal); }
-.island-terminal .terminal-list-menu { top:calc(100% + 9px); left:0; right:0; width:auto; max-width:calc(100vw - 32px); max-height:min(420px,calc(100dvh - 80px)); background:var(--surface); }
+/* Anchor to the visible inner glass plate, including on tight workbenches. */
+.island-terminal .terminal-list-menu { top:calc(100% + 5px); left:3px; right:3px; width:auto; max-width:none; max-height:min(480px,calc(100dvh - 80px)); background:var(--surface); }
+.terminal-list-menu { font-size:var(--font-size-ui); line-height:20px; }
+.terminal-list-menu button { min-height:36px; padding:8px; gap:8px; font:inherit; }
+.terminal-list-menu button > svg { flex:none; color:var(--text-muted); }
+.terminal-list-menu button:not(.terminal-picker-item,.app-select-trigger) > span { white-space:normal; overflow:visible; overflow-wrap:anywhere; }
+.terminal-list-menu button.terminal-picker-item { align-items:flex-start; }
+.terminal-picker-item > svg { margin-top:3px; }
+.terminal-list-menu button .terminal-picker-copy { display:flex; flex:1; min-width:0; flex-direction:column; gap:2px; }
+.terminal-list-menu button .terminal-picker-name { display:block; flex:none; color:var(--foreground); }
+.terminal-list-menu button .terminal-picker-meta { display:flex; flex:none; align-items:center; gap:8px; font-size:12px; line-height:18px; color:var(--text-muted); }
+.terminal-list-menu button .terminal-picker-meta > span { flex:1; }
+.terminal-list-menu .terminal-picker-meta small { flex:none; font-size:inherit; line-height:inherit; }
 .terminal-list-settings { border-top:1px solid var(--border); margin-top:4px; padding-top:4px; }
-.terminal-list-settings label { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; white-space:nowrap; }
-.terminal-list-settings label .app-select { min-width:0; width:160px; }
-.terminal-list-menu button .terminal-list-number { flex:none; white-space:nowrap; }
+.terminal-list-settings label { display:flex; flex-direction:column; align-items:stretch; gap:6px; padding:8px; font-size:12px; line-height:18px; color:var(--text-muted); }
+.terminal-list-settings label .app-select { width:100%; min-width:0; margin-top:0; font-size:var(--font-size-ui); line-height:20px; color:var(--foreground); }
 .terminal-list-menu button[aria-current=true] { color:var(--foreground); background:var(--surface-hover); }
 .terminal-action-menu,.terminal-list-menu { animation:terminal-menu-arrive 140ms ease-out; }
 @keyframes terminal-menu-arrive { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
@@ -105,8 +116,9 @@ html.lake-windows-chrome .app-shell.has-workbench-island :is(.workbench-splitter
  .island-inspector-heading > svg { display:none; }
  .lake-workbench-island .session-inspector-tabs { gap:10px; }
  .island-terminal .terminal-panel-header { width:100%; padding:0 8px; gap:6px; }
- .island-terminal .terminal-list-menu { left:auto; right:0; width:max(200px,100%); }
  .island-terminal .terminal-island-switcher { flex:1; gap:4px; }
+ .island-terminal .terminal-picker-meta { flex-wrap:wrap; gap:0 8px; }
+ .island-terminal .terminal-picker-meta > span { flex:none; }
  .island-terminal :is(.terminal-island-number,.terminal-island-count) { display:none; }
 }
 
