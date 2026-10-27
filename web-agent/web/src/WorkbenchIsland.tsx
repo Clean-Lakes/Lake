@@ -32,8 +32,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const terminalLabel=terminal?.querySelector<HTMLElement>('.terminal-island-title');
    const terminalNumber=terminal?.querySelector<HTMLElement>('.terminal-island-number');
    const terminalCount=terminal?.querySelector<HTMLElement>('.terminal-island-count');
-   const terminalActions=terminal?.querySelector<HTMLElement>('.terminal-header-actions');
-   const terminalWidth=Math.min(240,(terminalLabel?.scrollWidth??120)+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+70)+(terminalActions?.getBoundingClientRect().width??0)+44;
+   const terminalWidth=Math.min(240,(terminalLabel?.scrollWidth??120)+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+70)+44;
    // Measure the expanded task controls independently of their compact container state.
    const inspectorWidth=inspector?176+inspector.querySelectorAll('.session-inspector-tabs button:not(:disabled)').length*37:220;
    const layout=workbenchIslandLayout(natural,inspectorOpen?inspectorWidth:0,terminalOpen?terminalWidth:0,available);
@@ -50,7 +49,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(measure);};
   const observer=new ResizeObserver(schedule);
   for(const node of [element,shell,shell.querySelector('.workspace'),shell.querySelector('.session-layout > .session-view'),shell.querySelector('.session-inspector'),shell.querySelector('.terminal-side-panel')])if(node)observer.observe(node);
-  const observeControls=()=>{for(const node of element.querySelectorAll('.header-morph-slot,.header-morph-content,.crumb-title,.island-inspector-heading,.terminal-panel-header,.terminal-header-actions'))observer.observe(node);};
+  const observeControls=()=>{for(const node of element.querySelectorAll('.header-morph-slot,.header-morph-content,.crumb-title,.island-inspector-heading,.terminal-panel-header'))observer.observe(node);};
   observeControls();
   const content=new MutationObserver(()=>{observeControls();schedule();});
   content.observe(element,{childList:true,subtree:true,characterData:true});

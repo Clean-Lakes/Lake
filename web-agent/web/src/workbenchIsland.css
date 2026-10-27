@@ -28,9 +28,6 @@
 .island-terminal .terminal-panel-header > strong > svg { flex:none; }
 .terminal-island-switcher .terminal-island-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .island-terminal .terminal-tab-dot { width:5px; height:5px; flex:none; }
-.island-terminal .terminal-header-actions { width:0; overflow:hidden; opacity:0; pointer-events:none; gap:0; transition:width 180ms ease,opacity 140ms ease; }
-.island-terminal:is(:hover,:focus-within) .terminal-header-actions { width:100px; opacity:1; pointer-events:auto; }
-.island-terminal .terminal-header-actions .icon-button { width:25px; }
 .app-shell.has-workbench-island .session-inspector { padding-top:var(--inspector-island-inset,72px); }
 .app-shell.has-workbench-island .workspace.has-floating-header > .system-banner { margin-top:80px; }
 html.lake-windows-chrome .lake-workbench-island { top:52px; }
@@ -50,7 +47,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 .lake-workbench-island .session-inspector-tabs button:disabled { display:none; }
 .island-inspector-heading > .icon-button { opacity:0; pointer-events:none; transition:opacity 140ms ease; }
 .island-inspector:is(:hover,:focus-within) .island-inspector-heading > .icon-button { opacity:1; pointer-events:auto; }
-@media(hover:none) { .island-inspector-heading > .icon-button { opacity:1; pointer-events:auto; } .island-terminal .terminal-header-actions { width:100px; opacity:1; pointer-events:auto; } }
+@media(hover:none) { .island-inspector-heading > .icon-button { opacity:1; pointer-events:auto; } }
 
 .lake-workbench-island .pilot-action-avatar { display:flex; }
 .lake-workbench-island .pilot-island-action-line > strong { display:inline; }
@@ -60,7 +57,10 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 .terminal-island-switcher > svg:last-child { transition:transform 180ms ease; }
 .terminal-island-switcher > .is-open { transform:rotate(180deg); }
 .terminal-island-count { font-variant-numeric:tabular-nums; color:var(--text-muted); font-weight:var(--font-weight-normal); }
-.island-terminal .terminal-list-menu { left:auto; right:7px; width:280px; max-width:calc(100vw - 32px); background:var(--surface); }
+.island-terminal .terminal-list-menu { left:auto; right:7px; width:280px; max-width:calc(100vw - 32px); max-height:min(420px,calc(100dvh - 80px)); background:var(--surface); }
+.terminal-list-settings { border-top:1px solid var(--border); margin-top:4px; padding-top:4px; }
+.terminal-list-settings label { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; white-space:nowrap; }
+.terminal-list-settings label .app-select { min-width:0; width:160px; }
 .terminal-list-menu button[aria-current=true] { color:var(--foreground); background:var(--surface-hover); }
 .terminal-action-menu,.terminal-list-menu { animation:terminal-menu-arrive 140ms ease-out; }
 @keyframes terminal-menu-arrive { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
@@ -85,15 +85,11 @@ html.lake-windows-chrome .app-shell.has-workbench-island :is(.workbench-splitter
 
 /* Keep all three control groups inside the two-pane island on tight workbenches. */
 .island-inspector,.island-terminal { container-type:inline-size; }
-.terminal-action-menu .terminal-compact-action { display:none; }
 @container(max-width:180px) {
- .island-terminal .terminal-action-menu .terminal-compact-action { display:block; }
  .island-inspector-heading { gap:4px; padding:0 8px; }
  .island-inspector-heading > strong { display:none; }
  .lake-workbench-island .session-inspector-tabs { gap:10px; }
  .island-terminal .terminal-panel-header { width:100%; padding:0 8px; gap:6px; }
  .island-terminal .terminal-island-switcher { flex:1; gap:4px; }
  .island-terminal :is(.terminal-island-number,.terminal-island-count) { display:none; }
- .island-terminal .terminal-header-actions .icon-button:not([aria-label="终端选项"]) { display:none; }
- .island-terminal:is(:hover,:focus-within) .terminal-header-actions { width:25px; }
 }

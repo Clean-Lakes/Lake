@@ -1346,18 +1346,29 @@ function AppContent() {
           inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry?.attemptId,tab:entry?'execution':'plan'});
         }}/>}
       </header>;
-  const terminalListMenu=terminalListOpen && <div className="terminal-list-menu" ref={terminalListPopup.menu} id="terminal-switcher" role="group" aria-label="已打开的终端">{terminalOptions.map(({terminal: item, label}) => <button type="button" key={item.id} aria-current={terminalId===item.id} onContextMenu={event=>{event.preventDefault();setTerminalTabContext({terminal:item,x:event.clientX,y:event.clientY});}} onClick={() => selectTerminalTab(item)}><Glyph name="terminal" size={14}/><span>{label}</span><small>{terminalLabels[item.status]}</small></button>)}{!terminalOptions.length && <span>暂无在线终端</span>}{terminalResource && <button type="button" disabled={!!pendingOperation || !terminalConnected || connectingResources.includes(terminalResource.id)} onClick={() => { setTerminalListOpen(false); void openTerminalFor(terminalResource.id, true); }}><Glyph name="plus" size={14}/><span>新建终端</span></button>}</div>;
+  const terminalListMenu=terminalListOpen && <div className="terminal-list-menu" ref={terminalListPopup.menu} id="terminal-switcher" role="group" aria-label="已打开的终端">
+    {terminalOptions.map(({terminal: item, label}) => <button type="button" key={item.id} aria-current={terminalId===item.id} onContextMenu={event=>{event.preventDefault();setTerminalTabContext({terminal:item,x:event.clientX,y:event.clientY});}} onClick={() => selectTerminalTab(item)}><Glyph name="terminal" size={14}/><span>{label}</span><small>{terminalLabels[item.status]}</small></button>)}
+    {!terminalOptions.length && <span>暂无在线终端</span>}
+    {terminalResource && <button type="button" disabled={!!pendingOperation || !terminalConnected || connectingResources.includes(terminalResource.id)} onClick={() => { setTerminalListOpen(false); void openTerminalFor(terminalResource.id, true); }}><Glyph name="plus" size={14}/><span>新建终端</span></button>}
+    {sharedIsland && <div className="terminal-list-settings">
+      <label>本地 Shell<AppSelect value={localShell} onChange={event => setLocalShell(event.target.value)}>{["bash","zsh","sh","fish"].map(shell => <option key={shell}>{shell}</option>)}</AppSelect></label>
+      <button type="button" onClick={() => {terminalControlRef.current?.clear();setTerminalListOpen(false);}}>清屏</button>
+      <button type="button" disabled={!currentTerminal || currentTerminal.status !== "ready" || currentTerminal.holder !== "user"} onClick={() => {setTerminalListOpen(false);setCommandEditorOpen(true);}}>运行完整命令…</button>
+      {!terminalContext && currentTerminal?.holder === "user" && currentTerminal.status === "ready" && <button type="button" onClick={() => {setTerminalListOpen(false);void changeHolder("agent");}}>交给终端专员</button>}
+      {currentTerminal?.status === "busy" && <button type="button" onClick={() => {setTerminalListOpen(false);void interruptTerminal();}}>中断命令</button>}
+      {currentTerminal?.status !== "disconnected" && terminalId && <button type="button" onClick={() => {setTerminalListOpen(false);void disconnectTerminal();}}>断开连接</button>}
+      <button type="button" onClick={() => {setTerminalListOpen(false);closeTerminalPanel();}}>收起终端</button>
+    </div>}
+  </div>;
   const terminalHeading=<div className="terminal-panel-header">
       <button ref={terminalListPopup.trigger} type="button" className="terminal-island-switcher" aria-label={`切换终端，当前 ${activeTerminalOption?.label??terminalResource?.name??"终端"}，共 ${terminalOptions.length} 个终端`} aria-expanded={terminalListOpen} aria-controls={terminalListOpen?"terminal-switcher":undefined} onClick={()=>{setTerminalOptionsOpen(false);setTerminalListOpen(value=>!value);}}><Glyph name="lakeTerminal" size={18}/><span className="terminal-island-title" title={activeTerminalOption?.label}>{terminalResource?.name??"终端"}</span>{terminalOptions.length>1&&<small className="terminal-island-number">{activeTerminalOption?.shortLabel}</small>}{currentTerminal&&<span className={`terminal-tab-dot ${currentTerminal.status}`} aria-label={terminalLabels[currentTerminal.status]}/>}{terminalOptions.length>1&&<small className="terminal-island-count" title={`${terminalOptions.length} 个终端`}>{terminalOptions.length}</small>}<Glyph name="chevron" size={12} className={terminalListOpen?"is-open":""}/></button>
-      <div className="terminal-header-actions">
+      {!sharedIsland && <div className="terminal-header-actions">
         <button type="button" className="icon-button" aria-label="清屏" title="清屏" onClick={() => terminalControlRef.current?.clear()}><Glyph name="refresh" size={16}/></button>
         <button type="button" className="icon-button" aria-label="新建终端" title="新建终端" disabled={!terminalResource || !!pendingOperation || connectingResources.includes(terminalResource.id)} onClick={() => terminalResource && void openTerminalFor(terminalResource.id, true)}><Glyph name="plus" size={17}/></button>
         <button type="button" className="icon-button" ref={terminalOptionsPopup.trigger} aria-label="终端选项" title="终端选项" aria-expanded={terminalOptionsOpen} onClick={() => {setTerminalListOpen(false);setTerminalOptionsOpen(value => !value);}}>⋮</button>
         <button type="button" className="icon-button" aria-label="收起终端" title="收起终端，保留连接" onClick={closeTerminalPanel}><Glyph name="close" size={17}/></button>
-      </div>
-      {terminalOptionsOpen && <div className="terminal-action-menu" ref={terminalOptionsPopup.menu} role="group" aria-label="终端选项菜单">
-        <button type="button" className="terminal-compact-action" onClick={() => {terminalControlRef.current?.clear();setTerminalOptionsOpen(false);}}>清屏</button>
-        <button type="button" className="terminal-compact-action" onClick={() => {setTerminalOptionsOpen(false);closeTerminalPanel();}}>收起终端</button>
+      </div>}
+      {!sharedIsland && terminalOptionsOpen && <div className="terminal-action-menu" ref={terminalOptionsPopup.menu} role="group" aria-label="终端选项菜单">
         <label>本地 Shell<AppSelect value={localShell} onChange={event => setLocalShell(event.target.value)}>{["bash","zsh","sh","fish"].map(shell => <option key={shell}>{shell}</option>)}</AppSelect></label>
         <button type="button" disabled={!currentTerminal || currentTerminal.status !== "ready" || currentTerminal.holder !== "user"} onClick={() => { setTerminalOptionsOpen(false); setCommandEditorOpen(true); }}>运行完整命令…</button>
         {!terminalContext && currentTerminal?.holder === "user" && currentTerminal.status === "ready" && <button type="button" onClick={() => { setTerminalOptionsOpen(false); void changeHolder("agent"); }}>交给终端专员</button>}
