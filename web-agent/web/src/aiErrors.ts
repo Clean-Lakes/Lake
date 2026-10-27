@@ -22,3 +22,11 @@ export function displayAiError(message: string): string {
   if (message.includes("model output limit reached")) return "模型回复达到单次输出上限，自动重试仍未完成。已有消息和取证记录已保留，可在原会话继续，或提高单次输出上限。";
   return message;
 }
+
+/** Routine lifecycle notices belong to turn status and execution records. */
+export function isConversationInterruption(message: string): boolean {
+ const text=message.trim();
+ return ["context canceled","已停止本轮","本次执行已停止，已有证据与操作记录保留。",
+  "本步骤仍有未完成的只读检查，尚未通过验收。已保留取得的证据，可继续检查或结束任务。"].includes(text)
+  || text.startsWith("只读检查仍有缺口：")&&text.includes("pilot_read_recovery");
+}

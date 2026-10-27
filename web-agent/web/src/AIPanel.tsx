@@ -31,7 +31,7 @@ import {resourceStageProgress,resourceStagePreview} from './resourceStageProgres
 import {ResourceStageSummary} from './ResourceStageSummary';
 import {TurnExecutionDetails} from "./TurnExecutionDetails";
 import { timingForTurn } from "./replyDurationState";
-import {displayAiError} from "./aiErrors";
+import {displayAiError,isConversationInterruption} from "./aiErrors";
 import Markdown from "react-markdown";
 import {MarkdownCodeBlock} from './MarkdownCodeBlock';
 import {replyInfoComponents} from './ReplyInfoElements';
@@ -168,10 +168,9 @@ function AITranscriptContent({ onOpenMemory,sourceMessageId,onSourceLocated,snap
   const currentTurn=latestUser?turns.find(turn=>turn.some(entry=>entry.message?.id===latestUser.id))??[]:[];
   const currentTiming=timingForTurn(currentTurn,snapshot);
   const liveConversation=['running','waiting_approval'].includes(snapshot.ai?.status||'')&&(!currentTiming||currentTiming.status==='running');
-  const conversationTurnEntries=(turn:typeof entries)=>{
-    const stopped=timingForTurn(turn,snapshot)?.status==='cancelled';
-    return turn.filter(entry=>!isFileChangeCard(entry.card)&&!(stopped&&entry.card?.type==='error'&&entry.card.status==='cancelled'));
-  };
+  const conversationTurnEntries=(turn:typeof entries)=>turn.filter(entry=>!isFileChangeCard(entry.card)
+    &&!(entry.message?.role==='system'&&isConversationInterruption(entry.message.text||''))
+    &&!(entry.card?.type==='error'&&(['cancelled','interrupted'].includes(entry.card.status)||isConversationInterruption(entry.card.content||''))));
   const progressingId=currentProgressGroupId(currentTurn.filter(entry=>!isFileChangeCard(entry.card)),snapshot.ai?.status==='running'&&!snapshot.ai.question&&(!currentTiming||currentTiming.status==='running'),snapshot.resources);
   if (mode === "evidence") {
     const evidence = [...new Map([...(snapshot.evidence || []), ...(snapshot.ai?.agentRuns || []).flatMap(run => run.evidence || []),...mergedSRE.flatMap(t=>t.attempts.flatMap(a=>a.evidence??[]))].filter(item => item.sessionId === snapshot.session.id).map(item => [item.id,item])).values()];

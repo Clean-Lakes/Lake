@@ -6,8 +6,9 @@ import {miniCanStop,miniControlActive,miniTarget,type MiniBoxScope} from './mini
 import {miniAnomalyLine,miniPreview,miniPreviewRows,miniReadableOutput,miniRecordedEntry,miniRecordedEntries,retainMiniPreview,miniExecutionStatus,type MiniPreview} from './miniBoxPreview';
 import {useMiniBox} from './useMiniBox';
 import {MiniBoxControl} from './MiniBoxControl';
+import {ExecutionIcon} from './ExecutionIcon';
 
-export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScope;resource:string;kind:'local'|'ssh';cards:AICard[];onInspect?:()=>void}) {
+export function MiniBox({scope,resource,kind,cards,onInspect,marker=false}:{marker?:boolean;scope:MiniBoxScope;resource:string;kind:'local'|'ssh';cards:AICard[];onInspect?:()=>void}) {
   const protocol=kind==='local'?'本机':'SSH';
   const {histories,stale,refresh}=useMiniBox(scope,resource);
   const target=miniTarget(histories);
@@ -59,7 +60,7 @@ export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScop
     try {await api.terminalInterruptCommand(scope.session,target.history.terminal.id,target.history.terminal.generation,target.entry.id);refresh();}
     catch{setError('终止未确认，请核查当前命令状态。');setPending('');refresh();}
   }
-  return <div className="mini-box-container"><div className="mini-box-content">
+  return <>{marker&&<span className="thinking-step-marker"><ExecutionIcon card={last} active={active} size={20}/></span>}<div className="mini-box-container"><div className="mini-box-content">
     <section className={`mini-box${active?' is-operating':''}${open?'':' is-collapsed'}`} aria-label={`Mini Box ${protocol} 命令终端`}>
       <span className="mini-box-material" aria-hidden="true"/>
       <MiniBoxControl active={active}/>
@@ -89,7 +90,7 @@ export function MiniBox({scope,resource,kind,cards,onInspect}:{scope:MiniBoxScop
       </div>)}</div>
     </section>}
     {error&&<p className="mini-box-error" role="alert">{error}</p>}
-  </div></div>;
+  </div></div></>;
 }
 
 export function MiniBoxCompletionNotice({notices,startedAt,endedAt}:{notices:CommandStopNotice[];startedAt:string;endedAt?:string}) {

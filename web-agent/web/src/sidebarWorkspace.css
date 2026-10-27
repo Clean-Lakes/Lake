@@ -64,10 +64,10 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .nav-row-wrap:is(:hover,:focus-within) :is(.session-edit,.session-more) { background: var(--surface-hover); }
 .sidebar.workspace-navigation .nav-row-wrap:has(.active):is(:hover,:focus-within) :is(.session-edit,.session-more) { background: var(--surface-selected); }
 .sidebar.workspace-navigation .resources-heading { margin: 16px 4px 5px; padding: 14px 3px 0; border-top: 1px solid var(--border); border-bottom: 0; color: var(--text-muted); font-weight:var(--font-weight-ui); }
-.sidebar.workspace-navigation .resources-heading .nav-section-toggle { gap: 6px; }
+.sidebar.workspace-navigation .resources-heading .nav-section-toggle { gap: 4px; }
 .sidebar.workspace-navigation .resource-section-label { gap: 7px; }
 .sidebar.workspace-navigation .resource-section-label > small { padding: 0; border-radius: 0; background: transparent; color: var(--text-muted); font-size: var(--font-size-ui); }
-.sidebar.workspace-navigation .resource-section-chevron { width: 11px; height: 11px; }
+.sidebar.workspace-navigation .resource-section-chevron { width: 13px; height: 13px; }
 .sidebar.workspace-navigation :is(.resource-tree-row,.resource-folder-row,.resource-nav-row) { border-radius:var(--sidebar-row-radius); }
 .sidebar.workspace-navigation .resource-folder-row { padding: 0; }
 .sidebar.workspace-navigation .resource-folder-toggle { min-height: 36px; padding: 5px 4px; gap: 7px; font-size: var(--font-size-ui); border-radius: var(--sidebar-row-radius); }
@@ -99,7 +99,7 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation { --sidebar-leading-rail:15px; --sidebar-row-inset:9px; --sidebar-icon-inset:calc(var(--sidebar-leading-rail) + var(--sidebar-row-inset)); }
 .sidebar.workspace-navigation .session-nav-group-title { padding-left:var(--sidebar-icon-inset); }
 .sidebar.workspace-navigation .nav-show-more { margin-left:var(--sidebar-icon-inset); }
-.sidebar.workspace-navigation .resources-heading { padding-left:calc(var(--sidebar-icon-inset) - 4px); }
+.sidebar.workspace-navigation .resources-heading { padding-left:3px; }
 .sidebar.workspace-navigation .resource-tree-row { padding-left:var(--sidebar-leading-rail); }
 .sidebar.workspace-navigation .resource-tree-row > .resource-drag-handle { width:var(--sidebar-leading-rail); }
 .sidebar.workspace-navigation .resource-row { padding-left:var(--sidebar-row-inset); }
