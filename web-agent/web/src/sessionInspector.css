@@ -1,9 +1,9 @@
 /* The inspector shares the conversation workspace, without a second chat scroll. */
 .session-layout { position:relative; display:flex; flex:1 1 auto; min-height:0; min-width:0; overflow:hidden; }
 .session-layout > .session-view { min-width:0; overflow:hidden; }
-.workspace.has-session-inspector { --inspector-width:382px; --session-content-start:max(var(--session-gutter),calc((100cqw - var(--inspector-width) - 960px)/2)); --session-content-width:min(960px,calc(100cqw - var(--inspector-width) - var(--session-gutter) - var(--session-gutter))); }
+.workspace.has-session-inspector { --inspector-width:var(--inspector-preferred-width, 382px); --session-content-start:max(var(--session-gutter),calc((100cqw - var(--inspector-width) - 960px)/2)); --session-content-width:min(960px,calc(100cqw - var(--inspector-width) - var(--session-gutter) - var(--session-gutter))); }
 .workspace.has-session-inspector > .workspace-header { max-width:calc(100% - var(--inspector-width) - var(--session-content-start) - 16px); }
-.session-inspector { flex:0 0 382px; width:382px; min-width:0; height:100%; position:relative; z-index:5; display:flex; flex-direction:column; border-left:1px solid var(--border); background:var(--surface); color:var(--foreground); padding-top:0; outline:none; animation:inspector-arrive 240ms cubic-bezier(.22,1,.36,1) both; }
+.session-inspector { flex:0 0 var(--inspector-preferred-width, 382px); width:var(--inspector-preferred-width, 382px); min-width:0; height:100%; position:relative; z-index:5; display:flex; flex-direction:column; border-left:1px solid var(--border); background:var(--surface); color:var(--foreground); padding-top:0; outline:none; animation:inspector-arrive 240ms cubic-bezier(.22,1,.36,1) both; }
 .session-inspector.is-closing { position:absolute; right:0; top:0; bottom:0; pointer-events:none; animation:inspector-depart 180ms ease both; }
 .session-inspector-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:19px 22px 9px; }
 .session-inspector-heading > div { min-width:0; }
@@ -77,7 +77,7 @@
 @keyframes inspector-depart { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(10px); } }
 @media (max-width:700px) {
  .workspace.has-session-inspector { --inspector-width:0px; }
- .session-inspector { position:absolute; top:0; bottom:0; right:0; width:min(382px,100%); box-shadow:var(--shadow-popover); z-index:10; }
+ .session-inspector { position:absolute; top:0; bottom:0; right:0; width:min(var(--inspector-preferred-width, 382px),100%); box-shadow:var(--shadow-popover); z-index:10; }
  .session-inspector-heading { padding-top:19px; }
 }
 @media (max-width:700px) { .session-inspector { padding-top:0; } .session-inspector-scroll { padding:18px; } }

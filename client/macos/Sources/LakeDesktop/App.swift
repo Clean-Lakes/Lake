@@ -298,7 +298,9 @@ import LakeDesktopCore
         if body["widths"] != nil {
             if let widths = body["widths"] as? [String: Double], let sidebar = widths["sidebar"], let terminal = widths["terminal"],
                sidebar.isFinite, terminal.isFinite, (200...420).contains(sidebar), (280...900).contains(terminal) {
-                UserDefaults.standard.set(["sidebar": sidebar, "terminal": terminal], forKey: "LakeWorkbenchWidths")
+                var saved = ["sidebar": sidebar, "terminal": terminal]
+                if let inspector = widths["inspector"], inspector.isFinite, (280...900).contains(inspector) { saved["inspector"] = inspector }
+                UserDefaults.standard.set(saved, forKey: "LakeWorkbenchWidths")
             }
             return
         }
