@@ -69,7 +69,8 @@ const bootstrap={authenticated:true,modelConfigured:true,modelName:'DeepSeek',mo
 const islandQuery = new URLSearchParams(location.search).get('pilot-island');
 const islandWrites: string[] = [];
 const linkedIsland=new URLSearchParams(location.search).has('linked-island');
-const linkedTerminal={id:'linked-terminal',resourceId:'order-api',generation:'linked-g',status:'ready',holder:'user',interactive:true,writerSessionId:session.id};
+const linkedTerminal={id:'linked-terminal',sessionId:session.id,resourceId:'order-api',generation:'linked-g',status:'ready',holder:'user',interactive:true,writerSessionId:session.id};
+const linkedTerminals=Array.from({length:Math.min(8,Math.max(1,Number(new URLSearchParams(location.search).get('linked-terminals'))||1))},(_,index)=>({...linkedTerminal,resourceId:new URLSearchParams(location.search).has('linked-resources')&&index===2?'gateway':'order-api',id:index?`linked-terminal-${index+1}`:linkedTerminal.id,createdAt:new Date(Date.UTC(2026,9,25,10,index)).toISOString()}));
 const fixtureHistories:import('../../../shared/contracts').TerminalHistory[]=[];
 function applyIsland(state: IslandFixtureState) {
  const incoming = islandFixture(state, session.id, project.id);
@@ -144,9 +145,9 @@ window.fetch=async(input,init)=>{
  if(linkedIsland){
   const path=url.pathname;let value:unknown;
   if(path.endsWith('/terminal-context'))value={sessionId:session.id};
-  else if(path.endsWith('/history'))value={terminal:linkedTerminal,entries:[],output:'$ uptime\r\nload averages: 0.12 0.18 0.15\r\n$ '};
-  else if(path.endsWith('/terminals')&&path.includes('/resources/'))value={terminals:[linkedTerminal]};
-  else if(path.endsWith('/terminals')&&init?.method==='POST')value=linkedTerminal;
+  else if(path.endsWith('/history'))value={terminal:linkedTerminals.find(item=>path.includes('/'+item.id+'/'))??linkedTerminals[0],entries:[],output:'$ uptime\r\nload averages: 0.12 0.18 0.15\r\n$ '};
+  else if(path.endsWith('/terminals')&&path.includes('/resources/'))value={terminals:linkedTerminals.filter(item=>path.includes('/resources/'+item.resourceId+'/'))};
+  else if(path.endsWith('/terminals')&&init?.method==='POST')value=linkedTerminals[0];
   else if(path.endsWith('/resize')||path.endsWith('/input'))value={};
   if(value!==undefined)return new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
  }
@@ -154,7 +155,7 @@ window.fetch=async(input,init)=>{
  let value:unknown;
  const path=url.pathname;
  if(path==='/api/bootstrap')value=bootstrap;
- else if(path==='/api/catalog')value=catalog;
+ else if(path==='/api/catalog')value=linkedIsland?{...catalog,terminals:linkedTerminals}:catalog;
  else if(path.endsWith('/snapshot'))value=snapshot;
  else if(path.endsWith('/ai/reasoning'))value={modelId:model.modelId,effort:'',default:'',levels:[]};
  else if(path.endsWith('/ai/options'))value={profile:'core',multiAgentMode:'off',contextWindow:64000,maxOutput:8192,maxSteps:500,silentReadFiles:true,silentWriteFiles:false,silentReadSQL:true,silentCommands:true};

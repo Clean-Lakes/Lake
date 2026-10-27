@@ -28,11 +28,20 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const terminal=element.querySelector<HTMLElement>('.terminal-panel-header');
    const available=Math.max(160,base.right-left-16);
    const natural=Math.min(190,title?.scrollWidth??160)+(state?.getBoundingClientRect().width??0)+60;
-   const layout=workbenchIslandLayout(natural,inspectorOpen?inspector?.scrollWidth??220:0,terminalOpen?terminal?.scrollWidth??220:0,available);
+   const terminalLabel=terminal?.querySelector<HTMLElement>('.terminal-island-title');
+   const terminalNumber=terminal?.querySelector<HTMLElement>('.terminal-island-number');
+   const terminalCount=terminal?.querySelector<HTMLElement>('.terminal-island-count');
+   const terminalActions=terminal?.querySelector<HTMLElement>('.terminal-header-actions');
+   const terminalWidth=Math.min(240,(terminalLabel?.scrollWidth??120)+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+70)+(terminalActions?.getBoundingClientRect().width??0)+44;
+   const layout=workbenchIslandLayout(natural,inspectorOpen?inspector?.getBoundingClientRect().width??220:0,terminalOpen?terminalWidth:0,available);
    element.style.left=`${left-base.left}px`;
    element.style.maxWidth=`${available}px`;
    element.style.width=`${layout.width}px`;
    element.style.gridTemplateColumns=layout.columns.map(width=>`minmax(0,${width}px)`).join(' ');
+   for(const [name,selector] of [['terminal','.terminal-side-panel'],['inspector','.session-inspector']]){
+    const pane=shell.querySelector(selector)?.getBoundingClientRect();
+    (shell as HTMLElement).style.setProperty(`--${name}-island-inset`,pane&&left+layout.width-16>pane.left+8? '72px':'12px');
+   }
    element.dataset.ready='true';
   };
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(measure);};
@@ -43,7 +52,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   const content=new MutationObserver(()=>{observeControls();schedule();});
   content.observe(element,{childList:true,subtree:true,characterData:true});
   window.addEventListener('resize',schedule);measure();
-  return()=>{content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);};
+  return()=>{content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);for(const name of ['terminal','inspector'])(shell as HTMLElement).style.removeProperty(`--${name}-island-inset`);};
  },[inspectorOpen,terminalOpen]);
  return <div ref={root} className="lake-workbench-island" data-linked={inspectorOpen||terminalOpen} role="group" aria-label="Lake Island 工作台">
   <span className="workspace-header-glass" aria-hidden="true"/>
