@@ -77,7 +77,7 @@ a { color: inherit; }
 .resources-heading .resource-section-icon { transform: none; color: var(--text-secondary); }
 .resource-section-label { display: inline-flex; align-items: center; gap: 7px; }
 .resources-heading .resource-section-label > small { padding: 1px 5px; border-radius: 4px; background: var(--surface-selected); color: var(--text-muted); font-size: var(--font-size-ui); line-height: 1.5; }
-.resources-heading .resource-section-chevron { margin-left: auto; color: var(--text-muted); }
+.resources-heading .resource-section-chevron { margin-left: 0; color: var(--text-muted); }
 .nav-row { position: relative; display: flex; align-items: center; width: 100%; gap: 9px; border: 0; background: transparent; color: var(--text-secondary); text-align: left; border-radius: var(--radius-control); padding: 7px 8px; min-height: 36px; }
 .nav-row-wrap { position: relative; }
 .resource-nav-row { display: flex; align-items: center; gap: 2px; position: relative; }
