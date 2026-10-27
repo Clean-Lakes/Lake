@@ -70,7 +70,6 @@ a { color: inherit; }
 .resource-add-menu > button { display: flex; align-items: center; gap: 7px; width: 100%; padding: 9px 8px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-secondary); font: inherit; font-weight:var(--font-weight-ui); text-align: left; cursor: pointer; }
 .resource-add-menu > button > svg { flex-shrink: 0; }
 .resource-add-menu > button > span { display: flex; flex-direction: column; gap: 4px; }
-.resource-add-menu > button small { padding: 0; font-size: var(--font-size-ui); color: var(--text-muted); }
 .resource-add-menu > button:hover, .resource-add-menu > button:focus-visible { background: var(--surface-hover); color: var(--text-secondary); outline: none; }
 .resources-heading { margin: 18px 4px 8px; padding: 8px 4px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); color: var(--foreground); font-weight:var(--font-weight-semibold); }
 .resources-heading .nav-section-toggle { gap: 8px; min-height: 26px; padding: 2px 0; }
@@ -461,7 +460,14 @@ a { color: inherit; }
   to { transform: rotate(360deg); }
 }
 .modal-scrim { position: fixed; z-index: 50; inset: 0; display: flex; align-items: center; justify-content: center; padding: 18px; background: var(--overlay); backdrop-filter: none; }
-.modal { width: min(500px, 100%); max-height: calc(100vh - 36px); overflow-y: auto; border: 1px solid var(--border); box-shadow: var(--shadow-dialog); border-radius: var(--radius-dialog); padding: 24px; background: var(--surface); }
+.modal { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; width: min(500px, 100%); max-height: calc(100vh - 36px); overflow-y: auto; border: 1px solid var(--border); box-shadow: var(--shadow-dialog); border-radius: var(--radius-dialog); padding: 24px; background: var(--surface); }
+@supports selector(::-webkit-scrollbar) {
+  .modal { scrollbar-width: auto; scrollbar-color: auto; }
+  .modal::-webkit-scrollbar { width: 5px; height: 5px; }
+  .modal::-webkit-scrollbar-track { background: transparent; }
+  .modal::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--border-strong); }
+  .modal::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+}
 .modal-header { display: flex; align-items: flex-start; justify-content: space-between; }
 .modal-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-dialog); background: var(--surface-muted); color: var(--text-secondary); }
 .modal-icon.command-icon { background: var(--surface-hover); color: var(--foreground); }
