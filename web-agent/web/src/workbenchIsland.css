@@ -40,8 +40,8 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 @keyframes island-controls-arrive { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:translateY(0); } }
 @media(prefers-reduced-motion:reduce) { .lake-workbench-island > :is(.island-inspector,.island-terminal) { animation:none!important; } }
 
-.lake-workbench-island[data-linked=false] { transition:width 280ms cubic-bezier(.22,1,.36,1); }
-.workbench-resizing .lake-workbench-island { transition:none; }
+.lake-workbench-island[data-ready=true] { transition:left 280ms cubic-bezier(.22,1,.36,1),width 280ms cubic-bezier(.22,1,.36,1),grid-template-columns 280ms cubic-bezier(.22,1,.36,1); }
+.workbench-resizing .lake-workbench-island { transition:none!important; }
 @media(prefers-reduced-motion:reduce) { .lake-workbench-island { transition:none!important; } }
 
 .lake-workbench-island .session-inspector-tabs button:disabled { display:none; }
@@ -57,7 +57,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 .terminal-island-switcher > svg:last-child { transition:transform 180ms ease; }
 .terminal-island-switcher > .is-open { transform:rotate(180deg); }
 .terminal-island-count { font-variant-numeric:tabular-nums; color:var(--text-muted); font-weight:var(--font-weight-normal); }
-.island-terminal .terminal-list-menu { left:auto; right:7px; width:280px; max-width:calc(100vw - 32px); max-height:min(420px,calc(100dvh - 80px)); background:var(--surface); }
+.island-terminal .terminal-list-menu { left:18px; right:auto; width:280px; max-width:calc(100vw - 32px); max-height:min(420px,calc(100dvh - 80px)); background:var(--surface); }
 .terminal-list-settings { border-top:1px solid var(--border); margin-top:4px; padding-top:4px; }
 .terminal-list-settings label { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; white-space:nowrap; }
 .terminal-list-settings label .app-select { min-width:0; width:160px; }
@@ -90,6 +90,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island :is(.workbench-splitter
  .island-inspector-heading > strong { display:none; }
  .lake-workbench-island .session-inspector-tabs { gap:10px; }
  .island-terminal .terminal-panel-header { width:100%; padding:0 8px; gap:6px; }
+ .island-terminal .terminal-list-menu { left:8px; }
  .island-terminal .terminal-island-switcher { flex:1; gap:4px; }
  .island-terminal :is(.terminal-island-number,.terminal-island-count) { display:none; }
 }
