@@ -22,7 +22,7 @@
 .workspace-project-switcher .project-switcher[aria-expanded="true"] > svg { transform:rotate(180deg); }
 .workspace-project-row > .workspace-project-more { flex:none; width:28px; height:32px; padding:6px; color:var(--text-muted); border-radius:var(--radius-settings-control); }
 .workspace-project-options { padding:3px 0; max-height:min(240px,30dvh); overflow-y:auto; overscroll-behavior:contain; }
-.workspace-project-options > button { display:flex; align-items:center; gap:8px; width:100%; min-height:32px; padding:6px 8px 6px 16px; border:0; border-radius:var(--radius-settings-control); background:transparent; color:var(--text-muted); text-align:left; }
+.workspace-project-options > button { display:flex; align-items:center; gap:8px; width:100%; min-height:32px; padding:6px 8px; border:0; border-radius:var(--radius-settings-control); background:transparent; color:var(--text-muted); text-align:left; }
 .workspace-project-options > button > span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .workspace-project-options > button > svg { flex:none; }
 .workspace-project-options > button:is(:hover,:focus-visible),.workspace-project-options > button[aria-checked="true"] { color:var(--foreground); background:var(--surface-hover); }

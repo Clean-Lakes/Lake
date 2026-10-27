@@ -111,3 +111,5 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .app-shell > .workbench-splitter.workbench-splitter-sidebar:is(:hover,:focus-visible,.is-dragging)::after { top:18%; bottom:18%; left:3px; width:1px; opacity:1; background:var(--text-muted); }
 .app-shell > .workbench-splitter.workbench-splitter-sidebar:is(:focus-visible,.is-dragging)::after { background:var(--info); opacity:1; }
 @media(prefers-reduced-motion:reduce) { .app-shell > .workbench-splitter-sidebar::after { transition:none; } }
+
+.sidebar.workspace-navigation .project-contents:has(> [id^="project-sessions-"][hidden]) .resources-heading { margin-top:8px; padding-top:0; }
