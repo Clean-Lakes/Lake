@@ -1,8 +1,8 @@
 ---
 goal: 收敛策略学习，积累用户可控资产并复用有证据的经验，使后台学习不阻塞任务
-version: 1.5
+version: 1.6
 date_created: 2026-10-22
-last_updated: 2026-10-23
+last_updated: 2026-10-27
 owner: Lake
 status: Completed
 tags: [refactor, strategy, learning, user-assets, experience]
@@ -17,11 +17,30 @@ R0 盘点文档经 PR #68 合入。当前已实施 R1 的日常任务隔离和�
 ## 1. 基线与收敛理由
 
 - 盘点基线：2026-10-22 的 `origin/develop@89a02c6c85d972c70579a14e238bac80be281fbb`。
-- [PR #67](https://github.com/Clean-Lakes/Lake/pull/67) 尚未合入，盘点时 head 为 `9751d4d99cb33c7dfe0d872129693caad4f16fed`。其中记忆与资源纠错隔离、工具目标传递、在线预算收尾和快速 Dev 启动等修复，须单独评审，不能描述成 develop 已有行为，也不作为整个重构的强制前置。
+- 盘点时 [PR #67](https://github.com/Clean-Lakes/Lake/pull/67) 尚未合入，head 为 `9751d4d99cb33c7dfe0d872129693caad4f16fed`。其中日常任务所需修复随后经 #69、#70、#71 分别交付；2026-10-27 按用户授权关闭 #67，不整体合并。拆分去向及未交付项见下节，旧分支验证不代表最新 develop 已具备剩余能力。
 - 当前默认设置本来就是全关；已保存的试用设置可能为开启状态。“默认关闭”不能替代对老用户设置、在途任务和重新同意的迁移设计。
 - [P8 验收记录](../docs/validation/lake-strategy-learning-p8-completion.md)的收益结论仍为 **inconclusive**。平台回归通过、纠错状态机可运行或形成候选，都不等于资产能改善真实任务。
 
 后续投入围绕模型无法自行知道的用户偏好、私有约定和经验证的环境经验展开。减少通用反思提示、自动试跑及在线修订带来的额外调用、等待和停止条件。是否扩大自动学习，以实际复用收益决定。
+
+### 1.1 PR #67 收尾与未交付项（2026-10-27）
+
+本次核对基线为 `origin/develop@54a117c9af0a88f210c3adb2cf959b96ef711917`。#67 已被拆分交付及 R1～R5 的方向收敛替代，不再作为待合并的集成入口；关闭不等于其全部代码已合入或问题已修复。
+
+| 原 #67 内容 | 拆分去向与当前状态 |
+| --- | --- |
+| `inspect_host` 使用已解析的目标和省略时的 runtime，保留终端权限与歧义检查 | [#69](https://github.com/Clean-Lakes/Lake/pull/69)，合入提交 `c9915c0f` |
+| 签名 Go/React 后端及固定 Dev Home 的快速启动 | [#70](https://github.com/Clean-Lakes/Lake/pull/70)，合入提交 `9059e62c`；入口为 `scripts/run_lake_dev.sh` |
+| 项目记忆拒绝与资源纠错隔离、宿主管理待审核候选 | R1 [#71](https://github.com/Clean-Lakes/Lake/pull/71)，合入提交 `48c08c6d`；后台交付、前台优先与独立学习预算随后由 R2 [#72](https://github.com/Clean-Lakes/Lake/pull/72) 交付 |
+| 已收到 `completed/exitCode`、但未证明只读的命令以 `permission_blocked` 区分真正未知结果 | **未交付，暂缓**；不据此宣称当前在线实验的停止状态已修复 |
+| 明确 `pending.callId` 并以动态 schema 枚举约束提案来源，避免混用终端记录 ID | **未交付，暂缓**；现有通用 call ID 要求不等同于该增强 |
+| 按纠错阶段裁剪模型可见工具，减少请求和预算预留开销 | **未交付，暂缓** |
+| 恢复后剩余额度不足以携带工具时，在原预算内进行无工具证据汇报 | **未交付，暂缓**；不扩大或重置额度 |
+| `scripts/strategy_trial_fixture.py`、配套在线真实 curl 链路回归与试用说明 | **未随 #67 交付，暂缓**；R1 普通模式的只读回归不能替代在线实验验收 |
+
+上述暂缓项仅涉及默认关闭、需单独同意的在线纠错实验，不阻塞用户资产积累与后台学习。R3～R5 已分别由 [#80](https://github.com/Clean-Lakes/Lake/pull/80)、[#81](https://github.com/Clean-Lakes/Lake/pull/81)、[#83](https://github.com/Clean-Lakes/Lake/pull/83) 合入；[#85](https://github.com/Clean-Lakes/Lake/pull/85) 已将策略资产与学习统一标记为实验功能，有限验收不代表稳定功能或通用收益成立。
+
+保留 #67 的讨论、diff、提交及原验证记录作为历史证据；本次不删除其未合并分支。未来若重新投入在线纠错，须从当时最新 `origin/develop` 建立独立 PR，重新核对实现与回归，并验证来源身份、权限、未知操作、阶段工具集、原预算边界及真实 Dev 链路；不得直接合并旧分支或沿用旧测试作为当前验收，也不得借此开启在线默认值、重放历史操作或清空账本。
 
 ## 2. 目标使用流程与边界
 
@@ -57,7 +76,7 @@ R0 盘点文档经 PR #68 合入。当前已实施 R1 的日常任务隔离和�
 | [提取任务](../internal/web/strategy_learning_store.go)、[worker](../internal/web/strategy_learning_worker.go) | 单次无工具提取；仅 project 候选、single_observation；无自动采用 | **保留并调整**，明确学习独立预算、优先级、用户级晋升和拒绝反馈 |
 | 同一 [worker](../internal/web/strategy_learning_worker.go) 的调度 | 每 5 秒检查，领取前避让运行消息；可能与后到前台争用模型槽，依赖同轮项目记忆任务状态 | **调整**，前台优先、可取消/延期，学习等待只留在后台，不把辅助依赖传回主任务 |
 | [在线控制器](../internal/ai/strategy_online.go)、[停止卡](../web-agent/web/src/StrategyCorrectionCard.tsx) | 启用后要求修订工具、预留预算、观察/停止；可改变正常任务状态 | **退出日常路径**；关闭时不挂接控制器，不注册修订工具。若保留实验入口，独立明确同意且默认关闭 |
-| [实验](../internal/web/strategy_experiment_worker.go)、[优化](../internal/web/strategy_optimization_worker.go)、[界面](../web-agent/web/src/StrategyExperiments.tsx) | 快照 A/B、合成、留出验证、有界多次试跑 | **退出日常学习路径**；保留历史只读报告和按需离线配对评估，取消把自动优化作为资产成长必经阶段 |
+| [实验](../internal/web/strategy_experiment_worker.go)、[优化（盘点基线源码）](https://github.com/Clean-Lakes/Lake/blob/89a02c6c85d972c70579a14e238bac80be281fbb/internal/web/strategy_optimization_worker.go)、[界面](../web-agent/web/src/StrategyExperiments.tsx) | 快照 A/B、合成、留出验证、有界多次试跑 | **退出日常学习路径**；保留历史只读报告和按需离线配对评估，取消把自动优化作为资产成长必经阶段 |
 | [审批与操作账本](../internal/ai/adk_operations.go)、[恢复](../internal/ai/adk_recovery.go) | 操作结果、审批、未知结果核实的权威状态 | **保留**，不因关闭纠错放宽权限，不清空未知操作、不自动重放资源操作 |
 | [历史方案](feature-strategy-learning-1.md)与 [P8 证据](../docs/validation/lake-strategy-learning-p8-completion.md) | P0～P8 实施和有限样本结论 | **保留历史**；新阶段采用 R 编号，不把旧完成项改成未完成，也不将 inconclusive 改写成收益成立 |
 
@@ -143,7 +162,7 @@ R0 盘点文档经 PR #68 合入。当前已实施 R1 的日常任务隔离和�
 | 阶段 | 状态 | 交付与完成条件 |
 | --- | --- | --- |
 | R0 实现盘点与方向冻结 | [x] 文档交付 | 本计划、旧计划承接说明、现状与目标区分；保留 P8 inconclusive 结论 |
-| R1 隔离日常任务与在线纠错 | [x] 实施与本地验收 | 日常路径绕开控制器，在线实验须版本 2 新同意；旧同意保留审计并停用；可选资产故障分级、学习变更不取消普通任务。PR #67 的主机修复/快跑拆为 #69/#70，记忆边界纳入 R1，其余在线专属改动保留在 #67；未知操作不重放。见 R1 验收记录 |
+| R1 隔离日常任务与在线纠错 | [x] 实施与本地验收 | 日常路径绕开控制器，在线实验须版本 2 新同意；旧同意保留审计并停用；可选资产故障分级、学习变更不取消普通任务。PR #67 的主机修复/快跑拆为 #69/#70，记忆边界纳入 R1；#67 已关闭，剩余在线专属改动暂缓且未交付，见 1.1 节；未知操作不重放。见 R1 验收记录 |
 | R2 后台学习不阻塞任务 | [x] 实施与本地验收 | 前台最小 outbox、异步转交、前台优先调度、独立预算、取消与未知调用处理；慢模型、队列/候选入库失败不影响主任务 |
 | R3 用户资产审核与晋升 | [x] 实施与本地验收 | 在原库上补齐生命周期契约；用户级创建/项目候选晋升、来源权限、拒绝去重、版本采用/撤回；界面聚焦资产与待审核 |
 | R4 条件匹配与经验复用 | [x] 实施与本地验收 | 有界相关性选择、适用条件/待复核、去重和冲突解释、准确版本使用日志、用户反馈；错误泛化可快速停用与回滚 |

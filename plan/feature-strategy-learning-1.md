@@ -1,8 +1,8 @@
 ---
 goal: 为 Lake 实现用户可见的策略资产、纠错血缘、有界自我改进和可复现对照实验
-version: 1.4
+version: 1.5
 date_created: 2026-10-20
-last_updated: 2026-10-22
+last_updated: 2026-10-27
 owner: Lake
 status: Superseded
 tags: [feature, strategy, learning, skills, harness, adk, evaluation]
@@ -10,7 +10,7 @@ tags: [feature, strategy, learning, skills, harness, adk, evaluation]
 
 # Lake 策略学习与改进开发计划
 
-> **后续开发以 [用户资产积累与经验复用计划](refactor-user-assets-and-experience-1.md)为准（2026-10-22）。** 本文保留 P0～P8 的原始范围、交付与验收记录；其中在线纠错、递归优化及阶段默认策略不再代表后续投入方向。P8 的收益结论仍为 inconclusive。新计划只完成盘点，尚未修改运行代码或已有开关。
+> **后续开发以 [用户资产积累与经验复用计划](refactor-user-assets-and-experience-1.md)为准（2026-10-27 更新）。** 本文保留 P0～P8 的原始范围、交付与验收记录；其中在线纠错、递归优化及阶段默认策略不再代表后续投入方向。P8 的收益结论仍为 inconclusive。后续 R1～R5 已实施并合入 develop；PR #67 经拆分后关闭，剩余在线专属改动暂缓且未交付，详见承接计划 1.1 节。策略资产与学习仍为实验功能，不将历史在线验证当作当前能力或收益证明。
 
 本计划将提示词改进、用户提示词资产、来源血缘、有界纠错及开关对比组织为可分阶段交付的功能。用户能够查看学到了什么、为什么形成、在哪些场景生效，并编辑、停用或回滚。首期通过隔离故障环境证明策略效果，再开放正常任务中的只读纠错。
 
