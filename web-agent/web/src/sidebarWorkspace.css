@@ -107,7 +107,7 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation.is-bulk-selecting .resource-tree-row { padding-left:0; }
 
 /* The navigation edge keeps its resize hit area, without a permanent divider. */
-.app-shell > .workbench-splitter-sidebar::after { content:''; position:absolute; top:calc(50% - 16px); bottom:auto; left:3px; width:3px; height:32px; border-radius:2px; background:var(--text-muted); opacity:0; transition:opacity 160ms ease; }
-.app-shell > .workbench-splitter.workbench-splitter-sidebar:is(:hover,:focus-visible,.is-dragging)::after { top:calc(50% - 16px); bottom:auto; left:3px; width:3px; opacity:.7; background:var(--text-muted); }
+.app-shell > .workbench-splitter-sidebar::after { content:''; position:absolute; top:18%; bottom:18%; left:3px; width:1px; height:auto; border-radius:1px; background:var(--text-muted); opacity:0; transition:opacity 160ms ease; }
+.app-shell > .workbench-splitter.workbench-splitter-sidebar:is(:hover,:focus-visible,.is-dragging)::after { top:18%; bottom:18%; left:3px; width:1px; opacity:.7; background:var(--text-muted); }
 .app-shell > .workbench-splitter.workbench-splitter-sidebar:is(:focus-visible,.is-dragging)::after { background:var(--info); opacity:1; }
 @media(prefers-reduced-motion:reduce) { .app-shell > .workbench-splitter-sidebar::after { transition:none; } }

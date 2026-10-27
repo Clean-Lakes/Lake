@@ -35,7 +35,6 @@
 .island-inspector-heading { display:flex; align-items:center; gap:12px; height:44px; width:max-content; padding:0 12px; min-width:0; }
 .island-inspector-heading > strong { display:flex; align-items:center; gap:9px; flex:0 0 auto; min-width:0; font-size:var(--font-size-ui); font-weight:var(--font-weight-medium); white-space:nowrap; }
 .island-inspector-heading > svg { flex:none; color:var(--foreground); }
-.island-inspector-heading > .icon-button { flex:none; width:24px; height:28px; color:var(--text-muted); }
 .lake-workbench-island .session-inspector-tabs { border:0; padding:0; gap:18px; }
 .lake-workbench-island .session-inspector-tabs button { min-height:34px; padding:8px 0; white-space:nowrap; }
 .lake-workbench-island .session-inspector-tabs button[aria-selected=true]::after { bottom:1px; height:2px; background:var(--info); }
@@ -61,9 +60,6 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 @media(prefers-reduced-motion:reduce) { .lake-workbench-island { transition:none!important; } }
 
 .lake-workbench-island .session-inspector-tabs button:disabled { display:none; }
-.island-inspector-heading > .icon-button { opacity:0; pointer-events:none; transition:opacity 140ms ease; }
-.island-inspector:is(:hover,:focus-within) .island-inspector-heading > .icon-button { opacity:1; pointer-events:auto; }
-@media(hover:none) { .island-inspector-heading > .icon-button { opacity:1; pointer-events:auto; } }
 
 .lake-workbench-island .pilot-action-avatar { display:flex; }
 .lake-workbench-island .pilot-island-action-line > strong { display:inline; }
@@ -72,6 +68,8 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 .terminal-island-switcher > svg,.terminal-island-count { flex:none; }
 .terminal-island-switcher > svg:last-child { transition:transform 180ms ease; }
 .terminal-island-switcher > .is-open { transform:rotate(180deg); }
+.island-terminal .terminal-island-switcher { flex:1; width:100%; max-width:none; }
+.island-terminal .terminal-island-switcher > svg:last-child { margin-left:auto; }
 .terminal-island-count { font-variant-numeric:tabular-nums; color:var(--text-muted); font-weight:var(--font-weight-normal); }
 .island-terminal .terminal-list-menu { top:calc(100% + 9px); left:0; right:0; width:auto; max-width:calc(100vw - 32px); max-height:min(420px,calc(100dvh - 80px)); background:var(--surface); }
 .terminal-list-settings { border-top:1px solid var(--border); margin-top:4px; padding-top:4px; }
@@ -88,12 +86,12 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 /* One terminal viewport; the shared island owns host and terminal selection. */
 .terminal-panel-content > .terminal-panel-header .terminal-island-switcher { max-width:calc(100% - 118px); }
 
-/* Quiet pane boundaries: a generous invisible rail reveals only a short grip. */
+/* Quiet pane boundaries: a generous invisible rail reveals an inset divider. */
 .app-shell.has-workbench-island :is(.session-inspector,.terminal-side-panel) { border-left:0; }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal) { top:76px; bottom:12px; width:12px; }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal)::after {
- content:''; position:absolute; top:calc(50% - 16px); bottom:auto; left:4px; width:3px; height:32px;
- border-radius:2px; background:var(--text-muted); opacity:0; transition:opacity 160ms ease,background-color 160ms ease;
+ content:''; position:absolute; top:18%; bottom:18%; left:5px; width:1px; height:auto;
+ border-radius:1px; background:var(--text-muted); opacity:0; transition:opacity 160ms ease,background-color 160ms ease;
 }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal):is(:hover,:focus-visible,.is-dragging)::after { opacity:.7; }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal):is(:focus-visible,.is-dragging)::after { background:var(--info); opacity:1; }

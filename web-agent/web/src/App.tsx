@@ -1357,7 +1357,7 @@ function AppContent() {
       {!terminalContext && currentTerminal?.holder === "user" && currentTerminal.status === "ready" && <button type="button" onClick={() => {setTerminalListOpen(false);void changeHolder("agent");}}>交给终端专员</button>}
       {currentTerminal?.status === "busy" && <button type="button" onClick={() => {setTerminalListOpen(false);void interruptTerminal();}}>中断命令</button>}
       {currentTerminal?.status !== "disconnected" && terminalId && <button type="button" onClick={() => {setTerminalListOpen(false);void disconnectTerminal();}}>断开连接</button>}
-      <button type="button" onClick={() => {setTerminalListOpen(false);closeTerminalPanel();}}>收起终端</button>
+      <button type="button" title="退出终端面板，保留连接" onClick={() => {setTerminalListOpen(false);closeTerminalPanel();}}><Glyph name="close" size={14}/><span>退出终端</span></button>
     </div>}
   </div>;
   const terminalHeading=<div className="terminal-panel-header">
@@ -1380,7 +1380,7 @@ function AppContent() {
   const terminalDrawer = <section className="terminal-panel-content" aria-label="会话持续终端">
     {!sharedIsland&&terminalHeading}
     <div className="drawer-body">
-      {!terminalId && (terminalError ? <div className="terminal-load-error" role="alert">{terminalError}{terminalOpeningResource && <button type="button" disabled={!!pendingOperation} onClick={() => void openTerminalFor(terminalOpeningResource)}>重新连接</button>}</div> : <div className="terminal-placeholder" role="status">{terminalOpeningResource && connectingResources.includes(terminalOpeningResource) ? `正在连接 ${terminalResource?.name || "终端"}…` : "暂无在线终端，点击上方 + 新建终端"}</div>)}
+      {!terminalId && (terminalError ? <div className="terminal-load-error" role="alert">{terminalError}{terminalOpeningResource && <button type="button" disabled={!!pendingOperation} onClick={() => void openTerminalFor(terminalOpeningResource)}>重新连接</button>}</div> : <div className="terminal-placeholder" role="status">{terminalOpeningResource && connectingResources.includes(terminalOpeningResource) ? `正在连接 ${terminalResource?.name || "终端"}…` : sharedIsland ? "暂无在线终端，从上方终端菜单新建" : "暂无在线终端，点击上方 + 新建终端"}</div>)}
       <div className="terminal-session">
         {terminalId && terminalError && <div className="terminal-load-error" role="alert">{terminalError}<button type="button" onClick={() => setTerminalRefresh(value => value + 1)}>重新读取</button></div>}
         {Object.values(terminalHistories).map(history => {
