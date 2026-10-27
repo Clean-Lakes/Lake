@@ -23,7 +23,7 @@
 .lake-workbench-island .session-inspector-tabs { border:0; padding:0; gap:18px; }
 .lake-workbench-island .session-inspector-tabs button { min-height:34px; padding:8px 0; white-space:nowrap; }
 .lake-workbench-island .session-inspector-tabs button[aria-selected=true]::after { bottom:0; height:1.5px; }
-.island-terminal .terminal-panel-header { width:max-content; max-width:100%; min-width:0; min-height:44px; height:44px; border:0; background:transparent; padding:0 14px 0 18px; gap:12px; }
+.island-terminal .terminal-panel-header { width:100%; max-width:100%; min-width:0; min-height:44px; height:44px; border:0; background:transparent; padding:0 14px 0 18px; gap:12px; }
 .island-terminal .terminal-panel-header > strong { flex:0 1 auto; max-width:170px; display:flex; align-items:center; gap:9px; font-weight:var(--font-weight-medium); }
 .island-terminal .terminal-panel-header > strong > svg { flex:none; }
 .terminal-island-switcher .terminal-island-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -57,7 +57,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 .terminal-island-switcher > svg:last-child { transition:transform 180ms ease; }
 .terminal-island-switcher > .is-open { transform:rotate(180deg); }
 .terminal-island-count { font-variant-numeric:tabular-nums; color:var(--text-muted); font-weight:var(--font-weight-normal); }
-.island-terminal .terminal-list-menu { left:18px; right:auto; width:max(200px,calc(100% - 4px)); max-width:calc(100vw - 32px); max-height:min(420px,calc(100dvh - 80px)); background:var(--surface); }
+.island-terminal .terminal-list-menu { top:calc(100% + 9px); left:0; right:0; width:auto; max-width:calc(100vw - 32px); max-height:min(420px,calc(100dvh - 80px)); background:var(--surface); }
 .terminal-list-settings { border-top:1px solid var(--border); margin-top:4px; padding-top:4px; }
 .terminal-list-settings label { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; white-space:nowrap; }
 .terminal-list-settings label .app-select { min-width:0; width:160px; }
@@ -91,7 +91,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island :is(.workbench-splitter
  .island-inspector-heading > strong { display:none; }
  .lake-workbench-island .session-inspector-tabs { gap:10px; }
  .island-terminal .terminal-panel-header { width:100%; padding:0 8px; gap:6px; }
- .island-terminal .terminal-list-menu { left:8px; width:max(200px,100%); }
+ .island-terminal .terminal-list-menu { left:auto; right:0; width:max(200px,100%); }
  .island-terminal .terminal-island-switcher { flex:1; gap:4px; }
  .island-terminal :is(.terminal-island-number,.terminal-island-count) { display:none; }
 }
