@@ -15,6 +15,7 @@ import '../../src/agentQuestion.css';
 import '../../src/sreCollaboration.css';
 const dark=new URLSearchParams(location.search).get('theme')==='dark';
 setThemePreference(dark?'dark':'light');
+if(new URLSearchParams(location.search).has('corner-fallback'))document.documentElement.classList.add('lake-corner-fallback');
 const at=(minute:number)=>`2026-10-16T02:${String(minute).padStart(2,'0')}:00Z`;
 const project={id:'demo-project',name:'Northwind · 生产环境',createdAt:at(0)};
 const resources=[

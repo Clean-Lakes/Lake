@@ -117,6 +117,12 @@ html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
  -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);
  mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);
 }
+:root.lake-corner-fallback .workspace-header-backdrop {
+ /* A gradient mask competes with the nine-slice contour and exposes the
+    rectangular backdrop at the corners. The contour owns this fallback. */
+ -webkit-mask-image:none;
+ mask-image:none;
+}
 :is(.lake-workbench-island,.workspace.has-floating-header > .workspace-header) > .workspace-header-glass {
  background:var(--title-glass-sheen),var(--island-glass-background);
  -webkit-backdrop-filter:none;
