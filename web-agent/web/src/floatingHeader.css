@@ -76,8 +76,8 @@ html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
   from { transform:translate3d(-100%,0,0); }
   to { transform:translate3d(100%,0,0); }
 }
-.workspace.has-floating-header > .workspace-header > :not(.workspace-header-sweep,.workspace-header-glass,.workspace-header-backdrop) { position:relative; z-index:2; }
-:root.lake-corner-fallback :is(.workspace-header-sweep,.workspace-header-glass,.workspace-header-backdrop) {
+.workspace.has-floating-header > .workspace-header > :not(.workspace-header-sweep,.workspace-header-glass) { position:relative; z-index:2; }
+:root.lake-corner-fallback :is(.workspace-header-sweep,.workspace-header-glass) {
   /* The nine-slice mask is the only corner clip in older WKWebView. An inherited
      circular border-radius would cut inside it and leave a white crescent. */
   border-radius:0;
@@ -101,38 +101,32 @@ html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
   pointer-events:none;
 }
 
-/* One static backdrop pass, feathered beneath the island. Only the background
-   is blurred; text, controls and the existing running sweep stay independent. */
-:root { --island-glass-background:color-mix(in srgb,var(--surface) 42%,transparent); }
-:root[data-theme="dark"] { --island-glass-background:color-mix(in srgb,var(--surface) 52%,transparent); }
-.workspace-header-backdrop {
+/* Lake Island floats over a full-width, feathered conversation backdrop.
+   The pass belongs to the fixed viewport edge, outside the scrolling content. */
+.session-layout > .session-view { position:relative; }
+.conversation-header-backdrop {
  position:absolute;
- inset:0;
- z-index:-2;
- border-radius:inherit;
- corner-shape:inherit;
+ top:0;
+ left:0;
+ right:0;
+ height:92px;
+ z-index:7;
  pointer-events:none;
+ background:linear-gradient(to bottom,color-mix(in srgb,var(--background) 56%,transparent),color-mix(in srgb,var(--background) 24%,transparent) 60%,transparent);
  -webkit-backdrop-filter:blur(24px) saturate(125%);
  backdrop-filter:blur(24px) saturate(125%);
- -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);
- mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);
+ -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 45%,transparent 100%);
+ mask-image:linear-gradient(to bottom,#000 0%,#000 45%,transparent 100%);
 }
-:root.lake-corner-fallback .workspace-header-backdrop {
- /* A gradient mask competes with the nine-slice contour and exposes the
-    rectangular backdrop at the corners. The contour owns this fallback. */
- -webkit-mask-image:none;
- mask-image:none;
-}
+html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
+/* The band already blurs what passes under the island: do not stack filters. */
 :is(.lake-workbench-island,.workspace.has-floating-header > .workspace-header) > .workspace-header-glass {
- background:var(--title-glass-sheen),var(--island-glass-background);
  -webkit-backdrop-filter:none;
  backdrop-filter:none;
 }
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
- :root,:root[data-theme="dark"] { --island-glass-background:var(--surface); }
- .workspace-header-backdrop { display:none; }
+ .conversation-header-backdrop { background:linear-gradient(to bottom,var(--background) 0%,var(--background) 45%,transparent 100%); }
 }
 @media(prefers-reduced-transparency:reduce) {
- :root,:root[data-theme="dark"] { --island-glass-background:var(--surface); }
- .workspace-header-backdrop { display:none; }
+ .conversation-header-backdrop { -webkit-backdrop-filter:none; backdrop-filter:none; background:linear-gradient(to bottom,var(--background) 0%,var(--background) 45%,transparent 100%); }
 }
