@@ -76,8 +76,8 @@ html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
   from { transform:translate3d(-100%,0,0); }
   to { transform:translate3d(100%,0,0); }
 }
-.workspace.has-floating-header > .workspace-header > :not(.workspace-header-sweep,.workspace-header-glass) { position:relative; z-index:2; }
-:root.lake-corner-fallback :is(.workspace-header-sweep,.workspace-header-glass) {
+.workspace.has-floating-header > .workspace-header > :not(.workspace-header-sweep,.workspace-header-glass,.workspace-header-backdrop) { position:relative; z-index:2; }
+:root.lake-corner-fallback :is(.workspace-header-sweep,.workspace-header-glass,.workspace-header-backdrop) {
   /* The nine-slice mask is the only corner clip in older WKWebView. An inherited
      circular border-radius would cut inside it and leave a white crescent. */
   border-radius:0;
@@ -99,4 +99,34 @@ html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
   -webkit-backdrop-filter:var(--title-glass-filter);
   backdrop-filter:var(--title-glass-filter);
   pointer-events:none;
+}
+
+/* One static backdrop pass, feathered beneath the island. Only the background
+   is blurred; text, controls and the existing running sweep stay independent. */
+:root { --island-glass-background:color-mix(in srgb,var(--surface) 42%,transparent); }
+:root[data-theme="dark"] { --island-glass-background:color-mix(in srgb,var(--surface) 52%,transparent); }
+.workspace-header-backdrop {
+ position:absolute;
+ inset:0;
+ z-index:-2;
+ border-radius:inherit;
+ corner-shape:inherit;
+ pointer-events:none;
+ -webkit-backdrop-filter:blur(24px) saturate(125%);
+ backdrop-filter:blur(24px) saturate(125%);
+ -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);
+ mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);
+}
+:is(.lake-workbench-island,.workspace.has-floating-header > .workspace-header) > .workspace-header-glass {
+ background:var(--title-glass-sheen),var(--island-glass-background);
+ -webkit-backdrop-filter:none;
+ backdrop-filter:none;
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+ :root,:root[data-theme="dark"] { --island-glass-background:var(--surface); }
+ .workspace-header-backdrop { display:none; }
+}
+@media(prefers-reduced-transparency:reduce) {
+ :root,:root[data-theme="dark"] { --island-glass-background:var(--surface); }
+ .workspace-header-backdrop { display:none; }
 }

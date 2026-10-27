@@ -55,6 +55,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   return()=>{content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);for(const name of ['terminal','inspector'])(shell as HTMLElement).style.removeProperty(`--${name}-island-inset`);};
  },[inspectorOpen,terminalOpen]);
  return <div ref={root} className="lake-workbench-island" data-linked={inspectorOpen||terminalOpen} role="group" aria-label="Lake Island 工作台">
+  <span className="workspace-header-backdrop" aria-hidden="true"/>
   <span className="workspace-header-glass" aria-hidden="true"/>
   {activity}
   <div className="island-conversation">{conversation}</div>
