@@ -5,8 +5,6 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
-
-	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
 func TestInspectHostCarriesResolvedSSHRuntimeWithoutOverridingExplicitRuntime(t *testing.T) {
@@ -71,13 +69,15 @@ func TestInspectHostCarriesResolvedSSHRuntimeWithoutOverridingExplicitRuntime(t 
 
 func TestOnlineDispatchedHostInspectionIsNotAutomaticallyReplayed(t *testing.T) {
 	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
-	s, c := enableOnline(t, e)
+	s, c := configureRetiredOnline(t, e)
 	if onlineReadOnly("inspect_host", "readonly", nil, true) {
 		t.Fatal("inspection can create a terminal and must not become replayable")
 	}
 	err := e.onlineObserve(s, c, Call{ID: "inspect", Name: "inspect_host"}, &onlinePolicyTrace{Dispatched: true, TargetHash: "target"}, nil, errors.New("inspection failed after dispatch"))
-	var stopped *onlineStopped
-	if !errors.As(err, &stopped) || stopped.Reason != strategy.AwaitingReconciliation {
-		t.Fatal("unknown dispatched inspection must still await reconciliation", err)
+	if err != nil {
+		t.Fatal("retired correction intercepted host inspection", err)
+	}
+	if report, e := e.onlineCurrent(s, c); e != nil || report != nil {
+		t.Fatal("retired correction created a replayable report", e)
 	}
 }

@@ -54,7 +54,7 @@ func TestStrategyCancellationIsNotOptionalEnrichmentFailure(t *testing.T) {
 	}
 }
 
-func TestStrategyInvalidationOnlyCancelsUsedAssetsOrOnlineExperiments(t *testing.T) {
+func TestStrategyInvalidationOnlyCancelsUsedAssetsAfterRetirement(t *testing.T) {
 	for _, mode := range []string{"empty", "used_asset", "experiment"} {
 		t.Run(mode, func(t *testing.T) {
 			e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "unused"}, nil)
@@ -69,7 +69,7 @@ func TestStrategyInvalidationOnlyCancelsUsedAssetsOrOnlineExperiments(t *testing
 			s.state.PromptBaseline = &strategy.PromptBaseline{Strategy: selection}
 			s.state.Config.StrategyCorrectEnabled = mode == "experiment"
 			e.InvalidateStrategies("")
-			if (ctx.Err() != nil) != (mode != "empty") {
+			if (ctx.Err() != nil) != (mode == "used_asset") {
 				t.Fatal("incorrect invalidation", mode, ctx.Err())
 			}
 		})

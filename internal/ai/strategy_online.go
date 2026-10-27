@@ -86,7 +86,7 @@ func (e *onlineStopped) Error() string {
 }
 
 func onlineEnabled(c Config) bool {
-	return c.StrategyCorrectEnabled && !c.workflowMode && !c.sreCoordinator
+	return false // Retired for all configs, including restored sessions and direct stdio.
 }
 
 func onlineTool() Tool {
@@ -665,69 +665,7 @@ func (e *Engine) onlineObserve(s *session, c Config, call Call, trace *onlinePol
 }
 
 func (e *Engine) onlinePropose(ctx context.Context, s *session, c Config, call Call) (any, error) {
-	if !onlineEnabled(c) {
-		return nil, errors.New("online correction disabled")
-	}
-	if err := e.onlineGuard(ctx, s, c); err != nil {
-		return nil, err
-	}
-	var p strategy.OnlineRevision
-	if decodeOnlineJSON(call.Arguments, &p) != nil {
-		return nil, errors.New("invalid correction proposal")
-	}
-	// Internal outcome fields cannot be supplied by the model.
-	var raw map[string]any
-	if json.Unmarshal([]byte(call.Arguments), &raw) != nil || len(raw) != 7 {
-		return nil, errors.New("proposal requires exactly seven input fields")
-	}
-	for _, v := range []string{p.SourceID, p.RefutedHypothesis, p.Changes, p.ExpectedInformation, p.StopCondition, p.Tool, p.Arguments} {
-		if strings.TrimSpace(v) == "" || len(v) > 4000 || redact(v, c) != v {
-			return nil, errors.New("invalid or sensitive correction proposal")
-		}
-	}
-	var a map[string]any
-	if decodeOnlineJSON(p.Arguments, &a) != nil || a == nil || p.Tool == onlineRevisionTool {
-		return nil, errors.New("invalid correction call")
-	}
-	p.Arguments = js(a)
-	r, err := e.onlineUpdate(s, c, false, func(r *strategy.OnlineReport) error {
-		if err := onlineLimit(r); err != nil {
-			return err
-		}
-		if r.Pending == nil || r.Pending.CallID != p.SourceID || !r.Pending.TrustedReadOnly {
-			return onlineStop(r, strategy.AwaitingUser)
-		}
-		if r.InFlightCall != "" || len(r.Revisions) > 0 && r.Revisions[len(r.Revisions)-1].CallID == "" {
-			return onlineStop(r, strategy.AwaitingReconciliation)
-		}
-		if len(r.Revisions) >= r.Budget.MaxRevisions {
-			return onlineStop(r, strategy.BudgetExhausted)
-		}
-		check := onlineCheck(Call{Name: p.Tool, Arguments: p.Arguments})
-		if check == r.Pending.CheckHash {
-			if r.Pending.Class != "transient" && r.Pending.Class != "unknown" {
-				return onlineStop(r, strategy.NoProgress)
-			}
-			retries := 0
-			for _, ob := range r.Observations {
-				if ob.CheckHash == check {
-					retries++
-				}
-			}
-			if retries > r.Budget.ExtraReadRetries {
-				return onlineStop(r, strategy.BudgetExhausted)
-			}
-		}
-		r.Revisions = append(r.Revisions, p)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	if r == nil {
-		return nil, errors.New("an actual failed check is required before correction")
-	}
-	return map[string]any{"status": "revision_recorded", "revision": len(r.Revisions), "notice": "Execute only the exact proposed read-only check. The host rechecks authorization, target and remaining budget. Then report actual observations and gaps; do not claim the entire task recovered."}, nil
+	return nil, errors.New("strategy_execution_retired")
 }
 
 func decodeOnlineJSON(text string, out any) error {
@@ -859,10 +797,13 @@ func recoverOnlineCorrections(db *gorm.DB) error {
 		if json.Unmarshal([]byte(row.Body), &r) != nil {
 			return fmt.Errorf("invalid durable correction %s", row.ID)
 		}
-		if r.StopReason != "" {
+		if r.Retired {
 			continue
 		}
-		r.StopReason = strategy.AwaitingUser
+		r.Retired = true
+		if r.StopReason == "" || r.StopReason == strategy.AwaitingUser {
+			r.StopReason = strategy.Cancelled
+		}
 		if r.InFlightRequest || r.InFlightCall != "" {
 			r.StopReason = strategy.AwaitingReconciliation
 		}
@@ -888,6 +829,9 @@ func recoverOnlineCorrections(db *gorm.DB) error {
 // checks. No background worker resumes a correction. Waiting consumes no active
 // time and never refunds requests, tokens, revisions or the original deadline.
 func (e *Engine) prepareOnlineSREContinue(ctx context.Context, s *session, c Config, task string) error {
+	if !onlineEnabled(c) {
+		return nil
+	}
 	c.sreCoordinator = false
 	c.sre = &sreRoleContext{TaskID: task}
 	if err := e.onlineGuard(ctx, s, c); err != nil {

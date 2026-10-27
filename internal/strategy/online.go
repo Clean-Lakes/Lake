@@ -26,6 +26,7 @@ type OnlineRevision struct {
 }
 
 type OnlineReport struct {
+	Retired            bool                `json:"retired,omitempty"`
 	SchemaVersion      int                 `json:"schemaVersion"`
 	ID                 string              `json:"id"`
 	TaskID             string              `json:"taskId,omitempty"`

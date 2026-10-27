@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestStrategyLearningCapturesOnlyOptedInRealSignals(t *testing.T) {
+func TestStrategyRetiredLearningNeverCapturesSignals(t *testing.T) {
 	for _, mode := range []string{"correction", "failure", "ordinary", "unknown", "explicit_unknown", "not_executed", "tool_cancelled", "unpaired", "off", "worker", "workflow", "role", "sre", "cancelled"} {
 		t.Run(mode, func(t *testing.T) {
 			e := &Engine{sessions: map[string]*session{}}
@@ -57,7 +57,7 @@ func TestStrategyLearningCapturesOnlyOptedInRealSignals(t *testing.T) {
 			e.sessions["session"] = s
 			s.state.Config = c
 			e.collectStrategySnapshot(s, c, input, status)
-			wantEvent := mode != "off" && mode != "worker" && mode != "workflow" && mode != "role" && mode != "sre" && mode != "cancelled"
+			wantEvent := false
 			want := mode == "correction" || mode == "failure"
 			if (len(s.state.StrategyOutbox) == 1) != wantEvent {
 				t.Fatal("incorrect capture", mode, len(s.state.StrategyOutbox))

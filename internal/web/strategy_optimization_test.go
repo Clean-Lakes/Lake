@@ -25,10 +25,8 @@ func seedLegacyOptimization(t *testing.T, s *Store, state string) (StrategyConte
 	if e != nil {
 		t.Fatal(e)
 	}
-	job, e := s.QueueStrategyJob(ctx, ident(), StrategyJobInput{Scope: scope, Kind: "experiment", AssetID: a.AssetID, ExpectedRevision: 1, SourceIDs: v.Value.SourceIDs})
-	if e != nil {
-		t.Fatal(e)
-	}
+	job := seedLegacyJob(t, s, ctx, scope, "experiment", a.AssetID, v.Value.SourceIDs)
+
 	f := strategyExperimentFrozen{Optimization: true, Asset: v.Value, Cases: []strategy.Fixture{strategy.Fixtures()[0], strategy.Fixtures()[13]}, Repetitions: 1, Budget: strategy.DefaultBudget(), SkillHashes: map[string]string{}}
 	_, e = strategyCall(s, true, func() bool {
 		raw := jsonText(f)

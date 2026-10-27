@@ -23,8 +23,7 @@ func TestStrategyMaterializationRejectsEditedOrShiftedHistory(t *testing.T) {
 	s := &session{state: State{Config: Config{StrategyLearnEnabled: true, MemoryProjectID: "project"}, View: View{Session: "session", RootTurnID: "turn", TurnStartedAt: timestamp(), TurnFinishedAt: timestamp()}, History: []Message{{HostTurnID: "turn", Role: "user", Content: "以后请先给出证据。"}}, Checkpoints: []int{0}}}
 	e.sessions["session"] = s
 	input := TurnInput{StrategyMessageID: "actual-message", UserText: "以后请先给出证据。"}
-	e.collectStrategySnapshot(s, s.state.Config, input, "completed")
-	event := s.state.StrategyOutbox[0]
+	event := SealStrategySnapshot(StrategyTurnSnapshot{Deferred: true, HistoryStart: 0, HistoryEnd: 1, UserTextHash: hash(input.UserText), UserMessageID: input.StrategyMessageID, SessionID: "session", ProjectID: "project", TurnID: "turn", Status: "completed"})
 	if _, eligible, err := e.MaterializeStrategySnapshot(event, "edited message"); err != nil || eligible {
 		t.Fatal("edited user source accepted", err)
 	}

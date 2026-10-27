@@ -170,7 +170,7 @@ func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
 		s.ensureBuiltinLocalResources("")
 		s.seedResourceTree()
 		s.pauseMessageQueuesOnRestart()
-		s.retireLegacyOnlineConsent()
+		s.retireStrategyExecution()
 		s.recoverStrategyJobs()
 		s.exec("UPDATE workflowRuns SET status='interrupted',error='服务重启，工作流已中断；未自动重放',finishedAt=? WHERE status='running'", now())
 		s.exec("UPDATE replyTimings SET status='interrupted' WHERE status='running' AND finishedAt=''")

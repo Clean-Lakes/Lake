@@ -7,9 +7,11 @@ import type {SessionSnapshot,AICard} from '../../shared/contracts';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {StrategySwitches} from '../src/StrategySwitches';
+import {StrategyLearning} from '../src/StrategyLearning';
+import {StrategyExperiments} from '../src/StrategyExperiments';
 import {StrategyCorrectionCard} from '../src/StrategyCorrectionCard';
 
-test('online execution needs its own saved consent; old settings do not enable it',async()=>{
+test('settings saves cannot re-enable retired execution, even with old consent',async()=>{
  const oldFetch=globalThis.fetch;const requests:Record<string,unknown>[]=[];
  globalThis.fetch=async(_url,options)=>{requests.push(JSON.parse(String(options?.body)));return new Response('{}',{status:200})};
  try{
@@ -17,14 +19,14 @@ test('online execution needs its own saved consent; old settings do not enable i
   await strategyApi.saveSettings('/api/strategy',old);
   await strategyApi.saveSettings('/api/projects/current/strategy',{...old,onlineCorrectEnabled:true});
   await strategyApi.saveSettings('/api/projects/current/strategy',{...old,onlineCorrectEnabled:true,onlineConsentVersion:2});
-  assert.equal(requests[0].onlineCorrectEnabled,false);assert.equal(requests[1].onlineCorrectEnabled,false);assert.equal(requests[1].onlineConsentVersion,0);assert.equal(requests[2].onlineCorrectEnabled,true);assert.equal(requests[2].onlineConsentVersion,2);assert.equal(requests[1].expectedRevision,1);
+  assert.equal(requests[0].onlineCorrectEnabled,false);assert.equal(requests[1].onlineCorrectEnabled,false);assert.equal(requests[1].onlineConsentVersion,0);assert.equal(requests[2].onlineCorrectEnabled,false);assert.equal(requests[2].onlineConsentVersion,0);for(const request of requests){assert.equal(request.learnEnabled,false);assert.equal(request.correctEnabled,false);}assert.equal(requests[1].expectedRevision,1);
  }finally{globalThis.fetch=oldFetch}
 });
 
-test('an unsaved project shows inherited online consent while retaining project CAS and ownership',()=>{
+test('an unsaved project inherits manual application while discarding retired consent and retaining CAS',()=>{
  const project={scope:{kind:'project',projectId:'current'},revision:0,epoch:0,masterEnabled:false,applyEnabled:false,learnEnabled:false,correctEnabled:false,onlineCorrectEnabled:false,budget:{maxRevisions:2}} as StrategySettings;
- const view={settings:project,effective:{...project,masterEnabled:true,correctEnabled:true,onlineCorrectEnabled:true,onlineConsentVersion:2},source:'inherited',capabilities:{apply:true,learn:true,correct:true}} satisfies StrategySettingsView;
- const form=strategySettingsForm(view);assert.equal(form.settings.onlineCorrectEnabled,true);assert.equal(form.settings.onlineConsentVersion,2);assert.equal(form.settings.revision,0);assert.equal(form.settings.epoch,0);assert.deepEqual(form.settings.scope,project.scope);assert.equal(view.settings.onlineCorrectEnabled,false);
+ const view={settings:project,effective:{...project,masterEnabled:true,applyEnabled:true,correctEnabled:true,onlineCorrectEnabled:true,onlineConsentVersion:2},source:'inherited',capabilities:{apply:true,learn:true,correct:true}} satisfies StrategySettingsView;
+ const form=strategySettingsForm(view);assert.equal(form.settings.onlineCorrectEnabled,false);assert.equal(form.settings.onlineConsentVersion,0);assert.equal(form.settings.masterEnabled,true);assert.equal(form.settings.applyEnabled,true);assert.equal(form.settings.revision,0);assert.equal(form.settings.epoch,0);assert.deepEqual(form.settings.scope,project.scope);assert.equal(view.settings.onlineCorrectEnabled,false);
  assert.equal(strategySettingsForm({...view,source:'stored'}).settings.onlineCorrectEnabled,false);
 });
 
@@ -44,12 +46,21 @@ test('correction card exposes real stops and conservative usage without trusting
 });
 
 
-test('daily controls keep online consent inside a closed experiment section and show migration history',()=>{
- const settings={scope:{kind:'user'},revision:2,epoch:2,masterEnabled:true,applyEnabled:true,learnEnabled:true,correctEnabled:true,onlineCorrectEnabled:false,legacyOnlineConsent:{enabled:true,settingsRevision:1,epoch:1},budget:{}} as StrategySettings;
- const view={settings,effective:settings,source:'saved',capabilities:{apply:true,learn:true,correct:true}};
+test('manual controls have no learning or online execution inputs while preserving adopted content',()=>{
+ const settings={scope:{kind:'user'},revision:2,epoch:2,masterEnabled:true,applyEnabled:true,learnEnabled:true,correctEnabled:true,onlineCorrectEnabled:true,budget:{}} as StrategySettings;
+ const view={settings,effective:settings,source:'saved',capabilities:{apply:true,learn:false,correct:false}};
  const html=renderToStaticMarkup(createElement(StrategySwitches,{view,disabled:false,onChange:()=>{},onSave:()=>{}}));
- assert.match(html,/积累待审核候选/);assert.match(html,/旧版试用的在线纠错同意已停用/);
- assert.match(html,/<details><summary>在线实验/);assert.ok(!html.includes('<details open'));
- const experiment=html.slice(html.indexOf('<details>'),html.indexOf('</details>'));
- assert.match(experiment,/我同意本版本的在线只读纠错实验/);assert.match(experiment,/提前停止任务/);
+ assert.match(html,/会话应用已采用资产/);assert.match(html,/候选提取和新增对照实验已停用/);
+ assert.equal((html.match(/type="checkbox"/g)||[]).length,2);
+ assert.ok(!html.includes('积累待审核候选'));assert.ok(!html.includes('我同意本版本'));assert.ok(!html.includes('<details'));
+});
+
+test('history panels retain reading and withdrawal without new generation or experiment controls',()=>{
+ const run=async(task:()=>Promise<void>)=>task();
+ const learning=renderToStaticMarkup(createElement(StrategyLearning,{base:'/api/projects/current/strategy',busy:false,run,onAssetsChange:async()=>{}}));
+ const experiments=renderToStaticMarkup(createElement(StrategyExperiments,{base:'/api/projects/current/strategy',busy:false,run}));
+ assert.match(learning,/历史候选与来源/);assert.match(learning,/未知调用不会自动重发/);
+ assert.ok(!learning.includes('登记为纠正来源'));assert.ok(!learning.includes('从选中来源生成候选'));assert.ok(!learning.includes('<input'));
+ assert.match(experiments,/历史对照实验/);assert.match(experiments,/不继续旧任务/);
+ assert.ok(!experiments.includes('开始 A/B'));assert.ok(!experiments.includes('选择场景'));assert.ok(!experiments.includes('<select'));
 });

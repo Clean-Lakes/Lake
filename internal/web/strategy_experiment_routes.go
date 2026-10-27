@@ -16,7 +16,7 @@ func (b *Server) strategyExperimentRoute(w http.ResponseWriter, r *http.Request,
 		strategyFail(404, "project_required")
 	}
 	if suffix == "/fixtures" && r.Method == "GET" {
-		reply(w, 200, Object{"items": strategy.Fixtures(), "mode": "synthetic_snapshot", "arms": []string{"baseline", "assets"}, "correction": false, "boundedOptimization": Object{"supported": false, "retired": true, "onlineCorrection": false}})
+		reply(w, 200, Object{"items": []strategy.Fixture{}, "mode": "retired", "arms": []string{}, "correction": false, "boundedOptimization": Object{"supported": false, "retired": true, "onlineCorrection": false}})
 		return true
 	}
 	if suffix == "/experiments" {

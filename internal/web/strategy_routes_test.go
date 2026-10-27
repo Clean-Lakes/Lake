@@ -60,7 +60,7 @@ func TestStrategyHTTPScopeCASAndStrictSchema(t *testing.T) {
 	p2 := b.Store.CreateProject("other")
 	strategyHTTP(t, h, "GET", "/api/projects/"+stringOf(p2["id"])+"/strategy/assets/"+asset+"/lineage", "", "", 404)
 	strategyHTTP(t, h, "GET", base+"/assets?limit=999", "", "", 400)
-	strategyHTTP(t, h, "POST", base+"/proposals", "missing-fields", "{}", 400)
+	strategyHTTP(t, h, "POST", base+"/proposals", "missing-fields", "{}", 410)
 	for _, raw := range []string{
 		strings.Replace(strategyAssetJSON("x"), `"expectedRevision":0`, `"expectedRevision":0,"actor":"model"`, 1),
 		strings.Replace(strategyAssetJSON("x"), `"expectedRevision":0`, `"expectedRevision":0,"expectedRevision":0`, 1),

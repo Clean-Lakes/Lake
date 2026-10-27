@@ -10,7 +10,7 @@ tags: [feature, strategy, learning, skills, harness, adk, evaluation]
 
 # Lake 策略学习与改进开发计划
 
-> 2026-10-27 后续方向已调整为 [Harness² 衍生功能清理](refactor-harness-inspired-cleanup-1.md)。本文和 R0～R5 计划均保留历史证据；清理目标不表示运行代码已经退役，也不继续推进原在线优化路线。
+> 2026-10-27 后续方向已调整为 [Harness² 衍生功能清理](refactor-harness-inspired-cleanup-1.md)。本文和 R0～R5 计划均保留历史证据；[C1](../docs/design/strategy-execution-retirement-c1.md) 已停止新增在线纠错、候选提取与产品实验执行；C2～C4 仍待实施，不继续推进原在线优化路线。
 
 > **历史承接：[用户资产积累与经验复用计划](refactor-user-assets-and-experience-1.md)。** 本文保留 P0～P8 的原始范围、交付与验收记录；其中在线纠错、递归优化及阶段默认策略不再代表后续投入方向。P8 的收益结论仍为 inconclusive。后续 R1～R5 已实施并合入 develop；PR #67 经拆分后关闭，剩余在线专属改动暂缓且未交付，详见承接计划 1.1 节。策略资产与学习仍为实验功能，不将历史在线验证当作当前能力或收益证明。
 

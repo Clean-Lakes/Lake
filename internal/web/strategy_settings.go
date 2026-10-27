@@ -52,6 +52,9 @@ func (s *Store) strategyEffective(ctx StrategyContext) StrategyEffectiveSettings
 	if !out.Settings.CorrectEnabled {
 		out.Settings.OnlineCorrectEnabled = false
 	}
+	out.Settings.LearnEnabled = false
+	out.Settings.CorrectEnabled = false
+	out.Settings.OnlineCorrectEnabled = false
 	return out
 }
 func (s *Store) EffectiveStrategySettings(ctx StrategyContext) (StrategyEffectiveSettings, error) {
@@ -60,7 +63,7 @@ func (s *Store) EffectiveStrategySettings(ctx StrategyContext) (StrategyEffectiv
 func (s *Store) strategyInvalidateJobs(where string, args ...any) {
 	// An unknown/dispatched intent keeps its runtime identity and dispatchState.
 	// Cancelling optimization never asserts that an external effect was undone.
-	s.exec("UPDATE strategyJobs SET status='cancelled',leaseToken='',leaseUntilMs=0,errorCode='strategy_invalidated',updatedAt=? WHERE status IN ('queued','leased','awaiting_reconciliation') AND ("+where+")", append([]any{now()}, args...)...)
+	s.exec("UPDATE strategyJobs SET status=CASE WHEN dispatchState IN ('intent','started','unknown') THEN 'awaiting_reconciliation' ELSE 'cancelled' END,leaseToken='',leaseUntilMs=0,errorCode='strategy_invalidated',updatedAt=? WHERE status IN ('queued','leased','awaiting_reconciliation') AND ("+where+")", append([]any{now()}, args...)...)
 }
 func (s *Store) strategySaveSettings(key string, value strategy.Settings) {
 	s.exec("INSERT INTO strategySettings VALUES(?,?,?,?,?) ON CONFLICT(scopeKey) DO UPDATE SET revision=excluded.revision,epoch=excluded.epoch,body=excluded.body,updatedAt=excluded.updatedAt", key, value.Revision, value.Epoch, jsonText(value), now())
@@ -68,6 +71,11 @@ func (s *Store) strategySaveSettings(key string, value strategy.Settings) {
 func (s *Store) SetStrategySettings(ctx StrategyContext, scope strategy.Scope, key string, expected int64, input StrategySettingsInput) (StrategyMutationResult, error) {
 	return strategyCall(s, true, func() StrategyMutationResult {
 		scopeKey := s.strategyEnsureScope(ctx, scope)
+		// Check retirement before idempotency replay: an old successful receipt
+		// cannot authorize new execution or report an enable as successful.
+		if input.LearnEnabled || input.CorrectEnabled || input.OnlineCorrectEnabled {
+			strategyFail(410, "execution_retired")
+		}
 		if input.Budget.Validate() != nil {
 			strategyFail(400, "invalid_budget")
 		}
@@ -82,14 +90,8 @@ func (s *Store) SetStrategySettings(ctx StrategyContext, scope strategy.Scope, k
 		if input.OnlineConsentVersion != 0 && input.OnlineConsentVersion != strategy.OnlineConsentVersion {
 			strategyFail(400, "invalid_online_consent")
 		}
-		// Old clients may echo the old true flag while changing learning. Accept
-		// their update without granting experimental execution or blocking opt-out.
-		online := input.OnlineCorrectEnabled && input.OnlineConsentVersion == strategy.OnlineConsentVersion
-		consent := 0
-		if online {
-			consent = strategy.OnlineConsentVersion
-		}
-		value := strategy.Settings{Scope: scope, Revision: old.Revision + 1, Epoch: s.strategyAdvanceScope(scopeKey), MasterEnabled: input.MasterEnabled, ApplyEnabled: input.ApplyEnabled, LearnEnabled: input.LearnEnabled, CorrectEnabled: input.CorrectEnabled, OnlineCorrectEnabled: online, OnlineConsentVersion: consent, RuntimePolicyVersion: strategy.OnlineConsentVersion, LegacyOnlineConsent: old.LegacyOnlineConsent, Budget: input.Budget}
+		// Retired fields remain in stored JSON for older readers, always inert.
+		value := strategy.Settings{Scope: scope, Revision: old.Revision + 1, Epoch: s.strategyAdvanceScope(scopeKey), MasterEnabled: input.MasterEnabled, ApplyEnabled: input.ApplyEnabled, RuntimePolicyVersion: strategy.OnlineConsentVersion, LegacyOnlineConsent: old.LegacyOnlineConsent, Budget: input.Budget, ExecutionRetirementVersion: strategy.ExecutionRetirementVersion, RetiredExecutionChoices: old.RetiredExecutionChoices}
 		s.strategySaveSettings(scopeKey, value)
 		if scope.Kind == strategy.UserScope {
 			s.strategyInvalidateJobs("1=1")
