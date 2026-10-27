@@ -76,7 +76,7 @@ R0 盘点文档经 PR #68 合入。当前已实施 R1 的日常任务隔离和�
 | [提取任务](../internal/web/strategy_learning_store.go)、[worker](../internal/web/strategy_learning_worker.go) | 单次无工具提取；仅 project 候选、single_observation；无自动采用 | **保留并调整**，明确学习独立预算、优先级、用户级晋升和拒绝反馈 |
 | 同一 [worker](../internal/web/strategy_learning_worker.go) 的调度 | 每 5 秒检查，领取前避让运行消息；可能与后到前台争用模型槽，依赖同轮项目记忆任务状态 | **调整**，前台优先、可取消/延期，学习等待只留在后台，不把辅助依赖传回主任务 |
 | [在线控制器](../internal/ai/strategy_online.go)、[停止卡](../web-agent/web/src/StrategyCorrectionCard.tsx) | 启用后要求修订工具、预留预算、观察/停止；可改变正常任务状态 | **退出日常路径**；关闭时不挂接控制器，不注册修订工具。若保留实验入口，独立明确同意且默认关闭 |
-| [实验](../internal/web/strategy_experiment_worker.go)、[优化](../internal/web/strategy_optimization_worker.go)、[界面](../web-agent/web/src/StrategyExperiments.tsx) | 快照 A/B、合成、留出验证、有界多次试跑 | **退出日常学习路径**；保留历史只读报告和按需离线配对评估，取消把自动优化作为资产成长必经阶段 |
+| [实验](../internal/web/strategy_experiment_worker.go)、[优化（盘点基线源码）](https://github.com/Clean-Lakes/Lake/blob/89a02c6c85d972c70579a14e238bac80be281fbb/internal/web/strategy_optimization_worker.go)、[界面](../web-agent/web/src/StrategyExperiments.tsx) | 快照 A/B、合成、留出验证、有界多次试跑 | **退出日常学习路径**；保留历史只读报告和按需离线配对评估，取消把自动优化作为资产成长必经阶段 |
 | [审批与操作账本](../internal/ai/adk_operations.go)、[恢复](../internal/ai/adk_recovery.go) | 操作结果、审批、未知结果核实的权威状态 | **保留**，不因关闭纠错放宽权限，不清空未知操作、不自动重放资源操作 |
 | [历史方案](feature-strategy-learning-1.md)与 [P8 证据](../docs/validation/lake-strategy-learning-p8-completion.md) | P0～P8 实施和有限样本结论 | **保留历史**；新阶段采用 R 编号，不把旧完成项改成未完成，也不将 inconclusive 改写成收益成立 |
 
