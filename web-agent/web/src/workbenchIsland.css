@@ -86,14 +86,14 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 /* One terminal viewport; the shared island owns host and terminal selection. */
 .terminal-panel-content > .terminal-panel-header .terminal-island-switcher { max-width:calc(100% - 118px); }
 
-/* Quiet pane boundaries: a generous invisible rail reveals an inset divider. */
+/* Inset pane dividers stay visible; the wider transparent rail owns resizing. */
 .app-shell.has-workbench-island :is(.session-inspector,.terminal-side-panel) { border-left:0; }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal) { top:76px; bottom:12px; width:12px; }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal)::after {
  content:''; position:absolute; top:18%; bottom:18%; left:5px; width:1px; height:auto;
- border-radius:1px; background:var(--text-muted); opacity:0; transition:opacity 160ms ease,background-color 160ms ease;
+ border-radius:1px; background:var(--border); opacity:1; transition:background-color 160ms ease;
 }
-.app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal):is(:hover,:focus-visible,.is-dragging)::after { opacity:.7; }
+.app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal):is(:hover,:focus-visible,.is-dragging)::after { background:var(--text-muted); }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal):is(:focus-visible,.is-dragging)::after { background:var(--info); opacity:1; }
 html.lake-windows-chrome .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal) { top:124px; }
 @media(prefers-reduced-motion:reduce) { .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal)::after { transition:none; } }
