@@ -4,7 +4,8 @@ import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SessionSnapshot,SRETranscriptEntry} from '../../shared/contracts';
 import {AgentIcon} from './AgentIcon';
 import {Glyph} from './Icons';
-import {AppSelect} from './AppSelect';
+import {InspectorExecutionSteps} from './InspectorExecutionSteps';
+import {DisclosureSummary} from './DisclosureSummary';
 import {ObjectReferencesProvider} from './AssistantMarkdown';
 import {SREPlanCard} from './SREPlanCard';
 import {SRERoleMessage} from './SRERoleMessage';
@@ -31,8 +32,6 @@ export function SessionInspector({snapshot,connected,onUpdated,headerHost}:{snap
   if(selection&&!selection.automatic&&panel.current&&!panel.current.contains(document.activeElement))panel.current.focus({preventScroll:true});
  },[selection]);
  if((!present&&!selection)||!target||target.sessionId!==snapshot.session.id)return null;
- const options=task?inspectorAttempts(task):[];
- if(selected&&!options.some(item=>item.attempt.id===selected.attempt.id))options.unshift(selected);
  const currentEntry=selected&&task?(task.messages?.find(entry=>entry.attemptId===selected.attempt.id&&entry.kind==='progress')??task.messages?.find(entry=>entry.attemptId===selected.attempt.id)??{id:`inspector-${selected.attempt.id}`,sessionId:task.sessionId,taskId:task.id,roleId:selected.step.role,roleRunId:selected.attempt.roleRunId,attemptId:selected.attempt.id,kind:'progress',body:'',source:'runtime',sequence:0,revision:0,createdAt:selected.attempt.startedAt} satisfies SRETranscriptEntry):undefined;
  const attemptStatus=selected&&task?(selected.attempt.planRunId===task.runs?.at(-1)?.id?sreStepStatus(task,selected.step,snapshot.ai?.agentRuns):selected.attempt.status):'';
  const choose=(tab:'plan'|'execution',attemptId=target.attemptId)=>inspector.open({...target,tab,attemptId,evidenceId:undefined,automatic:false});
@@ -41,15 +40,24 @@ export function SessionInspector({snapshot,connected,onUpdated,headerHost}:{snap
   <button type="button" role="tab" id="inspector-execution-tab" aria-selected={target.tab==='execution'} aria-controls="inspector-execution-panel" tabIndex={target.tab==='execution'?0:-1} onClick={()=>choose('execution',selected?.attempt.id)}>{headerHost?'执行':'执行详情'}</button>
  </div>;
  return <aside ref={panel} id={sessionInspectorId} tabIndex={-1} className={`session-inspector${selection?' is-open':' is-closing'}`} inert={!selection} aria-hidden={!selection} aria-label="任务检查" onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();event.stopPropagation();inspector.close();}}}>
-  {headerHost?createPortal(<header className="island-inspector-heading"><strong><Glyph name="document" size={18}/>任务检查</strong>{tabs}<button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={14}/></button></header>,headerHost):<><header className="session-inspector-heading"><div><strong>任务检查</strong><p>{task?'Lake Pilot · 计划与执行':snapshot.session.title}</p></div><button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={16}/></button></header>{tabs}</>}
+  {headerHost?createPortal(<header className="island-inspector-heading"><Glyph name="document" size={17}/>{tabs}<button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={14}/></button></header>,headerHost):<><header className="session-inspector-heading"><div><strong>任务检查</strong><p>{task?'Lake Pilot · 计划与执行':snapshot.session.title}</p></div><button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={16}/></button></header>{tabs}</>}
   <ObjectReferencesProvider resources={snapshot.resources} tasks={snapshot.ai?.agentRuns}>
    <div className="session-inspector-scroll">
-    {task&&<InspectorTaskSummary task={task} title={snapshot.session.title} runs={snapshot.ai?.agentRuns}/>}
+    {task&&target.tab==='plan'&&<InspectorTaskSummary task={task} title={snapshot.session.title} runs={snapshot.ai?.agentRuns}/>}
     <div role="tabpanel" id="inspector-plan-panel" aria-labelledby="inspector-plan-tab" hidden={target.tab!=='plan'}>
      {task&&plan?<SREPlanCard task={task} resources={snapshot.resources} agentRuns={snapshot.ai?.agentRuns} enabled={connected&&snapshot.sre?.enabled===true} onUpdated={onUpdated} inspector onInspectStep={stepId=>{const attempt=inspectorAttempts(task).find(item=>item.step.id===stepId)?.attempt;if(attempt)choose('execution',attempt.id);}}/>:<p className="inspector-empty">计划生成后会显示在这里。</p>}
     </div>
     <div role="tabpanel" id="inspector-execution-panel" aria-labelledby="inspector-execution-tab" hidden={target.tab!=='execution'}>
-     {task&&<><label className="inspector-step-select">查看步骤<AppSelect value={selected?.attempt.id??''} onChange={event=>choose('execution',event.target.value)} disabled={!selected}>{!selected&&<option value="">尚无执行记录</option>}{options.map(({step,attempt})=><option key={attempt.id} value={attempt.id}>{sreRoles[step.role].name} · {step.description}</option>)}</AppSelect></label>{selected&&<div className="inspector-attempt-heading"><AgentIcon role={selected.step.role} size={20}/><strong>{sreRoles[selected.step.role].name}</strong><span>{sreStatus[attemptStatus]??attemptStatus}</span><p>{selected.step.description}</p></div>}{currentEntry?<SRERoleMessage key={`${task.id}:${currentEntry.attemptId}`} detailsOnly connected={connected} task={task} entry={currentEntry} snapshot={snapshot} onUpdated={onUpdated} renderApproval={()=>null}/>:<p className="inspector-empty">本步骤尚无执行记录。</p>}</>}
+     {task&&<>
+      <InspectorTaskSummary compact task={task} title={snapshot.session.title} runs={snapshot.ai?.agentRuns}/>
+      <InspectorExecutionSteps task={task} resources={snapshot.resources} runs={snapshot.ai?.agentRuns} selectedId={selected?.attempt.id} onSelect={attemptId=>{choose('execution',attemptId);requestAnimationFrame(()=>{const details=panel.current?.querySelector<HTMLDetailsElement>('.execution-step-records');if(details)details.open=true;});}}/>
+      <details className="execution-step-records" open={!!target.attemptId}>
+       <DisclosureSummary>步骤记录{selected&&<span>{selected.step.description}</span>}</DisclosureSummary>
+       {selected&&<div className="inspector-attempt-heading"><AgentIcon role={selected.step.role} size={18}/><strong>{sreRoles[selected.step.role].name}</strong><span>{sreStatus[attemptStatus]??attemptStatus}</span><p>{selected.step.description}</p></div>}
+       {currentEntry?<SRERoleMessage key={`${task.id}:${currentEntry.attemptId}`} detailsOnly connected={connected} task={task} entry={currentEntry} snapshot={snapshot} onUpdated={onUpdated} renderApproval={()=>null}/>:<p className="inspector-empty">本步骤尚无执行记录。</p>}
+      </details>
+     </>}
+     {!task&&<h3 className="inspector-execution-title"><Glyph name="document" size={17}/>当前执行</h3>}
      {!task&&!target.turnId&&<p className="inspector-empty">本轮尚无执行记录。</p>}
      <div ref={inspector.setHost} className="inspector-turn-host"/>
     </div>

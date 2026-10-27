@@ -34,7 +34,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const terminalCount=terminal?.querySelector<HTMLElement>('.terminal-island-count');
    const terminalWidth=Math.min(240,(terminalLabel?.scrollWidth??120)+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+70)+44;
    // Measure the expanded task controls independently of their compact container state.
-   const inspectorWidth=inspector?176+inspector.querySelectorAll('.session-inspector-tabs button:not(:disabled)').length*37:220;
+   const inspectorWidth=inspector?108+Array.from(inspector.querySelectorAll<HTMLElement>('.session-inspector-tabs button:not(:disabled)')).reduce((sum,button)=>sum+button.scrollWidth,0):164;
    const layout=workbenchIslandLayout(natural,inspectorOpen?inspectorWidth:0,terminalOpen?terminalWidth:0,available);
    element.style.left=`${left-base.left}px`;
    element.style.maxWidth=`${available}px`;
