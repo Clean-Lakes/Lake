@@ -464,7 +464,7 @@ a { color: inherit; }
 @supports selector(::-webkit-scrollbar) {
   .modal { scrollbar-width: auto; scrollbar-color: auto; }
   .modal::-webkit-scrollbar { width: 5px; height: 5px; }
-  .modal::-webkit-scrollbar-track { background: transparent; }
+  .modal::-webkit-scrollbar-track { margin-block: var(--radius-settings-dialog); background: transparent; }
   .modal::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--border-strong); }
   .modal::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 }
