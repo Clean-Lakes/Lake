@@ -81,6 +81,7 @@
       const element = shell.querySelector(pane === 'sidebar' ? '.sidebar' : pane === 'terminal' ? '.terminal-side-panel' : '.session-inspector');
       active = { pane, x: event.clientX, width: element.getBoundingClientRect().width, pointer: event.pointerId };
       handle.setPointerCapture(event.pointerId);
+      handle.classList.add('is-dragging');
       document.documentElement.classList.add('workbench-resizing');
     });
     handle.addEventListener('pointermove', event => {
@@ -90,7 +91,7 @@
       apply();
       schedule();
     });
-    const finish = () => { active = null; document.documentElement.classList.remove('workbench-resizing'); save(); };
+    const finish = () => { active = null; handle.classList.remove('is-dragging'); document.documentElement.classList.remove('workbench-resizing'); save(); };
     handle.addEventListener('pointerup', finish);
     handle.addEventListener('pointercancel', finish);
     handle.addEventListener('lostpointercapture', finish);
