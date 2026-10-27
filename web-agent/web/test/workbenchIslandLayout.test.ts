@@ -2,11 +2,20 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {workbenchIslandLayout} from '../src/workbenchIslandLayout';
 
-test('one shared island keeps both section boundaries aligned after a pane resize',()=>{
- for(const [conversation,inspector,terminal] of [[600,382,400],[480,502,400],[720,280,0],[580,0,400]]){
-  const result=workbenchIslandLayout(conversation,inspector,terminal);
-  assert.equal(1+result.columns[0],conversation);
-  if(terminal)assert.equal(1+result.columns[0]+result.columns[1],conversation+inspector);
-  assert.equal(result.columns.reduce((a,b)=>a+b,0)+2,result.width);
- }
+test('the shared island fits content without stretching to fill wide panes',()=>{
+ const result=workbenchIslandLayout(330,240,220,1400);
+ assert.equal(result.width,792);
+ assert.deepEqual(result.columns,[330,240,220]);
+});
+test('narrow layouts trim the title before task and terminal controls',()=>{
+ const result=workbenchIslandLayout(440,240,220,720);
+ assert.equal(result.width,720);
+ assert.equal(result.columns[1],240);
+ assert.equal(result.columns[2],218);
+ assert.equal(result.columns[0],260);
+});
+test('closed panes add no empty segments and hover controls can expand naturally',()=>{
+ assert.equal(workbenchIslandLayout(330,240,0,1400).width,572);
+ assert.equal(workbenchIslandLayout(330,240,320,1400).width,892);
+ assert.equal(workbenchIslandLayout(330,0,0,1400).width,332);
 });

@@ -8,7 +8,7 @@ export function useWideWorkbench(){
  return wide;
 }
 
-/** One surface, with controls aligned to the real panes rather than guessed widths. */
+/** A compact shared island: pane widths never stretch the space between controls. */
 export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,terminalOpen,onInspectorHost}:{conversation:ReactNode;terminal:ReactNode;activity:ReactNode;inspectorOpen:boolean;terminalOpen:boolean;onInspectorHost:(node:HTMLDivElement|null)=>void}){
  const root=useRef<HTMLDivElement>(null);
  useLayoutEffect(()=>{
@@ -22,27 +22,28 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const bounds=view.getBoundingClientRect(),base=shell.getBoundingClientRect();
    const transcript=view.querySelector('.timeline-list')?.getBoundingClientRect();
    const left=Math.min(bounds.right-120,Math.max(bounds.left+16,transcript?.left??bounds.left+48));
-   const inspector=shell.querySelector('.session-inspector.is-open')?.getBoundingClientRect();
-   const terminal=shell.querySelector('.terminal-side-panel.is-open')?.getBoundingClientRect();
-   const inspectorWidth=inspectorOpen&&inspector?inspector.width:0;
-   const terminalWidth=terminalOpen&&terminal?terminal.width:0;
-   const linked=inspectorWidth>0||terminalWidth>0;
-   element.style.left=`${left-base.left}px`;
-   element.style.maxWidth=`${Math.max(120,base.right-left-16)}px`;
-   const layout=workbenchIslandLayout(bounds.right-left,inspectorWidth,terminalWidth);
    const title=element.querySelector<HTMLElement>('.crumb-title');
    const state=element.querySelector<HTMLElement>('.header-morph-slot.is-visible .header-morph-content');
-   const natural=(title?.scrollWidth??160)+(state?.getBoundingClientRect().width??0)+62;
-   element.style.width=`${linked?layout.width:Math.min(Math.max(160,natural),Math.max(160,bounds.right-left-16))}px`;
-   element.style.gridTemplateColumns=linked?layout.columns.map(width=>`minmax(0,${width}px)`).join(' '):'minmax(0,1fr)';
+   const inspector=element.querySelector<HTMLElement>('.island-inspector-heading');
+   const terminal=element.querySelector<HTMLElement>('.terminal-panel-header');
+   const available=Math.max(160,base.right-left-16);
+   const natural=Math.min(190,title?.scrollWidth??160)+(state?.getBoundingClientRect().width??0)+60;
+   const layout=workbenchIslandLayout(natural,inspectorOpen?inspector?.scrollWidth??220:0,terminalOpen?terminal?.scrollWidth??220:0,available);
+   element.style.left=`${left-base.left}px`;
+   element.style.maxWidth=`${available}px`;
+   element.style.width=`${layout.width}px`;
+   element.style.gridTemplateColumns=layout.columns.map(width=>`minmax(0,${width}px)`).join(' ');
    element.dataset.ready='true';
   };
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(measure);};
   const observer=new ResizeObserver(schedule);
   for(const node of [element,shell,shell.querySelector('.workspace'),shell.querySelector('.session-layout > .session-view'),shell.querySelector('.session-inspector'),shell.querySelector('.terminal-side-panel')])if(node)observer.observe(node);
-  for(const node of element.querySelectorAll('.header-morph-slot,.header-morph-content,.crumb-title'))observer.observe(node);
+  const observeControls=()=>{for(const node of element.querySelectorAll('.header-morph-slot,.header-morph-content,.crumb-title,.island-inspector-heading,.terminal-panel-header,.terminal-header-actions'))observer.observe(node);};
+  observeControls();
+  const content=new MutationObserver(()=>{observeControls();schedule();});
+  content.observe(element,{childList:true,subtree:true,characterData:true});
   window.addEventListener('resize',schedule);measure();
-  return()=>{observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);};
+  return()=>{content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);};
  },[inspectorOpen,terminalOpen]);
  return <div ref={root} className="lake-workbench-island" data-linked={inspectorOpen||terminalOpen} role="group" aria-label="Lake Island 工作台">
   <span className="workspace-header-glass" aria-hidden="true"/>
