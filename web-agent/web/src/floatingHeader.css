@@ -23,7 +23,6 @@
 }
 .workspace.has-floating-header .breadcrumbs { flex: 0 1 auto; }
 .crumb-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workspace.has-floating-header .crumb-slash { flex-shrink: 0; }
 .workspace.has-floating-header .conversation { container-type: normal; min-height: 0; scrollbar-gutter: stable; scroll-padding-top: 80px; }
 .workspace.has-floating-header .timeline-list {
   width: var(--session-content-width);
