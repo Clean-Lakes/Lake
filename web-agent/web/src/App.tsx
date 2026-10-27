@@ -1356,6 +1356,8 @@ function AppContent() {
         <button type="button" className="icon-button" aria-label="收起终端" title="收起终端，保留连接" onClick={closeTerminalPanel}><Glyph name="close" size={17}/></button>
       </div>
       {terminalOptionsOpen && <div className="terminal-action-menu" ref={terminalOptionsPopup.menu} role="group" aria-label="终端选项菜单">
+        <button type="button" className="terminal-compact-action" onClick={() => {terminalControlRef.current?.clear();setTerminalOptionsOpen(false);}}>清屏</button>
+        <button type="button" className="terminal-compact-action" onClick={() => {setTerminalOptionsOpen(false);closeTerminalPanel();}}>收起终端</button>
         <label>本地 Shell<AppSelect value={localShell} onChange={event => setLocalShell(event.target.value)}>{["bash","zsh","sh","fish"].map(shell => <option key={shell}>{shell}</option>)}</AppSelect></label>
         <button type="button" disabled={!currentTerminal || currentTerminal.status !== "ready" || currentTerminal.holder !== "user"} onClick={() => { setTerminalOptionsOpen(false); setCommandEditorOpen(true); }}>运行完整命令…</button>
         {!terminalContext && currentTerminal?.holder === "user" && currentTerminal.status === "ready" && <button type="button" onClick={() => { setTerminalOptionsOpen(false); void changeHolder("agent"); }}>交给终端专员</button>}
@@ -1365,7 +1367,7 @@ function AppContent() {
       {terminalListMenu}
     </div>;
   const terminalDrawer = <section className="terminal-panel-content" aria-label="会话持续终端">
-    {terminalHeading}
+    {!sharedIsland&&terminalHeading}
     <div className="drawer-body">
       {!terminalId && (terminalError ? <div className="terminal-load-error" role="alert">{terminalError}{terminalOpeningResource && <button type="button" disabled={!!pendingOperation} onClick={() => void openTerminalFor(terminalOpeningResource)}>重新连接</button>}</div> : <div className="terminal-placeholder" role="status">{terminalOpeningResource && connectingResources.includes(terminalOpeningResource) ? `正在连接 ${terminalResource?.name || "终端"}…` : "暂无在线终端，点击上方 + 新建终端"}</div>)}
       <div className="terminal-session">
@@ -1468,7 +1470,7 @@ function AppContent() {
 
     </aside>
 
-    {sharedIsland&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} inspectorOpen={inspectorOpen} onInspectorHost={setIslandInspectorHost}/>}
+    {sharedIsland&&<WorkbenchIsland activity={headerSweep} conversation={workspaceHeading} terminal={terminalHeading} inspectorOpen={inspectorOpen} terminalOpen={terminalOpen} onInspectorHost={setIslandInspectorHost}/>}
     <main className={`workspace${inspectorOpen?" has-session-inspector":""}${!selectedSession&&!selectedResource?" is-welcome":""}${sessionHeader?" has-floating-header":""}`} onDragOver={event=>{if(selectedSession&&!selectedResource&&!isPlansPage&&Array.from(event.dataTransfer.types).includes("Files")){event.preventDefault();event.dataTransfer.dropEffect="copy";setAttachmentDragOver(true);}}} onDragLeave={event=>{if(!(event.relatedTarget instanceof Node)||!event.currentTarget.contains(event.relatedTarget))setAttachmentDragOver(false);}} onDrop={event=>{if(!selectedSession||selectedResource||isPlansPage||!Array.from(event.dataTransfer.types).includes("Files"))return;event.preventDefault();event.stopPropagation();setAttachmentDragOver(false);void attachFiles(clipboardFiles(event.dataTransfer));}}>
       {!sharedIsland&&workspaceHeading}
 
