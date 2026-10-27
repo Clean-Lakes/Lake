@@ -70,7 +70,7 @@ test('stopped turns show one neutral status without hiding actual errors or acti
  const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:'activity'}));
  assert.ok(activity.includes('data-conversation-entry="stop"'),'raw stop record remains in the activity view');
  const noTiming={...s,replyTimings:[]};
- assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot:noTiming})).includes('已停止本轮'),'do not remove the only stop notice if timing is unavailable');
+ assert.ok(!renderToStaticMarkup(createElement(AITranscript,{snapshot:noTiming})).includes('已停止本轮'),'stop notices stay out of prose even without saved timing');
 });
 test('operation status changes keep the same row and never absorb preceding text',()=>{
  for(const status of ['running','pending','completed','failed','unknown','interrupted','cancelled','not_executed','background_running']){
@@ -319,4 +319,15 @@ test('background failures and handle reads stay beneath the dispatch resource, n
  assert.equal(missing[1]?.resource,undefined,'nearby resource cannot guess an unknown job owner');
  const conflict=conversationGroups([dispatch('one','a','job-b'),dispatch('two','b','job-b'),failed],resources);
  assert.equal(conflict.at(-1)?.resource,undefined,'conflicting handle owners stay explicit and unassigned');
+});
+
+test('routine interruption notices leave main prose while raw records and unrelated failures remain',()=>{
+ const gap='本步骤仍有未完成的只读检查，尚未通过验收。已保留取得的证据，可继续检查或结束任务。';
+ const s={session:{id:'s'},messages:[user.message,{id:'system-gap',role:'system',text:gap,createdAt:at}],actions:[],resources:[],ai:{session:'s',status:'failed',cardsOffset:0,cards:[card('gap','error','failed',gap).card,card('failure','error','failed','服务器连接失败').card]}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ assert.ok(!html.includes(gap));
+ assert.ok(html.includes('服务器连接失败'));
+ assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:'activity'})).includes(gap),'execution records preserve the actual failure');
+ const assistant={...s,messages:[user.message,{id:'quoted',role:'assistant',text:gap,createdAt:at}],ai:{...s.ai!,cards:[]}};
+ assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot:assistant})).includes(gap),'assistant prose is never filtered by lifecycle wording');
 });

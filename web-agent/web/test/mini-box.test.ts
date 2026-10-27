@@ -75,3 +75,16 @@ test('multiple-host defaults include completed commands across sampling gaps and
  assert.equal(hasMultipleMiniResources([group('a','local','completed'),group('b','ssh','completed')]),true);
  assert.equal(hasMultipleMiniResources([group('a','local','completed'),group('a','local','completed')]),false);
 });
+
+test('grouped command marker follows mini terminal activity through running, waiting and completion',()=>{
+ const cards=[
+  {id:'old',type:'operation',title:'shell',status:'failed',at,content:'old failure'},
+  {id:'current',type:'operation',title:'shell',status:'running',at,data:{arguments:{command:'hostname'}}},
+ ];
+ const render=(overrides:Partial<MiniBoxScope>={},completed=false)=>renderToStaticMarkup(createElement(ExecutionDetailsOpen.Provider,{value:true},createElement(ThinkingTimeline,{live:true,resource:{id:'r',name:'fixture',kind:'ssh'},miniScope:{...scope,...overrides},cards:completed?cards.map(card=>({...card,status:'completed'})):cards})));
+ const marker='class="thinking-step-marker"><span class="execution-icon is-active"';
+ assert.ok(render().includes(marker),'earlier failed commands must not freeze a new running command marker');
+ assert.ok(render().includes('mini-box is-operating'));
+ for(const overrides of [{live:false},{waiting:true},{connected:false}])assert.ok(!render(overrides).includes(marker),JSON.stringify(overrides));
+ assert.ok(!render({},true).includes(marker),'finished commands stop their marker');
+});
