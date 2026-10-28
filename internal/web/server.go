@@ -40,6 +40,10 @@ type Server struct {
 	Extensions           *extensions.Manager
 	draftCompletions     sync.Map
 	memoryReads          sync.Map
+	memoryForeground     int
+	memoryBatchJobs      []naturalBatchItem
+	memoryOutboxMu       sync.Mutex
+	memoryOutboxPending  map[string]bool
 	memoryCancel         context.CancelFunc
 	memoryJobID          string
 	memoryLease          string
@@ -82,12 +86,7 @@ type Server struct {
 	hostKeyMu            sync.Mutex
 	hostKeyPrompts       map[string]*sshTrustPrompt
 
-	strategyHandoffStatus  atomic.Value // safe reason code only; never waits on the worker gate.
-	strategyWorkerMu       sync.Mutex
-	strategyLearningCancel context.CancelFunc // guarded by messageMu; admission never waits for auxiliary work.
-	strategyForeground     int                // foreground model activity, including workflow/role calls.
-	strategyRecoveryLoaded bool               // guarded by strategyWorkerMu
-	strategyOutboxPending  map[string]bool    // only registered durable outboxes, not historical backfill.
+	strategyHandoffStatus atomic.Value // safe reason code only; never waits on the worker gate.
 }
 
 func New(ctx context.Context, options Options) (server *Server, err error) {
@@ -170,6 +169,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	server.Engine.RuntimeDir = filepath.Join(options.DataDir, "adk")
 	server.Engine.SetSRERepository(store)
 	server.Engine.Strategies = server.strategyProvider
+	server.Engine.ModelActivity = server.memoryForegroundModel
 	store.RecoverSRETasks()
 	server.reconcileStaleSREStatuses()
 	if err = server.startScheduler(); err != nil {

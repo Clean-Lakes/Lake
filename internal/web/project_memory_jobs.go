@@ -49,6 +49,7 @@ WHERE (j.status IN ('succeeded','no_op') AND j.updatedAt<?) OR (j.status IN ('sk
 
 func (s *Store) ClaimMemoryJob() Object {
 	return s.update(func() any {
+		s.wakeNaturalDeferred()
 		if s.memoryV2 {
 			s.exec("UPDATE projectMemoryJobs SET status='queued' WHERE status='budget_wait' AND nextAttemptAtMs<=?", time.Now().UnixMilli())
 			s.exec("UPDATE projectMemoryJobs SET status='skipped',lastErrorCode='queue_expired',updatedAt=? WHERE status IN ('queued','retry_wait','budget_wait') AND createdAt<?", now(), time.Now().UTC().Add(-7*24*time.Hour).Format(time.RFC3339Nano))
@@ -101,7 +102,15 @@ func (s *Store) SettleMemoryJob(jobID, token, status, code string, usage ai.Usag
 			status = "failed"
 		}
 		s.exec("UPDATE projectMemoryJobs SET status=?,nextAttemptAtMs=?,leaseToken='',leaseOwner='',leaseUntilMs=0,lastErrorCode=?,usageJSON=?,updatedAt=? WHERE jobId=?", status, next, code, jsonText(previous), now(), jobID)
-		if status != "retry_wait" && status != "queued" {
+		stage := "deferred"
+		if status == "no_op" || status == "succeeded" {
+			stage = "processed"
+		}
+		if status == "skipped" {
+			stage = "withdrawn"
+		}
+		s.exec("UPDATE naturalMemoryCoverage SET stage=?,reason=?,updatedAt=? WHERE turnSequence=?", stage, code, now(), row["turnSequence"])
+		if status != "retry_wait" && status != "queued" && status != "budget_wait" {
 			outcome := status
 			if status == "succeeded" {
 				outcome = "applied"
@@ -124,135 +133,7 @@ func (s *Store) CommitMemoryExtraction(job Object, snapshot ai.MemoryTurnSnapsho
 			}
 		}
 	}()
-	result := s.update(func() any {
-		jobID, token := stringOf(job["jobId"]), stringOf(job["leaseToken"])
-		live := s.row("SELECT status,leaseToken,usageJSON FROM projectMemoryJobs WHERE jobId=?", jobID)
-		if live == nil || live["status"] != "running" || live["leaseToken"] != token {
-			fail(409, "Memory job lease expired")
-		}
-		settings := s.memorySettings(snapshot.ProjectID)
-		turn := s.row("SELECT projectId,sessionId,turnId,snapshotHash FROM projectMemoryTurns WHERE sequence=?", job["turnSequence"])
-		if turn == nil || turn["projectId"] != snapshot.ProjectID || turn["sessionId"] != snapshot.SessionID || turn["turnId"] != snapshot.TurnID || turn["snapshotHash"] != snapshot.SnapshotHash || !ai.ValidMemorySnapshot(snapshot) || int64(integer(s.row("SELECT leaseUntilMs FROM projectMemoryJobs WHERE jobId=?", jobID)["leaseUntilMs"])) <= time.Now().UnixMilli() {
-			fail(409, "Memory source or lease changed")
-		}
-		naturalChanged := false
-		if snapshot.Natural != nil {
-			if len(natural) != 1 || !s.naturalSnapshotValid(snapshot) {
-				fail(409, "Natural preference invalidated")
-			}
-			naturalChanged = s.commitNaturalPreference(job, snapshot, natural[0])
-		}
-		legacy := snapshot.Natural == nil || snapshot.LegacyExtraction
-		if legacy && (settings["useEnabled"] != true || settings["extractionEnabled"] != true || integer(settings["epoch"]) != snapshot.Epoch) {
-			fail(409, "Memory job invalidated")
-		}
-		if s.row("SELECT projectId FROM sessions WHERE id=?", snapshot.SessionID)["projectId"] != snapshot.ProjectID {
-			fail(409, "Memory source project changed")
-		}
-		if !legacy && len(mutations) != 0 {
-			fail(400, "Legacy extraction disabled")
-		}
-		if len(mutations) > 5 {
-			fail(400, "Too many memory changes")
-		}
-		projectRevision := integer(settings["revision"])
-		nextRevision := projectRevision + 1
-		t := now()
-		keys := []string{}
-		seen := map[string]bool{}
-		for _, mutation := range mutations {
-			if mutation.Operation != "upsert" || seen[mutation.Key] || len(mutation.SourceIDs) == 0 {
-				fail(400, "Invalid memory extraction")
-			}
-			seen[mutation.Key] = true
-			m := MemoryMutation{Key: mutation.Key, Type: mutation.Type, Description: mutation.Description, Body: mutation.Body, ExpectedRevision: mutation.ExpectedRevision, Verification: mutation.Verification}
-			validateMemoryMutation(m)
-			validSource, evidenceSource := false, false
-			for _, source := range mutation.SourceIDs {
-				if source == "user:0" {
-					validSource = true
-					continue
-				}
-				matched := false
-				for _, evidence := range snapshot.Evidence {
-					if source == "evidence:"+evidence.CallID && evidence.Completed {
-						validSource, evidenceSource = true, true
-						matched = true
-					}
-				}
-				if !matched {
-					fail(400, "Memory source could not be verified")
-				}
-			}
-			if !validSource || mutation.Verification == "observed" && !evidenceSource || mutation.Verification == "user-stated" && !containsMemorySource(mutation.SourceIDs, "user:0") {
-				fail(400, "Memory source could not be verified")
-			}
-			old := s.row("SELECT * FROM projectMemories WHERE projectId=? AND key=?", snapshot.ProjectID, mutation.Key)
-			oldRevision := 0
-			if old != nil {
-				oldRevision = integer(old["revision"])
-				if stringOf(old["deletedAt"]) != "" {
-					fail(409, "Memory changed after source turn")
-				}
-			}
-			if old != nil && old["body"] == m.Body && old["description"] == m.Description && old["type"] == m.Type {
-				continue
-			}
-			if old != nil && integer(old["projectRevision"]) > snapshot.KnowledgeBaseRevision {
-				fail(409, "Memory changed after source turn")
-			}
-			if mutation.ExpectedRevision != oldRevision {
-				fail(409, "Memory revision conflict")
-			}
-			if old == nil && integer(s.row("SELECT count(*) AS count FROM projectMemories WHERE projectId=? AND deletedAt=''", snapshot.ProjectID)["count"]) >= 500 {
-				fail(429, "Project memory is full")
-			}
-			originSession, originTurn, createdAt := snapshot.SessionID, snapshot.TurnID, t
-			sources := []Object{}
-			if old != nil {
-				originSession, originTurn, createdAt = stringOf(old["originSessionId"]), stringOf(old["originTurnId"]), stringOf(old["createdAt"])
-				_ = json.Unmarshal([]byte(stringOf(old["sourceSummaryJSON"])), &sources)
-			}
-			excerpt := snapshot.UserText
-			if len(excerpt) > 1024 {
-				excerpt = excerpt[:1024]
-			}
-			sources = append(sources, Object{"kind": "auto", "sessionId": snapshot.SessionID, "turnId": snapshot.TurnID, "sourceIds": mutation.SourceIDs, "at": snapshot.CapturedAt, "excerpt": excerpt})
-			if len(sources) > 8 {
-				sources = sources[len(sources)-8:]
-			}
-			observedAt := ""
-			if m.Verification == "observed" {
-				observedAt = snapshot.CapturedAt
-			}
-			markdown := renderMemoryMarkdown(m.Key, m.Type, m.Description, m.Body, memoryMarkdownMeta{ProjectID: snapshot.ProjectID, OriginSessionID: originSession, OriginTurnID: originTurn, Revision: oldRevision + 1, UpdatedAt: t, Verification: m.Verification, ObservedAt: observedAt})
-			hash := fmt.Sprintf("%x", sha256.Sum256([]byte(m.Body)))
-			s.exec(`INSERT INTO projectMemories(projectId,key,type,description,body,markdown,revision,projectRevision,contentHash,originSessionId,originTurnId,lastSourceSessionId,lastSourceTurnId,sourceIdsJSON,sourceSummaryJSON,verification,observedAt,createdAt,updatedAt)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(projectId,key) DO UPDATE SET type=excluded.type,description=excluded.description,body=excluded.body,markdown=excluded.markdown,revision=excluded.revision,projectRevision=excluded.projectRevision,contentHash=excluded.contentHash,lastSourceSessionId=excluded.lastSourceSessionId,lastSourceTurnId=excluded.lastSourceTurnId,sourceIdsJSON=excluded.sourceIdsJSON,sourceSummaryJSON=excluded.sourceSummaryJSON,verification=excluded.verification,observedAt=excluded.observedAt,updatedAt=excluded.updatedAt`, snapshot.ProjectID, m.Key, m.Type, m.Description, m.Body, markdown, oldRevision+1, nextRevision, hash, originSession, originTurn, snapshot.SessionID, snapshot.TurnID, jsonText(mutation.SourceIDs), jsonText(sources), m.Verification, observedAt, createdAt, t)
-			keys = append(keys, mutation.Key)
-		}
-		var previous ai.Usage
-		_ = json.Unmarshal([]byte(stringOf(live["usageJSON"])), &previous)
-		previous.Input += usage.Input
-		previous.Output += usage.Output
-		previous.Total += usage.Total
-		previous.Known = previous.Known || usage.Known
-		status, outcome := "no_op", "no_op"
-		if naturalChanged {
-			status, outcome = "succeeded", "applied"
-		}
-		if len(keys) > 0 {
-			status, outcome = "succeeded", "applied"
-			s.exec("UPDATE projectMemorySettings SET revision=revision+1,updatedAt=? WHERE projectId=?", t, snapshot.ProjectID)
-			s.exec("INSERT INTO projectMemoryCommits(commitId,jobId,projectId,revision,mutationKeysJSON,sourceTurnSequence,createdAt) VALUES(?,?,?,?,?,?,?)", ident(), jobID, snapshot.ProjectID, nextRevision, jsonText(keys), job["turnSequence"], t)
-		}
-		s.exec("UPDATE projectMemoryJobs SET status=?,leaseToken='',leaseOwner='',leaseUntilMs=0,lastErrorCode='',usageJSON=?,updatedAt=? WHERE jobId=?", status, jsonText(previous), t, jobID)
-		s.exec("UPDATE projectMemoryTurns SET outcome=?,processedAt=? WHERE sequence=?", outcome, t, job["turnSequence"])
-		if naturalChanged {
-			s.event(snapshot.SessionID, "message")
-		}
-		return len(keys) > 0 || naturalChanged
-	})
+	result := s.update(func() any { return s.commitMemoryExtractionLocked(job, snapshot, mutations, usage, natural...) })
 	changed = result.(bool)
 	if changed {
 		if publishErr := s.PublishProjectMemory(snapshot.ProjectID); publishErr != nil {
@@ -261,6 +142,138 @@ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(projectId,key) DO UPDA
 		}
 	}
 	return changed, nil
+}
+
+// Caller owns the Store transaction. Shared by one completion's atomic batch.
+func (s *Store) commitMemoryExtractionLocked(job Object, snapshot ai.MemoryTurnSnapshot, mutations []MemoryExtractMutation, usage ai.Usage, natural ...NaturalPreferenceResult) bool {
+	jobID, token := stringOf(job["jobId"]), stringOf(job["leaseToken"])
+	live := s.row("SELECT status,leaseToken,usageJSON FROM projectMemoryJobs WHERE jobId=?", jobID)
+	if live == nil || live["status"] != "running" || live["leaseToken"] != token {
+		fail(409, "Memory job lease expired")
+	}
+	settings := s.memorySettings(snapshot.ProjectID)
+	turn := s.row("SELECT projectId,sessionId,turnId,snapshotHash FROM projectMemoryTurns WHERE sequence=?", job["turnSequence"])
+	if turn == nil || turn["projectId"] != snapshot.ProjectID || turn["sessionId"] != snapshot.SessionID || turn["turnId"] != snapshot.TurnID || turn["snapshotHash"] != snapshot.SnapshotHash || !ai.ValidMemorySnapshot(snapshot) || int64(integer(s.row("SELECT leaseUntilMs FROM projectMemoryJobs WHERE jobId=?", jobID)["leaseUntilMs"])) <= time.Now().UnixMilli() {
+		fail(409, "Memory source or lease changed")
+	}
+	naturalChanged := false
+	if snapshot.Natural != nil {
+		if len(natural) != 1 || !s.naturalSnapshotValid(snapshot) {
+			fail(409, "Natural preference invalidated")
+		}
+		naturalChanged = s.commitNaturalPreference(job, snapshot, natural[0])
+	}
+	legacy := snapshot.Natural == nil || snapshot.LegacyExtraction
+	if legacy && (settings["useEnabled"] != true || settings["extractionEnabled"] != true || integer(settings["epoch"]) != snapshot.Epoch) {
+		fail(409, "Memory job invalidated")
+	}
+	if s.row("SELECT projectId FROM sessions WHERE id=?", snapshot.SessionID)["projectId"] != snapshot.ProjectID {
+		fail(409, "Memory source project changed")
+	}
+	if !legacy && len(mutations) != 0 {
+		fail(400, "Legacy extraction disabled")
+	}
+	if len(mutations) > 5 {
+		fail(400, "Too many memory changes")
+	}
+	projectRevision := integer(settings["revision"])
+	nextRevision := projectRevision + 1
+	t := now()
+	keys := []string{}
+	seen := map[string]bool{}
+	for _, mutation := range mutations {
+		if mutation.Operation != "upsert" || seen[mutation.Key] || len(mutation.SourceIDs) == 0 {
+			fail(400, "Invalid memory extraction")
+		}
+		seen[mutation.Key] = true
+		m := MemoryMutation{Key: mutation.Key, Type: mutation.Type, Description: mutation.Description, Body: mutation.Body, ExpectedRevision: mutation.ExpectedRevision, Verification: mutation.Verification}
+		validateMemoryMutation(m)
+		validSource, evidenceSource := false, false
+		for _, source := range mutation.SourceIDs {
+			if source == "user:0" {
+				validSource = true
+				continue
+			}
+			matched := false
+			for _, evidence := range snapshot.Evidence {
+				if source == "evidence:"+evidence.CallID && evidence.Completed {
+					validSource, evidenceSource = true, true
+					matched = true
+				}
+			}
+			if !matched {
+				fail(400, "Memory source could not be verified")
+			}
+		}
+		if !validSource || mutation.Verification == "observed" && !evidenceSource || mutation.Verification == "user-stated" && !containsMemorySource(mutation.SourceIDs, "user:0") {
+			fail(400, "Memory source could not be verified")
+		}
+		old := s.row("SELECT * FROM projectMemories WHERE projectId=? AND key=?", snapshot.ProjectID, mutation.Key)
+		oldRevision := 0
+		if old != nil {
+			oldRevision = integer(old["revision"])
+			if stringOf(old["deletedAt"]) != "" {
+				fail(409, "Memory changed after source turn")
+			}
+		}
+		if old != nil && old["body"] == m.Body && old["description"] == m.Description && old["type"] == m.Type {
+			continue
+		}
+		if old != nil && integer(old["projectRevision"]) > snapshot.KnowledgeBaseRevision {
+			fail(409, "Memory changed after source turn")
+		}
+		if mutation.ExpectedRevision != oldRevision {
+			fail(409, "Memory revision conflict")
+		}
+		if old == nil && integer(s.row("SELECT count(*) AS count FROM projectMemories WHERE projectId=? AND deletedAt=''", snapshot.ProjectID)["count"]) >= 500 {
+			fail(429, "Project memory is full")
+		}
+		originSession, originTurn, createdAt := snapshot.SessionID, snapshot.TurnID, t
+		sources := []Object{}
+		if old != nil {
+			originSession, originTurn, createdAt = stringOf(old["originSessionId"]), stringOf(old["originTurnId"]), stringOf(old["createdAt"])
+			_ = json.Unmarshal([]byte(stringOf(old["sourceSummaryJSON"])), &sources)
+		}
+		excerpt := snapshot.UserText
+		if len(excerpt) > 1024 {
+			excerpt = excerpt[:1024]
+		}
+		sources = append(sources, Object{"kind": "auto", "sessionId": snapshot.SessionID, "turnId": snapshot.TurnID, "sourceIds": mutation.SourceIDs, "at": snapshot.CapturedAt, "excerpt": excerpt})
+		if len(sources) > 8 {
+			sources = sources[len(sources)-8:]
+		}
+		observedAt := ""
+		if m.Verification == "observed" {
+			observedAt = snapshot.CapturedAt
+		}
+		markdown := renderMemoryMarkdown(m.Key, m.Type, m.Description, m.Body, memoryMarkdownMeta{ProjectID: snapshot.ProjectID, OriginSessionID: originSession, OriginTurnID: originTurn, Revision: oldRevision + 1, UpdatedAt: t, Verification: m.Verification, ObservedAt: observedAt})
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(m.Body)))
+		s.exec(`INSERT INTO projectMemories(projectId,key,type,description,body,markdown,revision,projectRevision,contentHash,originSessionId,originTurnId,lastSourceSessionId,lastSourceTurnId,sourceIdsJSON,sourceSummaryJSON,verification,observedAt,createdAt,updatedAt)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(projectId,key) DO UPDATE SET type=excluded.type,description=excluded.description,body=excluded.body,markdown=excluded.markdown,revision=excluded.revision,projectRevision=excluded.projectRevision,contentHash=excluded.contentHash,lastSourceSessionId=excluded.lastSourceSessionId,lastSourceTurnId=excluded.lastSourceTurnId,sourceIdsJSON=excluded.sourceIdsJSON,sourceSummaryJSON=excluded.sourceSummaryJSON,verification=excluded.verification,observedAt=excluded.observedAt,updatedAt=excluded.updatedAt`, snapshot.ProjectID, m.Key, m.Type, m.Description, m.Body, markdown, oldRevision+1, nextRevision, hash, originSession, originTurn, snapshot.SessionID, snapshot.TurnID, jsonText(mutation.SourceIDs), jsonText(sources), m.Verification, observedAt, createdAt, t)
+		keys = append(keys, mutation.Key)
+	}
+	var previous ai.Usage
+	_ = json.Unmarshal([]byte(stringOf(live["usageJSON"])), &previous)
+	previous.Input += usage.Input
+	previous.Output += usage.Output
+	previous.Total += usage.Total
+	previous.Known = previous.Known || usage.Known
+	status, outcome := "no_op", "no_op"
+	if naturalChanged {
+		status, outcome = "succeeded", "applied"
+	}
+	if len(keys) > 0 {
+		status, outcome = "succeeded", "applied"
+		s.exec("UPDATE projectMemorySettings SET revision=revision+1,updatedAt=? WHERE projectId=?", t, snapshot.ProjectID)
+		s.exec("INSERT INTO projectMemoryCommits(commitId,jobId,projectId,revision,mutationKeysJSON,sourceTurnSequence,createdAt) VALUES(?,?,?,?,?,?,?)", ident(), jobID, snapshot.ProjectID, nextRevision, jsonText(keys), job["turnSequence"], t)
+	}
+	s.exec("UPDATE projectMemoryJobs SET status=?,leaseToken='',leaseOwner='',leaseUntilMs=0,lastErrorCode='',usageJSON=?,updatedAt=? WHERE jobId=?", status, jsonText(previous), t, jobID)
+	s.exec("UPDATE projectMemoryTurns SET outcome=?,processedAt=? WHERE sequence=?", outcome, t, job["turnSequence"])
+	s.exec("UPDATE naturalMemoryCoverage SET stage='processed',reason='',updatedAt=? WHERE turnSequence=?", t, job["turnSequence"])
+	if naturalChanged {
+		s.event(snapshot.SessionID, "message")
+	}
+	return len(keys) > 0 || naturalChanged
 }
 
 func containsMemorySource(sources []string, desired string) bool {

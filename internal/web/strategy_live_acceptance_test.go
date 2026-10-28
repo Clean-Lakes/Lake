@@ -69,7 +69,7 @@ func TestP8RealProviderSmoke(t *testing.T) {
 	defer engine.Shutdown()
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	answer, usage, err := engine.ExtractStrategyProposal(ctx, model, []ai.Message{{Role: "system", Content: "Return exactly a JSON object with ok:true. No tools."}, {Role: "user", Content: "Verify this explicitly configured Lake Dev model can complete a bounded request."}})
+	answer, usage, err := engine.ExtractMemory(ctx, model, []ai.Message{{Role: "system", Content: "Return exactly a JSON object with ok:true. No tools."}, {Role: "user", Content: "Verify this explicitly configured Lake Dev model can complete a bounded request."}})
 	record := Object{"sourceCommit": os.Getenv("LAKE_P8_SOURCE_COMMIT"), "model": model.Name, "reasoningEffort": model.ReasoningEffort, "modelRef": ai.ModelIdentity(model), "protocol": model.Protocol, "usage": usage, "passed": false, "providerVersion": "not_exposed", "seed": "not_exposed"}
 	var value struct {
 		OK bool `json:"ok"`
@@ -851,7 +851,7 @@ func TestP8RealServicesBoundedOptimization(t *testing.T) {
 		defer cancel()
 		auxiliaryModel := model
 		auxiliaryModel.MaxOutput = 2048
-		body, usage, err := engine.ExtractStrategyProposal(ctx, auxiliaryModel, []ai.Message{{Role: "system", Content: "Return exactly JSON with one field body: a conditional reusable diagnostic method. Use only supplied DEVELOPMENT behavior. No tools, authority changes, fixture IDs, memorized answers, task-specific database values, automatic adoption or judge access. Refine the seed from actual behavior; preserve permissions, evidence and bounded stopping."}, {Role: "user", Content: data}})
+		body, usage, err := engine.ExtractMemory(ctx, auxiliaryModel, []ai.Message{{Role: "system", Content: "Return exactly JSON with one field body: a conditional reusable diagnostic method. Use only supplied DEVELOPMENT behavior. No tools, authority changes, fixture IDs, memorized answers, task-specific database values, automatic adoption or judge access. Refine the seed from actual behavior; preserve permissions, evidence and bounded stopping."}, {Role: "user", Content: data}})
 		var parsed struct {
 			Body string `json:"body"`
 		}

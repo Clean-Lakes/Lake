@@ -100,6 +100,7 @@ func (b *Server) runMemoryWorker() {
 			b.Store.PruneMemoryArtifacts()
 			lastPrune = time.Now()
 		}
+		b.reconcileRegisteredMemoryOutboxes()
 		b.processOneMemoryJob()
 		select {
 		case <-b.Context.Done():
@@ -115,7 +116,7 @@ func (b *Server) processOneMemoryJob() {
 		return
 	}
 	b.messageMu.Lock()
-	if len(b.runningMessages) > 0 || b.memoryCancel != nil || b.Context.Err() != nil {
+	if len(b.runningMessages) > 0 || b.memoryForeground > 0 || b.memoryCancel != nil || b.Context.Err() != nil {
 		b.messageMu.Unlock()
 		return
 	}

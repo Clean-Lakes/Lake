@@ -89,7 +89,7 @@ func TestStrategyOptimizationRetiredHTTPAndNoProviderDispatch(t *testing.T) {
 	for _, action := range []string{"resume", "save-candidate"} {
 		strategyHTTP(t, h, "POST", base+"/experiments/"+id+"/"+action, ident(), `{}`, 410)
 	}
-	b.processOneExperiment()
+	b.processOneMemoryJob()
 	job, e := b.Store.ClaimStrategyJob(ctx)
 	if e != nil || job != nil || calls.Load() != 0 {
 		t.Fatal("retired job dispatched", e)

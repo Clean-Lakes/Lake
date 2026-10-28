@@ -1,7 +1,6 @@
 package ai
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
@@ -221,10 +220,3 @@ func (e *Engine) PersistedStrategyOutboxes() ([]StrategyTurnSnapshot, error) {
 
 // One auxiliary completion, without session, tools or feedback into learning.
 func StrategyLearningInputBytes(messages []Message) int { return historyCost(messages) }
-
-func (e *Engine) ExtractStrategyProposal(ctx context.Context, m Model, messages []Message) (string, Usage, error) {
-	if len(messages) != 2 || messages[0].Role != "system" || messages[1].Role != "user" {
-		return "", Usage{}, errors.New("invalid strategy extraction input")
-	}
-	return e.sideCompletion(ctx, m, messages, "strategy context budget exceeded")
-}

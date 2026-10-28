@@ -215,8 +215,8 @@ func TestStrategyRetiredSignalsAndWorkerTicksMakeNoAuxiliaryRequests(t *testing.
 	apiTest(t, h, "POST", "/api/sessions/"+id+"/ai/configure", Object{"asset_ref": ref}, 200)
 	apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "以后请先列证据。"}, 202)
 	b.workers.Wait()
-	b.processOneStrategyJob()
-	b.processOneExperiment()
+	b.processOneMemoryJob()
+	b.processOneMemoryJob()
 	view, _ := b.Engine.Snapshot(id)
 	if view.Status != "completed" || requests.Load() != 1 || integer(b.Store.row("SELECT COUNT(*) AS n FROM strategyJobs")["n"]) != 0 {
 		t.Fatal(view.Status, requests.Load())

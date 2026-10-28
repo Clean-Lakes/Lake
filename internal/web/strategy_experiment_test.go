@@ -182,3 +182,23 @@ func TestStrategyExperimentSchemaUpgradeTransactionRollback(t *testing.T) {
 		t.Fatal("partial experiment table committed")
 	}
 }
+
+// Only explicit offline historical acceptance fixtures use these helpers.
+func experimentModelHash(m ai.Model) string {
+	return strategy.ContentHash(jsonText(Object{"identity": ai.ModelIdentity(m), "contextWindow": m.ContextWindow, "maxOutput": m.MaxOutput, "reasoningEffort": m.ReasoningEffort}))
+}
+func strategyExperimentModel(model ai.Model) ai.Model {
+	if model.ContextWindow <= 0 {
+		model.ContextWindow = ai.AutomaticContextWindow(model.ContextLimit)
+	}
+	if model.ContextLimit >= 2048 {
+		model.ContextWindow = min(model.ContextWindow, model.ContextLimit)
+	}
+	model.ContextWindow = min(64000, max(2048, model.ContextWindow))
+	if model.MaxOutput <= 0 {
+		model.MaxOutput = 2048
+	}
+	model.MaxOutput = min(2048, model.MaxOutput, model.ContextWindow/4)
+	model.SupportsImageOutput = false
+	return model
+}
