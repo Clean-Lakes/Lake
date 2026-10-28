@@ -294,7 +294,7 @@ func (e *Engine) PersistedMemoryOutboxes() ([]MemoryTurnSnapshot, error) {
 	}
 	var out []MemoryTurnSnapshot
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || !identifier.MatchString(strings.TrimSuffix(entry.Name(), ".json")) {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || !identifier.MatchString(strings.TrimSuffix(entry.Name(), ".json")) || !e.memoryCaptureSessionAvailable(strings.TrimSuffix(entry.Name(), ".json")) {
 			continue
 		}
 		bytes, err := os.ReadFile(filepath.Join(e.Dir, entry.Name()))

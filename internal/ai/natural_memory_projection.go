@@ -66,7 +66,7 @@ func (e *Engine) restoreMissingMemoryCaches() error {
 		return err
 	}
 	for _, id := range ids {
-		if !identifier.MatchString(id) {
+		if !identifier.MatchString(id) || !e.memoryCaptureSessionAvailable(id) {
 			continue
 		}
 		if _, err := os.Stat(filepath.Join(e.Dir, id+".json")); !os.IsNotExist(err) {
@@ -76,4 +76,16 @@ func (e *Engine) restoreMissingMemoryCaches() error {
 		_, _ = e.get(id)
 	}
 	return nil
+}
+
+func (e *Engine) memoryCaptureSessionAvailable(id string) (allowed bool) {
+	if e.MemoryCaptureSessionAllowed == nil {
+		return true
+	}
+	defer func() {
+		if recover() != nil {
+			allowed = false
+		}
+	}()
+	return e.MemoryCaptureSessionAllowed(id)
 }

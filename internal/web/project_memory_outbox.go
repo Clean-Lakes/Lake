@@ -83,6 +83,9 @@ func (s *Store) EnqueueMemoryTurn(snapshot ai.MemoryTurnSnapshot) (err error) {
 }
 
 func (b *Server) reconcileMemoryOutboxForSession(id string) error {
+	if !b.Store.MemoryCaptureSessionAllowed(id) {
+		return nil
+	}
 	if _, err := b.Engine.QueuePendingMemoryCaptures(id); err != nil {
 		b.registerMemoryOutbox(id)
 		return err
@@ -188,4 +191,8 @@ func (s *Store) MemoryCaptureAllowed(snapshot ai.MemoryTurnSnapshot) bool {
 		settings := s.memorySettings(snapshot.ProjectID)
 		return source != nil && source["text"] == snapshot.UserText && settings["useEnabled"] == true && settings["extractionEnabled"] == true && integer(settings["epoch"]) == snapshot.Epoch
 	}).(bool)
+}
+
+func (s *Store) MemoryCaptureSessionAllowed(id string) bool {
+	return s.read(func() any { return s.row("SELECT id FROM sessions WHERE id=?", id) != nil }).(bool)
 }

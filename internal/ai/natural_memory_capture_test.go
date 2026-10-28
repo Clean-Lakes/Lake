@@ -375,3 +375,38 @@ func TestMemoryCaptureTransientGuardFailureDoesNotLatchPermanentGap(t *testing.T
 		t.Fatal("transient failure remained a permanent warning", err)
 	}
 }
+
+func TestMemoryCaptureStartupNeverRecreatesDeletedBusinessSession(t *testing.T) {
+	model, close := fakeModel(t, func(_ int, _ map[string]any) any { return response("received") })
+	defer close()
+	home := t.TempDir()
+	e, err := New(home, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := Config{Model: model, Profile: "core", MemoryProjectID: "project", NaturalMemory: &NaturalMemoryConsent{ProjectEnabled: true, ProjectEpoch: 1}}
+	if err = e.Configure("deleted-case", c); err != nil {
+		t.Fatal(err)
+	}
+	if err = e.ExecuteTurn(context.Background(), "deleted-case", TurnInput{UserText: "以后这个项目固定中文。", StrategyMessageID: "message"}); err != nil {
+		t.Fatal(err)
+	}
+	e.Shutdown()
+	path := filepath.Join(home, "deleted-case.json")
+	if err = os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := New(home, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restored.Shutdown()
+	restored.MemoryCaptureSessionAllowed = func(string) bool { return false }
+	out, err := restored.PersistedMemoryOutboxes()
+	if err != nil || len(out) != 0 {
+		t.Fatal("deleted owner restored outbox", err)
+	}
+	if _, err = os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("deleted owner cache was recreated")
+	}
+}

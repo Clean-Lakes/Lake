@@ -171,6 +171,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	server.Engine.Strategies = server.strategyProvider
 	server.Engine.ModelActivity = server.memoryForegroundModel
 	server.Engine.MemoryCaptureAllowed = store.MemoryCaptureAllowed
+	server.Engine.MemoryCaptureSessionAllowed = store.MemoryCaptureSessionAllowed
 	store.RecoverSRETasks()
 	server.reconcileStaleSREStatuses()
 	if err = server.startScheduler(); err != nil {

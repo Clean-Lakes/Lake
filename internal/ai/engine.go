@@ -31,41 +31,42 @@ type session struct {
 	sreReply            *sreReply
 }
 type Engine struct {
-	MemoryCaptureAllowed func(MemoryTurnSnapshot) bool
-	experiment           *strategyExperimentRuntime
-	Strategies           StrategyProvider
-	CorrectionGuard      func(context.Context, string, int64, int64) error
-	correctionMu         sync.Mutex
-	onlineTask           string
-	onlineSessions       sync.Map
-	runMu                sync.Mutex
-	runs                 sync.WaitGroup
-	runtimeClosed        bool
-	shutdownOnce         sync.Once
-	sreRepository        SRERepository
-	sreControls          sync.Map
-	sreRecoveries        sync.Map
-	sreResourceLocks     sync.Map
-	agentMu              sync.Mutex
-	agentWorkers         map[string]*agentWorker
-	agentSlots           chan struct{}
-	modelSlots           chan struct{}
-	childModelSlots      chan struct{}
-	collectionSlots      chan struct{}
-	agentsClosed         bool
-	worker               *agentWorker
-	observationSlots     sync.Map
-	mu                   sync.Mutex
-	sessions             map[string]*session
-	Dir                  string
-	RuntimeDir           string
-	Bridge               Bridge
-	Emit                 func(Event)
-	ModelActivity        func() func() // Trusted host foreground priority; no provider/session mutation.
-	tunnels              sync.Map
-	shells               sync.Map
-	shellMu              sync.Mutex
-	shellsClosed         bool
+	MemoryCaptureAllowed        func(MemoryTurnSnapshot) bool
+	MemoryCaptureSessionAllowed func(string) bool
+	experiment                  *strategyExperimentRuntime
+	Strategies                  StrategyProvider
+	CorrectionGuard             func(context.Context, string, int64, int64) error
+	correctionMu                sync.Mutex
+	onlineTask                  string
+	onlineSessions              sync.Map
+	runMu                       sync.Mutex
+	runs                        sync.WaitGroup
+	runtimeClosed               bool
+	shutdownOnce                sync.Once
+	sreRepository               SRERepository
+	sreControls                 sync.Map
+	sreRecoveries               sync.Map
+	sreResourceLocks            sync.Map
+	agentMu                     sync.Mutex
+	agentWorkers                map[string]*agentWorker
+	agentSlots                  chan struct{}
+	modelSlots                  chan struct{}
+	childModelSlots             chan struct{}
+	collectionSlots             chan struct{}
+	agentsClosed                bool
+	worker                      *agentWorker
+	observationSlots            sync.Map
+	mu                          sync.Mutex
+	sessions                    map[string]*session
+	Dir                         string
+	RuntimeDir                  string
+	Bridge                      Bridge
+	Emit                        func(Event)
+	ModelActivity               func() func() // Trusted host foreground priority; no provider/session mutation.
+	tunnels                     sync.Map
+	shells                      sync.Map
+	shellMu                     sync.Mutex
+	shellsClosed                bool
 
 	compactionTimeout time.Duration
 	adkMu             sync.Mutex
