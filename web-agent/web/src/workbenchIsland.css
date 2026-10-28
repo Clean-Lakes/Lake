@@ -144,7 +144,8 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .term
  .lake-workbench-island .header-normal-state.is-visible { flex:1; min-width:0; max-width:100%; width:100%!important; }
  .lake-workbench-island .header-normal-state .header-morph-content { display:grid; grid-template-columns:minmax(0,1fr) 28px; width:100%; min-width:0; gap:4px; }
  /* Outrank the WKWebView corner fallback, which otherwise restores visible overflow. */
- :root .lake-workbench-island .header-normal-state .session-state-badge { min-width:0; padding-inline:6px; display:block; overflow:hidden; text-overflow:ellipsis; }
+ .lake-workbench-island .header-normal-state .session-state-badge { min-width:0; padding-inline:6px; display:block; overflow:hidden; text-overflow:ellipsis; }
+ :root.lake-corner-fallback .lake-workbench-island .header-morph-slot.header-normal-state .session-state-badge { overflow:hidden; }
  .lake-workbench-island .session-state-badge > span { display:inline-block; margin-right:6px; vertical-align:middle; }
  .lake-workbench-island .header-inspector-toggle { flex:none; margin-left:0; }
 }
