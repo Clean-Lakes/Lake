@@ -108,7 +108,9 @@ html.lake-windows-chrome .app-shell.has-workbench-island { --pane-rail-top:124px
 
 /* The prompt begins below its own island, alongside the inspector content. */
 .app-shell.has-workbench-island .terminal-session .terminal-screen .xterm { padding:76px 16px 12px; }
+.app-shell.has-workbench-island .terminal-session .xterm-viewport { top:76px; }
 html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .terminal-screen .xterm { padding-top:116px; }
+html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xterm-viewport { top:116px; }
 .lake-workbench-island .header-state-area { margin-left:0; }
 .lake-workbench-island .header-normal-state .header-morph-content { display:flex; align-items:center; gap:4px; }
 .lake-workbench-island .session-state-badge { white-space:nowrap; }
