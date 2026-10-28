@@ -25,3 +25,23 @@ export const naturalMemoryApi={
  carry:(base:string,p:NaturalPreview)=>request<{id:string;revision:number;changeId:string}>(base,'/legacy/'+encodeURIComponent(p.id)+'/carry',{expectedRevision:p.linkRevision,previewToken:p.previewToken}),
  undo:(base:string,changeId:string,revision:number)=>request<{id:string;revision:number;changeId:string}>(base,'/changes/'+encodeURIComponent(changeId)+'/undo',{expectedRevision:revision}),
 };
+export type FormedPreference={id:string;topic:string;revision:number;contentRevision:number;body:string;state:string;scope:string;source:{private:boolean;available:boolean;sessionId?:string;messageId?:string};parentRevision:number};
+export type FormedChange={id:string;entryId:string;beforeRevision:number;afterRevision:number;kind:string;createdAt:string;undoneBy:string;before?:FormedPreference|null;after?:FormedPreference};
+export type NaturalNotice={changeId:string;scope:string;entryId:string;revision:number};
+export const naturalNoticeBase=(scope:string)=>naturalMemoryPath(scope==='user'?'':scope.slice('project:'.length));
+export const naturalPreferenceApi={
+ list:(base:string,after='')=>request<NaturalPage<FormedPreference>>(base,'/formed-preferences?after='+encodeURIComponent(after)),
+ changes:(base:string,after='')=>request<NaturalPage<FormedChange>>(base,'/formed-changes?after='+encodeURIComponent(after)),
+ change:(base:string,id:string)=>request<FormedChange>(base,'/formed-changes/'+encodeURIComponent(id)),
+ read:(base:string,id:string)=>request<FormedPreference>(base,'/formed-preferences/'+encodeURIComponent(id)),
+ undo:(base:string,id:string,revision:number)=>request<{revision:number}>(base,'/formed-changes/'+encodeURIComponent(id)+'/undo',{expectedRevision:revision}),
+ forget:(base:string,id:string,revision:number)=>request<{revision:number}>(base,'/formed-preferences/'+encodeURIComponent(id)+'/forget',{expectedRevision:revision}),
+ dismiss:(base:string,id:string)=>request<{dismissed:boolean}>(base,'/formed-changes/'+encodeURIComponent(id)+'/dismiss',{}),
+ settings:async(base:string,revision:number,autoEnabled:boolean)=>{
+  const operation=base+'/settings'+JSON.stringify({expectedRevision:revision,autoEnabled});
+  const key=pending.get(operation)||crypto.randomUUID();pending.set(operation,key);
+  const response=await fetch(base+'/settings',{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify({expectedRevision:revision,autoEnabled})});
+  if(!response.ok){if(response.status<500)pending.delete(operation);throw new ApiRequestError('记忆设置已变化，请刷新后重试',response.status)}
+  pending.delete(operation);return response.json() as Promise<{revision:number;autoEnabled:boolean}>;
+ },
+};

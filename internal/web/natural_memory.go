@@ -7,9 +7,9 @@ import (
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
-// N1 does not authorize natural extraction or enable the gated operational V2.
-const naturalMemoryAutomaticReady = false
-const naturalMemoryPolicyVersion = 1
+// Natural preferences are opt-in; the operational V2 gate remains unchanged.
+const naturalMemoryAutomaticReady = true
+const naturalMemoryPolicyVersion = 2
 
 func naturalFail(status int, code string) { panic(&StrategyError{status, "natural_memory_" + code}) }
 func naturalScope(ctx StrategyContext) strategy.Scope {
@@ -27,9 +27,14 @@ func (s *Store) naturalSettings(ctx StrategyContext) Object {
 		revision = integer(row["revision"])
 		epoch = integer(row["epoch"])
 	}
+	enabled, consent := false, 0
+	if row != nil {
+		enabled = integer(row["autoEnabled"]) == 1 && integer(row["consentVersion"]) == naturalMemoryPolicyVersion
+		consent = integer(row["consentVersion"])
+	}
 	old := s.strategySettings(scope)
 	effective := s.strategyEffective(ctx)
-	out := Object{"scope": scope, "revision": revision, "epoch": epoch, "autoEnabled": false, "automaticReady": naturalMemoryAutomaticReady, "consentVersion": 0,
+	out := Object{"scope": scope, "revision": revision, "epoch": epoch, "autoEnabled": enabled, "automaticReady": naturalMemoryAutomaticReady && !s.memoryV2, "consentVersion": consent,
 		"policyVersion":         naturalMemoryPolicyVersion,
 		"preferenceSettings":    Object{"revision": old.Revision, "epoch": old.Epoch, "masterEnabled": old.MasterEnabled, "applyEnabled": old.ApplyEnabled, "effectiveUseEnabled": effective.Settings.MasterEnabled && effective.Settings.ApplyEnabled},
 		"projectMemorySettings": nil, "operationalMemoryVersion": 1}
@@ -66,7 +71,7 @@ func (s *Store) naturalSaveReceipt(scope, key, digest string, result Object) {
 func (s *Store) SetNaturalMemorySettings(ctx StrategyContext, key string, expected int, auto bool) (Object, error) {
 	return strategyCall(s, true, func() Object {
 		scope := s.strategyEnsureScope(ctx, naturalScope(ctx))
-		if auto {
+		if auto && s.memoryV2 {
 			naturalFail(409, "automatic_not_ready")
 		}
 		if expected < 0 {
@@ -80,8 +85,11 @@ func (s *Store) SetNaturalMemorySettings(ctx StrategyContext, key string, expect
 		if integer(old["revision"]) != expected {
 			naturalFail(409, "revision_conflict")
 		}
-		s.exec("INSERT INTO naturalMemorySettings VALUES(?,?,?,0,0) ON CONFLICT(scopeKey) DO UPDATE SET revision=excluded.revision,epoch=excluded.epoch,autoEnabled=0,consentVersion=0", scope, expected+1, integer(old["epoch"])+1)
-		result := Object{"revision": expected + 1, "epoch": integer(old["epoch"]) + 1, "autoEnabled": false}
+		s.exec("INSERT INTO naturalMemorySettings VALUES(?,?,?,?,?) ON CONFLICT(scopeKey) DO UPDATE SET revision=excluded.revision,epoch=excluded.epoch,autoEnabled=excluded.autoEnabled,consentVersion=excluded.consentVersion", scope, expected+1, integer(old["epoch"])+1, auto, naturalMemoryPolicyVersion)
+		if auto {
+			s.exec("INSERT INTO naturalPreferenceConsent VALUES(?,?) ON CONFLICT(scopeKey) DO UPDATE SET enabledAt=excluded.enabledAt", scope, now())
+		}
+		result := Object{"revision": expected + 1, "epoch": integer(old["epoch"]) + 1, "autoEnabled": auto}
 		s.naturalSaveReceipt(scope, key, digest, result)
 		return result
 	})

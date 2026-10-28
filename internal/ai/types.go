@@ -50,19 +50,20 @@ type Config struct {
 	sreCoordinator            bool
 	sre                       *sreRoleContext
 	targetScope               *TargetScope
-	StrategyLearnEnabled      bool             `json:"-"`
-	StrategyCorrectEnabled    bool             `json:"-"`
-	StrategyBudget            strategy.Budget  `json:"-"`
-	StrategyGlobalEpoch       int64            `json:"-"`
-	StrategyProjectEpoch      int64            `json:"-"`
-	MemoryProjectID           string           `json:"-"`
-	MemoryEnabled             bool             `json:"-"`
-	MemoryExtractionEnabled   bool             `json:"-"`
-	MemoryEpoch               int              `json:"-"`
-	MemoryKnowledgeRevision   int              `json:"-"`
-	MemorySchemaVersion       int              `json:"-"`
-	MemoryResourceGenerations map[string]int   `json:"-"`
-	Directories               []AssetDirectory `json:"directories,omitempty"`
+	StrategyLearnEnabled      bool                  `json:"-"`
+	StrategyCorrectEnabled    bool                  `json:"-"`
+	StrategyBudget            strategy.Budget       `json:"-"`
+	StrategyGlobalEpoch       int64                 `json:"-"`
+	StrategyProjectEpoch      int64                 `json:"-"`
+	NaturalMemory             *NaturalMemoryConsent `json:"-"`
+	MemoryProjectID           string                `json:"-"`
+	MemoryEnabled             bool                  `json:"-"`
+	MemoryExtractionEnabled   bool                  `json:"-"`
+	MemoryEpoch               int                   `json:"-"`
+	MemoryKnowledgeRevision   int                   `json:"-"`
+	MemorySchemaVersion       int                   `json:"-"`
+	MemoryResourceGenerations map[string]int        `json:"-"`
+	Directories               []AssetDirectory      `json:"directories,omitempty"`
 	agentRole                 string
 	workflowMode              bool
 	MultiAgentMode            string       `json:"multiAgentMode,omitempty"`
