@@ -3,7 +3,7 @@
 .session-layout > .session-view { min-width:0; overflow:hidden; }
 .workspace.has-session-inspector { --inspector-width:var(--inspector-preferred-width, 382px); --session-content-start:max(var(--session-gutter),calc((100cqw - var(--inspector-width) - 960px)/2)); --session-content-width:min(960px,calc(100cqw - var(--inspector-width) - var(--session-gutter) - var(--session-gutter))); }
 .workspace.has-session-inspector > .workspace-header { max-width:calc(100% - var(--inspector-width) - var(--session-content-start) - 16px); }
-.session-inspector { flex:0 0 var(--inspector-preferred-width, 382px); width:var(--inspector-preferred-width, 382px); min-width:0; height:100%; position:relative; z-index:5; display:flex; flex-direction:column; border-left:1px solid var(--border); background:var(--surface); color:var(--foreground); padding-top:0; outline:none; animation:inspector-arrive 240ms cubic-bezier(.22,1,.36,1) both; }
+.session-inspector { flex:0 0 var(--inspector-preferred-width, 382px); width:var(--inspector-preferred-width, 382px); min-width:0; height:100%; position:relative; z-index:5; display:flex; flex-direction:column; border-left:1px solid var(--border); background:var(--background); color:var(--foreground); padding-top:0; outline:none; animation:inspector-arrive 240ms cubic-bezier(.22,1,.36,1) both; }
 .session-inspector.is-closing { position:absolute; right:0; top:0; bottom:0; pointer-events:none; animation:inspector-depart 180ms ease both; }
 .session-inspector-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:19px 22px 9px; }
 .session-inspector-heading > div { min-width:0; }

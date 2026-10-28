@@ -606,7 +606,7 @@ a { color: inherit; }
 .terminal-controls { display: flex; flex-wrap: wrap; gap: 6px; }
 /* The terminal shares the workspace on desktop and overlays it on narrow screens. */
 .terminal-side-slot { grid-column: 3; min-width: 0; min-height: 0; overflow: hidden; }
-.terminal-side-panel { width: var(--terminal-panel-width); height: 100%; border-left: 1px solid var(--border); transform: translateX(40px); opacity: 0; background: var(--surface); transition: transform .18s ease, opacity .18s ease; }
+.terminal-side-panel { width: var(--terminal-panel-width); height: 100%; border-left: 1px solid var(--border); transform: translateX(40px); opacity: 0; background: var(--background); transition: transform .18s ease, opacity .18s ease; }
 .terminal-side-panel.is-open { transform: translateX(0); opacity: 1; }
 .terminal-panel-scrim { display: none; }
 .terminal-panel-content { display: flex; flex-direction: column; height: 100%; min-height: 0; }
