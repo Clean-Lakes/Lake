@@ -1,0 +1,18 @@
+{
+  "testedCommit": "7c53afdc07501649b37ce932f907d3996ab0c5a4",
+  "date": "2026-10-28",
+  "change": "Standalone and shared island use 46px height; standalone vertical padding is 5px. Remove old Pilot 54px minimum. Ordinary short status and title icon treatment stay consistent across breakpoints.",
+  "checks": {
+    "types": "passed",
+    "relatedTests": "21 passed: session-views, workbenchIslandLayout, workbenchPaneWidths",
+    "signedDevBuild": "scripts/build_lake_desktop.sh --dev --install passed",
+    "browser": "Fictional real-App fixture with native corner fallback: standalone at 850px is 257x46 with 5px vertical padding; conversation+inspector at 1232px is 416x46. Both show 执行中 with full 原操作仍在执行 tooltip. Light/dark and Pilot presentation also inspected.",
+    "nativeDev": "Installed macOS WKWebView shared two-pane island inspected, short status visible; backend healthy and clean manifest matches tested commit."
+  },
+  "notVerified": [
+    "Windows native visuals",
+    "Native dark theme",
+    "Complete native narrow/shared resize sequence; browser breakpoint sequence verified"
+  ],
+  "data": "No model calls or remote commands. Native user screenshots not saved to repository."
+}
