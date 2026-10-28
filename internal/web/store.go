@@ -133,6 +133,10 @@ func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
 		db.Close()
 		return nil, e
 	}
+	if e = s.prepareNaturalPreferenceMigration(); e != nil {
+		db.Close()
+		return nil, e
+	}
 	if e = s.prepareNaturalMemoryMigration(); e != nil {
 		db.Close()
 		return nil, e
@@ -171,6 +175,10 @@ func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
 		return nil, e
 	}
 	if e = s.migrateNaturalMemory(); e != nil {
+		db.Close()
+		return nil, e
+	}
+	if e = s.migrateNaturalPreference(); e != nil {
 		db.Close()
 		return nil, e
 	}
@@ -622,6 +630,7 @@ func (s *Store) SetGeneratedTitle(id, title string) bool {
 func (s *Store) DeleteSession(id string) {
 	s.update(func() any {
 		s.session(id)
+		s.naturalEraseSession(id)
 		s.strategyEraseSessionSources(id)
 		s.exec("UPDATE terminalEntries SET actionId=NULL WHERE actionId IN (SELECT id FROM actions WHERE sessionId=?)", id)
 		s.exec("DELETE FROM terminalEntries WHERE terminalId IN (SELECT id FROM terminals WHERE sessionId=?)", id)
@@ -662,7 +671,7 @@ func (s *Store) snapshot(id string) Object {
 		a["risk"] = p.Risk
 		a["riskReason"] = p.Reason
 	}
-	return Object{"replyTimings": s.rows("SELECT messageId,startedAt,finishedAt,status FROM replyTimings WHERE sessionId=? ORDER BY startedAt,rowid", id), "messageQueue": s.messageQueue(id), "session": session, "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE projectId=? ORDER BY position,id", session["projectId"]), "messages": messages, "actions": actions, "specialists": s.rows("SELECT * FROM specialists WHERE sessionId=? ORDER BY createdAt,rowid", id), "evidence": s.rows("SELECT * FROM evidence WHERE sessionId=? ORDER BY collectedAt,rowid", id), "terminals": s.rows("SELECT id,sessionId,resourceId,status,holder,contextVersion,createdAt,generation,outputCapturedAt,cwd,shell FROM terminals WHERE sessionId=? ORDER BY createdAt,rowid", id), "cursor": s.row("SELECT COALESCE(MAX(seq),0) AS cursor FROM events WHERE sessionId=?", id)["cursor"]}
+	return Object{"replyTimings": s.rows("SELECT messageId,startedAt,finishedAt,status FROM replyTimings WHERE sessionId=? ORDER BY startedAt,rowid", id), "messageQueue": s.messageQueue(id), "naturalMemoryNotices": s.naturalSessionNotices(id), "session": session, "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE projectId=? ORDER BY position,id", session["projectId"]), "messages": messages, "actions": actions, "specialists": s.rows("SELECT * FROM specialists WHERE sessionId=? ORDER BY createdAt,rowid", id), "evidence": s.rows("SELECT * FROM evidence WHERE sessionId=? ORDER BY collectedAt,rowid", id), "terminals": s.rows("SELECT id,sessionId,resourceId,status,holder,contextVersion,createdAt,generation,outputCapturedAt,cwd,shell FROM terminals WHERE sessionId=? ORDER BY createdAt,rowid", id), "cursor": s.row("SELECT COALESCE(MAX(seq),0) AS cursor FROM events WHERE sessionId=?", id)["cursor"]}
 }
 func (s *Store) Snapshot(id string) Object {
 	return s.read(func() any { return s.snapshot(id) }).(Object)

@@ -43,7 +43,14 @@ func (s *Store) EnqueueMemoryTurn(snapshot ai.MemoryTurnSnapshot) (err error) {
 				outcome, status, code = "skipped", "skipped", "queue_limit"
 			}
 		}
-		if integer(settings["epoch"]) != snapshot.Epoch || settings["useEnabled"] != true || settings["extractionEnabled"] != true {
+		if snapshot.Natural != nil {
+			if integer(s.row("SELECT count(*) n FROM projectMemoryJobs j JOIN projectMemoryTurns t ON t.sequence=j.turnSequence WHERE t.projectId=? AND j.status IN ('queued','running','retry_wait')", snapshot.ProjectID)["n"]) >= 100 {
+				outcome, status, code = "skipped", "skipped", "queue_limit"
+			}
+			if !s.naturalSnapshotValid(snapshot) || !naturalSourceAgeValid(snapshot) {
+				outcome, status, code = "skipped", "skipped", "natural_memory_disabled"
+			}
+		} else if integer(settings["epoch"]) != snapshot.Epoch || settings["useEnabled"] != true || settings["extractionEnabled"] != true {
 			outcome, status = "skipped", "skipped"
 		}
 		nowAt := now()

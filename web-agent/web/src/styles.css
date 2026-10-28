@@ -1318,3 +1318,9 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 
 @media(hover:none) { .resource-drag-handle { opacity:1; } }
 @media(prefers-reduced-motion:reduce) { .resource-drag-handle { transition:none; } }
+
+/* A persisted background-memory result stays below the floating chat header. */
+.workspace.has-floating-header > .workspace-header + .natural-memory-notice { margin-top: 72px; }
+.natural-memory-notice { flex: 0 0 auto; min-width: 0; }
+.natural-memory-notice .system-banner { flex-wrap: wrap; }
+.natural-memory-notice .strategy-settings { margin: 0 clamp(21px, 3vw, 42px) 10px; max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-settings-panel); corner-shape: var(--corner-window); padding: 12px; }
