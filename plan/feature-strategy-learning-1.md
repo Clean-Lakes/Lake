@@ -1,14 +1,16 @@
 ---
 goal: 为 Lake 实现用户可见的策略资产、纠错血缘、有界自我改进和可复现对照实验
-version: 1.6
+version: 1.7
 date_created: 2026-10-20
-last_updated: 2026-10-27
+last_updated: 2026-10-28
 owner: Lake
 status: Superseded
 tags: [feature, strategy, learning, skills, harness, adk, evaluation]
 ---
 
 # Lake 策略学习与改进开发计划
+
+> 2026-10-28：原策略资产的新功能按[自然记忆重塑计划](feature-natural-memory-1.md)推进；C1 已经 #107 合入。下文 P0～P8 为历史交付记录，不能用来恢复旧策略提取、在线纠错或实验流程。
 
 > 2026-10-27 后续方向已调整为 [Harness² 衍生功能清理](refactor-harness-inspired-cleanup-1.md)。本文和 R0～R5 计划均保留历史证据；[C1](../docs/design/strategy-execution-retirement-c1.md) 已停止新增在线纠错、候选提取与产品实验执行；C2～C4 仍待实施，不继续推进原在线优化路线。
 
