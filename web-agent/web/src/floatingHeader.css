@@ -13,8 +13,9 @@
   left: var(--session-content-start);
   width: max-content;
   max-width: calc(100% - var(--session-gutter) - var(--session-gutter));
-  min-height: 40px;
-  padding: 10px 14px;
+  height: 46px;
+  min-height: 46px;
+  padding: 5px 14px;
   gap: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-window);
@@ -22,6 +23,8 @@
   box-shadow: var(--shadow-popover);
 }
 .workspace.has-floating-header .breadcrumbs { flex: 0 1 auto; }
+.workspace.has-floating-header > .workspace-header .breadcrumbs strong > svg { display:none; }
+.workspace.has-floating-header > .workspace-header .header-normal-state .header-morph-content { gap:4px; }
 .crumb-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace.has-floating-header .conversation { container-type: normal; min-height: 0; scrollbar-gutter: stable; scroll-padding-top: 80px; }
 .workspace.has-floating-header .timeline-list {
@@ -35,13 +38,13 @@
 .sidebar-footer .desktop-update-trigger { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; color: var(--text-secondary); }
 .session-nav-row.active ~ .session-actions-trigger { opacity: 1; }
 @media (max-width: 700px) {
-  .workspace.has-floating-header > .workspace-header { gap: 6px; padding: 8px 10px; }
+  .workspace.has-floating-header > .workspace-header { gap: 6px; padding: 5px 10px; }
   .workspace.has-floating-header .breadcrumbs { gap: 6px; }
 }
 /* Reserve the native Windows window controls, without extending the bubble. */
 html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
   max-width: calc(100% - var(--session-content-start) - 156px);
-  height: auto;
+  height: 46px;
   user-select: none;
 }
 @media (max-width: 700px) {

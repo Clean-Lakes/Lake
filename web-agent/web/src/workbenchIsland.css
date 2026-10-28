@@ -28,6 +28,7 @@
 .lake-workbench-island .workspace-header > :not(.workspace-header-sweep) { position:relative; z-index:2; }
 .lake-workbench-island .breadcrumbs { flex:0 1 auto; min-width:60px; max-width:213px; gap:8px; }
 .lake-workbench-island .breadcrumbs strong { min-width:0; }
+.lake-workbench-island .breadcrumbs strong > svg { display:none; }
 .lake-workbench-island .pilot-island-trigger { border:0; padding-left:8px; gap:8px; }
 .lake-workbench-island .header-state-area { flex:0 1 auto; }
 .lake-workbench-island .header-pilot-state { flex-shrink:1; }

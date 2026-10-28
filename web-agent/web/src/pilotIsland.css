@@ -25,7 +25,6 @@
 .header-morph-slot.is-visible{opacity:1}
 .header-morph-content{display:flex;align-items:center;width:max-content;min-height:32px}
 .header-normal-state .session-state-badge{margin-left:0}
-.workspace.has-floating-header>.workspace-header{min-height:54px}
 @container(max-width:900px){.pilot-island-action{width:170px}}
 @container(max-width:700px){.pilot-island-trigger{padding-left:9px;gap:9px}.pilot-island-action{width:145px}}
 @container(max-width:480px){.pilot-action-avatar{display:none}.pilot-island-action{width:94px}.pilot-island-action-line{gap:5px}.pilot-island-action-line>strong{display:none}.pilot-island-progress{gap:6px}.pilot-island-ring,.pilot-island-ended{width:24px;height:24px}.workspace.has-floating-header .breadcrumbs strong>svg{display:none}}
