@@ -24,7 +24,7 @@ export function SessionListTags({tags}:{tags:WorkspaceTag[]}) {
 
 export function SessionStateBadge({session,label,status=session.status}:{session:WorkSession;label?:string;status?:WorkSession["status"]}) {
  const statuses={idle:"待命",investigating:"调查中",waiting_approval:"待确认",completed:"回复结束",failed:"需要关注"};
- return <span className={`session-state-badge state-${status}`}><span/>{label??statuses[status]}</span>;
+ return <span className={`session-state-badge state-${status}`} title={label??statuses[status]}><span/>{label??statuses[status]}</span>;
 }
 
 const sessionViews=[{value:"conversation",label:"对话",icon:"chat"},{value:"plans",label:"计划",icon:"document"},{value:"activity",label:"执行记录",icon:"terminal"},{value:"evidence",label:"证据",icon:"document"}] as const;

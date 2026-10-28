@@ -132,13 +132,16 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .term
 .lake-workbench-island .header-normal-state .header-morph-content { display:flex; align-items:center; gap:4px; }
 .lake-workbench-island .session-state-badge { white-space:nowrap; }
 
-/* On tight conversation rails, the status and pane actions take precedence over
-   the duplicate title, which remains available in the conversation navigation. */
+/* Keep the session identity visible on tight rails. The status text shares
+   the remaining space and can truncate, while its disclosure stays reachable. */
 @container(max-width:260px) {
  .lake-workbench-island .workspace-header { padding-inline:8px; gap:4px; }
- .lake-workbench-island .breadcrumbs { display:none; }
- .lake-workbench-island .header-state-area { width:100%; }
- .lake-workbench-island .header-normal-state.is-visible { flex:1; width:100%!important; }
+ .lake-workbench-island .breadcrumbs { display:flex; flex:1 1 56%; min-width:min(100px,55%); max-width:none; }
+ .lake-workbench-island .breadcrumbs strong { display:flex; align-items:center; min-width:0; width:100%; }
+ .lake-workbench-island .breadcrumbs strong > svg { display:none; }
+ .lake-workbench-island .crumb-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+ .lake-workbench-island .header-state-area { flex:1 1 44%; min-width:0; max-width:calc(100% - min(100px,55%) - 4px); }
+ .lake-workbench-island .header-normal-state.is-visible { flex:1; min-width:0; max-width:100%; width:100%!important; }
  .lake-workbench-island .header-normal-state .header-morph-content { width:100%; min-width:0; }
  .lake-workbench-island .header-normal-state .session-state-badge { flex:1; min-width:0; display:block; overflow:hidden; text-overflow:ellipsis; }
  .lake-workbench-island .session-state-badge > span { display:inline-block; margin-right:6px; vertical-align:middle; }
