@@ -1,0 +1,57 @@
+{
+  "limitations": [
+    "Synthetic two-source cases, one model. Condition mismatch may defer a whole batch; not complete coverage or positive learning.",
+    "All accepted changes pass the real Store transaction. No tools or live environment operations."
+  ],
+  "model": {
+    "maxOutput": 4096,
+    "name": "deepseek-flash",
+    "protocol": "openai"
+  },
+  "passed": true,
+  "promptSHA256": "e815bbf234893056ec40951aff3c016386e274d9ac330dd8168ee787ff063f89",
+  "providerDispatches": 24,
+  "runs": 3,
+  "schemaVersion": 1,
+  "usage": {
+    "inputKnown": false,
+    "outputKnown": false,
+    "cachedInput": null,
+    "input": 37353,
+    "output": 11434,
+    "total": 48787
+  },
+  "codeSHA": "afcd3c7dcf16a50033fa2b24e9b38830982a15d2",
+  "sourceSHA256": {
+    "internal/web/natural_consolidation_input.go": "be207072e0f64c466278cda196f882badd5a09f2457e5a0126711d3c6e1d0c95",
+    "internal/web/natural_consolidation_worker.go": "445e46a4430579567478f4405631882b4169c4fe4ead3226d390eb559bd97469",
+    "internal/web/natural_preference_extraction.go": "19fa6526b0adac6b45968a3c624893efa019963cf773ab08c14a6f98cbcef10f",
+    "internal/web/natural_consolidation_model_test.go": "616e72c89ee1e1c624444e2b97db2e221c867fa0ac5a0064f52d557a94f8f7f1"
+  },
+  "results": [
+    {"committedPreferences":1,"globalPreferences":0,"id":"semantic-equivalent","passed":true,"run":1,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1559,"output":323,"total":1882}},
+    {"committedPreferences":1,"globalPreferences":0,"id":"unclear-contradiction","passed":true,"run":1,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1555,"output":420,"total":1975}},
+    {"committedPreferences":1,"globalPreferences":0,"id":"explicit-correction","passed":true,"run":1,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1560,"output":281,"total":1841}},
+    {"committedPreferences":1,"globalPreferences":1,"id":"scope-separated","passed":true,"run":1,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1549,"output":289,"total":1838}},
+    {"committedPreferences":0,"globalPreferences":0,"id":"quoted-and-temporary","passed":true,"run":1,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1554,"output":336,"total":1890}},
+    {"committedPreferences":1,"globalPreferences":0,"id":"temporary-does-not-replace","passed":true,"run":1,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1552,"output":242,"total":1794}},
+    {"committedPreferences":1,"globalPreferences":0,"id":"different-conditions","passed":true,"run":1,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1564,"output":1081,"total":2645}},
+    {"committedPreferences":2,"globalPreferences":0,"id":"two-independent-topics","passed":true,"run":1,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1559,"output":332,"total":1891}},
+    {"committedPreferences":1,"globalPreferences":0,"id":"semantic-equivalent","passed":true,"run":2,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1552,"output":323,"total":1875}},
+    {"committedPreferences":1,"globalPreferences":0,"id":"unclear-contradiction","passed":true,"run":2,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1551,"output":402,"total":1953}},
+    {"committedPreferences":1,"globalPreferences":0,"id":"explicit-correction","passed":true,"run":2,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1557,"output":291,"total":1848}},
+    {"committedPreferences":1,"globalPreferences":1,"id":"scope-separated","passed":true,"run":2,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1552,"output":498,"total":2050}},
+    {"committedPreferences":0,"globalPreferences":0,"id":"quoted-and-temporary","passed":true,"run":2,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1553,"output":232,"total":1785}},
+    {"committedPreferences":1,"globalPreferences":0,"id":"temporary-does-not-replace","passed":true,"run":2,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1556,"output":292,"total":1848}},
+    {"committedPreferences":1,"globalPreferences":0,"id":"different-conditions","passed":true,"run":2,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1570,"output":808,"total":2378}},
+    {"committedPreferences":2,"globalPreferences":0,"id":"two-independent-topics","passed":true,"run":2,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1561,"output":182,"total":1743}},
+    {"committedPreferences":1,"globalPreferences":0,"id":"semantic-equivalent","passed":true,"run":3,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1561,"output":338,"total":1899}},
+    {"committedPreferences":1,"globalPreferences":0,"id":"unclear-contradiction","passed":true,"run":3,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1557,"output":2751,"total":4308}},
+    {"committedPreferences":1,"globalPreferences":0,"id":"explicit-correction","passed":true,"run":3,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1559,"output":356,"total":1915}},
+    {"committedPreferences":1,"globalPreferences":1,"id":"scope-separated","passed":true,"run":3,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1553,"output":352,"total":1905}},
+    {"committedPreferences":0,"globalPreferences":0,"id":"quoted-and-temporary","passed":true,"run":3,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1553,"output":259,"total":1812}},
+    {"committedPreferences":1,"globalPreferences":0,"id":"temporary-does-not-replace","passed":true,"run":3,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1547,"output":240,"total":1787}},
+    {"committedPreferences":2,"globalPreferences":0,"id":"different-conditions","passed":true,"run":3,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1564,"output":495,"total":2059}},
+    {"committedPreferences":2,"globalPreferences":0,"id":"two-independent-topics","passed":true,"run":3,"sources":2,"transactionDeferred":false,"usage":{"inputKnown":true,"outputKnown":true,"known":true,"cachedInput":1408,"input":1555,"output":311,"total":1866}}
+  ]
+}

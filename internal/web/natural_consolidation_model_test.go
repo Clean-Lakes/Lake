@@ -366,3 +366,88 @@ func TestNaturalConsolidationModelBatchEvaluation(t *testing.T) {
 		t.Fatal("N3 semantic batch gates failed; inspect private report")
 	}
 }
+
+func TestNaturalConsolidationExistingTargetModelEvaluation(t *testing.T) {
+	home := os.Getenv("LAKE_N3_EVAL_HOME")
+	path := os.Getenv("LAKE_N3_EXISTING_REPORT")
+	if home == "" || path == "" {
+		t.Skip("explicit synthetic existing-target evaluation only")
+	}
+	owner, _ := os.UserHomeDir()
+	if filepath.Clean(home) != filepath.Join(owner, ".lake-dev") {
+		t.Fatal("Dev Home required")
+	}
+	models := &Models{Home: home, Dir: filepath.Join(home, "web-agent")}
+	model := models.CachedCapacity(models.Active())
+	if model == nil {
+		t.Fatal("model unavailable")
+	}
+	model.MaxOutput = 4096
+	engine, e := ai.New(t.TempDir(), nil, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer engine.Shutdown()
+	results := []Object{}
+	passed := true
+	for run := 1; run <= 3; run++ {
+		for _, c := range []struct{ id, text, relation string }{
+			{"existing-merge", "以后这个项目的答复一直用中文。", "equivalent"},
+			{"existing-conflict", "以后这个项目的答复固定使用英文。", "conflict"},
+			{"existing-correction", "更正本项目长期偏好：以后答复固定使用英文。", "correction"},
+		} {
+			func() {
+				s, ctx, session := naturalNewFixture(t)
+				a := consolidationSource(t, s, ctx, session, "以后这个项目的答复固定用中文。", false)
+				items := consolidationItems(t, s, a)
+				items[0].Result = naturalResult(a.UserText, "response-language", false, 0)
+				items[0].Result.Relation = "new"
+				if _, e := consolidationCommit(t, s, items); e != nil {
+					t.Fatal(e)
+				}
+				b := consolidationSource(t, s, ctx, session, "本项目后续的回复都使用中文。", false)
+				items = consolidationItems(t, s, b)
+				items[0].Result = naturalResult(b.UserText, "response-language", false, 1)
+				items[0].Result.Relation = "equivalent"
+				if _, e := consolidationCommit(t, s, items); e != nil {
+					t.Fatal(e)
+				}
+				source := consolidationSource(t, s, ctx, session, c.text, false)
+				items = consolidationItems(t, s, source)
+				index := s.read(func() any { return s.naturalPreferenceIndex(source) }).([]Object)
+				guard := s.read(func() any { return s.naturalBatchUserGuard(items) }).(string)
+				call, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				output, usage, e := engine.ExtractMemory(call, *model, naturalConsolidationMessages(items, index, ""))
+				cancel()
+				r := Object{"run": run, "id": c.id, "usage": usage, "passed": false}
+				defer func() { results = append(results, r) }()
+				if e != nil {
+					r["error"] = "provider_error"
+					passed = false
+					return
+				}
+				parsed, e := parseNaturalConsolidation(output, items)
+				if e != nil {
+					r["error"] = "invalid_output:" + e.Error()
+					passed = false
+					if ai.SafeMemoryContent(output, *model) && !models.strategyContainsProviderSecret(output) {
+						_ = os.WriteFile(filepath.Join(os.TempDir(), "lake-n3-existing-"+c.id+".txt"), []byte(output), 0600)
+					}
+					return
+				}
+				r["relation"] = parsed[0].Result.Relation
+				_, e = s.commitNaturalBatch(parsed, usage, index, guard, ident())
+				ok := e == nil && parsed[0].Result.Relation == c.relation
+				r["passed"] = ok
+				passed = passed && ok
+			}()
+		}
+	}
+	data, _ := json.MarshalIndent(Object{"passed": passed, "providerDispatches": len(results), "results": results}, "", "  ")
+	if os.WriteFile(path, data, 0600) != nil {
+		t.Fatal("report unavailable")
+	}
+	if !passed {
+		t.Fatal("existing target gates failed; inspect private synthetic report")
+	}
+}

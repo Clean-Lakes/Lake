@@ -1,0 +1,258 @@
+{
+  "schemaVersion": 1,
+  "totalProviderDispatches": 777,
+  "runs": [
+    {
+      "report": "lake-n3-model-intent.json",
+      "dispatches": 180,
+      "passed": false,
+      "diagnostic": false,
+      "summaries": [
+        {
+          "exactDecisions": 53,
+          "falseAutoWrites": 0,
+          "passed": false,
+          "positiveCount": 30,
+          "positiveRecallCount": 27,
+          "run": 1,
+          "technicalFailures": 4,
+          "wrongScopes": 0
+        },
+        {
+          "exactDecisions": 54,
+          "falseAutoWrites": 0,
+          "passed": false,
+          "positiveCount": 30,
+          "positiveRecallCount": 27,
+          "run": 2,
+          "technicalFailures": 3,
+          "wrongScopes": 0
+        },
+        {
+          "exactDecisions": 55,
+          "falseAutoWrites": 0,
+          "passed": false,
+          "positiveCount": 30,
+          "positiveRecallCount": 28,
+          "run": 3,
+          "technicalFailures": 2,
+          "wrongScopes": 0
+        }
+      ],
+      "usage": {
+        "input": 191753,
+        "output": 44955,
+        "total": 236708
+      },
+      "failedBatchCases": []
+    },
+    {
+      "report": "lake-n3-model-diagnostic.json",
+      "dispatches": 9,
+      "passed": false,
+      "diagnostic": true,
+      "summaries": [
+        {
+          "exactDecisions": 9,
+          "falseAutoWrites": 0,
+          "passed": false,
+          "positiveCount": 30,
+          "positiveRecallCount": 8,
+          "run": 1,
+          "technicalFailures": 51,
+          "wrongScopes": 0
+        },
+        {
+          "exactDecisions": 0,
+          "falseAutoWrites": 0,
+          "passed": false,
+          "positiveCount": 30,
+          "positiveRecallCount": 0,
+          "run": 2,
+          "technicalFailures": 60,
+          "wrongScopes": 0
+        },
+        {
+          "exactDecisions": 0,
+          "falseAutoWrites": 0,
+          "passed": false,
+          "positiveCount": 30,
+          "positiveRecallCount": 0,
+          "run": 3,
+          "technicalFailures": 60,
+          "wrongScopes": 0
+        }
+      ],
+      "usage": {
+        "input": 9732,
+        "output": 3071,
+        "total": 12803
+      },
+      "failedBatchCases": []
+    },
+    {
+      "report": "lake-n3-model-intent-diagnostic-full.json",
+      "dispatches": 180,
+      "passed": false,
+      "diagnostic": false,
+      "summaries": [
+        {
+          "exactDecisions": 52,
+          "falseAutoWrites": 0,
+          "passed": false,
+          "positiveCount": 30,
+          "positiveRecallCount": 26,
+          "run": 1,
+          "technicalFailures": 4,
+          "wrongScopes": 0
+        },
+        {
+          "exactDecisions": 52,
+          "falseAutoWrites": 0,
+          "passed": false,
+          "positiveCount": 30,
+          "positiveRecallCount": 26,
+          "run": 2,
+          "technicalFailures": 4,
+          "wrongScopes": 0
+        },
+        {
+          "exactDecisions": 55,
+          "falseAutoWrites": 0,
+          "passed": false,
+          "positiveCount": 30,
+          "positiveRecallCount": 28,
+          "run": 3,
+          "technicalFailures": 2,
+          "wrongScopes": 0
+        }
+      ],
+      "usage": {
+        "input": 191745,
+        "output": 43963,
+        "total": 235708
+      },
+      "failedBatchCases": []
+    },
+    {
+      "report": "lake-n3-model-final-intent.json",
+      "dispatches": 180,
+      "passed": true,
+      "diagnostic": false,
+      "summaries": [
+        {
+          "exactDecisions": 55,
+          "falseAutoWrites": 0,
+          "passed": true,
+          "positiveCount": 30,
+          "positiveRecallCount": 30,
+          "run": 1,
+          "technicalFailures": 0,
+          "wrongScopes": 0
+        },
+        {
+          "exactDecisions": 56,
+          "falseAutoWrites": 0,
+          "passed": true,
+          "positiveCount": 30,
+          "positiveRecallCount": 30,
+          "run": 2,
+          "technicalFailures": 0,
+          "wrongScopes": 0
+        },
+        {
+          "exactDecisions": 55,
+          "falseAutoWrites": 0,
+          "passed": true,
+          "positiveCount": 30,
+          "positiveRecallCount": 30,
+          "run": 3,
+          "technicalFailures": 0,
+          "wrongScopes": 0
+        }
+      ],
+      "usage": {
+        "input": 264261,
+        "output": 34515,
+        "total": 298776
+      },
+      "failedBatchCases": []
+    },
+    {
+      "report": "lake-n3-model-batches.json",
+      "dispatches": 24,
+      "passed": false,
+      "diagnostic": false,
+      "summaries": null,
+      "usage": {
+        "input": 36128,
+        "output": 11469,
+        "total": 47597
+      },
+      "failedBatchCases": [
+        [
+          1,
+          "scope-separated"
+        ]
+      ]
+    },
+    {
+      "report": "lake-n3-model-final-intent-v2.json",
+      "dispatches": 180,
+      "passed": true,
+      "diagnostic": false,
+      "summaries": [
+        {
+          "exactDecisions": 55,
+          "falseAutoWrites": 0,
+          "passed": true,
+          "positiveCount": 30,
+          "positiveRecallCount": 30,
+          "run": 1,
+          "technicalFailures": 0,
+          "wrongScopes": 0
+        },
+        {
+          "exactDecisions": 55,
+          "falseAutoWrites": 0,
+          "passed": true,
+          "positiveCount": 30,
+          "positiveRecallCount": 30,
+          "run": 2,
+          "technicalFailures": 0,
+          "wrongScopes": 0
+        },
+        {
+          "exactDecisions": 53,
+          "falseAutoWrites": 0,
+          "passed": true,
+          "positiveCount": 30,
+          "positiveRecallCount": 30,
+          "run": 3,
+          "technicalFailures": 0,
+          "wrongScopes": 0
+        }
+      ],
+      "usage": {
+        "input": 273511,
+        "output": 36055,
+        "total": 309566
+      },
+      "failedBatchCases": []
+    },
+    {
+      "report": "lake-n3-model-batches-v2.json",
+      "dispatches": 24,
+      "passed": true,
+      "diagnostic": false,
+      "summaries": null,
+      "usage": {
+        "input": 37353,
+        "output": 11434,
+        "total": 48787
+      },
+      "failedBatchCases": []
+    }
+  ],
+  "limitations": "Preliminary failures retained. Synthetic diagnostics only, no task benefit claim; usage sums are reported known values, unknown is not estimated."
+}

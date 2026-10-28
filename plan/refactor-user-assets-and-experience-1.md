@@ -10,7 +10,7 @@ tags: [refactor, strategy, learning, user-assets, experience]
 
 # Lake 用户资产积累与经验复用开发计划
 
-> **2026-10-28：原策略资产的新产品方向以[自然记忆重塑计划](feature-natural-memory-1.md)为准。** 本文保留 R0～R5 已交付的实现与验收历史，“候选—审核—采用”不再规定新记忆的日常交互。新计划承接用户内容、范围与来源保护，新增非阻塞形成、空闲整理、按范围使用及压缩前增量提取。[清理计划](refactor-harness-inspired-cleanup-1.md)继续约束旧执行退役与历史兼容；C1 已经 #107 合入，见 [C1 契约](../docs/design/strategy-execution-retirement-c1.md)，C2 转由新计划承接，C3/C4 清理尚未实施。
+> **2026-10-28：原策略资产的新产品方向以[自然记忆重塑计划](feature-natural-memory-1.md)为准。** 本文保留 R0～R5 已交付的实现与验收历史，“候选—审核—采用”不再规定新记忆的日常交互。新计划承接用户内容、范围与来源保护，新增非阻塞形成、空闲整理、按范围使用及压缩前增量提取。[清理计划](refactor-harness-inspired-cleanup-1.md)继续约束旧执行退役与历史兼容；C1 已经 #107 合入，见 [C1 契约](../docs/design/strategy-execution-retirement-c1.md)，C2 转由新计划承接，N3 已提前清理无依赖退役派发器并折叠旧入口；C3/C4 其余清理仍待后续。
 
 本计划接替[策略学习与改进开发计划](feature-strategy-learning-1.md)的后续开发方向：重点保留用户级资产、来源血缘和经验复用；在线纠错默认关闭；学习在后台生成待审核候选，不参与当前任务的成败判定。模型原有的分析、根据工具结果调整调查步骤等能力继续通过官方 ADK 执行，不强制经过额外的策略修订流程。
 
@@ -75,10 +75,10 @@ R0 盘点文档经 PR #68 合入。当前已实施 R1 的日常任务隔离和�
 | [注入](../internal/ai/strategy_assets.go)、[设置](../internal/web/strategy_settings.go) | 解析/来源变化可返回整轮错误；设置变更可使任务失效 | **调整**，区分可省略的资产辅助故障与必须停用的权限/隐私撤回；避免普通学习设置变更取消主任务 |
 | [来源采集](../internal/ai/strategy_learning.go) | 明确纠正或成对工具错误触发终态快照；有截断、去敏与持久 outbox | **保留并缩小前台工作**；工具失败仅形成观察，经验需明确纠正或可验证结果支撑 |
 | [任务尾部](../internal/web/agent.go)、[outbox 转交](../internal/web/strategy_learning_outbox.go) | 提取在后台，但业务返回路径仍同步 reconcile/Ack；快照也在引擎终态保存路径内 | **调整**，前台只记录有界来源事件，不等待辅助模型、队列扫描或候选入库 |
-| [提取任务](../internal/web/strategy_learning_store.go)、[worker](../internal/web/strategy_learning_worker.go) | 单次无工具提取；仅 project 候选、single_observation；无自动采用 | **保留并调整**，明确学习独立预算、优先级、用户级晋升和拒绝反馈 |
-| 同一 [worker](../internal/web/strategy_learning_worker.go) 的调度 | 每 5 秒检查，领取前避让运行消息；可能与后到前台争用模型槽，依赖同轮项目记忆任务状态 | **调整**，前台优先、可取消/延期，学习等待只留在后台，不把辅助依赖传回主任务 |
+| [提取任务](../internal/web/strategy_learning_store.go)、[worker](https://github.com/Clean-Lakes/Lake/blob/89a02c6c85d972c70579a14e238bac80be281fbb/internal/web/strategy_learning_worker.go) | 单次无工具提取；仅 project 候选、single_observation；无自动采用 | **保留并调整**，明确学习独立预算、优先级、用户级晋升和拒绝反馈 |
+| 同一 [worker](https://github.com/Clean-Lakes/Lake/blob/89a02c6c85d972c70579a14e238bac80be281fbb/internal/web/strategy_learning_worker.go) 的调度 | 每 5 秒检查，领取前避让运行消息；可能与后到前台争用模型槽，依赖同轮项目记忆任务状态 | **调整**，前台优先、可取消/延期，学习等待只留在后台，不把辅助依赖传回主任务 |
 | [在线控制器](../internal/ai/strategy_online.go)、[停止卡](../web-agent/web/src/StrategyCorrectionCard.tsx) | 启用后要求修订工具、预留预算、观察/停止；可改变正常任务状态 | **退出日常路径**；关闭时不挂接控制器，不注册修订工具。若保留实验入口，独立明确同意且默认关闭 |
-| [实验](../internal/web/strategy_experiment_worker.go)、[优化（盘点基线源码）](https://github.com/Clean-Lakes/Lake/blob/89a02c6c85d972c70579a14e238bac80be281fbb/internal/web/strategy_optimization_worker.go)、[界面](../web-agent/web/src/StrategyExperiments.tsx) | 快照 A/B、合成、留出验证、有界多次试跑 | **退出日常学习路径**；保留历史只读报告和按需离线配对评估，取消把自动优化作为资产成长必经阶段 |
+| [实验](https://github.com/Clean-Lakes/Lake/blob/89a02c6c85d972c70579a14e238bac80be281fbb/internal/web/strategy_experiment_worker.go)、[优化（盘点基线源码）](https://github.com/Clean-Lakes/Lake/blob/89a02c6c85d972c70579a14e238bac80be281fbb/internal/web/strategy_optimization_worker.go)、[界面](../web-agent/web/src/StrategyExperiments.tsx) | 快照 A/B、合成、留出验证、有界多次试跑 | **退出日常学习路径**；保留历史只读报告和按需离线配对评估，取消把自动优化作为资产成长必经阶段 |
 | [审批与操作账本](../internal/ai/adk_operations.go)、[恢复](../internal/ai/adk_recovery.go) | 操作结果、审批、未知结果核实的权威状态 | **保留**，不因关闭纠错放宽权限，不清空未知操作、不自动重放资源操作 |
 | [历史方案](feature-strategy-learning-1.md)与 [P8 证据](../docs/validation/lake-strategy-learning-p8-completion.md) | P0～P8 实施和有限样本结论 | **保留历史**；新阶段采用 R 编号，不把旧完成项改成未完成，也不将 inconclusive 改写成收益成立 |
 

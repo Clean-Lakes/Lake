@@ -123,6 +123,9 @@ func naturalUnquotedSpan(text, quote string) bool {
 	}
 	return strings.Contains(clean.String(), quote)
 }
+func naturalExplicitCorrection(text string) bool {
+	return naturalTextHasAny(text, "不再", "更正", "取消", "不用了", "替换", "纠正", "原习惯作废", "别再", "旧的", "instead", "replace", "no longer", "correction", "cancel")
+}
 func validateNaturalPreferenceResult(text string, r NaturalPreferenceResult) error {
 	if r.Decision != "save" {
 		return nil
@@ -139,7 +142,7 @@ func validateNaturalPreferenceResult(text string, r NaturalPreferenceResult) err
 	if r.Scope == "project" && !naturalTextHasAny(r.Quote, "本项目", "这个项目", "该项目", "this project") {
 		return errors.New("project scope not explicit")
 	}
-	if r.Replacement && !naturalTextHasAny(r.Quote, "不再", "更正", "取消", "不用了", "替换", "纠正", "原习惯作废", "别再", "旧的", "instead", "replace", "no longer", "correction", "cancel") {
+	if r.Replacement && !naturalExplicitCorrection(r.Quote) {
 		return errors.New("correction not explicit")
 	}
 	return nil

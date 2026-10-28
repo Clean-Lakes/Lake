@@ -752,3 +752,24 @@ func TestNaturalConsolidationScopeCancellationUsesCapturedConsent(t *testing.T) 
 		})
 	}
 }
+
+func TestNaturalConsolidationInputDistinguishesDurableIntentFromCorrectionAuthority(t *testing.T) {
+	items := []naturalBatchItem{
+		{Job: Object{"jobId": "first"}, Snapshot: ai.MemoryTurnSnapshot{UserText: "以后这个项目的答复固定使用英文。"}},
+		{Job: Object{"jobId": "second"}, Snapshot: ai.MemoryTurnSnapshot{UserText: "更正本项目长期偏好：以后答复固定使用英文。"}},
+	}
+	messages := naturalConsolidationMessages(items, nil, "")
+	var input struct {
+		Sources []struct {
+			Allowed bool `json:"explicitCorrectionAllowed"`
+		} `json:"sources"`
+	}
+	if json.Unmarshal([]byte(messages[1].Content), &input) != nil || len(input.Sources) != 2 || input.Sources[0].Allowed || !input.Sources[1].Allowed {
+		t.Fatal("durability was mistaken for correction authority")
+	}
+	// Passing guidance to the model does not relax the host's exact-quote check.
+	bad := naturalResult(items[0].Snapshot.UserText, "response-language", true, 2)
+	if validateNaturalPreferenceResult(items[0].Snapshot.UserText, bad) == nil {
+		t.Fatal("unauthorized replacement accepted")
+	}
+}
