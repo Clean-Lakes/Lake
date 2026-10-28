@@ -1,0 +1,138 @@
+{
+  "date": "2026-10-28",
+  "testedSource": "4aac9d9f2d0743033f1139b1f5cffa7a952f59e4",
+  "baseSynced": "f1170f85",
+  "supersedes": "Earlier shared-island, pane motion and pending native-check records where described below",
+  "checks": {
+    "types": "pnpm --dir web-agent check passed",
+    "frontend": "528 passed, 0 failed, 0 skipped, including synchronous pane-budget regression",
+    "build": "scripts/build_lake_desktop.sh --dev --install passed; clean installed manifest matches testedSource",
+    "dev": "Normal quit/relaunch completed; authenticated bootstrap HTTP 200; ~/.lake-dev only"
+  },
+  "expansionStability": {
+    "browserSpace": 88,
+    "finished": true,
+    "source": "628738cf799b4ec5aac440f00821743ede6c5cdb",
+    "fixture": "Real App in-memory SSH terminal and 100-paragraph transcript",
+    "beforeSource": "33cff186",
+    "before": {
+      "shellWidth": 1232,
+      "conversationWidths": [
+        559,
+        279,
+        405
+      ],
+      "historyAnchorTop": [
+        92.625,
+        1384,
+        93
+      ],
+      "scrollTop": 2096,
+      "transcriptHeights": [
+        4658,
+        7355,
+        4658
+      ],
+      "removedMessageNodes": 0
+    },
+    "after": {
+      "shellWidth": 1232,
+      "conversationWidths": [
+        559,
+        405
+      ],
+      "allRenderedFramesWidth": 405,
+      "historyAnchorTop": [
+        92.625,
+        92.625
+      ],
+      "scrollTop": 2096,
+      "transcriptHeight": 4658,
+      "removedMessageNodes": 0,
+      "sameTimeline": true,
+      "sameRows": true,
+      "tailGapAllFrames": 0
+    },
+    "otherWidths": [
+      {
+        "shellWidth": 1130,
+        "widths": [
+          457,
+          405
+        ],
+        "scrollTopAllFrames": 1863,
+        "anchorTopAllFrames": 74.234375
+      },
+      {
+        "shellWidth": 1512,
+        "widths": [
+          839,
+          439
+        ],
+        "scrollTopAllFrames": 1859,
+        "anchorTopAllFrames": 78.234375
+      }
+    ],
+    "withoutInspectorDark": {
+      "renderedWidths": [
+        821
+      ],
+      "sameTimeline": true
+    },
+    "fix": "React layout effect dispatches lake-workbench-layout; shared browser/native script applies all pane widths synchronously before first paint rather than after MutationObserver + rAF"
+  },
+  "scrollbar": {
+    "browserSpace": 89,
+    "finished": true,
+    "source": "4aac9d9f2d0743033f1139b1f5cffa7a952f59e4",
+    "fixture": "Real xterm with 180 fictional history lines; no remote connection or command",
+    "sharedStyle": {
+      "scrollbarWidth": "thin",
+      "lightColor": "rgb(204, 204, 204) rgba(0, 0, 0, 0)",
+      "darkColor": "rgb(80, 80, 80) rgba(0, 0, 0, 0)",
+      "overflowY": "auto"
+    },
+    "viewport": {
+      "top": 76,
+      "bottom": 12,
+      "height": 673,
+      "contentHeight": 3087,
+      "range": 2414
+    },
+    "verified": [
+      "Scroll top displays fixture history line 001",
+      "Scroll end displays line 180 and prompt; scrollTop equals 2414px range",
+      "1232px shell with inspector has working thin viewport and history",
+      "Prompt-only terminal has zero scroll range and no always-on track",
+      "Light/dark screenshots inspected"
+    ],
+    "screenshots": [
+      "terminal-scrollbar-light.png",
+      "terminal-scrollbar-dark.png"
+    ]
+  },
+  "native": {
+    "source": "4aac9d9f2d0743033f1139b1f5cffa7a952f59e4",
+    "platform": "macOS WKWebView, light theme",
+    "verified": [
+      "Installed build launched and healthy",
+      "Conversation, inspector and terminal islands rendered",
+      "Normal local terminal open, close and reopen checked on expansion-fix source 628738cf",
+      "Final prompt-only local terminal has no full-height right scrollbar track",
+      "Final narrow four-pane layout and scrollbar inset checked visually"
+    ],
+    "privacy": "No shell input, model request, remote connection, or native user screenshot uploaded"
+  },
+  "unverified": [
+    "Live remote SSH scrollback on native WKWebView",
+    "Windows native and native dark rendering"
+  ],
+  "workflow": {
+    "branch": "codex/island-title-visible",
+    "pr": 109,
+    "base": "develop",
+    "merged": false,
+    "productionTouched": false,
+    "baseline": "99878406 / #104 dependencies retained; draft PR pending baseline coordination and user merge authorization"
+  }
+}
