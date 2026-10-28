@@ -1,0 +1,92 @@
+{
+  "date": "2026-10-28",
+  "testedSource": "56599cc1347a2bfb0b7cfcfa2e371bd8f1b9a2c0",
+  "supersedes": "validation.json terminal menu sizing and width/position-based flight implementation",
+  "changes": [
+    "Terminal menu matches both outside edges of its island",
+    "Terminal island prefers 260–320px and clamps to its pane; menu narrows with it",
+    "Island flight animates transform and opacity only; no animated left/top/width or scaled text",
+    "No grid-column width animation in floating-island mode",
+    "Landing positions ignore pane entrance transforms; terminal flight waits for visible pane and settled shared budget",
+    "Output/message DOM mutations no longer schedule island measurement; actual geometry uses ResizeObserver"
+  ],
+  "checks": {
+    "types": "pnpm --dir web-agent check passed",
+    "frontend": "524 passed, 0 failed, 0 skipped",
+    "build": "scripts/build_lake_desktop.sh --dev --install passed; installed clean source manifest matches testedSource"
+  },
+  "browser": {
+    "space": 86,
+    "finished": true,
+    "fixture": "Real App with in-memory fictional terminal and session data",
+    "themes": [
+      "light with standard corner fallback",
+      "dark with standard corner fallback"
+    ],
+    "alignment": {
+      "shell1232": {
+        "islandWidth": 260,
+        "menuWidth": 260,
+        "leftError": 0,
+        "rightError": 0
+      },
+      "shell1130": {
+        "islandWidth": 208,
+        "menuWidth": 208,
+        "leftError": 0,
+        "rightError": 0,
+        "menuHeight": 339
+      }
+    },
+    "motion": {
+      "rapidReverse": "Close immediately inert and aria-hidden; reopened present and interactive, zero remaining animations",
+      "reducedMotion": "Open and close both zero animations",
+      "snapshotPulse93": "Zero new flight animations",
+      "dividerDrag": "Direct geometry, zero animations, no moving flag"
+    },
+    "performance": {
+      "method": "Cold fourth-pane open after inspector settles; same 1232px fixture, Performance.getMetrics delta across 650ms including terminal mount; one sampled run per revision",
+      "before": {
+        "source": "5544d459c429aea5f56e107549b6ca23f39d9c79",
+        "islandAnimationStarts": 5,
+        "animatedProperties": [
+          "left",
+          "top",
+          "width",
+          "opacity"
+        ],
+        "LayoutCount": 68,
+        "RecalcStyleCount": 121,
+        "LayoutDurationSeconds": 0.010832,
+        "TaskDurationSeconds": 0.13806
+      },
+      "after": {
+        "islandAnimationStarts": 1,
+        "animatedProperties": [
+          "transform",
+          "opacity"
+        ],
+        "LayoutCount": 46,
+        "RecalcStyleCount": 86,
+        "LayoutDurationSeconds": 0.002685,
+        "TaskDurationSeconds": 0.096491
+      },
+      "limits": "Measurements include initial xterm setup and other App work; sample timings are environment-dependent, not a native FPS guarantee. Browser RAF sampling was around 30Hz for both runs."
+    },
+    "screenshots": [
+      "aligned-light.png",
+      "aligned-dark-narrow.png"
+    ]
+  },
+  "native": {
+    "installedSource": "56599cc1347a2bfb0b7cfcfa2e371bd8f1b9a2c0",
+    "dirty": false,
+    "restartAndVisualVerification": "Pending: CUA getApp/getAXState/getScreenshot repeatedly timed out, including after resetting CUA; old Dev backend remains healthy. No forced termination, runtime-ledger deletion or production operation. User told to quit/reopen Lake Dev to load new build."
+  },
+  "unverified": [
+    "Final native WKWebView motion and menu alignment",
+    "Windows native",
+    "Native dark theme"
+  ],
+  "security": "Only fictional browser data captured. No model request, remote terminal command, credential output or native user screenshot uploaded."
+}
