@@ -64,7 +64,13 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 				ExpectedRevision int  `json:"expectedRevision"`
 				AutoEnabled      bool `json:"autoEnabled"`
 			}](r, "expectedRevision", "autoEnabled")
-			b.naturalMemoryReply(w, strategyMust(b.Store.SetNaturalMemorySettings(ctx, key, in.ExpectedRevision, in.AutoEnabled)))
+			b.messageMu.Lock()
+			result, err := b.Store.SetNaturalMemorySettings(ctx, key, in.ExpectedRevision, in.AutoEnabled)
+			if err == nil && !in.AutoEnabled {
+				b.PauseMemoryExtractionForForeground()
+			}
+			b.messageMu.Unlock()
+			b.naturalMemoryReply(w, strategyMust(result, err))
 		default:
 			naturalFail(405, "method_unavailable")
 		}
@@ -77,6 +83,12 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 			naturalFail(400, "invalid_page")
 		}
 		switch suffix {
+		case "formed-preferences":
+			b.naturalMemoryReply(w, strategyMust(b.Store.NaturalFormedPreferences(ctx, after, limit)))
+			return true
+		case "formed-changes":
+			b.naturalMemoryReply(w, strategyMust(b.Store.NaturalPreferenceChanges(ctx, after, limit)))
+			return true
 		case "legacy":
 			b.naturalMemoryReply(w, strategyMust(b.Store.ListNaturalLegacy(ctx, after, limit)))
 			return true
@@ -95,6 +107,45 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 			// Reuse the version-specific adapter and its exact existing classification.
 			list["adapter"] = "project_memory"
 			b.naturalMemoryReply(w, list)
+			return true
+		}
+	}
+	if len(rest) >= 2 && rest[0] == "formed-preferences" {
+		if method == "GET" && len(rest) == 2 {
+			b.naturalMemoryReply(w, strategyMust(b.Store.ReadNaturalFormedPreference(ctx, rest[1], 0)))
+			return true
+		}
+		if method == "GET" && len(rest) == 4 && rest[2] == "revisions" {
+			n, err := strconv.Atoi(rest[3])
+			if err != nil || n < 1 {
+				naturalFail(400, "invalid_revision")
+			}
+			b.naturalMemoryReply(w, strategyMust(b.Store.ReadNaturalFormedPreference(ctx, rest[1], n)))
+			return true
+		}
+		if method == "POST" && len(rest) == 3 && rest[2] == "forget" {
+			in := strategyBody[struct {
+				ExpectedRevision int `json:"expectedRevision"`
+			}](r, "expectedRevision")
+			b.naturalMemoryReply(w, strategyMust(b.Store.ForgetNaturalPreference(ctx, rest[1], key, in.ExpectedRevision)))
+			return true
+		}
+	}
+	if len(rest) >= 2 && rest[0] == "formed-changes" {
+		if method == "GET" && len(rest) == 2 {
+			b.naturalMemoryReply(w, strategyMust(b.Store.NaturalPreferenceChange(ctx, rest[1])))
+			return true
+		}
+		if method == "POST" && len(rest) == 3 && rest[2] == "undo" {
+			in := strategyBody[struct {
+				ExpectedRevision int `json:"expectedRevision"`
+			}](r, "expectedRevision")
+			b.naturalMemoryReply(w, strategyMust(b.Store.UndoNaturalPreference(ctx, rest[1], key, in.ExpectedRevision)))
+			return true
+		}
+		if method == "POST" && len(rest) == 3 && rest[2] == "dismiss" {
+			strategyBody[struct{}](r)
+			b.naturalMemoryReply(w, strategyMust(b.Store.DismissNaturalPreferenceNotice(ctx, rest[1])))
 			return true
 		}
 	}

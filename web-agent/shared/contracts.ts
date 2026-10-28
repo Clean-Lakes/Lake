@@ -177,6 +177,7 @@ export type SendMessageResult = {queued?: boolean; queuedMessageId?: string; mes
 export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;status:"running" | "completed" | "cancelled" | "failed" | "interrupted"};
 
 export type SessionSnapshot = {
+ naturalMemoryNotices?:{changeId:string;scope:string;entryId:string;revision:number}[];
   commandStopNotices?: CommandStopNotice[];
  conversationMode?: ConversationMode;
 	sre?:SRESnapshot;

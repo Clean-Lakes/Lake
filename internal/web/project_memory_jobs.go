@@ -26,6 +26,7 @@ func (s *Store) RecoverMemoryJobs() {
 			s.exec("UPDATE projectMemoryJobAttemptsV2 SET status='interrupted',reason='restart',finishedAt=? WHERE finishedAt=''", now())
 			s.exec("UPDATE projectMemoryJobs SET attempts=max(0,attempts-1) WHERE status='running'")
 		}
+		s.exec("UPDATE naturalPreferenceDispatches SET status='interrupted',finishedAt=? WHERE finishedAt=''", now())
 		s.exec("UPDATE projectMemoryJobs SET status='queued',leaseOwner='',leaseToken='',leaseUntilMs=0,updatedAt=? WHERE status='running'", now())
 		return nil
 	})
@@ -113,7 +114,7 @@ func (s *Store) SettleMemoryJob(jobID, token, status, code string, usage ai.Usag
 
 // Commit all model mutations, the job result and its deduplication receipt in
 // one SQLite transaction. A stale lease or a later user edit cannot write back.
-func (s *Store) CommitMemoryExtraction(job Object, snapshot ai.MemoryTurnSnapshot, mutations []MemoryExtractMutation, usage ai.Usage) (changed bool, err error) {
+func (s *Store) CommitMemoryExtraction(job Object, snapshot ai.MemoryTurnSnapshot, mutations []MemoryExtractMutation, usage ai.Usage, natural ...NaturalPreferenceResult) (changed bool, err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if failure, ok := p.(*Failure); ok {
@@ -130,11 +131,26 @@ func (s *Store) CommitMemoryExtraction(job Object, snapshot ai.MemoryTurnSnapsho
 			fail(409, "Memory job lease expired")
 		}
 		settings := s.memorySettings(snapshot.ProjectID)
-		if settings["useEnabled"] != true || settings["extractionEnabled"] != true || integer(settings["epoch"]) != snapshot.Epoch {
+		turn := s.row("SELECT projectId,sessionId,turnId,snapshotHash FROM projectMemoryTurns WHERE sequence=?", job["turnSequence"])
+		if turn == nil || turn["projectId"] != snapshot.ProjectID || turn["sessionId"] != snapshot.SessionID || turn["turnId"] != snapshot.TurnID || turn["snapshotHash"] != snapshot.SnapshotHash || !ai.ValidMemorySnapshot(snapshot) || int64(integer(s.row("SELECT leaseUntilMs FROM projectMemoryJobs WHERE jobId=?", jobID)["leaseUntilMs"])) <= time.Now().UnixMilli() {
+			fail(409, "Memory source or lease changed")
+		}
+		naturalChanged := false
+		if snapshot.Natural != nil {
+			if len(natural) != 1 || !s.naturalSnapshotValid(snapshot) {
+				fail(409, "Natural preference invalidated")
+			}
+			naturalChanged = s.commitNaturalPreference(job, snapshot, natural[0])
+		}
+		legacy := snapshot.Natural == nil || snapshot.LegacyExtraction
+		if legacy && (settings["useEnabled"] != true || settings["extractionEnabled"] != true || integer(settings["epoch"]) != snapshot.Epoch) {
 			fail(409, "Memory job invalidated")
 		}
 		if s.row("SELECT projectId FROM sessions WHERE id=?", snapshot.SessionID)["projectId"] != snapshot.ProjectID {
 			fail(409, "Memory source project changed")
+		}
+		if !legacy && len(mutations) != 0 {
+			fail(400, "Legacy extraction disabled")
 		}
 		if len(mutations) > 5 {
 			fail(400, "Too many memory changes")
@@ -222,6 +238,9 @@ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(projectId,key) DO UPDA
 		previous.Total += usage.Total
 		previous.Known = previous.Known || usage.Known
 		status, outcome := "no_op", "no_op"
+		if naturalChanged {
+			status, outcome = "succeeded", "applied"
+		}
 		if len(keys) > 0 {
 			status, outcome = "succeeded", "applied"
 			s.exec("UPDATE projectMemorySettings SET revision=revision+1,updatedAt=? WHERE projectId=?", t, snapshot.ProjectID)
@@ -229,7 +248,10 @@ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(projectId,key) DO UPDA
 		}
 		s.exec("UPDATE projectMemoryJobs SET status=?,leaseToken='',leaseOwner='',leaseUntilMs=0,lastErrorCode='',usageJSON=?,updatedAt=? WHERE jobId=?", status, jsonText(previous), t, jobID)
 		s.exec("UPDATE projectMemoryTurns SET outcome=?,processedAt=? WHERE sequence=?", outcome, t, job["turnSequence"])
-		return len(keys) > 0
+		if naturalChanged {
+			s.event(snapshot.SessionID, "message")
+		}
+		return len(keys) > 0 || naturalChanged
 	})
 	changed = result.(bool)
 	if changed {
@@ -283,6 +305,9 @@ func (s *Store) RetryMemoryJob(project, jobID string, expectedRevision int) Obje
 					}
 				}
 			}
+		}
+		if snapshot.Natural != nil {
+			fail(409, "Natural memory jobs require a new user message")
 		}
 		snapshot.Epoch = integer(settings["epoch"])
 		snapshot = ai.SealMemorySnapshot(snapshot)

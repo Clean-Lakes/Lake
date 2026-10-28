@@ -169,13 +169,16 @@ func TestNaturalMemorySettingsNeverInheritOldExecutionConsent(t *testing.T) {
 		return nil
 	})
 	settings, e := s.NaturalMemorySettings(ctx)
-	if e != nil || settings["autoEnabled"] != false || settings["automaticReady"] != false || object(settings["projectMemorySettings"])["useEnabled"] != false || object(settings["projectMemorySettings"])["extractionEnabled"] != true {
+	if e != nil || settings["autoEnabled"] != false || settings["automaticReady"] != true || object(settings["projectMemorySettings"])["useEnabled"] != false || object(settings["projectMemorySettings"])["extractionEnabled"] != true {
 		t.Fatal(settings, e)
 	}
-	_, e = s.SetNaturalMemorySettings(ctx, "old-consent", 0, true)
-	strategyCheckError(t, e, 409)
-	r, e := s.SetNaturalMemorySettings(ctx, "disable", 0, false)
-	if e != nil || integer(r["revision"]) != 1 {
+	// Only a NEW explicit settings write opts in; legacy flags above did not.
+	_, e = s.SetNaturalMemorySettings(ctx, "new-consent", 0, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	r, e := s.SetNaturalMemorySettings(ctx, "disable", 1, false)
+	if e != nil || integer(r["revision"]) != 2 {
 		t.Fatal(r, e)
 	}
 	_, e = s.SetNaturalMemorySettings(ctx, "stale", 0, false)
@@ -277,7 +280,11 @@ func TestNaturalMemoryHTTPStrictScopesProjectAdaptersAndRetiredWrites(t *testing
 			strategyHTTP(t, h, "GET", base+"/project-entries/release-check", "", "", 200)
 			strategyHTTP(t, h, "GET", "/api/natural-memory/project-entries/release-check", "", "", 404)
 			strategyHTTP(t, h, "GET", "/api/projects/missing/natural-memory/settings", "", "", 404)
-			strategyHTTP(t, h, "PATCH", base+"/settings", "enable", `{"expectedRevision":0,"autoEnabled":true}`, 409)
+			status := 200
+			if v2 {
+				status = 409
+			}
+			strategyHTTP(t, h, "PATCH", base+"/settings", "enable", `{"expectedRevision":0,"autoEnabled":true}`, status)
 			for _, raw := range []string{`{"expectedRevision":0,"autoEnabled":false,"projectId":"other"}`, `{"expectedRevision":0,"autoEnabled":false,"autoEnabled":true}`, `{"expectedRevision":0,"autoEnabled":null}`} {
 				strategyHTTP(t, h, "PATCH", base+"/settings", ident(), raw, 400)
 			}

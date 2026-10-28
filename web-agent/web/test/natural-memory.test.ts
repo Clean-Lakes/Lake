@@ -5,9 +5,9 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {naturalMemoryApi,naturalMemoryPath,type NaturalPreview} from '../src/naturalMemoryApi';
 import {NaturalMemoryFoundation} from '../src/NaturalMemoryFoundation';
 
-test('natural memory foundation explains unavailable automation and reversible management without an enable control',()=>{
+test('natural memory foundation explains separate automation and reversible management without an enable control',()=>{
  const html=renderToStaticMarkup(React.createElement(NaturalMemoryFoundation,{projectId:'a',busy:false,run:async task=>{await task();}}));
- assert.match(html,/自然形成与自动整理尚未开放/);
+ assert.match(html,/自然形成见上方自动记忆实验开关/);
  assert.match(html,/不会停用原偏好/);
  assert.doesNotMatch(html,/type="checkbox"|type="radio"/);
  assert.match(html,/记忆内容承接/);
@@ -48,4 +48,21 @@ test('read endpoints never send an idempotency key or trigger retired strategy e
   assert.ok(calls.every(c=>c.startsWith('/api/natural-memory/')));
   assert.ok(calls.every(c=>!c.includes('/strategy/')));
  }finally{globalThis.fetch=original;}
+});
+
+test('natural settings PATCH and exact-version undo use separate scoped contracts',async()=>{
+ const {naturalPreferenceApi}=await import('../src/naturalMemoryApi');const original=globalThis.fetch;
+ const calls:{url:string;method:string;key:string|null;body:unknown}[]=[];
+ globalThis.fetch=async(input,init)=>{calls.push({url:String(input),method:init?.method||'',key:new Headers(init?.headers).get('Idempotency-Key'),body:JSON.parse(String(init?.body))});return new Response(JSON.stringify({revision:3}),{status:200})};
+ try{const base=naturalMemoryPath('project-a');await naturalPreferenceApi.settings(base,2,true);await naturalPreferenceApi.undo(base,'change-a',3);assert.equal(calls[0].method,'PATCH');assert.deepEqual(calls[0].body,{expectedRevision:2,autoEnabled:true});assert.deepEqual(calls[1].body,{expectedRevision:3});assert.ok(calls.every(c=>!!c.key&&!c.url.includes('/strategy/')))}finally{globalThis.fetch=original}
+});
+test('natural update notice is commit-driven and offers view and undo without review adoption',async()=>{
+ const {NaturalMemoryNotice}=await import('../src/NaturalMemoryNotice');
+ const empty=renderToStaticMarkup(React.createElement(NaturalMemoryNotice,{notices:[]}));assert.equal(empty,'');
+ const html=renderToStaticMarkup(React.createElement(NaturalMemoryNotice,{notices:[{changeId:'c',scope:'project:a',entryId:'e',revision:1}]}));
+ assert.match(html,/已更新项目偏好/);assert.match(html,/查看/);assert.match(html,/撤销/);assert.match(html,/实验/);assert.doesNotMatch(html,/审核|采用/);
+});
+test('natural settings describe opt-in scope, preserved content and staged recall',async()=>{
+ const {NaturalMemoryPreferences}=await import('../src/NaturalMemoryPreferences');
+ const html=renderToStaticMarkup(React.createElement(NaturalMemoryPreferences,{projectId:'a',busy:false,run:async task=>{await task()}}));assert.match(html,/自动记忆 · 实验/);assert.match(html,/不补扫历史/);assert.match(html,/跨项目偏好需/);assert.match(html,/尚未接入后续回答/);assert.match(html,/关闭停止新增/);
 });
