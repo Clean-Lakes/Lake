@@ -100,3 +100,33 @@ html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
   backdrop-filter:var(--title-glass-filter);
   pointer-events:none;
 }
+
+/* Lake Island floats over a full-width, feathered conversation backdrop.
+   The pass belongs to the fixed viewport edge, outside the scrolling content. */
+.session-layout > .session-view { position:relative; }
+.conversation-header-backdrop {
+ position:absolute;
+ top:0;
+ left:0;
+ right:0;
+ height:92px;
+ z-index:7;
+ pointer-events:none;
+ background:linear-gradient(to bottom,color-mix(in srgb,var(--background) 56%,transparent),color-mix(in srgb,var(--background) 24%,transparent) 60%,transparent);
+ -webkit-backdrop-filter:blur(24px) saturate(125%);
+ backdrop-filter:blur(24px) saturate(125%);
+ -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 45%,transparent 100%);
+ mask-image:linear-gradient(to bottom,#000 0%,#000 45%,transparent 100%);
+}
+html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
+/* The band already blurs what passes under the island: do not stack filters. */
+:is(.lake-workbench-island,.workspace.has-floating-header > .workspace-header) > .workspace-header-glass {
+ -webkit-backdrop-filter:none;
+ backdrop-filter:none;
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+ .conversation-header-backdrop { background:linear-gradient(to bottom,var(--background) 0%,var(--background) 45%,transparent 100%); }
+}
+@media(prefers-reduced-transparency:reduce) {
+ .conversation-header-backdrop { -webkit-backdrop-filter:none; backdrop-filter:none; background:linear-gradient(to bottom,var(--background) 0%,var(--background) 45%,transparent 100%); }
+}

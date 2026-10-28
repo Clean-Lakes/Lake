@@ -13,7 +13,8 @@ export function useInspectorWindow(open:boolean){
   const version=++revision.current;
   const width=workspace.getBoundingClientRect().width;
   const held=parseFloat(workspace.style.getPropertyValue('--inspector-main-width'));
-  const base=workspace.classList.contains('inspector-window-sizing')&&Number.isFinite(held)?held:open?width:Math.max(0,width-382);
+  const inspectorWidth=workspace.querySelector<HTMLElement>('.session-inspector')?.getBoundingClientRect().width ?? 382;
+  const base=workspace.classList.contains('inspector-window-sizing')&&Number.isFinite(held)?held:open?width:Math.max(0,width-inspectorWidth);
   workspace.style.setProperty('--inspector-main-width',`${base}px`);
   workspace.classList.add('inspector-window-sizing');
   void bridge.setOpen(open).catch(()=>undefined).finally(()=>{
