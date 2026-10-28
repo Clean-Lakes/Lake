@@ -15,7 +15,7 @@
 .session-inspector-tabs button[aria-selected=true] { color:var(--foreground); }
 .session-inspector-tabs button[aria-selected=true]::after { content:''; position:absolute; bottom:-1px; left:0; right:0; height:2px; border-radius:1px; background:var(--foreground); }
 .session-inspector-tabs button:disabled { opacity:.5; cursor:default; }
-.session-inspector-scroll { flex:1 1 auto; min-height:0; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; padding:22px; }
+.session-inspector-scroll { flex:1 1 auto; min-height:0; min-width:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; scrollbar-gutter:stable; padding:22px; }
 /* Completion measures steps; the finding below keeps its own outcome. */
 .inspector-task-summary { display:flex; flex-direction:column; gap:14px; padding:16px; border:1px solid var(--border); border-radius:var(--radius-settings-panel); corner-shape:var(--corner-window); background:var(--surface-subtle); margin-bottom:22px; font-size:var(--font-size-ui); }
 .inspector-summary-title { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
@@ -102,8 +102,10 @@
 .execution-completed { border-top:1px solid var(--border); padding-top:16px; margin-top:6px; }
 .execution-completed > summary { justify-content:flex-start; flex-direction:row-reverse; gap:8px; width:max-content; max-width:100%; color:var(--text-muted); margin-bottom:18px; }
 .execution-step-records { margin-top:20px; padding-top:16px; border-top:1px solid var(--border); }
-.execution-step-records > summary { display:flex; color:var(--text-muted); gap:8px; }
-.execution-step-records > summary > span { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.execution-step-records > summary.lake-disclosure-summary { display:grid; grid-template-columns:max-content minmax(0,1fr) 12px; width:100%; color:var(--text-muted); gap:8px; }
+.execution-step-records .execution-records-label { white-space:nowrap; }
+.execution-step-records .execution-records-description { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.execution-step-records > summary > .lake-disclosure-chevron { grid-column:3; }
 .execution-step-records[open] > summary { margin-bottom:18px; }
 @keyframes inspector-arrive { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
 @keyframes inspector-depart { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(10px); } }

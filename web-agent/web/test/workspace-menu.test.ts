@@ -22,3 +22,10 @@ test('short and narrow viewports retain an accessible inset rather than overflow
   assert.ok(result.height>0&&result.height<=432);
  }
 });
+test('home content determines the shared height without a reserved blank footer',()=>{
+ const anchor={left:13,top:700,width:254},viewport={width:1512,height:800};
+ const compact=workspaceMenuPosition(anchor,viewport,386);
+ assert.equal(compact.height,386);
+ assert.equal(compact.bottom,workspaceMenuPosition(anchor,viewport).bottom);
+ assert.equal(workspaceMenuPosition(anchor,viewport,800).height,432);
+});

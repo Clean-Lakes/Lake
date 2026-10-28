@@ -22,6 +22,7 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
  const [managedProject,setManagedProject]=useState<Project|null>(null);
  const [position,setPosition]=useState({left:8,bottom:8,width:240,height:432});
  const trigger=useRef<HTMLButtonElement>(null),panel=useRef<HTMLDivElement>(null);
+ const homeContent=useRef<HTMLDivElement>(null),contentHeight=useRef(432);
  const panelId=useId(),nameId=useId(),errorId=useId();
  const selected=tags.find(tag=>tag.id===selectedTag),currentProject=projects.find(project=>project.id===projectId);
  function close(restoreFocus=false){if(operation.current)return;setOpen(false);if(restoreFocus)trigger.current?.focus({preventScroll:true});}
@@ -30,8 +31,14 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
  useEffect(()=>{if(!operation.current){setOpen(false);setView('home');setError('');}},[projectId]);
  useLayoutEffect(()=>{
   if(!open)return;
-  const place=()=>{const anchor=trigger.current?.getBoundingClientRect();if(anchor)setPosition(workspaceMenuPosition(anchor,{width:innerWidth,height:innerHeight}));};
-  const observer=new ResizeObserver(place);if(trigger.current)observer.observe(trigger.current);
+  const place=()=>{
+   const anchor=trigger.current?.getBoundingClientRect();if(!anchor)return;
+   const naturalHeight=homeContent.current?.offsetHeight;
+   // Fit the home page once, then retain that height while visiting subpages.
+   if(naturalHeight)contentHeight.current=naturalHeight+14;
+   setPosition(workspaceMenuPosition(anchor,{width:innerWidth,height:innerHeight},contentHeight.current));
+  };
+  const observer=new ResizeObserver(place);if(trigger.current)observer.observe(trigger.current);if(homeContent.current)observer.observe(homeContent.current);
   place();window.addEventListener('resize',place);
   return()=>{observer.disconnect();window.removeEventListener('resize',place);};
  },[open]);
@@ -73,7 +80,7 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
    event.preventDefault();buttons[event.key==='Home'?0:event.key==='End'?buttons.length-1:(index+(event.key==='ArrowUp'?-1:1)+buttons.length)%buttons.length]?.focus();
   }}>
    <section className="workspace-menu-page" data-workspace-page="home" hidden={view!=='home'} inert={view!=='home'}>
-    <div className="workspace-menu-scroll">
+    <div className="workspace-menu-scroll"><div ref={homeContent}>
      <div className="workspace-menu-label">当前项目</div>
      <div className="workspace-current-project">{projectSelection}<button type="button" className="workspace-utility-action workspace-project-entry" aria-label={`切换项目：${currentProject?.name??'选择项目'}`} onClick={()=>page('projects')}><span title={currentProject?.name}>{currentProject?.name??'选择项目'}</span><Glyph name="next" size={14}/></button></div>
      <button type="button" className="workspace-utility-action" disabled={!connected||!currentProject} onClick={()=>{setManagedProject(currentProject!);page('manage');}}><Glyph name="filter" size={15}/><span>管理当前项目</span></button>
@@ -84,7 +91,7 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
      <button type="button" className="workspace-utility-action" disabled={booting} onClick={()=>act(onSettings)}><Glyph name="settings" size={15}/><span>设置</span>{!modelConfigured&&<small>待配置</small>}</button>
      <button type="button" className="workspace-utility-action" onClick={()=>act(()=>window.dispatchEvent(new Event('lake-open-updates')))}><Glyph name="refresh" size={15}/><span>检查更新</span>{unreadUpdate&&<small>新版本</small>}</button>
      <button type="button" className="workspace-utility-action" disabled={!connected} onClick={()=>act(onTrash)}><Glyph name="trash" size={15}/><span>已删除</span></button>
-    </div>
+    </div></div>
    </section>
    <section className="workspace-menu-page" data-workspace-page="projects" hidden={view!=='projects'} inert={view!=='projects'}>
     {back('切换项目')}

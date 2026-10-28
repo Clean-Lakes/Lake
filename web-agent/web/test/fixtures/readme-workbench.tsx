@@ -187,6 +187,7 @@ createRoot(document.getElementById('root')!).render(<><App/><WindowsChrome/></>)
 if (islandQuery) {
  const emit = () => {snapshot.cursor++;for(const stream of demoStreams)stream.onmessage?.(new MessageEvent('message',{data:JSON.stringify({sessionId:session.id,type:'session',seq:snapshot.cursor})}));};
  Object.assign(window, {lakeIslandQA: {
+  longInspectorSteps(){for(const plan of snapshot.sre!.tasks[0]!.plans)for(const step of plan.steps)step.description='通过 10.100.33.41 以只读方式执行：kubectl get nodes -o wide 记录各节点 Ready 状态与角色，并独立复核所有 Deployment 的期望副本、就绪副本和重启计数。';emit();},
   state(value: IslandFixtureState) {applyIsland(value);emit();},
   pulse(value: number) {for(const agent of snapshot.ai!.agentRuns ?? []) {agent.toolCount=value;agent.activityUpdatedAt=new Date().toISOString();}emit();},
   presentationStatus(value:WorkSession['status'],verified=false){session.status=value;if(verified){const t=snapshot.sre!.tasks[0]!;t.outcome='completed';t.recoveryStatus='verified';}emit();},

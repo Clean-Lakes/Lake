@@ -53,7 +53,7 @@ export function SessionInspector({snapshot,connected,onUpdated,headerHost}:{snap
       <InspectorTaskSummary compact task={task} title={snapshot.session.title} runs={snapshot.ai?.agentRuns}/>
       <InspectorExecutionSteps task={task} resources={snapshot.resources} runs={snapshot.ai?.agentRuns} selectedId={selected?.attempt.id} onSelect={attemptId=>{choose('execution',attemptId);requestAnimationFrame(()=>{const details=panel.current?.querySelector<HTMLDetailsElement>('.execution-step-records');if(details)details.open=true;});}}/>
       <details className="execution-step-records" open={!!target.attemptId}>
-       <DisclosureSummary>步骤记录{selected&&<span>{selected.step.description}</span>}</DisclosureSummary>
+       <DisclosureSummary><span className="execution-records-label">步骤记录</span>{selected&&<span className="execution-records-description" title={selected.step.description}>{selected.step.description}</span>}</DisclosureSummary>
        {selected&&<div className="inspector-attempt-heading"><AgentIcon role={selected.step.role} size={18}/><strong>{sreRoles[selected.step.role].name}</strong><span>{sreStatus[attemptStatus]??attemptStatus}</span><p>{selected.step.description}</p></div>}
        {currentEntry?<SRERoleMessage key={`${task.id}:${currentEntry.attemptId}`} detailsOnly connected={connected} task={task} entry={currentEntry} snapshot={snapshot} onUpdated={onUpdated} renderApproval={()=>null}/>:<p className="inspector-empty">本步骤尚无执行记录。</p>}
       </details>
