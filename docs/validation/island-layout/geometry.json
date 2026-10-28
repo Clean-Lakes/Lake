@@ -1,0 +1,370 @@
+[
+  {
+    "config": {
+      "width": 1512,
+      "theme": "light"
+    },
+    "expanded": {
+      "viewport": 1512,
+      "header": {
+        "left": 328,
+        "right": 1082,
+        "width": 754
+      },
+      "input": {
+        "left": 328,
+        "right": 1082,
+        "width": 754
+      },
+      "aligned": true,
+      "controlsInside": true,
+      "controls": [
+        {
+          "label": "收起计划与执行",
+          "left": 925,
+          "right": 953
+        },
+        {
+          "label": "展开资源终端",
+          "left": 957,
+          "right": 1067
+        }
+      ],
+      "summary": "并行协作"
+    },
+    "collapsed": {
+      "viewport": 1512,
+      "header": {
+        "left": 416,
+        "right": 1376,
+        "width": 960
+      },
+      "input": {
+        "left": 416,
+        "right": 1376,
+        "width": 960
+      },
+      "aligned": true,
+      "controlsInside": true,
+      "controls": [
+        {
+          "label": "展开计划与执行",
+          "left": 1219,
+          "right": 1247
+        },
+        {
+          "label": "展开资源终端",
+          "left": 1251,
+          "right": 1361
+        }
+      ],
+      "summary": ""
+    },
+    "terminalFocusRestored": true,
+    "terminal": {
+      "viewport": 1512,
+      "header": {
+        "left": 328,
+        "right": 682,
+        "width": 354
+      },
+      "input": {
+        "left": 328,
+        "right": 682,
+        "width": 354
+      },
+      "aligned": true,
+      "controlsInside": true,
+      "controls": [
+        {
+          "label": "收起计划与执行",
+          "left": 607,
+          "right": 635
+        },
+        {
+          "label": "收起资源终端",
+          "left": 639,
+          "right": 667
+        }
+      ],
+      "summary": "并行协作",
+      "inspectorRemainedOpen": true
+    }
+  },
+  {
+    "config": {
+      "width": 1024,
+      "theme": "light"
+    },
+    "expanded": {
+      "viewport": 1024,
+      "header": {
+        "left": 328,
+        "right": 976,
+        "width": 648
+      },
+      "input": {
+        "left": 328,
+        "right": 976,
+        "width": 648
+      },
+      "aligned": true,
+      "controlsInside": true,
+      "controls": [
+        {
+          "label": "收起计划与执行",
+          "left": 901,
+          "right": 929
+        },
+        {
+          "label": "展开资源终端",
+          "left": 933,
+          "right": 961
+        }
+      ],
+      "summary": "并行协作"
+    },
+    "collapsed": {
+      "viewport": 1024,
+      "header": {
+        "left": 328,
+        "right": 976,
+        "width": 648
+      },
+      "input": {
+        "left": 328,
+        "right": 976,
+        "width": 648
+      },
+      "aligned": true,
+      "controlsInside": true,
+      "controls": [
+        {
+          "label": "展开计划与执行",
+          "left": 901,
+          "right": 929
+        },
+        {
+          "label": "展开资源终端",
+          "left": 933,
+          "right": 961
+        }
+      ],
+      "summary": ""
+    },
+    "terminalFocusRestored": true,
+    "terminal": {
+      "viewport": 1024,
+      "header": {
+        "left": 328,
+        "right": 976,
+        "width": 648
+      },
+      "input": {
+        "left": 328,
+        "right": 976,
+        "width": 648
+      },
+      "aligned": true,
+      "controlsInside": true,
+      "controls": [
+        {
+          "label": "展开计划与执行",
+          "left": 901,
+          "right": 929
+        },
+        {
+          "label": "收起资源终端",
+          "left": 933,
+          "right": 961
+        }
+      ],
+      "summary": "",
+      "inspectorRemainedOpen": false
+    }
+  },
+  {
+    "config": {
+      "width": 720,
+      "theme": "dark"
+    },
+    "expanded": {
+      "viewport": 720,
+      "header": {
+        "left": 278,
+        "right": 672,
+        "width": 394
+      },
+      "input": {
+        "left": 278,
+        "right": 672,
+        "width": 394
+      },
+      "aligned": true,
+      "controlsInside": true,
+      "controls": [
+        {
+          "label": "收起计划与执行",
+          "left": 597,
+          "right": 625
+        },
+        {
+          "label": "展开资源终端",
+          "left": 629,
+          "right": 657
+        }
+      ],
+      "summary": "并行协作"
+    },
+    "collapsed": {
+      "viewport": 720,
+      "header": {
+        "left": 278,
+        "right": 672,
+        "width": 394
+      },
+      "input": {
+        "left": 278,
+        "right": 672,
+        "width": 394
+      },
+      "aligned": true,
+      "controlsInside": true,
+      "controls": [
+        {
+          "label": "展开计划与执行",
+          "left": 597,
+          "right": 625
+        },
+        {
+          "label": "展开资源终端",
+          "left": 629,
+          "right": 657
+        }
+      ],
+      "summary": ""
+    },
+    "terminalFocusRestored": true,
+    "terminal": {
+      "viewport": 720,
+      "header": {
+        "left": 278,
+        "right": 672,
+        "width": 394
+      },
+      "input": {
+        "left": 278,
+        "right": 672,
+        "width": 394
+      },
+      "aligned": true,
+      "controlsInside": true,
+      "controls": [
+        {
+          "label": "展开计划与执行",
+          "left": 597,
+          "right": 625
+        },
+        {
+          "label": "收起资源终端",
+          "left": 629,
+          "right": 657
+        }
+      ],
+      "summary": "",
+      "inspectorRemainedOpen": false
+    }
+  },
+  {
+    "config": {
+      "width": 390,
+      "theme": "light"
+    },
+    "expanded": {
+      "viewport": 390,
+      "header": {
+        "left": 32,
+        "right": 358,
+        "width": 326
+      },
+      "input": {
+        "left": 32,
+        "right": 358,
+        "width": 326
+      },
+      "aligned": true,
+      "controlsInside": true,
+      "controls": [
+        {
+          "label": "收起计划与执行",
+          "left": 287,
+          "right": 315
+        },
+        {
+          "label": "展开资源终端",
+          "left": 319,
+          "right": 347
+        }
+      ],
+      "summary": "并行协作"
+    },
+    "collapsed": {
+      "viewport": 390,
+      "header": {
+        "left": 32,
+        "right": 358,
+        "width": 326
+      },
+      "input": {
+        "left": 32,
+        "right": 358,
+        "width": 326
+      },
+      "aligned": true,
+      "controlsInside": true,
+      "controls": [
+        {
+          "label": "展开计划与执行",
+          "left": 287,
+          "right": 315
+        },
+        {
+          "label": "展开资源终端",
+          "left": 319,
+          "right": 347
+        }
+      ],
+      "summary": ""
+    },
+    "terminalFocusRestored": true,
+    "terminal": {
+      "viewport": 390,
+      "header": {
+        "left": 32,
+        "right": 358,
+        "width": 326
+      },
+      "input": {
+        "left": 32,
+        "right": 358,
+        "width": 326
+      },
+      "aligned": true,
+      "controlsInside": true,
+      "controls": [
+        {
+          "label": "展开计划与执行",
+          "left": 287,
+          "right": 315
+        },
+        {
+          "label": "收起资源终端",
+          "left": 319,
+          "right": 347
+        }
+      ],
+      "summary": "",
+      "inspectorRemainedOpen": false
+    }
+  }
+]
