@@ -1,0 +1,86 @@
+{
+  "scenarios": [
+    {
+      "scenario": "two genuine completed user sources",
+      "preferenceRevision": 2,
+      "sourceCount": 2,
+      "memoryProviderDispatches": 1,
+      "hostMessageIdentityMatched": true,
+      "journalVersion": 1
+    },
+    {
+      "scenario": "manual compaction 1",
+      "additionalMemoryProviderDispatches": 0,
+      "preferenceRevision": 2,
+      "processedSources": 2
+    },
+    {
+      "scenario": "manual compaction 2",
+      "additionalMemoryProviderDispatches": 0,
+      "preferenceRevision": 2,
+      "processedSources": 2
+    },
+    {
+      "scenario": "manual compaction 3",
+      "additionalMemoryProviderDispatches": 0,
+      "preferenceRevision": 2,
+      "processedSources": 2
+    },
+    {
+      "scenario": "new genuine correction after repeated summaries",
+      "preferenceRevision": 3,
+      "exactNewQuote": true,
+      "totalMemoryProviderDispatches": 2,
+      "taskStatus": "completed",
+      "memoryGap": false,
+      "globalAuto": false
+    }
+  ],
+  "memoryDispatchUsage": [
+    {
+      "inputKnown": true,
+      "outputKnown": true,
+      "known": true,
+      "cachedInput": 1280,
+      "input": 1629,
+      "output": 281,
+      "total": 1910
+    },
+    {
+      "inputKnown": true,
+      "outputKnown": true,
+      "known": true,
+      "cachedInput": 1280,
+      "input": 1609,
+      "output": 215,
+      "total": 1824
+    }
+  ],
+  "limitation": "Main conversation and original compaction-model usage are separate. No claim of new recall or business-task benefit.",
+  "finalRuntimeCodeSHA": "f69187a830663afdb58145ff59eabf55f0f44d68",
+  "initialScenarioCodeSHA": "53495f06516a4a26ff8856391b51a76fc4d54854",
+  "finalChecks": {
+    "allNaturalTablesUnchangedOnRestart": true,
+    "repeatedCompactionAfterRestartNewMemoryDispatches": 0,
+    "disabledNewTurnNewMemoryDispatches": 0,
+    "reenableThenCompactionDoesNotBackfillDisabledTurn": true,
+    "globalAuto": false,
+    "projectAutoRestored": true,
+    "currentPreferenceRevision": 3,
+    "memoryProviderDispatches": 2,
+    "resourceOperations": 0,
+    "taskStatus": "completed",
+    "derivedRegisteredQuotesRemovedAfterConsentRevocation": true
+  },
+  "foregroundUsageIncludingOriginalCompaction": {
+    "inputKnown": true,
+    "outputKnown": true,
+    "known": true,
+    "cachedInput": 13952,
+    "input": 78298,
+    "output": 4987,
+    "total": 83285
+  },
+  "manualCompactionCompletedCards": 6,
+  "completedUserTurns": 4
+}
