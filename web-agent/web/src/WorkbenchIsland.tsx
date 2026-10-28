@@ -30,7 +30,9 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const inspector=element.querySelector<HTMLElement>('.island-inspector-heading');
    const terminal=element.querySelector<HTMLElement>('.terminal-panel-header');
    const available=Math.max(1,composer?.width??bounds.right-left-48);
-   const natural=Math.min(190,title?.scrollWidth??160)+(state?.getBoundingClientRect().width??0)+60;
+   const natural=inspectorOpen&&terminalOpen?130:Math.min(190,title?.scrollWidth??160)+(state?.getBoundingClientRect().width??0)+60;
+   const identity=element.querySelector<HTMLElement>('.island-conversation');
+   if(identity)identity.title=title?.textContent??'';
    const terminalLabel=terminal?.querySelector<HTMLElement>('.terminal-island-title');
    const terminalNumber=terminal?.querySelector<HTMLElement>('.terminal-island-number');
    const terminalCount=terminal?.querySelector<HTMLElement>('.terminal-island-count');
@@ -58,7 +60,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   window.addEventListener('resize',schedule);measure();
   return()=>{content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);for(const name of ['inspector'])(shell as HTMLElement).style.removeProperty(`--${name}-island-inset`);(shell as HTMLElement).style.removeProperty('--pane-rail-bottom');};
  },[inspectorOpen,terminalOpen]);
- return <div ref={root} className="lake-workbench-island" data-linked={inspectorOpen||terminalOpen} role="group" aria-label="Lake Island 工作台">
+ return <div ref={root} className="lake-workbench-island" data-linked={inspectorOpen||terminalOpen} data-multipane={inspectorOpen&&terminalOpen} role="group" aria-label="Lake Island 工作台">
   <span className="workspace-header-glass" aria-hidden="true"/>
   {activity}
   <div className="island-conversation"><span className="island-module-glass" aria-hidden="true"/>{conversation}</div>

@@ -22,7 +22,7 @@ test('closing either auxiliary pane restores the compact island width',()=>{
 });
 
 test('narrow split conversations keep every active control inside the input width',()=>{
- const result=workbenchIslandLayout(440,140,250,335);
+ const result=workbenchIslandLayout(130,140,250,335);
  assert.equal(result.width,335);
  assert.ok(result.columns.every(width=>width>0));
 });
@@ -30,15 +30,15 @@ test('narrow split conversations keep every active control inside the input widt
 test('a tight three-pane rail preserves readable conversation and compact side controls',()=>{
  const normal=workbenchIslandLayout(330,128,200,402);
  assert.deepEqual(normal.columns,[216,84,100]);
- const narrow=workbenchIslandLayout(440,140,250,335);
+ const narrow=workbenchIslandLayout(130,140,250,335);
  assert.equal(narrow.width,335);
- assert.ok(narrow.columns[0]!>=150);
+ assert.equal(narrow.columns[0],130);
  assert.ok(narrow.columns[1]!>=84);
- assert.ok(narrow.columns[2]!>=84);
+ assert.ok(narrow.columns[2]!>=100);
 });
 
-test('minimum desktop composer gives stacked identity and a named terminal their own slots',()=>{
- const minimum=workbenchIslandLayout(330,128,200,320);
- assert.deepEqual(minimum,{width:320,columns:[150,84,84]});
- assert.deepEqual(workbenchIslandLayout(330,128,200,335).columns,[165,84,84]);
+test('status-only four-pane entry leaves readable tabs and terminal controls',()=>{
+ assert.deepEqual(workbenchIslandLayout(130,128,200,320),{width:320,columns:[130,88,100]});
+ assert.deepEqual(workbenchIslandLayout(130,128,200,335).columns,[130,103,100]);
+ assert.equal(workbenchIslandLayout(130,128,200,720).columns[0],130);
 });

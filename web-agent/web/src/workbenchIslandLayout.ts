@@ -1,8 +1,7 @@
 /** Keep the session identity and a readable status before trimming auxiliaries. */
 export function workbenchIslandLayout(conversation:number,inspector:number,terminal:number,available=Infinity){
  const columns=[conversation,inspector,terminal].map(value=>Math.max(0,value));
- const stacked=inspector>0&&terminal>0&&available<366;
- const minimum=[stacked?150:180,84,stacked?84:100].map((value,index)=>Math.min(value,columns[index]!));
+ const minimum=[180,84,100].map((value,index)=>Math.min(value,columns[index]!));
  let excess=Math.max(0,columns.reduce((a,b)=>a+b,2)-available);
  const trim=(index:number,floor:number)=>{const shrink=Math.min(excess,Math.max(0,columns[index]!-floor));columns[index]!-=shrink;excess-=shrink;};
  // First remove generous title space, then compress resource/task controls,
