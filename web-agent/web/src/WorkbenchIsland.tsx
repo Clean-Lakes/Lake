@@ -8,7 +8,7 @@ export function useWideWorkbench(){
  return wide;
 }
 
-/** A shared island that fills the conversation and inspection workspace in three-pane mode. */
+/** The island shares the live composer rail, including during pane resizing. */
 export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,terminalOpen,onInspectorHost}:{conversation:ReactNode;terminal:ReactNode;activity:ReactNode;inspectorOpen:boolean;terminalOpen:boolean;onInspectorHost:(node:HTMLDivElement|null)=>void}){
  const root=useRef<HTMLDivElement>(null);
  useLayoutEffect(()=>{
@@ -20,14 +20,14 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const view=shell.querySelector<HTMLElement>('.session-layout > .session-view');
    if(!view)return;
    const bounds=view.getBoundingClientRect(),base=shell.getBoundingClientRect();
+   const composer=view.querySelector('.composer-input')?.getBoundingClientRect();
    const transcript=view.querySelector('.timeline-list')?.getBoundingClientRect();
-   const left=Math.min(bounds.right-120,Math.max(bounds.left+16,transcript?.left??bounds.left+48));
+   const left=composer?.left??Math.min(bounds.right-120,Math.max(bounds.left+16,transcript?.left??bounds.left+48));
    const title=element.querySelector<HTMLElement>('.crumb-title');
    const state=element.querySelector<HTMLElement>('.header-morph-slot.is-visible .header-morph-content');
    const inspector=element.querySelector<HTMLElement>('.island-inspector-heading');
    const terminal=element.querySelector<HTMLElement>('.terminal-panel-header');
-   const workspace=shell.querySelector('.workspace')?.getBoundingClientRect();
-   const available=Math.max(1,(workspace?.right??bounds.right)-left-16);
+   const available=Math.max(1,composer?.width??bounds.right-left-48);
    const natural=Math.min(190,title?.scrollWidth??160)+(state?.getBoundingClientRect().width??0)+60;
    const terminalLabel=terminal?.querySelector<HTMLElement>('.terminal-island-title');
    const terminalNumber=terminal?.querySelector<HTMLElement>('.terminal-island-number');
@@ -48,7 +48,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   };
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(measure);};
   const observer=new ResizeObserver(schedule);
-  for(const node of [element,shell,shell.querySelector('.workspace'),shell.querySelector('.session-layout > .session-view'),shell.querySelector('.session-inspector'),shell.querySelector('.terminal-side-panel')])if(node)observer.observe(node);
+  for(const node of [element,shell,shell.querySelector('.workspace'),shell.querySelector('.session-layout > .session-view'),shell.querySelector('.session-inspector'),shell.querySelector('.terminal-side-panel'),shell.querySelector('.composer-input')])if(node)observer.observe(node);
   const observeControls=()=>{for(const node of element.querySelectorAll('.header-morph-slot,.header-morph-content,.crumb-title,.island-inspector-heading,.terminal-panel-header'))observer.observe(node);};
   observeControls();
   const content=new MutationObserver(()=>{observeControls();schedule();});

@@ -131,3 +131,16 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .term
 .lake-workbench-island .header-state-area { margin-left:0; }
 .lake-workbench-island .header-normal-state .header-morph-content { display:flex; align-items:center; gap:4px; }
 .lake-workbench-island .session-state-badge { white-space:nowrap; }
+
+/* On tight conversation rails, the status and pane actions take precedence over
+   the duplicate title, which remains available in the conversation navigation. */
+@container(max-width:260px) {
+ .lake-workbench-island .workspace-header { padding-inline:8px; gap:4px; }
+ .lake-workbench-island .breadcrumbs { display:none; }
+ .lake-workbench-island .header-state-area { width:100%; }
+ .lake-workbench-island .header-normal-state.is-visible { flex:1; width:100%!important; }
+ .lake-workbench-island .header-normal-state .header-morph-content { width:100%; min-width:0; }
+ .lake-workbench-island .header-normal-state .session-state-badge { flex:1; min-width:0; display:block; overflow:hidden; text-overflow:ellipsis; }
+ .lake-workbench-island .session-state-badge > span { display:inline-block; margin-right:6px; vertical-align:middle; }
+ .lake-workbench-island .header-inspector-toggle { flex:none; }
+}
