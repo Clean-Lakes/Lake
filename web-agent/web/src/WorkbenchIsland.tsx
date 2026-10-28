@@ -23,6 +23,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   if(!element||!shell||!identity)return;
   let frame=0;
   const reduced=matchMedia('(prefers-reduced-motion:reduce)');
+  const textMetrics=document.createElement('canvas').getContext('2d');
   const flights:Record<'inspector'|'terminal',IslandFlight>={inspector:{},terminal:{}};
   const observed=new Set<Element>();
   const write=(node:HTMLElement,box:IslandBox)=>{node.style.left=`${box.left}px`;node.style.top=`${box.top}px`;node.style.width=`${box.width}px`;};
@@ -65,6 +66,10 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const heading=inspectorIsland.current?.querySelector<HTMLElement>('.island-inspector-heading');
    const terminalHeader=terminalIsland.current?.querySelector<HTMLElement>('.terminal-panel-header');
    const terminalLabel=terminalHeader?.querySelector<HTMLElement>('.terminal-island-title');
+   // A compact label must not become its own preferred width and stay compact forever.
+   if(textMetrics&&terminalLabel)textMetrics.font=getComputedStyle(terminalLabel).font;
+   const terminalName=terminalLabel?.querySelector('.terminal-island-title-full')?.textContent??terminalLabel?.textContent??'终端';
+   const terminalNameWidth=textMetrics?.measureText(terminalName).width??terminalLabel?.scrollWidth??120;
    const terminalNumber=terminalHeader?.querySelector<HTMLElement>('.terminal-island-number');
    const terminalCount=terminalHeader?.querySelector<HTMLElement>('.terminal-island-count');
    const inspectorPane=shell.querySelector('.session-inspector.is-open')?.getBoundingClientRect();
@@ -75,7 +80,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
     terminal:terminalPane?{left:terminalPane.left-base.left,width:terminalPane.width}:undefined,
     conversationWidth:Math.min(190,title?.scrollWidth??160)+(state?.getBoundingClientRect().width??0)+60,
     inspectorWidth:Math.max(144,heading?.scrollWidth??144),
-    terminalWidth:Math.min(320,(terminalLabel?.scrollWidth??120)+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112),
+    terminalWidth:Math.min(320,terminalNameWidth+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112),
    });
    const top=shell.closest('html.lake-windows-chrome')?52:12;
    const source={...layout.conversation,top};
