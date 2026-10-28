@@ -1,13 +1,13 @@
 /* Current action, peer activity and measured plan progress share one quiet row. */
-.pilot-island{flex:0 0 auto;min-width:0;--pilot-island-color:var(--text-muted)}
+.pilot-island{flex:1 1 auto;width:100%;min-width:0;--pilot-island-color:var(--text-muted)}
 .pilot-island[data-tone="active"]{--pilot-island-color:var(--info)}
 .pilot-island[data-tone="attention"]{--pilot-island-color:var(--warning)}
 .pilot-island[data-tone="failed"]{--pilot-island-color:var(--danger)}
-.pilot-island-trigger{display:flex;align-items:center;gap:12px;height:32px;margin:0;padding:0 0 0 14px;border:0;border-left:1px solid var(--border);border-radius:0;background:transparent;color:var(--foreground);font:inherit;font-size:var(--font-size-ui);text-align:start;cursor:pointer}
+.pilot-island-trigger{display:flex;align-items:center;gap:12px;width:100%;min-width:0;height:32px;margin:0;padding:0 0 0 14px;border:0;border-left:1px solid var(--border);border-radius:0;background:transparent;color:var(--foreground);font:inherit;font-size:var(--font-size-ui);text-align:start;cursor:pointer}
 .pilot-island-trigger:hover{background:transparent}
 .pilot-island-trigger:focus-visible{outline:2px solid var(--focus-outline);outline-offset:-2px}
 .pilot-action-avatar{display:inline-flex;flex-shrink:0}
-.pilot-island-action{display:flex;flex-direction:column;justify-content:center;gap:1px;width:210px;min-width:0;line-height:17px}
+.pilot-island-action{display:flex;flex:1 1 auto;flex-direction:column;justify-content:center;gap:1px;min-width:0;line-height:17px}
 .pilot-island-action-line{display:flex;align-items:center;gap:8px;min-width:0}
 .pilot-island-action strong{font:inherit;flex-shrink:0}
 .pilot-action-state-dot{display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:var(--pilot-island-color);vertical-align:1px}
@@ -21,15 +21,35 @@
 .pilot-ring-value{stroke:var(--session-state-color,var(--pilot-island-color));transition:stroke-dasharray 240ms ease,stroke 160ms ease}
 .pilot-island-progress>svg:last-child{color:var(--text-muted);transition:transform 220ms cubic-bezier(.22,1,.36,1)}
 .pilot-island-trigger[aria-expanded="true"] .pilot-island-progress>svg:last-child{transform:rotate(180deg)}
-.header-state-area{display:flex;align-items:center;flex:0 0 auto;min-width:0}
-.header-morph-slot{display:block;overflow:hidden;flex:0 0 auto;opacity:0;transition:width 280ms cubic-bezier(.22,1,.36,1),opacity 120ms ease}
-.header-morph-slot.is-visible{opacity:1}
-.header-morph-content{display:flex;align-items:center;width:max-content;min-height:32px}
-.header-normal-state .session-state-badge{margin-left:0}
+/* A fixed footprint for ordinary status and specialist activity. */
+.header-state-area{display:flex;align-items:center;gap:8px;flex:1 1 0;min-width:0}
+.header-state-content{display:grid;grid-template-columns:minmax(0,1fr);align-items:center;flex:1 1 0;min-width:0}
+.header-morph-slot{grid-area:1/1;min-width:0;overflow:hidden;opacity:0;visibility:hidden;transform:translateY(3px);transition:opacity 180ms ease,transform 180ms ease,visibility 0s 180ms}
+.header-morph-slot.is-visible{opacity:1;visibility:visible;transform:none;transition-delay:0s}
+.header-morph-content{display:flex;align-items:center;width:100%;min-width:0;min-height:32px}
+.header-normal-state .session-state-badge{margin-left:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;flex-shrink:1}
+.header-panel-controls{display:flex;align-items:center;gap:4px;flex:0 1 auto;min-width:0}
+.header-terminal-toggle{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:28px;max-width:170px;height:28px;padding:0 6px;border:0;border-radius:var(--radius-settings-control);corner-shape:var(--corner-window);background:transparent;color:var(--text-muted);font-size:var(--font-size-ui);cursor:pointer}
+.header-terminal-toggle:hover{color:var(--foreground);background:var(--surface-hover)}
+.header-terminal-toggle:focus-visible{outline:2px solid var(--focus-outline);outline-offset:2px}
+.header-terminal-toggle[aria-expanded=true]{width:28px;color:var(--info);background:var(--info-soft)}
+.header-terminal-toggle>svg,.header-terminal-dot{flex:none}
+.header-terminal-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.header-terminal-dot{width:5px;height:5px;border-radius:50%;background:var(--text-muted)}
+.header-terminal-dot[data-connected=true]{background:var(--success)}
+/* The inspector and terminal can leave a narrow chat inside a wide window. */
+@container lake-island (max-width:560px){
+ .header-terminal-label,.header-terminal-dot,.header-terminal-toggle>svg:last-child:not(:first-child){display:none}
+ .header-terminal-toggle{width:28px;padding:0}
+ .header-panel-controls{flex:none}
+ .pilot-action-avatar,.pilot-island-action-line>strong{display:none}
+ .pilot-island-trigger{padding-left:7px;gap:6px}
+ .pilot-island-progress{gap:0}
+ .pilot-island-ring,.pilot-island-ended{width:24px;height:24px}
+}
 .workspace.has-floating-header>.workspace-header{min-height:54px}
-@container(max-width:900px){.pilot-island-action{width:170px}}
-@container(max-width:700px){.pilot-island-trigger{padding-left:9px;gap:9px}.pilot-island-action{width:145px}}
-@container(max-width:480px){.pilot-action-avatar{display:none}.pilot-island-action{width:94px}.pilot-island-action-line{gap:5px}.pilot-island-action-line>strong{display:none}.pilot-island-progress{gap:6px}.pilot-island-ring,.pilot-island-ended{width:24px;height:24px}.workspace.has-floating-header .breadcrumbs strong>svg{display:none}}
+@container(max-width:700px){.pilot-island-trigger{padding-left:9px;gap:9px}.header-terminal-label,.header-terminal-dot,.header-terminal-toggle>svg:last-child:not(:first-child){display:none}.header-terminal-toggle{width:28px;padding:0}}
+@container(max-width:480px){.pilot-action-avatar{display:none}.pilot-island-action-line{gap:5px}.pilot-island-action-line>strong{display:none}.pilot-island-progress{gap:6px}.pilot-island-ring,.pilot-island-ended{width:24px;height:24px}.workspace.has-floating-header .breadcrumbs strong>svg{display:none}}
 @media(prefers-reduced-motion:reduce){.header-morph-slot,.pilot-ring-value,.pilot-island-progress,.pilot-island-progress>svg:last-child{transition:none}}
 .pilot-island-panel { position: fixed; z-index: 75; width: min(420px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-settings-panel); corner-shape: var(--corner-window); background: var(--surface); color: var(--foreground); box-shadow: var(--shadow-popover); font-size: var(--font-size-ui); }
 .pilot-island-panel[data-state="closing"] { opacity:0; pointer-events:none; }

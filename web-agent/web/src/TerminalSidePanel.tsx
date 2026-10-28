@@ -17,7 +17,7 @@ export function TerminalSidePanel({ open, onClose, onOpen, children }: { open: b
   }, [open, mounted, visible]);
   return <>
     {open && <button type="button" className="terminal-panel-scrim" aria-label="收起终端面板" onClick={onClose}/>}
-    <div className="terminal-side-slot" inert={!open} aria-hidden={!open}>
+    <div id="resource-terminal-panel" className="terminal-side-slot" inert={!open} aria-hidden={!open}>
       {mounted && <aside className={`terminal-side-panel ${open && visible ? "is-open" : ""}`} aria-label="资源终端" onKeyDown={event => {
         if (event.key === "Escape" && !(event.target as HTMLElement).closest(".terminal-screen")) { event.preventDefault(); onClose(); }
       }}>{children}</aside>}

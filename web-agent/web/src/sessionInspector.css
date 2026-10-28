@@ -2,7 +2,6 @@
 .session-layout { position:relative; display:flex; flex:1 1 auto; min-height:0; min-width:0; overflow:hidden; }
 .session-layout > .session-view { min-width:0; overflow:hidden; }
 .workspace.has-session-inspector { --inspector-width:382px; --session-content-start:max(var(--session-gutter),calc((100cqw - var(--inspector-width) - 960px)/2)); --session-content-width:min(960px,calc(100cqw - var(--inspector-width) - var(--session-gutter) - var(--session-gutter))); }
-.workspace.has-session-inspector > .workspace-header { max-width:calc(100% - var(--inspector-width) - var(--session-content-start) - 16px); }
 .session-inspector { flex:0 0 382px; width:382px; min-width:0; height:100%; position:relative; z-index:5; display:flex; flex-direction:column; border-left:1px solid var(--border); background:var(--surface); color:var(--foreground); padding-top:0; outline:none; animation:inspector-arrive 240ms cubic-bezier(.22,1,.36,1) both; }
 .session-inspector.is-closing { position:absolute; right:0; top:0; bottom:0; pointer-events:none; animation:inspector-depart 180ms ease both; }
 .session-inspector-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:19px 22px 9px; }
@@ -75,6 +74,15 @@
 .session-inspector [hidden] { display:none!important; }
 @keyframes inspector-arrive { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
 @keyframes inspector-depart { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(10px); } }
+/* A terminal can narrow the workspace even on a large desktop. Keep a usable
+   chat canvas and switch the inspector to its existing overlay presentation. */
+@container (max-width:760px) {
+ .workspace.has-session-inspector:not(.inspector-window-sizing) > :is(.workspace-header,.session-layout) {
+  --session-content-start:max(var(--session-gutter),calc((100cqw - 960px)/2));
+  --session-content-width:min(960px,calc(100cqw - var(--session-gutter) - var(--session-gutter)));
+ }
+ .session-layout > .session-inspector { position:absolute; top:0; bottom:0; right:0; width:min(382px,100%); box-shadow:var(--shadow-popover); z-index:10; }
+}
 @media (max-width:700px) {
  .workspace.has-session-inspector { --inspector-width:0px; }
  .session-inspector { position:absolute; top:0; bottom:0; right:0; width:min(382px,100%); box-shadow:var(--shadow-popover); z-index:10; }
@@ -85,13 +93,11 @@
 
 .inspector-plan-context { margin:0 0 18px; color:var(--text-muted); font-size:var(--font-size-ui); }
 .inspector-plan-context > p { font-size:var(--font-size-ui); line-height:1.7; margin:12px 0 0; overflow-wrap:anywhere; }
-.header-inspector-toggle { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; margin-left:4px; padding:0; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); color:var(--text-muted); background:transparent; cursor:pointer; }
+.header-inspector-toggle { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; flex:none; padding:0; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); color:var(--text-muted); background:transparent; cursor:pointer; }
 .header-inspector-toggle:hover { color:var(--foreground); background:var(--surface-hover); }
 .header-inspector-toggle:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
-.header-inspector-toggle > svg { transition:transform 220ms cubic-bezier(.22,1,.36,1); }
-.header-inspector-toggle[aria-expanded=true] > svg { transform:rotate(180deg); }
+.header-inspector-toggle[aria-expanded=true] { color:var(--info); background:var(--info-soft); }
 .pilot-island[data-motion=paused] .pilot-ring-value { transition:none; }
-@media(prefers-reduced-motion:reduce) { .header-inspector-toggle > svg { transition:none; } }
 
 /* While AppKit changes the outer frame, the conversation keeps its pre-open width. */
 .workspace.inspector-window-sizing {
@@ -99,5 +105,4 @@
  --session-content-width:min(960px,calc(var(--inspector-main-width) - var(--session-gutter) - var(--session-gutter)));
 }
 .workspace.inspector-window-sizing .session-layout > .session-view { flex:0 0 var(--inspector-main-width); width:var(--inspector-main-width); }
-.workspace.inspector-window-sizing > .workspace-header { max-width:calc(var(--inspector-main-width) - var(--session-content-start) - 16px); }
 .workspace.inspector-window-sizing .session-inspector.is-closing { position:relative; right:auto; top:auto; bottom:auto; }

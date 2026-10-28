@@ -7,11 +7,13 @@
 }
 .workspace.has-floating-header > .session-view { overflow: hidden; }
 .workspace.has-floating-header > .workspace-header {
+  container-type: inline-size;
+  container-name: lake-island;
   position: absolute;
   z-index: 8;
   top: 12px;
   left: var(--session-content-start);
-  width: max-content;
+  width: var(--session-content-width);
   max-width: calc(100% - var(--session-gutter) - var(--session-gutter));
   min-height: 40px;
   padding: 10px 14px;
@@ -21,7 +23,9 @@
   background: transparent;
   box-shadow: var(--shadow-popover);
 }
-.workspace.has-floating-header .breadcrumbs { flex: 0 1 auto; }
+.workspace.has-floating-header .breadcrumbs { flex: 0 1 30%; min-width: 32px; }
+.workspace.has-floating-header .breadcrumbs strong { display:flex; align-items:center; gap:6px; min-width:0; }
+.workspace.has-floating-header .breadcrumbs strong > svg { flex:none; }
 .crumb-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace.has-floating-header .conversation { container-type: normal; min-height: 0; scrollbar-gutter: stable; scroll-padding-top: 80px; }
 .workspace.has-floating-header .timeline-list {
@@ -38,16 +42,13 @@
   .workspace.has-floating-header > .workspace-header { gap: 6px; padding: 8px 10px; }
   .workspace.has-floating-header .breadcrumbs { gap: 6px; }
 }
-/* Reserve the native Windows window controls, without extending the bubble. */
+/* Keep the full island below native Windows window controls. */
 html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
-  max-width: calc(100% - var(--session-content-start) - 156px);
+  top: 52px;
   height: auto;
   user-select: none;
 }
-@media (max-width: 700px) {
-  html.lake-windows-chrome .workspace.has-floating-header > .workspace-header { top: 52px; max-width: calc(100% - var(--session-gutter) - var(--session-gutter)); }
-  html.lake-windows-chrome .workspace.has-floating-header .timeline-list { padding-top: 120px; }
-}
+html.lake-windows-chrome .workspace.has-floating-header .timeline-list { padding-top: 120px; }
 
 /* A soft light sweep crosses the title while its contour and text stay fixed. */
 .workspace.has-floating-header > .workspace-header { isolation:isolate; }
