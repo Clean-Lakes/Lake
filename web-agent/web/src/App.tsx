@@ -716,6 +716,9 @@ function AppContent() {
   useEffect(()=>{inspector.reset();},[sessionId,route.resourceId,isPlansPage]);
   const inspectorOpen=!!activeSnapshot&&inspector.selection?.sessionId===activeSnapshot.session.id&&!selectedResource&&!isPlansPage;
   useInspectorWindow(inspectorOpen);
+  // The DOM now has its final pane classes. Apply the shared width budget
+  // before paint, rather than flashing one frame with the previous budget.
+  useLayoutEffect(()=>{window.dispatchEvent(new Event('lake-workbench-layout'));},[terminalOpen,inspectorOpen]);
   const headerPilot = !selectedResource && !isPlansPage ? pilotIslandModel(activeSnapshot) : null;
   const seenInspectorTasks=useRef(new Set<string>());
   useEffect(()=>{

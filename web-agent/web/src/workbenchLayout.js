@@ -171,6 +171,8 @@
   new MutationObserver(schedule).observe(document.body, { childList:true, subtree:true, attributes:true, attributeFilter:['class'] });
   new MutationObserver(schedule).observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
   window.addEventListener('resize', schedule);
+  // React pane toggles must settle widths in the same commit, before paint.
+  window.addEventListener('lake-workbench-layout', sync);
   document.addEventListener('scroll', schedule, true);
   window.addEventListener('lake-chrome-resize', schedule);
   document.addEventListener('transitionend', event => { if (event.target.matches('.app-shell, .terminal-side-panel')) schedule(); });

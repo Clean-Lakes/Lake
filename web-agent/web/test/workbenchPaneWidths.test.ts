@@ -20,7 +20,7 @@ function fixture(saved={sidebar:280,terminal:400,inspector:382}){
  const context={window,innerWidth:1512,innerHeight:900,localStorage:{getItem(){return null;},setItem(){}},document:{body:{},head:{appendChild(){}},documentElement:{classList:{add(){},remove(){}}},createElement:makeNode,querySelector:()=>shell,addEventListener(){}},ResizeObserver:class{observe(){}disconnect(){}},MutationObserver:class{observe(){}},requestAnimationFrame:(callback:Function)=>{callbacks.push(callback);return callbacks.length;}};
  runInNewContext(source,context);
  const flush=()=>{while(callbacks.length)callbacks.shift()!();};flush();
- return {properties,resize(width:number){shell.clientWidth=width;context.innerWidth=width;events.get('resize')!();flush();},reset(pane:string){handles.get(pane).dblclick();flush();},toggle(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('resize')!();flush();},widths(){return ['--sidebar-width','--terminal-panel-width','--inspector-preferred-width'].map(key=>parseFloat(properties.get(key)!));}};
+ return {properties,resize(width:number){shell.clientWidth=width;context.innerWidth=width;events.get('resize')!();flush();},reset(pane:string){handles.get(pane).dblclick();flush();},toggle(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('resize')!();flush();},commit(inspectorOpen:boolean,terminalOpen:boolean){shell.inspectorOpen=inspectorOpen;shell.terminalOpen=terminalOpen;events.get('lake-workbench-layout')!();},widths(){return ['--sidebar-width','--terminal-panel-width','--inspector-preferred-width'].map(key=>parseFloat(properties.get(key)!));}};
 }
 
 test('window zoom reserves conversation space once across both auxiliary panes',()=>{
@@ -43,4 +43,13 @@ test('closing a side pane returns its reserved width to the conversation',()=>{
  const page=fixture();page.resize(1130);page.toggle(false,true);
  assert.deepEqual(page.widths().slice(0,2),[280,400]);
  page.toggle(true,false);assert.equal(page.widths()[2],382);
+});
+test('pane toggles apply the full shared budget synchronously before the first paint',()=>{
+ const page=fixture();page.resize(1232);page.toggle(true,false);
+ page.commit(true,true); // Deliberately do not flush animation frames.
+ assert.deepEqual(page.widths(),[280,296,240]);
+ page.commit(true,false);
+ assert.equal(page.widths()[0],280);assert.equal(page.widths()[2],382);
+ page.commit(false,true);
+ assert.deepEqual(page.widths(),[280,400,280]);
 });
