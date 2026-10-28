@@ -1,14 +1,16 @@
 ---
 goal: 为 Lake 建立可追溯、按资源隔离、按需读取且不会把历史现场当成当前事实的运维记忆
-version: "2.0"
+version: "2.1"
 date_created: 2026-10-23
-last_updated: 2026-10-23
+last_updated: 2026-10-28
 owner: Lake
 status: In progress
 tags: [feature, architecture, memory, sre, migration]
 ---
 
 # Introduction
+
+> 2026-10-28：[自然记忆重塑计划](feature-natural-memory-1.md)承接统一记忆体验，扩展用户级偏好、自然长期意图、提交后轻提示/撤销及压缩前增量采集。本计划继续规定项目/资源事实的隔离、时效、来源和 V2 验收；“项目为隔离上界”针对项目事实，不表示允许跨项目共享事实。当前 `operationalMemoryV2Ready=false`，本次文档不改变门控，也不解除尚缺的验收要求。
 
 ![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
 
