@@ -8,7 +8,7 @@ export function useWideWorkbench(){
  return wide;
 }
 
-/** The island shares the live composer rail, including during pane resizing. */
+/** Three-pane mode shares the composer rail; other modes keep a compact island. */
 export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,terminalOpen,onInspectorHost}:{conversation:ReactNode;terminal:ReactNode;activity:ReactNode;inspectorOpen:boolean;terminalOpen:boolean;onInspectorHost:(node:HTMLDivElement|null)=>void}){
  const root=useRef<HTMLDivElement>(null);
  useLayoutEffect(()=>{
