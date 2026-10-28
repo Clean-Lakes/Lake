@@ -155,3 +155,22 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .term
 }
 
 @container(max-width:200px) { .lake-workbench-island .workspace-header { grid-template-columns:minmax(0,1fr) 100px; } }
+
+/* A narrow conversation segment uses hierarchy instead of one crowded row. */
+.terminal-island-title-short { display:none; }
+@container(max-width:240px) {
+ .lake-workbench-island .workspace-header { grid-template-columns:minmax(0,1fr); grid-template-rows:18px 16px; align-content:center; gap:0; padding:5px 34px 5px 10px; }
+ .lake-workbench-island .breadcrumbs { grid-row:1; line-height:18px; }
+ .lake-workbench-island .workspace-header .header-state-area { grid-row:2; position:static; height:16px; }
+ .lake-workbench-island .header-pilot-state:not(.is-visible) { display:none; }
+ .lake-workbench-island .header-normal-state.is-visible { height:16px; overflow:visible; }
+ .lake-workbench-island .header-normal-state .header-morph-content { display:block; min-height:16px; height:16px; }
+ .lake-workbench-island .header-normal-state .session-state-badge { padding:0; border:0; border-radius:0; background:transparent; font-size:12px; line-height:16px; font-weight:var(--font-weight-normal); }
+ .lake-workbench-island .session-state-badge > span { width:5px; height:5px; margin-right:5px; }
+ .lake-workbench-island .header-inspector-toggle { position:absolute; right:4px; top:8px; }
+}
+@container(max-width:180px) {
+ .island-terminal .terminal-island-title-full { display:none; }
+ .island-terminal .terminal-island-title-short { display:inline; }
+ .island-terminal .terminal-tab-dot.ready { display:none; }
+}

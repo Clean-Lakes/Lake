@@ -32,7 +32,13 @@ test('a tight three-pane rail preserves readable conversation and compact side c
  assert.deepEqual(normal.columns,[216,84,100]);
  const narrow=workbenchIslandLayout(440,140,250,335);
  assert.equal(narrow.width,335);
- assert.ok(narrow.columns[0]!>=180);
+ assert.ok(narrow.columns[0]!>=150);
  assert.ok(narrow.columns[1]!>=84);
- assert.ok(narrow.columns[2]!>=68);
+ assert.ok(narrow.columns[2]!>=84);
+});
+
+test('minimum desktop composer gives stacked identity and a named terminal their own slots',()=>{
+ const minimum=workbenchIslandLayout(330,128,200,320);
+ assert.deepEqual(minimum,{width:320,columns:[150,84,84]});
+ assert.deepEqual(workbenchIslandLayout(330,128,200,335).columns,[165,84,84]);
 });
