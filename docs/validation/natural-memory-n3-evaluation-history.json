@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "totalProviderDispatches": 777,
+  "totalProviderDispatches": 999,
   "runs": [
     {
       "report": "lake-n3-model-intent.json",
@@ -190,10 +190,10 @@
         "total": 47597
       },
       "failedBatchCases": [
-        [
-          1,
-          "scope-separated"
-        ]
+        {
+          "id": "scope-separated",
+          "run": 1
+        }
       ]
     },
     {
@@ -250,6 +250,105 @@
         "input": 37353,
         "output": 11434,
         "total": 48787
+      },
+      "failedBatchCases": []
+    },
+    {
+      "report": "lake-n3-model-existing.json",
+      "dispatches": 9,
+      "passed": false,
+      "diagnostic": false,
+      "summaries": null,
+      "usage": {
+        "input": 13877,
+        "output": 1615,
+        "total": 15492
+      },
+      "failedBatchCases": [
+        {
+          "error": "invalid_output:invalid source quote",
+          "id": "existing-conflict",
+          "run": 1
+        },
+        {
+          "error": "invalid_output:invalid source quote",
+          "id": "existing-conflict",
+          "run": 2
+        },
+        {
+          "error": "invalid_output:invalid source quote",
+          "id": "existing-conflict",
+          "run": 3
+        }
+      ]
+    },
+    {
+      "report": "lake-n3-model-existing-v2.json",
+      "dispatches": 9,
+      "passed": true,
+      "diagnostic": false,
+      "summaries": null,
+      "usage": {
+        "input": 14437,
+        "output": 1710,
+        "total": 16147
+      },
+      "failedBatchCases": []
+    },
+    {
+      "report": "lake-n3-model-final-intent-v3.json",
+      "dispatches": 180,
+      "passed": true,
+      "diagnostic": false,
+      "summaries": [
+        {
+          "exactDecisions": 55,
+          "falseAutoWrites": 0,
+          "passed": true,
+          "positiveCount": 30,
+          "positiveRecallCount": 30,
+          "run": 1,
+          "technicalFailures": 0,
+          "wrongScopes": 0
+        },
+        {
+          "exactDecisions": 55,
+          "falseAutoWrites": 0,
+          "passed": true,
+          "positiveCount": 30,
+          "positiveRecallCount": 30,
+          "run": 2,
+          "technicalFailures": 0,
+          "wrongScopes": 0
+        },
+        {
+          "exactDecisions": 55,
+          "falseAutoWrites": 0,
+          "passed": true,
+          "positiveCount": 30,
+          "positiveRecallCount": 30,
+          "run": 3,
+          "technicalFailures": 0,
+          "wrongScopes": 0
+        }
+      ],
+      "usage": {
+        "input": 284639,
+        "output": 34041,
+        "total": 318680
+      },
+      "failedBatchCases": []
+    },
+    {
+      "report": "lake-n3-model-batches-v3.json",
+      "dispatches": 24,
+      "passed": true,
+      "diagnostic": false,
+      "summaries": null,
+      "usage": {
+        "input": 39030,
+        "output": 10672,
+        "total": 49702
       },
       "failedBatchCases": []
     }

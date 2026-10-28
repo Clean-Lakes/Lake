@@ -1,5 +1,7 @@
 # P5 隔离快照评估
 
+> 历史设计：保留当时交付、判据和结论。当前自然记忆按[重塑计划](../../plan/feature-natural-memory-1.md)与 [N3 契约](natural-memory-idle-n3.md)推进；旧候选提取、在线纠错和新增产品实验按 [C1](strategy-execution-retirement-c1.md)退役，不能据本文重新启用。旧人工内容和原运行绑定仍从次级兼容入口管理。
+
 P6 在此基础上增加显式有界优化、合成复验及已知结果阶段继续，见 [v4 说明](strategy-learning-optimization-v4.md)。本页保留普通 P5 A/B 的规则。
 
 P5 交付登记夹具、独立 ADK 运行、固定客观判据及 A/B 报告（T20–T23）。首期是 **synthetic_snapshot 合成快照模式**：15 个与 P0 场景对应的可复位观测数据集，12 个开发场景、3 个保留场景。没有启动真实 SSH、Docker、PostgreSQL、Redis 或 Kubernetes，也不声称实现了 P0 目标规格中的真实故障注入/服务复位。原 `testdata/cases.v1.json` 保留为历史目标规格，实际登记表在 `internal/strategy/fixtures.go`。

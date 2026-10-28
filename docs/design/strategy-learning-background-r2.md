@@ -1,5 +1,7 @@
 # R2：后台学习交付、前台优先与独立预算
 
+> 历史设计：保留当时交付、判据和结论。当前自然记忆按[重塑计划](../../plan/feature-natural-memory-1.md)与 [N3 契约](natural-memory-idle-n3.md)推进；旧候选提取、在线纠错和新增产品实验按 [C1](strategy-execution-retirement-c1.md)退役，不能据本文重新启用。旧人工内容和原运行绑定仍从次级兼容入口管理。
+
 本阶段基于 develop 的 R1、主机检查修复与 Dev 快跑实现；PR #67 保留且不合并。学习候选仍是 project scope 的 single_observation，需要明确采用；用户级晋升、拒绝反馈与相关性选择由 R3/R4 推进。P8 的收益结论仍为 inconclusive。
 
 ## 运行契约

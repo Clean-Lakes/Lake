@@ -1,0 +1,157 @@
+{
+  "passed": true,
+  "providerDispatches": 9,
+  "codeSHA": "da294ba32ecdf621e5ca143a2d1a6af82a6346c6",
+  "sourceSHA256": {
+    "internal/web/natural_consolidation_input.go": "3f0ccd59f9141b5b94202e2714e5e18d31777ba90565f29df6f37458e682de36",
+    "internal/web/natural_consolidation_worker.go": "445e46a4430579567478f4405631882b4169c4fe4ead3226d390eb559bd97469",
+    "internal/web/natural_preference_extraction.go": "9949143f0e1ea3c13a73479cceb3c3e407a718e5c6eeedf85e5ec86e656a7ed8",
+    "internal/web/natural_consolidation_model_test.go": "99c0164a1caed43ccddbac2ca9be04dc17dc2895969cc2dae47c7d20916de2b6"
+  },
+  "results": [
+    {
+      "id": "existing-merge",
+      "passed": true,
+      "relation": "equivalent",
+      "run": 1,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 640,
+        "input": 1602,
+        "output": 183,
+        "total": 1785
+      }
+    },
+    {
+      "id": "existing-conflict",
+      "passed": true,
+      "relation": "conflict",
+      "run": 1,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1601,
+        "output": 190,
+        "total": 1791
+      }
+    },
+    {
+      "id": "existing-correction",
+      "passed": true,
+      "relation": "correction",
+      "run": 1,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1605,
+        "output": 162,
+        "total": 1767
+      }
+    },
+    {
+      "id": "existing-merge",
+      "passed": true,
+      "relation": "equivalent",
+      "run": 2,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1603,
+        "output": 206,
+        "total": 1809
+      }
+    },
+    {
+      "id": "existing-conflict",
+      "passed": true,
+      "relation": "conflict",
+      "run": 2,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1603,
+        "output": 190,
+        "total": 1793
+      }
+    },
+    {
+      "id": "existing-correction",
+      "passed": true,
+      "relation": "correction",
+      "run": 2,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1606,
+        "output": 181,
+        "total": 1787
+      }
+    },
+    {
+      "id": "existing-merge",
+      "passed": true,
+      "relation": "equivalent",
+      "run": 3,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1601,
+        "output": 200,
+        "total": 1801
+      }
+    },
+    {
+      "id": "existing-conflict",
+      "passed": true,
+      "relation": "conflict",
+      "run": 3,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1607,
+        "output": 196,
+        "total": 1803
+      }
+    },
+    {
+      "id": "existing-correction",
+      "passed": true,
+      "relation": "correction",
+      "run": 3,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1609,
+        "output": 202,
+        "total": 1811
+      }
+    }
+  ],
+  "model": {
+    "maxOutput": 4096,
+    "name": "deepseek-flash",
+    "protocol": "openai"
+  },
+  "promptSHA256": "92f1cf7f43b3c8b6bc471fdd27d014dffa5cb80ecbb3bdeb557ccc4c22a10715",
+  "limitations": [
+    "Three synthetic existing-v2 targets, one model; no tool or business-task benefit claim."
+  ]
+}
