@@ -11,8 +11,8 @@ test('all three control groups fit before the terminal pane',()=>{
  const result=workbenchIslandLayout(440,240,220,720);
  assert.equal(result.width,720);
  assert.equal(result.columns[1],240);
- assert.equal(result.columns[2],220);
- assert.equal(result.columns[0],258);
+ assert.equal(result.columns[2],178);
+ assert.equal(result.columns[0],300);
 });
 test('closing either auxiliary pane restores the compact island width',()=>{
  assert.deepEqual(workbenchIslandLayout(330,240,0,960),{width:572,columns:[330,240,0]});
@@ -25,4 +25,14 @@ test('narrow split conversations keep every active control inside the input widt
  const result=workbenchIslandLayout(440,140,250,335);
  assert.equal(result.width,335);
  assert.ok(result.columns.every(width=>width>0));
+});
+
+test('a tight three-pane rail preserves readable conversation and compact side controls',()=>{
+ const normal=workbenchIslandLayout(330,128,200,402);
+ assert.deepEqual(normal.columns,[216,84,100]);
+ const narrow=workbenchIslandLayout(440,140,250,335);
+ assert.equal(narrow.width,335);
+ assert.ok(narrow.columns[0]!>=180);
+ assert.ok(narrow.columns[1]!>=84);
+ assert.ok(narrow.columns[2]!>=68);
 });

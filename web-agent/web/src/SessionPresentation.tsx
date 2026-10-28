@@ -22,9 +22,11 @@ export function SessionListTags({tags}:{tags:WorkspaceTag[]}) {
  </span>;
 }
 
-export function SessionStateBadge({session,label,status=session.status}:{session:WorkSession;label?:string;status?:WorkSession["status"]}) {
+export function SessionStateBadge({session,label,status=session.status,compact=false}:{session:WorkSession;label?:string;status?:WorkSession["status"];compact?:boolean}) {
  const statuses={idle:"待命",investigating:"调查中",waiting_approval:"待确认",completed:"回复结束",failed:"需要关注"};
- return <span className={`session-state-badge state-${status}`} title={label??statuses[status]}><span/>{label??statuses[status]}</span>;
+ const full=label??statuses[status];
+ const short:Record<string,string>={'原操作仍在执行':'执行中','任务已暂停':'已暂停','任务未完成':'未完成','任务待继续':'待继续','任务已取消':'已取消','任务已完成':'已完成','调查结束 · 结论不充分':'结论不足','变更待核实':'待核实','需要关注':'需关注','回复结束':'已回复'};
+ return <span className={`session-state-badge state-${status}`} title={full} aria-label={compact?full:undefined}><span/>{compact?short[full]??full:full}</span>;
 }
 
 const sessionViews=[{value:"conversation",label:"对话",icon:"chat"},{value:"plans",label:"计划",icon:"document"},{value:"activity",label:"执行记录",icon:"terminal"},{value:"evidence",label:"证据",icon:"document"}] as const;

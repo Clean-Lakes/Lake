@@ -99,14 +99,17 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 
 /* Inset pane dividers stay visible; the wider transparent rail owns resizing. */
 .app-shell.has-workbench-island :is(.session-inspector,.terminal-side-panel) { border-left:0; }
-.app-shell.has-workbench-island { --pane-rail-top:76px; --pane-rail-bottom:12px; }
+.app-shell.has-workbench-island { --pane-rail-top:76px; --pane-rail-bottom:12px; --pane-line-inset:0px; }
 .app-shell.has-workbench-island > .workbench-splitter-sidebar,
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal) { top:var(--pane-rail-top); bottom:var(--pane-rail-bottom); }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal) { left:-6px; width:12px; }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal)::after {
- content:''; position:absolute; top:10%; bottom:10%; left:5px; width:1px; height:auto;
+ content:''; position:absolute; top:0; bottom:0; left:6px; width:1px; height:auto;
  border-radius:1px; background:var(--border); opacity:1; transition:background-color 160ms ease;
 }
+/* The terminal slot clips overflow; keep its boundary stroke inside the slot. */
+.app-shell.has-workbench-island .workbench-splitter-terminal { left:0; }
+.app-shell.has-workbench-island .workbench-splitter-terminal::after { left:0; }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal):is(:hover,:focus-visible,.is-dragging)::after { background:var(--text-muted); }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal):is(:focus-visible,.is-dragging)::after { background:var(--info); opacity:1; }
 html.lake-windows-chrome .app-shell.has-workbench-island { --pane-rail-top:124px; }
@@ -134,8 +137,8 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .term
 
 /* Keep the session identity visible on tight rails. The status text shares
    the remaining space and can truncate, while its disclosure stays reachable. */
-@container(max-width:260px) {
- .lake-workbench-island .workspace-header { display:grid; grid-template-columns:minmax(0,56fr) minmax(36px,44fr); padding-inline:8px; gap:4px; }
+@container(max-width:300px) {
+ .lake-workbench-island .workspace-header { display:grid; grid-template-columns:minmax(0,1fr) 114px; padding-inline:8px; gap:4px; }
  .lake-workbench-island .breadcrumbs { display:flex; min-width:0; width:100%; max-width:none; }
  .lake-workbench-island .breadcrumbs strong { display:flex; align-items:center; min-width:0; width:100%; }
  .lake-workbench-island .breadcrumbs strong > svg { display:none; }
@@ -149,3 +152,5 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .term
  .lake-workbench-island .session-state-badge > span { display:inline-block; margin-right:6px; vertical-align:middle; }
  .lake-workbench-island .header-inspector-toggle { flex:none; margin-left:0; }
 }
+
+@container(max-width:200px) { .lake-workbench-island .workspace-header { grid-template-columns:minmax(0,1fr) 100px; } }
