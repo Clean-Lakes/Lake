@@ -43,7 +43,7 @@ func captureResult(e *Engine, s *session, id string, success bool) {
 	e.captureMemoryToolResult(s, call, js(value), value, nil)
 }
 func TestMemoryCaptureAdmissionDoesNotMineUnregisteredHistory(t *testing.T) {
-	for _, kind := range []string{"normal", "no-id", "ignore", "plan", "child", "disabled"} {
+	for _, kind := range []string{"normal", "no-id", "ignore", "plan", "child", "disabled", "legacy-only"} {
 		t.Run(kind, func(t *testing.T) {
 			e := &Engine{}
 			s := &session{state: State{Config: Config{MemoryProjectID: "project", NaturalMemory: &NaturalMemoryConsent{ProjectEnabled: true}}, View: View{Session: "case", RootTurnID: "root", TurnStartedAt: timestamp()}}}
@@ -60,6 +60,10 @@ func TestMemoryCaptureAdmissionDoesNotMineUnregisteredHistory(t *testing.T) {
 				e.worker = &agentWorker{}
 			case "disabled":
 				c.NaturalMemory = nil
+			case "legacy-only":
+				c.NaturalMemory = nil
+				c.MemoryEnabled = true
+				c.MemoryExtractionEnabled = true
 			}
 			e.beginMemoryCapture(s, c, input)
 			if (currentMemoryCapture(s) != nil) != (kind == "normal") {

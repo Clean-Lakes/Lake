@@ -40,8 +40,9 @@ const memoryCaptureByteLimit = 128 * 1024
 // Caller owns s.mu. Invoked only when accepting a genuine host user turn.
 func (e *Engine) beginMemoryCapture(s *session, c Config, input TurnInput) {
 	legacy := c.MemoryEnabled && c.MemoryExtractionEnabled
-	natural := c.NaturalMemory != nil && (c.NaturalMemory.GlobalEnabled || c.NaturalMemory.ProjectEnabled) && NaturalMemorySignal(input.UserText)
-	if e.worker != nil || c.ConversationMode == ModePlan || input.IgnoreProjectMemory || c.MemoryProjectID == "" || input.StrategyMessageID == "" || (!legacy && !natural) || (!natural && !memorySignal(input.UserText)) {
+	automatic := c.NaturalMemory != nil && (c.NaturalMemory.GlobalEnabled || c.NaturalMemory.ProjectEnabled)
+	natural := automatic && NaturalMemorySignal(input.UserText)
+	if !automatic || e.worker != nil || c.ConversationMode == ModePlan || input.IgnoreProjectMemory || c.MemoryProjectID == "" || input.StrategyMessageID == "" || (!legacy && !natural) || (!natural && !memorySignal(input.UserText)) {
 		return
 	}
 	if len(input.UserText) > 64*1024 {
@@ -84,7 +85,7 @@ func (e *Engine) beginMemoryCapture(s *session, c Config, input TurnInput) {
 		return
 	}
 	base := MemoryTurnSnapshot{ProjectID: c.MemoryProjectID, SessionID: s.state.View.Session, SourceMessageID: input.StrategyMessageID, TurnID: s.state.View.RootTurnID, UserText: redact(input.UserText, c), Epoch: c.MemoryEpoch, KnowledgeBaseRevision: c.MemoryKnowledgeRevision, ModelRef: ModelIdentity(c.Model), CapturedAt: s.state.View.TurnStartedAt, LegacyExtraction: legacy, RecentUserInputs: append([]string(nil), s.state.MemoryRecentUserInputs...)}
-	if natural {
+	if automatic {
 		consent := *c.NaturalMemory
 		base.Natural = &consent
 	}
