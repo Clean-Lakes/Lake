@@ -32,7 +32,9 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const flight=flights[name],expanded=open.current[name],changed=flight.open!==expanded;
    if(!expanded&&flight.open===undefined){flight.open=false;present(node,false);return;}
    if(!expanded&&!flight.open&&!flight.animation)return;
-   const target=expanded?goal:source;
+   // Keep text at its final size. Only the composited translation and opacity
+   // change during flight; animating width would reflow all controls each frame.
+   const target=expanded?goal:{...source,width:flight.target?.width??node.offsetWidth};
    if(!target)return;
    if(reduced.matches||document.documentElement.classList.contains('workbench-resizing')){
     flight.animation?.cancel();flight.animation=undefined;flight.open=expanded;flight.target=target;write(node,target);present(node,expanded);delete node.dataset.moving;return;
@@ -48,8 +50,8 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    flight.open=expanded;flight.target=target;
    write(node,target);present(node,true);node.dataset.moving='true';
    const animation=node.animate([
-    {left:`${from.left}px`,top:`${from.top}px`,width:`${from.width}px`,opacity},
-    {left:`${target.left}px`,top:`${target.top}px`,width:`${target.width}px`,opacity:expanded?1:0},
+    {transform:`translate3d(${from.left-target.left}px,${from.top-target.top}px,0)`,opacity},
+    {transform:'translate3d(0,0,0)',opacity:expanded?1:0},
    ],{duration,easing:'cubic-bezier(.22,1,.36,1)',fill:'both'});
    flight.animation=animation;
    animation.onfinish=()=>{if(flight.animation!==animation)return;flight.animation=undefined;present(node,expanded);delete node.dataset.moving;animation.cancel();window.dispatchEvent(new Event('lake-chrome-resize'));};
@@ -61,7 +63,6 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const bounds=view.getBoundingClientRect(),base=shell.getBoundingClientRect();
    const composer=view.querySelector('.composer-input')?.getBoundingClientRect();
    const available=Math.max(1,composer?.width??bounds.width-96),left=(composer?.left??bounds.left+48)-base.left;
-   shell.style.setProperty('--pane-rail-bottom',`${Math.max(12,base.bottom-(composer?.top??base.bottom)+12)}px`);
    const title=identity.querySelector<HTMLElement>('.crumb-title'),state=identity.querySelector<HTMLElement>('.header-morph-slot.is-visible .header-morph-content');
    const heading=inspectorIsland.current?.querySelector<HTMLElement>('.island-inspector-heading');
    const terminalHeader=terminalIsland.current?.querySelector<HTMLElement>('.terminal-panel-header');
@@ -72,18 +73,27 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const terminalNameWidth=textMetrics?.measureText(terminalName).width??terminalLabel?.scrollWidth??120;
    const terminalNumber=terminalHeader?.querySelector<HTMLElement>('.terminal-island-number');
    const terminalCount=terminalHeader?.querySelector<HTMLElement>('.terminal-island-count');
-   const inspectorPane=shell.querySelector('.session-inspector.is-open')?.getBoundingClientRect();
-   const terminalPane=open.current.terminal?shell.querySelector('.terminal-side-panel')?.getBoundingClientRect():undefined;
+   // Pane entrance transforms are visual only, not new landing positions.
+   const rail=(pane:HTMLElement|null)=>{
+    if(!pane)return;
+    let left=0;
+    for(let current:HTMLElement|null=pane;current&&current!==shell;current=current.offsetParent as HTMLElement|null)left+=current.offsetLeft;
+    return {left,width:pane.offsetWidth};
+   };
+   const inspectorPane=rail(shell.querySelector<HTMLElement>('.session-inspector.is-open'));
+   // The panel becomes visible after the shared width budget has been applied.
+   const terminalPane=open.current.terminal?rail(shell.querySelector<HTMLElement>('.terminal-side-panel.is-open')):undefined;
    const layout=workbenchIslandLayout({
     conversation:{left,width:available,inset:0},
-    inspector:inspectorPane?{left:inspectorPane.left-base.left,width:inspectorPane.width}:undefined,
-    terminal:terminalPane?{left:terminalPane.left-base.left,width:terminalPane.width}:undefined,
+    inspector:inspectorPane,
+    terminal:terminalPane,
     conversationWidth:Math.min(190,title?.scrollWidth??160)+(state?.getBoundingClientRect().width??0)+60,
     inspectorWidth:Math.max(144,heading?.scrollWidth??144),
-    terminalWidth:Math.min(320,terminalNameWidth+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112),
+    terminalWidth:Math.min(320,Math.max(260,terminalNameWidth+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112)),
    });
    const top=shell.closest('html.lake-windows-chrome')?52:12;
    const source={...layout.conversation,top};
+   shell.style.setProperty('--pane-rail-bottom',`${Math.max(12,base.bottom-(composer?.top??base.bottom)+12)}px`);
    write(identity,source);identity.dataset.ready='true';identity.dataset.present='true';identity.title=title?.textContent??'';
    if(inspectorIsland.current)move('inspector',inspectorIsland.current,layout.inspector?{...layout.inspector,top}:undefined,source,base);
    if(terminalIsland.current)move('terminal',terminalIsland.current,layout.terminal?{...layout.terminal,top}:undefined,source,base);
@@ -94,7 +104,14 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(measure);};
   scheduleLayout.current=schedule;
   const observer=new ResizeObserver(schedule);
-  const content=new MutationObserver(schedule);
+  const content=new MutationObserver(records=>{
+   // Terminal output and message rendering do not move the chrome. Their
+   // containing panes/composer already report actual geometry changes above.
+   if(records.some(record=>{
+    const target=record.target instanceof Element?record.target:record.target.parentElement;
+    return !target?.closest('.terminal-session,.conversation,.session-inspector-scroll');
+   }))schedule();
+  });
   content.observe(shell,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class']});
   window.addEventListener('resize',schedule);reduced.addEventListener('change',schedule);measure();
   return()=>{scheduleLayout.current=()=>{};content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);reduced.removeEventListener('change',schedule);for(const flight of Object.values(flights))flight.animation?.cancel();shell.style.removeProperty('--pane-rail-bottom');};
