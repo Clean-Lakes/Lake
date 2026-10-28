@@ -4,11 +4,11 @@
   if (window.lakeWorkbenchLayout) return;
   window.lakeWorkbenchLayout = true;
   const key = 'lake.workbench.widths';
-  let preferred = { sidebar: 280, terminal: 400 };
+  let preferred = { sidebar: 280, terminal: 400, inspector: 382 };
   try {
     const saved = window.lakeWorkbenchWidths || JSON.parse(localStorage.getItem(key) || '{}');
-    for (const pane of ['sidebar', 'terminal']) {
-      const [min, max] = pane === 'sidebar' ? [200, 420] : [280, 900];
+    for (const pane of ['sidebar', 'terminal', 'inspector']) {
+      const [min, max] = pane === 'sidebar' ? [200, 420] : [240, 900];
       if (Number.isFinite(saved[pane]) && saved[pane] >= min && saved[pane] <= max) preferred[pane] = saved[pane];
     }
   } catch { /* Storage can be unavailable in private browsing. */ }
@@ -18,7 +18,9 @@
     .workbench-splitter:hover::after, .workbench-splitter:focus-visible::after { content:''; position:absolute; top:0; bottom:0; left:3px; width:2px; background:var(--focus); }
     .workbench-splitter-sidebar { left:calc(var(--sidebar-width) - 4px); }
     .workbench-splitter-sidebar:hover:not(:focus-visible)::after { width:1px; background:var(--border-strong); }
-    .workbench-splitter-terminal { left:0; }
+    .workbench-splitter-terminal, .workbench-splitter-inspector { left:0; }
+    .workbench-splitter-terminal::after, .workbench-splitter-inspector::after { left:0; }
+    .workbench-resizing .session-inspector { animation:none !important; }
     .workbench-resizing, .workbench-resizing * { cursor:col-resize !important; user-select:none !important; }
     .workbench-resizing .app-shell, .workbench-resizing .terminal-side-panel { transition:none !important; }
     .ai-context-panel { position:fixed; z-index:60; bottom:auto; right:auto; overflow-y:auto; }
@@ -39,10 +41,22 @@
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
   function limits(pane) {
     const width = shell?.clientWidth || innerWidth;
-    const sidebar = clamp(preferred.sidebar, 200, Math.min(420, width - 320));
-    const terminal = clamp(preferred.terminal, 280, Math.max(280, width - sidebar - 320));
-    if (pane === 'sidebar') return [200, Math.max(200, Math.min(420, width - 320 - (width > 1100 && shell.classList.contains('terminal-is-open') ? terminal : 0)))];
-    return [280, Math.max(280, Math.min(900, width <= 1100 ? width - 40 : width - sidebar - 320))];
+    const desktop = innerWidth > 1100;
+    const inspectorOpen = desktop && !!shell.querySelector('.session-inspector.is-open');
+    const terminalOpen = desktop && shell.classList.contains('terminal-is-open');
+    // All open panes share one budget. Reserving the conversation independently
+    // for each side pane can otherwise spend that same space twice after zooming.
+    const conversationMin = desktop ? 416 : 320;
+    const auxiliaryMin = inspectorOpen && terminalOpen ? 240 : 280;
+    const sidebarMax = Math.max(200, Math.min(420, width - conversationMin - (terminalOpen ? auxiliaryMin : 0) - (inspectorOpen ? auxiliaryMin : 0)));
+    const sidebar = clamp(preferred.sidebar, 200, sidebarMax);
+    const terminalMax = Math.max(auxiliaryMin, Math.min(900, width - sidebar - conversationMin - (inspectorOpen ? auxiliaryMin : 0)));
+    const terminal = terminalOpen ? clamp(preferred.terminal, auxiliaryMin, terminalMax) : 0;
+    if (pane === 'sidebar') return [200, sidebarMax];
+    if (pane === 'terminal') return desktop ? [auxiliaryMin, terminalMax] : [280, Math.max(280, Math.min(900, width - 40))];
+    if (desktop) return [auxiliaryMin, Math.max(auxiliaryMin, Math.min(900, width - sidebar - terminal - conversationMin))];
+    const workspace = shell.querySelector('.workspace');
+    return [280, Math.max(280, Math.min(900, (workspace?.clientWidth || 0) - (innerWidth <= 700 ? 0 : 320)))];
   }
   function save() {
     try { localStorage.setItem(key, JSON.stringify(preferred)); } catch {}
@@ -51,10 +65,10 @@
   }
   function apply() {
     if (!shell) return;
-    for (const pane of ['sidebar', 'terminal']) {
+    for (const pane of ['sidebar', 'terminal', 'inspector']) {
       const [min, max] = limits(pane);
       const width = clamp(preferred[pane], min, max);
-      shell.style.setProperty(pane === 'sidebar' ? '--sidebar-width' : '--terminal-panel-width', `${width}px`);
+      shell.style.setProperty(pane === 'sidebar' ? '--sidebar-width' : pane === 'terminal' ? '--terminal-panel-width' : '--inspector-preferred-width', `${width}px`);
       const handle = shell.querySelector(`.workbench-splitter-${pane}`);
       if (handle) for (const [name, value] of [['valuemin', min], ['valuemax', max], ['valuenow', width]]) handle.setAttribute(`aria-${name}`, String(value));
     }
@@ -66,14 +80,15 @@
     handle.tabIndex = 0;
     handle.setAttribute('role', 'separator');
     handle.setAttribute('aria-orientation', 'vertical');
-    handle.setAttribute('aria-label', pane === 'sidebar' ? '调整项目导航宽度' : '调整终端宽度');
+    handle.setAttribute('aria-label', pane === 'sidebar' ? '调整项目导航宽度' : pane === 'terminal' ? '调整终端宽度' : '调整任务检查宽度');
     handle.title = '拖动调整宽度，双击恢复默认；方向键微调';
     handle.addEventListener('pointerdown', event => {
       if (event.button !== 0) return;
       event.preventDefault();
-      const element = shell.querySelector(pane === 'sidebar' ? '.sidebar' : '.terminal-side-panel');
+      const element = shell.querySelector(pane === 'sidebar' ? '.sidebar' : pane === 'terminal' ? '.terminal-side-panel' : '.session-inspector');
       active = { pane, x: event.clientX, width: element.getBoundingClientRect().width, pointer: event.pointerId };
       handle.setPointerCapture(event.pointerId);
+      handle.classList.add('is-dragging');
       document.documentElement.classList.add('workbench-resizing');
     });
     handle.addEventListener('pointermove', event => {
@@ -83,11 +98,11 @@
       apply();
       schedule();
     });
-    const finish = () => { active = null; document.documentElement.classList.remove('workbench-resizing'); save(); };
+    const finish = () => { active = null; handle.classList.remove('is-dragging'); document.documentElement.classList.remove('workbench-resizing'); save(); };
     handle.addEventListener('pointerup', finish);
     handle.addEventListener('pointercancel', finish);
     handle.addEventListener('lostpointercapture', finish);
-    handle.addEventListener('dblclick', () => { preferred[pane] = pane === 'sidebar' ? 280 : 400; apply(); save(); schedule(); });
+    handle.addEventListener('dblclick', () => { preferred[pane] = pane === 'sidebar' ? 280 : pane === 'terminal' ? 400 : 382; apply(); save(); schedule(); });
     handle.addEventListener('keydown', event => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();
@@ -103,7 +118,7 @@
     const bridge = window.webkit?.messageHandlers?.lakeChrome;
     if (!bridge || !shell) return;
     const rect = element => { const r = element.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; };
-    const headers = [...shell.querySelectorAll('.workspace-header, .terminal-panel-header')].filter(element => element.getBoundingClientRect().width > 0);
+    const headers = [...shell.querySelectorAll('.workspace-header, .terminal-panel-header, .island-inspector-heading')].filter(element => element.getBoundingClientRect().width > 0 && !element.closest('[aria-hidden="true"]') && getComputedStyle(element).visibility !== 'hidden');
     const sidebar = shell.querySelector('.sidebar');
     const height = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--lake-titlebar-height')) || 52;
     const regions = headers.map(rect);
@@ -148,12 +163,16 @@
     addHandle(shell, 'sidebar');
     const terminal = shell.querySelector('.terminal-side-panel');
     if (terminal) addHandle(terminal, 'terminal');
+    const inspector = shell.querySelector('.session-inspector.is-open');
+    if (inspector) addHandle(inspector, 'inspector');
     apply(); syncChrome(); placeContextPanel();
   }
   function schedule() { if (!frame) frame = requestAnimationFrame(sync); }
   new MutationObserver(schedule).observe(document.body, { childList:true, subtree:true, attributes:true, attributeFilter:['class'] });
   new MutationObserver(schedule).observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
   window.addEventListener('resize', schedule);
+  // React pane toggles must settle widths in the same commit, before paint.
+  window.addEventListener('lake-workbench-layout', sync);
   document.addEventListener('scroll', schedule, true);
   window.addEventListener('lake-chrome-resize', schedule);
   document.addEventListener('transitionend', event => { if (event.target.matches('.app-shell, .terminal-side-panel')) schedule(); });

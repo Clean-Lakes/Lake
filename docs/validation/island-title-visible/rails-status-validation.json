@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-28",
+  "testedCommit": "ef88066c652636e228cf96e72cdb86124bd1ddfc",
+  "checks": {
+    "frontend": "526 passed",
+    "types": "pnpm --dir web-agent check passed",
+    "desktop": "scripts/build_lake_desktop.sh --dev --install passed with persistent signing identity",
+    "backend": "healthy; clean installed manifest matches tested commit",
+    "browser": "Real App with fictional in-memory APIs, 1130px frame with native corner fallback in light/dark; all three divider strokes start at 76px and end at viewport height minus 12px; island and composer are both 320px wide; readable title and execution status",
+    "windowBudget": "1101px: sidebar 205, conversation 416, inspector 240, terminal 240; restored 1512px: sidebar 280, conversation 450, inspector 382, terminal 400",
+    "nativeDev": "Actual macOS WKWebView: double-click title to enlarge and double-click again to restore; island remains aligned to composer, title and execution status visible, composer stays 48px tall; sidebar/inspector/terminal dividers visible and aligned"
+  },
+  "scope": "Extend three divider strokes, keep terminal stroke inside clipping container, reserve status width, share one pane budget during resize and reset",
+  "notVerified": [
+    "Windows native visual validation",
+    "Native dark theme; browser dark theme verified"
+  ],
+  "data": "Screenshots contain only fictional fixture data; native screenshots not saved to repository. No model calls or remote commands. Local shell opened for layout verification only.",
+  "integration": "PR #109 remains draft targeting develop; retains existing Dev baseline dependency #104; no merge authorization."
+}

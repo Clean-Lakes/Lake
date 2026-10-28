@@ -1,0 +1,161 @@
+/* Each pane owns one floating surface; the shell only carries their shared overlay. */
+.lake-workbench-islands { position:absolute; inset:0 0 auto; height:0; z-index:25; pointer-events:none; }
+.lake-workbench-island { position:absolute; top:12px; height:46px; min-width:0; display:flex; align-items:center; border:1px solid var(--border); border-radius:var(--radius-window); corner-shape:var(--corner-window); box-shadow:0 3px 12px rgb(0 0 0 / 5%); background:transparent; isolation:isolate; visibility:hidden; pointer-events:auto; container-type:inline-size; transition:none!important; }
+.lake-workbench-island[data-ready=true][data-present=true] { visibility:visible; }
+.lake-workbench-island[data-open=false] { pointer-events:none; }
+.lake-workbench-island[data-moving=true] { z-index:3; will-change:transform,opacity; }
+.lake-workbench-island[data-moving=true] > .workspace-header-glass { backdrop-filter:none; -webkit-backdrop-filter:none; background:var(--surface); }
+/* Reflow the reading columns once. The pane and island entrance use transforms. */
+.app-shell.has-workbench-island { transition:none; }
+.lake-workbench-island > .workspace-header-glass { z-index:-1; }
+.lake-workbench-island > :not(.workspace-header-glass,.workspace-header-sweep) { position:relative; z-index:2; min-width:0; }
+.lake-workbench-island [hidden] { display:none!important; }
+.island-inspector-content { width:100%; }
+.lake-workbench-island .workspace-header { justify-content:flex-start; position:relative; display:flex; align-items:center; gap:10px; min-width:0; min-height:44px; height:44px; width:100%; padding:5px 14px; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.lake-workbench-island .workspace-header > .workspace-header-glass { display:none; }
+.lake-workbench-island .workspace-header > :not(.workspace-header-sweep) { position:relative; z-index:2; }
+.lake-workbench-island .breadcrumbs { flex:0 1 auto; min-width:60px; max-width:213px; gap:8px; }
+.lake-workbench-island .breadcrumbs strong { min-width:0; }
+.lake-workbench-island .breadcrumbs strong > svg { display:none; }
+.lake-workbench-island .pilot-island-trigger { border:0; padding-left:8px; gap:8px; }
+.lake-workbench-island .header-state-area { flex:0 1 auto; }
+/* Keep Pilot in its own segment, allowing the copy to give space to its controls.
+   Its preferred width is independent of the currently constrained pane width. */
+.island-conversation { --pilot-state-width:238px; }
+.lake-workbench-island .header-pilot-state { flex-shrink:1; max-width:100%; }
+.lake-workbench-island .header-pilot-state.is-visible { width:var(--pilot-state-width)!important; }
+.lake-workbench-island .header-pilot-state .header-morph-content { width:var(--pilot-state-width); max-width:100%; }
+.lake-workbench-island .pilot-island { width:100%; }
+.lake-workbench-island .pilot-island-trigger { width:100%; min-width:0; }
+.lake-workbench-island .pilot-island-action { flex:1; }
+.lake-workbench-island .pilot-island-action-label { min-width:0; }
+.lake-workbench-island .workspace-header.has-pilot-island .breadcrumbs { flex:1 1 auto; }
+.lake-workbench-island .workspace-header.has-pilot-island .header-state-area { flex:0 1 var(--pilot-state-width); }
+.lake-workbench-island .pilot-island-action { width:150px; }
+.island-inspector-heading { display:flex; align-items:center; gap:12px; height:44px; width:max-content; padding:0 12px; min-width:0; }
+.island-inspector-heading > strong { display:flex; align-items:center; gap:9px; flex:0 0 auto; min-width:0; font-size:var(--font-size-ui); font-weight:var(--font-weight-medium); white-space:nowrap; }
+.island-inspector-heading > svg { flex:none; color:var(--foreground); }
+.lake-workbench-island .session-inspector-tabs { border:0; padding:0; gap:18px; }
+.lake-workbench-island .session-inspector-tabs button { min-height:34px; padding:8px 0; white-space:nowrap; }
+.lake-workbench-island .session-inspector-tabs button[aria-selected=true]::after { bottom:1px; height:2px; background:var(--info); }
+.island-terminal .terminal-panel-header { width:100%; max-width:100%; min-width:0; min-height:44px; height:44px; border:0; background:transparent; padding:0 14px 0 18px; gap:12px; }
+.island-terminal .terminal-panel-header > strong { flex:0 1 auto; max-width:170px; display:flex; align-items:center; gap:9px; font-weight:var(--font-weight-medium); }
+.island-terminal .terminal-panel-header > strong > svg { flex:none; }
+.terminal-island-switcher .terminal-island-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.island-terminal .terminal-tab-dot { width:5px; height:5px; flex:none; }
+.app-shell.has-workbench-island .session-inspector { padding-top:72px; }
+.app-shell.has-workbench-island .workspace.has-floating-header > .system-banner { margin-top:80px; }
+html.lake-windows-chrome .lake-workbench-island { top:52px; }
+html.lake-windows-chrome .app-shell.has-workbench-island .session-inspector { padding-top:112px; }
+html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { padding-top:120px; }
+
+@container(max-width:480px) { .lake-workbench-island .pilot-island-action-line > strong { display:inline; } }
+
+.lake-workbench-island .session-inspector-tabs button:disabled { color:var(--text-muted); opacity:.45; }
+
+.lake-workbench-island .pilot-action-avatar { display:flex; }
+.lake-workbench-island .pilot-island-action-line > strong { display:inline; }
+
+.terminal-island-switcher { display:flex; flex:0 1 auto; align-items:center; gap:8px; max-width:240px; min-width:0; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); padding:5px 0; background:transparent; color:var(--foreground); font:inherit; font-weight:var(--font-weight-medium); }
+.terminal-island-switcher > svg,.terminal-island-count { flex:none; }
+.terminal-island-switcher > svg:last-child { transition:transform 180ms ease; }
+.terminal-island-switcher > .is-open { transform:rotate(180deg); }
+.island-terminal .terminal-island-switcher { flex:1; width:100%; max-width:none; }
+.island-terminal .terminal-island-switcher > svg:last-child { margin-left:auto; transform:none; transition:none; }
+.terminal-island-count { font-variant-numeric:tabular-nums; color:var(--text-muted); font-weight:var(--font-weight-normal); }
+/* Match both outside edges of the island, including its one-pixel border. */
+.island-terminal .terminal-list-menu { top:calc(100% + 9px); left:-1px; right:-1px; width:auto; max-width:none; max-height:min(480px,calc(100dvh - 80px)); background:var(--surface); }
+.terminal-list-menu { font-size:var(--font-size-ui); line-height:20px; }
+.terminal-list-menu button { min-height:36px; padding:8px; gap:8px; font:inherit; }
+.terminal-list-menu button > svg { flex:none; color:var(--text-muted); }
+.terminal-list-menu button:not(.terminal-picker-item,.app-select-trigger) > span { white-space:normal; overflow:visible; overflow-wrap:anywhere; }
+.terminal-list-menu button.terminal-picker-item { align-items:flex-start; }
+.terminal-picker-item > svg { margin-top:3px; }
+.terminal-list-menu button .terminal-picker-copy { display:flex; flex:1; min-width:0; flex-direction:column; gap:2px; }
+.terminal-list-menu button .terminal-picker-name { display:block; flex:none; color:var(--foreground); }
+.terminal-list-menu button .terminal-picker-meta { display:flex; flex:none; align-items:center; gap:8px; font-size:12px; line-height:18px; color:var(--text-muted); }
+.terminal-list-menu button .terminal-picker-meta > span { flex:1; }
+.terminal-list-menu .terminal-picker-meta small { flex:none; font-size:inherit; line-height:inherit; }
+.terminal-list-settings { border-top:1px solid var(--border); margin-top:4px; padding-top:4px; }
+.terminal-list-settings label { display:flex; flex-direction:column; align-items:stretch; gap:6px; padding:8px; font-size:12px; line-height:18px; color:var(--text-muted); }
+.terminal-list-settings label .app-select { width:100%; min-width:0; margin-top:0; font-size:var(--font-size-ui); line-height:20px; color:var(--foreground); }
+.terminal-list-menu button[aria-current=true] { color:var(--foreground); background:var(--surface-hover); }
+.terminal-action-menu,.terminal-list-menu { animation:terminal-menu-arrive 140ms ease-out; }
+@keyframes terminal-menu-arrive { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+@media(prefers-reduced-motion:reduce) { .terminal-action-menu,.terminal-list-menu { animation:none; } .terminal-island-switcher > svg { transition:none; } }
+
+.terminal-island-number { flex:none; font-weight:var(--font-weight-normal); }
+
+/* One terminal viewport; its floating island owns host and terminal selection. */
+.terminal-panel-content > .terminal-panel-header .terminal-island-switcher { max-width:calc(100% - 118px); }
+
+/* Inset pane dividers stay visible; the wider transparent rail owns resizing. */
+.app-shell.has-workbench-island :is(.session-inspector,.terminal-side-panel) { border-left:0; }
+.app-shell.has-workbench-island { --pane-rail-top:76px; --pane-rail-bottom:12px; --pane-line-inset:0px; }
+.app-shell.has-workbench-island > .workbench-splitter-sidebar,
+.app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal) { top:var(--pane-rail-top); bottom:var(--pane-rail-bottom); }
+.app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal) { left:-6px; width:12px; }
+.app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal)::after {
+ content:''; position:absolute; top:0; bottom:0; left:6px; width:1px; height:auto;
+ border-radius:1px; background:var(--border); opacity:1; transition:background-color 160ms ease;
+}
+/* The terminal slot clips overflow; keep its boundary stroke inside the slot. */
+.app-shell.has-workbench-island .workbench-splitter-terminal { left:0; }
+.app-shell.has-workbench-island .workbench-splitter-terminal::after { left:0; }
+.app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal):is(:hover,:focus-visible,.is-dragging)::after { background:var(--text-muted); }
+.app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal):is(:focus-visible,.is-dragging)::after { background:var(--info); opacity:1; }
+html.lake-windows-chrome .app-shell.has-workbench-island { --pane-rail-top:124px; }
+@media(prefers-reduced-motion:reduce) { .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal)::after { transition:none; } }
+
+/* A compact pane keeps its own controls and menu inside its island. */
+.island-inspector,.island-terminal { container-type:inline-size; }
+@container(max-width:180px) {
+ .island-terminal .terminal-panel-header { width:100%; padding:0 8px; gap:6px; }
+ .island-terminal .terminal-island-switcher { flex:1; gap:4px; }
+ .island-terminal .terminal-picker-meta { flex-wrap:wrap; gap:0 8px; }
+ .island-terminal .terminal-picker-meta > span { flex:none; }
+ .island-terminal :is(.terminal-island-number,.terminal-island-count) { display:none; }
+}
+
+/* The prompt begins below its own island, alongside the inspector content. */
+.app-shell.has-workbench-island .terminal-session .terminal-screen .xterm { padding:76px 16px 12px; }
+.app-shell.has-workbench-island .terminal-session .xterm-viewport { top:76px; }
+html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .terminal-screen .xterm { padding-top:116px; }
+html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xterm-viewport { top:116px; }
+.lake-workbench-island .header-state-area { margin-left:0; }
+.lake-workbench-island .header-normal-state .header-morph-content { display:flex; align-items:center; gap:4px; }
+.lake-workbench-island .session-state-badge { white-space:nowrap; }
+
+/* Keep the session identity visible on tight rails. The status text shares
+   the remaining space and can truncate, while its disclosure stays reachable. */
+@container(max-width:300px) {
+ .lake-workbench-island .workspace-header { display:grid; grid-template-columns:minmax(0,1fr) 114px; padding-inline:8px; gap:4px; }
+ .lake-workbench-island .workspace-header.has-pilot-island { grid-template-columns:minmax(48px,1fr) minmax(0,var(--pilot-state-width)); }
+ .lake-workbench-island .breadcrumbs { display:flex; min-width:0; width:100%; max-width:none; }
+ .lake-workbench-island .breadcrumbs strong { display:flex; align-items:center; min-width:0; width:100%; }
+ .lake-workbench-island .breadcrumbs strong > svg { display:none; }
+ .lake-workbench-island .crumb-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+ .lake-workbench-island .header-state-area { min-width:0; width:100%; max-width:100%; }
+ .lake-workbench-island .header-normal-state.is-visible { flex:1; min-width:0; max-width:100%; width:100%!important; }
+ .lake-workbench-island .header-normal-state .header-morph-content { display:grid; grid-template-columns:minmax(0,1fr) 28px; width:100%; min-width:0; gap:4px; }
+ /* Outrank the WKWebView corner fallback, which otherwise restores visible overflow. */
+ .lake-workbench-island .header-normal-state .session-state-badge { min-width:0; padding-inline:6px; display:block; overflow:hidden; text-overflow:ellipsis; }
+ :root.lake-corner-fallback .lake-workbench-island .header-morph-slot.header-normal-state .session-state-badge { overflow:hidden; }
+ .lake-workbench-island .session-state-badge > span { display:inline-block; margin-right:6px; vertical-align:middle; }
+ .lake-workbench-island .header-inspector-toggle { flex:none; margin-left:0; }
+}
+
+@container(max-width:200px) { .lake-workbench-island .workspace-header { grid-template-columns:minmax(0,1fr) 100px; } }
+
+.terminal-island-title-short { display:none; }
+@container(max-width:180px) {
+ .island-terminal .terminal-island-title-full { display:none; }
+ .island-terminal .terminal-island-title-short { display:inline; }
+ .island-terminal .terminal-tab-dot.ready { display:none; }
+}
+
+/* The role icon still identifies the specialist when its name would crowd out
+   the action. The secondary line and full accessible description stay intact. */
+@container(max-width:380px) {
+ .lake-workbench-island .pilot-island-action-line > strong { display:none; }
+}

@@ -1,0 +1,20 @@
+{
+  "testedCommit": "2eb244813f5839f46a70e850372f4c0fd634821b",
+  "installedDevBaseline": "9987840654627485d1fe4a54bb682afac918a4e7",
+  "date": "2026-10-28",
+  "checks": {
+    "frontend": "522 tests passed",
+    "typescriptAndWebBuild": "passed",
+    "signedDesktop": "scripts/build_lake_desktop.sh --dev --install passed, persistent code-signing identity, strict verification",
+    "devBackend": "healthy; installed manifest matches tested commit",
+    "browser": "narrow conversation segment remains visible; title and status do not overlap; disclosure remains inside segment; full status tooltip retained; light/dark screenshots use fictional in-memory data",
+    "nativeDev": "verified three panes in macOS WKWebView: title remains visible with ellipsis, long status clips within its own slot, disclosure arrow visible and usable",
+    "nativeFallback": "explicit clipping overrides the shared nine-slice mask overflow rule; no mask or signing guard bypass"
+  },
+  "scope": "retain rolled-back shared island layout; only fix title and status clipping",
+  "dependency": "current Dev UI baseline includes pending PR #104 and additional existing work; not ready for develop merge until baseline is reconciled",
+  "notVerified": [
+    "native dark theme and Windows visual validation"
+  ],
+  "data": "no model or remote commands executed; local terminal opened only for native layout verification"
+}

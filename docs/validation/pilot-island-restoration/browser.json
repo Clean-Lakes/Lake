@@ -1,0 +1,208 @@
+[
+  {
+    "viewport": 1512,
+    "island": {
+      "x": 328,
+      "y": 12,
+      "width": 354,
+      "height": 46,
+      "top": 12,
+      "right": 682,
+      "bottom": 58,
+      "left": 328
+    },
+    "button": {
+      "x": 453.4765625,
+      "y": 19,
+      "width": 213.5234375,
+      "height": 32,
+      "top": 19,
+      "right": 667,
+      "bottom": 51,
+      "left": 453.4765625
+    },
+    "progress": {
+      "x": 625,
+      "y": 23,
+      "width": 42,
+      "height": 24,
+      "top": 23,
+      "right": 667,
+      "bottom": 47,
+      "left": 625
+    },
+    "title": {
+      "x": 343,
+      "y": 25,
+      "width": 100.4765625,
+      "height": 20,
+      "top": 25,
+      "right": 443.4765625,
+      "bottom": 45,
+      "left": 343
+    },
+    "fit": true,
+    "ordinaryHidden": true,
+    "pilotShown": true
+  },
+  {
+    "viewport": 1200,
+    "island": {
+      "x": 328,
+      "y": 12,
+      "width": 320,
+      "height": 46,
+      "top": 12,
+      "right": 648,
+      "bottom": 58,
+      "left": 328
+    },
+    "button": {
+      "x": 442.6015625,
+      "y": 19,
+      "width": 190.3984375,
+      "height": 32,
+      "top": 19,
+      "right": 633,
+      "bottom": 51,
+      "left": 442.6015625
+    },
+    "progress": {
+      "x": 591,
+      "y": 23,
+      "width": 42,
+      "height": 24,
+      "top": 23,
+      "right": 633,
+      "bottom": 47,
+      "left": 591
+    },
+    "title": {
+      "x": 343,
+      "y": 25,
+      "width": 89.6015625,
+      "height": 20,
+      "top": 25,
+      "right": 432.6015625,
+      "bottom": 45,
+      "left": 343
+    },
+    "fit": true,
+    "ordinaryHidden": true,
+    "pilotShown": true
+  },
+  {
+    "viewport": 1102,
+    "island": {
+      "x": 254,
+      "y": 12,
+      "width": 320,
+      "height": 46,
+      "top": 12,
+      "right": 574,
+      "bottom": 58,
+      "left": 254
+    },
+    "button": {
+      "x": 368.6015625,
+      "y": 19,
+      "width": 190.3984375,
+      "height": 32,
+      "top": 19,
+      "right": 559,
+      "bottom": 51,
+      "left": 368.6015625
+    },
+    "progress": {
+      "x": 517,
+      "y": 23,
+      "width": 42,
+      "height": 24,
+      "top": 23,
+      "right": 559,
+      "bottom": 47,
+      "left": 517
+    },
+    "title": {
+      "x": 269,
+      "y": 25,
+      "width": 89.6015625,
+      "height": 20,
+      "top": 25,
+      "right": 358.6015625,
+      "bottom": 45,
+      "left": 269
+    },
+    "fit": true,
+    "ordinaryHidden": true,
+    "pilotShown": true
+  },
+  {
+    "viewport": 1512,
+    "island": {
+      "x": 328,
+      "y": 12,
+      "width": 354,
+      "height": 46,
+      "top": 12,
+      "right": 682,
+      "bottom": 58,
+      "left": 328
+    },
+    "button": {
+      "x": 453.4765625,
+      "y": 19,
+      "width": 213.5234375,
+      "height": 32,
+      "top": 19,
+      "right": 667,
+      "bottom": 51,
+      "left": 453.4765625
+    },
+    "progress": {
+      "x": 625,
+      "y": 23,
+      "width": 42,
+      "height": 24,
+      "top": 23,
+      "right": 667,
+      "bottom": 47,
+      "left": 625
+    },
+    "title": {
+      "x": 343,
+      "y": 25,
+      "width": 100.4765625,
+      "height": 20,
+      "top": 25,
+      "right": 443.4765625,
+      "bottom": 45,
+      "left": 343
+    },
+    "fit": true,
+    "ordinaryHidden": true,
+    "pilotShown": true
+  },
+  {
+    "stableTrigger": true
+  },
+  {
+    "ordinaryRestored": true
+  },
+  {
+    "keyboardInspectorToggle": true,
+    "requests": [
+      "/api/resources/order-api/terminal-context",
+      "/api/sessions/demo-session-0/terminals",
+      "/api/sessions/demo-session-0/terminals/linked-terminal/resize",
+      "/api/sessions/demo-session-0/terminals/linked-terminal/resize",
+      "/api/sessions/demo-session-0/terminals/linked-terminal/resize",
+      "/api/sessions/demo-session-0/terminals/linked-terminal/resize",
+      "/api/sessions/demo-session-0/terminals/linked-terminal/resize",
+      "/api/sessions/demo-session-0/terminals/linked-terminal/resize",
+      "/api/sessions/demo-session-0/terminals/linked-terminal/resize",
+      "/api/sessions/demo-session-0/terminals/linked-terminal/resize"
+    ],
+    "modelRequests": []
+  }
+]

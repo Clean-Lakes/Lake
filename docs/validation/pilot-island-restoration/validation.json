@@ -1,0 +1,28 @@
+{
+  "sourceSHA": "ea22ce203c57ed402a6f510167159d78cb63d933",
+  "baseDevelop": "409d2706",
+  "cause": "App passed compact=true to PilotHeaderState whenever independent workbench islands were enabled, hiding the Pilot alternative regardless of its model.",
+  "change": "Remove presentation override; constrain specialist copy without hiding progress or disclosure. Preferred segment width is independent of constrained width.",
+  "checks": {
+    "typecheck": "passed",
+    "frontendTests": {
+      "passed": 536,
+      "failed": 0,
+      "skipped": 0
+    },
+    "signedDevBuildInstall": "passed",
+    "installedManifest": {
+      "sourceSHA": "ea22ce203c57ed402a6f510167159d78cb63d933",
+      "dirty": false
+    },
+    "bootstrapHTTP": 200,
+    "native": "CPU 状态检查 restored specialist/action, inconclusive secondary line and ended marker. Opened its inspector; Pilot remained present. No message submission, remote shell command or task action used.",
+    "browser": "See browser.json; 1102/1200/1512px four-pane layout, theme screenshots, keyboard toggle, mode restoration, retained trigger on count updates. Closing inspector restored island width410 and Pilot segment238."
+  },
+  "limits": [
+    "Windows not tested",
+    "Native dark theme not tested; browser dark theme covered",
+    "Native four-pane terminal launch not exercised; isolated in-memory terminal fixture covered"
+  ],
+  "privacy": "Screenshots in this directory contain fictional fixture data only. Native private conversation screenshot was inspected without saving in repository."
+}
