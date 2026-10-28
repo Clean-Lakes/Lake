@@ -83,6 +83,10 @@ func (s *Store) EnqueueMemoryTurn(snapshot ai.MemoryTurnSnapshot) (err error) {
 }
 
 func (b *Server) reconcileMemoryOutboxForSession(id string) error {
+	if _, err := b.Engine.QueuePendingMemoryCaptures(id); err != nil {
+		b.registerMemoryOutbox(id)
+		return err
+	}
 	items, err := b.Engine.MemoryOutbox(id)
 	if err != nil {
 		return err
@@ -95,6 +99,13 @@ func (b *Server) reconcileMemoryOutboxForSession(id string) error {
 		if err := b.Engine.AckMemoryOutbox(id, snapshot.TurnID, snapshot.SnapshotHash); err != nil {
 			return err
 		}
+	}
+	if queued, err := b.Engine.QueuePendingMemoryCaptures(id); queued || err != nil {
+		b.registerMemoryOutbox(id)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("registered memory capture pending")
 	}
 	return nil
 }
@@ -161,4 +172,20 @@ func (b *Server) memoryForegroundModel() func() {
 		b.memoryLastForeground = time.Now()
 		b.messageMu.Unlock()
 	}
+}
+
+// Host revalidation before materializing an already registered source, including
+// offline compaction recovery. Never restore consent from serialized config.
+func (s *Store) MemoryCaptureAllowed(snapshot ai.MemoryTurnSnapshot) bool {
+	return s.read(func() any {
+		if snapshot.Natural != nil {
+			return s.naturalSnapshotValid(snapshot)
+		}
+		source := s.row("SELECT m.text FROM messages m JOIN sessions x ON x.id=m.sessionId JOIN projects ON projects.id=x.projectId WHERE m.id=? AND m.sessionId=? AND m.role='user' AND x.projectId=? AND "+activeProjectsSQL, snapshot.SourceMessageID, snapshot.SessionID, snapshot.ProjectID)
+		if source == nil {
+			return false
+		}
+		settings := s.memorySettings(snapshot.ProjectID)
+		return source != nil && source["text"] == snapshot.UserText && settings["useEnabled"] == true && settings["extractionEnabled"] == true && integer(settings["epoch"]) == snapshot.Epoch
+	}).(bool)
 }

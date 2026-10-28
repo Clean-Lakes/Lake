@@ -209,12 +209,19 @@ func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any
 		}
 		return nil, b.Engine.ReplyQuestionWithTarget(id, input.ID, input.Answers, b.questionTargetScope(id, input.Answers))
 	}
+	if method == "compact" {
+		done := b.memoryForegroundModel()
+		defer done()
+	}
 	return b.Engine.Handle(ctx, method, id, json.RawMessage(jsonText(data)))
 }
 func (b *Server) event(event ai.Event) {
 	defer func() { recover() }()
 	b.Store.Session(event.Session)
 	switch event.Type {
+	case "memoryCapture":
+		b.registerMemoryOutbox(event.Session)
+		b.Store.Touch(event.Session)
 	case "delta":
 		data := object(event.Data)
 		kind, cardID := stringOf(data["kind"]), stringOf(data["card_id"])

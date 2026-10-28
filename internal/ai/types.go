@@ -160,6 +160,8 @@ type View struct {
 	Turns             int                `json:"turns"`
 }
 type State struct {
+	MemoryAcknowledged     map[string]string                `json:"memoryAcknowledged,omitempty"`
+	MemoryCapture          *MemoryCaptureState              `json:"memoryCapture,omitempty"`
 	PromptBaseline         *strategy.PromptBaseline         `json:"promptBaseline,omitempty"`
 	SkillSnapshots         []strategy.SkillSnapshot         `json:"skillSnapshots,omitempty"`
 	Runtime                *RuntimeCheckpoint               `json:"runtime,omitempty"`

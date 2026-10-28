@@ -140,7 +140,11 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 			in := strategyBody[struct {
 				ExpectedRevision int `json:"expectedRevision"`
 			}](r, "expectedRevision")
-			b.naturalMemoryReply(w, strategyMust(b.Store.ForgetNaturalPreference(ctx, rest[1], key, in.ExpectedRevision)))
+			result, err := b.Store.ForgetNaturalPreference(ctx, rest[1], key, in.ExpectedRevision)
+			if err == nil {
+				b.registerNaturalCaptureCleanup(ctx, rest[1])
+			}
+			b.naturalMemoryReply(w, strategyMust(result, err))
 			return true
 		}
 	}
@@ -221,4 +225,19 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 	}
 	naturalFail(405, "method_unavailable")
 	return true
+}
+
+func (b *Server) registerNaturalCaptureCleanup(ctx StrategyContext, id string) {
+	rows, err := strategyCall(b.Store, false, func() []Object {
+		scope := b.Store.strategyAuthorize(ctx, naturalScope(ctx))
+		if b.Store.row("SELECT id FROM naturalPreferenceEntries WHERE id=? AND scopeKey=?", id, scope) == nil {
+			return nil
+		}
+		return b.Store.rows("SELECT sourceSession FROM naturalPreferenceSupports WHERE entryId=? UNION SELECT sourceSession FROM naturalPreferenceRevisions WHERE entryId=? UNION SELECT sourceSession FROM naturalPreferenceConflicts WHERE entryId=?", id, id, id)
+	})
+	if err == nil {
+		for _, row := range rows {
+			b.registerMemoryOutbox(stringOf(row["sourceSession"]))
+		}
+	}
 }

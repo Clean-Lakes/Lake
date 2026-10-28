@@ -31,40 +31,41 @@ type session struct {
 	sreReply            *sreReply
 }
 type Engine struct {
-	experiment       *strategyExperimentRuntime
-	Strategies       StrategyProvider
-	CorrectionGuard  func(context.Context, string, int64, int64) error
-	correctionMu     sync.Mutex
-	onlineTask       string
-	onlineSessions   sync.Map
-	runMu            sync.Mutex
-	runs             sync.WaitGroup
-	runtimeClosed    bool
-	shutdownOnce     sync.Once
-	sreRepository    SRERepository
-	sreControls      sync.Map
-	sreRecoveries    sync.Map
-	sreResourceLocks sync.Map
-	agentMu          sync.Mutex
-	agentWorkers     map[string]*agentWorker
-	agentSlots       chan struct{}
-	modelSlots       chan struct{}
-	childModelSlots  chan struct{}
-	collectionSlots  chan struct{}
-	agentsClosed     bool
-	worker           *agentWorker
-	observationSlots sync.Map
-	mu               sync.Mutex
-	sessions         map[string]*session
-	Dir              string
-	RuntimeDir       string
-	Bridge           Bridge
-	Emit             func(Event)
-	ModelActivity    func() func() // Trusted host foreground priority; no provider/session mutation.
-	tunnels          sync.Map
-	shells           sync.Map
-	shellMu          sync.Mutex
-	shellsClosed     bool
+	MemoryCaptureAllowed func(MemoryTurnSnapshot) bool
+	experiment           *strategyExperimentRuntime
+	Strategies           StrategyProvider
+	CorrectionGuard      func(context.Context, string, int64, int64) error
+	correctionMu         sync.Mutex
+	onlineTask           string
+	onlineSessions       sync.Map
+	runMu                sync.Mutex
+	runs                 sync.WaitGroup
+	runtimeClosed        bool
+	shutdownOnce         sync.Once
+	sreRepository        SRERepository
+	sreControls          sync.Map
+	sreRecoveries        sync.Map
+	sreResourceLocks     sync.Map
+	agentMu              sync.Mutex
+	agentWorkers         map[string]*agentWorker
+	agentSlots           chan struct{}
+	modelSlots           chan struct{}
+	childModelSlots      chan struct{}
+	collectionSlots      chan struct{}
+	agentsClosed         bool
+	worker               *agentWorker
+	observationSlots     sync.Map
+	mu                   sync.Mutex
+	sessions             map[string]*session
+	Dir                  string
+	RuntimeDir           string
+	Bridge               Bridge
+	Emit                 func(Event)
+	ModelActivity        func() func() // Trusted host foreground priority; no provider/session mutation.
+	tunnels              sync.Map
+	shells               sync.Map
+	shellMu              sync.Mutex
+	shellsClosed         bool
 
 	compactionTimeout time.Duration
 	adkMu             sync.Mutex
@@ -653,6 +654,7 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		s.state.History[0] = Message{Role: "system", Content: systemPrompt}
 	}
 	s.state.History = append(s.state.History, Message{HostTurnID: s.state.View.RootTurnID, Role: "user", Content: redact(message, c), Images: images})
+	e.beginMemoryCapture(s, c, input)
 	err = e.save(s)
 	s.mu.Unlock()
 	if err != nil {
@@ -695,6 +697,9 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		e.collectStrategySnapshot(s, c, input, status)
 		if err == nil {
 			e.collectMemorySnapshot(s, c, input)
+		}
+		if turn := currentMemoryCapture(s); turn != nil {
+			turn.Finished = true
 		}
 		for i := range s.state.View.Cards {
 			card := &s.state.View.Cards[i]
@@ -844,6 +849,7 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 			}
 		}
 		s.state.History = append(s.state.History, Message{Role: "tool", CallID: call.ID, Name: call.Name, Content: payload})
+		e.captureMemoryToolResult(s, call, payload, value, toolErr)
 		if call.Name == "load_skill" && toolErr == nil && str(obj(value)["name"]) != "" && str(obj(value)["content"]) != "" {
 			s.state.SkillSnapshots = append(s.state.SkillSnapshots, strategy.SkillSnapshot{ResultHash: strategy.ContentHash(payload), ID: str(obj(value)["name"]), ContentHash: strategy.ContentHash(str(obj(value)["content"])), CallID: call.ID})
 		}
@@ -890,6 +896,7 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	if !force && chars < budget {
 		return nil
 	}
+	e.captureBeforeCompaction(ctx, s, c)
 	target := budget * 3 / 4
 	if c.sre != nil && c.sre.Role == SREInvestigator && !c.sre.FullTools {
 		// Preserve calls, evidence IDs and recorded results deterministically;
@@ -1131,6 +1138,7 @@ func (e *Engine) Restore(id string, h []Message) error {
 	if s.state.Runtime != nil {
 		s.state.Runtime.Detached = true
 	}
+	e.withdrawMemoryCapture(s, "")
 	s.state.History = h
 	s.state.LastRequest = nil
 	s.state.LastRequestAt = ""
@@ -1185,6 +1193,7 @@ func (e *Engine) Rollback(id string) error {
 	if s.state.Runtime != nil {
 		s.state.Runtime.Detached = true
 	}
+	e.withdrawMemoryCapture(s, "")
 	s.state.History = s.state.History[:n]
 	s.state.LastRequest = nil
 	s.state.LastRequestAt = ""

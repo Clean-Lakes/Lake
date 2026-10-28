@@ -245,6 +245,13 @@ func (s *Store) commitMemoryExtractionLocked(job Object, snapshot ai.MemoryTurnS
 		observedAt := ""
 		if m.Verification == "observed" {
 			observedAt = snapshot.CapturedAt
+			for _, sourceID := range mutation.SourceIDs {
+				for _, evidence := range snapshot.Evidence {
+					if sourceID == "evidence:"+evidence.CallID && evidence.ObservedAt != "" && (observedAt == snapshot.CapturedAt || evidence.ObservedAt < observedAt) {
+						observedAt = evidence.ObservedAt
+					}
+				}
+			}
 		}
 		markdown := renderMemoryMarkdown(m.Key, m.Type, m.Description, m.Body, memoryMarkdownMeta{ProjectID: snapshot.ProjectID, OriginSessionID: originSession, OriginTurnID: originTurn, Revision: oldRevision + 1, UpdatedAt: t, Verification: m.Verification, ObservedAt: observedAt})
 		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(m.Body)))
