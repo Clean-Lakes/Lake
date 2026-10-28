@@ -404,6 +404,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if b.providerRoute(w, r, name, method) {
 		return
 	}
+	if b.naturalMemoryRoute(w, r, name) {
+		return
+	}
 	if b.strategyRoute(w, r, name) {
 		return
 	}

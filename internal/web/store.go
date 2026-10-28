@@ -133,6 +133,10 @@ func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
 		db.Close()
 		return nil, e
 	}
+	if e = s.prepareNaturalMemoryMigration(); e != nil {
+		db.Close()
+		return nil, e
+	}
 	if e = s.prepareStrategyMigration(); e != nil {
 		db.Close()
 		return nil, e
@@ -163,6 +167,10 @@ func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
 		}
 	}()
 	if e = s.migrate(); e != nil {
+		db.Close()
+		return nil, e
+	}
+	if e = s.migrateNaturalMemory(); e != nil {
 		db.Close()
 		return nil, e
 	}
