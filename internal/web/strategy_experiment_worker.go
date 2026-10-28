@@ -79,6 +79,9 @@ func (b *Server) runExperimentWorker() {
 	}
 }
 func (b *Server) processOneExperiment() {
+	if strategy.ExecutionRetired {
+		return
+	}
 	var active StrategyContext
 	id := ""
 	defer func() {
@@ -117,6 +120,9 @@ func (b *Server) processOneExperiment() {
 	}
 }
 func (b *Server) executeExperiment(scope StrategyContext, job Object) {
+	if strategy.ExecutionRetired {
+		return
+	}
 	id, token := stringOf(job["id"]), stringOf(job["leaseToken"])
 	fail := func(code string) {
 		_, _ = b.Store.failStrategyProposal(scope, id, code)

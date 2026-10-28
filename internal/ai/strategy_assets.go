@@ -159,7 +159,7 @@ func (e *Engine) InvalidateStrategies(projectID string) {
 	e.mu.Unlock()
 	for _, s := range all {
 		s.mu.Lock()
-		if s.cancel != nil && s.state.PromptBaseline != nil && s.state.PromptBaseline.Strategy != nil && (len(s.state.PromptBaseline.Strategy.Selected) > 0 || s.state.Config.StrategyCorrectEnabled) && (projectID == "" || s.state.Config.MemoryProjectID == projectID) {
+		if s.cancel != nil && s.state.PromptBaseline != nil && s.state.PromptBaseline.Strategy != nil && (len(s.state.PromptBaseline.Strategy.Selected) > 0 || onlineEnabled(s.state.Config)) && (projectID == "" || s.state.Config.MemoryProjectID == projectID) {
 			s.cancel()
 		}
 		s.mu.Unlock()

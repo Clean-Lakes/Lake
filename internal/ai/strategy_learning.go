@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Clean-Lakes/Lake/internal/strategy"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,7 +61,7 @@ func ValidStrategySnapshot(s StrategyTurnSnapshot) bool {
 // Foreground capture only seals bounded source references. No history walk,
 // result hashing, queue transaction, auxiliary call or projection acknowledgement.
 func (e *Engine) collectStrategySnapshot(s *session, c Config, input TurnInput, status string) {
-	if input.StrategyMessageID == "" || e.worker != nil || !c.StrategyLearnEnabled || c.workflowMode || c.sreCoordinator || c.agentRole != "" || c.ConversationMode == ModePlan || c.MemoryProjectID == "" || len(s.state.StrategyOutbox) >= 20 || len(s.state.View.PendingApprovals) > 0 || (status != "completed" && status != "failed") || len(input.UserText) > 8192 {
+	if strategy.ExecutionRetired || input.StrategyMessageID == "" || e.worker != nil || !c.StrategyLearnEnabled || c.workflowMode || c.sreCoordinator || c.agentRole != "" || c.ConversationMode == ModePlan || c.MemoryProjectID == "" || len(s.state.StrategyOutbox) >= 20 || len(s.state.View.PendingApprovals) > 0 || (status != "completed" && status != "failed") || len(input.UserText) > 8192 {
 		return
 	}
 	start := 0

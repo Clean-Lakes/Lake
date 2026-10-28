@@ -17,18 +17,8 @@ import (
 func reviewCandidate(t *testing.T, s *Store, ctx StrategyContext, scope strategy.Scope) (StrategyMutationResult, StrategyMutationResult) {
 	t.Helper()
 	source := learningSource(t, s, ctx)
-	q, err := s.QueueStrategyProposal(ctx, ident(), StrategyJobInput{Scope: scope, Kind: "proposal", SourceIDs: []string{source.SourceID}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	job, err := s.claimStrategyJob(ctx, "proposal")
-	if err != nil || job == nil {
-		t.Fatal("no proposal lease", err)
-	}
-	result, err := s.CompleteStrategyProposal(ctx, q.JobID, stringOf(job["leaseToken"]), StrategyAssetInput{Title: "PRIVATE_PROJECT_ONLY_TITLE", Kind: strategy.UserPreference, Body: "PRIVATE_PROJECT_ONLY_BODY", Applicability: strategy.Applicability{Profiles: []string{"core"}}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	result := seedLegacyCandidate(t, s, ctx, scope, source.SourceID)
+
 	return result, source
 }
 func promotionDraft() StrategyAssetInput {
@@ -151,19 +141,9 @@ func TestStrategyReviewRejectionSuppressesSourceAndContent(t *testing.T) {
 		t.Fatal("rejected source charged again")
 	}
 	other := learningSource(t, s, ctx)
-	q, err := s.QueueStrategyProposal(ctx, "different-source", StrategyJobInput{Scope: scope, Kind: "proposal", SourceIDs: []string{other.SourceID}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	job, _ := s.claimStrategyJob(ctx, "proposal")
-	result, err := s.CompleteStrategyProposal(ctx, q.JobID, stringOf(job["leaseToken"]), StrategyAssetInput{Title: "Reworded title", Kind: strategy.UserPreference, Body: "PRIVATE_PROJECT_ONLY_BODY\r\n", Applicability: strategy.Applicability{}})
-	if err != nil || result.AssetID != "" {
-		t.Fatal("rejected content generated another asset", err)
-	}
-	got, _ := s.GetStrategyJob(ctx, q.JobID)
-	if got["errorCode"] != "rejected_candidate" {
-		t.Fatal("missing suppression reason", got)
-	}
+	_, err := s.QueueStrategyProposal(ctx, "different-source", StrategyJobInput{Scope: scope, Kind: "proposal", SourceIDs: []string{other.SourceID}})
+	strategyCheckError(t, err, 410)
+
 	if _, err = s.DeleteStrategyAsset(ctx, candidate.AssetID, "delete", 1); err != nil {
 		t.Fatal(err)
 	}

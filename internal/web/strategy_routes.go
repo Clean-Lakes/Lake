@@ -205,6 +205,8 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 				message = "策略或项目不可用"
 			case 409:
 				message = "策略版本、来源或幂等请求冲突，请刷新后重试"
+			case 410:
+				message = "在线纠错、候选提取和新实验已停用；人工资产与历史记录仍可管理"
 			case 405:
 				message = "此策略操作尚未提供"
 			}
@@ -215,6 +217,11 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 	// from the body, current UI state, asset title or filesystem path.
 	strategyMust(b.Store.GetStrategySettings(ctx, scope))
 	method := r.Method
+	if method == "POST" && (suffix == "/sources" || suffix == "/proposals" || suffix == "/experiments" || strings.HasSuffix(suffix, "/resume") || strings.HasSuffix(suffix, "/save-candidate")) {
+		// Host scope was validated above. No old receipt or request body is
+		// consulted before rejecting a retired execution request.
+		strategyFail(410, "execution_retired")
+	}
 	key := r.Header.Get("Idempotency-Key")
 	if method != "GET" {
 		if len(key) < 1 || len(key) > 128 || strings.TrimSpace(key) != key {
@@ -236,7 +243,7 @@ func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path stri
 					source = "inherited"
 				}
 			}
-			reply(w, 200, Object{"settings": settings, "effective": effective.Settings, "source": source, "capabilities": Object{"apply": true, "learn": true, "correct": true, "correctMode": "isolated_experiments", "onlineCorrect": true, "onlineConsentVersion": strategy.OnlineConsentVersion}})
+			reply(w, 200, Object{"settings": settings, "effective": effective.Settings, "source": source, "capabilities": Object{"apply": true, "learn": false, "correct": false, "executionRetired": true, "correctMode": "retired", "onlineCorrect": false, "onlineConsentVersion": strategy.OnlineConsentVersion}})
 			return
 		}
 		if method == "PATCH" {

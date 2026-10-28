@@ -91,19 +91,35 @@ func (b Budget) Validate() error {
 
 // Settings revision/epoch zero means implicit, unsaved defaults. Stored
 // mutations allocate positive monotonic revisions and epochs in the host.
+// ExecutionRetirementVersion fences the retired online/learning/experiment paths.
+// This is a product policy, not a user setting or a test override.
+const ExecutionRetirementVersion = 1
+const ExecutionRetired = true
+
+type RetiredExecutionChoices struct {
+	LearnEnabled         bool  `json:"learnEnabled"`
+	CorrectEnabled       bool  `json:"correctEnabled"`
+	OnlineCorrectEnabled bool  `json:"onlineCorrectEnabled"`
+	OnlineConsentVersion int   `json:"onlineConsentVersion"`
+	SettingsRevision     int64 `json:"settingsRevision"`
+	Epoch                int64 `json:"epoch"`
+}
+
 type Settings struct {
-	Scope                Scope                `json:"scope"`
-	Revision             int64                `json:"revision"`
-	Epoch                int64                `json:"epoch"`
-	MasterEnabled        bool                 `json:"masterEnabled"`
-	ApplyEnabled         bool                 `json:"applyEnabled"`
-	LearnEnabled         bool                 `json:"learnEnabled"`
-	CorrectEnabled       bool                 `json:"correctEnabled"`
-	OnlineCorrectEnabled bool                 `json:"onlineCorrectEnabled"`
-	OnlineConsentVersion int                  `json:"onlineConsentVersion"`
-	RuntimePolicyVersion int                  `json:"runtimePolicyVersion"`
-	LegacyOnlineConsent  *OnlineConsentRecord `json:"legacyOnlineConsent,omitempty"`
-	Budget               Budget               `json:"budget"`
+	ExecutionRetirementVersion int                      `json:"executionRetirementVersion,omitempty"`
+	RetiredExecutionChoices    *RetiredExecutionChoices `json:"retiredExecutionChoices,omitempty"`
+	Scope                      Scope                    `json:"scope"`
+	Revision                   int64                    `json:"revision"`
+	Epoch                      int64                    `json:"epoch"`
+	MasterEnabled              bool                     `json:"masterEnabled"`
+	ApplyEnabled               bool                     `json:"applyEnabled"`
+	LearnEnabled               bool                     `json:"learnEnabled"`
+	CorrectEnabled             bool                     `json:"correctEnabled"`
+	OnlineCorrectEnabled       bool                     `json:"onlineCorrectEnabled"`
+	OnlineConsentVersion       int                      `json:"onlineConsentVersion"`
+	RuntimePolicyVersion       int                      `json:"runtimePolicyVersion"`
+	LegacyOnlineConsent        *OnlineConsentRecord     `json:"legacyOnlineConsent,omitempty"`
+	Budget                     Budget                   `json:"budget"`
 }
 
 // A saved v1 trial flag is not consent to the isolated experimental path.

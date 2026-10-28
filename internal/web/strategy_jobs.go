@@ -48,6 +48,7 @@ func (s *Store) strategyJobSources(id string) []string {
 	return out
 }
 func (s *Store) strategyCheckJob(ctx StrategyContext, job Object) {
+	strategyFail(410, "execution_retired")
 	settings := s.strategyEffective(ctx)
 	if !settings.Settings.MasterEnabled || (job["kind"] == "proposal" && !settings.Settings.LearnEnabled) || (job["kind"] == "experiment" && !settings.Settings.ApplyEnabled) {
 		strategyFail(409, "disabled")
@@ -89,6 +90,7 @@ func (s *Store) QueueStrategyJob(ctx StrategyContext, key string, input Strategy
 }
 func (s *Store) strategyQueueJob(ctx StrategyContext, key string, input StrategyJobInput) StrategyMutationResult {
 	scopeKey := s.strategyEnsureScope(ctx, input.Scope)
+	strategyFail(410, "execution_retired")
 	if input.Kind != "proposal" && input.Kind != "experiment" {
 		strategyFail(400, "invalid_job")
 	}
@@ -154,6 +156,9 @@ func (s *Store) ClaimStrategyJob(ctx StrategyContext) (Object, error) {
 func (s *Store) claimStrategyJob(ctx StrategyContext, kind string) (Object, error) {
 	return strategyCall(s, true, func() Object {
 		s.strategyContext(ctx)
+		if strategy.ExecutionRetired {
+			return nil
+		}
 		stamp := time.Now().UnixMilli()
 		for _, job := range s.rows("SELECT * FROM strategyJobs WHERE accessProjectId=? AND (?='' OR kind=?) AND (status='queued' OR (status='leased' AND leaseUntilMs<=? AND dispatchState='none')) ORDER BY createdAt,id LIMIT 32", ctx.ProjectID, kind, kind, stamp) {
 			code := strategyValidationCode(func() { s.strategyCheckJob(ctx, job) })
@@ -273,6 +278,7 @@ func (s *Store) CompleteStrategyProposal(ctx StrategyContext, id, token string, 
 }
 func (s *Store) strategyCompleteProposal(ctx StrategyContext, id, token string, input StrategyAssetInput, dedup bool) StrategyMutationResult {
 	job := s.strategyJob(ctx, id)
+	strategyFail(410, "execution_retired")
 	validateStrategyInput(input)
 	scopeKey := stringOf(job["scopeKey"])
 	key := "job-result:" + id
@@ -320,11 +326,8 @@ func (s *Store) strategyCompleteProposal(ctx StrategyContext, id, token string, 
 	return result
 }
 
-// Called only while OpenStore owns the process lock. Leased means no dispatch
-// intent exists, so it may return to the queue. An intent never does.
+// Called only while OpenStore owns the process lock. Retire pending work and
+// retain unknown dispatch identities without returning anything to the queue.
 func (s *Store) recoverStrategyJobs() {
-	s.recoverStrategyExperiments()
-	s.exec("UPDATE strategyProposalRuns SET status='unknown',errorCode='interrupted',finishedAt=? WHERE status='running'", now())
-	s.exec("UPDATE strategyJobs SET status='queued',leaseToken='',leaseUntilMs=0,updatedAt=? WHERE status='leased' AND dispatchState='none'", now())
-	s.exec("UPDATE strategyJobs SET leaseToken='',leaseUntilMs=0,dispatchState=CASE WHEN dispatchState='intent' THEN 'unknown' ELSE dispatchState END,updatedAt=? WHERE status='awaiting_reconciliation'", now())
+	s.retireStrategyJobs()
 }

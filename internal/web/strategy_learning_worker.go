@@ -83,6 +83,9 @@ func (b *Server) runStrategyWorker() {
 	}
 }
 func (b *Server) processOneStrategyJob() {
+	if strategy.ExecutionRetired {
+		return
+	}
 	var activeContext StrategyContext
 	activeID := ""
 	defer func() {
@@ -157,6 +160,9 @@ func (b *Server) processOneStrategyJob() {
 	}
 }
 func (b *Server) executeStrategyProposal(background context.Context, scope StrategyContext, job Object) {
+	if strategy.ExecutionRetired {
+		return
+	}
 	id, token := stringOf(job["id"]), stringOf(job["leaseToken"])
 	fail := func(code string) { _, _ = b.Store.failStrategyProposal(scope, id, code) }
 	data, err := b.Store.strategyProposalData(scope, id, token)

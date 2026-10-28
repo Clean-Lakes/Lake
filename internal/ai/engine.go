@@ -261,6 +261,8 @@ func (e *Engine) notify(s *session, kind string, v any) {
 	}
 }
 func (e *Engine) Configure(id string, c Config) error {
+	c.StrategyCorrectEnabled = false
+	c.StrategyLearnEnabled = false
 	if e.worker != nil && c.MemorySchemaVersion == 2 {
 		c.MemoryEnabled = false
 		c.MemoryExtractionEnabled = false
@@ -535,6 +537,7 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		return errors.New("session busy")
 	}
 	c := s.state.Config
+	c.StrategyCorrectEnabled, c.StrategyLearnEnabled = false, false
 	c.sreCoordinator = c.ConversationMode != ModePlan && input.SRECoordination && e.worker == nil && (c.Profile == "core" || c.Profile == "")
 	if c.ConversationMode == ModePlan {
 		c.StrategyCorrectEnabled = false

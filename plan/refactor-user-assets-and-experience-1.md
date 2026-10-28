@@ -10,7 +10,7 @@ tags: [refactor, strategy, learning, user-assets, experience]
 
 # Lake 用户资产积累与经验复用开发计划
 
-> **后续投入以 [Harness² 衍生功能清理计划](refactor-harness-inspired-cleanup-1.md)为准（2026-10-27）。** 本文保留 R0～R5 已交付的实现与验收历史；不再继续建设独立在线纠错、自动候选学习和用户实验平台。清理尚未实施，当前代码和已保存设置不因计划更新而改变；用户已确认内容与来源保护按新计划保留和承接。
+> **后续投入以 [Harness² 衍生功能清理计划](refactor-harness-inspired-cleanup-1.md)为准（2026-10-27）。** 本文保留 R0～R5 已交付的实现与验收历史；不再继续建设独立在线纠错、自动候选学习和用户实验平台。C1 已实现新增执行退役，见 [C1 契约](../docs/design/strategy-execution-retirement-c1.md)；用户已确认内容与来源保护保留，C2～C4 尚未实施。
 
 本计划接替[策略学习与改进开发计划](feature-strategy-learning-1.md)的后续开发方向：重点保留用户级资产、来源血缘和经验复用；在线纠错默认关闭；学习在后台生成待审核候选，不参与当前任务的成败判定。模型原有的分析、根据工具结果调整调查步骤等能力继续通过官方 ADK 执行，不强制经过额外的策略修订流程。
 

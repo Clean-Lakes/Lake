@@ -60,6 +60,7 @@ func (s *Store) QueueStrategyProposal(ctx StrategyContext, key string, input Str
 			strategyFail(400, "invalid_proposal")
 		}
 		scopeKey := s.strategyAuthorize(ctx, input.Scope)
+		strategyFail(410, "execution_retired")
 		sources, hash := s.strategySourceSet(ctx, input.SourceIDs)
 		input.SourceIDs = sources
 		for _, id := range sources {

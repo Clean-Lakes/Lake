@@ -1,6 +1,6 @@
 ---
 goal: 退出为借鉴 Harness² 增加的在线优化与独立学习平台，保留用户内容和 Lake 原有任务能力
-version: 1.0
+version: 1.1
 date_created: 2026-10-27
 last_updated: 2026-10-27
 owner: Lake
@@ -14,7 +14,7 @@ tags: [cleanup, harness, strategy, compatibility, user-preferences]
 
 **Lake 当前不接入 Harness²，不移植其 Python 框架，也不继续建设独立的在线纠错、自动候选学习和递归优化产品。** 保留用户明确确认的内容、版本和来源保护，将有用能力逐步归回偏好、项目记忆与 Skills。先停止新执行，再整理用户入口，最后拆除失去用途的代码；不能按 `strategy*` 文件名整批删除。
 
-盘点基线：`origin/develop@ac3ae1544b00472da8e587f5f931d075d4e33917`，即文档 PR [#105](https://github.com/Clean-Lakes/Lake/pull/105) 合入后。本次仅提交清理计划与旧文档承接提示，**没有修改运行代码、用户开关、数据库或正在运行的 Dev**。下文所有“移除、迁移、停止”都是后续实施目标，不表示已经完成。
+盘点基线：`origin/develop@ac3ae1544b00472da8e587f5f931d075d4e33917`，即文档 PR [#105](https://github.com/Clean-Lakes/Lake/pull/105) 合入后。初版仅提交清理计划，随后经 #106 合入。C1 从 `081d6652` 实施新增执行退役，见 [C1 契约](../docs/design/strategy-execution-retirement-c1.md)；C2～C4 的内容承接和物理删除仍待实施，不能将下文所有目标描述为已完成。
 
 本计划接替[用户资产与经验复用计划](refactor-user-assets-and-experience-1.md)的后续投入方向。P0～P8、R1～R5 的实现与原测试结果继续作为历史证据；不改写完成记录，也不将 inconclusive 改成收益成立。已关闭且未合并的 [#67](https://github.com/Clean-Lakes/Lake/pull/67) 不重新打开、不挑入其剩余在线增强；其主机检查、Dev 快跑与记忆边界修复已由 #69/#70/#71 交付，继续保留。
 
@@ -114,8 +114,8 @@ ADK 持久化另有 `nativeCorrection`、`nativeArtifact` 和会话状态里的 
 
 | 阶段 | 状态 | 范围与退出条件 |
 | --- | --- | --- |
-| C0 盘点与决策 | 文档交付，待评审 | 本计划、代码分类、兼容边界与验收矩阵；不改变运行行为 |
-| C1 退役新增执行 | 待实施 | X01～X05 的在线/学习/评估入口停止新派发；先落持久退役、两库恢复和旧 API 防复活，再拆控制器/worker。旧人工应用、内容管理和历史访问仍可用 |
+| C0 盘点与决策 | 已合入 #106 | 本计划、代码分类、兼容边界与验收矩阵；不改变运行行为 |
+| C1 退役新增执行 | 已实现并完成本地验收，待 PR 合入 | X01～X05 的在线/学习/评估入口停止新派发；持久退役、两库恢复、旧 API 防复活及界面移除新执行操作。保留人工应用、历史访问和必要的惰性兼容函数；[C1 契约](../docs/design/strategy-execution-retirement-c1.md)及[验收](../docs/validation/strategy-execution-retirement-c1.md) |
 | C2 人工内容与入口收敛 | 待实施，依赖 C1 | 落实偏好范围预览与承接、复杂方法导出/显式 Skills 去向，复用现有存储；Pilot 只承接适用的表达偏好，不能改专员权限。确认无内容丢失后退出独立主标签与日常晋升/匹配/收益反馈 UI |
 | C3 运行依赖与代码清理 | 待实施，依赖 C1/C2 | 拆分 S01～S04，去掉优化槽位、无用请求清单必写、策略 provider/配置及无人使用的工具/预算类型。对仍需兼容应用的内容保留最小适配器；未达到等价承接条件的代码不得提前删除 |
 | C4 文档、测试和最终验收 | 待实施 | 更新 README/指南/测试脚本/CI 引用，保留历史证据；验证升级、重启、拒绝旧写入、内容承接、普通任务/Pilot、取消/审批/未知恢复；记录剩余兼容代码及理由 |
@@ -126,7 +126,7 @@ ADK 持久化另有 `nativeCorrection`、`nativeArtifact` 和会话状态里的 
 
 - 保留原生审批、未知操作、来源撤回、跨项目读取、版本采用/停用、签名/Dev 隔离、主机目标和项目记忆边界回归；必要时从策略测试中拆出。删除在线“继续执行成功”、候选自动生成、产品 A/B 新任务等旧功能正向断言时，补成退役拒绝和无额外调用测试，不能只删失败测试。
 - [verify_strategy_learning.py](../scripts/verify_strategy_learning.py)、[test_strategy_learning_dev.py](../scripts/test_strategy_learning_dev.py)、[test_strategy_reuse_dev.py](../scripts/test_strategy_reuse_dev.py) 随对应阶段退役/缩为兼容验证；通用的“消息只发送一次、等待新轮次”的回归 [test_strategy_dev_wait.py](../scripts/test_strategy_dev_wait.py) 先确认仍有调用者再抽离/更名，不能连带丢失排队竞争覆盖。
-- [strategy_daily_test.go](../internal/web/strategy_daily_test.go)、[strategy_background_test.go](../internal/web/strategy_background_test.go)、[strategy_crash_test.go](../internal/web/strategy_crash_test.go)、[strategy_reuse_acceptance_test.go](../internal/web/strategy_reuse_acceptance_test.go) 等按“正常能力保护/退役兼容/已无用途实验”重新归类；真实模型收益脚本不成为日常测试默认项。
+- [strategy_daily_test.go](../internal/web/strategy_daily_test.go)、[原 strategy_background_test.go](https://github.com/Clean-Lakes/Lake/blob/081d66520dfc8f958a8eebbd84b675a183113613/internal/web/strategy_background_test.go)、[原 strategy_crash_test.go](https://github.com/Clean-Lakes/Lake/blob/081d66520dfc8f958a8eebbd84b675a183113613/internal/web/strategy_crash_test.go)、[strategy_reuse_acceptance_test.go](../internal/web/strategy_reuse_acceptance_test.go) 等按“正常能力保护/退役兼容/已无用途实验”重新归类；C1 已将无新增执行用途的正向测试替换为 [退役回归](../internal/web/strategy_retirement_test.go)，历史删除文件链接固定至 C1 前基线。真实模型收益脚本不成为日常测试默认项。
 - [P0～P8 旧计划](feature-strategy-learning-1.md)、[R0～R5 旧计划](refactor-user-assets-and-experience-1.md)、`docs/design/strategy-*`、`docs/validation/` 中原始报告和失败原样保留，加日期/基线及承接说明，不重写样本得分。README 与 [当前指南](../docs/strategy-learning.md) 在运行代码落地时再同步“当前可用/已退役”，本次仅新增计划链接。
 - `internal/strategy` 的纯类型、hash 与通用帮助函数先找出非实验使用者；仅在调用迁移和历史解码可用后删除或移动。不能整包删除导致官方运行、Skills 或项目记忆间接失效。
 
@@ -150,7 +150,7 @@ ADK 持久化另有 `nativeCorrection`、`nativeArtifact` 和会话状态里的 
 
 实施代码时运行相应 Go 回归、必要 race/vet、`python3 scripts/check_adk_runtime_boundary.py`；UI 改动运行项目固定 pnpm 的类型检查、相关测试及构建，并在签名 Lake Dev 验证。最终阶段再对集成 SHA 执行全量检查，不把旧阶段结果替代新删除后的验证。真实模型仅限有界、明确的验证场景，保留失败和用量；无需为本计划重跑 144 臂研究试点。
 
-本次文档 PR 只核对代码定位、相对链接、引用记录与 `git diff --check`，不运行应用测试、不打包、不触发手动 CI、不操作生产。Windows CI 仍需届时明确授权。
+初版文档 PR 只核对代码定位、相对链接、引用记录与 `git diff --check`。后续实施 PR 按实际代码运行上列检查；Windows CI 仍需届时明确授权。
 
 ## 8. 完成标准与执行纪律
 

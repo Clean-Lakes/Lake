@@ -15,6 +15,9 @@ func (b *Server) strategySafeText(text string) bool {
 	return ai.SafeMemoryContent(text, *model) && !b.Models.strategyContainsProviderSecret(text) && !b.Terminals.containsCredential(text)
 }
 func (b *Server) enqueueStrategyTurn(snapshot ai.StrategyTurnSnapshot) (err error) {
+	if strategy.ExecutionRetired {
+		return nil
+	}
 	defer func() {
 		if recover() != nil {
 			err = &StrategyError{500, "learning_internal_error"}

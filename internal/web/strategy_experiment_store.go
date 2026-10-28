@@ -25,6 +25,8 @@ type strategyExperimentFrozen struct {
 
 func (s *Store) createStrategyExperiment(ctx StrategyContext, key string, frozen strategyExperimentFrozen) (StrategyMutationResult, error) {
 	return strategyCall(s, true, func() StrategyMutationResult {
+		s.strategyContext(ctx)
+		strategyFail(410, "execution_retired")
 		if frozen.Optimization {
 			strategyFail(410, "optimization_retired")
 		}

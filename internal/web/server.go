@@ -170,8 +170,6 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	server.Engine.RuntimeDir = filepath.Join(options.DataDir, "adk")
 	server.Engine.SetSRERepository(store)
 	server.Engine.Strategies = server.strategyProvider
-	server.Engine.CorrectionGuard = server.strategyCorrectionGuard
-	server.Engine.ModelActivity = server.strategyForegroundModel
 	store.RecoverSRETasks()
 	server.reconcileStaleSREStatuses()
 	if err = server.startScheduler(); err != nil {
@@ -193,10 +191,6 @@ func (b *Server) Start() error {
 	b.listener = l
 	b.workers.Add(1)
 	go b.runMemoryWorker()
-	b.workers.Add(1)
-	go b.runStrategyWorker()
-	b.workers.Add(1)
-	go b.runExperimentWorker()
 	b.workers.Add(1)
 	go func() {
 		defer b.workers.Done()

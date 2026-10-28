@@ -41,7 +41,7 @@ func createStrategyFixture(t *testing.T, s *Store, ctx StrategyContext, scope st
 }
 func enableStrategyFixture(t *testing.T, s *Store) {
 	t.Helper()
-	_, err := s.SetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "enable", 0, StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: true, CorrectEnabled: true, Budget: strategy.DefaultBudget()})
+	_, err := s.SetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "enable", 0, StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: false, CorrectEnabled: false, Budget: strategy.DefaultBudget()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestStrategySettingsDefaultInheritanceAndEpoch(t *testing.T) {
 	}
 	enableStrategyFixture(t, s)
 	effective, err := s.EffectiveStrategySettings(ctx)
-	if err != nil || !effective.Settings.LearnEnabled || effective.GlobalEpoch != 1 || effective.ProjectEpoch != 0 {
+	if err != nil || effective.Settings.LearnEnabled || !effective.Settings.ApplyEnabled || effective.GlobalEpoch != 1 || effective.ProjectEpoch != 0 {
 		t.Fatal(effective, err)
 	}
 	input := StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: false, Budget: strategy.DefaultBudget()}
