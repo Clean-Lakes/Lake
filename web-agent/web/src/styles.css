@@ -222,7 +222,16 @@ a { color: inherit; }
 .chip-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--surface-muted); }
 .chip-dot.available { background: var(--success); }
 .muted-small { color: var(--text-secondary); font-size: var(--font-size-ui); line-height: 1.6; }
-.conversation { container-type: inline-size; flex: 1 1 auto; min-height: 110px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-gutter: stable both-edges; border-top: 0; scrollbar-color: var(--border-strong) transparent; }
+.conversation { container-type: inline-size; flex: 1 1 auto; min-height: 110px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable both-edges; border-top: 0; }
+/* Chat, inspector and PTY history share a native thin thumb and transparent track. */
+.conversation, .session-inspector-scroll, .terminal-screen .xterm-viewport { scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
+.terminal-screen .xterm-viewport { overflow-y:auto; top:12px; bottom:12px; }
+@supports not (scrollbar-color:gray transparent) {
+ .conversation::-webkit-scrollbar, .session-inspector-scroll::-webkit-scrollbar, .terminal-screen .xterm-viewport::-webkit-scrollbar { width:6px; }
+ .conversation::-webkit-scrollbar-track, .session-inspector-scroll::-webkit-scrollbar-track, .terminal-screen .xterm-viewport::-webkit-scrollbar-track { background:transparent; }
+ .conversation::-webkit-scrollbar-thumb, .session-inspector-scroll::-webkit-scrollbar-thumb, .terminal-screen .xterm-viewport::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:6px; }
+ .conversation::-webkit-scrollbar-thumb:hover, .session-inspector-scroll::-webkit-scrollbar-thumb:hover, .terminal-screen .xterm-viewport::-webkit-scrollbar-thumb:hover { background:var(--text-muted); }
+}
 .startup-loading { color: var(--text-secondary); font-size: var(--font-size-ui); }
 .session-loading { width: min(790px, calc(100% - 52px)); margin: 0 auto; padding: 24px 0; color: var(--text-secondary); font-size: var(--font-size-ui); }
 .timeline-list { width: min(960px, calc(100% - var(--session-gutter, 24px) - var(--session-gutter, 24px))); margin-inline: auto; padding: 26px 0 32px; }
@@ -606,7 +615,7 @@ a { color: inherit; }
 .terminal-controls { display: flex; flex-wrap: wrap; gap: 6px; }
 /* The terminal shares the workspace on desktop and overlays it on narrow screens. */
 .terminal-side-slot { grid-column: 3; min-width: 0; min-height: 0; overflow: hidden; }
-.terminal-side-panel { width: var(--terminal-panel-width); height: 100%; border-left: 1px solid var(--border); transform: translateX(40px); opacity: 0; background: var(--surface); transition: transform .18s ease, opacity .18s ease; }
+.terminal-side-panel { width: var(--terminal-panel-width); height: 100%; border-left: 1px solid var(--border); transform: translateX(40px); opacity: 0; background: var(--background); transition: transform .18s ease, opacity .18s ease; }
 .terminal-side-panel.is-open { transform: translateX(0); opacity: 1; }
 .terminal-panel-scrim { display: none; }
 .terminal-panel-content { display: flex; flex-direction: column; height: 100%; min-height: 0; }

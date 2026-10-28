@@ -1,0 +1,74 @@
+{
+  "testedSourceCommit": "906b5aff57dbfc706e74b70eb06f0890a27b94f8",
+  "baseCommit": "510aad88",
+  "date": "2026-10-28",
+  "environment": {
+    "os": "macOS",
+    "node": "24.19.0",
+    "pnpm": "10.33.4",
+    "data": "fictional in-memory fixtures; signed backend smoke uses a temporary isolated home"
+  },
+  "checks": [
+    {
+      "command": "pnpm --dir web-agent test:frontend",
+      "result": "passed",
+      "tests": 518
+    },
+    {
+      "command": "pnpm --dir web-agent build:web",
+      "result": "passed",
+      "note": "includes TypeScript check; existing large-chunk warning remains"
+    },
+    {
+      "command": "LAKE_REUSE_WEB_ASSETS=1 scripts/build_lake.sh",
+      "result": "passed",
+      "signature": "Lake Local Development Code Signing; strict verification passed"
+    },
+    {
+      "command": "bin/lake web --home <temporary-isolated-home> --port 0",
+      "result": "passed",
+      "assertions": [
+        "authenticated bootstrap reports Go backend",
+        "modelConfigured is false",
+        "root serves compiled React assets",
+        "owned process stopped; temporary home removed"
+      ]
+    },
+    {
+      "command": "ego-browser: real App at /test/fixtures/pilot-island.html?pilot-island=parallel",
+      "result": "passed",
+      "assertions": [
+        "1512/1024/720/390px layouts: island and input left/right edges agree within 1px",
+        "long titles: panel controls stay inside the island",
+        "dark and light themes visually checked",
+        "narrow workspaces use inspector overlay",
+        "desktop inspector and terminal simultaneously expanded",
+        "terminal collapse restores focus to its header button",
+        "keyboard Enter opens inspector and Escape closes it",
+        "waiting-choice status retains the same header node and width",
+        "fixture writes remain empty",
+        "Windows header below controls at top=52px, aligned with composer",
+        "reduced-motion disables slot transition"
+      ],
+      "evidence": [
+        "geometry.json",
+        "expanded-light.png",
+        "expanded-dark.png"
+      ]
+    }
+  ],
+  "lakeDev": {
+    "result": "blocked before installation",
+    "check": "python3 scripts/dev_build_origin.py check <worktree> <installed-Dev>/Contents/Resources/build-origin.json",
+    "installedCommit": "9987840654627485d1fe4a54bb682afac918a4e7",
+    "reason": "installed Lake Dev includes commits outside current origin/develop; source-origin guard rejects overwriting it",
+    "action": "preserved existing Dev application and home; no bypass, installation or native Dev validation"
+  },
+  "notVerified": [
+    "native Lake Dev WKWebView visual validation",
+    "native Windows desktop validation",
+    "real terminal connections and model execution (display change only)"
+  ],
+  "dataOrPermissionChanges": "none",
+  "rollback": "revert the implementation commit through a PR targeting develop"
+}

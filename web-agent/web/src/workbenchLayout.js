@@ -8,7 +8,7 @@
   try {
     const saved = window.lakeWorkbenchWidths || JSON.parse(localStorage.getItem(key) || '{}');
     for (const pane of ['sidebar', 'terminal', 'inspector']) {
-      const [min, max] = pane === 'sidebar' ? [200, 420] : [280, 900];
+      const [min, max] = pane === 'sidebar' ? [200, 420] : [240, 900];
       if (Number.isFinite(saved[pane]) && saved[pane] >= min && saved[pane] <= max) preferred[pane] = saved[pane];
     }
   } catch { /* Storage can be unavailable in private browsing. */ }
@@ -41,15 +41,22 @@
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
   function limits(pane) {
     const width = shell?.clientWidth || innerWidth;
-    const sidebar = clamp(preferred.sidebar, 200, Math.min(420, width - 320));
-    const terminal = clamp(preferred.terminal, 280, Math.max(280, width - sidebar - 320));
-    if (pane === 'inspector') {
-      const workspace = shell.querySelector('.workspace');
-      const available = workspace?.clientWidth || 0;
-      return [280, Math.max(280, Math.min(900, available - (innerWidth <= 700 ? 0 : 320)))];
-    }
-    if (pane === 'sidebar') return [200, Math.max(200, Math.min(420, width - 320 - (width > 1100 && shell.classList.contains('terminal-is-open') ? terminal : 0)))];
-    return [280, Math.max(280, Math.min(900, width <= 1100 ? width - 40 : width - sidebar - 320))];
+    const desktop = innerWidth > 1100;
+    const inspectorOpen = desktop && !!shell.querySelector('.session-inspector.is-open');
+    const terminalOpen = desktop && shell.classList.contains('terminal-is-open');
+    // All open panes share one budget. Reserving the conversation independently
+    // for each side pane can otherwise spend that same space twice after zooming.
+    const conversationMin = desktop ? 416 : 320;
+    const auxiliaryMin = inspectorOpen && terminalOpen ? 240 : 280;
+    const sidebarMax = Math.max(200, Math.min(420, width - conversationMin - (terminalOpen ? auxiliaryMin : 0) - (inspectorOpen ? auxiliaryMin : 0)));
+    const sidebar = clamp(preferred.sidebar, 200, sidebarMax);
+    const terminalMax = Math.max(auxiliaryMin, Math.min(900, width - sidebar - conversationMin - (inspectorOpen ? auxiliaryMin : 0)));
+    const terminal = terminalOpen ? clamp(preferred.terminal, auxiliaryMin, terminalMax) : 0;
+    if (pane === 'sidebar') return [200, sidebarMax];
+    if (pane === 'terminal') return desktop ? [auxiliaryMin, terminalMax] : [280, Math.max(280, Math.min(900, width - 40))];
+    if (desktop) return [auxiliaryMin, Math.max(auxiliaryMin, Math.min(900, width - sidebar - terminal - conversationMin))];
+    const workspace = shell.querySelector('.workspace');
+    return [280, Math.max(280, Math.min(900, (workspace?.clientWidth || 0) - (innerWidth <= 700 ? 0 : 320)))];
   }
   function save() {
     try { localStorage.setItem(key, JSON.stringify(preferred)); } catch {}
@@ -111,7 +118,7 @@
     const bridge = window.webkit?.messageHandlers?.lakeChrome;
     if (!bridge || !shell) return;
     const rect = element => { const r = element.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; };
-    const headers = [...shell.querySelectorAll('.workspace-header, .terminal-panel-header, .island-inspector-heading')].filter(element => element.getBoundingClientRect().width > 0);
+    const headers = [...shell.querySelectorAll('.workspace-header, .terminal-panel-header, .island-inspector-heading')].filter(element => element.getBoundingClientRect().width > 0 && !element.closest('[aria-hidden="true"]') && getComputedStyle(element).visibility !== 'hidden');
     const sidebar = shell.querySelector('.sidebar');
     const height = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--lake-titlebar-height')) || 52;
     const regions = headers.map(rect);
@@ -164,6 +171,8 @@
   new MutationObserver(schedule).observe(document.body, { childList:true, subtree:true, attributes:true, attributeFilter:['class'] });
   new MutationObserver(schedule).observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
   window.addEventListener('resize', schedule);
+  // React pane toggles must settle widths in the same commit, before paint.
+  window.addEventListener('lake-workbench-layout', sync);
   document.addEventListener('scroll', schedule, true);
   window.addEventListener('lake-chrome-resize', schedule);
   document.addEventListener('transitionend', event => { if (event.target.matches('.app-shell, .terminal-side-panel')) schedule(); });

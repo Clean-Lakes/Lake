@@ -14,7 +14,7 @@
   --font-prose: var(--font-ui);
   --status-text-base: var(--text-secondary);
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --background: #fcfcfc;
+  --background: var(--sidebar);
   --surface: #ffffff;
   --surface-subtle: #fafafa;
   --surface-muted: #f5f5f5;
@@ -74,7 +74,7 @@
   --chart-4: #8064be;
   --reasoning-accent: #3683fa;
   --reasoning-track: #e9e8e8;
-  --terminal-background: #fafafa;
+  --terminal-background: var(--sidebar);
   --terminal-foreground: #303030;
   --terminal-selection: #dbe5f2;
   --terminal-black: #303030;
@@ -100,7 +100,7 @@
   --reasoning-accent: #4b91ff;
   --reasoning-track: #424246;
   color-scheme: dark;
-  --background: #171717;
+  --background: var(--sidebar);
   --surface: #1b1b1b;
   --surface-subtle: #202020;
   --surface-muted: #242424;
@@ -143,7 +143,7 @@
   --chart-2: #5cc9b7;
   --chart-3: #e1b063;
   --chart-4: #b49ae9;
-  --terminal-background: #1b1b1b;
+  --terminal-background: var(--sidebar);
   --terminal-foreground: #eeeeee;
   --terminal-selection: #33465f;
   --terminal-black: #aaaaaa;
@@ -157,8 +157,8 @@
 }
 
 /* Theme previews are local miniature surfaces, not a second application theme. */
-.theme-preview[data-preview="light"] { --background: #fcfcfc; --sidebar: #fafaf9; --surface: #ffffff; --surface-muted: #f5f5f5; --surface-subtle: #fafafa; --border: #e5e5e5; }
-.theme-preview[data-preview="dark"] { --background: #171717; --sidebar: #141414; --surface: #171717; --surface-muted: #242424; --surface-subtle: #202020; --border: #333333; }
+.theme-preview[data-preview="light"] { --background: var(--sidebar); --sidebar: #fafaf9; --surface: #ffffff; --surface-muted: #f5f5f5; --surface-subtle: #fafafa; --border: #e5e5e5; }
+.theme-preview[data-preview="dark"] { --background: var(--sidebar); --sidebar: #141414; --surface: #171717; --surface-muted: #242424; --surface-subtle: #202020; --border: #333333; }
 
 /* Shared translucent material for floating workspace and queued-message bubbles. */
 :root {

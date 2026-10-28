@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-28",
+  "latestDesign": "One independent floating island per conversation, inspector and terminal pane; replaces earlier shared/status-only island evidence.",
+  "testedSource": "5544d459c429aea5f56e107549b6ca23f39d9c79",
+  "browserInteractionSource": "14f6d42b7b009a768e3f964a11e3f2b9f58e2050",
+  "finalFollowup": "Measure full terminal names before compacting; final source rebuilt, all tests rerun, native full Local machine label verified.",
+  "checks": {
+    "frontend": "524 passed; 0 failures or skipped",
+    "types": "pnpm --dir web-agent check passed",
+    "build": "scripts/build_lake_desktop.sh --dev --install passed; persistent development signing; clean manifest matches testedSource",
+    "health": "Authenticated Dev bootstrap HTTP 200; ~/.lake-dev isolated from production"
+  },
+  "browser": {
+    "surface": "Real App fixture with fictional data; taskspace 85 finished",
+    "themes": [
+      "light",
+      "dark",
+      "standard rounded fallback"
+    ],
+    "geometry1232": {
+      "conversation": [
+        328,
+        286,
+        46
+      ],
+      "inspector": [
+        712,
+        144,
+        46
+      ],
+      "terminal": [
+        952,
+        241,
+        46
+      ]
+    },
+    "geometry1130": {
+      "conversation": [
+        282,
+        286,
+        46
+      ],
+      "inspector": [
+        666,
+        144,
+        46
+      ],
+      "terminal": [
+        906,
+        208,
+        46
+      ]
+    },
+    "motion": {
+      "open": "380ms; from conversation bounds at opacity .15 to own pane at opacity 1",
+      "close": "280ms; returns to conversation and fades out; immediately inert and aria-hidden",
+      "rapidReverse": "Reopens from current painted position; no leftover animation",
+      "snapshotUpdates": "88 fixture pulses did not replay auxiliary motion",
+      "reducedMotion": "Zero animations on open and close",
+      "dividerDrag": "Direct layout without flight animation",
+      "menu": "260px readable popup right-aligned with narrow terminal island"
+    },
+    "screenshots": [
+      "light.png",
+      "dark.png"
+    ],
+    "screenshotNote": "Fictional browser fixture screenshots captured before final text-metrics-only followup; final native label was separately verified."
+  },
+  "native": {
+    "platform": "macOS WKWebView, light theme",
+    "app": "~/Applications/Lake Dev.app",
+    "source": "5544d459c429aea5f56e107549b6ca23f39d9c79",
+    "verified": [
+      "Three independent islands over corresponding panes",
+      "Conversation title and status visible together",
+      "Full Local machine name visible with connected status",
+      "Terminal prompt starts below island",
+      "Rounded glass and footer divider clipping visible"
+    ],
+    "actions": "Opened execution details and an existing LOCAL terminal only; no shell input or model request; native user screenshot not saved in repository"
+  },
+  "unverified": [
+    "Windows native rendering",
+    "Native dark theme"
+  ],
+  "workflow": {
+    "branch": "codex/island-title-visible",
+    "pr": 109,
+    "base": "develop",
+    "merged": false,
+    "productionTouched": false,
+    "baseline": "Existing installed Dev baseline 99878406 and #104 dependencies retained in draft PR; latest origin/develop a566ad14 merged into topic."
+  }
+}
