@@ -14,7 +14,7 @@ export function inspectorProgress(task:SRETask,runs:AgentRun[]=[]){
  return {steps,completed:steps.filter(step=>step.status==='succeeded').length};
 }
 
-export function InspectorTaskSummary({task,title,runs}:{task:SRETask;title:string;runs?:AgentRun[]}){
+export function InspectorTaskSummary({task,title,runs,compact=false}:{task:SRETask;title:string;runs?:AgentRun[];compact?:boolean}){
  const {steps,completed}=inspectorProgress(task,runs),total=steps.length,done=total>0&&completed===total;
  const uncertain=steps.some(step=>step.status==='unknown');
  const result=uncertain?{tone:'attention',label:'执行结果待核实',detail:'保留原始记录，核实后再确认结果。'}
@@ -22,6 +22,7 @@ export function InspectorTaskSummary({task,title,runs}:{task:SRETask;title:strin
   :task.status==='completed'&&task.recoveryStatus==='verified'?{tone:'success',label:'恢复已验证',detail:'独立验证已确认恢复结果。'}
   :task.status==='failed'?{tone:'danger',label:'检查未完成',detail:'已取得的证据和操作记录保留。'}:undefined;
  const phaseTone=['waiting_input','waiting_approval'].includes(task.status)?'attention':task.status==='active'?'active':task.status==='failed'?'danger':'neutral';
+ if(compact)return result?<div className="inspector-execution-outcome inspector-summary-result" data-tone={result.tone}><Glyph name={result.tone==='success'?'check':'alert'} size={14}/><div><strong>{result.label}</strong><p>{result.detail}</p></div></div>:null;
  return <section className="inspector-task-summary" aria-label="任务进度概览">
   <div className="inspector-summary-title"><strong title={task.plans?.at(-1)?.goal}>{title}</strong><span data-tone={phaseTone}>{sreStatus[task.status]??task.status}</span></div>
   {total>0?<><div className="inspector-progress-caption"><span>{done?'步骤全部完成':'步骤进度'}</span><span className="inspector-progress-count" data-complete={done} data-has-completed={completed>0}>{done&&<Glyph name="check" size={13}/>}<b>{completed}</b><span>/ {total} 步</span></span></div>

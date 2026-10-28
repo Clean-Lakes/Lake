@@ -14,6 +14,19 @@
 .workspace-utility-action small { margin-left: auto; color: var(--text-muted); font-size: var(--font-size-ui); }
 .workspace-utility-action:hover:not(:disabled) { background: var(--surface-hover); color: var(--foreground); }
 .workspace-utility-action:disabled { opacity: .45; }
+.workspace-project-section { margin-bottom:5px; }
+.workspace-project-row { display:flex; align-items:flex-start; gap:2px; }
+.workspace-project-switcher { flex:1; min-width:0; }
+.workspace-project-switcher .project-switcher { width:100%; min-height:32px; padding:6px 8px; border-radius:var(--radius-settings-control); }
+.workspace-project-switcher .project-switcher > svg { transition:transform 160ms ease; }
+.workspace-project-switcher .project-switcher[aria-expanded="true"] > svg { transform:rotate(180deg); }
+.workspace-project-row > .workspace-project-more { flex:none; width:28px; height:32px; padding:6px; color:var(--text-muted); border-radius:var(--radius-settings-control); }
+.workspace-project-options { padding:3px 0; max-height:min(240px,30dvh); overflow-y:auto; overscroll-behavior:contain; }
+.workspace-project-options > button { display:flex; align-items:center; gap:8px; width:100%; min-height:32px; padding:6px 8px; border:0; border-radius:var(--radius-settings-control); background:transparent; color:var(--text-muted); text-align:left; }
+.workspace-project-options > button > span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.workspace-project-options > button > svg { flex:none; }
+.workspace-project-options > button:is(:hover,:focus-visible),.workspace-project-options > button[aria-checked="true"] { color:var(--foreground); background:var(--surface-hover); }
+@media(prefers-reduced-motion:reduce) { .workspace-project-switcher .project-switcher > svg { transition:none; } }
 .workspace-utilities-separator { height: 1px; margin: 5px 2px; background: var(--border); }
 .workspace-utilities-popover .sidebar-tags { border: 0; padding: 0; }
 .workspace-utilities-popover .sidebar-tags-toggle { color: var(--text-secondary); padding: 6px 8px; gap: 9px; }

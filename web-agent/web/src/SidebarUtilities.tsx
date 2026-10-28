@@ -1,13 +1,15 @@
-import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
+import {useEffect,useId,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
-import type {WorkSession,WorkspaceTag} from '../../shared/contracts';
+import type {Project,WorkSession,WorkspaceTag} from '../../shared/contracts';
+import {ProjectSwitcher} from './ProjectSwitcher';
 import {Glyph} from './Icons';
 import {TagNavigation} from './SessionPresentation';
 import {DesktopUpdate} from './DesktopUpdate';
 import './sidebarUtilities.css';
 
 /** One stable footer entry; existing workspace actions keep their original flows. */
-export function SidebarUtilities({tags,sessions,selectedTag,onSelectTag,onManageTags,onSession,onSettings,onTrash,onSchedules,booting,connected,modelConfigured}:{
+export function SidebarUtilities({projects,projectId,projectSelection,onSelectProject,onManageProject,tags,sessions,selectedTag,onSelectTag,onManageTags,onSession,onSettings,onTrash,onSchedules,booting,connected,modelConfigured}:{
+ projects:Project[];projectId?:string;projectSelection?:ReactNode;onSelectProject:(id:string)=>void;onManageProject:(button:HTMLButtonElement)=>void;
  tags:WorkspaceTag[];sessions:WorkSession[];selectedTag:string|null;onSelectTag:(tag:string|null)=>void;
  onManageTags:()=>void;onSession:(id:string)=>void;onSettings:()=>void;onTrash:()=>void;onSchedules?:()=>void;
  booting:boolean;connected:boolean;modelConfigured:boolean;
@@ -21,6 +23,7 @@ export function SidebarUtilities({tags,sessions,selectedTag,onSelectTag,onManage
  const selected=tags.find(tag=>tag.id===selectedTag);
  function close(restoreFocus=false){setOpen(false);if(restoreFocus)trigger.current?.focus();}
  function act(action:()=>void){close(true);action();}
+ useEffect(()=>{setOpen(false);},[projectId]);
  useLayoutEffect(()=>{
   if(!open)return;
   const place=()=>{
@@ -52,6 +55,7 @@ export function SidebarUtilities({tags,sessions,selectedTag,onSelectTag,onManage
    const index=buttons.indexOf(document.activeElement as HTMLButtonElement);
    event.preventDefault();buttons[event.key==='Home'?0:event.key==='End'?buttons.length-1:(index+(event.key==='ArrowUp'?-1:1)+buttons.length)%buttons.length]?.focus();
   }}>
+   {projectId&&<div className="workspace-project-section"><div className="workspace-project-row">{projectSelection}<ProjectSwitcher embedded projects={projects} value={projectId} onChange={id=>act(()=>onSelectProject(id))}/><button type="button" className="icon-button workspace-project-more" aria-label={`管理项目 ${projects.find(project=>project.id===projectId)?.name??''}`} aria-haspopup="menu" title="项目操作" disabled={!connected} onClick={event=>{const button=event.currentTarget;act(()=>onManageProject(button));}}><Glyph name="more" size={16}/></button></div></div>}
    <TagNavigation tags={tags} sessions={sessions} selected={selectedTag} onSelect={onSelectTag} onManage={()=>act(onManageTags)} onSession={id=>act(()=>onSession(id))}/>
    <div className="workspace-utilities-separator"/>
    {onSchedules&&<button type="button" className="workspace-utility-action" disabled={!connected} onClick={()=>act(onSchedules)}><Glyph name="clock" size={15}/><span>定时任务</span></button>}

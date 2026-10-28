@@ -1,0 +1,146 @@
+/* A shared Lake surface. Whitespace, glyphs and tab weight define its regions. */
+.lake-workbench-island { position:absolute; z-index:25; top:12px; height:46px; min-width:0; display:grid; align-items:center; border:1px solid var(--border); border-radius:var(--radius-window); corner-shape:var(--corner-window); box-shadow:0 3px 12px rgb(0 0 0 / 5%); background:transparent; isolation:isolate; visibility:hidden; }
+.lake-workbench-island[data-ready=true] { visibility:visible; }
+.lake-workbench-island > .workspace-header-glass { z-index:-1; }
+.lake-workbench-island > :not(.workspace-header-glass,.workspace-header-sweep) { position:relative; z-index:2; min-width:0; }
+.lake-workbench-island [hidden] { display:none!important; }
+.island-conversation { grid-column:1; container-type:inline-size; }
+.island-inspector { grid-column:2; }
+.island-terminal { grid-column:3; }
+/* The outer frame is 22px. A uniform 4px inset gives the inner plate an
+   18px curve; both use windowCorners.css, including its WKWebView contour. */
+.island-module-glass {
+ --window-corner-radius:calc(var(--radius-window) - 4px);
+ --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
+ --window-corner-stroke-slice:18;
+ position:absolute; inset:3px; z-index:-1; pointer-events:none;
+ border:1px solid color-mix(in srgb,var(--foreground) 5%,transparent);
+ background:var(--title-glass-sheen),color-mix(in srgb,var(--surface) 42%,transparent);
+ box-shadow:inset 0 1px 0 color-mix(in srgb,var(--foreground) 3%,transparent);
+ opacity:0; transition:opacity 160ms ease;
+}
+.lake-workbench-island[data-linked=true] .island-module-glass { opacity:.86; }
+.lake-workbench-island[data-linked=true] > :is(.island-conversation,.island-terminal):is(:hover,:focus-within) > .island-module-glass { opacity:1; }
+@media(prefers-reduced-motion:reduce) { .island-module-glass { transition:none; } }
+@media(prefers-reduced-transparency:reduce) { .island-module-glass { background:var(--surface); } }
+.lake-workbench-island .workspace-header { justify-content:flex-start; position:relative; display:flex; align-items:center; gap:10px; min-width:0; min-height:44px; height:44px; width:100%; padding:5px 14px; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.lake-workbench-island .workspace-header > .workspace-header-glass { display:none; }
+.lake-workbench-island .workspace-header > :not(.workspace-header-sweep) { position:relative; z-index:2; }
+.lake-workbench-island .breadcrumbs { flex:0 1 auto; min-width:60px; max-width:213px; gap:8px; }
+.lake-workbench-island .breadcrumbs strong { min-width:0; }
+.lake-workbench-island .pilot-island-trigger { border:0; padding-left:8px; gap:8px; }
+.lake-workbench-island .header-state-area { flex:0 1 auto; }
+.lake-workbench-island .header-pilot-state { flex-shrink:1; }
+.lake-workbench-island .pilot-island-action { width:150px; }
+.island-inspector-heading { display:flex; align-items:center; gap:12px; height:44px; width:max-content; padding:0 12px; min-width:0; }
+.island-inspector-heading > strong { display:flex; align-items:center; gap:9px; flex:0 0 auto; min-width:0; font-size:var(--font-size-ui); font-weight:var(--font-weight-medium); white-space:nowrap; }
+.island-inspector-heading > svg { flex:none; color:var(--foreground); }
+.lake-workbench-island .session-inspector-tabs { border:0; padding:0; gap:18px; }
+.lake-workbench-island .session-inspector-tabs button { min-height:34px; padding:8px 0; white-space:nowrap; }
+.lake-workbench-island .session-inspector-tabs button[aria-selected=true]::after { bottom:1px; height:2px; background:var(--info); }
+.island-terminal .terminal-panel-header { width:100%; max-width:100%; min-width:0; min-height:44px; height:44px; border:0; background:transparent; padding:0 14px 0 18px; gap:12px; }
+.island-terminal .terminal-panel-header > strong { flex:0 1 auto; max-width:170px; display:flex; align-items:center; gap:9px; font-weight:var(--font-weight-medium); }
+.island-terminal .terminal-panel-header > strong > svg { flex:none; }
+.terminal-island-switcher .terminal-island-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.island-terminal .terminal-tab-dot { width:5px; height:5px; flex:none; }
+.app-shell.has-workbench-island .session-inspector { padding-top:var(--inspector-island-inset,72px); }
+.app-shell.has-workbench-island .workspace.has-floating-header > .system-banner { margin-top:80px; }
+html.lake-windows-chrome .lake-workbench-island { top:52px; }
+html.lake-windows-chrome .app-shell.has-workbench-island .session-inspector { padding-top:calc(48px + var(--inspector-island-inset,72px)); }
+html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { padding-top:120px; }
+
+@container(max-width:480px) { .lake-workbench-island .pilot-island-action-line > strong { display:inline; } }
+
+.lake-workbench-island > :is(.island-inspector,.island-terminal):not([hidden]) { animation:island-controls-arrive 180ms ease-out both; }
+@keyframes island-controls-arrive { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:translateY(0); } }
+@media(prefers-reduced-motion:reduce) { .lake-workbench-island > :is(.island-inspector,.island-terminal) { animation:none!important; } }
+
+.lake-workbench-island[data-ready=true] { transition:left 280ms cubic-bezier(.22,1,.36,1),width 280ms cubic-bezier(.22,1,.36,1),grid-template-columns 280ms cubic-bezier(.22,1,.36,1); }
+.workbench-resizing .lake-workbench-island { transition:none!important; }
+@media(prefers-reduced-motion:reduce) { .lake-workbench-island { transition:none!important; } }
+
+.lake-workbench-island .session-inspector-tabs button:disabled { color:var(--text-muted); opacity:.45; }
+
+.lake-workbench-island .pilot-action-avatar { display:flex; }
+.lake-workbench-island .pilot-island-action-line > strong { display:inline; }
+
+.terminal-island-switcher { display:flex; flex:0 1 auto; align-items:center; gap:8px; max-width:240px; min-width:0; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); padding:5px 0; background:transparent; color:var(--foreground); font:inherit; font-weight:var(--font-weight-medium); }
+.terminal-island-switcher > svg,.terminal-island-count { flex:none; }
+.terminal-island-switcher > svg:last-child { transition:transform 180ms ease; }
+.terminal-island-switcher > .is-open { transform:rotate(180deg); }
+.island-terminal .terminal-island-switcher { flex:1; width:100%; max-width:none; }
+.island-terminal .terminal-island-switcher > svg:last-child { margin-left:auto; transform:none; transition:none; }
+.terminal-island-count { font-variant-numeric:tabular-nums; color:var(--text-muted); font-weight:var(--font-weight-normal); }
+/* Anchor to the visible inner glass plate, including on tight workbenches. */
+.island-terminal .terminal-list-menu { top:calc(100% + 5px); left:3px; right:3px; width:auto; max-width:none; max-height:min(480px,calc(100dvh - 80px)); background:var(--surface); }
+.terminal-list-menu { font-size:var(--font-size-ui); line-height:20px; }
+.terminal-list-menu button { min-height:36px; padding:8px; gap:8px; font:inherit; }
+.terminal-list-menu button > svg { flex:none; color:var(--text-muted); }
+.terminal-list-menu button:not(.terminal-picker-item,.app-select-trigger) > span { white-space:normal; overflow:visible; overflow-wrap:anywhere; }
+.terminal-list-menu button.terminal-picker-item { align-items:flex-start; }
+.terminal-picker-item > svg { margin-top:3px; }
+.terminal-list-menu button .terminal-picker-copy { display:flex; flex:1; min-width:0; flex-direction:column; gap:2px; }
+.terminal-list-menu button .terminal-picker-name { display:block; flex:none; color:var(--foreground); }
+.terminal-list-menu button .terminal-picker-meta { display:flex; flex:none; align-items:center; gap:8px; font-size:12px; line-height:18px; color:var(--text-muted); }
+.terminal-list-menu button .terminal-picker-meta > span { flex:1; }
+.terminal-list-menu .terminal-picker-meta small { flex:none; font-size:inherit; line-height:inherit; }
+.terminal-list-settings { border-top:1px solid var(--border); margin-top:4px; padding-top:4px; }
+.terminal-list-settings label { display:flex; flex-direction:column; align-items:stretch; gap:6px; padding:8px; font-size:12px; line-height:18px; color:var(--text-muted); }
+.terminal-list-settings label .app-select { width:100%; min-width:0; margin-top:0; font-size:var(--font-size-ui); line-height:20px; color:var(--foreground); }
+.terminal-list-menu button[aria-current=true] { color:var(--foreground); background:var(--surface-hover); }
+.terminal-action-menu,.terminal-list-menu { animation:terminal-menu-arrive 140ms ease-out; }
+@keyframes terminal-menu-arrive { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+@media(prefers-reduced-motion:reduce) { .terminal-action-menu,.terminal-list-menu { animation:none; } .terminal-island-switcher > svg { transition:none; } }
+
+.terminal-island-number { flex:none; font-weight:var(--font-weight-normal); }
+
+/* One terminal viewport; the shared island owns host and terminal selection. */
+.terminal-panel-content > .terminal-panel-header .terminal-island-switcher { max-width:calc(100% - 118px); }
+
+/* Inset pane dividers stay visible; the wider transparent rail owns resizing. */
+.app-shell.has-workbench-island :is(.session-inspector,.terminal-side-panel) { border-left:0; }
+.app-shell.has-workbench-island { --pane-rail-top:76px; --pane-rail-bottom:12px; }
+.app-shell.has-workbench-island > .workbench-splitter-sidebar,
+.app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal) { top:var(--pane-rail-top); bottom:var(--pane-rail-bottom); }
+.app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal) { left:-6px; width:12px; }
+.app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal)::after {
+ content:''; position:absolute; top:10%; bottom:10%; left:5px; width:1px; height:auto;
+ border-radius:1px; background:var(--border); opacity:1; transition:background-color 160ms ease;
+}
+.app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal):is(:hover,:focus-visible,.is-dragging)::after { background:var(--text-muted); }
+.app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal):is(:focus-visible,.is-dragging)::after { background:var(--info); opacity:1; }
+html.lake-windows-chrome .app-shell.has-workbench-island { --pane-rail-top:124px; }
+@media(prefers-reduced-motion:reduce) { .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal)::after { transition:none; } }
+
+/* Keep all three control groups inside the two-pane island on tight workbenches. */
+.island-inspector,.island-terminal { container-type:inline-size; }
+@container(max-width:180px) {
+ .island-inspector-heading { gap:4px; padding:0 8px; }
+ .island-inspector-heading > svg { display:none; }
+ .lake-workbench-island .session-inspector-tabs { gap:10px; }
+ .island-terminal .terminal-panel-header { width:100%; padding:0 8px; gap:6px; }
+ .island-terminal .terminal-island-switcher { flex:1; gap:4px; }
+ .island-terminal .terminal-picker-meta { flex-wrap:wrap; gap:0 8px; }
+ .island-terminal .terminal-picker-meta > span { flex:none; }
+ .island-terminal :is(.terminal-island-number,.terminal-island-count) { display:none; }
+}
+
+/* The shell prompt shares the island label's first-line center (12 + 46 / 2). */
+.app-shell.has-workbench-island .terminal-session .terminal-screen .xterm { padding:27px 16px 12px; }
+html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .terminal-screen .xterm { padding-top:67px; }
+.lake-workbench-island .header-state-area { margin-left:0; }
+.lake-workbench-island .header-normal-state .header-morph-content { display:flex; align-items:center; gap:4px; }
+.lake-workbench-island .session-state-badge { white-space:nowrap; }
+
+/* On tight conversation rails, the status and pane actions take precedence over
+   the duplicate title, which remains available in the conversation navigation. */
+@container(max-width:260px) {
+ .lake-workbench-island .workspace-header { padding-inline:8px; gap:4px; }
+ .lake-workbench-island .breadcrumbs { display:none; }
+ .lake-workbench-island .header-state-area { width:100%; }
+ .lake-workbench-island .header-normal-state.is-visible { flex:1; width:100%!important; }
+ .lake-workbench-island .header-normal-state .header-morph-content { width:100%; min-width:0; }
+ .lake-workbench-island .header-normal-state .session-state-badge { flex:1; min-width:0; display:block; overflow:hidden; text-overflow:ellipsis; }
+ .lake-workbench-island .session-state-badge > span { display:inline-block; margin-right:6px; vertical-align:middle; }
+ .lake-workbench-island .header-inspector-toggle { flex:none; }
+}
