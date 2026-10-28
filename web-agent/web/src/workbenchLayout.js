@@ -118,7 +118,7 @@
     const bridge = window.webkit?.messageHandlers?.lakeChrome;
     if (!bridge || !shell) return;
     const rect = element => { const r = element.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; };
-    const headers = [...shell.querySelectorAll('.workspace-header, .terminal-panel-header, .island-inspector-heading')].filter(element => element.getBoundingClientRect().width > 0);
+    const headers = [...shell.querySelectorAll('.workspace-header, .terminal-panel-header, .island-inspector-heading')].filter(element => element.getBoundingClientRect().width > 0 && !element.closest('[aria-hidden="true"]') && getComputedStyle(element).visibility !== 'hidden');
     const sidebar = shell.querySelector('.sidebar');
     const height = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--lake-titlebar-height')) || 52;
     const regions = headers.map(rect);

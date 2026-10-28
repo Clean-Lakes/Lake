@@ -21,9 +21,9 @@ export function SessionInspector({snapshot,connected,onUpdated,headerHost}:{snap
  const [present,setPresent]=useState(!!selection),panel=useRef<HTMLElement>(null);
  useEffect(()=>{
   if(selection){setPresent(true);return;}
-  const timer=setTimeout(()=>setPresent(false),window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:180);
+  const timer=setTimeout(()=>setPresent(false),window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:headerHost?320:180);
   return()=>clearTimeout(timer);
- },[!!selection]);
+ },[!!selection,headerHost]);
  const target=selection??retained.current;
  const task=target?inspectedTask(snapshot,target):undefined;
  const plan=task?.plans?.at(-1);

@@ -1,28 +1,13 @@
-/* A shared Lake surface. Whitespace, glyphs and tab weight define its regions. */
-.lake-workbench-island { position:absolute; z-index:25; top:12px; height:46px; min-width:0; display:grid; align-items:center; border:1px solid var(--border); border-radius:var(--radius-window); corner-shape:var(--corner-window); box-shadow:0 3px 12px rgb(0 0 0 / 5%); background:transparent; isolation:isolate; visibility:hidden; }
-.lake-workbench-island[data-ready=true] { visibility:visible; }
+/* Each pane owns one floating surface; the shell only carries their shared overlay. */
+.lake-workbench-islands { position:absolute; inset:0 0 auto; height:0; z-index:25; pointer-events:none; }
+.lake-workbench-island { position:absolute; top:12px; height:46px; min-width:0; display:flex; align-items:center; border:1px solid var(--border); border-radius:var(--radius-window); corner-shape:var(--corner-window); box-shadow:0 3px 12px rgb(0 0 0 / 5%); background:transparent; isolation:isolate; visibility:hidden; pointer-events:auto; container-type:inline-size; transition:none!important; }
+.lake-workbench-island[data-ready=true][data-present=true] { visibility:visible; }
+.lake-workbench-island[data-open=false] { pointer-events:none; }
+.lake-workbench-island[data-moving=true] { z-index:3; }
 .lake-workbench-island > .workspace-header-glass { z-index:-1; }
 .lake-workbench-island > :not(.workspace-header-glass,.workspace-header-sweep) { position:relative; z-index:2; min-width:0; }
 .lake-workbench-island [hidden] { display:none!important; }
-.island-conversation { grid-column:1; container-type:inline-size; }
-.island-inspector { grid-column:2; }
-.island-terminal { grid-column:3; }
-/* The outer frame is 22px. A uniform 4px inset gives the inner plate an
-   18px curve; both use windowCorners.css, including its WKWebView contour. */
-.island-module-glass {
- --window-corner-radius:calc(var(--radius-window) - 4px);
- --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
- --window-corner-stroke-slice:18;
- position:absolute; inset:3px; z-index:-1; pointer-events:none;
- border:1px solid color-mix(in srgb,var(--foreground) 5%,transparent);
- background:var(--title-glass-sheen),color-mix(in srgb,var(--surface) 42%,transparent);
- box-shadow:inset 0 1px 0 color-mix(in srgb,var(--foreground) 3%,transparent);
- opacity:0; transition:opacity 160ms ease;
-}
-.lake-workbench-island[data-linked=true] .island-module-glass { opacity:.86; }
-.lake-workbench-island[data-linked=true] > :is(.island-conversation,.island-terminal):is(:hover,:focus-within) > .island-module-glass { opacity:1; }
-@media(prefers-reduced-motion:reduce) { .island-module-glass { transition:none; } }
-@media(prefers-reduced-transparency:reduce) { .island-module-glass { background:var(--surface); } }
+.island-inspector-content { width:100%; }
 .lake-workbench-island .workspace-header { justify-content:flex-start; position:relative; display:flex; align-items:center; gap:10px; min-width:0; min-height:44px; height:44px; width:100%; padding:5px 14px; border:0; border-radius:0; background:transparent; box-shadow:none; }
 .lake-workbench-island .workspace-header > .workspace-header-glass { display:none; }
 .lake-workbench-island .workspace-header > :not(.workspace-header-sweep) { position:relative; z-index:2; }
@@ -44,21 +29,13 @@
 .island-terminal .terminal-panel-header > strong > svg { flex:none; }
 .terminal-island-switcher .terminal-island-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .island-terminal .terminal-tab-dot { width:5px; height:5px; flex:none; }
-.app-shell.has-workbench-island .session-inspector { padding-top:var(--inspector-island-inset,72px); }
+.app-shell.has-workbench-island .session-inspector { padding-top:72px; }
 .app-shell.has-workbench-island .workspace.has-floating-header > .system-banner { margin-top:80px; }
 html.lake-windows-chrome .lake-workbench-island { top:52px; }
-html.lake-windows-chrome .app-shell.has-workbench-island .session-inspector { padding-top:calc(48px + var(--inspector-island-inset,72px)); }
+html.lake-windows-chrome .app-shell.has-workbench-island .session-inspector { padding-top:112px; }
 html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { padding-top:120px; }
 
 @container(max-width:480px) { .lake-workbench-island .pilot-island-action-line > strong { display:inline; } }
-
-.lake-workbench-island > :is(.island-inspector,.island-terminal):not([hidden]) { animation:island-controls-arrive 180ms ease-out both; }
-@keyframes island-controls-arrive { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:translateY(0); } }
-@media(prefers-reduced-motion:reduce) { .lake-workbench-island > :is(.island-inspector,.island-terminal) { animation:none!important; } }
-
-.lake-workbench-island[data-ready=true] { transition:left 280ms cubic-bezier(.22,1,.36,1),width 280ms cubic-bezier(.22,1,.36,1),grid-template-columns 280ms cubic-bezier(.22,1,.36,1); }
-.workbench-resizing .lake-workbench-island { transition:none!important; }
-@media(prefers-reduced-motion:reduce) { .lake-workbench-island { transition:none!important; } }
 
 .lake-workbench-island .session-inspector-tabs button:disabled { color:var(--text-muted); opacity:.45; }
 
@@ -72,8 +49,8 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 .island-terminal .terminal-island-switcher { flex:1; width:100%; max-width:none; }
 .island-terminal .terminal-island-switcher > svg:last-child { margin-left:auto; transform:none; transition:none; }
 .terminal-island-count { font-variant-numeric:tabular-nums; color:var(--text-muted); font-weight:var(--font-weight-normal); }
-/* Anchor to the visible inner glass plate, including on tight workbenches. */
-.island-terminal .terminal-list-menu { top:calc(100% + 5px); left:3px; right:3px; width:auto; max-width:none; max-height:min(480px,calc(100dvh - 80px)); background:var(--surface); }
+/* Keep the complete terminal menu readable, anchored to the pane island's right edge. */
+.island-terminal .terminal-list-menu { top:calc(100% + 9px); left:auto; right:-1px; width:max(260px,100%); max-width:min(320px,calc(100vw - 24px)); max-height:min(480px,calc(100dvh - 80px)); background:var(--surface); }
 .terminal-list-menu { font-size:var(--font-size-ui); line-height:20px; }
 .terminal-list-menu button { min-height:36px; padding:8px; gap:8px; font:inherit; }
 .terminal-list-menu button > svg { flex:none; color:var(--text-muted); }
@@ -95,7 +72,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 
 .terminal-island-number { flex:none; font-weight:var(--font-weight-normal); }
 
-/* One terminal viewport; the shared island owns host and terminal selection. */
+/* One terminal viewport; its floating island owns host and terminal selection. */
 .terminal-panel-content > .terminal-panel-header .terminal-island-switcher { max-width:calc(100% - 118px); }
 
 /* Inset pane dividers stay visible; the wider transparent rail owns resizing. */
@@ -116,12 +93,9 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 html.lake-windows-chrome .app-shell.has-workbench-island { --pane-rail-top:124px; }
 @media(prefers-reduced-motion:reduce) { .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal)::after { transition:none; } }
 
-/* Keep all three control groups inside the two-pane island on tight workbenches. */
+/* A compact pane keeps its own controls and menu inside its island. */
 .island-inspector,.island-terminal { container-type:inline-size; }
 @container(max-width:180px) {
- .island-inspector-heading { gap:4px; padding:0 8px; }
- .island-inspector-heading > svg { display:none; }
- .lake-workbench-island .session-inspector-tabs { gap:10px; }
  .island-terminal .terminal-panel-header { width:100%; padding:0 8px; gap:6px; }
  .island-terminal .terminal-island-switcher { flex:1; gap:4px; }
  .island-terminal .terminal-picker-meta { flex-wrap:wrap; gap:0 8px; }
@@ -129,9 +103,9 @@ html.lake-windows-chrome .app-shell.has-workbench-island { --pane-rail-top:124px
  .island-terminal :is(.terminal-island-number,.terminal-island-count) { display:none; }
 }
 
-/* The shell prompt shares the island label's first-line center (12 + 46 / 2). */
-.app-shell.has-workbench-island .terminal-session .terminal-screen .xterm { padding:27px 16px 12px; }
-html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .terminal-screen .xterm { padding-top:67px; }
+/* The prompt begins below its own island, alongside the inspector content. */
+.app-shell.has-workbench-island .terminal-session .terminal-screen .xterm { padding:76px 16px 12px; }
+html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .terminal-screen .xterm { padding-top:116px; }
 .lake-workbench-island .header-state-area { margin-left:0; }
 .lake-workbench-island .header-normal-state .header-morph-content { display:flex; align-items:center; gap:4px; }
 .lake-workbench-island .session-state-badge { white-space:nowrap; }
@@ -156,17 +130,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .term
 
 @container(max-width:200px) { .lake-workbench-island .workspace-header { grid-template-columns:minmax(0,1fr) 100px; } }
 
-/* With all panes open, the first segment is a compact status entry. */
 .terminal-island-title-short { display:none; }
-.lake-workbench-island[data-multipane=true] .workspace-header { display:flex; align-items:center; padding:5px 10px; gap:0; }
-.lake-workbench-island[data-multipane=true] .breadcrumbs { display:none; }
-.lake-workbench-island[data-multipane=true] .header-state-area { flex:1; width:100%; min-width:0; }
-.lake-workbench-island[data-multipane=true] .header-pilot-state:not(.is-visible) { display:none; }
-.lake-workbench-island[data-multipane=true] .header-normal-state.is-visible { flex:1; width:100%!important; }
-.lake-workbench-island[data-multipane=true] .header-normal-state .header-morph-content { display:grid; grid-template-columns:minmax(0,1fr) 28px; gap:4px; width:100%; min-height:32px; align-items:center; }
-.lake-workbench-island[data-multipane=true] .header-normal-state .session-state-badge { padding:0; border:0; border-radius:0; background:transparent; font-size:14px; line-height:24px; font-weight:var(--font-weight-medium); }
-.lake-workbench-island[data-multipane=true] .session-state-badge > span { width:5px; height:5px; margin-right:5px; }
-.lake-workbench-island[data-multipane=true] .header-inspector-toggle { margin-left:0; }
 @container(max-width:180px) {
  .island-terminal .terminal-island-title-full { display:none; }
  .island-terminal .terminal-island-title-short { display:inline; }
