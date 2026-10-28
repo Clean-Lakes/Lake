@@ -7,10 +7,10 @@ import {NaturalMemoryFoundation} from '../src/NaturalMemoryFoundation';
 
 test('natural memory foundation explains separate automation and reversible management without an enable control',()=>{
  const html=renderToStaticMarkup(React.createElement(NaturalMemoryFoundation,{projectId:'a',busy:false,run:async task=>{await task();}}));
- assert.match(html,/自然形成见上方自动记忆实验开关/);
+ assert.match(html,/自然形成与空闲整理见上方自动记忆开关/);
  assert.match(html,/不会停用原偏好/);
  assert.doesNotMatch(html,/type="checkbox"|type="radio"/);
- assert.match(html,/记忆内容承接/);
+ assert.match(html,/旧偏好承接/);
 });
 test('carry retries retain idempotency identity and the exact reviewed token/revision',async()=>{
  const original=globalThis.fetch;
@@ -65,4 +65,15 @@ test('natural update notice is commit-driven and offers view and undo without re
 test('natural settings describe opt-in scope, preserved content and staged recall',async()=>{
  const {NaturalMemoryPreferences}=await import('../src/NaturalMemoryPreferences');
  const html=renderToStaticMarkup(React.createElement(NaturalMemoryPreferences,{projectId:'a',busy:false,run:async task=>{await task()}}));assert.match(html,/自动记忆 · 实验/);assert.match(html,/不补扫历史/);assert.match(html,/跨项目偏好需/);assert.match(html,/尚未接入后续回答/);assert.match(html,/关闭停止新增/);
+});
+
+test('one persisted batch produces one notice with scoped optional per-item controls',async()=>{
+ const {NaturalMemoryNotice}=await import('../src/NaturalMemoryNotice');
+ const html=renderToStaticMarkup(React.createElement(NaturalMemoryNotice,{notices:[{changeId:'a',scope:'project:p',entryId:'x',revision:1,batchId:'batch'},{changeId:'b',scope:'user',entryId:'y',revision:1,batchId:'batch'}]}));
+ assert.equal((html.match(/已更新/g)||[]).length,1);assert.match(html,/2 项/);assert.match(html,/查看/);assert.match(html,/撤销/);assert.doesNotMatch(html,/审核|采用/);
+});
+test('consolidation status and conflicts preserve scoped reads and CAS rejection',async()=>{
+ const {naturalConsolidationApi}=await import('../src/naturalMemoryApi');const original=globalThis.fetch;const calls:{url:string;method:string;key:string|null;body:unknown}[]=[];
+ globalThis.fetch=async(input,init)=>{calls.push({url:String(input),method:init?.method||'',key:new Headers(init?.headers).get('Idempotency-Key'),body:init?.body?JSON.parse(String(init.body)):null});return new Response(JSON.stringify({items:[],nextCursor:'',status:'rejected'}),{status:200})};
+ try{const base=naturalMemoryPath('project/a');await naturalConsolidationApi.status(base);await naturalConsolidationApi.conflicts(base,'cursor');await naturalConsolidationApi.reject(base,'conflict',4);assert.equal(calls[0].key,null);assert.equal(calls[1].method,'GET');assert.match(calls[1].url,/project%2Fa/);assert.equal(calls[2].method,'POST');assert.ok(calls[2].key);assert.deepEqual(calls[2].body,{expectedRevision:4});assert.ok(calls.every(c=>!c.url.includes('/strategy/')))}finally{globalThis.fetch=original}
 });

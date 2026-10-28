@@ -486,6 +486,10 @@ func TestNaturalPreferenceForegroundPreemptionAndFiniteDispatches(t *testing.T) 
 		}
 		return nil
 	})
+	b.Store.update(func() any {
+		b.Store.exec("UPDATE projectMemoryJobs SET nextAttemptAtMs=0 WHERE jobId=?", job["jobId"])
+		return nil
+	})
 	reclaimed := b.Store.ClaimMemoryJob()
 	if reclaimed == nil {
 		t.Fatal("preempted job missing")
@@ -494,7 +498,7 @@ func TestNaturalPreferenceForegroundPreemptionAndFiniteDispatches(t *testing.T) 
 	b.processNaturalPreferenceJob(reclaimed, snap)
 	b.Store.read(func() any {
 		row := b.Store.row("SELECT status,lastErrorCode FROM projectMemoryJobs WHERE jobId=?", job["jobId"])
-		if row["status"] != "blocked" || row["lastErrorCode"] != "natural_daily_dispatch_limit" {
+		if row["status"] != "budget_wait" || row["lastErrorCode"] != "natural_daily_dispatch_limit" {
 			t.Fatal(row)
 		}
 		return nil

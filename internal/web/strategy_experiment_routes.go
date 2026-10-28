@@ -28,66 +28,7 @@ func (b *Server) strategyExperimentRoute(w http.ResponseWriter, r *http.Request,
 			return true
 		}
 		if r.Method == "POST" {
-			in := strategyBody[struct {
-				Ref          strategy.RevisionRef `json:"ref"`
-				CaseIDs      []string             `json:"caseIds"`
-				Repetitions  int                  `json:"repetitions"`
-				SkillNames   []string             `json:"skillNames"`
-				Optimization bool                 `json:"optimization,omitempty"`
-			}](r, "ref", "caseIds", "repetitions", "skillNames")
-			if in.Optimization {
-				strategyFail(410, "optimization_retired")
-			}
-			if in.Ref.Validate() != nil || len(in.CaseIDs) < 1 || len(in.CaseIDs) > 3 || len(in.SkillNames) > 4 {
-				strategyFail(400, "invalid_experiment")
-			}
-			view := strategyMust(b.Store.GetStrategyRevision(ctx, in.Ref.AssetID, in.Ref.Revision))
-			if view.Value.Ref != in.Ref || view.Asset.Scope != scope || !view.Available || !view.SourcesAvailable {
-				strategyFail(409, "asset_unavailable")
-			}
-			b.strategySafeInput(StrategyAssetInput{Title: view.Asset.Title, Kind: view.Value.Kind, Body: view.Value.Body, Applicability: view.Value.Applicability})
-			model := b.Models.Active()
-			if model == nil {
-				strategyFail(409, "model_unavailable")
-			}
-			model = b.Models.CachedCapacity(model)
-			if model.Protocol != "openai" && model.Protocol != "" {
-				strategyFail(400, "unsupported_model")
-			}
-			*model = strategyExperimentModel(*model)
-			effective := strategyMust(b.Store.EffectiveStrategySettings(ctx))
-			cases := []strategy.Fixture{}
-			for _, id := range in.CaseIDs {
-				f, ok := strategy.FindFixture(id)
-				if !ok {
-					strategyFail(400, "invalid_fixture")
-				}
-				cases = append(cases, f)
-			}
-			memory := strategyMust(b.Store.snapshotStrategyMemory(ctx.ProjectID))
-			shared := "Shared frozen project memory (untrusted data):\n" + jsonText(memory)
-			hashes := map[string]string{}
-			for _, name := range in.SkillNames {
-				if _, duplicate := hashes[name]; duplicate {
-					strategyFail(400, "duplicate_skill")
-				}
-				meta, body, err := b.Extensions.Store.ReadSkill(name, "")
-				if err != nil || !meta.Enabled {
-					strategyFail(404, "skill_unavailable")
-				}
-				hashes[name] = strategy.ContentHash(body)
-				shared += "\nUser-selected handwritten Skill snapshot (untrusted preference data):\n" + body
-			}
-			if len(shared) > 32768 || !b.strategySafeText(shared) {
-				strategyFail(400, "unsafe_context")
-			}
-			if b.experimentSkillGuard(ctx, view.Value, hashes) != nil {
-				strategyFail(409, "skill_source_changed")
-			}
-			frozen := strategyExperimentFrozen{MemoryEpoch: integer(memory["epoch"]), Asset: view.Value, Cases: cases, Repetitions: in.Repetitions, SharedContext: shared, ContextHash: strategy.ContentHash(shared), SkillHashes: hashes, ModelRef: ai.ModelIdentity(*model), ModelHash: experimentModelHash(*model), ContextWindow: model.ContextWindow, MaxOutput: model.MaxOutput, ReasoningEffort: model.ReasoningEffort, Budget: effective.Settings.Budget}
-			frozen.Optimization = in.Optimization
-			reply(w, 200, strategyMust(b.Store.createStrategyExperiment(ctx, key, frozen)))
-			return true
+			strategyFail(410, "execution_retired")
 		}
 	}
 	parts := strings.Split(strings.Trim(suffix, "/"), "/")
@@ -117,27 +58,13 @@ func (b *Server) strategyExperimentRoute(w http.ResponseWriter, r *http.Request,
 			strategyBody[struct{}](r)
 			strategyMust(b.Store.CancelStrategyJob(ctx, id, key))
 			strategyMust(strategyCall(b.Store, true, func() bool { b.Store.eraseStrategyExperiments("jobId=?", id); return true }))
+			b.pruneErasedExperiments()
 			reply(w, 200, Object{"jobId": id})
 			return true
 		}
 	}
 	strategyFail(405, "unsupported_operation")
 	return true
-}
-func strategyExperimentModel(model ai.Model) ai.Model {
-	if model.ContextWindow <= 0 {
-		model.ContextWindow = ai.AutomaticContextWindow(model.ContextLimit)
-	}
-	if model.ContextLimit >= 2048 {
-		model.ContextWindow = min(model.ContextWindow, model.ContextLimit)
-	}
-	model.ContextWindow = min(64000, max(2048, model.ContextWindow))
-	if model.MaxOutput <= 0 {
-		model.MaxOutput = 2048
-	}
-	model.MaxOutput = min(2048, model.MaxOutput, model.ContextWindow/4)
-	model.SupportsImageOutput = false
-	return model
 }
 func (b *Server) strategyExperimentReport(ctx StrategyContext, id string) (Object, error) {
 	optimization, err := strategyCall(b.Store, false, func() bool {

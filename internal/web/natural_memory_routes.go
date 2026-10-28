@@ -67,7 +67,7 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 			b.messageMu.Lock()
 			result, err := b.Store.SetNaturalMemorySettings(ctx, key, in.ExpectedRevision, in.AutoEnabled)
 			if err == nil && !in.AutoEnabled {
-				b.PauseMemoryExtractionForForeground()
+				b.pauseNaturalScope(ctx)
 			}
 			b.messageMu.Unlock()
 			b.naturalMemoryReply(w, strategyMust(result, err))
@@ -83,6 +83,12 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 			naturalFail(400, "invalid_page")
 		}
 		switch suffix {
+		case "consolidation":
+			b.naturalMemoryReply(w, strategyMust(b.Store.NaturalConsolidationStatus(ctx)))
+			return true
+		case "conflicts":
+			b.naturalMemoryReply(w, strategyMust(b.Store.NaturalConflicts(ctx, after, limit)))
+			return true
 		case "formed-preferences":
 			b.naturalMemoryReply(w, strategyMust(b.Store.NaturalFormedPreferences(ctx, after, limit)))
 			return true
@@ -109,6 +115,13 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 			b.naturalMemoryReply(w, list)
 			return true
 		}
+	}
+	if len(rest) == 3 && rest[0] == "conflicts" && rest[2] == "reject" && method == "POST" {
+		in := strategyBody[struct {
+			ExpectedRevision int `json:"expectedRevision"`
+		}](r, "expectedRevision")
+		b.naturalMemoryReply(w, strategyMust(b.Store.RejectNaturalConflict(ctx, rest[1], key, in.ExpectedRevision)))
+		return true
 	}
 	if len(rest) >= 2 && rest[0] == "formed-preferences" {
 		if method == "GET" && len(rest) == 2 {

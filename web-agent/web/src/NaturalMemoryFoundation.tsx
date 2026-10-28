@@ -17,8 +17,8 @@ export function NaturalMemoryFoundation({projectId,busy,run}:{projectId:string;b
   setSettings(s);setLegacy(l.items);setEntries(p.items);setChanges(c.items);setMemories(m.items);setCursors({legacy:l.nextCursor,entries:p.nextCursor,changes:c.nextCursor});setError('');
  }
  useEffect(()=>{void refresh().catch(e=>setError(readableError(e)));return()=>{generation.current++;};},[base]);
- return <details className="strategy-learning"><summary>记忆内容承接 · 实验</summary>
- <p className="settings-note">将已采用的偏好纳入记忆管理，保留原正文、版本和适用条件。当前仍按原设置使用；撤销承接只撤销管理归属，不会停用原偏好。自然形成见上方自动记忆实验开关，语义整理尚未开放。</p>
+ return <details className="strategy-learning"><summary>旧偏好承接 · 实验</summary>
+ <p className="settings-note">将已采用的偏好纳入记忆管理，保留原正文、版本和适用条件。当前仍按原设置使用；撤销承接只撤销管理归属，不会停用原偏好。自然形成与空闲整理见上方自动记忆开关。</p>
  {settings&&<p className="settings-note">偏好实际应用：{settings.preferenceSettings.effectiveUseEnabled?'开启':'关闭'}。{settings.projectMemorySettings&&<>项目记忆使用：{settings.projectMemorySettings.useEnabled?'开启':'关闭'}；原有项目提炼：{settings.projectMemorySettings.extractionEnabled?'开启':'关闭'}。</>}</p>}
  {error&&<p className="form-error" role="alert">{error}</p>}{notice&&<p className="settings-note" role="status">{notice}</p>}
  <button type="button" className="button secondary" disabled={busy} onClick={()=>void run(refresh)}>刷新记忆内容</button>

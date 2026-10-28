@@ -23,6 +23,12 @@ func (s *Store) naturalSnapshotValid(snap ai.MemoryTurnSnapshot) bool {
 		return false
 	}
 	c := snap.Natural
+	if snap.LegacyExtraction {
+		legacy := s.memorySettings(snap.ProjectID)
+		if legacy["useEnabled"] != true || legacy["extractionEnabled"] != true || integer(legacy["epoch"]) != snap.Epoch {
+			return false
+		}
+	}
 	if c == nil || c.PolicyVersion != naturalMemoryPolicyVersion || snap.SourceMessageID == "" || len(snap.UserText) > 64*1024 {
 		return false
 	}
@@ -73,8 +79,12 @@ func (s *Store) naturalPreferenceView(scope, id string, revision int) Object {
 	body, state := "", stringOf(e["state"])
 	if content != nil && state != "forgotten" && s.naturalRevisionAvailable(r) {
 		body = stringOf(content["body"])
-	} else if state != "forgotten" {
+	} else if state != "forgotten" && state != "undone" {
 		state = "unavailable"
+	}
+	sources := s.naturalSupportViews(scope, id, revision)
+	if state == "active" && s.naturalPendingConflict(id, integer(e["revision"])) {
+		state = "conflict"
 	}
 	source := Object{"available": body != "", "private": scope == "user"}
 	if scope != "user" && body != "" {
@@ -82,7 +92,7 @@ func (s *Store) naturalPreferenceView(scope, id string, revision int) Object {
 		source["messageId"] = r["sourceMessage"]
 		source["sourceHash"] = r["sourceHash"]
 	}
-	return Object{"id": id, "topic": e["topic"], "revision": e["revision"], "contentRevision": revision, "parentRevision": r["parentRevision"], "scope": scope, "body": body, "state": state, "source": source, "createdAt": r["createdAt"], "updatedAt": e["updatedAt"]}
+	return Object{"id": id, "topic": e["topic"], "revision": e["revision"], "contentRevision": revision, "parentRevision": r["parentRevision"], "scope": scope, "body": body, "state": state, "source": source, "sources": sources, "createdAt": r["createdAt"], "updatedAt": e["updatedAt"]}
 }
 func (s *Store) NaturalFormedPreferences(ctx StrategyContext, after string, limit int) (Object, error) {
 	return strategyCall(s, false, func() Object {
@@ -113,6 +123,11 @@ func (s *Store) NaturalPreferenceChanges(ctx StrategyContext, after string, limi
 			naturalFail(400, "invalid_page")
 		}
 		items := s.rows("SELECT id,entryId,beforeRevision,afterRevision,kind,createdAt,undoneBy FROM naturalPreferenceChanges WHERE scopeKey=? AND id>? ORDER BY id LIMIT ?", scope, after, limit)
+		for _, item := range items {
+			if relation := s.row("SELECT relation FROM naturalMemoryRelations WHERE changeId=?", item["id"]); relation != nil && relation["relation"] == "equivalent" {
+				item["kind"] = "merge"
+			}
+		}
 		next := ""
 		if len(items) == limit {
 			next = stringOf(items[len(items)-1]["id"])
@@ -134,6 +149,9 @@ func (s *Store) commitNaturalPreference(job Object, snap ai.MemoryTurnSnapshot, 
 	}
 	scope := "project:" + snap.ProjectID
 	if result.Scope == "user" {
+		if !s.naturalGlobalTextSafe(snap.ProjectID, result.Quote, result.Topic) {
+			fail(400, "Global preference includes private metadata")
+		}
 		project := s.row("SELECT name FROM projects WHERE id=?", snap.ProjectID)
 		if name := stringOf(project["name"]); len([]rune(name)) >= 3 && strings.Contains(result.Quote, name) {
 			fail(400, "Global preference includes private project metadata")
@@ -167,8 +185,12 @@ func (s *Store) commitNaturalPreference(job Object, snap ai.MemoryTurnSnapshot, 
 		id = stringOf(old["id"])
 		before = integer(old["revision"])
 		source := s.row("SELECT createdAt FROM messages WHERE id=?", snap.SourceMessageID)
-		if naturalBefore(stringOf(source["createdAt"]), stringOf(old["updatedAt"])) {
+		if !s.naturalSourceAfterUserEdit(id, stringOf(source["createdAt"])) {
 			fail(409, "Preference changed after source message")
+		}
+		priorSource := s.row("SELECT m.createdAt FROM naturalPreferenceRevisions r JOIN messages m ON m.id=r.sourceMessage WHERE r.entryId=? AND r.revision=?", id, before)
+		if priorSource != nil && naturalBefore(stringOf(source["createdAt"]), stringOf(priorSource["createdAt"])) {
+			fail(409, "Preference source is older")
 		}
 		if old["state"] != "active" {
 			if result.Replacement || result.ExpectedRevision != 0 {
@@ -177,10 +199,10 @@ func (s *Store) commitNaturalPreference(job Object, snap ai.MemoryTurnSnapshot, 
 		} else {
 			undoBase = before
 			prior := s.naturalPreferenceView(scope, id, 0)
-			if prior["body"] == result.Quote {
+			if prior["body"] == result.Quote && result.Relation != "equivalent" {
 				return false
 			}
-			if prior["state"] != "active" || !result.Replacement || result.ExpectedRevision != before {
+			if prior["state"] != "active" || (!result.Replacement && result.Relation != "equivalent") || result.ExpectedRevision != before {
 				fail(409, "Preference replacement requires an exact current version")
 			}
 			kind = "replace"
@@ -194,9 +216,16 @@ func (s *Store) commitNaturalPreference(job Object, snap ai.MemoryTurnSnapshot, 
 	if before == 0 && integer(s.row("SELECT count(*) AS n FROM naturalPreferenceEntries WHERE scopeKey=? AND state<>'forgotten'", scope)["n"]) >= 500 {
 		fail(429, "Preference storage full")
 	}
+	if result.Relation == "equivalent" && integer(s.row("SELECT count(*) n FROM naturalPreferenceSupports WHERE entryId=? AND revision=?", id, before)["n"]) >= 50 {
+		fail(429, "Preference support limit; source remains uncovered")
+	}
 	s.exec("INSERT INTO naturalPreferenceEntries VALUES(?,?,?,?,'active',?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,state='active',updatedAt=excluded.updatedAt", id, scope, result.Topic, before+1, now())
 	s.exec("INSERT INTO naturalPreferenceRevisions VALUES(?,?,?,?,?,?,?,?,?)", id, before+1, before, snap.ProjectID, snap.SessionID, snap.SourceMessageID, memoryHash(snap.UserText), memoryHash(result.Quote), now())
 	s.exec("INSERT INTO naturalPreferenceContent VALUES(?,?,?)", id, before+1, result.Quote)
+	if result.Relation == "equivalent" {
+		s.naturalCloneSupports(id, before, before+1)
+	}
+	s.naturalAddSupport(id, before+1, snap.ProjectID, snap.SessionID, snap.SourceMessageID, memoryHash(snap.UserText), before+1)
 	s.exec("INSERT INTO naturalPreferenceChanges(id,scopeKey,entryId,jobId,sessionId,sourceMessage,beforeRevision,afterRevision,kind,createdAt) VALUES(?,?,?,?,?,?,?,?,?,?)", ident(), scope, id, job["jobId"], snap.SessionID, snap.SourceMessageID, undoBase, before+1, kind, now())
 	s.event(snap.SessionID, "message")
 	return true
@@ -240,6 +269,7 @@ func (s *Store) UndoNaturalPreference(ctx StrategyContext, change, key string, e
 		s.exec("UPDATE naturalPreferenceEntries SET revision=revision+1,state=?,updatedAt=? WHERE id=?", state, now(), id)
 		s.exec("INSERT INTO naturalPreferenceRevisions VALUES(?,?,?,?,?,?,?,?,?)", id, expected+1, before, source["sourceProject"], source["sourceSession"], source["sourceMessage"], source["sourceHash"], memoryHash(body), now())
 		if body != "" {
+			s.naturalCloneSupports(id, before, expected+1)
 			s.exec("INSERT INTO naturalPreferenceContent VALUES(?,?,?)", id, expected+1, body)
 		}
 		undo := ident()
@@ -270,6 +300,7 @@ func (s *Store) ForgetNaturalPreference(ctx StrategyContext, id, key string, exp
 		}
 		latest := s.row("SELECT * FROM naturalPreferenceRevisions WHERE entryId=? AND revision=?", id, expected)
 		s.exec("INSERT INTO naturalPreferenceRevisions VALUES(?,?,?,?,?,?,?,?,?)", id, expected+1, expected, latest["sourceProject"], latest["sourceSession"], latest["sourceMessage"], latest["sourceHash"], memoryHash(""), now())
+		s.naturalForgetConsolidation(id)
 		s.exec("DELETE FROM naturalPreferenceContent WHERE entryId=?", id)
 		s.exec("UPDATE naturalPreferenceEntries SET revision=revision+1,state='forgotten',updatedAt=? WHERE id=?", now(), id)
 		s.exec("UPDATE projectMemoryJobs SET status='skipped',leaseToken='',lastErrorCode='preference_forgotten',updatedAt=? WHERE status IN ('queued','retry_wait','running') AND turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE json_valid(snapshotJSON) AND json_extract(snapshotJSON,'$.sourceMessageId') IN (SELECT sourceMessage FROM naturalPreferenceRevisions WHERE entryId=?))", now(), id)
@@ -285,6 +316,7 @@ func (s *Store) ForgetNaturalPreference(ctx StrategyContext, id, key string, exp
 	})
 }
 func (s *Store) naturalEraseSession(session string) {
+	s.naturalWithdrawConsolidation(session)
 	for _, r := range s.rows("SELECT sourceMessage,sourceHash FROM naturalPreferenceRevisions WHERE sourceSession=?", session) {
 		s.exec("INSERT OR IGNORE INTO naturalPreferenceSuppressions VALUES(?,?,?)", r["sourceMessage"], r["sourceHash"], now())
 	}
@@ -293,12 +325,16 @@ func (s *Store) naturalEraseSession(session string) {
 	s.exec("UPDATE projectMemoryJobs SET status='skipped',leaseToken='',lastErrorCode='source_deleted',updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE sessionId=?)", now(), session)
 }
 func (s *Store) naturalSessionNotices(session string) []Object {
-	changes := s.rows("SELECT id,scopeKey,entryId,afterRevision,kind,undoneBy FROM naturalPreferenceChanges WHERE sessionId=? AND kind IN ('save','replace') AND id NOT IN (SELECT changeId FROM naturalPreferenceNoticeAcks) ORDER BY rowid DESC LIMIT 5", session)
+	changes := s.rows("SELECT id,scopeKey,entryId,afterRevision,kind,undoneBy FROM naturalPreferenceChanges WHERE sessionId=? AND kind IN ('save','replace') AND id NOT IN (SELECT changeId FROM naturalPreferenceNoticeAcks) ORDER BY rowid DESC LIMIT 20", session)
 	result := []Object{}
 	for _, c := range changes {
 		view := s.naturalPreferenceView(stringOf(c["scopeKey"]), stringOf(c["entryId"]), 0)
 		if view["state"] == "active" && integer(view["revision"]) == integer(c["afterRevision"]) && c["undoneBy"] == "" {
-			result = append(result, Object{"changeId": c["id"], "scope": c["scopeKey"], "entryId": c["entryId"], "revision": c["afterRevision"]})
+			batchID := ""
+			if relation := s.row("SELECT batchId FROM naturalMemoryRelations WHERE changeId=?", c["id"]); relation != nil {
+				batchID = stringOf(relation["batchId"])
+			}
+			result = append(result, Object{"changeId": c["id"], "scope": c["scopeKey"], "entryId": c["entryId"], "revision": c["afterRevision"], "batchId": batchID})
 		}
 	}
 	return result

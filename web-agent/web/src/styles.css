@@ -1320,7 +1320,9 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 @media(prefers-reduced-motion:reduce) { .resource-drag-handle { transition:none; } }
 
 /* A persisted background-memory result stays below the floating chat header. */
-.workspace.has-floating-header > .workspace-header + .natural-memory-notice { margin-top: 72px; }
+.workspace.has-floating-header > .natural-memory-notice { margin-top: 80px; width: var(--session-content-width); margin-left: var(--session-content-start); }
+.workspace.has-floating-header:has(> .natural-memory-notice) .timeline-list { padding-top: 16px; }
+.workspace.has-floating-header > .natural-memory-notice .system-banner { padding-inline: 0; }
 .natural-memory-notice { flex: 0 0 auto; min-width: 0; }
 .natural-memory-notice .system-banner { flex-wrap: wrap; }
 .natural-memory-notice .strategy-settings { margin: 0 clamp(21px, 3vw, 42px) 10px; max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-settings-panel); corner-shape: var(--corner-window); padding: 12px; }

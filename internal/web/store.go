@@ -133,6 +133,10 @@ func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
 		db.Close()
 		return nil, e
 	}
+	if e = s.prepareNaturalConsolidationMigration(); e != nil {
+		db.Close()
+		return nil, e
+	}
 	if e = s.prepareNaturalPreferenceMigration(); e != nil {
 		db.Close()
 		return nil, e
@@ -179,6 +183,10 @@ func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
 		return nil, e
 	}
 	if e = s.migrateNaturalPreference(); e != nil {
+		db.Close()
+		return nil, e
+	}
+	if e = s.migrateNaturalConsolidation(); e != nil {
 		db.Close()
 		return nil, e
 	}

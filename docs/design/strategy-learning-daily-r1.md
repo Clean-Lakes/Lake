@@ -1,5 +1,7 @@
 # R1：日常任务与策略在线实验隔离
 
+> 历史设计：保留当时交付、判据和结论。当前自然记忆按[重塑计划](../../plan/feature-natural-memory-1.md)与 [N3 契约](natural-memory-idle-n3.md)推进；旧候选提取、在线纠错和新增产品实验按 [C1](strategy-execution-retirement-c1.md)退役，不能据本文重新启用。旧人工内容和原运行绑定仍从次级兼容入口管理。
+
 实施基于 `develop@46fd6daa`，承接[用户资产与经验复用计划](../../plan/refactor-user-assets-and-experience-1.md)。主机检查修复与快速 Dev 启动分别由 PR #69、#70 交付；本阶段只取 PR #67 的记忆/学习边界修复，不包含在线工具裁剪、来源枚举或预算收尾。
 
 ## 日常路径

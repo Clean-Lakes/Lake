@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"errors"
 	"github.com/Clean-Lakes/Lake/internal/ai"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
@@ -93,41 +92,6 @@ func (b *Server) reconcileStrategyOutboxForSession(id string) error {
 		}
 	}
 	return nil
-}
-
-// Called only while the background gate is owned. Startup inventory reads
-// registered outboxes once; later ticks inspect only loaded pending sessions.
-func (b *Server) processStrategyOutboxes(ctx context.Context) {
-	if b.strategyOutboxPending == nil {
-		b.strategyOutboxPending = map[string]bool{}
-	}
-	if !b.strategyRecoveryLoaded {
-		items, err := b.Engine.PersistedStrategyOutboxes()
-		if err != nil {
-			b.strategyHandoffStatus.Store("handoff_pending_retry")
-			return
-		}
-		for _, event := range items {
-			b.strategyOutboxPending[event.SessionID] = true
-		}
-		b.strategyRecoveryLoaded = true
-	}
-	for _, id := range b.Engine.PendingStrategySessions() {
-		b.strategyOutboxPending[id] = true
-	}
-	b.strategyHandoffStatus.Store("")
-	processed := 0
-	for id := range b.strategyOutboxPending {
-		if ctx.Err() != nil || processed >= 8 {
-			return
-		}
-		processed++
-		if b.reconcileStrategyOutboxForSession(id) == nil {
-			delete(b.strategyOutboxPending, id)
-		} else {
-			b.strategyHandoffStatus.Store("handoff_pending_retry")
-		}
-	}
 }
 
 func strategyHandoffKey(event ai.StrategyTurnSnapshot) string {

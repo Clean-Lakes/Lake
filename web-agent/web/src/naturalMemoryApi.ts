@@ -25,9 +25,9 @@ export const naturalMemoryApi={
  carry:(base:string,p:NaturalPreview)=>request<{id:string;revision:number;changeId:string}>(base,'/legacy/'+encodeURIComponent(p.id)+'/carry',{expectedRevision:p.linkRevision,previewToken:p.previewToken}),
  undo:(base:string,changeId:string,revision:number)=>request<{id:string;revision:number;changeId:string}>(base,'/changes/'+encodeURIComponent(changeId)+'/undo',{expectedRevision:revision}),
 };
-export type FormedPreference={id:string;topic:string;revision:number;contentRevision:number;body:string;state:string;scope:string;source:{private:boolean;available:boolean;sessionId?:string;messageId?:string};parentRevision:number};
+export type FormedPreference={id:string;topic:string;revision:number;contentRevision:number;body:string;state:string;scope:string;source:{private:boolean;available:boolean;sessionId?:string;messageId?:string};parentRevision:number;sources?:{available:boolean;private:boolean;sessionId?:string;messageId?:string}[]};
 export type FormedChange={id:string;entryId:string;beforeRevision:number;afterRevision:number;kind:string;createdAt:string;undoneBy:string;before?:FormedPreference|null;after?:FormedPreference};
-export type NaturalNotice={changeId:string;scope:string;entryId:string;revision:number};
+export type NaturalNotice={changeId:string;scope:string;entryId:string;revision:number;batchId?:string};
 export const naturalNoticeBase=(scope:string)=>naturalMemoryPath(scope==='user'?'':scope.slice('project:'.length));
 export const naturalPreferenceApi={
  list:(base:string,after='')=>request<NaturalPage<FormedPreference>>(base,'/formed-preferences?after='+encodeURIComponent(after)),
@@ -44,4 +44,12 @@ export const naturalPreferenceApi={
   if(!response.ok){if(response.status<500)pending.delete(operation);throw new ApiRequestError('记忆设置已变化，请刷新后重试',response.status)}
   pending.delete(operation);return response.json() as Promise<{revision:number;autoEnabled:boolean}>;
  },
+};
+
+export type NaturalConflict={id:string;entryId:string;expectedRevision:number;currentRevision:number;body:string;status:string;stale:boolean;source:{available:boolean;private:boolean};createdAt:string};
+export type ConsolidationStatus={captured:number;processed:number;deferred:number;withdrawn:number;conflicts:number};
+export const naturalConsolidationApi={
+ status:(base:string)=>request<ConsolidationStatus>(base,'/consolidation'),
+ conflicts:(base:string,after='')=>request<NaturalPage<NaturalConflict>>(base,'/conflicts?after='+encodeURIComponent(after)),
+ reject:(base:string,id:string,revision:number)=>request<{status:string}>(base,'/conflicts/'+encodeURIComponent(id)+'/reject',{expectedRevision:revision}),
 };

@@ -1,5 +1,7 @@
 # R5：复用收益验收与旧优化退出
 
+> 历史设计：保留当时交付、判据和结论。当前自然记忆按[重塑计划](../../plan/feature-natural-memory-1.md)与 [N3 契约](natural-memory-idle-n3.md)推进；旧候选提取、在线纠错和新增产品实验按 [C1](strategy-execution-retirement-c1.md)退役，不能据本文重新启用。旧人工内容和原运行绑定仍从次级兼容入口管理。
+
 基于 PR #81 合入后的 develop `bb7228e`。不改写 P8 的 inconclusive；不因通过安全/平台回归而宣称模型收益。
 
 ## 冻结的配对契约

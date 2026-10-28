@@ -81,11 +81,12 @@ func (b *Server) projectMemoryRoute(w http.ResponseWriter, r *http.Request, name
 				b.messageMu.Lock()
 				defer b.messageMu.Unlock()
 				result := b.Store.SetMemorySettings(project, use, extraction, expected)
-				if b.Store.memoryV2 && (!use || !extraction) && b.memoryCancel != nil {
+				if (!use || !extraction) && b.memoryCancel != nil && (b.Store.memoryV2 || len(b.memoryBatchJobs) > 0 && b.memoryBatchJobs[0].Snapshot.LegacyExtraction) {
 					jobProject := b.Store.read(func() any {
 						return stringOf(b.Store.row("SELECT t.projectId FROM projectMemoryTurns t JOIN projectMemoryJobs j ON j.turnSequence=t.sequence WHERE j.jobId=?", b.memoryJobID)["projectId"])
 					}).(string)
 					if jobProject == project {
+						b.PauseMemoryExtractionForForeground()
 						b.memoryCancel()
 					}
 				}
