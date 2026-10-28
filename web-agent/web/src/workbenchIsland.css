@@ -19,7 +19,18 @@
 .lake-workbench-island .breadcrumbs strong > svg { display:none; }
 .lake-workbench-island .pilot-island-trigger { border:0; padding-left:8px; gap:8px; }
 .lake-workbench-island .header-state-area { flex:0 1 auto; }
-.lake-workbench-island .header-pilot-state { flex-shrink:1; }
+/* Keep Pilot in its own segment, allowing the copy to give space to its controls.
+   Its preferred width is independent of the currently constrained pane width. */
+.island-conversation { --pilot-state-width:238px; }
+.lake-workbench-island .header-pilot-state { flex-shrink:1; max-width:100%; }
+.lake-workbench-island .header-pilot-state.is-visible { width:var(--pilot-state-width)!important; }
+.lake-workbench-island .header-pilot-state .header-morph-content { width:var(--pilot-state-width); max-width:100%; }
+.lake-workbench-island .pilot-island { width:100%; }
+.lake-workbench-island .pilot-island-trigger { width:100%; min-width:0; }
+.lake-workbench-island .pilot-island-action { flex:1; }
+.lake-workbench-island .pilot-island-action-label { min-width:0; }
+.lake-workbench-island .workspace-header.has-pilot-island .breadcrumbs { flex:1 1 auto; }
+.lake-workbench-island .workspace-header.has-pilot-island .header-state-area { flex:0 1 var(--pilot-state-width); }
 .lake-workbench-island .pilot-island-action { width:150px; }
 .island-inspector-heading { display:flex; align-items:center; gap:12px; height:44px; width:max-content; padding:0 12px; min-width:0; }
 .island-inspector-heading > strong { display:flex; align-items:center; gap:9px; flex:0 0 auto; min-width:0; font-size:var(--font-size-ui); font-weight:var(--font-weight-medium); white-space:nowrap; }
@@ -119,6 +130,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xter
    the remaining space and can truncate, while its disclosure stays reachable. */
 @container(max-width:300px) {
  .lake-workbench-island .workspace-header { display:grid; grid-template-columns:minmax(0,1fr) 114px; padding-inline:8px; gap:4px; }
+ .lake-workbench-island .workspace-header.has-pilot-island { grid-template-columns:minmax(48px,1fr) minmax(0,var(--pilot-state-width)); }
  .lake-workbench-island .breadcrumbs { display:flex; min-width:0; width:100%; max-width:none; }
  .lake-workbench-island .breadcrumbs strong { display:flex; align-items:center; min-width:0; width:100%; }
  .lake-workbench-island .breadcrumbs strong > svg { display:none; }
@@ -140,4 +152,10 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xter
  .island-terminal .terminal-island-title-full { display:none; }
  .island-terminal .terminal-island-title-short { display:inline; }
  .island-terminal .terminal-tab-dot.ready { display:none; }
+}
+
+/* The role icon still identifies the specialist when its name would crowd out
+   the action. The secondary line and full accessible description stay intact. */
+@container(max-width:380px) {
+ .lake-workbench-island .pilot-island-action-line > strong { display:none; }
 }

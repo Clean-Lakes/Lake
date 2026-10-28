@@ -3,6 +3,7 @@ import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {pilotIslandAnimating,pilotIslandModel} from '../src/pilotIslandModel';
+import {PilotHeaderState} from '../src/PilotHeaderState';
 import {PilotStatusIsland} from '../src/PilotStatusIsland';
 import {islandFixture} from './fixtures/pilot-island-data';
 import {sreStepStatus} from '../src/sreTranscript';
@@ -181,4 +182,25 @@ test('current failed investigation takes precedence over a historical draining t
  assert.equal(JSON.stringify(historical),saved,'historical ledger must remain intact');
  historical.status='cancelled';historical.updatedAt='2026-10-26T00:02:00Z';
  assert.equal(pilotIslandModel(s)?.taskId,current.id,'late cleanup of an old dispatch must not replace the current task');
+});
+
+
+test('Pilot headers retain the specialist entry through execution and completion, then restore ordinary controls', () => {
+  for (const state of ['running', 'finished', 'paused', 'unknown'] as const) {
+    const html = renderToStaticMarkup(createElement(PilotHeaderState, {
+      model: pilotIslandModel(islandFixture(state)), normal: createElement('span', null, '普通状态'),
+      onInspect() {}, details: {available: true, open: false, toggle() {}},
+    }));
+    assert.match(html, /header-pilot-state is-visible"[^>]*aria-hidden="false"/);
+    assert.match(html, /header-normal-state"[^>]*aria-hidden="true"[^>]*inert/);
+    assert.match(html, /class="pilot-island-trigger"[^>]*aria-label="Lake Pilot：/);
+    assert.doesNotMatch(html, /class="pilot-island-trigger"[^>]*disabled/);
+  }
+  const ordinary = renderToStaticMarkup(createElement(PilotHeaderState, {
+    model: null, normal: createElement('span', null, '普通状态'), onInspect() {},
+    details: {available: true, open: false, toggle() {}},
+  }));
+  assert.match(ordinary, /header-normal-state is-visible"[^>]*aria-hidden="false"/);
+  assert.match(ordinary, /aria-label="展开执行详情"/);
+  assert.doesNotMatch(ordinary, /class="pilot-island-trigger"/);
 });
