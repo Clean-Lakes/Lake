@@ -2,10 +2,10 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {workbenchIslandLayout} from '../src/workbenchIslandLayout';
 
-test('the shared island fits content without filling wide panes',()=>{
+test('three-pane mode fills the workspace while keeping the terminal bubble compact',()=>{
  const result=workbenchIslandLayout(330,240,220,1400);
- assert.equal(result.width,792);
- assert.deepEqual(result.columns,[330,240,220]);
+ assert.equal(result.width,1400);
+ assert.deepEqual(result.columns,[330,848,220]);
 });
 test('all three control groups fit before the terminal pane',()=>{
  const result=workbenchIslandLayout(440,240,220,720);
@@ -17,4 +17,6 @@ test('all three control groups fit before the terminal pane',()=>{
 test('closed panes leave no empty segments',()=>{
  assert.equal(workbenchIslandLayout(330,240,0,1400).width,572);
  assert.equal(workbenchIslandLayout(330,0,0,1400).width,332);
+ assert.equal(workbenchIslandLayout(330,0,220,1400).width,552);
+ assert.equal(workbenchIslandLayout(330,240,220).width,792);
 });

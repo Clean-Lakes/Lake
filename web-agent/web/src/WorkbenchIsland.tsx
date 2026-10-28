@@ -8,7 +8,7 @@ export function useWideWorkbench(){
  return wide;
 }
 
-/** A compact shared island: pane widths never stretch the space between controls. */
+/** A shared island that fills the conversation and inspection workspace in three-pane mode. */
 export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,terminalOpen,onInspectorHost}:{conversation:ReactNode;terminal:ReactNode;activity:ReactNode;inspectorOpen:boolean;terminalOpen:boolean;onInspectorHost:(node:HTMLDivElement|null)=>void}){
  const root=useRef<HTMLDivElement>(null);
  useLayoutEffect(()=>{

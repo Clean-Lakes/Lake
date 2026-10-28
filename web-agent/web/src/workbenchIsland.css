@@ -104,7 +104,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { paddin
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal) { top:var(--pane-rail-top); bottom:var(--pane-rail-bottom); }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal) { left:-6px; width:12px; }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal)::after {
- content:''; position:absolute; top:18%; bottom:18%; left:5px; width:1px; height:auto;
+ content:''; position:absolute; top:10%; bottom:10%; left:5px; width:1px; height:auto;
  border-radius:1px; background:var(--border); opacity:1; transition:background-color 160ms ease;
 }
 .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal):is(:hover,:focus-visible,.is-dragging)::after { background:var(--text-muted); }
