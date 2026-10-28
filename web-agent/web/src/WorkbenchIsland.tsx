@@ -21,6 +21,8 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    if(!view)return;
    const bounds=view.getBoundingClientRect(),base=shell.getBoundingClientRect();
    const composer=view.querySelector('.composer-input')?.getBoundingClientRect();
+   // All pane boundaries stop above the composer, leaving its footer clear.
+   (shell as HTMLElement).style.setProperty('--pane-rail-bottom',`${Math.max(12,base.bottom-(composer?.top??base.bottom)+12)}px`);
    const transcript=view.querySelector('.timeline-list')?.getBoundingClientRect();
    const left=composer?.left??Math.min(bounds.right-120,Math.max(bounds.left+16,transcript?.left??bounds.left+48));
    const title=element.querySelector<HTMLElement>('.crumb-title');
@@ -48,13 +50,13 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
   };
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(measure);};
   const observer=new ResizeObserver(schedule);
-  for(const node of [element,shell,shell.querySelector('.workspace'),shell.querySelector('.session-layout > .session-view'),shell.querySelector('.session-inspector'),shell.querySelector('.terminal-side-panel'),shell.querySelector('.composer-input')])if(node)observer.observe(node);
+  for(const node of [element,shell,shell.querySelector('.workspace'),shell.querySelector('.session-layout > .session-view'),shell.querySelector('.session-inspector'),shell.querySelector('.terminal-side-panel'),shell.querySelector('.composer-input'),shell.querySelector('.composer-dock')])if(node)observer.observe(node);
   const observeControls=()=>{for(const node of element.querySelectorAll('.header-morph-slot,.header-morph-content,.crumb-title,.island-inspector-heading,.terminal-panel-header'))observer.observe(node);};
   observeControls();
   const content=new MutationObserver(()=>{observeControls();schedule();});
   content.observe(element,{childList:true,subtree:true,characterData:true});
   window.addEventListener('resize',schedule);measure();
-  return()=>{content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);for(const name of ['inspector'])(shell as HTMLElement).style.removeProperty(`--${name}-island-inset`);};
+  return()=>{content.disconnect();observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);for(const name of ['inspector'])(shell as HTMLElement).style.removeProperty(`--${name}-island-inset`);(shell as HTMLElement).style.removeProperty('--pane-rail-bottom');};
  },[inspectorOpen,terminalOpen]);
  return <div ref={root} className="lake-workbench-island" data-linked={inspectorOpen||terminalOpen} role="group" aria-label="Lake Island 工作台">
   <span className="workspace-header-glass" aria-hidden="true"/>
