@@ -16,7 +16,7 @@ tags: [cleanup, harness, strategy, compatibility, user-preferences]
 
 **Lake 当前不接入 Harness²，不移植其 Python 框架，也不继续建设独立的在线纠错、自动候选学习和递归优化产品。** 保留用户明确确认的内容、版本和来源保护，将有用能力逐步归回偏好、项目记忆与 Skills。先停止新执行，再整理用户入口，最后拆除失去用途的代码；不能按 `strategy*` 文件名整批删除。
 
-盘点基线：`origin/develop@ac3ae1544b00472da8e587f5f931d075d4e33917`，即文档 PR [#105](https://github.com/Clean-Lakes/Lake/pull/105) 合入后。初版仅提交清理计划，随后经 #106 合入。C1 从 `081d6652` 实施新增执行退役，见 [C1 契约](../docs/design/strategy-execution-retirement-c1.md)；C1 已合入 #107；C2 的内容与入口承接转由自然记忆 N1～N5 落实，C3/C4 物理删除与兼容验收仍待实施。不能将下文所有目标描述为已完成。
+盘点基线：`origin/develop@ac3ae1544b00472da8e587f5f931d075d4e33917`，即文档 PR [#105](https://github.com/Clean-Lakes/Lake/pull/105) 合入后。初版仅提交清理计划，随后经 #106 合入。C1 从 `081d6652` 实施新增执行退役，见 [C1 契约](../docs/design/strategy-execution-retirement-c1.md)；C1 已合入 #107；C2 的内容与入口承接转由自然记忆 N1～N5 落实，N1～N5 已随 #111～#116 合入；C3 运行清理已实施、待本次 PR 合入，C4 最终兼容验收仍待实施。不能将下文所有目标描述为已完成。
 
 本计划接替[用户资产与经验复用计划](refactor-user-assets-and-experience-1.md)的后续投入方向。P0～P8、R1～R5 的实现与原测试结果继续作为历史证据；不改写完成记录，也不将 inconclusive 改成收益成立。已关闭且未合并的 [#67](https://github.com/Clean-Lakes/Lake/pull/67) 不重新打开、不挑入其剩余在线增强；其主机检查、Dev 快跑与记忆边界修复已由 #69/#70/#71 交付，继续保留。
 
@@ -62,7 +62,7 @@ tags: [cleanup, harness, strategy, compatibility, user-preferences]
 
 | 编号 | 当前入口与代码定位 | 目标及保留边界 |
 | --- | --- | --- |
-| X01 | 在线控制器：[strategy_online.go](../internal/ai/strategy_online.go)、[online.go](../internal/strategy/online.go)、[progress.go](../internal/strategy/progress.go)；`revise_readonly_strategy` 及 provider/engine 接点 | **移除新在线修订、自动采样、在线预算和停止拦截**；删除活动工具注册和提示。保留旧报告解码、未知状态和受限历史卡，不再因旧会话恢复进入控制器 |
+| X01 | 在线控制器：[strategy_online.go](../internal/ai/strategy_online.go)、[online.go](../internal/strategy/online.go)、[原 progress.go](https://github.com/Clean-Lakes/Lake/blob/cd75e2c7d0acb71e61e73d19bd12ceec92486c5d/internal/strategy/progress.go)；`revise_readonly_strategy` 及 provider/engine 接点 | **移除新在线修订、自动采样、在线预算和停止拦截**；删除活动工具注册和提示。保留旧报告解码、未知状态和受限历史卡，不再因旧会话恢复进入控制器 |
 | X02 | 自动候选提取：[strategy_learning.go](../internal/ai/strategy_learning.go)、[strategy_learning_outbox.go](../internal/web/strategy_learning_outbox.go)、[strategy_learning_worker.go](https://github.com/Clean-Lakes/Lake/blob/409d27063f59030b406544cc35484edac0a4e8ce/internal/web/strategy_learning_worker.go)、[strategy_learning_input.go](../internal/web/strategy_learning_input.go)、[strategy_learning_routes.go](../internal/web/strategy_learning_routes.go) | **移除纠正前缀触发、终态自动采集、新候选任务与模型提取**，同时停用手工登记来源后调用提取模型的入口。已有候选保留待审核身份，可查看、导出、拒绝；不自动采用 |
 | X03 | 用户快照实验：[strategy_experiment.go](../internal/ai/strategy_experiment.go)、[strategy_experiment_worker.go](https://github.com/Clean-Lakes/Lake/blob/409d27063f59030b406544cc35484edac0a4e8ce/internal/web/strategy_experiment_worker.go)、[strategy_experiment_routes.go](../internal/web/strategy_experiment_routes.go)、[fixtures.go](../internal/strategy/fixtures.go)、[reuse_evaluation.go](../internal/strategy/reuse_evaluation.go) | **移除产品内新增 A/B 任务、变体执行与快照工具目录**；旧报告查看、取消收尾、正文清理及读取鉴权保留。无运行调用者的夹具/评分器删除；仍有必要的回归夹具留测试代码，不为历史报告保留执行器 |
 | X04 | 旧递归优化：[strategy_optimization_store.go](../internal/web/strategy_optimization_store.go)、[strategy_optimization_report.go](../internal/web/strategy_optimization_report.go) | 执行器和提案/合成已在 R5 退出，**不重复宣称本轮才移除**。保留 startup 退役恢复、未知调用和历史读取；resume/save-candidate 等旧写入口继续拒绝，不能顺带恢复 |
@@ -75,7 +75,7 @@ tags: [cleanup, harness, strategy, compatibility, user-preferences]
 | --- | --- | --- |
 | S01 | [strategy_prompt_layers.go](../internal/ai/strategy_prompt_layers.go)、[strategy_prompt.go](../internal/ai/strategy_prompt.go)、[prompt.go](../internal/strategy/prompt.go) | 保留实际身份、权限、工具指导与用户指令的优先级；退出为可优化槽位引入的精确字符串分类/匹配强依赖。普通任务仍按原规则构建提示词，不因某段文案改变而产生策略分类故障 |
 | S02 | [strategy_assets.go](../internal/ai/strategy_assets.go)、[strategy_runtime.go](../internal/web/strategy_runtime.go)、[agent.go](../internal/web/agent.go) | 将人工偏好的加载与旧控制器/实验 epoch 检查拆开。暂保旧采用内容的冻结版本和撤回检查；承接完成后删无调用者的策略 provider，不向专员盲目继承普通会话资产 |
-| S03 | [adk_provider_step.go](../internal/ai/adk_provider_step.go)、[strategy_manifest.go](../internal/ai/strategy_manifest.go)、[strategy_usage.go](../internal/ai/strategy_usage.go)、[strategy_manifest_test.go](../internal/ai/strategy_manifest_test.go) | 当前每次请求仍准备并持久化 PromptManifest，不能说关闭总开关就无此路径。拆除实验预算/清单强耦合；保留历史清单读取、准确内容版本追溯及必要的不含密钥诊断。将可选实验诊断从前台必写路径移出；不吞掉真实会话保存、授权或操作账本错误 |
+| S03 | [adk_provider_step.go](../internal/ai/adk_provider_step.go)、[strategy_manifest.go](../internal/ai/strategy_manifest.go)、[strategy_usage.go](../internal/ai/strategy_usage.go)、[strategy_manifest_test.go](../internal/ai/strategy_manifest_test.go) | 原盘点基线每次请求仍准备并持久化 PromptManifest；C3 已使产品默认停写，历史和显式诊断保留。拆除实验预算/清单强耦合；保留历史清单读取、准确内容版本追溯及必要的不含密钥诊断。将可选实验诊断从前台必写路径移出；不吞掉真实会话保存、授权或操作账本错误 |
 | S04 | [server.go](../internal/web/server.go)、[strategy_learning_worker.go](https://github.com/Clean-Lakes/Lake/blob/409d27063f59030b406544cc35484edac0a4e8ce/internal/web/strategy_learning_worker.go)、[strategy_jobs.go](../internal/web/strategy_jobs.go)、[types.go](../internal/ai/types.go)、[engine.go](../internal/ai/engine.go)、[adk_session.go](../internal/ai/adk_session.go) | 先拆开 worker、ModelActivity/前台优先回调、策略字段、Outbox、nativeCorrection 初始化和历史解码。停派发后移除无调用者的后台 ticker/锁/预算记账路径，保留已有记录与恢复隔离，不删除共享 ADK 服务 |
 | S05 | [ModelSettings.tsx](../web-agent/web/src/ModelSettings.tsx)、[StrategySettings.tsx](../web-agent/web/src/StrategySettings.tsx)、[StrategySwitches.tsx](../web-agent/web/src/StrategySwitches.tsx)、[StrategyLearning.tsx](../web-agent/web/src/StrategyLearning.tsx)、[StrategyExperiments.tsx](../web-agent/web/src/StrategyExperiments.tsx) | 先去掉学习、在线及新评估操作；人工内容承接后退出独立“策略资产”主标签。兼容查看旧内容/报告从次级入口进入，不删除旧内容来隐藏入口 |
 | S06 | [StrategyPromotion.tsx](../web-agent/web/src/StrategyPromotion.tsx)、[StrategyReuseEditor.tsx](../web-agent/web/src/StrategyReuseEditor.tsx)、[StrategyUsageHistory.tsx](../web-agent/web/src/StrategyUsageHistory.tsx)、[StrategyCorrectionCard.tsx](../web-agent/web/src/StrategyCorrectionCard.tsx)、[AIPanel.tsx](../web-agent/web/src/AIPanel.tsx)、[contracts.ts](../web-agent/shared/contracts.ts) | 日常偏好不再要求研究式“确认—晋升—调参—试跑”。仍保留用户决定跨项目范围的明确确认；旧纠错卡只解释历史终态，无“继续实验”入口，老卡片不破坏消息渲染 |
@@ -122,8 +122,8 @@ ADK 持久化另有 `nativeCorrection`、`nativeArtifact` 和会话状态里的 
 | --- | --- | --- |
 | C0 盘点与决策 | 已合入 #106 | 本计划、代码分类、兼容边界与验收矩阵；不改变运行行为 |
 | C1 退役新增执行 | 已合入 #107（510aad88） | X01～X05 的在线/学习/评估入口停止新派发；持久退役、两库恢复、旧 API 防复活及界面移除新执行操作。保留人工应用、历史访问和必要的惰性兼容函数；[C1 契约](../docs/design/strategy-execution-retirement-c1.md)及[验收](../docs/validation/strategy-execution-retirement-c1.md) |
-| C2 人工内容与入口收敛 | 转由自然记忆 N1～N5 落实 | 旧正文、绑定、范围与来源保真承接，统一记忆入口；新记忆采用自然形成/空闲整理/按范围使用/压缩补充提取的交互，不要求逐条采用。复杂方法不自动转成无条件偏好，Pilot 权限不变；见[新计划](feature-natural-memory-1.md) |
-| C3 运行依赖与代码清理 | 待实施，依赖 C1/C2 | 拆分 S01～S04，去掉优化槽位、无用请求清单必写、策略 provider/配置及无人使用的工具/预算类型。对仍需兼容应用的内容保留最小适配器；未达到等价承接条件的代码不得提前删除 |
+| C2 人工内容与入口收敛 | N1～N5 已合入 #111～#116，复杂条件保留兼容 | 旧正文、绑定、范围与来源保真承接，统一记忆入口；新记忆采用自然形成/空闲整理/按范围使用/压缩补充提取的交互，不要求逐条采用。复杂方法不自动转成无条件偏好，Pilot 权限不变；见[新计划](feature-natural-memory-1.md) |
+| C3 运行依赖与代码清理 | 已实施，待本次 PR 合入 | 已删除精确文案优化槽位、旧在线控制器/预算/候选采集/变体 actor 接点；普通请求默认停写实验清单，显式诊断失败不阻断任务。复杂条件采用仍保留最小 provider，旧 schema/hash/unknown/历史读取保留；见 [C3 契约](../docs/design/strategy-runtime-cleanup-c3.md)及[验收](../docs/validation/strategy-runtime-cleanup-c3.md) |
 | C4 文档、测试和最终验收 | 待实施 | 更新 README/指南/测试脚本/CI 引用，保留历史证据；验证升级、重启、拒绝旧写入、内容承接、普通任务/Pilot、取消/审批/未知恢复；记录剩余兼容代码及理由 |
 
 若 C2 的最小偏好承接仍需要复制整套策略平台，暂停扩展，优先保留受限的旧内容管理与导出；不能以清理名义新增向量检索、自动评分、多次试跑或另一套 Agent 循环。代码删除以零有效调用者、兼容读取和数据去向验证为门槛，不按删除行数验收。

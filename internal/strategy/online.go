@@ -58,12 +58,3 @@ type OnlineReport struct {
 	InFlightRequest    bool                `json:"inFlightRequest"`
 	Recovered          bool                `json:"recovered"`
 }
-
-// A completed sample covers a known failed check only when its logical check
-// and authorized target are unchanged. Novel text, IDs or timestamps do not
-// prove progress. Alternate checks remain observations, not recovery proof.
-func OnlineProgress(failed, sample OnlineObservation) bool {
-	return !failed.Success && failed.TrustedReadOnly && sample.TrustedReadOnly &&
-		sample.Success && failed.CheckHash != "" && failed.CheckHash == sample.CheckHash &&
-		failed.TargetHash != "" && failed.TargetHash == sample.TargetHash && sample.EvidenceHash != ""
-}

@@ -46,7 +46,7 @@ func (e *Engine) adkStore() (*storage.Store, error) {
 				var sessions []string
 				services.err = services.store.DB.Model(&nativeCorrection{}).Distinct("session_id").Pluck("session_id", &sessions).Error
 				for _, id := range sessions {
-					e.onlineSessions.Store(id, true)
+					e.historicalCorrectionSessions.Store(id, true)
 				}
 			}
 		}

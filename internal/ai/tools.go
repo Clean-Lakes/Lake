@@ -78,16 +78,8 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if naturalRecallTool(call.Name) {
 		return e.invokeNaturalRecall(ctx, s, c, call)
 	}
-	if e.experiment != nil {
-		return e.experiment.invoke(ctx, call)
-	}
-	// Approval recovery can enter invoke directly. It must obey the same frozen
-	// correction gate as ordinary ADK calls, including opaque session tools.
-	if err := e.onlineBeforeCall(ctx, s, c, call); err != nil {
-		return nil, &ToolNotExecutedError{Err: err}
-	}
 	if call.Name == onlineRevisionTool {
-		return e.onlinePropose(ctx, s, c, call)
+		return nil, errors.New("strategy_execution_retired")
 	}
 	if c.Model.Key != "" && (strings.Contains(call.Arguments, c.Model.Key) || strings.Contains(call.Arguments, strings.Trim(js(c.Model.Key), "\""))) {
 		return nil, errors.New("tool arguments cannot contain model credentials")
@@ -325,9 +317,6 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if err != nil {
 		return nil, err
 	}
-	if err = e.onlinePolicy(ctx, s, c, call, a, policyContext, risk, kind); err != nil {
-		return nil, err
-	}
 	var preview map[string]any
 	if call.Name == "import_resources" {
 		preview = obj(policyContext["importPreview"])
@@ -472,9 +461,6 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	operation, operationErr := e.dispatchNativeOperation(ctx, s, c, call, risk, target, fingerprint)
 	if operationErr != nil {
 		return nil, &ToolNotExecutedError{Err: operationErr}
-	}
-	if trace, _ := ctx.Value(onlinePolicyKey{}).(*onlinePolicyTrace); trace != nil {
-		trace.Dispatched = true
 	}
 	defer func() {
 		if persistErr := e.finishNativeOperation(operation, c, result, err); persistErr != nil {

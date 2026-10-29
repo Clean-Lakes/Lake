@@ -99,7 +99,7 @@ func CatalogForConfig(c Config, capabilities map[string]any) []Tool {
 }
 func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool {
 	list := e.baseSessionCatalog(ctx, id, c)
-	if e.NaturalMemory != nil && e.worker == nil && naturalRecallAllowed(c) && e.experiment == nil {
+	if e.NaturalMemory != nil && e.worker == nil && naturalRecallAllowed(c) {
 		list = append(list, naturalRecallTools()...)
 	}
 	if c.sre != nil && c.sre.Pilot != nil && !c.sre.NoTools && len(list) > 0 {
@@ -113,9 +113,6 @@ func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool
 		list = filtered
 		list = append(list, pilotChoiceTool(), pilotReadRecoveryTool())
 	}
-	if onlineEnabled(c) && (c.sre == nil || !c.sre.NoTools) {
-		list = append(list, onlineTool())
-	}
 	if c.ConversationMode == ModePlan {
 		list = planCatalog(list)
 	}
@@ -123,9 +120,6 @@ func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool
 }
 
 func (e *Engine) baseSessionCatalog(ctx context.Context, id string, c Config) []Tool {
-	if e.experiment != nil {
-		return e.experiment.catalog()
-	}
 	if c.sre != nil {
 		return e.sreRoleCatalog(c)
 	}

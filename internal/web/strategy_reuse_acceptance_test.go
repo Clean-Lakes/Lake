@@ -4,13 +4,11 @@ package web
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/Clean-Lakes/Lake/internal/ai"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -251,36 +249,24 @@ func reusePilot(t *testing.T, model ai.Model, reps int, path string, meter *p8Me
 	save()
 	return report
 }
-func TestStrategyReusePilotUsesDailySelectorAndNegativeControls(t *testing.T) {
-	cases := strategy.ReuseEvaluationCases()
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var p Object
-		_ = json.NewDecoder(r.Body).Decode(&p)
-		raw := jsonText(p["messages"])
-		if len(objects(p["tools"])) != 0 || strings.Contains(raw, "private_requirement") || strings.Contains(raw, "negative_transfer") {
-			t.Error("tools or judge leaked")
-		}
-		for _, c := range cases {
-			if strings.Contains(raw, c.Target) {
-				answer := c.Target + " " + c.Trace
-				if strings.Contains(raw, "User-confirmed historical strategy data") || c.Variant == "current_request" {
-					answer += " " + strings.Join(c.Required, " ")
-				}
-				emitModel(w, jsonText(Object{"outcome": "reported", "finding": "replay", "answer": answer, "evidenceIds": []string{"observation-1"}}), nil)
-				return
-			}
-		}
-		t.Error("unknown replay")
-	}))
-	defer provider.Close()
-	report := reusePilot(t, ai.Model{URL: provider.URL, Name: "deterministic-reuse", Protocol: "openai", ContextWindow: 64000, MaxOutput: 1024}, 1, "", nil)
-	s := object(report["summary"])
-	if integer(s["paired"]) != 24 || integer(s["missing"]) != 0 || integer(s["regressions"]) != 0 || integer(s["wins"]) != 18 {
-		t.Fatal("invalid pilot aggregation", jsonText(s))
+func TestStrategyReusePilotEntryIsRetired(t *testing.T) {
+	engine, err := ai.New(t.TempDir(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Shutdown()
+	requests := 0
+	result := engine.RunStrategyVariant(context.Background(), ai.StrategyVariantInput{RunID: "old-pilot", Home: filepath.Join(t.TempDir(), "not-created"), Reserve: func(int64) error { requests++; return nil }})
+	if result.Status != "retired" || result.ErrorCode != "strategy_execution_retired" || requests != 0 {
+		t.Fatal("retired pilot ran", result)
 	}
 }
+
 func TestR5ConfiguredDevModelPairedAcceptance(t *testing.T) {
 	home := os.Getenv("LAKE_R5_DEV_MODEL_HOME")
+	if home != "" {
+		t.Fatal("R5 actor is retired; retain historical reports and use current scoped-memory acceptance instead")
+	}
 	if home == "" {
 		t.Skip("explicit R5 Dev-model acceptance only")
 	}

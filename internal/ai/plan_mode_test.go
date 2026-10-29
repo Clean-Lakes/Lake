@@ -69,8 +69,6 @@ func TestPlanModeEnforcesDenialsAndPersistsProposal(t *testing.T) {
 	c := s.state.Config
 	s.mu.Unlock()
 	c.ConversationMode = ModePlan
-	c.StrategyCorrectEnabled = true
-	c.StrategyLearnEnabled = true
 	c.Permissions = &Permissions{SilentReadFiles: true, SilentWriteFiles: true, SilentCommands: true}
 	if err := e.Configure("case", c); err != nil {
 		t.Fatal(err)

@@ -563,8 +563,7 @@ func p8Run(t *testing.T, root string, spec p8LiveSpec, arm string, rep int, body
 		}
 		return strategy.Resolve([]strategy.Candidate{{Value: asset}}, q, 8192), nil
 	}
-	engine.CorrectionGuard = func(context.Context, string, int64, int64) error { return nil }
-	config := ai.Config{Model: model, Profile: "core", Runtime: "local", Workspace: dir, MultiAgentMode: "off", MaxSteps: 4, Permissions: &ai.Permissions{SilentCommands: true, SilentTerminalCreation: true}, StrategyCorrectEnabled: arm == "C", StrategyBudget: strategy.DefaultBudget(), StrategyGlobalEpoch: 1, StrategyProjectEpoch: 1}
+	config := ai.Config{Model: model, Profile: "core", Runtime: "local", Workspace: dir, MultiAgentMode: "off", MaxSteps: 4, Permissions: &ai.Permissions{SilentCommands: true, SilentTerminalCreation: true}}
 	if err = engine.Configure("trial", config); err != nil {
 		t.Fatal("real fixture configuration failed")
 	}
@@ -654,6 +653,9 @@ func p8Run(t *testing.T, root string, spec p8LiveSpec, arm string, rep int, body
 }
 
 func TestP8RealServicesPairedAcceptance(t *testing.T) {
+	if os.Getenv("LAKE_P8_REAL_SERVICES") == "1" {
+		t.Fatal("historical P8 correction/variant actor retired; original reports remain evidence for their recorded source only")
+	}
 	model := p8DevModel(t)
 	if os.Getenv("LAKE_P8_REAL_SERVICES") != "1" {
 		t.Skip("real fixture trials not requested")
@@ -721,6 +723,9 @@ func TestP8RealServicesPairedAcceptance(t *testing.T) {
 // The host owns reset/mutation; the actor still gets exactly one readonly
 // observation adapter. Five variants + two auxiliary requests share one budget.
 func TestP8RealServicesBoundedOptimization(t *testing.T) {
+	if os.Getenv("LAKE_P8_REAL_SERVICES") == "1" {
+		t.Fatal("historical P8 correction/variant actor retired; original reports remain evidence for their recorded source only")
+	}
 	model := p8DevModel(t)
 	if os.Getenv("LAKE_P8_REAL_SERVICES") != "1" {
 		t.Skip("real optimization not requested")
