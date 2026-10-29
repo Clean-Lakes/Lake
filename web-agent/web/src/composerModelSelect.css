@@ -22,7 +22,8 @@
   backdrop-filter: var(--title-glass-filter);
   box-shadow: inset 0 1px color-mix(in srgb,var(--surface) 65%,transparent),var(--shadow-popover);
 }
-.composer-model-provider.app-select { width: 100%; margin: 0 0 5px; }
+.composer-model-provider-heading { border-bottom:1px solid var(--border); margin-bottom:5px; padding-bottom:4px; }
+.composer-model-provider.app-select { width: 100%; margin: 0; }
 .composer-model-provider.app-select > .app-select-trigger { height: 34px; padding: 0 9px; border: 0; border-radius: 13px; corner-shape: var(--corner-window); background: transparent; font-size: var(--font-size-ui); font-weight:var(--font-weight-medium); }
 .composer-model-provider.app-select > .app-select-trigger:hover { background: var(--surface-hover); }
 .composer-model-provider .app-select-chevron { transform: rotate(-90deg); }

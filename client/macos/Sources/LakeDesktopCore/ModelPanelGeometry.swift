@@ -3,7 +3,7 @@ import AppKit
 /// Position a DOM-anchored panel inside the display without clipping its controls.
 public enum ModelPanelGeometry {
     public static func frame(anchor: NSRect, visible: NSRect, height: CGFloat) -> NSRect {
-        let width = min(max(1, anchor.width), max(1, visible.width - 16))
+        let width = min(max(240, anchor.width), max(1, visible.width - 16))
         let height = min(max(80, height), min(420, max(1, visible.height - 16)))
         let x = min(max(anchor.maxX - width, visible.minX + 8), visible.maxX - width - 8)
         let above = anchor.maxY + 6

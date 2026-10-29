@@ -37,6 +37,13 @@ test('model popup can match both trigger edges instead of enforcing a wider mini
  const clamped=selectPopupPosition({...anchor,left:4,width:1000},{width:320,height:800},8,{minWidth:0,maxHeight:420});
  assert.equal(clamped.left,8);assert.equal(clamped.width,304);
 });
+test('readable model popup expands left from a short trigger and respects screen margins',()=>{
+ const anchor={left:620,top:700,bottom:728,width:105};
+ const expanded=selectPopupPosition(anchor,{width:1000,height:800},6,{minWidth:240,align:'end'});
+ assert.equal(expanded.width,240);assert.equal(expanded.left+expanded.width,725);
+ const edge=selectPopupPosition({...anchor,left:8},{width:320,height:800},6,{minWidth:240,align:'end'});
+ assert.equal(edge.left,8);assert.equal(edge.width,240);
+});
 test("all public form selects use the shared component",()=>{
  const root=fileURLToPath(new URL("../src/",import.meta.url));
  for (const file of readdirSync(root).filter(file=>file.endsWith('.tsx')&&file!=="AppSelect.tsx")) {

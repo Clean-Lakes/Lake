@@ -10,6 +10,7 @@ import '../../src/composerModelSelect.css';
 const params=new URLSearchParams(location.search);
 document.documentElement.dataset.theme=params.has('dark')?'dark':'light';
 const models:AvailableModelEntry[]=['deepseek-v4-pro','deepseek-flash','no-reasoning'].map((name,i)=>({providerId:'demo',providerName:'DeepSeek · Lake',modelId:name,name,displayName:i===2?'轻量模型':name}));
+if(params.has('compact'))models.splice(0,models.length,...['hunyuan/hunyuan-turbos','zhipu/glm-5.3','zhipu/glm-5','deepseek/deepseek-flash'].map(name=>({providerId:'demo',providerName:'腾讯云',modelId:name,name,displayName:name})));
 if(params.has('long'))for(let i=0;i<20;i++)models.push({...models[0]!,modelId:`demo-${i}`,name:`demo-${i}`,displayName:`演示模型 ${i+1}`,providerId:i<10?'demo':'other',providerName:i<10?'DeepSeek · Lake':'备用供应商'});
 const saved:Record<string,string>={};
 const calls:{modelId:string;effort:string}[]=[];
@@ -25,7 +26,7 @@ window.fetch=async(input,init)=>{
  const settings:ReasoningSettings={modelId,levels:modelId==='no-reasoning'?[]:modelId==='deepseek-v4-pro'?['low','high']:['none','low','medium','high','max'],default:'high',effort:saved[modelId]??''};
  return new Response(JSON.stringify(settings),{headers:{'Content-Type':'application/json'}});
 };
-let currentModel='deepseek-flash';
+let currentModel=models[1]!.modelId;
 function Preview(){
  const [model,setModel]=useState(models[1]!),[open,setOpen]=useState(false),[busy,setBusy]=useState(false),[running,setRunning]=useState(false),[theme,setTheme]=useState(params.has('dark'));
  return <main style={{minHeight:'100vh',padding:24,boxSizing:'border-box',display:'flex',flexDirection:'column',justifyContent:'space-between'}}>
