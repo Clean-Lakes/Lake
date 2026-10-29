@@ -1,6 +1,6 @@
 # C3 运行依赖清理
 
-日期：2026-10-29。基于 `develop@cd75e2c7d0acb71e61e73d19bd12ceec92486c5d`（N5 #116 已合入）。本阶段落实[清理计划](../../plan/refactor-harness-inspired-cleanup-1.md) S01～S04；自然记忆仍为实验，默认使用/积累开关不变。没有引入 Harness² 依赖或另一套 Agent 循环。
+日期：2026-10-29。基于 `develop@cd75e2c7d0acb71e61e73d19bd12ceec92486c5d`（N5 #116 已合入）。最终已同步 develop@16483bd2（#115）；源码与验收提交见下文记录。本阶段落实[清理计划](../../plan/refactor-harness-inspired-cleanup-1.md) S01～S04；自然记忆仍为实验，默认使用/积累开关不变。没有引入 Harness² 依赖或另一套 Agent 循环。
 
 ## 普通任务的变化
 

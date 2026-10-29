@@ -1,0 +1,86 @@
+{
+  "countsBefore": {
+    "manifests": 187,
+    "corrections": 10
+  },
+  "codeSHA": "9033353bec358cc688c73bc1f850949c5169be0c",
+  "scenarios": [
+    {
+      "scenario": "C3 跨会话自然偏好",
+      "sessionId": "6915ff4d0e2d453363116060bfd4f386",
+      "passed": true,
+      "answer": "【协调偏好】2 加 2 等于 4。",
+      "preparedScopes": [
+        "project"
+      ],
+      "exactPreferencePrepared": true,
+      "noOperationsOrCorrection": true,
+      "newManifestRows": 0,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 18048,
+        "input": 18216,
+        "output": 35,
+        "total": 18251
+      }
+    },
+    {
+      "scenario": "C3 当前明确要求优先",
+      "sessionId": "995b0a16bd88febbef8d0e00477c99db",
+      "passed": true,
+      "answer": "4",
+      "preparedScopes": [
+        "project"
+      ],
+      "exactPreferencePrepared": true,
+      "noOperationsOrCorrection": true,
+      "newManifestRows": 0,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 18048,
+        "input": 18222,
+        "output": 66,
+        "total": 18288
+      }
+    }
+  ],
+  "viewSession": "995b0a16bd88febbef8d0e00477c99db",
+  "countsAfter": {
+    "manifests": 187,
+    "corrections": 10
+  },
+  "startupCompatibility": {
+    "counts": {
+      "web": 51,
+      "adk": 2
+    },
+    "changed": []
+  },
+  "oldHistory": {
+    "accessible": true,
+    "oldRows": 1
+  },
+  "integrity": {
+    "lake-web.sqlite": "ok",
+    "adk/sessions.sqlite": "ok"
+  },
+  "runtimeCleanAndHashMatched": true,
+  "globalAutoEnabled": false,
+  "projectAutoEnabled": false,
+  "projectUseEnabled": true,
+  "allPassed": true,
+  "ui": {
+    "light": true,
+    "dark": true,
+    "narrowScreenshotPixels": [
+      1003,
+      853
+    ],
+    "oldHistoryRendered": true,
+    "originalLightAndWindowRestored": true
+  }
+}
