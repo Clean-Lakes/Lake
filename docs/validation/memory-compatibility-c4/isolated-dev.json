@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "kind": "memory_compatibility_dev",
+  "sourceCommit": "3d317c0aa4bf0a3add84df687660944b98b5d5c6",
+  "status": "passed",
+  "syntheticProvider": true,
+  "realModelBenefitEvaluated": false,
+  "nativeUIEvaluated": false,
+  "previousBinaryRoundTrip": "passed_readonly_copy_only",
+  "checks": [
+    "legacy_content_exact",
+    "carry_without_duplicate_runtime",
+    "unadopted_not_applied",
+    "retired_writes_410",
+    "two_new_turns_across_restart",
+    "no_new_manifests_or_corrections",
+    "restart_hash_parity",
+    "independent_consent_off"
+  ],
+  "preservedTableCounts": {
+    "web": 51,
+    "adk": 2
+  },
+  "newExperimentalManifests": 0,
+  "newCorrections": 0,
+  "previousBinarySHA256": "0c72befd0c97f7ebac28a66ea6948ab1be75b0d0e091d543b98671a30a5fecc6",
+  "providerRequests": 2,
+  "previousSourceCommit": "54a117c9af0a88f210c3adb2cf959b96ef711917"
+}
