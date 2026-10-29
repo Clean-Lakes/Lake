@@ -2,6 +2,12 @@ name: Windows x86_64 client
 on:
   workflow_dispatch:
     inputs:
+      n5_checks:
+        description: 'N5 failed/uncompleted subset only'
+        required: false
+        default: all
+        type: choice
+        options: [all, migrations-and-ui, native-ui-only]
       n5_resume:
         description: 'Retry only failed/uncompleted N5 stages; frontend checks already passed'
         required: false
@@ -187,10 +193,15 @@ jobs:
           New-Item -ItemType Directory -Force assets/web/dist | Out-Null
           Copy-Item web-agent/web/dist/* assets/web/dist/ -Recurse -Force
       - name: Memory boundaries and recovery on Windows
+        if: inputs.n5_checks != 'native-ui-only'
         shell: pwsh
         run: |
           $env:CGO_ENABLED = '0'
-          go test ./internal/ai ./internal/web -run 'Test(Natural|MemoryCapture|ProjectMemory|ADKOfficialProjection|StrategyRetirement)' -count=1 -timeout=5m
+          if ('${{ inputs.n5_checks }}' -eq 'migrations-and-ui') {
+            go test ./internal/web -run '^TestNatural(ConsolidationMigrationBackfillsReferencesAndIsIdempotent|MemoryMigrationBackupRestartAndFutureGuard|PreferenceMigrationReopenBackupAndFutureGuard|RecallMigrationKeepsOldRowsAndRejectsFutureSchema)$' -count=1 -timeout=3m
+          } else {
+            go test ./internal/ai ./internal/web -run 'Test(Natural|MemoryCapture|ProjectMemory|ADKOfficialProjection|StrategyRetirement)' -count=1 -timeout=5m
+          }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Actual Windows memory settings in WebView2
         shell: pwsh

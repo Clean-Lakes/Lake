@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"github.com/Clean-Lakes/Lake/internal/ai"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"os"
 	"path/filepath"
 	"strings"
@@ -178,13 +179,18 @@ func TestNaturalRecallMigrationKeepsOldRowsAndRejectsFutureSchema(t *testing.T) 
 	if !boolOf(s.naturalRecallSettings(StrategyContext{})["useEnabled"]) {
 		t.Fatal("lost setting")
 	}
+	s.Close()
 	backup, _ := filepath.Glob(filepath.Join(dir, "lake-web.before-natural-recall-v1-*.sqlite"))
 	if len(backup) != 1 {
 		t.Fatal(backup)
 	}
 	stat, _ := os.Stat(backup[0])
-	if stat.Mode().Perm() != 0600 {
+	if !platform.Private(backup[0], stat) {
 		t.Fatal("backup not private")
+	}
+	s, err = OpenStore(dir)
+	if err != nil {
+		t.Fatal(err)
 	}
 	s.exec("UPDATE naturalRecallMeta SET schemaHash='future'")
 	s.Close()
