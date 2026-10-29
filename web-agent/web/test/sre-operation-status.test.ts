@@ -5,6 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import type {SRETask,WorkSession} from '../../shared/contracts';
 import {sreSessionPresentation} from '../src/sreSessionPresentation';
 import {SessionStateBadge} from '../src/SessionPresentation';
+import {sessionBadgeState} from '../src/sessionBadgeState';
 const session={id:'s',status:'completed'} as WorkSession;
 test('a completed model reply cannot turn paused, failed or cancelled SRE tasks green',()=>{
  for(const [status,label] of [['paused','任务已暂停'],['failed','任务未完成'],['cancelled','任务已取消']] as const){
@@ -42,4 +43,33 @@ test('an earlier pause cannot hide the current failed task',()=>{
  const old={status:'paused',updatedAt:'2020-01-01T00:00:00Z',attempts:[]} as unknown as SRETask;
  const current={status:'failed',updatedAt:at,attempts:[]} as unknown as SRETask;
  assert.equal(sreSessionPresentation(session,[current,old],at).label,'任务未完成');
+});
+
+test('fixed badge labels retain SRE uncertainty and distinguish a pause from failure',()=>{
+ const examples=[
+  ['paused','任务已暂停','已暂停','neutral'],
+  ['waiting_input','任务待继续','已暂停','neutral'],
+  ['cancelled','任务已取消','已停止','neutral'],
+  ['failed','任务未完成','需关注','danger'],
+  ['completed','调查结束 · 结论不充分','需关注','attention'],
+ ] as const;
+ for(const [status,detail,visible,tone] of examples){
+  const props=sreSessionPresentation(session,[{status,outcome:status==='completed'?'inconclusive':undefined,attempts:[]} as unknown as SRETask]);
+  const html=renderToStaticMarkup(createElement(SessionStateBadge,{session,...props}));
+  assert.ok(html.includes(`title="${detail}"`));
+  assert.ok(html.includes(`class="session-state-label">${visible}</span>`));
+  assert.ok(html.includes(`data-tone="${tone}"`));
+  assert.ok(!html.includes('data-badge-state="ended"'));
+ }
+ assert.equal(sessionBadgeState('failed','变更待核实').tone,'attention');
+ // A pause request cannot hide an operation that is still dispatched.
+ assert.equal(sessionBadgeState('investigating','原操作仍在执行').label,'处理中');
+ assert.equal(sessionBadgeState('waiting_approval','任务已完成').label,'待确认');
+});
+
+test('unrecognized detail text stays in the tooltip, not in the fixed badge label',()=>{
+ const html=renderToStaticMarkup(createElement(SessionStateBadge,{session,label:'服务端的详细结果说明'}));
+ assert.ok(html.includes('title="服务端的详细结果说明"'));
+ assert.ok(html.includes('class="session-state-label">已结束</span>'));
+ assert.ok(html.includes('session-state-icon'));
 });
