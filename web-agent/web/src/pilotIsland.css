@@ -27,10 +27,8 @@
 .header-normal-state .session-state-badge{margin-left:0}
 .pilot-mode-entry{display:flex;align-items:center;gap:4px;width:100%;min-width:0}
 .pilot-mode-avatar{display:inline-flex;flex:0 0 auto;color:var(--text-secondary)}
-.pilot-mode-copy{display:flex;flex:1 0 68px;flex-direction:column;min-width:0;line-height:16px}
-.pilot-mode-copy>strong{font-size:var(--font-size-ui);font-weight:var(--font-weight-ui);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pilot-mode-copy>small{font-size:var(--font-size-toolbar);color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pilot-mode-entry>.session-state-badge{margin-left:0;min-width:0;flex:0 1 auto;overflow:hidden}
+.pilot-mode-entry>.session-state-badge[data-tone]{margin-left:0;min-width:0;flex:1 1 auto;overflow:hidden;padding:0;background:transparent;border-radius:0}
+.pilot-mode-entry .session-state-icon{display:none}
 .pilot-mode-entry>.header-inspector-toggle{flex:0 0 28px;margin-left:0}
 @container(max-width:900px){.pilot-island-action{width:170px}}
 @container(max-width:700px){.pilot-island-trigger{padding-left:9px;gap:9px}.pilot-island-action{width:145px}}

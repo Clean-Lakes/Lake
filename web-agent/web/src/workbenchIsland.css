@@ -21,6 +21,7 @@
 /* Keep Pilot in its own segment, allowing the copy to give space to its controls.
    Its preferred width is independent of the currently constrained pane width. */
 .island-conversation { --pilot-state-width:238px; }
+.island-conversation:has(.workspace-header.has-pilot-mode) { --pilot-state-width:100px; }
 .lake-workbench-island .header-pilot-state { flex-shrink:1; max-width:100%; }
 .lake-workbench-island .header-pilot-state.is-visible { width:var(--pilot-state-width)!important; }
 .lake-workbench-island .header-pilot-state .header-morph-content { width:var(--pilot-state-width); max-width:100%; }

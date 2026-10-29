@@ -1361,7 +1361,7 @@ function AppContent() {
   const itemList = activeSnapshot ? timelineItems(activeSnapshot) : [];
   const sharedIsland=sessionHeader&&wideWorkbench;
   const headerSweep=sessionHeader&&<HeaderSweep key={`sweep-${selectedSession.id}`} active={!!activeSnapshot&&currentSessionStatus === "investigating"&&(headerPilot?pilotIslandAnimating(headerPilot):activeSnapshot?.ai?activeSnapshot.ai.status==='running'&&!activeSnapshot.ai.question:true)}/>;
-  const workspaceHeading=<header className={`workspace-header${headerPilot||headerPilotMode ? ' has-pilot-island' : ''}`}>
+  const workspaceHeading=<header className={`workspace-header${headerPilot||headerPilotMode ? ' has-pilot-island' : ''}${headerPilotMode&&!headerPilot?' has-pilot-mode':''}`}>
         {sessionHeader && <span className="workspace-header-glass" aria-hidden="true"/>}
         {!sharedIsland&&headerSweep}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>

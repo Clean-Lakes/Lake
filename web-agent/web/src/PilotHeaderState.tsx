@@ -25,8 +25,8 @@ export function PilotHeaderState({model,mode,status,normal,onInspect,details}:{d
  const inspectorToggle=details?.available&&<button type="button" className="header-inspector-toggle" aria-label={details.open?'收起执行详情':'展开执行详情'} title={details.open?'收起执行详情':'展开执行详情'} aria-controls={sessionInspectorId} aria-expanded={details.open} onClick={details.toggle}><Glyph name="next" size={13}/></button>;
  return <div className="header-state-area">
   <HeaderMorphSlot visible={!pilotVisible} className="header-normal-state">{normal}{inspectorToggle}</HeaderMorphSlot>
-  <HeaderMorphSlot visible={pilotVisible} className="header-pilot-state">{!model&&mode?<div className="pilot-mode-entry" role="group" aria-label={`Lake Pilot 已开启 · ${mode==='auto'?'自动推进':'手动选择'} · 本轮没有专员任务`}>
-   <span className="pilot-mode-avatar" role="img" aria-label="协调者入口" title="协调者 · Lake Pilot 入口"><AgentIcon role="coordinator" size={20}/></span><span className="pilot-mode-copy"><strong>Lake Pilot</strong><small>{mode==='auto'?'自动推进':'手动选择'}</small></span>{normal}{inspectorToggle}
+  <HeaderMorphSlot visible={pilotVisible} className="header-pilot-state">{!model&&mode?<div className="pilot-mode-entry" role="group" title={`Lake Pilot · ${mode==='auto'?'自动推进':'手动选择'}`} aria-label={`Lake Pilot 已开启 · ${mode==='auto'?'自动推进':'手动选择'} · 本轮没有专员任务`}>
+   <span className="pilot-mode-avatar" role="img" aria-label="协调者入口" title="协调者 · Lake Pilot 入口"><AgentIcon role="coordinator" size={20}/></span>{normal}{inspectorToggle}
   </div>:retained.current&&<PilotStatusIsland model={retained.current} status={status} visible={!!model} onInspect={onInspect}/>}</HeaderMorphSlot>
  </div>;
 }
