@@ -5,6 +5,7 @@ package web
 import (
 	"github.com/Clean-Lakes/Lake/internal/ai"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
 )
 
 // Only historical payload types remain; no optimizer prompt or actor is compiled.
@@ -43,7 +44,7 @@ func (b *Server) optimizationAssessment(id string, f strategyExperimentFrozen) (
 	runs := []Object{}
 	byVariant := map[string]Object{}
 	for _, row := range b.Store.rows("SELECT * FROM strategyExperimentRuns WHERE experimentId=? ORDER BY ordinal", id) {
-		fixture, _ := strategy.FindFixture(stringOf(row["caseId"]))
+		fixture, _ := legacystrategy.FindFixture(stringOf(row["caseId"]))
 		run := Object{"id": row["id"], "caseId": row["caseId"], "split": fixture.Split, "arm": row["arm"], "variant": row["variant"], "status": row["status"], "repetition": 1}
 		if row["reportJSON"] != "" && b.strategySafeText(stringOf(row["reportJSON"])) {
 			result := strategyDecode[legacyVariantResult](stringOf(row["reportJSON"]))

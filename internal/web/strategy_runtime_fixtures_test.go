@@ -6,15 +6,17 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
 // resolveStrategyBindings runs under the repository read lock. A project
 // binding, including an explicit disable, shadows the same global asset.
-func (s *Store) resolveStrategyBindings(ctx StrategyContext, q strategy.SelectionQuery, frozen *strategy.Selection, skillCheck func(string, string) bool) (strategy.ResolvedSelection, error) {
-	return strategyCall(s, false, func() strategy.ResolvedSelection {
+func (s *Store) resolveStrategyBindings(ctx StrategyContext, q legacystrategy.SelectionQuery, frozen *strategy.Selection, skillCheck func(string, string) bool) (legacystrategy.ResolvedSelection, error) {
+	return strategyCall(s, false, func() legacystrategy.ResolvedSelection {
 		effective := s.strategyEffective(ctx)
-		result := strategy.ResolvedSelection{Selection: strategy.Selection{GlobalEpoch: effective.GlobalEpoch, ProjectEpoch: effective.ProjectEpoch, SettingsRevision: effective.Settings.Revision, Selected: []strategy.RevisionRef{}, Omitted: []strategy.OmittedAsset{}}, Assets: []strategy.AssetRevision{}}
+		result := legacystrategy.ResolvedSelection{Selection: strategy.Selection{GlobalEpoch: effective.GlobalEpoch, ProjectEpoch: effective.ProjectEpoch, SettingsRevision: effective.Settings.Revision, Selected: []strategy.RevisionRef{}, Omitted: []strategy.OmittedAsset{}}, Assets: []strategy.AssetRevision{}}
 		if ctx.ProjectID != "" {
 			result.Selection.ProjectSettingsRevision = s.strategySettings(strategy.Scope{Kind: strategy.ProjectScope, ProjectID: ctx.ProjectID}).Revision
 		}
@@ -32,7 +34,7 @@ func (s *Store) resolveStrategyBindings(ctx StrategyContext, q strategy.Selectio
 			if len(rows) > 200 {
 				strategyFail(409, "binding_limit")
 			}
-			candidates := []strategy.Candidate{}
+			candidates := []legacystrategy.Candidate{}
 			for _, row := range rows {
 				v := s.strategyRevisionView(ctx, stringOf(row["assetId"]), int64(integer(row["revision"])))
 				reason := ""
@@ -61,9 +63,9 @@ func (s *Store) resolveStrategyBindings(ctx StrategyContext, q strategy.Selectio
 				if reason == "" {
 					reason = strategyReuseReason(policy, v.Value.Kind, model, toolHashes, q)
 				}
-				candidates = append(candidates, strategy.Candidate{Reuse: policy, Value: v.Value, Priority: integer(row["priority"]), ExclusionGroup: stringOf(row["exclusionGroup"]), UnavailableReason: reason})
+				candidates = append(candidates, legacystrategy.Candidate{Reuse: policy, Value: v.Value, Priority: integer(row["priority"]), ExclusionGroup: stringOf(row["exclusionGroup"]), UnavailableReason: reason})
 			}
-			resolved := strategy.Resolve(candidates, q, strategy.MaxAssetPromptBytes)
+			resolved := legacystrategy.Resolve(candidates, q, legacystrategy.MaxAssetPromptBytes)
 			result.Assets = resolved.Assets
 			result.Selection.Selected = resolved.Selection.Selected
 			result.Selection.Omitted = resolved.Selection.Omitted

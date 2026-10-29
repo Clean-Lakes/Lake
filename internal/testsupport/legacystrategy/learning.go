@@ -1,4 +1,4 @@
-package strategy
+package legacystrategy
 
 // Learning limits are independent of optional online correction/optimization.
 // Input counts the complete UTF-8 prompt envelope, not an approximate token count.

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
@@ -79,7 +81,7 @@ func TestStrategyReviewPromotionPrivacyExactVersionAndWithdrawal(t *testing.T) {
 	if _, err = s.BindStrategyAsset(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "adopt", StrategyBindingInput{Action: "adopt", Ref: pv.Value.Ref}); err != nil {
 		t.Fatal(err)
 	}
-	selected, err := s.resolveStrategyBindings(b, strategy.SelectionQuery{Profile: "core"}, nil, nil)
+	selected, err := s.resolveStrategyBindings(b, legacystrategy.SelectionQuery{Profile: "core"}, nil, nil)
 	if err != nil || len(selected.Assets) != 1 {
 		t.Fatal("global reuse failed", err)
 	}
@@ -105,7 +107,7 @@ func TestStrategyReviewPromotionPrivacyExactVersionAndWithdrawal(t *testing.T) {
 	if integer(s.row("SELECT COUNT(*) AS n FROM strategyRevisionContent WHERE assetId=?", public.AssetID)["n"]) != 0 {
 		t.Fatal("promoted content retained")
 	}
-	if _, err = s.resolveStrategyBindings(b, strategy.SelectionQuery{Profile: "core"}, &selected.Selection, nil); err == nil {
+	if _, err = s.resolveStrategyBindings(b, legacystrategy.SelectionQuery{Profile: "core"}, &selected.Selection, nil); err == nil {
 		t.Fatal("frozen context survived withdrawal")
 	}
 	s.Close()
@@ -252,7 +254,7 @@ func TestStrategyReviewArchiveCannotRevivePromotedContent(t *testing.T) {
 	if _, err = s.BindStrategyAsset(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "adopt-unavailable", StrategyBindingInput{Action: "adopt", Ref: gone.Value.Ref}); err == nil {
 		t.Fatal("archived origin was adopted")
 	}
-	if _, err = s.resolveStrategyBindings(StrategyContext{}, strategy.SelectionQuery{Profile: "core"}, nil, nil); err != nil {
+	if _, err = s.resolveStrategyBindings(StrategyContext{}, legacystrategy.SelectionQuery{Profile: "core"}, nil, nil); err != nil {
 		t.Fatal("archived origin poisoned global selection", err)
 	}
 	s.RestoreNavigation("project", ctx.ProjectID)
@@ -281,7 +283,7 @@ func TestStrategyReviewPromotionPreservesSkillPermissions(t *testing.T) {
 	}
 	other := StrategyContext{ProjectID: stringOf(s.CreateProject("Other")["id"])}
 	for _, mode := range []string{"denied", "changed", "unchanged"} {
-		q := strategy.SelectionQuery{Profile: "core", SkillReadAllowed: mode != "denied"}
+		q := legacystrategy.SelectionQuery{Profile: "core", SkillReadAllowed: mode != "denied"}
 		selection, err := s.resolveStrategyBindings(other, q, nil, func(name, hash string) bool {
 			return mode == "unchanged" && name == "private-method" && hash == strategy.ContentHash(body)
 		})

@@ -5,6 +5,8 @@ package web
 import (
 	"time"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
@@ -121,7 +123,7 @@ func (s *Store) strategyQueueJob(ctx StrategyContext, key string, input Strategy
 	}
 	ttl := time.Duration(effective.Settings.Budget.MaxActiveSeconds) * time.Second
 	if input.Kind == "proposal" {
-		limits := strategy.DefaultLearningLimits()
+		limits := legacystrategy.DefaultLearningLimits()
 		pending := s.row("SELECT COUNT(*) AS total,COALESCE(SUM(CASE WHEN accessProjectId=? THEN 1 ELSE 0 END),0) AS projectTotal FROM strategyJobs WHERE kind='proposal' AND status IN ('queued','leased','awaiting_reconciliation')", ctx.ProjectID)
 		if integer(pending["total"]) >= limits.MaxQueued || integer(pending["projectTotal"]) >= limits.MaxProjectQueued {
 			strategyFail(409, "learning_queue_full")

@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/ai"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
@@ -28,7 +30,7 @@ func seedLegacyOptimization(t *testing.T, s *Store, state string) (StrategyConte
 	}
 	job := seedLegacyJob(t, s, ctx, scope, "experiment", a.AssetID, v.Value.SourceIDs)
 
-	f := strategyExperimentFrozen{Optimization: true, Asset: v.Value, Cases: []strategy.Fixture{strategy.Fixtures()[0], strategy.Fixtures()[13]}, Repetitions: 1, Budget: strategy.DefaultBudget(), SkillHashes: map[string]string{}}
+	f := strategyExperimentFrozen{Optimization: true, Asset: v.Value, Cases: []legacystrategy.Fixture{legacystrategy.Fixtures()[0], legacystrategy.Fixtures()[13]}, Repetitions: 1, Budget: strategy.DefaultBudget(), SkillHashes: map[string]string{}}
 	_, e = strategyCall(s, true, func() bool {
 		raw := jsonText(f)
 		s.exec("INSERT INTO strategyExperiments(jobId,frozenJSON,frozenHash,modelRef,requests,tokensCharged,createdAt) VALUES(?,?,?,'legacy-model',2,4096,?)", job.JobID, raw, strategy.ContentHash(raw), now())
@@ -50,7 +52,7 @@ func seedLegacyOptimization(t *testing.T, s *Store, state string) (StrategyConte
 			second = "running"
 		}
 		s.exec("INSERT INTO strategyOptimizationCalls(id,experimentId,stage,status,requestHash,reservedTokens) VALUES(?,?,'synthesize',?,'inflight-request',2048)", ident(), job.JobID, second)
-		run := legacyVariantResult{Status: "completed", RuntimeID: "legacy-runtime", Answer: "Legacy private answer", Evaluation: strategy.FixtureEvaluation{Status: "passed"}}
+		run := legacyVariantResult{Status: "completed", RuntimeID: "legacy-runtime", Answer: "Legacy private answer", Evaluation: legacystrategy.FixtureEvaluation{Status: "passed"}}
 		s.exec("INSERT INTO strategyExperimentRuns(id,experimentId,ordinal,caseId,arm,repetition,status,runtimeId,reportJSON,variant) VALUES(?,?,1,'SL-001','baseline',1,'completed','legacy-runtime',?,'baseline_development')", ident(), job.JobID, jsonText(run))
 		s.exec("INSERT INTO strategyExperimentRuns(id,experimentId,ordinal,caseId,arm,repetition,status,variant) VALUES(?,?,2,'SL-014','assets',1,'planned','synthesis_holdout')", ident(), job.JobID)
 		if state == "checkpoint" {

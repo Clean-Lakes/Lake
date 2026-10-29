@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/ai"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
@@ -46,9 +48,9 @@ func experimentProvider(t *testing.T, calls *atomic.Int32, attack bool) *httptes
 		if strings.Contains(raw, "diagnostic_marker") || strings.Contains(raw, "candidateWins") || strings.Contains(raw, "snapshot-judge-v1") {
 			t.Error("hidden judge/feedback leaked")
 		}
-		var f strategy.Fixture
+		var f legacystrategy.Fixture
 		index := 0
-		for i, c := range strategy.Fixtures() {
+		for i, c := range legacystrategy.Fixtures() {
 			if strings.Contains(raw, c.Prompt) {
 				f = c
 				index = i

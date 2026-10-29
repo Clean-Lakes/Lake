@@ -1329,7 +1329,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .workspace.has-floating-header > .natural-memory-notice .system-banner { padding-inline: 0; }
 .natural-memory-notice { flex: 0 0 auto; min-width: 0; }
 .natural-memory-notice .system-banner { flex-wrap: wrap; }
-.natural-memory-notice .strategy-settings { margin: 0 clamp(21px, 3vw, 42px) 10px; max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-settings-panel); corner-shape: var(--corner-window); padding: 12px; }
+.natural-memory-notice .natural-memory-details { margin: 0 clamp(21px, 3vw, 42px) 10px; max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-settings-panel); corner-shape: var(--corner-window); padding: 12px; }
 
 .composer-send-feedback { color:var(--text-secondary); font-size:var(--font-size-toolbar); white-space:nowrap; }
 .composer-input .send-button[data-sending] { color:var(--info); }

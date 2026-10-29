@@ -7,3 +7,5 @@
 .memory-settings button:focus-visible,.memory-settings summary:focus-visible{outline:2px solid var(--focus-outline);outline-offset:2px}
 .memory-preferences{border:1px solid var(--border);border-radius:var(--radius-settings-panel);padding:12px;corner-shape:var(--corner-window)}
 @media(max-width:760px){.memory-settings{padding:12px}.memory-settings .button{min-height:36px}}
+.memory-preferences .memory-toggle{display:flex;flex-direction:row;align-items:center;gap:8px;font-size:var(--font-size-ui)}
+.memory-preferences .memory-toggle input{width:16px;height:16px;flex:none;margin:0}

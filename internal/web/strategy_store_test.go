@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
@@ -22,7 +24,7 @@ func strategyFixture(t *testing.T) (*Store, StrategyContext, strategy.Scope) {
 	return s, StrategyContext{ProjectID: project}, strategy.Scope{Kind: strategy.ProjectScope, ProjectID: project}
 }
 func strategyInput(body string) StrategyAssetInput {
-	return StrategyAssetInput{Reuse: &strategy.ReusePolicy{Keywords: []string{"evidence"}}, Title: "Evidence first", Kind: strategy.DomainProcedure, Body: body, Applicability: strategy.Applicability{Profiles: []string{"core"}, DomainTags: []string{"operations"}}}
+	return StrategyAssetInput{Reuse: &legacystrategy.ReusePolicy{Keywords: []string{"evidence"}}, Title: "Evidence first", Kind: strategy.DomainProcedure, Body: body, Applicability: strategy.Applicability{Profiles: []string{"core"}, DomainTags: []string{"operations"}}}
 }
 func strategyCheckError(t *testing.T, err error, status int) {
 	t.Helper()

@@ -5,31 +5,33 @@ package web
 import (
 	"time"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
-func (s *Store) strategyDefaultReuse(kind strategy.AssetKind) strategy.ReusePolicy {
+func (s *Store) strategyDefaultReuse(kind strategy.AssetKind) legacystrategy.ReusePolicy {
 	// Preserve explicitly adopted legacy report/preferences. Legacy procedures
 	// have no trustworthy conditions, so require review before automatic reuse.
 	if kind == strategy.UserPreference || kind == strategy.ReportGuidance {
-		return strategy.ReusePolicy{Keywords: []string{}, General: true}
+		return legacystrategy.ReusePolicy{Keywords: []string{}, General: true}
 	}
-	return strategy.ReusePolicy{Keywords: []string{}, NeedsReview: true}
+	return legacystrategy.ReusePolicy{Keywords: []string{}, NeedsReview: true}
 }
 
-func (s *Store) strategyReusePolicy(id string, revision int64, kind strategy.AssetKind) (strategy.ReusePolicy, string, map[string]string) {
+func (s *Store) strategyReusePolicy(id string, revision int64, kind strategy.AssetKind) (legacystrategy.ReusePolicy, string, map[string]string) {
 	row := s.row("SELECT * FROM strategyReusePolicies WHERE assetId=? AND revision=?", id, revision)
 	if row == nil {
 		return s.strategyDefaultReuse(kind), "", nil
 	}
-	policy := strategyDecode[strategy.ReusePolicy](stringOf(row["body"]))
+	policy := strategyDecode[legacystrategy.ReusePolicy](stringOf(row["body"]))
 	if policy.Keywords == nil {
 		policy.Keywords = []string{}
 	}
 	return policy, stringOf(row["modelHash"]), strategyDecode[map[string]string](stringOf(row["toolHashes"]))
 }
 
-func strategyReuseReason(policy strategy.ReusePolicy, kind strategy.AssetKind, model string, tools map[string]string, q strategy.SelectionQuery) string {
+func strategyReuseReason(policy legacystrategy.ReusePolicy, kind strategy.AssetKind, model string, tools map[string]string, q legacystrategy.SelectionQuery) string {
 	if policy.NeedsReview {
 		return "review_required"
 	}

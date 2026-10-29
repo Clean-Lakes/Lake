@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/platform"
 
 	"github.com/Clean-Lakes/Lake/internal/strategy"
@@ -34,7 +36,7 @@ func TestNaturalMemoryCarryUndoKeepsOneRuntimeAndExactLegacyData(t *testing.T) {
 	enableStrategyFixture(t, s)
 	a, v := naturalAdopt(t, s, ctx, scope)
 	before := s.read(func() any { return jsonText(s.rows("SELECT * FROM strategyBindings")) })
-	selected, e := s.resolveStrategyBindings(ctx, strategy.SelectionQuery{Profile: "core", ResourceKinds: []string{"local"}}, nil, nil)
+	selected, e := s.resolveStrategyBindings(ctx, legacystrategy.SelectionQuery{Profile: "core", ResourceKinds: []string{"local"}}, nil, nil)
 	if e != nil || len(selected.Assets) != 1 {
 		t.Fatal(selected, e)
 	}
@@ -57,7 +59,7 @@ func TestNaturalMemoryCarryUndoKeepsOneRuntimeAndExactLegacyData(t *testing.T) {
 	_, e = s.CarryNaturalPreference(ctx, a.AssetID, "again", stringOf(preview["previewToken"]), 1)
 	strategyCheckError(t, e, 409)
 	after := s.read(func() any { return jsonText(s.rows("SELECT * FROM strategyBindings")) })
-	selected, e = s.resolveStrategyBindings(ctx, strategy.SelectionQuery{Profile: "core", ResourceKinds: []string{"local"}}, nil, nil)
+	selected, e = s.resolveStrategyBindings(ctx, legacystrategy.SelectionQuery{Profile: "core", ResourceKinds: []string{"local"}}, nil, nil)
 	if before != after || e != nil || len(selected.Assets) != 1 || selected.Assets[0].Ref != v.Value.Ref {
 		t.Fatal("carry changed runtime/bindings", e)
 	}
@@ -392,7 +394,7 @@ func TestNaturalMemoryGlobalCarryPreservesProjectDisable(t *testing.T) {
 		ctx   StrategyContext
 		count int
 	}{{ctx, 0}, {StrategyContext{ProjectID: stringOf(s.CreateProject("other")["id"])}, 1}} {
-		selected, e := s.resolveStrategyBindings(project.ctx, strategy.SelectionQuery{Profile: "core"}, nil, nil)
+		selected, e := s.resolveStrategyBindings(project.ctx, legacystrategy.SelectionQuery{Profile: "core"}, nil, nil)
 		if e != nil || len(selected.Assets) != project.count {
 			t.Fatal("project override changed", selected, e)
 		}

@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/ai"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
@@ -95,7 +97,7 @@ func TestRetiredAssetsNeverInjectAndRejectedSettingsDoNotCancelForeground(t *tes
 	enableStrategyFixture(t, b.Store)
 	in := strategyInput("Preserve facts separately from hypotheses.")
 	in.Kind = strategy.ReportGuidance
-	in.Reuse = &strategy.ReusePolicy{General: true}
+	in.Reuse = &legacystrategy.ReusePolicy{General: true}
 	in.Applicability = strategy.Applicability{}
 	created, err := b.Store.CreateStrategyAsset(ctx, scope, "asset", in)
 	if err != nil {

@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
@@ -13,7 +15,7 @@ func TestStrategyReuseValidityModelToolsAndPendingConditions(t *testing.T) {
 	enableStrategyFixture(t, s)
 	for _, mode := range []string{"match", "unrelated", "expired", "review", "model", "tools"} {
 		t.Run(mode, func(t *testing.T) {
-			p := strategy.ReusePolicy{Keywords: []string{"磁盘"}}
+			p := legacystrategy.ReusePolicy{Keywords: []string{"磁盘"}}
 			if mode == "expired" {
 				p.ValidUntil = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
 			}
@@ -29,7 +31,7 @@ func TestStrategyReuseValidityModelToolsAndPendingConditions(t *testing.T) {
 			if _, err = s.BindStrategyAsset(ctx, scope, ident(), StrategyBindingInput{Action: "adopt", Ref: v.Value.Ref}); err != nil {
 				t.Fatal(err)
 			}
-			q := strategy.SelectionQuery{Profile: "core", TaskText: "检查磁盘空间", ModelHash: "model-A", ToolHash: "tools-A"}
+			q := legacystrategy.SelectionQuery{Profile: "core", TaskText: "检查磁盘空间", ModelHash: "model-A", ToolHash: "tools-A"}
 			if mode == "unrelated" {
 				q.TaskText = "翻译一段文字"
 			}

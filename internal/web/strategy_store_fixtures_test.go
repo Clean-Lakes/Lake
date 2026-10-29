@@ -9,6 +9,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/ai"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
@@ -33,13 +35,13 @@ type StrategyAssetView struct {
 }
 
 type StrategyRevisionView struct {
-	Asset            StrategyAssetView      `json:"asset"`
-	Value            strategy.AssetRevision `json:"value"`
-	Available        bool                   `json:"available"`
-	SourcesAvailable bool                   `json:"sourcesAvailable"`
-	Review           StrategyReview         `json:"review"`
-	Assessment       strategy.Assessment    `json:"assessment"`
-	Reuse            strategy.ReusePolicy   `json:"reuse"`
+	Asset            StrategyAssetView          `json:"asset"`
+	Value            strategy.AssetRevision     `json:"value"`
+	Available        bool                       `json:"available"`
+	SourcesAvailable bool                       `json:"sourcesAvailable"`
+	Review           StrategyReview             `json:"review"`
+	Assessment       strategy.Assessment        `json:"assessment"`
+	Reuse            legacystrategy.ReusePolicy `json:"reuse"`
 }
 
 var strategyTag = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
@@ -351,7 +353,7 @@ type StrategyAssetInput struct {
 	Body          string
 	Applicability strategy.Applicability
 	Assessment    strategy.Assessment
-	Reuse         *strategy.ReusePolicy
+	Reuse         *legacystrategy.ReusePolicy
 	ModelHash     string
 	ToolHashes    map[string]string
 }
