@@ -99,14 +99,14 @@ func Resolve(candidates []Candidate, q SelectionQuery, maxBytes int) ResolvedSel
 			reason = "asset_budget"
 		}
 		if reason != "" {
-			out.Selection.Omitted = append(out.Selection.Omitted, OmittedAsset{c.Value.Ref, reason})
+			out.Selection.Omitted = append(out.Selection.Omitted, OmittedAsset{Ref: c.Value.Ref, Reason: reason})
 			continue
 		}
 		hashes[ContentHash(ComparableContent(c.Value.Body))] = true
 		maxBytes -= cost
 		out.Assets = append(out.Assets, c.Value)
 		out.Selection.Selected = append(out.Selection.Selected, c.Value.Ref)
-		out.Selection.Reasons = append(out.Selection.Reasons, SelectionReason{c.Value.Ref, matched[c.Value.Ref.AssetID], scores[c.Value.Ref.AssetID]})
+		out.Selection.Reasons = append(out.Selection.Reasons, SelectionReason{Ref: c.Value.Ref, Reason: matched[c.Value.Ref.AssetID], Score: scores[c.Value.Ref.AssetID]})
 	}
 	return out
 }

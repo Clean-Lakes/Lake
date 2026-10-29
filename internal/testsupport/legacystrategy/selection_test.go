@@ -3,7 +3,7 @@ package legacystrategy
 import "testing"
 
 func candidate(id, body string, priority int, group string) Candidate {
-	return Candidate{Value: AssetRevision{Ref: RevisionRef{id, 1, ContentHash(body)}, Body: body}, Priority: priority, ExclusionGroup: group}
+	return Candidate{Value: AssetRevision{Ref: RevisionRef{AssetID: id, Revision: 1, ContentHash: ContentHash(body)}, Body: body}, Priority: priority, ExclusionGroup: group}
 }
 func TestResolveStrategySelection(t *testing.T) {
 	a := candidate("a", "first", 5, "")
