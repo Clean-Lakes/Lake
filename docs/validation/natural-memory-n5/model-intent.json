@@ -1,0 +1,3288 @@
+{
+  "actual_store_transactions": true,
+  "diagnostic": false,
+  "fixtureSHA256": "922f2a4f4b30ae23ba5c178af1456a0a635fff69f1b37505b4bd4f62bc21f084",
+  "model": {
+    "maxOutput": 2048,
+    "name": "deepseek-flash",
+    "protocol": "openai"
+  },
+  "passed": true,
+  "promptSHA256": "92f1cf7f43b3c8b6bc471fdd27d014dffa5cb80ecbb3bdeb557ccc4c22a10715",
+  "providerDispatches": 180,
+  "results": [
+    {
+      "run": 1,
+      "id": "NM-global-01",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 204,
+        "total": 1776
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-global-02",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 218,
+        "total": 1796
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-global-03",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 179,
+        "total": 1757
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-global-04",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 286,
+        "total": 1859
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-global-05",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 252,
+        "total": 1825
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-global-06",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1579,
+        "output": 177,
+        "total": 1756
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-global-07",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1576,
+        "output": 265,
+        "total": 1841
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-global-08",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1577,
+        "output": 216,
+        "total": 1793
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-global-09",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1581,
+        "output": 180,
+        "total": 1761
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-global-10",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1581,
+        "output": 213,
+        "total": 1794
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-project-01",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 255,
+        "total": 1830
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-project-02",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 179,
+        "total": 1754
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-project-03",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1581,
+        "output": 246,
+        "total": 1827
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-project-04",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1576,
+        "output": 254,
+        "total": 1830
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-project-05",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1577,
+        "output": 230,
+        "total": 1807
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-project-06",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 223,
+        "total": 1796
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-project-07",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 199,
+        "total": 1777
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-project-08",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 231,
+        "total": 1804
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-project-09",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1577,
+        "output": 232,
+        "total": 1809
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-project-10",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 234,
+        "total": 1812
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-temporary-01",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 171,
+        "total": 1743
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-temporary-02",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 153,
+        "total": 1725
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-temporary-03",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 166,
+        "total": 1738
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-temporary-04",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 142,
+        "total": 1714
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-temporary-05",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 141,
+        "total": 1714
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-temporary-06",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 135,
+        "total": 1710
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-temporary-07",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1571,
+        "output": 111,
+        "total": 1682
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-temporary-08",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 204,
+        "total": 1777
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-temporary-09",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 137,
+        "total": 1709
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-temporary-10",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 136,
+        "total": 1708
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-quoted-01",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1579,
+        "output": 115,
+        "total": 1694
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-quoted-02",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 177,
+        "total": 1751
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-quoted-03",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1583,
+        "output": 148,
+        "total": 1731
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-quoted-04",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 130,
+        "total": 1705
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-quoted-05",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 141,
+        "total": 1719
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-quoted-06",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1581,
+        "output": 164,
+        "total": 1745
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-quoted-07",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1585,
+        "output": 152,
+        "total": 1737
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-quoted-08",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 138,
+        "total": 1716
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-quoted-09",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1581,
+        "output": 156,
+        "total": 1737
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-quoted-10",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1576,
+        "output": 113,
+        "total": 1689
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-correction-01",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1610,
+        "output": 293,
+        "total": 1903
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-correction-02",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1604,
+        "output": 249,
+        "total": 1853
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-correction-03",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1606,
+        "output": 346,
+        "total": 1952
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-correction-04",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1607,
+        "output": 202,
+        "total": 1809
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-correction-05",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1608,
+        "output": 209,
+        "total": 1817
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-correction-06",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1610,
+        "output": 343,
+        "total": 1953
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-correction-07",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1612,
+        "output": 199,
+        "total": 1811
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-correction-08",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1613,
+        "output": 292,
+        "total": 1905
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-correction-09",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1608,
+        "output": 252,
+        "total": 1860
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-correction-10",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1610,
+        "output": 226,
+        "total": 1836
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-ambiguous-01",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 402,
+        "total": 1974
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-ambiguous-02",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1577,
+        "output": 147,
+        "total": 1724
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-ambiguous-03",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1570,
+        "output": 122,
+        "total": 1692
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-ambiguous-04",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1571,
+        "output": 152,
+        "total": 1723
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-ambiguous-05",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 125,
+        "total": 1698
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-ambiguous-06",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 152,
+        "total": 1726
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-ambiguous-07",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 163,
+        "total": 1735
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-ambiguous-08",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 433,
+        "total": 2006
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-ambiguous-09",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 141,
+        "total": 1713
+      }
+    },
+    {
+      "run": 1,
+      "id": "NM-ambiguous-10",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 191,
+        "total": 1766
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-global-01",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1576,
+        "output": 212,
+        "total": 1788
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-global-02",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 181,
+        "total": 1759
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-global-03",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 184,
+        "total": 1762
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-global-04",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1576,
+        "output": 211,
+        "total": 1787
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-global-05",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 219,
+        "total": 1792
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-global-06",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1576,
+        "output": 192,
+        "total": 1768
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-global-07",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1580,
+        "output": 323,
+        "total": 1903
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-global-08",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 247,
+        "total": 1821
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-global-09",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1579,
+        "output": 336,
+        "total": 1915
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-global-10",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1581,
+        "output": 195,
+        "total": 1776
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-project-01",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 220,
+        "total": 1794
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-project-02",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 167,
+        "total": 1742
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-project-03",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1576,
+        "output": 187,
+        "total": 1763
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-project-04",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 169,
+        "total": 1743
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-project-05",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1580,
+        "output": 270,
+        "total": 1850
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-project-06",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 325,
+        "total": 1900
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-project-07",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1580,
+        "output": 176,
+        "total": 1756
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-project-08",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 253,
+        "total": 1828
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-project-09",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 182,
+        "total": 1757
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-project-10",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1576,
+        "output": 231,
+        "total": 1807
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-temporary-01",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 191,
+        "total": 1763
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-temporary-02",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1569,
+        "output": 138,
+        "total": 1707
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-temporary-03",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 153,
+        "total": 1725
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-temporary-04",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 134,
+        "total": 1706
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-temporary-05",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1569,
+        "output": 137,
+        "total": 1706
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-temporary-06",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 142,
+        "total": 1715
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-temporary-07",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 123,
+        "total": 1696
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-temporary-08",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 199,
+        "total": 1774
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-temporary-09",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 129,
+        "total": 1702
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-temporary-10",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1571,
+        "output": 139,
+        "total": 1710
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-quoted-01",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 134,
+        "total": 1712
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-quoted-02",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1577,
+        "output": 130,
+        "total": 1707
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-quoted-03",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1582,
+        "output": 150,
+        "total": 1732
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-quoted-04",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 125,
+        "total": 1699
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-quoted-05",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1579,
+        "output": 121,
+        "total": 1700
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-quoted-06",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1579,
+        "output": 148,
+        "total": 1727
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-quoted-07",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1586,
+        "output": 163,
+        "total": 1749
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-quoted-08",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1582,
+        "output": 141,
+        "total": 1723
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-quoted-09",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1577,
+        "output": 125,
+        "total": 1702
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-quoted-10",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 131,
+        "total": 1706
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-correction-01",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1612,
+        "output": 234,
+        "total": 1846
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-correction-02",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1602,
+        "output": 218,
+        "total": 1820
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-correction-03",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1606,
+        "output": 234,
+        "total": 1840
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-correction-04",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1609,
+        "output": 313,
+        "total": 1922
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-correction-05",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1610,
+        "output": 234,
+        "total": 1844
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-correction-06",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1611,
+        "output": 260,
+        "total": 1871
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-correction-07",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1611,
+        "output": 220,
+        "total": 1831
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-correction-08",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1611,
+        "output": 222,
+        "total": 1833
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-correction-09",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1604,
+        "output": 222,
+        "total": 1826
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-correction-10",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1607,
+        "output": 251,
+        "total": 1858
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-ambiguous-01",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 142,
+        "total": 1715
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-ambiguous-02",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1576,
+        "output": 129,
+        "total": 1705
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-ambiguous-03",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1570,
+        "output": 115,
+        "total": 1685
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-ambiguous-04",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 257,
+        "total": 1829
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-ambiguous-05",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 106,
+        "total": 1680
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-ambiguous-06",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 133,
+        "total": 1707
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-ambiguous-07",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 189,
+        "total": 1761
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-ambiguous-08",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 85,
+        "total": 1657
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-ambiguous-09",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1576,
+        "output": 128,
+        "total": 1704
+      }
+    },
+    {
+      "run": 2,
+      "id": "NM-ambiguous-10",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 273,
+        "total": 1851
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-global-01",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1576,
+        "output": 224,
+        "total": 1800
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-global-02",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 183,
+        "total": 1756
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-global-03",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1580,
+        "output": 162,
+        "total": 1742
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-global-04",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1570,
+        "output": 216,
+        "total": 1786
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-global-05",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1577,
+        "output": 188,
+        "total": 1765
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-global-06",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1577,
+        "output": 198,
+        "total": 1775
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-global-07",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 189,
+        "total": 1767
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-global-08",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 227,
+        "total": 1799
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-global-09",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 292,
+        "total": 1870
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-global-10",
+      "decision": "save",
+      "scope": "user",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1580,
+        "output": 265,
+        "total": 1845
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-project-01",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1577,
+        "output": 187,
+        "total": 1764
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-project-02",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1576,
+        "output": 182,
+        "total": 1758
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-project-03",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1580,
+        "output": 231,
+        "total": 1811
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-project-04",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 206,
+        "total": 1779
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-project-05",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1579,
+        "output": 199,
+        "total": 1778
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-project-06",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 243,
+        "total": 1821
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-project-07",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 171,
+        "total": 1746
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-project-08",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1579,
+        "output": 196,
+        "total": 1775
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-project-09",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1579,
+        "output": 195,
+        "total": 1774
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-project-10",
+      "decision": "save",
+      "scope": "project",
+      "relation": "new",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 177,
+        "total": 1751
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-temporary-01",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 166,
+        "total": 1738
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-temporary-02",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 169,
+        "total": 1741
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-temporary-03",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 152,
+        "total": 1725
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-temporary-04",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 129,
+        "total": 1703
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-temporary-05",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 125,
+        "total": 1699
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-temporary-06",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 151,
+        "total": 1726
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-temporary-07",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1571,
+        "output": 133,
+        "total": 1704
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-temporary-08",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 199,
+        "total": 1773
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-temporary-09",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1577,
+        "output": 135,
+        "total": 1712
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-temporary-10",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 123,
+        "total": 1695
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-quoted-01",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1577,
+        "output": 143,
+        "total": 1720
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-quoted-02",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1580,
+        "output": 137,
+        "total": 1717
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-quoted-03",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1579,
+        "output": 134,
+        "total": 1713
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-quoted-04",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1580,
+        "output": 133,
+        "total": 1713
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-quoted-05",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1579,
+        "output": 145,
+        "total": 1724
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-quoted-06",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1579,
+        "output": 249,
+        "total": 1828
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-quoted-07",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1584,
+        "output": 240,
+        "total": 1824
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-quoted-08",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1577,
+        "output": 146,
+        "total": 1723
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-quoted-09",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1579,
+        "output": 140,
+        "total": 1719
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-quoted-10",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1579,
+        "output": 97,
+        "total": 1676
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-correction-01",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1609,
+        "output": 218,
+        "total": 1827
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-correction-02",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1607,
+        "output": 217,
+        "total": 1824
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-correction-03",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1608,
+        "output": 221,
+        "total": 1829
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-correction-04",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1607,
+        "output": 240,
+        "total": 1847
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-correction-05",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1609,
+        "output": 266,
+        "total": 1875
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-correction-06",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1616,
+        "output": 216,
+        "total": 1832
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-correction-07",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1608,
+        "output": 270,
+        "total": 1878
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-correction-08",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1609,
+        "output": 369,
+        "total": 1978
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-correction-09",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1606,
+        "output": 199,
+        "total": 1805
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-correction-10",
+      "decision": "save",
+      "scope": "project",
+      "relation": "correction",
+      "committed": true,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1608,
+        "output": 218,
+        "total": 1826
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-ambiguous-01",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1573,
+        "output": 146,
+        "total": 1719
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-ambiguous-02",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1576,
+        "output": 133,
+        "total": 1709
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-ambiguous-03",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1570,
+        "output": 129,
+        "total": 1699
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-ambiguous-04",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1572,
+        "output": 189,
+        "total": 1761
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-ambiguous-05",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 142,
+        "total": 1716
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-ambiguous-06",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1575,
+        "output": 121,
+        "total": 1696
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-ambiguous-07",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1574,
+        "output": 173,
+        "total": 1747
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-ambiguous-08",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1571,
+        "output": 141,
+        "total": 1712
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-ambiguous-09",
+      "decision": "ignore",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": false,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1577,
+        "output": 139,
+        "total": 1716
+      }
+    },
+    {
+      "run": 3,
+      "id": "NM-ambiguous-10",
+      "decision": "review",
+      "scope": "none",
+      "relation": "none",
+      "committed": false,
+      "correct": true,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1580,
+        "output": 156,
+        "total": 1736
+      }
+    }
+  ],
+  "schemaVersion": 1,
+  "summaries": [
+    {
+      "exactDecisions": 55,
+      "falseAutoWrites": 0,
+      "passed": true,
+      "positiveCount": 30,
+      "positiveRecallCount": 30,
+      "run": 1,
+      "technicalFailures": 0,
+      "wrongScopes": 0
+    },
+    {
+      "exactDecisions": 55,
+      "falseAutoWrites": 0,
+      "passed": true,
+      "positiveCount": 30,
+      "positiveRecallCount": 30,
+      "run": 2,
+      "technicalFailures": 0,
+      "wrongScopes": 0
+    },
+    {
+      "exactDecisions": 55,
+      "falseAutoWrites": 0,
+      "passed": true,
+      "positiveCount": 30,
+      "positiveRecallCount": 30,
+      "run": 3,
+      "technicalFailures": 0,
+      "wrongScopes": 0
+    }
+  ]
+}

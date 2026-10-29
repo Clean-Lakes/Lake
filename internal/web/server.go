@@ -169,6 +169,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	server.Engine.RuntimeDir = filepath.Join(options.DataDir, "adk")
 	server.Engine.SetSRERepository(store)
 	server.Engine.Strategies = server.strategyProvider
+	server.Engine.NaturalMemory = server.naturalRecallProvider
 	server.Engine.ModelActivity = server.memoryForegroundModel
 	server.Engine.MemoryCaptureAllowed = store.MemoryCaptureAllowed
 	server.Engine.MemoryCaptureSessionAllowed = store.MemoryCaptureSessionAllowed

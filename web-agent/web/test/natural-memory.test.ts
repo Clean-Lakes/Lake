@@ -62,9 +62,9 @@ test('natural update notice is commit-driven and offers view and undo without re
  const html=renderToStaticMarkup(React.createElement(NaturalMemoryNotice,{notices:[{changeId:'c',scope:'project:a',entryId:'e',revision:1}]}));
  assert.match(html,/已更新项目偏好/);assert.match(html,/查看/);assert.match(html,/撤销/);assert.match(html,/实验/);assert.doesNotMatch(html,/审核|采用/);
 });
-test('natural settings describe opt-in scope, preserved content and staged recall',async()=>{
+test('natural settings describe opt-in scope, preserved content and independent scoped recall',async()=>{
  const {NaturalMemoryPreferences}=await import('../src/NaturalMemoryPreferences');
- const html=renderToStaticMarkup(React.createElement(NaturalMemoryPreferences,{projectId:'a',busy:false,run:async task=>{await task()}}));assert.match(html,/自动记忆 · 实验/);assert.match(html,/不补扫历史/);assert.match(html,/跨项目偏好需/);assert.match(html,/尚未接入后续回答/);assert.match(html,/关闭停止新增/);
+ const html=renderToStaticMarkup(React.createElement(NaturalMemoryPreferences,{projectId:'a',busy:false,run:async task=>{await task()}}));assert.match(html,/自动记忆 · 实验/);assert.match(html,/不补扫历史/);assert.match(html,/跨项目偏好需/);assert.match(html,/使用默认关闭/);assert.match(html,/关闭积累仍可使用/);assert.match(html,/当前明确要求优先/);assert.match(html,/专员与工作流不继承/);assert.doesNotMatch(html,/尚未接入后续回答/);
 });
 
 test('one persisted batch produces one notice with scoped optional per-item controls',async()=>{
@@ -76,4 +76,11 @@ test('consolidation status and conflicts preserve scoped reads and CAS rejection
  const {naturalConsolidationApi}=await import('../src/naturalMemoryApi');const original=globalThis.fetch;const calls:{url:string;method:string;key:string|null;body:unknown}[]=[];
  globalThis.fetch=async(input,init)=>{calls.push({url:String(input),method:init?.method||'',key:new Headers(init?.headers).get('Idempotency-Key'),body:init?.body?JSON.parse(String(init.body)):null});return new Response(JSON.stringify({items:[],nextCursor:'',status:'rejected'}),{status:200})};
  try{const base=naturalMemoryPath('project/a');await naturalConsolidationApi.status(base);await naturalConsolidationApi.conflicts(base,'cursor');await naturalConsolidationApi.reject(base,'conflict',4);assert.equal(calls[0].key,null);assert.equal(calls[1].method,'GET');assert.match(calls[1].url,/project%2Fa/);assert.equal(calls[2].method,'POST');assert.ok(calls[2].key);assert.deepEqual(calls[2].body,{expectedRevision:4});assert.ok(calls.every(c=>!c.url.includes('/strategy/')))}finally{globalThis.fetch=original}
+});
+
+test('recall toggle uses its own revision and endpoint without changing capture consent',async()=>{
+ const {naturalPreferenceApi}=await import('../src/naturalMemoryApi');const original=globalThis.fetch;
+ let received:{url:string;method:string;body:unknown;key:string|null}|undefined;
+ globalThis.fetch=async(input,init)=>{received={url:String(input),method:init?.method||'',body:JSON.parse(String(init?.body)),key:new Headers(init?.headers).get('Idempotency-Key')};return new Response(JSON.stringify({revision:3,useEnabled:false}),{status:200})};
+ try{await naturalPreferenceApi.recallSettings(naturalMemoryPath('project/a'),2,false);assert.equal(received?.method,'PATCH');assert.match(received!.url,/project%2Fa\/natural-memory\/recall-settings$/);assert.deepEqual(received?.body,{expectedRevision:2,useEnabled:false});assert.ok(received?.key)}finally{globalThis.fetch=original}
 });

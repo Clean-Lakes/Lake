@@ -1,0 +1,168 @@
+//go:build windows
+
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"testing"
+	"time"
+
+	webassets "github.com/Clean-Lakes/Lake/assets/web"
+	lakeweb "github.com/Clean-Lakes/Lake/internal/web"
+	webview "github.com/jchv/go-webview2"
+	"github.com/jchv/go-webview2/webviewloader"
+)
+
+// This runs the actual embedded React application and Go API in WebView2,
+// using an empty private Home and no model/production credentials.
+func TestWindowsNaturalMemoryInRealWebView(t *testing.T) {
+	if _, err := webviewloader.GetInstalledVersion(); err != nil {
+		if os.Getenv("LAKE_N5_REQUIRED_WINDOWS_UI") == "1" {
+			t.Fatal("N5 requires the actual WebView2 runtime")
+		}
+		t.Skip("WebView2 runtime is not installed")
+	}
+	if os.Getenv("LAKE_N5_WINDOWS_UI_CHILD") != "1" {
+		// WebView2 can retain profile file handles until the embedding process
+		// exits. Let the parent own cleanup after that actual process boundary.
+		home := t.TempDir()
+		t.Cleanup(func() {
+			deadline := time.Now().Add(10 * time.Second)
+			for {
+				err := os.RemoveAll(home)
+				if err == nil {
+					return
+				}
+				if time.Now().After(deadline) {
+					t.Errorf("WebView2 test profile remained locked after process exit: %v", err)
+					return
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		})
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+		command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestWindowsNaturalMemoryInRealWebView$", "-test.v")
+		command.Env = append(os.Environ(), "LAKE_N5_WINDOWS_UI_CHILD=1", "LAKE_N5_WINDOWS_UI_HOME="+home)
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("actual WebView2 acceptance subprocess failed: %v\n%s", err, output)
+		}
+		return
+	}
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	home := os.Getenv("LAKE_N5_WINDOWS_UI_HOME")
+	if home == "" {
+		t.Fatal("parent-owned isolated Home required")
+	}
+	server, err := lakeweb.New(context.Background(), lakeweb.Options{Home: home, DynamicPort: true, Token: "n5-synthetic-local-test", Static: webassets.Files(), Output: io.Discard})
+	if err != nil {
+		t.Fatal("isolated backend setup failed")
+	}
+	defer server.Close()
+	if server.Models.Active() != nil {
+		t.Fatal("isolated Home unexpectedly configured a model")
+	}
+	server.Store.CreateProject("N5 Windows isolated acceptance")
+	go func() { _ = server.Start() }()
+	var origin string
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		raw, readErr := os.ReadFile(filepath.Join(home, "web-agent", "runtime.json"))
+		var info struct {
+			Origin string `json:"origin"`
+		}
+		if readErr == nil && json.Unmarshal(raw, &info) == nil && info.Origin != "" {
+			origin = info.Origin
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if origin == "" {
+		t.Fatal("isolated backend readiness timed out")
+	}
+	window := webview.NewWithOptions(webview.WebViewOptions{DataPath: filepath.Join(home, "webview"), WindowOptions: webview.WindowOptions{Title: "Lake N5 Windows acceptance", Width: 1280, Height: 800}})
+	if window == nil {
+		t.Fatal("WebView2 window creation failed")
+	}
+	defer window.Destroy()
+	result := make(chan map[string]any, 1)
+	if err = window.Bind("__n5Result", func(raw string) {
+		var value map[string]any
+		if json.Unmarshal([]byte(raw), &value) != nil {
+			value = map[string]any{"passed": false, "error": "invalid UI result"}
+		}
+		select {
+		case result <- value:
+		default:
+		}
+		window.Dispatch(window.Destroy)
+	}); err != nil {
+		t.Fatal("UI callback setup failed")
+	}
+	if err = window.Bind("__n5Resize", func() {
+		window.Dispatch(func() {
+			themeUser.NewProc("SetWindowPos").Call(uintptr(window.Window()), 0, 0, 0, 850, 600, 0x0002|0x0004)
+		})
+	}); err != nil {
+		t.Fatal("native resize binding unavailable")
+	}
+	window.Init(`document.addEventListener('DOMContentLoaded',()=>{(async()=>{
+ let phase='initial_document';
+ const wait=async f=>{const until=Date.now()+30000;while(Date.now()<until){const value=f();if(value)return value;await new Promise(r=>setTimeout(r,30));}throw Error('ui_readiness_timeout:'+phase+':'+document.readyState+':'+document.body.innerText.slice(0,180));};
+ // A first-run settings button includes a separate "待配置" badge. Match its
+ // visible label, while retaining exact matching for ordinary text buttons.
+ const button=(root,text)=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent.trim()===text || b.getAttribute('aria-label')===text || Array.from(b.querySelectorAll(':scope > span')).some(label=>label.textContent.trim()===text));
+ const panel=()=>document.querySelector('#memory-settings-panel');
+ const choose=async(root,text)=>{phase='button:'+text;(await wait(()=>{const current=typeof root==='function'?root():root;return current?.isConnected&&button(current,text);})).click();await new Promise(requestAnimationFrame);};
+ const assert=(value,code)=>{if(!value)throw Error(code);};
+ await choose(document,'工作区'); await choose(document,'设置');
+ (await wait(()=>document.querySelector('#memory-settings-tab'))).click();await wait(panel);
+ await choose(panel,'记忆范围');
+ (await wait(()=>Array.from(document.querySelectorAll('[role="option"]')).find(e=>e.textContent.includes('用户全局')))).click();
+ const checkbox=text=>Array.from(panel().querySelectorAll('label')).find(e=>e.textContent.includes(text))?.querySelector('input[type="checkbox"]');
+ await wait(()=>checkbox('使用用户全局自然偏好'));
+ assert(!checkbox('使用用户全局自然偏好').checked,'recall_default_on');
+ assert(!checkbox('自动形成用户全局偏好').checked,'capture_default_on');
+ checkbox('使用用户全局自然偏好').click();await wait(()=>checkbox('使用用户全局自然偏好').checked&&!checkbox('使用用户全局自然偏好').disabled);
+ let settings=await (await fetch('/api/natural-memory/settings')).json();
+ assert(settings.recallSettings.useEnabled===true&&settings.autoEnabled===false,'recall_changed_capture');
+ checkbox('使用用户全局自然偏好').click();await wait(()=>!checkbox('使用用户全局自然偏好').checked&&!checkbox('使用用户全局自然偏好').disabled);
+ settings=await (await fetch('/api/natural-memory/settings')).json();assert(settings.recallSettings.useEnabled===false&&settings.recallSettings.revision===2,'stop_not_persisted');
+ assert(!panel().querySelector('#strategy-settings-panel'),'legacy_loaded_without_request');
+ document.querySelector('#appearance-settings-tab').click();
+ const dark=await wait(()=>Array.from(document.querySelectorAll('[role="radio"]')).find(b=>b.textContent.trim()==='深色'));dark.click();await wait(()=>dark.getAttribute('aria-checked')==='true');
+ document.querySelector('#memory-settings-tab').click();await wait(panel);
+ await window.__n5Resize();phase='native_narrow_resize';await wait(()=>innerWidth<=900);
+ const select=panel().querySelector('[aria-label="记忆范围"]');select.focus();select.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));await wait(()=>select.getAttribute('aria-expanded')==='true');
+ select.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await wait(()=>select.getAttribute('aria-expanded')==='false');assert(document.querySelector('#memory-settings-panel'),'escape_closed_settings');
+ assert(panel().scrollWidth<=panel().clientWidth+2,'memory_panel_overflow');
+ await window.__n5Result(JSON.stringify({passed:true,actualBackend:true,actualWebView2:true,defaultNoModel:true,independentRecall:true,defaultOff:true,stopPersisted:true,legacyCollapsed:true,dark:true,keyboardEscape:true,viewportWidth:innerWidth,viewportHeight:innerHeight}));
+ })().catch(error=>window.__n5Result(JSON.stringify({passed:false,error:String(error.message)})));});`)
+	timer := time.AfterFunc(50*time.Second, func() { window.Dispatch(window.Destroy) })
+	defer timer.Stop()
+	window.Navigate(origin + "/#token=n5-synthetic-local-test")
+	window.Run()
+	select {
+	case value := <-result:
+		value["platform"] = runtime.GOOS + "/" + runtime.GOARCH
+		if path := os.Getenv("LAKE_N5_WINDOWS_REPORT"); path != "" {
+			raw, _ := json.MarshalIndent(value, "", "  ")
+			if os.WriteFile(path, append(raw, '\n'), 0600) != nil {
+				t.Fatal("cannot save UI evidence")
+			}
+		}
+		if value["passed"] != true {
+			t.Fatalf("Windows natural memory UI failed: %v", value["error"])
+		}
+	default:
+		t.Fatal("Windows natural memory UI did not report completion")
+	}
+}

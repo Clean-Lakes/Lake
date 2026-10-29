@@ -354,6 +354,15 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 	if strategyErr != nil {
 		return modelResult{}, strategyErr
 	}
+	var recallText string
+	var recallErr error
+	history, recallText, recallErr = e.naturalRecallRequest(ctx, s, c, history, tools)
+	if recallErr != nil {
+		return modelResult{}, recallErr
+	}
+	if recallText != "" {
+		fragments = appendPromptFragment(fragments, strategy.UserStrategy, "natural-memory-preferences", recallText)
+	}
 	s.mu.Lock()
 	if s.state.Runtime == nil {
 		s.mu.Unlock()

@@ -31,6 +31,7 @@ type session struct {
 	sreReply            *sreReply
 }
 type Engine struct {
+	NaturalMemory               NaturalMemoryProvider
 	MemoryCaptureAllowed        func(MemoryTurnSnapshot) bool
 	MemoryCaptureSessionAllowed func(string) bool
 	experiment                  *strategyExperimentRuntime
@@ -550,6 +551,7 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			return errors.New("Plan 模式不能运行工作流")
 		}
 	}
+	c.IgnoreNaturalMemory = input.IgnoreProjectMemory
 	if input.IgnoreProjectMemory {
 		c.MemoryEnabled = false
 		c.MemoryExtractionEnabled = false
@@ -630,6 +632,8 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	archiveProposedPlan(s)
 	s.state.View.ProposedPlan = nil
 	firstCard := len(s.state.View.Cards)
+	s.state.NaturalRecallUsed = nil
+	s.state.Config.IgnoreNaturalMemory = input.IgnoreProjectMemory
 	s.state.View.RootTurnID = uid()
 	s.state.SREHandoff = nil
 	s.sreReply = nil
@@ -849,7 +853,7 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 				s.state.Config.TerminalID = c.TerminalID
 			}
 		}
-		s.state.History = append(s.state.History, Message{Role: "tool", CallID: call.ID, Name: call.Name, Content: payload})
+		s.state.History = append(s.state.History, Message{HostTurnID: s.state.View.RootTurnID, Role: "tool", CallID: call.ID, Name: call.Name, Content: payload})
 		e.captureMemoryToolResult(s, call, payload, value, toolErr)
 		if call.Name == "load_skill" && toolErr == nil && str(obj(value)["name"]) != "" && str(obj(value)["content"]) != "" {
 			s.state.SkillSnapshots = append(s.state.SkillSnapshots, strategy.SkillSnapshot{ResultHash: strategy.ContentHash(payload), ID: str(obj(value)["name"]), ContentHash: strategy.ContentHash(str(obj(value)["content"])), CallID: call.ID})

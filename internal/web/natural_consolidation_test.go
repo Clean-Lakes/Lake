@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -456,7 +457,7 @@ func TestNaturalConsolidationMigrationBackfillsReferencesAndIsIdempotent(t *test
 		t.Fatal("backup not idempotent")
 	}
 	info, _ := os.Stat(backups[0])
-	if info.Mode().Perm() != 0600 {
+	if !platform.Private(backups[0], info) {
 		t.Fatal("backup not private")
 	}
 	db, e := openSQLite(filepath.Join(dir, "lake-web.sqlite"))
