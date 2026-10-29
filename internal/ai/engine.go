@@ -76,6 +76,8 @@ type Engine struct {
 	workDone          chan struct{}
 	workReady         chan struct{}
 	workStart         sync.Once
+	workTickMu        sync.Mutex
+	workOutboxMu      sync.Mutex
 	compactionTimeout time.Duration
 	adkMu             sync.Mutex
 	adk               *adkServices

@@ -14,6 +14,9 @@ import (
 )
 
 func (e *Engine) flushWorkOutbox(ctx context.Context) error {
+	owner := e.workOwner()
+	owner.workOutboxMu.Lock()
+	defer owner.workOutboxMu.Unlock()
 	store, err := e.adkStore()
 	if err != nil {
 		return err
@@ -187,7 +190,10 @@ func runMachineInput(ctx context.Context, service adksession.Service, node workf
 	if result != nil {
 		content = &genai.Content{Role: "user", Parts: []*genai.Part{{FunctionResponse: &genai.FunctionResponse{ID: callID, Name: workflow.WorkflowInputFunctionCallName, Response: result}}}}
 	}
-	for _, err := range r.Run(ctx, "lake", goalID, content, agent.RunConfig{}) {
+	// Each wait in a multi-stage goal needs its own Workflow checkpoint. A
+	// previously completed node must not stand in for a later external wait.
+	checkpointID := goalID + "_" + hash(callID)[:16]
+	for _, err := range r.Run(ctx, "lake", checkpointID, content, agent.RunConfig{}) {
 		if err != nil && !errors.Is(err, workflow.ErrNodeInterrupted) {
 			return err
 		}

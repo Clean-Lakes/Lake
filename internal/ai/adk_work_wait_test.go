@@ -115,3 +115,32 @@ func TestADKExternalWaitReopensWithoutModelPollingOrToolReplay(t *testing.T) {
 		t.Fatal("resume replayed wait", m.calls, dispatches)
 	}
 }
+
+func TestWorkSequentialWaitsHaveIndependentOriginalInputCheckpoints(t *testing.T) {
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+	store, err := e.adkStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, callID := range []string{"original-build-wait", "original-deploy-wait"} {
+		if err = e.runWorkInput(context.Background(), "same-goal", callID, nil); err != nil {
+			t.Fatal(err)
+		}
+		got, getErr := store.Sessions.Get(context.Background(), &adksession.GetRequest{AppName: "lake_work_input", UserID: "lake", SessionID: "same-goal_" + hash(callID)[:16]})
+		if getErr != nil {
+			t.Fatal(getErr)
+		}
+		found := false
+		for event := range got.Session.Events().All() {
+			if event.RequestedInput != nil && event.RequestedInput.InterruptID == callID {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("later work wait reused an already completed checkpoint", callID)
+		}
+		if err = e.runWorkInput(context.Background(), "same-goal", callID, map[string]any{"status": "completed"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

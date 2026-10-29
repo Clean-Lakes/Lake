@@ -42,6 +42,8 @@ func (e *Engine) startWorkManager() {
 	}()
 }
 func (e *Engine) workTick(ctx context.Context) error {
+	e.workTickMu.Lock()
+	defer e.workTickMu.Unlock()
 	store, err := e.adkStore()
 	if err != nil {
 		return err

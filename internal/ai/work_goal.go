@@ -384,6 +384,9 @@ func (e *Engine) workCheckpoint(s *session) error {
 	if s.state.Runtime != nil {
 		rounds = s.state.Runtime.ModelRounds
 	}
+	// The projection contains slices/pointers also updated by background cards.
+	// Serialize while holding the session lock, then persist immutable bytes.
+	checkpoint := js(projection)
 	s.mu.Unlock()
 	if goalID == "" {
 		return nil
@@ -392,7 +395,7 @@ func (e *Engine) workCheckpoint(s *session) error {
 	if err != nil {
 		return err
 	}
-	row.Checkpoint = string(safeJSON([]byte(js(projection)), c))
+	row.Checkpoint = string(safeJSON([]byte(checkpoint), c))
 	g.ModelRounds = rounds
 	if len(decisions) > 0 {
 		g.UserDecisions = decisions
