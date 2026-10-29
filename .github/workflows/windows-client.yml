@@ -2,6 +2,11 @@ name: Windows x86_64 client
 on:
   workflow_dispatch:
     inputs:
+      n5_resume:
+        description: 'Retry only failed/uncompleted N5 stages; frontend checks already passed'
+        required: false
+        default: false
+        type: boolean
       n5_only:
         description: 'N5 memory regressions and actual WebView2 only; no packaging'
         required: false
@@ -172,11 +177,15 @@ jobs:
           version: 10.33.4
       - run: pnpm --dir web-agent install --frozen-lockfile
       - run: pnpm --dir web-agent check
+        if: ${{ !inputs.n5_resume }}
       - run: pnpm --dir web-agent test:frontend
+        if: ${{ !inputs.n5_resume }}
       - run: pnpm --dir web-agent build:web
       - name: Stage actual application assets
         shell: pwsh
-        run: Copy-Item web-agent/web/dist/* assets/web/dist/ -Recurse -Force
+        run: |
+          New-Item -ItemType Directory -Force assets/web/dist | Out-Null
+          Copy-Item web-agent/web/dist/* assets/web/dist/ -Recurse -Force
       - name: Memory boundaries and recovery on Windows
         shell: pwsh
         run: |
