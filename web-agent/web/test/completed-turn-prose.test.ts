@@ -53,3 +53,22 @@ test('final prose keeps its stable entry; original narration remains available i
   const activity = renderToStaticMarkup(createElement(AITranscript, {snapshot, mode: 'activity'}));
   assert.ok(!activity.includes('is-archived'));
 });
+
+
+test('an incomplete turn with a real post-tool answer archives only proven pre-tool narration',()=>{
+ const failure=card('failure','error','实际操作失败');failure.card!.status='failed';
+ const second=card('second','message','补充核验：客户端实际登录仍需确认。');
+ const ended=[turn[0]!,turn[1]!,turn[2]!,second,failure];
+ assert.deepEqual([...completedTurnInterimIds(ended,false,undefined,true)],['interim']);
+ assert.equal(completedTurnInterimIds(ended,false,undefined,true).has('final'),false);
+ assert.equal(completedTurnInterimIds(ended,false,undefined,true).has('second'),false,'distinct actual results must not be semantically deduplicated');
+ assert.equal(completedTurnInterimIds(ended.slice(0,2),false,undefined,true).size,0,'without a later actual answer incomplete narration remains visible');
+ const partial=[turn[0]!,turn[1]!,{...turn[2]!,card:{...turn[2]!.card!,status:'failed'}}];
+ assert.deepEqual([...completedTurnInterimIds(partial,false,undefined,true)],['interim'],'retain the later partial answer while retiring only its pre-tool narration');
+ const snapshot={session:{id:'fixture'},resources:[],actions:[],messages:[{id:'user',role:'user',text:'继续处理',createdAt:'2026-10-21T00:00:00Z'}],replyTimings:[{messageId:'user',startedAt:'2026-10-21T00:00:00Z',finishedAt:'2026-10-21T00:00:05Z',status:'failed'}],ai:{session:'fixture',status:'failed',cardsOffset:0,cards:ended.map(entry=>entry.card!)}} as unknown as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.ok(html.includes('未完成')&&html.includes('实际操作失败'));
+ assert.ok(html.includes('过程播报 · 1'));
+ assert.match(html,/class="settled-reply is-archived"[^>]*><div class="settled-reply-content"><div data-conversation-entry="interim"/);
+ for(const id of ['final','second'])assert.match(html,new RegExp('class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="'+id+'"'));
+});

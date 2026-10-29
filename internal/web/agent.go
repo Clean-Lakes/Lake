@@ -198,6 +198,9 @@ func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any
 	if method == "agentQuestionReply" && b.Engine.NeedsRoleRecovery(id, stringOf(object(data)["runId"])) || method == "questionReply" && b.Engine.NeedsQuestionRecovery(id) || method == "agentDecision" && b.Engine.NeedsRoleRecovery(id, stringOf(object(data)["runId"])) || method == "decision" && b.Engine.NeedsADKRecovery(id) {
 		b.configure(id, nil)
 	}
+	if method == "workControl" {
+		b.configure(id, nil)
+	}
 	if method == "questionReply" {
 		var input struct {
 			ID      string              `json:"id"`
@@ -249,7 +252,13 @@ func (b *Server) event(event ai.Event) {
 		}
 	case "done":
 		status := stringOf(object(event.Data)["status"])
-		if status == "completed" || status == "cancelled" {
+		if status == "waiting_external" {
+			b.Store.Status(event.Session, "completed")
+		} else if status == "waiting_user" {
+			b.Store.Status(event.Session, "completed")
+		} else if status == "paused" || status == "blocked" {
+			b.Store.Status(event.Session, "completed")
+		} else if status == "completed" || status == "cancelled" {
 			b.syncSRESessionStatus(event.Session)
 		} else {
 			b.Store.Status(event.Session, "failed")
@@ -424,6 +433,9 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 			}
 		}
 	}()
+	if name == "work_release_capability" || name == "work_release_observe" {
+		return b.workReleaseBridge(ctx, id, name, args)
+	}
 	if name == "list_mcp_servers" || name == "list_mcp_tools" || name == "call_mcp_tool" {
 		return b.extensionBridge(ctx, id, name, args, approved)
 	}

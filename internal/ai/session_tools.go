@@ -75,6 +75,9 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	if workToolName(call.Name) {
+		return e.invokeWorkTool(ctx, s, c, call, a)
+	}
 	switch call.Name {
 	case "list_mcp_servers", "list_mcp_tools", "call_mcp_tool":
 		if e.Bridge == nil {
@@ -217,6 +220,10 @@ func (e *Engine) sessionApproval(ctx context.Context, s *session, call Call, kin
 	return e.sessionApprovalTarget(ctx, s, call, kind, "当前项目")
 }
 func (e *Engine) sessionApprovalTarget(ctx context.Context, s *session, call Call, kind, target string) error {
+	if e.workParent != nil {
+		return errors.New("后台接续遇到需要人工批准的操作；本次未执行。请记录 waiting_user 并在会话中明确处理")
+	}
+
 	s.mu.Lock()
 	c := s.state.Config
 	s.mu.Unlock()
@@ -226,6 +233,10 @@ func (e *Engine) sessionApprovalTarget(ctx context.Context, s *session, call Cal
 }
 
 func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot ...*PilotChoice) (any, error) {
+	if e.workParent != nil {
+		return nil, errors.New("后台接续需要用户提供信息；请把对应工作项设为 waiting_user 并说明问题，不猜测答案")
+	}
+
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}

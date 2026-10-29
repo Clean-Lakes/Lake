@@ -54,7 +54,7 @@ func extendedTools() []Tool {
 	}
 }
 func sessionTool(name string) bool {
-	for _, t := range extendedTools() {
+	for _, t := range append(workTools(), extendedTools()...) {
 		if t.Name == name {
 			return true
 		}

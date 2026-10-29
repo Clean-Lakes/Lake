@@ -31,6 +31,7 @@ type Server struct {
 	Env             map[string]string `json:"env,omitempty"`
 	TimeoutMS       int               `json:"timeoutMs,omitempty"`
 	ProtocolVersion string            `json:"protocolVersion,omitempty"`
+	WorkObserver    string            `json:"workObserver,omitempty"`
 }
 type Config struct {
 	Version        int      `json:"version"`
@@ -122,6 +123,9 @@ func (s *Store) Update(change func(*Config) error) error {
 	return platform.SyncDirectory(dir)
 }
 func ValidateServer(c Server) error {
+	if c.WorkObserver != "" && c.WorkObserver != "release-v1" {
+		return errors.New("不支持的后台任务观察适配器")
+	}
 	if !Identifier.MatchString(c.ID) || strings.TrimSpace(c.Name) == "" || len(c.Name) > 120 {
 		return errors.New("请输入有效的服务名称")
 	}
@@ -220,7 +224,7 @@ func (s *Store) FindServer(id string) (Server, error) {
 	return Server{}, errors.New("MCP 服务不存在")
 }
 func PublicServer(v Server) map[string]any {
-	return map[string]any{"id": v.ID, "name": v.Name, "transport": v.Transport, "enabled": v.Enabled, "url": v.URL, "command": v.Command, "args": append([]string{}, v.Args...), "headersConfigured": len(v.Headers) > 0, "envConfigured": len(v.Env) > 0, "timeoutMs": v.TimeoutMS, "protocolVersion": v.ProtocolVersion}
+	return map[string]any{"id": v.ID, "name": v.Name, "transport": v.Transport, "enabled": v.Enabled, "url": v.URL, "command": v.Command, "args": append([]string{}, v.Args...), "headersConfigured": len(v.Headers) > 0, "envConfigured": len(v.Env) > 0, "timeoutMs": v.TimeoutMS, "protocolVersion": v.ProtocolVersion, "workObserver": v.WorkObserver}
 }
 
 func ServerRevision(server Server) string {

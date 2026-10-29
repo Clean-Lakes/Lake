@@ -15,3 +15,11 @@
 @keyframes reply-handoff-in { from { grid-template-rows:0fr; opacity:0; transform:translateY(6px); } to { grid-template-rows:1fr; opacity:1; transform:translateY(0); } }
 .turn-progress-prose > .ai-response { margin-block: 12px; }
 @media (prefers-reduced-motion: reduce) { .settled-reply { transition: none; animation:none; } }
+
+/* A stable one-line caption survives tool rounds while full prose stays in records. */
+.turn-latest-progress { min-width:0; flex-shrink:0; font-size:var(--font-size-ui); line-height:1.75; color:var(--foreground); }
+.turn-latest-progress-text { display:block; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* When prose becomes the live caption, replace it in one paint. Cross-fading
+   the archived original duplicates the same line during its first frames. */
+.ai-turn:has(> .turn-latest-progress) > .settled-reply.is-archived { display:none; }

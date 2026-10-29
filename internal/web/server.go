@@ -173,12 +173,27 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	server.Engine.ModelActivity = server.memoryForegroundModel
 	server.Engine.MemoryCaptureAllowed = store.MemoryCaptureAllowed
 	server.Engine.MemoryCaptureSessionAllowed = store.MemoryCaptureSessionAllowed
+	server.Engine.SetSupplementHooks(server.readUserSupplements, server.acknowledgeUserSupplements)
+	server.Engine.SetWorkConfigurator(func(id string) (config ai.Config, err error) {
+		defer func() {
+			if failure := recover(); failure != nil {
+				err = fmt.Errorf("工作目标的当前会话配置不可用")
+			}
+		}()
+		server.configure(id, nil)
+		return server.Engine.ConfigForSession(id)
+	})
+	if err = server.reconcileUserSupplementQueues(); err != nil {
+		server.Close()
+		return nil, err
+	}
 	store.RecoverSRETasks()
 	server.reconcileStaleSREStatuses()
 	if err = server.startScheduler(); err != nil {
 		server.Close()
 		return nil, err
 	}
+	server.Engine.StartWorkManager()
 	return server, nil
 }
 func (b *Server) Start() error {
@@ -692,7 +707,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if len(parts) == 3 && method == "DELETE" {
 			b.messageMu.Lock()
 			defer b.messageMu.Unlock()
-			if b.runningMessages[id] {
+			if b.runningMessages[id] || b.Engine.SessionReserved(id) {
 				fail(409, "请先停止 AI，并等待本轮结束")
 			}
 			snap := b.sessionSnapshot(id)
@@ -706,6 +721,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					fail(409, "请先中断运行命令")
 				}
 			}
+			aiFailure(b.Engine.CancelWorkGoals(r.Context(), id))
 			aiFailure(b.Engine.Clear(id))
 			b.Terminals.CloseSession(id)
 			b.revokeSessionTerminals(id)
@@ -864,14 +880,14 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					reply(w, 200, b.configure(id, updates))
 					return
 				}
-				if set("abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails resolveOperation clear clearReferences rollback compact restore undoFile extractPreset")[op] {
+				if set("workControl abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails resolveOperation clear clearReferences rollback compact restore undoFile extractPreset")[op] {
 					limit := int64(128000)
 					if op == "restore" {
 						limit = 32 << 20
 					}
 					data := body(w, r, limit)
 					status := b.Store.Session(id)["status"]
-					if !set("abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails extractPreset")[op] && (status == "investigating" || status == "waiting_approval") {
+					if !set("workControl abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails extractPreset")[op] && (status == "investigating" || status == "waiting_approval") {
 						fail(409, "AI 正在运行，请先停止")
 					}
 					if op == "compact" || op == "undoFile" || op == "extractPreset" {

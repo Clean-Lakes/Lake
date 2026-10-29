@@ -19,7 +19,7 @@ func TestAutomaticCompactionUsesMeasuredInputAcrossToolBatches(t *testing.T) {
 	m, close := fakeModel(t, func(n int, b map[string]any) any {
 		requests++
 		if b["tools"] == nil {
-			t.Error("extra model summary despite measured input below budget")
+			t.Error("extra model summary despite measured input below the soft threshold")
 		}
 		var r any
 		if n <= 14 {
@@ -27,7 +27,7 @@ func TestAutomaticCompactionUsesMeasuredInputAcrossToolBatches(t *testing.T) {
 		} else {
 			r = response("检查完成。")
 		}
-		r.(map[string]any)["usage"] = map[string]any{"prompt_tokens": 15000 + n*1500, "completion_tokens": 100}
+		r.(map[string]any)["usage"] = map[string]any{"prompt_tokens": 15000 + n*1200, "completion_tokens": 100}
 		return r
 	})
 	defer close()

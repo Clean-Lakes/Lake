@@ -36,6 +36,21 @@ if(query.has('reference-time')){
  }
  state.ai!.cards.push({id:'reference-answer',type:'message',status:'completed',at:stamp(114),content:'已核对演示服务的运行状态，完整执行步骤与命令结果可在上方用时入口中查看。'});
 }
+// Reproduce a saved incomplete turn with a real answer after failed tools.
+// The pre-tool note belongs to process; both distinct result paragraphs and
+// the actual failure remain in the main transcript without changing its status.
+if(query.has('ended-failure')){
+ const user=state.messages.at(-1)!;
+ state.ai!.cards=[
+  {id:'process-preface',type:'message',status:'completed',at:stamp(111),content:'我继续核对演示配置，并确认实际结果。'},
+  {id:'failed-operation',type:'operation',title:'shell',status:'failed',at:stamp(112),content:'原操作失败记录',data:{target:'演示主机',arguments:{command:'example-command'}}},
+  {id:'actual-answer',type:'message',status:'completed',at:stamp(113),content:'已核对演示配置，记录显示已应用。'},
+  {id:'actual-verification',type:'message',status:'completed',at:stamp(114),content:'补充核验：实际客户端连接仍需确认。'},
+  {id:'final-error',type:'error',status:'failed',at:stamp(115),content:'演示后续检查失败，原始记录保留。'},
+ ];
+ state.session.status='failed';state.ai!.status='failed';state.ai!.totalCards=state.ai!.cards.length;
+ state.replyTimings=[{messageId:user.id,startedAt:user.createdAt,finishedAt:stamp(116),status:'failed'}];
+}
 const lineArrivals:{kind:string;duration:number|undefined}[]=[];
 const motionSamples:{kind:string;y:number;opacity:number}[]=[];
 const metrics={executionName:"",executionPhase:"",statusTop:0,statusHeight:0,statusBeforeReply:false,executionAnimations:0,rowReplacements:0,rowRemovals:0,rowPositionChanges:0,rowColorChanges:0,renderedRows:[] as {id:string;kind:string;top:number}[],lineArrivals,motionSamples,snapshots:0,subscriptions:0,actionReplacements:0,historyReplacements:0,actionAnimations:0,replyAnimations:0,replyReplacements:0,scrollWrites:0,scrollEvents:0,scrollChanges:0,heightChanges:0,updates:0,errors:0,top:0,height:0};

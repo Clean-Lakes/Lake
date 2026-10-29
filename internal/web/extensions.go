@@ -67,6 +67,9 @@ func (b *Server) extensionRoute(w http.ResponseWriter, r *http.Request, path str
 			if _, ok := data["protocolVersion"]; !ok {
 				next.ProtocolVersion = old.ProtocolVersion
 			}
+			if _, ok := data["workObserver"]; !ok {
+				next.WorkObserver = old.WorkObserver
+			}
 		}
 		if clear, _ := data["clearHeaders"].(bool); clear {
 			next.Headers = map[string]string{}
