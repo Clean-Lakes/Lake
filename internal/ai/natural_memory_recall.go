@@ -72,9 +72,19 @@ func (e *Engine) checkNaturalRecall(ctx context.Context, s *session, c Config) e
 	}
 	return ctx.Err()
 }
-func (e *Engine) rememberNaturalUse(s *session, items []NaturalRecallItem) {
+func (e *Engine) rememberNaturalUse(s *session, items []NaturalRecallItem) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	refs := map[string]bool{}
+	for _, v := range s.state.NaturalRecallUsed {
+		refs[v.ID+":"+v.Hash] = true
+	}
+	for _, v := range items {
+		refs[v.ID+":"+v.Hash] = true
+	}
+	if len(refs) > 32 {
+		return false
+	}
 	for _, v := range items {
 		found := false
 		for _, old := range s.state.NaturalRecallUsed {
@@ -85,6 +95,7 @@ func (e *Engine) rememberNaturalUse(s *session, items []NaturalRecallItem) {
 			s.state.NaturalRecallUsed = append(s.state.NaturalRecallUsed, v)
 		}
 	}
+	return true
 }
 func (e *Engine) naturalRecallRequest(ctx context.Context, s *session, c Config, history []Message, tools []Tool) ([]Message, string, error) {
 	if err := e.checkNaturalRecall(ctx, s, c); err != nil {
@@ -122,7 +133,9 @@ func (e *Engine) naturalRecallRequest(ctx context.Context, s *session, c Config,
 						}
 					}
 					history[i].Content = js(map[string]any{"items": live, "historical": true, "compliance": "unknown", "budgetLimited": len(live) < len(receipt.Items)})
-					e.rememberNaturalUse(s, live)
+					if !e.rememberNaturalUse(s, live) {
+						return nil, "", errors.New("本轮偏好读取已达上限")
+					}
 				}
 			}
 		}
@@ -165,7 +178,9 @@ func (e *Engine) naturalRecallRequest(ctx context.Context, s *session, c Config,
 	if len(history) > 0 {
 		history[0].Content += text
 	}
-	e.rememberNaturalUse(s, selected)
+	if !e.rememberNaturalUse(s, selected) {
+		return history, "", nil
+	}
 	// Optional diagnostics never turn a successful business task into a failure.
 	_ = e.RecordMemoryAccess(id, access, turn)
 	return history, text, nil
@@ -203,7 +218,9 @@ func (e *Engine) invokeNaturalRecall(ctx context.Context, s *session, c Config, 
 		}
 		access = append(access, MemoryAccess{Key: v.ID, Revision: v.Revision, Kind: kind, Category: "preference", Scope: v.Scope, ContentHash: v.Hash, BytesRead: len(items[i].Body)})
 	}
-	e.rememberNaturalUse(s, items)
+	if !e.rememberNaturalUse(s, items) {
+		return nil, errors.New("本轮偏好读取已达上限")
+	}
 	for i := range items {
 		items[i].Body = ""
 	} // Durable tool receipt contains references only.

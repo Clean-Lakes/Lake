@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -215,5 +216,21 @@ func TestNaturalRecallOfficialReadDeliversEphemeralFullBody(t *testing.T) {
 	projection := memoryProjection(s.state)
 	if strings.Contains(js(projection), body) {
 		t.Fatal("body copied into canonical guard")
+	}
+}
+
+func TestNaturalRecallReferenceBudgetNeverAdmitsUnguardedRead(t *testing.T) {
+	e, s, c := recallFixture(t)
+	for i := 0; i < 32; i++ {
+		s.state.NaturalRecallUsed = append(s.state.NaturalRecallUsed, NaturalRecallItem{ID: fmt.Sprintf("p-%d", i), Revision: 1, Hash: "h"})
+	}
+	e.NaturalMemory = func(context.Context, string, NaturalRecallQuery) ([]NaturalRecallItem, error) {
+		return []NaturalRecallItem{{ID: "one-too-many", Revision: 1, Hash: "h", Body: "以后本项目固定中文。"}}, nil
+	}
+	if _, err := e.invokeNaturalRecall(context.Background(), s, c, Call{Name: "read_memory_preference", Arguments: `{"id":"one-too-many","expectedRevision":1}`}); err == nil {
+		t.Fatal("unguarded read exceeded source budget")
+	}
+	if len(s.state.NaturalRecallUsed) != 32 {
+		t.Fatal("reference budget changed")
 	}
 }
