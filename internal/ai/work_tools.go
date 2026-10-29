@@ -184,6 +184,9 @@ func (e *Engine) workEvidence(s *session, id, status string) bool {
 	for _, m := range s.state.History {
 		if m.Role == "tool" && m.CallID == id {
 			data := objJSON(m.Content)
+			if data["outcome"] == "not_executed" {
+				return false
+			}
 			if data["error"] != nil {
 				return status == "failed"
 			}

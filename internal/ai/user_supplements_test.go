@@ -189,3 +189,16 @@ func TestUserSupplementDuringToolStopsLaterObsoleteCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSupersededProposalCannotProveWorkCompletedOrFailed(t *testing.T) {
+	e := engineFor(t, Model{Name: "fixture", URL: "http://127.0.0.1:1"}, nil)
+	s, _ := e.get("case")
+	s.mu.Lock()
+	s.state.History = []Message{{Role: "tool", CallID: "superseded", Name: "write", Content: `{"outcome":"not_executed","notice":"superseded by real user input before dispatch"}`}}
+	s.mu.Unlock()
+	for _, state := range []string{"completed", "failed"} {
+		if e.workEvidence(s, "superseded", state) {
+			t.Fatal("a proposal without execution became evidence of an outcome", state)
+		}
+	}
+}
