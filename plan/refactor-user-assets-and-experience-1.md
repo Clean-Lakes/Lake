@@ -10,6 +10,8 @@ tags: [refactor, strategy, learning, user-assets, experience]
 
 # Lake 用户资产积累与经验复用开发计划
 
+> 2026-10-29 当前状态：N1～N5 已合入，C3 已合入 #117；旧试跑入口已退役，C4 的当前验证与 Windows 缺口见[手册](../docs/design/memory-compatibility-c4.md)和[验收](../docs/validation/memory-compatibility-c4.md)。下文带日期的阶段状态与分数保持历史含义。
+
 > **2026-10-28：原策略资产的新产品方向以[自然记忆重塑计划](feature-natural-memory-1.md)为准。** 本文保留 R0～R5 已交付的实现与验收历史，“候选—审核—采用”不再规定新记忆的日常交互。新计划承接用户内容、范围与来源保护，新增非阻塞形成、空闲整理、按范围使用及压缩前增量提取。[清理计划](refactor-harness-inspired-cleanup-1.md)继续约束旧执行退役与历史兼容；C1 已经 #107 合入，见 [C1 契约](../docs/design/strategy-execution-retirement-c1.md)，C2 转由新计划承接，N3 已提前清理无依赖退役派发器并折叠旧入口；C3/C4 其余清理仍待后续。
 
 本计划接替[策略学习与改进开发计划](feature-strategy-learning-1.md)的后续开发方向：重点保留用户级资产、来源血缘和经验复用；在线纠错默认关闭；学习在后台生成待审核候选，不参与当前任务的成败判定。模型原有的分析、根据工具结果调整调查步骤等能力继续通过官方 ADK 执行，不强制经过额外的策略修订流程。

@@ -21,14 +21,14 @@ import (
 
 // This runs the actual embedded React application and Go API in WebView2,
 // using an empty private Home and no model/production credentials.
-func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
+func TestWindowsLegacyAssetConfirmationInRealWebView(t *testing.T) {
 	if _, err := webviewloader.GetInstalledVersion(); err != nil {
-		if os.Getenv("LAKE_P8_REQUIRED_WINDOWS_UI") == "1" {
-			t.Fatal("P8 requires the actual WebView2 runtime")
+		if os.Getenv("LAKE_COMPAT_REQUIRED_WINDOWS_UI") == "1" {
+			t.Fatal("Legacy asset compatibility requires the actual WebView2 runtime")
 		}
 		t.Skip("WebView2 runtime is not installed")
 	}
-	if os.Getenv("LAKE_P8_WINDOWS_UI_CHILD") != "1" {
+	if os.Getenv("LAKE_COMPAT_WINDOWS_UI_CHILD") != "1" {
 		// WebView2 can retain profile file handles until the embedding process
 		// exits. Let the parent own cleanup after that actual process boundary.
 		home := t.TempDir()
@@ -48,8 +48,8 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
 		})
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
-		command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestWindowsStrategyConfirmationInRealWebView$", "-test.v")
-		command.Env = append(os.Environ(), "LAKE_P8_WINDOWS_UI_CHILD=1", "LAKE_P8_WINDOWS_UI_HOME="+home)
+		command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestWindowsLegacyAssetConfirmationInRealWebView$", "-test.v")
+		command.Env = append(os.Environ(), "LAKE_COMPAT_WINDOWS_UI_CHILD=1", "LAKE_COMPAT_WINDOWS_UI_HOME="+home)
 		output, err := command.CombinedOutput()
 		if err != nil {
 			t.Fatalf("actual WebView2 acceptance subprocess failed: %v\n%s", err, output)
@@ -58,7 +58,7 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
 	}
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	home := os.Getenv("LAKE_P8_WINDOWS_UI_HOME")
+	home := os.Getenv("LAKE_COMPAT_WINDOWS_UI_HOME")
 	if home == "" {
 		t.Fatal("parent-owned isolated Home required")
 	}
@@ -88,13 +88,13 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
 	if origin == "" {
 		t.Fatal("isolated backend readiness timed out")
 	}
-	window := webview.NewWithOptions(webview.WebViewOptions{DataPath: filepath.Join(home, "webview"), WindowOptions: webview.WindowOptions{Title: "Lake P8 Windows acceptance", Width: 1280, Height: 800}})
+	window := webview.NewWithOptions(webview.WebViewOptions{DataPath: filepath.Join(home, "webview"), WindowOptions: webview.WindowOptions{Title: "Lake legacy assets Windows acceptance", Width: 1280, Height: 800}})
 	if window == nil {
 		t.Fatal("WebView2 window creation failed")
 	}
 	defer window.Destroy()
 	result := make(chan map[string]any, 1)
-	if err = window.Bind("__p8Result", func(raw string) {
+	if err = window.Bind("__legacyResult", func(raw string) {
 		var value map[string]any
 		if json.Unmarshal([]byte(raw), &value) != nil {
 			value = map[string]any{"passed": false, "error": "invalid UI result"}
@@ -107,7 +107,7 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
 	}); err != nil {
 		t.Fatal("UI callback setup failed")
 	}
-	if err = window.Bind("__p8Resize", func() {
+	if err = window.Bind("__legacyResize", func() {
 		window.Dispatch(func() {
 			themeUser.NewProc("SetWindowPos").Call(uintptr(window.Window()), 0, 0, 0, 850, 600, 0x0002|0x0004)
 		})
@@ -137,7 +137,7 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
  await choose(panel,'新建');
  phase='title_field';
  const title=await wait(()=>panel().querySelector('input[maxlength="240"]'));
- Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(title,'P8 unsaved Windows draft');
+ Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(title,'Legacy unsaved Windows draft');
  title.dispatchEvent(new Event('input',{bubbles:true}));
  await choose(panel,'新建');
  phase='unsaved_confirmation';
@@ -150,7 +150,7 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
  assert(document.activeElement===buttons[0],'shift_tab_escaped_confirmation');
  buttons[0].dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
  await wait(()=>!confirmation());
- assert(panel().querySelector('input[maxlength="240"]').value==='P8 unsaved Windows draft','escape_lost_draft');
+ assert(panel().querySelector('input[maxlength="240"]').value==='Legacy unsaved Windows draft','escape_lost_draft');
  assert(document.querySelector('#strategy-settings-panel'),'escape_closed_settings');
  await choose(panel,'新建'); await wait(confirmation);
  await choose(confirmation,'确认操作');
@@ -161,9 +161,9 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
  dark.click(); await wait(()=>dark.getAttribute('aria-checked')==='true');
  await openLegacy();
  await wait(panel);
- await window.__p8Resize(); phase='native_narrow_resize';await wait(()=>innerWidth<=900);assert(innerWidth<=900,'narrow_window_not_exercised');
- await window.__p8Result(JSON.stringify({passed:true,actualBackend:true,actualWebView2:true,defaultNoModel:true,tab:true,shiftTab:true,escapePreservedDraft:true,confirmedDiscard:true,dark:true,viewportWidth:innerWidth,viewportHeight:innerHeight}));
- })().catch(error=>window.__p8Result(JSON.stringify({passed:false,error:String(error.message)})));});`)
+ await window.__legacyResize(); phase='native_narrow_resize';await wait(()=>innerWidth<=900);assert(innerWidth<=900,'narrow_window_not_exercised');
+ await window.__legacyResult(JSON.stringify({passed:true,actualBackend:true,actualWebView2:true,defaultNoModel:true,tab:true,shiftTab:true,escapePreservedDraft:true,confirmedDiscard:true,dark:true,viewportWidth:innerWidth,viewportHeight:innerHeight}));
+ })().catch(error=>window.__legacyResult(JSON.stringify({passed:false,error:String(error.message)})));});`)
 	timer := time.AfterFunc(50*time.Second, func() { window.Dispatch(window.Destroy) })
 	defer timer.Stop()
 	window.Navigate(origin + "/#token=p8-synthetic-local-test")
@@ -171,7 +171,7 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
 	select {
 	case value := <-result:
 		value["platform"] = runtime.GOOS + "/" + runtime.GOARCH
-		if path := os.Getenv("LAKE_P8_WINDOWS_REPORT"); path != "" {
+		if path := os.Getenv("LAKE_COMPAT_WINDOWS_REPORT"); path != "" {
 			raw, _ := json.MarshalIndent(value, "", "  ")
 			if os.WriteFile(path, append(raw, '\n'), 0600) != nil {
 				t.Fatal("cannot save UI evidence")
@@ -181,6 +181,6 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
 			t.Fatalf("Windows strategy UI failed: %v", value["error"])
 		}
 	default:
-		t.Fatal("Windows strategy UI did not report completion")
+		t.Fatal("Windows legacy asset UI did not report completion")
 	}
 }

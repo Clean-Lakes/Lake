@@ -1,5 +1,7 @@
 # P8 策略学习验收记录
 
+> 2026-10-29：本文命令和结果属于历史版本；当前 P8 Dev 试跑入口明确退役，后续验证见 [C4 手册](../design/memory-compatibility-c4.md)。原始记录、分数和未测项不改写。
+
 本文保留 PR #54 提交时的历史验收状态；后续真实模型、真实服务、Windows 与最终结论见 [P8 补充验收](lake-strategy-learning-p8-completion.md) 及 [补充 JSON](lake-strategy-learning-p8-completion.json)。不要将下述“未运行”当作后续补充验收的当前状态。
 
 2026-10-22，从 `origin/develop@a783981ade1631d1466fcf6e8d785410bf88dfbb`（P7 PR #53 已合并）创建 `codex/strategy-learning-p8`。使用本地 `gh bearqy`，仅提交 develop PR，不合并、不触发 CI、不发布或操作生产。

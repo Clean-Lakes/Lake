@@ -2,42 +2,31 @@ name: Windows x86_64 client
 on:
   workflow_dispatch:
     inputs:
-      n5_checks:
-        description: 'N5 failed/uncompleted subset only'
+      compatibility_only:
+        description: 'Memory and legacy compatibility only; no packaging'
+        required: false
+        default: false
+        type: boolean
+      compatibility_checks:
+        description: 'Selected failed/uncompleted stages for an explicitly authorized retry'
         required: false
         default: all
         type: choice
-        options: [all, migrations-and-ui, native-ui-only]
-      n5_resume:
-        description: 'Retry only failed/uncompleted N5 stages; frontend checks already passed'
+        options: [all, backend-only, native-ui-only, legacy-ui-only, memory-ui-only]
+      compatibility_resume:
+        description: 'Skip frontend checks only when already passed at the tested source'
         required: false
         default: false
         type: boolean
-      n5_only:
-        description: 'N5 memory regressions and actual WebView2 only; no packaging'
-        required: false
-        default: false
-        type: boolean
-      p8_resume:
-        description: 'Only retry P8 failed/uncompleted acceptance; prior native backend checks already passed'
-        required: false
-        default: false
-        type: boolean
-      p8_checks:
-        description: 'Select failed P8 checks to retry; results from other runs remain separate evidence'
-        required: false
-        default: all
-        type: choice
-        options: [all, contracts-ai, native-ui-only]
   pull_request:
     branches: [master]
-    paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'scripts/verify_strategy_learning.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']
+    paths: ['client/windows/**', 'internal/**', 'cmd/lake/**', 'scripts/build_lake_windows.py', 'scripts/verify_memory_compatibility.py', 'scripts/verify_strategy_learning.py', 'web-agent/**', 'go.mod', 'go.sum', '.github/workflows/windows-client.yml']
 permissions:
   contents: read
 jobs:
   windows-amd64:
     if: >-
-      (github.event_name == 'workflow_dispatch' && !inputs.n5_only) ||
+      (github.event_name == 'workflow_dispatch' && !inputs.compatibility_only) ||
       (github.event.pull_request.head.ref == 'develop' &&
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: windows-latest
@@ -58,7 +47,7 @@ jobs:
           python-version: '3.14'
       - run: pnpm --dir web-agent install --frozen-lockfile
       - run: pnpm --dir web-agent test:frontend
-        if: ${{ !inputs.p8_resume }}
+        if: ${{ !inputs.compatibility_resume }}
       - run: pnpm --dir web-agent build:web
       - run: choco install nsis 7zip --no-progress -y
       - name: Prepare pinned terminal runtime before packaging
@@ -78,7 +67,7 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as env:
               env.write('LAKE_PORTABLE_ROOT=' + str(runtime) + '\n')
       - name: Test Windows locks, SQLite, ACLs and ConPTY
-        if: ${{ !inputs.p8_resume }}
+        if: ${{ !inputs.compatibility_resume }}
         shell: pwsh
         run: |
           $env:CGO_ENABLED = '0'
@@ -88,31 +77,33 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test ./internal/platform -run '^TestSSHFileOption' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go test ./client/windows -skip '^TestWindowsStrategyConfirmationInRealWebView$' -count=1 -timeout 1m
+          go test ./client/windows -skip '^TestWindows(LegacyAssetConfirmation|NaturalMemory)InRealWebView$' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: P8 strategy regression and actual Windows WebView2 acceptance
-        env:
-          LAKE_P8_CHECKS: ${{ inputs.p8_checks }}
+      - name: Memory, legacy assets and retirement regression
         shell: pwsh
         run: |
-          if ($env:LAKE_P8_CHECKS -eq 'contracts-ai') {
-            python scripts/verify_strategy_learning.py --report "${{ runner.temp }}/strategy-learning-windows.json" --packages internal/strategy internal/ai
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } elseif ($env:LAKE_P8_CHECKS -ne 'native-ui-only') {
-            python scripts/verify_strategy_learning.py --report "${{ runner.temp }}/strategy-learning-windows.json"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-          $env:LAKE_P8_REQUIRED_WINDOWS_UI = '1'
-          $env:LAKE_P8_WINDOWS_REPORT = '${{ runner.temp }}/strategy-learning-windows-ui.json'
-          go test -v ./client/windows -run '^TestWindowsStrategyConfirmationInRealWebView$' -count=1 -timeout=2m
+          python scripts/verify_memory_compatibility.py --report "${{ runner.temp }}/memory-compatibility-windows.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Actual Windows legacy confirmation and memory settings
+        shell: pwsh
+        env:
+          LAKE_COMPAT_REQUIRED_WINDOWS_UI: '1'
+          LAKE_COMPAT_WINDOWS_REPORT: ${{ runner.temp }}/legacy-assets-windows-ui.json
+          LAKE_MEMORY_REQUIRED_WINDOWS_UI: '1'
+          LAKE_MEMORY_WINDOWS_REPORT: ${{ runner.temp }}/memory-windows-ui.json
+        run: |
+          go test -v ./client/windows -run '^TestWindowsLegacyAssetConfirmationInRealWebView$' -count=1 -timeout=3m
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go test -v ./client/windows -run '^TestWindowsNaturalMemoryInRealWebView$' -count=1 -timeout=3m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: strategy-learning-windows-${{ github.run_id }}
+          name: memory-compatibility-windows-${{ github.run_id }}
           path: |
-            ${{ runner.temp }}/strategy-learning-windows.json
-            ${{ runner.temp }}/strategy-learning-windows-ui.json
+            ${{ runner.temp }}/memory-compatibility-windows.json
+            ${{ runner.temp }}/legacy-assets-windows-ui.json
+            ${{ runner.temp }}/memory-windows-ui.json
           if-no-files-found: warn
           retention-days: 14
       - name: Build installer after native runtime tests
@@ -166,10 +157,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  natural-memory-n5:
-    if: github.event_name == 'workflow_dispatch' && inputs.n5_only
+  memory-compatibility:
+    if: github.event_name == 'workflow_dispatch' && inputs.compatibility_only
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -181,38 +172,48 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
       - run: pnpm --dir web-agent install --frozen-lockfile
       - run: pnpm --dir web-agent check
-        if: ${{ !inputs.n5_resume }}
+        if: ${{ !inputs.compatibility_resume }}
       - run: pnpm --dir web-agent test:frontend
-        if: ${{ !inputs.n5_resume }}
+        if: ${{ !inputs.compatibility_resume }}
       - run: pnpm --dir web-agent build:web
       - name: Stage actual application assets
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force assets/web/dist | Out-Null
           Copy-Item web-agent/web/dist/* assets/web/dist/ -Recurse -Force
-      - name: Memory boundaries and recovery on Windows
-        if: inputs.n5_checks != 'native-ui-only'
+      - name: Memory, legacy assets, retirement and recovery
+        if: inputs.compatibility_checks == 'all' || inputs.compatibility_checks == 'backend-only'
         shell: pwsh
         run: |
           $env:CGO_ENABLED = '0'
-          if ('${{ inputs.n5_checks }}' -eq 'migrations-and-ui') {
-            go test ./internal/web -run '^TestNatural(ConsolidationMigrationBackfillsReferencesAndIsIdempotent|MemoryMigrationBackupRestartAndFutureGuard|PreferenceMigrationReopenBackupAndFutureGuard|RecallMigrationKeepsOldRowsAndRejectsFutureSchema)$' -count=1 -timeout=3m
-          } else {
-            go test ./internal/ai ./internal/web -run 'Test(Natural|MemoryCapture|ProjectMemory|ADKOfficialProjection|StrategyRetirement)' -count=1 -timeout=5m
-          }
+          python scripts/verify_memory_compatibility.py --report "${{ runner.temp }}/memory-compatibility-windows.json"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Actual Windows memory settings in WebView2
+      - name: Actual Windows legacy confirmation
+        if: inputs.compatibility_checks != 'backend-only' && inputs.compatibility_checks != 'memory-ui-only'
         shell: pwsh
         env:
-          LAKE_N5_REQUIRED_WINDOWS_UI: '1'
-          LAKE_N5_WINDOWS_REPORT: ${{ runner.temp }}/natural-memory-n5-windows-ui.json
+          LAKE_COMPAT_REQUIRED_WINDOWS_UI: '1'
+          LAKE_COMPAT_WINDOWS_REPORT: ${{ runner.temp }}/legacy-assets-windows-ui.json
+        run: go test -v ./client/windows -run '^TestWindowsLegacyAssetConfirmationInRealWebView$' -count=1 -timeout=3m
+      - name: Actual Windows memory settings
+        if: inputs.compatibility_checks != 'backend-only' && inputs.compatibility_checks != 'legacy-ui-only'
+        shell: pwsh
+        env:
+          LAKE_MEMORY_REQUIRED_WINDOWS_UI: '1'
+          LAKE_MEMORY_WINDOWS_REPORT: ${{ runner.temp }}/memory-windows-ui.json
         run: go test -v ./client/windows -run '^TestWindowsNaturalMemoryInRealWebView$' -count=1 -timeout=3m
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: natural-memory-n5-windows-${{ github.run_id }}
-          path: ${{ runner.temp }}/natural-memory-n5-windows-ui.json
+          name: memory-compatibility-windows-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/memory-compatibility-windows.json
+            ${{ runner.temp }}/legacy-assets-windows-ui.json
+            ${{ runner.temp }}/memory-windows-ui.json
           if-no-files-found: warn
           retention-days: 14
