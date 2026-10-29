@@ -1302,7 +1302,7 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .ai-role-user.has-message-images { display:flex; flex-direction:column; align-items:flex-end; gap:8px; padding:0; background:transparent; border:0; border-radius:0; box-shadow:none; }
 .ai-role-user.has-message-images > .user-message-text { max-width:100%; padding:10px 14px; border-radius:var(--radius-window); background:var(--surface-muted); }
 .message-images { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; max-width:100%; min-width:0; }
-.ai-chat-message .message-images .ai-image { display:block; margin:0; min-width:0; max-width:100%; }
+.ai-chat-message .message-images .ai-image { display:block; margin:0; min-width:0; max-width:260px; }
 .message-image-open { display:block; max-width:100%; padding:0; border:0; border-radius:var(--radius-panel); background:transparent; cursor:zoom-in; line-height:0; }
 .ai-chat-message .message-images .ai-image img { display:block; width:auto; height:auto; max-width:min(260px,100%); max-height:180px; object-fit:contain; }
 .message-image-open:focus-visible { outline:2px solid var(--focus-outline); outline-offset:3px; }
