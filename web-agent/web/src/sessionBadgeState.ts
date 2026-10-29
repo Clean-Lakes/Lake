@@ -9,7 +9,7 @@ const badges = {
  paused:{label:'已暂停',icon:'pause',tone:'neutral'},
  stopped:{label:'已停止',icon:'stop',tone:'neutral'},
  ended:{label:'已结束',icon:'check',tone:'success'},
- attention:{label:'需关注',icon:'alert',tone:'danger'},
+ attention:{label:'需关注',icon:'alert',tone:'attention'},
 } as const satisfies Record<string,{label:string;icon:GlyphName;tone:string}>;
 
 export function sessionBadgeState(status:WorkSession['status'],detail?:string) {

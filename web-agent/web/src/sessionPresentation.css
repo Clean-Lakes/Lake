@@ -25,6 +25,7 @@
 .session-state-badge.state-investigating { background: var(--info-soft); }
 .session-state-badge[data-tone="neutral"] { --session-state-color:var(--text-secondary); background:var(--surface-selected); }
 .session-state-badge[data-tone="attention"] { --session-state-color:var(--warning); background:var(--warning-soft); }
+.ai-context-usage[data-session-status="failed"] { --session-state-color:var(--warning); }
 .session-state-badge[data-badge-state="working"] .session-state-icon { animation:session-state-spin 1.8s linear infinite; }
 .header-normal-state[aria-hidden="true"] .session-state-icon { animation-play-state:paused; }
 @keyframes session-state-spin { to { transform:rotate(360deg); } }

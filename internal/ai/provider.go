@@ -347,7 +347,7 @@ func streamWithTimeouts(ctx context.Context, m Model, history []Message, tools [
 		if ctx.Err() != nil {
 			return modelResult{}, ctx.Err()
 		}
-		return modelResult{}, errors.New("cannot connect to model endpoint")
+		return modelResult{}, fmt.Errorf("%w: %s", ErrModelConnection, modelConnectionReason(e))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

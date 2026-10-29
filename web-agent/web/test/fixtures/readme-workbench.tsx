@@ -67,6 +67,14 @@ if(new URLSearchParams(location.search).has('responsive-approval')){
 const model={id:'demo-model',providerId:'demo-provider',providerName:'DeepSeek',modelId:'deepseek-chat',name:'DeepSeek',displayName:'DeepSeek',protocol:'openai'};
 const catalog={projects:[project],sessions,resources,resourceTree:tree,tags:[],terminals:[]};
 const bootstrap={authenticated:true,modelConfigured:true,modelName:'DeepSeek',modelId:model.modelId,modelSelection:model,terminalMode:'pty',supportsImageInput:false,aiRuntime:'go'};
+if(new URLSearchParams(location.search).has('compaction-failure')){
+ session.title='主机资源状态检查';session.status='failed';
+ const first='2026-10-29T02:15:07Z',second='2026-10-29T02:15:20Z';
+ snapshot.messages=[{id:'failed-question',sessionId:session.id,role:'user',text:'测试环境的 Flink 集群状态如何',createdAt:first},{id:'failed-followup',sessionId:session.id,role:'user',text:'啊',createdAt:second}];
+ snapshot.replyTimings=[{messageId:'failed-question',startedAt:first,finishedAt:'2026-10-29T02:15:10Z',status:'failed'},{messageId:'failed-followup',startedAt:second,finishedAt:'2026-10-29T02:15:23Z',status:'failed'}];
+ snapshot.ai={...snapshot.ai!,status:'failed',rootTurnId:'compaction-failure-turn',turnStartedAt:second,turnFinishedAt:'2026-10-29T02:15:23Z',agentRuns:[],cards:[{id:'failed-compact-a',type:'error',status:'failed',at:'2026-10-29T02:15:09Z',content:'context compaction: cannot connect to model endpoint'},{id:'failed-compact-b',type:'error',status:'failed',at:'2026-10-29T02:15:22Z',content:'context compaction: cannot connect to model endpoint'}],cardsOffset:0,totalCards:2};
+ snapshot.sre={enabled:false,tasks:[{...task,status:'cancelled',updatedAt:'2026-10-26T15:57:17Z',messages:[],attempts:[{...task.attempts[0]!,status:'interrupted',operations:[{id:'old-dispatch',status:'dispatched',risk:'readonly',resourceId:'order-api',call:{id:'old-call',name:'shell',arguments:'{"command":"hostname"}'},preparedAt:'2026-10-26T15:55:00Z',dispatchedAt:'2026-10-26T15:55:01Z'}]}]} as SRETask]};
+}
 const islandQuery = new URLSearchParams(location.search).get('pilot-island');
 const islandWrites: string[] = [];
 const linkedIsland=new URLSearchParams(location.search).has('linked-island');

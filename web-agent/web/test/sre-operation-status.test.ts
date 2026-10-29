@@ -34,9 +34,21 @@ test('only a successful fresh read covers a previous timeout',async()=>{
   }
   for(const [status,risk,label] of [['unknown','change','变更待核实'],['dispatched','readonly','原操作仍在执行']]){
    const task={...(old as SRETask),status:'paused',attempts:[{operations:[{status,risk}]}]} as unknown as SRETask;
-   assert.equal(sreSessionPresentation(session,[task],'2026-10-26T00:00:01Z').label,label);
+   assert.deepEqual(sreSessionPresentation(session,[task],'2026-10-26T00:00:01Z'),{});
+   assert.equal(sreSessionPresentation(session,[{...task,updatedAt:'2026-10-26T00:00:02Z'}],'2026-10-26T00:00:01Z').label,label);
   }
  });
+
+test('historical dispatched operations cannot revive a failed compaction turn',()=>{
+ const failed={...session,status:'failed' as const};
+ const historical=['cancelled','paused'].map(status=>({status,updatedAt:'2026-10-26T15:57:17Z',attempts:[{operations:[{status:'dispatched',risk:'readonly'}]}]} as unknown as SRETask));
+ const props=sreSessionPresentation(failed,historical,'2026-10-29T02:15:21Z');
+ assert.deepEqual(props,{});
+ const html=renderToStaticMarkup(createElement(SessionStateBadge,{session:failed,...props}));
+ assert.ok(html.includes('需关注'));
+ assert.ok(!html.includes('处理中'));
+ assert.equal(historical[0]!.attempts[0]!.operations[0]!.status,'dispatched','audit records remain unresolved');
+});
 
 test('an earlier pause cannot hide the current failed task',()=>{
  const at='2026-10-26T00:00:00Z';
@@ -50,7 +62,7 @@ test('fixed badge labels retain SRE uncertainty and distinguish a pause from fai
   ['paused','任务已暂停','已暂停','neutral'],
   ['waiting_input','任务待继续','已暂停','neutral'],
   ['cancelled','任务已取消','已停止','neutral'],
-  ['failed','任务未完成','需关注','danger'],
+  ['failed','任务未完成','需关注','attention'],
   ['completed','调查结束 · 结论不充分','需关注','attention'],
  ] as const;
  for(const [status,detail,visible,tone] of examples){

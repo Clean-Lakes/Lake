@@ -691,6 +691,10 @@ a { color: inherit; }
 .ai-role-user { align-self: flex-end; background: var(--surface-muted); padding: 10px 14px; max-width: 85%; border-radius: var(--radius-window); }
 .ai-chat-message small { display: block; color: var(--text-secondary); font-size: var(--font-size-ui); margin-bottom: 3px; }
 .ai-role-system, .ai-error { font-size: var(--font-size-ui); color: var(--danger); }
+.ai-compaction-notice { display:flex; align-items:flex-start; gap:7px; font-size:var(--font-size-ui); line-height:1.75; color:var(--text-secondary); }
+.ai-compaction-notice > svg { flex:none; margin-top:5px; }
+.compaction-diagnostic { margin-top:10px; color:var(--text-secondary); font-size:var(--font-size-ui); }
+.compaction-diagnostic pre { white-space:pre-wrap; overflow-wrap:anywhere; color:var(--text-secondary); }
 .ai-thinking, .ai-operation-group, .ai-operation, .ai-diff { border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface-subtle); padding: 11px 14px; font-size: var(--font-size-ui); }
 .ai-thinking summary, .ai-operation summary, .ai-operation-group > summary, .ai-diff summary { cursor: pointer; color: var(--text-secondary); }
 .ai-thinking div { white-space: pre-wrap; line-height: 1.7; margin-top: 12px; }
