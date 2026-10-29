@@ -425,6 +425,8 @@ func (e *Engine) WorkControl(ctx context.Context, sessionID, id, command string,
 			return errors.New("任务已结束")
 		}
 		g.Status = "cancelled"
+		g.Summary = "已停止后续跟进；远端任务状态以原记录为准"
+		g.BackgroundSummary = false
 	case "resume":
 		if row.WaitCallID == "" {
 			return errors.New("该目标没有可自动恢复的外部等待点，请在会话中明确后续请求；原操作未重放")

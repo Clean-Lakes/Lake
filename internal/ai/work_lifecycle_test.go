@@ -189,3 +189,20 @@ func TestWorkDeletionRetiresPendingContinuation(t *testing.T) {
 		t.Fatal("late control revived terminal goal")
 	}
 }
+
+func TestWorkRecoveryRefusesChangedResourceBinding(t *testing.T) {
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+	g := seedObservedWork(t, e)
+	row, g, _ := e.workRow("case", g.ID)
+	g.Binding = WorkBinding{Runtime: "ssh", AssetRef: "original", ResourceIdentity: "frozen-original-configuration"}
+	if err := e.writeWorkGoal(&row, &g, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.resumeWorkGoal(context.Background(), row, g, Config{Model: Model{URL: "http://127.0.0.1:1", Name: "fixture"}}); err != nil {
+		t.Fatal(err)
+	}
+	_, after, err := e.workRow("case", g.ID)
+	if err != nil || after.Status != "blocked" || after.ModelRounds != 0 {
+		t.Fatal("old work retargeted new resource", err, after.Status)
+	}
+}

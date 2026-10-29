@@ -12,6 +12,13 @@ func (e *Engine) publishWorkReport(ctx context.Context, g WorkGoal) error {
 	if (!workTerminal(g.Status) && g.Status != "waiting_user") || g.Summary == "" || !g.BackgroundSummary {
 		return nil
 	}
+	_, current, err := e.workRow(g.SessionID, g.ID)
+	if err != nil {
+		return err
+	}
+	if current.Revision != g.Revision {
+		return nil
+	}
 	s, err := e.get(g.SessionID)
 	if err != nil {
 		return err
