@@ -201,3 +201,34 @@ func TestNaturalRecallHostCannotResolveDeletedBusinessSession(t *testing.T) {
 		t.Fatal("deleted owner accepted")
 	}
 }
+
+func TestNaturalRecallFreshSourceAfterForgetCanFormNewPreference(t *testing.T) {
+	s, ctx, session := naturalNewFixture(t)
+	first := consolidationSource(t, s, ctx, session, "以后这个项目的回复固定用中文。", false)
+	items := consolidationItems(t, s, first)
+	items[0].Result = naturalResult(first.UserText, "response-language", false, 0)
+	items[0].Result.Relation = "new"
+	if _, err := consolidationCommit(t, s, items); err != nil {
+		t.Fatal(err)
+	}
+	page, _ := s.NaturalFormedPreferences(ctx, "", 20)
+	id := stringOf(objects(page["items"])[0]["id"])
+	if _, err := s.ForgetNaturalPreference(ctx, id, "forget", 1); err != nil {
+		t.Fatal(err)
+	}
+	if s.MemoryCaptureAllowed(first) {
+		t.Fatal("old source authorized after forget")
+	}
+	next := consolidationSource(t, s, ctx, session, "以后这个项目的回复固定用简短中文。", false)
+	items = consolidationItems(t, s, next)
+	items[0].Result = naturalResult(next.UserText, "response-language", false, 0)
+	items[0].Result.Relation = "new"
+	if _, err := consolidationCommit(t, s, items); err != nil {
+		t.Fatal("new genuine post-forget source blocked", err)
+	}
+	_, _ = s.SetNaturalRecallSettings(ctx, "use", 0, true)
+	got, err := s.recallPreferences(ctx, ai.NaturalRecallQuery{})
+	if err != nil || len(got) != 1 || got[0].Body != next.UserText || got[0].Revision != 3 {
+		t.Fatal("old body revived", got, err)
+	}
+}
