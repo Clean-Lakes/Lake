@@ -204,3 +204,18 @@ test('Pilot headers retain the specialist entry through execution and completion
   assert.match(ordinary, /aria-label="展开执行详情"/);
   assert.doesNotMatch(ordinary, /class="pilot-island-trigger"/);
 });
+
+
+test('enabled Pilot retains its mode entry after an ordinary follow-up without reviving old specialist activity',()=>{
+ const snapshot=islandFixture('finished');snapshot.ai!.turnStartedAt='2027-01-01T00:00:00Z';
+ const model=pilotIslandModel(snapshot);assert.equal(model,null);
+ for(const mode of ['auto','manual'] as const){
+  const html=renderToStaticMarkup(createElement(PilotHeaderState,{model,mode,normal:createElement('span',null,'已结束'),onInspect(){},details:{available:true,open:false,toggle(){}}}));
+  assert.match(html,/header-pilot-state is-visible"[^>]*aria-hidden="false"/);
+  assert.match(html,/header-normal-state"[^>]*aria-hidden="true"[^>]*inert/);
+  assert.ok(html.includes(mode==='auto'?'自动推进':'手动选择'));
+  assert.ok(html.includes('本轮没有专员任务')&&html.includes('展开执行详情'));
+  assert.ok(!html.includes('pilot-island-progress')&&!html.includes('pilot-action-avatar'));
+  assert.ok(!html.includes('调查结束')&&!html.includes('验收已通过'));
+ }
+});

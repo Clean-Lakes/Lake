@@ -25,6 +25,12 @@
 .header-morph-slot.is-visible{opacity:1}
 .header-morph-content{display:flex;align-items:center;width:max-content;min-height:32px}
 .header-normal-state .session-state-badge{margin-left:0}
+.pilot-mode-entry{display:flex;align-items:center;gap:8px;width:100%;min-width:0}
+.pilot-mode-entry>svg{flex:0 0 auto;color:var(--text-secondary)}
+.pilot-mode-copy{display:flex;flex:1 0 68px;flex-direction:column;min-width:0;line-height:16px}
+.pilot-mode-copy>strong{font-size:var(--font-size-ui);font-weight:var(--font-weight-ui);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pilot-mode-copy>small{font-size:var(--font-size-toolbar);color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pilot-mode-entry>.session-state-badge{margin-left:0;min-width:0;flex:0 1 auto;overflow:hidden}
 @container(max-width:900px){.pilot-island-action{width:170px}}
 @container(max-width:700px){.pilot-island-trigger{padding-left:9px;gap:9px}.pilot-island-action{width:145px}}
 @container(max-width:480px){.pilot-action-avatar{display:none}.pilot-island-action{width:94px}.pilot-island-action-line{gap:5px}.pilot-island-action-line>strong{display:none}.pilot-island-progress{gap:6px}.pilot-island-ring,.pilot-island-ended{width:24px;height:24px}}
