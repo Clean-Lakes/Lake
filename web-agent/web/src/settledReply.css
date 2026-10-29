@@ -17,7 +17,7 @@
 @media (prefers-reduced-motion: reduce) { .settled-reply { transition: none; animation:none; } }
 
 /* A stable one-line caption survives tool rounds while full prose stays in records. */
-.turn-latest-progress { min-width:0; flex-shrink:0; font-size:var(--font-size-ui); line-height:1.75; color:var(--text-secondary); }
+.turn-latest-progress { min-width:0; flex-shrink:0; font-size:var(--font-size-ui); line-height:1.75; color:var(--foreground); }
 .turn-latest-progress-text { display:block; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 /* When prose becomes the live caption, replace it in one paint. Cross-fading

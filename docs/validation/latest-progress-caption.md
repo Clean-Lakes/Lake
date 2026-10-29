@@ -29,3 +29,9 @@ ego-browser 实际 App + 隔离 SSE fixture 验收：
 按最新交互要求，最新进度行移除共享 StatusText，改为普通文本 span；从首次出现到原位更新均无文字跃动或扫光。计时行、岛和其他既有状态动效不受影响，单行省略、完整提示及正文首个非空分块接替规则保留。
 
 前端549/549、类型检查和Web构建通过；新增回归覆盖活动/非活动操作均不挂载扫光组件。实际App/SSE fixture在默认动态效果设置下验证：首次出现后的30个有效采样帧animationName=none、opacity=1、背景裁剪为border-box、高度24.5px；更新后caption和文字节点身份保持，计时行仍使用自己的状态动效。浅色及420px深色窗口可读，单行省略、无页面横向溢出。已查看截图 `/tmp/lake-static-progress-light.png`、`/tmp/lake-static-progress-dark-narrow.png`。正文接替的空白包/首字符/后续工具回归仍通过。无Go/API/持久化修改，未重复Go回归。签名Dev安装来源及实际服务资源摘要记录在PR #120。
+
+## 进度文字与正文同色
+
+进度行改用正文前景色 `--foreground`，深色模式从普通过程段落到单行进度始终保持正文白色，不再转为半透明的次要文字颜色。保持普通静态span，计时状态样式不变；浅色模式使用对应深色正文前景以保持可读。
+
+类型检查与Web构建通过（既有大chunk提示保留）。实际App fixture深色首次出现的31个有效帧均为rgb(223,223,223)、opacity=1、animationName=none，与原过程正文一致；更新、待确认、继续执行、工具返回及继续思考各阶段同色。420px浅色窗口为rgb(26,28,31)、无横向溢出、保持单行省略。截图 `/tmp/lake-progress-white-dark.png`、`/tmp/lake-progress-white-light-narrow.png` 已查看。本次仅CSS与说明修改，未新增或重跑组件/Go测试；静态文字及正文接替回归沿用上一提交549/549。签名Dev安装与实际资源摘要见PR #120最新记录。
