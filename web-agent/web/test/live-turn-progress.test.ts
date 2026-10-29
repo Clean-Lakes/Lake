@@ -6,6 +6,7 @@ import type {SessionSnapshot,AgentRun} from '../../shared/contracts';
 import type {TranscriptEntry} from '../src/timeline';
 import {liveTurnProgress} from '../src/liveTurnProgress';
 import {AITranscript} from '../src/AIPanel';
+import {TurnExecutionDetails} from '../src/TurnExecutionDetails';
 const at=(n:number)=>`2026-10-29T01:00:${String(n).padStart(2,'0')}Z`;
 const card=(id:string,type:string,content:string,status='completed',n=1):TranscriptEntry=>({id,at:at(n),card:{id,at:at(n),type,content,status,title:type==='operation'?'shell':undefined,data:type==='operation'?{target:'测试主机',arguments:{command:'uptime'}}:undefined}});
 const note=card('note','message','先核对原记录。');
@@ -88,4 +89,14 @@ test('the first nonempty reply chunk retires progress before the running turn en
  const next=renderToStaticMarkup(createElement(AITranscript,{snapshot:current}));
  assert.ok(next.includes('turn-latest-progress'),'a subsequent actual tool returns to the progress phase');
  assert.ok(next.includes('data-conversation-entry="latest"'),'the former paragraph is retained, not deleted');
+});
+
+// The caption is ordinary text even while the independent timer is active.
+test('latest progress stays static for active and inactive operations',()=>{
+ for(const active of [true,false]){
+  const html=renderToStaticMarkup(createElement(TurnExecutionDetails,{details:[],progress:{text:'正在检查服务。',active},view:{status:'running',turnStartedAt:at(0)} as SessionSnapshot['ai']}));
+  const caption=html.match(/<div class="turn-latest-progress"[^>]*>(.*?)<\/div>/)?.[1];
+  assert.equal(caption,'<span class="turn-latest-progress-text">正在检查服务。</span>');
+  assert.ok(!caption.includes('status-text'),'the caption must not inherit the shared status sweep');
+ }
 });
