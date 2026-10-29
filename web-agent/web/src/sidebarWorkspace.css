@@ -1,6 +1,6 @@
 /* Lightweight workspace: conversations and resources share one quiet sidebar. */
-.sidebar.workspace-navigation { --sidebar-row-radius:var(--radius-window); border-right:0; }
-.sidebar.workspace-navigation .sidebar-brand-row { position: relative; height: 36px; min-height: 36px; margin: 8px 0 10px; padding: 0 16px; }
+.sidebar.workspace-navigation { --sidebar-row-radius:var(--radius-window); --sidebar-edge-inset:8px; border-right:0; }
+.sidebar.workspace-navigation .sidebar-brand-row { position: relative; height: 36px; min-height: 36px; margin: 8px 0 10px; padding: 0 12px; }
 .sidebar.workspace-navigation .brand { gap: 7px; }
 .sidebar.workspace-navigation .brand > strong { font-size: 20px; line-height: 1; font-weight:var(--font-weight-semibold); letter-spacing: -.9px; color: var(--foreground); }
 .lake-development .sidebar.workspace-navigation .sidebar-brand-row .brand::after { content: "Dev"; position: static; display: grid; place-items: center; box-sizing: border-box; min-width: 30px; height: 18px; padding: 0 6px; border: 0; border-radius: var(--radius-settings-badge); background: var(--surface-hover); font:var(--font-weight-ui) var(--font-size-badge)/18px var(--font-ui); letter-spacing: 0; color: var(--text-muted); }
@@ -30,7 +30,7 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .sidebar-new-session > svg { flex-shrink: 0; }
 .sidebar.workspace-navigation .sidebar-session-heading { display: flex; align-items: center; gap: 8px; min-height: 32px; margin: 0 7px 5px; }
 .sidebar.workspace-navigation .sidebar-session-heading[hidden] { display: none; }
-.sidebar.workspace-navigation .project-scroll { padding: 0 10px 72px; scroll-padding-bottom: 72px; }
+.sidebar.workspace-navigation .project-scroll { padding: 0 var(--sidebar-edge-inset) 72px 0; scroll-padding-bottom: 72px; }
 .sidebar-scroll-area { position:relative; display:flex; flex:1 1 auto; min-height:0; overflow:hidden; }
 .sidebar-scroll-area > .project-scroll { min-width:0; width:100%; scrollbar-width:none; }
 .sidebar-scroll-area > .project-scroll::-webkit-scrollbar { display:none; }
@@ -94,7 +94,8 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 
 .sidebar.workspace-navigation .nav-show-more:is(:hover,:focus-visible,:active) { background:transparent; text-decoration:underline; text-underline-offset:3px; }
 
-/* One icon column for recent sessions, section captions and root resources. */
+/* Keep the drag rail separate from disclosure arrows while reducing the
+   outer gutter: root icons and captions now start 24px from the window edge. */
 .sidebar.workspace-navigation { --sidebar-leading-rail:15px; --sidebar-row-inset:9px; --sidebar-icon-inset:calc(var(--sidebar-leading-rail) + var(--sidebar-row-inset)); }
 .sidebar.workspace-navigation .session-nav-group-title { padding-left:var(--sidebar-icon-inset); }
 .sidebar.workspace-navigation .nav-show-more { margin-left:var(--sidebar-icon-inset); }
@@ -113,3 +114,11 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 @media(prefers-reduced-motion:reduce) { .app-shell > .workbench-splitter-sidebar::after { transition:none; } }
 
 .sidebar.workspace-navigation .project-contents:has(> [id^="project-sessions-"][hidden]) .resources-heading { margin-top:8px; padding-top:0; }
+
+/* Match the compact navigation gutter without changing the floating material. */
+.sidebar.workspace-navigation .sidebar-utilities { left:var(--sidebar-edge-inset); right:var(--sidebar-edge-inset); }
+.sidebar.workspace-navigation .workspace-utilities-trigger { padding-inline:9px; }
+
+/* Edge controls keep a complete focus outline inside the clipped sidebar. */
+.sidebar.workspace-navigation :is(.session-drag-handle,.resource-drag-handle):focus-visible { outline-offset:-2px; }
+.sidebar.workspace-navigation.is-bulk-selecting .project-scroll { padding-left:var(--sidebar-edge-inset); }
