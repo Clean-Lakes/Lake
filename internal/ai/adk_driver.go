@@ -374,8 +374,5 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 	}
 	err = e.save(s)
 	s.mu.Unlock()
-	if err == nil {
-		err = e.onlineCheckCompletion(s, *c)
-	}
 	return err
 }

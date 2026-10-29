@@ -1,7 +1,6 @@
 package web
 
 import (
-	"errors"
 	"github.com/Clean-Lakes/Lake/internal/ai"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
@@ -12,58 +11,6 @@ func (b *Server) strategySafeText(text string) bool {
 		model = &ai.Model{}
 	}
 	return ai.SafeMemoryContent(text, *model) && !b.Models.strategyContainsProviderSecret(text) && !b.Terminals.containsCredential(text)
-}
-func (b *Server) enqueueStrategyTurn(snapshot ai.StrategyTurnSnapshot) (err error) {
-	if strategy.ExecutionRetired {
-		return nil
-	}
-	defer func() {
-		if recover() != nil {
-			err = &StrategyError{500, "learning_internal_error"}
-		}
-	}()
-	ctx := StrategyContext{ProjectID: snapshot.ProjectID}
-	effective, err := b.Store.EffectiveStrategySettings(ctx)
-	if err != nil {
-		return err
-	}
-	// Outboxes survive a crash, but never authorization revocation/re-enable.
-	if !effective.Settings.MasterEnabled || !effective.Settings.LearnEnabled || snapshot.GlobalEpoch != effective.GlobalEpoch || snapshot.ProjectEpoch != effective.ProjectEpoch || !b.strategySafeText(jsonText(snapshot)) {
-		return nil
-	}
-	if snapshot.Deferred {
-		text, readErr := strategyCall(b.Store, false, func() string {
-			message := b.Store.row("SELECT m.text FROM messages m JOIN sessions s ON s.id=m.sessionId WHERE m.id=? AND m.sessionId=? AND s.projectId=? AND m.role='user'", snapshot.UserMessageID, snapshot.SessionID, snapshot.ProjectID)
-			if message == nil {
-				return ""
-			}
-			return stringOf(message["text"])
-		})
-		if readErr != nil {
-			return readErr
-		}
-		materialized, eligible, materializeErr := b.Engine.MaterializeStrategySnapshot(snapshot, text)
-		if materializeErr != nil {
-			return materializeErr
-		}
-		if !eligible {
-			return nil
-		}
-		snapshot = materialized
-		if !b.strategySafeText(jsonText(snapshot)) {
-			return nil
-		}
-	}
-	source, err := b.Store.registerStrategyTurn(snapshot)
-	if err != nil || source == "" {
-		return err
-	}
-	_, err = b.Store.QueueStrategyProposal(ctx, "auto:"+strategyExtractorVersion+":"+snapshot.SnapshotHash, StrategyJobInput{Scope: strategy.Scope{Kind: strategy.ProjectScope, ProjectID: ctx.ProjectID}, Kind: "proposal", SourceIDs: []string{source}})
-	return err
-}
-func strategyPermanentError(err error) bool {
-	var e *StrategyError
-	return errors.As(err, &e) && e.Status < 500 && e.Code != "strategy_learning_queue_full"
 }
 func (b *Server) reconcileStrategyOutboxForSession(id string) error {
 	items, err := b.Engine.StrategyOutbox(id)
@@ -80,9 +27,6 @@ func (b *Server) reconcileStrategyOutboxForSession(id string) error {
 				return err
 			}
 			continue
-		}
-		if err = b.enqueueStrategyTurn(s); err != nil && !strategyPermanentError(err) {
-			return err
 		}
 		if err = b.Store.ackStrategyHandoff(s); err != nil {
 			return err

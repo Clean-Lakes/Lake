@@ -68,6 +68,7 @@ func TestStrategyReuseValidityModelToolsAndPendingConditions(t *testing.T) {
 }
 func TestStrategyReuseActualManifestFeedbackScopeAndProjectStop(t *testing.T) {
 	b, h := fixture(t)
+	b.Engine.RecordPromptDiagnostics = true // Explicit historical diagnostics fixture.
 	sid, resource := newSession(t, h)
 	ctx := StrategyContext{ProjectID: stringOf(b.Store.Session(sid)["projectId"])}
 	enableStrategyFixture(t, b.Store)

@@ -6,8 +6,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-
-	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
 func configureRetiredOnline(t *testing.T, e *Engine) (*session, Config) {
@@ -16,10 +14,6 @@ func configureRetiredOnline(t *testing.T, e *Engine) (*session, Config) {
 	s.mu.Lock()
 	c := s.state.Config
 	s.mu.Unlock()
-	c.StrategyCorrectEnabled = true
-	c.StrategyBudget = strategy.DefaultBudget()
-	c.StrategyGlobalEpoch = 1
-	c.StrategyProjectEpoch = 2
 	if err := e.Configure("case", c); err != nil {
 		t.Fatal(err)
 	}
@@ -67,10 +61,13 @@ func TestOnlineMemoryToolErrorsDoNotInterruptOfficialADK(t *testing.T) {
 			if requests.Load() != 2 || calls.Load() != 1 {
 				t.Fatal("tool/model replay", requests.Load(), calls.Load())
 			}
-			report, err := e.onlineCurrent(s, c)
-			if err != nil || report != nil {
-				t.Fatal("memory created durable resource correction", err)
+			store, _ := e.adkStore()
+			var count int64
+			store.DB.Model(&nativeCorrection{}).Count(&count)
+			if count != 0 {
+				t.Fatal("memory created retired controller")
 			}
+			_ = s
 			view, _ := e.Snapshot("case")
 			if view.Status != "completed" {
 				t.Fatal("ordinary reply did not complete", view.Status)

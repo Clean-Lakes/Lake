@@ -23,16 +23,15 @@ func TestStrategyRetiredDirectAndRestoredConfigCannotRegisterOrExecuteCorrection
 	e := engineFor(t, m, nil)
 	s, _ := e.get("case")
 	c := s.state.Config
-	c.StrategyCorrectEnabled = true
-	c.StrategyLearnEnabled = true
+	if err := json.Unmarshal([]byte(`{"StrategyCorrectEnabled":true,"StrategyLearnEnabled":true,"StrategyBudget":{"maxRevisions":99}}`), &c); err != nil {
+		t.Fatal(err)
+	}
 	if err := e.Configure("case", c); err != nil {
 		t.Fatal(err)
 	}
-	if s.state.Config.StrategyCorrectEnabled || s.state.Config.StrategyLearnEnabled {
-		t.Fatal("direct configuration revived execution")
+	if strings.Contains(js(s.state.Config), "StrategyCorrectEnabled") {
+		t.Fatal("retired config persisted")
 	}
-	// Simulate old persisted JSON after hydration, not a new permissive mode.
-	s.state.Config.StrategyCorrectEnabled, s.state.Config.StrategyLearnEnabled = true, true
 	if err := e.Chat(context.Background(), "case", "纠正一下，本轮继续回答。", nil); err != nil {
 		t.Fatal(err)
 	}

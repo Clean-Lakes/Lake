@@ -81,6 +81,7 @@ func TestStrategyRevocationBeforeToolPreventsExecutionAndRedispatch(t *testing.T
 	})
 	defer close()
 	e = engineFor(t, m, nil)
+	e.RecordPromptDiagnostics = false // Revocation is mandatory even without optional manifests.
 	body := "Use bounded evidence."
 	e.Strategies = strategyProviderFixture(strategy.AssetRevision{Ref: strategy.RevisionRef{AssetID: "a", Revision: 1, ContentHash: strategy.ContentHash(body)}, Body: body}, &epoch)
 	if err := e.Chat(context.Background(), "case", "Inspect.", nil); err == nil {

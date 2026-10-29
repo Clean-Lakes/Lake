@@ -1,0 +1,46 @@
+{
+  "sourceCommit": "9033353bec358cc688c73bc1f850949c5169be0c",
+  "baseCommit": "16483bd22f8ce60999cdcf1d16fbaf16a9fda42a",
+  "checks": [
+    {
+      "command": "go test ./... -count=1 -timeout=8m",
+      "exitCode": 0,
+      "aiSeconds": 74.056,
+      "webSeconds": 213.659
+    },
+    {
+      "command": "go test -race ./internal/ai ./internal/web -run 'Test(C3|Natural|Memory|ProjectMemory|Strategy|Online|Compaction|ModelSwitch|ADKOfficialProjection|ProviderConnection|SummaryRequests)' -count=1 -timeout=6m",
+      "exitCode": 0,
+      "aiSeconds": 36.029,
+      "webSeconds": 65.905
+    },
+    {
+      "command": "go vet ./...",
+      "exitCode": 0
+    },
+    {
+      "command": "python3 scripts/check_adk_runtime_boundary.py",
+      "exitCode": 0
+    },
+    {
+      "cwd": "web-agent",
+      "command": "corepack pnpm check && corepack pnpm test:frontend",
+      "exitCode": 0,
+      "passed": 551,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "command": "GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/lake-c3-integrated-windows.exe ./cmd/lake",
+      "exitCode": 0,
+      "nativeWindowsTested": false
+    },
+    {
+      "command": "scripts/run_lake_dev.sh",
+      "ready": true,
+      "signed": true,
+      "sourceDirty": false,
+      "packaged": false
+    }
+  ]
+}
