@@ -234,3 +234,15 @@ func TestNaturalRecallReferenceBudgetNeverAdmitsUnguardedRead(t *testing.T) {
 		t.Fatal("reference budget changed")
 	}
 }
+
+func TestNaturalRecallDeduplicatesEncodedLegacyBody(t *testing.T) {
+	e, s, c := recallFixture(t)
+	body := "以后这个项目的报告\n固定先列结论。"
+	e.NaturalMemory = func(context.Context, string, NaturalRecallQuery) ([]NaturalRecallItem, error) {
+		return []NaturalRecallItem{{ID: "p", Revision: 1, Body: body, Hash: hash(body)}}, nil
+	}
+	h := []Message{{Role: "system", Content: Prompt(c) + js([]map[string]any{{"body": body}})}}
+	if _, text, err := e.naturalRecallRequest(context.Background(), s, c, h, nil); err != nil || text != "" {
+		t.Fatal("encoded legacy body duplicated", err)
+	}
+}

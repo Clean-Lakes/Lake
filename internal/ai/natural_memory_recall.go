@@ -157,7 +157,7 @@ func (e *Engine) naturalRecallRequest(ctx context.Context, s *session, c Config,
 			if m.Role != "system" {
 				continue
 			}
-			duplicate = duplicate || v.Body != "" && strings.Contains(strategy.ComparableContent(m.Content), strategy.ComparableContent(v.Body))
+			duplicate = duplicate || v.Body != "" && (strings.Contains(strategy.ComparableContent(m.Content), strategy.ComparableContent(v.Body)) || strings.Contains(strategy.ComparableContent(m.Content), strategy.ComparableContent(js(v.Body))))
 		}
 		if duplicate {
 			continue
