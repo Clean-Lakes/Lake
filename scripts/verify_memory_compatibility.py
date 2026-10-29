@@ -82,9 +82,10 @@ def main():
                     packages[package] = event["Action"]
             top = [t for t in tests.values() if "/" not in t["test"]]
             # A successful process with no selected tests is not acceptance.
+            qualifying = [t for t in top if not t["test"].endswith("Helper")]
             requested = {p.removeprefix("./") for p in command if p.startswith("./internal/")}
             ok = result.returncode == 0 and all(
-                any(t["status"] == "pass" and t["package"].endswith("/" + p) for t in top)
+                any(t["status"] == "pass" and t["package"].endswith("/" + p) for t in qualifying)
                 and any(pkg.endswith("/" + p) and status == "pass" for pkg, status in packages.items())
                 for p in requested
             )

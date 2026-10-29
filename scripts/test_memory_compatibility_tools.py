@@ -32,7 +32,8 @@ class CompatibilityToolTests(unittest.TestCase):
         return [{'Package': name, 'Test': 'TestC4RestoredHistory', 'Action': status}, {'Package': name, 'Action': status}]
 
     def test_every_requested_package_needs_real_selected_passes(self):
-        for events in [[], self.events('internal/ai'), self.events('internal/ai')+[{'Package': 'github.com/Clean-Lakes/Lake/internal/web', 'Action': 'pass'}]]:
+        helpers = [{**v, **({"Test": "TestADKCrashHelper"} if "Test" in v else {})} for v in self.events("internal/web")]
+        for events in [self.events("internal/ai")+helpers, [], self.events('internal/ai'), self.events('internal/ai')+[{'Package': 'github.com/Clean-Lakes/Lake/internal/web', 'Action': 'pass'}]]:
             with self.subTest(events=events):
                 code, report = self.run_report(events)
                 self.assertEqual(code, 1)
