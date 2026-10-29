@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "kind": "memory_settings_clarity",
+  "sourceCommit": "b8316919cc38da037c58a050215b2657cb90dca3",
+  "frontendTests": 536,
+  "typecheck": "passed",
+  "webBuild": "passed",
+  "windows": {
+    "clientTestCrossCompile": "passed",
+    "embeddedScriptSyntax": "passed",
+    "nativeWebView2": "not_run"
+  },
+  "nativeUI": {
+    "platform": "macOS",
+    "projectCaptureEnabled": false,
+    "projectRecallEnabled": true,
+    "globalCaptureEnabled": false,
+    "globalRecallEnabled": false,
+    "scopeSwitchWithoutWrites": "passed",
+    "defaultDisclosuresClosed": true,
+    "plainPreferenceBody": true,
+    "removedEntriesOnlyInHistory": true,
+    "changeDetailsReadable": true,
+    "consolidationReadable": true,
+    "forgetConfirmation": "passed",
+    "cancelButton": "passed",
+    "escapeCancelAndFocusRestore": "passed",
+    "light": "passed",
+    "dark": "passed",
+    "narrowWidth": 1003,
+    "themeRestored": "light",
+    "scopeRestored": "project",
+    "originalWidthRestored": true
+  },
+  "data": {
+    "tablesCompared": 55,
+    "allRowHashesUnchanged": true,
+    "legacyAssets": 8,
+    "naturalPreferences": 6
+  }
+}

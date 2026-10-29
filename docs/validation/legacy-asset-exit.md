@@ -1,6 +1,6 @@
 # 旧策略资产完全退出验收
 
-基线：develop `360fc7d738112c9ecf9025460551fac3f6053fcb`。产品最终代码 `b071abf3fd325bac5c139dcba35ffa14f56a0a96`；后续仅补测试支持包的 keyed literals、文档和验收附件。新行为、归档与回退要求见[退出契约](../design/legacy-asset-exit.md)。历史 C4/N1 验收只解释当时版本，汇总见 [checks.json](legacy-asset-exit/checks.json)。
+基线：develop `360fc7d738112c9ecf9025460551fac3f6053fcb`。退出阶段验收代码 `b071abf3fd325bac5c139dcba35ffa14f56a0a96`；该阶段后补测试支持包 keyed literals 和验收附件。之后的记忆设置界面整理另见[界面验收](memory-settings-clarity.md)，以下保留退出阶段的实际结果。新行为、归档与回退要求见[退出契约](../design/legacy-asset-exit.md)。历史 C4/N1 验收只解释当时版本，汇总见 [checks.json](legacy-asset-exit/checks.json)。
 
 ## 本地检查
 

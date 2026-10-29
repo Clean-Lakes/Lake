@@ -89,5 +89,7 @@
     "webFullExtendedAttempt": "609_pass_one_test_fixture_channel_race",
     "fixtureFix": "sync.OnceFunc_no_channel_reassignment",
     "affectedWebGroupsAfterFix": "passed_29.933s"
-  }
+  },
+  "validationScope": "legacy_asset_exit_before_settings_UI_followup",
+  "followUpUI": "../memory-settings-clarity/checks.json"
 }
