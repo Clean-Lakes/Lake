@@ -1,6 +1,6 @@
 /* Lightweight workspace: conversations and resources share one quiet sidebar. */
-.sidebar.workspace-navigation { --sidebar-row-radius:var(--radius-window); border-right:0; }
-.sidebar.workspace-navigation .sidebar-brand-row { position: relative; height: 36px; min-height: 36px; margin: 8px 0 10px; padding: 0 16px; }
+.sidebar.workspace-navigation { --sidebar-row-radius:var(--radius-window); --sidebar-edge-inset:8px; --sidebar-content-inset:12px; border-right:0; }
+.sidebar.workspace-navigation .sidebar-brand-row { position: relative; height: 36px; min-height: 36px; margin: 8px 0 10px; padding: 0 var(--sidebar-content-inset); }
 .sidebar.workspace-navigation .brand { gap: 7px; }
 .sidebar.workspace-navigation .brand > strong { font-size: 20px; line-height: 1; font-weight:var(--font-weight-semibold); letter-spacing: -.9px; color: var(--foreground); }
 .lake-development .sidebar.workspace-navigation .sidebar-brand-row .brand::after { content: "Dev"; position: static; display: grid; place-items: center; box-sizing: border-box; min-width: 30px; height: 18px; padding: 0 6px; border: 0; border-radius: var(--radius-settings-badge); background: var(--surface-hover); font:var(--font-weight-ui) var(--font-size-badge)/18px var(--font-ui); letter-spacing: 0; color: var(--text-muted); }
@@ -30,7 +30,7 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .sidebar-new-session > svg { flex-shrink: 0; }
 .sidebar.workspace-navigation .sidebar-session-heading { display: flex; align-items: center; gap: 8px; min-height: 32px; margin: 0 7px 5px; }
 .sidebar.workspace-navigation .sidebar-session-heading[hidden] { display: none; }
-.sidebar.workspace-navigation .project-scroll { padding: 0 10px 72px; scroll-padding-bottom: 72px; }
+.sidebar.workspace-navigation .project-scroll { padding: 0 var(--sidebar-edge-inset) 72px 0; scroll-padding-bottom: 72px; }
 .sidebar-scroll-area { position:relative; display:flex; flex:1 1 auto; min-height:0; overflow:hidden; }
 .sidebar-scroll-area > .project-scroll { min-width:0; width:100%; scrollbar-width:none; }
 .sidebar-scroll-area > .project-scroll::-webkit-scrollbar { display:none; }
@@ -47,14 +47,14 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .nav-heading { margin: 0 7px 5px; font-size: var(--font-size-ui); font-weight:var(--font-weight-ui); color: var(--text-muted); }
 .sidebar.workspace-navigation .nav-section-toggle { min-height: 26px; gap: 5px; padding: 3px 0; }
 .sidebar.workspace-navigation .session-group-count { display: none; }
-.sidebar.workspace-navigation .session-nav-row { min-height: 36px; padding: 7px 9px; gap: 9px; margin-bottom: 2px; border-radius: var(--sidebar-row-radius); }
+.sidebar.workspace-navigation .session-nav-row { min-height: 36px; padding: 7px var(--sidebar-content-inset); gap: 9px; margin-bottom: 2px; border-radius: var(--sidebar-row-radius); }
 .sidebar.workspace-navigation .session-nav-row .nav-row-text strong { font-weight:var(--font-weight-ui); }
 .sidebar.workspace-navigation .session-nav-row.active .nav-row-text strong { font-weight:var(--font-weight-medium); }
 .sidebar.workspace-navigation .nav-row:not(:disabled) .nav-row-text strong,
 .sidebar.workspace-navigation .resource-folder-toggle:not(:disabled) .resource-folder-name { color:var(--foreground); }
 /* The live state and the menu own separate space, including the non-hovered active row. */
 .sidebar.workspace-navigation .nav-row-wrap > .session-nav-row,
-.sidebar.workspace-navigation .nav-row-wrap:is(:hover,:focus-within) > .session-nav-row { padding-right: 40px; }
+.sidebar.workspace-navigation .nav-row-wrap:is(:hover,:focus-within) > .session-nav-row { padding-right: 60px; }
 .sidebar.workspace-navigation.is-bulk-selecting .nav-row-wrap > .session-nav-row,
 .sidebar.workspace-navigation.is-bulk-selecting .nav-row-wrap:is(:hover,:focus-within) > .session-nav-row { padding-right: 9px; }
 .sidebar.workspace-navigation .nav-row-text > small { display: none; }
@@ -94,17 +94,29 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 
 .sidebar.workspace-navigation .nav-show-more:is(:hover,:focus-visible,:active) { background:transparent; text-decoration:underline; text-underline-offset:3px; }
 
-/* One icon column for recent sessions, section captions and root resources. */
-.sidebar.workspace-navigation { --sidebar-leading-rail:15px; --sidebar-row-inset:9px; --sidebar-icon-inset:calc(var(--sidebar-leading-rail) + var(--sidebar-row-inset)); }
-.sidebar.workspace-navigation .session-nav-group-title { padding-left:var(--sidebar-icon-inset); }
-.sidebar.workspace-navigation .nav-show-more { margin-left:var(--sidebar-icon-inset); }
-.sidebar.workspace-navigation .resources-heading { padding-left:3px; }
-.sidebar.workspace-navigation .resource-tree-row { padding-left:var(--sidebar-leading-rail); }
-.sidebar.workspace-navigation .resource-tree-row > .resource-drag-handle { width:var(--sidebar-leading-rail); }
+/* The Lake wordmark, captions and root icons share one leading edge.
+   Drag handles live in the trailing action area instead of adding a blank rail. */
+.sidebar.workspace-navigation { --sidebar-row-inset:var(--sidebar-content-inset); }
+.sidebar.workspace-navigation .session-nav-group-title { padding-left:var(--sidebar-content-inset); }
+.sidebar.workspace-navigation .nav-show-more { margin-left:var(--sidebar-content-inset); }
+.sidebar.workspace-navigation .sidebar-session-heading { margin-left:var(--sidebar-content-inset); }
+.sidebar.workspace-navigation .resources-heading { margin-left:var(--sidebar-content-inset); padding-left:0; }
+.sidebar.workspace-navigation .session-sort-row { padding-left:0; }
+.sidebar.workspace-navigation .session-drag-handle { left:auto; right:33px; z-index:2; }
+.sidebar.workspace-navigation .session-sort-row:is(.drop-before,.drop-after)::after { left:var(--sidebar-content-inset); }
+.sidebar.workspace-navigation .resource-tree-row { padding-left:0; }
+.sidebar.workspace-navigation .resource-tree-row > .resource-drag-handle { left:auto; right:33px; width:15px; }
+.sidebar.workspace-navigation .resource-tree-row:has(> .resource-tree-resource-content .with-terminal-actions) > .resource-drag-handle { right:90px; }
+.sidebar.workspace-navigation .resource-tree-row:has(> .resource-tree-resource-content .with-resource-actions) > .resource-drag-handle { right:62px; }
 .sidebar.workspace-navigation .resource-row { padding-left:var(--sidebar-row-inset); }
+.sidebar.workspace-navigation:not(.is-bulk-selecting) .resource-tree-row:has(> .resource-drag-handle) .with-terminal-actions > .resource-row { padding-right:114px; }
+.sidebar.workspace-navigation:not(.is-bulk-selecting) .resource-tree-row:has(> .resource-drag-handle) .with-resource-actions > .resource-row { padding-right:86px; }
 .sidebar.workspace-navigation .resource-folder-toggle { position:relative; padding-left:var(--sidebar-row-inset); }
+.sidebar.workspace-navigation .resource-folder-row .resource-folder-toggle { padding-right:64px; }
+.sidebar.workspace-navigation.is-bulk-selecting .resource-folder-row .resource-folder-toggle { padding-right:4px; }
 .sidebar.workspace-navigation .resource-folder-toggle > .folder-chevron { position:absolute; left:0; width:9px; height:9px; }
-.sidebar.workspace-navigation.is-bulk-selecting .resource-tree-row { padding-left:0; }
+.sidebar.workspace-navigation .resource-tree-row:is(.drop-before,.drop-after)::before,
+.sidebar.workspace-navigation .resource-tree-row:is(.drop-before,.drop-after)::after { left:var(--sidebar-content-inset); }
 
 /* The navigation divider matches the inset pane boundaries and keeps its hit area. */
 .app-shell > .workbench-splitter-sidebar::after { content:''; position:absolute; top:var(--pane-line-inset,10%); bottom:var(--pane-line-inset,10%); left:4px; width:1px; height:auto; border-radius:1px; background:var(--border); opacity:1; transition:background-color 160ms ease; }
@@ -113,3 +125,13 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 @media(prefers-reduced-motion:reduce) { .app-shell > .workbench-splitter-sidebar::after { transition:none; } }
 
 .sidebar.workspace-navigation .project-contents:has(> [id^="project-sessions-"][hidden]) .resources-heading { margin-top:8px; padding-top:0; }
+
+/* Match the compact navigation gutter without changing the floating material. */
+.sidebar.workspace-navigation .sidebar-utilities { left:var(--sidebar-edge-inset); right:var(--sidebar-edge-inset); }
+.sidebar.workspace-navigation .workspace-utilities-trigger { padding-inline:9px; padding-left:calc(var(--sidebar-content-inset) - var(--sidebar-edge-inset) - 1px); }
+
+/* Edge controls keep a complete focus outline inside the clipped sidebar. */
+.sidebar.workspace-navigation :is(.session-drag-handle,.resource-drag-handle):focus-visible { outline-offset:-2px; }
+.sidebar.workspace-navigation.is-bulk-selecting .project-scroll { padding-left:var(--sidebar-edge-inset); }
+
+.sidebar.workspace-navigation :is(.session-nav-row,.resource-row,.resource-folder-toggle):focus-visible { outline-offset:-2px; }

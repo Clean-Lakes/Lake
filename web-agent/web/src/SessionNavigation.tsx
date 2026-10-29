@@ -37,7 +37,6 @@ export function SessionNavigation({sessions,selectedId,showAll,bulkMode,disabled
  function group(isPinned:boolean,all:WorkSession[],visible:WorkSession[]){
   const title=isPinned?'置顶':showAll?'全部会话':'最近会话';
   return <section className={`session-nav-group${isPinned&&!all.length?' is-empty-pin-drop':''}${drop?.pinned===isPinned&&!drop.row?' is-drop-group':''}`} aria-label={title} onDragOver={event=>{if(allow(event)){event.stopPropagation();setDrop({pinned:isPinned,beforeId:all[0]?.id??null});}}} onDrop={event=>commit(event,{pinned:isPinned,beforeId:all.find(s=>s.id!==source.current?.id)?.id??null})}>
-   {!isPinned&&!bulkMode&&<div className="session-nav-group-title"><span>{title}</span></div>}
    {!all.length&&!bulkMode&&<p className="session-nav-empty">{isPinned?'拖到这里置顶':'还没有会话'}</p>}
    {visible.map(session=><div key={session.id} data-session-nav-id={session.id} className={`session-sort-row${bulkMode?' is-bulk':''}${dragging===session.id?' is-dragging':''}${drop?.row===session.id?drop.after?' drop-after':' drop-before':''}`} onDragOver={event=>{
     if(!allow(event))return;event.stopPropagation();if(session.id===source.current?.id){setDrop(null);return;}
