@@ -1,7 +1,7 @@
 export type WorkspaceMenuView='home'|'projects'|'manage'|'create'|'delete';
 
 export function workspaceMenuParent(view:WorkspaceMenuView):WorkspaceMenuView{
- return view==='delete'?'manage':view==='create'?'projects':'home';
+ return view==='delete'?'manage':view==='create'||view==='manage'?'projects':'home';
 }
 
 /** The footer is the only anchor, including while pages and sidebar width change. */
