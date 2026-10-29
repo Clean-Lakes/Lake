@@ -15,3 +15,7 @@
 @keyframes reply-handoff-in { from { grid-template-rows:0fr; opacity:0; transform:translateY(6px); } to { grid-template-rows:1fr; opacity:1; transform:translateY(0); } }
 .turn-progress-prose > .ai-response { margin-block: 12px; }
 @media (prefers-reduced-motion: reduce) { .settled-reply { transition: none; animation:none; } }
+
+/* A stable one-line caption survives tool rounds while full prose stays in records. */
+.turn-latest-progress { min-width:0; flex-shrink:0; font-size:var(--font-size-ui); line-height:1.75; color:var(--text-secondary); }
+.turn-latest-progress > .status-text { display:block; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
