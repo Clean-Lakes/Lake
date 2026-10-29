@@ -18,3 +18,5 @@
 完整源码回归、准确提交及 Lake Dev 安装来源在 PR #120 记录。工作区已有 ignored output_recovery_test.go 的基线失败继续单列；不删除、修改或跳过。原生 UI 自动化限制沿用长任务验收记录，不虚构通过。
 
 回退前先处理完所有“待补充”标记，或停止本轮并确认原消息已回到暂停队列；保留最新 Web/SDK 两个数据库，不用旧备份覆盖已接入的真实用户输入。发布、数据库或正在运行的远端命令均未在本次验收中触发。
+
+最终运行源码提交：`4b08ea2b7a87b08031913026f8c1f57e12f864fe`。由提交归档补入已成功构建的静态资源后运行全部受版本控制的 Go 测试：`go test ./...`、`go test -race ./internal/ai ./internal/web ./internal/agent/...`、`go vet ./...` 全部通过；AI race 176s，Web race 506s，无 DATA RACE。ADK 边界检查通过，前端 555 项、类型与构建通过。签名后端独立 Home 验收通过：同一 RootTurnID，模型请求 2 次，旧写入零执行，其他队列内容不变，真实 user 消息仅入库一次，SDK 内部控制调用未进入供应商历史。最终文档提交与安装来源以 PR #120 对照 build-origin.json。

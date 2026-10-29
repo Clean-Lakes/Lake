@@ -57,3 +57,5 @@ python3 scripts/verify_long_task_continuity_dev.py --binary bin/lake
 该脚本在 macOS 首先验证二进制签名，等待实际后台执行占用已释放再退出后端；每次等待保留原调用身份。成功后清理自己的临时 Home。也可用 `--binary "$HOME/Applications/Lake Dev.app/Contents/Resources/lake"` 检查已安装的签名后端。
 
 最终提交源码由 `git archive` 导出，并补入本次成功构建的 Web 静态产物（Go embed 必需输入）后运行完整 Go/race/vet，未省略受版本控制的测试。运行代码对应 b78269f0；后续文档与复跑脚本提交不改变 Go/React 运行源码。工作区其他未跟踪文档保留，因此构建来源的 dirty 标志可为 true；安装前确认所有受版本控制的运行源码无未提交差异。
+
+后续增量“待发送消息推送为本轮补充”的实现与验收另见 [queued-message-supplements.md](queued-message-supplements.md)；本文件此前的源码及安装 SHA 描述长任务基线，不代表该增量尚未实现。
