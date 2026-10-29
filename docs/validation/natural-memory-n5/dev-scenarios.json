@@ -385,5 +385,40 @@
     "autoEnabled": false,
     "useEnabled": false,
     "restoredToOriginal": true
-  }
+  },
+  "deliverySmoke": [
+    {
+      "scenario": "最终源码跨会话使用",
+      "sessionId": "48bad5b071ffa48e3152ee057bb36aa4",
+      "passed": true,
+      "answer": "【协调偏好】2加2等于4。",
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4352,
+        "input": 18216,
+        "output": 75,
+        "total": 18291
+      }
+    },
+    {
+      "scenario": "最终源码当轮覆盖",
+      "sessionId": "6b6d825773545b7f1ad927ff7ac5c101",
+      "passed": true,
+      "answer": "4",
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4352,
+        "input": 18222,
+        "output": 68,
+        "total": 18290
+      }
+    }
+  ],
+  "deliveryRuntimeCodeSHA": "7c82f95601585a252ec5200e8b31f9996d5107d1",
+  "deliveryRuntimeSignedAndHashMatched": true,
+  "bothDatabasesIntegrity": "ok"
 }

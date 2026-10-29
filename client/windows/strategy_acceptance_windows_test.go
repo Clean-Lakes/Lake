@@ -122,10 +122,16 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
  const button=(root,text)=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent.trim()===text || b.getAttribute('aria-label')===text || Array.from(b.querySelectorAll(':scope > span')).some(label=>label.textContent.trim()===text));
  const panel=()=>document.querySelector('#strategy-settings-panel');
  const confirmation=()=>panel()?.querySelector('[aria-label="确认策略操作"]');
+ const openLegacy=async()=>{
+  (await wait(()=>document.querySelector('#memory-settings-tab'))).click();
+  const history=await wait(()=>Array.from(document.querySelectorAll('#memory-settings-panel summary')).find(e=>e.textContent.trim()==='历史资产与兼容管理'));
+  if(!history.parentElement.open)history.click();await wait(panel);
+ };
+
  const choose=async(root,text)=>{phase='button:'+text;(await wait(()=>{const current=typeof root==='function'?root():root;return current?.isConnected&&button(current,text);})).click();await new Promise(requestAnimationFrame);};
  const assert=(value,code)=>{if(!value)throw Error(code);};
  await choose(document,'工作区'); await choose(document,'设置');
- (await wait(()=>document.querySelector('#strategy-settings-tab'))).click();
+ await openLegacy();
  phase='strategy_panel';
  await wait(panel);
  await choose(panel,'新建');
@@ -153,7 +159,7 @@ func TestWindowsStrategyConfirmationInRealWebView(t *testing.T) {
  document.querySelector('#appearance-settings-tab').click();
  const dark=await wait(()=>Array.from(document.querySelectorAll('[role="radio"]')).find(b=>b.textContent.trim()==='深色'));
  dark.click(); await wait(()=>dark.getAttribute('aria-checked')==='true');
- document.querySelector('#strategy-settings-tab').click();
+ await openLegacy();
  await wait(panel);
  await window.__p8Resize(); phase='native_narrow_resize';await wait(()=>innerWidth<=900);assert(innerWidth<=900,'narrow_window_not_exercised');
  await window.__p8Result(JSON.stringify({passed:true,actualBackend:true,actualWebView2:true,defaultNoModel:true,tab:true,shiftTab:true,escapePreservedDraft:true,confirmedDiscard:true,dark:true,viewportWidth:innerWidth,viewportHeight:innerHeight}));

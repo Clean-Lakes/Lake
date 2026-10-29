@@ -128,9 +128,9 @@ SQLite 继续是事实源，原有 Markdown 投影可重建。N1 冻结统一记
 | N0 产品与契约计划 | 已合入 #110 | 四项体验、内容/范围规则、压缩契约、迁移和验收；不改变运行行为 |
 | N1 统一记忆基础与旧内容承接 | 已合入 #111 | 统一管理 API、独立自动记忆设置/原设置保真映射、准确版本/来源、漂移冲突和承接 CAS 撤销；唯一映射沿用原绑定，不复制/重复注入。V1/V2 适配和隔离恢复回归；V2 开启门槛仍保留。见 [N1 契约](../docs/design/natural-memory-foundation-n1.md)及[验收](../docs/validation/natural-memory-foundation-n1.md) |
 | N2 自然形成与更新提示 | 已合入 #112 | 不依赖固定口令识别明确长期偏好；临时/引用不写入；准确范围、提交后提示与 CAS 撤销；无逐条采用要求；见 [N2 契约](../docs/design/natural-memory-formation-n2.md)与[验收](../docs/validation/natural-memory-formation-n2.md) |
-| N3 空闲增量整理 | 已合入 #113 | 共用持久队列、有界六条批处理/独立覆盖、同义来源合并、矛盾保留、前台抢占和每日费用预留；主入口收敛为记忆，旧管理折叠；删除无依赖退役派发器。见 [N3 契约](../docs/design/natural-memory-idle-n3.md)及[验收](../docs/validation/natural-memory-idle-n3.md)；压缩捕获/新召回与 Windows 原生验收仍待后续 |
-| N4 压缩补充提取 | 已合入 #114 | Lake Memory 宿主来源登记、共享压缩入口增量捕获、与终态共用 outbox；canonical 信封/缓存恢复、覆盖缺口、撤回重验与原观测时间。见 [N4 契约](../docs/design/natural-memory-compaction-n4.md)及[验收](../docs/validation/natural-memory-compaction-n4.md)；N5 新偏好召回仍未开放 |
-| N5 按范围使用与集成收敛 | 已实现，集成验收中，待 PR 合入 | 独立默认关闭的用户/项目使用设置、短预览及准确版本按需读取、每请求/工具前来源重验、准备/读取/遵从未知诊断；普通/Plan/Pilot 协调表达可用，专员/工作流不继承。统一记忆入口、保留原事实/经验与复杂条件兼容；见 [N5 契约](../docs/design/natural-memory-recall-n5.md)及[验收](../docs/validation/natural-memory-recall-n5.md)。运维 V2 与 C3/C4 仍单独验收 |
+| N3 空闲增量整理 | 已合入 #113 | 共用持久队列、有界六条批处理/独立覆盖、同义来源合并、矛盾保留、前台抢占和每日费用预留；主入口收敛为记忆，旧管理折叠；删除无依赖退役派发器。见 [N3 契约](../docs/design/natural-memory-idle-n3.md)及[验收](../docs/validation/natural-memory-idle-n3.md)；该阶段未包含压缩捕获/新召回；现分别见 N4/N5 |
+| N4 压缩补充提取 | 已合入 #114 | Lake Memory 宿主来源登记、共享压缩入口增量捕获、与终态共用 outbox；canonical 信封/缓存恢复、覆盖缺口、撤回重验与原观测时间。见 [N4 契约](../docs/design/natural-memory-compaction-n4.md)及[验收](../docs/validation/natural-memory-compaction-n4.md)；N4 阶段未提供 N5 新偏好召回 |
+| N5 按范围使用与集成收敛 | 已实现并完成本地及 Windows 分项验收，待 PR 合入 | 独立默认关闭的用户/项目使用设置、短预览及准确版本按需读取、每请求/工具前来源重验、准备/读取/遵从未知诊断；普通/Plan/Pilot 协调表达可用，专员/工作流不继承。统一记忆入口、保留原事实/经验与复杂条件兼容；见 [N5 契约](../docs/design/natural-memory-recall-n5.md)及[验收](../docs/validation/natural-memory-recall-n5.md)。运维 V2 与 C3/C4 仍单独验收 |
 
 各阶段从当时最新 develop 独立分支提交 PR，本地签名 Dev 直接运行验证，不为 Go/React 日常改动制作安装包。阶段测试通过不等于新自动记忆可以默认开启；整体体验保持实验、受控启用；N5 验收不自动批准默认开启或正式发布。每阶段记录已测试源码 SHA、测试/模型样本与未验证项，不将实施目标标为已交付。
 

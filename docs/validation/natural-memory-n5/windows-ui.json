@@ -1,0 +1,15 @@
+{
+  "actualBackend": true,
+  "actualWebView2": true,
+  "dark": true,
+  "defaultNoModel": true,
+  "defaultOff": true,
+  "independentRecall": true,
+  "keyboardEscape": true,
+  "legacyCollapsed": true,
+  "passed": true,
+  "platform": "windows/amd64",
+  "stopPersisted": true,
+  "viewportHeight": 561,
+  "viewportWidth": 834
+}
