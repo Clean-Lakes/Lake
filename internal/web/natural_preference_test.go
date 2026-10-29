@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -261,7 +262,7 @@ func TestNaturalPreferenceMigrationReopenBackupAndFutureGuard(t *testing.T) {
 		t.Fatal(files)
 	}
 	info, _ := os.Stat(files[0])
-	if info.Mode().Perm() != 0600 {
+	if !platform.Private(files[0], info) {
 		t.Fatal("backup mode")
 	}
 	s, e = OpenStore(dir)

@@ -1,0 +1,424 @@
+{
+  "startupOldTablesUnchanged": 49,
+  "projects": [
+    {
+      "id": "20bc13b1c8b87741a31fb33821a29320",
+      "base": "/api/projects/20bc13b1c8b87741a31fb33821a29320/natural-memory"
+    },
+    {
+      "id": "66af08755d867d6c0deb9c8243d8cadd",
+      "base": "/api/projects/66af08755d867d6c0deb9c8243d8cadd/natural-memory"
+    }
+  ],
+  "globalPreference": "97dff503d3f355e4265d5686a433070c",
+  "projectPreference": "f9beacf99f4377c9e7beacfdfe85c960",
+  "seedSession": "fda1434b7830f86547094eb440a52c0d",
+  "viewSession": "a7a7389e6e5a69aa283f022fcfe5f092",
+  "evidence": [
+    {
+      "run": 1,
+      "scenario": "project-over-global",
+      "sessionId": "a364017cc9d2d5b78a75894485046122",
+      "passed": true,
+      "answer": "【项目偏好】2 加 2 等于 4。",
+      "preparedScopes": [
+        "project"
+      ],
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4224,
+        "input": 18224,
+        "output": 91,
+        "total": 18315
+      },
+      "resourceOperations": 0
+    },
+    {
+      "run": 1,
+      "scenario": "global-in-other-project",
+      "sessionId": "cc393e5bc60cd8b47e27e9c0faf199c7",
+      "passed": true,
+      "answer": "【全局偏好】2 + 2 = 4。",
+      "preparedScopes": [
+        "user"
+      ],
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 512,
+        "input": 18217,
+        "output": 33,
+        "total": 18250
+      },
+      "resourceOperations": 0
+    },
+    {
+      "run": 1,
+      "scenario": "current-explicit-override",
+      "sessionId": "48d49bca5d78d9f16070c97d95965dce",
+      "passed": true,
+      "answer": "4",
+      "preparedScopes": [
+        "project"
+      ],
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4224,
+        "input": 18230,
+        "output": 41,
+        "total": 18271
+      },
+      "resourceOperations": 0
+    },
+    {
+      "run": 2,
+      "scenario": "project-over-global",
+      "sessionId": "d0aac332a1a191496025e4582ce1aa82",
+      "passed": true,
+      "answer": "【项目偏好】2加2等于4。",
+      "preparedScopes": [
+        "project"
+      ],
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 18048,
+        "input": 18224,
+        "output": 28,
+        "total": 18252
+      },
+      "resourceOperations": 0
+    },
+    {
+      "run": 2,
+      "scenario": "global-in-other-project",
+      "sessionId": "f756bb120a6f7352f0fcae9bf3396b48",
+      "passed": true,
+      "answer": "【全局偏好】2 加 2 等于 4。",
+      "preparedScopes": [
+        "user"
+      ],
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 18048,
+        "input": 18217,
+        "output": 34,
+        "total": 18251
+      },
+      "resourceOperations": 0
+    },
+    {
+      "run": 2,
+      "scenario": "current-explicit-override",
+      "sessionId": "1f88eee1179b9873d575b370d3d0c189",
+      "passed": true,
+      "answer": "4",
+      "preparedScopes": [
+        "project"
+      ],
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 18048,
+        "input": 18230,
+        "output": 37,
+        "total": 18267
+      },
+      "resourceOperations": 0
+    },
+    {
+      "run": 3,
+      "scenario": "project-over-global",
+      "sessionId": "4d1f8534042d5d0e89b36b4cdf49b193",
+      "passed": true,
+      "answer": "【项目偏好】2 加 2 等于 4。",
+      "preparedScopes": [
+        "project"
+      ],
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 18048,
+        "input": 18224,
+        "output": 56,
+        "total": 18280
+      },
+      "resourceOperations": 0
+    },
+    {
+      "run": 3,
+      "scenario": "global-in-other-project",
+      "sessionId": "440895ebbfae49f05f2208c87a880eef",
+      "passed": true,
+      "answer": "【全局偏好】2 加 2 等于 4。",
+      "preparedScopes": [
+        "user"
+      ],
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 18048,
+        "input": 18217,
+        "output": 74,
+        "total": 18291
+      },
+      "resourceOperations": 0
+    },
+    {
+      "run": 3,
+      "scenario": "current-explicit-override",
+      "sessionId": "513243dda26c43b90114bdaa94dab174",
+      "passed": true,
+      "answer": "4",
+      "preparedScopes": [
+        "project"
+      ],
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 18048,
+        "input": 18230,
+        "output": 56,
+        "total": 18286
+      },
+      "resourceOperations": 0
+    },
+    {
+      "scenario": "usage-disabled",
+      "sessionId": "9e3ce8c204ea955317c7c563de0a5ff1",
+      "passed": true,
+      "preparedCount": 0,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4224,
+        "input": 17972,
+        "output": 2,
+        "total": 17974
+      }
+    },
+    {
+      "scenario": "one-turn-ignore",
+      "sessionId": "84ba5efde162cee3e9b6d7e269710fed",
+      "passed": true,
+      "preparedCount": 0,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 17536,
+        "input": 17765,
+        "output": 2,
+        "total": 17767
+      }
+    },
+    {
+      "scenario": "forgotten-project-not-read",
+      "sessionId": "3120caac32cb9c6dc38ce1c01a019a6a",
+      "passed": true,
+      "preparedScopes": [
+        "user"
+      ],
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4352,
+        "input": 18221,
+        "output": 15,
+        "total": 18236
+      }
+    },
+    {
+      "run": 1,
+      "scenario": "pilot-coordinator-expression-without-task",
+      "sessionId": "0a82a7b2a9984a7d9e69c4d7fb4cc95e",
+      "passed": true,
+      "answer": "【协调偏好】2 加 2 等于 4。",
+      "preparedScopes": [
+        "project"
+      ],
+      "sreTasksCreated": 0,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 5496,
+        "output": 97,
+        "total": 5593
+      }
+    },
+    {
+      "run": 2,
+      "scenario": "pilot-coordinator-expression-without-task",
+      "sessionId": "e47052acbc29e7bf464af4dc8763b0f7",
+      "passed": true,
+      "answer": "【协调偏好】2加2等于4。",
+      "preparedScopes": [
+        "project"
+      ],
+      "sreTasksCreated": 0,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 2048,
+        "input": 5493,
+        "output": 169,
+        "total": 5662
+      }
+    },
+    {
+      "run": 3,
+      "scenario": "pilot-coordinator-expression-without-task",
+      "sessionId": "a7a7389e6e5a69aa283f022fcfe5f092",
+      "passed": true,
+      "answer": "【协调偏好】2 加 2 等于 4。",
+      "preparedScopes": [
+        "project"
+      ],
+      "sreTasksCreated": 0,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 2048,
+        "input": 9371,
+        "output": 116,
+        "total": 9487
+      }
+    }
+  ],
+  "allPassed": true,
+  "initialCodeSHA": "fdb60deecbcdbf3cc4dccac553bf4558b78dc513",
+  "explorationFailures": [
+    {
+      "scenario": "fresh genuine preference after forgetting same topic",
+      "status": "blocked",
+      "code": "consolidation_conflict",
+      "falseWrites": 0,
+      "fix": "allow relation=new against inactive entries; existing source tombstones still checked"
+    }
+  ],
+  "demoPreference": "bbfd4fe2a7a125fccccc170683d51458",
+  "demoPreferenceActive": true,
+  "finalFunctionalCodeSHA": "39eb85703ddc2ee359dde2088a808fad296d3caa",
+  "macUI": {
+    "independentUseToggle": true,
+    "captureStayedOff": true,
+    "accessLinkOpensMemory": true,
+    "escapeKeepsSettings": true,
+    "legacyCollapsed": true,
+    "lightAndDark": true,
+    "macNarrowNotMeasured": true
+  },
+  "sampleTurnUsage": {
+    "input": 238331,
+    "output": 851,
+    "total": 239182
+  },
+  "memoryDispatches": [
+    {
+      "status": "succeeded",
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1280,
+        "input": 1578,
+        "output": 230,
+        "total": 1808
+      }
+    },
+    {
+      "status": "succeeded",
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1280,
+        "input": 1613,
+        "output": 273,
+        "total": 1886
+      }
+    },
+    {
+      "status": "consolidation_conflict",
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1280,
+        "input": 1581,
+        "output": 249,
+        "total": 1830
+      }
+    },
+    {
+      "status": "succeeded",
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 1408,
+        "input": 1578,
+        "output": 205,
+        "total": 1783
+      }
+    }
+  ],
+  "globalSettingsRestored": {
+    "autoEnabled": false,
+    "useEnabled": false,
+    "restoredToOriginal": true
+  },
+  "deliverySmoke": [
+    {
+      "scenario": "最终源码跨会话使用",
+      "sessionId": "48bad5b071ffa48e3152ee057bb36aa4",
+      "passed": true,
+      "answer": "【协调偏好】2加2等于4。",
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4352,
+        "input": 18216,
+        "output": 75,
+        "total": 18291
+      }
+    },
+    {
+      "scenario": "最终源码当轮覆盖",
+      "sessionId": "6b6d825773545b7f1ad927ff7ac5c101",
+      "passed": true,
+      "answer": "4",
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 4352,
+        "input": 18222,
+        "output": 68,
+        "total": 18290
+      }
+    }
+  ],
+  "deliveryRuntimeCodeSHA": "7c82f95601585a252ec5200e8b31f9996d5107d1",
+  "deliveryRuntimeSignedAndHashMatched": true,
+  "bothDatabasesIntegrity": "ok"
+}

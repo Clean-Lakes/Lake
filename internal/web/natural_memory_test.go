@@ -2,6 +2,7 @@ package web
 
 import (
 	"database/sql"
+	"github.com/Clean-Lakes/Lake/internal/platform"
 	"os"
 	"path/filepath"
 	"strings"
@@ -217,7 +218,7 @@ func TestNaturalMemoryMigrationBackupRestartAndFutureGuard(t *testing.T) {
 		t.Fatal(backups)
 	}
 	info, e := os.Stat(backups[0])
-	if e != nil || info.Mode().Perm() != 0600 {
+	if e != nil || !platform.Private(backups[0], info) {
 		t.Fatal(info, e)
 	}
 	old, e := openSQLite(backups[0])

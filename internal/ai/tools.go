@@ -72,6 +72,12 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if err := checkPlanOperation(c, call.Name, "readonly"); err != nil {
 		return nil, err
 	}
+	if err := e.checkNaturalRecall(ctx, s, c); err != nil {
+		return nil, &ToolNotExecutedError{Err: err}
+	}
+	if naturalRecallTool(call.Name) {
+		return e.invokeNaturalRecall(ctx, s, c, call)
+	}
 	if e.experiment != nil {
 		return e.experiment.invoke(ctx, call)
 	}

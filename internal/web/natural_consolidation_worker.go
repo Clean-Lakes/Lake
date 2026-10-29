@@ -117,7 +117,7 @@ func (s *Store) commitNaturalBatch(items []naturalBatchItem, usage ai.Usage, ind
 						fail(409, "Consolidation target was not supplied")
 					}
 				}
-				if current != nil && r.Relation == "new" {
+				if current != nil && current["state"] == "active" && r.Relation == "new" {
 					view := s.naturalPreferenceView(scope, stringOf(current["id"]), 0)
 					if view["body"] == r.Quote {
 						r.Relation = "equivalent"

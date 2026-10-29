@@ -36,6 +36,7 @@ func (s *Store) naturalSettings(ctx StrategyContext) Object {
 	effective := s.strategyEffective(ctx)
 	out := Object{"scope": scope, "revision": revision, "epoch": epoch, "autoEnabled": enabled, "automaticReady": naturalMemoryAutomaticReady && !s.memoryV2, "consentVersion": consent,
 		"policyVersion":         naturalMemoryPolicyVersion,
+		"recallSettings":        s.naturalRecallSettings(ctx),
 		"preferenceSettings":    Object{"revision": old.Revision, "epoch": old.Epoch, "masterEnabled": old.MasterEnabled, "applyEnabled": old.ApplyEnabled, "effectiveUseEnabled": effective.Settings.MasterEnabled && effective.Settings.ApplyEnabled},
 		"projectMemorySettings": nil, "operationalMemoryVersion": 1}
 	if ctx.ProjectID != "" {
