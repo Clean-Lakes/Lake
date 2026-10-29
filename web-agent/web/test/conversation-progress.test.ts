@@ -228,14 +228,14 @@ test('mixed-status resource summaries keep every exceptional result visible',()=
 });
 
 
-test('current normal progress keeps sweeping through generated prose until the turn finishes',()=>{
+test('recorded process remains available while generated prose retires the live status line',()=>{
  const entries=[user,card('tool','operation'),card('stream','message','running','正在汇总结果。')];
  assert.equal(currentProgressGroupId(entries,true),'tool');
  assert.equal(currentProgressGroupId(entries,false),undefined);
  const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],ai:{session:'s',status:'running',cardsOffset:0,turns:1,cards:entries.flatMap(e=>e.card?[e.card]:[])}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
  assert.ok(html.includes('is-continuing'));
- assert.ok(html.includes('status-text--active'),'the live status line also sweeps');
+ assert.ok(!html.includes('class="reply-duration '),'the live status line must not follow generated conclusion prose');
  const done=renderToStaticMarkup(createElement(AITranscript,{snapshot:{...s,ai:{...s.ai!,status:'completed'}}}));
  assert.ok(!done.includes('is-continuing')&&!done.includes('status-text--active'));
  for(const status of ['failed','pending','unknown','not_executed','interrupted','cancelled','background_running']){

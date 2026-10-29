@@ -62,14 +62,22 @@ test("light process labels name the file and target, bound repeated operations a
  assert.equal(describe("# free -m\necho done"),"执行命令 · 测试主机");
  assert.equal(describe("echo uname; systemctl restart nginx"),"执行命令 · 测试主机","a mention and a service mutation are not a read-only inspection");
 });
-test("the live process follows the latest reply while running; activity filtering cannot borrow a newer turn state",()=>{
+test("the live timer retires on the first reply chunk and returns for subsequent tools; activity filtering cannot borrow a newer turn state",()=>{
  const s={session:{id:"s"},messages:[{id:"u",sessionId:"s",role:"user",text:"检查",createdAt:at}],resources:[],actions:[],evidence:[],specialists:[],replyTimings:[timing],ai:{...view,todos:[{content:"步骤已完成",status:"completed"}],cards:[{id:"todo",type:"operation",title:"todo_write",status:"completed",at,data:{arguments:{todos:[{content:"步骤已完成",status:"completed"}]}}},{...tool,status:"completed"},{id:"reply",type:"message",status:"running",content:"最后的回复",at},{id:"edit",type:"diff",status:"completed",title:"example.conf",at,data:{before:"before",after:"after"}}]}} as SessionSnapshot;
- const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
- assert.equal((html.match(/class="reply-duration /g)||[]).length,1);
+ const render=()=>renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ const reply=s.ai!.cards.find(card=>card.id==='reply')!;
+ reply.content='';
+ assert.equal((render().match(/class="reply-duration /g)||[]).length,1,'an empty reply packet must not hide execution status');
+ reply.content='最';
+ assert.ok(!render().includes('class="reply-duration '),'the first nonempty chunk removes the live timer');
+ reply.content='最后的回复';
+ const html=render();
+ assert.ok(!html.includes('class="reply-duration '));
  assert.ok(html.includes('步骤已完成'));
- assert.ok(html.indexOf('class="reply-duration ')>html.indexOf("最后的回复"));
- assert.ok(html.includes('turn-status-elapsed')&&html.includes('已处理'),'the live process uses real turn timing');
+ assert.ok(html.includes('最后的回复'));
  assert.ok(!html.includes("file-changes"),"file summary waits until the running turn ends");
+ s.ai!.cards.push({...tool,id:'next-tool'});
+ assert.equal((render().match(/class="reply-duration /g)||[]).length,1,'a real subsequent tool restores execution status');
  s.messages.push({id:"v",sessionId:"s",role:"user",text:"新提问",createdAt:"2026-10-14T03:01:00Z"});
  s.replyTimings=undefined;s.ai!.cards=[{...tool,status:"completed"}];s.ai!.turnStartedAt=s.messages[1]!.createdAt;
  const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:"activity"}));
