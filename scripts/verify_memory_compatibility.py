@@ -14,10 +14,10 @@ import subprocess
 import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-TEST_PATTERN = "^(TestC[34]|TestNatural|TestMemory|TestProjectMemory|TestStrategy|TestOnline|TestHistorical|TestADK.*(Approval|Unknown|Crash|Projection)|TestCancelIdle|TestManualCompaction|TestSegmentedCompaction|TestInspectHost|TestConfiguredSkills|TestSkillPath|TestExtensionSettings|TestModelSwitch|TestCompaction|TestAutomaticCompaction|TestIdle|TestUnknownMutation|TestUnfinishedMutation|TestSREPlanOnly|TestSRERestart)"
+TEST_PATTERN = "^(TestC[34]|TestLegacy|TestNatural|TestMemory|TestProjectMemory|TestStrategy|TestOnline|TestHistorical|TestADK.*(Approval|Unknown|Crash|Projection)|TestCancelIdle|TestManualCompaction|TestSegmentedCompaction|TestInspectHost|TestConfiguredSkills|TestSkillPath|TestExtensionSettings|TestModelSwitch|TestCompaction|TestAutomaticCompaction|TestIdle|TestUnknownMutation|TestUnfinishedMutation|TestSREPlanOnly|TestSRERestart)"
 
 SUITES = [
-    ["go", "test", "-json", "./internal/strategy", "-count=1", "-timeout=3m"],
+    ["go", "test", "-json", "./internal/strategy", "./internal/testsupport/legacystrategy", "-count=1", "-timeout=3m"],
     ["go", "test", "-json", "./internal/ai", "./internal/web", "-run",
      TEST_PATTERN, "-count=1", "-timeout=5m"],
 ]

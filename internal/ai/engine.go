@@ -7,15 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Clean-Lakes/Lake/internal/platform"
-	"github.com/Clean-Lakes/Lake/internal/strategy"
-	"google.golang.org/genai"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Clean-Lakes/Lake/internal/platform"
+	"github.com/Clean-Lakes/Lake/internal/strategy"
+	"google.golang.org/genai"
 )
 
 type session struct {
@@ -35,7 +36,6 @@ type Engine struct {
 	NaturalMemory                NaturalMemoryProvider
 	MemoryCaptureAllowed         func(MemoryTurnSnapshot) bool
 	MemoryCaptureSessionAllowed  func(string) bool
-	Strategies                   StrategyProvider
 	correctionMu                 sync.Mutex
 	historicalCorrectionSessions sync.Map
 	runMu                        sync.Mutex
@@ -726,9 +726,6 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls []Call) error {
 	var observations []ImageAttachment
 	for _, call := range calls {
-		if _, err := e.resolveTurnStrategies(ctx, s, *c); err != nil {
-			return err
-		}
 		e.setSREActivity("tool", call.Name)
 		value, toolErr := e.invokeAfterSREHandoff(ctx, s, *c, call)
 		if errors.Is(toolErr, errADKApprovalPending) {

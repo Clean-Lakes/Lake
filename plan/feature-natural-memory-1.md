@@ -101,7 +101,7 @@ Lake 的新记忆功能承接原策略资产：用户正常交流，系统在用
 | [提炼适配器](../internal/ai/project_memory_extraction.go)、[V1 worker](../internal/web/project_memory_worker.go)、[V2 worker](../internal/web/project_memory_v2_worker.go) | 无工具 completion 与后台队列已在；复用前台优先、限额和提交重验，增加增量合并和统一更新事件 |
 | [V2 存储](../internal/web/project_memory_v2_store.go)、[提炼](../internal/web/project_memory_v2_extraction.go)、[检索](../internal/web/project_memory_retrieval.go) | 范围、来源、冲突、版本与撤回可承接；项目 V2 仍受 [编译期门控](../internal/web/project_memory_v2_schema.go)关闭，不能直接翻 true 当成完工 |
 | [压缩入口](../internal/ai/engine.go)、[官方 ADK 回调](../internal/ai/adk_projection.go)、[预览恢复](../internal/ai/context_compaction.go) | 已有上下文预算、摘要/确定性预览和历史投影；增加无额外前台模型调用的来源捕获，不修改官方执行循环或操作账本 |
-| [旧资产存储](../internal/web/strategy_store.go)、[血缘](../internal/web/strategy_lineage.go)、[界面](../web-agent/web/src/StrategySettings.tsx) | 复用准确版本、用户内容与来源保护；新入口替代日常策略资产入口，兼容保留旧记录与报告 |
+| [旧体系退出](../docs/design/legacy-asset-exit.md) | 旧资产全部归档并停止注入；移除旧管理入口和 N1 承接适配器，保留来源撤回、历史审计和未知操作账本 |
 
 SQLite 继续是事实源，原有 Markdown 投影可重建。N1 冻结统一记忆服务的条目/范围、revision、source、change/undo、冲突和覆盖进度契约，以及旧 API 拒绝/兼容与迁移方案；可增量扩展现有业务库，不另建个人知识数据库。用户偏好可以有独立表适配，但不得形成与项目记忆并行竞争的后台学习器。
 
@@ -109,11 +109,11 @@ SQLite 继续是事实源，原有 Markdown 投影可重建。N1 冻结统一记
 
 | 旧状态 | 迁移要求 |
 | --- | --- |
-| 已采用、范围可等价表达的偏好 | 保留准确正文和版本，预览归属、条件和来源后承接；映射唯一，新旧链路不能同时注入 |
-| 条件复杂的方法类资产 | 保留兼容应用或导出为用户检查的 Skill 草稿；不能自动改成无条件全局偏好或安装 Skill |
+| 已采用、范围可等价表达的偏好 | 归档准确正文、版本、条件和原采用状态；停止旧注入，不自动变为自然偏好 |
+| 条件复杂的方法类资产 | 仅归档/本地导出；不继续兼容应用，不自动转成全局偏好或安装 Skill |
 | 未采用、待审核、已拒绝/停用或来源已撤回 | 不因开启自动记忆变为有效记忆；保留原内容访问权限、拒绝与防复活记录 |
 | 原有项目记忆与 V2 待复核数据 | 保留项目/资源隔离、设置和既有复核门槛；不能批量确认旧条目或更改项目归属 |
-| 旧学习、纠错与实验记录 | 继续按 C1 退役，只读/撤回/清理按原权限；不得作为自动记忆的新增任务或成功证据 |
+| 旧学习、纠错与实验记录 | 仅保留历史审计、来源撤回清理和未知操作账本；旧读取/写入 API 全部 410，本地显式导出 |
 
 [Harness² 清理计划](refactor-harness-inspired-cleanup-1.md)的 C0/C1 保留完成事实；C2 的用户内容和入口承接由 N1～N5 落实，C3 的公共依赖拆分已实施，见 [C3 契约](../docs/design/strategy-runtime-cleanup-c3.md)；C4 的文档/脚本和本地集成验收见 [C4 手册](../docs/design/memory-compatibility-c4.md)，Windows 原生缺口按用户选择保留，不能先删新链路需要的记忆代码。原 [R0～R5](refactor-user-assets-and-experience-1.md) 不再指导新功能的逐条审核/采用交互。
 
@@ -158,3 +158,7 @@ SQLite 继续是事实源，原有 Markdown 投影可重建。N1 冻结统一记
 开发先用确定夹具覆盖上述边界，保留现有记忆、C1 退役、上下文预算/压缩、审批、取消和未知恢复回归。真实质量验证沿用 V2 既定的 60 个虚构案例各 3 轮，并补自然长期/临时表达、矛盾、压缩遗漏及重复样本；报告错误永久化、跨范围错误、遗漏、重复、额外调用和前台等待。跨范围泄露、撤回后复活、未知操作自动重放为阻断项；意图判据已由 [N1 固定样本](../internal/web/testdata/natural-memory-intent-v1.json)冻结：每轮错误自动写入/范围/来源为 0，明确长期意图召回至少 27/30，各跑 3 轮；分类器在 N2 实施并实测，N1 不宣称已取得分数。不能看过结果再放宽。
 
 初版 #110 只检查文档链接、代码定位、阶段一致性和 diff。N1 及后续实施按实际变更执行 Go/race/vet、`python3 scripts/check_adk_runtime_boundary.py`、固定 pnpm 的前端检查及签名 Dev；Windows 手动 CI 须另有届时授权。所有提交遵守 [AGENTS.md](../AGENTS.md)、[CONTRIBUTING.md](../CONTRIBUTING.md) 和[分支规范](../docs/development-workflow.md)，开发与提交 PR 不包含合并或发布授权。
+
+## 旧体系完全退出（2026-10-29）
+
+N1 的承接映射没有复制为新自然偏好，C4 阶段仍保留的旧注入和兼容管理已由本次退出取代。执行要求、归档格式、回退和验证见[退出契约](../docs/design/legacy-asset-exit.md)。不再以旧策略资产承担未来记忆功能；后续仅推进自然记忆质量、后台可靠性与原生平台验收。

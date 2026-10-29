@@ -20,6 +20,7 @@ func (s *Store) strategyEraseSessionSources(sessionID string) {
 		s.strategyEvent(key, "", sessionID, generation, "session_sources_deleted", Object{"sessionId": sessionID})
 	}
 }
+
 func (s *Store) strategyEraseAssetResults(assetID string) {
 	s.eraseStrategyExperiments("jobId IN (SELECT id FROM strategyJobs WHERE assetId=?)", assetID)
 	s.exec("UPDATE strategyProposalRuns SET resultJSON='' WHERE jobId IN (SELECT substr(createdBy,5) FROM strategyRevisions WHERE assetId=? AND createdBy LIKE 'job:%') OR jobId IN (SELECT id FROM strategyJobs WHERE assetId=?)", assetID, assetID)

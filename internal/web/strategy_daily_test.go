@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/ai"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
@@ -86,7 +88,7 @@ func TestStrategyDailyLongContextRetriesActualFailedReadWithoutCorrectionBudget(
 	}
 }
 
-func TestStrategyLearningToggleDoesNotCancelTurnUsingAdoptedAsset(t *testing.T) {
+func TestRetiredAssetsNeverInjectAndRejectedSettingsDoNotCancelForeground(t *testing.T) {
 	b, h := fixture(t)
 	id, ref := newSession(t, h)
 	project := stringOf(b.Store.Session(id)["projectId"])
@@ -95,7 +97,7 @@ func TestStrategyLearningToggleDoesNotCancelTurnUsingAdoptedAsset(t *testing.T) 
 	enableStrategyFixture(t, b.Store)
 	in := strategyInput("Preserve facts separately from hypotheses.")
 	in.Kind = strategy.ReportGuidance
-	in.Reuse = &strategy.ReusePolicy{General: true}
+	in.Reuse = &legacystrategy.ReusePolicy{General: true}
 	in.Applicability = strategy.Applicability{}
 	created, err := b.Store.CreateStrategyAsset(ctx, scope, "asset", in)
 	if err != nil {
@@ -110,13 +112,13 @@ func TestStrategyLearningToggleDoesNotCancelTurnUsingAdoptedAsset(t *testing.T) 
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request Object
 		_ = json.NewDecoder(r.Body).Decode(&request)
-		if !strings.Contains(jsonText(request["messages"]), in.Body) {
-			t.Error("adopted asset lost during learning-only change")
+		if strings.Contains(jsonText(request["messages"]), in.Body) {
+			t.Error("retired asset injected into ordinary turn")
 		}
 		if requests.Add(1) == 1 {
 			old, _ := b.Store.GetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope})
 			body := Object{"expectedRevision": old.Revision, "masterEnabled": true, "applyEnabled": true, "learnEnabled": false, "correctEnabled": false, "budget": old.Budget}
-			strategyHTTP(t, h, "PATCH", "/api/strategy/settings", "learn-off", jsonText(body), 200)
+			strategyHTTP(t, h, "PATCH", "/api/strategy/settings", "learn-off", jsonText(body), 410)
 			emitModel(w, "", []ai.Call{{ID: "normal-tool", Name: "todo_write", Arguments: `{"todos":[{"content":"continue investigation","status":"completed"}]}`}})
 			return
 		}
@@ -131,15 +133,4 @@ func TestStrategyLearningToggleDoesNotCancelTurnUsingAdoptedAsset(t *testing.T) 
 	if view.Status != "completed" || requests.Load() != 2 || len(view.Todos) != 1 {
 		t.Fatal("learning-only change cancelled foreground", view.Status, requests.Load())
 	}
-	// A source withdrawal must still invalidate a context which used it.
-	selected, err := b.Store.resolveStrategyBindings(ctx, strategy.SelectionQuery{Profile: "core"}, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = b.Store.ForgetStrategySource(ctx, created.SourceID, "withdraw", true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = b.Store.resolveStrategyBindings(ctx, strategy.SelectionQuery{Profile: "core"}, &selected.Selection, nil)
-	strategyCheckError(t, err, 409)
 }

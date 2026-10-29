@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
-	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
 func (b *Server) naturalMemoryCheck(v any) {
@@ -51,6 +50,10 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 	strategyMust(b.Store.NaturalMemorySettings(ctx)) // Validate the host project before parsing any body.
 	suffix := strings.Join(rest, "/")
 	method := r.Method
+	if len(rest) > 0 && (rest[0] == "legacy" || rest[0] == "preferences" || rest[0] == "changes") {
+		reply(w, 410, Object{"error": "旧偏好承接已退出；新自然记忆独立使用", "code": "strategy_assets_retired"})
+		return true
+	}
 	key := r.Header.Get("Idempotency-Key")
 	if method != "GET" && (len(key) < 1 || len(key) > 128 || strings.TrimSpace(key) != key) {
 		naturalFail(400, "invalid_idempotency_key")
@@ -106,15 +109,6 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 			return true
 		case "formed-changes":
 			b.naturalMemoryReply(w, strategyMust(b.Store.NaturalPreferenceChanges(ctx, after, limit)))
-			return true
-		case "legacy":
-			b.naturalMemoryReply(w, strategyMust(b.Store.ListNaturalLegacy(ctx, after, limit)))
-			return true
-		case "preferences":
-			b.naturalMemoryReply(w, strategyMust(b.Store.ListNaturalPreferences(ctx, after, limit)))
-			return true
-		case "changes":
-			b.naturalMemoryReply(w, strategyMust(b.Store.NaturalMemoryChanges(ctx, after, limit)))
 			return true
 		case "project-entries":
 			if ctx.ProjectID == "" {
@@ -180,56 +174,6 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 		if method == "POST" && len(rest) == 3 && rest[2] == "dismiss" {
 			strategyBody[struct{}](r)
 			b.naturalMemoryReply(w, strategyMust(b.Store.DismissNaturalPreferenceNotice(ctx, rest[1])))
-			return true
-		}
-	}
-	if len(rest) == 3 && rest[0] == "legacy" {
-		id := rest[1]
-		if rest[2] == "preview" && method == "GET" {
-			b.naturalMemoryReply(w, strategyMust(b.Store.PreviewNaturalMemory(ctx, id)))
-			return true
-		}
-		if rest[2] == "carry" && method == "POST" {
-			in := strategyBody[struct {
-				ExpectedRevision int    `json:"expectedRevision"`
-				PreviewToken     string `json:"previewToken"`
-			}](r, "expectedRevision", "previewToken")
-			b.naturalMemoryCheck(strategyMust(b.Store.PreviewNaturalMemory(ctx, id)))
-			b.naturalMemoryReply(w, strategyMust(b.Store.CarryNaturalPreference(ctx, id, key, in.PreviewToken, in.ExpectedRevision)))
-			return true
-		}
-	}
-	if len(rest) == 3 && rest[0] == "changes" && rest[2] == "undo" && method == "POST" {
-		in := strategyBody[struct {
-			ExpectedRevision int `json:"expectedRevision"`
-		}](r, "expectedRevision")
-		b.naturalMemoryReply(w, strategyMust(b.Store.UndoNaturalMemoryCarry(ctx, rest[1], key, in.ExpectedRevision)))
-		return true
-	}
-	if len(rest) >= 2 && rest[0] == "preferences" && method == "GET" {
-		entry := strategyMust(b.Store.ReadNaturalPreference(ctx, rest[1]))
-		if len(rest) == 2 {
-			b.naturalMemoryReply(w, entry)
-			return true
-		}
-		if len(rest) == 3 && rest[2] == "revisions" {
-			rows := strategyMust(strategyCall(b.Store, false, func() []Object {
-				return b.Store.rows("SELECT revision,parentRevision,contentHash,verification,createdAt FROM strategyRevisions WHERE assetId=? ORDER BY revision DESC LIMIT 50", rest[1])
-			}))
-			b.naturalMemoryReply(w, Object{"items": rows})
-			return true
-		}
-		if len(rest) == 4 && rest[2] == "revisions" {
-			version, err := strconv.ParseInt(rest[3], 10, 64)
-			if err != nil || version < 1 {
-				naturalFail(400, "invalid_revision")
-			}
-			v := strategyMust(b.Store.GetStrategyRevision(ctx, rest[1], version))
-			if !v.Available || !v.SourcesAvailable || v.Asset.Deleted {
-				v.Value.Body = ""
-				v.Assessment = strategy.Assessment{}
-			}
-			b.naturalMemoryReply(w, v)
 			return true
 		}
 	}

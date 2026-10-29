@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Isolated signed-backend compatibility acceptance; no real provider or UI.
 
-Creates a fresh private Home, a loopback model and synthetic manual preferences.
-Optionally round-trips a stopped copy through an explicitly supplied old binary.
+Creates a private Home, a loopback model and a stopped synthetic V6 archive fixture.
+Optionally verifies an explicitly supplied old binary refuses V7 on a stopped copy.
 Never opens the user's working database or copies credentials. No packaging/CI.
 """
 import argparse
@@ -39,7 +39,7 @@ class Provider(BaseHTTPRequestHandler):
         raw = json.dumps(body, ensure_ascii=False)
         names = {v['function']['name'] for v in body.get('tools', [])}
         require('revise_readonly_strategy' not in names, 'retired tool registered')
-        require(raw.count(BODY) == 1, 'manual preference missing or duplicated')
+        require(BODY not in raw, 'retired adopted preference injected')
         require('C4_UNADOPTED' not in raw, 'unadopted content leaked into request')
         self.server.requests += 1
         payload = {'choices': [{'index': 0, 'delta': {'content': 'C4 synthetic task completed.'}, 'finish_reason': 'stop'}],
@@ -66,7 +66,7 @@ def row_hashes(home):
             names = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")]
             result[key] = {}
             for name in names:
-                if name.startswith(('strategy', 'natural')) or name in ('native_corrections', 'native_artifacts'):
+                if name.startswith(('strategy', 'natural', 'legacyAsset')) or name in ('native_corrections', 'native_artifacts'):
                     rows = sorted(json.dumps(row, ensure_ascii=False, default=str) for row in db.execute('SELECT * FROM "'+name+'"'))
                     result[key][name] = hashlib.sha256('\n'.join(rows).encode()).hexdigest()
     return result
@@ -76,9 +76,37 @@ def retired(lake, path, method='POST', data=None):
     try:
         lake.api(path, method, {} if data is None else data)
     except urllib.error.HTTPError as error:
-        require(error.code == 410 and json.load(error).get('code') == 'strategy_execution_retired', 'wrong retirement response')
+        require(error.code == 410 and json.load(error).get('code') == 'strategy_assets_retired', 'wrong retirement response')
     else:
         raise AssertionError('retired write accepted')
+
+
+def seed_v6(home, project):
+    """Construct the stopped historical format, never re-enable a product API."""
+    digest = None
+    for name in ['strategy_schema.sql', 'strategy_learning_schema.sql', 'strategy_experiment_schema.sql',
+                 'strategy_optimization_schema.sql', 'strategy_review_schema.sql', 'strategy_reuse_schema.sql']:
+        text = (ROOT/'internal/web'/name).read_text().replace('\r\n', '\n')
+        digest = hashlib.sha256((text if digest is None else digest+'\n'+text).encode()).hexdigest()
+    scope, at = 'project:'+project, '2026-10-29T00:00:00Z'
+    with sqlite3.connect(home/'web-agent/lake-web.sqlite') as db:
+        db.execute('PRAGMA foreign_keys=ON')
+        db.executescript('DROP TABLE legacyAssetArchive; DROP TABLE legacyAssetSettingsArchive; DROP TABLE strategySchemaMeta; CREATE TABLE strategySchemaMeta(version INTEGER PRIMARY KEY CHECK(version=6),schemaHash TEXT NOT NULL);')
+        db.execute('INSERT INTO strategySchemaMeta VALUES(6,?)', (digest,))
+        db.execute("INSERT OR IGNORE INTO strategyScopes VALUES(?,'project',?,'local',1)", (scope, project))
+        for asset, body in [('adopted', BODY), ('draft', 'C4_UNADOPTED')]:
+            source, content_hash = 'source-'+asset, hashlib.sha256(body.encode()).hexdigest()
+            db.execute("INSERT INTO strategyAssets VALUES(?,?,'user_preference',?,1,?,'')", (asset, scope, 'Exact legacy '+asset, at))
+            db.execute("INSERT INTO strategySourceEvents VALUES(?,?,?,'manual_authoring','','',?,'Synthetic archival source','available',?)", (source, scope, source, content_hash, at))
+            db.execute("INSERT INTO strategyRevisions VALUES(?,1,0,?,?,?,'user_confirmed','local_user',?)", (asset, hashlib.sha256(b'{}').hexdigest(), content_hash, hashlib.sha256(json.dumps([source], separators=(',', ':')).encode()).hexdigest(), at))
+            db.execute("INSERT INTO strategyRevisionContent VALUES(?,1,?,'{}')", (asset, body))
+            db.execute("INSERT INTO strategyRevisionSources VALUES(?,1,?)", (asset, source))
+        db.execute("INSERT INTO strategyBindings VALUES('adopted',?,1,1,1,0,'')", (scope,))
+        db.execute("INSERT INTO naturalMemoryLinks VALUES(?,'adopted',1,1,?,'legacy-binding','mapped',?)", (scope, hashlib.sha256(BODY.encode()).hexdigest(), at))
+        old = dict(scope={'kind': 'user'}, revision=1, epoch=1, masterEnabled=True, applyEnabled=True,
+                   learnEnabled=False, correctEnabled=False, onlineCorrectEnabled=False)
+        db.execute("INSERT INTO strategySettings VALUES('user',1,1,?,?)", (json.dumps(old), at))
+        db.execute("INSERT INTO strategyJobs(id,scopeKey,accessProjectId,kind,expectedRevision,status,globalEpoch,projectEpoch,sourceSetHash,runtimeId,dispatchState,expiresAtMs,errorCode,createdAt,updatedAt) VALUES('unknown-call',?,?,'proposal',0,'awaiting_reconciliation',1,1,'source-hash','original-runtime','unknown',9999999999999,'strategy_execution_retired',?,?)", (scope, project, at, at))
 
 
 def main():
@@ -117,37 +145,43 @@ def main():
         lake.api('/api/projects/'+project+'/sre', 'PUT', {'enabled': False})
         lake.api('/api/projects/'+project+'/memory-settings', 'PATCH', {'expectedRevision': 0, 'useEnabled': False, 'extractionEnabled': False})
         lake.api('/api/settings/model', 'PUT', {'url': f'http://127.0.0.1:{provider.server_port}', 'name': 'C4 loopback fixture', 'protocol': 'openai'})
-        asset = lake.api(base+'/assets', 'POST', {'expectedRevision': 0, 'title': 'C4 exact preference', 'kind': 'user_preference', 'body': BODY, 'applicability': {}})['assetId']
-        ref = lake.api(base+'/assets/'+asset+'/revisions/1')['value']['ref']
-        lake.api(base+'/assets/'+asset+'/bindings', 'POST', {'action': 'adopt', 'ref': ref, 'expectedRevision': 0, 'priority': 0, 'exclusionGroup': ''})
-        lake.api(base+'/assets', 'POST', {'expectedRevision': 0, 'title': 'C4 draft', 'kind': 'user_preference', 'body': 'C4_UNADOPTED', 'applicability': {}})
-        settings = lake.api('/api/strategy/settings')['settings']
-        values = {k: False for k in ['learnEnabled', 'correctEnabled', 'onlineCorrectEnabled']}
-        values.update(expectedRevision=settings['revision'], masterEnabled=True, applyEnabled=True, budget=settings['budget'])
-        lake.api('/api/strategy/settings', 'PATCH', values)
-        preview = lake.api(memory+'/legacy/'+asset+'/preview')
-        require(preview['eligible'], 'simple adopted preference cannot be carried')
-        lake.api(memory+'/legacy/'+asset+'/carry', 'POST', {'expectedRevision': 0, 'previewToken': preview['previewToken']})
-        require(lake.api(memory+'/preferences/'+asset)['body'] == BODY, 'carry changed exact content')
-        for suffix in ['/sources', '/proposals', '/experiments', '/experiments/old/resume', '/experiments/old/save-candidate']:
+        lake.stop()
+        lake = None
+        seed_v6(home, project)
+        lake = Lake(binary, home, env)
+        archive = root/'retired-assets.json'
+        subprocess.run([str(binary), 'memory', 'export-retired-assets', '--home', str(home), '--output', str(archive)], check=True, stdout=subprocess.DEVNULL)
+        exported = json.loads(archive.read_text())
+        require(exported['runtimeUse'] is False, 'archive unexpectedly active')
+        require(len(exported['tables']['legacyAssetArchive']) == 2, 'missing archived asset')
+        require(any(v['body'] == BODY for v in exported['tables']['strategyRevisionContent']), 'exact legacy body lost')
+        require(exported['tables']['naturalMemoryLinks'][0]['state'] == 'mapped', 'N1 history lost')
+        require(json.loads(exported['tables']['legacyAssetSettingsArchive'][0]['body'])['applyEnabled'], 'original choice not archived')
+        with sqlite3.connect(home/'web-agent/lake-web.sqlite') as db:
+            old = json.loads(db.execute("SELECT body FROM strategySettings WHERE scopeKey='user'").fetchone()[0])
+            require(not old['masterEnabled'] and not old['applyEnabled'], 'old application remains enabled')
+            require(db.execute('SELECT COUNT(*) FROM naturalPreferenceEntries').fetchone()[0] == 0, 'legacy silently converted')
+            require(db.execute("SELECT runtimeId,dispatchState FROM strategyJobs WHERE id='unknown-call'").fetchone() == ('original-runtime', 'unknown'), 'unknown call identity changed')
+        for suffix in ['/assets', '/settings', '/sources', '/proposals', '/experiments', '/experiments/old/resume', '/experiments/old/save-candidate', '/usage']:
             retired(lake, base+suffix)
-        values['expectedRevision'] += 1
-        values.update(learnEnabled=True, correctEnabled=True, onlineCorrectEnabled=True, onlineConsentVersion=2)
-        retired(lake, '/api/strategy/settings', 'PATCH', values)
-        report['checks'] += ['legacy_content_exact', 'carry_without_duplicate_runtime', 'unadopted_not_applied', 'retired_writes_410']
+        retired(lake, '/api/strategy/settings', 'PATCH', {'masterEnabled': True, 'applyEnabled': True})
+        for suffix in ['/legacy', '/legacy/adopted/carry', '/preferences/adopted', '/changes/old/undo']:
+            retired(lake, memory+suffix)
+        report['checks'] += ['v6_exact_archive', 'old_switches_disabled', 'no_implicit_conversion', 'unknown_identity_preserved', 'all_legacy_routes_410']
         # Repeat actual HTTP/ADK tasks across clean backend restarts.
         for turn in range(2):
             sid = lake.session(project, 'C4 new turn '+str(turn))
             view = lake.send_and_finish(sid, 'Please answer once without using tools.')
             require(view['status'] == 'completed', 'ordinary turn failed')
             require(not any(c['type'] == 'strategy_correction' for c in view['cards']), 'new correction card')
-            require(lake.api(base+'/usage?sessionId='+sid)['items'] == [], 'new experimental manifest')
+            retired(lake, base+'/usage?sessionId='+sid, 'GET')
             lake.stop()
             lake = None
             before = row_hashes(home)
             lake = Lake(binary, home, env)
             require(row_hashes(home) == before, 'restart changed compatibility content')
-            require(lake.api(base+'/assets/'+asset+'/revisions/1')['value']['ref'] == ref, 'restart lost exact adopted version')
+            with sqlite3.connect(home/'web-agent/lake-web.sqlite') as db:
+                require(db.execute("SELECT body FROM strategyRevisionContent WHERE assetId='adopted'").fetchone()[0] == BODY, 'restart lost exact archived content')
             ns = lake.api(memory+'/settings')
             require(not ns['autoEnabled'] and not ns['recallSettings']['useEnabled'], 'restart inherited automatic/recall consent')
         report['preservedTableCounts'] = {key: len(value) for key, value in before.items()}
@@ -162,13 +196,19 @@ def main():
             copied = root / 'round-trip'
             shutil.copytree(home, copied)  # Home has only synthetic fixture data, no imported credentials.
             before = row_hashes(copied)
-            for executable in [args.previous_binary, binary]:
-                lake = Lake(executable, copied, env)
-                lake.api('/api/bootstrap')  # No task, model reconfiguration or resource operation.
-                lake.stop()
-                lake = None
-            require(before == row_hashes(copied), 'old-binary read-only round trip changed content')
-            report['previousBinaryRoundTrip'] = 'passed_readonly_copy_only'
+            try:
+                Lake(args.previous_binary, copied, env)
+            except AssertionError:
+                pass
+            else:
+                raise AssertionError('previous binary accepted retired V7')
+            require(before == row_hashes(copied), 'rejected old binary modified the archive')
+            lake = Lake(binary, copied, env)
+            lake.api('/api/bootstrap')
+            lake.stop()
+            lake = None
+            require(before == row_hashes(copied), 'current binary restart changed archived content')
+            report['previousBinaryRoundTrip'] = 'passed_v7_rejected_without_data_change'
             report['previousBinarySHA256'] = hashlib.sha256(args.previous_binary.read_bytes()).hexdigest()
         require(provider.requests == 2 and provider.errors == 0, 'extra model requests or invalid provider path')
         report['providerRequests'] = provider.requests
@@ -184,7 +224,7 @@ def main():
         provider.server_close()
         args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2)+'\n')
         os.chmod(args.report, 0o600)
-    print('C4 isolated compatibility acceptance passed; no real provider or working Home used.')
+    print('Legacy asset exit isolated acceptance passed; no real provider or working Home used.')
     return 0
 
 
