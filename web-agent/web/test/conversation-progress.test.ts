@@ -235,7 +235,8 @@ test('recorded process remains available while generated prose retires the live 
  const s={session:{id:'s'},messages:[user.message],actions:[],resources:[],ai:{session:'s',status:'running',cardsOffset:0,turns:1,cards:entries.flatMap(e=>e.card?[e.card]:[])}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
  assert.ok(html.includes('is-continuing'));
- assert.ok(!html.includes('class="reply-duration '),'the live status line must not follow generated conclusion prose');
+ assert.ok(html.includes('is-preview')&&!html.includes('reply-duration-spinner'),'elapsed preview precedes the reply without a trailing live status');
+ assert.ok(html.indexOf('class="reply-duration ')<html.indexOf('正在汇总结果。'));
  const done=renderToStaticMarkup(createElement(AITranscript,{snapshot:{...s,ai:{...s.ai!,status:'completed'}}}));
  assert.ok(!done.includes('is-continuing')&&!done.includes('status-text--active'));
  for(const status of ['failed','pending','unknown','not_executed','interrupted','cancelled','background_running']){

@@ -62,17 +62,20 @@ test("light process labels name the file and target, bound repeated operations a
  assert.equal(describe("# free -m\necho done"),"执行命令 · 测试主机");
  assert.equal(describe("echo uname; systemctl restart nginx"),"执行命令 · 测试主机","a mention and a service mutation are not a read-only inspection");
 });
-test("the live timer retires on the first reply chunk and returns for subsequent tools; activity filtering cannot borrow a newer turn state",()=>{
+test("elapsed preview precedes the first reply chunk and live timing returns for subsequent tools; activity filtering cannot borrow a newer turn state",()=>{
  const s={session:{id:"s"},messages:[{id:"u",sessionId:"s",role:"user",text:"检查",createdAt:at}],resources:[],actions:[],evidence:[],specialists:[],replyTimings:[timing],ai:{...view,todos:[{content:"步骤已完成",status:"completed"}],cards:[{id:"todo",type:"operation",title:"todo_write",status:"completed",at,data:{arguments:{todos:[{content:"步骤已完成",status:"completed"}]}}},{...tool,status:"completed"},{id:"reply",type:"message",status:"running",content:"最后的回复",at},{id:"edit",type:"diff",status:"completed",title:"example.conf",at,data:{before:"before",after:"after"}}]}} as SessionSnapshot;
  const render=()=>renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
  const reply=s.ai!.cards.find(card=>card.id==='reply')!;
  reply.content='';
  assert.equal((render().match(/class="reply-duration /g)||[]).length,1,'an empty reply packet must not hide execution status');
  reply.content='最';
- assert.ok(!render().includes('class="reply-duration '),'the first nonempty chunk removes the live timer');
+ assert.ok(render().includes('is-preview'),'the first nonempty chunk establishes elapsed time before the reply');
  reply.content='最后的回复';
  const html=render();
- assert.ok(!html.includes('class="reply-duration '));
+ assert.equal((html.match(/class="reply-duration /g)||[]).length,1);
+ const elapsedRow=html.match(/<div class="reply-duration [\s\S]*?<\/div>/)?.[0]??'';
+ assert.ok(elapsedRow.includes('is-preview')&&!elapsedRow.includes('is-live')&&!elapsedRow.includes('已完成'));
+ assert.ok(html.indexOf('class="reply-duration ')<html.indexOf('最后的回复'));
  assert.ok(html.includes('步骤已完成'));
  assert.ok(html.includes('最后的回复'));
  assert.ok(!html.includes("file-changes"),"file summary waits until the running turn ends");

@@ -10,6 +10,9 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  const selection=inspector?.selection;
  const inspecting=selection?.sessionId===sessionId&&selection?.turnId===id&&selection.tab==='execution';
  const {live}=turnStatus(timing.timing,timing.view,timing.cards??[],timing.latestUserAt??'',Date.now());
+ const [replyClock,setReplyClock]=useState({presenting:presentingReply,at:Date.now()});
+ if(replyClock.presenting!==presentingReply)setReplyClock({presenting:presentingReply,at:Date.now()});
+ const previewAt=live&&presentingReply&&!hideLive?replyClock.at:undefined;
  const active=live&&!presentingReply;
  const [disclosure,setDisclosure]=useState({active,open:active});
  const previousDetails=useRef(details);
@@ -33,10 +36,10 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
   if(inspector&&sessionId)inspector.open({sessionId,turnId:id,tab:'execution'});
   else {onInspect?.();setDisclosure({active,open:!open});}
  }}:undefined;
- // Stop live status when the reply takes over, even while turn timing is still
- // running. Saved final timing remains available above the completed reply.
- const summary=<ReplyDuration key="turn-duration" {...timing} latestStep={latestStep} disclosure={summaryDisclosure}/>;
+ // Move the same row ahead of the first reply chunk. Freeze the preview clock
+ // without declaring completion; saved final timing updates this slot in place.
+ const summary=<ReplyDuration key="turn-duration" {...timing} previewAt={previewAt} latestStep={latestStep} disclosure={summaryDisclosure}/>;
  const body=inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{details}</div></ExecutionDetailsOpen.Provider>,inspector.host)
   :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{shownDetails}</ExecutionDetailsOpen.Provider></div></div></div>;
- return <>{!live&&summary}{children}{body}{live&&!hideLive&&!presentingReply&&summary}</>;
+ return <>{(!live||previewAt!==undefined)&&summary}{children}{body}{live&&!hideLive&&!presentingReply&&summary}</>;
 }

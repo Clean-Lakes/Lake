@@ -98,6 +98,13 @@ test('live elapsed header sweeps quietly; completion freezes the duration',t=>{
  const ended=renderToStaticMarkup(createElement(ReplyDuration,{timing}));
  assert.ok(ended.includes('用时 1分钟 13秒'));
  assert.ok(!waiting.includes('status-text--active')&&!ended.includes('status-text--active'));
+ const previewAt=Date.parse(start)+19000;
+ const preview=renderToStaticMarkup(createElement(ReplyDuration,{timing:running,previewAt}));
+ assert.ok(preview.includes('用时 19秒')&&preview.includes('is-preview'));
+ assert.ok(!preview.includes('已完成')&&!preview.includes('status-text--active')&&!preview.includes('reply-duration-spinner'));
+ t.mock.method(Date,'now',()=>Date.parse(start)+45000);
+ assert.equal(renderToStaticMarkup(createElement(ReplyDuration,{timing:running,previewAt})),preview,'reply streaming does not advance the preview clock');
+ assert.ok(renderToStaticMarkup(createElement(ReplyDuration,{timing,previewAt})).includes('用时 1分钟 13秒'),'saved total replaces the preview only after real completion');
 });
 
 test('finished metadata drops the last operation caption even when saved cards still say running',()=>{
