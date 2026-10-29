@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type {AvailableModelEntry,AvailableModels} from "../../shared/contracts";
-import {currentComposerModel} from "../src/composerModelState";
+import {currentComposerModel,composerModelLabel} from "../src/composerModelState";
 import {modelBrand} from "../src/modelBrand";
 
 const magpie:AvailableModelEntry={providerId:"magpie",providerName:"Magpie",modelId:"route/opaque-model",name:"route/opaque-model",displayName:"Claude Sonnet · 区域路由"};
@@ -10,6 +10,8 @@ const available:AvailableModels={models:[magpie.name,manual.name],entries:[magpi
 test("Magpie opaque routes display their supplied label and manufacturer before opening the menu",()=>{
  const selected=currentComposerModel({models:[]},magpie.name,magpie);
  assert.equal(selected?.displayName,magpie.displayName);
+ assert.equal(composerModelLabel(selected!.displayName,selected!.name),magpie.displayName);
+ assert.equal(composerModelLabel('codex/gpt-6.1-sol','codex/gpt-6.1-sol'),'gpt-6.1-sol');
  assert.equal(modelBrand(selected!.name,selected!.displayName,selected!.providerName),"anthropic");
 });
 test("the selected provider takes precedence over the first row for identical model names",()=>{

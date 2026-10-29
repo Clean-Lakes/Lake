@@ -3,6 +3,7 @@ import type {Project,WorkSession,WorkspaceTag} from "../../shared/contracts";
 import {api,readableError} from "./api";
 import {Glyph,sessionIcons} from "./Icons";
 import {NavigationMenu} from "./NavigationDelete";
+import {sessionBadgeState} from './sessionBadgeState';
 
 const colors = [{id:"gray",label:"灰色"},{id:"green",label:"绿色"},{id:"blue",label:"蓝色"},{id:"purple",label:"紫色"},{id:"orange",label:"橙色"},{id:"red",label:"红色"}] as const;
 function PresentationDialog({title,onClose,children,returnFocus}:{title:string;onClose:()=>void;children:ReactNode;returnFocus?:RefObject<HTMLElement|null>}) {
@@ -22,11 +23,11 @@ export function SessionListTags({tags}:{tags:WorkspaceTag[]}) {
  </span>;
 }
 
-export function SessionStateBadge({session,label,status=session.status,compact=false}:{session:WorkSession;label?:string;status?:WorkSession["status"];compact?:boolean}) {
+export function SessionStateBadge({session,label,status=session.status}:{session:WorkSession;label?:string;status?:WorkSession["status"]}) {
  const statuses={idle:"待命",investigating:"调查中",waiting_approval:"待确认",completed:"回复结束",failed:"需要关注"};
  const full=label??statuses[status];
- const short:Record<string,string>={'原操作仍在执行':'执行中','任务已暂停':'已暂停','任务未完成':'未完成','任务待继续':'待继续','任务已取消':'已取消','任务已完成':'已完成','调查结束 · 结论不充分':'结论不足','变更待核实':'待核实','需要关注':'需关注','回复结束':'已回复'};
- return <span className={`session-state-badge state-${status}`} title={full} aria-label={compact?full:undefined}><span/>{compact?short[full]??full:full}</span>;
+ const badge=sessionBadgeState(status,label);
+ return <span className={`session-state-badge state-${status}`} data-badge-state={badge.state} data-tone={badge.tone} title={full} aria-label={full}><Glyph name={badge.icon} size={13} className="session-state-icon"/><span className="session-state-label">{badge.label}</span></span>;
 }
 
 const sessionViews=[{value:"conversation",label:"对话",icon:"chat"},{value:"plans",label:"计划",icon:"document"},{value:"activity",label:"执行记录",icon:"terminal"},{value:"evidence",label:"证据",icon:"document"}] as const;

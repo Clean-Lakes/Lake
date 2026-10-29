@@ -215,7 +215,7 @@ private final class TransparentPanelWebView: WKWebView {
         glass.layer?.cornerCurve = .continuous
         glass.layer?.masksToBounds = true
         glass.layerContentsRedrawPolicy = .duringViewResize
-        glass.style = .regular
+        glass.style = .clear
         glass.cornerRadius = 18
         glass.contentView = content
         panel.contentView = glass

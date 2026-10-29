@@ -1,5 +1,10 @@
 import type {AvailableModelEntry,AvailableModels} from "../../shared/contracts";
 
+// Keep supplied aliases; the technical provider route remains in the tooltip.
+export function composerModelLabel(label:string,name:string):string {
+  return label===name?name.split('/').filter(Boolean).at(-1)??label:label;
+}
+
 // Bootstrap metadata is authoritative even when a cached menu still names the old source.
 export function currentComposerModel(available:AvailableModels,modelName:string|null,selection?:AvailableModelEntry):AvailableModelEntry|undefined {
   if(selection?.name===modelName) return selection;

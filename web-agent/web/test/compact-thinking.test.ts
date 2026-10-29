@@ -88,7 +88,25 @@ test("compaction limit failures display one Chinese message with history-preserv
  const snapshot={session:{id:"demo"},messages:[{id:"user",role:"user",createdAt:start,text:"cpu呢"},{id:"system-copy",role:"system",createdAt:start,text:error}],actions:[],ai:{session:"demo",status:"failed",startedAt:start,cards:[{id:"error-card",type:"error",content:error,status:"failed",at:start}],cardsOffset:0}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.equal(html.split("上下文整理未完成").length-1,1);
- assert.ok(html.includes("历史记录已保留"));assert.ok(!html.includes("incomplete response discarded"));
+ assert.ok(html.includes("历史记录已保留"));assert.ok(!html.split('class="turn-execution-details')[0]!.includes("incomplete response discarded"));
+});
+
+test('compaction connection failures are quiet Chinese notices without blaming model availability',()=>{
+ const error='context compaction: cannot connect to model endpoint';
+ const snapshot={session:{id:'demo'},messages:[{id:'user',role:'user',createdAt:start,text:'集群状态如何'},{id:'system-copy',role:'system',createdAt:start,text:error}],actions:[],ai:{session:'demo',status:'failed',startedAt:start,cards:[{id:'error-card',type:'error',content:error,status:'failed',at:start}],cardsOffset:0}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.equal((html.match(/class="ai-compaction-notice"/g)||[]).length,1);
+ assert.ok(html.includes('上下文整理请求未能完成连接'));
+ assert.ok(html.includes('历史消息和操作记录已保留'));
+ assert.ok(!html.includes('ai-card ai-error'));
+ assert.ok(!html.split('class="turn-execution-details')[0]!.includes('cannot connect'));
+ assert.ok(html.includes('整理请求诊断')&&html.includes(error));
+ assert.equal(snapshot.ai!.cards[0]!.content,error,'original diagnostic stays in the audit data');
+ // Text written by the user or assistant must remain ordinary conversation.
+ const prose={...snapshot,messages:[{id:'user',role:'user',createdAt:start,text:error}],ai:{...snapshot.ai!,cards:[{id:'reply',type:'message',status:'completed',at:start,content:error}]}} as SessionSnapshot;
+ const text=renderToStaticMarkup(createElement(AITranscript,{snapshot:prose}));
+ assert.ok(text.includes('cannot connect'));
+ assert.ok(!text.includes('class="ai-compaction-notice"'));
 });
 
 test("plain output-limit errors are localized and retain original-session recovery guidance",()=>{

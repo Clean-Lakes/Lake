@@ -1,9 +1,15 @@
 import type {SRETask,WorkSession} from '../../shared/contracts';
 import {sreNeedsVerification} from './sreOperationPolicy';
-import {sreTaskOwnsTurn,sreTaskInFlight} from './sreTaskTurn';
+import {sreTaskInFlight} from './sreTaskTurn';
 export function sreSessionPresentation(session:WorkSession,tasks:SRETask[]=[],turnStartedAt?:string):{label?:string;status?:WorkSession['status']}{
  if(session.status==='investigating'||session.status==='waiting_approval')return {};
- const current=tasks.filter(t=>sreTaskOwnsTurn(t,turnStartedAt));
+ const start=Date.parse(turnStartedAt??'');
+ // Historical unresolved operations remain in execution records. They cannot
+ // make a later ordinary turn look live after its own model request has ended.
+ const current=tasks.filter(t=>{
+  const updated=Date.parse(t.updatedAt);
+  return !Number.isFinite(start)||!Number.isFinite(updated)||updated>=start;
+ });
  const t=current.find(sreTaskInFlight)??current.find(t=>['draft','active','paused','waiting_input','waiting_approval'].includes(t.status))??current[0];
  if(!t)return {};
  if(t.attempts?.some(a=>a.operations?.some(sreNeedsVerification)))return {label:'变更待核实',status:'failed'};

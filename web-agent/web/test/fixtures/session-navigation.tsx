@@ -2,6 +2,8 @@
 import {useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import type {WorkSession} from '../../../shared/contracts';
+import {SessionStatusDot} from '../../src/SessionStatusDot';
+import {SessionStateBadge} from '../../src/SessionPresentation';
 import {SessionNavigation} from '../../src/SessionNavigation';
 import {SessionActions,SessionListTags} from '../../src/SessionPresentation';
 import {sortSessionNavigation} from '../../src/sessionNavigationModel';
@@ -11,7 +13,7 @@ import '../../src/sidebarWorkspace.css';
 import '../../src/sessionPresentation.css';
 const params=new URLSearchParams(location.search);
 document.documentElement.dataset.theme=params.has('dark')?'dark':'light';
-const initial:Array<WorkSession>=['数据库迁移检查','服务器运行进程排查','会话状态查询','主机资源清单查询','南京今天天气查询','服务器内存占用排查','服务器状态检查','比较长的会话标题，检查文字省略以及图标与操作是否重叠'].map((title,i)=>({id:`s${i}`,projectId:'fixture',title,status:i===1?'investigating':'idle',resourceIds:[],createdAt:`2026-10-${22-i}T09:00:00Z`,updatedAt:`2026-10-${22-i}T09:00:00Z`,navigationRevision:0,tags:i===4?[{id:'tag',name:'运维排查',projectId:'fixture',color:'green'}]:[]}));
+const initial:Array<WorkSession>=['数据库迁移检查','服务器运行进程排查','会话状态查询','主机资源清单查询','南京今天天气查询','服务器内存占用排查','服务器状态检查','比较长的会话标题，检查文字省略以及图标与操作是否重叠'].map((title,i)=>({id:`s${i}`,projectId:'fixture',title,status:(['idle','investigating','waiting_approval','completed','failed'] as const)[i%5]!,resourceIds:[],createdAt:`2026-10-${22-i}T09:00:00Z`,updatedAt:`2026-10-${22-i}T09:00:00Z`,navigationRevision:0,tags:i===4?[{id:'tag',name:'运维排查',projectId:'fixture',color:'green'}]:[]}));
 function Fixture(){
  const [sessions,setSessions]=useState(initial),[all,setAll]=useState(false),[selected,setSelected]=useState('s0'),[busy,setBusy]=useState(false),[error,setError]=useState(''),[bulk,setBulk]=useState(false);
  const move=async(session:WorkSession,pinned:boolean,beforeId:string|null)=>{
@@ -27,7 +29,7 @@ function Fixture(){
    <div className="project-scroll" style={{margin:0,padding:0}}>
     <SessionNavigation sessions={sessions} selectedId={selected} showAll={all} bulkMode={bulk} disabled={busy} onMove={move} onShowAll={()=>setAll(!all)} renderSession={session=><div className="nav-row-wrap">
      <button type="button" className={`nav-row session-nav-row${selected===session.id?' active':''}`} onClick={()=>setSelected(session.id)}>
-      <Glyph name="chat" size={16}/><span className="nav-row-text"><strong>{session.title}</strong><SessionListTags tags={session.tags??[]}/></span>
+      <Glyph name="chat" size={16}/><span className="nav-row-text"><strong>{session.title}</strong><SessionListTags tags={session.tags??[]}/></span><SessionStatusDot session={session}/>
      </button>
      <SessionActions session={session} tags={[]} view="" hasViews={false} disabled={busy} onSaved={()=>{}} onRefresh={async()=>{}} onEdit={()=>{}} className="session-more" label={`管理会话 ${session.title}`} onView={()=>{}}
       onPin={()=>void move(session,!session.pinned,sortSessionNavigation(sessions.filter(s=>!!s.pinned!==!!session.pinned))[0]?.id??null).catch(e=>setError(e.message))}/>
@@ -35,6 +37,7 @@ function Fixture(){
    </div>
   </aside>
   <div style={{padding:20}}>
+   {sessions.slice(0,5).map(session=><div key={session.id} data-reference-status={session.status}><SessionStateBadge session={session}/></div>)}
    <button type="button" onClick={()=>{document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark';}}>切换主题</button>
    <button type="button" onClick={()=>setBulk(!bulk)}>批量选择</button>
    <button type="button" onClick={()=>setSessions(rows=>rows.map(s=>s.id==='s7'?{...s,updatedAt:'2026-12-01T00:00:00Z'}:s))}>模拟旧会话回复</button>

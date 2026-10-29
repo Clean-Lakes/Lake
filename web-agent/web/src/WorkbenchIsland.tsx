@@ -64,6 +64,8 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const composer=view.querySelector('.composer-input')?.getBoundingClientRect();
    const available=Math.max(1,composer?.width??bounds.width-96),left=(composer?.left??bounds.left+48)-base.left;
    const title=identity.querySelector<HTMLElement>('.crumb-title'),state=identity.querySelector<HTMLElement>('.header-morph-slot.is-visible .header-morph-content');
+   const titleIcon=title?.previousElementSibling;
+   const titleIconWidth=titleIcon ? titleIcon.getBoundingClientRect().width+parseFloat(getComputedStyle(title!.parentElement!).columnGap||'0') : 0;
    const pilotWidth=identity.querySelector('.header-pilot-state.is-visible')?parseFloat(getComputedStyle(identity).getPropertyValue('--pilot-state-width')):0;
    const heading=inspectorIsland.current?.querySelector<HTMLElement>('.island-inspector-heading');
    const terminalHeader=terminalIsland.current?.querySelector<HTMLElement>('.terminal-panel-header');
@@ -88,7 +90,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
     conversation:{left,width:available,inset:0},
     inspector:inspectorPane,
     terminal:terminalPane,
-    conversationWidth:Math.min(190,title?.scrollWidth??160)+(pilotWidth||state?.getBoundingClientRect().width||0)+60,
+    conversationWidth:Math.min(190,title?.scrollWidth??160)+titleIconWidth+(pilotWidth||state?.getBoundingClientRect().width||0)+60,
     inspectorWidth:Math.max(144,heading?.scrollWidth??144),
     terminalWidth:Math.min(320,Math.max(260,terminalNameWidth+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112)),
    });
