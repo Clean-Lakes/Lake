@@ -1330,3 +1330,9 @@ input[type="checkbox"]{ accent-color: var(--primary); }
 .natural-memory-notice { flex: 0 0 auto; min-width: 0; }
 .natural-memory-notice .system-banner { flex-wrap: wrap; }
 .natural-memory-notice .strategy-settings { margin: 0 clamp(21px, 3vw, 42px) 10px; max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-settings-panel); corner-shape: var(--corner-window); padding: 12px; }
+
+.composer-send-feedback { color:var(--text-secondary); font-size:var(--font-size-toolbar); white-space:nowrap; }
+.composer-input .send-button[data-sending] { color:var(--info); }
+.send-button[data-sending] > svg { animation:composer-send-spin 1.2s linear infinite; }
+@keyframes composer-send-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .send-button[data-sending] > svg { animation:none; } }
