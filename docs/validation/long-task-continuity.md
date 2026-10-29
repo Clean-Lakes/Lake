@@ -59,3 +59,18 @@ python3 scripts/verify_long_task_continuity_dev.py --binary bin/lake
 最终提交源码由 `git archive` 导出，并补入本次成功构建的 Web 静态产物（Go embed 必需输入）后运行完整 Go/race/vet，未省略受版本控制的测试。运行代码对应 b78269f0；后续文档与复跑脚本提交不改变 Go/React 运行源码。工作区其他未跟踪文档保留，因此构建来源的 dirty 标志可为 true；安装前确认所有受版本控制的运行源码无未提交差异。
 
 后续增量“待发送消息推送为本轮补充”的实现与验收另见 [queued-message-supplements.md](queued-message-supplements.md)；本文件此前的源码及安装 SHA 描述长任务基线，不代表该增量尚未实现。
+
+
+## 2026-10-29：跟踪内置与结束回收
+
+本节替代此前“执行详情显示工作目标卡片及控制组”的界面设计。运行源码与 Lake Dev 安装来源：`e7b6d9417143670d142f02d190d68099e4f152b1`。内部账本继续跟踪原操作、等待和接续；SessionInspector 移除全部工作目标卡片、累计模型调用及暂停/继续/停止跟进入口，保留真实执行记录、会话短状态和正常结果汇报，Pilot 原有计划与专员记录保持原路径。
+
+目标完成、失败或取消时，持久状态统一释放检查点、WaitCallID、WaitState、观察租约及活动工作项；后续最终 checkpoint 保存也不能重新创建它们。成功持久化的终态接续在 child.Shutdown 后删除自己的临时目录；中断或持久化失败保留恢复材料。原操作、观察证据、SDK 事件、真实消息与结果不删除。
+
+验收：自动结束无需模型显式调用 work_finish，3 次主请求完成后台任务；再次 tick 不调用模型，活动接续及临时目录已释放。完成/失败/取消三种终态回归核验最终 checkpoint 不复活等待，原观察证据保留。既有依赖、取消、迟到结果、压缩、重启、新话题与 CAS 用例一起通过 race；前端 539/539、类型检查、构建、ADK 边界检查及 AI/agent vet 通过。
+
+ego-browser 真实 App fixture 的浅/深色检查：内部面板及控制入口为零，两个原始读取记录保留；Escape 关闭检查栏并恢复展开入口焦点。截图 `/tmp/lake-internal-work-light.png`、`/tmp/lake-internal-work-dark-narrow.png` 已查看。后者虽尝试 640px 覆盖，导航后实际报告 1512px，因此只记录桌面深色验收，不声称窄窗通过。本次只删除该面板，不增加新控件或改变检查栏尺寸。
+
+已用官方脚本签名安装到 Lake Dev，核验 Dev bundle ID、签名、来源 SHA 与后端摘要；保留正在运行的进程。安装内后端的隔离 HTTP/PTY 长任务验收通过：重启接续、新话题保留、原命令只派发一次；4 次主请求，另有 2 次既有命名请求。不接触截图中的 PostgreSQL 或真实发布环境。工作区原有 ignored 测试基线限制沿用上文。
+
+最终提交归档的完整 `go test -race ./internal/ai ./internal/agent/...` 通过：AI 131s、ADK 2.5s，无 DATA RACE。仅受版本控制源码参与归档；ignored 基线文件未被修改或删除。此前 Web 全量集成回归对应 `34e4fd0d`，本增量未修改 Web 后端，因此不把旧 Web 结果表述为当前 head 的新一轮执行。
