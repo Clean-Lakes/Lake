@@ -9,6 +9,8 @@ export function SessionStatusDot({session,snapshot}:{session:WorkSession;snapsho
  const presentation=sreSessionPresentation(session,current?.sre?.tasks,current?.ai?.turnStartedAt);
  const badge=sessionBadgeState(presentation.status??session.status,presentation.label);
  const pilot=pilotIslandModel(current);
+ const tone=pilot?.tone??badge.tone;
+ if(tone==='success')return null;
  const label=pilot?`Lake Pilot：${pilot.detail}`:badge.label;
- return <span className="session-status-dot" data-tone={pilot?.tone??badge.tone} data-pilot={pilot?'true':undefined} title={label} role="img" aria-label={`会话状态：${label}`}/>;
+ return <span className="session-status-dot" data-tone={tone} data-pilot={pilot?'true':undefined} title={label} role="img" aria-label={`会话状态：${label}`}/>;
 }

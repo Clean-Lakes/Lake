@@ -24,6 +24,5 @@ test('a newer background catalog state discards cached Pilot activity and stays 
  assert.ok(html.includes('title="需关注"'));
  assert.ok(!html.includes('data-pilot'));
  const other=renderToStaticMarkup(createElement(SessionStatusDot,{session:{...snapshot.session,id:'another',status:'completed'},snapshot}));
- assert.ok(other.includes('data-tone="success"'));
- assert.ok(!other.includes('data-pilot'));
+ assert.equal(other,'');
 });
