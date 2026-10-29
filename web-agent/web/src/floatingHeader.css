@@ -23,7 +23,6 @@
   box-shadow: var(--shadow-popover);
 }
 .workspace.has-floating-header .breadcrumbs { flex: 0 1 auto; }
-.workspace.has-floating-header > .workspace-header .breadcrumbs strong > svg { display:none; }
 .workspace.has-floating-header > .workspace-header .header-normal-state .header-morph-content { gap:4px; }
 .crumb-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace.has-floating-header .conversation { container-type: normal; min-height: 0; scrollbar-gutter: stable; scroll-padding-top: 80px; }

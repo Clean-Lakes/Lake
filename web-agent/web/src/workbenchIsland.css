@@ -16,7 +16,6 @@
 .lake-workbench-island .workspace-header > :not(.workspace-header-sweep) { position:relative; z-index:2; }
 .lake-workbench-island .breadcrumbs { flex:0 1 auto; min-width:60px; max-width:213px; gap:8px; }
 .lake-workbench-island .breadcrumbs strong { min-width:0; }
-.lake-workbench-island .breadcrumbs strong > svg { display:none; }
 .lake-workbench-island .pilot-island-trigger { border:0; padding-left:8px; gap:8px; }
 .lake-workbench-island .header-state-area { flex:0 1 auto; }
 /* Keep Pilot in its own segment, allowing the copy to give space to its controls.
@@ -133,7 +132,6 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xter
  .lake-workbench-island .workspace-header.has-pilot-island { grid-template-columns:minmax(48px,1fr) minmax(0,var(--pilot-state-width)); }
  .lake-workbench-island .breadcrumbs { display:flex; min-width:0; width:100%; max-width:none; }
  .lake-workbench-island .breadcrumbs strong { display:flex; align-items:center; min-width:0; width:100%; }
- .lake-workbench-island .breadcrumbs strong > svg { display:none; }
  .lake-workbench-island .crumb-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
  .lake-workbench-island .header-state-area { min-width:0; width:100%; max-width:100%; }
  .lake-workbench-island .header-normal-state.is-visible { flex:1; min-width:0; max-width:100%; width:100%!important; }

@@ -27,7 +27,7 @@
 .header-normal-state .session-state-badge{margin-left:0}
 @container(max-width:900px){.pilot-island-action{width:170px}}
 @container(max-width:700px){.pilot-island-trigger{padding-left:9px;gap:9px}.pilot-island-action{width:145px}}
-@container(max-width:480px){.pilot-action-avatar{display:none}.pilot-island-action{width:94px}.pilot-island-action-line{gap:5px}.pilot-island-action-line>strong{display:none}.pilot-island-progress{gap:6px}.pilot-island-ring,.pilot-island-ended{width:24px;height:24px}.workspace.has-floating-header .breadcrumbs strong>svg{display:none}}
+@container(max-width:480px){.pilot-action-avatar{display:none}.pilot-island-action{width:94px}.pilot-island-action-line{gap:5px}.pilot-island-action-line>strong{display:none}.pilot-island-progress{gap:6px}.pilot-island-ring,.pilot-island-ended{width:24px;height:24px}}
 @media(prefers-reduced-motion:reduce){.header-morph-slot,.pilot-ring-value,.pilot-island-progress,.pilot-island-progress>svg:last-child{transition:none}}
 .pilot-island-panel { position: fixed; z-index: 75; width: min(420px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-settings-panel); corner-shape: var(--corner-window); background: var(--surface); color: var(--foreground); box-shadow: var(--shadow-popover); font-size: var(--font-size-ui); }
 .pilot-island-panel[data-state="closing"] { opacity:0; pointer-events:none; }
