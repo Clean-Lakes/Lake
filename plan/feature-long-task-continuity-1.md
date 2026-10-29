@@ -4,13 +4,13 @@ version: 1.0
 date_created: 2026-10-29
 last_updated: 2026-10-29
 owner: Lake
-status: 'Implemented — validation in progress'
+status: 'Implemented'
 tags: [feature, adk, long-task, compaction, recovery]
 ---
 
 # Introduction
 
-**状态：核心实现已落地，最终回归与 Dev 安装验收进行中。**
+**状态：核心实现与提交源码回归完成；Dev 签名安装结果随 PR #120 记录。**
 
 普通会话已能调用多轮工具和自动压缩，但模型返回最终文字就能结束一轮，没有通用的外部任务完成门槛。本方案补齐目标账本、外部任务观察、ADK 等待恢复和压缩后的接续；首先覆盖普通 core 会话，随后映射至共享界面。Pilot 继续拥有自己的任务、计划、审批与角色生命周期。
 
@@ -187,3 +187,5 @@ tags: [feature, adk, long-task, compaction, recovery]
 与原设计的具体差异：领域存储合并在 `work_goal.go`；工作策略以固定 prompt fragment 加入请求，不改变原基础策略模板；消息和命令接入现有 agent/server 路由。观察器当前串行执行，低于 8/32 并发上限。发布观察需要在 MCP 服务编辑页显式选择“发布平台状态（v1）”，导入配置不能自动授予该能力。未配置的已启动发布进入 blocked，不推断完成。
 
 后台接续中遇到新变更审批或新问题时停在需要人类输入的边界，不在隐藏的子执行器内伪造批准。等待用户的工作项由真实后续请求及原记录明确接续，按钮不会把数据库前置条件自动标成已完成。后台恢复中途崩溃进入 blocked 供核对，完整等待检查点可在重启后自动读取原句柄接续。没有可信恢复句柄的本机进程不会重新运行。
+
+提交源码的完整 Go、AI/Web/ADK race、vet、555 项前端测试及构建均已通过；已知本地 ignored 测试基线失败与未完成的 GUI/故障矩阵仍按验证文档保留，不归入通过项目。
