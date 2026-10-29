@@ -97,6 +97,12 @@ func (s *Store) commitNaturalBatch(items []naturalBatchItem, usage ai.Usage, ind
 			if validateNaturalPreferenceResult(snap.UserText, r) != nil {
 				fail(400, "Invalid natural source")
 			}
+			// A later evidence interval may share a genuine user message with
+			// an already committed preference. It cannot re-authorize a
+			// correction or resolve a newer conflict; legacy facts still commit.
+			if r.Decision == "save" && s.row("SELECT 1 FROM naturalPreferenceRevisions WHERE sourceMessage=? AND sourceHash=? LIMIT 1", snap.SourceMessageID, memoryHash(snap.UserText)) != nil {
+				r = NaturalPreferenceResult{SchemaVersion: 1, Decision: "ignore", Scope: "none", Relation: "none"}
+			}
 			scope := "project:" + snap.ProjectID
 			if r.Scope == "user" {
 				scope = "user"

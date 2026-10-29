@@ -12,12 +12,13 @@ import (
 )
 
 type MemoryEvidence struct {
-	CallID    string                 `json:"callId"`
-	Name      string                 `json:"name"`
-	Excerpt   string                 `json:"excerpt"`
-	Completed bool                   `json:"completed"`
-	Truncated bool                   `json:"truncated,omitempty"`
-	Context   *MemoryEvidenceContext `json:"context,omitempty"`
+	ObservedAt string                 `json:"observedAt,omitempty"`
+	CallID     string                 `json:"callId"`
+	Name       string                 `json:"name"`
+	Excerpt    string                 `json:"excerpt"`
+	Completed  bool                   `json:"completed"`
+	Truncated  bool                   `json:"truncated,omitempty"`
+	Context    *MemoryEvidenceContext `json:"context,omitempty"`
 }
 
 type MemoryResourceBinding struct {
@@ -113,6 +114,10 @@ func NaturalMemorySignal(text string) bool {
 }
 
 func (e *Engine) collectMemorySnapshot(s *session, c Config, input TurnInput) {
+	if turn := currentMemoryCapture(s); turn != nil {
+		e.finishMemoryCapture(s, c)
+		return
+	}
 	legacy := c.MemoryEnabled && c.MemoryExtractionEnabled
 	natural := c.NaturalMemory != nil && (c.NaturalMemory.GlobalEnabled || c.NaturalMemory.ProjectEnabled) && NaturalMemorySignal(input.UserText)
 	if c.ConversationMode == ModePlan || e.worker != nil || (!legacy && !natural) || c.MemoryProjectID == "" || input.IgnoreProjectMemory || len(input.UserText) > 64*1024 {
@@ -263,6 +268,16 @@ func (e *Engine) AckMemoryOutbox(id, turnID, snapshotHash string) error {
 		if snapshot.SnapshotHash != snapshotHash {
 			return errors.New("memory snapshot conflict")
 		}
+		if s.state.MemoryAcknowledged == nil {
+			s.state.MemoryAcknowledged = map[string]string{}
+		}
+		for key := range s.state.MemoryAcknowledged {
+			if len(s.state.MemoryAcknowledged) < 128 {
+				break
+			}
+			delete(s.state.MemoryAcknowledged, key)
+		}
+		s.state.MemoryAcknowledged[turnID] = snapshotHash
 		s.state.MemoryOutbox = append(s.state.MemoryOutbox[:i], s.state.MemoryOutbox[i+1:]...)
 		return e.save(s)
 	}
@@ -270,13 +285,16 @@ func (e *Engine) AckMemoryOutbox(id, turnID, snapshotHash string) error {
 }
 
 func (e *Engine) PersistedMemoryOutboxes() ([]MemoryTurnSnapshot, error) {
+	if err := e.restoreMissingMemoryCaches(); err != nil {
+		return nil, err
+	}
 	entries, err := os.ReadDir(e.Dir)
 	if err != nil {
 		return nil, err
 	}
 	var out []MemoryTurnSnapshot
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || !identifier.MatchString(strings.TrimSuffix(entry.Name(), ".json")) {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || !identifier.MatchString(strings.TrimSuffix(entry.Name(), ".json")) || !e.memoryCaptureSessionAvailable(strings.TrimSuffix(entry.Name(), ".json")) {
 			continue
 		}
 		bytes, err := os.ReadFile(filepath.Join(e.Dir, entry.Name()))
