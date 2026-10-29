@@ -55,6 +55,18 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 	if method != "GET" && (len(key) < 1 || len(key) > 128 || strings.TrimSpace(key) != key) {
 		naturalFail(400, "invalid_idempotency_key")
 	}
+	if suffix == "recall-settings" && method == "PATCH" {
+		in := strategyBody[struct {
+			ExpectedRevision int  `json:"expectedRevision"`
+			UseEnabled       bool `json:"useEnabled"`
+		}](r, "expectedRevision", "useEnabled")
+		result, err := b.Store.SetNaturalRecallSettings(ctx, key, in.ExpectedRevision, in.UseEnabled)
+		if err == nil && !in.UseEnabled {
+			b.Engine.InvalidateNaturalRecall(ctx.ProjectID)
+		}
+		b.naturalMemoryReply(w, strategyMust(result, err))
+		return true
+	}
 	if suffix == "settings" {
 		switch method {
 		case "GET":
@@ -143,6 +155,7 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 			result, err := b.Store.ForgetNaturalPreference(ctx, rest[1], key, in.ExpectedRevision)
 			if err == nil {
 				b.registerNaturalCaptureCleanup(ctx, rest[1])
+				b.Engine.InvalidateNaturalRecall(ctx.ProjectID)
 			}
 			b.naturalMemoryReply(w, strategyMust(result, err))
 			return true
@@ -157,7 +170,11 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 			in := strategyBody[struct {
 				ExpectedRevision int `json:"expectedRevision"`
 			}](r, "expectedRevision")
-			b.naturalMemoryReply(w, strategyMust(b.Store.UndoNaturalPreference(ctx, rest[1], key, in.ExpectedRevision)))
+			result, err := b.Store.UndoNaturalPreference(ctx, rest[1], key, in.ExpectedRevision)
+			if err == nil {
+				b.Engine.InvalidateNaturalRecall(ctx.ProjectID)
+			}
+			b.naturalMemoryReply(w, strategyMust(result, err))
 			return true
 		}
 		if method == "POST" && len(rest) == 3 && rest[2] == "dismiss" {

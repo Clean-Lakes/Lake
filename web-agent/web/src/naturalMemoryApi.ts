@@ -1,6 +1,6 @@
 import {ApiRequestError} from './api';
 import type {StrategyApplicability,StrategyReuse,StrategyScope} from './strategyApi';
-export type NaturalMemorySettings={scope:StrategyScope;revision:number;autoEnabled:boolean;automaticReady:boolean;preferenceSettings:{effectiveUseEnabled:boolean};projectMemorySettings:{useEnabled:boolean;extractionEnabled:boolean}|null};
+export type NaturalMemorySettings={scope:StrategyScope;revision:number;autoEnabled:boolean;automaticReady:boolean;recallSettings:{revision:number;useEnabled:boolean};preferenceSettings:{effectiveUseEnabled:boolean};projectMemorySettings:{useEnabled:boolean;extractionEnabled:boolean}|null};
 export type NaturalLegacy={id:string;title:string;eligible:boolean;reason:string;linkState:string;linkRevision:number;contentRevision:number};
 export type NaturalPreview=NaturalLegacy&{body:string;previewToken:string;scope:StrategyScope;applicability:StrategyApplicability;reuse:StrategyReuse;binding:{priority:number;exclusionGroup:string};assessment:{conditions:string;evidence:string;limitations:string}};
 export type NaturalPreference={id:string;title:string;revision:number;contentRevision:number;state:string};
@@ -37,6 +37,13 @@ export const naturalPreferenceApi={
  undo:(base:string,id:string,revision:number)=>request<{revision:number}>(base,'/formed-changes/'+encodeURIComponent(id)+'/undo',{expectedRevision:revision}),
  forget:(base:string,id:string,revision:number)=>request<{revision:number}>(base,'/formed-preferences/'+encodeURIComponent(id)+'/forget',{expectedRevision:revision}),
  dismiss:(base:string,id:string)=>request<{dismissed:boolean}>(base,'/formed-changes/'+encodeURIComponent(id)+'/dismiss',{}),
+ recallSettings:async(base:string,revision:number,useEnabled:boolean)=>{
+  const body=JSON.stringify({expectedRevision:revision,useEnabled}),operation=base+'/recall-settings'+body;
+  const key=pending.get(operation)||crypto.randomUUID();pending.set(operation,key);
+  const response=await fetch(base+'/recall-settings',{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json','Idempotency-Key':key},body});
+  if(!response.ok){if(response.status<500)pending.delete(operation);throw new ApiRequestError('记忆使用设置已变化，请刷新后重试',response.status)}
+  pending.delete(operation);return response.json() as Promise<{revision:number;useEnabled:boolean}>;
+ },
  settings:async(base:string,revision:number,autoEnabled:boolean)=>{
   const operation=base+'/settings'+JSON.stringify({expectedRevision:revision,autoEnabled});
   const key=pending.get(operation)||crypto.randomUUID();pending.set(operation,key);

@@ -2,6 +2,11 @@ name: Windows x86_64 client
 on:
   workflow_dispatch:
     inputs:
+      n5_only:
+        description: 'N5 memory regressions and actual WebView2 only; no packaging'
+        required: false
+        default: false
+        type: boolean
       p8_resume:
         description: 'Only retry P8 failed/uncompleted acceptance; prior native backend checks already passed'
         required: false
@@ -21,7 +26,7 @@ permissions:
 jobs:
   windows-amd64:
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && !inputs.n5_only) ||
       (github.event.pull_request.head.ref == 'develop' &&
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: windows-latest
@@ -148,4 +153,46 @@ jobs:
           name: ${{ (github.event_name == 'pull_request' || github.ref != 'refs/heads/master') && format('Lake-windows-x86_64-test-{0}', github.run_id) || 'Lake-windows-x86_64' }}
           path: dist/windows/*/x86_64/*
           if-no-files-found: error
+          retention-days: 14
+
+  natural-memory-n5:
+    if: github.event_name == 'workflow_dispatch' && inputs.n5_only
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - run: pnpm --dir web-agent install --frozen-lockfile
+      - run: pnpm --dir web-agent check
+      - run: pnpm --dir web-agent test:frontend
+      - run: pnpm --dir web-agent build:web
+      - name: Stage actual application assets
+        shell: pwsh
+        run: Copy-Item web-agent/web/dist/* assets/web/dist/ -Recurse -Force
+      - name: Memory boundaries and recovery on Windows
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = '0'
+          go test ./internal/ai ./internal/web -run 'Test(Natural|MemoryCapture|ProjectMemory|ADKOfficialProjection|StrategyRetirement)' -count=1 -timeout=5m
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Actual Windows memory settings in WebView2
+        shell: pwsh
+        env:
+          LAKE_N5_REQUIRED_WINDOWS_UI: '1'
+          LAKE_N5_WINDOWS_REPORT: ${{ runner.temp }}/natural-memory-n5-windows-ui.json
+        run: go test -v ./client/windows -run '^TestWindowsNaturalMemoryInRealWebView$' -count=1 -timeout=3m
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: natural-memory-n5-windows-${{ github.run_id }}
+          path: ${{ runner.temp }}/natural-memory-n5-windows-ui.json
+          if-no-files-found: warn
           retention-days: 14

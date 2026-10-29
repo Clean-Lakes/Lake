@@ -38,3 +38,7 @@ test('reading several pages of one revision counts as one memory',()=>{
  const html=renderToStaticMarkup(createElement(MemoryAccessSummary,{entries:[0,10].map(offsetLine=>({key:'large-method',revision:2,kind:'read' as const,offsetLine,at:'2026-10-23T00:00:00Z'}))}));
  assert.match(html,/已读取 1 条/);assert.doesNotMatch(html,/已读取 2 条/);
 });
+test('preference preparation stays distinct from actual reads and compliance',()=>{
+ const html=renderToStaticMarkup(createElement(MemoryAccessSummary,{entries:[{key:'preference-a',revision:2,kind:'prepared',category:'preference',scope:'project',at:'2026-10-29T00:00:00Z'}]}));
+ assert.match(html,/准备 1 条/);assert.match(html,/已读取 0 条/);assert.match(html,/项目偏好/);assert.match(html,/遵从未知/);assert.doesNotMatch(html,/已遵从|已采纳|已验证/);
+});

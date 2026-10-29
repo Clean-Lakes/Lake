@@ -44,6 +44,7 @@ type SSH struct {
 	KnownHosts    string `json:"-"`
 }
 type Config struct {
+	IgnoreNaturalMemory       bool   `json:"ignoreNaturalMemory,omitempty"`
 	ConversationMode          string `json:"conversationMode,omitempty"`
 	ModelProviderID           string `json:"modelProviderId,omitempty"` // Logical catalog ID only; never an endpoint or credential.
 	legacyInvestigations      bool   // Historical runtime compatibility; never enabled by user settings.
@@ -160,6 +161,7 @@ type View struct {
 	Turns             int                `json:"turns"`
 }
 type State struct {
+	NaturalRecallUsed      []NaturalRecallItem              `json:"naturalRecallUsed,omitempty"`
 	MemoryAcknowledged     map[string]string                `json:"memoryAcknowledged,omitempty"`
 	MemoryCapture          *MemoryCaptureState              `json:"memoryCapture,omitempty"`
 	PromptBaseline         *strategy.PromptBaseline         `json:"promptBaseline,omitempty"`

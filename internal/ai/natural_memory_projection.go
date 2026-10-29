@@ -9,16 +9,18 @@ import (
 // Separate optional envelope distinguishes old projections from an intentionally
 // empty outbox. Recovery never mines old user/history content for new consent.
 type nativeMemoryProjection struct {
-	Version      int                              `json:"version"`
-	Outbox       []MemoryTurnSnapshot             `json:"outbox,omitempty"`
-	Capture      *MemoryCaptureState              `json:"capture,omitempty"`
-	Acknowledged map[string]string                `json:"acknowledged,omitempty"`
-	Evidence     map[string]MemoryEvidenceContext `json:"evidence,omitempty"`
-	Recent       []string                         `json:"recent,omitempty"`
+	RecallUsed    []NaturalRecallItem              `json:"recallUsed,omitempty"`
+	RecallIgnored bool                             `json:"recallIgnored,omitempty"`
+	Version       int                              `json:"version"`
+	Outbox        []MemoryTurnSnapshot             `json:"outbox,omitempty"`
+	Capture       *MemoryCaptureState              `json:"capture,omitempty"`
+	Acknowledged  map[string]string                `json:"acknowledged,omitempty"`
+	Evidence      map[string]MemoryEvidenceContext `json:"evidence,omitempty"`
+	Recent        []string                         `json:"recent,omitempty"`
 }
 
 func memoryProjection(state State) *nativeMemoryProjection {
-	return &nativeMemoryProjection{Version: 1, Outbox: state.MemoryOutbox, Capture: state.MemoryCapture, Acknowledged: state.MemoryAcknowledged, Evidence: state.MemoryEvidenceContexts, Recent: state.MemoryRecentUserInputs}
+	return &nativeMemoryProjection{Version: 1, RecallUsed: state.NaturalRecallUsed, RecallIgnored: state.Config.IgnoreNaturalMemory, Outbox: state.MemoryOutbox, Capture: state.MemoryCapture, Acknowledged: state.MemoryAcknowledged, Evidence: state.MemoryEvidenceContexts, Recent: state.MemoryRecentUserInputs}
 }
 func restoreMemoryProjection(state *State, p *nativeMemoryProjection) error {
 	if p == nil {
@@ -45,6 +47,16 @@ func restoreMemoryProjection(state *State, p *nativeMemoryProjection) error {
 		}
 		state.MemoryOutbox = append(state.MemoryOutbox, snapshot)
 	}
+	if len(p.RecallUsed) > 32 {
+		return errors.New("invalid memory recall references")
+	}
+	for _, v := range p.RecallUsed {
+		if v.Body != "" {
+			return errors.New("memory recall projection must not contain body copies")
+		}
+	}
+	state.NaturalRecallUsed = p.RecallUsed
+	state.Config.IgnoreNaturalMemory = p.RecallIgnored
 	state.MemoryCapture = p.Capture
 	state.MemoryEvidenceContexts = p.Evidence
 	state.MemoryRecentUserInputs = p.Recent

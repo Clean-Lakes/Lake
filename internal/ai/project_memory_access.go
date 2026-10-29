@@ -18,6 +18,9 @@ func (e *Engine) RecordedMemoryEvidenceAvailable(sessionID, evidenceID string) b
 }
 
 type MemoryAccess struct {
+	Category       string `json:"category,omitempty"`
+	Scope          string `json:"scope,omitempty"`
+	ContentHash    string `json:"contentHash,omitempty"`
 	Key            string `json:"key"`
 	Revision       int    `json:"revision"`
 	Kind           string `json:"kind"`
@@ -96,7 +99,7 @@ func (e *Engine) RecordMemoryAccess(id string, entries []MemoryAccess, expectedT
 			}
 		}
 		if !found {
-			s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "memory_access", Title: "项目记忆", Content: js(s.state.View.MemoryAccess), Status: "completed", At: timestamp()})
+			s.state.View.Cards = append(s.state.View.Cards, Card{ID: cardID, Type: "memory_access", Title: "记忆 · 实验", Content: js(s.state.View.MemoryAccess), Status: "completed", At: timestamp()})
 		}
 	}
 	return e.save(s)
