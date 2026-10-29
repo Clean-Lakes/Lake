@@ -23,12 +23,12 @@ import (
 // using an empty private Home and no model/production credentials.
 func TestWindowsNaturalMemoryInRealWebView(t *testing.T) {
 	if _, err := webviewloader.GetInstalledVersion(); err != nil {
-		if os.Getenv("LAKE_N5_REQUIRED_WINDOWS_UI") == "1" {
-			t.Fatal("N5 requires the actual WebView2 runtime")
+		if os.Getenv("LAKE_MEMORY_REQUIRED_WINDOWS_UI") == "1" {
+			t.Fatal("Memory compatibility requires the actual WebView2 runtime")
 		}
 		t.Skip("WebView2 runtime is not installed")
 	}
-	if os.Getenv("LAKE_N5_WINDOWS_UI_CHILD") != "1" {
+	if os.Getenv("LAKE_MEMORY_WINDOWS_UI_CHILD") != "1" {
 		// WebView2 can retain profile file handles until the embedding process
 		// exits. Let the parent own cleanup after that actual process boundary.
 		home := t.TempDir()
@@ -49,7 +49,7 @@ func TestWindowsNaturalMemoryInRealWebView(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
 		command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestWindowsNaturalMemoryInRealWebView$", "-test.v")
-		command.Env = append(os.Environ(), "LAKE_N5_WINDOWS_UI_CHILD=1", "LAKE_N5_WINDOWS_UI_HOME="+home)
+		command.Env = append(os.Environ(), "LAKE_MEMORY_WINDOWS_UI_CHILD=1", "LAKE_MEMORY_WINDOWS_UI_HOME="+home)
 		output, err := command.CombinedOutput()
 		if err != nil {
 			t.Fatalf("actual WebView2 acceptance subprocess failed: %v\n%s", err, output)
@@ -58,11 +58,11 @@ func TestWindowsNaturalMemoryInRealWebView(t *testing.T) {
 	}
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	home := os.Getenv("LAKE_N5_WINDOWS_UI_HOME")
+	home := os.Getenv("LAKE_MEMORY_WINDOWS_UI_HOME")
 	if home == "" {
 		t.Fatal("parent-owned isolated Home required")
 	}
-	server, err := lakeweb.New(context.Background(), lakeweb.Options{Home: home, DynamicPort: true, Token: "n5-synthetic-local-test", Static: webassets.Files(), Output: io.Discard})
+	server, err := lakeweb.New(context.Background(), lakeweb.Options{Home: home, DynamicPort: true, Token: "memory-synthetic-local-test", Static: webassets.Files(), Output: io.Discard})
 	if err != nil {
 		t.Fatal("isolated backend setup failed")
 	}
@@ -70,7 +70,7 @@ func TestWindowsNaturalMemoryInRealWebView(t *testing.T) {
 	if server.Models.Active() != nil {
 		t.Fatal("isolated Home unexpectedly configured a model")
 	}
-	server.Store.CreateProject("N5 Windows isolated acceptance")
+	server.Store.CreateProject("Memory Windows isolated acceptance")
 	go func() { _ = server.Start() }()
 	var origin string
 	deadline := time.Now().Add(20 * time.Second)
@@ -88,13 +88,13 @@ func TestWindowsNaturalMemoryInRealWebView(t *testing.T) {
 	if origin == "" {
 		t.Fatal("isolated backend readiness timed out")
 	}
-	window := webview.NewWithOptions(webview.WebViewOptions{DataPath: filepath.Join(home, "webview"), WindowOptions: webview.WindowOptions{Title: "Lake N5 Windows acceptance", Width: 1280, Height: 800}})
+	window := webview.NewWithOptions(webview.WebViewOptions{DataPath: filepath.Join(home, "webview"), WindowOptions: webview.WindowOptions{Title: "Lake memory Windows acceptance", Width: 1280, Height: 800}})
 	if window == nil {
 		t.Fatal("WebView2 window creation failed")
 	}
 	defer window.Destroy()
 	result := make(chan map[string]any, 1)
-	if err = window.Bind("__n5Result", func(raw string) {
+	if err = window.Bind("__memoryResult", func(raw string) {
 		var value map[string]any
 		if json.Unmarshal([]byte(raw), &value) != nil {
 			value = map[string]any{"passed": false, "error": "invalid UI result"}
@@ -107,7 +107,7 @@ func TestWindowsNaturalMemoryInRealWebView(t *testing.T) {
 	}); err != nil {
 		t.Fatal("UI callback setup failed")
 	}
-	if err = window.Bind("__n5Resize", func() {
+	if err = window.Bind("__memoryResize", func() {
 		window.Dispatch(func() {
 			themeUser.NewProc("SetWindowPos").Call(uintptr(window.Window()), 0, 0, 0, 850, 600, 0x0002|0x0004)
 		})
@@ -140,20 +140,20 @@ func TestWindowsNaturalMemoryInRealWebView(t *testing.T) {
  document.querySelector('#appearance-settings-tab').click();
  const dark=await wait(()=>Array.from(document.querySelectorAll('[role="radio"]')).find(b=>b.textContent.trim()==='深色'));dark.click();await wait(()=>dark.getAttribute('aria-checked')==='true');
  document.querySelector('#memory-settings-tab').click();await wait(panel);
- await window.__n5Resize();phase='native_narrow_resize';await wait(()=>innerWidth<=900);
+ await window.__memoryResize();phase='native_narrow_resize';await wait(()=>innerWidth<=900);
  const select=panel().querySelector('[aria-label="记忆范围"]');select.focus();select.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));await wait(()=>select.getAttribute('aria-expanded')==='true');
  select.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await wait(()=>select.getAttribute('aria-expanded')==='false');assert(document.querySelector('#memory-settings-panel'),'escape_closed_settings');
  assert(panel().scrollWidth<=panel().clientWidth+2,'memory_panel_overflow');
- await window.__n5Result(JSON.stringify({passed:true,actualBackend:true,actualWebView2:true,defaultNoModel:true,independentRecall:true,defaultOff:true,stopPersisted:true,legacyCollapsed:true,dark:true,keyboardEscape:true,viewportWidth:innerWidth,viewportHeight:innerHeight}));
- })().catch(error=>window.__n5Result(JSON.stringify({passed:false,error:String(error.message)})));});`)
+ await window.__memoryResult(JSON.stringify({passed:true,actualBackend:true,actualWebView2:true,defaultNoModel:true,independentRecall:true,defaultOff:true,stopPersisted:true,legacyCollapsed:true,dark:true,keyboardEscape:true,viewportWidth:innerWidth,viewportHeight:innerHeight}));
+ })().catch(error=>window.__memoryResult(JSON.stringify({passed:false,error:String(error.message)})));});`)
 	timer := time.AfterFunc(50*time.Second, func() { window.Dispatch(window.Destroy) })
 	defer timer.Stop()
-	window.Navigate(origin + "/#token=n5-synthetic-local-test")
+	window.Navigate(origin + "/#token=memory-synthetic-local-test")
 	window.Run()
 	select {
 	case value := <-result:
 		value["platform"] = runtime.GOOS + "/" + runtime.GOARCH
-		if path := os.Getenv("LAKE_N5_WINDOWS_REPORT"); path != "" {
+		if path := os.Getenv("LAKE_MEMORY_WINDOWS_REPORT"); path != "" {
 			raw, _ := json.MarshalIndent(value, "", "  ")
 			if os.WriteFile(path, append(raw, '\n'), 0600) != nil {
 				t.Fatal("cannot save UI evidence")
