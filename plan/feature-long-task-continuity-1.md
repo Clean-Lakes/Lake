@@ -26,7 +26,7 @@ tags: [feature, adk, long-task, compaction, recovery]
 - **REQ-002**: 以宿主持久任务及原操作句柄管理异步工作。等待期间无模型空转，同一事件至多提交一次恢复输入；允许新用户消息正常进入会话，不能把所有会话都锁在旧任务上。
 - **REQ-003**: 独立工作项分别推进。用户接管数据库的工作项为 waiting_user；没有该前置依赖的构建及发布观察仍进行。需要该前置条件的部署不得自行启动。
 - **REQ-004**: 自动压缩在同一目标内可重复进行；保留用户原约束、任务 ID、工作项依赖、操作/证据引用、待答问题、已有审批绑定、剩余额度和下一观察时间。摘要不成为执行状态的唯一来源。
-- **REQ-005**: 关闭窗口不终止后端任务；后端退出时持久化待恢复状态，重开后先核对已有任务，不能声称关机期间仍在执行。新功能不自动接管升级前已经结束的历史会话。
+- **REQ-005**: 关闭窗口不终止后端任务；后端退出时持久化待恢复状态，重开后先核对已有任务，不能声称关机期间仍在执行。新功能不自动接管升级前已经结束的历史会话。等待必须释放会话执行占用；每个目标保留独立的 SDK runtimeSessionId 和恢复检查点，新话题不能覆盖旧目标的待恢复调用，旧目标恢复也不能覆盖当前话题的历史投影。
 - **REQ-006**: 顶部沿用既有七类状态与 Pilot 角色 Logo。外部等待映射“处理中”，详情说明等待对象与最近观察时间；等待用户映射“待确认”，预算暂停映射“已暂停”。只有当前关联目标和任务实际终结才显示“已结束”。
 - **SEC-001**: 继续使用现有资源、工具、审批和 MCP 权限。压缩、事件唤醒、目标登记和读状态都不授予新写权限；明确排除的数据库目标进入持久约束，依赖项不能绕过约束。
 - **SEC-002**: 不按模型文字或任意 JSON 的 status 字段推断可重试操作。dispatched/unknown 的原变更只可按原句柄核对；原调用 ID、指纹和目标的防重放校验继续有效。
@@ -38,7 +38,7 @@ tags: [feature, adk, long-task, compaction, recovery]
 
 ### 任务与等待契约
 
-新增 `WorkGoal`：宿主生成 id，包含 sessionId、originRootTurnId、revision、userSourceRefs、目标、硬约束引用、状态、工作项、budgetUsed/budgetLimit、deadlineAt、createdAt/updatedAt。每个工作项有宿主 ID、依赖项、验收条件、原操作 ID、证据引用和状态；用户文字、工具输出和模型摘要的来源类别分别保留。现有 Todo 只作进度展示，不自动转为执行授权或验收证据。
+新增 `WorkGoal`：宿主生成 id，包含 sessionId、originRootTurnId、runtimeSessionId、runtimeCheckpoint、revision、userSourceRefs、目标、硬约束引用、状态、工作项、budgetUsed/budgetLimit、deadlineAt、createdAt/updatedAt。每个工作项有宿主 ID、依赖项、验收条件、原操作 ID、证据引用和状态；用户文字、工具输出和模型摘要的来源类别分别保留。现有 Todo 只作进度展示，不自动转为执行授权或验收证据。
 
 新增 `ExternalWatch`：宿主生成 id，包含 goalId/itemId、原 nativeOperation ID、serverIdentity、adapterId/version、绑定的原句柄、readCapabilityRef、lastFingerprint、nextCheckAt、lastObservedAt、attempt/failureCount、wakeSequence/consumedSequence、revision、leaseOwner/leaseUntil。模型不能提供 polling 工具名称、任意 URL、Shell 字符串或认证字段。未有可信只读适配器时工作项进入 blocked，说明不能持续观察，不猜测其成功。
 
@@ -74,7 +74,7 @@ tags: [feature, adk, long-task, compaction, recovery]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | 新增 internal/ai/adk_work_wait_test.go：用官方 workflow.ResumeOrRequestInput 和原 function-response 恢复路径证明等待前、等待中、事件已提交但未消费三处进程退出均可接续；校验原 call ID、目标、预算和审批 envelope 不变，等待 10 分钟虚拟时间模型请求数不增加。该测试是后续阶段门槛；不能通过时报告能力缺口，不改成宿主模型轮询循环。 | No | — |
+| TASK-001 | 新增 internal/ai/adk_work_wait_test.go：用官方 workflow.ResumeOrRequestInput 和原 function-response 恢复路径证明等待前、等待中、事件已提交但未消费三处进程退出均可接续；校验原 call ID、目标、预算和审批 envelope 不变，等待 10 分钟虚拟时间模型请求数不增加、会话执行槽已释放、新用户话题可以完成，然后旧目标仍按原调用恢复。该测试是后续阶段门槛；不能通过时报告能力缺口，不改成宿主模型轮询循环。 | No | — |
 | TASK-002 | 新增 internal/ai/work_goal.go、work_goal_store.go：定义上述 WorkGoal/WorkItem/ExternalWatch、纯归约函数 ReduceWorkGoal、CAS 方法 TransitionWorkGoal 和 outbox；在 internal/ai/adk_session.go 的 adkStore 中迁移。保留未知字段兼容，旧库加载不生成历史任务。依赖 TASK-001。 | No | — |
 | TASK-003 | 在 internal/ai/runtime_contract.go 与 types.go 加入可重建的目标/等待投影，显式区分当前 RootTurnID 与 goal origin；为 transition/outbox 的崩溃窗口增加事务测试。JSON 缓存丢失时从领域表和 SDK 原记录恢复，不能写空表覆盖旧任务。依赖 TASK-002。 | No | — |
 
@@ -86,8 +86,8 @@ tags: [feature, adk, long-task, compaction, recovery]
 |------|-------------|-----------|------|
 | TASK-004 | 新增 internal/ai/work_tools.go 与 prompts/work-continuity.txt，在 extended_catalog.go/session_tools.go/sessionCatalog 注册五个 work 工具。work_wait 单独占一个工具批次；work_finish 校验验收证据及非终态工作项，拒绝后仍由原 LlmAgent 调度。将目标完成契约加入普通 core 策略，不用语言关键词识别用户意图。依赖 TASK-003。 | No | — |
 | TASK-005 | 新增 internal/ai/external_watch.go 与 external_watch_scheduler.go，实现本文件的租约、退避、去重、并发限额、deadline 和 shutdown。调度器只运行经过宿主校验的只读观察与投递事件，不直接调用模型或执行下一条变更。先添加 Shell 句柄适配器；增加固定版本 release 适配器，只接受注册服务的原派发结果及 get_release_status 等明确允许的读取能力；以独立 mock schema 契约测试验证 ID/状态路径，不信任任意 MCP status。依赖 TASK-002。 | No | — |
-| TASK-006 | 新增 internal/ai/adk_work_wait.go，借鉴 adk_questions.go 的原调用恢复：在专用 machine-input workflow 持久化中断 ID和来源，live 时阻塞原 work_wait 工具而不请求模型；进程恢复时构造原 work_wait 的 function-response 并通过官方 Runner 接续。不得把普通 root 改成丢失 confirmation envelope 的 Workflow AgentNode。依赖 TASK-001、TASK-004、TASK-005。 | No | — |
-| TASK-007 | 在 adk_driver.go、adk_provider_step.go 和 engine.go 接入工作决策及最终状态归约。对存在活动目标但模型直接给出最终文字的情况，在公开 LlmAgent 回调内生成宿主 work_read 状态纠正响应，使同一个官方循环继续；最多允许连续两次无新进展的决策纠正，随后 paused，不能自动无限追加“继续”。持久 ModelRounds 跨等待恢复累加。原轮结束仍在领域投影持久化后才释放占用。依赖 TASK-006。 | No | — |
+| TASK-006 | 新增 internal/ai/adk_work_wait.go，借鉴 adk_questions.go 的原调用恢复：在专用 machine-input workflow 持久化中断 ID 和来源，按 TASK-001 证明的公开中断路径退出本次 Runner 并释放会话占用，不保留阻塞整个会话的等待工具；目标的 SDK runtimeSessionId、调用 envelope 和预算单独保存。收到真实事件时构造原 work_wait 的 function-response 并通过官方 Runner 接续，投影写回原目标而非当前新话题。不得把普通 root 改成丢失 confirmation envelope 的 Workflow AgentNode。依赖 TASK-001、TASK-004、TASK-005。 | No | — |
+| TASK-007 | 在 adk_driver.go、adk_provider_step.go 和 engine.go 接入工作决策及最终状态归约。对存在活动目标但模型直接给出最终文字的情况，在公开 LlmAgent 回调内只处理完整最终响应，不改 partial 文字：全部可自动推进项都在等待可信外部句柄时生成带宿主来源的 work_wait 调用并持久暂停；仍有可运行项时生成 work_read 状态纠正响应，使同一个官方循环继续。生成的内部调用保留来源，不冒充模型或人类授权；最多允许连续两次无新进展的决策纠正，随后 paused，不能自动无限追加“继续”。持久 ModelRounds 跨等待恢复累加。原轮结束仍在领域投影持久化后才释放占用。依赖 TASK-006。 | No | — |
 | TASK-008 | 修改 polling.go：已登记且关联可信句柄的工作目标连续无输出改成等待观察；没有工作目标的普通“查看状态”请求保留三次无变化后结束答复的原行为。修改 adk_recovery.go 与 engine.go 的 Abort/Shutdown：取消观察及后续推进，迟到事件不激活目标，不替用户停止远端命令。依赖 TASK-005、TASK-007。 | No | — |
 
 ### Implementation Phase 3
