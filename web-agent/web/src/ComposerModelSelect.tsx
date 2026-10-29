@@ -52,7 +52,7 @@ export function ComposerModelSelect({available,modelName,selection,configured,op
   const label=configured?(current?.displayName||modelName?.split("/").pop()||"已配置"):"选择模型";
   const levelLabel=level&&level.session===session&&level.providerId===providerId?currentReasoningLabel(level.settings,modelId):undefined;
   const triggerLabel=<span className="composer-model-current"><span className="composer-model-name">{label}</span>{levelLabel&&<span className="composer-model-effort" title={`思考强度：${levelLabel}`}>{levelLabel}</span>}</span>;
-  return <span ref={anchor} className="composer-model-anchor"><AppSelect nativePopup={native} selectionLocked={disabled} className={`composer-model-select ${configured?"":"model-missing"}`} popupClassName="composer-model-popup" popupMinWidth={276} popupMaxHeight={420}
+  return <span ref={anchor} className="composer-model-anchor"><AppSelect nativePopup={native} selectionLocked={disabled} className={`composer-model-select ${configured?"":"model-missing"}`} popupClassName="composer-model-popup" popupMinWidth={0} popupMaxHeight={420}
     label={configured?`选择模型：${label}${levelLabel?` · 思考强度：${levelLabel}`:""}${current?.providerName?` · ${current.providerName}`:""}`:"选择模型"} title={modelName&&label!==modelName?`${label}\n${modelName}`:label} value={current?JSON.stringify([current.providerId,current.modelId]):modelName||""} renderValue={triggerLabel}
     icon={<ProviderIcon brand={modelBrand(modelName||"",current?.displayName,current?.providerName)} size={16}/>}
     open={open} aria-busy={disabled} onOpenChange={next=>{if(next&&disabled) return;if(next) {setSearch("");setSource(current?.providerId??null);}onOpenChange(next);}}
@@ -70,6 +70,6 @@ export function ComposerModelSelect({available,modelName,selection,configured,op
     </>}
     emptyMessage={available.loading?"正在获取可用模型…":query?"没有找到匹配的模型":note||"暂无可用模型，请先添加供应商。"}
     popupFooter={<>{reasoning&&<ReasoningSelector key={reasoning.session} {...trackedReasoning!}/>}{note&&rows.length>0&&<p className="composer-model-note">{note}</p>}</>}
-    renderOption={option=>{const row=rows.find(row=>row.value===option.value)!;return <><ProviderIcon brand={modelBrand(row.name,row.label,row.group)} size={16}/><span className="composer-model-label"><span>{row.label}</span>{row.name!==row.label&&<small>{row.name}</small>}</span>{available.imageInputCapabilities?.[row.name]&&<small className="composer-model-capability">视觉</small>}</>;}}
+    renderOption={option=>{const row=rows.find(row=>row.value===option.value)!;return <><ProviderIcon brand={modelBrand(row.name,row.label,row.group)} size={16}/><span className="composer-model-label" title={row.name===row.label?row.label:`${row.label}\n${row.name}`}><span>{row.label}</span>{row.name!==row.label&&<small>{row.name}</small>}</span>{available.imageInputCapabilities?.[row.name]&&<small className="composer-model-capability">视觉</small>}</>;}}
   >{visible.map(row=><option key={row.value} value={row.value} disabled={disabled&&reasoning?.disabled!==false}>{row.label}</option>)}</AppSelect></span>;
 }
