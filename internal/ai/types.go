@@ -84,17 +84,18 @@ type Call struct {
 	Arguments string `json:"arguments"`
 }
 type Message struct {
-	HostTurnID     string            `json:"hostTurnId,omitempty"` // Durable host anchor; never sent to providers.
-	Images         []ImageAttachment `json:"images,omitempty"`
-	NativeProtocol string            `json:"nativeProtocol,omitempty"`
-	NativeModel    string            `json:"nativeModel,omitempty"`
-	Role           string            `json:"role"`
-	Content        string            `json:"content"`
-	Reasoning      string            `json:"reasoning,omitempty"`
-	Calls          []Call            `json:"tool_calls,omitempty"`
-	CallID         string            `json:"tool_call_id,omitempty"`
-	Name           string            `json:"name,omitempty"`
-	Native         []json.RawMessage `json:"native,omitempty"`
+	SourceMessageID string            `json:"sourceMessageId,omitempty"` // Real supplemental user-message identity; never sent to providers.
+	HostTurnID      string            `json:"hostTurnId,omitempty"`      // Durable host anchor; never sent to providers.
+	Images          []ImageAttachment `json:"images,omitempty"`
+	NativeProtocol  string            `json:"nativeProtocol,omitempty"`
+	NativeModel     string            `json:"nativeModel,omitempty"`
+	Role            string            `json:"role"`
+	Content         string            `json:"content"`
+	Reasoning       string            `json:"reasoning,omitempty"`
+	Calls           []Call            `json:"tool_calls,omitempty"`
+	CallID          string            `json:"tool_call_id,omitempty"`
+	Name            string            `json:"name,omitempty"`
+	Native          []json.RawMessage `json:"native,omitempty"`
 }
 type Usage struct {
 	InputKnown  bool `json:"inputKnown"`
@@ -157,6 +158,7 @@ type View struct {
 	Turns             int                `json:"turns"`
 }
 type State struct {
+	SupplementIDs          []string                         `json:"supplementIds,omitempty"`
 	CompactionFailureAt    string                           `json:"compactionFailureAt,omitempty"`
 	WorkGoalID             string                           `json:"workGoalId,omitempty"`
 	NaturalRecallUsed      []NaturalRecallItem              `json:"naturalRecallUsed,omitempty"`

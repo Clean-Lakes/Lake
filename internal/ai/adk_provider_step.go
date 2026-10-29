@@ -17,6 +17,7 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	e, s, c := d.engine, d.session, *d.config
 	s.mu.Lock()
 	id := s.state.View.Session
+	s.supplementClosed = false
 	waiting := len(s.state.View.PendingApprovals) > 0
 	s.mu.Unlock()
 	if waiting {
@@ -65,9 +66,17 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 		s.mu.Unlock()
 	}
+	if _, err = d.applySupplements(ctx, ""); err != nil {
+		return modelResult{}, err
+	}
+	c = *d.config
 	if err = e.compactForTurn(ctx, s, c, resume && step == 0); err != nil {
 		return modelResult{}, err
 	}
+	if _, err = d.applySupplements(ctx, ""); err != nil {
+		return modelResult{}, err
+	}
+	c = *d.config
 	teamContext := e.sreTeamContext(c)
 	sreTurnContext := ""
 	if c.sreCoordinator {

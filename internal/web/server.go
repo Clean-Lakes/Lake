@@ -173,6 +173,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	server.Engine.ModelActivity = server.memoryForegroundModel
 	server.Engine.MemoryCaptureAllowed = store.MemoryCaptureAllowed
 	server.Engine.MemoryCaptureSessionAllowed = store.MemoryCaptureSessionAllowed
+	server.Engine.SetSupplementHooks(server.readUserSupplements, server.acknowledgeUserSupplements)
 	server.Engine.SetWorkConfigurator(func(id string) (config ai.Config, err error) {
 		defer func() {
 			if failure := recover(); failure != nil {
@@ -182,6 +183,10 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		server.configure(id, nil)
 		return server.Engine.ConfigForSession(id)
 	})
+	if err = server.reconcileUserSupplementQueues(); err != nil {
+		server.Close()
+		return nil, err
+	}
 	store.RecoverSRETasks()
 	server.reconcileStaleSREStatuses()
 	if err = server.startScheduler(); err != nil {

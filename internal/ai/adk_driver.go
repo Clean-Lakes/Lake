@@ -23,6 +23,7 @@ import (
 )
 
 type adkTurnDriver struct {
+	supplementCalls       map[string]bool
 	workRepairs           int
 	workOutputPolls       map[string]int
 	decision              bool
@@ -166,6 +167,24 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 		}
 		tools = append(tools, t)
 	}
+	if read, _ := e.supplementHooks(); read != nil {
+		supplemental, toolErr := functiontool.New(functiontool.Config{Name: supplementTool, Description: "Apply an admitted real user supplement at the current safe boundary.", InputSchema: &jsonschema.Schema{Type: "object"}}, func(ac agent.Context, _ map[string]any) (map[string]any, error) {
+			if !d.supplementCalls[ac.FunctionCallID()] {
+				return nil, errors.New("untrusted supplement invocation")
+			}
+			result, applyErr := d.applySupplements(ac, ac.FunctionCallID())
+			if applyErr != nil {
+				d.fatal = applyErr
+				ac.Actions().SkipSummarization = true
+				return map[string]any{"error": "user supplement retained; application failed"}, nil
+			}
+			return obj(result), nil
+		})
+		if toolErr != nil {
+			return toolErr
+		}
+		tools = append(tools, supplemental)
+	}
 	name := "lake_chat"
 	mode := llmagent.ModeChat
 	if c.sre != nil {
@@ -186,8 +205,27 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 		s.mu.Unlock()
 		return result
 	}
-	root, err := llmagent.New(llmagent.Config{Name: name, Model: provider, Tools: tools, Mode: mode, AfterModelCallbacks: []llmagent.AfterModelCallback{d.workDecision},
+	root, err := llmagent.New(llmagent.Config{Name: name, Model: provider, Tools: tools, Mode: mode, AfterModelCallbacks: []llmagent.AfterModelCallback{d.afterModel},
 		BeforeToolCallbacks: []llmagent.BeforeToolCallback{func(tc agent.Context, t tool.Tool, a map[string]any) (map[string]any, error) {
+			if t.Name() == supplementTool {
+				if d.supplementCalls[tc.FunctionCallID()] {
+					return nil, nil
+				}
+				return deny(tc, t.Name(), "untrusted supplement invocation"), nil
+			}
+			s.mu.Lock()
+			pending, pendingErr := e.pendingSupplementsLocked(s)
+			awaitingApproval := len(s.state.View.PendingApprovals) > 0
+			if len(pending) == 0 && (t.Name() == "work_finish" || t.Name() == "work_wait" || t.Name() == "sre_reply") {
+				s.supplementClosed = true
+			}
+			s.mu.Unlock()
+			if pendingErr != nil {
+				return nil, pendingErr
+			}
+			if len(pending) > 0 && !awaitingApproval {
+				return deny(tc, t.Name(), "A real user supplement arrived before dispatch. This proposed call was not executed; read the added request before choosing the next operation."), nil
+			}
 			if d.denied[tc.FunctionCallID()] {
 				return deny(tc, t.Name(), "tool arguments contain credentials or private key material"), nil
 			}
@@ -283,6 +321,9 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 				return err
 			}
 			if event != nil {
+				if ackErr := e.acknowledgeSupplementEvent(ctx, event.Actions.StateDelta, s.state.View.Session); ackErr != nil {
+					return ackErr
+				}
 				if resuming && len(event.Actions.RequestedToolConfirmations) > 0 {
 					followups = append(followups, event)
 				}

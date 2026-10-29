@@ -116,7 +116,7 @@ func (e *Engine) resumeWorkGoal(ctx context.Context, row nativeWorkGoal, g WorkG
 		}
 	}
 	child.modelSlots = e.modelSlots
-	cs := &session{state: State{Config: c, History: checkpoint.History, Runtime: checkpoint.Runtime, View: checkpoint.View, RootQuestion: checkpoint.RootQuestion, TargetScope: checkpoint.Scope, ReferencedAssetIDs: checkpoint.References, WorkGoalID: g.ID, QuestionDecisions: g.UserDecisions}}
+	cs := &session{state: State{SupplementIDs: checkpoint.SupplementIDs, Config: c, History: checkpoint.History, Runtime: checkpoint.Runtime, View: checkpoint.View, RootQuestion: checkpoint.RootQuestion, TargetScope: checkpoint.Scope, ReferencedAssetIDs: checkpoint.References, WorkGoalID: g.ID, QuestionDecisions: g.UserDecisions}}
 	cs.state.Config.targetScope = cloneTargetScope(checkpoint.Scope)
 	cs.state.Config.ReferencedAssets = validRemembered(c, checkpoint.References)
 	cs.state.View.Status = "running"

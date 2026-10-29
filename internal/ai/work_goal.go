@@ -376,7 +376,7 @@ func (e *Engine) workCheckpoint(s *session) error {
 	s.mu.Lock()
 	goalID, id := s.state.WorkGoalID, s.state.View.Session
 	// Config contains runtime credentials. It is deliberately never included.
-	projection := nativeProjection{History: s.state.History, View: s.state.View, Runtime: s.state.Runtime, RootQuestion: s.state.RootQuestion, Scope: s.state.TargetScope, References: s.state.ReferencedAssetIDs, WorkGoalID: goalID, Memory: memoryProjection(s.state), PromptBaseline: s.state.PromptBaseline}
+	projection := nativeProjection{SupplementIDs: s.state.SupplementIDs, History: s.state.History, View: s.state.View, Runtime: s.state.Runtime, RootQuestion: s.state.RootQuestion, Scope: s.state.TargetScope, References: s.state.ReferencedAssetIDs, WorkGoalID: goalID, Memory: memoryProjection(s.state), PromptBaseline: s.state.PromptBaseline}
 	c := s.state.Config
 	var decisions map[string]map[string][]string
 	_ = json.Unmarshal(safeJSON([]byte(js(s.state.QuestionDecisions)), c), &decisions)

@@ -24,6 +24,7 @@ type session struct {
 	state               State
 	cancel              context.CancelFunc
 	finalizing          bool
+	supplementClosed    bool
 	decision            chan bool
 	decisions           map[string]chan bool
 	questionReply       chan map[string][]string
@@ -67,6 +68,9 @@ type Engine struct {
 	shellMu                      sync.Mutex
 	shellsClosed                 bool
 
+	supplementMu      sync.RWMutex
+	supplementReader  SupplementReader
+	supplementAck     SupplementAcknowledger
 	workParent        *Engine
 	workConfigMu      sync.Mutex
 	workConfigurator  func(string) (Config, error)
@@ -666,6 +670,8 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	s.state.NaturalRecallUsed = nil
 	s.state.Config.IgnoreNaturalMemory = input.IgnoreProjectMemory
 	s.state.WorkGoalID = ""
+	s.state.SupplementIDs = nil
+	s.supplementClosed = false
 	s.state.View.RootTurnID = uid()
 	s.state.SREHandoff = nil
 	s.sreReply = nil
@@ -760,8 +766,12 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			err = saveErr
 		}
 		s.mu.Unlock()
-		if persistErr := e.persistNativeProjection(context.WithoutCancel(ctx), s); persistErr != nil && err == nil {
-			err = persistErr
+		if persistErr := e.persistNativeProjection(context.WithoutCancel(ctx), s); persistErr != nil {
+			if err == nil {
+				err = persistErr
+			}
+		} else if ackErr := e.acknowledgeSupplementState(context.WithoutCancel(ctx), s); ackErr != nil && err == nil {
+			err = ackErr
 		}
 		if workErr := e.workCheckpoint(s); workErr != nil && err == nil {
 			err = workErr
