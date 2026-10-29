@@ -1,0 +1,13 @@
+.conversation-latest {
+ position:absolute;z-index:3;left:50%;bottom:calc(100% + 10px + var(--pending-messages-height, 0px));transform:translateX(-50%);
+ display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;
+ border:1px solid var(--border);border-radius:50%;background:var(--floating-bubble-background);color:var(--foreground);
+ -webkit-backdrop-filter:var(--floating-bubble-filter);backdrop-filter:var(--floating-bubble-filter);
+ box-shadow:0 2px 8px color-mix(in srgb,var(--foreground) 10%,transparent);cursor:pointer;
+ transition:background 120ms,border-color 120ms;
+}
+.conversation-latest[hidden] { display:none; }
+.conversation-latest:hover { background:var(--floating-bubble-active);border-color:var(--border-strong); }
+.conversation-latest:focus-visible { outline:2px solid var(--focus-outline);outline-offset:3px; }
+.workspace.has-floating-header .conversation-latest { left:calc(var(--session-content-start) + var(--session-content-width) / 2); }
+@media(prefers-reduced-motion:reduce) { .conversation-latest { transition:none; } }

@@ -3,6 +3,7 @@ import type {WorkSession} from '../../shared/contracts';
 import type {PilotIslandModel} from './pilotIslandModel';
 import {PilotStatusIsland} from './PilotStatusIsland';
 import {Glyph} from './Icons';
+import {AgentIcon} from './AgentIcon';
 import {sessionInspectorId} from './SessionInspectorContext';
 
 // Both alternatives stay measured. The glass bubble follows their interpolated
@@ -18,10 +19,14 @@ function HeaderMorphSlot({visible,children,className=''}:{visible:boolean;childr
  return <div className={`header-morph-slot ${className}${visible?' is-visible':''}`} style={{width:visible?width:0}} aria-hidden={!visible} inert={!visible}><div ref={content} className="header-morph-content">{children}</div></div>;
 }
 
-export function PilotHeaderState({model,status,normal,onInspect,details}:{details?:{available:boolean;open:boolean;toggle:()=>void};model:PilotIslandModel|null;status?:WorkSession['status'];normal:ReactNode;onInspect:(target:string)=>void}){
+export function PilotHeaderState({model,mode,status,normal,onInspect,details}:{details?:{available:boolean;open:boolean;toggle:()=>void};model:PilotIslandModel|null;mode?:'auto'|'manual';status?:WorkSession['status'];normal:ReactNode;onInspect:(target:string)=>void}){
  const retained=useRef<PilotIslandModel|null>(model);if(model)retained.current=model;
+ const pilotVisible=!!model||!!mode;
+ const inspectorToggle=details?.available&&<button type="button" className="header-inspector-toggle" aria-label={details.open?'收起执行详情':'展开执行详情'} title={details.open?'收起执行详情':'展开执行详情'} aria-controls={sessionInspectorId} aria-expanded={details.open} onClick={details.toggle}><Glyph name="next" size={13}/></button>;
  return <div className="header-state-area">
-  <HeaderMorphSlot visible={!model} className="header-normal-state">{normal}{details?.available&&<button type="button" className="header-inspector-toggle" aria-label={details.open?'收起执行详情':'展开执行详情'} title={details.open?'收起执行详情':'展开执行详情'} aria-controls={sessionInspectorId} aria-expanded={details.open} onClick={details.toggle}><Glyph name="next" size={13}/></button>}</HeaderMorphSlot>
-  <HeaderMorphSlot visible={!!model} className="header-pilot-state">{retained.current&&<PilotStatusIsland model={retained.current} status={status} visible={!!model} onInspect={onInspect}/>}</HeaderMorphSlot>
+  <HeaderMorphSlot visible={!pilotVisible} className="header-normal-state">{normal}{inspectorToggle}</HeaderMorphSlot>
+  <HeaderMorphSlot visible={pilotVisible} className="header-pilot-state">{!model&&mode?<div className="pilot-mode-entry" role="group" title={`Lake Pilot · ${mode==='auto'?'自动推进':'手动选择'}`} aria-label={`Lake Pilot 已开启 · ${mode==='auto'?'自动推进':'手动选择'} · 本轮没有专员任务`}>
+   <span className="pilot-mode-avatar" role="img" aria-label="协调者入口" title="协调者 · Lake Pilot 入口"><AgentIcon role="coordinator" size={20}/></span>{normal}{inspectorToggle}
+  </div>:retained.current&&<PilotStatusIsland model={retained.current} status={status} visible={!!model} onInspect={onInspect}/>}</HeaderMorphSlot>
  </div>;
 }

@@ -176,6 +176,8 @@
 .model-settings-dialog .provider-discovery > input { margin: 0; }
 .provider-discovery-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 6px 0; font-size: var(--font-size-ui); color: var(--text-secondary); }
 .provider-discovery-toolbar > span { margin-left: auto; }
+.provider-discovery-selection { display:flex; flex-wrap:wrap; gap:8px; }
+.provider-discovery-selection .button { display:inline-flex; align-items:center; gap:5px; min-height:28px; padding:4px 9px; }
 .provider-discovery-list { height: min(220px,24dvh); overflow-y: auto; scrollbar-gutter: stable; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
 .provider-discovery-row { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 9px 12px; box-sizing: border-box; border-bottom: 1px solid var(--border); cursor: pointer; }
 .provider-discovery-row:last-child { border-bottom: 0; }

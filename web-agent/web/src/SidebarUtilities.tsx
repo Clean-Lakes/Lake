@@ -17,6 +17,7 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
  booting:boolean;connected:boolean;modelConfigured:boolean;
 }){
  const [open,setOpen]=useState(false),[view,setView]=useState<WorkspaceMenuView>('home');
+ const [present,setPresent]=useState(false),motion=useRef<Animation|null>(null);
  const [unreadUpdate,setUnreadUpdate]=useState(false),[draft,setDraft]=useState(''),[error,setError]=useState('');
  const [busy,setBusy]=useState<'create'|'delete'|null>(null),operation=useRef<'create'|'delete'|null>(null);
  const [managedProject,setManagedProject]=useState<Project|null>(null);
@@ -28,9 +29,9 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
  function close(restoreFocus=false){if(operation.current)return;setOpen(false);if(restoreFocus)trigger.current?.focus({preventScroll:true});}
  function act(action:()=>void){if(operation.current)return;close(true);action();}
  function page(next:WorkspaceMenuView){if(operation.current)return;setError('');setView(next);}
- useEffect(()=>{if(!operation.current){setOpen(false);setView('home');setError('');}},[projectId]);
+ useEffect(()=>{if(!operation.current){setOpen(false);setError('');}},[projectId]);
  useLayoutEffect(()=>{
-  if(!open)return;
+  if(!present)return;
   const place=()=>{
    const anchor=trigger.current?.getBoundingClientRect();if(!anchor)return;
    const naturalHeight=homeContent.current?.offsetHeight;
@@ -41,7 +42,27 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
   const observer=new ResizeObserver(place);if(trigger.current)observer.observe(trigger.current);if(homeContent.current)observer.observe(homeContent.current);
   place();window.addEventListener('resize',place);
   return()=>{observer.disconnect();window.removeEventListener('resize',place);};
- },[open]);
+ },[present]);
+ useLayoutEffect(()=>{
+  // Keep the exit frame until React detaches the surface. Reversing an
+  // unfinished animation starts from its current frame, without a flash.
+  if(!present){motion.current?.cancel();motion.current=null;return;}
+  const node=panel.current;if(!node)return;
+  if(document.hidden||matchMedia('(prefers-reduced-motion: reduce)').matches||!node.animate){
+   motion.current?.cancel();motion.current=null;if(!open)setPresent(false);return;
+  }
+  const expanded={opacity:1,transform:'translateY(0)'},collapsed={opacity:0,transform:'translateY(8px)'};
+  const style=getComputedStyle(node);
+  const from=motion.current?{opacity:style.opacity,transform:style.transform}:open?collapsed:expanded;
+  motion.current?.cancel();
+  const animation=node.animate([from,open?expanded:collapsed],{duration:open?220:160,easing:'cubic-bezier(.22,1,.36,1)',fill:'both'});
+  motion.current=animation;
+  animation.onfinish=()=>{
+   if(motion.current!==animation)return;
+   if(open){motion.current=null;animation.cancel();}else setPresent(false);
+  };
+ },[open,present]);
+ useEffect(()=>()=>{motion.current?.cancel();},[]);
  useLayoutEffect(()=>{
   if(!open||busy)return;
   const active=panel.current?.querySelector<HTMLElement>(`[data-workspace-page="${view}"]`);
@@ -67,11 +88,11 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
  const back=(title:string)=><header className="workspace-menu-heading"><button type="button" className="icon-button workspace-menu-back" aria-label="返回" disabled={!!busy} onClick={()=>page(workspaceMenuParent(view))}><Glyph name="next" size={16}/></button><strong>{title}</strong></header>;
  const errorMessage=error&&<p id={errorId} className="workspace-menu-error" role="alert">{error}</p>;
  return <>
-  <div className="sidebar-utilities"><button ref={trigger} type="button" className="workspace-utilities-trigger" aria-label={unreadUpdate?'工作区，有新版本':'工作区'} aria-haspopup="dialog" aria-expanded={open} aria-controls={open?panelId:undefined} onKeyDown={event=>{if(open&&event.key==='Escape'){event.preventDefault();close(true);}}} onClick={()=>{if(open)close();else{setView('home');setError('');setOpen(true);}}}>
+  <div className="sidebar-utilities"><button ref={trigger} type="button" className="workspace-utilities-trigger" aria-label={unreadUpdate?'工作区，有新版本':'工作区'} aria-haspopup="dialog" aria-expanded={open} aria-controls={present?panelId:undefined} onKeyDown={event=>{if(open&&event.key==='Escape'){event.preventDefault();close(true);}}} onClick={()=>{if(open)close();else{setView('home');setError('');setPresent(true);setOpen(true);}}}>
    <span className="workspace-utilities-glass" aria-hidden="true"/><span className="workspace-utilities-icon"><Glyph name="settings" size={16}/></span><span>工作区</span>{selected&&<small title={`标签筛选：${selected.name}`}>{selected.name}</small>}<span className="workspace-utilities-tail">{unreadUpdate&&<span className="workspace-utilities-update-dot" aria-hidden="true"/>}<Glyph name="chevron" size={13} className={open?'is-open':''}/></span>
   </button></div>
   <DesktopUpdate hideTrigger onUnreadChange={setUnreadUpdate}/>
-  {open&&createPortal(<div ref={panel} id={panelId} role="dialog" aria-label="工作区操作" aria-busy={!!busy} className="workspace-utilities-popover" style={position} onKeyDown={event=>{
+  {present&&createPortal(<div ref={panel} id={panelId} role="dialog" aria-label="工作区操作" aria-busy={!!busy} aria-hidden={!open} inert={!open} data-state={open?'open':'closing'} className="workspace-utilities-popover" style={position} onKeyDown={event=>{
    if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(view==='home')close(true);else page(workspaceMenuParent(view));return;}
    if(!['ArrowDown','ArrowUp','Home','End'].includes(event.key)||(event.target as HTMLElement).closest('input,textarea,[contenteditable="true"]'))return;
    const scope=(event.target as HTMLElement).closest('.workspace-project-options')??event.currentTarget;
@@ -83,7 +104,6 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
     <div className="workspace-menu-scroll"><div ref={homeContent}>
      <div className="workspace-menu-label">当前项目</div>
      <div className="workspace-current-project">{projectSelection}<button type="button" className="workspace-utility-action workspace-project-entry" aria-label={`切换项目：${currentProject?.name??'选择项目'}`} onClick={()=>page('projects')}><span title={currentProject?.name}>{currentProject?.name??'选择项目'}</span><Glyph name="next" size={14}/></button></div>
-     <button type="button" className="workspace-utility-action" disabled={!connected||!currentProject} onClick={()=>{setManagedProject(currentProject!);page('manage');}}><Glyph name="filter" size={15}/><span>管理当前项目</span></button>
      <div className="workspace-utilities-separator"/>
      <TagNavigation defaultExpanded tags={tags} sessions={sessions} selected={selectedTag} onSelect={onSelectTag} onManage={()=>act(onManageTags)} onSession={id=>act(()=>onSession(id))}/>
      <div className="workspace-utilities-separator"/>
@@ -99,7 +119,7 @@ export function SidebarUtilities({projects,projectId,projectSelection,onSelectPr
      {projects.map(project=><button key={project.id} type="button" role="menuitemradio" aria-checked={project.id===projectId} title={project.name} onClick={()=>{if(project.id===projectId)page('home');else act(()=>onSelectProject(project.id));}}><span>{project.name}</span>{project.id===projectId&&<Glyph name="check" size={14}/>}</button>)}
      {!projects.length&&<p className="workspace-menu-description">暂无项目</p>}
     </div>
-    <footer className="workspace-menu-footer"><button type="button" className="workspace-utility-action" disabled={!connected} onClick={()=>{setDraft('');page('create');}}><Glyph name="plus" size={15}/><span>新建项目</span></button></footer>
+    <footer className="workspace-menu-footer"><button type="button" className="workspace-utility-action" disabled={!connected||!currentProject} onClick={()=>{setManagedProject(currentProject!);page('manage');}}><Glyph name="filter" size={15}/><span>管理当前项目</span></button><button type="button" className="workspace-utility-action" disabled={!connected} onClick={()=>{setDraft('');page('create');}}><Glyph name="plus" size={15}/><span>新建项目</span></button></footer>
    </section>
    <section className="workspace-menu-page" data-workspace-page="manage" hidden={view!=='manage'} inert={view!=='manage'}>
     {back('项目管理')}

@@ -2,13 +2,15 @@
 .workspace-utilities-trigger { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 38px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--sidebar-row-radius,var(--radius-window)); color: var(--text-secondary); position:relative; isolation:isolate; --workspace-material:var(--floating-bubble-background); background:transparent; -webkit-backdrop-filter:none; backdrop-filter:none; pointer-events: auto; box-shadow: var(--shadow-popover); text-align: left; font-size: var(--font-size-ui); }
 .workspace-utilities-trigger:is(:hover,[aria-expanded="true"]) { --workspace-material:var(--floating-bubble-active); border-color: var(--border-strong); color: var(--foreground); }
 .workspace-utilities-tail { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; margin-left: auto; }
-.workspace-utilities-tail > svg { transform: rotate(-90deg); }
+.workspace-utilities-tail > svg { transform: rotate(-90deg); transition:transform 180ms ease; }
 .workspace-utilities-tail > svg.is-open { transform: rotate(0); }
 .workspace-utilities-trigger > small { min-width: 0; max-width: 50%; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-ui); color: var(--text-muted); }
 .workspace-utilities-trigger:has(>small) > .workspace-utilities-tail { margin-left: 0; }
 .workspace-utilities-icon { display: grid; place-items: center; position: relative; flex: 0 0 auto; }
 .workspace-utilities-update-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--danger); }
 .workspace-utilities-popover { position:fixed; z-index:120; display:flex; padding:6px; overflow:hidden; border:1px solid var(--border); border-radius:18px; background:var(--surface); color:var(--foreground); box-shadow:var(--shadow-popover); }
+.workspace-utilities-popover[data-state="closing"] { pointer-events:none; }
+@media(prefers-reduced-motion:reduce) { .workspace-utilities-tail > svg { transition:none; } }
 .workspace-utility-action { display:flex; align-items:center; gap:9px; width:100%; min-width:0; min-height:36px; padding:8px 10px; border:0; border-radius:var(--radius-settings-control); background:transparent; color:var(--text-secondary); text-align:left; font-size:var(--font-size-ui); }
 .workspace-utility-action > svg { flex: 0 0 auto; }
 .workspace-utility-action small { margin-left: auto; color: var(--text-muted); font-size: var(--font-size-ui); }

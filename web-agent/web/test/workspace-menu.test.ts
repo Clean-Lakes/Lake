@@ -5,7 +5,8 @@ import {workspaceMenuParent,workspaceMenuPosition} from '../src/workspaceMenu';
 test('workspace pages return one level without opening another surface',()=>{
  assert.equal(workspaceMenuParent('create'),'projects');
  assert.equal(workspaceMenuParent('delete'),'manage');
- for(const view of ['projects','manage','home'] as const)assert.equal(workspaceMenuParent(view),'home');
+ assert.equal(workspaceMenuParent('manage'),'projects');
+ for(const view of ['projects','home'] as const)assert.equal(workspaceMenuParent(view),'home');
 });
 test('all workspace pages use the footer width and stable bottom anchor',()=>{
  const anchor={left:13,top:700,width:254},viewport={width:1512,height:800};
