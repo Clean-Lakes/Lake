@@ -19,4 +19,17 @@
 
 回退前先处理完所有“待补充”标记，或停止本轮并确认原消息已回到暂停队列；保留最新 Web/SDK 两个数据库，不用旧备份覆盖已接入的真实用户输入。发布、数据库或正在运行的远端命令均未在本次验收中触发。
 
-最终运行源码提交：`4b08ea2b7a87b08031913026f8c1f57e12f864fe`。由提交归档补入已成功构建的静态资源后运行全部受版本控制的 Go 测试：`go test ./...`、`go test -race ./internal/ai ./internal/web ./internal/agent/...`、`go vet ./...` 全部通过；AI race 176s，Web race 506s，无 DATA RACE。ADK 边界检查通过，前端 555 项、类型与构建通过。签名后端独立 Home 验收通过：同一 RootTurnID，模型请求 2 次，旧写入零执行，其他队列内容不变，真实 user 消息仅入库一次，SDK 内部控制调用未进入供应商历史。最终文档提交与安装来源以 PR #120 对照 build-origin.json。
+首轮运行源码提交：`4b08ea2b7a87b08031913026f8c1f57e12f864fe`。由提交归档补入已成功构建的静态资源后运行全部受版本控制的 Go 测试：`go test ./...`、`go test -race ./internal/ai ./internal/web ./internal/agent/...`、`go vet ./...` 全部通过；AI race 176s，Web race 506s，无 DATA RACE。ADK 边界检查通过，前端 555 项、类型与构建通过。签名后端独立 Home 验收通过：同一 RootTurnID，模型请求 2 次，旧写入零执行，其他队列内容不变，真实 user 消息仅入库一次，SDK 内部控制调用未进入供应商历史。最终文档提交与安装来源以 PR #120 对照 build-origin.json。
+
+
+## 同步 develop 后的最终集成验收
+
+运行源码及已安装 Lake Dev 来源：`34e4fd0ddb30ca0ccf30eb13eb7959ef61bd0878`。正常合并 develop `6aa3d0b2`，保留旧策略资产退役及最新记忆设置，移除已退役字段在 detached 恢复路径的残留赋值。补充触发而未执行的旧工具提案不能作为工作目标完成或失败的证据，并增加对应回归。
+
+提交归档逐文件 Git blob 与上述 head 完全一致；`go test ./...`（Web 252s）、`go vet ./...`、ADK 边界检查通过。同步后前端 539/539、类型检查及构建通过；数量变化来自 develop 的旧资产退役。保留既有大 chunk 构建提示。
+
+官方 `scripts/build_lake_desktop.sh --dev --install` 成功；已核验 `com.cleanlakes.lake.desktop.dev`、深度严格签名、build-origin.gitHead 及后端 SHA256。只替换 Dev 安装，未重启正在运行的会话。受版本控制源码无未提交差异；清单 dirty=true 来自原有未跟踪材料，均保留。
+
+已直接使用安装内的签名后端、隔离 Home 和虚构模型复核：推送仍为同一 RootTurnID、2 次模型请求、旧写入零执行、其他队列保留、真实 user 一次入库。原长任务验收也通过：原命令仅派发一次，重启恢复与新话题保留，主任务及新话题合计 4 次模型请求，另有既有自动命名 2 次。工作区 ignored 测试的基线失败继续单列，不把提交归档通过表述为工作区全量通过。
+
+最终集成全套 `go test -race ./internal/ai ./internal/web ./internal/agent/...` 通过：AI 182s、Web 497s，无 DATA RACE。上面的源码与安装提交不含本条纯文档记录；PR head 包含该记录。
