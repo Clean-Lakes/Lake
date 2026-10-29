@@ -18,4 +18,4 @@
 
 顶级箭头移除增量：前端549/549、类型检查与构建通过。实际App目录fixture新建虚构子目录后，顶级箭头数量为0、子目录箭头为1且可展开；键盘Space可将顶级目录aria-expanded从true切为false并再次展开。根目录图标仍在12px。深色及420px浅色截图 `/tmp/lake-root-folder-dark.png`、`/tmp/lake-root-folder-light-narrow.png` 已查看，子目录箭头保留且无横向溢出；未对真实资源创建目录。
 
-会话副标题移除增量：普通会话列表不再渲染“最近会话 / 全部会话”标签及32px占位；保留分组aria-label，列表直接衔接主标题，实际间距6px。前端549/549、类型检查及构建通过。隔离App fixture验证5条预览→16条全部会话时均无副标题；Enter可收起历史并折叠/重新展开会话分组。已查看深色 `/tmp/lake-session-caption-dark.png`、420px浅色 `/tmp/lake-session-caption-light-narrow.png`，无横向溢出。首次鼠标收起被浮动工作区入口遮挡，本增量仅确认键盘收起通过，未扩大范围修改既有浮动入口/滚动逻辑；保留此限制。无Go/API/数据变化，未重复Go回归。
+会话副标题移除增量：普通会话列表不再渲染“最近会话 / 全部会话”标签及32px占位；保留分组aria-label，列表直接衔接主标题，实际间距6px。前端549/549、类型检查及构建通过。隔离App fixture验证5条预览→16条全部会话时均无副标题；Enter可收起历史并折叠/重新展开会话分组。已查看深色 `/tmp/lake-session-caption-dark.png`、420px浅色 `/tmp/lake-session-caption-light-narrow.png`，无横向溢出。自动化鼠标收起时曾被其他span拦截，未进一步核实来源；本增量确认键盘收起通过，不将工具拦截直接判定为生产缺陷。无Go/API/数据变化，未重复Go回归。
