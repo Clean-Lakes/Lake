@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from test_strategy_learning_dev import Lake
+from dev_acceptance import Lake
 
 
 class DevTurnWaitTests(unittest.TestCase):
@@ -16,7 +16,7 @@ class DevTurnWaitTests(unittest.TestCase):
         old = {'rootTurnId': 'old', 'status': 'completed', 'cards': ['old answer']}
         new = {'rootTurnId': 'new', 'status': 'completed', 'cards': ['new answer']}
         lake = self.lake([old, old, {'rootTurnId': 'new', 'status': 'running'}, new])
-        with patch('test_strategy_learning_dev.time.sleep'):
+        with patch('dev_acceptance.time.sleep'):
             self.assertEqual(lake.send_and_finish('session', 'next message'), new)
         lake.api.assert_called_once_with('/api/sessions/session/messages', 'POST', {'text': 'next message'})
         self.assertEqual(lake.snapshot.call_count, 4)
@@ -33,7 +33,7 @@ class DevTurnWaitTests(unittest.TestCase):
                 lake = self.lake([])
                 lake.snapshot.side_effect = None
                 lake.snapshot.return_value = response
-                with patch('test_strategy_learning_dev.time.monotonic', side_effect=[0, 0, 71]), patch('test_strategy_learning_dev.time.sleep'):
+                with patch('dev_acceptance.time.monotonic', side_effect=[0, 0, 71]), patch('dev_acceptance.time.sleep'):
                     with self.assertRaises(TimeoutError):
                         lake.send_and_finish('session', 'next message')
                 self.assertEqual(lake.api.call_count, 1)

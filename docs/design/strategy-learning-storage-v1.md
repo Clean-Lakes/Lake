@@ -1,6 +1,6 @@
 # P2 策略资产与血缘存储 v1
 
-> 历史设计：保留当时交付、判据和结论。当前自然记忆按[重塑计划](../../plan/feature-natural-memory-1.md)与 [N3 契约](natural-memory-idle-n3.md)推进；旧候选提取、在线纠错和新增产品实验按 [C1](strategy-execution-retirement-c1.md)退役，不能据本文重新启用。旧人工内容和原运行绑定仍从次级兼容入口管理。
+> 历史设计：保留当时交付、判据和结论。当前使用见 [Lake Memory（实验）](../lake-memory.md)，清理与验证见 [C4 手册](memory-compatibility-c4.md)。旧在线纠错、候选提取、优化和 P8/R5 试跑入口已退役；本文的命令仅适用于其记录的历史提交，不能据此重新启用。旧内容和报告从折叠兼容入口管理。
 
 日期：2026-10-21。实施基线：`origin/develop@39b3053b9b3fe0fe26c49561563eba2ff91b5466`，已包含 P1 PR #38。P2 交付 T07–T10 的业务存储；P3 API/UI/注入、P4 来源自动提取、P5 实验与 P6/P7 调度尚未接入。
 

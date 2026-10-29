@@ -28,6 +28,8 @@ jobs:
       - run: mkdir -p assets/web/dist && cp -R web-agent/web/dist/. assets/web/dist/
       - run: python3 scripts/check_adk_runtime_boundary.py
       - run: python3 -m unittest discover -s scripts -p 'test_branch_policy.py'
+      - run: python3 -m unittest discover -s scripts -p 'test_dev_*py'
+      - run: python3 -m unittest discover -s scripts -p 'test_memory_compatibility_tools.py'
       - run: go test -race ./... && go vet ./...
       - run: swift run --package-path client/macos --build-system native LakeUpdateTests
       - run: swift run --package-path client/macos --build-system native LakeWindowTests
