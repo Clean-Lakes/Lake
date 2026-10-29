@@ -3,17 +3,18 @@ package web
 import "github.com/Clean-Lakes/Lake/internal/strategy"
 
 // Run under OpenStore's lock and recovery transaction, before any worker starts.
-// The old apply choices and content bindings are deliberately independent.
+// Original settings are in the V7 archive; bindings remain audit data only.
 func (s *Store) retireStrategyExecution() {
 	for _, row := range s.rows("SELECT scopeKey,body FROM strategySettings") {
 		old := strategyDecode[strategy.Settings](stringOf(row["body"]))
-		if old.ExecutionRetirementVersion == strategy.ExecutionRetirementVersion && !old.LearnEnabled && !old.CorrectEnabled && !old.OnlineCorrectEnabled {
+		if old.ExecutionRetirementVersion == strategy.ExecutionRetirementVersion && !old.MasterEnabled && !old.ApplyEnabled && !old.LearnEnabled && !old.CorrectEnabled && !old.OnlineCorrectEnabled {
 			continue
 		}
 		value := old
 		if value.RetiredExecutionChoices == nil {
 			value.RetiredExecutionChoices = &strategy.RetiredExecutionChoices{LearnEnabled: old.LearnEnabled, CorrectEnabled: old.CorrectEnabled, OnlineCorrectEnabled: old.OnlineCorrectEnabled, OnlineConsentVersion: old.OnlineConsentVersion, SettingsRevision: old.Revision, Epoch: old.Epoch}
 		}
+		value.MasterEnabled, value.ApplyEnabled = false, false
 		value.LearnEnabled, value.CorrectEnabled, value.OnlineCorrectEnabled = false, false, false
 		value.OnlineConsentVersion = 0
 		value.ExecutionRetirementVersion = strategy.ExecutionRetirementVersion
@@ -21,7 +22,7 @@ func (s *Store) retireStrategyExecution() {
 		key := stringOf(row["scopeKey"])
 		value.Epoch = s.strategyAdvanceScope(key)
 		s.strategySaveSettings(key, value)
-		s.strategyEvent(key, old.Scope.ProjectID, key, value.Revision, "strategy_execution_retired", Object{"version": strategy.ExecutionRetirementVersion})
+		s.strategyEvent(key, old.Scope.ProjectID, key, value.Revision, "strategy_assets_retired", Object{"version": strategy.ExecutionRetirementVersion})
 	}
 }
 

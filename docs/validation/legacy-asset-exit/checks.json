@@ -1,0 +1,95 @@
+{
+  "baselineDevelop": "360fc7d738112c9ecf9025460551fac3f6053fcb",
+  "finalProductCodeCommit": "b071abf3fd325bac5c139dcba35ffa14f56a0a96",
+  "upgrade": {
+    "codeCommit": "f0fc0b44035c4ba60ffeea224d3dd3448a3482e5",
+    "status": "passed",
+    "preservedBaselineTables": 49,
+    "expectedChangedTables": [
+      "web/strategyScopes",
+      "web/strategySettings",
+      "web/strategyEvents",
+      "web/strategySchemaMeta"
+    ],
+    "archivedAssets": 8,
+    "naturalEntriesPreserved": 6,
+    "nativeCorrectionsUnchanged": true,
+    "nativeArtifactsUnchanged": true,
+    "originalSettingsArchivedExact": true
+  },
+  "isolated": {
+    "status": "passed",
+    "sourceCommit": "b071abf3fd325bac5c139dcba35ffa14f56a0a96",
+    "previousBinaryRoundTrip": "passed_v7_rejected_without_data_change",
+    "providerRequests": 2,
+    "checks": [
+      "v6_exact_archive",
+      "old_switches_disabled",
+      "no_implicit_conversion",
+      "unknown_identity_preserved",
+      "all_legacy_routes_410",
+      "two_new_turns_across_restart",
+      "no_new_manifests_or_corrections",
+      "restart_hash_parity",
+      "independent_consent_off"
+    ],
+    "newCorrections": 0,
+    "newExperimentalManifests": 0
+  },
+  "live": {
+    "sourceCommit": "f0fc0b44035c4ba60ffeea224d3dd3448a3482e5",
+    "allPassed": true,
+    "scenarios": [
+      {
+        "scenario": "旧体系退出 · 自然偏好复用",
+        "passed": true,
+        "answer": "【协调偏好】2 加 2 等于 4。",
+        "exactPreferencePrepared": true,
+        "noOperationsOrCorrection": true
+      },
+      {
+        "scenario": "旧体系退出 · 当前要求优先",
+        "passed": true,
+        "answer": "4",
+        "exactPreferencePrepared": true,
+        "noOperationsOrCorrection": true
+      }
+    ],
+    "manifestDelta": 0,
+    "correctionDelta": 0,
+    "integrity": {
+      "lake-web.sqlite": "ok",
+      "adk/sessions.sqlite": "ok"
+    }
+  },
+  "offlineCompatibility": {
+    "passed": 418,
+    "skipped": 6,
+    "failed": 0
+  },
+  "frontendTests": 532,
+  "nativeUI": {
+    "platform": "macOS",
+    "light": true,
+    "dark": true,
+    "narrowWindowWidth": 1003,
+    "legacyEntryAbsent": true,
+    "scopeMenuEscape": true,
+    "themeRestored": "light",
+    "widthRestored": true
+  },
+  "windows": {
+    "webCrossCompile": true,
+    "clientCrossCompile": true,
+    "nativeWebView2": "not_run_no_authorization"
+  },
+  "race": {
+    "aiFullPackage": "passed",
+    "webFullFirstAttempt": "package_timeout_5m",
+    "webFullExtendedAttempt": "609_pass_one_test_fixture_channel_race",
+    "fixtureFix": "sync.OnceFunc_no_channel_reassignment",
+    "affectedWebGroupsAfterFix": "passed_29.933s"
+  },
+  "validationScope": "legacy_asset_exit_before_settings_UI_followup",
+  "followUpUI": "../memory-settings-clarity/checks.json"
+}

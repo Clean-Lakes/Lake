@@ -2,54 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {naturalMemoryApi,naturalMemoryPath,type NaturalPreview} from '../src/naturalMemoryApi';
-import {NaturalMemoryFoundation} from '../src/NaturalMemoryFoundation';
+import {naturalMemoryPath} from '../src/naturalMemoryApi';
 
-test('natural memory foundation explains separate automation and reversible management without an enable control',()=>{
- const html=renderToStaticMarkup(React.createElement(NaturalMemoryFoundation,{projectId:'a',busy:false,run:async task=>{await task();}}));
- assert.match(html,/自然形成与空闲整理见上方自动记忆开关/);
- assert.match(html,/不会停用原偏好/);
- assert.doesNotMatch(html,/type="checkbox"|type="radio"/);
- assert.match(html,/旧偏好承接/);
+test('memory settings expose only natural memory and project entries, without legacy management',async()=>{
+ const {MemorySettings}=await import('../src/MemorySettings');
+ const html=renderToStaticMarkup(React.createElement(MemorySettings,{projectId:'a',onBusyChange:()=>{},onProjectMemory:()=>{}}));
+ assert.match(html,/记忆开关/);assert.match(html,/已保存的偏好/);assert.match(html,/查看当前项目的事实与经验/);
+ assert.doesNotMatch(html,/历史资产与兼容管理|旧偏好承接|会话应用已采用资产|历史对照实验|历史候选与来源|人工资产继续/);
 });
-test('carry retries retain idempotency identity and the exact reviewed token/revision',async()=>{
- const original=globalThis.fetch;
- const requests:{url:string;method?:string;key:string|null;body:string}[]=[];
- let attempt=0;
- globalThis.fetch=async(input,init)=>{
-  requests.push({url:String(input),method:init?.method,key:new Headers(init?.headers).get('Idempotency-Key'),body:String(init?.body)});
-  attempt++;
-  return new Response(JSON.stringify(attempt===1?{error:'retry'}:{id:'old',revision:4,changeId:'c'}),{status:attempt===1?503:200,headers:{'Content-Type':'application/json'}});
- };
- try{
-  const preview={id:'old',previewToken:'reviewed',linkRevision:3} as NaturalPreview;
-  const base=naturalMemoryPath('project/a');
-  await assert.rejects(naturalMemoryApi.carry(base,preview));
-  await naturalMemoryApi.carry(base,preview);
-  assert.equal(requests[0].key,requests[1].key);
-  assert.ok(requests[0].key);
-  assert.equal(requests[0].url,'/api/projects/project%2Fa/natural-memory/legacy/old/carry');
-  assert.deepEqual(JSON.parse(requests[1].body),{expectedRevision:3,previewToken:'reviewed'});
-  await naturalMemoryApi.undo(base,'c',4);
-  assert.notEqual(requests[2].key,requests[1].key);
-  assert.deepEqual(JSON.parse(requests[2].body),{expectedRevision:4});
- }finally{globalThis.fetch=original;}
-});
-test('read endpoints never send an idempotency key or trigger retired strategy endpoints',async()=>{
- const original=globalThis.fetch;
- const calls:string[]=[];
- globalThis.fetch=async(input,init)=>{
-  calls.push(String(input));assert.equal(init?.method,'GET');assert.equal(new Headers(init?.headers).get('Idempotency-Key'),null);
-  return new Response(JSON.stringify({items:[],nextCursor:'',total:0}),{status:200});
- };
- try{
-  const base=naturalMemoryPath('');
-  await naturalMemoryApi.settings(base);await naturalMemoryApi.projectEntries(base);await naturalMemoryApi.preferences(base);await naturalMemoryApi.changes(base);await naturalMemoryApi.legacy(base);
-  assert.ok(calls.every(c=>c.startsWith('/api/natural-memory/')));
-  assert.ok(calls.every(c=>!c.includes('/strategy/')));
- }finally{globalThis.fetch=original;}
-});
-
 test('natural settings PATCH and exact-version undo use separate scoped contracts',async()=>{
  const {naturalPreferenceApi}=await import('../src/naturalMemoryApi');const original=globalThis.fetch;
  const calls:{url:string;method:string;key:string|null;body:unknown}[]=[];
@@ -62,9 +22,11 @@ test('natural update notice is commit-driven and offers view and undo without re
  const html=renderToStaticMarkup(React.createElement(NaturalMemoryNotice,{notices:[{changeId:'c',scope:'project:a',entryId:'e',revision:1}]}));
  assert.match(html,/已更新项目偏好/);assert.match(html,/查看/);assert.match(html,/撤销/);assert.match(html,/实验/);assert.doesNotMatch(html,/审核|采用/);
 });
-test('natural settings describe opt-in scope, preserved content and independent scoped recall',async()=>{
+test('memory rules are available on demand after the controls and saved preferences',async()=>{
  const {NaturalMemoryPreferences}=await import('../src/NaturalMemoryPreferences');
- const html=renderToStaticMarkup(React.createElement(NaturalMemoryPreferences,{projectId:'a',busy:false,run:async task=>{await task()}}));assert.match(html,/自动记忆 · 实验/);assert.match(html,/不补扫历史/);assert.match(html,/跨项目偏好需/);assert.match(html,/使用默认关闭/);assert.match(html,/关闭积累仍可使用/);assert.match(html,/当前明确要求优先/);assert.match(html,/专员与工作流不继承/);assert.doesNotMatch(html,/尚未接入后续回答/);
+ const html=renderToStaticMarkup(React.createElement(NaturalMemoryPreferences,{projectId:'a',busy:false,run:async task=>{await task()}}));
+ assert.match(html,/自动积累偏好/);assert.match(html,/回答时使用偏好/);assert.match(html,/已保存的偏好/);
+ const rules=html.indexOf('<summary>记忆如何工作</summary>');assert.ok(rules>html.indexOf('已保存的偏好'));assert.ok(html.indexOf('当前明确要求优先')>rules);assert.match(html,/各自默认关闭/);assert.doesNotMatch(html,/后台增量：|遵从未知|原项目事实、历史经验和人工资产/);
 });
 
 test('one persisted batch produces one notice with scoped optional per-item controls',async()=>{
@@ -83,4 +45,34 @@ test('recall toggle uses its own revision and endpoint without changing capture 
  let received:{url:string;method:string;body:unknown;key:string|null}|undefined;
  globalThis.fetch=async(input,init)=>{received={url:String(input),method:init?.method||'',body:JSON.parse(String(init?.body)),key:new Headers(init?.headers).get('Idempotency-Key')};return new Response(JSON.stringify({revision:3,useEnabled:false}),{status:200})};
  try{await naturalPreferenceApi.recallSettings(naturalMemoryPath('project/a'),2,false);assert.equal(received?.method,'PATCH');assert.match(received!.url,/project%2Fa\/natural-memory\/recall-settings$/);assert.deepEqual(received?.body,{expectedRevision:2,useEnabled:false});assert.ok(received?.key)}finally{globalThis.fetch=original}
+});
+
+test('the two memory controls preserve independent persisted choices and loading disables writes',async()=>{
+ const {MemoryPreferenceControls}=await import('../src/NaturalMemoryPreferences');
+ for(const [autoEnabled,useEnabled] of [[false,true],[true,false],[false,false]]){
+  const settings={scope:{kind:'user'},revision:4,autoEnabled,automaticReady:true,recallSettings:{revision:7,useEnabled},projectMemorySettings:null} as const;
+  const html=renderToStaticMarkup(React.createElement(MemoryPreferenceControls,{settings,busy:false,onCapture:()=>{},onUse:()=>{}}));
+  const inputs=html.match(/<input[^>]+>/g)!;assert.equal(inputs.length,2);assert.equal(inputs[0]!.includes('checked=""'),autoEnabled);assert.equal(inputs[1]!.includes('checked=""'),useEnabled);assert.ok(inputs.every(input=>!input.includes('disabled=""')));
+ }
+ const loading=renderToStaticMarkup(React.createElement(MemoryPreferenceControls,{settings:null,busy:false,onCapture:()=>{},onUse:()=>{}}));assert.equal((loading.match(/disabled=""/g)||[]).length,2);
+});
+
+test('saved preference content is plain text with version and source inside optional details',async()=>{
+ const {MemoryPreferenceItem}=await import('../src/NaturalMemoryPreferences');
+ const value={id:'private-internal-identifier',topic:'style',revision:12,contentRevision:12,body:'先给结论，再列依据。',state:'active',scope:'project:p',source:{private:false,available:true},parentRevision:11};
+ const html=renderToStaticMarkup(React.createElement(MemoryPreferenceItem,{value,busy:false,onForget:()=>{}}));
+ assert.match(html,/先给结论，再列依据。/);assert.doesNotMatch(html,/<pre|private-internal-identifier|确认遗忘偏好/);assert.ok(html.indexOf('版本 12')>html.indexOf('<summary>来源与版本</summary>'));assert.match(html,/>遗忘<\/button>/);
+});
+
+test('private source identities stay hidden in both normal and expanded change markup',async()=>{
+ const {NaturalPreferenceChangeView}=await import('../src/NaturalMemoryPreferences');
+ const after={id:'p',topic:'style',revision:2,contentRevision:2,body:'先给结论。',state:'active',scope:'user',source:{private:true,available:true,sessionId:'PRIVATE-SESSION',messageId:'PRIVATE-MESSAGE'},parentRevision:1};
+ const html=renderToStaticMarkup(React.createElement(NaturalPreferenceChangeView,{value:{id:'c',entryId:'p',beforeRevision:1,afterRevision:2,kind:'replace',createdAt:'',undoneBy:'',after}}));
+ assert.match(html,/修改后/);assert.match(html,/来源详情已隐藏/);assert.doesNotMatch(html,/PRIVATE-SESSION|PRIVATE-MESSAGE/);
+});
+
+test('background counts live in a closed status disclosure and deferred records are not called complete',async()=>{
+ const {MemoryConsolidationDetails}=await import('../src/NaturalMemoryPreferences');
+ const html=renderToStaticMarkup(React.createElement(MemoryConsolidationDetails,{value:{captured:0,processed:2,deferred:1,withdrawn:1,conflicts:0}}));
+ assert.match(html,/<details[^>]*><summary>整理状态<\/summary>/);assert.doesNotMatch(html,/<details[^>]* open/);assert.match(html,/暂缓的记录尚未整理完成/);assert.match(html,/不影响正常对话/);
 });

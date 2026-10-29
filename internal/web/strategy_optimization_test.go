@@ -1,8 +1,6 @@
 package web
 
 import (
-	"github.com/Clean-Lakes/Lake/internal/ai"
-	"github.com/Clean-Lakes/Lake/internal/strategy"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +9,11 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
+	"github.com/Clean-Lakes/Lake/internal/ai"
+	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
 // Seed the on-disk v4-v6 format, not a production optimizer or permissive route.
@@ -27,7 +30,7 @@ func seedLegacyOptimization(t *testing.T, s *Store, state string) (StrategyConte
 	}
 	job := seedLegacyJob(t, s, ctx, scope, "experiment", a.AssetID, v.Value.SourceIDs)
 
-	f := strategyExperimentFrozen{Optimization: true, Asset: v.Value, Cases: []strategy.Fixture{strategy.Fixtures()[0], strategy.Fixtures()[13]}, Repetitions: 1, Budget: strategy.DefaultBudget(), SkillHashes: map[string]string{}}
+	f := strategyExperimentFrozen{Optimization: true, Asset: v.Value, Cases: []legacystrategy.Fixture{legacystrategy.Fixtures()[0], legacystrategy.Fixtures()[13]}, Repetitions: 1, Budget: strategy.DefaultBudget(), SkillHashes: map[string]string{}}
 	_, e = strategyCall(s, true, func() bool {
 		raw := jsonText(f)
 		s.exec("INSERT INTO strategyExperiments(jobId,frozenJSON,frozenHash,modelRef,requests,tokensCharged,createdAt) VALUES(?,?,?,'legacy-model',2,4096,?)", job.JobID, raw, strategy.ContentHash(raw), now())
@@ -49,7 +52,7 @@ func seedLegacyOptimization(t *testing.T, s *Store, state string) (StrategyConte
 			second = "running"
 		}
 		s.exec("INSERT INTO strategyOptimizationCalls(id,experimentId,stage,status,requestHash,reservedTokens) VALUES(?,?,'synthesize',?,'inflight-request',2048)", ident(), job.JobID, second)
-		run := ai.StrategyVariantResult{Status: "completed", RuntimeID: "legacy-runtime", Answer: "Legacy private answer", Evaluation: strategy.FixtureEvaluation{Status: "passed"}}
+		run := legacyVariantResult{Status: "completed", RuntimeID: "legacy-runtime", Answer: "Legacy private answer", Evaluation: legacystrategy.FixtureEvaluation{Status: "passed"}}
 		s.exec("INSERT INTO strategyExperimentRuns(id,experimentId,ordinal,caseId,arm,repetition,status,runtimeId,reportJSON,variant) VALUES(?,?,1,'SL-001','baseline',1,'completed','legacy-runtime',?,'baseline_development')", ident(), job.JobID, jsonText(run))
 		s.exec("INSERT INTO strategyExperimentRuns(id,experimentId,ordinal,caseId,arm,repetition,status,variant) VALUES(?,?,2,'SL-014','assets',1,'planned','synthesis_holdout')", ident(), job.JobID)
 		if state == "checkpoint" {
@@ -78,10 +81,7 @@ func TestStrategyOptimizationRetiredHTTPAndNoProviderDispatch(t *testing.T) {
 	b.Models.Save(&ai.Model{URL: provider.URL, Name: "retirement-fixture", Protocol: "openai"})
 	ctx, id, _ := seedLegacyOptimization(t, b.Store, "queued")
 	base := "/api/projects/" + ctx.ProjectID + "/strategy"
-	f := strategyHTTP(t, h, "GET", base+"/fixtures", "", "", 200)
-	if object(f["boundedOptimization"])["supported"] != false {
-		t.Fatal("retired actor advertised")
-	}
+	strategyHTTP(t, h, "GET", base+"/fixtures", "", "", 410)
 	// Even legacy idempotency keys cannot revive an old creation receipt.
 	for _, key := range []string{"new", "old"} {
 		strategyHTTP(t, h, "POST", base+"/experiments", key, jsonText(Object{"ref": strategy.RevisionRef{}, "caseIds": []string{}, "repetitions": 1, "skillNames": []string{}, "optimization": true}), 410)
@@ -94,10 +94,7 @@ func TestStrategyOptimizationRetiredHTTPAndNoProviderDispatch(t *testing.T) {
 	if e != nil || job != nil || calls.Load() != 0 {
 		t.Fatal("retired job dispatched", e)
 	}
-	report := strategyHTTP(t, h, "GET", base+"/experiments/"+id+"/report", "", "", 200)
-	if report["retired"] != true || report["canSave"] != false || report["canResume"] != false {
-		t.Fatal("historical actions remained available")
-	}
+	strategyHTTP(t, h, "GET", base+"/experiments/"+id+"/report", "", "", 410)
 }
 func TestStrategyOptimizationRetirementRecoveryPreservesUnknownAndCompletedIdentity(t *testing.T) {
 	for _, state := range []string{"queued", "checkpoint", "unknown", "settled"} {
@@ -157,20 +154,25 @@ func TestStrategyOptimizationMemoryForgetErasesCandidateCopies(t *testing.T) {
 	b, h := fixture(t)
 	enableStrategyFixture(t, b.Store)
 	ctx, id, source := seedLegacyOptimization(t, b.Store, "checkpoint")
-	base := "/api/projects/" + ctx.ProjectID + "/strategy"
-	before := strategyHTTP(t, h, "GET", base+"/experiments/"+id+"/report", "", "", 200)
+	before, err := b.strategyOptimizationReport(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(jsonText(before), "Legacy private candidate") {
 		t.Fatal("historical candidate unreadable")
 	}
 	if _, e := b.Store.ForgetStrategySource(ctx, source, ident(), true); e != nil {
 		t.Fatal(e)
 	}
-	after := strategyHTTP(t, h, "GET", base+"/experiments/"+id+"/report", "", "", 200)
+	after, err := b.strategyOptimizationReport(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if after["contentAvailable"] != false || strings.Contains(jsonText(after), "Legacy private") {
 		t.Fatal("withdrawal retained historical private text")
 	}
 	other := stringOf(b.Store.CreateProject("Other project")["id"])
-	strategyHTTP(t, h, "GET", "/api/projects/"+other+"/strategy/experiments/"+id+"/report", "", "", 404)
+	strategyHTTP(t, h, "GET", "/api/projects/"+other+"/strategy/experiments/"+id+"/report", "", "", 410)
 }
 func TestStrategyOptimizationCheckpointCrashHelper(t *testing.T) {
 	dir := os.Getenv("LAKE_R5_CRASH_DIR")

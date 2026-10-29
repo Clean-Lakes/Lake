@@ -1,0 +1,81 @@
+package web
+
+// Historical fixture support only: never compiled into the Lake product.
+
+import (
+	"strings"
+
+	"github.com/Clean-Lakes/Lake/internal/strategy"
+)
+
+func (s *Store) ReviewStrategyRevision(ctx StrategyContext, id, key string, ref strategy.RevisionRef, expected int64, decision, reason string) (StrategyMutationResult, error) {
+	return strategyCall(s, true, func() StrategyMutationResult {
+		a := s.strategyAsset(ctx, id, false)
+		if scopeFromRow(a).Kind == strategy.UserScope && ctx.ProjectID != "" {
+			strategyFail(404, "asset_unavailable")
+		}
+		if ref.AssetID != id || ref.Validate() != nil || (decision != "accepted" && decision != "rejected") || !set("not_reusable duplicate incorrect too_specific other reviewed")[reason] {
+			strategyFail(400, "invalid_review")
+		}
+		result, replay, digest := s.strategyReceipt(stringOf(a["scopeKey"]), key, Object{"operation": "review", "ref": ref, "expected": expected, "decision": decision, "reason": reason})
+		if replay {
+			return result
+		}
+		v := s.strategyRevisionView(ctx, id, ref.Revision)
+		if v.Value.Ref != ref || v.Review.DecisionRevision != expected || int64(integer(a["revision"])) != ref.Revision {
+			strategyFail(409, "revision_conflict")
+		}
+		if !v.Available || !v.SourcesAvailable {
+			strategyFail(409, "source_unavailable")
+		}
+		s.exec("INSERT INTO strategyReviews VALUES(?,?,?,?,?,?) ON CONFLICT(assetId,revision) DO UPDATE SET decision=excluded.decision,decisionRevision=excluded.decisionRevision,reasonCode=excluded.reasonCode,updatedAt=excluded.updatedAt", id, ref.Revision, decision, expected+1, reason, now())
+		if decision == "rejected" {
+			r := s.row("SELECT sourceSetHash FROM strategyRevisions WHERE assetId=? AND revision=?", id, ref.Revision)
+			s.exec("INSERT OR IGNORE INTO strategyRejections VALUES(?,?,?,?,?)", a["scopeKey"], r["sourceSetHash"], strategy.ContentHash(strategyComparableBody(v.Value.Body)), reason, now())
+			s.exec("UPDATE strategyBindings SET enabled=0,bindingRevision=bindingRevision+1 WHERE assetId=? AND revision=?", id, ref.Revision)
+			s.strategyAdvanceScope(stringOf(a["scopeKey"]))
+			s.pruneStrategyDerivedContent()
+		}
+		s.strategyEvent(stringOf(a["scopeKey"]), "", id, expected+1, "review_"+decision, ref)
+		result = StrategyMutationResult{AssetID: id, Revision: ref.Revision}
+		s.strategySaveReceipt(stringOf(a["scopeKey"]), key, digest, result)
+		return result
+	})
+}
+
+func (s *Store) PromoteStrategyRevision(ctx StrategyContext, id, key string, ref strategy.RevisionRef, in StrategyAssetInput, confirmed bool) (StrategyMutationResult, error) {
+	return strategyCall(s, true, func() StrategyMutationResult {
+		a := s.strategyAsset(ctx, id, false)
+		if ctx.ProjectID == "" || scopeFromRow(a).Kind != strategy.ProjectScope || !confirmed || ref.AssetID != id || ref.Validate() != nil {
+			strategyFail(400, "promotion_requires_confirmation")
+		}
+		validateStrategyInput(in)
+		result, replay, digest := s.strategyReceipt(stringOf(a["scopeKey"]), key, Object{"operation": "promote", "ref": ref, "input": in, "confirmed": confirmed})
+		if replay {
+			return result
+		}
+		v := s.strategyRevisionView(ctx, id, ref.Revision)
+		if v.Value.Ref != ref || int64(integer(a["revision"])) != ref.Revision {
+			strategyFail(409, "revision_conflict")
+		}
+		if !v.Available || !v.SourcesAvailable || v.Review.Decision != "accepted" {
+			strategyFail(409, "review_required")
+		}
+		if in.Kind != v.Value.Kind || strings.TrimSpace(in.Assessment.Conditions) == "" || strings.TrimSpace(in.Assessment.Limitations) == "" {
+			strategyFail(400, "promotion_conditions_required")
+		}
+		if s.row("SELECT 1 FROM strategyPromotions p JOIN strategyAssets a ON a.id=p.assetId JOIN strategyRevisions r ON r.assetId=p.assetId AND r.revision=p.revision WHERE p.originAssetId=? AND p.originRevision=? AND a.deletedAt='' AND r.contentHash=?", id, ref.Revision, strategy.ContentHash(in.Body)) != nil {
+			strategyFail(409, "duplicate_promotion")
+		}
+		target := ident()
+		s.exec("INSERT INTO strategyAssets(id,scopeKey,kind,title,revision,createdAt) VALUES(?,'user',?,?,1,?)", target, in.Kind, in.Title, now())
+		source := s.strategyManualSource("user", "promotion:"+target, in.Body)
+		s.strategyWriteRevision(StrategyContext{}, s.strategyAsset(StrategyContext{}, target, false), 1, 0, in, []string{source}, strategy.UserConfirmed, "local_user")
+		s.exec("INSERT INTO strategyPromotions VALUES(?,1,?,?,?)", target, id, ref.Revision, ref.ContentHash)
+		s.strategyEdge(target, revisionNode(target, 1), revisionNode(id, ref.Revision), "derived_from")
+		s.strategyEvent("user", "", target, 1, "promoted", Object{"ref": strategy.RevisionRef{AssetID: target, Revision: 1, ContentHash: strategy.ContentHash(in.Body)}})
+		result = StrategyMutationResult{AssetID: target, Revision: 1}
+		s.strategySaveReceipt(stringOf(a["scopeKey"]), key, digest, result)
+		return result
+	})
+}

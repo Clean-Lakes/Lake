@@ -126,17 +126,17 @@ func TestWindowsNaturalMemoryInRealWebView(t *testing.T) {
  await choose(document,'工作区'); await choose(document,'设置');
  (await wait(()=>document.querySelector('#memory-settings-tab'))).click();await wait(panel);
  await choose(panel,'记忆范围');
- (await wait(()=>Array.from(document.querySelectorAll('[role="option"]')).find(e=>e.textContent.includes('用户全局')))).click();
+ (await wait(()=>Array.from(document.querySelectorAll('[role="option"]')).find(e=>e.textContent.includes('所有项目')))).click();
  const checkbox=text=>Array.from(panel().querySelectorAll('label')).find(e=>e.textContent.includes(text))?.querySelector('input[type="checkbox"]');
- await wait(()=>checkbox('使用用户全局自然偏好'));
- assert(!checkbox('使用用户全局自然偏好').checked,'recall_default_on');
- assert(!checkbox('自动形成用户全局偏好').checked,'capture_default_on');
- checkbox('使用用户全局自然偏好').click();await wait(()=>checkbox('使用用户全局自然偏好').checked&&!checkbox('使用用户全局自然偏好').disabled);
+ await wait(()=>checkbox('回答时使用偏好')&&!checkbox('回答时使用偏好').disabled);
+ assert(!checkbox('回答时使用偏好').checked,'recall_default_on');
+ assert(!checkbox('自动积累偏好').checked,'capture_default_on');
+ checkbox('回答时使用偏好').click();await wait(()=>checkbox('回答时使用偏好').checked&&!checkbox('回答时使用偏好').disabled);
  let settings=await (await fetch('/api/natural-memory/settings')).json();
  assert(settings.recallSettings.useEnabled===true&&settings.autoEnabled===false,'recall_changed_capture');
- checkbox('使用用户全局自然偏好').click();await wait(()=>!checkbox('使用用户全局自然偏好').checked&&!checkbox('使用用户全局自然偏好').disabled);
+ checkbox('回答时使用偏好').click();await wait(()=>!checkbox('回答时使用偏好').checked&&!checkbox('回答时使用偏好').disabled);
  settings=await (await fetch('/api/natural-memory/settings')).json();assert(settings.recallSettings.useEnabled===false&&settings.recallSettings.revision===2,'stop_not_persisted');
- assert(!panel().querySelector('#strategy-settings-panel'),'legacy_loaded_without_request');
+ assert(!panel().querySelector('#strategy-settings-panel')&&!panel().textContent.includes('历史资产与兼容管理'),'legacy_entry_present');
  document.querySelector('#appearance-settings-tab').click();
  const dark=await wait(()=>Array.from(document.querySelectorAll('[role="radio"]')).find(b=>b.textContent.trim()==='深色'));dark.click();await wait(()=>dark.getAttribute('aria-checked')==='true');
  document.querySelector('#memory-settings-tab').click();await wait(panel);
@@ -144,7 +144,7 @@ func TestWindowsNaturalMemoryInRealWebView(t *testing.T) {
  const select=panel().querySelector('[aria-label="记忆范围"]');select.focus();select.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));await wait(()=>select.getAttribute('aria-expanded')==='true');
  select.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await wait(()=>select.getAttribute('aria-expanded')==='false');assert(document.querySelector('#memory-settings-panel'),'escape_closed_settings');
  assert(panel().scrollWidth<=panel().clientWidth+2,'memory_panel_overflow');
- await window.__memoryResult(JSON.stringify({passed:true,actualBackend:true,actualWebView2:true,defaultNoModel:true,independentRecall:true,defaultOff:true,stopPersisted:true,legacyCollapsed:true,dark:true,keyboardEscape:true,viewportWidth:innerWidth,viewportHeight:innerHeight}));
+ await window.__memoryResult(JSON.stringify({passed:true,actualBackend:true,actualWebView2:true,defaultNoModel:true,independentRecall:true,defaultOff:true,stopPersisted:true,legacyAbsent:true,dark:true,keyboardEscape:true,viewportWidth:innerWidth,viewportHeight:innerHeight}));
  })().catch(error=>window.__memoryResult(JSON.stringify({passed:false,error:String(error.message)})));});`)
 	timer := time.AfterFunc(50*time.Second, func() { window.Dispatch(window.Destroy) })
 	defer timer.Stop()

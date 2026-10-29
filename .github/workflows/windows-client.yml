@@ -77,14 +77,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test ./internal/platform -run '^TestSSHFileOption' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go test ./client/windows -skip '^TestWindows(LegacyAssetConfirmation|NaturalMemory)InRealWebView$' -count=1 -timeout 1m
+          go test ./client/windows -skip '^TestWindows(LegacyAssetsRetired|NaturalMemory)InRealWebView$' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Memory, legacy assets and retirement regression
         shell: pwsh
         run: |
           python scripts/verify_memory_compatibility.py --report "${{ runner.temp }}/memory-compatibility-windows.json"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Actual Windows legacy confirmation and memory settings
+      - name: Actual Windows legacy exit and memory settings
         shell: pwsh
         env:
           LAKE_COMPAT_REQUIRED_WINDOWS_UI: '1'
@@ -92,7 +92,7 @@ jobs:
           LAKE_MEMORY_REQUIRED_WINDOWS_UI: '1'
           LAKE_MEMORY_WINDOWS_REPORT: ${{ runner.temp }}/memory-windows-ui.json
         run: |
-          go test -v ./client/windows -run '^TestWindowsLegacyAssetConfirmationInRealWebView$' -count=1 -timeout=3m
+          go test -v ./client/windows -run '^TestWindowsLegacyAssetsRetiredInRealWebView$' -count=1 -timeout=3m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test -v ./client/windows -run '^TestWindowsNaturalMemoryInRealWebView$' -count=1 -timeout=3m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -199,7 +199,7 @@ jobs:
         env:
           LAKE_COMPAT_REQUIRED_WINDOWS_UI: '1'
           LAKE_COMPAT_WINDOWS_REPORT: ${{ runner.temp }}/legacy-assets-windows-ui.json
-        run: go test -v ./client/windows -run '^TestWindowsLegacyAssetConfirmationInRealWebView$' -count=1 -timeout=3m
+        run: go test -v ./client/windows -run '^TestWindowsLegacyAssetsRetiredInRealWebView$' -count=1 -timeout=3m
       - name: Actual Windows memory settings
         if: inputs.compatibility_checks != 'backend-only' && inputs.compatibility_checks != 'legacy-ui-only'
         shell: pwsh

@@ -1,10 +1,6 @@
 import {ApiRequestError} from './api';
-import type {StrategyApplicability,StrategyReuse,StrategyScope} from './strategyApi';
-export type NaturalMemorySettings={scope:StrategyScope;revision:number;autoEnabled:boolean;automaticReady:boolean;recallSettings:{revision:number;useEnabled:boolean};preferenceSettings:{effectiveUseEnabled:boolean};projectMemorySettings:{useEnabled:boolean;extractionEnabled:boolean}|null};
-export type NaturalLegacy={id:string;title:string;eligible:boolean;reason:string;linkState:string;linkRevision:number;contentRevision:number};
-export type NaturalPreview=NaturalLegacy&{body:string;previewToken:string;scope:StrategyScope;applicability:StrategyApplicability;reuse:StrategyReuse;binding:{priority:number;exclusionGroup:string};assessment:{conditions:string;evidence:string;limitations:string}};
-export type NaturalPreference={id:string;title:string;revision:number;contentRevision:number;state:string};
-export type NaturalChange={id:string;assetId:string;kind:string;createdAt:string;undoneBy:string;revision:number};
+type MemoryScope={kind:'user'|'project';projectId?:string};
+export type NaturalMemorySettings={scope:MemoryScope;revision:number;autoEnabled:boolean;automaticReady:boolean;recallSettings:{revision:number;useEnabled:boolean};projectMemorySettings:{useEnabled:boolean;extractionEnabled:boolean}|null};
 export type NaturalPage<T>={items:T[];nextCursor:string};
 export const naturalMemoryPath=(projectId:string)=>projectId?`/api/projects/${encodeURIComponent(projectId)}/natural-memory`:'/api/natural-memory';
 const pending=new Map<string,string>();
@@ -17,13 +13,7 @@ async function request<T>(base:string,path:string,data?:unknown):Promise<T>{
 }
 export const naturalMemoryApi={
  settings:(base:string)=>request<NaturalMemorySettings>(base,'/settings'),
- legacy:(base:string,after='')=>request<NaturalPage<NaturalLegacy>>(base,'/legacy?after='+encodeURIComponent(after)),
- preferences:(base:string,after='')=>request<NaturalPage<NaturalPreference>>(base,'/preferences?after='+encodeURIComponent(after)),
- changes:(base:string,after='')=>request<NaturalPage<NaturalChange>>(base,'/changes?after='+encodeURIComponent(after)),
  projectEntries:(base:string)=>request<{items:{key:string;description:string;revision:number}[];total:number}>(base,'/project-entries'),
- preview:(base:string,id:string)=>request<NaturalPreview>(base,'/legacy/'+encodeURIComponent(id)+'/preview'),
- carry:(base:string,p:NaturalPreview)=>request<{id:string;revision:number;changeId:string}>(base,'/legacy/'+encodeURIComponent(p.id)+'/carry',{expectedRevision:p.linkRevision,previewToken:p.previewToken}),
- undo:(base:string,changeId:string,revision:number)=>request<{id:string;revision:number;changeId:string}>(base,'/changes/'+encodeURIComponent(changeId)+'/undo',{expectedRevision:revision}),
 };
 export type FormedPreference={id:string;topic:string;revision:number;contentRevision:number;body:string;state:string;scope:string;source:{private:boolean;available:boolean;sessionId?:string;messageId?:string};parentRevision:number;sources?:{available:boolean;private:boolean;sessionId?:string;messageId?:string}[]};
 export type FormedChange={id:string;entryId:string;beforeRevision:number;afterRevision:number;kind:string;createdAt:string;undoneBy:string;before?:FormedPreference|null;after?:FormedPreference};

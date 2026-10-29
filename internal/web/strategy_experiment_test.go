@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/ai"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
@@ -46,9 +48,9 @@ func experimentProvider(t *testing.T, calls *atomic.Int32, attack bool) *httptes
 		if strings.Contains(raw, "diagnostic_marker") || strings.Contains(raw, "candidateWins") || strings.Contains(raw, "snapshot-judge-v1") {
 			t.Error("hidden judge/feedback leaked")
 		}
-		var f strategy.Fixture
+		var f legacystrategy.Fixture
 		index := 0
-		for i, c := range strategy.Fixtures() {
+		for i, c := range legacystrategy.Fixtures() {
 			if strings.Contains(raw, c.Prompt) {
 				f = c
 				index = i
@@ -117,7 +119,7 @@ func TestStrategyExperimentV2MigrationSnapshot(t *testing.T) {
 	}
 	s.Close()
 	db, _ := openSQLite(filepath.Join(dir, "lake-web.sqlite"))
-	_, err = db.Exec("DROP TABLE strategyUsageFeedback; DROP TABLE strategyReusePolicies; DROP TABLE strategyReviews; DROP TABLE strategyAssessments; DROP TABLE strategyPromotions; DROP TABLE strategyRejections; DROP TABLE strategyOptimizationCalls; DROP TABLE strategyOptimizations; DROP TABLE strategyExperimentRuns; DROP TABLE strategyExperiments; DROP TABLE strategySchemaMeta; CREATE TABLE strategySchemaMeta(version INTEGER PRIMARY KEY CHECK(version=2),schemaHash TEXT NOT NULL); INSERT INTO strategySchemaMeta VALUES(2,?)", strategySchemaV2Hash())
+	_, err = db.Exec("DROP TABLE strategyUsageFeedback; DROP TABLE strategyReusePolicies; DROP TABLE strategyReviews; DROP TABLE strategyAssessments; DROP TABLE strategyPromotions; DROP TABLE strategyRejections; DROP TABLE strategyOptimizationCalls; DROP TABLE strategyOptimizations; DROP TABLE strategyExperimentRuns; DROP TABLE strategyExperiments; DROP TABLE IF EXISTS legacyAssetArchive;DROP TABLE IF EXISTS legacyAssetSettingsArchive;DROP TABLE strategySchemaMeta; CREATE TABLE strategySchemaMeta(version INTEGER PRIMARY KEY CHECK(version=2),schemaHash TEXT NOT NULL); INSERT INTO strategySchemaMeta VALUES(2,?)", strategySchemaV2Hash())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +141,7 @@ func TestStrategyExperimentV2MigrationSnapshot(t *testing.T) {
 		t.Fatal("snapshot captured post-migration")
 	}
 	s.db.QueryRow("SELECT version FROM strategySchemaMeta").Scan(&version)
-	if version != 6 {
+	if version != 7 {
 		t.Fatal("v5 missing")
 	}
 	var integrity string
@@ -160,7 +162,7 @@ func TestStrategyExperimentSchemaUpgradeTransactionRollback(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	_, err = db.Exec("DROP TABLE strategySchemaMeta;CREATE TABLE strategySchemaMeta(version INTEGER PRIMARY KEY CHECK(version=2),schemaHash TEXT NOT NULL);INSERT INTO strategySchemaMeta VALUES(2,?);CREATE TABLE strategyExperimentRuns(conflict INTEGER)", strategySchemaV2Hash())
+	_, err = db.Exec("DROP TABLE IF EXISTS legacyAssetArchive;DROP TABLE IF EXISTS legacyAssetSettingsArchive;DROP TABLE strategySchemaMeta;CREATE TABLE strategySchemaMeta(version INTEGER PRIMARY KEY CHECK(version=2),schemaHash TEXT NOT NULL);INSERT INTO strategySchemaMeta VALUES(2,?);CREATE TABLE strategyExperimentRuns(conflict INTEGER)", strategySchemaV2Hash())
 	if err != nil {
 		t.Fatal(err)
 	}
