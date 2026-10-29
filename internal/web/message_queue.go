@@ -123,7 +123,7 @@ func (b *Server) humanMessageTitle(message humanMessage) string {
 // messageMu serializes admission and queue changes, including the gap between an
 // engine's done event and runTurn's terminal/history cleanup.
 func (b *Server) messageBusyLocked(id string) bool {
-	if b.runningMessages[id] {
+	if b.runningMessages[id] || b.Engine.SessionReserved(id) {
 		return true
 	}
 	status := b.Store.Session(id)["status"]

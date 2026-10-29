@@ -23,6 +23,9 @@ type adkServices struct {
 }
 
 func (e *Engine) adkStore() (*storage.Store, error) {
+	if e.workParent != nil {
+		return e.workParent.adkStore()
+	}
 	if e.worker != nil {
 		return e.worker.parent.adkStore()
 	}
@@ -35,7 +38,7 @@ func (e *Engine) adkStore() (*storage.Store, error) {
 	services.once.Do(func() {
 		services.store, services.err = storage.Open(filepath.Join(e.runtimeDirectory(), "sessions.sqlite"))
 		if services.err == nil {
-			services.err = services.store.DB.AutoMigrate(&nativeApproval{}, &nativeOperation{}, &nativeEvidence{}, &nativeArtifact{}, &nativeHistoryMigration{}, &nativeCorrection{})
+			services.err = services.store.DB.AutoMigrate(&nativeApproval{}, &nativeOperation{}, &nativeEvidence{}, &nativeArtifact{}, &nativeHistoryMigration{}, &nativeCorrection{}, &nativeWorkGoal{}, &nativeWorkOutbox{}, &nativeWorkObservation{})
 			if services.err == nil {
 				services.err = services.store.DB.Model(&nativeOperation{}).Where("status = ?", "dispatched").Update("status", "unknown").Error
 			}

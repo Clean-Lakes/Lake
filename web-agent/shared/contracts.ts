@@ -266,7 +266,9 @@ export type AIOperationOutcome = {id:string;tool:string;target:string;status:str
 export type ConversationMode = "default" | "plan";
 export type ConversationModeUpdate = {mode:ConversationMode;cursor:number};
 export type ProposedPlan = {id:string;content:string;at:string};
-export type AIView = { proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; memoryAccess?: MemoryAccess[]; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
+export type ExternalWorkWatch={adapter:string;operationId:string;handle:string;state:string;lastObservedAt?:string};
+export type WorkGoal={id:string;sessionId:string;originRootTurnId:string;title:string;status:string;revision:number;items:{id:string;title:string;status:string;reason?:string;watch?:ExternalWorkWatch}[];modelRounds:number;roundLimit:number;deadlineAt:string;updatedAt:string;summary?:string};
+export type AIView = {workGoals?:WorkGoal[]; proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; memoryAccess?: MemoryAccess[]; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
 export type AIPreset = { id: string; title: string; content: string };
 
 export type AIImage = { id: string; mimeType: string; base64: string; sizeBytes: number; width: number; height: number; name?: string; url?: string };
@@ -279,7 +281,7 @@ export type WorkflowCatalog = {templates:WorkflowTemplate[]; runs:WorkflowRun[]}
 
 export type NavigationTrashItem = {kind:"project" | "resource" | "folder";id:string;projectId:string;name:string;projectName:string;deletedAt:string};
 
-export interface MCPServerConfig {id:string;name:string;transport:"http"|"sse"|"stdio";enabled:boolean;url:string;command:string;args:string[];headersConfigured:boolean;envConfigured:boolean;timeoutMs?:number;protocolVersion?:string}
+export interface MCPServerConfig {id:string;name:string;transport:"http"|"sse"|"stdio";enabled:boolean;url:string;command:string;args:string[];headersConfigured:boolean;envConfigured:boolean;timeoutMs?:number;protocolVersion?:string;workObserver?:string}
 export interface MCPToolInfo {name:string;description:string;inputSchema:unknown}
 export interface MCPToolCatalog {serverId:string;serverName:string;tools:MCPToolInfo[];count:number}
 export interface SkillConfig {name:string;description:string;path:string;source:string;enabled:boolean;managed:boolean}

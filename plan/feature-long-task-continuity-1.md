@@ -4,17 +4,17 @@ version: 1.0
 date_created: 2026-10-29
 last_updated: 2026-10-29
 owner: Lake
-status: 'Planned'
+status: 'Implemented — validation in progress'
 tags: [feature, adk, long-task, compaction, recovery]
 ---
 
 # Introduction
 
-![Status: Planned](https://img.shields.io/badge/status-Planned-blue)
+**状态：核心实现已落地，最终回归与 Dev 安装验收进行中。**
 
 普通会话已能调用多轮工具和自动压缩，但模型返回最终文字就能结束一轮，没有通用的外部任务完成门槛。本方案补齐目标账本、外部任务观察、ADK 等待恢复和压缩后的接续；首先覆盖普通 core 会话，随后映射至共享界面。Pilot 继续拥有自己的任务、计划、审批与角色生命周期。
 
-基线是 develop `6debebb2c7a64c2753470b4069b9a75ec3e23e41`，由用户授权合并 PR #118 得到，其树与已测试的 `a45bafbe0b86a59e61c05bbf7e2c7a35d1720d62` 一致。本文件完成的是设计，下面的运行时任务尚未实现。
+基线是 develop `6debebb2c7a64c2753470b4069b9a75ec3e23e41`，由用户授权合并 PR #118 得到，其树与已测试的 `a45bafbe0b86a59e61c05bbf7e2c7a35d1720d62` 一致。本文件保留原设计及验收目标。实现、已覆盖边界和未覆盖的故障矩阵见下方实施记录及验证文档。
 
 只读排查的事实：示例会话用了 13/500 次模型调用，最后输入 129516 token，输入预算为 450000−8192=441808 token，没有压缩卡片；最后外部结果仍含 `deploying/building`，回复后会话却为 completed。用户曾明确排除数据库操作。这里仅保留脱敏统计；不复制原会话、发布单 ID、地址或配置。该样例证明的是持续跟进缺口，不证明本次停止由压缩导致。
 
@@ -74,9 +74,9 @@ tags: [feature, adk, long-task, compaction, recovery]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | 新增 internal/ai/adk_work_wait_test.go：用官方 workflow.ResumeOrRequestInput 和原 function-response 恢复路径证明等待前、等待中、事件已提交但未消费三处进程退出均可接续；校验原 call ID、目标、预算和审批 envelope 不变，等待 10 分钟虚拟时间模型请求数不增加、会话执行槽已释放、新用户话题可以完成，然后旧目标仍按原调用恢复。该测试是后续阶段门槛；不能通过时报告能力缺口，不改成宿主模型轮询循环。 | No | — |
-| TASK-002 | 新增 internal/ai/work_goal.go、work_goal_store.go：定义上述 WorkGoal/WorkItem/ExternalWatch、纯归约函数 ReduceWorkGoal、CAS 方法 TransitionWorkGoal 和 outbox；在 internal/ai/adk_session.go 的 adkStore 中迁移。保留未知字段兼容，旧库加载不生成历史任务。依赖 TASK-001。 | No | — |
-| TASK-003 | 在 internal/ai/runtime_contract.go 与 types.go 加入可重建的目标/等待投影，显式区分当前 RootTurnID 与 goal origin；为 transition/outbox 的崩溃窗口增加事务测试。JSON 缓存丢失时从领域表和 SDK 原记录恢复，不能写空表覆盖旧任务。依赖 TASK-002。 | No | — |
+| TASK-001 | 新增 internal/ai/adk_work_wait_test.go：用官方 workflow.ResumeOrRequestInput 和原 function-response 恢复路径证明等待前、等待中、事件已提交但未消费三处进程退出均可接续；校验原 call ID、目标、预算和审批 envelope 不变，等待 10 分钟虚拟时间模型请求数不增加、会话执行槽已释放、新用户话题可以完成，然后旧目标仍按原调用恢复。该测试是后续阶段门槛；不能通过时报告能力缺口，不改成宿主模型轮询循环。 | 见实施记录 | 2026-10-29 |
+| TASK-002 | 新增 internal/ai/work_goal.go、work_goal_store.go：定义上述 WorkGoal/WorkItem/ExternalWatch、纯归约函数 ReduceWorkGoal、CAS 方法 TransitionWorkGoal 和 outbox；在 internal/ai/adk_session.go 的 adkStore 中迁移。保留未知字段兼容，旧库加载不生成历史任务。依赖 TASK-001。 | 见实施记录 | 2026-10-29 |
+| TASK-003 | 在 internal/ai/runtime_contract.go 与 types.go 加入可重建的目标/等待投影，显式区分当前 RootTurnID 与 goal origin；为 transition/outbox 的崩溃窗口增加事务测试。JSON 缓存丢失时从领域表和 SDK 原记录恢复，不能写空表覆盖旧任务。依赖 TASK-002。 | 见实施记录 | 2026-10-29 |
 
 ### Implementation Phase 2
 
@@ -84,11 +84,11 @@ tags: [feature, adk, long-task, compaction, recovery]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-004 | 新增 internal/ai/work_tools.go 与 prompts/work-continuity.txt，在 extended_catalog.go/session_tools.go/sessionCatalog 注册五个 work 工具。work_wait 单独占一个工具批次；work_finish 校验验收证据及非终态工作项，拒绝后仍由原 LlmAgent 调度。将目标完成契约加入普通 core 策略，不用语言关键词识别用户意图。依赖 TASK-003。 | No | — |
-| TASK-005 | 新增 internal/ai/external_watch.go 与 external_watch_scheduler.go，实现本文件的租约、退避、去重、并发限额、deadline 和 shutdown。调度器只运行经过宿主校验的只读观察与投递事件，不直接调用模型或执行下一条变更。先添加 Shell 句柄适配器；增加固定版本 release 适配器，只接受注册服务的原派发结果及 get_release_status 等明确允许的读取能力；以独立 mock schema 契约测试验证 ID/状态路径，不信任任意 MCP status。依赖 TASK-002。 | No | — |
-| TASK-006 | 新增 internal/ai/adk_work_wait.go，借鉴 adk_questions.go 的原调用恢复：在专用 machine-input workflow 持久化中断 ID 和来源，按 TASK-001 证明的公开中断路径退出本次 Runner 并释放会话占用，不保留阻塞整个会话的等待工具；目标的 SDK runtimeSessionId、调用 envelope 和预算单独保存。收到真实事件时构造原 work_wait 的 function-response 并通过官方 Runner 接续，投影写回原目标而非当前新话题。不得把普通 root 改成丢失 confirmation envelope 的 Workflow AgentNode。依赖 TASK-001、TASK-004、TASK-005。 | No | — |
-| TASK-007 | 在 adk_driver.go、adk_provider_step.go 和 engine.go 接入工作决策及最终状态归约。对存在活动目标但模型直接给出最终文字的情况，在公开 LlmAgent 回调内只处理完整最终响应，不改 partial 文字：全部可自动推进项都在等待可信外部句柄时生成带宿主来源的 work_wait 调用并持久暂停；仍有可运行项时生成 work_read 状态纠正响应，使同一个官方循环继续。生成的内部调用保留来源，不冒充模型或人类授权；最多允许连续两次无新进展的决策纠正，随后 paused，不能自动无限追加“继续”。持久 ModelRounds 跨等待恢复累加。原轮结束仍在领域投影持久化后才释放占用。依赖 TASK-006。 | No | — |
-| TASK-008 | 修改 polling.go：已登记且关联可信句柄的工作目标连续无输出改成等待观察；没有工作目标的普通“查看状态”请求保留三次无变化后结束答复的原行为。修改 adk_recovery.go 与 engine.go 的 Abort/Shutdown：取消观察及后续推进，迟到事件不激活目标，不替用户停止远端命令。依赖 TASK-005、TASK-007。 | No | — |
+| TASK-004 | 新增 internal/ai/work_tools.go 与 prompts/work-continuity.txt，在 extended_catalog.go/session_tools.go/sessionCatalog 注册五个 work 工具。work_wait 单独占一个工具批次；work_finish 校验验收证据及非终态工作项，拒绝后仍由原 LlmAgent 调度。将目标完成契约加入普通 core 策略，不用语言关键词识别用户意图。依赖 TASK-003。 | 见实施记录 | 2026-10-29 |
+| TASK-005 | 新增 internal/ai/external_watch.go 与 external_watch_scheduler.go，实现本文件的租约、退避、去重、并发限额、deadline 和 shutdown。调度器只运行经过宿主校验的只读观察与投递事件，不直接调用模型或执行下一条变更。先添加 Shell 句柄适配器；增加固定版本 release 适配器，只接受注册服务的原派发结果及 get_release_status 等明确允许的读取能力；以独立 mock schema 契约测试验证 ID/状态路径，不信任任意 MCP status。依赖 TASK-002。 | 见实施记录 | 2026-10-29 |
+| TASK-006 | 新增 internal/ai/adk_work_wait.go，借鉴 adk_questions.go 的原调用恢复：在专用 machine-input workflow 持久化中断 ID 和来源，按 TASK-001 证明的公开中断路径退出本次 Runner 并释放会话占用，不保留阻塞整个会话的等待工具；目标的 SDK runtimeSessionId、调用 envelope 和预算单独保存。收到真实事件时构造原 work_wait 的 function-response 并通过官方 Runner 接续，投影写回原目标而非当前新话题。不得把普通 root 改成丢失 confirmation envelope 的 Workflow AgentNode。依赖 TASK-001、TASK-004、TASK-005。 | 见实施记录 | 2026-10-29 |
+| TASK-007 | 在 adk_driver.go、adk_provider_step.go 和 engine.go 接入工作决策及最终状态归约。对存在活动目标但模型直接给出最终文字的情况，在公开 LlmAgent 回调内只处理完整最终响应，不改 partial 文字：全部可自动推进项都在等待可信外部句柄时生成带宿主来源的 work_wait 调用并持久暂停；仍有可运行项时生成 work_read 状态纠正响应，使同一个官方循环继续。生成的内部调用保留来源，不冒充模型或人类授权；最多允许连续两次无新进展的决策纠正，随后 paused，不能自动无限追加“继续”。持久 ModelRounds 跨等待恢复累加。原轮结束仍在领域投影持久化后才释放占用。依赖 TASK-006。 | 见实施记录 | 2026-10-29 |
+| TASK-008 | 修改 polling.go：已登记且关联可信句柄的工作目标连续无输出改成等待观察；没有工作目标的普通“查看状态”请求保留三次无变化后结束答复的原行为。修改 adk_recovery.go 与 engine.go 的 Abort/Shutdown：取消观察及后续推进，迟到事件不激活目标，不替用户停止远端命令。依赖 TASK-005、TASK-007。 | 见实施记录 | 2026-10-29 |
 
 ### Implementation Phase 3
 
@@ -96,9 +96,9 @@ tags: [feature, adk, long-task, compaction, recovery]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-009 | 在 context.go、context_compaction.go 与 engine.go 的 compact 统一软阈值 80%、目标 60% 和硬上限，不另建 Token 计数器。在 adk_projection.go 的 nativeCompaction 使用同一预算门槛，避免 SDK 和 Lake 各压一次。加入含目标 ID和来源引用的宿主投影，摘要不能改写目标、授权或用户约束。依赖 TASK-003。 | No | — |
-| TASK-010 | 重构 compactForTurn/compact 的父子 context：摘要的 45 秒超时不取消主任务；对上述自动摘要失败使用父 context 进入既有安全预览恢复，无法压到预算才 paused。自动摘要失败后 60 秒内不重复摘要请求，除非已无法形成合法硬预算输入；后一情况直接 paused，不能在冷却期反复撞接口。手动压缩保持失败不覆盖语义。依赖 TASK-009。 | No | — |
-| TASK-011 | 在 context_compaction_test.go、compaction_recovery_test.go、context_resume_test.go、context_pacing_test.go 和 adk_projection_test.go 增加连续三次压缩、摘要超时/429/连接失败/空输出、父取消、大目录、超大不可裁约束、压缩与旧观察事件并发用例；快照提交前校验 goal revision，版本变动时重建投影而非覆盖真实状态。依赖 TASK-010、TASK-006。 | No | — |
+| TASK-009 | 在 context.go、context_compaction.go 与 engine.go 的 compact 统一软阈值 80%、目标 60% 和硬上限，不另建 Token 计数器。在 adk_projection.go 的 nativeCompaction 使用同一预算门槛，避免 SDK 和 Lake 各压一次。加入含目标 ID和来源引用的宿主投影，摘要不能改写目标、授权或用户约束。依赖 TASK-003。 | 见实施记录 | 2026-10-29 |
+| TASK-010 | 重构 compactForTurn/compact 的父子 context：摘要的 45 秒超时不取消主任务；对上述自动摘要失败使用父 context 进入既有安全预览恢复，无法压到预算才 paused。自动摘要失败后 60 秒内不重复摘要请求，除非已无法形成合法硬预算输入；后一情况直接 paused，不能在冷却期反复撞接口。手动压缩保持失败不覆盖语义。依赖 TASK-009。 | 见实施记录 | 2026-10-29 |
+| TASK-011 | 在 context_compaction_test.go、compaction_recovery_test.go、context_resume_test.go、context_pacing_test.go 和 adk_projection_test.go 增加连续三次压缩、摘要超时/429/连接失败/空输出、父取消、大目录、超大不可裁约束、压缩与旧观察事件并发用例；快照提交前校验 goal revision，版本变动时重建投影而非覆盖真实状态。依赖 TASK-010、TASK-006。 | 见实施记录 | 2026-10-29 |
 
 ### Implementation Phase 4
 
@@ -106,9 +106,9 @@ tags: [feature, adk, long-task, compaction, recovery]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-012 | 在 internal/web/agent.go 与新增 work_goal_routes.go 公开只读投影及显式暂停/恢复/取消命令，加入会话归属和乐观版本校验。接入现有消息队列：同一会话至多一个 Runner，用户消息优先于旧 wake；wake 只在原目标仍有效且会话空闲时消费，不注入假 user 消息或新建一条消息轮次。共享 Web/CLI/调度入口的相同 Engine 服务，不能只在浏览器计时器里实现。依赖 TASK-007、TASK-008。 | No | — |
-| TASK-013 | 扩展 web-agent/shared/contracts.ts 与 sessionBadgeState.ts 的工作投影，在 SessionInspector.tsx 的执行页提供紧凑工作项及等待信息；沿用既有七类状态、Glyph、角色 Logo 和多联布局，不增加顶部文字块。当前话题优先显示自己的任务状态，查看历史任务不激活其执行。更新 docs/ui-guidelines.md 与 docs/experiments/adk-runtime.md。依赖 TASK-012。 | No | — |
-| TASK-014 | 新增 work-continuity fixture 与端到端回归：同时模拟两项发布和四项构建，一项依赖用户数据库确认；独立项继续，依赖部署零调用；完成观察后最终汇报；测试新消息抢先、停止、重开、事件重复、跨会话伪句柄和权限变化。浏览器检查明暗/800px/三联、键盘、减少动态效果，原生 Lake Dev 复验入口可见与停止。依赖 TASK-011、TASK-013。 | No | — |
+| TASK-012 | 在 internal/web/agent.go 与新增 work_goal_routes.go 公开只读投影及显式暂停/恢复/取消命令，加入会话归属和乐观版本校验。接入现有消息队列：同一会话至多一个 Runner，用户消息优先于旧 wake；wake 只在原目标仍有效且会话空闲时消费，不注入假 user 消息或新建一条消息轮次。共享 Web/CLI/调度入口的相同 Engine 服务，不能只在浏览器计时器里实现。依赖 TASK-007、TASK-008。 | 见实施记录 | 2026-10-29 |
+| TASK-013 | 扩展 web-agent/shared/contracts.ts 与 sessionBadgeState.ts 的工作投影，在 SessionInspector.tsx 的执行页提供紧凑工作项及等待信息；沿用既有七类状态、Glyph、角色 Logo 和多联布局，不增加顶部文字块。当前话题优先显示自己的任务状态，查看历史任务不激活其执行。更新 docs/ui-guidelines.md 与 docs/experiments/adk-runtime.md。依赖 TASK-012。 | 见实施记录 | 2026-10-29 |
+| TASK-014 | 新增 work-continuity fixture 与端到端回归：同时模拟两项发布和四项构建，一项依赖用户数据库确认；独立项继续，依赖部署零调用；完成观察后最终汇报；测试新消息抢先、停止、重开、事件重复、跨会话伪句柄和权限变化。浏览器检查明暗/800px/三联、键盘、减少动态效果，原生 Lake Dev 复验入口可见与停止。依赖 TASK-011、TASK-013。 | 见实施记录 | 2026-10-29 |
 
 ### Implementation Phase 5
 
@@ -116,8 +116,8 @@ tags: [feature, adk, long-task, compaction, recovery]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-015 | 每阶段运行 python3 scripts/check_adk_runtime_boundary.py、受影响 Go 测试与 race/vet；最终运行 go test ./...、go test -race ./internal/ai ./internal/web ./internal/agent/...、go vet ./...，以及 Node 24.14.0 下 corepack pnpm --dir web-agent test:frontend 和 build:web。已有失败必须记录并确认来源，不删测试、不放宽门槛；没有完成的命令不能标绿。依赖 TASK-014。 | No | — |
-| TASK-016 | 提交实际代码后使用 scripts/build_lake_desktop.sh --dev --install 签名构建；核对 build-origin.gitHead 与测试 SHA。仅用显式隔离 Home 和 mock 外部工具验收断点恢复，不复制生产凭据、不重启正式版。将结果写入 docs/validation/long-task-continuity.md，按每阶段 develop PR 提交，合并分别取得授权。依赖 TASK-015。 | No | — |
+| TASK-015 | 每阶段运行 python3 scripts/check_adk_runtime_boundary.py、受影响 Go 测试与 race/vet；最终运行 go test ./...、go test -race ./internal/ai ./internal/web ./internal/agent/...、go vet ./...，以及 Node 24.14.0 下 corepack pnpm --dir web-agent test:frontend 和 build:web。已有失败必须记录并确认来源，不删测试、不放宽门槛；没有完成的命令不能标绿。依赖 TASK-014。 | 见实施记录 | 2026-10-29 |
+| TASK-016 | 提交实际代码后使用 scripts/build_lake_desktop.sh --dev --install 签名构建；核对 build-origin.gitHead 与测试 SHA。仅用显式隔离 Home 和 mock 外部工具验收断点恢复，不复制生产凭据、不重启正式版。将结果写入 docs/validation/long-task-continuity.md，按每阶段 develop PR 提交，合并分别取得授权。依赖 TASK-015。 | 见实施记录 | 2026-10-29 |
 
 ## 3. Alternatives
 
@@ -155,7 +155,7 @@ tags: [feature, adk, long-task, compaction, recovery]
 - **TEST-008**: 权限撤回、MCP 服务替换、伪造任务句柄、跨会话来源、工具输出伪指令及隐私字段注入均被拒绝；观察适配器不能调用任意写操作。
 - **TEST-009**: 前端完整 App fixture 验收上方状态、执行详情、角色图标、暂停恢复取消、新消息反馈与多联窄栏；重开 Dev 复验后台继续和恢复提示，生产数据保持未访问。
 
-设计文档验收：标识符声明唯一、所有引用存在、8 个必需章节完整、列出的现有源文件和函数存在。运行时测试列为待实现；不能以 PR #118 的 78 项前端检查替代本方案的 Go/ADK 验收。
+设计文档验收：标识符声明唯一、所有引用存在、8 个必需章节完整、列出的现有源文件和函数存在。运行时验收以本次验证文档为准；不能以 PR #118 的前端检查替代本方案的 Go/ADK 验收。
 
 ## 7. Risks & Assumptions
 
@@ -163,7 +163,7 @@ tags: [feature, adk, long-task, compaction, recovery]
 - **RISK-002**: MCP 返回结构及权限会变化；适配器按版本和服务身份校验，未知结果停止自动推进，不重启已发操作。
 - **RISK-003**: 模型可能漏登记工作或错误判断结论；可信异步派发在宿主自动绑定，终结须核对真实未完成观察和可执行验收条件。叙述性结论仍展示来源和未验证部分。
 - **RISK-004**: SQLite 领域事务与 SDK 事件并非一个事务；用 outbox、版本和故障注入验证可恢复性。回退前先暂停新目标并保留附加表，不删除操作和观察记录；迁移为新增结构，不能静默降级仍活跃的新任务。
-- **ASSUMPTION-001**: 当前请求先合并 #118，再完成可实施方案；本计划状态为 Planned，后续运行时实现、模型/真实资源验收和生产发布不在此文件中虚构完成。
+- **ASSUMPTION-001**: 当前请求先合并 #118，再完成可实施方案；当前已实现普通 core 会话的持续跟进；实际外部资源验收和生产发布仍需单独授权，不能以模拟测试替代。
 
 ## 8. Related Specifications / Further Reading
 
@@ -174,3 +174,16 @@ tags: [feature, adk, long-task, compaction, recovery]
 - [历史任务交接目标，仅作背景](feature-task-context-handoff-1.md)
 - [当前轮恢复与压缩](refactor-context-turn-recovery-1.md)
 - [PR #118：本方案前置集成](https://github.com/Clean-Lakes/Lake/pull/118)
+
+## 实施记录（2026-10-29）
+
+核心能力已实现：公开 ADK 等待/恢复、私有领域表和事务 outbox、五个工作工具、原句柄观察、自动压缩失败降级、跨话题接续、执行详情与控制、累计预算与 Dev 构建。实现未增加 SDK internal 依赖或另一套模型循环。
+
+- TASK-001～008、012～013：运行能力已实现；`adk_work_wait_test.go` 验证公开 API，`work_goal_test.go`、`work_recovery_test.go`、`work_lifecycle_test.go` 验证 Shell、重启、跨话题、CAS/租约、六个独立观察与数据库前置条件、取消和删除。没有声称逐一注入原矩阵列出的每个断电窗口。
+- TASK-009～011：80% 软阈值、60% 目标、摘要子超时与预览恢复、冷却及三次压缩保留目标/答案已实现并有回归；系统休眠、时钟跳变与全部错误排列尚未逐项模拟。
+- TASK-014：真实 App fixture 已检查明暗、三联与控制键盘。800px 截图存在终端抽屉遮挡，不能据此宣称完成窄窗目标面板视觉验收；原生自动化连接超时，未虚构 GUI 验收成功。
+- TASK-015～016：执行结果、准确测试提交和安装来源在 [验证记录](../docs/validation/long-task-continuity.md) 及 PR #120 更新。
+
+与原设计的具体差异：领域存储合并在 `work_goal.go`；工作策略以固定 prompt fragment 加入请求，不改变原基础策略模板；消息和命令接入现有 agent/server 路由。观察器当前串行执行，低于 8/32 并发上限。发布观察需要在 MCP 服务编辑页显式选择“发布平台状态（v1）”，导入配置不能自动授予该能力。未配置的已启动发布进入 blocked，不推断完成。
+
+后台接续中遇到新变更审批或新问题时停在需要人类输入的边界，不在隐藏的子执行器内伪造批准。等待用户的工作项由真实后续请求及原记录明确接续，按钮不会把数据库前置条件自动标成已完成。后台恢复中途崩溃进入 blocked 供核对，完整等待检查点可在重启后自动读取原句柄接续。没有可信恢复句柄的本机进程不会重新运行。

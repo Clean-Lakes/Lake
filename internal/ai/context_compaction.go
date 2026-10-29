@@ -68,6 +68,7 @@ func (e *Engine) recoverCompaction(ctx context.Context, s *session, history []Me
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
+	s.state.CompactionFailureAt = timestamp()
 	s.state.History = projected
 	s.state.LastRequest, s.state.LastRequestAt, s.state.ContextMeasurement = nil, "", nil
 	s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "compaction", Content: "模型摘要未完成，已改用工具输出预览继续；原始操作记录保留", Status: "completed", At: timestamp()})

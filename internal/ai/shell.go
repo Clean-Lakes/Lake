@@ -23,6 +23,9 @@ type shellJob struct {
 type backgroundShellSourceKey struct{}
 
 func (e *Engine) startShell(c Config, a map[string]any, command string, source ...map[string]any) (any, error) {
+	if e.workParent != nil {
+		return e.workParent.startShell(c, a, command, e.workShellSource(str(a["__session"]), source))
+	}
 	e.shellMu.Lock()
 	defer e.shellMu.Unlock()
 	if e.shellsClosed {
@@ -196,6 +199,9 @@ func (e *Engine) cancelShells(id string) {
 
 // trackBridgeShell gives persistent PTY jobs the same wait/output/kill contract as container jobs.
 func (e *Engine) trackBridgeShell(session string, result any, a map[string]any, source ...map[string]any) (any, error) {
+	if e.workParent != nil {
+		return e.workParent.trackBridgeShell(session, result, a, e.workShellSource(session, source))
+	}
 	e.shellMu.Lock()
 	defer e.shellMu.Unlock()
 	if e.shellsClosed {
@@ -259,13 +265,17 @@ func (e *Engine) shellCard(session, id, content, status string, create bool, sou
 		// whichever host is selected when the asynchronous command finishes.
 		data := map[string]any{"shell_id": id}
 		if len(source) > 0 {
-			for _, key := range []string{"resource_id", "target", "parent_card_id", "call_id"} {
+			for _, key := range []string{"resource_id", "target", "parent_card_id", "call_id", "work_goal_id", "work_goal_title"} {
 				if value := str(source[0][key]); value != "" {
 					data[key] = value
 				}
 			}
 		}
-		s.state.View.Cards = append(s.state.View.Cards, Card{ID: id, Type: "shell", Title: "后台命令", Data: data, Status: status, At: timestamp()})
+		title := "后台命令"
+		if str(data["work_goal_title"]) != "" {
+			title = "后台任务 · " + str(data["work_goal_title"])
+		}
+		s.state.View.Cards = append(s.state.View.Cards, Card{ID: id, Type: "shell", Title: title, Data: data, Status: status, At: timestamp()})
 	} else {
 		for i := range s.state.View.Cards {
 			if s.state.View.Cards[i].ID == id {

@@ -23,6 +23,8 @@ import (
 )
 
 type adkTurnDriver struct {
+	workRepairs           int
+	workOutputPolls       map[string]int
 	decision              bool
 	terminalRecovery      bool
 	denied                map[string]bool
@@ -86,7 +88,7 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 		if err = json.Unmarshal(raw, schema); err != nil {
 			return fmt.Errorf("tool %s schema: %w", entry.Name, err)
 		}
-		t, err := functiontool.New(functiontool.Config{Name: entry.Name, Description: entry.Description, InputSchema: schema}, func(tc agent.Context, arguments map[string]any) (map[string]any, error) {
+		t, err := functiontool.New(functiontool.Config{Name: entry.Name, Description: entry.Description, InputSchema: schema, IsLongRunning: entry.Name == "work_wait"}, func(tc agent.Context, arguments map[string]any) (map[string]any, error) {
 			d.toolMu.Lock()
 			defer d.toolMu.Unlock()
 			if err := tc.Err(); err != nil {
@@ -111,6 +113,28 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 				d.fatal = err
 				tc.Actions().SkipSummarization = true
 				return map[string]any{"error": "tool execution interrupted; inspect recorded result before retrying"}, nil
+			}
+			workSucceeded := true
+			if entry.Name == "work_wait" || entry.Name == "work_finish" {
+				s.mu.Lock()
+				workSucceeded = false
+				for i := len(s.state.History) - 1; i >= 0; i-- {
+					m := s.state.History[i]
+					if m.Role == "tool" && m.CallID == call.ID {
+						workSucceeded = objJSON(m.Content)["error"] == nil
+						break
+					}
+				}
+				s.mu.Unlock()
+			}
+			if entry.Name == "work_wait" && workSucceeded {
+				tc.Actions().SkipSummarization = true
+			}
+			if entry.Name == "work_finish" && workSucceeded {
+				tc.Actions().SkipSummarization = true
+				if err := e.finishReply(s, str(arguments["summary"])); err != nil {
+					d.fatal = err
+				}
 			}
 			if c.sreCoordinator {
 				done, err := e.finishSREReply(s, d.textID)
@@ -162,7 +186,7 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 		s.mu.Unlock()
 		return result
 	}
-	root, err := llmagent.New(llmagent.Config{Name: name, Model: provider, Tools: tools, Mode: mode,
+	root, err := llmagent.New(llmagent.Config{Name: name, Model: provider, Tools: tools, Mode: mode, AfterModelCallbacks: []llmagent.AfterModelCallback{d.workDecision},
 		BeforeToolCallbacks: []llmagent.BeforeToolCallback{func(tc agent.Context, t tool.Tool, a map[string]any) (map[string]any, error) {
 			if d.denied[tc.FunctionCallID()] {
 				return deny(tc, t.Name(), "tool arguments contain credentials or private key material"), nil

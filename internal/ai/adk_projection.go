@@ -29,6 +29,7 @@ type nativeProjectionRef struct {
 	EventID string `json:"eventId"`
 }
 type nativeProjection struct {
+	WorkGoalID     string                   `json:"workGoalId,omitempty"`
 	Memory         *nativeMemoryProjection  `json:"memory,omitempty"`
 	StrategyOutbox []StrategyTurnSnapshot   `json:"strategyOutbox,omitempty"`
 	PromptBaseline *strategy.PromptBaseline `json:"promptBaseline,omitempty"`
@@ -47,7 +48,7 @@ type nativeProjection struct {
 func (e *Engine) projectionDelta(ctx context.Context, s *session, runtimeID, eventID string) (map[string]any, error) {
 	s.mu.Lock()
 	c := s.state.Config
-	raw, err := json.Marshal(nativeProjection{Memory: memoryProjection(s.state), StrategyOutbox: s.state.StrategyOutbox, PromptBaseline: s.state.PromptBaseline, SkillSnapshots: s.state.SkillSnapshots, History: s.state.History, View: s.state.View, RootQuestion: s.state.RootQuestion, Runtime: s.state.Runtime, References: s.state.ReferencedAssetIDs, Scope: s.state.TargetScope})
+	raw, err := json.Marshal(nativeProjection{WorkGoalID: s.state.WorkGoalID, Memory: memoryProjection(s.state), StrategyOutbox: s.state.StrategyOutbox, PromptBaseline: s.state.PromptBaseline, SkillSnapshots: s.state.SkillSnapshots, History: s.state.History, View: s.state.View, RootQuestion: s.state.RootQuestion, Runtime: s.state.Runtime, References: s.state.ReferencedAssetIDs, Scope: s.state.TargetScope})
 	s.mu.Unlock()
 	if err != nil {
 		return nil, err
@@ -147,6 +148,7 @@ func (e *Engine) hydrateNativeProjection(ctx context.Context, s *session) error 
 	s.state.SkillSnapshots = projection.SkillSnapshots
 	s.state.History = projection.History
 	s.state.View = projection.View
+	s.state.WorkGoalID = projection.WorkGoalID
 	s.state.RootQuestion = projection.RootQuestion
 	return e.save(s)
 }

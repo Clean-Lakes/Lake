@@ -130,6 +130,7 @@ type Approval struct {
 	Fingerprint        string `json:"fingerprint"`
 }
 type View struct {
+	WorkGoals         []WorkGoal         `json:"workGoals,omitempty"`
 	ProposedPlan      *ProposedPlan      `json:"proposedPlan,omitempty"`
 	OperationOutcomes []OperationOutcome `json:"operationOutcomes,omitempty"`
 	PendingApprovals  []*Approval        `json:"pendingApprovals,omitempty"`
@@ -156,6 +157,8 @@ type View struct {
 	Turns             int                `json:"turns"`
 }
 type State struct {
+	CompactionFailureAt    string                           `json:"compactionFailureAt,omitempty"`
+	WorkGoalID             string                           `json:"workGoalId,omitempty"`
 	NaturalRecallUsed      []NaturalRecallItem              `json:"naturalRecallUsed,omitempty"`
 	MemoryAcknowledged     map[string]string                `json:"memoryAcknowledged,omitempty"`
 	MemoryCapture          *MemoryCaptureState              `json:"memoryCapture,omitempty"`

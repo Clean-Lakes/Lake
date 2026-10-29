@@ -22,6 +22,7 @@ import {useAutoRefresh} from './useAutoRefresh';
 import {applyLiveText} from './liveTextUpdates';
 import {SessionStatusDot} from './SessionStatusDot';
 import {sreSessionPresentation} from './sreSessionPresentation';
+import {workGoalPresentation} from './workGoalPresentation';
 import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerMentions";
 import {LakePilotControl} from './LakePilotControl';
 import {PilotHeaderState} from './PilotHeaderState';
@@ -719,7 +720,7 @@ function AppContent() {
 
   const activeSnapshot = snapshot?.session.id === sessionId ? snapshot : sessionId && catalog?.sessions.some(session => session.id === sessionId) ? snapshotCache.current.get(sessionId) ?? null : null;
   const selectedSession = activeSnapshot?.session ?? catalog?.sessions.find(item => item.id === sessionId);
-  const currentSessionPresentation = selectedSession ? sreSessionPresentation(selectedSession,activeSnapshot?.sre?.tasks,activeSnapshot?.ai?.turnStartedAt) : {};
+  const currentSessionPresentation = selectedSession ? workGoalPresentation(activeSnapshot)??sreSessionPresentation(selectedSession,activeSnapshot?.sre?.tasks,activeSnapshot?.ai?.turnStartedAt) : {};
   const currentSessionStatus = currentSessionPresentation.status ?? selectedSession?.status;
   const selectedResource = catalog?.resources.find(item => item.id === route.resourceId);
   useEffect(()=>{inspector.reset();},[sessionId,route.resourceId,isPlansPage]);
