@@ -29,8 +29,6 @@ func (e *Engine) resumeNativeApproval(ctx context.Context, s *session, c Config,
 	s.state.View.ProposedPlan = nil
 	s.mu.Unlock()
 	if c.ConversationMode == ModePlan {
-		c.StrategyCorrectEnabled = false
-		c.StrategyLearnEnabled = false
 		c.MemoryExtractionEnabled = false
 	}
 	defer func() {

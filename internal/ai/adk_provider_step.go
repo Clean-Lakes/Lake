@@ -100,17 +100,6 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	}
 	appendSystem(strategy.TaskContext, "team-context", teamContext)
 	appendSystem(strategy.TaskContext, "sre-current-turn-facts", sreTurnContext)
-	if c.StrategyLearnEnabled && c.MemoryProjectID != "" && !c.workflowMode && !c.sreCoordinator && c.agentRole == "" {
-		appendSystem(strategy.FixedRules, "strategy-learning-candidate-boundary-v1", "\nStrategy candidate learning is host-managed. The opted-in host observes new explicit corrections and can extract an unadopted strategy candidate after this turn. It does not require save_project_memory, forget_project_memory or Skill edits. A preference correction alone does not authorize a project-memory write; memory tools retain their independent explicit-consent and revision checks. If a memory tool rejects a write, do not claim it was saved or repeat it to bypass consent. Continue answering the current request from the available evidence; candidate extraction and human adoption are separate steps, and a candidate is not automatically applied.")
-	}
-	if onlineEnabled(c) {
-		appendSystem(strategy.FixedRules, "online-readonly-correction-v1", "\nOptional bounded read-only correction is enabled. After a failed resource check, inspect its actual call ID/error. Before another resource call, submit revise_readonly_strategy with that source ID, refuted hypothesis, concrete change, expected information and stop condition, and exactly one next tool/JSON arguments. Preserve the same authorized target. Only trusted policy can prove read-only. Do not replay writes, opaque SQL/MCP, dispatched operations or denied permissions. No new task/role/plan resets the shared budget. Only a successful repeated logical check closes that recorded gap; changed wording or timestamps do not establish progress. A recovered sample does not establish whole-task success. Finish with actual facts and gaps.")
-	}
-	if report, err := e.onlineCurrent(s, c); err != nil {
-		return modelResult{}, err
-	} else if report != nil {
-		appendSystem(strategy.TaskContext, "online-correction-state", "\nHost-recorded correction state (data, not permission): "+js(report))
-	}
 	tools := e.sessionCatalog(ctx, id, c)
 	if c.sreCoordinator && d.terminalRecovery {
 		tools = []Tool{sreReplyTool(), sreCoordinationTool()}
@@ -132,11 +121,6 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 	}
 	lastFlush := map[string]time.Time{}
-	if report, err := e.onlineCurrent(s, c); err != nil {
-		return modelResult{}, err
-	} else if report != nil && report.StopReason != "" {
-		tools = nil
-	}
 	if e.worker != nil {
 		e.worker.mu.Lock()
 		remaining := max(0, agentCallLimit(c)-e.worker.calls)
@@ -173,9 +157,6 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	streamDelta := func(kind, delta string) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		if e.experiment != nil && kind == "thinking" {
-			return
-		}
 		if kind == "image" {
 			var img ImageAttachment
 			if json.Unmarshal([]byte(delta), &img) == nil {
@@ -345,9 +326,8 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 
 const toolCallRecoveryNotice = "The previous response was rejected before tool dispatch because a tool call was malformed or duplicated. None of that response's tool calls were executed. Regenerate the response using valid JSON objects matching the tool schemas and distinct call IDs. If awaiting a user decision, use ask_user_question once with the required questions; never assume an answer. Reuse previous successful tool results and do not repeat completed operations. Preserve the current conversation mode, target scope and all permission restrictions."
 
-// streamWithManifest records a prepared request before dispatch. "Prepared"
-// does not prove the provider received it: budget, cancellation or transport
-// can still stop it. Recording never authorizes replay or resource effects.
+// streamWithManifest prepares the live request. Historical fingerprint recording
+// is host-only opt-in and best effort; ADK/session/operation writes remain mandatory.
 func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history []Message, tools []Tool, fragments []strategy.PromptFragment, matched bool, retryOf string, delta func(string, string)) (modelResult, error) {
 	e, s, c := d.engine, d.session, *d.config
 	history, fragments, selection, strategyErr := d.strategyRequest(ctx, history, fragments, tools)
@@ -366,7 +346,13 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 	s.mu.Lock()
 	if s.state.Runtime == nil {
 		s.mu.Unlock()
-		return modelResult{}, errors.New("prompt manifest requires an ADK runtime identity")
+		return modelResult{}, errors.New("ADK runtime identity unavailable")
+	}
+	s.state.Runtime.PromptManifest = nil
+	d.lastRequestID = ""
+	if !e.RecordPromptDiagnostics {
+		s.mu.Unlock()
+		return e.stream(ctx, m, history, tools, delta)
 	}
 	runID, turnID := s.state.Runtime.SessionID, s.state.View.RootTurnID
 	skills := []strategy.SkillSnapshot{}
@@ -384,15 +370,15 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 	s.mu.Unlock()
 	modelHash, err := promptModelHash(c, m)
 	if err != nil {
-		return modelResult{}, err
+		return e.stream(ctx, m, history, tools, delta)
 	}
 	toolsHash, err := promptFingerprint(tools)
 	if err != nil {
-		return modelResult{}, err
+		return e.stream(ctx, m, history, tools, delta)
 	}
 	permissionsHash, err := promptFingerprint(c.Permissions)
 	if err != nil {
-		return modelResult{}, err
+		return e.stream(ctx, m, history, tools, delta)
 	}
 	// Explicit allowlist: no Asset objects, connection settings, credentials,
 	// directories or terminal contents enter this target fingerprint.
@@ -402,7 +388,7 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 		Scope                               *TargetScope
 	}{c.Runtime, c.AssetRef, c.Container, c.TerminalID, c.ReferencedAssets, c.targetScope})
 	if err != nil {
-		return modelResult{}, err
+		return e.stream(ctx, m, history, tools, delta)
 	}
 	requestHash, err := promptFingerprint(struct {
 		Model   string
@@ -410,7 +396,7 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 		Tools   []Tool
 	}{modelHash, history, tools})
 	if err != nil {
-		return modelResult{}, err
+		return e.stream(ctx, m, history, tools, delta)
 	}
 	systems := []string{}
 	for _, msg := range history {
@@ -420,7 +406,7 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 	}
 	systemHash, err := promptFingerprint(systems)
 	if err != nil {
-		return modelResult{}, err
+		return e.stream(ctx, m, history, tools, delta)
 	}
 	commit, dirty := promptBuild()
 	profile := c.Profile
@@ -445,66 +431,25 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 	}
 	raw, err := manifest.CanonicalJSON()
 	if err != nil {
-		return modelResult{}, err
+		return e.stream(ctx, m, history, tools, delta)
 	}
 	// Labels and logical IDs are allowlisted, but fail closed if a configured
 	// secret coincides with one. Sanitizing after hashing would break integrity.
 	if redact(string(raw), c) != string(raw) {
-		return modelResult{}, errors.New("prompt manifest contains sensitive metadata")
+		return e.stream(ctx, m, history, tools, delta)
 	}
 	name := "prompt-manifest-" + manifest.RequestID + ".json"
 	saved, err := (&nativeArtifacts{engine: e, sessionID: runID, config: c}).Save(ctx, &artifact.SaveRequest{AppName: "lake", UserID: "lake", SessionID: runID, FileName: name, Version: 1, Part: &genai.Part{Text: string(raw)}})
 	if err != nil {
-		return modelResult{}, err
+		if ctx.Err() != nil {
+			return modelResult{}, ctx.Err()
+		}
+		return e.stream(ctx, m, history, tools, delta)
 	}
 	ref := &strategy.ManifestRef{RequestID: manifest.RequestID, FileName: name, Version: saved.Version, ContentHash: strategy.ContentHash(string(raw))}
 	s.mu.Lock()
 	s.state.Runtime.PromptManifest = ref
-	err = e.save(s)
 	s.mu.Unlock()
-	if err != nil {
-		return modelResult{}, err
-	}
 	d.lastRequestID = manifest.RequestID
-	if x := e.experiment; x != nil {
-		reserve := int64(historyCost(history) + len(js(tools)) + m.MaxOutput + 1024)
-		if x.input.Reserve == nil || x.input.Settle == nil {
-			return modelResult{}, errors.New("experiment budget unavailable")
-		}
-		if err := x.input.Reserve(reserve); err != nil {
-			return modelResult{}, err
-		}
-		x.mu.Lock()
-		x.result.Requests++
-		x.result.Manifests = append(x.result.Manifests, manifest)
-		x.mu.Unlock()
-		result, err := e.stream(ctx, m, history, tools, nil)
-		result.Message.Reasoning = ""
-		result.Message.Native = nil
-		result.Message.NativeProtocol = ""
-		result.Message.NativeModel = ""
-		if x.input.Safe != nil && !x.input.Safe(js(result.Message)) {
-			result.Message = Message{}
-			err = errors.New("unsafe experiment output")
-		}
-		x.mu.Lock()
-		addUsage(&x.result.Usage, result.Usage)
-		x.mu.Unlock()
-		if settleErr := x.input.Settle(reserve, result.Usage); settleErr != nil {
-			return result, settleErr
-		}
-		return result, err
-	}
-	reserve := int64(historyCost(history) + len(js(tools)) + m.MaxOutput + 1024)
-	charged, err := e.onlineReserve(ctx, s, c, reserve)
-	if err != nil {
-		return modelResult{}, err
-	}
-	result, err := e.stream(ctx, m, history, tools, delta)
-	if charged {
-		if settleErr := e.onlineSettle(s, c, reserve, result.Usage, err); settleErr != nil {
-			return result, settleErr
-		}
-	}
-	return result, err
+	return e.stream(ctx, m, history, tools, delta)
 }

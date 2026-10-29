@@ -62,6 +62,7 @@ func engineFor(t *testing.T, m Model, bridge Bridge) *Engine {
 	if err != nil {
 		t.Fatal(err)
 	}
+	e.RecordPromptDiagnostics = true // Explicit synthetic diagnostics; product New defaults off.
 	t.Cleanup(e.Shutdown)
 	if err = e.Configure("case", Config{Model: m, Profile: "core", Runtime: "local", Workspace: t.TempDir()}); err != nil {
 		t.Fatal(err)

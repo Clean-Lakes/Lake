@@ -31,43 +31,41 @@ type session struct {
 	sreReply            *sreReply
 }
 type Engine struct {
-	NaturalMemory               NaturalMemoryProvider
-	MemoryCaptureAllowed        func(MemoryTurnSnapshot) bool
-	MemoryCaptureSessionAllowed func(string) bool
-	experiment                  *strategyExperimentRuntime
-	Strategies                  StrategyProvider
-	CorrectionGuard             func(context.Context, string, int64, int64) error
-	correctionMu                sync.Mutex
-	onlineTask                  string
-	onlineSessions              sync.Map
-	runMu                       sync.Mutex
-	runs                        sync.WaitGroup
-	runtimeClosed               bool
-	shutdownOnce                sync.Once
-	sreRepository               SRERepository
-	sreControls                 sync.Map
-	sreRecoveries               sync.Map
-	sreResourceLocks            sync.Map
-	agentMu                     sync.Mutex
-	agentWorkers                map[string]*agentWorker
-	agentSlots                  chan struct{}
-	modelSlots                  chan struct{}
-	childModelSlots             chan struct{}
-	collectionSlots             chan struct{}
-	agentsClosed                bool
-	worker                      *agentWorker
-	observationSlots            sync.Map
-	mu                          sync.Mutex
-	sessions                    map[string]*session
-	Dir                         string
-	RuntimeDir                  string
-	Bridge                      Bridge
-	Emit                        func(Event)
-	ModelActivity               func() func() // Trusted host foreground priority; no provider/session mutation.
-	tunnels                     sync.Map
-	shells                      sync.Map
-	shellMu                     sync.Mutex
-	shellsClosed                bool
+	RecordPromptDiagnostics      bool // Host-only opt-in diagnostics; never an execution requirement.
+	NaturalMemory                NaturalMemoryProvider
+	MemoryCaptureAllowed         func(MemoryTurnSnapshot) bool
+	MemoryCaptureSessionAllowed  func(string) bool
+	Strategies                   StrategyProvider
+	correctionMu                 sync.Mutex
+	historicalCorrectionSessions sync.Map
+	runMu                        sync.Mutex
+	runs                         sync.WaitGroup
+	runtimeClosed                bool
+	shutdownOnce                 sync.Once
+	sreRepository                SRERepository
+	sreControls                  sync.Map
+	sreRecoveries                sync.Map
+	sreResourceLocks             sync.Map
+	agentMu                      sync.Mutex
+	agentWorkers                 map[string]*agentWorker
+	agentSlots                   chan struct{}
+	modelSlots                   chan struct{}
+	childModelSlots              chan struct{}
+	collectionSlots              chan struct{}
+	agentsClosed                 bool
+	worker                       *agentWorker
+	observationSlots             sync.Map
+	mu                           sync.Mutex
+	sessions                     map[string]*session
+	Dir                          string
+	RuntimeDir                   string
+	Bridge                       Bridge
+	Emit                         func(Event)
+	ModelActivity                func() func() // Trusted host foreground priority; no provider/session mutation.
+	tunnels                      sync.Map
+	shells                       sync.Map
+	shellMu                      sync.Mutex
+	shellsClosed                 bool
 
 	compactionTimeout time.Duration
 	adkMu             sync.Mutex
@@ -264,8 +262,6 @@ func (e *Engine) notify(s *session, kind string, v any) {
 	}
 }
 func (e *Engine) Configure(id string, c Config) error {
-	c.StrategyCorrectEnabled = false
-	c.StrategyLearnEnabled = false
 	if e.worker != nil && c.MemorySchemaVersion == 2 {
 		c.MemoryEnabled = false
 		c.MemoryExtractionEnabled = false
@@ -365,7 +361,7 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	if err := e.refreshOnlineCards(s); err != nil {
+	if err := e.refreshHistoricalCorrectionCards(s); err != nil {
 		return View{}, err
 	}
 	s.mu.Lock()
@@ -540,11 +536,8 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		return errors.New("session busy")
 	}
 	c := s.state.Config
-	c.StrategyCorrectEnabled, c.StrategyLearnEnabled = false, false
 	c.sreCoordinator = c.ConversationMode != ModePlan && input.SRECoordination && e.worker == nil && (c.Profile == "core" || c.Profile == "")
 	if c.ConversationMode == ModePlan {
-		c.StrategyCorrectEnabled = false
-		c.StrategyLearnEnabled = false
 		c.MemoryExtractionEnabled = false
 		if len(input.workflow) > 0 {
 			s.mu.Unlock()
@@ -674,11 +667,6 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			err = ctx.Err()
 		}
 		cancel()
-		if e.worker == nil {
-			if finishErr := e.onlineFinish(s, c, err); err == nil && finishErr != nil {
-				err = finishErr
-			}
-		}
 		s.mu.Lock()
 		s.finalizing = true
 		s.decision = nil
@@ -699,7 +687,6 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		if err == nil && c.ConversationMode == ModePlan {
 			captureProposedPlan(s, firstCard)
 		}
-		e.collectStrategySnapshot(s, c, input, status)
 		if err == nil {
 			e.collectMemorySnapshot(s, c, input)
 		}
@@ -739,16 +726,11 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls []Call) error {
 	var observations []ImageAttachment
 	for _, call := range calls {
-		if err := e.onlineBeforeCall(ctx, s, *c, call); err != nil {
-			return e.onlineDeny(s, *c, call, err)
-		}
 		if _, err := e.resolveTurnStrategies(ctx, s, *c); err != nil {
 			return err
 		}
 		e.setSREActivity("tool", call.Name)
-		trace := &onlinePolicyTrace{}
-		toolCtx := context.WithValue(ctx, onlinePolicyKey{}, trace)
-		value, toolErr := e.invokeAfterSREHandoff(toolCtx, s, *c, call)
+		value, toolErr := e.invokeAfterSREHandoff(ctx, s, *c, call)
 		if errors.Is(toolErr, errADKApprovalPending) {
 			return toolErr
 		}
@@ -855,16 +837,13 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 		}
 		s.state.History = append(s.state.History, Message{HostTurnID: s.state.View.RootTurnID, Role: "tool", CallID: call.ID, Name: call.Name, Content: payload})
 		e.captureMemoryToolResult(s, call, payload, value, toolErr)
-		if call.Name == "load_skill" && toolErr == nil && str(obj(value)["name"]) != "" && str(obj(value)["content"]) != "" {
+		if e.RecordPromptDiagnostics && call.Name == "load_skill" && toolErr == nil && str(obj(value)["name"]) != "" && str(obj(value)["content"]) != "" {
 			s.state.SkillSnapshots = append(s.state.SkillSnapshots, strategy.SkillSnapshot{ResultHash: strategy.ContentHash(payload), ID: str(obj(value)["name"]), ContentHash: strategy.ContentHash(str(obj(value)["content"])), CallID: call.ID})
 		}
 		err := e.save(s)
 		e.notify(s, "toolResult", map[string]any{"call_id": call.ID})
 		s.mu.Unlock()
 		if err != nil {
-			return err
-		}
-		if err := e.onlineObserve(s, *c, call, trace, value, toolErr); err != nil {
 			return err
 		}
 		if err := e.unknownSREOperation(*c, call); err != nil {
@@ -946,12 +925,6 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 		return errors.New("message exceeds configured context window")
 	}
 	timeout := e.compactionTimeout
-	if report, onlineErr := e.onlineCurrent(s, c); onlineErr != nil {
-		return onlineErr
-	} else if report != nil {
-		_, onlineErr = e.onlineUpdate(s, c, false, func(r *strategy.OnlineReport) error { return onlineStop(r, strategy.BudgetExhausted) })
-		return onlineErr
-	}
 	if timeout <= 0 {
 		timeout = 45 * time.Second
 	}

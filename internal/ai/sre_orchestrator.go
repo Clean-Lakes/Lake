@@ -40,9 +40,6 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 	}
 	baseConfig := s.state.Config
 	s.mu.Unlock()
-	if err := e.prepareOnlineSREContinue(ctx, s, baseConfig, taskID); err != nil {
-		return err
-	}
 	s.mu.Lock()
 	if s.cancel != nil {
 		s.mu.Unlock()
@@ -78,12 +75,6 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 		cancel()
 		close(control.done)
 		e.sreControls.Delete(key)
-		correctionConfig := baseConfig
-		correctionConfig.sreCoordinator = false
-		correctionConfig.sre = &sreRoleContext{TaskID: taskID}
-		if finishErr := e.onlineFinish(s, correctionConfig, err); err == nil && finishErr != nil {
-			err = finishErr
-		}
 		if err != nil {
 			_, _ = e.sreRepository.MutateSRETask(sessionID, taskID, 0, "task_paused", func(t *SRETask) error {
 				if !SRETaskActive(t.Status) {

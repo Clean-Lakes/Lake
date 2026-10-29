@@ -67,7 +67,6 @@ func TestStrategyInvalidationOnlyCancelsUsedAssetsAfterRetirement(t *testing.T) 
 				selection.Selected = []strategy.RevisionRef{{AssetID: "used", Revision: 1}}
 			}
 			s.state.PromptBaseline = &strategy.PromptBaseline{Strategy: selection}
-			s.state.Config.StrategyCorrectEnabled = mode == "experiment"
 			e.InvalidateStrategies("")
 			if (ctx.Err() != nil) != (mode == "used_asset") {
 				t.Fatal("incorrect invalidation", mode, ctx.Err())

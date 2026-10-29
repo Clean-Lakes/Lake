@@ -115,7 +115,7 @@ SQLite 继续是事实源，原有 Markdown 投影可重建。N1 冻结统一记
 | 原有项目记忆与 V2 待复核数据 | 保留项目/资源隔离、设置和既有复核门槛；不能批量确认旧条目或更改项目归属 |
 | 旧学习、纠错与实验记录 | 继续按 C1 退役，只读/撤回/清理按原权限；不得作为自动记忆的新增任务或成功证据 |
 
-[Harness² 清理计划](refactor-harness-inspired-cleanup-1.md)的 C0/C1 保留完成事实；C2 的用户内容和入口承接由 N1～N5 落实，C3/C4 的公共依赖拆分、历史兼容和最终清理继续执行，不能先删新链路需要的记忆代码。原 [R0～R5](refactor-user-assets-and-experience-1.md) 不再指导新功能的逐条审核/采用交互。
+[Harness² 清理计划](refactor-harness-inspired-cleanup-1.md)的 C0/C1 保留完成事实；C2 的用户内容和入口承接由 N1～N5 落实，C3 的公共依赖拆分已实施，见 [C3 契约](../docs/design/strategy-runtime-cleanup-c3.md)；C4 的历史兼容和最终清理继续执行，不能先删新链路需要的记忆代码。原 [R0～R5](refactor-user-assets-and-experience-1.md) 不再指导新功能的逐条审核/采用交互。
 
 [运维记忆 V2 计划](feature-operational-memory-2.md)继续承担资源事实、时效和来源验证；本计划扩展用户偏好、自然形成、轻提示/撤销及压缩增量。其项目隔离要求仍约束项目事实；新增用户级偏好不是跨项目事实共享。V2 验证中尚缺的升级/回退、竞态、Windows 和模型质量门槛仍须补齐，不以新名称绕过。
 
@@ -130,7 +130,7 @@ SQLite 继续是事实源，原有 Markdown 投影可重建。N1 冻结统一记
 | N2 自然形成与更新提示 | 已合入 #112 | 不依赖固定口令识别明确长期偏好；临时/引用不写入；准确范围、提交后提示与 CAS 撤销；无逐条采用要求；见 [N2 契约](../docs/design/natural-memory-formation-n2.md)与[验收](../docs/validation/natural-memory-formation-n2.md) |
 | N3 空闲增量整理 | 已合入 #113 | 共用持久队列、有界六条批处理/独立覆盖、同义来源合并、矛盾保留、前台抢占和每日费用预留；主入口收敛为记忆，旧管理折叠；删除无依赖退役派发器。见 [N3 契约](../docs/design/natural-memory-idle-n3.md)及[验收](../docs/validation/natural-memory-idle-n3.md)；该阶段未包含压缩捕获/新召回；现分别见 N4/N5 |
 | N4 压缩补充提取 | 已合入 #114 | Lake Memory 宿主来源登记、共享压缩入口增量捕获、与终态共用 outbox；canonical 信封/缓存恢复、覆盖缺口、撤回重验与原观测时间。见 [N4 契约](../docs/design/natural-memory-compaction-n4.md)及[验收](../docs/validation/natural-memory-compaction-n4.md)；N4 阶段未提供 N5 新偏好召回 |
-| N5 按范围使用与集成收敛 | 已实现并完成本地及 Windows 分项验收，待 PR 合入 | 独立默认关闭的用户/项目使用设置、短预览及准确版本按需读取、每请求/工具前来源重验、准备/读取/遵从未知诊断；普通/Plan/Pilot 协调表达可用，专员/工作流不继承。统一记忆入口、保留原事实/经验与复杂条件兼容；见 [N5 契约](../docs/design/natural-memory-recall-n5.md)及[验收](../docs/validation/natural-memory-recall-n5.md)。运维 V2 与 C3/C4 仍单独验收 |
+| N5 按范围使用与集成收敛 | 已合入 #116（cd75e2c7） | 独立默认关闭的用户/项目使用设置、短预览及准确版本按需读取、每请求/工具前来源重验、准备/读取/遵从未知诊断；普通/Plan/Pilot 协调表达可用，专员/工作流不继承。统一记忆入口、保留原事实/经验与复杂条件兼容；见 [N5 契约](../docs/design/natural-memory-recall-n5.md)及[验收](../docs/validation/natural-memory-recall-n5.md)。运维 V2 与 C3/C4 仍单独验收 |
 
 各阶段从当时最新 develop 独立分支提交 PR，本地签名 Dev 直接运行验证，不为 Go/React 日常改动制作安装包。阶段测试通过不等于新自动记忆可以默认开启；整体体验保持实验、受控启用；N5 验收不自动批准默认开启或正式发布。每阶段记录已测试源码 SHA、测试/模型样本与未验证项，不将实施目标标为已交付。
 
