@@ -15,7 +15,11 @@ func (s *Store) messageQueue(id string) Object {
 		for _, image := range objects(payload["images"]) {
 			images = append(images, Object{"id": image["id"], "name": image["name"], "mimeType": image["mimeType"]})
 		}
-		items = append(items, Object{"id": row["id"], "text": payload["text"], "resourceIds": stringsOf(payload["resourceIds"]), "references": objects(payload["references"]), "mentions": objects(payload["mentions"]), "images": images, "files": objects(payload["files"]), "createdAt": row["createdAt"]})
+		item := Object{"id": row["id"], "text": payload["text"], "resourceIds": stringsOf(payload["resourceIds"]), "references": objects(payload["references"]), "mentions": objects(payload["mentions"]), "images": images, "files": objects(payload["files"]), "createdAt": row["createdAt"]}
+		if root := stringOf(payload["supplementRootTurnId"]); root != "" {
+			item["supplementRootTurnId"] = root
+		}
+		items = append(items, item)
 	}
 	state["items"] = items
 	return state
@@ -69,10 +73,27 @@ func (s *Store) MutateMessageQueue(id string, data Object) Object {
 		case "pause", "resume":
 			paused := data["operation"] == "pause"
 			s.exec("UPDATE messageQueueState SET paused=?,lastError='' WHERE sessionId=?", paused, id)
+		case "push":
+			qid := stringOf(data["id"])
+			row := required(s.row("SELECT payload FROM queuedMessages WHERE id=? AND sessionId=?", qid, id), "Queued message")
+			payload := object(parsed(stringOf(row["payload"])))
+			if stringOf(payload["supplementRootTurnId"]) != "" {
+				fail(409, "这条消息已经在补充本轮")
+			}
+			if stringOf(data["supplementRootTurnId"]) == "" || data["supplementInput"] == nil {
+				fail(400, "缺少本轮补充的来源")
+			}
+			payload["supplementRootTurnId"] = data["supplementRootTurnId"]
+			payload["supplementInput"] = data["supplementInput"]
+			s.exec("UPDATE queuedMessages SET payload=? WHERE id=? AND sessionId=?", jsonText(payload), qid, id)
+			s.exec("UPDATE messageQueueState SET lastError='' WHERE sessionId=?", id)
 		case "edit":
 			qid := stringOf(data["id"])
 			row := required(s.row("SELECT payload FROM queuedMessages WHERE id=? AND sessionId=?", qid, id), "Queued message")
 			payload := object(parsed(stringOf(row["payload"])))
+			if stringOf(payload["supplementRootTurnId"]) != "" {
+				fail(409, "消息正在补充本轮，不能编辑")
+			}
 			payload["text"] = data["text"]
 			payload["resourceIds"] = data["resourceIds"]
 			if data["mentions"] != nil {
@@ -85,7 +106,10 @@ func (s *Store) MutateMessageQueue(id string, data Object) Object {
 			s.exec("UPDATE messageQueueState SET lastError='' WHERE sessionId=?", id)
 		case "remove":
 			qid := stringOf(data["id"])
-			required(s.row("SELECT id FROM queuedMessages WHERE id=? AND sessionId=?", qid, id), "Queued message")
+			removing := required(s.row("SELECT payload FROM queuedMessages WHERE id=? AND sessionId=?", qid, id), "Queued message")
+			if stringOf(object(parsed(stringOf(removing["payload"])))["supplementRootTurnId"]) != "" {
+				fail(409, "消息正在补充本轮，不能移除")
+			}
 			s.exec("DELETE FROM queuedMessages WHERE id=? AND sessionId=?", qid, id)
 			s.exec("UPDATE messageQueueState SET lastError='' WHERE sessionId=?", id)
 		case "reorder":

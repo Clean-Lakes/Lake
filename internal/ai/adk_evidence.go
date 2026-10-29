@@ -10,6 +10,9 @@ import (
 )
 
 func (e *Engine) runtimeDirectory() string {
+	if e.workParent != nil {
+		return e.workParent.runtimeDirectory()
+	}
 	if e.worker != nil {
 		return e.worker.parent.runtimeDirectory()
 	}

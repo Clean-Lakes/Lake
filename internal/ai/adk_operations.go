@@ -80,7 +80,33 @@ func (e *Engine) dispatchNativeOperation(ctx context.Context, s *session, c Conf
 		identity = s.state.Runtime.Identity
 	}
 	scopeID, turnID := s.state.View.Session, s.state.View.RootTurnID
+	workGoalID := s.state.WorkGoalID
 	s.mu.Unlock()
+	if workGoalID != "" && risk != "readonly" {
+		_, goal, loadErr := e.workRow(scopeID, workGoalID)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		if goal.Status != "running" || goal.ActiveItemID == "" {
+			return nil, errors.New("工作目标需要先选定可执行工作项；等待、暂停或已完成的任务不允许新变更")
+		}
+		allowed := false
+		for _, item := range goal.Items {
+			if item.ID == goal.ActiveItemID && item.Status == "running" {
+				allowed = true
+				for _, dep := range item.DependsOn {
+					for _, prerequisite := range goal.Items {
+						if prerequisite.ID == dep && prerequisite.Status != "completed" {
+							allowed = false
+						}
+					}
+				}
+			}
+		}
+		if !allowed {
+			return nil, errors.New("原工作项或前置条件未满足；本次变更未派发")
+		}
+	}
 	if err := e.reconcileNativeOperations(ctx, identity.SessionID); err != nil {
 		return nil, err
 	}
@@ -118,6 +144,15 @@ func (e *Engine) dispatchNativeOperation(ctx context.Context, s *session, c Conf
 		// Recovery can regenerate a provider call with a fresh ID. Only an exact
 		// unfinished tool/arguments/target match is a replay, not another command.
 		if risk != "readonly" {
+			if workGoalID != "" {
+				query := tx.Where("session_id = ? AND root_turn_id = ? AND tool = ? AND args_hash = ? AND target = ? AND status = ?", operation.SessionID, operation.RootTurnID, call.Name, operation.ArgsHash, target, "succeeded").First(&prior)
+				if query.Error == nil {
+					return &nativeOperationReplayError{ID: prior.ID, Tool: prior.Tool, Target: utf8Prefix(redact(prior.Target, c), 120), Status: prior.Status, Handle: prior.Handle}
+				}
+				if !errors.Is(query.Error, gorm.ErrRecordNotFound) {
+					return query.Error
+				}
+			}
 			query := tx.Where("session_id = ? AND tool = ? AND args_hash = ? AND target = ? AND status IN ?", operation.SessionID, call.Name, operation.ArgsHash, target, []string{"unknown", "dispatched"}).Order("started_at, id").First(&prior)
 			if query.Error == nil {
 				return &nativeOperationReplayError{ID: prior.ID, Tool: prior.Tool, Target: utf8Prefix(redact(prior.Target, c), 120), Status: prior.Status, Handle: prior.Handle}

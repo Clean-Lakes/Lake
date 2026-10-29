@@ -122,6 +122,8 @@ if(new URLSearchParams(location.search).has('image-messages')){
  const picture=(id:string,width:number,height:number,color:string)=>({id,name:id+'.svg',width,height,mimeType:'image/svg+xml',base64:'',sizeBytes:0,url:'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="${color}"/><circle cx="${width*.72}" cy="${height*.25}" r="${Math.min(width,height)*.12}" fill="#dceadf"/><path d="M0 ${height*.85} L${width*.4} ${height*.35} L${width} ${height*.9} V${height} H0Z" fill="#55766c"/><text x="${width*.08}" y="${height*.17}" fill="white" font-family="sans-serif" font-size="${Math.min(width,height)*.07}">${width} × ${height}</text></svg>`)});
  snapshot.messages=[
   {id:'image-user-1',sessionId:session.id,role:'user',text:'这两张图帮我看一下',images:[picture('横图',1800,1200,'#789b92'),picture('竖图',900,2400,'#7f8eac')],createdAt:at(31)},
+  {id:'image-user-wide',sessionId:session.id,role:'user',text:'',images:[picture('纯图片宽屏截图',2200,500,'#789b92')],createdAt:at(31)},
+  {id:'image-user-tall',sessionId:session.id,role:'user',text:'',images:[picture('纯图片竖屏截图',900,2400,'#7f8eac')],createdAt:at(32)},
   {id:'image-user-2',sessionId:session.id,role:'user',text:'',images:[picture('小图',48,48,'#8a9b72')],createdAt:at(32)},
   {id:'text-user',sessionId:session.id,role:'user',text:'普通文字仍保留原来的气泡。',createdAt:at(33)},
  ];

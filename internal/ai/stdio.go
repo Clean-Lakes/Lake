@@ -103,6 +103,19 @@ func (e *Engine) Handle(ctx context.Context, method, id string, data json.RawMes
 		return nil
 	}
 	switch method {
+	case "workGoals":
+		return e.WorkGoals(id)
+	case "workControl":
+		var a struct {
+			GoalID   string `json:"goalId"`
+			Command  string `json:"command"`
+			Revision int64  `json:"revision"`
+		}
+		if err := decode(&a); err != nil {
+			return nil, err
+		}
+		return nil, e.WorkControl(ctx, id, a.GoalID, a.Command, a.Revision)
+
 	case "resolveOperation":
 		var input struct {
 			ID     string `json:"id"`

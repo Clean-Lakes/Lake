@@ -4,7 +4,7 @@ import {createContext,useEffect,useId,useRef,useState,type ReactNode} from 'reac
 import {ReplyDuration,type ReplyDurationProps} from './ReplyDuration';
 import {turnStatus} from './turnStatus';
 export const ExecutionDetailsOpen=createContext(false);
-export function TurnExecutionDetails({details,onInspect,presentingReply=false,hideLive=false,sessionId,children,...timing}:{hideLive?:boolean;sessionId?:string;children?:ReactNode;details:ReactNode[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
+export function TurnExecutionDetails({details,onInspect,presentingReply=false,hideLive=false,sessionId,children,progress,...timing}:{progress?:{text:string;active:boolean};hideLive?:boolean;sessionId?:string;children?:ReactNode;details:ReactNode[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
  const id=useId();
  const inspector=useSessionInspector();
  const selection=inspector?.selection;
@@ -35,8 +35,8 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  }}:undefined;
  // Keep a keyed status node as new prose arrives. It follows live content,
  // then moves above the reply once the saved turn timing is final.
- const summary=<ReplyDuration key="turn-duration" {...timing} latestStep={latestStep} disclosure={summaryDisclosure}/>;
+ const summary=<ReplyDuration key="turn-duration" {...timing} latestStep={progress?undefined:latestStep} disclosure={summaryDisclosure}/>;
  const body=inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{details}</div></ExecutionDetailsOpen.Provider>,inspector.host)
   :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{shownDetails}</ExecutionDetailsOpen.Provider></div></div></div>;
- return <>{!live&&summary}{children}{body}{live&&!hideLive&&summary}</>;
+ return <>{!live&&summary}{children}{live&&!hideLive&&!presentingReply&&progress?.text&&<div className="turn-latest-progress" role="note" aria-label="最新进度" title={progress.text}><span className="turn-latest-progress-text">{progress.text}</span></div>}{body}{live&&!hideLive&&summary}</>;
 }

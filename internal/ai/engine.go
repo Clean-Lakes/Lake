@@ -25,6 +25,7 @@ type session struct {
 	state               State
 	cancel              context.CancelFunc
 	finalizing          bool
+	supplementClosed    bool
 	decision            chan bool
 	decisions           map[string]chan bool
 	questionReply       chan map[string][]string
@@ -67,19 +68,38 @@ type Engine struct {
 	shellMu                      sync.Mutex
 	shellsClosed                 bool
 
+	supplementMu      sync.RWMutex
+	supplementReader  SupplementReader
+	supplementAck     SupplementAcknowledger
+	workParent        *Engine
+	workConfigMu      sync.Mutex
+	workConfigurator  func(string) (Config, error)
+	workActive        sync.Map
+	workContext       context.Context
+	workCancel        context.CancelFunc
+	workDone          chan struct{}
+	workReady         chan struct{}
+	workStart         sync.Once
+	workTickMu        sync.Mutex
+	workOutboxMu      sync.Mutex
 	compactionTimeout time.Duration
 	adkMu             sync.Mutex
 	adk               *adkServices
 }
 
 func New(dir string, bridge Bridge, emit func(Event)) (*Engine, error) {
+	return newEngine(dir, bridge, emit, nil)
+}
+func newEngine(dir string, bridge Bridge, emit func(Event), parent *Engine) (*Engine, error) {
 	if err := platform.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
 	if err := platform.Chmod(dir, 0700); err != nil {
 		return nil, err
 	}
-	return &Engine{sessions: map[string]*session{}, Dir: dir, Bridge: bridge, Emit: emit, agentWorkers: map[string]*agentWorker{}, agentSlots: make(chan struct{}, 6), modelSlots: make(chan struct{}, 4), childModelSlots: make(chan struct{}, 3), collectionSlots: make(chan struct{}, 6)}, nil
+	e := &Engine{workParent: parent, sessions: map[string]*session{}, Dir: dir, Bridge: bridge, Emit: emit, agentWorkers: map[string]*agentWorker{}, agentSlots: make(chan struct{}, 6), modelSlots: make(chan struct{}, 4), childModelSlots: make(chan struct{}, 3), collectionSlots: make(chan struct{}, 6)}
+	e.startWorkManager()
+	return e, nil
 }
 
 var identifier = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,100}$`)
@@ -348,6 +368,7 @@ func (e *Engine) Configure(id string, c Config) error {
 	s.state.ReferencedAssetIDs = validRemembered(c, s.state.ReferencedAssetIDs)
 	c.ReferencedAssets = append([]string(nil), s.state.ReferencedAssetIDs...)
 	s.state.Config = c
+	e.StartWorkManager()
 	s.state.View.Profile = c.Profile
 	return e.save(s)
 }
@@ -370,6 +391,20 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	if s.finalizing {
 		view.Status, view.TurnFinishedAt = "running", ""
 	}
+	goals, goalErr := e.WorkGoals(id)
+	if goalErr != nil {
+		return View{}, goalErr
+	}
+	view.WorkGoals = goals
+	for _, g := range goals {
+		if g.OriginRootTurnID == view.RootTurnID && g.ID == s.state.WorkGoalID {
+			view.Status = g.Status
+			if workTerminal(g.Status) {
+				view.TurnFinishedAt = g.UpdatedAt.UTC().Format(time.RFC3339Nano)
+			}
+		}
+	}
+
 	view.OperationOutcomes = outcomes
 	view.Context = contextUsage(s.state)
 	view.TotalCards = len(view.Cards)
@@ -413,9 +448,16 @@ func (e *Engine) Abort(id string) error {
 		return err
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	goalID := s.state.WorkGoalID
 	if s.cancel != nil {
 		s.cancel()
+	}
+	s.mu.Unlock()
+	if goalID != "" {
+		_, g, loadErr := e.workRow(id, goalID)
+		if loadErr == nil && !workTerminal(g.Status) {
+			return e.WorkControl(context.Background(), id, goalID, "cancel", g.Revision)
+		}
 	}
 	return nil
 }
@@ -627,6 +669,9 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	firstCard := len(s.state.View.Cards)
 	s.state.NaturalRecallUsed = nil
 	s.state.Config.IgnoreNaturalMemory = input.IgnoreProjectMemory
+	s.state.WorkGoalID = ""
+	s.state.SupplementIDs = nil
+	s.supplementClosed = false
 	s.state.View.RootTurnID = uid()
 	s.state.SREHandoff = nil
 	s.sreReply = nil
@@ -682,6 +727,24 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			reconcile(&s.state, "turn "+status+"; no replay")
 			s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "error", Content: redact(err.Error(), c), Status: status, At: timestamp()})
 		}
+		if err == nil && s.state.WorkGoalID != "" {
+			if _, g, loadErr := e.workRow(id, s.state.WorkGoalID); loadErr == nil && !workTerminal(g.Status) {
+				status = g.Status
+			}
+		}
+		if err != nil && s.state.WorkGoalID != "" {
+			if row, g, loadErr := e.workRow(id, s.state.WorkGoalID); loadErr == nil && !workTerminal(g.Status) {
+				if g.Status != "paused" {
+					g.Status = "blocked"
+					if errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "context compaction:") {
+						g.Status = "paused"
+					}
+					g.Summary = "任务接续已暂停，原记录保留；请核对待处理事项"
+					_ = e.writeWorkGoal(&row, &g, false)
+				}
+				status = g.Status
+			}
+		}
 		s.state.View.Status = status
 		s.state.View.TurnFinishedAt = timestamp()
 		if err == nil && c.ConversationMode == ModePlan {
@@ -703,8 +766,15 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			err = saveErr
 		}
 		s.mu.Unlock()
-		if persistErr := e.persistNativeProjection(context.WithoutCancel(ctx), s); persistErr != nil && err == nil {
-			err = persistErr
+		if persistErr := e.persistNativeProjection(context.WithoutCancel(ctx), s); persistErr != nil {
+			if err == nil {
+				err = persistErr
+			}
+		} else if ackErr := e.acknowledgeSupplementState(context.WithoutCancel(ctx), s); ackErr != nil && err == nil {
+			err = ackErr
+		}
+		if workErr := e.workCheckpoint(s); workErr != nil && err == nil {
+			err = workErr
 		}
 		// Keep the session reserved until its final canonical write completes.
 		// A new turn must not load an ADK handle that this write makes stale.
@@ -728,6 +798,11 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 	for _, call := range calls {
 		e.setSREActivity("tool", call.Name)
 		value, toolErr := e.invokeAfterSREHandoff(ctx, s, *c, call)
+		if toolErr == nil {
+			if watchErr := e.registerWorkWatch(s, *c, call, value); watchErr != nil {
+				return watchErr
+			}
+		}
 		if errors.Is(toolErr, errADKApprovalPending) {
 			return toolErr
 		}
@@ -874,11 +949,11 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	s.mu.Unlock()
 	budget := (c.Model.ContextWindow - c.Model.MaxOutput) * 2
 	historyBudget := budget - toolCost
-	if !force && chars < budget {
+	if !force && chars < budget*80/100 {
 		return nil
 	}
 	e.captureBeforeCompaction(ctx, s, c)
-	target := budget * 3 / 4
+	target := budget * 60 / 100
 	if c.sre != nil && c.sre.Role == SREInvestigator && !c.sre.FullTools {
 		// Preserve calls, evidence IDs and recorded results deterministically;
 		// an extra model summary must not consume the report time reserve.
@@ -921,6 +996,22 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 		}
 		return errors.New("message exceeds configured context window")
 	}
+	if !force {
+		s.mu.Lock()
+		failedAt, _ := time.Parse(time.RFC3339Nano, s.state.CompactionFailureAt)
+		s.mu.Unlock()
+		if !failedAt.IsZero() && time.Since(failedAt) < time.Minute {
+			recovered, recoveryErr := e.recoverCompaction(ctx, s, history, toolCost, budget)
+			if recovered || recoveryErr != nil {
+				return recoveryErr
+			}
+			if chars < budget {
+				return nil
+			}
+			return errors.New("context compaction: summary cooling down and protected input does not fit; progress retained")
+		}
+	}
+	parentContext := ctx
 	timeout := e.compactionTimeout
 	if timeout <= 0 {
 		timeout = 45 * time.Second
@@ -959,6 +1050,21 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	if err != nil {
 		return err
 	}
+	// A summary child deadline must not expire the investigation's parent.
+	defer func() {
+		if err == nil || force || parentContext.Err() != nil || !strings.HasPrefix(err.Error(), "context compaction:") {
+			return
+		}
+		s.mu.Lock()
+		s.state.CompactionFailureAt = timestamp()
+		s.mu.Unlock()
+		if recovered, recoveryErr := e.recoverCompaction(parentContext, s, history, toolCost, budget); recovered && recoveryErr == nil {
+			err = nil
+			content = "模型摘要暂不可用，已使用工具预览继续；原始记录保留"
+		} else if recoveryErr != nil {
+			err = recoveryErr
+		}
+	}()
 	// Prefer complete turns; a long first turn can also compact between complete
 	// tool batches. Never separate assistant calls from their matching results.
 	cut := len(history) - 1
@@ -1251,6 +1357,10 @@ func (e *Engine) ExtractPreset(ctx context.Context, id string) (Preset, error) {
 }
 func (e *Engine) Shutdown() {
 	e.shutdownOnce.Do(func() {
+		if e.workCancel != nil {
+			e.workCancel()
+			<-e.workDone
+		}
 		e.runMu.Lock()
 		e.runtimeClosed = true
 		e.runMu.Unlock()
@@ -1289,7 +1399,7 @@ func (e *Engine) Shutdown() {
 		e.runs.Wait()
 		e.adkMu.Lock()
 		defer e.adkMu.Unlock()
-		if e.worker == nil && e.adk != nil && e.adk.store != nil {
+		if e.worker == nil && e.workParent == nil && e.adk != nil && e.adk.store != nil {
 			_ = e.adk.store.Close()
 		}
 	})

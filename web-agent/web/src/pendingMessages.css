@@ -63,3 +63,9 @@
 .user-message-arrival { animation: user-message-arrival 260ms cubic-bezier(.22,1,.36,1); }
 @keyframes user-message-arrival { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .user-message-arrival { animation: none; } }
+
+.pending-message-actions .pending-message-push{color:var(--text-secondary)}
+.pending-message-push-status{display:block;margin-top:2px;color:var(--text-secondary);font-size:var(--font-size-toolbar);line-height:1.5}
+.pending-message-push-loader{animation:pending-push-spin 1s linear infinite}
+@keyframes pending-push-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.pending-message-push-loader{animation:none}}

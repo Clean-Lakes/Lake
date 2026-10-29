@@ -99,6 +99,19 @@ func CatalogForConfig(c Config, capabilities map[string]any) []Tool {
 }
 func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool {
 	list := e.baseSessionCatalog(ctx, id, c)
+	if c.sre == nil && !c.sreCoordinator && !c.workflowMode && e.worker == nil && c.ConversationMode != ModePlan && (c.Profile == "core" || c.Profile == "") {
+		list = append(list, workTools()...)
+	}
+	if c.sre != nil || c.sreCoordinator || e.worker != nil || c.ConversationMode == ModePlan || c.Profile != "core" && c.Profile != "" {
+		filtered := list[:0]
+		for _, t := range list {
+			if !workToolName(t.Name) {
+				filtered = append(filtered, t)
+			}
+		}
+		list = filtered
+	}
+
 	if e.NaturalMemory != nil && e.worker == nil && naturalRecallAllowed(c) {
 		list = append(list, naturalRecallTools()...)
 	}

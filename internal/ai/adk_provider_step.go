@@ -18,6 +18,7 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	e, s, c := d.engine, d.session, *d.config
 	s.mu.Lock()
 	id := s.state.View.Session
+	s.supplementClosed = false
 	waiting := len(s.state.View.PendingApprovals) > 0
 	s.mu.Unlock()
 	if waiting {
@@ -63,9 +64,17 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 		}
 		s.mu.Unlock()
 	}
+	if _, err = d.applySupplements(ctx, ""); err != nil {
+		return modelResult{}, err
+	}
+	c = *d.config
 	if err = e.compactForTurn(ctx, s, c, resume && step == 0); err != nil {
 		return modelResult{}, err
 	}
+	if _, err = d.applySupplements(ctx, ""); err != nil {
+		return modelResult{}, err
+	}
+	c = *d.config
 	teamContext := e.sreTeamContext(c)
 	sreTurnContext := ""
 	if c.sreCoordinator {
@@ -89,12 +98,23 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	if saveErr != nil {
 		return modelResult{}, saveErr
 	}
+	if err = e.workCheckpoint(s); err != nil {
+		return modelResult{}, err
+	}
 	fragments, compositionMatched := d.basePromptFragments(history)
 	appendSystem := func(layer strategy.PromptLayer, source, text string) {
 		if len(history) > 0 {
 			history[0].Content += text
 			fragments = appendPromptFragment(fragments, layer, source, text)
 		}
+	}
+	if c.sre == nil && !c.sreCoordinator && !c.workflowMode && e.worker == nil && (c.Profile == "core" || c.Profile == "") && c.ConversationMode != ModePlan {
+		appendSystem(strategy.FixedRules, "work-continuity", workContinuityPrompt)
+		goalContext, goalErr := e.workGoalContext(s, c)
+		if goalErr != nil {
+			return modelResult{}, goalErr
+		}
+		appendSystem(strategy.TaskContext, "durable-work-state", goalContext)
 	}
 	appendSystem(strategy.TaskContext, "team-context", teamContext)
 	appendSystem(strategy.TaskContext, "sre-current-turn-facts", sreTurnContext)
