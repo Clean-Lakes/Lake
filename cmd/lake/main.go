@@ -6,10 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	webassets "github.com/Clean-Lakes/Lake/assets/web"
-	"github.com/Clean-Lakes/Lake/internal/ai"
-	"github.com/Clean-Lakes/Lake/internal/platform"
-	"github.com/Clean-Lakes/Lake/internal/web"
 	"io"
 	"net/http"
 	"net/url"
@@ -22,6 +18,11 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	webassets "github.com/Clean-Lakes/Lake/assets/web"
+	"github.com/Clean-Lakes/Lake/internal/ai"
+	"github.com/Clean-Lakes/Lake/internal/platform"
+	"github.com/Clean-Lakes/Lake/internal/web"
 )
 
 var version = "0.3.7" // Release builds inject the repository VERSION through -ldflags.
@@ -65,6 +66,21 @@ func run(ctx context.Context, args []string) (err error) {
 	if args[0] == "--version" || args[0] == "version" {
 		fmt.Println("Lake " + version + " · Go backend · React frontend")
 		return nil
+	}
+	if args[0] == "memory" {
+		if len(args) < 2 || args[1] != "export-retired-assets" {
+			return errors.New("use memory export-retired-assets --home PATH --output FILE")
+		}
+		flags := flag.NewFlagSet("memory export-retired-assets", flag.ContinueOnError)
+		home := flags.String("home", lakeHome(), "Lake home containing the retired archive")
+		output := flags.String("output", "", "new private JSON file (must not exist)")
+		if e := flags.Parse(args[2:]); e != nil {
+			return e
+		}
+		if flags.NArg() != 0 || *output == "" {
+			return errors.New("use --output with a new file path")
+		}
+		return web.ExportLegacyAssets(ctx, filepath.Join(*home, "web-agent"), *output)
 	}
 	if args[0] == "secrets" {
 		return migrate(args[1:])
@@ -233,6 +249,7 @@ const help = `Lake — Go 运维工作台（运行无需 Node.js）
   lake projects | resources | sessions list   查看工作台记录
   lake sessions show/delete ID                查看或删除会话
   lake chat --session ID --message TEXT        在已有会话发起 AI 轮次
+  lake memory export-retired-assets --home PATH --output FILE  导出已退出的旧资产档案
   lake status                                 查看本机系统
   lake ai [--data PATH]                        Go AI stdio 接口
   lake secrets migrate --manifest FILE [--home PATH]  显式旧凭据迁移

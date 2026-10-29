@@ -1,9 +1,10 @@
 package web
 
 import (
-	"github.com/Clean-Lakes/Lake/internal/ai"
 	"testing"
 	"time"
+
+	"github.com/Clean-Lakes/Lake/internal/ai"
 )
 
 func TestMemoryCaptureObservedTimeDoesNotRefreshDuringConsolidation(t *testing.T) {

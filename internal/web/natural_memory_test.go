@@ -2,12 +2,13 @@ package web
 
 import (
 	"database/sql"
-	"github.com/Clean-Lakes/Lake/internal/platform"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/Clean-Lakes/Lake/internal/platform"
 
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
@@ -257,47 +258,6 @@ func TestNaturalMemoryMigrationBackupRestartAndFutureGuard(t *testing.T) {
 	if opened, e := OpenStore(dir); e == nil {
 		opened.Close()
 		t.Fatal("future schema opened")
-	}
-}
-
-func TestNaturalMemoryHTTPStrictScopesProjectAdaptersAndRetiredWrites(t *testing.T) {
-	for _, v2 := range []bool{false, true} {
-		t.Run(map[bool]string{false: "v1", true: "gated_v2_fixture"}[v2], func(t *testing.T) {
-			b, h := fixture(t)
-			session, _ := newSession(t, h)
-			ctx := StrategyContext{ProjectID: stringOf(b.Store.Session(session)["projectId"])}
-			if v2 {
-				if e := b.Store.migrateMemoryV2(); e != nil {
-					t.Fatal(e)
-				}
-			}
-			m := memoryV2Mutation("release-check")
-			b.Store.CommitProjectMemory(ctx.ProjectID, m)
-			base := "/api/projects/" + ctx.ProjectID + "/natural-memory"
-			list := strategyHTTP(t, h, "GET", base+"/project-entries", "", "", 200)
-			if integer(list["total"]) != 1 {
-				t.Fatal(list)
-			}
-			strategyHTTP(t, h, "GET", base+"/project-entries/release-check", "", "", 200)
-			strategyHTTP(t, h, "GET", "/api/natural-memory/project-entries/release-check", "", "", 404)
-			strategyHTTP(t, h, "GET", "/api/projects/missing/natural-memory/settings", "", "", 404)
-			status := 200
-			if v2 {
-				status = 409
-			}
-			strategyHTTP(t, h, "PATCH", base+"/settings", "enable", `{"expectedRevision":0,"autoEnabled":true}`, status)
-			for _, raw := range []string{`{"expectedRevision":0,"autoEnabled":false,"projectId":"other"}`, `{"expectedRevision":0,"autoEnabled":false,"autoEnabled":true}`, `{"expectedRevision":0,"autoEnabled":null}`} {
-				strategyHTTP(t, h, "PATCH", base+"/settings", ident(), raw, 400)
-			}
-			a, _ := naturalAdopt(t, b.Store, ctx, naturalScope(ctx))
-			p := strategyHTTP(t, h, "GET", base+"/legacy/"+a.AssetID+"/preview", "", "", 200)
-			carried := strategyHTTP(t, h, "POST", base+"/legacy/"+a.AssetID+"/carry", "carry", jsonText(Object{"expectedRevision": 0, "previewToken": p["previewToken"]}), 200)
-			strategyHTTP(t, h, "GET", base+"/preferences/"+a.AssetID, "", "", 200)
-			strategyHTTP(t, h, "GET", base+"/preferences/"+a.AssetID+"/revisions/1", "", "", 200)
-			strategyHTTP(t, h, "GET", "/api/natural-memory/preferences/"+a.AssetID, "", "", 404)
-			strategyHTTP(t, h, "POST", base+"/changes/"+stringOf(carried["changeId"])+"/undo", "undo", `{"expectedRevision":1}`, 200)
-			strategyHTTP(t, h, "POST", "/api/projects/"+ctx.ProjectID+"/strategy/proposals", "retired", `{}`, 410)
-		})
 	}
 }
 

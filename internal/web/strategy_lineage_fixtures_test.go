@@ -1,8 +1,11 @@
 package web
 
+// Historical fixture support only: never compiled into the Lake product.
+
 import (
-	"github.com/Clean-Lakes/Lake/internal/strategy"
 	"strings"
+
+	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
 // Only existing real user messages can be registered here. Tool, evaluation
@@ -40,6 +43,7 @@ func (s *Store) RegisterStrategyMessageSource(ctx StrategyContext, messageID, ke
 		return result
 	})
 }
+
 func (s *Store) ForgetStrategySource(ctx StrategyContext, id, key string, revoke bool) (StrategyMutationResult, error) {
 	return strategyCall(s, true, func() StrategyMutationResult {
 		source := s.strategySource(ctx, id, false)
@@ -157,6 +161,7 @@ func (s *Store) AddStrategyLineage(ctx StrategyContext, id, key, from, to, relat
 		return result
 	})
 }
+
 func (s *Store) PendingStrategyEvents(ctx StrategyContext, after int64, limit int) ([]Object, error) {
 	return strategyCall(s, false, func() []Object {
 		s.strategyContext(ctx)
@@ -166,6 +171,7 @@ func (s *Store) PendingStrategyEvents(ctx StrategyContext, after int64, limit in
 		return s.rows("SELECT * FROM strategyEvents WHERE seq>? AND publishedAt='' AND (scopeKey='user' OR scopeKey=?) AND (accessProjectId='' OR accessProjectId=?) ORDER BY seq LIMIT ?", after, "project:"+ctx.ProjectID, ctx.ProjectID, limit)
 	})
 }
+
 func (s *Store) AcknowledgeStrategyEvent(ctx StrategyContext, seq int64) (bool, error) {
 	return strategyCall(s, true, func() bool {
 		s.strategyContext(ctx)

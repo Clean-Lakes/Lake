@@ -4,10 +4,11 @@ package web
 
 import (
 	"database/sql"
-	"golang.org/x/sys/windows"
-	_ "modernc.org/sqlite"
 	"os"
 	"path/filepath"
+
+	"golang.org/x/sys/windows"
+	_ "modernc.org/sqlite"
 )
 
 func lockStore(f *os.File) error {
@@ -18,4 +19,8 @@ func unlockStore(f *os.File) error {
 }
 func openSQLite(path string) (*sql.DB, error) {
 	return sql.Open("sqlite", filepath.ToSlash(path)+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
+}
+
+func openSQLiteReadOnly(path string) (*sql.DB, error) {
+	return sql.Open("sqlite", filepath.ToSlash(path)+"?mode=ro&_pragma=busy_timeout(5000)")
 }

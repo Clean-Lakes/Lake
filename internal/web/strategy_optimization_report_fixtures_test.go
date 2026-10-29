@@ -1,5 +1,7 @@
 package web
 
+// Historical fixture support only: never compiled into the Lake product.
+
 import (
 	"github.com/Clean-Lakes/Lake/internal/ai"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
@@ -15,12 +17,13 @@ type strategyOptimizationCandidate struct {
 	StopCondition       string   `json:"stopCondition"`
 	SourceRunIDs        []string `json:"sourceRunIds"`
 }
+
 type strategyOptimizationOutput struct {
 	SchemaVersion int                            `json:"schemaVersion"`
 	Candidate     *strategyOptimizationCandidate `json:"candidate"`
 }
 
-func optimizationApplied(result ai.StrategyVariantResult, ref strategy.RevisionRef) bool {
+func optimizationApplied(result legacyVariantResult, ref strategy.RevisionRef) bool {
 	if len(result.Manifests) == 0 {
 		return false
 	}
@@ -35,6 +38,7 @@ func optimizationApplied(result ai.StrategyVariantResult, ref strategy.RevisionR
 	}
 	return true
 }
+
 func (b *Server) optimizationAssessment(id string, f strategyExperimentFrozen) (Object, []Object) {
 	runs := []Object{}
 	byVariant := map[string]Object{}
@@ -42,7 +46,7 @@ func (b *Server) optimizationAssessment(id string, f strategyExperimentFrozen) (
 		fixture, _ := strategy.FindFixture(stringOf(row["caseId"]))
 		run := Object{"id": row["id"], "caseId": row["caseId"], "split": fixture.Split, "arm": row["arm"], "variant": row["variant"], "status": row["status"], "repetition": 1}
 		if row["reportJSON"] != "" && b.strategySafeText(stringOf(row["reportJSON"])) {
-			result := strategyDecode[ai.StrategyVariantResult](stringOf(row["reportJSON"]))
+			result := strategyDecode[legacyVariantResult](stringOf(row["reportJSON"]))
 			run["result"] = result
 			run["passed"] = result.Evaluation.Status == "passed"
 			run["repeatedObservations"] = max(0, result.Observed-1)
@@ -84,6 +88,7 @@ func (b *Server) optimizationAssessment(id string, f strategyExperimentFrozen) (
 	}
 	return splits, runs
 }
+
 func (b *Server) strategyOptimizationReport(ctx StrategyContext, id string) (Object, error) {
 	return strategyCall(b.Store, false, func() Object {
 		job := b.Store.strategyJob(ctx, id)

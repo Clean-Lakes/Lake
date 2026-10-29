@@ -21,10 +21,10 @@ import (
 
 // This runs the actual embedded React application and Go API in WebView2,
 // using an empty private Home and no model/production credentials.
-func TestWindowsLegacyAssetConfirmationInRealWebView(t *testing.T) {
+func TestWindowsLegacyAssetsRetiredInRealWebView(t *testing.T) {
 	if _, err := webviewloader.GetInstalledVersion(); err != nil {
 		if os.Getenv("LAKE_COMPAT_REQUIRED_WINDOWS_UI") == "1" {
-			t.Fatal("Legacy asset compatibility requires the actual WebView2 runtime")
+			t.Fatal("Legacy asset exit verification requires the actual WebView2 runtime")
 		}
 		t.Skip("WebView2 runtime is not installed")
 	}
@@ -48,7 +48,7 @@ func TestWindowsLegacyAssetConfirmationInRealWebView(t *testing.T) {
 		})
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
-		command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestWindowsLegacyAssetConfirmationInRealWebView$", "-test.v")
+		command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestWindowsLegacyAssetsRetiredInRealWebView$", "-test.v")
 		command.Env = append(os.Environ(), "LAKE_COMPAT_WINDOWS_UI_CHILD=1", "LAKE_COMPAT_WINDOWS_UI_HOME="+home)
 		output, err := command.CombinedOutput()
 		if err != nil {
@@ -88,7 +88,7 @@ func TestWindowsLegacyAssetConfirmationInRealWebView(t *testing.T) {
 	if origin == "" {
 		t.Fatal("isolated backend readiness timed out")
 	}
-	window := webview.NewWithOptions(webview.WebViewOptions{DataPath: filepath.Join(home, "webview"), WindowOptions: webview.WindowOptions{Title: "Lake legacy assets Windows acceptance", Width: 1280, Height: 800}})
+	window := webview.NewWithOptions(webview.WebViewOptions{DataPath: filepath.Join(home, "webview"), WindowOptions: webview.WindowOptions{Title: "Lake retired assets Windows acceptance", Width: 1280, Height: 800}})
 	if window == nil {
 		t.Fatal("WebView2 window creation failed")
 	}
@@ -120,49 +120,22 @@ func TestWindowsLegacyAssetConfirmationInRealWebView(t *testing.T) {
  // A first-run settings button includes a separate "待配置" badge. Match its
  // visible label, while retaining exact matching for ordinary text buttons.
  const button=(root,text)=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent.trim()===text || b.getAttribute('aria-label')===text || Array.from(b.querySelectorAll(':scope > span')).some(label=>label.textContent.trim()===text));
- const panel=()=>document.querySelector('#strategy-settings-panel');
- const confirmation=()=>panel()?.querySelector('[aria-label="确认策略操作"]');
- const openLegacy=async()=>{
-  (await wait(()=>document.querySelector('#memory-settings-tab'))).click();
-  const history=await wait(()=>Array.from(document.querySelectorAll('#memory-settings-panel summary')).find(e=>e.textContent.trim()==='历史资产与兼容管理'));
-  if(!history.parentElement.open)history.click();await wait(panel);
- };
-
- const choose=async(root,text)=>{phase='button:'+text;(await wait(()=>{const current=typeof root==='function'?root():root;return current?.isConnected&&button(current,text);})).click();await new Promise(requestAnimationFrame);};
+ const panel=()=>document.querySelector('#memory-settings-panel');
+ const choose=async(root,text)=>{phase='button:'+text;(await wait(()=>button(root,text))).click();await new Promise(requestAnimationFrame);};
  const assert=(value,code)=>{if(!value)throw Error(code);};
- await choose(document,'工作区'); await choose(document,'设置');
- await openLegacy();
- phase='strategy_panel';
- await wait(panel);
- await choose(panel,'新建');
- phase='title_field';
- const title=await wait(()=>panel().querySelector('input[maxlength="240"]'));
- Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(title,'Legacy unsaved Windows draft');
- title.dispatchEvent(new Event('input',{bubbles:true}));
- await choose(panel,'新建');
- phase='unsaved_confirmation';
- await wait(confirmation);
- let buttons=confirmation().querySelectorAll('button');
- assert(document.activeElement===buttons[0],'initial_cancel_focus');
- buttons[0].dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true}));
- assert(document.activeElement===buttons[1],'tab_escaped_confirmation');
- buttons[1].dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',shiftKey:true,bubbles:true,cancelable:true}));
- assert(document.activeElement===buttons[0],'shift_tab_escaped_confirmation');
- buttons[0].dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
- await wait(()=>!confirmation());
- assert(panel().querySelector('input[maxlength="240"]').value==='Legacy unsaved Windows draft','escape_lost_draft');
- assert(document.querySelector('#strategy-settings-panel'),'escape_closed_settings');
- await choose(panel,'新建'); await wait(confirmation);
- await choose(confirmation,'确认操作');
- await wait(()=>!confirmation());
- assert(panel().querySelector('input[maxlength="240"]').value==='','confirmed_discard_failed');
+ const absent=()=>{assert(!document.querySelector('#strategy-settings-panel'),'legacy_panel_present');assert(!panel().textContent.includes('历史资产与兼容管理'),'legacy_entry_present');assert(!panel().textContent.includes('旧偏好承接'),'legacy_carry_present');};
+ await choose(document,'工作区');await choose(document,'设置');
+ (await wait(()=>document.querySelector('#memory-settings-tab'))).click();await wait(panel);absent();
+ assert((await fetch('/api/strategy/settings')).status===410,'legacy_settings_available');
+ assert((await fetch('/api/natural-memory/legacy')).status===410,'legacy_carry_available');
+ assert((await fetch('/api/natural-memory/settings')).status===200,'natural_settings_unavailable');
  document.querySelector('#appearance-settings-tab').click();
  const dark=await wait(()=>Array.from(document.querySelectorAll('[role="radio"]')).find(b=>b.textContent.trim()==='深色'));
- dark.click(); await wait(()=>dark.getAttribute('aria-checked')==='true');
- await openLegacy();
- await wait(panel);
- await window.__legacyResize(); phase='native_narrow_resize';await wait(()=>innerWidth<=900);assert(innerWidth<=900,'narrow_window_not_exercised');
- await window.__legacyResult(JSON.stringify({passed:true,actualBackend:true,actualWebView2:true,defaultNoModel:true,tab:true,shiftTab:true,escapePreservedDraft:true,confirmedDiscard:true,dark:true,viewportWidth:innerWidth,viewportHeight:innerHeight}));
+ dark.click();await wait(()=>dark.getAttribute('aria-checked')==='true');
+ document.querySelector('#memory-settings-tab').click();await wait(panel);absent();
+ await window.__legacyResize();phase='native_narrow_resize';await wait(()=>innerWidth<=900);
+ assert(panel().scrollWidth<=panel().clientWidth+2,'memory_panel_overflow');
+ await window.__legacyResult(JSON.stringify({passed:true,actualBackend:true,actualWebView2:true,defaultNoModel:true,legacyAbsent:true,legacyAPI410:true,naturalSettingsAvailable:true,dark:true,viewportWidth:innerWidth,viewportHeight:innerHeight}));
  })().catch(error=>window.__legacyResult(JSON.stringify({passed:false,error:String(error.message)})));});`)
 	timer := time.AfterFunc(50*time.Second, func() { window.Dispatch(window.Destroy) })
 	defer timer.Stop()

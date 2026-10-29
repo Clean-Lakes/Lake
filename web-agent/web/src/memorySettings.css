@@ -1,0 +1,9 @@
+.memory-settings{min-height:0;overflow:auto;padding:16px 24px;flex:1;color:var(--foreground)}
+.memory-settings .field-label{margin:10px 0}.memory-settings details{margin:16px 0}.memory-settings summary{cursor:pointer;font-size:var(--font-size-ui)}
+.memory-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.memory-source{border-bottom:1px solid var(--border);padding:8px 0;display:flex;flex-direction:column;gap:4px;font-size:var(--font-size-ui);overflow-wrap:anywhere}
+.memory-source>.button{align-self:flex-start}
+.memory-diff{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.6 ui-monospace,monospace;max-height:280px;overflow:auto;background:var(--surface);padding:10px;border:1px solid var(--border);border-radius:var(--radius-settings-control);corner-shape:var(--corner-window)}
+.memory-settings button:focus-visible,.memory-settings summary:focus-visible{outline:2px solid var(--focus-outline);outline-offset:2px}
+.memory-preferences{border:1px solid var(--border);border-radius:var(--radius-settings-panel);padding:12px;corner-shape:var(--corner-window)}
+@media(max-width:760px){.memory-settings{padding:12px}.memory-settings .button{min-height:36px}}

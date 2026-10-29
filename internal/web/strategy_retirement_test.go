@@ -64,21 +64,17 @@ func TestStrategyRetiredRoutesRejectBeforeReceiptsAndPreserveManualAssets(t *tes
 			return nil
 		})
 		got := strategyHTTP(t, h, "POST", base+suffix, "old-success-"+suffix, `{}`, 410)
-		if got["code"] != "strategy_execution_retired" {
+		if got["code"] != "strategy_assets_retired" {
 			t.Fatal(got)
 		}
 	}
 	strategyHTTP(t, h, "POST", "/api/projects/missing/strategy/proposals", "foreign", `{}`, 404)
-	settings := strategyHTTP(t, h, "GET", "/api/strategy/settings", "", "", 200)
-	if object(settings["capabilities"])["learn"] != false || object(settings["capabilities"])["onlineCorrect"] != false {
-		t.Fatal(settings)
-	}
 	body := Object{"expectedRevision": 1, "masterEnabled": true, "applyEnabled": true, "learnEnabled": true, "correctEnabled": true, "onlineCorrectEnabled": true, "onlineConsentVersion": 2, "budget": strategy.DefaultBudget()}
 	strategyHTTP(t, h, "PATCH", "/api/strategy/settings", "old-enable", jsonText(body), 410)
-	strategyHTTP(t, h, "GET", base+"/assets/"+asset.AssetID+"/revisions/1", "", "", 200)
-	strategyHTTP(t, h, "GET", base+"/sources", "", "", 200)
-	strategyHTTP(t, h, "GET", base+"/proposals", "", "", 200)
-	strategyHTTP(t, h, "GET", base+"/experiments", "", "", 200)
+	strategyHTTP(t, h, "GET", base+"/assets/"+asset.AssetID+"/revisions/1", "", "", 410)
+	strategyHTTP(t, h, "GET", base+"/sources", "", "", 410)
+	strategyHTTP(t, h, "GET", base+"/proposals", "", "", 410)
+	strategyHTTP(t, h, "GET", base+"/experiments", "", "", 410)
 	if integer(b.Store.row("SELECT COUNT(*) AS n FROM strategyJobs")["n"]) != 0 {
 		t.Fatal("retired request created work")
 	}
@@ -136,7 +132,7 @@ func TestStrategyRetirementMigrationPreservesChoicesUnknownAndTerminalRecords(t 
 		t.Fatal(e)
 	}
 	settings, _ := s.GetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope})
-	if settings.LearnEnabled || settings.CorrectEnabled || settings.OnlineCorrectEnabled || !settings.MasterEnabled || !settings.ApplyEnabled || settings.RetiredExecutionChoices == nil || !settings.RetiredExecutionChoices.LearnEnabled {
+	if settings.LearnEnabled || settings.CorrectEnabled || settings.OnlineCorrectEnabled || settings.MasterEnabled || settings.ApplyEnabled || settings.RetiredExecutionChoices == nil || !settings.RetiredExecutionChoices.LearnEnabled {
 		t.Fatal(settings)
 	}
 	for state, id := range jobs {

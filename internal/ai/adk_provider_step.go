@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 	"google.golang.org/adk/v2/artifact"
 	"google.golang.org/genai"
-	"time"
 )
 
 // next performs one provider request. Only the official LlmAgent decides when
@@ -21,9 +22,6 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	s.mu.Unlock()
 	if waiting {
 		return modelResult{}, errADKApprovalPending
-	}
-	if _, err := e.resolveTurnStrategies(ctx, s, c); err != nil {
-		return modelResult{}, err
 	}
 	step := d.round
 	if step >= c.MaxSteps {
@@ -330,10 +328,8 @@ const toolCallRecoveryNotice = "The previous response was rejected before tool d
 // is host-only opt-in and best effort; ADK/session/operation writes remain mandatory.
 func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history []Message, tools []Tool, fragments []strategy.PromptFragment, matched bool, retryOf string, delta func(string, string)) (modelResult, error) {
 	e, s, c := d.engine, d.session, *d.config
-	history, fragments, selection, strategyErr := d.strategyRequest(ctx, history, fragments, tools)
-	if strategyErr != nil {
-		return modelResult{}, strategyErr
-	}
+	// Legacy adopted assets are archival data, never request enrichment.
+	selection := strategy.Selection{}
 	var recallText string
 	var recallErr error
 	history, recallText, recallErr = e.naturalRecallRequest(ctx, s, c, history, tools)

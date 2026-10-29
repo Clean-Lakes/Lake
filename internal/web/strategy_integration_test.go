@@ -13,7 +13,7 @@ import (
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
-func TestStrategyWebApplyOffOnNewRevisionAndProjectCap(t *testing.T) {
+func TestLegacyAssetArchiveNeverInjectsAcrossTurnsOrEnableAttempts(t *testing.T) {
 	b, h := fixture(t)
 	id, _ := newSession(t, h)
 	project := stringOf(b.Store.Session(id)["projectId"])
@@ -56,7 +56,7 @@ func TestStrategyWebApplyOffOnNewRevisionAndProjectCap(t *testing.T) {
 	}
 	send() // Adopted but master/apply remain off.
 	settings := Object{"expectedRevision": 0, "masterEnabled": true, "applyEnabled": true, "learnEnabled": false, "correctEnabled": false, "budget": strategy.DefaultBudget()}
-	strategyHTTP(t, h, "PATCH", "/api/strategy/settings", "enable", jsonText(settings), 200)
+	strategyHTTP(t, h, "PATCH", "/api/strategy/settings", "enable", jsonText(settings), 410)
 	send()
 	input.Body = "P3_UNADOPTED_VERSION_TWO: new preference."
 	_, err = b.Store.ReviseStrategyAsset(ctx, asset.AssetID, "new-version", 1, 1, input)
@@ -66,19 +66,19 @@ func TestStrategyWebApplyOffOnNewRevisionAndProjectCap(t *testing.T) {
 	send()
 	// An explicit project restriction wins over global enablement.
 	settings["applyEnabled"] = false
-	strategyHTTP(t, h, "PATCH", base+"/settings", "cap", jsonText(settings), 200)
+	strategyHTTP(t, h, "PATCH", base+"/settings", "cap", jsonText(settings), 410)
 	send()
 	mu.Lock()
 	defer mu.Unlock()
 	if len(requests) != 4 {
 		t.Fatalf("unexpected model dispatches: %d", len(requests))
 	}
-	if strings.Contains(requests[0], "P3_FROZEN_VERSION_ONE") || !strings.Contains(requests[1], "P3_FROZEN_VERSION_ONE") || !strings.Contains(requests[2], "P3_FROZEN_VERSION_ONE") || strings.Contains(requests[2], "P3_UNADOPTED_VERSION_TWO") || strings.Contains(requests[3], "P3_FROZEN_VERSION_ONE") {
-		t.Fatal("apply/adoption/project cap did not control actual requests")
+	if strings.Contains(requests[0], "P3_FROZEN_VERSION_ONE") || strings.Contains(requests[1], "P3_FROZEN_VERSION_ONE") || strings.Contains(requests[2], "P3_FROZEN_VERSION_ONE") || strings.Contains(requests[2], "P3_UNADOPTED_VERSION_TWO") || strings.Contains(requests[3], "P3_FROZEN_VERSION_ONE") {
+		t.Fatal("retired content reached actual model requests")
 	}
 }
 
-func TestStrategySwitchOffCancelsInFlightRequest(t *testing.T) {
+func TestRetiredSettingsDoNotCancelOrdinaryInflightRequest(t *testing.T) {
 	b, h := fixture(t)
 	id, _ := newSession(t, h)
 	entered := make(chan struct{})
@@ -91,7 +91,12 @@ func TestStrategySwitchOffCancelsInFlightRequest(t *testing.T) {
 		}
 		emitModel(w, "已收到。", nil)
 	}))
-	defer func() { close(release); provider.Close() }()
+	defer func() {
+		if release != nil {
+			close(release)
+		}
+		provider.Close()
+	}()
 
 	b.Models.Save(&ai.Model{URL: provider.URL, Name: "strategy cancel fixture", Protocol: "openai", ContextWindow: 200000, MaxOutput: 1024})
 	project := stringOf(b.Store.Session(id)["projectId"])
@@ -106,7 +111,7 @@ func TestStrategySwitchOffCancelsInFlightRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings := Object{"expectedRevision": 0, "masterEnabled": true, "applyEnabled": true, "learnEnabled": false, "correctEnabled": false, "budget": strategy.DefaultBudget()}
-	strategyHTTP(t, h, "PATCH", "/api/strategy/settings", "enable", jsonText(settings), 200)
+	strategyHTTP(t, h, "PATCH", "/api/strategy/settings", "enable", jsonText(settings), 410)
 	apiTest(t, h, "POST", "/api/sessions/"+id+"/messages", Object{"text": "回复收到。"}, 202)
 	select {
 	case <-entered:
@@ -115,7 +120,9 @@ func TestStrategySwitchOffCancelsInFlightRequest(t *testing.T) {
 	}
 	settings["expectedRevision"] = 1
 	settings["masterEnabled"] = false
-	strategyHTTP(t, h, "PATCH", "/api/strategy/settings", "disable", jsonText(settings), 200)
-	waitAI(t, b, id, "cancelled")
+	strategyHTTP(t, h, "PATCH", "/api/strategy/settings", "disable", jsonText(settings), 410)
+	close(release)
+	release = nil
+	waitAI(t, b, id, "completed")
 	b.workers.Wait()
 }

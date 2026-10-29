@@ -1,8 +1,8 @@
 package web
 
+// Historical fixture support only: never compiled into the Lake product.
+
 import (
-	"context"
-	"errors"
 	"reflect"
 	"strings"
 
@@ -80,50 +80,7 @@ func (s *Store) resolveStrategyBindings(ctx StrategyContext, q strategy.Selectio
 		return result
 	})
 }
-func (b *Server) strategyProvider(ctx context.Context, id string, q strategy.SelectionQuery, frozen *strategy.Selection) (out strategy.ResolvedSelection, err error) {
-	// Store.Session and credential adapters use host panics for unavailable data.
-	// Never let those escape into the provider/SDK callback or expose raw errors.
-	defer func() {
-		if recover() != nil {
-			out = strategy.ResolvedSelection{}
-			err = &StrategyError{404, "strategy_context_unavailable"}
-		}
-	}()
-	if ctx.Err() != nil {
-		return strategy.ResolvedSelection{}, ctx.Err()
-	}
-	// Resolve from the authenticated host session, not a config/model project ID.
-	session := b.Store.Session(id)
-	project := stringOf(session["projectId"])
-	if project == "" {
-		return strategy.ResolvedSelection{}, errors.New("strategy session unavailable")
-	}
-	checked := map[string]bool{}
-	out, err = b.Store.resolveStrategyBindings(StrategyContext{ProjectID: project}, q, frozen, func(name, hash string) bool {
-		key := name + ":" + hash
-		if value, ok := checked[key]; ok {
-			return value
-		}
-		meta, body, err := b.Extensions.Store.ReadSkill(name, "")
-		value := err == nil && meta.Enabled && strategy.ContentHash(body) == hash
-		checked[key] = value
-		return value
-	})
-	if err != nil {
-		return strategy.ResolvedSelection{}, err
-	}
-	// A historical preference can become sensitive after credentials change.
-	// Recheck current configured secrets, including inactive model providers.
-	for _, asset := range out.Assets {
-		if b.Terminals.containsCredential(asset.Body) || b.Models.strategyContainsProviderSecret(asset.Body) {
-			return strategy.ResolvedSelection{}, &StrategyError{400, "strategy_sensitive_content"}
-		}
-	}
-	return out, nil
-}
 
-// ImportStrategySkill accepts only a trusted host-read snapshot. HTTP callers
-// choose a catalog name, never a path/hash/source ID or verification level.
 func (s *Store) importStrategySkill(ctx StrategyContext, scope strategy.Scope, key, name, body string, in StrategyAssetInput) (StrategyMutationResult, error) {
 	return strategyCall(s, true, func() StrategyMutationResult {
 		scopeKey := s.strategyEnsureScope(ctx, scope)

@@ -205,7 +205,6 @@ func (b *Server) navigationTrashRoute(w http.ResponseWriter, r *http.Request, na
 			}
 		}
 		b.Store.ArchiveNavigation(kind, id)
-		b.Engine.InvalidateStrategies("")
 	} else {
 		b.Store.RestoreNavigation(kind, id)
 	}
