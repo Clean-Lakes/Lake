@@ -19,3 +19,7 @@
 /* A stable one-line caption survives tool rounds while full prose stays in records. */
 .turn-latest-progress { min-width:0; flex-shrink:0; font-size:var(--font-size-ui); line-height:1.75; color:var(--text-secondary); }
 .turn-latest-progress > .status-text { display:block; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* When prose becomes the live caption, replace it in one paint. Cross-fading
+   the archived original duplicates the same line during its first frames. */
+.ai-turn:has(> .turn-latest-progress) > .settled-reply.is-archived { display:none; }

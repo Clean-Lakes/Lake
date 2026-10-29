@@ -37,13 +37,14 @@ function snapshot(status='running'):SessionSnapshot{
  return {session:{id:'fixture'},resources:[],actions:[],messages:[{id:'user',sessionId:'fixture',role:'user',text:'检查服务',createdAt:at(0)}],ai:{session:'fixture',status,turnStartedAt:at(0),cardsOffset:0,cards:[note.card!,tool.card!,latest.card!]}} as unknown as SessionSnapshot;
 }
 test('ordinary running tool turns show exactly one caption and archive complete narration for inspection',()=>{
- const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:snapshot()}));
+ const current=snapshot();current.ai!.cards.pop();
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:current}));
  assert.equal((html.match(/class="turn-latest-progress"/g)||[]).length,1);
  assert.ok(html.includes('先核对原记录。'));
  assert.ok(html.includes('过程播报 · 1'));
  assert.ok(!html.includes('turn-current-step'),'the caption must not duplicate a second progress description beside the timer');
  assert.match(html,/class="settled-reply is-archived"[^>]*aria-hidden="true"[^>]*inert=""/);
- assert.match(html,/class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="latest"/,'a possible final answer stays complete in the main body while the turn is running');
+ assert.ok(html.includes('data-conversation-entry="note"'),'original narration keeps its identity in the records');
 });
 test('completion restores the real final reply and stops the live caption; failures retain incomplete prose',()=>{
  for(const status of ['completed','failed','cancelled']){
@@ -68,6 +69,23 @@ test('multiple distinct post-tool answers stay in the body, never in a resource 
   s.ai!.cards.splice(2,0,card('actual-first','message','第一项实际核验结果。','completed',3).card!);
   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
   for(const id of ['actual-first','latest'])assert.match(html,new RegExp('class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="'+id+'"'),status+' '+id);
-  if(status==='running')assert.match(html,/class="turn-latest-progress"[^>]*title="先核对原记录。"/);
+  assert.ok(!html.includes('turn-latest-progress'),'the real reply takes over the caption before turn completion');
  }
+});
+
+
+test('the first nonempty reply chunk retires progress before the running turn ends',()=>{
+ for(const content of ['', '  \n']){
+  const current=snapshot();current.ai!.cards.at(-1)!.content=content;
+  assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot:current})).includes('turn-latest-progress'),'empty stream packets must not retire progress');
+ }
+ const current=snapshot();current.ai!.cards.at(-1)!.content='核';
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:current}));
+ assert.equal(current.ai!.status,'running');
+ assert.ok(!html.includes('turn-latest-progress'));
+ assert.match(html,/class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="latest"/,'first reply chunk keeps its original visible body');
+ current.ai!.cards.push(card('next-real-tool','operation','original result','running',4).card!);
+ const next=renderToStaticMarkup(createElement(AITranscript,{snapshot:current}));
+ assert.ok(next.includes('turn-latest-progress'),'a subsequent actual tool returns to the progress phase');
+ assert.ok(next.includes('data-conversation-entry="latest"'),'the former paragraph is retained, not deleted');
 });

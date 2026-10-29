@@ -39,5 +39,5 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  const summary=<ReplyDuration key="turn-duration" {...timing} latestStep={progress?undefined:latestStep} disclosure={summaryDisclosure}/>;
  const body=inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{details}</div></ExecutionDetailsOpen.Provider>,inspector.host)
   :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{shownDetails}</ExecutionDetailsOpen.Provider></div></div></div>;
- return <>{!live&&summary}{children}{live&&!hideLive&&progress?.text&&<div className="turn-latest-progress" role="note" aria-label="最新进度" title={progress.text}><StatusText active={!waiting&&progress.active}>{progress.text}</StatusText></div>}{body}{live&&!hideLive&&summary}</>;
+ return <>{!live&&summary}{children}{live&&!hideLive&&!presentingReply&&progress?.text&&<div className="turn-latest-progress" role="note" aria-label="最新进度" title={progress.text}><StatusText active={!waiting&&progress.active}>{progress.text}</StatusText></div>}{body}{live&&!hideLive&&summary}</>;
 }
