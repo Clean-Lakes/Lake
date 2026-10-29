@@ -215,6 +215,7 @@ test('enabled Pilot retains its mode entry after an ordinary follow-up without r
   assert.match(html,/header-normal-state"[^>]*aria-hidden="true"[^>]*inert/);
   assert.ok(html.includes(mode==='auto'?'自动推进':'手动选择'));
   assert.ok(html.includes('本轮没有专员任务')&&html.includes('展开执行详情'));
+  assert.ok(html.includes('sre-avatar-coordinator')&&html.includes('aria-label="协调者入口"'));
   assert.ok(!html.includes('pilot-island-progress')&&!html.includes('pilot-action-avatar'));
   assert.ok(!html.includes('调查结束')&&!html.includes('验收已通过'));
  }
