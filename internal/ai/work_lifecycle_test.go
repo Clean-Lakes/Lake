@@ -231,3 +231,50 @@ func TestWorkFutureObservationDoesNotReloadOrWriteSessionConfig(t *testing.T) {
 		t.Fatal("idle wait rewrote goal")
 	}
 }
+
+// Terminal persistence releases only continuation state, never the evidence
+// needed to explain the result or reconcile an already dispatched operation.
+func TestWorkTerminalStatesReleaseCheckpointAndKeepEvidence(t *testing.T) {
+	for _, status := range []string{"completed", "failed", "cancelled"} {
+		t.Run(status, func(t *testing.T) {
+			e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+			g := seedObservedWork(t, e)
+			row, g, err := e.workRow("case", g.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			store, err := e.adkStore()
+			if err != nil {
+				t.Fatal(err)
+			}
+			proof := nativeWorkObservation{ID: uid(), SessionID: g.SessionID, GoalID: g.ID, OperationID: "original-operation", Status: status, Data: `{"observed":true}`}
+			if err = store.DB.Create(&proof).Error; err != nil {
+				t.Fatal(err)
+			}
+			row.LeaseOwner, row.LeaseUntil = "finished-worker", time.Now().Add(time.Minute)
+			g.Status, g.ActiveItemID, g.Summary = status, g.Items[0].ID, "实际结果保留"
+			if err = e.writeWorkGoal(&row, &g, false); err != nil {
+				t.Fatal(err)
+			}
+			// The normal final checkpoint hook runs after work_finish too.
+			s, _ := e.get("case")
+			if err = e.workCheckpoint(s); err != nil {
+				t.Fatal(err)
+			}
+			retired, after, err := e.workRow("case", g.ID)
+			if err != nil || retired.Checkpoint != "" || retired.WaitCallID != "" || retired.WaitState != "" || retired.LeaseOwner != "" || !retired.LeaseUntil.IsZero() || after.ActiveItemID != "" {
+				t.Fatal("terminal invocation was retained or recreated", retired, after, err)
+			}
+			var saved nativeWorkObservation
+			if err = store.DB.First(&saved, "id = ?", proof.ID).Error; err != nil || saved.Data != proof.Data || after.Summary != g.Summary || len(after.Items) != len(g.Items) {
+				t.Fatal("retirement removed original result or evidence", err)
+			}
+			if err = e.workTick(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if e.SessionReserved("case") {
+				t.Fatal("terminal work reacquired conversation")
+			}
+		})
+	}
+}

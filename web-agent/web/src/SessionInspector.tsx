@@ -2,7 +2,6 @@ import {createPortal} from 'react-dom';
 import {InspectorTaskSummary} from './InspectorTaskSummary';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SessionSnapshot,SRETranscriptEntry} from '../../shared/contracts';
-import {WorkGoalPanel} from './WorkGoalPanel';
 import {AgentIcon} from './AgentIcon';
 import {Glyph} from './Icons';
 import {InspectorExecutionSteps} from './InspectorExecutionSteps';
@@ -50,7 +49,6 @@ export function SessionInspector({snapshot,connected,onUpdated,headerHost}:{snap
      {task&&plan?<SREPlanCard task={task} resources={snapshot.resources} agentRuns={snapshot.ai?.agentRuns} enabled={connected&&snapshot.sre?.enabled===true} onUpdated={onUpdated} inspector onInspectStep={stepId=>{const attempt=inspectorAttempts(task).find(item=>item.step.id===stepId)?.attempt;if(attempt)choose('execution',attempt.id);}}/>:<p className="inspector-empty">计划生成后会显示在这里。</p>}
     </div>
     <div role="tabpanel" id="inspector-execution-panel" aria-labelledby="inspector-execution-tab" hidden={activeTab!=='execution'}>
-     <WorkGoalPanel key={snapshot.session.id} goals={snapshot.ai?.workGoals??[]} sessionId={snapshot.session.id} connected={connected} onUpdated={onUpdated}/>
      {task&&<>
       <InspectorTaskSummary compact task={task} title={snapshot.session.title} runs={snapshot.ai?.agentRuns}/>
       <InspectorExecutionSteps task={task} resources={snapshot.resources} runs={snapshot.ai?.agentRuns} selectedId={selected?.attempt.id} onSelect={attemptId=>{choose('execution',attemptId);requestAnimationFrame(()=>{const details=panel.current?.querySelector<HTMLDetailsElement>('.execution-step-records');if(details)details.open=true;});}}/>

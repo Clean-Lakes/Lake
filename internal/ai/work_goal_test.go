@@ -2,6 +2,8 @@ package ai
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -19,7 +21,7 @@ func TestWorkGoalParksBackgroundAndResumesOriginalWithoutReplay(t *testing.T) {
 			return response("工作已经启动，等待实际结果。")
 		}
 		if n == 3 {
-			return response("", Call{ID: "finish-goal", Name: "work_finish", Arguments: `{"summary":"原任务已核对完成，没有重复执行。"}`})
+			return response("原任务已核对完成，没有重复执行。")
 		}
 		return response("independent topic")
 	})
@@ -61,6 +63,20 @@ func TestWorkGoalParksBackgroundAndResumesOriginalWithoutReplay(t *testing.T) {
 	}
 	if goals[0].Status != "completed" || !strings.Contains(goals[0].Summary, "没有重复") {
 		t.Fatalf("did not finish original goal: %+v requests %d", goals[0], requests.Load())
+	}
+	retired, _, err := e.workRow("case", g.ID)
+	if err != nil || retired.Checkpoint != "" || retired.WaitCallID != "" || retired.WaitState != "" || retired.LeaseOwner != "" || !retired.LeaseUntil.IsZero() {
+		t.Fatal("completed work kept a resumable invocation", retired, err)
+	}
+	if _, active := e.workActive.Load(g.ID); active {
+		t.Fatal("completed work retained active runtime")
+	}
+	if _, statErr := os.Stat(filepath.Join(e.Dir, "work-goals", g.ID)); !os.IsNotExist(statErr) {
+		t.Fatal("completed continuation cache retained", statErr)
+	}
+	beforeRequests := requests.Load()
+	if err = e.workTick(context.Background()); err != nil || requests.Load() != beforeRequests {
+		t.Fatal("retired work resumed again", err)
 	}
 	view, err := e.Snapshot("case")
 	if err != nil || view.Status != "completed" {

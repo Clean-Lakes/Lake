@@ -230,6 +230,14 @@ func (e *Engine) writeWorkGoal(row *nativeWorkGoal, g *WorkGoal, create bool) er
 	if err != nil {
 		return err
 	}
+	// A terminal goal keeps its result and original evidence, but no longer owns
+	// a resumable invocation, wait or observer lease. Checkpoint saves after
+	// work_finish must not recreate these transient resources.
+	if workTerminal(g.Status) {
+		row.Checkpoint, row.WaitCallID, row.WaitState = "", "", ""
+		row.LeaseOwner, row.LeaseUntil = "", time.Time{}
+		g.ActiveItemID = ""
+	}
 	old := row.Revision
 	g.Revision = old + 1
 	g.UpdatedAt = time.Now().UTC()

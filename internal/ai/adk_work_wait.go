@@ -10,6 +10,7 @@ import (
 	adksession "google.golang.org/adk/v2/session"
 	"google.golang.org/adk/v2/workflow"
 	"google.golang.org/genai"
+	"os"
 	"path/filepath"
 )
 
@@ -67,7 +68,7 @@ func (e *Engine) flushWorkOutbox(ctx context.Context) error {
 	return nil
 }
 
-func (e *Engine) resumeWorkGoal(ctx context.Context, row nativeWorkGoal, g WorkGoal, c Config) error {
+func (e *Engine) resumeWorkGoal(ctx context.Context, row nativeWorkGoal, g WorkGoal, c Config) (err error) {
 	// Credentials and permissions are live; the requested resource binding is
 	// frozen. Switching foreground terminals must never retarget old work.
 	if g.Binding.ResourceIdentity != "" {
@@ -106,7 +107,17 @@ func (e *Engine) resumeWorkGoal(ctx context.Context, row nativeWorkGoal, g WorkG
 	if err != nil {
 		return err
 	}
-	defer child.Shutdown()
+	defer func() {
+		child.Shutdown()
+		// All canonical events and operation evidence live in the owner store.
+		// Only discard this private cache after successful terminal persistence;
+		// interrupted or failed persistence retains its recovery material.
+		if err == nil && identifier.MatchString(g.ID) {
+			if _, final, loadErr := e.workRow(g.SessionID, g.ID); loadErr == nil && workTerminal(final.Status) {
+				_ = os.RemoveAll(dir)
+			}
+		}
+	}()
 	child.ModelActivity = e.ModelActivity
 	child.NaturalMemory = e.NaturalMemory
 	child.Emit = func(event Event) {
