@@ -10,6 +10,9 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  const selection=inspector?.selection;
  const inspecting=selection?.sessionId===sessionId&&selection?.turnId===id&&selection.tab==='execution';
  const {live}=turnStatus(timing.timing,timing.view,timing.cards??[],timing.latestUserAt??'',Date.now());
+ const [replyClock,setReplyClock]=useState({presenting:presentingReply,at:Date.now()});
+ if(replyClock.presenting!==presentingReply)setReplyClock({presenting:presentingReply,at:Date.now()});
+ const previewAt=live&&presentingReply&&!hideLive?replyClock.at:undefined;
  const active=live&&!presentingReply;
  const [disclosure,setDisclosure]=useState({active,open:active});
  const previousDetails=useRef(details);
@@ -33,10 +36,10 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
   if(inspector&&sessionId)inspector.open({sessionId,turnId:id,tab:'execution'});
   else {onInspect?.();setDisclosure({active,open:!open});}
  }}:undefined;
- // Keep a keyed status node as new prose arrives. It follows live content,
- // then moves above the reply once the saved turn timing is final.
- const summary=<ReplyDuration key="turn-duration" {...timing} latestStep={progress?undefined:latestStep} disclosure={summaryDisclosure}/>;
+ // Move the same row ahead of the first reply chunk. Freeze the preview clock
+ // without declaring completion; saved final timing updates this slot in place.
+ const summary=<ReplyDuration key="turn-duration" {...timing} previewAt={previewAt} latestStep={progress?undefined:latestStep} disclosure={summaryDisclosure}/>;
  const body=inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{details}</div></ExecutionDetailsOpen.Provider>,inspector.host)
   :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{shownDetails}</ExecutionDetailsOpen.Provider></div></div></div>;
- return <>{!live&&summary}{children}{live&&!hideLive&&!presentingReply&&progress?.text&&<div className="turn-latest-progress" role="note" aria-label="最新进度" title={progress.text}><span className="turn-latest-progress-text">{progress.text}</span></div>}{body}{live&&!hideLive&&summary}</>;
+ return <>{(!live||previewAt!==undefined)&&summary}{children}{live&&!hideLive&&!presentingReply&&progress?.text&&<div className="turn-latest-progress" role="note" aria-label="最新进度" title={progress.text}><span className="turn-latest-progress-text">{progress.text}</span></div>}{body}{live&&!hideLive&&!presentingReply&&summary}</>;
 }

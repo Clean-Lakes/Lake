@@ -98,6 +98,13 @@ test('live elapsed header sweeps quietly; completion freezes the duration',t=>{
  const ended=renderToStaticMarkup(createElement(ReplyDuration,{timing}));
  assert.ok(ended.includes('用时 1分钟 13秒'));
  assert.ok(!waiting.includes('status-text--active')&&!ended.includes('status-text--active'));
+ const previewAt=Date.parse(start)+19000;
+ const preview=renderToStaticMarkup(createElement(ReplyDuration,{timing:running,previewAt}));
+ assert.ok(preview.includes('用时 19秒')&&preview.includes('is-preview'));
+ assert.ok(!preview.includes('已完成')&&!preview.includes('status-text--active')&&!preview.includes('reply-duration-spinner'));
+ t.mock.method(Date,'now',()=>Date.parse(start)+45000);
+ assert.equal(renderToStaticMarkup(createElement(ReplyDuration,{timing:running,previewAt})),preview,'reply streaming does not advance the preview clock');
+ assert.ok(renderToStaticMarkup(createElement(ReplyDuration,{timing,previewAt})).includes('用时 1分钟 13秒'),'saved total replaces the preview only after real completion');
 });
 
 test('finished metadata drops the last operation caption even when saved cards still say running',()=>{
@@ -141,9 +148,10 @@ test('Pilot elapsed header does not repeat specialist activity or invent missing
  assert.equal(renderToStaticMarkup(createElement(ReplyDuration,{elapsedOnly:true,view:{status:'running',cards:[]} as never})), '');
 });
 
-test('a completed timed reply explicitly shows completion without borrowing task failure',()=>{
+test('a completed timed reply shows elapsed time without a redundant completion label',()=>{
  const html=renderToStaticMarkup(createElement(ReplyDuration,{timing}));
- assert.ok(html.includes('已完成')&&!html.includes('未完成'));
+ assert.ok(html.includes('用时 1分钟 13秒')&&!html.includes('已完成')&&!html.includes('未完成'));
+ assert.ok(!html.includes(' · '),'normal completion has no dangling separator');
  const failed=renderToStaticMarkup(createElement(ReplyDuration,{timing:{...timing,status:'failed'}}));
  assert.ok(failed.includes('未完成')&&!failed.includes('已完成'));
 });
