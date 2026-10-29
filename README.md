@@ -40,7 +40,7 @@ Choose **Plan** beside the composer or enter `/plan` to toggle planning; `/plan 
 
 Lake handles requests directly in standard mode. For tasks that benefit from specialist roles, enable **Lake Pilot** beside the composer; it is off by default. Its **Auto advance** setting lets Lake choose operations for new tasks while retaining existing approvals. [Usage and current development scope (Chinese) →](docs/lake-pilot.md)
 
-Manual strategy assets remain experimental. Online correction, candidate extraction, and new comparison experiments are retired; existing content and historical records are retained. See the [usage and compatibility guide (Chinese)](docs/strategy-learning.md).
+**Lake Memory (experimental):** separately opt in to automatic accumulation and scoped preference use. Current instructions take precedence; consolidation runs in the background. Ordinary conversations and Pilot coordinator replies can use expression preferences; facts and operational experience still need verification. Manual strategy assets retain compatibility management. Online correction, candidate extraction, and new comparison experiments are retired; existing content and historical records are retained. See the [usage and compatibility guide (Chinese)](docs/strategy-learning.md).
 
 <details>
 <summary>Local development</summary>

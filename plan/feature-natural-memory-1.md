@@ -1,8 +1,8 @@
 ---
 goal: 将策略资产重塑为自然交流中形成、空闲整理、按范围使用且可追溯撤销的记忆
-version: 1.4
+version: 1.5
 date_created: 2026-10-28
-last_updated: 2026-10-28
+last_updated: 2026-10-29
 owner: Lake
 status: In Progress
 tags: [feature, memory, preferences, compaction, migration, adk]
@@ -14,7 +14,7 @@ Lake 的新记忆功能承接原策略资产：用户正常交流，系统在用
 
 用户提出的四项要求是本计划的产品目标：交流不被记忆流程打断；后台增量合并、处理矛盾并保留来源与历史；按用户、项目和资源范围使用，服从当前要求；压缩时补充提取。以下接口字段、阶段和门槛是实施方案，尚未成为运行能力。
 
-基线为 `origin/develop@510aad88e49916f3272404f9d0180b89954616c3`，即 [C1 #107](https://github.com/Clean-Lakes/Lake/pull/107) 合入后。C1 的在线纠错、旧策略候选提取和产品实验退役决定继续有效；新功能扩展现有记忆链路，不恢复旧开关、旧回执或实验执行器。本轮交付计划文档，代码和真实数据不变。
+基线为 `origin/develop@510aad88e49916f3272404f9d0180b89954616c3`，即 [C1 #107](https://github.com/Clean-Lakes/Lake/pull/107) 合入后。C1 的在线纠错、旧策略候选提取和产品实验退役决定继续有效；新功能扩展现有记忆链路，不恢复旧开关、旧回执或实验执行器。初版 #110 仅交付计划文档；后续各阶段的实际交付与验收见第 8 节。
 
 ## 1. 用户体验与记忆内容
 
@@ -129,10 +129,10 @@ SQLite 继续是事实源，原有 Markdown 投影可重建。N1 冻结统一记
 | N1 统一记忆基础与旧内容承接 | 已合入 #111 | 统一管理 API、独立自动记忆设置/原设置保真映射、准确版本/来源、漂移冲突和承接 CAS 撤销；唯一映射沿用原绑定，不复制/重复注入。V1/V2 适配和隔离恢复回归；V2 开启门槛仍保留。见 [N1 契约](../docs/design/natural-memory-foundation-n1.md)及[验收](../docs/validation/natural-memory-foundation-n1.md) |
 | N2 自然形成与更新提示 | 已合入 #112 | 不依赖固定口令识别明确长期偏好；临时/引用不写入；准确范围、提交后提示与 CAS 撤销；无逐条采用要求；见 [N2 契约](../docs/design/natural-memory-formation-n2.md)与[验收](../docs/validation/natural-memory-formation-n2.md) |
 | N3 空闲增量整理 | 已合入 #113 | 共用持久队列、有界六条批处理/独立覆盖、同义来源合并、矛盾保留、前台抢占和每日费用预留；主入口收敛为记忆，旧管理折叠；删除无依赖退役派发器。见 [N3 契约](../docs/design/natural-memory-idle-n3.md)及[验收](../docs/validation/natural-memory-idle-n3.md)；压缩捕获/新召回与 Windows 原生验收仍待后续 |
-| N4 压缩补充提取 | 已实现并完成本地验收，待 PR 合入 | Lake Memory 宿主来源登记、共享压缩入口增量捕获、与终态共用 outbox；canonical 信封/缓存恢复、覆盖缺口、撤回重验与原观测时间。见 [N4 契约](../docs/design/natural-memory-compaction-n4.md)及[验收](../docs/validation/natural-memory-compaction-n4.md)；N5 新偏好召回仍未开放 |
-| N5 按范围使用与集成收敛 | 待实施 | 统一记忆入口、当前要求优先、普通会话/Pilot 的适用边界、旧入口退出；完成质量、升级与平台验收，再处理 C3/C4 剩余兼容代码 |
+| N4 压缩补充提取 | 已合入 #114 | Lake Memory 宿主来源登记、共享压缩入口增量捕获、与终态共用 outbox；canonical 信封/缓存恢复、覆盖缺口、撤回重验与原观测时间。见 [N4 契约](../docs/design/natural-memory-compaction-n4.md)及[验收](../docs/validation/natural-memory-compaction-n4.md)；N5 新偏好召回仍未开放 |
+| N5 按范围使用与集成收敛 | 已实现，集成验收中，待 PR 合入 | 独立默认关闭的用户/项目使用设置、短预览及准确版本按需读取、每请求/工具前来源重验、准备/读取/遵从未知诊断；普通/Plan/Pilot 协调表达可用，专员/工作流不继承。统一记忆入口、保留原事实/经验与复杂条件兼容；见 [N5 契约](../docs/design/natural-memory-recall-n5.md)及[验收](../docs/validation/natural-memory-recall-n5.md)。运维 V2 与 C3/C4 仍单独验收 |
 
-各阶段从当时最新 develop 独立分支提交 PR，本地签名 Dev 直接运行验证，不为 Go/React 日常改动制作安装包。阶段测试通过不等于新自动记忆可以默认开启；整体体验在 N5 验收前保持实验、受控启用。每阶段记录已测试源码 SHA、测试/模型样本与未验证项，不将实施目标标为已交付。
+各阶段从当时最新 develop 独立分支提交 PR，本地签名 Dev 直接运行验证，不为 Go/React 日常改动制作安装包。阶段测试通过不等于新自动记忆可以默认开启；整体体验保持实验、受控启用；N5 验收不自动批准默认开启或正式发布。每阶段记录已测试源码 SHA、测试/模型样本与未验证项，不将实施目标标为已交付。
 
 ## 9. 验收矩阵
 
