@@ -8,7 +8,7 @@ test('memory settings expose only natural memory and project entries, without le
  const {MemorySettings}=await import('../src/MemorySettings');
  const html=renderToStaticMarkup(React.createElement(MemorySettings,{projectId:'a',onBusyChange:()=>{},onProjectMemory:()=>{}}));
  assert.match(html,/自动记忆 · 实验/);assert.match(html,/项目事实与历史经验/);
- assert.doesNotMatch(html,/历史资产与兼容管理|旧偏好承接|会话应用已采用资产|历史对照实验|历史候选与来源/);
+ assert.doesNotMatch(html,/历史资产与兼容管理|旧偏好承接|会话应用已采用资产|历史对照实验|历史候选与来源|人工资产继续/);
 });
 test('natural settings PATCH and exact-version undo use separate scoped contracts',async()=>{
  const {naturalPreferenceApi}=await import('../src/naturalMemoryApi');const original=globalThis.fetch;

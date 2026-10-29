@@ -17,7 +17,7 @@ export function NaturalMemoryPreferences({projectId,busy,run}:{projectId:string;
  useEffect(()=>{void refresh();return()=>{generation.current++}},[base]);
  return <section className="memory-preferences" aria-label="自动记忆实验"><h4>自动记忆 · 实验</h4>
  <p className="settings-note">开启后仅识别新消息中的明确长期表达偏好，后台保存，无需逐条审核或说“记住”。{projectId?'当前开关只允许项目偏好；跨项目偏好需在“用户全局”另行开启。':'当前开关只允许明确跨项目的偏好，不会将项目资料转成全局事实。'}不补扫历史，不阻塞任务。</p>
- <p className="settings-note">自动记忆负责积累；使用偏好独立开启，关闭积累仍可使用已保存内容。当前明确要求优先，项目偏好优先于用户偏好；矛盾暂停使用。普通对话和 Pilot 协调回复可用，专员与工作流不继承；原项目事实、历史经验和人工资产继续按原设置使用。</p>
+ <p className="settings-note">自动记忆负责积累；使用偏好独立开启，关闭积累仍可使用已保存内容。当前明确要求优先，项目偏好优先于用户偏好；矛盾暂停使用。普通对话和 Pilot 协调回复可用，专员与工作流不继承；原项目事实与历史经验继续按各自设置使用。</p>
  {settings&&<label className="field-label"><input type="checkbox" checked={settings.autoEnabled} disabled={busy||!settings.automaticReady} onChange={e=>{const enabled=e.target.checked;void run(async()=>{await naturalPreferenceApi.settings(base,settings.revision,enabled);await refresh();setNotice(enabled?'自动记忆已开启，仅处理此后符合条件的新消息。':'自动记忆已关闭，已保存内容保留。')})}}/>自动形成{projectId?'项目':'用户全局'}偏好{!settings.automaticReady&&'（当前运行模式尚未开放）'}</label>}
  {settings&&<label className="field-label"><input type="checkbox" checked={settings.recallSettings?.useEnabled??false} disabled={busy} onChange={e=>{const enabled=e.target.checked;void run(async()=>{await naturalPreferenceApi.recallSettings(base,settings.recallSettings?.revision??0,enabled);await refresh();setNotice(enabled?'已开启本范围偏好使用；不改变自动积累或执行权限。':'已停止使用本范围自然偏好，保存内容保留。')})}}/>使用{projectId?'本项目':'用户全局'}自然偏好</label>}
  <p className="settings-note">使用默认关闭；项目开关只控制本项目偏好，用户全局偏好由全局范围单独控制。本轮忽略记忆会同时忽略两者。索引准备和读取只表示提供给模型，不证明模型遵从。</p>
