@@ -148,9 +148,10 @@ test('Pilot elapsed header does not repeat specialist activity or invent missing
  assert.equal(renderToStaticMarkup(createElement(ReplyDuration,{elapsedOnly:true,view:{status:'running',cards:[]} as never})), '');
 });
 
-test('a completed timed reply explicitly shows completion without borrowing task failure',()=>{
+test('a completed timed reply shows elapsed time without a redundant completion label',()=>{
  const html=renderToStaticMarkup(createElement(ReplyDuration,{timing}));
- assert.ok(html.includes('已完成')&&!html.includes('未完成'));
+ assert.ok(html.includes('用时 1分钟 13秒')&&!html.includes('已完成')&&!html.includes('未完成'));
+ assert.ok(!html.includes(' · '),'normal completion has no dangling separator');
  const failed=renderToStaticMarkup(createElement(ReplyDuration,{timing:{...timing,status:'failed'}}));
  assert.ok(failed.includes('未完成')&&!failed.includes('已完成'));
 });

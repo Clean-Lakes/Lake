@@ -16,7 +16,7 @@ export function ReplyDuration({timing,view,cards=emptyCards,latestUserAt="",disc
  const {text,duration,state,live,waiting}=turnStatus(timing,view,cards,latestUserAt,previewAt??now);
  const preview=live&&previewAt!==undefined;
  const running=live&&!preview;
- const visibleState=elapsedOnly||preview?undefined:!live&&state==="回复结束"?(duration?"已完成":undefined):state;
+ const visibleState=elapsedOnly||preview||!live&&state==="回复结束"?undefined:state;
  const [presence,setPresence]=useState({running,reveal:false});
  if(presence.running!==running)setPresence({running,reveal:!running});
 
