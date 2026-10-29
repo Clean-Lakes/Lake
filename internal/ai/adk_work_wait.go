@@ -108,7 +108,6 @@ func (e *Engine) resumeWorkGoal(ctx context.Context, row nativeWorkGoal, g WorkG
 	}
 	defer child.Shutdown()
 	child.ModelActivity = e.ModelActivity
-	child.Strategies = e.Strategies
 	child.NaturalMemory = e.NaturalMemory
 	child.Emit = func(event Event) {
 		if e.Emit != nil && event.Type != "delta" {
