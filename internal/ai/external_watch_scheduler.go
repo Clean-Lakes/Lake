@@ -63,6 +63,16 @@ func (e *Engine) workTick(ctx context.Context) error {
 		if err = json.Unmarshal([]byte(row.Data), &g); err != nil {
 			return err
 		}
+		now := time.Now()
+		due := row.WaitState == "ready" || row.WaitState == "resuming" || now.After(g.DeadlineAt) || g.ModelRounds >= g.RoundLimit
+		for _, item := range g.Items {
+			if item.Watch != nil && item.Status == "waiting_external" && !now.Before(item.Watch.NextCheckAt) {
+				due = true
+			}
+		}
+		if !due {
+			continue
+		}
 		// Do not observe or resume while the foreground owns this conversation.
 		s, err := e.get(g.SessionID)
 		if err != nil {
@@ -89,7 +99,6 @@ func (e *Engine) workTick(ctx context.Context) error {
 			c = fresh
 		}
 
-		now := time.Now()
 		lease := uid()
 		acquired := store.DB.Model(&nativeWorkGoal{}).Where("id = ? AND revision = ? AND lease_until < ?", row.ID, row.Revision, now).Updates(map[string]any{"lease_owner": lease, "lease_until": now.Add(45 * time.Second)})
 		if acquired.Error != nil {

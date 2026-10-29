@@ -206,3 +206,28 @@ func TestWorkRecoveryRefusesChangedResourceBinding(t *testing.T) {
 		t.Fatal("old work retargeted new resource", err, after.Status)
 	}
 }
+
+func TestWorkFutureObservationDoesNotReloadOrWriteSessionConfig(t *testing.T) {
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+	g := seedObservedWork(t, e)
+	row, g, _ := e.workRow("case", g.ID)
+	g.Items[0].Watch.NextCheckAt = time.Now().Add(time.Hour)
+	if err := e.writeWorkGoal(&row, &g, false); err != nil {
+		t.Fatal(err)
+	}
+	var reloads atomic.Int32
+	e.SetWorkConfigurator(func(string) (Config, error) {
+		reloads.Add(1)
+		return Config{}, errors.New("must not reload before observation due")
+	})
+	if err := e.workTick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if reloads.Load() != 0 {
+		t.Fatal("idle wait repeatedly refreshed foreground session configuration")
+	}
+	_, after, _ := e.workRow("case", g.ID)
+	if after.Revision != g.Revision || after.Status != "waiting_external" {
+		t.Fatal("idle wait rewrote goal")
+	}
+}
