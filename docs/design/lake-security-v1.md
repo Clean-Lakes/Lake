@@ -1,16 +1,18 @@
-# Lake Security v1 详细设计 · 修订 3
+# Lake Security v1 详细设计 · 修订 4
 
-状态：提案，尚未实现。修订日期：2026-10-30。代码分析基线：`9d1c4c65f8419ae2cf306b19fd16318fdc04a771`。本文修订号为 3，产品范围仍是 Lake Security v1；保留文件名以维持已有链接。实施拆分见[实施计划](../../plan/feature-lake-security-1.md)。本文的接口、表和新文件均为拟议设计；标为“现有”的内容来自该提交的源码。
+状态：提案，尚未实现。修订日期：2026-10-30。修订4对照代码基线：`f70eed4831e0bfa4d9c119c7b3113ba522e957aa`（develop；交付PR记录完整SHA）。产品范围仍是 Lake Security v1；保留文件名以维持已有链接。实施拆分见[实施计划](../../plan/feature-lake-security-1.md)。本文的接口、表和新文件均为拟议设计；标为“现有”的内容来自该提交的源码。
 
 本次重设计解决四项评审问题：新增可跨明确续接轮次的 SecurityTask；按来源迁移旧目录状态并提供边界修改闭环；统一项目允许、任务授权、单次审批的判定规则；恢复备份时切换安全 epoch，使旧授权不能复活。另明确 Web/stdio 的统一存储位置，以及定时配置版本和运行状态版本的区别。
 
 修订 3 将“任务一次授权、范围内自动执行、范围外再确认”设为主要交互。TaskGrant 从纯读取扩展到可机械校验的命令模板及明确维护动作；不透明自由 Shell 仍不获得按任务通配授权。新项目可在任务授权卡中明确包含本机的受控命令，无须先进入设置开启全部本机执行；已有显式 deny 继续生效。
 
+修订4采用目标闭环：复用WorkGoal作为持久目标，WorkItem作为版本化步骤，关联多次执行尝试、原生operation/evidence和验收记录。SecurityTask改为目标下的限时执行上下文；轮次结束、换执行路径或授权过期都不能抹掉原目标及风险。新增孤儿执行治理：无有效归属禁止派发，失联操作追踪到停止或核实，不能由其他任务成功自动结清。
+
 ## 1. 目标与范围
 
 Lake Security 负责回答三个不同的问题：用户想操作哪个目标、这项操作是否被授权、实际派发时授权和目标是否仍然有效。它嵌入现有 ADK 工具调用链，不另建模型循环。
 
-交付后，用户在已授权的诊断任务中通过继续入口或精确输入“继续检查”可以沿用任务、目标和有效授权；普通新消息默认新建任务，避免换题后继承旧临时授权。明确切换目标时重新判断权限；目录为空时给出目标选择入口。写入、危险命令、跨资源操作、终端接管仍按具体能力判断，不能从“继续”推导出新权限。
+交付后，“先确认数据量→开始吧→换条路径重试→校验结果”都关联同一目标；“开始吧/继续”只推进绑定目标，不签发或扩大权限。明确换目标时选择新目标，旧目标保持未完成/暂停并可找回。所有尝试都回写原步骤，最终以证据验收目标，正文与状态使用相同结果。目录为空时给出选择入口；写入、跨资源和终端接管仍独立判断权限。
 
 v1 包含目标状态、确定性决策、项目策略、任务临时授权、单次审批绑定、派发校验、撤销与审计，以及现有调用入口的接入。v1 不包含多租户 IAM、组织角色管理、通用策略 DSL、新的 LLM 安全裁判、完整 Shell 解释器或跨平台 OS 沙箱。SQLite 和现有 ADK public API 继续使用，不引入新的策略服务。
 
@@ -27,6 +29,8 @@ v1 包含目标状态、确定性决策、项目策略、任务临时授权、�
 | 目录与目标 | [Web directory_targets.go](../../internal/web/directory_targets.go) 的 `directoryTurnScope`、`questionTargetScope`；目录、引用、地址和旧状态共同生成 `TargetScope` | 提取目标解析器，记录来源与待消歧状态；导航目录不自动成为新硬边界 |
 | 运行时范围 | [AI directory_targets.go](../../internal/ai/directory_targets.go) 的 `enforceTargetScope`；空范围或越界即阻断，与 `BlockUnreferencedAssets` 分别生效 | 拆分 `CurrentTarget` 与 `ExecutionBoundary`，迁移期明确保留旧边界 |
 | 工具调用 | [tools.go](../../internal/ai/tools.go) 的 `Engine.invoke`、`ToolRisk`、`Engine.policy`；存在提前分流的会话工具，通用路径还会重复读取 policy | 所有入口登记能力；每次准备一个可信操作描述，派发前做一次新鲜度复核 |
+| 目标与步骤 | [work_goal.go](../../internal/ai/work_goal.go) 已有WorkGoal/WorkItem/依赖/evidence引用及后台lease；[work_tools.go](../../internal/ai/work_tools.go) 的work_update要求成功观察 | 扩展这些权威对象，补稳定尝试、逐项验收和失败覆盖关系，不再新建平行目标账本 |
+| 界面聚合 | [AIPanel.tsx](../../web-agent/web/src/AIPanel.tsx) 按本轮卡片统计失败数；[replyDurationState.ts](../../web-agent/web/src/replyDurationState.ts) 展示轮次状态 | 分开轮次结束、目标验收和尝试失败计数；完成状态不得靠正文或失败卡片计数推断 |
 | 命令与 SQL | [policy.go](../../internal/web/policy.go) 的 `CommandPolicy`，`tools.go` 的 `readonlySQL`、`redisReadOnly`，以及 [sql_policy.go](../../internal/ai/sql_policy.go) | 复用确定性分类器，标记可证明程度；未知工具不能沿用默认 readonly |
 | 原生审批 | [adk_approval.go](../../internal/ai/adk_approval.go) 的 `nativeApproval`、`waitNativeApproval`、`claimNativeApprovals`；绑定参数、目标指纹、预览、终端版本，15 分钟有效 | 扩展绑定结构，保留 ADK confirmation 和单次消费状态机 |
 | 操作账本 | [adk_operations.go](../../internal/ai/adk_operations.go) 的 `dispatchNativeOperation`；事务内登记操作、消费审批、追加 `nativeEvidence`，不明结果需对账 | 在相同事务内增加新决策和授权使用记录，不另建执行账本 |
@@ -43,24 +47,26 @@ v1 包含目标状态、确定性决策、项目策略、任务临时授权、�
 
 ```mermaid
 flowchart TB
-    U[真实用户输入 / 明确继续 / 选择] --> TM[TaskManager：创建或续接 SecurityTask]
-    TM --> R[① 目标解析：稳定资源 ID + 当前目标]
-    M[模型候选 / 工具参数] --> R
-    R -->|未确定| Q[目标选择器]
-    Q -->|实际提交| R
-    R -->|已确定 / 工具无需资源目标| O[操作描述：task + target + capability + revisions]
-    P[项目策略 + 执行边界 + 父链与角色] --> E[② 确定性决策]
-    O --> E
-    G[项目 allow / 有效 TaskGrant / 单次审批] --> E
-    E -->|deny| N[拒绝：显示原因与可修改边界]
-    E -->|需要批准| C[现有 ADK 审批]
-    C -->|同意后重新判定| E
-    E -->|allow| D[③ 执行保护：epoch / 任务 / revision / 取消复核]
-    RG[RecoveryGate：恢复期间禁止派发] --> D
-    D --> X[同一事务：审批消费 + nativeOperation + 审计]
-    X --> I[单次 Permit → SSH / DB / K8s / MCP / 终端]
-    I --> Z[结果登记 / unknown 对账]
-    RV[撤销 / 停止 / 连接变更] --> D
+    U[用户请求 / 开始吧 / 继续 / 明确新目标] --> B[目标关联与计划版本]
+    B --> G[WorkGoal：用户目标与验收条件]
+    G --> S[WorkItem：步骤 / 依赖 / 必需条件]
+    S --> A[ExecutionAttempt：同一步骤可多次尝试]
+    A --> R[① 目标解析：真实资源 / 参数 / 连接版本]
+    R --> E[② 安全决策：项目规则 + 任务授权 + 单次批准]
+    T[SecurityTask：goalID / TTL / 有效轮次] --> E
+    E --> D[③ 派发保护：owner lease / epoch / 版本 / 预算]
+    D --> O[nativeOperation：唯一实际执行账本]
+    O --> V[nativeEvidence：原始结果与观察]
+    V --> C[步骤验收：逐条件pass / fail / insufficient]
+    C -->|未通过且允许重试| A
+    C -->|通过| GC[目标验收：必要条件全部满足 + 无未决副作用]
+    GC --> GV[GoalClosureView：统一正文和状态]
+    C --> CL[CoverageLink：替代尝试覆盖旧失败]
+    CL --> S
+    O --> W[孤儿/失联/unknown：冻结新派发 + 取消与对账]
+    W -->|可信结果回写 / 禁止自动重放| V
+    W --> RB[未核实风险与资源冲突阻断]
+    RB --> GC
 ```
 
 模型、工具返回、网页、日志、附件中的指令、记忆和技能文本均为非权威输入。它们可以提供目标候选或证据，不能写授权表、设置 actor、生成 Permit 或把 `approved=true` 作为通行证。用户真实消息也不直接成为可复用授权：目标意图可以解析，新增授权必须走可审计的设置或授权动作。
@@ -77,7 +83,7 @@ flowchart TB
 | 单次审批 | 一个确定操作的目标、参数、预览、版本 | 仅允许该次操作；不能突破 deny | 沿用 15 分钟 TTL，派发事务消费一次 |
 | Home 恢复控制 | storeID、随机 recoveryEpoch、RecoveryGate、规范 runtimeRoot | 不授予能力；可禁止整个 Home 派发 | 不随普通备份回滚，恢复时先轮换 epoch |
 
-TaskManager 管生命周期，TargetResolver 管意图，PolicyEvaluator 管授权，DispatchCoordinator 管最终派发；四者通过可信类型协作。SecurityTask 不包含可自由扩大的权限列表，TaskGrant 不负责猜测用户是否换题。模型工具可以提议完成或切换，但不能直接操作授权签发、恢复开闸或边界放宽接口。控制面令牌不作为工具参数或模型环境变量向 agent 委托。
+GoalCoordinator复用WorkGoal管理目标闭环，TaskManager管理限时执行上下文，TargetResolver管资源意图，PolicyEvaluator管授权，DispatchCoordinator与OwnerReconciler管理派发/孤儿治理；各层通过可信关联协作。SecurityTask 不包含可自由扩大的权限列表，TaskGrant 不负责猜测用户是否换题。模型工具可以提议完成或切换，但不能直接操作授权签发、恢复开闸或边界放宽接口。控制面令牌不作为工具参数或模型环境变量向 agent 委托。
 
 ## 4. 目标解析与边界分离
 
@@ -103,57 +109,114 @@ TaskManager 管生命周期，TargetResolver 管意图，PolicyEvaluator 管授�
 
 每个工具调用冻结自己的目标快照。流式生成中用户切换目标只影响后续操作；尚未派发的旧目标操作因目标 revision 不符而失效并重新准备。已登记派发的操作按第 9 节处理。目录改名不改变资源授权；目录增加成员不自动扩大已发出的任务授权。
 
-### 4.3 SecurityTask 身份与轮次映射
+### 4.3 目标、步骤、尝试与验收的关联
 
-当前普通 `Engine.ExecuteTurn` 会清空 WorkGoalID 并生成新 RootTurnID；`prepareADKHistory` 的 TaskID 仅在 SRE 上下文赋值。因此新增服务端 `SecurityTask`，不能把已有 RootTurnID 或整个 session 冒充跨轮次任务。
+沿用 `WorkGoal.id` 作为 `goalID`，`WorkItem.id` 作为 `stepID`，扩展既有模型与 `nativeWorkGoal` 持久化。`RootTurnID` 只是一次交互；新的 `SecurityTask` 是目标下的限时执行上下文，不能取代用户目标。原SRE attempt是执行适配器记录，与下表通用attempt一一映射或明确分组关联，不复制其operation账本。
 
-字段固定为 `id/projectID/sessionID/kind/parentTaskID/state/stateRevision/executionRevision/recoveryEpoch/createdAt/expiresAt/completedAt/cancelledAt`，另存用于展示的 purpose。`kind=conversation|sre|workflow|schedule`；默认任务绝对寿命 24 小时，不因继续或重启刷新。`SecurityTask.id` 是唯一授权归属；RootTurnID 是该任务中的一次模型轮次，WorkGoal/SRE task/workflow run 是带类型的执行关联，不与安全 taskID 混用。
-
-| 可信事件 | SecurityTask 行为 | 授权行为 |
+| 对象 | 身份与关键字段 | 职责 |
 | --- | --- | --- |
-| 第一条或普通新消息 | 新建任务；此前未结束的 conversation 任务结束，取消尚未派发调用 | 不复制旧 grant；项目规则仍适用 |
-| 继续入口；原始用户消息 trim 后完整等于“继续”或“继续检查” | 请求必须带当前 taskID、expectedRevision；后端重复校验输入来源和精确命令，续同一任务并新建 RootTurnID | 只使用仍有效 grant，不续期 |
-| “继续”但已有任务终结、过期或存在未解决恢复 | 返回结构化原因；不能偷偷新建同身份任务 | 需新建任务或完成恢复 |
-| 补充消息/审批回复/目标选择 | 只处理其绑定的 taskID/turnID；已开始新任务则旧交互失效 | 不签发额外授权 |
-| 用户新建任务或普通新消息包含新内容 | 默认新任务；模型判断“其实是继续”不改变此结果 | 同会话、同目标也不继承旧 grant |
-| workflow/schedule 启动 | 每个 run/occurrence 新建独立 task；SRE 子角色关联父安全任务并记录 scopeID | 保留父约束；每次调度独立签发受限 grant |
-| 清理聊天或压缩 | 不删除/重建安全任务与账本 | 不扩大、不续期 |
+| WorkGoal | goalID、project/session、originMessageID、selectedGoalID、goalRevision、progressRevision、activePlanRevision、acceptanceSpec | 保存用户要交付的结果、限制和验收条件，跨消息、失败和授权过期保留 |
+| WorkItem | stepID、goalID、stepRevision、required、dependsOn、acceptanceCriteria、coveragePolicy | 表达目标内的必要步骤；重试不换stepID，改计划新增版本并保留旧版 |
+| ExecutionAttempt | attemptID、goalID/planRevision/stepID/stepRevision、securityTaskID、retryOf、strategy、state、closureState | 表达某步骤的一次执行路径；失败后替代执行仍关联原步骤 |
+| nativeOperation | operationID、attemptID、可信目标/参数、lease owner/generation、handle、status | 保留实际工具派发与结果的唯一账本；一个attempt可包含多项operation |
+| nativeEvidence | evidenceID、operationID、目标身份、观察时间、内容摘要 | 保存可信观察；模型生成的成功文字不成为证据 |
+| AcceptanceRecord | acceptanceID、goal/plan/step版本、criteriaResults、evidenceIDs、verifierVersion、state、coverageLinks | 后端按具体条件判定pass/fail/insufficient；为尝试、步骤和目标提供可解释的完成依据 |
+| SecurityTask/TaskGrant | taskID、goalID、state/revisions/epoch、TTL、授权范围 | 限制哪些目标/步骤可执行哪些动作；身份有效不代表目标已成功 |
 
-自由文本“再看看磁盘”等不满足精确命令时按新任务处理，UI 提供“在当前任务继续”入口承载额外问题。被引用的“继续”、附件内容、工具返回和 assistant 消息不能生成续接事件。UI 提交 taskID 不足以构成授权；后端还校验当前会话、动作来源、revision、状态和 epoch。
+关联链为 `goal → versioned step → attempt → nativeOperation → nativeEvidence → acceptance → 原step/goal`。所有外部派发，包括短时诊断，都要求完整关联；纯解释性回答可以没有执行目标，但不能借解释入口访问资源。数据库外键/应用校验同时验证同project/goal及当前版本，模型不能自填任意关联ID获取权限。
 
-### 4.4 生命周期
+goalRevision/stepRevision只在目标契约、约束或步骤定义改变时增加；日常进度与状态另用progressRevision/attemptRevision。正常收集证据、等待审批不改契约版本，避免审批自行失效；验收提交同时CAS检查进度版本和未决operation集合。
+
+目标状态、执行上下文状态、实际操作状态分别投影，禁止混成一个“已完成”：
+
+- Goal：`draft/running/waiting_user/paused/blocked/verifying/completed/cancelled`。只有验收通过才completed。一次attempt失败可让步骤blocked或准备重试，不自动终结目标。
+- Step：`pending/running/blocked/verifying/passed/waived/superseded`。当前计划必要步骤只能passed；移除或waive必要条件需要用户确认计划变更，不能由模型跳过。superseded只标记有版本关联的旧路线，不减少当前必需条件。
+- Attempt执行状态：`prepared/running/succeeded/failed/unknown/not_executed/cancelled`；另有 `closureState=open/covered/reconciled`。覆盖失败不改写原failed，不把unknown抹成失败。
+- SecurityTask：`active/idle/waiting/paused/completed/cancelled/expired`。completed只表示该执行上下文已关闭，UI不得翻译为“目标已完成”；关闭未达标目标使用取消/暂存动作，保留未交付状态。
+
+### 4.4 跨轮次推进与目标切换
+
+当前 `Engine.ExecuteTurn` 每轮清空WorkGoalID，不能将此行为延续为新方案的目标归属策略。新增由后端维护的 `selectedGoalID` 与 `TaskIntent`：`continue_goal/new_goal/select_goal/clarify`。输入绑定真实 `sourceMessageID`、goalID、expectedGoalRevision和当前有效执行上下文；模型只能提议关联。
+
+| 输入/事件 | 目标与步骤行为 | 授权行为 |
+| --- | --- | --- |
+| 首次真实执行请求 | 创建/选择WorkGoal及验收条件；执行前至少明确目标和步骤 | 创建SecurityTask，按当前规则取得必要grant |
+| 同一目标的补充、开始、继续、重试 | 保持goalID；沿用或新增该步骤attempt，保留之前失败 | 有效task/grant可复用，不自动扩大或续TTL |
+| 唯一绑定的待开始/待回答事件收到“开始吧”“继续”“继续检查” | 验证原用户交互ID/goalRevision，推进该目标；不要求新建目标 | 该消息只表示推进，写入仍必须有独立有效授权 |
+| 带内容的跟进，例如“换成经Mac中转” | 客户端保留当前goal关联；后端判断是否改变资源/验收范围，必要时展示计划/授权差异 | 新本机或中转资源需确认；不能从策略变更文本推导权限 |
+| 归属不明确、存在多个候选目标 | 返回clarify选择原目标/新目标；未选定不派发 | 不沿用不确定的grant |
+| 明确新任务/新目标操作 | 创建新goal/task；旧goal保留为未完成或paused，可从待办找回 | 不复制旧grant；默认旧前台上下文暂停/关闭未派发轮次并请求取消在途操作。仅已明确允许后台续跑且有效owner/授权仍在的旧任务可继续 |
+| 切回旧目标 | 读取原步骤、未决attempt及资源占用，再决定合法恢复 | task过期或epoch变化则创建新task关联同goal并重新授权 |
+| 当前轮次回复结束 | 更新轮次结束和goal进度，不自动完成goal | SecurityTask进入idle，grant仍按原绝对TTL计时 |
+
+没有绑定目标时，精确短语也不能自行猜一个历史目标。带内容的继续请求和新请求有歧义时通过一次选择确定，不用“每条新消息都新任务”或只匹配两个固定词。切换目标不会取消其他目标、隐去失败或释放仍未核实的写入。明确取消可关闭待办，但未停止的外部操作继续占用风险记录。
+
+目标默认 `backgroundPolicy=foreground_only`；用户明确选择 `monitored_background` 后，才允许有持久owner、原handle、有效grant和deadline的后台继续。这里的切换指开始执行另一目标，单纯查看历史检查栏不改变运行状态。暂停/请求取消旧执行上下文不等于取消旧目标；其未完成步骤和在途风险继续展示。
+
+### 4.5 执行上下文和版本
+
+`SecurityTask` 字段为 `id/goalID/projectID/sessionID/kind/parentTaskID/state/stateRevision/executionRevision/recoveryEpoch/createdAt/expiresAt/closedReason`。默认上下文最长24小时；TaskGrant默认30分钟、可选4小时且不超过上下文deadline。上下文或grant到期不删除goal，也不把goal改为成功。新上下文只能复用目标和证据，不能复用旧grant/审批。
+
+只有active且目标/步骤有效时可新派发；idle表示该轮已结束，waiting表示无可运行分支，paused表示暂停。完成目标、用户关闭上下文、取消或过期会终结上下文；用户主动结束未完成目标必须记录cancelled及未验收条件，而不是completed。普通重启暂停上下文，持久目标仍在；备份恢复按第13节轮换epoch。
+
+stateRevision用于UI/CAS；executionRevision在暂停、终结、取消、过期时递增，废止旧prepared/approval。正常active→waiting→active不增加executionRevision，不使审批自己失效。grant绑定taskID/goalID/epoch/自身revision与TTL，不绑定executionRevision。并行分支单独waiting不冻结其他可运行scope。
+
+RootTurn/scope关联另记active/waiting/closed：审批continuation保留原轮次；下一轮继续先关闭旧轮次未派发调用，但保留已派发operation的观察/清理通道。新轮次不能让旧call复活，旧回调只能回写对应operation/证据，不能启动新的副作用。真实目标/计划修改另增加goal/step版本，旧审批与待派发尝试重新校验。
+
+### 4.6 失败覆盖、验收与统一结果
+
+1. attempt执行成功只表示操作层成功，必须进入步骤验收，不能直接完成goal。验收规则在执行前形成有版本的结构：expected target、必需条件、比较方法、输入证据身份/时效及预期值；模型可建议，后端验证器负责读取原始记录并判定。只有模型文字或exitCode=0不足以证明业务交付。
+2. 新尝试成功后，对同step/version记录 `CoverageLink(failedAttemptID,replacementAttemptID,acceptanceID,criteriaIDs,reason)`。纯执行策略的planRevision变化可跨版本关联，但须保存旧/新版本及相同验收契约摘要；条件改变则逐项重新验收，不能继承旧pass。只覆盖被证据证明已满足的原要求。普通已确认无副作用的失败/未执行尝试可covered；failed原因是权限拒绝时仍保留拒绝审计，覆盖不产生权限。
+3. 旧unknown/dispatched/未停止后台进程不能仅凭新路径成功标covered。先对原operation核实副作用和资源占用，可信证据证明停止/结果后才记reconciled。不能重写旧执行状态，也不能通过换attemptID绕过同一写入的防重放。
+4. 更换方案可使旧路线步骤变为superseded，但必须明确映射新步骤覆盖哪些旧条件。必要步骤未执行只能由等价替代验收覆盖，或经用户确认修改验收契约；不能自动记waived。独立步骤可以继续，依赖未满足的步骤不能执行。
+5. 目标completed要求当前计划所有required条件pass、有效步骤依赖满足、无未处理的相关写入unknown/孤儿/后台副作用，且相应资源lease已释放或有已确认的目标外移交。验证器在同一事务检查goal/step/证据版本并登记目标AcceptanceRecord，防止拿旧验收覆盖新变更。
+6. cancelled保留未满足条件；用户表示“算了”只能取消目标及请求取消执行，不能把未知副作用变为安全。外部风险未清零时另保留riskState=attention，安全看板与资源阻断仍有效。
+
+AcceptanceRecord追加保存，包含 `scope=step|goal`、精确版本、逐条 `pass/fail/insufficient`、证据引用、方法及验证器版本。配置可验证规则无法覆盖的业务验收采用明确人工核验入口，记录核验人/动作/原始依据；不能用模型“已完成”代替。用户接受部分交付时生成新的goalRevision和条件差异，再按新契约验收。
+
+验证器采用受信注册表及固定类型化比较方法，不执行模型提供的验收脚本。若验收需要新的远程查询，该查询仍登记goal/step/attempt并通过当前授权派发，再以取得的证据验收；不能从“校验”入口绕过资源权限或孤儿阻断。
+
+后端输出统一 `GoalClosureView(goalStatus,acceptanceState,requiredRemaining,openRiskCount,attemptFailures,operationFailures,recoveredFailures)`，正文结束摘要、状态岛、用时入口、任务检查栏读取同一视图。轮次“回复结束”与目标“已验收完成”分别展示；工具失败数与尝试失败数分开，不混称为失败任务。生成最终回复前提供验收事实，若无pass证据则呈现“待验收/未完成”，不能在UI把任意正文改写为成功。
+
+会话另提供未完成目标/未决风险清单。G2验收成功时可显示“当前目标已完成，另有G1待核实”，不能将G1风险隐藏，也不能把G1旧失败直接计成G2失败。正文是模型输出时保留原文，权威验收卡与最终生成事实一致性检查单独呈现，不用客户端文字替换伪造业务成功。
+
+### 4.7 孤儿执行治理属于安全边界
+
+孤儿执行包括：无有效goal/step/attempt/task归属；owner失联或lease过期；父任务取消但子队列仍在；后台handle失去追踪；恢复后回调仍试图续跑。界面关闭、用户换目标、模型回复结束都不是释放执行所有权的依据。
+
+- 每个nativeOperation必须登记goal/step/version/attempt/task、资源连接身份、ownerID/generation、leaseUntil及可取消/观察handle；队列/outbox、终端agent占用、文件操作和外部watch引用同一归属。已有nativeWorkGoal调度lease可复用其机制，但不能把调度锁误作远端进程已停止的证明。
+- 派发前在同事务校验完整关联、当前owner generation、未过期lease、授权与依赖；缺失归属fail closed。lease默认15秒、owner每5秒续期，续期不延长grant/上下文/命令deadline；单次运行deadline独立校验。取消/撤销/过期同步阻断后续派发。
+- 启动恢复及每5秒的sweeper检查过期owner和未决handle；扫描周期不成为授权宽限期。发现孤儿后冻结队列、废止待审批和prepared、使旧owner不能续跑，发出适配器取消请求，标记 `orphaned/reconciling` 风险。已派发operation保留真实dispatched/unknown状态，直到核实。
+- 取消结果按 `requested/confirmed/unsupported/unknown` 登记。进程实际退出、远程作业终态或可信人工核实才允许确认；超时、连接断开、卡片消失不等于已停止。孤儿租约过期后回来的旧callback可以登记原结果，不能重新取得权限或新派发。
+- 本机命令用受控进程组与deadline；远程命令/服务API依赖可验证的停止或有界执行机制。strict任务自动执行模板禁止detach和不受控后台派生；适配器无法给出边界时转opaque并在授权前说明，不能承诺停止本地连接就停止远端命令。
+- 原写入/进程无法核实时，持久阻断该资源上相关冲突变更；若影响范围不明，按恢复规则扩大阻断。新的成功尝试/独立目标不能清除此阻断。已授权的独立只读对账仍可进行，管理取消入口不受无active任务的限制。
+- 人工接管/转交必须显式确认目标、handle、generation与责任人，获取新授权和有效owner；旧grant不转移，旧owner被fence。确认转交只改变责任归属，不把unknown副作用变成已完成。
+
+取消和最低限度状态核实由后端内部清理权限执行，只允许原登记handle及其受信取消/状态API，不接受模型指定的新命令、目标或数据读取；grant到期不能阻止安全清理，也不能把清理权限借给agent续跑。缺少可信agent所有权证据的旧进程只进入人工核实清单，禁止自动杀掉可能属于用户的进程/终端。
+
+因此不存在“任务1失败后直接不管”的正常路径：必须是重试/等价替代并验收、暂停待处理、明确取消并核实停止，或有审计的移交。保留孤儿风险与待办，直到真实执行闭环；安全状态不能随着另一条成功回复消失。
+
+### 4.8 数据同步场景的验收示例
+
+以下为模拟fixture，不代表截图中的真实数据库已核验。G1目标是将两组文档从资源A同步到B，保留_id与字段、不覆盖既有记录，并核对指定源快照。步骤S1确认范围/数量，S2执行同步，S3独立比较目标结果；S2依赖S1，S3依赖同步证据。源快照为service 2条、tiles 1442条；验收还要核对文档ID集合、内容摘要和既有目标记录未改变，不能只比较总条数。
 
 ```mermaid
-stateDiagram-v2
-    [*] --> active: 用户新任务 / 有效调度触发
-    active --> waiting: 等待选择或审批
-    waiting --> active: 绑定交互完成
-    active --> idle: 本轮回复结束
-    idle --> active: 明确继续
-    active --> paused: 用户停止 / 进程重启
-    idle --> paused: 进程重启
-    waiting --> paused: 进程重启
-    paused --> active: 明确恢复 + 重新判定
-    active --> completed: 任务结束
-    idle --> completed: 用户结束 / 新任务替换
-    waiting --> cancelled: 用户取消
-    active --> cancelled: 用户取消
-    paused --> cancelled: 用户取消
-    active --> expired: 绝对寿命到期
-    idle --> expired: 绝对寿命到期
-    waiting --> expired: 绝对寿命到期
-    paused --> expired: 绝对寿命到期
+flowchart TB
+    G[G1：同步且校验两组文档] --> S1[S1：确认源快照与目标基线]
+    S1 --> S2[S2：同步文档]
+    S2 --> A1[A1：直接同步失败]
+    S2 --> A2[A2：经Mac中转 / retryOf A1]
+    A1 --> R1[确认无副作用 / 或保持unknown待核实]
+    A2 --> E[原生操作 + 写入结果证据]
+    E --> S3[S3：ID / 内容 / 原记录保护校验]
+    S3 --> V[步骤与目标AcceptanceRecord]
+    R1 --> V
+    V -->|条件全部通过且无未决副作用| C[G1已验收完成]
+    V -->|缺证据或仍有孤儿/unknown| B[G1待核验 / 资源写阻断]
+    C --> L[A1原失败保留 / A2覆盖关系可追溯]
 ```
 
-状态语义以此规则为准：只有 `active` 可新派发；所有非终态都允许可信取消并可过期；`completed/cancelled/expired` 不能恢复。普通一轮回复结束只进入 idle，不冒充任务完成。conversation 的完成由用户结束/新任务替换触发；workflow/SRE 的完成由可信运行账本终态触发，模型的“完成了”文本不是终态事件。暂停和等待不刷新 grant；普通进程重启把非终态暂停，用户明确恢复后按原 TTL 检查。备份恢复采用更严格的 epoch 失效规则，见第 13 节。
-
-任务动作中的 `expectedRevision` 对应 `stateRevision`，每次状态变更递增，用于 UI/CAS。`executionRevision` 仅在暂停、终结、取消、过期等需要使已准备调用失效的事件递增；操作描述与单次审批绑定它，不绑定 stateRevision。正常 active→waiting→active 的审批往返保留 executionRevision，因此不会使审批自己过期。TaskGrant 绑定 taskID/epoch/自身 revision 与 TTL，不绑定 executionRevision：暂停后恢复可使用仍有效的 grant，但需重新准备已失效调用。
-
-轮次关联表另记 active/waiting/closed：审批 continuation 保留原 RootTurnID 与合法 child scope；明确继续生成新 RootTurnID 并关闭旧轮次关联。派发必须检查 operation 的 RootTurnID/scope 仍有效，不只检查任务重新变为 active；这样旧轮次尚未派发的调用不能在新轮次复活。并行子 scope 绑定同一有效父轮次，不因为同任务其他合法子调用等待审批而混淆调用身份；父轮次关闭或暂停统一停止新派发。
-
-单个并行子 scope 等待审批只把该 scope 置为 waiting；仍有可运行分支时 SecurityTask 保持 active。仅本任务没有可继续派发的分支时进入任务级 waiting。批准后恢复相应 scope；若需要也恢复任务 active。两级等待都不增加 executionRevision，取消/暂停仍作用于全部 scope。
-
-“停止本轮”映射 pause：主任务与子 scope 均禁止新派发，grant 保留原绝对 TTL，明确恢复时重新检查，不续期。“结束任务 / 取消任务 / 任务到期”进入终态并使该任务 grant 失效。已派发 unknown 留在账本中对账，不能因任务已终结删除。SecurityTask 的创建、状态变化、轮次绑定和 grant 签发均使用 CAS/幂等 actionID；两个并发“继续”只有一次可以从同一 revision 启动。
+“先确认有多大数据→开始吧”绑定G1的原待开始事件，第二条消息不会另建G2。“改经Mac中转”新增A2/计划版本并申请必要本机范围；不会忽略A1的可能部分写入。A1有证据证明未写入，且A2/S3完成，才显示“目标已验收，历史尝试失败1次已替代”。A1仍unknown时，即使A2返回成功也必须保留G1待核实和相关写阻断。用户另开无关G2并完成，不影响G1待办/风险。
 
 ## 5. 策略、能力与授权规则
 
@@ -167,6 +230,8 @@ stateDiagram-v2
 
 ```text
 HardOK = 恢复闸门开放 ∧ epoch相同 ∧ 任务active且未过期 ∧ 未取消
+         ∧ goal/plan/step/attempt关联有效 ∧ 步骤依赖满足
+         ∧ owner generation与lease有效 ∧ 无相关未决副作用冲突
          ∧ 项目资源上限 ∧ 显式执行硬边界 ∧ 父链限制 ∧ 角色上限
          ∧ (本任务确认范围内 OR 用户批准的精确单次任务范围例外)
 AuthorityOK(capability) = 当前规则allow
@@ -213,7 +278,7 @@ v1 的约束使用固定结构，不接受模型填写的表达式或路径通�
 
 ### 5.3 任务授权
 
-`TaskGrant` 拟包含：服务端生成的 `id/taskID/projectID/sessionID`、`rootAuthorityID/recoveryEpoch`、purpose、精确资源 ID 与连接 revision、能力集合、类型化约束、签发人、来源动作 ID、签发/到期/撤销时间、revision。taskID 必须指向已存在的 SecurityTask，purpose 仅作解释，不作为字符串匹配安全条件。
+`TaskGrant` 拟包含：服务端生成的 `id/taskID/goalID/projectID/sessionID`、`rootAuthorityID/recoveryEpoch`、purpose、精确资源ID/连接revision、能力与约束、签发动作、绝对expiry和revision。taskID必须指向同goal的有效SecurityTask；计划允许grant跨该goal的多个attempt复用，但每次仍验证当前step/策略/范围。purpose仅解释，不能构成授权匹配。
 
 v1 任务授权支持结构化读取、受信命令模板和精确服务集合的重启动作。文件写、SQL 写、自由 Shell、任意终端输入及 opaque MCP 仍不接受任务通配授权。诊断预设为有效任务内 30 分钟；UI 可选择 30 分钟或 4 小时，项目上限默认 4 小时。任务结束、取消、父授权失效或时间到期立即停止新派发；续期必须再次显式授权。项目直接 allow 的读取不需要创建任务授权。
 
@@ -272,10 +337,10 @@ type TaskManager interface {
 
 `PreparedOperation` 是内部不可由工具参数伪造的对象，包含：
 
-- actor（由入口生成的 `human_action|agent|child|workflow|schedule`）、项目/会话/securityTask/rootTurn/call 身份；子任务父链、task executionRevision、storeID 和 recoveryEpoch；不绑定因正常审批等待而变化的 stateRevision。
+- actor（由入口生成的 `human_action|agent|child|workflow|schedule`）、项目/会话/goal/planRevision/step/stepRevision/attempt/securityTask/rootTurn/call 身份；子任务父链、task executionRevision、storeID 和 recoveryEpoch；不绑定因正常审批等待而变化的 stateRevision。
 - 工具名、注册表版本、能力、分类证明等级；实际资源 ID、连接 revision、协议/主机/端口/逻辑库等安全相关身份。
 - 规范化参数摘要、预览摘要、目标 revision、策略 revision、父边界 revision、所用 grant revision、终端 generation/context version、MCP 配置与目录 revision。
-- cancellation 标识、工作项身份、预期写入内容版本、唯一 operation identity。
+- cancellation标识、ownerID/generation/leaseUntil、预期写入内容版本、唯一operation identity；完整执行关联不可缺失。
 
 使用稳定 JSON 编码（字段顺序固定、明确 null/空值语义、集合排序）计算带版本的 SHA-256 描述摘要。秘密不进入描述、提示词或审计参数；只使用 credential reference 的后端身份与 revision。已经禁止的秘密参数继续拒绝，不能用散列秘密来替代秘密隔离。
 
@@ -285,7 +350,7 @@ type TaskManager interface {
 
 按照以下顺序执行，越早失败越不应申请审批：
 
-1. 校验入口身份、项目/会话/task 归属、工具注册、参数 schema 和秘密参数禁令。
+1. 校验入口身份、项目/会话/goal/step/attempt/task归属、当前计划/步骤依赖、owner有效性、工具注册、参数schema和秘密参数禁令；无归属不派发。
 2. 按注册的 target kind 解析资源或项目/会话归属；需要资源的工具缺失或歧义时返回 `TargetResolution`，不进入授权审批。发现和控制工具不要求先选资源。
 3. 解析实际连接和附带目标，构造操作描述；无法证明目标时按 opaque 规则处理，不回退本机。
 4. 校验 RecoveryGate、storeID/epoch、任务 active/expiry、executionRevision、有效 RootTurn/child scope 和取消，本机禁令、Plan/Pilot 角色、项目和父执行边界等硬限制。
@@ -300,6 +365,9 @@ type TaskManager interface {
 | `TARGET_REQUIRED` / `TARGET_AMBIGUOUS` / `TARGET_EMPTY_DIRECTORY` | 缺失、歧义、空目录 | 展示经权限过滤的目标选择器 |
 | `TARGET_OUTSIDE_BOUNDARY` | 目标有效，但超出独立硬边界 | 展示边界来源和设置入口 |
 | `LEGACY_SCOPE_CONFIRMATION_REQUIRED` | 旧范围缺少可靠来源 | 展示一次迁移确认，不将未知范围直接固化为永久 deny |
+| `GOAL_BINDING_REQUIRED` / `STEP_NOT_READY` | 缺少执行归属或必要依赖未满足 | 选择目标/处理前置步骤，不派发 |
+| `ORPHANED_EXECUTION` / `SIDE_EFFECT_UNRESOLVED` | owner失联或原副作用未核实 | 冻结新派发、取消/核实/可信接管；保留资源阻断 |
+| `ACCEPTANCE_REQUIRED` | 操作执行结束但目标条件未验证 | 展示缺失条件/证据，不能显示已交付 |
 | `TASK_NOT_ACTIVE` / `TASK_ENDED` | 暂停/空闲或已终结 | 合法继续/恢复入口，或新建任务 |
 | `RECOVERY_CONFIRMATION_REQUIRED` | 恢复后策略未确认或账本未对齐 | 进入恢复管理；没有 agent 执行按钮 |
 | `CAPABILITY_DENIED` / `LOCAL_EXECUTION_DENIED` | 明确拒绝 | 不出现审批同意按钮 |
@@ -313,18 +381,21 @@ type TaskManager interface {
 
 ### 8.1 表结构
 
-在规范 RuntimeRoot 下 `adkStore()` 打开的同一 ADK SQLite 增加下列表。名称为拟定，不修改现有 ADK SDK 内部表。所有新权威行和运行描述带 storeID/epoch；旧 epoch 数据只能审计读取，不能作为当前允许的依据。
+在规范 RuntimeRoot 下 `adkStore()` 打开的同一 ADK SQLite 增加下列表。名称为拟定，不修改现有 ADK SDK 内部表。授权与运行描述带storeID/epoch；旧epoch授权不能作为当前允许依据。持久goal/step/证据跨epoch保存关联，恢复后重核目标验收/未决风险，使用新上下文授权继续同goal。
 
 | 表 | 关键字段与约束 |
 | --- | --- |
 | `security_project_policies` | project_id 主键；schema_version、revision、mode、typed_rules、updated_by/action_id；更新 CAS |
 | `security_legacy_session_policies` | session_id 主键；迁移前有效七项权限与入口来源、revision、epoch；只用于已迁移 legacy 会话，禁止覆盖同项目其他会话 |
-| `security_tasks` | id 主键；project/session/kind/parent/state/state_revision/execution_revision/epoch、绝对 expiry；持久化状态机 |
-| `security_task_bindings` | typed execution kind + execution ID 唯一；映射 taskID 与 RootTurnID/WorkGoal/SRE/workflow/child scope，含 active/waiting/closed 与父轮次绑定 |
+| `security_tasks` | id主键；goal_id、project/session/kind/parent/state/state_revision/execution_revision/epoch、绝对expiry；只管执行上下文 |
+| `security_task_bindings` | task_id/kind/execution_id唯一；同scope仅一个active owner代次，历史绑定保留；映射taskID/goalID与RootTurn/SRE/workflow/child scope |
+| `work_execution_attempts` | attempt_id主键；goal_id/plan_revision/step_id/step_revision/task_id/retry_of、state/closure_state、revision；不保存第二份operation结果 |
+| `work_acceptance_records` | acceptance_id主键；goal/plan/step版本、条件结果、evidence引用、验证器版本、state；只追加 |
+| `work_coverage_links` | failed_attempt_id/replacement_attempt_id/acceptance_id/criteria_ids；同一目标、当前契约、验收通过才可写 |
 | `security_session_targets` | session_id 主键；project_id、current_target、pending_resolution、revision；无有效目标用 null，不用空列表表示授权 |
 | `security_boundaries` | id、ownerKind、project/session/task 归属、provenance、sourceActionID、resource_ids、revision、约束；未知来源须先确认 |
 | `security_resource_revisions` | project_id/resource_id 主键；generation、connection_digest、state=ready/changing/disabled；仅保存非秘密配置摘要；MCP 另以 server/tool/catalog 身份使用同类版本记录 |
-| `security_task_grants` | id 主键；project/session/task、parent_authority、资源连接版本、能力、约束、expiry、revision、revoked_at；索引 task/expiry |
+| `security_task_grants` | id 主键；project/session/goal/task、parent_authority、资源连接版本、能力、约束、expiry、revision、revoked_at；索引 task/expiry |
 | `security_schedule_grants` | id、schedule_id/config_revision、workflow_version、资源/能力、expiry、remaining_runs、authority_revision、epoch；与本次任务签发在同一事务 |
 | `security_schedule_occurrences` | schedule_id/config_revision/due_at 唯一；grant_id、task_id、workflow_run_id、状态；触发幂等记录，不替代实际工具操作账本 |
 | `security_decisions` | id、operation_id、effect/reason、descriptor_hash、相关 revision、授权来源、redacted summary、时间；追加记录 |
@@ -333,7 +404,7 @@ type TaskManager interface {
 
 另有 Home 私有文件 `<Home>/security/control.json`：`formatVersion/storeID/recoveryEpoch/runtimeRoot/gate/recoveryID`。它是恢复控制记录，不是第二个策略/操作账本；只存少量状态并采用权限私有、写临时文件、fsync、原子替换。普通备份不包含它，跨机器导入必须新建 storeID/epoch。文件缺失、格式不兼容、与数据库 epoch 不同均进入管理模式，不能自动按“全新安装”放行已有数据。
 
-扩展现有 `nativeApproval` 和 `nativeOperation`，增加 `descriptor_version/hash`、`security_decision_id` 与 `authority_revision_digest`；保留旧字段兼容读取。原生审批仍是单次审批唯一权威，原生操作仍是执行/unknown 唯一权威。`security_decisions` 记录判定，不构成可独立重放的执行队列。数据库唯一约束维持原 operation identity；失败不能靠另造 ID 自动重试同一不明副作用。
+扩展现有nativeWorkGoal/WorkItem的版本化步骤、验收条件、选中目标和进度字段；扩展nativeApproval/nativeOperation的goal/step/attempt关联、owner/generation/lease和描述/决策摘要，保留旧字段兼容读取。孤儿风险和取消结果附于原nativeOperation及审计，不另建副作用账本。原生审批仍是单次审批唯一权威，原生操作仍是执行/unknown 唯一权威。`security_decisions` 记录判定，不构成可独立重放的执行队列。数据库唯一约束维持原 operation identity；失败不能靠另造 ID 自动重试同一不明副作用。
 
 安全表由应用层 `internal/ai/security_store.go` 迁移和访问；底层 `internal/agent/storage` 继续只提供存储能力。项目删除需要撤销授权并阻止新任务，历史审计按保留策略处理，不能级联删除来解除 unknown 防重放约束。v1 不自动裁剪操作账本；决策列表采用分页，后续独立设计保留/导出策略。
 
@@ -428,8 +499,11 @@ MCP v1 只有受信配置中明确声明、经用户确认的 `serverID/toolName
 | `GET /api/projects/:id/security` | 读取项目策略和有效默认值 | 项目可见性；隐藏秘密 |
 | `PUT /api/projects/:id/security` | 修改固定类型规则 | expectedRevision CAS、真实用户动作；agent 工具不可调用授权签发功能 |
 | `PUT /api/sessions/:id/target` | 提交明确选择，解决 pendingResolution | expectedRevision、候选/资源归属；仅改目标 |
-| `POST /api/sessions/:id/security-tasks` | 新建普通安全任务并绑定输入 | 唯一 actionID、真实用户消息 ID、旧任务 CAS 和原子终结 |
-| `POST /api/security-tasks/:id/actions` | continue/pause/cancel/complete；恢复暂停采用 continue | task revision、当前会话、epoch、允许的状态转换；终态不可继续 |
+| `POST /api/sessions/:id/security-tasks` | 为已选目标新建限时执行上下文 | actionID、goalID/expectedGoalRevision、真实输入ID；不能终结其他goal或复制旧grant |
+| `POST /api/security-tasks/:id/actions` | 继续/暂停/关闭执行上下文 | task stateRevision、goal/当前会话、epoch和转换合法性；关闭上下文不等于目标验收 |
+| `POST /api/sessions/:id/goal-intents` | 继续、选择或新建目标，歧义选择 | sourceMessageID、goalID、expectedGoalRevision、交互绑定；不自动取消旧goal |
+| `POST /api/goals/:id/acceptance` | 提交后端验证或人工核验请求 | 当前计划/条件版本、证据归属/时效、verifier、progress CAS；不接受裸success布尔值 |
+| `POST /api/operations/:id/ownership` | 可信取消/核实/接管孤儿执行 | owner generation、handle/连接身份、证据与显式操作；不自动重放或转移旧grant |
 | `PUT /api/security-boundaries/:id` | 显式修改用户拥有的边界 | ownerKind、归属、expectedRevision、差异确认；下级不能修改项目/父边界 |
 | `POST /api/sessions/:id/security-migration/resolve` | 一次确认旧范围为导航或明确限制 | migration revision、target IDs、boundaryDecision、用户确认和同事务审计 |
 | `POST /api/sessions/:id/task-grants` | 用户一次确认读取/受控命令任务范围，或明确扩展 | taskID、资源/模板版本、参数范围、预算/TTL、expectedGrantRevision、用户差异确认、幂等actionID；与任务范围更新同事务 |
@@ -442,14 +516,14 @@ MCP v1 只有受信配置中明确声明、经用户确认的 `serverID/toolName
 
 前端 `contracts.ts` 增加 `SecurityView`、`TargetResolutionView`、`TaskGrantView`、`SecurityDecisionView`。会话 snapshot/SSE 推送安全 revision；旧客户端的通用 aiOptions 更新不得覆盖新的策略或重建已撤销授权，不支持的安全变更返回明确版本错误。
 
-界面按状态归属呈现：项目设置显示默认规则；输入区资源 chip 显示当前目标；任务条显示 idle/paused 等真实状态及“继续当前任务 / 新任务 / 结束”；任务授权卡显示资源、本机标识、命令模板/参数范围、剩余次数和时长、撤销；超范围卡显示差异并区分“仅这一次”和“扩展本任务”，不能默认选扩大范围。单次审批卡显示确切动作与预览。旧范围确认页同时显示“选择目标”和“保留/调整操作限制”，提交前展示差异；不能仅换一张目标 chip 就暗改边界。恢复管理页展示策略待确认、旧授权已失效和未决操作，不提供自动恢复执行按钮。后台收到 revoke 即生效。复用 `AppSelect`、`Glyph` 和共享圆角 token，并按 [UI 规范](../ui-guidelines.md) 验证浅色、深色、窄窗口和键盘。
+界面按状态归属呈现：项目设置显示默认规则；输入区资源 chip 显示当前目标；任务条分别展示goal验收/未完成原因、执行上下文idle/paused及“继续此目标 / 选择目标 / 取消目标”；任务授权卡显示资源、本机标识、命令模板/参数范围、剩余次数和时长、撤销；超范围卡显示差异并区分“仅这一次”和“扩展本任务”，不能默认选扩大范围。单次审批卡显示确切动作与预览。旧范围确认页同时显示“选择目标”和“保留/调整操作限制”，提交前展示差异；不能仅换一张目标 chip 就暗改边界。恢复管理页展示策略待确认、旧授权已失效和未决操作，不提供自动恢复执行按钮。后台收到 revoke 即生效。复用 `AppSelect`、`Glyph` 和共享圆角 token，并按 [UI 规范](../ui-guidelines.md) 验证浅色、深色、窄窗口和键盘。
 
 ## 13. 迁移、启用与回退
 
 ### 13.1 分阶段切换
 
 1. **兼容基础先行**：实现单 owner、RuntimeRoot manifest、reader guard、RecoveryGate/epoch、迁移备份与旧账本索引。先验证未来 schema 和恢复中断会关闭执行，再引入新权威状态。
-2. **任务与目标先闭环**：新增 SecurityTask、可信继续动作和边界管理接口；迁移现有会话时不推断一个可跨全部历史的活跃任务，首次新输入创建新任务。已有操作仍保留旧身份用于对账。
+2. **目标闭环前置**：扩展WorkGoal/WorkItem，建立attempt/evidence/acceptance/coverage关联及孤儿风险索引；SecurityTask关联goal。迁移保留可证明关联；来源不明先待确认，不按新消息重建目标或复制旧授权。旧无归属执行进入只读核实清单，不自动结束，也不误杀人工终端。
 3. **逐来源迁移旧范围**：有可靠持久化证据表明用户明确设定执行限制的，迁为 explicit_restriction；能确定只由目录导航/目标引用产生的，迁为 CurrentTarget/pendingResolution；来源不明（包括无证据的空范围）记 legacy_unclassified，并暂阻相关会话派发。未知来源不能直接变无限制，也不能变不可解除的永久 deny。
 4. **一次确认恢复旧会话**：用户在迁移页明确 targetIDs 和 boundaryDecision=keep/replace/navigation。后端检查资源归属与项目/父硬限制，以 CAS 在同一事务更新目标、创建/修改用户边界、解决 pending migration 并追加审计。navigation 是一次明确确认原范围只作目标的动作；之后选择目标不再隐式放宽边界。旧空目录→明确选择 B→确认导航→允许范围内读取必须可完成。
 5. **兼容与 shadow**：逐会话快照七项有效权限及 Web/stdio 来源；保留 denyLocal、显式引用限制、Plan/角色等真实限制。新 evaluator 仅比较脱敏结果，不使用新 allow 放行；新旧差异分为确认后的语义变化和未经确认的意外放宽，后者阻止启用。
@@ -490,13 +564,18 @@ flowchart LR
 
 | 场景 | 必须得到的结果 |
 | --- | --- |
+| 原目标直接同步失败→中转成功→独立验收 | 同goal/step新增attempt，证据通过后覆盖旧失败；历史保留，最终状态与正文一致 |
+| 原写入unknown但替代路径返回成功 | 仍待核实；不能覆盖未知副作用，不得重放或清写阻断 |
+| 必要步骤未执行、验收证据缺失或源快照变化 | 目标未完成/待验收；不能由另一任务成功结清 |
+| owner失联/lease过期、旧回调/队列复活 | 零新派发、废止旧owner、请求取消与核查，迟到结果只回写旧operation |
+| 用户切目标/取消或grant到期时仍有后台进程 | 目标与handle不丢失；保留孤儿风险、资源阻断及安全接管入口 |
 | 旧空目录后明确选择资源 B | 来源已知导航直接恢复；未知来源通过一次迁移确认恢复；真实硬边界通过有权限的边界修改动作处理 |
-| 授权诊断后“继续” | 精确继续命令/入口、taskID、revision均有效时沿用任务和授权；不追加权限、不续期 |
+| 授权诊断后“继续” | 原目标交互/选择绑定、goal/task/revision均有效时沿用目标及有效授权；不追加权限、不续期 |
 | 一次任务授权后执行不同合规命令 | 相同资源、模板/参数范围、TTL与预算内自动执行，不重复审批 |
 | 命令超范围或次数用尽 | 零派发并展示差异；单次批准不扩大后续范围，明确扩展才更新grant/任务范围 |
 | 参数夹带管道/命令替换、别名或未知脚本 | 不靠命令前缀放行；只能执行受信模板编译产物，否则拒绝/单次处理 |
 | 多子任务同时消耗最后一次维护额度 | 最多一项登记派发成功；unknown不退还预算 |
-| 同会话同目标但普通新问题 | 创建新SecurityTask，旧任务grant无效；项目allow仍可读取，ask必须新授权 |
+| 开始吧/带内容的继续/明确新目标 | 绑定原交互推进同goal；归属歧义则选择，明确新goal不取消旧goal或复制grant |
 | 无grant的项目allow父任务派生子任务 | 同资源、角色允许的读取成功；改为ask后必须取得合法授权 |
 | idle/paused/waiting/终态任务 | 只有合法状态转换后active能派发；终态不复活；并发继续最多一次 |
 | 多地址/账号同名、否定/引用地址 | 消歧；不因引用日志或否定句切目标 |
@@ -523,16 +602,16 @@ flowchart LR
 
 ## 15. 交付顺序与完成定义
 
-按八个可评审阶段交付：统一存储与恢复门禁 → SecurityTask、目标和旧边界确认 → 纯策略内核与 shadow → 原生审批/派发事务 → 全部适配器和定时入口 → 授权 API/UI → 恢复/启用演练 → Dev 验收和旧路径收口。共 40 项任务，恢复基础和任务身份前置，避免先实现依赖不存在 taskID/epoch 的 grant。阶段可按实际 diff 拆为多个 PR，不跨越验收门槛。文件、依赖和检查见[实施计划](../../plan/feature-lake-security-1.md)。
+按八个可评审阶段交付：统一存储与恢复门禁 → 目标/步骤/尝试/验收闭环、SecurityTask和旧边界确认 → 纯策略内核与 shadow → 原生审批/派发事务与孤儿治理 → 全部适配器和定时入口 → 授权 API/UI → 恢复/启用演练 → Dev 验收和旧路径收口。共 50 项任务，恢复基础和任务身份前置，避免先实现依赖不存在 taskID/epoch 的 grant。阶段可按实际 diff 拆为多个 PR，不跨越验收门槛。文件、依赖和检查见[实施计划](../../plan/feature-lake-security-1.md)。
 
-完成必须同时满足：全部运行工具有注册项；所有 agent 外部派发必须持有当前有效 Permit；旧 pending/unknown 和迁移限制处理有回归；没有模型或工具结果授予权限的路径；双库失败与撤销竞态可重复验证；Lake Dev 上截图场景、跨目标、审批、撤销、重启和窄窗口交互全部通过。仅完成架构图、开关页面或核心 evaluator 不算模块完成。
+完成必须同时满足：全部运行工具有注册项；所有 agent 外部派发必须持有当前有效 Permit；旧 pending/unknown 和迁移限制处理有回归；没有模型或工具结果授予权限的路径；双库失败与撤销竞态可重复验证；Lake Dev 上截图场景、跨目标、审批、撤销、重启和窄窗口交互全部通过。目标→步骤→尝试→证据→验收全部可追溯，孤儿执行没有静默遗弃路径，才算模块完成。
 
 ### 15.1 本次评审问题的关闭条件
 
 | 问题 | 修订后的机制 | 必须存在的反例测试 |
 | --- | --- | --- |
 | 恢复复活授权/消费次数 | 独立control、新epoch、全部旧授权失效、策略重确认、schedule禁用 | 备份后撤销或消费，再恢复仍不能执行 |
-| 普通会话无任务生命周期 | SecurityTask + 明确续接 + RootTurn绑定 + 终态规则 | 换题不继承，同任务合法继续不续TTL |
+| 普通会话无任务闭环 | 持久WorkGoal/步骤/尝试/验收 + 限时SecurityTask + 可信目标关联 | 开始吧不丢原goal；换目标不抹旧失败；授权过期不丢待办 |
 | 旧空范围固化 | provenance分类、legacy_unclassified确认、边界CAS/API | 现有故障会话可完成确认并恢复授权范围内读取 |
 | 无grant子任务误拒绝 | 项目allow/合法grant/单次审批满足规则，再校验硬边界 | 无grant的项目allow子任务通过，ask则待授权 |
 
