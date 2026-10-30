@@ -30,7 +30,7 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 .sidebar.workspace-navigation .sidebar-new-session > svg { flex-shrink: 0; }
 .sidebar.workspace-navigation .sidebar-session-heading { display: flex; align-items: center; gap: 8px; min-height: 32px; margin: 0 7px 5px; }
 .sidebar.workspace-navigation .sidebar-session-heading[hidden] { display: none; }
-.sidebar.workspace-navigation .project-scroll { padding: 0 var(--sidebar-edge-inset) 72px 0; scroll-padding-bottom: 72px; }
+.sidebar.workspace-navigation .project-scroll { padding: 0 var(--sidebar-edge-inset) 16px 0; scroll-padding-bottom: 16px; }
 .sidebar-scroll-area { position:relative; display:flex; flex:1 1 auto; min-height:0; overflow:hidden; }
 .sidebar-scroll-area > .project-scroll { min-width:0; width:100%; scrollbar-width:none; }
 .sidebar-scroll-area > .project-scroll::-webkit-scrollbar { display:none; }
@@ -126,8 +126,8 @@ html.lake-windows-chrome .sidebar.workspace-navigation .sidebar-brand-row { heig
 
 .sidebar.workspace-navigation .project-contents:has(> [id^="project-sessions-"][hidden]) .resources-heading { margin-top:8px; padding-top:0; }
 
-/* Match the compact navigation gutter without changing the floating material. */
-.sidebar.workspace-navigation .sidebar-utilities { left:var(--sidebar-edge-inset); right:var(--sidebar-edge-inset); }
+/* A quiet footer keeps its own space below the scrollable resource list. */
+.sidebar.workspace-navigation .sidebar-utilities { margin-inline:var(--sidebar-edge-inset); }
 .sidebar.workspace-navigation .workspace-utilities-trigger { padding-inline:9px; padding-left:calc(var(--sidebar-content-inset) - var(--sidebar-edge-inset) - 1px); }
 
 /* Edge controls keep a complete focus outline inside the clipped sidebar. */
