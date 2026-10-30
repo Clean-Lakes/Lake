@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import signal
 from pathlib import Path
 import sqlite3
 import subprocess
@@ -39,6 +40,14 @@ def main():
                     'stdio was able to fork Web authority')
             results.append('Web/stdio second owner rejected')
         finally:
+            # This PID came from the newly created, isolated Home. Native
+            # SIGTERM alone can leave its child backend behind on macOS.
+            # Stop the owned fixture backend before closing the test window.
+            if args.native:
+                try:
+                    os.kill(int(lake.runtime['pid']), signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
             lake.stop()
         protocol = subprocess.run([str(binary), 'ai', '--home', str(home)], input='', text=True,
                                   capture_output=True, env=env, timeout=15)

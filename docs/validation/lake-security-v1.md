@@ -12,7 +12,7 @@
 | 资源操作 | [完整清单](../security/tool-entrypoints.md)及[93个静态工具映射](../security/tool-entrypoints.json)，覆盖测试对照实际目录；Web/stdio共享规范RuntimeRoot | 全部适配器的能力登记、冻结操作描述及原子授权检查是后续阶段工作 |
 | 任务档案与验收 | 保留原ADK/nativeOperation/nativeEvidence；首次迁移一致快照、稳定legacyStoreID和摘要清单、未决状态统计 | 旧操作逐资源映射/查询与显式核实闭环、AcceptanceRecord/CoverageLink/GoalClosureView仍待实施 |
 
-对原第一阶段任务：TASK-001入口盘点、TASK-002规范Home/owner接入已交付；TASK-003先交付control/reader guard，完整checkpoint/跨设备恢复协议仍待完成；TASK-004先交付快照/迁移清单及保守隔离，TASK-005先交付现有专项与回归证据。旧账本逐资源索引/显式核实、完整迁移断点矩阵和原生窗口重启验证未完成，不能宣布整个第一阶段退出，更不能开启完整Security enforced模式。
+对原第一阶段任务：TASK-001入口盘点、TASK-002规范Home/owner接入已交付；TASK-003先交付control/reader guard，完整checkpoint/跨设备恢复协议仍待完成；TASK-004先交付快照/迁移清单及保守隔离，TASK-005先交付现有专项与回归证据。旧账本逐资源索引/显式核实、完整迁移断点矩阵、日常Home恢复和窗口交互补验未完成，不能宣布整个第一阶段退出，更不能开启完整Security enforced模式。
 
 ## 本批可观察行为
 
@@ -32,16 +32,22 @@
 | 静态检查 | `go vet ./internal/security ./internal/platform ./internal/agent/storage ./internal/ai ./internal/web ./cmd/lake`；`python3 scripts/check_adk_runtime_boundary.py` | 通过；未新增模型调用循环或导入SDK内部API |
 | 前端兼容 | Node 24.19.0、pnpm 10.33.4；`pnpm --dir web-agent check`、`pnpm --dir web-agent test:frontend` | 通过；556项前端测试，前端源码/shared契约未修改 |
 | Windows | `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go test -c ... ./internal/platform` | owner/进程检测平台包交叉编译通过；未在Windows真实运行 |
-| 签名Dev构建安装 | `scripts/build_lake_desktop.sh --dev --install` | 9ed31220阶段签名构建安装通过（build-origin准确且dirty=false）。最终e4515df3安装被来源保护拒绝：另一个工作区已安装03ea24a251f1版本；保留较新Dev，未绕过保护或操作正式版 |
-| 最终签名后端 | `scripts/build_lake.sh`后运行`python3 scripts/verify_security_runtime_dev.py --binary bin/lake --output <private-result>` | 通过；最终e4515df3的签名后端在隔离Home下验证第二owner拒绝、释放后同库/epoch不变、未来reader拒绝、旧unknown归档关闸无重放。9ed31220的已安装Dev后端也曾通过同一验收 |
+| 签名Dev构建安装 | `scripts/build_lake_desktop.sh --dev --install` | 单独分支安装先被03ea24a251f1来源保护拒绝；用户授权合并卡片后，将两边源码集成为42e1f411a31f56496e7079abea5c5e45bc8306f6，正常签名构建安装通过，dirty=false，未绕过保护或操作正式版 |
+| 最终签名后端 | `scripts/build_lake.sh`后运行`python3 scripts/verify_security_runtime_dev.py --binary bin/lake --output <private-result>` | 通过；最终e4515df3的签名后端在隔离Home下验证第二owner拒绝、释放后同库/epoch不变、未来reader拒绝、旧unknown归档关闸无重放。9ed31220及集成42e1f411的已安装Dev后端也通过同一验收 |
 | 自定义目录 | 签名bin/lake：环境指定自定义DataDir启动Web→同Home stdio configure→显式--home重启Web | 通过；会话仍保存到自定义DataDir，环境中的其他DataDir未覆盖已绑定root，无模型请求 |
-| 原生窗口 | 以上脚本加`--native '<Lake Dev.app>/Contents/MacOS/Lake'` | 未完成；现有Dev实例触发单实例保护，新窗口在后端启动前退出。保留现有实例，未强退或借其状态冒充新代码验收 |
+| 原生窗口 | 以上脚本加`--native '<Lake Dev.app>/Contents/MacOS/Lake'` | 隔离原生启动及同库/owner/gate验收已通过。真实WK窗口显示合成会话，实际JS/CSS字节与clean集成构建一致，未执行资源工具。原生动作接口报告状态变化，未声称窗口拖动及卡片全部交互已通过；日常Home恢复仍待处理 |
 | 补丁 | `git diff --check` | 通过 |
 
 首次完整运行曾因新清单测试错误地将多语言description解析为string而失败；已改为仅解析真实工具名，93项覆盖测试及后续回归通过。曾有一次旧源码测试运行主动中断，它不计入通过证据。最终代码测试记录以上述SHA为准。
 
 ## 剩余工作与回退限制
 
-本批属于基础能力，并未完成五模块全部69项任务。继续完成第一阶段的细粒度旧账本核实与迁移故障矩阵、实际原生重启验证后，才能进入目标/步骤/尝试/验收和TaskGrant等后续阶段。最终版本的Dev安装需要先与03ea24a251f1或其后续源码基线集成；原生联调需要在确认现有Dev可正常退出后重新运行，不能绕过来源或单实例保护。
+本批属于基础能力，并未完成五模块全部69项任务。继续完成第一阶段的细粒度旧账本核实与迁移故障矩阵、实际原生重启验证后，才能进入目标/步骤/尝试/验收和TaskGrant等后续阶段。已通过本地集成42e1f411保留03ea24a251f1源码并完成Dev安装；日常Home恢复和原生交互补验仍按门槛继续，不绕过来源、单实例或迁移保护。
 
 没有生产访问、凭据迁移、Release或标签。Home增加了持久控制与guard元数据；不支持回退到不认识control/epoch/schema的旧历史二进制。隔离验收Home随测试清理；真实Home需保全并通过后续受控恢复管理，不能通过删除账本、清单或control回退。当前没有可批准的完整恢复开闸流程，相关故障保持管理阻断。
+
+## 卡片 PR 合并后的集成
+
+用户明确授权合并更新[PR #131](https://github.com/Clean-Lakes/Lake/pull/131)，已核对其head `0e6216be587579c64f1ba9b99c3b2db171ae4ea6`经GitHub squash合入develop `8ae90c27d526efd0e9b6fbc69dad00328c87749c`；本分支通过合并origin/develop同步，无保护分支直接推送。Security PR #130保持草稿，diff不包含卡片前端改动。
+
+Dev集成42e1f411的前端与卡片PR源码一致，后端与e4515df3一致；补跑556前端测试、类型、Security专项和ADK边界通过。真实原生隔离窗口加载JS `index-CA00KQkZ.js`、CSS `index-DnbvT5Oj.css`，二者与构建文件字节一致，安装后端摘要与build-origin匹配。原生fixture结束时先停止其自己创建的后端，再关闭测试窗口，确认没有遗留Dev测试进程。日常Home中尚未完成的Security迁移标记及gate未删除或强行修改。
