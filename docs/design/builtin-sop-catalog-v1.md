@@ -101,6 +101,8 @@ SOP                                                  关闭
 
 ## 5. 与任务闭环的边界
 
+全局采用[五模块架构图](images/lake-security-five-modules.svg)及[模块职责说明](lake-security-v1.md)：本功能对应“SOP 手册”。任务中心、安全控制、资源操作、任务档案与验收由Security后端计划覆盖，首期浏览不接入它们的执行接口。独立计划逐项标注主责模块，避免把展示标准流程误当作实现执行引擎。
+
 ```mermaid
 flowchart LR
     B[随应用发布的内置SOP] --> R[只读内容注册表]
