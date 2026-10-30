@@ -1,6 +1,6 @@
 ---
 goal: 独立提供只读内置SOP清单与详情，不关联执行或授权
-version: 1
+version: 2
 date_created: 2026-10-30
 last_updated: 2026-10-30
 owner: Lake
@@ -17,9 +17,10 @@ tags: [feature, sop, ui, read-only, catalog]
 ## 1. Requirements & Constraints
 
 - **REQ-001**: 工作区菜单提供独立“SOP”入口，专用列表/详情面板；浏览不依赖模型、项目或资源选择。
-- **REQ-002**: 首批固定两条内置内容：service-diagnostics@1.0.0与data-sync-verification@1.0.0；展示用途、适用/前置条件、步骤/依赖、停止/失败处理及验收条件。
+- **REQ-002**: 首批固定7条内置内容：6条专用SOP和general-task-fallback通用兜底，ID/版本按详细设计表；展示用途、适用/前置条件、步骤/依赖、停止/失败处理及验收条件。
 - **REQ-003**: 支持名称/摘要/分类搜索、分类筛选、列表选择和窄窗返回；显示内置来源、版本及流程实际影响。
 - **REQ-004**: 内置内容随应用打包，只读API只提供列表/详情；不读取用户资源、聊天、凭据或外部网络。
+- **REQ-005**: 通用SOP规范澄清/取证/计划/授权/执行/验收或暂停，kind=fallback唯一。未来无适用专用SOP时走通用；目录错误/权限拒绝/未决副作用不能借兜底绕过。本期只展示该规则，不实现自动匹配/执行。
 - **SEC-001**: 浏览、搜索、选择、关闭不创建任务/工作流、不申请授权、不调用模型或执行命令；“内置”不代表执行许可。
 - **SEC-002**: 不提供新增、编辑、删除、导入、发布、启停或运行按钮；后端不开放写入/执行路由，不能仅靠隐藏按钮控制。
 - **SEC-003**: 内容是静态手册，参数仅描述不采集实际值；受限文本渲染，不启用原始HTML或脚本；内置目录ID不得作为文件路径。
@@ -35,13 +36,13 @@ tags: [feature, sop, ui, read-only, catalog]
 
 - **GOAL-001**: 提供稳定、可验证、无运行能力的内置内容注册表。
 
-依赖：无。退出条件：两条内容完整、ID/版本/依赖验证通过，包不依赖模型或执行器。
+依赖：无。退出条件：7条内容完整且通用兜底唯一、ID/版本/依赖验证通过，包不依赖模型或执行器。
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-001 | 新增 `internal/sop/catalog.go`，定义Summary/Detail/Step/Parameter类型和只读List/Get，使用go:embed加载builtin/*.json，验证source=builtin、ID/版本唯一、步骤依赖无环和必需字段，计算稳定catalogVersion。依赖：无。 | 否 | 未开始 |
-| TASK-002 | 新增 `internal/sop/builtin/service-diagnostics.json` 与 `data-sync-verification.json`，按设计编写前置/停止/失败/验收；使用抽象资源参数，明确数据同步含写入和不可逆/人工处理边界，不放真实地址/命令执行器。依赖：TASK-001。 | 否 | 未开始 |
-| TASK-003 | 新增 `internal/sop/catalog_test.go`，验证两条记录、版本稳定、未知ID/版本、损坏字段、依赖环、无真实资源数据；内容错误不可静默发布半份目录。依赖：TASK-002。 | 否 | 未开始 |
+| TASK-001 | 新增 `internal/sop/catalog.go`，定义Summary/Detail/Step/Parameter类型和只读List/Get，使用go:embed加载builtin/*.json，验证source=builtin、kind=standard/fallback、ID/版本唯一及唯一general-task-fallback、步骤依赖无环和必需字段，计算稳定catalogVersion。依赖：无。 | 否 | 未开始 |
+| TASK-002 | 新增 `internal/sop/builtin/{host-resource-diagnostics,service-diagnostics,database-health-check,kubernetes-app-diagnostics,data-sync-verification,service-restart-verification,general-task-fallback}.json`，版本均1.0.0；按设计编写前置/停止/失败/验收。通用条目写明无专用匹配时澄清/取证/方案先行，不能绕过权限或unknown；无真实地址和命令执行器。依赖：TASK-001。 | 否 | 未开始 |
+| TASK-003 | 新增 `internal/sop/catalog_test.go`，验证7条记录及唯一kind=fallback、版本稳定、未知ID/版本、损坏字段、依赖环、无真实资源数据；内容错误不可静默发布半份目录。依赖：TASK-002。 | 否 | 未开始 |
 
 ### Implementation Phase 2
 
@@ -64,8 +65,8 @@ tags: [feature, sop, ui, read-only, catalog]
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
 | TASK-007 | 修改 `SidebarUtilities.tsx` 增加onSops回调及book图标“SOP”条目，`App.tsx`接独立打开状态；不切换会话/资源、不打开showWorkflows，关闭恢复可见工作区入口焦点。入口与设置同层，不受modelConfigured影响。依赖：TASK-005、TASK-006。 | 否 | 未开始 |
-| TASK-008 | 新增 `web-agent/web/src/SopCatalog.tsx` 与 `sopCatalog.css`：搜索/分类、列表、详情、版本/内置来源/影响标识、loading/error/retry/empty；宽窗分区、窄窗单列返回。只GET目录，不提供写入/运行控件，复用AppSelect/Glyph/共享主题曲线。依赖：TASK-007。 | 否 | 未开始 |
-| TASK-009 | 新增 `web-agent/web/test/sop-catalog.test.ts` 及隔离fixture，验证搜索/分类、详情选择、版本变化、失败重试、键盘/Escape/焦点，打开/关闭保留草稿与当前任务；断言请求只有目录GET且没有任务/授权/执行POST。依赖：TASK-008。 | 否 | 未开始 |
+| TASK-008 | 新增 `web-agent/web/src/SopCatalog.tsx` 与 `sopCatalog.css`：搜索/分类、列表、详情、版本/内置来源/影响标识及通用兜底标识、loading/error/retry/empty；宽窗分区、窄窗单列返回。只GET目录，不提供写入/运行控件，复用AppSelect/Glyph/共享主题曲线。依赖：TASK-007。 | 否 | 未开始 |
+| TASK-009 | 新增 `web-agent/web/test/sop-catalog.test.ts` 及隔离fixture，验证7条内容/通用标识、搜索/分类、详情选择、版本变化、失败重试、键盘/Escape/焦点，打开/关闭保留草稿与当前任务；断言请求只有目录GET且没有任务/授权/执行POST。依赖：TASK-008。 | 否 | 未开始 |
 
 ### Implementation Phase 4
 
@@ -76,7 +77,7 @@ tags: [feature, sop, ui, read-only, catalog]
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
 | TASK-010 | 执行 `go test ./internal/sop ./internal/web`、`go test -race ./internal/sop ./internal/web`、`go vet ./internal/sop ./internal/web`，以及 `pnpm --dir web-agent check`、`pnpm --dir web-agent test:frontend`、`pnpm --dir web-agent build:web`；处理相关失败，记录检查head。不触发未请求CI。依赖：TASK-009。 | 否 | 未开始 |
-| TASK-011 | 用 `scripts/build_lake_desktop.sh --dev --install` 签名构建并在隔离Dev测试两条内容、无模型/无资源、窄窗/浅深色/键盘及长内容裁切；观察接口仅GET，草稿/任务/终端状态保持，记录SHA/Home/截图。依赖：TASK-010。 | 否 | 未开始 |
+| TASK-011 | 用 `scripts/build_lake_desktop.sh --dev --install` 签名构建并在隔离Dev测试7条内容与通用兜底标识、无模型/无资源、窄窗/浅深色/键盘及长内容裁切；观察接口仅GET，草稿/任务/终端状态保持，记录SHA/Home/截图。依赖：TASK-010。 | 否 | 未开始 |
 | TASK-012 | 新增 `docs/validation/builtin-sop-catalog-v1.md` 验证记录，更新本计划实际完成状态；创建独立SOP功能PR到develop，说明只读范围及回退，无用户授权不合并。依赖：TASK-011。 | 否 | 未开始 |
 
 ## 3. Alternatives
@@ -101,7 +102,7 @@ tags: [feature, sop, ui, read-only, catalog]
 
 ## 6. Testing
 
-- **TEST-001**: 内容schema、ID/版本唯一、步骤依赖和两条内置条目完整性；数据同步的影响不能误标只读。
+- **TEST-001**: 内容schema、ID/版本唯一、步骤依赖和7条内置条目、唯一通用兜底及其停止/验收条件完整性；数据同步的影响不能误标只读。
 - **TEST-002**: HTTP鉴权、列表/详情/版本、未知路径、写方法与执行路径拒绝；无业务状态修改。
 - **TEST-003**: 列表/详情/筛选/失败重试、无模型/无项目、键盘/焦点/窄窗与主题；请求记录只有目录GET。
 - **TEST-004**: 执行TASK-010检查与TASK-011真实Dev验证，记录准确SHA及未验证项；模板测试不能冒充真实设备验收。

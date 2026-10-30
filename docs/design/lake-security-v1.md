@@ -640,3 +640,5 @@ flowchart LR
 用户另行提出的“SOP清单”作为独立UI功能，首期只展示内置SOP的列表和详情，具体见[内置SOP清单设计](builtin-sop-catalog-v1.md)与[独立实施计划](../../plan/feature-builtin-sop-catalog-1.md)。它不纳入Security无UI改造的实现任务，后续以独立功能PR交付。
 
 SOP清单可独立于本安全内核上线，不要求先实现全部50项Security任务，也不因此打开隐藏Workflows或增加Security授权卡。首期浏览不实例化WorkGoal、不签发grant、不派发工具；后续把SOP用于计划生成需再单独评审其适用性和版本绑定。
+
+独立清单首批为6条专用SOP加1条“通用任务处理”。未来执行层在没有适用专用SOP时走通用流程的澄清→取证→计划→授权→执行→验收/暂停；这只是组织任务的兜底，不绕过权限、原操作unknown或孤儿治理。首期仍仅展示手册，不增加自动匹配或执行功能。
