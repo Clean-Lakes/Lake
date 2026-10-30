@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520" role="img" aria-labelledby="title desc">
+  <title id="title">Lake · 五块职责</title>
+  <desc id="desc">任务中心保存目标和步骤；SOP手册首期只读，后续为任务提供流程模板；安全控制约束资源操作并治理孤儿执行；任务档案与验收关联各模块的实际记录。实线表示模块关联而非执行先后，虚线表示SOP后续接入任务。</desc>
+  <style>
+    .canvas { fill:#fff; }
+    .node { fill:#f5f6f8; stroke:#cdd2da; stroke-width:1; }
+    .selected { fill:#eaf0f8; stroke:#aabbd2; }
+    .link { fill:none; stroke:#aab2bf; stroke-width:1.5; }
+    .future { stroke-dasharray:6 5; }
+    text { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans CJK SC","Microsoft YaHei",sans-serif; fill:#202938; font-size:17px; font-weight:400; }
+    .heading { font-size:23px; font-weight:500; }
+    .secondary { fill:#596577; font-size:14px; }
+    .label { font-weight:500; }
+    @media (prefers-color-scheme:dark) {
+      .canvas { fill:#15181e; }
+      .node { fill:#242a33; stroke:#626d7d; }
+      .selected { fill:#2c3b50; stroke:#92a8c7; }
+      .link { stroke:#8792a3; }
+      text { fill:#edf1f7; }
+      .secondary { fill:#b8c2d1; }
+    }
+  </style>
+  <rect class="canvas" width="920" height="520" rx="0"/>
+  <text x="50" y="38" class="heading">Lake · 五块职责</text>
+  <text x="256" y="38" class="secondary">架构方案</text>
+  <g class="link">
+    <path class="future" d="M160 220 V110 H350"/>
+    <path d="M460 148 V220"/>
+    <path d="M570 258 H650"/>
+    <path d="M460 296 V368"/>
+    <path d="M570 110 H610 V406 H570"/>
+    <path d="M760 296 V406 H570"/>
+  </g>
+  <g>
+    <rect class="node" x="350" y="72" width="220" height="76" rx="10"/>
+    <text x="460" y="103" text-anchor="middle" class="label">任务中心</text>
+    <text x="460" y="128" text-anchor="middle" class="secondary">要做什么 · 做到哪了</text>
+    <rect class="node" x="50" y="220" width="220" height="76" rx="10"/>
+    <text x="160" y="251" text-anchor="middle" class="label">SOP 手册</text>
+    <text x="160" y="276" text-anchor="middle" class="secondary">标准做法 · 首期只读</text>
+    <rect class="node selected" x="350" y="220" width="220" height="76" rx="10"/>
+    <text x="460" y="251" text-anchor="middle" class="label">安全控制</text>
+    <text x="460" y="276" text-anchor="middle" class="secondary">允许做什么 · 越界就停</text>
+    <rect class="node" x="650" y="220" width="220" height="76" rx="10"/>
+    <text x="760" y="251" text-anchor="middle" class="label">资源操作</text>
+    <text x="760" y="276" text-anchor="middle" class="secondary">主机 · 数据库 · K8s</text>
+    <rect class="node" x="350" y="368" width="220" height="76" rx="10"/>
+    <text x="460" y="399" text-anchor="middle" class="label">任务档案与验收</text>
+    <text x="460" y="424" text-anchor="middle" class="secondary">做过什么 · 是否真完成</text>
+  </g>
+  <path class="link" d="M50 490 H80"/>
+  <text class="secondary" x="90" y="495">模块关联，不表示先后顺序</text>
+  <path class="link future" d="M420 490 H450"/>
+  <text class="secondary" x="460" y="495">SOP 后续接入任务</text>
+</svg>
