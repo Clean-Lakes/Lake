@@ -31,7 +31,7 @@ func ServeHome(ctx context.Context, home string, in io.Reader, out io.Writer) er
 		return err
 	}
 	defer h.Close()
-	return serveRuntime(ctx, filepath.Join(h.Home, "web-agent", "ai"), h, in, out)
+	return serveRuntime(ctx, filepath.Join(filepath.Dir(h.RuntimeRoot), "ai"), h, in, out)
 }
 
 // Serve preserves the conventional legacy path only; arbitrary roots cannot

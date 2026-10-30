@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Clean-Lakes/Lake/internal/agent/storage"
@@ -240,5 +242,25 @@ func TestSecurityImplicitHomeFollowsCustomRuntimeManifest(t *testing.T) {
 	defer next.Close()
 	if next.RuntimeRoot != root || next.control.RecoveryEpoch != epoch {
 		t.Fatal("implicit CLI changed persisted runtime identity")
+	}
+}
+
+func TestSecurityStdioStateFollowsCustomRuntime(t *testing.T) {
+	home, data := t.TempDir(), t.TempDir()
+	h, err := OpenSecurityHome(context.Background(), home, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.Close()
+	var output bytes.Buffer
+	input := strings.NewReader(`{"id":"configure","method":"configure","session":"fixture","data":{"model":{"url":"http://127.0.0.1:12345/v1/chat/completions","name":"fixture","protocol":"openai"}}}` + "\n")
+	if err = ServeHome(context.Background(), home, input, &output); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(filepath.Join(data, "ai", "fixture.json")); err != nil {
+		t.Fatal("stdio did not use manifest state root", err, output.String())
+	}
+	if _, err = os.Stat(filepath.Join(home, "web-agent", "ai", "fixture.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("stdio forked session state")
 	}
 }

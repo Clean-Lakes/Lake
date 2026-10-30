@@ -105,11 +105,19 @@ func run(ctx context.Context, args []string) (err error) {
 		}
 		os.Setenv("LAKE_HOME", *home)
 		dataDir := ""
+		explicitHome := false
 		flags.Visit(func(f *flag.Flag) {
 			if f.Name == "home" {
-				dataDir = filepath.Join(*home, "web-agent")
+				explicitHome = true
 			}
 		})
+		if explicitHome {
+			_, root, e := ai.ResolveSecurityHome(*home, "")
+			if e != nil {
+				return e
+			}
+			dataDir = filepath.Dir(root)
+		}
 		b, e := web.New(ctx, web.Options{Home: *home, DataDir: dataDir, Port: *port, DynamicPort: *port == 0, Open: *open || os.Getenv("LAKE_WEB_START_OPEN") == "1", Static: webassets.Files(), DevOrigin: os.Getenv("LAKE_WEB_DEV_ORIGIN")})
 		if e != nil {
 			return e
