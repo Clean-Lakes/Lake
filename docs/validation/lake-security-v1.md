@@ -2,7 +2,7 @@
 
 日期：2026-10-30。代码基线：develop `be656805d345466f11bbb9c2c4af92e670da7420`。本批验证的代码提交：`e4515df3c4ccf89a8c71f29eb565b1d264124e84`；后续仅更新本文/计划进度时不改变该代码基线。总体方案见[设计 PR #124](https://github.com/Clean-Lakes/Lake/pull/124)，本批通过独立功能草稿[PR #130](https://github.com/Clean-Lakes/Lake/pull/130)交付，分支 `codex/security-runtime-foundation`，未合并。
 
-后续新增代码`0feea12f`已补齐日常Home的项目与历史只读恢复，验证见文末；执行开闸尚未实现。前文保留首次基础版本与集成验证的历史记录。
+后续补丁`0feea12f`先恢复只读查看，`e86daf36`继续完成受控的单库初始迁移，日常Dev现已恢复正常功能，验证见文末。通用跨设备恢复开闸仍未实现；前文保留各阶段历史记录。
 
 ## 五模块交付进度
 
@@ -71,3 +71,26 @@ Dev集成42e1f411的前端与卡片PR源码一致，后端与e4515df3一致；�
 最终通过`scripts/build_lake_desktop.sh --dev --install`安装代码`0feea12f2154e12a4217a64aca720dc233ac8360`，build-origin为dirty=false，签名及来源保护均正常。真实日常Lake Dev窗口已显示原项目导航、资源列表和既有会话内容，现有错误提示区显示只读恢复说明；原生启动后的bootstrap确认`recoveryReadOnly=true`。没有执行资源命令或模型请求，也未操作正式版。
 
 本节补齐的是日常Home的查看可用性；逐资源核实、受控迁移续跑与执行开闸仍待后续实施。PR #130保持草稿，不据此宣布整个第一阶段或Lake Security已完成。
+
+## 单库初始迁移续跑与日常功能恢复
+
+修复代码/最终Dev安装：`e86daf3699bbffe5c1b4c032bb8956248b3ef09c`，build-origin为dirty=false。上一版只恢复查看，未恢复用户要求的日常使用，已通过本补丁纠正。历史unknown要求保留和核实，不应使无关的新任务永久失去执行能力；原执行层已有稳定调用ID及未决调用的tool/args_hash/target精确防重保护。
+
+新增仅供可信离线host使用的命令：
+
+```sh
+lake security resume-initial-migration --home PATH
+```
+
+命令要求先停该Home后端，继续持有Home/DataDir owner锁；仅接受同身份、gate关闭、storeReady=false、无RecoveryID、具有匹配pending的单一规范库。双库、错误身份/reader/清单/快照、缺防重字段或仍可自动推进的旧WorkGoal拒绝恢复。该命令没有Web或模型工具入口，不是任意修改gate的接口，也不适用于完成初始化后的通用恢复。
+
+在gate保持关闭期间，命令保存当前一致快照、原control及原清单，校验摘要和完整性，调用公共SDK迁移器绑定同一storeID/epoch，持久化带`preserve_unresolved_no_replay`策略的单库清单。原pending原子移入恢复档案，所有阶段落盘完成后才将storeReady置为true并打开正常运行入口。`record.json`使prepared、store_ready、inventory和marker_archived阶段中断后可重试；未知操作不被标为成功/失败或重新派发。审批、账本与原任务数据不因迁移被清空。
+
+验收：
+
+- 新增四阶段故障注入/重试、第二owner/双库/活动任务/错误marker/损坏清单与快照拒绝；同一个旧unknown以新call ID重生仍拒绝，不同的新操作可通过既有权限与防重流程。CLI验证显式Home必填及security status兼容。
+- 完整Go回归通过：AI 50.017秒、Web 225.293秒、cmd/lake 1.974秒；最终CLI变更另跑专项通过。Security及选定unknown/replay专项race通过（AI 12.206秒、Web 2.273秒），vet、ADK边界、diff检查通过。
+- 真实Dev执行离线命令成功。与先前一致备份逐行摘要对照：native_operations、native_evidences、native_approvals、native_work_goals原行完全相同；93条unknown保留。Web库在迁移前后SHA256相同，SDK库新增storeID/epoch绑定元数据；原pending在恢复档案中保留。
+- 正常签名构建安装并重开Lake Dev成功。bootstrap返回recoveryReadOnly=false、modelConfigured=true；现有模型连接测试ok=true，没有调用资源工具。原生窗口显示原项目/会话/资源和可用输入区，只读阻断提示已消失。
+
+普通工作继续按现有权限运行；未决历史仍可核实且不能精确重复派发。完整任务级授权、孤儿租约治理、通用恢复、双库逐资源合并及SOP UI仍未交付；PR #130保持草稿，未授权合并，也没有生产安装或发布。
