@@ -10,7 +10,6 @@
 .lake-workbench-island > .workspace-header-glass { z-index:-1; }
 .lake-workbench-island > :not(.workspace-header-glass,.workspace-header-sweep) { position:relative; z-index:2; min-width:0; }
 .lake-workbench-island [hidden] { display:none!important; }
-.island-inspector-content { width:100%; }
 .lake-workbench-island .workspace-header { justify-content:flex-start; position:relative; display:flex; align-items:center; gap:10px; min-width:0; min-height:44px; height:44px; width:100%; padding:5px 14px; border:0; border-radius:0; background:transparent; box-shadow:none; }
 .lake-workbench-island .workspace-header > .workspace-header-glass { display:none; }
 .lake-workbench-island .workspace-header > :not(.workspace-header-sweep) { position:relative; z-index:2; }
@@ -32,26 +31,17 @@
 .lake-workbench-island .workspace-header.has-pilot-island .breadcrumbs { flex:1 1 auto; }
 .lake-workbench-island .workspace-header.has-pilot-island .header-state-area { flex:0 1 var(--pilot-state-width); }
 .lake-workbench-island .pilot-island-action { width:150px; }
-.island-inspector-heading { display:flex; align-items:center; gap:12px; height:44px; width:max-content; padding:0 12px; min-width:0; }
-.island-inspector-heading > strong { display:flex; align-items:center; gap:9px; flex:0 0 auto; min-width:0; font-size:var(--font-size-ui); font-weight:var(--font-weight-medium); white-space:nowrap; }
-.island-inspector-heading > svg { flex:none; color:var(--foreground); }
-.lake-workbench-island .session-inspector-tabs { border:0; padding:0; gap:18px; }
-.lake-workbench-island .session-inspector-tabs button { min-height:34px; padding:8px 0; white-space:nowrap; }
-.lake-workbench-island .session-inspector-tabs button[aria-selected=true]::after { bottom:1px; height:2px; background:var(--info); }
 .island-terminal .terminal-panel-header { width:100%; max-width:100%; min-width:0; min-height:44px; height:44px; border:0; background:transparent; padding:0 14px 0 18px; gap:12px; }
 .island-terminal .terminal-panel-header > strong { flex:0 1 auto; max-width:170px; display:flex; align-items:center; gap:9px; font-weight:var(--font-weight-medium); }
 .island-terminal .terminal-panel-header > strong > svg { flex:none; }
 .terminal-island-switcher .terminal-island-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .island-terminal .terminal-tab-dot { width:5px; height:5px; flex:none; }
-.app-shell.has-workbench-island .session-inspector { padding-top:72px; }
 .app-shell.has-workbench-island .workspace.has-floating-header > .system-banner { margin-top:80px; }
 html.lake-windows-chrome .lake-workbench-island { top:52px; }
-html.lake-windows-chrome .app-shell.has-workbench-island .session-inspector { padding-top:112px; }
 html.lake-windows-chrome .app-shell.has-workbench-island .timeline-list { padding-top:120px; }
 
 @container(max-width:480px) { .lake-workbench-island .pilot-island-action-line > strong { display:inline; } }
 
-.lake-workbench-island .session-inspector-tabs button:disabled { color:var(--text-muted); opacity:.45; }
 
 .lake-workbench-island .pilot-action-avatar { display:flex; }
 .lake-workbench-island .pilot-island-action-line > strong { display:inline; }
@@ -108,7 +98,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island { --pane-rail-top:124px
 @media(prefers-reduced-motion:reduce) { .app-shell.has-workbench-island :is(.workbench-splitter-inspector,.workbench-splitter-terminal)::after { transition:none; } }
 
 /* A compact pane keeps its own controls and menu inside its island. */
-.island-inspector,.island-terminal { container-type:inline-size; }
+.island-terminal { container-type:inline-size; }
 @container(max-width:180px) {
  .island-terminal .terminal-panel-header { width:100%; padding:0 8px; gap:6px; }
  .island-terminal .terminal-island-switcher { flex:1; gap:4px; }
@@ -157,3 +147,6 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xter
 @container(max-width:380px) {
  .lake-workbench-island .pilot-island-action-line > strong { display:none; }
 }
+
+/* The inspector card supplies its own edge; retain an invisible resize hit rail. */
+.app-shell.has-workbench-island .workbench-splitter-inspector::after { opacity:0; }
