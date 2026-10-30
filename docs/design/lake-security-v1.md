@@ -1,8 +1,10 @@
-# Lake Security v1 详细设计 · 修订 2
+# Lake Security v1 详细设计 · 修订 3
 
-状态：提案，尚未实现。修订日期：2026-10-30。代码基线：`9d1c4c65f8419ae2cf306b19fd16318fdc04a771`（`origin/develop`）。本文修订号为 2，产品范围仍是 Lake Security v1；保留文件名以维持已有链接。实施拆分见[实施计划](../../plan/feature-lake-security-1.md)。本文的接口、表和新文件均为拟议设计；标为“现有”的内容来自该提交的源码。
+状态：提案，尚未实现。修订日期：2026-10-30。代码分析基线：`9d1c4c65f8419ae2cf306b19fd16318fdc04a771`。本文修订号为 3，产品范围仍是 Lake Security v1；保留文件名以维持已有链接。实施拆分见[实施计划](../../plan/feature-lake-security-1.md)。本文的接口、表和新文件均为拟议设计；标为“现有”的内容来自该提交的源码。
 
 本次重设计解决四项评审问题：新增可跨明确续接轮次的 SecurityTask；按来源迁移旧目录状态并提供边界修改闭环；统一项目允许、任务授权、单次审批的判定规则；恢复备份时切换安全 epoch，使旧授权不能复活。另明确 Web/stdio 的统一存储位置，以及定时配置版本和运行状态版本的区别。
+
+修订 3 将“任务一次授权、范围内自动执行、范围外再确认”设为主要交互。TaskGrant 从纯读取扩展到可机械校验的命令模板及明确维护动作；不透明自由 Shell 仍不获得按任务通配授权。新项目可在任务授权卡中明确包含本机的受控命令，无须先进入设置开启全部本机执行；已有显式 deny 继续生效。
 
 ## 1. 目标与范围
 
@@ -87,7 +89,7 @@ TaskManager 管生命周期，TargetResolver 管意图，PolicyEvaluator 管授�
 
 `ExecutionBoundary` 独立保存 `resourceIDs`、本机执行限制、角色上限、来源、revision。来源包括项目配置、用户明确限定、父任务约束和迁移遗留约束。模型只能读取投影。新建的普通目录导航不创建它。
 
-边界增加 `ownerKind=project|session|task|parent`、`provenance=explicit_restriction|legacy_unclassified` 和原始动作证据 ID。只有用户拥有的 session/task 边界可通过边界接口调整；项目/父任务边界不能从下级修改。存量导航证据不成为永久 deny，未知来源在一次迁移确认前暂停该会话执行，见第 13 节。
+边界增加 `ownerKind=project|session|task|parent`、`provenance=explicit_restriction|legacy_unclassified|task_envelope` 和原始动作证据 ID。只有用户拥有的 session/task 边界可通过边界接口调整；项目/父任务边界不能从下级修改。存量导航证据不成为永久 deny，未知来源在一次迁移确认前暂停该会话执行，见第 13 节。
 
 ### 4.2 解析顺序与恢复
 
@@ -159,13 +161,14 @@ stateDiagram-v2
 
 `ProjectPolicy` 包含 `schemaVersion=1`、`projectID`、`revision`、`mode`、资源上限、能力规则、任务授权上限和确认偏好默认值。v1 使用 Go 类型与固定规则，不开放脚本表达式。
 
-能力规则的效果为 `allow`、`ask`、`deny`；`ask` 另有 `grantable` 和 `confirmation=single|task`。默认 deny 优先：任一适用硬限制拒绝即拒绝；能力未知也拒绝。规则冲突时依次采用显式 deny、最窄资源匹配、该能力规则、项目默认；同优先级取更严格结果。没有匹配项为 deny。项目资源上限和子任务角色边界不能被临时授权或单次审批覆盖。
+能力规则的效果为 `allow`、`ask`、`deny`；`ask` 另有 `grantable` 和 `confirmation=single|task|either`。受控命令默认either，允许任务授权或单次批准；单次专属操作不能被任务grant覆盖。默认 deny 优先：任一适用硬限制拒绝即拒绝；能力未知也拒绝。规则冲突时依次采用显式 deny、最窄资源匹配、该能力规则、项目默认；同优先级取更严格结果。没有匹配项为 deny。项目资源上限和子任务角色边界不能被临时授权或单次审批覆盖。
 
 每项能力统一按下面规则判断，主任务和子任务使用同一个函数：
 
 ```text
 HardOK = 恢复闸门开放 ∧ epoch相同 ∧ 任务active且未过期 ∧ 未取消
-         ∧ 项目资源上限 ∧ 当前执行边界 ∧ 父链限制 ∧ 角色上限
+         ∧ 项目资源上限 ∧ 显式执行硬边界 ∧ 父链限制 ∧ 角色上限
+         ∧ (本任务确认范围内 OR 用户批准的精确单次任务范围例外)
 AuthorityOK(capability) = 当前规则allow
                          OR (当前规则是可授权ask AND 有匹配的有效TaskGrant)
                          OR (当前规则ask允许单次确认 AND 有匹配的有效单次审批)
@@ -174,7 +177,7 @@ Allow(operation) = HardOK AND 每项能力的AuthorityOK
 
 任何匹配 deny 先行拒绝；单次审批不可拿来满足只允许更窄方式的规则。没有 TaskGrant 不等于空权限：项目已 allow 的读取，父子任务都可按边界执行。项目从 allow 变 ask 后，旧的 allow 决策不再是授权来源；必须取得当前规则允许的 grant/审批。每项能力在决策中记载实际 authority source，复核时重新检查，不只验证一个旧摘要。
 
-新建项目采用 `restricted` 配置：项目内资源元数据可读；具体资源的受支持结构化只读能力在目标确定、硬边界允许时可读；文件写、SQL 写、终端执行/创建/接管、MCP 操作为 ask；明确危险且可预览的操作仅支持单次审批；本机执行默认 deny，可由用户在项目设置明确修改。任意 Shell 和不透明 MCP 在 restricted 模式下为 deny，不能用审批按钮覆盖。
+新建项目采用 `restricted` 配置：项目内资源元数据可读；受支持结构化只读能力在目标确定、硬边界允许时可读。受控命令、具体服务重启动作为可任务授权的 ask；本机受控执行同样为 ask，授权卡必须明确显示“本机”、机器资源 ID 和能力范围。文件写、SQL 写及任意交互终端输入不接受任务通配授权；明确危险且可预览的操作仅支持单次审批。任意自由 Shell 和不透明 MCP 在 restricted 模式下为 deny。用户显式设置的本机/资源 deny 仍是硬限制，不能用任务授权覆盖。
 
 需要任意命令的用户可以显式启用 `compatible` 模式，确认其授权单位是选定执行域中的 Shell/MCP 调用，系统无法证明所有二次访问和副作用。此时不透明操作为单次 ask，不能获得任务级通配授权。模式切换增加策略 revision，并失效待审批操作。迁移的旧项目使用 `legacy` 适配，保留旧有效行为和硬限制；不直接套用新项目默认值。
 
@@ -188,6 +191,7 @@ Allow(operation) = HardOK AND 每项能力的AuthorityOK
 | 文件 | `file.read`、`file.write`、`file.delete` | 规范化路径、根目录、符号链接、写入前内容 hash |
 | 数据库/集群 | `db.read`、`db.write`、`cluster.read`、`cluster.logs` | 实际连接、库/schema、语句分类、行数/日志范围 |
 | 终端 | `terminal.open`、`terminal.adopt`、`terminal.execute`、`terminal.input`、`terminal.interrupt`、`terminal.close` | 资源、所有者、generation、上下文版本；打开不授权后续命令 |
+| 受控命令 | `command.diagnostics`、`service.restart`、`local.execute` | 受信模板及版本、真实 executable/argv、参数约束、资源/服务集合、调用预算；本机额外满足local.execute |
 | 外部访问 | `network.fetch`、`mcp.discover`、`mcp.call` | 目标域、重定向、server/tool/config revision；防止静默本机/内网回退 |
 | 应用内部 | `memory.read`、`memory.write`、`workflow.manage`、`schedule.manage`、`task.control`、`artifact.read` | 项目、会话、数据所有者与控制动作，不能因无资产参数而跳过 |
 
@@ -211,11 +215,35 @@ v1 的约束使用固定结构，不接受模型填写的表达式或路径通�
 
 `TaskGrant` 拟包含：服务端生成的 `id/taskID/projectID/sessionID`、`rootAuthorityID/recoveryEpoch`、purpose、精确资源 ID 与连接 revision、能力集合、类型化约束、签发人、来源动作 ID、签发/到期/撤销时间、revision。taskID 必须指向已存在的 SecurityTask，purpose 仅作解释，不作为字符串匹配安全条件。
 
-v1 任务授权仅支持可证明的结构化读取能力，不包含文件写、SQL 写、任意 Shell、终端输入或 opaque MCP。诊断预设为有效任务内 30 分钟；UI 可选择 30 分钟或 4 小时，项目上限默认 4 小时。任务结束、取消、父授权失效或时间到期立即停止新派发；续期必须再次显式授权。项目直接 allow 的读取不需要创建任务授权。
+v1 任务授权支持结构化读取、受信命令模板和精确服务集合的重启动作。文件写、SQL 写、自由 Shell、任意终端输入及 opaque MCP 仍不接受任务通配授权。诊断预设为有效任务内 30 分钟；UI 可选择 30 分钟或 4 小时，项目上限默认 4 小时。任务结束、取消、父授权失效或时间到期立即停止新派发；续期必须再次显式授权。项目直接 allow 的读取不需要创建任务授权。
 
 子任务先按第 5.1 节满足能力规则，再收窄到父任务当前边界与角色能力；TaskGrant 是可选授权来源，不是必须存在的交集项。子任务不得自行续期或扩大授权。父任务拥有的 grant 只能在显式关联的子 scope 中使用，资源/能力/TTL 均不变；单次审批仍绑定该具体子调用。后台续跑、压缩、普通重启不能刷新到期时间。
 
 每个后台 workflow run 拥有独立 SecurityTask；定时授权绑定 scheduleID、configRevision、冻结 workflow version、精确资源/能力、expiry、remainingRuns、recoveryEpoch。创建/修改定时时必须由用户显式设置到期与允许次数。每次触发在一笔事务中扣减次数并创建 occurrence、SecurityTask 和对应读取 grant，其到期为 `min(scheduleExpiry, taskExpiry, now+4h)`。无有效授权则标记 `authorization_required`，不自动同意。v1 定时 grant 也只允许结构化读取；写操作不能通过项目 allow 反向扩大本次定时运行的显式能力上限。
+
+### 5.4 任务命令授权与超范围确认
+
+一次任务授权卡展示：目标资源/连接身份、是否包含本机、命令模板及参数范围、读取路径或服务集合、禁止项、次数/时长预算、到期时间。用户批准后签发 TaskGrant，并建立来源为该真实用户动作的任务执行范围；权限由程序逐调用匹配，模型提供的“本次仍属排障”说明不参与授权判定。
+
+卡片一次列出模板执行所需的全部可授权能力，包括限定资源的建连能力，避免命令已获批却反复申请同一连接。跨会话接管人类终端仍单独确认。决策先检查项目/父/显式硬限制，再检查task_envelope：仅本任务范围越界且允许申请时进入范围确认；不能先按普通hard deny终止所有范围外请求，也不能为等待确认的请求先执行部分命令。
+
+| 项目 | v1 规则 |
+| --- | --- |
+| 范围表示 | `resourceIDs + capabilities + commandProfiles(profileID, version, typedArgs) + serviceIDs + maxUses + expiry`；不接受命令字符串前缀、任意正则或“所有排障命令” |
+| 诊断预设 | 固定读取模板，如磁盘使用量、进程快照、指定服务状态、限定日志范围；命令累计默认50次、每次30秒、任务授权默认30分钟，预算在主/子任务间共享 |
+| 维护预设 | 用户明确选择的服务重启，精确服务ID/实例/资源绑定，默认累计1次；不能从“读取服务状态”推导出重启权 |
+| 命令执行 | 新增 `internal/security/command_profiles.go` 定义封闭模板；`internal/ai/command_dispatch.go` 把模板与类型化参数编译成冻结的 executable/argv/工作目录/安全环境后执行。不得校验模板后再执行模型原始Shell文本 |
+| Shell输入 | 只有可无歧义转换为受信模板的输入才进入自动路径；管道、重定向、命令替换、动态脚本、未知子命令、提权和交互输入不能靠前缀匹配获批。适配器无法保证模板语义则降为opaque |
+| 次数消费 | 与nativeOperation派发登记同事务扣减；并发主/子调用共享额度。登记后unknown不返还额度，确认not_executed才可事务性返还一次 |
+| 范围内 | scope、当前策略、grant、模板版本、预算、任务状态均有效即自动派发，不重复弹命令审批 |
+| 范围外 | 返回 `TASK_SCOPE_EXTENSION_REQUIRED`，展示目标/动作/参数/预算差异；可“仅批准这一次”或“扩展本任务范围”。等待期间不执行、不扩范围 |
+| 不可确认项 | 项目/父边界明确deny、角色禁令、restricted下opaque仍拒绝，展示设置原因；不把所有拒绝变成“仍然执行”按钮 |
+
+“超范围再确认”也适用于项目已allow的能力：用户已确认的本任务范围是执行限制，不能用另一条项目allow绕过它。新建任务未指定限制时仍按项目策略判定。任务范围调整与授权来源分别存储，扩展动作以CAS同时修改用户任务边界并签发新grant/revision；不得修改父/项目硬边界。单次批准使用一个绑定确切操作的任务范围例外，只覆盖本次task_envelope，不覆盖其他显式执行限制，仍受全部父/项目限制；不修改后续调用的范围。
+
+扩展授权必须明确展示新增资源/模板/服务及预算，默认继承原到期时间和未消费预算；只有用户明确确认增加次数/延长时间才可更改。旧版本未消费审批/已准备描述失效；并发调用在派发事务读取最新版本。自由Shell在compatible模式下若无法证明其实际效果属于该任务范围，不能直接自动执行；单次卡片必须明确其可观察执行域和未知影响。单次批准不生成永久命令规则。
+
+示例：用户一次允许“在服务器A读取磁盘、进程、nginx状态和最近15分钟日志，30分钟内最多50次”。这些调用自动执行；重启nginx、访问服务器B、扩大日志路径或执行未知脚本时才再次请求授权。批准一次重启后，其他重启仍不被自动授权；若明确扩展为“本任务nginx可重启1次”，仅该预算内自动执行。
 
 ## 6. 可信操作描述和接口
 
@@ -404,7 +432,7 @@ MCP v1 只有受信配置中明确声明、经用户确认的 `serverID/toolName
 | `POST /api/security-tasks/:id/actions` | continue/pause/cancel/complete；恢复暂停采用 continue | task revision、当前会话、epoch、允许的状态转换；终态不可继续 |
 | `PUT /api/security-boundaries/:id` | 显式修改用户拥有的边界 | ownerKind、归属、expectedRevision、差异确认；下级不能修改项目/父边界 |
 | `POST /api/sessions/:id/security-migration/resolve` | 一次确认旧范围为导航或明确限制 | migration revision、target IDs、boundaryDecision、用户确认和同事务审计 |
-| `POST /api/sessions/:id/task-grants` | 用户确认任务读取授权 | taskID、资源版本、能力/时长上限、幂等 actionID |
+| `POST /api/sessions/:id/task-grants` | 用户一次确认读取/受控命令任务范围，或明确扩展 | taskID、资源/模板版本、参数范围、预算/TTL、expectedGrantRevision、用户差异确认、幂等actionID；与任务范围更新同事务 |
 | `POST /api/task-grants/:id/revoke` | 撤销任务授权 | 所属项目/会话、expectedRevision、幂等 |
 | `GET /api/sessions/:id/security-events` | 分页查看安全决定与变更 | 所属会话；cursor，默认 50、上限 200 |
 
@@ -414,7 +442,7 @@ MCP v1 只有受信配置中明确声明、经用户确认的 `serverID/toolName
 
 前端 `contracts.ts` 增加 `SecurityView`、`TargetResolutionView`、`TaskGrantView`、`SecurityDecisionView`。会话 snapshot/SSE 推送安全 revision；旧客户端的通用 aiOptions 更新不得覆盖新的策略或重建已撤销授权，不支持的安全变更返回明确版本错误。
 
-界面按状态归属呈现：项目设置显示默认规则；输入区资源 chip 显示当前目标；任务条显示 idle/paused 等真实状态及“继续当前任务 / 新任务 / 结束”；任务授权卡显示资源、读取能力、剩余时长与撤销；单次审批卡显示确切动作与预览。旧范围确认页同时显示“选择目标”和“保留/调整操作限制”，提交前展示差异；不能仅换一张目标 chip 就暗改边界。恢复管理页展示策略待确认、旧授权已失效和未决操作，不提供自动恢复执行按钮。后台收到 revoke 即生效。复用 `AppSelect`、`Glyph` 和共享圆角 token，并按 [UI 规范](../ui-guidelines.md) 验证浅色、深色、窄窗口和键盘。
+界面按状态归属呈现：项目设置显示默认规则；输入区资源 chip 显示当前目标；任务条显示 idle/paused 等真实状态及“继续当前任务 / 新任务 / 结束”；任务授权卡显示资源、本机标识、命令模板/参数范围、剩余次数和时长、撤销；超范围卡显示差异并区分“仅这一次”和“扩展本任务”，不能默认选扩大范围。单次审批卡显示确切动作与预览。旧范围确认页同时显示“选择目标”和“保留/调整操作限制”，提交前展示差异；不能仅换一张目标 chip 就暗改边界。恢复管理页展示策略待确认、旧授权已失效和未决操作，不提供自动恢复执行按钮。后台收到 revoke 即生效。复用 `AppSelect`、`Glyph` 和共享圆角 token，并按 [UI 规范](../ui-guidelines.md) 验证浅色、深色、窄窗口和键盘。
 
 ## 13. 迁移、启用与回退
 
@@ -464,6 +492,10 @@ flowchart LR
 | --- | --- |
 | 旧空目录后明确选择资源 B | 来源已知导航直接恢复；未知来源通过一次迁移确认恢复；真实硬边界通过有权限的边界修改动作处理 |
 | 授权诊断后“继续” | 精确继续命令/入口、taskID、revision均有效时沿用任务和授权；不追加权限、不续期 |
+| 一次任务授权后执行不同合规命令 | 相同资源、模板/参数范围、TTL与预算内自动执行，不重复审批 |
+| 命令超范围或次数用尽 | 零派发并展示差异；单次批准不扩大后续范围，明确扩展才更新grant/任务范围 |
+| 参数夹带管道/命令替换、别名或未知脚本 | 不靠命令前缀放行；只能执行受信模板编译产物，否则拒绝/单次处理 |
+| 多子任务同时消耗最后一次维护额度 | 最多一项登记派发成功；unknown不退还预算 |
 | 同会话同目标但普通新问题 | 创建新SecurityTask，旧任务grant无效；项目allow仍可读取，ask必须新授权 |
 | 无grant的项目allow父任务派生子任务 | 同资源、角色允许的读取成功；改为ask后必须取得合法授权 |
 | idle/paused/waiting/终态任务 | 只有合法状态转换后active能派发；终态不复活；并发继续最多一次 |
