@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,14 @@ import (
 )
 
 func TestSecurityRecoveryRestoresProjectsWithoutWorkersOrWrites(t *testing.T) {
+	for _, legacy := range []bool{false, true} {
+		t.Run(fmt.Sprintf("legacy_schema=%v", legacy), func(t *testing.T) {
+			testSecurityRecoveryRestoresProjects(t, legacy)
+		})
+	}
+}
+
+func testSecurityRecoveryRestoresProjects(t *testing.T, legacy bool) {
 	b, httpServer := fixture(t)
 	id, resource := newSession(t, httpServer)
 	home, root := b.options.Home, b.securityRuntime.RuntimeRoot
@@ -32,6 +41,36 @@ func TestSecurityRecoveryRestoresProjectsWithoutWorkersOrWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.Close()
+	if legacy {
+		// An upgrade can close the security gate before OpenStore has installed
+		// natural memory. Recovery must read that older schema without migrating it.
+		db, err := sql.Open("sqlite", filepath.Join(b.options.DataDir, "lake-web.sqlite"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name GLOB 'natural*'")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var tables []string
+		for rows.Next() {
+			var name string
+			if err = rows.Scan(&name); err != nil {
+				t.Fatal(err)
+			}
+			tables = append(tables, name)
+		}
+		if err = rows.Err(); err != nil {
+			t.Fatal(err)
+		}
+		rows.Close()
+		for _, name := range tables {
+			if _, err = db.Exec(`DROP TABLE "` + name + `"`); err != nil {
+				t.Fatal(err)
+			}
+		}
+		db.Close()
+	}
 	ledgerPath := filepath.Join(root, "sessions.sqlite")
 	db, err := sql.Open("sqlite", ledgerPath)
 	if err != nil {

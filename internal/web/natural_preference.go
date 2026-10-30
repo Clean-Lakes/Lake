@@ -325,6 +325,13 @@ func (s *Store) naturalEraseSession(session string) {
 	s.exec("UPDATE projectMemoryJobs SET status='skipped',leaseToken='',lastErrorCode='source_deleted',updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE sessionId=?)", now(), session)
 }
 func (s *Store) naturalSessionNotices(session string) []Object {
+	// Recovery opens the persisted Web store without migrations. Homes from
+	// before natural preferences have no notices yet; do not query their absent
+	// tables or install a schema just to render historical conversations. Keep
+	// errors visible when the feature is present but its schema is incomplete.
+	if s.readOnly && s.row("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('naturalPreferenceMeta','naturalPreferenceChanges') LIMIT 1") == nil {
+		return []Object{}
+	}
 	changes := s.rows("SELECT id,scopeKey,entryId,afterRevision,kind,undoneBy FROM naturalPreferenceChanges WHERE sessionId=? AND kind IN ('save','replace') AND id NOT IN (SELECT changeId FROM naturalPreferenceNoticeAcks) ORDER BY rowid DESC LIMIT 20", session)
 	result := []Object{}
 	for _, c := range changes {
