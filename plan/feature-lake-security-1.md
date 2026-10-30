@@ -1,18 +1,18 @@
 ---
 goal: 按五模块职责落实任务闭环、安全控制、资源操作及档案验收，SOP只读手册独立交付
-version: 5
+version: 6
 date_created: 2026-10-30
 last_updated: 2026-10-30
 owner: Lake
-status: Planned
+status: In progress
 tags: [feature, architecture, security, authorization, migration, adk]
 ---
 
 # Introduction
 
-![Status: Planned](https://img.shields.io/badge/status-Planned-blue)
+![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
 
-本计划对应 [Lake Security v1 详细设计（修订 5）](../docs/design/lake-security-v1.md)，代码基线为 `be656805d345466f11bbb9c2c4af92e670da7420`。保持文件名以延续原 PR 和文档链接；frontmatter 的 version 表示计划修订号。全部功能任务尚未开始，文档完成不表示模块已经实现。
+本计划对应 [Lake Security v1 详细设计（修订 5）](../docs/design/lake-security-v1.md)，代码基线为 `be656805d345466f11bbb9c2c4af92e670da7420`。保持文件名以延续原 PR 和文档链接；frontmatter 的 version 表示计划修订号。TASK-001、TASK-002已交付第一批实现，TASK-003至TASK-005进行中，其余未开始；总体仍在第一阶段，尚未达到阶段退出条件。实际行为和验证记录见[功能草稿PR #130](https://github.com/Clean-Lakes/Lake/pull/130)，完整方案尚未实现。
 
 本Security计划仅后端改造，不修改前端组件/样式/交互及shared契约。用户另行提出的SOP清单UI由[独立设计](../docs/design/builtin-sop-catalog-v1.md)与[独立计划](feature-builtin-sop-catalog-1.md)交付，不捆绑本计划实施。修订4先建立权威存储、恢复门禁及WorkGoal/步骤/尝试/证据/验收闭环，SecurityTask仅管理关联目标的限时执行；孤儿风险必须核实后才能收口，再实现策略与派发。旧范围按来源迁移；项目直接允许与临时授权是不同授权来源；恢复备份会使旧授权失效并要求重新确认策略。保留目标解析、安全决策、执行保护三层，以及现有 ADK 原生审批、操作账本和 continuation。
 
@@ -64,9 +64,9 @@ tags: [feature, architecture, security, authorization, migration, adk]
 | 资源操作 | TASK-001、TASK-031、TASK-032、TASK-033、TASK-036、TASK-037 | 入口清单、实际适配器、受控命令/MCP/终端/定时；子任务与workflow配合任务中心接入 | 清单内agent I/O无旁路，冻结目标执行，实际结果与handle可查询/取消 |
 | 任务档案与验收 | TASK-002、TASK-004、TASK-005、TASK-008、TASK-009、TASK-010、TASK-018、TASK-024、TASK-039、TASK-042、TASK-046、TASK-048、TASK-049、TASK-050 | 规范存储、尝试/证据/验收/风险持久化、现有协议投影；汇总四块后端联调与真实Dev证据 | 同goal证据可追溯，失败保留，必需条件和副作用闭环才完成；状态与结论一致 |
 
-五模块是职责视图，以下八阶段是实施顺序，不能机械改成五阶段串行：先做规范存储/恢复门禁，再做目标与验收基础，随后安全策略、派发、全入口适配、协议兼容、恢复演练及Dev收口。保留50项原任务的ID、依赖、退出条件和未开始状态。
+五模块是职责视图，以下八阶段是实施顺序，不能机械改成五阶段串行：先做规范存储/恢复门禁，再做目标与验收基础，随后安全策略、派发、全入口适配、协议兼容、恢复演练及Dev收口。保留50项原任务的ID、依赖与退出条件；完成状态按实际实施和验证更新。
 
-“否 / 未开始”表示当前实际状态。每阶段依赖前一阶段退出条件；阶段内部按表中依赖执行，无直接依赖的任务可独立准备。所有标记“新增”的路径和函数均为拟实现，不表示已存在。基础阶段只建立存储和门禁，功能仍处于 legacy/shadow；enforced 必须等全部入口覆盖和迁移验证完成。
+“是 / 日期”表示已交付；“否 / 进行中”表示部分实施但未满足原任务全部要求；“否 / 未开始”表示尚未实施。第一批在PR #130完成93工具清单与规范Home/owner接入；control/reader guard、旧库保全及专项验证已有实现，完整恢复协议、逐资源核实、故障矩阵与原生窗口验证仍有缺口。每阶段依赖前一阶段退出条件；阶段内部按表中依赖执行，无直接依赖的任务可独立准备。所有标记“新增”的路径和函数均为拟实现，不表示已存在。基础阶段只建立存储和门禁，功能仍处于 legacy/shadow；enforced 必须等全部入口覆盖和迁移验证完成。
 
 ### Implementation Phase 1
 
@@ -76,11 +76,11 @@ tags: [feature, architecture, security, authorization, migration, adk]
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-001 | 【资源操作】新增 `docs/security/tool-entrypoints.md`，逐项登记 `Engine.invoke` 全部早期/常规分支、`invokeSessionTool`、`Server.bridge`、`Server.terminalRoute`、`ai.Serve`、`executeSchedule` 和实际 I/O；记录身份来源、目标种类、权限/审批/账本路径，用运行时工具目录核对覆盖数量。依赖：无。 | 否 | 未开始 |
-| TASK-002 | 【任务档案与验收】新增 `internal/ai/security_home.go:ResolveSecurityHome/AcquireSecurityOwner`，使用 Home manifest 固定 storeID 与 Web DataDir 下 `adk` 的规范 runtime root；修改 `cmd/lake/main.go`、`internal/ai/stdio.go:Serve`、`internal/web/server.go:New` 和 `adk_evidence.go:runtimeDirectory` 使用同一身份。第二 owner 明确拒绝，不自动开第二库、不杀已有进程；独立 Home 显式隔离。依赖：TASK-001。 | 否 | 未开始 |
-| TASK-003 | 【安全控制】新增 `internal/security/schema.go` 与 `internal/ai/security_control.go:ReadControlState/RotateRecoveryEpoch`，维护 `<Home>/security/control.json` 的 storeID/随机epoch/gate，原子写入并同步落盘；checkpoint/manifest 绑定 storeID+epoch，普通备份排除此控制文件，跨设备导入使用新身份和关闭 gate。`adkStore`、Web/stdio 启动校验 schema、storeID、epoch 和中断标记，错误时只允许管理操作。依赖：TASK-002。 | 否 | 未开始 |
-| TASK-004 | 【任务档案与验收】新增 `internal/ai/security_store_migration.go:InventoryLegacyStores/MigrateLegacyStores`，先为原 Web `adk` 与 stdio `ai/adk` 制作一致备份；为 session/op/evidence 保留源库 namespace 和关联。同身份同 hash 可标记同源但保留原记录，冲突或未决内容进入只读历史/相关资源阻断，显式处理后才开 gate；禁止直接混并 SDK 内部表。生成迁移 manifest 并验证可重入。依赖：TASK-003。 | 否 | 未开始 |
-| TASK-005 | 【任务档案与验收】新增 `internal/ai/security_home_test.go`、`security_control_test.go`、`security_store_migration_test.go`：两个进程争用、不同 Home、两个旧库重复/冲突/unknown、迁移每个断点、未来 schema、丢失/损坏 control-state 均有确定结果；更新新增 `docs/validation/lake-security-v1.md` 记录兼容基础 SHA。依赖：TASK-004。 | 否 | 未开始 |
+| TASK-001 | 【资源操作】新增 `docs/security/tool-entrypoints.md`，逐项登记 `Engine.invoke` 全部早期/常规分支、`invokeSessionTool`、`Server.bridge`、`Server.terminalRoute`、`ai.Serve`、`executeSchedule` 和实际 I/O；记录身份来源、目标种类、权限/审批/账本路径，用运行时工具目录核对覆盖数量。依赖：无。 | 是 | 2026-10-30 |
+| TASK-002 | 【任务档案与验收】新增 `internal/ai/security_home.go:ResolveSecurityHome/AcquireSecurityOwner`，使用 Home manifest 固定 storeID 与 Web DataDir 下 `adk` 的规范 runtime root；修改 `cmd/lake/main.go`、`internal/ai/stdio.go:Serve`、`internal/web/server.go:New` 和 `adk_evidence.go:runtimeDirectory` 使用同一身份。第二 owner 明确拒绝，不自动开第二库、不杀已有进程；独立 Home 显式隔离。依赖：TASK-001。 | 是 | 2026-10-30 |
+| TASK-003 | 【安全控制】新增 `internal/security/schema.go` 与 `internal/ai/security_control.go:ReadControlState/RotateRecoveryEpoch`，维护 `<Home>/security/control.json` 的 storeID/随机epoch/gate，原子写入并同步落盘；checkpoint/manifest 绑定 storeID+epoch，普通备份排除此控制文件，跨设备导入使用新身份和关闭 gate。`adkStore`、Web/stdio 启动校验 schema、storeID、epoch 和中断标记，错误时只允许管理操作。进度：已实现control/storeID/epoch、最低reader与bootstrap/迁移中断拒绝；完整checkpoint/跨设备恢复协议及重新确认尚未完成。依赖：TASK-002。 | 否 | 进行中 |
+| TASK-004 | 【任务档案与验收】新增 `internal/ai/security_store_migration.go:InventoryLegacyStores/MigrateLegacyStores`，先为原 Web `adk` 与 stdio `ai/adk` 制作一致备份；为 session/op/evidence 保留源库 namespace 和关联。同身份同 hash 可标记同源但保留原记录，冲突或未决内容进入只读历史/相关资源阻断，显式处理后才开 gate；禁止直接混并 SDK 内部表。生成迁移 manifest 并验证可重入。进度：已实现一致快照、legacyStoreID/摘要清单和Home级保守阻断；逐资源风险索引、显式核实及安全开闸尚未完成。依赖：TASK-003。 | 否 | 进行中 |
+| TASK-005 | 【任务档案与验收】新增 `internal/ai/security_home_test.go`、`security_control_test.go`、`security_store_migration_test.go`：两个进程争用、不同 Home、两个旧库重复/冲突/unknown、迁移每个断点、未来 schema、丢失/损坏 control-state 均有确定结果；更新新增 `docs/validation/lake-security-v1.md` 记录兼容基础 SHA。进度：Go专项/完整回归、选定race/vet、93工具覆盖、签名Dev后端隔离验收已有证据；隔离原生启动/共享存储已验证；完整迁移故障矩阵、日常Home恢复及原生窗口交互补验未完成，来源/单实例/迁移保护均未绕过。依赖：TASK-004。 | 否 | 进行中 |
 
 ### Implementation Phase 2
 
