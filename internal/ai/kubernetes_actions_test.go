@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -133,5 +134,15 @@ func TestKubernetesActionScopeSchemaAndRoleIsolation(t *testing.T) {
 		if strings.Contains(js(childObservationTools(role, c.Assets)), "kubernetes_action") {
 			t.Fatal("read-only child received mutation")
 		}
+	}
+}
+
+func TestKubernetesInvalidSavedConnectionIsRecordedAsNotExecuted(t *testing.T) {
+	e := &Engine{}
+	c := Config{Assets: []Asset{{ID: "kube", Kind: "kubernetes", Settings: map[string]any{"endpoint": "invalid-endpoint"}}}}
+	_, err := e.kubernetesOperation(context.Background(), c, "kubernetes_action", map[string]any{"asset_ref": assetAlias("kube"), "action": "scale", "kind": "replicasets", "name": "uwb", "namespace": "prod"})
+	var notExecuted *ToolNotExecutedError
+	if !errors.As(err, &notExecuted) {
+		t.Fatal("known pre-dispatch failure became uncertain", err)
 	}
 }

@@ -60,27 +60,33 @@ func kubernetesActionTools() []Tool {
 }
 
 func (e *Engine) kubernetesOperation(ctx context.Context, c Config, name string, a map[string]any) (any, error) {
-	as, err := asset(c, str(a["asset_ref"]))
-	if err != nil {
+	failBeforeDispatch := func(err error) (any, error) {
+		if name == "kubernetes_action" {
+			return nil, &ToolNotExecutedError{Err: err}
+		}
 		return nil, err
 	}
+	as, err := asset(c, str(a["asset_ref"]))
+	if err != nil {
+		return failBeforeDispatch(err)
+	}
 	if as.Kind != "kubernetes" {
-		return nil, errors.New("请选择 Kubernetes 类型资源")
+		return failBeforeDispatch(errors.New("请选择 Kubernetes 类型资源"))
 	}
 	creds, err := credentials(as, c.CredentialDir)
 	if err != nil {
-		return nil, err
+		return failBeforeDispatch(err)
 	}
 	client, err := kube.New(as.Settings, creds)
 	if err != nil {
-		return nil, err
+		return failBeforeDispatch(err)
 	}
 	defer client.Close()
 	action := kube.Action{Action: str(a["action"]), Kind: str(a["kind"]), Namespace: str(a["namespace"]), Name: str(a["name"]), UID: str(a["uid"]), ResourceVersion: str(a["resource_version"])}
 	if raw, ok := a["replicas"]; ok {
 		var n int
 		if _, err := fmt.Sscan(fmt.Sprint(raw), &n); err != nil || fmt.Sprint(n) != fmt.Sprint(raw) {
-			return nil, errors.New("副本数必须是整数")
+			return failBeforeDispatch(errors.New("副本数必须是整数"))
 		}
 		action.Replicas = &n
 	}
