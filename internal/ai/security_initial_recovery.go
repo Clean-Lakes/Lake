@@ -98,6 +98,15 @@ func resumeInitialSecurityMigration(ctx context.Context, home string, checkpoint
 	markerPath := pending
 	if _, e := os.Lstat(pending); errors.Is(e, os.ErrNotExist) {
 		markerPath = archivedPending
+		if _, archivedErr := os.Lstat(archivedPending); errors.Is(archivedErr, os.ErrNotExist) && previous.State == "pending_review" {
+			// Earlier candidates removed the marker after a complete inventory even
+			// when review was pending. The validated, preserved inventory above is
+			// sufficient authority for this explicitly requested offline recovery.
+			if err = writeSecurityJSON(pending, map[string]string{"storeID": h.control.StoreID}); err != nil {
+				return err
+			}
+			markerPath = pending
+		}
 	}
 	if err = privateSecurityRead(markerPath, &marker); err != nil || marker.StoreID != h.control.StoreID {
 		return errors.New("security: no matching interrupted initial inventory")

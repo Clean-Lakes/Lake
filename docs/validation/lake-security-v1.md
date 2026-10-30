@@ -94,3 +94,13 @@ lake security resume-initial-migration --home PATH
 - 正常签名构建安装并重开Lake Dev成功。bootstrap返回recoveryReadOnly=false、modelConfigured=true；现有模型连接测试ok=true，没有调用资源工具。原生窗口显示原项目/会话/资源和可用输入区，只读阻断提示已消失。
 
 普通工作继续按现有权限运行；未决历史仍可核实且不能精确重复派发。完整任务级授权、孤儿租约治理、通用恢复、双库逐资源合并及SOP UI仍未交付；PR #130保持草稿，未授权合并，也没有生产安装或发布。
+
+
+## v0.3.23 独立发布评审修正
+
+独立评审重现普通单库升级（非崩溃中断）遇到unknown时，清单已写为pending_review但pending被提前移除，导致离线续跑拒绝。修复为仅ready后清理pending；pending_review保留管理入口。对于早期候选已缺marker的状态，仅在原清单已通过storeID/epoch、单规范库及快照摘要验证并保全后，可信离线命令建立管理marker；不为缺清单、错误身份、双库或已初始化恢复重新生成标记。
+
+测试helper改为断言真实迁移产生marker，移除人工补写。新增从正常迁移输出直接续跑、兼容旧markerless候选两个回归，核对unknown仍保留。Security专项race通过（AI 8.276秒、Web 2.499秒、cmd 2.852秒），vet与diff检查通过。发布候选待此修正合入后重新运行自动检查和独立复核；未操作日常Home或生产安装。
+
+
+发布CI首轮另发现：Linux测试使用的kernel.ostype精确查询缺只读登记；compaction重启测试未先释放旧Engine/SQLite连接；macOS完整web race包超过默认10分钟累计时限（超时时最后一例仅运行3秒）。本轮补精确只读键并保留赋值/-w拒绝，重启fixture先Shutdown旧owner，完整race时限20分钟、job30分钟且不移除任何测试。相关Security/compaction/sysctl专项race连续3轮通过（AI 27.415秒、Web 5.731秒）；签名后端隔离回归通过。最终生产CI须在修复合入后重新通过。

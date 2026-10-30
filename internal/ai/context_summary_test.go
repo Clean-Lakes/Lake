@@ -134,6 +134,8 @@ func TestSegmentedCompactionRecoversManualAndAutomaticConversations(t *testing.T
 			}
 			// Persisted compacted history, including the final handoff, can resume
 			// repeatedly without entering the same failed compaction loop.
+			// A restart releases the prior runtime and its SQLite connection first.
+			e.Shutdown()
 			loaded, err := New(e.Dir, nil, nil)
 			if err != nil {
 				t.Fatal(err)
