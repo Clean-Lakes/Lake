@@ -61,6 +61,7 @@ type Engine struct {
 	sessions                     map[string]*session
 	Dir                          string
 	RuntimeDir                   string
+	SecurityRuntime              *SecurityHome // Trusted host binding; shared by child engines.
 	Bridge                       Bridge
 	Emit                         func(Event)
 	ModelActivity                func() func() // Trusted host foreground priority; no provider/session mutation.

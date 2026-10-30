@@ -358,6 +358,11 @@ func (b *Server) executeSchedule(row toolSchedule) {
 				}
 			}
 		}()
+		if b.Engine != nil {
+			if err := b.Engine.CheckSecurityRuntime(); err != nil {
+				fail(409, "安全恢复门禁关闭；调度未派发")
+			}
+		}
 		if b.Store.Session(row.Session)["projectId"] != row.Project {
 			fail(403, "schedule project mismatch")
 		}

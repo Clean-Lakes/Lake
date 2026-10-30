@@ -26,7 +26,10 @@ type Store struct {
 	SQL      *sql.DB
 }
 
-func Open(path string) (*Store, error) {
+func Open(path string) (*Store, error) { return OpenChecked(path, nil) }
+
+// OpenChecked validates application identity before SDK migrations can write.
+func OpenChecked(path string, check func(*sql.DB) error) (*Store, error) {
 	dir := filepath.Dir(path)
 	if err := platform.MkdirAll(dir, 0700); err != nil {
 		return nil, err
@@ -50,6 +53,17 @@ func Open(path string) (*Store, error) {
 	raw, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
+	}
+	// A future schema must be rejected even by callers without a Home binding.
+	if err = checkReaderGuard(raw); err != nil {
+		raw.Close()
+		return nil, err
+	}
+	if check != nil {
+		if err = check(raw); err != nil {
+			raw.Close()
+			return nil, err
+		}
 	}
 	db, err := gorm.Open(sqlite.New(sqlite.Config{DriverName: "sqlite", Conn: raw}), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
@@ -131,4 +145,24 @@ func (s *Store) Backup(ctx context.Context, path string) error {
 		return closeErr
 	}
 	return platform.ReplaceFile(name, path)
+}
+
+// This reader guard runs before either SDK or application AutoMigrate.
+func checkReaderGuard(db *sql.DB) error {
+	var exists int
+	if err := db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='security_schema_meta'").Scan(&exists); err != nil {
+		return err
+	}
+	if exists == 0 {
+		return nil
+	}
+	var schema, reader int
+	var state string
+	if err := db.QueryRow("SELECT schema_version,minimum_reader_version,migration_state FROM security_schema_meta WHERE id=1").Scan(&schema, &reader, &state); err != nil {
+		return fmt.Errorf("invalid security reader guard: %w", err)
+	}
+	if schema != 1 || reader > 1 || reader < 1 || state != "ready" {
+		return fmt.Errorf("unsupported security store or incomplete migration")
+	}
+	return nil
 }
