@@ -4,9 +4,11 @@
 
 本次重设计解决四项评审问题：新增可跨明确续接轮次的 SecurityTask；按来源迁移旧目录状态并提供边界修改闭环；统一项目允许、任务授权、单次审批的判定规则；恢复备份时切换安全 epoch，使旧授权不能复活。另明确 Web/stdio 的统一存储位置，以及定时配置版本和运行状态版本的区别。
 
-修订 3 将“任务一次授权、范围内自动执行、范围外再确认”设为主要交互。TaskGrant 从纯读取扩展到可机械校验的命令模板及明确维护动作；不透明自由 Shell 仍不获得按任务通配授权。新项目可在任务授权卡中明确包含本机的受控命令，无须先进入设置开启全部本机执行；已有显式 deny 继续生效。
+修订 3 将“任务一次授权、范围内自动执行、范围外再确认”设为主要交互。TaskGrant 从纯读取扩展到可机械校验的命令模板及明确维护动作；不透明自由 Shell 仍不获得按任务通配授权。新项目可通过现有审批明确包含本机的受控命令，无须先进入设置开启全部本机执行；已有显式 deny 继续生效。
 
 修订4采用目标闭环：复用WorkGoal作为持久目标，WorkItem作为版本化步骤，关联多次执行尝试、原生operation/evidence和验收记录。SecurityTask改为目标下的限时执行上下文；轮次结束、换执行路径或授权过期都不能抹掉原目标及风险。新增孤儿执行治理：无有效归属禁止派发，失联操作追踪到停止或核实，不能由其他任务成功自动结清。
+
+**本期范围约束：仅改后端执行、授权、持久化、验收和兼容投影；不涉及UI改造。不得修改前端组件、页面、布局、样式、按钮、交互或shared/contracts.ts，不新增任务条/授权卡/恢复页/风险看板。复用现有消息、问题、审批、停止、执行记录和核实入口；需要的管理动作由后端API/CLI承载。**
 
 ## 1. 目标与范围
 
@@ -39,7 +41,7 @@ v1 包含目标状态、确定性决策、项目策略、任务临时授权、�
 | 会话与 MCP 工具 | [session_tools.go](../../internal/ai/session_tools.go) 的 `invokeSessionTool`；[extensions.go](../../internal/web/extensions.go) 的 `extensionBridge` 已校验配置版本 | 把提前分流入口也纳入同一能力注册表；MCP 绑定实际 server/tool/config revision |
 | 工作流/定时 | [tool_bridge.go](../../internal/web/tool_bridge.go)、[workflows.go](../../internal/web/workflows.go)、[schedules.go](../../internal/web/schedules.go) 已检查资源、工作流版本及继承权限 | 使用明确的运行身份和任务授权；定时运行不能复用聊天单次审批 |
 | 终端 | [terminal_access.go](../../internal/web/terminal_access.go) 校验会话、generation、permission version；[terminal.go](../../internal/web/terminal.go) 管理 execute/input/interrupt/close | 每个 agent 终端动作校验，不只校验首次打开；保留人类手动终端与借用语义 |
-| UI | [PermissionSettings.tsx](../../web-agent/web/src/PermissionSettings.tsx)、[contracts.ts](../../web-agent/shared/contracts.ts)、[approvalPresentation.ts](../../web-agent/web/src/approvalPresentation.ts) | 分开显示目标、任务授权、单次审批；安全原因由后端结构化提供 |
+| 现有前端兼容边界 | [PermissionSettings.tsx](../../web-agent/web/src/PermissionSettings.tsx)、[contracts.ts](../../web-agent/shared/contracts.ts)、[approvalPresentation.ts](../../web-agent/web/src/approvalPresentation.ts) | 仅作为现有协议/显示能力依据，不列入改动文件；后端输出兼容现有字段和交互 |
 
 现有代码不是“没有安全机制”。核心问题是多个状态承担了重叠职责、入口判断分散，以及目标解析失败被表现为权限错误。已有审批绑定、账本与终端 generation 是本设计的基础。
 
@@ -105,7 +107,7 @@ GoalCoordinator复用WorkGoal管理目标闭环，TaskManager管理限时执行�
 4. 目录选择产生候选集合。空目录给 `TARGET_EMPTY_DIRECTORY`；多个资源只在操作声明支持集合时使用，否则给 `TARGET_AMBIGUOUS`。
 5. 没有新的目标意图且没有未解决切换时，继承 `CurrentTarget`。任何继承都不扩大授权。
 
-明确切换到资源 B 后，即使旧目录 A 为空，目标解析也能返回 B；如果存在独立硬边界限制为 A，决策返回 `TARGET_OUTSIDE_BOUNDARY`，提供修改边界的真实设置入口，不能靠重新 `@B` 绕过。
+明确切换到资源 B 后，即使旧目录 A 为空，目标解析也能返回 B；如果存在独立硬边界限制为 A，决策返回 `TARGET_OUTSIDE_BOUNDARY`，通过现有提问/审批或管理API/CLI修改用户可管理边界，不能靠重新 `@B` 绕过。
 
 每个工具调用冻结自己的目标快照。流式生成中用户切换目标只影响后续操作；尚未派发的旧目标操作因目标 revision 不符而失效并重新准备。已登记派发的操作按第 9 节处理。目录改名不改变资源授权；目录增加成员不自动扩大已发出的任务授权。
 
@@ -132,7 +134,7 @@ goalRevision/stepRevision只在目标契约、约束或步骤定义改变时增�
 - Goal：`draft/running/waiting_user/paused/blocked/verifying/completed/cancelled`。只有验收通过才completed。一次attempt失败可让步骤blocked或准备重试，不自动终结目标。
 - Step：`pending/running/blocked/verifying/passed/waived/superseded`。当前计划必要步骤只能passed；移除或waive必要条件需要用户确认计划变更，不能由模型跳过。superseded只标记有版本关联的旧路线，不减少当前必需条件。
 - Attempt执行状态：`prepared/running/succeeded/failed/unknown/not_executed/cancelled`；另有 `closureState=open/covered/reconciled`。覆盖失败不改写原failed，不把unknown抹成失败。
-- SecurityTask：`active/idle/waiting/paused/completed/cancelled/expired`。completed只表示该执行上下文已关闭，UI不得翻译为“目标已完成”；关闭未达标目标使用取消/暂存动作，保留未交付状态。
+- SecurityTask：`active/idle/waiting/paused/completed/cancelled/expired`。completed只表示该执行上下文已关闭，后端不得将其投影为“目标已完成”；关闭未达标目标使用取消/暂存动作，保留未交付状态。
 
 ### 4.4 跨轮次推进与目标切换
 
@@ -161,7 +163,7 @@ goalRevision/stepRevision只在目标契约、约束或步骤定义改变时增�
 
 只有active且目标/步骤有效时可新派发；idle表示该轮已结束，waiting表示无可运行分支，paused表示暂停。完成目标、用户关闭上下文、取消或过期会终结上下文；用户主动结束未完成目标必须记录cancelled及未验收条件，而不是completed。普通重启暂停上下文，持久目标仍在；备份恢复按第13节轮换epoch。
 
-stateRevision用于UI/CAS；executionRevision在暂停、终结、取消、过期时递增，废止旧prepared/approval。正常active→waiting→active不增加executionRevision，不使审批自己失效。grant绑定taskID/goalID/epoch/自身revision与TTL，不绑定executionRevision。并行分支单独waiting不冻结其他可运行scope。
+stateRevision用于后端交互绑定/CAS；executionRevision在暂停、终结、取消、过期时递增，废止旧prepared/approval。正常active→waiting→active不增加executionRevision，不使审批自己失效。grant绑定taskID/goalID/epoch/自身revision与TTL，不绑定executionRevision。并行分支单独waiting不冻结其他可运行scope。
 
 RootTurn/scope关联另记active/waiting/closed：审批continuation保留原轮次；下一轮继续先关闭旧轮次未派发调用，但保留已派发operation的观察/清理通道。新轮次不能让旧call复活，旧回调只能回写对应operation/证据，不能启动新的副作用。真实目标/计划修改另增加goal/step版本，旧审批与待派发尝试重新校验。
 
@@ -178,9 +180,11 @@ AcceptanceRecord追加保存，包含 `scope=step|goal`、精确版本、逐条 
 
 验证器采用受信注册表及固定类型化比较方法，不执行模型提供的验收脚本。若验收需要新的远程查询，该查询仍登记goal/step/attempt并通过当前授权派发，再以取得的证据验收；不能从“校验”入口绕过资源权限或孤儿阻断。
 
-后端输出统一 `GoalClosureView(goalStatus,acceptanceState,requiredRemaining,openRiskCount,attemptFailures,operationFailures,recoveredFailures)`，正文结束摘要、状态岛、用时入口、任务检查栏读取同一视图。轮次“回复结束”与目标“已验收完成”分别展示；工具失败数与尝试失败数分开，不混称为失败任务。生成最终回复前提供验收事实，若无pass证据则呈现“待验收/未完成”，不能在UI把任意正文改写为成功。
+后端生成内部 `GoalClosureView(goalStatus,acceptanceState,requiredRemaining,openRiskCount,attemptFailures,operationFailures,recoveredFailures)`，最终回复的验收事实、现有状态字段与执行记录都从同一份结果投影。它不是新前端View或协议。本期不新增目标图谱浏览器、风险看板或任务卡。
 
-会话另提供未完成目标/未决风险清单。G2验收成功时可显示“当前目标已完成，另有G1待核实”，不能将G1风险隐藏，也不能把G1旧失败直接计成G2失败。正文是模型输出时保留原文，权威验收卡与最终生成事实一致性检查单独呈现，不用客户端文字替换伪造业务成功。
+兼容层只使用现有AIView/ReplyTiming/work goal/operation outcome和消息字段；枚举与响应形状保持旧客户端可理解。原始工具失败计数继续表示历史失败，后端不删除失败卡片或把失败改写为成功来减少计数。当前目标验收通过后，用现有状态及正常结论文本解释替代/核验结果；尚缺证据时不提供成功的生成事实。历史轮次失败仍保留，不能反改历史计时冒充当时成功。
+
+完整goal/step/attempt/evidence/acceptance关联留在后端账本、现有work_read/执行记录和管理API。G2完成不隐藏G1未决风险：继续保留原operation outcome/需关注状态及必要的现有系统消息，不增设新清单组件。旧前端无法完整展示的新关系不属于本期可视化交付；运行时仍必须按这些关系强制拦截。
 
 ### 4.7 孤儿执行治理属于安全边界
 
@@ -244,7 +248,7 @@ Allow(operation) = HardOK AND 每项能力的AuthorityOK
 
 任何匹配 deny 先行拒绝；单次审批不可拿来满足只允许更窄方式的规则。没有 TaskGrant 不等于空权限：项目已 allow 的读取，父子任务都可按边界执行。项目从 allow 变 ask 后，旧的 allow 决策不再是授权来源；必须取得当前规则允许的 grant/审批。每项能力在决策中记载实际 authority source，复核时重新检查，不只验证一个旧摘要。
 
-新建项目采用 `restricted` 配置：项目内资源元数据可读；受支持结构化只读能力在目标确定、硬边界允许时可读。受控命令、具体服务重启动作为可任务授权的 ask；本机受控执行同样为 ask，授权卡必须明确显示“本机”、机器资源 ID 和能力范围。文件写、SQL 写及任意交互终端输入不接受任务通配授权；明确危险且可预览的操作仅支持单次审批。任意自由 Shell 和不透明 MCP 在 restricted 模式下为 deny。用户显式设置的本机/资源 deny 仍是硬限制，不能用任务授权覆盖。
+新建项目采用 `restricted` 配置：项目内资源元数据可读；受支持结构化只读能力在目标确定、硬边界允许时可读。受控命令、具体服务重启动作为可任务授权的 ask；本机受控执行同样为 ask，现有审批说明必须明确显示“本机”、机器资源 ID 和能力范围。文件写、SQL 写及任意交互终端输入不接受任务通配授权；明确危险且可预览的操作仅支持单次审批。任意自由 Shell 和不透明 MCP 在 restricted 模式下为 deny。用户显式设置的本机/资源 deny 仍是硬限制，不能用任务授权覆盖。
 
 需要任意命令的用户可以显式启用 `compatible` 模式，确认其授权单位是选定执行域中的 Shell/MCP 调用，系统无法证明所有二次访问和副作用。此时不透明操作为单次 ask，不能获得任务级通配授权。模式切换增加策略 revision，并失效待审批操作。迁移的旧项目使用 `legacy` 适配，保留旧有效行为和硬限制；不直接套用新项目默认值。
 
@@ -282,7 +286,7 @@ v1 的约束使用固定结构，不接受模型填写的表达式或路径通�
 
 `TaskGrant` 拟包含：服务端生成的 `id/taskID/goalID/projectID/sessionID`、`rootAuthorityID/recoveryEpoch`、purpose、精确资源ID/连接revision、能力与约束、签发动作、绝对expiry和revision。taskID必须指向同goal的有效SecurityTask；计划允许grant跨该goal的多个attempt复用，但每次仍验证当前step/策略/范围。purpose仅解释，不能构成授权匹配。
 
-v1 任务授权支持结构化读取、受信命令模板和精确服务集合的重启动作。文件写、SQL 写、自由 Shell、任意终端输入及 opaque MCP 仍不接受任务通配授权。诊断预设为有效任务内 30 分钟；UI 可选择 30 分钟或 4 小时，项目上限默认 4 小时。任务结束、取消、父授权失效或时间到期立即停止新派发；续期必须再次显式授权。项目直接 allow 的读取不需要创建任务授权。
+v1 任务授权支持结构化读取、受信命令模板和精确服务集合的重启动作。文件写、SQL 写、自由 Shell、任意终端输入及 opaque MCP 仍不接受任务通配授权。诊断预设为有效任务内 30 分钟；可在现有提问选项中选择30分钟或4小时，项目上限默认 4 小时。任务结束、取消、父授权失效或时间到期立即停止新派发；续期必须再次显式授权。项目直接 allow 的读取不需要创建任务授权。
 
 子任务先按第 5.1 节满足能力规则，再收窄到父任务当前边界与角色能力；TaskGrant 是可选授权来源，不是必须存在的交集项。子任务不得自行续期或扩大授权。父任务拥有的 grant 只能在显式关联的子 scope 中使用，资源/能力/TTL 均不变；单次审批仍绑定该具体子调用。后台续跑、压缩、普通重启不能刷新到期时间。
 
@@ -290,9 +294,9 @@ v1 任务授权支持结构化读取、受信命令模板和精确服务集合�
 
 ### 5.4 任务命令授权与超范围确认
 
-一次任务授权卡展示：目标资源/连接身份、是否包含本机、命令模板及参数范围、读取路径或服务集合、禁止项、次数/时长预算、到期时间。用户批准后签发 TaskGrant，并建立来源为该真实用户动作的任务执行范围；权限由程序逐调用匹配，模型提供的“本次仍属排障”说明不参与授权判定。
+通过现有通用审批的标题、说明和预览字段展示任务授权：目标资源/连接身份、是否包含本机、命令模板及参数范围、读取路径或服务集合、禁止项、次数/时长预算、到期时间。用户批准后签发 TaskGrant，并建立来源为该真实用户动作的任务执行范围；权限由程序逐调用匹配，模型提供的“本次仍属排障”说明不参与授权判定。
 
-卡片一次列出模板执行所需的全部可授权能力，包括限定资源的建连能力，避免命令已获批却反复申请同一连接。跨会话接管人类终端仍单独确认。决策先检查项目/父/显式硬限制，再检查task_envelope：仅本任务范围越界且允许申请时进入范围确认；不能先按普通hard deny终止所有范围外请求，也不能为等待确认的请求先执行部分命令。
+现有审批一次列出模板执行所需的全部可授权能力，包括限定资源的建连能力，避免命令已获批却反复申请同一连接。跨会话接管人类终端仍单独确认。决策先检查项目/父/显式硬限制，再检查task_envelope：仅本任务范围越界且允许申请时进入范围确认；不能先按普通hard deny终止所有范围外请求，也不能为等待确认的请求先执行部分命令。
 
 | 项目 | v1 规则 |
 | --- | --- |
@@ -308,7 +312,7 @@ v1 任务授权支持结构化读取、受信命令模板和精确服务集合�
 
 “超范围再确认”也适用于项目已allow的能力：用户已确认的本任务范围是执行限制，不能用另一条项目allow绕过它。新建任务未指定限制时仍按项目策略判定。任务范围调整与授权来源分别存储，扩展动作以CAS同时修改用户任务边界并签发新grant/revision；不得修改父/项目硬边界。单次批准使用一个绑定确切操作的任务范围例外，只覆盖本次task_envelope，不覆盖其他显式执行限制，仍受全部父/项目限制；不修改后续调用的范围。
 
-扩展授权必须明确展示新增资源/模板/服务及预算，默认继承原到期时间和未消费预算；只有用户明确确认增加次数/延长时间才可更改。旧版本未消费审批/已准备描述失效；并发调用在派发事务读取最新版本。自由Shell在compatible模式下若无法证明其实际效果属于该任务范围，不能直接自动执行；单次卡片必须明确其可观察执行域和未知影响。单次批准不生成永久命令规则。
+扩展授权必须明确展示新增资源/模板/服务及预算，默认继承原到期时间和未消费预算；只有用户明确确认增加次数/延长时间才可更改。旧版本未消费审批/已准备描述失效；并发调用在派发事务读取最新版本。自由Shell在compatible模式下若无法证明其实际效果属于该任务范围，不能直接自动执行；现有单次审批说明必须明确其可观察执行域和未知影响。单次批准不生成永久命令规则。
 
 示例：用户一次允许“在服务器A读取磁盘、进程、nginx状态和最近15分钟日志，30分钟内最多50次”。这些调用自动执行；重启nginx、访问服务器B、扩大日志路径或执行未知脚本时才再次请求授权。批准一次重启后，其他重启仍不被自动授权；若明确扩展为“本任务nginx可重启1次”，仅该预算内自动执行。
 
@@ -362,16 +366,16 @@ type TaskManager interface {
 
 `Decision` 包含 `effect=allow|approval_required|deny`、`reasonCode`、安全的用户说明、`operationID`、相关 revision、需满足能力和已使用授权 ID；用户说明不含秘密或隐藏资源信息。无目标时使用独立 `resolution` 对象，不伪造 `deny`。
 
-| 原因码 | 含义 | UI 动作 |
+| 后端原因码 | 含义 | 复用既有交互或管理动作 |
 | --- | --- | --- |
-| `TARGET_REQUIRED` / `TARGET_AMBIGUOUS` / `TARGET_EMPTY_DIRECTORY` | 缺失、歧义、空目录 | 展示经权限过滤的目标选择器 |
-| `TARGET_OUTSIDE_BOUNDARY` | 目标有效，但超出独立硬边界 | 展示边界来源和设置入口 |
+| `TARGET_REQUIRED` / `TARGET_AMBIGUOUS` / `TARGET_EMPTY_DIRECTORY` | 缺失、歧义、空目录 | 用现有提问返回经过权限过滤的资源候选 |
+| `TARGET_OUTSIDE_BOUNDARY` | 目标有效，但超出独立硬边界 | 用现有消息解释来源，复用审批或管理API/CLI调整 |
 | `LEGACY_SCOPE_CONFIRMATION_REQUIRED` | 旧范围缺少可靠来源 | 展示一次迁移确认，不将未知范围直接固化为永久 deny |
 | `GOAL_BINDING_REQUIRED` / `STEP_NOT_READY` | 缺少执行归属或必要依赖未满足 | 选择目标/处理前置步骤，不派发 |
 | `ORPHANED_EXECUTION` / `SIDE_EFFECT_UNRESOLVED` | owner失联或原副作用未核实 | 冻结新派发、取消/核实/可信接管；保留资源阻断 |
 | `ACCEPTANCE_REQUIRED` | 操作执行结束但目标条件未验证 | 展示缺失条件/证据，不能显示已交付 |
 | `TASK_NOT_ACTIVE` / `TASK_ENDED` | 暂停/空闲或已终结 | 合法继续/恢复入口，或新建任务 |
-| `RECOVERY_CONFIRMATION_REQUIRED` | 恢复后策略未确认或账本未对齐 | 进入恢复管理；没有 agent 执行按钮 |
+| `RECOVERY_CONFIRMATION_REQUIRED` | 恢复后策略未确认或账本未对齐 | 通过现有消息/管理API或CLI处理恢复；不派发agent操作 |
 | `CAPABILITY_DENIED` / `LOCAL_EXECUTION_DENIED` | 明确拒绝 | 不出现审批同意按钮 |
 | `APPROVAL_REQUIRED` | 允许申请本次审批 | 展示资源、动作、差异/命令预览 |
 | `GRANT_EXPIRED` / `GRANT_REVOKED` | 临时授权已无效 | 可申请新的合规授权；禁止自动续期 |
@@ -516,9 +520,16 @@ MCP v1 只有受信配置中明确声明、经用户确认的 `serverID/toolName
 
 恢复管理另用 `POST /api/security/recovery/start`、`POST /api/security/recovery/:id/confirm`：只允许可信用户/离线管理命令；start 先关 gate 再触碰快照，confirm 必须绑定 recoveryID、新 epoch、当前策略摘要和对账报告摘要，不能接受一个裸 `confirm=true`。普通 agent 工具没有调用这些动作的能力。
 
-前端 `contracts.ts` 增加 `SecurityView`、`TargetResolutionView`、`TaskGrantView`、`SecurityDecisionView`。会话 snapshot/SSE 推送安全 revision；旧客户端的通用 aiOptions 更新不得覆盖新的策略或重建已撤销授权，不支持的安全变更返回明确版本错误。
+### 12.1 无UI变更的接入方式
 
-界面按状态归属呈现：项目设置显示默认规则；输入区资源 chip 显示当前目标；任务条分别展示goal验收/未完成原因、执行上下文idle/paused及“继续此目标 / 选择目标 / 取消目标”；任务授权卡显示资源、本机标识、命令模板/参数范围、剩余次数和时长、撤销；超范围卡显示差异并区分“仅这一次”和“扩展本任务”，不能默认选扩大范围。单次审批卡显示确切动作与预览。旧范围确认页同时显示“选择目标”和“保留/调整操作限制”，提交前展示差异；不能仅换一张目标 chip 就暗改边界。恢复管理页展示策略待确认、旧授权已失效和未决操作，不提供自动恢复执行按钮。后台收到 revoke 即生效。复用 `AppSelect`、`Glyph` 和共享圆角 token，并按 [UI 规范](../ui-guidelines.md) 验证浅色、深色、窄窗口和键盘。
+1. 原有发送/补充接口不要求前端新增goalID字段。后端从选中目标、真实消息ID和待回答交互解析TaskIntent，记录goal/step/task与原消息的绑定；归属歧义复用现有提问。原提问/审批响应已有ID用于后端CAS和摘要校验，不把模型自填ID当授权。
+2. 任务一次授权复用现有通用operation审批形状；在既有标题/说明/预览里列资源、模板、参数、预算、TTL及差异，后端nativeApproval.Binding保存真实grant request。只有现有“同意”提交了匹配审批ID并通过复核才签发，消息中“可以/开始吧”本身不成为grant。
+3. 范围外默认准备仅本次审批；若用户希望扩展，复用现有提问选“仅本次/本任务范围”，随后生成所选类型的标准审批。提问选择只选择申请方式，不签权限；最终仍只批准一次完整范围。禁止新增两个授权按钮或新的卡片组件。
+4. 孤儿风险复用原有operation outcome/执行记录、停止和结果核实入口；精确取消/接管等现有界面不能表达的管理操作走CLI/后端API，不新增面板。无法核实继续阻断，不因为界面不能展示全部细节而降低安全检查。
+5. 旧范围确认可由现有问题承载目标/边界意图，再走标准审批确认变更；恢复开闸/策略重确认通过管理API/CLI。新管理路由是后端能力，不要求桌面新增页面。
+6. 后端snapshot/SSE保持当前响应形状、枚举和既有控件语义。新增revision、内部验收模型和owner信息不要求前端读取；通过后端私有状态维护，已有客户端字段不得覆盖新权威状态。没有可兼容表示的控制动作fail closed并提供管理指令，不下发未知卡片类型/审批kind让旧客户端猜测。
+
+因此原方案中的SecuritySettings、SecurityTaskControls、TaskGrantCard、BoundaryResolutionCard、专门恢复页和目标浏览图均不在本期。保留现有UI源码和契约；验证聚焦后端兼容响应与旧界面现有流程可继续使用。文档结构图仅用于设计说明，不是产品界面改造稿。
 
 ## 13. 迁移、启用与回退
 
@@ -527,7 +538,7 @@ MCP v1 只有受信配置中明确声明、经用户确认的 `serverID/toolName
 1. **兼容基础先行**：实现单 owner、RuntimeRoot manifest、reader guard、RecoveryGate/epoch、迁移备份与旧账本索引。先验证未来 schema 和恢复中断会关闭执行，再引入新权威状态。
 2. **目标闭环前置**：扩展WorkGoal/WorkItem，建立attempt/evidence/acceptance/coverage关联及孤儿风险索引；SecurityTask关联goal。迁移保留可证明关联；来源不明先待确认，不按新消息重建目标或复制旧授权。旧无归属执行进入只读核实清单，不自动结束，也不误杀人工终端。
 3. **逐来源迁移旧范围**：有可靠持久化证据表明用户明确设定执行限制的，迁为 explicit_restriction；能确定只由目录导航/目标引用产生的，迁为 CurrentTarget/pendingResolution；来源不明（包括无证据的空范围）记 legacy_unclassified，并暂阻相关会话派发。未知来源不能直接变无限制，也不能变不可解除的永久 deny。
-4. **一次确认恢复旧会话**：用户在迁移页明确 targetIDs 和 boundaryDecision=keep/replace/navigation。后端检查资源归属与项目/父硬限制，以 CAS 在同一事务更新目标、创建/修改用户边界、解决 pending migration 并追加审计。navigation 是一次明确确认原范围只作目标的动作；之后选择目标不再隐式放宽边界。旧空目录→明确选择 B→确认导航→允许范围内读取必须可完成。
+4. **一次确认恢复旧会话**：用户通过现有问题与标准审批或管理CLI明确 targetIDs 和 boundaryDecision=keep/replace/navigation。后端检查资源归属与项目/父硬限制，以 CAS 在同一事务更新目标、创建/修改用户边界、解决 pending migration 并追加审计。navigation 是一次明确确认原范围只作目标的动作；之后选择目标不再隐式放宽边界。旧空目录→明确选择 B→确认导航→允许范围内读取必须可完成。
 5. **兼容与 shadow**：逐会话快照七项有效权限及 Web/stdio 来源；保留 denyLocal、显式引用限制、Plan/角色等真实限制。新 evaluator 仅比较脱敏结果，不使用新 allow 放行；新旧差异分为确认后的语义变化和未经确认的意外放宽，后者阻止启用。
 6. **逐入口及最终收口**：完成每个入口的正反例和恢复测试后接入同一内核；全部覆盖后新表成为唯一授权权威，旧 aiOptions 只做兼容投影。删除旧独立放行路径。若保留不同会话的 legacy 默认，必须在安全上下文存其会话级兼容配置，不能用一个项目默认覆盖不同会话。
 
@@ -558,7 +569,7 @@ flowchart LR
 
 因此“10:00 备份、10:05 撤销、10:10 恢复”不会复活 10:00 的授权；定时次数也不能靠恢复增加。v1 不尝试自动重放全部授权历史来保留便利性。受支持的恢复必须经过管理流程；该控制文件不是抗恶意 OS 管理员的不可回滚硬件计数器，不承诺防御整个 Home 连同 control 一起被手工回滚。跨机器导入同样生成新 storeID/epoch 并走上述确认流程。
 
-增量迁移可重入；migration/restore 标记不完整时不得派发。支持的回退版本必须理解当前 gate/epoch/schema；不具备该能力的早期历史二进制不能作为回退目标。回退可以关闭新 UI，但不能关掉安全内核；无法等价表达当前限制时保留管理模式。回退不清库、不恢复 grant、不重放未决操作。
+增量迁移可重入；migration/restore 标记不完整时不得派发。支持的回退版本必须理解当前 gate/epoch/schema；不具备该能力的早期历史二进制不能作为回退目标。本期无新UI可回退；回退不能关掉安全内核；无法等价表达当前限制时保留管理模式。回退不清库、不恢复 grant、不重放未决操作。
 
 ## 14. 验收与观测
 
@@ -604,9 +615,9 @@ flowchart LR
 
 ## 15. 交付顺序与完成定义
 
-按八个可评审阶段交付：统一存储与恢复门禁 → 目标/步骤/尝试/验收闭环、SecurityTask和旧边界确认 → 纯策略内核与 shadow → 原生审批/派发事务与孤儿治理 → 全部适配器和定时入口 → 授权 API/UI → 恢复/启用演练 → Dev 验收和旧路径收口。共 50 项任务，恢复基础和任务身份前置，避免先实现依赖不存在 taskID/epoch 的 grant。阶段可按实际 diff 拆为多个 PR，不跨越验收门槛。文件、依赖和检查见[实施计划](../../plan/feature-lake-security-1.md)。
+按八个可评审阶段交付：统一存储与恢复门禁 → 目标/步骤/尝试/验收闭环、SecurityTask和旧边界确认 → 纯策略内核与 shadow → 原生审批/派发事务与孤儿治理 → 全部适配器和定时入口 → 授权后端与现有协议兼容 → 恢复/启用演练 → Dev 验收和旧路径收口。共 50 项任务，恢复基础和任务身份前置，避免先实现依赖不存在 taskID/epoch 的 grant。阶段可按实际 diff 拆为多个 PR，不跨越验收门槛。文件、依赖和检查见[实施计划](../../plan/feature-lake-security-1.md)。
 
-完成必须同时满足：全部运行工具有注册项；所有 agent 外部派发必须持有当前有效 Permit；旧 pending/unknown 和迁移限制处理有回归；没有模型或工具结果授予权限的路径；双库失败与撤销竞态可重复验证；Lake Dev 上截图场景、跨目标、审批、撤销、重启和窄窗口交互全部通过。目标→步骤→尝试→证据→验收全部可追溯，孤儿执行没有静默遗弃路径，才算模块完成。
+完成必须同时满足：全部运行工具有注册项；所有 agent 外部派发必须持有当前有效 Permit；旧 pending/unknown 和迁移限制处理有回归；没有模型或工具结果授予权限的路径；双库失败与撤销竞态可重复验证；Lake Dev 上截图场景、跨目标、审批、撤销、重启以及现有审批/提问/执行记录兼容流程全部通过。目标→步骤→尝试→证据→验收全部可追溯，孤儿执行没有静默遗弃路径，才算模块完成。
 
 ### 15.1 本次评审问题的关闭条件
 
@@ -622,4 +633,4 @@ flowchart LR
 - [贡献规范](../../CONTRIBUTING.md)与[开发流程](../development-workflow.md)：每阶段从最新 develop 分支，通过 PR 集成；合并需明确授权，日常不依赖不存在的自动 CI。
 - [ADK runtime](../experiments/adk-runtime.md)：复用 official runtime、public confirmation 与原生操作恢复边界。
 - [现有会话权限计划](../../plan/feature-session-permissions-1.md)与[目录目标计划](../../plan/feature-directory-target-resolution-1.md)：作为历史行为依据，不将历史目标/权限耦合继续扩展。
-- [UI 规范](../ui-guidelines.md)：能力视图与现有设置、资源引用、审批控件保持一致。
+- [UI 规范](../ui-guidelines.md)：本期保持现有界面和控件，不涉及前端改造。
