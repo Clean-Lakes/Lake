@@ -2,6 +2,8 @@
 
 日期：2026-10-30。代码基线：develop `be656805d345466f11bbb9c2c4af92e670da7420`。本批验证的代码提交：`e4515df3c4ccf89a8c71f29eb565b1d264124e84`；后续仅更新本文/计划进度时不改变该代码基线。总体方案见[设计 PR #124](https://github.com/Clean-Lakes/Lake/pull/124)，本批通过独立功能草稿[PR #130](https://github.com/Clean-Lakes/Lake/pull/130)交付，分支 `codex/security-runtime-foundation`，未合并。
 
+后续新增代码`0feea12f`已补齐日常Home的项目与历史只读恢复，验证见文末；执行开闸尚未实现。前文保留首次基础版本与集成验证的历史记录。
+
 ## 五模块交付进度
 
 | 模块 | 本批结果 | 未实施部分 |
@@ -51,3 +53,21 @@
 用户明确授权合并更新[PR #131](https://github.com/Clean-Lakes/Lake/pull/131)，已核对其head `0e6216be587579c64f1ba9b99c3b2db171ae4ea6`经GitHub squash合入develop `8ae90c27d526efd0e9b6fbc69dad00328c87749c`；本分支通过合并origin/develop同步，无保护分支直接推送。Security PR #130保持草稿，diff不包含卡片前端改动。
 
 Dev集成42e1f411的前端与卡片PR源码一致，后端与e4515df3一致；补跑556前端测试、类型、Security专项和ADK边界通过。真实原生隔离窗口加载JS `index-CA00KQkZ.js`、CSS `index-DnbvT5Oj.css`，二者与构建文件字节一致，安装后端摘要与build-origin匹配。原生fixture结束时先停止其自己创建的后端，再关闭测试窗口，确认没有遗留Dev测试进程。日常Home中尚未完成的Security迁移标记及gate未删除或强行修改。
+
+## 迁移中断后的项目只读恢复
+
+恢复补丁代码：`0feea12f`。已有Dev Home的数据库及历史文件仍然完整；迁移在保存旧库快照后中断，留下`legacy-inventory.pending`并关闭gate，原启动路径连项目查看也一并拒绝。本补丁恢复同一Home下现有项目、资源、消息、AI卡片和SRE任务的本地只读查看，不代表执行能力恢复或旧副作用已经核实。
+
+- 只接受有效、版本受支持、根路径匹配且gate已关闭的control；继续持有相同Home、DataDir和Web Store owner锁。guard存在时检查schema/reader/storeID/epoch；已初始化库缺guard、身份不符、未来reader、bootstrap中断等情况仍拒绝。
+- Web与ADK数据库使用SQLite只读连接。恢复路径不调用普通Store/Engine构造器、SDK迁移或操作对账；不创建终端、扩展、WorkManager、调度或记忆/模型后台任务。SRE历史直接读取已存body，避免普通列表读取时的隐式命令对账。
+- API仅放行经过检查的本地读取：bootstrap、catalog、会话snapshot/AI卡片分页、已有消息队列、会话模式/选项、历史事件流。其他请求统一409，包括具有网络副作用的GET、模型测试、命令、审批、恢复操作结果和所有写接口。SQL只读连接及Store写入口同时拒绝写入。
+- 该进程不能切换到执行模式；control变化后读取也要求重新启动。RotateRecoveryEpoch、InventoryLegacyStores和MigrateLegacyStores均拒绝只读owner。原control、pending、未知操作、结果及handle保持原样，不删除标记、不伪造终态、不重新派发。
+- 没有前端或原生界面改造；恢复范围不包括资源连接、模型调用、终端、配置编辑、SOP UI或完整受控恢复开闸。旧审批和进度仅作为历史展示，不授予执行权限。
+
+验证结果：恢复补丁完整Go回归通过（AI 46.403秒、Web 227.301秒、cmd/lake 1.223秒）；最终代码额外通过`go test -race ./internal/ai ./internal/web -run '^TestSecurity' -count=1 -timeout=4m`、Go vet和ADK边界检查。新增测试模拟pending中断和unknown操作，核对数据库/control/pending/历史文件摘要不变、凭据脱敏、只读SQL与API拒绝、未来reader及错误身份拒绝、相同owner互斥和实际Start不创建执行服务。签名后端的原有隔离验收脚本也通过。
+
+真实Dev Home先在持有三组owner锁时备份Web/ADK一致快照和control/pending，备份位于`$HOME/.lake-dev/security/recovery-backups/<UTC>/`，权限0700/0600。签名后端逐一读取全部33个现有可见会话成功；可见目录为4项目/138资源。数据库物理记录5项目/61会话/141资源，包含原已隐藏记录，未做恢复删除项操作。验证后两个原库及control/pending的SHA256与备份清单一致，93条unknown及其他操作状态计数不变。真实数据内容、凭据和会话名称未放入自动化验收文件或仓库。
+
+最终通过`scripts/build_lake_desktop.sh --dev --install`安装代码`0feea12f2154e12a4217a64aca720dc233ac8360`，build-origin为dirty=false，签名及来源保护均正常。真实日常Lake Dev窗口已显示原项目导航、资源列表和既有会话内容，现有错误提示区显示只读恢复说明；原生启动后的bootstrap确认`recoveryReadOnly=true`。没有执行资源命令或模型请求，也未操作正式版。
+
+本节补齐的是日常Home的查看可用性；逐资源核实、受控迁移续跑与执行开闸仍待后续实施。PR #130保持草稿，不据此宣布整个第一阶段或Lake Security已完成。
