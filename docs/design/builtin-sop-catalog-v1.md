@@ -2,6 +2,8 @@
 
 状态：提案，尚未实现。日期：2026-10-30。对应[独立实施计划](../../plan/feature-builtin-sop-catalog-1.md)。本轮先纳入设计，后续通过独立功能PR实施，不在本次文档PR里增加前端代码。
 
+7份内置内容的完整基准见[详细流程规范](builtin-sop-procedures-v1.md)：逐条定义适用/前置条件、稳定步骤ID及依赖、预期证据、停止条件、失败处理和验收标准。本文负责入口/模型/API，详细规范负责实际手册内容；后续JSON必须保持两者一致。
+
 ## 1. 产品范围
 
 增加一个独立的“SOP”入口，首期提供内置流程的列表与详情浏览。用户可以知道Lake提供哪些标准流程、适用场景、前置条件、执行步骤、停止条件和验收方法。列表来自随应用发布的内置目录，不读取用户凭据、真实资源或聊天历史。
@@ -82,7 +84,11 @@ SOP                                                  关闭
 
 固定模型：`id/version/source=builtin/kind=standard|fallback/title/summary/category/impact/applicability/parameters/preconditions/steps/stopConditions/failureHandling/acceptanceCriteria`。step包含稳定id、title、description、dependsOn、expectedEvidence；parameters只描述名称/类型/用途，不保存值。可选rollback说明放failureHandling中，必须区分取消、补偿和不可逆影响。
 
+内容字段进一步固定为：step的expectedEvidence包含稳定证据键和说明；stopConditions/failureHandling各条都有稳定id及触发/处理说明；acceptanceCriteria各条含id、description、completionLevel（diagnostic/delivery/recovery，通用模板可用goal_contract并须在实例化前按原目标解析）、requiredEvidence（模板证据键）、required和预定义适用条件。ID和依赖对应详细规范，检查引用不可悬空；验收结果输出不能反过来作为自己的通过证据。静态schema校验仅验证内容完整性，首期不执行条件表达式、验证器或命令。
+
 包加载时验证ID/版本唯一、source固定builtin、7条内容中恰好1条kind=fallback且ID为general-task-fallback、步骤ID唯一且依赖存在/无环、前置/停止/验收内容非空。以排序后的内容hash生成catalogVersion；坏条目使目录加载返回明确错误，不发布半份内容。
+
+逐项内容验收还包括：四个诊断SOP不能把diagnostic_complete展示为问题修复；同步必须保留快照/部分写入/原记录保护条件；重启必须有业务稳定窗口验证；通用流程必须允许安全暂停且不能绕过权限/unknown。JSON完成条件保留上述区别，详情浏览不得只显示步骤名称而省略停止/失败/验收说明。
 
 | 拟新增接口 | 行为 |
 | --- | --- |
