@@ -1,6 +1,6 @@
 ---
 goal: 按五模块职责落实任务闭环、安全控制、资源操作及档案验收，SOP只读手册独立交付
-version: 6
+version: 7
 date_created: 2026-10-30
 last_updated: 2026-10-30
 owner: Lake
@@ -12,7 +12,7 @@ tags: [feature, architecture, security, authorization, migration, adk]
 
 ![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
 
-本计划对应 [Lake Security v1 详细设计（修订 5）](../docs/design/lake-security-v1.md)，代码基线为 `be656805d345466f11bbb9c2c4af92e670da7420`。保持文件名以延续原 PR 和文档链接；frontmatter 的 version 表示计划修订号。TASK-001、TASK-002已交付第一批实现，TASK-003至TASK-005进行中，其余未开始；总体仍在第一阶段，尚未达到阶段退出条件。实际行为和验证记录见[功能草稿PR #130](https://github.com/Clean-Lakes/Lake/pull/130)，完整方案尚未实现。
+本计划对应 [Lake Security v1 详细设计（修订 5）](../docs/design/lake-security-v1.md)，代码基线为 `be656805d345466f11bbb9c2c4af92e670da7420`。保持文件名以延续原 PR 和文档链接；frontmatter 的 version 表示计划修订号。TASK-001、TASK-002已交付第一批实现，TASK-003至TASK-005进行中，其余未开始；总体仍在第一阶段，尚未达到阶段退出条件。第一批基础代码及日常恢复修复已通过[PR #130](https://github.com/Clean-Lakes/Lake/pull/130)合入develop `dfd0e8a6bec34c1ddbb1a81b738a7028a38b9d04`，实际行为与验证见[实施记录](../docs/validation/lake-security-v1.md)；完整方案尚未实现。
 
 本Security计划仅后端改造，不修改前端组件/样式/交互及shared契约。用户另行提出的SOP清单UI由[独立设计](../docs/design/builtin-sop-catalog-v1.md)与[独立计划](feature-builtin-sop-catalog-1.md)交付，不捆绑本计划实施。修订4先建立权威存储、恢复门禁及WorkGoal/步骤/尝试/证据/验收闭环，SecurityTask仅管理关联目标的限时执行；孤儿风险必须核实后才能收口，再实现策略与派发。旧范围按来源迁移；项目直接允许与临时授权是不同授权来源；恢复备份会使旧授权失效并要求重新确认策略。保留目标解析、安全决策、执行保护三层，以及现有 ADK 原生审批、操作账本和 continuation。
 
@@ -79,8 +79,8 @@ tags: [feature, architecture, security, authorization, migration, adk]
 | TASK-001 | 【资源操作】新增 `docs/security/tool-entrypoints.md`，逐项登记 `Engine.invoke` 全部早期/常规分支、`invokeSessionTool`、`Server.bridge`、`Server.terminalRoute`、`ai.Serve`、`executeSchedule` 和实际 I/O；记录身份来源、目标种类、权限/审批/账本路径，用运行时工具目录核对覆盖数量。依赖：无。 | 是 | 2026-10-30 |
 | TASK-002 | 【任务档案与验收】新增 `internal/ai/security_home.go:ResolveSecurityHome/AcquireSecurityOwner`，使用 Home manifest 固定 storeID 与 Web DataDir 下 `adk` 的规范 runtime root；修改 `cmd/lake/main.go`、`internal/ai/stdio.go:Serve`、`internal/web/server.go:New` 和 `adk_evidence.go:runtimeDirectory` 使用同一身份。第二 owner 明确拒绝，不自动开第二库、不杀已有进程；独立 Home 显式隔离。依赖：TASK-001。 | 是 | 2026-10-30 |
 | TASK-003 | 【安全控制】新增 `internal/security/schema.go` 与 `internal/ai/security_control.go:ReadControlState/RotateRecoveryEpoch`，维护 `<Home>/security/control.json` 的 storeID/随机epoch/gate，原子写入并同步落盘；checkpoint/manifest 绑定 storeID+epoch，普通备份排除此控制文件，跨设备导入使用新身份和关闭 gate。`adkStore`、Web/stdio 启动校验 schema、storeID、epoch 和中断标记，错误时只允许管理操作。进度：已实现control/storeID/epoch、最低reader与bootstrap/迁移中断拒绝；完整checkpoint/跨设备恢复协议及重新确认尚未完成。依赖：TASK-002。 | 否 | 进行中 |
-| TASK-004 | 【任务档案与验收】新增 `internal/ai/security_store_migration.go:InventoryLegacyStores/MigrateLegacyStores`，先为原 Web `adk` 与 stdio `ai/adk` 制作一致备份；为 session/op/evidence 保留源库 namespace 和关联。同身份同 hash 可标记同源但保留原记录，冲突或未决内容进入只读历史/相关资源阻断，显式处理后才开 gate；禁止直接混并 SDK 内部表。生成迁移 manifest 并验证可重入。进度：已实现一致快照、legacyStoreID/摘要清单和Home级保守阻断；逐资源风险索引、显式核实及安全开闸尚未完成。依赖：TASK-003。 | 否 | 进行中 |
-| TASK-005 | 【任务档案与验收】新增 `internal/ai/security_home_test.go`、`security_control_test.go`、`security_store_migration_test.go`：两个进程争用、不同 Home、两个旧库重复/冲突/unknown、迁移每个断点、未来 schema、丢失/损坏 control-state 均有确定结果；更新新增 `docs/validation/lake-security-v1.md` 记录兼容基础 SHA。进度：Go专项/完整回归、选定race/vet、93工具覆盖、签名Dev后端隔离验收已有证据；隔离原生启动/共享存储已验证；完整迁移故障矩阵、日常Home恢复及原生窗口交互补验未完成，来源/单实例/迁移保护均未绕过。依赖：TASK-004。 | 否 | 进行中 |
+| TASK-004 | 【任务档案与验收】新增 `internal/ai/security_store_migration.go:InventoryLegacyStores/MigrateLegacyStores`，先为原 Web `adk` 与 stdio `ai/adk` 制作一致备份；为 session/op/evidence 保留源库 namespace 和关联。同身份同 hash 可标记同源但保留原记录，冲突或未决内容进入只读历史/相关资源阻断，显式处理后才开 gate；禁止直接混并 SDK 内部表。生成迁移 manifest 并验证可重入。进度：已实现一致快照、legacyStoreID/摘要清单、只读历史及受控的单库初始迁移续跑；续跑保留原unknown与精确防重，完成绑定和证据归档后恢复正常使用，双库/损坏/活动任务仍拒绝。逐资源风险索引、显式核实及通用恢复开闸尚未完成。依赖：TASK-003。 | 否 | 进行中 |
+| TASK-005 | 【任务档案与验收】新增 `internal/ai/security_home_test.go`、`security_control_test.go`、`security_store_migration_test.go`：两个进程争用、不同 Home、两个旧库重复/冲突/unknown、迁移每个断点、未来 schema、丢失/损坏 control-state 均有确定结果；更新新增 `docs/validation/lake-security-v1.md` 记录兼容基础 SHA。进度：Go专项/完整回归、选定race/vet、93工具覆盖、签名Dev隔离验收通过；新增初始迁移四阶段中断重试与防重/新操作并存测试。真实日常Home恢复正常、模型连接通过、原窗口只读提示消失，原账本/审批/审计/任务行保留。完整通用迁移故障矩阵及其余原生交互仍待补齐，来源与单实例保护未绕过。依赖：TASK-004。 | 否 | 进行中 |
 
 ### Implementation Phase 2
 
@@ -256,7 +256,7 @@ tags: [feature, architecture, security, authorization, migration, adk]
 - **RISK-010**: 八阶段覆盖面大；可以按实际 diff 再拆 PR，但不得跳过阶段退出条件或在缺少入口/恢复保证时宣称 enforced 完成。
 - **ASSUMPTION-001**: v1 面向单用户桌面/本机服务；多用户远程认证、租户隔离和管理角色需要独立设计。
 - **ASSUMPTION-002**: 控制面入口与凭据不委托给 agent；本方案不防御已经控制 OS 账户/进程的攻击者，也不承诺抵抗恶意全盘回滚控制文件与数据库。
-- **ASSUMPTION-003**: 此次只重设计与更新实施计划；功能尚未实施。文档 PR 合并不授权功能 PR 合并、安装生产或发布。
+- **ASSUMPTION-003**: 完整方案尚未实现；第一批基础与恢复增量已单独验证并合入develop。文档计划及本次增量合并不授权后续功能PR合并、安装生产或发布。
 
 ## 8. Related Specifications / Further Reading
 
