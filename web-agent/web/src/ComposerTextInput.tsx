@@ -24,7 +24,12 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
  const statusId=`composer-completion-${useId()}`;
  const eligible=completionEligible(value,selection.start,selection.end,focused,composing,completionBlocked||disabled);
  const suffix=eligible&&dismissed!==value&&suggestion?.prefix===value?suggestion.suffix:'';
- function syncSelection(){const range=input.current&&composerSelection(input.current,latest.current.references);if(range){caret.current=range;setSelection(current=>current.start===range.start&&current.end===range.end?current:range);}return range??caret.current;}
+ function syncSelection(){const root=input.current,range=root&&composerSelection(root,latest.current.references);if(range){
+  const native=root.ownerDocument.getSelection(),ghost=root.querySelector('[data-composer-suggestion]');
+  const afterHint=ghost&&(native?.anchorNode===root&&native.anchorOffset>Array.prototype.indexOf.call(root.childNodes,ghost)||native?.anchorNode&&ghost.contains(native.anchorNode));
+  if(!guard.current.ignores({key:''})&&range.start===range.end&&(afterHint||latest.current.value===''&&native?.anchorNode===root))setComposerSelection(root,range.start,range.end);
+  caret.current=range;setSelection(current=>current.start===range.start&&current.end===range.end?current:range);
+ }return range??caret.current;}
  function remember(value:string,refs:ComposerReference[],range:{start:number;end:number}) {
   const current=edits.current[editIndex.current]!;
   if(signature(current.value,current.references)===signature(value,refs)){Object.assign(current,range);return;}
@@ -41,7 +46,9 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
   const active=root.ownerDocument.activeElement===root;
   const current=readComposerDocument(root,references),wanted=signature(value,references);
   remember(value,references,caret.current);
-  const boundary=root.querySelector('[data-composer-caret]'),needsBoundary=value.endsWith(composerToken);
+  const boundary=root.querySelector('[data-composer-caret]'),needsBoundary=value===''||value.endsWith(composerToken);
+  const savedSelection=active?composerSelection(root,references)??caret.current:null;
+  let documentChanged=false;
   if(signature(current.value,current.references)!==wanted||root.querySelector('br:not([data-composer-break]):not([data-composer-placeholder]),div,p')||needsBoundary!==!!boundary||boundary&&boundary.textContent!==composerCaretCharacter){
    const fragment=root.ownerDocument.createDocumentFragment();const refs=new Map(references.map(ref=>[ref.position,ref]));let text='';
    const flush=()=>{if(text)fragment.appendChild(root.ownerDocument.createTextNode(text));text='';};
@@ -53,13 +60,18 @@ export const ComposerTextInput=forwardRef<ComposerInputHandle,Props>(function Co
    }
    flush();
    if(needsBoundary){const tail=root.ownerDocument.createElement('span');tail.dataset.composerCaret='';tail.textContent=composerCaretCharacter;fragment.appendChild(tail);}
-   if(value.endsWith('\n')){const placeholder=root.ownerDocument.createElement('br');placeholder.dataset.composerPlaceholder='';fragment.appendChild(placeholder);}root.replaceChildren(fragment);
-   if(active)setComposerSelection(root,Math.min(value.length,caret.current.start),Math.min(value.length,caret.current.end));
+   if(value.endsWith('\n')){const placeholder=root.ownerDocument.createElement('br');placeholder.dataset.composerPlaceholder='';fragment.appendChild(placeholder);}root.replaceChildren(fragment);documentChanged=true;
   }
   root.querySelectorAll<HTMLButtonElement>('[data-remove-composer-token]').forEach(button=>{button.disabled=disabled;});
-  root.querySelectorAll('[data-composer-suggestion]').forEach(el=>el.remove());
-  if(suffix){const ghost=root.ownerDocument.createElement('span');ghost.dataset.composerSuggestion='';ghost.className='composer-inline-suggestion';ghost.contentEditable='false';ghost.setAttribute('aria-hidden','true');ghost.textContent=suffix;root.appendChild(ghost);}
+  const existingSuggestion=root.querySelector('[data-composer-suggestion]');
+  const suggestionChanged=(existingSuggestion?.textContent??'')!==suffix;
+  if(suggestionChanged){
+   existingSuggestion?.remove();
+   if(suffix){const ghost=root.ownerDocument.createElement('span');ghost.dataset.composerSuggestion='';ghost.className='composer-inline-suggestion';ghost.contentEditable='false';ghost.setAttribute('aria-hidden','true');ghost.textContent=suffix;root.appendChild(ghost);}
+  }
+  // Restore after auxiliary nodes settle so a non-editable hint cannot own the caret.
   if(restore.current){const range=restore.current;restore.current=null;root.focus({preventScroll:true});setComposerSelection(root,range.start,range.end);}
+  else if(savedSelection&&(documentChanged||suggestionChanged))setComposerSelection(root,Math.min(value.length,savedSelection.start),Math.min(value.length,savedSelection.end));
  },[value,references,suffix,composing,disabled]);
  useEffect(()=>{
   setSuggestion(null);if(!eligible||dismissed===value)return;
