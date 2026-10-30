@@ -8,7 +8,7 @@
 
 修订4采用目标闭环：复用WorkGoal作为持久目标，WorkItem作为版本化步骤，关联多次执行尝试、原生operation/evidence和验收记录。SecurityTask改为目标下的限时执行上下文；轮次结束、换执行路径或授权过期都不能抹掉原目标及风险。新增孤儿执行治理：无有效归属禁止派发，失联操作追踪到停止或核实，不能由其他任务成功自动结清。
 
-**本期范围约束：仅改后端执行、授权、持久化、验收和兼容投影；不涉及UI改造。不得修改前端组件、页面、布局、样式、按钮、交互或shared/contracts.ts，不新增任务条/授权卡/恢复页/风险看板。复用现有消息、问题、审批、停止、执行记录和核实入口；需要的管理动作由后端API/CLI承载。**
+**Lake Security本体范围约束：仅改后端执行、授权、持久化、验收和兼容投影；不涉及UI改造。不得修改前端组件、页面、布局、样式、按钮、交互或shared/contracts.ts，不新增任务条/授权卡/恢复页/风险看板。复用现有消息、问题、审批、停止、执行记录和核实入口；需要的管理动作由后端API/CLI承载。**
 
 ## 1. 目标与范围
 
@@ -520,7 +520,7 @@ MCP v1 只有受信配置中明确声明、经用户确认的 `serverID/toolName
 
 恢复管理另用 `POST /api/security/recovery/start`、`POST /api/security/recovery/:id/confirm`：只允许可信用户/离线管理命令；start 先关 gate 再触碰快照，confirm 必须绑定 recoveryID、新 epoch、当前策略摘要和对账报告摘要，不能接受一个裸 `confirm=true`。普通 agent 工具没有调用这些动作的能力。
 
-### 12.1 无UI变更的接入方式
+### 12.1 Security本体无UI变更的接入方式
 
 1. 原有发送/补充接口不要求前端新增goalID字段。后端从选中目标、真实消息ID和待回答交互解析TaskIntent，记录goal/step/task与原消息的绑定；归属歧义复用现有提问。原提问/审批响应已有ID用于后端CAS和摘要校验，不把模型自填ID当授权。
 2. 任务一次授权复用现有通用operation审批形状；在既有标题/说明/预览里列资源、模板、参数、预算、TTL及差异，后端nativeApproval.Binding保存真实grant request。只有现有“同意”提交了匹配审批ID并通过复核才签发，消息中“可以/开始吧”本身不成为grant。
@@ -634,3 +634,9 @@ flowchart LR
 - [ADK runtime](../experiments/adk-runtime.md)：复用 official runtime、public confirmation 与原生操作恢复边界。
 - [现有会话权限计划](../../plan/feature-session-permissions-1.md)与[目录目标计划](../../plan/feature-directory-target-resolution-1.md)：作为历史行为依据，不将历史目标/权限耦合继续扩展。
 - [UI 规范](../ui-guidelines.md)：本期保持现有界面和控件，不涉及前端改造。
+
+## 17. 独立SOP清单UI的范围
+
+用户另行提出的“SOP清单”作为独立UI功能，首期只展示内置SOP的列表和详情，具体见[内置SOP清单设计](builtin-sop-catalog-v1.md)与[独立实施计划](../../plan/feature-builtin-sop-catalog-1.md)。它不纳入Security无UI改造的实现任务，后续以独立功能PR交付。
+
+SOP清单可独立于本安全内核上线，不要求先实现全部50项Security任务，也不因此打开隐藏Workflows或增加Security授权卡。首期浏览不实例化WorkGoal、不签发grant、不派发工具；后续把SOP用于计划生成需再单独评审其适用性和版本绑定。

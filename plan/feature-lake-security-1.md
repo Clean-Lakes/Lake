@@ -14,7 +14,7 @@ tags: [feature, architecture, security, authorization, migration, adk]
 
 本计划对应 [Lake Security v1 详细设计（修订 4）](../docs/design/lake-security-v1.md)，代码基线为 `be656805d345466f11bbb9c2c4af92e670da7420`。保持文件名以延续原 PR 和文档链接；frontmatter 的 version 表示计划修订号。全部功能任务尚未开始，文档完成不表示模块已经实现。
 
-本期仅后端改造，不修改前端组件/样式/交互及shared契约。修订4先建立权威存储、恢复门禁及WorkGoal/步骤/尝试/证据/验收闭环，SecurityTask仅管理关联目标的限时执行；孤儿风险必须核实后才能收口，再实现策略与派发。旧范围按来源迁移；项目直接允许与临时授权是不同授权来源；恢复备份会使旧授权失效并要求重新确认策略。保留目标解析、安全决策、执行保护三层，以及现有 ADK 原生审批、操作账本和 continuation。
+本Security计划仅后端改造，不修改前端组件/样式/交互及shared契约。用户另行提出的SOP清单UI由[独立设计](../docs/design/builtin-sop-catalog-v1.md)与[独立计划](feature-builtin-sop-catalog-1.md)交付，不捆绑本计划实施。修订4先建立权威存储、恢复门禁及WorkGoal/步骤/尝试/证据/验收闭环，SecurityTask仅管理关联目标的限时执行；孤儿风险必须核实后才能收口，再实现策略与派发。旧范围按来源迁移；项目直接允许与临时授权是不同授权来源；恢复备份会使旧授权失效并要求重新确认策略。保留目标解析、安全决策、执行保护三层，以及现有 ADK 原生审批、操作账本和 continuation。
 
 八阶段包含 50 项任务，建议按阶段提交可评审 PR。执行每阶段前以最新 `origin/develop` 为基础核对接口变化；本计划不授权功能 PR 合并、生产安装或发布。
 
@@ -46,7 +46,7 @@ tags: [feature, architecture, security, authorization, migration, adk]
 - **CON-001**: 不增加第二套模型循环、单次审批账本或执行账本；纯领域包不依赖 AI/Web，不导入 SDK internal API。
 - **CON-002**: 每阶段通过独立分支 PR 到 develop，记录实际 SHA 和本地证据，明确授权后才合并；不触发未请求的 CI 或生产操作。
 - **CON-003**: macOS 集成使用签名脚本与 Lake Dev/隔离 Home，不复制正式版 secrets，不让两个后端共用 Home。
-- **CON-004**: 本期无UI改造，不修改web-agent前端源码、样式、shared/contracts.ts，不新增页面、任务条、授权卡、按钮或浏览器。后端复用现有消息/提问/审批/执行记录/停止/核实协议；额外管理走API/CLI，不要求新前端字段。
+- **CON-004**: 本Security计划无UI改造，不修改web-agent前端源码、样式、shared/contracts.ts，不新增页面、任务条、授权卡、按钮或浏览器。后端复用现有消息/提问/审批/执行记录/停止/核实协议；额外管理走API/CLI，不要求新前端字段。
 - **GUD-001**: 兼容现有UI的响应形状、枚举和审批/提问语义；安全判断保留后端，无兼容表达的动作停止并提供管理方式，不能为保持旧显示放松检查。
 - **PAT-001**: 判定使用显式时间、版本和不可变描述；控制面动作使用 expectedRevision/actionID，拒绝测试断言外部派发计数为零。
 
@@ -253,3 +253,6 @@ tags: [feature, architecture, security, authorization, migration, adk]
 - [前端 UI 规范](../docs/ui-guidelines.md)
 - [已有会话权限计划](feature-session-permissions-1.md)
 - [已有目录目标解析计划](feature-directory-target-resolution-1.md)
+
+- [独立内置SOP清单设计](../docs/design/builtin-sop-catalog-v1.md)
+- [独立内置SOP清单实施计划](feature-builtin-sop-catalog-1.md)
