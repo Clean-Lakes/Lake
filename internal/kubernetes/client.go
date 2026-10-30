@@ -1,14 +1,16 @@
-// Package kubernetes reads bounded, projected observations from an explicitly
+// Package kubernetes provides bounded observations and preconditioned actions on an explicitly
 // configured cluster. It never executes credential plugins or kubectl.
 package kubernetes
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -16,6 +18,14 @@ import (
 	"strings"
 	"time"
 )
+
+type APIError struct {
+	Status int
+	Err    error
+}
+
+func (e *APIError) Error() string { return e.Err.Error() }
+func (e *APIError) Unwrap() error { return e.Err }
 
 var ErrTimeout = errors.New("连接超时，请检查集群地址或调整超时")
 var versionPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][a-zA-Z0-9.-]+)?$`)
@@ -94,17 +104,28 @@ func New(settings map[string]any, secrets map[string]string) (*Client, error) {
 func (c *Client) Close() { c.transport.CloseIdleConnections() }
 
 func (c *Client) get(ctx context.Context, path string, query url.Values, limit int) ([]byte, error) {
+	return c.request(ctx, http.MethodGet, path, query, nil, "", limit)
+}
+
+func (c *Client) request(ctx context.Context, method, path string, query url.Values, payload any, contentType string, limit int) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
+	var data []byte
+	if payload != nil {
+		data, _ = json.Marshal(payload)
+	}
 	endpoint := strings.TrimRight(c.connection.endpoint, "/") + path
 	if len(query) > 0 {
 		endpoint += "?" + query.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(data))
 	if err != nil {
 		return nil, errors.New("Kubernetes 请求地址无效")
 	}
 	req.Header.Set("Accept", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
 	if c.connection.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.connection.token)
 	} else if c.connection.username != "" || c.connection.password != "" {
@@ -125,14 +146,19 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, limit i
 		return nil, errors.New("无法连接 Kubernetes API Server，请检查地址、网络和证书配置")
 	}
 	defer response.Body.Close()
+	apiError := func(message string) error { return &APIError{Status: response.StatusCode, Err: errors.New(message)} }
 	switch response.StatusCode {
-	case 200:
+	case 200, 201, 202:
 	case 401:
-		return nil, errors.New("Kubernetes 认证失败，请检查 Token 或客户端证书")
+		return nil, apiError("Kubernetes 认证失败，请检查 Token 或客户端证书")
 	case 403:
-		return nil, errors.New("Kubernetes 拒绝访问，请检查账号对所选观察的 RBAC 权限")
+		return nil, apiError("Kubernetes 拒绝访问，请检查账号对本次操作的 RBAC 权限")
+	case 404:
+		return nil, apiError("Kubernetes 对象或 API 不存在，请重新查询目标")
+	case 409:
+		return nil, apiError("Kubernetes 对象已变化，请重新查询 UID 和 resourceVersion；未自动重试")
 	default:
-		return nil, errors.New("Kubernetes API Server 未返回有效的观察结果")
+		return nil, apiError("Kubernetes API Server 未接受本次请求")
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, int64(limit)+1))
 	if err != nil {
@@ -225,6 +251,9 @@ func (c *Client) Query(ctx context.Context, q Query) (map[string]any, error) {
 		path = "/api/v1/nodes"
 	case "namespaces":
 		path = "/api/v1/namespaces"
+	case "deployments", "replicasets", "statefulsets", "daemonsets":
+		path = "/apis/apps/v1/namespaces/" + url.PathEscape(namespace) + "/" + q.Metric
+		result["namespace"] = namespace
 	case "pods", "events":
 		path = "/api/v1/namespaces/" + url.PathEscape(namespace) + "/" + q.Metric
 		result["namespace"] = namespace
@@ -261,7 +290,7 @@ func (c *Client) Query(ctx context.Context, q Query) (map[string]any, error) {
 		result["namespace"], result["pod"], result["container"], result["output"], result["bounded"] = namespace, q.Pod, q.Container, string(body), true
 		return c.safe(result), nil
 	default:
-		return nil, errors.New("不支持的 Kubernetes 观察；只允许版本、节点、Pod、命名空间、事件、资源容量或日志")
+		return nil, errors.New("不支持的 Kubernetes 观察；只允许版本、节点、工作负载、Pod、命名空间、事件、资源容量或日志")
 	}
 	body, err := c.get(ctx, path, query, 4<<20)
 	if err != nil {
@@ -283,7 +312,40 @@ func (c *Client) Query(ctx context.Context, q Query) (map[string]any, error) {
 		meta, status, spec := obj(v["metadata"]), obj(v["status"]), obj(v["spec"])
 		row := fields(meta, "name", "namespace")
 		row["uid"] = short(meta["uid"], 128)
+		row["resource_version"] = short(meta["resourceVersion"], 256)
+		owners := []any{}
+		for _, owner := range list(meta["ownerReferences"]) {
+			if len(owners) >= 8 {
+				clipped = true
+				break
+			}
+			owners = append(owners, fields(obj(owner), "kind", "name", "uid"))
+		}
+		row["owners"] = owners
 		switch q.Metric {
+		case "deployments", "replicasets", "statefulsets", "daemonsets":
+			row["kind"] = q.Metric
+			if n, ok := spec["replicas"].(float64); ok && n >= 0 && math.Trunc(n) == n {
+				row["desired_replicas"] = n
+			}
+			if n, ok := meta["generation"].(float64); ok && n >= 0 && math.Trunc(n) == n {
+				row["generation"] = n
+			}
+			row["status"] = map[string]any{}
+			for _, field := range []string{"replicas", "readyReplicas", "availableReplicas", "updatedReplicas", "observedGeneration", "numberReady", "desiredNumberScheduled", "updatedNumberScheduled"} {
+				if v, ok := status[field].(float64); ok && v >= 0 && math.Trunc(v) == v {
+					obj(row["status"])[field] = v
+				}
+			}
+			conditions := []any{}
+			for _, condition := range list(status["conditions"]) {
+				if len(conditions) >= 16 {
+					clipped = true
+					break
+				}
+				conditions = append(conditions, fields(obj(condition), "type", "status", "reason", "message"))
+			}
+			row["conditions"] = conditions
 		case "nodes":
 			addresses := []any{}
 			for _, a := range list(status["addresses"]) {

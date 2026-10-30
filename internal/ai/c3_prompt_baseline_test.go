@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// Frozen on develop@cd75e2c7 before removing optimization slots. Only host OS
-// text is normalized so the same prompt byte-parity guard runs on Windows.
+// Initially frozen before removing optimization slots; intentionally refreshed
+// for native Kubernetes action/preflight instructions. Only host OS text varies.
 func TestC3PromptAssemblyMatchesPreCleanupBytes(t *testing.T) {
 	raw, err := os.ReadFile("testdata/c3-prompt-baseline.json")
 	if err != nil {

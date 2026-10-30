@@ -28,7 +28,7 @@ func planToolAllowed(name string) bool {
 	case "list_assets", "list_resource_groups", "ls", "glob", "grep", "read",
 		"inspect_host", "shell", "terminal_execute_command", "open_ssh_terminal",
 		"read_terminal_screen", "shell_output", "wait_shell",
-		"web_fetch", "web_search", "list_db_objects", "db_table_ddl", "execute_sql", "redis_command", "query_kubernetes",
+		"web_fetch", "web_search", "list_db_objects", "db_table_ddl", "execute_sql", "redis_command", "query_kubernetes", "kubernetes_capabilities",
 		"inspect_attachment", "preview_resource_import", "render_chart",
 		"todo_read", "todo_write", "ask_user_question", "read_session_context", "load_skill",
 		"list_workflows", "get_workflow_run", "schedule_list", "task_output", "read_tool_result",

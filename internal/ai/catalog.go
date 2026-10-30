@@ -58,6 +58,7 @@ func Catalog(profile string) []Tool {
 	)
 	list = append(list, extendedTools()...)
 	list = append(list, kubernetesQueryTool())
+	list = append(list, kubernetesActionTools()...)
 	enrichFileSchemas(list)
 	for i := range list {
 		normalizeDescriptions(list[i].Parameters)

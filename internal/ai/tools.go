@@ -24,7 +24,7 @@ func asset(c Config, ref string) (Asset, error) {
 func ToolRisk(name string, a map[string]any) string {
 	risk := "readonly"
 	switch name {
-	case "call_mcp_tool", "kill_shell", "import_resources", "stage_attachment":
+	case "call_mcp_tool", "kill_shell", "import_resources", "stage_attachment", "kubernetes_action":
 		risk = "write"
 	case "shell", "terminal_execute_command":
 		risk = "write"
@@ -458,6 +458,9 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	defer func() {
 		e.recordMemoryToolContext(s, c, call, str(policyContext["asset_ref"]), memoryStarted, result, err)
 	}()
+	if err = e.recordWorkResource(s, c, resourceID); err != nil {
+		return nil, &ToolNotExecutedError{Err: err}
+	}
 	operation, operationErr := e.dispatchNativeOperation(ctx, s, c, call, risk, target, fingerprint)
 	if operationErr != nil {
 		return nil, &ToolNotExecutedError{Err: operationErr}
@@ -510,6 +513,8 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		return e.redis(ctx, c, a)
 	case "query_kubernetes":
 		return e.queryKubernetes(ctx, c, a)
+	case "kubernetes_capabilities", "kubernetes_action":
+		return e.kubernetesOperation(ctx, c, call.Name, a)
 	case "list_docker_containers", "docker_container_logs", "docker_container_action":
 		return e.docker(ctx, c, call.Name, a)
 	case "open_ssh_tunnel", "close_ssh_tunnel", "scp_transfer":
