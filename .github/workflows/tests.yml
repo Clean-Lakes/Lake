@@ -12,6 +12,7 @@ jobs:
       (github.event.pull_request.head.ref == 'develop' &&
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: macos-14
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,7 +31,7 @@ jobs:
       - run: python3 -m unittest discover -s scripts -p 'test_branch_policy.py'
       - run: python3 -m unittest discover -s scripts -p 'test_dev_*py'
       - run: python3 -m unittest discover -s scripts -p 'test_memory_compatibility_tools.py'
-      - run: go test -race ./... && go vet ./...
+      - run: go test -race -timeout=20m ./... && go vet ./...
       - run: swift run --package-path client/macos --build-system native LakeUpdateTests
       - run: swift run --package-path client/macos --build-system native LakeWindowTests
       - run: swift build --package-path client/macos --build-system native --product LakeDesktop

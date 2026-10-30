@@ -218,7 +218,7 @@ func readonlySysctl(args []string) bool {
 	if len(args) > 0 && args[0] == "-n" {
 		args = args[1:]
 	}
-	return len(args) == 1 && (set("hw.memsize hw.ncpu hw.physicalcpu hw.logicalcpu kern.boottime vm.swapusage")[args[0]])
+	return len(args) == 1 && (set("hw.memsize hw.ncpu hw.physicalcpu hw.logicalcpu kern.boottime vm.swapusage kernel.ostype")[args[0]])
 }
 func readonlyDate(args []string) bool {
 	for i := 0; i < len(args); i++ {
