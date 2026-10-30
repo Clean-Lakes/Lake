@@ -1,0 +1,378 @@
+{
+  "schemaVersion": 1,
+  "baseSHA": "be656805d345466f11bbb9c2c4af92e670da7420",
+  "tools": [
+    {
+      "name": "append",
+      "family": "files"
+    },
+    {
+      "name": "ask_user_question",
+      "family": "session-content"
+    },
+    {
+      "name": "call_mcp_tool",
+      "family": "extension"
+    },
+    {
+      "name": "close_ssh_terminal",
+      "family": "host-terminal"
+    },
+    {
+      "name": "close_ssh_tunnel",
+      "family": "transfer"
+    },
+    {
+      "name": "db_table_ddl",
+      "family": "database"
+    },
+    {
+      "name": "delegate_investigation",
+      "family": "observation"
+    },
+    {
+      "name": "delete",
+      "family": "files"
+    },
+    {
+      "name": "docker_container_action",
+      "family": "container-cluster"
+    },
+    {
+      "name": "docker_container_logs",
+      "family": "container-cluster"
+    },
+    {
+      "name": "edit",
+      "family": "files"
+    },
+    {
+      "name": "execute_sql",
+      "family": "database"
+    },
+    {
+      "name": "forget_project_memory",
+      "family": "session-content"
+    },
+    {
+      "name": "get_workflow_run",
+      "family": "workflow-schedule"
+    },
+    {
+      "name": "glob",
+      "family": "files"
+    },
+    {
+      "name": "grep",
+      "family": "files"
+    },
+    {
+      "name": "import_resources",
+      "family": "resource-catalog"
+    },
+    {
+      "name": "inspect_attachment",
+      "family": "session-content"
+    },
+    {
+      "name": "inspect_host",
+      "family": "host-terminal"
+    },
+    {
+      "name": "kill_shell",
+      "family": "host-terminal"
+    },
+    {
+      "name": "kubernetes_action",
+      "family": "container-cluster"
+    },
+    {
+      "name": "kubernetes_capabilities",
+      "family": "container-cluster"
+    },
+    {
+      "name": "list_assets",
+      "family": "resource-catalog"
+    },
+    {
+      "name": "list_db_objects",
+      "family": "database"
+    },
+    {
+      "name": "list_docker_containers",
+      "family": "container-cluster"
+    },
+    {
+      "name": "list_mcp_servers",
+      "family": "extension"
+    },
+    {
+      "name": "list_mcp_tools",
+      "family": "extension"
+    },
+    {
+      "name": "list_memory_preferences",
+      "family": "session-content"
+    },
+    {
+      "name": "list_project_memories",
+      "family": "session-content"
+    },
+    {
+      "name": "list_resource_groups",
+      "family": "resource-catalog"
+    },
+    {
+      "name": "list_ssh_terminals",
+      "family": "host-terminal"
+    },
+    {
+      "name": "list_workflows",
+      "family": "workflow-schedule"
+    },
+    {
+      "name": "load_skill",
+      "family": "session-content"
+    },
+    {
+      "name": "ls",
+      "family": "files"
+    },
+    {
+      "name": "multi_edit",
+      "family": "files"
+    },
+    {
+      "name": "observe_cluster",
+      "family": "observation"
+    },
+    {
+      "name": "observe_cluster_logs",
+      "family": "observation"
+    },
+    {
+      "name": "observe_data",
+      "family": "observation"
+    },
+    {
+      "name": "observe_host",
+      "family": "observation"
+    },
+    {
+      "name": "observe_journal",
+      "family": "observation"
+    },
+    {
+      "name": "observe_logs",
+      "family": "observation"
+    },
+    {
+      "name": "open_ssh_terminal",
+      "family": "host-terminal"
+    },
+    {
+      "name": "open_ssh_tunnel",
+      "family": "transfer"
+    },
+    {
+      "name": "pilot_offer_directions",
+      "family": "task-coordination"
+    },
+    {
+      "name": "pilot_read_recovery",
+      "family": "task-coordination"
+    },
+    {
+      "name": "preview_resource_import",
+      "family": "resource-catalog"
+    },
+    {
+      "name": "query_kubernetes",
+      "family": "container-cluster"
+    },
+    {
+      "name": "read",
+      "family": "files"
+    },
+    {
+      "name": "read_evidence",
+      "family": "observation"
+    },
+    {
+      "name": "read_investigation",
+      "family": "observation"
+    },
+    {
+      "name": "read_memory_preference",
+      "family": "session-content"
+    },
+    {
+      "name": "read_project_memory",
+      "family": "session-content"
+    },
+    {
+      "name": "read_session_context",
+      "family": "session-content"
+    },
+    {
+      "name": "read_terminal_screen",
+      "family": "host-terminal"
+    },
+    {
+      "name": "read_tool_result",
+      "family": "session-content"
+    },
+    {
+      "name": "redis_command",
+      "family": "database"
+    },
+    {
+      "name": "render_chart",
+      "family": "session-content"
+    },
+    {
+      "name": "run_workflow",
+      "family": "workflow-schedule"
+    },
+    {
+      "name": "save_project_memory",
+      "family": "session-content"
+    },
+    {
+      "name": "save_workflow",
+      "family": "workflow-schedule"
+    },
+    {
+      "name": "schedule_create",
+      "family": "workflow-schedule"
+    },
+    {
+      "name": "schedule_delete",
+      "family": "workflow-schedule"
+    },
+    {
+      "name": "schedule_list",
+      "family": "workflow-schedule"
+    },
+    {
+      "name": "schedule_update",
+      "family": "workflow-schedule"
+    },
+    {
+      "name": "scp_transfer",
+      "family": "transfer"
+    },
+    {
+      "name": "shell",
+      "family": "host-terminal"
+    },
+    {
+      "name": "shell_output",
+      "family": "host-terminal"
+    },
+    {
+      "name": "sre_collaborate",
+      "family": "task-coordination"
+    },
+    {
+      "name": "sre_reply",
+      "family": "task-coordination"
+    },
+    {
+      "name": "sre_team_read",
+      "family": "task-coordination"
+    },
+    {
+      "name": "sre_team_update",
+      "family": "task-coordination"
+    },
+    {
+      "name": "ssh_terminal_expect",
+      "family": "host-terminal"
+    },
+    {
+      "name": "ssh_terminal_key",
+      "family": "host-terminal"
+    },
+    {
+      "name": "ssh_terminal_read",
+      "family": "host-terminal"
+    },
+    {
+      "name": "ssh_terminal_send",
+      "family": "host-terminal"
+    },
+    {
+      "name": "stage_attachment",
+      "family": "transfer"
+    },
+    {
+      "name": "task_output",
+      "family": "task-coordination"
+    },
+    {
+      "name": "task_stop",
+      "family": "task-coordination"
+    },
+    {
+      "name": "terminal_execute_command",
+      "family": "host-terminal"
+    },
+    {
+      "name": "terminal_expect",
+      "family": "host-terminal"
+    },
+    {
+      "name": "terminal_send_input",
+      "family": "host-terminal"
+    },
+    {
+      "name": "terminal_send_key",
+      "family": "host-terminal"
+    },
+    {
+      "name": "todo_read",
+      "family": "session-content"
+    },
+    {
+      "name": "todo_write",
+      "family": "session-content"
+    },
+    {
+      "name": "wait_shell",
+      "family": "host-terminal"
+    },
+    {
+      "name": "web_fetch",
+      "family": "web"
+    },
+    {
+      "name": "web_search",
+      "family": "web"
+    },
+    {
+      "name": "work_begin",
+      "family": "task-coordination"
+    },
+    {
+      "name": "work_finish",
+      "family": "task-coordination"
+    },
+    {
+      "name": "work_read",
+      "family": "task-coordination"
+    },
+    {
+      "name": "work_update",
+      "family": "task-coordination"
+    },
+    {
+      "name": "work_wait",
+      "family": "task-coordination"
+    },
+    {
+      "name": "write",
+      "family": "files"
+    }
+  ]
+}

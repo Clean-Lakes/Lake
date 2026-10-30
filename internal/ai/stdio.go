@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -22,8 +23,31 @@ type Frame struct {
 	Approved bool            `json:"approved,omitempty"`
 }
 
+// ServeHome uses the same canonical runtime as Web. The host owns the lock
+// until workers and the Engine have fully stopped.
+func ServeHome(ctx context.Context, home string, in io.Reader, out io.Writer) error {
+	h, err := OpenSecurityHome(ctx, home, "")
+	if err != nil {
+		return err
+	}
+	defer h.Close()
+	return serveRuntime(ctx, filepath.Join(filepath.Dir(h.RuntimeRoot), "ai"), h, in, out)
+}
+
+// Serve preserves the conventional legacy path only; arbitrary roots cannot
+// silently infer an authority. Prefer ServeHome with an explicit Home.
 // Serve uses inherited pipes only; it never opens an unauthenticated network listener.
 func Serve(ctx context.Context, dir string, in io.Reader, out io.Writer) error {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	if filepath.Base(abs) != "ai" || filepath.Base(filepath.Dir(abs)) != "web-agent" {
+		return errors.New("stdio requires an explicit Lake Home; use ServeHome")
+	}
+	return ServeHome(ctx, filepath.Dir(filepath.Dir(abs)), in, out)
+}
+func serveRuntime(ctx context.Context, dir string, h *SecurityHome, in io.Reader, out io.Writer) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var output sync.Mutex
@@ -57,6 +81,7 @@ func Serve(ctx context.Context, dir string, in io.Reader, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	engine.SecurityRuntime = h
 	defer engine.Shutdown()
 	var workers sync.WaitGroup
 	defer workers.Wait()

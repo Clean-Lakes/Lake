@@ -94,6 +94,7 @@ type Store struct {
 	subscribers      map[chan Object]bool
 	Dir              string
 	lockFile         *os.File
+	readOnly         bool
 }
 
 func OpenStore(dir string) (*Store, error) {
@@ -363,6 +364,9 @@ func (s *Store) read(work func() any) any { s.mu.Lock(); defer s.mu.Unlock(); re
 func (s *Store) update(work func() any) (result any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.readOnly {
+		fail(409, recoveryReadOnlyMessage)
+	}
 	tx, e := s.db.Begin()
 	must(e)
 	s.q = tx

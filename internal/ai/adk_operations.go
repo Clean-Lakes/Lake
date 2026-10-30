@@ -64,6 +64,9 @@ func (e *nativeOperationReplayError) Error() string {
 }
 
 func (e *Engine) dispatchNativeOperation(ctx context.Context, s *session, c Config, call Call, risk, target, fingerprint string) (*nativeOperation, error) {
+	if err := e.CheckSecurityRuntime(); err != nil {
+		return nil, err
+	}
 	if ctx.Value(adkToolContextKey{}) == nil {
 		return nil, nil
 	}

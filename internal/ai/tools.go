@@ -69,6 +69,9 @@ func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a
 	return risk, hash(js(c.Assets) + js(a)), nil
 }
 func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (result any, err error) {
+	if err := e.CheckSecurityRuntime(); err != nil {
+		return nil, &ToolNotExecutedError{Err: err}
+	}
 	if err := checkPlanOperation(c, call.Name, "readonly"); err != nil {
 		return nil, err
 	}

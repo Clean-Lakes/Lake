@@ -16,6 +16,9 @@ func (e *Engine) runtimeDirectory() string {
 	if e.worker != nil {
 		return e.worker.parent.runtimeDirectory()
 	}
+	if h := e.securityHome(); h != nil {
+		return h.RuntimeRoot
+	}
 	if e.RuntimeDir != "" {
 		return e.RuntimeDir
 	}
