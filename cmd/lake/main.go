@@ -85,6 +85,21 @@ func run(ctx context.Context, args []string) (err error) {
 	if args[0] == "secrets" {
 		return migrate(args[1:])
 	}
+	if args[0] == "security" && len(args) > 1 && args[1] == "resume-initial-migration" {
+		flags := flag.NewFlagSet("security resume-initial-migration", flag.ContinueOnError)
+		home := flags.String("home", "", "existing Lake Home; stop its backend first")
+		if err := flags.Parse(args[2:]); err != nil {
+			return err
+		}
+		if *home == "" || flags.NArg() != 0 {
+			return errors.New("an explicit --home is required")
+		}
+		if err := ai.ResumeInitialSecurityMigration(ctx, *home); err != nil {
+			return err
+		}
+		fmt.Println("Initial migration completed; legacy unknown outcomes preserved with replay protection.")
+		return nil
+	}
 	if args[0] == "web" || args[0] == "serve" {
 		flags := flag.NewFlagSet("lake web", flag.ContinueOnError)
 		flags.SetOutput(os.Stderr)
@@ -284,6 +299,7 @@ const help = `Lake — Go 运维工作台（运行无需 Node.js）
   lake status                                 查看本机系统
   lake ai [--home PATH]                        共享 Home 身份的 Go AI stdio 接口
   lake security status [--home PATH]            查看安全恢复门禁与存储身份
+  lake security resume-initial-migration --home PATH  停服后续跑初始迁移，保留旧操作结果
   lake secrets migrate --manifest FILE [--home PATH]  显式旧凭据迁移
 旧版 TypeScript Agent 与 Node Web 后端源码已移除，不支持其独立 grants/tasks/workflow CLI 合约。
 旧用户数据保留，不会自动导入新工作台。`

@@ -372,6 +372,12 @@ func (h *SecurityHome) CheckDatabase(db *sql.DB) error {
 	if err := h.Check(); err != nil {
 		return err
 	}
+	return h.bindSecurityDatabase(db)
+}
+
+// bindSecurityDatabase is also used by the offline initial-migration recovery
+// while its owner holds the gate closed. It never dispatches agent work.
+func (h *SecurityHome) bindSecurityDatabase(db *sql.DB) error {
 	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS security_schema_meta (id INTEGER PRIMARY KEY CHECK(id=1), schema_version INTEGER NOT NULL, minimum_reader_version INTEGER NOT NULL, store_id TEXT NOT NULL, recovery_epoch TEXT NOT NULL, migration_state TEXT NOT NULL)`)
 	if err != nil {
 		return err

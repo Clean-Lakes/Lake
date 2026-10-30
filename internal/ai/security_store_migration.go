@@ -31,6 +31,7 @@ type LegacyInventory struct {
 	StoreID       string        `json:"storeID"`
 	RecoveryEpoch string        `json:"recoveryEpoch"`
 	State         string        `json:"state"`
+	Policy        string        `json:"policy,omitempty"`
 	Stores        []LegacyStore `json:"stores"`
 	CreatedAt     time.Time     `json:"createdAt"`
 }
@@ -195,7 +196,16 @@ func (h *SecurityHome) MigrateLegacyStores(ctx context.Context) error {
 		if previous.FormatVersion != 1 || previous.StoreID != h.control.StoreID || previous.RecoveryEpoch != h.control.RecoveryEpoch || previous.State != "ready" {
 			return errors.New("security: legacy inventory requires management")
 		}
+		if previous.Policy != "" && previous.Policy != preserveLegacyUnresolved {
+			return errors.New("security: unsupported legacy recovery policy")
+		}
+		if previous.Policy == preserveLegacyUnresolved && (len(previous.Stores) != 1 || previous.Stores[0].Source != filepath.Join(h.RuntimeRoot, "sessions.sqlite")) {
+			return errors.New("security: recovery policy is only valid for one canonical store")
+		}
 		for _, row := range previous.Stores {
+			if row.Unresolved > 0 && previous.Policy != preserveLegacyUnresolved {
+				return errors.New("security: unresolved legacy history requires explicit adoption")
+			}
 			digest, err := hashSecurityArchive(row.Snapshot)
 			if err != nil {
 				return err
