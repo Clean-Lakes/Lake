@@ -51,7 +51,15 @@ func (e *Engine) AdmitSupplement(id string, mark func(string) error) error {
 	if s.cancel == nil || s.finalizing || s.supplementClosed || s.state.Config.workflowMode {
 		return errors.New("本轮尚未开始或正在结束，消息仍保留在队列，请稍后重试")
 	}
-	return mark(s.state.View.RootTurnID)
+	if err := mark(s.state.View.RootTurnID); err != nil {
+		return err
+	}
+	// Cancel only the provider request. The ADK invocation and in-flight tools
+	// retain their contexts, root identity, permissions and execution ledger.
+	if s.supplementRequest != nil {
+		s.supplementRequest.cancel(errUserSupplement)
+	}
+	return nil
 }
 
 // Caller owns s.mu. The reader only accesses the host queue, never the engine.
