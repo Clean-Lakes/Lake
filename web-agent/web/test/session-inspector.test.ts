@@ -4,7 +4,7 @@ import {InspectorTaskSummary,inspectorProgress} from '../src/InspectorTaskSummar
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {islandFixture} from './fixtures/pilot-island-data';
-import {inspectedTask,inspectedAttempt,inspectorAttempts} from '../src/sessionInspectorModel';
+import {inspectedTask,inspectedAttempt,inspectorAttempts,latestInspectorSelection,resolvedInspectorSelection} from '../src/sessionInspectorModel';
 
 test('the inspector uses the authoritative task and rejects another session or project',()=>{
  const snapshot=islandFixture(),task=snapshot.sre!.tasks[0]!;
@@ -58,4 +58,32 @@ test('paused and ended tasks cannot keep stale running segment states',()=>{
  const unknown=islandFixture('unknown').sre!.tasks[0]!;
  const html=renderToStaticMarkup(createElement(InspectorTaskSummary,{task:unknown,title:'待核实'}));
  assert.ok(html.includes('执行结果待核实')&&!html.includes('恢复已验证'));
+});
+
+test('header opens latest execution without restoring the last historical turn or attempt',()=>{
+ const snapshot=islandFixture();snapshot.sre!.pilot!.enabled=false;
+ const current=latestInspectorSelection(snapshot,'plan');
+ assert.deepEqual(current,{sessionId:snapshot.session.id,tab:'execution',followLatest:true});
+ const history={sessionId:snapshot.session.id,turnId:'old-turn',taskId:'old-task',attemptId:'old-attempt',tab:'execution' as const};
+ assert.equal(resolvedInspectorSelection(snapshot,history),history,'manual history stays pinned');
+ assert.deepEqual(resolvedInspectorSelection(snapshot,{...history,followLatest:true}),current,'follow latest drops saved history IDs');
+ assert.equal(resolvedInspectorSelection(snapshot,{...history,sessionId:'other-session'}),null);
+});
+test('a new ordinary user turn cannot display an earlier Pilot task while its snapshot is catching up',()=>{
+ const snapshot=islandFixture(),task=snapshot.sre!.tasks[0]!;
+ snapshot.messages=[{id:'new-user',sessionId:snapshot.session.id,role:'user',text:'检查另一个资源',createdAt:'2026-10-26T00:02:00Z'}];
+ assert.equal(latestInspectorSelection(snapshot).taskId,undefined,'old root and active task are not the new user turn');
+ snapshot.ai!.turnStartedAt='2026-10-26T00:02:01Z';snapshot.ai!.rootTurnId='new-root';
+ assert.equal(latestInspectorSelection(snapshot).taskId,undefined);
+ task.createdAt='2026-10-26T00:02:01Z';
+ assert.equal(latestInspectorSelection(snapshot,'plan').taskId,task.id);
+});
+test('latest Pilot follows real root-bound continuation while explicit historical attempts stay selected',()=>{
+ const snapshot=islandFixture(),task=snapshot.sre!.tasks[0]!;
+ snapshot.messages=[{id:'follow-up',sessionId:snapshot.session.id,role:'user',text:'继续验证',createdAt:'2026-10-26T00:02:00Z'}];
+ snapshot.ai!.turnStartedAt='2026-10-26T00:02:01Z';
+ const current=latestInspectorSelection(snapshot,'plan');
+ assert.equal(current.taskId,task.id);assert.equal(current.followLatest,true);
+ const history={sessionId:snapshot.session.id,taskId:task.id,attemptId:task.attempts[0]!.id,tab:'execution' as const};
+ assert.equal(resolvedInspectorSelection(snapshot,history),history);
 });

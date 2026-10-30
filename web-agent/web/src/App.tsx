@@ -3,6 +3,7 @@ import {WorkbenchIsland,useWideWorkbench} from './WorkbenchIsland';
 import {useInspectorWindow} from './inspectorWindow';
 import {SessionInspectorProvider,useSessionInspector} from './SessionInspectorContext';
 import {SessionInspector} from './SessionInspector';
+import {latestInspectorSelection} from './sessionInspectorModel';
 import {ServiceResourceFields} from "./ServiceResourceFields";
 import {emptyServiceDraft, resourceTypeOptions, resourceTypeLabel, serviceResourceInput, type ResourceInputType} from "./serviceResourceModel";
 
@@ -738,19 +739,13 @@ function AppContent() {
     const key=JSON.stringify([activeSnapshot.session.id,headerPilot.taskId]);
     if(seenInspectorTasks.current.has(key))return;
     seenInspectorTasks.current.add(key);
-    if((!inspector.selection||inspector.selection.sessionId!==activeSnapshot.session.id||inspector.selection.automatic)&&['draft','active','waiting_input','waiting_approval'].includes(headerPilot.status))inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,tab:'plan',automatic:true});
+    if((!inspector.selection||inspector.selection.sessionId!==activeSnapshot.session.id||inspector.selection.automatic)&&['draft','active','waiting_input','waiting_approval'].includes(headerPilot.status))inspector.open({...latestInspectorSelection(activeSnapshot,'plan'),automatic:true});
   },[headerPilot?.taskId,sessionId]);
-  const defaultInspectorTask=activeSnapshot?.sre?.tasks?.filter(task=>task.sessionId===sessionId&&((task.plans?.length??0)>0||(task.attempts?.length??0)>0)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
   const inspectorAvailable=!!activeSnapshot?.ai&&!selectedResource&&!isPlansPage;
   const reopenInspector=()=>{
     if(!activeSnapshot)return;
-    if(inspector.lastSelection?.sessionId===sessionId){inspector.open({...inspector.lastSelection,automatic:false});return;}
-    if(headerPilot){inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,tab:'plan'});return;}
-    const latestTurn=[...document.querySelectorAll<HTMLElement>('.conversation .ai-turn')].at(-1);
-    const execution=latestTurn?.querySelector<HTMLButtonElement>('.turn-duration-disclosure');
-    if(execution){execution.click();return;}
-    if(defaultInspectorTask){inspector.open({sessionId:activeSnapshot.session.id,taskId:defaultInspectorTask.id,tab:'plan'});return;}
-    inspector.open({sessionId:activeSnapshot.session.id,tab:'execution'});
+    const tab=inspector.lastSelection?.sessionId===sessionId?inspector.lastSelection.tab:headerPilot?'plan':'execution';
+    inspector.open(latestInspectorSelection(activeSnapshot,tab));
   };
   const selectedProjectId = selectedResource?.projectId ?? selectedSession?.projectId;
   useEffect(() => {
@@ -1377,7 +1372,7 @@ function AppContent() {
           if(!activeSnapshot||!headerPilot)return;
           const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
           const entry=task?.messages?.find(m=>`sre-message-${m.id}`===targetId);
-          inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry?.attemptId,tab:entry?'execution':'plan'});
+          inspector.open(entry?{sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry.attemptId,tab:'execution'}:latestInspectorSelection(activeSnapshot,'plan'));
         }}/>}
       </header>;
   const terminalListMenu=terminalListOpen && <div className="terminal-list-menu" ref={terminalListPopup.menu} id="terminal-switcher" role="group" aria-label="已打开的终端">

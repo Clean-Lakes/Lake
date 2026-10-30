@@ -1,4 +1,5 @@
 import {pendingUserSupplements} from "./messageQueue";
+import {latestInspectorSelection} from './sessionInspectorModel';
 import {MiniBoxCompletionNotice} from './MiniBox';
 import {hasMultipleMiniResources,isTerminalCommand} from './miniBoxModel';
 import {UserMessageCopy} from './UserMessageCopy';
@@ -173,6 +174,7 @@ function AITranscriptContent({ onOpenMemory,sourceMessageId,onSourceLocated,snap
   const thinkingVisible = !!tail?.some(entry => entry.agentRun || entry.card && ["thinking", "operation", "shell"].includes(entry.card.type)) && ["running", "waiting_approval"].includes(snapshot.ai?.status || "");
   const latestUser = snapshot.messages.filter(message => message.role === "user").at(-1);
   const latestUserAt = latestUser?.createdAt || "";
+  const latestInspectorTaskId=latestInspectorSelection(snapshot).taskId;
   const currentTurn=latestUser?turns.find(turn=>turn.some(entry=>entry.message?.id===latestUser.id))??[]:[];
   const currentTiming=timingForTurn(currentTurn,snapshot);
   const liveConversation=['running','waiting_approval'].includes(snapshot.ai?.status||'')&&(!currentTiming||currentTiming.status==='running');
@@ -236,7 +238,7 @@ function AITranscriptContent({ onOpenMemory,sourceMessageId,onSourceLocated,snap
       return <ReplyReferenceScope key={turn[0]!.id} cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}><div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)}>
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources} arrive={entry.message!.id===latestUser?.id&&!restoredMessageIds.current.has(entry.message!.id)}/>)}
       {mode==='activity'&&<ReplyDuration {...timingProps}/>}
-      {mode==='conversation'?<TurnExecutionDetails sessionId={snapshot.session.id} progress={progress} {...timingProps} presentingReply={presentingReply} hideLive={turn.some(entry=>entry.sre?.task.pilot)} detailNotice={pilotLive?undefined:notices} details={pilotLive?[]:[...processGroups.map(renderGroup),...compactionDiagnostics,...(interim.length?[<details className="turn-progress-prose" key="interim-prose"><DisclosureSummary>过程播报 · {interim.length}</DisclosureSummary>{interim.map(entry=><div className="ai-response" key={entry.id}>{entry.card?<Card card={entry.card}/>:entry.message?<TranscriptMessage message={entry.message} sessionId={snapshot.session.id}/>:null}</div>)}</details>]:[])]} onInspect={onInspect}>{replyContent}</TurnExecutionDetails>:replyContent}
+      {mode==='conversation'?<TurnExecutionDetails latest={latestUser?turn===currentTurn:turn===turns.at(-1)} latestTaskId={latestInspectorTaskId} sessionId={snapshot.session.id} progress={progress} {...timingProps} presentingReply={presentingReply} hideLive={turn.some(entry=>entry.sre?.task.pilot)} detailNotice={pilotLive?undefined:notices} details={pilotLive?[]:[...processGroups.map(renderGroup),...compactionDiagnostics,...(interim.length?[<details className="turn-progress-prose" key="interim-prose"><DisclosureSummary>过程播报 · {interim.length}</DisclosureSummary>{interim.map(entry=><div className="ai-response" key={entry.id}>{entry.card?<Card card={entry.card}/>:entry.message?<TranscriptMessage message={entry.message} sessionId={snapshot.session.id}/>:null}</div>)}</details>]:[])]} onInspect={onInspect}>{replyContent}</TurnExecutionDetails>:replyContent}
       <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}/>
       {mode==='conversation'&&!(turn===currentTurn&&liveConversation)&&<MiniBoxCompletionNotice notices={snapshot.commandStopNotices??[]} startedAt={miniStartedAt} endedAt={miniEndedAt}/>}
