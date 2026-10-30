@@ -70,6 +70,7 @@ type Server struct {
 	HexHubLocalAssets    func(context.Context) ([]Object, error)
 	Terminals            *Terminals
 	Engine               *ai.Engine
+	securityRuntime      *ai.SecurityHome
 	Context              context.Context
 	cancel               context.CancelFunc
 	options              Options
@@ -120,6 +121,22 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	if options.DataDir == "" {
 		options.DataDir = filepath.Join(options.Home, "web-agent")
 	}
+	runtimeHome, e := ai.OpenSecurityHome(ctx, options.Home, options.DataDir)
+	if e != nil {
+		return nil, e
+	}
+	runtimeReady := false
+	defer func() {
+		if !runtimeReady {
+			if server != nil {
+				server.Close()
+			} else {
+				_ = runtimeHome.Close()
+			}
+		}
+	}()
+	options.Home = runtimeHome.Home
+	options.DataDir = filepath.Dir(runtimeHome.RuntimeRoot)
 	if err = prepareMagpieConfig(options.Home); err != nil {
 		return nil, err
 	}
@@ -143,7 +160,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		token = fmt.Sprintf("%x", b)
 	}
 	child, cancel := context.WithCancel(ctx)
-	server = &Server{Context: child, cancel: cancel, options: options, token: token, generated: generated, streamSlots: make(chan struct{}, 4)}
+	server = &Server{securityRuntime: runtimeHome, Context: child, cancel: cancel, options: options, token: token, generated: generated, streamSlots: make(chan struct{}, 4)}
 	store, e := openStore(options.DataDir, operationalMemoryV2Ready || options.memoryV2ForTest)
 	if e != nil {
 		cancel()
@@ -167,7 +184,8 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		cancel()
 		return nil, e
 	}
-	server.Engine.RuntimeDir = filepath.Join(options.DataDir, "adk")
+	server.Engine.SecurityRuntime = runtimeHome
+	server.Engine.RuntimeDir = runtimeHome.RuntimeRoot
 	server.Engine.SetSRERepository(store)
 	server.Engine.NaturalMemory = server.naturalRecallProvider
 	server.Engine.ModelActivity = server.memoryForegroundModel
@@ -194,6 +212,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		return nil, err
 	}
 	server.Engine.StartWorkManager()
+	runtimeReady = true
 	return server, nil
 }
 func (b *Server) Start() error {
@@ -291,6 +310,9 @@ func (b *Server) Close() {
 		}
 		if b.Store != nil {
 			b.Store.Close()
+		}
+		if b.securityRuntime != nil {
+			_ = b.securityRuntime.Close()
 		}
 	})
 }
@@ -1004,6 +1026,11 @@ func validateIDs(v any) {
 	}
 }
 func (b *Server) terminalRoute(w http.ResponseWriter, r *http.Request, id, tid, op string) {
+	if b.Engine != nil {
+		if err := b.Engine.CheckSecurityRuntime(); err != nil {
+			fail(409, "安全恢复门禁关闭；终端操作未派发")
+		}
+	}
 	data := body(w, r, 16384)
 	switch op {
 	case "adopt":

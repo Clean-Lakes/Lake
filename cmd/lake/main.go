@@ -119,12 +119,35 @@ func run(ctx context.Context, args []string) (err error) {
 	}
 	if args[0] == "ai" {
 		flags := flag.NewFlagSet("lake ai", flag.ContinueOnError)
-		dir := flags.String("data", filepath.Join(lakeHome(), "web-agent", "ai"), "AI state directory")
+		home := flags.String("home", lakeHome(), "isolated Lake Home (shared identity with Web)")
+		dir := flags.String("data", "", "deprecated: use --home; arbitrary data roots cannot infer authority")
 		if e := flags.Parse(args[1:]); e != nil {
 			return e
 		}
-		return ai.Serve(ctx, *dir, os.Stdin, os.Stdout)
+		if flags.NArg() != 0 || *dir != "" {
+			return errors.New("lake ai: use --home PATH; legacy --data must be explicitly migrated, not silently rebound")
+		}
+		return ai.ServeHome(ctx, *home, os.Stdin, os.Stdout)
 	}
+	if args[0] == "security" {
+		flags := flag.NewFlagSet("lake security status", flag.ContinueOnError)
+		home := flags.String("home", lakeHome(), "Lake Home")
+		if len(args) < 2 || args[1] != "status" {
+			return errors.New("use lake security status --home PATH")
+		}
+		if e := flags.Parse(args[2:]); e != nil {
+			return e
+		}
+		if flags.NArg() != 0 {
+			return errors.New("unknown security status argument")
+		}
+		state, e := ai.ReadSecurityControl(*home)
+		if e != nil {
+			return e
+		}
+		return json.NewEncoder(os.Stdout).Encode(state)
+	}
+
 	if args[0] == "status" {
 		cmd := exec.CommandContext(ctx, platform.Executable("/usr/bin/uname"), "-a")
 		cmd.Stdout = os.Stdout
@@ -251,7 +274,8 @@ const help = `Lake — Go 运维工作台（运行无需 Node.js）
   lake chat --session ID --message TEXT        在已有会话发起 AI 轮次
   lake memory export-retired-assets --home PATH --output FILE  导出已退出的旧资产档案
   lake status                                 查看本机系统
-  lake ai [--data PATH]                        Go AI stdio 接口
+  lake ai [--home PATH]                        共享 Home 身份的 Go AI stdio 接口
+  lake security status [--home PATH]            查看安全恢复门禁与存储身份
   lake secrets migrate --manifest FILE [--home PATH]  显式旧凭据迁移
 旧版 TypeScript Agent 与 Node Web 后端源码已移除，不支持其独立 grants/tasks/workflow CLI 合约。
 旧用户数据保留，不会自动导入新工作台。`

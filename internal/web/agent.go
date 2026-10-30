@@ -418,6 +418,11 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 	}
 }
 func (b *Server) bridge(ctx context.Context, id, name string, args Object, approved bool) (result any, err error) {
+	if b.Engine != nil {
+		if err := b.Engine.CheckSecurityRuntime(); err != nil {
+			return nil, &ai.ToolNotExecutedError{Err: err}
+		}
+	}
 	// Opening/binding a shell can fail before any command is submitted. Only
 	// failures before this boundary are proven to have no command side effect.
 	commandMayHaveStarted := name != "runtimeCommandExec"

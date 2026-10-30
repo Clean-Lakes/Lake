@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -36,7 +37,14 @@ func (e *Engine) adkStore() (*storage.Store, error) {
 	services := e.adk
 	e.adkMu.Unlock()
 	services.once.Do(func() {
-		services.store, services.err = storage.Open(filepath.Join(e.runtimeDirectory(), "sessions.sqlite"))
+		if services.err = e.CheckSecurityRuntime(); services.err != nil {
+			return
+		}
+		var check func(*sql.DB) error
+		if h := e.securityHome(); h != nil {
+			check = h.CheckDatabase
+		}
+		services.store, services.err = storage.OpenChecked(filepath.Join(e.runtimeDirectory(), "sessions.sqlite"), check)
 		if services.err == nil {
 			services.err = services.store.DB.AutoMigrate(&nativeApproval{}, &nativeOperation{}, &nativeEvidence{}, &nativeArtifact{}, &nativeHistoryMigration{}, &nativeCorrection{}, &nativeWorkGoal{}, &nativeWorkOutbox{}, &nativeWorkObservation{})
 			if services.err == nil {
