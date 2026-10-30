@@ -71,9 +71,14 @@ func (e *Engine) flushWorkOutbox(ctx context.Context) error {
 func (e *Engine) resumeWorkGoal(ctx context.Context, row nativeWorkGoal, g WorkGoal, c Config) (err error) {
 	// Credentials and permissions are live; the requested resource binding is
 	// frozen. Switching foreground terminals must never retarget old work.
-	if g.Binding.ResourceIdentity != "" {
-		resource, lookupErr := asset(c, g.Binding.AssetRef)
-		if lookupErr != nil || hash(js(resource)) != g.Binding.ResourceIdentity {
+	bindings := append([]WorkBinding{}, g.ResourceBindings...)
+	bindings = append(bindings, g.Binding) // Existing goals keep their original frozen identity.
+	for _, binding := range bindings {
+		if binding.ResourceIdentity == "" {
+			continue
+		}
+		resource, lookupErr := asset(c, binding.AssetRef)
+		if lookupErr != nil || hash(js(resource)) != binding.ResourceIdentity {
 			g.Status = "blocked"
 			g.Summary = "原资源绑定已变化，接续已暂停；未切换到其他资源"
 			return e.writeWorkGoal(&row, &g, false)

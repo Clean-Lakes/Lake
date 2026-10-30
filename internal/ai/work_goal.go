@@ -35,6 +35,7 @@ type ExternalWatch struct {
 	Failures       int       `json:"failures"`
 }
 type WorkGoal struct {
+	ResourceBindings  []WorkBinding                  `json:"resourceBindings,omitempty"`
 	Binding           WorkBinding                    `json:"binding"`
 	ActiveItemID      string                         `json:"activeItemId,omitempty"`
 	ID                string                         `json:"id"`
@@ -332,11 +333,13 @@ func mergeWorkItems(base, added []WorkItem) ([]WorkItem, error) {
 	}
 	return out, nil
 }
-func (e *Engine) beginWork(s *session, title string, items []WorkItem) (WorkGoal, error) {
+func (e *Engine) beginWork(s *session, title string, items []WorkItem, assetRefs ...string) (WorkGoal, error) {
 	e.workOwner().StartWorkManager()
 	s.mu.Lock()
 	id, turn, existing, c := s.state.View.Session, s.state.View.RootTurnID, s.state.WorkGoalID, s.state.Config
 	sourceText := s.state.RootQuestion
+	scope := cloneTargetScope(s.state.TargetScope)
+	history := append([]Message(nil), s.state.History...)
 	var decisions map[string]map[string][]string
 	_ = json.Unmarshal(safeJSON([]byte(js(s.state.QuestionDecisions)), c), &decisions)
 	s.mu.Unlock()
@@ -353,6 +356,27 @@ func (e *Engine) beginWork(s *session, title string, items []WorkItem) (WorkGoal
 			return g, err
 		}
 		if !workTerminal(g.Status) {
+			if len(assetRefs) > 0 {
+				requested, bindErr := requestedWorkBindings(c, scope, history, assetRefs)
+				if bindErr != nil {
+					return g, bindErr
+				}
+				existingBindings := g.ResourceBindings
+				if len(existingBindings) == 0 && g.Binding.AssetRef != "" {
+					existingBindings = []WorkBinding{g.Binding}
+				}
+				for _, candidate := range requested {
+					found := false
+					for _, old := range existingBindings {
+						if old.AssetRef == candidate.AssetRef && old.ResourceIdentity == candidate.ResourceIdentity {
+							found = true
+						}
+					}
+					if !found {
+						return g, errors.New("当前目标已绑定其他资源；请结束原目标后为新资源创建任务")
+					}
+				}
+			}
 			create = false
 			if len(items) == 0 {
 				return g, nil
@@ -363,7 +387,18 @@ func (e *Engine) beginWork(s *session, title string, items []WorkItem) (WorkGoal
 		}
 	}
 	if create {
-		g = WorkGoal{Binding: workBinding(c), ID: uid(), SessionID: id, OriginRootTurnID: turn, Title: redact(title, c), UserText: redact(sourceText, c), UserDecisions: decisions, Status: "running", RoundLimit: c.MaxSteps, DeadlineAt: time.Now().Add(24 * time.Hour)}
+		bindings, bindErr := requestedWorkBindings(c, scope, history, assetRefs)
+		if bindErr != nil {
+			return g, bindErr
+		}
+		binding := WorkBinding{}
+		if len(bindings) == 0 && c.AssetRef == "" && c.TerminalID == "" {
+			binding.Runtime, binding.Container = c.Runtime, c.Container
+		}
+		if len(bindings) == 1 {
+			binding = bindings[0]
+		}
+		g = WorkGoal{ResourceBindings: bindings, Binding: binding, ID: uid(), SessionID: id, OriginRootTurnID: turn, Title: redact(title, c), UserText: redact(sourceText, c), UserDecisions: decisions, Status: "running", RoundLimit: c.MaxSteps, DeadlineAt: time.Now().Add(24 * time.Hour)}
 		row = nativeWorkGoal{ID: g.ID, SessionID: id, RootTurnID: turn}
 	}
 	merged, err := mergeWorkItems(g.Items, items)

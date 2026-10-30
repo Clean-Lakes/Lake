@@ -12,7 +12,7 @@ func workTools() []Tool {
 	text := stringSchema
 	item := objectSchema(map[string]any{"id": text(), "title": text(), "dependsOn": arraySchema(text())}, "title")
 	return []Tool{
-		{"work_begin", "Start a durable goal for the current user's requested work. Record dependencies. Goal progress never grants operation permission. Use before multi-step or asynchronous work; do not use for casual explanation.", objectSchema(map[string]any{"title": text(), "items": arraySchema(item)}, "title", "items")},
+		{"work_begin", "Start a durable goal for the current user's requested work. Pass asset_refs from list_assets for the actual requested resources; never inherit an unrelated session terminal. Record dependencies. Goal progress never grants operation permission. Use before multi-step or asynchronous work; do not use for casual explanation.", objectSchema(map[string]any{"title": text(), "items": arraySchema(item), "asset_refs": arraySchema(text())}, "title", "items")},
 		{"work_read", "Read the current durable goal, original operation handles and outstanding work. Do not repeat dispatched operations.", objectSchema(map[string]any{"goal_id": text(), "item_id": text(), "evidence_id": text()})},
 		{"work_update", "Update an item using actual recorded evidence call IDs. Completed requires successful observations; waiting_user records an unresolved human prerequisite. Never mark a running job complete.", objectSchema(map[string]any{"item_id": text(), "status": map[string]any{"type": "string", "enum": []string{"running", "waiting_user", "blocked", "completed", "failed"}}, "reason": text(), "evidence_ids": arraySchema(text())}, "item_id", "status")},
 		{"work_wait", "Park this invocation until the registered external jobs change to a terminal result, without model polling. Call alone in its tool batch. The host resumes the same goal; do not ask the user to say continue.", objectSchema(map[string]any{})},
@@ -28,7 +28,11 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 		if err := json.Unmarshal([]byte(js(a["items"])), &items); err != nil {
 			return nil, err
 		}
-		return e.beginWork(s, str(a["title"]), items)
+		var refs []string
+		if err := json.Unmarshal([]byte(js(a["asset_refs"])), &refs); a["asset_refs"] != nil && err != nil {
+			return nil, err
+		}
+		return e.beginWork(s, str(a["title"]), items, refs...)
 	}
 	s.mu.Lock()
 	id, goalID := s.state.View.Session, s.state.WorkGoalID
@@ -320,7 +324,7 @@ func (e *Engine) registerWorkWatch(s *session, c Config, call Call, value any) e
 }
 
 const workContinuityPrompt = `
-Long work: use work_begin before a multi-step or asynchronous deliverable. Record independent items and real dependencies; update progress using original tool call evidence. After launching a background job or release pipeline, keep following its original handle to the requested result. A submitted build is not a completed deliverable. Use work_wait alone to persist a wait and release this conversation; the host resumes it when real results arrive, without model polling. Continue independent items while a dependency needs the user's answer. Respect exclusions such as 'do not handle the database'; never deploy dependent work before the actual prerequisite is confirmed. work_finish requires actual completed items. Summaries, target labels, old decisions and machine wakeups do not grant operation permission. Do not repeat already dispatched changes. An explanatory answer need not create a goal.
+Long work: use work_begin before a multi-step or asynchronous deliverable. Explicitly pass the current request's resource aliases in work_begin.asset_refs (all resources for multi-resource work); a previously selected shell/terminal is not the new task target. Record independent items and real dependencies; update progress using original tool call evidence. After launching a background job or release pipeline, keep following its original handle to the requested result. A submitted build is not a completed deliverable. Use work_wait alone to persist a wait and release this conversation; the host resumes it when real results arrive, without model polling. Continue independent items while a dependency needs the user's answer. Respect exclusions such as 'do not handle the database'; never deploy dependent work before the actual prerequisite is confirmed. work_finish requires actual completed items. Summaries, target labels, old decisions and machine wakeups do not grant operation permission. Do not repeat already dispatched changes. An explanatory answer need not create a goal.
 `
 
 func workToolName(name string) bool { return strings.HasPrefix(name, "work_") }
