@@ -21,10 +21,40 @@ func interruptedInitialMigration(t *testing.T) (string, string) {
 		t.Fatal(err)
 	}
 	home = filepath.Dir(filepath.Dir(c.RuntimeRoot))
-	if err = writeSecurityJSON(filepath.Join(home, "security", "legacy-inventory.pending"), map[string]string{"storeID": c.StoreID}); err != nil {
+	if _, err = os.Stat(filepath.Join(home, "security", "legacy-inventory.pending")); err != nil {
 		t.Fatal(err)
 	}
 	return home, c.RuntimeRoot
+}
+
+func TestSecurityInitialRecoveryNormalUpgradeAndMarkerlessCandidate(t *testing.T) {
+	for _, markerless := range []bool{false, true} {
+		t.Run(map[bool]string{false: "normal-upgrade", true: "earlier-markerless-candidate"}[markerless], func(t *testing.T) {
+			home, root := interruptedInitialMigration(t)
+			if markerless {
+				if err := os.Remove(filepath.Join(home, "security", "legacy-inventory.pending")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := ResumeInitialSecurityMigration(context.Background(), home); err != nil {
+				t.Fatal(err)
+			}
+			h, err := OpenSecurityHome(context.Background(), home, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer h.Close()
+			db, err := openSecurityReadOnly(filepath.Join(root, "sessions.sqlite"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			var status string
+			if err = db.QueryRow("SELECT status FROM native_operations WHERE id='same-op'").Scan(&status); err != nil || status != "unknown" {
+				t.Fatal("old result changed", status, err)
+			}
+		})
+	}
 }
 
 func TestSecurityInitialRecoveryCrashStagesPreserveLedger(t *testing.T) {

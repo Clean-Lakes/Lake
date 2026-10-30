@@ -238,12 +238,6 @@ func (h *SecurityHome) MigrateLegacyStores(ctx context.Context) error {
 	if err = writeSecurityJSON(path, inv); err != nil {
 		return err
 	}
-	if err = os.Remove(pending); err != nil {
-		return err
-	}
-	if err = platform.SyncDirectory(filepath.Dir(pending)); err != nil {
-		return err
-	}
 	if inv.State != "ready" {
 		h.control.Gate = "closed"
 		if err = writeSecurityJSON(filepath.Join(h.Home, "security", "control.json"), h.control); err != nil {
@@ -251,7 +245,10 @@ func (h *SecurityHome) MigrateLegacyStores(ctx context.Context) error {
 		}
 		return fmt.Errorf("security: legacy history preserved; unresolved operations or dual stores require management (gate closed)")
 	}
-	return nil
+	if err = os.Remove(pending); err != nil {
+		return err
+	}
+	return platform.SyncDirectory(filepath.Dir(pending))
 }
 
 func hashSecurityArchive(path string) (string, error) {
