@@ -1,6 +1,6 @@
 # Lake Security v1 · 第一批实施记录
 
-日期：2026-10-30。代码基线：develop `be656805d345466f11bbb9c2c4af92e670da7420`。本批验证的代码提交：`9ed31220dd72c5f22951d334d40bdc42b5a2f932`；后续仅更新本文/计划进度时不改变该代码基线。总体方案见[设计 PR #124](https://github.com/Clean-Lakes/Lake/pull/124)，本批是独立功能分支 `codex/security-runtime-foundation`，未合并。
+日期：2026-10-30。代码基线：develop `be656805d345466f11bbb9c2c4af92e670da7420`。本批验证的代码提交：`9ed31220dd72c5f22951d334d40bdc42b5a2f932`；后续仅更新本文/计划进度时不改变该代码基线。总体方案见[设计 PR #124](https://github.com/Clean-Lakes/Lake/pull/124)，本批通过独立功能草稿[PR #130](https://github.com/Clean-Lakes/Lake/pull/130)交付，分支 `codex/security-runtime-foundation`，未合并。
 
 ## 五模块交付进度
 
@@ -27,7 +27,7 @@
 | 检查 | 实际命令/环境 | 结果 |
 | --- | --- | --- |
 | Go专项 | `go test ./internal/ai ./internal/web -run '^TestSecurity' -count=1` | 通过；93工具覆盖、跨进程锁、共享DataDir拒绝、epoch失效、双库/WAL/状态保留、缺库/缺清单/损坏/中断/未来版本/路径别名等 |
-| Go完整回归 | `go test ./internal/security ./internal/platform ./internal/agent/storage ./internal/ai ./internal/web ./cmd/lake -count=1 -timeout=8m` | 正在执行最后代码提交的完整回归，合并前以PR验证表最终结果为准 |
+| Go完整回归 | `go test ./internal/security ./internal/platform ./internal/agent/storage ./internal/ai ./internal/web ./cmd/lake -count=1 -timeout=8m` | 通过；最终代码SHA下AI 67.462秒、Web 250.706秒，其余相关包通过或无独立测试 |
 | race | `go test -race ./internal/ai ./internal/web -run 'TestSecurity\|TestADKRole.*Recover\|TestSRE.*Recover\|Test.*HostKey' -count=1` | 通过；专项与选定旧恢复/SSH回归；未声称全部测试均跑过race |
 | 静态检查 | `go vet ./internal/security ./internal/platform ./internal/agent/storage ./internal/ai ./internal/web ./cmd/lake`；`python3 scripts/check_adk_runtime_boundary.py` | 通过；未新增模型调用循环或导入SDK内部API |
 | 前端兼容 | Node 24.19.0、pnpm 10.33.4；`pnpm --dir web-agent check`、`pnpm --dir web-agent test:frontend` | 通过；556项前端测试，前端源码/shared契约未修改 |
