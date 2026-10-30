@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verify security foundations with a signed binary and isolated Homes only."""
 import argparse
+import hashlib
 import json
 import os
 import signal
@@ -9,6 +10,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import urllib.error
 
 from dev_acceptance import Lake, require
 
@@ -83,6 +85,45 @@ def main():
         require(len(inventory['stores']) == 1 and inventory['stores'][0]['unresolved'] == 1, 'legacy index incomplete')
         require(Path(inventory['stores'][0]['snapshot']).is_file(), 'legacy snapshot missing')
         results.append('legacy unknown archived; gate closed without replay')
+    with tempfile.TemporaryDirectory(prefix='lake-security-old-web.') as directory:
+        home = Path(directory)
+        os.chmod(home, 0o700)
+        lake = Lake(binary, home, env)
+        try:
+            project = lake.api('/api/projects', 'POST', {'name': 'Synthetic old Web schema'})['id']
+            session = lake.api('/api/projects/' + project + '/sessions', 'POST', {'title': 'Saved conversation'})['id']
+        finally:
+            lake.stop()
+        web = home / 'web-agent/lake-web.sqlite'
+        db = sqlite3.connect(web)
+        tables = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name GLOB 'natural*'").fetchall()
+        for (table,) in tables:
+            db.execute('DROP TABLE "' + table + '"')
+        db.commit()
+        db.close()
+        control_path = home / 'security/control.json'
+        control = json.loads(control_path.read_text())
+        control['gate'] = 'closed'
+        control_path.write_text(json.dumps(control))
+        ledger = home / 'web-agent/adk/sessions.sqlite'
+        paths = [web, ledger, control_path]
+        before = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+        lake = Lake(binary, home, env)
+        try:
+            require(lake.api('/api/bootstrap')['recoveryReadOnly'] is True, 'recovery gate not shown')
+            snapshot = lake.api('/api/sessions/' + session + '/snapshot')
+            require(snapshot['session']['id'] == session and snapshot['naturalMemoryNotices'] == [],
+                    'legacy conversation did not load without natural preference tables')
+            try:
+                lake.api('/api/projects', 'POST', {'name': 'must stay blocked'})
+                raise AssertionError('recovery allowed a write')
+            except urllib.error.HTTPError as error:
+                require(error.code == 409, 'unexpected recovery write response')
+        finally:
+            lake.stop()
+        require(all(hashlib.sha256(path.read_bytes()).hexdigest() == digest for path, digest in before.items()),
+                'legacy recovery changed the database or control manifest')
+        results.append('legacy Web session loaded without migrations; writes blocked; durable files unchanged')
     args.output.write_text(json.dumps({'checks': results, 'signed': sys.platform == 'darwin',
                                       'isolatedHomes': True, 'native': bool(args.native)}, ensure_ascii=False, indent=2) + '\n')
     print('PASS:', '; '.join(results))
