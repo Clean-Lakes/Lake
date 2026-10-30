@@ -1,6 +1,6 @@
 # Lake Security v1 · 第一批实施记录
 
-日期：2026-10-30。代码基线：develop `be656805d345466f11bbb9c2c4af92e670da7420`。本批验证的代码提交：`9ed31220dd72c5f22951d334d40bdc42b5a2f932`；后续仅更新本文/计划进度时不改变该代码基线。总体方案见[设计 PR #124](https://github.com/Clean-Lakes/Lake/pull/124)，本批通过独立功能草稿[PR #130](https://github.com/Clean-Lakes/Lake/pull/130)交付，分支 `codex/security-runtime-foundation`，未合并。
+日期：2026-10-30。代码基线：develop `be656805d345466f11bbb9c2c4af92e670da7420`。本批验证的代码提交：`e4515df3c4ccf89a8c71f29eb565b1d264124e84`；后续仅更新本文/计划进度时不改变该代码基线。总体方案见[设计 PR #124](https://github.com/Clean-Lakes/Lake/pull/124)，本批通过独立功能草稿[PR #130](https://github.com/Clean-Lakes/Lake/pull/130)交付，分支 `codex/security-runtime-foundation`，未合并。
 
 ## 五模块交付进度
 
@@ -16,7 +16,7 @@
 
 ## 本批可观察行为
 
-- `lake ai --home PATH`与Web使用control指定的同一个`<DataDir>/adk/sessions.sqlite`；不再默默另建`ai/adk`。同Home、同DataDir第二owner拒绝。旧Web的存活/可能复用PID记录也要求先核实，不删除记录或杀进程。
+- `lake ai --home PATH`与Web使用control指定的同一个`<DataDir>/adk/sessions.sqlite`；不再默默另建`ai/adk`。同Home、同DataDir第二owner拒绝；自定义DataDir持久绑定后，Web/stdio都跟随manifest，stdio会话文件也位于同一DataDir。旧Web的存活/可能复用PID记录也要求先核实，不删除记录或杀进程。
 - control私有原子写入并落盘；普通重启保留epoch；恢复准备只提供“轮换epoch并关闭gate”的后端原语，没有通用开闸接口。缺control、未来reader、已初始化库丢失、迁移中断、归档损坏等情况保留证据并拒绝启动。
 - 两份旧库不拼接SDK主键。不明、未登记终态或双库情况先保存SQLite一致快照（包含已提交WAL），以源namespace保留原记录，再关闭整个Home。归档不等于副作用已核实，也不导入旧审批为有效授权。
 - 当前迁移隔离是Home级保守阻断；无按资源核实/开闸接口。已初始化的迁移清单丢失时不自动重建，以免使用旧快照抹掉后来新增的未知记录。不得手工删control/清单、修改gate或用旧二进制绕过。
@@ -27,13 +27,14 @@
 | 检查 | 实际命令/环境 | 结果 |
 | --- | --- | --- |
 | Go专项 | `go test ./internal/ai ./internal/web -run '^TestSecurity' -count=1` | 通过；93工具覆盖、跨进程锁、共享DataDir拒绝、epoch失效、双库/WAL/状态保留、缺库/缺清单/损坏/中断/未来版本/路径别名等 |
-| Go完整回归 | `go test ./internal/security ./internal/platform ./internal/agent/storage ./internal/ai ./internal/web ./cmd/lake -count=1 -timeout=8m` | 通过；最终代码SHA下AI 67.462秒、Web 250.706秒，其余相关包通过或无独立测试 |
+| Go完整回归 | `go test ./internal/security ./internal/platform ./internal/agent/storage ./internal/ai ./internal/web ./cmd/lake -count=1 -timeout=8m` | 通过；最终代码SHA下AI 46.753秒、Web 239.543秒，其余相关包通过或无独立测试 |
 | race | `go test -race ./internal/ai ./internal/web -run 'TestSecurity\|TestADKRole.*Recover\|TestSRE.*Recover\|Test.*HostKey' -count=1` | 通过；专项与选定旧恢复/SSH回归；未声称全部测试均跑过race |
 | 静态检查 | `go vet ./internal/security ./internal/platform ./internal/agent/storage ./internal/ai ./internal/web ./cmd/lake`；`python3 scripts/check_adk_runtime_boundary.py` | 通过；未新增模型调用循环或导入SDK内部API |
 | 前端兼容 | Node 24.19.0、pnpm 10.33.4；`pnpm --dir web-agent check`、`pnpm --dir web-agent test:frontend` | 通过；556项前端测试，前端源码/shared契约未修改 |
 | Windows | `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go test -c ... ./internal/platform` | owner/进程检测平台包交叉编译通过；未在Windows真实运行 |
-| 签名Dev构建安装 | `scripts/build_lake_desktop.sh --dev --install` | 通过；安装`~/Applications/Lake Dev.app`，build-origin指向上述代码SHA，dirty=false；未安装/重启正式版 |
-| 已安装Dev的实际后端 | `python3 scripts/verify_security_runtime_dev.py --binary '<Lake Dev.app>/Contents/Resources/lake' --output <private-result>` | 通过；签名验证、隔离Home下Web/stdio第二owner拒绝、释放后复用同库/保留epoch、未来reader拒绝、旧unknown归档并关闭gate，无重放 |
+| 签名Dev构建安装 | `scripts/build_lake_desktop.sh --dev --install` | 9ed31220阶段签名构建安装通过（build-origin准确且dirty=false）。最终e4515df3安装被来源保护拒绝：另一个工作区已安装03ea24a251f1版本；保留较新Dev，未绕过保护或操作正式版 |
+| 最终签名后端 | `scripts/build_lake.sh`后运行`python3 scripts/verify_security_runtime_dev.py --binary bin/lake --output <private-result>` | 通过；最终e4515df3的签名后端在隔离Home下验证第二owner拒绝、释放后同库/epoch不变、未来reader拒绝、旧unknown归档关闸无重放。9ed31220的已安装Dev后端也曾通过同一验收 |
+| 自定义目录 | 签名bin/lake：环境指定自定义DataDir启动Web→同Home stdio configure→显式--home重启Web | 通过；会话仍保存到自定义DataDir，环境中的其他DataDir未覆盖已绑定root，无模型请求 |
 | 原生窗口 | 以上脚本加`--native '<Lake Dev.app>/Contents/MacOS/Lake'` | 未完成；现有Dev实例触发单实例保护，新窗口在后端启动前退出。保留现有实例，未强退或借其状态冒充新代码验收 |
 | 补丁 | `git diff --check` | 通过 |
 
@@ -41,6 +42,6 @@
 
 ## 剩余工作与回退限制
 
-本批属于基础能力，并未完成五模块全部69项任务。继续完成第一阶段的细粒度旧账本核实与迁移故障矩阵、实际原生重启验证后，才能进入目标/步骤/尝试/验收和TaskGrant等后续阶段。原生联调需要在确认现有Dev可正常退出后重新运行，不能绕过其单实例保护。
+本批属于基础能力，并未完成五模块全部69项任务。继续完成第一阶段的细粒度旧账本核实与迁移故障矩阵、实际原生重启验证后，才能进入目标/步骤/尝试/验收和TaskGrant等后续阶段。最终版本的Dev安装需要先与03ea24a251f1或其后续源码基线集成；原生联调需要在确认现有Dev可正常退出后重新运行，不能绕过来源或单实例保护。
 
 没有生产访问、凭据迁移、Release或标签。Home增加了持久控制与guard元数据；不支持回退到不认识control/epoch/schema的旧历史二进制。隔离验收Home随测试清理；真实Home需保全并通过后续受控恢复管理，不能通过删除账本、清单或control回退。当前没有可批准的完整恢复开闸流程，相关故障保持管理阻断。
