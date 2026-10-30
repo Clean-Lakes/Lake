@@ -112,6 +112,7 @@
 @media (max-width:1100px) {
  .workspace.has-session-inspector { --inspector-width:0px; }
  .session-inspector { position:absolute; top:0; bottom:0; right:0; width:min(var(--inspector-preferred-width, 382px),100%); z-index:26; }
+ .session-inspector-card { background:var(--surface); -webkit-backdrop-filter:none; backdrop-filter:none; }
 }
 html.lake-windows-chrome .session-inspector { padding-top:52px; }
 @media (prefers-reduced-motion:reduce) { .session-inspector,.session-inspector.is-closing { animation:none; } }
