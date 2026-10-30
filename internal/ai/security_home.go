@@ -24,6 +24,8 @@ type SecurityHome struct {
 	control           security.ControlState
 	lock              *os.File
 	rootLock          *os.File
+	readOnlyDB        *sql.DB
+	readOnly          bool
 	mu                sync.Mutex
 	closed            bool
 }
@@ -288,6 +290,9 @@ func (h *SecurityHome) Check() error {
 	if h.closed {
 		return errors.New("security: runtime owner closed")
 	}
+	if h.readOnly {
+		return errors.New("security: read-only recovery view; execution is disabled")
+	}
 	if _, err := os.Lstat(filepath.Join(h.Home, "security", "bootstrap.pending")); !errors.Is(err, os.ErrNotExist) {
 		return errors.New("security: interrupted bootstrap; management required")
 	}
@@ -325,6 +330,9 @@ func (h *SecurityHome) Close() error {
 		return nil
 	}
 	h.closed = true
+	if h.readOnlyDB != nil {
+		_ = h.readOnlyDB.Close()
+	}
 	if h.rootLock != nil {
 		_ = h.rootLock.Close()
 	}
@@ -338,6 +346,9 @@ func (h *SecurityHome) RotateRecoveryEpoch() error {
 	defer h.mu.Unlock()
 	if h.closed {
 		return errors.New("security: runtime owner closed")
+	}
+	if h.readOnly {
+		return errors.New("security: recovery view cannot change control state")
 	}
 	c, err := ReadSecurityControl(h.Home)
 	if err != nil {

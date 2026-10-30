@@ -418,6 +418,11 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 	}
 }
 func (b *Server) bridge(ctx context.Context, id, name string, args Object, approved bool) (result any, err error) {
+	if b.securityRuntime != nil {
+		if err := b.securityRuntime.Check(); err != nil {
+			return nil, &ai.ToolNotExecutedError{Err: err}
+		}
+	}
 	if b.Engine != nil {
 		if err := b.Engine.CheckSecurityRuntime(); err != nil {
 			return nil, &ai.ToolNotExecutedError{Err: err}

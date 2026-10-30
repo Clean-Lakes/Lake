@@ -56,6 +56,9 @@ func openSecurityReadOnly(path string) (*sql.DB, error) {
 // InventoryLegacyStores does not merge SDK tables or change source operations.
 // Stable store IDs namespace history from the two formerly independent roots.
 func (h *SecurityHome) InventoryLegacyStores(ctx context.Context) (LegacyInventory, error) {
+	if h.readOnly {
+		return LegacyInventory{}, errors.New("security: recovery view cannot snapshot or migrate stores")
+	}
 	inv := LegacyInventory{FormatVersion: 1, StoreID: h.control.StoreID, RecoveryEpoch: h.control.RecoveryEpoch, State: "ready", Stores: []LegacyStore{}, CreatedAt: time.Now().UTC()}
 	roots := []string{h.RuntimeRoot, filepath.Join(filepath.Dir(h.RuntimeRoot), "ai", "adk")}
 	for i, root := range roots {
@@ -179,6 +182,9 @@ func snapshotSecurityDatabase(ctx context.Context, source, dest string) error {
 	return platform.SyncDirectory(filepath.Dir(dest))
 }
 func (h *SecurityHome) MigrateLegacyStores(ctx context.Context) error {
+	if h.readOnly {
+		return errors.New("security: recovery view cannot migrate stores")
+	}
 	pending := filepath.Join(h.Home, "security", "legacy-inventory.pending")
 	if _, e := os.Lstat(pending); !errors.Is(e, os.ErrNotExist) {
 		return errors.New("security: interrupted legacy inventory; management required")

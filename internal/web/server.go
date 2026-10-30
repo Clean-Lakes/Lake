@@ -118,7 +118,14 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	if options.DataDir == "" {
 		options.DataDir = os.Getenv("LAKE_WEB_DATA_DIR")
 	}
-	runtimeHome, e := ai.OpenSecurityHome(ctx, options.Home, options.DataDir)
+	var runtimeHome *ai.SecurityHome
+	control, controlErr := ai.ReadSecurityControl(options.Home)
+	var e error
+	if controlErr == nil && control.Gate == "closed" {
+		runtimeHome, e = ai.OpenSecurityReadOnlyHome(options.Home, options.DataDir)
+	} else {
+		runtimeHome, e = ai.OpenSecurityHome(ctx, options.Home, options.DataDir)
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -134,8 +141,10 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	}()
 	options.Home = runtimeHome.Home
 	options.DataDir = filepath.Dir(runtimeHome.RuntimeRoot)
-	if err = prepareMagpieConfig(options.Home); err != nil {
-		return nil, err
+	if !runtimeHome.ReadOnlyView() {
+		if err = prepareMagpieConfig(options.Home); err != nil {
+			return nil, err
+		}
 	}
 	if options.Token == "" {
 		options.Token = os.Getenv("LAKE_WEB_TOKEN")
@@ -158,14 +167,23 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	}
 	child, cancel := context.WithCancel(ctx)
 	server = &Server{securityRuntime: runtimeHome, Context: child, cancel: cancel, options: options, token: token, generated: generated, streamSlots: make(chan struct{}, 4)}
-	store, e := openStore(options.DataDir, operationalMemoryV2Ready || options.memoryV2ForTest)
+	var store *Store
+	if runtimeHome.ReadOnlyView() {
+		store, e = openRecoveryStore(options.DataDir)
+	} else {
+		store, e = openStore(options.DataDir, operationalMemoryV2Ready || options.memoryV2ForTest)
+	}
 	if e != nil {
 		cancel()
 		return nil, e
 	}
 	server.Store = store
-	server.Extensions = extensions.NewManager(extensions.NewStore(options.Home))
 	server.Models = &Models{Home: options.Home, Dir: options.DataDir}
+	if runtimeHome.ReadOnlyView() {
+		runtimeReady = true
+		return server, nil
+	}
+	server.Extensions = extensions.NewManager(extensions.NewStore(options.Home))
 	server.Terminals = NewTerminals(store, server.Models, token)
 	server.Terminals.ResolveAccess = server.terminalOwner
 	server.Terminals.OnClose = server.revokeTerminal
@@ -213,23 +231,27 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	return server, nil
 }
 func (b *Server) Start() error {
-	if err := b.reconcilePersistedMemoryOutboxes(); err != nil {
-		return err
+	if !b.securityRuntime.ReadOnlyView() {
+		if err := b.reconcilePersistedMemoryOutboxes(); err != nil {
+			return err
+		}
+		b.Store.RecoverMemoryJobs()
+		_ = b.Store.ReconcileProjectMemoryFiles()
 	}
-	b.Store.RecoverMemoryJobs()
-	_ = b.Store.ReconcileProjectMemoryFiles()
 	l, e := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", b.options.Port))
 	if e != nil {
 		return e
 	}
 	b.listener = l
-	b.workers.Add(1)
-	go b.runMemoryWorker()
-	b.workers.Add(1)
-	go func() {
-		defer b.workers.Done()
-		b.Models.RefreshStoredReasoning(b.Context)
-	}()
+	if !b.securityRuntime.ReadOnlyView() {
+		b.workers.Add(1)
+		go b.runMemoryWorker()
+		b.workers.Add(1)
+		go func() {
+			defer b.workers.Done()
+			b.Models.RefreshStoredReasoning(b.Context)
+		}()
+	}
 	b.options.Port = l.Addr().(*net.TCPAddr).Port
 	must(atomicFile(filepath.Join(b.options.DataDir, "runtime.json"), []byte(jsonText(Object{"origin": fmt.Sprintf("http://localhost:%d", b.options.Port), "token": b.token, "pid": os.Getpid()}))))
 	b.http = &http.Server{Handler: b, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384, BaseContext: func(net.Listener) context.Context { return b.Context }}
@@ -403,6 +425,13 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fail(401, "Authentication required")
 		}
 	}
+	if b.securityRuntime != nil && b.securityRuntime.ReadOnlyView() {
+		aiFailure(b.securityRuntime.CheckReadOnlyView())
+		if name != "/api/bootstrap" || method != "GET" {
+			b.serveRecoveryView(w, r)
+			return
+		}
+	}
 	if name == "/api/bootstrap" && method == "GET" {
 		http.SetCookie(w, &http.Cookie{Name: "lake_web_token", Value: b.token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
 		model, selection := b.Models.ActiveSelection()
@@ -414,7 +443,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			modelID = ai.ModelIdentity(*model)
 			imageInput = model.SupportsImageInput
 		}
-		reply(w, 200, Object{"authenticated": true, "modelConfigured": model != nil, "modelName": modelName, "modelId": modelID, "modelSelection": selection, "supportsImageInput": imageInput, "terminalMode": "pty", "aiRuntime": "go", "backendRuntime": "go"})
+		reply(w, 200, Object{"authenticated": true, "modelConfigured": model != nil, "modelName": modelName, "modelId": modelID, "modelSelection": selection, "supportsImageInput": imageInput, "terminalMode": "pty", "aiRuntime": "go", "backendRuntime": "go", "recoveryReadOnly": b.securityRuntime != nil && b.securityRuntime.ReadOnlyView()})
 		return
 	}
 	if b.pilotSettingsRoute(w, r, name, method) {
