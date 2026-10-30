@@ -8,7 +8,7 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  const id=useId();
  const inspector=useSessionInspector();
  const selection=inspector?.selection;
- const inspecting=!!selection&&selection.sessionId===sessionId&&selection.tab==='execution'&&(selection.followLatest?latest&&!latestTaskId:selection.turnId===id);
+ const inspecting=!!selection&&selection.sessionId===sessionId&&(selection.followLatest?latest&&!latestTaskId:selection.tab==='execution'&&selection.turnId===id);
  const {live}=turnStatus(timing.timing,timing.view,timing.cards??[],timing.latestUserAt??'',Date.now());
  const [replyClock,setReplyClock]=useState({presenting:presentingReply,at:Date.now()});
  if(replyClock.presenting!==presentingReply)setReplyClock({presenting:presentingReply,at:Date.now()});

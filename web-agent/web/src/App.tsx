@@ -1372,7 +1372,7 @@ function AppContent() {
           if(!activeSnapshot||!headerPilot)return;
           const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
           const entry=task?.messages?.find(m=>`sre-message-${m.id}`===targetId);
-          inspector.open({sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry?.attemptId,tab:entry?'execution':'plan'});
+          inspector.open(entry?{sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry.attemptId,tab:'execution'}:latestInspectorSelection(activeSnapshot,'plan'));
         }}/>}
       </header>;
   const terminalListMenu=terminalListOpen && <div className="terminal-list-menu" ref={terminalListPopup.menu} id="terminal-switcher" role="group" aria-label="已打开的终端">

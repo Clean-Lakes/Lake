@@ -14,7 +14,9 @@ window.fetch=async(input,init)=>{
  const response=await originalFetch(input,init),url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href);
  if(!url.pathname.endsWith('/snapshot'))return response;
  const snapshot=await response.json() as SessionSnapshot,sessionId=snapshot.session.id;activeSession=sessionId;
- snapshot.sre={...snapshot.sre!,pilot:{enabled:false,autoAdvance:false,revision:1}};
+ const pilot=new URLSearchParams(location.search).has('pilot');
+ snapshot.sre={...snapshot.sre!,pilot:{enabled:pilot,autoAdvance:false,revision:1}};
+ if(pilot)snapshot.sre.tasks=snapshot.sre.tasks.map(task=>({...task,createdAt:at(1),updatedAt:at(3)}));
  snapshot.messages=[{id:'old-user',sessionId,role:'user',text:'上一轮的资源检查',createdAt:at(0)},...(stage?[{id:'current-user',sessionId,role:'user' as const,text:'最新一轮的资源检查',createdAt:at(90)}]:[]),...(stage===3?[{id:'next-user',sessionId,role:'user' as const,text:'第三轮刚发出，还没有操作',createdAt:at(110)}]:[])];
  snapshot.replyTimings=[{messageId:'old-user',startedAt:at(0),finishedAt:at(3),status:'completed'},...(stage?[{messageId:'current-user',startedAt:at(90),status:stage===3?'completed':'running',finishedAt:stage===3?at(100):''}]:[]),...(stage===3?[{messageId:'next-user',startedAt:at(110),status:'running'}]:[])];
  snapshot.ai={...snapshot.ai!,session:sessionId,rootTurnId:stage===3?'next-root':stage?'current-root':'old-root',turnStartedAt:stage===3?at(110):stage?at(90):at(0),status:stage?'running':'completed',turnFinishedAt:stage?'':at(3),agentRuns:[],cards:[
