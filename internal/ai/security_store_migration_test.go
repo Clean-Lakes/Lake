@@ -39,7 +39,7 @@ func TestSecurityDualStoreMigrationPreservesBothHistories(t *testing.T) {
 	if _, err = db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Exec("INSERT INTO native_operations(id,session_id,status) VALUES('wal-op','s','unknown')"); err != nil {
+	if _, err = db.Exec("INSERT INTO native_operations(id,session_id,status) VALUES('wal-op','s','unknown'),('future-status','s','unrecognized')"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = OpenSecurityHome(context.Background(), home, ""); err == nil {
@@ -59,7 +59,7 @@ func TestSecurityDualStoreMigrationPreservesBothHistories(t *testing.T) {
 	if len(inv.Stores) != 2 || inv.State != "pending_review" {
 		t.Fatalf("invalid inventory: %+v", inv)
 	}
-	if inv.Stores[1].Unresolved != 2 || inv.Stores[1].Operations != 2 {
+	if inv.Stores[1].Unresolved != 3 || inv.Stores[1].Operations != 3 {
 		t.Fatal("WAL evidence lost")
 	}
 	for _, row := range inv.Stores {
@@ -85,7 +85,7 @@ func TestSecurityDualStoreMigrationPreservesBothHistories(t *testing.T) {
 	}
 }
 func TestSecurityArchiveTamperingAndLateStoreAreRejected(t *testing.T) {
-	for _, kind := range []string{"archive", "late", "inventory"} {
+	for _, kind := range []string{"archive", "late", "inventory", "missing", "pending"} {
 		t.Run(kind, func(t *testing.T) {
 			home := t.TempDir()
 			legacySecurityFixture(t, filepath.Join(home, "web-agent", "adk", "sessions.sqlite"), "succeeded")
@@ -104,6 +104,10 @@ func TestSecurityArchiveTamperingAndLateStoreAreRejected(t *testing.T) {
 				os.WriteFile(inv.Stores[0].Snapshot, []byte("damaged"), 0600)
 			case "late":
 				legacySecurityFixture(t, filepath.Join(home, "web-agent", "ai", "adk", "sessions.sqlite"), "succeeded")
+			case "missing":
+				os.Remove(path)
+			case "pending":
+				writeSecurityJSON(filepath.Join(home, "security", "legacy-inventory.pending"), map[string]bool{"pending": true})
 			case "inventory":
 				os.WriteFile(path, []byte("{"), 0600)
 			}

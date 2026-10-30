@@ -112,7 +112,7 @@ func (h *SecurityHome) InventoryLegacyStores(ctx context.Context) (LegacyInvento
 				return err
 			}
 			if n > 0 {
-				if err := db.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(CASE WHEN status IN ('unknown','dispatched','running') THEN 1 ELSE 0 END),0) FROM native_operations`).Scan(&row.Operations, &row.Unresolved); err != nil {
+				if err := db.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(CASE WHEN status IS NULL OR status NOT IN ('succeeded','failed','not_executed') THEN 1 ELSE 0 END),0) FROM native_operations`).Scan(&row.Operations, &row.Unresolved); err != nil {
 					return err
 				}
 			}
@@ -179,6 +179,10 @@ func snapshotSecurityDatabase(ctx context.Context, source, dest string) error {
 	return platform.SyncDirectory(filepath.Dir(dest))
 }
 func (h *SecurityHome) MigrateLegacyStores(ctx context.Context) error {
+	pending := filepath.Join(h.Home, "security", "legacy-inventory.pending")
+	if _, e := os.Lstat(pending); !errors.Is(e, os.ErrNotExist) {
+		return errors.New("security: interrupted legacy inventory; management required")
+	}
 	path := filepath.Join(h.Home, "security", "legacy-inventory.json")
 	var previous LegacyInventory
 	if err := privateSecurityRead(path, &previous); err == nil {
@@ -205,11 +209,23 @@ func (h *SecurityHome) MigrateLegacyStores(ctx context.Context) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	if h.control.StoreReady {
+		return errors.New("security: initialized legacy inventory missing; management required")
+	}
+	if err := writeSecurityJSON(pending, map[string]string{"storeID": h.control.StoreID}); err != nil {
+		return err
+	}
 	inv, err := h.InventoryLegacyStores(ctx)
 	if err != nil {
 		return err
 	}
 	if err = writeSecurityJSON(path, inv); err != nil {
+		return err
+	}
+	if err = os.Remove(pending); err != nil {
+		return err
+	}
+	if err = platform.SyncDirectory(filepath.Dir(pending)); err != nil {
 		return err
 	}
 	if inv.State != "ready" {

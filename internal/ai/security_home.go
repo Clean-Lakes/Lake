@@ -178,6 +178,12 @@ func OpenSecurityHome(ctx context.Context, home, dataDir string) (h *SecurityHom
 	h = &SecurityHome{Home: home, RuntimeRoot: root, lock: lock}
 	defer func() {
 		if err != nil {
+			// Preserve invalid files as evidence. Only a valid, matching identity may
+			// be tightened to closed after a failed bootstrap/reader/migration check.
+			if c, e := ReadSecurityControl(h.Home); e == nil && c.StoreID == h.control.StoreID && c.RecoveryEpoch == h.control.RecoveryEpoch {
+				c.Gate = "closed"
+				_ = writeSecurityJSON(filepath.Join(h.Home, "security", "control.json"), c)
+			}
 			h.Close()
 		}
 	}()
