@@ -4,11 +4,11 @@ import {createContext,useEffect,useId,useRef,useState,type ReactNode} from 'reac
 import {ReplyDuration,type ReplyDurationProps} from './ReplyDuration';
 import {turnStatus} from './turnStatus';
 export const ExecutionDetailsOpen=createContext(false);
-export function TurnExecutionDetails({details,onInspect,presentingReply=false,hideLive=false,sessionId,children,progress,...timing}:{progress?:{text:string;active:boolean};hideLive?:boolean;sessionId?:string;children?:ReactNode;details:ReactNode[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
+export function TurnExecutionDetails({details,onInspect,presentingReply=false,hideLive=false,sessionId,latest=false,latestTaskId,children,progress,...timing}:{latest?:boolean;latestTaskId?:string;progress?:{text:string;active:boolean};hideLive?:boolean;sessionId?:string;children?:ReactNode;details:ReactNode[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
  const id=useId();
  const inspector=useSessionInspector();
  const selection=inspector?.selection;
- const inspecting=selection?.sessionId===sessionId&&selection?.turnId===id&&selection.tab==='execution';
+ const inspecting=!!selection&&selection.sessionId===sessionId&&selection.tab==='execution'&&(selection.followLatest?latest&&!latestTaskId:selection.turnId===id);
  const {live}=turnStatus(timing.timing,timing.view,timing.cards??[],timing.latestUserAt??'',Date.now());
  const [replyClock,setReplyClock]=useState({presenting:presentingReply,at:Date.now()});
  if(replyClock.presenting!==presentingReply)setReplyClock({presenting:presentingReply,at:Date.now()});
@@ -39,7 +39,7 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  // Move the same row ahead of the first reply chunk. Freeze the preview clock
  // without declaring completion; saved final timing updates this slot in place.
  const summary=<ReplyDuration key="turn-duration" {...timing} previewAt={previewAt} latestStep={progress?undefined:latestStep} disclosure={summaryDisclosure}/>;
- const body=inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{details}</div></ExecutionDetailsOpen.Provider>,inspector.host)
+ const body=inspector&&sessionId?inspecting&&inspector.host&&createPortal(<ExecutionDetailsOpen.Provider value={true}><div className="inspector-turn-details">{details.length?details:<p className="inspector-empty">本轮尚无执行记录。</p>}</div></ExecutionDetailsOpen.Provider>,inspector.host)
   :details.length>0&&<div id={id} className={`turn-execution-details${open?' is-open':''}`} aria-hidden={!open} inert={!open} role="region" aria-label="执行详细过程"><div className="turn-execution-content"><div className="turn-execution-body"><ExecutionDetailsOpen.Provider value={open}>{shownDetails}</ExecutionDetailsOpen.Provider></div></div></div>;
  return <>{(!live||previewAt!==undefined)&&summary}{children}{live&&!hideLive&&!presentingReply&&progress?.text&&<div className="turn-latest-progress" role="note" aria-label="最新进度" title={progress.text}><span className="turn-latest-progress-text">{progress.text}</span></div>}{body}{live&&!hideLive&&!presentingReply&&summary}</>;
 }
