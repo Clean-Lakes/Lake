@@ -14,6 +14,7 @@
 
 <br>
 
+<!-- v0.3.23: current workbench, synthetic demonstration data. -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/lake-workbench-dark.jpg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/lake-workbench-light.jpg">
