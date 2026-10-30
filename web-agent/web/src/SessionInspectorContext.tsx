@@ -36,7 +36,12 @@ export function SessionInspectorProvider({children}:{children:ReactNode}){
  const close=useCallback(()=>{
   const restore=retainConversation();setSelection(null);
   if(frame.current)cancelAnimationFrame(frame.current);
-  frame.current=requestAnimationFrame(()=>{restore();const target=opener.current?.isConnected?opener.current:document.querySelector<HTMLButtonElement>('.workspace-header .header-inspector-toggle,.workspace-header .pilot-island-trigger');target?.focus({preventScroll:true});});
+  frame.current=requestAnimationFrame(()=>{
+   restore();
+   const usable=(node:HTMLElement|null):node is HTMLElement=>!!node&&node.isConnected&&node!==document.body&&!node.closest('[inert],[aria-hidden="true"]')&&node.getBoundingClientRect().width>0;
+   const target=usable(opener.current)?opener.current:[...document.querySelectorAll<HTMLElement>('.workspace-header .header-inspector-toggle,.workspace-header .pilot-island-trigger')].find(usable);
+   target?.focus({preventScroll:true});
+  });
  },[]);
  const reset=useCallback(()=>{if(frame.current)cancelAnimationFrame(frame.current);setSelection(null);setLastSelection(null);opener.current=null;},[]);
  const value=useMemo(()=>({selection,lastSelection,host,setHost,open,close,reset}),[selection,lastSelection,host,open,close,reset]);

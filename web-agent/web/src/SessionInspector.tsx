@@ -1,4 +1,3 @@
-import {createPortal} from 'react-dom';
 import {InspectorTaskSummary} from './InspectorTaskSummary';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SessionSnapshot,SRETranscriptEntry} from '../../shared/contracts';
@@ -13,7 +12,7 @@ import {sreRoles,sreStatus,sreStepStatus} from './sreTranscript';
 import {inspectedTask,inspectedAttempt,inspectorAttempts,resolvedInspectorSelection} from './sessionInspectorModel';
 import {sessionInspectorId,useSessionInspector,type InspectorSelection} from './SessionInspectorContext';
 
-export function SessionInspector({snapshot,connected,onUpdated,headerHost}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;headerHost?:HTMLDivElement|null}){
+export function SessionInspector({snapshot,connected,onUpdated}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void}){
  const inspector=useSessionInspector()!;
  const selection=resolvedInspectorSelection(snapshot,inspector.selection);
  const retained=useRef<InspectorSelection|null>(selection);
@@ -21,9 +20,9 @@ export function SessionInspector({snapshot,connected,onUpdated,headerHost}:{snap
  const [present,setPresent]=useState(!!selection),panel=useRef<HTMLElement>(null);
  useEffect(()=>{
   if(selection){setPresent(true);return;}
-  const timer=setTimeout(()=>setPresent(false),window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:headerHost?320:180);
+  const timer=setTimeout(()=>setPresent(false),window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:180);
   return()=>clearTimeout(timer);
- },[!!selection,headerHost]);
+ },[!!selection]);
  const target=selection??retained.current;
  const followTurn=selection?.followLatest?snapshot.messages?.filter(message=>message.role==='user').at(-1)?.id:undefined;
  useLayoutEffect(()=>{const scroll=panel.current?.querySelector('.session-inspector-scroll');if(scroll)scroll.scrollTop=0;},[selection?.sessionId,selection?.turnId,selection?.taskId,followTurn]);
@@ -38,12 +37,13 @@ export function SessionInspector({snapshot,connected,onUpdated,headerHost}:{snap
  const attemptStatus=selected&&task?(selected.attempt.planRunId===task.runs?.at(-1)?.id?sreStepStatus(task,selected.step,snapshot.ai?.agentRuns):selected.attempt.status):'';
  const activeTab=plan?target.tab:'execution';
  const choose=(tab:'plan'|'execution',attemptId=target.attemptId,pin=false)=>inspector.open({...target,tab,attemptId,followLatest:pin?false:target.followLatest,evidenceId:undefined,automatic:false});
- const tabs=<div className="session-inspector-tabs" role="tablist" aria-label="任务视图" onKeyDown={event=>{if(plan&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();choose(event.key==='Home'?'plan':event.key==='End'?'execution':activeTab==='plan'?'execution':'plan');requestAnimationFrame(()=>(headerHost??panel.current)?.querySelector<HTMLButtonElement>('[role=tab][aria-selected=true]')?.focus());}}}>
-  <button type="button" role="tab" id="inspector-plan-tab" aria-selected={activeTab==='plan'} aria-controls="inspector-plan-panel" tabIndex={activeTab==='plan'?0:-1} disabled={!plan} title={!plan?'暂无最新计划':undefined} onClick={()=>choose('plan')}>{headerHost?'计划':'任务计划'}</button>
-  <button type="button" role="tab" id="inspector-execution-tab" aria-selected={activeTab==='execution'} aria-controls="inspector-execution-panel" tabIndex={activeTab==='execution'?0:-1} onClick={()=>choose('execution')}>{headerHost?'执行':'执行详情'}</button>
+ const tabs=<div className="session-inspector-tabs" role="tablist" aria-label="任务视图" onKeyDown={event=>{if(plan&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();choose(event.key==='Home'?'plan':event.key==='End'?'execution':activeTab==='plan'?'execution':'plan');requestAnimationFrame(()=>panel.current?.querySelector<HTMLButtonElement>('[role=tab][aria-selected=true]')?.focus());}}}>
+  <button type="button" role="tab" id="inspector-plan-tab" aria-selected={activeTab==='plan'} aria-controls="inspector-plan-panel" tabIndex={activeTab==='plan'?0:-1} disabled={!plan} title={!plan?'暂无最新计划':undefined} onClick={()=>choose('plan')}>计划</button>
+  <button type="button" role="tab" id="inspector-execution-tab" aria-selected={activeTab==='execution'} aria-controls="inspector-execution-panel" tabIndex={activeTab==='execution'?0:-1} onClick={()=>choose('execution')}>执行</button>
  </div>;
  return <aside ref={panel} id={sessionInspectorId} tabIndex={-1} className={`session-inspector${selection?' is-open':' is-closing'}`} inert={!selection} aria-hidden={!selection} aria-label="任务检查" onKeyDown={event=>{if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();event.stopPropagation();inspector.close();}}}>
-  {headerHost?createPortal(<header className="island-inspector-heading"><Glyph name="document" size={17}/>{tabs}</header>,headerHost):<><header className="session-inspector-heading"><div><strong>任务检查</strong><p>{task?'Lake Pilot · 计划与执行':snapshot.session.title}</p></div><button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={16}/></button></header>{tabs}</>}
+  <div className="session-inspector-card">
+   <header className="session-inspector-heading"><Glyph name="document" size={17}/>{tabs}<button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={16}/></button></header>
   <ObjectReferencesProvider resources={snapshot.resources} tasks={snapshot.ai?.agentRuns}>
    <div className="session-inspector-scroll">
     {task&&activeTab==='plan'&&<InspectorTaskSummary task={task} title={snapshot.session.title} runs={snapshot.ai?.agentRuns}/>}
@@ -66,5 +66,6 @@ export function SessionInspector({snapshot,connected,onUpdated,headerHost}:{snap
     </div>
    </div>
   </ObjectReferencesProvider>
+  </div>
  </aside>;
 }
