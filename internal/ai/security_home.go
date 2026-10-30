@@ -48,7 +48,15 @@ func ResolveSecurityHome(home, dataDir string) (string, string, error) {
 		return "", "", err
 	}
 	if dataDir == "" {
-		dataDir = filepath.Join(h, "web-agent")
+		// The manifest, not a new CLI's default directory, owns an established root.
+		c, e := ReadSecurityControl(h)
+		if e == nil {
+			dataDir = filepath.Dir(c.RuntimeRoot)
+		} else if errors.Is(e, os.ErrNotExist) {
+			dataDir = filepath.Join(h, "web-agent")
+		} else {
+			return "", "", e
+		}
 	}
 	d, err := canonicalSecurityDir(dataDir)
 	if err != nil {

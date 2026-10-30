@@ -118,9 +118,6 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	if options.DataDir == "" {
 		options.DataDir = os.Getenv("LAKE_WEB_DATA_DIR")
 	}
-	if options.DataDir == "" {
-		options.DataDir = filepath.Join(options.Home, "web-agent")
-	}
 	runtimeHome, e := ai.OpenSecurityHome(ctx, options.Home, options.DataDir)
 	if e != nil {
 		return nil, e

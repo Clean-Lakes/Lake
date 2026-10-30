@@ -12,7 +12,7 @@
 | 资源操作 | [完整清单](../security/tool-entrypoints.md)及[93个静态工具映射](../security/tool-entrypoints.json)，覆盖测试对照实际目录；Web/stdio共享规范RuntimeRoot | 全部适配器的能力登记、冻结操作描述及原子授权检查是后续阶段工作 |
 | 任务档案与验收 | 保留原ADK/nativeOperation/nativeEvidence；首次迁移一致快照、稳定legacyStoreID和摘要清单、未决状态统计 | 旧操作逐资源映射/查询与显式核实闭环、AcceptanceRecord/CoverageLink/GoalClosureView仍待实施 |
 
-对原第一阶段任务：TASK-001入口盘点、TASK-002规范Home/owner接入、TASK-003控制与reader guard已交付；TASK-004先交付快照/迁移清单及保守隔离，TASK-005先交付现有专项与回归证据。旧账本逐资源索引/显式核实、完整迁移断点矩阵和原生窗口重启验证未完成，不能宣布整个第一阶段退出，更不能开启完整Security enforced模式。
+对原第一阶段任务：TASK-001入口盘点、TASK-002规范Home/owner接入已交付；TASK-003先交付control/reader guard，完整checkpoint/跨设备恢复协议仍待完成；TASK-004先交付快照/迁移清单及保守隔离，TASK-005先交付现有专项与回归证据。旧账本逐资源索引/显式核实、完整迁移断点矩阵和原生窗口重启验证未完成，不能宣布整个第一阶段退出，更不能开启完整Security enforced模式。
 
 ## 本批可观察行为
 

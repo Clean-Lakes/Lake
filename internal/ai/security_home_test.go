@@ -223,3 +223,22 @@ func TestSecurityLegacyLivePIDCannotBeBypassed(t *testing.T) {
 		t.Fatal("runtime record removed", err)
 	}
 }
+
+func TestSecurityImplicitHomeFollowsCustomRuntimeManifest(t *testing.T) {
+	home := t.TempDir()
+	data := t.TempDir()
+	first, err := OpenSecurityHome(context.Background(), home, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, epoch := first.RuntimeRoot, first.control.RecoveryEpoch
+	first.Close()
+	next, err := OpenSecurityHome(context.Background(), home, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer next.Close()
+	if next.RuntimeRoot != root || next.control.RecoveryEpoch != epoch {
+		t.Fatal("implicit CLI changed persisted runtime identity")
+	}
+}
