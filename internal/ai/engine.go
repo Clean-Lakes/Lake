@@ -26,6 +26,7 @@ type session struct {
 	cancel              context.CancelFunc
 	finalizing          bool
 	supplementClosed    bool
+	supplementRequest   *supplementRequest
 	decision            chan bool
 	decisions           map[string]chan bool
 	questionReply       chan map[string][]string

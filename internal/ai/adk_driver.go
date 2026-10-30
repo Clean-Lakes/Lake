@@ -205,7 +205,7 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 		s.mu.Unlock()
 		return result
 	}
-	root, err := llmagent.New(llmagent.Config{Name: name, Model: provider, Tools: tools, Mode: mode, AfterModelCallbacks: []llmagent.AfterModelCallback{d.afterModel},
+	root, err := llmagent.New(llmagent.Config{Name: name, Model: provider, Tools: tools, Mode: mode, AfterModelCallbacks: []llmagent.AfterModelCallback{d.afterModel}, OnModelErrorCallbacks: []llmagent.OnModelErrorCallback{d.supplementModelError},
 		BeforeToolCallbacks: []llmagent.BeforeToolCallback{func(tc agent.Context, t tool.Tool, a map[string]any) (map[string]any, error) {
 			if t.Name() == supplementTool {
 				if d.supplementCalls[tc.FunctionCallID()] {
