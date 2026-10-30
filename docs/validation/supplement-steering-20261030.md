@@ -16,7 +16,7 @@
 - `go test ./...`：通过（web 包约 271 秒）。
 - `go vet ./...`：通过。
 - 定向 `go test -race ./internal/ai ./internal/web -run 'TestUserSupplement|TestMessageQueue.*Supplement' -count=10`：通过。
-- 完整 `go test -race ./internal/ai ./internal/web ./internal/agent/...`：完成后补记。
+- 完整 `go test -race ./internal/ai ./internal/web ./internal/agent/...`：通过（ai 约 193 秒，web 约 550 秒）。
 - `python3 scripts/check_adk_runtime_boundary.py`：通过。
 - 功能分支前端：553 项通过；保留 #128 的 Dev 集成前端：556 项通过。
 - `scripts/build_lake_desktop.sh --dev --install`：类型检查、Vite、Go/Swift 构建和签名安装通过，保留已有 chunk / Swift 构建系统警告。
@@ -26,7 +26,7 @@
 
 ## 当前 Dev 验证边界
 
-安装完成，但原生窗口控制接口多次读取、路径重连和重置后均报 timeoutReached，无法通过正常 UI 退出重开。检测到现有后端仍提供旧 JS `index-CMWbBKlN.js`，所以未声称新版已在当前窗口生效；已请用户手动正常重开后继续核对。未强制结束进程，也未使用真实模型或资源操作验收。
+签名安装后原生窗口控制接口暂时持续超时，因此由用户正常退出并重开 Dev。已验证新后端 PID 22379 提供本次 JS `index-D196aszw.js` 和 CSS，与构建 dist 字节完全一致；安装后端 SHA256 与 clean build-origin 一致，来源为 `5e4d282d`。重开后的原生 WK 窗口正常渲染，URL 对应新后端。没有为验收发送真实模型消息或执行实际资源操作。
 
 ## 风险与回退
 
