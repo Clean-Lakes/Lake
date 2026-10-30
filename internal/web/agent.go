@@ -486,6 +486,9 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		return b.sessionAssets(id), nil
 	}
 	tid := stringOf(args["terminal_id"])
+	if name == "policy" && set("query_kubernetes kubernetes_capabilities kubernetes_action")[stringOf(args["name"])] {
+		tid = ""
+	}
 	var target Object
 	if tid != "" {
 		if name == "policy" || name == "adopt_terminal" {
@@ -501,7 +504,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		if selected == "" {
 			selected = tid
 		}
-		if set("query_kubernetes observe_cluster observe_cluster_logs")[callName] {
+		if set("query_kubernetes kubernetes_capabilities kubernetes_action observe_cluster observe_cluster_logs")[callName] {
 			selected = ""
 		}
 		var terminal Object
@@ -564,7 +567,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		if resource != nil && resource["kind"] == "ssh" && (fileCall || callName == "open_ssh_terminal" || set("shell inspect_host terminal_execute_command ssh_terminal_send terminal_send_input ssh_terminal_key terminal_send_key")[callName] && (terminal == nil || terminal["status"] == "disconnected")) {
 			b.checkHostConnectionFailure(ctx, id, stringOf(resource["id"]))
 		}
-		if callName == "query_kubernetes" || resource != nil && resource["kind"] == "kubernetes" && set("observe_cluster observe_cluster_logs")[callName] {
+		if set("query_kubernetes kubernetes_capabilities kubernetes_action")[callName] || resource != nil && resource["kind"] == "kubernetes" && set("observe_cluster observe_cluster_logs")[callName] {
 			terminal = nil
 			targetName = stringOf(resource["name"])
 		}
