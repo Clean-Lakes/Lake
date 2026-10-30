@@ -21,7 +21,7 @@ export function PendingMessages({sessionId,queue:sourceQueue,supplementRootTurnI
  const [editor,setEditor]=useState<{id:string;text:string;original:string;references:Record<string,unknown>[];mentions:MessageMention[]} | null>(null);
 
  const [presentation,setPresentation]=useState(()=>({source:queue.items,rows:queue.items.map(item=>({item,phase:'present' as const})) as QueuePresence[]}));
- if(presentation.source!==queue.items)setPresentation({source:queue.items,rows:reconcileQueuePresence(presentation.rows,queue.items,queueMotionEnabled())});
+ if(presentation.source!==queue.items)setPresentation({source:queue.items,rows:reconcileQueuePresence(presentation.rows.filter(row=>!supplementRootTurnId||!sourceQueue.items.some(item=>item.id===row.item.id&&item.supplementRootTurnId===supplementRootTurnId)),queue.items,queueMotionEnabled())});
  const visibleRows=presentation.rows.filter(row=>!supplementRootTurnId||!sourceQueue.items.some(item=>item.id===row.item.id&&item.supplementRootTurnId===supplementRootTurnId));
  const settle=useCallback((id:string,phase:QueuePresence['phase'])=>setPresentation(current=>({...current,rows:current.rows.flatMap(row=>row.item.id!==id||row.phase!==phase?[row]:phase==='leaving'?[]:[{...row,phase:'present'}])})),[]);
  useEffect(()=>{
@@ -62,8 +62,9 @@ export function PendingMessages({sessionId,queue:sourceQueue,supplementRootTurnI
   finally {setBusy(false);}
  }
  async function push(item:QueuedMessage) {
+  const input=panel.current?.closest(".session-view")?.querySelector<HTMLElement>("#message-input");
   const next=await mutate({operation:"push",revision:queue.revision,id:item.id});
-  if(next)panel.current?.closest(".session-view")?.querySelector<HTMLElement>("#message-input")?.focus({preventScroll:true});
+  if(next&&input?.isConnected)input.focus({preventScroll:true});
  }
  async function edit(item:QueuedMessage) {
   const next=await mutate({operation:"pause",revision:queue.revision});
@@ -113,7 +114,7 @@ export function PendingMessages({sessionId,queue:sourceQueue,supplementRootTurnI
     <div className="pending-message-content">{editor?.id===item.id ? <div className="pending-message-editor"><textarea autoFocus aria-label="编辑待发送消息" rows={3} maxLength={100000} value={editor.text} disabled={blocked} onChange={event => setEditor({...editor,text:event.target.value})} onCompositionStart={() => composition.current.start()} onCompositionEnd={() => composition.current.end()} onKeyDown={event => {if (composition.current.ignores(event.nativeEvent)) return;if (isSendKey(event.nativeEvent,sendShortcut)) {event.preventDefault();void saveEdit();}if (event.key==="Escape") {event.preventDefault();finishEditing(editor.id);}}}/><div><span>队列已暂停，编辑完成后可继续发送</span><button type="button" disabled={blocked} onClick={() => finishEditing(editor.id)}>取消</button><button type="button" className="pending-editor-save" disabled={blocked || !editor.text.trim()} onClick={() => void saveEdit()}>保存修改</button></div></div> : <p title={item.text}><MessageText text={item.text} mentions={item.mentions}/></p>}
       {pushing&&<small className="pending-message-push-status" role="status">补充已发送 · 等待接入</small>}
       {(item.images.length>0 || item.files.length>0) && <div className="pending-message-attachments">{item.images.length>0 && <span>{item.images.length} 张图片</span>}{item.files.map(file => <span key={file.sourceId} title={file.name}><Glyph name="document" size={12}/>{file.name}</span>)}</div>}
-    </div>{!editor && <div className="pending-message-actions"><button type="button" className="pending-message-push" aria-label={`推送第 ${index+1} 条消息到本轮`} title={pushing?"补充已发送，等待接入":active?"推送到当前任务，当前步骤结束后补充":"本轮运行时可补充；空闲时请继续发送队列"} aria-busy={busy} disabled={blocked || retiring || pushing || !active} onClick={()=>void push(item)}><Glyph name={pushing?"check":"up"} size={15}/></button><button type="button" className="pending-message-edit" aria-label={`编辑第 ${index+1} 条消息`} data-queue-edit={item.id} title="编辑" disabled={blocked || retiring || pushing} onClick={() => void edit(item)}><Glyph name="edit" size={14}/></button><button type="button" aria-label={`移除第 ${index+1} 条消息`} title="移除" disabled={blocked || retiring || pushing} onClick={() => void mutate({operation:"remove",revision:queue.revision,id:item.id})}><Glyph name="close" size={14}/></button></div>}
+    </div>{!editor && <div className="pending-message-actions"><button type="button" className="pending-message-push" aria-label={`推送第 ${index+1} 条消息到本轮`} title={pushing?"补充已发送，等待接入":active?"推送到当前任务，优先接入补充":"本轮运行时可补充；空闲时请继续发送队列"} aria-busy={busy} disabled={blocked || retiring || pushing || !active} onClick={()=>void push(item)}><Glyph name={pushing?"check":"up"} size={15}/></button><button type="button" className="pending-message-edit" aria-label={`编辑第 ${index+1} 条消息`} data-queue-edit={item.id} title="编辑" disabled={blocked || retiring || pushing} onClick={() => void edit(item)}><Glyph name="edit" size={14}/></button><button type="button" aria-label={`移除第 ${index+1} 条消息`} title="移除" disabled={blocked || retiring || pushing} onClick={() => void mutate({operation:"remove",revision:queue.revision,id:item.id})}><Glyph name="close" size={14}/></button></div>}
   </div></QueueMessagePresence>})}</ol>
   {queue.paused && !editor && queue.items.length>0 && <div className="pending-queue-recovery"><button type="button" disabled={blocked} aria-label="继续发送队列" onClick={()=>void mutate({operation:"resume",revision:queue.revision})}>继续发送</button></div>}
   {editor && !queue.items.some(item => item.id===editor.id) && <p className="pending-messages-error">此消息已被其他窗口发送或移除。未保存内容：{editor.text}<button type="button" onClick={() => finishEditing(editor.id)}>关闭编辑</button></p>}
