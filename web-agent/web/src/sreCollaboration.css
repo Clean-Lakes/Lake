@@ -48,11 +48,31 @@
 .sre-plan-scheduling{font-size:var(--font-size-ui);line-height:1.7;color:var(--text-muted);margin:8px 0}
 
 .sre-role-live-state.is-active{--status-text-base:var(--foreground)}
-.sre-live-activity{display:flex;align-items:center;flex-wrap:wrap;gap:7px 12px;font-size:var(--font-size-ui);line-height:1.8;color:var(--text-muted);margin:0 0 12px;--status-text-base:var(--text-secondary)}
+.sre-live-activity{display:flex;align-items:center;flex-wrap:wrap;gap:7px 12px;font-size:var(--font-size-ui);line-height:1.8;color:var(--text-muted);margin:0 0 12px;--status-text-base:var(--text-secondary);--status-text-highlight:var(--foreground)}
 .sre-live-activity time{flex:0 0 7em;white-space:nowrap;font-variant-numeric:tabular-nums}.sre-activity-orbit{flex:0 0 12px;width:12px;height:12px;border:1.5px solid var(--border-strong);border-top-color:var(--foreground);border-radius:50%;animation:sre-activity-turn .9s linear infinite}
 @keyframes sre-activity-turn{to{transform:rotate(360deg)}}
 .sre-plan-blockers{border-top:1px solid var(--warning-border);padding:10px 0;margin-top:6px;color:var(--warning);font-size:var(--font-size-ui);line-height:1.7}
 .sre-plan-blockers>p{display:flex;align-items:center;flex-wrap:wrap;gap:6px 9px;margin:0 0 6px}.sre-plan-blockers strong{font-weight:var(--font-weight-medium)}.sre-plan-blockers>div{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:5px}.sre-plan-blockers button{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;background:transparent;border:0;border-radius:var(--radius-control);padding:4px 6px;color:var(--warning);font-size:var(--font-size-ui)}.sre-plan-blockers button:hover{background:var(--warning-soft)}.sre-operation-record{scroll-margin-block:40px}
-@media(prefers-reduced-motion:reduce){.sre-activity-orbit{animation:none}.sre-live-activity .status-text--active,.sre-role-live-state .status-text--active{animation:none;background:none;color:var(--status-text-base);-webkit-text-fill-color:currentColor}}
+@media(prefers-reduced-motion:reduce){.sre-activity-orbit{animation-play-state:paused}.sre-live-activity .status-text--active,.sre-role-live-state .status-text--active{animation-play-state:paused;background:none;color:var(--status-text-base);-webkit-text-fill-color:currentColor}}
 
 .sre-node-details{font-size:var(--font-size-ui);color:var(--text-secondary);margin:5px 0 0}.sre-node-details>summary{display:flex;align-items:center;gap:7px;width:fit-content;list-style:none;cursor:pointer;color:var(--text-muted);font-size:var(--font-size-ui);padding:3px 0}.sre-node-details>summary::-webkit-details-marker{display:none}.sre-node-details>summary svg{transition:transform .15s ease}.sre-node-details[open]>summary svg{transform:rotate(180deg)}.sre-node-details[open]>.sre-prose{margin-top:10px}.sre-report-summary:has(+.sre-node-details){margin-bottom:6px}
+
+.sre-live-record{margin:4px 0 12px;font-size:var(--font-size-toolbar);color:var(--text-muted)}
+.sre-live-record>summary{width:fit-content;max-width:100%}
+.sre-live-record>.sre-prose{margin-top:8px;color:var(--text-secondary);max-height:240px;overflow:auto}
+
+/* Stable sizing and snapshot timing are independent of browser-owned motion. */
+.sre-live-activity.is-stable>[role="status"]{flex:0 0 13em;white-space:nowrap}
+
+/* Keep the plan disclosure label and its chevron on the same line. */
+.sre-plan>footer>details>summary{white-space:nowrap}
+
+/* Pilot roles use the ordinary reply typography and one compact activity row. */
+.sre-role-conversation { display:block; position:relative; max-width:none; margin:0; }
+.sre-role-conversation > .sre-role-avatar { position:absolute; top:0; left:0; width:22px; height:25px; }
+.sre-role-conversation .sre-role-content > header { padding-left:32px; }
+.sre-role-conversation .sre-role-body { max-width:none; font-size:var(--font-size-body); padding:12px 0; line-height:inherit; }
+.sre-role-conversation .sre-conversation-activity { flex-wrap:wrap; margin:0; padding:0; border:0; font-size:var(--font-size-body); }
+.sre-conversation-activity .turn-duration-disclosure { flex-wrap:wrap; row-gap:4px; }
+.sre-conversation-activity > svg,.sre-conversation-activity button > svg { flex:none; }
+.sre-role-conversation.sre-role-status .sre-role-body { color:var(--foreground); }

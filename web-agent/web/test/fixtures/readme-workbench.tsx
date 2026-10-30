@@ -5,6 +5,7 @@ import App from '../../src/App';
 import {WindowsChrome} from '../../src/WindowsChrome';
 import {setThemePreference} from '../../src/appearance';
 import type {Resource,WorkSession,SessionSnapshot,SRETask} from '../../../shared/contracts';
+import {islandFixture, type IslandFixtureState} from './pilot-island-data';
 import '../../src/theme.css';
 import '../../src/appSelect.css';
 import '../../src/providerIcon.css';
@@ -14,6 +15,7 @@ import '../../src/agentQuestion.css';
 import '../../src/sreCollaboration.css';
 const dark=new URLSearchParams(location.search).get('theme')==='dark';
 setThemePreference(dark?'dark':'light');
+if(new URLSearchParams(location.search).has('corner-fallback'))document.documentElement.classList.add('lake-corner-fallback');
 const at=(minute:number)=>`2026-10-16T02:${String(minute).padStart(2,'0')}:00Z`;
 const project={id:'demo-project',name:'Northwind · 生产环境',createdAt:at(0)};
 const resources=[
@@ -47,9 +49,57 @@ const messages=[
 ].map((m,i)=>({...m,sessionId:session.id,taskId:'demo-task',revision:1,sequence:i+1,createdAt:at(m.minute),...(m.step?{attemptId:m.step,roleRunId:'role-'+m.step}:{})}));
 const task={id:'demo-task',sessionId:session.id,projectId:project.id,requestId:'demo-request',goal:'回滚订单服务并验证恢复',scope:['order-api'],mode:'assist',status:'completed',outcome:'completed',recoveryStatus:'verified',rootCauseStatus:'unknown',profileId:'lake-sre',profileVersion:1,revision:1,tokenBudget:128000,budgetSpent:0,usage:{input:0,output:0,total:0},createdAt:at(24),updatedAt:at(29),plans:[{id:'plan-v1',version:1,goal:'回滚订单服务并验证恢复',taskType:'recovery',scope:['order-api'],collaborationVersion:1,steps}],runs:[{id:'plan-run',planRevisionId:'plan-v1',status:'completed'}],attempts:steps.map((s,i)=>({id:s.id,stepId:s.id,planRunId:'plan-run',roleRunId:'role-'+s.id,status:'succeeded',evidence:[],operations:[],startedAt:at(25+i),finishedAt:at(26+i)})),messages,verifications:[]} as unknown as SRETask;
 const snapshot={session,resources,resourceTree:tree,messages:[{id:'demo-question',sessionId:session.id,role:'user',text:'订单服务发布后错误率升高，按已批准的方案回滚，并验证是否恢复。',createdAt:at(23)}],specialists:[],evidence:[],actions:[],terminals:[],cursor:1,replyTimings:[{messageId:'demo-question',startedAt:at(24),finishedAt:at(29),status:'completed'}],messageQueue:{paused:false,revision:0,lastError:'',items:[]},ai:{session:session.id,profile:'core',status:'completed',rootTurnId:'demo-turn',turns:1,turnStartedAt:at(24),turnFinishedAt:at(29),cards:[],cardsOffset:0,totalCards:0,agentRuns:steps.map((s,i)=>({id:'role-'+s.id,sessionId:session.id,rootTurnId:'demo-turn',sreTaskId:task.id,sreRole:s.role,role:s.role,task:s.description,resourceIds:['order-api'],status:'completed',createdAt:at(25+i),startedAt:at(25+i),finishedAt:at(26+i),toolCount:3})),usage:{known:true,input:17820,output:1240,total:19060}},sre:{enabled:true,tasks:[task]}} as unknown as SessionSnapshot;
+if(new URLSearchParams(location.search).has('inspector-ordinary')){
+ snapshot.sre={enabled:false,tasks:[]};snapshot.ai!.agentRuns=[];
+ snapshot.messages[0]!.text='只读核对两个演示资源的日志。';
+ snapshot.ai!.cards=resources.slice(0,2).map((resource,i)=>({id:`inspector-read-${i}`,type:'operation',title:'read',at:at(25+i),status:'completed',content:'演示日志读取完成。',data:{resource_id:resource.id,target:resource.name,arguments:{path:'/tmp/lake-inspector-fixture.log'}}}));
+ snapshot.ai!.cards.push({id:'inspector-answer',type:'message',at:at(29),status:'completed',content:'两个演示资源的日志已核对，原始记录可从上方用时入口查看。'});
+ snapshot.ai!.totalCards=snapshot.ai!.cards.length;
+}
+if(new URLSearchParams(location.search).has('responsive-approval')){
+ session.status='waiting_approval';
+ snapshot.sre={enabled:false,tasks:[]};snapshot.ai!.agentRuns=[];
+ snapshot.ai!.status='waiting_approval';snapshot.ai!.turnFinishedAt='';
+ snapshot.replyTimings![0]!.status='running';snapshot.replyTimings![0]!.finishedAt='';
+ snapshot.ai!.cards=[{id:'approval-prose',type:'message',status:'completed',at:at(25),content:'已确认目标，等待你核对本次文件写入。'}];
+ snapshot.ai!.pending={id:'responsive-file',kind:'file_write',target:'演示服务器 · 192.0.2.216',risk:'write',call:{id:'responsive-call',name:'write',arguments:JSON.stringify({path:'/tmp/routeinfo.py',content:'print("fixture only")\n'})}} as import('../../../shared/contracts').AIApproval;
+}
 const model={id:'demo-model',providerId:'demo-provider',providerName:'DeepSeek',modelId:'deepseek-chat',name:'DeepSeek',displayName:'DeepSeek',protocol:'openai'};
 const catalog={projects:[project],sessions,resources,resourceTree:tree,tags:[],terminals:[]};
 const bootstrap={authenticated:true,modelConfigured:true,modelName:'DeepSeek',modelId:model.modelId,modelSelection:model,terminalMode:'pty',supportsImageInput:false,aiRuntime:'go'};
+if(new URLSearchParams(location.search).has('compaction-failure')){
+ session.title='主机资源状态检查';session.status='failed';
+ const first='2026-10-29T02:15:07Z',second='2026-10-29T02:15:20Z';
+ snapshot.messages=[{id:'failed-question',sessionId:session.id,role:'user',text:'测试环境的 Flink 集群状态如何',createdAt:first},{id:'failed-followup',sessionId:session.id,role:'user',text:'啊',createdAt:second}];
+ snapshot.replyTimings=[{messageId:'failed-question',startedAt:first,finishedAt:'2026-10-29T02:15:10Z',status:'failed'},{messageId:'failed-followup',startedAt:second,finishedAt:'2026-10-29T02:15:23Z',status:'failed'}];
+ snapshot.ai={...snapshot.ai!,status:'failed',rootTurnId:'compaction-failure-turn',turnStartedAt:second,turnFinishedAt:'2026-10-29T02:15:23Z',agentRuns:[],cards:[{id:'failed-compact-a',type:'error',status:'failed',at:'2026-10-29T02:15:09Z',content:'context compaction: cannot connect to model endpoint'},{id:'failed-compact-b',type:'error',status:'failed',at:'2026-10-29T02:15:22Z',content:'context compaction: cannot connect to model endpoint'}],cardsOffset:0,totalCards:2};
+ snapshot.sre={enabled:false,tasks:[{...task,status:'cancelled',updatedAt:'2026-10-26T15:57:17Z',messages:[],attempts:[{...task.attempts[0]!,status:'interrupted',operations:[{id:'old-dispatch',status:'dispatched',risk:'readonly',resourceId:'order-api',call:{id:'old-call',name:'shell',arguments:'{"command":"hostname"}'},preparedAt:'2026-10-26T15:55:00Z',dispatchedAt:'2026-10-26T15:55:01Z'}]}]} as SRETask]};
+}
+const islandQuery = new URLSearchParams(location.search).get('pilot-island');
+const islandWrites: string[] = [];
+const linkedIsland=new URLSearchParams(location.search).has('linked-island');
+const linkedTerminal={id:'linked-terminal',sessionId:session.id,resourceId:'order-api',generation:'linked-g',status:'ready',holder:'user',interactive:true,writerSessionId:session.id};
+const linkedTerminals=Array.from({length:Math.min(8,Math.max(1,Number(new URLSearchParams(location.search).get('linked-terminals'))||1))},(_,index)=>({...linkedTerminal,resourceId:new URLSearchParams(location.search).has('linked-resources')&&index===2?'gateway':'order-api',id:index?`linked-terminal-${index+1}`:linkedTerminal.id,createdAt:new Date(Date.UTC(2026,9,25,10,index)).toISOString()}));
+const fixtureHistories:import('../../../shared/contracts').TerminalHistory[]=[];
+function applyIsland(state: IslandFixtureState) {
+ const incoming = islandFixture(state, session.id, project.id);
+ project.name = 'HexHub 服务器'; session.title = '主机资源状态检查';
+ session.status = ['paused','failed','finished','cancelled'].includes(state) ? 'completed' : 'investigating';
+ snapshot.ai = {...snapshot.ai!, ...incoming.ai!}; snapshot.sre = incoming.sre;
+ if (['paused','failed','finished','cancelled'].includes(state)) {
+  snapshot.ai.status = 'completed';
+  for (const agent of snapshot.ai.agentRuns ?? []) if (agent.status === 'running') agent.status = state === 'finished' ? 'completed' : 'interrupted';
+ }
+ snapshot.sre!.tasks[0]!.revision = snapshot.cursor + 1;
+ snapshot.messages = [{id:'island-user',sessionId:session.id,role:'user',text:'只读检查主机资源与日志来源。',createdAt:'2026-10-26T00:01:00Z'}];
+ const ended=['paused','failed','finished','cancelled'].includes(state);
+ snapshot.ai.turnFinishedAt=ended?'2026-10-26T00:03:00Z':'';
+ snapshot.replyTimings=[{messageId:'island-user',startedAt:'2026-10-26T00:01:00Z',finishedAt:snapshot.ai.turnFinishedAt,status:ended?'completed':'running'}];
+}
+if (islandQuery) {
+ applyIsland(islandQuery as IslandFixtureState);
+ if (new URLSearchParams(location.search).has('long-title')) session.title = '主机资源状态检查与六个业务服务日志来源独立复核'.repeat(4);
+}
 if(new URLSearchParams(location.search).has('conversation-radii')){
  const resource=resources.find(value=>value.id==='postgres')!;
  const label='@'+resource.name;
@@ -72,6 +122,8 @@ if(new URLSearchParams(location.search).has('image-messages')){
  const picture=(id:string,width:number,height:number,color:string)=>({id,name:id+'.svg',width,height,mimeType:'image/svg+xml',base64:'',sizeBytes:0,url:'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="${color}"/><circle cx="${width*.72}" cy="${height*.25}" r="${Math.min(width,height)*.12}" fill="#dceadf"/><path d="M0 ${height*.85} L${width*.4} ${height*.35} L${width} ${height*.9} V${height} H0Z" fill="#55766c"/><text x="${width*.08}" y="${height*.17}" fill="white" font-family="sans-serif" font-size="${Math.min(width,height)*.07}">${width} × ${height}</text></svg>`)});
  snapshot.messages=[
   {id:'image-user-1',sessionId:session.id,role:'user',text:'这两张图帮我看一下',images:[picture('横图',1800,1200,'#789b92'),picture('竖图',900,2400,'#7f8eac')],createdAt:at(31)},
+  {id:'image-user-wide',sessionId:session.id,role:'user',text:'',images:[picture('纯图片宽屏截图',2200,500,'#789b92')],createdAt:at(31)},
+  {id:'image-user-tall',sessionId:session.id,role:'user',text:'',images:[picture('纯图片竖屏截图',900,2400,'#7f8eac')],createdAt:at(32)},
   {id:'image-user-2',sessionId:session.id,role:'user',text:'',images:[picture('小图',48,48,'#8a9b72')],createdAt:at(32)},
   {id:'text-user',sessionId:session.id,role:'user',text:'普通文字仍保留原来的气泡。',createdAt:at(33)},
  ];
@@ -88,21 +140,39 @@ const fetchOriginal=window.fetch.bind(window);
 window.fetch=async(input,init)=>{
  const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href);
  if(!url.pathname.startsWith('/api/'))return fetchOriginal(input,init);
+ if(islandQuery&&(init?.method??'GET')!=='GET')islandWrites.push(url.pathname);
  if(sentTagsProof&&init?.method==='POST'&&url.pathname.endsWith('/messages')){
   const payload=JSON.parse(String(init.body));
   snapshot.messages.push({id:'sent-tags-'+snapshot.messages.length,sessionId:session.id,role:'user',text:payload.text,mentions:payload.mentions,createdAt:at(33+snapshot.messages.length)});snapshot.cursor++;
   return new Response('{}',{headers:{'Content-Type':'application/json'}});
  }
  if(referenceProof&&init?.method==='POST'&&url.pathname.endsWith('/messages')){const sent=JSON.parse(sentProof.textContent||'[]');sent.push(JSON.parse(String(init.body)));sentProof.textContent=JSON.stringify(sent);return new Response('{}',{headers:{'Content-Type':'application/json'}});}
+ if(islandQuery&&url.pathname===`/api/projects/${project.id}/pilot`&&init?.method==='PUT'){
+  const update=JSON.parse(String(init.body)),settings=snapshot.sre!.pilot!;
+  if(update.expectedRevision!==settings.revision)return new Response('{}',{status:409});
+  Object.assign(settings,{enabled:update.enabled,autoAdvance:update.autoAdvance,revision:settings.revision+1});
+  return new Response(JSON.stringify(settings),{headers:{'Content-Type':'application/json'}});
+ }
+ if(linkedIsland){
+  const path=url.pathname;let value:unknown;
+  if(path.endsWith('/terminal-context'))value={sessionId:session.id};
+  else if(path.endsWith('/history')){const terminal=linkedTerminals.find(item=>path.includes('/'+item.id+'/'))??linkedTerminals[0]!;value={terminal,entries:[],output:`$ # ${terminal.resourceId} / ${terminal.id}\r\n$ uptime\r\nload averages: 0.12 0.18 0.15\r\n$ `};}
+  else if(path.endsWith('/terminals')&&path.includes('/resources/'))value={terminals:linkedTerminals.filter(item=>path.includes('/resources/'+item.resourceId+'/'))};
+  else if(path.endsWith('/terminals')&&init?.method==='POST')value=linkedTerminals[0];
+  else if(path.endsWith('/resize')||path.endsWith('/input'))value={};
+  if(value!==undefined)return new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
+ }
  if((init?.method??'GET')!=='GET')return new Response(JSON.stringify({error:'README 演示只提供展示，不执行操作'}),{status:405,headers:{'Content-Type':'application/json'}});
  let value:unknown;
  const path=url.pathname;
  if(path==='/api/bootstrap')value=bootstrap;
- else if(path==='/api/catalog')value=catalog;
+ else if(path==='/api/catalog')value=linkedIsland?{...catalog,terminals:linkedTerminals}:catalog;
  else if(path.endsWith('/snapshot'))value=snapshot;
  else if(path.endsWith('/ai/reasoning'))value={modelId:model.modelId,effort:'',default:'',levels:[]};
  else if(path.endsWith('/ai/options'))value={profile:'core',multiAgentMode:'off',contextWindow:64000,maxOutput:8192,maxSteps:500,silentReadFiles:true,silentWriteFiles:false,silentReadSQL:true,silentCommands:true};
  else if(path==='/api/ai/presets'||path.endsWith('/ai/references')||path.endsWith('/terminals/available'))value=[];
+ else if(islandQuery&&path.endsWith('/pilot'))value=snapshot.sre!.pilot;
+ else if(islandQuery&&path.endsWith('/history'))value=fixtureHistories.find(h=>path.includes('/'+h.terminal.id+'/'))??{entries:[]};
  else if(path.endsWith('/sre'))value={enabled:true};
  else if(path.endsWith('/sre/tasks'))value={items:[task],nextCursor:''};
  else if(path.endsWith('/message-queue'))value=snapshot.messageQueue;
@@ -121,7 +191,41 @@ class DemoEventSource extends EventTarget {
 }
 window.EventSource=DemoEventSource as unknown as typeof EventSource;
 window.lakeDesktopUpdates={platform:'macOS · Apple Silicon',command:async()=>({status:'current',currentVersion:'0.3.17',message:'当前已是最新版本',updateAvailable:false})};
+if(new URLSearchParams(location.search).has('windows'))window.lakeWindowsChrome={command:async()=>"normal"};
 createRoot(document.getElementById('root')!).render(<><App/><WindowsChrome/></>);
+
+if (islandQuery) {
+ const emit = () => {snapshot.cursor++;for(const stream of demoStreams)stream.onmessage?.(new MessageEvent('message',{data:JSON.stringify({sessionId:session.id,type:'session',seq:snapshot.cursor})}));};
+ Object.assign(window, {lakeIslandQA: {
+  longInspectorSteps(){for(const plan of snapshot.sre!.tasks[0]!.plans)for(const step of plan.steps)step.description='通过 10.100.33.41 以只读方式执行：kubectl get nodes -o wide 记录各节点 Ready 状态与角色，并独立复核所有 Deployment 的期望副本、就绪副本和重启计数。';emit();},
+  state(value: IslandFixtureState) {applyIsland(value);emit();},
+  pulse(value: number) {for(const agent of snapshot.ai!.agentRuns ?? []) {agent.toolCount=value;agent.activityUpdatedAt=new Date().toISOString();}emit();},
+  presentationStatus(value:WorkSession['status'],verified=false){session.status=value;if(verified){const t=snapshot.sre!.tasks[0]!;t.outcome='completed';t.recoveryStatus='verified';}emit();},
+  streamLines(count:number){
+   const t=snapshot.sre!.tasks[0]!,id='qa-stream-tail';
+   const message={id,taskId:t.id,sessionId:session.id,roleId:'coordinator',kind:'summary',source:'runtime',sequence:999,revision:count,createdAt:'2026-10-26T00:01:01Z',body:Array.from({length:count},(_,i)=>`新增结果第${i+1}行：只读模拟检查，保留真实证据。`).join('\n\n')} as SRETask['messages'][number];
+   t.messages=t.messages.filter(m=>m.id!==id);t.messages.push(message);emit();
+  },
+  repeatRole(count:number){
+   const t=snapshot.sre!.tasks[0]!;
+   for(let i=0;i<count;i++)t.messages.push({id:'qa-status-'+t.messages.length,taskId:t.id,sessionId:session.id,roleId:'coordinator',roleRunId:'role-scope',kind:'status',source:'runtime',sequence:100+t.messages.length,revision:1,createdAt:'2026-10-26T00:01:30Z',body:'已核对原命令的终端完成记录，未重发命令。'});
+   emit();
+  },
+  laterOrdinaryTurn(){snapshot.ai!.turnStartedAt="2027-01-01T00:00:00Z";snapshot.ai!.rootTurnId="ordinary-later";session.status="completed";emit();},
+  mode(enabled:boolean){snapshot.sre!.pilot!.enabled=enabled;emit();},
+  resourceStep(count:number){
+   const task=snapshot.sre!.tasks[0]!,attempt=task.attempts.find(a=>a.stepId==='logs')!;
+   const peer=task.attempts.find(a=>a.stepId==='verify-logs')!;
+   const stamp='2026-10-26T00:01:00Z';
+   const operation=(id:string,resourceId:string,status='dispatched')=>({id,resourceId,preparedAt:stamp,dispatchedAt:stamp,status,risk:'readonly',call:{id,name:'shell',arguments:JSON.stringify({command:'hostname'})},result:JSON.stringify({terminal_id:'fixture-'+resourceId,entry_id:id,output:'owned '+id+'\n',exitCode:0})}) as typeof attempt.operations[number];
+   attempt.operations=[operation('mine-a','order-api'),...(count>1?[operation('mine-b','gateway')]:[]),...(count>2?[operation('mine-a-next','order-api','succeeded')]:[])];
+   peer.operations=[operation('peer-a','order-api')];
+   fixtureHistories.splice(0,fixtureHistories.length,...['order-api',...(count>1?['gateway']:[])].map(resourceId=>({terminal:{id:'fixture-'+resourceId,resourceId,generation:'fixture-g',status:'busy',holder:'agent',writerSessionId:session.id},entries:[...attempt.operations,...peer.operations].filter(op=>op.resourceId===resourceId).map(op=>({id:op.id,terminalId:'fixture-'+resourceId,generation:'fixture-g',actor:'agent',originSessionId:session.id,command:'hostname',output:op.id.startsWith('peer')?'PEER-ONLY-OUTPUT':'OWN-'+op.id+'\n',status:op.status==='succeeded'?'completed':'running',exitCode:op.status==='succeeded'?0:null,startedAt:stamp,createdAt:stamp,finishedAt:null,cwd:null})),output:'NEVER-MANUAL-SCREEN'} as import('../../../shared/contracts').TerminalHistory)));
+   snapshot.terminals=fixtureHistories.map(h=>h.terminal);emit();
+  },
+  writes: islandWrites,
+ }});
+}
 
 // Exercise the real App SSE -> snapshot -> header/composer path with safe local data.
 if(new URLSearchParams(location.search).has('live-context')){

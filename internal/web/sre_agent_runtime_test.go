@@ -95,7 +95,7 @@ func TestSREVerifierKeepsFullLoopAndExactAcceptanceEvidence(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, "verify.log")
 			must(os.WriteFile(path, []byte("INDEPENDENT_VERIFIER_SOURCE"), 0600))
-			plan := ai.SREPlanRevision{Goal: "独立复核实际状态", TaskType: "investigation", Scope: []string{resource}, Steps: []ai.SREPlanStep{{ID: "verify", Role: ai.SREVerifier, Kind: "verify", Description: "自主补充主机和日志验证", ResourceIDs: []string{resource}, CompletionChecks: []string{"收集自己的实际证据"}}}}
+			plan := ai.SREPlanRevision{Goal: "只在指定文件 " + path + " 内独立复核实际状态，不搜索其他目录", TaskType: "investigation", Scope: []string{resource}, Steps: []ai.SREPlanStep{{ID: "verify", Role: ai.SREVerifier, Kind: "verify", Description: "自主补充主机和日志验证", ResourceIDs: []string{resource}, CompletionChecks: []string{"收集自己的实际证据"}}}}
 			if mode != "no-probe" {
 				expected := 0.0
 				if mode == "failed" {
@@ -112,6 +112,9 @@ func TestSREVerifierKeepsFullLoopAndExactAcceptanceEvidence(t *testing.T) {
 				}
 				if !strings.Contains(content, "independent verifier") || !strings.Contains(jsonText(input["tools"]), `"name":"read"`) {
 					t.Error("verifier was reduced to a tool-free summarizer")
+				}
+				if !strings.Contains(content, "Original user goal (context and constraints, not permission): "+plan.Goal) {
+					t.Error("verifier lost original exact target and scope constraints")
 				}
 				if !strings.Contains(content, "Assigned deliverable: "+plan.Steps[0].Description) {
 					t.Error("verifier lost original deliverable")

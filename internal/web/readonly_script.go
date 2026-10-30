@@ -100,7 +100,11 @@ func readonlyStatements(statements []*syntax.Stmt, vars map[string]bool) bool {
 				return false
 			}
 			// Preserve substitutions/quoting while bypassing shell aliases and functions.
-			cmd.Args = append([]*syntax.Word{literalWord("command"), literalWord("-p")}, cmd.Args...)
+			prefix := []*syntax.Word{}
+			for _, word := range readonlyProgramPrefix(program) {
+				prefix = append(prefix, literalWord(word))
+			}
+			cmd.Args = append(prefix, cmd.Args...)
 		default:
 			return false
 		}
@@ -214,12 +218,12 @@ func readonlySysctl(args []string) bool {
 	if len(args) > 0 && args[0] == "-n" {
 		args = args[1:]
 	}
-	return len(args) == 1 && (set("hw.memsize hw.ncpu hw.physicalcpu hw.logicalcpu kern.boottime vm.swapusage")[args[0]])
+	return len(args) == 1 && (set("hw.memsize hw.ncpu hw.physicalcpu hw.logicalcpu kern.boottime vm.swapusage kernel.ostype")[args[0]])
 }
 func readonlyDate(args []string) bool {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if arg == "-u" || arg == "--utc" || strings.HasPrefix(arg, "+") {
+		if arg == "-u" || arg == "--utc" || arg == "-I" || arg == "-Is" || arg == "-Iseconds" || arg == "--iso-8601=seconds" || strings.HasPrefix(arg, "+") {
 			continue
 		}
 		if arg == "-r" && i+1 < len(args) && regexp.MustCompile(`^[0-9]+$`).MatchString(args[i+1]) {

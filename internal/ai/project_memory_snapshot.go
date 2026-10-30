@@ -12,12 +12,13 @@ import (
 )
 
 type MemoryEvidence struct {
-	CallID    string                 `json:"callId"`
-	Name      string                 `json:"name"`
-	Excerpt   string                 `json:"excerpt"`
-	Completed bool                   `json:"completed"`
-	Truncated bool                   `json:"truncated,omitempty"`
-	Context   *MemoryEvidenceContext `json:"context,omitempty"`
+	ObservedAt string                 `json:"observedAt,omitempty"`
+	CallID     string                 `json:"callId"`
+	Name       string                 `json:"name"`
+	Excerpt    string                 `json:"excerpt"`
+	Completed  bool                   `json:"completed"`
+	Truncated  bool                   `json:"truncated,omitempty"`
+	Context    *MemoryEvidenceContext `json:"context,omitempty"`
 }
 
 type MemoryResourceBinding struct {
@@ -41,7 +42,17 @@ type MemoryEvidenceContext struct {
 	Claims           []MemoryClaim           `json:"claims,omitempty"`
 }
 
+// Host-only consent snapshot; model arguments cannot populate this contract.
+type NaturalMemoryConsent struct {
+	GlobalEnabled  bool `json:"globalEnabled"`
+	ProjectEnabled bool `json:"projectEnabled"`
+	GlobalEpoch    int  `json:"globalEpoch"`
+	ProjectEpoch   int  `json:"projectEpoch"`
+	PolicyVersion  int  `json:"policyVersion"`
+}
 type MemoryTurnSnapshot struct {
+	Natural               *NaturalMemoryConsent   `json:"natural,omitempty"`
+	LegacyExtraction      bool                    `json:"legacyExtraction,omitempty"`
 	SchemaVersion         int                     `json:"schemaVersion,omitempty"`
 	SourceMessageID       string                  `json:"sourceMessageId,omitempty"`
 	TargetBindings        []MemoryResourceBinding `json:"targetBindings,omitempty"`
@@ -90,8 +101,26 @@ func memoryUTF8Prefix(s string, limit int) (string, bool) {
 	return s[:limit], true
 }
 
+// A cheap admission signal only. It cannot authorize a write; a separate no-tool
+// semantic result and the host's exact current-user source checks are required.
+func NaturalMemorySignal(text string) bool {
+	lower := strings.ToLower(text)
+	for _, part := range []string{"以后", "今后", "后续", "长期", "固定", "偏好", "习惯", "每次", "每回", "一直", "惯例", "不再", "从现在", "always", "prefer", "every ", "from now", "default", "future", "no longer", "任何项目", "所有项目", "所有会话", "all projects", "across projects"} {
+		if strings.Contains(lower, part) {
+			return true
+		}
+	}
+	return false
+}
+
 func (e *Engine) collectMemorySnapshot(s *session, c Config, input TurnInput) {
-	if c.ConversationMode == ModePlan || e.worker != nil || !c.MemoryEnabled || !c.MemoryExtractionEnabled || c.MemoryProjectID == "" || input.IgnoreProjectMemory || len(input.UserText) > 64*1024 {
+	if turn := currentMemoryCapture(s); turn != nil {
+		e.finishMemoryCapture(s, c)
+		return
+	}
+	legacy := c.MemoryEnabled && c.MemoryExtractionEnabled
+	natural := c.NaturalMemory != nil && (c.NaturalMemory.GlobalEnabled || c.NaturalMemory.ProjectEnabled) && NaturalMemorySignal(input.UserText)
+	if c.ConversationMode == ModePlan || e.worker != nil || (!legacy && !natural) || c.MemoryProjectID == "" || input.IgnoreProjectMemory || len(input.UserText) > 64*1024 {
 		return
 	}
 	recent := append([]string(nil), s.state.MemoryRecentUserInputs...)
@@ -100,7 +129,7 @@ func (e *Engine) collectMemorySnapshot(s *session, c Config, input TurnInput) {
 	if len(s.state.MemoryRecentUserInputs) > 3 {
 		s.state.MemoryRecentUserInputs = s.state.MemoryRecentUserInputs[len(s.state.MemoryRecentUserInputs)-3:]
 	}
-	if !memorySignal(input.UserText) {
+	if !memorySignal(input.UserText) && !natural {
 		return
 	}
 	if len(s.state.MemoryOutbox) >= 20 {
@@ -118,12 +147,31 @@ func (e *Engine) collectMemorySnapshot(s *session, c Config, input TurnInput) {
 	segment := s.state.History[start:]
 	for _, message := range segment {
 		for _, call := range message.Calls {
-			if call.Name == "save_project_memory" || call.Name == "forget_project_memory" {
+			if call.Name != "save_project_memory" && call.Name != "forget_project_memory" {
+				continue
+			}
+			if !natural {
 				return
+			}
+			// Failed direct-save attempts do not veto a separately authorized natural
+			// preference. Successful direct writes still avoid a second representation.
+			for _, result := range segment {
+				if result.Role == "tool" && result.CallID == call.ID && result.Name == call.Name {
+					var value map[string]any
+					if json.Unmarshal([]byte(result.Content), &value) == nil && value["error"] == nil && value["key"] != nil {
+						return
+					}
+				}
 			}
 		}
 	}
 	snapshot := MemoryTurnSnapshot{ProjectID: c.MemoryProjectID, SessionID: s.state.View.Session, TurnID: s.state.View.RootTurnID, Epoch: c.MemoryEpoch, KnowledgeBaseRevision: c.MemoryKnowledgeRevision, UserText: redact(input.UserText, c), RecentUserInputs: recent, ModelRef: ModelIdentity(c.Model), CapturedAt: s.state.View.TurnFinishedAt}
+	if natural {
+		consent := *c.NaturalMemory
+		snapshot.Natural = &consent
+		snapshot.LegacyExtraction = legacy
+		snapshot.SourceMessageID = input.StrategyMessageID
+	}
 	if c.MemorySchemaVersion == 2 {
 		snapshot.SchemaVersion = 2
 		snapshot.SourceMessageID = input.StrategyMessageID
@@ -220,6 +268,16 @@ func (e *Engine) AckMemoryOutbox(id, turnID, snapshotHash string) error {
 		if snapshot.SnapshotHash != snapshotHash {
 			return errors.New("memory snapshot conflict")
 		}
+		if s.state.MemoryAcknowledged == nil {
+			s.state.MemoryAcknowledged = map[string]string{}
+		}
+		for key := range s.state.MemoryAcknowledged {
+			if len(s.state.MemoryAcknowledged) < 128 {
+				break
+			}
+			delete(s.state.MemoryAcknowledged, key)
+		}
+		s.state.MemoryAcknowledged[turnID] = snapshotHash
 		s.state.MemoryOutbox = append(s.state.MemoryOutbox[:i], s.state.MemoryOutbox[i+1:]...)
 		return e.save(s)
 	}
@@ -227,13 +285,16 @@ func (e *Engine) AckMemoryOutbox(id, turnID, snapshotHash string) error {
 }
 
 func (e *Engine) PersistedMemoryOutboxes() ([]MemoryTurnSnapshot, error) {
+	if err := e.restoreMissingMemoryCaches(); err != nil {
+		return nil, err
+	}
 	entries, err := os.ReadDir(e.Dir)
 	if err != nil {
 		return nil, err
 	}
 	var out []MemoryTurnSnapshot
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || !identifier.MatchString(strings.TrimSuffix(entry.Name(), ".json")) {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") || !identifier.MatchString(strings.TrimSuffix(entry.Name(), ".json")) || !e.memoryCaptureSessionAvailable(strings.TrimSuffix(entry.Name(), ".json")) {
 			continue
 		}
 		bytes, err := os.ReadFile(filepath.Join(e.Dir, entry.Name()))

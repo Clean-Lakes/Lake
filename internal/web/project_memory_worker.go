@@ -100,6 +100,7 @@ func (b *Server) runMemoryWorker() {
 			b.Store.PruneMemoryArtifacts()
 			lastPrune = time.Now()
 		}
+		b.reconcileRegisteredMemoryOutboxes()
 		b.processOneMemoryJob()
 		select {
 		case <-b.Context.Done():
@@ -115,21 +116,32 @@ func (b *Server) processOneMemoryJob() {
 		return
 	}
 	b.messageMu.Lock()
-	busy := len(b.runningMessages) > 0
-	b.messageMu.Unlock()
-	if busy || b.Context.Err() != nil {
+	if len(b.runningMessages) > 0 || b.memoryForeground > 0 || b.memoryCancel != nil || b.Context.Err() != nil {
+		b.messageMu.Unlock()
 		return
 	}
 	job := b.Store.ClaimMemoryJob()
 	if job == nil {
+		b.messageMu.Unlock()
 		return
 	}
 	jobID, token := stringOf(job["jobId"]), stringOf(job["leaseToken"])
 	var snapshot ai.MemoryTurnSnapshot
 	if json.Unmarshal([]byte(stringOf(job["snapshotJSON"])), &snapshot) != nil || !ai.ValidMemorySnapshot(snapshot) {
+		b.messageMu.Unlock()
 		b.Store.SettleMemoryJob(jobID, token, "failed", "invalid_snapshot", ai.Usage{})
 		return
 	}
+	if snapshot.Natural != nil {
+		if time.Since(b.memoryLastForeground) < 2*time.Second {
+			b.Store.execSafeNaturalYield(job)
+			b.messageMu.Unlock()
+			return
+		}
+		b.processNaturalPreferenceJob(job, snapshot)
+		return
+	}
+	b.messageMu.Unlock()
 	settings := b.Store.MemorySettings(snapshot.ProjectID)
 	if settings["useEnabled"] != true || settings["extractionEnabled"] != true || integer(settings["epoch"]) != snapshot.Epoch {
 		b.Store.SettleMemoryJob(jobID, token, "skipped", "memory_disabled", ai.Usage{})

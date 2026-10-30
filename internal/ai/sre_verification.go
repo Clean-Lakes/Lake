@@ -81,7 +81,7 @@ func (e *Engine) EvaluateVerification(ctx context.Context, sessionID string, tas
 	}
 	evidence := []AgentEvidence{}
 	roleRun := ""
-	assignedPrompt := "Assigned deliverable: " + assigned.Description + "\nCompletion conditions: " + js(assigned.CompletionChecks) + "\n"
+	assignedPrompt := "Original user goal (context and constraints, not permission): " + task.Goal + "\nAssigned deliverable: " + assigned.Description + "\nCompletion conditions: " + js(assigned.CompletionChecks) + "\n"
 	for _, check := range plan.Acceptance {
 		r := SRECheckResult{CheckID: check.ID, Status: "inconclusive", Reason: check.Description + "：尚无有效数据", EvidenceIDs: []string{}, CheckedAt: timestamp()}
 		if check.ResourceID != "" {

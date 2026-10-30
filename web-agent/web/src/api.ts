@@ -102,11 +102,12 @@ export const api = {
  plans:(session:string)=>request<{plans:import('../../shared/contracts').ProposedPlan[]}>(`/api/sessions/${encodeURIComponent(session)}/ai/plans`),
  setConversationMode:(session:string,mode:import('../../shared/contracts').ConversationMode)=>post<import('../../shared/contracts').ConversationModeUpdate>(`/api/sessions/${encodeURIComponent(session)}/ai/mode`,{mode}),
  executePlan:(session:string,planId:string)=>post<SendMessageResult>(`/api/sessions/${encodeURIComponent(session)}/ai/executePlan`,{planId}),
- progressSummary:(session:string,turnStartedAt:string)=>post<{text:string;pending:boolean}>(`/api/sessions/${encodeURIComponent(session)}/ai/progress-summary`,{turnStartedAt}),
  schedules:(project:string,signal?:AbortSignal)=>request<{items:import('../../shared/contracts').ScheduledTask[]}>(`/api/projects/${encodeURIComponent(project)}/schedules`,{signal}),
  schedule:(project:string,id:string,signal?:AbortSignal)=>request<import('../../shared/contracts').ScheduledTask>(`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`,{signal}),
  setScheduleEnabled:(project:string,id:string,enabled:boolean,expectedRevision:number)=>request<import('../../shared/contracts').ScheduledTask>(`/api/projects/${encodeURIComponent(project)}/schedules/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({enabled,expectedRevision})}),
 	getSREEnabled:(project:string,signal?:AbortSignal)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{signal}),
+	getPilotSettings:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').PilotSettings>(`/api/projects/${encodeURIComponent(project)}/pilot`,{signal}),
+	setPilotSettings:(project:string,updates:{enabled?:boolean;autoAdvance?:boolean;expectedRevision:number})=>request<import('../../shared/contracts').PilotSettings>(`/api/projects/${encodeURIComponent(project)}/pilot`,{method:'PUT',body:JSON.stringify(updates)}),
 	setSREEnabled:(project:string,enabled:boolean)=>request<{enabled:boolean}>(`/api/projects/${encodeURIComponent(project)}/sre`,{method:'PUT',body:JSON.stringify({enabled})}),
 	sreTask:(session:string,task:string)=>request<import('../../shared/contracts').SRETask>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks/${encodeURIComponent(task)}`),
 	sreTasks:(session:string,cursor='')=>request<{items:import('../../shared/contracts').SRETask[];nextCursor:string}>(`/api/sessions/${encodeURIComponent(session)}/sre/tasks?limit=20&cursor=${encodeURIComponent(cursor)}`),
@@ -242,6 +243,8 @@ export const api = {
       `/api/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}/interrupt`,
       {},
     ),
+  terminalInterruptCommand: (sessionId: string, terminalId: string, generation: string, entryId: string) =>
+    post<{stopRequested:boolean}>(`/api/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}/interrupt-command`, {generation, entryId}),
   terminalInput: (sessionId: string, terminalId: string, data: string) =>
     post<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}/input`, { data }),
   terminalResize: (sessionId: string, terminalId: string, cols: number, rows: number) =>

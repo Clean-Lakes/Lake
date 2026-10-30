@@ -13,8 +13,9 @@
   left: var(--session-content-start);
   width: max-content;
   max-width: calc(100% - var(--session-gutter) - var(--session-gutter));
-  min-height: 40px;
-  padding: 10px 14px;
+  height: 46px;
+  min-height: 46px;
+  padding: 5px 14px;
   gap: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-window);
@@ -22,8 +23,8 @@
   box-shadow: var(--shadow-popover);
 }
 .workspace.has-floating-header .breadcrumbs { flex: 0 1 auto; }
+.workspace.has-floating-header > .workspace-header .header-normal-state .header-morph-content { gap:4px; }
 .crumb-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workspace.has-floating-header .crumb-slash { flex-shrink: 0; }
 .workspace.has-floating-header .conversation { container-type: normal; min-height: 0; scrollbar-gutter: stable; scroll-padding-top: 80px; }
 .workspace.has-floating-header .timeline-list {
   width: var(--session-content-width);
@@ -31,18 +32,18 @@
   margin-right: 0;
   padding-top: 80px;
 }
-.workspace.has-floating-header .composer { width: var(--session-content-width); }
+.workspace.has-floating-header :is(.composer,.composer-session-controls) { width: var(--session-content-width); }
 .workspace.has-floating-header > .workspace-header + .system-banner { margin-top: 72px; }
 .sidebar-footer .desktop-update-trigger { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; color: var(--text-secondary); }
 .session-nav-row.active ~ .session-actions-trigger { opacity: 1; }
 @media (max-width: 700px) {
-  .workspace.has-floating-header > .workspace-header { gap: 6px; padding: 8px 10px; }
+  .workspace.has-floating-header > .workspace-header { gap: 6px; padding: 5px 10px; }
   .workspace.has-floating-header .breadcrumbs { gap: 6px; }
 }
 /* Reserve the native Windows window controls, without extending the bubble. */
 html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
-  max-width: calc(100% - var(--session-gutter) - 156px);
-  height: auto;
+  max-width: calc(100% - var(--session-content-start) - 156px);
+  height: 46px;
   user-select: none;
 }
 @media (max-width: 700px) {
@@ -100,4 +101,34 @@ html.lake-windows-chrome .workspace.has-floating-header > .workspace-header {
   -webkit-backdrop-filter:var(--title-glass-filter);
   backdrop-filter:var(--title-glass-filter);
   pointer-events:none;
+}
+
+/* Lake Island floats over a full-width, feathered conversation backdrop.
+   The pass belongs to the fixed viewport edge, outside the scrolling content. */
+.session-layout > .session-view { position:relative; }
+.conversation-header-backdrop {
+ position:absolute;
+ top:0;
+ left:0;
+ right:0;
+ height:92px;
+ z-index:7;
+ pointer-events:none;
+ background:linear-gradient(to bottom,color-mix(in srgb,var(--background) 56%,transparent),color-mix(in srgb,var(--background) 24%,transparent) 60%,transparent);
+ -webkit-backdrop-filter:blur(24px) saturate(125%);
+ backdrop-filter:blur(24px) saturate(125%);
+ -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 45%,transparent 100%);
+ mask-image:linear-gradient(to bottom,#000 0%,#000 45%,transparent 100%);
+}
+html.lake-windows-chrome .conversation-header-backdrop { top:48px; }
+/* The band already blurs what passes under the island: do not stack filters. */
+:is(.lake-workbench-island,.workspace.has-floating-header > .workspace-header) > .workspace-header-glass {
+ -webkit-backdrop-filter:none;
+ backdrop-filter:none;
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+ .conversation-header-backdrop { background:linear-gradient(to bottom,var(--background) 0%,var(--background) 45%,transparent 100%); }
+}
+@media(prefers-reduced-transparency:reduce) {
+ .conversation-header-backdrop { -webkit-backdrop-filter:none; backdrop-filter:none; background:linear-gradient(to bottom,var(--background) 0%,var(--background) 45%,transparent 100%); }
 }

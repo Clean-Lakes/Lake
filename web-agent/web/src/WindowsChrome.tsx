@@ -18,7 +18,7 @@ export function WindowsChrome() {
       const target = (event as MouseEvent).target;
       if (!(target instanceof Element)) return false;
       if (target.closest('button,a,input,select,textarea,[role="button"],[contenteditable="true"],.workbench-splitter,.windows-titlebar-controls,.modal-scrim,dialog,[role="dialog"],[role="menu"],[role="listbox"]')) return false;
-      const header = target.closest(".sidebar-brand-row,.workspace-header,.terminal-panel-header");
+      const header = target.closest(".sidebar-brand-row,.workspace-header,.terminal-panel-header,.session-inspector-heading");
       return !!header || (event.clientY >= 0 && event.clientY < 48);
     }, action => {void bridge.command(action).then(refresh).catch(() => {});});
     refresh();

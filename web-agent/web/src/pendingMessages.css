@@ -4,7 +4,7 @@
 .pending-messages button:hover:not(:disabled) { color: var(--foreground); background: var(--surface-hover); }
 .pending-message-list { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow: auto; overscroll-behavior: contain; }
 .pending-message { position: relative; display: flex; align-items: center; gap: 7px; min-height: 38px; margin: 0 0 6px; padding: 5px 8px 5px 12px; border: 1px solid var(--border); border-radius: var(--radius-window); background: var(--floating-bubble-background); -webkit-backdrop-filter: var(--floating-bubble-filter); backdrop-filter: var(--floating-bubble-filter); box-shadow: 0 1px 3px color-mix(in srgb, var(--foreground) 4%, transparent); }
-.pending-message:last-child { margin-bottom: 0; }
+.pending-message-presence:last-child .pending-message { margin-bottom: 0; }
 .pending-message:is(:hover,:focus-within,.is-editing) { background: var(--floating-bubble-active); border-color: var(--border-strong); }
 .pending-message.dragging { opacity: .6; border-color: var(--border-strong); }
 .pending-messages .pending-message-grip { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-left: -5px; padding: 0; color: var(--text-muted); cursor: grab; flex: 0 0 28px; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -54,3 +54,18 @@
 
 .pending-queue-recovery { display: flex; justify-content: flex-end; padding: 0 4px 3px; }
 .pending-messages .pending-queue-recovery button { min-height: 22px; font-size: inherit; background: transparent; }
+
+/* Presence owns the changing height; each message keeps its glass and identity. */
+.pending-message-list { position: relative; }
+.pending-message-presence { position: relative; display: flow-root; min-height: 0; padding: 0; margin: 0; border: 0; }
+.pending-message-presence[data-queue-presence="leaving"] { pointer-events: none; }
+
+.user-message-arrival { animation: user-message-arrival 260ms cubic-bezier(.22,1,.36,1); }
+@keyframes user-message-arrival { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .user-message-arrival { animation: none; } }
+
+.pending-message-actions .pending-message-push{color:var(--text-secondary)}
+.pending-message-push-status{display:block;margin-top:2px;color:var(--text-secondary);font-size:var(--font-size-toolbar);line-height:1.5}
+.pending-message-push-loader{animation:pending-push-spin 1s linear infinite}
+@keyframes pending-push-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.pending-message-push-loader{animation:none}}

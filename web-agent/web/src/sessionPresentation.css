@@ -13,15 +13,30 @@
 .session-list-tag { color: var(--tag-color); background: var(--tag-soft); font-size: var(--font-size-ui); line-height: 1.6; padding: 0 5px; border-radius: 4px; max-width: min(100%, 100px); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-list-tags-more { font-size: var(--font-size-ui); color: var(--text-muted); flex-shrink: 0; }
 .session-state-badge[class*="state-"] { color: var(--session-state-color, var(--text-secondary)); }
-.session-state-badge > span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.session-state-badge.state-completed, .ai-context-usage[data-session-status="completed"] { --session-state-color: var(--success); }
+.session-state-icon { flex:0 0 auto; }
+.session-state-label { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.session-state-badge.state-completed, .ai-context-usage[data-session-status="completed"], .pilot-island-progress[data-session-status="completed"] { --session-state-color: var(--success); }
 .session-state-badge.state-completed { background: var(--success-soft); }
-.session-state-badge.state-failed, .ai-context-usage[data-session-status="failed"] { --session-state-color: var(--danger); }
+.session-state-badge.state-failed, .ai-context-usage[data-session-status="failed"], .pilot-island-progress[data-session-status="failed"] { --session-state-color: var(--danger); }
 .session-state-badge.state-failed { background: var(--danger-soft); }
-.session-state-badge.state-waiting_approval, .ai-context-usage[data-session-status="waiting_approval"] { --session-state-color: var(--warning); }
+.session-state-badge.state-waiting_approval, .ai-context-usage[data-session-status="waiting_approval"], .pilot-island-progress[data-session-status="waiting_approval"] { --session-state-color: var(--warning); }
 .session-state-badge.state-waiting_approval { background: var(--warning-soft); }
-.session-state-badge.state-investigating, .ai-context-usage[data-session-status="investigating"] { --session-state-color: var(--info); }
+.session-state-badge.state-investigating, .ai-context-usage[data-session-status="investigating"], .pilot-island-progress[data-session-status="investigating"] { --session-state-color: var(--info); }
 .session-state-badge.state-investigating { background: var(--info-soft); }
+.session-state-badge[data-tone="neutral"],.session-status-dot[data-tone="neutral"] { --session-state-color:var(--text-secondary); }
+.session-state-badge[data-tone="active"],.session-status-dot[data-tone="active"] { --session-state-color:var(--info); }
+.session-state-badge[data-tone="success"],.session-status-dot[data-tone="success"] { --session-state-color:var(--success); }
+.session-state-badge[data-tone="attention"],.session-status-dot[data-tone="attention"] { --session-state-color:var(--warning); }
+.session-state-badge[data-tone="neutral"] { background:var(--surface-selected); }
+.session-state-badge[data-tone="attention"] { background:var(--warning-soft); }
+.session-status-dot { display:inline-block; flex:0 0 6px; width:6px; height:6px; border-radius:50%; background:var(--session-state-color); box-shadow:0 0 4px color-mix(in srgb,var(--session-state-color) 30%,transparent); }
+.session-status-dot[data-pilot="true"][data-tone="neutral"] { --session-state-color:var(--text-muted); }
+.session-status-dot[data-tone="failed"] { --session-state-color:var(--danger); }
+.ai-context-usage[data-session-status="failed"] { --session-state-color:var(--warning); }
+.session-state-badge[data-badge-state="working"] .session-state-icon { animation:session-state-spin 1.8s linear infinite; }
+.header-normal-state[aria-hidden="true"] .session-state-icon { animation-play-state:paused; }
+@keyframes session-state-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .session-state-badge[data-badge-state="working"] .session-state-icon { animation:none; } }
 .sidebar-tags { border-top: 1px solid var(--border); padding: 6px 12px 3px; flex-shrink: 0; }
 .sidebar-tags-heading { display: flex; align-items: center; justify-content: space-between; color: var(--text-muted); font-size: var(--font-size-ui); margin-bottom: 0; }
 .sidebar-tags-heading > span { display: flex; align-items: center; gap: 7px; }
@@ -58,7 +73,7 @@
 .tag-manager-list > div { display: flex; align-items: center; gap: 4px; padding: 5px 0; }
 .tag-manager-list > div .tag-chip { margin-right: auto; }
 .tag-delete-confirm { background: var(--danger-soft); padding: 10px; border-radius: var(--radius-panel); font-size: var(--font-size-ui); }
-.tag-delete-confirm button { border: 1px solid var(--border); background: var(--surface); padding: 5px 8px; color: var(--foreground); border-radius: 4px; margin-right: 8px; }
+.tag-delete-confirm button { border: 1px solid var(--border); background: var(--surface); padding: 5px 8px; color: var(--foreground); border-radius: var(--radius-control); margin-right: 8px; }
 .breadcrumbs > svg, .breadcrumbs strong > svg { flex-shrink: 0; color: var(--text-secondary); }
 .breadcrumbs strong { display: flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-brand-row .brand > strong { font-size: 19px; }

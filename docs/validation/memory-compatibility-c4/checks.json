@@ -1,0 +1,97 @@
+{
+  "sourceCommit": "3d317c0aa4bf0a3add84df687660944b98b5d5c6",
+  "baseCommit": "01c5e139b79914afc351b71c517b8275f7eacafd",
+  "platform": "macOS arm64",
+  "checks": [
+    {
+      "command": "go test ./... -count=1 -timeout=8m",
+      "exitCode": 0,
+      "aiSeconds": 41.697,
+      "webSeconds": 182.653
+    },
+    {
+      "command": "go test -race ./internal/ai ./internal/web ./internal/strategy -run 'Test(C[34]|Natural|Memory|ProjectMemory|Strategy|Online|Historical|ADK.*(Approval|Unknown|Crash|Projection)|Compaction|ModelSwitch|SREPlanOnly|SRERestart)' -count=1 -timeout=6m",
+      "exitCode": 0,
+      "aiSeconds": 27.814,
+      "webSeconds": 58.924,
+      "strategySeconds": 2.562
+    },
+    {
+      "command": "go vet ./...",
+      "exitCode": 0
+    },
+    {
+      "command": "python3 scripts/check_adk_runtime_boundary.py",
+      "exitCode": 0
+    },
+    {
+      "command": "python3 scripts/verify_memory_compatibility.py --report /tmp/lake-c4-compatibility-final.json",
+      "exitCode": 0,
+      "topLevelPassed": 267,
+      "topLevelSkipped": 6,
+      "allPassed": 435,
+      "allSkipped": 6,
+      "failed": 0
+    },
+    {
+      "cwd": "web-agent",
+      "command": "corepack pnpm check && corepack pnpm test:frontend",
+      "exitCode": 0,
+      "passed": 551,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "command": "python3 -m unittest discover -s scripts -p 'test_dev_*py'",
+      "exitCode": 0,
+      "tests": 14
+    },
+    {
+      "command": "python3 -m unittest discover -s scripts -p 'test_memory_compatibility_tools.py'",
+      "exitCode": 0,
+      "tests": 4
+    },
+    {
+      "command": "python3 -m unittest discover -s scripts -p 'test_branch_policy.py'",
+      "exitCode": 0,
+      "tests": 4
+    },
+    {
+      "command": "Ruby Psych parse + production-only trigger/source assertions for tests.yml, adk-runtime.yml, windows-client.yml",
+      "exitCode": 0,
+      "githubExecution": false
+    },
+    {
+      "command": "GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/lake-c4-final-windows.exe ./cmd/lake",
+      "exitCode": 0,
+      "nativeExecution": false
+    },
+    {
+      "command": "GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go test -c -o /tmp/lake-c4-final-windows-ui-tests.exe ./client/windows",
+      "exitCode": 0,
+      "nativeExecution": false
+    },
+    {
+      "command": "scripts/run_lake_dev.sh",
+      "ready": true,
+      "cleanBuild": true,
+      "backendHashMatched": true,
+      "codesignVerified": true,
+      "packaged": false
+    },
+    {
+      "command": "python3 scripts/verify_memory_compatibility_dev.py --report /tmp/lake-c4-isolated-final.json --previous-binary '/Users/bear/Applications/Lake Dev.app/Contents/Resources/lake'",
+      "exitCode": 0,
+      "syntheticProviderRequests": 2,
+      "workingHomeUsed": false
+    }
+  ],
+  "windowsNative": {
+    "status": "deferred_by_user",
+    "ciDispatched": false
+  },
+  "release": {
+    "authorized": false,
+    "published": false
+  }
+}

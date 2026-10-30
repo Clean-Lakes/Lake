@@ -3,12 +3,26 @@
 .turn-status .status-text { --status-text-base: var(--text-muted); --status-text-highlight: var(--foreground); }
 .agent-group-state, .agent-task-status.status-running { --status-text-base: var(--foreground); }
 @supports ((background-clip: text) or (-webkit-background-clip: text)) {
-  .status-text--active { color: transparent; -webkit-text-fill-color: transparent; /* Every stop is opaque: the letters stay readable throughout the sweep. */ background: linear-gradient(105deg, var(--status-text-base) 32%, var(--status-text-highlight, var(--text-muted)) 44%, var(--status-text-highlight, var(--text-muted)) 56%, var(--status-text-base) 68%); background-size: 220% 100%; background-clip: text; -webkit-background-clip: text; animation: status-text-sweep 1.8s linear infinite; }
+  /* Keep one browser-owned clock per node. Text/clock/snapshot updates cannot
+     restart it; real status changes only pause or resume the same animation. */
+  .status-text,.thinking-label { animation:status-text-sweep 3.6s linear infinite paused; -webkit-text-fill-color:currentColor; }
+  .thinking-label { --status-text-base:var(--text-muted); --status-text-highlight:var(--foreground); }
+  .status-text--active,.thinking-timeline:is(.is-executing,.is-continuing) > .thinking-toggle > .thinking-label {
+    color:transparent; -webkit-text-fill-color:transparent;
+    background-color:var(--status-text-base);
+    background-image:linear-gradient(105deg,transparent 32%,var(--status-text-highlight,var(--text-muted)) 44%,var(--status-text-highlight,var(--text-muted)) 56%,transparent 68%);
+    background-size:220% 100%; background-repeat:no-repeat;
+    background-clip:text; -webkit-background-clip:text;
+    animation-play-state:running;
+  }
 }
 @keyframes status-text-sweep {
-  from { background-position: 120% 0; }
-  to { background-position: -120% 0; }
+  from { background-position:150% 0; }
+  to { background-position:-50% 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .status-text--active { animation: none; background: none; color: var(--status-text-base); -webkit-text-fill-color: currentColor; }
+  /* The global reduced-motion rule shortens animations to one iteration.
+     These clocks stay paused instead, preserving their phase without motion. */
+  .status-text,.thinking-label { animation-duration:3.6s!important; animation-iteration-count:infinite!important; animation-play-state:paused; transition:none!important; }
+  .status-text--active,.thinking-timeline:is(.is-executing,.is-continuing) > .thinking-toggle > .thinking-label { animation-play-state:paused; background:none; color:var(--status-text-base); -webkit-text-fill-color:currentColor; }
 }

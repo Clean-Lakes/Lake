@@ -287,6 +287,12 @@ func modelPayload(m Model, history []Message, tools []Tool) (string, map[string]
 	default:
 		return "", nil, fmt.Errorf("unsupported model protocol %s", p)
 	}
+	if m.requireToolCall && len(tools) > 0 {
+		switch p {
+		case "openai", "openai-response", "azure-gpt":
+			body["tool_choice"] = "required"
+		}
+	}
 	if err := applyReasoning(m, body); err != nil {
 		return "", nil, err
 	}
@@ -341,7 +347,7 @@ func streamWithTimeouts(ctx context.Context, m Model, history []Message, tools [
 		if ctx.Err() != nil {
 			return modelResult{}, ctx.Err()
 		}
-		return modelResult{}, errors.New("cannot connect to model endpoint")
+		return modelResult{}, fmt.Errorf("%w: %s", ErrModelConnection, modelConnectionReason(e))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

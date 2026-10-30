@@ -7,15 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Clean-Lakes/Lake/internal/platform"
-	"github.com/Clean-Lakes/Lake/internal/strategy"
-	"google.golang.org/genai"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Clean-Lakes/Lake/internal/platform"
+	"github.com/Clean-Lakes/Lake/internal/strategy"
+	"google.golang.org/genai"
 )
 
 type session struct {
@@ -24,6 +25,8 @@ type session struct {
 	state               State
 	cancel              context.CancelFunc
 	finalizing          bool
+	supplementClosed    bool
+	supplementRequest   *supplementRequest
 	decision            chan bool
 	decisions           map[string]chan bool
 	questionReply       chan map[string][]string
@@ -31,54 +34,74 @@ type session struct {
 	sreReply            *sreReply
 }
 type Engine struct {
-	experiment       *strategyExperimentRuntime
-	Strategies       StrategyProvider
-	CorrectionGuard  func(context.Context, string, int64, int64) error
-	correctionMu     sync.Mutex
-	onlineTask       string
-	onlineSessions   sync.Map
-	runMu            sync.Mutex
-	runs             sync.WaitGroup
-	runtimeClosed    bool
-	shutdownOnce     sync.Once
-	sreRepository    SRERepository
-	sreControls      sync.Map
-	sreRecoveries    sync.Map
-	sreResourceLocks sync.Map
-	agentMu          sync.Mutex
-	agentWorkers     map[string]*agentWorker
-	agentSlots       chan struct{}
-	modelSlots       chan struct{}
-	childModelSlots  chan struct{}
-	collectionSlots  chan struct{}
-	agentsClosed     bool
-	worker           *agentWorker
-	observationSlots sync.Map
-	mu               sync.Mutex
-	sessions         map[string]*session
-	Dir              string
-	RuntimeDir       string
-	Bridge           Bridge
-	Emit             func(Event)
-	ModelActivity    func() func() // Trusted host foreground priority; no provider/session mutation.
-	tunnels          sync.Map
-	shells           sync.Map
-	shellMu          sync.Mutex
-	shellsClosed     bool
+	RecordPromptDiagnostics      bool // Host-only opt-in diagnostics; never an execution requirement.
+	NaturalMemory                NaturalMemoryProvider
+	MemoryCaptureAllowed         func(MemoryTurnSnapshot) bool
+	MemoryCaptureSessionAllowed  func(string) bool
+	correctionMu                 sync.Mutex
+	historicalCorrectionSessions sync.Map
+	runMu                        sync.Mutex
+	runs                         sync.WaitGroup
+	runtimeClosed                bool
+	shutdownOnce                 sync.Once
+	sreRepository                SRERepository
+	sreControls                  sync.Map
+	sreRecoveries                sync.Map
+	sreResourceLocks             sync.Map
+	agentMu                      sync.Mutex
+	agentWorkers                 map[string]*agentWorker
+	agentSlots                   chan struct{}
+	modelSlots                   chan struct{}
+	childModelSlots              chan struct{}
+	collectionSlots              chan struct{}
+	agentsClosed                 bool
+	worker                       *agentWorker
+	observationSlots             sync.Map
+	mu                           sync.Mutex
+	sessions                     map[string]*session
+	Dir                          string
+	RuntimeDir                   string
+	SecurityRuntime              *SecurityHome // Trusted host binding; shared by child engines.
+	Bridge                       Bridge
+	Emit                         func(Event)
+	ModelActivity                func() func() // Trusted host foreground priority; no provider/session mutation.
+	tunnels                      sync.Map
+	shells                       sync.Map
+	shellMu                      sync.Mutex
+	shellsClosed                 bool
 
+	supplementMu      sync.RWMutex
+	supplementReader  SupplementReader
+	supplementAck     SupplementAcknowledger
+	workParent        *Engine
+	workConfigMu      sync.Mutex
+	workConfigurator  func(string) (Config, error)
+	workActive        sync.Map
+	workContext       context.Context
+	workCancel        context.CancelFunc
+	workDone          chan struct{}
+	workReady         chan struct{}
+	workStart         sync.Once
+	workTickMu        sync.Mutex
+	workOutboxMu      sync.Mutex
 	compactionTimeout time.Duration
 	adkMu             sync.Mutex
 	adk               *adkServices
 }
 
 func New(dir string, bridge Bridge, emit func(Event)) (*Engine, error) {
+	return newEngine(dir, bridge, emit, nil)
+}
+func newEngine(dir string, bridge Bridge, emit func(Event), parent *Engine) (*Engine, error) {
 	if err := platform.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
 	if err := platform.Chmod(dir, 0700); err != nil {
 		return nil, err
 	}
-	return &Engine{sessions: map[string]*session{}, Dir: dir, Bridge: bridge, Emit: emit, agentWorkers: map[string]*agentWorker{}, agentSlots: make(chan struct{}, 6), modelSlots: make(chan struct{}, 4), childModelSlots: make(chan struct{}, 3), collectionSlots: make(chan struct{}, 6)}, nil
+	e := &Engine{workParent: parent, sessions: map[string]*session{}, Dir: dir, Bridge: bridge, Emit: emit, agentWorkers: map[string]*agentWorker{}, agentSlots: make(chan struct{}, 6), modelSlots: make(chan struct{}, 4), childModelSlots: make(chan struct{}, 3), collectionSlots: make(chan struct{}, 6)}
+	e.startWorkManager()
+	return e, nil
 }
 
 var identifier = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,100}$`)
@@ -347,6 +370,7 @@ func (e *Engine) Configure(id string, c Config) error {
 	s.state.ReferencedAssetIDs = validRemembered(c, s.state.ReferencedAssetIDs)
 	c.ReferencedAssets = append([]string(nil), s.state.ReferencedAssetIDs...)
 	s.state.Config = c
+	e.StartWorkManager()
 	s.state.View.Profile = c.Profile
 	return e.save(s)
 }
@@ -360,7 +384,7 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	if err := e.refreshOnlineCards(s); err != nil {
+	if err := e.refreshHistoricalCorrectionCards(s); err != nil {
 		return View{}, err
 	}
 	s.mu.Lock()
@@ -369,6 +393,20 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	if s.finalizing {
 		view.Status, view.TurnFinishedAt = "running", ""
 	}
+	goals, goalErr := e.WorkGoals(id)
+	if goalErr != nil {
+		return View{}, goalErr
+	}
+	view.WorkGoals = goals
+	for _, g := range goals {
+		if g.OriginRootTurnID == view.RootTurnID && g.ID == s.state.WorkGoalID {
+			view.Status = g.Status
+			if workTerminal(g.Status) {
+				view.TurnFinishedAt = g.UpdatedAt.UTC().Format(time.RFC3339Nano)
+			}
+		}
+	}
+
 	view.OperationOutcomes = outcomes
 	view.Context = contextUsage(s.state)
 	view.TotalCards = len(view.Cards)
@@ -412,9 +450,16 @@ func (e *Engine) Abort(id string) error {
 		return err
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	goalID := s.state.WorkGoalID
 	if s.cancel != nil {
 		s.cancel()
+	}
+	s.mu.Unlock()
+	if goalID != "" {
+		_, g, loadErr := e.workRow(id, goalID)
+		if loadErr == nil && !workTerminal(g.Status) {
+			return e.WorkControl(context.Background(), id, goalID, "cancel", g.Revision)
+		}
 	}
 	return nil
 }
@@ -537,14 +582,13 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	c := s.state.Config
 	c.sreCoordinator = c.ConversationMode != ModePlan && input.SRECoordination && e.worker == nil && (c.Profile == "core" || c.Profile == "")
 	if c.ConversationMode == ModePlan {
-		c.StrategyCorrectEnabled = false
-		c.StrategyLearnEnabled = false
 		c.MemoryExtractionEnabled = false
 		if len(input.workflow) > 0 {
 			s.mu.Unlock()
 			return errors.New("Plan 模式不能运行工作流")
 		}
 	}
+	c.IgnoreNaturalMemory = input.IgnoreProjectMemory
 	if input.IgnoreProjectMemory {
 		c.MemoryEnabled = false
 		c.MemoryExtractionEnabled = false
@@ -625,6 +669,11 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	archiveProposedPlan(s)
 	s.state.View.ProposedPlan = nil
 	firstCard := len(s.state.View.Cards)
+	s.state.NaturalRecallUsed = nil
+	s.state.Config.IgnoreNaturalMemory = input.IgnoreProjectMemory
+	s.state.WorkGoalID = ""
+	s.state.SupplementIDs = nil
+	s.supplementClosed = false
 	s.state.View.RootTurnID = uid()
 	s.state.SREHandoff = nil
 	s.sreReply = nil
@@ -650,6 +699,7 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		s.state.History[0] = Message{Role: "system", Content: systemPrompt}
 	}
 	s.state.History = append(s.state.History, Message{HostTurnID: s.state.View.RootTurnID, Role: "user", Content: redact(message, c), Images: images})
+	e.beginMemoryCapture(s, c, input)
 	err = e.save(s)
 	s.mu.Unlock()
 	if err != nil {
@@ -664,11 +714,6 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			err = ctx.Err()
 		}
 		cancel()
-		if e.worker == nil {
-			if finishErr := e.onlineFinish(s, c, err); err == nil && finishErr != nil {
-				err = finishErr
-			}
-		}
 		s.mu.Lock()
 		s.finalizing = true
 		s.decision = nil
@@ -684,14 +729,34 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			reconcile(&s.state, "turn "+status+"; no replay")
 			s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "error", Content: redact(err.Error(), c), Status: status, At: timestamp()})
 		}
+		if err == nil && s.state.WorkGoalID != "" {
+			if _, g, loadErr := e.workRow(id, s.state.WorkGoalID); loadErr == nil && !workTerminal(g.Status) {
+				status = g.Status
+			}
+		}
+		if err != nil && s.state.WorkGoalID != "" {
+			if row, g, loadErr := e.workRow(id, s.state.WorkGoalID); loadErr == nil && !workTerminal(g.Status) {
+				if g.Status != "paused" {
+					g.Status = "blocked"
+					if errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "context compaction:") {
+						g.Status = "paused"
+					}
+					g.Summary = "任务接续已暂停，原记录保留；请核对待处理事项"
+					_ = e.writeWorkGoal(&row, &g, false)
+				}
+				status = g.Status
+			}
+		}
 		s.state.View.Status = status
 		s.state.View.TurnFinishedAt = timestamp()
 		if err == nil && c.ConversationMode == ModePlan {
 			captureProposedPlan(s, firstCard)
 		}
-		e.collectStrategySnapshot(s, c, input, status)
 		if err == nil {
 			e.collectMemorySnapshot(s, c, input)
+		}
+		if turn := currentMemoryCapture(s); turn != nil {
+			turn.Finished = true
 		}
 		for i := range s.state.View.Cards {
 			card := &s.state.View.Cards[i]
@@ -703,8 +768,15 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			err = saveErr
 		}
 		s.mu.Unlock()
-		if persistErr := e.persistNativeProjection(context.WithoutCancel(ctx), s); persistErr != nil && err == nil {
-			err = persistErr
+		if persistErr := e.persistNativeProjection(context.WithoutCancel(ctx), s); persistErr != nil {
+			if err == nil {
+				err = persistErr
+			}
+		} else if ackErr := e.acknowledgeSupplementState(context.WithoutCancel(ctx), s); ackErr != nil && err == nil {
+			err = ackErr
+		}
+		if workErr := e.workCheckpoint(s); workErr != nil && err == nil {
+			err = workErr
 		}
 		// Keep the session reserved until its final canonical write completes.
 		// A new turn must not load an ADK handle that this write makes stale.
@@ -726,16 +798,13 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls []Call) error {
 	var observations []ImageAttachment
 	for _, call := range calls {
-		if err := e.onlineBeforeCall(ctx, s, *c, call); err != nil {
-			return e.onlineDeny(s, *c, call, err)
-		}
-		if _, err := e.resolveTurnStrategies(ctx, s, *c); err != nil {
-			return err
-		}
 		e.setSREActivity("tool", call.Name)
-		trace := &onlinePolicyTrace{}
-		toolCtx := context.WithValue(ctx, onlinePolicyKey{}, trace)
-		value, toolErr := e.invokeAfterSREHandoff(toolCtx, s, *c, call)
+		value, toolErr := e.invokeAfterSREHandoff(ctx, s, *c, call)
+		if toolErr == nil {
+			if watchErr := e.registerWorkWatch(s, *c, call, value); watchErr != nil {
+				return watchErr
+			}
+		}
 		if errors.Is(toolErr, errADKApprovalPending) {
 			return toolErr
 		}
@@ -840,17 +909,15 @@ func (e *Engine) invokeCalls(ctx context.Context, s *session, c *Config, calls [
 				s.state.Config.TerminalID = c.TerminalID
 			}
 		}
-		s.state.History = append(s.state.History, Message{Role: "tool", CallID: call.ID, Name: call.Name, Content: payload})
-		if call.Name == "load_skill" && toolErr == nil && str(obj(value)["name"]) != "" && str(obj(value)["content"]) != "" {
+		s.state.History = append(s.state.History, Message{HostTurnID: s.state.View.RootTurnID, Role: "tool", CallID: call.ID, Name: call.Name, Content: payload})
+		e.captureMemoryToolResult(s, call, payload, value, toolErr)
+		if e.RecordPromptDiagnostics && call.Name == "load_skill" && toolErr == nil && str(obj(value)["name"]) != "" && str(obj(value)["content"]) != "" {
 			s.state.SkillSnapshots = append(s.state.SkillSnapshots, strategy.SkillSnapshot{ResultHash: strategy.ContentHash(payload), ID: str(obj(value)["name"]), ContentHash: strategy.ContentHash(str(obj(value)["content"])), CallID: call.ID})
 		}
 		err := e.save(s)
 		e.notify(s, "toolResult", map[string]any{"call_id": call.ID})
 		s.mu.Unlock()
 		if err != nil {
-			return err
-		}
-		if err := e.onlineObserve(s, *c, call, trace, value, toolErr); err != nil {
 			return err
 		}
 		if err := e.unknownSREOperation(*c, call); err != nil {
@@ -884,10 +951,11 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	s.mu.Unlock()
 	budget := (c.Model.ContextWindow - c.Model.MaxOutput) * 2
 	historyBudget := budget - toolCost
-	if !force && chars < budget {
+	if !force && chars < budget*80/100 {
 		return nil
 	}
-	target := budget * 3 / 4
+	e.captureBeforeCompaction(ctx, s, c)
+	target := budget * 60 / 100
 	if c.sre != nil && c.sre.Role == SREInvestigator && !c.sre.FullTools {
 		// Preserve calls, evidence IDs and recorded results deterministically;
 		// an extra model summary must not consume the report time reserve.
@@ -930,13 +998,23 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 		}
 		return errors.New("message exceeds configured context window")
 	}
-	timeout := e.compactionTimeout
-	if report, onlineErr := e.onlineCurrent(s, c); onlineErr != nil {
-		return onlineErr
-	} else if report != nil {
-		_, onlineErr = e.onlineUpdate(s, c, false, func(r *strategy.OnlineReport) error { return onlineStop(r, strategy.BudgetExhausted) })
-		return onlineErr
+	if !force {
+		s.mu.Lock()
+		failedAt, _ := time.Parse(time.RFC3339Nano, s.state.CompactionFailureAt)
+		s.mu.Unlock()
+		if !failedAt.IsZero() && time.Since(failedAt) < time.Minute {
+			recovered, recoveryErr := e.recoverCompaction(ctx, s, history, toolCost, budget)
+			if recovered || recoveryErr != nil {
+				return recoveryErr
+			}
+			if chars < budget {
+				return nil
+			}
+			return errors.New("context compaction: summary cooling down and protected input does not fit; progress retained")
+		}
 	}
+	parentContext := ctx
+	timeout := e.compactionTimeout
 	if timeout <= 0 {
 		timeout = 45 * time.Second
 	}
@@ -974,6 +1052,21 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	if err != nil {
 		return err
 	}
+	// A summary child deadline must not expire the investigation's parent.
+	defer func() {
+		if err == nil || force || parentContext.Err() != nil || !strings.HasPrefix(err.Error(), "context compaction:") {
+			return
+		}
+		s.mu.Lock()
+		s.state.CompactionFailureAt = timestamp()
+		s.mu.Unlock()
+		if recovered, recoveryErr := e.recoverCompaction(parentContext, s, history, toolCost, budget); recovered && recoveryErr == nil {
+			err = nil
+			content = "模型摘要暂不可用，已使用工具预览继续；原始记录保留"
+		} else if recoveryErr != nil {
+			err = recoveryErr
+		}
+	}()
 	// Prefer complete turns; a long first turn can also compact between complete
 	// tool batches. Never separate assistant calls from their matching results.
 	cut := len(history) - 1
@@ -1128,6 +1221,7 @@ func (e *Engine) Restore(id string, h []Message) error {
 	if s.state.Runtime != nil {
 		s.state.Runtime.Detached = true
 	}
+	e.withdrawMemoryCapture(s, "")
 	s.state.History = h
 	s.state.LastRequest = nil
 	s.state.LastRequestAt = ""
@@ -1182,6 +1276,7 @@ func (e *Engine) Rollback(id string) error {
 	if s.state.Runtime != nil {
 		s.state.Runtime.Detached = true
 	}
+	e.withdrawMemoryCapture(s, "")
 	s.state.History = s.state.History[:n]
 	s.state.LastRequest = nil
 	s.state.LastRequestAt = ""
@@ -1264,6 +1359,10 @@ func (e *Engine) ExtractPreset(ctx context.Context, id string) (Preset, error) {
 }
 func (e *Engine) Shutdown() {
 	e.shutdownOnce.Do(func() {
+		if e.workCancel != nil {
+			e.workCancel()
+			<-e.workDone
+		}
 		e.runMu.Lock()
 		e.runtimeClosed = true
 		e.runMu.Unlock()
@@ -1302,7 +1401,7 @@ func (e *Engine) Shutdown() {
 		e.runs.Wait()
 		e.adkMu.Lock()
 		defer e.adkMu.Unlock()
-		if e.worker == nil && e.adk != nil && e.adk.store != nil {
+		if e.worker == nil && e.workParent == nil && e.adk != nil && e.adk.store != nil {
 			_ = e.adk.store.Close()
 		}
 	})

@@ -23,6 +23,7 @@ type UserQuestion struct {
 	MultiSelect bool             `json:"multi_select,omitempty"`
 }
 type QuestionRequest struct {
+	Pilot            *PilotChoice        `json:"pilot,omitempty"`
 	Answers          map[string][]string `json:"answers,omitempty"`
 	Call             *Call               `json:"call,omitempty"`
 	RuntimeSessionID string              `json:"runtimeSessionId,omitempty"`
@@ -73,6 +74,9 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 	}()
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
+	}
+	if workToolName(call.Name) {
+		return e.invokeWorkTool(ctx, s, c, call, a)
 	}
 	switch call.Name {
 	case "list_mcp_servers", "list_mcp_tools", "call_mcp_tool":
@@ -216,6 +220,10 @@ func (e *Engine) sessionApproval(ctx context.Context, s *session, call Call, kin
 	return e.sessionApprovalTarget(ctx, s, call, kind, "当前项目")
 }
 func (e *Engine) sessionApprovalTarget(ctx context.Context, s *session, call Call, kind, target string) error {
+	if e.workParent != nil {
+		return errors.New("后台接续遇到需要人工批准的操作；本次未执行。请记录 waiting_user 并在会话中明确处理")
+	}
+
 	s.mu.Lock()
 	c := s.state.Config
 	s.mu.Unlock()
@@ -224,14 +232,23 @@ func (e *Engine) sessionApprovalTarget(ctx context.Context, s *session, call Cal
 	return err
 }
 
-func (e *Engine) askQuestion(ctx context.Context, s *session, call Call) (any, error) {
+func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot ...*PilotChoice) (any, error) {
+	if e.workParent != nil {
+		return nil, errors.New("后台接续需要用户提供信息；请把对应工作项设为 waiting_user 并说明问题，不猜测答案")
+	}
+
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 	var input struct {
 		Questions []UserQuestion `json:"questions"`
 	}
-	if json.Unmarshal([]byte(call.Arguments), &input) != nil || len(input.Questions) < 1 || len(input.Questions) > 3 {
+	if len(pilot) > 0 && pilot[0] != nil {
+		input.Questions = []UserQuestion{{ID: "pilot_" + hash(js(pilot[0].Directions))[:12], Title: "选择当前步骤的方向或命令"}}
+	} else if json.Unmarshal([]byte(call.Arguments), &input) != nil {
+		return nil, errors.New("invalid question arguments")
+	}
+	if len(input.Questions) < 1 || len(input.Questions) > 3 {
 		return nil, errors.New("questions must contain 1..3 items")
 	}
 	seen := map[string]bool{}
@@ -256,6 +273,9 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call) (any, e
 		return questionResult(input.Questions, previous, true), nil
 	}
 	req := &QuestionRequest{ID: uid(), Questions: input.Questions}
+	if len(pilot) > 0 {
+		req.Pilot = pilot[0]
+	}
 	s.mu.Lock()
 	questionConfig := s.state.Config
 	s.mu.Unlock()
@@ -322,6 +342,9 @@ func (e *Engine) ReplyQuestionWithTarget(id, requestID string, answers map[strin
 		return errors.New("question expired")
 	}
 	if err := validateQuestionAnswers(req, answers); err != nil {
+		return err
+	}
+	if err := e.recordPilotSelection(req, answers); err != nil {
 		return err
 	}
 	if scope != nil {
@@ -400,6 +423,10 @@ func (e *Engine) configuredExtensionTools(c Config, list []Tool) []Tool {
 }
 
 func validateQuestionAnswers(req *QuestionRequest, answers map[string][]string) error {
+	if req.Pilot != nil {
+		_, _, err := pilotSelection(req, answers)
+		return err
+	}
 	allowed := map[string]UserQuestion{}
 	for _, q := range req.Questions {
 		allowed[q.ID] = q

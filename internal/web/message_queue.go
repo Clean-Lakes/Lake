@@ -123,7 +123,7 @@ func (b *Server) humanMessageTitle(message humanMessage) string {
 // messageMu serializes admission and queue changes, including the gap between an
 // engine's done event and runTurn's terminal/history cleanup.
 func (b *Server) messageBusyLocked(id string) bool {
-	if b.runningMessages[id] {
+	if b.runningMessages[id] || b.Engine.SessionReserved(id) {
 		return true
 	}
 	status := b.Store.Session(id)["status"]
@@ -135,9 +135,9 @@ func (b *Server) messageBusyLocked(id string) bool {
 	return view.Status == "running" || view.Status == "waiting_approval" || view.Pending != nil
 }
 func (b *Server) launchMessageLocked(id string, message humanMessage) {
+	b.PauseMemoryExtractionForForeground()
+	b.memoryLastForeground = time.Now()
 	if b.Store.memoryV2 {
-		b.PauseMemoryExtractionForForeground()
-		b.memoryLastForeground = time.Now()
 		b.memoryReads.Range(func(key, value any) bool {
 			if strings.HasPrefix(key.(string), id+":") {
 				b.memoryReads.Delete(key)
@@ -152,9 +152,7 @@ func (b *Server) launchMessageLocked(id string, message humanMessage) {
 		fail(409, "本轮仍在结束，请稍后发送")
 	}
 	b.runningMessages[id] = true
-	if b.strategyLearningCancel != nil {
-		b.strategyLearningCancel()
-	}
+
 	b.workers.Add(1)
 	go b.runTurn(id, message.MessageID, message.Text, message.Images, message.References, message.Files, message.IgnoreProjectMemory)
 }
@@ -263,6 +261,17 @@ func (b *Server) finishMessageQueue(id string) {
 		return
 	}
 	queue := b.Store.MessageQueue(id)
+	for _, item := range objects(queue["items"]) {
+		if stringOf(item["supplementRootTurnId"]) != "" {
+			if err := b.Engine.ReconcileUserSupplements(b.Context, id); err != nil {
+				b.Store.PauseMessageQueue(id, "补充接入状态尚未核实，消息已保留，请稍后重试")
+				return
+			}
+			b.Store.releaseUserSupplements(id)
+			queue = b.Store.MessageQueue(id)
+			break
+		}
+	}
 	if len(objects(queue["items"])) == 0 {
 		return
 	}
@@ -317,6 +326,10 @@ func (b *Server) messageQueueRoute(w http.ResponseWriter, r *http.Request, id st
 	}
 	b.messageMu.Lock()
 	defer b.messageMu.Unlock()
+	if data["operation"] == "push" {
+		reply(w, 200, b.pushUserSupplement(id, data))
+		return
+	}
 	b.Store.MutateMessageQueue(id, data)
 	b.dispatchMessageQueueLocked(id)
 	reply(w, 200, b.Store.MessageQueue(id))

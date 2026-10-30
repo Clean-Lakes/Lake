@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
@@ -22,7 +24,7 @@ func strategyFixture(t *testing.T) (*Store, StrategyContext, strategy.Scope) {
 	return s, StrategyContext{ProjectID: project}, strategy.Scope{Kind: strategy.ProjectScope, ProjectID: project}
 }
 func strategyInput(body string) StrategyAssetInput {
-	return StrategyAssetInput{Reuse: &strategy.ReusePolicy{Keywords: []string{"evidence"}}, Title: "Evidence first", Kind: strategy.DomainProcedure, Body: body, Applicability: strategy.Applicability{Profiles: []string{"core"}, DomainTags: []string{"operations"}}}
+	return StrategyAssetInput{Reuse: &legacystrategy.ReusePolicy{Keywords: []string{"evidence"}}, Title: "Evidence first", Kind: strategy.DomainProcedure, Body: body, Applicability: strategy.Applicability{Profiles: []string{"core"}, DomainTags: []string{"operations"}}}
 }
 func strategyCheckError(t *testing.T, err error, status int) {
 	t.Helper()
@@ -41,7 +43,7 @@ func createStrategyFixture(t *testing.T, s *Store, ctx StrategyContext, scope st
 }
 func enableStrategyFixture(t *testing.T, s *Store) {
 	t.Helper()
-	_, err := s.SetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "enable", 0, StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: true, CorrectEnabled: true, Budget: strategy.DefaultBudget()})
+	_, err := s.SetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "enable", 0, StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: false, CorrectEnabled: false, Budget: strategy.DefaultBudget()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +207,7 @@ func TestStrategySettingsDefaultInheritanceAndEpoch(t *testing.T) {
 	}
 	enableStrategyFixture(t, s)
 	effective, err := s.EffectiveStrategySettings(ctx)
-	if err != nil || !effective.Settings.LearnEnabled || effective.GlobalEpoch != 1 || effective.ProjectEpoch != 0 {
+	if err != nil || effective.Settings.LearnEnabled || !effective.Settings.ApplyEnabled || effective.GlobalEpoch != 1 || effective.ProjectEpoch != 0 {
 		t.Fatal(effective, err)
 	}
 	input := StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: false, Budget: strategy.DefaultBudget()}

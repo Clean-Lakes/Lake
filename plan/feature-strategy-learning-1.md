@@ -1,8 +1,8 @@
 ---
 goal: 为 Lake 实现用户可见的策略资产、纠错血缘、有界自我改进和可复现对照实验
-version: 1.4
+version: 1.7
 date_created: 2026-10-20
-last_updated: 2026-10-22
+last_updated: 2026-10-28
 owner: Lake
 status: Superseded
 tags: [feature, strategy, learning, skills, harness, adk, evaluation]
@@ -10,7 +10,13 @@ tags: [feature, strategy, learning, skills, harness, adk, evaluation]
 
 # Lake 策略学习与改进开发计划
 
-> **后续开发以 [用户资产积累与经验复用计划](refactor-user-assets-and-experience-1.md)为准（2026-10-22）。** 本文保留 P0～P8 的原始范围、交付与验收记录；其中在线纠错、递归优化及阶段默认策略不再代表后续投入方向。P8 的收益结论仍为 inconclusive。新计划只完成盘点，尚未修改运行代码或已有开关。
+> 2026-10-29 当前状态：N1～N5 已合入，C3 已合入 #117；旧试跑入口已退役，C4 的当前验证与 Windows 缺口见[手册](../docs/design/memory-compatibility-c4.md)和[验收](../docs/validation/memory-compatibility-c4.md)。下文带日期的阶段状态与分数保持历史含义。
+
+> 2026-10-28：原策略资产的新功能按[自然记忆重塑计划](feature-natural-memory-1.md)推进；C1 已经 #107 合入。下文 P0～P8 为历史交付记录，不能用来恢复旧策略提取、在线纠错或实验流程。
+
+> 2026-10-27 后续方向已调整为 [Harness² 衍生功能清理](refactor-harness-inspired-cleanup-1.md)。本文和 R0～R5 计划均保留历史证据；[C1](../docs/design/strategy-execution-retirement-c1.md) 已停止新增在线纠错、候选提取与产品实验执行；C2～C4 仍待实施，不继续推进原在线优化路线。
+
+> **历史承接：[用户资产积累与经验复用计划](refactor-user-assets-and-experience-1.md)。** 本文保留 P0～P8 的原始范围、交付与验收记录；其中在线纠错、递归优化及阶段默认策略不再代表后续投入方向。P8 的收益结论仍为 inconclusive。后续 R1～R5 已实施并合入 develop；PR #67 经拆分后关闭，剩余在线专属改动暂缓且未交付，详见承接计划 1.1 节。策略资产与学习仍为实验功能，不将历史在线验证当作当前能力或收益证明。
 
 本计划将提示词改进、用户提示词资产、来源血缘、有界纠错及开关对比组织为可分阶段交付的功能。用户能够查看学到了什么、为什么形成、在哪些场景生效，并编辑、停用或回滚。首期通过隔离故障环境证明策略效果，再开放正常任务中的只读纠错。
 

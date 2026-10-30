@@ -125,6 +125,13 @@ export function remarkObjectReferences(catalog: ObjectCatalog) {
   return () => (tree: ProseNode) => {
     function visit(node: ProseNode) {
       if (!node.children || skipped.has(node.type)) return;
+      // Column headings describe fields, not prose objects. In particular,
+      // comparisons such as 现/基/Δ must not turn their suffix into a file chip.
+      // Body cells retain the normal resource/file reference behavior.
+      if (node.type === 'table') {
+        node.children.slice(1).forEach(visit);
+        return;
+      }
       node.children = node.children.flatMap(child => {
         if (!['text', 'inlineCode'].includes(child.type) || !child.value) { visit(child); return [child]; }
         const matches = objectMatches(child.value, catalog);

@@ -53,7 +53,7 @@ func composeProfile(c Config) strategy.Composition {
 		pieces := strings.Split(template, "%s")
 		values := []string{"Lake", "Lake", runtime.GOOS, c.Runtime + " " + c.AssetRef}
 		for i, piece := range pieces {
-			appendSpans(&prompt, "core-tool-template", piece, catalogStrategies, false)
+			prompt.Append(strategy.FixedRules, "core-tool-template", piece)
 			if i < len(values) {
 				layer := strategy.FixedRules
 				if i >= 2 {

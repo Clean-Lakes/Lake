@@ -1,0 +1,17 @@
+{
+  "testedCommit": "a04c2e49fe7fe8b962af5bf5d9cf396a9d9c459e",
+  "date": "2026-10-28",
+  "scope": "All three shared pane dividers end 12px above the actual composer top; input and footer area stays clear. Composer dock and input changes are observed; inline inset is removed on cleanup.",
+  "checks": {
+    "types": "passed",
+    "relatedTests": "8 passed: workbenchIslandLayout and workbenchPaneWidths",
+    "signedDesktop": "scripts/build_lake_desktop.sh --dev --install passed",
+    "nativeDev": "Actual three-pane WKWebView screenshot inspected: sidebar, inspector and terminal divider bottoms align above the input, with no divider beside the input or footer toolbar",
+    "backend": "healthy; clean installed manifest matches tested commit"
+  },
+  "notVerified": [
+    "Windows native visual validation",
+    "Native dark theme"
+  ],
+  "data": "No model requests or remote commands; local terminal opened for visual layout verification. Native user screenshot not saved."
+}

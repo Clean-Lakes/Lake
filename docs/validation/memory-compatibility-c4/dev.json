@@ -1,0 +1,130 @@
+{
+  "countsBefore": {
+    "manifests": 187,
+    "corrections": 10
+  },
+  "codeSHA": "298b935256b29f4cec9df0f198d94b3b3f25163f",
+  "scenarios": [
+    {
+      "scenario": "C4 跨会话自然偏好",
+      "sessionId": "35a196083813798d663d61ba32fc2ea4",
+      "passed": true,
+      "answer": "【协调偏好】2 加 2 等于 4。",
+      "preparedScopes": [
+        "project"
+      ],
+      "exactPreferencePrepared": true,
+      "noOperationsOrCorrection": true,
+      "newManifestRows": 0,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 18048,
+        "input": 18216,
+        "output": 47,
+        "total": 18263
+      }
+    },
+    {
+      "scenario": "C4 当前明确要求优先",
+      "sessionId": "4016ca45319d72717fb9cbd6f1a7a6b0",
+      "passed": true,
+      "answer": "4",
+      "preparedScopes": [
+        "project"
+      ],
+      "exactPreferencePrepared": true,
+      "noOperationsOrCorrection": true,
+      "newManifestRows": 0,
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 18048,
+        "input": 18222,
+        "output": 64,
+        "total": 18286
+      }
+    },
+    {
+      "scenario": "C4 Pilot 协调表达",
+      "sessionId": "dc769d4c57311c22ad25c481f4fe4f80",
+      "answer": "【协调偏好】2 加 2 等于 4。",
+      "passed": true,
+      "sreTasksCreated": 0,
+      "preparedScopes": [
+        "project"
+      ],
+      "usage": {
+        "inputKnown": true,
+        "outputKnown": true,
+        "known": true,
+        "cachedInput": 2048,
+        "input": 5493,
+        "output": 86,
+        "total": 5579
+      }
+    }
+  ],
+  "viewSession": "e95f6edee586acddb13174bc1002abae",
+  "countsAfter": {
+    "manifests": 187,
+    "corrections": 10
+  },
+  "startupCompatibility": {
+    "testedCommit": "298b935256b29f4cec9df0f198d94b3b3f25163f",
+    "counts": {
+      "web": 51,
+      "adk": 2
+    },
+    "changed": []
+  },
+  "oldHistory": {
+    "accessible": true,
+    "oldRows": 1
+  },
+  "integrity": {
+    "lake-web.sqlite": "ok",
+    "adk/sessions.sqlite": "ok"
+  },
+  "runtimeCleanAndHashMatched": true,
+  "globalAutoEnabled": false,
+  "projectAutoEnabled": false,
+  "projectUseEnabled": true,
+  "allPassed": true,
+  "fixturePilotRestored": true,
+  "deliverySmoke": {
+    "codeSHA": "3d317c0aa4bf0a3add84df687660944b98b5d5c6",
+    "sessionId": "e95f6edee586acddb13174bc1002abae",
+    "answer": "【协调偏好】2加2等于4。",
+    "passed": true,
+    "usage": {
+      "inputKnown": true,
+      "outputKnown": true,
+      "known": true,
+      "cachedInput": 18048,
+      "input": 18216,
+      "output": 35,
+      "total": 18251
+    }
+  },
+  "finalCounts": {
+    "manifests": 187,
+    "corrections": 10
+  },
+  "ui": {
+    "nativeDev": true,
+    "light": true,
+    "dark": true,
+    "narrowScreenshotPixels": [
+      1003,
+      853
+    ],
+    "legacyCollapsedByDefault": true,
+    "oldManifestRendered": true,
+    "lightAndWindowRestored": true
+  },
+  "finalGlobalAutoEnabled": false,
+  "finalProjectPilotEnabled": false
+}

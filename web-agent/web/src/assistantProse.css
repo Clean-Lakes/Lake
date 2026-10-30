@@ -22,18 +22,17 @@ div.ai-markdown.assistant-prose:has(> .reply-info-facts) > :is(h1,h2,h3,h4) { fo
 .ai-markdown.assistant-prose h3 { font-size: var(--font-size-ui); }
 .ai-markdown.assistant-prose h4 { font-size: var(--font-size-body); }
 .ai-markdown.assistant-prose p.assistant-summary { margin: 0 0 16px; padding: 0; border: 0; border-radius: 0; background: none; }
-.ai-markdown.assistant-prose table { width: auto; min-width: 0; max-width: 100%; margin: 16px 0 20px; line-height: 1.85; font-variant-numeric: tabular-nums; }
+.ai-markdown.assistant-prose .markdown-table-scroll { min-width: 0; max-width: 100%; overscroll-behavior-x: contain; }
+.ai-markdown.assistant-prose table { width: max-content; min-width: 100%; max-width: none; margin: 0; border-collapse: collapse; font-size: var(--font-size-ui); line-height: 1.7; font-variant-numeric: tabular-nums; }
 .assistant-reply-details { margin: 12px 0 0; }
 .assistant-reply-details[open] > summary { margin-bottom: 14px; }
-.ai-markdown.assistant-prose td,.ai-markdown.assistant-prose th { padding: 5px 18px 5px 0; border: 0; background: none; text-align: start; font-weight: inherit; }
-.ai-markdown.assistant-prose th { color: var(--text-muted); font-size: inherit; }
-.ai-markdown.assistant-prose td:last-child,.ai-markdown.assistant-prose th:last-child { padding-inline-end: 0; }
-.ai-markdown.assistant-prose td :not(pre) > code,.ai-markdown.assistant-prose td > code { padding: 0; background: none; }
+.ai-markdown.assistant-prose td,.ai-markdown.assistant-prose th { max-width: 36ch; padding: 6px 10px; border: 1px solid var(--border); text-align: start; vertical-align: top; white-space: normal; overflow-wrap: break-word; word-break: normal; }
+.ai-markdown.assistant-prose th { color: var(--foreground); background: var(--surface-muted); font-weight: var(--font-weight-medium); }
+.ai-markdown.assistant-prose :is(td,th) code { overflow-wrap: normal; word-break: normal; }
 .sre-report-facts > li > .sre-prose > .assistant-prose { display: inline; }
 .sre-report-facts > li > .sre-prose > .assistant-prose > p:last-child { display: inline; margin: 0; }
 .sre-report-section h4 { font-weight:var(--font-weight-semibold); }
 @media (max-width: 600px) {
   .ai-markdown.assistant-prose ul,.ai-markdown.assistant-prose ol { padding-inline-start: 1.35em; }
   .ai-markdown.assistant-prose li { padding-inline-start: 2px; }
-  .ai-markdown.assistant-prose td,.ai-markdown.assistant-prose th { padding-inline-end: 12px; }
 }

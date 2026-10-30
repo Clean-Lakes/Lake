@@ -37,5 +37,5 @@ func (b *Server) waitTerminal(ctx context.Context, id, tid, eid string) (result 
 			panic(p)
 		}
 	}()
-	return b.Terminals.Wait(ctx, id, tid, eid), nil
+	return stoppedCommandObservation(b.Terminals.Wait(ctx, id, tid, eid)), nil
 }

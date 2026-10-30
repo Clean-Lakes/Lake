@@ -94,6 +94,7 @@ type Store struct {
 	subscribers      map[chan Object]bool
 	Dir              string
 	lockFile         *os.File
+	readOnly         bool
 }
 
 func OpenStore(dir string) (*Store, error) {
@@ -133,6 +134,22 @@ func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
 		db.Close()
 		return nil, e
 	}
+	if e = s.prepareNaturalRecallMigration(); e != nil {
+		db.Close()
+		return nil, e
+	}
+	if e = s.prepareNaturalConsolidationMigration(); e != nil {
+		db.Close()
+		return nil, e
+	}
+	if e = s.prepareNaturalPreferenceMigration(); e != nil {
+		db.Close()
+		return nil, e
+	}
+	if e = s.prepareNaturalMemoryMigration(); e != nil {
+		db.Close()
+		return nil, e
+	}
 	if e = s.prepareStrategyMigration(); e != nil {
 		db.Close()
 		return nil, e
@@ -166,11 +183,27 @@ func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
 		db.Close()
 		return nil, e
 	}
+	if e = s.migrateNaturalMemory(); e != nil {
+		db.Close()
+		return nil, e
+	}
+	if e = s.migrateNaturalPreference(); e != nil {
+		db.Close()
+		return nil, e
+	}
+	if e = s.migrateNaturalConsolidation(); e != nil {
+		db.Close()
+		return nil, e
+	}
+	if e = s.migrateNaturalRecall(); e != nil {
+		db.Close()
+		return nil, e
+	}
 	s.update(func() any {
 		s.ensureBuiltinLocalResources("")
 		s.seedResourceTree()
 		s.pauseMessageQueuesOnRestart()
-		s.retireLegacyOnlineConsent()
+		s.retireStrategyExecution()
 		s.recoverStrategyJobs()
 		s.exec("UPDATE workflowRuns SET status='interrupted',error='服务重启，工作流已中断；未自动重放',finishedAt=? WHERE status='running'", now())
 		s.exec("UPDATE replyTimings SET status='interrupted' WHERE status='running' AND finishedAt=''")
@@ -205,7 +238,9 @@ func (s *Store) migrate() error {
 	if s.row("SELECT name FROM sqlite_master WHERE type='table' AND name='projectMemories'") == nil {
 		needBackup = true
 	}
-	parityColumns := [][3]string{{"terminals", "generation", "TEXT NOT NULL DEFAULT ''"}, {"terminals", "outputCapturedAt", "TEXT"}, {"terminals", "cwd", "TEXT"}, {"terminals", "shell", "TEXT NOT NULL DEFAULT 'sh'"}, {"terminalEntries", "status", "TEXT NOT NULL DEFAULT 'unknown'"}, {"terminalEntries", "generation", "TEXT NOT NULL DEFAULT ''"}, {"terminalEntries", "cwd", "TEXT"}, {"terminalEntries", "startedAt", "TEXT"}, {"terminalEntries", "finishedAt", "TEXT"}, {"terminalEntries", "originSessionId", "TEXT"}}
+	parityColumns := [][3]string{{"terminals", "generation", "TEXT NOT NULL DEFAULT ''"}, {"terminals", "outputCapturedAt", "TEXT"}, {"terminals", "cwd", "TEXT"}, {"terminals", "shell", "TEXT NOT NULL DEFAULT 'sh'"}, {"terminalEntries", "status", "TEXT NOT NULL DEFAULT 'unknown'"}, {"terminalEntries", "generation", "TEXT NOT NULL DEFAULT ''"}, {"terminalEntries", "cwd", "TEXT"}, {"terminalEntries", "startedAt", "TEXT"}, {"terminalEntries", "finishedAt", "TEXT"}, {"terminalEntries", "originSessionId", "TEXT"}, {"terminalEntries", "stopRequestedAt", "TEXT"}}
+	parityColumns = append(parityColumns, [][3]string{{"sreProjectSettings", "autoAdvance", "INTEGER NOT NULL DEFAULT 0"}, {"sreProjectSettings", "revision", "INTEGER NOT NULL DEFAULT 0"}, {"sreProjectSettings", "pilotVersion", "INTEGER NOT NULL DEFAULT 0"}, {"sreProjectSettings", "legacyEnabled", "INTEGER"}}...)
+	parityColumns = append(parityColumns, [3]string{"sreProjectSettings", "pilotConfigured", "INTEGER NOT NULL DEFAULT 0"})
 	for _, c := range parityColumns {
 		found := false
 		for _, row := range s.rows("PRAGMA table_info(" + c[0] + ")") {
@@ -256,6 +291,9 @@ func (s *Store) migrate() error {
 				return e
 			}
 		}
+	}
+	if _, err := s.db.Exec("UPDATE sreProjectSettings SET legacyEnabled=enabled,enabled=0,autoAdvance=0,pilotVersion=1,revision=revision+1 WHERE pilotVersion=0"); err != nil {
+		return err
 	}
 	if _, err := s.db.Exec("UPDATE terminalEntries SET status='completed' WHERE status='unknown' AND exitCode IS NOT NULL"); err != nil {
 		return err
@@ -326,6 +364,9 @@ func (s *Store) read(work func() any) any { s.mu.Lock(); defer s.mu.Unlock(); re
 func (s *Store) update(work func() any) (result any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.readOnly {
+		fail(409, recoveryReadOnlyMessage)
+	}
 	tx, e := s.db.Begin()
 	must(e)
 	s.q = tx
@@ -609,6 +650,7 @@ func (s *Store) SetGeneratedTitle(id, title string) bool {
 func (s *Store) DeleteSession(id string) {
 	s.update(func() any {
 		s.session(id)
+		s.naturalEraseSession(id)
 		s.strategyEraseSessionSources(id)
 		s.exec("UPDATE terminalEntries SET actionId=NULL WHERE actionId IN (SELECT id FROM actions WHERE sessionId=?)", id)
 		s.exec("DELETE FROM terminalEntries WHERE terminalId IN (SELECT id FROM terminals WHERE sessionId=?)", id)
@@ -649,7 +691,7 @@ func (s *Store) snapshot(id string) Object {
 		a["risk"] = p.Risk
 		a["riskReason"] = p.Reason
 	}
-	return Object{"replyTimings": s.rows("SELECT messageId,startedAt,finishedAt,status FROM replyTimings WHERE sessionId=? ORDER BY startedAt,rowid", id), "messageQueue": s.messageQueue(id), "session": session, "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE projectId=? ORDER BY position,id", session["projectId"]), "messages": messages, "actions": actions, "specialists": s.rows("SELECT * FROM specialists WHERE sessionId=? ORDER BY createdAt,rowid", id), "evidence": s.rows("SELECT * FROM evidence WHERE sessionId=? ORDER BY collectedAt,rowid", id), "terminals": s.rows("SELECT id,sessionId,resourceId,status,holder,contextVersion,createdAt,generation,outputCapturedAt,cwd,shell FROM terminals WHERE sessionId=? ORDER BY createdAt,rowid", id), "cursor": s.row("SELECT COALESCE(MAX(seq),0) AS cursor FROM events WHERE sessionId=?", id)["cursor"]}
+	return Object{"replyTimings": s.rows("SELECT messageId,startedAt,finishedAt,status FROM replyTimings WHERE sessionId=? ORDER BY startedAt,rowid", id), "messageQueue": s.messageQueue(id), "naturalMemoryNotices": s.naturalSessionNotices(id), "session": session, "resources": resources, "resourceTree": s.rows("SELECT * FROM resourceTree WHERE projectId=? ORDER BY position,id", session["projectId"]), "messages": messages, "actions": actions, "specialists": s.rows("SELECT * FROM specialists WHERE sessionId=? ORDER BY createdAt,rowid", id), "evidence": s.rows("SELECT * FROM evidence WHERE sessionId=? ORDER BY collectedAt,rowid", id), "terminals": s.rows("SELECT id,sessionId,resourceId,status,holder,contextVersion,createdAt,generation,outputCapturedAt,cwd,shell FROM terminals WHERE sessionId=? ORDER BY createdAt,rowid", id), "cursor": s.row("SELECT COALESCE(MAX(seq),0) AS cursor FROM events WHERE sessionId=?", id)["cursor"]}
 }
 func (s *Store) Snapshot(id string) Object {
 	return s.read(func() any { return s.snapshot(id) }).(Object)
@@ -812,7 +854,7 @@ func (s *Store) Control(id, tid string, holder any) Object {
 func (s *Store) History(id, tid string) Object {
 	return s.read(func() any {
 		t := s.terminal(id, tid)
-		rows := s.rows("SELECT id,terminalId,actor,command,output,exitCode,createdAt,status,generation,cwd,startedAt,finishedAt,originSessionId FROM terminalEntries WHERE terminalId=? ORDER BY rowid DESC LIMIT 500", tid)
+		rows := s.rows("SELECT id,terminalId,actor,command,output,exitCode,createdAt,status,generation,cwd,startedAt,finishedAt,originSessionId,stopRequestedAt FROM terminalEntries WHERE terminalId=? ORDER BY rowid DESC LIMIT 500", tid)
 		for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
 			rows[i], rows[j] = rows[j], rows[i]
 		}
@@ -828,7 +870,7 @@ func (s *Store) TerminalOutput(id, tid string) Object {
 func (s *Store) Entry(id, tid, eid string) Object {
 	return s.read(func() any {
 		s.terminal(id, tid)
-		return required(s.row("SELECT id,terminalId,actor,command,output,exitCode,createdAt,status,generation,cwd,startedAt,finishedAt,originSessionId FROM terminalEntries WHERE id=? AND terminalId=?", eid, tid), "Command")
+		return required(s.row("SELECT id,terminalId,actor,command,output,exitCode,createdAt,status,generation,cwd,startedAt,finishedAt,originSessionId,stopRequestedAt FROM terminalEntries WHERE id=? AND terminalId=?", eid, tid), "Command")
 	}).(Object)
 }
 func (s *Store) Recent(id string) []Object {
@@ -871,7 +913,7 @@ func (s *Store) BeginCommand(id, tid, actor, command, actionID string, origins .
 		s.exec("INSERT INTO terminalEntries(id,terminalId,actor,command,output,exitCode,actionId,createdAt,status,generation,cwd,startedAt,originSessionId) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", eid, tid, actor, command, "", nil, aid, now(), "running", t["generation"], t["cwd"], now(), origin)
 		s.exec("UPDATE terminals SET status='busy',contextVersion=contextVersion+1 WHERE id=?", tid)
 		s.event(id, "terminal")
-		return s.row("SELECT id,terminalId,actor,command,output,exitCode,createdAt,status,generation,cwd,startedAt,finishedAt,originSessionId FROM terminalEntries WHERE id=?", eid)
+		return s.row("SELECT id,terminalId,actor,command,output,exitCode,createdAt,status,generation,cwd,startedAt,finishedAt,originSessionId,stopRequestedAt FROM terminalEntries WHERE id=?", eid)
 	}).(Object)
 }
 func (s *Store) Output(id, tid, eid, output, jobOutput string) {

@@ -2,17 +2,37 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import type {AICard, AgentRun, SessionSnapshot} from '../../shared/contracts';
+import type {AICard, AgentRun, Resource, SessionSnapshot} from '../../shared/contracts';
 import type {TranscriptEntry} from '../src/timeline';
-import {completedTurnInterimIds} from '../src/completedTurnProse';
+import {completedTurnInterimIds,trailingTurnReplyId} from '../src/completedTurnProse';
+import {resourceStageProgress} from '../src/resourceStageProgress';
+import {conversationGroups} from '../src/conversation-progress-model';
 import {AITranscript} from '../src/AIPanel';
 
 const card = (id: string, type: string, content = id): TranscriptEntry => ({id, at: '2026-10-21T00:00:01Z', card: {id, at: '2026-10-21T00:00:01Z', type, content, status: 'completed'}});
 const turn = [card('interim', 'message', '先核对测试节点。'), card('tool', 'operation'), card('final', 'message', '最终结果：测试服务正常。')];
 
+test('a streaming reply after tools stays in the main body until another tool proves it interim',()=>{
+ const resource={id:'host',name:'测试主机',kind:'local'} as Resource;
+ const tool=card('check','operation');tool.card!.title='inspect_host';tool.card!.data={resource_id:resource.id};
+ const reply=card('answer','message','测试主机运行正常。');reply.card!.status='running';
+ const entries=[tool,reply];
+ const id=trailingTurnReplyId(entries);
+ assert.equal(id,'answer');
+ assert.equal(resourceStageProgress(entries,conversationGroups(entries,[resource]),true,false,id).ids.has('answer'),false);
+ reply.card!.status='completed';
+ assert.equal(trailingTurnReplyId(entries),'answer','completion must not move the same node back into progress');
+ const next=card('next','operation');next.card!.data={resource_id:resource.id};
+ assert.equal(trailingTurnReplyId([...entries,next]),undefined);
+ assert.equal(resourceStageProgress([...entries,next],conversationGroups([...entries,next],[resource]),true,false).ids.has('answer'),true);
+ assert.equal(trailingTurnReplyId([...entries,card('failure','error')]),undefined);
+});
+
 test('completed tool turns archive only narration before the real final response', () => {
   assert.deepEqual([...completedTurnInterimIds(turn, true)], ['interim']);
   assert.equal(completedTurnInterimIds(turn, false).size, 0, 'live, failed, stopped and waiting turns keep partial prose');
+  const streaming=turn.map(entry=>entry.id==='final'?{...entry,card:{...entry.card!,status:'running'}}:entry);
+  assert.deepEqual([...completedTurnInterimIds(streaming,false,'final')],['interim'],'retire the visible process before revealing its live answer');
   assert.equal(completedTurnInterimIds(turn.slice(0, 2), true).size, 0, 'no model final means no invented summary');
   assert.equal(completedTurnInterimIds([turn[0]!, turn[2]!], true).size, 0, 'ordinary conversation stays intact');
   assert.equal(completedTurnInterimIds([...turn, card('error', 'error')], true).size, 0, 'a later failure cannot be presented as completed');
@@ -28,7 +48,27 @@ test('final prose keeps its stable entry; original narration remains available i
   assert.ok(html.includes('data-conversation-entry="final"'));
   assert.match(html, /class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="final"/);
   const live = renderToStaticMarkup(createElement(AITranscript, {snapshot: {...snapshot, ai: {...snapshot.ai!, status: 'running'}}}));
-  assert.ok(!live.includes('is-archived') && !live.includes('过程播报 ·'));
+  assert.ok(live.includes('is-archived') && live.includes('过程播报 ·'),'a trailing answer retires process prose before turn completion');
+  assert.ok(!live.includes('turn-execution-details is-open'),'process closes when the answer starts');
   const activity = renderToStaticMarkup(createElement(AITranscript, {snapshot, mode: 'activity'}));
   assert.ok(!activity.includes('is-archived'));
+});
+
+
+test('an incomplete turn with a real post-tool answer archives only proven pre-tool narration',()=>{
+ const failure=card('failure','error','实际操作失败');failure.card!.status='failed';
+ const second=card('second','message','补充核验：客户端实际登录仍需确认。');
+ const ended=[turn[0]!,turn[1]!,turn[2]!,second,failure];
+ assert.deepEqual([...completedTurnInterimIds(ended,false,undefined,true)],['interim']);
+ assert.equal(completedTurnInterimIds(ended,false,undefined,true).has('final'),false);
+ assert.equal(completedTurnInterimIds(ended,false,undefined,true).has('second'),false,'distinct actual results must not be semantically deduplicated');
+ assert.equal(completedTurnInterimIds(ended.slice(0,2),false,undefined,true).size,0,'without a later actual answer incomplete narration remains visible');
+ const partial=[turn[0]!,turn[1]!,{...turn[2]!,card:{...turn[2]!.card!,status:'failed'}}];
+ assert.deepEqual([...completedTurnInterimIds(partial,false,undefined,true)],['interim'],'retain the later partial answer while retiring only its pre-tool narration');
+ const snapshot={session:{id:'fixture'},resources:[],actions:[],messages:[{id:'user',role:'user',text:'继续处理',createdAt:'2026-10-21T00:00:00Z'}],replyTimings:[{messageId:'user',startedAt:'2026-10-21T00:00:00Z',finishedAt:'2026-10-21T00:00:05Z',status:'failed'}],ai:{session:'fixture',status:'failed',cardsOffset:0,cards:ended.map(entry=>entry.card!)}} as unknown as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.ok(html.includes('未完成')&&html.includes('实际操作失败'));
+ assert.ok(html.includes('过程播报 · 1'));
+ assert.match(html,/class="settled-reply is-archived"[^>]*><div class="settled-reply-content"><div data-conversation-entry="interim"/);
+ for(const id of ['final','second'])assert.match(html,new RegExp('class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="'+id+'"'));
 });

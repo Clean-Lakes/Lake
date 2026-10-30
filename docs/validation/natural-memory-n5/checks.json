@@ -1,0 +1,46 @@
+{
+  "testedRuntimeSHA": "7c82f95601585a252ec5200e8b31f9996d5107d1",
+  "fullGo": "passed",
+  "race": "passed",
+  "vet": "passed",
+  "adkBoundary": "passed",
+  "frontendTests": 543,
+  "frontendFailures": 0,
+  "windowsCrossBuild": "passed",
+  "windowsClientTestsCrossCompile": "passed",
+  "windowsRuns": [
+    {
+      "id": 40801596960,
+      "head": "fdb60deecbcdbf3cc4dccac553bf4558b78dc513",
+      "result": "frontend passed, asset staging failed"
+    },
+    {
+      "id": 40802269014,
+      "head": "39eb85703ddc2ee359dde2088a808fad296d3caa",
+      "result": "AI and remaining Web passed except four migration permission assertions; UI not run"
+    },
+    {
+      "id": 40803070689,
+      "head": "64b518f89ae064f0cddbac40990963a2aec0442f",
+      "result": "four failed migration tests and previously unrun WebView2 passed"
+    }
+  ],
+  "laterWindowsNativeChangesNotRetested": [
+    "platform-independent encoded legacy body deduplication",
+    "old P8 compatibility test navigation selector update"
+  ],
+  "compatibility": {
+    "sequence": "N5 -> installed old Dev 54a117c9 -> N5",
+    "readOnlyStartupOnly": true,
+    "naturalTablesIdentical": true,
+    "integrity": "ok"
+  },
+  "fullGoSeconds": {
+    "ai": 52.165,
+    "web": 192.684
+  },
+  "raceSeconds": {
+    "ai": 19.929,
+    "web": 73.9
+  }
+}

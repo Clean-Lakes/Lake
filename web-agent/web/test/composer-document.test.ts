@@ -36,3 +36,16 @@ test('selection at a reference followed by prose targets the prose and keeps UTF
  setComposerSelection(root,1,3);
  assert.deepEqual(d.selection(),{start:[tail,0],end:[tail,2]});
 });
+
+test('empty draft keeps a painted text caret before a noneditable completion and no anchor text in its payload',()=>{
+ const d=documentFixture(),text=d.text(composerCaretCharacter),anchor=d.node('span',[text],{'data-composer-caret':''}),hint=d.node('span',[d.text('再试试')],{'data-composer-suggestion':''}),root=d.node('div',[anchor,hint]);
+ assert.deepEqual(readComposerDocument(root,[]),{value:'',references:[]});
+ setComposerSelection(root,0);
+ assert.deepEqual(d.selection(),{start:[text,1],end:[text,1]});
+});
+test('removing a completion keeps the empty editor caret mapped to its editable boundary',()=>{
+ const d=documentFixture(),text=d.text(composerCaretCharacter),root=d.node('div',[d.node('span',[text],{'data-composer-caret':''})]);
+ setComposerSelection(root,0);
+ assert.deepEqual(d.selection(),{start:[text,1],end:[text,1]});
+ assert.equal(readComposerDocument(root,[]).value,'');
+});

@@ -1,0 +1,42 @@
+[
+  {
+    "scenario": "two-source semantic merge",
+    "revision": 2,
+    "supportSources": 2,
+    "providerDispatches": 1,
+    "commitAfterBothForegroundCompletions": true,
+    "noticeCount": 1
+  },
+  {
+    "scenario": "pre-fix live contradictions",
+    "failedSources": 2,
+    "reason": "invalid_output; isolated reproduction found correction without explicit authority",
+    "coverage": "deferred",
+    "originalRevision": 2,
+    "bodyPreserved": true
+  },
+  {
+    "scenario": "post-fix unclear contradiction",
+    "state": "conflict",
+    "originalRevision": 2,
+    "bodyPreserved": true
+  },
+  {
+    "scenario": "explicit correction",
+    "revision": 3,
+    "oldConflict": "superseded"
+  },
+  {
+    "scenario": "exact repeat local merge",
+    "revision": 4,
+    "supportSources": 2,
+    "additionalProviderDispatches": 0
+  },
+  {
+    "scenario": "native exact-version undo of local merge",
+    "revision": 5,
+    "supportSources": 1,
+    "priorBodyRestored": true,
+    "noticeRemoved": true
+  }
+]

@@ -1,34 +1,22 @@
 package web
 
 import (
-	"encoding/json"
-	"github.com/Clean-Lakes/Lake/internal/ai"
-	"github.com/Clean-Lakes/Lake/internal/strategy"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
-	"time"
+
+	"github.com/Clean-Lakes/Lake/internal/testsupport/legacystrategy"
+
+	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
 func reviewCandidate(t *testing.T, s *Store, ctx StrategyContext, scope strategy.Scope) (StrategyMutationResult, StrategyMutationResult) {
 	t.Helper()
 	source := learningSource(t, s, ctx)
-	q, err := s.QueueStrategyProposal(ctx, ident(), StrategyJobInput{Scope: scope, Kind: "proposal", SourceIDs: []string{source.SourceID}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	job, err := s.claimStrategyJob(ctx, "proposal")
-	if err != nil || job == nil {
-		t.Fatal("no proposal lease", err)
-	}
-	result, err := s.CompleteStrategyProposal(ctx, q.JobID, stringOf(job["leaseToken"]), StrategyAssetInput{Title: "PRIVATE_PROJECT_ONLY_TITLE", Kind: strategy.UserPreference, Body: "PRIVATE_PROJECT_ONLY_BODY", Applicability: strategy.Applicability{Profiles: []string{"core"}}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	result := seedLegacyCandidate(t, s, ctx, scope, source.SourceID)
+
 	return result, source
 }
 func promotionDraft() StrategyAssetInput {
@@ -93,7 +81,7 @@ func TestStrategyReviewPromotionPrivacyExactVersionAndWithdrawal(t *testing.T) {
 	if _, err = s.BindStrategyAsset(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "adopt", StrategyBindingInput{Action: "adopt", Ref: pv.Value.Ref}); err != nil {
 		t.Fatal(err)
 	}
-	selected, err := s.resolveStrategyBindings(b, strategy.SelectionQuery{Profile: "core"}, nil, nil)
+	selected, err := s.resolveStrategyBindings(b, legacystrategy.SelectionQuery{Profile: "core"}, nil, nil)
 	if err != nil || len(selected.Assets) != 1 {
 		t.Fatal("global reuse failed", err)
 	}
@@ -119,7 +107,7 @@ func TestStrategyReviewPromotionPrivacyExactVersionAndWithdrawal(t *testing.T) {
 	if integer(s.row("SELECT COUNT(*) AS n FROM strategyRevisionContent WHERE assetId=?", public.AssetID)["n"]) != 0 {
 		t.Fatal("promoted content retained")
 	}
-	if _, err = s.resolveStrategyBindings(b, strategy.SelectionQuery{Profile: "core"}, &selected.Selection, nil); err == nil {
+	if _, err = s.resolveStrategyBindings(b, legacystrategy.SelectionQuery{Profile: "core"}, &selected.Selection, nil); err == nil {
 		t.Fatal("frozen context survived withdrawal")
 	}
 	s.Close()
@@ -151,19 +139,9 @@ func TestStrategyReviewRejectionSuppressesSourceAndContent(t *testing.T) {
 		t.Fatal("rejected source charged again")
 	}
 	other := learningSource(t, s, ctx)
-	q, err := s.QueueStrategyProposal(ctx, "different-source", StrategyJobInput{Scope: scope, Kind: "proposal", SourceIDs: []string{other.SourceID}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	job, _ := s.claimStrategyJob(ctx, "proposal")
-	result, err := s.CompleteStrategyProposal(ctx, q.JobID, stringOf(job["leaseToken"]), StrategyAssetInput{Title: "Reworded title", Kind: strategy.UserPreference, Body: "PRIVATE_PROJECT_ONLY_BODY\r\n", Applicability: strategy.Applicability{}})
-	if err != nil || result.AssetID != "" {
-		t.Fatal("rejected content generated another asset", err)
-	}
-	got, _ := s.GetStrategyJob(ctx, q.JobID)
-	if got["errorCode"] != "rejected_candidate" {
-		t.Fatal("missing suppression reason", got)
-	}
+	_, err := s.QueueStrategyProposal(ctx, "different-source", StrategyJobInput{Scope: scope, Kind: "proposal", SourceIDs: []string{other.SourceID}})
+	strategyCheckError(t, err, 410)
+
 	if _, err = s.DeleteStrategyAsset(ctx, candidate.AssetID, "delete", 1); err != nil {
 		t.Fatal(err)
 	}
@@ -197,26 +175,7 @@ func TestStrategyReviewEditPreservesSourcesAndRejectRevokesPromotion(t *testing.
 		t.Fatal("rejection did not revoke promotion", err)
 	}
 }
-func TestStrategyReviewHTTPAuthorityAndScopeFences(t *testing.T) {
-	b, h := fixture(t)
-	id, _ := newSession(t, h)
-	ctx := StrategyContext{ProjectID: stringOf(b.Store.Session(id)["projectId"])}
-	scope := strategy.Scope{Kind: strategy.ProjectScope, ProjectID: ctx.ProjectID}
-	enableStrategyFixture(t, b.Store)
-	candidate, _ := reviewCandidate(t, b.Store, ctx, scope)
-	v, _ := b.Store.GetStrategyRevision(ctx, candidate.AssetID, 1)
-	base := "/api/projects/" + ctx.ProjectID + "/strategy/assets/" + candidate.AssetID
-	review := Object{"ref": v.Value.Ref, "expectedDecisionRevision": 0, "decision": "accepted", "reasonCode": "reviewed"}
-	strategyHTTP(t, h, "POST", base+"/review", "review", jsonText(review), 200)
-	other := stringOf(b.Store.CreateProject("Other")["id"])
-	strategyHTTP(t, h, "POST", "/api/projects/"+other+"/strategy/assets/"+candidate.AssetID+"/promote", "wrong-project", jsonText(Object{"ref": v.Value.Ref, "confirmed": true, "draft": Object{}}), 404)
-	draft := Object{"expectedRevision": 0, "title": "General method", "kind": "user_preference", "body": "Public user preference", "applicability": strategy.Applicability{}, "assessment": promotionDraft().Assessment}
-	payload := Object{"ref": v.Value.Ref, "confirmed": true, "draft": draft}
-	draft["verification"] = "multi_task_validated"
-	strategyHTTP(t, h, "POST", base+"/promote", "forged-verification", jsonText(payload), 400)
-	delete(draft, "verification")
-	strategyHTTP(t, h, "POST", base+"/promote", "valid", jsonText(payload), 200)
-}
+
 func TestStrategyReviewV4MigrationPrivateBackupRollbackAndExistingAdoption(t *testing.T) {
 	for _, conflict := range []bool{false, true} {
 		t.Run(map[bool]string{false: "upgrade", true: "rollback"}[conflict], func(t *testing.T) {
@@ -230,7 +189,7 @@ func TestStrategyReviewV4MigrationPrivateBackupRollbackAndExistingAdoption(t *te
 			dir := s.Dir
 			s.Close()
 			db, _ := openSQLite(filepath.Join(dir, "lake-web.sqlite"))
-			_, err := db.Exec("DROP TABLE strategyUsageFeedback; DROP TABLE strategyReusePolicies; DROP TABLE strategyReviews;DROP TABLE strategyAssessments;DROP TABLE strategyPromotions;DROP TABLE strategyRejections;DROP TABLE strategySchemaMeta;CREATE TABLE strategySchemaMeta(version INTEGER PRIMARY KEY CHECK(version=4),schemaHash TEXT NOT NULL);INSERT INTO strategySchemaMeta VALUES(4,?)", strategySchemaV4Hash())
+			_, err := db.Exec("DROP TABLE strategyUsageFeedback; DROP TABLE strategyReusePolicies; DROP TABLE strategyReviews;DROP TABLE strategyAssessments;DROP TABLE strategyPromotions;DROP TABLE strategyRejections;DROP TABLE IF EXISTS legacyAssetArchive;DROP TABLE IF EXISTS legacyAssetSettingsArchive;DROP TABLE strategySchemaMeta;CREATE TABLE strategySchemaMeta(version INTEGER PRIMARY KEY CHECK(version=4),schemaHash TEXT NOT NULL);INSERT INTO strategySchemaMeta VALUES(4,?)", strategySchemaV4Hash())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -266,7 +225,7 @@ func TestStrategyReviewV4MigrationPrivateBackupRollbackAndExistingAdoption(t *te
 			defer db.Close()
 			var version int
 			db.QueryRow("SELECT version FROM strategySchemaMeta").Scan(&version)
-			want := 6
+			want := 7
 			if conflict {
 				want = 4
 			}
@@ -277,59 +236,6 @@ func TestStrategyReviewV4MigrationPrivateBackupRollbackAndExistingAdoption(t *te
 	}
 }
 
-func TestStrategyReviewCrossProjectInflightWithdrawalStopsOldContext(t *testing.T) {
-	b, h := fixture(t)
-	sid, resource := newSession(t, h)
-	enableStrategyFixture(t, b.Store)
-	projectA := stringOf(b.Store.CreateProject("Private origin")["id"])
-	ctx := StrategyContext{ProjectID: projectA}
-	scope := strategy.Scope{Kind: strategy.ProjectScope, ProjectID: projectA}
-	candidate, source := reviewCandidate(t, b.Store, ctx, scope)
-	v, _ := b.Store.GetStrategyRevision(ctx, candidate.AssetID, 1)
-	acceptReview(t, b.Store, ctx, v.Value.Ref)
-	public, err := b.Store.PromoteStrategyRevision(ctx, candidate.AssetID, "promote", v.Value.Ref, promotionDraft(), true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	p, _ := b.Store.GetStrategyRevision(StrategyContext{}, public.AssetID, 1)
-	if _, err = b.Store.BindStrategyAsset(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "adopt", StrategyBindingInput{Action: "adopt", Ref: p.Value.Ref}); err != nil {
-		t.Fatal(err)
-	}
-	entered, release := make(chan struct{}), make(chan struct{})
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var data Object
-		_ = json.NewDecoder(r.Body).Decode(&data)
-		if !strings.Contains(jsonText(data["messages"]), "PUBLIC_REVIEWED_BODY") || strings.Contains(jsonText(data["messages"]), "PRIVATE_PROJECT_ONLY") {
-			t.Error("provider lost approved content boundary")
-		}
-		close(entered)
-		<-release
-		emitModel(w, "Late answer must not continue with withdrawn context.", nil)
-	}))
-	defer provider.Close()
-	defer close(release)
-	b.Models.Save(&ai.Model{URL: provider.URL, Name: "review-withdrawal", Protocol: "openai"})
-	apiTest(t, h, "POST", "/api/sessions/"+sid+"/ai/configure", Object{"asset_ref": resource}, 200)
-	apiTest(t, h, "POST", "/api/sessions/"+sid+"/messages", Object{"text": "按已采用的偏好回答，无需工具。"}, 202)
-	select {
-	case <-entered:
-	case <-time.After(5 * time.Second):
-		t.Fatal("no foreground request")
-	}
-	strategyHTTP(t, h, "DELETE", "/api/projects/"+projectA+"/strategy/sources/"+source.SourceID, "withdraw", "{}", 200)
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		view, _ := b.Engine.Snapshot(sid)
-		if view.Status != "running" && view.Status != "investigating" {
-			if view.Status == "completed" {
-				t.Fatal("withdrawn context completed")
-			}
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatal("cross-project withdrawal failed to cancel in-flight context")
-}
 func TestStrategyReviewArchiveCannotRevivePromotedContent(t *testing.T) {
 	s, ctx, scope := strategyFixture(t)
 	enableStrategyFixture(t, s)
@@ -348,7 +254,7 @@ func TestStrategyReviewArchiveCannotRevivePromotedContent(t *testing.T) {
 	if _, err = s.BindStrategyAsset(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "adopt-unavailable", StrategyBindingInput{Action: "adopt", Ref: gone.Value.Ref}); err == nil {
 		t.Fatal("archived origin was adopted")
 	}
-	if _, err = s.resolveStrategyBindings(StrategyContext{}, strategy.SelectionQuery{Profile: "core"}, nil, nil); err != nil {
+	if _, err = s.resolveStrategyBindings(StrategyContext{}, legacystrategy.SelectionQuery{Profile: "core"}, nil, nil); err != nil {
 		t.Fatal("archived origin poisoned global selection", err)
 	}
 	s.RestoreNavigation("project", ctx.ProjectID)
@@ -377,7 +283,7 @@ func TestStrategyReviewPromotionPreservesSkillPermissions(t *testing.T) {
 	}
 	other := StrategyContext{ProjectID: stringOf(s.CreateProject("Other")["id"])}
 	for _, mode := range []string{"denied", "changed", "unchanged"} {
-		q := strategy.SelectionQuery{Profile: "core", SkillReadAllowed: mode != "denied"}
+		q := legacystrategy.SelectionQuery{Profile: "core", SkillReadAllowed: mode != "denied"}
 		selection, err := s.resolveStrategyBindings(other, q, nil, func(name, hash string) bool {
 			return mode == "unchanged" && name == "private-method" && hash == strategy.ContentHash(body)
 		})

@@ -24,7 +24,7 @@ func asset(c Config, ref string) (Asset, error) {
 func ToolRisk(name string, a map[string]any) string {
 	risk := "readonly"
 	switch name {
-	case "call_mcp_tool", "kill_shell", "import_resources", "stage_attachment":
+	case "call_mcp_tool", "kill_shell", "import_resources", "stage_attachment", "kubernetes_action":
 		risk = "write"
 	case "shell", "terminal_execute_command":
 		risk = "write"
@@ -69,19 +69,20 @@ func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a
 	return risk, hash(js(c.Assets) + js(a)), nil
 }
 func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (result any, err error) {
+	if err := e.CheckSecurityRuntime(); err != nil {
+		return nil, &ToolNotExecutedError{Err: err}
+	}
 	if err := checkPlanOperation(c, call.Name, "readonly"); err != nil {
 		return nil, err
 	}
-	if e.experiment != nil {
-		return e.experiment.invoke(ctx, call)
-	}
-	// Approval recovery can enter invoke directly. It must obey the same frozen
-	// correction gate as ordinary ADK calls, including opaque session tools.
-	if err := e.onlineBeforeCall(ctx, s, c, call); err != nil {
+	if err := e.checkNaturalRecall(ctx, s, c); err != nil {
 		return nil, &ToolNotExecutedError{Err: err}
 	}
+	if naturalRecallTool(call.Name) {
+		return e.invokeNaturalRecall(ctx, s, c, call)
+	}
 	if call.Name == onlineRevisionTool {
-		return e.onlinePropose(ctx, s, c, call)
+		return nil, errors.New("strategy_execution_retired")
 	}
 	if c.Model.Key != "" && (strings.Contains(call.Arguments, c.Model.Key) || strings.Contains(call.Arguments, strings.Trim(js(c.Model.Key), "\""))) {
 		return nil, errors.New("tool arguments cannot contain model credentials")
@@ -138,6 +139,15 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if err = e.checkSRECall(c, call, a); err != nil {
 		return nil, err
 	}
+	if call.Name == "pilot_offer_directions" {
+		return e.offerPilotDirections(ctx, s, c, call)
+	}
+	if call.Name == "pilot_read_recovery" {
+		return e.pilotReadRecovery(c, call)
+	}
+	if err = e.checkPilotCall(c, call, a); err != nil {
+		return nil, err
+	}
 	if sessionTool(call.Name) {
 		if err = e.PrepareSREOperation(c, call, "write"); err != nil {
 			return nil, err
@@ -170,6 +180,11 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		}
 	}
 	if sessionTool(call.Name) {
+		if !pilotInternalTool(call.Name) {
+			if err = pilotRoleAllowed(c, "write"); err != nil {
+				return nil, err
+			}
+		}
 		return e.invokeSessionTool(ctx, s, c, call, a)
 	}
 	if memoryTool(call.Name) {
@@ -297,12 +312,12 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	if err = e.PrepareSREOperation(c, call, risk); err != nil {
 		return nil, err
 	}
+	if err = pilotRoleAllowed(c, risk); err != nil {
+		return nil, err
+	}
 	kind := ""
 	kind, err = approvalKind(c, call.Name, risk, policyContext)
 	if err != nil {
-		return nil, err
-	}
-	if err = e.onlinePolicy(ctx, s, c, call, a, policyContext, risk, kind); err != nil {
 		return nil, err
 	}
 	var preview map[string]any
@@ -337,6 +352,7 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	}
 	e.notify(s, "toolCall", map[string]any{"name": call.Name})
 	s.mu.Unlock()
+	ctx = context.WithValue(ctx, backgroundShellSourceKey{}, map[string]any{"resource_id": resourceID, "target": target, "parent_card_id": cardID, "call_id": call.ID})
 	connectionPrepared := false
 	defer func() {
 		if connectionPrepared || errors.Is(err, errADKApprovalPending) {
@@ -358,6 +374,9 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 					card.Content = redact(err.Error(), c)
 				} else {
 					card.Content = redact(js(result), c)
+					if str(obj(result)["stopRequestedAt"]) != "" {
+						card.Status = "interrupted"
+					}
 					if len(card.Content) > 32000 {
 						card.Content = card.Content[:32000] + " [TRUNCATED]"
 					}
@@ -442,12 +461,12 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 	defer func() {
 		e.recordMemoryToolContext(s, c, call, str(policyContext["asset_ref"]), memoryStarted, result, err)
 	}()
+	if err = e.recordWorkResource(s, c, resourceID); err != nil {
+		return nil, &ToolNotExecutedError{Err: err}
+	}
 	operation, operationErr := e.dispatchNativeOperation(ctx, s, c, call, risk, target, fingerprint)
 	if operationErr != nil {
 		return nil, &ToolNotExecutedError{Err: operationErr}
-	}
-	if trace, _ := ctx.Value(onlinePolicyKey{}).(*onlinePolicyTrace); trace != nil {
-		trace.Dispatched = true
 	}
 	defer func() {
 		if persistErr := e.finishNativeOperation(operation, c, result, err); persistErr != nil {
@@ -497,6 +516,8 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 		return e.redis(ctx, c, a)
 	case "query_kubernetes":
 		return e.queryKubernetes(ctx, c, a)
+	case "kubernetes_capabilities", "kubernetes_action":
+		return e.kubernetesOperation(ctx, c, call.Name, a)
 	case "list_docker_containers", "docker_container_logs", "docker_container_action":
 		return e.docker(ctx, c, call.Name, a)
 	case "open_ssh_tunnel", "close_ssh_tunnel", "scp_transfer":
@@ -770,11 +791,11 @@ func (e *Engine) bridgeCall(ctx context.Context, id, name string, a map[string]a
 	if errors.As(err, &waiting) && ctx.Err() == nil && (name == "runtimeCommandExec" || name == "terminal_execute_command") && str(obj(result)["terminal_id"]) != "" && str(obj(result)["entry_id"]) != "" {
 		// Keep the original command; expose wait/output handles instead of
 		// aborting this specialist and cancelling all parallel peers.
-		return e.trackBridgeShell(id, result, a)
+		return e.trackBridgeShell(id, result, a, obj(ctx.Value(backgroundShellSourceKey{})))
 	}
 	continued := obj(result)["timed_out"] == true && str(obj(result)["status"]) == "running"
 	if err == nil && (a["run_in_background"] == true || continued) && (name == "runtimeCommandExec" || name == "terminal_execute_command") {
-		return e.trackBridgeShell(id, result, a)
+		return e.trackBridgeShell(id, result, a, obj(ctx.Value(backgroundShellSourceKey{})))
 	}
 	return result, err
 }

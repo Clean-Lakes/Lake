@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -41,7 +42,7 @@ func TestSRERiskGateReadTimeoutCanResampleWithoutReplayingChanges(t *testing.T) 
 					t.Fatal(err)
 				}
 				child.finishSREOperation(c, call, map[string]any{"exitCode": 0}, nil)
-				if repo.task.Attempts[0].Operations[0] != previous {
+				if js(repo.task.Attempts[0].Operations[0]) != js(previous) {
 					t.Fatal("original audit changed")
 				}
 				if repo.task.Attempts[1].Operations[0].Status != "succeeded" {
@@ -49,6 +50,36 @@ func TestSRERiskGateReadTimeoutCanResampleWithoutReplayingChanges(t *testing.T) 
 				}
 			})
 		}
+	}
+}
+
+func TestPilotForbiddenProposalDoesNotBorrowPeersLiveOperation(t *testing.T) {
+	_, child, _, c, _ := sreObservationFixture(t, Model{URL: "http://localhost:1", Name: "fixture"})
+	c.sre.FullTools = true
+	c.sre.Pilot = &PilotTaskPolicy{AutoAdvance: true}
+	c.sre.Role = SREInvestigator
+	c.sre.TaskID, c.sre.AttemptID = "task", "mine"
+	peer := SREOperation{ID: "peer", Risk: "readonly", Status: "dispatched"}
+	repo := &srePolicyRepository{task: SRETask{Status: "active", Attempts: []SREStepAttempt{{ID: "other", Operations: []SREOperation{peer}}, {ID: "mine"}}}}
+	child.sreRepository = repo
+	call := Call{ID: "proposal", Name: "shell", Arguments: `{"command":"run(){ uptime; }; run"}`}
+	if err := child.PrepareSREOperation(c, call, "dangerous"); err != nil {
+		t.Fatal("proposal confused with a peer execution", err)
+	}
+	err := pilotRoleAllowed(c, "dangerous")
+	if err == nil || !strings.Contains(err.Error(), "NOT executed") {
+		t.Fatal("missing truthful denial", err)
+	}
+	child.finishSREPreparation(c, call, err)
+	if repo.task.Attempts[1].Operations[0].Status != "not_executed" {
+		t.Fatal("forbidden proposal was dispatched")
+	}
+	if js(repo.task.Attempts[0].Operations[0]) != js(peer) {
+		t.Fatal("peer execution ledger changed")
+	}
+	c.sre.Role = SREExecutor
+	if err := child.PrepareSREOperation(c, Call{ID: "change", Name: "shell", Arguments: `{"command":"touch /tmp/example"}`}, "write"); err == nil {
+		t.Fatal("executor bypassed the live-operation barrier")
 	}
 }
 

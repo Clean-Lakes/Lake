@@ -1,32 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {strategyApi,strategySettingsForm,type StrategySettings,type StrategySettingsView} from '../src/strategyApi';
 import {orderedTranscript,transcriptGroups} from '../src/timeline';
 import {conversationDisplayGroups} from '../src/conversation-progress-model';
 import type {SessionSnapshot,AICard} from '../../shared/contracts';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {StrategySwitches} from '../src/StrategySwitches';
 import {StrategyCorrectionCard} from '../src/StrategyCorrectionCard';
-
-test('online execution needs its own saved consent; old settings do not enable it',async()=>{
- const oldFetch=globalThis.fetch;const requests:Record<string,unknown>[]=[];
- globalThis.fetch=async(_url,options)=>{requests.push(JSON.parse(String(options?.body)));return new Response('{}',{status:200})};
- try{
-  const old={revision:1,masterEnabled:true,applyEnabled:true,learnEnabled:true,correctEnabled:true,budget:{maxRevisions:2}} as StrategySettings;
-  await strategyApi.saveSettings('/api/strategy',old);
-  await strategyApi.saveSettings('/api/projects/current/strategy',{...old,onlineCorrectEnabled:true});
-  await strategyApi.saveSettings('/api/projects/current/strategy',{...old,onlineCorrectEnabled:true,onlineConsentVersion:2});
-  assert.equal(requests[0].onlineCorrectEnabled,false);assert.equal(requests[1].onlineCorrectEnabled,false);assert.equal(requests[1].onlineConsentVersion,0);assert.equal(requests[2].onlineCorrectEnabled,true);assert.equal(requests[2].onlineConsentVersion,2);assert.equal(requests[1].expectedRevision,1);
- }finally{globalThis.fetch=oldFetch}
-});
-
-test('an unsaved project shows inherited online consent while retaining project CAS and ownership',()=>{
- const project={scope:{kind:'project',projectId:'current'},revision:0,epoch:0,masterEnabled:false,applyEnabled:false,learnEnabled:false,correctEnabled:false,onlineCorrectEnabled:false,budget:{maxRevisions:2}} as StrategySettings;
- const view={settings:project,effective:{...project,masterEnabled:true,correctEnabled:true,onlineCorrectEnabled:true,onlineConsentVersion:2},source:'inherited',capabilities:{apply:true,learn:true,correct:true}} satisfies StrategySettingsView;
- const form=strategySettingsForm(view);assert.equal(form.settings.onlineCorrectEnabled,true);assert.equal(form.settings.onlineConsentVersion,2);assert.equal(form.settings.revision,0);assert.equal(form.settings.epoch,0);assert.deepEqual(form.settings.scope,project.scope);assert.equal(view.settings.onlineCorrectEnabled,false);
- assert.equal(strategySettingsForm({...view,source:'stored'}).settings.onlineCorrectEnabled,false);
-});
 
 test('a data-only correction report remains visible with its real turn and outside tool execution groups',()=>{
  const snapshot={messages:[{id:'user',role:'user',createdAt:'2026-10-21T09:00:00Z'}],actions:[],ai:{startedAt:'2026-10-21T09:00:00Z'}} as SessionSnapshot;
@@ -41,15 +20,4 @@ test('correction card exposes real stops and conservative usage without trusting
  const data={schemaVersion:1,id:'run',turnId:'actual-turn',arm:'assets_with_correction',modelRef:'hash',globalEpoch:3,projectEpoch:4,budget:{maxRevisions:2,maxOptimizationRequests:12,maxAdditionalTokens:100000},stopReason:'awaiting_reconciliation',recovered:false,noProgress:1,requests:2,tokensCharged:600,usageUnknown:true,selectedAssets:[],observations:[{callId:'unknown-call',tool:'shell',class:'unknown',success:false,trustedReadOnly:false,evidenceHash:'hash',checkHash:'check'}],revisions:[{sourceId:'unknown-call',refutedHypothesis:'<script>claim success</script>',changes:'read',expectedInformation:'actual result',stopCondition:'stop',tool:'read',arguments:'{}',progress:false}]};
  const html=renderToStaticMarkup(createElement(StrategyCorrectionCard,{card:{id:'report',type:'strategy_correction',status:'completed',at:'',data}}));
  assert.match(html,/操作结果待核实/);assert.match(html,/含保守预留/);assert.match(html,/unknown-call/);assert.match(html,/未证明只读/);assert.match(html,/尚未确认进展/);assert.match(html,/不代表整个任务已恢复/);assert.ok(!html.includes('<script>'));assert.match(html,/&lt;script&gt;/);
-});
-
-
-test('daily controls keep online consent inside a closed experiment section and show migration history',()=>{
- const settings={scope:{kind:'user'},revision:2,epoch:2,masterEnabled:true,applyEnabled:true,learnEnabled:true,correctEnabled:true,onlineCorrectEnabled:false,legacyOnlineConsent:{enabled:true,settingsRevision:1,epoch:1},budget:{}} as StrategySettings;
- const view={settings,effective:settings,source:'saved',capabilities:{apply:true,learn:true,correct:true}};
- const html=renderToStaticMarkup(createElement(StrategySwitches,{view,disabled:false,onChange:()=>{},onSave:()=>{}}));
- assert.match(html,/积累待审核候选/);assert.match(html,/旧版试用的在线纠错同意已停用/);
- assert.match(html,/<details><summary>在线实验/);assert.ok(!html.includes('<details open'));
- const experiment=html.slice(html.indexOf('<details>'),html.indexOf('</details>'));
- assert.match(experiment,/我同意本版本的在线只读纠错实验/);assert.match(experiment,/提前停止任务/);
 });

@@ -1,0 +1,143 @@
+{
+  "sourceCommit": "3d317c0aa4bf0a3add84df687660944b98b5d5c6",
+  "platform": "macOS arm64",
+  "matrix": [
+    {
+      "id": "V01",
+      "scenario": "新安装、旧全开设置与回传 true",
+      "status": "passed_local",
+      "tests": [
+        "TestStrategyRetiredDirectAndRestoredConfigCannotRegisterOrExecuteCorrection",
+        "TestStrategyRetirementMigrationPreservesChoicesUnknownAndTerminalRecords",
+        "TestNaturalMemorySettingsNeverInheritOldExecutionConsent"
+      ]
+    },
+    {
+      "id": "V02",
+      "scenario": "普通失败后继续与上下文压缩",
+      "status": "passed_local",
+      "tests": [
+        "TestStrategyDailyLongContextRetriesActualFailedReadWithoutCorrectionBudget",
+        "TestSegmentedCompactionRecoversManualAndAutomaticConversations"
+      ]
+    },
+    {
+      "id": "V03",
+      "scenario": "未派发、intent/unknown 与已完成任务",
+      "status": "passed_local",
+      "tests": [
+        "TestStrategyRetirementMigrationPreservesChoicesUnknownAndTerminalRecords",
+        "TestStrategyOptimizationCrashIntentRemainsUnknownAndNeverReplayed"
+      ]
+    },
+    {
+      "id": "V04",
+      "scenario": "旧 ADK 会话、outbox、清单及纠错卡",
+      "status": "passed_local",
+      "tests": [
+        "TestC4RestoredHistoryKeepsUnknownOutboxAndManifestWithoutExecution",
+        "TestHistoricalStrategyOutboxCanBeAcknowledgedWithoutMaterialization"
+      ]
+    },
+    {
+      "id": "V05",
+      "scenario": "准确采用、拒绝、查看与承接",
+      "status": "passed_local",
+      "tests": [
+        "TestNaturalMemoryCarryUndoKeepsOneRuntimeAndExactLegacyData",
+        "TestStrategyReviewRejectionSuppressesSourceAndContent",
+        "TestStrategyRepositoryVersionsBindingsAndIdempotency"
+      ]
+    },
+    {
+      "id": "V06",
+      "scenario": "跨项目保护与来源撤回",
+      "status": "passed_local",
+      "tests": [
+        "TestNaturalMemoryPromotedSourceRemainsPrivateAndRevocable",
+        "TestStrategyReviewCrossProjectInflightWithdrawalStopsOldContext"
+      ]
+    },
+    {
+      "id": "V07",
+      "scenario": "普通/Pilot 表达偏好与当前要求",
+      "status": "passed_local",
+      "tests": [
+        "TestNaturalRecallIndependentConsentAndScopePrecedence",
+        "TestNaturalRecallActualRequestDoesNotPersistBodyOrGrantAuthority"
+      ]
+    },
+    {
+      "id": "V08",
+      "scenario": "复杂条件与 Skill 权限/来源",
+      "status": "passed_local",
+      "tests": [
+        "TestStrategyReuseValidityModelToolsAndPendingConditions",
+        "TestStrategySkillImportPermissionsAndSourceChanges",
+        "TestStrategyReviewPromotionPreservesSkillPermissions"
+      ]
+    },
+    {
+      "id": "V09",
+      "scenario": "退役写、旧回执与错误项目",
+      "status": "passed_local",
+      "tests": [
+        "TestStrategyRetiredRoutesRejectBeforeReceiptsAndPreserveManualAssets",
+        "TestStrategyReviewHTTPAuthorityAndScopeFences"
+      ]
+    },
+    {
+      "id": "V10",
+      "scenario": "可选诊断故障与真正持久化/撤回故障",
+      "status": "passed_local",
+      "tests": [
+        "TestC3OrdinaryRequestsDoNotRequireOrWriteExperimentalManifests",
+        "TestStrategyManifestFailureDoesNotBlockProviderDispatch",
+        "TestC3RequiredCanonicalStorageFailureStillStopsDispatch",
+        "TestNaturalRecallRevocationBeforeToolPreventsSideEffects"
+      ]
+    },
+    {
+      "id": "V11",
+      "scenario": "Skills、项目记忆、主机和停止",
+      "status": "passed_local",
+      "tests": [
+        "TestConfiguredSkillsHonorEnabledState",
+        "TestInspectHostCarriesResolvedSSHRuntimeWithoutOverridingExplicitRuntime",
+        "TestCancelIdleCompactionDoesNotStartAnswerAndSessionCanResume"
+      ]
+    },
+    {
+      "id": "V12",
+      "scenario": "SQL v1～v6 升级、重复启动与副本兼容",
+      "status": "passed_local",
+      "tests": [
+        "TestStrategyMigrationBackupAndFutureGuard",
+        "TestStrategyLearningV1UpgradeBackupAndNoSecondBackup",
+        "TestStrategyExperimentV2MigrationSnapshot",
+        "TestStrategyOptimizationV3MigrationBackupAndRollback",
+        "TestStrategyReviewV4MigrationPrivateBackupRollbackAndExistingAdoption",
+        "TestStrategyReuseV5UpgradeBackupRollbackAndOldPolicy",
+        "TestStrategyRetirementRepeatedProcessStartupNeverDispatches"
+      ]
+    },
+    {
+      "id": "V13",
+      "scenario": "平台历史渲染与当前入口",
+      "status": "macos_passed_windows_deferred_by_user",
+      "macos": [
+        "light",
+        "dark",
+        "1003x853",
+        "experimental_label",
+        "legacy_collapsed",
+        "old_manifest_read"
+      ],
+      "windows": [
+        "backend_cross_build_passed",
+        "native_tests_cross_compile_passed",
+        "no_native_execution_or_CI"
+      ]
+    }
+  ]
+}

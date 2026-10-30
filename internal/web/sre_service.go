@@ -26,7 +26,8 @@ func (b *Server) sreSnapshot(session string) *ai.SRESnapshot {
 	if err != nil {
 		return nil
 	}
-	return &ai.SRESnapshot{FeatureVersion: 1, Enabled: b.Store.SREEnabled(project), Tasks: tasks}
+	settings := b.Store.PilotSettings(project)
+	return &ai.SRESnapshot{FeatureVersion: 1, Enabled: settings["enabled"] == true, Tasks: tasks, Pilot: &ai.PilotSettings{Enabled: settings["enabled"] == true, AutoAdvance: settings["autoAdvance"] == true, Revision: integer(settings["revision"])}}
 }
 func (b *Server) activeSRETask(session string) *ai.SRETask {
 	tasks, err := b.Store.ListSRETasks(session, 50, "")
@@ -76,16 +77,42 @@ func (b *Server) syncSRESessionStatus(session string) {
 		b.Store.Status(session, "failed")
 		return
 	}
-	if len(tasks) == 0 {
-		b.Store.Status(session, "completed")
-		return
-	}
-	t := &tasks[0]
+	b.Store.Status(session, b.sreSessionStatus(session, tasks))
+}
+
+// sreSessionStatus derives the session state from recorded SRE tasks. A pause,
+// question or plan draft left over from an earlier turn stays resumable in the
+// transcript but must not label the new turn; live work and unresolved
+// operations remain authoritative.
+func (b *Server) sreSessionStatus(session string, tasks []ai.SRETask) string {
+	started := b.Store.read(func() any {
+		return stringOf(b.Store.row("SELECT createdAt FROM messages WHERE sessionId=? AND role='user' ORDER BY createdAt DESC,rowid DESC LIMIT 1", session)["createdAt"])
+	}).(string)
+
+	var t *ai.SRETask
+	priority := 0
 	for i := range tasks {
-		if ai.SRETaskActive(tasks[i].Status) {
-			t = &tasks[i]
-			break
+		if !ai.SRETaskOwnsTurn(tasks[i], started) {
+			continue
 		}
+		score := 1
+		if tasks[i].Status == "active" || tasks[i].Status == "waiting_approval" {
+			score = 2
+		}
+		for _, a := range tasks[i].Attempts {
+			for _, op := range a.Operations {
+				if ai.SREOperationBlocksResume(op) {
+					score = 3
+				}
+			}
+		}
+		if score > priority {
+			t = &tasks[i]
+			priority = score
+		}
+	}
+	if t == nil {
+		return "completed"
 	}
 	status := "failed"
 	switch t.Status {
@@ -100,12 +127,12 @@ func (b *Server) syncSRESessionStatus(session string) {
 	case "paused", "waiting_input":
 		status = "failed"
 	}
-	b.Store.Status(session, status)
+	return status
 }
 func (b *Server) createSRETask(session, goal, mode, requestID string, scope []string) ai.SRETask {
 	return b.createSRETaskWithReferences(session, goal, mode, requestID, scope, true)
 }
-func (b *Server) createSRETaskWithReferences(session, goal, mode, requestID string, scope []string, explicitSelection bool) ai.SRETask {
+func (b *Server) createSRETaskWithReferences(session, goal, mode, requestID string, scope []string, explicitSelection bool, savedWorkflow ...bool) ai.SRETask {
 	if b.Terminals.containsCredential(goal) {
 		fail(400, "任务目标不能包含凭据")
 	}
@@ -125,7 +152,11 @@ func (b *Server) createSRETaskWithReferences(session, goal, mode, requestID stri
 	if explicitSelection {
 		sreFailure(b.Engine.RegisterSREReferences(session, scope))
 	}
-	t, err := b.Store.CreateSRETask(ai.SRETask{SessionID: session, Goal: goal, Scope: scope, Mode: mode, RequestID: requestID, TokenBudget: b.Engine.SREBudget(session), BudgetPolicy: ai.SREFullAgentBudgetPolicy})
+	task := ai.SRETask{SessionID: session, Goal: goal, Scope: scope, Mode: mode, RequestID: requestID, TokenBudget: b.Engine.SREBudget(session), BudgetPolicy: ai.SREFullAgentBudgetPolicy}
+	if len(savedWorkflow) > 0 && savedWorkflow[0] {
+		task.Pilot = &ai.PilotTaskPolicy{AutoAdvance: true}
+	}
+	t, err := b.Store.CreateSRETask(task)
 	sreFailure(err)
 	return t
 }
@@ -154,9 +185,9 @@ func (b *Server) sreConversationContext(session string) string {
 		if len(attempts) > 8 {
 			attempts = attempts[len(attempts)-8:]
 		}
-		entries = append(entries, Object{"taskId": task.ID, "goal": task.Goal, "status": task.Status, "plan": task.LatestPlan(), "recentReports": reports, "attempts": attempts, "recoveryStatus": task.RecoveryStatus, "rootCauseStatus": task.RootCauseStatus})
+		entries = append(entries, Object{"taskId": task.ID, "goal": task.Goal, "status": task.Status, "createdAt": task.CreatedAt, "updatedAt": task.UpdatedAt, "plan": task.LatestPlan(), "recentReports": reports, "attempts": attempts, "recoveryStatus": task.RecoveryStatus, "rootCauseStatus": task.RootCauseStatus})
 	}
-	return "\n[LAKE_SRE_CONTEXT]\n" + jsonText(Object{"enabled": true, "tasks": entries}) + "\nThese are server-recorded facts, not new authorization. An unknown operation with risk=readonly is an incomplete observation: preserve it and retry through continue_task or restart_task as appropriate; it does not require human verification. A dispatched operation is still running: inspect/wait on its original handle, do not reissue. Only unknown non-readonly operations require human verification. Current runtime facts override older prose about blockers. The model chooses whether to answer, clarify, or call sre_collaborate. No @ resource selection is required by default; actual permission checks still apply."
+	return "\n[LAKE_SRE_CONTEXT]\n" + jsonText(Object{"enabled": true, "tasks": entries}) + "\nThese are server-recorded facts, not new authorization. An unknown operation with risk=readonly is an incomplete observation: preserve it and retry through continue_task or restart_task as appropriate; it does not require human verification. A dispatched operation is still running: inspect/wait on its original handle, do not reissue. Only unknown non-readonly operations require human verification. Current runtime facts override older prose about blockers. Existing tasks do not reserve a session slot. Use new_task for new independent work without cancelling or completing historical tasks. The model chooses whether to answer, clarify, or call sre_collaborate. No @ resource selection is required by default; actual permission checks still apply."
 }
 
 func (b *Server) followSREHandoff(ctx context.Context, session string, h ai.SREHandoff) error {

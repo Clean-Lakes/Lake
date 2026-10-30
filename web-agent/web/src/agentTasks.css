@@ -41,7 +41,7 @@
 .agent-task-evidence pre { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .agent-coordinator-detail { margin: 12px 8px; font-size: var(--font-size-ui); }
 .agent-coordinator-detail .thinking-timeline { margin: 10px 0 0; }
-.agent-cancel-button, .agent-stop-turn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid var(--agent-line); border-radius: var(--radius-panel); background: var(--agent-surface); color: var(--agent-ink); font-size: var(--font-size-ui); }
+.agent-cancel-button, .agent-stop-turn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid var(--agent-line); border-radius: var(--radius-settings-control); corner-shape: var(--corner-window); background: var(--agent-surface); color: var(--agent-ink); font-size: var(--font-size-ui); }
 .agent-cancel-button { margin-top: 12px; }
 .agent-cancel-button:hover:not(:disabled), .agent-stop-turn:hover:not(:disabled) { background: var(--agent-soft); }
 .agent-cancel-button:disabled, .agent-stop-turn:disabled { color: var(--agent-muted); }

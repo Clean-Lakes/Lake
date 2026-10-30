@@ -41,9 +41,6 @@ func (s *Store) createSRETaskLocked(task ai.SRETask) ai.SRETask {
 	if old := s.row("SELECT body FROM sreTasks WHERE sessionId=? AND requestId=?", task.SessionID, task.RequestID); old != nil {
 		return decodeSRETask(old)
 	}
-	if s.row("SELECT id FROM sreTasks WHERE sessionId=? AND status IN ('draft','active','waiting_input','waiting_approval','paused')", task.SessionID) != nil {
-		fail(409, "当前会话已有活动任务，请先继续或结束该任务")
-	}
 	project := stringOf(sess["projectId"])
 	if task.Goal == "" || task.RequestID == "" || len(task.Goal) > 4000 || len(task.Scope) > 8 || len(task.Scope) == 0 {
 		fail(400, "任务需有目标、请求标识和 1–8 个明确资源")
@@ -55,6 +52,9 @@ func (s *Store) createSRETaskLocked(task ai.SRETask) ai.SRETask {
 		required(s.row("SELECT id FROM resources WHERE id=? AND projectId=?", rid, project), "Task resource")
 	}
 	task.ID, task.ProjectID, task.ProfileID, task.ProfileVersion, task.Status, task.Revision = ident(), project, "lake.sre.assisted", 1, "draft", 1
+	if settings := s.row("SELECT autoAdvance,revision,pilotConfigured FROM sreProjectSettings WHERE projectId=?", project); task.Pilot == nil && integer(settings["pilotConfigured"]) == 1 {
+		task.Pilot = &ai.PilotTaskPolicy{AutoAdvance: integer(settings["autoAdvance"]) == 1, SettingsRevision: integer(settings["revision"])}
+	}
 	task.CreatedAt, task.UpdatedAt = now(), now()
 	task.RecoveryStatus, task.RootCauseStatus = "unverified", "unknown"
 	s.exec("INSERT INTO sreTasks(id,sessionId,projectId,requestId,status,revision,body,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?)", task.ID, task.SessionID, project, task.RequestID, task.Status, task.Revision, jsonText(task), task.CreatedAt, task.UpdatedAt)
@@ -63,7 +63,8 @@ func (s *Store) createSRETaskLocked(task ai.SRETask) ai.SRETask {
 }
 
 // A restart is a new read-only investigation with the exact previous scope.
-// Cancellation and creation commit together; failed validation leaves history intact.
+// Completed history stays intact; cancellation of unfinished work and creation
+// commit together. Failed validation leaves history intact.
 func (s *Store) RestartSREInvestigation(session, taskID, requestID, mode string, budget int) (out ai.SRETask, err error) {
 	defer sreStoreError(&err)
 	out = s.update(func() any {
@@ -71,32 +72,17 @@ func (s *Store) RestartSREInvestigation(session, taskID, requestID, mode string,
 			return decodeSRETask(row)
 		}
 		old := s.sreTask(session, taskID)
-		if old.Status != "paused" && old.Status != "waiting_input" && old.Status != "draft" {
-			fail(409, "只能重新开始已暂停的只读调查")
+		if validation := ai.ValidateSRERestart(old); validation != nil {
+			fail(409, validation.Error())
 		}
-		if p := old.LatestPlan(); p != nil {
-			if p.TaskType != "investigation" && p.TaskType != "query" {
-				fail(409, "变更任务不能通过重新开始自动重放")
-			}
-			for _, step := range p.Steps {
-				if step.Kind == "act" {
-					fail(409, "含变更步骤的任务不能自动重新开始")
-				}
-			}
+		if old.Status != "completed" {
+			must(ai.TransitionSRETask(&old, "cancelled"))
+			old.Revision++
+			old.UpdatedAt = now()
+			old.AddMessage(ai.SRECoordinator, "", "collaboration", "已按重新开始的请求结束旧调查，保留全部证据和操作记录。", "")
+			old.Messages[len(old.Messages)-1].Source = "runtime"
+			s.persistSRE(&old, "investigation_restarted")
 		}
-		for _, a := range old.Attempts {
-			for _, op := range a.Operations {
-				if ai.SREOperationBlocksResume(op) {
-					fail(409, "原操作尚未完成或结果未明，核实前不会重新开始")
-				}
-			}
-		}
-		must(ai.TransitionSRETask(&old, "cancelled"))
-		old.Revision++
-		old.UpdatedAt = now()
-		old.AddMessage(ai.SRECoordinator, "", "collaboration", "已按重新开始的请求结束旧调查，保留全部证据和操作记录。", "")
-		old.Messages[len(old.Messages)-1].Source = "runtime"
-		s.persistSRE(&old, "investigation_restarted")
 		return s.createSRETaskLocked(ai.SRETask{SessionID: session, Goal: old.Goal, Scope: append([]string(nil), old.Scope...), Mode: mode, RequestID: requestID, TokenBudget: budget, BudgetPolicy: ai.SREFullAgentBudgetPolicy})
 	}).(ai.SRETask)
 	return
@@ -224,10 +210,8 @@ func (s *Store) SREEnabled(project string) bool {
 func (s *Store) SetSREEnabled(project string, enabled bool) {
 	s.update(func() any {
 		required(s.row("SELECT id FROM projects WHERE id=?", project), "Project")
-		s.exec("INSERT INTO sreProjectSettings(projectId,enabled) VALUES(?,?) ON CONFLICT(projectId) DO UPDATE SET enabled=excluded.enabled", project, enabled)
-		for _, row := range s.rows("SELECT id FROM sessions WHERE projectId=?", project) {
-			s.event(stringOf(row["id"]), "session")
-		}
+		s.exec("INSERT INTO sreProjectSettings(projectId,enabled,pilotVersion,revision) VALUES(?,?,1,1) ON CONFLICT(projectId) DO UPDATE SET enabled=excluded.enabled,revision=sreProjectSettings.revision+1", project, enabled)
+		s.pilotSettingsEvents(project)
 		return nil
 	})
 }

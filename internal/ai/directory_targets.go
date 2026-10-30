@@ -218,6 +218,10 @@ func listDirectoryAssets(c Config, a map[string]any) (any, error) {
 		if as.Kind == "kubernetes" {
 			info["endpoint"], info["context"], info["namespace"] = str(as.Settings["endpoint"]), str(as.Settings["context"]), str(as.Settings["namespace"])
 			info["query_tool"] = "query_kubernetes"
+			info["capability_tool"] = "kubernetes_capabilities"
+			info["action_tool"] = "kubernetes_action"
+			info["supported_actions"] = []string{"scale", "restart", "delete_pod"}
+			info["authorization"] = "Check exact object permissions before promising execution; actions require user authorization and fresh UID/resource_version. Query success does not prove write access."
 		}
 		if r := str(as.Settings["ssh_asset_ref"]); r != "" {
 			info["ssh_asset_ref"] = assetAlias(r)

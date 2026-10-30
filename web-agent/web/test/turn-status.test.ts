@@ -62,21 +62,32 @@ test("light process labels name the file and target, bound repeated operations a
  assert.equal(describe("# free -m\necho done"),"执行命令 · 测试主机");
  assert.equal(describe("echo uname; systemctl restart nginx"),"执行命令 · 测试主机","a mention and a service mutation are not a read-only inspection");
 });
-test("the single metadata row precedes the reply, file changes and todos; activity filtering cannot borrow a newer turn state",()=>{
+test("elapsed preview precedes the first reply chunk and live timing returns for subsequent tools; activity filtering cannot borrow a newer turn state",()=>{
  const s={session:{id:"s"},messages:[{id:"u",sessionId:"s",role:"user",text:"检查",createdAt:at}],resources:[],actions:[],evidence:[],specialists:[],replyTimings:[timing],ai:{...view,todos:[{content:"步骤已完成",status:"completed"}],cards:[{id:"todo",type:"operation",title:"todo_write",status:"completed",at,data:{arguments:{todos:[{content:"步骤已完成",status:"completed"}]}}},{...tool,status:"completed"},{id:"reply",type:"message",status:"running",content:"最后的回复",at},{id:"edit",type:"diff",status:"completed",title:"example.conf",at,data:{before:"before",after:"after"}}]}} as SessionSnapshot;
- const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ const render=()=>renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ const reply=s.ai!.cards.find(card=>card.id==='reply')!;
+ reply.content='';
+ assert.equal((render().match(/class="reply-duration /g)||[]).length,1,'an empty reply packet must not hide execution status');
+ reply.content='最';
+ assert.ok(render().includes('is-preview'),'the first nonempty chunk establishes elapsed time before the reply');
+ reply.content='最后的回复';
+ const html=render();
  assert.equal((html.match(/class="reply-duration /g)||[]).length,1);
+ const elapsedRow=html.match(/<div class="reply-duration [\s\S]*?<\/div>/)?.[0]??'';
+ assert.ok(elapsedRow.includes('is-preview')&&!elapsedRow.includes('is-live')&&!elapsedRow.includes('已完成'));
+ assert.ok(html.indexOf('class="reply-duration ')<html.indexOf('最后的回复'));
  assert.ok(html.includes('步骤已完成'));
- assert.ok(html.indexOf('class="reply-duration ')<html.indexOf("步骤已完成"));
- assert.ok(html.indexOf('class="reply-duration ')<html.indexOf("最后的回复"));
+ assert.ok(html.includes('最后的回复'));
  assert.ok(!html.includes("file-changes"),"file summary waits until the running turn ends");
+ s.ai!.cards.push({...tool,id:'next-tool'});
+ assert.equal((render().match(/class="reply-duration /g)||[]).length,1,'a real subsequent tool restores execution status');
  s.messages.push({id:"v",sessionId:"s",role:"user",text:"新提问",createdAt:"2026-10-14T03:01:00Z"});
  s.replyTimings=undefined;s.ai!.cards=[{...tool,status:"completed"}];s.ai!.turnStartedAt=s.messages[1]!.createdAt;
  const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:"activity"}));
  assert.ok(!activity.includes("reply-duration-spinner"),"the only shown activity is historical");
 });
 
-test('each turn starts with its own metadata after the user message and before the reply',()=>{
+test('each turn starts its reply with its own elapsed line',()=>{
  const old='2026-10-14T02:00:00Z';
  const snapshot={session:{id:'s'},messages:[{id:'old',sessionId:'s',role:'user',text:'历史问题',createdAt:old},{id:'u',sessionId:'s',role:'user',text:'当前问题',createdAt:at}],resources:[],actions:[],replyTimings:[{messageId:'old',startedAt:old,finishedAt:'2026-10-14T02:00:02Z',status:'completed'},{...timing,status:'completed',finishedAt:'2026-10-14T03:00:49Z'}],ai:{...view,status:'completed',cards:[{id:'old-reply',type:'message',status:'completed',content:'历史答复',at:old},{...tool,status:'completed'},{id:'reply',type:'message',status:'completed',content:'本轮答复',at}]}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));

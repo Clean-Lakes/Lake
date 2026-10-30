@@ -21,6 +21,7 @@ export function progressGlyph(card?:AICard):GlyphName {
 }
 
 export const toolLabels: Record<string, string> = {
+ "后台命令":"后台命令",
  inspect_attachment:"检查附件",stage_attachment:"传输附件",
  list_mcp_servers:"查看 MCP 服务",list_mcp_tools:"查看 MCP 工具",call_mcp_tool:"调用 MCP 工具",
  todo_read:"查看任务进度",todo_write:"更新任务进度",ask_user_question:"询问你的选择",read_session_context:"查阅历史会话",load_skill:"加载技能",list_workflows:"查看工作流",get_workflow_run:"查看工作流结果",run_workflow:"运行工作流",save_workflow:"保存工作流",schedule_create:"创建定时任务",schedule_list:"查看定时任务",schedule_update:"更新定时任务",schedule_delete:"删除定时任务",task_output:"查看任务结果",task_stop:"停止任务",read_tool_result:"读取完整工具结果",

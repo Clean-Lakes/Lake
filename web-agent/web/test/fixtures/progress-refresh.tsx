@@ -36,6 +36,21 @@ if(query.has('reference-time')){
  }
  state.ai!.cards.push({id:'reference-answer',type:'message',status:'completed',at:stamp(114),content:'已核对演示服务的运行状态，完整执行步骤与命令结果可在上方用时入口中查看。'});
 }
+// Reproduce a saved incomplete turn with a real answer after failed tools.
+// The pre-tool note belongs to process; both distinct result paragraphs and
+// the actual failure remain in the main transcript without changing its status.
+if(query.has('ended-failure')){
+ const user=state.messages.at(-1)!;
+ state.ai!.cards=[
+  {id:'process-preface',type:'message',status:'completed',at:stamp(111),content:'我继续核对演示配置，并确认实际结果。'},
+  {id:'failed-operation',type:'operation',title:'shell',status:'failed',at:stamp(112),content:'原操作失败记录',data:{target:'演示主机',arguments:{command:'example-command'}}},
+  {id:'actual-answer',type:'message',status:'completed',at:stamp(113),content:'已核对演示配置，记录显示已应用。'},
+  {id:'actual-verification',type:'message',status:'completed',at:stamp(114),content:'补充核验：实际客户端连接仍需确认。'},
+  {id:'final-error',type:'error',status:'failed',at:stamp(115),content:'演示后续检查失败，原始记录保留。'},
+ ];
+ state.session.status='failed';state.ai!.status='failed';state.ai!.totalCards=state.ai!.cards.length;
+ state.replyTimings=[{messageId:user.id,startedAt:user.createdAt,finishedAt:stamp(116),status:'failed'}];
+}
 const lineArrivals:{kind:string;duration:number|undefined}[]=[];
 const motionSamples:{kind:string;y:number;opacity:number}[]=[];
 const metrics={executionName:"",executionPhase:"",statusTop:0,statusHeight:0,statusBeforeReply:false,executionAnimations:0,rowReplacements:0,rowRemovals:0,rowPositionChanges:0,rowColorChanges:0,renderedRows:[] as {id:string;kind:string;top:number}[],lineArrivals,motionSamples,snapshots:0,subscriptions:0,actionReplacements:0,historyReplacements:0,actionAnimations:0,replyAnimations:0,replyReplacements:0,scrollWrites:0,scrollEvents:0,scrollChanges:0,heightChanges:0,updates:0,errors:0,top:0,height:0};
@@ -68,7 +83,7 @@ Element.prototype.animate=function(keyframes,options){
 const descriptor=Object.getOwnPropertyDescriptor(Element.prototype,'scrollTop')!;
 Object.defineProperty(Element.prototype,'scrollTop',{...descriptor,get:descriptor.get,set(value:number){if(this.classList.contains('conversation'))metrics.scrollWrites++;descriptor.set!.call(this,value)}});
 document.addEventListener('animationstart',event=>{if((event.target as Element).matches('.conversation-progress-action > span'))metrics.actionAnimations++});
-document.addEventListener('animationstart',event=>{if((event as AnimationEvent).animationName==='execution-text-sweep')metrics.executionAnimations++;if((event as AnimationEvent).animationName==='reply-arrival'){metrics.replyAnimations++;const row=event.target as HTMLElement;lineArrivals.push({kind:row.querySelector('.thinking-timeline')?'action':'reply',duration:360})}});
+document.addEventListener('animationstart',event=>{if((event as AnimationEvent).animationName==='status-text-sweep'&&(event.target as Element).matches('.thinking-label'))metrics.executionAnimations++;if((event as AnimationEvent).animationName==='reply-arrival'){metrics.replyAnimations++;const row=event.target as HTMLElement;lineArrivals.push({kind:row.querySelector('.thinking-timeline')?'action':'reply',duration:360})}});
 document.addEventListener('scroll',event=>{if((event.target as Element).classList?.contains('conversation'))metrics.scrollEvents++},true);
 window.addEventListener('error',()=>metrics.errors++);
 createRoot(document.getElementById('root')!).render(<App/>);
@@ -79,7 +94,7 @@ let motionNodeId=0,motionAnimationId=0;
 function readMotion(selector:string){return [...document.querySelectorAll(selector)].map(node=>{
  if(!motionNodes.has(node))motionNodes.set(node,++motionNodeId);
  const style=getComputedStyle(node);
- return {nodeId:motionNodes.get(node),text:node.textContent,name:style.animationName,phase:style.backgroundPosition,fill:style.webkitTextFillColor,animations:node.getAnimations().map(animation=>{
+ return {nodeId:motionNodes.get(node),text:node.textContent,name:style.animationName,phase:style.backgroundPosition,fill:style.webkitTextFillColor,animations:node.getAnimations().filter(animation=>'animationName' in animation).map(animation=>{
   if(!motionAnimations.has(animation))motionAnimations.set(animation,++motionAnimationId);
   return {id:motionAnimations.get(animation),state:animation.playState,start:animation.startTime,time:animation.currentTime};
  })};
@@ -129,8 +144,12 @@ const update=()=>{
  metrics.updates++;streams.forEach(stream=>stream.emit());
 };
 let index=0,tick=112;
+document.getElementById('queue-followup')!.onclick=()=>{const queue=state.messageQueue!;queue.items.push({id:`queued-${++index}`,text:'再检查磁盘空间，保留已有结果。',resourceIds:[],images:[],files:[],createdAt:stamp(++tick)});queue.revision++;update()};
+document.getElementById('consume-followup')!.onclick=()=>{const queue=state.messageQueue!;const item=queue.items.shift();if(!item)return;queue.revision++;finishCurrent();state.messages.push({id:item.id,sessionId:'fixture',role:'user',text:item.text,createdAt:stamp(++tick)});state.ai!.rootTurnId=item.id;state.ai!.turnStartedAt=stamp(tick);update()};
 document.getElementById('reset-metrics')!.onclick=()=>{lineArrivals.length=motionSamples.length=0;metrics.executionAnimations=metrics.rowReplacements=metrics.rowRemovals=metrics.rowPositionChanges=metrics.rowColorChanges=0;metrics.actionReplacements=metrics.historyReplacements=metrics.actionAnimations=metrics.replyAnimations=metrics.replyReplacements=metrics.scrollWrites=metrics.scrollEvents=metrics.scrollChanges=metrics.heightChanges=metrics.updates=0};
 document.getElementById('update-line')!.onclick=()=>{state.ai!.cards.find(card=>card.id==='note')!.content=`第 ${++index} 次核对演示服务与运行记录，保留本轮原始证据。`;update()};
+document.getElementById('wait-approval')!.onclick=()=>{state.ai!.status='waiting_approval';update()};
+document.getElementById('resume-motion')!.onclick=()=>{state.ai!.status='running';update()};
 document.getElementById('finish-tool')!.onclick=()=>{state.ai!.cards.filter(card=>card.type==='operation'||card.type==='shell').forEach(card=>{if(card.status==='running')card.status='completed'});update()};
 document.getElementById('fail-tool')!.onclick=()=>{const tool=state.ai!.cards.filter(card=>card.type==='operation'||card.type==='shell').at(-1)!;tool.status='failed';tool.content='演示失败：原始错误记录保留';update()};
 document.getElementById('next-reasoning')!.onclick=()=>{state.ai!.cards.filter(card=>card.type==='thinking'||card.type==='operation'||card.type==='shell').forEach(card=>{if(card.status==='running')card.status='completed'});state.ai!.cards.push({id:`reasoning-${++tick}`,type:'thinking',status:'running',at:stamp(tick),content:'继续比对演示主机的进程与连接，保留原始思考记录。'});update()};

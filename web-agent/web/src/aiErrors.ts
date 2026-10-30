@@ -1,9 +1,11 @@
 /** Translate known internal failures without rewriting user/assistant prose. */
 export function displayAiError(message: string): string {
+	if (message.startsWith("只读检查仍有缺口：") && message.includes("pilot_read_recovery")) return "本步骤仍有未完成的只读检查，尚未通过验收。已保留取得的证据，可继续检查或结束任务。";
 	if (message.includes("invalid or duplicate model tool call")) return "模型返回的工具调用格式无效，本轮未完成。已有调查结果和消息已保留，可在原会话继续，或切换模型后重试。";
 	if (message.includes("model stream idle timeout")) return message.includes("context compaction:") ? "上下文整理未完成：模型长时间没有返回新内容。历史记录已保留，可以重试整理或切换模型后继续。" : "模型长时间没有返回新内容，已停止等待。已收到的回复和操作记录已保留，可以继续发送消息或重试。";
 	if (message.trim() === "context deadline exceeded") return "本轮等待超时。已有消息和操作记录已保留；终端命令可能仍在运行，继续前请先核查执行状态。";
 	if (message.includes("context compaction:")) {
+		if (message.includes("cannot connect to model endpoint")) return "上下文整理请求未能完成连接，本轮未继续。历史消息和操作记录已保留，可在原会话重试。";
 		if (message.includes("context deadline exceeded")) return "上下文整理超时。历史消息和操作记录已保留；可以在原会话重试压缩，或切换响应更快的模型后继续。";
 		if (message.includes("context canceled")) return "已停止整理上下文。历史消息和操作记录已保留，可以在原会话继续。";
 		if (/model returned HTTP 404\b/.test(message)) return "上下文整理未完成：模型接口不存在（HTTP 404）。请检查供应商的 API 格式与 Base URL 是否匹配；历史记录已保留，修正后可继续。";
@@ -18,6 +20,19 @@ export function displayAiError(message: string): string {
 	if (message.includes("context compaction: summary input exceeds")) return "上下文整理未完成：摘要输入超出配置预算。历史记录已保留，请缩小查询范围后继续。";
   if (message.includes("context compaction:") && message.includes("model output limit reached")) return "上下文整理未完成：摘要超过模型输出上限。历史记录已保留，请重试。";
   if (message.includes("context compaction: empty summary")) return "上下文整理未完成：模型未返回有效摘要。历史记录已保留，请重试。";
+  if (isContextCompactionFailure(message)) return "上下文整理未完成，本轮未继续。历史消息和操作记录已保留，可查看执行详情后重试。";
   if (message.includes("model output limit reached")) return "模型回复达到单次输出上限，自动重试仍未完成。已有消息和取证记录已保留，可在原会话继续，或提高单次输出上限。";
   return message;
+}
+
+export function isContextCompactionFailure(message:string):boolean {
+ return message.trimStart().startsWith('context compaction:');
+}
+
+/** Routine lifecycle notices belong to turn status and execution records. */
+export function isConversationInterruption(message: string): boolean {
+ const text=message.trim();
+ return ["context canceled","已停止本轮","本次执行已停止，已有证据与操作记录保留。",
+  "本步骤仍有未完成的只读检查，尚未通过验收。已保留取得的证据，可继续检查或结束任务。"].includes(text)
+  || text.startsWith("只读检查仍有缺口：")&&text.includes("pilot_read_recovery");
 }

@@ -1,5 +1,5 @@
 .schedule-scrim { z-index: 100; }
-.schedule-dialog { width: min(900px,calc(100vw - 32px)); max-height: min(760px,calc(100dvh - 40px)); display: flex; flex-direction: column; background: var(--surface); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius-panel); box-shadow: var(--shadow-popover); overflow: hidden; }
+.schedule-dialog { width: min(900px,calc(100vw - 32px)); max-height: min(760px,calc(100dvh - 40px)); display: flex; flex-direction: column; background: var(--surface); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius-dialog); box-shadow: var(--shadow-popover); overflow: hidden; }
 .schedule-header { display: flex; align-items: center; justify-content: space-between; padding: 22px 24px 0; gap: 16px; }
 .schedule-header p { margin: 0 0 5px; font-size: var(--font-size-ui); color: var(--text-muted); }
 .schedule-header h2 { margin: 0; font-size: 20px; font-weight:var(--font-weight-semibold); }

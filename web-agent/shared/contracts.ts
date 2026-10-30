@@ -10,7 +10,7 @@ export type Project = {
 
 export type MemoryKnowledgeKind = "preference" | "procedure" | "topology" | "configuration" | "incident_lesson";
 export type MemorySource = {sourceId?:string; kind:string; sessionId?:string; turnId?:string; messageId?:string; evidenceId?:string; at?:string; observedAt?:string; assertedAt?:string; excerpt?:string; outcome?:string};
-export type MemoryAccess = {key:string; revision:number; kind:"index"|"read"; scopeSignature?:string; offsetLine?:number; byteOffset?:number; bytesRead?:number; at:string; observedAt?:string; historical?:boolean};
+export type MemoryAccess = {key:string; revision:number; kind:"index"|"read"|"prepared"; category?:string; scope?:string; contentHash?:string; scopeSignature?:string; offsetLine?:number; byteOffset?:number; bytesRead?:number; at:string; observedAt?:string; historical?:boolean};
 export type MemoryCandidate = {candidateId:string; candidateHash:string; baseKey:string; baseRevision:number; reason:string; status:string; createdAt:string; expiresAt:string; proposal:Partial<ProjectMemoryEntry>};
 export type ProjectMemorySettings = {memorySchemaVersion?:number; projectId: string; useEnabled: boolean; extractionEnabled: boolean; epoch: number; revision: number; settingsRevision: number; publishedRevision: number };
 export type ProjectMemoryEntry = {knowledgeKind?:MemoryKnowledgeKind; scopeKind?:"project"|"resources"; resourceIds?:string[]; resourceNames?:string[]; subject?:Record<string,unknown>; factKey?:string; alwaysReference?:boolean; eligibility?:string; reviewState?:string; observedAt?:string; assertedAt?:string; historical?:boolean; projectId: string; key: string; type: "user" | "feedback" | "project" | "reference"; description: string; body?: string; revision: number; projectRevision: number; verification: string; validUntil: string; expired: boolean; deletedAt: string; createdAt: string; updatedAt: string; sources?: MemorySource[] };
@@ -149,6 +149,7 @@ export type TerminalSession = {
 };
 
 export type TerminalEntry = {
+  stopRequestedAt?: string | null;
   status: "running" | "completed" | "unknown"; generation: string; cwd: string | null; startedAt: string | null; finishedAt: string | null; originSessionId: string | null;
   id: string;
   terminalId: string;
@@ -168,14 +169,16 @@ export type Catalog = {
   terminals?: Array<TerminalSession & { sessionTitle?: string }>;
 };
 
-export type QueuedMessage = {id: string; text: string; resourceIds: string[]; references?: Record<string,unknown>[]; mentions?: MessageMention[]; images: Pick<AIImage,"id" | "name" | "mimeType">[]; files: TextFileAttachment[]; createdAt: string};
+export type QueuedMessage = {supplementRootTurnId?:string; id: string; text: string; resourceIds: string[]; references?: Record<string,unknown>[]; mentions?: MessageMention[]; images: Pick<AIImage,"id" | "name" | "mimeType">[]; files: TextFileAttachment[]; createdAt: string};
 export type MessageQueue = {paused: boolean; revision: number; lastError: string; items: QueuedMessage[]};
-export type QueueOperation = {operation:"pause" | "resume"; revision:number} | {operation:"remove"; revision:number; id:string} | {operation:"edit"; revision:number; id:string; text:string; resourceIds:string[]; references?:Record<string,unknown>[]; mentions?:MessageMention[]} | {operation:"reorder"; revision:number; ids:string[]};
+export type QueueOperation = {operation:"pause" | "resume"; revision:number} | {operation:"remove" | "push"; revision:number; id:string} | {operation:"edit"; revision:number; id:string; text:string; resourceIds:string[]; references?:Record<string,unknown>[]; mentions?:MessageMention[]} | {operation:"reorder"; revision:number; ids:string[]};
 export type SendMessageResult = {queued?: boolean; queuedMessageId?: string; messageQueue?: MessageQueue};
 
 export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;status:"running" | "completed" | "cancelled" | "failed" | "interrupted"};
 
 export type SessionSnapshot = {
+ naturalMemoryNotices?:{changeId:string;scope:string;entryId:string;revision:number;batchId?:string}[];
+  commandStopNotices?: CommandStopNotice[];
  conversationMode?: ConversationMode;
 	sre?:SRESnapshot;
  replyTimings?:ReplyTiming[];
@@ -193,6 +196,8 @@ export type SessionSnapshot = {
   ai?: AIView;
   hostKeyTrust?: SSHHostKeyTrust | null;
 };
+
+export type CommandStopNotice = {entryId:string;terminalId:string;resourceId:string;resourceName:string;requestedAt:string;status:string;exitCode:number|null;finishedAt:string|null};
 
 export type ResourceTreeNode = { id: string; projectId: string; parentId: string | null; kind: "folder" | "resource"; name: string; resourceId: string | null; position: number; builtin?: boolean };
 
@@ -253,12 +258,17 @@ export type AIContextUsage = { window: number; windowSource?: string; modelId?: 
 export type AITodo = {content:string;status:"pending"|"in_progress"|"completed";priority?:"high"|"medium"|"low"};
 export type AIQuestionOption = {label:string;description?:string;recommended?:boolean};
 export type AIUserQuestion = {id:string;title:string;reason?:string;options?:Array<string|AIQuestionOption>;multi_select?:boolean};
-export type AIQuestionRequest = {id:string;questions:AIUserQuestion[]};
+export type PilotOperationCandidate = {id:string;title:string;tool:string;arguments:Record<string,unknown>;dependsOn?:string[];risk:string};
+export type PilotDirection = {id:string;title:string;reason:string;recommended?:boolean;operations:PilotOperationCandidate[]};
+export type PilotChoice = {sessionId:string;taskId:string;planRevisionId:string;stepId:string;attemptId:string;role:SREAgentRole;directions:PilotDirection[];singleDirectionReason?:string};
+export type AIQuestionRequest = {id:string;questions:AIUserQuestion[];pilot?:PilotChoice};
 export type AIOperationOutcome = {id:string;tool:string;target:string;status:string;handle?:string;result?:string;startedAt:string};
 export type ConversationMode = "default" | "plan";
 export type ConversationModeUpdate = {mode:ConversationMode;cursor:number};
 export type ProposedPlan = {id:string;content:string;at:string};
-export type AIView = { proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; memoryAccess?: MemoryAccess[]; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
+export type ExternalWorkWatch={adapter:string;operationId:string;handle:string;state:string;lastObservedAt?:string};
+export type WorkGoal={id:string;sessionId:string;originRootTurnId:string;title:string;status:string;revision:number;items:{id:string;title:string;status:string;reason?:string;watch?:ExternalWorkWatch}[];modelRounds:number;roundLimit:number;deadlineAt:string;updatedAt:string;summary?:string};
+export type AIView = {workGoals?:WorkGoal[]; proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; memoryAccess?: MemoryAccess[]; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
 export type AIPreset = { id: string; title: string; content: string };
 
 export type AIImage = { id: string; mimeType: string; base64: string; sizeBytes: number; width: number; height: number; name?: string; url?: string };
@@ -271,7 +281,7 @@ export type WorkflowCatalog = {templates:WorkflowTemplate[]; runs:WorkflowRun[]}
 
 export type NavigationTrashItem = {kind:"project" | "resource" | "folder";id:string;projectId:string;name:string;projectName:string;deletedAt:string};
 
-export interface MCPServerConfig {id:string;name:string;transport:"http"|"sse"|"stdio";enabled:boolean;url:string;command:string;args:string[];headersConfigured:boolean;envConfigured:boolean;timeoutMs?:number;protocolVersion?:string}
+export interface MCPServerConfig {id:string;name:string;transport:"http"|"sse"|"stdio";enabled:boolean;url:string;command:string;args:string[];headersConfigured:boolean;envConfigured:boolean;timeoutMs?:number;protocolVersion?:string;workObserver?:string}
 export interface MCPToolInfo {name:string;description:string;inputSchema:unknown}
 export interface MCPToolCatalog {serverId:string;serverName:string;tools:MCPToolInfo[];count:number}
 export interface SkillConfig {name:string;description:string;path:string;source:string;enabled:boolean;managed:boolean}
@@ -281,17 +291,22 @@ export interface SkillCatalog {skills:SkillConfig[];roots:string[];defaultRoot:s
 export type SREAgentRole = 'coordinator'|'investigator'|'executor'|'verifier';
 export type SREAction = {tool:string;arguments:Record<string,unknown>;reason?:string;impact?:string;rollback?:string;stopCondition?:string};
 export type SRECheck = {id:string;description:string;kind:'number_threshold'|'boolean_probe'|'manual_attestation';resourceId?:string;probe?:SREAction;path?:string;operator?:string;expected?:unknown;unit?:string;windowSeconds?:number;minSamples?:number};
-export type SREPlanStep = {id:string;role:SREAgentRole;kind:'observe'|'analyze'|'act'|'verify'|'summarize';description:string;capability?:string;dependsOn:string[];resourceIds:string[];completionChecks:string[];action?:SREAction};
+export type SREPlanStep = {assignmentId?:string;id:string;role:SREAgentRole;kind:'observe'|'analyze'|'act'|'verify'|'summarize';description:string;capability?:string;dependsOn:string[];resourceIds:string[];completionChecks:string[];action?:SREAction};
 export type SREPlanRevision = {collaborationVersion?:number;id:string;taskId:string;version:number;goal:string;taskType:'query'|'investigation'|'recovery'|'change';scope:string[];steps:SREPlanStep[];acceptance:SRECheck[];changeReason:string;createdAt:string};
-export type SREOperation = {risk?:string;resolutionNote?:string;resolvedBy?:string;resolvedAt?:string;id:string;call:{id:string;name:string;arguments:string};digest:string;resourceId:string;status:string;preparedAt:string;dispatchedAt?:string;finishedAt?:string;approvalId?:string;result?:string};
+export type SREOperation = {evidenceIds?:string[];risk?:string;resolutionNote?:string;resolvedBy?:string;resolvedAt?:string;id:string;call:{id:string;name:string;arguments:string};digest:string;resourceId:string;status:string;preparedAt:string;dispatchedAt?:string;finishedAt?:string;approvalId?:string;result?:string};
 export type SRERoleReport = {schemaVersion:number;summary:string;facts:{statement:string;evidenceIds:string[]}[];hypotheses:string[];unknowns:string[];nextChecks:string[]};
-export type SREStepAttempt = {reusedFromAttemptId?:string;report?:SRERoleReport;id:string;planRunId:string;stepId:string;roleRunId:string;status:string;evidence:AgentEvidence[];operations:SREOperation[];result?:string;startedAt:string;finishedAt?:string};
+export type PilotReadRecovery = {failedOperationId:string;replacementOperationIds:string[];reason:string;createdAt:string};
+export type SREStepAttempt = {completionRepair?:{roleRunId:string;maxRounds:number;originalRemainingRounds:number;startedAt:string};readRecoveries?:PilotReadRecovery[];reusedFromAttemptId?:string;report?:SRERoleReport;id:string;planRunId:string;stepId:string;roleRunId:string;status:string;evidence:AgentEvidence[];operations:SREOperation[];result?:string;startedAt:string;finishedAt?:string};
 export type SREPlanRun = {id:string;taskId:string;planRevisionId:string;profileVersion:number;status:string;resumeOfRunId?:string;startedAt:string;finishedAt?:string};
 export type SRETranscriptEntry = {toRoleId?:SREAgentRole;evidenceIds?:string[];source?:string;id:string;sessionId:string;taskId:string;roleId:SREAgentRole;roleRunId:string;kind:string;body:string;revision:number;sequence:number;planVersion?:number;attemptId?:string;createdAt:string};
 export type SRECheckResult = {checkId:string;status:string;reason:string;evidenceIds:string[];samples:number;value?:unknown;attestedBy?:string;checkedAt:string};
 export type SREVerificationResult = {reviewSummary?:string;id:string;taskId:string;planRunId:string;checks:SRECheckResult[];verdict:string;checkedAt:string};
-export type SRETask = {id:string;sessionId:string;projectId:string;requestId:string;goal:string;scope:string[];mode:'assist'|'plan_only';status:string;outcome:string;recoveryStatus:string;rootCauseStatus:string;profileId:string;profileVersion:number;revision:number;tokenBudget:number;budgetPolicy?:string;budgetSpent:number;usage:AIUsage;plans:SREPlanRevision[];runs:SREPlanRun[];attempts:SREStepAttempt[];messages:SRETranscriptEntry[];verifications:SREVerificationResult[];error?:string;createdAt:string;updatedAt:string};
-export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[]};
+export type PilotSelection = {level:'step'|'direction'|'command'|'cancel';directionId?:string;operationIds?:string[]};
+export type PilotDirectionBatch = {id:string;decisionId:string;directionId:string;operations:PilotOperationCandidate[];createdAt:string};
+export type PilotTaskPolicy = {directionBatches?:PilotDirectionBatch[];autoAdvance:boolean;settingsRevision:number;decisions?:{requestId:string;planRevisionId:string;stepId:string;attemptId:string;direction?:PilotDirection;selection:PilotSelection;fingerprints?:string[];operations?:PilotOperationCandidate[];createdAt:string}[]};
+export type SRETask = {pilot?:PilotTaskPolicy;id:string;sessionId:string;projectId:string;requestId:string;goal:string;scope:string[];mode:'assist'|'plan_only';status:string;outcome:string;recoveryStatus:string;rootCauseStatus:string;profileId:string;profileVersion:number;revision:number;tokenBudget:number;budgetPolicy?:string;budgetSpent:number;usage:AIUsage;plans:SREPlanRevision[];runs:SREPlanRun[];attempts:SREStepAttempt[];messages:SRETranscriptEntry[];verifications:SREVerificationResult[];error?:string;createdAt:string;updatedAt:string};
+export type PilotSettings = {enabled:boolean;autoAdvance:boolean;revision:number};
+export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[];pilot?:PilotSettings};
 
 export type ScheduleExecution={id:string;scheduled_at:string;started_at?:string;finished_at?:string;status:string;error?:string;task_id?:string;session_id?:string};
 export type ScheduledTask={id:string;project_id:string;session_id:string;name:string;at:string;interval_seconds:number;kind:'reminder'|'workflow';message?:string;workflow_id?:string;version?:number;enabled:boolean;revision:number;status:string;last_at?:string;error?:string;task_id?:string;history_count:number;history?:ScheduleExecution[]};

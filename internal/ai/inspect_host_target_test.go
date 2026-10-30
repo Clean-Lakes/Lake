@@ -5,8 +5,6 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
-
-	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
 func TestInspectHostCarriesResolvedSSHRuntimeWithoutOverridingExplicitRuntime(t *testing.T) {
@@ -70,14 +68,37 @@ func TestInspectHostCarriesResolvedSSHRuntimeWithoutOverridingExplicitRuntime(t 
 }
 
 func TestOnlineDispatchedHostInspectionIsNotAutomaticallyReplayed(t *testing.T) {
-	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
-	s, c := enableOnline(t, e)
-	if onlineReadOnly("inspect_host", "readonly", nil, true) {
-		t.Fatal("inspection can create a terminal and must not become replayable")
+	var calls atomic.Int32
+	m, done := fakeModel(t, func(n int, _ map[string]any) any {
+		if n == 1 {
+			return response("", Call{ID: "inspect", Name: "inspect_host", Arguments: `{}`})
+		}
+		return response("Actual inspection failed; no replay.")
+	})
+	defer done()
+	e := engineFor(t, m, func(_ context.Context, _ string, name string, _ map[string]any, _ bool) (any, error) {
+		if name == "policy" {
+			return map[string]any{"asset_ref": "local", "runtime": "local"}, nil
+		}
+		if name == "inspectHost" {
+			calls.Add(1)
+		}
+		return nil, errors.New("inspection failed after dispatch")
+	})
+	c := Config{Model: m, Profile: "core", Runtime: "local", Assets: []Asset{{ID: "local", Kind: "local", Name: "Synthetic local"}}}
+	if err := e.Configure("case", c); err != nil {
+		t.Fatal(err)
 	}
-	err := e.onlineObserve(s, c, Call{ID: "inspect", Name: "inspect_host"}, &onlinePolicyTrace{Dispatched: true, TargetHash: "target"}, nil, errors.New("inspection failed after dispatch"))
-	var stopped *onlineStopped
-	if !errors.As(err, &stopped) || stopped.Reason != strategy.AwaitingReconciliation {
-		t.Fatal("unknown dispatched inspection must still await reconciliation", err)
+	if err := e.Chat(context.Background(), "case", "Inspect.", nil); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 1 {
+		t.Fatal("inspection automatically replayed")
+	}
+	store, _ := e.adkStore()
+	var count int64
+	store.DB.Model(&nativeCorrection{}).Count(&count)
+	if count != 0 {
+		t.Fatal("retired correction record created")
 	}
 }

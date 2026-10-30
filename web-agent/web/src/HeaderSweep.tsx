@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 
 export const HEADER_SWEEP_FADE_MS=700;
 
-/** Keep the same moving layer alive during its exit, including a quick resume. */
+/** Keep the same layer and freeze its phase during exit, including a quick resume. */
 export function HeaderSweep({active}:{active:boolean}) {
  const [retained,setRetained]=useState(active);
  useEffect(()=>{
@@ -12,5 +12,5 @@ export function HeaderSweep({active}:{active:boolean}) {
   return ()=>window.clearTimeout(timer);
  },[active,retained]);
  if(!active&&!retained)return null;
- return <span className={`workspace-header-sweep${active?'':' is-receding'}`} style={{transitionDuration:`${HEADER_SWEEP_FADE_MS}ms`}} aria-hidden="true"><span className="header-sweep-light"/></span>;
+ return <span className={`workspace-header-sweep${active?'':' is-receding'}`} style={{transitionDuration:`${HEADER_SWEEP_FADE_MS}ms`}} aria-hidden="true"><span className="header-sweep-light" style={{animationPlayState:active?'running':'paused'}}/></span>;
 }

@@ -174,3 +174,59 @@ func TestProtocolSwitchAndReusedCallIDs(t *testing.T) {
 		}
 	}
 }
+
+func TestTerminalRecoveryRequiresToolCallOnlyForSupportedProtocol(t *testing.T) {
+	for _, p := range []string{"openai", "openai-response", "azure-gpt", "claude", "gemini", "ollama"} {
+		m := Model{URL: "https://example.test/v1", Name: "fixture", Protocol: p, MaxOutput: 1024, requireToolCall: true}
+		_, body, err := modelPayload(m, []Message{{Role: "user", Content: "complete the decision"}}, []Tool{sreReplyTool(), sreCoordinationTool()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := p == "openai" || p == "openai-response" || p == "azure-gpt"
+		if (body["tool_choice"] == "required") != expected {
+			t.Fatal("unexpected recovery tool policy", p)
+		}
+		m.requireToolCall = false
+		_, ordinary, err := modelPayload(m, []Message{{Role: "user", Content: "hello"}}, []Tool{sreReplyTool()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ordinary["tool_choice"] != nil {
+			t.Fatal("ordinary request forced tool calling", p)
+		}
+		m.requireToolCall = true
+		_, empty, err := modelPayload(m, []Message{{Role: "user", Content: "hello"}}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if empty["tool_choice"] != nil {
+			t.Fatal("empty catalog forced tool calling", p)
+		}
+	}
+	a, _ := promptModelHash(Config{}, Model{})
+	b, _ := promptModelHash(Config{}, Model{requireToolCall: true})
+	if a == b {
+		t.Fatal("manifest omitted terminal recovery policy")
+	}
+}
+
+func TestTerminalDecisionDeepSeekThinkingCompatibilityIsRequestLocal(t *testing.T) {
+	for _, p := range []string{"openai", "openai-response"} {
+		cap := ReasoningCapability{Levels: []string{"low", "high", "max"}, Default: "high", Source: "provider"}
+		original := Model{URL: "https://api.deepseek.com/v1", Name: "deepseek-flash", Protocol: p, Reasoning: &cap, ReasoningEffort: "high", MaxOutput: 8192}
+		recovery := terminalDecisionModel(original)
+		_, body, err := modelPayload(recovery, []Message{{Role: "user", Content: "finish decision"}}, []Tool{sreReplyTool()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if body["tool_choice"] != "required" {
+			t.Fatal("decision not required")
+		}
+		if p == "openai-response" && obj(body["reasoning"])["effort"] != "none" || p == "openai" && obj(body["thinking"])["type"] != "disabled" {
+			t.Fatal("incompatible forced thinking request")
+		}
+		if original.ReasoningEffort != "high" || original.Reasoning != &cap || len(cap.Levels) != 3 || recovery.MaxOutput != original.MaxOutput {
+			t.Fatal("recovery modified saved reasoning or token ceiling")
+		}
+	}
+}

@@ -43,7 +43,8 @@ func promptModelHash(c Config, m Model) (string, error) {
 		Reasoning                                 ReasoningCapability
 		ContextWindow, MaxOutput                  int
 		ImageInput, ImageOutput                   bool
-	}{c.ModelProviderID, m.Name, protocol(m), m.ReasoningEffort, ReasoningSupport(m), m.ContextWindow, m.MaxOutput, m.SupportsImageInput, m.SupportsImageOutput})
+		RequiredToolCall                          bool `json:",omitempty"`
+	}{c.ModelProviderID, m.Name, protocol(m), m.ReasoningEffort, ReasoningSupport(m), m.ContextWindow, m.MaxOutput, m.SupportsImageInput, m.SupportsImageOutput, m.requireToolCall})
 }
 
 func (d *adkTurnDriver) basePromptFragments(history []Message) ([]strategy.PromptFragment, bool) {

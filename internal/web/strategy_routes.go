@@ -7,27 +7,9 @@ import (
 	"io"
 	"net/http"
 	"reflect"
-	"strconv"
 	"strings"
-
-	"github.com/Clean-Lakes/Lake/internal/ai"
-	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
-type strategyAssetRequest struct {
-	ExpectedRevision int64                  `json:"expectedRevision"`
-	ParentRevision   int64                  `json:"parentRevision,omitempty"`
-	Title            string                 `json:"title"`
-	Kind             strategy.AssetKind     `json:"kind"`
-	Body             string                 `json:"body"`
-	Applicability    strategy.Applicability `json:"applicability"`
-	Assessment       strategy.Assessment    `json:"assessment"`
-	Reuse            *strategy.ReusePolicy  `json:"reuse,omitempty"`
-}
-
-func (r strategyAssetRequest) input() StrategyAssetInput {
-	return StrategyAssetInput{Title: r.Title, Kind: r.Kind, Body: r.Body, Applicability: r.Applicability, Assessment: r.Assessment, Reuse: r.Reuse}
-}
 func strategyMust[T any](value T, err error) T {
 	if err != nil {
 		panic(err)
@@ -107,6 +89,7 @@ func strategyJSONValue(d *json.Decoder) error {
 	}
 	return err
 }
+
 func strategyBody[T any](r *http.Request, required ...string) T {
 	raw, err := io.ReadAll(io.LimitReader(r.Body, 128001))
 	if err != nil || len(raw) > 128000 {
@@ -138,329 +121,25 @@ func strategyBody[T any](r *http.Request, required ...string) T {
 	if !strategyExactKeys(raw, reflect.TypeOf(out)) {
 		strategyFail(400, "unknown_field")
 	}
-	if budget, ok := fields["budget"]; ok {
-		var entries map[string]json.RawMessage
-		_ = json.Unmarshal(budget, &entries)
-		if len(entries) != 9 {
-			strategyFail(400, "invalid_budget")
-		}
-	}
 
 	return out
 }
-func strategyPage(r *http.Request, key string, fallback int64) int64 {
-	text := r.URL.Query().Get(key)
-	if text == "" {
-		return fallback
-	}
-	value, err := strconv.ParseInt(text, 10, 64)
-	if err != nil || value < 0 {
-		strategyFail(400, "invalid_page")
-	}
-	return value
-}
-func (b *Server) strategySafeInput(in StrategyAssetInput) {
-	model := b.Models.Active()
-	if model == nil {
-		model = &ai.Model{}
-	}
-	raw := jsonText(in)
-	if b.Terminals.containsCredential(raw) || !ai.SafeMemoryContent(raw, *model) || b.Models.strategyContainsProviderSecret(raw) {
-		strategyFail(400, "sensitive_content")
-	}
-	validateStrategyInput(in)
-}
-func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path string) (handled bool) {
-	var ctx StrategyContext
-	scope := strategy.Scope{Kind: strategy.UserScope}
-	suffix := ""
-	if path == "/api/strategy" || strings.HasPrefix(path, "/api/strategy/") {
-		suffix = strings.TrimPrefix(path, "/api/strategy")
-	} else {
+
+func (b *Server) strategyRoute(w http.ResponseWriter, r *http.Request, path string) bool {
+	ctx := StrategyContext{}
+	if path != "/api/strategy" && !strings.HasPrefix(path, "/api/strategy/") {
 		parts := strings.Split(strings.Trim(path, "/"), "/")
 		if len(parts) < 4 || parts[0] != "api" || parts[1] != "projects" || parts[3] != "strategy" {
 			return false
 		}
 		ctx.ProjectID = parts[2]
-		scope = strategy.Scope{Kind: strategy.ProjectScope, ProjectID: ctx.ProjectID}
-		suffix = "/" + strings.Join(parts[4:], "/")
 	}
-	handled = true
-	defer func() {
-		if p := recover(); p != nil {
-			var e *StrategyError
-			switch v := p.(type) {
-			case *StrategyError:
-				e = v
-			case *Failure:
-				e = &StrategyError{v.Status, "strategy_scope_unavailable"}
-			default:
-				e = &StrategyError{500, "strategy_internal_error"}
-			}
-			message := "策略操作失败，请刷新后重试"
-			switch e.Status {
-			case 400:
-				message = "策略参数或正文无效，请检查必填项、适用条件和敏感内容"
-			case 404:
-				message = "策略或项目不可用"
-			case 409:
-				message = "策略版本、来源或幂等请求冲突，请刷新后重试"
-			case 405:
-				message = "此策略操作尚未提供"
-			}
-			reply(w, e.Status, Object{"error": message, "code": e.Code})
-		}
-	}()
-	// Validate the host project even for unsupported routes; never read a project
-	// from the body, current UI state, asset title or filesystem path.
-	strategyMust(b.Store.GetStrategySettings(ctx, scope))
-	method := r.Method
-	key := r.Header.Get("Idempotency-Key")
-	if method != "GET" {
-		if len(key) < 1 || len(key) > 128 || strings.TrimSpace(key) != key {
-			strategyFail(400, "invalid_idempotency_key")
-		}
+	// The outer server authenticates first. Validate project scope even for 410.
+	_, err := strategyCall(b.Store, false, func() bool { b.Store.strategyContext(ctx); return true })
+	if err != nil {
+		reply(w, 404, Object{"error": "项目不可用", "code": "strategy_scope_unavailable"})
+		return true
 	}
-	mutated := func(result StrategyMutationResult) {
-		b.Engine.InvalidateStrategies("")
-		reply(w, 200, result)
-	}
-	if suffix == "/settings" {
-		if method == "GET" {
-			settings := strategyMust(b.Store.GetStrategySettings(ctx, scope))
-			effective := strategyMust(b.Store.EffectiveStrategySettings(ctx))
-			source := "saved"
-			if settings.Revision == 0 {
-				source = "default"
-				if ctx.ProjectID != "" {
-					source = "inherited"
-				}
-			}
-			reply(w, 200, Object{"settings": settings, "effective": effective.Settings, "source": source, "capabilities": Object{"apply": true, "learn": true, "correct": true, "correctMode": "isolated_experiments", "onlineCorrect": true, "onlineConsentVersion": strategy.OnlineConsentVersion}})
-			return
-		}
-		if method == "PATCH" {
-			in := strategyBody[struct {
-				ExpectedRevision     int64           `json:"expectedRevision"`
-				MasterEnabled        bool            `json:"masterEnabled"`
-				ApplyEnabled         bool            `json:"applyEnabled"`
-				LearnEnabled         bool            `json:"learnEnabled"`
-				CorrectEnabled       bool            `json:"correctEnabled"`
-				OnlineCorrectEnabled bool            `json:"onlineCorrectEnabled"`
-				OnlineConsentVersion int             `json:"onlineConsentVersion"`
-				Budget               strategy.Budget `json:"budget"`
-			}](r, "expectedRevision", "masterEnabled", "applyEnabled", "learnEnabled", "correctEnabled", "budget")
-			before := strategyMust(b.Store.EffectiveStrategySettings(ctx))
-			result := strategyMust(b.Store.SetStrategySettings(ctx, scope, key, in.ExpectedRevision, StrategySettingsInput{MasterEnabled: in.MasterEnabled, ApplyEnabled: in.ApplyEnabled, LearnEnabled: in.LearnEnabled, CorrectEnabled: in.CorrectEnabled, OnlineCorrectEnabled: in.OnlineCorrectEnabled, OnlineConsentVersion: in.OnlineConsentVersion, Budget: in.Budget}))
-			after := strategyMust(b.Store.EffectiveStrategySettings(ctx))
-			// Learning-only changes must not cancel a normal foreground turn.
-			// Active experimental controllers still fence any stale settings epoch.
-			if before.Settings.MasterEnabled && before.Settings.ApplyEnabled && !(after.Settings.MasterEnabled && after.Settings.ApplyEnabled) || before.Settings.OnlineCorrectEnabled {
-				b.Engine.InvalidateStrategies(ctx.ProjectID)
-			}
-			reply(w, 200, result)
-			return
-		}
-	}
-	if suffix == "/assets" {
-		if method == "GET" {
-			limit := strategyPage(r, "limit", 50)
-			if limit < 1 || limit > 50 {
-				strategyFail(400, "invalid_page")
-			}
-			items := strategyMust(b.Store.ListStrategyAssets(ctx, scope, r.URL.Query().Get("after"), int(limit)))
-			next := ""
-			if len(items) == int(limit) {
-				next = items[len(items)-1].ID
-			}
-			reply(w, 200, Object{"items": items, "nextCursor": next})
-			return
-		}
-		if method == "POST" {
-			in := strategyBody[strategyAssetRequest](r, "expectedRevision", "title", "kind", "body", "applicability")
-			if in.ExpectedRevision != 0 || in.ParentRevision != 0 {
-				strategyFail(400, "invalid_revision")
-			}
-			b.strategySafeInput(in.input())
-			reply(w, 200, strategyMust(b.Store.CreateStrategyAsset(ctx, scope, key, b.strategyCaptureReuse(in.input()))))
-			return
-		}
-	}
-	if suffix == "/imports/skill" && method == "POST" {
-		in := strategyBody[struct {
-			ExpectedRevision int64                  `json:"expectedRevision"`
-			Name             string                 `json:"name"`
-			Kind             strategy.AssetKind     `json:"kind"`
-			Applicability    strategy.Applicability `json:"applicability"`
-		}](r, "expectedRevision", "name", "kind", "applicability")
-		if in.ExpectedRevision != 0 {
-			strategyFail(400, "invalid_revision")
-		}
-		meta, content, err := b.Extensions.Store.ReadSkill(in.Name, "")
-		if err != nil || !meta.Enabled {
-			strategyFail(404, "skill_unavailable")
-		}
-		asset := StrategyAssetInput{Title: meta.Name, Kind: in.Kind, Body: content, Applicability: in.Applicability}
-		b.strategySafeInput(asset)
-		reply(w, 200, strategyMust(b.Store.importStrategySkill(ctx, scope, key, in.Name, content, asset)))
-		return
-	}
-	if b.strategyReuseRoute(w, r, ctx, scope, suffix, key) {
-		return
-	}
-	if b.strategyExperimentRoute(w, r, ctx, scope, suffix, key) {
-		return
-	}
-	if b.strategyLearningRoute(w, r, ctx, scope, suffix, key) {
-		return
-	}
-	parts := strings.Split(strings.Trim(suffix, "/"), "/")
-	if len(parts) >= 2 && parts[0] == "assets" {
-		id := parts[1]
-		// Ownership check shared by all handlers. A project can bind a global asset,
-		// but edits/deletion go through that asset's explicit owner scope.
-		latest := strategyMust(strategyCall(b.Store, false, func() StrategyAssetView { return assetView(b.Store.strategyAsset(ctx, id, true)) }))
-		owner := func() {
-			if latest.Scope != scope {
-				strategyFail(404, "asset_unavailable")
-			}
-		}
-		if len(parts) == 3 && parts[2] == "review" && method == "POST" {
-			owner()
-			in := strategyBody[struct {
-				Ref                      strategy.RevisionRef `json:"ref"`
-				ExpectedDecisionRevision int64                `json:"expectedDecisionRevision"`
-				Decision                 string               `json:"decision"`
-				ReasonCode               string               `json:"reasonCode"`
-			}](r, "ref", "expectedDecisionRevision", "decision", "reasonCode")
-			result := strategyMust(b.Store.ReviewStrategyRevision(ctx, id, key, in.Ref, in.ExpectedDecisionRevision, in.Decision, in.ReasonCode))
-			if in.Decision == "rejected" {
-				b.Engine.InvalidateStrategies("")
-			}
-			reply(w, 200, result)
-			return
-		}
-		if len(parts) == 3 && parts[2] == "promote" && method == "POST" {
-			owner()
-			in := strategyBody[struct {
-				Ref       strategy.RevisionRef `json:"ref"`
-				Confirmed bool                 `json:"confirmed"`
-				Draft     strategyAssetRequest `json:"draft"`
-			}](r, "ref", "confirmed", "draft")
-			if in.Draft.ExpectedRevision != 0 || in.Draft.ParentRevision != 0 {
-				strategyFail(400, "invalid_revision")
-			}
-			b.strategySafeInput(in.Draft.input())
-			reply(w, 200, strategyMust(b.Store.PromoteStrategyRevision(ctx, id, key, in.Ref, b.strategyCaptureReuse(in.Draft.input()), in.Confirmed)))
-			return
-		}
-		if len(parts) == 2 && method == "DELETE" {
-			owner()
-			in := strategyBody[struct {
-				ExpectedRevision int64 `json:"expectedRevision"`
-			}](r, "expectedRevision")
-			mutated(strategyMust(b.Store.DeleteStrategyAsset(ctx, id, key, in.ExpectedRevision)))
-			return
-		}
-		if len(parts) == 3 && parts[2] == "revisions" {
-			if method == "GET" {
-				before := strategyPage(r, "before", latest.Revision+1)
-				limit := strategyPage(r, "limit", 50)
-				if limit < 1 || limit > 50 {
-					strategyFail(400, "invalid_page")
-				}
-				refs := strategyMust(strategyCall(b.Store, false, func() []Object {
-					out := []Object{}
-					for _, row := range b.Store.rows("SELECT revision,parentRevision,contentHash,verification,createdAt FROM strategyRevisions WHERE assetId=? AND revision<? ORDER BY revision DESC LIMIT ?", id, before, limit) {
-						out = append(out, row)
-					}
-					return out
-				}))
-				next := int64(0)
-				if len(refs) == int(limit) {
-					next = int64(integer(refs[len(refs)-1]["revision"]))
-				}
-				reply(w, 200, Object{"asset": latest, "items": refs, "nextCursor": next})
-				return
-			}
-			if method == "POST" {
-				owner()
-				in := strategyBody[strategyAssetRequest](r, "expectedRevision", "parentRevision", "title", "kind", "body", "applicability")
-				b.strategySafeInput(in.input())
-				reply(w, 200, strategyMust(b.Store.ReviseStrategyAsset(ctx, id, key, in.ExpectedRevision, in.ParentRevision, b.strategyCaptureReuse(in.input()))))
-				return
-			}
-		}
-		if len(parts) == 4 && parts[2] == "revisions" && method == "GET" {
-			version, err := strconv.ParseInt(parts[3], 10, 64)
-			if err != nil || version < 1 {
-				strategyFail(400, "invalid_revision")
-			}
-			v := strategyMust(b.Store.GetStrategyRevision(ctx, id, version))
-			if v.Available {
-				b.strategySafeInput(StrategyAssetInput{Title: v.Asset.Title, Kind: v.Value.Kind, Body: v.Value.Body, Applicability: v.Value.Applicability, Assessment: v.Assessment, Reuse: &v.Reuse})
-			}
-			status := strategyMust(strategyCall(b.Store, false, func() []Object {
-				out := []Object{}
-				for _, id := range v.Value.SourceIDs {
-					source := b.Store.strategySource(ctx, id, false)
-					if source["kind"] == "skill_import" {
-						parts := strings.Split(stringOf(source["originKey"]), ":")
-						state := "changed"
-						name := ""
-						if len(parts) == 4 {
-							name = parts[1]
-							meta, body, e := b.Extensions.Store.ReadSkill(name, "")
-							if e == nil && meta.Enabled && strategy.ContentHash(body) == source["contentHash"] {
-								state = "unchanged"
-							}
-						}
-						out = append(out, Object{"name": name, "contentHash": source["contentHash"], "state": state})
-					}
-				}
-				return out
-			}))
-			reply(w, 200, Object{"asset": v.Asset, "value": v.Value, "available": v.Available, "sourcesAvailable": v.SourcesAvailable, "skillSources": status, "review": v.Review, "assessment": v.Assessment, "reuse": v.Reuse, "reuseStatus": b.strategyRevisionReuseStatus(v)})
-			return
-		}
-		if len(parts) == 3 && parts[2] == "bindings" {
-			if method == "GET" {
-				binding, err := b.Store.GetStrategyBinding(ctx, scope, id)
-				if err != nil {
-					var e *StrategyError
-					if errors.As(err, &e) && e.Code == "strategy_binding_unavailable" {
-						reply(w, 200, Object{"binding": nil})
-						return
-					}
-					panic(err)
-				}
-				reply(w, 200, Object{"binding": binding})
-				return
-			}
-			if method == "POST" {
-				in := strategyBody[struct {
-					Action           string               `json:"action"`
-					Ref              strategy.RevisionRef `json:"ref"`
-					ExpectedRevision int64                `json:"expectedRevision"`
-					Priority         int                  `json:"priority"`
-					ExclusionGroup   string               `json:"exclusionGroup"`
-				}](r, "action", "ref", "expectedRevision", "priority", "exclusionGroup")
-				if in.Ref.AssetID != id {
-					strategyFail(400, "invalid_binding")
-				}
-				mutated(strategyMust(b.Store.BindStrategyAsset(ctx, scope, key, StrategyBindingInput{in.Action, in.Ref, in.ExpectedRevision, in.Priority, in.ExclusionGroup})))
-				return
-			}
-		}
-		if len(parts) == 3 && parts[2] == "lineage" && method == "GET" {
-			limit := strategyPage(r, "limit", 50)
-			if limit < 1 || limit > 50 {
-				strategyFail(400, "invalid_page")
-			}
-			reply(w, 200, strategyMust(b.Store.StrategyLineage(ctx, id, strategyPage(r, "cursor", 0), int(limit))))
-			return
-		}
-	}
-	strategyFail(405, "unsupported_operation")
-	return
+	reply(w, 410, Object{"error": "旧策略资产体系已退出；历史资料可通过本地命令导出", "code": "strategy_assets_retired"})
+	return true
 }

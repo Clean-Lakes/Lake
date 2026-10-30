@@ -10,9 +10,15 @@ import (
 // Reserve provider message framing in addition to the serialized Message cost.
 const summaryRequestOverhead = 512
 
+// Large-context models can still sit behind gateways with smaller body limits.
+// Bound each auxiliary request independently; retain every fragment and merge
+// only after all summaries succeed, without replaying historical operations.
+const summaryRequestBudget = 256 << 10
+
 // Summaries are local until every segment and merge succeeds. No transcript
 // fragment is installed as live history or exposed as an executable tool call.
 func (e *Engine) summarizeHistory(ctx context.Context, model Model, history []Message, prompt string, budget, ceiling int) (modelResult, error) {
+	budget = min(budget, summaryRequestBudget)
 	if messages, fits := fitSummaryInput(history, prompt, budget-summaryRequestOverhead); fits {
 		return e.summarizeContextRequest(ctx, model, messages, budget, ceiling, 0)
 	}

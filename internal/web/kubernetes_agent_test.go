@@ -79,3 +79,26 @@ func TestKubernetesResourceWorksThroughConversationWithoutSSHOrNameMatch(t *test
 		}
 	}
 }
+
+func TestKubernetesActionsPolicyDoesNotBorrowOldHostTerminal(t *testing.T) {
+	b, h := fixture(t)
+	sid, local := newSession(t, h)
+	project := stringOf(b.Store.Session(sid)["projectId"])
+	cluster := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("policy must not contact cluster") }))
+	defer cluster.Close()
+	raw := withKubeCA(syntheticKubeconfig(cluster.URL, "synthetic-policy-token"), cluster.Certificate())
+	r := apiTest(t, h, "POST", "/api/projects/"+project+"/resources", Object{"name": "Nanjing-k1", "kind": "kubernetes", "settings": kubeSettings(raw)}, 201)
+	ref := stringOf(r["id"])
+	old := b.Terminals.Open(context.Background(), sid, local)
+	tid := stringOf(old["id"])
+	apiTest(t, h, "POST", "/api/sessions/"+sid+"/ai/configure", Object{"asset_ref": local, "terminal_id": tid}, 200)
+	for _, name := range []string{"query_kubernetes", "kubernetes_capabilities", "kubernetes_action"} {
+		for _, terminalID := range []string{tid, "deleted-old-terminal"} {
+			policy, err := b.bridge(context.Background(), sid, "policy", Object{"name": name, "arguments": Object{"asset_ref": ref, "action": "scale", "kind": "replicasets", "namespace": "production", "name": "uwb"}, "terminal_id": terminalID}, false)
+			p := object(policy)
+			if err != nil || p["terminal_id"] != nil || p["asset_ref"] != ref || p["target"] != "Nanjing-k1" || p["runtime"] != "kubernetes" || p["needsTerminal"] == true {
+				t.Fatal("Kubernetes operation borrowed SSH policy", p, err)
+			}
+		}
+	}
+}

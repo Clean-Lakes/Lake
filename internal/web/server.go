@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Clean-Lakes/Lake/internal/ai"
-	"github.com/Clean-Lakes/Lake/internal/extensions"
 	"io"
 	"io/fs"
 	"mime"
@@ -25,6 +23,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/Clean-Lakes/Lake/internal/ai"
+	"github.com/Clean-Lakes/Lake/internal/extensions"
 )
 
 type Options struct {
@@ -40,6 +41,10 @@ type Server struct {
 	Extensions           *extensions.Manager
 	draftCompletions     sync.Map
 	memoryReads          sync.Map
+	memoryForeground     int
+	memoryBatchJobs      []naturalBatchItem
+	memoryOutboxMu       sync.Mutex
+	memoryOutboxPending  map[string]bool
 	memoryCancel         context.CancelFunc
 	memoryJobID          string
 	memoryLease          string
@@ -65,6 +70,7 @@ type Server struct {
 	HexHubLocalAssets    func(context.Context) ([]Object, error)
 	Terminals            *Terminals
 	Engine               *ai.Engine
+	securityRuntime      *ai.SecurityHome
 	Context              context.Context
 	cancel               context.CancelFunc
 	options              Options
@@ -82,12 +88,7 @@ type Server struct {
 	hostKeyMu            sync.Mutex
 	hostKeyPrompts       map[string]*sshTrustPrompt
 
-	strategyHandoffStatus  atomic.Value // safe reason code only; never waits on the worker gate.
-	strategyWorkerMu       sync.Mutex
-	strategyLearningCancel context.CancelFunc // guarded by messageMu; admission never waits for auxiliary work.
-	strategyForeground     int                // foreground model activity, including workflow/role calls.
-	strategyRecoveryLoaded bool               // guarded by strategyWorkerMu
-	strategyOutboxPending  map[string]bool    // only registered durable outboxes, not historical backfill.
+	strategyHandoffStatus atomic.Value // safe reason code only; never waits on the worker gate.
 }
 
 func New(ctx context.Context, options Options) (server *Server, err error) {
@@ -117,11 +118,33 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	if options.DataDir == "" {
 		options.DataDir = os.Getenv("LAKE_WEB_DATA_DIR")
 	}
-	if options.DataDir == "" {
-		options.DataDir = filepath.Join(options.Home, "web-agent")
+	var runtimeHome *ai.SecurityHome
+	control, controlErr := ai.ReadSecurityControl(options.Home)
+	var e error
+	if controlErr == nil && control.Gate == "closed" {
+		runtimeHome, e = ai.OpenSecurityReadOnlyHome(options.Home, options.DataDir)
+	} else {
+		runtimeHome, e = ai.OpenSecurityHome(ctx, options.Home, options.DataDir)
 	}
-	if err = prepareMagpieConfig(options.Home); err != nil {
-		return nil, err
+	if e != nil {
+		return nil, e
+	}
+	runtimeReady := false
+	defer func() {
+		if !runtimeReady {
+			if server != nil {
+				server.Close()
+			} else {
+				_ = runtimeHome.Close()
+			}
+		}
+	}()
+	options.Home = runtimeHome.Home
+	options.DataDir = filepath.Dir(runtimeHome.RuntimeRoot)
+	if !runtimeHome.ReadOnlyView() {
+		if err = prepareMagpieConfig(options.Home); err != nil {
+			return nil, err
+		}
 	}
 	if options.Token == "" {
 		options.Token = os.Getenv("LAKE_WEB_TOKEN")
@@ -143,15 +166,24 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		token = fmt.Sprintf("%x", b)
 	}
 	child, cancel := context.WithCancel(ctx)
-	server = &Server{Context: child, cancel: cancel, options: options, token: token, generated: generated, streamSlots: make(chan struct{}, 4)}
-	store, e := openStore(options.DataDir, operationalMemoryV2Ready || options.memoryV2ForTest)
+	server = &Server{securityRuntime: runtimeHome, Context: child, cancel: cancel, options: options, token: token, generated: generated, streamSlots: make(chan struct{}, 4)}
+	var store *Store
+	if runtimeHome.ReadOnlyView() {
+		store, e = openRecoveryStore(options.DataDir)
+	} else {
+		store, e = openStore(options.DataDir, operationalMemoryV2Ready || options.memoryV2ForTest)
+	}
 	if e != nil {
 		cancel()
 		return nil, e
 	}
 	server.Store = store
-	server.Extensions = extensions.NewManager(extensions.NewStore(options.Home))
 	server.Models = &Models{Home: options.Home, Dir: options.DataDir}
+	if runtimeHome.ReadOnlyView() {
+		runtimeReady = true
+		return server, nil
+	}
+	server.Extensions = extensions.NewManager(extensions.NewStore(options.Home))
 	server.Terminals = NewTerminals(store, server.Models, token)
 	server.Terminals.ResolveAccess = server.terminalOwner
 	server.Terminals.OnClose = server.revokeTerminal
@@ -167,40 +199,59 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		cancel()
 		return nil, e
 	}
-	server.Engine.RuntimeDir = filepath.Join(options.DataDir, "adk")
+	server.Engine.SecurityRuntime = runtimeHome
+	server.Engine.RuntimeDir = runtimeHome.RuntimeRoot
 	server.Engine.SetSRERepository(store)
-	server.Engine.Strategies = server.strategyProvider
-	server.Engine.CorrectionGuard = server.strategyCorrectionGuard
-	server.Engine.ModelActivity = server.strategyForegroundModel
+	server.Engine.NaturalMemory = server.naturalRecallProvider
+	server.Engine.ModelActivity = server.memoryForegroundModel
+	server.Engine.MemoryCaptureAllowed = store.MemoryCaptureAllowed
+	server.Engine.MemoryCaptureSessionAllowed = store.MemoryCaptureSessionAllowed
+	server.Engine.SetSupplementHooks(server.readUserSupplements, server.acknowledgeUserSupplements)
+	server.Engine.SetWorkConfigurator(func(id string) (config ai.Config, err error) {
+		defer func() {
+			if failure := recover(); failure != nil {
+				err = fmt.Errorf("工作目标的当前会话配置不可用")
+			}
+		}()
+		server.configure(id, nil)
+		return server.Engine.ConfigForSession(id)
+	})
+	if err = server.reconcileUserSupplementQueues(); err != nil {
+		server.Close()
+		return nil, err
+	}
 	store.RecoverSRETasks()
+	server.reconcileStaleSREStatuses()
 	if err = server.startScheduler(); err != nil {
 		server.Close()
 		return nil, err
 	}
+	server.Engine.StartWorkManager()
+	runtimeReady = true
 	return server, nil
 }
 func (b *Server) Start() error {
-	if err := b.reconcilePersistedMemoryOutboxes(); err != nil {
-		return err
+	if !b.securityRuntime.ReadOnlyView() {
+		if err := b.reconcilePersistedMemoryOutboxes(); err != nil {
+			return err
+		}
+		b.Store.RecoverMemoryJobs()
+		_ = b.Store.ReconcileProjectMemoryFiles()
 	}
-	b.Store.RecoverMemoryJobs()
-	_ = b.Store.ReconcileProjectMemoryFiles()
 	l, e := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", b.options.Port))
 	if e != nil {
 		return e
 	}
 	b.listener = l
-	b.workers.Add(1)
-	go b.runMemoryWorker()
-	b.workers.Add(1)
-	go b.runStrategyWorker()
-	b.workers.Add(1)
-	go b.runExperimentWorker()
-	b.workers.Add(1)
-	go func() {
-		defer b.workers.Done()
-		b.Models.RefreshStoredReasoning(b.Context)
-	}()
+	if !b.securityRuntime.ReadOnlyView() {
+		b.workers.Add(1)
+		go b.runMemoryWorker()
+		b.workers.Add(1)
+		go func() {
+			defer b.workers.Done()
+			b.Models.RefreshStoredReasoning(b.Context)
+		}()
+	}
 	b.options.Port = l.Addr().(*net.TCPAddr).Port
 	must(atomicFile(filepath.Join(b.options.DataDir, "runtime.json"), []byte(jsonText(Object{"origin": fmt.Sprintf("http://localhost:%d", b.options.Port), "token": b.token, "pid": os.Getpid()}))))
 	b.http = &http.Server{Handler: b, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384, BaseContext: func(net.Listener) context.Context { return b.Context }}
@@ -278,6 +329,9 @@ func (b *Server) Close() {
 		}
 		if b.Store != nil {
 			b.Store.Close()
+		}
+		if b.securityRuntime != nil {
+			_ = b.securityRuntime.Close()
 		}
 	})
 }
@@ -371,6 +425,13 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fail(401, "Authentication required")
 		}
 	}
+	if b.securityRuntime != nil && b.securityRuntime.ReadOnlyView() {
+		aiFailure(b.securityRuntime.CheckReadOnlyView())
+		if name != "/api/bootstrap" || method != "GET" {
+			b.serveRecoveryView(w, r)
+			return
+		}
+	}
 	if name == "/api/bootstrap" && method == "GET" {
 		http.SetCookie(w, &http.Cookie{Name: "lake_web_token", Value: b.token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
 		model, selection := b.Models.ActiveSelection()
@@ -382,7 +443,10 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			modelID = ai.ModelIdentity(*model)
 			imageInput = model.SupportsImageInput
 		}
-		reply(w, 200, Object{"authenticated": true, "modelConfigured": model != nil, "modelName": modelName, "modelId": modelID, "modelSelection": selection, "supportsImageInput": imageInput, "terminalMode": "pty", "aiRuntime": "go", "backendRuntime": "go"})
+		reply(w, 200, Object{"authenticated": true, "modelConfigured": model != nil, "modelName": modelName, "modelId": modelID, "modelSelection": selection, "supportsImageInput": imageInput, "terminalMode": "pty", "aiRuntime": "go", "backendRuntime": "go", "recoveryReadOnly": b.securityRuntime != nil && b.securityRuntime.ReadOnlyView()})
+		return
+	}
+	if b.pilotSettingsRoute(w, r, name, method) {
 		return
 	}
 	if b.sreRoute(w, r, name, method) {
@@ -404,6 +468,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if b.providerRoute(w, r, name, method) {
+		return
+	}
+	if b.naturalMemoryRoute(w, r, name) {
 		return
 	}
 	if b.strategyRoute(w, r, name) {
@@ -688,7 +755,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if len(parts) == 3 && method == "DELETE" {
 			b.messageMu.Lock()
 			defer b.messageMu.Unlock()
-			if b.runningMessages[id] {
+			if b.runningMessages[id] || b.Engine.SessionReserved(id) {
 				fail(409, "请先停止 AI，并等待本轮结束")
 			}
 			snap := b.sessionSnapshot(id)
@@ -702,11 +769,11 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					fail(409, "请先中断运行命令")
 				}
 			}
+			aiFailure(b.Engine.CancelWorkGoals(r.Context(), id))
 			aiFailure(b.Engine.Clear(id))
 			b.Terminals.CloseSession(id)
 			b.revokeSessionTerminals(id)
 			b.Store.DeleteSession(id)
-			b.Engine.InvalidateStrategies("")
 			b.resetConnectionFailures(id)
 			w.WriteHeader(204)
 			return
@@ -861,14 +928,14 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					reply(w, 200, b.configure(id, updates))
 					return
 				}
-				if set("abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails resolveOperation clear clearReferences rollback compact restore undoFile extractPreset")[op] {
+				if set("workControl abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails resolveOperation clear clearReferences rollback compact restore undoFile extractPreset")[op] {
 					limit := int64(128000)
 					if op == "restore" {
 						limit = 32 << 20
 					}
 					data := body(w, r, limit)
 					status := b.Store.Session(id)["status"]
-					if !set("abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails extractPreset")[op] && (status == "investigating" || status == "waiting_approval") {
+					if !set("workControl abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails extractPreset")[op] && (status == "investigating" || status == "waiting_approval") {
 						fail(409, "AI 正在运行，请先停止")
 					}
 					if op == "compact" || op == "undoFile" || op == "extractPreset" {
@@ -985,6 +1052,11 @@ func validateIDs(v any) {
 	}
 }
 func (b *Server) terminalRoute(w http.ResponseWriter, r *http.Request, id, tid, op string) {
+	if b.Engine != nil {
+		if err := b.Engine.CheckSecurityRuntime(); err != nil {
+			fail(409, "安全恢复门禁关闭；终端操作未派发")
+		}
+	}
 	data := body(w, r, 16384)
 	switch op {
 	case "adopt":
@@ -1032,6 +1104,10 @@ func (b *Server) terminalRoute(w http.ResponseWriter, r *http.Request, id, tid, 
 	case "interrupt":
 		b.Terminals.Interrupt(id, tid)
 		reply(w, 202, Object{"interrupted": true})
+		return
+	case "interrupt-command":
+		b.Terminals.InterruptCommand(id, tid, text(data["generation"], "generation", 100), text(data["entryId"], "entryId", 100))
+		reply(w, 202, Object{"stopRequested": true})
 		return
 	case "commands":
 		if data["actor"] != "user" && data["actor"] != "agent" {

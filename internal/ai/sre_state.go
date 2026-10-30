@@ -59,7 +59,14 @@ func ValidateSREPlan(plan SREPlanRevision, scope []string) error {
 		planScope[id] = true
 	}
 	steps := map[string]SREPlanStep{}
+	assignmentRoles := map[string]SREAgentRole{}
 	for _, step := range plan.Steps {
+		if step.AssignmentID != "" {
+			if !identifier.MatchString(step.AssignmentID) || len(step.AssignmentID) > 100 || assignmentRoles[step.AssignmentID] != "" && assignmentRoles[step.AssignmentID] != step.Role {
+				return sreError(400, "工作项标识无效或被不同专员共用")
+			}
+			assignmentRoles[step.AssignmentID] = step.Role
+		}
 		if !identifier.MatchString(step.ID) || steps[step.ID].ID != "" || strings.TrimSpace(step.Description) == "" || len(step.Description) > 4000 || !ValidSRERole(step.Role) {
 			return sreError(400, "无效或重复的计划步骤")
 		}

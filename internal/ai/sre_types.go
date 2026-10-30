@@ -44,6 +44,7 @@ type SREAction struct {
 }
 
 type SREPlanStep struct {
+	AssignmentID     string       `json:"assignmentId,omitempty"`
 	ID               string       `json:"id"`
 	Role             SREAgentRole `json:"role"`
 	Kind             string       `json:"kind"`
@@ -81,35 +82,38 @@ type SREPlanRun struct {
 }
 
 type SREOperation struct {
-	Risk           string `json:"risk,omitempty"` // Trusted runtime policy, never a model assertion.
-	ResolutionNote string `json:"resolutionNote,omitempty"`
-	ResolvedBy     string `json:"resolvedBy,omitempty"`
-	ResolvedAt     string `json:"resolvedAt,omitempty"`
-	ID             string `json:"id"`
-	Call           Call   `json:"call"`
-	Digest         string `json:"digest"`
-	ResourceID     string `json:"resourceId"`
-	Status         string `json:"status"`
-	PreparedAt     string `json:"preparedAt"`
-	DispatchedAt   string `json:"dispatchedAt,omitempty"`
-	FinishedAt     string `json:"finishedAt,omitempty"`
-	ApprovalID     string `json:"approvalId,omitempty"`
-	Result         string `json:"result,omitempty"`
+	EvidenceIDs    []string `json:"evidenceIds,omitempty"`
+	Risk           string   `json:"risk,omitempty"` // Trusted runtime policy, never a model assertion.
+	ResolutionNote string   `json:"resolutionNote,omitempty"`
+	ResolvedBy     string   `json:"resolvedBy,omitempty"`
+	ResolvedAt     string   `json:"resolvedAt,omitempty"`
+	ID             string   `json:"id"`
+	Call           Call     `json:"call"`
+	Digest         string   `json:"digest"`
+	ResourceID     string   `json:"resourceId"`
+	Status         string   `json:"status"`
+	PreparedAt     string   `json:"preparedAt"`
+	DispatchedAt   string   `json:"dispatchedAt,omitempty"`
+	FinishedAt     string   `json:"finishedAt,omitempty"`
+	ApprovalID     string   `json:"approvalId,omitempty"`
+	Result         string   `json:"result,omitempty"`
 }
 
 type SREStepAttempt struct {
-	Report              *SRERoleReport  `json:"report,omitempty"`
-	ReusedFromAttemptID string          `json:"reusedFromAttemptId,omitempty"`
-	ID                  string          `json:"id"`
-	PlanRunID           string          `json:"planRunId"`
-	StepID              string          `json:"stepId"`
-	RoleRunID           string          `json:"roleRunId"`
-	Status              string          `json:"status"`
-	Evidence            []AgentEvidence `json:"evidence"`
-	Operations          []SREOperation  `json:"operations"`
-	Result              string          `json:"result,omitempty"`
-	StartedAt           string          `json:"startedAt"`
-	FinishedAt          string          `json:"finishedAt,omitempty"`
+	CompletionRepair    *PilotCompletionRepair `json:"completionRepair,omitempty"`
+	ReadRecoveries      []PilotReadRecovery    `json:"readRecoveries,omitempty"`
+	Report              *SRERoleReport         `json:"report,omitempty"`
+	ReusedFromAttemptID string                 `json:"reusedFromAttemptId,omitempty"`
+	ID                  string                 `json:"id"`
+	PlanRunID           string                 `json:"planRunId"`
+	StepID              string                 `json:"stepId"`
+	RoleRunID           string                 `json:"roleRunId"`
+	Status              string                 `json:"status"`
+	Evidence            []AgentEvidence        `json:"evidence"`
+	Operations          []SREOperation         `json:"operations"`
+	Result              string                 `json:"result,omitempty"`
+	StartedAt           string                 `json:"startedAt"`
+	FinishedAt          string                 `json:"finishedAt,omitempty"`
 }
 
 type SREFact struct {
@@ -165,6 +169,7 @@ type SREVerificationResult struct {
 }
 
 type SRETask struct {
+	Pilot           *PilotTaskPolicy        `json:"pilot,omitempty"`
 	Requests        map[string]string       `json:"requests,omitempty"`
 	ID              string                  `json:"id"`
 	SessionID       string                  `json:"sessionId"`
@@ -204,9 +209,10 @@ type SREEvent struct {
 }
 
 type SRESnapshot struct {
-	FeatureVersion int       `json:"featureVersion"`
-	Enabled        bool      `json:"enabled"`
-	Tasks          []SRETask `json:"tasks"`
+	FeatureVersion int            `json:"featureVersion"`
+	Enabled        bool           `json:"enabled"`
+	Tasks          []SRETask      `json:"tasks"`
+	Pilot          *PilotSettings `json:"pilot,omitempty"`
 }
 
 func (t *SRETask) LatestPlan() *SREPlanRevision {

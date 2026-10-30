@@ -11,11 +11,50 @@ import {mentionOptions} from '../src/composerMentionState';
 import {referencedExtensions,rebaseExtensionReferences} from '../../shared/references';
 import {roleReport,reportEvidence} from './fixtures/sre-report';
 import {SREReport,SREProse} from '../src/SREReport';
+import {SRERoleMessage} from '../src/SRERoleMessage';
+import {sreConversationRoles} from '../src/sreConversationRoles';
 
 const at='2026-10-15T10:00:00Z';
 const message=(patch:Partial<SRETranscriptEntry>={}):SRETranscriptEntry=>({id:'message',sessionId:'session',taskId:'task',roleId:'coordinator',roleRunId:'real-role',kind:'plan',body:'已明确任务范围',revision:1,sequence:1,planVersion:1,createdAt:at,...patch});
 const task=(patch:Partial<SRETask>={}):SRETask=>({id:'task',sessionId:'session',projectId:'project',requestId:'request',goal:'调查测试服务',scope:['host'],mode:'plan_only',status:'draft',outcome:'',recoveryStatus:'unverified',rootCauseStatus:'unknown',profileId:'lake.sre.assisted',profileVersion:1,revision:1,tokenBudget:128000,budgetSpent:100,usage:{input:50,output:50,total:100},plans:[{id:'plan',taskId:'task',version:1,goal:'调查测试服务',taskType:'investigation',scope:['host'],steps:[{id:'observe',role:'investigator',kind:'observe',description:'查询真实状态',capability:'host',resourceIds:['host'],dependsOn:[],completionChecks:['记录证据']}],acceptance:[],changeReason:'初始计划',createdAt:at}],runs:[],attempts:[],messages:[message()],verifications:[],createdAt:at,updatedAt:at,...patch});
 const snapshot=(tasks:SRETask[]=[task()]):SessionSnapshot=>({session:{id:'session',projectId:'project'},messages:[{id:'user',sessionId:'session',role:'user',text:'调查测试服务',createdAt:'2026-10-15T09:59:59Z'}],resources:[{id:'host',name:'测试主机'}],specialists:[],evidence:[],actions:[],terminals:[],cursor:0,ai:{session:'session',status:'completed',profile:'core',cards:[],cardsOffset:0,totalCards:0,usage:{input:0,output:0,total:0},turns:1,agentRuns:[]},sre:{enabled:true,featureVersion:1,tasks}} as SessionSnapshot);
+
+test('Pilot keeps one stable role per turn while audit retains every recorded message',()=>{
+ const t=task({pilot:{} as SRETask['pilot'],messages:[message(),message({id:'status-1',kind:'status',body:'第一次核对',sequence:2}),message({id:'status-2',kind:'status',body:'最新核对完成',sequence:3})]});
+ const s=snapshot([t]),original=orderedTranscript(s,[],0),projected=sreConversationRoles(original);
+ const role=projected.find(e=>e.sre)!;
+ assert.equal(role.id,'sre:message');assert.equal(role.sre!.entry.id,'status-2');assert.equal(role.sre!.thread!.length,3);
+ assert.equal(original.filter(e=>e.sre).length,3,'original messages are untouched');
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:s}));
+ assert.equal((html.match(/data-role="coordinator"/g)||[]).length,1);
+ assert.ok(html.includes('最新核对完成')&&!html.includes('第一次核对')&&html.includes('sre-role-conversation'));
+ assert.ok(html.includes('查询真实状态'),'the initial plan stays accessible');
+ const audit=renderToStaticMarkup(createElement(AITranscript,{snapshot:s,mode:'activity'}));
+ assert.equal((audit.match(/data-role="coordinator"/g)||[]).length,3);
+ const other=task({...t,id:'other',messages:[message({taskId:'other',id:'other-message'})]});
+ assert.equal(sreConversationRoles(orderedTranscript(snapshot([t,other]),[],0)).filter(e=>e.sre).length,2);
+ assert.equal(sreConversationRoles(orderedTranscript(snapshot([{...t,pilot:undefined}]),[],0)).filter(e=>e.sre).length,3,'non-Pilot history is not projected');
+ const nextTurn=snapshot([{...t,messages:[message(),message({id:'next-role',createdAt:'2026-10-15T10:02:00Z'})]}]);
+ nextTurn.messages.push({id:'next-user',sessionId:'session',role:'user',text:'重新检查',createdAt:'2026-10-15T10:01:00Z'});
+ const nextHTML=renderToStaticMarkup(createElement(AITranscript,{snapshot:nextTurn}));
+ assert.equal((nextHTML.match(/data-role="coordinator"/g)||[]).length,2,'different user turns keep their own role surface');
+});
+
+test('role consolidation retains earlier errors and every outstanding role-run approval',()=>{
+ const entries=[message({id:'failure',kind:'error',body:'读取失败，请保留真实错误',roleRunId:'first'}),message({id:'later',kind:'progress',body:'正在重试',roleRunId:'second'})];
+ const t=task({pilot:{} as SRETask['pilot'],messages:entries}),s=snapshot([t]);
+ s.ai!.agentRuns=['first','second'].map(id=>({id,sreTaskId:t.id,pending:{id:'approval-'+id}} as NonNullable<SessionSnapshot['ai']>['agentRuns'] extends (infer T)[]|undefined?T:never));
+ const html=renderToStaticMarkup(createElement(SRERoleMessage,{task:t,entry:entries[1]!,thread:entries,snapshot:s,onUpdated:()=>{},renderApproval:run=>createElement('button',{},'确认 '+run.id)}));
+ for(const label of ['需关注的记录','读取失败，请保留真实错误','确认 first','确认 second'])assert.ok(html.includes(label),label);
+ assert.equal((html.match(/data-role="coordinator"/g)||[]).length,1);
+});
+
+test('a later role update cannot hide an earlier operation with an unknown result',()=>{
+ const entries=[message({id:'original',attemptId:'first-attempt',roleRunId:'first'}),message({id:'later',kind:'status',roleRunId:'second',body:'新的状态说明'})];
+ const t=task({pilot:{} as SRETask['pilot'],messages:entries,attempts:[{id:'first-attempt',planRunId:'run',stepId:'observe',roleRunId:'first',status:'unknown',startedAt:at,evidence:[],operations:[{id:'unknown-write',status:'unknown',risk:'write',preparedAt:at,call:{id:'call',name:'write',arguments:'{}'}}]}]});
+ const html=renderToStaticMarkup(createElement(SRERoleMessage,{task:t,entry:entries[1]!,thread:entries,snapshot:snapshot([t]),onUpdated:()=>{},renderApproval:()=>null}));
+ assert.ok(html.includes('结果待核实')&&html.includes('查看对应操作')&&html.includes('新的状态说明'));
+});
 
 test('SRE messages use real ownership and revision while preserving their original anchor',()=>{
  const current=task({messages:[message({body:'updated',revision:2}),message({id:'foreign',sessionId:'other'})]});

@@ -1,12 +1,25 @@
 .settled-reply { display: grid; grid-template-rows: 1fr; opacity: 1; margin-block-start: 0; transition: margin-block-start 360ms cubic-bezier(.22, 1, .36, 1), grid-template-rows 360ms cubic-bezier(.22, 1, .36, 1), opacity 220ms ease; }
-.settled-reply-content { min-height: 0; }
+.settled-reply-content { min-height: 0; min-width: 0; }
 /* Expanded text must keep its intrinsic wrapped height in a flex column.
    Expand immediately: a 0fr → 1fr transition paints full text outside an
    intermediate row height, letting the next activity mark overlap it. Only
    archival collapse animates, with its content clipped below. */
-.settled-reply:not(.is-archived) { flex-shrink: 0; transition: none; }
+.settled-reply:not(.is-archived):not(.is-presenting-reply) { display: block; }
+.settled-reply:not(.is-archived) { min-width:0; flex-shrink: 0; transition: none; }
 .settled-reply:not(.is-archived) > .settled-reply-content { min-height: min-content; }
 .settled-reply.is-archived { grid-template-rows: 0fr; opacity: 0; margin-block-start: calc(-1 * var(--turn-entry-gap, 12px)); pointer-events: none; }
 .settled-reply.is-archived .settled-reply-content { overflow: hidden; }
+.settled-reply.is-awaiting-reply { display:none; }
+.settled-reply.is-presenting-reply { animation:reply-handoff-in 240ms cubic-bezier(.22,1,.36,1) both; }
+.settled-reply.is-presenting-reply > .settled-reply-content { min-height:0; overflow:hidden; }
+@keyframes reply-handoff-in { from { grid-template-rows:0fr; opacity:0; transform:translateY(6px); } to { grid-template-rows:1fr; opacity:1; transform:translateY(0); } }
 .turn-progress-prose > .ai-response { margin-block: 12px; }
-@media (prefers-reduced-motion: reduce) { .settled-reply { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .settled-reply { transition: none; animation:none; } }
+
+/* A stable one-line caption survives tool rounds while full prose stays in records. */
+.turn-latest-progress { min-width:0; flex-shrink:0; font-size:var(--font-size-ui); line-height:1.75; color:var(--foreground); }
+.turn-latest-progress-text { display:block; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* When prose becomes the live caption, replace it in one paint. Cross-fading
+   the archived original duplicates the same line during its first frames. */
+.ai-turn:has(> .turn-latest-progress) > .settled-reply.is-archived { display:none; }

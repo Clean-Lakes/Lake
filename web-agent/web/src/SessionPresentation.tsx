@@ -3,6 +3,7 @@ import type {Project,WorkSession,WorkspaceTag} from "../../shared/contracts";
 import {api,readableError} from "./api";
 import {Glyph,sessionIcons} from "./Icons";
 import {NavigationMenu} from "./NavigationDelete";
+import {sessionBadgeState} from './sessionBadgeState';
 
 const colors = [{id:"gray",label:"灰色"},{id:"green",label:"绿色"},{id:"blue",label:"蓝色"},{id:"purple",label:"紫色"},{id:"orange",label:"橙色"},{id:"red",label:"红色"}] as const;
 function PresentationDialog({title,onClose,children,returnFocus}:{title:string;onClose:()=>void;children:ReactNode;returnFocus?:RefObject<HTMLElement|null>}) {
@@ -24,7 +25,9 @@ export function SessionListTags({tags}:{tags:WorkspaceTag[]}) {
 
 export function SessionStateBadge({session,label,status=session.status}:{session:WorkSession;label?:string;status?:WorkSession["status"]}) {
  const statuses={idle:"待命",investigating:"调查中",waiting_approval:"待确认",completed:"回复结束",failed:"需要关注"};
- return <span className={`session-state-badge state-${status}`}><span/>{label??statuses[status]}</span>;
+ const full=label??statuses[status];
+ const badge=sessionBadgeState(status,label);
+ return <span className={`session-state-badge state-${status}`} data-badge-state={badge.state} data-tone={badge.tone} title={full} aria-label={full}><Glyph name={badge.icon} size={13} className="session-state-icon"/><span className="session-state-label">{badge.label}</span></span>;
 }
 
 const sessionViews=[{value:"conversation",label:"对话",icon:"chat"},{value:"plans",label:"计划",icon:"document"},{value:"activity",label:"执行记录",icon:"terminal"},{value:"evidence",label:"证据",icon:"document"}] as const;
@@ -56,8 +59,8 @@ export function SessionActions({session,tags,disabled,onSaved,onRefresh,onEdit,v
  </>;
 }
 
-export function TagNavigation({tags,sessions,selected,onSelect,onManage,onSession}:{tags:WorkspaceTag[];sessions:WorkSession[];selected:string|null;onSelect:(tag:string|null)=>void;onManage:()=>void;onSession:(session:string)=>void}) {
- const [expanded,setExpanded]=useState(false);
+export function TagNavigation({tags,sessions,selected,onSelect,onManage,onSession,defaultExpanded=false}:{tags:WorkspaceTag[];sessions:WorkSession[];selected:string|null;onSelect:(tag:string|null)=>void;onManage:()=>void;onSession:(session:string)=>void;defaultExpanded?:boolean}) {
+ const [expanded,setExpanded]=useState(defaultExpanded);
  const panelId=useId();
  useEffect(()=>{if(selected)setExpanded(true);},[selected]);
  return <section className="sidebar-tags" aria-label="标签导航"><div className="sidebar-tags-heading"><button type="button" className="sidebar-tags-toggle" aria-expanded={expanded} aria-controls={panelId} onClick={()=>setExpanded(value=>!value)}><Glyph name="tags" size={15}/><span>标签</span><small>{tags.length}</small><Glyph name="chevron" size={14} className={expanded ? "open" : ""}/></button>{expanded&&<button type="button" className="icon-button" aria-label="管理标签" title="管理标签" onClick={onManage}><Glyph name="filter" size={15}/></button>}</div><div id={panelId} hidden={!expanded}>{!tags.length?<button type="button" className="tag-empty-add" onClick={onManage}><Glyph name="plus" size={14}/>添加项目标签</button>:<div className="sidebar-tag-list">{tags.map(tag=>{const related=sessions.filter(session=>session.tags?.some(t=>t.id===tag.id));return <div key={tag.id}><button type="button" className={`tag-nav-row color-${tag.color} ${selected===tag.id?"active":""}`} aria-pressed={selected===tag.id} onClick={()=>onSelect(selected===tag.id?null:tag.id)}><span className="tag-dot"/><span>{tag.name}</span><small>{related.length}</small></button>{selected===tag.id&&<div className="tag-session-list">{related.map(session=><button type="button" key={session.id} onClick={()=>onSession(session.id)}><Glyph name={session.icon??"chat"} size={14}/><span>{session.title}</span></button>)}{!related.length&&<span className="presentation-note">暂无关联会话</span>}</div>}</div>;})}</div>}</div></section>;

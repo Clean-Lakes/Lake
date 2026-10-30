@@ -102,7 +102,8 @@ func TestSREReadOnlyRestartIsAtomicAndKeepsScopeAndHistory(t *testing.T) {
 	if duplicate.ID != next.ID {
 		t.Fatal("restart replay created duplicate tasks")
 	}
-	if _, err = b.Engine.ValidateSREHandoff(sid, ai.SREHandoff{Action: "new_task", Goal: "start again", ResourceIDs: []string{rid}}); err == nil {
-		t.Fatal("new_task ignored active draft until post-handoff execution")
+	must(b.Engine.Configure(sid, ai.Config{Assets: []ai.Asset{{ID: rid, Name: "本机", Kind: "local"}}, Model: ai.Model{Name: "fixture", URL: "http://127.0.0.1:1"}}))
+	if _, err = b.Engine.ValidateSREHandoff(sid, ai.SREHandoff{Action: "new_task", Goal: "independent inspection", ResourceIDs: []string{rid}}); err != nil {
+		t.Fatal("historical draft reserved a session task slot", err)
 	}
 }

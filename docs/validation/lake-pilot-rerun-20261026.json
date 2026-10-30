@@ -1,0 +1,88 @@
+{
+  "sourceCommit": "c664060840ecfe615091baef47b27a3d44179c0a",
+  "devCommit": "8c9f73744ebbe4bd87c0a00c525815f2120a2070",
+  "devDirty": false,
+  "backendHash": "d5eaa55beb50da2e40c4e023ec473f7fcb589d0e5b53067d9cbfe1127a3676da",
+  "devPID": 56038,
+  "checks": {
+    "goAll": true,
+    "goRace": "targeted SRE terminal decisions/restart/history/manifest/payload cases",
+    "goVet": true,
+    "adkBoundary": true,
+    "frontendPassed": 499,
+    "frontendCheckBuild": true,
+    "signedAppInstalled": true,
+    "strictCodesign": true
+  },
+  "live": {
+    "project": "8c829d98e328c3f6e7548cfc6b6e4b30",
+    "session": "8e4b64ac9c846062b63c1dcc3d5b04f6",
+    "runs": [
+      {
+        "task": "b9c6868c5e998e75283ff95d5050d8c1",
+        "value": 17,
+        "status": "completed",
+        "auto": true,
+        "successfulReads": 2,
+        "notExecuted": 1,
+        "independentReads": {
+          "investigator": true,
+          "verifier": true
+        }
+      },
+      {
+        "task": "5a2e065b5b34c46335d5dae67be40674",
+        "value": 29,
+        "status": "completed",
+        "auto": true,
+        "successfulReads": 2,
+        "notExecuted": 1,
+        "independentReads": {
+          "investigator": true,
+          "verifier": true
+        }
+      },
+      {
+        "task": "4775241a9b0e123acd8cdf21dde3824e",
+        "value": 41,
+        "status": "completed",
+        "auto": true,
+        "successfulReads": 3,
+        "notExecuted": 2,
+        "independentReads": {
+          "investigator": true,
+          "verifier": true
+        }
+      },
+      {
+        "task": "dd5b679d6720e07d77a398a5004e2232",
+        "value": 53,
+        "status": "completed",
+        "auto": true,
+        "successfulReads": 2,
+        "notExecuted": 1,
+        "independentReads": {
+          "investigator": true,
+          "verifier": true
+        }
+      }
+    ],
+    "naturalRerunAction": "new_task",
+    "oldRecordsUnchanged": true,
+    "plainExplanation": {
+      "newTasks": 0,
+      "sessionStatus": "completed",
+      "aiStatus": "completed",
+      "formalDecision": "sre_reply"
+    },
+    "syntheticSingleFileOnly": true
+  },
+  "limits": [
+    "Natural rerun chose new_task with the same effective single-file goal and exact resource scope; restart_task exact goal retention is covered by Go protocol/store regressions.",
+    "A first QA in a shared project was invalidated by its Pilot setting changing to off; that project preference was preserved and subsequent QA used a separate project.",
+    "An initial literal goal-string assertion was overconstrained: model-created new_task rewrote an equivalent goal. Real scope, operations, independent fresh reads and historical audit were checked instead.",
+    "Text-only formal reply failure and DeepSeek thinking/required incompatibility were found during live QA and fixed before final passing run.",
+    "Dark/narrow browser DOM status passed; its screenshot had the navigation drawer covering the header and is not claimed as visual corner validation.",
+    "This is a four-round single-file rerun regression, not a repeat of the earlier six-service long-task acceptance."
+  ]
+}

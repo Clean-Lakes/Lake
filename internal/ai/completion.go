@@ -9,7 +9,7 @@ import (
 
 // CompleteDraft is a text-only preflight. It never enters an agent/tool loop or saves history.
 func CompleteDraft(ctx context.Context, model Model, draft string, recent []string) (string, error) {
-	if n := utf8.RuneCountInString(strings.TrimSpace(draft)); n < 4 || n > 2000 || !SafeMemoryContent(draft, model) {
+	if n := utf8.RuneCountInString(strings.TrimSpace(draft)); n == 0 || n > 2000 || !SafeMemoryContent(draft, model) {
 		return "", nil
 	}
 	history := []string{}

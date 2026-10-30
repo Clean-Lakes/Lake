@@ -80,7 +80,7 @@ test("live execution opens its resource row without duplicating the latest actio
   assert.ok(html.includes('class="turn-execution-details is-open" aria-hidden="false"'));
   assert.ok(!html.includes("VERY_VERBOSE_RAW_REASONING"));
   assert.equal((html.match(/turn-status-text/g)||[]).length,1);
-  assert.ok(html.indexOf("正在执行工具…")<html.indexOf("Local machine"));
+  assert.ok(html.indexOf("正在执行工具…")>html.indexOf("Local machine"));
 });
 
 test("compaction limit failures display one Chinese message with history-preservation guidance",()=>{
@@ -88,7 +88,25 @@ test("compaction limit failures display one Chinese message with history-preserv
  const snapshot={session:{id:"demo"},messages:[{id:"user",role:"user",createdAt:start,text:"cpu呢"},{id:"system-copy",role:"system",createdAt:start,text:error}],actions:[],ai:{session:"demo",status:"failed",startedAt:start,cards:[{id:"error-card",type:"error",content:error,status:"failed",at:start}],cardsOffset:0}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.equal(html.split("上下文整理未完成").length-1,1);
- assert.ok(html.includes("历史记录已保留"));assert.ok(!html.includes("incomplete response discarded"));
+ assert.ok(html.includes("历史记录已保留"));assert.ok(!html.split('class="turn-execution-details')[0]!.includes("incomplete response discarded"));
+});
+
+test('compaction connection failures are quiet Chinese notices without blaming model availability',()=>{
+ const error='context compaction: cannot connect to model endpoint';
+ const snapshot={session:{id:'demo'},messages:[{id:'user',role:'user',createdAt:start,text:'集群状态如何'},{id:'system-copy',role:'system',createdAt:start,text:error}],actions:[],ai:{session:'demo',status:'failed',startedAt:start,cards:[{id:'error-card',type:'error',content:error,status:'failed',at:start}],cardsOffset:0}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.equal((html.match(/class="ai-compaction-notice"/g)||[]).length,1);
+ assert.ok(html.includes('上下文整理请求未能完成连接'));
+ assert.ok(html.includes('历史消息和操作记录已保留'));
+ assert.ok(!html.includes('ai-card ai-error'));
+ assert.ok(!html.split('class="turn-execution-details')[0]!.includes('cannot connect'));
+ assert.ok(html.includes('整理请求诊断')&&html.includes(error));
+ assert.equal(snapshot.ai!.cards[0]!.content,error,'original diagnostic stays in the audit data');
+ // Text written by the user or assistant must remain ordinary conversation.
+ const prose={...snapshot,messages:[{id:'user',role:'user',createdAt:start,text:error}],ai:{...snapshot.ai!,cards:[{id:'reply',type:'message',status:'completed',at:start,content:error}]}} as SessionSnapshot;
+ const text=renderToStaticMarkup(createElement(AITranscript,{snapshot:prose}));
+ assert.ok(text.includes('cannot connect'));
+ assert.ok(!text.includes('class="ai-compaction-notice"'));
 });
 
 test("plain output-limit errors are localized and retain original-session recovery guidance",()=>{
@@ -109,4 +127,11 @@ test('resource summaries reuse the exact catalog resource icon; lookup retains i
   assert.ok(!html.includes('data-kind="lakeHost"'),kind);
  }
  assert.equal(progressGlyph({...read,title:'list_assets'}),'lakeSearch');
+});
+
+
+test('internal Pilot recovery instructions become a clear task outcome without rewriting reports',()=>{
+ const message='只读检查仍有缺口：可以在当前委托范围内取得替代证据并用 pilot_read_recovery 关联，或将本步报告为失败';
+ const text=displayAiError(message);assert.ok(text.includes('未通过验收'));assert.ok(text.includes('已保留'));assert.ok(!text.includes('pilot_read_recovery'));
+ const report='调查说明：pilot_read_recovery 返回错误';assert.equal(displayAiError(report),report);
 });

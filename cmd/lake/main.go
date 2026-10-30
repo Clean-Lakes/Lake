@@ -6,10 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	webassets "github.com/Clean-Lakes/Lake/assets/web"
-	"github.com/Clean-Lakes/Lake/internal/ai"
-	"github.com/Clean-Lakes/Lake/internal/platform"
-	"github.com/Clean-Lakes/Lake/internal/web"
 	"io"
 	"net/http"
 	"net/url"
@@ -22,6 +18,11 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	webassets "github.com/Clean-Lakes/Lake/assets/web"
+	"github.com/Clean-Lakes/Lake/internal/ai"
+	"github.com/Clean-Lakes/Lake/internal/platform"
+	"github.com/Clean-Lakes/Lake/internal/web"
 )
 
 var version = "0.3.7" // Release builds inject the repository VERSION through -ldflags.
@@ -66,8 +67,38 @@ func run(ctx context.Context, args []string) (err error) {
 		fmt.Println("Lake " + version + " · Go backend · React frontend")
 		return nil
 	}
+	if args[0] == "memory" {
+		if len(args) < 2 || args[1] != "export-retired-assets" {
+			return errors.New("use memory export-retired-assets --home PATH --output FILE")
+		}
+		flags := flag.NewFlagSet("memory export-retired-assets", flag.ContinueOnError)
+		home := flags.String("home", lakeHome(), "Lake home containing the retired archive")
+		output := flags.String("output", "", "new private JSON file (must not exist)")
+		if e := flags.Parse(args[2:]); e != nil {
+			return e
+		}
+		if flags.NArg() != 0 || *output == "" {
+			return errors.New("use --output with a new file path")
+		}
+		return web.ExportLegacyAssets(ctx, filepath.Join(*home, "web-agent"), *output)
+	}
 	if args[0] == "secrets" {
 		return migrate(args[1:])
+	}
+	if args[0] == "security" && len(args) > 1 && args[1] == "resume-initial-migration" {
+		flags := flag.NewFlagSet("security resume-initial-migration", flag.ContinueOnError)
+		home := flags.String("home", "", "existing Lake Home; stop its backend first")
+		if err := flags.Parse(args[2:]); err != nil {
+			return err
+		}
+		if *home == "" || flags.NArg() != 0 {
+			return errors.New("an explicit --home is required")
+		}
+		if err := ai.ResumeInitialSecurityMigration(ctx, *home); err != nil {
+			return err
+		}
+		fmt.Println("Initial migration completed; legacy unknown outcomes preserved with replay protection.")
+		return nil
 	}
 	if args[0] == "web" || args[0] == "serve" {
 		flags := flag.NewFlagSet("lake web", flag.ContinueOnError)
@@ -89,11 +120,19 @@ func run(ctx context.Context, args []string) (err error) {
 		}
 		os.Setenv("LAKE_HOME", *home)
 		dataDir := ""
+		explicitHome := false
 		flags.Visit(func(f *flag.Flag) {
 			if f.Name == "home" {
-				dataDir = filepath.Join(*home, "web-agent")
+				explicitHome = true
 			}
 		})
+		if explicitHome {
+			_, root, e := ai.ResolveSecurityHome(*home, "")
+			if e != nil {
+				return e
+			}
+			dataDir = filepath.Dir(root)
+		}
 		b, e := web.New(ctx, web.Options{Home: *home, DataDir: dataDir, Port: *port, DynamicPort: *port == 0, Open: *open || os.Getenv("LAKE_WEB_START_OPEN") == "1", Static: webassets.Files(), DevOrigin: os.Getenv("LAKE_WEB_DEV_ORIGIN")})
 		if e != nil {
 			return e
@@ -103,12 +142,35 @@ func run(ctx context.Context, args []string) (err error) {
 	}
 	if args[0] == "ai" {
 		flags := flag.NewFlagSet("lake ai", flag.ContinueOnError)
-		dir := flags.String("data", filepath.Join(lakeHome(), "web-agent", "ai"), "AI state directory")
+		home := flags.String("home", lakeHome(), "isolated Lake Home (shared identity with Web)")
+		dir := flags.String("data", "", "deprecated: use --home; arbitrary data roots cannot infer authority")
 		if e := flags.Parse(args[1:]); e != nil {
 			return e
 		}
-		return ai.Serve(ctx, *dir, os.Stdin, os.Stdout)
+		if flags.NArg() != 0 || *dir != "" {
+			return errors.New("lake ai: use --home PATH; legacy --data must be explicitly migrated, not silently rebound")
+		}
+		return ai.ServeHome(ctx, *home, os.Stdin, os.Stdout)
 	}
+	if args[0] == "security" {
+		flags := flag.NewFlagSet("lake security status", flag.ContinueOnError)
+		home := flags.String("home", lakeHome(), "Lake Home")
+		if len(args) < 2 || args[1] != "status" {
+			return errors.New("use lake security status --home PATH")
+		}
+		if e := flags.Parse(args[2:]); e != nil {
+			return e
+		}
+		if flags.NArg() != 0 {
+			return errors.New("unknown security status argument")
+		}
+		state, e := ai.ReadSecurityControl(*home)
+		if e != nil {
+			return e
+		}
+		return json.NewEncoder(os.Stdout).Encode(state)
+	}
+
 	if args[0] == "status" {
 		cmd := exec.CommandContext(ctx, platform.Executable("/usr/bin/uname"), "-a")
 		cmd.Stdout = os.Stdout
@@ -233,8 +295,11 @@ const help = `Lake — Go 运维工作台（运行无需 Node.js）
   lake projects | resources | sessions list   查看工作台记录
   lake sessions show/delete ID                查看或删除会话
   lake chat --session ID --message TEXT        在已有会话发起 AI 轮次
+  lake memory export-retired-assets --home PATH --output FILE  导出已退出的旧资产档案
   lake status                                 查看本机系统
-  lake ai [--data PATH]                        Go AI stdio 接口
+  lake ai [--home PATH]                        共享 Home 身份的 Go AI stdio 接口
+  lake security status [--home PATH]            查看安全恢复门禁与存储身份
+  lake security resume-initial-migration --home PATH  停服后续跑初始迁移，保留旧操作结果
   lake secrets migrate --manifest FILE [--home PATH]  显式旧凭据迁移
 旧版 TypeScript Agent 与 Node Web 后端源码已移除，不支持其独立 grants/tasks/workflow CLI 合约。
 旧用户数据保留，不会自动导入新工作台。`

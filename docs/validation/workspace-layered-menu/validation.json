@@ -1,0 +1,99 @@
+{
+  "date": "2026-10-28",
+  "testedSource": "b3dfb72c1eac8d34198621d801ad0bbc4c0dc32c",
+  "approvedDesign": "原位分层 selected by the user from workspace-menu-redesign.html; compact-height followup replaces the original fixed 432px height.",
+  "implementation": [
+    "One anchored workspace surface with home, project list, project management, creation and deletion-confirmation pages",
+    "Explicit manage-current-project row replaces the detached ellipsis; no secondary project NavigationMenu",
+    "Existing project APIs and bulk toolbar reused; create/delete errors stay in the panel; success closes and restores footer focus",
+    "Hidden pages inert; Escape returns one level, current project radio focused, deletion defaults to Cancel; tag expansion retained between pages",
+    "Home measures natural content with a 432px ceiling; subpages retain that height; sidebar/viewport resize keeps the footer anchor",
+    "Inspector shares conversation/terminal native thin scrollbar style",
+    "Record disclosure uses a no-wrap label, ellipsized description and separate fixed arrow column"
+  ],
+  "checks": {
+    "types": "pnpm --dir web-agent check passed",
+    "frontend": "532 passed, 0 failed, 0 skipped",
+    "build": "scripts/build_lake_desktop.sh --dev --install passed; clean source manifest matches testedSource",
+    "dev": "Normal quit/relaunch completed, authenticated bootstrap HTTP 200, ~/.lake-dev only"
+  },
+  "workspaceAcceptance": {
+    "functionalSource": "99b60a684478821fcce1afccebdb3fbbc86df55f",
+    "browserSpace": 93,
+    "finished": true,
+    "fixture": "Actual SidebarUtilities with in-memory project callbacks; no real project mutated",
+    "initialGeometry": "All pages measured x13/y265/254x432/bottom697 before the compact-height followup; zero secondary management menus",
+    "create": "Double click produced one failed call, input retained and focused; retry produced one successful call and closed; created fixture project selected",
+    "delete": "No call before final confirmation; Cancel focused; double click produced one delete call for the captured fixture project; error case kept the project target and returned focus to Cancel",
+    "bulk": "Existing bulk callback invoked once, menu closed, workspace trigger focused",
+    "keyboard": "End reached last of 44 projects and scrolled it into view; Escape parent path checked; input editing unaffected; outside click dismissed",
+    "tagState": "Collapsed state retained after project-page visit",
+    "narrowDark": "360x480 with 44 projects, bounded 334x408 panel, pinned new-project footer, scrollable list, zero secondary menus",
+    "realApp": "Read-only fixture verification entered management/deletion confirmation and canceled; same panel bounds before/after, no model writes"
+  },
+  "compactFollowup": {
+    "source": "b3dfb72c1eac8d34198621d801ad0bbc4c0dc32c",
+    "browserSpace": 94,
+    "finished": true,
+    "home": {
+      "height": 401,
+      "contentHeight": 387,
+      "width": 254,
+      "lastRowBottom": 689.5,
+      "panelBottom": 697,
+      "bottomGap": 7.5
+    },
+    "subpages": "Management and confirmation retained x13/y296/254x401/bottom697; Cancel remained initial confirmation focus"
+  },
+  "inspector": {
+    "source": "b3dfb72c1eac8d34198621d801ad0bbc4c0dc32c",
+    "browserSpace": 94,
+    "fixture": "Real App with long plan-step descriptions; selected existing attempt; 1232px shell and 240px inspector",
+    "label": {
+      "text": "步骤记录",
+      "width": 56,
+      "height": 22.3984375
+    },
+    "summaryHeight": 26.3984375,
+    "descriptionWidth": 93,
+    "ellipsis": "ellipsis",
+    "arrowWidth": 12,
+    "horizontalOverflow": 0,
+    "sameLineLightAndDark": true,
+    "scrollbar": {
+      "conversationWidth": "thin",
+      "inspectorWidth": "thin",
+      "lightColorBoth": "rgb(204, 204, 204) rgba(0, 0, 0, 0)",
+      "darkColorBoth": "rgb(80, 80, 80) rgba(0, 0, 0, 0)"
+    }
+  },
+  "native": {
+    "platform": "macOS WKWebView light theme",
+    "source": "b3dfb72c1eac8d34198621d801ad0bbc4c0dc32c",
+    "verified": [
+      "Final Dev installed, normally restarted and healthy",
+      "Native workspace home visually inspected: compact bottom inset, shared curves and single surface",
+      "Workspace popup closed and focus restored after inspection"
+    ],
+    "priorSource99b60": "Native management page visually inspected in place before compact followup",
+    "privacy": "No real project creation/deletion, model request, remote command, or native screenshot uploaded"
+  },
+  "unverified": [
+    "Windows native",
+    "Native dark theme",
+    "Live API create/delete against a real project; UI callbacks tested with isolated in-memory data"
+  ],
+  "workflow": {
+    "branch": "codex/island-title-visible",
+    "pr": 109,
+    "base": "develop",
+    "merged": false,
+    "productionTouched": false,
+    "baseline": "Existing Dev baseline 99878406 and #104 dependencies retained; PR remains draft pending coordination and user merge authorization"
+  },
+  "screenshots": [
+    "workspace-home.png",
+    "inspector-records-light.png",
+    "inspector-records-dark.png"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "core": "a6d7c0eecc5b60be89de9d283fa4ace738d701537050369631e7f6194ffb1e32",
+  "db-query-editor": "25e09234e0da998c37622ee8e47d420a27528bc319c4138ee64d4066b57b717d",
+  "default": "a6d7c0eecc5b60be89de9d283fa4ace738d701537050369631e7f6194ffb1e32",
+  "legacy-investigation": "b644eaf407dc480e91f11ed03c54406de7fe7efa8134dbdd5595ecafaef708a0",
+  "memory": "1a0f5b10dcadb0d53a2c45d61f96cca0db16c71a7a274fb2f31968f8af6770dc",
+  "permissions-denied": "757fb718da87444b755c1f839b470f2a8bb0ff47b3c1702c43c0426a3865eef5",
+  "permissions-silent": "984ce215f4a94b8ceef92e52eacf6438190c9f7ca9664bec036b77ee7feab957",
+  "preset": "bf82563e3c8008d721d510f5cabcf2e9c4562a0242a90d61640dfa1d3e076c73",
+  "role-coordinator": "be9b6cb9dc6b3b994e798a4b6a43e76efb1ea6af70436547550ccff41ee23256",
+  "role-executor": "cf6ed7d5b22a0d5cb1d3a1d017c77937b0be34f8bfc42c1c3d62e79fc65fcf8a",
+  "role-investigator": "251ee4adfa73e5a6eaa478f62edf28ad8620eeddcbca882c577a1206a7f562fd",
+  "role-verifier": "80360c65e7fc75cbb63c4e00fdc0a1b4b65600c55bf00ee602abf6104b042241",
+  "sre-dispatch": "34e3cf9cf0018e0f16d4a7e274934071d4cefdc051f80b428a1ef15fae8ac14f",
+  "terminal2": "569638ab6200061cc9399fe971d144570f02c99ef05f3b818943e5015919d6b2",
+  "text-only": "963641dd572152d6b8fc3ac33126d363766778adb5f4d49a3ec38898acb96c87",
+  "unknown": "4ff6bdb17d66036a5e537ed8420066b5116ae363b09cd1968148e8e6d9c5806f",
+  "workflow": "e5895509aae69267dcf459a8a92dbbe2a6cf392ad7953412cb247e78c32d1fb0"
+}

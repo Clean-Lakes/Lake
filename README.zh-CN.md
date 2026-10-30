@@ -14,6 +14,7 @@
 
 <br>
 
+<!-- v0.3.23: current workbench, synthetic demonstration data. -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/lake-workbench-dark.jpg">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/lake-workbench-light.jpg">
@@ -36,7 +37,7 @@
 
 普通模式由 Lake 直接处理。需要多人分工时，在输入框旁开启 **SRE 协作 · 实验性**；操作沿用会话权限。[了解使用与边界 →](docs/sre-collaboration.md)
 
-策略资产、候选学习与有界只读纠错为默认关闭的实验能力，即使随正式客户端提供，也不作为正式稳定功能。手写资产、版本采用、来源追溯、预算及退出方法见[使用说明](docs/strategy-learning.md)。
+**Lake Memory · 实验**：自动积累和使用自然偏好分别主动开启，当前要求优先；后台整理与压缩补采不阻塞交流。普通会话与 Pilot 协调回复按范围使用偏好，事实与经验仍需核实。人工策略资产保留兼容管理。在线纠错、候选提取和新增对照实验已停用，已保存内容、采用绑定及历史记录保留，见[使用与兼容说明](docs/strategy-learning.md)。
 
 <details>
 <summary>本地开发</summary>

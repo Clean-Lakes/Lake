@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { atConversationTail, conversationCanScroll, pausesConversationFollow, FollowScroll } from "../src/followScroll";
+import { atConversationTail, conversationCanScroll, pausesConversationFollow, followsConversationScroll, FollowScroll, observeConversationGrowth } from "../src/followScroll";
 import { sameCard } from "../src/cardEquality";
 
 function fixture(reduced = false) {
@@ -119,4 +119,51 @@ test("unchanged historical cards reuse Markdown, while streamed content and tool
   assert.equal(sameCard(card, {...card, content: "**updated**"}), false);
   assert.equal(sameCard(card, {...card, status: "pending"}), false);
   assert.equal(sameCard(card, {...card, data: {target: "different host"}}), false);
+});
+
+
+test('conversation observes actual growth, not same-height metadata or content shrink',()=>{
+ const previousResize=globalThis.ResizeObserver,previousMutation=globalThis.MutationObserver;
+ let resize=()=>{},replace=()=>{},disconnected=0,requests=0;
+ globalThis.ResizeObserver=class {constructor(callback:()=>void){resize=callback}observe(){}unobserve(){}disconnect(){disconnected++}} as unknown as typeof ResizeObserver;
+ globalThis.MutationObserver=class {constructor(callback:()=>void){replace=callback}observe(){}disconnect(){disconnected++}} as unknown as typeof MutationObserver;
+ try {
+  const container={scrollHeight:900,clientHeight:400,clientWidth:700,firstElementChild:{}} as unknown as HTMLElement;
+  const stop=observeConversationGrowth(container,()=>requests++);
+  for(let i=0;i<100;i++)resize();assert.equal(requests,0);
+  Object.assign(container,{scrollHeight:940});resize();assert.equal(requests,1);
+  Object.assign(container,{scrollHeight:900});resize();assert.equal(requests,1);
+  Object.assign(container,{firstElementChild:{}});replace();assert.equal(requests,1);
+  Object.assign(container,{scrollHeight:920});resize();assert.equal(requests,2,'growth uses the post-collapse baseline');
+  Object.assign(container,{clientWidth:600});resize();assert.equal(requests,3);
+  Object.assign(container,{clientHeight:350});resize();assert.equal(requests,4);
+  stop();assert.equal(disconnected,2);
+ } finally {globalThis.ResizeObserver=previousResize;globalThis.MutationObserver=previousMutation}
+});
+
+test('layout scroll events cannot cancel line-growth following, but reader gestures still pause',()=>{
+ const f=fixture();f.follower.jump();
+ // The last frame/scroll anchoring can dispatch after new layout has grown.
+ f.box.scrollTop-=40;
+ assert.equal(followsConversationScroll(f.box,true),true);
+ assert.equal(pausesConversationFollow(f.box,80,true),false,'downward catch-up keeps a running follow');
+ f.box.scrollHeight+=120;f.follower.request();
+ for(let time=0;time<1500;time+=16.67)f.frame(time);
+ assert.equal(f.box.scrollTop,620);
+ assert.equal(pausesConversationFollow(f.box,-80,true),true,'intentional upward reading pauses');
+ f.pause();f.box.scrollTop-=80;f.box.scrollHeight+=100;f.follower.request();
+ assert.equal(f.callbacks.size,0);assert.equal(followsConversationScroll(f.box,false),false);
+ f.box.scrollTop=f.box.scrollHeight-f.box.clientHeight;
+ assert.equal(followsConversationScroll(f.box,false),true,'manually reaching the tail resumes following');
+});
+
+test('completion relocation keeps the latest reply visible without pulling a history reader',()=>{
+ const f=fixture();f.follower.jump();
+ // The browser anchors the relocated elapsed caption without changing height.
+ f.box.scrollTop-=200;
+ assert.equal(followsConversationScroll(f.box,true),true);
+ f.follower.request();for(let t=0;t<1500;t+=16.67)f.frame(t);
+ assert.equal(f.box.scrollTop,500);
+ f.pause();f.box.scrollTop=180;f.follower.jump();
+ assert.equal(f.box.scrollTop,180,'completion does not resume intentional history reading');
 });

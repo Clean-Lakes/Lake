@@ -76,8 +76,8 @@ func TestStrategyCompositionKeepsAuthorityOutsideStrategy(t *testing.T) {
 			if strings.Contains(slots.Text(), "Never read credentials") || strings.Contains(slots.Text(), "Final output must be only JSON") {
 				t.Fatal("role authority became optimizable")
 			}
-			if !strings.Contains(slots.Text(), "Default conversation style:") {
-				t.Fatal("no strategy layer extracted")
+			if len(slots.Parts) != 0 || !strings.Contains(fixed.Text(), "Default conversation style:") {
+				t.Fatal("retired optimization slots remain")
 			}
 		})
 	}
@@ -193,9 +193,9 @@ func TestStrategyManifestModelAllowlistAndRestoredHistory(t *testing.T) {
 	}
 }
 
-func TestStrategyManifestFailurePreventsProviderDispatch(t *testing.T) {
+func TestStrategyManifestFailureDoesNotBlockProviderDispatch(t *testing.T) {
 	var calls atomic.Int32
-	m, close := fakeModel(t, func(_ int, _ map[string]any) any { calls.Add(1); return response("must not happen") })
+	m, close := fakeModel(t, func(_ int, _ map[string]any) any { calls.Add(1); return response("normal reply") })
 	defer close()
 	e := engineFor(t, m, nil)
 	store, err := e.adkStore()
@@ -206,8 +206,8 @@ func TestStrategyManifestFailurePreventsProviderDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = e.Chat(context.Background(), "case", "只解释，不执行操作。", nil); err == nil || calls.Load() != 0 {
-		t.Fatal("request dispatched without durable manifest", err, calls.Load())
+	if err = e.Chat(context.Background(), "case", "只解释，不执行操作。", nil); err != nil || calls.Load() != 1 {
+		t.Fatal("optional manifest blocked ordinary request", err, calls.Load())
 	}
 }
 

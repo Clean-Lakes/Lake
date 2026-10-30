@@ -62,6 +62,7 @@ func engineFor(t *testing.T, m Model, bridge Bridge) *Engine {
 	if err != nil {
 		t.Fatal(err)
 	}
+	e.RecordPromptDiagnostics = true // Explicit synthetic diagnostics; product New defaults off.
 	t.Cleanup(e.Shutdown)
 	if err = e.Configure("case", Config{Model: m, Profile: "core", Runtime: "local", Workspace: t.TempDir()}); err != nil {
 		t.Fatal(err)
@@ -392,7 +393,7 @@ func TestProfilesAndSchemaValidation(t *testing.T) {
 			t.Fatal("prompt substitutions")
 		}
 	}
-	if len(all) != 46+len(extendedTools()) || !all["list_resource_groups"] || !all["inspect_host"] || !all["preview_resource_import"] || !all["import_resources"] || !all["query_kubernetes"] {
+	if len(all) != 48+len(extendedTools()) || !all["list_resource_groups"] || !all["inspect_host"] || !all["preview_resource_import"] || !all["import_resources"] || !all["query_kubernetes"] || !all["kubernetes_capabilities"] || !all["kubernetes_action"] {
 		t.Fatal(len(all))
 	}
 	for _, tool := range Catalog("core") {

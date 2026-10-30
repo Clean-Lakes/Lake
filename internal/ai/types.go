@@ -11,6 +11,7 @@ import (
 )
 
 type Model struct {
+	requireToolCall     bool                 // runtime-only terminal-decision recovery; never persisted as user configuration
 	ReasoningEffort     string               `json:"reasoningEffort,omitempty"`
 	Reasoning           *ReasoningCapability `json:"reasoningCapability,omitempty"`
 	SupportsImageInput  bool                 `json:"supportsImageInput,omitempty"`
@@ -43,25 +44,22 @@ type SSH struct {
 	KnownHosts    string `json:"-"`
 }
 type Config struct {
+	IgnoreNaturalMemory       bool   `json:"ignoreNaturalMemory,omitempty"`
 	ConversationMode          string `json:"conversationMode,omitempty"`
 	ModelProviderID           string `json:"modelProviderId,omitempty"` // Logical catalog ID only; never an endpoint or credential.
 	legacyInvestigations      bool   // Historical runtime compatibility; never enabled by user settings.
 	sreCoordinator            bool
 	sre                       *sreRoleContext
 	targetScope               *TargetScope
-	StrategyLearnEnabled      bool             `json:"-"`
-	StrategyCorrectEnabled    bool             `json:"-"`
-	StrategyBudget            strategy.Budget  `json:"-"`
-	StrategyGlobalEpoch       int64            `json:"-"`
-	StrategyProjectEpoch      int64            `json:"-"`
-	MemoryProjectID           string           `json:"-"`
-	MemoryEnabled             bool             `json:"-"`
-	MemoryExtractionEnabled   bool             `json:"-"`
-	MemoryEpoch               int              `json:"-"`
-	MemoryKnowledgeRevision   int              `json:"-"`
-	MemorySchemaVersion       int              `json:"-"`
-	MemoryResourceGenerations map[string]int   `json:"-"`
-	Directories               []AssetDirectory `json:"directories,omitempty"`
+	NaturalMemory             *NaturalMemoryConsent `json:"-"`
+	MemoryProjectID           string                `json:"-"`
+	MemoryEnabled             bool                  `json:"-"`
+	MemoryExtractionEnabled   bool                  `json:"-"`
+	MemoryEpoch               int                   `json:"-"`
+	MemoryKnowledgeRevision   int                   `json:"-"`
+	MemorySchemaVersion       int                   `json:"-"`
+	MemoryResourceGenerations map[string]int        `json:"-"`
+	Directories               []AssetDirectory      `json:"directories,omitempty"`
 	agentRole                 string
 	workflowMode              bool
 	MultiAgentMode            string       `json:"multiAgentMode,omitempty"`
@@ -86,17 +84,18 @@ type Call struct {
 	Arguments string `json:"arguments"`
 }
 type Message struct {
-	HostTurnID     string            `json:"hostTurnId,omitempty"` // Durable host anchor; never sent to providers.
-	Images         []ImageAttachment `json:"images,omitempty"`
-	NativeProtocol string            `json:"nativeProtocol,omitempty"`
-	NativeModel    string            `json:"nativeModel,omitempty"`
-	Role           string            `json:"role"`
-	Content        string            `json:"content"`
-	Reasoning      string            `json:"reasoning,omitempty"`
-	Calls          []Call            `json:"tool_calls,omitempty"`
-	CallID         string            `json:"tool_call_id,omitempty"`
-	Name           string            `json:"name,omitempty"`
-	Native         []json.RawMessage `json:"native,omitempty"`
+	SourceMessageID string            `json:"sourceMessageId,omitempty"` // Real supplemental user-message identity; never sent to providers.
+	HostTurnID      string            `json:"hostTurnId,omitempty"`      // Durable host anchor; never sent to providers.
+	Images          []ImageAttachment `json:"images,omitempty"`
+	NativeProtocol  string            `json:"nativeProtocol,omitempty"`
+	NativeModel     string            `json:"nativeModel,omitempty"`
+	Role            string            `json:"role"`
+	Content         string            `json:"content"`
+	Reasoning       string            `json:"reasoning,omitempty"`
+	Calls           []Call            `json:"tool_calls,omitempty"`
+	CallID          string            `json:"tool_call_id,omitempty"`
+	Name            string            `json:"name,omitempty"`
+	Native          []json.RawMessage `json:"native,omitempty"`
 }
 type Usage struct {
 	InputKnown  bool `json:"inputKnown"`
@@ -132,6 +131,7 @@ type Approval struct {
 	Fingerprint        string `json:"fingerprint"`
 }
 type View struct {
+	WorkGoals         []WorkGoal         `json:"workGoals,omitempty"`
 	ProposedPlan      *ProposedPlan      `json:"proposedPlan,omitempty"`
 	OperationOutcomes []OperationOutcome `json:"operationOutcomes,omitempty"`
 	PendingApprovals  []*Approval        `json:"pendingApprovals,omitempty"`
@@ -158,6 +158,12 @@ type View struct {
 	Turns             int                `json:"turns"`
 }
 type State struct {
+	SupplementIDs          []string                         `json:"supplementIds,omitempty"`
+	CompactionFailureAt    string                           `json:"compactionFailureAt,omitempty"`
+	WorkGoalID             string                           `json:"workGoalId,omitempty"`
+	NaturalRecallUsed      []NaturalRecallItem              `json:"naturalRecallUsed,omitempty"`
+	MemoryAcknowledged     map[string]string                `json:"memoryAcknowledged,omitempty"`
+	MemoryCapture          *MemoryCaptureState              `json:"memoryCapture,omitempty"`
 	PromptBaseline         *strategy.PromptBaseline         `json:"promptBaseline,omitempty"`
 	SkillSnapshots         []strategy.SkillSnapshot         `json:"skillSnapshots,omitempty"`
 	Runtime                *RuntimeCheckpoint               `json:"runtime,omitempty"`

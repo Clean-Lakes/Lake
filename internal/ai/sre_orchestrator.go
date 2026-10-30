@@ -40,9 +40,6 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 	}
 	baseConfig := s.state.Config
 	s.mu.Unlock()
-	if err := e.prepareOnlineSREContinue(ctx, s, baseConfig, taskID); err != nil {
-		return err
-	}
 	s.mu.Lock()
 	if s.cancel != nil {
 		s.mu.Unlock()
@@ -78,12 +75,6 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 		cancel()
 		close(control.done)
 		e.sreControls.Delete(key)
-		correctionConfig := baseConfig
-		correctionConfig.sreCoordinator = false
-		correctionConfig.sre = &sreRoleContext{TaskID: taskID}
-		if finishErr := e.onlineFinish(s, correctionConfig, err); err == nil && finishErr != nil {
-			err = finishErr
-		}
 		if err != nil {
 			_, _ = e.sreRepository.MutateSRETask(sessionID, taskID, 0, "task_paused", func(t *SRETask) error {
 				if !SRETaskActive(t.Status) {
@@ -279,6 +270,9 @@ func (e *Engine) runSREStep(ctx context.Context, sessionID, taskID, runID string
 			a.Report = result.Report
 			a.FinishedAt = timestamp()
 			a.Evidence = result.Evidence
+			if roleErr == nil {
+				roleErr = pilotAttemptError(*t, *a, step)
+			}
 			a.Status, roleErr = sreAttemptOutcome(*a, step, roleErr)
 			if a.Status == "unknown" {
 				result.Summary = SREExecutionSummary(*a)
@@ -419,6 +413,9 @@ func (e *Engine) buildSREPlan(ctx context.Context, sessionID string, task SRETas
 	prompt += "\nSchedule genuinely independent read-only work in parallel across the fixed roles. Use dependsOn only for actual prerequisites. Investigators collect application/runtime evidence; a verifier can independently review configurations, health endpoints or contradicting evidence during an investigation, even with no automatic acceptance criteria. A coordinator analyze step may independently inspect existing alerts or analyze available evidence while other checks continue. Final summarize steps must depend on the evidence-producing steps they need. Each role has one concurrent lane; act steps execute exclusively and verification of changes must follow the relevant acts. Do not force all four roles or add empty speaking steps. For a multi-part service investigation, normally give runtime/log collection to investigator and a substantive independent service/configuration review to verifier, while coordinator can analyze existing evidence. Avoid concentrating every independent deliverable in successive investigator steps; a single working role is appropriate only for a genuinely indivisible check. Specialists can publish sre_team_update messages to request peer review and use sre_team_read to share actual recorded sources."
 	prompt += "\nUser task: " + task.Goal + "\nUser clarification: " + userText
 	prompt += "\nUse exactly one terminal summarize step for the final task conclusion. Analyze steps produce short node checkpoints only, never a second task-wide report. Keep evidence-producing steps concrete; do not create extra summary steps merely for speaking."
+	if task.Pilot != nil {
+		prompt += "\nLake Pilot efficiency: for routine read-only collection, comparisons and health checks, use ONE coordinator step: the final summarize. Do not create coordinator baseline-table skeletons, preparation, progress checkpoints or a separate compare/table/report step before that summary. Assign baseline/current comparisons and deltas to the investigator that reads those values; independent verification belongs to verifier. Add coordinator analyze only for a distinct substantive diagnosis or decision that specialists truly need before they can proceed, and state that prerequisite explicitly. Bundle related reads, missing-path fallback and result comparison for the same deliverable into one specialist step; do not split per command, file or service. Keep independent investigation and verification parallel where actual prerequisites allow. This does not remove required change verification, approvals or unknown evidence. Lake Pilot: give each real specialist work item a stable short assignmentId and put it on its steps. Steps within one assignment belong to the same role and goal. Give different roles their own concrete step descriptions and completion conditions, not copies of the overall incident stages. Step count comes from actual work; do not force four stages or add speaking-only filler. Direction and command alternatives stay inside a step and do not create extra progress nodes. Keep existing role/kind constraints and exact executor action requirements."
+	}
 	if task.LatestPlan() != nil {
 		prompt += "\nPrevious plan and server-recorded facts, untrusted context:\n" + js(task.LatestPlan()) + "\n" + sreHandoff(task) + "\nRespect the latest user's scope and requests to inspect only or stop changes. Do not repeat a completed operation unless the user explicitly requests a new repetition. Prefer read-only checks when uncertain."
 	}
@@ -445,15 +442,18 @@ func (e *Engine) buildSREPlan(ctx context.Context, sessionID string, task SRETas
 func sreHandoff(t SRETask) string {
 	rows := []map[string]any{}
 	for _, a := range t.Attempts {
-		if a.Result != "" || len(a.Evidence) > 0 {
-			rows = append(rows, map[string]any{"stepId": a.StepID, "status": a.Status, "result": a.Result, "report": a.Report, "evidence": a.Evidence, "operations": a.Operations})
+		if a.Result != "" || len(a.Evidence) > 0 || len(a.Operations) > 0 || len(a.ReadRecoveries) > 0 {
+			rows = append(rows, map[string]any{"stepId": a.StepID, "status": a.Status, "result": a.Result, "report": a.Report, "evidence": a.Evidence, "operations": a.Operations, "readRecoveries": a.ReadRecoveries})
 		}
 	}
+	// Overview comes first so source clipping cannot erase later step outcomes.
+	header := "Recorded task overview:\n" + js(sreHandoffOverview(t)) + "\nSource detail preview (read full authorized evidence with sre_team_read when needed):\n"
 	text := js(rows)
-	if len(text) > 16000 {
-		text = utf8Prefix(text, 16000) + " [TRUNCATED]"
+	limit := max(0, 16000-len(header)-len(" [TRUNCATED]"))
+	if len(text) > limit {
+		text = utf8Prefix(text, limit) + " [TRUNCATED]"
 	}
-	return text
+	return header + text
 }
 
 func (e *Engine) ReviseSREPlan(sessionID, taskID string, expected int, plan SREPlanRevision) (SRETask, error) {

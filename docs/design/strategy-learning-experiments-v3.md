@@ -1,5 +1,7 @@
 # P5 隔离快照评估
 
+> 历史设计：保留当时交付、判据和结论。当前使用见 [Lake Memory（实验）](../lake-memory.md)，清理与验证见 [C4 手册](memory-compatibility-c4.md)。旧在线纠错、候选提取、优化和 P8/R5 试跑入口已退役；本文的命令仅适用于其记录的历史提交，不能据此重新启用。旧内容和报告从折叠兼容入口管理。
+
 P6 在此基础上增加显式有界优化、合成复验及已知结果阶段继续，见 [v4 说明](strategy-learning-optimization-v4.md)。本页保留普通 P5 A/B 的规则。
 
 P5 交付登记夹具、独立 ADK 运行、固定客观判据及 A/B 报告（T20–T23）。首期是 **synthetic_snapshot 合成快照模式**：15 个与 P0 场景对应的可复位观测数据集，12 个开发场景、3 个保留场景。没有启动真实 SSH、Docker、PostgreSQL、Redis 或 Kubernetes，也不声称实现了 P0 目标规格中的真实故障注入/服务复位。原 `testdata/cases.v1.json` 保留为历史目标规格，实际登记表在 `internal/strategy/fixtures.go`。

@@ -20,7 +20,12 @@ type shellJob struct {
 	terminalID, entryID string
 }
 
-func (e *Engine) startShell(c Config, a map[string]any, command string) (any, error) {
+type backgroundShellSourceKey struct{}
+
+func (e *Engine) startShell(c Config, a map[string]any, command string, source ...map[string]any) (any, error) {
+	if e.workParent != nil {
+		return e.workParent.startShell(c, a, command, e.workShellSource(str(a["__session"]), source))
+	}
 	e.shellMu.Lock()
 	defer e.shellMu.Unlock()
 	if e.shellsClosed {
@@ -43,7 +48,7 @@ func (e *Engine) startShell(c Config, a map[string]any, command string) (any, er
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), duration(a))
 	j := &shellJob{id: id, session: session, cancel: cancel, done: make(chan struct{}), status: "running"}
-	e.shellCard(session, id, "", "background_running", true)
+	e.shellCard(session, id, "", "background_running", true, source...)
 	e.shells.Store(session+":"+id, j)
 	go func() {
 		defer close(j.done)
@@ -113,6 +118,12 @@ func (e *Engine) shellJob(ctx context.Context, id, method string, a map[string]a
 		}
 	}
 	result := map[string]any{"shell_id": j.id, "status": status, "result": value}
+	if stopped := str(obj(value)["stopRequestedAt"]); stopped != "" {
+		result["stopRequestedAt"] = stopped
+		result["userStopped"] = true
+		result["notice"] = obj(value)["notice"]
+		result["status"] = "interrupted"
+	}
 	if status == "running" {
 		result["poll_after_ms"] = 1000
 	}
@@ -187,7 +198,10 @@ func (e *Engine) cancelShells(id string) {
 }
 
 // trackBridgeShell gives persistent PTY jobs the same wait/output/kill contract as container jobs.
-func (e *Engine) trackBridgeShell(session string, result any, a map[string]any) (any, error) {
+func (e *Engine) trackBridgeShell(session string, result any, a map[string]any, source ...map[string]any) (any, error) {
+	if e.workParent != nil {
+		return e.workParent.trackBridgeShell(session, result, a, e.workShellSource(session, source))
+	}
 	e.shellMu.Lock()
 	defer e.shellMu.Unlock()
 	if e.shellsClosed {
@@ -203,7 +217,7 @@ func (e *Engine) trackBridgeShell(session string, result any, a map[string]any) 
 	cancel := stopWaiting
 	job := &shellJob{id: id, session: session, cancel: cancel, done: make(chan struct{}), status: "running", terminalID: terminalID, entryID: entryID}
 	e.shells.Store(session+":"+id, job)
-	e.shellCard(session, id, "", "background_running", true)
+	e.shellCard(session, id, "", "background_running", true, source...)
 	go func() {
 		defer close(job.done)
 		result, err := e.Bridge(ctx, session, "terminal_wait_command", map[string]any{"terminal_id": terminalID, "entry_id": entryID}, false)
@@ -218,10 +232,13 @@ func (e *Engine) trackBridgeShell(session string, result any, a map[string]any) 
 		if err != nil {
 			job.status = "failed"
 		}
+		if str(obj(result)["stopRequestedAt"]) != "" {
+			job.status = "interrupted"
+		}
 		status := job.status
 		job.mu.Unlock()
 		content := js(result)
-		if err != nil {
+		if err != nil && str(obj(result)["stopRequestedAt"]) == "" {
 			content = err.Error()
 		}
 		e.shellCard(session, id, content, status, false)
@@ -236,7 +253,7 @@ func (e *Engine) trackBridgeShell(session string, result any, a map[string]any) 
 }
 
 // Completion updates the original card, never the status or ordering of a later turn.
-func (e *Engine) shellCard(session, id, content, status string, create bool) {
+func (e *Engine) shellCard(session, id, content, status string, create bool, source ...map[string]any) {
 	s, err := e.get(session)
 	if err != nil {
 		return
@@ -244,7 +261,21 @@ func (e *Engine) shellCard(session, id, content, status string, create bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if create {
-		s.state.View.Cards = append(s.state.View.Cards, Card{ID: id, Type: "shell", Title: "后台命令", Status: status, At: timestamp()})
+		// Copy only the originating operation identity; never infer it from
+		// whichever host is selected when the asynchronous command finishes.
+		data := map[string]any{"shell_id": id}
+		if len(source) > 0 {
+			for _, key := range []string{"resource_id", "target", "parent_card_id", "call_id", "work_goal_id", "work_goal_title"} {
+				if value := str(source[0][key]); value != "" {
+					data[key] = value
+				}
+			}
+		}
+		title := "后台命令"
+		if str(data["work_goal_title"]) != "" {
+			title = "后台任务 · " + str(data["work_goal_title"])
+		}
+		s.state.View.Cards = append(s.state.View.Cards, Card{ID: id, Type: "shell", Title: title, Data: data, Status: status, At: timestamp()})
 	} else {
 		for i := range s.state.View.Cards {
 			if s.state.View.Cards[i].ID == id {

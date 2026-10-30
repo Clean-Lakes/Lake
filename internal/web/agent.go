@@ -152,10 +152,9 @@ func (b *Server) configureWithSave(id string, updates Object, saveOptions func(s
 	assets, directories := b.sessionAssetCatalog(id)
 	projectID := stringOf(b.Store.Session(id)["projectId"])
 	memorySettings := b.Store.MemorySettings(projectID)
-	learning, _ := b.Store.EffectiveStrategySettings(StrategyContext{ProjectID: projectID})
 	// Approvals belong to individual operations; earlier pending actions must not
 	// disable this turn's tools. invoke enforces per-operation permissions.
-	aiFailure(b.Engine.Configure(id, ai.Config{ConversationMode: stringOf(options["conversationMode"]), StrategyCorrectEnabled: learning.Settings.MasterEnabled && learning.Settings.CorrectEnabled && learning.Settings.OnlineCorrectEnabled, StrategyBudget: learning.Settings.Budget, StrategyLearnEnabled: learning.Settings.MasterEnabled && learning.Settings.LearnEnabled, StrategyGlobalEpoch: learning.GlobalEpoch, StrategyProjectEpoch: learning.ProjectEpoch, ModelProviderID: stringOf(modelSelection["providerId"]), MemoryProjectID: projectID, MemorySchemaVersion: integer(memorySettings["memorySchemaVersion"]), MemoryResourceGenerations: b.Store.memoryGenerationSnapshot(projectID), MemoryEnabled: memorySettings["useEnabled"] == true, MemoryExtractionEnabled: memorySettings["useEnabled"] == true && memorySettings["extractionEnabled"] == true, MemoryEpoch: integer(memorySettings["epoch"]), MemoryKnowledgeRevision: integer(memorySettings["revision"]), Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
+	aiFailure(b.Engine.Configure(id, ai.Config{ConversationMode: stringOf(options["conversationMode"]), ModelProviderID: stringOf(modelSelection["providerId"]), NaturalMemory: b.Store.NaturalConsent(projectID), MemoryProjectID: projectID, MemorySchemaVersion: integer(memorySettings["memorySchemaVersion"]), MemoryResourceGenerations: b.Store.memoryGenerationSnapshot(projectID), MemoryEnabled: memorySettings["useEnabled"] == true, MemoryExtractionEnabled: memorySettings["useEnabled"] == true && memorySettings["extractionEnabled"] == true, MemoryEpoch: integer(memorySettings["epoch"]), MemoryKnowledgeRevision: integer(memorySettings["revision"]), Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
 	saveOptions(id, options)
 	if previousPermissions != permissionVersion(options) {
 		b.revokeSessionTerminals(id)
@@ -183,7 +182,23 @@ func (b *Server) sessionAssetCatalog(id string) ([]ai.Asset, []ai.AssetDirectory
 	return assets, directories
 }
 func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any, error) {
+	if method == "agentQuestionReply" || method == "agentDecision" {
+		view, err := b.Engine.Snapshot(id)
+		if err == nil {
+			for _, run := range view.AgentRuns {
+				if run.ID == stringOf(object(data)["runId"]) && run.SRETaskID != "" {
+					task, loadErr := b.Store.LoadSRETask(id, run.SRETaskID)
+					if loadErr == nil && task.Pilot != nil && !b.Store.SREEnabled(task.ProjectID) {
+						return nil, &ai.SREError{Status: 409, Message: "请先开启 Lake Pilot，再继续该任务"}
+					}
+				}
+			}
+		}
+	}
 	if method == "agentQuestionReply" && b.Engine.NeedsRoleRecovery(id, stringOf(object(data)["runId"])) || method == "questionReply" && b.Engine.NeedsQuestionRecovery(id) || method == "agentDecision" && b.Engine.NeedsRoleRecovery(id, stringOf(object(data)["runId"])) || method == "decision" && b.Engine.NeedsADKRecovery(id) {
+		b.configure(id, nil)
+	}
+	if method == "workControl" {
 		b.configure(id, nil)
 	}
 	if method == "questionReply" {
@@ -196,12 +211,19 @@ func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any
 		}
 		return nil, b.Engine.ReplyQuestionWithTarget(id, input.ID, input.Answers, b.questionTargetScope(id, input.Answers))
 	}
+	if method == "compact" {
+		done := b.memoryForegroundModel()
+		defer done()
+	}
 	return b.Engine.Handle(ctx, method, id, json.RawMessage(jsonText(data)))
 }
 func (b *Server) event(event ai.Event) {
 	defer func() { recover() }()
 	b.Store.Session(event.Session)
 	switch event.Type {
+	case "memoryCapture":
+		b.registerMemoryOutbox(event.Session)
+		b.Store.Touch(event.Session)
 	case "delta":
 		data := object(event.Data)
 		kind, cardID := stringOf(data["kind"]), stringOf(data["card_id"])
@@ -230,7 +252,13 @@ func (b *Server) event(event ai.Event) {
 		}
 	case "done":
 		status := stringOf(object(event.Data)["status"])
-		if status == "completed" || status == "cancelled" {
+		if status == "waiting_external" {
+			b.Store.Status(event.Session, "completed")
+		} else if status == "waiting_user" {
+			b.Store.Status(event.Session, "completed")
+		} else if status == "paused" || status == "blocked" {
+			b.Store.Status(event.Session, "completed")
+		} else if status == "completed" || status == "cancelled" {
 			b.syncSRESessionStatus(event.Session)
 		} else {
 			b.Store.Status(event.Session, "failed")
@@ -390,6 +418,16 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 	}
 }
 func (b *Server) bridge(ctx context.Context, id, name string, args Object, approved bool) (result any, err error) {
+	if b.securityRuntime != nil {
+		if err := b.securityRuntime.Check(); err != nil {
+			return nil, &ai.ToolNotExecutedError{Err: err}
+		}
+	}
+	if b.Engine != nil {
+		if err := b.Engine.CheckSecurityRuntime(); err != nil {
+			return nil, &ai.ToolNotExecutedError{Err: err}
+		}
+	}
 	// Opening/binding a shell can fail before any command is submitted. Only
 	// failures before this boundary are proven to have no command side effect.
 	commandMayHaveStarted := name != "runtimeCommandExec"
@@ -405,6 +443,9 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 			}
 		}
 	}()
+	if name == "work_release_capability" || name == "work_release_observe" {
+		return b.workReleaseBridge(ctx, id, name, args)
+	}
 	if name == "list_mcp_servers" || name == "list_mcp_tools" || name == "call_mcp_tool" {
 		return b.extensionBridge(ctx, id, name, args, approved)
 	}
@@ -455,6 +496,9 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		return b.sessionAssets(id), nil
 	}
 	tid := stringOf(args["terminal_id"])
+	if name == "policy" && set("query_kubernetes kubernetes_capabilities kubernetes_action")[stringOf(args["name"])] {
+		tid = ""
+	}
 	var target Object
 	if tid != "" {
 		if name == "policy" || name == "adopt_terminal" {
@@ -470,7 +514,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		if selected == "" {
 			selected = tid
 		}
-		if set("query_kubernetes observe_cluster observe_cluster_logs")[callName] {
+		if set("query_kubernetes kubernetes_capabilities kubernetes_action observe_cluster observe_cluster_logs")[callName] {
 			selected = ""
 		}
 		var terminal Object
@@ -533,7 +577,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		if resource != nil && resource["kind"] == "ssh" && (fileCall || callName == "open_ssh_terminal" || set("shell inspect_host terminal_execute_command ssh_terminal_send terminal_send_input ssh_terminal_key terminal_send_key")[callName] && (terminal == nil || terminal["status"] == "disconnected")) {
 			b.checkHostConnectionFailure(ctx, id, stringOf(resource["id"]))
 		}
-		if callName == "query_kubernetes" || resource != nil && resource["kind"] == "kubernetes" && set("observe_cluster observe_cluster_logs")[callName] {
+		if set("query_kubernetes kubernetes_capabilities kubernetes_action")[callName] || resource != nil && resource["kind"] == "kubernetes" && set("observe_cluster observe_cluster_logs")[callName] {
 			terminal = nil
 			targetName = stringOf(resource["name"])
 		}
@@ -661,6 +705,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		if resource["kind"] != runtime || !set("local ssh")[runtime] {
 			return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("Shell runtime and asset do not match")}
 		}
+		b.Store.assertCommandNotStopped(id, ref, stringOf(args["command"]))
 		term := b.hostTerminal(ctx, id, ref, approved, explicitTerminal)
 		options := b.Store.Options(id)
 		if options["asset_ref"] == ref || approved && stringOf(options["asset_ref"]) == "" {
@@ -757,7 +802,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		entry := b.Store.Entry(b.terminalOwner(id, tid, false), tid, stringOf(args["entry_id"]))
 		entry["output"] = tail(stringOf(entry["output"]), 16000)
 		entry["partial"] = entry["status"] == "running"
-		return entry, nil
+		return stoppedCommandObservation(entry), nil
 	}
 	observed := Object{}
 	read := func() string {
@@ -782,6 +827,9 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		b.Terminals.Close(id, tid)
 		return Object{"closed": true}, nil
 	case "terminal_execute_command":
+		commandMayHaveStarted = false
+		b.Store.assertCommandNotStopped(id, stringOf(target["resourceId"]), stringOf(args["command"]))
+		commandMayHaveStarted = true
 		if b.Terminals.Capabilities(id, tid)["commandBlocks"] != true {
 			return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("Terminal command-block integration unavailable")}
 		}

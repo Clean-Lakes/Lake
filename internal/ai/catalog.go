@@ -58,6 +58,7 @@ func Catalog(profile string) []Tool {
 	)
 	list = append(list, extendedTools()...)
 	list = append(list, kubernetesQueryTool())
+	list = append(list, kubernetesActionTools()...)
 	enrichFileSchemas(list)
 	for i := range list {
 		normalizeDescriptions(list[i].Parameters)
@@ -99,8 +100,32 @@ func CatalogForConfig(c Config, capabilities map[string]any) []Tool {
 }
 func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool {
 	list := e.baseSessionCatalog(ctx, id, c)
-	if onlineEnabled(c) && (c.sre == nil || !c.sre.NoTools) {
-		list = append(list, onlineTool())
+	if c.sre == nil && !c.sreCoordinator && !c.workflowMode && e.worker == nil && c.ConversationMode != ModePlan && (c.Profile == "core" || c.Profile == "") {
+		list = append(list, workTools()...)
+	}
+	if c.sre != nil || c.sreCoordinator || e.worker != nil || c.ConversationMode == ModePlan || c.Profile != "core" && c.Profile != "" {
+		filtered := list[:0]
+		for _, t := range list {
+			if !workToolName(t.Name) {
+				filtered = append(filtered, t)
+			}
+		}
+		list = filtered
+	}
+
+	if e.NaturalMemory != nil && e.worker == nil && naturalRecallAllowed(c) {
+		list = append(list, naturalRecallTools()...)
+	}
+	if c.sre != nil && c.sre.Pilot != nil && !c.sre.NoTools && len(list) > 0 {
+		// Durable project knowledge remains owned by the parent conversation.
+		filtered := make([]Tool, 0, len(list))
+		for _, tool := range list {
+			if tool.Name != "save_project_memory" && tool.Name != "forget_project_memory" {
+				filtered = append(filtered, tool)
+			}
+		}
+		list = filtered
+		list = append(list, pilotChoiceTool(), pilotReadRecoveryTool())
 	}
 	if c.ConversationMode == ModePlan {
 		list = planCatalog(list)
@@ -109,9 +134,6 @@ func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool
 }
 
 func (e *Engine) baseSessionCatalog(ctx context.Context, id string, c Config) []Tool {
-	if e.experiment != nil {
-		return e.experiment.catalog()
-	}
 	if c.sre != nil {
 		return e.sreRoleCatalog(c)
 	}

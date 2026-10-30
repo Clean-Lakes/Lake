@@ -7,11 +7,11 @@ import type { TerminalEntry } from "../../shared/contracts";
 import { terminalOutputUpdate } from "./terminalOutput";
 import { TerminalTextInput, usesWebKitTextInput } from "./terminalTextInput";
 
-function terminalTheme() {
+function terminalTheme(transparent = false) {
   const style = getComputedStyle(document.documentElement);
   const token = (name: string) => style.getPropertyValue(`--terminal-${name}`).trim();
   return {
-    background: token("background"), foreground: token("foreground"),
+    background: transparent ? '#00000000' : token("background"), foreground: token("foreground"),
     cursor: token("foreground"), cursorAccent: token("background"), selectionBackground: token("selection"),
     black: token("black"), brightBlack: token("bright-black"), red: token("red"), green: token("green"),
     yellow: token("yellow"), blue: token("blue"), magenta: token("magenta"), cyan: token("cyan"),
@@ -20,10 +20,10 @@ function terminalTheme() {
 }
 
 export type TerminalHandle = { focus: () => void; clear: () => void };
-type Props = { active?: boolean; entries: TerminalEntry[]; output: string; interactive: boolean; showCommandEntries?: boolean; onInput: (data: string) => void; onResize: (cols: number, rows: number) => void; controlRef?: RefObject<TerminalHandle | null> };
+type Props = { active?: boolean; entries: TerminalEntry[]; output: string; interactive: boolean; showCommandEntries?: boolean; transparentBackground?:boolean; onInput: (data: string) => void; onResize: (cols: number, rows: number) => void; controlRef?: RefObject<TerminalHandle | null> };
 
 /** Real PTY input and output, including the shell's own prompt and line editor. */
-export function TerminalPane({ active = true, entries, output, interactive, showCommandEntries = true, onInput, onResize, controlRef }: Props) {
+export function TerminalPane({ active = true, entries, output, interactive, showCommandEntries = true, transparentBackground = false, onInput, onResize, controlRef }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -51,7 +51,7 @@ export function TerminalPane({ active = true, entries, output, interactive, show
     if (!hostRef.current) return;
     let closed = false;
     const terminal = new Terminal({
-      allowTransparency: false,
+      allowTransparency: transparentBackground,
       convertEol: true,
       cursorBlink: true,
       screenReaderMode: true,
@@ -60,14 +60,14 @@ export function TerminalPane({ active = true, entries, output, interactive, show
       fontSize: 13,
       lineHeight: 1.15,
       scrollback: 5000,
-      theme: terminalTheme(),
+      theme: terminalTheme(transparentBackground),
     });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     fitRef.current = fit;
     terminal.open(hostRef.current);
     terminalRef.current = terminal;
-    const themeObserver = new MutationObserver(() => { terminal.options.theme = terminalTheme(); });
+    const themeObserver = new MutationObserver(() => { terminal.options.theme = terminalTheme(transparentBackground); });
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const sendInput = (data: string) => { if (propsRef.current.active && propsRef.current.interactive) propsRef.current.onInput(data); };
     const textInput = usesWebKitTextInput(navigator.platform, navigator.userAgent) ? new TerminalTextInput(sendInput) : undefined;

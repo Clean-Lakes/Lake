@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-28",
+  "testedCommit": "75cb0acc6e50be0cd1af6e11636debf908930643",
+  "finalBehavior": "When conversation, inspector and terminal are open together (four columns including navigation), first island group is a fixed 130px status-and-disclosure entry. Session title is hidden there and retained as hover text; closing either auxiliary pane restores the visible title. Outer island stays 46px high and follows the composer rail. Narrow terminal entry uses a type name and retains full resource name in tooltip/menu.",
+  "checks": {
+    "frontend": "527 passed",
+    "types": "passed",
+    "signedDesktop": "scripts/build_lake_desktop.sh --dev --install passed; clean installed manifest matches tested commit; backend healthy",
+    "browser": "Real App fictional fixture with native corner fallback: 320x46 outer island, 130/88/100px groups, hidden session title and readable 执行中 status, light/dark four-column screenshots inspected. Closing inspector restores title; reopening hides it again.",
+    "nativeDev": "Updated signed app launched and healthy; ordinary layout retains title and short state. User actively changed layout/terminal during final four-column check, so further native UI actions stopped."
+  },
+  "notVerified": [
+    "Final status-only four-column arrangement in native WKWebView",
+    "Windows native visuals",
+    "Native dark theme"
+  ],
+  "data": "Committed screenshots use fictional local API fixtures only. No model requests or remote commands executed by validation; native user screenshots not saved."
+}

@@ -4,6 +4,10 @@ import {isAssistantProse} from './completedTurnProse';
 
 export type ResourceStages={byResource:Map<string,TranscriptEntry[]>;overall:TranscriptEntry[];ids:Set<string>};
 const prose=(entry:TranscriptEntry)=>entry.card?.content??entry.message?.text??'';
+/** Compact visual caption only; the original Markdown stays in the disclosure. */
+export function resourceStagePreview(entry?:TranscriptEntry):string {
+ return entry?prose(entry).replace(/!?\[([^\]]*)\]\([^)]*\)/g,'$1').replace(/`+|\*\*|__/g,'').replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|>\s*)/gm,'').replace(/\s+/g,' ').trim():'';
+}
 const object=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'?value as Record<string,unknown>:{};
 const contains=(body:string,name:string)=>{
  if(name.length<3)return false;
@@ -17,7 +21,7 @@ const contains=(body:string,name:string)=>{
  * stored evidence. Prefer explicit identity, then exact names, then the preceding
  * single-resource batch. Ambiguous/joint prose feeds the overall synthesis, never
  * cloned into resource rows. Canonical repeated prose has one projected owner. */
-export function resourceStageProgress(turn:TranscriptEntry[],groups:ConversationGroup[],live:boolean,completed:boolean):ResourceStages {
+export function resourceStageProgress(turn:TranscriptEntry[],groups:ConversationGroup[],live:boolean,completed:boolean,presentReplyId?:string,provenOnly=false):ResourceStages {
  const result:ResourceStages={byResource:new Map(),overall:[],ids:new Set()};
  if(!live&&!completed||turn.some(entry=>entry.agentRun||entry.sre))return result;
  const rows=groups.filter(group=>group.progress&&group.resource);
@@ -41,7 +45,7 @@ export function resourceStageProgress(turn:TranscriptEntry[],groups:Conversation
    hasOperation=true;
    continue;
   }
-  if(!isAssistantProse(entry)||!prose(entry).trim()||index===final)continue;
+  if(!isAssistantProse(entry)||!prose(entry).trim()||index===final||entry.id===presentReplyId||provenOnly&&index>lastTool)continue;
   if(entry.card&&!['running','completed','success','succeeded'].includes(entry.card.status))continue;
   const data=object(entry.card?.data),ref=typeof data.resource_id==='string'?data.resource_id:undefined;
   const matches=[...seen].filter(row=>ref?row.resource?.id===ref:

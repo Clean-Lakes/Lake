@@ -5,7 +5,7 @@ import {completionEligible,localCompletion,validCompletion} from "../src/compose
 test("completion only runs for focused drafts with a collapsed caret at the end",()=>{
  const text="帮我检查";
  assert.equal(completionEligible(text,4,4,true,false,false),true);
- for(const args of [[text,2,2,true,false,false],[text,0,4,true,false,false],[text,4,4,false,false,false],[text,4,4,true,true,false],[text,4,4,true,false,true],["帮我",2,2,true,false,false],["检查完成。",5,5,true,false,false],["api_key=synthetic",17,17,true,false,false]] as const) assert.equal(completionEligible(...args),false);
+ for(const args of [[text,2,2,true,false,false],[text,0,4,true,false,false],[text,4,4,false,false,false],[text,4,4,true,true,false],[text,4,4,true,false,true],["检查完成。",5,5,true,false,false],["api_key=synthetic",17,17,true,false,false]] as const) assert.equal(completionEligible(...args),false);
 });
 test("local fallback favors current-session history while keeping the typed prefix intact",()=>{
  assert.equal(localCompletion("帮我检查",["帮我检查 CPU 使用率","帮我检查 Redis 主从状态"])," Redis 主从状态");
@@ -17,4 +17,30 @@ test("history and generated suffixes cannot introduce broken mentions, multiline
  assert.equal(localCompletion("请帮我",["请帮我 @生产主机 检查日志","请帮我\n运行脚本"]),"排查服务无法访问的原因。");
  for(const value of [null,"","   ","\nanswer","@server","x".repeat(121)]) assert.equal(validCompletion(value),false);
  assert.equal(validCompletion(" logs"),true);
+});
+
+test("empty focused drafts offer a safe local suggestion without needing typed characters",()=>{
+ assert.equal(completionEligible('',0,0,true,false,false),true);
+ for(const flags of [[false,false,false],[true,true,false],[true,false,true]] as const)assert.equal(completionEligible('',0,0,...flags),false);
+ assert.equal(completionEligible('   ',3,3,true,false,false),false);
+ assert.equal(localCompletion('',[]),'帮我检查服务运行状态，分析异常原因并给出处理建议。');
+ assert.equal(localCompletion('',['帮我查看内存使用情况。','帮我检查服务状态。']),'帮我检查服务状态。');
+ assert.equal(localCompletion('',['帮我检查服务状态。','password=synthetic-only','@prod 重启','多行\n表达']),'帮我检查服务状态。');
+});
+
+test("consumed empty suggestions advance without duplicates or cycling back",()=>{
+ const consumed=new Set(['三台再试试']);
+ assert.equal(localCompletion('',['新的表达','三台再试试',' 三台再试试 '],consumed),'新的表达');
+ const long='x'.repeat(100);consumed.add(long.slice(0,80));
+ assert.notEqual(localCompletion('',[long],consumed),long.slice(0,80));
+ const all=new Set<string>();let next:string;
+ while((next=localCompletion('',[],all))){assert.ok(!all.has(next));all.add(next);assert.ok(all.size<=4);}
+ assert.equal(all.size,4);assert.equal(localCompletion('',[],all),'');
+});
+
+test("one to three typed characters can request model completion without a local match",()=>{
+ for(const text of ["这","这确","这确实","h","hi"]){
+  assert.equal(completionEligible(text,text.length,text.length,true,false,false),true);
+  assert.equal(localCompletion(text,[]),"");
+ }
 });

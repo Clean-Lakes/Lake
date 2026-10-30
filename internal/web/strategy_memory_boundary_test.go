@@ -17,7 +17,6 @@ import (
 func TestStrategyMemoryDenialKeepsTurnAndCandidateLearningIndependent(t *testing.T) {
 	for _, mode := range []string{"daily_denied", "experiment_denied", "daily_authorized"} {
 		authorized := mode == "daily_authorized"
-		online := mode == "experiment_denied"
 		name := mode
 		if authorized {
 			name = "explicit_memory_write_still_works"
@@ -27,7 +26,7 @@ func TestStrategyMemoryDenialKeepsTurnAndCandidateLearningIndependent(t *testing
 			id, ref := newSession(t, h)
 			project := stringOf(b.Store.Session(id)["projectId"])
 			b.Store.SetMemorySettings(project, true, false, 0)
-			_, err := b.Store.SetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "enable-all", 0, StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: true, CorrectEnabled: true, OnlineCorrectEnabled: online, OnlineConsentVersion: strategy.OnlineConsentVersion, Budget: strategy.DefaultBudget()})
+			_, err := b.Store.SetStrategySettings(StrategyContext{}, strategy.Scope{Kind: strategy.UserScope}, "enable-all", 0, StrategySettingsInput{MasterEnabled: true, ApplyEnabled: true, LearnEnabled: false, CorrectEnabled: false, OnlineCorrectEnabled: false, OnlineConsentVersion: strategy.OnlineConsentVersion, Budget: strategy.DefaultBudget()})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -54,9 +53,6 @@ func TestStrategyMemoryDenialKeepsTurnAndCandidateLearningIndependent(t *testing
 				}
 				n := mainCalls.Add(1)
 				if n == 1 {
-					if !strings.Contains(jsonText(messages), "Strategy candidate learning is host-managed") {
-						t.Error("actual request lost learning/memory boundary guidance")
-					}
 					emitModel(w, "", []ai.Call{{ID: "save-preference", Name: "save_project_memory", Arguments: jsonText(Object{"key": "answer-format", "type": "feedback", "description": "排障答复格式", "body": "区分事实与假设。", "expectedRevision": 0})}})
 					return
 				}
@@ -101,22 +97,13 @@ func TestStrategyMemoryDenialKeepsTurnAndCandidateLearningIndependent(t *testing
 			} else if b.Store.row("SELECT key FROM projectMemories WHERE projectId=? AND key=?", project, "answer-format") != nil {
 				t.Fatal("denied memory write changed durable memory")
 			}
-			b.processOneStrategyJob()
-			if integer(b.Store.row("SELECT COUNT(*) AS n FROM strategyLearningTurns WHERE sessionId=?", id)["n"]) != 1 {
-				t.Fatal("explicit correction source lost")
+			b.processOneMemoryJob()
+			if integer(b.Store.row("SELECT COUNT(*) AS n FROM strategyLearningTurns WHERE sessionId=?", id)["n"]) != 0 {
+				t.Fatal("retired learning captured a source")
 			}
-			b.processOneStrategyJob()
-			if learningCalls.Load() != 1 {
+			b.processOneMemoryJob()
+			if learningCalls.Load() != 0 {
 				t.Fatal("candidate extraction missing or repeated", learningCalls.Load())
-			}
-			ctx := StrategyContext{ProjectID: project}
-			assets, err := b.Store.ListStrategyAssets(ctx, strategy.Scope{Kind: strategy.ProjectScope, ProjectID: project}, "", 50)
-			if err != nil || len(assets) != 1 {
-				t.Fatal("independent strategy candidate missing", err)
-			}
-			revision, err := b.Store.GetStrategyRevision(ctx, assets[0].ID, 1)
-			if err != nil || revision.Value.Verification != strategy.SingleObservation {
-				t.Fatal("candidate verification was promoted", err)
 			}
 			if integer(b.Store.row("SELECT COUNT(*) AS n FROM strategyBindings")["n"]) != 0 {
 				t.Fatal("candidate was automatically adopted")

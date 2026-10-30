@@ -18,7 +18,7 @@ func TestStrategyOptimizationV3MigrationBackupAndRollback(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			_, err = db.Exec("DROP TABLE strategySchemaMeta;CREATE TABLE strategySchemaMeta(version INTEGER PRIMARY KEY CHECK(version=3),schemaHash TEXT NOT NULL);INSERT INTO strategySchemaMeta VALUES(3,?)", strategySchemaV3Hash())
+			_, err = db.Exec("DROP TABLE IF EXISTS legacyAssetArchive;DROP TABLE IF EXISTS legacyAssetSettingsArchive;DROP TABLE strategySchemaMeta;CREATE TABLE strategySchemaMeta(version INTEGER PRIMARY KEY CHECK(version=3),schemaHash TEXT NOT NULL);INSERT INTO strategySchemaMeta VALUES(3,?)", strategySchemaV3Hash())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -55,7 +55,7 @@ func TestStrategyOptimizationV3MigrationBackupAndRollback(t *testing.T) {
 			db, _ = openSQLite(filepath.Join(dir, "lake-web.sqlite"))
 			defer db.Close()
 			db.QueryRow("SELECT version FROM strategySchemaMeta").Scan(&version)
-			want := 6
+			want := 7
 			if conflict {
 				want = 3
 			}

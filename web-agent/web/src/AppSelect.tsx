@@ -3,7 +3,7 @@ import {createPortal} from "react-dom";
 import {Glyph} from "./Icons";
 import {matchSelectOption,nextEnabledOption,selectPopupPosition,selectSidePopupPosition,type SelectOption} from "./selectState";
 
-type Props=Omit<SelectHTMLAttributes<HTMLSelectElement>,"multiple"|"size"|"value"|"defaultValue"> & {value?:string|number;defaultValue?:string|number;label?:string;icon?:ReactNode;open?:boolean;onOpenChange?:(open:boolean)=>void;renderValue?:ReactNode;renderOption?:(option:SelectOption)=>ReactNode;popupHeader?:ReactNode|((state:{listId:string;activeId?:string})=>ReactNode);popupFooter?:ReactNode;emptyMessage?:string;popupClassName?:string;popupMinWidth?:number;popupMaxHeight?:number;nativePopup?:boolean;selectionLocked?:boolean;popupPlacement?:"vertical"|"side"};
+type Props=Omit<SelectHTMLAttributes<HTMLSelectElement>,"multiple"|"size"|"value"|"defaultValue"> & {value?:string|number;defaultValue?:string|number;label?:string;icon?:ReactNode;open?:boolean;onOpenChange?:(open:boolean)=>void;renderValue?:ReactNode;renderOption?:(option:SelectOption)=>ReactNode;popupHeader?:ReactNode|((state:{listId:string;activeId?:string})=>ReactNode);popupFooter?:ReactNode;emptyMessage?:string;popupClassName?:string;popupMinWidth?:number;popupAlign?:"start"|"end";popupMaxHeight?:number;nativePopup?:boolean;selectionLocked?:boolean;popupPlacement?:"vertical"|"side"};
 function nodeText(node:ReactNode):string {
   return Children.toArray(node).map(child=>isValidElement<{children?:ReactNode}>(child)?nodeText(child.props.children):String(child)).join("");
 }
@@ -18,7 +18,7 @@ function collectOptions(children:ReactNode,inheritedDisabled=false,group=""):Sel
 }
 
 /** Shared single-value field. The hidden select preserves real change events and form values. */
-export function AppSelect({children,value,defaultValue,onChange,disabled=false,id,className="",label,icon,open:controlledOpen,onOpenChange,renderValue,renderOption,popupHeader,popupFooter,emptyMessage="没有可选项",popupClassName="",popupMinWidth=200,popupMaxHeight=288,nativePopup=false,selectionLocked=false,popupPlacement="vertical",...nativeProps}:Props) {
+export function AppSelect({children,value,defaultValue,onChange,disabled=false,id,className="",label,icon,open:controlledOpen,onOpenChange,renderValue,renderOption,popupHeader,popupFooter,emptyMessage="没有可选项",popupClassName="",popupMinWidth=200,popupAlign="start",popupMaxHeight=288,nativePopup=false,selectionLocked=false,popupPlacement="vertical",...nativeProps}:Props) {
   const generatedId=useId();
   const controlId=id || `lake-select-${generatedId}`;
   const listId=`${controlId}-list`;
@@ -41,7 +41,7 @@ export function AppSelect({children,value,defaultValue,onChange,disabled=false,i
   function place() {
     const rect=trigger.current?.getBoundingClientRect();
     if (rect) {
-      const next=popupPlacement==="side"?selectSidePopupPosition(rect,{width:window.innerWidth,height:window.innerHeight},options.length+(popupFooter?2:0)):selectPopupPosition(rect,{width:window.innerWidth,height:window.innerHeight},options.length+(popupHeader?2:0)+(popupFooter?2:0),{minWidth:popupMinWidth,maxHeight:popupMaxHeight});
+      const next=popupPlacement==="side"?selectSidePopupPosition(rect,{width:window.innerWidth,height:window.innerHeight},options.length+(popupFooter?2:0)):selectPopupPosition(rect,{width:window.innerWidth,height:window.innerHeight},options.length+(popupHeader?2:0)+(popupFooter?2:0),{minWidth:popupMinWidth,maxHeight:popupMaxHeight,align:popupAlign});
       setPosition(previous=>previous&&JSON.stringify(previous)===JSON.stringify(next)?previous:next);
     }
   }

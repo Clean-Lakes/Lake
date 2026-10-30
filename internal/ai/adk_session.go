@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -23,6 +24,9 @@ type adkServices struct {
 }
 
 func (e *Engine) adkStore() (*storage.Store, error) {
+	if e.workParent != nil {
+		return e.workParent.adkStore()
+	}
 	if e.worker != nil {
 		return e.worker.parent.adkStore()
 	}
@@ -33,9 +37,16 @@ func (e *Engine) adkStore() (*storage.Store, error) {
 	services := e.adk
 	e.adkMu.Unlock()
 	services.once.Do(func() {
-		services.store, services.err = storage.Open(filepath.Join(e.runtimeDirectory(), "sessions.sqlite"))
+		if services.err = e.CheckSecurityRuntime(); services.err != nil {
+			return
+		}
+		var check func(*sql.DB) error
+		if h := e.securityHome(); h != nil {
+			check = h.CheckDatabase
+		}
+		services.store, services.err = storage.OpenChecked(filepath.Join(e.runtimeDirectory(), "sessions.sqlite"), check)
 		if services.err == nil {
-			services.err = services.store.DB.AutoMigrate(&nativeApproval{}, &nativeOperation{}, &nativeEvidence{}, &nativeArtifact{}, &nativeHistoryMigration{}, &nativeCorrection{})
+			services.err = services.store.DB.AutoMigrate(&nativeApproval{}, &nativeOperation{}, &nativeEvidence{}, &nativeArtifact{}, &nativeHistoryMigration{}, &nativeCorrection{}, &nativeWorkGoal{}, &nativeWorkOutbox{}, &nativeWorkObservation{})
 			if services.err == nil {
 				services.err = services.store.DB.Model(&nativeOperation{}).Where("status = ?", "dispatched").Update("status", "unknown").Error
 			}
@@ -46,7 +57,7 @@ func (e *Engine) adkStore() (*storage.Store, error) {
 				var sessions []string
 				services.err = services.store.DB.Model(&nativeCorrection{}).Distinct("session_id").Pluck("session_id", &sessions).Error
 				for _, id := range sessions {
-					e.onlineSessions.Store(id, true)
+					e.historicalCorrectionSessions.Store(id, true)
 				}
 			}
 		}

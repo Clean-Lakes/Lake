@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from 'react';
+import {useLayoutEffect,useRef,useState} from 'react';
 import {TextReveal} from './textReveal';
 
 export function useSmoothText(text:string,streaming:boolean,animateInitial=false){
@@ -6,7 +6,7 @@ export function useSmoothText(text:string,streaming:boolean,animateInitial=false
  const displayed=useRef(shown);displayed.current=shown;
  const latest=useRef({text,streaming});latest.current={text,streaming};
  const sync=useRef<()=>void>(()=>{});
- useEffect(()=>{
+ useLayoutEffect(()=>{
   if(!streaming)return;
   const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
   const engine=new TextReveal(displayed.current,setShown);
@@ -15,7 +15,7 @@ export function useSmoothText(text:string,streaming:boolean,animateInitial=false
   sync.current();
   return()=>{engine.stop();motion.removeEventListener('change',sync.current);document.removeEventListener('visibilitychange',sync.current);sync.current=()=>{}};
  },[streaming]);
- useEffect(()=>sync.current(),[text,streaming]);
+ useLayoutEffect(()=>sync.current(),[text,streaming]);
  // Completion, cancellation and replacement are visible in the same render,
  // including SSR. Frames never delay approvals, errors, or a final response.
  return !streaming||!text.startsWith(shown)?text:shown;

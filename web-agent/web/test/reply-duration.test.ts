@@ -28,7 +28,7 @@ test("normal activity waits one second and instant completion does not flash a d
  }
  now=Date.parse(start)+1000;
  const active=render({timing:running});
- assert.ok(active.includes("reply-duration-spinner")&&active.includes("用时 1秒")&&active.includes("正在思考…"));
+ assert.ok(active.includes("reply-duration-spinner")&&!active.includes("用时")&&active.includes("正在思考…"));
  const quick={...timing,finishedAt:"2026-10-12T03:00:00.999Z"};
  assert.equal(render({timing:quick}),"");
  assert.ok(render({timing:{...quick,status:"failed"}}).includes("未完成"));
@@ -86,16 +86,25 @@ test('elapsed disclosure matches the Chinese reference and exposes a real access
 });
 
 
-test('live elapsed time, separator and state share one sweep while confirmation and completion stay static',()=>{
+test('live elapsed header sweeps quietly; completion freezes the duration',t=>{
+ t.mock.method(Date,'now',()=>Date.parse(start)+19000);
  const running={...timing,status:'running' as const,finishedAt:''};
  const html=renderToStaticMarkup(createElement(ReplyDuration,{timing:running}));
  const active=html.match(/<span class="status-text status-text--active [^"]*">([\s\S]*?)<\/span><\/span>/)?.[1]??'';
- assert.ok(active.includes('turn-status-elapsed')&&active.includes('用时 '));
- assert.ok(active.includes(' · ')&&active.includes('正在思考…'));
+ assert.ok(active.includes('turn-status-elapsed')&&active.includes('已处理 19秒')&&!active.includes('用时 '));
+ assert.ok(active.includes('正在思考…'));
  assert.equal((html.match(/status-text--active/g)||[]).length,1);
  const waiting=renderToStaticMarkup(createElement(ReplyDuration,{timing:running,view:{status:'waiting_approval',cards:[]} as never}));
  const ended=renderToStaticMarkup(createElement(ReplyDuration,{timing}));
+ assert.ok(ended.includes('用时 1分钟 13秒'));
  assert.ok(!waiting.includes('status-text--active')&&!ended.includes('status-text--active'));
+ const previewAt=Date.parse(start)+19000;
+ const preview=renderToStaticMarkup(createElement(ReplyDuration,{timing:running,previewAt}));
+ assert.ok(preview.includes('用时 19秒')&&preview.includes('is-preview'));
+ assert.ok(!preview.includes('已完成')&&!preview.includes('status-text--active')&&!preview.includes('reply-duration-spinner'));
+ t.mock.method(Date,'now',()=>Date.parse(start)+45000);
+ assert.equal(renderToStaticMarkup(createElement(ReplyDuration,{timing:running,previewAt})),preview,'reply streaming does not advance the preview clock');
+ assert.ok(renderToStaticMarkup(createElement(ReplyDuration,{timing,previewAt})).includes('用时 1分钟 13秒'),'saved total replaces the preview only after real completion');
 });
 
 test('finished metadata drops the last operation caption even when saved cards still say running',()=>{
@@ -128,4 +137,40 @@ test('latest-step caption hides while expanded and stops sweeping on attention o
  const ended=render({timing,latestStep:{...latestStep,status:'completed'},disclosure});
  assert.ok(!ended.includes('turn-current-step')&&!ended.includes('status-text--active'));
  assert.ok(!render({timing,latestStep,disclosure}).includes('execution-icon-water'),'stale running records stay static after the turn ends');
+});
+
+test('Pilot elapsed header does not repeat specialist activity or invent missing timing',t=>{
+ t.mock.method(Date,'now',()=>Date.parse(start)+19000);
+ const running={...timing,status:'running' as const,finishedAt:''};
+ const html=renderToStaticMarkup(createElement(ReplyDuration,{timing:running,elapsedOnly:true,view:{status:'running',cards:[],agentRuns:[{sessionId:'s',status:'running',createdAt:start}],session:'s'} as never}));
+ assert.ok(html.includes('已处理 19秒'));
+ assert.ok(!html.includes('子任务执行中')&&!html.includes('reply-duration-spinner'));
+ assert.equal(renderToStaticMarkup(createElement(ReplyDuration,{elapsedOnly:true,view:{status:'running',cards:[]} as never})), '');
+});
+
+test('a completed timed reply shows elapsed time without a redundant completion label',()=>{
+ const html=renderToStaticMarkup(createElement(ReplyDuration,{timing}));
+ assert.ok(html.includes('用时 1分钟 13秒')&&!html.includes('已完成')&&!html.includes('未完成'));
+ assert.ok(!html.includes(' · '),'normal completion has no dangling separator');
+ const failed=renderToStaticMarkup(createElement(ReplyDuration,{timing:{...timing,status:'failed'}}));
+ assert.ok(failed.includes('未完成')&&!failed.includes('已完成'));
+});
+
+test('side detail entry keeps a horizontal navigation arrow while inline disclosure retains its direction',()=>{
+ for(const open of [false,true]){
+  const html=renderToStaticMarkup(createElement(ReplyDuration,{timing,disclosure:{open,side:true,controls:'session-task-inspector',onToggle:()=>{}}}));
+  assert.ok(html.includes('data-placement="side"')&&html.includes('在右侧查看执行详细过程'));
+  assert.ok(html.includes(`aria-expanded="${open}"`)&&html.includes('aria-controls="session-task-inspector"'));
+ }
+ const inline=renderToStaticMarkup(createElement(ReplyDuration,{timing,disclosure:{open:true,controls:'inline-details',onToggle:()=>{}}}));
+ assert.ok(inline.includes('data-placement="inline"')&&inline.includes('收起执行详细过程'));
+});
+
+test('Pilot hides the running turn timer without reserving space and restores ordinary finished timing',()=>{
+ const body=createElement('p',{},'专员正文');
+ const live=renderToStaticMarkup(createElement(TurnExecutionDetails,{hideLive:true,timing:{...timing,status:'running',finishedAt:''},details:[],children:body}));
+ assert.equal(live,'<p>专员正文</p>');
+ const ended=renderToStaticMarkup(createElement(TurnExecutionDetails,{hideLive:true,timing,details:[],children:body}));
+ assert.ok(ended.includes('用时 1分钟 13秒')&&ended.includes('is-finished'));
+ assert.ok(ended.indexOf('用时')<ended.indexOf('专员正文'));
 });

@@ -1,5 +1,5 @@
 import {displayAiError} from "./aiErrors";
-import type { AICard, AgentRun, SessionSnapshot } from "../../shared/contracts";
+import type { AICard, AgentRun, SessionSnapshot, SRETranscriptEntry } from "../../shared/contracts";
 import { transcriptAgentRuns } from "./agentTasks";
 import {sreEntries} from './sreTranscript';
 
@@ -14,7 +14,7 @@ export type TranscriptEntry = {
   message?: SessionSnapshot["messages"][number];
   action?: SessionSnapshot["actions"][number];
   agentRun?: AgentRun;
-  sre?:ReturnType<typeof sreEntries>[number];
+  sre?:ReturnType<typeof sreEntries>[number]&{thread?:SRETranscriptEntry[]};
 };
 // File summaries belong to the user turn that produced them, even when that
 // turn includes several assistant replies and tool runs.

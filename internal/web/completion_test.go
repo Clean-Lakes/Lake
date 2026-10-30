@@ -34,16 +34,24 @@ func TestComposerCompletionDoesNotCreateMessagesOrRunAgentTools(t *testing.T) {
 	apiTest(t, h, "PUT", "/api/settings/model", Object{"url": remote.URL, "name": "completion-model", "protocol": "openai"}, 200)
 	model := b.Models.Active()
 	before := len(objects(b.Store.Snapshot(id)["messages"]))
-	result := apiTest(t, h, "POST", "/api/sessions/"+id+"/completion", Object{"text": "帮我检查", "modelId": ai.ModelIdentity(*model)}, 200)
-	if result["suffix"] != "服务状态。" || calls != 1 {
-		t.Fatal("missing generated completion")
+	for i, draft := range []string{"帮我检查", "这", "这确", "这确实", "hi"} {
+		result := apiTest(t, h, "POST", "/api/sessions/"+id+"/completion", Object{"text": draft, "modelId": ai.ModelIdentity(*model)}, 200)
+		if result["suffix"] != "服务状态。" || calls != i+1 {
+			t.Fatalf("draft %q: missing generated completion", draft)
+		}
+	}
+	for _, draft := range []string{"", "   "} {
+		result := apiTest(t, h, "POST", "/api/sessions/"+id+"/completion", Object{"text": draft}, 200)
+		if result["suffix"] != "" {
+			t.Fatal("blank drafts must not call the model")
+		}
 	}
 	if len(objects(b.Store.Snapshot(id)["messages"])) != before || len(objects(b.Store.Snapshot(id)["actions"])) != 0 {
 		t.Fatal("completion mutated the conversation")
 	}
 	apiTest(t, h, "POST", "/api/sessions/"+id+"/completion", Object{"text": "帮我检查", "modelId": "stale-model"}, 409)
 	apiTest(t, h, "POST", "/api/sessions/missing/completion", Object{"text": "帮我检查"}, 404)
-	if calls != 1 {
+	if calls != 5 {
 		t.Fatal("invalid completion requests called the provider")
 	}
 }
@@ -78,7 +86,7 @@ func TestComposerCompletionCancelsPreviousDraft(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("first request did not start")
 	}
-	result := apiTest(t, h, "POST", "/api/sessions/"+id+"/completion", Object{"text": "新的草稿"}, 200)
+	result := apiTest(t, h, "POST", "/api/sessions/"+id+"/completion", Object{"text": "这"}, 200)
 	if result["suffix"] != "新建议。" {
 		t.Fatal("new draft did not receive its own completion")
 	}

@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {TextReveal} from '../src/textReveal';
+import {TextReveal,TEXT_REVEAL_MAX_LAG_MS} from '../src/textReveal';
 function fixture(initial=''){
  let now=0,id=0;const pending=new Map<number,FrameRequestCallback>(),values:string[]=[];
  const reveal=new TextReveal(initial,text=>values.push(text),{request:cb=>{pending.set(++id,cb);return id},cancel:n=>{pending.delete(n)},now:()=>now});
  const frame=(ms=16.67)=>{now+=ms;const callbacks=[...pending.values()];pending.clear();callbacks.forEach(cb=>cb(now))};
  return {reveal,values,pending,frame};
 }
-test('live append is monotonic, coalesced to one frame and catches up within 200 ms',()=>{
+test('live append is monotonic, coalesced to one frame and catches up within 80 ms',()=>{
  const f=fixture('已收到。');const target='已收到。'+ '新的检查结果，正在按接收内容逐步呈现。'.repeat(20);
  f.reveal.update(target,true);f.reveal.update(target+'尾部',true);
  assert.equal(f.pending.size,1);assert.equal(f.values.length,0);
@@ -44,7 +44,24 @@ test('new packets during streaming retarget the pending suffix without losing or
 });
 test('presentation follows display frames without a fixed 30fps ceiling',()=>{
  const f=fixture();f.reveal.update('连续内容'.repeat(100),true);
- for(let i=0;i<12;i++)f.frame(8.34);
- assert.ok(f.values.length>6,'high refresh displays must not be capped at one update per 32ms');
+ for(let i=0;i<6;i++)f.frame(8.34);
+ assert.equal(f.values.length,6,'every display frame paints pending text');
  assert.equal(f.pending.size,1);f.reveal.flush();assert.equal(f.pending.size,0);
+});
+
+test('small bursts paint on every 120/144Hz display frame and use a short catch-up window',()=>{
+ for(const ms of [1000/120,1000/144]){
+  const f=fixture();f.reveal.update('正文'.repeat(40),true);
+  for(let i=0;i<5;i++)f.frame(ms);
+  assert.equal(f.values.length,5);
+  while(f.pending.size)f.frame(ms);
+  assert.equal(f.values.at(-1),'正文'.repeat(40));
+ }
+ assert.equal(TEXT_REVEAL_MAX_LAG_MS,80);
+});
+test('continuous packets cannot postpone an existing catch-up deadline',()=>{
+ const f=fixture();let source='';
+ for(let i=0;i<20;i++){source+='增量正文👩🏽‍💻';f.reveal.update(source,true);f.frame(4);}
+ assert.equal(f.values.at(-1),source,'80ms deadline catches up despite packets every 4ms');
+ assert.equal(f.pending.size,0);
 });

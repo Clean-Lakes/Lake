@@ -3,6 +3,7 @@ import {useEffect, useState} from "react";
 import type {AIQuestionRequest} from "../../shared/contracts";
 import {api, readableError} from "./api";
 import {chooseAnswer, questionAnswer, questionOptions, recordQuestionAnswer} from "./questionState";
+import {PilotChoiceQuestion} from './PilotChoiceQuestion';
 export function AgentQuestion({session, request, refresh,runId}: {runId?:string;session: string; request: AIQuestionRequest; refresh: () => Promise<unknown>}) {
  const [selected,setSelected]=useState<Record<string,string[]>>({});
  const [text,setText]=useState<Record<string,string>>({});
@@ -11,6 +12,7 @@ export function AgentQuestion({session, request, refresh,runId}: {runId?:string;
  const [index,setIndex]=useState(0);const [collapsed,setCollapsed]=useState(false);
  const [busy,setBusy]=useState(false);const [error,setError]=useState("");
  useEffect(()=>{setSelected({});setText({});setOther({});setCommitted({});setIndex(0);setCollapsed(false);setBusy(false);setError("");},[request.id]);
+ if(request.pilot)return <PilotChoiceQuestion key={request.id} session={session} request={request} refresh={refresh} runId={runId}/>;
  const question=request.questions[index];if(!question)return null;
  const options=questionOptions(question);
  const custom=other[question.id]||options.length===0;
