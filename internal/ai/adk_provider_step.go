@@ -298,6 +298,22 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	}
 	if modelErr != nil {
 		s.mu.Lock()
+		if errors.Is(modelErr, errUserSupplement) {
+			for i := range s.state.View.Cards {
+				card := &s.state.View.Cards[i]
+				if card.ID == textID || card.ID == thinkID {
+					card.Status = "interrupted"
+					if card.ID == textID {
+						card.Type = "draft"
+					}
+				}
+			}
+			if saveErr := e.save(s); saveErr != nil {
+				s.mu.Unlock()
+				return modelResult{}, saveErr
+			}
+			e.notify(s, "session", nil)
+		}
 		addUsage(&s.state.View.Usage, result.Usage)
 		s.mu.Unlock()
 		return modelResult{}, modelErr
@@ -346,7 +362,18 @@ const toolCallRecoveryNotice = "The previous response was rejected before tool d
 
 // streamWithManifest prepares the live request. Historical fingerprint recording
 // is host-only opt-in and best effort; ADK/session/operation writes remain mandatory.
-func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history []Message, tools []Tool, fragments []strategy.PromptFragment, matched bool, retryOf string, delta func(string, string)) (modelResult, error) {
+func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history []Message, tools []Tool, fragments []strategy.PromptFragment, matched bool, retryOf string, delta func(string, string)) (out modelResult, modelErr error) {
+	parent := ctx
+	requestCtx, finish, setupErr := d.supplementRequestContext(ctx)
+	if setupErr != nil {
+		return modelResult{}, setupErr
+	}
+	ctx = requestCtx
+	defer func() {
+		if finish() && parent.Err() == nil {
+			modelErr = errUserSupplement
+		}
+	}()
 	e, s, c := d.engine, d.session, *d.config
 	// Legacy adopted assets are archival data, never request enrichment.
 	selection := strategy.Selection{}
