@@ -2,7 +2,7 @@ import {createContext,useCallback,useContext,useMemo,useEffect,useRef,useState,t
 import {atConversationTail} from './followScroll';
 import type {SRETask} from '../../shared/contracts';
 
-export type InspectorSelection={sessionId:string;taskId?:string;task?:SRETask;attemptId?:string;evidenceId?:string;turnId?:string;automatic?:boolean;tab:'plan'|'execution'};
+export type InspectorSelection={sessionId:string;taskId?:string;task?:SRETask;attemptId?:string;evidenceId?:string;turnId?:string;followLatest?:boolean;automatic?:boolean;tab:'plan'|'execution'};
 type InspectorState={selection:InspectorSelection|null;lastSelection:InspectorSelection|null;host:HTMLDivElement|null;open:(target:InspectorSelection)=>void;close:()=>void;reset:()=>void;setHost:(node:HTMLDivElement|null)=>void};
 const InspectorContext=createContext<InspectorState|null>(null);
 export const useSessionInspector=()=>useContext(InspectorContext);
