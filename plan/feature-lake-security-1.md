@@ -1,18 +1,18 @@
 ---
 goal: 按五模块职责落实任务闭环、安全控制、资源操作及档案验收，SOP只读手册独立交付
-version: 11
+version: 12
 date_created: 2026-10-30
 last_updated: 2026-11-02
 owner: Lake
-status: In progress
+status: Completed
 tags: [feature, architecture, security, authorization, migration, adk]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
-本计划对应 [Lake Security v1 详细设计（修订 5）](../docs/design/lake-security-v1.md)，代码基线为 `be656805d345466f11bbb9c2c4af92e670da7420`。保持文件名以延续原 PR 和文档链接；frontmatter 的 version 表示计划修订号。本轮 TASK-001 至 TASK-048 后端实现与自动化验证已交付候选；TASK-049 签名原生运行已通过，但 Mac 锁屏导致实际窗口检查/截图未完成，TASK-050 最终收口保持进行中。代码与证据按真实结果记录，不将历史版本或未完成的人工检查记为通过。第一批基础代码及日常恢复修复已通过[PR #130](https://github.com/Clean-Lakes/Lake/pull/130)合入develop `dfd0e8a6bec34c1ddbb1a81b738a7028a38b9d04`，实际行为与验证见[实施记录](../docs/validation/lake-security-v1.md)；该记录为历史批次，本轮证据另见下文。
+本计划对应 [Lake Security v1 详细设计（修订 5）](../docs/design/lake-security-v1.md)，代码基线为 `be656805d345466f11bbb9c2c4af92e670da7420`。保持文件名以延续原 PR 和文档链接；frontmatter 的 version 表示计划修订号。本轮 TASK-001 至 TASK-050 已完成实现和计划验收，代码候选为 `b2405d9fae393ee675702fd86b01ed8f174be0d0`。2026-11-02 解锁后已补齐原生窗口检查与三张截图，PR #140 待评审和明确合并授权；完成状态不代表已合并或发布。代码与证据按真实结果记录，不将历史版本测试代替本轮验收。第一批基础代码及日常恢复修复已通过[PR #130](https://github.com/Clean-Lakes/Lake/pull/130)合入develop `dfd0e8a6bec34c1ddbb1a81b738a7028a38b9d04`，实际行为与验证见[实施记录](../docs/validation/lake-security-v1.md)；该记录为历史批次，本轮证据另见下文。
 
 本Security计划仅后端改造，不修改前端组件/样式/交互及shared契约。用户另行提出的SOP清单UI由[独立设计](../docs/design/builtin-sop-catalog-v1.md)与[独立计划](feature-builtin-sop-catalog-1.md)交付，不捆绑本计划实施。修订4先建立权威存储、恢复门禁及WorkGoal/步骤/尝试/证据/验收闭环，SecurityTask仅管理关联目标的限时执行；孤儿风险必须核实后才能收口，再实现策略与派发。旧范围按来源迁移；项目直接允许与临时授权是不同授权来源；恢复备份会使旧授权失效并要求重新确认策略。保留目标解析、安全决策、执行保护三层，以及现有 ADK 原生审批、操作账本和 continuation。
 
@@ -70,7 +70,7 @@ tags: [feature, architecture, security, authorization, migration, adk]
 
 五模块是职责视图，以下八阶段是实施顺序，不能机械改成五阶段串行：先做规范存储/恢复门禁，再做目标与验收基础，随后安全策略、派发、全入口适配、协议兼容、恢复演练及Dev收口。保留50项原任务的ID、依赖与退出条件；完成状态按实际实施和验证更新。
 
-“是 / 日期”表示已交付；“否 / 进行中”表示部分实施但未满足原任务全部要求；“否 / 未开始”表示尚未实施。当前实现已覆盖93个工具和13类入口、完整配对恢复/逐来源核实、任务授权/验收和所有权保护；实际自动化/签名验收见本轮记录，原生窗口检查/截图仍待解锁完成。每阶段依赖前一阶段退出条件；阶段内部按表中依赖执行，无直接依赖的任务可独立准备。早期拟定文件已按实际事务边界合并，现以本文路径和实施记录的模块映射为准。全局 enforced 需显式确认完整快照、全部入口和迁移检查；不会因安装二进制自动开启。
+“是 / 日期”表示已交付；“否 / 进行中”表示部分实施但未满足原任务全部要求；“否 / 未开始”表示尚未实施。当前实现已覆盖93个工具和13类入口、完整配对恢复/逐来源核实、任务授权/验收和所有权保护；实际自动化、签名及解锁后的原生窗口检查/截图见本轮记录。每阶段依赖前一阶段退出条件；阶段内部按表中依赖执行，无直接依赖的任务可独立准备。早期拟定文件已按实际事务边界合并，现以本文路径和实施记录的模块映射为准。全局 enforced 需显式确认完整快照、全部入口和迁移检查；不会因安装二进制自动开启。
 
 ### Implementation Phase 1
 
@@ -191,8 +191,8 @@ tags: [feature, architecture, security, authorization, migration, adk]
 | --- | --- | --- | --- |
 | TASK-047 | 【安全控制】修改 `internal/ai/permissions.go/tools.go/session_tools.go` 和 Web configure/bridge，移除已替代的独立授权路径；旧 aiOptions 仅保留兼容确认偏好/只读投影，nativePolicyHash 不作为第二放行来源，删除 `approved bool` 的执行依赖。复查入口清单与所有 gate/epoch/父来源校验。依赖：TASK-046。 | 是 | 2026-11-02 |
 | TASK-048 | 【任务档案与验收】运行 Testing 节的 Go/race/vet、ADK/security boundary、原前端兼容回归与性能检查；集中执行任务续接/换题、无 grant 子任务、旧空目录迁移、撤销后恢复、调度次数及所有入口矩阵。失败修复后重跑相关检查；记录命令与实际 SHA，不把没有自动 CI 当作通过。依赖：TASK-047。 | 是 | 2026-11-02 |
-| TASK-049 | 【任务档案与验收】使用 `scripts/build_lake_desktop.sh --dev --install` 签名构建和独立验收 Home，实测新任务/继续/暂停/结束、截图空目录恢复、目标切换、审批后变更、即时撤销、Pilot/MCP/workflow/schedule、重启与备份恢复管理门禁。使用专用测试凭据/假目标，不操作生产；保存平台/路径/SHA/截图。依赖：TASK-048。 | 否 | 原生签名运行通过；窗口截图待解锁 |
-| TASK-050 | 【任务档案与验收】更新 `docs/validation/lake-security-v1.md`，新增 `docs/security/user-guide.md`，记录覆盖计数、性能样本、最低回退版本、独立 Home/owner 规则、恢复后重新授权步骤及未验证项；按真实结果更新本文状态，整理 PR 到 develop，等待对应明确合并授权。依赖：TASK-049。 | 否 | 文档/PR已整理；待TASK-049收口 |
+| TASK-049 | 【任务档案与验收】使用 `scripts/build_lake_desktop.sh --dev --install` 签名构建和独立验收 Home，实测新任务/继续/暂停/结束、截图空目录恢复、目标切换、审批后变更、即时撤销、Pilot/MCP/workflow/schedule、重启与备份恢复管理门禁。使用专用测试凭据/假目标，不操作生产；保存平台/路径/SHA/截图。依赖：TASK-048。 | 是 | 2026-11-02 |
+| TASK-050 | 【任务档案与验收】更新 `docs/validation/lake-security-v1.md`，新增 `docs/security/user-guide.md`，记录覆盖计数、性能样本、最低回退版本、独立 Home/owner 规则、恢复后重新授权步骤及未验证项；按真实结果更新本文状态，整理 PR 到 develop，等待对应明确合并授权。依赖：TASK-049。 | 是 | 2026-11-02 |
 
 ## 3. Alternatives
 

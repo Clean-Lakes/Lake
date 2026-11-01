@@ -29,5 +29,37 @@
     "isolatedHomeEnforced": true,
     "native": true
   },
-  "nativeScreenshot": "not captured: Mac locked; manual visual acceptance pending"
+  "nativeVisualAcceptance": {
+    "date": "2026-11-02",
+    "passed": true,
+    "scope": [
+      "completed goal and conclusion visible",
+      "two original read operations completed",
+      "actual bounded read evidence visible"
+    ],
+    "screenshots": [
+      {
+        "path": "images/lake-security-task-completed.jpg",
+        "format": "JPEG",
+        "width": 3024,
+        "height": 1744,
+        "sha256": "8cff68ec260d430e1321f9cf892774259897f6e115de819320b68d914153d55b"
+      },
+      {
+        "path": "images/lake-security-task-executions.jpg",
+        "format": "JPEG",
+        "width": 3024,
+        "height": 1744,
+        "sha256": "afcc0ba58c8f4f9c4869e6f1966bfbba6723a820b20a21d5a6bffd4e07834b6b"
+      },
+      {
+        "path": "images/lake-security-read-evidence.jpg",
+        "format": "JPEG",
+        "width": 3024,
+        "height": 1744,
+        "sha256": "4e4a44e0ea1f2c6df2539b42bd6637f3d87f6f214cf4c13dcbb2184df9d4360f"
+      }
+    ],
+    "productionDataUsed": false
+  }
 }

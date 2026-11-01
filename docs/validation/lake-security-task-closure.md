@@ -1,6 +1,6 @@
 # Lake Security 任务闭环实施记录
 
-日期：2026-11-02。分支：`codex/security-task-closure`，PR [#140](https://github.com/Clean-Lakes/Lake/pull/140) → `develop`。后端实现和自动化验收以代码候选 `b2405d9fae393ee675702fd86b01ed8f174be0d0` 固定；本记录后的提交只更新文档。原生签名运行已通过，实际窗口检查及截图因 Mac 锁屏仍未完成（TASK-049），最终收口 TASK-050 保持进行中。未合并、未发布，未安装或重启正式版。
+日期：2026-11-02。分支：`codex/security-task-closure`，PR [#140](https://github.com/Clean-Lakes/Lake/pull/140) → `develop`。后端实现和自动化验收以代码候选 `b2405d9fae393ee675702fd86b01ed8f174be0d0` 固定；本记录后的提交只更新文档。2026-11-02 用户解锁后，已补齐原生窗口检查和三张截图，TASK-049/050 收口，计划 50/50 完成。未合并、未发布，未安装或重启正式版。
 
 ## 五模块与实际代码
 
@@ -25,7 +25,7 @@
 | vet / 两套边界 | `b2405d9f` 全仓 vet、ADK AST boundary、Security registry/hooks 全通过 |
 | 原前端 | `1d5e0b24` 类型检查和 556/556 测试通过；`b2405d9f` Dev 再次完成类型检查/Web 构建，前端/shared/client 文件均无 diff |
 | Dev 脚本 | `b2405d9f`：16/16 unittest 通过，含真实进程持锁/父退出后的等待回归 |
-| 签名 Dev | `b2405d9f`：构建安装及两项原生宿主脚本通过，报告见下文；原生截图未验证 |
+| 签名 Dev | `b2405d9f`：构建安装及两项原生宿主脚本通过，报告见下文；解锁后窗口与原执行记录检查通过，三张截图已保存 |
 
 - 完整 Go：`go test ./... -count=1 -timeout=8m`。
 - Race：`go test -race ./internal/security ./internal/ai ./internal/web ./cmd/lake -run 'Security|WorkClosure|WorkAcceptance|WorkManual|ExecutionOwner|ExecutionMonitor|Orphan|Managed|TargetResolution' -count=1 -timeout=8m`。
@@ -36,7 +36,17 @@
 - 原生基础：`scripts/verify_security_runtime_dev.py --binary bin/lake --native "$HOME/Applications/Lake Dev.app/Contents/MacOS/Lake" --output <private-report>`。
 - 任务与启用：`scripts/verify_security_task_dev.py --binary bin/lake --enforce --output <private-report>`，同脚本支持 `--native` 验证原生宿主。
 
-[签名验收报告](lake-security-task-dev.json)：Dev build-origin 的 gitHead 为 `b2405d9fae393ee675702fd86b01ed8f174be0d0`、`dirty=false`；backend SHA256 `245288b35324f37e269db52d45a2116f06abffd876b1ea76a8db2556f2eb4473`。两项最终脚本均使用实际原生 Dev 宿主并成功；截图工具报告 Mac 锁屏，不能据此宣称原窗口视觉验收通过。
+[签名验收报告](lake-security-task-dev.json)：Dev build-origin 的 gitHead 为 `b2405d9fae393ee675702fd86b01ed8f174be0d0`、`dirty=false`；backend SHA256 `245288b35324f37e269db52d45a2116f06abffd876b1ea76a8db2556f2eb4473`。两项最终脚本均使用实际原生 Dev 宿主并成功。初次截图遇 Mac 锁屏；2026-11-02 用户解锁后，使用同一签名候选和新隔离 Home 再次通过任务/启用脚本，补齐原生窗口检查及截图。屏幕操作只查看已有结论和原始执行记录，没有修改前端或实际业务资源。
+
+### 原生窗口证据（2026-11-02）
+
+原生 Lake Dev 的测试会话 `Original protocol acceptance` 可正常显示最终结论和“已结束”；展开原“执行过程”后，`Local machine 2 项` 下两条“读取文件”均为“已完成”。展开其中一条可见 `LAKE_ISOLATED_SECURITY_MARKER`、内容 hash 及 `truncated:false`，与该次隔离任务实际 FD 读取结果一致。
+
+- [任务完成态](images/lake-security-task-completed.jpg)
+- [同一结论关联两条原始执行记录](images/lake-security-task-executions.jpg)
+- [展开后的真实读取证据](images/lake-security-read-evidence.jpg)
+
+三张截图均来自签名 Dev 的原生窗口，保留原像素，内容为专用假目标及合成模型；没有生产凭据或业务数据。UI 检查范围为该任务的完成态、执行记录展开与证据可见性；其他生命周期/恢复/撤销/入口矩阵依据前述自动化与签名运行记录，不冒充逐项人工 UI 操作。测试结束后已正常停止本轮原生宿主和后端，释放其独立 Home。
 
 任务 fixture 使用实际签名后端、实际 HTTP/SSE、真实有界 FD 读取及现有提问/审批接口，仅模型响应来自 loopback 合成提供者：一个原目标、两次原读取、一次任务范围审批、独立人工验收、预算 10→8、目标和 task 均关闭，随后真实启用该隔离 Home 并验证新项目默认 restricted。不以模型总结替代验收。
 
