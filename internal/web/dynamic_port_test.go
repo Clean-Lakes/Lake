@@ -41,4 +41,22 @@ func TestDesktopDynamicPortUsesBoundAddress(t *testing.T) {
 	if res.StatusCode != 200 {
 		t.Fatalf("bound origin rejected: %d", res.StatusCode)
 	}
+	if err = b.Start(); err == nil {
+		t.Fatal("second Start created another listener or worker set")
+	}
+}
+
+func TestServerClosedBeforeStartCannotPublishRuntime(t *testing.T) {
+	home := t.TempDir()
+	b, err := New(context.Background(), Options{Home: home, DynamicPort: true, Token: "synthetic-closed-token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Close()
+	if err = b.Start(); err != context.Canceled {
+		t.Fatal("closed server restarted", err)
+	}
+	if _, err = os.Stat(filepath.Join(home, "web-agent", "runtime.json")); !os.IsNotExist(err) {
+		t.Fatal("closed owner published a runtime record")
+	}
 }

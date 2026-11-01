@@ -37,12 +37,11 @@ type LegacyInventory struct {
 }
 
 func openSecurityReadOnly(path string) (*sql.DB, error) {
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
-	q := u.Query()
-	q.Set("mode", "ro")
-	q.Set("_pragma", "busy_timeout(5000)")
-	u.RawQuery = q.Encode()
-	db, err := sql.Open("sqlite", u.String())
+	return openSecurityReadOnlyMode(path, false)
+}
+
+func openSecurityReadOnlyMode(path string, immutable bool) (*sql.DB, error) {
+	db, err := sql.Open("sqlite", securityReadOnlyURI(path, immutable))
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +51,18 @@ func openSecurityReadOnly(path string) (*sql.DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+func securityReadOnlyURI(path string, immutable bool) string {
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
+	q := u.Query()
+	q.Set("mode", "ro")
+	if immutable {
+		q.Set("immutable", "1")
+	}
+	q.Set("_pragma", "busy_timeout(5000)")
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // InventoryLegacyStores does not merge SDK tables or change source operations.

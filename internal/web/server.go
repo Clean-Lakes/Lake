@@ -78,6 +78,7 @@ type Server struct {
 	generated            bool
 	workers              sync.WaitGroup
 	closeOnce            sync.Once
+	startMu              sync.Mutex
 	gate                 sync.RWMutex
 	closed               bool
 	http                 *http.Server
@@ -230,17 +231,25 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	runtimeReady = true
 	return server, nil
 }
-func (b *Server) Start() error {
+func (b *Server) prepareHTTPServer() (net.Listener, *http.Server, error) {
+	b.startMu.Lock()
+	defer b.startMu.Unlock()
+	if err := b.Context.Err(); err != nil {
+		return nil, nil, err
+	}
+	if b.listener != nil {
+		return nil, nil, errors.New("Lake HTTP server already started")
+	}
 	if !b.securityRuntime.ReadOnlyView() {
 		if err := b.reconcilePersistedMemoryOutboxes(); err != nil {
-			return err
+			return nil, nil, err
 		}
 		b.Store.RecoverMemoryJobs()
 		_ = b.Store.ReconcileProjectMemoryFiles()
 	}
 	l, e := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", b.options.Port))
 	if e != nil {
-		return e
+		return nil, nil, e
 	}
 	b.listener = l
 	if !b.securityRuntime.ReadOnlyView() {
@@ -276,8 +285,16 @@ func (b *Server) Start() error {
 	} else if b.generated {
 		fmt.Fprintln(b.options.Output, "Startup access URL:", address+"/#token="+url.QueryEscape(b.token))
 	}
+	return l, b.http, nil
+}
+
+func (b *Server) Start() error {
+	l, server, err := b.prepareHTTPServer()
+	if err != nil {
+		return err
+	}
 	errc := make(chan error, 1)
-	go func() { errc <- b.http.Serve(l) }()
+	go func() { errc <- server.Serve(l) }()
 	select {
 	case <-b.Context.Done():
 		return nil
@@ -296,11 +313,19 @@ func (b *Server) Close() {
 		if b.cancel != nil {
 			b.cancel()
 		}
-		if b.http != nil {
+		// Wait for startup to finish registering listener, HTTP server and
+		// workers. A runtime.json appearing is not a Go memory barrier.
+		b.startMu.Lock()
+		server, listener := b.http, b.listener
+		b.startMu.Unlock()
+		if server != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			b.http.Shutdown(ctx)
+			server.Shutdown(ctx)
 			cancel()
-			b.http.Close()
+			server.Close()
+		}
+		if listener != nil {
+			listener.Close()
 		}
 		b.gate.Lock()
 		defer b.gate.Unlock()
@@ -319,12 +344,12 @@ func (b *Server) Close() {
 		}
 		b.schedulerWorkers.Wait()
 		b.workers.Wait()
-		if b.http != nil {
+		if server != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			b.http.Shutdown(ctx)
+			server.Shutdown(ctx)
 		}
-		if b.listener != nil {
+		if listener != nil {
 			os.Remove(filepath.Join(b.options.DataDir, "runtime.json"))
 		}
 		if b.Store != nil {
