@@ -125,7 +125,12 @@ def main():
                         lake.api('/api/sessions/' + sid + '/ai/decision', 'POST', {'id': approval['id'], 'accept': True, 'confirmation': approval.get('confirmation', '')})
                         approvals.add(approval['id'])
                     if state['calls'] >= 6 and view.get('status') == 'completed':
-                        break
+                        # Goal acceptance can project completed while the original
+                        # turn is still committing its finite task transition.
+                        with sqlite3.connect(state['db']) as db:
+                            closed = db.execute('SELECT state FROM security_tasks WHERE session_id=?', (sid,)).fetchall()
+                        if closed == [('completed',)]:
+                            break
                     time.sleep(0.1)
                 else:
                     errors = [{'title': x.get('title'), 'status': x.get('status'), 'content': x.get('content', '')[:500]} for x in view.get('cards', []) if x.get('status') in ('failed', 'not_executed')]
@@ -137,7 +142,7 @@ def main():
                     accepted = db.execute("SELECT source_kind,source_interaction_id FROM work_acceptance_records WHERE session_id=? AND verifier_version='human/1'", (sid,)).fetchall()
                     consumed = db.execute("SELECT count(*) FROM native_approvals WHERE session_id=? AND status='consumed'", (sid,)).fetchone()[0]
                 require(len(goals) == 1 and goals[0][1] == 'completed', 'goal association or final acceptance failed')
-                require(tasks == [('completed',)], 'original task lifecycle did not close')
+                require(tasks == [('completed',)], 'original task lifecycle did not close: ' + json.dumps({'tasks': tasks, 'goals': goals}))
                 require(grants == [(8,)], 'the confirmed ten-use budget was not shared by both reads')
                 require(len(accepted) == 1 and accepted[0][0] == 'question' and accepted[0][1] in answered, 'manual acceptance lost its independent interaction source')
                 require(consumed == 1 and len(approvals) == 1 and len(answered) == 3, 'scope authorization or final verification repeated')

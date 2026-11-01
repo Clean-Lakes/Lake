@@ -28,12 +28,46 @@ type SecurityModeAction struct {
 	ConfirmedShadowDifferences []string `json:"confirmedShadowDifferences,omitempty"`
 }
 type SecurityModeStatus struct {
-	Mode              string                       `json:"mode"`
-	Revision          int64                        `json:"revision"`
-	Digest            string                       `json:"digest"`
-	Precondition      string                       `json:"precondition"`
-	Coverage          SecurityEnforcementReadiness `json:"coverage"`
-	ShadowDifferences []SecurityShadowDifference   `json:"shadowDifferences"`
+	Mode                       string                       `json:"mode"`
+	Revision                   int64                        `json:"revision"`
+	Digest                     string                       `json:"digest"`
+	Precondition               string                       `json:"precondition"`
+	Coverage                   SecurityEnforcementReadiness `json:"coverage"`
+	ShadowDifferences          []SecurityShadowDifference   `json:"shadowDifferences"`
+	ShadowDifferencesTotal     int                          `json:"shadowDifferencesTotal"`
+	ShadowWideningRemaining    int                          `json:"shadowWideningRemaining"`
+	ShadowDifferencesTruncated bool                         `json:"shadowDifferencesTruncated"`
+}
+
+const securityShadowStatusLimit = 100
+
+// Only the management projection is bounded. Activation and acknowledgement
+// continue to use the complete facts and digest, including undisplayed events.
+// Pending widening reviews take priority so each confirmed batch exposes the
+// next one without letting old history hide an unreviewed permission change.
+func projectSecurityShadowStatus(out *SecurityModeStatus, differences []SecurityShadowDifference) {
+	out.ShadowDifferencesTotal = len(differences)
+	out.ShadowWideningRemaining = 0
+	out.ShadowDifferences = make([]SecurityShadowDifference, 0, min(len(differences), securityShadowStatusLimit))
+	for _, difference := range differences {
+		if difference.Comparison != "widening" || difference.Acknowledged {
+			continue
+		}
+		out.ShadowWideningRemaining++
+		if len(out.ShadowDifferences) < securityShadowStatusLimit {
+			out.ShadowDifferences = append(out.ShadowDifferences, difference)
+		}
+	}
+	for _, difference := range differences {
+		if len(out.ShadowDifferences) == securityShadowStatusLimit {
+			break
+		}
+		if difference.Comparison == "widening" && !difference.Acknowledged {
+			continue
+		}
+		out.ShadowDifferences = append(out.ShadowDifferences, difference)
+	}
+	out.ShadowDifferencesTruncated = len(out.ShadowDifferences) < len(differences)
 }
 
 func securityRuntimeModeTx(tx *gorm.DB, storeID, epoch string) (securityRuntimeModeRow, error) {
@@ -161,8 +195,12 @@ func (e *Engine) SecurityMode(ctx context.Context, projects []string) (out Secur
 		if err != nil {
 			return err
 		}
-		out.ShadowDifferences, err = securityShadowSnapshotTx(tx, storeID, epoch)
-		return err
+		differences, err := securityShadowSnapshotTx(tx, storeID, epoch)
+		if err != nil {
+			return err
+		}
+		projectSecurityShadowStatus(&out, differences)
+		return nil
 	})
 	return out, err
 }
@@ -181,6 +219,11 @@ func (e *Engine) SetSecurityMode(ctx context.Context, action SecurityModeAction,
 	}
 	err = e.workMutation(db.WithContext(ctx), func(tx *gorm.DB) error {
 		if replay, err := securityActionReplay(tx, storeID, epoch, action.ActorID, action.ActionID, js(action), &out); replay || err != nil {
+			if replay && err == nil && out.ShadowDifferencesTotal == 0 {
+				// Replays recorded before the bounded projection retain their exact
+				// authority outcome while receiving the same safe response bound.
+				projectSecurityShadowStatus(&out, out.ShadowDifferences)
+			}
 			return err
 		}
 		row, err := securityRuntimeModeTx(tx, storeID, epoch)
@@ -228,7 +271,8 @@ func (e *Engine) SetSecurityMode(ctx context.Context, action SecurityModeAction,
 		if err = tx.Save(&row).Error; err != nil {
 			return err
 		}
-		out = SecurityModeStatus{Mode: row.Mode, Revision: row.Revision, Digest: digest, Precondition: reason, Coverage: readiness, ShadowDifferences: differences}
+		out = SecurityModeStatus{Mode: row.Mode, Revision: row.Revision, Digest: digest, Precondition: reason, Coverage: readiness}
+		projectSecurityShadowStatus(&out, differences)
 		return securityActionRecord(tx, storeID, epoch, action.ActorID, action.ActionID, "mode.set", "home", js(action), before, row.Revision, out, time.Now().UTC())
 	})
 	return out, err

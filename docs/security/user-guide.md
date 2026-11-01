@@ -47,7 +47,7 @@ bin/lake security shadow --home /absolute/isolated/home --input /private/action.
 bin/lake security enforce --home /absolute/isolated/home --input /private/action.json
 ```
 
-动作文件须为私有普通文件，包含 `actionId`、`expectedRevision` 和先前读取的 `confirmedDigest`。全局 enforce 还要求编译时入口覆盖、项目策略、旧范围和历史风险检查通过；不能用请求字段强制开启，也不允许降回旧模式绕过限制。shadow 不采用新的 allow 结果替代原执行权限；真实托管操作在准备后纯比较旧 allow/approval_required/deny 与新结果，缺少可信任务或目标/终端元信息则明确记为 incomplete，不编造允许。管理状态的 `shadowDifferences` 展示差异；未经确认的 widening 阻止启用。先以原摘要、CAS、`actionId` 和精确 `confirmedShadowDifferences` 事件 ID 提交 shadow 确认，读取新的 READY 摘要后再单独 enforce；ACK 本身不授予资源操作权限。
+动作文件须为私有普通文件，包含 `actionId`、`expectedRevision` 和先前读取的 `confirmedDigest`。全局 enforce 还要求编译时入口覆盖、项目策略、旧范围和历史风险检查通过；不能用请求字段强制开启，也不允许降回旧模式绕过限制。shadow 不采用新的 allow 结果替代原执行权限；真实托管操作在准备后纯比较旧 allow/approval_required/deny 与新结果，缺少可信任务或目标/终端元信息则明确记为 incomplete，不编造允许。管理状态的 `shadowDifferences` 最多展示 100 条、优先待确认放宽；`shadowDifferencesTotal`、`shadowWideningRemaining`、`shadowDifferencesTruncated` 表示完整数量、未确认数及是否省略展示。可逐批确认、每次读取新摘要，完整事实仍由原分页 audit 查询并全部纳入启用摘要；未经确认的 widening 阻止启用。先以原摘要、CAS、`actionId` 和精确 `confirmedShadowDifferences` 事件 ID 提交 shadow 确认，读取新的 READY 摘要后再单独 enforce；ACK 本身不授予资源操作权限。
 
 已启用全局 enforce 的 Home 中，新项目使用默认 restricted 策略；受控本机命令可以申请明确任务授权，已有 deny 不会被覆盖。缺少策略的项目或无项目身份不得退回 legacy。
 
