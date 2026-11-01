@@ -145,12 +145,22 @@ func runtimeStdout(result map[string]any) string {
 	return str(result["output"])
 }
 func (e *Engine) execRuntimeInput(ctx context.Context, c Config, a map[string]any, argv []string, input io.Reader) (result map[string]any, err error) {
+	if err = e.requireSecurityAdapterContext(ctx, c); err != nil {
+		return nil, err
+	}
 	processMayHaveStarted := false
 	defer func() {
 		if err != nil && !processMayHaveStarted {
 			err = &ToolNotExecutedError{Err: err}
 		}
 	}()
+	if len(argv) == 0 {
+		return nil, errors.New("runtime executable required")
+	}
+	frozen, hasFrozen, frozenErr := checkFrozenRuntimeCommand(ctx, argv)
+	if frozenErr != nil {
+		return nil, frozenErr
+	}
 	target := str(a["runtime"])
 	if target == "" {
 		target = c.Runtime
@@ -164,6 +174,10 @@ func (e *Engine) execRuntimeInput(ctx context.Context, c Config, a map[string]an
 		container = c.Container
 	}
 	cmdline := joinArgs(argv)
+	if hasFrozen {
+		cmdline = joinArgs(append(append([]string{"/usr/bin/env", "-i"}, frozen.Environment()...), argv...))
+		cmdline = "cd " + quote(frozen.Directory()) + " && exec " + cmdline
+	}
 	executable := argv[0]
 	cmdargs := argv[1:]
 	var sshTarget *SSH
@@ -228,6 +242,10 @@ func (e *Engine) execRuntimeInput(ctx context.Context, c Config, a map[string]an
 	setupProcess(cmd)
 	home, _ := os.UserHomeDir()
 	cmd.Env = platform.Environment(home)
+	if hasFrozen {
+		cmd.Env = frozen.Environment()
+		cmd.Dir = frozen.Directory()
+	}
 	if sshTarget != nil {
 		var err error
 		cmd.Env, err = sshEnvironment(sshTarget, c.CredentialDir)
@@ -235,7 +253,7 @@ func (e *Engine) execRuntimeInput(ctx context.Context, c Config, a map[string]an
 			return nil, err
 		}
 	}
-	if target == "local" && c.Workspace != "" {
+	if target == "local" && c.Workspace != "" && !hasFrozen {
 		cmd.Dir = c.Workspace
 	}
 	cmd.Stdin = input
@@ -247,6 +265,16 @@ func (e *Engine) execRuntimeInput(ctx context.Context, c Config, a map[string]an
 	cmd.Stderr = io.MultiWriter(output, stderr)
 	// From this point failures may have an effect. Never infer non-execution
 	// from a transport error, timeout or a process's output text.
+	if permit, _ := ctx.Value(securityPermitContextKey{}).(*SecurityPermit); permit != nil && target == "local" {
+		processMayHaveStarted = true
+		return e.runManagedProcess(ctx, c, a, argv, input, cmd.Env, cmd.Dir)
+	}
+	if target == "ssh" && hasFrozen {
+		if permit, _ := ctx.Value(securityPermitContextKey{}).(*SecurityPermit); permit != nil {
+			processMayHaveStarted = true
+			return e.runManagedSSHProcess(ctx, c, a, argv, input, sshTarget, append([]string{cmd.Path}, cmd.Args[1:]...), cmd.Env, cmd.Dir)
+		}
+	}
 	processMayHaveStarted = true
 	err = cmd.Run()
 	code := 0
@@ -270,6 +298,9 @@ func (e *Engine) command(ctx context.Context, c Config, a map[string]any, comman
 		return nil, errors.New("invalid command")
 	}
 	if a["run_in_background"] == true {
+		if permit, _ := ctx.Value(securityPermitContextKey{}).(*SecurityPermit); permit != nil {
+			return e.startManagedShell(ctx, c, a, command, obj(ctx.Value(backgroundShellSourceKey{})))
+		}
 		return e.startShell(c, a, command, obj(ctx.Value(backgroundShellSourceKey{})))
 	}
 	return e.execRuntime(ctx, c, a, []string{"/bin/sh", "-c", command}, "")
@@ -402,6 +433,9 @@ func fileMutation(name string) bool {
 	return false
 }
 func (e *Engine) file(ctx context.Context, s *session, c Config, name string, a map[string]any) (result any, err error) {
+	if err = e.requireSecurityAdapterContext(ctx, c); err != nil {
+		return nil, err
+	}
 	mutationStarted := false
 	defer func() {
 		if err != nil && fileMutation(name) && !mutationStarted {
@@ -638,16 +672,23 @@ func (e *Engine) filePreview(ctx context.Context, c Config, name string, a map[s
 var containerName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,255}$`)
 
 func safeConfiguredFile(c Config, path string) error {
-	if c.CredentialDir == "" {
-		return nil
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	} else if parent, err := filepath.EvalSymlinks(filepath.Dir(path)); err == nil {
+		path = filepath.Join(parent, filepath.Base(path))
 	}
-	root := c.CredentialDir
-	if real, err := filepath.EvalSymlinks(root); err == nil {
-		root = real
-	}
-	rel, err := filepath.Rel(root, path)
-	if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return errors.New("credential files cannot be accessed by model tools")
+	roots := append(append([]string(nil), c.runtimeProtectedPaths...), c.CredentialDir)
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		if real, err := filepath.EvalSymlinks(root); err == nil {
+			root = real
+		}
+		rel, err := filepath.Rel(root, path)
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return errors.New("credential and Lake authority files cannot be accessed by model tools")
+		}
 	}
 	return nil
 }

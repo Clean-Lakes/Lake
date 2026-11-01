@@ -83,6 +83,9 @@ func (s *Store) EnqueueMemoryTurn(snapshot ai.MemoryTurnSnapshot) (err error) {
 }
 
 func (b *Server) reconcileMemoryOutboxForSession(id string) error {
+	if err := b.Engine.CheckSecurityMemoryEligibility(b.Context, stringOf(b.Store.Session(id)["projectId"]), ai.SecurityMemoryCapture); err != nil {
+		return err
+	}
 	if !b.Store.MemoryCaptureSessionAllowed(id) {
 		return nil
 	}
@@ -95,6 +98,9 @@ func (b *Server) reconcileMemoryOutboxForSession(id string) error {
 		return err
 	}
 	for _, snapshot := range items {
+		if b.Engine.CheckSecurityMemoryEligibility(b.Context, snapshot.ProjectID, ai.SecurityMemoryCapture) != nil {
+			continue
+		}
 		if err := b.Store.EnqueueMemoryTurn(snapshot); err != nil {
 			b.registerMemoryOutbox(id)
 			return err
@@ -119,6 +125,9 @@ func (b *Server) reconcilePersistedMemoryOutboxes() error {
 		return err
 	}
 	for _, snapshot := range items {
+		if b.Engine.CheckSecurityMemoryEligibility(b.Context, snapshot.ProjectID, ai.SecurityMemoryCapture) != nil {
+			continue
+		}
 		if err := b.Store.EnqueueMemoryTurn(snapshot); err != nil {
 			b.registerMemoryOutbox(snapshot.SessionID)
 			// A removed or corrupted session must not prevent other projects from starting.

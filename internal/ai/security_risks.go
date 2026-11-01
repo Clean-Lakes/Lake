@@ -101,7 +101,7 @@ func InspectSecurityRisks(ctx context.Context, home string, limit int) (Security
 		seen[entry.Source] = true
 		archive := filepath.Join(h.Home, "security", "legacy", entry.StoreID, "sessions.sqlite")
 		recovery := filepath.Join(h.Home, "security", "initial-migration-recovery", "sessions.sqlite")
-		if entry.Snapshot != archive && !(entry.Snapshot == recovery && entry.Source == canonical && len(inv.Stores) == 1 && inv.Policy == preserveLegacyUnresolved) {
+		if entry.Snapshot != archive && !(entry.Snapshot == recovery && entry.Source == canonical && len(inv.Stores) == 1 && inv.Policy == preserveLegacyUnresolved) && !(entry.Source == canonical && SecurityRecoveryArchive(h.Home, entry.Snapshot)) {
 			return SecurityRiskReport{}, errors.New("security: invalid legacy snapshot location")
 		}
 		resolved, e := filepath.EvalSymlinks(entry.Snapshot)
@@ -235,7 +235,7 @@ func inspectSecurityRiskStore(ctx context.Context, db *sql.DB, namespace, view s
 		return "''"
 	}
 	risk := field("risk")
-	unresolved := "(status IS NULL OR status NOT IN ('succeeded','failed','not_executed'))"
+	unresolved := securityUnresolvedOperationPredicate(columns)
 	if err = tx.QueryRowContext(ctx, "SELECT count(*),COALESCE(sum(CASE WHEN "+unresolved+" THEN 1 ELSE 0 END),0),COALESCE(sum(CASE WHEN "+unresolved+" AND ("+risk+"<>'readonly' OR COALESCE(status,'') NOT IN ('unknown','dispatched','running')) THEN 1 ELSE 0 END),0) FROM native_operations").Scan(&out.Operations, &out.Unresolved, &out.EffectReview); err != nil {
 		return out, errors.New("security: operation counts unavailable")
 	}

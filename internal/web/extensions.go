@@ -28,7 +28,11 @@ func (b *Server) extensionRoute(w http.ResponseWriter, r *http.Request, path str
 		for i := range rows {
 			rows[i].ID = ident()
 		}
-		extensionError(store.ImportServers(rows))
+		ids := []string{}
+		for _, row := range rows {
+			ids = append(ids, row.ID)
+		}
+		extensionError(b.mutateSecurityMCP(ids, func() error { return store.ImportServers(rows) }))
 		public := []Object{}
 		for _, row := range rows {
 			public = append(public, extensions.PublicServer(row))
@@ -77,7 +81,7 @@ func (b *Server) extensionRoute(w http.ResponseWriter, r *http.Request, path str
 		if clear, _ := data["clearEnv"].(bool); clear {
 			next.Env = map[string]string{}
 		}
-		extensionError(store.SaveServer(next, next.Headers != nil, next.Env != nil))
+		extensionError(b.mutateSecurityMCP([]string{next.ID}, func() error { return store.SaveServer(next, next.Headers != nil, next.Env != nil) }))
 		b.Extensions.Invalidate(next.ID)
 		saved, err := store.FindServer(next.ID)
 		extensionError(err)
@@ -88,14 +92,21 @@ func (b *Server) extensionRoute(w http.ResponseWriter, r *http.Request, path str
 	if len(parts) >= 4 && parts[2] == "mcp" {
 		id := parts[3]
 		if len(parts) == 4 && r.Method == "DELETE" {
-			extensionError(store.DeleteServer(id))
+			extensionError(b.mutateSecurityMCP([]string{id}, func() error { return store.DeleteServer(id) }))
 			b.Extensions.Invalidate(id)
 			reply(w, 200, Object{"ok": true})
 			return true
 		}
 		if len(parts) == 5 && parts[4] == "test" && r.Method == "POST" {
-			result, err := b.Extensions.Tools(r.Context(), id, true)
+			server, err := store.FindServer(id)
 			extensionError(err)
+			storage, err := securityFileMetadata(store.Path())
+			extensionError(err)
+			revision, err := b.Engine.SecurityMCPInspectionRevision(r.Context(), id, securityMCPMetadata(server), storage)
+			extensionError(err)
+			result, err := b.Extensions.ToolsWithServer(r.Context(), server, true)
+			extensionError(err)
+			extensionError(b.Engine.RecordSecurityMCPCatalog(r.Context(), id, revision, object(result)))
 			reply(w, 200, result)
 			return true
 		}
@@ -111,13 +122,13 @@ func (b *Server) extensionRoute(w http.ResponseWriter, r *http.Request, path str
 	if path == "/api/settings/skills/roots" {
 		if r.Method == "POST" {
 			data := body(w, r, 8000)
-			extensionError(store.AddSkillRoot(stringOf(data["path"])))
+			extensionError(b.mutateSecurityMCP(nil, func() error { return store.AddSkillRoot(stringOf(data["path"])) }))
 			reply(w, 200, Object{"ok": true})
 			return true
 		}
 		if r.Method == "DELETE" {
 			data := body(w, r, 8000)
-			extensionError(store.RemoveSkillRoot(stringOf(data["path"])))
+			extensionError(b.mutateSecurityMCP(nil, func() error { return store.RemoveSkillRoot(stringOf(data["path"])) }))
 			reply(w, 200, Object{"ok": true})
 			return true
 		}
@@ -140,7 +151,7 @@ func (b *Server) extensionRoute(w http.ResponseWriter, r *http.Request, path str
 				}
 			}
 			if enabled, ok := data["enabled"].(bool); ok {
-				extensionError(store.SetSkillEnabled(name, enabled))
+				extensionError(b.mutateSecurityMCP(nil, func() error { return store.SetSkillEnabled(name, enabled) }))
 			}
 			reply(w, 200, Object{"ok": true})
 			return true

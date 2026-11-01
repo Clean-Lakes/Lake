@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Clean-Lakes/Lake/internal/security"
 	"strings"
 	"time"
 
@@ -11,21 +12,47 @@ import (
 )
 
 type nativeOperation struct {
-	ID          string `gorm:"primaryKey"`
-	SessionID   string `gorm:"index"`
-	RootTurnID  string
-	CallID      string
-	Tool        string
-	ArgsHash    string
-	Identity    string
-	Target      string
-	Fingerprint string
-	Risk        string
-	Status      string `gorm:"index"`
-	Result      string
-	Handle      string `gorm:"index"`
-	StartedAt   time.Time
-	FinishedAt  *time.Time
+	permit                     *SecurityPermit `gorm:"-"`
+	ProjectID                  string
+	GoalID                     string `gorm:"index"`
+	GoalRevision               int64
+	PlanRevision               int64
+	StepID                     string
+	StepRevision               int64
+	AttemptID                  string `gorm:"index"`
+	SecurityTaskID             string `gorm:"index"`
+	StoreID                    string
+	RecoveryEpoch              string
+	ExecutionRevision          int64
+	OwnerID                    string
+	OwnerGeneration            int64
+	OwnerLeaseUntil            time.Time
+	OwnerKind                  string
+	MonitorBindingID           string
+	OrphanState                string `gorm:"index"`
+	ClosureState               string
+	CancelRequestedAt          *time.Time
+	CancellationState          string
+	ResourceID                 string `gorm:"index"`
+	ResourceConnectionRevision int64
+	SecurityDescriptor         string
+	DescriptorDigest           string
+	RiskResolvedAt             *time.Time
+	ID                         string `gorm:"primaryKey"`
+	SessionID                  string `gorm:"index"`
+	RootTurnID                 string
+	CallID                     string
+	Tool                       string
+	ArgsHash                   string
+	Identity                   string
+	Target                     string
+	Fingerprint                string
+	Risk                       string
+	Status                     string `gorm:"index"`
+	Result                     string
+	Handle                     string `gorm:"index"`
+	StartedAt                  time.Time
+	FinishedAt                 *time.Time
 }
 
 // nativeEvidence is append-only application audit data. It shares a transaction
@@ -67,7 +94,15 @@ func (e *Engine) dispatchNativeOperation(ctx context.Context, s *session, c Conf
 	if err := e.CheckSecurityRuntime(); err != nil {
 		return nil, err
 	}
-	if ctx.Value(adkToolContextKey{}) == nil {
+	prepared := preparedSecurityOperation(ctx)
+	configured, checkErr := e.securityPolicyConfigured(configSecurityProject(c))
+	if checkErr != nil {
+		return nil, checkErr
+	}
+	if configured && prepared == nil {
+		return nil, errors.New("security: prepared operation required for configured project")
+	}
+	if ctx.Value(adkToolContextKey{}) == nil && prepared == nil {
 		return nil, nil
 	}
 	if err := ctx.Err(); err != nil {
@@ -85,7 +120,7 @@ func (e *Engine) dispatchNativeOperation(ctx context.Context, s *session, c Conf
 	scopeID, turnID := s.state.View.Session, s.state.View.RootTurnID
 	workGoalID := s.state.WorkGoalID
 	s.mu.Unlock()
-	if workGoalID != "" && risk != "readonly" {
+	if prepared == nil && workGoalID != "" && risk != "readonly" {
 		_, goal, loadErr := e.workRow(scopeID, workGoalID)
 		if loadErr != nil {
 			return nil, loadErr
@@ -132,23 +167,55 @@ func (e *Engine) dispatchNativeOperation(ctx context.Context, s *session, c Conf
 	if identity.OperationID != "" {
 		operation.ID = identity.OperationID
 	}
-	err = store.DB.Transaction(func(tx *gorm.DB) error {
-		// Prior unknown/running operations do not create a session-wide lock.
-		// Preserve durable invocation identity and exact unfinished-call replay
-		// protection while allowing different commands through normal permissions.
-		var prior nativeOperation
-		query := tx.First(&prior, "id = ?", operation.ID)
-		if query.Error == nil {
-			return &nativeOperationReplayError{ID: prior.ID, Tool: prior.Tool, Target: utf8Prefix(redact(prior.Target, c), 120), Status: prior.Status, Handle: prior.Handle}
+	if prepared != nil {
+		op := prepared.descriptor
+		if op.Proof == security.ProofOpaque && operation.Risk == "readonly" {
+			operation.Risk = "write"
 		}
-		if !errors.Is(query.Error, gorm.ErrRecordNotFound) {
-			return query.Error
+		if identity.OperationID != "" && op.ID != identity.OperationID {
+			return nil, errors.New("security: original SRE operation identity mismatch")
 		}
-		// Recovery can regenerate a provider call with a fresh ID. Only an exact
-		// unfinished tool/arguments/target match is a replay, not another command.
-		if risk != "readonly" {
-			if workGoalID != "" {
-				query := tx.Where("session_id = ? AND root_turn_id = ? AND tool = ? AND args_hash = ? AND target = ? AND status = ?", operation.SessionID, operation.RootTurnID, call.Name, operation.ArgsHash, target, "succeeded").First(&prior)
+		if op.SessionID != identity.SessionID || op.RootTurnID != identity.RootTurnID || op.ChildScopeID != identity.ScopeID || op.CallID != call.ID || op.Tool != call.Name {
+			return nil, errors.New("security: frozen invocation binding mismatch")
+		}
+		operation.ID = op.ID
+		operation.SecurityDescriptor, operation.DescriptorDigest = js(op), prepared.digest
+		operation.ArgsHash = op.ArgumentsDigest
+		operation.ProjectID, operation.GoalID, operation.GoalRevision, operation.PlanRevision = op.ProjectID, op.GoalID, op.GoalRevision, op.PlanRevision
+		operation.StepID, operation.StepRevision, operation.AttemptID, operation.SecurityTaskID = op.StepID, op.StepRevision, op.AttemptID, op.TaskID
+		operation.StoreID, operation.RecoveryEpoch, operation.ExecutionRevision = op.StoreID, op.RecoveryEpoch, op.ExecutionRevision
+		operation.OwnerID, operation.OwnerGeneration, operation.OwnerKind = op.OwnerID, op.OwnerGeneration, "agent"
+		operation.OwnerLeaseUntil = prepared.owner.LeaseUntil
+		if len(op.Resources) == 1 {
+			operation.ResourceID, operation.ResourceConnectionRevision = op.Resources[0].ID, op.Resources[0].ConnectionRevision
+		}
+	}
+	dispatch := func() error {
+		return store.DB.Transaction(func(tx *gorm.DB) error {
+			// Prior unknown/running operations do not create a session-wide lock.
+			// Preserve durable invocation identity and exact unfinished-call replay
+			// protection while allowing different commands through normal permissions.
+			var prior nativeOperation
+			query := tx.First(&prior, "id = ?", operation.ID)
+			if query.Error == nil {
+				return &nativeOperationReplayError{ID: prior.ID, Tool: prior.Tool, Target: utf8Prefix(redact(prior.Target, c), 120), Status: prior.Status, Handle: prior.Handle}
+			}
+			if !errors.Is(query.Error, gorm.ErrRecordNotFound) {
+				return query.Error
+			}
+			// Recovery can regenerate a provider call with a fresh ID. Only an exact
+			// unfinished tool/arguments/target match is a replay, not another command.
+			if risk != "readonly" {
+				if workGoalID != "" {
+					query := tx.Where("session_id = ? AND root_turn_id = ? AND tool = ? AND args_hash = ? AND target = ? AND status = ?", operation.SessionID, operation.RootTurnID, call.Name, operation.ArgsHash, target, "succeeded").First(&prior)
+					if query.Error == nil {
+						return &nativeOperationReplayError{ID: prior.ID, Tool: prior.Tool, Target: utf8Prefix(redact(prior.Target, c), 120), Status: prior.Status, Handle: prior.Handle}
+					}
+					if !errors.Is(query.Error, gorm.ErrRecordNotFound) {
+						return query.Error
+					}
+				}
+				query := tx.Where("session_id = ? AND tool = ? AND args_hash = ? AND target = ? AND status IN ?", operation.SessionID, call.Name, operation.ArgsHash, target, []string{"unknown", "dispatched"}).Order("started_at, id").First(&prior)
 				if query.Error == nil {
 					return &nativeOperationReplayError{ID: prior.ID, Tool: prior.Tool, Target: utf8Prefix(redact(prior.Target, c), 120), Status: prior.Status, Handle: prior.Handle}
 				}
@@ -156,32 +223,53 @@ func (e *Engine) dispatchNativeOperation(ctx context.Context, s *session, c Conf
 					return query.Error
 				}
 			}
-			query := tx.Where("session_id = ? AND tool = ? AND args_hash = ? AND target = ? AND status IN ?", operation.SessionID, call.Name, operation.ArgsHash, target, []string{"unknown", "dispatched"}).Order("started_at, id").First(&prior)
-			if query.Error == nil {
-				return &nativeOperationReplayError{ID: prior.ID, Tool: prior.Tool, Target: utf8Prefix(redact(prior.Target, c), 120), Status: prior.Status, Handle: prior.Handle}
+			approvalCallID := call.ID
+			if original, ok := ctx.Value(adkApprovalCallKey{}).(string); ok {
+				approvalCallID = original
 			}
-			if !errors.Is(query.Error, gorm.ErrRecordNotFound) {
-				return query.Error
+			if prepared != nil {
+				permit, permitErr := acquirePreparedSecurityPermitTx(ctx, tx, operation.ID, time.Now().UTC())
+				if permitErr != nil {
+					return permitErr
+				}
+				operation.permit = permit
+				var live securityTaskBinding
+				if err := tx.First(&live, "id = ?", prepared.owner.BindingID).Error; err != nil {
+					return err
+				}
+				operation.OwnerLeaseUntil = live.LeaseUntil
+				if err := tx.Model(&workExecutionAttempt{}).Where("id = ? AND state IN ?", operation.AttemptID, []string{"prepared", "running"}).Update("state", "running").Error; err != nil {
+					return err
+				}
 			}
-		}
-		approvalCallID := call.ID
-		if original, ok := ctx.Value(adkApprovalCallKey{}).(string); ok {
-			approvalCallID = original
-		}
-		if err := e.claimNativeApprovals(tx, scopeID, turnID, approvalCallID, operation.ID); err != nil {
-			return err
-		}
-		if err := tx.Create(operation).Error; err != nil {
-			return err
-		}
-		return e.appendNativeEvidence(tx, &nativeEvidence{OperationID: operation.ID, SessionID: operation.SessionID, CallID: call.ID, Tool: call.Name, Status: "started", Data: js(map[string]any{"args_hash": operation.ArgsHash, "target": target, "risk": risk}), At: time.Now()})
-	})
+			if prepared == nil {
+				if err := e.claimNativeApprovals(tx, scopeID, turnID, approvalCallID, operation.ID); err != nil {
+					return err
+				}
+			}
+			if err := tx.Create(operation).Error; err != nil {
+				return err
+			}
+			return e.appendNativeEvidence(tx, &nativeEvidence{OperationID: operation.ID, SessionID: operation.SessionID, CallID: call.ID, Tool: call.Name, Status: "started", Data: js(map[string]any{"args_hash": operation.ArgsHash, "target": target, "risk": risk}), At: time.Now()})
+		})
+	}
+	if prepared != nil {
+		err = e.withSecurityDispatchBarrier(dispatch)
+	} else {
+		err = dispatch()
+	}
 	return operation, err
 }
 
 func (e *Engine) finishNativeOperation(operation *nativeOperation, c Config, value any, toolErr error) error {
 	if operation == nil {
 		return nil
+	}
+	if actual, observedErr, found := e.managedShellFinalResult(operation.ID, value); found {
+		value = actual
+		if observedErr != nil {
+			toolErr = observedErr
+		}
 	}
 	store, err := e.adkStore()
 	if err != nil {
@@ -196,7 +284,7 @@ func (e *Engine) finishNativeOperation(operation *nativeOperation, c Config, val
 			status = "not_executed"
 		}
 	}
-	if result["exitCode"] != nil && num(result["exitCode"], 0) != 0 {
+	if result["exitCode"] != nil && num(result["exitCode"], 0) != 0 && (operation.permit == nil || toolErr == nil) {
 		status = "failed"
 	}
 	handle := str(result["shell_id"])
@@ -217,11 +305,30 @@ func (e *Engine) finishNativeOperation(operation *nativeOperation, c Config, val
 		body = utf8Prefix(redact(toolErr.Error(), c), 32000)
 	}
 	now := time.Now()
-	updates := map[string]any{"status": status, "result": body, "handle": handle, "finished_at": now}
+	updates := map[string]any{"status": status, "result": body, "finished_at": now}
+	if handle != "" {
+		updates["handle"] = handle
+	}
+	if status == "failed" && operation.permit != nil && securityOperationMayMutate(operation.permit.operation) {
+		updates["orphan_state"] = "effects_unknown"
+		updates["closure_state"] = "effects_unknown"
+	}
 	if status == "dispatched" {
 		updates["finished_at"] = nil
 	}
-	return store.DB.Transaction(func(tx *gorm.DB) error {
+	persistErr := store.DB.Transaction(func(tx *gorm.DB) error {
+		if operation.SecurityTaskID != "" {
+			var registered nativeOperation
+			if err := tx.Select("id", "handle").First(&registered, "id = ?", operation.ID).Error; err != nil {
+				return err
+			}
+			if registered.Handle != "" && status == "not_executed" {
+				// The original I/O handle may already have been handed off.
+				// An error alone cannot prove zero effects or refund its budget.
+				status = "unknown"
+				updates["status"] = status
+			}
+		}
 		updated := tx.Model(&nativeOperation{}).Where("id = ? AND status = ?", operation.ID, "dispatched").Updates(updates)
 		if updated.Error != nil {
 			return updated.Error
@@ -229,6 +336,16 @@ func (e *Engine) finishNativeOperation(operation *nativeOperation, c Config, val
 		if updated.RowsAffected != 1 {
 			return errors.New("operation result did not match a dispatched operation")
 		}
-		return e.appendNativeEvidence(tx, &nativeEvidence{OperationID: operation.ID, SessionID: operation.SessionID, CallID: operation.CallID, Tool: operation.Tool, Status: map[string]string{"succeeded": "completed", "dispatched": "running", "unknown": "unknown", "failed": "failed", "not_executed": "not_executed"}[status], Data: body, At: now})
+		if err := e.appendNativeEvidence(tx, &nativeEvidence{OperationID: operation.ID, SessionID: operation.SessionID, CallID: operation.CallID, Tool: operation.Tool, Status: map[string]string{"succeeded": "completed", "dispatched": "running", "unknown": "unknown", "failed": "failed", "not_executed": "not_executed"}[status], Data: body, At: now}); err != nil {
+			return err
+		}
+		if status == "not_executed" && operation.permit != nil {
+			return RefundSecurityPermitTx(tx, operation.ID)
+		}
+		return nil
 	})
+	if persistErr != nil {
+		return persistErr
+	}
+	return e.completeManagedShellOperation(operation.ID)
 }

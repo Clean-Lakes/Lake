@@ -13,7 +13,7 @@ func (e *Engine) recordObservation(c Config, resourceID, title string, value any
 	memoryToolName := title
 	if result := obj(value); result["output"] != nil {
 		value = map[string]any{"output": result["output"], "exitCode": result["exitCode"], "truncated": result["truncated"]}
-		for _, key := range []string{"identity", "metric", "namespace", "pod", "container", "disks", "disk_note"} {
+		for _, key := range []string{"identity", "metric", "namespace", "pod", "container", "disks", "disk_note", "sample_hash", "observed_at", "sample_bytes", "sample_file_size"} {
 			if result[key] != nil {
 				obj(value)[key] = result[key]
 			}

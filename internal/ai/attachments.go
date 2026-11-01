@@ -25,6 +25,7 @@ func (r attachmentReader) Read(p []byte) (int, error) {
 }
 
 func (e *Engine) stageAttachment(ctx context.Context, id string, c Config, a map[string]any) (any, error) {
+	c = e.securityProtectedConfig(c)
 	if e.Bridge == nil {
 		return nil, errors.New("附件需要 Lake 工作台")
 	}
@@ -44,6 +45,9 @@ func (e *Engine) stageAttachment(ctx context.Context, id string, c Config, a map
 	defer input.Close()
 	target := str(a["runtime"])
 	if target == "local" {
+		if err = safeConfiguredFile(c, destination); err != nil {
+			return nil, err
+		}
 		if err = safeLocalFile(destination); err != nil {
 			return nil, err
 		}

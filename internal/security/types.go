@@ -282,6 +282,7 @@ type EvaluationInput struct {
 	LocalExecution                                            bool
 	Now                                                       time.Time
 	StoreID, RecoveryEpoch                                    string
+	SessionDenyLocal                                          bool // Trusted live host floor; false never overrides confirmed policy.
 	GateOpen                                                  bool
 	Operation                                                 PreparedOperation
 	Task                                                      SecurityTask

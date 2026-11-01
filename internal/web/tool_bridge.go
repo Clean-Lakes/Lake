@@ -96,7 +96,20 @@ func (b *Server) projectToolBridge(ctx context.Context, id, name string, args Ob
 		template := b.Store.Workflow(project, stringOf(args["workflow_id"]))
 		b.checkToolWorkflowScope(id, template)
 		options := b.workflowToolOptions(id)
-		run := b.startWorkflow(project, template.ID, integer(args["version"]), options)
+		managed, managedErr := b.Engine.SecurityProjectManaged(ctx, project)
+		if managedErr != nil {
+			return nil, managedErr
+		}
+		var run Object
+		if managed {
+			action, source, sourceErr := b.Engine.SecurityWorkflowActionReference(ctx, project, id)
+			if sourceErr != nil {
+				return nil, sourceErr
+			}
+			run = b.startWorkflowWithAction(ctx, project, template.ID, integer(args["version"]), "agent", "workflow-spawn:"+action, source, options)
+		} else {
+			run = b.startWorkflow(project, template.ID, integer(args["version"]), options)
+		}
 		return Object{"task_id": run["id"], "type": "workflow", "run": run}, nil
 	case "task_output", "task_stop":
 		run := b.Store.WorkflowRun(project, stringOf(args["task_id"]))

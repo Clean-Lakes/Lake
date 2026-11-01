@@ -83,25 +83,35 @@ type queryer interface {
 	Exec(string, ...any) (sql.Result, error)
 }
 type Store struct {
-	mu               sync.Mutex
-	memoryPublishMu  sync.Mutex
-	memoryV2         bool
-	memoryV2Wanted   bool
-	memoryIndexCache map[string]memoryIndexCacheEntry
-	db               *sql.DB
-	q                queryer
-	events           []Object
-	subscribers      map[chan Object]bool
-	Dir              string
-	lockFile         *os.File
-	readOnly         bool
+	mu                       sync.Mutex
+	memoryPublishMu          sync.Mutex
+	memoryV2                 bool
+	memoryV2Wanted           bool
+	memoryIndexCache         map[string]memoryIndexCacheEntry
+	db                       *sql.DB
+	q                        queryer
+	events                   []Object
+	subscribers              map[chan Object]bool
+	Dir                      string
+	lockFile                 *os.File
+	readOnly                 bool
+	skipMemoryInitialization bool
+	recoveryMemorySchema     int
+	securityResourceMutation func(func() any, []string) any
+	securityProjectCreated   func(string) error
 }
 
 func OpenStore(dir string) (*Store, error) {
 	return openStore(dir, operationalMemoryV2Ready)
 }
 
-func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
+type storeOpenOptions struct {
+	// Recovery requires the Memory owner's explicit initialization protocol;
+	// opening the resource store must not install/rebuild old Memory state.
+	SkipMemoryInitialization bool
+}
+
+func openStore(dir string, memoryV2Wanted bool, options ...storeOpenOptions) (*Store, error) {
 	if e := platform.MkdirAll(dir, 0700); e != nil {
 		return nil, e
 	}
@@ -130,25 +140,19 @@ func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	s := &Store{db: db, q: db, subscribers: map[chan Object]bool{}, Dir: dir, lockFile: lockFile, memoryV2Wanted: memoryV2Wanted}
-	if e = s.checkMemoryV2Compatibility(); e != nil {
-		db.Close()
-		return nil, e
+	if len(options) > 0 {
+		s.skipMemoryInitialization = options[0].SkipMemoryInitialization
 	}
-	if e = s.prepareNaturalRecallMigration(); e != nil {
-		db.Close()
-		return nil, e
+	if s.skipMemoryInitialization {
+		s.recoveryMemorySchema = s.existingRecoveryMemorySchema()
 	}
-	if e = s.prepareNaturalConsolidationMigration(); e != nil {
-		db.Close()
-		return nil, e
-	}
-	if e = s.prepareNaturalPreferenceMigration(); e != nil {
-		db.Close()
-		return nil, e
-	}
-	if e = s.prepareNaturalMemoryMigration(); e != nil {
-		db.Close()
-		return nil, e
+	if !s.skipMemoryInitialization {
+		for _, prepare := range []func() error{s.checkMemoryV2Compatibility, s.prepareNaturalRecallMigration, s.prepareNaturalConsolidationMigration, s.prepareNaturalPreferenceMigration, s.prepareNaturalMemoryMigration} {
+			if e = prepare(); e != nil {
+				db.Close()
+				return nil, e
+			}
+		}
 	}
 	if e = s.prepareStrategyMigration(); e != nil {
 		db.Close()
@@ -183,21 +187,13 @@ func openStore(dir string, memoryV2Wanted bool) (*Store, error) {
 		db.Close()
 		return nil, e
 	}
-	if e = s.migrateNaturalMemory(); e != nil {
-		db.Close()
-		return nil, e
-	}
-	if e = s.migrateNaturalPreference(); e != nil {
-		db.Close()
-		return nil, e
-	}
-	if e = s.migrateNaturalConsolidation(); e != nil {
-		db.Close()
-		return nil, e
-	}
-	if e = s.migrateNaturalRecall(); e != nil {
-		db.Close()
-		return nil, e
+	if !s.skipMemoryInitialization {
+		for _, migrate := range []func() error{s.migrateNaturalMemory, s.migrateNaturalPreference, s.migrateNaturalConsolidation, s.migrateNaturalRecall} {
+			if e = migrate(); e != nil {
+				db.Close()
+				return nil, e
+			}
+		}
 	}
 	s.update(func() any {
 		s.ensureBuiltinLocalResources("")
@@ -336,12 +332,14 @@ func (s *Store) migrate() error {
 	if e != nil {
 		return e
 	}
-	if e := s.migrateProjectMemory(); e != nil {
-		return e
-	}
-	if s.memoryV2Wanted {
-		if e := s.migrateMemoryV2(); e != nil {
+	if !s.skipMemoryInitialization {
+		if e := s.migrateProjectMemory(); e != nil {
 			return e
+		}
+		if s.memoryV2Wanted {
+			if e := s.migrateMemoryV2(); e != nil {
+				return e
+			}
 		}
 	}
 	return s.migrateStrategy()
@@ -535,16 +533,20 @@ func (s *Store) Project(id string) Object {
 	return s.read(func() any { return s.activeProject(id) }).(Object)
 }
 func (s *Store) CreateProject(name string) Object {
-	return s.update(func() any {
+	project := s.resourceUpdate(func() any {
 		p := Object{"id": ident(), "name": name, "createdAt": now()}
 		s.exec("INSERT INTO projects(id,name,createdAt) VALUES(?,?,?)", p["id"], name, p["createdAt"])
 		s.ensureBuiltinLocalResources(stringOf(p["id"]))
 		s.seedResourceTree()
 		return p
-	}).(Object)
+	}, "").(Object)
+	if s.securityProjectCreated != nil {
+		must(s.securityProjectCreated(stringOf(project["id"])))
+	}
+	return project
 }
 func (s *Store) CreateResource(project, name, kind string, config Object) Object {
-	return s.update(func() any {
+	return s.resourceUpdate(func() any {
 		s.activeProject(project)
 		if ref := stringOf(config["ssh_asset_ref"]); ref != "" {
 			r := s.resource(ref)
@@ -573,7 +575,7 @@ func (s *Store) CreateResource(project, name, kind string, config Object) Object
 			s.event(stringOf(session["id"]), "session")
 		}
 		return s.resource(id)
-	}).(Object)
+	}, "").(Object)
 }
 func (s *Store) CreateSession(project, title string, chosen []string) Object {
 	return s.update(func() any {

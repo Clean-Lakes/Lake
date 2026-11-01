@@ -23,6 +23,14 @@ func (e *Engine) TryStrategyModelSlot(ctx context.Context) (context.Context, fun
 }
 
 func (e *Engine) stream(ctx context.Context, model Model, history []Message, tools []Tool, delta func(string, string)) (modelResult, error) {
+	if err := e.checkSecurityProviderContext(ctx); err != nil {
+		return modelResult{}, err
+	}
+	if expiry, ok := ctx.Value(securityProviderDeadlineKey{}).(time.Time); ok && !expiry.IsZero() && ctx.Value(auxiliaryModelKey{}) != true {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, expiry)
+		defer cancel()
+	}
 	if e.ModelActivity != nil && ctx.Value(auxiliaryModelKey{}) != true {
 		releaseActivity := e.ModelActivity()
 		defer releaseActivity()
@@ -36,6 +44,9 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 			return modelResult{}, ctx.Err()
 		}
 		defer func() { <-w.parent.childModelSlots }()
+		if err := e.checkSecurityProviderContext(ctx); err != nil {
+			return modelResult{}, err
+		}
 	}
 	if held, ok := ctx.Value(reservedLearningSlotKey{}).(chan struct{}); !ok || held != e.modelSlots {
 		select {
@@ -44,6 +55,9 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 			return modelResult{}, ctx.Err()
 		}
 		defer func() { <-e.modelSlots }()
+	}
+	if err := e.checkSecurityProviderContext(ctx); err != nil {
+		return modelResult{}, err
 	}
 	e.setSREActivity("thinking", "")
 	if e.worker != nil {
@@ -80,6 +94,13 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 			}
 			return modelResult{}, ctx.Err()
 		}
+		if err := e.checkSecurityProviderContext(ctx); err != nil {
+			settleAgentBudget(e.worker, charge, Usage{}, false)
+			if w.sreTaskID != "" {
+				e.settleSREBudget(w.parentID, w.sreTaskID, charge, Usage{}, false)
+			}
+			return modelResult{}, err
+		}
 		result, err := Stream(ctx, model, history, tools, delta)
 		budgetUsage := result.Usage
 		if err != nil && (!budgetUsage.InputKnown || !budgetUsage.OutputKnown) {
@@ -96,6 +117,9 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 			e.worker.mu.Unlock()
 		}
 		return result, err
+	}
+	if err := e.checkSecurityProviderContext(ctx); err != nil {
+		return modelResult{}, err
 	}
 	return Stream(ctx, model, history, tools, delta)
 }

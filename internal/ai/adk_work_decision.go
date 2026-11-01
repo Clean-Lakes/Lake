@@ -99,6 +99,18 @@ func (d *adkTurnDriver) workDecision(_ agent.Context, response *model.LLMRespons
 			return nil, d.engine.writeWorkGoal(&row, &g, false)
 		}
 		if len(g.Items) > 0 && (state == "completed" || state == "failed") {
+			if g.closure != nil {
+				if _, err = d.engine.VerifyWorkGoal(id, g.ID, g.Revision); err != nil {
+					return nil, err
+				}
+				row, g, err = d.engine.workRow(id, g.ID)
+				if err != nil {
+					return nil, err
+				}
+				if g.Status != "completed" {
+					return &model.LLMResponse{Content: &genai.Content{Role: "model", Parts: []*genai.Part{{Text: "目标尚未通过验收，未完成条件及原操作记录已保留。"}}}}, nil
+				}
+			}
 			g.Status = state
 			g.Summary = redact(utf8Prefix(text.String(), 8000), *d.config)
 			g.BackgroundSummary = d.engine.workParent != nil

@@ -68,7 +68,7 @@ func mergeSSHResourceEdit(old, input Object) Object {
 }
 
 func (s *Store) EditTerminalResource(id, name string, config Object, changed bool) Object {
-	return s.update(func() any {
+	return s.resourceUpdate(func() any {
 		resource := s.resource(id)
 		s.InvalidateMemoryIndexCache()
 		project := stringOf(resource["projectId"])
@@ -87,7 +87,7 @@ func (s *Store) EditTerminalResource(id, name string, config Object, changed boo
 			s.event(stringOf(session["id"]), "session")
 		}
 		return s.resource(id)
-	}).(Object)
+	}, id).(Object)
 }
 
 func (b *Server) editTerminalResourceRoute(w http.ResponseWriter, r *http.Request, id string) {

@@ -30,23 +30,45 @@ func resumingNativeApproval(ctx context.Context) bool {
 // NativeApproval is the durable server-owned binding. The UI supplies only its
 // ID and decision. Neither model arguments nor a resume payload grant access.
 type nativeApproval struct {
-	ID               string `gorm:"primaryKey"`
-	SessionID        string `gorm:"index"`
-	RootTurnID       string
-	RuntimeSessionID string
-	CallID           string
-	Fingerprint      string
-	PolicyHash       string
-	CallHash         string
-	PreviewHash      string
-	Binding          string
-	Status           string
-	Accepted         bool
-	ConfirmationID   string
-	Payload          string
-	Author           string
-	Branch           string
-	ExpiresAt        time.Time
+	GrantProposal     string
+	SecurityTaskID    string
+	StoreID           string
+	RecoveryEpoch     string
+	DescriptorDigest  string
+	ScopeID           string
+	ExecutionRevision int64
+	EnvelopeException bool
+	CreatedAt         time.Time
+	ID                string `gorm:"primaryKey"`
+	SessionID         string `gorm:"index"`
+	RootTurnID        string
+	RuntimeSessionID  string
+	CallID            string
+	Fingerprint       string
+	PolicyHash        string
+	CallHash          string
+	PreviewHash       string
+	Binding           string
+	Status            string
+	Accepted          bool
+	ConfirmationID    string
+	Payload           string
+	Author            string
+	Branch            string
+	ExpiresAt         time.Time
+}
+
+// UI/SDK runtime sessions remain separate from the canonical parent execution
+// identity. Child approvals bind the parent goal/task and their exact scope.
+func nativeApprovalScope(state State) (sessionID, rootTurnID, scopeID, taskID string, managed bool) {
+	sessionID, rootTurnID = state.View.Session, state.View.RootTurnID
+	if execution := state.Config.securityExecution; execution != nil && execution.Managed && execution.Task.ID != "" {
+		return execution.SessionID, execution.Owner.RootTurnID, execution.Owner.ScopeID, execution.Task.ID, true
+	}
+	if state.SecurityManaged && state.SecurityTaskID != "" {
+		return sessionID, rootTurnID, "", state.SecurityTaskID, true
+	}
+	return sessionID, rootTurnID, "", "", false
 }
 
 // publishFollowupConfirmations covers the public ToolContext re-entry case in
@@ -63,11 +85,15 @@ func (e *Engine) publishFollowupConfirmations(ctx context.Context, s *session, s
 		return err
 	}
 	s.mu.Lock()
-	id, turn := s.state.View.Session, s.state.View.RootTurnID
+	id, turn, scopeID, taskID, managed := nativeApprovalScope(s.state)
 	s.mu.Unlock()
 	for callID, confirmation := range event.Actions.RequestedToolConfirmations {
 		var pending nativeApproval
-		if err = store.DB.Where("session_id = ? AND root_turn_id = ? AND call_id = ? AND status IN ? AND confirmation_id = ?", id, turn, callID, []string{"pending", "decided"}, "").First(&pending).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		query := store.DB.Where("session_id = ? AND root_turn_id = ? AND call_id = ? AND status IN ? AND confirmation_id = ?", id, turn, callID, []string{"pending", "decided"}, "")
+		if managed {
+			query = query.Where("scope_id = ? AND security_task_id = ?", scopeID, taskID)
+		}
+		if err = query.First(&pending).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 			continue
 		} else if err != nil {
 			return err
@@ -150,8 +176,14 @@ func (e *Engine) waitNativeApproval(ctx context.Context, s *session, c Config, p
 		if json.Unmarshal([]byte(record.Binding), &original) != nil {
 			return false, errors.New("invalid approval binding")
 		}
+		if prepared := preparedSecurityOperation(ctx); prepared != nil {
+			op := prepared.descriptor
+			if record.SecurityTaskID != op.TaskID || record.StoreID != op.StoreID || record.RecoveryEpoch != op.RecoveryEpoch || record.ExecutionRevision != op.ExecutionRevision || record.ScopeID != op.ChildScopeID || record.DescriptorDigest != prepared.digest || record.CreatedAt.IsZero() || record.ExpiresAt.After(record.CreatedAt.Add(15*time.Minute)) {
+				return false, errors.New("security operation or task changed; approval expired")
+			}
+		}
 		s.mu.Lock()
-		sessionID, turnID := s.state.View.Session, s.state.View.RootTurnID
+		sessionID, turnID, _, _, _ := nativeApprovalScope(s.state)
 		s.mu.Unlock()
 		// A preceding approved call may bind the target, so current policy no
 		// longer requests confirmation. Still settle this exact response once;
@@ -165,7 +197,16 @@ func (e *Engine) waitNativeApproval(ctx context.Context, s *session, c Config, p
 		if record.Status != "decided" || record.Accepted != confirmation.Confirmed {
 			return false, errors.New("approval expired or already decided")
 		}
-		claimErr := store.DB.Transaction(func(tx *gorm.DB) error {
+
+		expectedProposal, _ := ctx.Value(securityGrantConfirmationKey{}).(*securityGrantConfirmation)
+		if record.GrantProposal != "" && (expectedProposal == nil || record.GrantProposal != js(expectedProposal)) || record.GrantProposal == "" && expectedProposal != nil {
+			return false, errors.New("security: task grant approval scope changed")
+		}
+		claimErr := e.workMutation(store.DB, func(tx *gorm.DB) error {
+			if record.GrantProposal != "" && record.Accepted {
+				return e.claimSecurityTaskGrantApprovalTx(ctx, tx, record, preparedSecurityOperation(ctx), time.Now().UTC())
+			}
+
 			claimed := tx.Model(&nativeApproval{}).Where("id = ? AND status = ?", id, "decided").Update("status", "authorized")
 			if claimed.Error != nil {
 				return claimed.Error
@@ -204,7 +245,24 @@ func (e *Engine) waitNativeApproval(ctx context.Context, s *session, c Config, p
 	}
 	p.ID = "adk-" + p.ID
 	s.mu.Lock()
-	record := nativeApproval{ID: p.ID, SessionID: s.state.View.Session, RootTurnID: s.state.View.RootTurnID, CallID: p.Call.ID, Fingerprint: p.Fingerprint, PolicyHash: nativePolicyHash(c), Binding: string(safeJSON([]byte(js(p)), c)), CallHash: hash(p.Call.Arguments), PreviewHash: hash(js(p.Preview)), Status: "pending", ExpiresAt: time.Now().Add(15 * time.Minute)}
+	// Keep the legacy SQLite timestamp representation consistent with its
+	// existing pending-decision queries. Go comparisons remain instant-aware.
+	// Both fields still use one clock sample, so the TTL is exactly 15 minutes.
+	now := time.Now()
+	record := nativeApproval{ID: p.ID, SessionID: s.state.View.Session, RootTurnID: s.state.View.RootTurnID, CallID: p.Call.ID, Fingerprint: p.Fingerprint, PolicyHash: nativePolicyHash(c), Binding: string(safeJSON([]byte(js(p)), c)), CallHash: hash(p.Call.Arguments), PreviewHash: hash(js(p.Preview)), Status: "pending", CreatedAt: now, ExpiresAt: now.Add(15 * time.Minute)}
+	if prepared := preparedSecurityOperation(ctx); prepared != nil {
+		op := prepared.descriptor
+		record.SessionID, record.RootTurnID = op.SessionID, op.RootTurnID
+		record.SecurityTaskID, record.StoreID, record.RecoveryEpoch = op.TaskID, op.StoreID, op.RecoveryEpoch
+		record.DescriptorDigest, record.ExecutionRevision, record.ScopeID = prepared.digest, op.ExecutionRevision, op.ChildScopeID
+	}
+	if proposal, _ := ctx.Value(securityGrantConfirmationKey{}).(*securityGrantConfirmation); proposal != nil {
+		record.GrantProposal = js(proposal)
+		if proposal.SingleException {
+			record.EnvelopeException = true
+			record.ExpiresAt = minTime(record.ExpiresAt, proposal.RequestedScope.ExpiresAt).In(now.Location())
+		}
+	}
 	if s.state.Runtime != nil {
 		record.RuntimeSessionID = s.state.Runtime.SessionID
 	}
@@ -259,9 +317,13 @@ func (e *Engine) recordNativeConfirmation(s *session, call *genai.FunctionCall, 
 		return err
 	}
 	s.mu.Lock()
-	id, turn := s.state.View.Session, s.state.View.RootTurnID
+	id, turn, scopeID, taskID, managed := nativeApprovalScope(s.state)
 	s.mu.Unlock()
-	result := store.DB.Model(&nativeApproval{}).Where("session_id = ? AND root_turn_id = ? AND call_id = ? AND status IN ?", id, turn, original.ID, []string{"pending", "decided"}).Updates(map[string]any{"confirmation_id": call.ID, "payload": js(call.Args["toolConfirmation"]), "author": author, "branch": branch})
+	query := store.DB.Model(&nativeApproval{}).Where("session_id = ? AND root_turn_id = ? AND call_id = ? AND status IN ?", id, turn, original.ID, []string{"pending", "decided"})
+	if managed {
+		query = query.Where("scope_id = ? AND security_task_id = ?", scopeID, taskID)
+	}
+	result := query.Updates(map[string]any{"confirmation_id": call.ID, "payload": js(call.Args["toolConfirmation"]), "author": author, "branch": branch})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -352,7 +414,12 @@ func (e *Engine) decideNativeApproval(store *storage.Store, s *session, id strin
 		return nil, errors.New("explicit target confirmation required")
 	}
 
-	result := store.DB.Model(&nativeApproval{}).Where("id = ? AND session_id = ? AND root_turn_id = ? AND status = ? AND expires_at > ?", id, s.state.View.Session, s.state.View.RootTurnID, "pending", time.Now()).Updates(map[string]any{"status": "decided", "accepted": accept})
+	sessionID, rootTurnID, scopeID, taskID, managed := nativeApprovalScope(s.state)
+	query := store.DB.Model(&nativeApproval{}).Where("id = ? AND session_id = ? AND root_turn_id = ? AND status = ? AND expires_at > ?", id, sessionID, rootTurnID, "pending", time.Now())
+	if managed {
+		query = query.Where("scope_id = ? AND security_task_id = ?", scopeID, taskID)
+	}
+	result := query.Updates(map[string]any{"status": "decided", "accepted": accept})
 	storeErr := result.Error
 	if storeErr == nil && result.RowsAffected != 1 {
 		storeErr = errors.New("approval expired or already decided")

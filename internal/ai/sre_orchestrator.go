@@ -40,6 +40,41 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 	}
 	baseConfig := s.state.Config
 	s.mu.Unlock()
+	projectID := task.ProjectID
+	if projectID == "" {
+		projectID = configSecurityProject(baseConfig)
+	}
+	managed, managedErr := e.SecurityProjectManaged(ctx, projectID)
+	if managedErr != nil {
+		return managedErr
+	}
+	var managedExecution SecurityExecutionContext
+	if managed {
+		if configured := configSecurityProject(baseConfig); configured != "" && configured != projectID {
+			return errors.New("security: SRE project binding mismatch")
+		}
+		s.mu.Lock()
+		s.state.Config.SecurityProjectID = projectID
+		s.state.SecurityManaged = true
+		baseConfig = s.state.Config
+		s.mu.Unlock()
+		if !planOnly {
+			if task.LatestPlan() == nil {
+				return errors.New("security: first create a plan and confirm its typed work acceptance before execution")
+			}
+			managedExecution, err = e.prepareSecuritySREStart(ctx, s, task)
+			if err != nil {
+				return err
+			}
+			if err = e.BindSecuritySREPlan(ctx, sessionID, taskID); err != nil {
+				_ = e.finishSecurityTurn(managedExecution, true)
+				return err
+			}
+			bounded, stop := context.WithDeadline(ctx, managedExecution.Task.ExpiresAt)
+			defer stop()
+			ctx = bounded
+		}
+	}
 	s.mu.Lock()
 	if s.cancel != nil {
 		s.mu.Unlock()
@@ -48,7 +83,7 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
 	s.state.View.Status = "running"
-	if _, recovering := e.sreRecoveries.Load(sessionID + ":" + taskID); !recovering {
+	if _, recovering := e.sreRecoveries.Load(sessionID + ":" + taskID); !recovering && (!managed || managedExecution.Task.ID == "") {
 		s.state.View.RootTurnID = uid()
 	}
 	s.state.RootQuestion = task.Goal
@@ -103,6 +138,9 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 		s.mu.Unlock()
 		if e.Emit != nil {
 			e.Emit(Event{Session: sessionID, Type: "sreDone"})
+		}
+		if finishErr := e.finishSecurityTurn(managedExecution, err != nil); finishErr != nil && err == nil {
+			err = finishErr
 		}
 	}()
 	if task.BudgetPolicy == "" {
@@ -184,6 +222,27 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 	runID := task.ActiveRun().ID
 	if err = e.runSREPlanSteps(ctx, sessionID, taskID, runID, plan); err != nil {
 		return err
+	}
+	if managed {
+		row, _, verifyErr := e.workRow(sessionID, managedExecution.GoalID)
+		if verifyErr != nil {
+			return verifyErr
+		}
+		acceptanceID, verifyErr := e.VerifyWorkGoal(sessionID, managedExecution.GoalID, row.Revision)
+		if verifyErr != nil {
+			return verifyErr
+		}
+		store, verifyErr := e.adkStore()
+		if verifyErr != nil {
+			return verifyErr
+		}
+		var acceptance workAcceptanceRecord
+		if verifyErr = store.DB.First(&acceptance, "id = ?", acceptanceID).Error; verifyErr != nil {
+			return verifyErr
+		}
+		if acceptance.State != "pass" {
+			return errors.New("security: workflow execution ended but goal acceptance remains incomplete")
+		}
 	}
 
 	_, err = e.sreRepository.MutateSRETask(sessionID, taskID, 0, "task_finished", func(t *SRETask) error {

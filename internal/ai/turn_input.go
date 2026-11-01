@@ -6,15 +6,18 @@ import (
 )
 
 type TurnInput struct {
-	StrategyMessageID   string       `json:"-"`
-	SRECoordination     bool         `json:"-"`
-	IgnoreProjectMemory bool         `json:"ignoreProjectMemory,omitempty"`
-	TargetScope         *TargetScope `json:"-"`
-	workflow            []WorkflowStep
-	UserText            string            `json:"message"`
-	Context             string            `json:"context,omitempty"`
-	References          []map[string]any  `json:"references,omitempty"`
-	Images              []ImageAttachment `json:"images,omitempty"`
+	SecurityIntent       GoalIntent   `json:"-"` // Set only by a trusted host goal action.
+	SecurityGoalID       string       `json:"-"`
+	SecurityGoalRevision int64        `json:"-"`
+	StrategyMessageID    string       `json:"-"`
+	SRECoordination      bool         `json:"-"`
+	IgnoreProjectMemory  bool         `json:"ignoreProjectMemory,omitempty"`
+	TargetScope          *TargetScope `json:"-"`
+	workflow             []WorkflowStep
+	UserText             string            `json:"message"`
+	Context              string            `json:"context,omitempty"`
+	References           []map[string]any  `json:"references,omitempty"`
+	Images               []ImageAttachment `json:"images,omitempty"`
 }
 
 func (input TurnInput) validate() error {

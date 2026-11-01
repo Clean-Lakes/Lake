@@ -99,6 +99,18 @@ func (b *Server) projectMemoryBridge(ctx context.Context, id, name string, args 
 	}
 	session := b.Store.Session(id)
 	project := stringOf(session["projectId"])
+	if err := b.Engine.CheckSecurityMemoryEligibility(ctx, project, ai.SecurityMemoryUse); err != nil {
+		return nil, err
+	}
+	purpose := ai.SecurityMemoryRead
+	if name == "project_memory_index" {
+		purpose = ai.SecurityMemoryIndex
+	} else if name == "save_project_memory" || name == "forget_project_memory" {
+		purpose = ai.SecurityMemoryCapture
+	}
+	if err := b.Engine.CheckSecurityMemoryEligibility(ctx, project, purpose); err != nil {
+		return nil, err
+	}
 	settings := b.Store.MemorySettings(project)
 	if name == "project_memory_status" {
 		if b.Store.memoryV2 && settings["useEnabled"] == true {

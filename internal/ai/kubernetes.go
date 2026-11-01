@@ -15,6 +15,12 @@ func kubernetesQueryTool() Tool {
 }
 
 func (e *Engine) queryKubernetes(ctx context.Context, c Config, a map[string]any) (any, error) {
+	if p, _ := ctx.Value(securityPermitContextKey{}).(*SecurityPermit); p != nil && p.prepared != nil && p.prepared.read != nil {
+		return e.executeSecurityReadProbe(ctx, c, "query_kubernetes", a)
+	}
+	if err := e.requireSecurityAdapterContext(ctx, c); err != nil {
+		return nil, err
+	}
 	as, err := asset(c, str(a["asset_ref"]))
 	if err != nil {
 		return nil, err
@@ -60,6 +66,9 @@ func kubernetesActionTools() []Tool {
 }
 
 func (e *Engine) kubernetesOperation(ctx context.Context, c Config, name string, a map[string]any) (any, error) {
+	if err := e.requireSecurityAdapterContext(ctx, c); err != nil {
+		return nil, err
+	}
 	failBeforeDispatch := func(err error) (any, error) {
 		if name == "kubernetes_action" {
 			return nil, &ToolNotExecutedError{Err: err}

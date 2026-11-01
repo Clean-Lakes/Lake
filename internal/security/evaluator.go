@@ -82,7 +82,7 @@ func Evaluate(in EvaluationInput) Decision {
 	if o.LocalExecution != in.LocalExecution {
 		return deny(ReasonOperationStale)
 	}
-	if o.LocalExecution && (p.DenyLocal || !slices.Contains(o.Capabilities, "local.execute")) {
+	if o.LocalExecution && (p.DenyLocal || in.SessionDenyLocal || !slices.Contains(o.Capabilities, "local.execute")) {
 		return deny(ReasonLocalExecutionDenied)
 	}
 	if !sameResources(o.Resources, in.Resources) {
@@ -98,7 +98,7 @@ func Evaluate(in EvaluationInput) Decision {
 		if !slices.Contains(p.ResourceIDs, r.ID) {
 			return deny(ReasonTargetOutsideBoundary)
 		}
-		if r.Local && (p.DenyLocal || !slices.Contains(o.Capabilities, "local.execute")) {
+		if r.Local && (p.DenyLocal || in.SessionDenyLocal || !slices.Contains(o.Capabilities, "local.execute")) {
 			return deny(ReasonLocalExecutionDenied)
 		}
 	}
@@ -217,20 +217,29 @@ func Evaluate(in EvaluationInput) Decision {
 	// A confirmed task budget is independent of capability authority. Project
 	// allow and exact approvals cannot silently bypass an explicit use limit.
 	if in.Envelope != nil && withinEnvelope(o, *in.Envelope) && len(in.Envelope.BudgetGrantIDs) > 0 && !pureTaskControl(o) {
-		budgetInput := in
-		budgetInput.Grants = nil
-		for _, grant := range in.Grants {
-			if slices.Contains(in.Envelope.BudgetGrantIDs, grant.ID) {
-				budgetInput.Grants = append(budgetInput.Grants, grant)
+		if approval != nil && approval.EnvelopeException {
+			// This is an explicitly reviewed extra operation, not a refill or an
+			// unbounded exception. The original exact single approval is consumed by
+			// AcquirePermit; the task's remaining budget is unchanged.
+			if !slices.ContainsFunc(d.Authorities, func(source AuthoritySource) bool { return source.Kind == "single_approval" && source.ID == approval.ID }) {
+				d.Authorities = append(d.Authorities, AuthoritySource{Kind: "single_approval", ID: approval.ID})
 			}
-		}
-		for _, capability := range o.Capabilities {
-			for _, resourceID := range resourceIDs {
-				grant := matchingGrant(budgetInput, o, capability, resourceID)
-				if grant == nil {
-					return ask(ReasonTaskScopeExtensionRequired)
+		} else {
+			budgetInput := in
+			budgetInput.Grants = nil
+			for _, grant := range in.Grants {
+				if slices.Contains(in.Envelope.BudgetGrantIDs, grant.ID) {
+					budgetInput.Grants = append(budgetInput.Grants, grant)
 				}
-				d.Authorities = append(d.Authorities, AuthoritySource{Capability: capability, ResourceID: resourceID, Kind: "task_budget", ID: grant.ID, Revision: grant.Revision})
+			}
+			for _, capability := range o.Capabilities {
+				for _, resourceID := range resourceIDs {
+					grant := matchingGrant(budgetInput, o, capability, resourceID)
+					if grant == nil {
+						return ask(ReasonTaskScopeExtensionRequired)
+					}
+					d.Authorities = append(d.Authorities, AuthoritySource{Capability: capability, ResourceID: resourceID, Kind: "task_budget", ID: grant.ID, Revision: grant.Revision})
+				}
 			}
 		}
 	}

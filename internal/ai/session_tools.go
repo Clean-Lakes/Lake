@@ -269,10 +269,16 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot .
 	key := hash(s.state.View.RootTurnID + js(input.Questions))
 	previous, reused := s.state.QuestionDecisions[key]
 	s.mu.Unlock()
-	if reused {
+	if reused && !hasSecurityConfirmationQuestion(ctx) {
 		return questionResult(input.Questions, previous, true), nil
 	}
 	req := &QuestionRequest{ID: uid(), Questions: input.Questions}
+	if hasSecurityConfirmationQuestion(ctx) {
+		req.ID = "security-confirm-" + req.ID
+	}
+	if err := e.bindSecurityConfirmationQuestion(ctx, s, req); err != nil {
+		return nil, err
+	}
 	if len(pilot) > 0 {
 		req.Pilot = pilot[0]
 	}
@@ -316,7 +322,10 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot .
 			s.state.QuestionDecisions = map[string]map[string][]string{}
 		}
 		s.state.QuestionDecisions[key] = answers
-		saveErr := e.save(s)
+		saveErr := e.commitSecurityConfirmationAnswer(ctx, s, req, answers)
+		if saveErr == nil {
+			saveErr = e.save(s)
+		}
 		s.mu.Unlock()
 		return questionResult(req.Questions, answers, false), saveErr
 	case <-ctx.Done():
@@ -331,6 +340,9 @@ func (e *Engine) ReplyQuestion(id, requestID string, answers map[string][]string
 // from the actual human answer. Question text and model-proposed options cannot
 // select resources before that answer is validated and submitted.
 func (e *Engine) ReplyQuestionWithTarget(id, requestID string, answers map[string][]string, scope *TargetScope) error {
+	if handled, err := e.replySecurityGoalQuestion(id, requestID, answers); handled {
+		return err
+	}
 	s, err := e.get(id)
 	if err != nil {
 		return err
@@ -342,6 +354,9 @@ func (e *Engine) ReplyQuestionWithTarget(id, requestID string, answers map[strin
 		return errors.New("question expired")
 	}
 	if err := validateQuestionAnswers(req, answers); err != nil {
+		return err
+	}
+	if err := e.commitSecurityConfirmationAnswer(context.Background(), s, req, answers); err != nil {
 		return err
 	}
 	if err := e.recordPilotSelection(req, answers); err != nil {

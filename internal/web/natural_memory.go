@@ -3,6 +3,7 @@ package web
 import (
 	"strings"
 
+	"github.com/Clean-Lakes/Lake/internal/ai"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 )
 
@@ -20,6 +21,19 @@ func naturalScope(ctx StrategyContext) strategy.Scope {
 func (s *Store) naturalSettings(ctx StrategyContext) Object {
 	scope := naturalScope(ctx)
 	key := s.strategyAuthorize(ctx, scope)
+	if s.skipMemoryInitialization {
+		out := Object{"scope": scope, "revision": 0, "epoch": 0, "autoEnabled": false, "automaticReady": false, "consentVersion": 0, "policyVersion": naturalMemoryPolicyVersion, "recallSettings": Object{"revision": 0, "useEnabled": false}, "projectMemorySettings": nil, "operationalMemoryVersion": 1}
+		if s.memoryColumnsPresent("naturalMemorySettings", "scopeKey", "revision", "epoch") {
+			if metadata := s.row("SELECT revision,epoch FROM naturalMemorySettings WHERE scopeKey=?", key); metadata != nil {
+				out["revision"], out["epoch"] = metadata["revision"], metadata["epoch"]
+			}
+		}
+		out["recallSettings"] = s.naturalRecallSettings(ctx)
+		if ctx.ProjectID != "" {
+			out["projectMemorySettings"] = s.memorySettings(ctx.ProjectID)
+		}
+		return out
+	}
 	row := s.row("SELECT * FROM naturalMemorySettings WHERE scopeKey=?", key)
 	revision, epoch := 0, 0
 	if row != nil {
@@ -66,7 +80,13 @@ func (s *Store) naturalSaveReceipt(scope, key, digest string, result Object) {
 	s.exec("INSERT INTO naturalMemoryReceipts VALUES(?,?,?,?)", scope, strategy.ContentHash(key), digest, jsonText(result))
 }
 func (s *Store) SetNaturalMemorySettings(ctx StrategyContext, key string, expected int, auto bool) (Object, error) {
+	if s.skipMemoryInitialization && auto {
+		return nil, ai.ErrSecurityMemoryRecoveryUnqualified
+	}
 	return strategyCall(s, true, func() Object {
+		if s.skipMemoryInitialization && (!s.memoryColumnsPresent("naturalMemorySettings", "scopeKey", "revision", "epoch", "autoEnabled", "consentVersion") || !s.memoryColumnsPresent("naturalMemoryReceipts", "scopeKey", "keyHash", "requestHash", "resultJSON")) {
+			naturalFail(409, "recovery_qualification_required")
+		}
 		scope := s.strategyEnsureScope(ctx, naturalScope(ctx))
 		if auto && s.memoryV2 {
 			naturalFail(409, "automatic_not_ready")

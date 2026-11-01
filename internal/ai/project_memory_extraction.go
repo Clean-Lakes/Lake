@@ -8,6 +8,10 @@ import (
 // ExtractMemory uses the ordinary provider adapter and model concurrency limit,
 // but deliberately supplies no tools or conversation session.
 func (e *Engine) ExtractMemory(ctx context.Context, model Model, messages []Message) (string, Usage, error) {
+	project, _ := ctx.Value(securityMemoryProjectContext{}).(string)
+	if err := e.CheckSecurityMemoryEligibility(ctx, project, SecurityMemoryProvider); err != nil {
+		return "", Usage{}, err
+	}
 	if len(messages) < 2 || messages[0].Role != "system" || messages[1].Role != "user" {
 		return "", Usage{}, errors.New("invalid memory extraction input")
 	}

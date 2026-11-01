@@ -94,82 +94,91 @@ func (e *Engine) observation(ctx context.Context, c Config, name string, a map[s
 	defer func() { <-slots }()
 	var value any
 	memoryObservationStarted := time.Now()
-	switch name {
-	case "observe_cluster":
-		value, err = e.observeCluster(ctx, c, as, a)
-	case "observe_cluster_logs":
-		value, err = e.observeClusterLogs(ctx, c, as, a)
-	case "observe_journal":
-		value, err = e.observeJournal(ctx, c, as, a)
-	case "observe_host":
-		if as.Kind != "local" && as.Kind != "ssh" {
-			return nil, errors.New("Scout 仅调查分配的本机或 SSH 主机")
-		}
-		command := ""
-		switch str(a["metric"]) {
-		case "overview", "status":
-			command = "uname -a; uptime; if [ \"$(uname -s)\" = Darwin ]; then LC_ALL=C top -l 2 -n 0 -s 1 | tail -n 14; vm_stat; sysctl vm.swapusage; else LC_ALL=C vmstat 1 2; free -m; fi; df -Pk"
-		case "processes":
-			command = "ps -Ao pid,pcpu,pmem,comm | sort -nr -k 2 | head -n 40"
-		case "disk_usage", "open_deleted":
-			command, err = hostDetailCommand(str(a["metric"]), str(a["path"]))
-			if err != nil {
+	permit, _ := ctx.Value(securityPermitContextKey{}).(*SecurityPermit)
+	if permit != nil && permit.prepared != nil && permit.prepared.read != nil {
+		value, err = e.executeSecurityReadProbe(ctx, c, name, a)
+	} else {
+		switch name {
+		case "observe_cluster":
+			value, err = e.observeCluster(ctx, c, as, a)
+		case "observe_cluster_logs":
+			value, err = e.observeClusterLogs(ctx, c, as, a)
+		case "observe_journal":
+			value, err = e.observeJournal(ctx, c, as, a)
+		case "observe_host":
+			if as.Kind != "local" && as.Kind != "ssh" {
+				return nil, errors.New("Scout 仅调查分配的本机或 SSH 主机")
+			}
+			command := ""
+			switch str(a["metric"]) {
+			case "overview", "status":
+				command = "uname -a; uptime; if [ \"$(uname -s)\" = Darwin ]; then LC_ALL=C top -l 2 -n 0 -s 1 | tail -n 14; vm_stat; sysctl vm.swapusage; else LC_ALL=C vmstat 1 2; free -m; fi; df -Pk"
+			case "processes":
+				command = "ps -Ao pid,pcpu,pmem,comm | sort -nr -k 2 | head -n 40"
+			case "disk_usage", "open_deleted":
+				command, err = hostDetailCommand(str(a["metric"]), str(a["path"]))
+				if err != nil {
+					return nil, err
+				}
+			default:
+				return nil, errors.New("不支持的主机指标")
+			}
+			if str(a["metric"]) == "status" {
+				command = strings.TrimSuffix(command, "; df -Pk")
+				command += "; if [ \"$(uname -s)\" = Darwin ]; then sysctl -n hw.memsize; fi; if command -v systemctl >/dev/null 2>&1; then printf '\\nKUBELET SERVICE STATUS (not Kubernetes Ready):\\n'; systemctl is-active kubelet 2>&1 || true; systemctl show kubelet --no-pager -p ActiveState -p SubState -p ExecMainStatus -p NRestarts 2>&1 || true; fi; df -Pk | head -n 25; ps -Ao pid,pcpu,pmem,comm | sort -nr -k 2 | head -n 25"
+			}
+			value, err = e.command(ctx, c, map[string]any{"asset_ref": as.ID, "runtime": as.Kind}, command)
+			if err == nil && (str(a["metric"]) == "overview" || str(a["metric"]) == "status") {
+				obj(value)["disks"] = hostSnapshotDisks(str(obj(value)["output"]))
+				obj(value)["disk_note"] = "available_percent_of_total is computed from df available/total; df used% has a different denominator when blocks are reserved. This is not a measured kubelet eviction threshold or proof of DiskPressure."
+			}
+		case "observe_logs":
+			if as.Kind != "local" && as.Kind != "ssh" {
+				return nil, errors.New("Trace 仅读取分配主机的日志")
+			}
+			path := str(a["path"])
+			if err = safeFile(path); err != nil {
 				return nil, err
 			}
-		default:
-			return nil, errors.New("不支持的主机指标")
-		}
-		if str(a["metric"]) == "status" {
-			command = strings.TrimSuffix(command, "; df -Pk")
-			command += "; if [ \"$(uname -s)\" = Darwin ]; then sysctl -n hw.memsize; fi; if command -v systemctl >/dev/null 2>&1; then printf '\\nKUBELET SERVICE STATUS (not Kubernetes Ready):\\n'; systemctl is-active kubelet 2>&1 || true; systemctl show kubelet --no-pager -p ActiveState -p SubState -p ExecMainStatus -p NRestarts 2>&1 || true; fi; df -Pk | head -n 25; ps -Ao pid,pcpu,pmem,comm | sort -nr -k 2 | head -n 25"
-		}
-		value, err = e.command(ctx, c, map[string]any{"asset_ref": as.ID, "runtime": as.Kind}, command)
-		if err == nil && (str(a["metric"]) == "overview" || str(a["metric"]) == "status") {
-			obj(value)["disks"] = hostSnapshotDisks(str(obj(value)["output"]))
-			obj(value)["disk_note"] = "available_percent_of_total is computed from df available/total; df used% has a different denominator when blocks are reserved. This is not a measured kubelet eviction threshold or proof of DiskPressure."
-		}
-	case "observe_logs":
-		if as.Kind != "local" && as.Kind != "ssh" {
-			return nil, errors.New("Trace 仅读取分配主机的日志")
-		}
-		path := str(a["path"])
-		if err = safeFile(path); err != nil {
-			return nil, err
-		}
-		if !strings.HasSuffix(strings.ToLower(path), ".log") && !strings.HasPrefix(filepath.Clean(path), "/var/log/") {
-			return nil, errors.New("请指定 .log 文件或 /var/log 下的日志")
-		}
-		if as.Kind == "local" {
-			real, resolveErr := filepath.EvalSymlinks(path)
-			if resolveErr != nil {
-				return nil, errors.New("日志文件不可用")
+			if !strings.HasSuffix(strings.ToLower(path), ".log") && !strings.HasPrefix(filepath.Clean(path), "/var/log/") {
+				return nil, errors.New("请指定 .log 文件或 /var/log 下的日志")
 			}
-			if err = safeFile(real); err != nil {
-				return nil, err
-			}
-			if c.CredentialDir != "" {
-				privateRoot, _ := filepath.EvalSymlinks(c.CredentialDir)
-				if privateRoot != "" && strings.HasPrefix(real, privateRoot+string(filepath.Separator)) {
-					return nil, errors.New("子 Agent 不能读取凭据目录")
+			if as.Kind == "local" {
+				if permit, _ := ctx.Value(securityPermitContextKey{}).(*SecurityPermit); permit != nil {
+					value, err = e.executeSecurityLocalFile(ctx, c, name, a)
+					break
+				}
+				real, resolveErr := filepath.EvalSymlinks(path)
+				if resolveErr != nil {
+					return nil, errors.New("日志文件不可用")
+				}
+				if err = safeFile(real); err != nil {
+					return nil, err
+				}
+				if c.CredentialDir != "" {
+					privateRoot, _ := filepath.EvalSymlinks(c.CredentialDir)
+					if privateRoot != "" && strings.HasPrefix(real, privateRoot+string(filepath.Separator)) {
+						return nil, errors.New("子 Agent 不能读取凭据目录")
+					}
 				}
 			}
-		}
-		// Resolve the directory on the remote host and reject a linked file. The
-		// resulting path cannot escape the credential-path exclusion via a symlink.
-		command := "p=" + quote(path) + "; d=$(cd -P -- \"$(dirname -- \"$p\")\" && pwd -P) || exit 44; f=\"$d/$(basename -- \"$p\")\"; case \"$f\" in */.ssh/*|*/.lake/secrets/*|*/Keychains/*) exit 45;; esac; [ ! -L \"$f\" ] && [ -f \"$f\" ] || exit 44; tail -n 200 -- \"$f\""
-		value, err = e.command(ctx, c, map[string]any{"asset_ref": as.ID, "runtime": as.Kind}, command)
-	case "observe_data":
-		metric := str(a["metric"])
-		if metric != "health" && metric != "connections" && metric != "activity" {
-			return nil, errors.New("不支持的数据指标")
-		}
-		if as.Kind == "redis" {
-			command := map[string]string{"health": "PING", "connections": "INFO clients", "activity": "INFO stats"}[metric]
-			value, err = e.redis(ctx, c, map[string]any{"asset_ref": as.ID, "command": command, "timeout_ms": 10000})
-		} else if as.Kind == "database" {
-			value, err = observeDatabase(ctx, c, as, metric)
-		} else {
-			return nil, errors.New("Deep 仅调查分配的数据库或 Redis")
+			// Resolve the directory on the remote host and reject a linked file. The
+			// resulting path cannot escape the credential-path exclusion via a symlink.
+			command := "p=" + quote(path) + "; d=$(cd -P -- \"$(dirname -- \"$p\")\" && pwd -P) || exit 44; f=\"$d/$(basename -- \"$p\")\"; case \"$f\" in */.ssh/*|*/.lake/secrets/*|*/Keychains/*) exit 45;; esac; [ ! -L \"$f\" ] && [ -f \"$f\" ] || exit 44; tail -n 200 -- \"$f\""
+			value, err = e.command(ctx, c, map[string]any{"asset_ref": as.ID, "runtime": as.Kind}, command)
+		case "observe_data":
+			metric := str(a["metric"])
+			if metric != "health" && metric != "connections" && metric != "activity" {
+				return nil, errors.New("不支持的数据指标")
+			}
+			if as.Kind == "redis" {
+				command := map[string]string{"health": "PING", "connections": "INFO clients", "activity": "INFO stats"}[metric]
+				value, err = e.redis(ctx, c, map[string]any{"asset_ref": as.ID, "command": command, "timeout_ms": 10000})
+			} else if as.Kind == "database" {
+				value, err = observeDatabase(ctx, c, as, metric)
+			} else {
+				return nil, errors.New("Deep 仅调查分配的数据库或 Redis")
+			}
 		}
 	}
 	if strings.Contains(str(obj(value)["output"]), "\nLAKE_OBSERVATION_OUTPUT_TRUNCATED") {
@@ -194,6 +203,11 @@ func (e *Engine) observation(ctx context.Context, c Config, name string, a map[s
 }
 
 func observeDatabase(ctx context.Context, c Config, as Asset, metric string) (any, error) {
+	if str(as.Settings["driver"]) == "sqlite" {
+		if err := safeConfiguredFile(c, str(as.Settings["path"])); err != nil {
+			return nil, err
+		}
+	}
 	db, driver, err := databaseOpen(as, true, "", c.CredentialDir)
 	if err != nil {
 		return nil, err

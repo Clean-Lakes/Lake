@@ -11,6 +11,9 @@ func (s *Store) NaturalConsent(project string) *ai.NaturalMemoryConsent {
 	return s.read(func() any { return s.naturalConsent(project) }).(*ai.NaturalMemoryConsent)
 }
 func (s *Store) naturalConsent(project string) *ai.NaturalMemoryConsent {
+	if s.skipMemoryInitialization {
+		return &ai.NaturalMemoryConsent{PolicyVersion: naturalMemoryPolicyVersion}
+	}
 	if s.memoryV2 {
 		return (*ai.NaturalMemoryConsent)(nil)
 	}
@@ -316,6 +319,9 @@ func (s *Store) ForgetNaturalPreference(ctx StrategyContext, id, key string, exp
 	})
 }
 func (s *Store) naturalEraseSession(session string) {
+	if s.skipMemoryInitialization {
+		return
+	}
 	s.naturalWithdrawConsolidation(session)
 	for _, r := range s.rows("SELECT sourceMessage,sourceHash FROM naturalPreferenceRevisions WHERE sourceSession=?", session) {
 		s.exec("INSERT OR IGNORE INTO naturalPreferenceSuppressions VALUES(?,?,?)", r["sourceMessage"], r["sourceHash"], now())
@@ -325,6 +331,9 @@ func (s *Store) naturalEraseSession(session string) {
 	s.exec("UPDATE projectMemoryJobs SET status='skipped',leaseToken='',lastErrorCode='source_deleted',updatedAt=? WHERE turnSequence IN (SELECT sequence FROM projectMemoryTurns WHERE sessionId=?)", now(), session)
 }
 func (s *Store) naturalSessionNotices(session string) []Object {
+	if s.skipMemoryInitialization {
+		return []Object{}
+	}
 	// Recovery opens the persisted Web store without migrations. Homes from
 	// before natural preferences have no notices yet; do not query their absent
 	// tables or install a schema just to render historical conversations. Keep

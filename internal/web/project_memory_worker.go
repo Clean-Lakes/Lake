@@ -96,7 +96,7 @@ func (b *Server) runMemoryWorker() {
 		if b.Context.Err() != nil {
 			return
 		}
-		if time.Since(lastPrune) >= 24*time.Hour {
+		if time.Since(lastPrune) >= 24*time.Hour && b.Engine.CheckSecurityMemoryEligibility(b.Context, "global-memory", ai.SecurityMemoryBackground) == nil {
 			b.Store.PruneMemoryArtifacts()
 			lastPrune = time.Now()
 		}
@@ -111,6 +111,9 @@ func (b *Server) runMemoryWorker() {
 }
 
 func (b *Server) processOneMemoryJob() {
+	if b.Engine.CheckSecurityMemoryEligibility(b.Context, "global-memory", ai.SecurityMemoryBackground) != nil {
+		return
+	}
 	if b.Store.memoryV2 {
 		b.processMemoryV2Job()
 		return
@@ -130,6 +133,11 @@ func (b *Server) processOneMemoryJob() {
 	if json.Unmarshal([]byte(stringOf(job["snapshotJSON"])), &snapshot) != nil || !ai.ValidMemorySnapshot(snapshot) {
 		b.messageMu.Unlock()
 		b.Store.SettleMemoryJob(jobID, token, "failed", "invalid_snapshot", ai.Usage{})
+		return
+	}
+	if b.Engine.CheckSecurityMemoryEligibility(b.Context, snapshot.ProjectID, ai.SecurityMemoryBackground) != nil {
+		b.messageMu.Unlock()
+		b.Store.SettleMemoryJob(jobID, token, "blocked", "security_memory_recovery_unqualified", ai.Usage{})
 		return
 	}
 	if snapshot.Natural != nil {
@@ -163,7 +171,7 @@ func (b *Server) processOneMemoryJob() {
 	messages := []ai.Message{{Role: "system", Content: memoryExtractionPrompt}, {Role: "user", Content: content}}
 	ctx, cancel := context.WithTimeout(b.Context, 60*time.Second)
 	defer cancel()
-	output, usage, err := b.Engine.ExtractMemory(ctx, *model, messages)
+	output, usage, err := b.Engine.ExtractMemory(ai.WithSecurityMemoryProject(ctx, snapshot.ProjectID), *model, messages)
 	if err != nil {
 		status, code := "retry_wait", "model_error"
 		if strings.Contains(err.Error(), "context budget") {
@@ -188,6 +196,10 @@ func (b *Server) processOneMemoryJob() {
 			b.Store.SettleMemoryJob(jobID, token, "failed", "credential_detected", usage)
 			return
 		}
+	}
+	if b.Engine.CheckSecurityMemoryEligibility(ctx, snapshot.ProjectID, ai.SecurityMemoryCapture) != nil {
+		b.Store.SettleMemoryJob(jobID, token, "blocked", "security_memory_recovery_unqualified", usage)
+		return
 	}
 	_, err = b.Store.CommitMemoryExtraction(job, snapshot, mutations, usage)
 	if err != nil {

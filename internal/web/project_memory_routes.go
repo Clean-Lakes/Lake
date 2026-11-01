@@ -57,6 +57,14 @@ func (b *Server) projectMemoryRoute(w http.ResponseWriter, r *http.Request, name
 		return false
 	}
 	project := parts[2]
+	negative := method == "DELETE" && len(parts) == 5 && parts[3] == "memory"
+	if !negative && (parts[3] == "memory" || strings.HasPrefix(parts[3], "memory-")) && parts[3] != "memory-settings" {
+		purpose := ai.SecurityMemoryRead
+		if method != "GET" {
+			purpose = ai.SecurityMemoryCapture
+		}
+		aiFailure(b.Engine.CheckSecurityMemoryEligibility(r.Context(), project, purpose))
+	}
 	if b.Store.memoryV2 && b.memoryV2Route(w, r, parts, method) {
 		return true
 	}

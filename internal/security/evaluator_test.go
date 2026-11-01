@@ -666,3 +666,60 @@ func TestKernelMandatoryExactSingleSurvivesProjectAllow(t *testing.T) {
 		t.Fatal("changed arguments reused catastrophic confirmation", got)
 	}
 }
+
+func TestKernelExactExtraApprovalDoesNotRefillExhaustedTaskBudget(t *testing.T) {
+	in := kernelFixture()
+	fixtureGrant(&in)
+	in.Policy.Rules[0].Effect = EffectAllow
+	in.Grants[0].RemainingUses = 0
+	in.Envelope = &TaskEnvelope{Revision: 1, BudgetGrantIDs: []string{"grant1"}, Resources: in.Resources, ResourceIDs: []string{"r1"}, Capabilities: []string{"file.read"}, Limits: ScopeLimits{FileRoots: []string{"/var/log"}}}
+	in.Operation.EnvelopeRevision = 1
+	fixtureApproval(&in)
+	if got := Evaluate(in); got.Effect == EffectAllow {
+		t.Fatal("normal single bypassed budget", got)
+	}
+	in.Approvals[0].EnvelopeException = true
+	got := Evaluate(in)
+	if got.Effect != EffectAllow {
+		t.Fatal("reviewed exact extra operation blocked", got)
+	}
+	if !slices.ContainsFunc(got.Authorities, func(s AuthoritySource) bool { return s.Kind == "single_approval" && s.ID == "approval1" }) {
+		t.Fatal("extra operation has no consumed single source", got)
+	}
+	if slices.ContainsFunc(got.Authorities, func(s AuthoritySource) bool { return s.Kind == "task_budget" || s.Kind == "task_grant" }) {
+		t.Fatal("exception refilled or spent original budget", got)
+	}
+	in.Operation.CallID = "unapproved-call"
+	if got = Evaluate(in); got.Effect == EffectAllow {
+		t.Fatal("exact extra approval reused by different call", got)
+	}
+	in.Operation.CallID = "call1"
+	in.Policy.Rules[0].Effect = EffectAsk
+	in.Policy.Rules[0].Confirmation = ConfirmTask
+	if got = Evaluate(in); got.Effect == EffectAllow {
+		t.Fatal("single extra bypassed task-only policy", got)
+	}
+}
+
+func TestKernelCurrentHostLocalDenyIsAHardFloor(t *testing.T) {
+	in := kernelFixture()
+	in.Operation.LocalExecution = true
+	in.LocalExecution = true
+	in.Operation.Resources[0].Local = true
+	in.Resources[0].Local = true
+	in.Operation.Capabilities = append(in.Operation.Capabilities, "local.execute")
+	in.Policy.Rules = append(in.Policy.Rules, Rule{Capability: "local.execute", Effect: EffectAllow})
+	if got := Evaluate(in); got.Effect != EffectAllow {
+		t.Fatal(got)
+	}
+	in.SessionDenyLocal = true
+	fixtureApproval(&in)
+	if got := Evaluate(in); got.Effect != EffectDeny || got.ReasonCode != ReasonLocalExecutionDenied {
+		t.Fatal("live host deny bypassed", got)
+	}
+	in.SessionDenyLocal = false
+	in.Policy.DenyLocal = true
+	if got := Evaluate(in); got.Effect != EffectDeny || got.ReasonCode != ReasonLocalExecutionDenied {
+		t.Fatal("host false cancelled confirmed policy deny", got)
+	}
+}

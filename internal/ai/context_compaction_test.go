@@ -146,7 +146,9 @@ func TestChildSummaryFitsSixteenKWindowWithLongAssignment(t *testing.T) {
 	c.Model.MaxOutput = 2048
 	s.state.Config = c
 	_, workers := budgetWorkers("verify")
-	workers[0].parent = e
+	// A child has a distinct parent Engine; a self-parent is an invalid runtime
+	// ownership cycle and must fail the Security boundary before provider I/O.
+	workers[0].parent = engineFor(t, model, nil)
 	e.worker = workers[0]
 	h := longFirstTurn()
 	h[1].Content += strings.Repeat("scope ", 1500)

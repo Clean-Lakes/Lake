@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/Clean-Lakes/Lake/internal/platform"
+	"github.com/Clean-Lakes/Lake/internal/security"
 	"google.golang.org/adk/v2/session"
 	sessiondb "google.golang.org/adk/v2/session/database"
 	"gorm.io/driver/sqlite"
@@ -161,7 +162,7 @@ func checkReaderGuard(db *sql.DB) error {
 	if err := db.QueryRow("SELECT schema_version,minimum_reader_version,migration_state FROM security_schema_meta WHERE id=1").Scan(&schema, &reader, &state); err != nil {
 		return fmt.Errorf("invalid security reader guard: %w", err)
 	}
-	if schema != 1 || reader > 1 || reader < 1 || state != "ready" {
+	if schema != security.SchemaVersion || reader > security.ReaderVersion || reader < 1 || state != "ready" {
 		return fmt.Errorf("unsupported security store or incomplete migration")
 	}
 	return nil

@@ -20,6 +20,10 @@ import (
 const outputLimit = 32768
 
 type terminalJob struct {
+	securityDescriptorDigest string
+	securityOwnerID          string
+	securityOwnerGeneration  int64
+	securityOperationID      string
 	entry                    Object
 	marker, output, actionID string
 	done                     chan struct{}
@@ -68,6 +72,7 @@ type Terminals struct {
 	mu              sync.Mutex
 	live            map[string]*liveTerminal
 	jobs            map[string]*terminalJob
+	securityJobs    map[string]*terminalJob
 	store           *Store
 	models          *Models
 	token           string

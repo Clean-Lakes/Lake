@@ -69,6 +69,14 @@ func (e *Engine) flushWorkOutbox(ctx context.Context) error {
 }
 
 func (e *Engine) resumeWorkGoal(ctx context.Context, row nativeWorkGoal, g WorkGoal, c Config) (err error) {
+	var securityExecution SecurityExecutionContext
+	configured, policyErr := e.securityPolicyConfigured(configSecurityProject(c))
+	if policyErr != nil {
+		return policyErr
+	}
+	if configured && g.closure == nil {
+		return errors.New("security: an unconfirmed legacy goal cannot automatically resume")
+	}
 	// Credentials and permissions are live; the requested resource binding is
 	// frozen. Switching foreground terminals must never retarget old work.
 	bindings := append([]WorkBinding{}, g.ResourceBindings...)
@@ -123,6 +131,23 @@ func (e *Engine) resumeWorkGoal(ctx context.Context, row nativeWorkGoal, g WorkG
 			}
 		}
 	}()
+	if g.closure != nil {
+		securityExecution, err = e.claimSecurityWorkResume(ctx, g)
+		if err != nil {
+			return err
+		}
+		cancel()
+		work, cancel = context.WithDeadline(ctx, securityExecution.Task.ExpiresAt)
+		owner.mu.Lock()
+		owner.cancel = cancel
+		owner.mu.Unlock()
+		e.workActive.Store(g.ID, cancel)
+		defer func() {
+			if finishErr := e.finishSecurityTurn(securityExecution, err != nil); finishErr != nil && err == nil {
+				err = finishErr
+			}
+		}()
+	}
 	child.ModelActivity = e.ModelActivity
 	child.NaturalMemory = e.NaturalMemory
 	child.Emit = func(event Event) {
@@ -132,6 +157,24 @@ func (e *Engine) resumeWorkGoal(ctx context.Context, row nativeWorkGoal, g WorkG
 	}
 	child.modelSlots = e.modelSlots
 	cs := &session{state: State{SupplementIDs: checkpoint.SupplementIDs, Config: c, History: checkpoint.History, Runtime: checkpoint.Runtime, View: checkpoint.View, RootQuestion: checkpoint.RootQuestion, TargetScope: checkpoint.Scope, ReferencedAssetIDs: checkpoint.References, WorkGoalID: g.ID, QuestionDecisions: g.UserDecisions}}
+	if securityExecution.Managed {
+		cs.state.SecurityManaged = true
+		cs.state.SecurityTaskID = securityExecution.Task.ID
+		cs.state.SecuritySourceMessageID = securityExecution.SourceMessageID
+		cs.state.SelectedGoalID = g.ID
+		cs.state.Config.SecurityProjectID = securityExecution.ProjectID
+		cs.state.Config.securityExecution = &securityExecution
+		cs.state.View.RootTurnID = securityExecution.Owner.RootTurnID
+		cs.state.View.Pending = nil
+		cs.state.View.PendingApprovals = nil
+		cs.state.View.Question = nil
+		if cs.state.Runtime != nil {
+			checkpointRuntime := *cs.state.Runtime
+			checkpointRuntime.Identity = RunIdentity{SessionID: g.SessionID, RootTurnID: securityExecution.Owner.RootTurnID}
+			checkpointRuntime.PendingConfirmations = nil
+			cs.state.Runtime = &checkpointRuntime
+		}
+	}
 	cs.state.Config.targetScope = cloneTargetScope(checkpoint.Scope)
 	cs.state.Config.ReferencedAssets = validRemembered(c, checkpoint.References)
 	cs.state.View.Status = "running"
