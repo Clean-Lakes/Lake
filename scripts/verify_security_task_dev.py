@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import signal
 import subprocess
 import tempfile
 import threading
@@ -19,6 +20,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--native', type=Path, help='signed Lake Dev executable, with this isolated fixture Home')
+    parser.add_argument('--hold-seconds', type=int, default=0, choices=range(46), help='briefly keep the isolated native window open for visual evidence')
     parser.add_argument('--enforce', action='store_true', help='also activate only this newly created isolated fixture Home')
     args = parser.parse_args()
     binary = args.binary.resolve(strict=True)
@@ -83,7 +86,7 @@ def main():
             marker.write_text('LAKE_ISOLATED_SECURITY_MARKER\n')
             marker.chmod(0o600)
             state['file'], state['db'] = str(marker.resolve()), str(home / 'web-agent/adk/sessions.sqlite')
-            lake = Lake(binary, home, env)
+            lake = Lake(binary, home, env, native=args.native)
             state['lake'] = lake
             try:
                 project = lake.api('/api/projects', 'POST', {'name': 'Isolated security acceptance'})['id']
@@ -151,10 +154,18 @@ def main():
                     require(any(x['Capability'] == 'local.execute' and x['Effect'] == 'ask' and x['Grantable'] for x in default['Rules']), 'new project cannot explicitly request controlled local operations')
                 report = {'passed': True, 'binarySHA256': hashlib.sha256(binary.read_bytes()).hexdigest(), 'model': 'loopback synthetic fixture', 'goals': 1, 'originalReadOperations': 2, 'nativeApprovalsConsumed': 1, 'humanQuestions': 3, 'remainingUses': 8, 'taskState': 'completed', 'frontendModified': False}
                 report['isolatedHomeEnforced'] = args.enforce
+                report['native'] = bool(args.native)
                 args.output.write_text(json.dumps(report, indent=2) + '\n')
                 args.output.chmod(0o600)
-                print('PASS: original question/approval protocol, task budget reuse, actual FD reads, independent human acceptance and goal/task completion')
+                print('PASS: original question/approval protocol, task budget reuse, actual FD reads, independent human acceptance and goal/task completion', flush=True)
+                if args.native and args.hold_seconds:
+                    time.sleep(args.hold_seconds)
             finally:
+                if args.native:
+                    try:
+                        os.kill(int(lake.runtime['pid']), signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
                 lake.stop()
     finally:
         model.shutdown()

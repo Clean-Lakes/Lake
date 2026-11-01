@@ -79,6 +79,70 @@ func TestSecurityProviderOriginalTaskAuthorityBeforeContinuation(t *testing.T) {
 		})
 	}
 }
+
+func TestSecurityProviderLegacySRESummaryWithoutParentTurnAndManagedChildRootFence(t *testing.T) {
+	for _, managed := range []bool{false, true} {
+		name := "legacy-summary-without-parent-turn"
+		if managed {
+			name = "managed-child-with-mismatched-parent-turn"
+		}
+		t.Run(name, func(t *testing.T) {
+			var calls atomic.Int32
+			model, closeModel := fakeModel(t, func(_ int, _ map[string]any) any {
+				calls.Add(1)
+				return response("summary from the actual provider")
+			})
+			defer closeModel()
+			var parent *Engine
+			if managed {
+				parent = managedEngineFixture(t, model)
+			} else {
+				parent = engineFor(t, model, nil)
+			}
+			state, err := parent.get("case")
+			if err != nil {
+				t.Fatal(err)
+			}
+			state.mu.Lock()
+			config := state.state.Config
+			parentRoot := state.state.View.RootTurnID
+			state.state.View.AgentRuns = append(state.state.View.AgentRuns, AgentRun{ID: "role-run", RootTurnID: "temporary-role-turn", Status: "running"})
+			state.mu.Unlock()
+			child, err := New(t.TempDir(), nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer child.Shutdown()
+			child.worker = &agentWorker{parent: parent, parentID: "case", session: state, runID: "role-run", turnID: "temporary-role-turn"}
+			config.sre = &sreRoleContext{Role: SRECoordinator, NoTools: true}
+			if err = child.Configure("summary-role", config); err != nil {
+				t.Fatal(err)
+			}
+			role, err := child.get("summary-role")
+			if err != nil {
+				t.Fatal(err)
+			}
+			role.mu.Lock()
+			role.state.View.RootTurnID = "actual-role-root"
+			role.mu.Unlock()
+			driver := &adkTurnDriver{engine: child, session: role, config: &config, providerSecurityRoot: "actual-role-root"}
+			ctx, _, err := driver.securityProviderContext(t.Context(), nil)
+			if managed {
+				if !errors.Is(err, errExecutionOwner) || calls.Load() != 0 {
+					t.Fatal("managed child lost its parent root fence", err, calls.Load())
+				}
+				return
+			}
+			if parentRoot != "" || err != nil {
+				t.Fatal("legacy no-turn summary required a fabricated owner", parentRoot, err)
+			}
+			if _, err = child.stream(ctx, model, []Message{{Role: "user", Content: "summarize existing results"}}, nil, nil); err != nil || calls.Load() != 1 {
+				t.Fatal("legacy summary did not reach the provider", err, calls.Load())
+			}
+		})
+	}
+}
+
 func TestSecurityProviderRechecksAuthorityAfterWaitingForModelSlot(t *testing.T) {
 	for _, kind := range []string{"expired", "paused", "fenced", "owner-expired", "new-root", "goal-revised"} {
 		t.Run(kind, func(t *testing.T) {

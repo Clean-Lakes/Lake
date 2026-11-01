@@ -20,18 +20,20 @@ type securityRuntimeModeRow struct {
 func (securityRuntimeModeRow) TableName() string { return "security_runtime_mode" }
 
 type SecurityModeAction struct {
-	ActorID          string `json:"-"`
-	ActionID         string `json:"actionId"`
-	ExpectedRevision int64  `json:"expectedRevision"`
-	Mode             string `json:"mode"`
-	ConfirmedDigest  string `json:"confirmedDigest"`
+	ActorID                    string   `json:"-"`
+	ActionID                   string   `json:"actionId"`
+	ExpectedRevision           int64    `json:"expectedRevision"`
+	Mode                       string   `json:"mode"`
+	ConfirmedDigest            string   `json:"confirmedDigest"`
+	ConfirmedShadowDifferences []string `json:"confirmedShadowDifferences,omitempty"`
 }
 type SecurityModeStatus struct {
-	Mode         string                       `json:"mode"`
-	Revision     int64                        `json:"revision"`
-	Digest       string                       `json:"digest"`
-	Precondition string                       `json:"precondition"`
-	Coverage     SecurityEnforcementReadiness `json:"coverage"`
+	Mode              string                       `json:"mode"`
+	Revision          int64                        `json:"revision"`
+	Digest            string                       `json:"digest"`
+	Precondition      string                       `json:"precondition"`
+	Coverage          SecurityEnforcementReadiness `json:"coverage"`
+	ShadowDifferences []SecurityShadowDifference   `json:"shadowDifferences"`
 }
 
 func securityRuntimeModeTx(tx *gorm.DB, storeID, epoch string) (securityRuntimeModeRow, error) {
@@ -130,6 +132,16 @@ func securityModeSnapshotTx(tx *gorm.DB, storeID, epoch string, projects []strin
 			reason = "UNCLASSIFIED_OPERATION_EFFECTS"
 		}
 	}
+	differences, err := securityShadowSnapshotTx(tx, storeID, epoch)
+	if err != nil {
+		return "", "", err
+	}
+	manifest = append(manifest, differences)
+	for _, difference := range differences {
+		if difference.Comparison == "widening" && !difference.Acknowledged && reason == "READY" {
+			reason = "SHADOW_WIDENING_CONFIRMATION_REQUIRED"
+		}
+	}
 	return hash(js([]any{storeID, epoch, ids, manifest})), reason, nil
 }
 
@@ -146,6 +158,10 @@ func (e *Engine) SecurityMode(ctx context.Context, projects []string) (out Secur
 		}
 		out.Mode, out.Revision = row.Mode, row.Revision
 		out.Digest, out.Precondition, err = securityModeSnapshotTx(tx, storeID, epoch, projects)
+		if err != nil {
+			return err
+		}
+		out.ShadowDifferences, err = securityShadowSnapshotTx(tx, storeID, epoch)
 		return err
 	})
 	return out, err
@@ -178,8 +194,28 @@ func (e *Engine) SetSecurityMode(ctx context.Context, action SecurityModeAction,
 		if err != nil {
 			return err
 		}
-		if digest != action.ConfirmedDigest || action.Mode == "enforced" && reason != "READY" {
+		if digest != action.ConfirmedDigest || action.Mode == "enforced" && (reason != "READY" || len(action.ConfirmedShadowDifferences) > 0) {
 			return errors.New("security: confirm the current complete activation snapshot: " + reason)
+		}
+		differences, err := securityShadowSnapshotTx(tx, storeID, epoch)
+		if err != nil {
+			return err
+		}
+		if len(action.ConfirmedShadowDifferences) > 0 {
+			if row.Mode != "shadow" || action.Mode != "shadow" {
+				return errSecurityAction
+			}
+			if err = acknowledgeSecurityShadowTx(tx, storeID, epoch, action, differences); err != nil {
+				return err
+			}
+			digest, reason, err = securityModeSnapshotTx(tx, storeID, epoch, projects)
+			if err != nil {
+				return err
+			}
+			differences, err = securityShadowSnapshotTx(tx, storeID, epoch)
+			if err != nil {
+				return err
+			}
 		}
 		if action.Mode == "enforced" {
 			if err = raiseSecurityPolicyReaderGuard(tx, storeID, epoch); err != nil {
@@ -192,7 +228,7 @@ func (e *Engine) SetSecurityMode(ctx context.Context, action SecurityModeAction,
 		if err = tx.Save(&row).Error; err != nil {
 			return err
 		}
-		out = SecurityModeStatus{Mode: row.Mode, Revision: row.Revision, Digest: digest, Precondition: reason, Coverage: readiness}
+		out = SecurityModeStatus{Mode: row.Mode, Revision: row.Revision, Digest: digest, Precondition: reason, Coverage: readiness, ShadowDifferences: differences}
 		return securityActionRecord(tx, storeID, epoch, action.ActorID, action.ActionID, "mode.set", "home", js(action), before, row.Revision, out, time.Now().UTC())
 	})
 	return out, err
@@ -256,29 +292,7 @@ func (e *Engine) InitializeSecurityProject(ctx context.Context, projectID string
 	})
 }
 
-func (e *Engine) recordSecurityShadowCall(ctx context.Context, s *session, c Config, call Call, legacyAllowed bool) {
-	if e.securityHome() == nil {
-		return
-	}
-	db, storeID, epoch, err := e.securityTaskDB()
-	if err != nil {
-		return
-	}
-	s.mu.Lock()
-	sessionID, rootID := s.state.View.Session, s.state.View.RootTurnID
-	s.mu.Unlock()
-	_ = e.workMutation(db.WithContext(ctx), func(tx *gorm.DB) error {
-		mode, err := securityRuntimeModeTx(tx, storeID, epoch)
-		if err != nil || mode.Mode != "shadow" {
-			return err
-		}
-		// Old executions have no trustworthy goal/step/attempt/owner tuple. Do
-		// not invent those identities just to obtain a positive shadow verdict.
-		comparison := map[string]any{"tool": call.Name, "legacyExecutionSucceeded": legacyAllowed, "comparison": "missing_task_binding", "managedEffect": "deny", "reasonCode": security.ReasonGoalBindingRequired}
-		action := "shadow:" + hash(sessionID+"\x00"+rootID+"\x00"+call.ID)
-		if replay, err := securityActionReplay(tx, storeID, epoch, "host", action, js(comparison), &map[string]any{}); replay || err != nil {
-			return err
-		}
-		return securityActionRecord(tx, storeID, epoch, "host", action, "shadow.compare", call.ID, js(comparison), 0, 0, comparison, time.Now().UTC(), configSecurityProject(c))
-	})
+func (e *Engine) recordSecurityShadowCall(ctx context.Context, s *session, c Config, call Call, _ bool) {
+	// Execution success/failure is never used as a legacy authorization decision.
+	_ = e.recordSecurityShadowDecision(ctx, s, c, call, nil, security.Decision{})
 }

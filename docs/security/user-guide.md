@@ -8,7 +8,9 @@
 
 范围内后续动作自动执行；范围外、次数耗尽或连接变化时重新确认。授权不能覆盖项目/父范围/本机的明确禁止。续接、重试和暂停不自动补充次数或延长到期；目标契约变化使旧任务授权失效，需要明确重新授权。
 
-任意 Shell、原始 SQL、opaque MCP 和不受控交互不获得任务通配授权。固定磁盘/进程/服务状态/日志命令和登记服务的重启通过受控模板执行；服务名、OS、模板版本与参数由宿主注册，不能靠命令前缀放行。
+任意 Shell、原始 SQL、opaque MCP 和不受控交互不获得任务通配授权。compatible 模式下明确批准的任意 Shell 仍使用当前操作系统账号权限，Go 审批不是 OS 沙箱。固定磁盘/进程/服务状态/日志命令和登记服务的重启通过受控模板执行；服务名、OS、模板版本与参数由宿主注册，不能靠命令前缀放行。
+
+Lake 自己的 Home、runtime、控制面、数据库及凭据目录不接受普通文件授权；用户选择宽目录也不能开放这些文件。正常凭据仍由执行适配器按 reference 读取。
 
 ## 完成与失败
 
@@ -45,7 +47,7 @@ bin/lake security shadow --home /absolute/isolated/home --input /private/action.
 bin/lake security enforce --home /absolute/isolated/home --input /private/action.json
 ```
 
-动作文件须为私有普通文件，包含 `actionId`、`expectedRevision` 和先前读取的 `confirmedDigest`。全局 enforce 还要求编译时入口覆盖、项目策略、旧范围和历史风险检查通过；不能用请求字段强制开启，也不允许降回旧模式绕过限制。shadow 不授予权限，缺少可信任务关联会明确记为不可等价比较，不能伪造任务得到允许结论。
+动作文件须为私有普通文件，包含 `actionId`、`expectedRevision` 和先前读取的 `confirmedDigest`。全局 enforce 还要求编译时入口覆盖、项目策略、旧范围和历史风险检查通过；不能用请求字段强制开启，也不允许降回旧模式绕过限制。shadow 不采用新的 allow 结果替代原执行权限；真实托管操作在准备后纯比较旧 allow/approval_required/deny 与新结果，缺少可信任务或目标/终端元信息则明确记为 incomplete，不编造允许。管理状态的 `shadowDifferences` 展示差异；未经确认的 widening 阻止启用。先以原摘要、CAS、`actionId` 和精确 `confirmedShadowDifferences` 事件 ID 提交 shadow 确认，读取新的 READY 摘要后再单独 enforce；ACK 本身不授予资源操作权限。
 
 已启用全局 enforce 的 Home 中，新项目使用默认 restricted 策略；受控本机命令可以申请明确任务授权，已有 deny 不会被覆盖。缺少策略的项目或无项目身份不得退回 legacy。
 
@@ -54,3 +56,9 @@ bin/lake security enforce --home /absolute/isolated/home --input /private/action
 恢复 Memory 需要 Memory 提供者独立核实同意与遗忘下限；任务授权或恢复资产策略不能代替它。定时任务使用独立的[有界 schedule 授权](schedule-authority.md)，禁用仅停止未来触发；撤销授权或改变模板/目标会使相应执行资格失效。
 
 不要删除 control、操作、审批、风险或恢复清单来解锁。回退必须使用理解当前 reader guard/epoch 的兼容二进制及受控恢复流程；旧版本不能直接读取新权威状态。
+
+## stdio 宿主对接
+
+`lake ai --home /absolute/isolated/home` 使用与 Web 相同的规范库和唯一 owner；先正常关闭该 Home 的 Web，再启动 stdio。`configure` 帧在协议顶层提供 `hostProjectId`，会话必须确属这个项目。宿主从真实存储读取资源、连接、凭据目录和已确认的七项权限；不要在模型配置中自行构造这些权威。managed bridge 由实际本机宿主执行，不接受外部 callback 的 approved 字段代替许可。
+
+Memory 的恢复资格由 Memory 提供者独立确认；尚未提供所需同意/遗忘核实能力的集成继续保持关闭，不以项目策略或任务授权解锁。

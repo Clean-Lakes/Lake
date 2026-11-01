@@ -1,6 +1,6 @@
 ---
 goal: 按五模块职责落实任务闭环、安全控制、资源操作及档案验收，SOP只读手册独立交付
-version: 10
+version: 11
 date_created: 2026-10-30
 last_updated: 2026-11-02
 owner: Lake
@@ -22,7 +22,7 @@ tags: [feature, architecture, security, authorization, migration, adk]
 
 ## 1. Requirements & Constraints
 
-2026-11-01 继续第一阶段：新增[未决操作只读核查](../docs/security/legacy-risk-inspection.md)，按旧源 namespace 验证归档与当前账本、提供有界安全投影，不改变 gate 或原操作状态。TASK-004 的查询可见性得到补充，可信逐资源映射、显式核实与通用恢复仍未完成；不据此开启后续 enforced 阶段，也不修改 Memory 或 Items 的数据权威。
+2026-11-01 的[未决操作只读核查](../docs/security/legacy-risk-inspection.md)作为历史基础保留。本轮在其上新增可信逐资源映射、显式策略确认、恢复激活和新受限任务逐来源核实；不修改原 source 事实，也不更换 Memory 或 Items 的数据权威。
 
 - **REQ-001**: `CurrentTarget`、`pendingResolution` 和 `ExecutionBoundary` 独立建模；目录导航不创建硬边界，目标修改不签发授权。
 - **REQ-002**: 复用WorkGoal为持久goalID、WorkItem为版本化stepID，关联ExecutionAttempt、nativeOperation/nativeEvidence、AcceptanceRecord和CoverageLink。SecurityTask是goal下的限时执行上下文，不代表目标本身；消息/轮次结束、重试或授权过期不删除或完成goal。
@@ -70,7 +70,7 @@ tags: [feature, architecture, security, authorization, migration, adk]
 
 五模块是职责视图，以下八阶段是实施顺序，不能机械改成五阶段串行：先做规范存储/恢复门禁，再做目标与验收基础，随后安全策略、派发、全入口适配、协议兼容、恢复演练及Dev收口。保留50项原任务的ID、依赖与退出条件；完成状态按实际实施和验证更新。
 
-“是 / 日期”表示已交付；“否 / 进行中”表示部分实施但未满足原任务全部要求；“否 / 未开始”表示尚未实施。第一批在PR #130完成93工具清单与规范Home/owner接入；control/reader guard、旧库保全及专项验证已有实现，完整恢复协议、逐资源核实、故障矩阵与原生窗口验证仍有缺口。每阶段依赖前一阶段退出条件；阶段内部按表中依赖执行，无直接依赖的任务可独立准备。所有标记“新增”的路径和函数均为拟实现，不表示已存在。基础阶段只建立存储和门禁，功能仍处于 legacy/shadow；enforced 必须等全部入口覆盖和迁移验证完成。
+“是 / 日期”表示已交付；“否 / 进行中”表示部分实施但未满足原任务全部要求；“否 / 未开始”表示尚未实施。第一批在PR #130完成93工具清单与规范Home/owner接入；control/reader guard、旧库保全及专项验证已有实现，完整恢复协议、逐资源核实、故障矩阵与原生窗口验证仍有缺口。每阶段依赖前一阶段退出条件；阶段内部按表中依赖执行，无直接依赖的任务可独立准备。早期拟定文件已按实际事务边界合并，现以本文路径和实施记录的模块映射为准。基础阶段只建立存储和门禁，功能仍处于 legacy/shadow；enforced 必须等全部入口覆盖和迁移验证完成。
 
 ### Implementation Phase 1
 
@@ -82,9 +82,9 @@ tags: [feature, architecture, security, authorization, migration, adk]
 | --- | --- | --- | --- |
 | TASK-001 | 【资源操作】新增 `docs/security/tool-entrypoints.md`，逐项登记 `Engine.invoke` 全部早期/常规分支、`invokeSessionTool`、`Server.bridge`、`Server.terminalRoute`、`ai.Serve`、`executeSchedule` 和实际 I/O；记录身份来源、目标种类、权限/审批/账本路径，用运行时工具目录核对覆盖数量。依赖：无。 | 是 | 2026-10-30 |
 | TASK-002 | 【任务档案与验收】新增 `internal/ai/security_home.go:ResolveSecurityHome/AcquireSecurityOwner`，使用 Home manifest 固定 storeID 与 Web DataDir 下 `adk` 的规范 runtime root；修改 `cmd/lake/main.go`、`internal/ai/stdio.go:Serve`、`internal/web/server.go:New` 和 `adk_evidence.go:runtimeDirectory` 使用同一身份。第二 owner 明确拒绝，不自动开第二库、不杀已有进程；独立 Home 显式隔离。依赖：TASK-001。 | 是 | 2026-10-30 |
-| TASK-003 | 【安全控制】新增 `internal/security/schema.go` 与 `internal/ai/security_control.go:ReadControlState/RotateRecoveryEpoch`，维护 `<Home>/security/control.json` 的 storeID/随机epoch/gate，原子写入并同步落盘；checkpoint/manifest 绑定 storeID+epoch，普通备份排除此控制文件，跨设备导入使用新身份和关闭 gate。`adkStore`、Web/stdio 启动校验 schema、storeID、epoch 和中断标记，错误时只允许管理操作。进度：已实现control/storeID/epoch、最低reader与bootstrap/迁移中断拒绝；完整checkpoint/跨设备恢复协议及重新确认尚未完成。依赖：TASK-002。 | 否 | 进行中 |
-| TASK-004 | 【任务档案与验收】新增 `internal/ai/security_store_migration.go:InventoryLegacyStores/MigrateLegacyStores`，先为原 Web `adk` 与 stdio `ai/adk` 制作一致备份；为 session/op/evidence 保留源库 namespace 和关联。同身份同 hash 可标记同源但保留原记录，冲突或未决内容进入只读历史/相关资源阻断，显式处理后才开 gate；禁止直接混并 SDK 内部表。生成迁移 manifest 并验证可重入。进度：已实现一致快照、legacyStoreID/摘要清单、只读历史及受控的单库初始迁移续跑；续跑保留原unknown与精确防重，完成绑定和证据归档后恢复正常使用，双库/损坏/活动任务仍拒绝。逐资源风险索引、显式核实及通用恢复开闸尚未完成。依赖：TASK-003。 | 否 | 进行中 |
-| TASK-005 | 【任务档案与验收】新增 `internal/ai/security_home_test.go`、`security_control_test.go`、`security_store_migration_test.go`：两个进程争用、不同 Home、两个旧库重复/冲突/unknown、迁移每个断点、未来 schema、丢失/损坏 control-state 均有确定结果；更新新增 `docs/validation/lake-security-v1.md` 记录兼容基础 SHA。进度：Go专项/完整回归、选定race/vet、93工具覆盖、签名Dev隔离验收通过；新增初始迁移四阶段中断重试与防重/新操作并存测试。真实日常Home恢复正常、模型连接通过、原窗口只读提示消失，原账本/审批/审计/任务行保留。完整通用迁移故障矩阵及其余原生交互仍待补齐，来源与单实例保护未绕过。依赖：TASK-004。 | 否 | 进行中 |
+| TASK-003 | 【安全控制】新增 `internal/security/schema.go` 与 `internal/ai/security_home.go`，维护 `<Home>/security/control.json` 的 storeID/随机epoch/gate，原子写入并同步落盘；checkpoint/manifest 绑定 storeID+epoch，普通备份排除此控制文件，跨设备导入使用新身份和关闭 gate。`adkStore`、Web/stdio 启动校验 schema、storeID、epoch 和中断标记，错误时只允许管理操作。实现：control/storeID/随机epoch、最低reader、中断拒绝、配对checkpoint、跨设备导入及显式重新确认；实际路径为 `security_home.go`、`security_checkpoint.go`、`security_recovery*.go`。依赖：TASK-002。 | 否 | 进行中 |
+| TASK-004 | 【任务档案与验收】新增 `internal/ai/security_store_migration.go:InventoryLegacyStores/MigrateLegacyStores`，先为原 Web `adk` 与 stdio `ai/adk` 制作一致备份；为 session/op/evidence 保留源库 namespace 和关联。同身份同 hash 可标记同源但保留原记录，冲突或未决内容进入只读历史/相关资源阻断，显式处理后才开 gate；禁止直接混并 SDK 内部表。生成迁移 manifest 并验证可重入。实现：一致快照、namespace/摘要、只读历史、逐来源资源索引及新epoch恢复；保全原账本与unknown，全部策略/连接确认后激活，再用新受限任务实际读取逐来源核实。无法证明影响范围仍关闭gate；原failed/unknown不改成功。依赖：TASK-003。 | 否 | 进行中 |
+| TASK-005 | 【任务档案与验收】新增 `internal/ai/security_home_test.go`、`security_control_test.go`、`security_store_migration_test.go`：两个进程争用、不同 Home、两个旧库重复/冲突/unknown、迁移每个断点、未来 schema、丢失/损坏 control-state 均有确定结果；更新新增 `docs/validation/lake-security-v1.md` 记录兼容基础 SHA。实现：旧迁移断点、配对恢复阶段重入、缺失/未来reader/epoch、资源映射与public恢复激活E2E；签名Dev和原生窗口隔离验证见本轮实施记录。历史日常Home恢复证据保留于旧记录，不能替代本轮验收。依赖：TASK-004。 | 否 | 进行中 |
 
 ### Implementation Phase 2
 
@@ -95,10 +95,10 @@ tags: [feature, architecture, security, authorization, migration, adk]
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
 | TASK-006 | 【任务中心】扩展 `internal/ai/work_goal.go:WorkGoal/WorkItem/nativeWorkGoal` 与新增 `internal/security/work_closure.go`：goal/plan/step版本、验收契约、进度版本及目标状态，复用原权威行不建第二目标账本；定义ExecutionAttempt/AcceptanceRecord/CoverageLink身份和SecurityTask.goalID。依赖：TASK-005。 | 否 | 进行中 |
-| TASK-007 | 【任务中心】新增 `internal/ai/work_goal_binding.go:ResolveGoalIntent`、`internal/web/goal_intent_routes.go`，真实消息/selectedGoalID/原待开始交互决定continue/new/select/clarify；目标歧义不派发，换goal不自动取消旧goal或继承grant。扩展 `work_goal.go/work_tools.go` 重试/恢复规则，不把失败attempt变为不可续原目标。依赖：TASK-006、TASK-012。 | 否 | 进行中 |
-| TASK-008 | 【任务档案与验收】新增 `internal/ai/work_attempts.go` 与 `adk_session.go` 应用表迁移，记录 `work_execution_attempts/work_acceptance_records/work_coverage_links`；SRE attempt映射而非复制operation，原生operation/evidence携带goal/step/version/attempt关联，unique+归属校验拒绝跨goal证据。依赖：TASK-006。 | 否 | 进行中 |
-| TASK-009 | 【任务档案与验收】新增 `internal/ai/work_acceptance.go:VerifyStep/VerifyGoal/RecordCoverage`，按受信验证器/显式人工核验逐条件pass/fail/insufficient；CAS核对目标契约、进度和未决operation，必要步骤不能默默waive。失败覆盖保留旧failed，unknown必须先核实。扩展 `reduceWorkGoal/work_finish` 只在目标验收及副作用闭环后completed。依赖：TASK-008。 | 否 | 进行中 |
-| TASK-010 | 【任务档案与验收】在 `internal/ai/adk_operations.go` 扩展ownerID/generation/leaseUntil/handle、取消与orphan风险字段；定义 `internal/security/execution_owner.go` 协议及 `internal/ai/execution_ownership.go` 基础查询，队列/outbox/watch/agent终端均能追到原operation。旧无归属记录先核实，不误杀人工终端。依赖：TASK-008。 | 否 | 进行中 |
+| TASK-007 | 【任务中心】新增 `internal/ai/security_intent.go`、`internal/web/security_work_routes.go`，真实消息/selectedGoalID/原待开始交互决定continue/new/select/clarify；目标歧义不派发，换goal不自动取消旧goal或继承grant。扩展 `work_goal.go/work_tools.go` 重试/恢复规则，不把失败attempt变为不可续原目标。依赖：TASK-006、TASK-012。 | 否 | 进行中 |
+| TASK-008 | 【任务档案与验收】新增 `internal/ai/work_closure.go` 与 `adk_session.go` 应用表迁移，记录 `work_execution_attempts/work_acceptance_records/work_coverage_links`；SRE attempt映射而非复制operation，原生operation/evidence携带goal/step/version/attempt关联，unique+归属校验拒绝跨goal证据。依赖：TASK-006。 | 否 | 进行中 |
+| TASK-009 | 【任务档案与验收】新增 `internal/ai/work_closure.go`，按受信验证器/显式人工核验逐条件pass/fail/insufficient；CAS核对目标契约、进度和未决operation，必要步骤不能默默waive。失败覆盖保留旧failed，unknown必须先核实。扩展 `reduceWorkGoal/work_finish` 只在目标验收及副作用闭环后completed。依赖：TASK-008。 | 否 | 进行中 |
+| TASK-010 | 【任务档案与验收】在 `internal/ai/adk_operations.go` 扩展ownerID/generation/leaseUntil/handle、取消与orphan风险字段；定义 `internal/ai/execution_ownership.go` 协议及 `internal/ai/execution_ownership.go` 基础查询，队列/outbox/watch/agent终端均能追到原operation。旧无归属记录先核实，不误杀人工终端。依赖：TASK-008。 | 否 | 进行中 |
 | TASK-011 | 【安全控制】新增 `internal/security/task.go`、`target.go`，定义 SecurityTask/CurrentTarget/TargetResolution/ExecutionBoundary 及固定来源和 24 小时 task deadline；SecurityTask 明确 stateRevision/executionRevision，前者用于后端交互绑定/CAS，后者在 pause/complete/cancel/expire 递增，active→waiting→active 不递增。定义 TaskEvent 的 new/continue/pause/resume/complete/cancel/expire，终态不可恢复；新增纯状态转移表测试。依赖：TASK-005。 | 否 | 进行中 |
 | TASK-012 | 【安全控制】新增 `internal/ai/security_tasks.go:CreateSecurityTask/ApplyTaskEvent` 与 `security_store.go` 的基础 task/target/boundary/event 表及 `security_legacy_session_policies`，先按 session 保存存量七项权限、入口来源和 revision/epoch；任务由服务端生成 ID，可信 actionID 幂等，expectedRevision 对 stateRevision 做 CAS；存储 executionRevision 及当前有效 RootTurnID/child scope 绑定，记录与 WorkGoal/SRE/workflow 的类型化关联；结束一轮只置 idle；goal切换不终结旧目标，明确暂停/关闭只改变相应上下文和授权；workflow/SRE执行结束后仍需目标验收；普通重启置 paused，原 epoch 的合法续接不刷新 deadline，备份恢复旧 epoch 任务不得续接。依赖：TASK-011。 | 否 | 进行中 |
 | TASK-013 | 【任务中心】修改 `internal/ai/engine.go`、`types.go:Config`、`adk_session.go:prepareADKHistory` 与 `internal/web/agent.go:runTurn`，绑定当前goalID/step/attempt/securityTask，禁止每轮清空并重建目标；运行中AdmitSupplement/adk_supplement_preemption保留原goal/RootTurn/工具上下文，不随推理抢先取消实际操作或改权限；由TaskIntent推进/选择/澄清，明确新goal不结束旧goal。审批continuation保留轮次，下一轮关闭旧未派发call；task过期只新建上下文关联原goal。依赖：TASK-012、TASK-007。 | 否 | 进行中 |
@@ -119,7 +119,7 @@ tags: [feature, architecture, security, authorization, migration, adk]
 | TASK-019 | 【安全控制】新增 `internal/security/types.go`、`reason.go`、`canonical.go`，定义 PreparedOperation、Decision、AuthoritySource、resource/resource_set/project/session/none 五种目标类型和原因码；稳定 JSON 规范化绑定 taskID/epoch/executionRevision、有效 RootTurn/child scope、真实连接及参数/预览等安全 revision，排除 task.stateRevision。秘密只使用后端 reference revision，模型参数不能设置 actor 或构造 Permit。依赖：TASK-017。 | 否 | 进行中 |
 | TASK-020 | 【安全控制】新增 `internal/security/capability.go`，按 TASK-001 清单登记工具、能力、resource/resource_set/project/session/none 目标类型、证明等级和预览方式；只有前两种做资源解析，资源发现与任务/恢复控制不因缺少 CurrentTarget 被阻断。复用 `ToolRisk`、`CommandPolicy`、`readonlySQL/redisReadOnly` 作为证据，未登记工具不默认为 readonly；新增 `internal/security/command_profiles.go` 及测试，定义受信profile/version、类型化argv/服务集合、诊断默认50次与重启默认1次预算；禁止字符串前缀授权、动态shell和未知模板自动执行。新增目录覆盖测试。依赖：TASK-019。 | 否 | 进行中 |
 | TASK-021 | 【安全控制】新增 `internal/security/evaluator.go:Evaluate`，严格实现 REQ-005 的授权公式，先判硬限制再解析当前能力的合法授权来源；project allow 无需 grant，ask 的 task/single 来源受 grantable/confirmation 约束，deny 不可覆盖。每次校验父链/角色及具体来源 revision/epoch；增加父 allow 无 grant、父 ask 无 grant、父来源撤销和多能力全满足测试。依赖：TASK-020。 | 否 | 进行中 |
-| TASK-022 | 【安全控制】新增 `internal/ai/security_adapter.go:PrepareOperation`，使用 TASK-012 已建的 `security_legacy_session_policies` 按 session 保存 Web/standalone 的存量有效七项配置、入口来源、revision/epoch并生成 legacy 适配，不被项目默认覆盖，也不覆盖同项目其他会话；替换 `Engine.invoke` 的重复 policy 分析，shadow 仅记录脱敏差异。新项目 restricted/compatible 的固定范围、读取预算和 opaque 规则按设计实现。依赖：TASK-021。 | 否 | 进行中 |
+| TASK-022 | 【安全控制】新增 `internal/ai/security_adapter.go:PrepareSecurityOperation`，使用 TASK-012 已建的 `security_legacy_session_policies` 按 session 保存 Web/standalone 的存量有效七项配置、入口来源、revision/epoch并生成 legacy 适配，不被项目默认覆盖，也不覆盖同项目其他会话；替换 `Engine.invoke` 的重复 policy 分析，shadow 仅记录脱敏差异。新项目 restricted/compatible 的固定范围、读取预算和 opaque 规则按设计实现。依赖：TASK-021。 | 否 | 进行中 |
 | TASK-023 | 【安全控制】在新增 `internal/security/evaluator_test.go` 建立显式时间、规则冲突和固定性能 fixture（100 资源、20 规则、20 grants、并发 8），记录纯 Evaluate p95<1ms；后续派发集成用同 fixture 测准备/登记相对旧链 p95 增量≤10ms，不计网络/模型。检查领域包不导入 AI/Web。依赖：TASK-022。 | 否 | 进行中 |
 
 ### Implementation Phase 4
@@ -133,8 +133,8 @@ tags: [feature, architecture, security, authorization, migration, adk]
 | TASK-024 | 【任务档案与验收】扩展 `internal/ai/security_store.go` 的已有基础表，增加设计中的 project policy/task grant/schedule grant/occurrence/resource revision/decision/authority event 表及唯一约束；所有权威对象绑定 storeID/epoch，grant 绑定 taskID/自身 revision/TTL 而不绑 executionRevision，绝对 expiry≤task deadline；原审批/操作绑定 executionRevision 和 RootTurn/child scope。扩展 `adkStore` 与原 nativeApproval/nativeOperation 列，不另建审批或执行账本。依赖：TASK-023。 | 否 | 进行中 |
 | TASK-025 | 【安全控制】新增 `internal/ai/security_coordinator.go` 与 `internal/web/security_catalog.go`，实现共享短时 barrier、固定锁序和 changing→Web更新→ready 版本协议；资源创建/编辑/导入/删除、MCP 配置均接入，纯名称变化不提升连接 revision。失败恢复前保持不可派发，新增逐提交断点测试。依赖：TASK-024。 | 否 | 进行中 |
 | TASK-026 | 【安全控制】修改 `adk_approval.go:waitNativeApproval/decideNativeApproval/claimNativeApprovals`，保留原 15 分钟 TTL、状态机和 ADK confirmation，新增 taskID/epoch/executionRevision/有效 RootTurn/child scope 和描述摘要绑定，不绑定 stateRevision；旧缺少绑定或 epoch 不符的未消费审批失效，重复确认幂等，active→waiting→active 正常审批可消费，pause 后旧审批不可复活。扩展 `adk_parallel_approval_test.go`。依赖：TASK-025。 | 否 | 进行中 |
-| TASK-027 | 【安全控制】实现 `security_coordinator.go:AcquirePermit`，修改 `adk_operations.go:dispatchNativeOperation`：事务中复核 gate/epoch、task active/expiry/executionRevision、RootTurnID/child scope 当前有效性、策略与实际授权来源，消费审批、原子扣减主/子任务共享的命令额度、记录使用及原生操作/审计；unknown不返额度，确认not_executed仅可事务返还一次。Permit 只传进程内冻结描述，适配器不得重解目标；保留当前重复保护与 finish unknown 语义。依赖：TASK-026。 | 否 | 进行中 |
-| TASK-028 | 【安全控制】新增 `internal/ai/security_dispatch_test.go`，用 barrier 控制撤销/取消与提交两种先后、审批后改参数/连接、两个消费者、task paused/terminal、epoch 切换、事务失败与登记后崩溃；验证 active→waiting→active 不使自身审批失效，pause/resume 后旧 prepared/approval 拒绝但原 TTL grant 可用于新准备，continue 后旧轮次/child call 拒绝；断言回滚不消费授权、拒绝无 I/O，unknown 不阻断无关合法读取。依赖：TASK-027。 | 否 | 进行中 |
+| TASK-027 | 【安全控制】实现 `security_coordinator.go:AcquireSecurityPermitTx`，修改 `adk_operations.go:dispatchNativeOperation`：事务中复核 gate/epoch、task active/expiry/executionRevision、RootTurnID/child scope 当前有效性、策略与实际授权来源，消费审批、原子扣减主/子任务共享的命令额度、记录使用及原生操作/审计；unknown不返额度，确认not_executed仅可事务返还一次。Permit 只传进程内冻结描述，适配器不得重解目标；保留当前重复保护与 finish unknown 语义。依赖：TASK-026。 | 否 | 进行中 |
+| TASK-028 | 【安全控制】新增 `internal/ai/security_coordinator_test.go`，用 barrier 控制撤销/取消与提交两种先后、审批后改参数/连接、两个消费者、task paused/terminal、epoch 切换、事务失败与登记后崩溃；验证 active→waiting→active 不使自身审批失效，pause/resume 后旧 prepared/approval 拒绝但原 TTL grant 可用于新准备，continue 后旧轮次/child call 拒绝；断言回滚不消费授权、拒绝无 I/O，unknown 不阻断无关合法读取。依赖：TASK-027。 | 否 | 进行中 |
 | TASK-029 | 【安全控制】实现 `execution_ownership.go:AcquireOwner/RenewOwner/FenceOwner`，在 `dispatchNativeOperation` 同事务检查goal/step/attempt依赖、owner generation、lease、epoch/grant并登记操作；lease默认15秒/5秒心跳，不续grant。旧owner/无归属/原步骤不满足时零派发；原callback仅登记结果不可续副作用。依赖：TASK-028、TASK-010。 | 否 | 进行中 |
 | TASK-030 | 【安全控制】新增 `internal/ai/orphan_reconciler.go`，启动及每5秒扫描失联/过期owner、未决watch/outbox/handle，冻结新派发、取消并观察真实进程/远程结果；持久写阻断、人工接管与generation fencing。新增 `orphan_reconciler_test.go` 控制时钟验证失联、过期、迟到回调、重复取消、未知结果、新任务成功不清风险、人工终端不误杀及进程组取消。依赖：TASK-029。 | 否 | 进行中 |
 
@@ -146,13 +146,13 @@ tags: [feature, architecture, security, authorization, migration, adk]
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-031 | 【资源操作】修改 `internal/ai/tools.go:Engine.invoke`、`internal/web/agent.go:bridge` 全部早期/常规分支，资源、附件、记忆及项目控制工具均按其目标种类 Prepare/AcquirePermit。将 `approved bool` 降为无独立放行能力的兼容字段；实际 I/O 接收内部 Permit/冻结描述。依赖：TASK-030。 | 否 | 进行中 |
+| TASK-031 | 【资源操作】修改 `internal/ai/security_execution.go:Engine.invoke`、`internal/web/tool_bridge.go:bridge` 全部早期/常规分支，资源、附件、记忆及项目控制工具均按其目标种类 Prepare/AcquirePermit。将 `approved bool` 降为无独立放行能力的兼容字段；实际 I/O 接收内部 Permit/冻结描述。依赖：TASK-030。 | 否 | 进行中 |
 | TASK-032 | 【资源操作】修改 `terminal_access.go:ResolveTerminalAccess`、`terminal.go:Execute/Input/Interrupt/Close`、`server.go:terminalRoute` 和 `manual_terminal.go`，区分真实人工入口和 agent，保留 owner/generation/上下文及单写者；建连成功后重审原命令，restricted 不允许任意交互输入。新增 `internal/ai/command_dispatch.go`，仅执行受信模板编译的冻结executable/argv/目录/安全环境，不执行模型原始Shell文本。新增 `internal/web/security_terminal_test.go` 及命令adapter测试。依赖：TASK-031。 | 否 | 进行中 |
-| TASK-033 | 【资源操作】修改 `internal/ai/session_tools.go:invokeSessionTool` 与 `internal/web/extensions.go:extensionBridge`，绑定受信 server/tool/resource 映射、config/catalog revision 和 task/epoch；自报 readonly 不授予权限，stdio 服从本机禁令，opaque 仅 compatible 单次审批。新增 `internal/ai/security_mcp_test.go`。依赖：TASK-031。 | 否 | 进行中 |
-| TASK-034 | 【任务中心】修改 `agent_scope.go:scopedChildConfig`、`adk_sre_roles.go:ExecuteSRERole`、`adk_observation_roles.go:runInvestigations`，显式传递 SecurityTask/父链和实际 AuthoritySource；只收窄资源/角色，不要求每个 project allow 调查创建 grant。新增 `internal/ai/security_children_test.go`，验证父 allow 无 grant、父来源撤销及角色上限。依赖：TASK-031。 | 否 | 进行中 |
-| TASK-035 | 【任务中心】修改 `internal/web/tool_bridge.go:checkToolWorkflowScope`、`workflows.go:startWorkflow/executeWorkflowRun`，每个 workflow run 映射 SecurityTask、冻结模板/目标；改造 AI external_watch/external_watch_scheduler/adk_work_wait/work_goal 恢复路径，使用原 task 且不刷新 deadline/expiry。新增 `internal/web/security_workflow_test.go`。依赖：TASK-034。 | 否 | 进行中 |
+| TASK-033 | 【资源操作】修改 `internal/ai/session_tools.go:invokeSessionTool` 与 `internal/web/extensions.go:extensionBridge`，绑定受信 server/tool/resource 映射、config/catalog revision 和 task/epoch；自报 readonly 不授予权限，stdio 服从本机禁令，opaque 仅 compatible 单次审批。新增 `internal/ai/security_catalog_test.go`。依赖：TASK-031。 | 否 | 进行中 |
+| TASK-034 | 【任务中心】修改 `agent_scope.go:scopedChildConfig`、`adk_sre_roles.go:ExecuteSRERole`、`adk_observation_roles.go:runInvestigations`，显式传递 SecurityTask/父链和实际 AuthoritySource；只收窄资源/角色，不要求每个 project allow 调查创建 grant。新增 `internal/ai/security_parent_test.go`，验证父 allow 无 grant、父来源撤销及角色上限。依赖：TASK-031。 | 否 | 进行中 |
+| TASK-035 | 【任务中心】修改 `internal/web/tool_bridge.go:checkToolWorkflowScope`、`workflows.go:startWorkflow/executeWorkflowRun`，每个 workflow run 映射 SecurityTask、冻结模板/目标；改造 AI external_watch/external_watch_scheduler/adk_work_wait/work_goal 恢复路径，使用原 task 且不刷新 deadline/expiry。新增 `internal/web/security_workflow_routes_test.go`。依赖：TASK-034。 | 否 | 进行中 |
 | TASK-036 | 【资源操作】修改 `internal/web/schedules.go:tickSchedules/writeSchedules/executeSchedule` 与 `schedule_routes.go:scheduleRoute`：显式拆 configRevision/authorityRevision/statusRevision；状态与运行关联更新只增 statusRevision。配置更新走 changing/原子替换/ready；以原计划 dueAt 建唯一 occurrence，在 ADK 事务内扣次数并创建 task grant，再幂等补建 Web run。新增重复 tick、状态更新不失效、修改/撤销和崩溃回归。依赖：TASK-035。 | 否 | 进行中 |
-| TASK-037 | 【资源操作】按 TASK-001 复查文件路径/symlink/hash、SQL/服务端权限、网络解析/重定向、SSH trust、credential reference 等实际 I/O，无法约束者标 opaque。新增 `internal/ai/security_adapters_test.go` 和补充静态 `scripts/check_security_boundary.py`；以假适配器零派发和主/stdio/Pilot/child/workflow/schedule/MCP/terminal 矩阵测试证明无旁路。依赖：TASK-032、TASK-033、TASK-036。 | 否 | 进行中 |
+| TASK-037 | 【资源操作】按 TASK-001 复查文件路径/symlink/hash、SQL/服务端权限、网络解析/重定向、SSH trust、credential reference 等实际 I/O，无法约束者标 opaque。新增 `internal/ai/security_read_adapters_test.go` 和补充静态 `scripts/check_security_boundary.py`；以假适配器零派发和主/stdio/Pilot/child/workflow/schedule/MCP/terminal 矩阵测试证明无旁路。依赖：TASK-032、TASK-033、TASK-036。 | 否 | 进行中 |
 
 ### Implementation Phase 6
 
@@ -163,9 +163,9 @@ tags: [feature, architecture, security, authorization, migration, adk]
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
 | TASK-038 | 【安全控制】新增 `internal/web/security_routes.go`，接入设计中的项目策略、task grant、revoke 和分页审计接口；复用 task/boundary 路由，全部做 `Server.protect`、身份/归属、CAS、actionID、task/epoch 及 expiry 上限校验。schedule 授权要求显式到期与次数；旧 aiOptions 不得覆盖新权威状态。task-grants与task_envelope更新同事务，扩展需expectedGrantRevision和差异确认、默认不刷新TTL/预算；单次批准只绑定精确task_envelope例外。新项目本机受控命令为ask可直接任务授权，既有显式deny保留。新增越权/跨项目/重复提交路由测试。依赖：TASK-037。 | 否 | 进行中 |
-| TASK-039 | 【任务档案与验收】修改后端 `internal/web/store.go/agent.go/server.go` 的snapshot/SSE兼容投影；严格保持当前contracts字段形状与枚举，不修改 `web-agent/shared/contracts.ts`。goal/step/task/revision私有状态由后端会话及原消息/问题/审批ID关联；不要求客户端增加goalID或读取新View，不发送Permit/秘密。新增 `internal/web/security_compat_test.go` 和现有响应golden fixture。依赖：TASK-038。 | 否 | 进行中 |
-| TASK-040 | 【安全控制】新增 `internal/ai/security_confirmation.go` 与 `internal/web/security_confirmation_bridge.go`，使用现有question选择目标/仅本次或任务范围，再用现有通用operation审批确认完整scope；选择本身不签权限，最后匹配nativeApproval.Binding才签grant/单次例外。范围/TTL/预算放既有说明与预览，不新增前端组件、按钮或approval kind；额外管理走CLI/API。依赖：TASK-039。 | 否 | 进行中 |
-| TASK-041 | 【安全控制】新增 `internal/web/security_confirmation_test.go`，校验既有提问/审批ID、payload及响应形状兼容、重复提交幂等、task授权与单次类型绑定、选择不等于批准、超范围不执行、旧客户端设置不覆盖权威状态。使用当前未修改的前端做兼容冒烟检查；不得新增securityPresentation组件/测试或改变视觉交互。依赖：TASK-040。 | 否 | 进行中 |
+| TASK-039 | 【任务档案与验收】修改后端 `internal/web/store.go/agent.go/server.go` 的snapshot/SSE兼容投影；严格保持当前contracts字段形状与枚举，不修改 `web-agent/shared/contracts.ts`。goal/step/task/revision私有状态由后端会话及原消息/问题/审批ID关联；不要求客户端增加goalID或读取新View，不发送Permit/秘密。新增 `internal/web/security_routes_test.go` 和现有响应golden fixture。依赖：TASK-038。 | 否 | 进行中 |
+| TASK-040 | 【安全控制】新增 `internal/ai/security_confirmation.go` 与 `internal/ai/security_confirmation_bridge.go`，使用现有question选择目标/仅本次或任务范围，再用现有通用operation审批确认完整scope；选择本身不签权限，最后匹配nativeApproval.Binding才签grant/单次例外。范围/TTL/预算放既有说明与预览，不新增前端组件、按钮或approval kind；额外管理走CLI/API。依赖：TASK-039。 | 否 | 进行中 |
+| TASK-041 | 【安全控制】新增 `internal/ai/security_confirmation_test.go`，校验既有提问/审批ID、payload及响应形状兼容、重复提交幂等、task授权与单次类型绑定、选择不等于批准、超范围不执行、旧客户端设置不覆盖权威状态。使用当前未修改的前端做兼容冒烟检查；不得新增securityPresentation组件/测试或改变视觉交互。依赖：TASK-040。 | 否 | 进行中 |
 | TASK-042 | 【任务档案与验收】新增后端 `internal/web/work_closure_view.go` 与 `work_closure_view_test.go`，内部GoalClosureView统一驱动既有AIView/ReplyTiming/work goal/operation outcome与最终回复验收事实；原工具失败/历史计时不删改，完整关联经现有work_read、原始执行记录及管理API读取。不新增workClosurePresentation/风险清单组件或点查导航；G2成功不清G1风险，旧协议无法展示细节仍由后端强制阻断。依赖：TASK-041、TASK-030、TASK-009。 | 否 | 进行中 |
 
 ### Implementation Phase 7
@@ -176,9 +176,9 @@ tags: [feature, architecture, security, authorization, migration, adk]
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-043 | 【安全控制】新增 `internal/web/security_backup.go` 与 `internal/ai/security_recovery.go:RestoreSecurityBackup`：暂停派发、原子轮换 control-state 的随机 epoch 并置 gate=closed，保全当前账本/审计，再恢复配对 Web/ADK/JSON 快照。旧 task/schedule grants 及全部未消费 pending/decided/authorized 审批失效，未终结旧任务 paused 且不可跨 epoch 续接，继续旧工作必须创建新 SecurityTask/新 epoch 授权；schedule disabled、project policy unconfirmed；备份不能覆盖 control-state，checkpoint/manifest 绑定 storeID+epoch，跨设备导入用新身份且关闭 gate，不自动追补 occurrence。账本保全完整且影响资源确定的 unknown/冲突持久阻断相关写入，全部策略确认后才可开 gate，由新受限任务读取对账后解除写阻断；若证据丢失且无法确定影响范围，整个 gate 保持关闭仅管理。gate 关闭期间禁止任何外部对账读取。依赖：TASK-042。 | 否 | 进行中 |
+| TASK-043 | 【安全控制】新增 `internal/ai/security_checkpoint.go` 与 `internal/ai/security_recovery.go:RestoreSecurityBackup`：暂停派发、原子轮换 control-state 的随机 epoch 并置 gate=closed，保全当前账本/审计，再恢复配对 Web/ADK/JSON 快照。旧 task/schedule grants 及全部未消费 pending/decided/authorized 审批失效，未终结旧任务 paused 且不可跨 epoch 续接，继续旧工作必须创建新 SecurityTask/新 epoch 授权；schedule disabled、project policy unconfirmed；备份不能覆盖 control-state，checkpoint/manifest 绑定 storeID+epoch，跨设备导入用新身份且关闭 gate，不自动追补 occurrence。账本保全完整且影响资源确定的 unknown/冲突持久阻断相关写入，全部策略确认后才可开 gate，由新受限任务读取对账后解除写阻断；若证据丢失且无法确定影响范围，整个 gate 保持关闭仅管理。gate 关闭期间禁止任何外部对账读取。依赖：TASK-042。 | 否 | 进行中 |
 | TASK-044 | 【安全控制】新增 `internal/web/security_migration_routes.go`，在 `cmd/lake/main.go` 的现有命令结构接入 status/shadow/enforce/verify-backup/restore 管理命令；必须使用 TASK-043 恢复协议。新增用户策略重新确认/恢复清单接口，记录 actor/actionID/epoch及持久资源写阻断；开 gate 前确认全部策略，旧执行上下文不得跨epoch恢复，用户续旧工作时新建SecurityTask关联原goal；enforce 仅在全部入口覆盖、旧状态处置及一致性检查完成后开放，无环境变量旁路或清账本选项。依赖：TASK-043。 | 否 | 进行中 |
-| TASK-045 | 【安全控制】新增 `internal/ai/security_recovery_test.go`、`security_rollback_test.go`，覆盖备份→撤销/策略deny/消费定时次数→恢复，要求旧 grant 和 pending/decided/authorized 审批零派发、旧 task 不可跨 epoch 续接且无重复调度；每个恢复断点重启关闭 gate，期间外部读取也是零派发。账本完整且影响资源明确时，策略全确认后用新受限任务对账读取，unknown/冲突相关资源仍拒写；证据丢失且影响范围不明时整个 gate 关闭，仅管理；测试 epoch 不符、control-state 缺失、未来 schema和无法等价映射时拒绝旧模式降级。记录支持回退 SHA，历史无 reader guard 二进制不在支持范围。依赖：TASK-044。 | 否 | 进行中 |
+| TASK-045 | 【安全控制】新增 `internal/ai/security_recovery_test.go`、`security_recovery_test.go`，覆盖备份→撤销/策略deny/消费定时次数→恢复，要求旧 grant 和 pending/decided/authorized 审批零派发、旧 task 不可跨 epoch 续接且无重复调度；每个恢复断点重启关闭 gate，期间外部读取也是零派发。账本完整且影响资源明确时，策略全确认后用新受限任务对账读取，unknown/冲突相关资源仍拒写；证据丢失且影响范围不明时整个 gate 关闭，仅管理；测试 epoch 不符、control-state 缺失、未来 schema和无法等价映射时拒绝旧模式降级。记录支持回退 SHA，历史无 reader guard 二进制不在支持范围。依赖：TASK-044。 | 否 | 进行中 |
 | TASK-046 | 【任务档案与验收】扩展 `security_recovery.go` 与 `orphan_reconciler.go`，备份/重启/owner变更保留goal-step-attempt-op-evidence和coverage关系；旧epoch只允许回写核实、不可续派发。未决孤儿/资源占用先索引阻断，取消/目标切换不丢handle。测试恢复后新G2成功不能解旧G1写阻断，缺关联进入管理/核实清单。依赖：TASK-045、TASK-042。 | 否 | 进行中 |
 
 ### Implementation Phase 8
@@ -214,7 +214,7 @@ tags: [feature, architecture, security, authorization, migration, adk]
 
 ## 5. Files
 
-以下按职责分组。标为“新增”的文件尚不存在；TASK-001 发现额外入口时必须补注册和验收，不能以此静态清单限制安全覆盖。
+以下按职责分组；实际文件映射和验证以实施记录为准。新增入口必须补注册和真实执行保护验收，不能以静态清单限制覆盖范围。
 
 - **FILE-001**: 新增 `internal/security/{schema,task,target,types,reason,canonical,capability,command_profiles,evaluator}.go` 及测试：纯领域模型、目标闭环与owner协议、任务状态机、授权公式、描述摘要；新增 `work_closure.go/execution_owner.go`。
 - **FILE-002**: 新增 `internal/ai/security_{home,control,store_migration,tasks,store,migration,adapter,coordinator,recovery}.go` 及测试：规范存储、epoch/gate、任务与事务集成；新增 `work_attempts.go/work_acceptance.go/work_goal_binding.go/execution_ownership.go/orphan_reconciler.go`；新增 `internal/ai/command_dispatch.go` 编译执行受控命令。
@@ -222,7 +222,7 @@ tags: [feature, architecture, security, authorization, migration, adk]
 - **FILE-004**: 修改 `internal/ai/{agent_scope,adk_sre_roles,adk_observation_roles,external_watch,external_watch_scheduler,adk_work_wait,work_goal}.go`：父授权来源、角色和后台恢复。
 - **FILE-005**: 新增 `internal/web/{target_resolution,security_task_routes,security_boundary_routes,security_catalog,security_routes,security_backup,security_migration_routes}.go` 及测试：可信用户动作、迁移/恢复管理、Web 适配。
 - **FILE-006**: 修改 `internal/web/{agent,store,server,directory_targets,resource_edit,resource_import,resource_tree,extensions,terminal_access,terminal,manual_terminal,tool_bridge,workflows,schedules,schedule_routes}.go` 及 `cmd/lake/main.go`：资源/终端/定时版本、规范路径和管理命令。
-- **FILE-007**: 新增后端 `internal/ai/security_confirmation.go`、`internal/web/security_confirmation_bridge.go`、`work_closure_view.go`、`security_compat_test.go`、`security_confirmation_test.go` 及兼容fixture；前端源码与shared/contracts.ts仅作为只读协议依据，不纳入改动。
+- **FILE-007**: 新增后端 `internal/ai/security_confirmation.go`、`internal/ai/security_confirmation_bridge.go`、`work_closure_view.go`、`security_compat_test.go`、`security_confirmation_test.go` 及兼容fixture；前端源码与shared/contracts.ts仅作为只读协议依据，不纳入改动。
 - **FILE-008**: 新增 `docs/security/{tool-entrypoints,user-guide}.md`、`docs/validation/lake-security-v1.md` 与 `scripts/check_security_boundary.py`，更新本计划和详细设计的实际状态。
 
 ## 6. Testing
@@ -239,7 +239,7 @@ tags: [feature, architecture, security, authorization, migration, adk]
 - **TEST-010**: 实现新包后执行 `go test ./internal/security ./internal/ai ./internal/web ./internal/agent/storage ./cmd/lake`、对应路径的 `go test -race` 与 `go vet`，以及 `python3 scripts/check_adk_runtime_boundary.py` 和新增的 `python3 scripts/check_security_boundary.py`。失败按相关改动修复，不删除门禁。
 - **TEST-011**: 以后端golden/JSON与路由测试确认现有payload/枚举不变；可运行未修改前端的check/test:frontend/build:web作兼容回归，不增加前端源码或UI测试文件。Dev仅用原有提问/审批/停止/执行记录/核实流程检查后端行为；恢复/接管管理走API/CLI，记录实际SHA/Home。
 - **TEST-012**: 使用 TASK-023 固定 fixture 保存平台、原始样本与 p95：Evaluate<1ms，本地准备/登记相对旧链 p95 增量≤10ms。超标先优化快照/索引，不删除派发校验。
-- **TEST-013**: 本轮文档交付只校验 frontmatter、必需章节、声明 ID 唯一、引用与任务依赖闭合、链接及 `git diff --check`；不运行应用测试/构建，不把未来验收写成已通过。
+- **TEST-013**: 文档校验 frontmatter、必需章节、声明 ID 唯一、引用与任务依赖闭合、链接及 `git diff --check`；应用实施另按 TEST-010/011/012 和签名Dev实测记录，不把未来验收写成已通过。
 
 - **TEST-014**: 任务一次授权后多种合规命令不重复确认；跨资源/参数/路径/模板、次数耗尽、模板升级均零派发并显示差异。单次例外不扩大后续范围，显式扩展不自动续期或补额度；project allow不得绕过task_envelope，项目/父deny不可覆盖。注入管道、命令替换、别名/未知脚本验证不执行原始Shell；两个子任务竞争最后一次维护额度最多派发一次，unknown不退额度。
 

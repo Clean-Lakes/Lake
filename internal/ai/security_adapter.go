@@ -168,10 +168,3 @@ func acquirePreparedSecurityPermitTx(ctx context.Context, tx *gorm.DB, operation
 	}
 	return permit, err
 }
-
-// compareSecurityShadow returns only safe decision facts. It does not consume
-// grants/approvals, mutate legacy permissions or open the enforced gate.
-func compareSecurityShadow(in security.EvaluationInput, legacyAllowed bool) map[string]any {
-	decision := security.Evaluate(in)
-	return map[string]any{"operation_id": in.Operation.ID, "descriptor_hash": decision.DescriptorDigest, "effect": decision.Effect, "reason_code": decision.ReasonCode, "differs": legacyAllowed != (decision.Effect == security.EffectAllow)}
-}

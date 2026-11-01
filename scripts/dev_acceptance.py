@@ -23,6 +23,24 @@ def wait_for(check, seconds=40):
         time.sleep(0.1)
     raise TimeoutError('Lake fixture wait expired')
 
+def home_owner_released(home):
+    """Observe fixture shutdown; never remove or rewrite an ownership record."""
+    if os.name != 'posix':
+        # Native fixtures are macOS-only; web fixtures wait their backend Popen.
+        return True
+    import fcntl
+    try:
+        owner = (home / 'security/owner.lock').open('rb')
+    except FileNotFoundError:
+        return True
+    with owner:
+        try:
+            fcntl.flock(owner.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        fcntl.flock(owner.fileno(), fcntl.LOCK_UN)
+    return True
+
 class Lake:
 
     def __init__(self, binary, home, env, native=None):
@@ -83,4 +101,13 @@ class Lake:
         if self.process.poll() is None:
             self.process.terminate()
             self.process.wait(timeout=25)
-        self.log.close()
+        # A native window's Popen is the parent, not its backend. The caller
+        # terminates the fixture backend by the PID in its fresh runtime record;
+        # parent exit alone does not mean the canonical DB owner has stopped.
+        # Wait for actual ownership release before inspecting/reopening the Home.
+        try:
+            wait_for(lambda: home_owner_released(self.home), seconds=25)
+        except TimeoutError as error:
+            raise TimeoutError('owned fixture backend did not release the Home owner lock') from error
+        finally:
+            self.log.close()

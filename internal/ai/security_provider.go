@@ -62,9 +62,6 @@ func (d *adkTurnDriver) securityProviderContext(ctx context.Context, tools []Too
 		}
 		sourceSession = providerSource(sourceState)
 		expectedRoot = e.worker.turnID
-		if sourceSession.root != expectedRoot {
-			return ctx, tools, errExecutionOwner
-		}
 	}
 	managed, err := source.securityPolicyConfigured(sourceSession.project)
 	if err != nil {
@@ -74,6 +71,12 @@ func (d *adkTurnDriver) securityProviderContext(ctx context.Context, tools []Too
 	if !managed && d.providerSecurity == nil {
 		d.providerSecurityInitialized = true
 		return ctx, tools, nil
+	}
+	// Legacy SRE summaries may run outside a parent turn and use a temporary
+	// worker turn ID. They have no Security owner to fence. A managed child,
+	// including a previously bound driver, must still retain its real parent.
+	if e.worker != nil && sourceSession.root != expectedRoot {
+		return ctx, tools, errExecutionOwner
 	}
 	sourceID := ownSessionID(d.session)
 	if e.worker != nil {

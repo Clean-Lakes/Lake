@@ -121,6 +121,9 @@ func (e *Engine) invokeManaged(ctx context.Context, s *session, c Config, call C
 	if err != nil {
 		return nil, &ToolNotExecutedError{Err: err}
 	}
+	if err = e.recordSecurityShadowDecision(ctx, s, c, call, prepared, decision); err != nil {
+		return nil, &ToolNotExecutedError{Err: err}
+	}
 	if prepared == nil || decision.Effect == security.EffectDeny {
 		return nil, &ToolNotExecutedError{Err: &securityPermitError{Decision: decision}}
 	}

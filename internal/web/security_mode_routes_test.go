@@ -14,6 +14,17 @@ func TestSecurityModeHTTPUsesHostProjectsAndFrozenCAS(t *testing.T) {
 		t.Fatal(first)
 	}
 	apiTest(t, h, "POST", "/api/security/mode", payload, 200)
+	if _, ok := first["shadowDifferences"].([]any); !ok {
+		t.Fatal("management status omitted shadow review", first)
+	}
+	forgedDifference := Object{"actionId": "forged-shadow-ack", "expectedRevision": 1, "mode": "shadow", "confirmedDigest": first["digest"], "confirmedShadowDifferences": []string{"not-an-original-host-event"}}
+	apiTest(t, h, "POST", "/api/security/mode", forgedDifference, 409)
+	unchanged := apiTest(t, h, "GET", "/api/security/mode", nil, 200)
+	if number(unchanged["revision"]) != 1 || unchanged["mode"] != "shadow" {
+		t.Fatal("forged difference changed mode", unchanged)
+	}
+	forgedDifference["confirmedShadowDifferences"] = []Object{{"id": "fake", "comparison": "widening"}}
+	apiTest(t, h, "POST", "/api/security/mode", forgedDifference, 400)
 	forged := cloneObject(payload)
 	forged["projects"] = []string{"fake"}
 	apiTest(t, h, "POST", "/api/security/mode", forged, 400)

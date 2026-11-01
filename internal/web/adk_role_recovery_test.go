@@ -48,7 +48,9 @@ func testADKRoleCrash(t *testing.T, question bool, projectionWindow ...bool) {
 	}
 	h := httptest.NewServer(b)
 	session, resource := newSession(t, h)
-	target := filepath.Join(home, "effect.txt")
+	// A business effect belongs outside Lake's protected runtime/authority Home.
+	// Recovery must preserve that boundary while resuming the approved operation.
+	target := filepath.Join(t.TempDir(), "effect.txt")
 	if pilot {
 		if err := os.WriteFile(target, []byte("PILOT_CRASH_SOURCE"), 0600); err != nil {
 			t.Fatal(err)

@@ -33,7 +33,7 @@ func (b *Server) securityModeRoute(w http.ResponseWriter, r *http.Request) bool 
 		fail(405, "Method not allowed")
 	}
 	data := body(w, r, 8192)
-	memoryFields(data, "actionId", "expectedRevision", "mode", "confirmedDigest")
+	memoryFields(data, "actionId", "expectedRevision", "mode", "confirmedDigest", "confirmedShadowDifferences")
 	if _, present := data["expectedRevision"]; !present {
 		fail(400, "expectedRevision required")
 	}
