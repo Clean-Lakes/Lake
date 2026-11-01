@@ -1,6 +1,6 @@
 # Lake Security 任务闭环实施记录
 
-日期：2026-11-02。分支：`codex/security-task-closure`，PR [#140](https://github.com/Clean-Lakes/Lake/pull/140) → `develop`。当前为最终验收候选；通过结果、tested SHA 和签名产物在本轮收口后固定。未合并、未发布，未安装或重启正式版。
+日期：2026-11-02。分支：`codex/security-task-closure`，PR [#140](https://github.com/Clean-Lakes/Lake/pull/140) → `develop`。后端实现和自动化验收以代码候选 `b2405d9fae393ee675702fd86b01ed8f174be0d0` 固定；本记录后的提交只更新文档。原生签名运行已通过，实际窗口检查及截图因 Mac 锁屏仍未完成（TASK-049），最终收口 TASK-050 保持进行中。未合并、未发布，未安装或重启正式版。
 
 ## 五模块与实际代码
 
@@ -16,7 +16,16 @@
 
 ## 测试与签名 Dev
 
-最终命令、实际耗时和 SHA 待本轮检查结束后填入。此前集成失败不记为通过：原 SRE 汇总误套 owner 检查、恢复夹具把业务文件放入受保护 Home、native 测试未等后台释放 owner，均已定位并有针对回归。
+代码 SHA：`b2405d9fae393ee675702fd86b01ed8f174be0d0`。最终完整 Go 回归已通过（AI 117.534s、Web 277.919s，所有其余包通过或无测试）。上一个完整候选 `1d5e0b24ecba4495854f6ebb1018425aa6dc9689` 全仓通过（AI 及其余包通过、Web 318.531s），在其后仅追加 mode 响应有界投影及验收脚本等待 task 最终提交；该补丁 AI/Web/CLI race 已通过。此前集成失败不记为通过：原 SRE 汇总误套 owner 检查、恢复夹具把业务文件放入受保护 Home、native 测试未等后台释放 owner，均已定位并有针对回归。
+
+| 验证 | 代码 SHA / 结果 |
+| --- | --- |
+| 完整 Go | `b2405d9f`：全仓通过，AI 117.534s、Web 277.919s、CLI 2.367s |
+| 全部安全/闭环相关 race | `1d5e0b24`：AI 166.094s、Web 41.936s、CLI 4.405s；随后 `b2405d9f` mode/shadow/CLI 增量 race：AI 21.691s、Web 9.081s、CLI 10.398s |
+| vet / 两套边界 | `b2405d9f` 全仓 vet、ADK AST boundary、Security registry/hooks 全通过 |
+| 原前端 | `1d5e0b24` 类型检查和 556/556 测试通过；`b2405d9f` Dev 再次完成类型检查/Web 构建，前端/shared/client 文件均无 diff |
+| Dev 脚本 | `b2405d9f`：16/16 unittest 通过，含真实进程持锁/父退出后的等待回归 |
+| 签名 Dev | `b2405d9f`：构建安装及两项原生宿主脚本通过，报告见下文；原生截图未验证 |
 
 - 完整 Go：`go test ./... -count=1 -timeout=8m`。
 - Race：`go test -race ./internal/security ./internal/ai ./internal/web ./cmd/lake -run 'Security|WorkClosure|WorkAcceptance|WorkManual|ExecutionOwner|ExecutionMonitor|Orphan|Managed|TargetResolution' -count=1 -timeout=8m`。
@@ -27,9 +36,11 @@
 - 原生基础：`scripts/verify_security_runtime_dev.py --binary bin/lake --native "$HOME/Applications/Lake Dev.app/Contents/MacOS/Lake" --output <private-report>`。
 - 任务与启用：`scripts/verify_security_task_dev.py --binary bin/lake --enforce --output <private-report>`，同脚本支持 `--native` 验证原生宿主。
 
+[签名验收报告](lake-security-task-dev.json)：Dev build-origin 的 gitHead 为 `b2405d9fae393ee675702fd86b01ed8f174be0d0`、`dirty=false`；backend SHA256 `245288b35324f37e269db52d45a2116f06abffd876b1ea76a8db2556f2eb4473`。两项最终脚本均使用实际原生 Dev 宿主并成功；截图工具报告 Mac 锁屏，不能据此宣称原窗口视觉验收通过。
+
 任务 fixture 使用实际签名后端、实际 HTTP/SSE、真实有界 FD 读取及现有提问/审批接口，仅模型响应来自 loopback 合成提供者：一个原目标、两次原读取、一次任务范围审批、独立人工验收、预算 10→8、目标和 task 均关闭，随后真实启用该隔离 Home 并验证新项目默认 restricted。不以模型总结替代验收。
 
-公共恢复 E2E：真实 checkpoint→restore→全部策略/连接映射确认→activate→关闭只读 owner→正常重启→新受限任务实际读取→逐来源解除阻断→新 task 重试原 goal。原失败/未知状态、原授权失效和未验收事实保持，缺少一个入口则仍拒绝激活。原提问/审批崩溃恢复保留恰好一次与 unknown 不重放断言。
+最终 SHA 的两项公共恢复 E2E 明确 PASS（正向 0.81s，非 skip）：真实 checkpoint→restore→全部策略/连接映射确认→activate→关闭只读 owner→正常重启→新受限任务实际读取→逐来源解除阻断→新 task 重试原 goal。原失败/未知状态、原授权失效和未验收事实保持，缺少一个入口则仍拒绝激活。原提问/审批崩溃恢复保留恰好一次与 unknown 不重放断言。
 
 ## 覆盖与真实 I/O
 
@@ -49,7 +60,7 @@
 
 ## 性能
 
-Apple Silicon 本机、非 race，固定 100 资源/20 规则/20 grants/并发 8；纯 Evaluate 和 SQLite 准备/登记分别记录，不含模型/网络/实际读取耗时。最终固定 SHA 的 p95 样本待填；集成期间 Evaluate 62µs、真实有界文件准备+登记 7.89ms，不作为最终候选结果。
+Apple Silicon 本机、非 race，固定 100 资源/20 规则/20 grants/并发 8；纯 Evaluate 和 SQLite 准备/登记分别记录，不含模型/网络/实际读取耗时。固定上述代码 SHA 的实际样本：Evaluate p95 **100.667µs**；128 组原 SQLite 登记 p95 **752.375µs**、安全登记 **1.726167ms**，增量 **973.792µs**；64 组真实文件目标解析+FD 元数据+规范准备+原登记 p95 **8.802583ms**。符合纯 Evaluate <1ms 与登记增量 ≤10ms 目标。运行时同时有全仓回归，不将单机样本当作所有环境的延迟保证。
 
 ## 独立审查与修复
 
@@ -59,6 +70,7 @@ Apple Silicon 本机、非 race，固定 100 资源/20 规则/20 grants/并发 8
 - 恢复索引统一纳入 failed/succeeded 的未决副作用，不只筛 unknown；空影响资源也必须有可信 catalog 映射确认。
 - 原问题只提议授权范围；最后审批绑定差异、scope、TTL、预算；批准后重新 Prepare，外部 approved 字段无效。
 - runtime/Home/control/凭据文件保护覆盖规范路径、别名、symlink 和硬链接；host token 只参与内部脱敏，不序列化。
+- mode 管理投影最多 100 条、优先未确认放宽，支持逐批 ACK；1000 条事实/300 项放宽回归验证隐藏事实仍改变完整摘要并阻止启用，CLI 的 64KiB 上限不放大。
 - 旧 SRE 无任务临时汇总保持原合法行为，managed 错 root/owner 仍为零 provider 调用。
 - shadow 对真实 managed prepared operation 纯比较新旧三态，不消费权限；未经确认放宽绑定到启用快照，显式 ACK 和启用分两步。缺少可信关联记 incomplete，不编造允许。
 
@@ -66,6 +78,6 @@ Apple Silicon 本机、非 race，固定 100 资源/20 规则/20 grants/并发 8
 
 默认存量 Home 不因安装二进制就自动全局 enforce；逐会话保留原七项有效权限。显式项目策略受新控制，Home 强制模式须用管理 API/CLI 确认完整摘要并满足全部前置条件。强制后缺项目/策略不得退回 legacy；没有环境变量或清账本解锁选项。
 
-新权威状态最低 reader 为 **2**。基础 reader 1 和早期正式二进制不属于可读回退范围；当前批次最早受支持的候选 SHA 在最终验证后固定。回退需理解 control/epoch/reader guard 的兼容二进制和[成对恢复协议](../security/checkpoint-and-recovery.md)，不能直接降级读取或将备份覆盖 control。
+新权威状态最低 reader 为 **2**。基础 reader 1 和早期正式二进制不属于可读回退范围；本批次已验证的最低兼容代码 SHA 为 `b2405d9fae393ee675702fd86b01ed8f174be0d0`，未验证任何更早 reader-2 二进制作为回退候选。回退需理解 control/epoch/reader guard 的兼容二进制和[成对恢复协议](../security/checkpoint-and-recovery.md)，不能直接降级读取或将备份覆盖 control。
 
 本轮仅 macOS arm64 Dev 验证；Windows/Linux 原生运行和真实数据库引擎验收未执行。SOP UI 与 Memory 内部重构不在本 Security 计划范围。独立审查代理的本地结论不冒充 GitHub 第三方账号审批。PR 等待用户对本 PR 的明确合并授权；日常 develop PR 无自动 CI，未触发额外 workflow。

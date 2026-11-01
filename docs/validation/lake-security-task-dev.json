@@ -1,0 +1,33 @@
+{
+  "testedCodeSHA": "b2405d9fae393ee675702fd86b01ed8f174be0d0",
+  "platform": "macOS arm64 / Apple M5",
+  "runtime": {
+    "checks": [
+      "Web/stdio second owner rejected",
+      "offline risk inspection fences owners and preserves open Home data",
+      "ordinary restart retained epoch and canonical store",
+      "future reader rejected",
+      "stdio-only unresolved history inspectable without raw data or writes",
+      "legacy unknown archived; gate closed without replay",
+      "legacy Web session loaded without migrations; writes blocked; durable files unchanged"
+    ],
+    "signed": true,
+    "isolatedHomes": true,
+    "native": true
+  },
+  "taskAndEnforcement": {
+    "passed": true,
+    "binarySHA256": "245288b35324f37e269db52d45a2116f06abffd876b1ea76a8db2556f2eb4473",
+    "model": "loopback synthetic fixture",
+    "goals": 1,
+    "originalReadOperations": 2,
+    "nativeApprovalsConsumed": 1,
+    "humanQuestions": 3,
+    "remainingUses": 8,
+    "taskState": "completed",
+    "frontendModified": false,
+    "isolatedHomeEnforced": true,
+    "native": true
+  },
+  "nativeScreenshot": "not captured: Mac locked; manual visual acceptance pending"
+}
