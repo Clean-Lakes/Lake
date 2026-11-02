@@ -84,6 +84,19 @@ func InspectSecurityRisks(ctx context.Context, home string, limit int) (Security
 	if err = privateSecurityRead(filepath.Join(h.Home, "security", "legacy-inventory.json"), &inv); err != nil {
 		return out, errors.New("security: inspection requires a preserved legacy inventory")
 	}
+	if inv.FormatVersion == 2 {
+		if _, err = h.verifyLegacyFinalization(ctx, h.readOnlyDB, inv); err != nil {
+			return out, err
+		}
+		row, e := inspectSecurityRiskStore(ctx, h.readOnlyDB, legacySecurityStoreID(filepath.Join(h.RuntimeRoot, "sessions.sqlite")), "current", limit)
+		if e != nil {
+			return out, e
+		}
+		if err = h.CheckReadOnlyView(); err != nil {
+			return out, err
+		}
+		return SecurityRiskReport{FormatVersion: 1, StoreID: h.control.StoreID, RecoveryEpoch: h.control.RecoveryEpoch, Gate: h.control.Gate, LimitPerStore: limit, ResourceMap: "unverified", Stores: []SecurityRiskStore{row}}, nil
+	}
 	if inv.FormatVersion != 1 || inv.StoreID != h.control.StoreID || inv.RecoveryEpoch != h.control.RecoveryEpoch || (inv.State != "ready" && inv.State != "pending_review") || len(inv.Stores) > 2 || (inv.Policy != "" && inv.Policy != preserveLegacyUnresolved) {
 		return out, errors.New("security: invalid legacy inventory identity or version")
 	}

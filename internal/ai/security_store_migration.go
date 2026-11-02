@@ -27,13 +27,14 @@ type LegacyStore struct {
 	Sessions   int64  `json:"sessions"`
 }
 type LegacyInventory struct {
-	FormatVersion int           `json:"formatVersion"`
-	StoreID       string        `json:"storeID"`
-	RecoveryEpoch string        `json:"recoveryEpoch"`
-	State         string        `json:"state"`
-	Policy        string        `json:"policy,omitempty"`
-	Stores        []LegacyStore `json:"stores"`
-	CreatedAt     time.Time     `json:"createdAt"`
+	FormatVersion  int           `json:"formatVersion"`
+	StoreID        string        `json:"storeID"`
+	RecoveryEpoch  string        `json:"recoveryEpoch"`
+	State          string        `json:"state"`
+	Policy         string        `json:"policy,omitempty"`
+	Stores         []LegacyStore `json:"stores"`
+	CreatedAt      time.Time     `json:"createdAt"`
+	FinalizationID string        `json:"finalizationID,omitempty"`
 }
 
 func openSecurityReadOnly(path string) (*sql.DB, error) {
@@ -208,6 +209,15 @@ func (h *SecurityHome) MigrateLegacyStores(ctx context.Context) error {
 	path := filepath.Join(h.Home, "security", "legacy-inventory.json")
 	var previous LegacyInventory
 	if err := privateSecurityRead(path, &previous); err == nil {
+		if previous.FormatVersion == 2 {
+			db, err := openSecurityReadOnly(filepath.Join(h.RuntimeRoot, "sessions.sqlite"))
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			_, err = h.verifyLegacyFinalization(ctx, db, previous)
+			return err
+		}
 		if previous.FormatVersion != 1 || previous.StoreID != h.control.StoreID || previous.RecoveryEpoch != h.control.RecoveryEpoch || previous.State != "ready" {
 			return errors.New("security: legacy inventory requires management")
 		}
