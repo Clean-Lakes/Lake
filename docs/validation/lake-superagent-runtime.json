@@ -5,9 +5,9 @@
   "baseSHA": "85a768d074f654d8428d1ea278f9d60dec7a2504",
   "installedDev": {
     "platform": "macOS arm64",
-    "gitHead": "7684699f3baabf77f42309dadb1b2168524bd2f3",
+    "gitHead": "0ad3b2ae0967ed0df6ad9fd8626ca38b3cab238a",
     "sourceDirty": false,
-    "binarySHA256": "7fa70064a5b0f3c211f31b1915b5b15a9252738172626ae39ee51c38e5316fe7",
+    "binarySHA256": "1a3b23e2acf452c218da19cb2030b757ae9c07a9014648637ef369347e60789e",
     "codesign": "deep_strict_pass",
     "productionTouched": false
   },
@@ -847,5 +847,70 @@
     ],
     "authorityChanges": false,
     "schemaMigration": false
+  },
+  "legacyHistoryNavigationVerification": {
+    "date": "2026-11-03",
+    "testedSHA": "0ad3b2ae0967ed0df6ad9fd8626ca38b3cab238a",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "7684699f3baabf77f42309dadb1b2168524bd2f3",
+      "sourceDirty": false,
+      "binarySHA256": "7fa70064a5b0f3c211f31b1915b5b15a9252738172626ae39ee51c38e5316fe7",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "changes": [
+      "active Pilot workspace omits the old history entry and session list from the sidebar",
+      "legacy navigation renders only for explicitly inactive workspaces, avoiding old-session flash during loading",
+      "old read-only session pages and records are retained"
+    ],
+    "toolchain": {
+      "node": "24.14.0",
+      "pnpm": "10.33.4"
+    },
+    "typeCheck": "pass",
+    "frontendTests": {
+      "tests": 565,
+      "passed": 565,
+      "failed": 0
+    },
+    "webBuild": "pass",
+    "signedDevBuildInstall": "pass",
+    "codesign": "deep_strict_pass",
+    "nativeUI": "history entry absent; original HexHub 服务器 project with 135 resources and existing folders visible; left on original project Pilot",
+    "browserUI": {
+      "lightWidth": 1512,
+      "darkWidth": 600,
+      "legacySidebarEntries": 0,
+      "legacyNavigationRows": 0,
+      "resourceCount": 135,
+      "horizontalDocumentOverflow": false,
+      "resourceHeadingKeyboardFocusVisible": true,
+      "themePreferenceChanged": false
+    },
+    "retainedHistory": "CPU 状态检查 found through existing workspace search and opened as read-only; original operation/evidence retention notice visible; no new model messages sent",
+    "automationNotes": [
+      "A wait for .ai-role-assistant was not applicable to the original Pilot message-card rendering; snapshot confirmed loaded content.",
+      "Reloading a legacy URL followed existing initial Pilot activation routing; retained read-only history was verified through in-app search after activation instead."
+    ],
+    "screenshots": [
+      "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/legacy-history-hidden-light.png",
+      "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/legacy-history-hidden-600-dark.png"
+    ],
+    "logs": {
+      "typeCheck": "/tmp/lake-hide-legacy-check.log",
+      "frontendTests": "/tmp/lake-hide-legacy-frontend.log",
+      "desktop": "/tmp/lake-hide-legacy-desktop.log"
+    },
+    "notRun": [
+      "Go suites; no runtime changes",
+      "Windows native UI",
+      "inactive workspace fallback in a live environment",
+      "new external-model execution"
+    ],
+    "authorityChanges": false,
+    "schemaMigration": false,
+    "historyDeleted": false
   }
 }
