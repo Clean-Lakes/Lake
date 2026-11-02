@@ -995,7 +995,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					if _, exists := updates["conversationMode"]; exists {
 						fail(400, "请通过模式切换入口修改会话模式")
 					}
-					reply(w, 200, b.configure(id, updates))
+					reply(w, 200, b.configureUserOptions(id, updates))
 					return
 				}
 				if set("workControl abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails resolveOperation clear clearReferences rollback compact restore undoFile extractPreset")[op] {

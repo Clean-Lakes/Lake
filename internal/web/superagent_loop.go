@@ -32,6 +32,9 @@ func (b *Server) reconcileSuperagent() {
 		if !visible {
 			continue
 		}
+		if b.Engine.InheritSuperProjectAccess(b.Context, domain.ProjectID) != nil {
+			continue
+		}
 		b.reconcileSuperSourceContexts(domain)
 		b.startSuperRouter(domain)
 		if _, err := b.Engine.RecoverSuperagent(b.Context, domain.ProjectID); err != nil {

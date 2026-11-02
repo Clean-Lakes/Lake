@@ -287,6 +287,9 @@ func (b *Server) ensureSuperProject(ctx context.Context, project string) (ai.Sup
 	if b.Context.Err() != nil {
 		return ai.SuperProject{}, errors.New("superagent: runtime is draining")
 	}
+	if err := b.Engine.InheritSuperProjectAccess(ctx, project); err != nil {
+		return ai.SuperProject{}, err
+	}
 	if existing, ok, err := b.Engine.SuperProject(ctx, project); err != nil || ok {
 		if err == nil && ok {
 			b.reconcileSuperSessionRoles(existing)

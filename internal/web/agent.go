@@ -50,6 +50,20 @@ func (b *Server) configure(id string, updates Object) Object {
 // Mode-only saves use an ordered presentation delta; other configuration
 // changes keep the full invalidation used by existing clients.
 func (b *Server) configureWithSave(id string, updates Object, saveOptions func(string, Object)) Object {
+	return b.configureSessionOptions(id, updates, saveOptions, false)
+}
+
+func (b *Server) configureUserOptions(id string, updates Object) Object {
+	return b.configureSessionOptions(id, updates, b.Store.SaveOptions, true)
+}
+
+func (b *Server) configureSessionOptions(id string, updates Object, saveOptions func(string, Object), userAction bool) Object {
+	explicitPermissions := false
+	for _, key := range []string{"silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "blockUnreferencedAssets", "denyLocalExecution"} {
+		if _, exists := updates[key]; userAction && exists {
+			explicitPermissions = true
+		}
+	}
 	options := b.sessionOptions(id)
 	if mode, exists := updates["conversationMode"]; exists && mode != ai.ModeDefault && mode != ai.ModePlan {
 		fail(400, "Invalid conversation mode")
@@ -121,6 +135,9 @@ func (b *Server) configureWithSave(id string, updates Object, saveOptions func(s
 	activeModel, modelSelection := b.Models.ActiveSelection()
 	model := b.Models.CachedCapacity(activeModel)
 	if model == nil {
+		if explicitPermissions {
+			aiFailure(b.syncSuperPermissionSettings(id, permissions))
+		}
 		saveOptions(id, options)
 		if previousPermissions != permissionVersion(options) {
 			b.revokeSessionTerminals(id)
@@ -152,6 +169,9 @@ func (b *Server) configureWithSave(id string, updates Object, saveOptions func(s
 	assets, directories := b.sessionAssetCatalog(id)
 	projectID := stringOf(b.Store.Session(id)["projectId"])
 	memorySettings := b.Store.MemorySettings(projectID)
+	if explicitPermissions {
+		aiFailure(b.syncSuperPermissionSettings(id, permissions))
+	}
 	// Approvals belong to individual operations; earlier pending actions must not
 	// disable this turn's tools. invoke enforces per-operation permissions.
 	aiFailure(b.Engine.Configure(id, ai.Config{ConversationMode: stringOf(options["conversationMode"]), ModelProviderID: stringOf(modelSelection["providerId"]), NaturalMemory: b.Store.NaturalConsent(projectID), MemoryProjectID: projectID, MemorySchemaVersion: integer(memorySettings["memorySchemaVersion"]), MemoryResourceGenerations: b.Store.memoryGenerationSnapshot(projectID), MemoryEnabled: memorySettings["useEnabled"] == true, MemoryExtractionEnabled: memorySettings["useEnabled"] == true && memorySettings["extractionEnabled"] == true, MemoryEpoch: integer(memorySettings["epoch"]), MemoryKnowledgeRevision: integer(memorySettings["revision"]), Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))

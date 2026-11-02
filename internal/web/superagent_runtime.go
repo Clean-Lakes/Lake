@@ -36,6 +36,9 @@ func (b *Server) deliverPendingSuperReports(domain ai.SuperProject) {
 }
 
 func (b *Server) startSuperWorkers(domain ai.SuperProject) {
+	if b.Engine.InheritSuperProjectAccess(b.Context, domain.ProjectID) != nil {
+		return
+	}
 	if b.Engine.ApplySuperStops(b.Context, domain.ProjectID) != nil {
 		return
 	}

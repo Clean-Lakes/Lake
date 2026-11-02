@@ -10,7 +10,7 @@ test('Pilot and real specialist instances replace session creation',()=>{
  const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'pilot',onPilot(){},onWorker(){}}));
  assert.match(html,/持续沟通，自动安排工作/);
  assert.match(html,/订单专员/);assert.match(html,/排查订单超时/);assert.match(html,/待核实/);
- assert.doesNotMatch(html,/新会话|新对话|已验收/);
+ assert.doesNotMatch(html,/新会话|新对话|已验收|项目执行范围|设置执行范围/);
  assert.match(html,/aria-current="page"/);
  assert.match(html,/data-role="coordinator"/);
  assert.match(html,/sre-avatar-coordinator/);

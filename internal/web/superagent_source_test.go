@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
@@ -16,6 +17,15 @@ func TestSuperProjectHasOnePersistentPilotAndRealUserSource(t *testing.T) {
 	sid := stringOf(first["routerSessionId"])
 	if sid == "" || second["routerSessionId"] != sid {
 		t.Fatal(first, second)
+	}
+	policy, err := b.Engine.SecurityProjectPolicy(t.Context(), pid)
+	if err != nil || policy.Mode != "legacy" {
+		t.Fatal("Pilot did not inherit existing project access", policy, err)
+	}
+	for _, resource := range objects(b.Store.Catalog()["resources"]) {
+		if resource["projectId"] == pid && !slices.Contains(policy.ResourceIDs, stringOf(resource["id"])) {
+			t.Fatal("original project resource unavailable", resource["id"])
+		}
 	}
 	message := b.Store.AddMessage(sid, "user", "Investigate yesterday's orders", nil)
 	event, err := b.ReceiveUserEvent(context.Background(), sid, stringOf(message["id"]))
@@ -34,6 +44,36 @@ func TestSuperProjectHasOnePersistentPilotAndRealUserSource(t *testing.T) {
 	foreign := b.Store.CreateSession(stringOf(other["id"]), "old", nil)
 	if _, err = b.ReceiveUserEvent(context.Background(), stringOf(foreign["id"]), stringOf(message["id"])); err == nil {
 		t.Fatal("foreign user source accepted")
+	}
+}
+
+func TestSuperProjectPermissionSettingsUseExplicitOriginalAuthority(t *testing.T) {
+	b, h := fixture(t)
+	project := b.Store.CreateProject("Inherited permissions")
+	pid := stringOf(project["id"])
+	domain := apiTest(t, h, "POST", "/api/projects/"+pid+"/superagent", Object{}, 200)
+	sid := stringOf(domain["routerSessionId"])
+	b.Models.Save(&ai.Model{URL: "http://127.0.0.1:1", Name: "no-provider-calls", Protocol: "openai"})
+	b.configure(sid, nil)
+	before, err := b.Engine.SecurityLegacySessionPolicy(t.Context(), pid, sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiTest(t, h, "POST", "/api/sessions/"+sid+"/ai/configure", Object{"silentReadFiles": false, "denyLocalExecution": true}, 200)
+	after, err := b.Engine.SecurityLegacySessionPolicy(t.Context(), pid, sid)
+	if err != nil || after.Revision != before.Revision+1 || after.Permissions.SilentReadFiles || !after.Permissions.DenyLocalExecution {
+		t.Fatal(after, err)
+	}
+	// Runtime refreshes do not become user authority, even with different flags.
+	b.configure(sid, Object{"silentReadFiles": true})
+	refreshed, _ := b.Engine.SecurityLegacySessionPolicy(t.Context(), pid, sid)
+	if refreshed.Revision != after.Revision || refreshed.Permissions.SilentReadFiles {
+		t.Fatal("refresh expanded permissions", refreshed)
+	}
+	apiTest(t, h, "POST", "/api/sessions/"+sid+"/ai/configure", Object{"silentReadFiles": true}, 200)
+	confirmed, err := b.Engine.SecurityLegacySessionPolicy(t.Context(), pid, sid)
+	if err != nil || !confirmed.Permissions.SilentReadFiles || confirmed.Revision != after.Revision+1 {
+		t.Fatal(confirmed, err)
 	}
 }
 
