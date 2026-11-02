@@ -5,9 +5,20 @@
   "testedCodeSHA": "65ec4fdec699c3af94f70ea160038bac8d3add45",
   "frontendTestedSHA": "32722df87e2ea904b6e39dd49b1e9a4843f9585f",
   "frontendUnchangedSinceTest": true,
-  "fullGo": {"testAndSubtestPassCount": 1946, "packagePassCount": 11, "exitCode": 0},
-  "targetedRace": {"testAndSubtestPassCount": 57, "packagePassCount": 2, "exitCode": 0},
-  "frontend": {"testPassCount": 570, "typecheck": "passed"},
+  "fullGo": {
+    "testAndSubtestPassCount": 1946,
+    "packagePassCount": 11,
+    "exitCode": 0
+  },
+  "targetedRace": {
+    "testAndSubtestPassCount": 57,
+    "packagePassCount": 2,
+    "exitCode": 0
+  },
+  "frontend": {
+    "testPassCount": 570,
+    "typecheck": "passed"
+  },
   "vet": "passed",
   "adkBoundary": "passed",
   "dev": {
@@ -33,7 +44,10 @@
     "connectionRevision": 1,
     "enabled": true,
     "services": [],
-    "diagnosticProfiles": ["disk_usage", "process_snapshot"]
+    "diagnosticProfiles": [
+      "disk_usage",
+      "process_snapshot"
+    ]
   },
   "legacyUnknownAudit": {
     "countBefore": 93,
@@ -47,8 +61,44 @@
   "humanAcceptanceImpersonated": false,
   "loopbackSSHFixedProcessRead": "passed",
   "scope": "Worker target selection, managed fixed host read, specialist own-session reply identity",
-  "remaining": ["Fresh correctly scoped task needs existing host plan confirmation", "Service-level diagnosis needs owner-specified service definitions"],
+  "remaining": [
+    "Fresh correctly scoped task needs existing host plan confirmation",
+    "Service-level diagnosis needs owner-specified service definitions"
+  ],
   "prTarget": "develop",
   "mergeAuthorized": false,
-  "productionChanged": false
+  "productionChanged": false,
+  "navigationCorners": {
+    "testedSHA": "ed8817cd661e55fc0f602c6c9db1536303bf3f01",
+    "codeChanges": "CSS only; subsequent documentation correction does not change tested styles",
+    "frontendTestPassCount": 570,
+    "typecheck": "passed",
+    "devInstalledSourceSHA": "ed8817cd661e55fc0f602c6c9db1536303bf3f01",
+    "devBuildSourceDirty": false,
+    "backendSHA256": "5f13fc81693d77d7bd02ce6b4a41b72e8117a87a78aa88b9b67259072fc98367",
+    "strictSignatureVerification": "passed",
+    "nativeWKWebViewSelectedPilot": "passed",
+    "forcedFallbackLight1280": "passed",
+    "forcedFallbackDark600": "passed",
+    "hoverAndSelection": "passed",
+    "shiftTabPilotVisibleFocus": "passed",
+    "sharedFallbackFill": "/window-corner-fill.svg",
+    "desktop": {
+      "rowWidth": 272,
+      "pilotHeight": 38,
+      "workerHeight": 59,
+      "cornerRadius": 18
+    },
+    "touch": {
+      "pilotHeight": 44,
+      "workerHeight": 59,
+      "pilotAndResourceCornerRadius": 22
+    },
+    "narrow": {
+      "viewportWidth": 600,
+      "documentWidth": 600
+    },
+    "newGoRegressionRun": false,
+    "remoteIOExecuted": false
+  }
 }
