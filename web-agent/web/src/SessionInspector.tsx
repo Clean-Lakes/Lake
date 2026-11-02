@@ -1,7 +1,7 @@
 import {SuperTaskInspector} from './SuperTaskInspector';
 import {InspectorTaskSummary} from './InspectorTaskSummary';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
-import type {SessionSnapshot,SRETranscriptEntry} from '../../shared/contracts';
+import type {SessionSnapshot,SRETranscriptEntry,SuperWorker} from '../../shared/contracts';
 import {AgentIcon} from './AgentIcon';
 import {Glyph} from './Icons';
 import {InspectorExecutionSteps} from './InspectorExecutionSteps';
@@ -13,7 +13,7 @@ import {sreRoles,sreStatus,sreStepStatus} from './sreTranscript';
 import {inspectedTask,inspectedAttempt,inspectorAttempts,resolvedInspectorSelection} from './sessionInspectorModel';
 import {sessionInspectorId,useSessionInspector,type InspectorSelection} from './SessionInspectorContext';
 
-export function SessionInspector({snapshot,connected,onUpdated,readOnly=false}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;readOnly?:boolean}){
+export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=false}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;worker?:SuperWorker;readOnly?:boolean}){
  const inspector=useSessionInspector()!;
  const selection=resolvedInspectorSelection(snapshot,inspector.selection);
  const retained=useRef<InspectorSelection|null>(selection);
@@ -52,7 +52,7 @@ export function SessionInspector({snapshot,connected,onUpdated,readOnly=false}:{
    <div className="session-inspector-scroll">
     {task&&activeTab==='plan'&&<InspectorTaskSummary task={task} title={snapshot.session.title} runs={snapshot.ai?.agentRuns}/>}
     <div role="tabpanel" id="inspector-plan-panel" aria-labelledby="inspector-plan-tab" hidden={activeTab!=='plan'}>
-     {task&&plan?<SREPlanCard task={task} resources={snapshot.resources} agentRuns={snapshot.ai?.agentRuns} enabled={connected&&!readOnly&&snapshot.sre?.enabled===true} onUpdated={onUpdated} inspector onInspectStep={stepId=>{const attempt=inspectorAttempts(task).find(item=>item.step.id===stepId)?.attempt;if(attempt)choose('execution',attempt.id,true);}}/>:goal&&canonical?<SuperTaskInspector task={canonical} goal={goal} plan/>:<p className="inspector-empty">计划生成后会显示在这里。</p>}
+     {task&&plan?<SREPlanCard task={task} resources={snapshot.resources} agentRuns={snapshot.ai?.agentRuns} enabled={connected&&!readOnly&&snapshot.sre?.enabled===true} onUpdated={onUpdated} inspector onInspectStep={stepId=>{const attempt=inspectorAttempts(task).find(item=>item.step.id===stepId)?.attempt;if(attempt)choose('execution',attempt.id,true);}}/>:goal&&canonical?<SuperTaskInspector task={canonical} goal={goal} worker={worker} plan/>:<p className="inspector-empty">计划生成后会显示在这里。</p>}
     </div>
     <div role="tabpanel" id="inspector-execution-panel" aria-labelledby="inspector-execution-tab" hidden={activeTab!=='execution'}>
      {task&&<>
@@ -64,7 +64,7 @@ export function SessionInspector({snapshot,connected,onUpdated,readOnly=false}:{
        {currentEntry?<SRERoleMessage key={`${task.id}:${currentEntry.attemptId}`} detailsOnly connected={connected&&!readOnly} task={task} entry={currentEntry} snapshot={snapshot} onUpdated={onUpdated} renderApproval={()=>null}/>:<p className="inspector-empty">本步骤尚无执行记录。</p>}
       </details>
      </>}
-     {goal&&canonical&&<SuperTaskInspector task={canonical} goal={goal} connected={connected&&!readOnly} onUpdated={onUpdated}/>}
+     {goal&&canonical&&<SuperTaskInspector task={canonical} goal={goal} worker={worker} connected={connected&&!readOnly} onUpdated={onUpdated}/>}
      {!task&&!goal&&<h3 className="inspector-execution-title"><Glyph name="document" size={17}/>当前执行</h3>}
      {!task&&!target.turnId&&(!target.followLatest||!(snapshot.messages?.length??0)&&!snapshot.ai?.cards.length)&&<p className="inspector-empty">本轮尚无执行记录。</p>}
      <div ref={inspector.setHost} className="inspector-turn-host"/>

@@ -12,7 +12,8 @@ test('Pilot and real specialist instances replace session creation',()=>{
  assert.match(html,/订单专员/);assert.match(html,/排查订单超时/);assert.match(html,/待核实/);
  assert.doesNotMatch(html,/新会话|新对话|已验收/);
  assert.match(html,/aria-current="page"/);
- assert.match(html,/brand\/lake-app-icon.png/);
+ assert.match(html,/data-role="coordinator"/);
+ assert.match(html,/sre-avatar-coordinator/);
 });
 
 test('an unavailable migration shows its actual reason without fake workers',()=>{
