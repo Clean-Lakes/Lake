@@ -5,9 +5,9 @@
   "baseSHA": "85a768d074f654d8428d1ea278f9d60dec7a2504",
   "installedDev": {
     "platform": "macOS arm64",
-    "gitHead": "650f22041bf017e6f12f27a2b652a59c444fd5db",
+    "gitHead": "2ae4155e02154db106638d7bfc507ed5928dc78d",
     "sourceDirty": false,
-    "binarySHA256": "ea61872f3869b27509cc10892c490a0d03aa51bbb80885769726d90ab1717b63",
+    "binarySHA256": "6c8d9061cc0daceead77e905f727e75a51c0ed2dc090e08f6dd210f6975e0233",
     "codesign": "deep_strict_pass",
     "productionTouched": false
   },
@@ -514,6 +514,41 @@
     "notRun": [
       "Windows visual QA",
       "new external-model end-to-end tasks; this change is presentation only"
+    ]
+  },
+  "inspectorDefaultCollapsedVerification": {
+    "testedSHA": "2ae4155e02154db106638d7bfc507ed5928dc78d",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "650f22041bf017e6f12f27a2b652a59c444fd5db",
+      "sourceDirty": false,
+      "binarySHA256": "ea61872f3869b27509cc10892c490a0d03aa51bbb80885769726d90ab1717b63",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "frontendTests": 562,
+    "typeCheck": "pass",
+    "signedDesktopBuild": "pass",
+    "nativeChecks": [
+      "startup collapsed",
+      "enter waiting-user Worker collapsed",
+      "header arrow opens",
+      "Escape closes",
+      "execution process opens",
+      "switch Worker collapses",
+      "workspace polling leaves inspector collapsed"
+    ],
+    "logFiles": [
+      "/tmp/lake-inspector-collapsed-tests.log",
+      "/tmp/lake-inspector-collapsed-check.log",
+      "/tmp/lake-inspector-collapsed-desktop.log"
+    ],
+    "backendRuntimeChanged": false,
+    "newModelTaskSentByAgent": false,
+    "notRun": [
+      "new live SRE task; automatic-open effect removed and frontend regression passed",
+      "Windows native UI"
     ]
   }
 }
