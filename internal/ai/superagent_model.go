@@ -136,5 +136,14 @@ func projectSuperTaskTx(tx *gorm.DB, sessionID, taskID string) (SuperTaskView, e
 			return view, lookup
 		}
 	}
+	if view.ProjectID == "" && tx.Migrator().HasTable(&superLegacyAliasRow{}) {
+		var alias superLegacyAliasRow
+		lookup := tx.First(&alias, "canonical_id = ? AND session_id = ?", taskID, sessionID).Error
+		if lookup == nil {
+			view.ProjectID = alias.ProjectID
+		} else if !errors.Is(lookup, gorm.ErrRecordNotFound) {
+			return view, lookup
+		}
+	}
 	return view, nil
 }

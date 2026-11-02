@@ -101,6 +101,12 @@ func decodeWorkGoal(row nativeWorkGoal, goal *WorkGoal) error {
 func loadWorkGoalTx(tx *gorm.DB, sessionID, goalID string, expected int64) (nativeWorkGoal, WorkGoal, error) {
 	var row nativeWorkGoal
 	var goal WorkGoal
+	if err := rejectSuperReadOnlyGoalTx(tx, goalID); err != nil {
+		return row, goal, err
+	}
+	if isSuperArchiveGoal(goalID) {
+		return row, goal, errors.New("superagent: imported SRE archive is read-only")
+	}
 	if err := tx.First(&row, "id = ? AND session_id = ?", goalID, sessionID).Error; err != nil {
 		return row, goal, err
 	}

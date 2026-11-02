@@ -70,6 +70,9 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 	defer func() { d.toolMu.Lock(); d.toolMu.Unlock() }()
 	provider := NewProviderLLM(c.Model)
 	provider.stream = func(ctx context.Context, _ Model, _ []Message, _ []Tool, _ func(string, string)) (modelResult, error) {
+		if err := e.checkSuperModelDomain(ctx, ownSessionID(s), *c); err != nil {
+			return modelResult{}, err
+		}
 		return d.next(ctx)
 	}
 	catalog := e.sessionCatalog(ctx, s.state.View.Session, *c)

@@ -9,7 +9,8 @@ export type Project = {
 };
 
 export type MemoryKnowledgeKind = "preference" | "procedure" | "topology" | "configuration" | "incident_lesson";
-export type MemorySource = {sourceId?:string; kind:string; sessionId?:string; turnId?:string; messageId?:string; evidenceId?:string; at?:string; observedAt?:string; assertedAt?:string; excerpt?:string; outcome?:string};
+export type MemoryTaskContext = {taskId?:string;workerId?:string;taskRevision?:number;goalRevision?:number;planRevision?:number;ledger?:{kind:string;id:string;stepId?:string;attemptId?:string;state?:string}[];truncated?:boolean};
+export type MemorySource = {taskContext?:MemoryTaskContext;sourceId?:string; kind:string; sessionId?:string; turnId?:string; messageId?:string; evidenceId?:string; at?:string; observedAt?:string; assertedAt?:string; excerpt?:string; outcome?:string};
 export type MemoryAccess = {key:string; revision:number; kind:"index"|"read"|"prepared"; category?:string; scope?:string; contentHash?:string; scopeSignature?:string; offsetLine?:number; byteOffset?:number; bytesRead?:number; at:string; observedAt?:string; historical?:boolean};
 export type MemoryCandidate = {candidateId:string; candidateHash:string; baseKey:string; baseRevision:number; reason:string; status:string; createdAt:string; expiresAt:string; proposal:Partial<ProjectMemoryEntry>};
 export type ProjectMemorySettings = {memorySchemaVersion?:number; projectId: string; useEnabled: boolean; extractionEnabled: boolean; epoch: number; revision: number; settingsRevision: number; publishedRevision: number };
@@ -29,7 +30,7 @@ export type Resource = {
 };
 
 export type WorkSession = {
-	workspaceRole?: 'router'|'worker';
+	workspaceRole?: 'router'|'worker'|'legacy';
   id: string;
   projectId: string;
   title: string;
@@ -173,7 +174,7 @@ export type Catalog = {
 export type QueuedMessage = {supplementRootTurnId?:string; id: string; text: string; resourceIds: string[]; references?: Record<string,unknown>[]; mentions?: MessageMention[]; images: Pick<AIImage,"id" | "name" | "mimeType">[]; files: TextFileAttachment[]; createdAt: string};
 export type MessageQueue = {paused: boolean; revision: number; lastError: string; items: QueuedMessage[]};
 export type QueueOperation = {operation:"pause" | "resume"; revision:number} | {operation:"remove" | "push"; revision:number; id:string} | {operation:"edit"; revision:number; id:string; text:string; resourceIds:string[]; references?:Record<string,unknown>[]; mentions?:MessageMention[]} | {operation:"reorder"; revision:number; ids:string[]};
-export type SendMessageResult = {queued?: boolean; queuedMessageId?: string; messageQueue?: MessageQueue};
+export type SendMessageResult = {pilotSessionId?:string;queued?: boolean; queuedMessageId?: string; messageQueue?: MessageQueue};
 
 export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;status:"running" | "completed" | "cancelled" | "failed" | "interrupted"};
 

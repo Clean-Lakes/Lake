@@ -19,6 +19,8 @@ type superRouterRun struct {
 	projectID        string
 	binding          SuperSourceBinding
 	bindings         map[string]SuperSourceBinding
+	modes            map[string]string
+	limits           map[string]int
 	events           map[string]bool
 	remaining        int
 	workerRoundLimit int
@@ -36,6 +38,7 @@ type SuperDecision struct {
 	roundLimit       int
 }
 type SuperRouteResult struct {
+	Protocol   string `json:"protocol,omitempty"`
 	DecisionID string `json:"decisionId"`
 	TaskID     string `json:"taskId,omitempty"`
 	WorkerID   string `json:"workerId,omitempty"`
@@ -178,6 +181,9 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 			if in.Action == "stop" {
 				break
 			}
+			if w.Protocol == "workflow" && in.Action == "followup" {
+				return errors.New("superagent: saved workflow constraints are frozen; ask for a separate task or send context_only")
+			}
 			if _, err := enqueueSuperInput(tx, b.ProjectID, event, w.ID, in.PartKey, mode); err != nil {
 				return err
 			}
@@ -256,6 +262,8 @@ func (e *Engine) RunPilotRouter(ctx context.Context, sessionID string, b SuperSo
 	}()
 	run := &superRouterRun{projectID: b.ProjectID, binding: b, events: map[string]bool{}, remaining: 16, workerRoundLimit: c.MaxSteps, conversationMode: c.ConversationMode, readCursors: map[string]int{}, readComplete: map[string]bool{}}
 	run.bindings = map[string]SuperSourceBinding{}
+	run.modes = map[string]string{}
+	run.limits = map[string]int{}
 	for _, event := range remaining {
 		run.events[event.ID] = true
 		binding, lookupErr := superSourceForEvent(db.WithContext(ctx), event.ID, b.ProjectID)
@@ -263,6 +271,18 @@ func (e *Engine) RunPilotRouter(ctx context.Context, sessionID string, b SuperSo
 			return lookupErr
 		}
 		run.bindings[event.ID] = binding
+		if binding.Kind == "user" {
+			input, sourceErr := e.resolveSuperInput(ctx, event)
+			if sourceErr != nil {
+				return sourceErr
+			}
+			if input.SuperConversationMode != "" && ValidConversationMode(input.SuperConversationMode) {
+				run.modes[event.ID] = input.SuperConversationMode
+			}
+			if input.SuperMaxSteps > 0 {
+				run.limits[event.ID] = min(c.MaxSteps, input.SuperMaxSteps)
+			}
+		}
 	}
 	c.superRole, c.superTaskID, c.superRouter = "router", "", run
 	c.sre, c.sreCoordinator, c.workflowMode, c.legacyInvestigations = nil, false, false, false

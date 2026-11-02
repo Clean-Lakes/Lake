@@ -25,7 +25,7 @@ type sreNodeResult struct {
 
 // The official session owns durable node outputs. Attempts remain business
 // evidence/projections, and are imported only for pre-graph runs or reused acts.
-func (e *Engine) runSREPlanSteps(ctx context.Context, sessionID, taskID, runID string, plan SREPlanRevision) error {
+func (e *Engine) runSREPlanSteps(ctx context.Context, sessionID, taskID, runID string, plan SREPlanRevision) (err error) {
 	store, err := e.adkStore()
 	if err != nil {
 		return err
@@ -34,6 +34,16 @@ func (e *Engine) runSREPlanSteps(ctx context.Context, sessionID, taskID, runID s
 	if err != nil {
 		return err
 	}
+	graph, finish, err := e.prepareSuperSREGraph(ctx, plan)
+	if err != nil {
+		return err
+	}
+	ctx = graph
+	defer func() {
+		if finishErr := finish(); err == nil {
+			err = finishErr
+		}
+	}()
 	return executeADKPlan(ctx, plan, func(ctx context.Context, step SREPlanStep) error {
 		return e.runSREStep(ctx, sessionID, taskID, runID, step)
 	}, adkPlanSession{service: store.Sessions, id: "sre_" + sessionID + "_" + taskID + "_" + runID, importResult: func(step SREPlanStep, legacy bool) bool {

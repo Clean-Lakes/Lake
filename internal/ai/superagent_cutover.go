@@ -54,7 +54,18 @@ func (e *Engine) ActivateSuperProject(ctx context.Context, projectID, routerSess
 			}
 		}
 		for _, row := range goals {
-			if !workTerminal(row.Status) {
+			if isSuperArchiveGoal(row.ID) {
+				continue
+			}
+			var prior superLegacyAliasRow
+			lookup := tx.First(&prior, "kind = ? AND legacy_id = ?", "work", row.ID).Error
+			if lookup != nil && !errors.Is(lookup, gorm.ErrRecordNotFound) {
+				return lookup
+			}
+			if lookup == nil && (prior.ProjectID != projectID || prior.SessionID != row.SessionID || prior.CanonicalID != row.ID || !prior.ReadOnly) {
+				return errSuperConflict
+			}
+			if !workTerminal(row.Status) && !(lookup == nil && row.Status == "paused") {
 				return errors.New("superagent: active legacy work must drain before cutover")
 			}
 			var g WorkGoal
@@ -64,7 +75,10 @@ func (e *Engine) ActivateSuperProject(ctx context.Context, projectID, routerSess
 			if g.closure != nil && g.closure.ProjectID != projectID {
 				return errSuperBinding
 			}
-			alias := superLegacyAliasRow{Kind: "work", LegacyID: g.ID, SessionID: g.SessionID, ProjectID: projectID, CanonicalID: g.ID, RequestHash: hash(row.Data), CreatedAt: time.Now().UTC()}
+			if lookup == nil {
+				continue
+			}
+			alias := superLegacyAliasRow{Kind: "work", LegacyID: g.ID, SessionID: g.SessionID, ProjectID: projectID, CanonicalID: g.ID, RequestHash: hash(js([]any{row.ID, row.SessionID, row.RootTurnID, row.OriginMessageID})), ReadOnly: true, CreatedAt: time.Now().UTC()}
 			if err := tx.Create(&alias).Error; err != nil {
 				return err
 			}
@@ -168,7 +182,23 @@ func (e *Engine) SuperWorkerForSession(ctx context.Context, projectID, sessionID
 	if err = db.WithContext(ctx).First(&w, "session_id = ? AND project_id = ?", sessionID, projectID).Error; err != nil {
 		return SuperRouteResult{}, err
 	}
-	return SuperRouteResult{TaskID: w.TaskID, WorkerID: w.ID, SessionID: w.SessionID}, nil
+	return SuperRouteResult{TaskID: w.TaskID, WorkerID: w.ID, SessionID: w.SessionID, Protocol: w.Protocol}, nil
+}
+
+func (e *Engine) SuperWorkerOrigin(ctx context.Context, projectID, workerID string) (SuperEvent, error) {
+	db, err := e.superStore()
+	if err != nil {
+		return SuperEvent{}, err
+	}
+	w, err := superWorkerInProject(db.WithContext(ctx), workerID, projectID)
+	if err != nil {
+		return SuperEvent{}, err
+	}
+	var event superEventRow
+	if err = db.WithContext(ctx).First(&event, "id = ? AND project_id = ?", w.SourceEventID, projectID).Error; err != nil {
+		return SuperEvent{}, err
+	}
+	return event.event(), nil
 }
 
 func (e *Engine) SuperWorkerEventIDs(ctx context.Context, projectID, sessionID string) ([]string, error) {
@@ -217,6 +247,8 @@ func (e *Engine) SuperWorkers(ctx context.Context, projectID string) ([]SuperWor
 			}
 			if assignment.State == "queued" {
 				task.State = "queued"
+			} else if assignment.State == "waiting_user" && !workTerminal(task.State) {
+				task.State = "waiting_user"
 			}
 			out = append(out, SuperWorkerView{ID: w.ID, RoleID: w.RoleID, RoleName: role.Name, SessionID: w.SessionID, Task: task, AssignmentState: assignment.State, ParentWorkerID: w.ParentWorkerID})
 		}

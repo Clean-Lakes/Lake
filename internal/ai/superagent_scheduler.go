@@ -36,12 +36,42 @@ func (e *Engine) checkSuperAssignmentContext(ctx context.Context) error {
 // Repeat inside the same transaction as dispatch/commit. An entrance check
 // alone cannot fence an owner that lost its lease while waiting for approval.
 func checkSuperAssignmentTx(tx *gorm.DB, token SuperAssignmentToken) error {
+	if err := checkSuperLeaseTx(tx, token, []string{"active"}); err != nil {
+		return err
+	}
+	var worker superWorkerRow
+	if err := tx.First(&worker, "id = ?", token.WorkerID).Error; err != nil {
+		return err
+	}
+	if worker.ParentWorkerID != "" {
+		var parent superWorkerRow
+		if err := tx.First(&parent, "id = ?", worker.ParentWorkerID).Error; err != nil {
+			return err
+		}
+		worker = parent
+	}
+	return checkSuperWorkflowTx(tx, worker, time.Now().UTC())
+}
+
+func checkSuperLeaseTx(tx *gorm.DB, token SuperAssignmentToken, states []string) error {
 	var count int64
-	if err := tx.Model(&superAssignmentRow{}).Where("id = ? AND worker_id = ? AND owner_id = ? AND generation = ? AND state = ? AND lease_until > ?", token.AssignmentID, token.WorkerID, token.OwnerID, token.Generation, "active", time.Now().UTC()).Count(&count).Error; err != nil {
+	if err := tx.Model(&superAssignmentRow{}).Where("id = ? AND worker_id = ? AND owner_id = ? AND generation = ? AND state IN ? AND lease_until > ?", token.AssignmentID, token.WorkerID, token.OwnerID, token.Generation, states, time.Now().UTC()).Count(&count).Error; err != nil {
 		return err
 	}
 	if count != 1 {
 		return errSuperConflict
+	}
+	var w superWorkerRow
+	if err := tx.First(&w, "id = ?", token.WorkerID).Error; err != nil {
+		return err
+	}
+	if w.ParentWorkerID != "" {
+		if err := tx.Model(&superAssignmentRow{}).Where("worker_id = ? AND generation = ? AND state = ? AND lease_until > ?", w.ParentWorkerID, w.ParentGeneration, "waiting_children", time.Now().UTC()).Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 1 {
+			return errSuperConflict
+		}
 	}
 	return nil
 }
@@ -91,6 +121,9 @@ func (e *Engine) AcquireWorkerSlot(ctx context.Context, projectID, workerID stri
 		}
 		if a.State != "queued" {
 			return ErrSuperWorkerQueued
+		}
+		if err := checkSuperWorkflowTx(tx, w, time.Now().UTC()); err != nil {
+			return err
 		}
 		var active int64
 		// An expired owner still occupies a slot until explicitly reconciled.

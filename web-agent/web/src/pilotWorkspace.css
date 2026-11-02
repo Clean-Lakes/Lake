@@ -11,3 +11,14 @@
 .pilot-history{margin:0 0 12px}.pilot-history>summary{cursor:pointer;color:var(--text-muted);font-size:12px;padding:9px 12px}
 
 .super-task-inspector{padding:12px 2px 18px}.super-task-heading{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.6}.super-task-heading>svg{flex:none;margin-top:2px}.super-task-state{display:flex;gap:8px;flex-wrap:wrap;padding:10px 0 16px;font-size:12px}.super-task-state small,.super-task-budget{color:var(--text-muted)}.super-task-steps{list-style:none;padding:0;margin:0;display:grid;gap:16px}.super-task-steps li{display:flex;gap:10px}.super-step-number{display:grid;place-items:center;width:20px;height:20px;flex:none;border:1px solid var(--border);border-radius:7px;corner-shape:var(--corner-window);font-size:11px;color:var(--text-muted)}.super-task-steps strong{font-size:12px;font-weight:500;line-height:1.6}.super-task-steps small{display:block;font-size:11px;color:var(--text-muted);padding-top:3px}.super-task-steps p{font-size:12px;line-height:1.6;color:var(--text-secondary);margin:5px 0 0}.super-task-budget{font-size:11px;padding-top:12px}
+
+.pilot-history-notice{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px;color:var(--muted);border-top:1px solid var(--line);font-size:12px}.pilot-history-notice .button{display:flex;align-items:center;gap:8px}
+.pilot-policy-panel{padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-settings-panel);corner-shape:var(--corner-window);background:var(--surface);font-size:12px;line-height:1.6}
+.pilot-policy-panel p{margin:0 0 8px;color:var(--text-muted)}
+.pilot-policy-panel fieldset{border:0;padding:0;margin:0;display:grid;gap:7px}
+.pilot-policy-panel legend{font-weight:600;margin-bottom:6px}
+.pilot-policy-panel label{display:flex;align-items:flex-start;gap:7px}
+.pilot-policy-panel input{accent-color:var(--foreground);flex:none;margin-top:4px}
+.pilot-policy-panel details{margin-top:10px}.pilot-policy-panel pre{white-space:pre-wrap;max-height:180px;overflow:auto;font-size:10px}
+.pilot-policy-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:10px}
+.pilot-policy-actions .button{border-radius:var(--radius-settings-control);corner-shape:var(--corner-window)}

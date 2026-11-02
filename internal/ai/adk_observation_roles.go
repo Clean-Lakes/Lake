@@ -28,7 +28,13 @@ func (e *Engine) runInvestigations(ctx context.Context, s *session, c Config, sp
 		return nil, errors.New("security: delegation requires an existing canonical step and attempt")
 	}
 	if len(question) > 4000 {
-		question = question[:4000] + " [TRUNCATED]"
+		if c.superRole == "worker" {
+			if len(question) > 8000 {
+				return nil, errors.New("superagent: complete original constraints cannot fit this bounded child context; keep the work in its parent Worker")
+			}
+		} else {
+			question = utf8Prefix(question, 4000) + " [TRUNCATED]"
+		}
 	}
 	runs := e.currentInvestigations(s)
 	count := len(runs)

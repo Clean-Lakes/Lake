@@ -69,6 +69,9 @@ func (e *Engine) CheckSuperagentProgress(ctx context.Context, projectID string) 
 			}
 			reason := ""
 			state := "parked"
+			if err := checkSuperWorkflowTx(tx, w, time.Now().UTC()); err != nil {
+				reason = "workflow_authority_unavailable"
+			}
 			if w.SourceEventID != "" {
 				var event superEventRow
 				if err := tx.First(&event, "id = ?", w.SourceEventID).Error; err != nil {

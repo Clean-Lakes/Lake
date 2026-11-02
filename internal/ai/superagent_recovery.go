@@ -8,9 +8,10 @@ import (
 )
 
 type SuperRecoveryResult struct {
-	WorkerID string `json:"workerId"`
-	State    string `json:"state"`
-	Reason   string `json:"reason"`
+	fencedGeneration int64
+	WorkerID         string `json:"workerId"`
+	State            string `json:"state"`
+	Reason           string `json:"reason"`
 }
 
 // RecoverSuperagent fences expired invocation owners; it never replays tools or
@@ -44,6 +45,8 @@ func (e *Engine) RecoverSuperagent(ctx context.Context, projectID string) ([]Sup
 				state, reason = "finished", "canonical_terminal"
 			} else if row.WaitCallID != "" && row.Checkpoint != "" {
 				state, reason = "waiting_external", "original_checkpoint_only"
+			} else if a.Checkpoint != "" {
+				state, reason = "queued", "original_human_checkpoint_only"
 			} else {
 				// Do not repeat a user request merely because its ACK/checkpoint
 				// was lost. A new actual input is required after an interruption.
@@ -52,14 +55,18 @@ func (e *Engine) RecoverSuperagent(ctx context.Context, projectID string) ([]Sup
 					return err
 				}
 			}
-			r := tx.Model(&superAssignmentRow{}).Where("id = ? AND generation = ? AND lease_until <= ?", a.ID, a.Generation, now).Updates(map[string]any{"state": state, "owner_id": "", "lease_until": time.Time{}, "generation": a.Generation + 1, "last_error": reason})
+			updates := map[string]any{"state": state, "owner_id": "", "lease_until": time.Time{}, "generation": a.Generation + 1, "last_error": reason}
+			if reason == "original_human_checkpoint_only" {
+				updates["invocation_kind"] = "human_recovery"
+			}
+			r := tx.Model(&superAssignmentRow{}).Where("id = ? AND generation = ? AND lease_until <= ?", a.ID, a.Generation, now).Updates(updates)
 			if r.Error != nil {
 				return r.Error
 			}
 			if r.RowsAffected != 1 {
 				return errSuperConflict
 			}
-			results = append(results, SuperRecoveryResult{WorkerID: w.ID, State: state, Reason: reason})
+			results = append(results, SuperRecoveryResult{WorkerID: w.ID, State: state, Reason: reason, fencedGeneration: a.Generation})
 		}
 		return nil
 	})
@@ -74,7 +81,7 @@ func (e *Engine) RecoverSuperagent(ctx context.Context, projectID string) ([]Sup
 			e.mu.Unlock()
 			if s != nil {
 				s.mu.Lock()
-				if s.cancel != nil {
+				if token := s.state.Config.superAssignment; s.cancel != nil && token != nil && token.Generation <= r.fencedGeneration {
 					s.cancel()
 				}
 				s.mu.Unlock()

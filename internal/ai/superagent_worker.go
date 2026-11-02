@@ -32,6 +32,8 @@ func (e *Engine) enforceSuperSessionConfig(sessionID string, c Config) (Config, 
 	c.superAssignment = nil
 	if w.ParentWorkerID != "" {
 		c.superRole = "child"
+	} else if w.Protocol == "workflow" {
+		c.superRole = "workflow"
 	}
 	c.ConversationMode = w.ConversationMode
 	c.MemoryEnabled, c.MemoryExtractionEnabled, c.IgnoreNaturalMemory = false, false, true
@@ -70,9 +72,15 @@ func (e *Engine) bindSuperWorkerProposalLocked(ctx context.Context, s *session, 
 	}
 	if goal.ClosureContract == "" {
 		if sourceID != goal.OriginMessageID {
-			return errors.New("superagent: original proposal source required")
+			var count int64
+			if err := db.WithContext(ctx).Model(&superInboxRow{}).Where("worker_id = ? AND task_id = ? AND source_message_id = ? AND root_turn_id = ? AND mode = ?", w.ID, w.TaskID, sourceID, goal.RootTurnID, "followup").Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return errors.New("superagent: original proposal or authenticated task followup required")
+			}
 		}
-		s.state.SecurityManaged, s.state.SecurityTaskID, s.state.WorkGoalID, s.state.SecuritySourceMessageID = true, "", goal.ID, sourceID
+		s.state.SecurityManaged, s.state.SecurityTaskID, s.state.WorkGoalID, s.state.SecuritySourceMessageID = true, "", goal.ID, goal.OriginMessageID
 		c.securityExecution, s.state.Config.securityExecution = nil, nil
 	}
 	return nil
@@ -157,6 +165,9 @@ func (e *Engine) QueueSuperFollowup(ctx context.Context, projectID, workerID str
 		if err != nil {
 			return err
 		}
+		if w.Protocol == "workflow" {
+			return errors.New("superagent: workflow input requires a new Pilot decision; its frozen definition cannot be replaced")
+		}
 		var a superAssignmentRow
 		if err = tx.First(&a, "worker_id = ?", w.ID).Error; err != nil {
 			return err
@@ -168,7 +179,7 @@ func (e *Engine) QueueSuperFollowup(ctx context.Context, projectID, workerID str
 		if err != nil {
 			return err
 		}
-		if goal.closure == nil || row.WaitCallID != "" || workTerminal(goal.Status) || !goal.DeadlineAt.After(time.Now().UTC()) || goal.ModelRounds >= goal.RoundLimit {
+		if a.Checkpoint != "" || row.WaitCallID != "" || workTerminal(goal.Status) || !goal.DeadlineAt.After(time.Now().UTC()) || goal.ModelRounds >= goal.RoundLimit {
 			return ErrSuperWorkerQueued
 		}
 		if unresolved, err := workUnresolvedTx(tx, goal.ID, ""); err != nil {
@@ -214,6 +225,9 @@ func (e *Engine) ResumeTaskWorker(ctx context.Context, projectID, workerID strin
 	if err = db.WithContext(ctx).First(&a, "worker_id = ? AND state = ?", workerID, "queued").Error; err != nil {
 		return err
 	}
+	if a.InvocationKind == "human_recovery" {
+		return e.resumeSuperHumanWait(ctx, w, a)
+	}
 	if a.InputEventID == "" {
 		return e.StartTaskWorker(ctx, projectID, workerID)
 	}
@@ -247,7 +261,7 @@ func (e *Engine) SuperQueuedWorkers(ctx context.Context, projectID string) ([]Su
 		return nil, err
 	}
 	var rows []superWorkerRow
-	err = db.WithContext(ctx).Where("project_id = ? AND parent_worker_id = '' AND id IN (?)", projectID, db.Model(&superAssignmentRow{}).Select("worker_id").Where("state = ? AND invocation_kind <> ?", "queued", "machine")).Order("created_at, id").Find(&rows).Error
+	err = db.WithContext(ctx).Where("project_id = ? AND parent_worker_id = '' AND id IN (?)", projectID, db.Model(&superAssignmentRow{}).Select("worker_id").Where("state = ? AND invocation_kind NOT IN ?", "queued", []string{"machine", "workflow"})).Order("created_at, id").Find(&rows).Error
 	out := make([]SuperRouteResult, 0, len(rows))
 	for _, w := range rows {
 		out = append(out, SuperRouteResult{TaskID: w.TaskID, WorkerID: w.ID, SessionID: w.SessionID})

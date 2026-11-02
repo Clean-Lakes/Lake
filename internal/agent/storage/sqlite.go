@@ -159,7 +159,7 @@ func checkReaderGuard(db *sql.DB) error {
 		if err := db.QueryRow("SELECT version FROM superagent_schema WHERE id=1").Scan(&version); err != nil {
 			return fmt.Errorf("invalid superagent reader guard: %w", err)
 		}
-		if version != 2 {
+		if version != 3 {
 			return fmt.Errorf("unsupported superagent store")
 		}
 	}

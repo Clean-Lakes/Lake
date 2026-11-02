@@ -76,3 +76,7 @@ Mini Box 复用原材质、当前操作光带、状态和终止交互。并行�
 - 真实供应商模型的方向质量，以及 Lake Dev 中真实故障、审批拒绝、独立恢复验收的全套演练。
 
 完整目标与任务状态见 [实现方案](../plan/feature-lake-pilot-1.md)，实际验证及限制见 [验证记录](validation/lake-pilot.md)。
+
+## Super-agent 统一入口（2026-11-02）
+
+已切换的项目使用持续 Pilot 与独立 Worker。新要求、旧会话补充、普通/Plan 与专用入口由宿主进入同一来源事件；专员详情保持原问题/审批、任务检查与终端。历史只读，继续沟通回到 Pilot。旧 SRE 开关不作为该工作区的第二个运行模式。 验证与边界见 [运行架构](design/lake-superagent-runtime.md)。

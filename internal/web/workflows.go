@@ -76,6 +76,18 @@ func (b *Server) startBoundWorkflowRun(binding ai.SecurityWorkflowRunBinding, in
 	if b.workflowCancels != nil && b.workflowCancels[binding.RunID] != nil {
 		return run
 	}
+	if _, active, err := b.Engine.SuperProject(b.Context, binding.ProjectID); err != nil {
+		aiFailure(err)
+	} else if active {
+		var err error
+		if binding.SourceKind == "schedule_occurrence" {
+			_, err = b.ReceiveScheduleOccurrence(b.Context, binding)
+		} else {
+			_, err = b.Engine.RegisterSuperWorkflow(b.Context, binding)
+		}
+		aiFailure(err)
+		b.ensureSuperWorkerSession(binding.ProjectID, binding.SessionID, template.Name)
+	}
 	if inherited != nil {
 		b.Store.SaveOptions(binding.SessionID, inherited)
 	}
@@ -214,7 +226,7 @@ func (s *Store) CreateWorkflowRunWithID(project, id string, version int, runID, 
 		}
 		session, run, t := sessionID, runID, now()
 		s.exec("INSERT INTO sessions(id,projectId,title,status,createdAt,updatedAt) VALUES(?,?,?,?,?,?)", session, project, "工作流 · "+template.Name, "investigating", t, t)
-		s.message(session, "user", template.Goal, nil)
+		s.message(session, "system", "已登记工作流触发："+template.Goal, nil)
 		s.exec("INSERT INTO workflowRuns(id,workflowId,projectId,sessionId,template,status,createdAt) VALUES(?,?,?,?,?,'running',?)", run, id, project, session, jsonText(template), t)
 		s.event(session, "session")
 		return s.workflowRun(project, run)
@@ -397,7 +409,16 @@ func (b *Server) executeWorkflowRun(ctx context.Context, cancel context.CancelFu
 		message = err.Error()
 		return
 	}
-	if err := b.Engine.StartSRETask(ctx, id, task.ID, false, ""); err != nil {
+	start := func(runContext context.Context) error {
+		return b.Engine.StartSRETask(runContext, id, task.ID, false, "")
+	}
+	var runErr error
+	if worker, err := b.Engine.SuperWorkerForSession(ctx, template.ProjectID, id); err == nil {
+		runErr = b.Engine.RunTaskInvestigation(ctx, template.ProjectID, worker.WorkerID, start)
+	} else {
+		runErr = start(ctx)
+	}
+	if err := runErr; err != nil {
 		message = err.Error()
 		if errors.Is(err, context.Canceled) {
 			status, message = "cancelled", "工作流已停止"
@@ -412,6 +433,17 @@ func (b *Server) executeWorkflowRun(ctx context.Context, cancel context.CancelFu
 		if card := view.Cards[i]; card.Type == "message" && card.Content != "" {
 			b.Store.AddMessage(id, "assistant", card.Content, nil)
 			break
+		}
+	}
+	if worker, err := b.Engine.SuperWorkerForSession(ctx, template.ProjectID, id); err == nil {
+		canonical, err := b.Engine.SuperTask(id, worker.TaskID)
+		if err != nil {
+			message = "工作流事实已保留，目标验收待核实"
+			return
+		}
+		if canonical.State != "completed" {
+			status, message = "paused", "调查已结束，目标尚未验收通过"
+			return
 		}
 	}
 	status, message = "completed", ""

@@ -57,7 +57,7 @@ func (b SuperSourceBinding) valid() bool {
 		}
 	}
 	switch b.Kind {
-	case "user", "schedule", "observer", "alert":
+	case "user", "schedule", "workflow", "observer", "alert":
 		return true
 	}
 	return false

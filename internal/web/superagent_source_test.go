@@ -56,6 +56,10 @@ func TestSuperPilotReportKeepsStableReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Projection can precede dispatch. Opening the new specialist immediately
+	// must have a real host session rather than intermittently return 404.
+	apiTest(t, h, "GET", "/api/projects/"+pid+"/superagent", nil, 200)
+	apiTest(t, h, "GET", "/api/sessions/"+task.SessionID+"/snapshot", nil, 200)
 	view, err := b.Engine.SuperTask(task.SessionID, task.TaskID)
 	if err != nil {
 		t.Fatal(err)
@@ -87,6 +91,12 @@ func TestSuperCutoverRejectsActiveLegacySRE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	b.messageMu.Lock()
+	if b.runningMessages == nil {
+		b.runningMessages = map[string]bool{}
+	}
+	b.runningMessages[sid] = true
+	b.messageMu.Unlock()
 	apiTest(t, h, "POST", "/api/projects/"+project+"/superagent", Object{}, 409)
 	_, active, err := b.Engine.SuperProject(context.Background(), project)
 	if err != nil || active {

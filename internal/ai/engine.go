@@ -579,6 +579,9 @@ func (e *Engine) Decision(id, approval string, accept bool, confirmation string)
 			return err
 		}
 		if reply == nil {
+			if handled, err := e.queueSuperHumanRecoveryLocked(s, nil, nil, approval); handled || err != nil {
+				return err
+			}
 			if s.state.Config.Model.Name == "" {
 				return errors.New("model not configured for recovery")
 			}

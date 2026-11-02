@@ -407,6 +407,16 @@ func (e *Engine) beginWork(s *session, title string, items []WorkItem, assetRefs
 				if len(existingBindings) == 0 && g.Binding.AssetRef != "" {
 					existingBindings = []WorkBinding{g.Binding}
 				}
+				if len(existingBindings) == 0 && g.closure == nil && row.GoalRevision == 0 && c.superRole == "worker" && c.superTaskID == g.ID {
+					// Routing creates an unconfirmed goal, not a resource scope.
+					// Its first real plan freezes host-resolved targets before the
+					// original confirmation. A confirmed goal cannot take this path.
+					g.ResourceBindings = append([]WorkBinding(nil), requested...)
+					if len(requested) == 1 {
+						g.Binding = requested[0]
+					}
+					existingBindings = g.ResourceBindings
+				}
 				for _, candidate := range requested {
 					found := false
 					for _, old := range existingBindings {
@@ -509,12 +519,24 @@ func (e *Engine) workCheckpoint(s *session) error {
 	return e.writeWorkGoal(&row, &g, false)
 }
 func (e *Engine) WorkControl(ctx context.Context, sessionID, id, command string, revision int64) error {
+	if isSuperArchiveGoal(id) {
+		return errors.New("superagent: imported SRE archive is read-only")
+	}
 	if _, err := e.get(sessionID); err != nil {
 		return err
 	}
 	row, g, err := e.workRow(sessionID, id)
 	if err != nil {
 		return err
+	}
+	if command == "resume" {
+		store, err := e.adkStore()
+		if err != nil {
+			return err
+		}
+		if err = rejectSuperReadOnlyGoalTx(store.DB, id); err != nil {
+			return err
+		}
 	}
 	if revision != g.Revision {
 		return errWorkConflict

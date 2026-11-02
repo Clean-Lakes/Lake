@@ -56,6 +56,9 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 		}
 		return e.ReadOnlyRecoveryWorkGoal(ctx, id, goalID)
 	}
+	if isSuperArchiveGoal(goalID) && call.Name != "work_read" {
+		return nil, errors.New("superagent: imported SRE archive is read-only")
+	}
 	row, g, err := e.workRow(id, goalID)
 	if err != nil {
 		return nil, err

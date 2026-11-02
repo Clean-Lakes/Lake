@@ -86,13 +86,18 @@ func (e *Engine) ReadSuperObject(ctx context.Context, sessionID, kind, id string
 				raw, rev = js(map[string]any{"id": w.ID, "taskId": w.TaskID, "roleId": w.RoleID, "parentWorkerId": w.ParentWorkerID}), w.Revision
 				return nil
 			}
-			view, err := projectSuperTaskTx(tx, w.SessionID, w.TaskID)
+			view, err := projectSuperTaskTx(tx, w.goalSession(), w.TaskID)
 			if err != nil {
 				return err
 			}
 			view.ProjectID = projectID
-			// The index exposes state and references, never another task's conversation.
-			raw, rev = js(view), view.Revision
+			// Recall the committed original request, never another worker's
+			// transcript or a lossy model summary of its constraints.
+			_, goal, err := loadSuperGoalTx(tx, w)
+			if err != nil {
+				return err
+			}
+			raw, rev = js(map[string]any{"task": view, "sourceEventId": w.SourceEventID, "originalRequirements": goal.UserText}), view.Revision
 		default:
 			return errSuperBinding
 		}

@@ -84,7 +84,14 @@ func (e *Engine) invokeSuperRouter(ctx context.Context, s *session, c Config, ca
 		if c.superRouter.bindings != nil {
 			binding = c.superRouter.bindings[eventID]
 		}
-		return e.ApplySuperDecision(ctx, binding, SuperDecision{EventID: eventID, PartKey: str(a["part_key"]), Action: str(a["action"]), TaskID: str(a["task_id"]), Title: str(a["title"]), RoleKey: str(a["role_key"]), Quote: str(a["quote"]), Reason: str(a["reason"]), roundLimit: c.superRouter.workerRoundLimit, conversationMode: c.superRouter.conversationMode})
+		mode, limit := c.superRouter.conversationMode, c.superRouter.workerRoundLimit
+		if actual, ok := c.superRouter.modes[eventID]; ok {
+			mode = actual
+		}
+		if actual, ok := c.superRouter.limits[eventID]; ok {
+			limit = actual
+		}
+		return e.ApplySuperDecision(ctx, binding, SuperDecision{EventID: eventID, PartKey: str(a["part_key"]), Action: str(a["action"]), TaskID: str(a["task_id"]), Title: str(a["title"]), RoleKey: str(a["role_key"]), Quote: str(a["quote"]), Reason: str(a["reason"]), roundLimit: limit, conversationMode: mode})
 	case "read_super_object":
 		return e.ReadSuperObject(ctx, ownSessionID(s), str(a["kind"]), str(a["id"]), int64(num(a["revision"], 0)), num(a["offset"], 0), num(a["limit"], 4096))
 	}

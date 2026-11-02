@@ -20,8 +20,14 @@ func (b *Server) superagentRoute(w http.ResponseWriter, r *http.Request) bool {
 	case "GET":
 		domain, active, err := b.Engine.SuperProject(r.Context(), project)
 		aiFailure(err)
+		if active {
+			b.reconcileSuperSessionRoles(domain)
+		}
 		workers, err := b.Engine.SuperWorkers(r.Context(), project)
 		aiFailure(err)
+		for _, worker := range workers {
+			b.ensureSuperWorkerSession(project, worker.SessionID, worker.Task.Title)
+		}
 		reply(w, 200, Object{"active": active, "project": domain, "workers": workers})
 	default:
 		fail(405, "Method not allowed")

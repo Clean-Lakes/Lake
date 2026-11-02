@@ -222,7 +222,7 @@ func (b *Server) securityRoute(w http.ResponseWriter, r *http.Request) bool {
 			}
 			resources, err := b.Engine.SecurityCatalogResources(r.Context(), projectID)
 			aiFailure(err)
-			reply(w, 200, Object{"resources": resources})
+			reply(w, 200, Object{"resources": resources, "capabilities": security.KnownCapabilities()})
 			return true
 		case "policy":
 			if r.Method == "GET" {

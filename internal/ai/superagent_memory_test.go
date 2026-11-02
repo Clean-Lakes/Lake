@@ -49,3 +49,36 @@ func TestSuperRouterMemoryReadContextCannotAuthorizeMutationOrOtherSession(t *te
 		}
 	}
 }
+
+func TestSuperMemoryReferencesRemainExactAndDoNotPromoteUnknown(t *testing.T) {
+	e, b := superFixture(t)
+	ctx := context.Background()
+	task := superCreateFixture(t, e, b, "real-source", "Inspect orders without writes", "orders", "Inspect orders")
+	db, _ := e.superStore()
+	var worker superWorkerRow
+	if err := db.First(&worker, "id = ?", task.WorkerID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&superEventRow{}).Where("id = ?", worker.SourceEventID).Update("thread_ref", "pilot").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&nativeOperation{ID: "original-unknown", ProjectID: b.ProjectID, SessionID: task.SessionID, GoalID: task.TaskID, Status: "unknown"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := e.SuperMemorySourceContext(ctx, b.ProjectID, "pilot", "real-source")
+	if err != nil || metadata == nil || metadata.TaskID != task.TaskID || len(metadata.Ledger) != 1 || metadata.Ledger[0].State != "unknown" {
+		t.Fatal(metadata, err)
+	}
+	for _, source := range []struct{ project, session, message string }{{"other", "pilot", "real-source"}, {b.ProjectID, "foreign", "real-source"}, {b.ProjectID, "pilot", "ordinary-preference"}} {
+		if metadata, err = e.SuperMemorySourceContext(ctx, source.project, source.session, source.message); err != nil || metadata != nil {
+			t.Fatal("invented preference task or foreign source", metadata, err)
+		}
+	}
+	// Two independent deliverables from one message have no unique task ID.
+	if _, err = e.ApplySuperDecision(ctx, b, SuperDecision{EventID: worker.SourceEventID, PartKey: "other", Action: "create", Title: "Check changes", RoleKey: "other", Quote: "without writes", Reason: "second actual deliverable"}); err != nil {
+		t.Fatal(err)
+	}
+	if metadata, err = e.SuperMemorySourceContext(ctx, b.ProjectID, "pilot", "real-source"); err != nil || metadata != nil {
+		t.Fatal("ambiguous source assigned a task", metadata, err)
+	}
+}

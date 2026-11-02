@@ -53,6 +53,15 @@ func workflowContractHTTP(t *testing.T, b *Server, method, path string, payload 
 }
 
 func TestSecurityWorkflowRealSREObservationUsesOriginalTaskAndAcceptance(t *testing.T) {
+	verifyRealWorkflowObservation(t, false)
+}
+
+func TestSuperWorkflowRealSREObservationUsesOriginalTaskAndAcceptance(t *testing.T) {
+	verifyRealWorkflowObservation(t, true)
+}
+
+func verifyRealWorkflowObservation(t *testing.T, super bool) {
+	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("bounded local file identity is deliberately unsupported on Windows")
 	}
@@ -60,6 +69,9 @@ func TestSecurityWorkflowRealSREObservationUsesOriginalTaskAndAcceptance(t *test
 	session, resource := newSession(t, h)
 	project := stringOf(b.Store.Session(session)["projectId"])
 	apiTest(t, h, "PUT", "/api/projects/"+project+"/sre", Object{"enabled": true}, 200)
+	if super {
+		apiTest(t, h, "POST", "/api/projects/"+project+"/superagent", Object{}, 200)
+	}
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

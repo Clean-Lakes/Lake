@@ -11,7 +11,7 @@ import (
 // SRE observation roles are bounded task extensions, not another task/result
 // authority. Registration reserves the lifetime instance count before any model
 // runs. The official ADK graph below owns dependencies, fan-out and fan-in.
-func (e *Engine) reserveSuperChildren(ctx context.Context, workers []*agentWorker) error {
+func (e *Engine) reserveSuperChildren(ctx context.Context, workers []*agentWorker, graph ...bool) error {
 	token, ok := ctx.Value(superAssignmentContextKey{}).(SuperAssignmentToken)
 	if !ok {
 		return errSuperBinding
@@ -21,7 +21,11 @@ func (e *Engine) reserveSuperChildren(ctx context.Context, workers []*agentWorke
 		return err
 	}
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := checkSuperAssignmentTx(tx, token); err != nil {
+		states := []string{"active"}
+		if len(graph) > 0 && graph[0] {
+			states = []string{"waiting_children"}
+		}
+		if err := checkSuperLeaseTx(tx, token, states); err != nil {
 			return err
 		}
 		var parent superWorkerRow

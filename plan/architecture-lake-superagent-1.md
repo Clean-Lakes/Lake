@@ -189,8 +189,8 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 | --- | --- | --- | --- |
 | TASK-004 | 在 `internal/ai/superagent_store.go` 实现 `superagentModels` 与 `MigrateSuperagentStore`，经 `adk_services.go` 的同一私有库注册 1.3 新表、唯一键、schema 版本及旧版本拒绝规则；迁移前沿既有一致快照路径备份。依赖 TASK-002、TASK-003；验证 TEST-002。 | true | 2026-11-02 |
 | TASK-005 | 在 `internal/ai/superagent_intake.go` 实现 `ReceiveSuperEvent`，完成 source/revision/project/actor 校验、幂等插入与游标提交顺序；在 `internal/web/superagent_source.go:ReceiveUserEvent` 适配真实消息身份。依赖 TASK-004；验证 TEST-004。 | true | 2026-11-02 |
-| TASK-006 | 在 `internal/ai/superagent_subscription.go` 实现 `RouteSubscribedEvent/HandBackSuperEvent`，区分 context_only/followup、确切归属和跨任务要求；事件正文不授予权限，退回次数每 event/worker 最多一次。依赖 TASK-005；验证 TEST-005。 | false | — |
-| TASK-007 | 在 `internal/ai/superagent_inbox.go` 实现 `EnqueueWorkerInput/MarkWorkerInputConsumed`，接 `user_supplements.go:acknowledgeSupplementEvent`，仅 SDK 实际接纳后消费；保留重复、未送达和未读状态。依赖 TASK-006；验证 TEST-006。 | false | — |
+| TASK-006 | 在 `internal/ai/superagent_subscription.go` 实现 `RouteSubscribedEvent/HandBackSuperEvent`，区分 context_only/followup、确切归属和跨任务要求；事件正文不授予权限，退回次数每 event/worker 最多一次。依赖 TASK-005；验证 TEST-005。 | true | 2026-11-02 |
+| TASK-007 | 在 `internal/ai/superagent_inbox.go` 实现 `EnqueueWorkerInput/MarkWorkerInputConsumed`，接 `user_supplements.go:acknowledgeSupplementEvent`，仅 SDK 实际接纳后消费；保留重复、未送达和未读状态。依赖 TASK-006；验证 TEST-006。 | true | 2026-11-02 |
 | TASK-008 | 在 `internal/ai/superagent_outbox.go` 实现 `QueuePilotReport/AcknowledgePilotDelivery`，把 task report revision 与待回复同事务保存；在 `internal/web/superagent_source.go:DeliverPilotReport` 使用固定回执键。依赖 TASK-004；验证 TEST-007。 | true | 2026-11-02 |
 
 ### Implementation Phase 3
@@ -199,10 +199,10 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-009 | 在 `internal/ai/superagent_router.go` 实现 `RunPilotRouter/ApplySuperDecision`，按 1.4 串行提交多项决策、批量上限与优先级，使用当前任务索引进行显式任务绑定；创建提案不产生资源许可。依赖 TASK-005、TASK-007、TASK-008；验证 TEST-008。 | false | — |
-| TASK-010 | 在 `internal/ai/superagent_catalog.go` 实现 `RouterCatalog/WorkerCatalog`，Router 仅获得路由、受限索引和回复能力；接 `adk_driver.go:runOfficialADK` 与当前 `sessionCatalog`，服务端禁止隐藏执行工具与伪造可信参数。依赖 TASK-009；验证 TEST-009。 | false | — |
-| TASK-011 | 在 `internal/ai/superagent_worker.go` 实现 `StartTaskWorker/ResumeTaskWorker`，绑定 canonical goal、原执行 root、受限 catalog、独立 Session 与 Assignment；沿用原 Security 提案、确认与 owner 建立流程。依赖 TASK-010；验证 TEST-008、TEST-010。 | false | — |
-| TASK-012 | 在 `internal/ai/superagent_context.go` 实现 `BuildRouterContext/ReadSuperObject`，按 1.4 Inline/Spill、准确版本引用和 Chain of Recall 读取原记录，超预算保护约束并对每跳重新过滤范围。依赖 TASK-009；验证 TEST-011。 | false | — |
+| TASK-009 | 在 `internal/ai/superagent_router.go` 实现 `RunPilotRouter/ApplySuperDecision`，按 1.4 串行提交多项决策、批量上限与优先级，使用当前任务索引进行显式任务绑定；创建提案不产生资源许可。依赖 TASK-005、TASK-007、TASK-008；验证 TEST-008。 | true | 2026-11-02 |
+| TASK-010 | 在 `internal/ai/superagent_catalog.go` 实现 `RouterCatalog/WorkerCatalog`，Router 仅获得路由、受限索引和回复能力；接 `adk_driver.go:runOfficialADK` 与当前 `sessionCatalog`，服务端禁止隐藏执行工具与伪造可信参数。依赖 TASK-009；验证 TEST-009。 | true | 2026-11-02 |
+| TASK-011 | 在 `internal/ai/superagent_worker.go` 实现 `StartTaskWorker/ResumeTaskWorker`，绑定 canonical goal、原执行 root、受限 catalog、独立 Session 与 Assignment；沿用原 Security 提案、确认与 owner 建立流程。依赖 TASK-010；验证 TEST-008、TEST-010。 | true | 2026-11-02 |
+| TASK-012 | 在 `internal/ai/superagent_context.go` 实现 `BuildRouterContext/ReadSuperObject`，按 1.4 Inline/Spill、准确版本引用和 Chain of Recall 读取原记录，超预算保护约束并对每跳重新过滤范围。依赖 TASK-009；验证 TEST-011。 | true | 2026-11-02 |
 
 ### Implementation Phase 4
 
@@ -210,11 +210,11 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-013 | 在 `internal/ai/superagent_sre.go:RunTaskInvestigation` 适配 `adk_sre_workflow.go:runSREPlanSteps/executeADKPlan`；SRE 计划和步骤关联 canonical goal，原 SRE 数据仅作业务扩展/历史投影，验收接 `VerifyWorkStep/VerifyWorkGoal`。依赖 TASK-011；验证 TEST-003、TEST-010。 | false | — |
-| TASK-014 | 在 `internal/ai/superagent_worker.go:DelegateTaskWorker` 实现受控同任务子专员，复用 `security_parent.go:bindCatalogParentRestriction` 的真实父子绑定及 1.4 深度、实例数和预算限制；不能把旧不允许递归的 catalog 直接放开。依赖 TASK-013；验证 TEST-012。 | false | — |
-| TASK-015 | 在 `internal/ai/superagent_scheduler.go:AcquireWorkerSlot/ReleaseWorkerSlot` 实现持久 Assignment、公平准入与前台保留槽；不自行运行 DAG，图节点调度继续由 ADK 所有。依赖 TASK-011；验证 TEST-013。 | false | — |
+| TASK-013 | 在 `internal/ai/superagent_sre.go:RunTaskInvestigation` 适配 `adk_sre_workflow.go:runSREPlanSteps/executeADKPlan`；SRE 计划和步骤关联 canonical goal，原 SRE 数据仅作业务扩展/历史投影，验收接 `VerifyWorkStep/VerifyWorkGoal`。依赖 TASK-011；验证 TEST-003、TEST-010。 | true | 2026-11-02 |
+| TASK-014 | 在 `internal/ai/superagent_worker.go:DelegateTaskWorker` 实现受控同任务子专员，复用 `security_parent.go:bindCatalogParentRestriction` 的真实父子绑定及 1.4 深度、实例数和预算限制；不能把旧不允许递归的 catalog 直接放开。依赖 TASK-013；验证 TEST-012。 | true | 2026-11-02 |
+| TASK-015 | 在 `internal/ai/superagent_scheduler.go:AcquireWorkerSlot/ReleaseWorkerSlot` 实现持久 Assignment、公平准入与前台保留槽；不自行运行 DAG，图节点调度继续由 ADK 所有。依赖 TASK-011；验证 TEST-013。 | true | 2026-11-02 |
 | TASK-016 | 在 `internal/ai/superagent_wait.go:ParkTaskWorker/WakeTaskWorker` 接 `adk_work_wait.go:resumeWorkGoal/runMachineInput` 与 `external_watch_scheduler.go`，等待释放活跃槽、续接绑定原句柄；在 `internal/web/superagent_observer.go:ObserveBuildRun` 增加显式可信配置的构建观察适配。依赖 TASK-015；验证 TEST-014。 | false | — |
-| TASK-017 | 在 `internal/ai/superagent_conflicts.go:ReserveTaskResource/ReleaseTaskResource` 接 `security_execution.go:invoke` 与现有终端占用，记录跨 Task 写冲突、generation 和当前资源版本；锁失效时核实原操作，不自动释放 unknown 变更。依赖 TASK-014、TASK-015；验证 TEST-015。 | false | — |
+| TASK-017 | 在 `internal/ai/superagent_conflicts.go:ReserveTaskResource/ReleaseTaskResource` 接 `security_execution.go:invoke` 与现有终端占用，记录跨 Task 写冲突、generation 和当前资源版本；锁失效时核实原操作，不自动释放 unknown 变更。依赖 TASK-014、TASK-015；验证 TEST-015。 | true | 2026-11-02 |
 
 ### Implementation Phase 5
 
@@ -222,8 +222,8 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-018 | 在 `internal/ai/superagent_memory.go` 定义 `SuperMemoryContext/MemoryForRouter/MemoryForWorker`，宿主绑定真实 task/worker/purpose 与资源；新增字段缺省兼容旧来源，不提供新的授权接口。依赖 TASK-011、TASK-013；验证 TEST-016。 | false | — |
-| TASK-019 | 扩展 `internal/web/project_memory_retrieval.go:ResolveMemoryReadScope/BuildScopedMemoryIndex` 与 `internal/ai/adk_services.go:nativeMemory` 的适配，加入 Worker task_knowledge_read 视图、逐条来源过滤和准确 revision 读取；缺失依赖返回 unavailable。依赖 TASK-018、DEP-002、DEP-003；验证 TEST-017。 | false | — |
+| TASK-018 | 在 `internal/ai/superagent_memory.go` 定义 `SuperMemoryContext/MemoryForRouter/MemoryForWorker`，宿主绑定真实 task/worker/purpose 与资源；新增字段缺省兼容旧来源，不提供新的授权接口。依赖 TASK-011、TASK-013；验证 TEST-016。 | true | 2026-11-02 |
+| TASK-019 | 扩展 `internal/web/project_memory_retrieval.go:ResolveMemoryReadScope/BuildScopedMemoryIndex` 与 `internal/ai/adk_services.go:nativeMemory` 的适配，加入 Worker task_knowledge_read 视图、逐条来源过滤和准确 revision 读取；缺失依赖返回 unavailable。依赖 TASK-018、DEP-002、DEP-003；验证 TEST-017。 | true | 2026-11-02 |
 | TASK-020 | 在 `internal/ai/project_memory_snapshot.go:MemoryTurnSnapshot/collectMemorySnapshot` 增量关联真实 goal/attempt/operation/evidence/acceptance；接 `project_memory_outbox.go:EnqueueMemoryTurn`，保持来源 hash、重复覆盖、同意与旧快照语义。依赖 TASK-018；验证 TEST-018。 | false | — |
 | TASK-021 | 扩展 `internal/web/natural_consolidation_worker.go:processNaturalConsolidation/commitNaturalBatch` 及现有项目记忆 worker 的任务来源适配，保留前台抢占、来源撤回、资产变化和后台权限重验；成功经验必须核对对应验收。依赖 TASK-019、TASK-020；验证 TEST-019。 | false | — |
 | TASK-022 | 更新 `docs/lake-memory.md` 与 `docs/design/items-security-memory-integration.md` 的实际交付矩阵；在 Memory 管理既有来源记录显示准确 task/attempt/acceptance 引用。N5 Worker 继承与运维 V2 继续关闭，只有单独验收的能力才改变对应描述。依赖 TASK-021；验证 TEST-016 至 TEST-019。 | false | — |
@@ -234,11 +234,11 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-023 | 在 `internal/web/superagent_routes.go` 实现鉴权的消息、Task/Worker、状态和事件投影入口；`agent.go:runTurn`、`sre_service.go:launchSRE/followSREHandoff` 接统一入口，旧执行路由只代理一次；保留真实审批/问题路径。依赖 TASK-013、TASK-016、TASK-017；验证 TEST-020。 | false | — |
-| TASK-024 | 将 `internal/web/schedules.go:executeSchedule` 与保存工作流接到 `superagent_source.go:ReceiveScheduleOccurrence`，使用原 `SecurityScheduleOccurrenceID/ValidateSecurityScheduleTaskSource` 及受控重复触发策略。旧 scheduler 先停止接单后切换。依赖 TASK-023；验证 TEST-021。 | false | — |
-| TASK-025 | 在 `internal/ai/superagent_migration.go:ApplyLegacyWorkImport` 落实 1.6 的排空、唯一 alias、逐条对账和接管水位；旧 SDK Session 和操作 ID 保持不变，缺失来源/验收/明确句柄时保持只读或受阻。依赖 TASK-002、TASK-023；验证 TEST-002、TEST-022。 | false | — |
+| TASK-023 | 在 `internal/web/superagent_routes.go` 实现鉴权的消息、Task/Worker、状态和事件投影入口；`agent.go:runTurn`、`sre_service.go:launchSRE/followSREHandoff` 接统一入口，旧执行路由只代理一次；保留真实审批/问题路径。依赖 TASK-013、TASK-016、TASK-017；验证 TEST-020。 | true | 2026-11-02 |
+| TASK-024 | 将 `internal/web/schedules.go:executeSchedule` 与保存工作流接到 `superagent_source.go:ReceiveScheduleOccurrence`，使用原 `SecurityScheduleOccurrenceID/ValidateSecurityScheduleTaskSource` 及受控重复触发策略。旧 scheduler 先停止接单后切换。依赖 TASK-023；验证 TEST-021。 | true | 2026-11-02 |
+| TASK-025 | 在 `internal/ai/superagent_migration.go:ApplyLegacyWorkImport` 落实 1.6 的排空、唯一 alias、逐条对账和接管水位；旧 SDK Session 和操作 ID 保持不变，缺失来源/验收/明确句柄时保持只读或受阻。依赖 TASK-002、TASK-023；验证 TEST-002、TEST-022。 | true | 2026-11-02 |
 | TASK-026 | 在 `web-agent/shared/contracts.ts`、`web-agent/web/src/App.tsx`、新 `PilotWorkspace.tsx` 与 `pilotWorkspace.css` 接真实 Pilot、专员、资源及 Task 投影；使用原 `SessionInspectorContext.tsx`、`PilotHeaderState.tsx` 和终端入口构成 Dev 三联。窄窗、明暗、焦点、资源引用和三栏宽度遵循 `docs/ui-guidelines.md`。依赖 TASK-023、TASK-025；验证 TEST-023。 | false | — |
-| TASK-027 | 在 `internal/ai/catalog.go`、`internal/web/agent.go` 与 `internal/web/sre_service.go` 关闭迁移域的旧创建/恢复写入口，保留兼容读取；在 `docs/experiments/adk-runtime.md` 和 `docs/lake-pilot.md` 写明唯一接单、恢复与结清路径。依赖 TASK-024、TASK-025、TASK-026；验证 TEST-020、TEST-022。 | false | — |
+| TASK-027 | 在 `internal/ai/catalog.go`、`internal/web/agent.go` 与 `internal/web/sre_service.go` 关闭迁移域的旧创建/恢复写入口，保留兼容读取；在 `docs/experiments/adk-runtime.md` 和 `docs/lake-pilot.md` 写明唯一接单、恢复与结清路径。依赖 TASK-024、TASK-025、TASK-026；验证 TEST-020、TEST-022。 | true | 2026-11-02 |
 
 ### Implementation Phase 7
 
@@ -246,8 +246,8 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-028 | 在 `internal/ai/superagent_recovery.go:RecoverSuperagent/ClaimAssignment` 实现带 generation/fence 的恢复，默认 lease 45 秒、heartbeat 15 秒；接现有恢复 gate 与原句柄对账，旧 owner 迟到提交被拒绝。依赖 TASK-025、TASK-027；验证 TEST-024。 | false | — |
-| TASK-029 | 在 `internal/ai/superagent_watchdog.go:CheckSuperagentProgress` 实现确定性故障分类、连续无进展记录与有界恢复提案；语义监督仅使用明确后台预算、同一 ADK 与 Security，不自动改策略或重试 unknown 变更。依赖 TASK-028；验证 TEST-025。 | false | — |
+| TASK-028 | 在 `internal/ai/superagent_recovery.go:RecoverSuperagent/ClaimAssignment` 实现带 generation/fence 的恢复，默认 lease 45 秒、heartbeat 15 秒；接现有恢复 gate 与原句柄对账，旧 owner 迟到提交被拒绝。依赖 TASK-025、TASK-027；验证 TEST-024。 | true | 2026-11-02 |
+| TASK-029 | 在 `internal/ai/superagent_watchdog.go:CheckSuperagentProgress` 实现确定性故障分类、连续无进展记录与有界恢复提案；语义监督仅使用明确后台预算、同一 ADK 与 Security，不自动改策略或重试 unknown 变更。依赖 TASK-028；验证 TEST-025。 | true | 2026-11-02 |
 | TASK-030 | 新增 `client/macos/Sources/LakeDesktop/SuperagentConnection.swift`，适配 `Backend.swift:readRuntime/healthy/start/stop` 与 `App.swift`，实现 1.6 的 detach、鉴权停止、重连及更新前 drain；新增 `internal/web/superagent_lifecycle.go:DrainSuperagent` 处理停止接单、checkpoint、outbox 和排空。保持 Swift `LakeDesktop` target、签名 Dev 安装与 Home 独占，不安装 LaunchAgent 或部署云端内核。依赖 TASK-028；验证 TEST-026。 | false | — |
 | TASK-031 | 新增 `scripts/verify_superagent_dev.py`，用隔离 Home、合成供应商与只读可控资源执行第 6 节矩阵；生成 `docs/validation/lake-superagent-runtime.md` 与 JSON，记录精确 tested SHA、平台、原生 Dev 结果及未验证项。依赖 TASK-029、TASK-030；验证 TEST-001 至 TEST-026。 | false | — |
 
@@ -346,3 +346,10 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 - [DeepSeek Harness：Exploring Super-agent Design](https://x.com/DeepSeekHarness/article/2116857257245987236)：借鉴 Router/Worker、事件过滤与直通、Inline/Spill、Chain of Recall、异步交互、状态/环境分离及监督；文章为设计探索，实验使用合成负载，不能视为 Lake 收益承诺。
 - [DeepSeek 研究原型 README，固定参考提交](https://github.com/deepseek-ai/dsh-superagent-prototype/tree/6337fc823ce20251c8de8085948165c81aaa701e)：公开原型与文章/内部版本不同，部分设计未实现。
 - [原型领域模型](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/6337fc823ce20251c8de8085948165c81aaa701e/docs/001-domain.md)、[授权边界](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/6337fc823ce20251c8de8085948165c81aaa701e/docs/002-authorization.md)、[执行与恢复](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/6337fc823ce20251c8de8085948165c81aaa701e/docs/003-execution.md)：借鉴概念及投递纪律，不照搬原型以宿主 OS 用户运行命令的权限模型。
+
+## 当前依赖与交付水位（2026-11-02）
+
+- TASK-016：原受监管 Shell 等待接续已接公共 Worker；通用构建平台缺少当前只读 Security profile，适配器明确 unavailable。不能把通用 MCP 返回或历史批准用于后台自动读取。
+- TASK-020 至 TASK-022：已提交宿主只读来源旁注及兼容契约供协作审阅；长期任务来源采集/整理与资产范围 Memory 依赖 bearqy/Items 的接口和联合验收，尚未完成，不改变 snapshot hash、不启用 N5 专员或运维 V2。
+- TASK-026/030/031：客户端界面与生命周期代码已实现，最终签名安装、原生三栏与故障矩阵验证完成后再更新对应状态。
+- 全部完成和已启用是不同事实；本计划保持 In progress，不能用部分单测或缺失 CI 声称完整验收。

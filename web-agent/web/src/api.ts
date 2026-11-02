@@ -99,6 +99,9 @@ export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"model
 
 export const api = {
 	superWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorkspace>(`/api/projects/${encodeURIComponent(project)}/superagent`,{signal}),
+	projectSecurityPolicy:(project:string,signal?:AbortSignal)=>request<{configured:boolean;policy?:import('./ProjectSecurityPolicy').ProjectPolicy}>(`/api/projects/${encodeURIComponent(project)}/security/policy`,{signal}),
+	projectSecurityCapabilities:(project:string,signal?:AbortSignal)=>request<{capabilities:string[]}>(`/api/projects/${encodeURIComponent(project)}/security/catalog`,{signal}),
+	saveProjectSecurityPolicy:(project:string,body:object)=>request<import('./ProjectSecurityPolicy').ProjectPolicy>(`/api/projects/${encodeURIComponent(project)}/security/policy`,{method:'PUT',body:JSON.stringify(body)}),
 	ensureSuperWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperProject>(`/api/projects/${encodeURIComponent(project)}/superagent`,{method:'POST',body:'{}',signal}),
  moveSessionNavigation:(project:string,data:{sessionId:string;pinned:boolean;beforeId:string|null;revision:number})=>post<WorkSession>(`/api/projects/${encodeURIComponent(project)}/session-navigation`,data),
  plans:(session:string)=>request<{plans:import('../../shared/contracts').ProposedPlan[]}>(`/api/sessions/${encodeURIComponent(session)}/ai/plans`),

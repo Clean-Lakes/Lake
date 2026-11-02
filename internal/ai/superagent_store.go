@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const superSchemaVersion = 2
+const superSchemaVersion = 3
 
 type superSchemaRow struct {
 	ID      int `gorm:"primaryKey"`
@@ -64,6 +64,7 @@ type superRoleRow struct {
 func (superRoleRow) TableName() string { return "superagent_roles" }
 
 type superWorkerRow struct {
+	Protocol                                              string
 	ParentGeneration                                      int64
 	GoalSessionID                                         string
 	ConversationMode                                      string
@@ -144,6 +145,7 @@ type superOutputRow struct {
 func (superOutputRow) TableName() string { return "superagent_outbox" }
 
 type superLegacyAliasRow struct {
+	ReadOnly                                       bool
 	Kind                                           string `gorm:"primaryKey"`
 	LegacyID                                       string `gorm:"primaryKey"`
 	SessionID, ProjectID, CanonicalID, RequestHash string

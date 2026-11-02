@@ -321,6 +321,9 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 	} else if active && b.Store.superSessionKind(id) == "worker" {
 		b.runSuperTargetedInput(turnContext, domain, id, messageID, refs, files, ignoreProjectMemory)
 		return
+	} else if active {
+		b.runSuperForwardedTurn(turnContext, domain, id, messageID, refs, files)
+		return
 	}
 	sreCoordination := options["conversationMode"] != ai.ModePlan && options["profile"] == "core" && len(files) == 0 && b.Store.SREEnabled(stringOf(b.Store.Session(id)["projectId"]))
 	simpleConversation := !sreCoordination && ai.IsBriefConversation(message) && len(refs) == 0 && len(images) == 0 && len(files) == 0

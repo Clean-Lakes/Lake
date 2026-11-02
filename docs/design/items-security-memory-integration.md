@@ -213,3 +213,9 @@ ADK/native 操作账本与 Web SQLite 是两个事务域，不假设一次跨库
 - [Security 详细设计](lake-security-v1.md)与[实施计划](../../plan/feature-lake-security-1.md)
 - [工作区 SOP 独立设计](builtin-sop-catalog-v1.md)
 - [开发规范](../../CONTRIBUTING.md)与[发布流程](../development-workflow.md)
+
+## 11. Super-agent 宿主适配增量（2026-11-02）
+
+[Super-agent 运行记录](lake-superagent-runtime.md)已接真实项目/Pilot/Worker 与 canonical WorkGoal 关联。`SuperMemoryContext` 提供额外读取旁注，包含准确任务 revision、尝试、操作、验收/证据引用；无唯一任务的消息保持无 taskID。子角色没有冻结 Security scope 时返回不可用，不能继承整项目知识。
+
+该增量未改变 bearqy 的 MemoryTurnSnapshot/hash、N1–N5 采集整理及来源契约。Worker task knowledge、任务经验采集、完整资产/入口版本协作仍未启用；运维 V2 仍为 false。上述独立计划的任务、负责人和依赖状态继续有效，不因 UI 显示来源关联而标记已交付。

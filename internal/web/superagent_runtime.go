@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
@@ -65,8 +66,8 @@ func (b *Server) startSuperWorkers(domain ai.SuperProject) {
 			if goal, err := b.Engine.SuperTask(task.SessionID, task.TaskID); err == nil {
 				title = goal.Title
 			}
-			b.Store.ensureSuperSession(domain.ProjectID, task.SessionID, title, "worker")
-			b.configure(task.SessionID, nil)
+			b.ensureSuperWorkerSession(domain.ProjectID, task.SessionID, title)
+			b.configure(task.SessionID, b.superWorkerTargetOptions(domain.ProjectID, task.WorkerID))
 			c, err := b.Engine.ConfigForSession(task.SessionID)
 			if err == nil {
 				err = b.Engine.ConfigureTaskWorker(b.Context, domain.ProjectID, task.WorkerID, c)
@@ -116,6 +117,10 @@ func (b *Server) runSuperTargetedInput(ctx context.Context, domain ai.SuperProje
 	}
 	if err == nil {
 		err = b.recordSuperInput(event, refs, files, ignoreMemory)
+	}
+	if err == nil && task.Protocol == "workflow" {
+		b.startSuperRouter(domain)
+		return
 	}
 	if err == nil {
 		_, err = b.Engine.ApplySuperDecision(ctx, b.superUserSource(domain.ProjectID, domain.RouterSessionID), ai.SuperDecision{EventID: event.ID, PartKey: "targeted-followup", Action: "followup", TaskID: task.TaskID, Quote: event.Payload, Reason: "Authenticated user explicitly addressed this task's specialist"})
@@ -169,11 +174,19 @@ func (b *Server) acceptSuperWorkerMessage(id string, message humanMessage, queue
 		return result
 	}).(Object)
 	messageID := stringOf(result["id"])
-	task, err := b.Engine.SuperWorkerForSession(b.Context, project, id)
-	aiFailure(err)
+	legacy := b.Store.superSessionKind(id) == "legacy"
+	var task ai.SuperRouteResult
+	if !legacy {
+		task, err = b.Engine.SuperWorkerForSession(b.Context, project, id)
+		aiFailure(err)
+	}
 	event, err := b.ReceiveUserEvent(b.Context, id, messageID)
 	aiFailure(err)
-	aiFailure(b.recordSuperInput(event, message.References, message.Files, message.IgnoreProjectMemory))
+	aiFailure(b.recordSuperInput(event, message.References, message.Files, message.IgnoreProjectMemory || legacy || task.Protocol == "workflow"))
+	if legacy || task.Protocol == "workflow" {
+		result["pilotSessionId"] = domain.RouterSessionID
+		return result
+	}
 	_, err = b.Engine.ApplySuperDecision(b.Context, b.superUserSource(project, domain.RouterSessionID), ai.SuperDecision{EventID: event.ID, PartKey: "targeted-followup", Action: "followup", TaskID: task.TaskID, Quote: event.Payload, Reason: "Authenticated user explicitly addressed this specialist"})
 	aiFailure(err)
 	aiFailure(b.Engine.FinishSuperUserRouting(b.Context, b.superUserSource(project, domain.RouterSessionID), event.ID))
@@ -181,4 +194,48 @@ func (b *Server) acceptSuperWorkerMessage(id string, message humanMessage, queue
 	_ = b.Engine.QueueSuperFollowup(b.Context, project, task.WorkerID)
 	b.startSuperWorkers(domain)
 	return result
+}
+
+func (b *Server) superWorkerTargetOptions(project, workerID string) Object {
+	event, err := b.Engine.SuperWorkerOrigin(b.Context, project, workerID)
+	aiFailure(err)
+	_, err = b.resolveSuperInput(b.Context, event)
+	aiFailure(err)
+	var host superHostInput
+	b.Store.read(func() any {
+		row := b.Store.row("SELECT data FROM superagentInputs WHERE eventId=?", event.ID)
+		if row == nil {
+			fail(409, "原始任务目标上下文不可用")
+		}
+		must(json.Unmarshal([]byte(stringOf(row["data"])), &host))
+		return nil
+	})
+	current := b.sessionOptions(event.ThreadRef)
+	opts := Object{}
+	for _, key := range []string{"runtime", "asset_ref", "terminal_id", "terminal_generation", "container_id"} {
+		if value, ok := host.TargetOptions[key]; ok {
+			opts[key] = value
+		}
+	}
+	for _, key := range []string{"silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation"} {
+		opts[key] = host.TargetOptions[key] == true && current[key] == true
+	}
+	for _, key := range []string{"denyLocalExecution", "blockUnreferencedAssets"} {
+		opts[key] = host.TargetOptions[key] == true || current[key] == true
+	}
+	return opts
+}
+
+func (b *Server) runSuperForwardedTurn(ctx context.Context, domain ai.SuperProject, id, messageID string, refs, files []Object) {
+	event, err := b.ReceiveUserEvent(ctx, id, messageID)
+	if err == nil {
+		err = b.recordSuperInput(event, refs, files, true)
+	}
+	if err != nil {
+		b.Store.AddMessage(id, "system", "原始输入尚未接纳，请核对来源记录。", nil)
+		b.Store.Status(id, "failed")
+		return
+	}
+	b.Store.Status(id, "completed")
+	b.startSuperRouter(domain)
 }

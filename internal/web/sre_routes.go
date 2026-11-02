@@ -41,6 +41,13 @@ func (b *Server) sreRoute(w http.ResponseWriter, r *http.Request, name, method s
 	sid := parts[2]
 	session := b.Store.Session(sid)
 	project := stringOf(session["projectId"])
+	if method != "GET" {
+		_, active, err := b.Engine.SuperProject(r.Context(), project)
+		aiFailure(err)
+		if active && (b.Store.superSessionKind(sid) == "legacy" || len(parts) < 7 || parts[6] != "attest" && parts[6] != "resolve") {
+			fail(409, "请向 Pilot 提出新要求；历史 SRE 计划不再单独启动执行")
+		}
+	}
 	if len(parts) == 5 {
 		switch method {
 		case "GET":

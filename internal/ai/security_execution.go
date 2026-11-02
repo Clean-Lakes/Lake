@@ -13,10 +13,16 @@ import (
 // invoke is the single runtime tool entrance. Configured projects cannot reach
 // legacy execution via an early memory/session/Pilot/attachment branch.
 func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (any, error) {
-	if err := e.checkSuperAssignmentContext(ctx); err != nil {
+	if err := e.CheckSecurityRuntime(); err != nil {
 		return nil, &ToolNotExecutedError{Err: err}
 	}
-	if err := e.CheckSecurityRuntime(); err != nil {
+	if s == nil {
+		return nil, &ToolNotExecutedError{Err: errors.New("execution session is unavailable")}
+	}
+	if err := e.checkSuperModelDomain(ctx, ownSessionID(s), c); err != nil {
+		return nil, &ToolNotExecutedError{Err: err}
+	}
+	if err := e.checkSuperAssignmentContext(ctx); err != nil {
 		return nil, &ToolNotExecutedError{Err: err}
 	}
 	if c.superRole == "router" {
