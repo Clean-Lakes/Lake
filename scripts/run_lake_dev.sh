@@ -1,9 +1,9 @@
 #!/bin/sh
 # Fast Go/React iteration: a signed backend, no native rebuild or ZIP/DMG.
-# Quit Lake Dev first. Open the installed Dev app after this server is ready;
+# Stop the Lake Dev kernel first. Open the installed Dev app after this server is ready;
 # it reuses this Home's healthy runtime. This terminal owns the backend lifetime.
 set -eu
-[ "$#" -eq 0 ] || { echo '用法: scripts/run_lake_dev.sh（先正常退出 Lake Dev）' >&2; exit 2; }
+[ "$#" -eq 0 ] || { echo '用法: scripts/run_lake_dev.sh（先停止 Lake Dev 内核）' >&2; exit 2; }
 [ "$(uname -s)" = Darwin ] || { echo '此入口用于 macOS Lake Dev' >&2; exit 1; }
 lake_repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$lake_repo_root"

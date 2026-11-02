@@ -10,6 +10,9 @@ import (
 )
 
 func TestSecurityRecoveryCLIRequiresExplicitHome(t *testing.T) {
+	if err := run(context.Background(), []string{"security", "finalize-migration"}); err == nil || !strings.Contains(err.Error(), "explicit --home") {
+		t.Fatal("finalization accepted implicit Home", err)
+	}
 	if err := run(context.Background(), []string{"security", "resume-initial-migration"}); err == nil || !strings.Contains(err.Error(), "explicit --home") {
 		t.Fatal("recovery accepted a default Home", err)
 	}

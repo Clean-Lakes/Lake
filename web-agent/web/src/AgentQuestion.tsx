@@ -36,6 +36,7 @@ export function AgentQuestion({session, request, refresh,runId}: {runId?:string;
  <button type="button" aria-label="暂不回答剩余问题，继续任务" disabled={busy} onClick={()=>void submit(committed)}><Glyph name="close" size={14}/></button></header>
  {!collapsed&&<><fieldset disabled={busy}><legend className="visually-hidden">{question.title}</legend>
  {question.reason&&<p className="lake-question-reason">{question.reason}</p>}
+ {request.source&&<details className="lake-question-source"><summary>查看原始要求</summary><div className="lake-question-source-text">{request.source.text}</div></details>}
  {options.map(option=>{
   const checked=(selected[question.id]||[]).includes(option.label)&&(!custom||question.multi_select);
   return <label className={`lake-question-option ${checked?"is-selected":""}`} key={option.label}>

@@ -18,6 +18,21 @@ func runSecurityMaintenance(ctx context.Context, args []string) (bool, error) {
 		return false, nil
 	}
 	switch args[0] {
+	case "finalize-migration":
+		flags := flag.NewFlagSet("security finalize-migration", flag.ContinueOnError)
+		home := flags.String("home", "", "existing offline Lake Home")
+		apply := flags.Bool("apply", false, "publish verified completion and remove its canonical migration archive")
+		if err := flags.Parse(args[1:]); err != nil {
+			return true, err
+		}
+		if *home == "" || flags.NArg() != 0 {
+			return true, errors.New("an explicit --home is required")
+		}
+		report, err := ai.FinalizeSecurityMigration(ctx, *home, *apply)
+		if err != nil {
+			return true, err
+		}
+		return true, json.NewEncoder(os.Stdout).Encode(report)
 	case "recovery-live-review", "recovery-reconcile-preview", "recovery-reconcile":
 		return runSecurityRecoveryLiveMaintenance(ctx, args)
 	case "recovery-review", "recovery-work-history", "recovery-map", "recovery-confirm-policy", "recovery-confirm-legacy", "recovery-activate":

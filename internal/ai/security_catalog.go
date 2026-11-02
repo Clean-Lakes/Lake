@@ -858,7 +858,7 @@ func (e *Engine) PrepareCatalogOperation(ctx context.Context, sessionID string, 
 		return nil, decision, err
 	}
 	if !execution.Managed || execution.GoalID == "" || execution.StepID == "" || execution.AttemptID == "" {
-		return nil, decision, errors.New("security: goal/step/attempt binding required")
+		return nil, decision, errors.New("security: goal/step/attempt binding required: read the current goal with work_read; after plan confirmation, call work_update with its actual item_id and status=running before resource I/O. Do not invent goal, step or attempt IDs")
 	}
 	spec, ok := security.LookupTool(call.Name)
 	if !ok {
@@ -1003,7 +1003,7 @@ func (e *Engine) PrepareCatalogOperation(ctx context.Context, sessionID string, 
 				return nil, decision, targetErr
 			}
 			if target.Pending != nil || target.Current == nil || len(target.Current.ResourceIDs) != 1 {
-				return nil, decision, errors.New("security: TARGET_REQUIRED")
+				return nil, decision, errors.New("security: TARGET_REQUIRED: specify asset_ref from list_assets for this operation; runtime=local alone does not identify a resource. If the intended resource is already clear, retry with its exact catalog alias; otherwise ask which resource to use")
 			}
 			refs = target.Current.ResourceIDs
 		}

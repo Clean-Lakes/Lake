@@ -44,6 +44,11 @@ type SSH struct {
 	KnownHosts    string `json:"-"`
 }
 type Config struct {
+	superRole                 string // Host-only Router/Worker identity; never restored from JSON.
+	superTaskID               string
+	superAssignment           *SuperAssignmentToken
+	superRoundBase            int
+	superRouter               *superRouterRun
 	SecurityProjectID         string `json:"-"` // Trusted host project identity, independent of Memory consent.
 	securityExecution         *SecurityExecutionContext
 	IgnoreNaturalMemory       bool   `json:"ignoreNaturalMemory,omitempty"`

@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-03",
+  "status": "complete_for_single_canonical_initial_migration",
+  "testedSHA": "c42c96f289874771cd9f77786d5418ccdbefc45f",
+  "installedDev": {
+    "platform": "macOS arm64",
+    "sourceDirty": false,
+    "binarySHA256": "db4bb410eeca90d80388a0509edbe9abcd6a2d8ef9ba6f6847359c2eb06ab2b5",
+    "codesign": "deep_strict_pass",
+    "productionTouched": false
+  },
+  "checks": {
+    "full": {
+      "command": "go test -json ./... -count=1 -timeout=15m",
+      "testedSHA": "c42c96f289874771cd9f77786d5418ccdbefc45f",
+      "tests": 1943,
+      "packages": 11,
+      "result": "pass",
+      "log": "/tmp/lake-migration-finalize-full.jsonl"
+    },
+    "race": {
+      "command": "go test -race -json ./internal/ai ./internal/web ./cmd/lake -run '^TestSecurity|^TestSuper|^Test.*Recovery|^Test.*Replay' -count=1 -timeout=8m",
+      "testedSHA": "c42c96f289874771cd9f77786d5418ccdbefc45f",
+      "tests": 494,
+      "packages": 3,
+      "result": "pass",
+      "log": "/tmp/lake-migration-finalize-race.jsonl"
+    }
+  },
+  "vet": "pass",
+  "adkRuntimeBoundary": "pass",
+  "signedDevBuildInstall": "pass",
+  "node": "24.14.0",
+  "pnpm": "10.33.4",
+  "liveOwnerRefused": true,
+  "dryRun": {
+    "applied": false,
+    "finalized": false,
+    "archiveBytes": 3799941120,
+    "removedBytes": 0,
+    "tables": [
+      {
+        "name": "app_states",
+        "rows": 0
+      },
+      {
+        "name": "events",
+        "rows": 22253
+      },
+      {
+        "name": "native_approvals",
+        "rows": 38
+      },
+      {
+        "name": "native_artifacts",
+        "rows": 8026
+      },
+      {
+        "name": "native_corrections",
+        "rows": 0
+      },
+      {
+        "name": "native_evidences",
+        "rows": 5019
+      },
+      {
+        "name": "native_history_migrations",
+        "rows": 447
+      },
+      {
+        "name": "native_operations",
+        "rows": 2459
+      },
+      {
+        "name": "native_work_goals",
+        "rows": 7
+      },
+      {
+        "name": "native_work_observations",
+        "rows": 0
+      },
+      {
+        "name": "native_work_outboxes",
+        "rows": 112
+      },
+      {
+        "name": "sessions",
+        "rows": 530
+      },
+      {
+        "name": "user_states",
+        "rows": 0
+      }
+    ],
+    "operations": 2459
+  },
+  "applied": {
+    "applied": true,
+    "finalized": true,
+    "archiveBytes": 3799941120,
+    "removedBytes": 3799941120,
+    "tables": [
+      {
+        "name": "app_states",
+        "rows": 0
+      },
+      {
+        "name": "events",
+        "rows": 22253
+      },
+      {
+        "name": "native_approvals",
+        "rows": 38
+      },
+      {
+        "name": "native_artifacts",
+        "rows": 8026
+      },
+      {
+        "name": "native_corrections",
+        "rows": 0
+      },
+      {
+        "name": "native_evidences",
+        "rows": 5019
+      },
+      {
+        "name": "native_history_migrations",
+        "rows": 447
+      },
+      {
+        "name": "native_operations",
+        "rows": 2459
+      },
+      {
+        "name": "native_work_goals",
+        "rows": 7
+      },
+      {
+        "name": "native_work_observations",
+        "rows": 0
+      },
+      {
+        "name": "native_work_outboxes",
+        "rows": 112
+      },
+      {
+        "name": "sessions",
+        "rows": 530
+      },
+      {
+        "name": "user_states",
+        "rows": 0
+      }
+    ],
+    "operations": 2459
+  },
+  "repeatApplyRemovedBytes": 0,
+  "preservation": {
+    "all2542OperationRowsUnchanged": true,
+    "allOperationRowsUnchangedAfterRestart": true,
+    "controlUnchanged": true,
+    "controlUnchangedAfterRestart": true,
+    "canonicalCounts": {
+      "sessions": 588,
+      "events": 23161,
+      "native_operations": 2542,
+      "native_evidences": 5285,
+      "native_artifacts": 8291,
+      "native_work_goals": 31
+    },
+    "operationStatuses": {
+      "failed": 76,
+      "not_executed": 43,
+      "succeeded": 2330,
+      "unknown": 93
+    },
+    "webDatabaseCounts": {
+      "projects": 6,
+      "sessions": 70,
+      "resources": 142,
+      "messages": 874
+    },
+    "webDatabaseCountsUnchanged": true,
+    "visibleCatalogCounts": {
+      "projects": 5,
+      "resources": 139
+    },
+    "specialistAuthors": [
+      "Go 依赖审查专员",
+      "前端依赖审查专员",
+      "本机状态检查专员"
+    ]
+  },
+  "completion": {
+    "inventoryFormat": 2,
+    "state": "finalized",
+    "receiptBytes": 330199,
+    "archiveBytesRemoved": 3799941120,
+    "archive": "~/.lake-dev/security/initial-migration-recovery/sessions.sqlite",
+    "unrelatedRecoveryBackupsTouched": false
+  },
+  "startup": {
+    "baselineSourceSHA": "61d48de7b87b40551d47dcff484acf0f9d0389eb",
+    "baselineRuntimePublicationMS": [
+      3041.7,
+      3357.2
+    ],
+    "currentAuthenticatedHTTPReadyMS": 759.6,
+    "nativeProcessToHTTPReadyMS": 1208.3,
+    "currentSamples": 1,
+    "measurementLimit": "kernel process observation and loopback readiness, not UI first paint or a p95 benchmark"
+  },
+  "nativeUI": "installed Dev workbench visible; Pilot, specialist reports, original resources and collapsed execution inspector retained",
+  "initialVerificationCorrection": "API catalog filters deleted/hidden rows; corrected comparison to raw database counts before/after. No records were lost.",
+  "notRun": [
+    "Windows native startup",
+    "physical power loss",
+    "new external-model tasks",
+    "frontend test suite; no frontend source changes",
+    "full old-binary downgrade execution"
+  ],
+  "unsupportedCleanup": [
+    "independent stdio/dual-store history",
+    "closed or pending migration",
+    "activated recovery archives"
+  ],
+  "logs": {
+    "preview": "/tmp/lake-migration-finalize-daily-preview.json",
+    "apply": "/tmp/lake-migration-finalize-daily-apply.json",
+    "before": "/tmp/lake-migration-finalize-before.json",
+    "after": "/tmp/lake-migration-finalize-after.json",
+    "restart": "/tmp/lake-migration-finalize-restarted.json",
+    "timing": "/tmp/lake-migration-finalize-startup.json",
+    "desktop": "/tmp/lake-migration-finalize-desktop.log",
+    "vet": "/tmp/lake-migration-finalize-vet.log",
+    "boundary": "/tmp/lake-migration-finalize-boundary.log"
+  }
+}

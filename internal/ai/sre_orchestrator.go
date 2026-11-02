@@ -40,6 +40,9 @@ func (e *Engine) StartSRETask(ctx context.Context, sessionID, taskID string, pla
 	}
 	baseConfig := s.state.Config
 	s.mu.Unlock()
+	if err := e.checkSuperModelDomain(ctx, sessionID, baseConfig); err != nil {
+		return err
+	}
 	projectID := task.ProjectID
 	if projectID == "" {
 		projectID = configSecurityProject(baseConfig)

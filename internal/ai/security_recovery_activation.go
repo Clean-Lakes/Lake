@@ -187,7 +187,7 @@ func (h *SecurityHome) activateSecurityRecovery(ctx context.Context, action Secu
 		if err = activateRecoveredSecurityModeTx(tx, journal.After.StoreID, journal.After.RecoveryEpoch); err != nil {
 			return err
 		}
-		if err = tx.Exec("UPDATE security_schema_meta SET minimum_reader_version=? WHERE id=1 AND store_id=? AND recovery_epoch=?", securityEnforcedReaderVersion, journal.After.StoreID, journal.After.RecoveryEpoch).Error; err != nil {
+		if err = tx.Exec("UPDATE security_schema_meta SET minimum_reader_version=MAX(minimum_reader_version,?) WHERE id=1 AND store_id=? AND recovery_epoch=?", securityEnforcedReaderVersion, journal.After.StoreID, journal.After.RecoveryEpoch).Error; err != nil {
 			return err
 		}
 		out.State, out.Revision = "activation_prepared", action.ExpectedRevision+1

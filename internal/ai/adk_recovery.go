@@ -32,6 +32,11 @@ func (e *Engine) resumeNativeApproval(ctx context.Context, s *session, c Config,
 		c.MemoryExtractionEnabled = false
 	}
 	defer func() {
+		if c.superAssignment != nil {
+			if checkpointErr := e.workCheckpoint(s); checkpointErr != nil && err == nil {
+				err = checkpointErr
+			}
+		}
 		if persistErr := e.persistNativeProjection(context.WithoutCancel(ctx), s); persistErr != nil && err == nil {
 			err = persistErr
 		}

@@ -70,6 +70,9 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 	defer func() { d.toolMu.Lock(); d.toolMu.Unlock() }()
 	provider := NewProviderLLM(c.Model)
 	provider.stream = func(ctx context.Context, _ Model, _ []Message, _ []Tool, _ func(string, string)) (modelResult, error) {
+		if err := e.checkSuperModelDomain(ctx, ownSessionID(s), *c); err != nil {
+			return modelResult{}, err
+		}
 		return d.next(ctx)
 	}
 	catalog := e.sessionCatalog(ctx, s.state.View.Session, *c)
@@ -308,6 +311,12 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 	id := runtimeID
 	message := s.state.RootQuestion
 	s.mu.Unlock()
+	if c.superRole == "router" && messageContent != nil {
+		message = ""
+		for _, part := range messageContent.Parts {
+			message += part.Text
+		}
+	}
 	runContent := func(content *genai.Content) error {
 		resuming := false
 		if content != nil {
@@ -331,7 +340,7 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 				return err
 			}
 			if event != nil {
-				if ackErr := e.acknowledgeSupplementEvent(ctx, event.Actions.StateDelta, s.state.View.Session); ackErr != nil {
+				if ackErr := e.acknowledgeSupplementEvent(ctx, event.Actions.StateDelta, s.state.View.Session, event.ID); ackErr != nil {
 					return ackErr
 				}
 				if resuming && len(event.Actions.RequestedToolConfirmations) > 0 {

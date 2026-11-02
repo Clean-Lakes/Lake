@@ -110,7 +110,7 @@ func (b *Server) projectMemoryRoute(w http.ResponseWriter, r *http.Request, name
 		key := parts[4]
 		switch method {
 		case "GET":
-			reply(w, 200, b.Store.ReadProjectMemory(project, key, r.URL.Query().Get("includeDeleted") == "true"))
+			reply(w, 200, b.superMemorySources(r.Context(), project, b.Store.ReadProjectMemory(project, key, r.URL.Query().Get("includeDeleted") == "true")))
 		case "PUT":
 			data := body(w, r, 32*1024)
 			memoryFields(data, "type", "description", "body", "expectedRevision", "restoreDeleted", "validUntil")

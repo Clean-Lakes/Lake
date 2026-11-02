@@ -104,7 +104,7 @@ func (b *Server) loadAttachment(project, session, id string) (chatAttachment, st
 	if err != nil || len(raw) > 4096 || json.Unmarshal(raw, &a) != nil || a.SourceID != id {
 		fail(404, "附件不存在")
 	}
-	if a.Project != project || a.Session != session {
+	if a.Project != project || a.Session != session && !b.superAttachmentReferenced(project, session, a.Session, id) {
 		fail(403, "只能访问当前项目和会话的附件")
 	}
 	blob, err := privateFile(root, filepath.Join(root, id+".blob"))

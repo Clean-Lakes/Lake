@@ -14,13 +14,13 @@ func workTools() []Tool {
 	return []Tool{
 		{"work_begin", "Start a durable goal for the current user's requested work. Pass asset_refs from list_assets for the actual requested resources; never inherit an unrelated session terminal. Record dependencies. Goal progress never grants operation permission. Use before multi-step or asynchronous work; do not use for casual explanation.", objectSchema(map[string]any{"title": text(), "items": arraySchema(item), "asset_refs": arraySchema(text())}, "title", "items")},
 		{"work_read", "Read the current durable goal, original operation handles and outstanding work. Do not repeat dispatched operations.", objectSchema(map[string]any{"goal_id": text(), "item_id": text(), "evidence_id": text()})},
-		{"work_update", "Update an item using actual recorded evidence call IDs. Completed requires successful observations; waiting_user records an unresolved human prerequisite. Never mark a running job complete.", objectSchema(map[string]any{"item_id": text(), "status": map[string]any{"type": "string", "enum": []string{"running", "waiting_user", "blocked", "completed", "failed"}}, "reason": text(), "evidence_ids": arraySchema(text())}, "item_id", "status")},
+		{"work_update", "After plan confirmation, first set the actual item_id to running and wait for its result before resource I/O; this binds the step and attempt. After successful observations, submit completed with the actual evidence call IDs to request host verification; the host may ask independent human acceptance before recording completion. waiting_user only records a missing prerequisite and does not create an acceptance question. Never mark a running external job complete.", objectSchema(map[string]any{"item_id": text(), "status": map[string]any{"type": "string", "enum": []string{"running", "waiting_user", "blocked", "completed", "failed"}}, "reason": text(), "evidence_ids": arraySchema(text())}, "item_id", "status")},
 		{"work_wait", "Park this invocation until the registered external jobs change to a terminal result, without model polling. Call alone in its tool batch. The host resumes the same goal; do not ask the user to say continue.", objectSchema(map[string]any{})},
 		{"work_finish", "Finish only after every goal item is actually complete. Otherwise record a human prerequisite or blocker and leave the goal open. summary is the actual answer grounded in recorded evidence.", objectSchema(map[string]any{"summary": text()}, "summary")},
 	}
 }
 func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call Call, a map[string]any) (any, error) {
-	if e.worker != nil || c.sreCoordinator || c.sre != nil || c.workflowMode || c.ConversationMode == ModePlan || c.Profile != "core" && c.Profile != "" {
+	if e.worker != nil || c.sreCoordinator || c.sre != nil || c.workflowMode || c.ConversationMode == ModePlan && c.superRole != "worker" || c.Profile != "core" && c.Profile != "" {
 		return nil, errors.New("work goals require an ordinary core conversation")
 	}
 	if call.Name == "work_begin" {
@@ -56,10 +56,14 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 		}
 		return e.ReadOnlyRecoveryWorkGoal(ctx, id, goalID)
 	}
+	if isSuperArchiveGoal(goalID) && call.Name != "work_read" {
+		return nil, errors.New("superagent: imported SRE archive is read-only")
+	}
 	row, g, err := e.workRow(id, goalID)
 	if err != nil {
 		return nil, err
 	}
+	row.superFence = c.superAssignment
 	s.mu.Lock()
 	managedGoal := s.state.SecurityManaged
 	s.mu.Unlock()
@@ -101,7 +105,7 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 				return g, nil
 			}
 		}
-		if _, err = e.VerifyWorkStep(id, g.ID, str(a["item_id"]), g.Revision); err != nil {
+		if _, err = e.verifyWorkStep(ctx, id, g.ID, str(a["item_id"]), g.Revision); err != nil {
 			return nil, err
 		}
 		_, verified, readErr := e.workRow(id, g.ID)
@@ -136,7 +140,7 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 				return g, nil
 			}
 		}
-		if _, err = e.BeginWorkAttempt(id, g.ID, stepID, execution.Task.ID, execution.Owner.RootTurnID, current, str(a["reason"]), g.Revision); err != nil {
+		if _, err = e.beginWorkAttempt(ctx, id, g.ID, stepID, execution.Task.ID, execution.Owner.RootTurnID, current, str(a["reason"]), g.Revision); err != nil {
 			return nil, err
 		}
 		_, updated, loadErr := e.workRow(id, g.ID)
@@ -230,13 +234,14 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 		row.WaitState = "waiting"
 	case "work_finish":
 		if g.closure != nil {
-			if _, err = e.VerifyWorkGoal(id, g.ID, g.Revision); err != nil {
+			if _, err = e.verifyWorkGoal(ctx, id, g.ID, g.Revision); err != nil {
 				return nil, err
 			}
 			row, g, err = e.workRow(id, g.ID)
 			if err != nil {
 				return nil, err
 			}
+			row.superFence = c.superAssignment
 			if g.Status != "completed" {
 				return g, nil
 			}
@@ -437,6 +442,7 @@ func (e *Engine) registerWorkWatch(s *session, c Config, call Call, value any) e
 		}
 	}
 	g.Status = reduceWorkGoal(g.Items)
+	row.superFence = c.superAssignment
 	return e.writeWorkGoal(&row, &g, false)
 }
 

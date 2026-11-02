@@ -1,0 +1,64 @@
+/* Message colors are independent of selection and other workbench surfaces. */
+.ai-role-user:not(.has-message-images),
+.ai-role-user.has-message-images > .user-message-text,
+.message-user .timeline-content {
+  background: var(--user-message-background);
+  color: var(--user-message-foreground);
+}
+.message-user .message-text,
+.ai-role-user:not(.has-message-images) .message-attachments a {
+  color: var(--user-message-foreground);
+}
+
+/* One bubble per reply; the avatar owns a separate column beside it. */
+.ai-chat-message.ai-role-assistant,
+.ai-card:is(.ai-text, .ai-message),
+.ai-response:has(> .ai-card:is(.ai-text, .ai-message)),
+.sre-role-message .sre-role-body,
+.message-assistant .timeline-content {
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  padding: 14px 18px;
+  border-radius: var(--radius-window);
+  corner-shape: var(--corner-window);
+  background: var(--assistant-message-background);
+}
+.ai-response > .ai-card:is(.ai-text, .ai-message) {
+  width: auto;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.ai-role-assistant .response-author:hover {
+  background: var(--surface-selected);
+}
+
+.response-avatar { display:inline-flex; align-items:center; justify-content:center; flex:none; }
+.ai-chat-message.ai-role-assistant,
+.ai-response:has(> .response-identity):has(> .ai-card:is(.ai-text, .ai-message)) {
+  --reply-avatar-column: 32px;
+  position: relative;
+  isolation: isolate;
+  padding-inline-start: calc(18px + var(--reply-avatar-column));
+  background: transparent;
+}
+.ai-chat-message.ai-role-assistant::before,
+.ai-response:has(> .response-identity):has(> .ai-card:is(.ai-text, .ai-message))::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 var(--reply-avatar-column);
+  z-index: -1;
+  pointer-events: none;
+  border-radius: var(--radius-window);
+  corner-shape: var(--corner-window);
+  background: var(--assistant-message-background);
+}
+.ai-chat-message.ai-role-assistant > .response-identity .response-avatar,
+.ai-response:has(> .ai-card:is(.ai-text, .ai-message)) > .response-identity .response-avatar {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 14px;
+  width: 20px;
+  height: 1.75em;
+}

@@ -20,6 +20,7 @@ if [ "$development_app" -eq 1 ]; then
 fi
 [ "$(uname -s)" = Darwin ] || { echo '此脚本用于 macOS' >&2; exit 1; }
 if [ "$development_app" -eq 1 ] && [ "$install_app" -eq 1 ]; then
+  python3 scripts/dev_run_preflight.py
   python3 scripts/dev_build_origin.py check "$lake_repo_root" "$HOME/Applications/Lake Dev.app/Contents/Resources/build-origin.json"
 fi
 lake_identity='Lake Local Development Code Signing'

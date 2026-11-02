@@ -16,6 +16,40 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (a
 	if err := e.CheckSecurityRuntime(); err != nil {
 		return nil, &ToolNotExecutedError{Err: err}
 	}
+	if s == nil {
+		return nil, &ToolNotExecutedError{Err: errors.New("execution session is unavailable")}
+	}
+	if err := e.checkSuperModelDomain(ctx, ownSessionID(s), c); err != nil {
+		return nil, &ToolNotExecutedError{Err: err}
+	}
+	if err := e.checkSuperAssignmentContext(ctx); err != nil {
+		return nil, &ToolNotExecutedError{Err: err}
+	}
+	if c.superRole == "router" {
+		return e.invokeSuperRouter(ctx, s, c, call)
+	}
+	if c.superRole == "worker" {
+		if _, ok := ctx.Value(superAssignmentContextKey{}).(SuperAssignmentToken); !ok {
+			return nil, &ToolNotExecutedError{Err: errors.New("superagent: Worker assignment required")}
+		}
+		found := false
+		for _, t := range e.sessionCatalog(ctx, ownSessionID(s), c) {
+			if t.Name == call.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, &ToolNotExecutedError{Err: errors.New("superagent: tool unavailable to Worker")}
+		}
+		managed, err := e.SecurityProjectManaged(ctx, configSecurityProject(c))
+		if err != nil {
+			return nil, err
+		}
+		if !managed {
+			return nil, &ToolNotExecutedError{Err: errors.New("superagent: Worker requires current Security policy")}
+		}
+	}
 	configured, err := e.securityPolicyConfigured(configSecurityProject(c))
 	if err != nil {
 		return nil, &ToolNotExecutedError{Err: err}
@@ -328,6 +362,12 @@ func (e *Engine) invokeManaged(ctx context.Context, s *session, c Config, call C
 // RequireSecurityBridgeContext is used at the actual host bridge, including its
 // early branches. approved is never consulted as proof of managed authority.
 func (e *Engine) RequireSecurityBridgeContext(ctx context.Context, projectID, sessionID, name string) error {
+	if binding, ok := ctx.Value(superMemoryReadKey{}).(superMemoryReadBinding); ok && binding.sessionID == sessionID && binding.projectID == projectID && (name == "project_memory_index" || name == "list_project_memories" || name == "read_project_memory") {
+		if err := e.CheckSecurityMemoryEligibility(ctx, projectID, SecurityMemoryRead); err != nil {
+			return err
+		}
+		return e.CheckSecurityMemoryEligibility(ctx, projectID, SecurityMemoryUse)
+	}
 	configured, err := e.securityPolicyConfigured(projectID)
 	if err != nil {
 		return err

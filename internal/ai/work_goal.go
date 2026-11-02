@@ -83,7 +83,8 @@ type nativeWorkGoal struct {
 	Data             string
 	Checkpoint       string
 	WaitState        string
-	fence            string `gorm:"-"`
+	fence            string                `gorm:"-"`
+	superFence       *SuperAssignmentToken `gorm:"-"`
 	WaitCallID       string
 	LeaseOwner       string
 	LeaseUntil       time.Time
@@ -243,6 +244,11 @@ func (e *Engine) writeWorkGoal(row *nativeWorkGoal, g *WorkGoal, create bool) er
 }
 
 func writeWorkGoalTx(tx *gorm.DB, row *nativeWorkGoal, g *WorkGoal, create bool) error {
+	if row.superFence != nil {
+		if err := checkSuperAssignmentTx(tx, *row.superFence); err != nil {
+			return err
+		}
+	}
 	if g.closure != nil {
 		if g.Status == "failed" {
 			g.Status = "blocked"
@@ -401,6 +407,16 @@ func (e *Engine) beginWork(s *session, title string, items []WorkItem, assetRefs
 				if len(existingBindings) == 0 && g.Binding.AssetRef != "" {
 					existingBindings = []WorkBinding{g.Binding}
 				}
+				if len(existingBindings) == 0 && g.closure == nil && row.GoalRevision == 0 && c.superRole == "worker" && c.superTaskID == g.ID {
+					// Routing creates an unconfirmed goal, not a resource scope.
+					// Its first real plan freezes host-resolved targets before the
+					// original confirmation. A confirmed goal cannot take this path.
+					g.ResourceBindings = append([]WorkBinding(nil), requested...)
+					if len(requested) == 1 {
+						g.Binding = requested[0]
+					}
+					existingBindings = g.ResourceBindings
+				}
 				for _, candidate := range requested {
 					found := false
 					for _, old := range existingBindings {
@@ -442,6 +458,7 @@ func (e *Engine) beginWork(s *session, title string, items []WorkItem, assetRefs
 		return g, err
 	}
 	g.Items = merged
+	row.superFence = c.superAssignment
 	if err = e.writeWorkGoal(&row, &g, create); err != nil {
 		return g, err
 	}
@@ -463,6 +480,9 @@ func (e *Engine) workCheckpoint(s *session) error {
 	if s.state.Runtime != nil {
 		rounds = s.state.Runtime.ModelRounds
 	}
+	if c.superRole == "worker" {
+		rounds += c.superRoundBase
+	}
 	// The projection contains slices/pointers also updated by background cards.
 	// Serialize while holding the session lock, then persist immutable bytes.
 	checkpoint := js(projection)
@@ -475,7 +495,20 @@ func (e *Engine) workCheckpoint(s *session) error {
 		return err
 	}
 	row.Checkpoint = string(safeJSON([]byte(checkpoint), c))
+	row.superFence = c.superAssignment
 	g.ModelRounds = rounds
+	if c.superAssignment != nil {
+		store, storeErr := e.adkStore()
+		if storeErr != nil {
+			return storeErr
+		}
+		var budget superBudgetRow
+		if budgetErr := store.DB.First(&budget, "task_id = ?", goalID).Error; budgetErr == nil {
+			g.ModelRounds = budget.Rounds
+		} else if !errors.Is(budgetErr, gorm.ErrRecordNotFound) {
+			return budgetErr
+		}
+	}
 	if len(decisions) > 0 {
 		g.UserDecisions = decisions
 	}
@@ -486,12 +519,24 @@ func (e *Engine) workCheckpoint(s *session) error {
 	return e.writeWorkGoal(&row, &g, false)
 }
 func (e *Engine) WorkControl(ctx context.Context, sessionID, id, command string, revision int64) error {
+	if isSuperArchiveGoal(id) {
+		return errors.New("superagent: imported SRE archive is read-only")
+	}
 	if _, err := e.get(sessionID); err != nil {
 		return err
 	}
 	row, g, err := e.workRow(sessionID, id)
 	if err != nil {
 		return err
+	}
+	if command == "resume" {
+		store, err := e.adkStore()
+		if err != nil {
+			return err
+		}
+		if err = rejectSuperReadOnlyGoalTx(store.DB, id); err != nil {
+			return err
+		}
 	}
 	if revision != g.Revision {
 		return errWorkConflict

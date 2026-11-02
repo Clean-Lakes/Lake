@@ -64,6 +64,9 @@ func (e *Engine) recoverQuestionReply(s *session, req *QuestionRequest, answers 
 	if s.state.Config.Model.Name == "" {
 		return errors.New("model not configured for recovery")
 	}
+	if handled, err := e.queueSuperHumanRecoveryLocked(s, req, answers, ""); handled || err != nil {
+		return err
+	}
 	if err := e.runNativeQuestion(context.Background(), req, answers, s.state.Config); err != nil {
 		return err
 	}

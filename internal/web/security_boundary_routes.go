@@ -11,9 +11,24 @@ func (b *Server) securitySourceMessage(sessionID, messageID string) {
 	if messageID == "" {
 		fail(400, "sourceMessageId required")
 	}
+	found, project := false, ""
 	b.Store.read(func() any {
-		b.Store.session(sessionID)
-		if b.Store.row("SELECT id FROM messages WHERE id=? AND sessionId=? AND role='user'", messageID, sessionID) == nil {
+		session := b.Store.session(sessionID)
+		project = stringOf(session["projectId"])
+		found = b.Store.row("SELECT id FROM messages WHERE id=? AND sessionId=? AND role='user'", messageID, sessionID) != nil
+		return nil
+	})
+	if found {
+		return
+	}
+	event, err := b.Engine.SuperWorkerSource(b.Context, project, sessionID, messageID)
+	if err != nil {
+		fail(409, "Original user message binding required")
+	}
+	b.Store.read(func() any {
+		sourceSession := b.Store.session(event.ThreadRef)
+		message := b.Store.row("SELECT text FROM messages WHERE id=? AND sessionId=? AND role='user'", messageID, event.ThreadRef)
+		if sourceSession["projectId"] != project || message == nil || message["text"] != event.Payload {
 			fail(409, "Original user message binding required")
 		}
 		return nil

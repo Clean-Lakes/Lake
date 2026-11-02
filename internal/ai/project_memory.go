@@ -57,6 +57,9 @@ func (e *Engine) requestMemoryContext(ctx context.Context, id string, c Config, 
 		return ""
 	}
 	args := map[string]any{}
+	if c.superRole == "router" {
+		ctx = withSuperMemoryRead(ctx, id, configSecurityProject(c))
+	}
 	turn, _ := e.MemoryReadContext(id)
 	limit := 24 * 1024
 	if c.MemorySchemaVersion == 2 {

@@ -31,6 +31,9 @@ func RegisteredTools() []string {
 
 func KnownCapability(name string) bool { return slices.Contains(knownCapabilities, name) }
 
+// For the authenticated policy editor; this registry does not grant authority.
+func KnownCapabilities() []string { return slices.Clone(knownCapabilities) }
+
 // TaskGrantable is an additional fixed ceiling, independent of a policy rule.
 // Policy cannot turn arbitrary Shell, file/SQL writes or MCP into task wildcards.
 func TaskGrantable(name string, proof ProofLevel) bool {

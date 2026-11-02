@@ -4,7 +4,7 @@ package security
 
 const (
 	SchemaVersion           = 1
-	ReaderVersion           = 2
+	ReaderVersion           = 3
 	FoundationReaderVersion = 1
 	ControlFormat           = 1
 )

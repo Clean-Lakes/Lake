@@ -7,12 +7,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 )
 
 func (e *Engine) runInvestigations(ctx context.Context, s *session, c Config, specs []investigationSpec) ([]AgentRun, error) {
-	if e.worker != nil || !c.legacyInvestigations || c.MultiAgentMode != "auto" || c.Profile != "core" {
+	if e.worker != nil || c.superRole != "worker" && (!c.legacyInvestigations || c.MultiAgentMode != "auto") || c.Profile != "core" {
 		return nil, errors.New("此会话未启用多 Agent 调查")
 	}
 	if len(specs) < 1 || len(specs) > 8 {
@@ -29,7 +28,13 @@ func (e *Engine) runInvestigations(ctx context.Context, s *session, c Config, sp
 		return nil, errors.New("security: delegation requires an existing canonical step and attempt")
 	}
 	if len(question) > 4000 {
-		question = question[:4000] + " [TRUNCATED]"
+		if c.superRole == "worker" {
+			if len(question) > 8000 {
+				return nil, errors.New("superagent: complete original constraints cannot fit this bounded child context; keep the work in its parent Worker")
+			}
+		} else {
+			question = utf8Prefix(question, 4000) + " [TRUNCATED]"
+		}
 	}
 	runs := e.currentInvestigations(s)
 	count := len(runs)
@@ -141,6 +146,12 @@ func (e *Engine) runInvestigations(ctx context.Context, s *session, c Config, sp
 			})
 		}
 		cc := c
+		if c.superRole == "worker" {
+			cc.superRole = "child"
+			cc.superAssignment = nil
+		}
+		cc.NaturalMemory = nil
+		cc.MemoryEnabled, cc.MemoryExtractionEnabled, cc.IgnoreNaturalMemory = false, false, true
 		if frozenParent.Managed {
 			cc.securityExecution = &frozenParent
 		}
@@ -184,6 +195,15 @@ func (e *Engine) runInvestigations(ctx context.Context, s *session, c Config, sp
 		}
 		workers = append(workers, w)
 	}
+	if c.superRole == "worker" {
+		if err := e.reserveSuperChildren(ctx, workers); err != nil {
+			for _, w := range workers {
+				w.cancel()
+				w.child.Shutdown()
+			}
+			return nil, err
+		}
+	}
 	// Registration is atomic with shutdown admission. No model request starts on validation failure.
 	e.agentMu.Lock()
 	if e.agentsClosed {
@@ -214,25 +234,17 @@ func (e *Engine) runInvestigations(ctx context.Context, s *session, c Config, sp
 		}
 		return nil, err
 	}
-	var investigated sync.WaitGroup
-	for _, w := range workers {
-		if w.role != "verify" {
-			investigated.Add(1)
-		}
+	defer e.cleanupInvestigationGraph(workers)
+	resume, err := e.parkSuperInvocation(ctx, "waiting_children")
+	if err != nil {
+		return nil, err
 	}
-	for i, w := range workers {
-		spec := specs[i]
-		go func(w *agentWorker, spec investigationSpec) {
-			if w.role == "verify" {
-				investigated.Wait()
-			} else {
-				defer investigated.Done()
-			}
-			w.run(spec, question)
-		}(w, spec)
+	graphErr := e.runInvestigationGraph(ctx, workers, specs, question)
+	if err = resume(); err != nil {
+		return nil, err
 	}
-	for _, w := range workers {
-		<-w.done
+	if graphErr != nil {
+		return nil, graphErr
 	}
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -240,10 +252,13 @@ func (e *Engine) runInvestigations(ctx context.Context, s *session, c Config, sp
 	return e.currentInvestigations(s), nil
 }
 
-func (w *agentWorker) run(spec investigationSpec, question string) {
+func (w *agentWorker) run(ctx context.Context, spec investigationSpec, question string) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stop := context.AfterFunc(w.ctx, cancel)
+	defer stop()
 	defer close(w.done)
 	defer w.cancel()
-	ctx := w.ctx
 	defer func() {
 		w.child.Shutdown()
 		w.parent.agentMu.Lock()
@@ -251,6 +266,13 @@ func (w *agentWorker) run(spec investigationSpec, question string) {
 		w.parent.agentMu.Unlock()
 	}()
 	var err error
+	if _, super := ctx.Value(superAssignmentContextKey{}).(SuperAssignmentToken); super {
+		var release func()
+		ctx, release, err = w.parent.claimSuperChild(ctx, w.runID)
+		if err == nil {
+			defer release()
+		}
+	}
 	select {
 	case w.parent.agentSlots <- struct{}{}:
 		defer func() { <-w.parent.agentSlots }()

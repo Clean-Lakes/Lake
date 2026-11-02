@@ -53,6 +53,15 @@ func workflowContractHTTP(t *testing.T, b *Server, method, path string, payload 
 }
 
 func TestSecurityWorkflowRealSREObservationUsesOriginalTaskAndAcceptance(t *testing.T) {
+	verifyRealWorkflowObservation(t, false)
+}
+
+func TestSuperWorkflowRealSREObservationUsesOriginalTaskAndAcceptance(t *testing.T) {
+	verifyRealWorkflowObservation(t, true)
+}
+
+func verifyRealWorkflowObservation(t *testing.T, super bool) {
+	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("bounded local file identity is deliberately unsupported on Windows")
 	}
@@ -60,6 +69,9 @@ func TestSecurityWorkflowRealSREObservationUsesOriginalTaskAndAcceptance(t *test
 	session, resource := newSession(t, h)
 	project := stringOf(b.Store.Session(session)["projectId"])
 	apiTest(t, h, "PUT", "/api/projects/"+project+"/sre", Object{"enabled": true}, 200)
+	if super {
+		apiTest(t, h, "POST", "/api/projects/"+project+"/superagent", Object{}, 200)
+	}
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +109,8 @@ func TestSecurityWorkflowRealSREObservationUsesOriginalTaskAndAcceptance(t *test
 	workflowID := stringOf(saved["id"])
 	template := b.Store.Workflow(project, workflowID)
 	policy := security.ProjectPolicy{ProjectID: project, SchemaVersion: 1, Mode: "restricted", ResourceIDs: []string{resource}, Rules: []security.Rule{{Capability: "file.read", Effect: security.EffectAllow, Limits: security.ScopeLimits{FileRoots: []string{dir}}}, {Capability: "local.execute", Effect: security.EffectAllow}}}
-	if _, err = b.Engine.PutSecurityProjectPolicy(t.Context(), ai.SecurityPolicyAction{ActorID: "local-user", ActionID: "managed-workflow-policy", ProjectID: project}, policy); err != nil {
+	currentPolicy, _ := b.Engine.SecurityProjectPolicy(t.Context(), project)
+	if _, err = b.Engine.PutSecurityProjectPolicy(t.Context(), ai.SecurityPolicyAction{ActorID: "local-user", ActionID: "managed-workflow-policy", ProjectID: project, ExpectedRevision: currentPolicy.Revision}, policy); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := b.Engine.SecurityCatalogResources(t.Context(), project)

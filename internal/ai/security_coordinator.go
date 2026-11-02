@@ -486,6 +486,9 @@ func (e *Engine) validateSecurityPermitAtIO(ctx context.Context, projectID, sess
 	return e.withSecurityDispatchBarrier(func() error {
 		var latestCatalog SecurityCatalogView
 		checkErr := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := checkSuperContextTx(ctx, tx); err != nil {
+				return err
+			}
 			now := time.Now().UTC()
 			o := permit.operation
 			digest, err := security.OperationDigest(o)

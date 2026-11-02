@@ -166,6 +166,28 @@ func (e *Engine) SelectSecurityGoal(ctx context.Context, in SecurityGoalSelectio
 // prepareSecurityTurnLocked runs only for an actual incoming user turn while
 // holding the session lock. It never treats model text as a control action.
 func (e *Engine) prepareSecurityTurnLocked(ctx context.Context, s *session, c *Config, in TurnInput, sourceID, rootTurnID string) (SecurityExecutionContext, error) {
+	if c.superRole == "router" {
+		if c.superRouter == nil || c.superRouter.projectID != configSecurityProject(*c) {
+			return SecurityExecutionContext{}, errSuperBinding
+		}
+		s.state.SecurityManaged, s.state.SecurityTaskID, s.state.WorkGoalID = true, "", ""
+		c.securityExecution, s.state.Config.securityExecution = nil, nil
+		return SecurityExecutionContext{Managed: true, ProjectID: c.superRouter.projectID, SessionID: s.state.View.Session}, nil
+	}
+	if c.superRole == "worker" {
+		if err := e.bindSuperWorkerProposalLocked(ctx, s, c, sourceID); err != nil {
+			return SecurityExecutionContext{}, err
+		}
+		if s.state.WorkGoalID == c.superTaskID {
+			_, goal, err := e.workRow(s.state.View.Session, c.superTaskID)
+			if err != nil {
+				return SecurityExecutionContext{}, err
+			}
+			if goal.closure == nil {
+				return SecurityExecutionContext{Managed: true, ProjectID: configSecurityProject(*c), SessionID: s.state.View.Session, GoalID: goal.ID}, nil
+			}
+		}
+	}
 	if e.worker != nil {
 		if c.sre != nil && c.sre.NoTools {
 			managed, err := e.worker.parent.SecurityProjectManaged(ctx, configSecurityProject(*c))
@@ -296,6 +318,7 @@ func (e *Engine) prepareSecurityTurnLocked(ctx context.Context, s *session, c *C
 	}
 	if goal.Status == "paused" {
 		goal.Status = "running" // Real current-goal continuation; item prerequisites remain unchanged.
+		row.superFence = c.superAssignment
 		if err = e.writeWorkGoal(&row, &goal, false); err != nil {
 			return out, err
 		}

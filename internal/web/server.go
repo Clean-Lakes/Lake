@@ -77,6 +77,8 @@ type Server struct {
 	token                string
 	generated            bool
 	workers              sync.WaitGroup
+	superWorkers         sync.Map
+	draining             atomic.Bool
 	closeOnce            sync.Once
 	startMu              sync.Mutex
 	gate                 sync.RWMutex
@@ -214,6 +216,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		return nil, err
 	}
 	server.Engine.SetSRERepository(store)
+	server.Engine.SuperInputResolver = server.resolveSuperInput
 	server.Engine.NaturalMemory = server.naturalRecallProvider
 	server.Engine.ModelActivity = server.memoryForegroundModel
 	server.Engine.MemoryCaptureAllowed = store.MemoryCaptureAllowed
@@ -268,6 +271,8 @@ func (b *Server) prepareHTTPServer() (net.Listener, *http.Server, error) {
 	if !b.securityRuntime.ReadOnlyView() {
 		b.workers.Add(1)
 		go b.runMemoryWorker()
+		b.workers.Add(1)
+		go b.runSuperagent()
 		b.workers.Add(1)
 		go func() {
 			defer b.workers.Done()
@@ -463,6 +468,12 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fail(401, "Authentication required")
 		}
 	}
+	if b.superagentLifecycleRoute(w, r) {
+		return
+	}
+	if b.draining.Load() && method != "GET" {
+		fail(503, "内核正在排空，新的操作尚未接纳")
+	}
 	if b.securityMigrationRoute(w, r) {
 		return
 	}
@@ -488,6 +499,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if b.pilotSettingsRoute(w, r, name, method) {
+		return
+	}
+	if b.superagentRoute(w, r) {
 		return
 	}
 	if b.securityBoundaryRoute(w, r, name, method) {
@@ -981,7 +995,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					if _, exists := updates["conversationMode"]; exists {
 						fail(400, "请通过模式切换入口修改会话模式")
 					}
-					reply(w, 200, b.configure(id, updates))
+					reply(w, 200, b.configureUserOptions(id, updates))
 					return
 				}
 				if set("workControl abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails resolveOperation clear clearReferences rollback compact restore undoFile extractPreset")[op] {

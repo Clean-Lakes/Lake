@@ -25,9 +25,18 @@ func (securityConfirmationQuestionRow) TableName() string { return "security_con
 func securityConfirmationModels() []any                   { return []any{&securityConfirmationQuestionRow{}} }
 
 type securityConfirmationQuestionContext struct {
+	Source     *QuestionSource
 	Row        securityConfirmationQuestionRow
 	QuestionID string
 }
+
+func securityQuestionDigest(req *QuestionRequest) string {
+	if req.Source == nil {
+		return hash(js(req.Questions))
+	}
+	return hash(js([]any{req.Questions, req.Source}))
+}
+
 type securityConfirmationQuestionContextKey struct{}
 
 func withSecurityConfirmationQuestion(ctx context.Context, binding *securityConfirmationQuestionContext) context.Context {
@@ -42,6 +51,10 @@ func (e *Engine) bindSecurityConfirmationQuestion(ctx context.Context, s *sessio
 	binding, _ := ctx.Value(securityConfirmationQuestionContextKey{}).(*securityConfirmationQuestionContext)
 	if binding == nil {
 		return nil
+	}
+	if binding.Source != nil {
+		copy := *binding.Source
+		req.Source = &copy
 	}
 	db, storeID, epoch, err := e.securityTaskDB()
 	if err != nil {
@@ -58,7 +71,7 @@ func (e *Engine) bindSecurityConfirmationQuestion(ctx context.Context, s *sessio
 		return errSecurityAction
 	}
 	row.QuestionID, row.StoreID, row.RecoveryEpoch = req.ID, storeID, epoch
-	row.QuestionDigest, row.Status, row.Revision, row.CreatedAt = hash(js(req.Questions)), "pending", 1, time.Now().UTC()
+	row.QuestionDigest, row.Status, row.Revision, row.CreatedAt = securityQuestionDigest(req), "pending", 1, time.Now().UTC()
 	err = e.withSecurityDispatchBarrier(func() error {
 		return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			var pending int64
@@ -98,7 +111,7 @@ func (e *Engine) commitSecurityConfirmationAnswer(ctx context.Context, s *sessio
 			} else if err != nil {
 				return err
 			}
-			if row.StoreID != storeID || row.RecoveryEpoch != epoch || row.SessionID != s.state.View.Session || row.RootTurnID != s.state.View.RootTurnID || row.ProjectID != configSecurityProject(s.state.Config) || row.SourceMessageID != s.state.SecuritySourceMessageID || row.GoalID != s.state.WorkGoalID || row.QuestionDigest != hash(js(req.Questions)) || !time.Now().UTC().Before(row.ExpiresAt) {
+			if row.StoreID != storeID || row.RecoveryEpoch != epoch || row.SessionID != s.state.View.Session || row.RootTurnID != s.state.View.RootTurnID || row.ProjectID != configSecurityProject(s.state.Config) || row.SourceMessageID != s.state.SecuritySourceMessageID || row.GoalID != s.state.WorkGoalID || row.QuestionDigest != securityQuestionDigest(req) || !time.Now().UTC().Before(row.ExpiresAt) {
 				return errors.New("security: original confirmation question changed or expired")
 			}
 			encoded := js(answers)

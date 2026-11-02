@@ -23,7 +23,7 @@ def check_dev_home(dev_home, release_home):
         return
     except PermissionError:
         pass
-    raise ValueError("Dev 后端仍在运行；请正常退出 Lake Dev，并在原启动终端 Ctrl+C 后重试")
+    raise ValueError("Dev 后端仍在运行；请在 Lake Dev 选择‘停止内核并退出’，或在原启动终端 Ctrl+C 后重试")
 
 
 if __name__ == "__main__":

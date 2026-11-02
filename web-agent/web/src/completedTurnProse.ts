@@ -1,7 +1,7 @@
 import type {TranscriptEntry} from './timeline';
 
 export function isAssistantProse(entry: TranscriptEntry): boolean {
-  return entry.message?.role === 'assistant' || !!entry.card && ['message', 'text'].includes(entry.card.type);
+  return entry.message?.role === 'assistant' && !entry.message.author || !!entry.card && ['message', 'text'].includes(entry.card.type);
 }
 
 // The latest reply after a tool may be the final answer. Keep its streaming node

@@ -243,7 +243,7 @@ func (e *Engine) prepareSecuritySRERole(ctx context.Context, sessionID string, t
 	workAttempt := goal.closure.ActiveAttempts[step.ID]
 	if workAttempt == "" {
 		for casTry := 0; casTry < 4; casTry++ {
-			workAttempt, err = e.BeginWorkAttempt(sessionID, goal.ID, step.ID, current.Task.ID, current.Owner.RootTurnID, "", "SRE attempt "+attemptID, row.Revision)
+			workAttempt, err = e.beginWorkAttempt(ctx, sessionID, goal.ID, step.ID, current.Task.ID, current.Owner.RootTurnID, "", "SRE attempt "+attemptID, row.Revision)
 			if err == nil {
 				break
 			}
@@ -358,6 +358,10 @@ func (e *Engine) securitySREPresentationOnly(ctx context.Context, sessionID stri
 }
 
 func (e *Engine) verifySecuritySRERole(execution SecurityExecutionContext, step SREPlanStep) error {
+	return e.verifySecuritySRERoleContext(context.Background(), execution, step)
+}
+
+func (e *Engine) verifySecuritySRERoleContext(ctx context.Context, execution SecurityExecutionContext, step SREPlanStep) error {
 	if !execution.Managed || execution.Task.ID == "" || execution.StepID == "" {
 		return nil
 	}
@@ -365,7 +369,7 @@ func (e *Engine) verifySecuritySRERole(execution SecurityExecutionContext, step 
 	if err != nil {
 		return err
 	}
-	id, err := e.VerifyWorkStep(execution.SessionID, execution.GoalID, execution.StepID, row.Revision)
+	id, err := e.verifyWorkStep(ctx, execution.SessionID, execution.GoalID, execution.StepID, row.Revision)
 	if err != nil {
 		return err
 	}

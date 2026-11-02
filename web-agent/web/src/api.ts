@@ -98,6 +98,8 @@ export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"model
 };
 
 export const api = {
+	superWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorkspace>(`/api/projects/${encodeURIComponent(project)}/superagent`,{signal}),
+	ensureSuperWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperProject>(`/api/projects/${encodeURIComponent(project)}/superagent`,{method:'POST',body:'{}',signal}),
  moveSessionNavigation:(project:string,data:{sessionId:string;pinned:boolean;beforeId:string|null;revision:number})=>post<WorkSession>(`/api/projects/${encodeURIComponent(project)}/session-navigation`,data),
  plans:(session:string)=>request<{plans:import('../../shared/contracts').ProposedPlan[]}>(`/api/sessions/${encodeURIComponent(session)}/ai/plans`),
  setConversationMode:(session:string,mode:import('../../shared/contracts').ConversationMode)=>post<import('../../shared/contracts').ConversationModeUpdate>(`/api/sessions/${encodeURIComponent(session)}/ai/mode`,{mode}),

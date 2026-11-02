@@ -43,7 +43,7 @@ struct RuntimeInfo: Decodable {
               (response as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               json["backendRuntime"] as? String == "go" else { return false }
-        return true
+        return await SuperagentConnection.matches(info, home: home, data: dataDirectory)
     }
     func start() async throws -> URL {
         if let existing = readRuntime(), await healthy(existing) {
@@ -87,13 +87,17 @@ struct RuntimeInfo: Decodable {
         components.fragment = "token=" + info.token
         return components.url!
     }
-    func stop() async {
-        guard let child = process, child.isRunning else { return }
-        child.terminate()
-        for _ in 0..<80 {
-            if !child.isRunning { return }
-            try? await Task.sleep(nanoseconds: 100_000_000)
-        }
-        // The installer waits for this PID as well; a stuck backend prevents replacement.
+    func detach() {
+        // Process deallocation does not terminate the Go service. Keep its
+        // private runtime record for the next UI's authenticated reconnect.
+        process = nil
+        runtime = nil
+    }
+    func stop() async -> Bool {
+        guard let info = runtime ?? readRuntime() else { return process?.isRunning != true }
+        if kill(info.pid, 0) != 0 && errno == ESRCH { detach(); return true }
+        let stopped = await SuperagentConnection.drain(info, home: home, data: dataDirectory)
+        if stopped { detach() }
+        return stopped
     }
 }

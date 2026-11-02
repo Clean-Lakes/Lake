@@ -62,3 +62,9 @@ Lake Memory 在有真实宿主消息身份、已获同意的新来源上登记�
 ## 当前验证入口
 
 离线兼容回归使用 `python3 scripts/verify_memory_compatibility.py --report /tmp/lake-memory-compatibility.json`。签名 Dev 后端的隔离运行使用 `python3 scripts/verify_memory_compatibility_dev.py --report /tmp/lake-memory-dev.json`；只创建临时 Home、使用本机合成模型，不读取工作库或真实供应商凭据，不替代原生 UI 验收。旧 P8/R5 试跑脚本仅保留退役提示；旧 verify 文件名是当前离线回归的兼容别名。升级后的旧二进制验证应确认拒绝 v7，不能继续期待旧版打开新版工作库。Windows 本次未运行原生 CI，不能用交叉编译或 N5 旧结果宣称 C4 原生已通过。
+
+## Super-agent 宿主接入（2026-11-02）
+
+持续 Pilot 保留现有表达偏好与项目记忆的同意、读取、来源和派发重验；独立专员/工作流关闭 N5 继承与自动积累。`MemoryForWorker` 仅返回可信 task/worker/资源与账本引用，并明确报告 `task_knowledge_view_unavailable`，没有复制整项目知识或启用运维 V2。
+
+Memory 管理界面对唯一的已提交用户来源补充任务、尝试、操作、验收 ID 的读取旁注；普通偏好及一条消息拆出的多任务不伪造 taskID。原 `MemoryTurnSnapshot`、hash、outbox、worker、撤回与遗忘协议不变。未知/未验收操作保留原状态，旁注不是自动形成成功经验的依据。任务知识、长期任务来源采集及成功经验整理仍待 bearqy 的资产范围契约与联合验收，不能将此次旁注当作这些依赖已完成。
