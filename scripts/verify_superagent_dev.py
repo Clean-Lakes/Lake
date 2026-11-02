@@ -58,7 +58,9 @@ def main():
     parser.add_argument('--binary', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--native', type=Path)
-    parser.add_argument('--hold-seconds', type=int, default=0, choices=range(301))
+    parser.add_argument('--hold-seconds', type=int, default=0, choices=range(1801))
+    parser.add_argument('--inspection-finished-file', type=Path, help='owned test marker that ends the optional visual inspection early')
+    parser.add_argument('--ui-detached-file', type=Path, help='owned test marker set after quitting the native UI; verify surviving kernel and reopen the same isolated Home')
     parser.add_argument('--go-results', type=Path, help='optional complete go test -json log')
     args = parser.parse_args()
     binary = args.binary.resolve(strict=True)
@@ -187,7 +189,7 @@ def main():
                 wait_for(lambda: query("SELECT count(*) FROM superagent_outbox WHERE task_id<>'' AND state='delivered'")[0][0] >= 2)
                 identity = lake.api('/api/superagent/lifecycle')
                 require(Path(identity['home']).resolve() == home.resolve() and identity['pid'] == lake.runtime['pid'], 'wrong Home owner')
-                report.update(passed=True, tasks=2, distinctWorkerSessions=2, actualReads=2, humanQuestions=len(answered), pilotReportsDelivered=True, currentKernelPIDVerified=True, memoryTaskKnowledge='unavailable_by_design', externalBuildReadProfile='unavailable', windows='not_run', sleepAndPowerLoss='not_run')
+                report.update(runtimeAcceptance=True, tasks=2, distinctWorkerSessions=2, actualReads=2, humanQuestions=len(answered), pilotReportsDelivered=True, currentKernelPIDVerified=True, memoryTaskKnowledge='unavailable_by_design', externalBuildReadProfile='unavailable', windows='not_run', sleepAndPowerLoss='not_run')
                 args.output.parent.mkdir(parents=True, exist_ok=True)
                 args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
                 args.output.chmod(0o600)
@@ -195,11 +197,27 @@ def main():
                 if args.hold_seconds:
                     print('Fixture Home for local UI inspection: ' + str(home), flush=True)
                     print('Fixture origin: ' + lake.runtime['origin'], flush=True)
-                    time.sleep(args.hold_seconds)
+                    until = time.monotonic() + args.hold_seconds
+                    reopened = False
+                    while time.monotonic() < until:
+                        if args.ui_detached_file and args.ui_detached_file.exists() and not reopened:
+                            require(args.native and lake.process.poll() is not None, 'the original native UI has not exited')
+                            require(lake.api('/api/superagent/lifecycle')['pid'] == identity['pid'], 'UI exit stopped or replaced the kernel')
+                            report['uiDetachedKernelSurvived'] = True
+                            lake.process = subprocess.Popen([str(args.native), '--lake-home', str(home)], env=env, stdout=lake.log, stderr=lake.log)
+                            reopened = True
+                            require(lake.api('/api/superagent/lifecycle')['pid'] == identity['pid'], 'reopening replaced the original kernel')
+                            print('REOPENED: native UI on the same isolated Home and kernel PID', flush=True)
+                        if args.inspection_finished_file and args.inspection_finished_file.exists():
+                            break
+                        time.sleep(0.2)
                 lake.api('/api/superagent/lifecycle', 'POST', {'action': 'drain'})
                 wait_for(lambda: not (home / 'web-agent/runtime.json').exists(), 30)
+                report['explicitKernelDrainVerified'] = True
             finally:
                 lake.stop()
+            report['passed'] = True
+            args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
     finally:
         provider.shutdown()
         provider.server_close()

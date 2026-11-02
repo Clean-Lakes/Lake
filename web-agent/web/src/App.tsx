@@ -836,7 +836,7 @@ function AppContent() {
     return data;
   }, []);
   const pilotProjectId=sidebarProjectId??selectedProjectId??catalog?.projects[0]?.id;
-  const pilotWorkspace=usePilotWorkspace(pilotProjectId,connected);
+  const pilotWorkspace=usePilotWorkspace(pilotProjectId,!!bootstrap?.authenticated&&!!catalog);
   const openedPilotProjects=useRef(new Set<string>());
   const pendingWorkerInspector=useRef<string|null>(null);
   useEffect(()=>{
