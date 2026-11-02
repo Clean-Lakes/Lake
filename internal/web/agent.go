@@ -424,9 +424,26 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		}
 	}
 	if b.Engine != nil {
+		projectID := stringOf(b.Store.Session(id)["projectId"])
+		if err := b.Engine.RequireSecurityBridgeContext(ctx, projectID, id, name); err != nil {
+			return nil, &ai.ToolNotExecutedError{Err: err}
+		}
+	}
+	if b.Engine != nil {
 		if err := b.Engine.CheckSecurityRuntime(); err != nil {
 			return nil, &ai.ToolNotExecutedError{Err: err}
 		}
+	}
+
+	managedTerminal := false
+	if b.Engine != nil {
+		managedTerminal, err = b.Engine.SecurityProjectManaged(ctx, stringOf(b.Store.Session(id)["projectId"]))
+		if err != nil {
+			return nil, &ai.ToolNotExecutedError{Err: err}
+		}
+	}
+	if managedTerminal && set("inspectHost prepare_host open_ssh_terminal adopt_terminal close_ssh_terminal terminal_kill_command")[name] {
+		return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("security: terminal creation, takeover and whole-terminal closure are not supported by this operation")}
 	}
 	// Opening/binding a shell can fail before any command is submitted. Only
 	// failures before this boundary are proven to have no command side effect.
@@ -706,7 +723,21 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 			return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("Shell runtime and asset do not match")}
 		}
 		b.Store.assertCommandNotStopped(id, ref, stringOf(args["command"]))
-		term := b.hostTerminal(ctx, id, ref, approved, explicitTerminal)
+
+		var term Object
+		if managedTerminal {
+			frozen, bindErr := b.Engine.SecurityTerminalIdentity(ctx, project, id)
+			if bindErr != nil || explicitTerminal != "" && explicitTerminal != frozen {
+				return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("security: existing frozen terminal required")}
+			}
+			term = b.terminalForSession(id, frozen)
+			if term["resourceId"] != ref || term["status"] != "ready" || term["holder"] != "agent" {
+				return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("security: frozen Agent terminal is not ready")}
+			}
+		} else {
+			term = b.hostTerminal(ctx, id, ref, approved, explicitTerminal)
+		}
+
 		options := b.Store.Options(id)
 		if options["asset_ref"] == ref || approved && stringOf(options["asset_ref"]) == "" {
 			options["asset_ref"] = ref
@@ -778,7 +809,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 	}
 	if target != nil && set("terminal_execute_command ssh_terminal_send terminal_send_input ssh_terminal_key terminal_send_key")[name] {
 		b.verifyTerminalBinding(id, stringOf(target["resourceId"]), tid)
-		if b.manualTerminalBound(id, target) && target["holder"] == "user" {
+		if !managedTerminal && b.manualTerminalBound(id, target) && target["holder"] == "user" {
 			target = b.borrowManualTerminal(id, target)
 		}
 	}
@@ -841,7 +872,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 			return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("请先将空闲终端交给 Agent")}
 		}
 		actionID := ""
-		if CommandPolicy(command).Risk != "readonly" {
+		if !managedTerminal && CommandPolicy(command).Risk != "readonly" {
 			if !approved {
 				fail(403, "Command requires approval")
 			}
@@ -859,8 +890,26 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 					panic(p)
 				}
 			}()
-			entry = b.Terminals.Execute(id, tid, "agent", command, actionID)
+
+			if managedTerminal {
+				var executeErr error
+				entry, executeErr = b.executeSecurityTerminal(ctx, id, tid, command)
+				if executeErr != nil {
+					err = executeErr
+					return
+				}
+			} else {
+				entry = b.Terminals.Execute(id, tid, "agent", command, actionID)
+			}
+
 		}()
+
+		if err != nil {
+			if entry != nil {
+				return Object{"terminal_id": tid, "entry_id": entry["id"], "status": "unknown"}, err
+			}
+			return nil, err
+		}
 		if args["run_in_background"] == true {
 			return Object{"shell_id": entry["id"], "entry_id": entry["id"], "terminal_id": tid, "status": "running"}, nil
 		}
@@ -894,7 +943,11 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		if enter && !strings.HasSuffix(input, "\n") && !strings.HasSuffix(input, "\r") {
 			input += "\n"
 		}
-		b.Terminals.Input(id, tid, input, true)
+		if managedTerminal {
+			aiFailure(b.inputSecurityTerminal(ctx, id, tid, input))
+		} else {
+			b.Terminals.Input(id, tid, input, true)
+		}
 	}
 	switch name {
 	case "ssh_terminal_send", "terminal_send_input":

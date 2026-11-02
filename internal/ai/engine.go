@@ -17,6 +17,7 @@ import (
 	"github.com/Clean-Lakes/Lake/internal/platform"
 	"github.com/Clean-Lakes/Lake/internal/strategy"
 	"google.golang.org/genai"
+	"gorm.io/gorm"
 )
 
 type session struct {
@@ -34,41 +35,52 @@ type session struct {
 	sreReply            *sreReply
 }
 type Engine struct {
-	RecordPromptDiagnostics      bool // Host-only opt-in diagnostics; never an execution requirement.
-	NaturalMemory                NaturalMemoryProvider
-	MemoryCaptureAllowed         func(MemoryTurnSnapshot) bool
-	MemoryCaptureSessionAllowed  func(string) bool
-	correctionMu                 sync.Mutex
-	historicalCorrectionSessions sync.Map
-	runMu                        sync.Mutex
-	runs                         sync.WaitGroup
-	runtimeClosed                bool
-	shutdownOnce                 sync.Once
-	sreRepository                SRERepository
-	sreControls                  sync.Map
-	sreRecoveries                sync.Map
-	sreResourceLocks             sync.Map
-	agentMu                      sync.Mutex
-	agentWorkers                 map[string]*agentWorker
-	agentSlots                   chan struct{}
-	modelSlots                   chan struct{}
-	childModelSlots              chan struct{}
-	collectionSlots              chan struct{}
-	agentsClosed                 bool
-	worker                       *agentWorker
-	observationSlots             sync.Map
-	mu                           sync.Mutex
-	sessions                     map[string]*session
-	Dir                          string
-	RuntimeDir                   string
-	SecurityRuntime              *SecurityHome // Trusted host binding; shared by child engines.
-	Bridge                       Bridge
-	Emit                         func(Event)
-	ModelActivity                func() func() // Trusted host foreground priority; no provider/session mutation.
-	tunnels                      sync.Map
-	shells                       sync.Map
-	shellMu                      sync.Mutex
-	shellsClosed                 bool
+	securityOwners                 sync.Map
+	securityStart                  sync.Once
+	securityLifeMu                 sync.Mutex
+	securityCancel                 context.CancelFunc
+	securityDone                   chan struct{}
+	securityWake                   chan struct{}
+	securityCleanupResolver        OrphanAdapterResolver
+	RecordPromptDiagnostics        bool // Host-only opt-in diagnostics; never an execution requirement.
+	NaturalMemory                  NaturalMemoryProvider
+	SecurityMemoryRecoveryVerifier SecurityMemoryRecoveryVerifier // Trusted Memory-owner integration; never model or task consent.
+	MemoryCaptureAllowed           func(MemoryTurnSnapshot) bool
+	MemoryCaptureSessionAllowed    func(string) bool
+	correctionMu                   sync.Mutex
+	historicalCorrectionSessions   sync.Map
+	runMu                          sync.Mutex
+	runs                           sync.WaitGroup
+	runtimeClosed                  bool
+	shutdownOnce                   sync.Once
+	sreRepository                  SRERepository
+	sreControls                    sync.Map
+	sreRecoveries                  sync.Map
+	sreResourceLocks               sync.Map
+	agentMu                        sync.Mutex
+	agentWorkers                   map[string]*agentWorker
+	agentSlots                     chan struct{}
+	modelSlots                     chan struct{}
+	childModelSlots                chan struct{}
+	collectionSlots                chan struct{}
+	agentsClosed                   bool
+	worker                         *agentWorker
+	observationSlots               sync.Map
+	mu                             sync.Mutex
+	sessions                       map[string]*session
+	Dir                            string
+	RuntimeDir                     string
+	SecurityRuntime                *SecurityHome // Trusted host binding; shared by child engines.
+	securityEntrySource            string        // Host-only entry identity; never a model or Config field.
+	securityHostSecretMu           sync.RWMutex
+	securityHostSecrets            []string
+	Bridge                         Bridge
+	Emit                           func(Event)
+	ModelActivity                  func() func() // Trusted host foreground priority; no provider/session mutation.
+	tunnels                        sync.Map
+	shells                         sync.Map
+	shellMu                        sync.Mutex
+	shellsClosed                   bool
 
 	supplementMu      sync.RWMutex
 	supplementReader  SupplementReader
@@ -129,7 +141,10 @@ func (e *Engine) get(id string) (*session, error) {
 				orphanedCompaction = true
 			}
 		}
-		if s.state.Runtime != nil && len(s.state.View.PendingApprovals) > 0 {
+		if pending := s.state.PendingGoalQuestion; pending != nil {
+			s.state.View.Question = &pending.Request
+			s.state.View.Status = "waiting_input"
+		} else if s.state.Runtime != nil && len(s.state.View.PendingApprovals) > 0 {
 			s.state.View.Status = "waiting_approval"
 			s.state.View.Pending = s.state.View.PendingApprovals[0]
 		} else if s.state.Runtime != nil && nativeQuestionReady(s.state.View.Question) {
@@ -294,7 +309,8 @@ func (e *Engine) Configure(id string, c Config) error {
 	if c.MultiAgentMode != "" && c.MultiAgentMode != "off" && c.MultiAgentMode != "auto" {
 		return errors.New("invalid multi-agent mode")
 	}
-	c.AuthSecrets = nil
+	c = e.securityProtectedConfig(c)
+	c.AuthSecrets = e.securityHostSecretSnapshot()
 	for _, asset := range c.Assets {
 		if asset.SSH != nil && asset.SSH.CredentialRef != "" {
 			secret, err := sshSecret(asset.SSH.CredentialRef, c.CredentialDir)
@@ -348,14 +364,62 @@ func (e *Engine) Configure(id string, c Config) error {
 			}
 		}
 	}
+	managedScope := false
+	legacyDenyLocal := false
+	legacyBlockUnreferenced := false
+	if e.securityHome() != nil && e.worker == nil && e.workParent == nil {
+		e.mu.Lock()
+		source := e.securityEntrySource
+		if source == "" {
+			source = "standalone"
+			if e.Bridge != nil {
+				source = "web"
+			}
+			e.securityEntrySource = source
+		}
+		e.mu.Unlock()
+		if err := e.CaptureSecurityLegacyPolicy(context.Background(), configSecurityProject(c), id, source, c); err != nil {
+			return err
+		}
+		var err error
+		managedScope, err = e.securityPolicyConfigured(configSecurityProject(c))
+		if err != nil {
+			return err
+		}
+		if managedScope {
+			permissions, err := e.LegacySecurityPermissions(context.Background(), configSecurityProject(c), id)
+			if err != nil {
+				return err
+			}
+			legacyDenyLocal = permissions.DenyLocalExecution
+			legacyBlockUnreferenced = permissions.BlockUnreferencedAssets
+		}
+	}
 	s, err := e.get(id)
 	if err != nil {
 		return err
+	}
+	if managedScope {
+		if err = e.hydrateNativeProjection(context.Background(), s); err != nil {
+			return err
+		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cancel != nil {
 		return errors.New("session busy")
+	}
+	if managedScope {
+		db, storeID, epoch, err := e.securityTaskDB()
+		if err != nil {
+			return err
+		}
+		if err = db.Transaction(func(tx *gorm.DB) error {
+			missingReferenceRestriction := s.state.TargetScope == nil && (legacyBlockUnreferenced || c.Permissions != nil && c.Permissions.BlockUnreferencedAssets || s.state.Config.Permissions != nil && s.state.Config.Permissions.BlockUnreferencedAssets)
+			return stageLegacySecurityScope(tx, storeID, epoch, configSecurityProject(c), id, cloneTargetScope(s.state.TargetScope), LegacyScopeEvidence{DenyLocal: legacyDenyLocal || c.Permissions != nil && c.Permissions.DenyLocalExecution || s.state.Config.Permissions != nil && s.state.Config.Permissions.DenyLocalExecution, MissingReferenceRestriction: missingReferenceRestriction, PersistedReferenceIDs: append([]string(nil), s.state.ReferencedAssetIDs...)}, time.Now().UTC())
+		}); err != nil {
+			return err
+		}
 	}
 	if ModelIdentity(s.state.Config.Model) != ModelIdentity(c.Model) {
 		s.state.LastRequest = nil
@@ -399,12 +463,23 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	}
 	view.WorkGoals = goals
 	for _, g := range goals {
-		if g.OriginRootTurnID == view.RootTurnID && g.ID == s.state.WorkGoalID {
+		if g.ID == s.state.WorkGoalID && (g.OriginRootTurnID == view.RootTurnID || s.state.SecurityManaged) {
 			view.Status = g.Status
-			if workTerminal(g.Status) {
+			if s.state.SecurityManaged {
+				if closure, closureErr := e.WorkClosureView(id, g.ID); closureErr != nil {
+					return View{}, closureErr
+				} else if closure.Managed {
+					view.Status = closure.Status
+				}
+			}
+			if workTerminal(view.Status) {
 				view.TurnFinishedAt = g.UpdatedAt.UTC().Format(time.RFC3339Nano)
 			}
 		}
+	}
+	if pending := s.state.PendingGoalQuestion; pending != nil {
+		view.Question = &pending.Request
+		view.Status = "waiting_input"
 	}
 
 	view.OperationOutcomes = outcomes
@@ -567,6 +642,7 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	if err != nil {
 		return err
 	}
+	input.Images = images
 	s, err := e.get(id)
 	if err != nil {
 		return err
@@ -661,6 +737,29 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	c.ReferencedAssets = validRemembered(c, c.ReferencedAssets)
 	s.state.ReferencedAssetIDs = append([]string(nil), c.ReferencedAssets...)
 	resume := e.worker == nil && shouldCompactResumedConversation(s.state, time.Now())
+	sourceMessageID := input.StrategyMessageID
+	if e.worker != nil {
+		sourceMessageID = ""
+	} else if sourceMessageID == "" {
+		sourceMessageID = uid()
+	}
+	rootTurnID := uid()
+	execution, securityErr := e.prepareSecurityTurnLocked(ctx, s, &c, input, sourceMessageID, rootTurnID)
+	if securityErr != nil {
+		s.mu.Unlock()
+		if errors.Is(securityErr, errSecurityGoalChoicePending) {
+			return nil
+		}
+		return securityErr
+	}
+	if !execution.Managed {
+		if s.state.SelectedGoalID == "" {
+			s.state.SelectedGoalID = s.state.WorkGoalID
+		}
+		s.state.WorkGoalID = ""
+		s.state.SecurityTaskID = ""
+		s.state.SecuritySourceMessageID = sourceMessageID
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	ctx = boundedShellPolling(ctx)
 	s.cancel = cancel
@@ -671,10 +770,9 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	firstCard := len(s.state.View.Cards)
 	s.state.NaturalRecallUsed = nil
 	s.state.Config.IgnoreNaturalMemory = input.IgnoreProjectMemory
-	s.state.WorkGoalID = ""
 	s.state.SupplementIDs = nil
 	s.supplementClosed = false
-	s.state.View.RootTurnID = uid()
+	s.state.View.RootTurnID = rootTurnID
 	s.state.SREHandoff = nil
 	s.sreReply = nil
 	s.state.QuestionDecisions = nil
@@ -698,12 +796,13 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	} else {
 		s.state.History[0] = Message{Role: "system", Content: systemPrompt}
 	}
-	s.state.History = append(s.state.History, Message{HostTurnID: s.state.View.RootTurnID, Role: "user", Content: redact(message, c), Images: images})
+	s.state.History = append(s.state.History, Message{SourceMessageID: sourceMessageID, HostTurnID: s.state.View.RootTurnID, Role: "user", Content: redact(message, c), Images: images})
 	e.beginMemoryCapture(s, c, input)
 	err = e.save(s)
 	s.mu.Unlock()
 	if err != nil {
 		cancel()
+		_ = e.finishSecurityTurn(execution, true)
 		s.mu.Lock()
 		s.cancel = nil
 		s.mu.Unlock()
@@ -748,6 +847,14 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			}
 		}
 		s.state.View.Status = status
+		if current := s.state.Config.securityExecution; current != nil && current.Managed && current.Task.ID != "" && current.SessionID == id && current.Owner.RootTurnID == rootTurnID && current.Owner.ScopeID == execution.Owner.ScopeID {
+			execution = *current
+		}
+		if finishErr := e.finishSecurityTurn(execution, err != nil); finishErr != nil && err == nil {
+			err = finishErr
+			status = "failed"
+			s.state.View.Status = status
+		}
 		s.state.View.TurnFinishedAt = timestamp()
 		if err == nil && c.ConversationMode == ModePlan {
 			captureProposedPlan(s, firstCard)
@@ -1359,6 +1466,9 @@ func (e *Engine) ExtractPreset(ctx context.Context, id string) (Preset, error) {
 }
 func (e *Engine) Shutdown() {
 	e.shutdownOnce.Do(func() {
+		e.runMu.Lock()
+		e.runtimeClosed = true
+		e.runMu.Unlock()
 		if e.workCancel != nil {
 			e.workCancel()
 			<-e.workDone
@@ -1399,6 +1509,7 @@ func (e *Engine) Shutdown() {
 			<-done
 		}
 		e.runs.Wait()
+		e.stopSecurityLifecycle()
 		e.adkMu.Lock()
 		defer e.adkMu.Unlock()
 		if e.worker == nil && e.workParent == nil && e.adk != nil && e.adk.store != nil {

@@ -45,6 +45,9 @@ func (b *Server) completeDraft(w http.ResponseWriter, r *http.Request, id string
 	for i := len(recent) - 1; i >= 0; i-- {
 		history = append(history, stringOf(recent[i]["text"]))
 	}
+	if b.Engine != nil {
+		aiFailure(b.Engine.CheckSecurityRuntime())
+	}
 	suffix, err := ai.CompleteDraft(ctx, *model, draft, history)
 	current := b.Models.Active()
 	if err != nil || ctx.Err() != nil || current == nil || ai.ModelIdentity(*current) != identity {

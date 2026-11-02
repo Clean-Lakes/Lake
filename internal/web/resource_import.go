@@ -575,6 +575,9 @@ func (b *Server) previewResourceImport(ctx context.Context, project, session str
 		masked, values := maskImportText(raw)
 		secrets = values
 		var err error
+		if b.Engine != nil {
+			aiFailure(b.Engine.CheckSecurityRuntime())
+		}
 		records, err = ai.ExtractImportResources(ctx, *model, masked)
 		if err != nil {
 			fail(400, err.Error())

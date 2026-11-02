@@ -320,7 +320,11 @@ v1 任务授权支持结构化读取、受信命令模板和精确服务集合�
 
 子任务先按第 5.1 节满足能力规则，再收窄到父任务当前边界与角色能力；TaskGrant 是可选授权来源，不是必须存在的交集项。子任务不得自行续期或扩大授权。父任务拥有的 grant 只能在显式关联的子 scope 中使用，资源/能力/TTL 均不变；单次审批仍绑定该具体子调用。后台续跑、压缩、普通重启不能刷新到期时间。
 
-每个后台 workflow run 拥有独立 SecurityTask；定时授权绑定 scheduleID、configRevision、冻结 workflow version、精确资源/能力、expiry、remainingRuns、recoveryEpoch。创建/修改定时时必须由用户显式设置到期与允许次数。每次触发在一笔事务中扣减次数并创建 occurrence、SecurityTask 和对应读取 grant，其到期为 `min(scheduleExpiry, taskExpiry, now+4h)`。无有效授权则标记 `authorization_required`，不自动同意。v1 定时 grant 也只允许结构化读取；写操作不能通过项目 allow 反向扩大本次定时运行的显式能力上限。
+每个后台 workflow run 拥有独立 SecurityTask；定时授权绑定 scheduleID、configRevision、冻结 workflow version、精确资源/能力、expiry、remainingRuns、recoveryEpoch。创建/修改会派发 Agent 的工作流定时时必须由用户显式设置到期与允许次数。每次触发在一笔事务中扣减次数并创建 occurrence、SecurityTask 和对应读取 grant，其到期为 `min(scheduleExpiry, taskExpiry, now+4h)`。无有效授权则标记 `authorization_required`，不自动同意。v1 定时 grant 只允许结构化读取与固定的只读诊断模板；service_restart、任意 Shell、写入及 opaque MCP 不在定时授权范围内；写操作不能通过项目 allow 反向扩大本次定时运行的显式能力上限。
+
+定时的 `enabled` 开关沿用现有“暂停未来发生实例”语义：不撤销已经登记的当前实例，不刷新其任务/grant 的原 TTL、剩余次数或步骤。单纯开关是可用性变更，保留 configRevision/authorityRevision；周期、原始时间锚、目标、模板或授权范围变化及显式 grant 撤销才使原授权失效并 fence 关联执行。恢复备份仍无条件禁用并撤销。后台状态/关联更新只增加 statusRevision，现有响应中的 revision 仅用于用户配置/开关 CAS，不因工作状态刷新变化。
+
+本地 reminder 只追加已有会话的 system 消息，不调用模型或资源；保留现有创建审批语义，但每次发生实例和消息均用确定身份幂等写入。工作流 occurrence 则以原计划 dueAt 登记，ADK 事务中一次扣次数、创建 task/root/目标和受限 grant；Web run 用同一身份补建。重启只补建本地历史投影，不激活旧上下文或追补资源派发。
 
 ### 5.4 任务命令授权与超范围确认
 

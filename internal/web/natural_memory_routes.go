@@ -35,6 +35,21 @@ func (b *Server) naturalMemoryRoute(w http.ResponseWriter, r *http.Request, path
 		return false
 	}
 	handled = true
+	negative := r.Method == "POST" && len(rest) == 3 && rest[0] == "formed-preferences" && rest[2] == "forget"
+	if !negative && (len(rest) == 0 || rest[0] != "settings" && rest[0] != "recall-settings") {
+		project := ctx.ProjectID
+		if project == "" {
+			project = "global-memory"
+		}
+		purpose := ai.SecurityMemoryRead
+		if r.Method != "GET" {
+			purpose = ai.SecurityMemoryCapture
+		}
+		if err := b.Engine.CheckSecurityMemoryEligibility(r.Context(), project, purpose); err != nil {
+			reply(w, 409, Object{"error": err.Error(), "code": "security_memory_recovery_unqualified"})
+			return true
+		}
+	}
 	defer func() {
 		if p := recover(); p != nil {
 			status, code := 500, "natural_memory_storage_error"

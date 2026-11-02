@@ -172,7 +172,9 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	if runtimeHome.ReadOnlyView() {
 		store, e = openRecoveryStore(options.DataDir)
 	} else {
-		store, e = openStore(options.DataDir, operationalMemoryV2Ready || options.memoryV2ForTest)
+		// Resource recovery never grants consent to initialize old Memory data.
+		// A future Memory-owner protocol must qualify and initialize it explicitly.
+		store, e = openStore(options.DataDir, operationalMemoryV2Ready || options.memoryV2ForTest, storeOpenOptions{SkipMemoryInitialization: controlErr == nil && control.RecoveryID != ""})
 	}
 	if e != nil {
 		cancel()
@@ -201,7 +203,16 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		return nil, e
 	}
 	server.Engine.SecurityRuntime = runtimeHome
+	if err = server.Engine.SetSecurityEntrySource("web"); err != nil {
+		server.Close()
+		return nil, err
+	}
 	server.Engine.RuntimeDir = runtimeHome.RuntimeRoot
+	server.Engine.SetSecurityHostSecrets([]string{server.token})
+	if err = server.initializeSecurityCatalog(); err != nil {
+		server.Close()
+		return nil, err
+	}
 	server.Engine.SetSRERepository(store)
 	server.Engine.NaturalMemory = server.naturalRecallProvider
 	server.Engine.ModelActivity = server.memoryForegroundModel
@@ -244,8 +255,10 @@ func (b *Server) prepareHTTPServer() (net.Listener, *http.Server, error) {
 		if err := b.reconcilePersistedMemoryOutboxes(); err != nil {
 			return nil, nil, err
 		}
-		b.Store.RecoverMemoryJobs()
-		_ = b.Store.ReconcileProjectMemoryFiles()
+		if !b.Store.skipMemoryInitialization && b.Engine.CheckSecurityMemoryEligibility(b.Context, "global-memory", ai.SecurityMemoryBackground) == nil {
+			b.Store.RecoverMemoryJobs()
+			_ = b.Store.ReconcileProjectMemoryFiles()
+		}
 	}
 	l, e := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", b.options.Port))
 	if e != nil {
@@ -450,6 +463,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fail(401, "Authentication required")
 		}
 	}
+	if b.securityMigrationRoute(w, r) {
+		return
+	}
 	if b.securityRuntime != nil && b.securityRuntime.ReadOnlyView() {
 		aiFailure(b.securityRuntime.CheckReadOnlyView())
 		if name != "/api/bootstrap" || method != "GET" {
@@ -472,6 +488,21 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if b.pilotSettingsRoute(w, r, name, method) {
+		return
+	}
+	if b.securityBoundaryRoute(w, r, name, method) {
+		return
+	}
+	if b.securityWorkRoute(w, r) {
+		return
+	}
+	if b.securityRoute(w, r) {
+		return
+	}
+	if b.securityModeRoute(w, r) {
+		return
+	}
+	if b.securityWorkflowRoute(w, r) {
 		return
 	}
 	if b.sreRoute(w, r, name, method) {

@@ -18,17 +18,20 @@ import (
 )
 
 type adkServices struct {
-	once  sync.Once
-	store *storage.Store
-	err   error
+	once            sync.Once
+	store           *storage.Store
+	err             error
+	catalogMu       sync.RWMutex
+	catalogResolver SecurityCatalogResolver
 }
 
 func (e *Engine) adkStore() (*storage.Store, error) {
-	if e.workParent != nil {
-		return e.workParent.adkStore()
+	owner, ownerErr := securityRootEngine(e)
+	if ownerErr != nil {
+		return nil, ownerErr
 	}
-	if e.worker != nil {
-		return e.worker.parent.adkStore()
+	if owner != e {
+		return owner.adkStore()
 	}
 	e.adkMu.Lock()
 	if e.adk == nil {
@@ -48,7 +51,39 @@ func (e *Engine) adkStore() (*storage.Store, error) {
 		if services.err == nil {
 			services.err = services.store.DB.AutoMigrate(&nativeApproval{}, &nativeOperation{}, &nativeEvidence{}, &nativeArtifact{}, &nativeHistoryMigration{}, &nativeCorrection{}, &nativeWorkGoal{}, &nativeWorkOutbox{}, &nativeWorkObservation{})
 			if services.err == nil {
-				services.err = services.store.DB.Model(&nativeOperation{}).Where("status = ?", "dispatched").Update("status", "unknown").Error
+				services.err = migrateSecurityStore(services.store.DB)
+			}
+			if services.err == nil {
+				services.err = services.store.DB.AutoMigrate(workClosureModels()...)
+			}
+			if services.err == nil {
+				services.err = services.store.DB.AutoMigrate(securityPolicyModels()...)
+			}
+			if services.err == nil {
+				services.err = services.store.DB.AutoMigrate(securityRecoveryModels()...)
+			}
+			if services.err == nil {
+				services.err = services.store.DB.AutoMigrate(securityCatalogModels()...)
+			}
+			if services.err == nil {
+				services.err = services.store.DB.AutoMigrate(securityScheduleModels()...)
+			}
+			if services.err == nil {
+				services.err = services.store.DB.AutoMigrate(securityConfirmationModels()...)
+			}
+			if services.err == nil {
+				storeID, epoch := "", ""
+				if h := e.securityHome(); h != nil {
+					h.mu.Lock()
+					storeID, epoch = h.control.StoreID, h.control.RecoveryEpoch
+					h.mu.Unlock()
+				}
+				services.err = services.store.DB.Transaction(func(tx *gorm.DB) error {
+					return pauseSecurityTasksAfterRestart(tx, storeID, epoch, time.Now().UTC())
+				})
+			}
+			if services.err == nil {
+				services.err = recoverDispatchedSecurityOperations(services.store.DB)
 			}
 			if services.err == nil {
 				services.err = recoverOnlineCorrections(services.store.DB)

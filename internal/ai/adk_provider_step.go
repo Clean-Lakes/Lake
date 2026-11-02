@@ -16,6 +16,11 @@ import (
 // to request another model response or invoke a function tool.
 func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	e, s, c := d.engine, d.session, *d.config
+	var providerGuardErr error
+	ctx, _, providerGuardErr = d.securityProviderContext(ctx, nil)
+	if providerGuardErr != nil {
+		return modelResult{}, providerGuardErr
+	}
 	s.mu.Lock()
 	id := s.state.View.Session
 	s.supplementClosed = false
@@ -375,6 +380,11 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 		}
 	}()
 	e, s, c := d.engine, d.session, *d.config
+	var providerGuardErr error
+	ctx, tools, providerGuardErr = d.securityProviderContext(ctx, tools)
+	if providerGuardErr != nil {
+		return modelResult{}, providerGuardErr
+	}
 	// Legacy adopted assets are archival data, never request enrichment.
 	selection := strategy.Selection{}
 	var recallText string

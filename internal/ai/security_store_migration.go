@@ -127,7 +127,11 @@ func (h *SecurityHome) InventoryLegacyStores(ctx context.Context) (LegacyInvento
 				return err
 			}
 			if n > 0 {
-				if err := db.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(CASE WHEN status IS NULL OR status NOT IN ('succeeded','failed','not_executed') THEN 1 ELSE 0 END),0) FROM native_operations`).Scan(&row.Operations, &row.Unresolved); err != nil {
+				columns, err := securityNativeOperationColumns(ctx, db)
+				if err != nil {
+					return err
+				}
+				if err := db.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(CASE WHEN `+securityUnresolvedOperationPredicate(columns)+` THEN 1 ELSE 0 END),0) FROM native_operations`).Scan(&row.Operations, &row.Unresolved); err != nil {
 					return err
 				}
 			}

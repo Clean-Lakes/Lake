@@ -46,7 +46,7 @@ func openRecoveryStore(dir string) (*Store, error) {
 		return nil, err
 	}
 	// No normal Store constructor: it runs migrations and restart recovery.
-	s := &Store{db: db, q: db, Dir: dir, lockFile: lock, subscribers: map[chan Object]bool{}, readOnly: true, memoryV2Wanted: operationalMemoryV2Ready}
+	s := &Store{db: db, q: db, Dir: dir, lockFile: lock, subscribers: map[chan Object]bool{}, readOnly: true, memoryV2Wanted: operationalMemoryV2Ready, skipMemoryInitialization: true}
 	if err = s.checkMemoryV2Compatibility(); err != nil {
 		s.Close()
 		return nil, err

@@ -20,12 +20,16 @@ func TestADKCrashApprovalHelper(t *testing.T) {
 	var bridge Bridge
 	effect := os.Getenv("LAKE_ADK_CRASH_SCENARIO") == "effect"
 	if effect {
+		target := os.Getenv("LAKE_ADK_CRASH_EFFECT_TARGET")
+		if !filepath.IsAbs(target) {
+			t.Fatal("external effect fixture requires its original absolute target")
+		}
 		bridge = func(ctx context.Context, _ string, name string, _ map[string]any, _ bool) (any, error) {
 			if name == "policy" {
 				return map[string]any{"risk": "write", "target": "crash fixture", "fingerprint": "fixture-generation"}, nil
 			}
 			if name == "runtimeCommandExec" {
-				f, err := os.OpenFile(filepath.Join(dir, "effect.txt"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+				f, err := os.OpenFile(target, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 				if err != nil {
 					return nil, err
 				}
@@ -64,7 +68,9 @@ func TestADKCrashApprovalHelper(t *testing.T) {
 // diagnostics so a startup failure cannot masquerade as a recovery failure.
 func TestADKApprovalSurvivesProcessCrashAndExecutesOnce(t *testing.T) {
 	home := t.TempDir()
-	target := filepath.Join(home, "effect.txt")
+	// Runtime and authority files stay protected across approval recovery; the
+	// approved business target is an independent directory, as in production.
+	target := filepath.Join(t.TempDir(), "effect.txt")
 	model, close := fakeModel(t, func(n int, _ map[string]any) any {
 		if n == 1 {
 			return response("", Call{ID: "crash-write", Name: "append", Arguments: js(map[string]any{"path": target, "content": "once\n"})})
@@ -158,7 +164,7 @@ func TestADKApprovalSurvivesProcessCrashAndExecutesOnce(t *testing.T) {
 
 func TestADKCrashAfterExternalEffectNeverReplaysUnknownOperation(t *testing.T) {
 	home := t.TempDir()
-	target := filepath.Join(home, "effect.txt")
+	target := filepath.Join(t.TempDir(), "effect.txt")
 	model, close := fakeModel(t, func(n int, _ map[string]any) any {
 		if n <= 2 {
 			return response("", Call{ID: "external-effect", Name: "shell", Arguments: `{"command":"synthetic-append"}`})
@@ -173,7 +179,7 @@ func TestADKCrashAfterExternalEffectNeverReplaysUnknownOperation(t *testing.T) {
 	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=60s")
 	var childOutput bytes.Buffer
 	child.Stdout, child.Stderr = &childOutput, &childOutput
-	child.Env = append(os.Environ(), "LAKE_ADK_CRASH_HELPER=1", "LAKE_ADK_CRASH_SCENARIO=effect", "LAKE_ADK_CRASH_HOME="+home, "LAKE_ADK_CRASH_PROVIDER="+model.URL)
+	child.Env = append(os.Environ(), "LAKE_ADK_CRASH_HELPER=1", "LAKE_ADK_CRASH_SCENARIO=effect", "LAKE_ADK_CRASH_HOME="+home, "LAKE_ADK_CRASH_EFFECT_TARGET="+target, "LAKE_ADK_CRASH_PROVIDER="+model.URL)
 	if err = child.Start(); err != nil {
 		t.Fatal(err)
 	}

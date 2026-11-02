@@ -109,6 +109,20 @@ func (e *Engine) sreRoleCatalog(c Config) []Tool {
 }
 
 func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRETask, step SREPlanStep, runID, attemptID, prompt string, noTools bool) (out SRERoleResult, err error) {
+	presentationOnly, presentationErr := e.securitySREPresentationOnly(ctx, sessionID, task, step)
+	if presentationErr != nil {
+		return out, presentationErr
+	}
+	noTools = noTools || presentationOnly
+	securityExecution, securityErr := e.prepareSecuritySRERole(ctx, sessionID, task, step, attemptID, noTools)
+	if securityErr != nil {
+		return out, securityErr
+	}
+	defer func() {
+		if verifyErr := e.verifySecuritySRERole(securityExecution, step); verifyErr != nil && err == nil {
+			err = verifyErr
+		}
+	}()
 	s, err := e.get(sessionID)
 	if err != nil {
 		return out, err
@@ -165,6 +179,14 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 	recovery, recovering := ctx.Value(sreRoleRecoveryKey{}).(sreRoleRecovery)
 	if recovering {
 		w.runID = recovery.runID
+	} else if !noTools && securityExecution.Managed {
+		frozenScope, scopeErr := e.claimSecurityWorkflowChildScope(ctx, securityExecution, task.ID, attemptID)
+		if scopeErr != nil {
+			return out, scopeErr
+		}
+		if frozenScope != "" {
+			w.runID = frozenScope
+		}
 	}
 	out.RunID = w.runID
 	child, err := New(filepath.Join(e.Dir, "children", sessionID), nil, nil)
@@ -191,6 +213,9 @@ func (e *Engine) ExecuteSRERole(ctx context.Context, sessionID string, task SRET
 		child.Bridge = nil
 	}
 	cc := c
+	if securityExecution.Managed && securityExecution.Task.ID != "" {
+		cc.securityExecution = &securityExecution
+	}
 	cc.MaxSteps = pilotRoleRoundLimit(task, attemptID, w.runID, cc.MaxSteps)
 	cc.sreCoordinator = false
 	cc.Assets = assets

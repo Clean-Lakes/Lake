@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -21,7 +22,9 @@ import (
 	"time"
 
 	mysql "github.com/go-sql-driver/mysql"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgproto3"
+	pgxstdlib "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -52,6 +55,12 @@ func databaseOpen(as Asset, readonly bool, dbname string, roots ...string) (*sql
 	if err != nil {
 		return nil, "", err
 	}
+	return databaseOpenWithCredentials(as, readonly, dbname, creds)
+}
+
+func databaseOpenWithCredentials(as Asset, readonly bool, dbname string, creds map[string]string, fixedDiagnostic ...bool) (*sql.DB, string, error) {
+	var err error
+	fixed := len(fixedDiagnostic) == 1 && fixedDiagnostic[0]
 	driver := str(as.Settings["driver"])
 	dsn := ""
 	db := str(as.Settings["database"])
@@ -76,6 +85,25 @@ func databaseOpen(as Asset, readonly bool, dbname string, roots ...string) (*sql
 			sslmode = "verify-full"
 		}
 		q.Set("sslmode", sslmode)
+		if fixed {
+			if user == "" || os.Getenv("PGSERVICE") != "" {
+				return nil, "", errors.New("security: fixed PostgreSQL probe needs explicit saved account and no environment service")
+			}
+			q.Set("passfile", os.DevNull)
+			q.Set("servicefile", os.DevNull)
+			q.Set("sslcert", "")
+			q.Set("sslkey", "")
+			q.Set("sslrootcert", "")
+			q.Set("sslpassword", "")
+			q.Set("options", "")
+			q.Set("timezone", "UTC")
+			q.Set("application_name", "Lake fixed diagnostic")
+			q.Set("sslsni", "1")
+			q.Set("sslnegotiation", "")
+			q.Set("target_session_attrs", "any")
+			q.Set("connect_timeout", "5")
+		}
+
 		u.RawQuery = q.Encode()
 		dsn = u.String()
 	case "mysql":
@@ -87,9 +115,26 @@ func databaseOpen(as Asset, readonly bool, dbname string, roots ...string) (*sql
 		conf.DBName = db
 		conf.ParseTime = true
 		conf.Timeout = 10 * time.Second
+		if fixed {
+			conf.Timeout = securityProbeTimeout
+			conf.ReadTimeout = securityProbeTimeout
+			conf.WriteTimeout = securityProbeTimeout
+			conf.MaxAllowedPacket = securityProbeBytes + 1
+		}
 		conf.TLSConfig = "true"
 		if as.Settings["tls"] == false {
 			conf.TLSConfig = "false"
+		}
+		if fixed {
+			conf.DialFunc = securityBoundedSQLDialContext
+			conf.Logger = log.New(io.Discard, "", 0)
+			connector, connectorErr := mysql.NewConnector(conf)
+			if connectorErr != nil {
+				return nil, "", errors.New("security: invalid fixed MySQL configuration")
+			}
+			connection := sql.OpenDB(connector)
+			connection.SetMaxOpenConns(1)
+			return connection, driver, nil
 		}
 		dsn = conf.FormatDSN()
 	case "sqlite":
@@ -114,6 +159,21 @@ func databaseOpen(as Asset, readonly bool, dbname string, roots ...string) (*sql
 		dsn = u.String()
 	default:
 		return nil, "", errors.New("database driver must be postgres, mysql or sqlite")
+	}
+	if fixed && driver == "pgx" {
+		configuration, parseErr := pgx.ParseConfig(dsn)
+		if parseErr != nil {
+			return nil, "", errors.New("security: invalid fixed PostgreSQL configuration")
+		}
+		configuration.DialFunc = securityBoundedSQLDialContext
+		configuration.BuildFrontend = func(reader io.Reader, writer io.Writer) *pgproto3.Frontend {
+			frontend := pgproto3.NewFrontend(reader, writer)
+			frontend.SetMaxBodyLen(securityProbeBytes + 1)
+			return frontend
+		}
+		connection := pgxstdlib.OpenDB(*configuration)
+		connection.SetMaxOpenConns(1)
+		return connection, driver, nil
 	}
 	conn, err := sql.Open(driver, dsn)
 	if err != nil {
@@ -177,9 +237,18 @@ FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 A
 	return "SELECT table_name AS name,table_type AS type FROM information_schema.tables WHERE table_schema=? ORDER BY table_name", []any{schema}, nil
 }
 func (e *Engine) database(ctx context.Context, c Config, name string, a map[string]any) (any, error) {
+	c = e.securityProtectedConfig(c)
+	if err := e.requireSecurityAdapterContext(ctx, c); err != nil {
+		return nil, err
+	}
 	as, err := asset(c, str(a["asset_ref"]))
 	if err != nil {
 		return nil, err
+	}
+	if str(as.Settings["driver"]) == "sqlite" {
+		if err = safeConfiguredFile(c, str(as.Settings["path"])); err != nil {
+			return nil, err
+		}
 	}
 	readonly := name != "execute_sql" || readonlySQL(str(a["sql"]))
 	db, driver, err := databaseOpen(as, readonly, str(a["db"]), c.CredentialDir)
@@ -327,6 +396,9 @@ func respRead(r *bufio.Reader, depth int) (any, error) {
 	return nil, errors.New("unsupported Redis response")
 }
 func (e *Engine) redis(ctx context.Context, c Config, a map[string]any) (any, error) {
+	if err := e.requireSecurityAdapterContext(ctx, c); err != nil {
+		return nil, err
+	}
 	as, err := asset(c, str(a["asset_ref"]))
 	if err != nil || as.Kind != "redis" {
 		return nil, errors.New("Redis asset required")
@@ -394,6 +466,9 @@ func (e *Engine) redis(ctx context.Context, c Config, a map[string]any) (any, er
 	return send(parts)
 }
 func (e *Engine) web(ctx context.Context, name string, a map[string]any) (any, error) {
+	if p, _ := ctx.Value(securityPermitContextKey{}).(*SecurityPermit); p != nil && p.prepared != nil && p.prepared.read != nil {
+		return e.executeSecurityReadProbe(ctx, p.prepared.executionConfig, name, a)
+	}
 	endpoint := str(a["url"])
 	if name == "web_search" {
 		endpoint = "https://html.duckduckgo.com/html/?q=" + url.QueryEscape(str(a["query"]))
@@ -418,6 +493,10 @@ func (e *Engine) web(ctx context.Context, name string, a map[string]any) (any, e
 	return map[string]any{"url": endpoint, "status": response.StatusCode, "content": string(b[:min(len(b), 100000)]), "truncated": len(b) > 100000}, nil
 }
 func (e *Engine) transfer(ctx context.Context, id string, c Config, name string, a map[string]any) (any, error) {
+	c = e.securityProtectedConfig(c)
+	if err := e.requireSecurityAdapterContext(ctx, c); err != nil {
+		return nil, err
+	}
 	if name == "close_ssh_tunnel" {
 		key := id + ":" + str(a["tunnel_id"])
 		v, ok := e.tunnels.LoadAndDelete(key)
@@ -442,6 +521,9 @@ func (e *Engine) transfer(ctx context.Context, id string, c Config, name string,
 	if name == "scp_transfer" {
 		local := str(a["local_path"])
 		remote := str(a["remote_path"])
+		if err = safeConfiguredFile(c, local); err != nil {
+			return nil, err
+		}
 		if err = safeLocalFile(local); err != nil {
 			return nil, err
 		}

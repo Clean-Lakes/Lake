@@ -8,12 +8,28 @@ import (
 )
 
 func (s *Store) naturalRecallSettings(ctx StrategyContext) Object {
+	if s.skipMemoryInitialization {
+		result := Object{"revision": 0, "useEnabled": false}
+		if s.memoryColumnsPresent("naturalRecallSettings", "scopeKey", "revision") {
+			scope := s.strategyAuthorize(ctx, naturalScope(ctx))
+			if metadata := s.row("SELECT revision FROM naturalRecallSettings WHERE scopeKey=?", scope); metadata != nil {
+				result["revision"] = metadata["revision"]
+			}
+		}
+		return result
+	}
 	scope := s.strategyAuthorize(ctx, naturalScope(ctx))
 	row := s.row("SELECT * FROM naturalRecallSettings WHERE scopeKey=?", scope)
 	return Object{"revision": integer(row["revision"]), "useEnabled": integer(row["useEnabled"]) == 1}
 }
 func (s *Store) SetNaturalRecallSettings(ctx StrategyContext, key string, expected int, enabled bool) (Object, error) {
+	if s.skipMemoryInitialization && enabled {
+		return nil, ai.ErrSecurityMemoryRecoveryUnqualified
+	}
 	return strategyCall(s, true, func() Object {
+		if s.skipMemoryInitialization && (!s.memoryColumnsPresent("naturalRecallSettings", "scopeKey", "revision", "useEnabled") || !s.memoryColumnsPresent("naturalMemoryReceipts", "scopeKey", "keyHash", "requestHash", "resultJSON")) {
+			naturalFail(409, "recovery_qualification_required")
+		}
 		scope := s.strategyEnsureScope(ctx, naturalScope(ctx))
 		old := s.naturalRecallSettings(ctx)
 		replay, digest := s.naturalReceipt(scope, key, Object{"operation": "recall_settings", "expectedRevision": expected, "useEnabled": enabled})
@@ -121,6 +137,12 @@ func (b *Server) naturalRecallProvider(ctx context.Context, id string, q ai.Natu
 	session := b.Store.Session(id)
 	if session == nil {
 		return nil, errors.New("memory session unavailable")
+	}
+	if err := b.Engine.CheckSecurityMemoryEligibility(ctx, stringOf(session["projectId"]), ai.SecurityMemoryRead); err != nil {
+		return nil, err
+	}
+	if err := b.Engine.CheckSecurityMemoryEligibility(ctx, stringOf(session["projectId"]), ai.SecurityMemoryUse); err != nil {
+		return nil, err
 	}
 	out, err = b.Store.recallPreferences(StrategyContext{ProjectID: stringOf(session["projectId"])}, q)
 	if err != nil {

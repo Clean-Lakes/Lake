@@ -2,7 +2,6 @@ package ai
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"time"
@@ -60,7 +59,7 @@ func (e *Engine) workTick(ctx context.Context) error {
 			continue
 		}
 		var g WorkGoal
-		if err = json.Unmarshal([]byte(row.Data), &g); err != nil {
+		if err = decodeWorkGoal(row, &g); err != nil {
 			return err
 		}
 		now := time.Now()
@@ -145,6 +144,13 @@ func (e *Engine) workTick(ctx context.Context) error {
 				w.NextCheckAt = now.Add(watchDelay(w.Attempts, item.ID))
 				if readErr != nil {
 					w.Failures++
+					if g.closure != nil {
+						item.Status = "blocked"
+						item.Reason = redact("受控观察已暂停："+readErr.Error(), c)
+						g.Status = "blocked"
+						ready = false
+						continue
+					}
 					if w.Failures >= 5 || c.Permissions == nil || !c.Permissions.SilentCommands {
 						item.Status = "blocked"
 						item.Reason = "无法继续核对原任务；请检查连接与当前读取权限"
@@ -157,6 +163,10 @@ func (e *Engine) workTick(ctx context.Context) error {
 					w.State = state
 					if state != "running" {
 						item.Status = state
+						if g.closure != nil {
+							item.Status = "running"
+							item.Reason = "原执行已结束，业务验收尚待核对"
+						}
 						item.EvidenceIDs = []string{w.EvidenceID}
 						ready = true
 					}
@@ -181,6 +191,27 @@ func (e *Engine) workTick(ctx context.Context) error {
 		}
 		row.fence = ""
 		if ready && g.Status == "running" {
+			if g.closure != nil {
+				for _, item := range g.Items {
+					if item.Watch == nil || item.Watch.State == "running" || item.Watch.EvidenceID == "" {
+						continue
+					}
+					if _, verifyErr := e.VerifyWorkStep(g.SessionID, g.ID, item.ID, g.Revision); verifyErr != nil {
+						g.Status = "blocked"
+						g.Summary = "原执行结果已保留，业务验收未完成"
+						_ = e.writeWorkGoal(&row, &g, false)
+						ready = false
+						break
+					}
+					row, g, err = e.workRow(g.SessionID, g.ID)
+					if err != nil {
+						return err
+					}
+				}
+				if !ready {
+					continue
+				}
+			}
 			if resumeErr := e.resumeWorkGoal(ctx, row, g, c); resumeErr != nil {
 				return resumeErr
 			}

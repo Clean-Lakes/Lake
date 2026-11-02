@@ -10,14 +10,23 @@ import (
 )
 
 type shellJob struct {
-	mu                  sync.Mutex
-	id, session         string
-	cancel              context.CancelFunc
-	done                chan struct{}
-	result              any
-	err                 error
-	status              string
-	terminalID, entryID string
+	mu                             sync.Mutex
+	id, session                    string
+	cancel                         context.CancelFunc
+	done                           chan struct{}
+	result                         any
+	err                            error
+	status                         string
+	terminalID, entryID            string
+	operationID, ownerID           string
+	descriptorDigest               string
+	taskID, resourceID, goalID     string
+	ownerGeneration                int64
+	managed, cancellationRequested bool
+	remoteTransport                bool
+	effectsKnownOnStop             bool
+	config                         Config
+	completedAt                    time.Time
 }
 
 type backgroundShellSourceKey struct{}
@@ -74,6 +83,22 @@ func (e *Engine) startShell(c Config, a map[string]any, command string, source .
 	return map[string]any{"shell_id": id, "status": "running"}, nil
 }
 func (e *Engine) shellJob(ctx context.Context, id, method string, a map[string]any) (any, error) {
+	if permit, _ := ctx.Value(securityPermitContextKey{}).(*SecurityPermit); permit != nil {
+		if permit.operation.Tool != method || permit.prepared == nil {
+			return nil, errors.New("security: exact shell-result permit required")
+		}
+		if err := e.requireSecurityAdapterContext(ctx, permit.prepared.executionConfig); err != nil {
+			return nil, err
+		}
+		id = permit.operation.SessionID
+		owner, err := securityRootEngine(e)
+		if err != nil {
+			return nil, err
+		}
+		if owner != e {
+			return owner.shellJob(ctx, id, method, a)
+		}
+	}
 	v, ok := e.shells.Load(id + ":" + str(a["shell_id"]))
 	if !ok {
 		if method == "shell_output" || method == "shellOutput" || method == "wait_shell" || method == "waitShell" {
@@ -82,6 +107,30 @@ func (e *Engine) shellJob(ctx context.Context, id, method string, a map[string]a
 		return nil, errors.New("重启后仅能恢复原命令结果读取，不能通过丢失的任务句柄终止或重放命令")
 	}
 	j := v.(*shellJob)
+	if permit, _ := ctx.Value(securityPermitContextKey{}).(*SecurityPermit); permit != nil && !j.managed {
+		if method == "shell_output" || method == "wait_shell" {
+			return e.recordedManagedShellOutput(ctx, id, str(a["shell_id"]))
+		}
+		return nil, errors.New("security: an unclassified or human terminal is not an owned agent cleanup handle")
+	}
+	if j.managed {
+		permit, _ := ctx.Value(securityPermitContextKey{}).(*SecurityPermit)
+		if permit == nil {
+			return nil, errors.New("security: managed shell access requires a current registered permit")
+		}
+		if method == "kill_shell" || method == "forceKillShell" {
+			matches := false
+			for _, resource := range permit.operation.Resources {
+				matches = matches || resource.ID == j.resourceID
+			}
+			if permit.operation.TaskID != j.taskID || permit.operation.GoalID != j.goalID || !matches {
+				return nil, errors.New("security: cancellation must bind the original task and resource")
+			}
+			j.mu.Lock()
+			j.cancellationRequested = true
+			j.mu.Unlock()
+		}
+	}
 	if method == "kill_shell" || method == "forceKillShell" {
 		if j.terminalID != "" && e.Bridge != nil {
 			if _, err := e.Bridge(ctx, id, "terminal_kill_command", map[string]any{"terminal_id": j.terminalID, "entry_id": j.entryID}, true); err != nil {
@@ -137,6 +186,9 @@ func (e *Engine) shellJob(ctx context.Context, id, method string, a map[string]a
 // an alias because error messages expose it; it never grants cross-session access
 // or permits execution. A disconnected command remains unknown without an exit code.
 func (e *Engine) recordedShellOutput(ctx context.Context, session, requested string) (any, error) {
+	if permit, _ := ctx.Value(securityPermitContextKey{}).(*SecurityPermit); permit != nil {
+		return e.recordedManagedShellOutput(ctx, session, requested)
+	}
 	if e.Bridge == nil || requested == "" || len(requested) > 200 {
 		return nil, errors.New("找不到此会话的原命令记录，不会重放原命令")
 	}

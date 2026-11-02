@@ -51,7 +51,7 @@ func (s *Store) resourceIdleForChange(ref, operation string) {
 	}
 }
 func (s *Store) ArchiveNavigation(kind, id string) {
-	s.update(func() any {
+	s.resourceNavigationUpdate(kind, id, func() any {
 		switch kind {
 		case "resource":
 			resource := s.resource(id)
@@ -108,7 +108,7 @@ func (s *Store) ArchiveNavigation(kind, id string) {
 	})
 }
 func (s *Store) RestoreNavigation(kind, id string) {
-	s.update(func() any {
+	s.resourceNavigationUpdate(kind, id, func() any {
 		item := required(s.row("SELECT * FROM navigationTrash WHERE kind=? AND id=?", kind, id), "Deleted entry")
 		project := stringOf(item["projectId"])
 		payload := object(parsed(stringOf(item["payload"])))

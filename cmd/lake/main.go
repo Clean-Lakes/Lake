@@ -85,6 +85,11 @@ func run(ctx context.Context, args []string) (err error) {
 	if args[0] == "secrets" {
 		return migrate(args[1:])
 	}
+	if args[0] == "security" {
+		if handled, maintenanceErr := runSecurityMaintenance(ctx, args[1:]); handled {
+			return maintenanceErr
+		}
+	}
 	if args[0] == "security" && len(args) > 1 && args[1] == "risks" {
 		flags := flag.NewFlagSet("security risks", flag.ContinueOnError)
 		home := flags.String("home", "", "existing Lake Home; stop its backend first")
@@ -166,7 +171,7 @@ func run(ctx context.Context, args []string) (err error) {
 		if flags.NArg() != 0 || *dir != "" {
 			return errors.New("lake ai: use --home PATH; legacy --data must be explicitly migrated, not silently rebound")
 		}
-		return ai.ServeHome(ctx, *home, os.Stdin, os.Stdout)
+		return ai.ServeHome(ctx, *home, os.Stdin, os.Stdout, web.NewSecurityStdioHost)
 	}
 	if args[0] == "security" {
 		flags := flag.NewFlagSet("lake security status", flag.ContinueOnError)
@@ -316,6 +321,17 @@ const help = `Lake — Go 运维工作台（运行无需 Node.js）
   lake ai [--home PATH]                        共享 Home 身份的 Go AI stdio 接口
   lake security status [--home PATH]            查看安全恢复门禁与存储身份
   lake security risks --home PATH [--limit 100]  停服后只读核查未决操作，不修改或开闸
+  lake security checkpoint --home PATH --output DIR  停服后创建配对一致快照，不备份control和凭据
+  lake security verify-backup --path DIR         校验配对快照、存储身份和摘要
+  lake security restore --home PATH --from DIR [--import]  停服后保全现状并恢复，保持门禁关闭
+  lake security recovery-status --home PATH      查看未完成恢复与保全快照位置
+  lake security recovery-review --home PATH      查看待确认范围、项目和会话策略
+  lake security recovery-work-history --home PATH [--session ID]  查看只读原目标历史
+  lake security recovery-map|recovery-confirm-policy|recovery-confirm-legacy --home PATH --input FILE  提交绑定版本的管理动作
+  lake security recovery-activate --home PATH --input FILE  仅在完整入口覆盖和恢复确认后尝试开闸
+  lake security recovery-live-review --home PATH  查看运行实例的逐来源核实清单
+  lake security recovery-reconcile-preview --home PATH --impact ID --resource ID --operation ID  预览新只读任务的原影响核验证据
+  lake security recovery-reconcile --home PATH --input FILE  明确核实后只解除对应来源/资源的写阻断
   lake security resume-initial-migration --home PATH  停服后续跑初始迁移，保留旧操作结果
   lake secrets migrate --manifest FILE [--home PATH]  显式旧凭据迁移
 旧版 TypeScript Agent 与 Node Web 后端源码已移除，不支持其独立 grants/tasks/workflow CLI 合约。

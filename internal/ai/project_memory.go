@@ -50,6 +50,9 @@ func memoryPrompt() string {
 }
 
 func (e *Engine) requestMemoryContext(ctx context.Context, id string, c Config, budgets ...int) string {
+	if e.CheckSecurityMemoryEligibility(ctx, c.MemoryProjectID, SecurityMemoryIndex) != nil || e.CheckSecurityMemoryEligibility(ctx, c.MemoryProjectID, SecurityMemoryUse) != nil {
+		return ""
+	}
 	if !c.MemoryEnabled || c.MemoryProjectID == "" || e.Bridge == nil || e.worker != nil {
 		return ""
 	}

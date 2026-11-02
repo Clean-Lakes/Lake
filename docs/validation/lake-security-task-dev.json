@@ -1,0 +1,65 @@
+{
+  "testedCodeSHA": "b2405d9fae393ee675702fd86b01ed8f174be0d0",
+  "platform": "macOS arm64 / Apple M5",
+  "runtime": {
+    "checks": [
+      "Web/stdio second owner rejected",
+      "offline risk inspection fences owners and preserves open Home data",
+      "ordinary restart retained epoch and canonical store",
+      "future reader rejected",
+      "stdio-only unresolved history inspectable without raw data or writes",
+      "legacy unknown archived; gate closed without replay",
+      "legacy Web session loaded without migrations; writes blocked; durable files unchanged"
+    ],
+    "signed": true,
+    "isolatedHomes": true,
+    "native": true
+  },
+  "taskAndEnforcement": {
+    "passed": true,
+    "binarySHA256": "245288b35324f37e269db52d45a2116f06abffd876b1ea76a8db2556f2eb4473",
+    "model": "loopback synthetic fixture",
+    "goals": 1,
+    "originalReadOperations": 2,
+    "nativeApprovalsConsumed": 1,
+    "humanQuestions": 3,
+    "remainingUses": 8,
+    "taskState": "completed",
+    "frontendModified": false,
+    "isolatedHomeEnforced": true,
+    "native": true
+  },
+  "nativeVisualAcceptance": {
+    "date": "2026-11-02",
+    "passed": true,
+    "scope": [
+      "completed goal and conclusion visible",
+      "two original read operations completed",
+      "actual bounded read evidence visible"
+    ],
+    "screenshots": [
+      {
+        "path": "images/lake-security-task-completed.jpg",
+        "format": "JPEG",
+        "width": 3024,
+        "height": 1744,
+        "sha256": "8cff68ec260d430e1321f9cf892774259897f6e115de819320b68d914153d55b"
+      },
+      {
+        "path": "images/lake-security-task-executions.jpg",
+        "format": "JPEG",
+        "width": 3024,
+        "height": 1744,
+        "sha256": "afcc0ba58c8f4f9c4869e6f1966bfbba6723a820b20a21d5a6bffd4e07834b6b"
+      },
+      {
+        "path": "images/lake-security-read-evidence.jpg",
+        "format": "JPEG",
+        "width": 3024,
+        "height": 1744,
+        "sha256": "4e4a44e0ea1f2c6df2539b42bd6637f3d87f6f214cf4c13dcbb2184df9d4360f"
+      }
+    ],
+    "productionDataUsed": false
+  }
+}

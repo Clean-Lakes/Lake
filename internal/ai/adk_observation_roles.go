@@ -21,6 +21,13 @@ func (e *Engine) runInvestigations(ctx context.Context, s *session, c Config, sp
 	s.mu.Lock()
 	parentID, turnID, question := s.state.View.Session, s.state.View.RootTurnID, s.state.RootQuestion
 	s.mu.Unlock()
+	frozenParent, securityErr := e.CurrentSecurityExecution(ctx, parentID)
+	if securityErr != nil {
+		return nil, securityErr
+	}
+	if frozenParent.Managed && (frozenParent.StepID == "" || frozenParent.AttemptID == "") {
+		return nil, errors.New("security: delegation requires an existing canonical step and attempt")
+	}
 	if len(question) > 4000 {
 		question = question[:4000] + " [TRUNCATED]"
 	}
@@ -134,6 +141,9 @@ func (e *Engine) runInvestigations(ctx context.Context, s *session, c Config, sp
 			})
 		}
 		cc := c
+		if frozenParent.Managed {
+			cc.securityExecution = &frozenParent
+		}
 		cc.Directories = nil
 		cc.workflowMode = false
 		cc.agentRole = spec.Role

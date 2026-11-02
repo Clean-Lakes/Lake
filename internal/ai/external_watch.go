@@ -36,6 +36,13 @@ func (e *Engine) observeWork(ctx context.Context, g WorkGoal, w *ExternalWatch, 
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
+	managed, err := e.securityPolicyConfigured(configSecurityProject(c))
+	if err != nil {
+		return "", err
+	}
+	if managed || g.closure != nil {
+		return e.observeSecurityWork(ctx, g, w, c)
+	}
 	switch w.Adapter {
 	case "release-v1":
 		if c.Permissions == nil || !c.Permissions.SilentCommands || c.Permissions.BlockUnreferencedAssets {

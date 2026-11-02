@@ -57,7 +57,10 @@ def main():
             lake.stop()
         protocol = subprocess.run([str(binary), 'ai', '--home', str(home)], input='', text=True,
                                   capture_output=True, env=env, timeout=15)
-        require(protocol.returncode == 0, 'stdio could not reuse the released canonical runtime')
+        diagnostic = protocol.stderr.strip().replace(lake.runtime['token'], '[REDACTED]')
+        require(protocol.returncode == 0,
+                f'stdio could not reuse the released canonical runtime '
+                f'(exit {protocol.returncode}): {diagnostic[:2000]}')
         require(not (home / 'web-agent/ai/adk/sessions.sqlite').exists(), 'stdio created a second store')
         unchanged = json.loads((home / 'security/control.json').read_text())
         require(unchanged['recoveryEpoch'] == control['recoveryEpoch'], 'normal restart changed epoch')

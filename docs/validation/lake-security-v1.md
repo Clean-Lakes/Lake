@@ -106,3 +106,8 @@ lake security resume-initial-migration --home PATH
 
 
 发布CI首轮另发现：Linux测试使用的kernel.ostype精确查询缺只读登记；compaction重启测试未先释放旧Engine/SQLite连接；macOS完整web race包超过默认10分钟累计时限（超时时最后一例仅运行3秒）。本轮补精确只读键并保留赋值/-w拒绝，重启fixture先Shutdown旧owner，完整race时限20分钟、job30分钟且不移除任何测试。相关Security/compaction/sysctl专项race连续3轮通过（AI 27.415秒、Web 5.731秒）；签名后端隔离回归通过。最终生产CI须在修复合入后重新通过。
+
+
+## 2026-11-02 任务闭环后续候选
+
+后续实现、独立审查修复、106项入口保护、任务授权/验收、配对恢复及签名Dev证据见[任务闭环实施记录](lake-security-task-closure.md)。该记录使用独立代码SHA，不将本文历史批次测试当作本轮通过。前端/shared契约未修改。初次原生截图遇Mac锁屏；2026-11-02用户解锁后已补齐窗口检查和三张截图，TASK-049/050收口，计划50/50完成。

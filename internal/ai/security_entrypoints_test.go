@@ -7,7 +7,7 @@ import (
 )
 
 // This inventory is a coverage fixture, not a runtime permission registry.
-// The actual capability evaluator is delivered in phase 3.
+// Runtime coverage is separately attested by SecurityEnforcementStatus and exercised by adapter/lifecycle tests.
 func TestSecurityEntrypointInventory(t *testing.T) {
 	var manifest struct {
 		Tools []struct {
