@@ -66,6 +66,7 @@ def main():
     parser.add_argument('--exercise-missing-target', action='store_true', help='omit asset_ref once per Worker and verify target repair before the actual read')
     parser.add_argument('--exercise-missing-attempt', action='store_true', help='try a read before starting an item and verify the original attempt protocol repairs it')
     parser.add_argument('--inherit-project-access', action='store_true', help='use the existing project catalog and permissions without writing a separate project policy')
+    parser.add_argument('--verify-reply-authors', action='store_true', help='verify distinct specialist identities on delivered Pilot reports')
     args = parser.parse_args()
     binary = args.binary.resolve(strict=True)
     if os.uname().sysname == 'Darwin':
@@ -103,6 +104,8 @@ def main():
                         event = query("SELECT id FROM superagent_events WHERE source_kind='user' ORDER BY received_at LIMIT 1")[0][0]
                         label = 'A' if route_number == 1 else 'B'
                         tool, payload = 'route_work', {'event_id': event, 'part_key': 'marker-' + label, 'action': 'create', 'title': 'Read marker ' + label, 'role_key': 'reader', 'quote': 'Read marker ' + label, 'reason': 'Independent actual user deliverable'}
+                        if args.verify_reply_authors:
+                            payload['role_key'] = 'Go 审查专员' if label == 'A' else '前端执行专员'
                         if args.exercise_missing_role and n == 1:
                             del payload['role_key']
                     else:
@@ -227,6 +230,13 @@ def main():
                 require(query("SELECT count(*) FROM native_operations WHERE tool='read' AND status='succeeded'")[0][0] == 2, 'read duplicated or missing')
                 require(query("SELECT count(*) FROM native_operations WHERE tool IN ('write','edit','append','shell')")[0][0] == 0, 'readonly fixture performed an unsolicited mutation')
                 wait_for(lambda: query("SELECT count(*) FROM superagent_outbox WHERE task_id<>'' AND state='delivered'")[0][0] >= 2)
+                if args.verify_reply_authors:
+                    messages = lake.api('/api/sessions/' + pilot + '/snapshot')['messages']
+                    authors = [message['author'] for message in messages if message.get('author')]
+                    require({author['taskId'] for author in authors} == {worker['task']['taskId'] for worker in workers}, 'report author lost its original task')
+                    require({author['sessionId'] for author in authors} == {worker['sessionId'] for worker in workers}, 'report author lost its original specialist')
+                    require({author['name'] for author in authors} == {'Go 审查专员', '前端执行专员'}, 'distinct specialist names were replaced by a channel label')
+                    report['replyAuthorVerification'] = {'passed': True, 'names': sorted({author['name'] for author in authors}), 'tasks': 2, 'workerSessions': 2}
                 identity = lake.api('/api/superagent/lifecycle')
                 require(Path(identity['home']).resolve() == home.resolve() and identity['pid'] == lake.runtime['pid'], 'wrong Home owner')
                 report.update(runtimeAcceptance=True, tasks=2, distinctWorkerSessions=2, actualReads=2, humanQuestions=len(answered), pilotReportsDelivered=True, currentKernelPIDVerified=True, memoryTaskKnowledge='unavailable_by_design', externalBuildReadProfile='unavailable', windows='not_run', sleepAndPowerLoss='not_run')
