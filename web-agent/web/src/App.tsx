@@ -97,6 +97,7 @@ import { conversationActive, sessionConnection, type StreamState } from "./conne
 import { conversationCanScroll, pausesConversationFollow, followsConversationScroll, FollowScroll, observeConversationGrowth } from "./followScroll";
 import { type CommandPolicy, dangerConfirmation } from "../../shared/command-policy";
 import "./styles.css";
+import "./conversationBubbles.css";
 import "./memorySettings.css";
 import './fileOperationApproval.css';
 import './operationApproval.css';

@@ -1,0 +1,32 @@
+/* Message colors are independent of selection and other workbench surfaces. */
+.ai-role-user:not(.has-message-images),
+.ai-role-user.has-message-images > .user-message-text,
+.message-user .timeline-content {
+  background: var(--user-message-background);
+  color: var(--user-message-foreground);
+}
+.message-user .message-text,
+.ai-role-user:not(.has-message-images) .message-attachments a {
+  color: var(--user-message-foreground);
+}
+
+/* One bubble per reply, including its specialist identity when present. */
+.ai-chat-message.ai-role-assistant,
+.ai-card:is(.ai-text, .ai-message),
+.ai-response:has(> .ai-card:is(.ai-text, .ai-message)),
+.sre-role-message .sre-role-body,
+.message-assistant .timeline-content {
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  padding: 14px 18px;
+  border-radius: var(--radius-window);
+  corner-shape: var(--corner-window);
+  background: var(--assistant-message-background);
+}
+.ai-response > .ai-card:is(.ai-text, .ai-message) {
+  width: auto;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
