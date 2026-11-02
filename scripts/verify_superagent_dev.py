@@ -178,7 +178,7 @@ def main():
                 resource = next(resource['id'] for resource in snapshot['resources'] if resource['kind'] == 'local')
                 state['alias'] = 'a_' + hashlib.sha256(resource.encode()).hexdigest()[:16]
                 lake.api('/api/settings/model', 'PUT', {'url': f'http://127.0.0.1:{provider.server_port}', 'name': 'isolated-superagent-fixture', 'protocol': 'openai'})
-                lake.api('/api/sessions/' + pilot + '/ai/configure', 'POST', {'contextBudgetMode': 'manual', 'contextWindow': 64000, 'maxSteps': 20})
+                lake.api('/api/sessions/' + pilot + '/ai/configure', 'POST', {'contextBudgetMode': 'manual', 'contextWindow': 64000, 'maxOutput': 1024, 'maxSteps': 20})
                 previous = lake.api('/api/projects/' + project + '/security/policy')
                 revision = previous.get('policy', {}).get('Revision', 0)
                 lake.api('/api/projects/' + project + '/security/policy', 'PUT', {'actionId': 'isolated-read-policy', 'expectedRevision': revision, 'policy': {'schemaVersion': 1, 'mode': 'restricted', 'resourceIDs': [resource], 'rules': [{'capability': 'file.read', 'effect': 'allow', 'limits': {'FileRoots': [str(readable)]}}, {'capability': 'local.execute', 'effect': 'allow'}]}})
@@ -205,7 +205,8 @@ def main():
                         break
                     time.sleep(0.1)
                 else:
-                    raise AssertionError('Super-agent fixture did not close both canonical goals: ' + json.dumps({'workers': workers, 'modelCalls': state['calls']}, ensure_ascii=False))
+                    errors = {worker['sessionId']: [card.get('content', '') for card in lake.snapshot(worker['sessionId']).get('cards', []) if card.get('type') == 'error'] for worker in workers}
+                    raise AssertionError('Super-agent fixture did not close both canonical goals: ' + json.dumps({'workers': workers, 'modelCalls': state['calls'], 'errors': errors}, ensure_ascii=False))
                 require(len({worker['task']['taskId'] for worker in workers}) == 2 and len({worker['sessionId'] for worker in workers}) == 2, 'task context was shared')
                 require(query("SELECT count(*) FROM native_operations WHERE tool='read' AND status='succeeded'")[0][0] == 2, 'read duplicated or missing')
                 require(query("SELECT count(*) FROM native_operations WHERE tool IN ('write','edit','append','shell')")[0][0] == 0, 'readonly fixture performed an unsolicited mutation')
