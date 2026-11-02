@@ -88,7 +88,8 @@ import { reusableResourceTerminal, onlineTerminalOptions, panelTerminalSessions,
 import { ResourceTree } from "./ResourceTree";
 import { WorkspaceSearch } from "./WorkspaceSearch";
 import { ResourceTerminalMenu } from "./ResourceTerminalMenu";
-import { initialSidebarProject } from "./sidebarState";
+import { initialWorkspaceSelection } from "./sidebarState";
+import {savedWorkspaceProject,saveWorkspaceProject} from './workspaceProjectPreference';
 import {SessionNavigation} from "./SessionNavigation";
 import {sortSessionNavigation} from "./sessionNavigationModel";
 import { CompositionGuard, isSendKey, parseSendShortcut, sendShortcutStorageKey, type SendShortcut } from "./composerKeyboard";
@@ -402,14 +403,9 @@ function AppContent() {
       setAuthRequired(false);
       setAuthInput("");
       setCatalog(data);
-      const initialProject = initialSidebarProject(data, initialRoute());
-      setSidebarProjectId(previous => data.projects.some(project => project.id === previous) ? previous : initialProject);
-      setRoute(previous => {
-        const sessionId = previous.sessionId && data.sessions.some(session => session.id === previous.sessionId)
-          ? previous.sessionId : [...data.sessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id ?? null;
-        const resourceId=previous.resourceId && data.resources.some(resource => resource.id === previous.resourceId) ? previous.resourceId : null;
-        return {sessionId,resourceId,...(previous.view==='plans'&&sessionId===previous.sessionId&&!resourceId?{view:'plans' as const}:{})};
-      });
+      const selection = initialWorkspaceSelection(data, initialRoute(), savedWorkspaceProject());
+      setSidebarProjectId(selection.projectId);
+      setRoute(selection.route);
     } catch (error) {
       setBootstrap(null);
       setCatalog(null);
@@ -746,6 +742,8 @@ function AppContent() {
   useEffect(() => {
     if (selectedProjectId) setSidebarProjectId(selectedProjectId);
   }, [selectedProjectId]);
+  const savedProjectId = catalog?.projects.some(project => project.id === sidebarProjectId) ? sidebarProjectId : null;
+  useEffect(() => { if (savedProjectId) saveWorkspaceProject(savedProjectId); }, [savedProjectId]);
   const resourceMap = new Map((catalog?.resources ?? []).map(resource => [resource.id, resource]));
   const sshParentName = sshParent ? (catalog?.resourceTree ?? []).find(node => node.id === sshParent)?.name ?? "" : "";
   const visibleSessionError = streamSessionId === sessionId ? sessionError : "";

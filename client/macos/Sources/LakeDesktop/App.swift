@@ -64,6 +64,10 @@ import LakeDesktopCore
         if profile.isDevelopment { NSApp.dockTile.badgeLabel = "DEV" }
         installMenu()
         let config = WKWebViewConfiguration()
+        if let projectID = UserDefaults.standard.string(forKey: "LakeWorkspaceProjectId"),
+           let data = try? JSONEncoder().encode(projectID), let json = String(data: data, encoding: .utf8) {
+            config.userContentController.addUserScript(WKUserScript(source: "window.lakeWorkspaceProjectId = \(json);", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
         if let appearance = UserDefaults.standard.string(forKey: "LakeAppearance"),
            ["light", "dark", "system"].contains(appearance) {
             config.userContentController.addUserScript(WKUserScript(source: "window.lakeAppearance = '\(appearance)';", injectionTime: .atDocumentStart, forMainFrameOnly: true))
@@ -284,6 +288,14 @@ import LakeDesktopCore
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == "lakeChrome", message.frameInfo.isMainFrame,
               sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any] else { return }
+        if body["workspaceProjectId"] != nil {
+            if message.webView === webView, let projectID = body["workspaceProjectId"] as? String,
+               !projectID.isEmpty, projectID.utf8.count <= 256,
+               projectID.rangeOfCharacter(from: .whitespacesAndNewlines.union(.controlCharacters)) == nil {
+                UserDefaults.standard.set(projectID, forKey: "LakeWorkspaceProjectId")
+            }
+            return
+        }
         if let theme = body["theme"] as? String, theme == "light" || theme == "dark" {
             let dark = theme == "dark"
             // WebKit's prefers-color-scheme reflects this window's appearance. Pinning
