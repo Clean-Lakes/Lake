@@ -98,3 +98,37 @@ func TestSuperHumanRecoveryUsesOriginalRunnerAndActualAnswer(t *testing.T) {
 		t.Fatal("answered question accepted twice")
 	}
 }
+
+func TestSuperHumanReceiptBatchesOnlyExactApprovalRuntime(t *testing.T) {
+	e, b := superFixture(t)
+	ctx := context.Background()
+	task := superCreateFixture(t, e, b, "approval-source", "Inspect orders", "orders", "Inspect orders")
+	s, _ := e.get(task.SessionID)
+	s.mu.Lock()
+	s.state.View.RootTurnID = "actual-root"
+	s.state.Runtime = &RuntimeCheckpoint{SessionID: "actual-sdk"}
+	for _, id := range []string{"approval-a", "approval-b"} {
+		if handled, err := e.queueSuperHumanRecoveryLocked(s, nil, nil, id); !handled || err != nil {
+			s.mu.Unlock()
+			t.Fatal(handled, err)
+		}
+	}
+	s.state.Runtime.SessionID = "foreign-sdk"
+	if _, err := e.queueSuperHumanRecoveryLocked(s, nil, nil, "approval-c"); err == nil {
+		s.mu.Unlock()
+		t.Fatal("foreign approval runtime replaced receipt")
+	}
+	s.mu.Unlock()
+	db, _ := e.superStore()
+	var assignment superAssignmentRow
+	if err := db.First(&assignment, "worker_id = ?", task.WorkerID).Error; err != nil || assignment.InvocationKind != "human_recovery" {
+		t.Fatal(assignment, err)
+	}
+	var cp superHumanCheckpoint
+	if err := json.Unmarshal([]byte(assignment.Checkpoint), &cp); err != nil || cp.RuntimeID != "actual-sdk" || cp.ApprovalID != "approval-a" {
+		t.Fatal(cp, err)
+	}
+	if _, err := e.AcquireWorkerSlot(ctx, b.ProjectID, task.WorkerID); err == nil {
+		t.Fatal("unrouted source became runnable")
+	}
+}

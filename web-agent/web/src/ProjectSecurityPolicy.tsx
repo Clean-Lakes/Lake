@@ -17,7 +17,7 @@ export function ProjectSecurityPolicy({projectId,resources}:{projectId:string;re
  const save=async()=>{
   setBusy(true);setError('');
   try{
-   const rules=policy?.Rules??capabilities.map(Capability=>({Capability,Effect:memory&&Capability.startsWith('memory.')?'allow' as const:'ask' as const,Confirmation:'single',Grantable:false}));
+	   const rules=policy?(policy.Rules??[]):capabilities.map(Capability=>({Capability,Effect:memory&&Capability.startsWith('memory.')?'allow' as const:'ask' as const,Confirmation:'single',Grantable:false}));
    const next=await api.saveProjectSecurityPolicy(projectId,{actionId:crypto.randomUUID(),expectedRevision:policy?.Revision??0,policy:{schemaVersion:1,mode:policy?.Mode??'compatible',resourceIDs:selected,denyLocal,rules}});
    setPolicy(next);setSelected(next.ResourceIDs??[]);setDenyLocal(next.DenyLocal);setOpen(false);
   }catch(reason){setError(readableError(reason));}finally{setBusy(false);}
@@ -30,7 +30,7 @@ export function ProjectSecurityPolicy({projectId,resources}:{projectId:string;re
     <label><input type="checkbox" checked={denyLocal} onChange={event=>setDenyLocal(event.target.checked)}/><span>禁止执行本机命令</span></label>
     {!policy&&<label><input type="checkbox" checked={memory} onChange={event=>setMemory(event.target.checked)}/><span>允许 Memory 按已确认的积累与使用设置工作</span></label>}
    </fieldset>
-   <details><summary>查看操作规则</summary><pre>{JSON.stringify(policy?.Rules??capabilities.map(Capability=>({Capability,Effect:memory&&Capability.startsWith('memory.')?'allow':'ask',Confirmation:'single'})),null,2)}</pre></details>
+   <details><summary>查看操作规则</summary><pre>{JSON.stringify(policy?(policy.Rules??[]):capabilities.map(Capability=>({Capability,Effect:memory&&Capability.startsWith('memory.')?'allow':'ask',Confirmation:'single'})),null,2)}</pre></details>
    <div className="pilot-policy-actions"><button className="button secondary" type="button" onClick={()=>setOpen(false)} disabled={busy}>取消</button><button className="button" type="button" onClick={()=>void save()} disabled={!loaded||busy}>{busy?'保存中…':policy?'保存范围':'确认并启用'}</button></div>
   </section>}
   {error&&<p className="pilot-workspace-error" role="alert">{error}</p>}

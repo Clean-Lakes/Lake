@@ -116,3 +116,41 @@ func TestSuperFirstPlanBindsRealResourcesWithoutReplacingGoal(t *testing.T) {
 		t.Fatal("resource proposal granted execution", tasks, err)
 	}
 }
+
+func TestSuperWorkerSourceRevocationStopsNextProviderOrTool(t *testing.T) {
+	e, b := superFixture(t)
+	ctx := context.Background()
+	if _, err := e.ActivateSuperProject(ctx, b.ProjectID, "pilot", nil); err != nil {
+		t.Fatal(err)
+	}
+	task := superCreateFixture(t, e, b, "source-message", "Inspect orders", "orders", "Inspect orders")
+	db, _ := e.superStore()
+	var worker superWorkerRow
+	if err := db.First(&worker, "id = ?", task.WorkerID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := e.finishSuperRouting(ctx, b, worker.SourceEventID); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.ConfigureTaskWorker(ctx, b.ProjectID, task.WorkerID, Config{SecurityProjectID: b.ProjectID, Model: Model{URL: "http://127.0.0.1:1", Name: "fixture"}}); err != nil {
+		t.Fatal(err)
+	}
+	c, err := e.ConfigForSession(task.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := e.AcquireWorkerSlot(ctx, b.ProjectID, task.WorkerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := context.WithValue(ctx, superAssignmentContextKey{}, token)
+	if err = e.checkSuperModelDomain(run, task.SessionID, c); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Model(&superSourceRow{}).Where("id = ?", b.SourceID).Update("enabled", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = e.checkSuperModelDomain(run, task.SessionID, c); err == nil {
+		t.Fatal("revoked source still eligible for provider/tool dispatch")
+	}
+}

@@ -48,11 +48,17 @@ func (e *Engine) checkSuperModelDomain(ctx context.Context, sessionID string, c 
 		return ErrSuperLegacyReadOnly
 	}
 	if worker.SourceEventID != "" {
+		if _, err := superSourceForEvent(store.DB.WithContext(ctx), worker.SourceEventID, project); err != nil {
+			return err
+		}
 		var sources []superEventRow
 		if err := store.DB.WithContext(ctx).Where("project_id = ? AND source_kind = ? AND (id = ? OR id IN (?))", project, "user", worker.SourceEventID, store.DB.Model(&superInboxRow{}).Select("event_id").Where("task_id = ?", worker.TaskID)).Find(&sources).Error; err != nil {
 			return err
 		}
 		for _, source := range sources {
+			if _, err := superSourceForEvent(store.DB.WithContext(ctx), source.ID, project); err != nil {
+				return err
+			}
 			if _, err := e.resolveSuperInput(ctx, source.event()); err != nil {
 				return err
 			}

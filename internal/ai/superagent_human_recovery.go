@@ -63,7 +63,14 @@ func (e *Engine) queueSuperHumanRecoveryLocked(s *session, req *QuestionRequest,
 			return err
 		}
 		if a.Checkpoint != "" && a.Checkpoint != raw {
-			return errSuperConflict
+			var prior superHumanCheckpoint
+			if json.Unmarshal([]byte(a.Checkpoint), &prior) != nil || cp.Question != nil || prior.Question != nil || cp.ApprovalID == "" || prior.ApprovalID == "" || cp.RuntimeID != prior.RuntimeID || cp.RootTurnID != prior.RootTurnID {
+				return errSuperConflict
+			}
+			// Other approvals in this exact batch have their own durable native
+			// decisions. Keep one resume receipt rather than reject an accepted
+			// second decision or start another invocation.
+			raw = a.Checkpoint
 		}
 		updates := map[string]any{"checkpoint": raw}
 		switch a.State {
