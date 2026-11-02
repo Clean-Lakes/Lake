@@ -55,3 +55,9 @@
 .super-worker-source-copy strong { font-weight:var(--font-weight-ui); }
 .super-worker-source-copy>span { color:var(--text-muted); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .super-worker-source p { margin:10px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+
+.response-author { display:inline-flex; align-items:center; gap:8px; min-width:0; max-width:100%; padding:3px 5px; margin:-3px -5px; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); background:transparent; color:var(--foreground); font:inherit; text-align:left; cursor:pointer; }
+.response-author>strong { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.response-author>.lucide { flex:none; color:var(--text-muted); }
+.response-author:hover { background:var(--surface-hover); }
+.response-author:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }

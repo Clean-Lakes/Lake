@@ -95,5 +95,23 @@ func (b *Server) sessionSnapshot(id string) Object {
 		aiFailure(err)
 		snap["superagent"] = detail
 	}
+	if b.Engine != nil && object(snap["session"])["workspaceRole"] == "router" {
+		messages := objects(snap["messages"])
+		ids := []string{}
+		for _, message := range messages {
+			if message["role"] == "assistant" {
+				ids = append(ids, stringOf(message["id"]))
+			}
+		}
+		authors, err := b.Engine.SuperReplyAuthors(b.Context, stringOf(object(snap["session"])["projectId"]), id, ids)
+		aiFailure(err)
+		for _, message := range messages {
+			if message["role"] == "assistant" {
+				if author, ok := authors[stringOf(message["id"])]; ok {
+					message["author"] = author
+				}
+			}
+		}
+	}
 	return snap
 }
