@@ -62,13 +62,30 @@ func superRouteResult(tx *gorm.DB, r superDecisionRow) (SuperRouteResult, error)
 // It has no model/tool loop and never issues a resource permit.
 func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, in SuperDecision) (SuperRouteResult, error) {
 	var out SuperRouteResult
-	if !b.valid() || in.EventID == "" || in.PartKey == "" || len(in.PartKey) > 128 || in.Reason == "" || len(in.Reason) > 2048 || len(in.Title) > 1000 || len(in.RoleKey) > 128 {
+	if !b.valid() {
 		return out, errSuperBinding
 	}
+	if in.EventID == "" || in.PartKey == "" || len(in.PartKey) > 128 || in.Reason == "" || len(in.Reason) > 2048 || len(in.Title) > 1000 || len(in.RoleKey) > 128 {
+		return out, errors.New("superagent: invalid route_work arguments: event_id, part_key and reason are required; maximum lengths are part_key=128, reason=2048, title=1000, role_key=128 bytes")
+	}
 	switch in.Action {
-	case "create", "followup", "context_only", "stop", "ask", "respond":
+	case "create":
+		if in.TaskID != "" {
+			return out, errors.New("superagent: route_work create must omit task_id; the host assigns the new task ID")
+		}
+		if strings.TrimSpace(in.Title) == "" || strings.TrimSpace(in.RoleKey) == "" {
+			return out, errors.New("superagent: route_work create requires both title and role_key; supply the specialist role_key and retry the same event_id and part_key")
+		}
+	case "followup", "context_only", "stop":
+		if in.TaskID == "" {
+			return out, errors.New("superagent: route_work followup, context_only and stop require an existing task_id from this project")
+		}
+	case "ask", "respond":
+		if in.TaskID != "" {
+			return out, errors.New("superagent: route_work ask and respond must omit task_id")
+		}
 	default:
-		return out, errSuperBinding
+		return out, errors.New("superagent: route_work action must be create, followup, context_only, stop, ask or respond")
 	}
 	if err := e.checkSuperPayload(js(in)); err != nil {
 		return out, err
@@ -110,7 +127,7 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 			return errSuperBinding
 		}
 		if (in.Action == "create" || in.Action == "followup" || in.Action == "stop") && (strings.TrimSpace(in.Quote) == "" || !strings.Contains(event.Payload, in.Quote)) {
-			return errSuperBinding
+			return errors.New("superagent: route_work create, followup and stop require quote to be an exact non-empty substring of the original user event; copy it without paraphrasing")
 		}
 		var priorParts []superDecisionRow
 		if err := tx.Where("event_id = ?", event.ID).Find(&priorParts).Error; err != nil {
@@ -135,9 +152,6 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 		row := superDecisionRow{ID: uid(), EventID: event.ID, PartKey: in.PartKey, Revision: 1, TaskID: in.TaskID, Action: in.Action, Reason: in.Reason, RequestHash: requestHash, Quote: in.Quote, Title: in.Title, RoleKey: in.RoleKey, At: time.Now().UTC()}
 		switch in.Action {
 		case "create":
-			if in.TaskID != "" || strings.TrimSpace(in.Title) == "" || strings.TrimSpace(in.RoleKey) == "" {
-				return errSuperBinding
-			}
 			key := hash(js([]any{event.ID, in.PartKey}))[:32]
 			sessionID, taskID, workerID := "sw_"+key, "st_"+key, "worker_"+key
 			root := "super_" + key
@@ -188,9 +202,6 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 				return err
 			}
 		case "ask", "respond":
-			if in.TaskID != "" {
-				return errSuperBinding
-			}
 		}
 		if err := tx.Create(&row).Error; err != nil {
 			return err

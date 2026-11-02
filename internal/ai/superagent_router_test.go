@@ -125,6 +125,60 @@ func TestSuperRouterRunsOnlyOfficialADKWithRestrictedCatalog(t *testing.T) {
 	}
 }
 
+func TestSuperRouterRepairsMissingCreateRoleWithoutLosingParts(t *testing.T) {
+	e, b := superFixture(t)
+	ctx := context.Background()
+	quotes := []string{"读取 go.mod，检查 Go 版本和主要依赖。", "读取 web-agent/package.json，检查 Node、pnpm 版本及前端依赖。"}
+	event, _, err := e.ReceiveSuperEvent(ctx, b, SuperEventInput{SourceEventID: "two-specialists", Kind: "message", Payload: "请创建两个独立专员：\n1. " + quotes[0] + "\n2. " + quotes[1]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var modelCalls int
+	m, closeModel := fakeModel(t, func(n int, input map[string]any) any {
+		modelCalls++
+		if n == 2 {
+			feedback := js(input["messages"])
+			if !strings.Contains(feedback, "requires both title and role_key") || strings.Contains(feedback, "invalid host binding") {
+				t.Error("missing role was not reported as repairable model arguments", feedback)
+			}
+			queued, err := e.SuperQueuedWorkers(ctx, b.ProjectID)
+			if err != nil || len(queued) != 0 {
+				t.Error("invalid proposal created a partial Worker", queued, err)
+			}
+		}
+		if n <= 2 {
+			calls := []Call{}
+			for i, part := range []string{"go_dependencies", "frontend_dependencies"} {
+				arguments := map[string]any{"event_id": event.ID, "part_key": part, "action": "create", "title": part, "quote": quotes[i], "reason": "independent user requirement"}
+				if n == 2 {
+					arguments["role_key"] = part + " reviewer"
+				}
+				calls = append(calls, Call{ID: part + string(rune('0'+n)), Name: "route_work", Arguments: js(arguments)})
+			}
+			return response("", calls...)
+		}
+		return response("已分别安排两个专员，等待确认任务计划。")
+	})
+	defer closeModel()
+	if err = e.Configure("pilot", Config{Model: m, SecurityProjectID: b.ProjectID, Profile: "core"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = e.RunPilotRouter(ctx, "pilot", b); err != nil {
+		t.Fatal(err)
+	}
+	queued, err := e.SuperQueuedWorkers(ctx, b.ProjectID)
+	if err != nil || len(queued) != 2 || modelCalls != 3 || queued[0].SessionID == queued[1].SessionID {
+		t.Fatal("corrected original parts did not produce two isolated Workers", queued, modelCalls, err)
+	}
+	db, _ := e.superStore()
+	for _, table := range []string{"native_operations", "security_tasks"} {
+		var count int64
+		if err = db.Table(table).Count(&count).Error; err != nil || count != 0 {
+			t.Fatal("argument correction dispatched I/O or granted authority", table, count, err)
+		}
+	}
+}
+
 func TestSuperRouterObjectScopeAndUTF8Paging(t *testing.T) {
 	e, b := superFixture(t)
 	ctx := context.Background()

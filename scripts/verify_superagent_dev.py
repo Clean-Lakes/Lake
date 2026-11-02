@@ -62,6 +62,7 @@ def main():
     parser.add_argument('--inspection-finished-file', type=Path, help='owned test marker that ends the optional visual inspection early')
     parser.add_argument('--ui-detached-file', type=Path, help='owned test marker set after quitting the native UI; verify surviving kernel and reopen the same isolated Home')
     parser.add_argument('--go-results', type=Path, help='optional complete go test -json log')
+    parser.add_argument('--exercise-missing-role', action='store_true', help='omit role_key once, verify actionable feedback and repair the same original event part')
     args = parser.parse_args()
     binary = args.binary.resolve(strict=True)
     if os.uname().sysname == 'Darwin':
@@ -90,10 +91,17 @@ def main():
                 if 'route_work' in names:
                     state['router'] += 1
                     n = state['router']
-                    if n <= 2:
+                    if args.exercise_missing_role and n == 2:
+                        require('requires both title and role_key' in json.dumps(request.get('messages', [])), 'missing role did not produce actionable tool feedback')
+                        require(query('SELECT count(*) FROM superagent_workers')[0][0] == 0, 'invalid routing arguments created a Worker')
+                        state['routingArgumentRepairVerified'] = True
+                    route_number = n - 1 if args.exercise_missing_role and n >= 2 else n
+                    if route_number <= 2:
                         event = query("SELECT id FROM superagent_events WHERE source_kind='user' ORDER BY received_at LIMIT 1")[0][0]
-                        label = 'A' if n == 1 else 'B'
+                        label = 'A' if route_number == 1 else 'B'
                         tool, payload = 'route_work', {'event_id': event, 'part_key': 'marker-' + label, 'action': 'create', 'title': 'Read marker ' + label, 'role_key': 'reader', 'quote': 'Read marker ' + label, 'reason': 'Independent actual user deliverable'}
+                        if args.exercise_missing_role and n == 1:
+                            del payload['role_key']
                     else:
                         content = '两项只读工作已分别交给专员；原要求与验收条件保留。'
                     key = 'router'
@@ -190,6 +198,9 @@ def main():
                 identity = lake.api('/api/superagent/lifecycle')
                 require(Path(identity['home']).resolve() == home.resolve() and identity['pid'] == lake.runtime['pid'], 'wrong Home owner')
                 report.update(runtimeAcceptance=True, tasks=2, distinctWorkerSessions=2, actualReads=2, humanQuestions=len(answered), pilotReportsDelivered=True, currentKernelPIDVerified=True, memoryTaskKnowledge='unavailable_by_design', externalBuildReadProfile='unavailable', windows='not_run', sleepAndPowerLoss='not_run')
+                if args.exercise_missing_role:
+                    require(state.get('routingArgumentRepairVerified'), 'routing argument repair was not exercised')
+                    report['routingArgumentRepairVerified'] = True
                 args.output.parent.mkdir(parents=True, exist_ok=True)
                 args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
                 args.output.chmod(0o600)
