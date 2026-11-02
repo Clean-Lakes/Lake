@@ -213,12 +213,18 @@ def main():
                         time.sleep(0.2)
                 # Native UI inspection can explicitly drain the same known kernel.
                 # Observe its exit rather than claiming the later CLI sent that request.
-                try:
-                    os.kill(identity['pid'], 0)
-                    kernel_exited = False
-                except ProcessLookupError:
-                    kernel_exited = True
-                if kernel_exited and not (home / 'web-agent/runtime.json').exists():
+                def kernel_exited():
+                    # Reap our CLI child: kill(pid, 0) also succeeds for a zombie.
+                    if not args.native:
+                        return lake.process.poll() is not None
+                    try:
+                        os.kill(identity['pid'], 0)
+                        return False
+                    except ProcessLookupError:
+                        return True
+
+                if not (home / 'web-agent/runtime.json').exists():
+                    wait_for(kernel_exited, 30)
                     report['externalKernelExitObserved'] = True
                 else:
                     lake.api('/api/superagent/lifecycle', 'POST', {'action': 'drain'})
