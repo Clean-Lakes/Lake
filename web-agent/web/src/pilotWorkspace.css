@@ -1,6 +1,6 @@
 .pilot-workspace { padding:2px 0 12px; color:var(--foreground); font-size:var(--font-size-ui); }
 /* Match resource/navigation rows, including their selected and keyboard contour. */
-.sidebar.workspace-navigation .pilot-workspace .nav-row { padding:8px var(--sidebar-content-inset); gap:9px; border-radius:18px; corner-shape:var(--corner-window); }
+.sidebar.workspace-navigation .pilot-workspace .nav-row { padding:8px var(--sidebar-content-inset); gap:9px; border-radius:var(--window-corner-radius,18px); corner-shape:var(--corner-window); }
 .pilot-workspace .nav-row:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }
 .pilot-workspace-entry { min-height:44px; }
 .pilot-workspace .nav-heading { padding:16px 0 8px; }
