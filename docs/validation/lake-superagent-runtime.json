@@ -5,9 +5,9 @@
   "baseSHA": "85a768d074f654d8428d1ea278f9d60dec7a2504",
   "installedDev": {
     "platform": "macOS arm64",
-    "gitHead": "61ffda7f4aa42a93494e22c138713a7f9b540f16",
+    "gitHead": "650f22041bf017e6f12f27a2b652a59c444fd5db",
     "sourceDirty": false,
-    "binarySHA256": "03fefe6a8f629380c4673a6d25a0f7e1efd47531465ad7c14d59cebbd9842392",
+    "binarySHA256": "ea61872f3869b27509cc10892c490a0d03aa51bbb80885769726d90ab1717b63",
     "codesign": "deep_strict_pass",
     "productionTouched": false
   },
@@ -466,5 +466,54 @@
       "scope": "separate regression project; only the two repository files; no shell, installation or mutation"
     },
     "priorFaultInjectionFailure": "With three added repair rounds and no provider usage, conservative cumulative token reservations exhausted the original budget. The synthetic provider now reports its explicitly synthetic character-based usage; runtime limits were not changed."
+  },
+  "uiConsistencyVerification": {
+    "testedSHA": "650f22041bf017e6f12f27a2b652a59c444fd5db",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "61ffda7f4aa42a93494e22c138713a7f9b540f16",
+      "sourceDirty": false,
+      "binarySHA256": "03fefe6a8f629380c4673a6d25a0f7e1efd47531465ad7c14d59cebbd9842392",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "frontendTests": 562,
+    "typeCheck": "pass",
+    "signedDesktopBuild": "pass",
+    "nativeRoleNavigationAndInspector": "pass",
+    "nativeSourceDisclosureKeyboard": "pass",
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "browserWidths": [
+      1512,
+      820,
+      600
+    ],
+    "horizontalDocumentOverflow": false,
+    "hoverSelectionAndKeyboardFocus": "pass",
+    "iconMapping": "presentation only; shared AgentIcon; name-based with investigator fallback",
+    "newModelTaskSent": false,
+    "backendRuntimeChanged": false,
+    "logFiles": [
+      "/tmp/lake-superagent-ui-tests.log",
+      "/tmp/lake-superagent-ui-check.log",
+      "/tmp/lake-superagent-ui-final-desktop.log"
+    ],
+    "screenshots": [
+      "lake-role-ui-light.png",
+      "lake-role-ui-dark.png",
+      "lake-role-ui-820.png",
+      "lake-role-ui-600.png",
+      "lake-role-ui-600-nav.png",
+      "lake-role-ui-600-light.png"
+    ],
+    "screenshotDirectory": "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a",
+    "notRun": [
+      "Windows visual QA",
+      "new external-model end-to-end tasks; this change is presentation only"
+    ]
   }
 }
