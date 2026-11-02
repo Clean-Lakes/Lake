@@ -30,3 +30,6 @@
   border-radius: 0;
   background: transparent;
 }
+.ai-role-assistant .response-author:hover {
+  background: var(--surface-selected);
+}
