@@ -38,6 +38,9 @@ func WorkerCatalog(catalog []Tool) []Tool {
 		if sessionTool(t.Name) && !allowedSession || t.Name == "save_project_memory" || t.Name == "forget_project_memory" || t.Name == "recall_preferences" || t.Name == "read_preference" {
 			continue
 		}
+		if t.Name == "inspect_host" {
+			t.Description = "Run only the registered fixed process_snapshot diagnostic on the assigned local/SSH host. Returns bounded process/CPU/memory-percentage output without creating an interactive terminal. SSH requires an owner-configured OS diagnostic target. This alone does not establish overall service health or include service logs. Missing or stale target configuration must be reported, never bypassed with raw Shell."
+		}
 		if t.Name == "work_begin" {
 			t.Parameters = maps.Clone(t.Parameters)
 			t.Parameters["required"] = []string{"title", "items", "asset_refs"}
