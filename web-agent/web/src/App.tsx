@@ -735,14 +735,6 @@ function AppContent() {
   useLayoutEffect(()=>{window.dispatchEvent(new Event('lake-workbench-layout'));},[terminalOpen,inspectorOpen]);
   const headerPilot = !selectedResource && !isPlansPage ? pilotIslandModel(activeSnapshot) : null;
   const headerPilotMode: 'auto'|'manual'|undefined = !selectedResource&&!isPlansPage&&activeSnapshot?.sre?.pilot?.enabled&&(!activeSnapshot.ai?.profile||activeSnapshot.ai.profile==='core')?(activeSnapshot.sre.pilot.autoAdvance?'auto':'manual'):undefined;
-  const seenInspectorTasks=useRef(new Set<string>());
-  useEffect(()=>{
-    if(!headerPilot||!activeSnapshot)return;
-    const key=JSON.stringify([activeSnapshot.session.id,headerPilot.taskId]);
-    if(seenInspectorTasks.current.has(key))return;
-    seenInspectorTasks.current.add(key);
-    if((!inspector.selection||inspector.selection.sessionId!==activeSnapshot.session.id||inspector.selection.automatic)&&['draft','active','waiting_input','waiting_approval'].includes(headerPilot.status))inspector.open({...latestInspectorSelection(activeSnapshot,'plan'),automatic:true});
-  },[headerPilot?.taskId,sessionId]);
   const inspectorAvailable=!!activeSnapshot?.ai&&!selectedResource&&!isPlansPage;
   const reopenInspector=()=>{
     if(!activeSnapshot)return;
@@ -839,18 +831,12 @@ function AppContent() {
   const pilotProjectId=sidebarProjectId??selectedProjectId??catalog?.projects[0]?.id;
   const pilotWorkspace=usePilotWorkspace(pilotProjectId,!!bootstrap?.authenticated&&!!catalog);
   const openedPilotProjects=useRef(new Set<string>());
-  const pendingWorkerInspector=useRef<string|null>(null);
   useEffect(()=>{
     const domain=pilotWorkspace.workspace?.active?pilotWorkspace.workspace.project:null;
     if(!domain||openedPilotProjects.current.has(domain.projectId))return;
     openedPilotProjects.current.add(domain.projectId);
     void refreshCatalog().then(()=>{if(!route.resourceId)navigate({sessionId:domain.routerSessionId,resourceId:null});}).catch(handleFailure);
   },[pilotWorkspace.workspace?.project.routerSessionId,pilotWorkspace.workspace?.active,refreshCatalog,navigate]);
-  useEffect(()=>{
-    if(activeSnapshot?.session.id!==pendingWorkerInspector.current)return;
-    pendingWorkerInspector.current=null;
-    if(activeSnapshot)inspector.open(latestInspectorSelection(activeSnapshot,'execution'));
-  },[activeSnapshot?.session.id]);
   async function moveSessionNavigation(session:WorkSession,pinned:boolean,beforeId:string|null) {
     if(sessionNavigationSaving.current) throw new Error("正在保存会话顺序，请稍后重试");
     sessionNavigationSaving.current=true;setSessionNavigationBusy(true);
@@ -1475,7 +1461,7 @@ function AppContent() {
           <button type="button" className="nav-section-toggle" aria-label={`${sidebarSessionsExpanded?"折叠":"展开"}${sidebarProject.name}的会话`} aria-expanded={sidebarSessionsExpanded} aria-controls={navigationProjects.length?`project-sessions-${sidebarProject.id}`:undefined} disabled={!navigationProjects.length} onClick={()=>setClosedSessionGroups(items=>sidebarSessionsExpanded?[...items,sidebarProject.id]:items.filter(id=>id!==sidebarProject.id))}><Glyph name="chevron" size={13} className={sidebarSessionsExpanded?"chevron-open":""}/><span>会话</span></button>
           <button type="button" ref={newSessionButton} className="sidebar-new-session" hidden={bulkMode} disabled={!connected||!!pendingOperation} aria-label="新对话" aria-keyshortcuts="Meta+N Control+N" title={`新对话（${/Mac/.test(navigator.platform)?'⌘ N':'Ctrl N'}）`} onClick={()=>{setClosedSessionGroups(items=>items.filter(id=>id!==sidebarProject.id));openSessionDialog(sidebarProject.id);}}><Glyph name="edit" size={14}/></button>
         </div>}
-        <PilotWorkspace resources={catalog.resources} workspace={pilotWorkspace.workspace} error={pilotWorkspace.error} selectedId={route.sessionId} onPilot={()=>{if(pilotWorkspace.workspace)navigate({sessionId:pilotWorkspace.workspace.project.routerSessionId,resourceId:null});}} onWorker={worker=>{pendingWorkerInspector.current=worker.sessionId;navigate({sessionId:worker.sessionId,resourceId:null});}}/>
+        <PilotWorkspace resources={catalog.resources} workspace={pilotWorkspace.workspace} error={pilotWorkspace.error} selectedId={route.sessionId} onPilot={()=>{if(pilotWorkspace.workspace)navigate({sessionId:pilotWorkspace.workspace.project.routerSessionId,resourceId:null});}} onWorker={worker=>navigate({sessionId:worker.sessionId,resourceId:null})}/>
         {navigationProjects.length ? navigationProjects.map(project => {
           const sessionsExpanded = !closedSessionGroups.includes(project.id);
           const sessions = catalog.sessions.filter(session => (!session.workspaceRole||session.workspaceRole==='legacy') && session.projectId === project.id && (!selectedTag || session.tags?.some(tag=>tag.id===selectedTag)));
