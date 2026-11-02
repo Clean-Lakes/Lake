@@ -1003,7 +1003,7 @@ func (e *Engine) PrepareCatalogOperation(ctx context.Context, sessionID string, 
 				return nil, decision, targetErr
 			}
 			if target.Pending != nil || target.Current == nil || len(target.Current.ResourceIDs) != 1 {
-				return nil, decision, errors.New("security: TARGET_REQUIRED")
+				return nil, decision, errors.New("security: TARGET_REQUIRED: specify asset_ref from list_assets for this operation; runtime=local alone does not identify a resource. If the intended resource is already clear, retry with its exact catalog alias; otherwise ask which resource to use")
 			}
 			refs = target.Current.ResourceIDs
 		}

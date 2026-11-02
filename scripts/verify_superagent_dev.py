@@ -63,6 +63,7 @@ def main():
     parser.add_argument('--ui-detached-file', type=Path, help='owned test marker set after quitting the native UI; verify surviving kernel and reopen the same isolated Home')
     parser.add_argument('--go-results', type=Path, help='optional complete go test -json log')
     parser.add_argument('--exercise-missing-role', action='store_true', help='omit role_key once, verify actionable feedback and repair the same original event part')
+    parser.add_argument('--exercise-missing-target', action='store_true', help='omit asset_ref once per Worker and verify target repair before the actual read')
     args = parser.parse_args()
     binary = args.binary.resolve(strict=True)
     if os.uname().sysname == 'Darwin':
@@ -115,15 +116,22 @@ def main():
                     key = match.group(1)
                     state['calls'][key] = state['calls'].get(key, 0) + 1
                     n = state['calls'][key]
-                    if n == 1:
+                    if args.exercise_missing_target and n == 4:
+                        require('TARGET_REQUIRED: specify asset_ref from list_assets' in text, 'missing resource target did not produce actionable feedback')
+                        state['targetRepair' + key] = True
+                    step = n - 1 if args.exercise_missing_target and n >= 4 else n
+                    if step == 1:
                         tool, payload = 'work_begin', {'title': 'Read marker ' + key, 'items': [{'id': 'inspect', 'title': 'Read and independently verify marker ' + key}], 'asset_refs': [state['alias']]}
-                    elif n in (2, 4):
+                    elif step in (2, 4):
                         rows = query("SELECT g.data FROM native_work_goals g JOIN superagent_workers w ON w.task_id=g.id WHERE json_extract(g.data,'$.title')=? AND w.parent_worker_id=''", ('Read marker ' + key,))
                         goal = json.loads(rows[0][0])
-                        tool, payload = 'work_update', {'item_id': goal['items'][0]['id'], 'status': 'running' if n == 2 else 'completed'}
-                    elif n == 3:
+                        tool, payload = 'work_update', {'item_id': goal['items'][0]['id'], 'status': 'running' if step == 2 else 'completed'}
+                    elif step == 3:
                         tool, payload = 'read', {'asset_ref': state['alias'], 'path': str(state['readable'] / ('marker-' + key + '.txt'))}
-                    elif n == 5:
+                        if args.exercise_missing_target and n == 3:
+                            del payload['asset_ref']
+                            payload['runtime'] = 'local'
+                    elif step == 5:
                         tool, payload = 'work_finish', {'summary': 'The original marker was read and independently verified.'}
                     else:
                         content = '原文件已读取，独立人工验收通过。'
@@ -201,6 +209,9 @@ def main():
                 if args.exercise_missing_role:
                     require(state.get('routingArgumentRepairVerified'), 'routing argument repair was not exercised')
                     report['routingArgumentRepairVerified'] = True
+                if args.exercise_missing_target:
+                    require(state.get('targetRepairA') and state.get('targetRepairB'), 'both Workers must repair missing resource targets')
+                    report['workerTargetRepairVerified'] = True
                 args.output.parent.mkdir(parents=True, exist_ok=True)
                 args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
                 args.output.chmod(0o600)
