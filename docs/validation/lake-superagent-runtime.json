@@ -5,9 +5,9 @@
   "baseSHA": "85a768d074f654d8428d1ea278f9d60dec7a2504",
   "installedDev": {
     "platform": "macOS arm64",
-    "gitHead": "61d48de7b87b40551d47dcff484acf0f9d0389eb",
+    "gitHead": "984ae97cfed66be9428f394010f4389969dfca5b",
     "sourceDirty": false,
-    "binarySHA256": "4bdda7b3084a62a60b0f33e100628285e10af64d8028e8dd8fbd89e9d41d97da",
+    "binarySHA256": "460d3d80e05234f7dd00750d5db42ea917b4c8f440509e3b5bcbc3939e9044d2",
     "codesign": "deep_strict_pass",
     "productionTouched": false
   },
@@ -699,5 +699,60 @@
       "adkBoundary": "/tmp/lake-reply-author-boundary.log",
       "desktop": "/tmp/lake-reply-author-desktop.log"
     }
+  },
+  "messageBubbleVerification": {
+    "date": "2026-11-03",
+    "testedSHA": "984ae97cfed66be9428f394010f4389969dfca5b",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "61d48de7b87b40551d47dcff484acf0f9d0389eb",
+      "sourceDirty": false,
+      "binarySHA256": "4bdda7b3084a62a60b0f33e100628285e10af64d8028e8dd8fbd89e9d41d97da",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "changes": [
+      "black background and white text for user messages in both themes",
+      "theme gray bubbles for Pilot and specialist text replies",
+      "specialist identity and reply share one bubble; distinct hover and visible keyboard focus"
+    ],
+    "toolchain": {
+      "node": "24.14.0",
+      "pnpm": "10.33.4"
+    },
+    "typeCheck": "pass",
+    "webBuild": "pass",
+    "signedDevBuildInstall": "pass",
+    "codesign": "deep_strict_pass",
+    "nativeUI": "installed Lake Dev shows black user message and gray Pilot/specialist replies; inspector remains collapsed",
+    "browserUI": {
+      "lightWidth": 1512,
+      "darkWidth": 600,
+      "horizontalDocumentOverflow": false,
+      "userBackground": "#111111",
+      "userText": "#ffffff",
+      "lightReplyBackground": "#eeeeee",
+      "darkReplyBackground": "#2c2c2c",
+      "specialistHover": "#e8e8e8 light / #333333 dark",
+      "keyboardFocus": "visible on specialist entry"
+    },
+    "screenshots": [
+      "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/message-bubbles-light.png",
+      "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/message-bubbles-600-dark.png"
+    ],
+    "logs": {
+      "typeCheck": "/tmp/lake-message-bubbles-final-check.log",
+      "desktop": "/tmp/lake-message-bubbles-node24-desktop.log"
+    },
+    "notRun": [
+      "Go suites; no Go source changes",
+      "full frontend suite; CSS-only presentation change",
+      "Windows native UI",
+      "new external-model execution",
+      "independent image-attachment / wide-table / full-code-block visual scenarios"
+    ],
+    "authorityChanges": false,
+    "schemaMigration": false
   }
 }
