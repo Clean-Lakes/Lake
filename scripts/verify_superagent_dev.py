@@ -65,6 +65,7 @@ def main():
     parser.add_argument('--exercise-missing-role', action='store_true', help='omit role_key once, verify actionable feedback and repair the same original event part')
     parser.add_argument('--exercise-missing-target', action='store_true', help='omit asset_ref once per Worker and verify target repair before the actual read')
     parser.add_argument('--exercise-missing-attempt', action='store_true', help='try a read before starting an item and verify the original attempt protocol repairs it')
+    parser.add_argument('--inherit-project-access', action='store_true', help='use the existing project catalog and permissions without writing a separate project policy')
     args = parser.parse_args()
     binary = args.binary.resolve(strict=True)
     if os.uname().sysname == 'Darwin':
@@ -188,7 +189,12 @@ def main():
                 lake.api('/api/sessions/' + pilot + '/ai/configure', 'POST', {'contextBudgetMode': 'manual', 'contextWindow': 64000, 'maxSteps': 20})
                 previous = lake.api('/api/projects/' + project + '/security/policy')
                 revision = previous.get('policy', {}).get('Revision', 0)
-                lake.api('/api/projects/' + project + '/security/policy', 'PUT', {'actionId': 'isolated-read-policy', 'expectedRevision': revision, 'policy': {'schemaVersion': 1, 'mode': 'restricted', 'resourceIDs': [resource], 'rules': [{'capability': 'file.read', 'effect': 'allow', 'limits': {'FileRoots': [str(readable)]}}, {'capability': 'local.execute', 'effect': 'allow'}]}})
+                if args.inherit_project_access:
+                    inherited = previous.get('policy', {})
+                    require(inherited.get('Mode') == 'legacy' and resource in inherited.get('ResourceIDs', []), 'original project access was not inherited')
+                    report['projectAccess'] = 'inherited catalog and original permissions; no policy PUT'
+                else:
+                    lake.api('/api/projects/' + project + '/security/policy', 'PUT', {'actionId': 'isolated-read-policy', 'expectedRevision': revision, 'policy': {'schemaVersion': 1, 'mode': 'restricted', 'resourceIDs': [resource], 'rules': [{'capability': 'file.read', 'effect': 'allow', 'limits': {'FileRoots': [str(readable)]}}, {'capability': 'local.execute', 'effect': 'allow'}]}})
                 lake.api('/api/sessions/' + pilot + '/messages', 'POST', {'text': 'Read marker A; Read marker B. Read only, do not modify files. Preserve separate goals and verify each result.', 'resourceIds': [resource]})
                 answered, workers = set(), []
                 for _ in range(900):
