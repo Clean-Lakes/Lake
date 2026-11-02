@@ -116,6 +116,7 @@ def main():
                     match = re.search(r'\[ASSIGNED DELIVERABLE\]\s*Read marker ([AB])', text)
                     require(match is not None, 'Worker lost its exact assigned original deliverable')
                     key = match.group(1)
+                    state['lastToolResults' + key] = [message.get('content') for message in request.get('messages', []) if message.get('role') == 'tool'][-6:]
                     state['calls'][key] = state['calls'].get(key, 0) + 1
                     n = state['calls'][key]
                     sequence = n - 1 if args.exercise_missing_attempt and n >= 3 else n
@@ -214,6 +215,8 @@ def main():
                                 answers[item['id']] = [labels[0]]
                             lake.api('/api/sessions/' + sid + '/ai/questionReply', 'POST', {'id': question['id'], 'answers': answers})
                             answered.add(question['id'])
+                    if len(workers) == 2 and all(worker['task']['state'] in ('blocked', 'failed') for worker in workers):
+                        raise AssertionError('Workers blocked: ' + json.dumps({'toolResults': {label: state.get('lastToolResults' + label) for label in ('A', 'B')}, 'goals': [json.loads(row[0]) for row in query('SELECT data FROM native_work_goals')], 'operations': query('SELECT tool,status,result FROM native_operations')}, ensure_ascii=False))
                     if len(workers) == 2 and all(worker['task']['state'] == 'completed' and worker['task']['acceptanceState'] == 'pass' for worker in workers):
                         break
                     time.sleep(0.1)

@@ -2,14 +2,16 @@ package ai
 
 import (
 	"errors"
+	"slices"
 
 	"github.com/Clean-Lakes/Lake/internal/security"
 	"gorm.io/gorm"
 )
 
 // A legacy project's defaults cannot replace each session's effective settings.
-// This adapter only narrows the current project's rules. Unknown old reference
-// boundaries require explicit migration confirmation rather than becoming wide.
+// Explicit project rules only narrow. Host-inherited catalog policies express
+// the old resource-level permission as the exact prepared operation's scope.
+// Unknown old reference boundaries still require explicit migration confirmation.
 func applyLegacySessionPolicyTx(tx *gorm.DB, in *security.EvaluationInput) error {
 	if in.Policy.Mode != "legacy" {
 		return nil
@@ -36,11 +38,18 @@ func applyLegacySessionPolicyTx(tx *gorm.DB, in *security.EvaluationInput) error
 			return errors.New("security: legacy referenced-resource scope needs explicit migration confirmation")
 		}
 	}
+	inherited, err := inheritedSuperCatalogPolicyTx(tx, in.Policy)
+	if err != nil {
+		return err
+	}
 	rules := append([]security.Rule(nil), in.Policy.Rules...)
 	for i := range rules {
 		rule := &rules[i]
 		if rule.Effect == security.EffectDeny {
 			continue
+		}
+		if inherited && slices.Contains(o.Capabilities, rule.Capability) {
+			rule.Limits = inheritedSuperOperationLimits(o.Scope)
 		}
 		allowed := false
 		switch rule.Capability {

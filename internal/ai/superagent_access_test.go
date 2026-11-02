@@ -50,13 +50,16 @@ func TestSuperProjectInheritsCatalogAndLegacyPermissions(t *testing.T) {
 	if err = recordLegacySessionPolicy(db, storeID, epoch, "inherited", "existing", "web", Permissions{SilentReadFiles: true, DenyLocalExecution: true}); err != nil {
 		t.Fatal(err)
 	}
-	in := security.EvaluationInput{Policy: p, Operation: security.PreparedOperation{ProjectID: "inherited", SessionID: "existing", StoreID: storeID, RecoveryEpoch: epoch}}
+	in := security.EvaluationInput{Policy: p, Operation: security.PreparedOperation{ProjectID: "inherited", SessionID: "existing", StoreID: storeID, RecoveryEpoch: epoch, Capabilities: []string{"file.read"}, Scope: security.OperationScope{FilePath: "/actual/project-file"}}}
 	if err = applyLegacySessionPolicyTx(db, &in); err != nil {
 		t.Fatal(err)
 	}
 	for _, rule := range in.Policy.Rules {
 		if rule.Capability == "file.read" && rule.Effect != security.EffectAllow {
 			t.Fatal("existing read permission lost")
+		}
+		if rule.Capability == "file.read" && !slices.Equal(rule.Limits.FileRoots, []string{"/actual/project-file"}) {
+			t.Fatal("inherited read was not bound to the actual operation", rule)
 		}
 		if rule.Capability == "file.write" && rule.Effect != security.EffectAsk {
 			t.Fatal("write permission silently expanded")
@@ -102,5 +105,25 @@ func TestSuperProjectPreservesExplicitAccessAndRecoveryFence(t *testing.T) {
 	}
 	if err := e.InheritSuperProjectAccess(t.Context(), "missing-enforced-policy"); err == nil {
 		t.Fatal("enforced Home accepted an unconfirmed project")
+	}
+}
+
+func TestSuperInheritedOperationLimitsCannotAuthorizeAnotherTarget(t *testing.T) {
+	cases := []struct {
+		capability  string
+		scope       security.OperationScope
+		same, other security.ScopeLimits
+	}{
+		{"file.read", security.OperationScope{FilePath: "/project/exact"}, security.ScopeLimits{FileRoots: []string{"/project/exact"}}, security.ScopeLimits{FileRoots: []string{"/project/other"}}},
+		{"db.read", security.OperationScope{DatabaseID: "db", Schema: "public", MaxRows: 20, MaxDurationMS: 1000}, security.ScopeLimits{DatabaseID: "db", Schemas: []string{"public"}, MaxRows: 20, MaxDurationMS: 1000}, security.ScopeLimits{DatabaseID: "other", Schemas: []string{"public"}, MaxRows: 20, MaxDurationMS: 1000}},
+		{"cluster.read", security.OperationScope{ClusterID: "cluster", Namespace: "app", ResourceKind: "pods", Verb: "list"}, security.ScopeLimits{ClusterID: "cluster", Namespaces: []string{"app"}, ResourceKinds: []string{"pods"}, Verbs: []string{"list"}}, security.ScopeLimits{ClusterID: "cluster", Namespaces: []string{"other"}, ResourceKinds: []string{"pods"}, Verbs: []string{"list"}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.capability, func(t *testing.T) {
+			rule := security.Rule{Capability: tc.capability, Limits: inheritedSuperOperationLimits(tc.scope)}
+			if !security.GrantLimitsFitRule(tc.same, rule, tc.capability) || security.GrantLimitsFitRule(tc.other, rule, tc.capability) {
+				t.Fatal("inherited limits changed target", rule)
+			}
+		})
 	}
 }
