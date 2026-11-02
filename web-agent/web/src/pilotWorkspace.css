@@ -19,8 +19,6 @@
 .super-role-avatar > .agent-role-icon.sre-avatar { color:var(--super-role-color); }
 .pilot-workspace-empty,.pilot-workspace-error { margin:4px 12px; line-height:1.65; overflow-wrap:anywhere; }
 .pilot-workspace-error { padding:8px 0; }
-.pilot-history { margin:0 0 12px; }
-.pilot-history>summary { cursor:pointer; color:var(--text-muted); font-size:var(--font-size-ui); padding:9px 12px; }
 
 .super-task-inspector { padding:0 2px 18px; font-size:var(--font-size-ui); line-height:1.65; }
 .super-task-owner { display:flex; align-items:center; gap:9px; margin-bottom:12px; }
