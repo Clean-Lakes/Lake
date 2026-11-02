@@ -5,9 +5,9 @@
   "baseSHA": "85a768d074f654d8428d1ea278f9d60dec7a2504",
   "installedDev": {
     "platform": "macOS arm64",
-    "gitHead": "2ae4155e02154db106638d7bfc507ed5928dc78d",
+    "gitHead": "a6351c63f0256675ca517cc66ef7e3b766dd85a4",
     "sourceDirty": false,
-    "binarySHA256": "6c8d9061cc0daceead77e905f727e75a51c0ed2dc090e08f6dd210f6975e0233",
+    "binarySHA256": "96e50467e1015429cbb853e8bf9a35c46c433bbab51852d2229743d9c792b669",
     "codesign": "deep_strict_pass",
     "productionTouched": false
   },
@@ -549,6 +549,71 @@
     "notRun": [
       "new live SRE task; automatic-open effect removed and frontend regression passed",
       "Windows native UI"
+    ]
+  },
+  "projectResourceInheritanceVerification": {
+    "testedSHA": "a6351c63f0256675ca517cc66ef7e3b766dd85a4",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "2ae4155e02154db106638d7bfc507ed5928dc78d",
+      "sourceDirty": false,
+      "binarySHA256": "6c8d9061cc0daceead77e905f727e75a51c0ed2dc090e08f6dd210f6975e0233",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "fullGo": {
+      "tests": 1913,
+      "packages": 11,
+      "log": "/tmp/lake-project-resource-accepted-full.jsonl"
+    },
+    "targetedRace": {
+      "tests": 164,
+      "packages": 3,
+      "log": "/tmp/lake-project-resource-accepted-race.jsonl"
+    },
+    "frontendTests": 562,
+    "frontendSource": "same as 22bc4e0d; subsequent changes are Go/tests/fixture only",
+    "typeCheck": "pass",
+    "vet": "pass",
+    "adkRuntimeBoundary": "pass",
+    "signedDevBuildInstall": "pass",
+    "codesign": "deep_strict_pass",
+    "dailyProject": {
+      "project": "HexHub 服务器",
+      "resources": 135,
+      "policyConfigured": true,
+      "mode": "legacy",
+      "policyResourceCount": 135
+    },
+    "nativeUI": [
+      "no separate execution scope entry",
+      "original folders, resources, add-reference and terminal entries retained"
+    ],
+    "isolatedIntegration": {
+      "provider": "loopback synthetic fixture, not external model",
+      "policyPUT": false,
+      "actualReads": 2,
+      "distinctWorkerSessions": 2,
+      "humanFixtureQuestions": 4,
+      "acceptance": "both pass",
+      "pilotReports": "delivered",
+      "faultRepairs": [
+        "missing role",
+        "missing resource target",
+        "missing current attempt"
+      ],
+      "report": "/tmp/lake-project-resource-inherited-final.json"
+    },
+    "initialFailures": [
+      "workflow fixture used revision 0 after inheritance created revision 1; changed fixture to current CAS revision",
+      "prior work_update description update left strategy catalog golden stale; exact old-description substitution reproduced every previous hash before updating only catalog hashes",
+      "inherited file read initially lacked an execution scope; exact host-prepared scope adapter added and end-to-end rerun passed"
+    ],
+    "notRun": [
+      "Windows native UI",
+      "new external-model execution",
+      "remote connections to all 135 resources"
     ]
   }
 }
