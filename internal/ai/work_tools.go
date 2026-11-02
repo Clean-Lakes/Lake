@@ -24,6 +24,9 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 		return nil, errors.New("work goals require an ordinary core conversation")
 	}
 	if call.Name == "work_begin" {
+		if c.superRole == "worker" && a["asset_refs"] == nil {
+			return nil, errors.New("Worker work_begin requires explicit asset_refs from PROJECT RESOURCE INDEX; bind the intended aliases before plan confirmation. For work with no resource I/O, explicitly pass asset_refs:[]")
+		}
 		var items []WorkItem
 		if err := json.Unmarshal([]byte(js(a["items"])), &items); err != nil {
 			return nil, err

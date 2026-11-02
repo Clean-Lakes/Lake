@@ -188,3 +188,31 @@ func TestSecurityManagedSSHProfileRealTransportAndUnknownDisconnect(t *testing.T
 		})
 	}
 }
+
+func TestSecurityInspectHostUsesFixedSSHReadWithoutClearingLegacyWriteRisk(t *testing.T) {
+	e, c, commands := managedSSHFixture(t, false)
+	store, _ := e.adkStore()
+	if err := store.DB.Create(&nativeOperation{ID: "legacy-risk", SessionID: "old", Tool: "shell", Risk: "write", Status: "unknown"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	a := map[string]any{"asset_ref": assetAlias("resource"), "runtime": "ssh"}
+	result, err := runFixedReadPermit(t, e, c, Call{ID: "host-probe", Name: "inspect_host", Arguments: js(a)})
+	if err != nil || !strings.Contains(str(obj(result)["stdout"]), "owned-remote-profile") {
+		t.Fatal(result, err)
+	}
+	select {
+	case command := <-commands:
+		if !strings.Contains(command, "'/bin/ps' '-eo' 'pid,ppid,pcpu,pmem,comm'") {
+			t.Fatal("inspection did not use exact fixed process diagnostic", command)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("no SSH process diagnostic")
+	}
+	var prior nativeOperation
+	if err = store.DB.First(&prior, "id = ?", "legacy-risk").Error; err != nil || prior.Status != "unknown" || prior.RiskResolvedAt != nil {
+		t.Fatal("inspection changed old risk", err)
+	}
+	if err = CheckResourceWriteBlock(store.DB, "resource"); err != ErrUnresolvedResourceEffect {
+		t.Fatal("old write restriction lost", err)
+	}
+}

@@ -114,7 +114,7 @@ var toolCapabilities = map[string]ToolCapability{
 	"observe_host":             {Name: "observe_host", TargetKind: TargetResource, Proof: ProofStructured, Capabilities: []string{"command.diagnostics"}, CommandProfileAllowed: true},
 	"observe_journal":          tool("observe_journal", TargetResource, ProofStructured, "cluster.logs"),
 	"observe_logs":             tool("observe_logs", TargetResource, ProofStructured, "file.read"),
-	"inspect_host":             tool("inspect_host", TargetResource, ProofStructured, "command.diagnostics"),
+	"inspect_host":             {Name: "inspect_host", TargetKind: TargetResource, Proof: ProofStructured, Capabilities: []string{"command.diagnostics"}, CommandProfileAllowed: true},
 	"list_assets":              tool("list_assets", TargetProject, ProofStructured, "resource.list"),
 	"list_resource_groups":     tool("list_resource_groups", TargetProject, ProofStructured, "resource.list"),
 	"preview_resource_import":  tool("preview_resource_import", TargetProject, ProofStructured, "resource.resolve"),

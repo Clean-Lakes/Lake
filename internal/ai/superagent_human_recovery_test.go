@@ -11,7 +11,7 @@ import (
 func TestSuperHumanRecoveryUsesOriginalRunnerAndActualAnswer(t *testing.T) {
 	model, closeModel := fakeModel(t, func(n int, input map[string]any) any {
 		if n == 1 {
-			return response("", Call{ID: "original-question", Name: "work_begin", Arguments: `{"title":"Inspect test target","items":[{"title":"Review test evidence"}]}`})
+			return response("", Call{ID: "original-question", Name: "work_begin", Arguments: `{"asset_refs":[],"title":"Inspect test target","items":[{"title":"Review test evidence"}]}`})
 		}
 		if !strings.Contains(js(input["messages"]), securityWorkConfirmLabel) {
 			t.Error("actual answer missing")

@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -83,15 +84,22 @@ func (e *Engine) prepareSecurityReadProbe(ctx context.Context, c Config, op *sec
 		}
 	}
 	switch op.Tool {
-	case "observe_host":
-		if str(a["metric"]) != "processes" {
+	case "observe_host", "inspect_host":
+		if op.Tool == "observe_host" && str(a["metric"]) != "processes" {
 			return nil, nil
 		}
-		if err = fixedProbeArguments(a, "asset_ref", "metric"); err != nil {
+		allowed := []string{"asset_ref", "metric"}
+		if op.Tool == "inspect_host" {
+			allowed = []string{"asset_ref", "runtime"}
+		}
+		if err = fixedProbeArguments(a, allowed...); err != nil {
 			return nil, err
 		}
 		command, err := e.compileSecurityCommandProfile(ctx, c, op, a, as, "process_snapshot")
 		if err != nil {
+			if op.Tool == "inspect_host" {
+				return nil, fmt.Errorf("security: fixed host inspection requires a current enabled OS diagnostic target; configure or revalidate this resource's Linux/macOS command target, without clearing unresolved operations: %w", err)
+			}
 			return nil, err
 		}
 		p.kind = "command"
@@ -575,7 +583,7 @@ func (e *Engine) executeSecurityFetch(ctx context.Context, p *securityReadProbe,
 // Eligibility describes actual implemented adapters, never a model-selected
 // label or a digest of arbitrary SQL, MCP, raw Shell or script contents.
 func SecurityReadVerifierProfile(op security.PreparedOperation) (string, bool) {
-	if op.Proof == security.ProofCommandProfile && op.Tool == "observe_host" && op.CommandProfileID == "process_snapshot" && op.CommandProfileVersion == security.CommandProfileVersion && op.Scope.ProbeID == "command.process_snapshot" && op.Scope.ProbeVersion == securityProbeVersion {
+	if op.Proof == security.ProofCommandProfile && (op.Tool == "observe_host" || op.Tool == "inspect_host") && op.CommandProfileID == "process_snapshot" && op.CommandProfileVersion == security.CommandProfileVersion && op.Scope.ProbeID == "command.process_snapshot" && op.Scope.ProbeVersion == securityProbeVersion {
 		return op.Scope.ProbeID, true
 	}
 	if op.Proof != security.ProofStructured || op.Scope.ProbeVersion != securityProbeVersion {

@@ -3,11 +3,23 @@ import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {ReplyIdentity} from '../src/ReplyIdentity';
+import {AITranscript} from '../src/AIPanel';
 import type {Message,SpecialistReplyAuthor,SessionSnapshot} from '../../shared/contracts';
 import {orderedTranscript} from '../src/timeline';
 import {isAssistantProse} from '../src/completedTurnProse';
 
 const author=(name:string,id:string):SpecialistReplyAuthor=>({kind:'specialist',name,workerId:'worker-'+id,sessionId:'session-'+id,taskId:'task-'+id});
+test('specialist own-session text and message replies both show the role avatar and identity',()=>{
+ for(const type of ['text','message'])for(const status of ['running','completed']){
+  const at='2026-11-03T00:00:00Z';
+  const snapshot={session:{id:'worker'},messages:[],resources:[],actions:[],specialists:[],evidence:[],ai:{session:'worker',status,rootTurnId:'turn',cardsOffset:0,cards:[{id:'answer',type,status,at,content:'实际检查结果。'}]}} as unknown as SessionSnapshot;
+  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'服务运行状态排查专员'}}));
+  assert.ok(html.includes('class="response-avatar"'));
+  assert.ok(html.includes('<strong>服务运行状态排查专员</strong>'));
+  assert.ok(html.includes('实际检查结果。'));
+  assert.ok(!html.includes('<strong>Lake</strong>'));
+ }
+});
 test('each delivered report displays its own specialist even inside the Pilot conversation',()=>{
  for(const name of ['Go 审查专员','前端执行专员']){
   const html=renderToStaticMarkup(createElement(ReplyIdentity,{identity:{name:'Pilot',pilot:true},author:author(name,name),onSpecialist(){}}));
