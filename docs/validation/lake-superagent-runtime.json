@@ -5,9 +5,9 @@
   "baseSHA": "85a768d074f654d8428d1ea278f9d60dec7a2504",
   "installedDev": {
     "platform": "macOS arm64",
-    "gitHead": "984ae97cfed66be9428f394010f4389969dfca5b",
+    "gitHead": "c42c96f289874771cd9f77786d5418ccdbefc45f",
     "sourceDirty": false,
-    "binarySHA256": "460d3d80e05234f7dd00750d5db42ea917b4c8f440509e3b5bcbc3939e9044d2",
+    "binarySHA256": "db4bb410eeca90d80388a0509edbe9abcd6a2d8ef9ba6f6847359c2eb06ab2b5",
     "codesign": "deep_strict_pass",
     "productionTouched": false
   },
@@ -754,5 +754,24 @@
     ],
     "authorityChanges": false,
     "schemaMigration": false
+  },
+  "securityMigrationFinalization": {
+    "date": "2026-11-03",
+    "testedSHA": "c42c96f289874771cd9f77786d5418ccdbefc45f",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "984ae97cfed66be9428f394010f4389969dfca5b",
+      "sourceDirty": false,
+      "binarySHA256": "460d3d80e05234f7dd00750d5db42ea917b4c8f440509e3b5bcbc3939e9044d2",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "result": "pass",
+    "fullGoTests": 1943,
+    "targetedRaceTests": 494,
+    "archiveBytesRemoved": 3799941120,
+    "unresolvedOperationsPreserved": 93,
+    "kernelHTTPReadyMS": 759.6,
+    "record": "lake-security-migration-finalization.json"
   }
 }
