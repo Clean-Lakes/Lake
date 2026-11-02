@@ -22,3 +22,7 @@
 .pilot-policy-panel details{margin-top:10px}.pilot-policy-panel pre{white-space:pre-wrap;max-height:180px;overflow:auto;font-size:10px}
 .pilot-policy-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:10px}
 .pilot-policy-actions .button{border-radius:var(--radius-settings-control);corner-shape:var(--corner-window)}
+
+.super-worker-source{margin-bottom:18px;border:1px solid var(--border);border-radius:var(--radius-settings-panel);corner-shape:var(--corner-window);padding:10px 12px;background:var(--surface);font-size:12px;color:var(--text-muted)}
+.super-worker-source summary{display:flex;align-items:center;gap:7px;cursor:pointer;color:var(--foreground)}
+.super-worker-source p{margin:10px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
