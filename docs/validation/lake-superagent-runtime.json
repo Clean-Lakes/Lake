@@ -1,0 +1,406 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "overallStatus": "in_progress_dependencies_unavailable",
+  "baseSHA": "85a768d074f654d8428d1ea278f9d60dec7a2504",
+  "installedDev": {
+    "platform": "macOS arm64",
+    "gitHead": "34695a78c261da7b2c4cc46cef916c3121cc3ff6",
+    "sourceDirty": false,
+    "binarySHA256": "a7114bc1b2181798cad702ed6313a4b6c83c9d559b55ad05e6a13e0341859509",
+    "codesign": "deep_strict_pass",
+    "productionTouched": false
+  },
+  "checks": [
+    {
+      "name": "full_go_race",
+      "testedSHA": "f8fbf10321e3e5fcc8de31c1895d1dd2a202a6ec",
+      "command": "go test -race -json ./... -count=1 -timeout=25m",
+      "result": "pass",
+      "tests": 1903
+    },
+    {
+      "name": "full_go",
+      "testedSHA": "24b69e6959574b6057107caf2c4d788a9acb8e56",
+      "command": "go test -json ./... -count=1 -timeout=15m",
+      "result": "pass",
+      "tests": 1905
+    },
+    {
+      "name": "approval_batch_and_source_revocation_race",
+      "testedSHA": "24b69e6959574b6057107caf2c4d788a9acb8e56",
+      "command": "go test -race ./internal/ai -run '^TestSuperHuman|^TestSuperWorkerSource'",
+      "result": "pass"
+    },
+    {
+      "name": "vet",
+      "testedSHA": "24b69e6959574b6057107caf2c4d788a9acb8e56",
+      "command": "go vet ./...",
+      "result": "pass"
+    },
+    {
+      "name": "adk_boundary",
+      "testedSHA": "24b69e6959574b6057107caf2c4d788a9acb8e56",
+      "command": "python3 scripts/check_adk_runtime_boundary.py",
+      "result": "pass"
+    },
+    {
+      "name": "frontend",
+      "testedSHA": "373c7f3225e18c78c82afa4967348f1f734243bb",
+      "result": "pass",
+      "tests": 558,
+      "typecheck": "pass",
+      "command": "pnpm --dir web-agent test:frontend; pnpm --dir web-agent check"
+    },
+    {
+      "name": "signed_desktop_build",
+      "testedSHA": "34695a78c261da7b2c4cc46cef916c3121cc3ff6",
+      "command": "scripts/build_lake_desktop.sh --dev --install",
+      "result": "pass"
+    },
+    {
+      "name": "isolated_signed_runtime",
+      "verifierSHA": "f4cab2e58cbb964a34981d47ace2dfb6e340f9b6",
+      "binarySourceSHA": "34695a78c261da7b2c4cc46cef916c3121cc3ff6",
+      "sourceDirty": false,
+      "result": "pass",
+      "actualReads": 2,
+      "humanQuestions": 4,
+      "distinctWorkerSessions": 2,
+      "pilotReportsDelivered": true,
+      "externalKernelExitObserved": true
+    },
+    {
+      "name": "native_detach_and_reopen",
+      "testedSHA": "98fbbe2cf00d2635aa963fa61c22d415d4c5139d",
+      "result": "pass",
+      "sameKernelPID": true,
+      "paintedCaret": true,
+      "referenceInsertRemoveAndContinuedTyping": true,
+      "clipboardOSPayload": "not_separately_inspected"
+    },
+    {
+      "name": "ui_triptych",
+      "testedSHA": "34695a78c261da7b2c4cc46cef916c3121cc3ff6",
+      "result": "pass",
+      "light": true,
+      "dark": true,
+      "wideWidth": 1512,
+      "narrowWidth": 820,
+      "horizontalDocumentOverflow": false,
+      "narrowTerminal": "drawer",
+      "realTerminal": true,
+      "realOperationDetails": true
+    },
+    {
+      "name": "daily_dev_launch",
+      "binarySourceSHA": "34695a78c261da7b2c4cc46cef916c3121cc3ff6",
+      "result": "pass",
+      "home": "~/.lake-dev",
+      "pilotVisible": true,
+      "existingResourceTreeVisible": true,
+      "noModelMessageSent": true
+    }
+  ],
+  "scenarios": [
+    {
+      "case": "TEST-001",
+      "unitBoundaryEvidence": {
+        "TestSuperRouterRunsOnlyOfficialADKWithRestrictedCatalog": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-002",
+      "unitBoundaryEvidence": {
+        "TestSuperStoreBacksUpBeforeMigrationAndRejectsFutureReader": "pass",
+        "TestSuperLegacyImportKeepsOriginalGoalAndNeverReplays": "pass",
+        "TestSuperLegacySREArchivePreservesUnknownOperationsAndIDs": "pass",
+        "TestSuperLegacyImportDoesNotAdoptUnresolvedOrSREWork": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-003",
+      "unitBoundaryEvidence": {
+        "TestSuperTaskProjectionRequiresCanonicalAcceptance/legacy": "pass",
+        "TestSuperTaskProjectionRequiresCanonicalAcceptance/insufficient": "pass",
+        "TestSuperTaskProjectionRequiresCanonicalAcceptance/unknown": "pass",
+        "TestSuperTaskProjectionRequiresCanonicalAcceptance/uncovered": "pass",
+        "TestSuperTaskProjectionRequiresCanonicalAcceptance/accepted": "pass",
+        "TestSuperTaskProjectionRequiresCanonicalAcceptance": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-004",
+      "unitBoundaryEvidence": {
+        "TestSuperEventConcurrentDuplicateIsImmutable": "pass",
+        "TestSuperEventRejectsForeignBindingAndCredentials": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-005",
+      "unitBoundaryEvidence": {
+        "TestSuperSubscriptionsAreExactAndHandbackIsBounded": "pass",
+        "TestSuperObserverCannotBecomeHumanFollowup": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-006",
+      "unitBoundaryEvidence": {
+        "TestSuperInboxConsumptionRequiresStoredSDKReceipt": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-007",
+      "unitBoundaryEvidence": {
+        "TestSuperOutboxDoesNotResendUncertainWrites": "pass",
+        "TestSuperPilotReportKeepsStableReceipt": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-008",
+      "unitBoundaryEvidence": {
+        "TestSuperRouterSplitsAndSupplementsOneTask": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-009",
+      "unitBoundaryEvidence": {
+        "TestSuperRouterRejectsForgedSourceAndForeignTask": "pass",
+        "TestSuperRouterRunsOnlyOfficialADKWithRestrictedCatalog": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-010",
+      "unitBoundaryEvidence": {
+        "TestSuperWorkerUsesOriginalGoalAndHostConfirmation": "pass",
+        "TestSuperWorkflowRealSREObservationUsesOriginalTaskAndAcceptance": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-011",
+      "unitBoundaryEvidence": {
+        "TestSuperRouterObjectScopeAndUTF8Paging": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-012",
+      "unitBoundaryEvidence": {
+        "TestSuperChildrenShareGoalAndCannotRecurseOrResetInstanceLimit": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-013",
+      "unitBoundaryEvidence": {
+        "TestSuperBudgetSharedReservationsSurviveContinuation": "pass",
+        "TestSuperAssignmentRejectsDuplicateAndExpiredOwner": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-014",
+      "unitBoundaryEvidence": {
+        "TestSecurityRestoreImportInitializesEmptyTargetClosedAndResumes/#00": "pass",
+        "TestSecurityRestoreImportInitializesEmptyTargetClosedAndResumes/import_gate_closed": "pass",
+        "TestSecurityRestoreImportInitializesEmptyTargetClosedAndResumes/import_store_initialized": "pass",
+        "TestSecurityRestoreImportInitializesEmptyTargetClosedAndResumes": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes/gate_closed": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes/preserved": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes/staged": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes/applied:adk/sessions.sqlite": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes/applied:lake-web.sqlite": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes/confirmation_required": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes": "pass",
+        "TestSecurityManagedWorkWaitResumesOfficialSDKFromActualMachineEvent": "pass",
+        "TestSecurityWorkMachineResumeRejectsExpiryRevocationAndUnregisteredObserver/expired-task": "pass",
+        "TestSecurityWorkMachineResumeRejectsExpiryRevocationAndUnregisteredObserver/revoked-policy": "pass",
+        "TestSecurityWorkMachineResumeRejectsExpiryRevocationAndUnregisteredObserver/foreign-source": "pass",
+        "TestSecurityWorkMachineResumeRejectsExpiryRevocationAndUnregisteredObserver/opaque-observer": "pass",
+        "TestSecurityWorkMachineResumeRejectsExpiryRevocationAndUnregisteredObserver": "pass",
+        "TestWorkRecoveryValidatesEveryResourceIdentity": "pass",
+        "TestWorkObserverBacksOffThenBlocksWithoutModelOrWrite": "pass",
+        "TestWorkRecoveryRefusesChangedResourceBinding": "pass",
+        "TestWorkRecoveryKeepsNewTopicAndUsesCurrentConfig": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Unit boundaries and existing monitored Shell path; generic external build profile unavailable."
+    },
+    {
+      "case": "TEST-015",
+      "unitBoundaryEvidence": {
+        "TestSuperResourceConflictRetainsUnknownEffects": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-016",
+      "unitBoundaryEvidence": {
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/normal": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/ignore": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/plan": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/child": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/ordinary": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/failed-direct-save": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/successful-direct-save": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent": "pass",
+        "TestSuperMemoryPreservesWorkerExclusionAndOriginalSource": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Compatibility evidence only; N5 Worker inheritance remains disabled."
+    },
+    {
+      "case": "TEST-017",
+      "unitBoundaryEvidence": {
+        "TestSuperMemoryPreservesWorkerExclusionAndOriginalSource": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Unavailable-path and scope boundaries only; asset task knowledge is not delivered."
+    },
+    {
+      "case": "TEST-018",
+      "unitBoundaryEvidence": {
+        "TestMemoryCaptureOutboxPressureRetainsSourceAndFlushesAfterAck": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/normal": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/ignore": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/plan": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/child": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/ordinary": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/failed-direct-save": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/successful-direct-save": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent": "pass",
+        "TestSuperMemoryReferencesRemainExactAndDoNotPromoteUnknown": "pass",
+        "TestMemoryOutboxDeduplicationAndTransactionalCommit": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Existing outbox/provenance sidecar evidence only; new task Memory capture remains pending."
+    },
+    {
+      "case": "TEST-019",
+      "unitBoundaryEvidence": {
+        "TestNaturalRecallRevocationBeforeToolPreventsSideEffects": "pass",
+        "TestMemoryV2ForegroundRevokesLeaseAndRejectsLateCommit": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Existing revocation evidence only; joint task-aware consolidation remains pending."
+    },
+    {
+      "case": "TEST-020",
+      "unitBoundaryEvidence": {
+        "TestSuperWorkflowRealSREObservationUsesOriginalTaskAndAcceptance": "pass",
+        "TestSuperProjectHasOnePersistentPilotAndRealUserSource": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-021",
+      "unitBoundaryEvidence": {
+        "TestSecurityScheduleOccurrenceConsumesOnceAndStatusDoesNotInvalidate": "pass",
+        "TestSuperWorkflowDefinitionChangeFencesQueuedAndActiveWorkers": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-022",
+      "unitBoundaryEvidence": {
+        "TestSuperLegacyImportKeepsOriginalGoalAndNeverReplays": "pass",
+        "TestSuperLegacySREArchivePreservesUnknownOperationsAndIDs": "pass",
+        "TestSuperLegacyImportDoesNotAdoptUnresolvedOrSREWork": "pass",
+        "TestSuperCutoverRejectsActiveLegacySRE": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-023",
+      "unitBoundaryEvidence": {},
+      "status": "unit_and_manual_ui_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "558 frontend tests plus actual signed native UI/reference/caret and browser light/dark/narrow inspections. Separate OS clipboard payload not inspected."
+    },
+    {
+      "case": "TEST-024",
+      "unitBoundaryEvidence": {
+        "TestSuperHumanRecoveryUsesOriginalRunnerAndActualAnswer": "pass",
+        "TestSuperRecoveryFencesExpiredOwnerWithoutReplaying": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Lease/recovery fault simulation passed; physical power loss not run."
+    },
+    {
+      "case": "TEST-025",
+      "unitBoundaryEvidence": {
+        "TestSuperWatchdogBoundsDispatchFailureAndPreservesAcceptance": "pass",
+        "TestSuperRouterFailuresHavePersistentBoundedRetries": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-026",
+      "unitBoundaryEvidence": {
+        "TestSuperLifecycleIsAuthenticatedAndClosesNewAdmission": "pass"
+      },
+      "status": "unit_and_native_lifecycle_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Native UI detach/reopen same kernel and native authenticated drain passed; Windows, sleep/power and complete offline fault matrix not run."
+    }
+  ],
+  "unavailable": [
+    "TASK-016 generic trusted external build readonly Security profile",
+    "TASK-020 task provenance capture into maintained Memory outbox/snapshots",
+    "TASK-021 task-aware Memory consolidation and joint revocation validation",
+    "TASK-022 completed Memory source UI and joint delivery matrix"
+  ],
+  "notRun": [
+    "Windows native Dev",
+    "physical power loss",
+    "sleep/wake",
+    "cross-device continuity",
+    "complete 26-case native fault injection matrix",
+    "separate OS clipboard payload inspection"
+  ],
+  "capabilityGates": {
+    "operationalMemoryV2Ready": false,
+    "N5WorkerInheritance": false,
+    "genericBuildObservation": "unavailable",
+    "taskKnowledgeRead": "unavailable"
+  },
+  "cleanup": {
+    "rebuildableGiBRemoved": 13.19,
+    "freeDiskGiBAfter": 23.47,
+    "scope": "ignored Swift caches and Go build/race cache only"
+  }
+}

@@ -237,7 +237,7 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 | TASK-023 | 在 `internal/web/superagent_routes.go` 实现鉴权的消息、Task/Worker、状态和事件投影入口；`agent.go:runTurn`、`sre_service.go:launchSRE/followSREHandoff` 接统一入口，旧执行路由只代理一次；保留真实审批/问题路径。依赖 TASK-013、TASK-016、TASK-017；验证 TEST-020。 | true | 2026-11-02 |
 | TASK-024 | 将 `internal/web/schedules.go:executeSchedule` 与保存工作流接到 `superagent_source.go:ReceiveScheduleOccurrence`，使用原 `SecurityScheduleOccurrenceID/ValidateSecurityScheduleTaskSource` 及受控重复触发策略。旧 scheduler 先停止接单后切换。依赖 TASK-023；验证 TEST-021。 | true | 2026-11-02 |
 | TASK-025 | 在 `internal/ai/superagent_migration.go:ApplyLegacyWorkImport` 落实 1.6 的排空、唯一 alias、逐条对账和接管水位；旧 SDK Session 和操作 ID 保持不变，缺失来源/验收/明确句柄时保持只读或受阻。依赖 TASK-002、TASK-023；验证 TEST-002、TEST-022。 | true | 2026-11-02 |
-| TASK-026 | 在 `web-agent/shared/contracts.ts`、`web-agent/web/src/App.tsx`、新 `PilotWorkspace.tsx` 与 `pilotWorkspace.css` 接真实 Pilot、专员、资源及 Task 投影；使用原 `SessionInspectorContext.tsx`、`PilotHeaderState.tsx` 和终端入口构成 Dev 三联。窄窗、明暗、焦点、资源引用和三栏宽度遵循 `docs/ui-guidelines.md`。依赖 TASK-023、TASK-025；验证 TEST-023。 | false | — |
+| TASK-026 | 在 `web-agent/shared/contracts.ts`、`web-agent/web/src/App.tsx`、新 `PilotWorkspace.tsx` 与 `pilotWorkspace.css` 接真实 Pilot、专员、资源及 Task 投影；使用原 `SessionInspectorContext.tsx`、`PilotHeaderState.tsx` 和终端入口构成 Dev 三联。窄窗、明暗、焦点、资源引用和三栏宽度遵循 `docs/ui-guidelines.md`。依赖 TASK-023、TASK-025；验证 TEST-023。 | true | 2026-11-02 |
 | TASK-027 | 在 `internal/ai/catalog.go`、`internal/web/agent.go` 与 `internal/web/sre_service.go` 关闭迁移域的旧创建/恢复写入口，保留兼容读取；在 `docs/experiments/adk-runtime.md` 和 `docs/lake-pilot.md` 写明唯一接单、恢复与结清路径。依赖 TASK-024、TASK-025、TASK-026；验证 TEST-020、TEST-022。 | true | 2026-11-02 |
 
 ### Implementation Phase 7
@@ -248,8 +248,8 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 | --- | --- | --- | --- |
 | TASK-028 | 在 `internal/ai/superagent_recovery.go:RecoverSuperagent/ClaimAssignment` 实现带 generation/fence 的恢复，默认 lease 45 秒、heartbeat 15 秒；接现有恢复 gate 与原句柄对账，旧 owner 迟到提交被拒绝。依赖 TASK-025、TASK-027；验证 TEST-024。 | true | 2026-11-02 |
 | TASK-029 | 在 `internal/ai/superagent_watchdog.go:CheckSuperagentProgress` 实现确定性故障分类、连续无进展记录与有界恢复提案；语义监督仅使用明确后台预算、同一 ADK 与 Security，不自动改策略或重试 unknown 变更。依赖 TASK-028；验证 TEST-025。 | true | 2026-11-02 |
-| TASK-030 | 新增 `client/macos/Sources/LakeDesktop/SuperagentConnection.swift`，适配 `Backend.swift:readRuntime/healthy/start/stop` 与 `App.swift`，实现 1.6 的 detach、鉴权停止、重连及更新前 drain；新增 `internal/web/superagent_lifecycle.go:DrainSuperagent` 处理停止接单、checkpoint、outbox 和排空。保持 Swift `LakeDesktop` target、签名 Dev 安装与 Home 独占，不安装 LaunchAgent 或部署云端内核。依赖 TASK-028；验证 TEST-026。 | false | — |
-| TASK-031 | 新增 `scripts/verify_superagent_dev.py`，用隔离 Home、合成供应商与只读可控资源执行第 6 节矩阵；生成 `docs/validation/lake-superagent-runtime.md` 与 JSON，记录精确 tested SHA、平台、原生 Dev 结果及未验证项。依赖 TASK-029、TASK-030；验证 TEST-001 至 TEST-026。 | false | — |
+| TASK-030 | 新增 `client/macos/Sources/LakeDesktop/SuperagentConnection.swift`，适配 `Backend.swift:readRuntime/healthy/start/stop` 与 `App.swift`，实现 1.6 的 detach、鉴权停止、重连及更新前 drain；新增 `internal/web/superagent_lifecycle.go:DrainSuperagent` 处理停止接单、checkpoint、outbox 和排空。保持 Swift `LakeDesktop` target、签名 Dev 安装与 Home 独占，不安装 LaunchAgent 或部署云端内核。依赖 TASK-028；验证 TEST-026。 | true | 2026-11-02 |
+| TASK-031 | 新增 `scripts/verify_superagent_dev.py`，用隔离 Home、合成供应商与只读可控资源执行第 6 节矩阵；生成 `docs/validation/lake-superagent-runtime.md` 与 JSON，记录精确 tested SHA、平台、原生 Dev 结果及未验证项。依赖 TASK-029、TASK-030；验证 TEST-001 至 TEST-026。 | true | 2026-11-02 |
 
 ## 3. Alternatives
 
@@ -318,7 +318,7 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 
 每个实现批次执行受影响的 Go 测试与 race；涉及执行/持久化时加 `go vet ./...`、ADK 边界检查及恢复测试。前端批次使用 `web-agent/package.json` 中已有脚本执行类型检查、相关测试和 Web build，不发明不存在的 npm 脚本。最终集成执行完整 Go/race/vet、前端检查、签名 Dev 与故障矩阵，记录精确 head SHA；Windows 和跨设备未测项单列。日常 `develop` PR 不自动跑 CI，不把无 checks 写成通过。
 
-本轮文档验证：检查 front matter、八个固定章节、声明 ID 唯一性、引用完整性、相对文件链接及 `git diff --check`；不构建、不安装、不启动应用，不声称上述运行验收完成。
+最初方案阶段仅做文档验证，没有构建或安装。实施阶段的实际 tested SHA、签名 Dev 与已运行/未运行矩阵统一记录于 [验证记录](../docs/validation/lake-superagent-runtime.md)，不把规划要求当作已通过结果。
 
 ## 7. Risks & Assumptions
 
@@ -351,5 +351,5 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 
 - TASK-016：原受监管 Shell 等待接续已接公共 Worker；通用构建平台缺少当前只读 Security profile，适配器明确 unavailable。不能把通用 MCP 返回或历史批准用于后台自动读取。
 - TASK-020 至 TASK-022：已提交宿主只读来源旁注及兼容契约供协作审阅；长期任务来源采集/整理与资产范围 Memory 依赖 bearqy/Items 的接口和联合验收，尚未完成，不改变 snapshot hash、不启用 N5 专员或运维 V2。
-- TASK-026/030/031：客户端界面与生命周期代码已实现，最终签名安装、原生三栏与故障矩阵验证完成后再更新对应状态。
+- TASK-026/030/031：已完成签名 Dev 安装、真实三联与明暗/窄窗检查、原生退出界面后同 PID 重连和鉴权排空；验收脚本及 [MD](../docs/validation/lake-superagent-runtime.md)/[JSON](../docs/validation/lake-superagent-runtime.json) 已交付。26 项矩阵逐项记录实际边界证据，Windows、睡眠/断电和完整原生故障矩阵仍未验证，不能据此声称整个矩阵通过。
 - 全部完成和已启用是不同事实；本计划保持 In progress，不能用部分单测或缺失 CI 声称完整验收。
