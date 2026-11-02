@@ -23,7 +23,10 @@ func (b *Server) readUserSupplements(id, root string) (result []ai.UserSupplemen
 		}
 		return out
 	}).([]Object)
-	out := []ai.UserSupplement{}
+	out, superErr := b.Engine.SuperUserSupplements(b.Context, id, root)
+	if superErr != nil {
+		return nil, superErr
+	}
 	for _, row := range rows {
 		var input ai.UserSupplement
 		if err := json.Unmarshal([]byte(jsonText(row)), &input); err != nil {
@@ -102,6 +105,13 @@ func (s *Store) releaseUserSupplements(id string) {
 	})
 }
 func (b *Server) pushUserSupplement(id string, data Object) Object {
+	if kind := b.Store.superSessionKind(id); kind == "router" {
+		fail(409, "Pilot 会自动接收排队消息，无需补充到路由轮次")
+	} else if kind == "worker" {
+		payload := b.Store.queuedPayload(id, stringOf(data["id"]))
+		message := b.validateHumanMessage(id, payload)
+		return b.acceptSuperWorkerMessage(id, message, stringOf(data["id"]))
+	}
 	if b.Store.ActiveWorkflowRun(id) != "" {
 		fail(409, "此会话正在执行工作流，请停止或等待工作流结束后再发送消息")
 	}

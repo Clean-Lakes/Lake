@@ -46,6 +46,18 @@ func (e *Engine) QueuePilotReport(ctx context.Context, projectID, sessionID, tas
 		return out, err
 	}
 	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		id := hash(js([]any{"pilot-report", taskID, expected, channelRef, kind}))
+		requestHash := hash(js([]any{projectID, sessionID, sourceMessageID, payload}))
+		var prior superOutputRow
+		if lookup := tx.First(&prior, "id = ?", id).Error; lookup == nil {
+			if prior.RequestHash != requestHash {
+				return errSuperConflict
+			}
+			out = prior.report()
+			return nil
+		} else if !errors.Is(lookup, gorm.ErrRecordNotFound) {
+			return lookup
+		}
 		view, err := projectSuperTaskTx(tx, sessionID, taskID)
 		if err != nil {
 			return err
@@ -56,8 +68,6 @@ func (e *Engine) QueuePilotReport(ctx context.Context, projectID, sessionID, tas
 		// A result is not necessarily success; the canonical state travels with it.
 		// Consumers must display it and cannot derive completion from prose.
 		data := js(map[string]any{"task": view, "text": payload})
-		id := hash(js([]any{"pilot-report", taskID, expected, channelRef, kind}))
-		requestHash := hash(js([]any{projectID, sessionID, sourceMessageID, data}))
 		row := superOutputRow{ID: id, TaskID: taskID, ProjectID: projectID, ChannelRef: channelRef, SourceMessageID: sourceMessageID, Kind: kind, Payload: data, RequestHash: requestHash, ReportRevision: expected, State: "pending", CreatedAt: time.Now().UTC()}
 		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
 			return err
@@ -106,6 +116,55 @@ func (e *Engine) BeginPilotDelivery(ctx context.Context, projectID, id string) (
 		out = row.report()
 		return nil
 	})
+	return out, err
+}
+
+// The built-in host message store guarantees a unique message ID. This adapter
+// may retry the same key after an uncertain send; arbitrary channels cannot.
+func (e *Engine) BeginPilotHostDelivery(ctx context.Context, projectID, id string) (SuperReport, error) {
+	db, err := e.superStore()
+	if err != nil {
+		return SuperReport{}, err
+	}
+	var out SuperReport
+	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row superOutputRow
+		if err := tx.First(&row, "id = ? AND project_id = ?", id, projectID).Error; err != nil {
+			return err
+		}
+		var domain superProjectRow
+		if err := tx.First(&domain, "project_id = ? AND router_session_id = ?", projectID, row.ChannelRef).Error; err != nil {
+			return err
+		}
+		switch row.State {
+		case "delivered":
+			out = row.report()
+			return nil
+		case "pending", "sending", "unknown":
+		default:
+			return errSuperBinding
+		}
+		if err := tx.Model(&superOutputRow{}).Where("id = ?", id).Update("state", "sending").Error; err != nil {
+			return err
+		}
+		row.State = "sending"
+		out = row.report()
+		return nil
+	})
+	return out, err
+}
+
+func (e *Engine) PendingPilotReports(ctx context.Context, projectID string) ([]SuperReport, error) {
+	db, err := e.superStore()
+	if err != nil {
+		return nil, err
+	}
+	var rows []superOutputRow
+	err = db.WithContext(ctx).Where("project_id = ? AND state IN ?", projectID, []string{"pending", "sending", "unknown"}).Order("created_at, id").Limit(100).Find(&rows).Error
+	out := make([]SuperReport, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row.report())
+	}
 	return out, err
 }
 func (e *Engine) AcknowledgePilotDelivery(ctx context.Context, projectID, id, receipt string) error {

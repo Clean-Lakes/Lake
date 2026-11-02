@@ -27,6 +27,7 @@ export function inspectedAttempt(task:SRETask,attemptId?:string){
 
 /** Header openings follow the current conversation, never a remembered history target. */
 export function latestInspectorSelection(snapshot:SessionSnapshot,tab:InspectorSelection['tab']='execution'):InspectorSelection {
+	if(snapshot.superagent?.task.sessionId===snapshot.session.id)return {sessionId:snapshot.session.id,canonicalGoalId:snapshot.superagent.task.taskId,tab,followLatest:true};
  const pilot=pilotIslandModel(snapshot),task=snapshot.sre?.tasks.find(task=>task.id===pilot?.taskId);
  const latestUser=(snapshot.messages??[]).filter(message=>message.role==='user').at(-1);
  const userAt=Date.parse(latestUser?.createdAt??''),started=Date.parse(snapshot.ai?.turnStartedAt??'');

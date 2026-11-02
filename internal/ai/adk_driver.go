@@ -308,6 +308,12 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 	id := runtimeID
 	message := s.state.RootQuestion
 	s.mu.Unlock()
+	if c.superRole == "router" && messageContent != nil {
+		message = ""
+		for _, part := range messageContent.Parts {
+			message += part.Text
+		}
+	}
 	runContent := func(content *genai.Content) error {
 		resuming := false
 		if content != nil {

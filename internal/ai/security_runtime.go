@@ -318,6 +318,7 @@ func (e *Engine) prepareSecurityTurnLocked(ctx context.Context, s *session, c *C
 	}
 	if goal.Status == "paused" {
 		goal.Status = "running" // Real current-goal continuation; item prerequisites remain unchanged.
+		row.superFence = c.superAssignment
 		if err = e.writeWorkGoal(&row, &goal, false); err != nil {
 			return out, err
 		}

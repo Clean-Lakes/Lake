@@ -78,6 +78,7 @@ type Server struct {
 	generated            bool
 	workers              sync.WaitGroup
 	superWorkers         sync.Map
+	draining             atomic.Bool
 	closeOnce            sync.Once
 	startMu              sync.Mutex
 	gate                 sync.RWMutex
@@ -215,6 +216,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		return nil, err
 	}
 	server.Engine.SetSRERepository(store)
+	server.Engine.SuperInputResolver = server.resolveSuperInput
 	server.Engine.NaturalMemory = server.naturalRecallProvider
 	server.Engine.ModelActivity = server.memoryForegroundModel
 	server.Engine.MemoryCaptureAllowed = store.MemoryCaptureAllowed
@@ -269,6 +271,8 @@ func (b *Server) prepareHTTPServer() (net.Listener, *http.Server, error) {
 	if !b.securityRuntime.ReadOnlyView() {
 		b.workers.Add(1)
 		go b.runMemoryWorker()
+		b.workers.Add(1)
+		go b.runSuperagent()
 		b.workers.Add(1)
 		go func() {
 			defer b.workers.Done()
@@ -463,6 +467,12 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !(name == "/api/bootstrap" && method == "GET" && b.generated && b.options.DevOrigin != "") {
 			fail(401, "Authentication required")
 		}
+	}
+	if b.superagentLifecycleRoute(w, r) {
+		return
+	}
+	if b.draining.Load() && method != "GET" {
+		fail(503, "内核正在排空，新的操作尚未接纳")
 	}
 	if b.securityMigrationRoute(w, r) {
 		return

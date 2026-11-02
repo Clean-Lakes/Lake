@@ -112,6 +112,14 @@ func (e *Engine) ReadSuperObject(ctx context.Context, sessionID, kind, id string
 	}
 	text := utf8Prefix(raw[offset:], limit)
 	next := offset + len(text)
+	if kind == "event" && c.superRole == "router" && c.superRouter != nil && c.superRouter.readCursors != nil {
+		c.superRouter.readMu.Lock()
+		if offset == 0 || offset == c.superRouter.readCursors[id] {
+			c.superRouter.readCursors[id] = next
+			c.superRouter.readComplete[id] = next == len(raw)
+		}
+		c.superRouter.readMu.Unlock()
+	}
 	if next == len(raw) {
 		next = 0
 	}
@@ -129,12 +137,13 @@ func (e *Engine) BuildRouterContext(ctx context.Context, sessionID string, event
 	pages := []SuperObjectPage{}
 	used := 0
 	for _, event := range events {
-		page, err := e.ReadSuperObject(ctx, sessionID, "event", event.ID, 1, 0, 4096)
+		previewLimit := min(4096, max(256, 12000/max(1, len(events))-400))
+		page, err := e.ReadSuperObject(ctx, sessionID, "event", event.ID, 1, 0, previewLimit)
 		if err != nil {
 			return "", err
 		}
 		used += len(js(page))
-		if used > 16*1024 {
+		if used > 16*1024-512 {
 			return "", errors.New("superagent: Router event batch exceeds context budget; reduce batch")
 		}
 		pages = append(pages, page)
@@ -153,7 +162,7 @@ func (e *Engine) BuildRouterContext(ctx context.Context, sessionID string, event
 		if err != nil {
 			return "", err
 		}
-		if used+len(js(page)) > 16*1024 {
+		if used+len(js(page)) > 16*1024-512 {
 			break
 		}
 		used += len(js(page))

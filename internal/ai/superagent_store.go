@@ -9,6 +9,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const superSchemaVersion = 2
+
 type superSchemaRow struct {
 	ID      int `gorm:"primaryKey"`
 	Version int
@@ -25,6 +27,10 @@ type superSourceRow struct {
 func (superSourceRow) TableName() string { return "superagent_sources" }
 
 type superEventRow struct {
+	SourceKind                                                      string
+	RoutingAttempts                                                 int
+	RetryAt                                                         time.Time
+	HostInputHash                                                   string
 	ID                                                              string `gorm:"primaryKey"`
 	SourceID                                                        string `gorm:"uniqueIndex:super_event_source,priority:1"`
 	SourceEventID                                                   string `gorm:"uniqueIndex:super_event_source,priority:2"`
@@ -37,6 +43,7 @@ type superEventRow struct {
 func (superEventRow) TableName() string { return "superagent_events" }
 
 type superDecisionRow struct {
+	AppliedAt                           *time.Time
 	ID                                  string `gorm:"primaryKey"`
 	EventID                             string `gorm:"uniqueIndex:super_decision,priority:1"`
 	PartKey                             string `gorm:"uniqueIndex:super_decision,priority:2"`
@@ -57,6 +64,9 @@ type superRoleRow struct {
 func (superRoleRow) TableName() string { return "superagent_roles" }
 
 type superWorkerRow struct {
+	ParentGeneration                                      int64
+	GoalSessionID                                         string
+	ConversationMode                                      string
 	ID                                                    string `gorm:"primaryKey"`
 	TaskID                                                string `gorm:"index"`
 	ProjectID, SessionID, ParentWorkerID, RoleID, ScopeID string
@@ -67,11 +77,22 @@ type superWorkerRow struct {
 
 func (superWorkerRow) TableName() string { return "superagent_workers" }
 
+func (w superWorkerRow) goalSession() string {
+	if w.GoalSessionID != "" {
+		return w.GoalSessionID
+	}
+	return w.SessionID
+}
+
 type superAssignmentRow struct {
+	InvocationKind                        string
+	FailureCount                          int
+	LastError                             string
 	ID                                    string `gorm:"primaryKey"`
 	WorkerID                              string `gorm:"index"`
 	AttemptID, OwnerID, Checkpoint, State string
 	ProjectID                             string `gorm:"index"`
+	InputEventID                          string
 	CreatedAt                             time.Time
 	Generation                            int64
 	LeaseUntil                            time.Time
@@ -98,6 +119,7 @@ type superInboxRow struct {
 	WorkerID                                    string `gorm:"uniqueIndex:super_input,priority:3"`
 	TaskID, AssignmentID, Mode, ConsumedEventID string
 	SourceMessageID, RootTurnID                 string
+	SDKSessionID                                string
 	DeliveredAt, ConsumedAt                     *time.Time
 }
 
@@ -131,7 +153,7 @@ type superLegacyAliasRow struct {
 func (superLegacyAliasRow) TableName() string { return "superagent_legacy_aliases" }
 
 func superagentModels() []any {
-	return []any{&superSchemaRow{}, &superSourceRow{}, &superEventRow{}, &superDecisionRow{}, &superRoleRow{}, &superWorkerRow{}, &superAssignmentRow{}, &superSubscriptionRow{}, &superInboxRow{}, &superOutputRow{}, &superLegacyAliasRow{}, &superHandbackRow{}, &superAdmissionRow{}, &superProjectRow{}}
+	return []any{&superSchemaRow{}, &superSourceRow{}, &superEventRow{}, &superDecisionRow{}, &superRoleRow{}, &superWorkerRow{}, &superAssignmentRow{}, &superSubscriptionRow{}, &superInboxRow{}, &superOutputRow{}, &superLegacyAliasRow{}, &superHandbackRow{}, &superAdmissionRow{}, &superProjectRow{}, &superBudgetRow{}, &superModelChargeRow{}}
 }
 
 // MigrateSuperagentStore adds routing metadata only. A newer schema is rejected
@@ -142,7 +164,7 @@ func MigrateSuperagentStore(db *gorm.DB) error {
 		if err := db.First(&row, "id = ?", 1).Error; err != nil {
 			return err
 		}
-		if row.Version != 1 {
+		if row.Version != superSchemaVersion {
 			return errors.New("superagent: unsupported schema")
 		}
 		for _, model := range superagentModels() {
@@ -156,7 +178,7 @@ func MigrateSuperagentStore(db *gorm.DB) error {
 		if err := tx.AutoMigrate(superagentModels()...); err != nil {
 			return err
 		}
-		if err := tx.Create(&superSchemaRow{ID: 1, Version: 1}).Error; err != nil {
+		if err := tx.Create(&superSchemaRow{ID: 1, Version: superSchemaVersion}).Error; err != nil {
 			return err
 		}
 		// Previous binaries already honor this guard before any AutoMigrate.
@@ -182,18 +204,11 @@ func (e *Engine) superStore() (*gorm.DB, error) {
 	}
 	owner.superOnce.Do(func() {
 		if !store.DB.Migrator().HasTable(&superSchemaRow{}) {
-			var goals, operations int64
-			if owner.superErr = store.DB.Model(&nativeWorkGoal{}).Count(&goals).Error; owner.superErr != nil {
+			backupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			owner.superErr = store.Backup(backupCtx, filepath.Join(owner.runtimeDirectory(), "before-superagent-"+uid()+".sqlite"))
+			if owner.superErr != nil {
 				return
-			}
-			if owner.superErr = store.DB.Model(&nativeOperation{}).Count(&operations).Error; owner.superErr != nil {
-				return
-			}
-			if goals+operations > 0 {
-				owner.superErr = store.Backup(context.Background(), filepath.Join(owner.runtimeDirectory(), "before-superagent-"+uid()+".sqlite"))
-				if owner.superErr != nil {
-					return
-				}
 			}
 		}
 		owner.superErr = MigrateSuperagentStore(store.DB)

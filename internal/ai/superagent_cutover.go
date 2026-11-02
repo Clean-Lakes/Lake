@@ -86,6 +86,69 @@ func (e *Engine) SuperProject(ctx context.Context, projectID string) (SuperProje
 	return SuperProject{ProjectID: r.ProjectID, RouterSessionID: r.RouterSessionID, Version: r.Version}, err == nil, err
 }
 
+func (e *Engine) SuperProjects(ctx context.Context) ([]SuperProject, error) {
+	db, err := e.superStore()
+	if err != nil {
+		return nil, err
+	}
+	var rows []superProjectRow
+	if err = db.WithContext(ctx).Order("project_id").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]SuperProject, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, SuperProject{ProjectID: r.ProjectID, RouterSessionID: r.RouterSessionID, Version: r.Version})
+	}
+	return out, nil
+}
+
+func (e *Engine) SuperInputWorkers(ctx context.Context, projectID string) ([]string, error) {
+	db, err := e.superStore()
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	err = db.WithContext(ctx).Model(&superWorkerRow{}).Where("project_id = ? AND id IN (?)", projectID, db.Model(&superInboxRow{}).Select("worker_id").Where("mode = ? AND consumed_at IS NULL AND delivered_at IS NULL", "followup")).Order("created_at, id").Limit(100).Pluck("id", &ids).Error
+	return ids, err
+}
+
+func (e *Engine) ApplySuperStops(ctx context.Context, projectID string) error {
+	db, err := e.superStore()
+	if err != nil {
+		return err
+	}
+	var decisions []superDecisionRow
+	if err = db.WithContext(ctx).Where("action = ? AND applied_at IS NULL AND task_id IN (?)", "stop", db.Model(&superWorkerRow{}).Select("task_id").Where("project_id = ?", projectID)).Order("at, id").Limit(16).Find(&decisions).Error; err != nil {
+		return err
+	}
+	for _, d := range decisions {
+		var w superWorkerRow
+		if err = db.WithContext(ctx).First(&w, "task_id = ? AND project_id = ?", d.TaskID, projectID).Error; err != nil {
+			return err
+		}
+		var event superEventRow
+		if err = db.WithContext(ctx).First(&event, "id = ? AND project_id = ? AND disposition = ?", d.EventID, projectID, "routed").Error; err != nil {
+			continue
+		}
+		_, goal, err := e.workRow(w.SessionID, w.TaskID)
+		if err != nil {
+			return err
+		}
+		if !workTerminal(goal.Status) {
+			if err = e.WorkControl(ctx, w.SessionID, w.TaskID, "cancel", goal.Revision); err != nil {
+				return err
+			}
+		}
+		if err = db.WithContext(ctx).Model(&superAssignmentRow{}).Where("worker_id IN (?)", db.Model(&superWorkerRow{}).Select("id").Where("task_id = ? AND project_id = ?", w.TaskID, projectID)).Updates(map[string]any{"state": "finished", "owner_id": "", "generation": gorm.Expr("generation + 1"), "lease_until": time.Time{}}).Error; err != nil {
+			return err
+		}
+		if err = db.WithContext(ctx).Model(&superDecisionRow{}).Where("id = ? AND applied_at IS NULL", d.ID).Update("applied_at", time.Now().UTC()).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type SuperWorkerView struct {
 	ID              string        `json:"id"`
 	RoleID          string        `json:"roleId"`
@@ -96,6 +159,37 @@ type SuperWorkerView struct {
 	ParentWorkerID  string        `json:"parentWorkerId,omitempty"`
 }
 
+func (e *Engine) SuperWorkerForSession(ctx context.Context, projectID, sessionID string) (SuperRouteResult, error) {
+	db, err := e.superStore()
+	if err != nil {
+		return SuperRouteResult{}, err
+	}
+	var w superWorkerRow
+	if err = db.WithContext(ctx).First(&w, "session_id = ? AND project_id = ?", sessionID, projectID).Error; err != nil {
+		return SuperRouteResult{}, err
+	}
+	return SuperRouteResult{TaskID: w.TaskID, WorkerID: w.ID, SessionID: w.SessionID}, nil
+}
+
+func (e *Engine) SuperWorkerEventIDs(ctx context.Context, projectID, sessionID string) ([]string, error) {
+	db, err := e.superStore()
+	if err != nil {
+		return nil, err
+	}
+	var w superWorkerRow
+	if err = db.WithContext(ctx).First(&w, "session_id = ? AND project_id = ?", sessionID, projectID).Error; err != nil {
+		return nil, err
+	}
+	var ids []string
+	if err = db.WithContext(ctx).Model(&superInboxRow{}).Distinct("event_id").Where("worker_id = ? AND mode = ?", w.ID, "followup").Pluck("event_id", &ids).Error; err != nil {
+		return nil, err
+	}
+	if w.SourceEventID != "" {
+		ids = append(ids, w.SourceEventID)
+	}
+	return ids, nil
+}
+
 func (e *Engine) SuperWorkers(ctx context.Context, projectID string) ([]SuperWorkerView, error) {
 	db, err := e.superStore()
 	if err != nil {
@@ -104,7 +198,7 @@ func (e *Engine) SuperWorkers(ctx context.Context, projectID string) ([]SuperWor
 	out := []SuperWorkerView{}
 	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var workers []superWorkerRow
-		if err := tx.Where("project_id = ?", projectID).Order("created_at DESC, id").Limit(100).Find(&workers).Error; err != nil {
+		if err := tx.Where("project_id = ? AND parent_worker_id = ''", projectID).Order("created_at DESC, id").Limit(100).Find(&workers).Error; err != nil {
 			return err
 		}
 		for _, w := range workers {

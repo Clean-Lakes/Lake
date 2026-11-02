@@ -36,6 +36,7 @@ type session struct {
 	sreReply            *sreReply
 }
 type Engine struct {
+	SuperInputResolver             func(context.Context, SuperEvent) (TurnInput, error) // Trusted host; resolves existing source data, never authority.
 	superOnce                      sync.Once
 	superErr                       error
 	superInitialized               atomic.Bool
@@ -331,12 +332,16 @@ func (e *Engine) Configure(id string, c Config) error {
 			c.AuthSecrets = append(c.AuthSecrets, secret)
 		}
 	}
-	if c.Model.Key != "" {
-		e.superSecrets.Store(c.Model.Key, true)
+	secretOwner, ownerErr := securityRootEngine(e)
+	if ownerErr != nil {
+		return ownerErr
 	}
-	for _, secret := range c.AuthSecrets {
+	if c.Model.Key != "" {
+		secretOwner.superSecrets.Store(c.Model.Key, true)
+	}
+	for _, secret := range append(c.AuthSecrets, headerValues(c.Model.Headers)...) {
 		if secret != "" {
-			e.superSecrets.Store(secret, true)
+			secretOwner.superSecrets.Store(secret, true)
 		}
 	}
 	if c.Permissions != nil {
@@ -675,7 +680,7 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		return errors.New("session busy")
 	}
 	c := s.state.Config
-	c.sreCoordinator = c.ConversationMode != ModePlan && input.SRECoordination && e.worker == nil && (c.Profile == "core" || c.Profile == "")
+	c.sreCoordinator = c.superRole == "" && c.ConversationMode != ModePlan && input.SRECoordination && e.worker == nil && (c.Profile == "core" || c.Profile == "")
 	if c.ConversationMode == ModePlan {
 		c.MemoryExtractionEnabled = false
 		if len(input.workflow) > 0 {
@@ -703,7 +708,11 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		s.mu.Unlock()
 		return errors.New("model not configured")
 	}
-	message := text
+	modelUserText := text
+	if c.superRole == "router" && len(modelUserText) > 4096 {
+		modelUserText = utf8Prefix(modelUserText, 4096) + "\n[Original message continues in the immutable event. Read all pages before routing; the preview does not replace its constraints.]"
+	}
+	message := modelUserText
 	hasTargetReference := false
 	for _, ref := range refs {
 		hasTargetReference = hasTargetReference || str(ref["asset_ref"]) != "" || str(ref["terminal_id"]) != ""
@@ -745,11 +754,11 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 				}
 			}
 		}
-		message = "[HEXHUB_REFERENCES]\n" + js(refs) + "\n[USER_MESSAGE]\n" + text
+		message = "[HEXHUB_REFERENCES]\n" + js(refs) + "\n[USER_MESSAGE]\n" + modelUserText
 	}
 	if input.Context != "" {
 		if len(refs) == 0 {
-			message = "[USER_MESSAGE]\n" + text
+			message = "[USER_MESSAGE]\n" + modelUserText
 		}
 		message = boundedTurnContext(message, input.Context, c) + "\n" + message
 	}
@@ -764,7 +773,15 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	}
 	rootTurnID := uid()
 	if c.superRole == "worker" {
-		row, _, loadErr := e.workRow(id, c.superTaskID)
+		if token, ok := ctx.Value(superAssignmentContextKey{}).(SuperAssignmentToken); ok {
+			c.superAssignment = &token
+			s.state.Config.superAssignment = &token
+		}
+		if _, ok := ctx.Value(superAssignmentContextKey{}).(SuperAssignmentToken); !ok {
+			s.mu.Unlock()
+			return errors.New("superagent: Worker assignment required")
+		}
+		row, goal, loadErr := e.workRow(id, c.superTaskID)
 		if loadErr != nil {
 			s.mu.Unlock()
 			return loadErr
@@ -772,7 +789,20 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		if row.ClosureContract == "" {
 			rootTurnID = row.RootTurnID
 		}
+		if goal.ModelRounds >= goal.RoundLimit || !goal.DeadlineAt.After(time.Now().UTC()) {
+			s.mu.Unlock()
+			return errors.New("superagent: original task budget or deadline exhausted")
+		}
+		c.superRoundBase = goal.ModelRounds
+		c.MaxSteps = min(c.MaxSteps, goal.RoundLimit-goal.ModelRounds)
+		s.state.Config.superRoundBase = c.superRoundBase
 		ctx = context.WithValue(ctx, superWorkerModelKey{}, true)
+		if len(input.superInboxIDs) > 0 {
+			if err := e.bindSuperInitialInput(ctx, c.superTaskID, rootTurnID, input.superInboxIDs); err != nil {
+				s.mu.Unlock()
+				return err
+			}
+		}
 	}
 	execution, securityErr := e.prepareSecurityTurnLocked(ctx, s, &c, input, sourceMessageID, rootTurnID)
 	if securityErr != nil {
@@ -801,6 +831,9 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	s.state.NaturalRecallUsed = nil
 	s.state.Config.IgnoreNaturalMemory = input.IgnoreProjectMemory
 	s.state.SupplementIDs = nil
+	if len(input.superInboxIDs) > 0 {
+		s.state.SupplementIDs = []string{sourceMessageID}
+	}
 	s.supplementClosed = false
 	s.state.View.RootTurnID = rootTurnID
 	s.state.SREHandoff = nil

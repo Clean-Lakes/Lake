@@ -43,6 +43,54 @@ func securityWorkQuestionFixture(t *testing.T) (*Engine, *session, WorkGoal, con
 	return e, s, goal, context.WithValue(ctx, adkToolContextKey{}, struct{}{}), questions
 }
 
+func TestSecurityConfirmationPreservesLongSourceAndRejectsTampering(t *testing.T) {
+	e, s, goal, ctx, questions := securityWorkQuestionFixture(t)
+	row, goal, err := e.workRow(goal.SessionID, goal.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	goal.UserText = strings.Repeat("保留全部已有记录，不修改数据库。", 500)
+	if err = e.writeWorkGoal(&row, &goal, false); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := e.confirmSecurityWorkProposal(ctx, s, s.state.Config, Call{ID: "long-source", Name: "work_begin"}, goal)
+		done <- err
+	}()
+	var id string
+	select {
+	case id = <-questions:
+	case err := <-done:
+		t.Fatal(err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("missing long-source question")
+	}
+	s.mu.Lock()
+	req := s.state.View.Question
+	if req == nil || req.Source == nil || req.Source.Text != goal.UserText {
+		s.mu.Unlock()
+		t.Fatal("original constraints were clipped")
+	}
+	original := req.Source.Text
+	req.Source.Text += "changed"
+	s.mu.Unlock()
+	if err = e.ReplyQuestion("case", id, map[string][]string{"work_contract": {securityWorkConfirmLabel}}); err == nil {
+		t.Fatal("tampered source accepted")
+	}
+	s.mu.Lock()
+	req.Source.Text = original
+	s.mu.Unlock()
+	if err = e.ReplyQuestion("case", id, map[string][]string{"work_contract": {securityWorkRejectLabel}}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("rejection did not drain")
+	}
+}
+
 func TestSecurityWorkConfirmationUsesActualQuestionWithoutGrantingIO(t *testing.T) {
 	e, s, goal, ctx, questions := securityWorkQuestionFixture(t)
 	done := make(chan error, 1)

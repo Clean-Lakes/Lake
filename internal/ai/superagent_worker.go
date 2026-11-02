@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"gorm.io/gorm"
+	"time"
 )
 
 // Recovery and generic host configuration cannot accidentally turn a persisted
@@ -28,6 +29,11 @@ func (e *Engine) enforceSuperSessionConfig(sessionID string, c Config) (Config, 
 		return c, errSuperBinding
 	}
 	c.superRole, c.superTaskID, c.superRouter = "worker", w.TaskID, nil
+	c.superAssignment = nil
+	if w.ParentWorkerID != "" {
+		c.superRole = "child"
+	}
+	c.ConversationMode = w.ConversationMode
 	c.MemoryEnabled, c.MemoryExtractionEnabled, c.IgnoreNaturalMemory = false, false, true
 	c.NaturalMemory = nil
 	c.sreCoordinator, c.legacyInvestigations = false, false
@@ -44,6 +50,9 @@ func (e *Engine) bindSuperWorkerProposalLocked(ctx context.Context, s *session, 
 	var w superWorkerRow
 	if err = db.WithContext(ctx).First(&w, "session_id = ? AND task_id = ? AND project_id = ?", s.state.View.Session, c.superTaskID, configSecurityProject(*c)).Error; err != nil {
 		return err
+	}
+	if token, ok := ctx.Value(superAssignmentContextKey{}).(SuperAssignmentToken); !ok || token.WorkerID != w.ID {
+		return errSuperBinding
 	}
 	var goal nativeWorkGoal
 	if err = db.WithContext(ctx).First(&goal, "id = ? AND session_id = ?", w.TaskID, w.SessionID).Error; err != nil {
@@ -119,17 +128,117 @@ func (e *Engine) StartTaskWorker(ctx context.Context, projectID, workerID string
 	if err = db.WithContext(ctx).First(&decision, "task_id = ? AND action = ?", w.TaskID, "create").Error; err != nil {
 		return err
 	}
-	assignment, err := e.AcquireWorkerSlot(ctx, projectID, workerID)
+	input, err := e.resolveSuperInput(ctx, event.event())
 	if err != nil {
 		return err
 	}
-	runCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	done := make(chan struct{})
-	go e.heartbeatSuperAssignment(runCtx, assignment, cancel, done)
-	defer func() { cancel(); <-done; _ = e.ReleaseWorkerSlot(context.Background(), assignment, "parked") }()
-	// Root identity is installed by ExecuteTurn only for this original proposal.
-	return e.ExecuteTurn(runCtx, w.SessionID, TurnInput{UserText: event.Payload, StrategyMessageID: event.SourceEventID, Context: "[ASSIGNED DELIVERABLE]\n" + decision.Quote + "\n[BOUNDARY]\nWork only on this quoted deliverable. The original user message is retained for constraints; its other independent deliverables belong to other Workers. Canonical task: " + w.TaskID})
+	input.Context += "\n[ASSIGNED DELIVERABLE]\n" + decision.Quote + "\n[BOUNDARY]\nWork only on this quoted deliverable. The original user message is retained for constraints; its other independent deliverables belong to other Workers. Canonical task: " + w.TaskID
+	return e.runSuperWorkerInput(ctx, w, input)
+}
+
+func (e *Engine) runSuperWorkerInput(ctx context.Context, w superWorkerRow, input TurnInput) error {
+	assignment, err := e.AcquireWorkerSlot(ctx, w.ProjectID, w.ID)
+	if err != nil {
+		return err
+	}
+	runCtx, release := e.beginSuperInvocation(ctx, assignment)
+	defer release()
+	return e.ExecuteTurn(runCtx, w.SessionID, input)
+}
+
+// A real human followup can continue a confirmed idle task, never renew limits.
+func (e *Engine) QueueSuperFollowup(ctx context.Context, projectID, workerID string) error {
+	db, err := e.superStore()
+	if err != nil {
+		return err
+	}
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		w, err := superWorkerInProject(tx, workerID, projectID)
+		if err != nil {
+			return err
+		}
+		var a superAssignmentRow
+		if err = tx.First(&a, "worker_id = ?", w.ID).Error; err != nil {
+			return err
+		}
+		if a.State != "parked" {
+			return ErrSuperWorkerQueued
+		}
+		row, goal, err := loadSuperGoalTx(tx, w)
+		if err != nil {
+			return err
+		}
+		if goal.closure == nil || row.WaitCallID != "" || workTerminal(goal.Status) || !goal.DeadlineAt.After(time.Now().UTC()) || goal.ModelRounds >= goal.RoundLimit {
+			return ErrSuperWorkerQueued
+		}
+		if unresolved, err := workUnresolvedTx(tx, goal.ID, ""); err != nil {
+			return err
+		} else if unresolved {
+			return ErrSuperWorkerQueued
+		}
+		var input superInboxRow
+		if err = tx.First(&input, "worker_id = ? AND mode = ? AND consumed_at IS NULL AND delivered_at IS NULL", w.ID, "followup").Error; err != nil {
+			return err
+		}
+		var event superEventRow
+		if err = tx.First(&event, "id = ? AND project_id = ? AND disposition = ?", input.EventID, projectID, "routed").Error; err != nil {
+			return err
+		}
+		var source superSourceRow
+		if err = tx.First(&source, "id = ? AND revision = ? AND kind = ? AND enabled = ?", event.SourceID, event.SourceRevision, "user", true).Error; err != nil {
+			return err
+		}
+		return tx.Model(&superAssignmentRow{}).Where("id = ? AND generation = ? AND state = ?", a.ID, a.Generation, "parked").Updates(map[string]any{"state": "queued", "input_event_id": event.ID, "invocation_kind": "human"}).Error
+	})
+}
+
+func loadSuperGoalTx(tx *gorm.DB, w superWorkerRow) (nativeWorkGoal, WorkGoal, error) {
+	var row nativeWorkGoal
+	var goal WorkGoal
+	if err := tx.First(&row, "id = ? AND session_id = ?", w.TaskID, w.goalSession()).Error; err != nil {
+		return row, goal, err
+	}
+	return row, goal, decodeWorkGoal(row, &goal)
+}
+
+func (e *Engine) ResumeTaskWorker(ctx context.Context, projectID, workerID string) error {
+	db, err := e.superStore()
+	if err != nil {
+		return err
+	}
+	w, err := superWorkerInProject(db.WithContext(ctx), workerID, projectID)
+	if err != nil {
+		return err
+	}
+	var a superAssignmentRow
+	if err = db.WithContext(ctx).First(&a, "worker_id = ? AND state = ?", workerID, "queued").Error; err != nil {
+		return err
+	}
+	if a.InputEventID == "" {
+		return e.StartTaskWorker(ctx, projectID, workerID)
+	}
+	var event superEventRow
+	if err = db.WithContext(ctx).First(&event, "id = ? AND project_id = ? AND disposition = ?", a.InputEventID, projectID, "routed").Error; err != nil {
+		return err
+	}
+	var inputs []superInboxRow
+	if err = db.WithContext(ctx).Where("worker_id = ? AND event_id = ? AND mode = ? AND consumed_at IS NULL", w.ID, event.ID, "followup").Find(&inputs).Error; err != nil {
+		return err
+	}
+	if len(inputs) == 0 {
+		return errSuperBinding
+	}
+	ids := []string{}
+	for _, input := range inputs {
+		ids = append(ids, input.ID)
+	}
+	input, err := e.resolveSuperInput(ctx, event.event())
+	if err != nil {
+		return err
+	}
+	input.superInboxIDs = ids
+	input.Context += "\n[ACTUAL TASK FOLLOWUP]\nContinue only canonical task " + w.TaskID + " with this actual new human input. Existing approvals, unknown operations, evidence, deadline and cumulative budget remain authoritative."
+	return e.runSuperWorkerInput(ctx, w, input)
 }
 
 func (e *Engine) SuperQueuedWorkers(ctx context.Context, projectID string) ([]SuperRouteResult, error) {
@@ -138,7 +247,7 @@ func (e *Engine) SuperQueuedWorkers(ctx context.Context, projectID string) ([]Su
 		return nil, err
 	}
 	var rows []superWorkerRow
-	err = db.WithContext(ctx).Where("project_id = ? AND id IN (?)", projectID, db.Model(&superAssignmentRow{}).Select("worker_id").Where("state = ?", "queued")).Order("created_at, id").Find(&rows).Error
+	err = db.WithContext(ctx).Where("project_id = ? AND parent_worker_id = '' AND id IN (?)", projectID, db.Model(&superAssignmentRow{}).Select("worker_id").Where("state = ? AND invocation_kind <> ?", "queued", "machine")).Order("created_at, id").Find(&rows).Error
 	out := make([]SuperRouteResult, 0, len(rows))
 	for _, w := range rows {
 		out = append(out, SuperRouteResult{TaskID: w.TaskID, WorkerID: w.ID, SessionID: w.SessionID})

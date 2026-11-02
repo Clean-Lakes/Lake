@@ -20,7 +20,7 @@ func workTools() []Tool {
 	}
 }
 func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call Call, a map[string]any) (any, error) {
-	if e.worker != nil || c.sreCoordinator || c.sre != nil || c.workflowMode || c.ConversationMode == ModePlan || c.Profile != "core" && c.Profile != "" {
+	if e.worker != nil || c.sreCoordinator || c.sre != nil || c.workflowMode || c.ConversationMode == ModePlan && c.superRole != "worker" || c.Profile != "core" && c.Profile != "" {
 		return nil, errors.New("work goals require an ordinary core conversation")
 	}
 	if call.Name == "work_begin" {
@@ -60,6 +60,7 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 	if err != nil {
 		return nil, err
 	}
+	row.superFence = c.superAssignment
 	s.mu.Lock()
 	managedGoal := s.state.SecurityManaged
 	s.mu.Unlock()
@@ -101,7 +102,7 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 				return g, nil
 			}
 		}
-		if _, err = e.VerifyWorkStep(id, g.ID, str(a["item_id"]), g.Revision); err != nil {
+		if _, err = e.verifyWorkStep(ctx, id, g.ID, str(a["item_id"]), g.Revision); err != nil {
 			return nil, err
 		}
 		_, verified, readErr := e.workRow(id, g.ID)
@@ -136,7 +137,7 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 				return g, nil
 			}
 		}
-		if _, err = e.BeginWorkAttempt(id, g.ID, stepID, execution.Task.ID, execution.Owner.RootTurnID, current, str(a["reason"]), g.Revision); err != nil {
+		if _, err = e.beginWorkAttempt(ctx, id, g.ID, stepID, execution.Task.ID, execution.Owner.RootTurnID, current, str(a["reason"]), g.Revision); err != nil {
 			return nil, err
 		}
 		_, updated, loadErr := e.workRow(id, g.ID)
@@ -230,13 +231,14 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 		row.WaitState = "waiting"
 	case "work_finish":
 		if g.closure != nil {
-			if _, err = e.VerifyWorkGoal(id, g.ID, g.Revision); err != nil {
+			if _, err = e.verifyWorkGoal(ctx, id, g.ID, g.Revision); err != nil {
 				return nil, err
 			}
 			row, g, err = e.workRow(id, g.ID)
 			if err != nil {
 				return nil, err
 			}
+			row.superFence = c.superAssignment
 			if g.Status != "completed" {
 				return g, nil
 			}
@@ -437,6 +439,7 @@ func (e *Engine) registerWorkWatch(s *session, c Config, call Call, value any) e
 		}
 	}
 	g.Status = reduceWorkGoal(g.Items)
+	row.superFence = c.superAssignment
 	return e.writeWorkGoal(&row, &g, false)
 }
 

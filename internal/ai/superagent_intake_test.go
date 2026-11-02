@@ -2,6 +2,9 @@ package ai
 
 import (
 	"context"
+	"github.com/Clean-Lakes/Lake/internal/agent/storage"
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -19,6 +22,42 @@ func superFixture(t *testing.T) (*Engine, SuperSourceBinding) {
 		t.Fatal(err)
 	}
 	return e, b
+}
+
+func TestSuperStoreBacksUpBeforeMigrationAndRejectsFutureReader(t *testing.T) {
+	e, _ := superFixture(t)
+	backups, err := filepath.Glob(filepath.Join(e.runtimeDirectory(), "before-superagent-*.sqlite"))
+	if err != nil || len(backups) != 1 {
+		t.Fatal(backups, err)
+	}
+	info, err := os.Stat(backups[0])
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatal("backup is not private", err)
+	}
+	prior, err := storage.OpenChecked(backups[0], nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prior.DB.Migrator().HasTable(&superSchemaRow{}) {
+		t.Fatal("backup was made after migration")
+	}
+	if err = prior.SQL.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := e.superStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Model(&superSchemaRow{}).Where("id = ?", 1).Update("version", superSchemaVersion+1).Error; err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(e.runtimeDirectory(), "sessions.sqlite")
+	e.Shutdown()
+	next, err := storage.OpenChecked(path, nil)
+	if err == nil {
+		next.SQL.Close()
+		t.Fatal("future schema reached SDK AutoMigrate")
+	}
 }
 
 func TestSuperEventConcurrentDuplicateIsImmutable(t *testing.T) {
@@ -108,14 +147,14 @@ func TestSuperSchemaRejectsNewerVersionBeforeMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = db.Model(&superSchemaRow{}).Where("id = ?", 1).Update("version", 2).Error; err != nil {
+	if err = db.Model(&superSchemaRow{}).Where("id = ?", 1).Update("version", superSchemaVersion+1).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err = MigrateSuperagentStore(db); err == nil {
 		t.Fatal("future schema accepted")
 	}
 	var row superSchemaRow
-	if err = db.First(&row, "id = ?", 1).Error; err != nil || row.Version != 2 {
+	if err = db.First(&row, "id = ?", 1).Error; err != nil || row.Version != superSchemaVersion+1 {
 		t.Fatal(row, err)
 	}
 }
@@ -137,5 +176,32 @@ func TestSuperEventsSurviveRuntimeRestart(t *testing.T) {
 	rows, err := next.PendingSuperEvents(ctx, b, 16)
 	if err != nil || len(rows) != 1 || rows[0].Payload != "persisted" {
 		t.Fatal(rows, err)
+	}
+}
+
+func TestSuperEventWaitsForCommittedHostContext(t *testing.T) {
+	e, b := superFixture(t)
+	ctx := context.Background()
+	event, _, err := e.ReceiveSuperEvent(ctx, b, SuperEventInput{SourceEventID: "staged", Kind: "message", Payload: "Inspect an attached file", HostStaged: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending, err := e.PendingSuperEvents(ctx, b, 16); err != nil || len(pending) != 0 {
+		t.Fatal("uncommitted context admitted", pending, err)
+	}
+	if _, err = e.ApplySuperDecision(ctx, b, SuperDecision{EventID: event.ID, PartKey: "file", Action: "create", Title: "File", RoleKey: "files", Quote: event.Payload, Reason: "too early"}); err == nil {
+		t.Fatal("staged event routed")
+	}
+	digest := hash("committed host reference data")
+	for i := 0; i < 2; i++ {
+		if err = e.ConfirmSuperEventContext(ctx, b, event.ID, digest); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = e.ConfirmSuperEventContext(ctx, b, event.ID, hash("changed reference data")); err == nil {
+		t.Fatal("immutable host context changed")
+	}
+	if pending, err := e.PendingSuperEvents(ctx, b, 16); err != nil || len(pending) != 1 {
+		t.Fatal(pending, err)
 	}
 }

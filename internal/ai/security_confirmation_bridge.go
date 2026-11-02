@@ -72,7 +72,7 @@ func (e *Engine) confirmSecurityWorkProposal(ctx context.Context, s *session, c 
 	}
 	proposal.SelectionRevision = selection.Revision
 	var description strings.Builder
-	fmt.Fprintf(&description, "目标：%s\n原始请求：%s\n资源绑定：%s\n", goal.Title, goal.UserText, js([]any{goal.Binding, goal.ResourceBindings}))
+	fmt.Fprintf(&description, "目标：%s\n原始要求可在下方展开查看。\n资源：%s\n", goal.Title, securityWorkResourceSummary(goal, c))
 	description.WriteString("确认以下任务步骤及依赖。每一步需要你在结果出现后另行确认，不能由模型总结替代验收。此确认不授予资源或命令权限。\n")
 	for i, item := range goal.Items {
 		if strings.TrimSpace(item.Title) == "" || item.ID == "" {
@@ -93,7 +93,7 @@ func (e *Engine) confirmSecurityWorkProposal(ctx context.Context, s *session, c 
 	if proposal.TaskDeadline.Before(expires) {
 		expires = proposal.TaskDeadline
 	}
-	binding := &securityConfirmationQuestionContext{Row: securityConfirmationQuestionRow{Kind: "work_contract", StoreID: storeID, RecoveryEpoch: epoch, ProjectID: configSecurityProject(c), SessionID: sessionID, RootTurnID: rootID, SourceMessageID: sourceID, GoalID: goal.ID, CallID: call.ID, Data: js(proposal), ExpiresAt: expires}}
+	binding := &securityConfirmationQuestionContext{Source: &QuestionSource{MessageID: sourceID, Text: redact(goal.UserText, c)}, Row: securityConfirmationQuestionRow{Kind: "work_contract", StoreID: storeID, RecoveryEpoch: epoch, ProjectID: configSecurityProject(c), SessionID: sessionID, RootTurnID: rootID, SourceMessageID: sourceID, GoalID: goal.ID, CallID: call.ID, Data: js(proposal), ExpiresAt: expires}}
 	questions := []UserQuestion{{ID: "work_contract", Title: "确认任务步骤与验收方式", Reason: redact(description.String(), c), Options: []QuestionOption{{Label: securityWorkConfirmLabel, Description: "只确认任务和验收要求；资源操作仍需当前策略或单独审批。"}, {Label: securityWorkRejectLabel, Description: "保留提案，不创建执行授权。"}}}}
 	questionCall := call
 	questionCall.Arguments = js(map[string]any{"questions": questions})
@@ -115,6 +115,37 @@ func (e *Engine) confirmSecurityWorkProposal(ctx context.Context, s *session, c 
 	return e.activateConfirmedSecurityWork(ctx, s, row, proposal)
 }
 
+func securityWorkResourceSummary(goal WorkGoal, c Config) string {
+	bindings := append([]WorkBinding(nil), goal.ResourceBindings...)
+	if len(bindings) == 0 {
+		bindings = append(bindings, goal.Binding)
+	}
+	names := []string{}
+	seen := map[string]bool{}
+	for _, binding := range bindings {
+		if binding.AssetRef == "" {
+			continue
+		}
+		resource, err := asset(c, binding.AssetRef)
+		if err != nil {
+			continue
+		}
+		if seen[resource.ID] {
+			continue
+		}
+		seen[resource.ID] = true
+		name := resource.Name
+		if resource.SSH != nil {
+			name += fmt.Sprintf("（%s:%d）", resource.SSH.Host, resource.SSH.Port)
+		}
+		names = append(names, redact(name, c))
+	}
+	if len(names) == 0 {
+		return "执行前仍需核实具体目标"
+	}
+	return strings.Join(names, "、")
+}
+
 func (e *Engine) activateConfirmedSecurityWork(ctx context.Context, s *session, question securityConfirmationQuestionRow, proposal securityWorkConfirmationProposal) (goal WorkGoal, err error) {
 	db, storeID, epoch, err := e.securityTaskDB()
 	if err != nil {
@@ -128,6 +159,9 @@ func (e *Engine) activateConfirmedSecurityWork(ctx context.Context, s *session, 
 	var execution SecurityExecutionContext
 	err = e.withSecurityDispatchBarrier(func() error {
 		return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := checkSuperContextTx(ctx, tx); err != nil {
+				return err
+			}
 			var current securityConfirmationQuestionRow
 			if err := tx.First(&current, "question_id = ? AND status = ? AND store_id = ? AND recovery_epoch = ?", question.QuestionID, "answered", storeID, epoch).Error; err != nil {
 				return err

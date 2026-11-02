@@ -27,6 +27,32 @@ type SuperTaskView struct {
 var errSuperBinding = errors.New("superagent: invalid host binding")
 var errSuperConflict = errors.New("superagent: revision conflict")
 
+type SuperTaskDetail struct {
+	Task SuperTaskView `json:"task"`
+	Goal WorkGoal      `json:"goal"`
+}
+
+func (e *Engine) SuperTaskDetail(sessionID, taskID string) (SuperTaskDetail, error) {
+	store, err := e.adkStore()
+	if err != nil {
+		return SuperTaskDetail{}, err
+	}
+	var out SuperTaskDetail
+	err = store.DB.Transaction(func(tx *gorm.DB) error {
+		var err error
+		out.Task, err = projectSuperTaskTx(tx, sessionID, taskID)
+		if err != nil {
+			return err
+		}
+		var row nativeWorkGoal
+		if err = tx.First(&row, "id = ? AND session_id = ?", taskID, sessionID).Error; err != nil {
+			return err
+		}
+		return decodeWorkGoal(row, &out.Goal)
+	})
+	return out, err
+}
+
 // ProjectSuperTaskState is a read-only projection. The caller obtains closure
 // from WorkClosureView, never from a worker report or a model-supplied object.
 func ProjectSuperTaskState(goal WorkGoal, closure GoalClosureView, now time.Time) (SuperTaskView, error) {

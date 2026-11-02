@@ -109,10 +109,10 @@ func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool
 	if managed || c.securityExecution != nil {
 		enrichSecurityCommandSchemas(list)
 	}
-	if c.sre == nil && !c.sreCoordinator && !c.workflowMode && e.worker == nil && c.ConversationMode != ModePlan && (c.Profile == "core" || c.Profile == "") {
+	if c.sre == nil && !c.sreCoordinator && !c.workflowMode && e.worker == nil && (c.ConversationMode != ModePlan || c.superRole == "worker") && (c.Profile == "core" || c.Profile == "") {
 		list = append(list, workTools()...)
 	}
-	if c.sre != nil || c.sreCoordinator || e.worker != nil || c.ConversationMode == ModePlan || c.Profile != "core" && c.Profile != "" {
+	if c.sre != nil || c.sreCoordinator || e.worker != nil || c.ConversationMode == ModePlan && c.superRole != "worker" || c.Profile != "core" && c.Profile != "" {
 		filtered := list[:0]
 		for _, t := range list {
 			if !workToolName(t.Name) {
@@ -137,7 +137,15 @@ func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool
 		list = append(list, pilotChoiceTool(), pilotReadRecoveryTool())
 	}
 	if c.ConversationMode == ModePlan {
+		original := list
 		list = planCatalog(list)
+		if c.superRole == "worker" {
+			for _, tool := range original {
+				if workToolName(tool.Name) {
+					list = append(list, tool)
+				}
+			}
+		}
 	}
 	if c.superRole == "worker" {
 		list = WorkerCatalog(list)
@@ -170,7 +178,7 @@ func (e *Engine) baseSessionCatalog(ctx context.Context, id string, c Config) []
 		if c.MemoryEnabled && e.Bridge != nil {
 			list = append(list, projectMemoryTools(c)...)
 		}
-		if c.legacyInvestigations && c.MultiAgentMode == "auto" && (c.Profile == "core" || c.Profile == "") {
+		if (c.superRole == "worker" || c.legacyInvestigations && c.MultiAgentMode == "auto") && (c.Profile == "core" || c.Profile == "") {
 			list = append(list, delegationTools()...)
 		}
 		return e.configuredExtensionTools(c, list)

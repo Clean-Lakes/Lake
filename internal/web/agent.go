@@ -199,7 +199,18 @@ func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any
 		b.configure(id, nil)
 	}
 	if method == "workControl" {
-		b.configure(id, nil)
+		if b.Store.superSessionKind(id) == "worker" {
+			project := stringOf(b.Store.Session(id)["projectId"])
+			worker, err := b.Engine.SuperWorkerForSession(ctx, project, id)
+			if err != nil {
+				return nil, err
+			}
+			if stringOf(object(data)["goalId"]) != worker.TaskID {
+				return nil, errors.New("superagent: current task binding required")
+			}
+		} else {
+			b.configure(id, nil)
+		}
 	}
 	if method == "questionReply" {
 		var input struct {
@@ -305,7 +316,10 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 	if domain, active, err := b.Engine.SuperProject(turnContext, stringOf(b.Store.Session(id)["projectId"])); err != nil {
 		aiFailure(err)
 	} else if active && id == domain.RouterSessionID {
-		b.runSuperPilotTurn(turnContext, domain, id, messageID)
+		b.runSuperPilotTurn(turnContext, domain, id, messageID, refs, files, ignoreProjectMemory)
+		return
+	} else if active && b.Store.superSessionKind(id) == "worker" {
+		b.runSuperTargetedInput(turnContext, domain, id, messageID, refs, files, ignoreProjectMemory)
 		return
 	}
 	sreCoordination := options["conversationMode"] != ai.ModePlan && options["profile"] == "core" && len(files) == 0 && b.Store.SREEnabled(stringOf(b.Store.Session(id)["projectId"]))

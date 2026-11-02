@@ -1,0 +1,13 @@
+.pilot-workspace{padding:2px 0 12px;color:var(--foreground)}
+.pilot-workspace-entry{min-height:52px;gap:10px}.pilot-workspace-entry>img{width:28px;height:28px;flex:none}
+.pilot-workspace .nav-heading{display:flex;justify-content:space-between;padding:18px 12px 8px}
+.pilot-workspace .nav-heading small,.pilot-workspace-empty,.pilot-workspace-error{color:var(--text-muted);font-size:12px}
+.pilot-worker-row{gap:9px;min-height:66px;align-items:center}.pilot-worker-row .nav-row-text{gap:3px;min-width:0}
+.pilot-worker-avatar{display:grid;place-items:center;flex:none;width:28px;height:28px;border-radius:8px;corner-shape:var(--corner-window);background:var(--surface);color:var(--foreground)}
+.pilot-worker-task{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;opacity:.7}
+.pilot-worker-dot{width:6px;height:6px;border-radius:50%;background:var(--text-muted);flex:none}
+.pilot-worker-dot.state-running{background:var(--primary)}.pilot-worker-dot.state-completed{background:var(--success)}.pilot-worker-dot.state-waiting_user,.pilot-worker-dot.state-blocked{background:var(--warning)}
+.pilot-workspace-empty,.pilot-workspace-error{margin:4px 12px;line-height:1.65}.pilot-workspace-error{padding:8px 0}
+.pilot-history{margin:0 0 12px}.pilot-history>summary{cursor:pointer;color:var(--text-muted);font-size:12px;padding:9px 12px}
+
+.super-task-inspector{padding:12px 2px 18px}.super-task-heading{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.6}.super-task-heading>svg{flex:none;margin-top:2px}.super-task-state{display:flex;gap:8px;flex-wrap:wrap;padding:10px 0 16px;font-size:12px}.super-task-state small,.super-task-budget{color:var(--text-muted)}.super-task-steps{list-style:none;padding:0;margin:0;display:grid;gap:16px}.super-task-steps li{display:flex;gap:10px}.super-step-number{display:grid;place-items:center;width:20px;height:20px;flex:none;border:1px solid var(--border);border-radius:7px;corner-shape:var(--corner-window);font-size:11px;color:var(--text-muted)}.super-task-steps strong{font-size:12px;font-weight:500;line-height:1.6}.super-task-steps small{display:block;font-size:11px;color:var(--text-muted);padding-top:3px}.super-task-steps p{font-size:12px;line-height:1.6;color:var(--text-secondary);margin:5px 0 0}.super-task-budget{font-size:11px;padding-top:12px}

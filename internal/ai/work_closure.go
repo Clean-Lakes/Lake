@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -226,6 +227,10 @@ func (e *Engine) ConfigureWorkAcceptance(sessionID, goalID, projectID, actor, ac
 // BeginWorkAttempt binds a retry to the original versioned step. Its operations
 // stay in native_operations; this row never duplicates operation results.
 func (e *Engine) BeginWorkAttempt(sessionID, goalID, stepID, taskID, rootTurnID, retryOf, strategy string, expected int64) (string, error) {
+	return e.beginWorkAttempt(context.Background(), sessionID, goalID, stepID, taskID, rootTurnID, retryOf, strategy, expected)
+}
+
+func (e *Engine) beginWorkAttempt(ctx context.Context, sessionID, goalID, stepID, taskID, rootTurnID, retryOf, strategy string, expected int64) (string, error) {
 	if err := e.CheckSecurityRuntime(); err != nil {
 		return "", err
 	}
@@ -235,6 +240,9 @@ func (e *Engine) BeginWorkAttempt(sessionID, goalID, stepID, taskID, rootTurnID,
 	}
 	id := uid()
 	err = e.workMutation(store.DB, func(tx *gorm.DB) error {
+		if err := checkSuperContextTx(ctx, tx); err != nil {
+			return err
+		}
 		row, goal, err := loadWorkGoalTx(tx, sessionID, goalID, expected)
 		if err != nil {
 			return err
@@ -301,6 +309,10 @@ func workUnresolvedTx(tx *gorm.DB, goalID, stepID string) (bool, error) {
 }
 
 func (e *Engine) VerifyWorkStep(sessionID, goalID, stepID string, expected int64) (string, error) {
+	return e.verifyWorkStep(context.Background(), sessionID, goalID, stepID, expected)
+}
+
+func (e *Engine) verifyWorkStep(ctx context.Context, sessionID, goalID, stepID string, expected int64) (string, error) {
 	if err := e.CheckSecurityRuntime(); err != nil {
 		return "", err
 	}
@@ -310,6 +322,9 @@ func (e *Engine) VerifyWorkStep(sessionID, goalID, stepID string, expected int64
 	}
 	id := uid()
 	err = e.workMutation(store.DB, func(tx *gorm.DB) error {
+		if err := checkSuperContextTx(ctx, tx); err != nil {
+			return err
+		}
 		row, goal, err := loadWorkGoalTx(tx, sessionID, goalID, expected)
 		if err != nil {
 			return err
@@ -495,6 +510,10 @@ func workUncoveredAttemptsTx(tx *gorm.DB, goal WorkGoal) (bool, error) {
 }
 
 func (e *Engine) VerifyWorkGoal(sessionID, goalID string, expected int64) (string, error) {
+	return e.verifyWorkGoal(context.Background(), sessionID, goalID, expected)
+}
+
+func (e *Engine) verifyWorkGoal(ctx context.Context, sessionID, goalID string, expected int64) (string, error) {
 	if err := e.CheckSecurityRuntime(); err != nil {
 		return "", err
 	}
@@ -504,6 +523,9 @@ func (e *Engine) VerifyWorkGoal(sessionID, goalID string, expected int64) (strin
 	}
 	id := uid()
 	err = e.workMutation(store.DB, func(tx *gorm.DB) error {
+		if err := checkSuperContextTx(ctx, tx); err != nil {
+			return err
+		}
 		row, goal, err := loadWorkGoalTx(tx, sessionID, goalID, expected)
 		if err != nil {
 			return err

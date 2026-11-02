@@ -88,5 +88,12 @@ func (b *Server) sessionSnapshot(id string) Object {
 	snap["terminals"] = own
 	snap["commandStopNotices"] = b.Store.commandStopNotices(id)
 	snap["sre"] = b.sreSnapshot(id)
+	if b.Engine != nil && object(snap["session"])["workspaceRole"] == "worker" {
+		worker, err := b.Engine.SuperWorkerForSession(b.Context, stringOf(object(snap["session"])["projectId"]), id)
+		aiFailure(err)
+		detail, err := b.Engine.SuperTaskDetail(id, worker.TaskID)
+		aiFailure(err)
+		snap["superagent"] = detail
+	}
 	return snap
 }

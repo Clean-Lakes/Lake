@@ -69,6 +69,29 @@ func (e *Engine) flushWorkOutbox(ctx context.Context) error {
 }
 
 func (e *Engine) resumeWorkGoal(ctx context.Context, row nativeWorkGoal, g WorkGoal, c Config) (err error) {
+	w, isSuper, lookupErr := e.superWorkerForGoal(ctx, g.SessionID, g.ID)
+	if lookupErr != nil {
+		return lookupErr
+	}
+	if isSuper {
+		c, err = e.enforceSuperSessionConfig(g.SessionID, c)
+		if err != nil {
+			return err
+		}
+		token, claimErr := e.ClaimAssignment(ctx, w.ProjectID, w.ID, row.WaitCallID)
+		if errors.Is(claimErr, ErrSuperWorkerQueued) {
+			return nil
+		}
+		if claimErr != nil {
+			return claimErr
+		}
+		var release func()
+		ctx, release = e.beginSuperInvocation(ctx, token)
+		defer release()
+		c.superAssignment = &token
+		c.superRoundBase = g.ModelRounds
+		row.superFence = &token
+	}
 	var securityExecution SecurityExecutionContext
 	configured, policyErr := e.securityPolicyConfigured(configSecurityProject(c))
 	if policyErr != nil {
@@ -156,6 +179,7 @@ func (e *Engine) resumeWorkGoal(ctx context.Context, row nativeWorkGoal, g WorkG
 		}
 	}
 	child.modelSlots = e.modelSlots
+	child.childModelSlots = e.childModelSlots
 	cs := &session{state: State{SupplementIDs: checkpoint.SupplementIDs, Config: c, History: checkpoint.History, Runtime: checkpoint.Runtime, View: checkpoint.View, RootQuestion: checkpoint.RootQuestion, TargetScope: checkpoint.Scope, ReferencedAssetIDs: checkpoint.References, WorkGoalID: g.ID, QuestionDecisions: g.UserDecisions}}
 	if securityExecution.Managed {
 		cs.state.SecurityManaged = true
@@ -180,6 +204,12 @@ func (e *Engine) resumeWorkGoal(ctx context.Context, row nativeWorkGoal, g WorkG
 	cs.state.View.Status = "running"
 	cs.state.View.TurnFinishedAt = ""
 	cs.state.Config.MaxSteps = g.RoundLimit
+	if isSuper {
+		cs.state.Config.MaxSteps = max(1, g.RoundLimit-g.ModelRounds)
+		if cs.state.Runtime != nil {
+			cs.state.Runtime.ModelRounds = 0
+		}
+	}
 	child.sessions[g.SessionID] = cs
 	// Replace the intermediate response in the provider projection; ADK merges
 	// the original long-running FunctionResponse by its original ID.

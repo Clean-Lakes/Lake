@@ -192,6 +192,14 @@ func (e *Engine) dispatchNativeOperation(ctx context.Context, s *session, c Conf
 	}
 	dispatch := func() error {
 		return store.DB.Transaction(func(tx *gorm.DB) error {
+			if err := checkSuperContextTx(ctx, tx); err != nil {
+				return err
+			}
+			if prepared != nil {
+				if err := checkSuperResourceConflictsTx(tx, prepared.descriptor); err != nil {
+					return err
+				}
+			}
 			// Prior unknown/running operations do not create a session-wide lock.
 			// Preserve durable invocation identity and exact unfinished-call replay
 			// protection while allowing different commands through normal permissions.

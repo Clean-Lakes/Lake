@@ -29,6 +29,7 @@ export type Resource = {
 };
 
 export type WorkSession = {
+	workspaceRole?: 'router'|'worker';
   id: string;
   projectId: string;
   title: string;
@@ -177,6 +178,7 @@ export type SendMessageResult = {queued?: boolean; queuedMessageId?: string; mes
 export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;status:"running" | "completed" | "cancelled" | "failed" | "interrupted"};
 
 export type SessionSnapshot = {
+	superagent?:{task:SuperTask;goal?:WorkGoal};
  naturalMemoryNotices?:{changeId:string;scope:string;entryId:string;revision:number;batchId?:string}[];
   commandStopNotices?: CommandStopNotice[];
  conversationMode?: ConversationMode;
@@ -261,7 +263,7 @@ export type AIUserQuestion = {id:string;title:string;reason?:string;options?:Arr
 export type PilotOperationCandidate = {id:string;title:string;tool:string;arguments:Record<string,unknown>;dependsOn?:string[];risk:string};
 export type PilotDirection = {id:string;title:string;reason:string;recommended?:boolean;operations:PilotOperationCandidate[]};
 export type PilotChoice = {sessionId:string;taskId:string;planRevisionId:string;stepId:string;attemptId:string;role:SREAgentRole;directions:PilotDirection[];singleDirectionReason?:string};
-export type AIQuestionRequest = {id:string;questions:AIUserQuestion[];pilot?:PilotChoice};
+export type AIQuestionRequest = {id:string;questions:AIUserQuestion[];pilot?:PilotChoice;source?:{messageId:string;text:string}};
 export type AIOperationOutcome = {id:string;tool:string;target:string;status:string;handle?:string;result?:string;startedAt:string};
 export type ConversationMode = "default" | "plan";
 export type ConversationModeUpdate = {mode:ConversationMode;cursor:number};
@@ -306,6 +308,10 @@ export type PilotDirectionBatch = {id:string;decisionId:string;directionId:strin
 export type PilotTaskPolicy = {directionBatches?:PilotDirectionBatch[];autoAdvance:boolean;settingsRevision:number;decisions?:{requestId:string;planRevisionId:string;stepId:string;attemptId:string;direction?:PilotDirection;selection:PilotSelection;fingerprints?:string[];operations?:PilotOperationCandidate[];createdAt:string}[]};
 export type SRETask = {pilot?:PilotTaskPolicy;id:string;sessionId:string;projectId:string;requestId:string;goal:string;scope:string[];mode:'assist'|'plan_only';status:string;outcome:string;recoveryStatus:string;rootCauseStatus:string;profileId:string;profileVersion:number;revision:number;tokenBudget:number;budgetPolicy?:string;budgetSpent:number;usage:AIUsage;plans:SREPlanRevision[];runs:SREPlanRun[];attempts:SREStepAttempt[];messages:SRETranscriptEntry[];verifications:SREVerificationResult[];error?:string;createdAt:string;updatedAt:string};
 export type PilotSettings = {enabled:boolean;autoAdvance:boolean;revision:number};
+export type SuperTask = {taskId:string;sessionId:string;projectId?:string;title:string;state:'queued'|'running'|'waiting_external'|'waiting_user'|'paused'|'blocked'|'completed'|'failed'|'cancelled';acceptanceState:'not_evaluated'|'insufficient'|'pass'|'fail';revision:number;originRootTurnId:string;deadlineAt:string;reason?:string;resources?:{runtime:string;assetRef?:string;terminalId?:string}[]};
+export type SuperProject = {projectId:string;routerSessionId:string;version:number};
+export type SuperWorker = {id:string;roleId:string;roleName:string;sessionId:string;task:SuperTask;assignmentState:string;parentWorkerId?:string};
+export type SuperWorkspace = {active:boolean;project:SuperProject;workers:SuperWorker[]};
 export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[];pilot?:PilotSettings};
 
 export type ScheduleExecution={id:string;scheduled_at:string;started_at?:string;finished_at?:string;status:string;error?:string;task_id?:string;session_id?:string};

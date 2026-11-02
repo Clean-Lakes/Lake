@@ -6,6 +6,7 @@ import (
 )
 
 type TurnInput struct {
+	superInboxIDs        []string
 	SecurityIntent       GoalIntent   `json:"-"` // Set only by a trusted host goal action.
 	SecurityGoalID       string       `json:"-"`
 	SecurityGoalRevision int64        `json:"-"`

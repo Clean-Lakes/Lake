@@ -49,6 +49,16 @@ func (e *Engine) SubscribeSuperWorker(ctx context.Context, projectID string, in 
 		if in.Mode == "followup" && source.Kind != "user" {
 			return errSuperBinding
 		}
+		if in.Mode == "followup" {
+			var domain superProjectRow
+			lookup := tx.First(&domain, "project_id = ?", projectID).Error
+			if lookup == nil && domain.RouterSessionID == in.ThreadRef {
+				return errors.New("superagent: shared Pilot stream has no single task owner")
+			}
+			if lookup != nil && !errors.Is(lookup, gorm.ErrRecordNotFound) {
+				return lookup
+			}
+		}
 		w, err := superWorkerInProject(tx, in.WorkerID, projectID)
 		if err != nil {
 			return err
@@ -87,6 +97,16 @@ func (e *Engine) RouteSubscribedEvent(ctx context.Context, projectID, eventID st
 		}
 		if event.ThreadRef == "" {
 			return nil
+		}
+		if source.Kind == "user" {
+			var domain superProjectRow
+			lookup := tx.First(&domain, "project_id = ?", projectID).Error
+			if lookup == nil && domain.RouterSessionID == event.ThreadRef {
+				return nil
+			}
+			if lookup != nil && !errors.Is(lookup, gorm.ErrRecordNotFound) {
+				return lookup
+			}
 		}
 		var subscriptions []superSubscriptionRow
 		if err := tx.Where("source_id = ? AND thread_ref = ? AND project_id = ? AND closed_at IS NULL", event.SourceID, event.ThreadRef, projectID).Order("id").Find(&subscriptions).Error; err != nil {

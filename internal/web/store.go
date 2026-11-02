@@ -501,6 +501,9 @@ func (s *Store) session(id string) Object {
 		ids = append(ids, stringOf(v["id"]))
 	}
 	r["resourceIds"] = ids
+	if super := s.row("SELECT kind FROM superagentSessions WHERE sessionId=?", id); super != nil {
+		r["workspaceRole"] = super["kind"]
+	}
 	s.decorateSession(r)
 	return r
 }

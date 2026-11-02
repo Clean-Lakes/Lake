@@ -145,6 +145,39 @@ func TestSuperInboxConsumptionRequiresStoredSDKReceipt(t *testing.T) {
 	if err = store.DB.First(&row, "id = ?", input.ID).Error; err != nil || row.ConsumedAt == nil || row.ConsumedEventID != receipt.ID {
 		t.Fatal(row, err)
 	}
+	// Lost ACK after SDK commit is reconciled without invoking a model.
+	if err = store.DB.Model(&superInboxRow{}).Where("id = ?", input.ID).Updates(map[string]any{"consumed_at": nil, "consumed_event_id": ""}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = e.ReconcileSuperInbox(ctx, "project"); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.DB.First(&row, "id = ?", input.ID).Error; err != nil || row.ConsumedAt == nil || row.ConsumedEventID != receipt.ID {
+		t.Fatal("lost ACK not recovered", row, err)
+	}
+	// An unaccepted delivered input is retained; only after drain may it be
+	// exposed for delivery again, never falsely consumed from a local cache.
+	second, _, err := e.ReceiveSuperEvent(ctx, b, SuperEventInput{SourceEventID: "not-accepted", Kind: "message", Payload: "New requirement"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending, err := e.EnqueueWorkerInput(ctx, "project", second.ID, w, "whole", "followup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = e.MarkWorkerInputDelivered(ctx, "project", pending.ID, a); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.DB.Model(&superAssignmentRow{}).Where("id = ?", a).Update("state", "parked").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = e.ReconcileSuperInbox(ctx, "project"); err != nil {
+		t.Fatal(err)
+	}
+	var undelivered superInboxRow
+	if err = store.DB.First(&undelivered, "id = ?", pending.ID).Error; err != nil || undelivered.DeliveredAt != nil || undelivered.ConsumedAt != nil {
+		t.Fatal(undelivered, err)
+	}
 }
 
 func TestSuperOutboxDoesNotResendUncertainWrites(t *testing.T) {
@@ -158,6 +191,17 @@ func TestSuperOutboxDoesNotResendUncertainWrites(t *testing.T) {
 	duplicate, err := e.QueuePilotReport(ctx, "project", g.SessionID, g.ID, "pilot-channel", "human-message", "attention", "Needs verification", g.Revision)
 	if err != nil || duplicate.ID != report.ID {
 		t.Fatal(duplicate, err)
+	}
+	row, updated, loadErr := e.workRow(g.SessionID, g.ID)
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	updated.Summary = "New canonical progress after report commit"
+	if err = e.writeWorkGoal(&row, &updated, false); err != nil {
+		t.Fatal(err)
+	}
+	if old, err := e.QueuePilotReport(ctx, "project", g.SessionID, g.ID, "pilot-channel", "human-message", "attention", "Needs verification", g.Revision); err != nil || old.ID != report.ID || old.Payload != report.Payload {
+		t.Fatal("report retry followed newer task state", old, err)
 	}
 	if _, err = e.QueuePilotReport(ctx, "project", g.SessionID, g.ID, "pilot-channel", "human-message", "attention", "Changed content", g.Revision); err == nil {
 		t.Fatal("mutable report")

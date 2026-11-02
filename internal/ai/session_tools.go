@@ -23,12 +23,17 @@ type UserQuestion struct {
 	MultiSelect bool             `json:"multi_select,omitempty"`
 }
 type QuestionRequest struct {
+	Source           *QuestionSource     `json:"source,omitempty"`
 	Pilot            *PilotChoice        `json:"pilot,omitempty"`
 	Answers          map[string][]string `json:"answers,omitempty"`
 	Call             *Call               `json:"call,omitempty"`
 	RuntimeSessionID string              `json:"runtimeSessionId,omitempty"`
 	ID               string              `json:"id"`
 	Questions        []UserQuestion      `json:"questions"`
+}
+type QuestionSource struct {
+	MessageID string `json:"messageId"`
+	Text      string `json:"text"`
 }
 
 func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, call Call, a map[string]any) (result any, err error) {
@@ -232,7 +237,7 @@ func (e *Engine) sessionApprovalTarget(ctx context.Context, s *session, call Cal
 	return err
 }
 
-func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot ...*PilotChoice) (any, error) {
+func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot ...*PilotChoice) (result any, resultErr error) {
 	if e.workParent != nil {
 		return nil, errors.New("后台接续需要用户提供信息；请把对应工作项设为 waiting_user 并说明问题，不猜测答案")
 	}
@@ -310,6 +315,17 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot .
 	if err != nil {
 		return nil, err
 	}
+	resumeSlot, slotErr := e.parkSuperHumanInput(ctx)
+	if slotErr != nil {
+		return nil, slotErr
+	}
+	defer func() {
+		if resultErr == nil {
+			if err := resumeSlot(); err != nil {
+				result, resultErr = nil, err
+			}
+		}
+	}()
 	select {
 	case answers := <-reply:
 		if req.RuntimeSessionID != "" {

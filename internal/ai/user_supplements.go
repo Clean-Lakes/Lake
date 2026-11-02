@@ -62,7 +62,7 @@ func (e *Engine) AdmitSupplement(id string, mark func(string) error) error {
 	return nil
 }
 
-// Caller owns s.mu. The reader only accesses the host queue, never the engine.
+// Caller owns s.mu. Readers may access durable queues, never re-enter s.
 func (e *Engine) pendingSupplementsLocked(s *session) ([]UserSupplement, error) {
 	read, _ := e.supplementHooks()
 	if read == nil {

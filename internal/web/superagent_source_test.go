@@ -49,6 +49,9 @@ func TestSuperPilotReportKeepsStableReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err = b.recordSuperInput(event, nil, nil, false); err != nil {
+		t.Fatal(err)
+	}
 	task, err := b.Engine.ApplySuperDecision(ctx, b.superUserSource(pid, sid), ai.SuperDecision{EventID: event.ID, PartKey: "orders", Action: "create", Title: "Order investigator", RoleKey: "orders", Quote: event.Payload, Reason: "actual request"})
 	if err != nil {
 		t.Fatal(err)
@@ -89,4 +92,38 @@ func TestSuperCutoverRejectsActiveLegacySRE(t *testing.T) {
 	if err != nil || active {
 		t.Fatal("active legacy writer was replaced", active, err)
 	}
+}
+
+func TestSuperAttachmentFollowsOnlyItsActualTaskSource(t *testing.T) {
+	b, h := fixture(t)
+	ctx := context.Background()
+	project := apiTest(t, h, "POST", "/api/projects", Object{"name": "Scoped inputs"}, 201)
+	pid := stringOf(project["id"])
+	domain := apiTest(t, h, "POST", "/api/projects/"+pid+"/superagent", Object{}, 200)
+	sid := stringOf(domain["routerSessionId"])
+	file := uploadFixture(t, h, sid, "orders.txt", []byte("real attached fixture bytes"))
+	message := b.Store.AddMessage(sid, "user", "Inspect orders attachment", nil)
+	event, err := b.ReceiveUserEvent(ctx, sid, stringOf(message["id"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := []Object{{"source_id": file["sourceId"], "name": file["name"]}}
+	if err = b.recordSuperInput(event, nil, files, true); err != nil {
+		t.Fatal(err)
+	}
+	task, err := b.Engine.ApplySuperDecision(ctx, b.superUserSource(pid, sid), ai.SuperDecision{EventID: event.ID, PartKey: "orders", Action: "create", Title: "Inspect attachment", RoleKey: "files", Quote: event.Payload, Reason: "actual request"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Store.ensureSuperSession(pid, task.SessionID, "Files", "worker")
+	resolved, err := b.resolveSuperInput(ctx, event)
+	if err != nil || !resolved.IgnoreProjectMemory || len(resolved.Context) == 0 {
+		t.Fatal(resolved, err)
+	}
+	attachment, filename := b.loadAttachment(pid, task.SessionID, stringOf(file["sourceId"]))
+	verifyAttachment(attachment, filename)
+	other := b.Store.CreateSession(pid, "Unrelated", nil)
+	expectPanic(t, 403, func() { b.loadAttachment(pid, stringOf(other["id"]), stringOf(file["sourceId"])) })
+	b.Store.update(func() any { b.Store.exec("DELETE FROM messages WHERE id=?", message["id"]); return nil })
+	expectPanic(t, 403, func() { b.loadAttachment(pid, task.SessionID, stringOf(file["sourceId"])) })
 }

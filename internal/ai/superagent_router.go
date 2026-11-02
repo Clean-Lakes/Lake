@@ -11,20 +11,29 @@ import (
 )
 
 type superRouterRun struct {
-	projectID string
-	binding   SuperSourceBinding
-	events    map[string]bool
-	remaining int
+	firstCard        int
+	readMu           sync.Mutex
+	conversationMode string
+	readCursors      map[string]int
+	readComplete     map[string]bool
+	projectID        string
+	binding          SuperSourceBinding
+	bindings         map[string]SuperSourceBinding
+	events           map[string]bool
+	remaining        int
+	workerRoundLimit int
 }
 type SuperDecision struct {
-	EventID string `json:"eventId"`
-	PartKey string `json:"partKey"`
-	Action  string `json:"action"`
-	TaskID  string `json:"taskId,omitempty"`
-	Title   string `json:"title,omitempty"`
-	RoleKey string `json:"roleKey,omitempty"`
-	Quote   string `json:"quote,omitempty"`
-	Reason  string `json:"reason"`
+	conversationMode string
+	EventID          string `json:"eventId"`
+	PartKey          string `json:"partKey"`
+	Action           string `json:"action"`
+	TaskID           string `json:"taskId,omitempty"`
+	Title            string `json:"title,omitempty"`
+	RoleKey          string `json:"roleKey,omitempty"`
+	Quote            string `json:"quote,omitempty"`
+	Reason           string `json:"reason"`
+	roundLimit       int
 }
 type SuperRouteResult struct {
 	DecisionID string `json:"decisionId"`
@@ -129,7 +138,11 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 			key := hash(js([]any{event.ID, in.PartKey}))[:32]
 			sessionID, taskID, workerID := "sw_"+key, "st_"+key, "worker_"+key
 			root := "super_" + key
-			g := WorkGoal{ID: taskID, SessionID: sessionID, OriginRootTurnID: root, UserText: event.Payload, Title: in.Title, Status: "running", RoundLimit: 500, DeadlineAt: time.Now().UTC().Add(24 * time.Hour)}
+			limit := in.roundLimit
+			if limit < 1 || limit > 500 {
+				limit = 500
+			}
+			g := WorkGoal{ID: taskID, SessionID: sessionID, OriginRootTurnID: root, UserText: event.Payload, Title: in.Title, Status: "running", RoundLimit: limit, DeadlineAt: event.ReceivedAt.Add(24 * time.Hour)}
 			native := nativeWorkGoal{ID: taskID, SessionID: sessionID, RootTurnID: root, OriginMessageID: event.SourceEventID}
 			if err := writeWorkGoalTx(tx, &native, &g, true); err != nil {
 				return err
@@ -145,7 +158,7 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 			} else if lookup != nil {
 				return lookup
 			}
-			w := superWorkerRow{ID: workerID, TaskID: taskID, ProjectID: b.ProjectID, SessionID: sessionID, RoleID: roleID, SourceEventID: event.ID, OriginRootTurnID: root, Revision: 1, CreatedAt: row.At}
+			w := superWorkerRow{ID: workerID, TaskID: taskID, ProjectID: b.ProjectID, SessionID: sessionID, RoleID: roleID, SourceEventID: event.ID, OriginRootTurnID: root, Revision: 1, CreatedAt: row.At, ConversationMode: in.conversationMode}
 			if err := tx.Create(&w).Error; err != nil {
 				return err
 			}
@@ -161,6 +174,9 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 			mode := "context_only"
 			if in.Action != "context_only" {
 				mode = "followup"
+			}
+			if in.Action == "stop" {
+				break
 			}
 			if _, err := enqueueSuperInput(tx, b.ProjectID, event, w.ID, in.PartKey, mode); err != nil {
 				return err
@@ -198,7 +214,18 @@ func (e *Engine) RunPilotRouter(ctx context.Context, sessionID string, b SuperSo
 	if configSecurityProject(c) != b.ProjectID {
 		return errSuperBinding
 	}
-	events, err := e.PendingSuperEvents(ctx, b, 16)
+	db, err := e.superStore()
+	if err != nil {
+		return err
+	}
+	var source superSourceRow
+	if err = db.WithContext(ctx).First(&source, "id = ?", b.SourceID).Error; err != nil {
+		return err
+	}
+	if !superSourceMatches(source, b) {
+		return errSuperBinding
+	}
+	events, err := e.PendingSuperProjectEvents(ctx, b.ProjectID, 16)
 	if err != nil {
 		return err
 	}
@@ -218,9 +245,24 @@ func (e *Engine) RunPilotRouter(ctx context.Context, sessionID string, b SuperSo
 	if len(remaining) == 0 {
 		return nil
 	}
-	run := &superRouterRun{projectID: b.ProjectID, binding: b, events: map[string]bool{}, remaining: 16}
+	if err = e.beginSuperRoutingAttempt(ctx, b.ProjectID, remaining); err != nil {
+		return err
+	}
+	succeeded := false
+	defer func() {
+		if !succeeded {
+			_ = e.failSuperRouting(context.WithoutCancel(ctx), b.ProjectID, remaining)
+		}
+	}()
+	run := &superRouterRun{projectID: b.ProjectID, binding: b, events: map[string]bool{}, remaining: 16, workerRoundLimit: c.MaxSteps, conversationMode: c.ConversationMode, readCursors: map[string]int{}, readComplete: map[string]bool{}}
+	run.bindings = map[string]SuperSourceBinding{}
 	for _, event := range remaining {
 		run.events[event.ID] = true
+		binding, lookupErr := superSourceForEvent(db.WithContext(ctx), event.ID, b.ProjectID)
+		if lookupErr != nil {
+			return lookupErr
+		}
+		run.bindings[event.ID] = binding
 	}
 	c.superRole, c.superTaskID, c.superRouter = "router", "", run
 	c.sre, c.sreCoordinator, c.workflowMode, c.legacyInvestigations = nil, false, false, false
@@ -238,15 +280,35 @@ func (e *Engine) RunPilotRouter(ctx context.Context, sessionID string, b SuperSo
 		return err
 	}
 	latest := remaining[len(remaining)-1]
-	if err = e.ExecuteTurn(ctx, sessionID, TurnInput{UserText: latest.Payload, Context: contextText, StrategyMessageID: latest.SourceEventID}); err != nil {
-		return err
-	}
 	for _, event := range remaining {
-		if err = e.finishSuperRouting(ctx, b, event.ID); err != nil {
-			return err
+		if run.bindings[event.ID].Kind == "user" {
+			latest = event
+			break
 		}
 	}
-	return nil
+	input := TurnInput{UserText: latest.Payload, StrategyMessageID: latest.SourceEventID}
+	if run.bindings[latest.ID].Kind == "user" {
+		input, err = e.resolveSuperInput(ctx, latest)
+		if err != nil {
+			return err
+		}
+	} else {
+		input.IgnoreProjectMemory = true
+	}
+	input.Context = contextText + "\n" + input.Context
+	before, snapshotErr := e.Snapshot(sessionID)
+	if snapshotErr != nil {
+		return snapshotErr
+	}
+	run.firstCard = before.TotalCards
+	invoke, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	if err = e.ExecuteTurn(invoke, sessionID, input); err != nil {
+		return err
+	}
+	err = e.finalizeSuperRouter(ctx, sessionID, run, remaining)
+	succeeded = err == nil
+	return err
 }
 
 func (e *Engine) finishSuperRouting(ctx context.Context, b SuperSourceBinding, eventID string) error {
@@ -255,19 +317,39 @@ func (e *Engine) finishSuperRouting(ctx context.Context, b SuperSourceBinding, e
 		return err
 	}
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var event superEventRow
-		if err := tx.First(&event, "id = ? AND source_id = ? AND project_id = ? AND source_revision = ?", eventID, b.SourceID, b.ProjectID, b.Revision).Error; err != nil {
-			return err
-		}
-		var count int64
-		if err := tx.Model(&superDecisionRow{}).Where("event_id = ?", eventID).Count(&count).Error; err != nil {
-			return err
-		}
-		if count == 0 {
-			if err := tx.Create(&superDecisionRow{ID: uid(), EventID: eventID, PartKey: "direct-response", Revision: 1, Action: "respond", Reason: "Router completed a direct text response", At: time.Now().UTC()}).Error; err != nil {
-				return err
-			}
-		}
-		return tx.Model(&superEventRow{}).Where("id = ?", eventID).Update("disposition", "routed").Error
+		return finishSuperRoutingTx(tx, b, eventID)
 	})
+}
+
+func finishSuperRoutingTx(tx *gorm.DB, b SuperSourceBinding, eventID string) error {
+	var source superSourceRow
+	if err := tx.First(&source, "id = ?", b.SourceID).Error; err != nil {
+		return err
+	}
+	if !superSourceMatches(source, b) {
+		return errSuperBinding
+	}
+	var event superEventRow
+	if err := tx.First(&event, "id = ? AND source_id = ? AND project_id = ? AND source_revision = ?", eventID, b.SourceID, b.ProjectID, b.Revision).Error; err != nil {
+		return err
+	}
+	var count int64
+	if err := tx.Model(&superDecisionRow{}).Where("event_id = ?", eventID).Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		if err := tx.Create(&superDecisionRow{ID: uid(), EventID: eventID, PartKey: "direct-response", Revision: 1, Action: "respond", Reason: "Router completed a direct text response", At: time.Now().UTC()}).Error; err != nil {
+			return err
+		}
+	}
+	return tx.Model(&superEventRow{}).Where("id = ?", eventID).Update("disposition", "routed").Error
+}
+
+// FinishSuperUserRouting is for a host's explicit task-selection adapter.
+// Models cannot call it; their invocation finalizes admitted events as a batch.
+func (e *Engine) FinishSuperUserRouting(ctx context.Context, b SuperSourceBinding, eventID string) error {
+	if !b.valid() || b.Kind != "user" {
+		return errSuperBinding
+	}
+	return e.finishSuperRouting(ctx, b, eventID)
 }

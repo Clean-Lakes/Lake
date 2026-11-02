@@ -13,8 +13,32 @@ import (
 // SuperSourceBinding is supplied by an authenticated host adapter. It is not a
 // tool argument and has no authority to dispatch resource operations.
 type SuperSourceBinding struct{ SourceID, ProjectID, Kind, ActorRef, Revision string }
-type SuperEventInput struct{ SourceEventID, ThreadRef, Kind, Payload, NextCursor string }
+type SuperEventInput struct {
+	SourceEventID, ThreadRef, Kind, Payload, NextCursor string
+	HostStaged                                          bool // Host outbox confirms its committed context before routing.
+}
+
+func (e *Engine) ValidateSuperData(value string) error { return e.checkSuperPayload(value) }
+func (e *Engine) resolveSuperInput(ctx context.Context, event SuperEvent) (TurnInput, error) {
+	owner, err := securityRootEngine(e)
+	if err != nil {
+		return TurnInput{}, err
+	}
+	if owner.SuperInputResolver != nil {
+		input, err := owner.SuperInputResolver(ctx, event)
+		if err != nil {
+			return input, err
+		}
+		if input.UserText != event.Payload || input.StrategyMessageID != event.SourceEventID {
+			return TurnInput{}, errSuperBinding
+		}
+		return input, nil
+	}
+	return TurnInput{UserText: event.Payload, StrategyMessageID: event.SourceEventID}, nil
+}
+
 type SuperEvent struct {
+	SourceKind    string    `json:"sourceKind"`
 	ID            string    `json:"id"`
 	SourceID      string    `json:"sourceId"`
 	SourceEventID string    `json:"sourceEventId"`
@@ -95,7 +119,7 @@ func (e *Engine) checkSuperPayload(payload string) error {
 	return nil
 }
 func (r superEventRow) event() SuperEvent {
-	return SuperEvent{ID: r.ID, SourceID: r.SourceID, SourceEventID: r.SourceEventID, ProjectID: r.ProjectID, ThreadRef: r.ThreadRef, Kind: r.Kind, Payload: r.Payload, Disposition: r.Disposition, ReceivedAt: r.ReceivedAt}
+	return SuperEvent{ID: r.ID, SourceKind: r.SourceKind, SourceID: r.SourceID, SourceEventID: r.SourceEventID, ProjectID: r.ProjectID, ThreadRef: r.ThreadRef, Kind: r.Kind, Payload: r.Payload, Disposition: r.Disposition, ReceivedAt: r.ReceivedAt}
 }
 
 // ReceiveSuperEvent commits the immutable event before advancing the source
@@ -122,6 +146,10 @@ func (e *Engine) ReceiveSuperEvent(ctx context.Context, b SuperSourceBinding, in
 			return errSuperBinding
 		}
 		row := superEventRow{ID: uid(), SourceID: b.SourceID, SourceEventID: in.SourceEventID, ProjectID: b.ProjectID, SourceRevision: b.Revision, ActorRef: b.ActorRef, ThreadRef: in.ThreadRef, Kind: in.Kind, Payload: in.Payload, PayloadHash: hash(in.Payload), Disposition: "pending", ReceivedAt: time.Now().UTC()}
+		row.SourceKind = b.Kind
+		if in.HostStaged {
+			row.Disposition = "staged"
+		}
 		result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row)
 		if result.Error != nil {
 			return result.Error
@@ -172,4 +200,68 @@ func (e *Engine) PendingSuperEvents(ctx context.Context, b SuperSourceBinding, l
 		out = append(out, r.event())
 	}
 	return out, err
+}
+
+func (e *Engine) ConfirmSuperEventContext(ctx context.Context, b SuperSourceBinding, eventID, digest string) error {
+	if !b.valid() || len(digest) != 64 {
+		return errSuperBinding
+	}
+	db, err := e.superStore()
+	if err != nil {
+		return err
+	}
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var source superSourceRow
+		if err := tx.First(&source, "id = ?", b.SourceID).Error; err != nil {
+			return err
+		}
+		if !superSourceMatches(source, b) {
+			return errSuperBinding
+		}
+		var event superEventRow
+		if err := tx.First(&event, "id = ? AND source_id = ? AND source_revision = ? AND project_id = ?", eventID, b.SourceID, b.Revision, b.ProjectID).Error; err != nil {
+			return err
+		}
+		if event.HostInputHash != "" {
+			if event.HostInputHash == digest {
+				return nil
+			}
+			return errSuperConflict
+		}
+		if event.Disposition != "staged" {
+			return errSuperConflict
+		}
+		return tx.Model(&superEventRow{}).Where("id = ? AND disposition = ? AND host_input_hash = ''", event.ID, "staged").Updates(map[string]any{"host_input_hash": digest, "disposition": "pending"}).Error
+	})
+}
+
+// Stable project-wide intake: actual human controls/inputs precede scheduled
+// work and observations. Disabled or revised sources cannot keep a queue alive.
+func (e *Engine) PendingSuperProjectEvents(ctx context.Context, projectID string, limit int) ([]SuperEvent, error) {
+	if projectID == "" || limit < 1 || limit > 16 {
+		return nil, errSuperBinding
+	}
+	db, err := e.superStore()
+	if err != nil {
+		return nil, err
+	}
+	var rows []superEventRow
+	err = db.WithContext(ctx).Table("superagent_events AS event").Select("event.*").Joins("JOIN superagent_sources AS source ON source.id=event.source_id AND source.project_id=event.project_id AND source.revision=event.source_revision AND source.actor_ref=event.actor_ref AND source.enabled=1").Where("event.project_id = ? AND event.disposition = ? AND event.routing_attempts < ? AND event.retry_at <= ?", projectID, "pending", 3, time.Now().UTC()).Order("CASE WHEN source.kind='user' AND event.kind IN ('stop','approval') THEN 0 WHEN source.kind='user' THEN 1 WHEN source.kind='schedule' THEN 2 WHEN source.kind='observer' THEN 3 ELSE 4 END, event.received_at, event.id").Limit(limit).Scan(&rows).Error
+	out := make([]SuperEvent, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row.event())
+	}
+	return out, err
+}
+
+func superSourceForEvent(tx *gorm.DB, eventID, projectID string) (SuperSourceBinding, error) {
+	var event superEventRow
+	if err := tx.First(&event, "id = ? AND project_id = ?", eventID, projectID).Error; err != nil {
+		return SuperSourceBinding{}, err
+	}
+	var row superSourceRow
+	if err := tx.First(&row, "id = ? AND project_id = ? AND revision = ? AND actor_ref = ? AND enabled = ?", event.SourceID, projectID, event.SourceRevision, event.ActorRef, true).Error; err != nil {
+		return SuperSourceBinding{}, err
+	}
+	return SuperSourceBinding{SourceID: row.ID, ProjectID: row.ProjectID, Kind: row.Kind, ActorRef: row.ActorRef, Revision: row.Revision}, nil
 }

@@ -163,6 +163,9 @@ func (b *Server) submitHumanMessage(id string, data Object) Object {
 	message := b.validateHumanMessage(id, data)
 	b.messageMu.Lock()
 	defer b.messageMu.Unlock()
+	if b.Store.superSessionKind(id) == "worker" {
+		return b.acceptSuperWorkerMessage(id, message, "")
+	}
 	queue := b.Store.MessageQueue(id)
 	if b.messageBusyLocked(id) || len(objects(queue["items"])) > 0 || data["enqueue"] == true {
 		payload := Object{"text": message.Text, "resourceIds": stringsOf(data["resourceIds"]), "ignoreProjectMemory": message.IgnoreProjectMemory}

@@ -32,6 +32,9 @@ func (e *Engine) TryStrategyModelSlot(ctx context.Context) (context.Context, fun
 }
 
 func (e *Engine) stream(ctx context.Context, model Model, history []Message, tools []Tool, delta func(string, string)) (modelResult, error) {
+	if err := e.checkSuperAssignmentContext(ctx); err != nil {
+		return modelResult{}, err
+	}
 	if err := e.checkSecurityProviderContext(ctx); err != nil {
 		return modelResult{}, err
 	}
@@ -77,6 +80,9 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 		return modelResult{}, err
 	}
 	e.setSREActivity("thinking", "")
+	if err := e.checkSuperAssignmentContext(ctx); err != nil {
+		return modelResult{}, err
+	}
 	if e.worker != nil {
 		w := e.worker
 		chars := historyCost(history) + len(js(tools))
@@ -118,7 +124,7 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 			}
 			return modelResult{}, err
 		}
-		result, err := Stream(ctx, model, history, tools, delta)
+		result, err := e.streamSuperBudget(ctx, model, history, tools, delta)
 		budgetUsage := result.Usage
 		if err != nil && (!budgetUsage.InputKnown || !budgetUsage.OutputKnown) {
 			budgetUsage = Usage{}
@@ -138,5 +144,15 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 	if err := e.checkSecurityProviderContext(ctx); err != nil {
 		return modelResult{}, err
 	}
-	return Stream(ctx, model, history, tools, delta)
+	return e.streamSuperBudget(ctx, model, history, tools, delta)
+}
+
+func (e *Engine) streamSuperBudget(ctx context.Context, model Model, history []Message, tools []Tool, delta func(string, string)) (modelResult, error) {
+	settle, err := e.reserveSuperModel(ctx, model, history, tools)
+	if err != nil {
+		return modelResult{}, err
+	}
+	result, err := Stream(ctx, model, history, tools, delta)
+	settle(result.Usage)
+	return result, err
 }

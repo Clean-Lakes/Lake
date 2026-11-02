@@ -10,10 +10,17 @@ const superWorkerPrompt = `You are a Lake task Worker. Work only on the assigned
 
 func RouterCatalog() []Tool {
 	text := stringSchema
-	return []Tool{
+	list := []Tool{
 		{Name: "route_work", Description: "Commit a routing decision for one exact admitted event part. This creates metadata only, never execution permission. quote must be an exact original user-event substring. Use task_id for existing tasks; cannot operate resources or accept a task.", Parameters: objectSchema(map[string]any{"event_id": text(), "part_key": text(), "action": map[string]any{"type": "string", "enum": []string{"create", "followup", "context_only", "stop", "ask", "respond"}}, "task_id": text(), "title": text(), "role_key": text(), "quote": text(), "reason": text()}, "event_id", "part_key", "action", "reason")},
 		{Name: "read_super_object", Description: "Read an exact project-scoped event/task/worker and its current revision. Clipped pages carry a hash and continuation; knowing an ID never expands scope.", Parameters: objectSchema(map[string]any{"kind": map[string]any{"type": "string", "enum": []string{"event", "task", "worker"}}, "id": text(), "revision": map[string]any{"type": "integer"}, "offset": map[string]any{"type": "integer"}, "limit": map[string]any{"type": "integer"}}, "kind", "id")},
 	}
+	list = append(list, naturalRecallTools()...)
+	for _, tool := range projectMemoryTools() {
+		if tool.Name == "list_project_memories" || tool.Name == "read_project_memory" {
+			list = append(list, tool)
+		}
+	}
+	return list
 }
 
 func WorkerCatalog(catalog []Tool) []Tool {
@@ -21,8 +28,8 @@ func WorkerCatalog(catalog []Tool) []Tool {
 	for _, t := range catalog {
 		// No broad session recall, Memory mutation, old coordinator or another
 		// scheduler can be smuggled into an isolated task's catalog.
-		allowedSession := workToolName(t.Name) || t.Name == "ask_user_question" || t.Name == "todo_read" || t.Name == "todo_write" || t.Name == "read_tool_result" || t.Name == "load_skill"
-		if sessionTool(t.Name) && !allowedSession || t.Name == "save_project_memory" || t.Name == "forget_project_memory" || t.Name == "recall_preferences" || t.Name == "read_preference" || t.Name == "delegate_investigation" {
+		allowedSession := workToolName(t.Name) || t.Name == "delegate_investigation" || t.Name == "read_investigation" || t.Name == "ask_user_question" || t.Name == "todo_read" || t.Name == "todo_write" || t.Name == "read_tool_result" || t.Name == "load_skill" || t.Name == "list_mcp_servers" || t.Name == "list_mcp_tools" || t.Name == "call_mcp_tool"
+		if sessionTool(t.Name) && !allowedSession || t.Name == "save_project_memory" || t.Name == "forget_project_memory" || t.Name == "recall_preferences" || t.Name == "read_preference" {
 			continue
 		}
 		out = append(out, t)
@@ -51,6 +58,13 @@ func (e *Engine) invokeSuperRouter(ctx context.Context, s *session, c Config, ca
 		return nil, &ToolNotExecutedError{Err: errors.New("superagent: Router has no execution capability")}
 	}
 	switch call.Name {
+	case "list_memory_preferences", "read_memory_preference":
+		return e.invokeNaturalRecall(ctx, s, c, call)
+	case "list_project_memories", "read_project_memory":
+		if !c.MemoryEnabled || c.MemoryProjectID != configSecurityProject(c) {
+			return nil, errors.New("superagent: project Memory unavailable")
+		}
+		return e.bridgeCall(withSuperMemoryRead(ctx, ownSessionID(s), configSecurityProject(c)), ownSessionID(s), call.Name, a, false)
 	case "route_work":
 		if c.superRouter.remaining < 1 {
 			return nil, errors.New("superagent: Router decision batch exhausted")
@@ -60,7 +74,17 @@ func (e *Engine) invokeSuperRouter(ctx context.Context, s *session, c Config, ca
 		if !c.superRouter.events[eventID] {
 			return nil, errSuperBinding
 		}
-		return e.ApplySuperDecision(ctx, c.superRouter.binding, SuperDecision{EventID: eventID, PartKey: str(a["part_key"]), Action: str(a["action"]), TaskID: str(a["task_id"]), Title: str(a["title"]), RoleKey: str(a["role_key"]), Quote: str(a["quote"]), Reason: str(a["reason"])})
+		c.superRouter.readMu.Lock()
+		complete := c.superRouter.readComplete[eventID]
+		c.superRouter.readMu.Unlock()
+		if !complete {
+			return nil, errors.New("superagent: read the complete original event before routing its constraints")
+		}
+		binding := c.superRouter.binding
+		if c.superRouter.bindings != nil {
+			binding = c.superRouter.bindings[eventID]
+		}
+		return e.ApplySuperDecision(ctx, binding, SuperDecision{EventID: eventID, PartKey: str(a["part_key"]), Action: str(a["action"]), TaskID: str(a["task_id"]), Title: str(a["title"]), RoleKey: str(a["role_key"]), Quote: str(a["quote"]), Reason: str(a["reason"]), roundLimit: c.superRouter.workerRoundLimit, conversationMode: c.superRouter.conversationMode})
 	case "read_super_object":
 		return e.ReadSuperObject(ctx, ownSessionID(s), str(a["kind"]), str(a["id"]), int64(num(a["revision"], 0)), num(a["offset"], 0), num(a["limit"], 4096))
 	}

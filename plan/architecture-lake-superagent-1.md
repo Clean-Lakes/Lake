@@ -187,11 +187,11 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-004 | 在 `internal/ai/superagent_store.go` 实现 `superagentModels` 与 `MigrateSuperagentStore`，经 `adk_services.go` 的同一私有库注册 1.3 新表、唯一键、schema 版本及旧版本拒绝规则；迁移前沿既有一致快照路径备份。依赖 TASK-002、TASK-003；验证 TEST-002。 | false | — |
-| TASK-005 | 在 `internal/ai/superagent_intake.go` 实现 `ReceiveSuperEvent`，完成 source/revision/project/actor 校验、幂等插入与游标提交顺序；在 `internal/web/superagent_source.go:ReceiveUserEvent` 适配真实消息身份。依赖 TASK-004；验证 TEST-004。 | false | — |
+| TASK-004 | 在 `internal/ai/superagent_store.go` 实现 `superagentModels` 与 `MigrateSuperagentStore`，经 `adk_services.go` 的同一私有库注册 1.3 新表、唯一键、schema 版本及旧版本拒绝规则；迁移前沿既有一致快照路径备份。依赖 TASK-002、TASK-003；验证 TEST-002。 | true | 2026-11-02 |
+| TASK-005 | 在 `internal/ai/superagent_intake.go` 实现 `ReceiveSuperEvent`，完成 source/revision/project/actor 校验、幂等插入与游标提交顺序；在 `internal/web/superagent_source.go:ReceiveUserEvent` 适配真实消息身份。依赖 TASK-004；验证 TEST-004。 | true | 2026-11-02 |
 | TASK-006 | 在 `internal/ai/superagent_subscription.go` 实现 `RouteSubscribedEvent/HandBackSuperEvent`，区分 context_only/followup、确切归属和跨任务要求；事件正文不授予权限，退回次数每 event/worker 最多一次。依赖 TASK-005；验证 TEST-005。 | false | — |
 | TASK-007 | 在 `internal/ai/superagent_inbox.go` 实现 `EnqueueWorkerInput/MarkWorkerInputConsumed`，接 `user_supplements.go:acknowledgeSupplementEvent`，仅 SDK 实际接纳后消费；保留重复、未送达和未读状态。依赖 TASK-006；验证 TEST-006。 | false | — |
-| TASK-008 | 在 `internal/ai/superagent_outbox.go` 实现 `QueuePilotReport/AcknowledgePilotDelivery`，把 task report revision 与待回复同事务保存；在 `internal/web/superagent_source.go:DeliverPilotReport` 使用固定回执键。依赖 TASK-004；验证 TEST-007。 | false | — |
+| TASK-008 | 在 `internal/ai/superagent_outbox.go` 实现 `QueuePilotReport/AcknowledgePilotDelivery`，把 task report revision 与待回复同事务保存；在 `internal/web/superagent_source.go:DeliverPilotReport` 使用固定回执键。依赖 TASK-004；验证 TEST-007。 | true | 2026-11-02 |
 
 ### Implementation Phase 3
 

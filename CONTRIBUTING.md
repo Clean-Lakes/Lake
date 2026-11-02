@@ -22,7 +22,7 @@ open "$HOME/Applications/Lake Dev.app"
 
 构建脚本先调用 `scripts/build_lake.sh` 生成**已签名**的 `bin/lake`，再构建和签名 Dev 应用。缺少 `Lake Local Development Code Signing` 身份时应停止构建并运行一次签名设置脚本，不能改用未签名二进制。构建产物在 `dist/macos/<版本>/arm64/dev/`，安装位置为 `~/Applications/Lake Dev.app`。应用会启动自己的 Go 服务并选择本机空闲端口；不要另外启动一个服务来驱动这个窗口。
 
-已运行 Dev 时，安装新包后先正常退出 **Lake Dev**，再打开上面的应用路径，确保加载新进程。不要退出或重启正式版 Lake。Dev 标题旁有 `DEV` 标记；模型和项目配置从独立目录读取，首次启动为空是正常现象。
+已运行 Dev 时，安装前在 **Lake Dev** 选择“停止内核并退出”，确认后端退出后安装新包，再打开上面的应用路径，确保加载新进程。不要退出或重启正式版 Lake。Dev 标题旁有 `DEV` 标记；模型和项目配置从独立目录读取，首次启动为空是正常现象。
 
 | 项目 | 本地联调 | 正式版 |
 | --- | --- | --- |
@@ -44,7 +44,7 @@ bin/lake web --home "$HOME/.lake-dev-cli" --port 4182 --open
 
 ### macOS Go/React 快速运行（不制作安装包）
 
-仅修改 Go/React 时，先正常退出 **Lake Dev**，再从仓库根目录运行：
+仅修改 Go/React 时，先在 **Lake Dev** 选择“停止内核并退出”，再从仓库根目录运行：
 
 ```sh
 scripts/run_lake_dev.sh
