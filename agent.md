@@ -1,6 +1,14 @@
-# Lake 三模块整体设计与协作约定
+# Lake Super-agent 内核与三模块协作约定
 
-更新日期：2026-11-01。本文记录用户确认的架构方向，供后续 Agent 和模块维护者共同遵循。它不代表所有能力已经实现，也不改变 `AGENTS.md`、`CONTRIBUTING.md` 和 `docs/development-workflow.md` 中的开发、合并、发布与数据隔离要求。
+更新日期：2026-11-02。本文记录用户确认的架构方向，供后续 Agent 和模块维护者共同遵循。它不代表所有能力已经实现，也不改变 `AGENTS.md`、`CONTRIBUTING.md` 和 `docs/development-workflow.md` 中的开发、合并、发布与数据隔离要求。
+
+## 0. 统一 Super-agent 内核方向（待实施）
+
+Lake 的目标业务架构统一为持续的 **Pilot Router + 独立任务 Worker**：Pilot 接收用户要求、路由工作、跨任务协调并统一回复；Worker 使用官方 ADK 完成执行，复杂任务内部按同一受控协议组织专员。普通操作、Plan、SRE、保存工作流、日程和外部结果逐步进入同一事件与任务链路，不维护彼此竞争的接单、调度与结清内核。用户无需管理执行会话；内部 Session、原 RootTurnID、操作句柄、审批和证据继续保留。
+
+任务主记录与闭环沿现有 WorkGoal/验收账本收敛，旧 SRE 通过兼容映射分阶段迁移；事件、订阅、Worker 和投递记录不建立另一份任务完成权威。Memory 作为 Router 与 Worker 的横向知识服务，继续以 bearqy 的方案为主；当前 N5 专员/工作流限制、同意与使用开关、运维 V2 门控不会因目标架构改变而自动放开。
+
+完整对象、职责、迁移、Memory 对接、分期任务及验收见 [Lake 统一 Super-agent 内核实施方案](plan/architecture-lake-superagent-1.md)。该计划状态为 Planned，本次只交付文档，不表示已经重构或启用运行能力。下面的 Items、Security、Memory 分工继续有效。
 
 ## 1. 总体分工
 
@@ -76,6 +84,7 @@ flowchart TB
 
 ## 6. 详细规格与维护
 
+- [统一 Super-agent 内核实施方案（待实施）](plan/architecture-lake-superagent-1.md)
 - [三模块对接说明、当前进度、接口与验收矩阵](docs/design/items-security-memory-integration.md)
 - [分阶段实施计划与 12 项待实施任务](plan/feature-items-security-memory-integration-1.md)
 - [Memory 当前使用与兼容说明](docs/lake-memory.md)及[自然记忆 N1–N5 计划](plan/feature-natural-memory-1.md)
