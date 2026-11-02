@@ -7,6 +7,8 @@ import (
 
 type auxiliaryModelKey struct{}
 type reservedLearningSlotKey struct{}
+type superWorkerModelKey struct{}
+type reservedWorkerModelKey struct{}
 
 // Only trusted background coordination uses this nonblocking admission. A
 // queued auxiliary task never waits ahead of interactive requests for a slot.
@@ -15,9 +17,16 @@ func (e *Engine) TryStrategyModelSlot(ctx context.Context) (context.Context, fun
 		return ctx, func() {}, false
 	}
 	select {
-	case e.modelSlots <- struct{}{}:
-		return context.WithValue(ctx, reservedLearningSlotKey{}, e.modelSlots), func() { <-e.modelSlots }, true
+	case e.childModelSlots <- struct{}{}:
 	default:
+		return ctx, func() {}, false
+	}
+	select {
+	case e.modelSlots <- struct{}{}:
+		ctx = context.WithValue(ctx, reservedWorkerModelKey{}, e.childModelSlots)
+		return context.WithValue(ctx, reservedLearningSlotKey{}, e.modelSlots), func() { <-e.modelSlots; <-e.childModelSlots }, true
+	default:
+		<-e.childModelSlots
 		return ctx, func() {}, false
 	}
 }
@@ -36,6 +45,14 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 		defer releaseActivity()
 	}
 	e.setSREActivity("waiting_model", "")
+	if e.worker == nil && ctx.Value(superWorkerModelKey{}) == true {
+		select {
+		case e.childModelSlots <- struct{}{}:
+		case <-ctx.Done():
+			return modelResult{}, ctx.Err()
+		}
+		defer func() { <-e.childModelSlots }()
+	}
 	if e.worker != nil {
 		w := e.worker
 		select {

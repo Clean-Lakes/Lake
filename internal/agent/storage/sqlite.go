@@ -150,6 +150,19 @@ func (s *Store) Backup(ctx context.Context, path string) error {
 
 // This reader guard runs before either SDK or application AutoMigrate.
 func checkReaderGuard(db *sql.DB) error {
+	var superExists int
+	if err := db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='superagent_schema'").Scan(&superExists); err != nil {
+		return err
+	}
+	if superExists != 0 {
+		var version int
+		if err := db.QueryRow("SELECT version FROM superagent_schema WHERE id=1").Scan(&version); err != nil {
+			return fmt.Errorf("invalid superagent reader guard: %w", err)
+		}
+		if version != 1 {
+			return fmt.Errorf("unsupported superagent store")
+		}
+	}
 	var exists int
 	if err := db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='security_schema_meta'").Scan(&exists); err != nil {
 		return err

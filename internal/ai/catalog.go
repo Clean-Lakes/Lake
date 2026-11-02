@@ -101,6 +101,9 @@ func CatalogForConfig(c Config, capabilities map[string]any) []Tool {
 	return out
 }
 func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool {
+	if c.superRole == "router" {
+		return RouterCatalog()
+	}
 	list := e.baseSessionCatalog(ctx, id, c)
 	managed, _ := e.securityPolicyConfigured(configSecurityProject(c))
 	if managed || c.securityExecution != nil {
@@ -135,6 +138,9 @@ func (e *Engine) sessionCatalog(ctx context.Context, id string, c Config) []Tool
 	}
 	if c.ConversationMode == ModePlan {
 		list = planCatalog(list)
+	}
+	if c.superRole == "worker" {
+		list = WorkerCatalog(list)
 	}
 	return list
 }

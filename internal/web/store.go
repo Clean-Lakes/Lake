@@ -174,7 +174,7 @@ func openStore(dir string, memoryV2Wanted bool, options ...storeOpenOptions) (*S
 		return nil, e
 	}
 	platform.Chmod(path, 0600)
-	if _, e = db.Exec(presentationSchema + sessionNavigationSchema); e != nil {
+	if _, e = db.Exec(presentationSchema + sessionNavigationSchema + superSessionSchema); e != nil {
 		db.Close()
 		return nil, e
 	}

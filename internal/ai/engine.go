@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Clean-Lakes/Lake/internal/platform"
@@ -35,6 +36,11 @@ type session struct {
 	sreReply            *sreReply
 }
 type Engine struct {
+	superOnce                      sync.Once
+	superErr                       error
+	superInitialized               atomic.Bool
+	superRouterLocks               sync.Map
+	superSecrets                   sync.Map
 	securityOwners                 sync.Map
 	securityStart                  sync.Once
 	securityLifeMu                 sync.Mutex
@@ -299,6 +305,11 @@ func (e *Engine) notify(s *session, kind string, v any) {
 	}
 }
 func (e *Engine) Configure(id string, c Config) error {
+	var superErr error
+	c, superErr = e.enforceSuperSessionConfig(id, c)
+	if superErr != nil {
+		return superErr
+	}
 	if e.worker != nil && c.MemorySchemaVersion == 2 {
 		c.MemoryEnabled = false
 		c.MemoryExtractionEnabled = false
@@ -318,6 +329,14 @@ func (e *Engine) Configure(id string, c Config) error {
 				return err
 			}
 			c.AuthSecrets = append(c.AuthSecrets, secret)
+		}
+	}
+	if c.Model.Key != "" {
+		e.superSecrets.Store(c.Model.Key, true)
+	}
+	for _, secret := range c.AuthSecrets {
+		if secret != "" {
+			e.superSecrets.Store(secret, true)
 		}
 	}
 	if c.Permissions != nil {
@@ -744,6 +763,17 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		sourceMessageID = uid()
 	}
 	rootTurnID := uid()
+	if c.superRole == "worker" {
+		row, _, loadErr := e.workRow(id, c.superTaskID)
+		if loadErr != nil {
+			s.mu.Unlock()
+			return loadErr
+		}
+		if row.ClosureContract == "" {
+			rootTurnID = row.RootTurnID
+		}
+		ctx = context.WithValue(ctx, superWorkerModelKey{}, true)
+	}
 	execution, securityErr := e.prepareSecurityTurnLocked(ctx, s, &c, input, sourceMessageID, rootTurnID)
 	if securityErr != nil {
 		s.mu.Unlock()

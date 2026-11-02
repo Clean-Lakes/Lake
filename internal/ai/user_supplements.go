@@ -231,9 +231,9 @@ func (d *adkTurnDriver) afterModel(ac agent.Context, response *model.LLMResponse
 	}
 	return check(terminal)
 }
-func (e *Engine) acknowledgeSupplementEvent(ctx context.Context, eventData map[string]any, id string) error {
+func (e *Engine) acknowledgeSupplementEvent(ctx context.Context, eventData map[string]any, id string, sdkEventIDs ...string) error {
 	_, ack := e.supplementHooks()
-	if ack == nil || eventData == nil {
+	if eventData == nil {
 		return nil
 	}
 	var receipt struct {
@@ -249,7 +249,13 @@ func (e *Engine) acknowledgeSupplementEvent(ctx context.Context, eventData map[s
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return ack(id, receipt.RootTurnID, receipt.IDs)
+	if err := e.acknowledgeSuperSupplements(ctx, id, receipt.RootTurnID, receipt.IDs, sdkEventIDs); err != nil {
+		return err
+	}
+	if ack != nil {
+		return ack(id, receipt.RootTurnID, receipt.IDs)
+	}
+	return nil
 }
 func (e *Engine) acknowledgeSupplementState(ctx context.Context, s *session) error {
 	s.mu.Lock()

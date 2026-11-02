@@ -331,7 +331,7 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 				return err
 			}
 			if event != nil {
-				if ackErr := e.acknowledgeSupplementEvent(ctx, event.Actions.StateDelta, s.state.View.Session); ackErr != nil {
+				if ackErr := e.acknowledgeSupplementEvent(ctx, event.Actions.StateDelta, s.state.View.Session, event.ID); ackErr != nil {
 					return ackErr
 				}
 				if resuming && len(event.Actions.RequestedToolConfirmations) > 0 {

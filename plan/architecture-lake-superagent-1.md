@@ -4,20 +4,20 @@ version: "1.0"
 date_created: "2026-11-02"
 last_updated: "2026-11-02"
 owner: "Lake；Memory 方案与内部实现以 bearqy 维护内容为主"
-status: Planned
+status: In progress
 tags: [architecture, super-agent, pilot, adk, memory, security, migration]
 baseline_commit: "85a768d074f654d8428d1ea278f9d60dec7a2504"
 reference_prototype_commit: "6337fc823ce20251c8de8085948165c81aaa701e"
-delivery_scope: plan-only
+delivery_scope: implementation
 ---
 
 # Introduction
 
-![Status: Planned](https://img.shields.io/badge/status-Planned-blue)
+![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
 
 本方案落实用户确认的方向：Lake 统一采用 Super-agent 业务运行架构；用户持续与 Pilot 沟通，由系统创建和协调专员，用户无需创建、命名、切换或维护执行会话。普通操作、Plan、SRE、保存的工作流、定时任务和外部结果逐步进入同一任务与事件链路。官方 ADK 继续承载模型/工具循环和工作流图；Lake Items、Security、Memory 保留各自权威职责。
 
-本轮只交付方案和架构索引，不修改运行代码、数据库、配置、Memory 开关、供应商或正式版。以下全部实现任务尚未开始。用户认可 UI 概念不等于原生客户端已经实现；DeepSeek 设计文章、公开原型和 Lake 的实现建议分别标注，不把文章中的未来方向写成原型已有功能。
+用户于 2026-11-02 授权完整实施并安装 Lake Dev。当前在独立 `codex/superagent-kernel` 工作区实施，逐项记录完成情况；未完成项保持 false。正式版和 Memory 既有开关继续遵守隔离与分工约束。用户认可 UI 概念不等于原生客户端已经实现；DeepSeek 设计文章、公开原型和 Lake 的实现建议分别标注，不把文章中的未来方向写成原型已有功能。
 
 交付后的主要使用场景：用户说“排查订单超时，构建完成后告诉我”，Pilot 建立两项独立工作；订单工作按需组织应用、数据库和验证专员；构建工作跟踪原编号。用户补充“订单只调查，不改配置”时，原订单工作收到约束，构建继续。相关结果由 Pilot 汇总，详细步骤、证据和原终端在当前 Dev 风格的三联视图中查看。
 
@@ -169,7 +169,7 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 
 ## 2. Implementation Steps
 
-各阶段按下面的依赖推进；同一阶段内只有声明了依赖的任务必须顺序执行。任务中的新增路径/函数是实施落点约定；现有名称以 1.1 基线为准。所有 `false` 表示未实施。
+各阶段按下面的依赖推进；同一阶段内只有声明了依赖的任务必须顺序执行。任务中的新增路径/函数是实施落点约定；现有名称以 1.1 基线为准。`false` 表示尚未完成全部接入及验收，可能已有部分实现。
 
 ### Implementation Phase 1
 
@@ -177,9 +177,9 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-001 | 在 `docs/design/lake-superagent-runtime.md` 逐项记录 1.1 入口到当前 catalog、owner、存储和恢复入口的映射；记录基线 SHA 与旧计划差异。依赖：无；验证 TEST-001。 | false | — |
-| TASK-002 | 在 `internal/ai/superagent_migration.go` 定义 `LegacyWorkAlias` 与纯函数 `PlanLegacyWorkImport`，输入现有 WorkGoal/SRETask/操作/审批/验收引用，返回仅元数据的导入计划与不可接管原因；不派发工具。依赖 TASK-001；验证 TEST-002。 | false | — |
-| TASK-003 | 在 `internal/ai/superagent_model.go` 定义 `SuperTaskView` 与 `ProjectSuperTaskState`，以 `work_closure.go:VerifyWorkGoal` 为完成权威，定义旧状态逐项映射与验收状态分离。依赖 TASK-001；验证 TEST-003。 | false | — |
+| TASK-001 | 在 `docs/design/lake-superagent-runtime.md` 逐项记录 1.1 入口到当前 catalog、owner、存储和恢复入口的映射；记录基线 SHA 与旧计划差异。依赖：无；验证 TEST-001。 | true | 2026-11-02 |
+| TASK-002 | 在 `internal/ai/superagent_migration.go` 定义 `LegacyWorkAlias` 与纯函数 `PlanLegacyWorkImport`，输入现有 WorkGoal/SRETask/操作/审批/验收引用，返回仅元数据的导入计划与不可接管原因；不派发工具。依赖 TASK-001；验证 TEST-002。 | true | 2026-11-02 |
+| TASK-003 | 在 `internal/ai/superagent_model.go` 定义 `SuperTaskView` 与 `ProjectSuperTaskState`，以 `work_closure.go:VerifyWorkGoal` 为完成权威，定义旧状态逐项映射与验收状态分离。依赖 TASK-001；验证 TEST-003。 | true | 2026-11-02 |
 
 ### Implementation Phase 2
 
@@ -271,7 +271,7 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 
 ## 5. Files
 
-本轮实际改动只有本计划与根 `agent.md` 的目标架构索引；以下是未来实现范围，不代表本轮已新增。
+下列为实施范围，实际进度以上方任务状态及运行架构记录为准。
 
 - **FILE-001**: `internal/ai/superagent_model.go`、`superagent_store.go`、`superagent_intake.go`、`superagent_subscription.go`：领域、持久事件与路由元数据。
 - **FILE-002**: `internal/ai/superagent_router.go`、`superagent_catalog.go`、`superagent_context.go`：轻量 Pilot、受限工具目录与准确历史召回。

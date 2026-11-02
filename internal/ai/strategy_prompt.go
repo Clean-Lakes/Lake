@@ -22,6 +22,12 @@ func composePrompt(c Config) strategy.Composition {
 
 func composeProfile(c Config) strategy.Composition {
 	var prompt strategy.Composition
+	if c.superRole == "router" {
+		prompt.Append(strategy.FixedRules, "pilot-router", superRouterPrompt)
+		prompt.AppendComposition(embeddedPrompt("user-language-policy"))
+		prompt.Append(strategy.TaskContext, "user-preferences", c.UserPrompt)
+		return prompt
+	}
 	if c.sreCoordinator {
 		prompt.AppendComposition(embeddedPrompt("sre-coordination"))
 		prompt.Append(strategy.FixedRules, "separator", "\n")
@@ -40,6 +46,9 @@ func composeProfile(c Config) strategy.Composition {
 		prompt.Append(strategy.FixedRules, "separator", "\n")
 		prompt.AppendComposition(embeddedPrompt("user-language-policy"))
 		return prompt
+	}
+	if c.superRole == "worker" {
+		prompt.Append(strategy.FixedRules, "task-worker", superWorkerPrompt)
 	}
 	name := c.Profile
 	if name == "" {

@@ -302,6 +302,12 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 		fail(400, "尚未配置模型")
 	}
 	options := b.configure(id, nil)
+	if domain, active, err := b.Engine.SuperProject(turnContext, stringOf(b.Store.Session(id)["projectId"])); err != nil {
+		aiFailure(err)
+	} else if active && id == domain.RouterSessionID {
+		b.runSuperPilotTurn(turnContext, domain, id, messageID)
+		return
+	}
 	sreCoordination := options["conversationMode"] != ai.ModePlan && options["profile"] == "core" && len(files) == 0 && b.Store.SREEnabled(stringOf(b.Store.Session(id)["projectId"]))
 	simpleConversation := !sreCoordination && ai.IsBriefConversation(message) && len(refs) == 0 && len(images) == 0 && len(files) == 0
 	var targetScope *ai.TargetScope

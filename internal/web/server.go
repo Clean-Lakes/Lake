@@ -77,6 +77,7 @@ type Server struct {
 	token                string
 	generated            bool
 	workers              sync.WaitGroup
+	superWorkers         sync.Map
 	closeOnce            sync.Once
 	startMu              sync.Mutex
 	gate                 sync.RWMutex
@@ -488,6 +489,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if b.pilotSettingsRoute(w, r, name, method) {
+		return
+	}
+	if b.superagentRoute(w, r) {
 		return
 	}
 	if b.securityBoundaryRoute(w, r, name, method) {

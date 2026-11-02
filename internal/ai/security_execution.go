@@ -16,6 +16,28 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (a
 	if err := e.CheckSecurityRuntime(); err != nil {
 		return nil, &ToolNotExecutedError{Err: err}
 	}
+	if c.superRole == "router" {
+		return e.invokeSuperRouter(ctx, s, c, call)
+	}
+	if c.superRole == "worker" {
+		found := false
+		for _, t := range e.sessionCatalog(ctx, ownSessionID(s), c) {
+			if t.Name == call.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, &ToolNotExecutedError{Err: errors.New("superagent: tool unavailable to Worker")}
+		}
+		managed, err := e.SecurityProjectManaged(ctx, configSecurityProject(c))
+		if err != nil {
+			return nil, err
+		}
+		if !managed {
+			return nil, &ToolNotExecutedError{Err: errors.New("superagent: Worker requires current Security policy")}
+		}
+	}
 	configured, err := e.securityPolicyConfigured(configSecurityProject(c))
 	if err != nil {
 		return nil, &ToolNotExecutedError{Err: err}
