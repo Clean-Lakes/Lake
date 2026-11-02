@@ -4,7 +4,7 @@
 
 ## 版本与证据范围
 
-基线为 `85a768d074f654d8428d1ea278f9d60dec7a2504`。已安装 `~/Applications/Lake Dev.app` 的干净源码为 `34695a78c261da7b2c4cc46cef916c3121cc3ff6`，后端 SHA-256 为 `a7114bc1b2181798cad702ed6313a4b6c83c9d559b55ad05e6a13e0341859509`。安装命令为 `scripts/build_lake_desktop.sh --dev --install`；应用与后端签名严格校验通过。后续 `f4cab2e58cbb964a34981d47ace2dfb6e340f9b6` 仅修正验收脚本对子进程退出的观察，不改变已安装客户端或运行内核。
+基线为 `85a768d074f654d8428d1ea278f9d60dec7a2504`。首轮安装 `~/Applications/Lake Dev.app` 的干净源码为 `34695a78c261da7b2c4cc46cef916c3121cc3ff6`，后端 SHA-256 为 `a7114bc1b2181798cad702ed6313a4b6c83c9d559b55ad05e6a13e0341859509`。安装命令为 `scripts/build_lake_desktop.sh --dev --install`；应用与后端签名严格校验通过。后续 `f4cab2e58cbb964a34981d47ace2dfb6e340f9b6` 仅修正验收脚本对子进程退出的观察，不改变已安装客户端或运行内核。
 
 各项检查分别记录 tested SHA；完整 Go 检查后只有前端、验收脚本及文档变化，没有声称旧 SHA 的检查运行在新 SHA 上。机器可读记录见 [JSON](lake-superagent-runtime.json)。本地原始日志保存在执行环境 `/tmp/lake-superagent-*`，并非仓库附件，重启或系统清理后可能消失；JSON 保留观察结果及实际测试名称。
 
@@ -53,3 +53,24 @@ JSON 的 `unitBoundaryEvidence` 来自实际完整 Go 日志，每项 `fullScena
 磁盘清理仅涉及已核实可重建的忽略 Swift 缓存和 Go build/race 缓存，累计逻辑大小约 13.19 GiB；完成后可用空间约 23.47 GiB。构建期间会生成新缓存，因此这不是净增可用空间。没有清理源文件、项目历史、凭据或生产 Home。
 
 开发分支通过草稿 PR 指向 develop；没有合并、发布标签/Release 或安装生产应用。日常 develop PR 无自动 CI，不能把没有 checks 当作通过。
+
+
+## 真实模型路由问题修复与复测
+
+用户实测的 `invalid host binding` 已从原始 SDK 调用定位：两个 `route_work create` 都缺少 `role_key`。角色字段属于模型路由参数，原错误把它与宿主来源绑定混淆。现按 action 给出参数要求和可修正的错误，要求沿同一 event/part 修正；原项目、来源、引用、权限、幂等及任务验收门禁保留。
+
+真实供应商后续复测还暴露 Worker 协议说明不足：本机读取未传 `asset_ref`、确认计划后未激活当前步骤、只写 waiting_user 而未调用真实验收。工具契约与 Worker 指令现明确目录别名、`work_update(running)` → 实际 I/O → `work_update(completed)` 触发宿主验收 → `work_finish`；缺少目标/尝试时返回具体恢复方法，不自动补权限或伪造执行身份。
+
+当前签名安装源码为 **`61ffda7f`**（完整 SHA 见 JSON），干净构建、严格签名校验通过。后续仅验收脚本和记录变化。
+
+| 检查 | 版本 | 结果 |
+| --- | --- | --- |
+| 完整 Go 回归 | `8f291dea` | 1906 项、11 个包通过；之后仅补充工具说明和错误提示 |
+| Super-agent、Security 目标/目录、Work race | `61ffda7f` | 124 项、2 个包通过 |
+| vet、ADK 边界、签名 Dev 构建安装 | `61ffda7f` | 通过 |
+| 同时注入缺角色、缺目标、缺当前尝试 | 验收脚本 `04326783`，安装后端 `61ffda7f` | 三类错误均修正后完成，两项任务各一次真实临时文件读取、独立验收及 Pilot 投递通过 |
+| 用户已配置真实模型 `gpt-6.1-terra` | 安装后端 `61ffda7f` | 新一轮两个任务分别读取 go.mod/package.json 各一次，原始结果与磁盘完全一致，两项验收 pass、报告 delivered；原生 UI 两项均显示已验收 |
+
+真实模型测试位于独立 Dev 项目“Super-agent 路由回归 20261102”，只为这两个源文件配置只读测试范围，未修改原项目策略。之前失败/受阻记录保留，新一轮两个已验收任务是本次正向结果；不能把保留的旧失败改写为成功。没有执行 Shell、安装依赖或写资源。
+
+三类故障同时注入时，早期合成供应商没有返回 usage，额外恢复轮次触发了原预算的保守预留上限，任务正确停止。验收夹具现明确声明并返回模拟的四字符 token 计量以结算已完成响应；该计量不是实际模型账单，运行时预算没有放宽。诊断日志现在保留错误卡片原因。最终完整注入重跑通过，未跳过原故障条件。

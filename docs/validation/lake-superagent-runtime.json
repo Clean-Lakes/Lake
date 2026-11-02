@@ -5,9 +5,9 @@
   "baseSHA": "85a768d074f654d8428d1ea278f9d60dec7a2504",
   "installedDev": {
     "platform": "macOS arm64",
-    "gitHead": "34695a78c261da7b2c4cc46cef916c3121cc3ff6",
+    "gitHead": "61ffda7f4aa42a93494e22c138713a7f9b540f16",
     "sourceDirty": false,
-    "binarySHA256": "a7114bc1b2181798cad702ed6313a4b6c83c9d559b55ad05e6a13e0341859509",
+    "binarySHA256": "03fefe6a8f629380c4673a6d25a0f7e1efd47531465ad7c14d59cebbd9842392",
     "codesign": "deep_strict_pass",
     "productionTouched": false
   },
@@ -402,5 +402,69 @@
     "rebuildableGiBRemoved": 13.19,
     "freeDiskGiBAfter": 23.47,
     "scope": "ignored Swift caches and Go build/race cache only"
+  },
+  "previousInstalledDev": {
+    "platform": "macOS arm64",
+    "gitHead": "34695a78c261da7b2c4cc46cef916c3121cc3ff6",
+    "sourceDirty": false,
+    "binarySHA256": "a7114bc1b2181798cad702ed6313a4b6c83c9d559b55ad05e6a13e0341859509",
+    "codesign": "deep_strict_pass",
+    "productionTouched": false
+  },
+  "routingRepairVerification": {
+    "date": "2026-11-02",
+    "binarySourceSHA": "61ffda7f4aa42a93494e22c138713a7f9b540f16",
+    "verifierSHA": "043267837184b3ed724c8b537afa77024d9c6945",
+    "issues": [
+      "missing role_key mislabeled as invalid host binding",
+      "missing asset_ref despite runtime=local",
+      "resource I/O before step/attempt activation and prose-only acceptance wait"
+    ],
+    "fullGo": {
+      "testedSHA": "8f291deaad7f49cb1cab2ed365d31adf474cade9",
+      "passed": 1906,
+      "command": "go test -json ./... -count=1 -timeout=15m"
+    },
+    "race": {
+      "testedSHA": "61ffda7f4aa42a93494e22c138713a7f9b540f16",
+      "passed": 124,
+      "command": "go test -race -json ./internal/ai ./internal/web -run '^TestSuper|^TestSecurity.*(Catalog|Target)|^TestWork' -count=1 -timeout=10m"
+    },
+    "vet": "pass",
+    "adkBoundary": "pass",
+    "signedBuildInstall": "pass",
+    "syntheticFaultInjection": {
+      "passed": true,
+      "providerUsage": "synthetic four-JSON-character fixture tokens, not real model billing",
+      "routingArgumentRepairVerified": true,
+      "workerTargetRepairVerified": true,
+      "workerAttemptRepairVerified": true,
+      "actualReads": 2,
+      "distinctWorkerSessions": 2,
+      "pilotReportsDelivered": true
+    },
+    "realModel": {
+      "model": "gpt-6.1-terra",
+      "passed": true,
+      "files": [
+        {
+          "file": "web-agent/package.json",
+          "reads": 1,
+          "contentMatches": true,
+          "accepted": true,
+          "reportDelivered": true
+        },
+        {
+          "file": "go.mod",
+          "reads": 1,
+          "contentMatches": true,
+          "accepted": true,
+          "reportDelivered": true
+        }
+      ],
+      "nativeUIBothAccepted": true,
+      "scope": "separate regression project; only the two repository files; no shell, installation or mutation"
+    },
+    "priorFaultInjectionFailure": "With three added repair rounds and no provider usage, conservative cumulative token reservations exhausted the original budget. The synthetic provider now reports its explicitly synthetic character-based usage; runtime limits were not changed."
   }
 }
