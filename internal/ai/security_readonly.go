@@ -15,6 +15,12 @@ import (
 // never bootstraps, migrates, reconciles operations, or opens the recovery gate.
 // It lets a supported, gate-closed Home expose its existing local history.
 func OpenSecurityReadOnlyHome(home, dataDir string) (h *SecurityHome, err error) {
+	return openSecurityReadOnlyHome(home, dataDir, false)
+}
+
+// Offline inspection may read an open or closed Home, but has exactly the same
+// non-executable owner, identity and reader checks as the recovery view.
+func openSecurityReadOnlyHome(home, dataDir string, inspection bool) (h *SecurityHome, err error) {
 	home, root, err := ResolveSecurityHome(home, dataDir)
 	if err != nil {
 		return nil, err
@@ -40,7 +46,7 @@ func OpenSecurityReadOnlyHome(home, dataDir string) (h *SecurityHome, err error)
 	if err != nil {
 		return h, err
 	}
-	if h.control.Gate != "closed" || h.control.RuntimeRoot != root {
+	if (!inspection && h.control.Gate != "closed") || h.control.RuntimeRoot != root {
 		return h, errors.New("security: recovery view requires a matching closed Home")
 	}
 	if _, e := os.Lstat(filepath.Join(home, "security", "bootstrap.pending")); !errors.Is(e, os.ErrNotExist) {
@@ -48,6 +54,11 @@ func OpenSecurityReadOnlyHome(home, dataDir string) (h *SecurityHome, err error)
 	}
 	path := filepath.Join(root, "sessions.sqlite")
 	info, err := os.Lstat(path)
+	if inspection && errors.Is(err, os.ErrNotExist) && !h.control.StoreReady {
+		// A stdio-only legacy migration can close the gate before a canonical
+		// database exists. Inspection reads its verified archive, not a new DB.
+		return h, nil
+	}
 	if err != nil {
 		return h, err
 	}

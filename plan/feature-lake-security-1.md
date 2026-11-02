@@ -1,8 +1,8 @@
 ---
 goal: 按五模块职责落实任务闭环、安全控制、资源操作及档案验收，SOP只读手册独立交付
-version: 7
+version: 8
 date_created: 2026-10-30
-last_updated: 2026-10-30
+last_updated: 2026-11-01
 owner: Lake
 status: In progress
 tags: [feature, architecture, security, authorization, migration, adk]
@@ -19,6 +19,8 @@ tags: [feature, architecture, security, authorization, migration, adk]
 修订5按五模块对应交付职责，每个任务只有一个主责模块；模块划分不改变原事务边界与前置依赖。八阶段包含 50 项任务，建议按阶段提交可评审 PR。执行每阶段前以最新 `origin/develop` 为基础核对接口变化；本计划不授权功能 PR 合并、生产安装或发布。
 
 ## 1. Requirements & Constraints
+
+2026-11-01 继续第一阶段：新增[未决操作只读核查](../docs/security/legacy-risk-inspection.md)，按旧源 namespace 验证归档与当前账本、提供有界安全投影，不改变 gate 或原操作状态。TASK-004 的查询可见性得到补充，可信逐资源映射、显式核实与通用恢复仍未完成；不据此开启后续 enforced 阶段，也不修改 Memory 或 Items 的数据权威。
 
 - **REQ-001**: `CurrentTarget`、`pendingResolution` 和 `ExecutionBoundary` 独立建模；目录导航不创建硬边界，目标修改不签发授权。
 - **REQ-002**: 复用WorkGoal为持久goalID、WorkItem为版本化stepID，关联ExecutionAttempt、nativeOperation/nativeEvidence、AcceptanceRecord和CoverageLink。SecurityTask是goal下的限时执行上下文，不代表目标本身；消息/轮次结束、重试或授权过期不删除或完成goal。

@@ -40,6 +40,10 @@ def main():
                                        capture_output=True, env=env, timeout=15)
             require(duplicate.returncode != 0 and 'already has an owner' in duplicate.stderr,
                     'stdio was able to fork Web authority')
+            inspection = subprocess.run([str(binary), 'security', 'risks', '--home', str(home)],
+                                        capture_output=True, text=True, env=env, timeout=15)
+            require(inspection.returncode != 0 and 'already has an owner' in inspection.stderr,
+                    'offline inspection bypassed the running owner')
             results.append('Web/stdio second owner rejected')
         finally:
             # This PID came from the newly created, isolated Home. Native
@@ -60,6 +64,20 @@ def main():
         db = sqlite3.connect(root / 'sessions.sqlite')
         row = db.execute('SELECT store_id,recovery_epoch FROM security_schema_meta WHERE id=1').fetchone()
         require(row == (control['storeID'], control['recoveryEpoch']), 'control/store identity differs')
+        db.close()
+        protected = [root / 'sessions.sqlite', home / 'security/control.json',
+                     home / 'security/legacy-inventory.json']
+        before = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in protected}
+        inspection = subprocess.run([str(binary), 'security', 'risks', '--home', str(home), '--limit', '1'],
+                                    capture_output=True, text=True, env=env, timeout=15)
+        require(inspection.returncode == 0, 'open Home risk inspection failed')
+        report = json.loads(inspection.stdout)
+        require(report['gate'] == 'open' and report['resourceMapping'] == 'unverified'
+                and report['stores'][0]['view'] == 'current', 'incorrect risk report boundaries')
+        require(all(hashlib.sha256(path.read_bytes()).hexdigest() == digest for path, digest in before.items()),
+                'risk inspection changed durable data')
+        results.append('offline risk inspection fences owners and preserves open Home data')
+        db = sqlite3.connect(root / 'sessions.sqlite')
         db.execute('UPDATE security_schema_meta SET minimum_reader_version=999')
         db.commit()
         db.close()
@@ -84,6 +102,22 @@ def main():
         require(control['gate'] == 'closed' and inventory['state'] == 'pending_review', 'migration gate bypass')
         require(len(inventory['stores']) == 1 and inventory['stores'][0]['unresolved'] == 1, 'legacy index incomplete')
         require(Path(inventory['stores'][0]['snapshot']).is_file(), 'legacy snapshot missing')
+        protected = [old / 'sessions.sqlite', Path(inventory['stores'][0]['snapshot']),
+                     home / 'security/control.json', home / 'security/legacy-inventory.json',
+                     home / 'security/legacy-inventory.pending']
+        before = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in protected}
+        inspection = subprocess.run([str(binary), 'security', 'risks', '--home', str(home)],
+                                    capture_output=True, text=True, env=env, timeout=15)
+        require(inspection.returncode == 0, 'stdio-only risk inspection failed')
+        report = json.loads(inspection.stdout)
+        require(report['gate'] == 'closed' and len(report['stores']) == 1
+                and report['stores'][0]['view'] == 'archived'
+                and report['stores'][0]['unresolved'] == 1
+                and report['stores'][0]['effectReview'] == 1, 'legacy uncertainty missing from report')
+        require('fixture-unknown' not in inspection.stdout, 'raw legacy identifier leaked')
+        require(all(hashlib.sha256(path.read_bytes()).hexdigest() == digest for path, digest in before.items()),
+                'legacy risk inspection changed data or cleared the gate')
+        results.append('stdio-only unresolved history inspectable without raw data or writes')
         results.append('legacy unknown archived; gate closed without replay')
     with tempfile.TemporaryDirectory(prefix='lake-security-old-web.') as directory:
         home = Path(directory)
