@@ -1,6 +1,7 @@
 import {PilotWorkspace,usePilotWorkspace} from './PilotWorkspace';
 import './pilotWorkspace.css';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
+import {superTaskHeaderPresentation} from './superAgentPresentation';
 import {useTerminalPopover} from './useTerminalPopover';
 import {WorkbenchIsland,useWideWorkbench} from './WorkbenchIsland';
 import {useInspectorWindow} from './inspectorWindow';
@@ -1366,6 +1367,7 @@ function AppContent() {
   const sidebarProject = projectList.find(project => project.id === (sidebarProjectId ?? selectedProjectId)) ?? projectList[0];
   const sessionHeader=!!selectedSession&&!selectedResource&&!isPlansPage;
   const selectedSuperWorker=pilotWorkspace.workspace?.active?pilotWorkspace.workspace.workers.find(worker=>worker.sessionId===selectedSession?.id):undefined;
+  const superHeaderPresentation=superTaskHeaderPresentation(selectedSuperWorker?.task)??currentSessionPresentation;
   const selectedSuperPilot=pilotWorkspace.workspace?.active&&pilotWorkspace.workspace.project.routerSessionId===selectedSession?.id;
   const superHeaderIdentity=sessionHeader&&(selectedSuperWorker||selectedSuperPilot);
   const sidebarSessionsExpanded=!closedSessionGroups.includes(sidebarProject?.id??"");
@@ -1378,7 +1380,7 @@ function AppContent() {
         {!sharedIsland&&headerSweep}
         <button className="icon-button mobile-only" aria-label="打开项目导航" onClick={() => setMobileMenu(true)}><Glyph name="menu" size={21}/></button>
         <div className="breadcrumbs">{!sessionHeader&&<><Glyph name="panel" size={17}/><span className="crumb-project">{projectList.find(project => project.id === (selectedResource?.projectId ?? selectedSession?.projectId))?.name ?? "项目"}</span><span className="crumb-slash">/</span></>}<strong>{superHeaderIdentity?<SuperRoleAvatar name={selectedSuperWorker?.roleName} pilot={!!selectedSuperPilot} size={20}/>:<Glyph name={selectedResource ? selectedResource.kind==='ssh'?'server':selectedResource.kind : selectedSession ? selectedSession.icon??'chat' : 'document'} size={15}/>}<span className="crumb-title" title={selectedResource?.name ?? selectedSession?.title ?? "概览"}>{superHeaderIdentity?(selectedSuperWorker?.roleName??'Pilot'):selectedResource?.name ?? selectedSession?.title ?? "概览"}</span></strong></div>
-        {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...currentSessionPresentation}/>} onInspect={targetId => {
+        {selectedSession && !selectedResource && !isPlansPage && <PilotHeaderState key={`pilot-${selectedSession.id}`} model={headerPilot} mode={headerPilotMode} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} details={{available:!!inspectorAvailable,open:inspectorOpen,toggle:()=>inspectorOpen?inspector.close():reopenInspector()}} normal={<SessionStateBadge session={selectedSession} {...superHeaderPresentation}/>} onInspect={targetId => {
           if(!activeSnapshot||!headerPilot)return;
           const task=activeSnapshot.sre?.tasks.find(t=>t.id===headerPilot.taskId);
           const entry=task?.messages?.find(m=>`sre-message-${m.id}`===targetId);

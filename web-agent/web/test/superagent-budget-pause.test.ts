@@ -5,6 +5,8 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {AITranscript} from '../src/AIPanel';
 import {SuperTaskInspector} from '../src/SuperTaskInspector';
 import {displayAiError,isConversationInterruption} from '../src/aiErrors';
+import {superTaskHeaderPresentation} from '../src/superAgentPresentation';
+import {SessionStateBadge} from '../src/SessionPresentation';
 import type {SessionSnapshot,SuperTask,WorkGoal} from '../../shared/contracts';
 
 const refusal="superagent: original task's cumulative model budget exhausted";
@@ -33,4 +35,12 @@ test('budget pause is distinct from a recoverable context-size error and has an 
  assert.match(html,/尚无新的检查结果/);
  assert.match(html,/本次执行额度不足/);
  assert.doesNotMatch(html,/13 \/ 500|已验收/);
+});
+
+test('a restored ended invocation does not label its budget-paused task as ended',()=>{
+ const task={state:'paused',reason:'model_budget_exhausted'} as SuperTask;
+ const html=renderToStaticMarkup(createElement(SessionStateBadge,{session:{status:'completed'} as SessionSnapshot['session'],...superTaskHeaderPresentation(task)}));
+ assert.match(html,/已暂停/);
+ assert.doesNotMatch(html,/已结束/);
+ assert.equal(superTaskHeaderPresentation({...task,state:'running'}),undefined);
 });
