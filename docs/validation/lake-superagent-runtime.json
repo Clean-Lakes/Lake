@@ -5,9 +5,9 @@
   "baseSHA": "85a768d074f654d8428d1ea278f9d60dec7a2504",
   "installedDev": {
     "platform": "macOS arm64",
-    "gitHead": "a6351c63f0256675ca517cc66ef7e3b766dd85a4",
+    "gitHead": "61d48de7b87b40551d47dcff484acf0f9d0389eb",
     "sourceDirty": false,
-    "binarySHA256": "96e50467e1015429cbb853e8bf9a35c46c433bbab51852d2229743d9c792b669",
+    "binarySHA256": "4bdda7b3084a62a60b0f33e100628285e10af64d8028e8dd8fbd89e9d41d97da",
     "codesign": "deep_strict_pass",
     "productionTouched": false
   },
@@ -615,5 +615,89 @@
       "new external-model execution",
       "remote connections to all 135 resources"
     ]
+  },
+  "replyAuthorVerification": {
+    "runtimeSourceSHA": "61d48de7b87b40551d47dcff484acf0f9d0389eb",
+    "integrationDriverSHA": "f3a95b0e8abadd7d75965e5fc123c4e658196e79",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "a6351c63f0256675ca517cc66ef7e3b766dd85a4",
+      "sourceDirty": false,
+      "binarySHA256": "96e50467e1015429cbb853e8bf9a35c46c433bbab51852d2229743d9c792b669",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "behavior": [
+      "Pilot reports resolve their original root Worker and role from the durable outbox message ID",
+      "Each specialist report shows its own role name and matching Lake avatar, including historical delivered reports",
+      "The reply identity button navigates to the actual Worker session; Pilot coordination retains Pilot identity",
+      "Explicit report authors survive equal-text deduplication and are not folded into Pilot progress prose"
+    ],
+    "targetedRace": {
+      "command": "go test -race -json ./internal/ai ./internal/web -run '^TestSuper|^Test.*Snapshot' -count=1 -timeout=5m",
+      "tests": 90,
+      "packages": 2,
+      "log": "/tmp/lake-reply-author-race.jsonl"
+    },
+    "frontendTests": 565,
+    "typeCheck": "pass",
+    "vet": "pass",
+    "adkRuntimeBoundary": "pass",
+    "signedDevBuildInstall": "pass",
+    "codesign": "deep_strict_pass",
+    "sourceScope": "Go/frontend checks cover runtime source 61d48de7; subsequent f3a95b0e changes only the isolated verification script",
+    "nativeUI": [
+      "Existing Go, frontend and local-machine reports show distinct original specialist names and matching avatars",
+      "Mouse activation opens the original local-machine specialist session",
+      "Tab paints the frontend specialist reply focus ring and Return opens that exact Worker session",
+      "Execution inspector remains collapsed during specialist navigation",
+      "Light/dark appearance inspected; original follow-system preference restored"
+    ],
+    "responsiveUI": {
+      "surface": "ego-browser against the installed Dev backend; viewport emulation",
+      "viewports": [
+        820,
+        600
+      ],
+      "themes": "820px light; 600px dark page preview; native theme switching verified separately",
+      "hoverAndKeyboardFocus": "pass",
+      "horizontalDocumentOverflow": false,
+      "screenshots": [
+        "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/reply-author-820-light.png",
+        "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/reply-author-600-dark.png"
+      ]
+    },
+    "isolatedIntegration": {
+      "command": "python3 scripts/verify_superagent_dev.py --binary bin/lake --output /tmp/lake-reply-author-integration.json --inherit-project-access --verify-reply-authors",
+      "provider": "loopback synthetic fixture; not an external model",
+      "actualReads": 2,
+      "distinctWorkerSessions": 2,
+      "humanFixtureQuestions": 4,
+      "acceptance": "both pass",
+      "pilotReports": "delivered",
+      "authorNames": [
+        "Go 审查专员",
+        "前端执行专员"
+      ],
+      "authorTaskAndWorkerSessionBinding": "exact match for both delivered reports",
+      "kernelDrain": "pass",
+      "report": "/tmp/lake-reply-author-integration.json"
+    },
+    "authorityChanges": false,
+    "schemaMigration": false,
+    "notRun": [
+      "full Go suite for this display projection change",
+      "new external-model execution",
+      "Windows native UI",
+      "native narrow-window resize; responsive layout checked in browser instead"
+    ],
+    "logs": {
+      "frontend": "/tmp/lake-reply-author-frontend.log",
+      "typeCheck": "/tmp/lake-reply-author-check.log",
+      "vet": "/tmp/lake-reply-author-vet.log",
+      "adkBoundary": "/tmp/lake-reply-author-boundary.log",
+      "desktop": "/tmp/lake-reply-author-desktop.log"
+    }
   }
 }
