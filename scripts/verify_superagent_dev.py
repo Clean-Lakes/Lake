@@ -211,9 +211,19 @@ def main():
                         if args.inspection_finished_file and args.inspection_finished_file.exists():
                             break
                         time.sleep(0.2)
-                lake.api('/api/superagent/lifecycle', 'POST', {'action': 'drain'})
+                # Native UI inspection can explicitly drain the same known kernel.
+                # Observe its exit rather than claiming the later CLI sent that request.
+                try:
+                    os.kill(identity['pid'], 0)
+                    kernel_exited = False
+                except ProcessLookupError:
+                    kernel_exited = True
+                if kernel_exited and not (home / 'web-agent/runtime.json').exists():
+                    report['externalKernelExitObserved'] = True
+                else:
+                    lake.api('/api/superagent/lifecycle', 'POST', {'action': 'drain'})
+                    report['explicitKernelDrainVerified'] = True
                 wait_for(lambda: not (home / 'web-agent/runtime.json').exists(), 30)
-                report['explicitKernelDrainVerified'] = True
             finally:
                 lake.stop()
             report['passed'] = True
