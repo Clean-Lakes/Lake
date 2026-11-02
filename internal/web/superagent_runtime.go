@@ -81,6 +81,13 @@ func (b *Server) startSuperWorkers(domain ai.SuperProject) {
 			if errors.Is(err, ai.ErrSuperWorkerQueued) {
 				return
 			}
+			if errors.Is(err, ai.ErrSuperBudget) {
+				// The original provider refusal atomically paused the task and
+				// queued its attention report. Do not repeat its engine error as
+				// a system message or publish pre-tool narration as a result.
+				b.deliverPendingSuperReports(domain)
+				return
+			}
 			if err != nil && b.Context.Err() == nil {
 				_ = b.Engine.RecordSuperDispatchFailure(b.Context, domain.ProjectID, task.WorkerID)
 				b.Store.AddMessage(task.SessionID, "system", err.Error(), nil)
@@ -96,7 +103,7 @@ func (b *Server) startSuperWorkers(domain ai.SuperProject) {
 			if err != nil {
 				payload = "专员本次执行中断，需核对原记录后继续。"
 			}
-			if snapshot, snapshotErr := b.Engine.Snapshot(task.SessionID); snapshotErr == nil {
+			if snapshot, snapshotErr := b.Engine.Snapshot(task.SessionID); err == nil && snapshotErr == nil {
 				for i := len(snapshot.Cards) - 1; i >= 0; i-- {
 					if card := snapshot.Cards[i]; card.Type == "message" && card.Content != "" {
 						payload = card.Content

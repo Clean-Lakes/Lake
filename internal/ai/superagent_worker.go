@@ -208,6 +208,13 @@ func (e *Engine) QueueSuperFollowup(ctx context.Context, projectID, workerID str
 		if err != nil {
 			return err
 		}
+		paused, err := superBudgetPausedTx(tx, goal.ID, goal.RoundLimit)
+		if err != nil {
+			return err
+		}
+		if paused {
+			return ErrSuperWorkerQueued
+		}
 		if a.Checkpoint != "" || row.WaitCallID != "" || workTerminal(goal.Status) || !goal.DeadlineAt.After(time.Now().UTC()) || goal.ModelRounds >= goal.RoundLimit {
 			return ErrSuperWorkerQueued
 		}

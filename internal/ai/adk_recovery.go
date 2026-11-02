@@ -57,6 +57,9 @@ func (e *Engine) resumeNativeApproval(ctx context.Context, s *session, c Config,
 		if errors.Is(err, context.Canceled) {
 			status = "cancelled"
 		}
+		if errors.Is(err, ErrSuperBudget) {
+			status = "paused"
+		}
 		reconcile(&s.state, "ADK recovery interrupted; no replay")
 		s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "error", Content: redact(err.Error(), c), Status: status, At: timestamp()})
 	}

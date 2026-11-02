@@ -36,7 +36,7 @@ import {resourceStageProgress,resourceStagePreview} from './resourceStageProgres
 import {ResourceStageSummary} from './ResourceStageSummary';
 import {TurnExecutionDetails} from "./TurnExecutionDetails";
 import { timingForTurn } from "./replyDurationState";
-import {displayAiError,isConversationInterruption,isContextCompactionFailure} from "./aiErrors";
+import {displayAiError,isConversationInterruption,isContextCompactionFailure,isSuperBudgetPause} from "./aiErrors";
 import Markdown from "react-markdown";
 import {MarkdownCodeBlock} from './MarkdownCodeBlock';
 import {replyInfoComponents} from './ReplyInfoElements';
@@ -149,6 +149,8 @@ function AITranscriptContent({ onSpecialist,assistantIdentity,onOpenMemory,sourc
   const entries = orderedTranscript(displaySnapshot, cards, before).map(entry=>mode==='conversation'?conversationPlanEntry(entry,{planMode:snapshot.conversationMode==='plan',live:snapshot.ai?.status==='running',currentPlanId:snapshot.ai?.proposedPlan?.id}):entry);
   const loadOlderSRE=async()=>{onInspect?.();const session=snapshot.session.id;setLoadingSRE(true);try{const page=await api.sreTasks(session,sreCursor??snapshot.sre?.tasks.at(-1)?.id??'');if(selectedSession.current===session){setOlderSRE(old=>[...old,...page.items]);setSRECursor(page.nextCursor)}}catch(e){setError(readableError(e))}finally{setLoadingSRE(false)}};
   const visibleEntries = entries.filter(entry => !isFileChangeCard(entry.card));
+  const lastBudgetCard=cards.filter(card=>!!card.content).at(-1);
+  const budgetPause=lastBudgetCard?.type==='error'&&isSuperBudgetPause(lastBudgetCard.content||'')&&!['running','waiting_approval'].includes(snapshot.ai?.status||'')?lastBudgetCard:undefined;
   const groups = transcriptGroups(visibleEntries);
   const activityEntry = (entry: (typeof entries)[number]) => !!(entry.sre||entry.agentRun || entry.action || entry.card && ["thinking", "operation", "shell", "diff", "error", "strategy_correction"].includes(entry.card.type));
   const filteredEntries=mode==='activity'&&sreTaskFilter?entries.filter(entry=>entry.sre&&(entry.sre.task.id===sreTaskFilter||entry.sre.task.status==='waiting_approval'||entry.sre.task.attempts.some(a=>a.operations?.some(o=>['unknown','dispatched'].includes(o.status))))):entries;
@@ -245,6 +247,7 @@ function AITranscriptContent({ onSpecialist,assistantIdentity,onOpenMemory,sourc
       {mode==='conversation'&&!(turn===currentTurn&&liveConversation)&&<MiniBoxCompletionNotice notices={snapshot.commandStopNotices??[]} startedAt={miniStartedAt} endedAt={miniEndedAt}/>}
     </div></ReplyReferenceScope>;})}
 
+    {mode==='conversation'&&budgetPause&&<div className="ai-response" role="status"><ReplyIdentity identity={assistantIdentity}/><div className="ai-card ai-message"><AssistantMarkdown>{displayAiError(budgetPause.content||'')}</AssistantMarkdown></div></div>}
     {mode==='conversation'&&pendingUserSupplements(snapshot).map(item=><TranscriptMessage key={`supplement:${item.id}`} sessionId={snapshot.session.id} resources={snapshot.resources} pendingImages={item.images.length} message={{...item,images:[],sessionId:snapshot.session.id,role:'user'}}/>)}
     {mode==='activity'&&mergedSRE.filter(task=>!sreTaskFilter||task.id===sreTaskFilter).map(task=><SREEventHistory key={task.id} task={task}/>)}
   </div>;

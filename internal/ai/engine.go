@@ -41,6 +41,7 @@ type Engine struct {
 	superErr                       error
 	superInitialized               atomic.Bool
 	superRouterLocks               sync.Map
+	superLegacyBudgetChecked       sync.Map
 	superSecrets                   sync.Map
 	securityOwners                 sync.Map
 	securityStart                  sync.Once
@@ -890,6 +891,9 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			status = "failed"
 			if errors.Is(err, context.Canceled) {
 				status = "cancelled"
+			}
+			if errors.Is(err, ErrSuperBudget) {
+				status = "paused"
 			}
 			reconcile(&s.state, "turn "+status+"; no replay")
 			s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "error", Content: redact(err.Error(), c), Status: status, At: timestamp()})

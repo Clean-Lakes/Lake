@@ -44,6 +44,9 @@ type SuperRouteResult struct {
 	WorkerID   string `json:"workerId,omitempty"`
 	SessionID  string `json:"sessionId,omitempty"`
 	Action     string `json:"action"`
+	State      string `json:"state,omitempty"`
+	Reason     string `json:"reason,omitempty"`
+	Summary    string `json:"summary,omitempty"`
 }
 
 func superRouteResult(tx *gorm.DB, r superDecisionRow) (SuperRouteResult, error) {
@@ -54,6 +57,11 @@ func superRouteResult(tx *gorm.DB, r superDecisionRow) (SuperRouteResult, error)
 			return out, err
 		}
 		out.WorkerID, out.SessionID = w.ID, w.SessionID
+		view, err := projectSuperTaskTx(tx, w.goalSession(), w.TaskID)
+		if err != nil {
+			return out, err
+		}
+		out.State, out.Reason, out.Summary = view.State, view.Reason, view.Summary
 	}
 	return out, nil
 }

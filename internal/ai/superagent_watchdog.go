@@ -14,6 +14,9 @@ func (e *Engine) CheckSuperagentProgress(ctx context.Context, projectID string) 
 	if err != nil {
 		return err
 	}
+	if err = e.reconcileSuperBudgetPauses(ctx, projectID); err != nil {
+		return err
+	}
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&superEventRow{}).Where("project_id = ? AND disposition = ? AND routing_attempts >= ? AND retry_at <= ?", projectID, "pending", 3, time.Now().UTC()).Update("disposition", "blocked").Error; err != nil {
 			return err
@@ -92,10 +95,20 @@ func (e *Engine) CheckSuperagentProgress(ctx context.Context, projectID string) 
 			} else if a.FailureCount >= 3 {
 				reason = "dispatch_failed"
 			}
+			paused, err := superBudgetPausedTx(tx, goal.ID, goal.RoundLimit)
+			if err != nil {
+				return err
+			}
+			if paused && !workTerminal(goal.Status) {
+				if err := pauseSuperBudgetTx(tx, w, &row, &goal); err != nil {
+					return err
+				}
+				reason = superBudgetPauseReason
+			}
 			if reason == "" {
 				continue
 			}
-			if !workTerminal(goal.Status) {
+			if !workTerminal(goal.Status) && reason != superBudgetPauseReason {
 				goal.Status, goal.Summary = "paused", "任务派发已暂停："+reason+"；原操作未重放"
 				if err := writeWorkGoalTx(tx, &row, &goal, false); err != nil {
 					return err

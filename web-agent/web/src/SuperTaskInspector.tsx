@@ -16,10 +16,11 @@ export function SuperTaskInspector({task,goal,worker,plan=false,connected=false,
   {owner&&<div className="super-task-owner"><SuperRoleAvatar name={owner.roleName}/><strong>{owner.roleName}</strong></div>}
   <div className="super-task-heading">{!owner&&<Glyph name="document" size={17}/>}<strong>{task.title}</strong></div>
   <div className="super-task-state"><span data-tone={state.tone}>{state.label}</span><small>{accepted?'验收通过':task.acceptanceState==='fail'?'验收未通过':'尚未通过目标验收'}</small></div>
+  {task.summary&&['paused','blocked','failed'].includes(task.state)&&<p className="inspector-empty">{task.summary}</p>}
   {!goal.items.length?<p className="inspector-empty">专员生成计划后会显示在这里。</p>:<ol className="super-task-steps">{goal.items.map((item,index)=><li key={item.id} data-state={item.status}>
    <span className="super-step-number">{item.status==='completed'?<Glyph name="check" size={12}/>:index+1}</span><div><strong>{item.title}</strong><small>{plan?'':stepLabels[item.status]??'待核实'}</small>{item.reason&&<p>{item.reason}</p>}</div>
   </li>)}</ol>}
-  {!plan&&<p className="super-task-budget">已用 {goal.modelRounds} / {goal.roundLimit} 轮</p>}
+  {!plan&&<p className="super-task-budget">{task.reason==='model_budget_exhausted'?'本次执行额度不足':<>已用 {goal.modelRounds} / {goal.roundLimit} 轮</>}</p>}
   {!plan&&!['completed','failed','cancelled'].includes(task.state)&&<button type="button" className="button secondary" disabled={!connected||busy} onClick={()=>void stop()} title="停止后续跟进，保留原操作记录"><Glyph name="stop" size={13}/>停止任务</button>}
   {error&&<p role="alert" className="super-task-control-error">{error}</p>}
  </section>;
