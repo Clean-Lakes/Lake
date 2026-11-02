@@ -5,9 +5,9 @@
   "baseSHA": "85a768d074f654d8428d1ea278f9d60dec7a2504",
   "installedDev": {
     "platform": "macOS arm64",
-    "gitHead": "0ad3b2ae0967ed0df6ad9fd8626ca38b3cab238a",
+    "gitHead": "7b3e6d99b53f12b73ff87ead3bb42cf0ae910d54",
     "sourceDirty": false,
-    "binarySHA256": "1a3b23e2acf452c218da19cb2030b757ae9c07a9014648637ef369347e60789e",
+    "binarySHA256": "a5bf0d8d2a9ba521c0bfdef5d879dc1fa42e13e9570120dd743fb680e0707dbb",
     "codesign": "deep_strict_pass",
     "productionTouched": false
   },
@@ -912,5 +912,93 @@
     "authorityChanges": false,
     "schemaMigration": false,
     "historyDeleted": false
+  },
+  "workspaceProjectRestorationVerification": {
+    "date": "2026-11-03",
+    "testedSHA": "7b3e6d99b53f12b73ff87ead3bb42cf0ae910d54",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "0ad3b2ae0967ed0df6ad9fd8626ca38b3cab238a",
+      "sourceDirty": false,
+      "binarySHA256": "1a3b23e2acf452c218da19cb2030b757ae9c07a9014648637ef369347e60789e",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "cause": "startup discarded the last selected project and chose the globally newest session, returning to a one-resource test project",
+    "changes": [
+      "persist the selected project ID in origin-local web storage and macOS per-bundle preferences",
+      "restore sidebar and initial session together within that project",
+      "explicit valid resource/session links take precedence; removed project preferences fall back safely"
+    ],
+    "toolchain": {
+      "node": "24.14.0",
+      "pnpm": "10.33.4"
+    },
+    "typeCheck": "pass",
+    "frontendTests": {
+      "tests": 569,
+      "passed": 569,
+      "failed": 0,
+      "addedRegressionTests": 4
+    },
+    "webBuild": "pass",
+    "signedDevBuildInstall": "pass",
+    "nativeSwiftCompilation": "pass",
+    "codesign": "deep_strict_pass",
+    "regressionCoverage": [
+      "newer activity in another project cannot replace a saved project",
+      "initial route and sidebar belong to the same project",
+      "explicit links and plan views",
+      "deleted preferences, stale links and empty projects",
+      "new desktop origin, unavailable web storage and ordinary browser storage"
+    ],
+    "nativeRestarts": {
+      "uiOnlyReopen": {
+        "origin": "http://localhost:51043",
+        "pid": 98541,
+        "sameKernel": true,
+        "restoredProjectId": "e43b93db3c937f4fe57d939427cd5604",
+        "nativeUI": "HexHub 服务器 resources visible"
+      },
+      "kernelRestart": {
+        "origin": "http://localhost:51470",
+        "pid": 98671,
+        "changedKernel": true,
+        "changedPort": true,
+        "restoredProjectId": "e43b93db3c937f4fe57d939427cd5604",
+        "nativeUI": "HexHub 服务器 / 资源 135; original folders visible"
+      }
+    },
+    "savedDevelopmentPreference": {
+      "domain": "com.cleanlakes.lake.desktop.dev",
+      "key": "LakeWorkspaceProjectId",
+      "value": "e43b93db3c937f4fe57d939427cd5604"
+    },
+    "finalDataCounts": {
+      "projects": 6,
+      "sessions": 71,
+      "allResources": 142,
+      "originalProjectResources": 135
+    },
+    "logs": {
+      "typeCheck": "/tmp/lake-project-restore-check.log",
+      "frontendTests": "/tmp/lake-project-restore-frontend.log",
+      "desktop": "/tmp/lake-project-restore-desktop.log",
+      "restarts": "/tmp/lake-project-restore-restarts.json"
+    },
+    "notRun": [
+      "Go suites; no runtime source changes",
+      "Windows native project persistence",
+      "live deletion of projects; fallback covered by unit tests",
+      "new external-model execution",
+      "new light/dark/narrow geometry matrix; no geometry or color changes"
+    ],
+    "authorityChanges": false,
+    "schemaMigration": false,
+    "historyDeleted": false,
+    "productionTouched": false,
+    "newestSessionProjectBeforeRestarts": "0d1989938303b243f5c92f8f347aa926",
+    "newestSessionProjectAfterRestarts": "e43b93db3c937f4fe57d939427cd5604"
   }
 }
