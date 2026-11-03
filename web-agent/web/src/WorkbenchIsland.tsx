@@ -64,6 +64,23 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const composer=view.querySelector('.composer-input')?.getBoundingClientRect();
    const available=Math.max(1,composer?.width??bounds.width-96),left=(composer?.left??bounds.left+48)-base.left;
    const title=identity.querySelector<HTMLElement>('.crumb-title'),state=identity.querySelector<HTMLElement>('.header-morph-slot.is-visible .header-morph-content');
+   const textWidth=(node:HTMLElement|null)=>{
+    if(!node)return 0;
+    if(!textMetrics)return node.scrollWidth;
+    textMetrics.font=getComputedStyle(node).font;
+    return textMetrics.measureText(node.textContent??'').width;
+   };
+   // Measure intrinsic text/controls, never the width imposed by this island's
+   // own container query. Otherwise a compact 114px state expands the island,
+   // its natural state shrinks it below 300px, and ResizeObserver oscillates.
+   const badge=state?.querySelector<HTMLElement>('.session-state-badge')??null;
+   const badgeStyle=badge?getComputedStyle(badge):null;
+   // Compact badges use smaller padding too. Budget the preferred padding,
+   // otherwise even intrinsic text can still oscillate across the breakpoint.
+   const badgePadding=parseFloat(getComputedStyle(identity).getPropertyValue('--island-badge-padding'));
+   const badgeWidth=badgeStyle?textWidth(badge!.querySelector('.session-state-label'))+(badge!.querySelector('.session-state-icon')?.getBoundingClientRect().width??0)+parseFloat(badgeStyle.columnGap||'0')+2*badgePadding+parseFloat(badgeStyle.borderLeftWidth)+parseFloat(badgeStyle.borderRightWidth):0;
+   const disclosure=state?.querySelector<HTMLElement>('.header-inspector-toggle');
+   const normalStateWidth=badge?badgeWidth+(disclosure?disclosure.getBoundingClientRect().width+parseFloat(getComputedStyle(state!).columnGap||'0'):0):state?.getBoundingClientRect().width??0;
    const titleIcon=title?.previousElementSibling;
    const titleIconWidth=titleIcon ? titleIcon.getBoundingClientRect().width+parseFloat(getComputedStyle(title!.parentElement!).columnGap||'0') : 0;
    const pilotWidth=identity.querySelector('.header-pilot-state.is-visible')?parseFloat(getComputedStyle(identity).getPropertyValue('--pilot-state-width')):0;
@@ -87,7 +104,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const layout=workbenchIslandLayout({
     conversation:{left,width:available,inset:0},
     terminal:terminalPane,
-    conversationWidth:Math.min(190,title?.scrollWidth??160)+titleIconWidth+(pilotWidth||state?.getBoundingClientRect().width||0)+60,
+    conversationWidth:Math.min(190,title?textWidth(title):160)+titleIconWidth+(pilotWidth||normalStateWidth)+60,
     inspectorWidth:144,
     terminalWidth:Math.min(320,Math.max(260,terminalNameWidth+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112)),
    });
