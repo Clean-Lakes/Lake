@@ -2,7 +2,14 @@
   "schemaVersion": 1,
   "date": "2026-11-03",
   "version": "0.3.25",
-  "status": "local_preparation_checked_pr_pending_not_release_ready",
+  "status": "preparation_complete_release_gated",
+  "preparationPR": {
+    "number": 144,
+    "url": "https://github.com/Clean-Lakes/Lake/pull/144",
+    "base": "develop",
+    "draft": true,
+    "merged": false
+  },
   "authorization": {
     "prepare": true,
     "mergePRs": false,
