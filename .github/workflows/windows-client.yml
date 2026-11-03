@@ -73,7 +73,9 @@ jobs:
           $env:CGO_ENABLED = '0'
           go test -v ./internal/web -run '^(TestWindows|TestConsole|TestRemoteShellCwd|TestCommandWaitTimeout|TestConversationFinishesWhenCompleted|TestInteractiveStartupHidesBootstrapTrigger)' -count=1 -timeout 3m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go test -v ./internal/ai -run '^Test(SSHAuthenticationMethodBoundary|StreamCompletion|StreamIdle|Idle|ManualCompaction|CancelIdle|ReloadClears|FirstTurn|OversizedSingle|FailedCompaction|CompactionUses|ToolChildContextFailure|ParentContextFailure)' -count=1 -timeout 1m
+          # This is a suite-wide deadline: Windows durable-store compaction
+          # cases already consume ~56 seconds before the final tool tests.
+          go test -v ./internal/ai -run '^Test(SSHAuthenticationMethodBoundary|StreamCompletion|StreamIdle|Idle|ManualCompaction|CancelIdle|ReloadClears|FirstTurn|OversizedSingle|FailedCompaction|CompactionUses|ToolChildContextFailure|ParentContextFailure)' -count=1 -timeout 3m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test ./internal/platform -run '^TestSSHFileOption' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
