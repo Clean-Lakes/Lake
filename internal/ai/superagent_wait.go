@@ -49,11 +49,22 @@ func (e *Engine) ClaimAssignment(ctx context.Context, projectID, workerID, callI
 }
 
 func (e *Engine) beginSuperInvocation(ctx context.Context, token SuperAssignmentToken) (context.Context, func()) {
+	e.runMu.Lock()
+	admitted := !e.runtimeClosed
+	if admitted {
+		e.runs.Add(1)
+	}
+	e.runMu.Unlock()
 	run, cancel := context.WithCancel(context.WithValue(ctx, superAssignmentContextKey{}, token))
 	run = context.WithValue(run, superWorkerModelKey{}, true)
+	if !admitted {
+		cancel()
+		return run, cancel
+	}
 	done := make(chan struct{})
 	go e.heartbeatSuperAssignment(run, token, cancel, done)
 	return run, func() {
+		defer e.runs.Done() // Release the durable assignment before Shutdown closes SQLite.
 		cancel()
 		<-done
 		state := "parked"

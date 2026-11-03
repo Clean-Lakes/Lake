@@ -213,7 +213,7 @@ func (b *Server) roleChannelPage(ctx context.Context, session, cursor string, li
 	active := []Object{}
 	for _, w := range workers {
 		hostStatus := b.Store.Session(w.SessionID)["status"]
-		if hostStatus != "investigating" && hostStatus != "waiting_approval" && w.AssignmentState != "active" && w.AssignmentState != "waiting_user" && w.Task.State != "waiting_user" {
+		if hostStatus != "investigating" && hostStatus != "waiting_approval" && w.AssignmentState != "active" && w.AssignmentState != "waiting_user" && w.Task.State != "waiting_user" && !b.Engine.NeedsQuestionRecovery(w.SessionID) {
 			continue
 		}
 		view, err := b.Engine.Snapshot(w.SessionID)

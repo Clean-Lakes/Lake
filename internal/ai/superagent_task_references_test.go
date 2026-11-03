@@ -60,6 +60,13 @@ func TestSuperComparisonReadsOnlyRegisteredVersionedEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	catalogCall := nativeOperation{ID: "catalog-before-observation", CallID: "catalog-call", Tool: "list_assets", ProjectID: b.ProjectID, GoalID: a.TaskID, SessionID: a.SessionID, StoreID: storeID, RecoveryEpoch: epoch, Status: "succeeded"}
+	if err := db.Create(&catalogCall).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&nativeEvidence{OperationID: catalogCall.ID, CallID: catalogCall.CallID, SessionID: a.SessionID, Status: "completed", Data: "catalog metadata is not host observation", At: time.Now()}).Error; err != nil {
+		t.Fatal(err)
+	}
 	op := nativeOperation{ID: "operation-a", CallID: "call-a", ProjectID: b.ProjectID, GoalID: a.TaskID, GoalRevision: 1, AttemptID: "attempt-a", SessionID: a.SessionID, StoreID: storeID, RecoveryEpoch: epoch, ResourceID: resource.ID, ResourceConnectionRevision: connection, Status: "unknown"}
 	if err := db.Create(&op).Error; err != nil {
 		t.Fatal(err)

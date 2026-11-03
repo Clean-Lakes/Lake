@@ -648,6 +648,9 @@ func reconcile(st *State, why string) {
 	for _, m := range st.History {
 		for _, c := range m.Calls {
 			if _, ok := pending[c.ID]; ok {
+				if nativeQuestionReady(st.View.Question) && st.View.Question.Call.ID == c.ID {
+					continue // Original durable input remains unanswered across host shutdown.
+				}
 				st.History = append(st.History, Message{Role: "tool", CallID: c.ID, Name: c.Name, Content: js(map[string]any{"error": why, "outcome": "unknown; not replayed"})})
 				delete(pending, c.ID)
 			}

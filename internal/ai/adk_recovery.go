@@ -67,7 +67,8 @@ func (e *Engine) resumeNativeApproval(ctx context.Context, s *session, c Config,
 	s.decisions = nil
 	s.state.View.Pending = nil
 	s.state.View.PendingApprovals = nil
-	s.state.View.Question = nil
+	// askQuestion expires normal cancelled inputs and retains the exact
+	// unanswered checkpoint when the host is shutting down for an update.
 	s.state.View.Status = status
 	s.state.View.TurnFinishedAt = timestamp()
 	if err == nil && c.ConversationMode == ModePlan {

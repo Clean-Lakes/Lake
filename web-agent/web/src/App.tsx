@@ -856,7 +856,11 @@ function AppContent() {
     const domain=pilotWorkspace.workspace?.active?pilotWorkspace.workspace.project:null;
     if(!domain||openedPilotProjects.current.has(domain.projectId))return;
     openedPilotProjects.current.add(domain.projectId);
-    void refreshCatalog().then(()=>{if(!route.resourceId)navigate({sessionId:domain.routerSessionId,resourceId:null});}).catch(handleFailure);
+    void refreshCatalog().then(data=>{
+      const current=data.sessions.find(session=>session.id===activeSession.current);
+      const continuous=current?.projectId===domain.projectId&&['router','role','worker'].includes(current.workspaceRole??'');
+      if(!route.resourceId&&!continuous)navigate({sessionId:domain.routerSessionId,resourceId:null});
+    }).catch(handleFailure);
   },[pilotWorkspace.workspace?.project.routerSessionId,pilotWorkspace.workspace?.active,refreshCatalog,navigate]);
   async function moveSessionNavigation(session:WorkSession,pinned:boolean,beforeId:string|null) {
     if(sessionNavigationSaving.current) throw new Error("正在保存会话顺序，请稍后重试");

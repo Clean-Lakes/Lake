@@ -139,7 +139,10 @@ func (e *Engine) referencedEvidence(ctx context.Context, session, source string,
 				return err
 			}
 			var rows []nativeEvidence
-			if err := tx.Table("native_evidences AS e").Select("e.*").Joins("JOIN native_operations o ON o.id=e.operation_id AND o.session_id=e.session_id").Where("o.goal_id = ? AND o.project_id = ? AND o.store_id = ? AND o.recovery_epoch = ? AND e.id > ?", source, project, storeID, epoch, after).Where("e.status IN ?", []string{"completed", "failed", "unknown", "not_executed"}).Order("e.id").Limit(limit).Scan(&rows).Error; err != nil {
+			// Catalog/control calls are task records, not observations of a
+			// resource. Do not publish them or let their absent host identity
+			// prevent retrieval of the actual versioned diagnostic evidence.
+			if err := tx.Table("native_evidences AS e").Select("e.*").Joins("JOIN native_operations o ON o.id=e.operation_id AND o.session_id=e.session_id").Where("o.goal_id = ? AND o.project_id = ? AND o.store_id = ? AND o.recovery_epoch = ? AND e.id > ?", source, project, storeID, epoch, after).Where("o.resource_id <> '' AND o.resource_connection_revision > 0").Where("e.status IN ?", []string{"completed", "failed", "unknown", "not_executed"}).Order("e.id").Limit(limit).Scan(&rows).Error; err != nil {
 				return err
 			}
 			for _, item := range rows {
