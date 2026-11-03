@@ -141,7 +141,6 @@ export const api = {
   navigationTrash: () => request<{items:NavigationTrashItem[]}>("/api/navigation-trash"),
   deleteNavigation: (kind:"project" | "resource",id:string) => post<{items:NavigationTrashItem[]}>("/api/navigation-delete",{kind,id}),
   restoreNavigation: (kind:NavigationTrashItem["kind"],id:string) => post<{items:NavigationTrashItem[]}>("/api/navigation-trash",{kind,id}),
-  completeDraft: (session:string,text:string,modelId:string|undefined,signal:AbortSignal) => request<{suffix:string;modelId?:string}>(`/api/sessions/${encodeURIComponent(session)}/completion`,{method:"POST",body:JSON.stringify({text,modelId}),signal}),
   catalog: (signal?: AbortSignal) => request<Catalog>("/api/catalog", { signal }),
   modelCapacity: () => request<{modelId?: string; limit: number; source?: string}>("/api/settings/model/capacity"),
   providers: () => request<ProviderCatalog>("/api/settings/providers"),

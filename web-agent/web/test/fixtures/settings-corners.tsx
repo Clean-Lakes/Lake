@@ -23,4 +23,4 @@ window.fetch=async(input,init)=>{
  if(path==='/api/settings/model/state')return json({providers:catalog,settings:{name:'deepseek-flash',managedBy:'manual'},available:{models:[],entries:[]}});
  return json({});
 };
-createRoot(document.getElementById('root')!).render(<ModelSettings onClose={()=>{}} onChanged={async()=>{}} sendShortcut="enter" onShortcutChange={()=>{}} completionEnabled={false} onCompletionEnabledChange={()=>{}} ignoreProjectMemory={false} onIgnoreProjectMemoryChange={()=>{}}/>);
+createRoot(document.getElementById('root')!).render(<ModelSettings onClose={()=>{}} onChanged={async()=>{}} sendShortcut="enter" onShortcutChange={()=>{}} ignoreProjectMemory={false} onIgnoreProjectMemoryChange={()=>{}}/>);
