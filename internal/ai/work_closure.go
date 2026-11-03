@@ -253,10 +253,11 @@ func (e *Engine) beginWorkAttempt(ctx context.Context, sessionID, goalID, stepID
 		if err != nil {
 			return err
 		}
-		if goal.closure == nil || goal.Status != "running" || taskID == "" || rootTurnID == "" {
+		if goal.closure == nil || (goal.Status != "running" && goal.Status != "blocked") || taskID == "" || rootTurnID == "" {
 			return errors.New("active versioned work and execution task required")
 		}
-		if _, err = verifySecurityTaskTx(tx, taskID, sessionID, goalID, rootTurnID, time.Now().UTC()); err != nil {
+		task, err := verifySecurityTaskTx(tx, taskID, sessionID, goalID, rootTurnID, time.Now().UTC())
+		if err != nil {
 			return err
 		}
 		step, exists := goal.closure.Steps[stepID]
@@ -291,7 +292,31 @@ func (e *Engine) beginWorkAttempt(ctx context.Context, sessionID, goalID, stepID
 				return err
 			}
 			if prior.State != "failed" && prior.State != "not_executed" && prior.ClosureState != "reconciled" {
-				return errors.New("prior attempt has no safe retry result")
+				// Preparation may fail before any original operation is registered.
+				// Retire only that provably unstarted attempt, under the same dispatch
+				// barrier as its replacement. Unknown/dispatched effects never qualify.
+				var operations int64
+				if err = tx.Model(&nativeOperation{}).Where("attempt_id = ?", prior.ID).Count(&operations).Error; err != nil {
+					return err
+				}
+				var originalTask securityTaskRow
+				if err = tx.First(&originalTask, "id = ?", prior.SecurityTaskID).Error; err != nil {
+					return err
+				}
+				if prior.State != "prepared" || operations != 0 || prior.ProjectID != goal.closure.ProjectID || prior.GoalRevision != goal.closure.GoalRevision || prior.PlanRevision != goal.closure.PlanRevision || prior.StepRevision != step.Revision || originalTask.StoreID != task.StoreID || originalTask.RecoveryEpoch != task.RecoveryEpoch || originalTask.GoalID != goalID || originalTask.GoalRevision != goal.closure.GoalRevision || originalTask.ProjectID != goal.closure.ProjectID || originalTask.SessionID != sessionID {
+					return errors.New("prior attempt has no safe retry result; reconcile its original operations first")
+				}
+				changed := tx.Model(&workExecutionAttempt{}).Where("id = ? AND revision = ? AND state = ?", prior.ID, prior.Revision, "prepared").Updates(map[string]any{"state": "not_executed", "closure_state": "reconciled", "revision": prior.Revision + 1})
+				if changed.Error != nil {
+					return changed.Error
+				}
+				if changed.RowsAffected != 1 {
+					return errWorkConflict
+				}
+				proof := map[string]any{"attemptId": prior.ID, "replacementAttemptId": id, "operationCount": operations, "rootTurnId": rootTurnID}
+				if err = securityActionRecord(tx, task.StoreID, task.RecoveryEpoch, "runtime", "unstarted-attempt:"+prior.ID, "work.attempt.not_executed", prior.ID, js(proof), prior.Revision, prior.Revision+1, proof, time.Now().UTC(), goal.closure.ProjectID); err != nil {
+					return err
+				}
 			}
 		}
 		attempt := workExecutionAttempt{ID: id, SessionID: sessionID, ProjectID: goal.closure.ProjectID, GoalID: goalID, GoalRevision: goal.closure.GoalRevision, PlanRevision: goal.closure.PlanRevision, StepID: stepID, StepRevision: step.Revision, SecurityTaskID: taskID, RootTurnID: rootTurnID, RetryOf: retryOf, Strategy: utf8Prefix(strategy, 2000), State: "prepared", ClosureState: "open", Revision: 1, CreatedAt: time.Now().UTC()}
@@ -299,6 +324,7 @@ func (e *Engine) beginWorkAttempt(ctx context.Context, sessionID, goalID, stepID
 			return err
 		}
 		goal.closure.ActiveAttempts[stepID], goal.ActiveItemID = id, stepID
+		goal.Status = "running"
 		return writeWorkGoalTx(tx, &row, &goal, false)
 	})
 	return id, err

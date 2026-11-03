@@ -139,7 +139,7 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 			if err = store.DB.First(&attempt, "id = ? AND goal_id = ? AND step_id = ?", current, g.ID, stepID).Error; err != nil {
 				return nil, err
 			}
-			if (attempt.State == "prepared" || attempt.State == "running") && attempt.RootTurnID == execution.Owner.RootTurnID {
+			if g.Status == "running" && g.ActiveItemID == stepID && (attempt.State == "prepared" || attempt.State == "running") && attempt.RootTurnID == execution.Owner.RootTurnID && attempt.SecurityTaskID == execution.Task.ID {
 				return g, nil
 			}
 		}
