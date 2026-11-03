@@ -349,6 +349,8 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 
 ## 当前依赖与交付水位（2026-11-02）
 
+2026-11-03 增量审计：角色表与独立任务 Worker 已存在，但侧栏仍按 Worker 列表展示，专员直聊仍直接进入该 Worker 的原任务，尚未交付“一个长期专员入口对应多个任务会话”。`ReadSuperObject` 也仅覆盖 event/task/worker，完整跨任务证据召回未交付。现状证据、75 项 Go / 10 项前端定向回归及增量实施步骤见[长期专员频道方案](feature-specialist-channel-1.md)。该方案状态 Planned，本次仅提交文档，不将已有存储/分页能力标记为完整角色频道或 Memory 已上线。
+
 - TASK-016：原受监管 Shell 等待接续已接公共 Worker；通用构建平台缺少当前只读 Security profile，适配器明确 unavailable。不能把通用 MCP 返回或历史批准用于后台自动读取。
 - TASK-020 至 TASK-022：已提交宿主只读来源旁注及兼容契约供协作审阅；长期任务来源采集/整理与资产范围 Memory 依赖 bearqy/Items 的接口和联合验收，尚未完成，不改变 snapshot hash、不启用 N5 专员或运维 V2。
 - TASK-026/030/031：已完成签名 Dev 安装、真实三联与明暗/窄窗检查、原生退出界面后同 PID 重连和鉴权排空；验收脚本及 [MD](../docs/validation/lake-superagent-runtime.md)/[JSON](../docs/validation/lake-superagent-runtime.json) 已交付。26 项矩阵逐项记录实际边界证据，Windows、睡眠/断电和完整原生故障矩阵仍未验证，不能据此声称整个矩阵通过。
