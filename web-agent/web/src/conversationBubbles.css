@@ -66,12 +66,12 @@
 }
 
 /* The caption follows the text; its divider starts at the painted bubble edge. */
-.ai-turn:has(:is(.ai-response,.ai-chat-message.ai-role-assistant) > .response-identity) > .turn-status:not(.is-thinking) {
+.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status:not(.is-thinking) {
   position:relative;
   padding-inline-start:calc(var(--reply-avatar-column) + var(--reply-bubble-inset));
   border-bottom:0;
 }
-.ai-turn:has(:is(.ai-response,.ai-chat-message.ai-role-assistant) > .response-identity) > .turn-status:not(.is-live)::after {
+.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status:not(.is-live)::after {
   content:"";
   position:absolute;
   inset-inline:var(--reply-avatar-column) 0;
@@ -80,7 +80,7 @@
   background:var(--surface-hover);
   pointer-events:none;
 }
-.ai-turn:has(:is(.ai-response,.ai-chat-message.ai-role-assistant) > .response-identity) > .turn-status .turn-status-mark {
+.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status .turn-status-mark {
   position:absolute;
   inset-inline-start:0;
 }

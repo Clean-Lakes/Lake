@@ -5,7 +5,8 @@ import {Glyph} from './Icons';
 
 export type AssistantIdentity={name:string;pilot?:boolean};
 export function showsReplyAvatar(identity?:AssistantIdentity,author?:SpecialistReplyAuthor){return !author&&(!identity||!!identity.pilot);}
-export function ReplyIdentity({identity,author,onSpecialist}:{identity?:AssistantIdentity;author?:SpecialistReplyAuthor;onSpecialist?:(author:SpecialistReplyAuthor)=>void}) {
+export function ReplyIdentity({identity,author,onSpecialist,hidden=false}:{identity?:AssistantIdentity;author?:SpecialistReplyAuthor;onSpecialist?:(author:SpecialistReplyAuthor)=>void;hidden?:boolean}) {
+ if(hidden)return null;
  const name=author?.name??identity?.name??'Lake';
  const avatar=showsReplyAvatar(identity,author);
  const content=<>{avatar&&<span className="response-avatar" aria-hidden="true">{identity?<SuperRoleAvatar name={name} pilot={identity.pilot} size={20}/>:<AgentIcon role="lake" size={18}/>}</span>}<strong>{name}</strong></>;

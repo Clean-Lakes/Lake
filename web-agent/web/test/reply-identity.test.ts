@@ -9,13 +9,13 @@ import {orderedTranscript} from '../src/timeline';
 import {isAssistantProse} from '../src/completedTurnProse';
 
 const author=(name:string,id:string):SpecialistReplyAuthor=>({kind:'specialist',name,workerId:'worker-'+id,sessionId:'session-'+id,taskId:'task-'+id});
-test('specialist own-session text and message replies show their name without a chat avatar',()=>{
- for(const type of ['text','message'])for(const status of ['running','completed']){
+test('specialist own-session replies omit repeated identity headers and chat avatars',()=>{
+ for(const type of ['text','message'])for(const status of ['running','completed'])for(const persisted of [false,true]){
   const at='2026-11-03T00:00:00Z';
-  const snapshot={session:{id:'worker'},messages:[],resources:[],actions:[],specialists:[],evidence:[],ai:{session:'worker',status,rootTurnId:'turn',cardsOffset:0,cards:[{id:'answer',type,status,at,content:'实际检查结果。'}]}} as unknown as SessionSnapshot;
+  const snapshot={session:{id:'worker',workspaceRole:'worker'},messages:persisted?[{id:'stored',role:'assistant',text:'实际检查结果。',createdAt:at}]:[],resources:[],actions:[],specialists:[],evidence:[],ai:{session:'worker',status,rootTurnId:'turn',cardsOffset:0,cards:persisted?[]:[{id:'answer',type,status,at,content:'实际检查结果。'}]}} as unknown as SessionSnapshot;
   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'服务运行状态排查专员'}}));
-  assert.ok(!html.includes('class="response-avatar"')&&html.includes('without-avatar'));
-  assert.ok(html.includes('<strong>服务运行状态排查专员</strong>'));
+  assert.ok(!html.includes('class="response-avatar"')&&!html.includes('class="response-identity'));
+  assert.ok(!html.includes('<strong>服务运行状态排查专员</strong>'));
   assert.ok(html.includes('实际检查结果。'));
   assert.ok(!html.includes('<strong>Lake</strong>'));
  }

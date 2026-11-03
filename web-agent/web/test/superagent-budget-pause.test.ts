@@ -15,7 +15,7 @@ test('a stopped Worker shows one pause explanation while original diagnostics re
  const snapshot={session:{id:'worker'},messages:[{id:'system-copy',role:'system',text:refusal,createdAt:at}],resources:[],actions:[],specialists:[],evidence:[],ai:{session:'worker',status:'paused',cardsOffset:0,cards:[{id:'first',type:'error',status:'failed',at,content:refusal},{id:'second',type:'error',status:'paused',at,content:refusal}]}} as unknown as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'服务状态专员'}}));
  assert.equal(html.split('本任务的剩余执行额度不足').length-1,1);
- assert.match(html,/服务状态专员/);
+ assert.doesNotMatch(html,/class="response-identity|<strong>服务状态专员<\/strong>/);
  assert.doesNotMatch(html,/response-avatar/);
  assert.doesNotMatch(html,/cumulative model budget|ai-error/);
  const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot,mode:'activity'}));
