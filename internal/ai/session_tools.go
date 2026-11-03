@@ -308,7 +308,7 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot .
 		s.mu.Lock()
 		s.questionReply = nil
 		e.runMu.Lock()
-		closing := e.runtimeClosed
+		closing := e.runtimeClosed || e.HostContext != nil && e.HostContext.Err() != nil
 		e.runMu.Unlock()
 		// A host update must retain the original SDK input checkpoint. A normal
 		// turn cancellation still expires its question; neither path answers it.

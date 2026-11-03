@@ -205,7 +205,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		return nil, e
 	}
 	server.Engine.SecurityRuntime = runtimeHome
-	server.Engine.SuperMigrationContext = server.Context
+	server.Engine.HostContext = server.Context
 	if err = server.Engine.SetSecurityEntrySource("web"); err != nil {
 		server.Close()
 		return nil, err

@@ -37,7 +37,7 @@ type session struct {
 }
 type Engine struct {
 	SuperInputResolver             func(context.Context, SuperEvent) (TurnInput, error) // Trusted host; resolves existing source data, never authority.
-	SuperMigrationContext          context.Context                                      // Host lifetime only; allows shutdown to cancel a large pre-migration snapshot.
+	HostContext                    context.Context                                      // Trusted host lifetime; cancels startup snapshots and preserves unanswered SDK waits on host shutdown.
 	superOnce                      sync.Once
 	superErr                       error
 	superInitialized               atomic.Bool

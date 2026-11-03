@@ -26,7 +26,7 @@ func TestSuperChannelMigrationCancellationLeavesPreviousSchemaIntact(t *testing.
 	defer next.Shutdown()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	next.SuperMigrationContext = ctx
+	next.HostContext = ctx
 	if _, err := next.superStore(); !errors.Is(err, context.Canceled) {
 		t.Fatal("migration ignored host shutdown", err)
 	}

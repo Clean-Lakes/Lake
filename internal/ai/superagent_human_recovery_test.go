@@ -9,16 +9,12 @@ import (
 )
 
 func TestSuperHumanRecoveryUsesOriginalRunnerAndActualAnswer(t *testing.T) {
-	for _, graceful := range []bool{false, true} {
-		name := "crash-checkpoint"
-		if graceful {
-			name = "graceful-host-update"
-		}
-		t.Run(name, func(t *testing.T) { testSuperHumanRecovery(t, graceful) })
+	for _, mode := range []string{"crash-checkpoint", "graceful-host-update", "host-context-drains-first"} {
+		t.Run(mode, func(t *testing.T) { testSuperHumanRecovery(t, mode) })
 	}
 }
 
-func testSuperHumanRecovery(t *testing.T, graceful bool) {
+func testSuperHumanRecovery(t *testing.T, mode string) {
 	model, closeModel := fakeModel(t, func(n int, input map[string]any) any {
 		if n == 1 {
 			return response("", Call{ID: "original-question", Name: "work_begin", Arguments: `{"asset_refs":[],"title":"Inspect test target","items":[{"title":"Review test evidence"}]}`})
@@ -52,6 +48,9 @@ func testSuperHumanRecovery(t *testing.T, graceful bool) {
 	}
 	s, _ := e.get(w.SessionID)
 	run, cancel := context.WithCancel(ctx)
+	if mode == "host-context-drains-first" {
+		e.HostContext = run
+	}
 	done := make(chan error, 1)
 	go func() { done <- e.StartTaskWorker(run, "project", w.ID) }()
 	var saved State
@@ -79,10 +78,16 @@ func testSuperHumanRecovery(t *testing.T, graceful bool) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if graceful {
-		e.Shutdown()
-		<-done
-		cancel()
+	if mode != "crash-checkpoint" {
+		if mode == "host-context-drains-first" {
+			cancel()
+			<-done
+			e.Shutdown()
+		} else {
+			e.Shutdown()
+			<-done
+			cancel()
+		}
 		next, err := New(e.Dir, nil, nil)
 		if err != nil {
 			t.Fatal(err)

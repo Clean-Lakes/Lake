@@ -237,7 +237,7 @@ func (e *Engine) superStore() (*gorm.DB, error) {
 			needsBackup = schema.Version == 3
 		}
 		if needsBackup {
-			lifetime := owner.SuperMigrationContext
+			lifetime := owner.HostContext
 			if lifetime == nil {
 				lifetime = owner.workContext
 			}
