@@ -26,6 +26,8 @@
 
 同一目标后续真实轮次可以继续取得新的只读观测：原尝试的所有操作必须已成功结束、具有可校验的非 opaque 只读 descriptor，且原资源连接、契约和 store/epoch 仍匹配。宿主只把该尝试的执行事实记为 succeeded/reconciled 并追加审计，为当前有效 task/root 建立带 retryOf 的新尝试；不复用旧 permit、不重放原操作、不生成业务 pass。原成功写入、未知结果、未结束操作及描述不完整的历史均不能借此刷新；权限、调用额度和绝对期限继续按当前状态检查。
 
+效果判定使用经过校验的冻结 descriptor。通用 Shell 的旧 risk 字段可能仍是 write，但已登记、冻结并成功返回的 disk_usage/process_snapshot 等只读诊断不因此冒充未核实写入；原 risk、status、result 和 descriptor 均保持原样。opaque Shell 或真正包含写入能力的操作不能借此继续。
+
 once/task 的问答只记录授权提案。最终原生审批必须展示并绑定实际资源、能力、profile、task revision、绝对到期时间、预算和 envelope 差异；签约仍在原审批领取事务中完成。签约后使用新 descriptor，旧单次批准不能扩成批量授权。
 
 恢复保全原问题和验收历史，使未完成提案失效并切换 epoch；不从旧问答自动创建新权限，也不复用旧 owner。Memory 的同意与遗忘资格另行核验，任务或人工验收不表示 Memory 同意。

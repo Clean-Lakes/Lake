@@ -333,8 +333,10 @@ func reconcileWorkContinuationTx(tx *gorm.DB, prior workExecutionAttempt, task s
 			return errors.New("new current turn required to continue completed read observations")
 		}
 		for _, op := range operations {
+			// Old generic Shell risk labels may say write for a frozen diagnostic;
+			// only the validated original descriptor can prove its actual effects.
 			var descriptor security.PreparedOperation
-			if op.Status != "succeeded" || op.Risk != "readonly" || op.FinishedAt == nil || op.SessionID != prior.SessionID || op.GoalID != prior.GoalID || op.StepID != prior.StepID || op.GoalRevision != prior.GoalRevision || op.PlanRevision != prior.PlanRevision || op.StepRevision != prior.StepRevision || op.SecurityTaskID != prior.SecurityTaskID || op.RootTurnID != prior.RootTurnID || op.StoreID != task.StoreID || op.RecoveryEpoch != task.RecoveryEpoch || json.Unmarshal([]byte(op.SecurityDescriptor), &descriptor) != nil || descriptor.Proof == security.ProofOpaque || len(descriptor.Capabilities) == 0 || securityOperationMayMutate(descriptor) {
+			if op.Status != "succeeded" || op.FinishedAt == nil || op.SessionID != prior.SessionID || op.GoalID != prior.GoalID || op.StepID != prior.StepID || op.GoalRevision != prior.GoalRevision || op.PlanRevision != prior.PlanRevision || op.StepRevision != prior.StepRevision || op.SecurityTaskID != prior.SecurityTaskID || op.RootTurnID != prior.RootTurnID || op.StoreID != task.StoreID || op.RecoveryEpoch != task.RecoveryEpoch || json.Unmarshal([]byte(op.SecurityDescriptor), &descriptor) != nil || descriptor.Proof == security.ProofOpaque || len(descriptor.Capabilities) == 0 || securityOperationMayMutate(descriptor) {
 				return errors.New("prior attempt has unverified effects; reconcile original operations before retry")
 			}
 			current, err := currentWorkOperationResourcesTx(tx, op)

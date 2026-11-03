@@ -90,6 +90,11 @@ func TestWorkBlockedRetryDispatchesFixedSSHWithoutClearingLegacyRisk(t *testing.
 	}
 	// The next real turn must also be able to take a new observation. Keep all
 	// old operation/evidence records; only retire their completed read attempt.
+	// Generic Shell historically keeps risk=write even for a frozen diagnostic.
+	// Its verified command-profile descriptor, not that old label, proves read-only.
+	if err = store.DB.Model(&nativeOperation{}).Where("attempt_id = ? AND tool = ?", current, "inspect_host").Update("risk", "write").Error; err != nil {
+		t.Fatal(err)
+	}
 	newRoot := "next-human-root"
 	var nextOwner ExecutionOwner
 	err = store.DB.Transaction(func(tx *gorm.DB) error {
