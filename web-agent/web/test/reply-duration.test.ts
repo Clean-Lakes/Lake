@@ -68,6 +68,30 @@ test('a direct specialist supplement shows dots without saved timing or a new ta
  assert.equal(snapshot.superagent!.goal!.status,'blocked');
  assert.equal(snapshot.ai!.rootTurnId,'original-task-root');
 });
+test('direct specialist compaction uses dots immediately and preserves approval, stop and completion states',t=>{
+ const userAt=new Date(Date.parse(start)+1000).toISOString();
+ const compact:AICard={id:'compact',type:'compaction',status:'running',content:'正在压缩上下文…',at:userAt};
+ const snapshot={session:{id:'worker',workspaceRole:'worker'},messages:[{id:'followup',sessionId:'worker',role:'user',text:'为什么？',createdAt:userAt}],resources:[],actions:[],replyTimings:[],ai:{session:'worker',status:'running',replyStatus:'running',rootTurnId:'original-task-root',turnStartedAt:start,cards:[compact],cardsOffset:0}} as SessionSnapshot;
+ const render=()=>renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'服务器运维排查专员'}}));
+ for(const elapsed of [0,3000]){
+  t.mock.method(Date,'now',()=>Date.parse(userAt)+elapsed);
+  const html=render();
+  assert.equal((html.match(/class="reply-duration /g)||[]).length,1);
+  assert.ok(html.includes('turn-thinking-dots')&&!html.includes('reply-duration-spinner')&&!html.includes('status-text--active'));
+  assert.ok(html.includes('role="status" aria-live="polite">正在压缩上下文…'));
+  assert.ok(!html.includes('turn-thinking-avatar'));
+ }
+ snapshot.ai!.status='waiting_approval';
+ assert.ok(render().includes('等待确认')&&!render().includes('turn-thinking-dots'));
+ snapshot.ai!.status='cancelled';
+ assert.ok(render().includes('已停止')&&!render().includes('turn-thinking-dots'),'a stale running compaction card cannot keep a stopped turn busy');
+ snapshot.ai!.status='running';compact.status='completed';
+ assert.ok(render().includes('turn-thinking-dots')&&!render().includes('正在压缩上下文'),'after compaction the same bubble continues with normal thinking');
+ snapshot.ai!.cards.push({id:'reply',type:'message',status:'running',content:'这是答复',at:new Date(Date.parse(userAt)+3000).toISOString()});
+ assert.ok(!render().includes('turn-thinking-dots'),'real prose ends the waiting bubble');
+ snapshot.ai!.status='completed';
+ assert.ok(!render().includes('turn-thinking-dots'));
+});
 test("cancelled and failed turns are identified; unknown endpoints do not fabricate time",()=>{
  assert.equal(replyDurationText({...timing,status:"cancelled"},Date.now()),"1分钟 13秒 · 已停止");
  assert.equal(replyDurationText({...timing,status:"failed"},Date.now()),"1分钟 13秒 · 未完成");
