@@ -479,6 +479,13 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	view := s.state.View
+	view.ReplyStatus = ""
+	// Canonical goals below may be blocked while a real human followup is
+	// receiving a model response. Keep that live reply activity independent;
+	// it is presentation metadata, never a task transition or execution permit.
+	if s.cancel != nil && (view.Status == "running" || view.Status == "waiting_approval") {
+		view.ReplyStatus = view.Status
+	}
 	if s.finalizing {
 		view.Status, view.TurnFinishedAt = "running", ""
 	}

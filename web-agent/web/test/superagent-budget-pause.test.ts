@@ -16,7 +16,7 @@ test('a stopped Worker shows one pause explanation while original diagnostics re
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'服务状态专员'}}));
  assert.equal(html.split('本任务的剩余执行额度不足').length-1,1);
  assert.match(html,/服务状态专员/);
- assert.match(html,/response-avatar/);
+ assert.doesNotMatch(html,/response-avatar/);
  assert.doesNotMatch(html,/cumulative model budget|ai-error/);
  const activity=renderToStaticMarkup(createElement(AITranscript,{snapshot,mode:'activity'}));
  assert.match(activity,/本任务的剩余执行额度不足/);

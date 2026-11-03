@@ -5,7 +5,7 @@ import {Glyph} from "./Icons";
 import {StatusText} from "./StatusText";
 import {toolDescription} from "./activity";
 import {ExecutionIcon} from './ExecutionIcon';
-import {ReplyIdentity,type AssistantIdentity} from './ReplyIdentity';
+import {ReplyIdentity,showsReplyAvatar,type AssistantIdentity} from './ReplyIdentity';
 const emptyCards:AICard[]=[];
 
 function TurnActivityMark() {
@@ -18,6 +18,7 @@ export function ReplyDuration({assistantIdentity,timing,view,cards=emptyCards,la
  const preview=live&&previewAt!==undefined;
  const running=live&&!preview;
  const thinking=running&&!elapsedOnly&&state==='正在思考…';
+ const avatar=showsReplyAvatar(assistantIdentity);
  const visibleState=elapsedOnly||preview||!live&&state==="回复结束"?undefined:state;
  const [presence,setPresence]=useState({running,reveal:false});
  if(presence.running!==running)setPresence({running,reveal:!running});
@@ -36,5 +37,5 @@ export function ReplyDuration({assistantIdentity,timing,view,cards=emptyCards,la
  const showDuration=!!duration;
  if(elapsedOnly&&!showDuration)return null;
  const label=thinking?<><span className="turn-thinking-bubble"><span className="turn-thinking-dots" aria-hidden="true"><i/><i/><i/></span><span className="visually-hidden" role="status" aria-live="polite">正在思考…</span></span>{detailNotice&&<span className="turn-execution-notice">{detailNotice}</span>}</>:<>{running&&!waiting&&!elapsedOnly&&<span className="turn-status-mark"><TurnActivityMark/></span>}<span className="turn-status-text"><StatusText active={running&&!waiting}>{showDuration&&<><span className="turn-status-elapsed">{running?'已处理':'用时'} {duration}</span>{visibleState&&<span aria-hidden="true"> · </span>}</>}{!showDuration&&!visibleState&&disclosure&&<span>执行过程</span>}{visibleState&&<span role={running?"status":undefined} aria-live={running?"polite":undefined} aria-atomic="true">{visibleState}</span>}</StatusText>{detailNotice&&<span className="turn-execution-notice"> · {detailNotice}</span>}</span>{disclosure&&<Glyph name="next" size={11} className="turn-duration-chevron"/>}</>;
- return <div className={`reply-duration turn-status ${preview ? "is-preview" : live ? "is-live" : "is-finished"} ${waiting ? "is-waiting" : ""}${thinking?' is-thinking':''}${presence.reveal&&!running?" is-revealed":""}`} aria-label={running?"执行状态":"回答耗时"} title={thinking?`正在思考${duration?` · 已处理 ${duration}`:''}`:preview?"截至结论开始输出时的处理用时":live?undefined:"本轮总耗时包含等待确认，不包含排队等待"}>{thinking&&<span className="turn-thinking-avatar" aria-hidden="true"><ReplyIdentity identity={assistantIdentity}/></span>}{disclosure?<button type="button" className="turn-duration-disclosure" data-placement={disclosure.side?"side":"inline"} aria-label={thinking?'查看执行详细过程':undefined} aria-expanded={disclosure.open} aria-controls={disclosure.controls} title={disclosure.side?'在右侧查看执行详细过程':disclosure.open?'收起执行详细过程':'展开执行详细过程'} onClick={disclosure.onToggle}>{label}{running&&!disclosure.open&&latestStep&&<span className="turn-current-step" aria-label={`最新步骤：${stepDescription}`} title={stepDescription}><ExecutionIcon card={latestStep} active={stepActive}/><StatusText active={stepActive} className="turn-current-step-label">{stepDescription}</StatusText></span>}</button>:label}</div>;
+ return <div className={`reply-duration turn-status ${preview ? "is-preview" : live ? "is-live" : "is-finished"} ${waiting ? "is-waiting" : ""}${thinking?` is-thinking${avatar?'':' without-avatar'}`:''}${presence.reveal&&!running?" is-revealed":""}`} aria-label={running?"执行状态":"回答耗时"} title={thinking?`正在思考${duration?` · 已处理 ${duration}`:''}`:preview?"截至结论开始输出时的处理用时":live?undefined:"本轮总耗时包含等待确认，不包含排队等待"}>{thinking&&avatar&&<span className="turn-thinking-avatar" aria-hidden="true"><ReplyIdentity identity={assistantIdentity}/></span>}{disclosure?<button type="button" className="turn-duration-disclosure" data-placement={disclosure.side?"side":"inline"} aria-label={thinking?'查看执行详细过程':undefined} aria-expanded={disclosure.open} aria-controls={disclosure.controls} title={disclosure.side?'在右侧查看执行详细过程':disclosure.open?'收起执行详细过程':'展开执行详细过程'} onClick={disclosure.onToggle}>{label}{running&&!disclosure.open&&latestStep&&<span className="turn-current-step" aria-label={`最新步骤：${stepDescription}`} title={stepDescription}><ExecutionIcon card={latestStep} active={stepActive}/><StatusText active={stepActive} className="turn-current-step-label">{stepDescription}</StatusText></span>}</button>:label}</div>;
 }

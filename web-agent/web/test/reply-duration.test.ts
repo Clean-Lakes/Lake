@@ -47,12 +47,26 @@ test('Pilot and specialist identities survive initial, empty-stream and reasonin
   for(const cards of [[],[{id:'empty',type:'message',status:'running',content:'',at:start}],[{id:'empty-text',type:'text',status:'running',content:'  ',at:start}],[{id:'reasoning',type:'thinking',status:'running',content:'',at:start}]] as AICard[][]){
    const snapshot={session:{id:'s'},messages:[{id:'u',sessionId:'s',role:'user',text:'继续',createdAt:start}],resources:[],actions:[],replyTimings:[{...timing,status:'running',finishedAt:''}],ai:{session:'s',status:cards.length?'running':'idle',turnStartedAt:start,cards,cardsOffset:0}} as SessionSnapshot;
    const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity}));
-   const avatar=html.slice(html.indexOf('turn-thinking-avatar'));
-   assert.ok(avatar.includes(`data-role="${assistantIdentity.pilot?'coordinator':'investigator'}"`));
+   if(assistantIdentity.pilot)assert.ok(html.slice(html.indexOf('turn-thinking-avatar')).includes('data-role="coordinator"'));
+   else assert.ok(!html.includes('turn-thinking-avatar')&&html.includes('data-reply-avatar="hidden"'));
    assert.ok(html.includes('turn-thinking-dots')&&!html.includes('reply-duration-spinner'));
-   assert.equal((html.match(/class="response-avatar"/g)||[]).length,1,'empty reply placeholders do not add another blank identity bubble');
+   assert.equal((html.match(/class="response-avatar"/g)||[]).length,assistantIdentity.pilot?1:0,'empty reply placeholders do not add another blank identity bubble');
   }
  }
+});
+
+test('a direct specialist supplement shows dots without saved timing or a new task root',t=>{
+ t.mock.method(Date,'now',()=>Date.parse(start)+2000);
+ const userAt=new Date(Date.parse(start)+1000).toISOString();
+ const snapshot={session:{id:'worker',workspaceRole:'worker'},messages:[{id:'followup',sessionId:'worker',role:'user',text:'为什么受阻？',createdAt:userAt}],resources:[],actions:[],replyTimings:[],superagent:{task:{state:'blocked'},goal:{status:'blocked'}},ai:{session:'worker',status:'running',replyStatus:'running',rootTurnId:'original-task-root',turnStartedAt:start,cards:[],cardsOffset:0,workGoals:[{id:'original-task',status:'blocked'}]}} as unknown as SessionSnapshot;
+ const render=(s:SessionSnapshot)=>renderToStaticMarkup(createElement(AITranscript,{snapshot:s,assistantIdentity:{name:'服务器运维排查专员'}}));
+ const active=render(snapshot);
+ assert.ok(active.includes('turn-thinking-dots')&&active.includes('data-reply-avatar="hidden"'));
+ assert.ok(!active.includes('response-avatar')&&!active.includes('turn-thinking-avatar'));
+ const ended=render({...snapshot,ai:{...snapshot.ai!,status:'blocked',replyStatus:undefined,turnFinishedAt:new Date().toISOString()}});
+ assert.ok(!ended.includes('turn-thinking-dots'),'business blockage alone must not invent a live reply');
+ assert.equal(snapshot.superagent!.goal!.status,'blocked');
+ assert.equal(snapshot.ai!.rootTurnId,'original-task-root');
 });
 test("cancelled and failed turns are identified; unknown endpoints do not fabricate time",()=>{
  assert.equal(replyDurationText({...timing,status:"cancelled"},Date.now()),"1分钟 13秒 · 已停止");

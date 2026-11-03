@@ -157,6 +157,7 @@ type View struct {
 	TurnFinishedAt    string             `json:"turnFinishedAt,omitempty"`
 	Session           string             `json:"session"`
 	Status            string             `json:"status"`
+	ReplyStatus       string             `json:"replyStatus,omitempty"`
 	Cards             []Card             `json:"cards"`
 	Pending           *Approval          `json:"pending,omitempty"`
 	Context           *ContextUsage      `json:"context,omitempty"`
