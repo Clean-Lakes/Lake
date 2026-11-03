@@ -11,6 +11,7 @@
 }
 
 /* One bubble per reply; the avatar owns a separate column beside it. */
+.ai-transcript { --reply-avatar-column:32px; --reply-bubble-inset:18px; }
 .ai-chat-message.ai-role-assistant,
 .ai-card:is(.ai-text, .ai-message),
 .ai-response:has(> .ai-card:is(.ai-text, .ai-message)),
@@ -37,10 +38,9 @@
 .response-avatar { display:inline-flex; align-items:center; justify-content:center; flex:none; }
 .ai-chat-message.ai-role-assistant,
 .ai-response:has(> .response-identity):has(> .ai-card:is(.ai-text, .ai-message)) {
-  --reply-avatar-column: 32px;
   position: relative;
   isolation: isolate;
-  padding-inline-start: calc(18px + var(--reply-avatar-column));
+  padding-inline-start: calc(var(--reply-bubble-inset) + var(--reply-avatar-column));
   background: transparent;
 }
 .ai-chat-message.ai-role-assistant::before,
@@ -61,4 +61,14 @@
   top: 14px;
   width: 20px;
   height: 1.75em;
+}
+
+/* The execution caption follows the reply text, while its divider spans the turn. */
+.ai-turn:has(:is(.ai-response,.ai-chat-message.ai-role-assistant) > .response-identity) > .turn-status {
+  position:relative;
+  padding-inline-start:calc(var(--reply-avatar-column) + var(--reply-bubble-inset));
+}
+.ai-turn:has(:is(.ai-response,.ai-chat-message.ai-role-assistant) > .response-identity) > .turn-status .turn-status-mark {
+  position:absolute;
+  inset-inline-start:0;
 }
