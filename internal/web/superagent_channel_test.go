@@ -3,11 +3,48 @@ package web
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
 )
+
+func TestSuperChannelHistoryOmitsEmptyReplyPlaceholders(t *testing.T) {
+	b, _, _, worker, ch := roleWorkspaceFixture(t)
+	state := ai.State{View: ai.View{Session: worker.SessionID, Status: "paused", Cards: []ai.Card{
+		{ID: "empty", Type: "message", At: "2026-11-03T01:00:00Z"},
+		{ID: "blank", Type: "text", Content: " \n ", At: "2026-11-03T01:00:01Z"},
+		{ID: "reply", Type: "message", Content: "Actual reply", At: "2026-11-03T01:00:02Z"},
+	}}}
+	raw, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(b.Engine.Dir, worker.SessionID+".json"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Also cover rows indexed by an earlier version while the reply was empty.
+	b.Store.update(func() any {
+		b.Store.exec("INSERT INTO superagentChannelTimeline(channelId,kind,sourceSessionId,sourceId,createdAt) VALUES(?,'card',?,'empty',?)", ch.ID, worker.SessionID, channelEntryTime("2026-11-03T01:00:00Z"))
+		return nil
+	})
+	page := b.roleChannelPage(t.Context(), ch.SessionID, "", 50)
+	cards := 0
+	for _, entry := range page["entries"].([]roleChannelEntry) {
+		if entry.Card != nil {
+			cards++
+			if entry.Card.ID != "reply" {
+				t.Fatal("empty historical reply remained visible", entry.Card.ID)
+			}
+		}
+	}
+	if cards != 1 {
+		t.Fatal("actual reply lost", cards)
+	}
+}
 
 func TestSuperChannelStagedRecoveryRestoresRoleBeforeAdmission(t *testing.T) {
 	b, pid, pilot, _, ch := roleWorkspaceFixture(t)

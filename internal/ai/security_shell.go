@@ -197,6 +197,9 @@ func (e *Engine) startOwnedManagedProcess(ctx context.Context, c Config, a map[s
 	}
 	go owner.watchManagedShellAuthority(j)
 	go func() {
+		// A finished process may still have durable operation/card updates to
+		// write. Shutdown must join those writes before closing the store.
+		defer close(j.done)
 		waitErr := cmd.Wait()
 		cause := jobContext.Err()
 		cancel()
@@ -226,7 +229,6 @@ func (e *Engine) startOwnedManagedProcess(ctx context.Context, c Config, a map[s
 		}
 		status := j.status
 		j.mu.Unlock()
-		close(j.done)
 		_ = owner.completeManagedShellOperation(j.operationID)
 		if background && owner.CheckSecurityRuntime() == nil {
 			owner.shellCard(j.session, id, js(result), status, false)

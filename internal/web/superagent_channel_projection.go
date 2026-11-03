@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
@@ -80,7 +81,7 @@ func (b *Server) reconcileRoleChannelTimeline(ctx context.Context, ch ai.Special
 			}
 			b.Store.update(func() any {
 				for _, card := range view.Cards {
-					if card.Type == "message" || card.Type == "text" {
+					if (card.Type == "message" || card.Type == "text") && strings.TrimSpace(card.Content) != "" {
 						b.Store.exec("INSERT OR IGNORE INTO superagentChannelTimeline(channelId,kind,sourceSessionId,sourceId,taskId,workerId,createdAt) VALUES(?,'card',?,?,?,?,?)", ch.ID, worker.SessionID, card.ID, worker.Task.TaskID, worker.ID, channelEntryTime(card.At))
 					}
 				}
@@ -203,7 +204,9 @@ func (b *Server) roleChannelPage(ctx context.Context, session, cursor string, li
 				cardBefore[source] = view.CardsOffset
 			}
 		}
-		if entry.Message != nil || entry.Card != nil {
+		// Old projection rows may reference a streaming placeholder. Keep it
+		// in the original task for live progress, never as an empty history row.
+		if entry.Message != nil || (entry.Card != nil && strings.TrimSpace(entry.Card.Content) != "") {
 			entries = append(entries, entry)
 		}
 	}

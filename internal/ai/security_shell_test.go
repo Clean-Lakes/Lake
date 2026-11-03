@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -16,6 +17,53 @@ import (
 	"github.com/Clean-Lakes/Lake/internal/platform"
 	"github.com/Clean-Lakes/Lake/internal/security"
 )
+
+func TestSecurityManagedShellCompletionIncludesFinalCardPersistence(t *testing.T) {
+	e, c, ctx, cancel, operation, _, a := managedShellFixture(t, true, "printf complete")
+	defer cancel()
+	finalCard, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	defer unblock()
+	e.Emit = func(event Event) {
+		if event.Type != "shell" {
+			return
+		}
+		job := e.managedShellByOperation(operation.ID)
+		job.mu.Lock()
+		finished := job.status != "running"
+		job.mu.Unlock()
+		if finished {
+			close(finalCard)
+			<-release
+		}
+	}
+	value, err := e.startManagedShell(ctx, c, a, str(a["command"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = e.finishNativeOperation(operation, c, value, nil); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-finalCard:
+	case <-time.After(5 * time.Second):
+		t.Fatal("final process card was not persisted")
+	}
+	job := e.managedShellByOperation(operation.ID)
+	select {
+	case <-job.done:
+		t.Fatal("shutdown join was released before the final card notification completed")
+	default:
+	}
+	unblock()
+	select {
+	case <-job.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("completed process did not release its shutdown join")
+	}
+	e.Shutdown()
+}
 
 func managedShellFixture(t *testing.T, monitored bool, command string, foreground ...bool) (*Engine, Config, context.Context, context.CancelFunc, *nativeOperation, SecurityExecutionContext, map[string]any) {
 	t.Helper()
