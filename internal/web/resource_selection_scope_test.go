@@ -57,7 +57,7 @@ func TestMultipleReferencesKeepTheirScopeAcrossTurnsWithoutTargetApproval(t *tes
 	apiTest(t, h, "POST", "/api/sessions/"+id+"/ai/configure", Object{"silentCommands": true, "silentTerminalCreation": true, "silentReadFiles": true, "blockUnreferencedAssets": true}, 200)
 	waitTurn := func(turn int, status string) ai.View {
 		t.Helper()
-		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+		for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); {
 			view, err := b.Engine.Snapshot(id)
 			must(err)
 			if view.Turns >= turn && view.Status == status {
@@ -66,7 +66,7 @@ func TestMultipleReferencesKeepTheirScopeAcrossTurnsWithoutTargetApproval(t *tes
 			if view.Turns >= turn && view.Pending != nil && status != "waiting_approval" {
 				t.Fatalf("unexpected confirmation in turn %d: %s", turn, view.Pending.Kind)
 			}
-			time.Sleep(time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
 		view, _ := b.Engine.Snapshot(id)
 		t.Fatalf("turn %d did not reach %s (turns=%d status=%s)", turn, status, view.Turns, view.Status)

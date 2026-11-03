@@ -14,16 +14,18 @@ import verify_memory_compatibility as verifier
 
 
 class CompatibilityToolTests(unittest.TestCase):
-    def run_report(self, events):
+    def run_report(self, events, system="Linux"):
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / 'result.json'
 
             def run(command, **options):
+                go_timeout = next(arg for arg in command if arg.startswith('-timeout=')).split('=', 1)[1]
+                self.assertGreater(options['timeout'], int(go_timeout.removesuffix('m')) * 60)
                 for event in events:
                     options['stdout'].write(json.dumps(event)+'\n')
                 return SimpleNamespace(returncode=0)
 
-            with patch.object(sys, 'argv', ['verify', '--report', str(report), '--packages', 'internal/ai', 'internal/web']), patch.object(verifier, 'git', return_value='test-sha'), patch.object(verifier.subprocess, 'check_output', return_value='go fixture'), patch.object(verifier.subprocess, 'run', side_effect=run), contextlib.redirect_stdout(io.StringIO()):
+            with patch.object(sys, 'argv', ['verify', '--report', str(report), '--packages', 'internal/ai', 'internal/web']), patch.object(verifier, 'git', return_value='test-sha'), patch.object(verifier.platform, 'system', return_value=system), patch.object(verifier.subprocess, 'check_output', return_value='go fixture'), patch.object(verifier.subprocess, 'run', side_effect=run), contextlib.redirect_stdout(io.StringIO()):
                 code = verifier.main()
             return code, json.loads(report.read_text())
 
@@ -54,6 +56,23 @@ class CompatibilityToolTests(unittest.TestCase):
         pattern = report['suites'][0]['command'][report['suites'][0]['command'].index('-run')+1]
         self.assertIn('TestNatural', pattern)
         self.assertIn('TestC[34]', pattern)
+
+    def test_timeout_never_passes_or_persists_raw_diagnostics(self):
+        events = self.events('internal/ai') + self.events('internal/web') + [
+            {'Package': 'fixture', 'Action': 'output',
+             'Output': 'panic: test timed out after 5m0s\nsynthetic-private-payload'}]
+        code, report = self.run_report(events)
+        self.assertEqual(code, 1)
+        self.assertTrue(report['suites'][0]['timedOut'])
+        self.assertNotIn('synthetic-private-payload', json.dumps(report))
+
+    def test_windows_budget_retains_all_selected_tests_and_outer_deadline(self):
+        events = self.events('internal/ai') + self.events('internal/web')
+        code, report = self.run_report(events, system="Windows")
+        self.assertEqual(code, 0)
+        command = report['suites'][0]['command']
+        self.assertIn('-timeout=20m', command)
+        self.assertEqual(command[command.index('-run') + 1], verifier.TEST_PATTERN)
 
     def test_retired_trial_commands_exit_before_any_report_or_home_is_created(self):
         for name in ['test_strategy_learning_dev.py', 'test_strategy_reuse_dev.py']:

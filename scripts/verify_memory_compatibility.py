@@ -32,12 +32,15 @@ def main():
     parser.add_argument("--report", required=True, type=pathlib.Path)
     parser.add_argument("--packages", nargs="+", choices=["internal/strategy", "internal/ai", "internal/web"], default=["internal/strategy", "internal/ai", "internal/web"])
     args = parser.parse_args()
+    # Native Windows durability makes this selected suite substantially slower
+    # than Linux. Keep Go's package deadline inside the outer process deadline.
+    runtime_timeout, process_timeout = ("20m", 1500) if platform.system() == "Windows" else ("5m", 660)
     suites=[]
     if "internal/strategy" in args.packages:
         suites.append(SUITES[0])
     runtime=["./"+p for p in args.packages if p!="internal/strategy"]
     if runtime:
-        suites.append(["go","test","-json",*runtime,"-run",TEST_PATTERN,"-count=1","-timeout=5m"])
+        suites.append(["go","test","-json",*runtime,"-run",TEST_PATTERN,"-count=1","-timeout="+runtime_timeout])
     args.report.parent.mkdir(parents=True, exist_ok=True)
     report = {
         "schemaVersion": 1, "kind": "memory_compatibility_regression", "status": "running",
@@ -63,15 +66,19 @@ def main():
             # file; publish only identities/statuses, never request bodies.
             log = args.report.with_name(args.report.stem + f"-{len(report['suites'])}.log")
             tests, packages = {}, {}
+            timed_out = False
             with log.open("w", encoding="utf-8") as stream:
                 os.chmod(log, 0o600)
                 result = subprocess.run(command, cwd=ROOT, stdout=stream,
-                                        stderr=subprocess.STDOUT, timeout=660)
+                                        stderr=subprocess.STDOUT, timeout=process_timeout)
             for line in log.read_text(encoding="utf-8").splitlines():
                 try:
                     event = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                # Publish a timeout flag, never raw diagnostics/request bodies.
+                if event.get("Action") == "output" and str(event.get("Output", "")).startswith("panic: test timed out after "):
+                    timed_out = True
                 if event.get("Action") not in ("pass", "fail", "skip"):
                     continue
                 package, name = event.get("Package", ""), event.get("Test", "")
@@ -89,10 +96,10 @@ def main():
                 and any(pkg.endswith("/" + p) and status == "pass" for pkg, status in packages.items())
                 for p in requested
             )
-            ok = ok and not any(t["status"] == "fail" for t in tests.values())
+            ok = ok and not timed_out and not any(t["status"] == "fail" for t in tests.values())
             report["suites"].append({"command": command, "exitCode": result.returncode,
                                      "seconds": round(time.monotonic() - start, 3),
-                                     "passed": ok, "packages": packages,
+                                     "passed": ok, "timedOut": timed_out, "packages": packages,
                                      "tests": sorted(tests.values(), key=lambda t: (t["package"], t["test"]))})
             save()
             failed |= not ok
