@@ -31,8 +31,12 @@ export function SpecialistChannel({snapshot,connected,onTask,onActivity}:{snapsh
  const [page,setPage]=useState<SpecialistChannelPage|null>(null),[entries,setEntries]=useState<SpecialistChannelEntry[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(false);
  const cursor=useRef(''),hasOlder=useRef(false),generation=useRef(0);
  useEffect(()=>{
-  const current=++generation.current,controller=new AbortController();let busy=false;
+  // A hidden window / reconnect suspends transport, not the conversation.
+  // Clearing history there repeatedly collapses the scroll height and island.
   setPage(null);setEntries([]);setError('');cursor.current='';hasOlder.current=false;
+ },[session]);
+ useEffect(()=>{
+  const current=++generation.current,controller=new AbortController();let busy=false;
   if(!connected)return;
   const refresh=async()=>{
    if(busy)return;busy=true;
