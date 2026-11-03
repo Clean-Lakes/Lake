@@ -253,10 +253,11 @@ func (e *Engine) beginWorkAttempt(ctx context.Context, sessionID, goalID, stepID
 		if err != nil {
 			return err
 		}
-		if goal.closure == nil || goal.Status != "running" || taskID == "" || rootTurnID == "" {
+		if goal.closure == nil || (goal.Status != "running" && goal.Status != "blocked") || taskID == "" || rootTurnID == "" {
 			return errors.New("active versioned work and execution task required")
 		}
-		if _, err = verifySecurityTaskTx(tx, taskID, sessionID, goalID, rootTurnID, time.Now().UTC()); err != nil {
+		task, err := verifySecurityTaskTx(tx, taskID, sessionID, goalID, rootTurnID, time.Now().UTC())
+		if err != nil {
 			return err
 		}
 		step, exists := goal.closure.Steps[stepID]
@@ -291,7 +292,9 @@ func (e *Engine) beginWorkAttempt(ctx context.Context, sessionID, goalID, stepID
 				return err
 			}
 			if prior.State != "failed" && prior.State != "not_executed" && prior.ClosureState != "reconciled" {
-				return errors.New("prior attempt has no safe retry result")
+				if err = reconcileWorkContinuationTx(tx, prior, task, *goal.closure, step, rootTurnID, id); err != nil {
+					return err
+				}
 			}
 		}
 		attempt := workExecutionAttempt{ID: id, SessionID: sessionID, ProjectID: goal.closure.ProjectID, GoalID: goalID, GoalRevision: goal.closure.GoalRevision, PlanRevision: goal.closure.PlanRevision, StepID: stepID, StepRevision: step.Revision, SecurityTaskID: taskID, RootTurnID: rootTurnID, RetryOf: retryOf, Strategy: utf8Prefix(strategy, 2000), State: "prepared", ClosureState: "open", Revision: 1, CreatedAt: time.Now().UTC()}
@@ -299,9 +302,62 @@ func (e *Engine) beginWorkAttempt(ctx context.Context, sessionID, goalID, stepID
 			return err
 		}
 		goal.closure.ActiveAttempts[stepID], goal.ActiveItemID = id, stepID
+		goal.Status = "running"
 		return writeWorkGoalTx(tx, &row, &goal, false)
 	})
 	return id, err
+}
+
+// Reconcile only facts established by the original ledger. A fresh turn may
+// continue successful typed reads, but cannot replay successful mutations or
+// turn unverified effects into business acceptance.
+func reconcileWorkContinuationTx(tx *gorm.DB, prior workExecutionAttempt, task security.SecurityTask, contract WorkClosureContract, step WorkStepContract, root, replacement string) error {
+	var originalTask securityTaskRow
+	if err := tx.First(&originalTask, "id = ?", prior.SecurityTaskID).Error; err != nil {
+		return err
+	}
+	if prior.ProjectID != contract.ProjectID || prior.GoalRevision != contract.GoalRevision || prior.PlanRevision != contract.PlanRevision || prior.StepRevision != step.Revision || originalTask.StoreID != task.StoreID || originalTask.RecoveryEpoch != task.RecoveryEpoch || originalTask.GoalID != prior.GoalID || originalTask.GoalRevision != contract.GoalRevision || originalTask.ProjectID != contract.ProjectID || originalTask.SessionID != prior.SessionID {
+		return errors.New("prior attempt does not match current contract and recovery identity")
+	}
+	var operations []nativeOperation
+	if err := tx.Where("attempt_id = ?", prior.ID).Find(&operations).Error; err != nil {
+		return err
+	}
+	state, kind := "not_executed", "work.attempt.not_executed"
+	if len(operations) == 0 {
+		if prior.State != "prepared" {
+			return errors.New("only a prepared attempt with no original operations can be retired as unstarted")
+		}
+	} else {
+		if root == prior.RootTurnID || (prior.State != "prepared" && prior.State != "running" && prior.State != "succeeded") {
+			return errors.New("new current turn required to continue completed read observations")
+		}
+		for _, op := range operations {
+			// Old generic Shell risk labels may say write for a frozen diagnostic;
+			// only the validated original descriptor can prove its actual effects.
+			var descriptor security.PreparedOperation
+			if op.Status != "succeeded" || op.FinishedAt == nil || op.SessionID != prior.SessionID || op.GoalID != prior.GoalID || op.StepID != prior.StepID || op.GoalRevision != prior.GoalRevision || op.PlanRevision != prior.PlanRevision || op.StepRevision != prior.StepRevision || op.SecurityTaskID != prior.SecurityTaskID || op.RootTurnID != prior.RootTurnID || op.StoreID != task.StoreID || op.RecoveryEpoch != task.RecoveryEpoch || json.Unmarshal([]byte(op.SecurityDescriptor), &descriptor) != nil || descriptor.Proof == security.ProofOpaque || len(descriptor.Capabilities) == 0 || securityOperationMayMutate(descriptor) {
+				return errors.New("prior attempt has unverified effects; reconcile original operations before retry")
+			}
+			current, err := currentWorkOperationResourcesTx(tx, op)
+			if err != nil {
+				return err
+			}
+			if !current {
+				return errors.New("prior read descriptor or resource connection changed")
+			}
+		}
+		state, kind = "succeeded", "work.attempt.read_complete"
+	}
+	changed := tx.Model(&workExecutionAttempt{}).Where("id = ? AND revision = ? AND state = ?", prior.ID, prior.Revision, prior.State).Updates(map[string]any{"state": state, "closure_state": "reconciled", "revision": prior.Revision + 1})
+	if changed.Error != nil {
+		return changed.Error
+	}
+	if changed.RowsAffected != 1 {
+		return errWorkConflict
+	}
+	proof := map[string]any{"attemptId": prior.ID, "replacementAttemptId": replacement, "operationCount": len(operations), "rootTurnId": root}
+	return securityActionRecord(tx, task.StoreID, task.RecoveryEpoch, "runtime", "continue-attempt:"+prior.ID, kind, prior.ID, js(proof), prior.Revision, prior.Revision+1, proof, time.Now().UTC(), contract.ProjectID)
 }
 
 func workUnresolvedTx(tx *gorm.DB, goalID, stepID string) (bool, error) {

@@ -1,5 +1,7 @@
 /** Translate known internal failures without rewriting user/assistant prose. */
 export function displayAiError(message: string): string {
+	if(message.trim()==='superagent: task model round limit reached')return '本任务已达到模型调用轮数上限，已暂停。原任务和操作记录保留。';
+	if(isSuperBudgetPause(message))return '本任务的剩余执行额度不足，已暂停，尚未取得新的检查结果。原任务和操作记录保留；重复询问不会恢复额度。';
 	if (message.startsWith("只读检查仍有缺口：") && message.includes("pilot_read_recovery")) return "本步骤仍有未完成的只读检查，尚未通过验收。已保留取得的证据，可继续检查或结束任务。";
 	if (message.includes("invalid or duplicate model tool call")) return "模型返回的工具调用格式无效，本轮未完成。已有调查结果和消息已保留，可在原会话继续，或切换模型后重试。";
 	if (message.includes("model stream idle timeout")) return message.includes("context compaction:") ? "上下文整理未完成：模型长时间没有返回新内容。历史记录已保留，可以重试整理或切换模型后继续。" : "模型长时间没有返回新内容，已停止等待。已收到的回复和操作记录已保留，可以继续发送消息或重试。";
@@ -29,9 +31,14 @@ export function isContextCompactionFailure(message:string):boolean {
  return message.trimStart().startsWith('context compaction:');
 }
 
+export function isSuperBudgetPause(message:string):boolean {
+ return ["superagent: original task's cumulative model budget exhausted",'superagent: task model round limit reached'].includes(message.trim());
+}
+
 /** Routine lifecycle notices belong to turn status and execution records. */
 export function isConversationInterruption(message: string): boolean {
  const text=message.trim();
+ if(isSuperBudgetPause(text))return true;
  return ["context canceled","已停止本轮","本次执行已停止，已有证据与操作记录保留。",
   "本步骤仍有未完成的只读检查，尚未通过验收。已保留取得的证据，可继续检查或结束任务。"].includes(text)
   || text.startsWith("只读检查仍有缺口：")&&text.includes("pilot_read_recovery");

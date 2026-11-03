@@ -100,6 +100,24 @@ func runFixedReadPermit(t *testing.T, e *Engine, c Config, call Call) (any, erro
 	return result, readErr
 }
 
+func TestSecurityInspectHostRequiresRegisteredSSHOSAndRejectsRawInputs(t *testing.T) {
+	as := Asset{ID: "resource", Kind: "ssh", SSH: &SSH{Host: "127.0.0.1", Port: 1, Username: "fixture"}}
+	e, c := fixedReadManagedFixture(t, as, security.Rule{Capability: "command.diagnostics", Effect: security.EffectAllow})
+	a := map[string]any{"asset_ref": assetAlias(as.ID), "runtime": "ssh"}
+	if prepared, _, err := e.PrepareCatalogOperation(t.Context(), "case", c, Call{ID: "missing-os", Name: "inspect_host"}, a); err == nil || prepared != nil {
+		t.Fatal("unconfigured SSH target silently fell back to raw terminal execution")
+	}
+	if _, err := e.PutSecurityCommandTarget(t.Context(), SecurityCommandTargetAction{SecurityPolicyAction: SecurityPolicyAction{ActorID: "user", ActionID: "linux-target", ProjectID: "project"}, ResourceID: as.ID, OS: "linux", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"command", "terminal_id", "profile_arguments", "environment"} {
+		injected := map[string]any{"asset_ref": assetAlias(as.ID), "runtime": "ssh", key: "untrusted"}
+		if prepared, _, err := e.PrepareCatalogOperation(t.Context(), "case", c, Call{ID: "reject-" + key, Name: "inspect_host"}, injected); err == nil || prepared != nil {
+			t.Fatal("fixed inspection accepted arbitrary input", key)
+		}
+	}
+}
+
 func TestSecurityFixedRedisProbeOriginalPermitAndNoArbitraryCommands(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

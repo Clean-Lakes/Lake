@@ -42,6 +42,12 @@ func (b *Server) startSuperWorkers(domain ai.SuperProject) {
 	if b.Engine.ApplySuperStops(b.Context, domain.ProjectID) != nil {
 		return
 	}
+	if inputs, err := b.Engine.SuperInputWorkers(b.Context, domain.ProjectID); err == nil {
+		for _, worker := range inputs {
+			_ = b.Engine.DeliverSuperFollowups(b.Context, domain.ProjectID, worker)
+			_ = b.Engine.QueueSuperFollowup(b.Context, domain.ProjectID, worker)
+		}
+	}
 	queued, err := b.Engine.SuperQueuedWorkers(b.Context, domain.ProjectID)
 	if err != nil {
 		return
@@ -70,7 +76,7 @@ func (b *Server) startSuperWorkers(domain ai.SuperProject) {
 				title = goal.Title
 			}
 			b.ensureSuperWorkerSession(domain.ProjectID, task.SessionID, title)
-			b.configure(task.SessionID, b.superWorkerTargetOptions(domain.ProjectID, task.WorkerID))
+			b.configure(task.SessionID, b.superWorkerTargetOptions(domain.ProjectID, task.WorkerID, task.SessionID))
 			c, err := b.Engine.ConfigForSession(task.SessionID)
 			if err == nil {
 				err = b.Engine.ConfigureTaskWorker(b.Context, domain.ProjectID, task.WorkerID, c)
@@ -79,6 +85,13 @@ func (b *Server) startSuperWorkers(domain ai.SuperProject) {
 				err = b.Engine.ResumeTaskWorker(b.Context, domain.ProjectID, task.WorkerID)
 			}
 			if errors.Is(err, ai.ErrSuperWorkerQueued) {
+				return
+			}
+			if errors.Is(err, ai.ErrSuperBudget) {
+				// The original provider refusal atomically paused the task and
+				// queued its attention report. Do not repeat its engine error as
+				// a system message or publish pre-tool narration as a result.
+				b.deliverPendingSuperReports(domain)
 				return
 			}
 			if err != nil && b.Context.Err() == nil {
@@ -90,21 +103,23 @@ func (b *Server) startSuperWorkers(domain ai.SuperProject) {
 				return
 			}
 			payload := "专员已保留当前工作进度。"
+			sourceCardID := ""
 			if err == nil && (view.State == "waiting_external" || view.State == "running" || view.State == "queued") {
 				return
 			}
 			if err != nil {
 				payload = "专员本次执行中断，需核对原记录后继续。"
 			}
-			if snapshot, snapshotErr := b.Engine.Snapshot(task.SessionID); snapshotErr == nil {
+			if snapshot, snapshotErr := b.Engine.Snapshot(task.SessionID); err == nil && snapshotErr == nil {
 				for i := len(snapshot.Cards) - 1; i >= 0; i-- {
 					if card := snapshot.Cards[i]; card.Type == "message" && card.Content != "" {
 						payload = card.Content
+						sourceCardID = card.ID
 						break
 					}
 				}
 			}
-			report, reportErr := b.Engine.QueuePilotReport(b.Context, domain.ProjectID, task.SessionID, task.TaskID, domain.RouterSessionID, task.TaskID, "attention", payload, view.Revision)
+			report, reportErr := b.Engine.QueuePilotReport(b.Context, domain.ProjectID, task.SessionID, task.TaskID, domain.RouterSessionID, task.TaskID, "attention", payload, view.Revision, sourceCardID)
 			if reportErr == nil {
 				_ = b.DeliverPilotReport(b.Context, domain.ProjectID, domain.RouterSessionID, report.ID)
 			}
@@ -113,32 +128,17 @@ func (b *Server) startSuperWorkers(domain ai.SuperProject) {
 }
 
 func (b *Server) runSuperTargetedInput(ctx context.Context, domain ai.SuperProject, id, messageID string, refs, files []Object, ignoreMemory bool) {
-	task, err := b.Engine.SuperWorkerForSession(ctx, domain.ProjectID, id)
-	var event ai.SuperEvent
-	if err == nil {
-		event, err = b.ReceiveUserEvent(ctx, id, messageID)
-	}
+	event, err := b.ReceiveUserEvent(ctx, id, messageID)
 	if err == nil {
 		err = b.recordSuperInput(event, refs, files, ignoreMemory)
-	}
-	if err == nil && task.Protocol == "workflow" {
-		b.startSuperRouter(domain)
-		return
-	}
-	if err == nil {
-		_, err = b.Engine.ApplySuperDecision(ctx, b.superUserSource(domain.ProjectID, domain.RouterSessionID), ai.SuperDecision{EventID: event.ID, PartKey: "targeted-followup", Action: "followup", TaskID: task.TaskID, Quote: event.Payload, Reason: "Authenticated user explicitly addressed this task's specialist"})
-	}
-	if err == nil {
-		err = b.Engine.FinishSuperUserRouting(ctx, b.superUserSource(domain.ProjectID, domain.RouterSessionID), event.ID)
 	}
 	if err != nil {
 		b.Store.AddMessage(id, "system", err.Error(), nil)
 		b.Store.Status(id, "failed")
 		return
 	}
-	_ = b.Engine.DeliverSuperFollowups(ctx, domain.ProjectID, task.WorkerID)
-	_ = b.Engine.QueueSuperFollowup(ctx, domain.ProjectID, task.WorkerID)
-	b.startSuperWorkers(domain)
+	b.Store.Status(id, "completed")
+	b.startSuperRouter(domain)
 }
 
 func (b *Server) acceptSuperWorkerMessage(id string, message humanMessage, queuedID string) Object {
@@ -178,28 +178,25 @@ func (b *Server) acceptSuperWorkerMessage(id string, message humanMessage, queue
 	}).(Object)
 	messageID := stringOf(result["id"])
 	legacy := b.Store.superSessionKind(id) == "legacy"
-	var task ai.SuperRouteResult
-	if !legacy {
-		task, err = b.Engine.SuperWorkerForSession(b.Context, project, id)
-		aiFailure(err)
-	}
 	event, err := b.ReceiveUserEvent(b.Context, id, messageID)
 	aiFailure(err)
-	aiFailure(b.recordSuperInput(event, message.References, message.Files, message.IgnoreProjectMemory || legacy || task.Protocol == "workflow"))
-	if legacy || task.Protocol == "workflow" {
+	aiFailure(b.recordSuperInput(event, message.References, message.Files, message.IgnoreProjectMemory || legacy))
+	if legacy {
 		result["pilotSessionId"] = domain.RouterSessionID
-		return result
+	} else if b.Store.superSessionKind(id) == "worker" {
+		channel, err := b.Engine.SpecialistChannelForWorker(b.Context, project, id)
+		aiFailure(err)
+		b.reconcileSpecialistChannels(b.Context, project)
+		result["pilotSessionId"] = channel.SessionID
 	}
-	_, err = b.Engine.ApplySuperDecision(b.Context, b.superUserSource(project, domain.RouterSessionID), ai.SuperDecision{EventID: event.ID, PartKey: "targeted-followup", Action: "followup", TaskID: task.TaskID, Quote: event.Payload, Reason: "Authenticated user explicitly addressed this specialist"})
-	aiFailure(err)
-	aiFailure(b.Engine.FinishSuperUserRouting(b.Context, b.superUserSource(project, domain.RouterSessionID), event.ID))
-	_ = b.Engine.DeliverSuperFollowups(b.Context, project, task.WorkerID)
-	_ = b.Engine.QueueSuperFollowup(b.Context, project, task.WorkerID)
-	b.startSuperWorkers(domain)
+	// Admission holds messageMu. Start the serialized Router after it releases;
+	// the host shutdown gate already covers this registered dispatch worker.
+	b.workers.Add(1)
+	go func() { defer b.workers.Done(); b.startSuperRouter(domain) }()
 	return result
 }
 
-func (b *Server) superWorkerTargetOptions(project, workerID string) Object {
+func (b *Server) superWorkerTargetOptions(project, workerID string, workerSessions ...string) Object {
 	event, err := b.Engine.SuperWorkerOrigin(b.Context, project, workerID)
 	aiFailure(err)
 	_, err = b.resolveSuperInput(b.Context, event)
@@ -215,6 +212,18 @@ func (b *Server) superWorkerTargetOptions(project, workerID string) Object {
 	})
 	current := b.sessionOptions(event.ThreadRef)
 	opts := Object{}
+	// Channel-local options seed only a new task. Later channel edits never
+	// overwrite an existing task's independent configuration.
+	if len(workerSessions) == 1 {
+		existing := b.Store.Options(workerSessions[0])
+		for _, key := range []string{"conversationMode", "maxSteps", "reasoningEffort", "reasoningModelId", "contextBudgetMode", "contextWindow", "maxOutput"} {
+			if _, set := existing[key]; !set {
+				if value, ok := host.TargetOptions[key]; ok {
+					opts[key] = value
+				}
+			}
+		}
+	}
 	for _, key := range []string{"runtime", "asset_ref", "terminal_id", "terminal_generation", "container_id"} {
 		if value, ok := host.TargetOptions[key]; ok {
 			opts[key] = value

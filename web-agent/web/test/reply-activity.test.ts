@@ -13,12 +13,15 @@ const snapshot = (status = 'running'): SessionSnapshot => ({
 const render = (s: SessionSnapshot, props = {}) => renderToStaticMarkup(createElement(AITranscript, {snapshot: s, ...props}));
 const hasActivity = (html: string) => html.includes('class="reply-activity"');
 
-test('normal replies and model waiting keep status metadata without a blue loading glyph',()=>{
+test('plain streamed replies have no extra activity row while model waiting retains its typing bubble',()=>{
  const s=snapshot();
  assert.equal(hasActivity(render(s)),false);
  assert.ok(render(s).includes('正在核对测试数据。'));
- assert.equal((render(s).match(/aria-label="执行状态"/g)??[]).length,1);
+ assert.equal((render(s).match(/aria-label="执行状态"/g)??[]).length,0);
+ assert.ok(!render(s).includes('正在生成回复')&&!render(s).includes('reply-duration-spinner'));
  s.ai!.cards=[];assert.equal(hasActivity(render(s)),false);
+ assert.equal((render(s).match(/aria-label="执行状态"/g)??[]).length,1);
+ assert.ok(render(s).includes('turn-thinking-dots'));
  for(const status of ['completed','failed','cancelled','waiting_approval'])assert.equal(hasActivity(render(snapshot(status))),false);
 });
 

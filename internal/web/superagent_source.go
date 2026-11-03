@@ -26,7 +26,7 @@ func (b *Server) recordSuperInput(event ai.SuperEvent, refs, files []Object, ign
 	input := superHostInput{References: refs, Files: files, IgnoreMemory: ignoreMemory}
 	options := b.sessionOptions(event.ThreadRef)
 	input.TargetOptions = Object{}
-	for _, key := range []string{"runtime", "asset_ref", "terminal_id", "terminal_generation", "container_id", "conversationMode", "maxSteps", "silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "blockUnreferencedAssets", "denyLocalExecution"} {
+	for _, key := range []string{"runtime", "asset_ref", "terminal_id", "terminal_generation", "container_id", "conversationMode", "maxSteps", "reasoningEffort", "reasoningModelId", "contextBudgetMode", "contextWindow", "maxOutput", "silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "blockUnreferencedAssets", "denyLocalExecution"} {
 		if value, ok := options[key]; ok {
 			input.TargetOptions[key] = value
 		}
@@ -72,6 +72,9 @@ func (b *Server) recordSuperInput(event ai.SuperEvent, refs, files []Object, ign
 	if !active {
 		return errors.New("superagent: source domain is not active")
 	}
+	if err := b.bindSuperRoleSource(event); err != nil {
+		return err
+	}
 	if err = b.Engine.ConfirmSuperEventContext(b.Context, b.superUserSource(event.ProjectID, domain.RouterSessionID), event.ID, requestHash); err != nil {
 		return err
 	}
@@ -79,6 +82,30 @@ func (b *Server) recordSuperInput(event ai.SuperEvent, refs, files []Object, ign
 		b.Store.exec("UPDATE superagentInputs SET ready=1 WHERE eventId=? AND requestHash=?", event.ID, requestHash)
 		return nil
 	})
+	return nil
+}
+
+func (b *Server) bindSuperRoleSource(event ai.SuperEvent) error {
+	if b.Store.superSessionKind(event.ThreadRef) == "role" {
+		if err := b.Engine.BindSpecialistSource(b.Context, event.ProjectID, event.ThreadRef, event.ID, ""); err != nil {
+			return err
+		}
+	}
+	if b.Store.superSessionKind(event.ThreadRef) == "worker" {
+		worker, err := b.Engine.SuperWorkerForSession(b.Context, event.ProjectID, event.ThreadRef)
+		if err != nil {
+			return err
+		}
+		if worker.Protocol != "workflow" {
+			channel, err := b.Engine.SpecialistChannelForWorker(b.Context, event.ProjectID, event.ThreadRef)
+			if err != nil {
+				return err
+			}
+			if err := b.Engine.BindSpecialistSource(b.Context, event.ProjectID, channel.SessionID, event.ID, worker.TaskID); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -271,6 +298,9 @@ func (b *Server) reconcileSuperSourceContexts(domain ai.SuperProject) {
 		if err != nil || event.ID != row["eventId"] {
 			continue
 		}
+		if b.bindSuperRoleSource(event) != nil {
+			continue
+		}
 		if b.Engine.ConfirmSuperEventContext(b.Context, b.superUserSource(domain.ProjectID, domain.RouterSessionID), event.ID, stringOf(row["requestHash"])) != nil {
 			continue
 		}
@@ -392,8 +422,19 @@ func (b *Server) DeliverPilotReport(ctx context.Context, project, routerID, repo
 		return nil
 	}
 	if report.ChannelRef != routerID {
-		return errors.New("superagent: report channel mismatch")
+		channels := b.reconcileSpecialistChannels(ctx, project)
+		found := false
+		for _, channel := range channels {
+			if channel.SessionID == report.ChannelRef {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return errors.New("superagent: report channel mismatch")
+		}
 	}
+	destination := report.ChannelRef
 	var payload struct {
 		Task ai.SuperTaskView `json:"task"`
 		Text string           `json:"text"`
@@ -408,15 +449,15 @@ func (b *Server) DeliverPilotReport(ctx context.Context, project, routerID, repo
 		text = payload.Text
 	}
 	b.Store.update(func() any {
-		b.Store.session(routerID)
+		b.Store.session(destination)
 		if prior := b.Store.row("SELECT sessionId,text FROM messages WHERE id=?", report.ID); prior != nil {
-			if prior["sessionId"] != routerID || prior["text"] != text {
+			if prior["sessionId"] != destination || prior["text"] != text {
 				fail(409, "回复回执内容冲突")
 			}
 			return nil
 		}
-		b.Store.exec("INSERT INTO messages(id,sessionId,role,text,createdAt) VALUES(?,?,?,?,?)", report.ID, routerID, "assistant", text, now())
-		b.Store.event(routerID, "message")
+		b.Store.exec("INSERT INTO messages(id,sessionId,role,text,createdAt) VALUES(?,?,?,?,?)", report.ID, destination, "assistant", text, now())
+		b.Store.event(destination, "message")
 		return nil
 	})
 	return b.Engine.AcknowledgePilotDelivery(ctx, project, report.ID, "host-message:"+report.ID)

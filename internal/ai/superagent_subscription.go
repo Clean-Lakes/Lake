@@ -50,6 +50,13 @@ func (e *Engine) SubscribeSuperWorker(ctx context.Context, projectID string, in 
 			return errSuperBinding
 		}
 		if in.Mode == "followup" {
+			var channels int64
+			if err := tx.Model(&superChannelRow{}).Where("project_id = ? AND host_session_id = ?", projectID, in.ThreadRef).Count(&channels).Error; err != nil {
+				return err
+			}
+			if channels > 0 {
+				return errors.New("superagent: shared specialist channel has no single task owner")
+			}
 			var domain superProjectRow
 			lookup := tx.First(&domain, "project_id = ?", projectID).Error
 			if lookup == nil && domain.RouterSessionID == in.ThreadRef {
@@ -90,6 +97,13 @@ func (e *Engine) RouteSubscribedEvent(ctx context.Context, projectID, eventID st
 		var event superEventRow
 		if err := tx.First(&event, "id = ? AND project_id = ?", eventID, projectID).Error; err != nil {
 			return err
+		}
+		channel, err := superChannelForEventTx(tx, event)
+		if err != nil {
+			return err
+		}
+		if channel != nil {
+			return nil
 		}
 		var source superSourceRow
 		if err := tx.First(&source, "id = ? AND project_id = ? AND revision = ? AND enabled = ?", event.SourceID, projectID, event.SourceRevision, true).Error; err != nil {

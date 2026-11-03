@@ -205,6 +205,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		return nil, e
 	}
 	server.Engine.SecurityRuntime = runtimeHome
+	server.Engine.HostContext = server.Context
 	if err = server.Engine.SetSecurityEntrySource("web"); err != nil {
 		server.Close()
 		return nil, err
@@ -823,6 +824,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(parts) == 3 && method == "DELETE" {
+			if b.Store.superSessionKind(id) == "role" {
+				fail(409, "长期专员入口不能作为执行会话删除")
+			}
 			b.messageMu.Lock()
 			defer b.messageMu.Unlock()
 			if b.runningMessages[id] || b.Engine.SessionReserved(id) {
@@ -854,9 +858,17 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(parts) == 4 {
 			switch parts[3] {
+			case "channel":
+				b.roleChannelRoute(w, r, id)
+				return
 			case "snapshot":
 				if method == "GET" {
 					snap := b.sessionSnapshot(id)
+					if b.Store.superSessionKind(id) == "role" {
+						snap["ai"] = ai.View{Session: id, Status: "idle", Cards: []ai.Card{}}
+						reply(w, 200, snap)
+						return
+					}
 					view, e := b.Engine.Snapshot(id)
 					aiFailure(e)
 					snap["ai"] = b.contextView(view)
@@ -974,6 +986,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if method == "POST" {
+				if b.Store.superSessionKind(id) == "role" && op != "configure" && op != "mode" {
+					fail(409, "请打开对应任务的执行详情后操作，专员频道本身不执行任务")
+				}
 				if op == "mode" {
 					reply(w, 200, b.setConversationMode(id, body(w, r, 16384)))
 					return

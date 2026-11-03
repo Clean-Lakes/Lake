@@ -28,7 +28,35 @@ func (b *Server) superagentRoute(w http.ResponseWriter, r *http.Request) bool {
 		for _, worker := range workers {
 			b.ensureSuperWorkerSession(project, worker.SessionID, worker.Task.Title)
 		}
-		reply(w, 200, Object{"active": active, "project": domain, "workers": workers})
+		channels := b.reconcileSpecialistChannels(r.Context(), project)
+		attention := map[string]bool{}
+		waiting, err := b.Engine.SuperInteractionSessions(r.Context(), project)
+		aiFailure(err)
+		b.Store.read(func() any {
+			for _, row := range b.Store.rows("SELECT id FROM sessions WHERE projectId=? AND status IN ('waiting_approval','investigating')", project) {
+				waiting = append(waiting, stringOf(row["id"]))
+			}
+			return nil
+		})
+		seen := map[string]bool{}
+		for _, session := range waiting {
+			if seen[session] {
+				continue
+			}
+			seen[session] = true
+			ch, err := b.Engine.SpecialistChannelForWorker(r.Context(), project, session)
+			if err != nil {
+				continue
+			}
+			view, err := b.Engine.Snapshot(session)
+			if err == nil && (view.Question != nil || view.Pending != nil || b.hostKeyPrompt(session) != nil) {
+				attention[ch.ID] = true
+			}
+		}
+		for i := range channels {
+			channels[i].NeedsConfirmation = attention[channels[i].ID]
+		}
+		reply(w, 200, Object{"active": active, "project": domain, "workers": workers, "channels": channels})
 	default:
 		fail(405, "Method not allowed")
 	}

@@ -165,6 +165,13 @@ func (e *Engine) AcquireWorkerSlot(ctx context.Context, projectID, workerID stri
 		if err = decodeWorkGoal(row, &goal); err != nil {
 			return err
 		}
+		paused, err := superBudgetPausedTx(tx, goal.ID, goal.RoundLimit)
+		if err != nil {
+			return err
+		}
+		if paused {
+			return ErrSuperWorkerQueued
+		}
 		if workTerminal(goal.Status) || !goal.DeadlineAt.After(time.Now().UTC()) || goal.ModelRounds >= goal.RoundLimit {
 			return errors.New("superagent: task deadline, state or budget prevents dispatch")
 		}

@@ -3,17 +3,53 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Clean-Lakes/Lake/internal/security"
 )
 
+func TestSuperWorkerResourceIndexAndMissingTargetCannotConfirmScope(t *testing.T) {
+	c := Config{superRole: "worker", Permissions: &Permissions{BlockUnreferencedAssets: true}, ReferencedAssets: []string{"visible"}, Assets: []Asset{
+		{ID: "visible", Name: "Allowed host", Kind: "ssh", SSH: &SSH{Host: "hidden-address", IdentityFile: "never-in-context"}},
+		{ID: "foreign", Name: "Hidden host", Kind: "ssh"},
+	}}
+	index := superWorkerResourceIndex(c)
+	if !strings.Contains(index, assetAlias("visible")) || !strings.Contains(index, "Allowed host") || strings.Contains(index, "Hidden host") || strings.Contains(index, "hidden-address") || strings.Contains(index, "never-in-context") {
+		t.Fatal("resource index lost visibility or exposed connection metadata")
+	}
+	e := &Engine{}
+	_, err := e.invokeWorkTool(t.Context(), nil, c, Call{Name: "work_begin"}, map[string]any{"title": "Inspect", "items": []any{}})
+	if err == nil || !strings.Contains(err.Error(), "explicit asset_refs") {
+		t.Fatal("missing target entered plan confirmation", err)
+	}
+	tools := WorkerCatalog(workTools())
+	for _, tool := range tools {
+		if tool.Name == "work_begin" && !strings.Contains(js(tool.Parameters["required"]), "asset_refs") {
+			t.Fatal("Worker schema omitted explicit target selection")
+		}
+	}
+	for _, tool := range workTools() {
+		if tool.Name == "work_begin" && strings.Contains(js(tool.Parameters["required"]), "asset_refs") {
+			t.Fatal("Worker schema mutated ordinary tool contract")
+		}
+	}
+	large := Config{}
+	for i := 0; i < 300; i++ {
+		large.Assets = append(large.Assets, Asset{ID: js(i), Name: strings.Repeat("界", 200), Kind: "ssh"})
+	}
+	bounded := superWorkerResourceIndex(large)
+	if len(bounded) > 34<<10 || !strings.Contains(bounded, `"truncated":true`) {
+		t.Fatal("resource context was not byte bounded")
+	}
+}
+
 func TestSuperWorkerUsesOriginalGoalAndHostConfirmation(t *testing.T) {
 	ctx := context.Background()
 	m, closeModel := fakeModel(t, func(n int, input map[string]any) any {
 		if n == 1 {
-			return response("", Call{ID: "plan", Name: "work_begin", Arguments: `{"title":"Investigate orders","items":[{"title":"Review order evidence"}]}`})
+			return response("", Call{ID: "plan", Name: "work_begin", Arguments: `{"asset_refs":[],"title":"Investigate orders","items":[{"title":"Review order evidence"}]}`})
 		}
 		return response("Need actual evidence before acceptance.")
 	})

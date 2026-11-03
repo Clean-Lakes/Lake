@@ -17,6 +17,7 @@
  .composer-input,
  .ai-role-user:not(.has-message-images),
  .ai-role-user.has-message-images > .user-message-text,
+ .turn-thinking-bubble,
  .markdown-code-block,
  .composer-mentions.mention-menu,
  .composer-mentions .mention-item
@@ -28,14 +29,14 @@
 }
 
 /* Compact desktop navigation scales the window curve without clipping its corners. */
-:root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row) {
+:root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row,.pilot-workspace .nav-row) {
  --window-corner-radius:18px;
  --window-corner-stroke-image:url('/window-corner-stroke-compact.svg');
  --window-corner-stroke-slice:18;
 }
 @media(pointer:coarse) {
- :root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row) {
-  min-height:44px;
+ :root .sidebar.workspace-navigation :is(.navigation-search,.session-nav-row,.resource-row,.resource-folder-toggle,.resource-tree-row,.resource-folder-row,.resource-nav-row,.pilot-workspace .nav-row) {
+  &:not(.pilot-worker-row) { min-height:44px; }
   --window-corner-radius:var(--radius-window);
   --window-corner-stroke-image:url('/window-corner-stroke.svg');
   --window-corner-stroke-slice:22;
@@ -57,6 +58,7 @@
    masks. Background and border remain inherited so hover, focus and theme updates
    are native CSS changes; no observer or per-frame JavaScript is needed. */
 :root.lake-corner-fallback :is(
+ .sidebar.workspace-navigation .pilot-workspace .nav-row,
  .sidebar.workspace-navigation .project-switcher,
  .sidebar.workspace-navigation .navigation-search,
  .sidebar.workspace-navigation .session-nav-row,
@@ -73,6 +75,7 @@
  .composer-input,
  .ai-role-user:not(.has-message-images),
  .ai-role-user.has-message-images > .user-message-text,
+ .turn-thinking-bubble,
  .markdown-code-block,
  .composer-mentions.mention-menu,
  .composer-mentions .mention-item,
@@ -119,6 +122,7 @@
  .composer-mentions.mention-menu
 ) { --window-corner-inset:-1px; }
 :root.lake-corner-fallback :is(
+ .sidebar.workspace-navigation .pilot-workspace .nav-row,
  .sidebar.workspace-navigation .project-switcher,
  .sidebar.workspace-navigation .navigation-search,
  .sidebar.workspace-navigation .session-nav-row,
@@ -132,6 +136,7 @@
  .composer-input,
  .ai-role-user:not(.has-message-images),
  .ai-role-user.has-message-images > .user-message-text,
+ .turn-thinking-bubble,
  .markdown-code-block,
  .composer-mentions .mention-item,
  .session-state-badge,

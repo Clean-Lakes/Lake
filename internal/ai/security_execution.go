@@ -49,6 +49,20 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (a
 		if !managed {
 			return nil, &ToolNotExecutedError{Err: errors.New("superagent: Worker requires current Security policy")}
 		}
+		if call.Name == "list_referenced_task_evidence" {
+			a, err := args(call)
+			if err != nil {
+				return nil, err
+			}
+			for _, tool := range referencedTaskEvidenceTools() {
+				if tool.Name == call.Name {
+					if err := validateTool(tool, a); err != nil {
+						return nil, err
+					}
+				}
+			}
+			return e.ListReferencedTaskEvidence(ctx, ownSessionID(s), str(a["task_id"]), str(a["cursor"]), num(a["limit"], 20))
+		}
 	}
 	configured, err := e.securityPolicyConfigured(configSecurityProject(c))
 	if err != nil {
@@ -307,6 +321,14 @@ func (e *Engine) invokeManaged(ctx context.Context, s *session, c Config, call C
 		return e.ExecuteSecurityMCP(ctx, call.Name, a)
 	}
 	switch call.Name {
+	case "read_referenced_task_evidence":
+		// This is an operation of the comparison attempt, not a fresh host
+		// observation. Its original result retains the source identity.
+		page, readErr := e.ReadReferencedTaskEvidence(ctx, sessionID, str(a["task_id"]), str(a["evidence_id"]), str(a["reference_id"]), num(a["offset"], 0), num(a["limit"], 2048))
+		if readErr != nil {
+			return nil, &ToolNotExecutedError{Err: readErr}
+		}
+		return page, nil
 	case "pilot_offer_directions":
 		return e.offerPilotDirections(ctx, s, c, call)
 	case "pilot_read_recovery":

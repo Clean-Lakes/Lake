@@ -31,11 +31,23 @@ func (e *Engine) finalizeSuperRouter(ctx context.Context, sessionID string, run 
 	}
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		ids := []string{}
+		admitted := []SuperEvent{}
 		for _, event := range events {
+			var current superEventRow
+			if err := tx.First(&current, "id = ? AND project_id = ?", event.ID, run.projectID).Error; err != nil {
+				return err
+			}
+			if current.Disposition == "cancelled" {
+				continue
+			}
 			if err := finishSuperRoutingTx(tx, run.bindings[event.ID], event.ID); err != nil {
 				return err
 			}
 			ids = append(ids, event.ID)
+			admitted = append(admitted, event)
+		}
+		if len(ids) == 0 {
+			return nil
 		}
 		var domain superProjectRow
 		err := tx.First(&domain, "project_id = ? AND router_session_id = ?", run.projectID, sessionID).Error
@@ -46,6 +58,18 @@ func (e *Engine) finalizeSuperRouter(ctx context.Context, sessionID string, run 
 			return err
 		}
 		id := hash(js([]any{"router-reply", ids}))
+		destination := sessionID
+		var origin superEventRow
+		if err := tx.First(&origin, "id = ? AND project_id = ?", admitted[0].ID, run.projectID).Error; err != nil {
+			return err
+		}
+		channel, err := superChannelForEventTx(tx, origin)
+		if err != nil {
+			return err
+		}
+		if channel != nil {
+			destination = channel.HostSessionID
+		}
 		payload := js(map[string]any{"text": text})
 		var prior superOutputRow
 		if err := tx.First(&prior, "id = ?", id).Error; err == nil {
@@ -53,7 +77,7 @@ func (e *Engine) finalizeSuperRouter(ctx context.Context, sessionID string, run 
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		return tx.Create(&superOutputRow{ID: id, ProjectID: run.projectID, ChannelRef: sessionID, SourceMessageID: events[len(events)-1].SourceEventID, Kind: "router_reply", Payload: payload, RequestHash: hash(payload), ReportRevision: 1, State: "pending", CreatedAt: time.Now().UTC()}).Error
+		return tx.Create(&superOutputRow{ID: id, ProjectID: run.projectID, ChannelRef: destination, SourceMessageID: admitted[len(admitted)-1].SourceEventID, Kind: "router_reply", Payload: payload, RequestHash: hash(payload), ReportRevision: 1, State: "pending", CreatedAt: time.Now().UTC()}).Error
 	})
 }
 

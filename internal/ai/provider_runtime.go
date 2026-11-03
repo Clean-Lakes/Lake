@@ -93,13 +93,15 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 		}
 		e.worker.mu.Unlock()
 		charge := estimated + model.MaxOutput
-		if e.worker.sreTaskID != "" {
+		_, superTask := ctx.Value(superAssignmentContextKey{}).(SuperAssignmentToken)
+		legacySREBudget := w.sreTaskID != "" && !superTask
+		if legacySREBudget {
 			if err := e.reserveSREBudget(w.parentID, w.sreTaskID, charge); err != nil {
 				return modelResult{}, err
 			}
 		}
 		if err := reserveAgentBudget(ctx, e.worker, charge); err != nil {
-			if w.sreTaskID != "" {
+			if legacySREBudget {
 				e.settleSREBudget(w.parentID, w.sreTaskID, charge, Usage{}, false)
 			}
 			return modelResult{}, err
@@ -112,14 +114,14 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 		defer cancel()
 		if ctx.Err() != nil {
 			settleAgentBudget(e.worker, charge, Usage{}, false)
-			if w.sreTaskID != "" {
+			if legacySREBudget {
 				e.settleSREBudget(w.parentID, w.sreTaskID, charge, Usage{}, false)
 			}
 			return modelResult{}, ctx.Err()
 		}
 		if err := e.checkSecurityProviderContext(ctx); err != nil {
 			settleAgentBudget(e.worker, charge, Usage{}, false)
-			if w.sreTaskID != "" {
+			if legacySREBudget {
 				e.settleSREBudget(w.parentID, w.sreTaskID, charge, Usage{}, false)
 			}
 			return modelResult{}, err
@@ -130,7 +132,7 @@ func (e *Engine) stream(ctx context.Context, model Model, history []Message, too
 			budgetUsage = Usage{}
 		}
 		settleAgentBudget(e.worker, charge, budgetUsage, true)
-		if w.sreTaskID != "" {
+		if legacySREBudget {
 			e.settleSREBudget(w.parentID, w.sreTaskID, charge, budgetUsage, true)
 		}
 		if result.Usage.InputKnown {

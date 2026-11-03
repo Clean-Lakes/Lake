@@ -43,6 +43,9 @@ func currentWorkOperationResourcesTx(tx *gorm.DB, op nativeOperation) (bool, err
 			return false, nil
 		}
 	}
+	if op.Tool == "read_referenced_task_evidence" {
+		return currentReferencedTaskReadTx(tx, op)
+	}
 	return true, nil
 }
 

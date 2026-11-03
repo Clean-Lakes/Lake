@@ -99,6 +99,8 @@ export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"model
 
 export const api = {
 	superWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorkspace>(`/api/projects/${encodeURIComponent(project)}/superagent`,{signal}),
+	specialistChannel:(session:string,cursor='',signal?:AbortSignal)=>request<import('../../shared/contracts').SpecialistChannelPage>(`/api/sessions/${encodeURIComponent(session)}/channel${cursor?`?cursor=${encodeURIComponent(cursor)}`:''}`,{signal}),
+	stopSpecialistChannel:(session:string)=>request<{stopped:boolean}>(`/api/sessions/${encodeURIComponent(session)}/channel`,{method:'POST',body:JSON.stringify({action:'stop'})}),
 	ensureSuperWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperProject>(`/api/projects/${encodeURIComponent(project)}/superagent`,{method:'POST',body:'{}',signal}),
  moveSessionNavigation:(project:string,data:{sessionId:string;pinned:boolean;beforeId:string|null;revision:number})=>post<WorkSession>(`/api/projects/${encodeURIComponent(project)}/session-navigation`,data),
  plans:(session:string)=>request<{plans:import('../../shared/contracts').ProposedPlan[]}>(`/api/sessions/${encodeURIComponent(session)}/ai/plans`),
@@ -141,7 +143,6 @@ export const api = {
   navigationTrash: () => request<{items:NavigationTrashItem[]}>("/api/navigation-trash"),
   deleteNavigation: (kind:"project" | "resource",id:string) => post<{items:NavigationTrashItem[]}>("/api/navigation-delete",{kind,id}),
   restoreNavigation: (kind:NavigationTrashItem["kind"],id:string) => post<{items:NavigationTrashItem[]}>("/api/navigation-trash",{kind,id}),
-  completeDraft: (session:string,text:string,modelId:string|undefined,signal:AbortSignal) => request<{suffix:string;modelId?:string}>(`/api/sessions/${encodeURIComponent(session)}/completion`,{method:"POST",body:JSON.stringify({text,modelId}),signal}),
   catalog: (signal?: AbortSignal) => request<Catalog>("/api/catalog", { signal }),
   modelCapacity: () => request<{modelId?: string; limit: number; source?: string}>("/api/settings/model/capacity"),
   providers: () => request<ProviderCatalog>("/api/settings/providers"),

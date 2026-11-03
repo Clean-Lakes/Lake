@@ -1,0 +1,88 @@
+{
+  "date": "2026-11-03",
+  "userRequest": "Remove the per-task cumulative token ceiling",
+  "testedSHA": "947e2f1171577a11b548557323e29dab9d2c1804",
+  "fullGo": {
+    "testsAndSubtestsPassed": 1954,
+    "packagesPassed": 11,
+    "exitCode": 0
+  },
+  "targetedRace": {
+    "testsAndSubtestsPassed": 106,
+    "packagesPassed": 2,
+    "exitCode": 0
+  },
+  "frontend": {
+    "testsPassed": 574,
+    "typecheck": "passed",
+    "exitCode": 0
+  },
+  "goVet": "passed",
+  "adkRuntimeBoundary": "passed",
+  "dev": {
+    "bundleID": "com.cleanlakes.lake.desktop.dev",
+    "home": "~/.lake-dev",
+    "buildSourceDirty": false,
+    "sourceSHA": "947e2f1171577a11b548557323e29dab9d2c1804",
+    "backendSHA256": "7935d548cfd879e07ccf466387d4c3b4681df4018c243586c5b91e30fe2f1828",
+    "buildAndInstall": "passed",
+    "strictAppAndBackendSignatures": "passed",
+    "nativeRemovalNotice": "passed",
+    "restoredProjectResourceCount": 135
+  },
+  "policy": {
+    "cumulativeTaskTokenCeiling": null,
+    "tokenLimitZeroMeansUncapped": true,
+    "usageAccountingRetained": true,
+    "superChildLegacyTokenCeilingsRemoved": true,
+    "roundLimitsRetained": true,
+    "contextAndOutputLimitsRetained": true,
+    "deadlineAndSecurityRetained": true,
+    "memoryGatesUnchanged": true
+  },
+  "realExistingTask": {
+    "tokenLimitBefore": 256000,
+    "tokenLimitAfter": 0,
+    "tokensAfter": 236780,
+    "roundsAfter": 13,
+    "usagePreserved": true,
+    "roundsPreserved": true,
+    "assignmentState": "parked",
+    "generation": 3,
+    "generationPreserved": true,
+    "reason": "token_limit_removed",
+    "goalState": "blocked",
+    "bindingPreserved": true,
+    "deadlinePreserved": true,
+    "removalNoticeCount": 1,
+    "removalNoticeState": "delivered"
+  },
+  "legacyUnknownAudit": {
+    "count": 93,
+    "projectionSHA256": "9540501386ee5c60b1d27425ad0ccabb52d6718a4d64a3973b65e703e8409cd5",
+    "unchanged": true
+  },
+  "ui": {
+    "light": {
+      "noticeCount": 1,
+      "removedMessage": true,
+      "obsoletePauseVisible": false,
+      "headerPaused": false
+    },
+    "dark": {
+      "noticeCount": 1,
+      "documentWidth": 600,
+      "viewportWidth": 600,
+      "composerFocused": true
+    }
+  },
+  "newRealRemoteInspectionExecuted": false,
+  "taskAcceptanceClaimed": false,
+  "schemaColumnsOrTablesAdded": false,
+  "pr": {
+    "number": 142,
+    "target": "develop",
+    "mergeAuthorized": false
+  },
+  "productionChanged": false
+}
