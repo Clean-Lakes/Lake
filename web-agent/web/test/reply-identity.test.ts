@@ -24,6 +24,9 @@ test('each delivered report displays its own specialist even inside the Pilot co
  for(const name of ['Go 审查专员','前端执行专员']){
   const html=renderToStaticMarkup(createElement(ReplyIdentity,{identity:{name:'Pilot',pilot:true},author:author(name,name),onSpecialist(){}}));
   assert.ok(html.includes(`<strong>${name}</strong>`));assert.ok(html.includes(`aria-label="与${name}继续沟通"`));
+  assert.match(html,/class="response-avatar"/);
+  assert.ok(html.includes(`data-role="${name==='Go 审查专员'?'verifier':'executor'}"`));
+  assert.doesNotMatch(html,/data-role="coordinator"/);
   assert.ok(!html.includes('<strong>Pilot</strong>')&&!html.includes('<strong>Lake</strong>'));
  }
  const own=renderToStaticMarkup(createElement(ReplyIdentity,{identity:{name:'Pilot',pilot:true}}));
