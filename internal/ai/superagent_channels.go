@@ -54,13 +54,14 @@ func superChannelForEventTx(tx *gorm.DB, event superEventRow) (*superChannelRow,
 }
 
 type SpecialistChannel struct {
-	ID        string    `json:"id"`
-	ProjectID string    `json:"projectId"`
-	RoleID    string    `json:"roleId"`
-	RoleName  string    `json:"roleName"`
-	SessionID string    `json:"sessionId"`
-	Revision  int64     `json:"revision"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID                string    `json:"id"`
+	ProjectID         string    `json:"projectId"`
+	RoleID            string    `json:"roleId"`
+	RoleName          string    `json:"roleName"`
+	SessionID         string    `json:"sessionId"`
+	Revision          int64     `json:"revision"`
+	CreatedAt         time.Time `json:"createdAt"`
+	NeedsConfirmation bool      `json:"needsConfirmation,omitempty"`
 }
 
 func ensureSuperChannelTx(tx *gorm.DB, project, role string, at time.Time) (superChannelRow, error) {

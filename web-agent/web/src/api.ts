@@ -100,6 +100,7 @@ export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"model
 export const api = {
 	superWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorkspace>(`/api/projects/${encodeURIComponent(project)}/superagent`,{signal}),
 	specialistChannel:(session:string,cursor='',signal?:AbortSignal)=>request<import('../../shared/contracts').SpecialistChannelPage>(`/api/sessions/${encodeURIComponent(session)}/channel${cursor?`?cursor=${encodeURIComponent(cursor)}`:''}`,{signal}),
+	stopSpecialistChannel:(session:string)=>request<{stopped:boolean}>(`/api/sessions/${encodeURIComponent(session)}/channel`,{method:'POST',body:JSON.stringify({action:'stop'})}),
 	ensureSuperWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperProject>(`/api/projects/${encodeURIComponent(project)}/superagent`,{method:'POST',body:'{}',signal}),
  moveSessionNavigation:(project:string,data:{sessionId:string;pinned:boolean;beforeId:string|null;revision:number})=>post<WorkSession>(`/api/projects/${encodeURIComponent(project)}/session-navigation`,data),
  plans:(session:string)=>request<{plans:import('../../shared/contracts').ProposedPlan[]}>(`/api/sessions/${encodeURIComponent(session)}/ai/plans`),

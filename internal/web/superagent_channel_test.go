@@ -263,3 +263,33 @@ func TestSuperChannelControlRequiresExactExecutionSession(t *testing.T) {
 		}
 	}
 }
+
+func TestSuperChannelStopHTTPUsesOwnedCanonicalTasks(t *testing.T) {
+	b, h := fixture(t)
+	p := b.Store.CreateProject("Channel stop")
+	pid := stringOf(p["id"])
+	domain, err := b.ensureSuperProject(t.Context(), pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := b.Store.AddMessage(domain.RouterSessionID, "user", "Inspect only this task", nil)
+	event, err := b.ReceiveUserEvent(t.Context(), domain.RouterSessionID, stringOf(m["id"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.recordSuperInput(event, nil, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	worker, err := b.Engine.ApplySuperDecision(t.Context(), b.superUserSource(pid, domain.RouterSessionID), ai.SuperDecision{EventID: event.ID, PartKey: "task", Action: "create", Title: event.Payload, RoleKey: "运维专员", Quote: event.Payload, Reason: "Original request"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch := b.reconcileSpecialistChannels(t.Context(), pid)[0]
+	apiTest(t, h, "POST", "/api/sessions/"+ch.SessionID+"/channel", Object{"action": "invalid"}, 400)
+	apiTest(t, h, "POST", "/api/sessions/"+ch.SessionID+"/channel", Object{"action": "stop"}, 200)
+	view, err := b.Engine.SuperTask(worker.SessionID, worker.TaskID)
+	if err != nil || view.State != "cancelled" {
+		t.Fatal(view, err)
+	}
+	apiTest(t, h, "POST", "/api/sessions/"+ch.SessionID+"/ai/abort", Object{}, 409)
+}

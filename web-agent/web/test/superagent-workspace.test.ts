@@ -29,3 +29,11 @@ test('one durable role channel represents several independent task workers',()=>
  assert.match(html,/<small>1<\/small>/);
  assert.match(html,/aria-current="page"/);
 });
+
+test('a pending confirmation on the channel remains visible beside a newer completed task',()=>{
+ const workspace:SuperWorkspace={active:true,project:{projectId:'p',routerSessionId:'pilot',version:1},channels:[{id:'ops',projectId:'p',roleId:'ops',roleName:'运维专员',sessionId:'channel',revision:1,createdAt:'',needsConfirmation:true}],workers:[]};
+ const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:null,onPilot(){},onWorker(){}}));
+ assert.match(html,/pilot-worker-confirmation/);assert.match(html,/>需确认<\/span>/);assert.match(html,/aria-label="运维专员 · 持续沟通 · 需确认"/);
+ workspace.channels![0].needsConfirmation=false;
+ assert.doesNotMatch(renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:null,onPilot(){},onWorker(){}})),/pilot-worker-confirmation/);
+});

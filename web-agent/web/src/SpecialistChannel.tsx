@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {AIPending,AITranscript,Card,TranscriptMessage} from './AIPanel';
@@ -26,10 +26,11 @@ export function SpecialistTaskControls({snapshot,connected}:{snapshot:SessionSna
  </fieldset>;
 }
 
-export function SpecialistChannel({snapshot,connected,onTask,onActivity}:{snapshot:SessionSnapshot;connected:boolean;onTask:(sessionId:string)=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void}){
+export function SpecialistChannel({snapshot,connected,onTask,onActivity,onReady}:{snapshot:SessionSnapshot;connected:boolean;onTask:(sessionId:string)=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void;onReady?:(sessionId:string,ready:boolean)=>void}){
  const session=snapshot.session.id;
  const [page,setPage]=useState<SpecialistChannelPage|null>(null),[entries,setEntries]=useState<SpecialistChannelEntry[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(false);
  const cursor=useRef(''),hasOlder=useRef(false),generation=useRef(0);
+ useLayoutEffect(()=>{onReady?.(session,!!page||!!error);},[!!page,!!error,session,onReady]);
  useEffect(()=>{
   // A hidden window / reconnect suspends transport, not the conversation.
   // Clearing history there repeatedly collapses the scroll height and island.

@@ -1,3 +1,6 @@
+import {SessionLoading} from './SessionLoading';
+import {prepareSessionEntrance} from './sessionEntrance';
+import './sessionEntrance.css';
 import {SpecialistChannel} from './SpecialistChannel';
 import './specialistChannel.css';
 import {PilotWorkspace,usePilotWorkspace} from './PilotWorkspace';
@@ -175,7 +178,10 @@ function AppContent() {
   const [streamState, setStreamState] = useState<StreamState>("connecting");
   const [streamSessionId, setStreamSessionId] = useState<string | null>(null);
   const [warningSessionId, setWarningSessionId] = useState<string | null>(null);
-  const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
+  const [historyVisibleId,setHistoryVisibleId]=useState<string|null>(null);
+  const historyVisible=useRef<string|null>(null);historyVisible.current=historyVisibleId;
+  const [roleContentReady,setRoleContentReady]=useState<string|null>(null);
+  const updateRoleContentReady=useCallback((id:string,ready:boolean)=>{if(activeSession.current===id)setRoleContentReady(ready?id:null);},[]);
   const snapshotCache = useRef(new Map<string, SessionSnapshot>());
   useLayoutEffect(() => {
     if (!snapshot) return;
@@ -778,12 +784,6 @@ function AppContent() {
     const timer = setTimeout(() => setWarningSessionId(sessionId), 800);
     return () => clearTimeout(timer);
   }, [connection.warning, sessionId]);
-  useEffect(() => {
-    setLoadingSessionId(null);
-    if (!sessionId || activeSnapshot || visibleSessionError) return;
-    const timer = setTimeout(() => setLoadingSessionId(sessionId), 250);
-    return () => clearTimeout(timer);
-  }, [sessionId, !!activeSnapshot, visibleSessionError]);
   const sessionConnected = connected && !!activeSnapshot && !!selectedSession;
   const modelConfigured = bootstrap?.modelConfigured === true;
   const persistentMode = bootstrap?.terminalMode === "pty";
@@ -803,11 +803,14 @@ function AppContent() {
   const terminalResource = resourceMap.get(currentTerminal?.resourceId ?? terminalOpeningResource ?? "");
   const pendingApproval = activeSnapshot?.actions.some(action => action.status === "pending") ?? false;
   const isLegacyHistory=selectedSession?.workspaceRole==='legacy';
-  const turnActive = !isLegacyHistory&&conversationActive(activeSnapshot, selectedSession?.status);
+  const roleBusy=activeSnapshot?.session.workspaceRole==='role'&&roleReplyActivity?.sessionId===sessionId&&roleReplyActivity.state!=='idle';
+  const turnActive = !isLegacyHistory&&(!!roleBusy||conversationActive(activeSnapshot, selectedSession?.status));
+  const historyDataReady=!!activeSnapshot&&(activeSnapshot.session.workspaceRole!=='role'||roleContentReady===sessionId);
+  const historyPending=historyVisibleId!==sessionId&&!visibleSessionError;
   const hasMessageDraft = !!(messageDraft.trim() || mentionRefs.length || imageDraft.length || fileDraft.length);
   const sendFeedback=messageSubmission?.session===sessionId?(messageSubmission.accepted?"已发送，正在更新":"正在发送"):null;
   const composerStop=turnActive&&!hasMessageDraft&&!sendFeedback;
-  const queueMode = activeSnapshot?.session.workspaceRole!=='worker'&&(turnActive || (activeSnapshot?.messageQueue?.items.length ?? 0)>0);
+  const queueMode = activeSnapshot?.session.workspaceRole!=='worker'&&activeSnapshot?.session.workspaceRole!=='role'&&(turnActive || (activeSnapshot?.messageQueue?.items.length ?? 0)>0);
   const messageBlocked = selectedSession?.status === "investigating" || bootstrap?.aiRuntime === "go" && activeSnapshot?.ai?.status === "waiting_approval";
   useEffect(() => {
     if (currentTerminal?.status !== "disconnected") return;
@@ -835,9 +838,15 @@ function AppContent() {
     const resume=conversationResume.current.get(key);
     if(resume){conversationResume.current.delete(key);conversationScroll.current={key,following:resume.following};container.scrollTop=resume.top;if(resume.following)follower.jump();}
     else follower.jump();
-    const stopObserving = observeConversationGrowth(container, () => follower.request());
+    const stopObserving = observeConversationGrowth(container, () => historyVisible.current===key?follower.request():follower.jump());
     return () => { stopObserving(); follower.stop(); conversationFollower.current = null; };
   }, [activeSnapshot?.session.id, route.resourceId,isPlansPage]);
+
+  useLayoutEffect(()=>{
+    setHistoryVisibleId(null);
+    if(!sessionId||!historyDataReady||route.resourceId||isPlansPage)return;
+    return prepareSessionEntrance(()=>conversationFollower.current?.jump(),()=>setHistoryVisibleId(sessionId));
+  },[sessionId,historyDataReady,route.resourceId,isPlansPage]);
 
   // Final metadata moves the same elapsed row above the reply. Settle the
   // latest reply before paint; a history reader never opts back into following.
@@ -1082,7 +1091,7 @@ function AppContent() {
   async function stopCurrentTurn() {
     if (!sessionId || !turnActive || stoppingTurn || !sessionConnected) return;
     setStoppingTurn(true);
-    try { if(activeSnapshot?.superagent){const task=activeSnapshot.superagent.task;await api.aiOperation(sessionId,'workControl',{goalId:task.taskId,command:'cancel',revision:task.revision});}else await api.aiOperation(sessionId, "abort"); await refreshCurrent(); }
+    try { if(activeSnapshot?.session.workspaceRole==='role'){await api.stopSpecialistChannel(sessionId);}else if(activeSnapshot?.superagent){const task=activeSnapshot.superagent.task;await api.aiOperation(sessionId,'workControl',{goalId:task.taskId,command:'cancel',revision:task.revision});}else await api.aiOperation(sessionId, "abort"); await refreshCurrent(); }
     catch (error) { handleFailure(error); }
     finally { setStoppingTurn(false); }
   }
@@ -1556,7 +1565,7 @@ function AppContent() {
       {selectedResource ? <><ResourceDetail resource={selectedResource} pilotSessionId={pilotWorkspace.workspace?.active&&pilotWorkspace.workspace.project.projectId===selectedResource.projectId?pilotWorkspace.workspace.project.routerSessionId:undefined} project={projectList.find(project => project.id === selectedResource.projectId)} sessions={catalog.sessions.filter(session => session.projectId === selectedResource.projectId)} selectedSession={selectedSession} terminalList={resourceTerminals} disabled={!connected || !!pendingOperation} onBack={() => navigate({ sessionId, resourceId: null })} onNewSession={() => openSessionDialog(selectedResource.projectId)} onSession={id => navigate({ sessionId: id, resourceId: null })} onEdit={() => setEditTerminalResource(selectedResource)} />
         </> : sessionId && selectedSession ? isPlansPage ? <SessionPlansPage key={sessionId} session={selectedSession} snapshot={activeSnapshot} error={visibleSessionError} disabled={!sessionConnected||turnActive||!!pendingOperation||modeSaving.has(sessionId)} onBack={returnToConversation} onRetry={()=>setSessionReload(value=>value+1)} onRevise={()=>{returnToConversation();requestAnimationFrame(()=>messageInputRef.current?.focus());}} onExecuted={async()=>{await refreshCurrent();returnToConversation();}}/> : <div className="session-layout"><div className="session-view">
         <span className="conversation-header-backdrop" aria-hidden="true"/>
-        <section id="session-view-panel" tabIndex={-1} ref={conversationRef} onWheel={event => { if (pausesConversationFollow(event.currentTarget,event.deltaY,conversationScroll.current.following)) pauseFollowing(); }} onPointerDown={event => {
+        <div className="conversation-stage" aria-busy={historyPending}>{historyPending&&<SessionLoading/>}<section id="session-view-panel" tabIndex={-1} ref={conversationRef} onWheel={event => { if (pausesConversationFollow(event.currentTarget,event.deltaY,conversationScroll.current.following)) pauseFollowing(); }} onPointerDown={event => {
           // Only grabbing the native scrollbar pauses on pointer-down. Clicking
           // text or toggling a short progress row is not a scroll gesture.
           const box=event.currentTarget, rect=box.getBoundingClientRect();
@@ -1566,13 +1575,13 @@ function AppContent() {
           if(target.closest('input,textarea,[contenteditable="true"]'))return;
           const direction=["ArrowUp","PageUp","Home"].includes(event.key)?-1:["ArrowDown","PageDown","End"].includes(event.key)?1:0;
           if(direction&&pausesConversationFollow(event.currentTarget,direction,conversationScroll.current.following))pauseFollowing();
-        }} onScroll={event => { if (conversationFollower.current?.animating) return; conversationScroll.current.following = followsConversationScroll(event.currentTarget,conversationScroll.current.following); if(conversationScroll.current.following)conversationFollower.current?.request(); }} className="conversation" aria-label="会话记录">
-          {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true">{loadingSessionId === sessionId && <span role="status">正在加载会话…</span>}</div> : selectedSession.workspaceRole==='role'?<div className="timeline-list"><SpecialistChannel key={sessionId} snapshot={activeSnapshot} connected={sessionConnected} onTask={id=>void inspectRoleTask(id)} onActivity={updateRoleReplyActivity}/></div>: (itemList.length || !!activeSnapshot.ai?.cards.length || !!activeSnapshot.superagent || !!activeSnapshot.sre?.tasks.length || !!activeSnapshot.ai?.operationOutcomes?.length) ? <div className="timeline-list">
+        }} onScroll={event => { if (conversationFollower.current?.animating) return; conversationScroll.current.following = followsConversationScroll(event.currentTarget,conversationScroll.current.following); if(conversationScroll.current.following)conversationFollower.current?.request(); }} className={`conversation${historyPending?" is-entering":""}`} inert={historyPending} aria-label="会话记录">
+          {!activeSnapshot ? visibleSessionError ? <div className="timeline-empty"><div className="empty-icon"><Glyph name="refresh" size={24}/></div><h2>会话未能加载</h2><p>{visibleSessionError}</p><button className="button secondary" onClick={() => setSessionReload(value => value + 1)}><Glyph name="refresh" size={16}/>重新获取</button></div> : <div className="session-loading" aria-busy="true"/> : selectedSession.workspaceRole==='role'?<div className="timeline-list"><SpecialistChannel key={sessionId} snapshot={activeSnapshot} connected={sessionConnected} onTask={id=>void inspectRoleTask(id)} onActivity={updateRoleReplyActivity} onReady={updateRoleContentReady}/></div>: (itemList.length || !!activeSnapshot.ai?.cards.length || !!activeSnapshot.superagent || !!activeSnapshot.sre?.tasks.length || !!activeSnapshot.ai?.operationOutcomes?.length) ? <div className="timeline-list">
             {activeSnapshot.superagent?.goal?.userText&&<details className="super-worker-source"><DisclosureSummary>{selectedSuperWorker?<SuperRoleAvatar name={selectedSuperWorker.roleName} size={20}/>:<Glyph name="document" size={16}/>}<span className="super-worker-source-copy">{selectedSuperWorker&&<strong>{selectedSuperWorker.roleName}</strong>}<span>任务来源 · {activeSnapshot.superagent.task.title}</span></span></DisclosureSummary><p>{activeSnapshot.superagent.goal.userText}</p></details>}
             {activeSnapshot?.ai ? <AITranscript key={sessionId} superTask={selectedSuperWorker?.task} onSpecialist={author=>{const worker=pilotWorkspace.workspace?.workers.find(row=>row.id===author.workerId);const channel=pilotWorkspace.workspace?.channels?.find(row=>row.roleId===worker?.roleId);void api.superWorkspace(selectedSession.projectId).then(()=>refreshCatalog()).then(()=>navigate({sessionId:author.channelSessionId??channel?.sessionId??author.sessionId,resourceId:null})).catch(handleFailure);}} assistantIdentity={selectedSuperWorker?{name:selectedSuperWorker.roleName}:selectedSuperPilot?{name:"Pilot",pilot:true}:undefined} onOpenMemory={()=>{setSettingsInitialTab("memory");setSettingsOpen(true)}} sourceMessageId={memorySourceJump?.sessionId===sessionId?memorySourceJump.messageId:undefined} onSourceLocated={()=>setMemorySourceJump(null)} refresh={refreshCurrent} snapshot={activeSnapshot} mode={conversationMode} onOpenPlans={openPlans} onInspect={inspectConversation} onStopTurn={() => void stopCurrentTurn()} stopping={stoppingTurn} disabled={isLegacyHistory||!sessionConnected || modeSaving.has(sessionId)} renderAction={action => <TimelineNode entry={{ kind: "action", at: action.createdAt, id: action.id, item: action }} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={isLegacyHistory||!sessionConnected || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })}/>} /> : itemList.map(entry => <TimelineNode key={`${entry.kind}:${entry.id}`} entry={entry} resourceMap={resourceMap} sessionTitle={selectedSession.title} disabled={!sessionConnected || messageBlocked || !!pendingOperation} pendingOperation={pendingOperation} terminals={conversationTerminals} onDecision={decide} onHandoff={handoffAction} persistentMode={persistentMode} onResource={resourceId => navigate({ sessionId, resourceId })} />)}
             {selectedSession.status === "investigating" && !activeSnapshot.ai && <div className="timeline-item item-thinking" role="status" aria-live="polite"><span className="timeline-point"><Glyph name="spark" size={15}/></span><div className="timeline-content"><div className="thinking-line"><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span><span>正在处理…</span></div></div></div>}
           </div> : <div className="timeline-empty"><div className="empty-icon"><Glyph name="chat" size={25}/></div><h2>从一个问题开始</h2><p>描述你看到的故障或想核实的现象。Lake 会把调查过程、证据和需要确认的操作留在这里。</p></div>}
-        </section>
+        </section></div>
         {isLegacyHistory?<div className="pilot-history-notice"><span>历史记录只读，原操作与证据保留。</span><button type="button" className="button secondary" onClick={()=>void openProjectPilot(selectedSession.projectId)}>前往 Pilot 继续沟通<Glyph name="arrow" size={14}/></button></div>:<div className="composer-dock"><ConversationLatest key={`${sessionId}:${conversationMode}`} container={conversationRef} onJump={jumpToLatest}/>{activeSnapshot?.ai && <div className="composer-session-controls"><AIControls snapshot={activeSnapshot} refresh={refreshCurrent} optionsOpen={agentOptionsOpen} onCloseOptions={() => setAgentOptionsOpen(false)} permissionsOpen={permissionsOpen} permissionAnchor={permissionButtonRef} onClosePermissions={() => setPermissionsOpen(false)}/></div>}<PendingMessages key={sessionId} supplementRootTurnId={conversationMode==='conversation'?activeSnapshot?.ai?.rootTurnId:undefined} sessionId={sessionId} queue={activeSnapshot?.messageQueue ?? {paused:false,revision:0,lastError:"",items:[]}} disabled={!sessionConnected} active={turnActive} sendShortcut={sendShortcut} resourceIds={mentionedResourceIds} onUpdated={messageQueue => setSnapshot(current => current?.session.id===sessionId && messageQueue.revision>=(current.messageQueue?.revision ?? 0) ? {...current,messageQueue} : current)}/>{activeSnapshot?.conversationMode==='plan'&&<p className="plan-mode-hint" role="status">Plan 模式 · 只读调查与制定方案，确认计划后再执行。{activeSnapshot.sre?.enabled?'SRE 协作将在退出 Plan 模式后恢复。':''}</p>}<form className="composer" onSubmit={sendMessage}><label htmlFor="message-input" className="visually-hidden">给 Lake 的消息</label><div className={`composer-input${attachmentDragOver?" attachment-drop-active":""}`}>
           {mention && <ComposerMentions options={mentionMatches} allOptions={allMentionOptions} index={mentionIndex} category={mentionCategory} onActive={index=>setMention(current=>current&&current.index!==index?{...current,index}:current)} onCategory={kind=>{setMentionCategory(kind);setMention({...mention,index:0});}} onSelect={insertMention} loading={mentionExtensions.loading} error={mentionExtensions.error} onReload={mentionExtensions.reload} onClose={()=>setMention(null)} onImport={()=>{const target=projectList.find(item=>item.id===selectedSession?.projectId);setMention(null);if(target){setImportHexhub(true);setImportProject(target);}}}/>}
           {attachmentUploading&&<p className="attachment-upload-status" role="status">正在上传：{attachmentUploading}</p>}{attachmentDragOver&&<p className="attachment-upload-status" role="status">松开以添加文件 · 每个最多 512 MiB</p>}{fileDraft.length > 0 && <div className="text-file-drafts">{fileDraft.map(file => <span key={file.sourceId}><Glyph name="file" size={14}/>{file.name}{file.sizeBytes!==undefined&&<small>{fileSize(file.sizeBytes)}</small>}<button type="button" aria-label={`移除 ${file.name}`} onClick={() => setFileDraft(files => files.filter(item => item.sourceId !== file.sourceId))}><Glyph name="close" size={14}/></button></span>)}</div>}{imageDraft.length > 0 && <div className="image-drafts">{imageDraft.map(image => <figure key={image.id}><img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name || "待发送图片"}/><figcaption title={image.name}>{image.name || "剪贴板图片"}</figcaption><button type="button" aria-label={`移除 ${image.name || "图片"}`} onClick={() => setImageDraft(images => images.filter(item => item.id !== image.id))}><Glyph name="close" size={14}/></button></figure>)}</div>}{modelConfigured && imageDraft.length > 0 && !bootstrap?.supportsImageInput && <p className="composer-image-hint" role="status">当前模型不接受图片输入，请切换模型或在模型设置中手动调整。</p>}<div className="composer-body"><ComposerTextInput key={sessionId} references={mentionRefs} renderReference={ref=><>{ref.kind==="role"?<AgentIcon role={ref.resourceId as AgentIconName} size={14}/>:ref.kind==="resource"?<ResourceIcon kind={resourceMap.get(ref.resourceId)?.kind??"ssh"} size={13}/>:<Glyph name={ref.kind==="skill"?"book":"plug"} size={13}/>}<span>{ref.label.slice(1)}</span>{ref.kind!=="resource"&&<small>{ref.kind==="role"?"专员":ref.kind==="skill"?"Skill":"MCP"}</small>}</>} id="message-input" ref={messageInputRef} role="combobox" aria-haspopup="listbox" aria-autocomplete={mention?"list":"none"} aria-expanded={!!mention} aria-controls={mention?"composer-mention-options":undefined} aria-activedescendant={mention&&mentionMatches[mentionIndex]?mentionOptionId(mentionMatches[mentionIndex]!):undefined} placeholder={queueMode ? "继续输入，稍后发送…" : activeSnapshot?.conversationMode === "plan" ? "描述目标或修改意见，Lake 会先制定计划…" : pendingApproval ? "可以继续讨论，操作由确认按钮单独处理" : "想让 Lake 帮你做什么？"} value={messageDraft} onPaste={event => { const files = clipboardFiles(event.clipboardData); if (!files.length) return; event.preventDefault(); void attachFiles(files); }} onChange={(value,refs,caret)=>{setMessageDraft(value);setMentionRefs(refs);syncMention(value,caret);}} disabled={!sessionConnected || !!pendingOperation} onCompositionStart={() => messageComposition.current.start()} onCompositionEnd={() => messageComposition.current.end()} onBlur={() => { messageComposition.current = new CompositionGuard(); }} onKeyDown={event => {

@@ -258,6 +258,21 @@ func (b *Server) roleChannelPage(ctx context.Context, session, cursor string, li
 }
 
 func (b *Server) roleChannelRoute(w http.ResponseWriter, r *http.Request, session string) {
+	if r.Method == "POST" {
+		b.protect(r)
+		if !b.authorized(r) {
+			fail(401, "Authentication required")
+		}
+		data := body(w, r, 1024)
+		if data["action"] != "stop" {
+			fail(400, "Unknown channel action")
+		}
+		project := stringOf(b.Store.Session(session)["projectId"])
+		aiFailure(b.Engine.StopSpecialistChannel(r.Context(), project, session))
+		b.Store.AddMessage(session, "system", "已停止本专员当前处理与待派发工作；原任务和操作记录保留，远端执行状态以原记录为准。", nil)
+		reply(w, 200, Object{"stopped": true})
+		return
+	}
 	if r.Method != "GET" {
 		fail(405, "Method not allowed")
 	}

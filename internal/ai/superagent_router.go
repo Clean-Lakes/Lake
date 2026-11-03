@@ -99,7 +99,9 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 	if err := e.checkSuperPayload(js(in)); err != nil {
 		return out, err
 	}
-	if in.Action!="create"&&len(in.EvidenceTaskIDs)>0{return out,errors.New("superagent: historical evidence sources are registered only for new comparison tasks")}
+	if in.Action != "create" && len(in.EvidenceTaskIDs) > 0 {
+		return out, errors.New("superagent: historical evidence sources are registered only for new comparison tasks")
+	}
 	db, err := e.superStore()
 	if err != nil {
 		return out, err
@@ -407,6 +409,9 @@ func finishSuperRoutingTx(tx *gorm.DB, b SuperSourceBinding, eventID string) err
 	var event superEventRow
 	if err := tx.First(&event, "id = ? AND source_id = ? AND project_id = ? AND source_revision = ?", eventID, b.SourceID, b.ProjectID, b.Revision).Error; err != nil {
 		return err
+	}
+	if event.Disposition != "pending" && event.Disposition != "routed" {
+		return errSuperConflict
 	}
 	var count int64
 	if err := tx.Model(&superDecisionRow{}).Where("event_id = ?", eventID).Count(&count).Error; err != nil {
