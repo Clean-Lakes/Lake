@@ -46,6 +46,7 @@ func TestPilotLongTaskCompletesAcrossParallelRolesAndResume(t *testing.T) {
 			}
 			plan.Steps = append(plan.Steps, ai.SREPlanStep{ID: "summary", Role: ai.SRECoordinator, Kind: "summarize", Description: "LONG_FINAL", ResourceIDs: []string{resource}, DependsOn: []string{"p1g0", "p1g1", "p1g2"}, CompletionChecks: []string{"六个工作项完成后唯一汇总"}})
 			var arrivals, requests atomic.Int32
+			var taskID atomic.Value
 			ready := make(chan struct{})
 			pauseReached := make(chan struct{})
 			var pauseTriggered atomic.Bool
@@ -79,12 +80,24 @@ func TestPilotLongTaskCompletesAcrossParallelRolesAndResume(t *testing.T) {
 					return
 				}
 				stepID := match[1]
-				tasks, err := b.Store.ListSRETasks(session, 20, "")
-				if err != nil || len(tasks) != 1 {
+				id, _ := taskID.Load().(string)
+				if id == "" {
+					tasks, err := b.Store.ListSRETasks(session, 20, "")
+					if err != nil || len(tasks) != 1 {
+						t.Error("lost durable task", err)
+						return
+					}
+					id = tasks[0].ID
+					taskID.Store(id)
+				}
+				// Read this original task directly. Listing also reconciles terminal
+				// commands in a write transaction; doing it for every model turn
+				// adds unrelated writes to this long evidence fixture.
+				task, err := b.Store.LoadSRETask(session, id)
+				if err != nil {
 					t.Error("lost durable task", err)
 					return
 				}
-				task := tasks[0]
 				var attempt ai.SREStepAttempt
 				for _, a := range task.Attempts {
 					if a.StepID == stepID {
@@ -171,8 +184,9 @@ func TestPilotLongTaskCompletesAcrossParallelRolesAndResume(t *testing.T) {
 			if pause {
 				select {
 				case <-pauseReached:
-				case <-time.After(45 * time.Second):
-					t.Fatal("long task never reached partial verification")
+				case <-time.After(150 * time.Second):
+					task, _ := b.Store.LoadSRETask(session, id)
+					t.Fatalf("long task never reached partial verification: status=%s attempts=%d requests=%d", task.Status, len(task.Attempts), requests.Load())
 				}
 				before, _ := b.Store.LoadSRETask(session, id)
 				for _, a := range before.Attempts {
@@ -204,7 +218,8 @@ func TestPilotLongTaskCompletesAcrossParallelRolesAndResume(t *testing.T) {
 			}
 			// This deliberately dispatches >120 real operations; race instrumentation
 			// costs much more than the short-role fixtures' 45 second settle window.
-			deadline := time.Now().Add(150 * time.Second)
+			// Hosted race runs need more headroom than an isolated local run.
+			deadline := time.Now().Add(180 * time.Second)
 			var task ai.SRETask
 			for {
 				task, _ = b.Store.LoadSRETask(session, id)
@@ -212,7 +227,7 @@ func TestPilotLongTaskCompletesAcrossParallelRolesAndResume(t *testing.T) {
 					break
 				}
 				if time.Now().After(deadline) {
-					t.Fatalf("long task did not settle: status=%s attempts=%d", task.Status, len(task.Attempts))
+					t.Fatalf("long task did not settle: status=%s attempts=%d requests=%d", task.Status, len(task.Attempts), requests.Load())
 				}
 				time.Sleep(50 * time.Millisecond)
 			}
