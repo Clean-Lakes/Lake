@@ -133,7 +133,7 @@ RoleID沿用当前项目内准确标识；已有两个不同RoleID的“服务�
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-017 | 实现TEST-001至TEST-008的迁移、路由、隔离、迟到投递与恢复测试；执行Go/race/vet、ADK边界、前端类型/测试/构建。每次变更记录被测SHA，不删除保护测试或放宽权限来达成切换。 | false | — |
+| TASK-017 | 实现TEST-001至TEST-008的迁移、路由、隔离、迟到投递与恢复测试；执行Go/race/vet、ADK边界、前端类型/测试/构建。每次变更记录被测SHA，不删除保护测试或放宽权限来达成切换。 | true | 2026-11-03 |
 | TASK-018 | 使用签名scripts/build_lake_desktop.sh --dev --install，在Lake Dev以真实A/B/返回A/比较序列验收。记录两项独立任务、第三比较任务、角色入口数量、实际证据、资源绑定和模型上下文占用；验证浅/深色、窄窗、三栏、键盘与引用caret，清空未发送合成草稿。依赖TASK-017。 | false | — |
 | TASK-019 | 更新docs/design/lake-superagent-runtime.md、docs/lake-pilot.md、docs/ui-guidelines.md及原统一内核计划的实际水位，记录Memory未交付项、迁移及回退要求。以develop为目标更新PR、处理反馈；只在取得本PR合并授权后合并并清理可安全删除的分支。依赖TASK-018。 | false | — |
 
@@ -206,3 +206,6 @@ pnpm --dir web-agent exec tsx --tsconfig web/tsconfig.json --test web/test/super
 - [DeepSeek官方设计文章，§2、§3.3](https://x.com/DeepSeekHarness/status/2116857257245987236)
 - [官方原型领域模型](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/main/docs/001-domain.md)
 - [官方原型授权及follow-up](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/main/docs/002-authorization.md)
+
+
+2026-11-03 最终候选记录：应用源码 `935fbab6` 已签名安装 Lake Dev；完整Go在仅补充清单/覆盖夹具的 `a19b230d` 上1981项通过、15跳过、0失败，安全定向race106项、前端577项、vet和ADK边界通过。详细迁移、真实独立A3/B3、历史读取回执、上下文用量、状态岛稳定性、主题/窄窗/三栏/caret结果见[频道验证记录](../docs/validation/lake-specialist-channels.md)。TASK-017完成；TASK-018 的真实C4最终交付仍被模型服务HTTP504阻塞，保持未完成。用户只核实C4两项本地读取失败，原93项unknown与全部人工验收保持原样。文档和PR候选已更新，TASK-019按其依赖保持未完成；未合并PR、未发布生产。

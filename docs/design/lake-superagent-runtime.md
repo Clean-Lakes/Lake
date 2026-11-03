@@ -76,3 +76,6 @@ Pilot 与 Worker 使用当前项目原资源目录。`InheritSuperProjectAccess`
 Router 新增 `search_super_tasks`，按角色、资源、标题及时间查询历史任务，默认20、最大50，单页索引包限制在16 KiB内；准确原要求继续通过 `read_super_object` 分页读取。比较任务用 `evidence_task_ids` 显式登记只读来源。Worker 仅能列举/读取这些来源的准确证据；每页最多2 KiB，重新验证项目、源任务修订、attempt/operation/evidence关联、当前项目资源范围、Store/epoch和真实连接版本。返回采集时间、来源资源、原操作和验收状态、内容hash与续读位置。unknown、失败及采集端未保存的字节不被补造成成功或完整输出。
 
 实现与验收任务见[长期专员频道计划](../../plan/feature-specialist-channel-1.md)。本节描述当前分支实现，签名 Dev 与最终候选验收仍以计划 TASK-017/018 的实际记录为准；不代表已经合并或发布。Worker 的长期 Memory 仍明确 unavailable，N5 专员及运维 V2 门控未启用。
+
+
+2026-11-03 候选验收：[长期专员频道验证记录](../validation/lake-specialist-channels.md)。历史正文读取在确认步骤后进入当前比较尝试的原操作账本，保留源任务引用和采集时间；成功读取不代表新的主机观测或源任务通过验收。人工验收/汇总再次验证源修订与连接。窗口隐藏与重连保留频道历史，状态岛首选宽度不依赖紧凑布局后的宽度。完整回归及签名Dev已通过；真实C4最终模型交付仍受外部provider可用性阻塞，不能视为已验收。

@@ -355,3 +355,6 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 - TASK-020 至 TASK-022：已提交宿主只读来源旁注及兼容契约供协作审阅；长期任务来源采集/整理与资产范围 Memory 依赖 bearqy/Items 的接口和联合验收，尚未完成，不改变 snapshot hash、不启用 N5 专员或运维 V2。
 - TASK-026/030/031：已完成签名 Dev 安装、真实三联与明暗/窄窗检查、原生退出界面后同 PID 重连和鉴权排空；验收脚本及 [MD](../docs/validation/lake-superagent-runtime.md)/[JSON](../docs/validation/lake-superagent-runtime.json) 已交付。26 项矩阵逐项记录实际边界证据，Windows、睡眠/断电和完整原生故障矩阵仍未验证，不能据此声称整个矩阵通过。
 - 全部完成和已启用是不同事实；本计划保持 In progress，不能用部分单测或缺失 CI 声称完整验收。
+
+
+2026-11-03 频道增量：实现与独立回归及签名Dev安装已完成，真实独立A3/B3采样成功，C4完成已有证据读取；历史读取的当前尝试回执、原SDK问答关闭恢复、状态岛和历史挂载稳定性已修复。最终C4交付仍等待外部模型服务恢复，TASK-018保持未完成；详见[增量验证记录](../docs/validation/lake-specialist-channels.md)。不改变本统一计划其他未完成任务及Memory门控。
