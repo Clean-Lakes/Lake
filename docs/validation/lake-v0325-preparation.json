@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-03",
+  "version": "0.3.25",
+  "status": "preparation_in_progress_not_release_ready",
+  "authorization": {
+    "prepare": true,
+    "mergePRs": false,
+    "createProductionPR": false,
+    "publishReleaseOrTags": false,
+    "installOrRestartProduction": false
+  },
+  "source": {
+    "developBase": "2b233a4ad9d405e5b7bf4705359303b31bcde652",
+    "masterBase": "b921d078044ef5cc0616970a4726fc15039e413e",
+    "historySyncCommit": "c03e0b39a19920265398c4d01ea04f8250e6323a",
+    "historySyncChangesTree": false,
+    "branch": "sync/v0.3.25-preparation",
+    "requiredPRBase": "develop",
+    "requiredMergeMethod": "merge",
+    "compatibilityImplementation": "c42c96f289874771cd9f77786d5418ccdbefc45f",
+    "format2ReaderFilesMatchInstalledDevSource": "86031db73c207328b52f8d2028e89a0a415d08d4",
+    "unmergedPRsAtPreparationStart": [142, 143]
+  },
+  "checks": [],
+  "package": null,
+  "releaseBlockers": [
+    "Selected PR scope and overlap have not been approved or merged into develop",
+    "No frozen final develop candidate SHA or final candidate full validation",
+    "No production develop-to-master PR, required CI or independent release review",
+    "No production merge, publication or installation authorization"
+  ],
+  "production": {
+    "installedVersion": "0.3.24",
+    "inventoryFormat": 2,
+    "originalArchiveAvailable": false,
+    "oldInstalledReaderCompatible": false,
+    "recoveryVerified": false,
+    "touchedByThisPreparation": false
+  },
+  "notRun": [
+    "Final release candidate full test and installed Dev validation",
+    "Windows native package or runtime",
+    "Production build, installation, restart or data mutation",
+    "Release or asset-tag publication"
+  ]
+}
