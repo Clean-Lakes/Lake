@@ -1,10 +1,44 @@
 package ai
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 )
+
+func TestSuperChannelMigrationCancellationLeavesPreviousSchemaIntact(t *testing.T) {
+	e, _ := superFixture(t)
+	db, err := e.superStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&superSchemaRow{}).Where("id = ?", 1).Update("version", 3).Error; err != nil {
+		t.Fatal(err)
+	}
+	dir := e.Dir
+	e.Shutdown()
+	next, err := New(dir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer next.Shutdown()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	next.SuperMigrationContext = ctx
+	if _, err := next.superStore(); !errors.Is(err, context.Canceled) {
+		t.Fatal("migration ignored host shutdown", err)
+	}
+	store, err := next.adkStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema superSchemaRow
+	if err := store.DB.First(&schema, "id = ?", 1).Error; err != nil || schema.Version != 3 {
+		t.Fatal("cancelled backup changed schema", schema, err)
+	}
+}
 
 func channelEventFixture(t *testing.T, e *Engine, b SuperSourceBinding, ch SpecialistChannel, id, text string) SuperEvent {
 	t.Helper()

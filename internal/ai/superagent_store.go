@@ -237,7 +237,16 @@ func (e *Engine) superStore() (*gorm.DB, error) {
 			needsBackup = schema.Version == 3
 		}
 		if needsBackup {
-			backupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			lifetime := owner.SuperMigrationContext
+			if lifetime == nil {
+				lifetime = owner.workContext
+			}
+			if lifetime == nil {
+				lifetime = context.Background()
+			}
+			// A multi-GiB consistent VACUUM snapshot plus quick_check can exceed
+			// 30 seconds. This is one migration only; shutdown still cancels it.
+			backupCtx, cancel := context.WithTimeout(lifetime, 5*time.Minute)
 			defer cancel()
 			owner.superErr = store.Backup(backupCtx, filepath.Join(owner.runtimeDirectory(), "before-superagent-"+uid()+".sqlite"))
 			if owner.superErr != nil {
