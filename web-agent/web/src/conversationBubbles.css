@@ -63,10 +63,20 @@
   height: 1.75em;
 }
 
-/* The execution caption follows the reply text, while its divider spans the turn. */
+/* The caption follows the text; its divider starts at the painted bubble edge. */
 .ai-turn:has(:is(.ai-response,.ai-chat-message.ai-role-assistant) > .response-identity) > .turn-status {
   position:relative;
   padding-inline-start:calc(var(--reply-avatar-column) + var(--reply-bubble-inset));
+  border-bottom:0;
+}
+.ai-turn:has(:is(.ai-response,.ai-chat-message.ai-role-assistant) > .response-identity) > .turn-status:not(.is-live)::after {
+  content:"";
+  position:absolute;
+  inset-inline:var(--reply-avatar-column) 0;
+  bottom:0;
+  height:1px;
+  background:var(--surface-hover);
+  pointer-events:none;
 }
 .ai-turn:has(:is(.ai-response,.ai-chat-message.ai-role-assistant) > .response-identity) > .turn-status .turn-status-mark {
   position:absolute;
