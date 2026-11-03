@@ -45,6 +45,13 @@ func TestSecurityEntrypointInventory(t *testing.T) {
 		list = append(list, Tool{Name: tool.Name})
 	}
 	list = append(list, workTools()...)
+	// Reference listing is Router/Worker metadata discovery with its own
+	// source guard; reading the body is a registered managed operation.
+	for _, tool := range referencedTaskEvidenceTools() {
+		if tool.Name == "read_referenced_task_evidence" {
+			list = append(list, tool)
+		}
+	}
 	list = append(list, naturalRecallTools()...)
 	list = append(list, kubernetesActionTools()...)
 	list = append(list, kubernetesQueryTool(), pilotChoiceTool(), pilotReadRecoveryTool())
