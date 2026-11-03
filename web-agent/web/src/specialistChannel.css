@@ -9,3 +9,5 @@
 .specialist-channel-tasks > button > span { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; }
 .specialist-channel-tasks > button > small { color:var(--muted); }
 .specialist-channel-active { min-width:0; }
+.specialist-task-controls { border:0; padding:0; margin:0; min-width:0; }
+.specialist-task-controls:empty { display:none; }

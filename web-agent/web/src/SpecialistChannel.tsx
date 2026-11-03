@@ -1,7 +1,9 @@
 import {useEffect,useRef,useState} from 'react';
 import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage} from '../../shared/contracts';
 import {api,readableError} from './api';
-import {AITranscript,Card,TranscriptMessage} from './AIPanel';
+import {AIPending,AITranscript,Card,TranscriptMessage} from './AIPanel';
+import {AgentQuestion} from './AgentQuestion';
+import {HostKeyTrust} from './HostKeyTrust';
 import {ObjectReferencesProvider} from './AssistantMarkdown';
 import {superTaskPresentation} from './superAgentPresentation';
 import {Glyph} from './Icons';
@@ -10,6 +12,18 @@ export function mergeChannelEntries(previous:SpecialistChannelEntry[],incoming:S
  const entries=new Map(previous.map(entry=>[entry.id,entry]));
  for(const entry of incoming)entries.set(entry.id,entry);
  return [...entries.values()].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
+}
+
+// Questions, approvals and host trust always use their original task session.
+// A display channel must never become the execution/SDK identity.
+export function SpecialistTaskControls({snapshot,connected}:{snapshot:SessionSnapshot;connected:boolean}){
+ const session=snapshot.session.id,view=snapshot.ai;
+ const refresh=()=>api.snapshot(session);
+ return <fieldset className="specialist-task-controls" disabled={!connected} aria-label={`任务确认：${snapshot.superagent?.task.title??snapshot.session.title}`}>
+  {view?.question&&<AgentQuestion session={session} request={view.question} refresh={refresh}/>}
+  {view?.pending&&<AIPending session={session} view={view} attachments={snapshot.messages.flatMap(message=>message.files??[])} refresh={refresh}/>}
+  {snapshot.hostKeyTrust&&<HostKeyTrust session={session} prompt={snapshot.hostKeyTrust} disabled={!connected} refresh={refresh}/>}
+ </fieldset>;
 }
 
 export function SpecialistChannel({snapshot,connected,onTask,onActivity}:{snapshot:SessionSnapshot;connected:boolean;onTask:(sessionId:string)=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void}){
@@ -59,6 +73,7 @@ export function SpecialistChannel({snapshot,connected,onTask,onActivity}:{snapsh
    return <section className="specialist-channel-active" key={active.session.id} aria-label={task?.title??'当前任务'}>
     <button type="button" className="specialist-channel-source" onClick={()=>onTask(active.session.id)}>{task?.title??'当前任务'}<Glyph name="next" size={11}/></button>
     <AITranscript snapshot={live} superTask={task} assistantIdentity={{name}} disabled={!connected} refresh={()=>api.snapshot(active.session.id)} onInspect={()=>onTask(active.session.id)}/>
+    <SpecialistTaskControls snapshot={active} connected={connected}/>
    </section>;
   })}
  </div></ObjectReferencesProvider>;
