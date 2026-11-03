@@ -2,6 +2,8 @@
 
 2026-11-03，macOS arm64。基线 `2b233a4ad9d405e5b7bf4705359303b31bcde652`；执行链路和回复身份修复的被测代码与首轮干净签名 Dev 构建为 **`65ec4fdec699c3af94f70ea160038bac8d3add45`**。后续导航圆角追补单列于文末，未改变前述 Go 执行代码。机器可读结果见 [JSON](lake-worker-inspection-repair.json)。
 
+后续真实任务的额度暂停与状态传递修复见 [Worker 额度暂停验证](lake-worker-budget-pause.md)；各阶段使用各自的被测 SHA，不将初轮检查视为后续代码已验证。
+
 ## 故障与最终行为
 
 真实 Worker 在 `work_begin` 中省略 `asset_refs`，确认了空资源范围；激活步骤后才发现主机。此时 `inspect_host` 的旧终端路径属于 opaque 操作，受到历史未决写入限制；再给已确认的目标补资源也被范围冻结拒绝。账本中只有资源目录读取成功，没有实际服务器检查，不能将先前回复解释为巡检结果。
