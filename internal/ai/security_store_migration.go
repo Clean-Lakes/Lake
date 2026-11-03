@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Clean-Lakes/Lake/internal/platform"
@@ -55,7 +56,13 @@ func openSecurityReadOnlyMode(path string, immutable bool) (*sql.DB, error) {
 }
 
 func securityReadOnlyURI(path string, immutable bool) string {
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
+	filePath := filepath.ToSlash(path)
+	// A drive-qualified path must stay in the URI path. Without the leading
+	// slash, URL.String emits file://C:/..., interpreting the drive as a host.
+	if len(filePath) >= 3 && filePath[1] == ':' && filePath[2] == '/' && strings.ContainsRune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", rune(filePath[0])) {
+		filePath = "/" + filePath
+	}
+	u := url.URL{Scheme: "file", Path: filePath}
 	q := u.Query()
 	q.Set("mode", "ro")
 	if immutable {
