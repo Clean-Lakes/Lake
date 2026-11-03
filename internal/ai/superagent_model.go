@@ -135,6 +135,8 @@ func projectSuperTaskTx(tx *gorm.DB, sessionID, taskID string) (SuperTaskView, e
 		}
 		if paused {
 			view.State, view.Reason, view.Summary = "paused", superBudgetPauseReason, SuperBudgetPauseSummary
+		} else if view.State == "blocked" && goal.Status == "blocked" && goal.Summary == SuperTokenLimitRemovedSummary {
+			view.Reason = superTokenLimitRemovedReason
 		}
 	}
 	if view.ProjectID == "" && tx.Migrator().HasTable(&superWorkerRow{}) {

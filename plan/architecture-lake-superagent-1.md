@@ -2,7 +2,7 @@
 goal: 将 Lake 统一为持续 Pilot Router、独立任务 Worker 与共享 Memory 的 Super-agent 内核
 version: "1.0"
 date_created: "2026-11-02"
-last_updated: "2026-11-02"
+last_updated: "2026-11-03"
 owner: "Lake；Memory 方案与内部实现以 bearqy 维护内容为主"
 status: In progress
 tags: [architecture, super-agent, pilot, adk, memory, security, migration]
@@ -123,7 +123,7 @@ Task 可保留超过一次执行许可的历史，但活跃许可不得超出现
 | 持续补充 | 使用 `AdmitSupplement/applySupplements` 的安全边界；持久记录源消息和原执行 RootTurnID，SDK 接纳后才消费 Inbox。源事件与内部续接消息分开，不能伪造人类授权 |
 | 模型并发 | 初值全局最多 4 个模型请求，其中 1 个保留给 Router/人工续接，Worker 总计最多 3 个；后台 Memory/监督只使用剩余 Worker 预算并服从现有前台抢占。活跃 Worker 上限 6，不占浏览器 SSE 槽 |
 | 图与子专员 | 依赖和 fan-in 继续由 ADK 图调度。初值最多 1 层子专员，每项 Task 累计最多 8 个 Worker 实例，重试也计数；须通过宿主委派与 Security 校验，子专员不获得无限递归工具 |
-| 额度 | 沿用当前 Engine/任务的有效 MaxSteps、模型输入/输出和累计用量约束；新 Worker 不重置父任务余额。分配前预留、结果后结算，缺失用量保守估算并标识；Router 另行累计和限额，不能无限运行 |
+| 额度 | 2026-11-03 用户明确取消单任务累计 token 上限，主/子专员的 token 总量只记账不拦截。保留有效 MaxSteps、单次上下文/输出、累计模型轮数、绝对期限和并发约束；新 Worker 共享原任务轮数及用量计数，不归零。分配前记录预留、结果后结算，缺失用量保守记账；Router 自身现有批次与轮数约束保留 |
 | 收件与公平 | 同一 Router 域串行提交决策；单次最多 16 个积压事件，停止/审批/真实用户补充优先于自动告警。超量事件留队，任务按项目与等待时间轮转；不通过取消在途变更实现抢占 |
 | 等待 | `work_wait` 释放 Runner/活跃槽，实际结果继续通过原 function-response 与 machine input 恢复。新适配器必须校验明确配置与修订；当前仅有的 release-v1 能力不冒充通用 Jenkins 观察器 |
 | 上下文 | Router 默认最多 16 KiB 相关摘要，单事件预览最多 4 KiB，单证据预览最多 2 KiB；按 UTF-8 边界截取并附准确 ID/hash/revision 与继续读取引用。权限、任务约束、验收契约不得靠截断隐藏，无法装入则拒绝本次派发 |

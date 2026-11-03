@@ -28,15 +28,84 @@ type superModelChargeRow struct {
 
 func (superModelChargeRow) TableName() string { return "superagent_model_charges" }
 
-var ErrSuperBudget = errors.New("superagent: original task's cumulative model budget exhausted")
+var ErrSuperBudget = errors.New("superagent: task model round limit reached")
 
-const superBudgetPauseReason = "model_budget_exhausted"
-const SuperBudgetPauseSummary = "本任务的剩余执行额度不足，已暂停，尚未取得新的检查结果。原任务、操作和待处理输入已保留；重复询问不会恢复额度，也不会自动重放原操作。"
+const superBudgetPauseReason = "model_round_limit"
+const SuperBudgetPauseSummary = "本任务已达到模型调用轮数上限，已暂停。原任务、操作和待处理输入已保留。"
+const legacySuperTokenPauseReason = "model_budget_exhausted"
+const legacySuperTokenPauseSummary = "本任务的剩余执行额度不足，已暂停，尚未取得新的检查结果。原任务、操作和待处理输入已保留；重复询问不会恢复额度，也不会自动重放原操作。"
+const superTokenLimitRemovedReason = "token_limit_removed"
+const SuperTokenLimitRemovedSummary = "累计 token 上限已取消，历史用量继续累计。任务可接收后续要求，原资源范围、操作记录和验收要求保留。"
+
+// TokenLimit=0 means accounting without a cumulative token ceiling. This
+// changes current policy only; spent usage, rounds and original events remain.
+func (e *Engine) removeSuperTokenLimits(ctx context.Context, projectID string) error {
+	db, err := e.superStore()
+	if err != nil {
+		return err
+	}
+	var workers []superWorkerRow
+	err = db.WithContext(ctx).Where("project_id = ? AND parent_worker_id = '' AND task_id IN (?) AND (task_id IN (?) OR id IN (?))", projectID, db.Model(&nativeWorkGoal{}).Select("id").Where("status NOT IN ?", []string{"completed", "failed", "cancelled"}), db.Model(&superBudgetRow{}).Select("task_id").Where("token_limit > 0"), db.Model(&superAssignmentRow{}).Select("worker_id").Where("last_error = ?", legacySuperTokenPauseReason)).Find(&workers).Error
+	if err != nil {
+		return err
+	}
+	for _, w := range workers {
+		if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			var budget superBudgetRow
+			if err := tx.First(&budget, "task_id = ?", w.TaskID).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&budget).Update("token_limit", 0).Error; err != nil {
+				return err
+			}
+			row, goal, err := loadSuperGoalTx(tx, w)
+			if err != nil || workTerminal(goal.Status) {
+				return err
+			}
+			var a superAssignmentRow
+			err = tx.First(&a, "worker_id = ? AND last_error = ? AND state IN ?", w.ID, legacySuperTokenPauseReason, []string{"parked", "queued"}).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if budget.Rounds >= goal.RoundLimit || goal.ModelRounds >= goal.RoundLimit {
+				return pauseSuperBudgetTx(tx, w, &row, &goal)
+			}
+			reason := ""
+			if goal.Status == "paused" && goal.Summary == legacySuperTokenPauseSummary {
+				goal.Status, goal.Summary = "blocked", SuperTokenLimitRemovedSummary
+				reason = superTokenLimitRemovedReason
+				if !goal.DeadlineAt.After(time.Now().UTC()) {
+					goal.Status, goal.Summary = "paused", "累计 token 上限已取消；本任务期限已到，仍保持暂停，原记录保留。"
+					reason = "deadline_exhausted"
+				}
+				if err := writeWorkGoalTx(tx, &row, &goal, false); err != nil {
+					return err
+				}
+			}
+			if err := tx.Model(&superAssignmentRow{}).Where("last_error = ? AND worker_id IN (?)", legacySuperTokenPauseReason, tx.Model(&superWorkerRow{}).Select("id").Where("task_id = ?", w.TaskID)).Update("last_error", reason).Error; err != nil {
+				return err
+			}
+			if reason != "" {
+				return queueSuperBudgetNoticeTx(tx, w, goal, superTokenLimitRemovedReason, goal.Summary)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // Older hosts recorded the rejected reservation only in the durable engine
 // projection. Recover that stop once, without retrying a provider or editing
 // the old cards, usage, inputs, permissions or operation results.
 func (e *Engine) reconcileSuperBudgetPauses(ctx context.Context, projectID string) error {
+	if err := e.removeSuperTokenLimits(ctx, projectID); err != nil {
+		return err
+	}
 	db, err := e.superStore()
 	if err != nil {
 		return err
@@ -85,6 +154,10 @@ func (e *Engine) reconcileSuperBudgetPauses(ctx context.Context, projectID strin
 			if err != nil || workTerminal(goal.Status) {
 				return err
 			}
+			paused, err := superBudgetPausedTx(tx, goal.ID, goal.RoundLimit)
+			if err != nil || !paused {
+				return err
+			}
 			if err = pauseSuperBudgetTx(tx, w, &row, &goal); err != nil {
 				return err
 			}
@@ -97,8 +170,8 @@ func (e *Engine) reconcileSuperBudgetPauses(ctx context.Context, projectID strin
 	return nil
 }
 
-// A rejected reservation is durable even when a positive balance remains. The
-// next full request, rather than just one output token, must fit that balance.
+// Cumulative token totals are telemetry. Only the retained round limit gates
+// this task-wide counter; context/output and Security limits are independent.
 func superBudgetPausedTx(tx *gorm.DB, taskID string, roundLimit int) (bool, error) {
 	var budget superBudgetRow
 	err := tx.First(&budget, "task_id = ?", taskID).Error
@@ -108,12 +181,7 @@ func superBudgetPausedTx(tx *gorm.DB, taskID string, roundLimit int) (bool, erro
 	if err != nil {
 		return false, err
 	}
-	if budget.Rounds >= roundLimit || budget.Tokens >= budget.TokenLimit {
-		return true, nil
-	}
-	var count int64
-	err = tx.Model(&superAssignmentRow{}).Where("last_error = ? AND worker_id IN (?)", superBudgetPauseReason, tx.Model(&superWorkerRow{}).Select("id").Where("task_id = ?", taskID)).Count(&count).Error
-	return count > 0, err
+	return budget.Rounds >= roundLimit, nil
 }
 
 func pauseSuperBudgetTx(tx *gorm.DB, w superWorkerRow, row *nativeWorkGoal, goal *WorkGoal) error {
@@ -129,6 +197,10 @@ func pauseSuperBudgetTx(tx *gorm.DB, w superWorkerRow, row *nativeWorkGoal, goal
 	if err := tx.Model(&superAssignmentRow{}).Where("worker_id IN (?)", tx.Model(&superWorkerRow{}).Select("id").Where("task_id = ?", goal.ID)).Update("last_error", superBudgetPauseReason).Error; err != nil {
 		return err
 	}
+	return queueSuperBudgetNoticeTx(tx, w, *goal, superBudgetPauseReason, SuperBudgetPauseSummary)
+}
+
+func queueSuperBudgetNoticeTx(tx *gorm.DB, w superWorkerRow, goal WorkGoal, reason, text string) error {
 	var domain superProjectRow
 	err := tx.First(&domain, "project_id = ?", w.ProjectID).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -143,8 +215,8 @@ func pauseSuperBudgetTx(tx *gorm.DB, w superWorkerRow, row *nativeWorkGoal, goal
 	}
 	// One durable attention delivery for this stop, not another model dispatch
 	// or a replay of the Worker's last pre-tool narration.
-	payload := js(map[string]any{"task": view, "text": SuperBudgetPauseSummary})
-	return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&superOutputRow{ID: hash(js([]any{superBudgetPauseReason, goal.ID})), TaskID: goal.ID, ProjectID: w.ProjectID, ChannelRef: domain.RouterSessionID, SourceMessageID: goal.ID, Kind: "attention", Payload: payload, RequestHash: hash(payload), ReportRevision: view.Revision, State: "pending", CreatedAt: time.Now().UTC()}).Error
+	payload := js(map[string]any{"task": view, "text": text})
+	return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&superOutputRow{ID: hash(js([]any{reason, goal.ID})), TaskID: goal.ID, ProjectID: w.ProjectID, ChannelRef: domain.RouterSessionID, SourceMessageID: goal.ID, Kind: "attention", Payload: payload, RequestHash: hash(payload), ReportRevision: view.Revision, State: "pending", CreatedAt: time.Now().UTC()}).Error
 }
 
 // A provider dispatch consumes one durable round and reserves tokens before
@@ -180,19 +252,22 @@ func (e *Engine) reserveSuperModel(ctx context.Context, model Model, history []M
 		var budget superBudgetRow
 		err = tx.First(&budget, "task_id = ?", goal.ID).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			_, usageLimit := agentUsageLimits(Config{Model: model})
-			budget = superBudgetRow{TaskID: goal.ID, Rounds: goal.ModelRounds, TokenLimit: usageLimit}
+			budget = superBudgetRow{TaskID: goal.ID, Rounds: goal.ModelRounds}
 			if err = tx.Create(&budget).Error; err != nil {
 				return err
 			}
 		} else if err != nil {
 			return err
 		}
+		budget.TokenLimit = 0
+		if err := tx.Model(&budget).Update("token_limit", 0).Error; err != nil {
+			return err
+		}
 		paused, err := superBudgetPausedTx(tx, goal.ID, goal.RoundLimit)
 		if err != nil {
 			return err
 		}
-		if paused || charge > budget.TokenLimit-budget.Tokens {
+		if paused {
 			rejected = true
 			return pauseSuperBudgetTx(tx, w, &goalRow, &goal)
 		}

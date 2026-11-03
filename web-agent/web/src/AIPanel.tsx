@@ -1,5 +1,5 @@
 import {ReplyIdentity,type AssistantIdentity} from './ReplyIdentity';
-import type {SpecialistReplyAuthor} from '../../shared/contracts';
+import type {SpecialistReplyAuthor,SuperTask} from '../../shared/contracts';
 import {pendingUserSupplements} from "./messageQueue";
 import {latestInspectorSelection} from './sessionInspectorModel';
 import {MiniBoxCompletionNotice} from './MiniBox';
@@ -119,13 +119,13 @@ function TranscriptMessage({message,sessionId,resources,arrive=false,pendingImag
           {message.role==='user'&&!!message.text&&<UserMessageCopy text={message.text}/>}
         </div>;
 }
-type TranscriptProps = {onSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;onOpenMemory?:()=>void;sourceMessageId?:string;onSourceLocated?:()=>void;onOpenPlans?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
+type TranscriptProps = {superTask?:SuperTask;onSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;onOpenMemory?:()=>void;sourceMessageId?:string;onSourceLocated?:()=>void;onOpenPlans?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
 export function AITranscript(props: TranscriptProps) {
   const {snapshot} = props;
   const resources = useMemo(() => (snapshot.resources ?? []).filter(resource => !resource.projectId || resource.projectId === snapshot.session.projectId), [snapshot.resources, snapshot.session.projectId]);
   return <ObjectReferencesProvider key={snapshot.session.id} resources={resources} tasks={snapshot.ai?.agentRuns}><AITranscriptContent {...props}/></ObjectReferencesProvider>;
 }
-function AITranscriptContent({ onSpecialist,assistantIdentity,onOpenMemory,sourceMessageId,onSourceLocated,snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh, onOpenPlans }: TranscriptProps) {
+function AITranscriptContent({ superTask,onSpecialist,assistantIdentity,onOpenMemory,sourceMessageId,onSourceLocated,snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh, onOpenPlans }: TranscriptProps) {
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
   // Retain an observed completion when a legacy turn has no saved timing and
@@ -151,6 +151,7 @@ function AITranscriptContent({ onSpecialist,assistantIdentity,onOpenMemory,sourc
   const visibleEntries = entries.filter(entry => !isFileChangeCard(entry.card));
   const lastBudgetCard=cards.filter(card=>!!card.content).at(-1);
   const budgetPause=lastBudgetCard?.type==='error'&&isSuperBudgetPause(lastBudgetCard.content||'')&&!['running','waiting_approval'].includes(snapshot.ai?.status||'')?lastBudgetCard:undefined;
+  const budgetNotice=superTask?.reason==='token_limit_removed'?superTask.summary:budgetPause?(superTask?.summary||displayAiError(budgetPause.content||'')):undefined;
   const groups = transcriptGroups(visibleEntries);
   const activityEntry = (entry: (typeof entries)[number]) => !!(entry.sre||entry.agentRun || entry.action || entry.card && ["thinking", "operation", "shell", "diff", "error", "strategy_correction"].includes(entry.card.type));
   const filteredEntries=mode==='activity'&&sreTaskFilter?entries.filter(entry=>entry.sre&&(entry.sre.task.id===sreTaskFilter||entry.sre.task.status==='waiting_approval'||entry.sre.task.attempts.some(a=>a.operations?.some(o=>['unknown','dispatched'].includes(o.status))))):entries;
@@ -247,7 +248,7 @@ function AITranscriptContent({ onSpecialist,assistantIdentity,onOpenMemory,sourc
       {mode==='conversation'&&!(turn===currentTurn&&liveConversation)&&<MiniBoxCompletionNotice notices={snapshot.commandStopNotices??[]} startedAt={miniStartedAt} endedAt={miniEndedAt}/>}
     </div></ReplyReferenceScope>;})}
 
-    {mode==='conversation'&&budgetPause&&<div className="ai-response" role="status"><ReplyIdentity identity={assistantIdentity}/><div className="ai-card ai-message"><AssistantMarkdown>{displayAiError(budgetPause.content||'')}</AssistantMarkdown></div></div>}
+    {mode==='conversation'&&budgetNotice&&<div className="ai-response" role="status"><ReplyIdentity identity={assistantIdentity}/><div className="ai-card ai-message"><AssistantMarkdown>{budgetNotice}</AssistantMarkdown></div></div>}
     {mode==='conversation'&&pendingUserSupplements(snapshot).map(item=><TranscriptMessage key={`supplement:${item.id}`} sessionId={snapshot.session.id} resources={snapshot.resources} pendingImages={item.images.length} message={{...item,images:[],sessionId:snapshot.session.id,role:'user'}}/>)}
     {mode==='activity'&&mergedSRE.filter(task=>!sreTaskFilter||task.id===sreTaskFilter).map(task=><SREEventHistory key={task.id} task={task}/>)}
   </div>;

@@ -28,19 +28,31 @@ test('budget pause is distinct from a recoverable context-size error and has an 
  assert.ok(isConversationInterruption(refusal));
  assert.match(displayAiError(refusal),/尚未取得新的检查结果/);
  assert.ok(!isConversationInterruption('message exceeds configured context window'));
- const task={taskId:'task',sessionId:'worker',title:'检查服务',state:'paused',reason:'model_budget_exhausted',summary:'本任务剩余执行额度不足，尚无新的检查结果。',acceptanceState:'insufficient',revision:3} as SuperTask;
- const goal={items:[],modelRounds:13,roundLimit:500} as unknown as WorkGoal;
+ const task={taskId:'task',sessionId:'worker',title:'检查服务',state:'paused',reason:'model_round_limit',summary:'本任务剩余执行额度不足，尚无新的检查结果。',acceptanceState:'insufficient',revision:3} as SuperTask;
+ const goal={items:[],modelRounds:500,roundLimit:500} as unknown as WorkGoal;
  const html=renderToStaticMarkup(createElement(SuperTaskInspector,{task,goal}));
  assert.match(html,/已暂停/);
  assert.match(html,/尚无新的检查结果/);
- assert.match(html,/本次执行额度不足/);
+ assert.match(html,/模型调用轮数已达上限/);
  assert.doesNotMatch(html,/13 \/ 500|已验收/);
 });
 
 test('a restored ended invocation does not label its budget-paused task as ended',()=>{
- const task={state:'paused',reason:'model_budget_exhausted'} as SuperTask;
+ const task={state:'paused',reason:'model_round_limit'} as SuperTask;
  const html=renderToStaticMarkup(createElement(SessionStateBadge,{session:{status:'completed'} as SessionSnapshot['session'],...superTaskHeaderPresentation(task)}));
  assert.match(html,/已暂停/);
  assert.doesNotMatch(html,/已结束/);
  assert.equal(superTaskHeaderPresentation({...task,state:'running'}),undefined);
+});
+
+test('removing a legacy token ceiling supersedes its current pause notice without deleting diagnostics',()=>{
+ const at='2026-11-03T00:00:00Z';
+ const snapshot={session:{id:'worker'},messages:[],resources:[],actions:[],specialists:[],evidence:[],ai:{session:'worker',status:'blocked',cardsOffset:0,cards:[{id:'old-limit',type:'error',status:'failed',at,content:refusal}]}} as unknown as SessionSnapshot;
+ const task={taskId:'task',sessionId:'worker',state:'blocked',reason:'token_limit_removed',summary:'累计 token 上限已取消，历史用量继续累计。'} as SuperTask;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,superTask:task}));
+ assert.match(html,/累计 token 上限已取消/);
+ assert.doesNotMatch(html,/剩余执行额度不足/);
+ assert.equal(snapshot.ai!.cards[0].content,refusal);
+ assert.equal(superTaskHeaderPresentation(task)?.status,'failed');
+ assert.match(displayAiError('superagent: task model round limit reached'),/模型调用轮数上限/);
 });

@@ -24,9 +24,11 @@ func reserveAgentBudget(ctx context.Context, w *agentWorker, charge int) error {
 			return err
 		}
 		w.session.mu.Lock()
-		if w.sreTaskID != "" {
+		_, superTask := ctx.Value(superAssignmentContextKey{}).(SuperAssignmentToken)
+		if w.sreTaskID != "" || superTask {
 			// The durable SRE task reservation is checked by stream. Keep the
-			// child journal, without imposing the legacy Scout/Beacon quotas.
+			// child journal, without imposing legacy token ceilings on a
+			// Super-agent task's accounting-only cumulative usage.
 			for i := range w.session.state.View.AgentRuns {
 				run := &w.session.state.View.AgentRuns[i]
 				if run.ID == w.runID && run.SRETaskID == w.sreTaskID {
