@@ -77,7 +77,7 @@ func (e *Engine) finalizeSuperRouter(ctx context.Context, sessionID string, run 
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		return tx.Create(&superOutputRow{ID: id, ProjectID: run.projectID, ChannelRef: destination, SourceMessageID: events[len(events)-1].SourceEventID, Kind: "router_reply", Payload: payload, RequestHash: hash(payload), ReportRevision: 1, State: "pending", CreatedAt: time.Now().UTC()}).Error
+		return tx.Create(&superOutputRow{ID: id, ProjectID: run.projectID, ChannelRef: destination, SourceMessageID: admitted[len(admitted)-1].SourceEventID, Kind: "router_reply", Payload: payload, RequestHash: hash(payload), ReportRevision: 1, State: "pending", CreatedAt: time.Now().UTC()}).Error
 	})
 }
 

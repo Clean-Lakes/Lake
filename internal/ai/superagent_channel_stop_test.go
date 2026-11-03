@@ -72,3 +72,37 @@ func TestSuperChannelPendingInteractionsAreNotLimitedToRecentWorkers(t *testing.
 		t.Fatal(ids, err)
 	}
 }
+
+func TestSuperChannelStopPartialRouterBatchKeepsAdmittedOrigin(t *testing.T) {
+	e, binding := superFixture(t)
+	db, _ := e.superStore()
+	if err := db.Create(&superProjectRow{ProjectID: binding.ProjectID, RouterSessionID: "router", Version: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	live, _, err := e.ReceiveSuperEvent(t.Context(), binding, SuperEventInput{SourceEventID: "live", Kind: "message", Payload: "Keep this request"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopped, _, err := e.ReceiveSuperEvent(t.Context(), binding, SuperEventInput{SourceEventID: "stopped", Kind: "message", Payload: "Stop this request"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&superEventRow{}).Where("id = ?", stopped.ID).Update("disposition", "cancelled").Error; err != nil {
+		t.Fatal(err)
+	}
+	s, err := e.get("router")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.state.View.Cards = []Card{{ID: "reply", Type: "message", Content: "Kept request response"}}
+	s.mu.Unlock()
+	run := &superRouterRun{projectID: binding.ProjectID, bindings: map[string]SuperSourceBinding{live.ID: binding, stopped.ID: binding}}
+	if err := e.finalizeSuperRouter(t.Context(), "router", run, []SuperEvent{live, stopped}); err != nil {
+		t.Fatal(err)
+	}
+	var output superOutputRow
+	if err := db.First(&output).Error; err != nil || output.SourceMessageID != live.SourceEventID {
+		t.Fatal("reply was attributed to cancelled input", output.SourceMessageID, err)
+	}
+}
