@@ -114,7 +114,8 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .term
 html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xterm-viewport { top:116px; }
 .lake-workbench-island .header-state-area { margin-left:0; }
 .lake-workbench-island .header-normal-state .header-morph-content { display:flex; align-items:center; gap:4px; }
-.lake-workbench-island .session-state-badge { white-space:nowrap; }
+.lake-workbench-island { --island-badge-padding:8px; }
+.lake-workbench-island .session-state-badge { white-space:nowrap; padding-inline:var(--island-badge-padding); }
 
 /* Keep the session identity visible on tight rails. The status text shares
    the remaining space and can truncate, while its disclosure stays reachable. */
