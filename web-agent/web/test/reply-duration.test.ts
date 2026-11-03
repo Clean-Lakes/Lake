@@ -100,6 +100,25 @@ test("cancelled and failed turns are identified; unknown endpoints do not fabric
  assert.equal(replyDurationText({...timing,startedAt:"invalid"},Date.now()),undefined);
  assert.equal(replyDurationText({...timing,finishedAt:"2026-10-12T02:00:00Z"},Date.now()),undefined);
 });
+test('streamed prose replaces the model waiting row while details and real tool activity remain available',t=>{
+ t.mock.method(Date,'now',()=>Date.parse(start)+4000);
+ for(const pilot of [false,true])for(const type of ['message','text'] as const){
+  const cards:AICard[]=[{id:'reply',type,status:'running',content:'请问你想继续检查这台主机吗？',at:start}];
+  const snapshot={session:{id:'stream',workspaceRole:pilot?'router':'worker'},messages:[{id:'u',sessionId:'stream',role:'user',text:'a',createdAt:start}],resources:[],actions:[],replyTimings:pilot?[{...timing,status:'running',finishedAt:''}]:[],ai:{session:'stream',status:'running',turnStartedAt:start,cards,cardsOffset:0}} as SessionSnapshot;
+  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:pilot?'Pilot':'服务器运维排查专员',pilot}}));
+  assert.ok(html.includes(cards[0]!.content!));
+  assert.ok(!html.includes('正在生成回复')&&!html.includes('reply-duration-spinner')&&!html.includes('turn-thinking-dots')&&!html.includes('class="reply-duration '),'plain model streaming needs no second activity row');
+  const props={timing:{...timing,status:'running' as const,finishedAt:''},view:snapshot.ai,cards,latestUserAt:start};
+  const details=renderToStaticMarkup(createElement(ReplyDuration,{...props,disclosure:{open:false,controls:'steps',onToggle:()=>{}}}));
+  assert.ok(details.includes('执行过程')&&details.includes('aria-controls="steps"'));
+  assert.ok(!details.includes('正在生成回复')&&!details.includes('reply-duration-spinner')&&!details.includes('status-text--active'));
+  const notice=renderToStaticMarkup(createElement(ReplyDuration,{...props,timing:pilot?props.timing:undefined,detailNotice:'1 项结果待核查'}));
+  assert.ok(notice.includes('1 项结果待核查')&&!notice.includes('正在生成回复'),'quiet model output must preserve execution warnings even without saved timing');
+  const tool:AICard={id:'tool',type:'operation',title:'inspect_host',status:'running',at:start};
+  const operating=renderToStaticMarkup(createElement(ReplyDuration,{...props,cards:[tool,...cards]}));
+  assert.ok(operating.includes('正在执行工具'),'real running tools must not be hidden merely because prose arrived');
+ }
+});
 test("each footer stays with its own user turn and multi-Agent replies keep one timer",()=>{
  const snapshot={session:{id:"s"},messages:[{id:"u",role:"user",text:"你好",createdAt:start},{id:"v",role:"user",text:"谢谢",createdAt:"2026-10-12T03:02:00Z"}],resources:[],actions:[],specialists:[],evidence:[],replyTimings:[timing,{messageId:"v",startedAt:"2026-10-12T03:02:00Z",finishedAt:"2026-10-12T03:02:04Z",status:"completed"}],ai:{session:"s",status:"completed",startedAt:start,turnStartedAt:"2026-10-12T03:02:00Z",turnFinishedAt:"2026-10-12T03:02:04Z",cardsOffset:0,cards:[{id:"reply1",type:"message",content:"你好。",status:"completed",at:"2026-10-12T03:00:10Z"},{id:"reply2",type:"message",content:"不客气。",status:"completed",at:"2026-10-12T03:02:01Z"}],agentRuns:[{id:"run",sessionId:"s",role:"host",task:"检查",status:"completed",resourceIds:[],createdAt:"2026-10-12T03:00:01Z"}]}} as SessionSnapshot;
  assert.equal(timingForTurn([{id:"u",at:start,message:snapshot.messages[0]}],snapshot),timing);
