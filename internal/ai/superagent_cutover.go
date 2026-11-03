@@ -122,7 +122,8 @@ func (e *Engine) SuperInputWorkers(ctx context.Context, projectID string) ([]str
 		return nil, err
 	}
 	var ids []string
-	err = db.WithContext(ctx).Model(&superWorkerRow{}).Where("project_id = ? AND id IN (?)", projectID, db.Model(&superInboxRow{}).Select("worker_id").Where("mode = ? AND consumed_at IS NULL AND delivered_at IS NULL", "followup")).Order("created_at, id").Limit(100).Pluck("id", &ids).Error
+	routed := db.Model(&superEventRow{}).Select("id").Where("project_id = ? AND disposition = ?", projectID, "routed")
+	err = db.WithContext(ctx).Model(&superWorkerRow{}).Where("project_id = ? AND id IN (?)", projectID, db.Model(&superInboxRow{}).Select("worker_id").Where("mode = ? AND consumed_at IS NULL AND delivered_at IS NULL AND event_id IN (?)", "followup", routed)).Order("created_at, id").Limit(100).Pluck("id", &ids).Error
 	return ids, err
 }
 

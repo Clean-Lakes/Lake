@@ -184,7 +184,8 @@ func (e *Engine) DeliverSuperFollowups(ctx context.Context, projectID, workerID 
 	if err != nil {
 		return err
 	}
-	return e.AdmitSupplement(w.SessionID, func(root string) error {
+	noInput := errors.New("superagent: no newly admitted followup")
+	err = e.AdmitSupplement(w.SessionID, func(root string) error {
 		// AdmitSupplement owns this exact session lock through the callback.
 		runtimeID := ""
 		if s.state.Runtime != nil {
@@ -199,6 +200,9 @@ func (e *Engine) DeliverSuperFollowups(ctx context.Context, projectID, workerID 
 			if err := tx.Where("worker_id = ? AND mode = ? AND consumed_at IS NULL AND delivered_at IS NULL AND event_id IN (?)", workerID, "followup", tx.Model(&superEventRow{}).Select("id").Where("disposition = ?", "routed")).Find(&rows).Error; err != nil {
 				return err
 			}
+			if len(rows) == 0 {
+				return noInput // Do not cancel a provider for an empty delivery.
+			}
 			for _, row := range rows {
 				if err := tx.Model(&superInboxRow{}).Where("id = ? AND consumed_at IS NULL AND delivered_at IS NULL", row.ID).Updates(map[string]any{"assignment_id": assignment.ID, "root_turn_id": root, "sdk_session_id": runtimeID, "delivered_at": time.Now().UTC()}).Error; err != nil {
 					return err
@@ -207,6 +211,10 @@ func (e *Engine) DeliverSuperFollowups(ctx context.Context, projectID, workerID 
 			return nil
 		})
 	})
+	if errors.Is(err, noInput) {
+		return nil
+	}
+	return err
 }
 func enqueueSuperInput(tx *gorm.DB, projectID string, event superEventRow, workerID, partKey, mode string) (SuperWorkerInput, error) {
 	if !validSuperInputMode(mode) || partKey == "" || len(partKey) > 128 {

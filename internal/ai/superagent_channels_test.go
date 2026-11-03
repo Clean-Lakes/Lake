@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSuperChannelMigrationCancellationLeavesPreviousSchemaIntact(t *testing.T) {
@@ -259,5 +260,39 @@ func TestSuperChannelBlockedRouteDoesNotStarveLaterTaskFollowup(t *testing.T) {
 		if row.DeliveredAt != nil || row.ConsumedAt != nil {
 			t.Fatal("queueing consumed or removed another input")
 		}
+	}
+	if err := db.Model(&superInboxRow{}).Where("event_id = ?", admitted.ID).Update("delivered_at", time.Now().UTC()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if ids, err := e.SuperInputWorkers(t.Context(), b.ProjectID); err != nil || len(ids) != 0 {
+		t.Fatal("blocked route remained a deliverable supplement", ids, err)
+	}
+
+}
+
+func TestSuperEmptyFollowupDeliveryDoesNotPreemptProvider(t *testing.T) {
+	e, b := superFixture(t)
+	task := superCreateFixture(t, e, b, "original", "Inspect A", "a", "Inspect A")
+	db, _ := e.superStore()
+	if err := db.Model(&superAssignmentRow{}).Where("worker_id = ?", task.WorkerID).Updates(map[string]any{"state": "active", "lease_until": time.Now().Add(time.Minute)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	e.SetSupplementHooks(func(string, string) ([]UserSupplement, error) { return nil, nil }, nil)
+	s, _ := e.get(task.SessionID)
+	ctx, cancelCause := context.WithCancelCause(t.Context())
+	defer cancelCause(nil)
+	_, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s.mu.Lock()
+	s.cancel = cancel
+	s.state.View.RootTurnID = "live-root"
+	s.supplementRequest = &supplementRequest{cancel: cancelCause}
+	s.mu.Unlock()
+	defer func() { s.mu.Lock(); s.cancel = nil; s.supplementRequest = nil; s.mu.Unlock() }()
+	if err := e.DeliverSuperFollowups(t.Context(), b.ProjectID, task.WorkerID); err != nil {
+		t.Fatal(err)
+	}
+	if context.Cause(ctx) != nil {
+		t.Fatal("empty poll cancelled live provider", context.Cause(ctx))
 	}
 }
