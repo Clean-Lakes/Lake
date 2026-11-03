@@ -17,6 +17,7 @@
  .composer-input,
  .ai-role-user:not(.has-message-images),
  .ai-role-user.has-message-images > .user-message-text,
+ .turn-thinking-bubble,
  .markdown-code-block,
  .composer-mentions.mention-menu,
  .composer-mentions .mention-item
@@ -74,6 +75,7 @@
  .composer-input,
  .ai-role-user:not(.has-message-images),
  .ai-role-user.has-message-images > .user-message-text,
+ .turn-thinking-bubble,
  .markdown-code-block,
  .composer-mentions.mention-menu,
  .composer-mentions .mention-item,
@@ -134,6 +136,7 @@
  .composer-input,
  .ai-role-user:not(.has-message-images),
  .ai-role-user.has-message-images > .user-message-text,
+ .turn-thinking-bubble,
  .markdown-code-block,
  .composer-mentions .mention-item,
  .session-state-badge,

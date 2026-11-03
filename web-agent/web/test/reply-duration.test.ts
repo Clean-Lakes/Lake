@@ -28,7 +28,7 @@ test("normal activity waits one second and instant completion does not flash a d
  }
  now=Date.parse(start)+1000;
  const active=render({timing:running});
- assert.ok(active.includes("reply-duration-spinner")&&!active.includes("用时")&&active.includes("正在思考…"));
+ assert.ok(active.includes("turn-thinking-dots")&&!active.includes("用时")&&active.includes("正在思考…"));
  const quick={...timing,finishedAt:"2026-10-12T03:00:00.999Z"};
  assert.equal(render({timing:quick}),"");
  assert.ok(render({timing:{...quick,status:"failed"}}).includes("未完成"));
@@ -59,7 +59,7 @@ test("each footer stays with its own user turn and multi-Agent replies keep one 
 test("waiting for first model data already has visible motion, independent of idle engine state",()=>{
  const snapshot={session:{id:"s"},messages:[{id:"u",role:"user",text:"你能看懂图片吗",createdAt:start}],resources:[],actions:[],replyTimings:[{...timing,status:"running",finishedAt:""}],ai:{session:"s",status:"idle",cards:[],cardsOffset:0}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
- assert.ok(html.includes("reply-duration-spinner") && html.includes("正在思考…"));
+ assert.ok(html.includes("turn-thinking-dots") && html.includes("正在思考…"));
  const completed=renderToStaticMarkup(createElement(AITranscript,{snapshot:{...snapshot,replyTimings:[timing]}}));
  assert.ok(!completed.includes("reply-duration-spinner") && completed.includes("用时 1分钟 13秒")&&!completed.includes("reply-duration-clock"));
  assert.ok(!completed.includes("回复结束")&&!completed.includes("turn-status-mark"),"finished timing uses a quiet Chinese elapsed caption without an icon or repeated completion label");
@@ -86,14 +86,20 @@ test('elapsed disclosure matches the Chinese reference and exposes a real access
 });
 
 
-test('live elapsed header sweeps quietly; completion freezes the duration',t=>{
+test('thinking uses three accessible dots; tool activity keeps elapsed text and completion freezes it',t=>{
  t.mock.method(Date,'now',()=>Date.parse(start)+19000);
  const running={...timing,status:'running' as const,finishedAt:''};
  const html=renderToStaticMarkup(createElement(ReplyDuration,{timing:running}));
- const active=html.match(/<span class="status-text status-text--active [^"]*">([\s\S]*?)<\/span><\/span>/)?.[1]??'';
+ assert.ok(html.includes('turn-thinking-bubble')&&html.includes('class="visually-hidden" role="status"'));
+ assert.equal((html.match(/<i>/g)||[]).length,3);
+ assert.ok(html.includes('title="正在思考 · 已处理 19秒"'));
+ assert.ok(!html.includes('turn-status-elapsed')&&!html.includes('reply-duration-spinner')&&!html.includes('status-text--active'));
+ const tool:AICard={id:'tool',type:'operation',title:'inspect_host',status:'running',at:start};
+ const toolHTML=renderToStaticMarkup(createElement(ReplyDuration,{timing:running,cards:[tool]}));
+ const active=toolHTML.match(/<span class="status-text status-text--active [^"]*">([\s\S]*?)<\/span><\/span>/)?.[1]??'';
  assert.ok(active.includes('turn-status-elapsed')&&active.includes('已处理 19秒')&&!active.includes('用时 '));
- assert.ok(active.includes('正在思考…'));
- assert.equal((html.match(/status-text--active/g)||[]).length,1);
+ assert.ok(active.includes('正在执行工具…'));
+ assert.equal((toolHTML.match(/status-text--active/g)||[]).length,1);
  const waiting=renderToStaticMarkup(createElement(ReplyDuration,{timing:running,view:{status:'waiting_approval',cards:[]} as never}));
  const ended=renderToStaticMarkup(createElement(ReplyDuration,{timing}));
  assert.ok(ended.includes('用时 1分钟 13秒'));
@@ -105,6 +111,18 @@ test('live elapsed header sweeps quietly; completion freezes the duration',t=>{
  t.mock.method(Date,'now',()=>Date.parse(start)+45000);
  assert.equal(renderToStaticMarkup(createElement(ReplyDuration,{timing:running,previewAt})),preview,'reply streaming does not advance the preview clock');
  assert.ok(renderToStaticMarkup(createElement(ReplyDuration,{timing,previewAt})).includes('用时 1分钟 13秒'),'saved total replaces the preview only after real completion');
+});
+
+test('typing bubble preserves detail access and yields to approval and final timing',()=>{
+ const running={...timing,status:'running' as const,finishedAt:''};
+ const disclosure={open:false,controls:'steps',side:true,onToggle:()=>{}};
+ const render=(props:Parameters<typeof ReplyDuration>[0])=>renderToStaticMarkup(createElement(ReplyDuration,props));
+ const thinking=render({timing:running,disclosure});
+ assert.ok(thinking.includes('aria-label="查看执行详细过程"')&&thinking.includes('aria-controls="steps"'));
+ for(const html of [render({timing:running,view:{status:'waiting_approval',cards:[]} as never,disclosure}),render({timing:{...timing,status:'failed'}}),render({timing}),render({timing:running,previewAt:Date.parse(start)+19000})]){
+  assert.ok(!html.includes('turn-thinking-bubble'));
+ }
+ assert.ok(render({timing:running,view:{status:'waiting_approval',cards:[]} as never}).includes('等待确认'));
 });
 
 test('finished metadata drops the last operation caption even when saved cards still say running',()=>{
