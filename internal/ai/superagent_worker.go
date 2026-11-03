@@ -142,6 +142,11 @@ func (e *Engine) StartTaskWorker(ctx context.Context, projectID, workerID string
 	}
 	input.Context += "\n[ASSIGNED DELIVERABLE]\n" + decision.Quote + "\n[BOUNDARY]\nWork only on this quoted deliverable. The original user message is retained for constraints; its other independent deliverables belong to other Workers. Canonical task: " + w.TaskID
 	input.Context += superWorkerResourceIndex(c)
+	refs, refErr := e.superTaskReferenceContext(ctx, w.ProjectID, w.TaskID)
+	if refErr != nil {
+		return refErr
+	}
+	input.Context += refs
 	return e.runSuperWorkerInput(ctx, w, input)
 }
 
@@ -288,6 +293,11 @@ func (e *Engine) ResumeTaskWorker(ctx context.Context, projectID, workerID strin
 	}
 	input.superInboxIDs = ids
 	input.Context += "\n[ACTUAL TASK FOLLOWUP]\nContinue only canonical task " + w.TaskID + " with this actual new human input. Existing approvals, unknown operations, evidence, deadline and cumulative budget remain authoritative."
+	refs, refErr := e.superTaskReferenceContext(ctx, w.ProjectID, w.TaskID)
+	if refErr != nil {
+		return refErr
+	}
+	input.Context += refs
 	return e.runSuperWorkerInput(ctx, w, input)
 }
 

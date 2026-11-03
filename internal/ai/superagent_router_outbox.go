@@ -46,6 +46,18 @@ func (e *Engine) finalizeSuperRouter(ctx context.Context, sessionID string, run 
 			return err
 		}
 		id := hash(js([]any{"router-reply", ids}))
+		destination := sessionID
+		var origin superEventRow
+		if err := tx.First(&origin, "id = ? AND project_id = ?", events[0].ID, run.projectID).Error; err != nil {
+			return err
+		}
+		channel, err := superChannelForEventTx(tx, origin)
+		if err != nil {
+			return err
+		}
+		if channel != nil {
+			destination = channel.HostSessionID
+		}
 		payload := js(map[string]any{"text": text})
 		var prior superOutputRow
 		if err := tx.First(&prior, "id = ?", id).Error; err == nil {
@@ -53,7 +65,7 @@ func (e *Engine) finalizeSuperRouter(ctx context.Context, sessionID string, run 
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		return tx.Create(&superOutputRow{ID: id, ProjectID: run.projectID, ChannelRef: sessionID, SourceMessageID: events[len(events)-1].SourceEventID, Kind: "router_reply", Payload: payload, RequestHash: hash(payload), ReportRevision: 1, State: "pending", CreatedAt: time.Now().UTC()}).Error
+		return tx.Create(&superOutputRow{ID: id, ProjectID: run.projectID, ChannelRef: destination, SourceMessageID: events[len(events)-1].SourceEventID, Kind: "router_reply", Payload: payload, RequestHash: hash(payload), ReportRevision: 1, State: "pending", CreatedAt: time.Now().UTC()}).Error
 	})
 }
 

@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const superSchemaVersion = 3
+const superSchemaVersion = 4
 
 type superSchemaRow struct {
 	ID      int `gorm:"primaryKey"`
@@ -155,6 +155,10 @@ type superLegacyAliasRow struct {
 func (superLegacyAliasRow) TableName() string { return "superagent_legacy_aliases" }
 
 func superagentModels() []any {
+	return append(superagentV3Models(), &superChannelRow{}, &superChannelSourceRow{}, &superTaskReferenceRow{})
+}
+
+func superagentV3Models() []any {
 	return []any{&superSchemaRow{}, &superSourceRow{}, &superEventRow{}, &superDecisionRow{}, &superRoleRow{}, &superWorkerRow{}, &superAssignmentRow{}, &superSubscriptionRow{}, &superInboxRow{}, &superOutputRow{}, &superLegacyAliasRow{}, &superHandbackRow{}, &superAdmissionRow{}, &superProjectRow{}, &superBudgetRow{}, &superModelChargeRow{}}
 }
 
@@ -166,8 +170,30 @@ func MigrateSuperagentStore(db *gorm.DB) error {
 		if err := db.First(&row, "id = ?", 1).Error; err != nil {
 			return err
 		}
-		if row.Version != superSchemaVersion {
+		if row.Version != 3 && row.Version != superSchemaVersion {
 			return errors.New("superagent: unsupported schema")
+		}
+		if row.Version == 3 {
+			for _, model := range superagentV3Models() {
+				if !db.Migrator().HasTable(model) {
+					return errors.New("superagent: incomplete previous schema")
+				}
+			}
+			return db.Transaction(func(tx *gorm.DB) error {
+				if err := tx.AutoMigrate(&superChannelRow{}, &superChannelSourceRow{}, &superTaskReferenceRow{}); err != nil {
+					return err
+				}
+				var workers []superWorkerRow
+				if err := tx.Where("parent_worker_id = ''").Order("created_at,id").Find(&workers).Error; err != nil {
+					return err
+				}
+				for _, worker := range workers {
+					if _, err := ensureSuperChannelTx(tx, worker.ProjectID, worker.RoleID, worker.CreatedAt); err != nil {
+						return err
+					}
+				}
+				return tx.Model(&superSchemaRow{}).Where("id = ? AND version = ?", 1, 3).Update("version", superSchemaVersion).Error
+			})
 		}
 		for _, model := range superagentModels() {
 			if !db.Migrator().HasTable(model) {
@@ -205,7 +231,12 @@ func (e *Engine) superStore() (*gorm.DB, error) {
 		return nil, err
 	}
 	owner.superOnce.Do(func() {
-		if !store.DB.Migrator().HasTable(&superSchemaRow{}) {
+		var schema superSchemaRow
+		needsBackup := !store.DB.Migrator().HasTable(&superSchemaRow{})
+		if !needsBackup && store.DB.First(&schema, "id = ?", 1).Error == nil {
+			needsBackup = schema.Version == 3
+		}
+		if needsBackup {
 			backupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			owner.superErr = store.Backup(backupCtx, filepath.Join(owner.runtimeDirectory(), "before-superagent-"+uid()+".sqlite"))

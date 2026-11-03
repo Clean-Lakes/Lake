@@ -27,14 +27,15 @@ type superRouterRun struct {
 }
 type SuperDecision struct {
 	conversationMode string
-	EventID          string `json:"eventId"`
-	PartKey          string `json:"partKey"`
-	Action           string `json:"action"`
-	TaskID           string `json:"taskId,omitempty"`
-	Title            string `json:"title,omitempty"`
-	RoleKey          string `json:"roleKey,omitempty"`
-	Quote            string `json:"quote,omitempty"`
-	Reason           string `json:"reason"`
+	EventID          string   `json:"eventId"`
+	PartKey          string   `json:"partKey"`
+	Action           string   `json:"action"`
+	TaskID           string   `json:"taskId,omitempty"`
+	Title            string   `json:"title,omitempty"`
+	RoleKey          string   `json:"roleKey,omitempty"`
+	Quote            string   `json:"quote,omitempty"`
+	Reason           string   `json:"reason"`
+	EvidenceTaskIDs  []string `json:"evidenceTaskIds,omitempty"`
 	roundLimit       int
 }
 type SuperRouteResult struct {
@@ -98,6 +99,7 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 	if err := e.checkSuperPayload(js(in)); err != nil {
 		return out, err
 	}
+	if in.Action!="create"&&len(in.EvidenceTaskIDs)>0{return out,errors.New("superagent: historical evidence sources are registered only for new comparison tasks")}
 	db, err := e.superStore()
 	if err != nil {
 		return out, err
@@ -133,6 +135,25 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 		}
 		if source.Kind != "user" && in.Action != "context_only" && in.Action != "ask" {
 			return errSuperBinding
+		}
+		channel, channelErr := superChannelForEventTx(tx, event)
+		if channelErr != nil {
+			return channelErr
+		}
+		if channel != nil {
+			var role superRoleRow
+			if err := tx.First(&role, "id = ? AND project_id = ?", channel.RoleID, b.ProjectID).Error; err != nil {
+				return err
+			}
+			if in.Action == "create" && in.RoleKey != role.RoleKey {
+				return errors.New("superagent: use the exact preferred role_key from the source channel")
+			}
+			if in.TaskID != "" {
+				var worker superWorkerRow
+				if err := tx.First(&worker, "task_id = ? AND project_id = ? AND role_id = ? AND parent_worker_id = ''", in.TaskID, b.ProjectID, role.ID).Error; err != nil {
+					return errSuperBinding
+				}
+			}
 		}
 		if (in.Action == "create" || in.Action == "followup" || in.Action == "stop") && (strings.TrimSpace(in.Quote) == "" || !strings.Contains(event.Payload, in.Quote)) {
 			return errors.New("superagent: route_work create, followup and stop require quote to be an exact non-empty substring of the original user event; copy it without paraphrasing")
@@ -187,10 +208,16 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 			if err := tx.Create(&w).Error; err != nil {
 				return err
 			}
+			if _, err := ensureSuperChannelTx(tx, b.ProjectID, roleID, row.At); err != nil {
+				return err
+			}
 			if err := tx.Create(&superAssignmentRow{ID: "assignment_" + key, WorkerID: workerID, ProjectID: b.ProjectID, State: "queued", CreatedAt: row.At}).Error; err != nil {
 				return err
 			}
 			row.TaskID = taskID
+			if err := registerSuperTaskReferencesTx(tx, b.ProjectID, taskID, in.EvidenceTaskIDs); err != nil {
+				return err
+			}
 		case "followup", "context_only", "stop":
 			var w superWorkerRow
 			if err := tx.First(&w, "task_id = ? AND project_id = ? AND parent_worker_id = ''", in.TaskID, b.ProjectID).Error; err != nil {
@@ -270,6 +297,15 @@ func (e *Engine) RunPilotRouter(ctx context.Context, sessionID string, b SuperSo
 	if len(remaining) == 0 {
 		return nil
 	}
+	// A single Router completion must not be attributed to unrelated channels.
+	thread := remaining[0].ThreadRef
+	batch := remaining[:0]
+	for _, event := range remaining {
+		if event.ThreadRef == thread {
+			batch = append(batch, event)
+		}
+	}
+	remaining = batch
 	if err = e.beginSuperRoutingAttempt(ctx, b.ProjectID, remaining); err != nil {
 		return err
 	}

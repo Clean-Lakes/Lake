@@ -1,0 +1,65 @@
+import {useEffect,useRef,useState} from 'react';
+import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage} from '../../shared/contracts';
+import {api,readableError} from './api';
+import {AITranscript,Card,TranscriptMessage} from './AIPanel';
+import {ObjectReferencesProvider} from './AssistantMarkdown';
+import {superTaskPresentation} from './superAgentPresentation';
+import {Glyph} from './Icons';
+
+export function mergeChannelEntries(previous:SpecialistChannelEntry[],incoming:SpecialistChannelEntry[]){
+ const entries=new Map(previous.map(entry=>[entry.id,entry]));
+ for(const entry of incoming)entries.set(entry.id,entry);
+ return [...entries.values()].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
+}
+
+export function SpecialistChannel({snapshot,connected,onTask,onActivity}:{snapshot:SessionSnapshot;connected:boolean;onTask:(sessionId:string)=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void}){
+ const session=snapshot.session.id;
+ const [page,setPage]=useState<SpecialistChannelPage|null>(null),[entries,setEntries]=useState<SpecialistChannelEntry[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(false);
+ const cursor=useRef(''),hasOlder=useRef(false),generation=useRef(0);
+ useEffect(()=>{
+  const current=++generation.current,controller=new AbortController();let busy=false;
+  setPage(null);setEntries([]);setError('');cursor.current='';hasOlder.current=false;
+  if(!connected)return;
+  const refresh=async()=>{
+   if(busy)return;busy=true;
+   try{const next=await api.specialistChannel(session,'',controller.signal);if(current!==generation.current)return;
+    setPage(next);setEntries(old=>mergeChannelEntries(old,next.entries));setError('');if(!hasOlder.current)cursor.current=next.nextCursor;
+   }catch(reason){if(!controller.signal.aborted&&current===generation.current)setError(readableError(reason));}finally{busy=false;}
+  };
+  void refresh();const timer=window.setInterval(()=>void refresh(),1000);
+  return()=>{controller.abort();window.clearInterval(timer);};
+ },[session,connected]);
+ const loadOlder=async()=>{
+  if(!cursor.current||loading)return;
+  const current=generation.current,container=document.querySelector<HTMLElement>('.conversation'),height=container?.scrollHeight??0,top=container?.scrollTop??0;
+  setLoading(true);
+  try{const older=await api.specialistChannel(session,cursor.current);if(current!==generation.current)return;
+   hasOlder.current=true;cursor.current=older.nextCursor;setEntries(old=>mergeChannelEntries(old,older.entries));setError('');
+   requestAnimationFrame(()=>{if(container&&current===generation.current)container.scrollTop=top+container.scrollHeight-height;});
+  }catch(reason){if(current===generation.current)setError(readableError(reason));}finally{if(current===generation.current)setLoading(false);}
+ };
+ const latestOwn=snapshot.messages.at(-1);
+ const admitting=latestOwn?.role==='user'&&(!page||!entries.length||Date.parse(latestOwn.createdAt)>Date.parse(entries.at(-1)!.createdAt));
+ const activity=page?.routing||admitting||!!page?.queued||page?.active.some(active=>active.ai?.replyStatus==='running')?'running':page?.active.length?'waiting':'idle';
+ useEffect(()=>{onActivity?.(session,activity)},[session,activity,onActivity]);
+ const name=page?.channel.roleName??snapshot.session.title;
+ return <ObjectReferencesProvider resources={snapshot.resources}><div className="ai-transcript specialist-channel" data-reply-avatar="hidden">
+  {!!cursor.current&&<button type="button" className="button secondary" disabled={loading} onClick={()=>void loadOlder()}>{loading?'正在加载…':'加载更早记录'}</button>}
+  {error&&<p className="pilot-workspace-error" role="alert">{error}</p>}
+  {page&&<details className="specialist-channel-tasks"><summary>任务记录 · {page.workers.length}</summary>{page.workers.map(worker=><button key={worker.id} type="button" onClick={()=>onTask(worker.sessionId)}><span>{worker.task.title}</span><small>{superTaskPresentation(worker.task).label}</small><Glyph name="next" size={12}/></button>)}</details>}
+  {entries.map(entry=><div className="specialist-channel-entry" key={entry.id} data-source-session={entry.sourceSessionId} data-task-id={entry.taskId}>
+   {entry.message?<TranscriptMessage message={entry.message} sessionId={entry.sourceSessionId} resources={snapshot.resources} hideIdentity/>:entry.card?<Card card={entry.card}/>:null}
+   {entry.taskId&&<button type="button" className="specialist-channel-source" aria-label={`查看任务 ${page?.workers.find(worker=>worker.task.taskId===entry.taskId)?.task.title??entry.taskId} 的执行详情`} onClick={()=>onTask(entry.sourceSessionId)}>执行详情<Glyph name="next" size={11}/></button>}
+  </div>)}
+  {(page?.routing||admitting||!!page?.queued)&&<div className="reply-duration turn-status is-live is-thinking without-avatar" role="status" aria-label="专员正在处理消息"><span className="turn-thinking-bubble"><span className="turn-thinking-dots" aria-hidden="true"><i/><i/><i/></span><span className="visually-hidden">正在安排工作</span></span></div>}
+  {page?.active.map(active=>{
+   const task=active.superagent?.task;
+   const cards=active.ai?.cards.filter(card=>!!active.ai?.turnStartedAt&&card.at>=active.ai.turnStartedAt)??[];
+   const live={...active,messages:[],ai:active.ai?{...active.ai,cards,cardsOffset:0,totalCards:cards.length}:undefined};
+   return <section className="specialist-channel-active" key={active.session.id} aria-label={task?.title??'当前任务'}>
+    <button type="button" className="specialist-channel-source" onClick={()=>onTask(active.session.id)}>{task?.title??'当前任务'}<Glyph name="next" size={11}/></button>
+    <AITranscript snapshot={live} superTask={task} assistantIdentity={{name}} disabled={!connected} refresh={()=>api.snapshot(active.session.id)} onInspect={()=>onTask(active.session.id)}/>
+   </section>;
+  })}
+ </div></ObjectReferencesProvider>;
+}

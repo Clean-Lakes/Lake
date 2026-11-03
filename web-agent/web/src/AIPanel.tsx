@@ -84,7 +84,7 @@ const cardMarkdownComponents:Components={...replyInfoComponents,pre:MarkdownCode
 function CompactionNotice({message}:{message:string}) {
  return <div className="ai-compaction-notice" role="status"><Glyph name="alert" size={14}/><span>{displayAiError(message)}</span></div>;
 }
-const Card = memo(function Card({ card, tags = noTags, animateInitial = false,onOpenPlans,onOpenMemory }: { card: AICard; tags?: WorkspaceTag[]; animateInitial?:boolean;onOpenPlans?:()=>void;onOpenMemory?:()=>void }) {
+export const Card = memo(function Card({ card, tags = noTags, animateInitial = false,onOpenPlans,onOpenMemory }: { card: AICard; tags?: WorkspaceTag[]; animateInitial?:boolean;onOpenPlans?:()=>void;onOpenMemory?:()=>void }) {
   const assistantText = ["text", "message"].includes(card.type);
   const isPlan=!!card.content?.trimStart().startsWith("<proposed_plan>");
   const content = card.type === "error" ? card.status === "cancelled" ? "已停止本轮" : displayAiError(card.content || "") : isPlan ? planMarkdown(card.content||"") : card.content;
@@ -108,7 +108,7 @@ function ReplyArrival({entryId,arrive,children}:{entryId:string;arrive:boolean;c
   const [animate] = useState(arrive);
   return <div data-conversation-entry={entryId} className={`ai-response${animate?' reply-arrival':''}`}>{children}</div>;
 }
-function TranscriptMessage({message,sessionId,resources,arrive=false,pendingImages,assistantIdentity,onSpecialist,hideIdentity=false}:{hideIdentity?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;pendingImages?:number;message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"];arrive?:boolean}) {
+export function TranscriptMessage({message,sessionId,resources,arrive=false,pendingImages,assistantIdentity,onSpecialist,hideIdentity=false}:{hideIdentity?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;pendingImages?:number;message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"];arrive?:boolean}) {
  const [animate]=useState(()=>arrive&&!document.hidden&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
  if(message.role==='system'&&isContextCompactionFailure(message.text||''))return <CompactionNotice message={message.text}/>;
  return <div className={`ai-chat-message ai-role-${message.role}${message.images?.length?" has-message-images":""}${animate?" user-message-arrival":""}`}>

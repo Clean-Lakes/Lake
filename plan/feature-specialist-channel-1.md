@@ -4,21 +4,21 @@ version: 1
 date_created: 2026-11-03
 last_updated: 2026-11-03
 owner: Lake
-status: 'Planned'
+status: 'In progress'
 tags: [feature, architecture, superagent, conversation, context]
 ---
 
 # Introduction
 
-![Status: Planned](https://img.shields.io/badge/status-Planned-blue)
+![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
 
-用户在一个长期专员入口持续沟通；系统为独立工作创建不同 Worker/执行 Session，并为后续问题找回准确任务。前台聊天历史按角色连续展示，模型上下文按任务隔离。本文件是当前实现审计及增量实施方案，未实现的接口和表均明确标为拟新增。本次只交付方案，不启动迁移、修改运行代码或启用 Memory。
+用户在一个长期专员入口持续沟通；系统为独立工作创建不同 Worker/执行 Session，并为后续问题找回准确任务。前台聊天历史按角色连续展示，模型上下文按任务隔离。2026-11-03 用户授权实施；按下列任务完成状态记录实际水位，未勾选项不视为已交付。Memory 门控保持原值。
 
 审计源码：`af64c8cd6c859a387ee9ea166e0f14f7ed231535`，工作分支 `codex/worker-recovery-avatar`；包含本次读取的 `origin/develop@2b233a4ad9d405e5b7bf4705359303b31bcde652`。Lake Dev 最近已安装的运行源码为 `612298cc6461f08713825dad3075801472b7113d`；两者差异仅为专员名称验证文档。后续本方案提交也不代表运行能力已经交付。
 
 ## 1. Requirements & Constraints
 
-### 当前实际水位
+### 实施前审计水位（保留基线）
 
 | 能力 | 结论 | 可核对证据与实际限制 |
 | --- | --- | --- |
@@ -52,14 +52,14 @@ tags: [feature, architecture, superagent, conversation, context]
 - **CON-002**: canonical WorkGoal/操作/证据/验收仍是唯一执行事实源。新频道、索引和报告投影可重建，不能自行结清任务。
 - **CON-003**: 本方案实施通过功能分支和develop PR完成；Mac仅签名构建、安装和重启Lake Dev。合并和生产发布仍需各自授权。
 
-### 拟新增内部契约
+### 内部契约（当前分支已实现，验收见实施步骤）
 
 | 对象 | 准确字段/不变量 | 存储与用途 |
 | --- | --- | --- |
-| SpecialistChannel | id、projectID、roleID、hostSessionID、revision、createdAt；唯一(projectID,roleID) | 拟新增superagent_role_channels，放现有规范库；hostSessionID指向Web展示Session，不创建ADK执行Session。 |
-| RoleChannelSource | channelID、sourceSessionID、messageID、eventID、preferredRoleID、explicitTaskRef可空 | 拟新增宿主来源关联；引用原消息和附件，不搬运或伪造人类消息，不把preferredRoleID当授权。 |
-| ChannelTimelineRef | channelID、kind、sourceSessionID、sourceID、taskID可空、workerID可空、createdAt | 拟新增Web投影索引；同一源引用在同频道只展示一次，不能按正文相同去重。分页游标使用(createdAt,kind,sourceID)。 |
-| TaskEvidenceRef | taskID、goalRevision、attemptID、operationID、evidenceID、resourceID、connectionVersion、collectedAt、resultState | 拟新增只读引用契约，由原账本生成；不包含凭据、旧执行owner、可重用permit或另一Worker整段历史。 |
+| SpecialistChannel | id、projectID、roleID、hostSessionID、revision、createdAt；唯一(projectID,roleID) | superagent_role_channels，放现有规范库；hostSessionID指向Web展示Session，不创建ADK执行Session。 |
+| RoleChannelSource | channelID、sourceSessionID、messageID、eventID、preferredRoleID、explicitTaskRef可空 | superagent_channel_sources 的宿主来源关联；引用原消息和附件，不搬运或伪造人类消息，不把preferredRoleID当授权。 |
+| ChannelTimelineRef | channelID、kind、sourceSessionID、sourceID、taskID可空、workerID可空、createdAt | superagentChannelTimeline Web投影索引；同一源引用在同频道只展示一次，不能按正文相同去重。分页游标使用(createdAt,kind,sourceID)。 |
+| TaskEvidenceRef | taskID、goalRevision、attemptID、operationID、evidenceID、resourceID、connectionVersion、collectedAt、resultState | 只读引用契约，由原账本生成；不包含凭据、旧执行owner、可重用permit或另一Worker整段历史。 |
 
 RoleID沿用当前项目内准确标识；已有两个不同RoleID的“服务器运维排查专员/服务运行状态排查专员”不按词义自动合并。频道可先各自存在；角色别名/人工合并另行设计。新工作在准确频道中使用宿主允许的preferredRoleID，模型不得用自造role_key制造重复频道。
 
@@ -92,9 +92,9 @@ RoleID沿用当前项目内准确标识；已有两个不同RoleID的“服务�
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-004 | 在internal/ai/superagent_store.go与拟新增superagent_channels.go实现EnsureSpecialistChannel/ListSpecialistChannels。为schema3到schema4编写显式事务迁移和未知版本拒绝；保持现有表及TaskID/SessionID/epoch不变。为现有根Worker按准确RoleID生成唯一频道映射；旧版本不得继续写schema4，不能直接降级旧二进制。 | false | — |
-| TASK-005 | 在internal/web/superagent_source.go及拟新增superagent_channel_projection.go实现EnsureRoleChannelSession/ReconcileRoleChannelTimeline；使用既有Web Store迁移入口登记kind=role的非执行Session。跨库关联通过幂等投影/回执修复，不假设两个SQLite原子提交。依赖TASK-004。 | false | — |
-| TASK-006 | 在internal/web/superagent_routes.go提供项目鉴权的角色列表与频道分页读取；在web-agent/shared/contracts.ts增加SpecialistChannel、ChannelEntry和workspaceRole=role，保留旧workers响应兼容。返回准确内部任务引用供详情/审批使用；频道本身不出现在执行准入中。依赖TASK-005。 | false | — |
+| TASK-004 | 在internal/ai/superagent_store.go与拟新增superagent_channels.go实现EnsureSpecialistChannel/ListSpecialistChannels。为schema3到schema4编写显式事务迁移和未知版本拒绝；保持现有表及TaskID/SessionID/epoch不变。为现有根Worker按准确RoleID生成唯一频道映射；旧版本不得继续写schema4，不能直接降级旧二进制。 | true | 2026-11-03 |
+| TASK-005 | 在internal/web/superagent_source.go及拟新增superagent_channel_projection.go实现EnsureRoleChannelSession/ReconcileRoleChannelTimeline；使用既有Web Store迁移入口登记kind=role的非执行Session。跨库关联通过幂等投影/回执修复，不假设两个SQLite原子提交。依赖TASK-004。 | true | 2026-11-03 |
+| TASK-006 | 在internal/web/superagent_routes.go提供项目鉴权的角色列表与频道分页读取；在web-agent/shared/contracts.ts增加SpecialistChannel、ChannelEntry和workspaceRole=role，保留旧workers响应兼容。返回准确内部任务引用供详情/审批使用；频道本身不出现在执行准入中。依赖TASK-005。 | true | 2026-11-03 |
 
 ### Implementation Phase 3
 
@@ -102,10 +102,10 @@ RoleID沿用当前项目内准确标识；已有两个不同RoleID的“服务�
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-007 | 在internal/web/superagent_runtime.go新增acceptSpecialistChannelMessage/runSpecialistChannelInput；先提交原消息、引用和附件，再把preferredRoleID及可核实explicitTaskRef交给同一Pilot Router。取消role频道默认targeted-followup；不直接ExecuteTurn频道Session。依赖TASK-006。 | false | — |
-| TASK-008 | 在internal/ai/superagent_catalog.go与superagent_router.go扩展角色限定路由；宿主校验RoleID属于当前频道项目。原精确回复/审批/外部句柄可走当前任务快路径；普通新消息先Router判断，资源相同仅为候选，不自动合并任务。create仍要求真实新要求；followup重验原scope/deadline/轮数，respond不能派发资源操作。依赖TASK-007。 | false | — |
-| TASK-009 | 在internal/web/superagent_runtime.go保留旧Worker链接兼容入口：界面导航到其角色频道并携带可见任务引用；新的普通用户输入经角色路由，原问题答案/审批继续投递原SDK/root。internal/ai/superagent_subscription.go只为准确任务归属保留直通；先判定再入Worker收件箱，不放宽已消费HandBack。依赖TASK-008。 | false | — |
-| TASK-010 | 在internal/web/superagent_source.go:DeliverPilotReport与superagent_outbox.go的现有投递机制上增加准确role channel目标；每个目标独立稳定delivery ID与回执。角色频道展示完整报告，Pilot复用现有通知策略；保留来源身份，同一报告重试不重复显示，不按相同正文删除不同报告。依赖TASK-006、TASK-008。 | false | — |
+| TASK-007 | 在internal/web/superagent_runtime.go新增acceptSpecialistChannelMessage/runSpecialistChannelInput；先提交原消息、引用和附件，再把preferredRoleID及可核实explicitTaskRef交给同一Pilot Router。取消role频道默认targeted-followup；不直接ExecuteTurn频道Session。依赖TASK-006。 | true | 2026-11-03 |
+| TASK-008 | 在internal/ai/superagent_catalog.go与superagent_router.go扩展角色限定路由；宿主校验RoleID属于当前频道项目。原精确回复/审批/外部句柄可走当前任务快路径；普通新消息先Router判断，资源相同仅为候选，不自动合并任务。create仍要求真实新要求；followup重验原scope/deadline/轮数，respond不能派发资源操作。依赖TASK-007。 | true | 2026-11-03 |
+| TASK-009 | 在internal/web/superagent_runtime.go保留旧Worker链接兼容入口：界面导航到其角色频道并携带可见任务引用；新的普通用户输入经角色路由，原问题答案/审批继续投递原SDK/root。internal/ai/superagent_subscription.go只为准确任务归属保留直通；先判定再入Worker收件箱，不放宽已消费HandBack。依赖TASK-008。 | true | 2026-11-03 |
+| TASK-010 | 在internal/web/superagent_source.go:DeliverPilotReport与superagent_outbox.go的现有投递机制上增加准确role channel目标；每个目标独立稳定delivery ID与回执。角色频道展示完整报告，Pilot复用现有通知策略；保留来源身份，同一报告重试不重复显示，不按相同正文删除不同报告。依赖TASK-006、TASK-008。 | true | 2026-11-03 |
 
 ### Implementation Phase 4
 
@@ -113,9 +113,9 @@ RoleID沿用当前项目内准确标识；已有两个不同RoleID的“服务�
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-011 | 在internal/ai/superagent_context.go新增SearchSuperTaskIndex，按当前project、准确RoleID、资源ID和时间分页过滤canonical任务，默认20条、上限50条。Router工具增加查询入口；保留BuildRouterContext的16 KiB及事件完整读取要求，不将全频道消息注入模型，不再依赖最近32/列表100作为历史全集。 | false | — |
-| TASK-012 | 在拟新增internal/ai/superagent_evidence.go实现ReadReferencedTaskEvidence；只读取宿主登记到当前任务的TaskEvidenceRef。逐页重验项目、当前读取资格、资源连接版本、任务revision及证据关联；返回时间、状态、来源和明确截断标记，单页最多2 KiB，必要正文按页继续。禁止读取另一Worker transcript，未知结果保持unknown。依赖TASK-011。 | false | — |
-| TASK-013 | 在superagent_router.go与拟新增superagent_task_references.go登记比较任务C到A/B的只读依赖引用；这些引用不改变A/B状态、scope、验收或许可，也不自动继续旧命令。缺少当前证据时由C明确报告不足或按真实请求提出新观测。Worker任务知识Memory保持unavailable，不以该接口绕过Memory同意。依赖TASK-012。 | false | — |
+| TASK-011 | 在internal/ai/superagent_context.go新增SearchSuperTaskIndex，按当前project、准确RoleID、资源ID和时间分页过滤canonical任务，默认20条、上限50条。Router工具增加查询入口；保留BuildRouterContext的16 KiB及事件完整读取要求，不将全频道消息注入模型，不再依赖最近32/列表100作为历史全集。 | true | 2026-11-03 |
+| TASK-012 | 在拟新增internal/ai/superagent_evidence.go实现ReadReferencedTaskEvidence；只读取宿主登记到当前任务的TaskEvidenceRef。逐页重验项目、当前读取资格、资源连接版本、任务revision及证据关联；返回时间、状态、来源和明确截断标记，单页最多2 KiB，必要正文按页继续。禁止读取另一Worker transcript，未知结果保持unknown。依赖TASK-011。 | true | 2026-11-03 |
+| TASK-013 | 在superagent_router.go与拟新增superagent_task_references.go登记比较任务C到A/B的只读依赖引用；这些引用不改变A/B状态、scope、验收或许可，也不自动继续旧命令。缺少当前证据时由C明确报告不足或按真实请求提出新观测。Worker任务知识Memory保持unavailable，不以该接口绕过Memory同意。依赖TASK-012。 | true | 2026-11-03 |
 
 ### Implementation Phase 5
 
@@ -123,9 +123,9 @@ RoleID沿用当前项目内准确标识；已有两个不同RoleID的“服务�
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-014 | 修改web-agent/web/src/PilotWorkspace.tsx与App.tsx，以频道ID渲染角色入口、导航和最近活动摘要；数量为角色频道数。顶部显示角色名称，消息气泡不恢复已移除的头像/重复名称；资源树保持原项目目录。依赖TASK-006、TASK-009。 | false | — |
-| TASK-015 | 新增web-agent/web/src/SpecialistChannel.tsx，分页聚合原用户消息与各任务回复引用，分别读取准确Worker消息/卡片；原始事件ID去重、恢复滚动锚点、加载历史及流式进度。频道不拼接成一个模型Session；每条回复关联真实task/worker，跨任务比较提供按需来源详情。依赖TASK-010、TASK-013、TASK-014。 | false | — |
-| TASK-016 | 扩展SessionInspector.tsx及现有问答/审批处理，使频道内的输入、暂停、停止、执行详情、附件均指向准确任务和原SDK/root。多个活动任务不能用“最后选中Worker”代替归属；不明确就询问。保留权限、Plan、模型配置与草稿原语义，角色频道模型配置只作为新任务默认，不覆盖在途任务。依赖TASK-015。 | false | — |
+| TASK-014 | 修改web-agent/web/src/PilotWorkspace.tsx与App.tsx，以频道ID渲染角色入口、导航和最近活动摘要；数量为角色频道数。顶部显示角色名称，消息气泡不恢复已移除的头像/重复名称；资源树保持原项目目录。依赖TASK-006、TASK-009。 | true | 2026-11-03 |
+| TASK-015 | 新增web-agent/web/src/SpecialistChannel.tsx，分页聚合原用户消息与各任务回复引用，分别读取准确Worker消息/卡片；原始事件ID去重、恢复滚动锚点、加载历史及流式进度。频道不拼接成一个模型Session；每条回复关联真实task/worker，跨任务比较提供按需来源详情。依赖TASK-010、TASK-013、TASK-014。 | true | 2026-11-03 |
+| TASK-016 | 扩展SessionInspector.tsx及现有问答/审批处理，使频道内的输入、暂停、停止、执行详情、附件均指向准确任务和原SDK/root。多个活动任务不能用“最后选中Worker”代替归属；不明确就询问。保留权限、Plan、模型配置与草稿原语义，角色频道模型配置只作为新任务默认，不覆盖在途任务。依赖TASK-015。 | true | 2026-11-03 |
 
 ### Implementation Phase 6
 
@@ -180,6 +180,8 @@ pnpm --dir web-agent exec tsx --tsconfig web/tsconfig.json --test web/test/super
 ```
 
 结果：Go 75项、2包通过；前端10项通过；0失败。fixture使用隔离数据和受控/本地端点，不操作现有Dev任务或远端主机。本轮没有为文档重启Dev或重跑完整Go/race/平台验收；既有最近运行版本的完整验证见相关记录，不能替代未来频道实现的验收。
+
+实施记录：规范库已增加角色频道、来源角色绑定和比较任务只读引用；Web 库增加宿主展示 Session 与可重建时间线。频道分页使用现有鉴权后的 `/api/sessions/{roleSessionID}/channel`，每页50条。`SpecialistChannel.tsx` 聚合真实来源，任务检查通过 App 的独立快照在右栏展示。证据代码合并在 `superagent_task_references.go`，未另拆 `superagent_evidence.go`；未新增模型循环。
 
 ## 7. Risks & Assumptions
 

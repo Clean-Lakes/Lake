@@ -20,3 +20,12 @@ test('an unavailable migration shows its actual reason without fake workers',()=
  const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace:null,error:'旧任务仍需核对',selectedId:null,onPilot(){},onWorker(){}}));
  assert.match(html,/旧任务仍需核对/);assert.doesNotMatch(html,/订单专员|创建成功/);
 });
+
+test('one durable role channel represents several independent task workers',()=>{
+ const task=(id:string)=>({taskId:id,sessionId:`session-${id}`,title:`检查 ${id}`,state:'blocked' as const,acceptanceState:'insufficient' as const,revision:1,originRootTurnId:`root-${id}`,deadlineAt:'2026-11-04T00:00:00Z'});
+ const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},channels:[{id:'channel',projectId:'project',roleId:'ops',roleName:'运维专员',sessionId:'role-channel',revision:1,createdAt:'2026-11-03T00:00:00Z'}],workers:['a','b'].map(id=>({id,roleId:'ops',roleName:'运维专员',sessionId:`session-${id}`,task:task(id),assignmentState:'parked'}))};
+ const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'role-channel',onPilot(){},onWorker(){},onChannel(){}}));
+ assert.equal((html.match(/class="nav-row pilot-worker-row/g)??[]).length,1);
+ assert.match(html,/<small>1<\/small>/);
+ assert.match(html,/aria-current="page"/);
+});

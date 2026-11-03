@@ -49,6 +49,23 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (a
 		if !managed {
 			return nil, &ToolNotExecutedError{Err: errors.New("superagent: Worker requires current Security policy")}
 		}
+		if call.Name == "list_referenced_task_evidence" || call.Name == "read_referenced_task_evidence" {
+			a, err := args(call)
+			if err != nil {
+				return nil, err
+			}
+			for _, tool := range referencedTaskEvidenceTools() {
+				if tool.Name == call.Name {
+					if err := validateTool(tool, a); err != nil {
+						return nil, err
+					}
+				}
+			}
+			if call.Name == "list_referenced_task_evidence" {
+				return e.ListReferencedTaskEvidence(ctx, ownSessionID(s), str(a["task_id"]), str(a["cursor"]), num(a["limit"], 20))
+			}
+			return e.ReadReferencedTaskEvidence(ctx, ownSessionID(s), str(a["task_id"]), str(a["evidence_id"]), str(a["reference_id"]), num(a["offset"], 0), num(a["limit"], 2048))
+		}
 	}
 	configured, err := e.securityPolicyConfigured(configSecurityProject(c))
 	if err != nil {

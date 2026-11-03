@@ -28,7 +28,8 @@ func (b *Server) superagentRoute(w http.ResponseWriter, r *http.Request) bool {
 		for _, worker := range workers {
 			b.ensureSuperWorkerSession(project, worker.SessionID, worker.Task.Title)
 		}
-		reply(w, 200, Object{"active": active, "project": domain, "workers": workers})
+		channels := b.reconcileSpecialistChannels(r.Context(), project)
+		reply(w, 200, Object{"active": active, "project": domain, "workers": workers, "channels": channels})
 	default:
 		fail(405, "Method not allowed")
 	}

@@ -10,6 +10,8 @@ Lake 的目标业务架构统一为持续的 **Pilot Router + 独立任务 Worke
 
 任务主记录与闭环沿现有 WorkGoal/验收账本收敛，旧 SRE 通过兼容映射分阶段迁移；事件、订阅、Worker 和投递记录不建立另一份任务完成权威。Memory 作为 Router 与 Worker 的横向知识服务，继续以 bearqy 的方案为主；当前 N5 专员/工作流限制、同意与使用开关、运维 V2 门控不会因目标架构改变而自动放开。
 
+长期专员入口与执行上下文分离：同一项目/准确 RoleID 使用一个连续角色频道，每项工作仍有独立 Task、Worker 和 ADK Session。频道不能签发许可或隐式扩大旧任务；跨任务比较只读取显式登记且当前可读的证据。实现和验收进度见 [长期专员频道计划](plan/feature-specialist-channel-1.md)，不改变下述 Memory 所有权和门控。
+
 完整对象、职责、迁移、Memory 对接、分期任务及验收见 [Lake 统一 Super-agent 内核实施方案](plan/architecture-lake-superagent-1.md)。该计划状态为 In progress；以任务勾选及实际验证记录为准，未完成接入的能力不视为已启用。下面的 Items、Security、Memory 分工继续有效。
 
 ## 1. 总体分工
