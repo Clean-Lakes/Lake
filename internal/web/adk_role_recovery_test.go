@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -101,7 +102,7 @@ func testADKRoleCrash(t *testing.T, question bool, projectionWindow ...bool) {
 	}
 	created := apiTest(t, h, "POST", "/api/sessions/"+session+"/sre/tasks", Object{"goal": plan.Goal, "resourceIds": []string{resource}, "mode": "plan_only", "clientRequestId": "adk_role_crash"}, 202)
 	taskID := stringOf(created["id"])
-	for deadline := time.Now().Add(5 * time.Second); ; {
+	for deadline := time.Now().Add(sreSettleTimeout); ; {
 		task, _ := b.Store.LoadSRETask(session, taskID)
 		view, _ := b.Engine.Snapshot(session)
 		if len(task.Plans) > 0 && view.Status != "running" {
@@ -115,16 +116,29 @@ func testADKRoleCrash(t *testing.T, question bool, projectionWindow ...bool) {
 	h.Close()
 	b.Close()
 	binary, _ := os.Executable()
-	child := exec.Command(binary, "-test.run=^TestADKSRERoleCrashHelper$", "-test.timeout=60s")
+	child := exec.Command(binary, "-test.run=^TestADKSRERoleCrashHelper$", "-test.timeout=120s")
 	child.Env = append(os.Environ(), "LAKE_ADK_ROLE_HELPER=1", "LAKE_ADK_ROLE_HOME="+home, "LAKE_ADK_ROLE_SESSION="+session, "LAKE_ADK_ROLE_TASK="+taskID)
+	var childOutput bytes.Buffer
+	child.Stdout, child.Stderr = &childOutput, &childOutput
 	if err = child.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = child.Process.Kill(); _ = child.Wait() }()
+	childDone := make(chan error, 1)
+	go func() { childDone <- child.Wait() }()
+	waited := false
+	stopChild := func() {
+		if !waited {
+			_ = child.Process.Kill()
+			<-childDone
+			waited = true
+		}
+	}
+	defer stopChild()
 	var pending ai.AgentRun
-	// Cold native SQLite setup in a Windows subprocess can exceed 15 seconds.
-	// Wait for the same durable parent/child state before deliberately crashing.
-	for deadline := time.Now().Add(45 * time.Second); time.Now().Before(deadline); {
+	durableConfirmation := false
+	// Include cold subprocess setup, then require both original durable waits.
+	// Capture early process failure instead of reporting only a missing card.
+	for deadline := time.Now().Add(90 * time.Second); time.Now().Before(deadline); {
 		raw, _ := os.ReadFile(filepath.Join(home, "web-agent", "ai", session+".json"))
 		var state ai.State
 		_ = json.Unmarshal(raw, &state)
@@ -137,17 +151,23 @@ func testADKRoleCrash(t *testing.T, question bool, projectionWindow ...bool) {
 			raw, _ = os.ReadFile(filepath.Join(home, "web-agent", "ai", "children", session, pending.ID+".json"))
 			var childState ai.State
 			_ = json.Unmarshal(raw, &childState)
-			if childState.Runtime != nil && (question && childState.View.Question != nil || !question && childState.Runtime.PendingConfirmations[pending.Pending.ID] != "") {
+			if childState.Runtime != nil && (question && childState.View.Question != nil || !question && pending.Pending != nil && childState.Runtime.PendingConfirmations[pending.Pending.ID] != "") {
+				durableConfirmation = true
 				break
 			}
 		}
-		time.Sleep(10 * time.Millisecond)
+		select {
+		case childErr := <-childDone:
+			waited = true
+			t.Fatalf("role fixture exited before durable confirmation: %v\n%s", childErr, childOutput.String())
+		default:
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
-	if pending.Pending == nil && pending.Question == nil {
-		t.Fatal("no durable role confirmation")
+	stopChild()
+	if !durableConfirmation {
+		t.Fatalf("no durable parent/child role confirmation\n%s", childOutput.String())
 	}
-	_ = child.Process.Kill()
-	_ = child.Wait()
 	if len(projectionWindow) > 0 && projectionWindow[0] {
 		// Reproduce a crash after the role's durable wait/parent card but
 		// before the separate business store projects waiting_input/approval.
