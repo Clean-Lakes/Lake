@@ -75,7 +75,10 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    // its natural state shrinks it below 300px, and ResizeObserver oscillates.
    const badge=state?.querySelector<HTMLElement>('.session-state-badge')??null;
    const badgeStyle=badge?getComputedStyle(badge):null;
-   const badgeWidth=badgeStyle?textWidth(badge!.querySelector('.session-state-label'))+(badge!.querySelector('.session-state-icon')?.getBoundingClientRect().width??0)+parseFloat(badgeStyle.columnGap||'0')+parseFloat(badgeStyle.paddingLeft)+parseFloat(badgeStyle.paddingRight)+parseFloat(badgeStyle.borderLeftWidth)+parseFloat(badgeStyle.borderRightWidth):0;
+   // Compact badges use smaller padding too. Budget the preferred padding,
+   // otherwise even intrinsic text can still oscillate across the breakpoint.
+   const badgePadding=parseFloat(getComputedStyle(identity).getPropertyValue('--island-badge-padding'));
+   const badgeWidth=badgeStyle?textWidth(badge!.querySelector('.session-state-label'))+(badge!.querySelector('.session-state-icon')?.getBoundingClientRect().width??0)+parseFloat(badgeStyle.columnGap||'0')+2*badgePadding+parseFloat(badgeStyle.borderLeftWidth)+parseFloat(badgeStyle.borderRightWidth):0;
    const disclosure=state?.querySelector<HTMLElement>('.header-inspector-toggle');
    const normalStateWidth=badge?badgeWidth+(disclosure?disclosure.getBoundingClientRect().width+parseFloat(getComputedStyle(state!).columnGap||'0'):0):state?.getBoundingClientRect().width??0;
    const titleIcon=title?.previousElementSibling;
@@ -98,10 +101,16 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    };
    // The panel becomes visible after the shared width budget has been applied.
    const terminalPane=open.current.terminal?rail(shell.querySelector<HTMLElement>('.terminal-side-panel.is-open')):undefined;
+   const titleWidth=Math.min(190,title?textWidth(title):160)+titleIconWidth;
+   const preferredWidth=titleWidth+(pilotWidth||normalStateWidth)+60;
+   // The compact grid reserves 114px for ordinary status (300px content +
+   // two border pixels). Budget that once from intrinsic size so a short
+   // island does not unnecessarily truncate its title on an otherwise wide rail.
+   const conversationWidth=!pilotWidth&&preferredWidth<=302?titleWidth+Math.max(114,normalStateWidth)+60:preferredWidth;
    const layout=workbenchIslandLayout({
     conversation:{left,width:available,inset:0},
     terminal:terminalPane,
-    conversationWidth:Math.min(190,title?textWidth(title):160)+titleIconWidth+(pilotWidth||normalStateWidth)+60,
+    conversationWidth,
     inspectorWidth:144,
     terminalWidth:Math.min(320,Math.max(260,terminalNameWidth+(terminalNumber?.offsetWidth??0)+(terminalCount?.offsetWidth??0)+112)),
    });
