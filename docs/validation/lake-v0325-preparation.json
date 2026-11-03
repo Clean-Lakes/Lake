@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "date": "2026-11-03",
   "version": "0.3.25",
-  "status": "preparation_complete_release_gated",
+  "status": "local_integration_prevalidated_waiting_develop_merge_authorization",
   "preparationPR": {
     "number": 144,
     "url": "https://github.com/Clean-Lakes/Lake/pull/144",
@@ -98,7 +98,9 @@
         "sha256": "d5f71199baace1bfd505060a05b73f4c7fef95fdb6877ad3ee4649878b20ddb3",
         "bytes": 34747557
       }
-    ]
+    ],
+    "artifactAtRecordedPathStillCurrent": false,
+    "supersededBy": "lake-v0325-integration.json"
   },
   "releaseBlockers": [
     "Selected PR scope and overlap have not been approved or merged into develop",
@@ -140,7 +142,11 @@
     "PR_CI_review_and_no_force_push_not_server_enforced": true
   },
   "dailyDev": {
-    "installedSource": "86031db73c207328b52f8d2028e89a0a415d08d4",
-    "replaced": false
-  }
+    "sourceAtInitialPreparation": "86031db73c207328b52f8d2028e89a0a415d08d4",
+    "installedIntegrationSource": "e03fa6a6c810f75bd7b449598eeaa37179d46255",
+    "version": "0.3.25",
+    "replacedDuringInitialPreparation": false,
+    "replacedDuringIntegrationValidation": true
+  },
+  "integrationValidation": "lake-v0325-integration.json"
 }

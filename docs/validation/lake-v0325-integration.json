@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-03",
+  "status": "local_integration_prevalidated_waiting_develop_merge_authorization",
+  "sourceSHA": "e03fa6a6c810f75bd7b449598eeaa37179d46255",
+  "treeSHA": "5fc7a9d0667a4118c802a3b4e89aef8a96ea454e",
+  "sourceDirty": false,
+  "branch": "codex/v0325-integration",
+  "baseDevelop": "2b233a4ad9d405e5b7bf4705359303b31bcde652",
+  "mergeOrder": [
+    143,
+    142,
+    144
+  ],
+  "sourceHeads": {
+    "143": "baf1c4b2841dd0d281e17a89bc502e891c8deff8",
+    "142": "98bf19d78cb1207acad4d8b2789af581b8e259d2",
+    "144_initial": "57ce9461cc8a362f803770704e831f8213060521",
+    "144_notes": "56380da035766e7eb1729c0196d7336d55c6e495"
+  },
+  "mergeConflicts": false,
+  "headerFilesIdenticalBetween142And143": true,
+  "applicationCodeDiffFrom142ExceptVersion": false,
+  "checks": [
+    {
+      "name": "full_go",
+      "command": "go test ./... -json -count=1 -timeout=10m",
+      "result": "pass",
+      "counts": {
+        "pass": 1987,
+        "skip": 15
+      },
+      "log": "/tmp/lake-v0325-integration-full.jsonl"
+    },
+    {
+      "name": "expanded_race",
+      "command": "go test -race ./internal/ai ./internal/web ./internal/security ./cmd/lake -run 'TestSuper|TestSpecialist|TestSecurity.*(Finaliz|Manual|Independent|Enforcement|Tool|Risk|Migration|Recovery)' -json -count=1 -timeout=8m",
+      "result": "pass",
+      "counts": {
+        "pass": 215
+      },
+      "log": "/tmp/lake-v0325-integration-race.jsonl"
+    },
+    {
+      "name": "frontend",
+      "command": "pnpm --dir web-agent test:frontend",
+      "pass": 579,
+      "fail": 0,
+      "result": "pass",
+      "log": "/tmp/lake-v0325-integration-frontend.log"
+    },
+    {
+      "name": "vet",
+      "command": "go vet ./...",
+      "result": "pass"
+    },
+    {
+      "name": "ADK_and_Security_boundary",
+      "result": "pass"
+    },
+    {
+      "name": "signed_Dev_build_install",
+      "command": "scripts/build_lake_desktop.sh --dev --install",
+      "webTypecheckAndBuild": "pass",
+      "result": "pass",
+      "log": "/tmp/lake-v0325-integration-dev.log"
+    }
+  ],
+  "Dev": {
+    "sourceSHA": "e03fa6a6c810f75bd7b449598eeaa37179d46255",
+    "sourceDirty": false,
+    "version": "0.3.25",
+    "bundleID": "com.cleanlakes.lake.desktop.dev",
+    "codesign": "deep_strict_pass",
+    "backendSHA256": "c8e3edaf3d2be650cca6a537e5bdc3fdbf9374374466449ab466ea9c94a1822f",
+    "visibleResources": 139,
+    "projectResources": 135,
+    "roleChannels": 2,
+    "tasks": {
+      "A3": {
+        "state": "paused",
+        "acceptanceState": "insufficient",
+        "revision": 15
+      },
+      "B3": {
+        "state": "paused",
+        "acceptanceState": "insufficient",
+        "revision": 10
+      },
+      "C4": {
+        "state": "completed",
+        "acceptanceState": "pass",
+        "revision": 78
+      }
+    },
+    "migrationInventory": {
+      "formatVersion": 2,
+      "state": "finalized"
+    },
+    "activeTasksInChannel": 0,
+    "routing": false,
+    "newHostCommandsIssuedByValidation": false
+  },
+  "package": {
+    "kind": "dev_integration_validation_installed",
+    "sourceSHA": "e03fa6a6c810f75bd7b449598eeaa37179d46255",
+    "sourceDirty": false,
+    "files": [
+      {
+        "name": "Lake-0.3.25-macos-arm64-dev.zip",
+        "sha256": "12cf0071d01a19e4b57df69dbb822e9222f0730d5ff03873179f20b99371ca7e",
+        "bytes": 32534766
+      },
+      {
+        "name": "Lake-0.3.25-macos-arm64-dev.dmg",
+        "sha256": "1851376e60156f25d190e0ac61fe77f039c291df2a462735ce757cb86b2d5493",
+        "bytes": 35254744
+      }
+    ]
+  },
+  "nativeUI": "workbench and original specialist channel visible; current project retained; no new host commands or model requests",
+  "productionTouched": false,
+  "developMerged": false,
+  "productionPRCreated": false,
+  "notRun": [
+    "Final actual develop SHA validation after authorized merges",
+    "Production release CI and qualified independent review",
+    "Windows native",
+    "New external-provider tasks",
+    "Production install/restart or publication"
+  ]
+}

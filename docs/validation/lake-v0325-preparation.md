@@ -36,9 +36,9 @@
 | Dev验证包 | 0.3.25 · `com.cleanlakes.lake.desktop.dev` · source `863d2d9f` · dirty=false；ZIP/DMG SHA-256均验证通过，未安装或上传 |
 | 计划与文档 | 必需章节/front matter、唯一声明ID、相对链接、JSON/版本和`git diff --check`通过 |
 
-非安装验证产物在`dist/macos/0.3.25/arm64/dev/`。DMG SHA-256 `d5f71199baace1bfd505060a05b73f4c7fef95fdb6877ad3ee4649878b20ddb3`；ZIP SHA-256 `f573c1a21fc78acf3f05845b43887f16614b2e45cf69738b462bd17fae812b16`。这些是准备基线的Dev格式包，不能重命名为正式包或上传稳定渠道。后续证据文档修改不改变被测应用源码。
+最初的非安装验证产物位于`dist/macos/0.3.25/arm64/dev/`。当时DMG SHA-256 `d5f71199baace1bfd505060a05b73f4c7fef95fdb6877ad3ee4649878b20ddb3`；ZIP SHA-256 `f573c1a21fc78acf3f05845b43887f16614b2e45cf69738b462bd17fae812b16`。这是准备基线的历史验证记录；同名产物后来已由整合候选替换，当前摘要以[整合预验证](lake-v0325-integration.md)为准。Dev格式包不能重命名为正式包或上传稳定渠道。
 
-没有重跑全量Go与完整前端测试，没有安装/运行本准备基线的旧功能UI，也没有以它覆盖日常Dev；这些检查属于完成选定PR整合后的最终候选。日常Dev仍为`86031db7`，签名和来源记录未被本次构建替换。
+最初准备基线没有重跑全量Go与完整前端测试，没有安装/运行其旧功能UI，也没有以它覆盖当时`86031db7`日常Dev。用户随后要求继续，已在包含拟合入三个PR的干净候选`e03fa6a6`完成1987项Go、215项race、579项前端及签名Dev安装/启动检查，见[独立整合记录](lake-v0325-integration.md)。它仍是本地预验证，不是已合入develop的正式候选。
 
 ## GitHub强制约束核对
 
