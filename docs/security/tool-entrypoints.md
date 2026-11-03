@@ -1,8 +1,10 @@
 # Lake 执行入口与执行保护
 
-基础清单始于 develop `be656805d345466f11bbb9c2c4af92e670da7420`，本轮在同一清单上完成任务闭环。工具名和分类见 [JSON 清单](tool-entrypoints.json)，纯领域注册见 `internal/security/capability.go`。`TestSecurityEntrypointInventory` 对照真实目录；`security_enforcement_coverage.go` 静态列出 **93 个工具 + 13 类入口 = 106 项**，新增或退役入口会使精确覆盖检查失败。
+基础清单始于 develop `be656805d345466f11bbb9c2c4af92e670da7420`，本轮在同一清单上完成任务闭环。工具名和分类见 [JSON 清单](tool-entrypoints.json)，纯领域注册见 `internal/security/capability.go`。`TestSecurityEntrypointInventory` 对照真实目录；`security_enforcement_coverage.go` 静态列出 **94 个工具 + 13 类入口 = 107 项**，新增或退役入口会使精确覆盖检查失败。
 
 覆盖表示入口接受统一保护，不能据此认为所有操作都有受限执行适配器。不支持的复合动作会明确拒绝；无法证明的动作保持 opaque，restricted 拒绝，compatible 仅可精确单次审批。实际验证和限制见[实施记录](../validation/lake-security-task-closure.md)。
+
+长期专员频道的 `read_referenced_task_evidence` 已登记为受任务准入保护的本地历史读取，进入当前步骤的原操作账本；元数据列举由准确源任务引用守卫，不能借此执行主机命令、继承源任务许可或通过验收。
 
 ## 入口与权威归属
 

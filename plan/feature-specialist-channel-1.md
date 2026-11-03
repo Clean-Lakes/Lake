@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-03
 last_updated: 2026-11-03
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [feature, architecture, superagent, conversation, context]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 用户在一个长期专员入口持续沟通；系统为独立工作创建不同 Worker/执行 Session，并为后续问题找回准确任务。前台聊天历史按角色连续展示，模型上下文按任务隔离。2026-11-03 用户授权实施；按下列任务完成状态记录实际水位，未勾选项不视为已交付。Memory 门控保持原值。
 
@@ -134,8 +134,8 @@ RoleID沿用当前项目内准确标识；已有两个不同RoleID的“服务�
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
 | TASK-017 | 实现TEST-001至TEST-008的迁移、路由、隔离、迟到投递与恢复测试；执行Go/race/vet、ADK边界、前端类型/测试/构建。每次变更记录被测SHA，不删除保护测试或放宽权限来达成切换。 | true | 2026-11-03 |
-| TASK-018 | 使用签名scripts/build_lake_desktop.sh --dev --install，在Lake Dev以真实A/B/返回A/比较序列验收。记录两项独立任务、第三比较任务、角色入口数量、实际证据、资源绑定和模型上下文占用；验证浅/深色、窄窗、三栏、键盘与引用caret，清空未发送合成草稿。依赖TASK-017。 | false | — |
-| TASK-019 | 更新docs/design/lake-superagent-runtime.md、docs/lake-pilot.md、docs/ui-guidelines.md及原统一内核计划的实际水位，记录Memory未交付项、迁移及回退要求。以develop为目标更新PR、处理反馈；只在取得本PR合并授权后合并并清理可安全删除的分支。依赖TASK-018。 | false | — |
+| TASK-018 | 使用签名scripts/build_lake_desktop.sh --dev --install，在Lake Dev以真实A/B/返回A/比较序列验收。记录两项独立任务、第三比较任务、角色入口数量、实际证据、资源绑定和模型上下文占用；验证浅/深色、窄窗、三栏、键盘与引用caret，清空未发送合成草稿。依赖TASK-017。 | true | 2026-11-03 |
+| TASK-019 | 更新docs/design/lake-superagent-runtime.md、docs/lake-pilot.md、docs/ui-guidelines.md及原统一内核计划的实际水位，记录Memory未交付项、迁移及回退要求。以develop为目标更新PR、处理反馈；只在取得本PR合并授权后合并并清理可安全删除的分支。依赖TASK-018。 | true | 2026-11-03 |
 
 ## 3. Alternatives
 
@@ -208,4 +208,4 @@ pnpm --dir web-agent exec tsx --tsconfig web/tsconfig.json --test web/test/super
 - [官方原型授权及follow-up](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/main/docs/002-authorization.md)
 
 
-2026-11-03 最终候选记录：应用源码 `935fbab6` 已签名安装 Lake Dev；完整Go在仅补充清单/覆盖夹具的 `a19b230d` 上1981项通过、15跳过、0失败，安全定向race106项、前端577项、vet和ADK边界通过。详细迁移、真实独立A3/B3、历史读取回执、上下文用量、状态岛稳定性、主题/窄窗/三栏/caret结果见[频道验证记录](../docs/validation/lake-specialist-channels.md)。TASK-017完成；TASK-018 的真实C4最终交付仍被模型服务HTTP504阻塞，保持未完成。用户只核实C4两项本地读取失败，原93项unknown与全部人工验收保持原样。文档和PR候选已更新，TASK-019按其依赖保持未完成；未合并PR、未发布生产。
+2026-11-03 最终候选记录：应用源码 `a59aa4c2` 已签名安装 Lake Dev；全量 Go 1983项通过、15跳过、0失败，AI/Web/Security 定向 race 108项、前端577项、vet和ADK边界通过。详细迁移、真实独立A3/B3、历史读取回执、上下文用量、状态岛稳定性、主题/窄窗/三栏/caret结果见[频道验证记录](../docs/validation/lake-specialist-channels.md)。TASK-017完成。C4续办暴露的旧blocked输入阻塞后续routed输入、空轮询误取消活跃provider已修复，回归验证不删除原输入、不重置范围或限制。用户核实C4两项本地读取失败后，又分别核实证据读取、比较两步；原93项unknown及A3/B3未验收状态保留。C4原5次失败/未执行尝试通过既有等价覆盖接口关联到同契约已验收读取，不改旧失败State；目标最终为修订78、completed/pass。TASK-018/019完成；PR已提供验证材料并保持打开，未获本次合并授权，不合并PR、不发布生产。
