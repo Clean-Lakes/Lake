@@ -229,7 +229,10 @@ func (e *Engine) QueueSuperFollowup(ctx context.Context, projectID, workerID str
 			return ErrSuperWorkerQueued
 		}
 		var input superInboxRow
-		if err = tx.First(&input, "worker_id = ? AND mode = ? AND consumed_at IS NULL AND delivered_at IS NULL", w.ID, "followup").Error; err != nil {
+		// A partially committed route may later be blocked by Router failure.
+		// Keep that input, but never let it starve a later admitted human turn.
+		routed := tx.Model(&superEventRow{}).Select("id").Where("project_id = ? AND disposition = ?", projectID, "routed")
+		if err = tx.Where("event_id IN (?)", routed).Order("rowid").First(&input, "worker_id = ? AND mode = ? AND consumed_at IS NULL AND delivered_at IS NULL", w.ID, "followup").Error; err != nil {
 			return err
 		}
 		var event superEventRow

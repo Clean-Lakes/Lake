@@ -210,3 +210,54 @@ func TestSuperHistoricalTaskIndexExceedsRecentLimits(t *testing.T) {
 		t.Fatal("Worker read all project history")
 	}
 }
+
+func TestSuperChannelBlockedRouteDoesNotStarveLaterTaskFollowup(t *testing.T) {
+	e, b := superFixture(t)
+	task := superCreateFixture(t, e, b, "original", "Inspect A", "a", "Inspect A")
+	db, _ := e.superStore()
+	var worker superWorkerRow
+	if err := db.First(&worker, "id = ?", task.WorkerID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := e.finishSuperRouting(t.Context(), b, worker.SourceEventID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&superAssignmentRow{}).Where("worker_id = ?", worker.ID).Update("state", "parked").Error; err != nil {
+		t.Fatal(err)
+	}
+	channels, _ := e.ListSpecialistChannels(t.Context(), b.ProjectID)
+	var admitted SuperEvent
+	for i, disposition := range []string{"blocked", "routed"} {
+		event := channelEventFixture(t, e, b, channels[0], fmt.Sprint("followup-", i), "Continue original task")
+		if _, err := e.ApplySuperDecision(t.Context(), b, SuperDecision{EventID: event.ID, PartKey: "continue", Action: "followup", TaskID: task.TaskID, Quote: event.Payload, Reason: "Exact original task"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Model(&superEventRow{}).Where("id = ?", event.ID).Update("disposition", disposition).Error; err != nil {
+			t.Fatal(err)
+		}
+		if disposition == "routed" {
+			admitted = event
+		}
+	}
+	before, _ := e.SuperTaskDetail(task.SessionID, task.TaskID)
+	if err := e.QueueSuperFollowup(t.Context(), b.ProjectID, worker.ID); err != nil {
+		t.Fatal("blocked input starved later routed request", err)
+	}
+	var assignment superAssignmentRow
+	if err := db.First(&assignment, "worker_id = ?", worker.ID).Error; err != nil || assignment.InputEventID != admitted.ID || assignment.State != "queued" {
+		t.Fatal(assignment, err)
+	}
+	after, _ := e.SuperTaskDetail(task.SessionID, task.TaskID)
+	if js(before) != js(after) {
+		t.Fatal("queueing reset task state, limits or scope")
+	}
+	var rows []superInboxRow
+	if err := db.Where("worker_id = ?", worker.ID).Find(&rows).Error; err != nil || len(rows) != 2 {
+		t.Fatal(rows, err)
+	}
+	for _, row := range rows {
+		if row.DeliveredAt != nil || row.ConsumedAt != nil {
+			t.Fatal("queueing consumed or removed another input")
+		}
+	}
+}
