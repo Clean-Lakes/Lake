@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+// Readiness includes a fresh official SDK store and native Windows ACL/flush
+// setup; it is separate from the assertions about approval and exactly-once I/O.
+const adkCrashReadyTimeout = 90 * time.Second
+
 func TestADKCrashApprovalHelper(t *testing.T) {
 	if os.Getenv("LAKE_ADK_CRASH_HELPER") != "1" {
 		t.Skip("subprocess fixture")
@@ -82,7 +86,7 @@ func TestADKApprovalSurvivesProcessCrashAndExecutesOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=60s")
+	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=120s")
 	var childOutput bytes.Buffer
 	child.Stdout, child.Stderr = &childOutput, &childOutput
 	child.Env = append(os.Environ(), "LAKE_ADK_CRASH_HELPER=1", "LAKE_ADK_CRASH_HOME="+home, "LAKE_ADK_CRASH_PROVIDER="+model.URL)
@@ -97,7 +101,7 @@ func TestADKApprovalSurvivesProcessCrashAndExecutesOnce(t *testing.T) {
 		}
 	}()
 	var saved State
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(adkCrashReadyTimeout)
 	for time.Now().Before(deadline) {
 		raw, err := os.ReadFile(filepath.Join(home, "case.json"))
 		if err == nil && json.Unmarshal(raw, &saved) == nil && saved.View.Pending != nil && saved.Runtime != nil {
@@ -176,7 +180,7 @@ func TestADKCrashAfterExternalEffectNeverReplaysUnknownOperation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=60s")
+	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=120s")
 	var childOutput bytes.Buffer
 	child.Stdout, child.Stderr = &childOutput, &childOutput
 	child.Env = append(os.Environ(), "LAKE_ADK_CRASH_HELPER=1", "LAKE_ADK_CRASH_SCENARIO=effect", "LAKE_ADK_CRASH_HOME="+home, "LAKE_ADK_CRASH_EFFECT_TARGET="+target, "LAKE_ADK_CRASH_PROVIDER="+model.URL)
@@ -191,7 +195,7 @@ func TestADKCrashAfterExternalEffectNeverReplaysUnknownOperation(t *testing.T) {
 		}
 	}()
 	dispatched := false
-	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); {
+	for deadline := time.Now().Add(adkCrashReadyTimeout); time.Now().Before(deadline); {
 		if _, err = os.Stat(filepath.Join(home, "effect-dispatched")); err == nil {
 			dispatched = true
 			break
@@ -261,7 +265,7 @@ func TestADKQuestionSurvivesProcessCrashWithoutReplayingTools(t *testing.T) {
 	})
 	defer close()
 	binary, _ := os.Executable()
-	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=60s")
+	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=120s")
 	var childOutput bytes.Buffer
 	child.Stdout, child.Stderr = &childOutput, &childOutput
 	child.Env = append(os.Environ(), "LAKE_ADK_CRASH_HELPER=1", "LAKE_ADK_CRASH_HOME="+home, "LAKE_ADK_CRASH_PROVIDER="+model.URL)
@@ -271,7 +275,7 @@ func TestADKQuestionSurvivesProcessCrashWithoutReplayingTools(t *testing.T) {
 	defer func() { _ = child.Process.Kill(); _ = child.Wait() }()
 	var state State
 	ready := false
-	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); {
+	for deadline := time.Now().Add(adkCrashReadyTimeout); time.Now().Before(deadline); {
 		raw, _ := os.ReadFile(filepath.Join(home, "case.json"))
 		_ = json.Unmarshal(raw, &state)
 		if nativeQuestionReady(state.View.Question) && state.Runtime != nil {

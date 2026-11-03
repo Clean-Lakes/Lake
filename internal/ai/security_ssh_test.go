@@ -62,6 +62,8 @@ func managedSSHFixture(t *testing.T, disconnect bool) (*Engine, Config, <-chan s
 			return
 		}
 		defer conn.Close()
+		// Bound the fixture even if a failed client leaves its transport open.
+		_ = conn.SetDeadline(time.Now().Add(15 * time.Second))
 		serverConfig := &ssh.ServerConfig{NoClientAuth: true}
 		serverConfig.AddHostKey(signer)
 		server, channels, requests, err := ssh.NewServerConn(conn, serverConfig)
@@ -96,7 +98,12 @@ func managedSSHFixture(t *testing.T, disconnect bool) (*Engine, Config, <-chan s
 				}
 				io.WriteString(ch, "owned-remote-profile\n")
 				ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Code uint32 }{0}))
+				ch.CloseWrite()
 				ch.Close()
+				// Keep the transport alive until OpenSSH consumes the exit status
+				// and disconnects. Closing it immediately can turn a successful
+				// fixture into client_loop EPIPE / exit 255 on Linux.
+				_ = server.Wait()
 				return
 			}
 		}
