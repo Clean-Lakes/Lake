@@ -292,29 +292,7 @@ func (e *Engine) beginWorkAttempt(ctx context.Context, sessionID, goalID, stepID
 				return err
 			}
 			if prior.State != "failed" && prior.State != "not_executed" && prior.ClosureState != "reconciled" {
-				// Preparation may fail before any original operation is registered.
-				// Retire only that provably unstarted attempt, under the same dispatch
-				// barrier as its replacement. Unknown/dispatched effects never qualify.
-				var operations int64
-				if err = tx.Model(&nativeOperation{}).Where("attempt_id = ?", prior.ID).Count(&operations).Error; err != nil {
-					return err
-				}
-				var originalTask securityTaskRow
-				if err = tx.First(&originalTask, "id = ?", prior.SecurityTaskID).Error; err != nil {
-					return err
-				}
-				if prior.State != "prepared" || operations != 0 || prior.ProjectID != goal.closure.ProjectID || prior.GoalRevision != goal.closure.GoalRevision || prior.PlanRevision != goal.closure.PlanRevision || prior.StepRevision != step.Revision || originalTask.StoreID != task.StoreID || originalTask.RecoveryEpoch != task.RecoveryEpoch || originalTask.GoalID != goalID || originalTask.GoalRevision != goal.closure.GoalRevision || originalTask.ProjectID != goal.closure.ProjectID || originalTask.SessionID != sessionID {
-					return errors.New("prior attempt has no safe retry result; reconcile its original operations first")
-				}
-				changed := tx.Model(&workExecutionAttempt{}).Where("id = ? AND revision = ? AND state = ?", prior.ID, prior.Revision, "prepared").Updates(map[string]any{"state": "not_executed", "closure_state": "reconciled", "revision": prior.Revision + 1})
-				if changed.Error != nil {
-					return changed.Error
-				}
-				if changed.RowsAffected != 1 {
-					return errWorkConflict
-				}
-				proof := map[string]any{"attemptId": prior.ID, "replacementAttemptId": id, "operationCount": operations, "rootTurnId": rootTurnID}
-				if err = securityActionRecord(tx, task.StoreID, task.RecoveryEpoch, "runtime", "unstarted-attempt:"+prior.ID, "work.attempt.not_executed", prior.ID, js(proof), prior.Revision, prior.Revision+1, proof, time.Now().UTC(), goal.closure.ProjectID); err != nil {
+				if err = reconcileWorkContinuationTx(tx, prior, task, *goal.closure, step, rootTurnID, id); err != nil {
 					return err
 				}
 			}
@@ -328,6 +306,56 @@ func (e *Engine) beginWorkAttempt(ctx context.Context, sessionID, goalID, stepID
 		return writeWorkGoalTx(tx, &row, &goal, false)
 	})
 	return id, err
+}
+
+// Reconcile only facts established by the original ledger. A fresh turn may
+// continue successful typed reads, but cannot replay successful mutations or
+// turn unverified effects into business acceptance.
+func reconcileWorkContinuationTx(tx *gorm.DB, prior workExecutionAttempt, task security.SecurityTask, contract WorkClosureContract, step WorkStepContract, root, replacement string) error {
+	var originalTask securityTaskRow
+	if err := tx.First(&originalTask, "id = ?", prior.SecurityTaskID).Error; err != nil {
+		return err
+	}
+	if prior.ProjectID != contract.ProjectID || prior.GoalRevision != contract.GoalRevision || prior.PlanRevision != contract.PlanRevision || prior.StepRevision != step.Revision || originalTask.StoreID != task.StoreID || originalTask.RecoveryEpoch != task.RecoveryEpoch || originalTask.GoalID != prior.GoalID || originalTask.GoalRevision != contract.GoalRevision || originalTask.ProjectID != contract.ProjectID || originalTask.SessionID != prior.SessionID {
+		return errors.New("prior attempt does not match current contract and recovery identity")
+	}
+	var operations []nativeOperation
+	if err := tx.Where("attempt_id = ?", prior.ID).Find(&operations).Error; err != nil {
+		return err
+	}
+	state, kind := "not_executed", "work.attempt.not_executed"
+	if len(operations) == 0 {
+		if prior.State != "prepared" {
+			return errors.New("only a prepared attempt with no original operations can be retired as unstarted")
+		}
+	} else {
+		if root == prior.RootTurnID || (prior.State != "prepared" && prior.State != "running" && prior.State != "succeeded") {
+			return errors.New("new current turn required to continue completed read observations")
+		}
+		for _, op := range operations {
+			var descriptor security.PreparedOperation
+			if op.Status != "succeeded" || op.Risk != "readonly" || op.FinishedAt == nil || op.SessionID != prior.SessionID || op.GoalID != prior.GoalID || op.StepID != prior.StepID || op.GoalRevision != prior.GoalRevision || op.PlanRevision != prior.PlanRevision || op.StepRevision != prior.StepRevision || op.SecurityTaskID != prior.SecurityTaskID || op.RootTurnID != prior.RootTurnID || op.StoreID != task.StoreID || op.RecoveryEpoch != task.RecoveryEpoch || json.Unmarshal([]byte(op.SecurityDescriptor), &descriptor) != nil || descriptor.Proof == security.ProofOpaque || len(descriptor.Capabilities) == 0 || securityOperationMayMutate(descriptor) {
+				return errors.New("prior attempt has unverified effects; reconcile original operations before retry")
+			}
+			current, err := currentWorkOperationResourcesTx(tx, op)
+			if err != nil {
+				return err
+			}
+			if !current {
+				return errors.New("prior read descriptor or resource connection changed")
+			}
+		}
+		state, kind = "succeeded", "work.attempt.read_complete"
+	}
+	changed := tx.Model(&workExecutionAttempt{}).Where("id = ? AND revision = ? AND state = ?", prior.ID, prior.Revision, prior.State).Updates(map[string]any{"state": state, "closure_state": "reconciled", "revision": prior.Revision + 1})
+	if changed.Error != nil {
+		return changed.Error
+	}
+	if changed.RowsAffected != 1 {
+		return errWorkConflict
+	}
+	proof := map[string]any{"attemptId": prior.ID, "replacementAttemptId": replacement, "operationCount": len(operations), "rootTurnId": root}
+	return securityActionRecord(tx, task.StoreID, task.RecoveryEpoch, "runtime", "continue-attempt:"+prior.ID, kind, prior.ID, js(proof), prior.Revision, prior.Revision+1, proof, time.Now().UTC(), contract.ProjectID)
 }
 
 func workUnresolvedTx(tx *gorm.DB, goalID, stepID string) (bool, error) {

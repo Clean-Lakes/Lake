@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 func TestWorkBlockedRetryDispatchesFixedSSHWithoutClearingLegacyRisk(t *testing.T) {
@@ -86,6 +88,41 @@ func TestWorkBlockedRetryDispatchesFixedSSHWithoutClearingLegacyRisk(t *testing.
 	if accepted != 0 {
 		t.Fatal("task retry fabricated business acceptance")
 	}
+	// The next real turn must also be able to take a new observation. Keep all
+	// old operation/evidence records; only retire their completed read attempt.
+	newRoot := "next-human-root"
+	var nextOwner ExecutionOwner
+	err = store.DB.Transaction(func(tx *gorm.DB) error {
+		binding, err := bindSecurityTaskTurn(tx, execution.Task.ID, execution.Task.StoreID, execution.Task.RecoveryEpoch, newRoot, "", execution.Task.ExecutionRevision, time.Now().UTC())
+		if err != nil {
+			return err
+		}
+		nextOwner, err = acquireExecutionOwner(tx, binding.ID, uid(), "agent", binding.OwnerGeneration, time.Now().UTC())
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.securityOwners.Store(nextOwner.BindingID, &liveSecurityOwner{owner: nextOwner})
+	s.mu.Lock()
+	s.state.View.RootTurnID = newRoot
+	s.mu.Unlock()
+	activate()
+	_, continued, _ := e.workRow("case", goal.ID)
+	next := continued.closure.ActiveAttempts[step]
+	if next == current {
+		t.Fatal("fresh observation reused the old turn's attempt")
+	}
+	var completedRead, nextAttempt workExecutionAttempt
+	store.DB.First(&completedRead, "id = ?", current)
+	store.DB.First(&nextAttempt, "id = ?", next)
+	if completedRead.State != "succeeded" || completedRead.ClosureState != "reconciled" || nextAttempt.RetryOf != current || nextAttempt.RootTurnID != newRoot {
+		t.Fatal("successful read continuation lost its original provenance")
+	}
+	prepared, decision, err := e.PrepareCatalogOperation(t.Context(), "case", c, Call{ID: "next-host-read", Name: "inspect_host"}, a)
+	if err != nil || prepared == nil || decision.Effect != "allow" || prepared.descriptor.AttemptID != next {
+		t.Fatal("fresh task observation is not executable", decision.ReasonCode, err)
+	}
 }
 
 func TestWorkBlockedRetryRejectsDispatchedAndUnverifiedAttempts(t *testing.T) {
@@ -103,7 +140,13 @@ func TestWorkBlockedRetryRejectsDispatchedAndUnverifiedAttempts(t *testing.T) {
 			store, _ := e.adkStore()
 			var prior workExecutionAttempt
 			store.DB.First(&prior, "id = ?", priorID)
-			if _, err := e.BeginWorkAttempt(goal.SessionID, goal.ID, goal.Items[0].ID, prior.SecurityTaskID, prior.RootTurnID, priorID, "retry", goal.Revision); err == nil {
+			var task securityTaskRow
+			store.DB.First(&task, "id = ?", prior.SecurityTaskID)
+			newRoot := "actual-next-root"
+			if _, err := bindSecurityTaskTurn(store.DB, task.ID, task.StoreID, task.RecoveryEpoch, newRoot, "", task.ExecutionRevision, time.Now().UTC()); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := e.BeginWorkAttempt(goal.SessionID, goal.ID, goal.Items[0].ID, prior.SecurityTaskID, newRoot, priorID, "retry", goal.Revision); err == nil {
 				t.Fatal("unverified original operation was treated as unstarted")
 			}
 			var unchanged workExecutionAttempt
