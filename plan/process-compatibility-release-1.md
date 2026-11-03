@@ -43,8 +43,8 @@ tags: [release, compatibility, security, macos]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-003 | 更新`VERSION`与`client/macos/RELEASE_NOTES.md`，说明format2、累计已合入变更、平台及兼容回退边界。 | ✅ | 2026-11-03 |
-| TASK-004 | 在隔离测试目录运行finalization/recovery/risk回归及ADK边界；记录实际SHA和结果，不访问生产Home或复制秘密。 | | |
-| TASK-005 | 使用`scripts/build_lake_desktop.sh --dev`制作带0.3.25版本的未安装签名Dev验证包，核对包版本、构建来源与严格签名；不覆盖日常Dev或生产安装。 | | |
+| TASK-004 | 在隔离测试目录运行finalization/recovery/risk回归及ADK边界；记录实际SHA和结果，不访问生产Home或复制秘密。 | ✅ | 2026-11-03 |
+| TASK-005 | 使用`scripts/build_lake_desktop.sh --dev`制作带0.3.25版本的未安装签名Dev验证包，核对包版本、构建来源与严格签名；不覆盖日常Dev或生产安装。 | ✅ | 2026-11-03 |
 | TASK-006 | 更新`docs/validation/lake-v0325-preparation.md`与JSON，检查计划格式、链接及diff；提交准备PR到develop并明确需merge commit保留生产历史。 | | |
 
 ### Implementation Phase 3
