@@ -84,8 +84,12 @@
 }
 
 /* A quiet typing bubble takes the same column as the next assistant reply. */
-.reply-duration.is-thinking { min-height:44px; padding:0; border:0; }
+.reply-duration.is-thinking { position:relative; min-height:44px; padding:0 0 0 var(--reply-avatar-column,32px); border:0; }
 .ai-turn > .turn-status.is-thinking { padding-inline-start:var(--reply-avatar-column,32px); }
+.turn-thinking-avatar { position:absolute; inset-inline-start:0; top:12px; width:20px; height:20px; }
+.turn-thinking-avatar .response-identity { margin:0; }
+.turn-thinking-avatar .response-identity > strong { display:none; }
+.turn-thinking-avatar .response-avatar { width:20px; height:20px; }
 .turn-thinking-bubble { display:inline-flex; align-items:center; justify-content:center; flex:none; width:76px; height:44px; padding:14px 18px; border:0; border-radius:var(--radius-window); corner-shape:var(--corner-window); background:var(--assistant-message-background); color:var(--foreground); }
 .turn-thinking-dots { display:inline-flex; align-items:center; gap:8px; }
 .turn-thinking-dots > i { width:7px; height:7px; border-radius:50%; background:currentColor; opacity:.32; animation:turn-thinking-dot 1.2s ease-in-out infinite; }

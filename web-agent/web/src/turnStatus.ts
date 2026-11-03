@@ -17,7 +17,7 @@ export function turnStatus(timing:ReplyTiming|undefined,view:AIView|undefined,ca
   else if(compacting) state="正在压缩上下文…";
   else if(runs.some(run=>run.status==="running"||run.status==="queued")) state=`${runs.filter(run=>run.status==="running"||run.status==="queued").length} 个子任务执行中…`;
   else if(currentCards.some(card=>["operation","shell"].includes(card.type)&&card.status==="running")) state="正在执行工具…";
-  else if(["message","text"].includes(currentCards.at(-1)?.type??"")&&currentCards.at(-1)?.status==="running") state="正在生成回复…";
+  else if(["message","text"].includes(currentCards.at(-1)?.type??"")&&currentCards.at(-1)?.status==="running"&&currentCards.at(-1)?.content?.trim()) state="正在生成回复…";
   else state="正在思考…";
  } else {
   const last=currentCards.at(-1);

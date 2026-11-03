@@ -16,15 +16,18 @@ test("completed duration stays frozen and sub-second durations stay hidden",()=>
  assert.equal(replyDurationText({...timing,status:"running",finishedAt:""},Date.parse(start)+19000),"19秒 · 正在思考…");
  assert.equal(replyDurationText({...timing,status:"running"},Date.parse(start)+19000,true),"19秒 · 等待确认");
 });
-test("normal activity waits one second and instant completion does not flash a duration",t=>{
+test("thinking identity appears immediately while brief tool activity and elapsed captions stay quiet",t=>{
  let now=Date.parse(start);
  t.mock.method(Date,"now",()=>now);
  const running={...timing,status:"running" as const,finishedAt:""};
  const render=(props:Parameters<typeof ReplyDuration>[0])=>renderToStaticMarkup(createElement(ReplyDuration,props));
  for(const elapsed of [0,500,999]){
   now=Date.parse(start)+elapsed;
-  assert.equal(render({timing:running}),"");
-  assert.equal(render({view:{status:"running",turnStartedAt:start,cards:[]} as never}),"");
+  for(const html of [render({timing:running}),render({view:{status:"running",turnStartedAt:start,cards:[]} as never})]){
+   assert.ok(html.includes('turn-thinking-avatar')&&html.includes('turn-thinking-dots'));
+   assert.ok(!html.includes('reply-duration-spinner')&&!html.includes('turn-status-elapsed'));
+  }
+  assert.equal(render({timing:running,cards:[{id:'tool',type:'operation',status:'running',at:start}]}),'');
  }
  now=Date.parse(start)+1000;
  const active=render({timing:running});
@@ -36,6 +39,20 @@ test("normal activity waits one second and instant completion does not flash a d
  const waiting=render({timing:running,view:{status:"waiting_approval",cards:[]} as never});
  assert.ok(waiting.includes("等待确认")&&!waiting.includes("reply-duration-spinner"));
  assert.ok(!waiting.includes("不到1秒"));
+});
+
+test('Pilot and specialist identities survive initial, empty-stream and reasoning snapshots without the old animation',t=>{
+ t.mock.method(Date,'now',()=>Date.parse(start)+100);
+ for(const assistantIdentity of [{name:'Pilot',pilot:true},{name:'服务器运维排查专员'}]){
+  for(const cards of [[],[{id:'empty',type:'message',status:'running',content:'',at:start}],[{id:'empty-text',type:'text',status:'running',content:'  ',at:start}],[{id:'reasoning',type:'thinking',status:'running',content:'',at:start}]] as AICard[][]){
+   const snapshot={session:{id:'s'},messages:[{id:'u',sessionId:'s',role:'user',text:'继续',createdAt:start}],resources:[],actions:[],replyTimings:[{...timing,status:'running',finishedAt:''}],ai:{session:'s',status:cards.length?'running':'idle',turnStartedAt:start,cards,cardsOffset:0}} as SessionSnapshot;
+   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity}));
+   const avatar=html.slice(html.indexOf('turn-thinking-avatar'));
+   assert.ok(avatar.includes(`data-role="${assistantIdentity.pilot?'coordinator':'investigator'}"`));
+   assert.ok(html.includes('turn-thinking-dots')&&!html.includes('reply-duration-spinner'));
+   assert.equal((html.match(/class="response-avatar"/g)||[]).length,1,'empty reply placeholders do not add another blank identity bubble');
+  }
+ }
 });
 test("cancelled and failed turns are identified; unknown endpoints do not fabricate time",()=>{
  assert.equal(replyDurationText({...timing,status:"cancelled"},Date.now()),"1分钟 13秒 · 已停止");
