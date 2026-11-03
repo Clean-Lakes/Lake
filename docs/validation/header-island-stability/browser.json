@@ -1,0 +1,72 @@
+[
+  {
+    "theme": "light",
+    "title": "服务运行状态排查专员",
+    "widths": [
+      336
+    ],
+    "stable": true,
+    "titleClipped": false
+  },
+  {
+    "theme": "light",
+    "title": "服务运行状态排查专员aai",
+    "widths": [
+      302.9921875
+    ],
+    "stable": true,
+    "titleClipped": false
+  },
+  {
+    "theme": "light",
+    "title": "特别长的服务运行状态排查专员特别长的服务运行状态排查专员特别长的服务运行状态排查专员特别长的服务运行状态排查专员特别长的服务运行状态排查专员",
+    "widths": [
+      334
+    ],
+    "stable": true,
+    "titleClipped": true
+  },
+  {
+    "theme": "light",
+    "case": "narrow rail",
+    "widths": [
+      240
+    ],
+    "stable": true
+  },
+  {
+    "theme": "dark",
+    "title": "服务运行状态排查专员",
+    "widths": [
+      336
+    ],
+    "stable": true,
+    "titleClipped": false
+  },
+  {
+    "theme": "dark",
+    "title": "服务运行状态排查专员aai",
+    "widths": [
+      302.9921875
+    ],
+    "stable": true,
+    "titleClipped": false
+  },
+  {
+    "theme": "dark",
+    "title": "特别长的服务运行状态排查专员特别长的服务运行状态排查专员特别长的服务运行状态排查专员特别长的服务运行状态排查专员特别长的服务运行状态排查专员",
+    "widths": [
+      334
+    ],
+    "stable": true,
+    "titleClipped": true
+  },
+  {
+    "theme": "dark",
+    "case": "narrow rail",
+    "widths": [
+      240
+    ],
+    "stable": true
+  }
+]
