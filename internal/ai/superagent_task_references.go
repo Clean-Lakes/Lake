@@ -2,9 +2,12 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -24,7 +27,7 @@ func (superTaskReferenceRow) TableName() string { return "superagent_task_refere
 func referencedTaskEvidenceTools() []Tool {
 	return []Tool{
 		{Name: "list_referenced_task_evidence", Description: "List exact historical evidence references for a source task explicitly registered to this comparison task. Never reads another Worker's transcript or grants resource access. Continue using nextCursor.", Parameters: objectSchema(map[string]any{"task_id": stringSchema(), "cursor": stringSchema(), "limit": integerSchema(1, 50)}, "task_id")},
-		{Name: "read_referenced_task_evidence", Description: "Read one registered immutable evidence reference, up to 2048 bytes. Every page revalidates project, policy, source revision, resource connection and evidence identity. Results are historical, not proof of current health. Missing, stale, failed and unknown results must be reported accurately.", Parameters: objectSchema(map[string]any{"task_id": stringSchema(), "evidence_id": stringSchema(), "reference_id": stringSchema(), "offset": integerSchema(0, 100000000), "limit": integerSchema(1, 2048)}, "task_id", "evidence_id", "reference_id")},
+		{Name: "read_referenced_task_evidence", Description: "After work_begin confirmation and work_update(running), read one registered immutable evidence reference, up to 2048 bytes. The host records this historical read in the current attempt for independent manual acceptance; it never accepts the source task or establishes current health. Every page revalidates project, policy, source revision, resource connection and evidence identity. Missing, stale, failed and unknown results must be reported accurately.", Parameters: objectSchema(map[string]any{"task_id": stringSchema(), "evidence_id": stringSchema(), "reference_id": stringSchema(), "offset": integerSchema(0, 100000000), "limit": integerSchema(1, 2048)}, "task_id", "evidence_id", "reference_id")},
 	}
 }
 
@@ -44,7 +47,7 @@ func (e *Engine) superTaskReferenceContext(ctx context.Context, project, task st
 	for _, row := range rows {
 		ids = append(ids, row.SourceTaskID)
 	}
-	return "\n[REGISTERED HISTORICAL TASK REFERENCES]\n" + js(ids) + "\nUse list_referenced_task_evidence then read_referenced_task_evidence. These are historical read-only sources, not execution permissions or completed acceptance. Missing evidence must remain a stated gap.", nil
+	return "\n[REGISTERED HISTORICAL TASK REFERENCES]\n" + js(ids) + "\nUse list_referenced_task_evidence for discovery. Confirm the comparison plan and set its actual item running before read_referenced_task_evidence; the host records each read in this attempt for manual verification. Include comparison and acceptance in one substantive item, not an evidence-free final item. These are historical read-only sources, not execution permissions or completed acceptance. Missing evidence must remain a stated gap.", nil
 }
 
 // References carry read-only provenance. They never copy scope, attempts,
@@ -220,14 +223,14 @@ func (e *Engine) ReadReferencedTaskEvidence(ctx context.Context, session, source
 	var out TaskEvidencePage
 	id, err := strconv.ParseUint(evidenceID, 10, 64)
 	if err != nil || id < 1 || offset < 0 || limit < 1 || limit > 2048 {
-		return out, errSuperBinding
+		return out, fmt.Errorf("historical read arguments: %w", errSuperBinding)
 	}
 	refs, rows, err := e.referencedEvidence(ctx, session, source, id-1, 1)
 	if err != nil {
-		return out, err
+		return out, fmt.Errorf("historical read source: %w", err)
 	}
 	if len(refs) != 1 || refs[0].EvidenceID != evidenceID || refs[0].ID != referenceID {
-		return out, errSuperBinding
+		return out, fmt.Errorf("historical read reference: %w", errSuperBinding)
 	}
 	raw := rows[0].Data
 	if err = e.checkSuperPayload(raw); err != nil {
@@ -243,4 +246,59 @@ func (e *Engine) ReadReferencedTaskEvidence(ctx context.Context, session, source
 		next = 0
 	}
 	return TaskEvidencePage{Reference: refs[0], Text: text, Hash: hash(raw), Offset: offset, NextOffset: next, Historical: true, Truncated: truncated, StoredBytes: len(raw), Notice: "Captured stored evidence only; source tools may have truncated their output. nextOffset pages the stored bytes and cannot recover unseen source bytes. Historical observations do not establish current health."}, nil
+}
+
+// Revalidate the original historical-read receipt during manual acceptance and
+// final goal aggregation. A successful local read never imports a source pass,
+// host observation time, execution owner or permit into the comparison task.
+func currentReferencedTaskReadTx(tx *gorm.DB, op nativeOperation) (bool, error) {
+	var page TaskEvidencePage
+	if json.Unmarshal([]byte(op.Result), &page) != nil || !page.Historical || page.Reference.TaskID == op.GoalID {
+		return false, nil
+	}
+	ref := page.Reference
+	var link superTaskReferenceRow
+	if err := tx.First(&link, "task_id = ? AND source_task_id = ? AND project_id = ?", op.GoalID, ref.TaskID, op.ProjectID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	var worker superWorkerRow
+	if err := tx.First(&worker, "task_id = ? AND project_id = ?", ref.TaskID, op.ProjectID).Error; err != nil {
+		return false, err
+	}
+	view, err := projectSuperTaskTx(tx, worker.goalSession(), ref.TaskID)
+	if err != nil {
+		return false, err
+	}
+	if view.Revision != link.SourceRevision || ref.TaskRevision != view.Revision {
+		return false, nil
+	}
+	var proof nativeEvidence
+	if err := tx.First(&proof, "id = ? AND operation_id = ? AND session_id = ?", ref.EvidenceID, ref.OperationID, worker.goalSession()).Error; err != nil {
+		return false, err
+	}
+	var source nativeOperation
+	if err := tx.First(&source, "id = ? AND session_id = ? AND goal_id = ? AND project_id = ? AND store_id = ? AND recovery_epoch = ?", ref.OperationID, worker.goalSession(), ref.TaskID, op.ProjectID, op.StoreID, op.RecoveryEpoch).Error; err != nil {
+		return false, err
+	}
+	state := source.Status
+	if source.OrphanState == "effects_unknown" || source.ClosureState == "effects_unknown" {
+		state = "unknown"
+	}
+	expected := hash(js([]any{ref.TaskID, view.Revision, proof.ID, source.ID, source.AttemptID, source.ResourceID, source.ResourceConnectionRevision, source.Status, source.ClosureState, source.OrphanState}))
+	want := TaskEvidenceRef{ID: expected, TaskID: ref.TaskID, GoalRevision: source.GoalRevision, TaskRevision: view.Revision, AttemptID: source.AttemptID, OperationID: source.ID, EvidenceID: strconv.FormatUint(proof.ID, 10), ResourceID: source.ResourceID, ConnectionVersion: source.ResourceConnectionRevision, CollectedAt: proof.At, ResultState: state, EvidenceState: proof.Status, AcceptanceState: view.AcceptanceState}
+	if js(ref) != js(want) || source.CallID == "" || source.CallID != proof.CallID || source.ResourceID == "" || page.Hash != hash(proof.Data) || page.StoredBytes != len(proof.Data) || page.Offset < 0 || page.Offset > len(proof.Data) || !strings.HasPrefix(proof.Data[page.Offset:], page.Text) {
+		return false, nil
+	}
+	var resource securityResourceRevisionRow
+	if err := tx.First(&resource, "project_id = ? AND resource_id = ? AND store_id = ? AND recovery_epoch = ? AND state = 'ready'", op.ProjectID, ref.ResourceID, op.StoreID, op.RecoveryEpoch).Error; err != nil {
+		return false, err
+	}
+	policy, err := loadSecurityPolicy(tx, op.ProjectID, op.StoreID, op.RecoveryEpoch)
+	if err != nil {
+		return false, err
+	}
+	return resource.ConnectionRevision == ref.ConnectionVersion && slices.Contains(policy.ResourceIDs, ref.ResourceID), nil
 }
