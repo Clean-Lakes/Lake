@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-03",
+  "testedSHA": "ac7f87a21684310c3c8c0e4aa941424261594b02",
+  "frontend": {"typecheck": "passed", "testsPassed": 574, "testsFailed": 0},
+  "dev": {
+    "bundleID": "com.cleanlakes.lake.desktop.dev",
+    "home": "~/.lake-dev",
+    "buildSourceDirty": false,
+    "signedBuildAndInstall": "passed",
+    "strictAppAndBackendSignatures": "passed",
+    "backendSHA256": "023cf3c307ec31306f5eb0993aba2f9ab416022e3561409926ebc5b8f94684de",
+    "resourceCount": 135
+  },
+  "layout": {
+    "rowOuterInsetsPx": [8, 8],
+    "desktop1280NameColumnsPx": [47, 47, 47, 47, 47, 47, 47],
+    "narrow600NameColumnsPx": [47, 47, 47, 47, 47, 47, 47],
+    "desktopExecutionAndReplyTextX": [378, 378],
+    "narrowExecutionAndReplyTextX": [82, 82],
+    "dividerAvatarInsetPx": 32,
+    "extraFullWidthBorderPx": 0,
+    "horizontalOverflow": false,
+    "lightDarkAndCornerFallback": "visually_verified",
+    "keyboardDisclosureAndFocus": "passed"
+  },
+  "backendChanged": false,
+  "realModelOrRemoteCommandExecuted": false,
+  "productionChanged": false,
+  "pullRequest": 142,
+  "merged": false
+}

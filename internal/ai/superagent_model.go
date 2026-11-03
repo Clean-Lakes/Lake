@@ -22,6 +22,7 @@ type SuperTaskView struct {
 	Resources        []WorkBinding `json:"resources,omitempty"`
 	DeadlineAt       time.Time     `json:"deadlineAt"`
 	Reason           string        `json:"reason,omitempty"`
+	Summary          string        `json:"summary,omitempty"`
 }
 
 var errSuperBinding = errors.New("superagent: invalid host binding")
@@ -59,7 +60,7 @@ func ProjectSuperTaskState(goal WorkGoal, closure GoalClosureView, now time.Time
 	view := SuperTaskView{TaskID: goal.ID, SessionID: goal.SessionID, Title: goal.Title,
 		Revision: goal.Revision, OriginRootTurnID: goal.OriginRootTurnID,
 		DeadlineAt: goal.DeadlineAt, Resources: append([]WorkBinding(nil), goal.ResourceBindings...),
-		AcceptanceState: "not_evaluated"}
+		AcceptanceState: "not_evaluated", Summary: utf8Prefix(goal.Summary, 2000)}
 	if goal.ID == "" || goal.SessionID == "" || closure.GoalID != goal.ID {
 		return view, errSuperBinding
 	}
@@ -126,6 +127,17 @@ func projectSuperTaskTx(tx *gorm.DB, sessionID, taskID string) (SuperTaskView, e
 	view, err := ProjectSuperTaskState(goal, closure, time.Now().UTC())
 	if err != nil {
 		return view, err
+	}
+	if !workTerminal(goal.Status) && tx.Migrator().HasTable(&superBudgetRow{}) {
+		paused, err := superBudgetPausedTx(tx, goal.ID, goal.RoundLimit)
+		if err != nil {
+			return view, err
+		}
+		if paused {
+			view.State, view.Reason, view.Summary = "paused", superBudgetPauseReason, SuperBudgetPauseSummary
+		} else if view.State == "blocked" && goal.Status == "blocked" && goal.Summary == SuperTokenLimitRemovedSummary {
+			view.Reason = superTokenLimitRemovedReason
+		}
 	}
 	if view.ProjectID == "" && tx.Migrator().HasTable(&superWorkerRow{}) {
 		var w superWorkerRow

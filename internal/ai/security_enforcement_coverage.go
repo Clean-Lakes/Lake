@@ -72,6 +72,7 @@ var securityVerifiedEnforcementEntrypoints = [...]string{
 	"read_investigation",
 	"read_memory_preference",
 	"read_project_memory",
+	"read_referenced_task_evidence",
 	"read_session_context",
 	"read_terminal_screen",
 	"read_tool_result",

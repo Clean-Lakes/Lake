@@ -314,6 +314,8 @@ v1 的约束使用固定结构，不接受模型填写的表达式或路径通�
 
 ### 5.3 任务授权
 
+已接入的受管 `inspect_host` 只调用注册的 `process_snapshot` 固定诊断，与 `observe_host(metric=processes)` 共用编译、派发和只读证据校验；不创建交互终端，不执行模型 Shell 字符串。SSH 必须先由用户确认系统类型并登记与当前连接版本匹配的命令目标；未配置、禁用或版本变化时明确拒绝，不回退到旧终端路径。进程快照不代表服务整体健康，也不包含服务日志。未决操作及写入阻断继续保留，固定读取不会将历史 unknown 改为成功或解除原限制。
+
 `TaskGrant` 拟包含：服务端生成的 `id/taskID/goalID/projectID/sessionID`、`rootAuthorityID/recoveryEpoch`、purpose、精确资源ID/连接revision、能力与约束、签发动作、绝对expiry和revision。taskID必须指向同goal的有效SecurityTask；计划允许grant跨该goal的多个attempt复用，但每次仍验证当前step/策略/范围。purpose仅解释，不能构成授权匹配。
 
 v1 任务授权支持结构化读取、受信命令模板和精确服务集合的重启动作。文件写、SQL 写、自由 Shell、任意终端输入及 opaque MCP 仍不接受任务通配授权。诊断预设为有效任务内 30 分钟；可在现有提问选项中选择30分钟或4小时，项目上限默认 4 小时。任务结束、取消、父授权失效或时间到期立即停止新派发；续期必须再次显式授权。项目直接 allow 的读取不需要创建任务授权。

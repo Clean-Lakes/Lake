@@ -219,6 +219,10 @@
       "family": "host-terminal"
     },
     {
+      "name": "read_referenced_task_evidence",
+      "family": "session-content"
+    },
+    {
       "name": "read_tool_result",
       "family": "session-content"
     },

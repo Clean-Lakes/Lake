@@ -202,6 +202,9 @@ func (b *Server) sessionAssetCatalog(id string) ([]ai.Asset, []ai.AssetDirectory
 	return assets, directories
 }
 func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any, error) {
+	if b.Store.superSessionKind(id) == "role" {
+		return nil, errors.New("superagent: select the exact task before execution control or approval")
+	}
 	if method == "agentQuestionReply" || method == "agentDecision" {
 		view, err := b.Engine.Snapshot(id)
 		if err == nil {

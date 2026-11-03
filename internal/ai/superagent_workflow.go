@@ -113,6 +113,9 @@ func (e *Engine) RegisterSuperWorkflow(ctx context.Context, binding SecurityWork
 			return lookup
 		}
 		w := superWorkerRow{ID: workerID, TaskID: binding.GoalID, ProjectID: binding.ProjectID, SessionID: binding.SessionID, RoleID: roleID, Protocol: "workflow", SourceEventID: eventID, OriginRootTurnID: binding.RootTurnID, Revision: 1, CreatedAt: time.Now().UTC()}
+		if _, err := ensureSuperChannelTx(tx, binding.ProjectID, roleID, w.CreatedAt); err != nil {
+			return err
+		}
 		if err := tx.Create(&w).Error; err != nil {
 			return err
 		}

@@ -473,6 +473,11 @@ func (m *Models) WithCapacity(ctx context.Context, model *ai.Model) *ai.Model {
 	return &copy
 }
 func (b *Server) contextView(view ai.View) ai.View {
+	// Web conversation activity follows the current response, while WorkGoals
+	// and the Super task projection retain their independent business status.
+	if view.ReplyStatus == "running" || view.ReplyStatus == "waiting_approval" {
+		view.Status = view.ReplyStatus
+	}
 	model := b.Models.Active()
 	if view.Context != nil && model != nil && view.Context.ModelID == ai.ModelIdentity(*model) {
 		model = b.Models.CachedCapacity(model)

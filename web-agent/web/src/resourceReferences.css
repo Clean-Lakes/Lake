@@ -7,10 +7,19 @@
 :is(.sidebar.workspace-navigation .resource-row,.composer-mentions .mention-item) > .resource-kind-icon.kind-local { color:var(--text-secondary); }
 .sidebar.workspace-navigation .resource-folder-toggle > .resource-tree-folder-icon { color:var(--warning); }
 
-/* Borderless resource chips keep their original outer dimensions. */
+/* Draft references remain removable chips; sent references read as inline names. */
 :is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon) { border:0; }
 .composer-reference-token:has(> .resource-kind-icon) { padding:2px 6px; }
-.message-reference-token:has(> .resource-kind-icon) { padding:1px 6px; }
+.message-reference-token:has(> .resource-kind-icon) {
+ max-width:calc(100% - 4px);
+ padding:1px 0;
+ background:transparent;
+ font-size:inherit;
+ font-weight:inherit;
+}
+:is(.ai-role-user,.message-user) .message-reference-token:has(> .resource-kind-icon) {
+ color:color-mix(in srgb,var(--resource-reference-foreground) 65%,var(--user-message-foreground));
+}
 :is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon:is(.kind-ssh,.kind-apisix)) {
  --resource-reference-background:var(--info-soft);
  --resource-reference-foreground:var(--info);

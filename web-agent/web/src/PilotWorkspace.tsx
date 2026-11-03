@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
-import type {SuperWorkspace,SuperWorker} from '../../shared/contracts';
+import type {SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
 import {superTaskPresentation} from './superAgentPresentation';
@@ -27,16 +27,18 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
  return {workspace,error};
 }
 
-export function PilotWorkspace({workspace,error,selectedId,onPilot,onWorker}:{workspace:SuperWorkspace|null;error:string;selectedId:string|null;onPilot:()=>void;onWorker:(worker:SuperWorker)=>void}){
+export function PilotWorkspace({workspace,error,selectedId,onPilot,onWorker,onChannel}:{workspace:SuperWorkspace|null;error:string;selectedId:string|null;onPilot:()=>void;onWorker:(worker:SuperWorker)=>void;onChannel?:(channel:SpecialistChannelInfo)=>void}){
  if(!workspace?.active)return error?<p className="pilot-workspace-error" role="status">{error}</p>:null;
  const roots=workspace.workers.filter(worker=>!worker.parentWorkerId);
+ const channels=workspace.channels;
+ const entries=channels?channels.map(channel=>({channel,worker:roots.find(worker=>worker.roleId===channel.roleId)})):roots.map(worker=>({channel:undefined,worker}));
  return <section className="pilot-workspace" aria-label="Pilot 与专员">
   <button type="button" className={`nav-row pilot-workspace-entry${selectedId===workspace.project.routerSessionId?' active':''}`} aria-current={selectedId===workspace.project.routerSessionId?'page':undefined} title="Pilot · 持续沟通，自动安排工作" onClick={onPilot}>
    <SuperRoleAvatar pilot/><span className="nav-row-text"><strong>Pilot</strong></span><Glyph name="arrow" size={14}/>
   </button>
-  <div className="nav-heading"><span>专员</span><small>{roots.length}</small></div>
-  {roots.length?roots.map(worker=>{const state=superTaskPresentation(worker.task),label=`${worker.roleName} · ${worker.task.title} · ${state.label}`;return <button type="button" key={worker.id} className={`nav-row pilot-worker-row${selectedId===worker.sessionId?' active':''}`} aria-current={selectedId===worker.sessionId?'page':undefined} aria-label={label} title={label} onClick={()=>onWorker(worker)}>
-   <SuperRoleAvatar name={worker.roleName}/><span className="nav-row-text"><strong>{worker.roleName}</strong><span className="pilot-worker-task">{worker.task.title}</span></span><span className="pilot-worker-status" aria-hidden="true">{state.tone!=='success'&&<span className="session-status-dot" data-tone={state.tone}/>}</span>
+  <div className="nav-heading"><span>专员</span><small>{entries.length}</small></div>
+  {entries.length?entries.map(({channel,worker})=>{const needsConfirmation=channel?.needsConfirmation===true||roots.some(row=>(channel?row.roleId===channel.roleId:row.id===worker?.id)&&row.task.state==='waiting_user');const task=worker?.task,state=task?superTaskPresentation(task):{label:'暂无任务',tone:'muted'},name=channel?.roleName??worker!.roleName,id=channel?.sessionId??worker!.sessionId,selected=selectedId===id||!!channel&&roots.some(row=>row.roleId===channel.roleId&&row.sessionId===selectedId),label=`${name} · ${task?.title??'持续沟通'} · ${needsConfirmation?'需确认':state.label}`;return <button type="button" key={channel?.id??worker!.id} className={`nav-row pilot-worker-row${selected?' active':''}`} aria-current={selected?'page':undefined} aria-label={label} title={label} onClick={()=>channel&&onChannel?onChannel(channel):worker&&onWorker(worker)}>
+   <SuperRoleAvatar name={name}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{task?.title??'持续沟通'}</span></span><span className={`pilot-worker-status${needsConfirmation?" needs-confirmation":""}`}>{needsConfirmation?<span className="pilot-worker-confirmation">需确认</span>:state.tone!=='success'&&task&&<span className="session-status-dot" data-tone={state.tone}/>}</span>
   </button>}):<p className="pilot-workspace-empty">告诉 Pilot 你的目标，它会安排合适的专员。</p>}
  </section>;
 }

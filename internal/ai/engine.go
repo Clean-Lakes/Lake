@@ -37,10 +37,12 @@ type session struct {
 }
 type Engine struct {
 	SuperInputResolver             func(context.Context, SuperEvent) (TurnInput, error) // Trusted host; resolves existing source data, never authority.
+	HostContext                    context.Context                                      // Trusted host lifetime; cancels startup snapshots and preserves unanswered SDK waits on host shutdown.
 	superOnce                      sync.Once
 	superErr                       error
 	superInitialized               atomic.Bool
 	superRouterLocks               sync.Map
+	superLegacyBudgetChecked       sync.Map
 	superSecrets                   sync.Map
 	securityOwners                 sync.Map
 	securityStart                  sync.Once
@@ -478,6 +480,13 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	view := s.state.View
+	view.ReplyStatus = ""
+	// Canonical goals below may be blocked while a real human followup is
+	// receiving a model response. Keep that live reply activity independent;
+	// it is presentation metadata, never a task transition or execution permit.
+	if s.cancel != nil && (view.Status == "running" || view.Status == "waiting_approval") {
+		view.ReplyStatus = view.Status
+	}
 	if s.finalizing {
 		view.Status, view.TurnFinishedAt = "running", ""
 	}
@@ -639,6 +648,9 @@ func reconcile(st *State, why string) {
 	for _, m := range st.History {
 		for _, c := range m.Calls {
 			if _, ok := pending[c.ID]; ok {
+				if nativeQuestionReady(st.View.Question) && st.View.Question.Call.ID == c.ID {
+					continue // Original durable input remains unanswered across host shutdown.
+				}
 				st.History = append(st.History, Message{Role: "tool", CallID: c.ID, Name: c.Name, Content: js(map[string]any{"error": why, "outcome": "unknown; not replayed"})})
 				delete(pending, c.ID)
 			}
@@ -890,6 +902,9 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 			status = "failed"
 			if errors.Is(err, context.Canceled) {
 				status = "cancelled"
+			}
+			if errors.Is(err, ErrSuperBudget) {
+				status = "paused"
 			}
 			reconcile(&s.state, "turn "+status+"; no replay")
 			s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "error", Content: redact(err.Error(), c), Status: status, At: timestamp()})

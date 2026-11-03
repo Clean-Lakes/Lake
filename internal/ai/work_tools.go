@@ -24,6 +24,9 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 		return nil, errors.New("work goals require an ordinary core conversation")
 	}
 	if call.Name == "work_begin" {
+		if c.superRole == "worker" && a["asset_refs"] == nil {
+			return nil, errors.New("Worker work_begin requires explicit asset_refs from PROJECT RESOURCE INDEX; bind the intended aliases before plan confirmation. For work with no resource I/O, explicitly pass asset_refs:[]")
+		}
 		var items []WorkItem
 		if err := json.Unmarshal([]byte(js(a["items"])), &items); err != nil {
 			return nil, err
@@ -136,7 +139,13 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 			if err = store.DB.First(&attempt, "id = ? AND goal_id = ? AND step_id = ?", current, g.ID, stepID).Error; err != nil {
 				return nil, err
 			}
-			if (attempt.State == "prepared" || attempt.State == "running") && attempt.RootTurnID == execution.Owner.RootTurnID {
+			runningItem := false
+			for _, item := range g.Items {
+				if item.ID == stepID && item.Status == "running" {
+					runningItem = true
+				}
+			}
+			if g.Status == "running" && runningItem && g.ActiveItemID == stepID && (attempt.State == "prepared" || attempt.State == "running") && attempt.RootTurnID == execution.Owner.RootTurnID && attempt.SecurityTaskID == execution.Task.ID {
 				return g, nil
 			}
 		}

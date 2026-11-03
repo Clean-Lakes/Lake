@@ -9,9 +9,15 @@ import (
 )
 
 func TestSuperHumanRecoveryUsesOriginalRunnerAndActualAnswer(t *testing.T) {
+	for _, mode := range []string{"crash-checkpoint", "graceful-host-update", "host-context-drains-first"} {
+		t.Run(mode, func(t *testing.T) { testSuperHumanRecovery(t, mode) })
+	}
+}
+
+func testSuperHumanRecovery(t *testing.T, mode string) {
 	model, closeModel := fakeModel(t, func(n int, input map[string]any) any {
 		if n == 1 {
-			return response("", Call{ID: "original-question", Name: "work_begin", Arguments: `{"title":"Inspect test target","items":[{"title":"Review test evidence"}]}`})
+			return response("", Call{ID: "original-question", Name: "work_begin", Arguments: `{"asset_refs":[],"title":"Inspect test target","items":[{"title":"Review test evidence"}]}`})
 		}
 		if !strings.Contains(js(input["messages"]), securityWorkConfirmLabel) {
 			t.Error("actual answer missing")
@@ -42,6 +48,9 @@ func TestSuperHumanRecoveryUsesOriginalRunnerAndActualAnswer(t *testing.T) {
 	}
 	s, _ := e.get(w.SessionID)
 	run, cancel := context.WithCancel(ctx)
+	if mode == "host-context-drains-first" {
+		e.HostContext = run
+	}
 	done := make(chan error, 1)
 	go func() { done <- e.StartTaskWorker(run, "project", w.ID) }()
 	var saved State
@@ -69,16 +78,46 @@ func TestSuperHumanRecoveryUsesOriginalRunnerAndActualAnswer(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	cancel()
-	<-done
-	// Restore the last committed wait as a crashed host would, after the old
-	// invocation has drained. Its official SDK call and root remain unchanged.
-	s.mu.Lock()
-	c := s.state.Config
-	s.state = saved
-	s.state.Config = c
-	s.cancel, s.questionReply = nil, nil
-	s.mu.Unlock()
+	if mode != "crash-checkpoint" {
+		if mode == "host-context-drains-first" {
+			cancel()
+			<-done
+			e.Shutdown()
+		} else {
+			e.Shutdown()
+			<-done
+			cancel()
+		}
+		next, err := New(e.Dir, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		next.SecurityRuntime = e.SecurityRuntime
+		t.Cleanup(next.Shutdown)
+		e = next
+		if err := e.ConfigureTaskWorker(ctx, "project", w.ID, Config{Model: model, SecurityProjectID: "project", Profile: "core", MaxSteps: 12}); err != nil {
+			t.Fatal(err)
+		}
+		s, _ = e.get(w.SessionID)
+		db, _ = e.superStore()
+		s.mu.Lock()
+		preserved := nativeQuestionReady(s.state.View.Question) && s.state.View.Question.ID == saved.View.Question.ID
+		s.mu.Unlock()
+		if !preserved {
+			t.Fatalf("graceful update lost the original unanswered question: %s", js(s.state.View))
+		}
+	} else {
+		cancel()
+		<-done
+		// Restore the last committed wait as a crashed host would, after the
+		// old invocation drains. Its official SDK call/root remain unchanged.
+		s.mu.Lock()
+		c := s.state.Config
+		s.state = saved
+		s.state.Config = c
+		s.cancel, s.questionReply = nil, nil
+		s.mu.Unlock()
+	}
 	if err := e.ReplyQuestion(w.SessionID, saved.View.Question.ID, map[string][]string{"work_contract": {securityWorkConfirmLabel}}); err != nil {
 		t.Fatal(err)
 	}

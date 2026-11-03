@@ -17,3 +17,9 @@ export function superTaskPresentation(task:Pick<SuperTask,'state'|'acceptanceSta
  const tone=task.state==='running'||task.state==='waiting_external'?'active':task.state==='waiting_user'||task.state==='blocked'?'attention':task.state==='failed'?'danger':'neutral';
  return {label:labels[task.state]??'待核实',tone};
 }
+
+// A restored invocation can have ended while its canonical task is paused.
+export function superTaskHeaderPresentation(task?:SuperTask) {
+ if(task?.state==='blocked'&&task.reason==='token_limit_removed')return {status:'failed' as const,label:'等待后续核对'};
+ return task?.state==='paused'?{status:'completed' as const,label:'任务已暂停'}:undefined;
+}

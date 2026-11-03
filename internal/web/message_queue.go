@@ -163,7 +163,7 @@ func (b *Server) submitHumanMessage(id string, data Object) Object {
 	message := b.validateHumanMessage(id, data)
 	b.messageMu.Lock()
 	defer b.messageMu.Unlock()
-	if b.Store.superSessionKind(id) == "worker" || b.Store.superSessionKind(id) == "legacy" {
+	if b.Store.superSessionKind(id) == "worker" || b.Store.superSessionKind(id) == "legacy" || b.Store.superSessionKind(id) == "role" {
 		return b.acceptSuperWorkerMessage(id, message, "")
 	}
 	queue := b.Store.MessageQueue(id)

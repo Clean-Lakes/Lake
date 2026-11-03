@@ -69,7 +69,24 @@ func (e *Engine) ReadSuperObject(ctx context.Context, sessionID, kind, id string
 					return errSuperBinding
 				}
 			}
-			raw, rev = js(r.event()), 1
+			channel, err := superChannelForEventTx(tx, r)
+			if err != nil {
+				return err
+			}
+			if channel != nil {
+				var role superRoleRow
+				if err := tx.First(&role, "id = ?", channel.RoleID).Error; err != nil {
+					return err
+				}
+				var source superChannelSourceRow
+				if err := tx.First(&source, "event_id = ?", r.ID).Error; err != nil {
+					return err
+				}
+				raw = js(map[string]any{"event": r.event(), "preferredRoleID": role.ID, "preferredRoleKey": role.RoleKey, "explicitTaskRef": source.ExplicitTaskID, "notice": "This host channel is a routing preference, not execution permission. New work uses this exact role_key; ordinary messages are not automatically followups."})
+			} else {
+				raw = js(r.event())
+			}
+			rev = 1
 		case "task", "worker":
 			var w superWorkerRow
 			column := "task_id"

@@ -307,9 +307,16 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot .
 	defer func() {
 		s.mu.Lock()
 		s.questionReply = nil
-		s.state.View.Question = nil
+		e.runMu.Lock()
+		closing := e.runtimeClosed || e.HostContext != nil && e.HostContext.Err() != nil
+		e.runMu.Unlock()
+		// A host update must retain the original SDK input checkpoint. A normal
+		// turn cancellation still expires its question; neither path answers it.
+		if !closing || resultErr == nil || !nativeQuestionReady(req) {
+			s.state.View.Question = nil
+		}
 		_ = e.saveHumanInputState(s)
-		e.notify(s, "question", nil)
+		e.notify(s, "question", s.state.View.Question)
 		s.mu.Unlock()
 	}()
 	if err != nil {

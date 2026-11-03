@@ -27,7 +27,7 @@ test('navigation keeps task and status accessible while completed workers have n
  assert.match(html,/data-role="coordinator"/);assert.match(html,/data-role="verifier"/);
  assert.doesNotMatch(html,/class="session-status-dot"/);
  const pending=renderToStaticMarkup(createElement(PilotWorkspace,{workspace:{...workspace,workers:[{...worker,task:{...task,state:'waiting_user',acceptanceState:'not_evaluated'}}]},error:'',selectedId:null,onPilot(){},onWorker(){}}));
- assert.match(pending,/需要你回答/);assert.match(pending,/data-tone="attention"/);
+ assert.match(pending,/需确认/);assert.match(pending,/pilot-worker-confirmation/);
 });
 
 test('inspector never attributes another session or task to the selected specialist',()=>{

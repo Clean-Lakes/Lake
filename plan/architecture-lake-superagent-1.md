@@ -2,7 +2,7 @@
 goal: 将 Lake 统一为持续 Pilot Router、独立任务 Worker 与共享 Memory 的 Super-agent 内核
 version: "1.0"
 date_created: "2026-11-02"
-last_updated: "2026-11-02"
+last_updated: "2026-11-03"
 owner: "Lake；Memory 方案与内部实现以 bearqy 维护内容为主"
 status: In progress
 tags: [architecture, super-agent, pilot, adk, memory, security, migration]
@@ -123,7 +123,7 @@ Task 可保留超过一次执行许可的历史，但活跃许可不得超出现
 | 持续补充 | 使用 `AdmitSupplement/applySupplements` 的安全边界；持久记录源消息和原执行 RootTurnID，SDK 接纳后才消费 Inbox。源事件与内部续接消息分开，不能伪造人类授权 |
 | 模型并发 | 初值全局最多 4 个模型请求，其中 1 个保留给 Router/人工续接，Worker 总计最多 3 个；后台 Memory/监督只使用剩余 Worker 预算并服从现有前台抢占。活跃 Worker 上限 6，不占浏览器 SSE 槽 |
 | 图与子专员 | 依赖和 fan-in 继续由 ADK 图调度。初值最多 1 层子专员，每项 Task 累计最多 8 个 Worker 实例，重试也计数；须通过宿主委派与 Security 校验，子专员不获得无限递归工具 |
-| 额度 | 沿用当前 Engine/任务的有效 MaxSteps、模型输入/输出和累计用量约束；新 Worker 不重置父任务余额。分配前预留、结果后结算，缺失用量保守估算并标识；Router 另行累计和限额，不能无限运行 |
+| 额度 | 2026-11-03 用户明确取消单任务累计 token 上限，主/子专员的 token 总量只记账不拦截。保留有效 MaxSteps、单次上下文/输出、累计模型轮数、绝对期限和并发约束；新 Worker 共享原任务轮数及用量计数，不归零。分配前记录预留、结果后结算，缺失用量保守记账；Router 自身现有批次与轮数约束保留 |
 | 收件与公平 | 同一 Router 域串行提交决策；单次最多 16 个积压事件，停止/审批/真实用户补充优先于自动告警。超量事件留队，任务按项目与等待时间轮转；不通过取消在途变更实现抢占 |
 | 等待 | `work_wait` 释放 Runner/活跃槽，实际结果继续通过原 function-response 与 machine input 恢复。新适配器必须校验明确配置与修订；当前仅有的 release-v1 能力不冒充通用 Jenkins 观察器 |
 | 上下文 | Router 默认最多 16 KiB 相关摘要，单事件预览最多 4 KiB，单证据预览最多 2 KiB；按 UTF-8 边界截取并附准确 ID/hash/revision 与继续读取引用。权限、任务约束、验收契约不得靠截断隐藏，无法装入则拒绝本次派发 |
@@ -349,7 +349,12 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 
 ## 当前依赖与交付水位（2026-11-02）
 
+2026-11-03 增量审计：角色表与独立任务 Worker 已存在，但侧栏仍按 Worker 列表展示，专员直聊仍直接进入该 Worker 的原任务，尚未交付“一个长期专员入口对应多个任务会话”。`ReadSuperObject` 也仅覆盖 event/task/worker，完整跨任务证据召回未交付。现状证据、75 项 Go / 10 项前端定向回归及增量实施步骤见[长期专员频道方案](feature-specialist-channel-1.md)。上述是实施前审计基线。用户随后授权实施，当前分支已接入长期角色频道、普通消息角色限定路由、历史任务索引和注册证据读取；最终检查及 Dev 验收见该增量计划 TASK-017/018，未通过前不计作已发布能力。Worker Memory 的独立依赖与门控保持不变。
+
 - TASK-016：原受监管 Shell 等待接续已接公共 Worker；通用构建平台缺少当前只读 Security profile，适配器明确 unavailable。不能把通用 MCP 返回或历史批准用于后台自动读取。
 - TASK-020 至 TASK-022：已提交宿主只读来源旁注及兼容契约供协作审阅；长期任务来源采集/整理与资产范围 Memory 依赖 bearqy/Items 的接口和联合验收，尚未完成，不改变 snapshot hash、不启用 N5 专员或运维 V2。
 - TASK-026/030/031：已完成签名 Dev 安装、真实三联与明暗/窄窗检查、原生退出界面后同 PID 重连和鉴权排空；验收脚本及 [MD](../docs/validation/lake-superagent-runtime.md)/[JSON](../docs/validation/lake-superagent-runtime.json) 已交付。26 项矩阵逐项记录实际边界证据，Windows、睡眠/断电和完整原生故障矩阵仍未验证，不能据此声称整个矩阵通过。
 - 全部完成和已启用是不同事实；本计划保持 In progress，不能用部分单测或缺失 CI 声称完整验收。
+
+
+2026-11-03 频道增量：实现与独立回归及签名Dev安装已完成，真实独立A3/B3采样成功，C4完成已有证据读取；历史读取的当前尝试回执、原SDK问答关闭恢复、状态岛和历史挂载稳定性已修复。最终候选 `a59aa4c2` 已恢复原C4并输出带来源的10%/18%历史比较，原任务逐项验收链路可用；旧失败输入阻塞和空轮询误取消均已修复，业务最终验收不自动通过；详见[增量验证记录](../docs/validation/lake-specialist-channels.md)。不改变本统一计划其他未完成任务及Memory门控。

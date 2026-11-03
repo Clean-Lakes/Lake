@@ -1,0 +1,76 @@
+{
+  "date": "2026-11-03",
+  "platform": "macOS arm64",
+  "goTestedSHA": "7a0934de4ad2426a1fd44270a5a5622cc00c7be7",
+  "uiAndInstalledSHA": "71a2aa0270ba1b010583a1f6a619510dc4610848",
+  "goUnchangedAfterFullRegression": true,
+  "fullGo": {
+    "passedTestsAndSubtests": 1948,
+    "passedPackages": 11,
+    "exitCode": 0
+  },
+  "targetedRace": {
+    "passedTestsAndSubtests": 97,
+    "passedPackages": 2,
+    "exitCode": 0
+  },
+  "frontend": {
+    "passedTests": 573,
+    "typecheck": "passed",
+    "exitCode": 0
+  },
+  "vet": "passed",
+  "adkRuntimeBoundary": "passed",
+  "dev": {
+    "bundleID": "com.cleanlakes.lake.desktop.dev",
+    "home": "~/.lake-dev",
+    "buildSourceDirty": false,
+    "buildAndInstall": "passed",
+    "strictAppAndBackendSignatures": "passed",
+    "backendSHA256": "038b102767902308fe93a69076391568449c36d27883dbf5ef88f83065706940",
+    "nativeHeaderCanonicalPause": "passed",
+    "projectResourceCount": 135
+  },
+  "realTask": {
+    "state": "paused",
+    "assignmentState": "parked",
+    "generation": 3,
+    "generationUnchanged": true,
+    "pauseReason": "model_budget_exhausted",
+    "budgetUsed": 236780,
+    "budgetLimit": 256000,
+    "budgetRounds": 13,
+    "budgetUnchanged": true,
+    "attentionDeliveries": 1,
+    "attentionState": "delivered"
+  },
+  "legacyUnknownAudit": {
+    "count": 93,
+    "projectionSHA256": "9540501386ee5c60b1d27425ad0ccabb52d6718a4d64a3973b65e703e8409cd5",
+    "unchanged": true
+  },
+  "ui": {
+    "light1280HeaderPaused": true,
+    "lightNoticeCount": 1,
+    "rawEnglishVisible": false,
+    "planControlEnabled": true,
+    "visibleInspectorPauseReason": true,
+    "misleadingRoundCounter": false,
+    "dark600NoticeCount": 1,
+    "darkDocumentWidth": 600,
+    "darkViewportWidth": 600,
+    "composerKeyboardFocus": true
+  },
+  "originalErrorCardsRewritten": false,
+  "budgetExtendedOrReset": false,
+  "newRealRemoteInspectionExecuted": false,
+  "taskAcceptanceClaimed": false,
+  "schemaMigrationAdded": false,
+  "budgetExtensionUIAvailable": false,
+  "pr": {
+    "number": 142,
+    "target": "develop",
+    "mergeAuthorized": false
+  },
+  "productionChanged": false
+}

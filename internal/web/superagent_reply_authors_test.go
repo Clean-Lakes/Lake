@@ -45,7 +45,11 @@ func TestSuperReportsProjectOriginalSpecialistIdentity(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		expected[report.ID] = ai.SuperReplyAuthor{Kind: "specialist", Name: role, WorkerID: worker.WorkerID, SessionID: worker.SessionID, TaskID: worker.TaskID}
+		channel, err := b.Engine.SpecialistChannelForWorker(t.Context(), pid, worker.SessionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected[report.ID] = ai.SuperReplyAuthor{Kind: "specialist", Name: role, WorkerID: worker.WorkerID, SessionID: worker.SessionID, TaskID: worker.TaskID, ChannelSessionID: channel.SessionID}
 	}
 	plain := b.Store.AddMessage(pilot, "assistant", "Go 审查专员: this is ordinary Pilot prose", nil)
 	snapshot := apiTest(t, h, "GET", "/api/sessions/"+pilot+"/snapshot", nil, 200)

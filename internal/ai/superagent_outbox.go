@@ -28,7 +28,7 @@ func (r superOutputRow) report() SuperReport {
 
 // QueuePilotReport binds the report to the canonical goal revision in the same
 // transaction. Repeated submissions retain one delivery key and exact content.
-func (e *Engine) QueuePilotReport(ctx context.Context, projectID, sessionID, taskID, channelRef, sourceMessageID, kind, payload string, expected int64) (SuperReport, error) {
+func (e *Engine) QueuePilotReport(ctx context.Context, projectID, sessionID, taskID, channelRef, sourceMessageID, kind, payload string, expected int64, sourceCardIDs ...string) (SuperReport, error) {
 	var out SuperReport
 	switch kind {
 	case "ack", "result", "question", "attention":
@@ -41,13 +41,42 @@ func (e *Engine) QueuePilotReport(ctx context.Context, projectID, sessionID, tas
 	if err := e.checkSuperPayload(payload); err != nil {
 		return out, err
 	}
+	if len(sourceCardIDs) > 1 {
+		return out, errSuperBinding
+	}
+	if len(sourceCardIDs) == 1 && sourceCardIDs[0] != "" {
+		s, err := e.get(sessionID)
+		if err != nil {
+			return out, err
+		}
+		valid := false
+		s.mu.Lock()
+		for _, card := range s.state.View.Cards {
+			if card.ID == sourceCardIDs[0] && card.Type == "message" && card.Content == payload {
+				valid = true
+				break
+			}
+		}
+		s.mu.Unlock()
+		if !valid {
+			return out, errSuperBinding
+		}
+	}
 	db, err := e.superStore()
 	if err != nil {
 		return out, err
 	}
 	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		id := hash(js([]any{"pilot-report", taskID, expected, channelRef, kind}))
-		requestHash := hash(js([]any{projectID, sessionID, sourceMessageID, payload}))
+		sourceCardID := ""
+		if len(sourceCardIDs) > 0 {
+			sourceCardID = sourceCardIDs[0]
+		}
+		parts := []any{projectID, sessionID, sourceMessageID, payload}
+		if sourceCardID != "" {
+			parts = append(parts, sourceCardID)
+		}
+		requestHash := hash(js(parts))
 		var prior superOutputRow
 		if lookup := tx.First(&prior, "id = ?", id).Error; lookup == nil {
 			if prior.RequestHash != requestHash {
@@ -67,9 +96,26 @@ func (e *Engine) QueuePilotReport(ctx context.Context, projectID, sessionID, tas
 		}
 		// A result is not necessarily success; the canonical state travels with it.
 		// Consumers must display it and cannot derive completion from prose.
-		data := js(map[string]any{"task": view, "text": payload})
+		data := js(map[string]any{"task": view, "text": payload, "sourceCardId": sourceCardID})
 		row := superOutputRow{ID: id, TaskID: taskID, ProjectID: projectID, ChannelRef: channelRef, SourceMessageID: sourceMessageID, Kind: kind, Payload: data, RequestHash: requestHash, ReportRevision: expected, State: "pending", CreatedAt: time.Now().UTC()}
 		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
+			return err
+		}
+		var worker superWorkerRow
+		if err := tx.First(&worker, "task_id = ? AND project_id = ? AND parent_worker_id = ''", taskID, projectID).Error; err == nil && worker.RoleID != "" {
+			channel, err := ensureSuperChannelTx(tx, projectID, worker.RoleID, row.CreatedAt)
+			if err != nil {
+				return err
+			}
+			if channel.HostSessionID != channelRef {
+				copy := row
+				copy.ID = hash(js([]any{"pilot-report", taskID, expected, channel.HostSessionID, kind}))
+				copy.ChannelRef = channel.HostSessionID
+				if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&copy).Error; err != nil {
+					return err
+				}
+			}
+		} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
 		var original superOutputRow
@@ -134,7 +180,13 @@ func (e *Engine) BeginPilotHostDelivery(ctx context.Context, projectID, id strin
 		}
 		var domain superProjectRow
 		if err := tx.First(&domain, "project_id = ? AND router_session_id = ?", projectID, row.ChannelRef).Error; err != nil {
-			return err
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			var channel superChannelRow
+			if err := tx.First(&channel, "project_id = ? AND host_session_id = ?", projectID, row.ChannelRef).Error; err != nil {
+				return err
+			}
 		}
 		switch row.State {
 		case "delivered":
