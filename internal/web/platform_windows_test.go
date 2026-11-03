@@ -105,7 +105,13 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 	if len(options) > 0 {
 		opts = options[0]
 	}
-	b, h := fixture(t)
+	home := t.TempDir()
+	if unusualPaths {
+		home = filepath.Join(home, "Lake 数据 with spaces")
+	}
+	// Bind every runtime component to the installed-style Home at construction.
+	// Changing Models.Home later leaves Security pointing at a different store.
+	b, h := fixtureAtHome(t, home)
 	id, _ := newSession(t, h)
 	if opts.desktop != "" {
 		b.Terminals.askpassProgram = opts.desktop
@@ -113,7 +119,6 @@ func windowsSSHPasswordConPTYHandshake(t *testing.T, interactive, unusualPaths, 
 	if unusualPaths {
 		// Reproduce an installed backend/credential path, not only the ASCII
 		// checkout path used by go test on a hosted runner.
-		b.Models.Home = filepath.Join(t.TempDir(), "Lake 数据 with spaces")
 		helper := filepath.Join(t.TempDir(), "Lake 安装 with spaces", "resources", "lake.exe")
 		if err := os.MkdirAll(filepath.Dir(helper), 0700); err != nil {
 			t.Fatal(err)
