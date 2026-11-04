@@ -30,9 +30,9 @@ tags: [refactor, task-runtime, resources]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | `internal/ai/work_goal.go:beginWork` 和 `work_binding.go` 合并新增资源快照，幂等保存无步骤的资源补充；空或待澄清目录不阻止无资源建任务。实际访问仍由权限层处理。 | | |
-| TASK-002 | `adk_work_wait.go:resumeWorkGoal` 对已有 Security 契约使用中性的资源选择及原操作恢复验证；保留旧无契约自动恢复的保守路径。 | | |
-| TASK-003 | `security_sre.go:BindSecuritySREPlan` 将普通 SRE 资源候选改为当前项目目录；明确 workflow 原模板的资源、步骤和连接检查保持。`superagent_model.go:projectSuperTaskTx` 从准确项目/会话/目标的 operation 补全资源关联投影，不写回授权或任务完成状态。 | | |
+| TASK-001 | `internal/ai/work_goal.go:beginWork` 和 `work_binding.go` 合并新增资源快照，幂等保存无步骤的资源补充；空或待澄清目录不阻止无资源建任务。实际访问仍由权限层处理。 | ✅ | 2026-11-04 |
+| TASK-002 | `adk_work_wait.go:resumeWorkGoal` 对已有 Security 契约使用中性的资源选择及原操作恢复验证；保留旧无契约自动恢复的保守路径。 | ✅ | 2026-11-04 |
+| TASK-003 | `security_sre.go:BindSecuritySREPlan` 将普通 SRE 资源候选改为当前项目目录；明确 workflow 原模板的资源、步骤和连接检查保持。`superagent_model.go:projectSuperTaskTx` 从准确项目/会话/目标的 operation 补全资源关联投影，不写回授权或任务完成状态。 | ✅ | 2026-11-04 |
 
 ### Implementation Phase 2
 
@@ -40,9 +40,9 @@ tags: [refactor, task-runtime, resources]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-004 | `work_tools.go`、`superagent_catalog.go`、`superagent_worker.go` 移除必填资源及“原计划固定资源”提示，说明任务可以跨项目内资源继续，具体操作必须用准确目标。 | | |
-| TASK-005 | 更新 `work_binding_test.go`、`superagent_worker_test.go`，补充同 GoalID 跨资源、旧 Binding、重复追加、无资源建单、重启、权限收窄、原操作身份及 SRE/workflow 边界回归。运行 ai/web 完整测试、相关 race、vet、runtime boundary 和前端检查。 | | |
-| TASK-006 | 更新 `agent.md`、`docs/lake-pilot.md` 及验收记录；在保留当前 Dev 候选的干净本地集成提交上签名构建安装，核对原数据和新任务行为；提交独立 develop PR，不自行合并。 | | |
+| TASK-004 | `work_tools.go`、`superagent_catalog.go`、`superagent_worker.go` 移除必填资源及“原计划固定资源”提示，说明任务可以跨项目内资源继续，具体操作必须用准确目标。 | ✅ | 2026-11-04 |
+| TASK-005 | 更新 `work_binding_test.go`、`superagent_worker_test.go`，补充同 GoalID 跨资源、旧 Binding、重复追加、无资源建单、持久化/恢复、权限收窄、原操作身份及 SRE/workflow 边界回归。运行 ai/web 完整测试、相关 race、vet、runtime boundary 和前端检查。 | ✅ | 2026-11-04 |
+| TASK-006 | 更新 `agent.md`、`docs/lake-pilot.md` 及验收记录；在保留当前 Dev 候选的干净本地集成提交上签名构建安装，核对原数据与原生工作台；提交独立 develop PR，不自行合并。 | | |
 
 ## 3. Alternatives
 
@@ -78,3 +78,4 @@ tags: [refactor, task-runtime, resources]
 - [Security 设计](../docs/design/lake-security-v1.md)
 - [长期专员与项目资源](../docs/lake-pilot.md)
 - [开发规范](../CONTRIBUTING.md)
+- [验证记录](../docs/validation/lake-task-resource-decoupling.md)
