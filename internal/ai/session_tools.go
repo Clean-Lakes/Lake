@@ -105,9 +105,9 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 			if server.Transport == "stdio" && c.Permissions != nil && c.Permissions.DenyLocalExecution {
 				return nil, errors.New("当前会话禁止启动本机 MCP")
 			}
-			if call.Name == "call_mcp_tool" || server.Transport == "stdio" {
+			if mcpRequiresUnrestrictedResources(call.Name, server.Transport == "stdio") {
 				if c.Permissions != nil && c.Permissions.BlockUnreferencedAssets {
-					return nil, errors.New("MCP 无法验证项目资源范围；当前会话仅允许操作已引用资源")
+					return nil, errMCPReferencedResourcesOnly
 				}
 				if c.Permissions == nil || !c.Permissions.SilentCommands {
 					target := server.Name + " · " + str(a["tool"])
@@ -132,7 +132,7 @@ func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, ca
 				if lookupErr != nil || !server.Enabled {
 					return nil, errors.New("MCP 服务已不可用")
 				}
-				if c.Permissions != nil && (server.Transport == "stdio" && c.Permissions.DenyLocalExecution || (call.Name == "call_mcp_tool" || server.Transport == "stdio") && c.Permissions.BlockUnreferencedAssets) {
+				if c.Permissions != nil && (server.Transport == "stdio" && c.Permissions.DenyLocalExecution || mcpRequiresUnrestrictedResources(call.Name, server.Transport == "stdio") && c.Permissions.BlockUnreferencedAssets) {
 					return nil, errors.New("当前父会话权限已禁止此次 MCP 操作")
 				}
 			}
