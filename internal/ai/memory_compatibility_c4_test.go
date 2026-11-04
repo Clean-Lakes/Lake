@@ -78,9 +78,9 @@ func TestC4RestoredHistoryKeepsUnknownOutboxAndManifestWithoutExecution(t *testi
 		}
 		found = true
 	}
-	outbox, err := restarted.StrategyOutbox("case")
-	if !found || err != nil || len(outbox) != 1 || outbox[0].SnapshotHash != event.SnapshotHash || requests.Load() != 1 {
-		t.Fatal("restoring history executed or lost data", found, err, requests.Load())
+	outbox := historicalStrategyOutbox(t, restarted, "case")
+	if !found || len(outbox) != 1 || outbox[0].SnapshotHash != event.SnapshotHash || requests.Load() != 1 {
+		t.Fatal("restoring history executed or lost data", found, requests.Load())
 	}
 	after, _ := readPromptManifest(t, restarted, "case").CanonicalJSON()
 	if string(after) != string(rawManifest) {
@@ -108,8 +108,20 @@ func TestC4RestoredHistoryKeepsUnknownOutboxAndManifestWithoutExecution(t *testi
 	if err := store.DB.Model(&nativeArtifact{}).Where("file_name LIKE 'prompt-manifest-%'").Count(&count).Error; err != nil || count != 1 {
 		t.Fatal("new task wrote an experimental manifest", count, err)
 	}
-	outbox, _ = restarted.StrategyOutbox("case")
+	outbox = historicalStrategyOutbox(t, restarted, "case")
 	if len(outbox) != 1 || outbox[0].SnapshotHash != event.SnapshotHash {
 		t.Fatal("new task mined or discarded old source")
 	}
+}
+
+// Inspect retained audit state without exposing a product queue API.
+func historicalStrategyOutbox(t *testing.T, e *Engine, id string) []StrategyTurnSnapshot {
+	t.Helper()
+	s, err := e.get(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]StrategyTurnSnapshot(nil), s.state.StrategyOutbox...)
 }

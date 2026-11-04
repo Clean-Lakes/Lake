@@ -84,7 +84,7 @@ flowchart TB
 
 ## 5. 实施顺序
 
-按 [新主计划 FM 阶段](plan/feature-agent-file-memory-1.md#3-分批实施) 推进：先审计 caller 和存储/恢复契约，再交付后台提取与文件整理，然后接通 Pilot 读取、迁移旧数据并停止旧写入/注入，最后接 Worker 范围读取、质量验收及删除无依赖代码。
+按 [新主计划 FM 阶段](plan/feature-agent-file-memory-1.md#3-分批实施) 推进，历史遗留清理优先级最高：先审计 caller 和存储/恢复契约，立即删除已无依赖的旧运行代码；每批实现前重复清理，不推迟到最终验收。仍支撑实际链路的旧 Memory 在后台提取、文件整理和 Pilot 读取接替后迁移，停止旧写入/注入再移除；随后接 Worker 范围读取及质量验收。保留项必须说明依赖和退出条件，见 [首批遗留审计](docs/design/agent-file-memory-legacy-audit.md)。
 
 三模块的资产身份、权限、来源、时间和撤回边界继续有效；旧 12 项条目管理对接任务不再是排期前提。Super-agent 外部事件主线可以在 Worker 知识视图 unavailable 时继续。每批记录准确 tested SHA 与平台缺口，经 develop PR 交付，不将文档替代视作运行下线或验收完成。
 
