@@ -18,6 +18,22 @@ func runSecurityMaintenance(ctx context.Context, args []string) (bool, error) {
 		return false, nil
 	}
 	switch args[0] {
+	case "recover-finalized-startup":
+		flags := flag.NewFlagSet("security recover-finalized-startup", flag.ContinueOnError)
+		home := flags.String("home", "", "existing finalized initial Lake Home")
+		apply := flags.Bool("apply", false, "record explicit authorization and resume the verified foundation runtime; backend must be stopped")
+		digest := flags.String("expected-digest", "", "exact digest returned by the reviewed preview")
+		if err := flags.Parse(args[1:]); err != nil {
+			return true, err
+		}
+		if *home == "" || flags.NArg() != 0 {
+			return true, errors.New("an explicit --home is required")
+		}
+		report, err := ai.RecoverFinalizedInitialStartup(ctx, *home, *apply, *digest)
+		if err != nil {
+			return true, err
+		}
+		return true, json.NewEncoder(os.Stdout).Encode(report)
 	case "finalize-migration":
 		flags := flag.NewFlagSet("security finalize-migration", flag.ContinueOnError)
 		home := flags.String("home", "", "existing offline Lake Home")
