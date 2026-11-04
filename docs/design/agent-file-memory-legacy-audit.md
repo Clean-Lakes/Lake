@@ -45,7 +45,7 @@
 
 - 删除 `project_memory_v2_extraction.go` 与 `project_memory_v2_worker.go` 中的提取提示词/解析、来源分类与 typed claim 提升、候选写入、请求预留/结算及自动 worker。继续删除失去 caller 的资源快照校验、资源变动取消入口、自动提交分支和 `MemoryMutation.Claim`。
 - 自然记忆仍需要的 `PauseMemoryExtractionForForeground` 原样移到 `project_memory_scheduling.go`；当前自然批处理、关闭/撤回、前台优先与 V1 项目记忆保持原链路。
-- 新收到的 schemaVersion=2 outbox 仅记录 `blocked / memory_v2_retired` 回执。恢复与领取任务前将旧 queued/retry/budget/running 队列停止调度，清除旧租约，但保留来源 JSON/hash、尝试次数和已记用量。当前 V1 提交器拒绝迟到的 V2 输出，V2 Store 不再领取自动任务；旧手动重试返回 410，不重置次数、用量或来源 hash。
+- 新收到的 schemaVersion=2 outbox 仅记录 `blocked / memory_v2_retired` 回执。恢复与领取任务前将旧 queued/retry/budget/running 队列停止调度，清除旧租约，但保留来源 JSON/hash、尝试次数和已记用量。自然来源已撤回时沿原语义只留 hash，正文不落盘，coverage 保持 withdrawn。当前 V1 提交器拒绝迟到的 V2 输出，V2 Store 不再领取自动任务；旧手动重试返回 410，不重置次数、用量或来源 hash。
 - 停止把 V2 未完派发在重启时重置为 interrupted、减少尝试次数后重排队；保留原 `projectMemoryJobAttemptsV2` 全部历史行，停止自动裁剪。`blocked` 是调度退役状态，不能解释为原派发未执行、结果已核实或应退款。
 - 九项依赖已移除自动执行能力的正向测试退役，换成不派发、跨重启不复活、未知派发不改写、V1 队列不被阻塞和 AST 边界回归；历史候选的过期时间测试改为直接构造旧记录，继续验证审核不能刷新观察时间。
 - 保留原 schema/迁移 marker、拒绝不兼容 Home、历史读取/删除与 Security 恢复；手动 V2 API/UI 和候选旧数据管理仍是下一批清理项，本批不把旧数据迁入新文件记忆。

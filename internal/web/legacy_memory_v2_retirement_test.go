@@ -178,6 +178,37 @@ func TestMemoryV2RetiredWorkerMakesNoAuxiliaryRequestsAndForegroundContinues(t *
 	}
 }
 
+func TestMemoryV2RetiredWithdrawnNaturalSourceStaysRedacted(t *testing.T) {
+	s, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	project := stringOf(s.CreateProject("Withdrawn source")["id"])
+	session := stringOf(s.CreateSession(project, "Source", nil)["id"])
+	snapshot := testMemorySnapshot(project, session, "withdrawn-v2", 0, 0)
+	snapshot.SchemaVersion = 2
+	// A historical consent snapshot never replaces the host's current opt-out.
+	snapshot.Natural = &ai.NaturalMemoryConsent{ProjectEnabled: true}
+	snapshot = ai.SealMemorySnapshot(snapshot)
+	if err := s.EnqueueMemoryTurn(snapshot); err != nil {
+		t.Fatal(err)
+	}
+	row := s.read(func() any {
+		return s.row("SELECT t.snapshotJSON,t.snapshotHash,j.status FROM projectMemoryTurns t JOIN projectMemoryJobs j ON j.turnSequence=t.sequence WHERE t.turnId=?", snapshot.TurnID)
+	}).(Object)
+	coverage := s.read(func() any {
+		return s.row("SELECT stage FROM naturalMemoryCoverage WHERE sourceKey=?", naturalCoverageKey(snapshot))
+	}).(Object)
+	if row["snapshotJSON"] != "" || row["snapshotHash"] != snapshot.SnapshotHash || row["status"] != "blocked" || coverage["stage"] != "withdrawn" {
+		t.Fatal("retirement retained withdrawn natural content")
+	}
+	s.RecoverMemoryJobs()
+	if s.ClaimMemoryJob() != nil {
+		t.Fatal("redacted retired source became dispatchable")
+	}
+}
+
 func TestMemoryV2RetiredExtractionAbsentFromProduction(t *testing.T) {
 	forbidden := map[string]bool{
 		"processMemoryV2Job": true, "ReserveMemoryDispatch": true, "settleMemoryDispatch": true,

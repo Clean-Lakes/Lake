@@ -51,12 +51,13 @@ func (s *Store) EnqueueMemoryTurn(snapshot ai.MemoryTurnSnapshot) (err error) {
 		} else if integer(settings["epoch"]) != snapshot.Epoch || settings["useEnabled"] != true || settings["extractionEnabled"] != true {
 			outcome, status = "skipped", "skipped"
 		}
+		withdrawnNatural := snapshot.Natural != nil && status == "skipped"
 		if snapshot.SchemaVersion == 2 {
 			outcome, status, code = "blocked", "blocked", retiredMemoryV2Code
 		}
 		nowAt := now()
 		snapshotJSON := jsonText(snapshot)
-		if snapshot.Natural != nil && status == "skipped" {
+		if withdrawnNatural {
 			snapshotJSON = ""
 		}
 		s.exec("INSERT INTO projectMemoryTurns(projectId,sessionId,turnId,epoch,knowledgeBaseRevision,snapshotJSON,snapshotHash,modelRefJSON,outcome,createdAt,processedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?)", snapshot.ProjectID, snapshot.SessionID, snapshot.TurnID, snapshot.Epoch, snapshot.KnowledgeBaseRevision, snapshotJSON, snapshot.SnapshotHash, jsonText(Object{"modelRef": snapshot.ModelRef}), outcome, nowAt, "")
@@ -64,7 +65,7 @@ func (s *Store) EnqueueMemoryTurn(snapshot ai.MemoryTurnSnapshot) (err error) {
 		s.exec("INSERT INTO projectMemoryJobs(jobId,turnSequence,status,nextAttemptAtMs,createdAt,updatedAt,lastErrorCode) VALUES(?,?,?,?,?,?,?)", ident(), sequence, status, time.Now().UnixMilli(), nowAt, nowAt, code)
 		if snapshot.Natural != nil {
 			stage := "captured"
-			if status == "skipped" {
+			if status == "skipped" || withdrawnNatural {
 				stage = "withdrawn"
 				if code == "queue_limit" {
 					stage = "deferred"
