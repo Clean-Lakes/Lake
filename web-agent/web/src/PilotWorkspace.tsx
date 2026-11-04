@@ -93,10 +93,11 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilo
    const needsConfirmation = channel?.needsConfirmation || workers.some(row => row.task.state === 'waiting_user');
    const running = channel ? channel.running === true : task?.state === 'running';
    const cursor = channel?.completionCursor ?? '';
+   const read = channel ? readMarks.get(readKey(channel)) : undefined;
    const unread = !!channel && !selected && cursor > (channel.seenCompletionCursor ?? '') &&
-    cursor > (readMarks.get(readKey(channel))?.requested ?? '');
+    cursor > (read?.requested ?? '') && cursor > (read?.acknowledged ?? '');
    const status = [needsConfirmation && '需确认', running && '执行中', unread && '有已完成任务未读'].filter(Boolean).join(' · ') ||
-    (task ? superTaskPresentation(task).label : '暂无任务');
+    (task && task.state !== 'running' ? superTaskPresentation(task).label : task ? '暂无正在执行的任务' : '暂无任务');
    const label = `${name} · ${task?.title ?? '持续沟通'} · ${status}`;
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label} title={label}

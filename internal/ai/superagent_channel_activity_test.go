@@ -37,6 +37,13 @@ func TestSpecialistChannelActivityUsesAllRootTasksAndLiveAssignments(t *testing.
 		}
 	}
 	check(false)
+	origin, err := e.SuperWorkerOrigin(ctx, source.ProjectID, first.WorkerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.FinishSuperUserRouting(ctx, source, origin.ID); err != nil {
+		t.Fatal(err)
+	}
 	token, err := e.AcquireWorkerSlot(ctx, source.ProjectID, first.WorkerID)
 	if err != nil {
 		t.Fatal(err)
