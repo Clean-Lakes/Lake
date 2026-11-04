@@ -9,7 +9,7 @@ import {isCompactionFallbackEntry} from '../src/timeline';
 import {TranscriptMessage} from '../src/AIPanel';
 import {completedTurnInterimIds} from '../src/completedTurnProse';
 
-test('Pilot shows the @recipient while the specialist receives only the instruction',()=>{
+test('Pilot omits duplicate dispatch chatter while the specialist retains the instruction',()=>{
  const at='2026-11-04T01:00:00Z';
  const message={id:'dispatch-message',sessionId:'pilot',role:'assistant' as const,text:'@数据库专员，请去做一下：核对两端 MySQL 数据',createdAt:at,dispatch:{id:'decision',sourceMessageId:'original-user',workerId:'worker',sessionId:'worker-session',taskId:'task',roleId:'stable-role',roleName:'数据库专员',channelSessionId:'channel',instruction:'核对两端 MySQL 数据',action:'create' as const}};
  const channelHTML=renderToStaticMarkup(createElement(TranscriptMessage,{message,sessionId:'pilot',hideIdentity:true}));
@@ -18,8 +18,8 @@ test('Pilot shows the @recipient while the specialist receives only the instruct
  assert.ok(!channelHTML.includes('@数据库专员')&&!channelHTML.includes('请去做一下'));
  assert.ok(!channelHTML.includes('ai-role-user'));
  const pilotHTML=renderToStaticMarkup(createElement(TranscriptMessage,{message,sessionId:'pilot',onSpecialist:()=>{}}));
- assert.ok(pilotHTML.includes('aria-label="与数据库专员继续沟通"'));
- assert.ok(pilotHTML.includes('@数据库专员')&&pilotHTML.includes('请去做一下：核对两端 MySQL 数据'));
+ assert.equal(pilotHTML,'');
+ assert.equal(message.dispatch.instruction,'核对两端 MySQL 数据','display filtering preserves the source record');
  const followup={...message,dispatch:{...message.dispatch,action:'followup' as const,instruction:'只比较业务表'}};
  const followupHTML=renderToStaticMarkup(createElement(TranscriptMessage,{message:followup,sessionId:'pilot',hideIdentity:true}));
  assert.ok(followupHTML.includes('补充要求：只比较业务表')&&!followupHTML.includes('@数据库专员'));

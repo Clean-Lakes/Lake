@@ -11,9 +11,9 @@ test("left and right cycle visible categories including empty categories",()=>{
  assert.equal(nextMentionCategory("mcp",[],{key:"ArrowRight"}),"all");
  assert.equal(nextMentionCategory("all",[],{key:"ArrowLeft"}),"mcp");
  const options=mentionOptions([],[],[],true);
- assert.equal(nextMentionCategory("mcp",options,{key:"ArrowRight"}),"role");
- assert.equal(nextMentionCategory("role",options,{key:"ArrowRight"}),"all");
- assert.equal(nextMentionCategory("all",options,{key:"ArrowLeft"}),"role");
+ assert.equal(nextMentionCategory("mcp",options,{key:"ArrowRight"}),"all");
+ assert.equal(nextMentionCategory("role",options,{key:"ArrowRight"}),"resource");
+ assert.equal(nextMentionCategory("all",options,{key:"ArrowLeft"}),"mcp");
 });
 test("category navigation preserves modified arrows and other keys",()=>{
  for(const key of ["ArrowLeft","ArrowRight"]){
@@ -139,4 +139,20 @@ test("internal clipboard tokens retain known IDs while foreign or forged referen
  assert.equal(composerClipboardFragment(raw,[]),null);
  assert.equal(composerClipboardFragment(raw.replace('"position":1','"position":0'),doc.references),null);
  assert.equal(composerClipboardFragment('{',doc.references),null);
+});
+
+
+test('created specialists appear before resources and retain exact RoleID across filtering and submission',()=>{
+ const options=mentionOptions([{id:'db',name:'数据库',status:'available'}] as Resource[],[],[],false,[{roleId:'role-a',roleName:'数据库专员',duties:'核对数据一致性'},{roleId:'role-b',roleName:'数据库专员',duties:'维护索引'}]);
+ assert.deepEqual(options.map(option=>[option.kind,option.id]),[['role','role-a'],['role','role-b'],['resource','db']]);
+ assert.equal(nextMentionCategory('all',options,{key:'ArrowRight'}),'role');
+ assert.equal(nextMentionCategory('role',options,{key:'ArrowRight'}),'resource');
+ const filtered=filterMentions(options,'维护索引','role');
+ assert.equal(filtered.length,1);assert.equal(filtered[0]!.id,'role-b');
+ const picked=selectComposerMention('@',1,[],filtered[0]!);
+ const payload=composerMessage(picked.next+' 查询',picked.references,['db']);
+ assert.equal(payload.text,'@数据库专员 查询');assert.deepEqual(payload.resourceIds,[]);
+ assert.equal(payload.references[0]!.role_id,'role-b');assert.equal(payload.mentions[0]!.id,'role-b');
+ const removed=replaceComposerRange(picked.next,picked.references,0,1,'');
+ assert.deepEqual(composerMessage(removed.next,removed.references,[]).references,[]);
 });
