@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
@@ -32,38 +31,6 @@ func (b *Server) chargeMemoryList(scope memoryReadScope, id string, args, result
 	ledger.bytes += cost
 	ledger.pages[key] = ident()
 	return result, nil
-}
-
-func memoryDetailsFrom(data Object) *MemoryDetails {
-	for _, field := range []string{"knowledgeKind", "scopeKind", "factKey", "reviewState"} {
-		if value, ok := data[field]; ok {
-			if _, ok := value.(string); !ok {
-				fail(400, "Invalid memory classification field")
-			}
-		}
-	}
-	if value, ok := data["subject"]; ok {
-		if _, ok := value.(map[string]any); !ok {
-			fail(400, "Invalid memory subject")
-		}
-	}
-	if value, ok := data["resourceIds"]; ok {
-		switch values := value.(type) {
-		case []any:
-			for _, v := range values {
-				if _, ok := v.(string); !ok {
-					fail(400, "Invalid memory resources")
-				}
-			}
-		case []string:
-		default:
-			fail(400, "Invalid memory resources")
-		}
-	}
-	if value, ok := data["alwaysReference"]; ok {
-		memoryBool(value, "alwaysReference")
-	}
-	return &MemoryDetails{KnowledgeKind: stringOf(data["knowledgeKind"]), ScopeKind: stringOf(data["scopeKind"]), ResourceIDs: stringsOf(data["resourceIds"]), Subject: object(data["subject"]), FactKey: stringOf(data["factKey"]), AlwaysReference: data["alwaysReference"] == true, ReviewState: stringOf(data["reviewState"])}
 }
 
 func (b *Server) memoryV2Read(ctx context.Context, id, name string, args Object) (any, error) {
@@ -202,33 +169,4 @@ func (b *Server) memoryV2Read(ctx context.Context, id, name string, args Object)
 		return entry, nil
 	}
 	return nil, errors.New("unknown memory read")
-}
-
-func (b *Server) validateMemoryToolDetails(id string, args Object) *MemoryDetails {
-	memoryFields(args, "key", "type", "description", "body", "expectedRevision", "restoreDeleted", "knowledgeKind", "scopeKind", "resourceIds", "subject", "factKey")
-	d := memoryDetailsFrom(args)
-	scope, err := b.ResolveMemoryReadScope(id)
-	must(err)
-	allowed := map[string]bool{}
-	for _, ref := range scope.ResourceIDs {
-		allowed[ref] = true
-	}
-	for index, ref := range d.ResourceIDs {
-		if !allowed[ref] {
-			for id := range allowed {
-				if ai.AssetAlias(id) == ref {
-					d.ResourceIDs[index] = id
-					ref = id
-					break
-				}
-			}
-		}
-		if !allowed[ref] {
-			fail(403, "Memory scope exceeds current target")
-		}
-	}
-	if strings.TrimSpace(d.ScopeKind) == "" {
-		fail(422, "scope_required")
-	}
-	return d
 }

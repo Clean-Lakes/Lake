@@ -135,6 +135,9 @@ func (b *Server) projectMemoryBridge(ctx context.Context, id, name string, args 
 	if settings["useEnabled"] != true {
 		return nil, errors.New("project memory disabled")
 	}
+	if b.Store.memoryV2 && name == "save_project_memory" {
+		return nil, errors.New(retiredMemoryV2Code)
+	}
 	if b.Store.memoryV2 && (name == "project_memory_index" || name == "list_project_memories" || name == "read_project_memory") {
 		return b.memoryV2Read(ctx, id, name, args)
 	}
@@ -225,9 +228,5 @@ func (b *Server) projectMemoryBridge(ctx context.Context, id, name string, args 
 		return nil, errors.New("credentials cannot be saved in project memory")
 	}
 	restore, _ := args["restoreDeleted"].(bool)
-	var details *MemoryDetails
-	if b.Store.memoryV2 {
-		details = b.validateMemoryToolDetails(id, args)
-	}
-	return b.Store.CommitProjectMemory(project, MemoryMutation{Details: details, Key: key, Type: stringOf(args["type"]), Description: stringOf(args["description"]), Body: body, ExpectedRevision: memoryRevision(args["expectedRevision"]), RestoreDeleted: restore, Verification: "user-stated", OriginSessionID: id, OriginTurnID: view.RootTurnID, OriginMessageID: userMessageID, SourceKind: "user"}), nil
+	return b.Store.CommitProjectMemory(project, MemoryMutation{Key: key, Type: stringOf(args["type"]), Description: stringOf(args["description"]), Body: body, ExpectedRevision: memoryRevision(args["expectedRevision"]), RestoreDeleted: restore, Verification: "user-stated", OriginSessionID: id, OriginTurnID: view.RootTurnID, OriginMessageID: userMessageID, SourceKind: "user"}), nil
 }

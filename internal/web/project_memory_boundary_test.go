@@ -32,33 +32,6 @@ func TestMemoryV2ManualEditCannotRefreshGenerationOrObservation(t *testing.T) {
 	}
 }
 
-func TestMemoryV2LegacyClassificationIsAtomicAndCannotRefreshTime(t *testing.T) {
-	s, p := memoryV2Fixture(t)
-	r := stringOf(s.CreateResource(p, "Node", "ssh", Object{"host": "192.0.2.11", "port": 22, "username": "fixture"})["id"])
-	for _, key := range []string{"legacy-a", "legacy-b"} {
-		s.CommitMemoryV2(p, memoryV2Mutation(key))
-		s.update(func() any {
-			s.exec("UPDATE projectMemoryEntriesV2 SET reviewState='needs_review',assertedAt='',observedAt='' WHERE projectId=? AND key=?", p, key)
-			return nil
-		})
-	}
-	revision := integer(s.MemorySettings(p)["revision"])
-	details := &MemoryDetails{KnowledgeKind: "configuration", ScopeKind: "resources", ResourceIDs: []string{r}}
-	items := []Object{{"key": "legacy-a", "expectedRevision": float64(1)}, {"key": "legacy-b", "expectedRevision": float64(99)}}
-	expectPanic(t, 409, func() { s.ClassifyLegacyMemoriesV2(p, items, revision, details) })
-	if s.ReadProjectMemory(p, "legacy-a", false)["reviewState"] != "needs_review" {
-		t.Fatal("batch conflict partially classified data")
-	}
-	items[1]["expectedRevision"] = float64(1)
-	s.ClassifyLegacyMemoriesV2(p, items, revision, details)
-	for _, key := range []string{"legacy-a", "legacy-b"} {
-		e := s.ReadProjectMemory(p, key, false)
-		if e["body"] != "发布前先核对备份是否可恢复。" || e["observedAt"] != "" || e["eligibility"] != "expired" {
-			t.Fatal("classification changed content or made legacy facts fresh")
-		}
-	}
-}
-
 func TestMemoryV2DisableRechecksAllStoreReadsIncludingCachedIndex(t *testing.T) {
 	s, p := memoryV2Fixture(t)
 	s.CommitMemoryV2(p, memoryV2Mutation("backup-method"))

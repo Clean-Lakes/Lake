@@ -211,6 +211,8 @@ func TestMemoryV2RetiredWithdrawnNaturalSourceStaysRedacted(t *testing.T) {
 
 func TestMemoryV2RetiredExtractionAbsentFromProduction(t *testing.T) {
 	forbidden := map[string]bool{
+		"memoryV2Route": true, "ClassifyLegacyMemoriesV2": true, "DecideMemoryCandidate": true,
+		"ResolveMemorySourceLink": true, "memoryDetailsFrom": true, "validateMemoryToolDetails": true,
 		"processMemoryV2Job": true, "ReserveMemoryDispatch": true, "settleMemoryDispatch": true,
 		"memoryExtractionPromptV2": true, "MemoryExtractMutationV2": true, "parseMemoryExtractionV2": true,
 		"CommitMemoryCandidates": true, "memoryExtractionInputV2": true, "validateMemoryExtractionSources": true,
