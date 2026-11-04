@@ -1,6 +1,6 @@
 import {SuperTaskInspector} from './SuperTaskInspector';
 import {InspectorTaskSummary} from './InspectorTaskSummary';
-import {useEffect,useLayoutEffect,useRef,useState} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import type {SessionSnapshot,SRETranscriptEntry,SuperWorker} from '../../shared/contracts';
 import {AgentIcon} from './AgentIcon';
 import {Glyph} from './Icons';
@@ -13,7 +13,7 @@ import {sreRoles,sreStatus,sreStepStatus} from './sreTranscript';
 import {inspectedTask,inspectedAttempt,inspectorAttempts,resolvedInspectorSelection} from './sessionInspectorModel';
 import {sessionInspectorId,useSessionInspector,type InspectorSelection} from './SessionInspectorContext';
 
-export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=false}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;worker?:SuperWorker;readOnly?:boolean}){
+export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=false,taskNavigation}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;worker?:SuperWorker;readOnly?:boolean;taskNavigation?:ReactNode}){
  const inspector=useSessionInspector()!;
  const selection=resolvedInspectorSelection(snapshot,inspector.selection);
  const retained=useRef<InspectorSelection|null>(selection);
@@ -50,6 +50,7 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
    <header className="session-inspector-heading"><Glyph name="document" size={17}/>{tabs}<button type="button" className="icon-button" aria-label="关闭任务检查" onClick={inspector.close}><Glyph name="close" size={16}/></button></header>
   <ObjectReferencesProvider resources={snapshot.resources} tasks={snapshot.ai?.agentRuns}>
    <div className="session-inspector-scroll">
+    {taskNavigation}
     {task&&activeTab==='plan'&&<InspectorTaskSummary task={task} title={snapshot.session.title} runs={snapshot.ai?.agentRuns}/>}
     <div role="tabpanel" id="inspector-plan-panel" aria-labelledby="inspector-plan-tab" hidden={activeTab!=='plan'}>
      {task&&plan?<SREPlanCard task={task} resources={snapshot.resources} agentRuns={snapshot.ai?.agentRuns} enabled={connected&&!readOnly&&snapshot.sre?.enabled===true} onUpdated={onUpdated} inspector onInspectStep={stepId=>{const attempt=inspectorAttempts(task).find(item=>item.step.id===stepId)?.attempt;if(attempt)choose('execution',attempt.id,true);}}/>:goal&&canonical?<SuperTaskInspector task={canonical} goal={goal} worker={worker} plan/>:<p className="inspector-empty">计划生成后会显示在这里。</p>}
