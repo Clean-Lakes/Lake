@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -49,6 +50,12 @@ func TestSuperWorkerResourceIndexAndMissingTargetCannotConfirmScope(t *testing.T
 }
 
 func TestSuperWorkerUsesOriginalGoalAndHostConfirmation(t *testing.T) {
+	for _, paused := range []bool{false, true} {
+		t.Run(fmt.Sprintf("paused_proposal_%v", paused), func(t *testing.T) { testSuperWorkerConfirmedProposal(t, paused) })
+	}
+}
+
+func testSuperWorkerConfirmedProposal(t *testing.T, paused bool) {
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
 	home := t.TempDir()
@@ -116,6 +123,33 @@ func TestSuperWorkerUsesOriginalGoalAndHostConfirmation(t *testing.T) {
 	if err := e.finishSuperRouting(ctx, b, w.SourceEventID); err != nil {
 		t.Fatal(err)
 	}
+	if paused {
+		row, goal, err := e.workRow(w.SessionID, w.TaskID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		goal.Status, goal.Summary = "paused", "模型未提交可执行的下一步，已保留任务进度"
+		if err := e.writeWorkGoal(&row, &goal, false); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Model(&superAssignmentRow{}).Where("worker_id = ?", w.ID).Update("state", "parked").Error; err != nil {
+			t.Fatal(err)
+		}
+		channel, err := e.SpecialistChannelForWorker(ctx, b.ProjectID, w.SessionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		event := channelEventFixture(t, e, b, channel, "retry-query", "Use the project release counting procedure now")
+		if _, err := e.ApplySuperDecision(ctx, b, SuperDecision{EventID: event.ID, PartKey: "retry", Action: "followup", TaskID: w.TaskID, Quote: event.Payload, Reason: "Continue the original query"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.finishSuperRouting(ctx, b, event.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.QueueSuperFollowup(ctx, b.ProjectID, w.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
 	p := DefaultPermissions()
 	if err := e.ConfigureTaskWorker(ctx, "project", w.ID, Config{Model: m, SecurityProjectID: "project", Profile: "core", MaxSteps: 12, Permissions: &p, CredentialDir: filepath.Join(home, "secrets"), AssetRef: "unrelated", Assets: []Asset{{ID: "unrelated", Kind: "ssh", Name: "Unrelated host"}}}); err != nil {
 		t.Fatal(err)
@@ -133,7 +167,13 @@ func TestSuperWorkerUsesOriginalGoalAndHostConfirmation(t *testing.T) {
 		}
 	}
 	done := make(chan error, 1)
-	go func() { done <- e.StartTaskWorker(ctx, "project", w.ID) }()
+	go func() {
+		if paused {
+			done <- e.ResumeTaskWorker(ctx, "project", w.ID)
+		} else {
+			done <- e.StartTaskWorker(ctx, "project", w.ID)
+		}
+	}()
 	select {
 	case id := <-questions:
 		if err := e.ReplyQuestion(w.SessionID, id, map[string][]string{"work_contract": {securityWorkConfirmLabel}}); err != nil {
@@ -167,6 +207,7 @@ func TestSuperWorkerUsesOriginalGoalAndHostConfirmation(t *testing.T) {
 	if err = db.Where("session_id = ?", w.SessionID).Find(&operations).Error; err != nil || len(operations) != 1 || operations[0].Tool != "load_skill" || operations[0].CallID != "skill" || operations[0].Status != "succeeded" || operations[0].ResourceID != "" || operations[0].AttemptID == "" {
 		t.Fatal("expected exactly one project-scoped Skill operation after confirmation", len(operations), err)
 	}
+
 }
 
 func TestSuperFirstPlanBindsRealResourcesWithoutReplacingGoal(t *testing.T) {

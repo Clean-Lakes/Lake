@@ -53,7 +53,8 @@ func (e *Engine) bindSuperWorkerProposalLocked(ctx context.Context, s *session, 
 	if err = db.WithContext(ctx).First(&w, "session_id = ? AND task_id = ? AND project_id = ?", s.state.View.Session, c.superTaskID, configSecurityProject(*c)).Error; err != nil {
 		return err
 	}
-	if token, ok := ctx.Value(superAssignmentContextKey{}).(SuperAssignmentToken); !ok || token.WorkerID != w.ID {
+	token, ok := ctx.Value(superAssignmentContextKey{}).(SuperAssignmentToken)
+	if !ok || token.WorkerID != w.ID {
 		return errSuperBinding
 	}
 	var goal nativeWorkGoal
@@ -78,6 +79,27 @@ func (e *Engine) bindSuperWorkerProposalLocked(ctx context.Context, s *session, 
 			}
 			if count == 0 {
 				return errors.New("superagent: original proposal or authenticated task followup required")
+			}
+			if goal.Status == "paused" {
+				// A newly routed human request can reopen an unconfirmed proposal.
+				// The original goal still needs its plan confirmation before I/O.
+				var proposal WorkGoal
+				if err := decodeWorkGoal(goal, &proposal); err != nil {
+					return err
+				}
+				if proposal.ModelRounds >= proposal.RoundLimit || !proposal.DeadlineAt.After(time.Now().UTC()) {
+					return errors.New("superagent: original task budget or deadline exhausted")
+				}
+				if unresolved, err := workUnresolvedTx(db.WithContext(ctx), proposal.ID, ""); err != nil {
+					return err
+				} else if unresolved {
+					return errors.New("superagent: original operations require reconciliation before continuing")
+				}
+				goal.superFence = &token
+				proposal.Status, proposal.Summary = "running", ""
+				if err := e.writeWorkGoal(&goal, &proposal, false); err != nil {
+					return err
+				}
 			}
 		}
 		s.state.SecurityManaged, s.state.SecurityTaskID, s.state.WorkGoalID, s.state.SecuritySourceMessageID = true, "", goal.ID, goal.OriginMessageID
@@ -306,6 +328,7 @@ func (e *Engine) ResumeTaskWorker(ctx context.Context, projectID, workerID strin
 	}
 	input.superInboxIDs = ids
 	input.Context += "\n[ACTUAL TASK FOLLOWUP]\nContinue only canonical task " + w.TaskID + " with this actual new human input. Existing approvals, unknown operations, evidence, deadline and cumulative budget remain authoritative."
+	input.Context += "\nFor an unconfirmed task, submit work_begin on this same goal with the current project catalog and obtain the host confirmation. An earlier paused proposal does not require the user to find a workspace resume control. Use work_read for current task state; past assistant messages are historical observations."
 	refs, refErr := e.superTaskReferenceContext(ctx, w.ProjectID, w.TaskID)
 	if refErr != nil {
 		return refErr
