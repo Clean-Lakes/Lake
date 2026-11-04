@@ -15,6 +15,22 @@ bin/lake security recovery-status --home /absolute/isolated-home
 
 `checkpoint` 和 `restore` 要求显式 Home，拒绝存活 owner、已用目录及与运行数据重叠的快照路径。普通重启不运行 restore。现有 `security status`、`risks` 和限定单库初始迁移的 `resume-initial-migration` 保持原语义；后者不是备份恢复的开闸方式。
 
+### 已收尾初始迁移的启动恢复
+
+旧版本启动失败可能留下 `StoreReady=true`、`gate=closed`，而 `resume-initial-migration` 只接受尚未完成的初始迁移。对于已验证收尾、仅有基础 reader 1 的单规范库，可使用单独的 host-only 维护命令：
+
+```sh
+bin/lake security recover-finalized-startup --home /absolute/existing-home
+# 核对预览、正常停服、创建并验证当前配对 checkpoint，再明确授权以下动作。
+bin/lake security recover-finalized-startup --home /absolute/existing-home --apply --expected-digest EXACT_PREVIEW_SHA256
+```
+
+默认预览只读，可在只读恢复界面运行期间使用，不创建目录、owner 或 schema。输出仅有资格、收尾 ID、原操作/未决数量和绑定摘要，不含结果正文或凭据。apply 需要独占 Home、规范根和 Web owner，核对 control、完整收尾 receipt、全部原操作身份、当前状态/句柄摘要及未决数量；在私有 `security/finalized-startup-recovery/<digest>.json` 持久化人工维护授权后，再次验证摘要，最后原子更新 control。中断后保持关闭；同一摘要可继续，已提交的同一动作可核验后幂等返回。命令不启动模型、Worker、终端或资源操作，也不写数据库。
+
+该入口仅接受 `preserve_unresolved_no_replay` 的已收尾初始采用，且没有新增操作、域级 Security/Super-agent schema、任何 goal、实际 recoveryID/journal、在途 Web 工作或排队消息。收尾证明、原身份或路径变化、出现第二旧库、reader 升级、未决数量变化均拒绝。实际 restore/enforced 恢复仍必须使用下述完整协议，不能使用本命令代替。它不核实 unknown、不恢复旧授权、不扩大项目权限，也不表示 Memory 获得新的恢复资格。
+
+成功后由正常客户端执行原有 schema 初始化和权限检查。重新启动前需保留可验证的当前配对 checkpoint；启动后验证 Pilot、原历史/资源、模型对话及未知操作防重放。若启动再失败，保留关闭现场和错误，不能删除历史、再次手改 gate 或自动忽略未知结果。正式 Home 的维护和重启仍须取得对应明确授权。
+
 异设备导入必须明确加 `restore --import`。它在目标 Home 生成新的 storeID 和随机 recoveryEpoch；同设备恢复保留 storeID，仅生成新随机 epoch。导入也保持关闭门禁，不继承旧临时授权。全新空 Home 可直接导入：先保存绑定输入 manifest 摘要的初始化记录，持久化关闭的 control，再通过官方 SDK 的公开迁移器建立空规范库；不会启动模型或 worker。此初始化可在两个断点重入。没有 control 但存在旧数据、密钥目录或其他未分类文件的 Home 不视为空目录，拒绝覆盖，须先明确恢复其原身份与历史。
 
 ## 快照内容与验证

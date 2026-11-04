@@ -333,6 +333,7 @@ const help = `Lake — Go 运维工作台（运行无需 Node.js）
   lake security recovery-reconcile-preview --home PATH --impact ID --resource ID --operation ID  预览新只读任务的原影响核验证据
   lake security recovery-reconcile --home PATH --input FILE  明确核实后只解除对应来源/资源的写阻断
   lake security resume-initial-migration --home PATH  停服后续跑初始迁移，保留旧操作结果
+  lake security recover-finalized-startup --home PATH [--apply --expected-digest SHA256]  预览并显式恢复已收尾的初始基础库启动
   lake security finalize-migration --home PATH [--apply]  停服验证历史完整性；明确apply后收尾并清理旧快照
   lake secrets migrate --manifest FILE [--home PATH]  显式旧凭据迁移
 旧版 TypeScript Agent 与 Node Web 后端源码已移除，不支持其独立 grants/tasks/workflow CLI 合约。
