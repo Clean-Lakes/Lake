@@ -68,7 +68,7 @@ func TestSuperWorkerUsesOriginalGoalAndHostConfirmation(t *testing.T) {
 		case 1:
 			return response("", Call{ID: "early", Name: "load_skill", Arguments: `{"name":"release-count"}`})
 		case 2:
-			if !strings.Contains(lastToolResult, "work_begin") || !strings.Contains(lastToolResult, "asset_refs:[]") {
+			if !strings.Contains(lastToolResult, "work_begin") || !strings.Contains(lastToolResult, "asset_refs is optional") {
 				t.Errorf("pre-plan Skill access was not declined with an actionable recovery: %s", lastToolResult)
 			}
 			return response("", Call{ID: "plan", Name: "work_begin", Arguments: `{"asset_refs":[],"title":"Check release counting procedure","items":[{"id":"check","title":"Read the project release counting procedure"}]}`})
