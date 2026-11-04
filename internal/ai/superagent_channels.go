@@ -180,7 +180,7 @@ func (e *Engine) SpecialistChannelWorkers(ctx context.Context, project, session,
 			if err := tx.First(&a, "worker_id = ?", w.ID).Error; err != nil {
 				return err
 			}
-			out = append(out, SuperWorkerView{ID: w.ID, RoleID: w.RoleID, RoleName: ch.RoleName, SessionID: w.SessionID, Task: view, AssignmentState: a.State})
+			out = append(out, SuperWorkerView{ID: w.ID, CreatedAt: w.CreatedAt, RoleID: w.RoleID, RoleName: ch.RoleName, SessionID: w.SessionID, Task: view, AssignmentState: a.State})
 		}
 		return nil
 	})

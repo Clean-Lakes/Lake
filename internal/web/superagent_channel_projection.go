@@ -31,6 +31,23 @@ func (b *Server) reconcileSpecialistChannels(ctx context.Context, project string
 	return channels
 }
 
+// Resolve both the channel and a direct task link to the same project role.
+func (b *Server) specialistTasks(ctx context.Context, session string) []ai.SuperWorkerView {
+	project := stringOf(b.Store.Session(session)["projectId"])
+	switch b.Store.superSessionKind(session) {
+	case "worker":
+		channel, err := b.Engine.SpecialistChannelForWorker(ctx, project, session)
+		aiFailure(err)
+		session = channel.SessionID
+	case "role":
+	default:
+		fail(404, "Specialist session required")
+	}
+	workers := b.channelWorkers(ctx, project, session)
+	sort.SliceStable(workers, func(i, j int) bool { return workers[i].CreatedAt.After(workers[j].CreatedAt) })
+	return workers
+}
+
 func (b *Server) channelWorkers(ctx context.Context, project, session string) []ai.SuperWorkerView {
 	out := []ai.SuperWorkerView{}
 	after := ""

@@ -47,13 +47,6 @@
 .pilot-history-notice { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:16px; color:var(--text-muted); border-top:1px solid var(--border); font-size:var(--font-size-ui); }
 .pilot-history-notice .button { display:flex; align-items:center; gap:8px; }
 
-.super-worker-source { margin-bottom:18px; border:1px solid var(--border); border-radius:var(--radius-settings-panel); corner-shape:var(--corner-window); padding:10px 12px; background:var(--surface); font-size:var(--font-size-ui); color:var(--text-muted); }
-.super-worker-source > summary.lake-disclosure-summary { display:flex; width:100%; align-items:center; gap:9px; cursor:pointer; color:var(--foreground); border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); }
-.super-worker-source > summary.lake-disclosure-summary:focus-visible { outline:2px solid var(--focus-outline); outline-offset:3px; }
-.super-worker-source-copy { display:grid; gap:3px; flex:1; min-width:0; }
-.super-worker-source-copy strong { font-weight:var(--font-weight-ui); }
-.super-worker-source-copy>span { color:var(--text-muted); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-.super-worker-source p { margin:10px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; }
 
 .response-author { display:inline-flex; align-items:center; gap:8px; min-width:0; max-width:100%; padding:3px 5px; margin:-3px -5px; border:0; border-radius:var(--radius-settings-control); corner-shape:var(--corner-window); background:transparent; color:var(--foreground); font:inherit; text-align:left; cursor:pointer; }
 .response-author>strong { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
