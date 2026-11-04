@@ -40,6 +40,7 @@ type SuperDecision struct {
 	roundLimit       int
 }
 type SuperRouteResult struct {
+	RoleID     string `json:"roleId,omitempty"`
 	Protocol   string `json:"protocol,omitempty"`
 	DecisionID string `json:"decisionId"`
 	TaskID     string `json:"taskId,omitempty"`
@@ -58,7 +59,7 @@ func superRouteResult(tx *gorm.DB, r superDecisionRow) (SuperRouteResult, error)
 		if err := tx.Where("task_id = ? AND parent_worker_id = ''", r.TaskID).First(&w).Error; err != nil {
 			return out, err
 		}
-		out.WorkerID, out.SessionID = w.ID, w.SessionID
+		out.WorkerID, out.SessionID, out.RoleID = w.ID, w.SessionID, w.RoleID
 		view, err := projectSuperTaskTx(tx, w.goalSession(), w.TaskID)
 		if err != nil {
 			return out, err

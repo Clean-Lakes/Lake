@@ -102,11 +102,14 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    // The panel becomes visible after the shared width budget has been applied.
    const terminalPane=open.current.terminal?rail(shell.querySelector<HTMLElement>('.terminal-side-panel.is-open')):undefined;
    const titleWidth=Math.min(190,title?textWidth(title):160)+titleIconWidth;
-   const preferredWidth=titleWidth+(pilotWidth||normalStateWidth)+60;
+   const taskTrigger=identity.querySelector<HTMLElement>('.specialist-task-trigger');
+   // Reserve the preferred gap even when the compact header has tightened it.
+   const taskControlWidth=taskTrigger?taskTrigger.offsetWidth+10:0;
+   const preferredWidth=titleWidth+(pilotWidth||normalStateWidth)+60+taskControlWidth;
    // The compact grid reserves 114px for ordinary status (300px content +
    // two border pixels). Budget that once from intrinsic size so a short
    // island does not unnecessarily truncate its title on an otherwise wide rail.
-   const conversationWidth=!pilotWidth&&preferredWidth<=302?titleWidth+Math.max(114,normalStateWidth)+60:preferredWidth;
+   const conversationWidth=!pilotWidth&&preferredWidth<=302?titleWidth+Math.max(114,normalStateWidth)+60+taskControlWidth:preferredWidth;
    const layout=workbenchIslandLayout({
     conversation:{left,width:available,inset:0},
     terminal:terminalPane,

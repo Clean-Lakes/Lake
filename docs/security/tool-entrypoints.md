@@ -40,3 +40,9 @@
 ## 恢复与风险
 
 旧数据库按 source namespace 保全，不直接拼接 SDK 主键。恢复先推进 epoch、关闭 gate 并使旧授权失效。完整策略/连接映射确认后才激活；明确影响的未决副作用继续阻断相关写入，由新受限任务实际对账读取并逐来源核实。原 failed/unknown 不改成成功；G2 成功不会清除 G1 风险。细节见[成对恢复协议](checkpoint-and-recovery.md)。
+
+## 项目 MCP 继承
+
+经过本机管理身份认证后，读取 `GET /api/projects/{id}/security/mcp-inheritance` 可查看项目的 `Enabled`、`Revision` 和当前可发现的服务名称与 ID。用 `PUT` 提交 `{"actionId":"<唯一请求 ID>","expectedRevision":0,"enabled":true}` 可在创建首个专员之前开启继承。后续更新使用刚读取的版本，关闭时传 `enabled:false`。未设置的项目默认关闭。
+
+继承覆盖全局目录中已启用且配置有效的服务和它们当前公布的工具。项目对单一服务的显式绑定优先，其他项目的绑定独立生效。Worker 的计划只接收可见服务的公开名称和 ID，发现工具和实际调用沿用当前项目策略、会话权限及任务审批。目录配置、项目绑定或继承设置变化后，运行时会重新核对相关操作的版本。

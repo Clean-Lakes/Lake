@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -249,6 +250,8 @@ func TestSuperChannelControlRequiresExactExecutionSession(t *testing.T) {
 	}
 	apiTest(t, h, "DELETE", "/api/sessions/"+ch.SessionID, nil, 409)
 	b.ensureSuperWorkerSession(pid, worker.SessionID, "Check target")
+	apiTest(t, h, "PUT", "/api/sessions/"+ch.SessionID+"/channel/read", Object{"cursor": "00000000000000000001"}, 409)
+	apiTest(t, h, "PUT", "/api/sessions/"+worker.SessionID+"/channel/read", Object{"cursor": "00000000000000000001"}, 404)
 	for _, source := range []string{ch.SessionID, worker.SessionID} {
 		message := apiTest(t, h, "POST", "/api/sessions/"+source+"/messages", Object{"text": "Check a different host; route before dispatch"}, 202)
 		if source == worker.SessionID && message["pilotSessionId"] != ch.SessionID {
@@ -292,4 +295,52 @@ func TestSuperChannelStopHTTPUsesOwnedCanonicalTasks(t *testing.T) {
 		t.Fatal(view, err)
 	}
 	apiTest(t, h, "POST", "/api/sessions/"+ch.SessionID+"/ai/abort", Object{}, 409)
+}
+
+func TestSpecialistTasksFromChannelAndDirectWorker(t *testing.T) {
+	b, project, pilot, first, channel := roleWorkspaceFixture(t)
+	// A second role with an identically titled task must not enter this list.
+	msg := b.Store.AddMessage(pilot, "user", "Check host A", nil)
+	event, err := b.ReceiveUserEvent(t.Context(), pilot, stringOf(msg["id"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.recordSuperInput(event, nil, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	source := b.superUserSource(project, pilot)
+	for _, role := range []string{channel.RoleName, "其他专员"} {
+		_, err := b.Engine.ApplySuperDecision(t.Context(), source, ai.SuperDecision{EventID: event.ID, PartKey: role, Action: "create", RoleKey: role, Title: event.Payload, Quote: event.Payload, Reason: "Independent task"})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, session := range []string{channel.SessionID, first.SessionID, pilot} {
+		req := httptest.NewRequest("GET", "/api/sessions/"+session+"/channel/tasks", nil)
+		req.Host = "localhost:4177"
+		req.Header.Set("Authorization", "Bearer synthetic-test-auth-token")
+		resp := httptest.NewRecorder()
+		b.ServeHTTP(resp, req)
+		if session == pilot {
+			if resp.Code != 404 {
+				t.Fatalf("Pilot accepted as specialist: %d", resp.Code)
+			}
+			continue
+		}
+		var workers []ai.SuperWorkerView
+		if resp.Code != 200 || json.Unmarshal(resp.Body.Bytes(), &workers) != nil || len(workers) != 2 {
+			t.Fatalf("unexpected task list: %d %s", resp.Code, resp.Body.String())
+		}
+		if workers[0].SessionID == workers[1].SessionID || workers[0].Task.TaskID == workers[1].Task.TaskID {
+			t.Fatal("same-title tasks lost their identities")
+		}
+		if workers[1].SessionID != first.SessionID {
+			t.Fatal("newer task should appear before the original", workers)
+		}
+		for _, worker := range workers {
+			if worker.RoleID != channel.RoleID || worker.Task.Title != event.Payload {
+				t.Fatal("task from another role", worker)
+			}
+		}
+	}
 }

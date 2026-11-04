@@ -59,6 +59,7 @@ func (b *Server) superagentRoute(w http.ResponseWriter, r *http.Request) bool {
 		for i := range channels {
 			channels[i].NeedsConfirmation = attention[channels[i].ID]
 		}
+		b.populateSpecialistReads(project, channels)
 		reply(w, 200, Object{"active": active, "project": domain, "workers": workers, "channels": channels, "cursor": cursor})
 	default:
 		fail(405, "Method not allowed")
