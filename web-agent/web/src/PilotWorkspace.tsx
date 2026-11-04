@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import type {SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
-import {SuperRoleAvatar} from './SuperRoleAvatar';
+import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
 import {conversationAvatarMotion,superAvatarMotion,superTaskPresentation,type ConversationAvatarActivity,type ConversationActivity} from './superAgentPresentation';
 import {Glyph} from './Icons';
 
@@ -93,7 +93,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
  const entries = channels ? channels.map(channel => ({channel, workers: roots.filter(worker => worker.roleId === channel.roleId)})) :
   roots.map(worker => ({channel: undefined, workers: [worker]}));
  return <section className="pilot-workspace" aria-label="Pilot 与专员">
-  <button type="button" className={`nav-row pilot-workspace-entry${selectedId===workspace.project.routerSessionId?' active':''}`} aria-current={selectedId===workspace.project.routerSessionId?'page':undefined} title="Pilot · 持续沟通，自动安排工作" onClick={onPilot}>
+  <button type="button" className={`nav-row pilot-workspace-entry${selectedId===workspace.project.routerSessionId?' active':''}`} aria-current={selectedId===workspace.project.routerSessionId?'page':undefined} title="Pilot · 持续沟通，自动安排工作" onClick={event=>{greetRoleAvatar(event.currentTarget);onPilot();}}>
    <SuperRoleAvatar pilot motion={conversationAvatarMotion(activity?.sessionId===workspace.project.routerSessionId?activity.state:pilotActivity)}/><span className="nav-row-text"><strong>Pilot</strong></span><Glyph name="arrow" size={14}/>
   </button>
   <div className="nav-heading"><span>专员</span><small>{entries.length}</small></div>
@@ -113,7 +113,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    const label = `${name} · ${task?.title ?? (channel?.duties || '持续沟通')} · ${status}`;
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label} title={label}
-     onClick={() => channel && onChannel ? onChannel(channel) : worker && onWorker(worker)}>
+     onClick={event=>{greetRoleAvatar(event.currentTarget);if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);}}>
     <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{task?.title ?? (channel?.duties || '持续沟通')}</span></span>
     <span className="pilot-worker-status">
      {needsConfirmation && <span className="pilot-worker-confirmation">需确认</span>}
