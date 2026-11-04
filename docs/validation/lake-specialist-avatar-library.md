@@ -48,3 +48,6 @@ ZIP 大小 77,488 字节，SHA-256：`4d9ff25cd99c79e7eb6732087581c2bd20bc047e2a
 安装前后的用户消息、任务输入、原操作、审批、决策和事件逐表指纹一致。32 条专员报告的 RoleID 与原 Worker 对齐；4 个频道中的 49 条历史报告正文保留，Pilot 权限和当前项目继承的全局 MCP 保留。
 
 未进行 Windows 原生验证，未运行真实模型任务或资源查询。原 PR #175 继续以 `develop` 为目标，本次不自动合并或发布。
+
+
+会话进行中的头像同步改进及新一轮 Dev 验证见[会话动效验证](lake-specialist-avatar-conversations.md)。
