@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-04
 last_updated: 2026-11-05
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [frontend, avatars, svg]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 将已交付的八种湖生态头像扩展为 100 个命名、可预览及可导出的本地 SVG 图形。不同头像必须具有不同几何，不能只改配色、朝向、标签或编号凑数；继续沿用 RoleID 稳定选择与既有轻动效。
 
@@ -51,7 +51,7 @@ tags: [frontend, avatars, svg]
 |------|-------------|-----------|------|
 | TASK-006 | `lakeAvatarArtwork.ts` 定义 100 个形象的分部件曲线图形；`LakeAvatarFigure.tsx` 统一绘制柔和分色、眼睛与细线；小龟使用用户确认的原始曲线。保持目录顺序及 ID 不变。 | ✅ | 2026-11-05 |
 | TASK-007 | `lakeAvatarMotion.ts` 为每个 ID 定义不同的工作与回应动作序列；共享 CSS 通过部件与姿态驱动，保持正在工作的动画与点击回应独立；减弱动态和隐藏状态沿用原约定。依赖 TASK-006。 | ✅ | 2026-11-05 |
-| TASK-008 | 更新同源导出、完整图库预览及测试；逐项检查 64/22px、浅/深色、窄窗、工作/点击/静止；签名安装保留既有候选的 Lake Dev，记录实际运行 SHA 并更新 PR #175。依赖 TASK-007。 | | |
+| TASK-008 | 更新同源导出、完整图库预览及测试；逐项检查 64/22px、浅/深色、窄窗、工作/点击/静止；签名安装保留既有候选的 Lake Dev，记录实际运行 SHA 并更新 PR #175。依赖 TASK-007。 | ✅ | 2026-11-05 |
 
 ## 3. Alternatives
 
@@ -88,3 +88,5 @@ tags: [frontend, avatars, svg]
 - [开发规范](../CONTRIBUTING.md)
 - [100 款验收](../docs/validation/lake-specialist-avatar-library.md)
 - [头像 PR #175](https://github.com/Clean-Lakes/Lake/pull/175)
+
+最终精细图稿、独立动作、Pilot 水纹、湖面浮标及扫光的验收见 [2026-11-05 记录](../docs/validation/lake-specialist-avatar-refinement.md)。
