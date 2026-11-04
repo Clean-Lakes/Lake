@@ -501,8 +501,13 @@ func (s *Store) session(id string) Object {
 		ids = append(ids, stringOf(v["id"]))
 	}
 	r["resourceIds"] = ids
-	if super := s.row("SELECT kind FROM superagentSessions WHERE sessionId=?", id); super != nil {
-		r["workspaceRole"] = super["kind"]
+	// Closed-gate recovery reads the original schema without migrations. Older
+	// databases have no Super-agent presentation metadata; retain their history
+	// without requiring that optional table or installing it in a read-only Home.
+	if !s.readOnly || s.row("SELECT name FROM sqlite_master WHERE type='table' AND name='superagentSessions'") != nil {
+		if super := s.row("SELECT kind FROM superagentSessions WHERE sessionId=?", id); super != nil {
+			r["workspaceRole"] = super["kind"]
+		}
 	}
 	s.decorateSession(r)
 	return r

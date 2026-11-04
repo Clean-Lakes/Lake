@@ -19,17 +19,23 @@ import (
 
 func TestSecurityRecoveryRestoresProjectsWithoutWorkersOrWrites(t *testing.T) {
 	for _, legacy := range []bool{false, true} {
-		t.Run(fmt.Sprintf("legacy_schema=%v", legacy), func(t *testing.T) {
-			testSecurityRecoveryRestoresProjects(t, legacy)
-		})
+		for _, beforeSuperagent := range []bool{false, true} {
+			t.Run(fmt.Sprintf("legacy_schema=%v/before_superagent=%v", legacy, beforeSuperagent), func(t *testing.T) {
+				testSecurityRecoveryRestoresProjects(t, legacy, beforeSuperagent)
+			})
+		}
 	}
 }
 
-func testSecurityRecoveryRestoresProjects(t *testing.T, legacy bool) {
+func testSecurityRecoveryRestoresProjects(t *testing.T, legacy, beforeSuperagent bool) {
 	b, httpServer := fixture(t)
 	id, resource := newSession(t, httpServer)
 	home, root := b.options.Home, b.securityRuntime.RuntimeRoot
 	b.Store.AddMessage(id, "assistant", "saved history", nil)
+	b.Store.update(func() any {
+		b.Store.exec("INSERT INTO superagentSessions(sessionId,projectId,kind) VALUES(?,?,'legacy')", id, b.Store.session(id)["projectId"])
+		return nil
+	})
 	task, err := b.Store.CreateSRETask(ai.SRETask{SessionID: id, RequestID: "saved-task", Goal: "verify the existing result", Mode: "assist", Scope: []string{resource}})
 	if err != nil {
 		t.Fatal(err)
@@ -41,14 +47,15 @@ func testSecurityRecoveryRestoresProjects(t *testing.T, legacy bool) {
 		t.Fatal(err)
 	}
 	b.Close()
-	if legacy {
+	if legacy || beforeSuperagent {
 		// An upgrade can close the security gate before OpenStore has installed
-		// natural memory. Recovery must read that older schema without migrating it.
+		// natural memory or Super-agent. Recovery must read that older schema
+		// without migrating it, including when all Memory tables still exist.
 		db, err := sql.Open("sqlite", filepath.Join(b.options.DataDir, "lake-web.sqlite"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name GLOB 'natural*'")
+		rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND ((? AND name GLOB 'natural*') OR (? AND name GLOB 'superagent*'))", legacy, beforeSuperagent)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -128,6 +135,13 @@ func testSecurityRecoveryRestoresProjects(t *testing.T, legacy bool) {
 	catalog := apiTest(t, server, "GET", "/api/catalog", nil, 200)
 	if len(objects(catalog["projects"])) != 1 || len(objects(catalog["sessions"])) != 1 {
 		t.Fatal("saved project missing")
+	}
+	if got := objects(catalog["resources"]); len(got) != 1 || got[0]["id"] != resource {
+		t.Fatal("saved resources missing")
+	}
+	role := objects(catalog["sessions"])[0]["workspaceRole"]
+	if beforeSuperagent && role != nil || !beforeSuperagent && role != "legacy" {
+		t.Fatal("recovery discarded or invented workspace metadata", role)
 	}
 	snapshot := apiTest(t, server, "GET", "/api/sessions/"+id+"/snapshot", nil, 200)
 	view := object(snapshot["ai"])
