@@ -182,7 +182,9 @@ function AppContent() {
   const [historyVisibleId,setHistoryVisibleId]=useState<string|null>(null);
   const historyVisible=useRef<string|null>(null);historyVisible.current=historyVisibleId;
   const [roleContentReady,setRoleContentReady]=useState<string|null>(null);
-  const updateRoleContentReady=useCallback((id:string,ready:boolean)=>{if(activeSession.current===id)setRoleContentReady(ready?id:null);},[]);
+  // Child layout effects run before the parent's passive session-ref update.
+  // Bind readiness to the rendered route so revisiting a cached channel can reveal.
+  const updateRoleContentReady=useCallback((id:string,ready:boolean)=>{if(route.sessionId===id)setRoleContentReady(ready?id:null);},[route.sessionId]);
   const snapshotCache = useRef(new Map<string, SessionSnapshot>());
   useLayoutEffect(() => {
     if (!snapshot) return;
