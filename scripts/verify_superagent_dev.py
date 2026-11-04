@@ -96,6 +96,7 @@ def main():
             with lock:
                 if 'route_work' in names and state.get('phase'):
                     phase = state['phase']
+                    key = 'profile-' + phase
                     state['profileCalls'] = state.get('profileCalls', 0) + 1
                     n = state['profileCalls']
                     event, quote = query("SELECT id,payload FROM superagent_events WHERE disposition='pending' AND source_kind='user' ORDER BY received_at DESC LIMIT 1")[0]
@@ -139,6 +140,9 @@ def main():
                     match = re.search(r'\[ASSIGNED DELIVERABLE\]\s*Read marker ([AB])', text)
                     require(match is not None, 'Worker lost its exact assigned original deliverable')
                     key = match.group(1)
+                    if args.manage_specialists:
+                        require('[SPECIALIST PROFILE AT TASK CREATION]' in text and '证据核实专员' in text and '只读核实指定文件，不修改文件。' in text, 'model request lost the frozen specialist duties')
+                        require('LAKE_SUPER_READ_ONLY_' + ('B' if key == 'A' else 'A') not in text, 'Worker received peer evidence context')
                     state['lastToolResults' + key] = [message.get('content') for message in request.get('messages', []) if message.get('role') == 'tool'][-6:]
                     state['calls'][key] = state['calls'].get(key, 0) + 1
                     n = state['calls'][key]
