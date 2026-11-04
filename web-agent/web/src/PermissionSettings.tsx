@@ -29,9 +29,9 @@ const groups: Array<{title: string; hint?: string; fields: Array<{key: keyof typ
   ]},
 ];
 
-export function PermissionSettings({anchor, options, disabled, saving=false, error, onChange, onClose}: {
+export function PermissionSettings({anchor, options, disabled, saving=false, error, onChange, onClose, pilot=false}: {
   anchor: RefObject<HTMLButtonElement | null>;
-  options: Record<string, unknown>; disabled: boolean; saving?: boolean; error?: string;
+  options: Record<string, unknown>; pilot?: boolean; disabled: boolean; saving?: boolean; error?: string;
   onChange: (key: string, value: boolean) => void; onClose: () => void;
 }) {
   const panel = useRef<HTMLElement>(null);
@@ -80,6 +80,7 @@ export function PermissionSettings({anchor, options, disabled, saving=false, err
   return createPortal(<section ref={panel} className="permission-popover" role="dialog" aria-label="会话权限" aria-busy={saving}
     style={{left: position.left, top: position.top, maxHeight: position.maxHeight, visibility: position.ready ? "visible" : "hidden"}}>
     <header><strong className="permission-heading"><Glyph name="waves" size={18}/>执行偏好</strong><span className="permission-save-state">自动保存</span><button type="button" className="permission-close" aria-label="关闭会话权限" onClick={() => {onClose(); anchor.current?.focus();}}><Glyph name="close" size={14}/></button></header>
+    {pilot && <p className="settings-note">本项目的专员统一沿用这里的设置。</p>}
     {error && <p className="form-error" role="alert">{error}</p>}
     {groups.map((group, index) => <div className="permission-group" role="group" aria-labelledby={`${id}-group-${index}`} key={group.title}>
       <div className="permission-group-heading"><span id={`${id}-group-${index}`}>{group.title}</span>{group.hint && <small>{group.hint}</small>}</div>

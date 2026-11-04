@@ -585,11 +585,14 @@ func TestKernelPureTaskControlsDoNotSpendResourceBudgetOrExpandScope(t *testing.
 }
 
 func TestKernelCommandRegistryAndLegacyRevisionsAreAuthorityBindings(t *testing.T) {
-	for _, source := range []string{"command", "legacy"} {
+	for _, source := range []string{"command", "legacy", "legacy-source"} {
 		in := kernelFixture()
 		if source == "command" {
 			in.Operation.CommandTargetRevision = 1
 			in.CommandTargetRevision = 2
+		} else if source == "legacy-source" {
+			in.Operation.LegacyPolicySourceID = "old-pilot"
+			in.LegacyPolicySourceID = "current-pilot"
 		} else {
 			in.Operation.LegacyPolicyRevision = 1
 			in.LegacyPolicyRevision = 2

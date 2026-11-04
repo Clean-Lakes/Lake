@@ -653,8 +653,8 @@ func (e *Engine) ExpandSecurityTaskGrant(ctx context.Context, in SecurityTaskGra
 	return out, err
 }
 
-// RecordLegacySessionPolicy captures the effective seven settings once per
-// session. Another session's settings and project defaults cannot overwrite it.
+// recordLegacySessionPolicy captures the effective settings once per session.
+// Runtime refreshes cannot overwrite this historical snapshot.
 func recordLegacySessionPolicy(tx *gorm.DB, storeID, epoch, projectID, sessionID, source string, p Permissions) error {
 	if sessionID == "" || source != "web" && source != "standalone" {
 		return errSecurityAction
