@@ -28,8 +28,9 @@ export function mentionOptions(resources:Resource[],skills:SkillConfig[],servers
 }
 export function filterMentions(options:MentionOption[],query:string,category:MentionCategory):MentionOption[] {
  const needle=query.trim().toLocaleLowerCase();
- return options.filter(o=>(category==="all"||o.kind===category)&&`${o.name} ${o.detail} ${o.kind} ${mentionTypeLabel(o)}`.toLocaleLowerCase().includes(needle));
+ return options.filter(o=>(category==="all"?o.kind!=="role":o.kind===category)&&`${o.name} ${o.detail} ${o.kind} ${mentionTypeLabel(o)}`.toLocaleLowerCase().includes(needle));
 }
+export const mentionCategoryCount=(options:MentionOption[],category:MentionCategory)=>filterMentions(options,'',category).length;
 export function mentionInsertion(draft:string,caret:number,option:MentionOption) {
  const before=draft.slice(0,caret),token=before.match(/(?:^|\s)@([^\s@]*)$/);
  const start=token?before.lastIndexOf("@"):caret;
