@@ -50,6 +50,9 @@ func checkSuperAssignmentTx(tx *gorm.DB, token SuperAssignmentToken) error {
 		}
 		worker = parent
 	}
+	if err := checkSuperRoleAvailableTx(tx, worker.ProjectID, worker.RoleID); err != nil {
+		return err
+	}
 	return checkSuperWorkflowTx(tx, worker, time.Now().UTC())
 }
 
@@ -103,6 +106,9 @@ func (e *Engine) AcquireWorkerSlot(ctx context.Context, projectID, workerID stri
 		if err != nil {
 			return err
 		}
+		if err := checkSuperRoleAvailableTx(tx, projectID, w.RoleID); err != nil {
+			return err
+		}
 		if w.ParentWorkerID != "" {
 			var parent superAssignmentRow
 			if err := tx.First(&parent, "worker_id = ? AND generation = ? AND state = ? AND lease_until > ?", w.ParentWorkerID, w.ParentGeneration, "waiting_children", time.Now().UTC()).Error; err != nil {
@@ -140,7 +146,7 @@ func (e *Engine) AcquireWorkerSlot(ctx context.Context, projectID, workerID stri
 		}
 		var next superAssignmentRow
 		readyEvents := tx.Table("superagent_events AS event").Select("event.id").Joins("JOIN superagent_sources AS source ON source.id=event.source_id AND source.project_id=event.project_id AND source.revision=event.source_revision AND source.actor_ref=event.actor_ref AND source.enabled=1").Where("event.disposition = ?", "routed")
-		readyWorkers := tx.Model(&superWorkerRow{}).Select("id").Where("source_event_id = '' OR source_event_id IN (?)", readyEvents)
+		readyWorkers := tx.Model(&superWorkerRow{}).Select("id").Where("(source_event_id = '' OR source_event_id IN (?)) AND role_id NOT IN (?)", readyEvents, tx.Model(&superRoleRow{}).Select("id").Where("deleted_at IS NOT NULL"))
 		query := tx.Where("state = ? AND worker_id IN (?)", "queued", readyWorkers)
 		if cursor.LastProject != "" {
 			var other int64

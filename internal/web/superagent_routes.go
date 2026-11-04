@@ -1,12 +1,36 @@
 package web
 
 import (
+	"errors"
 	"net/http"
 	"strings"
+
+	"github.com/Clean-Lakes/Lake/internal/ai"
+	"gorm.io/gorm"
 )
 
 func (b *Server) superagentRoute(w http.ResponseWriter, r *http.Request) bool {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) == 6 && parts[0] == "api" && parts[1] == "projects" && parts[3] == "superagent" && parts[4] == "specialists" {
+		b.Store.Project(parts[2])
+		if r.Method != "DELETE" {
+			fail(405, "Method not allowed")
+		}
+		revision, valid := body(w, r, 1024)["revision"].(float64)
+		if !valid || revision < 0 || revision != float64(int64(revision)) {
+			fail(400, "专员版本无效，请刷新后重试")
+		}
+		err := b.Engine.DeleteSuperSpecialist(r.Context(), parts[2], parts[5], int64(revision))
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			fail(404, "专员不存在")
+		}
+		if errors.Is(err, ai.ErrSpecialistRevision) {
+			fail(409, err.Error())
+		}
+		aiFailure(err)
+		reply(w, 200, Object{"deleted": true})
+		return true
+	}
 	if len(parts) != 4 || parts[0] != "api" || parts[1] != "projects" || parts[3] != "superagent" {
 		return false
 	}
