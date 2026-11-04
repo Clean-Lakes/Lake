@@ -53,7 +53,7 @@ func BenchmarkMemoryV2ScopedIndex500(b *testing.B) {
 		for i := 0; i < 500; i++ {
 			m := memoryV2Mutation(fmt.Sprintf("rule-%03d", i))
 			m.Description = "备份" + strings.Repeat("说明", 77)
-			s.commitMemoryV2Locked(p, m, nil, true)
+			s.commitMemoryV2Locked(p, m, nil)
 		}
 		return nil
 	})
@@ -81,7 +81,7 @@ func TestMemoryV2IndexBoundedDeterministicAndSearchableInChinese(t *testing.T) {
 		for i := 0; i < 500; i++ {
 			m := memoryV2Mutation(fmt.Sprintf("rule-%03d", i))
 			m.Description = "发布备份检查 " + strings.Repeat("说明", 65)
-			s.commitMemoryV2Locked(p, m, nil, true)
+			s.commitMemoryV2Locked(p, m, nil)
 		}
 		return nil
 	})

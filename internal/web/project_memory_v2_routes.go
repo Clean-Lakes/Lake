@@ -127,7 +127,7 @@ func (s *Store) ClassifyLegacyMemoriesV2(project string, items []Object, project
 			d.FactKey = stringOf(old["factKey"])
 			m := MemoryMutation{Key: key, Type: stringOf(old["type"]), Description: stringOf(old["description"]), Body: stringOf(old["body"]), ExpectedRevision: memoryRevision(item["expectedRevision"]), Details: &d, Verification: "user-stated", SourceKind: "manual-ui"}
 			ValidateMemoryV2(m)
-			s.commitMemoryV2Locked(project, m, nil, false)
+			s.commitMemoryV2Locked(project, m, nil)
 		}
 		return Object{"classified": len(items), "projectRevision": s.memorySettings(project)["revision"]}
 	}).(Object)
@@ -189,7 +189,7 @@ func (s *Store) DecideMemoryCandidate(project, id string, data Object) Object {
 			}
 		}
 		sources = append(sources, Object{"kind": "review", "assertedAt": now(), "outcome": "user_stated"})
-		out := s.commitMemoryV2Locked(project, m, sources, false)
+		out := s.commitMemoryV2Locked(project, m, sources)
 		// Operational candidates retain their original evidence/assertion horizon.
 		if m.Details.KnowledgeKind == "topology" || m.Details.KnowledgeKind == "configuration" || m.Details.KnowledgeKind == "incident_lesson" {
 			entry := s.row("SELECT * FROM projectMemoryEntriesV2 WHERE projectId=? AND key=?", project, key)

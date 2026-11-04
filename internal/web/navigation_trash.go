@@ -208,13 +208,6 @@ func (b *Server) navigationTrashRoute(w http.ResponseWriter, r *http.Request, na
 	} else {
 		b.Store.RestoreNavigation(kind, id)
 	}
-	project := id
-	if kind == "resource" {
-		project = b.Store.read(func() any {
-			return stringOf(b.Store.row("SELECT projectId FROM resources WHERE id=?", id)["projectId"])
-		}).(string)
-	}
-	b.invalidateMemoryExtraction(project, "resource_changed")
 	reply(w, 200, Object{"items": b.Store.NavigationTrash()})
 	return true
 }
