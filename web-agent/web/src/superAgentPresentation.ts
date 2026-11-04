@@ -1,14 +1,15 @@
 import type {SuperTask,SuperWorker} from '../../shared/contracts';
 import type {AgentIconName} from './AgentIcon';
+import {lakeAvatarGroups} from './lakeAvatarCatalog';
 
-const specialistFigures=['heron','otter','turtle','kingfisher','dragonfly','duck','fish','lotus'] as const;
 const specialistPalettes=['river','moss','reed','clay'] as const;
 export function superWorkerAppearance(worker:Pick<SuperWorker,'roleName'>&{roleId?:string}) {
  // RoleID owns the appearance. Names only support older servers without IDs.
  const identity=worker.roleId||worker.roleName.normalize('NFKC').trim().toLowerCase();
  let seed=2166136261;
  for(const char of identity)seed=Math.imul(seed^char.codePointAt(0)!,16777619)>>>0;
- return {icon:specialistFigures[seed%8],palette:specialistPalettes[(seed>>>8)%4],variant:(seed>>>12)%3,phase:-(seed%7600)};
+ const group=lakeAvatarGroups[seed%lakeAvatarGroups.length];
+ return {icon:group.avatars[(seed>>>16)%group.avatars.length].id,palette:specialistPalettes[(seed>>>8)%4],variant:(seed>>>12)%3,phase:-(seed%7600)};
 }
 export function superWorkerIcon(worker:Pick<SuperWorker,'roleName'>&{roleId?:string}):AgentIconName {return superWorkerAppearance(worker).icon;}
 

@@ -10,7 +10,7 @@
 .super-role-avatar[data-motion=working] .avatar-body { animation:lake-avatar-work 2.4s ease-in-out var(--avatar-phase) infinite; }
 .super-role-avatar[data-motion=working] .avatar-limb { animation:lake-avatar-limb 1.8s ease-in-out var(--avatar-phase) infinite; }
 .super-role-avatar[data-motion=working] .avatar-water { animation:lake-avatar-water 2.4s ease-in-out var(--avatar-phase) infinite; }
-.super-role-avatar[data-role=lotus][data-motion=idle] .avatar-limb { animation:lake-avatar-sway 7.6s ease-in-out var(--avatar-phase) infinite; transform-origin:center bottom; }
+.super-role-avatar[data-motion=idle] .lake-avatar-figure[data-family=lotus] .avatar-limb { animation:lake-avatar-sway 7.6s ease-in-out var(--avatar-phase) infinite; transform-origin:center bottom; }
 .super-role-avatar[data-role=coordinator][data-motion=idle] ellipse,.super-role-avatar[data-role=coordinator][data-motion=working] ellipse { transform-box:fill-box; transform-origin:center; animation:lake-avatar-ripple 6s ease-in-out var(--avatar-phase) infinite; }
 .super-role-avatar[data-role=coordinator][data-motion=working] ellipse { animation-duration:2.4s; }
 .super-role-avatar[data-hidden] * { animation-play-state:paused!important; }

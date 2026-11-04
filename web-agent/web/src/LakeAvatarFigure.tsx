@@ -1,10 +1,13 @@
-export type LakeAvatarName='heron'|'otter'|'turtle'|'kingfisher'|'dragonfly'|'duck'|'fish'|'lotus';
+import {lakeAvatarDefinition,type LakeAvatarName} from './lakeAvatarCatalog';
+export type {LakeAvatarName} from './lakeAvatarCatalog';
 
 /** Local Lake silhouettes: separate moving parts keep the identity itself fixed. */
 export function LakeAvatarFigure({role,size,className}:{role:LakeAvatarName;size:number;className:string}) {
  const eye=(x:number,y:number)=><ellipse className="avatar-eye" cx={x} cy={y} rx=".65" ry=".7" fill="var(--background)"/>;
- return <svg className={`${className} lake-avatar-figure`} width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+ const definition=lakeAvatarDefinition(role);
+ return <svg className={`${className} lake-avatar-figure`} data-family={definition.family} width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
   <g className="avatar-body" fill="currentColor" strokeLinejoin="round" strokeLinecap="round">
+   {definition.body&&<g transform={definition.fit}><path className={definition.family==='lotus'?'avatar-limb':undefined} d={definition.body}/>{definition.limb&&<path className="avatar-limb" d={definition.limb} stroke="currentColor" strokeWidth="1.2" fill="none"/>}{definition.detail&&<path d={definition.detail} stroke="var(--background)" strokeWidth=".85" fill="none"/>}{definition.eyes?.map(([x,y],index)=><ellipse key={index} className="avatar-eye" cx={x} cy={y} rx=".65" ry=".7" fill="var(--background)"/>)}</g>}
    {role==='heron'&&<><path d="m15.6 2.8 5.3 2-4.5.9c-2.3.4-2.7 2-2.4 4.2l.3 2.2c.3 2.6-2 4.6-6.3 5.6l-4 .6 4.7-5.7c1.2-1.5 2.4-2.2 3.8-2.6l-.6-1.6c-1-2.7.2-4.7 3.7-5.6Z"/><path className="avatar-limb" d="m8 15 3-2" stroke="var(--background)" strokeWidth=".8"/>{eye(15.6,4.4)}<path d="m9.8 17.6-.4 3m3-4-.5 4M6.5 22h10" fill="none" stroke="currentColor" strokeWidth="1.1"/></>}
    {role==='otter'&&<><path d="M8 14.3C4.4 13.6 2 14 1.8 16.1c-.2 1.9 3.2 2.6 6.8.8Z"/><path d="M7 13.1c0-2.7 1.4-4.8 3.7-5.7l-.4-1.7 2.2.2c2.4-.6 4.4.6 5.5 2.5l3 .9-2.3 1.8c.1 4.5-1.7 8.1-5.9 8.1-3.6 0-6-2.5-5.8-6.1Z"/>{eye(16,8.6)}<path className="avatar-limb" d="m11.5 14 3.4 1.2" stroke="var(--background)" strokeWidth="1"/><path d="M10 20.5h7" stroke="currentColor" strokeWidth="1.2"/></>}
    {role==='turtle'&&<><path className="avatar-limb" d="m5 16-2 3 4-1m8-1 3 2-.1-4M5 10 3 8l4 .4" stroke="currentColor" strokeWidth="1.6"/><path d="M2.5 13.8c.2-5.6 4-9 8.6-8.2 4.4.8 6.4 4.4 6.2 9.4-4.2 2.4-10.2 2.1-14.8-1.2Z"/><path d="m6.5 8.5 3 4.2-.7 3m.7-3 5.7-2.5" stroke="var(--background)" strokeWidth=".9"/><path d="M16 12.1c0-2.7 3-4.2 5-2.6 1.9 1.5.6 5.1-2 5.5l-3-1Z"/>{eye(20,11.4)}</>}

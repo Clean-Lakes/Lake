@@ -10,8 +10,8 @@ import type {SpecialistChannelInfo,SuperTask,SuperWorker,SuperWorkspace,WorkGoal
 test('specialist appearances follow stable RoleID rather than mutable names or tasks',()=>{
  const before=superWorkerAppearance({roleId:'stable-role',roleName:'数据库专员'});
  assert.deepEqual(superWorkerAppearance({roleId:'stable-role',roleName:'改名后的发布专员'}),before);
- const shapes=new Set(Array.from({length:32},(_,i)=>superWorkerIcon({roleId:`role-${i}`,roleName:'专员'})));
- assert.equal(shapes.size,8);
+ const shapes=new Set(Array.from({length:10000},(_,i)=>superWorkerIcon({roleId:`role-${i}`,roleName:'专员'})));
+ assert.equal(shapes.size,100);
  assert.notEqual(superWorkerIcon({roleName:'数据库专员'}),superWorkerIcon({roleName:'发布专员'}));
  assert.equal(superAvatarMotion(true,'blocked'),'working');
  for(const state of ['paused','blocked','failed','cancelled'] as const)assert.equal(superAvatarMotion(false,state),'still');
