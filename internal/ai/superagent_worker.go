@@ -179,6 +179,7 @@ func superWorkerResourceIndex(c Config) string {
 }
 
 func (e *Engine) runSuperWorkerInput(ctx context.Context, w superWorkerRow, input TurnInput) error {
+	input.Context += superWorkerRoleContext(w)
 	assignment, err := e.AcquireWorkerSlot(ctx, w.ProjectID, w.ID)
 	if err != nil {
 		return err

@@ -160,10 +160,10 @@ func TestSuperChannelSchemaThreeMigrationIsIdempotent(t *testing.T) {
 	}
 	var version superSchemaRow
 	db.First(&version, "id = ?", 1)
-	if version.Version != 4 {
+	if version.Version != superSchemaVersion {
 		t.Fatal(version)
 	}
-	if err := db.Model(&superSchemaRow{}).Where("id = ?", 1).Update("version", 5).Error; err != nil {
+	if err := db.Model(&superSchemaRow{}).Where("id = ?", 1).Update("version", superSchemaVersion+1).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSuperagentStore(db); err == nil {

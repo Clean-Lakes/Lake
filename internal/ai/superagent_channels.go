@@ -58,6 +58,8 @@ type SpecialistChannel struct {
 	ProjectID         string    `json:"projectId"`
 	RoleID            string    `json:"roleId"`
 	RoleName          string    `json:"roleName"`
+	Duties            string    `json:"duties"`
+	RoleRevision      int64     `json:"roleRevision"`
 	SessionID         string    `json:"sessionId"`
 	Revision          int64     `json:"revision"`
 	CreatedAt         time.Time `json:"createdAt"`
@@ -85,7 +87,7 @@ func (e *Engine) ListSpecialistChannels(ctx context.Context, project string) ([]
 		return nil, err
 	}
 	out := []SpecialistChannel{}
-	err = db.WithContext(ctx).Table("superagent_role_channels c").Select("c.id,c.project_id,c.role_id,r.name AS role_name,c.host_session_id AS session_id,c.revision,c.created_at").Joins("JOIN superagent_roles r ON r.id=c.role_id AND r.project_id=c.project_id").Where("c.project_id = ?", project).Order("c.created_at,c.id").Scan(&out).Error
+	err = db.WithContext(ctx).Table("superagent_role_channels c").Select("c.id,c.project_id,c.role_id,r.name AS role_name,r.duties,r.revision AS role_revision,c.host_session_id AS session_id,c.revision,c.created_at").Joins("JOIN superagent_roles r ON r.id=c.role_id AND r.project_id=c.project_id").Where("c.project_id = ?", project).Order("c.created_at,c.id").Scan(&out).Error
 	return out, err
 }
 
@@ -95,7 +97,7 @@ func (e *Engine) SpecialistChannelForSession(ctx context.Context, project, sessi
 		return SpecialistChannel{}, err
 	}
 	var out SpecialistChannel
-	result := db.WithContext(ctx).Table("superagent_role_channels c").Select("c.id,c.project_id,c.role_id,r.name AS role_name,c.host_session_id AS session_id,c.revision,c.created_at").Joins("JOIN superagent_roles r ON r.id=c.role_id AND r.project_id=c.project_id").Where("c.project_id = ? AND c.host_session_id = ?", project, session).Scan(&out)
+	result := db.WithContext(ctx).Table("superagent_role_channels c").Select("c.id,c.project_id,c.role_id,r.name AS role_name,r.duties,r.revision AS role_revision,c.host_session_id AS session_id,c.revision,c.created_at").Joins("JOIN superagent_roles r ON r.id=c.role_id AND r.project_id=c.project_id").Where("c.project_id = ? AND c.host_session_id = ?", project, session).Scan(&out)
 	if result.Error != nil {
 		return out, result.Error
 	}

@@ -18,6 +18,9 @@ func (b *Server) superagentRoute(w http.ResponseWriter, r *http.Request) bool {
 		aiFailure(err)
 		reply(w, 200, domain)
 	case "GET":
+		cursor := b.Store.read(func() any {
+			return integer(b.Store.row("SELECT COALESCE(MAX(seq),0) AS n FROM events")["n"])
+		})
 		domain, active, err := b.Engine.SuperProject(r.Context(), project)
 		aiFailure(err)
 		if active {
@@ -56,7 +59,7 @@ func (b *Server) superagentRoute(w http.ResponseWriter, r *http.Request) bool {
 		for i := range channels {
 			channels[i].NeedsConfirmation = attention[channels[i].ID]
 		}
-		reply(w, 200, Object{"active": active, "project": domain, "workers": workers, "channels": channels})
+		reply(w, 200, Object{"active": active, "project": domain, "workers": workers, "channels": channels, "cursor": cursor})
 	default:
 		fail(405, "Method not allowed")
 	}
