@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestWorkBeginUsesRequestedClusterInsteadOfOldSSHTerminal(t *testing.T) {
+func TestWorkBeginAddsResourcesToSameGoalWithoutBorrowingTerminal(t *testing.T) {
 	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
 	s, _ := e.get("case")
 	c := s.state.Config
@@ -23,9 +23,9 @@ func TestWorkBeginUsesRequestedClusterInsteadOfOldSSHTerminal(t *testing.T) {
 	if goal.Binding.AssetRef != "cluster" || goal.Binding.Runtime != "kubernetes" || goal.Binding.TerminalID != "" || len(goal.ResourceBindings) != 1 || goal.Binding.ResourceIdentity == "" {
 		t.Fatal("goal inherited foreground SSH", goal.Binding)
 	}
-	_, err = e.beginWork(s, "retarget", nil, assetAlias("old-host"))
-	if err == nil {
-		t.Fatal("silently rebound active goal")
+	updated, err := e.beginWork(s, "inspect both resources", nil, assetAlias("old-host"))
+	if err != nil || updated.ID != goal.ID || len(updated.ResourceBindings) != 2 || updated.Binding.AssetRef != "" || !updated.DeadlineAt.Equal(goal.DeadlineAt) {
+		t.Fatal("adding a resource replaced or blocked the goal", updated, err)
 	}
 }
 
@@ -61,7 +61,7 @@ func TestWorkBindingFallbackOnlyUsesCurrentTurnOrTrustedScope(t *testing.T) {
 	}
 }
 
-func TestWorkRecoveryValidatesEveryResourceIdentity(t *testing.T) {
+func TestLegacyWorkRecoveryValidatesEveryResourceIdentity(t *testing.T) {
 	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
 	g := seedObservedWork(t, e)
 	row, g, _ := e.workRow("case", g.ID)
@@ -79,6 +79,52 @@ func TestWorkRecoveryValidatesEveryResourceIdentity(t *testing.T) {
 	_, after, _ := e.workRow("case", g.ID)
 	if after.Status != "blocked" || !strings.Contains(after.Summary, "原资源绑定已变化") {
 		t.Fatal("changed secondary resource was ignored", after.Status)
+	}
+}
+
+func TestWorkCanBeginBeforeResourceResolutionAndKeepsLegacySnapshots(t *testing.T) {
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+	s, _ := e.get("case")
+	c := s.state.Config
+	c.Assets = []Asset{{ID: "a", Kind: "mysql"}, {ID: "b", Kind: "kubernetes"}}
+	if err := e.Configure("case", c); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.state.TargetScope = &TargetScope{NeedsClarification: true}
+	s.mu.Unlock()
+	goal, err := e.beginWork(s, "Compare database and cluster", []WorkItem{{ID: "compare", Title: "Compare actual data"}})
+	if err != nil || len(goal.ResourceBindings) != 0 || goal.Binding.AssetRef != "" {
+		t.Fatal(goal, err)
+	}
+	// A pre-existing single binding is preserved as history, not a resource limit.
+	row, goal, _ := e.workRow("case", goal.ID)
+	goal.Binding = WorkBinding{Runtime: "mysql", AssetRef: "a", ResourceIdentity: "historical-a"}
+	goal.ModelRounds = 7
+	if err = e.writeWorkGoal(&row, &goal, false); err != nil {
+		t.Fatal(err)
+	}
+	if err = e.recordWorkResource(s, c, "b"); err != nil {
+		t.Fatal(err)
+	}
+	_, after, _ := e.workRow("case", goal.ID)
+	if after.ID != goal.ID || len(after.ResourceBindings) != 2 || after.ResourceBindings[0] != goal.Binding || after.ModelRounds != 7 || !after.DeadlineAt.Equal(goal.DeadlineAt) || after.Items[0].ID != goal.Items[0].ID {
+		t.Fatal("history or task identity changed", after)
+	}
+	revision := after.Revision
+	if err = e.recordWorkResource(s, c, "b"); err != nil {
+		t.Fatal(err)
+	}
+	_, again, _ := e.workRow("case", goal.ID)
+	if again.Revision != revision {
+		t.Fatal("duplicate resource created a new task revision")
+	}
+	if err = e.recordWorkResource(s, c, "a"); err != nil {
+		t.Fatal(err)
+	}
+	_, again, _ = e.workRow("case", goal.ID)
+	if len(again.ResourceBindings) != 3 || again.ResourceBindings[0].ResourceIdentity != "historical-a" {
+		t.Fatal("new connection reference rewrote history", again.ResourceBindings)
 	}
 }
 

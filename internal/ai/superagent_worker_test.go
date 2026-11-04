@@ -12,7 +12,7 @@ import (
 	"github.com/Clean-Lakes/Lake/internal/security"
 )
 
-func TestSuperWorkerResourceIndexAndMissingTargetCannotConfirmScope(t *testing.T) {
+func TestSuperWorkerResourceIndexAndOptionalTaskReferences(t *testing.T) {
 	c := Config{superRole: "worker", Permissions: &Permissions{BlockUnreferencedAssets: true}, ReferencedAssets: []string{"visible"}, Assets: []Asset{
 		{ID: "visible", Name: "Allowed host", Kind: "ssh", SSH: &SSH{Host: "hidden-address", IdentityFile: "never-in-context"}},
 		{ID: "foreign", Name: "Hidden host", Kind: "ssh"},
@@ -22,15 +22,16 @@ func TestSuperWorkerResourceIndexAndMissingTargetCannotConfirmScope(t *testing.T
 	if !strings.Contains(index, `"server_id":"gos"`) || !strings.Contains(index, "GOS release catalog") || !strings.Contains(index, assetAlias("visible")) || !strings.Contains(index, "Allowed host") || strings.Contains(index, "Hidden host") || strings.Contains(index, "hidden-address") || strings.Contains(index, "never-in-context") {
 		t.Fatal("resource index lost visibility or exposed connection metadata")
 	}
-	e := &Engine{}
-	_, err := e.invokeWorkTool(t.Context(), nil, c, Call{Name: "work_begin"}, map[string]any{"title": "Inspect", "items": []any{}})
-	if err == nil || !strings.Contains(err.Error(), "explicit asset_refs") {
-		t.Fatal("missing target entered plan confirmation", err)
+	e := engineFor(t, Model{URL: "http://127.0.0.1:1", Name: "fixture"}, nil)
+	s, _ := e.get("case")
+	value, err := e.invokeWorkTool(t.Context(), s, c, Call{Name: "work_begin"}, map[string]any{"title": "Inspect", "items": []any{}})
+	if err != nil || len(value.(WorkGoal).ResourceBindings) != 0 {
+		t.Fatal("task required resources before discovery", value, err)
 	}
 	tools := WorkerCatalog(workTools())
 	for _, tool := range tools {
-		if tool.Name == "work_begin" && !strings.Contains(js(tool.Parameters["required"]), "asset_refs") {
-			t.Fatal("Worker schema omitted explicit target selection")
+		if tool.Name == "work_begin" && strings.Contains(js(tool.Parameters["required"]), "asset_refs") {
+			t.Fatal("Worker schema still requires task resource selection")
 		}
 	}
 	for _, tool := range workTools() {
@@ -169,10 +170,10 @@ func TestSuperWorkerUsesOriginalGoalAndHostConfirmation(t *testing.T) {
 	}
 }
 
-func TestSuperFirstPlanBindsRealResourcesWithoutReplacingGoal(t *testing.T) {
+func TestSuperConfirmedTaskAddsProjectResourcesWithoutReplacingGoal(t *testing.T) {
 	e, b := superFixture(t)
 	ctx := context.Background()
-	task := superCreateFixture(t, e, b, "target-source", "Read target A only", "read", "Read target A")
+	task := superCreateFixture(t, e, b, "target-source", "Compare targets A and B", "read", "Compare targets A and B")
 	c := Config{SecurityProjectID: b.ProjectID, Profile: "core", Model: Model{URL: "http://127.0.0.1:1", Name: "fixture"}, Assets: []Asset{{ID: "target-a", Name: "A", Kind: "ssh", SSH: &SSH{Host: "127.0.0.1", Port: 22, Username: "fixture"}}, {ID: "target-b", Name: "B", Kind: "ssh", SSH: &SSH{Host: "127.0.0.2", Port: 22, Username: "fixture"}}}}
 	if err := e.ConfigureTaskWorker(ctx, b.ProjectID, task.WorkerID, c); err != nil {
 		t.Fatal(err)
@@ -190,8 +191,10 @@ func TestSuperFirstPlanBindsRealResourcesWithoutReplacingGoal(t *testing.T) {
 	if err = e.ConfigureWorkAcceptance(task.SessionID, goal.ID, b.ProjectID, "user", "confirm-original-target", goal.Revision, map[string]WorkStepContract{goal.Items[0].ID: contract}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = e.beginWork(s, "Read B", []WorkItem{{ID: "other", Title: "Different target"}}, assetAlias("target-b")); err == nil {
-		t.Fatal("confirmed scope widened")
+	_, confirmed, _ := e.workRow(task.SessionID, task.TaskID)
+	updated, err := e.beginWork(s, "Compare targets A and B", nil, assetAlias("target-b"))
+	if err != nil || updated.ID != task.TaskID || len(updated.ResourceBindings) != 2 || updated.closure.GoalRevision != confirmed.closure.GoalRevision || updated.closure.PlanRevision != confirmed.closure.PlanRevision || !updated.DeadlineAt.Equal(confirmed.DeadlineAt) || updated.OriginRootTurnID != confirmed.OriginRootTurnID {
+		t.Fatal("resource discovery replaced task or acceptance", updated, err)
 	}
 	db, _ := e.superStore()
 	var goals, tasks int64

@@ -403,29 +403,10 @@ func (e *Engine) beginWork(s *session, title string, items []WorkItem, assetRefs
 				if bindErr != nil {
 					return g, bindErr
 				}
-				existingBindings := g.ResourceBindings
-				if len(existingBindings) == 0 && g.Binding.AssetRef != "" {
-					existingBindings = []WorkBinding{g.Binding}
-				}
-				if len(existingBindings) == 0 && g.closure == nil && row.GoalRevision == 0 && c.superRole == "worker" && c.superTaskID == g.ID {
-					// Routing creates an unconfirmed goal, not a resource scope.
-					// Its first real plan freezes host-resolved targets before the
-					// original confirmation. A confirmed goal cannot take this path.
-					g.ResourceBindings = append([]WorkBinding(nil), requested...)
-					if len(requested) == 1 {
-						g.Binding = requested[0]
-					}
-					existingBindings = g.ResourceBindings
-				}
-				for _, candidate := range requested {
-					found := false
-					for _, old := range existingBindings {
-						if old.AssetRef == candidate.AssetRef && old.ResourceIdentity == candidate.ResourceIdentity {
-							found = true
-						}
-					}
-					if !found {
-						return g, errors.New("当前目标已绑定其他资源；请结束原目标后为新资源创建任务")
+				if mergeWorkResources(&g, requested) && len(items) == 0 {
+					row.superFence = c.superAssignment
+					if err := e.writeWorkGoal(&row, &g, false); err != nil {
+						return g, err
 					}
 				}
 			}

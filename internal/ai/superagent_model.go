@@ -158,5 +158,28 @@ func projectSuperTaskTx(tx *gorm.DB, sessionID, taskID string) (SuperTaskView, e
 			return view, lookup
 		}
 	}
+	// Actual operation references complete the task's descriptive index even
+	// when the resource was discovered after work_begin. This grants no access.
+	if view.ProjectID != "" {
+		var used []string
+		if err := tx.Model(&nativeOperation{}).Distinct("resource_id").Where("project_id = ? AND session_id = ? AND goal_id = ? AND resource_id <> ''", view.ProjectID, sessionID, taskID).Order("resource_id").Pluck("resource_id", &used).Error; err != nil {
+			return view, err
+		}
+		seen := map[string]bool{}
+		resources := []WorkBinding{}
+		for _, binding := range view.Resources {
+			if !seen[binding.AssetRef] {
+				resources = append(resources, binding)
+				seen[binding.AssetRef] = true
+			}
+		}
+		for _, id := range used {
+			if !seen[id] {
+				resources = append(resources, WorkBinding{AssetRef: id})
+				seen[id] = true
+			}
+		}
+		view.Resources = resources
+	}
 	return view, nil
 }
