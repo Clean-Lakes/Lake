@@ -2,7 +2,7 @@
 
 2026-11-04，macOS arm64；基线 develop `caab241e89bc93f38e6395b69f3e85a285637296`。PR #167 评审 head `409d770c` 与集成树一致，已按授权合并并清理远端/本地分支。
 
-Go/race tested SHA：`0be3a0316d0d3f50afe2a86bf4521e34cccc4080`。其后只保留当前自然偏好共用的空状态 CSS，并补充文档，没有 Go 变更；最终前端/签名后端提交及复验结果另记。范围见 [遗留审计第三批](../design/agent-file-memory-legacy-audit.md#第三批v2-手动入口与界面退出)。
+Go/race tested SHA：`0be3a0316d0d3f50afe2a86bf4521e34cccc4080`。其后只保留当前自然偏好共用的空状态 CSS，并补充文档，没有 Go 变更；最终前端/签名后端在 `8d877ed13c4a8f25c7139ce7b7e2eaddb44e7495` 重建并通过复验；`git diff 0be3a031 8d877ed1 -- internal scripts` 为空，后续仅文档变动。范围见 [遗留审计第三批](../design/agent-file-memory-legacy-audit.md#第三批v2-手动入口与界面退出)。
 
 ## 本地检查
 
@@ -27,11 +27,11 @@ go test -race ./internal/web ./internal/ai -run 'Test(Memory|ProjectMemory|Natur
 
 ## 签名后端直接运行
 
-二进制 SHA-256：`a86a1ab803f79aa40dee5d15323def257c06f72593f39f49166ae39844e2f304`；来源记录为上述 clean tested SHA。分别在独立、权限受限的临时 Home 运行：
+最终二进制 SHA-256：`772c77933e01f3a7341445fc8f6bf6118f280474e5097958050ef7506b30e9c5`；来源记录为 clean `8d877ed13c4a8f25c7139ce7b7e2eaddb44e7495`。分别在独立、权限受限的临时 Home 运行：
 
 ```sh
-python3 scripts/verify_memory_v2_entry_dev.py --report /tmp/lake-memory-v2-entry-0be3a031.json
-python3 scripts/verify_memory_compatibility_dev.py --report /tmp/lake-memory-entry-compat-0be3a031.json
+python3 scripts/verify_memory_v2_entry_dev.py --report /tmp/lake-memory-v2-entry-8d877ed1.json
+python3 scripts/verify_memory_compatibility_dev.py --report /tmp/lake-memory-entry-compat-8d877ed1.json
 ```
 
 两项通过。第一项不配置模型：20 种旧入口/方法组合均 410，认证 401、缺失项目及跨项目正文 404，V1 保存/读取、重启对账、遗忘清正文正常；旧请求不修改当前数据。V2 旧表的写入拒绝与遗忘专项另由 Go 历史 fixture 回归覆盖，不在真实 Home 翻转 V2。
