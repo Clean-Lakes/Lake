@@ -28,6 +28,9 @@ func applyLegacySessionPolicyTx(tx *gorm.DB, in *security.EvaluationInput) error
 	if err := decodeSecurityJSON(row.Data, &permissions); err != nil {
 		return err
 	}
+	if permissions.BlockUnreferencedAssets && mcpRequiresUnrestrictedResources(o.Tool, in.LocalExecution) {
+		return errMCPReferencedResourcesOnly
+	}
 	in.Policy.DenyLocal = in.Policy.DenyLocal || permissions.DenyLocalExecution
 	if permissions.BlockUnreferencedAssets && len(o.Resources) > 0 {
 		var boundaries []securityBoundaryRow

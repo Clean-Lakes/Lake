@@ -36,6 +36,7 @@ type session struct {
 	sreReply            *sreReply
 }
 type Engine struct {
+	SuperRolesChanged              func(context.Context, string) error                  // Host projection notification, never authority; durable roles survive failed delivery.
 	SuperInputResolver             func(context.Context, SuperEvent) (TurnInput, error) // Trusted host; resolves existing source data, never authority.
 	HostContext                    context.Context                                      // Trusted host lifetime; cancels startup snapshots and preserves unanswered SDK waits on host shutdown.
 	superOnce                      sync.Once

@@ -65,6 +65,8 @@ def main():
     parser.add_argument('--exercise-missing-role', action='store_true', help='omit role_key once, verify actionable feedback and repair the same original event part')
     parser.add_argument('--exercise-missing-target', action='store_true', help='omit asset_ref once per Worker and verify target repair before the actual read')
     parser.add_argument('--exercise-missing-attempt', action='store_true', help='try a read before starting an item and verify the original attempt protocol repairs it')
+    parser.add_argument('--profile-inspection-file', type=Path, help='with --manage-specialists, wait up to 300 seconds after the idle profile restart for this owned UI-inspection marker')
+    parser.add_argument('--manage-specialists', action='store_true', help='create/list/edit an idle specialist through Pilot tools, cold restart, then reuse its stable RoleID for independent tasks')
     parser.add_argument('--inherit-project-access', action='store_true', help='use the existing project catalog and permissions without writing a separate project policy')
     parser.add_argument('--verify-reply-authors', action='store_true', help='verify distinct specialist identities on delivered Pilot reports')
     args = parser.parse_args()
@@ -92,7 +94,23 @@ def main():
             names = {tool['function']['name'] for tool in request.get('tools', [])}
             content, tool, payload = '', None, {}
             with lock:
-                if 'route_work' in names:
+                if 'route_work' in names and state.get('phase'):
+                    phase = state['phase']
+                    key = 'profile-' + phase
+                    state['profileCalls'] = state.get('profileCalls', 0) + 1
+                    n = state['profileCalls']
+                    event, quote = query("SELECT id,payload FROM superagent_events WHERE disposition='pending' AND source_kind='user' ORDER BY received_at DESC LIMIT 1")[0]
+                    if n == 1:
+                        tool, payload = 'list_specialists', {}
+                    elif n == 2:
+                        tool, payload = 'manage_specialist', {'event_id': event, 'part_key': 'reader-profile', 'action': 'create' if phase == 'create' else 'update', 'name': '长期读取专员' if phase == 'create' else '证据核实专员', 'duties': '只读核实指定文件，不修改文件。', 'quote': quote}
+                        if phase == 'create':
+                            payload['role_key'] = 'reader'
+                        else:
+                            payload.update(role_id=state['roleID'], expected_revision=1)
+                    else:
+                        content = '专员资料已保存；尚未派任务。'
+                elif 'route_work' in names:
                     state['router'] += 1
                     n = state['router']
                     if args.exercise_missing_role and n == 2:
@@ -101,9 +119,12 @@ def main():
                         state['routingArgumentRepairVerified'] = True
                     route_number = n - 1 if args.exercise_missing_role and n >= 2 else n
                     if route_number <= 2:
-                        event = query("SELECT id FROM superagent_events WHERE source_kind='user' ORDER BY received_at LIMIT 1")[0][0]
+                        event = query("SELECT id FROM superagent_events WHERE source_kind='user' AND disposition='pending' ORDER BY received_at DESC LIMIT 1")[0][0]
                         label = 'A' if route_number == 1 else 'B'
                         tool, payload = 'route_work', {'event_id': event, 'part_key': 'marker-' + label, 'action': 'create', 'title': 'Read marker ' + label, 'role_key': 'reader', 'quote': 'Read marker ' + label, 'reason': 'Independent actual user deliverable'}
+                        if args.manage_specialists:
+                            payload.pop('role_key', None)
+                            payload['role_id'] = state['roleID']
                         if args.verify_reply_authors:
                             payload['role_key'] = 'Go 审查专员' if label == 'A' else '前端执行专员'
                         if args.exercise_missing_role and n == 1:
@@ -119,6 +140,9 @@ def main():
                     match = re.search(r'\[ASSIGNED DELIVERABLE\]\s*Read marker ([AB])', text)
                     require(match is not None, 'Worker lost its exact assigned original deliverable')
                     key = match.group(1)
+                    if args.manage_specialists:
+                        require('[SPECIALIST PROFILE AT TASK CREATION]' in text and '证据核实专员' in text and '只读核实指定文件，不修改文件。' in text, 'model request lost the frozen specialist duties')
+                        require('LAKE_SUPER_READ_ONLY_' + ('B' if key == 'A' else 'A') not in text, 'Worker received peer evidence context')
                     state['lastToolResults' + key] = [message.get('content') for message in request.get('messages', []) if message.get('role') == 'tool'][-6:]
                     state['calls'][key] = state['calls'].get(key, 0) + 1
                     n = state['calls'][key]
@@ -199,6 +223,31 @@ def main():
                     report['projectAccess'] = 'inherited catalog and original permissions; no policy PUT'
                 else:
                     lake.api('/api/projects/' + project + '/security/policy', 'PUT', {'actionId': 'isolated-read-policy', 'expectedRevision': revision, 'policy': {'schemaVersion': 1, 'mode': 'restricted', 'resourceIDs': [resource], 'rules': [{'capability': 'file.read', 'effect': 'allow', 'limits': {'FileRoots': [str(readable)]}}, {'capability': 'local.execute', 'effect': 'allow'}]}})
+                if args.manage_specialists:
+                    require(not args.exercise_missing_role and not args.verify_reply_authors, 'specialist management uses one stable role_id; choose separate runs for legacy role repair/distinct authors')
+                    state.update(phase='create', profileCalls=0)
+                    lake.send_and_finish(pilot, '先创建长期读取专员，职责是只读核实指定文件，不修改文件。暂时不要派任务。')
+                    idle = lake.api('/api/projects/' + project + '/superagent')
+                    require(len(idle['channels']) == 1 and not idle['workers'], 'precreation created a Worker or lost its idle channel')
+                    channel = idle['channels'][0]
+                    state['roleID'] = channel['roleId']
+                    require(query('SELECT count(*) FROM native_work_goals')[0][0] == 0, 'metadata created a canonical goal')
+                    state.update(phase='update', profileCalls=0)
+                    lake.send_and_finish(pilot, '将长期读取专员改名为证据核实专员，职责仍为只读核实指定文件，不修改文件。')
+                    edited = lake.api('/api/projects/' + project + '/superagent')
+                    require(edited['channels'][0]['roleId'] == channel['roleId'] and edited['channels'][0]['roleName'] == '证据核实专员' and edited['channels'][0]['roleRevision'] == 2 and not edited['workers'], 'edit replaced identity or created work')
+                    old_pid = lake.runtime['pid']
+                    lake.api('/api/superagent/lifecycle', 'POST', {'action': 'drain'})
+                    wait_for(lambda: not (home / 'web-agent/runtime.json').exists(), 30)
+                    lake.stop()
+                    lake = Lake(binary, home, env, native=args.native)
+                    restored = lake.api('/api/projects/' + project + '/superagent')
+                    require(lake.runtime['pid'] != old_pid and restored['channels'][0] == edited['channels'][0] and not restored['workers'], 'cold restart lost idle specialist/profile identity')
+                    report['specialistManagement'] = {'createdWithoutTask': True, 'editedWithoutTask': True, 'coldRestartRetainedRoleAndChannel': True, 'stableRoleID': channel['roleId'], 'roleRevision': 2}
+                    state.pop('phase')
+                    if args.profile_inspection_file:
+                        print('IDLE PROFILE: ' + str(home) + ' origin=' + lake.runtime['origin'], flush=True)
+                        wait_for(lambda: args.profile_inspection_file.exists(), 300)
                 lake.api('/api/sessions/' + pilot + '/messages', 'POST', {'text': 'Read marker A; Read marker B. Read only, do not modify files. Preserve separate goals and verify each result.', 'resourceIds': [resource]})
                 answered, workers = set(), []
                 for _ in range(900):
@@ -227,6 +276,11 @@ def main():
                     errors = {worker['sessionId']: [card.get('content', '') for card in lake.snapshot(worker['sessionId']).get('cards', []) if card.get('type') == 'error'] for worker in workers}
                     raise AssertionError('Super-agent fixture did not close both canonical goals: ' + json.dumps({'workers': workers, 'modelCalls': state['calls'], 'errors': errors}, ensure_ascii=False))
                 require(len({worker['task']['taskId'] for worker in workers}) == 2 and len({worker['sessionId'] for worker in workers}) == 2, 'task context was shared')
+                if args.manage_specialists:
+                    require(len(workspace['channels']) == 1 and {w['roleId'] for w in workers} == {state['roleID']}, 'task dispatch duplicated the specialist')
+                    snapshots = query('SELECT role_snapshot FROM superagent_workers')
+                    require(all(json.loads(row[0])['revision'] == 2 and json.loads(row[0])['name'] == '证据核实专员' for row in snapshots), 'Worker did not receive edited frozen duties')
+                    report['specialistManagement'].update(reusedRoleForTwoIndependentTasks=True, oneSidebarChannel=True)
                 require(query("SELECT count(*) FROM native_operations WHERE tool='read' AND status='succeeded'")[0][0] == 2, 'read duplicated or missing')
                 require(query("SELECT count(*) FROM native_operations WHERE tool IN ('write','edit','append','shell')")[0][0] == 0, 'readonly fixture performed an unsolicited mutation')
                 wait_for(lambda: query("SELECT count(*) FROM superagent_outbox WHERE task_id<>'' AND state='delivered'")[0][0] >= 2)

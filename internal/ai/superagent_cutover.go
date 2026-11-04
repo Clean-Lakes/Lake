@@ -165,6 +165,7 @@ func (e *Engine) ApplySuperStops(ctx context.Context, projectID string) error {
 }
 
 type SuperWorkerView struct {
+	CreatedAt       time.Time     `json:"createdAt"`
 	ID              string        `json:"id"`
 	RoleID          string        `json:"roleId"`
 	RoleName        string        `json:"roleName"`
@@ -183,7 +184,7 @@ func (e *Engine) SuperWorkerForSession(ctx context.Context, projectID, sessionID
 	if err = db.WithContext(ctx).First(&w, "session_id = ? AND project_id = ?", sessionID, projectID).Error; err != nil {
 		return SuperRouteResult{}, err
 	}
-	return SuperRouteResult{TaskID: w.TaskID, WorkerID: w.ID, SessionID: w.SessionID, Protocol: w.Protocol}, nil
+	return SuperRouteResult{TaskID: w.TaskID, WorkerID: w.ID, SessionID: w.SessionID, RoleID: w.RoleID, Protocol: w.Protocol}, nil
 }
 
 func (e *Engine) SuperWorkerOrigin(ctx context.Context, projectID, workerID string) (SuperEvent, error) {
@@ -251,7 +252,7 @@ func (e *Engine) SuperWorkers(ctx context.Context, projectID string) ([]SuperWor
 			} else if assignment.State == "waiting_user" && !workTerminal(task.State) {
 				task.State = "waiting_user"
 			}
-			out = append(out, SuperWorkerView{ID: w.ID, RoleID: w.RoleID, RoleName: role.Name, SessionID: w.SessionID, Task: task, AssignmentState: assignment.State, ParentWorkerID: w.ParentWorkerID})
+			out = append(out, SuperWorkerView{ID: w.ID, CreatedAt: w.CreatedAt, RoleID: w.RoleID, RoleName: role.Name, SessionID: w.SessionID, Task: task, AssignmentState: assignment.State, ParentWorkerID: w.ParentWorkerID})
 		}
 		return nil
 	})

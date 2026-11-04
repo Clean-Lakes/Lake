@@ -121,6 +121,7 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xter
    the remaining space and can truncate, while its disclosure stays reachable. */
 @container(max-width:300px) {
  .lake-workbench-island .workspace-header { display:grid; grid-template-columns:minmax(0,1fr) 114px; padding-inline:8px; gap:4px; }
+ .lake-workbench-island .workspace-header.has-specialist-tasks { grid-template-columns:minmax(0,1fr) 114px 28px; }
  .lake-workbench-island .workspace-header.has-pilot-island { grid-template-columns:minmax(48px,1fr) minmax(0,var(--pilot-state-width)); }
  .lake-workbench-island .breadcrumbs { display:flex; min-width:0; width:100%; max-width:none; }
  .lake-workbench-island .breadcrumbs strong { display:flex; align-items:center; min-width:0; width:100%; }
@@ -134,7 +135,10 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xter
  .lake-workbench-island .header-inspector-toggle { flex:none; margin-left:0; }
 }
 
-@container(max-width:200px) { .lake-workbench-island .workspace-header { grid-template-columns:minmax(0,1fr) 100px; } }
+@container(max-width:200px) {
+ .lake-workbench-island .workspace-header { grid-template-columns:minmax(0,1fr) 100px; }
+ .lake-workbench-island .workspace-header.has-specialist-tasks { grid-template-columns:minmax(0,1fr) 92px 28px; }
+}
 
 .terminal-island-title-short { display:none; }
 @container(max-width:180px) {

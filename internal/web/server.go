@@ -218,6 +218,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	}
 	server.Engine.SetSRERepository(store)
 	server.Engine.SuperInputResolver = server.resolveSuperInput
+	server.Engine.SuperRolesChanged = server.syncSuperSpecialists
 	server.Engine.NaturalMemory = server.naturalRecallProvider
 	server.Engine.ModelActivity = server.memoryForegroundModel
 	server.Engine.MemoryCaptureAllowed = store.MemoryCaptureAllowed
@@ -850,6 +851,17 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			b.Store.DeleteSession(id)
 			b.resetConnectionFailures(id)
 			w.WriteHeader(204)
+			return
+		}
+		if len(parts) == 5 && parts[3] == "channel" && parts[4] == "read" {
+			b.readSpecialistCompletion(w, r, id)
+			return
+		}
+		if len(parts) == 5 && parts[3] == "channel" && parts[4] == "tasks" {
+			if method != "GET" {
+				fail(405, "Method not allowed")
+			}
+			reply(w, 200, b.specialistTasks(r.Context(), id))
 			return
 		}
 		if len(parts) == 5 && parts[3] == "attachments" {

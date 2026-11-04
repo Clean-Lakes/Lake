@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -16,7 +17,28 @@ const superChannelSchema = `
 CREATE TABLE IF NOT EXISTS superagentRoleChannels(channelId TEXT PRIMARY KEY,projectId TEXT NOT NULL REFERENCES projects(id),roleId TEXT NOT NULL,sessionId TEXT NOT NULL UNIQUE REFERENCES sessions(id),UNIQUE(projectId,roleId));
 CREATE TABLE IF NOT EXISTS superagentChannelTimeline(channelId TEXT NOT NULL REFERENCES superagentRoleChannels(channelId),kind TEXT NOT NULL,sourceSessionId TEXT NOT NULL,sourceId TEXT NOT NULL,taskId TEXT NOT NULL DEFAULT '',workerId TEXT NOT NULL DEFAULT '',createdAt TEXT NOT NULL,PRIMARY KEY(channelId,kind,sourceSessionId,sourceId));
 CREATE INDEX IF NOT EXISTS superagentChannelTimelinePage ON superagentChannelTimeline(channelId,createdAt,kind,sourceSessionId,sourceId);
+CREATE TABLE IF NOT EXISTS superagentChannelReads(channelId TEXT PRIMARY KEY REFERENCES superagentRoleChannels(channelId) ON DELETE CASCADE, completionCursor TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS superagentChannelCursors(channelId TEXT NOT NULL,sessionId TEXT NOT NULL,cardsThrough INTEGER NOT NULL,eventThrough INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(channelId,sessionId));`
+
+// Canonical metadata commits before this repairable Web projection. Emit a
+// durable Router event so the sidebar refreshes even while the reply streams.
+func (b *Server) syncSuperSpecialists(ctx context.Context, project string) (err error) {
+	defer func() {
+		if recover() != nil {
+			err = fmt.Errorf("specialist projection unavailable; retry from canonical roles")
+		}
+	}()
+	b.reconcileSpecialistChannels(ctx, project)
+	domain, active, err := b.Engine.SuperProject(ctx, project)
+	if err != nil || !active {
+		return err
+	}
+	b.Store.update(func() any {
+		b.Store.event(domain.RouterSessionID, "specialist")
+		return nil
+	})
+	return nil
+}
 
 func (b *Server) reconcileSpecialistChannels(ctx context.Context, project string) []ai.SpecialistChannel {
 	channels, err := b.Engine.ListSpecialistChannels(ctx, project)
@@ -29,6 +51,23 @@ func (b *Server) reconcileSpecialistChannels(ctx context.Context, project string
 		})
 	}
 	return channels
+}
+
+// Resolve both the channel and a direct task link to the same project role.
+func (b *Server) specialistTasks(ctx context.Context, session string) []ai.SuperWorkerView {
+	project := stringOf(b.Store.Session(session)["projectId"])
+	switch b.Store.superSessionKind(session) {
+	case "worker":
+		channel, err := b.Engine.SpecialistChannelForWorker(ctx, project, session)
+		aiFailure(err)
+		session = channel.SessionID
+	case "role":
+	default:
+		fail(404, "Specialist session required")
+	}
+	workers := b.channelWorkers(ctx, project, session)
+	sort.SliceStable(workers, func(i, j int) bool { return workers[i].CreatedAt.After(workers[j].CreatedAt) })
+	return workers
 }
 
 func (b *Server) channelWorkers(ctx context.Context, project, session string) []ai.SuperWorkerView {

@@ -25,7 +25,7 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 	}
 	if call.Name == "work_begin" {
 		if c.superRole == "worker" && a["asset_refs"] == nil {
-			return nil, errors.New("Worker work_begin requires explicit asset_refs from PROJECT RESOURCE INDEX; bind the intended aliases before plan confirmation. For work with no resource I/O, explicitly pass asset_refs:[]")
+			return nil, errors.New("Worker work_begin requires explicit asset_refs. " + superWorkerAssetRefsHint)
 		}
 		var items []WorkItem
 		if err := json.Unmarshal([]byte(js(a["items"])), &items); err != nil {
@@ -71,6 +71,9 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 	managedGoal := s.state.SecurityManaged
 	s.mu.Unlock()
 	if managedGoal && g.closure == nil && call.Name != "work_read" {
+		if c.superRole == "worker" && goalID == c.superTaskID {
+			return nil, errSuperWorkerPlanRequired
+		}
 		return nil, errors.New("确认当前任务步骤和验收条件后才能推进或完成目标")
 	}
 	if call.Name == "work_read" {

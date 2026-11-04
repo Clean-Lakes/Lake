@@ -365,6 +365,7 @@ func (e *Engine) CurrentSecurityExecution(ctx context.Context, sessionID string)
 	s.mu.Lock()
 	out = SecurityExecutionContext{Managed: s.state.SecurityManaged, ProjectID: configSecurityProject(s.state.Config), SessionID: sessionID, GoalID: s.state.WorkGoalID, SourceMessageID: s.state.SecuritySourceMessageID}
 	taskID, rootTurnID := s.state.SecurityTaskID, s.state.View.RootTurnID
+	workerProposal := s.state.Config.superRole == "worker" && out.GoalID != "" && out.GoalID == s.state.Config.superTaskID
 	inherited := s.state.Config.securityExecution
 	pending := s.state.PendingGoalIntent != nil
 	s.mu.Unlock()
@@ -391,6 +392,11 @@ func (e *Engine) CurrentSecurityExecution(ctx context.Context, sessionID string)
 		return out, errors.New("security: goal association requires confirmation")
 	}
 	if out.GoalID == "" || taskID == "" {
+		if workerProposal && inherited == nil {
+			if _, goal, err := e.workRow(out.SessionID, out.GoalID); err == nil && goal.closure == nil && !workTerminal(goal.Status) {
+				return out, errSuperWorkerPlanRequired
+			}
+		}
 		return out, errors.New("security: goal, task and acceptance contract required before resource access")
 	}
 	_, goal, err := e.workRow(out.SessionID, out.GoalID)

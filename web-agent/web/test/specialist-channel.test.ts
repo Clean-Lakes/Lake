@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {SpecialistTaskMenu} from '../src/SpecialistTaskMenu';
 import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
@@ -68,4 +69,12 @@ test('inspector task navigation keeps distinct source sessions even for equal ta
  assert.ok(html.includes('value="session-a"')&&html.includes('value="session-b" selected=""'));
  assert.ok(html.includes('任务记录')&&html.includes('检查服务器'));
  assert.deepEqual([a,b].map(row=>row.id),['a','b'],'display ordering does not mutate task metadata');
+});
+
+test('the header task list starts collapsed and reveals source on demand', () => {
+ const source = '查看项目的发布记录';
+ const html = renderToStaticMarkup(createElement(SpecialistTaskMenu, {sessionId: 'orders-session', currentTaskId: 'orders-task', source, onTask() {}}));
+ assert.match(html, /aria-label="专员任务清单"/);
+ assert.match(html, /aria-expanded="false"/);
+ assert.ok(!html.includes(source));
 });

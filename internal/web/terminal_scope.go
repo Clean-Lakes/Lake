@@ -93,6 +93,7 @@ func (b *Server) sessionSnapshot(id string) Object {
 		aiFailure(err)
 		detail, err := b.Engine.SuperTaskDetail(id, worker.TaskID)
 		aiFailure(err)
+		detail.RoleID = worker.RoleID
 		snap["superagent"] = detail
 	}
 	if b.Engine != nil && object(snap["session"])["workspaceRole"] == "router" {
