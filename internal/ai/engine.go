@@ -480,6 +480,17 @@ func (e *Engine) SnapshotPage(id string, before, limit int) (View, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.cancel == nil && s.questionReply == nil {
+		obsolete, err := e.obsoleteSecurityQuestionLocked(s, s.state.View.Question)
+		if err != nil {
+			return View{}, err
+		}
+		if obsolete {
+			if err := e.dismissQuestionLocked(s, s.state.View.Question, "expired"); err != nil {
+				return View{}, err
+			}
+		}
+	}
 	view := s.state.View
 	view.ReplyStatus = ""
 	// Canonical goals below may be blocked while a real human followup is
@@ -562,6 +573,10 @@ func (e *Engine) Abort(id string) error {
 	goalID := s.state.WorkGoalID
 	if s.cancel != nil {
 		s.cancel()
+	}
+	if err := e.dismissQuestionLocked(s, s.state.View.Question, "cancelled"); err != nil {
+		s.mu.Unlock()
+		return err
 	}
 	s.mu.Unlock()
 	if goalID != "" {
