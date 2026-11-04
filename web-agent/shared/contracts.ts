@@ -51,7 +51,7 @@ export type WorkspaceTag = {id: string; projectId: string; name: string; color: 
 
 export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: string; label: string; start: number; end: number; resourceKind?: Resource["kind"]};
 
-export type SpecialistReplyAuthor = {kind:'specialist';name:string;workerId:string;sessionId:string;taskId:string;channelSessionId?:string};
+export type SpecialistReplyAuthor = {kind:'specialist';name:string;roleId?:string;workerId:string;sessionId:string;taskId:string;channelSessionId?:string};
 export type Message = {
   author?: SpecialistReplyAuthor;
   id: string;

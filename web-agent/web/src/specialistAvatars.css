@@ -1,0 +1,25 @@
+.super-role-avatar[data-palette=river] { --super-role-color:var(--agent-coordinator); }
+.super-role-avatar[data-palette=moss] { --super-role-color:var(--agent-investigator); }
+.super-role-avatar[data-palette=reed] { --super-role-color:var(--agent-verifier); }
+.super-role-avatar[data-palette=clay] { --super-role-color:var(--agent-executor); }
+.super-role-avatar>.agent-role-icon.lake-avatar-figure { color:var(--super-role-color); flex:none; }
+.super-role-avatar .avatar-body,.super-role-avatar .avatar-limb,.super-role-avatar .avatar-eye,.super-role-avatar .avatar-water { transform-box:fill-box; transform-origin:center; }
+.super-role-avatar[data-variant="1"] .lake-avatar-figure { transform:scaleX(-1); }
+.super-role-avatar[data-variant="2"] .avatar-water { stroke-dasharray:2 2; }
+.super-role-avatar[data-motion=idle] .avatar-eye,.super-role-avatar[data-motion=working] .avatar-eye { animation:lake-avatar-blink 7.6s ease-in-out var(--avatar-phase) infinite; }
+.super-role-avatar[data-motion=working] .avatar-body { animation:lake-avatar-work 2.4s ease-in-out var(--avatar-phase) infinite; }
+.super-role-avatar[data-motion=working] .avatar-limb { animation:lake-avatar-limb 1.8s ease-in-out var(--avatar-phase) infinite; }
+.super-role-avatar[data-motion=working] .avatar-water { animation:lake-avatar-water 2.4s ease-in-out var(--avatar-phase) infinite; }
+.super-role-avatar[data-role=lotus][data-motion=idle] .avatar-limb { animation:lake-avatar-sway 7.6s ease-in-out var(--avatar-phase) infinite; transform-origin:center bottom; }
+.super-role-avatar[data-role=coordinator][data-motion=idle] ellipse,.super-role-avatar[data-role=coordinator][data-motion=working] ellipse { transform-box:fill-box; transform-origin:center; animation:lake-avatar-ripple 6s ease-in-out var(--avatar-phase) infinite; }
+.super-role-avatar[data-role=coordinator][data-motion=working] ellipse { animation-duration:2.4s; }
+.super-role-avatar[data-hidden] * { animation-play-state:paused!important; }
+@keyframes lake-avatar-blink { 0%,43%,47%,100% { transform:scaleY(1); } 45% { transform:scaleY(.12); } }
+@keyframes lake-avatar-work { 0%,100% { transform:translateY(0) rotate(0); } 50% { transform:translateY(-.55px) rotate(-1.5deg); } }
+@keyframes lake-avatar-limb { 0%,100% { transform:rotate(-2deg); } 50% { transform:rotate(5deg); } }
+@keyframes lake-avatar-water { 0%,100% { transform:scaleX(.88); opacity:.3; } 50% { transform:scaleX(1.06); opacity:.5; } }
+@keyframes lake-avatar-sway { 0%,100% { transform:rotate(-1deg); } 50% { transform:rotate(1.5deg); } }
+@keyframes lake-avatar-ripple { 0%,100% { transform:scale(.98); opacity:.8; } 50% { transform:scale(1.02); opacity:1; } }
+@media (prefers-reduced-motion:reduce) {
+ .super-role-avatar * { animation:none!important; }
+}

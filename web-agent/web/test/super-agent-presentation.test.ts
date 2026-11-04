@@ -2,13 +2,20 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {superTaskPresentation,superWorkerIcon} from '../src/superAgentPresentation';
+import {superTaskPresentation,superWorkerAppearance,superWorkerIcon,superAvatarMotion} from '../src/superAgentPresentation';
 import {PilotWorkspace} from '../src/PilotWorkspace';
 import {SuperTaskInspector} from '../src/SuperTaskInspector';
 import type {SpecialistChannelInfo,SuperTask,SuperWorker,SuperWorkspace,WorkGoal} from '../../shared/contracts';
 
-test('specialist identities share Lake role shapes, with a stable investigation fallback',()=>{
- for(const [roleName,shape] of [['协调专员','coordinator'],['本机状态检查专员','investigator'],['代码修复专员','executor'],['前端依赖审查专员','verifier'],['Go 依赖审查专员','verifier'],['Deployment Specialist','executor'],['Independent Reviewer','verifier'],['自定义专员','investigator']])assert.equal(superWorkerIcon({roleName}),shape);
+test('specialist appearances follow stable RoleID rather than mutable names or tasks',()=>{
+ const before=superWorkerAppearance({roleId:'stable-role',roleName:'数据库专员'});
+ assert.deepEqual(superWorkerAppearance({roleId:'stable-role',roleName:'改名后的发布专员'}),before);
+ const shapes=new Set(Array.from({length:32},(_,i)=>superWorkerIcon({roleId:`role-${i}`,roleName:'专员'})));
+ assert.equal(shapes.size,8);
+ assert.notEqual(superWorkerIcon({roleName:'数据库专员'}),superWorkerIcon({roleName:'发布专员'}));
+ assert.equal(superAvatarMotion(true,'blocked'),'working');
+ for(const state of ['paused','blocked','failed','cancelled'] as const)assert.equal(superAvatarMotion(false,state),'still');
+ assert.equal(superAvatarMotion(false,'completed'),'idle');assert.equal(superAvatarMotion(false),'idle');
 });
 
 test('task success requires acceptance and distinct waiting/failure states stay visible',()=>{
@@ -25,7 +32,7 @@ test('navigation keeps task and status accessible while completed workers have n
  const workspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},workers:[worker]} satisfies SuperWorkspace;
  const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'session',onPilot(){},onWorker(){}}));
  assert.match(html,/aria-current="page" aria-label="依赖审查专员 · 只读检查依赖 · 已验收"/);
- assert.match(html,/data-role="coordinator"/);assert.match(html,/data-role="verifier"/);
+ assert.match(html,/data-role="coordinator"/);assert.ok(html.includes(`data-role="${superWorkerIcon(worker)}"`));
  assert.doesNotMatch(html,/class="session-status-dot"/);
  const pending=renderToStaticMarkup(createElement(PilotWorkspace,{workspace:{...workspace,workers:[{...worker,task:{...task,state:'waiting_user',acceptanceState:'not_evaluated'}}]},error:'',selectedId:null,onPilot(){},onWorker(){}}));
  assert.match(pending,/需确认/);assert.match(pending,/pilot-worker-confirmation/);

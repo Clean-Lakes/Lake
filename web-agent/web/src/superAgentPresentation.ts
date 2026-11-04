@@ -1,14 +1,21 @@
 import type {SuperTask,SuperWorker} from '../../shared/contracts';
 import type {AgentIconName} from './AgentIcon';
 
-// Appearance only: names never select tools, permissions or runtime roles.
-// Keep the shape stable when a worker's task or execution state changes.
-export function superWorkerIcon(worker:Pick<SuperWorker,'roleName'>):AgentIconName {
- const name=worker.roleName.toLowerCase();
- if(/协调|统筹|规划|coordinator|planner/.test(name))return 'coordinator';
- if(/验收|验证|测试|复核|审查|审核|verif|review|test|audit/.test(name))return 'verifier';
- if(/执行|修复|开发|部署|构建|实施|executor|implement|develop|deploy|build|repair/.test(name))return 'executor';
- return 'investigator';
+const specialistFigures=['heron','otter','turtle','kingfisher','dragonfly','duck','fish','lotus'] as const;
+const specialistPalettes=['river','moss','reed','clay'] as const;
+export function superWorkerAppearance(worker:Pick<SuperWorker,'roleName'>&{roleId?:string}) {
+ // RoleID owns the appearance. Names only support older servers without IDs.
+ const identity=worker.roleId||worker.roleName.normalize('NFKC').trim().toLowerCase();
+ let seed=2166136261;
+ for(const char of identity)seed=Math.imul(seed^char.codePointAt(0)!,16777619)>>>0;
+ return {icon:specialistFigures[seed%8],palette:specialistPalettes[(seed>>>8)%4],variant:(seed>>>12)%3,phase:-(seed%7600)};
+}
+export function superWorkerIcon(worker:Pick<SuperWorker,'roleName'>&{roleId?:string}):AgentIconName {return superWorkerAppearance(worker).icon;}
+
+export type AvatarMotion='idle'|'working'|'still';
+export function superAvatarMotion(running:boolean,state?:SuperTask['state']):AvatarMotion {
+ if(running)return 'working';
+ return state&&['paused','blocked','failed','cancelled'].includes(state)?'still':'idle';
 }
 
 const labels:Record<SuperTask['state'],string>={queued:'排队中',running:'执行中',waiting_external:'等待外部结果',waiting_user:'需要你回答',paused:'已暂停',blocked:'待核实',completed:'执行结束',failed:'执行失败',cancelled:'已停止跟进'};

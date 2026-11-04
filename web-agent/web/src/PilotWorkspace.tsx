@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import type {SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
-import {superTaskPresentation} from './superAgentPresentation';
+import {superAvatarMotion,superTaskPresentation} from './superAgentPresentation';
 import {Glyph} from './Icons';
 
 export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
@@ -112,7 +112,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilo
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label} title={label}
      onClick={() => channel && onChannel ? onChannel(channel) : worker && onWorker(worker)}>
-    <SuperRoleAvatar name={name}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{task?.title ?? (channel?.duties || '持续沟通')}</span></span>
+    <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={superAvatarMotion(running,task?.state)}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{task?.title ?? (channel?.duties || '持续沟通')}</span></span>
     <span className="pilot-worker-status">
      {needsConfirmation && <span className="pilot-worker-confirmation">需确认</span>}
      {running ? <span className="pilot-worker-running" role="img" aria-label="执行中"><Glyph name="loader" size={14} className="activity-indicator"/></span> :

@@ -1,0 +1,21 @@
+html,body,#root { height:auto; min-height:100%; overflow:auto; }
+.avatar-preview { padding:28px; max-width:1320px; margin:auto; color:var(--foreground); font:var(--font-size-ui)/1.6 var(--font-sans); }
+.avatar-preview h1 { font-size:22px; font-weight:600; margin:0; }
+.avatar-preview p { margin:8px 0; }
+.avatar-preview>header { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.avatar-preview>header p,.preview-controls>span,.preview-heading>span:last-child { color:var(--text-muted); }
+.preview-controls { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin:24px 0; }
+.preview-controls label { display:flex; align-items:center; gap:10px; white-space:nowrap; }
+.preview-grid { display:grid; grid-template-columns:260px minmax(280px,1fr) 260px; border:1px solid var(--border); border-radius:18px; corner-shape:var(--corner-window); overflow:hidden; background:var(--sidebar); min-height:600px; }
+.preview-grid>.sidebar { position:static; left:auto; top:auto; transform:none; transition:none; width:auto; height:auto; min-width:0; padding:12px; border-right:1px solid var(--border); }
+.preview-conversation { min-width:0; padding:24px; }
+.preview-heading { display:flex; align-items:center; gap:10px; padding:10px 0 24px; flex-wrap:wrap; }
+.preview-message { padding:18px; background:var(--surface-hover); border-radius:18px; corner-shape:var(--corner-window); }
+.preview-message .response-avatar { display:inline-flex; }
+.preview-message .response-identity { display:flex; align-items:center; gap:8px; }
+.preview-gallery { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px 14px; margin-top:40px; }
+.preview-gallery>div { display:flex; align-items:center; gap:9px; min-width:0; }
+.preview-gallery>div>span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.preview-inspector { min-width:0; padding:24px 18px; border-left:1px solid var(--border); }
+@media(max-width:1000px){.preview-grid { grid-template-columns:240px minmax(280px,1fr); }.preview-inspector { grid-column:1/-1; border-top:1px solid var(--border); border-left:0; }}
+@media(max-width:620px){.avatar-preview { padding:16px; }.preview-grid { grid-template-columns:minmax(0,1fr); }.preview-grid>.sidebar { border-right:0; border-bottom:1px solid var(--border); }.preview-conversation { padding:20px; }.preview-controls { gap:10px; }}

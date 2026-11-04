@@ -1,6 +1,6 @@
 import type {SuperTask,SuperWorker,WorkGoal} from '../../shared/contracts';
 import {Glyph} from './Icons';
-import {superTaskPresentation} from './superAgentPresentation';
+import {superAvatarMotion,superTaskPresentation} from './superAgentPresentation';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
 import {useState} from 'react';
 import {api,readableError} from './api';
@@ -14,7 +14,7 @@ export function SuperTaskInspector({task,goal,worker,plan=false,connected=false,
  const accepted=task.state==='completed'&&task.acceptanceState==='pass';
  const owner=worker?.sessionId===task.sessionId&&worker.task.taskId===task.taskId?worker:undefined,state=superTaskPresentation(task);
  return <section className="super-task-inspector" aria-label={plan?'任务计划':'当前任务执行'}>
-  {owner&&<div className="super-task-owner"><SuperRoleAvatar name={owner.roleName}/><strong>{owner.roleName}</strong></div>}
+  {owner&&<div className="super-task-owner"><SuperRoleAvatar name={owner.roleName} roleId={owner.roleId} motion={superAvatarMotion(owner.assignmentState==='active'&&task.state==='running',task.state)}/><strong>{owner.roleName}</strong></div>}
   <div className="super-task-heading">{!owner&&<Glyph name="document" size={17}/>}<strong>{task.title}</strong></div>
   <div className="super-task-state"><span data-tone={state.tone}>{state.label}</span><small>{accepted?'验收通过':task.acceptanceState==='fail'?'验收未通过':'尚未通过目标验收'}</small></div>
   {task.summary&&['paused','blocked','failed'].includes(task.state)&&<p className="inspector-empty">{task.summary}</p>}
