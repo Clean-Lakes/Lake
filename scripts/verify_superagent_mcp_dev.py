@@ -173,8 +173,8 @@ def exercise(binary, home, native):
             worker = workers[0]
             sid = worker['sessionId']
             view = lake.snapshot(sid)
-            if count and title not in retries and worker['task']['state'] == 'paused':
-                proposal = view['superagent']['goal']
+            if count and title not in retries and worker['task']['state'] == 'paused' and worker['assignmentState'] == 'parked':
+                proposal = json.loads(rows('SELECT data FROM native_work_goals WHERE id=? AND session_id=?', (worker['task']['taskId'], sid))[0][0])
                 require(not proposal.get('items') and not requests, 'the original proposal already executed')
                 retries[title] = {'taskId': worker['task']['taskId'], 'sessionId': sid,
                                   'modelRounds': proposal['modelRounds'], 'deadlineAt': proposal['deadlineAt']}
@@ -207,9 +207,12 @@ def exercise(binary, home, native):
                 approved.add(pending['id'])
             if worker['task']['state'] == 'completed' and worker['task']['acceptanceState'] == 'pass':
                 if count:
-                    goal = view['superagent']['goal']
+                    goal = json.loads(rows('SELECT data FROM native_work_goals WHERE id=? AND session_id=?', (worker['task']['taskId'], sid))[0][0])
                     require(goal['modelRounds'] > retries[title]['modelRounds'] and goal['deadlineAt'] == retries[title]['deadlineAt'], 'retry reset task usage or extended its deadline')
                 break
+            if count and worker['task']['state'] == 'paused' and not answered:
+                time.sleep(.1)
+                continue
             require(worker['task']['state'] not in ('failed', 'blocked', 'paused'), 'worker stalled: ' + str(worker['task']))
             time.sleep(.1)
         else:
