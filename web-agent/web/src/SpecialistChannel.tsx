@@ -5,7 +5,6 @@ import {AIPending,AITranscript,Card,TranscriptMessage} from './AIPanel';
 import {AgentQuestion} from './AgentQuestion';
 import {HostKeyTrust} from './HostKeyTrust';
 import {ObjectReferencesProvider} from './AssistantMarkdown';
-import {superTaskPresentation} from './superAgentPresentation';
 import {Glyph} from './Icons';
 
 export function mergeChannelEntries(previous:SpecialistChannelEntry[],incoming:SpecialistChannelEntry[]){
@@ -65,7 +64,6 @@ export function SpecialistChannel({snapshot,connected,onTask,onActivity,onReady}
  return <ObjectReferencesProvider resources={snapshot.resources}><div className="ai-transcript specialist-channel" data-reply-avatar="hidden">
   {!!cursor.current&&<button type="button" className="button secondary" disabled={loading} onClick={()=>void loadOlder()}>{loading?'正在加载…':'加载更早记录'}</button>}
   {error&&<p className="pilot-workspace-error" role="alert">{error}</p>}
-  {page&&<details className="specialist-channel-tasks"><summary>任务记录 · {page.workers.length}</summary>{page.workers.map(worker=><button key={worker.id} type="button" onClick={()=>onTask(worker.sessionId)}><span>{worker.task.title}</span><small>{superTaskPresentation(worker.task).label}</small><Glyph name="next" size={12}/></button>)}</details>}
   {entries.map(entry=><div className="specialist-channel-entry" key={entry.id} data-source-session={entry.sourceSessionId} data-task-id={entry.taskId}>
    {entry.message?<TranscriptMessage message={entry.message} sessionId={entry.sourceSessionId} resources={snapshot.resources} hideIdentity/>:entry.card?<Card card={entry.card}/>:null}
    {entry.taskId&&<button type="button" className="specialist-channel-source" aria-label={`查看任务 ${page?.workers.find(worker=>worker.task.taskId===entry.taskId)?.task.title??entry.taskId} 的执行详情`} onClick={()=>onTask(entry.sourceSessionId)}>执行详情<Glyph name="next" size={11}/></button>}

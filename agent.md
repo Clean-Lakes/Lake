@@ -90,6 +90,8 @@ flowchart TB
 
 ## 6. 详细规格与维护
 
+[Lake Super-agent 完整产品方案（二期规划）](plan/architecture-lake-superagent-2.md)承接本机内核与长期专员，分阶段规划外部 Trigger、订阅直通、全双工验收、独立巡检、云端控制面和设备执行。各阶段按独立验收记录更新交付状态。
+
 - [统一 Super-agent 内核实施方案（待实施）](plan/architecture-lake-superagent-1.md)
 - [三模块对接说明、当前进度、接口与验收矩阵](docs/design/items-security-memory-integration.md)
 - [分阶段实施计划与 12 项待实施任务](plan/feature-items-security-memory-integration-1.md)

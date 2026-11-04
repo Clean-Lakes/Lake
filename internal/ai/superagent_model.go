@@ -29,8 +29,9 @@ var errSuperBinding = errors.New("superagent: invalid host binding")
 var errSuperConflict = errors.New("superagent: revision conflict")
 
 type SuperTaskDetail struct {
-	Task SuperTaskView `json:"task"`
-	Goal WorkGoal      `json:"goal"`
+	RoleID string        `json:"roleId,omitempty"`
+	Task   SuperTaskView `json:"task"`
+	Goal   WorkGoal      `json:"goal"`
 }
 
 func (e *Engine) SuperTaskDetail(sessionID, taskID string) (SuperTaskDetail, error) {
