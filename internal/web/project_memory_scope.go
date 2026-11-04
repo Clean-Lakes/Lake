@@ -1,7 +1,6 @@
 package web
 
 import (
-	"github.com/Clean-Lakes/Lake/internal/ai"
 	"sort"
 	"strings"
 	"time"
@@ -59,24 +58,6 @@ func (s *Store) BumpMemoryResourceGeneration(resource, reason string) {
 	for _, id := range ids {
 		s.exec("INSERT INTO resourceMemoryGenerations(resourceId,generation,updatedAt,reason) VALUES(?,2,?,?) ON CONFLICT(resourceId) DO UPDATE SET generation=generation+1,updatedAt=excluded.updatedAt,reason=excluded.reason", id, now(), reason)
 	}
-}
-
-func (s *Store) memorySnapshotBindingsValid(snapshot ai.MemoryTurnSnapshot) bool {
-	return s.read(func() any {
-		bindings := append([]ai.MemoryResourceBinding{}, snapshot.TargetBindings...)
-		for _, evidence := range snapshot.Evidence {
-			if evidence.Context != nil {
-				bindings = append(bindings, evidence.Context.ResourceBindings...)
-			}
-		}
-		for _, binding := range bindings {
-			row := s.row("SELECT generation FROM resourceMemoryGenerations g JOIN resources ON resources.id=g.resourceId WHERE resourceId=? AND projectId=? AND "+activeResourcesSQL, binding.ResourceID, snapshot.ProjectID)
-			if integer(row["generation"]) != binding.Generation {
-				return false
-			}
-		}
-		return true
-	}).(bool)
 }
 
 func (s *Store) EvaluateMemoryEligibility(row Object, at time.Time) string {

@@ -163,7 +163,6 @@ func (b *Server) editTerminalResourceRoute(w http.ResponseWriter, r *http.Reques
 	}()
 	saved = true
 	if changed {
-		b.invalidateMemoryExtraction(stringOf(resource["projectId"]), "resource_changed")
 		for _, session := range objects(b.Store.Catalog()["sessions"]) {
 			if session["projectId"] == resource["projectId"] {
 				b.resetConnectionFailures(stringOf(session["id"]))

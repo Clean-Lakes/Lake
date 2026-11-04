@@ -9,8 +9,8 @@ import (
 	"github.com/Clean-Lakes/Lake/internal/platform"
 )
 
-// Enable only with the complete V2 API, tools, UI and acceptance suite. Tests
-// exercise migration directly against an isolated Store; no environment bypass.
+// Retired operational-memory feature: keep production disabled. Historical
+// fixtures exercise format/withdrawal compatibility; they do not enable extraction.
 const operationalMemoryV2Ready = false
 
 func (s *Store) checkMemoryV2Compatibility() error {

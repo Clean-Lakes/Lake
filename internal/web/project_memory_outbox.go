@@ -41,14 +41,6 @@ func (s *Store) EnqueueMemoryTurn(snapshot ai.MemoryTurnSnapshot) (err error) {
 		}
 		outcome, status := "pending", "queued"
 		code := ""
-		if s.memoryV2 {
-			if snapshot.SchemaVersion != 2 {
-				outcome, status, code = "skipped", "skipped", "legacy_snapshot"
-			}
-			if integer(s.row("SELECT count(*) AS n FROM projectMemoryJobs j JOIN projectMemoryTurns t ON t.sequence=j.turnSequence WHERE t.projectId=? AND j.status IN ('queued','running','retry_wait','budget_wait')", snapshot.ProjectID)["n"]) >= 100 {
-				outcome, status, code = "skipped", "skipped", "queue_limit"
-			}
-		}
 		if snapshot.Natural != nil {
 			if integer(s.row("SELECT count(*) n FROM projectMemoryJobs j JOIN projectMemoryTurns t ON t.sequence=j.turnSequence WHERE t.projectId=? AND j.status IN ('queued','running','retry_wait')", snapshot.ProjectID)["n"]) >= 100 {
 				fail(429, "Memory outbox retained until queue space is available")
@@ -58,6 +50,9 @@ func (s *Store) EnqueueMemoryTurn(snapshot ai.MemoryTurnSnapshot) (err error) {
 			}
 		} else if integer(settings["epoch"]) != snapshot.Epoch || settings["useEnabled"] != true || settings["extractionEnabled"] != true {
 			outcome, status = "skipped", "skipped"
+		}
+		if snapshot.SchemaVersion == 2 {
+			outcome, status, code = "blocked", "blocked", retiredMemoryV2Code
 		}
 		nowAt := now()
 		snapshotJSON := jsonText(snapshot)

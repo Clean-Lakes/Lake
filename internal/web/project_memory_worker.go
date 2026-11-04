@@ -115,7 +115,7 @@ func (b *Server) processOneMemoryJob() {
 		return
 	}
 	if b.Store.memoryV2 {
-		b.processMemoryV2Job()
+		// Operational V2 extraction is retired; never fall through to V1.
 		return
 	}
 	b.messageMu.Lock()

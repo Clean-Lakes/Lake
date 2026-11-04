@@ -29,7 +29,7 @@ import (
 )
 
 type Options struct {
-	memoryV2ForTest                 bool // Package-private fixture injection; no CLI/environment override.
+	memoryV2ForTest                 bool // Historical-store fixtures only; V2 extraction is retired, no CLI/env override.
 	Home, DataDir, Token, DevOrigin string
 	Port                            int
 	Open                            bool
