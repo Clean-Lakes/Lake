@@ -1,4 +1,5 @@
 import {ReplyIdentity,type AssistantIdentity} from './ReplyIdentity';
+import {SuperRoleAvatar} from './SuperRoleAvatar';
 import type {SpecialistReplyAuthor,SuperTask} from '../../shared/contracts';
 import {pendingUserSupplements} from "./messageQueue";
 import {latestInspectorSelection} from './sessionInspectorModel';
@@ -111,10 +112,19 @@ function ReplyArrival({entryId,arrive,children}:{entryId:string;arrive:boolean;c
 export function TranscriptMessage({message,sessionId,resources,arrive=false,pendingImages,assistantIdentity,onSpecialist,hideIdentity=false}:{hideIdentity?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;pendingImages?:number;message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"];arrive?:boolean}) {
  const [animate]=useState(()=>arrive&&!document.hidden&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
  if(message.role==='system'&&isContextCompactionFailure(message.text||''))return <CompactionNotice message={message.text}/>;
+ const attachmentSession=message.dispatch?message.sessionId:sessionId;
+ const attachments=<>{message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(attachmentSession)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}{!!message.images?.length&&<MessageImages images={message.images}/>}</>;
+ if(message.dispatch){
+  const d=message.dispatch;
+  const recipient=<><SuperRoleAvatar name={d.roleName} size={14}/><span>@{d.roleName}</span></>;
+  return <div className="ai-chat-message ai-role-assistant pilot-dispatch" data-dispatch-id={d.id}>
+   <ReplyIdentity identity={{name:'Pilot',pilot:true}}/>
+   <div className="pilot-dispatch-text">{onSpecialist?<button type="button" className="pilot-dispatch-recipient message-reference-token" aria-label={`与${d.roleName}继续沟通`} onClick={()=>onSpecialist({kind:'specialist',name:d.roleName,workerId:d.workerId,sessionId:d.sessionId,taskId:d.taskId,channelSessionId:d.channelSessionId})}>{recipient}</button>:<span className="message-reference-token">{recipient}</span>}{d.action==='followup'?'，请继续处理：':'，请去做一下：'}{d.instruction}</div>{attachments}
+  </div>;
+ }
  return <div className={`ai-chat-message ai-role-${message.role}${message.images?.length?" has-message-images":""}${animate?" user-message-arrival":""}`}>
           {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <ReplyIdentity identity={assistantIdentity} author={message.author} onSpecialist={onSpecialist} hidden={hideIdentity}/> }{message.text && (message.role === 'assistant' ? <AssistantMarkdown>{planMarkdown(message.text)}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
-          {message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}
-          {!!message.images?.length&&<MessageImages images={message.images}/>}
+          {attachments}
           {pendingImages!==undefined&&<small className="supplement-delivery-status" role="status">补充已发送 · 等待接入{pendingImages>0?` · ${pendingImages} 张图片`:''}</small>}
           {message.role==='user'&&!!message.text&&<UserMessageCopy text={message.text}/>}
         </div>;

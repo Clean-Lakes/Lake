@@ -54,6 +54,7 @@ export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: s
 export type SpecialistReplyAuthor = {kind:'specialist';name:string;workerId:string;sessionId:string;taskId:string;channelSessionId?:string};
 export type Message = {
   author?: SpecialistReplyAuthor;
+  dispatch?: {id:string;sourceMessageId:string;workerId:string;sessionId:string;taskId:string;roleId:string;roleName:string;channelSessionId:string;instruction:string;action:'create'|'followup'};
   id: string;
   sessionId: string;
   role: "user" | "assistant" | "system";

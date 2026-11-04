@@ -30,7 +30,8 @@ export function SpecialistTaskSelect({workers,sessionId,onTask}:{workers:SuperWo
 }
 
 export function SpecialistChannelEntries({entries,resources}:{entries:SpecialistChannelEntry[];resources:SessionSnapshot['resources']}){
- return <>{entries.filter(entry=>!isCompactionFallbackEntry(entry)).map(entry=><div className="specialist-channel-entry" key={entry.id} data-source-session={entry.sourceSessionId} data-task-id={entry.taskId}>
+ const forwarded=new Set(entries.flatMap(entry=>entry.message?.dispatch?[`${entry.sourceSessionId}\0${entry.message.dispatch.sourceMessageId}`]:[]));
+ return <>{entries.filter(entry=>!isCompactionFallbackEntry(entry)&&!(entry.message?.role==='user'&&forwarded.has(`${entry.sourceSessionId}\0${entry.message.id}`))).map(entry=><div className="specialist-channel-entry" key={entry.id} data-source-session={entry.sourceSessionId} data-task-id={entry.taskId}>
   {entry.message?<TranscriptMessage message={entry.message} sessionId={entry.sourceSessionId} resources={resources} hideIdentity/>:entry.card?<Card card={entry.card}/>:null}
  </div>)}</>;
 }
