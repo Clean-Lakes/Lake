@@ -216,6 +216,33 @@ func (b *Server) securityRoute(w http.ResponseWriter, r *http.Request) bool {
 			fail(404, "Unknown security management route")
 		}
 		switch parts[4] {
+		case "mcp-inheritance":
+			if r.Method == "GET" {
+				result, err := b.Engine.SecurityMCPInheritance(r.Context(), projectID)
+				aiFailure(err)
+				servers := b.projectMCPIndex(r.Context(), projectID, &ai.Permissions{})
+				reply(w, 200, struct {
+					ai.SecurityMCPInheritance
+					Servers []ai.ProjectMCPServer `json:"servers"`
+				}{result, append([]ai.ProjectMCPServer{}, servers...)})
+				return true
+			}
+			if r.Method != "PUT" {
+				fail(405, "Method not allowed")
+			}
+			data := body(w, r, 8192)
+			memoryFields(data, "actionId", "expectedRevision", "enabled")
+			enabled, ok := data["enabled"].(bool)
+			if !ok {
+				fail(400, "enabled is required")
+			}
+			action := ai.SecurityPolicyAction{ActorID: "local-user", ActionID: stringOf(data["actionId"]), ProjectID: projectID, ExpectedRevision: int64(memoryRevision(data["expectedRevision"]))}
+			// A project can select its MCP catalog before its first Pilot session.
+			aiFailure(b.Engine.InheritSuperProjectAccess(r.Context(), projectID))
+			result, err := b.Engine.PutSecurityMCPInheritance(r.Context(), action, enabled)
+			aiFailure(err)
+			reply(w, 200, result)
+			return true
 		case "catalog":
 			if r.Method != "GET" {
 				fail(405, "Method not allowed")

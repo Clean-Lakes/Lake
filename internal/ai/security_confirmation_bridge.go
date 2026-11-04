@@ -141,6 +141,9 @@ func securityWorkResourceSummary(goal WorkGoal, c Config) string {
 		names = append(names, redact(name, c))
 	}
 	if len(names) == 0 {
+		if c.superRole == "worker" && len(goal.ResourceBindings) == 0 && goal.Binding.AssetRef == "" {
+			return "本任务未绑定主机或其他资产；MCP 和技能按项目权限使用"
+		}
 		return "执行前仍需核实具体目标"
 	}
 	return strings.Join(names, "、")

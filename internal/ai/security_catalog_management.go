@@ -95,7 +95,7 @@ func (e *Engine) PutSecurityMCPBinding(ctx context.Context, a SecurityMCPBinding
 			} else if err != nil {
 				return err
 			}
-			if row.StoreID != storeID || row.RecoveryEpoch != epoch || row.Revision != a.ExpectedRevision {
+			if row.StoreID != storeID || row.RecoveryEpoch != epoch || row.Revision != a.ExpectedRevision || row.Revision >= inheritedMCPRevisionBase-1 {
 				return security.ErrConflict
 			}
 			before := row.Revision
@@ -298,10 +298,14 @@ type SecurityMCPReconciliation struct {
 }
 
 func (e *Engine) mcpReconciliationTx(ctx context.Context, tx *gorm.DB, projectID, serverID, storeID, epoch string) (out SecurityMCPReconciliation, err error) {
-	var binding securityMCPBindingRow
-	if err = tx.First(&binding, "project_id = ? AND server_id = ? AND store_id = ? AND recovery_epoch = ?", projectID, serverID, storeID, epoch).Error; err != nil {
+	bindings, err := effectiveMCPBindingsTx(tx, projectID, storeID, epoch, serverID, false)
+	if err != nil {
 		return out, err
 	}
+	if serverID == "" || len(bindings) != 1 {
+		return out, gorm.ErrRecordNotFound
+	}
+	binding := bindings[0]
 	var row securityMCPRevisionRow
 	if err = tx.First(&row, "id = ? AND store_id = ? AND recovery_epoch = ?", serverID, storeID, epoch).Error; err != nil {
 		return out, err

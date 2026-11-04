@@ -79,6 +79,7 @@ func (b *Server) startSuperWorkers(domain ai.SuperProject) {
 			b.configure(task.SessionID, b.superWorkerTargetOptions(domain.ProjectID, task.WorkerID, task.SessionID))
 			c, err := b.Engine.ConfigForSession(task.SessionID)
 			if err == nil {
+				c.ProjectMCPServers = b.projectMCPIndex(b.Context, domain.ProjectID, c.Permissions)
 				err = b.Engine.ConfigureTaskWorker(b.Context, domain.ProjectID, task.WorkerID, c)
 			}
 			if err == nil {
