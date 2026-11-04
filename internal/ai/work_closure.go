@@ -148,86 +148,90 @@ func (e *Engine) ConfigureWorkAcceptance(sessionID, goalID, projectID, actor, ac
 	if err != nil {
 		return err
 	}
-	requestHash := hash(js([]any{goalID, projectID, expected, steps}))
 	return e.workMutation(store.DB, func(tx *gorm.DB) error {
-		var previous workContractRevision
-		lookup := tx.First(&previous, "session_id = ? AND action_id = ?", sessionID, actionID)
-		if lookup.Error == nil {
-			if previous.Actor != actor || previous.RequestHash != requestHash {
-				return errWorkConflict
-			}
-			return nil
+		return e.configureWorkAcceptanceTx(tx, sessionID, goalID, projectID, actor, actionID, expected, steps)
+	})
+}
+
+func (e *Engine) configureWorkAcceptanceTx(tx *gorm.DB, sessionID, goalID, projectID, actor, actionID string, expected int64, steps map[string]WorkStepContract) error {
+	requestHash := hash(js([]any{goalID, projectID, expected, steps}))
+	var previous workContractRevision
+	lookup := tx.First(&previous, "session_id = ? AND action_id = ?", sessionID, actionID)
+	if lookup.Error == nil {
+		if previous.Actor != actor || previous.RequestHash != requestHash {
+			return errWorkConflict
 		}
-		if !errors.Is(lookup.Error, gorm.ErrRecordNotFound) {
-			return lookup.Error
-		}
-		row, goal, err := loadWorkGoalTx(tx, sessionID, goalID, expected)
+		return nil
+	}
+	if !errors.Is(lookup.Error, gorm.ErrRecordNotFound) {
+		return lookup.Error
+	}
+	row, goal, err := loadWorkGoalTx(tx, sessionID, goalID, expected)
+	if err != nil {
+		return err
+	}
+	if workTerminal(goal.Status) || len(goal.Items) == 0 || len(steps) != len(goal.Items) {
+		return errors.New("active complete work plan required")
+	}
+	// Contract edits never legitimize a side effect which is still unknown.
+	if unresolved, err := workUnresolvedTx(tx, goalID, ""); err != nil || unresolved {
 		if err != nil {
 			return err
 		}
-		if workTerminal(goal.Status) || len(goal.Items) == 0 || len(steps) != len(goal.Items) {
-			return errors.New("active complete work plan required")
+		return errors.New("unresolved work operations require reconciliation")
+	}
+	contract := WorkClosureContract{ProjectID: projectID, GoalRevision: 1, PlanRevision: 1, Steps: map[string]WorkStepContract{}, ActiveAttempts: map[string]string{}}
+	if goal.closure != nil {
+		if goal.closure.ProjectID != projectID {
+			return errors.New("work project cannot change")
 		}
-		// Contract edits never legitimize a side effect which is still unknown.
-		if unresolved, err := workUnresolvedTx(tx, goalID, ""); err != nil || unresolved {
-			if err != nil {
-				return err
+		contract.GoalRevision = goal.closure.GoalRevision + 1
+		contract.PlanRevision = goal.closure.PlanRevision + 1
+	}
+	required := false
+	for i := range goal.Items {
+		item := &goal.Items[i]
+		step, exists := steps[item.ID]
+		if !exists || security.ValidateCriteria(step.Criteria) != nil {
+			return errors.New("every work step needs valid acceptance criteria")
+		}
+		if step.VerificationMode != "" && step.VerificationMode != "automatic" && step.VerificationMode != "manual" && step.VerificationMode != "tool_results" {
+			return errors.New("unknown acceptance verification mode")
+		}
+		if current, checkErr := currentWorkCriteriaTx(tx, projectID, sessionID, step.Criteria); checkErr != nil || !current {
+			if checkErr != nil {
+				return checkErr
 			}
-			return errors.New("unresolved work operations require reconciliation")
+			return errors.New("acceptance target connection changed or is unavailable")
 		}
-		contract := WorkClosureContract{ProjectID: projectID, GoalRevision: 1, PlanRevision: 1, Steps: map[string]WorkStepContract{}, ActiveAttempts: map[string]string{}}
+		// Operation success alone is insufficient for a business contract.
+		for _, c := range step.Criteria {
+			if c.Method == "operation_succeeded" {
+				return errors.New("acceptance requires observed result criteria")
+			}
+		}
+		step.Revision = 1
 		if goal.closure != nil {
-			if goal.closure.ProjectID != projectID {
-				return errors.New("work project cannot change")
-			}
-			contract.GoalRevision = goal.closure.GoalRevision + 1
-			contract.PlanRevision = goal.closure.PlanRevision + 1
+			step.Revision = goal.closure.Steps[item.ID].Revision + 1
 		}
-		required := false
-		for i := range goal.Items {
-			item := &goal.Items[i]
-			step, exists := steps[item.ID]
-			if !exists || security.ValidateCriteria(step.Criteria) != nil {
-				return errors.New("every work step needs valid acceptance criteria")
-			}
-			if step.VerificationMode != "" && step.VerificationMode != "automatic" && step.VerificationMode != "manual" {
-				return errors.New("unknown acceptance verification mode")
-			}
-			if current, checkErr := currentWorkCriteriaTx(tx, projectID, sessionID, step.Criteria); checkErr != nil || !current {
-				if checkErr != nil {
-					return checkErr
-				}
-				return errors.New("acceptance target connection changed or is unavailable")
-			}
-			// Operation success alone is insufficient for a business contract.
-			for _, c := range step.Criteria {
-				if c.Method == "operation_succeeded" {
-					return errors.New("acceptance requires observed result criteria")
-				}
-			}
-			step.Revision = 1
-			if goal.closure != nil {
-				step.Revision = goal.closure.Steps[item.ID].Revision + 1
-			}
-			contract.Steps[item.ID] = step
-			required = required || step.Required
-			item.Status, item.EvidenceIDs, item.Reason = "pending", nil, "验收契约已更新，需按当前版本核实"
-		}
-		if !required {
-			return errors.New("at least one required work step is required")
-		}
-		goal.closure, goal.ActiveItemID, goal.Status = &contract, "", "running"
-		history := workContractRevision{ID: uid(), SessionID: sessionID, GoalID: goalID, ActionID: actionID, Actor: actor, RequestHash: requestHash, GoalRevision: contract.GoalRevision, PlanRevision: contract.PlanRevision, Data: js(contract), At: time.Now().UTC()}
-		if err = tx.Create(&history).Error; err != nil {
+		contract.Steps[item.ID] = step
+		required = required || step.Required
+		item.Status, item.EvidenceIDs, item.Reason = "pending", nil, "验收契约已更新，需按当前版本核实"
+	}
+	if !required {
+		return errors.New("at least one required work step is required")
+	}
+	goal.closure, goal.ActiveItemID, goal.Status = &contract, "", "running"
+	history := workContractRevision{ID: uid(), SessionID: sessionID, GoalID: goalID, ActionID: actionID, Actor: actor, RequestHash: requestHash, GoalRevision: contract.GoalRevision, PlanRevision: contract.PlanRevision, Data: js(contract), At: time.Now().UTC()}
+	if err = tx.Create(&history).Error; err != nil {
+		return err
+	}
+	if h := e.securityHome(); h != nil {
+		if err = fenceSecurityGoalRevisionTx(tx, h.control.StoreID, h.control.RecoveryEpoch, projectID, sessionID, goalID, contract.GoalRevision, actor, actionID, time.Now().UTC()); err != nil {
 			return err
 		}
-		if h := e.securityHome(); h != nil {
-			if err = fenceSecurityGoalRevisionTx(tx, h.control.StoreID, h.control.RecoveryEpoch, projectID, sessionID, goalID, contract.GoalRevision, actor, actionID, time.Now().UTC()); err != nil {
-				return err
-			}
-		}
-		return writeWorkGoalTx(tx, &row, &goal, false)
-	})
+	}
+	return writeWorkGoalTx(tx, &row, &goal, false)
 }
 
 // BeginWorkAttempt binds a retry to the original versioned step. Its operations
@@ -447,6 +451,15 @@ func (e *Engine) verifyWorkStep(ctx context.Context, sessionID, goalID, stepID s
 		unresolved = unresolved || !current
 		now := time.Now().UTC()
 		state, results := security.VerifyStep(security.StepVerification{Binding: binding, AttemptID: attemptID, Criteria: step.Criteria, Evidence: evidence, Unresolved: unresolved || attemptState != "succeeded", Now: now})
+		if step.VerificationMode == "tool_results" {
+			state, results, err = verifyWorkToolResultsTx(tx, goal, stepID, attempt, operations, nil)
+			if err != nil {
+				return err
+			}
+			if unresolved || attemptState != "succeeded" {
+				state = security.AcceptanceInsufficient
+			}
+		}
 		var refs []string
 		for _, result := range results {
 			refs = append(refs, result.EvidenceIDs...)
@@ -508,7 +521,7 @@ func acceptedStepsTx(tx *gorm.DB, goal WorkGoal) ([]security.GoalStepAcceptance,
 
 func currentWorkCriteriaTx(tx *gorm.DB, projectID, sessionID string, criteria []security.AcceptanceCriterion) (bool, error) {
 	for _, criterion := range criteria {
-		if criterion.Method == "human_verified" && criterion.TargetKind == security.TargetSession {
+		if (criterion.Method == "human_verified" || criterion.Method == "tool_result") && criterion.TargetKind == security.TargetSession {
 			if criterion.Target != sessionID {
 				return false, nil
 			}
