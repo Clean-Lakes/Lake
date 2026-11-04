@@ -5,7 +5,7 @@ import {AIPending,AITranscript,Card,TranscriptMessage} from './AIPanel';
 import {AgentQuestion} from './AgentQuestion';
 import {HostKeyTrust} from './HostKeyTrust';
 import {ObjectReferencesProvider} from './AssistantMarkdown';
-import {superTaskPresentation} from './superAgentPresentation';
+import {conversationActivity,superTaskPresentation} from './superAgentPresentation';
 import {isCompactionFallbackEntry} from './timeline';
 import {AppSelect} from './AppSelect';
 
@@ -81,7 +81,7 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
  };
  const latestOwn=snapshot.messages.at(-1);
  const admitting=latestOwn?.role==='user'&&(!page||!entries.length||Date.parse(latestOwn.createdAt)>Date.parse(entries.at(-1)!.createdAt));
- const activity=page?.routing||admitting||!!page?.queued||page?.active.some(active=>active.ai?.replyStatus==='running')?'running':page?.active.length?'waiting':'idle';
+ const activity=page?.routing||admitting||!!page?.queued||page?.active.some(active=>conversationActivity(active.ai)==='running')?'running':page?.active.length?'waiting':'idle';
  useEffect(()=>{onActivity?.(session,activity)},[session,activity,onActivity]);
  const name=page?.channel.roleName??snapshot.session.title;
  return <ObjectReferencesProvider resources={snapshot.resources}><div className="ai-transcript specialist-channel" data-reply-avatar="hidden">

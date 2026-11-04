@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-04
 last_updated: 2026-11-04
 owner: Lake
-status: 'Completed'
+status: 'In progress'
 tags: [frontend, avatars, svg]
 ---
 
 # Introduction
 
-![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
+![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
 
 将已交付的八种湖生态头像扩展为 100 个命名、可预览及可导出的本地 SVG 图形。不同头像必须具有不同几何，不能只改配色、朝向、标签或编号凑数；继续沿用 RoleID 稳定选择与既有轻动效。
 
@@ -19,6 +19,7 @@ tags: [frontend, avatars, svg]
 - **REQ-001**: `lakeAvatarCatalog.ts` 恰好 100 个唯一 ID、中文名称和不同 SVG 几何；保留原八个形象。
 - **REQ-002**: 从原八个生态族内按 RoleID 选具体图形，各入口一致，改名/换任务/重启不随机更换。扩容首次更新允许呈现同族新图形，之后固定目录顺序。
 - **REQ-003**: 提供 100 图总览和包含 100 个独立 SVG 的文件包，导出与产品使用同一绘图源；保留浅/深色、闲时/工作/静止和减少动态效果。
+- **REQ-004**: 所有头像在真实会话接单、思考、工具执行和流式回复时使用工作动作；侧栏与顶部同步当前来源，等待确认时静止；历史消息不跟随新回复工作。
 - **SEC-001**: 只扩充显示资产，不更改项目资源、角色权限、任务、审批、验收或数据库。
 - **CON-001**: 使用项目原有矢量绘图，不引入外部图片、生成模型或帧定时器。保留 20/22px 正常界面尺寸。
 
@@ -33,6 +34,8 @@ tags: [frontend, avatars, svg]
 | TASK-001 | 在 `web-agent/web/src/lakeAvatarCatalog.ts` 定义八族 100 个形象；`LakeAvatarFigure.tsx`、`AgentIcon.tsx` 共享绘制；`superAgentPresentation.ts` 在族内稳定选择，`specialistAvatars.css` 让新草木沿用轻摇。 | ✅ | 2026-11-04 |
 | TASK-002 | `web-agent/scripts/export-specialist-avatars.tsx` 从相同绘图源生成 100 个 SVG、manifest 和离线总览；导出的离线 `index.html` 使用真实组件绘图总览，验证小尺寸及动效。依赖 TASK-001。 | ✅ | 2026-11-04 |
 | TASK-003 | 更新前端身份/几何回归和说明；完成类型检查、完整前端测试、构建与浏览器视觉检查；在保留现有 Dev 候选的干净集成提交签名安装，记录 SHA 后更新原头像 PR。依赖 TASK-002。 | ✅ | 2026-11-04 |
+
+| TASK-004 | `superAgentPresentation.ts` 统一真实回复活动；`App.tsx`、`PilotWorkspace.tsx`、`SpecialistChannel.tsx`、`ReplyIdentity.tsx`、`ReplyDuration.tsx`、`AIPanel.tsx` 接入会话动效。完成身份隔离、历史/等待回归与浏览器、Lake Dev 验证，更新 PR #175。依赖 TASK-003。 | | |
 
 ## 3. Alternatives
 

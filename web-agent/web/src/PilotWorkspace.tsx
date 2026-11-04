@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import type {SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
-import {superAvatarMotion,superTaskPresentation} from './superAgentPresentation';
+import {conversationAvatarMotion,superAvatarMotion,superTaskPresentation,type ConversationAvatarActivity,type ConversationActivity} from './superAgentPresentation';
 import {Glyph} from './Icons';
 
 export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
@@ -79,10 +79,11 @@ function useCompletionReads(workspace: SuperWorkspace | null, viewedRole: string
 
 type PilotWorkspaceProps = {
  workspace: SuperWorkspace | null; error: string; selectedId: string | null; selectedRoleId?: string;
+ activity?:ConversationAvatarActivity; pilotActivity?:ConversationActivity;
  onPilot: () => void; onWorker: (worker: SuperWorker) => void; onChannel?: (channel: SpecialistChannelInfo) => void;
 };
 
-export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilot,onWorker,onChannel}: PilotWorkspaceProps) {
+export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activity,pilotActivity='idle',onPilot,onWorker,onChannel}: PilotWorkspaceProps) {
  const roots = workspace?.workers?.filter(worker => !worker.parentWorkerId) ?? [];
  const channels = workspace?.channels;
  const viewedRole = selectedId ? selectedRoleId ?? channels?.find(channel => channel.sessionId === selectedId)?.roleId ??
@@ -93,7 +94,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilo
   roots.map(worker => ({channel: undefined, workers: [worker]}));
  return <section className="pilot-workspace" aria-label="Pilot 与专员">
   <button type="button" className={`nav-row pilot-workspace-entry${selectedId===workspace.project.routerSessionId?' active':''}`} aria-current={selectedId===workspace.project.routerSessionId?'page':undefined} title="Pilot · 持续沟通，自动安排工作" onClick={onPilot}>
-   <SuperRoleAvatar pilot/><span className="nav-row-text"><strong>Pilot</strong></span><Glyph name="arrow" size={14}/>
+   <SuperRoleAvatar pilot motion={conversationAvatarMotion(activity?.sessionId===workspace.project.routerSessionId?activity.state:pilotActivity)}/><span className="nav-row-text"><strong>Pilot</strong></span><Glyph name="arrow" size={14}/>
   </button>
   <div className="nav-heading"><span>专员</span><small>{entries.length}</small></div>
   {entries.length ? entries.map(({channel, workers}) => {
@@ -102,6 +103,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilo
    const selected = channel ? channel.roleId === viewedRole : worker?.sessionId === selectedId;
    const needsConfirmation = channel?.needsConfirmation || workers.some(row => row.task.state === 'waiting_user');
    const running = channel ? channel.running === true : task?.state === 'running';
+   const replyActivity=activity&&(activity.sessionId===channel?.sessionId||workers.some(row=>row.sessionId===activity.sessionId))?activity.state:undefined;
    const cursor = channel?.completionCursor ?? '';
    const read = channel ? readMarks.get(readKey(channel)) : undefined;
    const unread = !!channel && !selected && cursor > (channel.seenCompletionCursor ?? '') &&
@@ -112,7 +114,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilo
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label} title={label}
      onClick={() => channel && onChannel ? onChannel(channel) : worker && onWorker(worker)}>
-    <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={superAvatarMotion(running,task?.state)}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{task?.title ?? (channel?.duties || '持续沟通')}</span></span>
+    <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{task?.title ?? (channel?.duties || '持续沟通')}</span></span>
     <span className="pilot-worker-status">
      {needsConfirmation && <span className="pilot-worker-confirmation">需确认</span>}
      {running ? <span className="pilot-worker-running" role="img" aria-label="执行中"><Glyph name="loader" size={14} className="activity-indicator"/></span> :

@@ -1,4 +1,4 @@
-import type {SuperTask,SuperWorker} from '../../shared/contracts';
+import type {AIView,SuperTask,SuperWorker} from '../../shared/contracts';
 import type {AgentIconName} from './AgentIcon';
 import {lakeAvatarGroups} from './lakeAvatarCatalog';
 
@@ -14,6 +14,17 @@ export function superWorkerAppearance(worker:Pick<SuperWorker,'roleName'>&{roleI
 export function superWorkerIcon(worker:Pick<SuperWorker,'roleName'>&{roleId?:string}):AgentIconName {return superWorkerAppearance(worker).icon;}
 
 export type AvatarMotion='idle'|'working'|'still';
+export type ConversationActivity='running'|'waiting'|'idle';
+export type ConversationAvatarActivity={sessionId:string;state:ConversationActivity};
+// Live reply metadata wins over a canonical goal that may still be blocked.
+export function conversationActivity(view?:AIView,fallbackStatus?:string):ConversationActivity {
+ const status=view?.replyStatus||view?.status||fallbackStatus;
+ if(view?.question||view?.pending||view?.pendingApprovals?.length||status==='waiting_approval'||status==='waiting_input')return 'waiting';
+ return status==='running'||!view&&status==='investigating'?'running':'idle';
+}
+export function conversationAvatarMotion(activity:ConversationActivity,state?:SuperTask['state']):AvatarMotion {
+ return activity==='waiting'?'still':superAvatarMotion(activity==='running',state);
+}
 export function superAvatarMotion(running:boolean,state?:SuperTask['state']):AvatarMotion {
  if(running)return 'working';
  return state&&['paused','blocked','failed','cancelled'].includes(state)?'still':'idle';
