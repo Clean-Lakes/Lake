@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-04
 last_updated: 2026-11-04
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [refactor, task-runtime, resources]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 同一业务目标在执行中可能依次发现数据库、主机、集群和 MCP。任务保存目标、步骤、尝试和验收；资源由每次操作从所属项目目录解析。首次计划的资源参考不能成为后续任务的固定资源白名单。
 
@@ -42,7 +42,7 @@ tags: [refactor, task-runtime, resources]
 |------|-------------|-----------|------|
 | TASK-004 | `work_tools.go`、`superagent_catalog.go`、`superagent_worker.go` 移除必填资源及“原计划固定资源”提示，说明任务可以跨项目内资源继续，具体操作必须用准确目标。 | ✅ | 2026-11-04 |
 | TASK-005 | 更新 `work_binding_test.go`、`superagent_worker_test.go`，补充同 GoalID 跨资源、旧 Binding、重复追加、无资源建单、持久化/恢复、权限收窄、原操作身份及 SRE/workflow 边界回归。运行 ai/web 完整测试、相关 race、vet、runtime boundary 和前端检查。 | ✅ | 2026-11-04 |
-| TASK-006 | 更新 `agent.md`、`docs/lake-pilot.md` 及验收记录；在保留当前 Dev 候选的干净本地集成提交上签名构建安装，核对原数据与原生工作台；提交独立 develop PR，不自行合并。 | | |
+| TASK-006 | 更新 `agent.md`、`docs/lake-pilot.md` 及验收记录；在保留当前 Dev 候选的干净本地集成提交上签名构建安装，核对原数据与原生工作台；提交独立 develop PR，不自行合并。 | ✅ | 2026-11-04 |
 
 ## 3. Alternatives
 
@@ -79,3 +79,4 @@ tags: [refactor, task-runtime, resources]
 - [长期专员与项目资源](../docs/lake-pilot.md)
 - [开发规范](../CONTRIBUTING.md)
 - [验证记录](../docs/validation/lake-task-resource-decoupling.md)
+- [独立 PR #173](https://github.com/Clean-Lakes/Lake/pull/173)
