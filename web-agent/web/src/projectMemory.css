@@ -13,5 +13,6 @@
 .project-memory-jobs { margin-top: 16px; }
 .project-memory-jobs p { font-size: var(--font-size-ui); color: var(--text-secondary); }
 .project-memory-pages { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 8px; font-size: var(--font-size-ui); }
+.memory-empty { padding: 22px 10px; color: var(--text-muted); }
 .memory-access-summary { margin: 8px 0; color: var(--text-muted); font-size: 12px; }.memory-access-summary p { display: flex; gap: 12px; flex-wrap: wrap; }.memory-access-summary button { border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; }
 .memory-editor-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
