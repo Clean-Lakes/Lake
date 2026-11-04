@@ -38,31 +38,63 @@ python3 scripts/verify_memory_compatibility_dev.py --report /tmp/lake-memory-ent
 
 第二项使用 loopback 合成模型：跨后端重启的两次普通 HTTP/ADK 任务完成，供应商请求 2，新实验记录/纠错均 0，unknown 身份保留；Web 53 张和 ADK 2 张历史相关表 hash 一致。没有读取真实凭据、修改日常 Dev/正式 Home 或替换桌面安装。
 
-## UI 补验（2026-11-04）与剩余缺口
+## 最终 macOS 客户端补验（2026-11-04）
 
-本次 UI tested SHA 为 `dca9786ea3cdacd005479f02eda51f6bdeb01c35`；与签名后端来源 `8d877ed1` 的 Go、脚本和前端树一致，差异仅为文档。本次未修改产品代码，未重新打包或替换桌面安装。
+**剩余 macOS 界面项已补齐，可将 PR #169 转为正式 PR。** 最终客户端/夹具 tested SHA：`d1a57101457c479f7b062db01bfc8670738bad81`。React 类型检查、586 项前端测试（无跳过）及新构建在焦点修复提交 `d13e3a223784fbc53e4be10c034228ea2a6931ac` 通过；`d13e3a22..d1a57101` 只调整 `_test.go` 夹具的静态文件依赖，产品代码完全相同。
 
-原生桌面验证使用已安装的 `~/Applications/Lake Dev.app`，通过 `--lake-home` 指向权限 0700 的独立临时 Home，并连接当前签名 `bin/lake` 提供的页面。未配置模型，未读取真实凭据，未使用日常 Dev 或正式 Home。使用合成项目“PR169 界面验收”及合成记忆：
+按用户要求，最终验收通过已安装的 `~/Applications/Lake Dev.app` 实际窗口完成，不以浏览器 fixture 作为客户端验收。没有重建/替换桌面安装，没有制作 ZIP/DMG。Lake 用 WKWebView 显示本机 Go 服务提供的 React 页面，仍是桌面应用。
 
-- 从工作区设置进入“记忆”，通过“查看当前项目的事实与经验”打开真实 V1 管理页。
-- 打开条目，编辑正文、保存并重新打开，确认 revision 增加且正文为“发布前检查备份，并记录验收结果。”。
-- 浅色和深色下观察完整编辑器，正文、来源、保存按钮可见，输入框与弹窗圆角、边缘裁切正常；关闭后可再次从设置进入。
-- 退出前恢复原浅色外观；本次原生实例和临时后端均已停止。
+### 隔离与测试后端
 
-证据只含合成数据：[原生浅色编辑](pr169-native-v1-light.jpg)、[原生深色编辑](pr169-native-v1-dark.jpg)。Lake 是桌面应用，macOS 用 WKWebView 加载本机 Go 后端提供的 React 页面；仓库 `web-agent` 是这套界面的源码，浏览器辅助检查不代表另一个已交付的 Web 产品。
+新增 `internal/web/project_memory_native_dev_test.go`，仅在显式给出新 receipt 文件时启动。它使用真实 `web.New`、真实路由和刚构建的 `assets/web/dist`，不替换 fetch、不增加模拟产品路由。Home 始终由 `t.TempDir()` 创建，不能传入日常 Dev/正式目录；不配置模型，日志不输出 runtime token。测试二进制经持久开发身份签名，SHA-256 为 `e303d9f00bee6a04e6392667aff4cc18b3456ed89c340ae2df2d07839c249a97`。
 
-浏览器辅助 fixture：`web-agent/web/test/fixtures/project-memory.html`，直接挂载真实 ProjectMemory wrapper，API 为合成响应，不调用模型或主机。本次重新观察到浅色 V2 停用页只有说明及关闭按钮，关闭按钮初始获得焦点；正反 Tab 后焦点仍在关闭按钮，Escape 后对话框消失。已保存[停用页浅色截图](pr169-v2-light.jpg)，没有上传个人浏览器标签栏。
+V1 场景含合成记忆及一项 blocked 历史任务；V2 场景沿已有 `memoryV2ForTest` 历史库夹具提供旧格式响应。这个参数只存在于测试代码，不增加 CLI/env 放量入口，生产 `operationalMemoryV2Ready` 仍为 false。不能把此夹具解释成当前生产二进制可以打开 V2 Home。
 
-随后浏览器的元素点击和脚本检查反复在派发前超时，无法可靠完成重新打开、焦点返回和后续矩阵，不据此判定产品失败或验收通过。当前仍缺：
+### 客户端验收矩阵
 
-- V2 停用页的深色、390×844 页面视口及实际裁切。原生窗口最小尺寸为 850×600；390×844 是额外的响应式页面检查，不能称为原生窗口尺寸。
-- 停用页完整关闭/重开/Escape/焦点返回循环。
-- V1 列表中的历史 V2 任务停用说明与无重试按钮的视觉检查（对应代码与回归已有，视觉仍待补）。
+| 项目 | 实际操作与结果 | 证据 |
+| --- | --- | --- |
+| V1 编辑与持久化 | 从设置进入，改正文、保存、重开；revision 2 与完整正文一致，HTTP 复核一致 | [最终客户端编辑](pr169-native-v1-final.jpg) |
+| 历史任务停用 | 展开真实任务列表，显示“旧版任务已停用”，没有重试按钮；任务仍为 blocked、attempts 3 | [浅色任务列表](pr169-native-jobs-light.jpg) |
+| V1 深色窄窗 | 记忆条目、任务说明与关闭入口均可见，无横向裁切 | [深色窄窗任务列表](pr169-native-jobs-dark-narrow.jpg) |
+| V2 正常窗口 | 浅/深色均只有停用说明与关闭按钮，无编辑/审核/采用/重试入口 | [浅色](pr169-native-v2-light.jpg)、[深色](pr169-native-v2-dark.jpg) |
+| V2 原生窄窗口 | 手动缩到客户端最小尺寸附近；截图 852×602，文字、连续圆角、关闭按钮和键盘轮廓完整 | [浅色窄窗](pr169-native-v2-light-narrow.jpg)、[深色窄窗](pr169-native-v2-dark-narrow.jpg) |
+| 初始焦点 | 打开后不按 Tab，直接回车可触发关闭 | [客户端按键记录](pr169-native-focus.json) |
+| Tab / Shift+Tab | 正反 Tab 后仍可用回车触发唯一关闭按钮，不进入背后界面 | 同上 |
+| Escape / 鼠标关闭 / 重开 | 关闭后按回车可以打开工作区菜单，证明恢复到仍存在的工作区入口；从设置可再次打开停用页 | 同上 |
+| 点击外侧关闭 | 修复后关闭，再按回车可打开工作区菜单；焦点不再丢到页面 | 同上 |
 
-本次未设置临时浏览器视口，新建测试标签页已关闭，Vite 服务已停止；先前任务遗留视口是否自动清理仍不能确认。复验入口可通过 `corepack pnpm exec vite --config web/vite.config.ts --host 127.0.0.1 --port 6191 --strictPort`（web-agent 目录）启动，使用 fixture 的 `version=1/2/3` 与 `theme=light/dark`。补齐剩余矩阵后再将草稿转正式 PR。
+V1 深色窄窗截图来自 `d0440216`，之后唯一产品差异是 V2 Gate 的外侧点击处理；V1 组件与样式没有变化。其余最终截图与客户端按键记录在 `d1a57101` 验证。长 V1 编辑器在容器内滚动，不把下面的来源和操作压到窗口外；实际保存、重开及正文/版本复核通过。
+
+原生窄窗口遵守客户端 850×600 最小尺寸；之前的 390×844 浏览器页面尺寸不再作为客户端验收要求或通过依据。用户要求转客户端后已停止浏览器验收、恢复临时视口并关闭本次测试标签页。早先浏览器截图仅保留历史记录，不冒充原生证据。
+
+### 本次发现与修复
+
+客户端发现：点击遮罩外侧时，组件清理先恢复工作区焦点，随后浏览器默认 mousedown 行为又将焦点移到页面。`ProjectMemoryGate` 在命中遮罩自身时先 `preventDefault()` 再关闭，保留正常子元素点击。已在客户端复验外侧关闭 → 回车打开工作区；Escape、鼠标关闭、正反 Tab 与重开循环同时通过。回归采用实际客户端按键，不把静态 HTML 渲染测试当成交互证明。
+
+### 复验入口
+
+先构建新页面和签名后端，再单独编译测试夹具：
+
+```sh
+(cd web-agent && corepack pnpm build:web)
+LAKE_REUSE_WEB_ASSETS=1 scripts/build_lake.sh
+go test -c -o /tmp/lake-memory-native.test ./internal/web
+codesign --force --timestamp=none --sign 'Lake Local Development Code Signing' --identifier com.cleanlakes.lake.dev.memory-fixture /tmp/lake-memory-native.test
+codesign --verify --strict /tmp/lake-memory-native.test
+(cd internal/web && /tmp/lake-memory-native.test -test.run '^TestMemoryRetirementNativeDev$' -test.v -test.timeout=30m -memory-native-receipt=/tmp/lake-memory-native-v1.json)
+```
+
+保持夹具终端运行，在另一个终端读取权限 0600 的 receipt 中 `home`，以 `~/Applications/Lake Dev.app/Contents/MacOS/Lake --lake-home <该临时 home>` 启动客户端。V2 使用同一命令加 `-memory-native-v2`，并指定另一个尚不存在的 receipt；先退出前一个客户端，再 Ctrl+C 正常停止前一夹具。测试 Home 会自动清理。普通 `go test` 跳过这一人工 UI 夹具，不能将跳过算成界面通过。
+
+### 最终后端复核与清理
+
+焦点修复后的签名产品二进制来源 `d13e3a22`（clean），SHA-256 `659352fd0208ff2d0b5af217351bb09e5b143c7884425362243e3fecec972081`。再次执行入口与历史兼容两个隔离脚本均通过：[入口报告](pr169-entry-final.json)、[兼容报告](pr169-compat-final.json)。20 个退役请求组合、认证/项目隔离、V1 读写、重启/遗忘与历史 hash/unknown 保留仍正常。报告的 `nativeUIEvaluated:false` 如实表示它们是后端检查，原生界面证据由上方矩阵单独提供。
+
+`go vet ./internal/web` 和 ADK 边界复核通过。未更改 Go 产品逻辑，不重复冒称完整 Go/race 已在新 SHA 运行；原完整 Go/race 证据仍见上文。V1/V2 客户端夹具均正常退出，临时后端通过 Ctrl+C 排空并释放 Home，恢复浅色和正常窗口，未保留模拟项目到日常数据。
 
 ## 状态与回退
 
-本批保持草稿 PR，不能将已完成的原生 V1 编辑验收扩大成完整 UI 矩阵通过。Windows 原生/WebView2/ACL、真实模型质量及旧二进制往返未执行；不触发手动 CI、不打包、不发布。冻结 SQL/版本和未知操作账本不改；V1 与历史读取/遗忘、Security 恢复及必要存储兼容保留。
+本批 macOS 客户端补验通过，转正式 PR；本次不合并。Windows 原生/WebView2/ACL、真实模型质量及旧二进制往返未执行；不触发手动 CI、不打包、不发布。冻结 SQL/版本和未知操作账本不改；V1 与历史读取/遗忘、Security 恢复及必要存储兼容保留。
 
 回退经 develop PR 恢复入口代码，不需要回滚数据库；不能借回退恢复旧队列或重置用量。FM-01 仍需收敛 V2 存储兼容职责并冻结新文件协议，新文件记忆未启用。
