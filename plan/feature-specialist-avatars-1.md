@@ -30,8 +30,8 @@ tags: [frontend, specialists, animation]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | 在 `AgentIcon.tsx` 扩充湖生态 SVG，`superAgentPresentation.ts` 用 RoleID 计算稳定形象组合；`SuperRoleAvatar.tsx` 和独立 CSS 实现可冻结的轻动效。  ✅ | 2026-11-04 |
-| TASK-002 | 在 `PilotWorkspace.tsx`、`App.tsx`、`ReplyIdentity.tsx`、`SuperTaskInspector.tsx` 传递同一 RoleID 和真实运行状态；`superagent_reply_authors.go`、共享 contracts 补充只读 RoleID 投影。依赖 TASK-001。  ✅ | 2026-11-04 |
+| TASK-001 | 在 `AgentIcon.tsx` 扩充湖生态 SVG，`superAgentPresentation.ts` 用 RoleID 计算稳定形象组合；`SuperRoleAvatar.tsx` 和独立 CSS 实现可冻结的轻动效。 | ✅ | 2026-11-04 |
+| TASK-002 | 在 `PilotWorkspace.tsx`、`App.tsx`、`ReplyIdentity.tsx`、`SuperTaskInspector.tsx` 传递同一 RoleID 和真实运行状态；`superagent_reply_authors.go`、共享 contracts 补充只读 RoleID 投影。依赖 TASK-001。 | ✅ | 2026-11-04 |
 | TASK-003 | 补充身份/状态回归和浏览器夹具，验证明暗、窄窗、静止/运行、减少动态效果及隐藏；签名安装保留此前候选的 Lake Dev，记录实际 SHA，提交独立 develop PR。依赖 TASK-002。 | | |
 
 ## 3. Alternatives
