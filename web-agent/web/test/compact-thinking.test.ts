@@ -119,6 +119,28 @@ test("automatic output recovery shows a single notice while previous compaction 
  assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot})).includes("正在缩短回复后重试"));
 });
 
+test('optional context resume fallback stays in diagnostics for live and restored conversations',()=>{
+ const text='历史上下文整理未完成，已保留原上下文继续本轮对话。';
+ for(const status of ['running','completed']){
+  const snapshot={session:{id:'demo'},messages:[{id:'user',role:'user',createdAt:start,text:'继续调查'},{id:'legacy-system',role:'system',createdAt:start,text}],actions:[],ai:{session:'demo',status,turnStartedAt:start,cardsOffset:0,cards:[{id:'fallback',type:'notice',status:'completed',content:text,at:start},{id:'reply',type:'message',status:'completed',content:'这是正常回复。',at:start}]}} as SessionSnapshot;
+  const before=JSON.stringify(snapshot);
+  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+  assert.ok(!html.split('class="turn-execution-details')[0]!.includes(text),'optional maintenance diagnostics must not appear as chat prose');
+  assert.ok(html.includes('这是正常回复。'));
+  assert.ok(html.includes('整理请求诊断')&&html.includes(text),'the disclosure retains the fallback diagnostic');
+  assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot,mode:'activity'})).includes(text),'raw execution records remain readable');
+  assert.equal(JSON.stringify(snapshot),before,'presentation never removes persisted records');
+ }
+});
+
+test('context fallback wording in human or assistant prose is not suppressed',()=>{
+ const text='历史上下文整理未完成，已保留原上下文继续本轮对话。';
+ const snapshot={session:{id:'demo'},messages:[{id:'user',role:'user',createdAt:start,text}],actions:[],ai:{session:'demo',status:'completed',cardsOffset:0,cards:[{id:'reply',type:'message',status:'completed',content:text,at:start},{id:'other-notice',type:'notice',status:'completed',content:'模型回复达到单次输出上限，正在缩短回复后重试；已完成的操作保留',at:start}]}} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.ok(html.split(text).length>=3,'user quotation and actual assistant prose both remain');
+ assert.ok(html.includes('正在缩短回复后重试'));
+});
+
 test('resource summaries reuse the exact catalog resource icon; lookup retains its search identity',()=>{
  for(const kind of ['local','ssh','database','redis','docker','kubernetes','apisix','prometheus','victoriametrics'] as const){
   const html=renderToStaticMarkup(createElement(ThinkingTimeline,{cards:[read],live:true,resourceRow:true,resource:{id:'fixture',name:'fixture',kind}}));
