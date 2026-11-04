@@ -2,17 +2,20 @@
 goal: 为 Lake 建立可追溯、按资源隔离、按需读取且不会把历史现场当成当前事实的运维记忆
 version: "2.1"
 date_created: 2026-10-23
-last_updated: 2026-10-28
+last_updated: 2026-11-04
 owner: Lake
-status: In progress
+status: Superseded
 tags: [feature, architecture, memory, sre, migration]
+superseded_by: feature-agent-file-memory-1.md
 ---
 
 # Introduction
 
+> **2026-11-04：已由 [Agent 本地文件记忆主计划](feature-agent-file-memory-1.md) 替代。** 下文保留历史设计、任务勾选和验收水位，不再作为新开发指令；未完成项不继续按旧实现推进。当前运行代码尚未因本次计划更新而停用。采集/同意/撤回及实际任务依赖按新计划接替，旧整理、条目管理、注入/投影和无依赖 V2 代码分批下线；不为旧体系补齐放量，也不删除必要审计和未知操作账本。
+
 > 2026-10-28：[自然记忆重塑计划](feature-natural-memory-1.md)承接统一记忆体验，扩展用户级偏好、自然长期意图、提交后轻提示/撤销及压缩前增量采集。本计划继续规定项目/资源事实的隔离、时效、来源和 V2 验收；“项目为隔离上界”针对项目事实，不表示允许跨项目共享事实。当前 `operationalMemoryV2Ready=false`，本次文档不改变门控，也不解除尚缺的验收要求。
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Superseded](https://img.shields.io/badge/status-Superseded-lightgrey)
 
 本方案把 Lake 现有项目记忆升级为运维记忆 V2：每次请求只附带与当前问题相关的短索引，模型需要时分页读取专题；一次真实用户轮次完成后，在后台提炼有来源的增量。资源范围、事实发生时间和适用条件必须随记忆一起流转。
 

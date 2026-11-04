@@ -10,6 +10,8 @@ tags: [architecture, superagent, routing, triggers, execution, watchdog]
 
 # Introduction
 
+> **Memory 主线调整（2026-11-04）**：后续以 [Agent 本地文件记忆主计划](feature-agent-file-memory-1.md) 为准。旧正文数据库/Markdown 投影及条目管理路线进入分批替换；下文既有行为和测试是历史/当前代码水位，不表示新方案已实现或旧链路已下线。保留真实来源、同意、项目/角色范围、撤回及运行账本；新 Agent 接管后停止旧写入/注入，Worker 读取能力另行验收。
+
 ![Status: Planned](https://img.shields.io/badge/status-Planned-blue)
 
 用户在 Pilot 的一个项目入口提出多个目标、查看进展、补充要求或叫停任务。Pilot 负责分派和交付，长期专员保存职责，每个独立目标由自己的 Worker 跟进到验收。外部事件可以带回新线索，设备离线期间控制面仍能收件，需要那台设备的步骤等待重连。用户主要关注三件事：哪个结果可以使用，哪项工作需要自己决定，哪项工作确实卡住了。
@@ -36,7 +38,7 @@ tags: [architecture, superagent, routing, triggers, execution, watchdog]
 - **SEC-001**: 来源签名只证明事件来自已登记的连接。外部人类账号须绑定 Lake 主体并在当前项目获准提出请求。CI、机器人、邮件正文及会议邀请默认是观察。若需由机器事件主动发起任务，由用户预设带项目、来源、条件、作业模板、允许操作、期限和撤销版本的规则；匹配时复用已授权作业准入。无适用规则时只能提供上下文或提示人工决定。
 - **SEC-002**: Items 提供当前资源身份与连接版本，Security 决定每次读写、审批和恢复资格。WorkGoal、尝试、操作证据与验收沿任务运行层保持单一权威。RoleID、订阅、云消息及 Watchdog 报告均无授权效力。
 - **CON-001**: 模型与工具循环继续使用官方 ADK。沿用当前项目原资源和权限、并发槽、累计模型轮数、单次上下文/输出限制及任务绝对期限。累计 token 用于计量，保留未知操作和人工验收要求。
-- **CON-002**: Memory 依 bearqy 的现有同意、来源、角色和范围规则工作。历史任务引用与运维 V2 分开处理。一期 TASK-020 至 TASK-022 的采集、整理、来源展示单独联合验收；主线各阶段允许在 Worker 知识视图 unavailable 时运行。
+- **CON-002**: Memory 依 bearqy 的现有同意、来源、角色和范围规则工作。历史任务引用与运维 V2 分开处理。一期 TASK-020 至 TASK-022 的旧 Memory 实施路线由 [新主计划](feature-agent-file-memory-1.md) FM-02 至 FM-04 承接；主线各阶段允许在 Worker 知识视图 unavailable 时运行。
 
 **目标结构。** 下图表示托管模式的最终布局。本地阶段先以同一组协议跑通事件链，设备侧执行边界从第一阶段保留。
 
