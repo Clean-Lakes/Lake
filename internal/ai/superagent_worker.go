@@ -188,6 +188,7 @@ func (e *Engine) runSuperWorkerInput(ctx context.Context, w superWorkerRow, inpu
 		return errSuperBinding
 	}
 	input.Context += superWorkerResourceIndex(c)
+	input.Context += superWorkerRoleContext(w)
 	assignment, err := e.AcquireWorkerSlot(ctx, w.ProjectID, w.ID)
 	if err != nil {
 		return err

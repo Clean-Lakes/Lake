@@ -218,6 +218,7 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	}
 	server.Engine.SetSRERepository(store)
 	server.Engine.SuperInputResolver = server.resolveSuperInput
+	server.Engine.SuperRolesChanged = server.syncSuperSpecialists
 	server.Engine.NaturalMemory = server.naturalRecallProvider
 	server.Engine.ModelActivity = server.memoryForegroundModel
 	server.Engine.MemoryCaptureAllowed = store.MemoryCaptureAllowed

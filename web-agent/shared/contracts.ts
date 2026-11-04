@@ -314,10 +314,10 @@ export type PilotSettings = {enabled:boolean;autoAdvance:boolean;revision:number
 export type SuperTask = {taskId:string;sessionId:string;projectId?:string;title:string;state:'queued'|'running'|'waiting_external'|'waiting_user'|'paused'|'blocked'|'completed'|'failed'|'cancelled';acceptanceState:'not_evaluated'|'insufficient'|'pass'|'fail';revision:number;originRootTurnId:string;deadlineAt:string;reason?:string;summary?:string;resources?:{runtime:string;assetRef?:string;terminalId?:string}[]};
 export type SuperProject = {projectId:string;routerSessionId:string;version:number};
 export type SuperWorker = {id:string;createdAt?:string;roleId:string;roleName:string;sessionId:string;task:SuperTask;assignmentState:string;parentWorkerId?:string};
-export type SpecialistChannelInfo = {id:string;projectId:string;roleId:string;roleName:string;sessionId:string;revision:number;createdAt:string;needsConfirmation?:boolean;running?:boolean;completionCursor?:string;seenCompletionCursor?:string};
+export type SpecialistChannelInfo = {id:string;projectId:string;roleId:string;roleName:string;duties?:string;roleRevision?:number;sessionId:string;revision:number;createdAt:string;needsConfirmation?:boolean;running?:boolean;completionCursor?:string;seenCompletionCursor?:string};
 export type SpecialistChannelEntry = {id:string;sourceSessionId:string;taskId?:string;workerId?:string;createdAt:string;message?:Message;card?:AICard};
 export type SpecialistChannelPage = {channel:SpecialistChannelInfo;entries:SpecialistChannelEntry[];nextCursor:string;workers:SuperWorker[];active:SessionSnapshot[];routing:boolean;queued:number};
-export type SuperWorkspace = {active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[]};
+export type SuperWorkspace = {active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[];cursor?:number};
 export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[];pilot?:PilotSettings};
 
 export type ScheduleExecution={id:string;scheduled_at:string;started_at?:string;finished_at?:string;status:string;error?:string;task_id?:string;session_id?:string};

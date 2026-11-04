@@ -7,23 +7,33 @@ import {Glyph} from './Icons';
 
 export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
  const [workspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
- const generation=useRef(0);
+ const generation=useRef(0),refreshRef=useRef<()=>void>(()=>{});
  useEffect(()=>{
   const current=++generation.current;setWorkspace(null);setError('');
   if(!projectId||!connected)return;
-  const controller=new AbortController();let busy=false,nextActivation=0;
+  const controller=new AbortController();let busy=false,queued=false,nextActivation=0;
   const refresh=async()=>{
-   if(busy)return;busy=true;
+   if(busy){queued=true;return;}busy=true;
    try{
     let next=await api.superWorkspace(projectId,controller.signal);
     if(!next.active&&Date.now()>=nextActivation){nextActivation=Date.now()+15000;await api.ensureSuperWorkspace(projectId,controller.signal);next=await api.superWorkspace(projectId,controller.signal);}
     if(generation.current===current){setWorkspace(next);if(next.active)setError('');}
    }catch(reason){if(!controller.signal.aborted&&generation.current===current)setError(readableError(reason));}
-   finally{busy=false;}
+   finally{busy=false;if(queued&&!controller.signal.aborted){queued=false;void refresh();}}
   };
+  refreshRef.current=()=>void refresh();
   void refresh();const timer=window.setInterval(()=>void refresh(),2500);
-  return()=>{controller.abort();window.clearInterval(timer);};
+  return()=>{controller.abort();refreshRef.current=()=>{};window.clearInterval(timer);};
  },[projectId,connected]);
+ const routerId=workspace?.active?workspace.project.routerSessionId:undefined;
+ const cursor=useRef(0);cursor.current=workspace?.cursor??0;
+ useEffect(()=>{
+  if(!routerId||!connected||typeof EventSource==='undefined')return;
+  const stream=new EventSource(api.eventsUrl(routerId,cursor.current),{withCredentials:true});
+  const refresh=()=>refreshRef.current();
+  stream.addEventListener('specialist',refresh);stream.addEventListener('open',refresh);
+  return()=>stream.close();
+ },[routerId,connected]);
  return {workspace,error};
 }
 
@@ -98,11 +108,11 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilo
     cursor > (read?.requested ?? '') && cursor > (read?.acknowledged ?? '');
    const status = [needsConfirmation && '需确认', running && '执行中', unread && '有已完成任务未读'].filter(Boolean).join(' · ') ||
     (task && task.state !== 'running' ? superTaskPresentation(task).label : task ? '暂无正在执行的任务' : '暂无任务');
-   const label = `${name} · ${task?.title ?? '持续沟通'} · ${status}`;
+   const label = `${name} · ${task?.title ?? (channel?.duties || '持续沟通')} · ${status}`;
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label} title={label}
      onClick={() => channel && onChannel ? onChannel(channel) : worker && onWorker(worker)}>
-    <SuperRoleAvatar name={name}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{task?.title ?? '持续沟通'}</span></span>
+    <SuperRoleAvatar name={name}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{task?.title ?? (channel?.duties || '持续沟通')}</span></span>
     <span className="pilot-worker-status">
      {needsConfirmation && <span className="pilot-worker-confirmation">需确认</span>}
      {running ? <span className="pilot-worker-running" role="img" aria-label="执行中"><Glyph name="loader" size={14} className="activity-indicator"/></span> :

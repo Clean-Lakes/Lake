@@ -82,7 +82,7 @@ func (e *Engine) ReadSuperObject(ctx context.Context, sessionID, kind, id string
 				if err := tx.First(&source, "event_id = ?", r.ID).Error; err != nil {
 					return err
 				}
-				raw = js(map[string]any{"event": r.event(), "preferredRoleID": role.ID, "preferredRoleKey": role.RoleKey, "explicitTaskRef": source.ExplicitTaskID, "notice": "This host channel is a routing preference, not execution permission. New work uses this exact role_key; ordinary messages are not automatically followups."})
+				raw = js(map[string]any{"event": r.event(), "preferredRoleID": role.ID, "preferredRoleKey": role.RoleKey, "explicitTaskRef": source.ExplicitTaskID, "notice": "This host channel is a routing preference, not execution permission. New work uses this exact preferredRoleID; ordinary messages are not automatically followups."})
 			} else {
 				raw = js(r.event())
 			}

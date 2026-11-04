@@ -37,3 +37,11 @@ test('a pending confirmation on the channel remains visible beside a newer compl
  workspace.channels![0].needsConfirmation=false;
  assert.doesNotMatch(renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:null,onPilot(){},onWorker(){}})),/pilot-worker-confirmation/);
 });
+
+test('a specialist created before any task is navigable with its persistent duties',()=>{
+ const workspace:SuperWorkspace={active:true,project:{projectId:'p',routerSessionId:'pilot',version:1},channels:[{id:'channel-ops',projectId:'p',roleId:'stable-ops',roleName:'可靠性专员',duties:'只读核实主机证据',roleRevision:2,sessionId:'role-session',revision:1,createdAt:''}],workers:[]};
+ const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'role-session',onPilot(){},onWorker(){},onChannel(){}}));
+ assert.equal((html.match(/class="nav-row pilot-worker-row/g)??[]).length,1);
+ assert.match(html,/<small>1<\/small>/);assert.match(html,/可靠性专员/);assert.match(html,/只读核实主机证据/);assert.match(html,/aria-current="page"/);
+ assert.doesNotMatch(html,/session-status-dot|已验收|正在执行/);
+});

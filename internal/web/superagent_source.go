@@ -213,6 +213,10 @@ func (s *Store) ensureSuperSession(project, id, title, kind string) Object {
 			if row["projectId"] != project || row["kind"] != kind {
 				fail(409, "专员身份冲突")
 			}
+			if kind == "role" && s.session(id)["title"] != title {
+				s.exec("UPDATE sessions SET title=?,updatedAt=? WHERE id=?", title, now(), id)
+				s.event(id, "session")
+			}
 			return s.session(id)
 		}
 		if s.row("SELECT id FROM sessions WHERE id=?", id) != nil {
