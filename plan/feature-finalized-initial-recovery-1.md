@@ -4,13 +4,13 @@ version: 1.0
 date_created: 2026-11-04
 last_updated: 2026-11-04
 owner: Lake maintainers
-status: In progress
+status: Completed
 tags: [security, recovery, compatibility]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 The affected Home is initialized, has a valid format-2 finalization receipt, retains all 133 original operations including five unknown outcomes, and contains only the foundation Security schema. Version 0.3.26 restores read-only navigation but provides no supported operation for resuming this already-finalized initial adoption. The original gate-closing failure was not logged; the banner alone does not establish that cause. This plan adds a narrow host maintenance operation; it does not add a general gate-open API or claim that a historical unknown outcome has been reconciled.
 
@@ -53,8 +53,10 @@ The affected Home is initialized, has a valid format-2 finalization receipt, ret
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-006 | Build the signed CLI and validate a private representative Home through recovery, normal Web/Engine startup, restart, Pilot activation and loopback-model conversation. Keep production data unchanged. Depends on TASK-005. | ✅ | 2026-11-04 |
-| TASK-007 | Create the develop PR with tested SHA and concrete live read-only preview. Obtain explicit merge and production-maintenance/restart authorization before applying its digest. Depends on TASK-006. | | |
-| TASK-008 | Under authorized offline ownership verify the existing current paired checkpoint, apply the exact reviewed digest, reopen the installed stable client and verify normal bootstrap, Pilot, history/resources and preservation of all five unknown operations. Record remaining limitations accurately. Depends on TASK-007. | | |
+| TASK-007 | Create the develop PR with tested SHA and concrete live read-only preview. Obtain explicit merge and production-maintenance/restart authorization before applying its digest. Depends on TASK-006. | ✅ | 2026-11-04 |
+| TASK-008 | Under authorized offline ownership verify the existing current paired checkpoint, apply the exact reviewed digest, reopen the installed stable client and verify normal bootstrap, Pilot, history/resources and preservation of all five unknown operations. Record remaining limitations accurately. Depends on TASK-007. | ✅ | 2026-11-04 |
+
+PR #153 was explicitly authorized and merged at `26a60dce44cf8c491be99e336c8704b647a0c4bf`; its tree matches tested source `5a1f26894d64c160f4b8e64e2479ee8e132fa712`. After separately authorized maintenance and restart, installed stable 0.3.26 loaded normal Pilot, 134 resources and nine legacy snapshots; the configured model actually replied through the native client. All 133 original operation rows remained unchanged, including five unknown outcomes; no resource command or new task was executed. The paired checkpoint and private control audit were retained. Actual restored/enforced Homes remain outside this command's profile.
 
 ## 3. Alternatives
 
