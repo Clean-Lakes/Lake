@@ -38,23 +38,31 @@ python3 scripts/verify_memory_compatibility_dev.py --report /tmp/lake-memory-ent
 
 第二项使用 loopback 合成模型：跨后端重启的两次普通 HTTP/ADK 任务完成，供应商请求 2，新实验记录/纠错均 0，unknown 身份保留；Web 53 张和 ADK 2 张历史相关表 hash 一致。没有读取真实凭据、修改日常 Dev/正式 Home 或替换桌面安装。
 
-## UI 已观察与未完成矩阵
+## UI 补验（2026-11-04）与剩余缺口
 
-纯本地合成 fixture：`web-agent/web/test/fixtures/project-memory.html`，不调用模型或主机。实现冻结前已看到浅色停用页：只有说明和关闭按钮，初始焦点及 Tab 焦点均在关闭按钮。它不能代替最终 head 的完整 UI 验收。
+本次 UI tested SHA 为 `dca9786ea3cdacd005479f02eda51f6bdeb01c35`；与签名后端来源 `8d877ed1` 的 Go、脚本和前端树一致，差异仅为文档。本次未修改产品代码，未重新打包或替换桌面安装。
 
-浏览器自动化多次超时、连接断开，以下仍未完成：
+原生桌面验证使用已安装的 `~/Applications/Lake Dev.app`，通过 `--lake-home` 指向权限 0700 的独立临时 Home，并连接当前签名 `bin/lake` 提供的页面。未配置模型，未读取真实凭据，未使用日常 Dev 或正式 Home。使用合成项目“PR169 界面验收”及合成记忆：
 
-- 深色与 390×844 窄窗口、实际角落和文字裁切；只设置视口或看到 URL 不算通过。
-- 完整关闭/重开/Escape/焦点返回循环。
-- V1 界面仍可编辑，旧 V2 任务只显示停用说明且没有重试按钮。
-- 原生 Lake Dev 窗口验证；浏览器 fixture 不冒充原生验收。
+- 从工作区设置进入“记忆”，通过“查看当前项目的事实与经验”打开真实 V1 管理页。
+- 打开条目，编辑正文、保存并重新打开，确认 revision 增加且正文为“发布前检查备份，并记录验收结果。”。
+- 浅色和深色下观察完整编辑器，正文、来源、保存按钮可见，输入框与弹窗圆角、边缘裁切正常；关闭后可再次从设置进入。
+- 退出前恢复原浅色外观；本次原生实例和临时后端均已停止。
 
-曾设置临时视口；连接断开后 reset/close 被拒绝，独立测试标签页未能确认自动清理。该任务拥有的 Vite 服务已核对 cwd 后停止。未提交包含个人标签栏的整窗截图，也未上传截图；后续补验时仅保存测试页截图到本目录。
+证据只含合成数据：[原生浅色编辑](pr169-native-v1-light.jpg)、[原生深色编辑](pr169-native-v1-dark.jpg)。Lake 是桌面应用，macOS 用 WKWebView 加载本机 Go 后端提供的 React 页面；仓库 `web-agent` 是这套界面的源码，浏览器辅助检查不代表另一个已交付的 Web 产品。
 
-复验入口可通过 `corepack pnpm exec vite --config web/vite.config.ts --host 127.0.0.1 --port 6191 --strictPort`（web-agent 目录）启动，使用 fixture 的 `version=1/2/3` 与 `theme=light/dark`。补齐上述矩阵及截图后再将草稿转正式 PR。
+浏览器辅助 fixture：`web-agent/web/test/fixtures/project-memory.html`，直接挂载真实 ProjectMemory wrapper，API 为合成响应，不调用模型或主机。本次重新观察到浅色 V2 停用页只有说明及关闭按钮，关闭按钮初始获得焦点；正反 Tab 后焦点仍在关闭按钮，Escape 后对话框消失。已保存[停用页浅色截图](pr169-v2-light.jpg)，没有上传个人浏览器标签栏。
+
+随后浏览器的元素点击和脚本检查反复在派发前超时，无法可靠完成重新打开、焦点返回和后续矩阵，不据此判定产品失败或验收通过。当前仍缺：
+
+- V2 停用页的深色、390×844 页面视口及实际裁切。原生窗口最小尺寸为 850×600；390×844 是额外的响应式页面检查，不能称为原生窗口尺寸。
+- 停用页完整关闭/重开/Escape/焦点返回循环。
+- V1 列表中的历史 V2 任务停用说明与无重试按钮的视觉检查（对应代码与回归已有，视觉仍待补）。
+
+本次未设置临时浏览器视口，新建测试标签页已关闭，Vite 服务已停止；先前任务遗留视口是否自动清理仍不能确认。复验入口可通过 `corepack pnpm exec vite --config web/vite.config.ts --host 127.0.0.1 --port 6191 --strictPort`（web-agent 目录）启动，使用 fixture 的 `version=1/2/3` 与 `theme=light/dark`。补齐剩余矩阵后再将草稿转正式 PR。
 
 ## 状态与回退
 
-本批保持草稿 PR。Windows 原生/WebView2/ACL、真实模型质量及旧二进制往返未执行；不触发手动 CI、不打包、不发布。冻结 SQL/版本和未知操作账本不改；V1 与历史读取/遗忘、Security 恢复及必要存储兼容保留。
+本批保持草稿 PR，不能将已完成的原生 V1 编辑验收扩大成完整 UI 矩阵通过。Windows 原生/WebView2/ACL、真实模型质量及旧二进制往返未执行；不触发手动 CI、不打包、不发布。冻结 SQL/版本和未知操作账本不改；V1 与历史读取/遗忘、Security 恢复及必要存储兼容保留。
 
 回退经 develop PR 恢复入口代码，不需要回滚数据库；不能借回退恢复旧队列或重置用量。FM-01 仍需收敛 V2 存储兼容职责并冻结新文件协议，新文件记忆未启用。
