@@ -132,7 +132,12 @@
 @keyframes lake-avatar-greet-done { from,to { opacity:1; } }
 @keyframes lake-avatar-blink { 0%,43%,47%,100% { transform:scaleY(1); } 45% { transform:scaleY(.12); } }
 .super-role-avatar[data-role=coordinator][data-motion=idle] ellipse,.super-role-avatar[data-role=coordinator][data-motion=working] ellipse { transform-box:fill-box; transform-origin:center; animation:lake-avatar-ripple 6s ease-in-out var(--avatar-phase) infinite; }
-.super-role-avatar[data-role=coordinator][data-motion=working] ellipse { animation-duration:2.4s; }
+.super-role-avatar[data-role=coordinator][data-motion=working] ellipse { animation:lake-pilot-working-ring 2.1s ease-out var(--avatar-phase) infinite; }
+/* Outward ripples read clearly at the actual 20px island size. */
+.super-role-avatar[data-role=coordinator][data-motion=working] ellipse:nth-child(2) { animation-delay:calc(var(--avatar-phase) - .7s); }
+.super-role-avatar[data-role=coordinator][data-motion=working] ellipse:nth-child(3) { animation:lake-pilot-working-center 2.1s ease-in-out var(--avatar-phase) infinite; }
+@keyframes lake-pilot-working-ring { 0% { transform:scale(.64); opacity:.15; } 28% { opacity:1; } 100% { transform:scale(1.03); opacity:.2; } }
+@keyframes lake-pilot-working-center { 0%,100% { transform:scale(.78); opacity:.6; } 50% { transform:scale(1.22); opacity:1; } }
 .super-role-avatar[data-role=coordinator].is-greeting ellipse { animation:lake-pilot-greet 650ms ease-out; }
 @keyframes lake-avatar-ripple { 0%,100% { transform:scale(.98); opacity:.8; } 50% { transform:scale(1.02); opacity:1; } }
 @keyframes lake-pilot-greet { 0%,100% { transform:scale(1); } 35% { transform:scale(1.12); } 70% { transform:scale(.98); } }

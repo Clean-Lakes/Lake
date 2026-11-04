@@ -38,7 +38,7 @@ import {workGoalPresentation} from './workGoalPresentation';
 import {ComposerMentions,useMentionExtensions,mentionOptionId} from "./ComposerMentions";
 import {LakePilotControl} from './LakePilotControl';
 import {PilotHeaderState} from './PilotHeaderState';
-import {pilotIslandAnimating,pilotIslandModel} from './pilotIslandModel';
+import {pilotIslandModel} from './pilotIslandModel';
 import './pilotIsland.css';
 import './pilot.css';
 import {appendResourceMention,composerMessage,composerResourceIds,selectComposerMention,filterMentions,mentionOptions,nextMentionCategory,type MentionCategory,type MentionOption} from "./composerMentionState";
@@ -1433,7 +1433,7 @@ function AppContent() {
   const navigationProjects = projectList.filter(project => project.id === sidebarProject?.id && (!selectedTag || catalog.tags?.some(tag=>tag.id===selectedTag&&tag.projectId===project.id)));
   const itemList = activeSnapshot ? timelineItems(activeSnapshot) : [];
   const sharedIsland=sessionHeader&&wideWorkbench;
-  const headerSweep=sessionHeader&&<HeaderSweep key={`sweep-${selectedSession.id}`} active={!!activeSnapshot&&currentSessionStatus === "investigating"&&(headerPilot?pilotIslandAnimating(headerPilot):activeSnapshot?.ai?activeSnapshot.ai.status==='running'&&!activeSnapshot.ai.question:true)}/>;
+  const headerSweep=sessionHeader&&<HeaderSweep key={`sweep-${selectedSession.id}`} active={avatarActivity?.state==='running'}/>;
   const workspaceHeading=<header className={`workspace-header${specialistMenu?' has-specialist-tasks':''}${headerPilot||headerPilotMode ? ' has-pilot-island' : ''}${headerPilotMode&&!headerPilot?' has-pilot-mode':''}`}>
         {sessionHeader && <span className="workspace-header-glass" aria-hidden="true"/>}
         {!sharedIsland&&headerSweep}

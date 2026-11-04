@@ -88,7 +88,7 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
   {!!cursor.current&&<button type="button" className="button secondary" disabled={loading} onClick={()=>void loadOlder()}>{loading?'正在加载…':'加载更早记录'}</button>}
   {error&&<p className="pilot-workspace-error" role="alert">{error}</p>}
   <SpecialistChannelEntries entries={entries} resources={snapshot.resources}/>
-  {(page?.routing||admitting||!!page?.queued)&&<div className="reply-duration turn-status is-live is-thinking without-avatar" role="status" aria-label="专员正在处理消息"><span className="turn-thinking-bubble"><span className="turn-thinking-dots" aria-hidden="true"><i/><i/><i/></span><span className="visually-hidden">正在安排工作</span></span></div>}
+  {(page?.routing||admitting||!!page?.queued)&&<div className="reply-duration turn-status is-live is-thinking without-avatar" role="status" aria-label="专员正在处理消息"><span className="turn-thinking-bubble"><ThinkingBuoys/><span className="visually-hidden">正在安排工作</span></span></div>}
   {page?.active.map(active=>{
    const task=active.superagent?.task;
    const cards=active.ai?.cards.filter(card=>!!active.ai?.turnStartedAt&&card.at>=active.ai.turnStartedAt)??[];
@@ -100,3 +100,4 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
   })}
  </div></ObjectReferencesProvider>;
 }
+import {ThinkingBuoys} from './ThinkingBuoys';
