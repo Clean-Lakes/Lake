@@ -1,5 +1,7 @@
 # Lake Items × Lake Security × Lake Memory 对接说明
 
+> **Memory 主线调整（2026-11-04）**：后续以 [Agent 本地文件记忆主计划](../../plan/feature-agent-file-memory-1.md) 为准。旧正文数据库/Markdown 投影及条目管理路线进入分批替换；下文既有行为和测试是历史/当前代码水位，不表示新方案已实现或旧链路已下线。保留真实来源、同意、项目/角色范围、撤回及运行账本；新 Agent 接管后停止旧写入/注入，Worker 读取能力另行验收。
+
 日期：2026-11-01。面向 bearqy（Lake Memory）及 Items、Security、任务运行层实现者。状态：**协作设计，待各模块确认；本文件不表示新增接口已经上线**。
 
 核对基线：`origin/develop@23363614c2ba8792077533878d73c98dee66ae5f`；正式版 `v0.3.24@b921d078044ef5cc0616970a4726fc15039e413e`。两者文件树相同。本轮仅交付文档，不修改运行代码、数据库、开关或产品 UI。

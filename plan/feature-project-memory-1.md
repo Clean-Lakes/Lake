@@ -2,15 +2,18 @@
 goal: 为 Lake Go 工作台实现项目范围的跨会话记忆、索引加载和可恢复的后台自动提取
 version: 1.1
 date_created: 2026-10-13
-last_updated: 2026-10-13
+last_updated: 2026-11-04
 owner: Lake
-status: In Progress
+status: Superseded
 tags: [feature, memory, project, persistence, go, zcode]
+superseded_by: feature-agent-file-memory-1.md
 ---
 
 # Introduction
 
-![Status: In Progress](https://img.shields.io/badge/status-In_Progress-yellow)
+> **2026-11-04：已由 [Agent 本地文件记忆主计划](feature-agent-file-memory-1.md) 替代。** 下文保留历史设计、任务勾选和验收水位，不再作为新开发指令；未完成项不继续按旧实现推进。当前运行代码尚未因本次计划更新而停用。采集/同意/撤回及实际任务依赖按新计划接替，旧整理、条目管理、注入/投影和无依赖 V2 代码分批下线；不为旧体系补齐放量，也不删除必要审计和未知操作账本。
+
+![Status: Superseded](https://img.shields.io/badge/status-Superseded-lightgrey)
 
 参考 ZCode 的项目 Markdown 记忆、`MEMORY.md` 索引和成功轮次后的后台提取，为 Lake 当前 Go 后端增加跨会话记忆。实现后，同项目普通聊天和资源／终端 AI 可以复用用户反馈、项目约束和外部参考；后台提取支持中文输入，并在后端重启后恢复尚未完成的工作。
 

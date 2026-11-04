@@ -1,6 +1,6 @@
 # Lake Super-agent 内核与三模块协作约定
 
-更新日期：2026-11-03。本文记录用户确认的架构方向，供后续 Agent 和模块维护者共同遵循。它不代表所有能力已经实现，也不改变 `AGENTS.md`、`CONTRIBUTING.md` 和 `docs/development-workflow.md` 中的开发、合并、发布与数据隔离要求。
+更新日期：2026-11-04。本文记录用户确认的架构方向，供后续 Agent 和模块维护者共同遵循。它不代表所有能力已经实现，也不改变 `AGENTS.md`、`CONTRIBUTING.md` 和 `docs/development-workflow.md` 中的开发、合并、发布与数据隔离要求。
 
 ## 0. 统一 Super-agent 内核方向（实施中）
 
@@ -48,15 +48,15 @@ flowchart TB
 
 连线是模块协作关系，不是执行步骤。“统一对接约定”是宿主内类型和适配接口，不是新增服务或数据库。
 
-## 2. Memory 以 bearqy 设计为主
+## 2. Memory 新主线：Agent 自主管理本地文件
 
-- 延续 bearqy 已交付的 N1–N5：来源与同意、自然偏好形成、空闲整理、压缩前增量捕获、按范围召回。保留现有 SQLite、outbox、worker、前台抢占、版本重验、撤销及遗忘机制；以增量适配完成三模块协作。
-- Memory 内部的知识模型、来源资格、时间语义、归并/冲突、检索、正文版本及整理调度由 bearqy 维护；跨模块接口和职责调整需要与其方案对齐。本约定不授权向其本地分支写代码或替其启用功能。
-- 保留“以资产组织知识”的方向。资产注册、创建、绑定、合并、拆分和真实入口配置归 Items；Memory 保存资产引用、知识关联、历史与观测断言。资产型 Memory 草稿中的相应管理设计按此边界调整，不在 Memory 内再建立竞争的资产事实源。
-- Items 保存已登记/确认的拓扑；Memory 可以保存带来源、观测时间和可信状态的关系断言。一次历史观测或推断不会直接覆盖当前登记关系，核实后通过 Items 的正常变更入口更新。
-- SQLite 保存记忆正式记录；Markdown、索引和知识卡是可重建投影。投影编辑不自动变成可信来源或反向改写连接配置。
-- 自动积累与使用已有记忆各自独立，沿用现有同意与开关语义。取得一次任务授权不等于同意长期采集、无限后台模型调用或未来资产操作。
-- 当前已合入的自然偏好仍按现有实验、角色和范围限制工作；运维 V2 保持实际门控和独立启用验收。不能把设计文档、测试夹具或 N5 完成当作完整资产记忆已经上线。
+- 当前唯一开发主计划为 [Agent 本地文件记忆](plan/feature-agent-file-memory-1.md)。旧项目记忆、运维 V2、自然记忆和三模块旧对接任务路线已替代；历史交付事实与必要审计保留，未完成项不再按旧内容继续开发。
+- 目标采用两阶段后台 ADK Agent：会话/任务来源提取 → SQLite 中间结果与运行状态 → 文件整理 Agent → 本地摘要、手册、来源总结及方法资料。程序安排资格、调度和恢复，模型自主组织知识；用户控制开关、查看、纠正和删除，不建设逐条审核、采用和晋升平台。
+- 当前源码仍是 SQLite 记忆正文与 Markdown 投影，新流水线尚未实现。目标中 SQLite 保留同意、提取结果、outbox、租约、用量和抑制状态；文件保存 Agent 整理的成品。迁移不能让两套成品长期并行写入或重复注入，也不要求所有历史字段都改成文件资产。
+- N1–N5 的真实来源、独立同意、压缩前捕获、前台优先、撤回/遗忘和幂等可复用；旧条目管理、内容整理算法、注入/投影与 UI/API 在新链路接管后下线。无实际依赖的 V2 代码分批删除，不翻转旧门控来完成新功能。
+- Memory 内部设计和实现继续由 bearqy 维护。Items 管理资产身份、连接与登记关系；Security 管理执行资格；Memory 只保存知识与原记录引用，不维护另一套资产注册表或任务完成权威。历史观测不覆盖当前拓扑，文件和摘要不能签发权限。
+- Pilot 首批接入分层读取；Worker 在任务/资源范围视图单独验收前保持 unavailable。原任务历史证据读取、ADK、普通 Skills、会话压缩、操作/审批/验收/unknown 账本不随旧 Memory 一并退役。
+- 不自动重新扫描开启前历史，不复活退役策略资产、在线纠错或自动可执行 Skill；本期不引入向量模型、外部基础设施或端云记忆同步。新计划合入不代表运行开关已改变或新角色已启用。
 
 ## 3. 三组必须对齐的接口
 
@@ -84,11 +84,9 @@ flowchart TB
 
 ## 5. 实施顺序
 
-1. **先接已有能力**：以 bearqy 的 N1–N5 和现有项目记忆为基础，接宿主上下文、当前资源引用、gate、项目范围与同意检查；保持现有角色边界。不能用无条件 allow 桩冒充尚未完成的 Security。
-2. **再接资产中心**：Items 交付稳定身份、通用连接版本和持久变更事件后，Memory 增量接入资产绑定、关系范围、缓存失效及迟到提交拒绝。
-3. **最后接任务闭环**：任务运行层及 Security 实际交付目标/尝试/证据/验收和任务授权后，Memory 引用这些真实记录，完成经验来源与安全联动；运维 V2 另行验收、单独提出启用变更。
+按 [新主计划 FM 阶段](plan/feature-agent-file-memory-1.md#3-分批实施) 推进：先审计 caller 和存储/恢复契约，再交付后台提取与文件整理，然后接通 Pilot 读取、迁移旧数据并停止旧写入/注入，最后接 Worker 范围读取、质量验收及删除无依赖代码。
 
-每批都有相应的兼容、范围、撤回、版本变化、后台迟到和恢复测试，并记录 tested SHA。文档修改不能宣称运行验收通过；未完成的依赖保持待实施，不默认开启功能。
+三模块的资产身份、权限、来源、时间和撤回边界继续有效；旧 12 项条目管理对接任务不再是排期前提。Super-agent 外部事件主线可以在 Worker 知识视图 unavailable 时继续。每批记录准确 tested SHA 与平台缺口，经 develop PR 交付，不将文档替代视作运行下线或验收完成。
 
 ## 6. 详细规格与维护
 
@@ -96,9 +94,10 @@ flowchart TB
 
 - [统一 Super-agent 内核实施方案（待实施）](plan/architecture-lake-superagent-1.md)
 - [三模块对接说明、当前进度、接口与验收矩阵](docs/design/items-security-memory-integration.md)
-- [分阶段实施计划与 12 项待实施任务](plan/feature-items-security-memory-integration-1.md)
-- [Memory 当前使用与兼容说明](docs/lake-memory.md)及[自然记忆 N1–N5 计划](plan/feature-natural-memory-1.md)
+- [Agent 本地文件记忆主计划（当前）](plan/feature-agent-file-memory-1.md)
+- [三模块旧实施路线（已替代，仅历史参考）](plan/feature-items-security-memory-integration-1.md)
+- [Memory 当前使用与兼容说明](docs/lake-memory.md)及[自然记忆 N1–N5 历史交付](plan/feature-natural-memory-1.md)
 - [Security 设计](docs/design/lake-security-v1.md)及[实施计划](plan/feature-lake-security-1.md)
-- [运维 V2 的门控与未完成验收](docs/validation/lake-operational-memory-v2.md)
+- [旧运维 V2 门控与历史验收](docs/validation/lake-operational-memory-v2.md)
 
 变更前重新核对实际代码、已合入 PR 与维护者当前方案。发现旧草稿或历史阶段记录与本文职责约定不一致时，明确记录差异并更新对应规格，不把未交付能力写成现状；用户后续明确调整架构时同步维护本文件与详细说明。

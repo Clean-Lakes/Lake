@@ -13,6 +13,8 @@ delivery_scope: implementation
 
 # Introduction
 
+> **Memory 主线调整（2026-11-04）**：后续以 [Agent 本地文件记忆主计划](feature-agent-file-memory-1.md) 为准。旧正文数据库/Markdown 投影及条目管理路线进入分批替换；下文既有行为和测试是历史/当前代码水位，不表示新方案已实现或旧链路已下线。保留真实来源、同意、项目/角色范围、撤回及运行账本；新 Agent 接管后停止旧写入/注入，Worker 读取能力另行验收。
+
 ![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
 
 本方案落实用户确认的方向：Lake 统一采用 Super-agent 业务运行架构；用户持续与 Pilot 沟通，由系统创建和协调专员，用户无需创建、命名、切换或维护执行会话。普通操作、Plan、SRE、保存的工作流、定时任务和外部结果逐步进入同一任务与事件链路。官方 ADK 继续承载模型/工具循环和工作流图；Lake Items、Security、Memory 保留各自权威职责。
@@ -147,7 +149,7 @@ Router 的 Chain of Recall 读取真实 `Event → Task → Worker/Attempt → E
 
 采集链：真实用户消息/已提交操作与证据 → 现有 `MemoryTurnSnapshot` 与 ADK outbox → Web `EnqueueMemoryTurn` 去重 → 现有整理 worker → 来源与权限重验 → Memory 正式记录。没有独立验收不阻碍保存符合原同意规则的长期偏好；形成“成功处置经验”时则必须有对应 acceptanceID。整理前及最终提交分别检查同意、来源撤回、资源版本、recoveryEpoch、预算与租约，保留前台抢占。
 
-SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二份资产注册表、Task 状态机、授权器或并行学习器。扩展新关联字段必须兼容旧快照校验与 hash，不能修改旧来源来伪造新可信字段。原设置、遗忘和撤销对内联缓存、准确正文读取、后续 provider 请求与后台迟到提交全部生效。
+本段为旧存储契约：当前代码仍由 SQLite 保存正式记录，Markdown 是投影；目标存储与两阶段整理以新主计划为准。Memory 不建立第二份资产注册表、Task 状态机或授权器。扩展新关联字段必须兼容旧快照校验与 hash，不能修改旧来源来伪造新可信字段。原设置、遗忘和撤销对内联缓存、准确正文读取、后续 provider 请求与后台迟到提交全部生效。
 
 ### 1.6 兼容、切换与恢复
 
@@ -224,9 +226,9 @@ SQLite 保存正式记录，Markdown 是可重建投影；Memory 不建立第二
 | --- | --- | --- | --- |
 | TASK-018 | 在 `internal/ai/superagent_memory.go` 定义 `SuperMemoryContext/MemoryForRouter/MemoryForWorker`，宿主绑定真实 task/worker/purpose 与资源；新增字段缺省兼容旧来源，不提供新的授权接口。依赖 TASK-011、TASK-013；验证 TEST-016。 | true | 2026-11-02 |
 | TASK-019 | 扩展 `internal/web/project_memory_retrieval.go:ResolveMemoryReadScope/BuildScopedMemoryIndex` 与 `internal/ai/adk_services.go:nativeMemory` 的适配，加入 Worker task_knowledge_read 视图、逐条来源过滤和准确 revision 读取；缺失依赖返回 unavailable。依赖 TASK-018、DEP-002、DEP-003；验证 TEST-017。 | true | 2026-11-02 |
-| TASK-020 | 在 `internal/ai/project_memory_snapshot.go:MemoryTurnSnapshot/collectMemorySnapshot` 增量关联真实 goal/attempt/operation/evidence/acceptance；接 `project_memory_outbox.go:EnqueueMemoryTurn`，保持来源 hash、重复覆盖、同意与旧快照语义。依赖 TASK-018；验证 TEST-018。 | false | — |
-| TASK-021 | 扩展 `internal/web/natural_consolidation_worker.go:processNaturalConsolidation/commitNaturalBatch` 及现有项目记忆 worker 的任务来源适配，保留前台抢占、来源撤回、资产变化和后台权限重验；成功经验必须核对对应验收。依赖 TASK-019、TASK-020；验证 TEST-019。 | false | — |
-| TASK-022 | 更新 `docs/lake-memory.md` 与 `docs/design/items-security-memory-integration.md` 的实际交付矩阵；在 Memory 管理既有来源记录显示准确 task/attempt/acceptance 引用。N5 Worker 继承与运维 V2 继续关闭，只有单独验收的能力才改变对应描述。依赖 TASK-021；验证 TEST-016 至 TEST-019。 | false | — |
+| TASK-020 | 【旧实施路线已替代；由新主计划 FM-02A 承接，不再按本行旧算法实施】在 `internal/ai/project_memory_snapshot.go:MemoryTurnSnapshot/collectMemorySnapshot` 增量关联真实 goal/attempt/operation/evidence/acceptance；接 `project_memory_outbox.go:EnqueueMemoryTurn`，保持来源 hash、重复覆盖、同意与旧快照语义。依赖 TASK-018；验证 TEST-018。 | false | — |
+| TASK-021 | 【旧实施路线已替代；由新主计划 FM-02B 承接，不再按本行旧算法实施】扩展 `internal/web/natural_consolidation_worker.go:processNaturalConsolidation/commitNaturalBatch` 及现有项目记忆 worker 的任务来源适配，保留前台抢占、来源撤回、资产变化和后台权限重验；成功经验必须核对对应验收。依赖 TASK-019、TASK-020；验证 TEST-019。 | false | — |
+| TASK-022 | 【旧实施路线已替代；由新主计划 FM-03/04 承接，不再按本行旧算法实施】更新 `docs/lake-memory.md` 与 `docs/design/items-security-memory-integration.md` 的实际交付矩阵；在 Memory 管理既有来源记录显示准确 task/attempt/acceptance 引用。N5 Worker 继承与运维 V2 继续关闭，只有单独验收的能力才改变对应描述。依赖 TASK-021；验证 TEST-016 至 TEST-019。 | false | — |
 
 ### Implementation Phase 6
 

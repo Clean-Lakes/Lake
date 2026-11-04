@@ -2,15 +2,18 @@
 goal: 对接 Lake Items 资产中心、Lake Security 与 bearqy 的 Lake Memory，保留现有来源和权限边界
 version: 1
 date_created: 2026-11-01
-last_updated: 2026-11-01
+last_updated: 2026-11-04
 owner: Lake；Memory 对接负责人 bearqy
-status: Planned
+status: Superseded
 tags: [architecture, integration, items, security, memory]
+superseded_by: feature-agent-file-memory-1.md
 ---
 
 # Introduction
 
-![Status: Planned](https://img.shields.io/badge/status-Planned-blue)
+> **2026-11-04：已由 [Agent 本地文件记忆主计划](feature-agent-file-memory-1.md) 替代。** 下文保留历史设计、任务勾选和验收水位，不再作为新开发指令；未完成项不继续按旧实现推进。当前运行代码尚未因本次计划更新而停用。采集/同意/撤回及实际任务依赖按新计划接替，旧整理、条目管理、注入/投影和无依赖 V2 代码分批下线；不为旧体系补齐放量，也不删除必要审计和未知操作账本。
+
+![Status: Superseded](https://img.shields.io/badge/status-Superseded-lightgrey)
 
 本计划是[三模块对接说明](../docs/design/items-security-memory-integration.md)的待实施任务清单。基线 `origin/develop@23363614c2ba8792077533878d73c98dee66ae5f`，与 `v0.3.24` 文件树相同。bearqy 的 N1–N5、C3/C4 和旧资产退出已合入；运维 V2 仍关闭。全部任务尚未执行，本轮只交付协作设计与文档，不授权合并、启用、模型调用或操作正式版。
 
