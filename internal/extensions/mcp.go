@@ -238,6 +238,16 @@ func (m *Manager) Tools(ctx context.Context, id string, test bool) (any, error) 
 	if err != nil {
 		return nil, err
 	}
+	return m.ToolsWithServer(ctx, c, test)
+}
+
+// ToolsWithServer uses a host-frozen configuration and never resolves a new server after authorization.
+func (m *Manager) ToolsWithServer(ctx context.Context, c Server, test bool) (any, error) {
+	if c.ID == "" || !c.Enabled {
+		return nil, errors.New("MCP 服务不可用")
+	}
+	id := c.ID
+	var err error
 	timeout := 12 * time.Second
 	if c.TimeoutMS > 0 {
 		timeout = time.Duration(c.TimeoutMS) * time.Millisecond
@@ -272,6 +282,16 @@ func (m *Manager) Call(ctx context.Context, id, name string, args map[string]any
 	if err != nil {
 		return nil, err
 	}
+	return m.CallWithServer(ctx, c, name, args)
+}
+
+// CallWithServer accepts only the configuration frozen by the trusted host adapter.
+func (m *Manager) CallWithServer(ctx context.Context, c Server, name string, args map[string]any) (any, error) {
+	if c.ID == "" || !c.Enabled {
+		return nil, errors.New("MCP 服务不可用")
+	}
+	id := c.ID
+	var err error
 	timeout := 60 * time.Second
 	if c.TimeoutMS > 0 {
 		timeout = time.Duration(c.TimeoutMS) * time.Millisecond

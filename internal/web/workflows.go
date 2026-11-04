@@ -2,11 +2,14 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
 )
@@ -22,6 +25,88 @@ type workflowTemplate struct {
 	Version   int               `json:"version"`
 	CreatedAt string            `json:"createdAt"`
 	UpdatedAt string            `json:"updatedAt"`
+}
+
+func workflowSecurityDigest(template workflowTemplate) string {
+	sum := sha256.Sum256([]byte(jsonText(template)))
+	return hex.EncodeToString(sum[:])
+}
+
+func workflowSecuritySteps(template workflowTemplate) []ai.SecurityWorkflowStep {
+	var steps []ai.SecurityWorkflowStep
+	previous := ""
+	refs := []string{}
+	seen := map[string]bool{}
+	ids := map[string]bool{}
+	for _, step := range template.Steps {
+		deps := []string{}
+		if previous != "" {
+			deps = append(deps, previous)
+		}
+		steps = append(steps, ai.SecurityWorkflowStep{ID: step.ID, Title: step.Task, Role: string(ai.SREInvestigator), ResourceIDs: append([]string(nil), step.ResourceIDs...), DependsOn: deps})
+		ids[step.ID] = true
+		previous = step.ID
+		for _, ref := range step.ResourceIDs {
+			if !seen[ref] {
+				seen[ref] = true
+				refs = append(refs, ref)
+			}
+		}
+	}
+	summary := "sre_summary"
+	for ids[summary] {
+		summary += "_"
+	}
+	return append(steps, ai.SecurityWorkflowStep{ID: summary, Title: "汇总工作流调查事实、缺失证据和建议", Role: string(ai.SRECoordinator), ResourceIDs: refs, DependsOn: []string{previous}})
+}
+
+// A committed ADK run/occurrence is materialized before its one-way execution
+// claim. Repeated delivery returns the same Web identity, never a second run.
+func (b *Server) startBoundWorkflowRun(binding ai.SecurityWorkflowRunBinding, inherited Object) Object {
+	if b.Models.Active() == nil {
+		fail(400, "请先配置 Agent 模型")
+	}
+	template := b.Store.Workflow(binding.ProjectID, binding.WorkflowID)
+	if int64(template.Version) != binding.TemplateVersion || workflowSecurityDigest(template) != binding.TemplateDigest {
+		fail(409, "工作流模板已变化，原调度未派发")
+	}
+	b.workflowMu.Lock()
+	defer b.workflowMu.Unlock()
+	run := b.Store.CreateWorkflowRunWithID(binding.ProjectID, binding.WorkflowID, int(binding.TemplateVersion), binding.RunID, binding.SessionID)
+	if b.workflowCancels != nil && b.workflowCancels[binding.RunID] != nil {
+		return run
+	}
+	if _, active, err := b.Engine.SuperProject(b.Context, binding.ProjectID); err != nil {
+		aiFailure(err)
+	} else if active {
+		var err error
+		if binding.SourceKind == "schedule_occurrence" {
+			_, err = b.ReceiveScheduleOccurrence(b.Context, binding)
+		} else {
+			_, err = b.Engine.RegisterSuperWorkflow(b.Context, binding)
+		}
+		aiFailure(err)
+		b.ensureSuperWorkerSession(binding.ProjectID, binding.SessionID, template.Name)
+	}
+	if inherited != nil {
+		b.Store.SaveOptions(binding.SessionID, inherited)
+	}
+	b.configure(binding.SessionID, Object{"profile": "core", "multiAgentMode": "off", "blockUnreferencedAssets": true, "maxSteps": 34})
+	execution, err := b.Engine.ActivateSecurityWorkflowRun(b.Context, binding.RunID)
+	aiFailure(err)
+	if execution.SessionID != binding.SessionID || execution.GoalID != binding.GoalID || execution.Task.ID != binding.Task.ID || execution.Owner.RootTurnID != binding.RootTurnID {
+		fail(409, "工作流执行归属不一致")
+	}
+	var snapshot workflowTemplate
+	must(json.Unmarshal([]byte(jsonText(run["template"])), &snapshot))
+	ctx, cancel := context.WithDeadline(b.Context, execution.Task.ExpiresAt)
+	if b.workflowCancels == nil {
+		b.workflowCancels = map[string]context.CancelFunc{}
+	}
+	b.workflowCancels[binding.RunID] = cancel
+	b.workers.Add(1)
+	go b.executeWorkflowRun(ctx, cancel, run, snapshot)
+	return run
 }
 
 func workflowFromRow(row Object) workflowTemplate {
@@ -111,7 +196,24 @@ func (s *Store) DeleteWorkflow(project, id string, version int) {
 	})
 }
 func (s *Store) CreateWorkflowRun(project, id string, version int) Object {
+	return s.CreateWorkflowRunWithID(project, id, version, ident(), ident())
+}
+
+// CreateWorkflowRunWithID materializes an already committed occurrence. Its
+// identity is supplied by the trusted scheduler, never model arguments.
+func (s *Store) CreateWorkflowRunWithID(project, id string, version int, runID, sessionID string) Object {
 	return s.update(func() any {
+		if !workflowIdentifier.MatchString(runID) || !workflowIdentifier.MatchString(sessionID) {
+			fail(400, "Invalid workflow run identity")
+		}
+		if existing := s.row("SELECT * FROM workflowRuns WHERE id=?", runID); existing != nil {
+			var snapshot workflowTemplate
+			must(json.Unmarshal([]byte(stringOf(existing["template"])), &snapshot))
+			if existing["projectId"] != project || existing["workflowId"] != id || existing["sessionId"] != sessionID || snapshot.Version != version {
+				fail(409, "Workflow occurrence identity conflict")
+			}
+			return s.workflowRun(project, runID)
+		}
 		template := workflowFromRow(required(s.row("SELECT * FROM workflows WHERE id=? AND projectId=?", id, project), "Workflow"))
 		if template.Version != version {
 			fail(409, "工作流已被修改，请刷新后重试")
@@ -122,9 +224,9 @@ func (s *Store) CreateWorkflowRun(project, id string, version int) Object {
 		if s.row("SELECT id FROM workflowRuns WHERE workflowId=? AND status='running'", id) != nil {
 			fail(409, "此模板仍在执行，请先结束当前运行")
 		}
-		session, run, t := ident(), ident(), now()
+		session, run, t := sessionID, runID, now()
 		s.exec("INSERT INTO sessions(id,projectId,title,status,createdAt,updatedAt) VALUES(?,?,?,?,?,?)", session, project, "工作流 · "+template.Name, "investigating", t, t)
-		s.message(session, "user", template.Goal, nil)
+		s.message(session, "system", "已登记工作流触发："+template.Goal, nil)
 		s.exec("INSERT INTO workflowRuns(id,workflowId,projectId,sessionId,template,status,createdAt) VALUES(?,?,?,?,?,'running',?)", run, id, project, session, jsonText(template), t)
 		s.event(session, "session")
 		return s.workflowRun(project, run)
@@ -200,6 +302,10 @@ func (b *Server) workflowRunView(run Object) Object {
 	return run
 }
 func (b *Server) startWorkflow(project, id string, version int, inherited ...Object) Object {
+	return b.startWorkflowWithAction(b.Context, project, id, version, "local-user", "", "", inherited...)
+}
+
+func (b *Server) startWorkflowWithAction(originContext context.Context, project, id string, version int, actorID, actionID, sourceMessageID string, inherited ...Object) Object {
 	if !b.Store.SREEnabled(project) {
 		fail(409, "工作流协作执行需要先开启本项目的 SRE 协作")
 	}
@@ -211,6 +317,21 @@ func (b *Server) startWorkflow(project, id string, version int, inherited ...Obj
 	var data Object
 	must(json.Unmarshal([]byte(jsonText(template)), &data))
 	b.validateWorkflowTemplate(project, data)
+	managed, managedErr := b.Engine.SecurityProjectManaged(originContext, project)
+	aiFailure(managedErr)
+	if managed {
+		runID, sessionID := ident(), ident()
+		if actionID == "" {
+			actionID = "workflow-start:" + runID
+		}
+		binding, err := b.Engine.BeginSecurityWorkflowRun(originContext, ai.SecurityWorkflowRunInput{RunID: runID, WorkflowID: id, ProjectID: project, SessionID: sessionID, TemplateVersion: int64(version), TemplateDigest: workflowSecurityDigest(template), ActorID: actorID, ActionID: actionID, SourceMessageID: sourceMessageID, SourceKind: "workflow_run", SourceEventID: runID, ExpiresAt: time.Now().UTC().Add(20 * time.Minute)})
+		aiFailure(err)
+		var options Object
+		if len(inherited) > 0 {
+			options = inherited[0]
+		}
+		return b.startBoundWorkflowRun(binding, options)
+	}
 	b.workflowMu.Lock()
 	defer b.workflowMu.Unlock()
 	run := b.Store.CreateWorkflowRun(project, id, version)
@@ -288,7 +409,16 @@ func (b *Server) executeWorkflowRun(ctx context.Context, cancel context.CancelFu
 		message = err.Error()
 		return
 	}
-	if err := b.Engine.StartSRETask(ctx, id, task.ID, false, ""); err != nil {
+	start := func(runContext context.Context) error {
+		return b.Engine.StartSRETask(runContext, id, task.ID, false, "")
+	}
+	var runErr error
+	if worker, err := b.Engine.SuperWorkerForSession(ctx, template.ProjectID, id); err == nil {
+		runErr = b.Engine.RunTaskInvestigation(ctx, template.ProjectID, worker.WorkerID, start)
+	} else {
+		runErr = start(ctx)
+	}
+	if err := runErr; err != nil {
 		message = err.Error()
 		if errors.Is(err, context.Canceled) {
 			status, message = "cancelled", "工作流已停止"
@@ -303,6 +433,17 @@ func (b *Server) executeWorkflowRun(ctx context.Context, cancel context.CancelFu
 		if card := view.Cards[i]; card.Type == "message" && card.Content != "" {
 			b.Store.AddMessage(id, "assistant", card.Content, nil)
 			break
+		}
+	}
+	if worker, err := b.Engine.SuperWorkerForSession(ctx, template.ProjectID, id); err == nil {
+		canonical, err := b.Engine.SuperTask(id, worker.TaskID)
+		if err != nil {
+			message = "工作流事实已保留，目标验收待核实"
+			return
+		}
+		if canonical.State != "completed" {
+			status, message = "paused", "调查已结束，目标尚未验收通过"
+			return
 		}
 	}
 	status, message = "completed", ""

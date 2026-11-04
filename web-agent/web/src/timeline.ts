@@ -49,6 +49,7 @@ export function orderedTranscript(snapshot: SessionSnapshot, cards: AICard[], be
     // Only remove a native assistant copy when its actual reply card exists
     // in this turn. Server notices (including SRE scope questions) have no card.
     if (entry.message?.role === "assistant") {
+      if(entry.message.author)return true;
       const content=entry.message.text?.trim();
       return !content || !turn.some(other=>other.card && ["message","text"].includes(other.card.type) && other.card.content?.trim()===content);
     }

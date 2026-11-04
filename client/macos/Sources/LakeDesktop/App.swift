@@ -46,6 +46,7 @@ import LakeDesktopCore
     private var modelPanel: ModelPanelHosting?
     private var origin: URL?
     private var terminating = false
+    private var stopKernelRequested = false
     private var ready = false
     private var inspectorExpansion: InspectorWindowExpansion?
     private var dragRegions: [NSRect] = []
@@ -63,6 +64,10 @@ import LakeDesktopCore
         if profile.isDevelopment { NSApp.dockTile.badgeLabel = "DEV" }
         installMenu()
         let config = WKWebViewConfiguration()
+        if let projectID = UserDefaults.standard.string(forKey: "LakeWorkspaceProjectId"),
+           let data = try? JSONEncoder().encode(projectID), let json = String(data: data, encoding: .utf8) {
+            config.userContentController.addUserScript(WKUserScript(source: "window.lakeWorkspaceProjectId = \(json);", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
         if let appearance = UserDefaults.standard.string(forKey: "LakeAppearance"),
            ["light", "dark", "system"].contains(appearance) {
             config.userContentController.addUserScript(WKUserScript(source: "window.lakeAppearance = '\(appearance)';", injectionTime: .atDocumentStart, forMainFrameOnly: true))
@@ -159,9 +164,8 @@ import LakeDesktopCore
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(updateAccessibilityChanged), name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
         updater.beforeInstall = { [weak self] in
             guard let self else { throw UpdateError.message("应用正在退出。") }
-            let context = InstallContext(pid: self.backend.process?.processIdentifier ?? 0, home: self.backend.home, data: self.backend.dataDirectory)
-            await self.backend.stop()
-            guard self.backend.process?.isRunning != true else { throw UpdateError.message("后端尚未退出，更新未安装，请稍后重试。") }
+            let context = InstallContext(pid: self.backend.runtime?.pid ?? self.backend.process?.processIdentifier ?? 0, home: self.backend.home, data: self.backend.dataDirectory)
+            guard await self.backend.stop() else { throw UpdateError.message("内核尚未排空退出，更新未安装，请稍后重试。") }
             return context
         }
         writeReceiptPID()
@@ -201,7 +205,8 @@ import LakeDesktopCore
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "显示工作台", action: #selector(showWorkbench), keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "退出 " + profile.name, action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "退出界面（后台继续）", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "停止内核并退出", action: #selector(stopKernelAndQuit), keyEquivalent: "")
         appItem.submenu = appMenu
         menu.addItem(appItem)
         let edit = NSMenuItem()
@@ -283,6 +288,14 @@ import LakeDesktopCore
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == "lakeChrome", message.frameInfo.isMainFrame,
               sameOrigin(message.frameInfo.request.url), let body = message.body as? [String: Any] else { return }
+        if body["workspaceProjectId"] != nil {
+            if message.webView === webView, let projectID = body["workspaceProjectId"] as? String,
+               !projectID.isEmpty, projectID.utf8.count <= 256,
+               projectID.rangeOfCharacter(from: .whitespacesAndNewlines.union(.controlCharacters)) == nil {
+                UserDefaults.standard.set(projectID, forKey: "LakeWorkspaceProjectId")
+            }
+            return
+        }
         if let theme = body["theme"] as? String, theme == "light" || theme == "dark" {
             let dark = theme == "dark"
             // WebKit's prefers-color-scheme reflects this window's appearance. Pinning
@@ -361,16 +374,20 @@ import LakeDesktopCore
         return false
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    @objc private func stopKernelAndQuit() {
+        stopKernelRequested = true
+        NSApp.terminate(nil)
+    }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard backend.process?.isRunning == true else { return .terminateNow }
+        if !stopKernelRequested { backend.detach(); return .terminateNow }
         if terminating { return .terminateCancel }
         terminating = true
         // AppKit's terminateLater uses a modal run loop which can starve Swift actor tasks.
         // Cancel this request, finish shutdown on the normal run loop, then terminate synchronously.
         Task {
-            await backend.stop()
+            let stopped = await backend.stop()
             terminating = false
-            if backend.process?.isRunning != true { sender.terminate(nil) }
+            if stopped { stopKernelRequested = false; sender.terminate(nil) }
             else {
                 showWorkbench()
                 let alert = NSAlert()

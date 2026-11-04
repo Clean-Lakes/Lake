@@ -57,6 +57,14 @@ func (b *Server) projectMemoryRoute(w http.ResponseWriter, r *http.Request, name
 		return false
 	}
 	project := parts[2]
+	negative := method == "DELETE" && len(parts) == 5 && parts[3] == "memory"
+	if !negative && (parts[3] == "memory" || strings.HasPrefix(parts[3], "memory-")) && parts[3] != "memory-settings" {
+		purpose := ai.SecurityMemoryRead
+		if method != "GET" {
+			purpose = ai.SecurityMemoryCapture
+		}
+		aiFailure(b.Engine.CheckSecurityMemoryEligibility(r.Context(), project, purpose))
+	}
 	if b.Store.memoryV2 && b.memoryV2Route(w, r, parts, method) {
 		return true
 	}
@@ -102,7 +110,7 @@ func (b *Server) projectMemoryRoute(w http.ResponseWriter, r *http.Request, name
 		key := parts[4]
 		switch method {
 		case "GET":
-			reply(w, 200, b.Store.ReadProjectMemory(project, key, r.URL.Query().Get("includeDeleted") == "true"))
+			reply(w, 200, b.superMemorySources(r.Context(), project, b.Store.ReadProjectMemory(project, key, r.URL.Query().Get("includeDeleted") == "true")))
 		case "PUT":
 			data := body(w, r, 32*1024)
 			memoryFields(data, "type", "description", "body", "expectedRevision", "restoreDeleted", "validUntil")

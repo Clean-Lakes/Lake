@@ -21,6 +21,22 @@ func budgetWorkers(roles ...string) (*session, []*agentWorker) {
 	return s, workers
 }
 
+func TestSuperChildTokenUsageIsAccountingWithoutLegacyCeiling(t *testing.T) {
+	s, workers := budgetWorkers("host")
+	s.state.View.AgentRuns[0].BudgetSpent = 300000
+	if err := reserveAgentBudget(t.Context(), workers[0], 100); err == nil {
+		t.Fatal("ordinary legacy quota was changed")
+	}
+	ctx := context.WithValue(t.Context(), superAssignmentContextKey{}, SuperAssignmentToken{WorkerID: "trusted-child"})
+	if err := reserveAgentBudget(ctx, workers[0], 1000000); err != nil {
+		t.Fatal("Super-agent inherited a second legacy token ceiling", err)
+	}
+	settleAgentBudget(workers[0], 1000000, Usage{Input: 20, Output: 10, Total: 30, Known: true}, true)
+	if run := s.state.View.AgentRuns[0]; run.BudgetSpent != 300030 || run.budgetReserved != 0 {
+		t.Fatal("child usage was reset or not settled", run)
+	}
+}
+
 func TestAgentCumulativeLimitsScaleWithConfiguredContextAndRemainBounded(t *testing.T) {
 	for _, row := range []struct{ context, child, turn int }{{0, 32000, 128000}, {16000, 32000, 128000}, {64000, 64000, 256000}, {1000000, 64000, 256000}} {
 		child, turn := agentUsageLimits(Config{Model: Model{ContextWindow: row.context}})

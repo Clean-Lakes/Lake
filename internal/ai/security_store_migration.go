@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Clean-Lakes/Lake/internal/platform"
@@ -27,22 +28,22 @@ type LegacyStore struct {
 	Sessions   int64  `json:"sessions"`
 }
 type LegacyInventory struct {
-	FormatVersion int           `json:"formatVersion"`
-	StoreID       string        `json:"storeID"`
-	RecoveryEpoch string        `json:"recoveryEpoch"`
-	State         string        `json:"state"`
-	Policy        string        `json:"policy,omitempty"`
-	Stores        []LegacyStore `json:"stores"`
-	CreatedAt     time.Time     `json:"createdAt"`
+	FormatVersion  int           `json:"formatVersion"`
+	StoreID        string        `json:"storeID"`
+	RecoveryEpoch  string        `json:"recoveryEpoch"`
+	State          string        `json:"state"`
+	Policy         string        `json:"policy,omitempty"`
+	Stores         []LegacyStore `json:"stores"`
+	CreatedAt      time.Time     `json:"createdAt"`
+	FinalizationID string        `json:"finalizationID,omitempty"`
 }
 
 func openSecurityReadOnly(path string) (*sql.DB, error) {
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
-	q := u.Query()
-	q.Set("mode", "ro")
-	q.Set("_pragma", "busy_timeout(5000)")
-	u.RawQuery = q.Encode()
-	db, err := sql.Open("sqlite", u.String())
+	return openSecurityReadOnlyMode(path, false)
+}
+
+func openSecurityReadOnlyMode(path string, immutable bool) (*sql.DB, error) {
+	db, err := sql.Open("sqlite", securityReadOnlyURI(path, immutable))
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +53,24 @@ func openSecurityReadOnly(path string) (*sql.DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+func securityReadOnlyURI(path string, immutable bool) string {
+	filePath := filepath.ToSlash(path)
+	// A drive-qualified path must stay in the URI path. Without the leading
+	// slash, URL.String emits file://C:/..., interpreting the drive as a host.
+	if len(filePath) >= 3 && filePath[1] == ':' && filePath[2] == '/' && strings.ContainsRune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", rune(filePath[0])) {
+		filePath = "/" + filePath
+	}
+	u := url.URL{Scheme: "file", Path: filePath}
+	q := u.Query()
+	q.Set("mode", "ro")
+	if immutable {
+		q.Set("immutable", "1")
+	}
+	q.Set("_pragma", "busy_timeout(5000)")
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // InventoryLegacyStores does not merge SDK tables or change source operations.
@@ -116,7 +135,11 @@ func (h *SecurityHome) InventoryLegacyStores(ctx context.Context) (LegacyInvento
 				return err
 			}
 			if n > 0 {
-				if err := db.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(CASE WHEN status IS NULL OR status NOT IN ('succeeded','failed','not_executed') THEN 1 ELSE 0 END),0) FROM native_operations`).Scan(&row.Operations, &row.Unresolved); err != nil {
+				columns, err := securityNativeOperationColumns(ctx, db)
+				if err != nil {
+					return err
+				}
+				if err := db.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(CASE WHEN `+securityUnresolvedOperationPredicate(columns)+` THEN 1 ELSE 0 END),0) FROM native_operations`).Scan(&row.Operations, &row.Unresolved); err != nil {
 					return err
 				}
 			}
@@ -193,6 +216,15 @@ func (h *SecurityHome) MigrateLegacyStores(ctx context.Context) error {
 	path := filepath.Join(h.Home, "security", "legacy-inventory.json")
 	var previous LegacyInventory
 	if err := privateSecurityRead(path, &previous); err == nil {
+		if previous.FormatVersion == 2 {
+			db, err := openSecurityReadOnly(filepath.Join(h.RuntimeRoot, "sessions.sqlite"))
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			_, err = h.verifyLegacyFinalization(ctx, db, previous)
+			return err
+		}
 		if previous.FormatVersion != 1 || previous.StoreID != h.control.StoreID || previous.RecoveryEpoch != h.control.RecoveryEpoch || previous.State != "ready" {
 			return errors.New("security: legacy inventory requires management")
 		}

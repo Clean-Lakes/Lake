@@ -30,6 +30,14 @@ test("old pending tools and foreign or earlier agent runs cannot become the curr
  assert.equal(turnStatus(timing,{...v,agentRuns:[{...run,status:"waiting_approval"}]},[],at,now).state,"等待确认");
  assert.equal(turnStatus({...timing,status:"cancelled",finishedAt:new Date(now).toISOString()},v,[],at,now).text,"49秒 · 已停止");
 });
+
+test('empty streamed message and text placeholders stay in thinking until actual reply text arrives',()=>{
+ for(const type of ['message','text'] as const){
+  const placeholder:AICard={id:'reply',type,status:'running',content:'',at};
+  for(const content of ['', '  \n'])assert.equal(turnStatus(timing,view,[{...placeholder,content}],at,now).state,'正在思考…');
+  assert.equal(turnStatus(timing,view,[{...placeholder,content:'答复'}],at,now).state,'正在生成回复…');
+ }
+});
 test("current compaction has one live footer even when its card is hidden from the transcript",()=>{
  const compact:AICard={id:"compact",type:"compaction",content:"正在压缩上下文…",status:"running",at};
  const v={...view,cards:[compact]};
@@ -41,6 +49,8 @@ test("current compaction has one live footer even when its card is hidden from t
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.equal(html.split("正在压缩上下文…").length-1,1);
  assert.equal((html.match(/class="reply-duration /g)||[]).length,1);
+ assert.ok(html.includes('turn-thinking-dots')&&!html.includes('reply-duration-spinner')&&!html.includes('status-text--active'));
+ assert.ok(html.includes('title="正在压缩上下文 · 已处理 '),'the actual compaction state remains available on hover');
 });
 test("unverified and background results stay honest; missing endpoints never invent elapsed time",()=>{
  const saved={...timing,status:"completed" as const,finishedAt:new Date(now).toISOString()};

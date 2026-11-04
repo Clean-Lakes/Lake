@@ -32,6 +32,11 @@ func (e *Engine) resumeNativeApproval(ctx context.Context, s *session, c Config,
 		c.MemoryExtractionEnabled = false
 	}
 	defer func() {
+		if c.superAssignment != nil {
+			if checkpointErr := e.workCheckpoint(s); checkpointErr != nil && err == nil {
+				err = checkpointErr
+			}
+		}
 		if persistErr := e.persistNativeProjection(context.WithoutCancel(ctx), s); persistErr != nil && err == nil {
 			err = persistErr
 		}
@@ -52,6 +57,9 @@ func (e *Engine) resumeNativeApproval(ctx context.Context, s *session, c Config,
 		if errors.Is(err, context.Canceled) {
 			status = "cancelled"
 		}
+		if errors.Is(err, ErrSuperBudget) {
+			status = "paused"
+		}
 		reconcile(&s.state, "ADK recovery interrupted; no replay")
 		s.state.View.Cards = append(s.state.View.Cards, Card{ID: uid(), Type: "error", Content: redact(err.Error(), c), Status: status, At: timestamp()})
 	}
@@ -59,7 +67,8 @@ func (e *Engine) resumeNativeApproval(ctx context.Context, s *session, c Config,
 	s.decisions = nil
 	s.state.View.Pending = nil
 	s.state.View.PendingApprovals = nil
-	s.state.View.Question = nil
+	// askQuestion expires normal cancelled inputs and retains the exact
+	// unanswered checkpoint when the host is shutting down for an update.
 	s.state.View.Status = status
 	s.state.View.TurnFinishedAt = timestamp()
 	if err == nil && c.ConversationMode == ModePlan {

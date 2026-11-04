@@ -19,7 +19,11 @@ import (
 
 func fixture(t *testing.T) (*Server, *httptest.Server) {
 	t.Helper()
-	home := t.TempDir()
+	return fixtureAtHome(t, t.TempDir())
+}
+
+func fixtureAtHome(t *testing.T, home string) (*Server, *httptest.Server) {
+	t.Helper()
 	b, e := New(context.Background(), Options{Home: home, Token: "synthetic-test-auth-token", Static: fstest.MapFS{"index.html": {Data: []byte("React static fixture")}, "assets/app.js": {Data: []byte("script")}}})
 	if e != nil {
 		t.Fatal(e)
@@ -27,6 +31,27 @@ func fixture(t *testing.T) (*Server, *httptest.Server) {
 	h := httptest.NewServer(b)
 	t.Cleanup(func() { h.Close(); b.Close() })
 	return b, h
+}
+
+func TestHTTPUnicodeHomeKeepsSecurityCatalogBound(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "Lake 数据 with spaces")
+	b, h := fixtureAtHome(t, home)
+	id, _ := newSession(t, h)
+	resource := b.Store.CreateResource(stringOf(b.Store.Session(id)["projectId"]), "loopback fixture", "ssh", Object{"host": "127.0.0.1", "port": 22, "username": "fixture"})
+	expected, err := os.Stat(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, path := range map[string]string{"models": b.Models.Home, "security": b.securityRuntime.Home} {
+		actual, err := os.Stat(path)
+		if err != nil || !os.SameFile(expected, actual) {
+			t.Fatalf("%s Home does not identify the initialized fixture directory", name)
+		}
+	}
+	if stringOf(resource["id"]) == "" {
+		t.Fatal("security catalog did not retain the resource")
+	}
+	apiTest(t, h, "GET", "/api/sessions/"+id+"/snapshot", nil, 200)
 }
 func apiTest(t *testing.T, h *httptest.Server, method, path string, data any, status int) Object {
 	t.Helper()

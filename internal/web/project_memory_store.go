@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/Clean-Lakes/Lake/internal/ai"
 )
 
 var memoryKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
@@ -154,6 +156,21 @@ func validateMemoryMutation(m MemoryMutation) {
 
 func (s *Store) memorySettings(project string) Object {
 	s.activeProject(project)
+	if s.skipMemoryInitialization {
+		projection := Object{"projectId": project, "useEnabled": false, "extractionEnabled": false, "epoch": 0, "revision": 0, "settingsRevision": 0, "publishedRevision": 0, "memorySchemaVersion": 1}
+		if s.memoryColumnsPresent("projectMemorySettings", "projectId", "epoch", "revision", "settingsRevision", "publishedRevision") {
+			if metadata := s.row("SELECT epoch,revision,settingsRevision,publishedRevision FROM projectMemorySettings WHERE projectId=?", project); metadata != nil {
+				for key, value := range metadata {
+					projection[key] = value
+				}
+			}
+		}
+		return projection
+	}
+	return s.storedMemorySettings(project)
+}
+
+func (s *Store) storedMemorySettings(project string) Object {
 	row := s.row("SELECT * FROM projectMemorySettings WHERE projectId=?", project)
 	if row == nil {
 		row = Object{"projectId": project, "useEnabled": 1, "extractionEnabled": 1, "epoch": 0, "revision": 0, "settingsRevision": 0, "publishedRevision": 0}
@@ -177,9 +194,15 @@ func (s *Store) ensureMemorySettings(project string) {
 }
 
 func (s *Store) SetMemorySettings(project string, use, extraction bool, expected int) Object {
+	if s.skipMemoryInitialization && (use || extraction) {
+		fail(409, ai.ErrSecurityMemoryRecoveryUnqualified.Error())
+	}
 	return s.update(func() any {
+		if s.skipMemoryInitialization && (s.recoveryMemorySchema < 1 || !s.memoryColumnsPresent("projectMemorySettings", "projectId", "epoch", "revision", "settingsRevision", "publishedRevision")) {
+			fail(409, ai.ErrSecurityMemoryRecoveryUnqualified.Error())
+		}
 		s.ensureMemorySettings(project)
-		settings := s.memorySettings(project)
+		settings := s.storedMemorySettings(project)
 		if integer(settings["settingsRevision"]) != expected {
 			fail(409, "Memory settings changed; refresh and retry")
 		}
@@ -280,13 +303,16 @@ func (s *Store) ReadProjectMemory(project, key string, includeDeleted bool) Obje
 }
 
 func (s *Store) CommitProjectMemory(project string, m MemoryMutation) Object {
-	if s.memoryV2 {
+	if s.skipMemoryInitialization && (!m.Forget || s.recoveryMemorySchema < 1) {
+		fail(409, ai.ErrSecurityMemoryRecoveryUnqualified.Error())
+	}
+	if s.memoryV2 || s.skipMemoryInitialization && s.recoveryMemorySchema == 2 {
 		return s.CommitMemoryV2(project, m)
 	}
 	validateMemoryMutation(m)
 	result := s.update(func() any {
 		s.ensureMemorySettings(project)
-		settings := s.memorySettings(project)
+		settings := s.storedMemorySettings(project)
 		old := s.row("SELECT * FROM projectMemories WHERE projectId=? AND key=?", project, m.Key)
 		revision := 0
 		if old != nil {
@@ -351,6 +377,10 @@ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(projectId,key) DO UPDA
 		s.exec("INSERT INTO projectMemoryCommits(commitId,projectId,revision,mutationKeysJSON,createdAt) VALUES(?,?,?,?,?)", commitID, project, next, jsonText([]string{m.Key}), t)
 		return Object{"commitId": commitID, "projectRevision": next, "revision": revision + 1, "key": m.Key, "deleted": m.Forget}
 	}).(Object)
+	if s.skipMemoryInitialization {
+		result["publicationError"] = "Memory tombstone committed; projection cleanup requires Memory-owner recovery qualification"
+		return result
+	}
 	if err := s.PublishProjectMemory(project); err != nil {
 		result["publicationError"] = "Memory saved; file publication pending"
 	}

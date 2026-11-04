@@ -157,12 +157,15 @@ func (b *Server) launchMessageLocked(id string, message humanMessage) {
 	go b.runTurn(id, message.MessageID, message.Text, message.Images, message.References, message.Files, message.IgnoreProjectMemory)
 }
 func (b *Server) submitHumanMessage(id string, data Object) Object {
-	if b.Store.ActiveWorkflowRun(id) != "" {
+	if b.Store.ActiveWorkflowRun(id) != "" && b.Store.superSessionKind(id) != "worker" {
 		fail(409, "此会话正在执行工作流，请停止或等待工作流结束后再发送消息")
 	}
 	message := b.validateHumanMessage(id, data)
 	b.messageMu.Lock()
 	defer b.messageMu.Unlock()
+	if b.Store.superSessionKind(id) == "worker" || b.Store.superSessionKind(id) == "legacy" || b.Store.superSessionKind(id) == "role" {
+		return b.acceptSuperWorkerMessage(id, message, "")
+	}
 	queue := b.Store.MessageQueue(id)
 	if b.messageBusyLocked(id) || len(objects(queue["items"])) > 0 || data["enqueue"] == true {
 		payload := Object{"text": message.Text, "resourceIds": stringsOf(data["resourceIds"]), "ignoreProjectMemory": message.IgnoreProjectMemory}

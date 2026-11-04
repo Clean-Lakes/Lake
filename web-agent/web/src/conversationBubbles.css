@@ -1,0 +1,109 @@
+/* Message colors are independent of selection and other workbench surfaces. */
+.ai-role-user:not(.has-message-images),
+.ai-role-user.has-message-images > .user-message-text,
+.message-user .timeline-content {
+  background: var(--user-message-background);
+  color: var(--user-message-foreground);
+}
+.message-user .message-text,
+.ai-role-user:not(.has-message-images) .message-attachments a {
+  color: var(--user-message-foreground);
+}
+
+/* One bubble per reply; the avatar owns a separate column beside it. */
+.ai-transcript { --reply-avatar-column:32px; --reply-bubble-inset:18px; }
+.ai-transcript[data-reply-avatar=hidden] { --reply-avatar-column:0px; }
+.ai-transcript[data-reply-avatar=hidden] :is(.response-avatar,.turn-thinking-avatar) { display:none; }
+.ai-chat-message.ai-role-assistant,
+.ai-card:is(.ai-text, .ai-message),
+.ai-response:has(> .ai-card:is(.ai-text, .ai-message)),
+.sre-role-message .sre-role-body,
+.message-assistant .timeline-content {
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  padding: 14px 18px;
+  border-radius: var(--radius-window);
+  corner-shape: var(--corner-window);
+  background: var(--assistant-message-background);
+}
+.ai-response > .ai-card:is(.ai-text, .ai-message) {
+  width: auto;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.ai-role-assistant .response-author:hover {
+  background: var(--surface-selected);
+}
+
+.response-avatar { display:inline-flex; align-items:center; justify-content:center; flex:none; }
+.ai-chat-message.ai-role-assistant,
+.ai-response:has(> .response-identity):has(> .ai-card:is(.ai-text, .ai-message)) {
+  position: relative;
+  isolation: isolate;
+  padding-inline-start: calc(var(--reply-bubble-inset) + var(--reply-avatar-column));
+  background: transparent;
+}
+.ai-chat-message.ai-role-assistant::before,
+.ai-response:has(> .response-identity):has(> .ai-card:is(.ai-text, .ai-message))::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 var(--reply-avatar-column);
+  z-index: -1;
+  pointer-events: none;
+  border-radius: var(--radius-window);
+  corner-shape: var(--corner-window);
+  background: var(--assistant-message-background);
+}
+.ai-chat-message.ai-role-assistant > .response-identity .response-avatar,
+.ai-response:has(> .ai-card:is(.ai-text, .ai-message)) > .response-identity .response-avatar {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 14px;
+  width: 20px;
+  height: 1.75em;
+}
+
+/* The caption follows the text; its divider starts at the painted bubble edge. */
+.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status:not(.is-thinking) {
+  position:relative;
+  padding-inline-start:calc(var(--reply-avatar-column) + var(--reply-bubble-inset));
+  border-bottom:0;
+}
+.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status:not(.is-live)::after {
+  content:"";
+  position:absolute;
+  inset-inline:var(--reply-avatar-column) 0;
+  bottom:0;
+  height:1px;
+  background:var(--surface-hover);
+  pointer-events:none;
+}
+.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status .turn-status-mark {
+  position:absolute;
+  inset-inline-start:0;
+}
+
+/* A quiet typing bubble takes the same column as the next assistant reply. */
+.reply-duration.is-thinking { position:relative; min-height:44px; padding:0 0 0 var(--reply-avatar-column,32px); border:0; }
+.ai-turn > .turn-status.is-thinking { padding-inline-start:var(--reply-avatar-column,32px); }
+.ai-turn > .turn-status.is-thinking.without-avatar,
+.reply-duration.is-thinking.without-avatar { padding-inline-start:0; }
+.turn-thinking-avatar { position:absolute; inset-inline-start:0; top:12px; width:20px; height:20px; }
+.turn-thinking-avatar .response-identity { margin:0; }
+.turn-thinking-avatar .response-identity > strong { display:none; }
+.turn-thinking-avatar .response-avatar { width:20px; height:20px; }
+.turn-thinking-bubble { display:inline-flex; align-items:center; justify-content:center; flex:none; width:76px; height:44px; padding:14px 18px; border:0; border-radius:var(--radius-window); corner-shape:var(--corner-window); background:var(--assistant-message-background); color:var(--foreground); }
+.turn-thinking-dots { display:inline-flex; align-items:center; gap:8px; }
+.turn-thinking-dots > i { width:7px; height:7px; border-radius:50%; background:currentColor; opacity:.32; animation:turn-thinking-dot 1.2s ease-in-out infinite; }
+.turn-thinking-dots > i:nth-child(2) { animation-delay:.16s; }
+.turn-thinking-dots > i:nth-child(3) { animation-delay:.32s; }
+.is-thinking > .turn-duration-disclosure { width:fit-content; max-width:100%; border-radius:var(--radius-window); corner-shape:var(--corner-window); }
+.is-thinking .turn-current-step { flex:0 1 auto; }
+@keyframes turn-thinking-dot { 0%,60%,100% { opacity:.32; } 30% { opacity:1; } }
+@media(prefers-reduced-motion:reduce) {
+ .turn-thinking-dots > i { animation:none; }
+ .turn-thinking-dots > i:nth-child(2) { opacity:.6; }
+ .turn-thinking-dots > i:nth-child(3) { opacity:.9; }
+}

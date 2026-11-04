@@ -17,7 +17,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -41,7 +41,9 @@ jobs:
       - name: Official SDK adapters and durable services
         run: go test ./internal/agent/... -count=1 -timeout=3m
       - name: ADK integration, crashes, migration and SRE recovery
-        run: go test ./internal/ai ./internal/web -run 'TestADK|TestSREScheduler|TestSREPlanOnly|TestSRERestart|TestSREFullSpecialist' -count=1 -timeout=4m
+        # Windows flushes every durable fixture; this deadline covers all
+        # selected tests in each package, not one individual recovery case.
+        run: go test -v ./internal/ai ./internal/web -run 'TestADK|TestSREScheduler|TestSREPlanOnly|TestSRERestart|TestSREFullSpecialist' -count=1 -timeout=10m
       # This fixture uses only synthetic models and a loopback health server.
       # Keep its diagnostics separate from private provider request logs.
       - name: Actual Windows local HTTP retry regression
@@ -60,4 +62,4 @@ jobs:
         run: go build -o lake-acceptance ./cmd/lake
       - name: Full Linux regression
         if: runner.os == 'Linux'
-        run: go test ./... -count=1 -timeout=5m
+        run: go test ./... -count=1 -timeout=15m

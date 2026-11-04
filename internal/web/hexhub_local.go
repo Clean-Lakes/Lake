@@ -190,7 +190,11 @@ func importSSHHasLogin(config Object) bool {
 	return stringOf(config["credentialRef"]) != "" || stringOf(config["identityFile"]) != "" || stringOf(config["privateKey"]) != "" || stringOf(config["password"]) != ""
 }
 func (s *Store) SyncImportedLogins(project string, updates map[string]Object) {
-	s.update(func() any {
+	ids := []string{}
+	for id := range updates {
+		ids = append(ids, id)
+	}
+	s.resourceUpdate(func() any {
 		s.projectIdleForDeletion(project)
 		for id := range updates {
 			resource := s.resource(id)
@@ -210,7 +214,7 @@ func (s *Store) SyncImportedLogins(project string, updates map[string]Object) {
 			s.event(stringOf(session["id"]), "session")
 		}
 		return nil
-	})
+	}, ids...)
 }
 
 func importResourceConfig(resource Object) Object {

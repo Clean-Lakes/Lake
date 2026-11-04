@@ -36,3 +36,7 @@
 - Validate visible corners, hover/selection/focus and clipping in Lake Dev, light/dark themes and narrow windows. Matching computed `border-radius` alone is insufficient. Do not use double outlines, broad dialog shadows on inputs, or square backing surfaces at rounded corners. See `docs/ui-guidelines.md` for the full scale and platform rules.
 
 - Inline resource references scale the same curve to their actual height: editor chip `24px` high / `--radius-composer-reference: 12px`, sent chip `22px` high / `--radius-message-reference: 11px`. Keep borderless type colors. After inserting/removing a reference, verify a painted caret and continued typing; DOM caret anchors must never enter the draft, clipboard payload or sent text.
+
+# Items, Security and Memory architecture
+
+- Before changing assets, memory, security or their task-runtime integration, read [agent.md](agent.md) and the linked detailed specifications. Lake Items is the asset center; Lake Security owns safety decisions; Lake Memory follows bearqy's design and existing implementation. Task goals, attempts and acceptance remain in the task runtime. Preserve the ownership, compatibility and staged integration rules in that document; planned interfaces are not delivered capabilities or permission to enable them. These architecture rules do not override the contribution, release, credential or Dev-isolation requirements above.

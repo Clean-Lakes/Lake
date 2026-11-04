@@ -39,6 +39,9 @@ const memoryCaptureByteLimit = 128 * 1024
 
 // Caller owns s.mu. Invoked only when accepting a genuine host user turn.
 func (e *Engine) beginMemoryCapture(s *session, c Config, input TurnInput) {
+	if e.CheckSecurityMemoryEligibility(context.Background(), c.MemoryProjectID, SecurityMemoryCapture) != nil {
+		return
+	}
 	legacy := c.MemoryEnabled && c.MemoryExtractionEnabled
 	automatic := c.NaturalMemory != nil && (c.NaturalMemory.GlobalEnabled || c.NaturalMemory.ProjectEnabled)
 	natural := automatic && NaturalMemorySignal(input.UserText)
@@ -129,6 +132,9 @@ func currentMemoryCapture(s *session) *MemoryCaptureTurn {
 // Metadata is constructed at the actual executor completion, not inferred from
 // a summary, a recovered tool error, or a successful-looking stdout string.
 func (e *Engine) captureMemoryToolResult(s *session, call Call, payload string, value any, toolErr error) {
+	if e.CheckSecurityMemoryEligibility(context.Background(), s.state.Config.MemoryProjectID, SecurityMemoryCapture) != nil {
+		return
+	}
 	turn := currentMemoryCapture(s)
 	if e.worker != nil || turn == nil {
 		return
@@ -183,6 +189,9 @@ func captureConsentAvailable(source MemoryTurnSnapshot, c Config) bool {
 // Caller owns s.mu. Bounded incremental capture, shared by completion and ALL
 // compaction paths. No model, tools, history scan of prior unregistered users.
 func (e *Engine) captureMemoryIncrement(s *session, c Config, only ...*MemoryCaptureTurn) bool {
+	if e.CheckSecurityMemoryEligibility(context.Background(), c.MemoryProjectID, SecurityMemoryCapture) != nil {
+		return false
+	}
 	journal := s.state.MemoryCapture
 	if e.worker != nil || journal == nil || journal.Version != 1 || c.ConversationMode == ModePlan {
 		return false

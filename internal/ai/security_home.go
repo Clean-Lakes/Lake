@@ -386,7 +386,7 @@ func (h *SecurityHome) bindSecurityDatabase(db *sql.DB) error {
 	var store, epoch, state string
 	err = db.QueryRow(`SELECT schema_version,minimum_reader_version,store_id,recovery_epoch,migration_state FROM security_schema_meta WHERE id=1`).Scan(&schema, &reader, &store, &epoch, &state)
 	if errors.Is(err, sql.ErrNoRows) {
-		_, err = db.Exec(`INSERT INTO security_schema_meta VALUES(1,?,?,?,?,?)`, security.SchemaVersion, security.ReaderVersion, h.control.StoreID, h.control.RecoveryEpoch, "ready")
+		_, err = db.Exec(`INSERT INTO security_schema_meta VALUES(1,?,?,?,?,?)`, security.SchemaVersion, security.FoundationReaderVersion, h.control.StoreID, h.control.RecoveryEpoch, "ready")
 		return err
 	}
 	if err != nil {
@@ -398,16 +398,41 @@ func (h *SecurityHome) bindSecurityDatabase(db *sql.DB) error {
 	return nil
 }
 func (e *Engine) securityHome() *SecurityHome {
-	if e.workParent != nil {
-		return e.workParent.securityHome()
+	owner, err := securityRootEngine(e)
+	if err != nil {
+		return nil
 	}
-	if e.worker != nil {
-		return e.worker.parent.securityHome()
+	return owner.SecurityRuntime
+}
+
+func securityRootEngine(e *Engine) (*Engine, error) {
+	seen := map[*Engine]bool{}
+	for e != nil {
+		if seen[e] || len(seen) >= 32 {
+			return nil, errors.New("security: cyclic runtime ownership")
+		}
+		seen[e] = true
+		if e.workParent != nil {
+			e = e.workParent
+			continue
+		}
+		if e.worker != nil {
+			if e.worker.parent == nil {
+				return nil, errors.New("security: missing parent runtime owner")
+			}
+			e = e.worker.parent
+			continue
+		}
+		return e, nil
 	}
-	return e.SecurityRuntime
+	return nil, errors.New("security: runtime owner unavailable")
 }
 func (e *Engine) CheckSecurityRuntime() error {
-	if h := e.securityHome(); h != nil {
+	owner, err := securityRootEngine(e)
+	if err != nil {
+		return err
+	}
+	if h := owner.SecurityRuntime; h != nil {
 		return h.Check()
 	}
 	return nil

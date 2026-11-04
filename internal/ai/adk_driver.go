@@ -23,23 +23,27 @@ import (
 )
 
 type adkTurnDriver struct {
-	supplementCalls       map[string]bool
-	workRepairs           int
-	workOutputPolls       map[string]int
-	decision              bool
-	terminalRecovery      bool
-	denied                map[string]bool
-	toolMu                sync.Mutex
-	engine                *Engine
-	session               *session
-	config                *Config
-	cancel                context.CancelFunc
-	round                 int
-	resume, outputRetried bool
-	invalidToolRetried    bool
-	lastRequestID         string
-	textID                string
-	fatal                 error
+	providerSecurityMu          sync.Mutex
+	providerSecurityRoot        string
+	providerSecurityInitialized bool
+	providerSecurity            *securityProviderBinding
+	supplementCalls             map[string]bool
+	workRepairs                 int
+	workOutputPolls             map[string]int
+	decision                    bool
+	terminalRecovery            bool
+	denied                      map[string]bool
+	toolMu                      sync.Mutex
+	engine                      *Engine
+	session                     *session
+	config                      *Config
+	cancel                      context.CancelFunc
+	round                       int
+	resume, outputRetried       bool
+	invalidToolRetried          bool
+	lastRequestID               string
+	textID                      string
+	fatal                       error
 }
 
 func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resume bool, cancel context.CancelFunc) error {
@@ -57,9 +61,18 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 	}
 	s.mu.Unlock()
 	d := &adkTurnDriver{engine: e, session: s, config: c, resume: resume, cancel: cancel}
+	s.mu.Lock()
+	d.providerSecurityRoot = s.state.View.RootTurnID
+	s.mu.Unlock()
+	if _, _, err := d.securityProviderContext(ctx, nil); err != nil {
+		return err
+	}
 	defer func() { d.toolMu.Lock(); d.toolMu.Unlock() }()
 	provider := NewProviderLLM(c.Model)
 	provider.stream = func(ctx context.Context, _ Model, _ []Message, _ []Tool, _ func(string, string)) (modelResult, error) {
+		if err := e.checkSuperModelDomain(ctx, ownSessionID(s), *c); err != nil {
+			return modelResult{}, err
+		}
 		return d.next(ctx)
 	}
 	catalog := e.sessionCatalog(ctx, s.state.View.Session, *c)
@@ -298,6 +311,12 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 	id := runtimeID
 	message := s.state.RootQuestion
 	s.mu.Unlock()
+	if c.superRole == "router" && messageContent != nil {
+		message = ""
+		for _, part := range messageContent.Parts {
+			message += part.Text
+		}
+	}
 	runContent := func(content *genai.Content) error {
 		resuming := false
 		if content != nil {
@@ -321,7 +340,7 @@ func (e *Engine) runOfficialADK(ctx context.Context, s *session, c *Config, resu
 				return err
 			}
 			if event != nil {
-				if ackErr := e.acknowledgeSupplementEvent(ctx, event.Actions.StateDelta, s.state.View.Session); ackErr != nil {
+				if ackErr := e.acknowledgeSupplementEvent(ctx, event.Actions.StateDelta, s.state.View.Session, event.ID); ackErr != nil {
 					return ackErr
 				}
 				if resuming && len(event.Actions.RequestedToolConfirmations) > 0 {

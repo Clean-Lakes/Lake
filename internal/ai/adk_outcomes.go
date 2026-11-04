@@ -78,23 +78,62 @@ func (e *Engine) ResolveOperation(id, operationID, status, note string) error {
 		return err
 	}
 	var row nativeOperation
-	err = store.DB.Transaction(func(tx *gorm.DB) error {
+	err = e.workMutation(store.DB, func(tx *gorm.DB) error {
 		if err := tx.First(&row, "id = ? AND session_id = ?", operationID, id).Error; err != nil {
 			return err
 		}
-		if row.Status != "unknown" {
+		if pending, err := securityRecoveryOperationPendingTx(tx, row); err != nil {
+			return err
+		} else if pending {
+			return errors.New("security: original operation requires source-bound recovery reconciliation")
+		}
+		managedUnresolved := row.SecurityTaskID != "" && row.RiskResolvedAt == nil && row.Status == "failed" && row.OrphanState != ""
+		if row.Status != "unknown" && !managedUnresolved {
 			return errors.New("操作仍在运行或已核实，不能覆盖结果")
 		}
 		now := time.Now()
 		result := redact("用户核实："+note, c)
-		updated := tx.Model(&nativeOperation{}).Where("id = ? AND status = ?", row.ID, "unknown").Updates(map[string]any{"status": status, "result": result, "finished_at": now})
+		updates := map[string]any{"status": status, "result": result, "finished_at": now}
+		if row.SecurityTaskID != "" {
+			updates["risk_resolved_at"] = now
+			updates["orphan_state"] = "reconciled"
+			updates["closure_state"] = "reconciled"
+			updates["cancellation_state"] = "resolved"
+		}
+		updated := tx.Model(&nativeOperation{}).Where("id = ? AND status = ? AND risk_resolved_at IS NULL", row.ID, row.Status).Updates(updates)
 		if updated.Error != nil {
 			return updated.Error
 		}
 		if updated.RowsAffected != 1 {
 			return errors.New("操作状态已变化")
 		}
-		return e.appendNativeEvidence(tx, &nativeEvidence{OperationID: row.ID, SessionID: id, CallID: row.CallID, Tool: row.Tool, Status: "resolved_" + status, Data: result, At: now})
+		if err := e.appendNativeEvidence(tx, &nativeEvidence{OperationID: row.ID, SessionID: id, CallID: row.CallID, Tool: row.Tool, Status: "resolved_" + status, Data: result, At: now}); err != nil {
+			return err
+		}
+		if row.SecurityTaskID != "" && row.AttemptID != "" {
+			var remaining int64
+			if err := tx.Model(&nativeOperation{}).Where("attempt_id = ? AND id <> ? AND (status IN ? OR (orphan_state NOT IN ? AND risk_resolved_at IS NULL))", row.AttemptID, row.ID, []string{"unknown", "dispatched"}, []string{"", "resolved", "reconciled"}).Count(&remaining).Error; err != nil {
+				return err
+			}
+			if remaining == 0 {
+				var operations []nativeOperation
+				if err := tx.Where("attempt_id = ?", row.AttemptID).Find(&operations).Error; err != nil {
+					return err
+				}
+				attemptState := "succeeded"
+				for _, op := range operations {
+					if op.Status == "not_executed" && attemptState == "succeeded" {
+						attemptState = "not_executed"
+					} else if op.Status != "succeeded" && op.Status != "not_executed" {
+						attemptState = "failed"
+					}
+				}
+				// Resolving side effects permits a safe retry; it does not cover a
+				// failed business attempt or sign a successful step acceptance.
+				return tx.Model(&workExecutionAttempt{}).Where("id = ? AND session_id = ? AND goal_id = ?", row.AttemptID, id, row.GoalID).Updates(map[string]any{"state": attemptState, "revision": gorm.Expr("revision + 1")}).Error
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return err
@@ -140,6 +179,11 @@ func (e *Engine) reconcileNativeOperations(ctx context.Context, id string) error
 		return err
 	}
 	for _, row := range rows {
+		// Managed execution has its own exact owner/generation observer. An old
+		// terminal/shell handle or exit code cannot clear its unknown effects.
+		if row.SecurityTaskID != "" {
+			continue
+		}
 		var value any
 		var observationErr error
 		terminal, entry, ok := strings.Cut(row.Handle, ":")
@@ -195,6 +239,9 @@ func (e *Engine) reconcilePreflightOutcomes(ctx context.Context, id string) erro
 			return err
 		}
 		for _, row := range rows {
+			if row.SecurityTaskID != "" {
+				continue
+			}
 			var identity RunIdentity
 			if json.Unmarshal([]byte(row.Identity), &identity) != nil || identity.TaskID != "" {
 				continue

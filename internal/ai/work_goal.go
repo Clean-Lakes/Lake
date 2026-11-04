@@ -35,6 +35,7 @@ type ExternalWatch struct {
 	Failures       int       `json:"failures"`
 }
 type WorkGoal struct {
+	closure           *WorkClosureContract           // Backend-only; never changes the existing UI contract.
 	ResourceBindings  []WorkBinding                  `json:"resourceBindings,omitempty"`
 	Binding           WorkBinding                    `json:"binding"`
 	ActiveItemID      string                         `json:"activeItemId,omitempty"`
@@ -73,18 +74,24 @@ func workBinding(c Config) WorkBinding {
 }
 
 type nativeWorkGoal struct {
-	ID         string `gorm:"primaryKey"`
-	SessionID  string `gorm:"index"`
-	RootTurnID string `gorm:"index"`
-	Status     string `gorm:"index"`
-	Revision   int64
-	Data       string
-	Checkpoint string
-	WaitState  string
-	fence      string `gorm:"-"`
-	WaitCallID string
-	LeaseOwner string
-	LeaseUntil time.Time
+	ID               string `gorm:"primaryKey"`
+	SessionID        string `gorm:"index"`
+	RootTurnID       string `gorm:"index"`
+	OriginMessageID  string
+	Status           string `gorm:"index"`
+	Revision         int64
+	Data             string
+	Checkpoint       string
+	WaitState        string
+	fence            string                `gorm:"-"`
+	superFence       *SuperAssignmentToken `gorm:"-"`
+	WaitCallID       string
+	LeaseOwner       string
+	LeaseUntil       time.Time
+	GoalRevision     int64
+	PlanRevision     int64
+	ProgressRevision int64
+	ClosureContract  string
 }
 type nativeWorkOutbox struct {
 	ID        string `gorm:"primaryKey"`
@@ -203,7 +210,7 @@ func (e *Engine) workRow(sessionID, id string) (nativeWorkGoal, WorkGoal, error)
 	err = store.DB.First(&row, "id = ? AND session_id = ?", id, sessionID).Error
 	var goal WorkGoal
 	if err == nil {
-		err = json.Unmarshal([]byte(row.Data), &goal)
+		err = decodeWorkGoal(row, &goal)
 	}
 	return row, goal, err
 }
@@ -219,17 +226,38 @@ func (e *Engine) WorkGoals(sessionID string) ([]WorkGoal, error) {
 	goals := make([]WorkGoal, 0, len(rows))
 	for _, row := range rows {
 		var goal WorkGoal
-		if err = json.Unmarshal([]byte(row.Data), &goal); err != nil {
+		if err = decodeWorkGoal(row, &goal); err != nil {
 			return nil, err
 		}
 		goals = append(goals, goal)
 	}
-	return goals, nil
+	return e.RecoveryWorkGoalProjections(context.Background(), sessionID, goals)
 }
 func (e *Engine) writeWorkGoal(row *nativeWorkGoal, g *WorkGoal, create bool) error {
 	store, err := e.adkStore()
 	if err != nil {
 		return err
+	}
+	return store.DB.Transaction(func(tx *gorm.DB) error {
+		return writeWorkGoalTx(tx, row, g, create)
+	})
+}
+
+func writeWorkGoalTx(tx *gorm.DB, row *nativeWorkGoal, g *WorkGoal, create bool) error {
+	if row.superFence != nil {
+		if err := checkSuperAssignmentTx(tx, *row.superFence); err != nil {
+			return err
+		}
+	}
+	if g.closure != nil {
+		if g.Status == "failed" {
+			g.Status = "blocked"
+		}
+		if g.Status == "completed" {
+			if err := requireGoalAcceptanceTx(tx, *row, *g); err != nil {
+				return err
+			}
+		}
 	}
 	// A terminal goal keeps its result and original evidence, but no longer owns
 	// a resumable invocation, wait or observer lease. Checkpoint saves after
@@ -245,26 +273,29 @@ func (e *Engine) writeWorkGoal(row *nativeWorkGoal, g *WorkGoal, create bool) er
 	row.Revision = g.Revision
 	row.Status = g.Status
 	row.Data = js(g)
-	return store.DB.Transaction(func(tx *gorm.DB) error {
-		if create {
-			if err := tx.Create(row).Error; err != nil {
-				return err
-			}
-		} else {
-			query := tx.Model(&nativeWorkGoal{}).Where("id = ? AND session_id = ? AND revision = ?", row.ID, row.SessionID, old)
-			if row.fence != "" {
-				query = query.Where("lease_owner = ? AND lease_until > ?", row.fence, time.Now())
-			}
-			updated := query.Select("*").Updates(row)
-			if updated.Error != nil {
-				return updated.Error
-			}
-			if updated.RowsAffected != 1 {
-				return errWorkConflict
-			}
+	row.ProgressRevision = g.Revision
+	if g.closure != nil {
+		row.GoalRevision, row.PlanRevision = g.closure.GoalRevision, g.closure.PlanRevision
+		row.ClosureContract = js(g.closure)
+	}
+	if create {
+		if err := tx.Create(row).Error; err != nil {
+			return err
 		}
-		return tx.Create(&nativeWorkOutbox{ID: fmt.Sprintf("%s-%d", g.ID, g.Revision), GoalID: g.ID, SessionID: g.SessionID, Revision: g.Revision, Data: row.Data}).Error
-	})
+	} else {
+		query := tx.Model(&nativeWorkGoal{}).Where("id = ? AND session_id = ? AND revision = ?", row.ID, row.SessionID, old)
+		if row.fence != "" {
+			query = query.Where("lease_owner = ? AND lease_until > ?", row.fence, time.Now())
+		}
+		updated := query.Select("*").Updates(row)
+		if updated.Error != nil {
+			return updated.Error
+		}
+		if updated.RowsAffected != 1 {
+			return errWorkConflict
+		}
+	}
+	return tx.Create(&nativeWorkOutbox{ID: fmt.Sprintf("%s-%d", g.ID, g.Revision), GoalID: g.ID, SessionID: g.SessionID, Revision: g.Revision, Data: row.Data}).Error
 }
 func mergeWorkItems(base, added []WorkItem) ([]WorkItem, error) {
 	out := append([]WorkItem(nil), base...)
@@ -338,7 +369,18 @@ func (e *Engine) beginWork(s *session, title string, items []WorkItem, assetRefs
 	s.mu.Lock()
 	id, turn, existing, c := s.state.View.Session, s.state.View.RootTurnID, s.state.WorkGoalID, s.state.Config
 	sourceText := s.state.RootQuestion
+	sourceMessageID := s.state.SecuritySourceMessageID
 	scope := cloneTargetScope(s.state.TargetScope)
+	if s.state.SecurityManaged {
+		// The confirmed security boundary is authoritative. Directory navigation
+		// only supplies candidates and cannot make an empty directory a hard deny.
+		scope = nil
+		if c.Permissions != nil {
+			permissions := *c.Permissions
+			permissions.BlockUnreferencedAssets = false
+			c.Permissions = &permissions
+		}
+	}
 	history := append([]Message(nil), s.state.History...)
 	var decisions map[string]map[string][]string
 	_ = json.Unmarshal(safeJSON([]byte(js(s.state.QuestionDecisions)), c), &decisions)
@@ -364,6 +406,16 @@ func (e *Engine) beginWork(s *session, title string, items []WorkItem, assetRefs
 				existingBindings := g.ResourceBindings
 				if len(existingBindings) == 0 && g.Binding.AssetRef != "" {
 					existingBindings = []WorkBinding{g.Binding}
+				}
+				if len(existingBindings) == 0 && g.closure == nil && row.GoalRevision == 0 && c.superRole == "worker" && c.superTaskID == g.ID {
+					// Routing creates an unconfirmed goal, not a resource scope.
+					// Its first real plan freezes host-resolved targets before the
+					// original confirmation. A confirmed goal cannot take this path.
+					g.ResourceBindings = append([]WorkBinding(nil), requested...)
+					if len(requested) == 1 {
+						g.Binding = requested[0]
+					}
+					existingBindings = g.ResourceBindings
 				}
 				for _, candidate := range requested {
 					found := false
@@ -399,13 +451,14 @@ func (e *Engine) beginWork(s *session, title string, items []WorkItem, assetRefs
 			binding = bindings[0]
 		}
 		g = WorkGoal{ResourceBindings: bindings, Binding: binding, ID: uid(), SessionID: id, OriginRootTurnID: turn, Title: redact(title, c), UserText: redact(sourceText, c), UserDecisions: decisions, Status: "running", RoundLimit: c.MaxSteps, DeadlineAt: time.Now().Add(24 * time.Hour)}
-		row = nativeWorkGoal{ID: g.ID, SessionID: id, RootTurnID: turn}
+		row = nativeWorkGoal{ID: g.ID, SessionID: id, RootTurnID: turn, OriginMessageID: sourceMessageID}
 	}
 	merged, err := mergeWorkItems(g.Items, items)
 	if err != nil {
 		return g, err
 	}
 	g.Items = merged
+	row.superFence = c.superAssignment
 	if err = e.writeWorkGoal(&row, &g, create); err != nil {
 		return g, err
 	}
@@ -427,6 +480,9 @@ func (e *Engine) workCheckpoint(s *session) error {
 	if s.state.Runtime != nil {
 		rounds = s.state.Runtime.ModelRounds
 	}
+	if c.superRole == "worker" {
+		rounds += c.superRoundBase
+	}
 	// The projection contains slices/pointers also updated by background cards.
 	// Serialize while holding the session lock, then persist immutable bytes.
 	checkpoint := js(projection)
@@ -439,7 +495,20 @@ func (e *Engine) workCheckpoint(s *session) error {
 		return err
 	}
 	row.Checkpoint = string(safeJSON([]byte(checkpoint), c))
+	row.superFence = c.superAssignment
 	g.ModelRounds = rounds
+	if c.superAssignment != nil {
+		store, storeErr := e.adkStore()
+		if storeErr != nil {
+			return storeErr
+		}
+		var budget superBudgetRow
+		if budgetErr := store.DB.First(&budget, "task_id = ?", goalID).Error; budgetErr == nil {
+			g.ModelRounds = budget.Rounds
+		} else if !errors.Is(budgetErr, gorm.ErrRecordNotFound) {
+			return budgetErr
+		}
+	}
 	if len(decisions) > 0 {
 		g.UserDecisions = decisions
 	}
@@ -450,12 +519,24 @@ func (e *Engine) workCheckpoint(s *session) error {
 	return e.writeWorkGoal(&row, &g, false)
 }
 func (e *Engine) WorkControl(ctx context.Context, sessionID, id, command string, revision int64) error {
+	if isSuperArchiveGoal(id) {
+		return errors.New("superagent: imported SRE archive is read-only")
+	}
 	if _, err := e.get(sessionID); err != nil {
 		return err
 	}
 	row, g, err := e.workRow(sessionID, id)
 	if err != nil {
 		return err
+	}
+	if command == "resume" {
+		store, err := e.adkStore()
+		if err != nil {
+			return err
+		}
+		if err = rejectSuperReadOnlyGoalTx(store.DB, id); err != nil {
+			return err
+		}
 	}
 	if revision != g.Revision {
 		return errWorkConflict
@@ -529,6 +610,9 @@ func (e *Engine) CancelWorkGoals(ctx context.Context, sessionID string) error {
 		return err
 	}
 	for _, goal := range goals {
+		if IsRecoveryWorkGoalID(goal.ID) {
+			continue
+		}
 		if !workTerminal(goal.Status) {
 			if err = e.WorkControl(ctx, sessionID, goal.ID, "cancel", goal.Revision); err != nil {
 				return err

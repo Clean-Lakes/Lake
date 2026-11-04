@@ -14,16 +14,19 @@ func workTools() []Tool {
 	return []Tool{
 		{"work_begin", "Start a durable goal for the current user's requested work. Pass asset_refs from list_assets for the actual requested resources; never inherit an unrelated session terminal. Record dependencies. Goal progress never grants operation permission. Use before multi-step or asynchronous work; do not use for casual explanation.", objectSchema(map[string]any{"title": text(), "items": arraySchema(item), "asset_refs": arraySchema(text())}, "title", "items")},
 		{"work_read", "Read the current durable goal, original operation handles and outstanding work. Do not repeat dispatched operations.", objectSchema(map[string]any{"goal_id": text(), "item_id": text(), "evidence_id": text()})},
-		{"work_update", "Update an item using actual recorded evidence call IDs. Completed requires successful observations; waiting_user records an unresolved human prerequisite. Never mark a running job complete.", objectSchema(map[string]any{"item_id": text(), "status": map[string]any{"type": "string", "enum": []string{"running", "waiting_user", "blocked", "completed", "failed"}}, "reason": text(), "evidence_ids": arraySchema(text())}, "item_id", "status")},
+		{"work_update", "After plan confirmation, first set the actual item_id to running and wait for its result before resource I/O; this binds the step and attempt. After successful observations, submit completed with the actual evidence call IDs to request host verification; the host may ask independent human acceptance before recording completion. waiting_user only records a missing prerequisite and does not create an acceptance question. Never mark a running external job complete.", objectSchema(map[string]any{"item_id": text(), "status": map[string]any{"type": "string", "enum": []string{"running", "waiting_user", "blocked", "completed", "failed"}}, "reason": text(), "evidence_ids": arraySchema(text())}, "item_id", "status")},
 		{"work_wait", "Park this invocation until the registered external jobs change to a terminal result, without model polling. Call alone in its tool batch. The host resumes the same goal; do not ask the user to say continue.", objectSchema(map[string]any{})},
 		{"work_finish", "Finish only after every goal item is actually complete. Otherwise record a human prerequisite or blocker and leave the goal open. summary is the actual answer grounded in recorded evidence.", objectSchema(map[string]any{"summary": text()}, "summary")},
 	}
 }
 func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call Call, a map[string]any) (any, error) {
-	if e.worker != nil || c.sreCoordinator || c.sre != nil || c.workflowMode || c.ConversationMode == ModePlan || c.Profile != "core" && c.Profile != "" {
+	if e.worker != nil || c.sreCoordinator || c.sre != nil || c.workflowMode || c.ConversationMode == ModePlan && c.superRole != "worker" || c.Profile != "core" && c.Profile != "" {
 		return nil, errors.New("work goals require an ordinary core conversation")
 	}
 	if call.Name == "work_begin" {
+		if c.superRole == "worker" && a["asset_refs"] == nil {
+			return nil, errors.New("Worker work_begin requires explicit asset_refs from PROJECT RESOURCE INDEX; bind the intended aliases before plan confirmation. For work with no resource I/O, explicitly pass asset_refs:[]")
+		}
 		var items []WorkItem
 		if err := json.Unmarshal([]byte(js(a["items"])), &items); err != nil {
 			return nil, err
@@ -32,7 +35,11 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 		if err := json.Unmarshal([]byte(js(a["asset_refs"])), &refs); a["asset_refs"] != nil && err != nil {
 			return nil, err
 		}
-		return e.beginWork(s, str(a["title"]), items, refs...)
+		goal, err := e.beginWork(s, str(a["title"]), items, refs...)
+		if err != nil {
+			return nil, err
+		}
+		return e.confirmSecurityWorkProposal(ctx, s, c, call, goal)
 	}
 	s.mu.Lock()
 	id, goalID := s.state.View.Session, s.state.WorkGoalID
@@ -46,9 +53,25 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 		}
 		return nil, errors.New("当前没有工作目标，请先 work_begin")
 	}
+	if IsRecoveryWorkGoalID(goalID) {
+		if call.Name != "work_read" {
+			return nil, errors.New("恢复档案只读，继续原目标需要新执行上下文")
+		}
+		return e.ReadOnlyRecoveryWorkGoal(ctx, id, goalID)
+	}
+	if isSuperArchiveGoal(goalID) && call.Name != "work_read" {
+		return nil, errors.New("superagent: imported SRE archive is read-only")
+	}
 	row, g, err := e.workRow(id, goalID)
 	if err != nil {
 		return nil, err
+	}
+	row.superFence = c.superAssignment
+	s.mu.Lock()
+	managedGoal := s.state.SecurityManaged
+	s.mu.Unlock()
+	if managedGoal && g.closure == nil && call.Name != "work_read" {
+		return nil, errors.New("确认当前任务步骤和验收条件后才能推进或完成目标")
 	}
 	if call.Name == "work_read" {
 		if ref := str(a["evidence_id"]); ref != "" {
@@ -75,6 +98,62 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 	}
 	if workTerminal(g.Status) || g.Status == "paused" {
 		return nil, errors.New("任务已结束或暂停")
+	}
+	if g.closure != nil && call.Name == "work_update" && (str(a["status"]) == "completed" || str(a["status"]) == "failed") {
+		stepID := str(a["item_id"])
+		if str(a["status"]) == "completed" && g.closure.Steps[stepID].VerificationMode == "manual" {
+			if accepted, checkErr := e.currentManualWorkStepAccepted(g, stepID); checkErr != nil {
+				return nil, checkErr
+			} else if accepted {
+				return g, nil
+			}
+		}
+		if _, err = e.verifyWorkStep(ctx, id, g.ID, str(a["item_id"]), g.Revision); err != nil {
+			return nil, err
+		}
+		_, verified, readErr := e.workRow(id, g.ID)
+		if readErr == nil && str(a["status"]) == "completed" && verified.closure.Steps[stepID].VerificationMode == "manual" {
+			if _, verifyErr := e.askManualSecurityWorkVerification(ctx, s, c, call, verified, stepID); verifyErr != nil {
+				return nil, verifyErr
+			}
+			_, verified, readErr = e.workRow(id, g.ID)
+		}
+		return verified, readErr
+	}
+	if g.closure != nil && call.Name == "work_update" && str(a["status"]) == "running" {
+		execution, execErr := e.CurrentSecurityExecution(ctx, id)
+		if execErr != nil {
+			return nil, execErr
+		}
+		if !execution.Managed || execution.GoalID != g.ID {
+			return nil, errors.New("当前执行上下文未绑定原目标")
+		}
+		stepID := str(a["item_id"])
+		current := g.closure.ActiveAttempts[stepID]
+		if current != "" {
+			store, storeErr := e.adkStore()
+			if storeErr != nil {
+				return nil, storeErr
+			}
+			var attempt workExecutionAttempt
+			if err = store.DB.First(&attempt, "id = ? AND goal_id = ? AND step_id = ?", current, g.ID, stepID).Error; err != nil {
+				return nil, err
+			}
+			runningItem := false
+			for _, item := range g.Items {
+				if item.ID == stepID && item.Status == "running" {
+					runningItem = true
+				}
+			}
+			if g.Status == "running" && runningItem && g.ActiveItemID == stepID && (attempt.State == "prepared" || attempt.State == "running") && attempt.RootTurnID == execution.Owner.RootTurnID && attempt.SecurityTaskID == execution.Task.ID {
+				return g, nil
+			}
+		}
+		if _, err = e.beginWorkAttempt(ctx, id, g.ID, stepID, execution.Task.ID, execution.Owner.RootTurnID, current, str(a["reason"]), g.Revision); err != nil {
+			return nil, err
+		}
+		_, updated, loadErr := e.workRow(id, g.ID)
+		return updated, loadErr
 	}
 	if call.Name == "work_wait" || call.Name == "work_finish" {
 		s.mu.Lock()
@@ -163,6 +242,22 @@ func (e *Engine) invokeWorkTool(ctx context.Context, s *session, c Config, call 
 		row.WaitCallID = call.ID
 		row.WaitState = "waiting"
 	case "work_finish":
+		if g.closure != nil {
+			if _, err = e.verifyWorkGoal(ctx, id, g.ID, g.Revision); err != nil {
+				return nil, err
+			}
+			row, g, err = e.workRow(id, g.ID)
+			if err != nil {
+				return nil, err
+			}
+			row.superFence = c.superAssignment
+			if g.Status != "completed" {
+				return g, nil
+			}
+			g.Summary = redact(utf8Prefix(str(a["summary"]), 8000), c)
+			g.BackgroundSummary = e.workParent != nil
+			return g, e.writeWorkGoal(&row, &g, false)
+		}
 		if len(g.Items) == 0 || (reduceWorkGoal(g.Items) != "completed" && reduceWorkGoal(g.Items) != "failed") {
 			return nil, errors.New("仍有未完成、等待用户或未知的工作，不能结束目标")
 		}
@@ -269,8 +364,35 @@ func (e *Engine) registerWorkWatch(s *session, c Config, call Call, value any) e
 		return err
 	}
 	var operation nativeOperation
-	if err = store.DB.Where("session_id = ? AND call_id = ?", id, call.ID).Order("started_at DESC").First(&operation).Error; err != nil {
+	query := store.DB.Where("session_id = ? AND call_id = ?", id, call.ID)
+	managed := c.securityExecution != nil && c.securityExecution.Managed
+	if managed {
+		x := c.securityExecution
+		query = query.Where("security_task_id = ? AND goal_id = ? AND root_turn_id = ? AND step_id = ? AND attempt_id = ? AND goal_revision = ? AND plan_revision = ? AND step_revision = ?", x.Task.ID, x.GoalID, x.Owner.RootTurnID, x.StepID, x.AttemptID, x.GoalRevision, x.PlanRevision, x.StepRevision)
+		goalID = x.GoalID
+	}
+	if err = query.Order("started_at DESC").First(&operation).Error; err != nil {
 		return err
+	}
+	if managed {
+		x := c.securityExecution
+		scope, valid := operationOwnerScope(operation)
+		if !valid || scope != x.Owner.ScopeID || operation.OwnerID != x.Owner.OwnerID || operation.OwnerGeneration != x.Owner.Generation || operation.StoreID != x.Task.StoreID || operation.RecoveryEpoch != x.Task.RecoveryEpoch {
+			return errExecutionOwner
+		}
+		if watch.Adapter != "shell-v1" {
+			return errors.New("security: trusted owned background observer required")
+		}
+		job := e.managedShellByOperation(operation.ID)
+		if job == nil {
+			return errors.New("security: exact original process handle missing")
+		}
+		job.mu.Lock()
+		matches := job.managed && job.id == watch.Handle && job.taskID == x.Task.ID && job.goalID == x.GoalID && job.operationID == operation.ID && job.descriptorDigest == operation.DescriptorDigest
+		job.mu.Unlock()
+		if !matches {
+			return errors.New("security: background handle binding mismatch")
+		}
 	}
 	watch.OperationID = operation.ID
 	if goalID == "" {
@@ -283,6 +405,9 @@ func (e *Engine) registerWorkWatch(s *session, c Config, call Call, value any) e
 	row, g, err := e.workRow(id, goalID)
 	if err != nil {
 		return err
+	}
+	if managed && (g.closure == nil || g.closure.GoalRevision != operation.GoalRevision || g.closure.PlanRevision != operation.PlanRevision || g.closure.ActiveAttempts[operation.StepID] != operation.AttemptID) {
+		return errWorkConflict
 	}
 	for _, item := range g.Items {
 		if item.Watch != nil && item.Watch.OperationID == watch.OperationID {
@@ -298,6 +423,9 @@ func (e *Engine) registerWorkWatch(s *session, c Config, call Call, value any) e
 	}
 	assigned := false
 	for i := range g.Items {
+		if managed && g.Items[i].ID != operation.StepID {
+			continue
+		}
 		if g.Items[i].Watch == nil && g.Items[i].Status == "running" {
 			g.Items[i].Watch = &watch
 			if g.ActiveItemID == g.Items[i].ID {
@@ -309,6 +437,9 @@ func (e *Engine) registerWorkWatch(s *session, c Config, call Call, value any) e
 		}
 	}
 	if !assigned {
+		if managed {
+			return errors.New("security: original contracted background step unavailable")
+		}
 		g.Items = append(g.Items, WorkItem{ID: uid(), Title: title, Status: "waiting_external", Watch: &watch})
 	}
 	if blockedReason != "" {
@@ -320,6 +451,7 @@ func (e *Engine) registerWorkWatch(s *session, c Config, call Call, value any) e
 		}
 	}
 	g.Status = reduceWorkGoal(g.Items)
+	row.superFence = c.superAssignment
 	return e.writeWorkGoal(&row, &g, false)
 }
 

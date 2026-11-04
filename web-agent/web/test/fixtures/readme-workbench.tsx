@@ -76,6 +76,16 @@ if(new URLSearchParams(location.search).has('compaction-failure')){
  snapshot.sre={enabled:false,tasks:[{...task,status:'cancelled',updatedAt:'2026-10-26T15:57:17Z',messages:[],attempts:[{...task.attempts[0]!,status:'interrupted',operations:[{id:'old-dispatch',status:'dispatched',risk:'readonly',resourceId:'order-api',call:{id:'old-call',name:'shell',arguments:'{"command":"hostname"}'},preparedAt:'2026-10-26T15:55:00Z',dispatchedAt:'2026-10-26T15:55:01Z'}]}]} as SRETask]};
 }
 const islandQuery = new URLSearchParams(location.search).get('pilot-island');
+// Ordinary standby with no inspector reproduces the 284px/336px resize loop.
+if(new URLSearchParams(location.search).has('header-stability')){
+ session.title='服务运行状态排查专员';session.status='idle';
+ snapshot.sre={enabled:false,tasks:[]};snapshot.ai=undefined;
+ snapshot.messages=[];snapshot.replyTimings=[];
+ Object.assign(window,{lakeHeaderStabilityQA:{
+  title(value:string){session.title=value;emit();},
+ }});
+ function emit(){snapshot.cursor++;for(const stream of demoStreams)stream.onmessage?.(new MessageEvent('message',{data:JSON.stringify({sessionId:session.id,type:'session',seq:snapshot.cursor})}));}
+}
 const islandWrites: string[] = [];
 const linkedIsland=new URLSearchParams(location.search).has('linked-island');
 const linkedTerminal={id:'linked-terminal',sessionId:session.id,resourceId:'order-api',generation:'linked-g',status:'ready',holder:'user',interactive:true,writerSessionId:session.id};

@@ -23,7 +23,13 @@ type scheduleExecution struct {
 }
 
 type toolSchedule struct {
-	History []scheduleExecution `json:"history,omitempty"`
+	ConfigRevision    int64               `json:"security_config_revision,omitempty"`
+	AuthorityRevision int64               `json:"security_authority_revision,omitempty"`
+	StatusRevision    int64               `json:"security_status_revision,omitempty"`
+	AnchorAt          string              `json:"security_anchor_at,omitempty"`
+	OccurrenceID      string              `json:"security_occurrence_id,omitempty"`
+	OccurrenceDueAt   string              `json:"security_occurrence_due_at,omitempty"`
+	History           []scheduleExecution `json:"history,omitempty"`
 
 	ID         string `json:"id"`
 	Project    string `json:"project_id"`
@@ -55,6 +61,11 @@ func (b *Server) readSchedules() ([]toolSchedule, error) {
 	}
 	var rows []toolSchedule
 	err = json.Unmarshal(data, &rows)
+	if err == nil {
+		for i := range rows {
+			normalizeScheduleRevisions(&rows[i])
+		}
+	}
 	return rows, err
 }
 func (b *Server) writeSchedules(rows []toolSchedule) error {
@@ -80,7 +91,10 @@ func (b *Server) writeSchedules(rows []toolSchedule) error {
 	if err != nil {
 		return err
 	}
-	return platform.ReplaceFile(temp.Name(), b.schedulePath())
+	if err = platform.ReplaceFile(temp.Name(), b.schedulePath()); err != nil {
+		return err
+	}
+	return platform.SyncDirectory(b.Store.Dir)
 }
 func scheduleView(row toolSchedule) Object {
 	historyCount := len(row.History)
@@ -90,6 +104,9 @@ func scheduleView(row toolSchedule) Object {
 	must(json.Unmarshal([]byte(jsonText(row)), &out))
 	delete(out, "options")
 	delete(out, "history")
+	for _, key := range []string{"security_config_revision", "security_authority_revision", "security_status_revision", "security_anchor_at", "security_occurrence_id", "security_occurrence_due_at"} {
+		delete(out, key)
+	}
 	out["history_count"] = historyCount
 	return out
 }
@@ -140,8 +157,9 @@ func (b *Server) scheduleTool(ctx context.Context, id, project, name string, arg
 			return nil, errors.New("schedule execution is running; stop its task before editing")
 		}
 		if name == "schedule_delete" {
-			rows = append(rows[:index], rows[index+1:]...)
-			return Object{"deleted": true}, b.writeSchedules(rows)
+			row.Enabled = false
+			err = b.persistScheduleConfiguration(ctx, &row, "agent", func() error { rows = append(rows[:index], rows[index+1:]...); return b.writeSchedules(rows) })
+			return Object{"deleted": true}, err
 		}
 		row.Revision++
 	}
@@ -150,6 +168,7 @@ func (b *Server) scheduleTool(ctx context.Context, id, project, name string, arg
 	}
 	if v, ok := args["at"]; ok {
 		row.At = stringOf(v)
+		row.AnchorAt = row.At
 	}
 	if v, ok := args["kind"]; ok {
 		row.Kind = stringOf(v)
@@ -211,12 +230,43 @@ func (b *Server) scheduleTool(ctx context.Context, id, project, name string, arg
 	} else {
 		rows[index] = row
 	}
-	if err = b.writeSchedules(rows); err != nil {
+	index = len(rows) - 1
+	for i := range rows {
+		if rows[i].ID == row.ID {
+			index = i
+			break
+		}
+	}
+	if err = b.persistScheduleConfiguration(ctx, &rows[index], "agent", func() error { return b.writeSchedules(rows) }); err != nil {
 		return nil, err
 	}
-	return scheduleView(row), nil
+	return scheduleView(rows[index]), nil
 }
 func (b *Server) startScheduler() error {
+	// Repair only the local cross-store projection. Restart never activates a
+	// registered workflow, renews a task/grant or replays external effects.
+	if b.Engine != nil {
+		pending, err := b.Engine.PendingSecurityScheduleOccurrences(b.Context)
+		if err != nil {
+			return err
+		}
+		for _, occurrence := range pending {
+			projectionErr := func() (err error) {
+				defer func() {
+					if recover() != nil {
+						err = errors.New("schedule recovery projection failed; claimed occurrence remains preserved and was not executed")
+					}
+				}()
+				binding := occurrence.Workflow
+				run := b.Store.CreateWorkflowRunWithID(binding.ProjectID, binding.WorkflowID, int(binding.TemplateVersion), binding.RunID, binding.SessionID)
+				b.Store.FinishWorkflowRun(stringOf(run["id"]), "interrupted", "Lake restarted before workflow admission; explicit continuation and current authorization required")
+				return b.Engine.MarkSecurityScheduleOccurrenceMaterialized(b.Context, occurrence.ID, binding.RunID)
+			}()
+			if projectionErr != nil {
+				return projectionErr
+			}
+		}
+	}
 	b.scheduleMu.Lock()
 	rows, err := b.readSchedules()
 	if err == nil {
@@ -234,12 +284,12 @@ func (b *Server) startScheduler() error {
 				r.Status = "interrupted"
 				r.Error = "Lake restarted; the claimed occurrence was not replayed"
 				finishScheduleExecution(r, current)
-				r.Revision++
+				scheduleStatusChanged(r)
 			}
 			if r.Enabled && !at.After(current) {
 				appendScheduleExecution(r, scheduleExecution{ID: ident(), ScheduledAt: r.At, FinishedAt: current.Format(time.RFC3339), Status: "missed"})
 				advanceSchedule(r, current)
-				r.Revision++
+				scheduleStatusChanged(r)
 				r.Status = "missed"
 				r.Error = "Missed occurrence skipped after restart"
 			}
@@ -298,12 +348,35 @@ func (b *Server) tickSchedules(current time.Time) {
 			if e != nil || !r.Enabled || r.Status == "running" || at.After(current) {
 				continue
 			}
-			appendScheduleExecution(r, scheduleExecution{ID: ident(), ScheduledAt: r.At, StartedAt: current.Format(time.RFC3339), Status: "running", SessionID: r.Session})
+			if err = b.ensureReminderScheduleConfiguration(r); err != nil {
+				recordScheduleClaimFailure(r, current, err)
+				continue
+			}
+			definition, definitionErr := b.scheduleDefinition(*r)
+			if definitionErr == nil {
+				definitionErr = b.Engine.ValidateSecurityScheduleSnapshot(b.Context, definition)
+			}
+			if definitionErr != nil {
+				recordScheduleClaimFailure(r, current, definitionErr)
+				continue
+			}
+			occurrence, claimErr := b.Engine.ClaimSecurityScheduleOccurrenceAt(b.Context, r.ID, r.ConfigRevision, r.AuthorityRevision, at, current)
+			if claimErr != nil {
+				recordScheduleClaimFailure(r, current, claimErr)
+				continue
+			}
+			if occurrence.Replay && r.Kind != "reminder" {
+				advanceSchedule(r, current)
+				scheduleStatusChanged(r)
+				continue
+			}
+			r.OccurrenceID, r.OccurrenceDueAt = occurrence.ID, at.UTC().Format(time.RFC3339Nano)
+			appendScheduleExecution(r, scheduleExecution{ID: occurrence.ID, ScheduledAt: r.At, StartedAt: current.Format(time.RFC3339), Status: "running", SessionID: r.Session})
 			r.Status = "running"
 			r.Error = ""
 			r.TaskID = ""
 			r.LastAt = current.Format(time.RFC3339)
-			r.Revision++
+			scheduleStatusChanged(r)
 			advanceSchedule(r, current)
 			due = append(due, *r)
 		}
@@ -326,7 +399,7 @@ func (b *Server) refreshScheduleTask(r *toolSchedule) {
 	defer func() {
 		if r.Status != "running" {
 			finishScheduleExecution(r, time.Now())
-			r.Revision++
+			scheduleStatusChanged(r)
 		}
 	}()
 	defer func() {
@@ -367,7 +440,10 @@ func (b *Server) executeSchedule(row toolSchedule) {
 			fail(403, "schedule project mismatch")
 		}
 		if row.Kind == "reminder" {
-			b.Store.AddMessage(row.Session, "system", "提醒「"+row.Name+"」："+row.Message, nil)
+			b.deliverScheduleReminder(row)
+			if row.OccurrenceID != "" {
+				must(b.Engine.MarkSecurityScheduleOccurrenceMaterialized(b.Context, row.OccurrenceID, ""))
+			}
 			return
 		}
 		template := b.Store.Workflow(row.Project, row.WorkflowID)
@@ -382,7 +458,18 @@ func (b *Server) executeSchedule(row toolSchedule) {
 			opts[k] = opts[k] == true && current[k] == true
 		}
 		opts["denyLocalExecution"] = opts["denyLocalExecution"] == true || current["denyLocalExecution"] == true
-		run := b.startWorkflow(row.Project, row.WorkflowID, row.Version, opts)
+		if row.OccurrenceID == "" || row.OccurrenceDueAt == "" {
+			fail(409, "工作流调度缺少已登记的发生实例，未派发")
+		}
+		dueAt, parseErr := time.Parse(time.RFC3339Nano, row.OccurrenceDueAt)
+		must(parseErr)
+		occurrence, claimErr := b.Engine.ClaimSecurityScheduleOccurrence(b.Context, row.ID, row.ConfigRevision, row.AuthorityRevision, dueAt)
+		must(claimErr)
+		if occurrence.ID != row.OccurrenceID || occurrence.Workflow.RunID == "" {
+			fail(409, "调度实例身份不匹配，未派发")
+		}
+		run := b.startBoundWorkflowRun(occurrence.Workflow, opts)
+		must(b.Engine.MarkSecurityScheduleOccurrenceMaterialized(b.Context, row.OccurrenceID, occurrence.Workflow.RunID))
 		taskID = stringOf(run["id"])
 		executionSession = stringOf(run["sessionId"])
 		status = "running"
@@ -400,7 +487,7 @@ func (b *Server) executeSchedule(row toolSchedule) {
 			rows[i].Status = status
 			rows[i].Error = message
 			rows[i].TaskID = taskID
-			rows[i].Revision++
+			scheduleStatusChanged(&rows[i])
 			if len(rows[i].History) > 0 {
 				last := &rows[i].History[len(rows[i].History)-1]
 				last.TaskID = taskID
@@ -424,6 +511,11 @@ func (b *Server) executeSchedule(row toolSchedule) {
 // Execution entries live in the same atomic file as claims; no external effect
 // is replayed to reconstruct historical records.
 func appendScheduleExecution(row *toolSchedule, run scheduleExecution) {
+	for _, old := range row.History {
+		if old.ID == run.ID {
+			return
+		}
+	}
 	row.History = append(row.History, run)
 	if len(row.History) > 100 {
 		row.History = append([]scheduleExecution{}, row.History[len(row.History)-100:]...)

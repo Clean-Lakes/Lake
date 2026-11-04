@@ -1,5 +1,7 @@
 package web
 
+import "github.com/Clean-Lakes/Lake/internal/ai"
+
 // Resource terminals need an event/history owner, but opening a shell must not
 // create a user-facing chat. Reuse one private runtime scope per resource.
 func (s *Store) ResourceTerminalSession(ref string) Object {
@@ -49,6 +51,9 @@ func (s *Store) AvailableTerminals(id string) []Object {
 
 func (b *Server) sessionSnapshot(id string) Object {
 	snap := b.Store.Snapshot(id)
+	if b.Engine == nil || b.Engine.CheckSecurityMemoryEligibility(b.Context, stringOf(object(snap["session"])["projectId"]), ai.SecurityMemoryRead) != nil {
+		snap["naturalMemoryNotices"] = []Object{}
+	}
 	own := objects(snap["terminals"])
 	seen := map[string]bool{}
 	for _, term := range own {
@@ -83,5 +88,30 @@ func (b *Server) sessionSnapshot(id string) Object {
 	snap["terminals"] = own
 	snap["commandStopNotices"] = b.Store.commandStopNotices(id)
 	snap["sre"] = b.sreSnapshot(id)
+	if b.Engine != nil && object(snap["session"])["workspaceRole"] == "worker" {
+		worker, err := b.Engine.SuperWorkerForSession(b.Context, stringOf(object(snap["session"])["projectId"]), id)
+		aiFailure(err)
+		detail, err := b.Engine.SuperTaskDetail(id, worker.TaskID)
+		aiFailure(err)
+		snap["superagent"] = detail
+	}
+	if b.Engine != nil && object(snap["session"])["workspaceRole"] == "router" {
+		messages := objects(snap["messages"])
+		ids := []string{}
+		for _, message := range messages {
+			if message["role"] == "assistant" {
+				ids = append(ids, stringOf(message["id"]))
+			}
+		}
+		authors, err := b.Engine.SuperReplyAuthors(b.Context, stringOf(object(snap["session"])["projectId"]), id, ids)
+		aiFailure(err)
+		for _, message := range messages {
+			if message["role"] == "assistant" {
+				if author, ok := authors[stringOf(message["id"])]; ok {
+					message["author"] = author
+				}
+			}
+		}
+	}
 	return snap
 }

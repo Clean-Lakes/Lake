@@ -23,12 +23,17 @@ type UserQuestion struct {
 	MultiSelect bool             `json:"multi_select,omitempty"`
 }
 type QuestionRequest struct {
+	Source           *QuestionSource     `json:"source,omitempty"`
 	Pilot            *PilotChoice        `json:"pilot,omitempty"`
 	Answers          map[string][]string `json:"answers,omitempty"`
 	Call             *Call               `json:"call,omitempty"`
 	RuntimeSessionID string              `json:"runtimeSessionId,omitempty"`
 	ID               string              `json:"id"`
 	Questions        []UserQuestion      `json:"questions"`
+}
+type QuestionSource struct {
+	MessageID string `json:"messageId"`
+	Text      string `json:"text"`
 }
 
 func (e *Engine) invokeSessionTool(ctx context.Context, s *session, c Config, call Call, a map[string]any) (result any, err error) {
@@ -232,7 +237,7 @@ func (e *Engine) sessionApprovalTarget(ctx context.Context, s *session, call Cal
 	return err
 }
 
-func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot ...*PilotChoice) (any, error) {
+func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot ...*PilotChoice) (result any, resultErr error) {
 	if e.workParent != nil {
 		return nil, errors.New("后台接续需要用户提供信息；请把对应工作项设为 waiting_user 并说明问题，不猜测答案")
 	}
@@ -269,10 +274,16 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot .
 	key := hash(s.state.View.RootTurnID + js(input.Questions))
 	previous, reused := s.state.QuestionDecisions[key]
 	s.mu.Unlock()
-	if reused {
+	if reused && !hasSecurityConfirmationQuestion(ctx) {
 		return questionResult(input.Questions, previous, true), nil
 	}
 	req := &QuestionRequest{ID: uid(), Questions: input.Questions}
+	if hasSecurityConfirmationQuestion(ctx) {
+		req.ID = "security-confirm-" + req.ID
+	}
+	if err := e.bindSecurityConfirmationQuestion(ctx, s, req); err != nil {
+		return nil, err
+	}
 	if len(pilot) > 0 {
 		req.Pilot = pilot[0]
 	}
@@ -296,14 +307,32 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot .
 	defer func() {
 		s.mu.Lock()
 		s.questionReply = nil
-		s.state.View.Question = nil
+		e.runMu.Lock()
+		closing := e.runtimeClosed || e.HostContext != nil && e.HostContext.Err() != nil
+		e.runMu.Unlock()
+		// A host update must retain the original SDK input checkpoint. A normal
+		// turn cancellation still expires its question; neither path answers it.
+		if !closing || resultErr == nil || !nativeQuestionReady(req) {
+			s.state.View.Question = nil
+		}
 		_ = e.saveHumanInputState(s)
-		e.notify(s, "question", nil)
+		e.notify(s, "question", s.state.View.Question)
 		s.mu.Unlock()
 	}()
 	if err != nil {
 		return nil, err
 	}
+	resumeSlot, slotErr := e.parkSuperHumanInput(ctx)
+	if slotErr != nil {
+		return nil, slotErr
+	}
+	defer func() {
+		if resultErr == nil {
+			if err := resumeSlot(); err != nil {
+				result, resultErr = nil, err
+			}
+		}
+	}()
 	select {
 	case answers := <-reply:
 		if req.RuntimeSessionID != "" {
@@ -316,7 +345,10 @@ func (e *Engine) askQuestion(ctx context.Context, s *session, call Call, pilot .
 			s.state.QuestionDecisions = map[string]map[string][]string{}
 		}
 		s.state.QuestionDecisions[key] = answers
-		saveErr := e.save(s)
+		saveErr := e.commitSecurityConfirmationAnswer(ctx, s, req, answers)
+		if saveErr == nil {
+			saveErr = e.save(s)
+		}
 		s.mu.Unlock()
 		return questionResult(req.Questions, answers, false), saveErr
 	case <-ctx.Done():
@@ -331,6 +363,9 @@ func (e *Engine) ReplyQuestion(id, requestID string, answers map[string][]string
 // from the actual human answer. Question text and model-proposed options cannot
 // select resources before that answer is validated and submitted.
 func (e *Engine) ReplyQuestionWithTarget(id, requestID string, answers map[string][]string, scope *TargetScope) error {
+	if handled, err := e.replySecurityGoalQuestion(id, requestID, answers); handled {
+		return err
+	}
 	s, err := e.get(id)
 	if err != nil {
 		return err
@@ -342,6 +377,9 @@ func (e *Engine) ReplyQuestionWithTarget(id, requestID string, answers map[strin
 		return errors.New("question expired")
 	}
 	if err := validateQuestionAnswers(req, answers); err != nil {
+		return err
+	}
+	if err := e.commitSecurityConfirmationAnswer(context.Background(), s, req, answers); err != nil {
 		return err
 	}
 	if err := e.recordPilotSelection(req, answers); err != nil {

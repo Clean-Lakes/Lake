@@ -5,7 +5,7 @@ export type StreamState = "connecting" | "connected" | "polling" | "disconnected
 // A background process has its own terminal lifecycle. It must not turn a
 // completed conversation's Send button back into Stop.
 export function conversationActive(snapshot: SessionSnapshot | null, status?: WorkSession["status"]): boolean {
-  return !!snapshot?.hostKeyTrust || !!snapshot?.ai && (["running", "waiting_approval"].includes(snapshot.ai.status) || status === "investigating");
+  return !!snapshot?.hostKeyTrust || !!snapshot?.ai && (snapshot.ai.replyStatus === "running" || ["running", "waiting_approval"].includes(snapshot.ai.status) || status === "investigating");
 }
 
 export function sessionConnection(state: {

@@ -22,8 +22,14 @@ func (b *Server) finishReplyTiming(id string) {
 		return
 	}
 	status := "failed"
-	if view, err := b.Engine.Snapshot(id); err == nil && set("completed cancelled failed")[view.Status] {
-		status = view.Status
+	if view, err := b.Engine.Snapshot(id); err == nil {
+		if set("completed cancelled failed")[view.Status] {
+			status = view.Status
+		}
+		if closureStatus, managed := b.workClosureReplyStatus(id, view); managed {
+			b.Store.FinishReplyTiming(id, closureStatus)
+			return
+		}
 	}
 	// Do not let historical successful SRE work overwrite a failed current reply.
 	if status != "failed" {

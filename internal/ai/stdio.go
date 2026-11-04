@@ -12,26 +12,30 @@ import (
 )
 
 type Frame struct {
-	ID       string          `json:"id,omitempty"`
-	Method   string          `json:"method,omitempty"`
-	Session  string          `json:"session,omitempty"`
-	Data     json.RawMessage `json:"data,omitempty"`
-	Result   any             `json:"result,omitempty"`
-	Error    string          `json:"error,omitempty"`
-	Event    *Event          `json:"event,omitempty"`
-	Callback string          `json:"callback,omitempty"`
-	Approved bool            `json:"approved,omitempty"`
+	ID            string          `json:"id,omitempty"`
+	Method        string          `json:"method,omitempty"`
+	Session       string          `json:"session,omitempty"`
+	Data          json.RawMessage `json:"data,omitempty"`
+	Result        any             `json:"result,omitempty"`
+	Error         string          `json:"error,omitempty"`
+	Event         *Event          `json:"event,omitempty"`
+	Callback      string          `json:"callback,omitempty"`
+	Approved      bool            `json:"approved,omitempty"`
+	HostProjectID string          `json:"hostProjectId,omitempty"` // Inherited-pipe host binding, never tool arguments.
 }
 
 // ServeHome uses the same canonical runtime as Web. The host owns the lock
 // until workers and the Engine have fully stopped.
-func ServeHome(ctx context.Context, home string, in io.Reader, out io.Writer) error {
+func ServeHome(ctx context.Context, home string, in io.Reader, out io.Writer, hosts ...SecurityStdioHostFactory) error {
+	if len(hosts) > 1 {
+		return errors.New("stdio requires at most one trusted host adapter")
+	}
 	h, err := OpenSecurityHome(ctx, home, "")
 	if err != nil {
 		return err
 	}
 	defer h.Close()
-	return serveRuntime(ctx, filepath.Join(filepath.Dir(h.RuntimeRoot), "ai"), h, in, out)
+	return serveRuntime(ctx, filepath.Join(filepath.Dir(h.RuntimeRoot), "ai"), h, in, out, hosts...)
 }
 
 // Serve preserves the conventional legacy path only; arbitrary roots cannot
@@ -47,7 +51,7 @@ func Serve(ctx context.Context, dir string, in io.Reader, out io.Writer) error {
 	}
 	return ServeHome(ctx, filepath.Dir(filepath.Dir(abs)), in, out)
 }
-func serveRuntime(ctx context.Context, dir string, h *SecurityHome, in io.Reader, out io.Writer) error {
+func serveRuntime(ctx context.Context, dir string, h *SecurityHome, in io.Reader, out io.Writer, hosts ...SecurityStdioHostFactory) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var output sync.Mutex
@@ -59,7 +63,40 @@ func serveRuntime(ctx context.Context, dir string, h *SecurityHome, in io.Reader
 		}
 	}
 	var pending sync.Map
+	var engine *Engine
+	var host SecurityStdioHost
+	var workers sync.WaitGroup
 	bridge := func(ctx context.Context, session, name string, a map[string]any, approved bool) (any, error) {
+		if engine != nil {
+			projectID := ""
+			if permit, _ := ctx.Value(securityPermitContextKey{}).(*SecurityPermit); permit != nil {
+				// SDK child runtime IDs are not Web session identities. Keep
+				// the actual parent host session and exact child scope permit.
+				projectID, session = permit.operation.ProjectID, permit.operation.SessionID
+			} else {
+				current, err := engine.get(session)
+				if err != nil {
+					return nil, err
+				}
+				current.mu.Lock()
+				projectID = configSecurityProject(current.state.Config)
+				current.mu.Unlock()
+			}
+			if err := engine.RequireSecurityBridgeContext(ctx, projectID, session, name); err != nil {
+				return nil, &ToolNotExecutedError{Err: err}
+			}
+			managed, err := engine.SecurityProjectManaged(ctx, projectID)
+			if err != nil {
+				return nil, &ToolNotExecutedError{Err: err}
+			}
+			if managed {
+				actual, ok := host.(SecurityStdioBridgeHost)
+				if !ok {
+					return nil, &ToolNotExecutedError{Err: errors.New("security: actual stdio resource bridge unavailable")}
+				}
+				return actual.Bridge(ctx, session, name, a, approved)
+			}
+		}
 		id := uid()
 		ch := make(chan Frame, 1)
 		pending.Store(id, ch)
@@ -77,14 +114,31 @@ func serveRuntime(ctx context.Context, dir string, h *SecurityHome, in io.Reader
 			return nil, ctx.Err()
 		}
 	}
-	engine, err := New(dir, bridge, func(event Event) { send(Frame{Event: &event}) })
+	var err error
+	engine, err = New(dir, bridge, func(event Event) { send(Frame{Event: &event}) })
 	if err != nil {
 		return err
 	}
 	engine.SecurityRuntime = h
-	defer engine.Shutdown()
-	var workers sync.WaitGroup
-	defer workers.Wait()
+	engine.securityEntrySource = "standalone"
+	defer func() {
+		// Stop waiting handlers before closing either canonical DB owner.
+		cancel()
+		workers.Wait()
+		engine.Shutdown()
+		if host != nil {
+			_ = host.Close()
+		}
+	}()
+	if len(hosts) == 1 && hosts[0] != nil {
+		host, err = hosts[0](ctx, h, engine)
+		if err != nil {
+			return err
+		}
+		if host == nil {
+			return errors.New("stdio trusted host adapter unavailable")
+		}
+	}
 	scan := bufio.NewScanner(in)
 	scan.Buffer(make([]byte, 65536), 32<<20)
 	for scan.Scan() {
@@ -105,7 +159,13 @@ func serveRuntime(ctx context.Context, dir string, h *SecurityHome, in io.Reader
 		workers.Add(1)
 		go func(f Frame) {
 			defer workers.Done()
-			result, err := engine.Handle(ctx, f.Method, f.Session, f.Data)
+			var result any
+			var err error
+			if f.Method == "configure" {
+				result, err = engine.configureSecurityStdio(ctx, host, f)
+			} else {
+				result, err = engine.Handle(ctx, f.Method, f.Session, f.Data)
+			}
 			reply := Frame{ID: f.ID, Result: result}
 			if err != nil {
 				reply.Error = err.Error()
@@ -113,8 +173,8 @@ func serveRuntime(ctx context.Context, dir string, h *SecurityHome, in io.Reader
 			send(reply)
 		}(frame)
 	}
-	cancel()
-	engine.Shutdown()
+	// The deferred shutdown cancels waits, drains accepted frame handlers,
+	// then closes Engine/host; ServeHome releases the Home owner last.
 	return scan.Err()
 }
 func (e *Engine) Handle(ctx context.Context, method, id string, data json.RawMessage) (any, error) {

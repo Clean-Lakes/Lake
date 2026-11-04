@@ -51,3 +51,7 @@ A successful asynchronous Shell dispatch binds the original operation/handle. Th
 Pause/stop cancel observation and follow-up admission, not the remote job. Session deletion cancels its pending goals. A lost local-process handle or crash during model resumption blocks instead of replaying changes. Waiting-checkpoint restart recovery is tested. New approval/questions in a detached continuation require an explicit foreground human step; machine results never satisfy them. A user-owned database prerequisite can coexist with independent observations; its dependent deployment remains ineligible.
 
 Automatic context maintenance uses the existing input estimator, triggers at 80% and aims for 60%. Summary child timeout/failure can fall back to bounded tool previews using the live parent context, preserving original user/call pairing and task references. A 60-second failure cooldown prevents summary retry loops. Parent cancellation and manual compaction failure preserve their original semantics; protected input that cannot fit pauses rather than dropping constraints. See [implementation validation](../validation/long-task-continuity.md) for tested paths and remaining fault-matrix coverage.
+
+## Super-agent 统一入口（2026-11-02）
+
+已切换的 Super-agent 项目由 Pilot Router 接单，Worker/保存工作流/日程共用持久准入与租约；模型/工具循环及图调度全部由官方 ADK 承担。原生人工问题与审批的恢复绑定原 SDK/root；原句柄、未知操作和验收账本不因恢复重置。旧执行写入口不能逃逸到 unmanaged；未排空的旧项目保留原 owner，拒绝双写。 验证与边界见 [运行架构](../design/lake-superagent-runtime.md)。

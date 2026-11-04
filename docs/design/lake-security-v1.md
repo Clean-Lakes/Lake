@@ -314,13 +314,19 @@ v1 的约束使用固定结构，不接受模型填写的表达式或路径通�
 
 ### 5.3 任务授权
 
+已接入的受管 `inspect_host` 只调用注册的 `process_snapshot` 固定诊断，与 `observe_host(metric=processes)` 共用编译、派发和只读证据校验；不创建交互终端，不执行模型 Shell 字符串。SSH 必须先由用户确认系统类型并登记与当前连接版本匹配的命令目标；未配置、禁用或版本变化时明确拒绝，不回退到旧终端路径。进程快照不代表服务整体健康，也不包含服务日志。未决操作及写入阻断继续保留，固定读取不会将历史 unknown 改为成功或解除原限制。
+
 `TaskGrant` 拟包含：服务端生成的 `id/taskID/goalID/projectID/sessionID`、`rootAuthorityID/recoveryEpoch`、purpose、精确资源ID/连接revision、能力与约束、签发动作、绝对expiry和revision。taskID必须指向同goal的有效SecurityTask；计划允许grant跨该goal的多个attempt复用，但每次仍验证当前step/策略/范围。purpose仅解释，不能构成授权匹配。
 
 v1 任务授权支持结构化读取、受信命令模板和精确服务集合的重启动作。文件写、SQL 写、自由 Shell、任意终端输入及 opaque MCP 仍不接受任务通配授权。诊断预设为有效任务内 30 分钟；可在现有提问选项中选择30分钟或4小时，项目上限默认 4 小时。任务结束、取消、父授权失效或时间到期立即停止新派发；续期必须再次显式授权。项目直接 allow 的读取不需要创建任务授权。
 
 子任务先按第 5.1 节满足能力规则，再收窄到父任务当前边界与角色能力；TaskGrant 是可选授权来源，不是必须存在的交集项。子任务不得自行续期或扩大授权。父任务拥有的 grant 只能在显式关联的子 scope 中使用，资源/能力/TTL 均不变；单次审批仍绑定该具体子调用。后台续跑、压缩、普通重启不能刷新到期时间。
 
-每个后台 workflow run 拥有独立 SecurityTask；定时授权绑定 scheduleID、configRevision、冻结 workflow version、精确资源/能力、expiry、remainingRuns、recoveryEpoch。创建/修改定时时必须由用户显式设置到期与允许次数。每次触发在一笔事务中扣减次数并创建 occurrence、SecurityTask 和对应读取 grant，其到期为 `min(scheduleExpiry, taskExpiry, now+4h)`。无有效授权则标记 `authorization_required`，不自动同意。v1 定时 grant 也只允许结构化读取；写操作不能通过项目 allow 反向扩大本次定时运行的显式能力上限。
+每个后台 workflow run 拥有独立 SecurityTask；定时授权绑定 scheduleID、configRevision、冻结 workflow version、精确资源/能力、expiry、remainingRuns、recoveryEpoch。创建/修改会派发 Agent 的工作流定时时必须由用户显式设置到期与允许次数。每次触发在一笔事务中扣减次数并创建 occurrence、SecurityTask 和对应读取 grant，其到期为 `min(scheduleExpiry, taskExpiry, now+4h)`。无有效授权则标记 `authorization_required`，不自动同意。v1 定时 grant 只允许结构化读取与固定的只读诊断模板；service_restart、任意 Shell、写入及 opaque MCP 不在定时授权范围内；写操作不能通过项目 allow 反向扩大本次定时运行的显式能力上限。
+
+定时的 `enabled` 开关沿用现有“暂停未来发生实例”语义：不撤销已经登记的当前实例，不刷新其任务/grant 的原 TTL、剩余次数或步骤。单纯开关是可用性变更，保留 configRevision/authorityRevision；周期、原始时间锚、目标、模板或授权范围变化及显式 grant 撤销才使原授权失效并 fence 关联执行。恢复备份仍无条件禁用并撤销。后台状态/关联更新只增加 statusRevision，现有响应中的 revision 仅用于用户配置/开关 CAS，不因工作状态刷新变化。
+
+本地 reminder 只追加已有会话的 system 消息，不调用模型或资源；保留现有创建审批语义，但每次发生实例和消息均用确定身份幂等写入。工作流 occurrence 则以原计划 dueAt 登记，ADK 事务中一次扣次数、创建 task/root/目标和受限 grant；Web run 用同一身份补建。重启只补建本地历史投影，不激活旧上下文或追补资源派发。
 
 ### 5.4 任务命令授权与超范围确认
 
@@ -468,6 +474,10 @@ type TaskManager interface {
 首次迁移先备份所有发现的旧 Web/stdio store。现有 Web store 作为规范活动库；旧 stdio store 以 `legacyStoreID` 命名空间保留为只读历史及未决操作对账来源，所有新调用只写规范库。不把 ADK SDK 表按整数 ID 直接拼接。完全相同的记录可按内容摘要标记同源；session/op 身份冲突或无法映射真实资源的未决操作进入冲突清单，相关资源保持恢复阻断。旧会话需要显式导入其可验证历史投影并开始新 SecurityTask；原审批不导入为有效授权。Web/stdio 的旧有效权限快照分别归属其明确项目/会话，不能互相覆盖默认值。
 
 只有旧操作记录的资源映射、结果和冲突已核对后，相关资源才可以写入。保留 archive 本身不等于完成迁移；规范查询需要同时访问迁移索引，以免在新 session 下绕过旧 unknown。用户看到的冲突解决必须有独立审计，不得通过删除旧目录来“完成”迁移。
+
+已初始化、gate open 且没有恢复流程的单一规范库，可显式执行离线 `lake security finalize-migration --home PATH` 检查迁移收尾资格。默认只检查；`--apply` 才提交并清理所引用的迁移快照。先验证原快照摘要，在一致只读事务中逐主键比较所有历史行和不可变内容；会话当前状态、操作结果、工作目标进展等已知可变字段由当前账本继续负责，未决结果不能因清理自动变成已结清。事件、证据和版本化制品必须完整保留。独立 stdio 历史、待审迁移、缺失/变化内容、活动 owner 或恢复档案不适用此收尾协议。
+
+收尾凭据先以应用元数据写入规范 SQLite，再原子发布 format 2、state finalized 的迁移清单，最后删除准确匹配的旧快照；中断可幂等续跑。凭据绑定原清单、storeID/epoch、历史覆盖数量和原操作身份摘要，不保存另一份操作状态或签发权限。正常启动改为验证规范库内的小凭据及原操作身份，不再读取已退出的快照；离线风险核查继续读取当前账本。旧 reader 会拒绝 format 2，不能在删除快照后手工恢复旧清单或降级；原 control/reader guard、恢复 epoch、未决风险和防重放规则保持有效。该协议只收尾迁移副本，不裁剪当前操作、证据、会话或 Memory 数据。
 
 ## 9. 审批、派发与撤销时序
 

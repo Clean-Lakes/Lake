@@ -9,7 +9,8 @@ export type Project = {
 };
 
 export type MemoryKnowledgeKind = "preference" | "procedure" | "topology" | "configuration" | "incident_lesson";
-export type MemorySource = {sourceId?:string; kind:string; sessionId?:string; turnId?:string; messageId?:string; evidenceId?:string; at?:string; observedAt?:string; assertedAt?:string; excerpt?:string; outcome?:string};
+export type MemoryTaskContext = {taskId?:string;workerId?:string;taskRevision?:number;goalRevision?:number;planRevision?:number;ledger?:{kind:string;id:string;stepId?:string;attemptId?:string;state?:string}[];truncated?:boolean};
+export type MemorySource = {taskContext?:MemoryTaskContext;sourceId?:string; kind:string; sessionId?:string; turnId?:string; messageId?:string; evidenceId?:string; at?:string; observedAt?:string; assertedAt?:string; excerpt?:string; outcome?:string};
 export type MemoryAccess = {key:string; revision:number; kind:"index"|"read"|"prepared"; category?:string; scope?:string; contentHash?:string; scopeSignature?:string; offsetLine?:number; byteOffset?:number; bytesRead?:number; at:string; observedAt?:string; historical?:boolean};
 export type MemoryCandidate = {candidateId:string; candidateHash:string; baseKey:string; baseRevision:number; reason:string; status:string; createdAt:string; expiresAt:string; proposal:Partial<ProjectMemoryEntry>};
 export type ProjectMemorySettings = {memorySchemaVersion?:number; projectId: string; useEnabled: boolean; extractionEnabled: boolean; epoch: number; revision: number; settingsRevision: number; publishedRevision: number };
@@ -29,6 +30,7 @@ export type Resource = {
 };
 
 export type WorkSession = {
+	workspaceRole?: 'router'|'worker'|'role'|'legacy';
   id: string;
   projectId: string;
   title: string;
@@ -49,7 +51,9 @@ export type WorkspaceTag = {id: string; projectId: string; name: string; color: 
 
 export type MessageMention = {kind: "resource" | "skill" | "mcp" | "role"; id: string; label: string; start: number; end: number; resourceKind?: Resource["kind"]};
 
+export type SpecialistReplyAuthor = {kind:'specialist';name:string;workerId:string;sessionId:string;taskId:string;channelSessionId?:string};
 export type Message = {
+  author?: SpecialistReplyAuthor;
   id: string;
   sessionId: string;
   role: "user" | "assistant" | "system";
@@ -172,11 +176,12 @@ export type Catalog = {
 export type QueuedMessage = {supplementRootTurnId?:string; id: string; text: string; resourceIds: string[]; references?: Record<string,unknown>[]; mentions?: MessageMention[]; images: Pick<AIImage,"id" | "name" | "mimeType">[]; files: TextFileAttachment[]; createdAt: string};
 export type MessageQueue = {paused: boolean; revision: number; lastError: string; items: QueuedMessage[]};
 export type QueueOperation = {operation:"pause" | "resume"; revision:number} | {operation:"remove" | "push"; revision:number; id:string} | {operation:"edit"; revision:number; id:string; text:string; resourceIds:string[]; references?:Record<string,unknown>[]; mentions?:MessageMention[]} | {operation:"reorder"; revision:number; ids:string[]};
-export type SendMessageResult = {queued?: boolean; queuedMessageId?: string; messageQueue?: MessageQueue};
+export type SendMessageResult = {pilotSessionId?:string;queued?: boolean; queuedMessageId?: string; messageQueue?: MessageQueue};
 
 export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;status:"running" | "completed" | "cancelled" | "failed" | "interrupted"};
 
 export type SessionSnapshot = {
+	superagent?:{task:SuperTask;goal?:WorkGoal};
  naturalMemoryNotices?:{changeId:string;scope:string;entryId:string;revision:number;batchId?:string}[];
   commandStopNotices?: CommandStopNotice[];
  conversationMode?: ConversationMode;
@@ -261,14 +266,14 @@ export type AIUserQuestion = {id:string;title:string;reason?:string;options?:Arr
 export type PilotOperationCandidate = {id:string;title:string;tool:string;arguments:Record<string,unknown>;dependsOn?:string[];risk:string};
 export type PilotDirection = {id:string;title:string;reason:string;recommended?:boolean;operations:PilotOperationCandidate[]};
 export type PilotChoice = {sessionId:string;taskId:string;planRevisionId:string;stepId:string;attemptId:string;role:SREAgentRole;directions:PilotDirection[];singleDirectionReason?:string};
-export type AIQuestionRequest = {id:string;questions:AIUserQuestion[];pilot?:PilotChoice};
+export type AIQuestionRequest = {id:string;questions:AIUserQuestion[];pilot?:PilotChoice;source?:{messageId:string;text:string}};
 export type AIOperationOutcome = {id:string;tool:string;target:string;status:string;handle?:string;result?:string;startedAt:string};
 export type ConversationMode = "default" | "plan";
 export type ConversationModeUpdate = {mode:ConversationMode;cursor:number};
 export type ProposedPlan = {id:string;content:string;at:string};
 export type ExternalWorkWatch={adapter:string;operationId:string;handle:string;state:string;lastObservedAt?:string};
-export type WorkGoal={id:string;sessionId:string;originRootTurnId:string;title:string;status:string;revision:number;items:{id:string;title:string;status:string;reason?:string;watch?:ExternalWorkWatch}[];modelRounds:number;roundLimit:number;deadlineAt:string;updatedAt:string;summary?:string};
-export type AIView = {workGoals?:WorkGoal[]; proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; memoryAccess?: MemoryAccess[]; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
+export type WorkGoal={userText?:string;id:string;sessionId:string;originRootTurnId:string;title:string;status:string;revision:number;items:{id:string;title:string;status:string;reason?:string;watch?:ExternalWorkWatch}[];modelRounds:number;roundLimit:number;deadlineAt:string;updatedAt:string;summary?:string};
+export type AIView = {replyStatus?:string;workGoals?:WorkGoal[]; proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; memoryAccess?: MemoryAccess[]; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
 export type AIPreset = { id: string; title: string; content: string };
 
 export type AIImage = { id: string; mimeType: string; base64: string; sizeBytes: number; width: number; height: number; name?: string; url?: string };
@@ -306,6 +311,13 @@ export type PilotDirectionBatch = {id:string;decisionId:string;directionId:strin
 export type PilotTaskPolicy = {directionBatches?:PilotDirectionBatch[];autoAdvance:boolean;settingsRevision:number;decisions?:{requestId:string;planRevisionId:string;stepId:string;attemptId:string;direction?:PilotDirection;selection:PilotSelection;fingerprints?:string[];operations?:PilotOperationCandidate[];createdAt:string}[]};
 export type SRETask = {pilot?:PilotTaskPolicy;id:string;sessionId:string;projectId:string;requestId:string;goal:string;scope:string[];mode:'assist'|'plan_only';status:string;outcome:string;recoveryStatus:string;rootCauseStatus:string;profileId:string;profileVersion:number;revision:number;tokenBudget:number;budgetPolicy?:string;budgetSpent:number;usage:AIUsage;plans:SREPlanRevision[];runs:SREPlanRun[];attempts:SREStepAttempt[];messages:SRETranscriptEntry[];verifications:SREVerificationResult[];error?:string;createdAt:string;updatedAt:string};
 export type PilotSettings = {enabled:boolean;autoAdvance:boolean;revision:number};
+export type SuperTask = {taskId:string;sessionId:string;projectId?:string;title:string;state:'queued'|'running'|'waiting_external'|'waiting_user'|'paused'|'blocked'|'completed'|'failed'|'cancelled';acceptanceState:'not_evaluated'|'insufficient'|'pass'|'fail';revision:number;originRootTurnId:string;deadlineAt:string;reason?:string;summary?:string;resources?:{runtime:string;assetRef?:string;terminalId?:string}[]};
+export type SuperProject = {projectId:string;routerSessionId:string;version:number};
+export type SuperWorker = {id:string;roleId:string;roleName:string;sessionId:string;task:SuperTask;assignmentState:string;parentWorkerId?:string};
+export type SpecialistChannelInfo = {id:string;projectId:string;roleId:string;roleName:string;sessionId:string;revision:number;createdAt:string;needsConfirmation?:boolean};
+export type SpecialistChannelEntry = {id:string;sourceSessionId:string;taskId?:string;workerId?:string;createdAt:string;message?:Message;card?:AICard};
+export type SpecialistChannelPage = {channel:SpecialistChannelInfo;entries:SpecialistChannelEntry[];nextCursor:string;workers:SuperWorker[];active:SessionSnapshot[];routing:boolean;queued:number};
+export type SuperWorkspace = {active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[]};
 export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[];pilot?:PilotSettings};
 
 export type ScheduleExecution={id:string;scheduled_at:string;started_at?:string;finished_at?:string;status:string;error?:string;task_id?:string;session_id?:string};

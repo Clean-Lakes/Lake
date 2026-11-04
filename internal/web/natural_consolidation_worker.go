@@ -186,6 +186,11 @@ func (b *Server) settleNaturalBatch(items []naturalBatchItem, status, reason str
 	}
 }
 func (b *Server) processNaturalConsolidation(first Object, snapshot ai.MemoryTurnSnapshot) {
+	if b.Engine.CheckSecurityMemoryEligibility(b.Context, snapshot.ProjectID, ai.SecurityMemoryBackground) != nil {
+		b.messageMu.Unlock()
+		b.Store.SettleMemoryJob(stringOf(first["jobId"]), stringOf(first["leaseToken"]), "blocked", "security_memory_recovery_unqualified", ai.Usage{})
+		return
+	}
 	if !naturalSourceAgeValid(snapshot) || !b.Store.read(func() any { return b.Store.naturalSnapshotValid(snapshot) }).(bool) {
 		b.messageMu.Unlock()
 		b.Store.SettleMemoryJob(stringOf(first["jobId"]), stringOf(first["leaseToken"]), "skipped", "natural_memory_invalidated", ai.Usage{})
@@ -206,6 +211,11 @@ func (b *Server) processNaturalConsolidation(first Object, snapshot ai.MemoryTur
 		ok    bool
 	})
 	if local.ok {
+		if b.Engine.CheckSecurityMemoryEligibility(b.Context, snapshot.ProjectID, ai.SecurityMemoryCapture) != nil {
+			b.messageMu.Unlock()
+			b.settleNaturalBatch(items, "blocked", "security_memory_recovery_unqualified", ai.Usage{})
+			return
+		}
 		_, err := b.Store.commitNaturalBatch(local.items, ai.Usage{}, index, guard, batch)
 		b.messageMu.Unlock()
 		if err != nil {
@@ -273,7 +283,7 @@ func (b *Server) processNaturalConsolidation(first Object, snapshot ai.MemoryTur
 		}
 		b.messageMu.Unlock()
 	}()
-	output, u, err := b.Engine.ExtractMemory(ctx, *model, messages)
+	output, u, err := b.Engine.ExtractMemory(ai.WithSecurityMemoryProject(ctx, snapshot.ProjectID), *model, messages)
 	usage = u
 	if err != nil {
 		status = "model_error"
@@ -303,6 +313,10 @@ func (b *Server) processNaturalConsolidation(first Object, snapshot ai.MemoryTur
 		b.messageMu.Unlock()
 		status = "foreground_preempted"
 		b.settleNaturalBatch(items, "retry_wait", status, usage)
+		return
+	}
+	if b.Engine.CheckSecurityMemoryEligibility(ctx, snapshot.ProjectID, ai.SecurityMemoryCapture) != nil {
+		b.settleNaturalBatch(items, "blocked", "security_memory_recovery_unqualified", usage)
 		return
 	}
 	_, err = b.Store.commitNaturalBatch(parsed, usage, index, guard, batch)

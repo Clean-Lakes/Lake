@@ -232,8 +232,15 @@ func (s *Store) readMemoryV2(project, key string, includeDeleted bool) Object {
 }
 
 func (s *Store) CommitMemoryV2(project string, m MemoryMutation) Object {
+	if s.skipMemoryInitialization && (!m.Forget || s.recoveryMemorySchema != 2) {
+		fail(409, ai.ErrSecurityMemoryRecoveryUnqualified.Error())
+	}
 	ValidateMemoryV2(m)
 	result := s.update(func() any { return s.commitMemoryV2Locked(project, m, nil, false) }).(Object)
+	if s.skipMemoryInitialization {
+		result["publicationError"] = "Memory tombstone committed; projection cleanup requires Memory-owner recovery qualification"
+		return result
+	}
 	if err := s.PublishProjectMemory(project); err != nil {
 		result["publicationError"] = "记忆已保存到数据库，文件投影待修复；下次启动将重试。"
 		if m.Forget {
@@ -247,7 +254,7 @@ func (s *Store) CommitMemoryV2(project string, m MemoryMutation) Object {
 // another source turn remains eligible; manual edits invalidate earlier jobs.
 func (s *Store) commitMemoryV2Locked(project string, m MemoryMutation, sources []Object, automatic bool) Object {
 	s.ensureMemorySettings(project)
-	settings := s.memorySettings(project)
+	settings := s.storedMemorySettings(project)
 	old := s.row("SELECT * FROM projectMemoryEntriesV2 WHERE projectId=? AND key=?", project, m.Key)
 	revision := integer(old["revision"])
 	if m.Forget && old != nil && stringOf(old["deletedAt"]) != "" && (m.ExpectedRevision == revision || m.ExpectedRevision == revision-1) {

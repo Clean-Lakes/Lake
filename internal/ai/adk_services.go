@@ -201,6 +201,12 @@ func (m *nativeMemory) SearchMemory(ctx context.Context, req *memory.SearchReque
 		return nil, errors.New("memory outside current user")
 	}
 	c := m.config
+	if err := m.engine.CheckSecurityMemoryEligibility(ctx, c.MemoryProjectID, SecurityMemoryRead); err != nil {
+		return nil, err
+	}
+	if err := m.engine.CheckSecurityMemoryEligibility(ctx, c.MemoryProjectID, SecurityMemoryUse); err != nil {
+		return nil, err
+	}
 	if !c.MemoryEnabled || c.MemoryProjectID == "" || m.engine.Bridge == nil {
 		return &memory.SearchResponse{Memories: []memory.Entry{}}, nil
 	}
@@ -230,6 +236,9 @@ func (m *nativeMemory) AddSessionToMemory(ctx context.Context, session adksessio
 	m.session.mu.Lock()
 	defer m.session.mu.Unlock()
 	c := m.session.state.Config
+	if err := m.engine.CheckSecurityMemoryEligibility(ctx, c.MemoryProjectID, SecurityMemoryCapture); err != nil {
+		return err
+	}
 	if !c.MemoryEnabled || !c.MemoryExtractionEnabled || c.MemoryProjectID != m.config.MemoryProjectID {
 		return errors.New("project memory ingestion disabled")
 	}

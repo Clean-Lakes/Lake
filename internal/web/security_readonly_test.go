@@ -76,7 +76,14 @@ func testSecurityRecoveryRestoresProjects(t *testing.T, legacy bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = db.Exec(`CREATE TABLE native_operations(id TEXT PRIMARY KEY,session_id TEXT,tool TEXT,target TEXT,status TEXT,handle TEXT,result TEXT,risk TEXT,started_at DATETIME); INSERT INTO native_operations VALUES('old-operation',?,'shell','test-resource','unknown','old-handle','','write',?)`, id, time.Now().UTC())
+	if legacy {
+		// Only this isolated fixture deliberately recreates the older application
+		// projection. The normal branch retains the real current native schema.
+		if _, err = db.Exec(`DROP TABLE IF EXISTS native_operations`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS native_operations(id TEXT PRIMARY KEY,session_id TEXT,tool TEXT,target TEXT,status TEXT,handle TEXT,result TEXT,risk TEXT,started_at DATETIME); INSERT INTO native_operations(id,session_id,tool,target,status,handle,result,risk,started_at) VALUES('old-operation',?,'shell','test-resource','unknown','old-handle','','write',?)`, id, time.Now().UTC())
 	db.Close()
 	if err != nil {
 		t.Fatal(err)

@@ -77,7 +77,10 @@ type Server struct {
 	token                string
 	generated            bool
 	workers              sync.WaitGroup
+	superWorkers         sync.Map
+	draining             atomic.Bool
 	closeOnce            sync.Once
+	startMu              sync.Mutex
 	gate                 sync.RWMutex
 	closed               bool
 	http                 *http.Server
@@ -171,7 +174,9 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	if runtimeHome.ReadOnlyView() {
 		store, e = openRecoveryStore(options.DataDir)
 	} else {
-		store, e = openStore(options.DataDir, operationalMemoryV2Ready || options.memoryV2ForTest)
+		// Resource recovery never grants consent to initialize old Memory data.
+		// A future Memory-owner protocol must qualify and initialize it explicitly.
+		store, e = openStore(options.DataDir, operationalMemoryV2Ready || options.memoryV2ForTest, storeOpenOptions{SkipMemoryInitialization: controlErr == nil && control.RecoveryID != ""})
 	}
 	if e != nil {
 		cancel()
@@ -200,8 +205,19 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 		return nil, e
 	}
 	server.Engine.SecurityRuntime = runtimeHome
+	server.Engine.HostContext = server.Context
+	if err = server.Engine.SetSecurityEntrySource("web"); err != nil {
+		server.Close()
+		return nil, err
+	}
 	server.Engine.RuntimeDir = runtimeHome.RuntimeRoot
+	server.Engine.SetSecurityHostSecrets([]string{server.token})
+	if err = server.initializeSecurityCatalog(); err != nil {
+		server.Close()
+		return nil, err
+	}
 	server.Engine.SetSRERepository(store)
+	server.Engine.SuperInputResolver = server.resolveSuperInput
 	server.Engine.NaturalMemory = server.naturalRecallProvider
 	server.Engine.ModelActivity = server.memoryForegroundModel
 	server.Engine.MemoryCaptureAllowed = store.MemoryCaptureAllowed
@@ -230,22 +246,34 @@ func New(ctx context.Context, options Options) (server *Server, err error) {
 	runtimeReady = true
 	return server, nil
 }
-func (b *Server) Start() error {
+func (b *Server) prepareHTTPServer() (net.Listener, *http.Server, error) {
+	b.startMu.Lock()
+	defer b.startMu.Unlock()
+	if err := b.Context.Err(); err != nil {
+		return nil, nil, err
+	}
+	if b.listener != nil {
+		return nil, nil, errors.New("Lake HTTP server already started")
+	}
 	if !b.securityRuntime.ReadOnlyView() {
 		if err := b.reconcilePersistedMemoryOutboxes(); err != nil {
-			return err
+			return nil, nil, err
 		}
-		b.Store.RecoverMemoryJobs()
-		_ = b.Store.ReconcileProjectMemoryFiles()
+		if !b.Store.skipMemoryInitialization && b.Engine.CheckSecurityMemoryEligibility(b.Context, "global-memory", ai.SecurityMemoryBackground) == nil {
+			b.Store.RecoverMemoryJobs()
+			_ = b.Store.ReconcileProjectMemoryFiles()
+		}
 	}
 	l, e := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", b.options.Port))
 	if e != nil {
-		return e
+		return nil, nil, e
 	}
 	b.listener = l
 	if !b.securityRuntime.ReadOnlyView() {
 		b.workers.Add(1)
 		go b.runMemoryWorker()
+		b.workers.Add(1)
+		go b.runSuperagent()
 		b.workers.Add(1)
 		go func() {
 			defer b.workers.Done()
@@ -276,8 +304,16 @@ func (b *Server) Start() error {
 	} else if b.generated {
 		fmt.Fprintln(b.options.Output, "Startup access URL:", address+"/#token="+url.QueryEscape(b.token))
 	}
+	return l, b.http, nil
+}
+
+func (b *Server) Start() error {
+	l, server, err := b.prepareHTTPServer()
+	if err != nil {
+		return err
+	}
 	errc := make(chan error, 1)
-	go func() { errc <- b.http.Serve(l) }()
+	go func() { errc <- server.Serve(l) }()
 	select {
 	case <-b.Context.Done():
 		return nil
@@ -296,11 +332,19 @@ func (b *Server) Close() {
 		if b.cancel != nil {
 			b.cancel()
 		}
-		if b.http != nil {
+		// Wait for startup to finish registering listener, HTTP server and
+		// workers. A runtime.json appearing is not a Go memory barrier.
+		b.startMu.Lock()
+		server, listener := b.http, b.listener
+		b.startMu.Unlock()
+		if server != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			b.http.Shutdown(ctx)
+			server.Shutdown(ctx)
 			cancel()
-			b.http.Close()
+			server.Close()
+		}
+		if listener != nil {
+			listener.Close()
 		}
 		b.gate.Lock()
 		defer b.gate.Unlock()
@@ -319,12 +363,12 @@ func (b *Server) Close() {
 		}
 		b.schedulerWorkers.Wait()
 		b.workers.Wait()
-		if b.http != nil {
+		if server != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			b.http.Shutdown(ctx)
+			server.Shutdown(ctx)
 		}
-		if b.listener != nil {
+		if listener != nil {
 			os.Remove(filepath.Join(b.options.DataDir, "runtime.json"))
 		}
 		if b.Store != nil {
@@ -425,6 +469,15 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fail(401, "Authentication required")
 		}
 	}
+	if b.superagentLifecycleRoute(w, r) {
+		return
+	}
+	if b.draining.Load() && method != "GET" {
+		fail(503, "内核正在排空，新的操作尚未接纳")
+	}
+	if b.securityMigrationRoute(w, r) {
+		return
+	}
 	if b.securityRuntime != nil && b.securityRuntime.ReadOnlyView() {
 		aiFailure(b.securityRuntime.CheckReadOnlyView())
 		if name != "/api/bootstrap" || method != "GET" {
@@ -447,6 +500,24 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if b.pilotSettingsRoute(w, r, name, method) {
+		return
+	}
+	if b.superagentRoute(w, r) {
+		return
+	}
+	if b.securityBoundaryRoute(w, r, name, method) {
+		return
+	}
+	if b.securityWorkRoute(w, r) {
+		return
+	}
+	if b.securityRoute(w, r) {
+		return
+	}
+	if b.securityModeRoute(w, r) {
+		return
+	}
+	if b.securityWorkflowRoute(w, r) {
 		return
 	}
 	if b.sreRoute(w, r, name, method) {
@@ -753,6 +824,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(parts) == 3 && method == "DELETE" {
+			if b.Store.superSessionKind(id) == "role" {
+				fail(409, "长期专员入口不能作为执行会话删除")
+			}
 			b.messageMu.Lock()
 			defer b.messageMu.Unlock()
 			if b.runningMessages[id] || b.Engine.SessionReserved(id) {
@@ -784,9 +858,17 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(parts) == 4 {
 			switch parts[3] {
+			case "channel":
+				b.roleChannelRoute(w, r, id)
+				return
 			case "snapshot":
 				if method == "GET" {
 					snap := b.sessionSnapshot(id)
+					if b.Store.superSessionKind(id) == "role" {
+						snap["ai"] = ai.View{Session: id, Status: "idle", Cards: []ai.Card{}}
+						reply(w, 200, snap)
+						return
+					}
 					view, e := b.Engine.Snapshot(id)
 					aiFailure(e)
 					snap["ai"] = b.contextView(view)
@@ -904,6 +986,9 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if method == "POST" {
+				if b.Store.superSessionKind(id) == "role" && op != "configure" && op != "mode" {
+					fail(409, "请打开对应任务的执行详情后操作，专员频道本身不执行任务")
+				}
 				if op == "mode" {
 					reply(w, 200, b.setConversationMode(id, body(w, r, 16384)))
 					return
@@ -925,7 +1010,7 @@ func (b *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					if _, exists := updates["conversationMode"]; exists {
 						fail(400, "请通过模式切换入口修改会话模式")
 					}
-					reply(w, 200, b.configure(id, updates))
+					reply(w, 200, b.configureUserOptions(id, updates))
 					return
 				}
 				if set("workControl abort questionReply agentQuestionReply decision cancelAgent agentDecision agentDetails resolveOperation clear clearReferences rollback compact restore undoFile extractPreset")[op] {

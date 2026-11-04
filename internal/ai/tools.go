@@ -68,7 +68,7 @@ func (e *Engine) policy(ctx context.Context, id string, c Config, name string, a
 	}
 	return risk, hash(js(c.Assets) + js(a)), nil
 }
-func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (result any, err error) {
+func (e *Engine) invokeLegacy(ctx context.Context, s *session, c Config, call Call) (result any, err error) {
 	if err := e.CheckSecurityRuntime(); err != nil {
 		return nil, &ToolNotExecutedError{Err: err}
 	}
@@ -473,6 +473,14 @@ func (e *Engine) invoke(ctx context.Context, s *session, c Config, call Call) (r
 			err = persistErr
 		}
 	}()
+	if operation != nil && operation.permit != nil {
+		ctx = securityPermitContext(ctx, operation.permit)
+	}
+	return e.executeResourceTool(ctx, s, c, call, a, risk, ref, sessionID, policyContext, preview, approved)
+}
+
+func (e *Engine) executeResourceTool(ctx context.Context, s *session, c Config, call Call, a map[string]any, risk, ref, sessionID string, policyContext map[string]any, preview map[string]any, approved bool) (any, error) {
+	sessionForTools := sessionID
 	switch call.Name {
 	case "stage_attachment":
 		return e.stageAttachment(ctx, sessionForTools, c, a)

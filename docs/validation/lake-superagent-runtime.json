@@ -1,0 +1,1004 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "overallStatus": "in_progress_dependencies_unavailable",
+  "baseSHA": "85a768d074f654d8428d1ea278f9d60dec7a2504",
+  "installedDev": {
+    "platform": "macOS arm64",
+    "gitHead": "7b3e6d99b53f12b73ff87ead3bb42cf0ae910d54",
+    "sourceDirty": false,
+    "binarySHA256": "a5bf0d8d2a9ba521c0bfdef5d879dc1fa42e13e9570120dd743fb680e0707dbb",
+    "codesign": "deep_strict_pass",
+    "productionTouched": false
+  },
+  "checks": [
+    {
+      "name": "full_go_race",
+      "testedSHA": "f8fbf10321e3e5fcc8de31c1895d1dd2a202a6ec",
+      "command": "go test -race -json ./... -count=1 -timeout=25m",
+      "result": "pass",
+      "tests": 1903
+    },
+    {
+      "name": "full_go",
+      "testedSHA": "24b69e6959574b6057107caf2c4d788a9acb8e56",
+      "command": "go test -json ./... -count=1 -timeout=15m",
+      "result": "pass",
+      "tests": 1905
+    },
+    {
+      "name": "approval_batch_and_source_revocation_race",
+      "testedSHA": "24b69e6959574b6057107caf2c4d788a9acb8e56",
+      "command": "go test -race ./internal/ai -run '^TestSuperHuman|^TestSuperWorkerSource'",
+      "result": "pass"
+    },
+    {
+      "name": "vet",
+      "testedSHA": "24b69e6959574b6057107caf2c4d788a9acb8e56",
+      "command": "go vet ./...",
+      "result": "pass"
+    },
+    {
+      "name": "adk_boundary",
+      "testedSHA": "24b69e6959574b6057107caf2c4d788a9acb8e56",
+      "command": "python3 scripts/check_adk_runtime_boundary.py",
+      "result": "pass"
+    },
+    {
+      "name": "frontend",
+      "testedSHA": "373c7f3225e18c78c82afa4967348f1f734243bb",
+      "result": "pass",
+      "tests": 558,
+      "typecheck": "pass",
+      "command": "pnpm --dir web-agent test:frontend; pnpm --dir web-agent check"
+    },
+    {
+      "name": "signed_desktop_build",
+      "testedSHA": "34695a78c261da7b2c4cc46cef916c3121cc3ff6",
+      "command": "scripts/build_lake_desktop.sh --dev --install",
+      "result": "pass"
+    },
+    {
+      "name": "isolated_signed_runtime",
+      "verifierSHA": "f4cab2e58cbb964a34981d47ace2dfb6e340f9b6",
+      "binarySourceSHA": "34695a78c261da7b2c4cc46cef916c3121cc3ff6",
+      "sourceDirty": false,
+      "result": "pass",
+      "actualReads": 2,
+      "humanQuestions": 4,
+      "distinctWorkerSessions": 2,
+      "pilotReportsDelivered": true,
+      "externalKernelExitObserved": true
+    },
+    {
+      "name": "native_detach_and_reopen",
+      "testedSHA": "98fbbe2cf00d2635aa963fa61c22d415d4c5139d",
+      "result": "pass",
+      "sameKernelPID": true,
+      "paintedCaret": true,
+      "referenceInsertRemoveAndContinuedTyping": true,
+      "clipboardOSPayload": "not_separately_inspected"
+    },
+    {
+      "name": "ui_triptych",
+      "testedSHA": "34695a78c261da7b2c4cc46cef916c3121cc3ff6",
+      "result": "pass",
+      "light": true,
+      "dark": true,
+      "wideWidth": 1512,
+      "narrowWidth": 820,
+      "horizontalDocumentOverflow": false,
+      "narrowTerminal": "drawer",
+      "realTerminal": true,
+      "realOperationDetails": true
+    },
+    {
+      "name": "daily_dev_launch",
+      "binarySourceSHA": "34695a78c261da7b2c4cc46cef916c3121cc3ff6",
+      "result": "pass",
+      "home": "~/.lake-dev",
+      "pilotVisible": true,
+      "existingResourceTreeVisible": true,
+      "noModelMessageSent": true
+    }
+  ],
+  "scenarios": [
+    {
+      "case": "TEST-001",
+      "unitBoundaryEvidence": {
+        "TestSuperRouterRunsOnlyOfficialADKWithRestrictedCatalog": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-002",
+      "unitBoundaryEvidence": {
+        "TestSuperStoreBacksUpBeforeMigrationAndRejectsFutureReader": "pass",
+        "TestSuperLegacyImportKeepsOriginalGoalAndNeverReplays": "pass",
+        "TestSuperLegacySREArchivePreservesUnknownOperationsAndIDs": "pass",
+        "TestSuperLegacyImportDoesNotAdoptUnresolvedOrSREWork": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-003",
+      "unitBoundaryEvidence": {
+        "TestSuperTaskProjectionRequiresCanonicalAcceptance/legacy": "pass",
+        "TestSuperTaskProjectionRequiresCanonicalAcceptance/insufficient": "pass",
+        "TestSuperTaskProjectionRequiresCanonicalAcceptance/unknown": "pass",
+        "TestSuperTaskProjectionRequiresCanonicalAcceptance/uncovered": "pass",
+        "TestSuperTaskProjectionRequiresCanonicalAcceptance/accepted": "pass",
+        "TestSuperTaskProjectionRequiresCanonicalAcceptance": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-004",
+      "unitBoundaryEvidence": {
+        "TestSuperEventConcurrentDuplicateIsImmutable": "pass",
+        "TestSuperEventRejectsForeignBindingAndCredentials": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-005",
+      "unitBoundaryEvidence": {
+        "TestSuperSubscriptionsAreExactAndHandbackIsBounded": "pass",
+        "TestSuperObserverCannotBecomeHumanFollowup": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-006",
+      "unitBoundaryEvidence": {
+        "TestSuperInboxConsumptionRequiresStoredSDKReceipt": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-007",
+      "unitBoundaryEvidence": {
+        "TestSuperOutboxDoesNotResendUncertainWrites": "pass",
+        "TestSuperPilotReportKeepsStableReceipt": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-008",
+      "unitBoundaryEvidence": {
+        "TestSuperRouterSplitsAndSupplementsOneTask": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-009",
+      "unitBoundaryEvidence": {
+        "TestSuperRouterRejectsForgedSourceAndForeignTask": "pass",
+        "TestSuperRouterRunsOnlyOfficialADKWithRestrictedCatalog": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-010",
+      "unitBoundaryEvidence": {
+        "TestSuperWorkerUsesOriginalGoalAndHostConfirmation": "pass",
+        "TestSuperWorkflowRealSREObservationUsesOriginalTaskAndAcceptance": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-011",
+      "unitBoundaryEvidence": {
+        "TestSuperRouterObjectScopeAndUTF8Paging": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-012",
+      "unitBoundaryEvidence": {
+        "TestSuperChildrenShareGoalAndCannotRecurseOrResetInstanceLimit": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-013",
+      "unitBoundaryEvidence": {
+        "TestSuperBudgetSharedReservationsSurviveContinuation": "pass",
+        "TestSuperAssignmentRejectsDuplicateAndExpiredOwner": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-014",
+      "unitBoundaryEvidence": {
+        "TestSecurityRestoreImportInitializesEmptyTargetClosedAndResumes/#00": "pass",
+        "TestSecurityRestoreImportInitializesEmptyTargetClosedAndResumes/import_gate_closed": "pass",
+        "TestSecurityRestoreImportInitializesEmptyTargetClosedAndResumes/import_store_initialized": "pass",
+        "TestSecurityRestoreImportInitializesEmptyTargetClosedAndResumes": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes/gate_closed": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes/preserved": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes/staged": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes/applied:adk/sessions.sqlite": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes/applied:lake-web.sqlite": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes/confirmation_required": "pass",
+        "TestSecurityRestoreEveryInterruptionRemainsClosedAndResumes": "pass",
+        "TestSecurityManagedWorkWaitResumesOfficialSDKFromActualMachineEvent": "pass",
+        "TestSecurityWorkMachineResumeRejectsExpiryRevocationAndUnregisteredObserver/expired-task": "pass",
+        "TestSecurityWorkMachineResumeRejectsExpiryRevocationAndUnregisteredObserver/revoked-policy": "pass",
+        "TestSecurityWorkMachineResumeRejectsExpiryRevocationAndUnregisteredObserver/foreign-source": "pass",
+        "TestSecurityWorkMachineResumeRejectsExpiryRevocationAndUnregisteredObserver/opaque-observer": "pass",
+        "TestSecurityWorkMachineResumeRejectsExpiryRevocationAndUnregisteredObserver": "pass",
+        "TestWorkRecoveryValidatesEveryResourceIdentity": "pass",
+        "TestWorkObserverBacksOffThenBlocksWithoutModelOrWrite": "pass",
+        "TestWorkRecoveryRefusesChangedResourceBinding": "pass",
+        "TestWorkRecoveryKeepsNewTopicAndUsesCurrentConfig": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Unit boundaries and existing monitored Shell path; generic external build profile unavailable."
+    },
+    {
+      "case": "TEST-015",
+      "unitBoundaryEvidence": {
+        "TestSuperResourceConflictRetainsUnknownEffects": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-016",
+      "unitBoundaryEvidence": {
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/normal": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/ignore": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/plan": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/child": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/ordinary": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/failed-direct-save": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/successful-direct-save": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent": "pass",
+        "TestSuperMemoryPreservesWorkerExclusionAndOriginalSource": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Compatibility evidence only; N5 Worker inheritance remains disabled."
+    },
+    {
+      "case": "TEST-017",
+      "unitBoundaryEvidence": {
+        "TestSuperMemoryPreservesWorkerExclusionAndOriginalSource": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Unavailable-path and scope boundaries only; asset task knowledge is not delivered."
+    },
+    {
+      "case": "TEST-018",
+      "unitBoundaryEvidence": {
+        "TestMemoryCaptureOutboxPressureRetainsSourceAndFlushesAfterAck": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/normal": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/ignore": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/plan": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/child": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/ordinary": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/failed-direct-save": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent/successful-direct-save": "pass",
+        "TestNaturalMemorySnapshotUsesCurrentUserAndIndependentConsent": "pass",
+        "TestSuperMemoryReferencesRemainExactAndDoNotPromoteUnknown": "pass",
+        "TestMemoryOutboxDeduplicationAndTransactionalCommit": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Existing outbox/provenance sidecar evidence only; new task Memory capture remains pending."
+    },
+    {
+      "case": "TEST-019",
+      "unitBoundaryEvidence": {
+        "TestNaturalRecallRevocationBeforeToolPreventsSideEffects": "pass",
+        "TestMemoryV2ForegroundRevokesLeaseAndRejectsLateCommit": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Existing revocation evidence only; joint task-aware consolidation remains pending."
+    },
+    {
+      "case": "TEST-020",
+      "unitBoundaryEvidence": {
+        "TestSuperWorkflowRealSREObservationUsesOriginalTaskAndAcceptance": "pass",
+        "TestSuperProjectHasOnePersistentPilotAndRealUserSource": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-021",
+      "unitBoundaryEvidence": {
+        "TestSecurityScheduleOccurrenceConsumesOnceAndStatusDoesNotInvalidate": "pass",
+        "TestSuperWorkflowDefinitionChangeFencesQueuedAndActiveWorkers": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-022",
+      "unitBoundaryEvidence": {
+        "TestSuperLegacyImportKeepsOriginalGoalAndNeverReplays": "pass",
+        "TestSuperLegacySREArchivePreservesUnknownOperationsAndIDs": "pass",
+        "TestSuperLegacyImportDoesNotAdoptUnresolvedOrSREWork": "pass",
+        "TestSuperCutoverRejectsActiveLegacySRE": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-023",
+      "unitBoundaryEvidence": {},
+      "status": "unit_and_manual_ui_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "558 frontend tests plus actual signed native UI/reference/caret and browser light/dark/narrow inspections. Separate OS clipboard payload not inspected."
+    },
+    {
+      "case": "TEST-024",
+      "unitBoundaryEvidence": {
+        "TestSuperHumanRecoveryUsesOriginalRunnerAndActualAnswer": "pass",
+        "TestSuperRecoveryFencesExpiredOwnerWithoutReplaying": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Lease/recovery fault simulation passed; physical power loss not run."
+    },
+    {
+      "case": "TEST-025",
+      "unitBoundaryEvidence": {
+        "TestSuperWatchdogBoundsDispatchFailureAndPreservesAcceptance": "pass",
+        "TestSuperRouterFailuresHavePersistentBoundedRetries": "pass"
+      },
+      "status": "unit_evidence",
+      "fullScenarioClaimed": false
+    },
+    {
+      "case": "TEST-026",
+      "unitBoundaryEvidence": {
+        "TestSuperLifecycleIsAuthenticatedAndClosesNewAdmission": "pass"
+      },
+      "status": "unit_and_native_lifecycle_evidence",
+      "fullScenarioClaimed": false,
+      "qualification": "Native UI detach/reopen same kernel and native authenticated drain passed; Windows, sleep/power and complete offline fault matrix not run."
+    }
+  ],
+  "unavailable": [
+    "TASK-016 generic trusted external build readonly Security profile",
+    "TASK-020 task provenance capture into maintained Memory outbox/snapshots",
+    "TASK-021 task-aware Memory consolidation and joint revocation validation",
+    "TASK-022 completed Memory source UI and joint delivery matrix"
+  ],
+  "notRun": [
+    "Windows native Dev",
+    "physical power loss",
+    "sleep/wake",
+    "cross-device continuity",
+    "complete 26-case native fault injection matrix",
+    "separate OS clipboard payload inspection"
+  ],
+  "capabilityGates": {
+    "operationalMemoryV2Ready": false,
+    "N5WorkerInheritance": false,
+    "genericBuildObservation": "unavailable",
+    "taskKnowledgeRead": "unavailable"
+  },
+  "cleanup": {
+    "rebuildableGiBRemoved": 13.19,
+    "freeDiskGiBAfter": 23.47,
+    "scope": "ignored Swift caches and Go build/race cache only"
+  },
+  "previousInstalledDev": {
+    "platform": "macOS arm64",
+    "gitHead": "34695a78c261da7b2c4cc46cef916c3121cc3ff6",
+    "sourceDirty": false,
+    "binarySHA256": "a7114bc1b2181798cad702ed6313a4b6c83c9d559b55ad05e6a13e0341859509",
+    "codesign": "deep_strict_pass",
+    "productionTouched": false
+  },
+  "routingRepairVerification": {
+    "date": "2026-11-02",
+    "binarySourceSHA": "61ffda7f4aa42a93494e22c138713a7f9b540f16",
+    "verifierSHA": "043267837184b3ed724c8b537afa77024d9c6945",
+    "issues": [
+      "missing role_key mislabeled as invalid host binding",
+      "missing asset_ref despite runtime=local",
+      "resource I/O before step/attempt activation and prose-only acceptance wait"
+    ],
+    "fullGo": {
+      "testedSHA": "8f291deaad7f49cb1cab2ed365d31adf474cade9",
+      "passed": 1906,
+      "command": "go test -json ./... -count=1 -timeout=15m"
+    },
+    "race": {
+      "testedSHA": "61ffda7f4aa42a93494e22c138713a7f9b540f16",
+      "passed": 124,
+      "command": "go test -race -json ./internal/ai ./internal/web -run '^TestSuper|^TestSecurity.*(Catalog|Target)|^TestWork' -count=1 -timeout=10m"
+    },
+    "vet": "pass",
+    "adkBoundary": "pass",
+    "signedBuildInstall": "pass",
+    "syntheticFaultInjection": {
+      "passed": true,
+      "providerUsage": "synthetic four-JSON-character fixture tokens, not real model billing",
+      "routingArgumentRepairVerified": true,
+      "workerTargetRepairVerified": true,
+      "workerAttemptRepairVerified": true,
+      "actualReads": 2,
+      "distinctWorkerSessions": 2,
+      "pilotReportsDelivered": true
+    },
+    "realModel": {
+      "model": "gpt-6.1-terra",
+      "passed": true,
+      "files": [
+        {
+          "file": "web-agent/package.json",
+          "reads": 1,
+          "contentMatches": true,
+          "accepted": true,
+          "reportDelivered": true
+        },
+        {
+          "file": "go.mod",
+          "reads": 1,
+          "contentMatches": true,
+          "accepted": true,
+          "reportDelivered": true
+        }
+      ],
+      "nativeUIBothAccepted": true,
+      "scope": "separate regression project; only the two repository files; no shell, installation or mutation"
+    },
+    "priorFaultInjectionFailure": "With three added repair rounds and no provider usage, conservative cumulative token reservations exhausted the original budget. The synthetic provider now reports its explicitly synthetic character-based usage; runtime limits were not changed."
+  },
+  "uiConsistencyVerification": {
+    "testedSHA": "650f22041bf017e6f12f27a2b652a59c444fd5db",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "61ffda7f4aa42a93494e22c138713a7f9b540f16",
+      "sourceDirty": false,
+      "binarySHA256": "03fefe6a8f629380c4673a6d25a0f7e1efd47531465ad7c14d59cebbd9842392",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "frontendTests": 562,
+    "typeCheck": "pass",
+    "signedDesktopBuild": "pass",
+    "nativeRoleNavigationAndInspector": "pass",
+    "nativeSourceDisclosureKeyboard": "pass",
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "browserWidths": [
+      1512,
+      820,
+      600
+    ],
+    "horizontalDocumentOverflow": false,
+    "hoverSelectionAndKeyboardFocus": "pass",
+    "iconMapping": "presentation only; shared AgentIcon; name-based with investigator fallback",
+    "newModelTaskSent": false,
+    "backendRuntimeChanged": false,
+    "logFiles": [
+      "/tmp/lake-superagent-ui-tests.log",
+      "/tmp/lake-superagent-ui-check.log",
+      "/tmp/lake-superagent-ui-final-desktop.log"
+    ],
+    "screenshots": [
+      "lake-role-ui-light.png",
+      "lake-role-ui-dark.png",
+      "lake-role-ui-820.png",
+      "lake-role-ui-600.png",
+      "lake-role-ui-600-nav.png",
+      "lake-role-ui-600-light.png"
+    ],
+    "screenshotDirectory": "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a",
+    "notRun": [
+      "Windows visual QA",
+      "new external-model end-to-end tasks; this change is presentation only"
+    ]
+  },
+  "inspectorDefaultCollapsedVerification": {
+    "testedSHA": "2ae4155e02154db106638d7bfc507ed5928dc78d",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "650f22041bf017e6f12f27a2b652a59c444fd5db",
+      "sourceDirty": false,
+      "binarySHA256": "ea61872f3869b27509cc10892c490a0d03aa51bbb80885769726d90ab1717b63",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "frontendTests": 562,
+    "typeCheck": "pass",
+    "signedDesktopBuild": "pass",
+    "nativeChecks": [
+      "startup collapsed",
+      "enter waiting-user Worker collapsed",
+      "header arrow opens",
+      "Escape closes",
+      "execution process opens",
+      "switch Worker collapses",
+      "workspace polling leaves inspector collapsed"
+    ],
+    "logFiles": [
+      "/tmp/lake-inspector-collapsed-tests.log",
+      "/tmp/lake-inspector-collapsed-check.log",
+      "/tmp/lake-inspector-collapsed-desktop.log"
+    ],
+    "backendRuntimeChanged": false,
+    "newModelTaskSentByAgent": false,
+    "notRun": [
+      "new live SRE task; automatic-open effect removed and frontend regression passed",
+      "Windows native UI"
+    ]
+  },
+  "projectResourceInheritanceVerification": {
+    "testedSHA": "a6351c63f0256675ca517cc66ef7e3b766dd85a4",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "2ae4155e02154db106638d7bfc507ed5928dc78d",
+      "sourceDirty": false,
+      "binarySHA256": "6c8d9061cc0daceead77e905f727e75a51c0ed2dc090e08f6dd210f6975e0233",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "fullGo": {
+      "tests": 1913,
+      "packages": 11,
+      "log": "/tmp/lake-project-resource-accepted-full.jsonl"
+    },
+    "targetedRace": {
+      "tests": 164,
+      "packages": 3,
+      "log": "/tmp/lake-project-resource-accepted-race.jsonl"
+    },
+    "frontendTests": 562,
+    "frontendSource": "same as 22bc4e0d; subsequent changes are Go/tests/fixture only",
+    "typeCheck": "pass",
+    "vet": "pass",
+    "adkRuntimeBoundary": "pass",
+    "signedDevBuildInstall": "pass",
+    "codesign": "deep_strict_pass",
+    "dailyProject": {
+      "project": "HexHub 服务器",
+      "resources": 135,
+      "policyConfigured": true,
+      "mode": "legacy",
+      "policyResourceCount": 135
+    },
+    "nativeUI": [
+      "no separate execution scope entry",
+      "original folders, resources, add-reference and terminal entries retained"
+    ],
+    "isolatedIntegration": {
+      "provider": "loopback synthetic fixture, not external model",
+      "policyPUT": false,
+      "actualReads": 2,
+      "distinctWorkerSessions": 2,
+      "humanFixtureQuestions": 4,
+      "acceptance": "both pass",
+      "pilotReports": "delivered",
+      "faultRepairs": [
+        "missing role",
+        "missing resource target",
+        "missing current attempt"
+      ],
+      "report": "/tmp/lake-project-resource-inherited-final.json"
+    },
+    "initialFailures": [
+      "workflow fixture used revision 0 after inheritance created revision 1; changed fixture to current CAS revision",
+      "prior work_update description update left strategy catalog golden stale; exact old-description substitution reproduced every previous hash before updating only catalog hashes",
+      "inherited file read initially lacked an execution scope; exact host-prepared scope adapter added and end-to-end rerun passed"
+    ],
+    "notRun": [
+      "Windows native UI",
+      "new external-model execution",
+      "remote connections to all 135 resources"
+    ]
+  },
+  "replyAuthorVerification": {
+    "runtimeSourceSHA": "61d48de7b87b40551d47dcff484acf0f9d0389eb",
+    "integrationDriverSHA": "f3a95b0e8abadd7d75965e5fc123c4e658196e79",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "a6351c63f0256675ca517cc66ef7e3b766dd85a4",
+      "sourceDirty": false,
+      "binarySHA256": "96e50467e1015429cbb853e8bf9a35c46c433bbab51852d2229743d9c792b669",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "behavior": [
+      "Pilot reports resolve their original root Worker and role from the durable outbox message ID",
+      "Each specialist report shows its own role name and matching Lake avatar, including historical delivered reports",
+      "The reply identity button navigates to the actual Worker session; Pilot coordination retains Pilot identity",
+      "Explicit report authors survive equal-text deduplication and are not folded into Pilot progress prose"
+    ],
+    "targetedRace": {
+      "command": "go test -race -json ./internal/ai ./internal/web -run '^TestSuper|^Test.*Snapshot' -count=1 -timeout=5m",
+      "tests": 90,
+      "packages": 2,
+      "log": "/tmp/lake-reply-author-race.jsonl"
+    },
+    "frontendTests": 565,
+    "typeCheck": "pass",
+    "vet": "pass",
+    "adkRuntimeBoundary": "pass",
+    "signedDevBuildInstall": "pass",
+    "codesign": "deep_strict_pass",
+    "sourceScope": "Go/frontend checks cover runtime source 61d48de7; subsequent f3a95b0e changes only the isolated verification script",
+    "nativeUI": [
+      "Existing Go, frontend and local-machine reports show distinct original specialist names and matching avatars",
+      "Mouse activation opens the original local-machine specialist session",
+      "Tab paints the frontend specialist reply focus ring and Return opens that exact Worker session",
+      "Execution inspector remains collapsed during specialist navigation",
+      "Light/dark appearance inspected; original follow-system preference restored"
+    ],
+    "responsiveUI": {
+      "surface": "ego-browser against the installed Dev backend; viewport emulation",
+      "viewports": [
+        820,
+        600
+      ],
+      "themes": "820px light; 600px dark page preview; native theme switching verified separately",
+      "hoverAndKeyboardFocus": "pass",
+      "horizontalDocumentOverflow": false,
+      "screenshots": [
+        "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/reply-author-820-light.png",
+        "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/reply-author-600-dark.png"
+      ]
+    },
+    "isolatedIntegration": {
+      "command": "python3 scripts/verify_superagent_dev.py --binary bin/lake --output /tmp/lake-reply-author-integration.json --inherit-project-access --verify-reply-authors",
+      "provider": "loopback synthetic fixture; not an external model",
+      "actualReads": 2,
+      "distinctWorkerSessions": 2,
+      "humanFixtureQuestions": 4,
+      "acceptance": "both pass",
+      "pilotReports": "delivered",
+      "authorNames": [
+        "Go 审查专员",
+        "前端执行专员"
+      ],
+      "authorTaskAndWorkerSessionBinding": "exact match for both delivered reports",
+      "kernelDrain": "pass",
+      "report": "/tmp/lake-reply-author-integration.json"
+    },
+    "authorityChanges": false,
+    "schemaMigration": false,
+    "notRun": [
+      "full Go suite for this display projection change",
+      "new external-model execution",
+      "Windows native UI",
+      "native narrow-window resize; responsive layout checked in browser instead"
+    ],
+    "logs": {
+      "frontend": "/tmp/lake-reply-author-frontend.log",
+      "typeCheck": "/tmp/lake-reply-author-check.log",
+      "vet": "/tmp/lake-reply-author-vet.log",
+      "adkBoundary": "/tmp/lake-reply-author-boundary.log",
+      "desktop": "/tmp/lake-reply-author-desktop.log"
+    }
+  },
+  "messageBubbleVerification": {
+    "date": "2026-11-03",
+    "testedSHA": "984ae97cfed66be9428f394010f4389969dfca5b",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "61d48de7b87b40551d47dcff484acf0f9d0389eb",
+      "sourceDirty": false,
+      "binarySHA256": "4bdda7b3084a62a60b0f33e100628285e10af64d8028e8dd8fbd89e9d41d97da",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "changes": [
+      "black background and white text for user messages in both themes",
+      "theme gray bubbles for Pilot and specialist text replies",
+      "specialist identity and reply share one bubble; distinct hover and visible keyboard focus"
+    ],
+    "toolchain": {
+      "node": "24.14.0",
+      "pnpm": "10.33.4"
+    },
+    "typeCheck": "pass",
+    "webBuild": "pass",
+    "signedDevBuildInstall": "pass",
+    "codesign": "deep_strict_pass",
+    "nativeUI": "installed Lake Dev shows black user message and gray Pilot/specialist replies; inspector remains collapsed",
+    "browserUI": {
+      "lightWidth": 1512,
+      "darkWidth": 600,
+      "horizontalDocumentOverflow": false,
+      "userBackground": "#111111",
+      "userText": "#ffffff",
+      "lightReplyBackground": "#eeeeee",
+      "darkReplyBackground": "#2c2c2c",
+      "specialistHover": "#e8e8e8 light / #333333 dark",
+      "keyboardFocus": "visible on specialist entry"
+    },
+    "screenshots": [
+      "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/message-bubbles-light.png",
+      "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/message-bubbles-600-dark.png"
+    ],
+    "logs": {
+      "typeCheck": "/tmp/lake-message-bubbles-final-check.log",
+      "desktop": "/tmp/lake-message-bubbles-node24-desktop.log"
+    },
+    "notRun": [
+      "Go suites; no Go source changes",
+      "full frontend suite; CSS-only presentation change",
+      "Windows native UI",
+      "new external-model execution",
+      "independent image-attachment / wide-table / full-code-block visual scenarios"
+    ],
+    "authorityChanges": false,
+    "schemaMigration": false
+  },
+  "securityMigrationFinalization": {
+    "date": "2026-11-03",
+    "testedSHA": "c42c96f289874771cd9f77786d5418ccdbefc45f",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "984ae97cfed66be9428f394010f4389969dfca5b",
+      "sourceDirty": false,
+      "binarySHA256": "460d3d80e05234f7dd00750d5db42ea917b4c8f440509e3b5bcbc3939e9044d2",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "result": "pass",
+    "fullGoTests": 1943,
+    "targetedRaceTests": 494,
+    "archiveBytesRemoved": 3799941120,
+    "unresolvedOperationsPreserved": 93,
+    "kernelHTTPReadyMS": 759.6,
+    "record": "lake-security-migration-finalization.json"
+  },
+  "replyAvatarPlacementVerification": {
+    "date": "2026-11-03",
+    "testedSHA": "7684699f3baabf77f42309dadb1b2168524bd2f3",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "c42c96f289874771cd9f77786d5418ccdbefc45f",
+      "sourceDirty": false,
+      "binarySHA256": "db4bb410eeca90d80388a0509edbe9abcd6a2d8ef9ba6f6847359c2eb06ab2b5",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "changes": [
+      "reply avatar occupies a separate column to the left of the gray bubble",
+      "specialist name and body stay inside the gray bubble",
+      "avatar remains inside the original specialist button for shared navigation and accessible labeling"
+    ],
+    "toolchain": {
+      "node": "24.14.0",
+      "pnpm": "10.33.4"
+    },
+    "typeCheck": "pass",
+    "frontendTests": {
+      "tests": 565,
+      "passed": 565,
+      "failed": 0
+    },
+    "webBuild": "pass",
+    "signedDevBuildInstall": "pass",
+    "codesign": "deep_strict_pass",
+    "nativeUI": "installed Lake Dev visually confirms specialist avatars outside gray reply bubbles, names/body inside and inspector collapsed",
+    "browserUI": {
+      "light": {
+        "viewportWidth": 1512,
+        "avatarLeft": 416,
+        "avatarRight": 436,
+        "bubbleLeft": 448,
+        "background": "#eeeeee",
+        "hoverBackground": "#e8e8e8"
+      },
+      "dark": {
+        "viewportWidth": 600,
+        "avatarLeft": 32,
+        "avatarRight": 52,
+        "bubbleLeft": 64,
+        "rowRight": 568,
+        "background": "#2c2c2c",
+        "keyboardFocusVisible": true,
+        "outline": "2px solid rgb(155,188,232)"
+      },
+      "horizontalDocumentOverflow": false,
+      "avatarClick": "navigates to original worker sw_9e4d7ac77cf2a8006f0c201922f9a22e; specialist task source and saved reply visible",
+      "inspectorCollapsed": true,
+      "themePreferenceChanged": false
+    },
+    "automationNote": "A post-navigation wait incorrectly targeted .ai-role-assistant on the worker page; fresh snapshot confirmed the saved specialist task and reply use a different rendering path. Navigation succeeded; no product failure was observed.",
+    "screenshots": [
+      "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/reply-avatar-outside-light.png",
+      "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/reply-avatar-outside-600-dark.png"
+    ],
+    "logs": {
+      "typeCheck": "/tmp/lake-outside-avatar-check.log",
+      "frontendTests": "/tmp/lake-outside-avatar-frontend.log",
+      "desktop": "/tmp/lake-outside-avatar-desktop.log"
+    },
+    "notRun": [
+      "Go suites; no runtime source changes",
+      "Windows native UI",
+      "new external-model execution",
+      "independent image / wide-table / full-code-block scenarios"
+    ],
+    "authorityChanges": false,
+    "schemaMigration": false
+  },
+  "legacyHistoryNavigationVerification": {
+    "date": "2026-11-03",
+    "testedSHA": "0ad3b2ae0967ed0df6ad9fd8626ca38b3cab238a",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "7684699f3baabf77f42309dadb1b2168524bd2f3",
+      "sourceDirty": false,
+      "binarySHA256": "7fa70064a5b0f3c211f31b1915b5b15a9252738172626ae39ee51c38e5316fe7",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "changes": [
+      "active Pilot workspace omits the old history entry and session list from the sidebar",
+      "legacy navigation renders only for explicitly inactive workspaces, avoiding old-session flash during loading",
+      "old read-only session pages and records are retained"
+    ],
+    "toolchain": {
+      "node": "24.14.0",
+      "pnpm": "10.33.4"
+    },
+    "typeCheck": "pass",
+    "frontendTests": {
+      "tests": 565,
+      "passed": 565,
+      "failed": 0
+    },
+    "webBuild": "pass",
+    "signedDevBuildInstall": "pass",
+    "codesign": "deep_strict_pass",
+    "nativeUI": "history entry absent; original HexHub 服务器 project with 135 resources and existing folders visible; left on original project Pilot",
+    "browserUI": {
+      "lightWidth": 1512,
+      "darkWidth": 600,
+      "legacySidebarEntries": 0,
+      "legacyNavigationRows": 0,
+      "resourceCount": 135,
+      "horizontalDocumentOverflow": false,
+      "resourceHeadingKeyboardFocusVisible": true,
+      "themePreferenceChanged": false
+    },
+    "retainedHistory": "CPU 状态检查 found through existing workspace search and opened as read-only; original operation/evidence retention notice visible; no new model messages sent",
+    "automationNotes": [
+      "A wait for .ai-role-assistant was not applicable to the original Pilot message-card rendering; snapshot confirmed loaded content.",
+      "Reloading a legacy URL followed existing initial Pilot activation routing; retained read-only history was verified through in-app search after activation instead."
+    ],
+    "screenshots": [
+      "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/legacy-history-hidden-light.png",
+      "/Users/lingyunxieqing/.codex/visualizations/2026/11/02/01a199d5-c479-7f82-9114-91153706238a/legacy-history-hidden-600-dark.png"
+    ],
+    "logs": {
+      "typeCheck": "/tmp/lake-hide-legacy-check.log",
+      "frontendTests": "/tmp/lake-hide-legacy-frontend.log",
+      "desktop": "/tmp/lake-hide-legacy-desktop.log"
+    },
+    "notRun": [
+      "Go suites; no runtime changes",
+      "Windows native UI",
+      "inactive workspace fallback in a live environment",
+      "new external-model execution"
+    ],
+    "authorityChanges": false,
+    "schemaMigration": false,
+    "historyDeleted": false
+  },
+  "workspaceProjectRestorationVerification": {
+    "date": "2026-11-03",
+    "testedSHA": "7b3e6d99b53f12b73ff87ead3bb42cf0ae910d54",
+    "result": "pass",
+    "previousInstalledDev": {
+      "platform": "macOS arm64",
+      "gitHead": "0ad3b2ae0967ed0df6ad9fd8626ca38b3cab238a",
+      "sourceDirty": false,
+      "binarySHA256": "1a3b23e2acf452c218da19cb2030b757ae9c07a9014648637ef369347e60789e",
+      "codesign": "deep_strict_pass",
+      "productionTouched": false
+    },
+    "cause": "startup discarded the last selected project and chose the globally newest session, returning to a one-resource test project",
+    "changes": [
+      "persist the selected project ID in origin-local web storage and macOS per-bundle preferences",
+      "restore sidebar and initial session together within that project",
+      "explicit valid resource/session links take precedence; removed project preferences fall back safely"
+    ],
+    "toolchain": {
+      "node": "24.14.0",
+      "pnpm": "10.33.4"
+    },
+    "typeCheck": "pass",
+    "frontendTests": {
+      "tests": 569,
+      "passed": 569,
+      "failed": 0,
+      "addedRegressionTests": 4
+    },
+    "webBuild": "pass",
+    "signedDevBuildInstall": "pass",
+    "nativeSwiftCompilation": "pass",
+    "codesign": "deep_strict_pass",
+    "regressionCoverage": [
+      "newer activity in another project cannot replace a saved project",
+      "initial route and sidebar belong to the same project",
+      "explicit links and plan views",
+      "deleted preferences, stale links and empty projects",
+      "new desktop origin, unavailable web storage and ordinary browser storage"
+    ],
+    "nativeRestarts": {
+      "uiOnlyReopen": {
+        "origin": "http://localhost:51043",
+        "pid": 98541,
+        "sameKernel": true,
+        "restoredProjectId": "e43b93db3c937f4fe57d939427cd5604",
+        "nativeUI": "HexHub 服务器 resources visible"
+      },
+      "kernelRestart": {
+        "origin": "http://localhost:51470",
+        "pid": 98671,
+        "changedKernel": true,
+        "changedPort": true,
+        "restoredProjectId": "e43b93db3c937f4fe57d939427cd5604",
+        "nativeUI": "HexHub 服务器 / 资源 135; original folders visible"
+      }
+    },
+    "savedDevelopmentPreference": {
+      "domain": "com.cleanlakes.lake.desktop.dev",
+      "key": "LakeWorkspaceProjectId",
+      "value": "e43b93db3c937f4fe57d939427cd5604"
+    },
+    "finalDataCounts": {
+      "projects": 6,
+      "sessions": 71,
+      "allResources": 142,
+      "originalProjectResources": 135
+    },
+    "logs": {
+      "typeCheck": "/tmp/lake-project-restore-check.log",
+      "frontendTests": "/tmp/lake-project-restore-frontend.log",
+      "desktop": "/tmp/lake-project-restore-desktop.log",
+      "restarts": "/tmp/lake-project-restore-restarts.json"
+    },
+    "notRun": [
+      "Go suites; no runtime source changes",
+      "Windows native project persistence",
+      "live deletion of projects; fallback covered by unit tests",
+      "new external-model execution",
+      "new light/dark/narrow geometry matrix; no geometry or color changes"
+    ],
+    "authorityChanges": false,
+    "schemaMigration": false,
+    "historyDeleted": false,
+    "productionTouched": false,
+    "newestSessionProjectBeforeRestarts": "0d1989938303b243f5c92f8f347aa926",
+    "newestSessionProjectAfterRestarts": "e43b93db3c937f4fe57d939427cd5604"
+  }
+}

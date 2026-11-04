@@ -67,6 +67,9 @@ func (b *Server) invalidateMemoryExtraction(project, reason string) {
 }
 
 func (b *Server) processMemoryV2Job() {
+	if b.Engine.CheckSecurityMemoryEligibility(b.Context, "global-memory", ai.SecurityMemoryBackground) != nil {
+		return
+	}
 	b.messageMu.Lock()
 	if len(b.runningMessages) > 0 || b.memoryCancel != nil || time.Since(b.memoryLastForeground) < 2*time.Second || b.Context.Err() != nil {
 		b.messageMu.Unlock()
@@ -82,6 +85,11 @@ func (b *Server) processMemoryV2Job() {
 	if json.Unmarshal([]byte(stringOf(job["snapshotJSON"])), &snapshot) != nil || snapshot.SchemaVersion != 2 || !ai.ValidMemorySnapshot(snapshot) {
 		b.messageMu.Unlock()
 		b.Store.SettleMemoryJob(jobID, token, "skipped", "legacy_or_invalid_snapshot", ai.Usage{})
+		return
+	}
+	if b.Engine.CheckSecurityMemoryEligibility(b.Context, snapshot.ProjectID, ai.SecurityMemoryBackground) != nil {
+		b.messageMu.Unlock()
+		b.Store.SettleMemoryJob(jobID, token, "blocked", "security_memory_recovery_unqualified", ai.Usage{})
 		return
 	}
 	settings := b.Store.MemorySettings(snapshot.ProjectID)
@@ -125,7 +133,7 @@ func (b *Server) processMemoryV2Job() {
 		}
 		b.messageMu.Unlock()
 	}()
-	output, usage, err := b.Engine.ExtractMemory(ctx, *model, messages)
+	output, usage, err := b.Engine.ExtractMemory(ai.WithSecurityMemoryProject(ctx, snapshot.ProjectID), *model, messages)
 	status, reason := "succeeded", ""
 	defer func() { b.Store.settleMemoryDispatch(attempt, usage, status, reason) }()
 	if err != nil {
@@ -156,6 +164,10 @@ func (b *Server) processMemoryV2Job() {
 	if len(b.runningMessages) > 0 || ctx.Err() != nil {
 		b.messageMu.Unlock()
 		status, reason = "cancelled", "foreground_preempted"
+		return
+	}
+	if b.Engine.CheckSecurityMemoryEligibility(ctx, snapshot.ProjectID, ai.SecurityMemoryCapture) != nil {
+		b.Store.SettleMemoryJob(jobID, token, "blocked", "security_memory_recovery_unqualified", usage)
 		return
 	}
 	_, err = b.Store.CommitMemoryCandidates(job, snapshot, mutations, usage)

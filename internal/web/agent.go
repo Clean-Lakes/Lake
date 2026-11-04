@@ -50,6 +50,20 @@ func (b *Server) configure(id string, updates Object) Object {
 // Mode-only saves use an ordered presentation delta; other configuration
 // changes keep the full invalidation used by existing clients.
 func (b *Server) configureWithSave(id string, updates Object, saveOptions func(string, Object)) Object {
+	return b.configureSessionOptions(id, updates, saveOptions, false)
+}
+
+func (b *Server) configureUserOptions(id string, updates Object) Object {
+	return b.configureSessionOptions(id, updates, b.Store.SaveOptions, true)
+}
+
+func (b *Server) configureSessionOptions(id string, updates Object, saveOptions func(string, Object), userAction bool) Object {
+	explicitPermissions := false
+	for _, key := range []string{"silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "blockUnreferencedAssets", "denyLocalExecution"} {
+		if _, exists := updates[key]; userAction && exists {
+			explicitPermissions = true
+		}
+	}
 	options := b.sessionOptions(id)
 	if mode, exists := updates["conversationMode"]; exists && mode != ai.ModeDefault && mode != ai.ModePlan {
 		fail(400, "Invalid conversation mode")
@@ -121,6 +135,9 @@ func (b *Server) configureWithSave(id string, updates Object, saveOptions func(s
 	activeModel, modelSelection := b.Models.ActiveSelection()
 	model := b.Models.CachedCapacity(activeModel)
 	if model == nil {
+		if explicitPermissions {
+			aiFailure(b.syncSuperPermissionSettings(id, permissions))
+		}
 		saveOptions(id, options)
 		if previousPermissions != permissionVersion(options) {
 			b.revokeSessionTerminals(id)
@@ -152,6 +169,9 @@ func (b *Server) configureWithSave(id string, updates Object, saveOptions func(s
 	assets, directories := b.sessionAssetCatalog(id)
 	projectID := stringOf(b.Store.Session(id)["projectId"])
 	memorySettings := b.Store.MemorySettings(projectID)
+	if explicitPermissions {
+		aiFailure(b.syncSuperPermissionSettings(id, permissions))
+	}
 	// Approvals belong to individual operations; earlier pending actions must not
 	// disable this turn's tools. invoke enforces per-operation permissions.
 	aiFailure(b.Engine.Configure(id, ai.Config{ConversationMode: stringOf(options["conversationMode"]), ModelProviderID: stringOf(modelSelection["providerId"]), NaturalMemory: b.Store.NaturalConsent(projectID), MemoryProjectID: projectID, MemorySchemaVersion: integer(memorySettings["memorySchemaVersion"]), MemoryResourceGenerations: b.Store.memoryGenerationSnapshot(projectID), MemoryEnabled: memorySettings["useEnabled"] == true, MemoryExtractionEnabled: memorySettings["useEnabled"] == true && memorySettings["extractionEnabled"] == true, MemoryEpoch: integer(memorySettings["epoch"]), MemoryKnowledgeRevision: integer(memorySettings["revision"]), Directories: directories, MultiAgentMode: stringOf(options["multiAgentMode"]), Permissions: &permissions, CredentialDir: filepath.Join(b.Models.Home, "secrets"), Model: *model, Profile: stringOf(options["profile"]), UserPrompt: stringOf(options["userPrompt"]), Runtime: stringOf(options["runtime"]), AssetRef: stringOf(options["asset_ref"]), Container: stringOf(options["container_id"]), TerminalID: stringOf(options["terminal_id"]), Assets: assets, MaxSteps: integer(options["maxSteps"])}))
@@ -182,6 +202,9 @@ func (b *Server) sessionAssetCatalog(id string) ([]ai.Asset, []ai.AssetDirectory
 	return assets, directories
 }
 func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any, error) {
+	if b.Store.superSessionKind(id) == "role" {
+		return nil, errors.New("superagent: select the exact task before execution control or approval")
+	}
 	if method == "agentQuestionReply" || method == "agentDecision" {
 		view, err := b.Engine.Snapshot(id)
 		if err == nil {
@@ -199,7 +222,18 @@ func (b *Server) handleAI(ctx context.Context, method, id string, data any) (any
 		b.configure(id, nil)
 	}
 	if method == "workControl" {
-		b.configure(id, nil)
+		if b.Store.superSessionKind(id) == "worker" {
+			project := stringOf(b.Store.Session(id)["projectId"])
+			worker, err := b.Engine.SuperWorkerForSession(ctx, project, id)
+			if err != nil {
+				return nil, err
+			}
+			if stringOf(object(data)["goalId"]) != worker.TaskID {
+				return nil, errors.New("superagent: current task binding required")
+			}
+		} else {
+			b.configure(id, nil)
+		}
 	}
 	if method == "questionReply" {
 		var input struct {
@@ -302,6 +336,18 @@ func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachm
 		fail(400, "尚未配置模型")
 	}
 	options := b.configure(id, nil)
+	if domain, active, err := b.Engine.SuperProject(turnContext, stringOf(b.Store.Session(id)["projectId"])); err != nil {
+		aiFailure(err)
+	} else if active && id == domain.RouterSessionID {
+		b.runSuperPilotTurn(turnContext, domain, id, messageID, refs, files, ignoreProjectMemory)
+		return
+	} else if active && b.Store.superSessionKind(id) == "worker" {
+		b.runSuperTargetedInput(turnContext, domain, id, messageID, refs, files, ignoreProjectMemory)
+		return
+	} else if active {
+		b.runSuperForwardedTurn(turnContext, domain, id, messageID, refs, files)
+		return
+	}
 	sreCoordination := options["conversationMode"] != ai.ModePlan && options["profile"] == "core" && len(files) == 0 && b.Store.SREEnabled(stringOf(b.Store.Session(id)["projectId"]))
 	simpleConversation := !sreCoordination && ai.IsBriefConversation(message) && len(refs) == 0 && len(images) == 0 && len(files) == 0
 	var targetScope *ai.TargetScope
@@ -424,9 +470,26 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		}
 	}
 	if b.Engine != nil {
+		projectID := stringOf(b.Store.Session(id)["projectId"])
+		if err := b.Engine.RequireSecurityBridgeContext(ctx, projectID, id, name); err != nil {
+			return nil, &ai.ToolNotExecutedError{Err: err}
+		}
+	}
+	if b.Engine != nil {
 		if err := b.Engine.CheckSecurityRuntime(); err != nil {
 			return nil, &ai.ToolNotExecutedError{Err: err}
 		}
+	}
+
+	managedTerminal := false
+	if b.Engine != nil {
+		managedTerminal, err = b.Engine.SecurityProjectManaged(ctx, stringOf(b.Store.Session(id)["projectId"]))
+		if err != nil {
+			return nil, &ai.ToolNotExecutedError{Err: err}
+		}
+	}
+	if managedTerminal && set("inspectHost prepare_host open_ssh_terminal adopt_terminal close_ssh_terminal terminal_kill_command")[name] {
+		return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("security: terminal creation, takeover and whole-terminal closure are not supported by this operation")}
 	}
 	// Opening/binding a shell can fail before any command is submitted. Only
 	// failures before this boundary are proven to have no command side effect.
@@ -706,7 +769,21 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 			return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("Shell runtime and asset do not match")}
 		}
 		b.Store.assertCommandNotStopped(id, ref, stringOf(args["command"]))
-		term := b.hostTerminal(ctx, id, ref, approved, explicitTerminal)
+
+		var term Object
+		if managedTerminal {
+			frozen, bindErr := b.Engine.SecurityTerminalIdentity(ctx, project, id)
+			if bindErr != nil || explicitTerminal != "" && explicitTerminal != frozen {
+				return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("security: existing frozen terminal required")}
+			}
+			term = b.terminalForSession(id, frozen)
+			if term["resourceId"] != ref || term["status"] != "ready" || term["holder"] != "agent" {
+				return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("security: frozen Agent terminal is not ready")}
+			}
+		} else {
+			term = b.hostTerminal(ctx, id, ref, approved, explicitTerminal)
+		}
+
 		options := b.Store.Options(id)
 		if options["asset_ref"] == ref || approved && stringOf(options["asset_ref"]) == "" {
 			options["asset_ref"] = ref
@@ -778,7 +855,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 	}
 	if target != nil && set("terminal_execute_command ssh_terminal_send terminal_send_input ssh_terminal_key terminal_send_key")[name] {
 		b.verifyTerminalBinding(id, stringOf(target["resourceId"]), tid)
-		if b.manualTerminalBound(id, target) && target["holder"] == "user" {
+		if !managedTerminal && b.manualTerminalBound(id, target) && target["holder"] == "user" {
 			target = b.borrowManualTerminal(id, target)
 		}
 	}
@@ -841,7 +918,7 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 			return nil, &ai.ToolNotExecutedError{Err: fmt.Errorf("请先将空闲终端交给 Agent")}
 		}
 		actionID := ""
-		if CommandPolicy(command).Risk != "readonly" {
+		if !managedTerminal && CommandPolicy(command).Risk != "readonly" {
 			if !approved {
 				fail(403, "Command requires approval")
 			}
@@ -859,8 +936,26 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 					panic(p)
 				}
 			}()
-			entry = b.Terminals.Execute(id, tid, "agent", command, actionID)
+
+			if managedTerminal {
+				var executeErr error
+				entry, executeErr = b.executeSecurityTerminal(ctx, id, tid, command)
+				if executeErr != nil {
+					err = executeErr
+					return
+				}
+			} else {
+				entry = b.Terminals.Execute(id, tid, "agent", command, actionID)
+			}
+
 		}()
+
+		if err != nil {
+			if entry != nil {
+				return Object{"terminal_id": tid, "entry_id": entry["id"], "status": "unknown"}, err
+			}
+			return nil, err
+		}
 		if args["run_in_background"] == true {
 			return Object{"shell_id": entry["id"], "entry_id": entry["id"], "terminal_id": tid, "status": "running"}, nil
 		}
@@ -894,7 +989,11 @@ func (b *Server) bridge(ctx context.Context, id, name string, args Object, appro
 		if enter && !strings.HasSuffix(input, "\n") && !strings.HasSuffix(input, "\r") {
 			input += "\n"
 		}
-		b.Terminals.Input(id, tid, input, true)
+		if managedTerminal {
+			aiFailure(b.inputSecurityTerminal(ctx, id, tid, input))
+		} else {
+			b.Terminals.Input(id, tid, input, true)
+		}
 	}
 	switch name {
 	case "ssh_terminal_send", "terminal_send_input":

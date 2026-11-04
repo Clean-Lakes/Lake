@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+// Readiness includes a fresh official SDK store and native Windows ACL/flush
+// setup; it is separate from the assertions about approval and exactly-once I/O.
+const adkCrashReadyTimeout = 90 * time.Second
+
 func TestADKCrashApprovalHelper(t *testing.T) {
 	if os.Getenv("LAKE_ADK_CRASH_HELPER") != "1" {
 		t.Skip("subprocess fixture")
@@ -20,12 +24,16 @@ func TestADKCrashApprovalHelper(t *testing.T) {
 	var bridge Bridge
 	effect := os.Getenv("LAKE_ADK_CRASH_SCENARIO") == "effect"
 	if effect {
+		target := os.Getenv("LAKE_ADK_CRASH_EFFECT_TARGET")
+		if !filepath.IsAbs(target) {
+			t.Fatal("external effect fixture requires its original absolute target")
+		}
 		bridge = func(ctx context.Context, _ string, name string, _ map[string]any, _ bool) (any, error) {
 			if name == "policy" {
 				return map[string]any{"risk": "write", "target": "crash fixture", "fingerprint": "fixture-generation"}, nil
 			}
 			if name == "runtimeCommandExec" {
-				f, err := os.OpenFile(filepath.Join(dir, "effect.txt"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+				f, err := os.OpenFile(target, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 				if err != nil {
 					return nil, err
 				}
@@ -64,7 +72,9 @@ func TestADKCrashApprovalHelper(t *testing.T) {
 // diagnostics so a startup failure cannot masquerade as a recovery failure.
 func TestADKApprovalSurvivesProcessCrashAndExecutesOnce(t *testing.T) {
 	home := t.TempDir()
-	target := filepath.Join(home, "effect.txt")
+	// Runtime and authority files stay protected across approval recovery; the
+	// approved business target is an independent directory, as in production.
+	target := filepath.Join(t.TempDir(), "effect.txt")
 	model, close := fakeModel(t, func(n int, _ map[string]any) any {
 		if n == 1 {
 			return response("", Call{ID: "crash-write", Name: "append", Arguments: js(map[string]any{"path": target, "content": "once\n"})})
@@ -76,7 +86,7 @@ func TestADKApprovalSurvivesProcessCrashAndExecutesOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=60s")
+	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=120s")
 	var childOutput bytes.Buffer
 	child.Stdout, child.Stderr = &childOutput, &childOutput
 	child.Env = append(os.Environ(), "LAKE_ADK_CRASH_HELPER=1", "LAKE_ADK_CRASH_HOME="+home, "LAKE_ADK_CRASH_PROVIDER="+model.URL)
@@ -91,7 +101,7 @@ func TestADKApprovalSurvivesProcessCrashAndExecutesOnce(t *testing.T) {
 		}
 	}()
 	var saved State
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(adkCrashReadyTimeout)
 	for time.Now().Before(deadline) {
 		raw, err := os.ReadFile(filepath.Join(home, "case.json"))
 		if err == nil && json.Unmarshal(raw, &saved) == nil && saved.View.Pending != nil && saved.Runtime != nil {
@@ -158,7 +168,7 @@ func TestADKApprovalSurvivesProcessCrashAndExecutesOnce(t *testing.T) {
 
 func TestADKCrashAfterExternalEffectNeverReplaysUnknownOperation(t *testing.T) {
 	home := t.TempDir()
-	target := filepath.Join(home, "effect.txt")
+	target := filepath.Join(t.TempDir(), "effect.txt")
 	model, close := fakeModel(t, func(n int, _ map[string]any) any {
 		if n <= 2 {
 			return response("", Call{ID: "external-effect", Name: "shell", Arguments: `{"command":"synthetic-append"}`})
@@ -170,10 +180,10 @@ func TestADKCrashAfterExternalEffectNeverReplaysUnknownOperation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=60s")
+	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=120s")
 	var childOutput bytes.Buffer
 	child.Stdout, child.Stderr = &childOutput, &childOutput
-	child.Env = append(os.Environ(), "LAKE_ADK_CRASH_HELPER=1", "LAKE_ADK_CRASH_SCENARIO=effect", "LAKE_ADK_CRASH_HOME="+home, "LAKE_ADK_CRASH_PROVIDER="+model.URL)
+	child.Env = append(os.Environ(), "LAKE_ADK_CRASH_HELPER=1", "LAKE_ADK_CRASH_SCENARIO=effect", "LAKE_ADK_CRASH_HOME="+home, "LAKE_ADK_CRASH_EFFECT_TARGET="+target, "LAKE_ADK_CRASH_PROVIDER="+model.URL)
 	if err = child.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +195,7 @@ func TestADKCrashAfterExternalEffectNeverReplaysUnknownOperation(t *testing.T) {
 		}
 	}()
 	dispatched := false
-	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); {
+	for deadline := time.Now().Add(adkCrashReadyTimeout); time.Now().Before(deadline); {
 		if _, err = os.Stat(filepath.Join(home, "effect-dispatched")); err == nil {
 			dispatched = true
 			break
@@ -255,7 +265,7 @@ func TestADKQuestionSurvivesProcessCrashWithoutReplayingTools(t *testing.T) {
 	})
 	defer close()
 	binary, _ := os.Executable()
-	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=60s")
+	child := exec.Command(binary, "-test.run=^TestADKCrashApprovalHelper$", "-test.timeout=120s")
 	var childOutput bytes.Buffer
 	child.Stdout, child.Stderr = &childOutput, &childOutput
 	child.Env = append(os.Environ(), "LAKE_ADK_CRASH_HELPER=1", "LAKE_ADK_CRASH_HOME="+home, "LAKE_ADK_CRASH_PROVIDER="+model.URL)
@@ -265,7 +275,7 @@ func TestADKQuestionSurvivesProcessCrashWithoutReplayingTools(t *testing.T) {
 	defer func() { _ = child.Process.Kill(); _ = child.Wait() }()
 	var state State
 	ready := false
-	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); {
+	for deadline := time.Now().Add(adkCrashReadyTimeout); time.Now().Before(deadline); {
 		raw, _ := os.ReadFile(filepath.Join(home, "case.json"))
 		_ = json.Unmarshal(raw, &state)
 		if nativeQuestionReady(state.View.Question) && state.Runtime != nil {

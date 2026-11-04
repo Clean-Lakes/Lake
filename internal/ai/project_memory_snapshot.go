@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -114,6 +115,9 @@ func NaturalMemorySignal(text string) bool {
 }
 
 func (e *Engine) collectMemorySnapshot(s *session, c Config, input TurnInput) {
+	if e.CheckSecurityMemoryEligibility(context.Background(), c.MemoryProjectID, SecurityMemoryCapture) != nil {
+		return
+	}
 	if turn := currentMemoryCapture(s); turn != nil {
 		e.finishMemoryCapture(s, c)
 		return

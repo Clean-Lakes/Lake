@@ -3,9 +3,10 @@
 package security
 
 const (
-	SchemaVersion = 1
-	ReaderVersion = 1
-	ControlFormat = 1
+	SchemaVersion           = 1
+	ReaderVersion           = 3
+	FoundationReaderVersion = 1
+	ControlFormat           = 1
 )
 
 type ControlState struct {

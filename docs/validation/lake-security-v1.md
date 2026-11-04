@@ -1,5 +1,7 @@
 # Lake Security v1 · 第一批实施记录
 
+后续补充（2026-11-01）：[未决操作只读核查说明](../security/legacy-risk-inspection.md)补充当前规范库和旧 stdio 归档的命名空间查询、完整性验证与安全引用投影；不改变执行门禁或解析可信资源映射。新增 Security 专项/race、签名隔离 Dev 及完整相关 Go 回归的实际结果以本批 PR 的 tested SHA 和记录为准，不能将此处历史阶段 SHA 当成本批源码。
+
 日期：2026-10-30。代码基线：develop `be656805d345466f11bbb9c2c4af92e670da7420`。本批验证的代码提交：`e4515df3c4ccf89a8c71f29eb565b1d264124e84`；后续仅更新本文/计划进度时不改变该代码基线。总体方案见[设计 PR #124](https://github.com/Clean-Lakes/Lake/pull/124)，本批通过独立功能草稿[PR #130](https://github.com/Clean-Lakes/Lake/pull/130)交付，分支 `codex/security-runtime-foundation`，未合并。
 
 后续补丁`0feea12f`先恢复只读查看，`e86daf36`继续完成受控的单库初始迁移，日常Dev现已恢复正常功能，验证见文末。通用跨设备恢复开闸仍未实现；前文保留各阶段历史记录。
@@ -104,3 +106,8 @@ lake security resume-initial-migration --home PATH
 
 
 发布CI首轮另发现：Linux测试使用的kernel.ostype精确查询缺只读登记；compaction重启测试未先释放旧Engine/SQLite连接；macOS完整web race包超过默认10分钟累计时限（超时时最后一例仅运行3秒）。本轮补精确只读键并保留赋值/-w拒绝，重启fixture先Shutdown旧owner，完整race时限20分钟、job30分钟且不移除任何测试。相关Security/compaction/sysctl专项race连续3轮通过（AI 27.415秒、Web 5.731秒）；签名后端隔离回归通过。最终生产CI须在修复合入后重新通过。
+
+
+## 2026-11-02 任务闭环后续候选
+
+后续实现、独立审查修复、106项入口保护、任务授权/验收、配对恢复及签名Dev证据见[任务闭环实施记录](lake-security-task-closure.md)。该记录使用独立代码SHA，不将本文历史批次测试当作本轮通过。前端/shared契约未修改。初次原生截图遇Mac锁屏；2026-11-02用户解锁后已补齐窗口检查和三张截图，TASK-049/050收口，计划50/50完成。

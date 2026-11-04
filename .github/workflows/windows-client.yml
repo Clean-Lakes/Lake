@@ -30,7 +30,7 @@ jobs:
       (github.event.pull_request.head.ref == 'develop' &&
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -73,12 +73,21 @@ jobs:
           $env:CGO_ENABLED = '0'
           go test -v ./internal/web -run '^(TestWindows|TestConsole|TestRemoteShellCwd|TestCommandWaitTimeout|TestConversationFinishesWhenCompleted|TestInteractiveStartupHidesBootstrapTrigger)' -count=1 -timeout 3m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go test -v ./internal/ai -run '^Test(SSHAuthenticationMethodBoundary|StreamCompletion|StreamIdle|Idle|ManualCompaction|CancelIdle|ReloadClears|FirstTurn|OversizedSingle|FailedCompaction|CompactionUses|ToolChildContextFailure|ParentContextFailure)' -count=1 -timeout 1m
+          # This is a suite-wide deadline: Windows durable-store compaction
+          # cases already consume ~56 seconds before the final tool tests.
+          go test -v ./internal/ai -run '^Test(SSHAuthenticationMethodBoundary|StreamCompletion|StreamIdle|Idle|ManualCompaction|CancelIdle|ReloadClears|FirstTurn|OversizedSingle|FailedCompaction|CompactionUses|ToolChildContextFailure|ParentContextFailure)' -count=1 -timeout 3m
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Execute the exact-file/write-rejection regressions on native Windows.
+          go test -v ./internal/ai -run '^TestSecurityReadOnly(URIKeepsWindowsVolumeInPath|DatabaseReadsExactFileAndRejectsWrites)$' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test ./internal/platform -run '^TestSSHFileOption' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test ./client/windows -skip '^TestWindows(LegacyAssetsRetired|NaturalMemory)InRealWebView$' -count=1 -timeout 1m
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # This isolated fixture uses only an empty synthetic catalog and loopback
+      # HTTP. Keep its exact route failure visible without uploading private logs.
+      - name: Diagnose isolated Windows retired-route boundary
+        run: go test -v ./internal/web -run '^TestLegacyAssetExitClosesAllRoutesBeforeBodyOrReceiptReplay$' -count=1 -timeout=3m
       - name: Memory, legacy assets and retirement regression
         shell: pwsh
         run: |

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -103,35 +104,32 @@ func TestIdleResumePolicySkipsShortFreshAndUnknownHistory(t *testing.T) {
 }
 
 func TestManualCompactionTimeoutPreservesHistoryAndAllowsRetry(t *testing.T) {
-	requested, release := make(chan struct{}), make(chan struct{})
+	var requests atomic.Int32
+	release := make(chan struct{})
+	releaseSummary := sync.OnceFunc(func() { close(release) })
 	m, closeModel := fakeModel(t, func(n int, _ map[string]any) any {
+		requests.Add(1)
 		if n == 1 {
-			close(requested)
 			<-release
 		}
 		return response("保留 node-a 和不重启的限制；继续检查服务。")
 	})
 	defer closeModel()
-	defer close(release)
+	defer releaseSummary()
 	e := engineFor(t, m, nil)
 	e.compactionTimeout = 100 * time.Millisecond
 	before := seedIdleConversation(t, e, 12000)
 	done := make(chan error, 1)
 	go func() { done <- e.Compact(context.Background(), "case") }()
-	select {
-	case <-requested:
-	case <-time.After(3 * time.Second):
-		t.Fatal("summary did not start")
-	}
-	// This deliberately short deadline may already have expired by the time
-	// the test goroutine is scheduled. Check live visibility independently
-	// below, while the provider is held behind an explicit barrier.
+	// The 100ms child deadline can expire during a durable checkpoint before
+	// HTTP starts. Both paths must preserve history and release the session;
+	// provider-start visibility has its own barrier test below.
 	select {
 	case err := <-done:
 		if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "context compaction:") {
 			t.Fatal(err)
 		}
-	case <-time.After(3 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("summary did not respect its own deadline")
 	}
 	after, _ := e.History("case")
@@ -144,8 +142,17 @@ func TestManualCompactionTimeoutPreservesHistoryAndAllowsRetry(t *testing.T) {
 		t.Error("timeout left the session busy or destroyed its checkpoint")
 	}
 	s.mu.Unlock()
+	// Release even if the timed-out attempt never reached the provider: the
+	// retry may be its first request. Retry admission is independent of the
+	// deliberately tiny timeout used for the failed attempt.
+	releaseSummary()
+	e.compactionTimeout = 10 * time.Second
 	if err := e.Compact(context.Background(), "case"); err != nil {
 		t.Fatal("cannot retry", err)
+	}
+	retried, err := e.History("case")
+	if err != nil || requests.Load() == 0 || reflect.DeepEqual(before, retried) || validHistory(retried) != nil {
+		t.Fatal("retry did not produce a real valid summary", err)
 	}
 }
 

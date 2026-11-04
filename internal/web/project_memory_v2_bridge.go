@@ -67,6 +67,16 @@ func memoryDetailsFrom(data Object) *MemoryDetails {
 }
 
 func (b *Server) memoryV2Read(ctx context.Context, id, name string, args Object) (any, error) {
+	purpose := ai.SecurityMemoryRead
+	if name == "project_memory_index" {
+		purpose = ai.SecurityMemoryIndex
+	}
+	if err := b.Engine.CheckSecurityMemoryEligibility(ctx, stringOf(b.Store.Session(id)["projectId"]), purpose); err != nil {
+		return nil, err
+	}
+	if err := b.Engine.CheckSecurityMemoryEligibility(ctx, stringOf(b.Store.Session(id)["projectId"]), ai.SecurityMemoryUse); err != nil {
+		return nil, err
+	}
 	scope, err := b.ResolveMemoryReadScope(id)
 	if err != nil {
 		return nil, err

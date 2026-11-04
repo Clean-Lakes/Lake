@@ -1,0 +1,10 @@
+.conversation-stage { position:relative; display:flex; flex:1; flex-direction:column; min-height:0; }
+.conversation-stage > .conversation { transition:opacity 160ms ease-out; }
+.conversation-stage > .conversation.is-entering { opacity:0; pointer-events:none; }
+.conversation-loading { position:absolute; inset:0; z-index:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:24px; color:var(--muted); pointer-events:none; }
+.conversation-loading-preview { width:min(260px,55%); display:flex; flex-direction:column; gap:12px; opacity:.65; }
+.conversation-loading-preview > span { height:12px; border-radius:6px; background:var(--surface-selected); animation:conversation-placeholder 1.2s ease-in-out infinite alternate; }
+.conversation-loading-preview > span:nth-child(2) { width:76%; animation-delay:120ms; }
+.conversation-loading-preview > span:nth-child(3) { width:88%; animation-delay:240ms; }
+@keyframes conversation-placeholder { from { opacity:.35; } to { opacity:1; } }
+@media (prefers-reduced-motion:reduce) { .conversation-stage > .conversation { transition:none; } .conversation-loading-preview > span { animation:none; } }
