@@ -177,3 +177,23 @@ func TestSecurityOldQuestionCancellationKeepsNewInput(t *testing.T) {
 		t.Fatal("old cancellation cleared newer input")
 	}
 }
+
+func TestSecurityAbortCancelsGoalBeforeWorkerCallback(t *testing.T) {
+	e, s, goal, _ := savedSecurityQuestionFixture(t)
+	calls := 0
+	s.mu.Lock()
+	s.cancel = func() {
+		calls++
+		_, current, err := e.workRow(goal.SessionID, goal.ID)
+		if err != nil || current.Status != "cancelled" {
+			t.Errorf("worker callback ran before canonical cancellation: %s %v", current.Status, err)
+		}
+	}
+	s.mu.Unlock()
+	if err := e.Abort(goal.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	if calls == 0 {
+		t.Fatal("worker cancellation was not requested")
+	}
+}

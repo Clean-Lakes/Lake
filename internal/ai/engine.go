@@ -571,8 +571,10 @@ func (e *Engine) Abort(id string) error {
 	}
 	s.mu.Lock()
 	goalID := s.state.WorkGoalID
-	if s.cancel != nil {
-		s.cancel()
+	if cancel := s.cancel; cancel != nil {
+		// Cancel the canonical goal first. The worker's cancellation callback
+		// otherwise races WorkControl with a new progress revision.
+		defer cancel()
 	}
 	if err := e.dismissQuestionLocked(s, s.state.View.Question, "cancelled"); err != nil {
 		s.mu.Unlock()
@@ -580,10 +582,20 @@ func (e *Engine) Abort(id string) error {
 	}
 	s.mu.Unlock()
 	if goalID != "" {
-		_, g, loadErr := e.workRow(id, goalID)
-		if loadErr == nil && !workTerminal(g.Status) {
-			return e.WorkControl(context.Background(), id, goalID, "cancel", g.Revision)
+		for range 3 {
+			_, g, err := e.workRow(id, goalID)
+			if err != nil {
+				return err
+			}
+			if workTerminal(g.Status) {
+				return nil
+			}
+			err = e.WorkControl(context.Background(), id, goalID, "cancel", g.Revision)
+			if !errors.Is(err, errWorkConflict) {
+				return err
+			}
 		}
+		return errWorkConflict
 	}
 	return nil
 }
