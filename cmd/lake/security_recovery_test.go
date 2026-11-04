@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,11 +12,30 @@ import (
 )
 
 func TestSecurityRecoveryCLIRequiresExplicitHome(t *testing.T) {
+	if err := run(context.Background(), []string{"security", "recover-finalized-startup"}); err == nil || !strings.Contains(err.Error(), "explicit --home") {
+		t.Fatal("finalized recovery accepted implicit Home", err)
+	}
 	if err := run(context.Background(), []string{"security", "finalize-migration"}); err == nil || !strings.Contains(err.Error(), "explicit --home") {
 		t.Fatal("finalization accepted implicit Home", err)
 	}
 	if err := run(context.Background(), []string{"security", "resume-initial-migration"}); err == nil || !strings.Contains(err.Error(), "explicit --home") {
 		t.Fatal("recovery accepted a default Home", err)
+	}
+}
+
+func TestSecurityFinalizedStartupCLIValidatesApply(t *testing.T) {
+	for _, args := range [][]string{
+		{"--apply"}, {"--apply", "--expected-digest", "invalid"},
+		{"--expected-digest", strings.Repeat("0", 64)}, {"extra"},
+	} {
+		home := filepath.Join(t.TempDir(), "missing")
+		input := append([]string{"security", "recover-finalized-startup", "--home", home}, args...)
+		if err := run(context.Background(), input); err == nil {
+			t.Fatal("invalid finalized recovery accepted")
+		}
+		if _, err := os.Stat(home); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("invalid CLI created a Home", err)
+		}
 	}
 }
 
