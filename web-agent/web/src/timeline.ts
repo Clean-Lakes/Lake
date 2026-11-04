@@ -16,6 +16,12 @@ export type TranscriptEntry = {
   agentRun?: AgentRun;
   sre?:ReturnType<typeof sreEntries>[number]&{thread?:SRETranscriptEntry[]};
 };
+// Optional idle-resume maintenance is diagnostic metadata, not conversation.
+// Match its host origin as well as the legacy text; quotations remain prose.
+export function isCompactionFallbackEntry(entry: Pick<TranscriptEntry, 'card' | 'message'>): boolean {
+  const content = entry.card?.type === 'notice' ? entry.card.content : entry.message?.role === 'system' ? entry.message.text : undefined;
+  return content?.trim() === '历史上下文整理未完成，已保留原上下文继续本轮对话。';
+}
 // File summaries belong to the user turn that produced them, even when that
 // turn includes several assistant replies and tool runs.
 export function transcriptTurns(entries: TranscriptEntry[]): TranscriptEntry[][] {

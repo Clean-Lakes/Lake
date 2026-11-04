@@ -46,7 +46,7 @@ import { memo, useEffect, useMemo, useRef, useState, type ReactNode, type RefObj
 import type { AIImage, AICard, AIView, AIPreset, TextFileAttachment, SessionSnapshot, TerminalSession, WorkspaceTag } from "../../shared/contracts";
 import { conversationTagSignature } from "./conversationTags";
 import {AssistantMarkdown, ObjectReferencesProvider, ReplyReferenceScope} from './AssistantMarkdown';
-import { orderedTranscript, transcriptGroups, transcriptTurns } from "./timeline";
+import { isCompactionFallbackEntry, orderedTranscript, transcriptGroups, transcriptTurns } from "./timeline";
 import { FileChanges } from "./FileChanges";
 import { TaskProgress } from "./TaskProgress";
 import { isFileChangeCard } from "./file-changes-model";
@@ -153,7 +153,7 @@ function AITranscriptContent({ superTask,onSpecialist,assistantIdentity,onOpenMe
   const budgetPause=lastBudgetCard?.type==='error'&&isSuperBudgetPause(lastBudgetCard.content||'')&&!['running','waiting_approval'].includes(snapshot.ai?.status||'')?lastBudgetCard:undefined;
   const budgetNotice=superTask?.reason==='token_limit_removed'?superTask.summary:budgetPause?(superTask?.summary||displayAiError(budgetPause.content||'')):undefined;
   const groups = transcriptGroups(visibleEntries);
-  const activityEntry = (entry: (typeof entries)[number]) => !!(entry.sre||entry.agentRun || entry.action || entry.card && ["thinking", "operation", "shell", "diff", "error", "strategy_correction"].includes(entry.card.type));
+  const activityEntry = (entry: (typeof entries)[number]) => !!(isCompactionFallbackEntry(entry)||entry.sre||entry.agentRun || entry.action || entry.card && ["thinking", "operation", "shell", "diff", "error", "strategy_correction"].includes(entry.card.type));
   const filteredEntries=mode==='activity'&&sreTaskFilter?entries.filter(entry=>entry.sre&&(entry.sre.task.id===sreTaskFilter||entry.sre.task.status==='waiting_approval'||entry.sre.task.attempts.some(a=>a.operations?.some(o=>['unknown','dispatched'].includes(o.status))))):entries;
   const turns = transcriptTurns(filteredEntries).filter(turn => mode !== "activity" || turn.some(activityEntry));
   const directoryItems = conversationDirectoryItems(snapshot.messages, new Set(turns.flatMap(turn => turn.filter(entry => entry.message?.role === "user").map(entry => entry.id))),new Map(turns.flatMap(turn=>{const user=turn.find(entry=>entry.message?.role==='user');return user?[[user.id,conversationPreview(turn)] as const]:[]})));
@@ -183,6 +183,7 @@ function AITranscriptContent({ superTask,onSpecialist,assistantIdentity,onOpenMe
   const currentTiming=timingForTurn(currentTurn,snapshot);
   const liveConversation=['running','waiting_approval'].includes(snapshot.ai?.status||'')&&(!currentTiming||currentTiming.status==='running');
   const conversationTurnEntries=(turn:typeof entries)=>turn.filter(entry=>!isFileChangeCard(entry.card)
+    &&!isCompactionFallbackEntry(entry)
     &&!(entry.card&&['message','text'].includes(entry.card.type)&&!entry.card.content?.trim())
     &&!(entry.message?.role==='system'&&isConversationInterruption(entry.message.text||''))
     &&!(entry.card?.type==='error'&&(['cancelled','interrupted'].includes(entry.card.status)||isConversationInterruption(entry.card.content||''))));
@@ -216,7 +217,9 @@ function AITranscriptContent({ superTask,onSpecialist,assistantIdentity,onOpenMe
       const stages=resourceStageProgress(turn,processGroups,mode==='conversation'&&turn===currentTurn&&liveConversation,mode==='conversation'&&settled,presentedReply,true);
       const overallIds=new Set(stages.overall.map(entry=>entry.id));
       const interim = turn.filter(entry=>((interimIds.has(entry.id)||progress?.ids.has(entry.id))&&!stages.ids.has(entry.id))||((settled||!!progress)&&overallIds.has(entry.id)));
+      const fallbackDiagnostic=turn.find(isCompactionFallbackEntry);
       const compactionDiagnostics=turn.flatMap(entry=>entry.card?.type==='error'&&isContextCompactionFailure(entry.card.content||'')?[<details className="compaction-diagnostic" key={`diagnostic-${entry.id}`}><DisclosureSummary>整理请求诊断</DisclosureSummary><pre>{entry.card.content}</pre></details>]:[]);
+      if(fallbackDiagnostic)compactionDiagnostics.push(<details className="compaction-diagnostic" key={`diagnostic-${fallbackDiagnostic.id}`}><DisclosureSummary>整理请求诊断</DisclosureSummary><pre>{fallbackDiagnostic.card?.content??fallbackDiagnostic.message?.text}</pre></details>);
       const stageContent=(entry:typeof turn[number])=>entry.card?<Card key={entry.id} card={entry.card} tags={snapshot.session.tags}/>:entry.message?<TranscriptMessage key={entry.id} message={entry.message} sessionId={snapshot.session.id} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} hideIdentity={hideReplyIdentity}/>:null;
       const notices=[['failed','项失败'],['pending','项待确认'],['unknown','项结果待核查'],['background_running','项后台执行中'],['not_executed','项未执行'],['interrupted','项已停止'],['cancelled','项已停止']].flatMap(([status,label])=>{const count=processGroups.flatMap(group=>group.entries).filter(entry=>entry.card?.status===status).length;return count?[`${count} ${label}`]:[];}).join(' · ');
       const timingProps={timing:timingForTurn(turn,snapshot),view:turn.some(entry=>entry.message?.id===latestUser?.id)?snapshot.ai:undefined,cards:turn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt:turn.find(entry=>entry.message?.role==='user')?.at??''};

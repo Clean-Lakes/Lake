@@ -1,10 +1,11 @@
 import {test} from 'node:test';
+import {SpecialistTaskMenu} from '../src/SpecialistTaskMenu';
 import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {SpecialistTaskMenu} from '../src/SpecialistTaskMenu';
-import {mergeChannelEntries,SpecialistTaskControls} from '../src/SpecialistChannel';
-import type {SessionSnapshot,SpecialistChannelEntry} from '../../shared/contracts';
+import {channelTasksByRecentRecord,mergeChannelEntries,preferredChannelTask,SpecialistChannelEntries,SpecialistTaskControls,SpecialistTaskSelect} from '../src/SpecialistChannel';
+import type {SessionSnapshot,SpecialistChannelEntry,SuperWorker} from '../../shared/contracts';
+import {isCompactionFallbackEntry} from '../src/timeline';
 
 test('channel pagination and retries use source identity rather than report body',()=>{
  const entry=(id:string,at:string,source='worker-a'):SpecialistChannelEntry=>({id,sourceSessionId:source,taskId:`task-${source}`,createdAt:at,message:{id,sessionId:source,role:'assistant',text:'相同正文',createdAt:at}});
@@ -14,6 +15,18 @@ test('channel pagination and retries use source identity rather than report body
  assert.deepEqual(result.map(item=>item.id),['b','a']);
  assert.equal(result[0]?.sourceSessionId,'worker-b');assert.equal(result[1]?.message?.text,'流式更新');
  assert.equal(mergeChannelEntries(result,[older]).length,2);
+});
+
+test('persisted channel diagnostics are quiet without filtering human or assistant quotations',()=>{
+ const text='历史上下文整理未完成，已保留原上下文继续本轮对话。';
+ const base={id:'diagnostic',sourceSessionId:'worker-a',taskId:'task-a',createdAt:'2026-11-03T01:00:01Z'};
+ const card={...base,card:{id:'fallback',type:'notice',status:'completed',content:text,at:base.createdAt}};
+ const message=(role:'user'|'assistant'|'system'):SpecialistChannelEntry=>({...base,message:{id:'message',sessionId:base.sourceSessionId,role,text,createdAt:base.createdAt}});
+ const entries=[card,message('system'),message('user'),message('assistant')];
+ const before=JSON.stringify(entries);
+ assert.deepEqual(entries.map(isCompactionFallbackEntry),[true,true,false,false]);
+ assert.equal(entries.filter(entry=>!isCompactionFallbackEntry(entry)).length,2);
+ assert.equal(JSON.stringify(entries),before,'raw channel history and source identities stay intact');
 });
 
 test('two waiting task controls expose both original questions and approvals without enabling a disconnected channel',()=>{
@@ -27,6 +40,35 @@ test('two waiting task controls expose both original questions and approvals wit
  assert.equal((html.match(/>提交并继续/g)??[]).length,2);
  assert.equal((html.match(/>使用此资源<\/button>/g)??[]).length,2);
  assert.match(renderToStaticMarkup(createElement(SpecialistTaskControls,{snapshot:snapshot('A'),connected:false})),/<fieldset[^>]*disabled=""/);
+});
+
+test('channel messages retain source identity without repeated execution links',()=>{
+ const at='2026-11-04T01:00:00Z';
+ const entries:SpecialistChannelEntry[]=[
+  {id:'reply',sourceSessionId:'worker-a',taskId:'task-a',createdAt:at,message:{id:'reply',sessionId:'worker-a',role:'assistant',text:'已取得磁盘证据',createdAt:at}},
+  {id:'blocked',sourceSessionId:'worker-b',taskId:'task-b',createdAt:at,card:{id:'blocked',type:'error',status:'failed',content:'需要核实原操作',at}},
+ ];
+ const html=renderToStaticMarkup(createElement(SpecialistChannelEntries,{entries,resources:[]}));
+ assert.ok(html.includes('已取得磁盘证据')&&html.includes('需要核实原操作'));
+ assert.ok(html.includes('data-source-session="worker-a"')&&html.includes('data-task-id="task-b"'));
+ assert.ok(!html.includes('执行详情')&&!html.includes('specialist-channel-source'));
+});
+
+test('inspector task navigation keeps distinct source sessions even for equal task titles',()=>{
+ const worker=(id:string,state:SuperWorker['task']['state']):SuperWorker=>({id,roleId:'ops',roleName:'运维专员',sessionId:`session-${id}`,assignmentState:'active',task:{taskId:`task-${id}`,sessionId:`session-${id}`,title:'检查服务器',state,acceptanceState:'not_evaluated',revision:1,originRootTurnId:`root-${id}`,deadlineAt:''}});
+ const a=worker('a','completed'),b=worker('b','paused'),c=worker('c','running'),d=worker('d','waiting_user');
+ const entries:SpecialistChannelEntry[]=[{id:'latest',sourceSessionId:b.sessionId,taskId:b.task.taskId,createdAt:'2026-11-04T02:00:00Z'}];
+ const ordered=channelTasksByRecentRecord([a,b],entries);
+ assert.deepEqual(ordered.map(row=>row.id),['b','a']);
+ assert.equal(preferredChannelTask(ordered),b,'idle channel opens the task with the most recent loaded record');
+ assert.equal(preferredChannelTask([b,c]),c,'active work is reachable before paused history');
+ assert.equal(preferredChannelTask([c,d]),d,'a task needing confirmation is directly reachable');
+ assert.equal(preferredChannelTask([]),undefined);
+ const html=renderToStaticMarkup(createElement(SpecialistTaskSelect,{workers:[a,b],sessionId:b.sessionId,onTask:()=>{}}));
+ assert.ok(html.includes('role="combobox"')&&html.includes('aria-label="查看专员任务"'));
+ assert.ok(html.includes('value="session-a"')&&html.includes('value="session-b" selected=""'));
+ assert.ok(html.includes('任务记录')&&html.includes('检查服务器'));
+ assert.deepEqual([a,b].map(row=>row.id),['a','b'],'display ordering does not mutate task metadata');
 });
 
 test('the header task list starts collapsed and reveals source on demand', () => {
