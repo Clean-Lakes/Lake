@@ -10,6 +10,7 @@ const stepLabels:Record<string,string>={pending:'待执行',running:'执行中',
 export function SuperTaskInspector({task,goal,worker,plan=false,connected=false,onUpdated}:{task:SuperTask;goal:WorkGoal;worker?:SuperWorker;plan?:boolean;connected?:boolean;onUpdated?:()=>void}){
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
  const stop=async()=>{setBusy(true);setError('');try{await api.aiOperation(task.sessionId,'workControl',{goalId:task.taskId,command:'cancel',revision:task.revision});onUpdated?.();}catch(reason){setError(readableError(reason));}finally{setBusy(false);}};
+ const items=goal.items??[];
  const accepted=task.state==='completed'&&task.acceptanceState==='pass';
  const owner=worker?.sessionId===task.sessionId&&worker.task.taskId===task.taskId?worker:undefined,state=superTaskPresentation(task);
  return <section className="super-task-inspector" aria-label={plan?'任务计划':'当前任务执行'}>
@@ -17,7 +18,7 @@ export function SuperTaskInspector({task,goal,worker,plan=false,connected=false,
   <div className="super-task-heading">{!owner&&<Glyph name="document" size={17}/>}<strong>{task.title}</strong></div>
   <div className="super-task-state"><span data-tone={state.tone}>{state.label}</span><small>{accepted?'验收通过':task.acceptanceState==='fail'?'验收未通过':'尚未通过目标验收'}</small></div>
   {task.summary&&['paused','blocked','failed'].includes(task.state)&&<p className="inspector-empty">{task.summary}</p>}
-  {!goal.items.length?<p className="inspector-empty">专员生成计划后会显示在这里。</p>:<ol className="super-task-steps">{goal.items.map((item,index)=><li key={item.id} data-state={item.status}>
+  {!items.length?<p className="inspector-empty">专员生成计划后会显示在这里。</p>:<ol className="super-task-steps">{items.map((item,index)=><li key={item.id} data-state={item.status}>
    <span className="super-step-number">{item.status==='completed'?<Glyph name="check" size={12}/>:index+1}</span><div><strong>{item.title}</strong><small>{plan?'':stepLabels[item.status]??'待核实'}</small>{item.reason&&<p>{item.reason}</p>}</div>
   </li>)}</ol>}
   {!plan&&<p className="super-task-budget">{task.reason==='model_round_limit'?'模型调用轮数已达上限':<>已用 {goal.modelRounds} / {goal.roundLimit} 轮</>}</p>}

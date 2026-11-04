@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
+import {SpecialistTaskMenu} from '../src/SpecialistTaskMenu';
 import {mergeChannelEntries,SpecialistTaskControls} from '../src/SpecialistChannel';
 import type {SessionSnapshot,SpecialistChannelEntry} from '../../shared/contracts';
 
@@ -26,4 +27,12 @@ test('two waiting task controls expose both original questions and approvals wit
  assert.equal((html.match(/>提交并继续/g)??[]).length,2);
  assert.equal((html.match(/>使用此资源<\/button>/g)??[]).length,2);
  assert.match(renderToStaticMarkup(createElement(SpecialistTaskControls,{snapshot:snapshot('A'),connected:false})),/<fieldset[^>]*disabled=""/);
+});
+
+test('the header task list starts collapsed and reveals source on demand', () => {
+ const source = '查看项目的发布记录';
+ const html = renderToStaticMarkup(createElement(SpecialistTaskMenu, {sessionId: 'orders-session', currentTaskId: 'orders-task', source, onTask() {}}));
+ assert.match(html, /aria-label="专员任务清单"/);
+ assert.match(html, /aria-expanded="false"/);
+ assert.ok(!html.includes(source));
 });

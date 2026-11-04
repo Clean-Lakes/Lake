@@ -31,7 +31,7 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
  const plan=task?.plans?.at(-1);
  const canonical=snapshot.superagent?.task;
  const goal=canonical&&canonical.taskId===target?.canonicalGoalId?[snapshot.superagent?.goal,...(snapshot.ai?.workGoals??[])].find(goal=>goal?.id===canonical.taskId&&goal.sessionId===snapshot.session.id&&goal.revision===canonical.revision):undefined;
- const hasPlan=!!plan||!!goal?.items.length;
+ const hasPlan=!!plan||!!goal?.items?.length;
  const selected=task?inspectedAttempt(task,target?.attemptId):undefined;
  useLayoutEffect(()=>{
   if(selection&&!selection.automatic&&panel.current&&!panel.current.contains(document.activeElement))panel.current.focus({preventScroll:true});
