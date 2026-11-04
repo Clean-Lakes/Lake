@@ -299,14 +299,8 @@ func loadSecurityEvaluation(tx *gorm.DB, o security.PreparedOperation, owner Exe
 		if len(ignoreOperationID) == 1 && ignoreOperationID[0] == o.ID {
 			blockQuery = tx.Where("id <> ?", o.ID)
 		}
-		ids := securityCatalogResources(o.Resources)
-		if len(ids) == 0 {
-			ids = []string{""}
-		}
-		for _, id := range ids {
-			if err = CheckResourceWriteBlock(blockQuery, id); err != nil {
-				return in, err
-			}
+		if err = checkSecurityOperationConflicts(blockQuery, o); err != nil {
+			return in, err
 		}
 	}
 
