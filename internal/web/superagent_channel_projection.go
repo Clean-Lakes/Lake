@@ -16,6 +16,7 @@ const superChannelSchema = `
 CREATE TABLE IF NOT EXISTS superagentRoleChannels(channelId TEXT PRIMARY KEY,projectId TEXT NOT NULL REFERENCES projects(id),roleId TEXT NOT NULL,sessionId TEXT NOT NULL UNIQUE REFERENCES sessions(id),UNIQUE(projectId,roleId));
 CREATE TABLE IF NOT EXISTS superagentChannelTimeline(channelId TEXT NOT NULL REFERENCES superagentRoleChannels(channelId),kind TEXT NOT NULL,sourceSessionId TEXT NOT NULL,sourceId TEXT NOT NULL,taskId TEXT NOT NULL DEFAULT '',workerId TEXT NOT NULL DEFAULT '',createdAt TEXT NOT NULL,PRIMARY KEY(channelId,kind,sourceSessionId,sourceId));
 CREATE INDEX IF NOT EXISTS superagentChannelTimelinePage ON superagentChannelTimeline(channelId,createdAt,kind,sourceSessionId,sourceId);
+CREATE TABLE IF NOT EXISTS superagentChannelReads(channelId TEXT PRIMARY KEY REFERENCES superagentRoleChannels(channelId) ON DELETE CASCADE, completionCursor TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS superagentChannelCursors(channelId TEXT NOT NULL,sessionId TEXT NOT NULL,cardsThrough INTEGER NOT NULL,eventThrough INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(channelId,sessionId));`
 
 func (b *Server) reconcileSpecialistChannels(ctx context.Context, project string) []ai.SpecialistChannel {

@@ -5,7 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {superTaskPresentation,superWorkerIcon} from '../src/superAgentPresentation';
 import {PilotWorkspace} from '../src/PilotWorkspace';
 import {SuperTaskInspector} from '../src/SuperTaskInspector';
-import type {SuperTask,SuperWorker,SuperWorkspace,WorkGoal} from '../../shared/contracts';
+import type {SpecialistChannelInfo,SuperTask,SuperWorker,SuperWorkspace,WorkGoal} from '../../shared/contracts';
 
 test('specialist identities share Lake role shapes, with a stable investigation fallback',()=>{
  for(const [roleName,shape] of [['协调专员','coordinator'],['本机状态检查专员','investigator'],['代码修复专员','executor'],['前端依赖审查专员','verifier'],['Go 依赖审查专员','verifier'],['Deployment Specialist','executor'],['Independent Reviewer','verifier'],['自定义专员','investigator']])assert.equal(superWorkerIcon({roleName}),shape);
@@ -41,4 +41,36 @@ test('inspector never attributes another session or task to the selected special
 test('opening the details of a paused task before its first plan shows the empty state',()=>{
  const html=renderToStaticMarkup(createElement(SuperTaskInspector,{task:{...task,state:'paused'},goal:{...goal,items:null}}));
  assert.match(html,/专员生成计划后会显示在这里/);
+});
+
+test('specialist sidebar prioritizes live execution, keeps confirmations and clears only viewed completions', () => {
+ const channel: SpecialistChannelInfo = {
+  id: 'channel', sessionId: 'role-channel', projectId: 'project', roleId: worker.roleId,
+  roleName: worker.roleName, createdAt: '', revision: 1,
+ };
+ const earlier = '00000000000000000008', latest = '00000000000000000009';
+ function render(fields: Partial<SpecialistChannelInfo>, selectedId: string | null = null, selectedRoleId?: string) {
+  const workspace: SuperWorkspace = {
+   active: true, project: {projectId: 'project', routerSessionId: 'pilot', version: 1},
+   // A paused preview in the bounded worker list must not decide this role's aggregate activity.
+   workers: [{...worker, task: {...task, state: 'paused'}}], channels: [{...channel, ...fields}],
+  };
+  return renderToStaticMarkup(createElement(PilotWorkspace, {workspace, selectedId, selectedRoleId, error: '', onPilot(){}, onWorker(){}}));
+ }
+ const unread = {completionCursor: latest, seenCompletionCursor: earlier, needsConfirmation: true};
+ const executing = render({...unread, running: true});
+ assert.match(executing, /class="pilot-worker-running"/);
+ assert.match(executing, /activity-indicator/);
+ assert.match(executing, /class="pilot-worker-confirmation"/);
+ assert.doesNotMatch(executing, /class="pilot-worker-unread"/);
+
+ const finished = render(unread);
+ assert.match(finished, /class="pilot-worker-unread"/);
+ assert.match(finished, /class="pilot-worker-confirmation"/);
+ for (const html of [
+  render({}), render({...unread, seenCompletionCursor: latest}),
+  render(unread, channel.sessionId), render(unread, worker.sessionId),
+  render(unread, 'older-session-outside-worker-preview', worker.roleId),
+ ]) assert.doesNotMatch(html, /class="(?:pilot-worker-unread|pilot-worker-running|session-status-dot)"/);
+ assert.match(render(unread, 'pilot'), /class="pilot-worker-unread"/);
 });

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -54,14 +55,17 @@ func superChannelForEventTx(tx *gorm.DB, event superEventRow) (*superChannelRow,
 }
 
 type SpecialistChannel struct {
-	ID                string    `json:"id"`
-	ProjectID         string    `json:"projectId"`
-	RoleID            string    `json:"roleId"`
-	RoleName          string    `json:"roleName"`
-	SessionID         string    `json:"sessionId"`
-	Revision          int64     `json:"revision"`
-	CreatedAt         time.Time `json:"createdAt"`
-	NeedsConfirmation bool      `json:"needsConfirmation,omitempty"`
+	ID                   string    `json:"id"`
+	ProjectID            string    `json:"projectId"`
+	RoleID               string    `json:"roleId"`
+	RoleName             string    `json:"roleName"`
+	SessionID            string    `json:"sessionId"`
+	Revision             int64     `json:"revision"`
+	CreatedAt            time.Time `json:"createdAt"`
+	NeedsConfirmation    bool      `json:"needsConfirmation,omitempty"`
+	Running              bool      `json:"running,omitempty"`
+	CompletionCursor     string    `json:"completionCursor,omitempty"`
+	SeenCompletionCursor string    `json:"seenCompletionCursor,omitempty"`
 }
 
 func ensureSuperChannelTx(tx *gorm.DB, project, role string, at time.Time) (superChannelRow, error) {
@@ -86,7 +90,76 @@ func (e *Engine) ListSpecialistChannels(ctx context.Context, project string) ([]
 	}
 	out := []SpecialistChannel{}
 	err = db.WithContext(ctx).Table("superagent_role_channels c").Select("c.id,c.project_id,c.role_id,r.name AS role_name,c.host_session_id AS session_id,c.revision,c.created_at").Joins("JOIN superagent_roles r ON r.id=c.role_id AND r.project_id=c.project_id").Where("c.project_id = ?", project).Order("c.created_at,c.id").Scan(&out).Error
-	return out, err
+	if err != nil || len(out) == 0 {
+		return out, err
+	}
+	activity, err := specialistActivity(db.WithContext(ctx), project, "")
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		a := activity[out[i].RoleID]
+		out[i].Running = a.Running
+		out[i].CompletionCursor = a.completionCursor()
+	}
+	return out, nil
+}
+
+type specialistActivityRow struct {
+	RoleID    string
+	Running   bool
+	Completed int64
+}
+
+func (a specialistActivityRow) completionCursor() string {
+	if a.Completed == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%020d", a.Completed)
+}
+
+// Count each immutable accepted root goal once. A step receipt, later report
+// delivery or ordinary goal revision does not advance the role's read cursor.
+func specialistActivity(db *gorm.DB, project, role string) (map[string]specialistActivityRow, error) {
+	query := db.Table("superagent_workers w").
+		Joins("JOIN native_work_goals g ON g.id = w.task_id AND g.session_id = COALESCE(NULLIF(w.goal_session_id, ''), w.session_id)").
+		Where("w.project_id = ? AND w.parent_worker_id = ''", project)
+	if role != "" {
+		query = query.Where("w.role_id = ?", role)
+	}
+	var rows []specialistActivityRow
+	err := query.Select(`w.role_id,
+		MAX(CASE WHEN g.status IN ('pending','idle','queued','running') AND EXISTS (
+			SELECT 1 FROM superagent_workers runner JOIN superagent_assignments a ON a.worker_id = runner.id
+			WHERE runner.task_id = w.task_id AND runner.project_id = w.project_id AND a.project_id = w.project_id
+			  AND (runner.id = w.id OR runner.parent_worker_id = w.id)
+			  AND a.state = 'active' AND a.owner_id <> '' AND a.lease_until > ?
+		) THEN 1 ELSE 0 END) AS running,
+		COUNT(DISTINCT CASE WHEN g.status = 'completed' AND g.closure_contract <> '' AND EXISTS (
+			SELECT 1 FROM work_acceptance_records receipt
+			WHERE receipt.goal_id = g.id AND receipt.session_id = g.session_id AND receipt.project_id = w.project_id
+			  AND receipt.goal_revision = g.goal_revision AND receipt.plan_revision = g.plan_revision
+			  AND receipt.scope = 'goal' AND receipt.state = 'pass'
+		) THEN g.id END) AS completed`, time.Now().UTC()).Group("w.role_id").Scan(&rows).Error
+	activity := make(map[string]specialistActivityRow, len(rows))
+	for _, row := range rows {
+		activity[row.RoleID] = row
+	}
+	return activity, err
+}
+
+// SpecialistCompletionCursor checks the role watermark without projecting
+// every task or loading a different channel's history.
+func (e *Engine) SpecialistCompletionCursor(ctx context.Context, project, role string) (string, error) {
+	if project == "" || role == "" {
+		return "", errSuperBinding
+	}
+	db, err := e.superStore()
+	if err != nil {
+		return "", err
+	}
+	activity, err := specialistActivity(db.WithContext(ctx), project, role)
+	return activity[role].completionCursor(), err
 }
 
 func (e *Engine) SpecialistChannelForSession(ctx context.Context, project, session string) (SpecialistChannel, error) {

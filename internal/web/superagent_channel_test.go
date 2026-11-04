@@ -250,6 +250,8 @@ func TestSuperChannelControlRequiresExactExecutionSession(t *testing.T) {
 	}
 	apiTest(t, h, "DELETE", "/api/sessions/"+ch.SessionID, nil, 409)
 	b.ensureSuperWorkerSession(pid, worker.SessionID, "Check target")
+	apiTest(t, h, "PUT", "/api/sessions/"+ch.SessionID+"/channel/read", Object{"cursor": "00000000000000000001"}, 409)
+	apiTest(t, h, "PUT", "/api/sessions/"+worker.SessionID+"/channel/read", Object{"cursor": "00000000000000000001"}, 404)
 	for _, source := range []string{ch.SessionID, worker.SessionID} {
 		message := apiTest(t, h, "POST", "/api/sessions/"+source+"/messages", Object{"text": "Check a different host; route before dispatch"}, 202)
 		if source == worker.SessionID && message["pilotSessionId"] != ch.SessionID {

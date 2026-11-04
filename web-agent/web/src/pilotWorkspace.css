@@ -9,8 +9,11 @@
 .pilot-worker-row { min-height:56px; margin-bottom:2px; align-items:center; }
 .pilot-worker-row .nav-row-text { gap:3px; min-width:0; }
 .pilot-worker-task { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--font-size-ui); color:var(--text-muted); }
-.pilot-worker-status { display:flex; align-items:center; justify-content:center; flex:0 0 12px; }
-.pilot-worker-status .session-status-dot[data-tone=danger] { --session-state-color:var(--danger); }
+.pilot-worker-status { display:inline-flex; align-items:center; justify-content:flex-end; gap:6px; flex:0 0 auto; }
+.pilot-worker-status:empty { display:none; }
+.pilot-worker-running { display:inline-flex; }
+.nav-row .pilot-worker-running .activity-indicator { color:var(--info); }
+.pilot-worker-unread { width:7px; height:7px; border-radius:50%; background:var(--success); }
 .super-role-avatar { display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; background:none; }
 .super-role-avatar[data-role=coordinator] { --super-role-color:var(--agent-coordinator); }
 .super-role-avatar[data-role=investigator] { --super-role-color:var(--agent-investigator); }
@@ -54,5 +57,4 @@
 .response-author:hover { background:var(--surface-hover); }
 .response-author:focus-visible { outline:2px solid var(--focus-outline); outline-offset:2px; }
 
-.pilot-worker-status.needs-confirmation { flex-basis:auto; }
 .pilot-worker-confirmation { padding:3px 7px; border-radius:5px; corner-shape:var(--corner-window); color:var(--info); background:color-mix(in srgb,var(--info) 11%,transparent); white-space:nowrap; font-size:11px; line-height:16px; font-weight:500; }

@@ -99,6 +99,7 @@ export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"model
 
 export const api = {
 	superWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorkspace>(`/api/projects/${encodeURIComponent(project)}/superagent`,{signal}),
+	readSpecialistCompletion:(session:string,cursor:string)=>request<{cursor:string}>(`/api/sessions/${encodeURIComponent(session)}/channel/read`,{method:'PUT',body:JSON.stringify({cursor})}),
 	specialistTasks:(session:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorker[]>(`/api/sessions/${encodeURIComponent(session)}/channel/tasks`,{signal}),
 	specialistChannel:(session:string,cursor='',signal?:AbortSignal)=>request<import('../../shared/contracts').SpecialistChannelPage>(`/api/sessions/${encodeURIComponent(session)}/channel${cursor?`?cursor=${encodeURIComponent(cursor)}`:''}`,{signal}),
 	stopSpecialistChannel:(session:string)=>request<{stopped:boolean}>(`/api/sessions/${encodeURIComponent(session)}/channel`,{method:'POST',body:JSON.stringify({action:'stop'})}),
