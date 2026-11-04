@@ -378,7 +378,7 @@ func (e *Engine) ReplyQuestionWithTarget(id, requestID string, answers map[strin
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	req := s.state.View.Question
-	if req == nil && noQuestionAnswers(answers) {
+	if req == nil && strings.HasPrefix(requestID, "security-confirm-") && noQuestionAnswers(answers) {
 		return nil // Dismissing an already closed card is idempotent.
 	}
 	if req != nil && req.ID == requestID {
