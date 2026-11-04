@@ -1,0 +1,109 @@
+{
+  "cli": {
+    "passed": true,
+    "testedSHA": "f68981c0dac90d795c209c6c2101952659765d14",
+    "sourceDirty": false,
+    "binarySHA256": "4ad7d09cab924a68cfc8469df024bd1e11e08e7c6eeafd1ce5f7ccf2aa13565c",
+    "provider": "loopback synthetic fixture",
+    "native": false,
+    "tasks": 2,
+    "distinctWorkerSessions": 2,
+    "actualReads": 2,
+    "humanQuestions": 4,
+    "pilotReportsDelivered": true,
+    "currentKernelPIDVerified": true,
+    "explicitKernelDrainVerified": true,
+    "specialistManagement": {
+      "createdWithoutTask": true,
+      "editedWithoutTask": true,
+      "coldRestartRetainedRoleAndChannel": true,
+      "stableRoleID": "a30306acad48330ba6049b20f87da27324ae7a635b8c47cf9ca0a881fb3d375a",
+      "roleRevision": 2,
+      "reusedRoleForTwoIndependentTasks": true,
+      "oneSidebarChannel": true
+    },
+    "projectAccess": "inherited catalog and original permissions; no policy PUT"
+  },
+  "native": {
+    "passed": true,
+    "testedSHA": "f68981c0dac90d795c209c6c2101952659765d14",
+    "sourceDirty": true,
+    "binarySHA256": "4ad7d09cab924a68cfc8469df024bd1e11e08e7c6eeafd1ce5f7ccf2aa13565c",
+    "provider": "loopback synthetic fixture",
+    "native": true,
+    "tasks": 2,
+    "distinctWorkerSessions": 2,
+    "actualReads": 2,
+    "humanQuestions": 4,
+    "pilotReportsDelivered": true,
+    "currentKernelPIDVerified": true,
+    "explicitKernelDrainVerified": true,
+    "specialistManagement": {
+      "createdWithoutTask": true,
+      "editedWithoutTask": true,
+      "coldRestartRetainedRoleAndChannel": true,
+      "stableRoleID": "889bd3553bf3b9605547e123e86d734ba4af4d850e5f30768245897cb7b27603",
+      "roleRevision": 2,
+      "reusedRoleForTwoIndependentTasks": true,
+      "oneSidebarChannel": true
+    },
+    "projectAccess": "inherited catalog and original permissions; no policy PUT",
+    "sourceDirtyReason": "Only generated UI screenshots under docs/validation were untracked; tracked application sources match f68981c0 (runtime unchanged from 19691440)."
+  },
+  "installation": {
+    "overwritten": false,
+    "installedHead": "e20ce338c9bb44f08ead0d5b422d972f4b0bd288",
+    "reason": "dev_build_origin.py rejected replacing an installed Dev containing unmerged UI commits; used the signed candidate Dev bundle with a disposable explicit Home instead. No guard bypass."
+  },
+  "existingDev": {
+    "schema": 4,
+    "unchangedCanonicalTables": [
+      "superagent_roles",
+      "superagent_workers",
+      "superagent_assignments",
+      "native_work_goals",
+      "native_operations",
+      "security_tasks"
+    ],
+    "reopenedOriginalApplication": true
+  },
+  "ui": {
+    "light": true,
+    "dark": true,
+    "narrowWidth": 900,
+    "narrowScrollWidth": 900,
+    "idleChannelNavigable": true,
+    "idleTasks": 0,
+    "nativeTaskCount": 2,
+    "nativeDistinctTaskInspectors": true,
+    "screenshots": [
+      "idle-light.png",
+      "idle-dark.png",
+      "idle-dark-narrow.png"
+    ]
+  },
+  "automated": {
+    "applicationSHA": "19691440",
+    "go": {
+      "passed": 2020,
+      "skipped": 15,
+      "failed": 0,
+      "packages": 15
+    },
+    "race": {
+      "passed": 100,
+      "failed": 0
+    },
+    "frontend": {
+      "passed": 580,
+      "failed": 0,
+      "node": "24.14.0",
+      "pnpm": "10.33.4",
+      "typecheck": true,
+      "build": true
+    },
+    "vet": true,
+    "adkBoundary": true,
+    "devScriptTests": 16
+  }
+}
