@@ -1242,11 +1242,11 @@ func runningCatalogAuthorityValid(tx *gorm.DB, o security.PreparedOperation) (bo
 		}
 	}
 	if o.LegacyPolicyRevision > 0 {
-		var legacy securityLegacySessionPolicyRow
-		if err := tx.First(&legacy, "session_id = ? AND project_id = ? AND store_id = ? AND recovery_epoch = ?", o.SessionID, o.ProjectID, o.StoreID, o.RecoveryEpoch).Error; err != nil {
+		legacy, source, err := effectiveLegacyPolicyTx(tx, o.ProjectID, o.SessionID, o.StoreID, o.RecoveryEpoch)
+		if err != nil {
 			return false, err
 		}
-		if legacy.Revision != o.LegacyPolicyRevision {
+		if source != o.LegacyPolicySourceID || legacy.Revision != o.LegacyPolicyRevision {
 			return false, nil
 		}
 	}
