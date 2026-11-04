@@ -72,7 +72,7 @@ func (e *Engine) confirmSecurityWorkProposal(ctx context.Context, s *session, c 
 	}
 	proposal.SelectionRevision = selection.Revision
 	var description strings.Builder
-	fmt.Fprintf(&description, "目标：%s\n原始要求可在下方展开查看。\n资源：%s\n", goal.Title, securityWorkResourceSummary(goal, c))
+	fmt.Fprintf(&description, "目标：%s\n原始要求可在下方展开查看。\n资源参考：%s\n", goal.Title, securityWorkResourceSummary(goal, c))
 	description.WriteString("确认以下任务步骤及依赖。每一步需要你在结果出现后另行确认，不能由模型总结替代验收。此确认不授予资源或命令权限。\n")
 	for i, item := range goal.Items {
 		if strings.TrimSpace(item.Title) == "" || item.ID == "" {
@@ -141,10 +141,7 @@ func securityWorkResourceSummary(goal WorkGoal, c Config) string {
 		names = append(names, redact(name, c))
 	}
 	if len(names) == 0 {
-		if c.superRole == "worker" && len(goal.ResourceBindings) == 0 && goal.Binding.AssetRef == "" {
-			return "本任务未绑定主机或其他资产；MCP 和技能按项目权限使用"
-		}
-		return "执行前仍需核实具体目标"
+		return "执行时按需选择项目内资源，沿用现有权限"
 	}
 	return strings.Join(names, "、")
 }
