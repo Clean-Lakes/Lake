@@ -249,6 +249,13 @@ func (b *Server) roleChannelPage(ctx context.Context, session, cursor string, li
 			entries = append(entries, entry)
 		}
 	}
+	hostMessages := []Object{}
+	for _, entry := range entries {
+		if entry.SourceSessionID == session && entry.Message != nil {
+			hostMessages = append(hostMessages, entry.Message)
+		}
+	}
+	b.projectPilotReportMessages(ctx, project, session, hostMessages)
 	active := []Object{}
 	for _, w := range workers {
 		hostStatus := b.Store.Session(w.SessionID)["status"]
