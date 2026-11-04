@@ -119,7 +119,7 @@ export function TranscriptMessage({message,sessionId,resources,arrive=false,pend
   const recipient=<><SuperRoleAvatar name={d.roleName} size={14}/><span>@{d.roleName}</span></>;
   return <div className="ai-chat-message ai-role-assistant pilot-dispatch" data-dispatch-id={d.id}>
    <ReplyIdentity identity={{name:'Pilot',pilot:true}}/>
-   <div className="pilot-dispatch-text">{onSpecialist?<button type="button" className="pilot-dispatch-recipient message-reference-token" aria-label={`与${d.roleName}继续沟通`} onClick={()=>onSpecialist({kind:'specialist',name:d.roleName,workerId:d.workerId,sessionId:d.sessionId,taskId:d.taskId,channelSessionId:d.channelSessionId})}>{recipient}</button>:<span className="message-reference-token">{recipient}</span>}{d.action==='followup'?'，请继续处理：':'，请去做一下：'}{d.instruction}</div>{attachments}
+   <div className="pilot-dispatch-text">{!hideIdentity&&<>{onSpecialist?<button type="button" className="pilot-dispatch-recipient message-reference-token" aria-label={`与${d.roleName}继续沟通`} onClick={()=>onSpecialist({kind:'specialist',name:d.roleName,workerId:d.workerId,sessionId:d.sessionId,taskId:d.taskId,channelSessionId:d.channelSessionId})}>{recipient}</button>:<span className="message-reference-token">{recipient}</span>}{d.action==='followup'?'，请继续处理：':'，请去做一下：'}</>}{hideIdentity&&d.action==='followup'?'补充要求：':''}{d.instruction}</div>{attachments}
   </div>;
  }
  return <div className={`ai-chat-message ai-role-${message.role}${message.images?.length?" has-message-images":""}${animate?" user-message-arrival":""}`}>
