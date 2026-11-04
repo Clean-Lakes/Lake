@@ -272,7 +272,7 @@ export type ConversationMode = "default" | "plan";
 export type ConversationModeUpdate = {mode:ConversationMode;cursor:number};
 export type ProposedPlan = {id:string;content:string;at:string};
 export type ExternalWorkWatch={adapter:string;operationId:string;handle:string;state:string;lastObservedAt?:string};
-export type WorkGoal={userText?:string;id:string;sessionId:string;originRootTurnId:string;title:string;status:string;revision:number;items:{id:string;title:string;status:string;reason?:string;watch?:ExternalWorkWatch}[];modelRounds:number;roundLimit:number;deadlineAt:string;updatedAt:string;summary?:string};
+export type WorkGoal={userText?:string;id:string;sessionId:string;originRootTurnId:string;title:string;status:string;revision:number;items:{id:string;title:string;status:string;reason?:string;watch?:ExternalWorkWatch}[]|null;modelRounds:number;roundLimit:number;deadlineAt:string;updatedAt:string;summary?:string};
 export type AIView = {replyStatus?:string;workGoals?:WorkGoal[]; proposedPlan?: ProposedPlan; operationOutcomes?: AIOperationOutcome[]; todos?: AITodo[]; question?: AIQuestionRequest; session: string; status: string; cards: AICard[]; agentRuns?: AgentRun[]; rootTurnId?: string; delegatedUsage?: AIUsage; pending?: AIApproval; pendingApprovals?: AIApproval[]; usage: AIUsage; context?: AIContextUsage; profile: string; summary?: string; memoryStatus?: string; memoryAccess?: MemoryAccess[]; turns: number; cardsOffset: number; totalCards: number; startedAt?: string; turnStartedAt?: string; turnFinishedAt?: string };
 export type AIPreset = { id: string; title: string; content: string };
 

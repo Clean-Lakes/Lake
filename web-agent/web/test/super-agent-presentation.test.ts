@@ -18,6 +18,7 @@ test('task success requires acceptance and distinct waiting/failure states stay 
 });
 
 const task={taskId:'task',sessionId:'session',title:'只读检查依赖',state:'completed',acceptanceState:'pass',revision:1,originRootTurnId:'turn',deadlineAt:''} satisfies SuperTask;
+const goal={items:[],modelRounds:1,roundLimit:10} as unknown as WorkGoal;
 const worker={id:'worker',roleId:'opaque-role-id',roleName:'依赖审查专员',sessionId:'session',task,assignmentState:'completed'} satisfies SuperWorker;
 
 test('navigation keeps task and status accessible while completed workers have no attention dot',()=>{
@@ -31,9 +32,13 @@ test('navigation keeps task and status accessible while completed workers have n
 });
 
 test('inspector never attributes another session or task to the selected specialist',()=>{
- const goal={items:[],modelRounds:1,roundLimit:10} as unknown as WorkGoal;
  const render=(owner:SuperWorker)=>renderToStaticMarkup(createElement(SuperTaskInspector,{task,goal,worker:owner}));
  assert.match(render(worker),/依赖审查专员/);
  assert.doesNotMatch(render({...worker,sessionId:'another-session'}),/依赖审查专员/);
  assert.doesNotMatch(render({...worker,task:{...task,taskId:'another-task'}}),/依赖审查专员/);
+});
+
+test('opening the details of a paused task before its first plan shows the empty state',()=>{
+ const html=renderToStaticMarkup(createElement(SuperTaskInspector,{task:{...task,state:'paused'},goal:{...goal,items:null}}));
+ assert.match(html,/专员生成计划后会显示在这里/);
 });
