@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-04
 last_updated: 2026-11-04
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [frontend, specialists, animation]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 专员原来只按名称关键词落到少数几个头像，多数自定义名称都显示鹭鸟。扩充共享湖生态矢量形象，以准确 RoleID 确定图形、配色和细节；闲时眨眼，真实执行时轻动，暂停和减少动态效果时静止。
 
@@ -32,7 +32,7 @@ tags: [frontend, specialists, animation]
 |------|-------------|-----------|------|
 | TASK-001 | 在 `AgentIcon.tsx` 扩充湖生态 SVG，`superAgentPresentation.ts` 用 RoleID 计算稳定形象组合；`SuperRoleAvatar.tsx` 和独立 CSS 实现可冻结的轻动效。 | ✅ | 2026-11-04 |
 | TASK-002 | 在 `PilotWorkspace.tsx`、`App.tsx`、`ReplyIdentity.tsx`、`SuperTaskInspector.tsx` 传递同一 RoleID 和真实运行状态；`superagent_reply_authors.go`、共享 contracts 补充只读 RoleID 投影。依赖 TASK-001。 | ✅ | 2026-11-04 |
-| TASK-003 | 补充身份/状态回归和浏览器夹具，验证明暗、窄窗、静止/运行、减少动态效果及隐藏；签名安装保留此前候选的 Lake Dev，记录实际 SHA，提交独立 develop PR。依赖 TASK-002。 | | |
+| TASK-003 | 补充身份/状态回归和浏览器夹具，验证明暗、窄窗、静止/运行、减少动态效果及隐藏；签名安装保留此前候选的 Lake Dev，记录实际 SHA，提交独立 develop PR。依赖 TASK-002。 | ✅ | 2026-11-04 |
 
 ## 3. Alternatives
 
@@ -67,3 +67,5 @@ tags: [frontend, specialists, animation]
 - [UI 规范](../docs/ui-guidelines.md)
 - [长期专员](../docs/lake-pilot.md)
 - [开发规范](../CONTRIBUTING.md)
+- [验证记录](../docs/validation/lake-specialist-avatars.md)
+- [头像 PR #175](https://github.com/Clean-Lakes/Lake/pull/175)
