@@ -31,6 +31,8 @@ type securityReadProbe struct {
 	command                          *security.FrozenCommand
 	kind, metric, query, driver, url string
 	argumentsDigest                  string
+	parameters                       []any
+	database, pattern                string
 	asset                            Asset
 	scope                            security.OperationScope
 }
@@ -84,6 +86,8 @@ func (e *Engine) prepareSecurityReadProbe(ctx context.Context, c Config, op *sec
 		}
 	}
 	switch op.Tool {
+	case "list_db_objects", "db_table_ddl":
+		return prepareSecurityDatabaseMetadata(op, a, as)
 	case "observe_host", "inspect_host":
 		if op.Tool == "observe_host" && str(a["metric"]) != "processes" {
 			return nil, nil
@@ -355,7 +359,7 @@ func (e *Engine) executeSecurityReadProbe(ctx context.Context, c Config, name st
 	switch p.kind {
 	case "command":
 		return e.executeFrozenCommand(ctx, c, a, *p.command)
-	case "sql":
+	case "sql", "sql.metadata":
 		result, err = executeSecuritySQLProbe(ctx, c, p, secrets)
 	case "redis":
 		result, err = executeSecurityRedisProbe(ctx, c, p, secrets)
@@ -373,7 +377,7 @@ func (e *Engine) executeSecurityReadProbe(ctx context.Context, c Config, name st
 }
 
 func executeSecuritySQLProbe(ctx context.Context, c Config, p *securityReadProbe, secrets map[string]string) (any, error) {
-	db, driver, err := databaseOpenWithCredentials(p.asset, true, "", secrets, true)
+	db, driver, err := databaseOpenWithCredentials(p.asset, true, p.database, secrets, true)
 	if err != nil {
 		return nil, &ToolNotExecutedError{Err: err}
 	}
@@ -385,7 +389,7 @@ func executeSecuritySQLProbe(ctx context.Context, c Config, p *securityReadProbe
 	}
 	defer tx.Rollback()
 	if driver == "pgx" {
-		for _, statement := range []string{"SET LOCAL statement_timeout = 5000", "SET LOCAL lock_timeout = 1000"} {
+		for _, statement := range []string{"SET LOCAL statement_timeout = 5000", "SET LOCAL lock_timeout = 1000", "SET LOCAL search_path = pg_catalog"} {
 			if _, err = tx.ExecContext(ctx, statement); err != nil {
 				return nil, errors.New("security: cannot enforce diagnostic deadline")
 			}
@@ -396,7 +400,7 @@ func executeSecuritySQLProbe(ctx context.Context, c Config, p *securityReadProbe
 			return nil, &ToolNotExecutedError{Err: errors.New("security: cannot enforce MySQL diagnostic deadline")}
 		}
 	}
-	rows, err := tx.QueryContext(ctx, p.query)
+	rows, err := tx.QueryContext(ctx, p.query, p.parameters...)
 	if err != nil {
 		return nil, errors.New("security: fixed diagnostic query failed")
 	}
@@ -407,10 +411,18 @@ func executeSecuritySQLProbe(ctx context.Context, c Config, p *securityReadProbe
 	}
 	result := []map[string]any{}
 	size := 0
+	metadata := p.kind == "sql.metadata"
+	truncated := false
+	scanned := int64(0)
+	pattern, err := securityMetadataPattern(p.pattern)
+	if err != nil {
+		return nil, err
+	}
 	for rows.Next() {
-		if len(result) >= 64 {
+		if scanned >= p.scope.MaxRows {
 			return nil, errors.New("security: diagnostic row bound exceeded")
 		}
+		scanned++
 		values := make([]any, len(columns))
 		refs := make([]any, len(columns))
 		for i := range values {
@@ -427,14 +439,25 @@ func executeSecuritySQLProbe(ctx context.Context, c Config, p *securityReadProbe
 			}
 			row[column] = value
 		}
-		size += len(js(row))
-		if size > securityProbeBytes {
+		if metadata && !pattern.MatchString(str(row["name"])+" "+str(row["type"])) && p.metric == "objects" {
+			continue
+		}
+		rowBytes := len(js(row))
+		if size+rowBytes > securityProbeBytes {
+			if metadata {
+				truncated = true
+				break
+			}
 			return nil, errors.New("security: diagnostic byte bound exceeded")
 		}
+		size += rowBytes
 		result = append(result, row)
 	}
 	if rows.Err() != nil {
 		return nil, errors.New("security: diagnostic result incomplete")
+	}
+	if metadata {
+		return map[string]any{"columns": columns, "rows": result, "truncated": truncated || p.metric == "objects" && scanned == p.scope.MaxRows, "bounded": true, "verifier_profile": p.scope.ProbeID}, nil
 	}
 	return map[string]any{"metric": p.metric, "rows": result, "exitCode": 0, "bounded": true, "verifier_profile": p.scope.ProbeID}, nil
 }
@@ -591,6 +614,14 @@ func SecurityReadVerifierProfile(op security.PreparedOperation) (string, bool) {
 	}
 	id := op.Scope.ProbeID
 	switch op.Tool {
+	case "list_db_objects":
+		if id == "sql.metadata.objects" {
+			return id, true
+		}
+	case "db_table_ddl":
+		if id == "sql.metadata.ddl" {
+			return id, true
+		}
 	case "observe_data":
 		if slices.Contains([]string{"sql.health", "sql.connections", "sql.activity", "redis.health", "redis.connections", "redis.activity"}, id) {
 			return id, true
