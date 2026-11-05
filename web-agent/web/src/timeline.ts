@@ -1,4 +1,4 @@
-import {displayAiError} from "./aiErrors";
+import {displayAiError,isContextCompactionFailure} from "./aiErrors";
 import type { AICard, AgentRun, SessionSnapshot, SRETranscriptEntry } from "../../shared/contracts";
 import { transcriptAgentRuns } from "./agentTasks";
 import {sreEntries} from './sreTranscript';
@@ -16,6 +16,10 @@ export type TranscriptEntry = {
   agentRun?: AgentRun;
   sre?:ReturnType<typeof sreEntries>[number]&{thread?:SRETranscriptEntry[]};
 };
+export function isCompactionFailureEntry(entry:Pick<TranscriptEntry,'card'|'message'>):boolean {
+  const text=entry.card?.type==='error'?entry.card.content:entry.message?.role==='system'?entry.message.text:undefined;
+  return !!text&&isContextCompactionFailure(text);
+}
 // Optional idle-resume maintenance is diagnostic metadata, not conversation.
 // Match its host origin as well as the legacy text; quotations remain prose.
 export function isCompactionFallbackEntry(entry: Pick<TranscriptEntry, 'card' | 'message'>): boolean {
