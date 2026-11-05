@@ -7,8 +7,9 @@ import {AITranscript} from '../src/AIPanel';
 import type {Message,SpecialistReplyAuthor,SessionSnapshot} from '../../shared/contracts';
 import {orderedTranscript} from '../src/timeline';
 import {isAssistantProse} from '../src/completedTurnProse';
+import {superWorkerIcon} from '../src/superAgentPresentation';
 
-const author=(name:string,id:string):SpecialistReplyAuthor=>({kind:'specialist',name,workerId:'worker-'+id,sessionId:'session-'+id,taskId:'task-'+id});
+const author=(name:string,id:string):SpecialistReplyAuthor=>({kind:'specialist',name,roleId:'role-'+id,workerId:'worker-'+id,sessionId:'session-'+id,taskId:'task-'+id});
 test('specialist own-session replies omit repeated identity headers and chat avatars',()=>{
  for(const type of ['text','message'])for(const status of ['running','completed'])for(const persisted of [false,true]){
   const at='2026-11-03T00:00:00Z';
@@ -25,7 +26,7 @@ test('each delivered report displays its own specialist even inside the Pilot co
   const html=renderToStaticMarkup(createElement(ReplyIdentity,{identity:{name:'Pilot',pilot:true},author:author(name,name),onSpecialist(){}}));
   assert.ok(html.includes(`<strong>${name}</strong>`));assert.ok(html.includes(`aria-label="与${name}继续沟通"`));
   assert.match(html,/class="response-avatar"/);
-  assert.ok(html.includes(`data-role="${name==='Go 审查专员'?'verifier':'executor'}"`));
+  assert.ok(html.includes(`data-role="${superWorkerIcon({roleId:author(name,name).roleId,roleName:name})}"`));
   assert.doesNotMatch(html,/data-role="coordinator"/);
   assert.ok(!html.includes('<strong>Pilot</strong>')&&!html.includes('<strong>Lake</strong>'));
  }
