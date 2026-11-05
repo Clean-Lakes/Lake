@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-05
 last_updated: 2026-11-05
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [architecture, refactor, zcode, conversation]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 用户授权保留 Pilot 与独立 Worker，改造 TS/ZCode Dev 的上下文、续派、普通任务协议与状态展示。实际缺陷：Pilot 读取修复前的 SSH unavailable 任务记录后直接报告当前缺少能力，未续派；此前“再试试”没有近期对话锚点。本计划不代表完整 TS 功能等价验收完成。
 
@@ -51,7 +51,7 @@ tags: [architecture, refactor, zcode, conversation]
 |------|-------------|-----------|------|
 | TASK-005 | tasks.ts 按宿主证明的只读能力允许独立诊断，保留原 unknown 与写入禁重放；superagent.ts 不因 unknown 阻止模型进行诊断判断 | ✅ | 2026-11-05 |
 | TASK-006 | 后端频道和前端 PilotWorkspace 仅根据当前交互显示需确认；旧 waiting_user 不制造弹窗或批准 | ✅ | 2026-11-05 |
-| TASK-007 | 新增协议、行为及隔离测试，运行 TS/前端检查；签名构建安装 TS Dev，验证运行来源、真实多轮续派和回执 | | |
+| TASK-007 | 新增协议、行为及隔离测试，运行 TS/前端检查；签名构建安装 TS Dev，验证运行来源、真实多轮续派和回执 | ✅ | 2026-11-05 |
 
 ## 3. Alternatives
 

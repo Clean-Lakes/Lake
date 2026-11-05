@@ -40,4 +40,8 @@
 
 修改前运行来源已核验：`fc4018c3b55cca599e6bbf3ee8ca77e277365228`，`backendRuntime=typescript`、`aiRuntime=zcode`、`upstreamVersion=3.17.2`，进程来自已安装 `Lake Dev.app/Contents/Resources/lake`，Home 为 `.lake-dev`。
 
-本批签名安装及最终来源 SHA 将在安装完成后记录。安装前使用原生“停止内核并退出”，确认没有活跃任务/终端，并为 Dev app/Home 保留私有 APFS 克隆；不接触正式版。
+本批源码和已安装 Dev 来源：`910f93c3cdde03eec894ae8f0d5773aa181bab84`，构建元数据 dirty=false。使用 `scripts/build_lake_desktop.sh --dev --ts-candidate --install`，App 深度严格签名与 ZIP/DMG SHA-256 校验通过。安装后可执行文件 SHA-256 为 `668d21654bba41ee746da75cca27a9aa834f274b552669d59a017ddf40b23998`，与 build-origin 一致。
+
+原生窗口 `Lake Dev · TS/ZCode` 已打开并加载。运行接口再次确认 TypeScript / ZCode 3.17.2 / PTY，PID 为 27048，进程来自已安装 app，Home/data 分别为 `.lake-dev` / `.lake-dev/web-agent`；recoveryReadOnly=false，实际服务的 JS 字节与本次 Web 构建相同。没有活跃确认项时，频道需确认数量为 0。
+
+安装前使用原生“停止内核并退出”，确认没有活跃任务/终端，并为 Dev app/Home 保留私有 APFS 克隆。安装后旧 Go 主数据库、ADK 数据库、providers.json 和 Security control 的四项摘要不变。未执行真实业务任务或连接用户服务器；上述多轮行为验证使用隔离合成 SSH 目标。正式版未操作。
