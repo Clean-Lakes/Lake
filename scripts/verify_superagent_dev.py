@@ -96,11 +96,14 @@ def main():
             content, tool, payload = '', None, {}
             with lock:
                 if 'route_work' in names and state.get('phase') == 'context-check':
+                    key = 'context-check'
                     n = state['contextCheckCalls'] = state.get('contextCheckCalls', 0) + 1
                     messages = request.get('messages', [])
                     envelopes = []
                     for message in messages:
                         text = message.get('content', '')
+                        if isinstance(text, list):
+                            text = ''.join(part.get('text', '') for part in text if isinstance(part, dict) and part.get('type') == 'text')
                         if isinstance(text, str):
                             try:
                                 envelope = json.loads(text.split('\n', 1)[0])
@@ -108,7 +111,7 @@ def main():
                                     envelopes.append(envelope)
                             except ValueError:
                                 pass
-                    require(len(envelopes) == 1, 'historical Router envelopes reached the actual provider')
+                    require(len(envelopes) == 1, 'actual provider must have one current Router envelope; observed ' + str(len(envelopes)))
                     envelope = envelopes[0]
                     encoded = json.dumps(envelope, ensure_ascii=False, separators=(',', ':')).encode()
                     require(len(encoded) <= 16 * 1024, 'Router envelope exceeded 16 KiB')
@@ -385,6 +388,11 @@ def main():
                     report['explicitKernelDrainVerified'] = True
                 wait_for(lambda: not (home / 'web-agent/runtime.json').exists(), 30)
             finally:
+                # A failed native assertion must drain this fixture kernel
+                # before its disposable Home is removed, too.
+                if args.native and (home / 'web-agent/runtime.json').exists():
+                    lake.api('/api/superagent/lifecycle', 'POST', {'action': 'drain'})
+                    wait_for(lambda: not (home / 'web-agent/runtime.json').exists(), 30)
                 lake.stop()
             report['passed'] = True
             args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
