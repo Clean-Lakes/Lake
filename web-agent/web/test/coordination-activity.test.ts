@@ -47,17 +47,21 @@ test('real and unknown tools keep their execution progress even beside coordinat
   const card=operation(title),s=snapshot([operation('route_work','completed'),{...card,id:'real'}]);
   assert.equal(quietCoordination(card),false);
   assert.equal(turnStatus(undefined,s.ai,s.ai!.cards,at,Date.parse(at)+5000).state,'正在执行工具…');
-  assert.ok(render(s).includes('turn-progress-reply'));
-  assert.ok(render(s).includes('class="turn-execution-details is-open"'));
+  const html=render(s);
+  assert.ok(!html.includes('turn-progress-reply'),'tool activity cannot synthesize an assistant reply');
+  assert.ok(html.includes('class="turn-execution-details" aria-hidden="true" inert=""'));
+  assert.ok(html.includes('正在执行工具'),'actual execution keeps its status and inspection entry');
  }
 });
 
 test('coordination approval and failure states remain visible and never become quiet metadata',()=>{
- for(const status of ['pending','failed','unknown','not_executed','interrupted','cancelled','background_running']){
+ for(const [status,label] of [['pending','待确认'],['failed','失败'],['unknown','结果待核查'],['not_executed','未执行'],['interrupted','已停止'],['cancelled','已停止'],['background_running','后台执行中']]){
   const card=operation('route_work',status),s=snapshot([card]);
   assert.equal(quietCoordination(card),false,status);
-  assert.ok(render(s).includes('class="turn-execution-details is-open"'),status);
-  assert.ok(render(s).includes('turn-progress-reply'),status);
+  const html=render(s);
+  assert.ok(html.includes('class="turn-execution-details" aria-hidden="true" inert=""'),status);
+  assert.ok(!html.includes('turn-progress-reply'),status);
+  assert.ok(html.includes(label!),status+' must remain visible without opening raw records');
   assert.equal(liveTurnProgress([{id:card.id,at,card}])?.active,false,status);
   if(status==='pending')assert.equal(turnStatus(undefined,s.ai,[card],at,Date.parse(at)+5000).state,'等待确认');
  }

@@ -265,5 +265,24 @@ test('Pilot hides the running turn timer without reserving space and restores or
  assert.equal(live,'<p>专员正文</p>');
  const ended=renderToStaticMarkup(createElement(TurnExecutionDetails,{hideLive:true,timing,details:[],children:body}));
  assert.ok(ended.includes('用时 1分钟 13秒')&&ended.includes('is-finished'));
- assert.ok(ended.indexOf('用时')<ended.indexOf('专员正文'));
+ assert.ok(ended.indexOf('专员正文')<ended.indexOf('用时'),'finished timing stays in the same slot after prose');
+});
+
+test('the elapsed and decision status owns one fixed slot after prose throughout the turn',t=>{
+ t.mock.method(Date,'now',()=>Date.parse(start)+19000);
+ for(const status of ['running','waiting_approval','completed','failed','cancelled'] as const){
+  const active=status==='running'||status==='waiting_approval';
+  const html=renderToStaticMarkup(createElement(TurnExecutionDetails,{
+   timing:{...timing,status:active?'running':status,finishedAt:active?'':timing.finishedAt},
+   view:{status,cards:[]} as never,details:[createElement('span',{key:'record'},'操作详细记录')],
+   children:createElement('p',{'data-public-reply':'reply'},'已经展示的公开正文'),
+  }));
+  assert.equal((html.match(/class="reply-duration /g)??[]).length,1,status);
+  assert.ok(html.indexOf('已经展示的公开正文')<html.indexOf('class="reply-duration '),status);
+  assert.ok(html.indexOf('class="reply-duration ')<html.indexOf('class="turn-execution-details"'),status);
+  assert.ok(html.includes('aria-hidden="true" inert="" role="region"'),status+' must not auto-open process records');
+  if(status==='waiting_approval')assert.ok(html.includes('等待确认'));
+  if(status==='failed')assert.ok(html.includes('未完成'));
+  if(status==='cancelled')assert.ok(html.includes('已停止'));
+ }
 });

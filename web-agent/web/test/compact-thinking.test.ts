@@ -82,16 +82,17 @@ test("finished history stays collapsed and describes the actual operation",()=>{
   const html=renderToStaticMarkup(createElement(ThinkingTimeline,{cards:[{...thought,status:"completed"},{...read,status:"completed"}],live:false}));
   assert.ok(html.includes("读取 example.log · Local machine"));assert.ok(!html.includes(thought.content!));
 });
-test("live execution opens its resource row without duplicating the latest action caption",()=>{
+test("live execution keeps one status and a folded resource record without synthesizing prose",()=>{
   const view={session:"demo",status:"running",turnStartedAt:start,profile:"core",cards:[thought,read],cardsOffset:0} as AIView;
   const snapshot={session:{id:"demo"},messages:[{id:"user",role:"user",createdAt:start,text:"Read fixture"}],actions:[],ai:view} as SessionSnapshot;
   const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
-  assert.equal((html.match(/class="turn-current-step"/g)||[]).length,0);
+  assert.ok(!html.includes('turn-progress-reply'));
   assert.ok(html.includes('<span class="thinking-label">Local machine</span>'));
-  assert.ok(html.includes('class="turn-execution-details is-open" aria-hidden="false"'));
+  assert.ok(html.includes('class="turn-execution-details" aria-hidden="true" inert=""'));
   assert.ok(!html.includes("VERY_VERBOSE_RAW_REASONING"));
   assert.equal((html.match(/turn-status-text/g)||[]).length,1);
-  assert.ok(html.indexOf("正在执行工具…")>html.indexOf("Local machine"));
+  assert.ok(html.indexOf("正在执行工具…")<html.indexOf('class="turn-execution-details"'));
+  assert.ok(html.indexOf('<span class="thinking-label">Local machine</span>')>html.indexOf('class="turn-execution-details"'));
 });
 
 test("compaction limit failures display one Chinese message with history-preservation guidance",()=>{

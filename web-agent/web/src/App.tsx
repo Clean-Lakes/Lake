@@ -870,9 +870,9 @@ function AppContent() {
     return prepareSessionEntrance(()=>conversationFollower.current?.jump(),()=>setHistoryVisibleId(sessionId));
   },[sessionId,historyDataReady,route.resourceId,isPlansPage]);
 
-  // Final metadata moves the same elapsed row above the reply. Settle the
-  // latest reply before paint; a history reader never opts back into following.
-  useLayoutEffect(() => { conversationFollower.current?.jump(); },
+  // Completion can add final text; continue the existing smooth follow without
+  // jumping or opting a reader of earlier messages back into following.
+  useLayoutEffect(() => { conversationFollower.current?.request(); },
     [activeSnapshot?.replyTimings?.at(-1)?.finishedAt,activeSnapshot?.ai?.turnFinishedAt]);
 
   const refreshCatalog = useCallback(async (signal?: AbortSignal) => {

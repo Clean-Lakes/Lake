@@ -7,6 +7,7 @@ import type {TranscriptEntry} from '../src/timeline';
 import {liveTurnProgress} from '../src/liveTurnProgress';
 import {AITranscript} from '../src/AIPanel';
 import {TurnExecutionDetails} from '../src/TurnExecutionDetails';
+import {conversationGroups} from '../src/conversation-progress-model';
 const at=(n:number)=>`2026-10-29T01:00:${String(n).padStart(2,'0')}Z`;
 const card=(id:string,type:string,content:string,status='completed',n=1):TranscriptEntry=>({id,at:at(n),card:{id,at:at(n),type,content,status,title:type==='operation'?'shell':undefined,data:type==='operation'?{target:'测试主机',arguments:{command:'uptime'}}:undefined}});
 const note=card('note','message','先核对原记录。');
@@ -37,16 +38,36 @@ test('plain answers, internal bookkeeping, Pilot and subagent reports keep their
 function snapshot(status='running'):SessionSnapshot{
  return {session:{id:'fixture'},resources:[],actions:[],messages:[{id:'user',sessionId:'fixture',role:'user',text:'检查服务',createdAt:at(0)}],ai:{session:'fixture',status,turnStartedAt:at(0),cardsOffset:0,cards:[note.card!,tool.card!,latest.card!]}} as unknown as SessionSnapshot;
 }
-test('ordinary running tool turns show exactly one caption and archive complete narration for inspection',()=>{
+test('ordinary running tool turns keep public narration once without a synthesized caption',()=>{
  const current=snapshot();current.ai!.cards.pop();
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:current}));
- assert.equal((html.match(/class="turn-latest-progress"/g)||[]).length,1);
- assert.ok(html.includes('先核对原记录。'));
- assert.ok(html.includes('过程播报 · 1'));
- assert.ok(!html.includes('turn-current-step'),'the caption must not duplicate a second progress description beside the timer');
- assert.match(html,/class="settled-reply is-archived"[^>]*aria-hidden="true"[^>]*inert=""/);
- assert.ok(html.includes('data-conversation-entry="note"'),'original narration keeps its identity in the records');
- assert.match(html, /class="ai-response turn-progress-reply"><div class="response-identity[^]*?<div class="ai-card ai-message"><div class="turn-latest-progress"/,'live narration uses the same identity and gray bubble structure as assistant replies');
+ assert.ok(!html.includes('turn-latest-progress')&&!html.includes('turn-progress-reply')&&!html.includes('过程播报'));
+ assert.equal((html.match(/先核对原记录。/g)||[]).length,1);
+ assert.ok(!html.includes('is-archived')&&!html.includes('is-awaiting-reply'));
+ assert.match(html,/class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="note"/);
+ assert.ok(html.includes('class="turn-execution-details" aria-hidden="true" inert=""'));
+});
+
+test('continuous ordinary and Pilot replies never promote reasoning or tool output to public prose',()=>{
+ for(const pilot of [false,true])for(const status of ['running','waiting_approval','completed','failed','cancelled']){
+  const current=snapshot(status);
+  current.ai!.cards.splice(1,0,card('private-reasoning','thinking','PRIVATE REASONING').card!);
+  current.ai!.cards.push(card('later-tool','operation','PRIVATE LATER OUTPUT','completed',4).card!);
+  const before=JSON.stringify(current);
+  const groups=conversationGroups(current.ai!.cards.map(card=>({id:card.id,at:card.at,card})));
+  assert.ok(groups.filter(group=>!group.progress).every(group=>group.entries.every(entry=>!entry.card?.content?.includes('PRIVATE'))));
+  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:current,assistantIdentity:{name:pilot?'Pilot':'Lake',pilot}}));
+  const details=html.indexOf('class="turn-execution-details"');
+  assert.ok(details>0&&html.includes('aria-hidden="true" inert="" role="region" aria-label="执行详细过程"'));
+  const body=html.slice(0,details);
+  assert.ok(!body.includes('PRIVATE REASONING')&&!body.includes('PRIVATE TOOL OUTPUT')&&!body.includes('PRIVATE LATER OUTPUT'));
+  assert.equal((html.match(/先核对原记录。/g)??[]).length,1);
+  assert.equal((html.match(/下一步验证连接。/g)??[]).length,1);
+  for(const id of ['note','latest'])assert.ok(body.includes('data-conversation-entry="'+id+'"'));
+  assert.ok(!html.includes('is-archived')&&!html.includes('turn-progress-reply')&&!html.includes('is-awaiting-reply'));
+  assert.ok(html.indexOf('data-conversation-entry="note"')<html.indexOf('data-conversation-entry="latest"'));
+  assert.equal(JSON.stringify(current),before,'raw reasoning and tool records remain unchanged for explicit inspection');
+ }
 });
 test('completion restores the real final reply and stops the live caption; failures retain incomplete prose',()=>{
  for(const status of ['completed','failed','cancelled']){
@@ -76,10 +97,12 @@ test('multiple distinct post-tool answers stay in the body, never in a resource 
 });
 
 
-test('the first nonempty reply chunk retires progress before the running turn ends',()=>{
+test('each nonempty public chunk stays in place when another tool starts',()=>{
  for(const content of ['', '  \n']){
   const current=snapshot();current.ai!.cards.at(-1)!.content=content;
-  assert.ok(renderToStaticMarkup(createElement(AITranscript,{snapshot:current})).includes('turn-latest-progress'),'empty stream packets must not retire progress');
+  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:current}));
+  assert.ok(!html.includes('turn-latest-progress')&&!html.includes('data-conversation-entry="latest"'),'empty stream packets never create a public reply');
+  assert.equal((html.match(/先核对原记录。/g)??[]).length,1);
  }
  const current=snapshot();current.ai!.cards.at(-1)!.content='核';
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot:current}));
@@ -88,16 +111,14 @@ test('the first nonempty reply chunk retires progress before the running turn en
  assert.match(html,/class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="latest"/,'first reply chunk keeps its original visible body');
  current.ai!.cards.push(card('next-real-tool','operation','original result','running',4).card!);
  const next=renderToStaticMarkup(createElement(AITranscript,{snapshot:current}));
- assert.ok(next.includes('turn-latest-progress'),'a subsequent actual tool returns to the progress phase');
- assert.ok(next.includes('data-conversation-entry="latest"'),'the former paragraph is retained, not deleted');
+ assert.ok(!next.includes('turn-latest-progress')&&!next.includes('is-archived'));
+ assert.match(next,/class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="latest"/,'a subsequent tool never hides the former paragraph');
 });
 
 // The caption is ordinary text even while the independent timer is active.
-test('latest progress stays static for active and inactive operations',()=>{
+test('legacy progress props cannot create another public reply or duplicate a status caption',()=>{
  for(const active of [true,false]){
   const html=renderToStaticMarkup(createElement(TurnExecutionDetails,{details:[],progress:{text:'正在检查服务。',active},view:{status:'running',turnStartedAt:at(0)} as SessionSnapshot['ai']}));
-  const caption=html.match(/<div class="turn-latest-progress"[^>]*>(.*?)<\/div>/)?.[1];
-  assert.equal(caption,'<span class="turn-latest-progress-text">正在检查服务。</span>');
-  assert.ok(!caption.includes('status-text'),'the caption must not inherit the shared status sweep');
+  assert.ok(!html.includes('turn-latest-progress')&&!html.includes('正在检查服务。'));
  }
 });

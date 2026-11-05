@@ -52,16 +52,17 @@ test('real final replies stay in prose; incomplete, stopped, plain and role repo
  assert.equal(project([tool('a')],false,true).ids.size,0);
  assert.equal(project([...entries,{id:'agent',at,agentRun:{id:'role'}} as TranscriptEntry]).ids.size,0);
 });
-test('the latest progress caption shares its resource header; full text and prior stages are disclosed',()=>{
+test('resource tools do not absorb or duplicate public progress paragraphs',()=>{
  const entries=[tool('a'),say('old-stage','第一阶段结果'),tool('a2'),say('latest-stage','最新阶段结果'),tool('ongoing')];
  const snapshot={session:{id:'s'},messages:[{id:'u',sessionId:'s',role:'user',text:'检查',createdAt:at}],actions:[],resources,ai:{session:'s',status:'running',cardsOffset:0,cards:entries.map(entry=>entry.card!)}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
- assert.ok(html.includes('data-stage-entry="latest-stage"'));
- assert.ok(!html.includes('data-stage-entry="old-stage"'));
- assert.ok(html.includes('此前进展 · 1'));
- assert.ok(html.includes('Mini Box SSH 命令终端'),'current command preview opens without waiting for history');
- assert.ok(html.indexOf('data-stage-entry="latest-stage"')<html.indexOf('class="turn-execution-body"')+html.slice(html.indexOf('class="turn-execution-body"')).indexOf('</section>'));
- assert.ok(html.includes('class="settled-reply is-archived"'),'original prose stays mounted but hidden');
+ assert.ok(!html.includes('data-stage-entry=')&&!html.includes('此前进展')&&!html.includes('is-archived'));
+ for(const [id,text] of [['old-stage','第一阶段结果'],['latest-stage','最新阶段结果']]){
+  assert.match(html,new RegExp('class="settled-reply"><div class="settled-reply-content"><div data-conversation-entry="'+id+'"'));
+  assert.equal(html.split(text!).length-1,1,'each original paragraph stays visible once');
+  assert.ok(html.indexOf('data-conversation-entry="'+id+'"')<html.indexOf('class="turn-execution-details"'));
+ }
+ assert.ok(html.indexOf('data-conversation-entry="old-stage"')<html.indexOf('data-conversation-entry="latest-stage"'));
 });
 
 
@@ -96,14 +97,18 @@ test('multi-resource execution keeps its resource rows without an extra overall 
  assert.ok(!html.includes('class="reply-activity"'));
 });
 
-test('a collapsed resource keeps its compact caption while full Markdown is lazy',()=>{
+test('public Markdown stays complete while the resource operation records remain folded',()=>{
  const entries=[tool('db',resources[1]),say('stage','**恢复正常**，继续读取 `status.json`。\n下一步核对 [完整记录](/record)。'),tool('db2',resources[1])];
  const snapshot={session:{id:'s'},messages:[{id:'u',sessionId:'s',role:'user',text:'检查',createdAt:at}],actions:[],resources,ai:{session:'s',status:'running',cardsOffset:0,cards:entries.map(entry=>entry.card!)}} as SessionSnapshot;
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  const caption=resourceStagePreview(entries[1]);
  assert.equal(caption,'恢复正常，继续读取 status.json。 下一步核对 完整记录。');
- assert.ok(html.includes('class="thinking-label thinking-stage-preview"'));
- assert.ok(html.includes(caption));
+ assert.ok(!html.includes('class="thinking-label thinking-stage-preview"'));
+ assert.match(html,/<strong>恢复正常<\/strong>/);
+ assert.match(html,/class="object-reference-label">status.json<\/span>/,'file references keep their full original value');
+ assert.match(html,/href="\/record"/);
+ assert.equal((html.match(/恢复正常/g)??[]).length,1);
  assert.ok(html.includes('aria-expanded="false"'));
- assert.ok(!html.includes('data-stage-entry="stage"'),'full stage mounts only when the resource is expanded');
+ assert.ok(html.includes('data-conversation-entry="stage"')&&!html.includes('data-stage-entry="stage"'));
+ assert.ok(!html.includes('is-archived')&&!html.includes('is-awaiting-reply'));
 });
