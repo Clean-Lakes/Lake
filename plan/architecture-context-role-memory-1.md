@@ -248,7 +248,7 @@ CM 上下文投影先独立交付；不等待文件记忆流水线才能改善 P
 | --- | --- | --- | --- |
 | TASK-013 | 在FM迁移适配中新增角色归属清单与恢复校验；按准确RoleID/来源映射，保留原项目/用户归属；核对数量/hash/抑制水位与唯一读写owner，不运行模型重写迁移历史。 | 否 | 未执行 |
 | TASK-014 | 新增 `scripts/verify_context_role_memory.py`，用临时Home和假provider捕获实际请求/模型调用，执行本文场景；再用明确启用的Dev测试数据完成固定真实模型质量集，不自动采集生产或开启前历史。依赖TASK-013。 | 否 | 未执行 |
-| TASK-015 | 更新 `docs/validation/lake-context-role-memory.md`，记录准确源码/模型/配置/平台、请求大小、质量、遗忘与恢复结果；每批审计并删除已被接替且无依赖的旧注入/投影caller，按FM清单退役，不删除历史账本。签名安装Lake Dev并原生验证，未测Windows明确未验收。依赖TASK-014。 | 否 | 未执行 |
+| TASK-015 | 更新 `docs/validation/lake-context-role-memory.md`，记录源码/模型/配置/平台、请求大小、质量、遗忘与恢复结果；按FM清单退役旧 caller，签名安装及原生验证。依赖TASK-014。 | 部分：CM 首批本地/签名 Dev 验证已记录；完整记忆质量/迁移/遗忘与 Windows 未验收 | 2026-11-05 |
 
 ## 3. Alternatives
 
@@ -267,14 +267,14 @@ CM 上下文投影先独立交付；不等待文件记忆流水线才能改善 P
 
 ## 5. Files
 
-- **FILE-001**: 本文、`agent.md`、`feature-agent-file-memory-1.md`、Super-agent一期/二期计划、`docs/lake-memory.md` 和三模块对接说明：本次仅同步目标、分工和未交付状态。
+- **FILE-001**: 本文、`agent.md`、`feature-agent-file-memory-1.md`、Super-agent一期/二期计划、`docs/lake-memory.md` 和三模块对接说明：同步分工、首批交付和未完成状态。
 - **FILE-002**: 拟新增 `internal/ai/superagent_context_contract.go`、`superagent_task_digest.go`、`superagent_context_projection.go`、`superagent_task_context.go`：契约、摘要和请求工作集；预算函数扩展既有文件。
 - **FILE-003**: 既有 `internal/ai/superagent_context.go`、`superagent_router.go`、`superagent_outbox.go`、`superagent_worker.go`、`superagent_roles.go`、`superagent_memory.go`、`superagent_task_references.go`：原身份、派发、报告及读取适配。
 - **FILE-004**: 既有 `internal/ai/engine.go`、`context_budget.go`、`context_compaction.go`、`context_resume.go`、`adk_session.go`、`adk_provider_step.go`、`adk_projection.go`、`adk_services.go`：官方ADK请求与恢复边界。
 - **FILE-005**: FM拟新增 `internal/memory/role_scope.go`、`role_workspace.go`、`role_read.go`、`role_lifecycle.go`：角色范围、单写者、知识读取与生命周期，不另建引擎。
 - **FILE-006**: 原 `internal/web/project_memory_outbox.go`、`project_memory_retrieval.go`、`project_memory_worker.go`、`natural_consolidation_worker.go`：按FM替换/适配来源、范围和调度，不保留第二套语义处理器。
 - **FILE-007**: 既有 `web-agent/web/src/MemorySettings.tsx`、`NaturalMemoryPreferences.tsx` 与 `ProjectMemory.tsx`：在FM入口适配范围内提供角色查看/纠正/删除，不新增专员权限面板。
-- **FILE-008**: 拟新增 `internal/ai/superagent_context_contract_test.go`、`internal/ai/superagent_context_projection_test.go`、`internal/memory/role_scope_test.go`、`scripts/verify_context_role_memory.py`、`docs/design/context-role-memory-contract.md` 和 `docs/validation/lake-context-role-memory.md`：后续实施验证产物；当前不存在不表示已交付。
+- **FILE-008**: 契约/投影/角色范围测试、契约说明与 CM 首批验证记录已新增；签名验证复用 `scripts/verify_superagent_dev.py --verify-context-working-set`。完整质量验证的 `scripts/verify_context_role_memory.py` 及后续阶段测试尚未交付。
 
 ## 6. Testing
 
