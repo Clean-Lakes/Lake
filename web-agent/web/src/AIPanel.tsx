@@ -47,7 +47,7 @@ import { memo, useEffect, useMemo, useRef, useState, type ReactNode, type RefObj
 import type { AIImage, AICard, AIView, AIPreset, TextFileAttachment, SessionSnapshot, TerminalSession, WorkspaceTag } from "../../shared/contracts";
 import { conversationTagSignature } from "./conversationTags";
 import {AssistantMarkdown, ObjectReferencesProvider, ReplyReferenceScope} from './AssistantMarkdown';
-import { isCompactionFallbackEntry, orderedTranscript, transcriptGroups, transcriptTurns } from "./timeline";
+import { isCompactionFallbackEntry, isCompactionFailureEntry, orderedTranscript, transcriptGroups, transcriptTurns } from "./timeline";
 import { FileChanges } from "./FileChanges";
 import { TaskProgress } from "./TaskProgress";
 import { isFileChangeCard } from "./file-changes-model";
@@ -185,6 +185,7 @@ function AITranscriptContent({ superTask,onSpecialist,assistantIdentity,onOpenMe
   const currentTiming=timingForTurn(currentTurn,snapshot);
   const liveConversation=['running','waiting_approval'].includes(snapshot.ai?.status||'')&&(!currentTiming||currentTiming.status==='running');
   const conversationTurnEntries=(turn:typeof entries)=>turn.filter(entry=>!isFileChangeCard(entry.card)
+    &&(!isCompactionFailureEntry(entry)||entry===turn.find(isCompactionFailureEntry))
     &&!isCompactionFallbackEntry(entry)
     &&!(entry.card&&['message','text'].includes(entry.card.type)&&!entry.card.content?.trim())
     &&!(entry.message?.role==='system'&&isConversationInterruption(entry.message.text||''))

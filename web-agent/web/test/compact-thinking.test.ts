@@ -11,6 +11,17 @@ import {progressGlyph} from '../src/activity';
 const start="2026-10-11T00:00:00Z";
 const thought:AICard={id:"thought",type:"thinking",content:"VERY_VERBOSE_RAW_REASONING",status:"running",at:start};
 const read:AICard={id:"read",type:"operation",title:"read",status:"running",at:start,data:{arguments:{path:"/tmp/example.log"},target:"Local machine"}};
+test('one turn shows its original compaction failure once while every retry stays in diagnostics',()=>{
+ const errors=['context compaction: context deadline exceeded','context compaction: summary cooling down and protected input does not fit; progress retained','context compaction: summary cooling down and protected input does not fit; progress retained'];
+ const snapshot={session:{id:'pilot'},resources:[],actions:[],messages:[{id:'u',sessionId:'pilot',role:'user',text:'运维组多少文档呢',createdAt:start}],ai:{session:'pilot',status:'failed',cardsOffset:0,cards:errors.map((content,i)=>({id:'error-'+i,type:'error',status:'failed',content,at:new Date(Date.parse(start)+1000*(i+1)).toISOString()}))}} as SessionSnapshot;
+ const before=JSON.stringify(snapshot),html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
+ assert.equal((html.match(/class="ai-compaction-notice"/g)||[]).length,1);
+ assert.ok(html.includes('上下文整理超时'));
+ assert.equal((html.match(/class="compaction-diagnostic"/g)||[]).length,3);
+ const records=renderToStaticMarkup(createElement(AITranscript,{snapshot,mode:'activity'}));
+ assert.equal((records.match(/class="ai-compaction-notice"/g)||[]).length,3);
+ assert.equal(JSON.stringify(snapshot),before);
+});
 test('malformed model calls explain that planning can continue with existing evidence',()=>{
  const message=displayAiError('invalid or duplicate model tool call: arguments must be a JSON object');
  assert.match(message,/本轮未完成/);assert.match(message,/已有调查结果和消息已保留/);assert.match(message,/原会话继续/);

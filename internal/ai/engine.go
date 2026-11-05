@@ -752,8 +752,8 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 		return errors.New("model not configured")
 	}
 	modelUserText := text
-	if c.superRole == "router" && len(modelUserText) > 4096 {
-		modelUserText = utf8Prefix(modelUserText, 4096) + "\n[Original message continues in the immutable event. Read all pages before routing; the preview does not replace its constraints.]"
+	if c.superRole == "router" {
+		modelUserText = routerUserPreview(modelUserText)
 	}
 	message := modelUserText
 	hasTargetReference := false
@@ -807,6 +807,10 @@ func (e *Engine) ExecuteTurn(ctx context.Context, id string, input TurnInput) (e
 	}
 	c.ReferencedAssets = validRemembered(c, c.ReferencedAssets)
 	s.state.ReferencedAssetIDs = append([]string(nil), c.ReferencedAssets...)
+	if err = e.projectSuperRouterHistoryLocked(ctx, s, c); err != nil {
+		s.mu.Unlock()
+		return err
+	}
 	resume := e.worker == nil && shouldCompactResumedConversation(s.state, time.Now())
 	sourceMessageID := input.StrategyMessageID
 	if e.worker != nil {
