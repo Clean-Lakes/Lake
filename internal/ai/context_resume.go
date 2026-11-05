@@ -29,7 +29,13 @@ func shouldCompactResumedConversation(st State, now time.Time) bool {
 }
 
 func (e *Engine) compactForTurn(ctx context.Context, s *session, c Config, resume bool) error {
-	err := e.compact(ctx, s, c, resume)
+	forceHandoff := resume
+	if c.superRole == "router" && c.superRouter != nil {
+		// Router coordination is rebuilt per request. Idle time must not force
+		// an archive-wide handoff before that bounded working set is checked.
+		forceHandoff = false
+	}
+	err := e.compact(ctx, s, c, forceHandoff)
 	if err == nil || !resume || ctx.Err() != nil || !strings.HasPrefix(err.Error(), "context compaction:") {
 		return err
 	}

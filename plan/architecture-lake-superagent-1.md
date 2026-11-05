@@ -15,6 +15,8 @@ delivery_scope: implementation
 
 > **Memory 主线调整（2026-11-04）**：后续以 [Agent 本地文件记忆主计划](feature-agent-file-memory-1.md) 为准。旧正文数据库/Markdown 投影及条目管理路线进入分批替换；下文既有行为和测试是历史/当前代码水位，不表示新方案已实现或旧链路已下线。保留真实来源、同意、项目/角色范围、撤回及运行账本；新 Agent 接管后停止旧写入/注入，Worker 读取能力另行验收。
 
+> **上下文与角色知识增量（2026-11-05，待实施）**：按[总方案](architecture-context-role-memory-1.md)区分 Pilot 协调工作集、独立任务上下文、RoleID 长期知识及原始档案。CM 负责摘要/引用和角色读取适配，FM 仍负责唯一记忆流水线；现有 Worker unavailable 与使用开关不因文档变更自动改变。
+
 ![Status: In progress](https://img.shields.io/badge/status-In_progress-yellow)
 
 本方案落实用户确认的方向：Lake 统一采用 Super-agent 业务运行架构；用户持续与 Pilot 沟通，由系统创建和协调专员，用户无需创建、命名、切换或维护执行会话。普通操作、Plan、SRE、保存的工作流、定时任务和外部结果逐步进入同一任务与事件链路。官方 ADK 继续承载模型/工具循环和工作流图；Lake Items、Security、Memory 保留各自权威职责。

@@ -1,8 +1,8 @@
 ---
 goal: 用 Agent 自主管理的本地文件记忆替代旧 Memory 开发主线，并分批退役旧实现
-version: 1
+version: 1.1
 date_created: 2026-11-04
-last_updated: 2026-11-04
+last_updated: 2026-11-05
 owner: Lake / bearqy
 status: In progress
 baseline_commit: 299026fa6d893769847e1bebe2ceaac80096580c
@@ -13,6 +13,8 @@ tags: [memory, agent, files, migration, retirement, adk]
 # Lake Agent 本地文件记忆主计划
 
 本计划落实用户确认的新方向：由后台 Agent 提取和整理长期记忆，前台 Agent 按需阅读本地摘要、手册和来源总结。用户主要控制是否积累、是否使用，以及查看、纠正和删除；不建设逐条审核、采用、晋升的资产平台。
+
+2026-11-05 增量：按[上下文与角色知识总方案](architecture-context-role-memory-1.md)扩展准确 RoleID 的长期知识范围。FM 仍是唯一文件记忆流水线；CM 负责 Pilot/Task 工作集、摘要与角色适配，不新增学习器。角色知识跨任务持久，任务上下文独立，Pilot 不自动加载全部专员手册。该增量尚未实现，不改变当前开关。
 
 本计划替代旧项目记忆、运维 V2、自然记忆及其旧实现对接路线。历史交付与验收记录保留，未交付任务不再按旧设计推进。旧实现可以下线，前提是实际链路已被接替或证明无依赖；不要求为退役体系补齐全部旧功能。
 
@@ -63,9 +65,16 @@ flowchart TB
     rollout_summaries/
     skills/
     extensions/ad_hoc/notes/
+    roles/<role-id>/
+      memory_summary.md
+      MEMORY.md
+      rollout_summaries/
+      skills/
 ```
 
 项目私有事实只进入对应项目目录。用户层仅接收符合全局范围的去敏偏好，不能复制项目原文、名称和私有证据。项目 ID、角色与资源范围由宿主解析，不信任模型或 front matter 自报。
+
+角色范围按 `storeID + projectID + RoleID` 解析，名称和头像不参与身份；角色目录与项目共享目录使用同一来源、版本、单写者及撤回协议。角色私有经验默认不全量共享，项目共享内容保留可见性与支持来源。文件布局及联合契约见总方案，尚未投入使用。项目级专员知识积累/使用设置拟独立记录且默认关闭，旧N5同意不自动扩大到新角色；不为每个专员新增权限面板。
 
 summary 是简短导航，MEMORY 是可搜索手册，rollout summaries 是来源总结，raw memories 是阶段二输入；不把整个目录塞进每次请求。skills 初版仅是方法资料，不自动安装到扩展注册表，不获得可执行权限。人工规范及项目 AGENTS.md 不由记忆整理自动改写。
 
@@ -115,8 +124,10 @@ FM-01 首批审计与删除清单见 [遗留依赖审计](../docs/design/agent-f
 | FM-02B | 实现全局/范围整理锁、增量差异和受限 ADK 整理 Agent；更新 summary/MEMORY/来源总结，原子发布可读快照并处理删除输入 | FM-02A | 未实施 |
 | FM-03A | Pilot 新导航、搜索和准确读取；简单开关、查看、纠正、删除。旧读路径经适配保持运行，文件读取不自动继承到 Worker | FM-02B | 未实施 |
 | FM-03B | 隔离 Home 迁移、数量/hash 对账与原生 Dev；按范围切换单写者；移除该范围旧采集算法、旧注入/投影与 UI/API，保留所需兼容和撤回清理 | FM-03A | 未实施 |
-| FM-04A | Worker 任务/资源范围知识视图；只加载分配范围片段，保留原任务历史证据读取；不默认复制全部项目文件 | FM-03B | 未实施 |
+| FM-04A | Worker 角色/任务知识视图；按准确RoleID及当前允许范围加载相关片段，保留独立Task/Session和原证据读取；不默认复制全部项目文件，也不新增任务资源分配限制 | FM-03B及CM角色范围/发布契约 | 未实施 |
 | FM-04B | 真实模型质量、成本、前台耗时及原生平台矩阵；复核每批清理与最终退役清单，不把已无依赖代码留到本阶段 | FM-04A | 未实施 |
+
+CM 的 Pilot 摘要/请求工作集可与本流水线独立推进；角色知识存储由 FM-02 承接，Worker 视图由 FM-04A 与 CM 联合验收，不能只改角色标志就启用。
 
 FM-03 后即可试用 Pilot 闭环；FM-04 未验收的角色明确不可用，不阻塞 Super-agent 外部事件主线。云端控制面以后经独立数据出端设计接入本接口，本期不上传 Home 或跨设备同步记忆。
 
@@ -130,6 +141,7 @@ FM-03 后即可试用 Pilot 闭环；FM-04 未验收的角色明确不可用，�
 | `feature-items-security-memory-integration-1.md` | 旧 12 项实施路线已替代；资产和安全职责保留，必要宿主接口在 FM-01/04 冻结，不为旧条目管理补建平台 |
 | Super-agent 一期 TASK-018/019 | 已交付的边界/不可用结果保留，不冒称 Worker 知识已可用 |
 | Super-agent 一期 TASK-020/021/022 | 不再按旧算法实施；来源关联归 FM-02A，整理归 FM-02B，读取/说明归 FM-03/04 |
+| 上下文与角色知识总方案 CM | CM负责请求工作集、摘要/引用和角色适配；本计划独占提取/整理/发布/退役。角色知识不建立第二正文库，CM全部实施任务当前未执行 |
 | Super-agent 二期 | 主线不变；原 Memory 依赖改指本计划，允许未接知识的 Worker 正常执行 |
 | Harness² 清理及旧策略档案 | 已退役结论继续有效，不重新导入成品记忆或可执行 Skill |
 
@@ -170,7 +182,7 @@ FM-03 后即可试用 Pilot 闭环；FM-04 未验收的角色明确不可用，�
 
 ## 8. 参考与当前水位
 
-- [根架构约定](../agent.md)、[当前 Memory 使用与退役说明](../docs/lake-memory.md)。
+- [根架构约定](../agent.md)、[上下文与角色知识总方案](architecture-context-role-memory-1.md)、[当前 Memory 使用与退役说明](../docs/lake-memory.md)。
 - [Super-agent 一期](architecture-lake-superagent-1.md)、[二期](architecture-lake-superagent-2.md)。
 - [Codex 记忆说明](https://learn.chatgpt.com/docs/customization/memories)、[公开两阶段实现](https://github.com/openai/codex/blob/main/codex-rs/memories/README.md)、[整理提示词](https://github.com/openai/codex/blob/main/codex-rs/memories/write/templates/memories/consolidation.md)。参考其机制，不宣称逐文件复刻某一 Codex 版本。
 - [贡献规范](../CONTRIBUTING.md)、[分支与发布](../docs/development-workflow.md)。

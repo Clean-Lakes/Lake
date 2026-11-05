@@ -1,0 +1,66 @@
+{
+  "passed": true,
+  "binarySHA256": "6d2ebfc29a8c59f5b9f110c6943b320eeb337eb8df9265d2486fadf2c81be5e4",
+  "provider": "loopback synthetic fixture",
+  "providerUsage": "synthetic four-JSON-character fixture tokens, not real model billing",
+  "native": true,
+  "testedSHA": "94c9ae8cdb96d1b022dd2cd539665dc1e71f101c",
+  "sourceDirty": false,
+  "projectAccess": "inherited catalog and original permissions; no policy PUT",
+  "specialistManagement": {
+    "createdWithoutTask": true,
+    "editedWithoutTask": true,
+    "coldRestartRetainedRoleAndChannel": true,
+    "stableRoleID": "13822b4684c29464cfa9bb69e49bdaf3a12b3ada9a7e09be067176dcb966ebe6",
+    "roleRevision": 2,
+    "reusedRoleForTwoIndependentTasks": true,
+    "oneSidebarChannel": true
+  },
+  "contextWorkingSet": {
+    "passed": true,
+    "actualProviderRequests": [
+      {
+        "messagesBytes": 16748,
+        "routerEnvelopeBytes": 2766,
+        "taskDigests": 2
+      },
+      {
+        "messagesBytes": 18346,
+        "routerEnvelopeBytes": 2766,
+        "taskDigests": 2
+      },
+      {
+        "messagesBytes": 18879,
+        "routerEnvelopeBytes": 2766,
+        "taskDigests": 2
+      }
+    ],
+    "oneCurrentEnvelope": true,
+    "exactDigestHashRead": true,
+    "noOperationReplay": true,
+    "roleKnowledgeEnabled": false
+  },
+  "runtimeAcceptance": true,
+  "tasks": 2,
+  "distinctWorkerSessions": 2,
+  "actualReads": 2,
+  "humanQuestions": 0,
+  "pilotReportsDelivered": true,
+  "currentKernelPIDVerified": true,
+  "memoryTaskKnowledge": "unavailable_by_design",
+  "externalBuildReadProfile": "unavailable",
+  "windows": "not_run",
+  "sleepAndPowerLoss": "not_run",
+  "explicitKernelDrainVerified": true,
+  "runtimeCodeSHA": "675a073d049104f279104bc62bd6ff8a8a79d808",
+  "installedDevBuildSHA": "94c9ae8cdb96d1b022dd2cd539665dc1e71f101c",
+  "legacyScenarioMatrix": "not claimed; no unit-matrix file supplied",
+  "dailyDev": {
+    "homeIsDailyDev": true,
+    "nativeBackendMatchesInstalled": true,
+    "servedAssetSHA256": "a549fb07ed7b08841a7131c3f1f4eff130ebe235da82e34c52473d39989a857a",
+    "servedAssetMatchesBuild": true,
+    "canonicalTablesUnchanged": true
+  },
+  "scope": "CM first batch: bounded Pilot context and foundation contracts; role file-memory pipeline remains unavailable"
+}

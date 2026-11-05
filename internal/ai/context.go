@@ -9,11 +9,17 @@ type ContextMeasurement struct {
 	ModelID     string `json:"modelId"`
 	HistoryCost int    `json:"historyCost"`
 	ToolsCost   int    `json:"toolsCost"`
+	// Nonzero only for a host-projected request. The archive is retained but
+	// must not be reported as occupied model context after that request.
+	ArchiveHistoryCost int `json:"archiveHistoryCost,omitempty"`
 }
 
 func estimatedContextCost(state State, history []Message, toolsCost int) int {
 	cost := historyCost(history)
 	m := state.ContextMeasurement
+	if m != nil && m.ModelID == ModelIdentity(state.Config.Model) && m.ArchiveHistoryCost > 0 && cost >= m.ArchiveHistoryCost {
+		cost = m.HistoryCost + cost - m.ArchiveHistoryCost
+	}
 	if m == nil || m.ModelID != ModelIdentity(state.Config.Model) || state.LastRequest == nil || !state.LastRequest.InputKnown || state.LastRequest.Input <= 0 {
 		return cost + toolsCost
 	}
