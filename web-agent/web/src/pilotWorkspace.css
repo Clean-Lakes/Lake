@@ -23,6 +23,8 @@
 .super-role-avatar > .agent-role-icon.sre-avatar { color:var(--super-role-color); }
 .pilot-workspace-empty,.pilot-workspace-error { margin:4px 12px; line-height:1.65; overflow-wrap:anywhere; }
 .pilot-workspace-error { padding:8px 0; }
+.specialist-delete-dialog { margin:auto; max-width:calc(100vw - 36px); color:var(--foreground); }
+.specialist-delete-dialog::backdrop { background:var(--overlay); }
 
 .super-task-inspector { padding:0 2px 18px; font-size:var(--font-size-ui); line-height:1.65; }
 .super-task-owner { display:flex; align-items:center; gap:9px; margin-bottom:12px; }

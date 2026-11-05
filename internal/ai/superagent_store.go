@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const superSchemaVersion = 5
+const superSchemaVersion = 6
 
 type superSchemaRow struct {
 	ID      int `gorm:"primaryKey"`
@@ -56,6 +56,7 @@ type superDecisionRow struct {
 func (superDecisionRow) TableName() string { return "superagent_decisions" }
 
 type superRoleRow struct {
+	DeletedAt                              *time.Time
 	ID                                     string `gorm:"primaryKey"`
 	ProjectID, RoleKey, Name, Capabilities string
 	Duties                                 string
@@ -176,7 +177,7 @@ func MigrateSuperagentStore(db *gorm.DB) error {
 		if err := db.First(&row, "id = ?", 1).Error; err != nil {
 			return err
 		}
-		if row.Version != 3 && row.Version != 4 && row.Version != superSchemaVersion {
+		if row.Version != 3 && row.Version != 4 && row.Version != 5 && row.Version != superSchemaVersion {
 			return errors.New("superagent: unsupported schema")
 		}
 		if row.Version == 3 {
@@ -228,6 +229,19 @@ func MigrateSuperagentStore(db *gorm.DB) error {
 					}
 				}
 				return tx.Model(&superSchemaRow{}).Where("id = ? AND version = ?", 1, 4).Update("version", superSchemaVersion).Error
+			})
+		}
+		if row.Version == 5 {
+			for _, model := range superagentModels() {
+				if !db.Migrator().HasTable(model) {
+					return errors.New("superagent: incomplete previous schema")
+				}
+			}
+			return db.Transaction(func(tx *gorm.DB) error {
+				if err := tx.AutoMigrate(&superRoleRow{}); err != nil {
+					return err
+				}
+				return tx.Model(&superSchemaRow{}).Where("id = ? AND version = ?", 1, 5).Update("version", superSchemaVersion).Error
 			})
 		}
 		for _, model := range superagentModels() {

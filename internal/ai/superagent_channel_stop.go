@@ -10,6 +10,10 @@ import (
 // StopSpecialistChannel is a host-only stop, never a model tool. Stop admission
 // first so an in-flight Router cannot recreate work after the user stops it.
 func (e *Engine) StopSpecialistChannel(ctx context.Context, project, sessionID string) error {
+	return e.stopSpecialistChannel(ctx, project, sessionID, false)
+}
+
+func (e *Engine) stopSpecialistChannel(ctx context.Context, project, sessionID string, deleting bool) error {
 	ch, err := e.SpecialistChannelForSession(ctx, project, sessionID)
 	if err != nil {
 		return err
@@ -32,7 +36,11 @@ func (e *Engine) StopSpecialistChannel(ctx context.Context, project, sessionID s
 			}
 			stopped[event.ID] = true
 		}
-		return tx.Where("project_id = ? AND role_id = ? AND parent_worker_id = '' AND id IN (?)", project, ch.RoleID, tx.Model(&superAssignmentRow{}).Select("worker_id").Where("state IN ? OR checkpoint <> ''", []string{"active", "queued", "waiting_user"})).Find(&workers).Error
+		query := tx.Where("project_id = ? AND role_id = ? AND parent_worker_id = ''", project, ch.RoleID)
+		if !deleting {
+			query = query.Where("id IN (?)", tx.Model(&superAssignmentRow{}).Select("worker_id").Where("state IN ? OR checkpoint <> ''", []string{"active", "queued", "waiting_user"}))
+		}
+		return query.Find(&workers).Error
 	})
 	if err != nil {
 		return err

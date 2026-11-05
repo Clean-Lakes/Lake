@@ -224,6 +224,9 @@ func enqueueSuperInput(tx *gorm.DB, projectID string, event superEventRow, worke
 	if err != nil {
 		return SuperWorkerInput{}, err
 	}
+	if err := checkSuperRoleAvailableTx(tx, projectID, w.RoleID); err != nil {
+		return SuperWorkerInput{}, err
+	}
 	if mode == "followup" && w.SourceEventID == event.ID {
 		return SuperWorkerInput{}, errors.New("superagent: the original task input is already assigned")
 	}
