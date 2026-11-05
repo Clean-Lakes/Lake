@@ -24,6 +24,7 @@ export type Goal = Omit<WorkGoal, "items"> & {
   items: Step[]; planHash?: string; planRevision: number; goalRevision: number;
   acceptanceState: "not_evaluated" | "insufficient" | "pass" | "fail";
   activeItemId?: string; confirmed: boolean; mode: "default" | "plan";
+  executionMode?: "host_managed" | "explicit_plan";
 };
 export type Attempt = {
   id: string; goalId: string; sessionId: string; stepId: string; projectId: string;
@@ -43,6 +44,8 @@ export type Operation = {
   hostConfigurationHash?: string;
 };
 
+const businessReceiptTools = new Set(["inspect_host", "Read", "Write", "Edit", "list_project_files", "call_mcp_tool", "read_referenced_task_evidence"]);
+
 // The goal and immutable acceptance receipts are the only completion authority.
 // Router replies, Worker prose and channel presentation never close a goal.
 export class TaskLedger {
@@ -57,6 +60,99 @@ export class TaskLedger {
     const value: Goal = { ...goal, revision: 1, items: [], modelRounds: 0, updatedAt: now(),
       acceptanceState: "not_evaluated", planRevision: 0, goalRevision: 1, confirmed: false };
     return this.store.put("superGoals", value.id, value);
+  }
+  isHostManaged(goal: Goal) {
+    if (goal.mode !== "default" || goal.executionMode === "explicit_plan") return false;
+    if (goal.executionMode === "host_managed") return true;
+    // Only the TS default, unaccepted single-step contract can be adopted.
+    // Legacy Go goals live in a separate ledger and are never accepted here.
+    return !goal.planHash || goal.confirmed && goal.items.length === 1 &&
+      goal.items.every((step) => step.status !== "completed" && !step.acceptanceId) &&
+      !this.store.list<any>("superAcceptance").some((receipt) => receipt.goalId === goal.id);
+  }
+  prepareHostOperation(goalId: string, generation: number, policyHash: string, binding: { readOnly?: boolean } = {}) {
+    return this.store.transaction(() => {
+      const goal = this.get(goalId);
+      if (!this.isHostManaged(goal)) throw new HttpError(409, "This task retains its explicit plan and acceptance contract");
+      if (terminal(goal.status) || goal.status !== "running" || Date.parse(goal.deadlineAt) <= Date.now())
+        throw new HttpError(409, "An active task within its deadline is required");
+      if (this.unresolved(goalId) && binding.readOnly !== true)
+        throw new HttpError(409, "Original operation requires reconciliation before another mutation");
+      if (goal.executionMode !== "host_managed") {
+        this.store.put("superHostAdoptions", goal.id, { goalId, at: now(), originalPlanHash: goal.planHash, originalItems: goal.items });
+        goal.executionMode = "host_managed";
+      }
+      if (!goal.planHash) {
+        goal.items = [{ id: "host_work", title: goal.title, status: "pending", dependsOn: [], evidenceIds: [] }];
+        goal.planHash = digest({ hostManaged: true, goalId, itemId: "host_work" });
+        goal.planRevision = 1;
+      }
+      goal.confirmed = true;
+      const step = goal.items.find((item) => item.status !== "completed" && !item.acceptanceId);
+      if (!step) throw new HttpError(409, "No unfinished host-managed work remains");
+      const previous = step.attemptId ? this.store.require<Attempt>("superAttempts", step.attemptId) : undefined;
+      const operations = previous ? this.store.list<Operation>("superOperations").filter((operation) => operation.attemptId === previous.id) : [];
+      if (previous?.state === "running" && previous.generation === generation && previous.policyHash === policyHash &&
+          !operations.some((operation) => ["failed", "unknown", "dispatched"].includes(operation.status))) {
+        goal.activeItemId = step.id; step.status = "running"; return this.save(goal);
+      }
+      // New observations get a new attempt. An unresolved predecessor is kept
+      // untouched; a read does not reconcile or replay its possible side effect.
+      if (previous && previous.state !== "unknown" && operations.length &&
+          operations.every((operation) => operation.readOnly === true && ["succeeded", "failed"].includes(operation.status))) {
+        previous.state = operations.some((operation) => operation.status === "failed") ? "failed" : "succeeded";
+        previous.reconciledAt = now(); previous.reconciliation = "Settled proven read-only observations; fresh attempt without replay or goal acceptance";
+        this.store.put("superAttempts", previous.id, previous);
+      }
+      const attempt: Attempt = { id: id(), goalId, sessionId: goal.sessionId, projectId: goal.projectId, stepId: step.id,
+        goalRevision: goal.goalRevision, planRevision: goal.planRevision, generation, policyHash,
+        state: "running", createdAt: now(), ...(previous ? { retryOf: previous.id } : {}) };
+      this.store.put("superAttempts", attempt.id, attempt);
+      step.attemptId = attempt.id; step.status = "running"; step.reason = undefined; step.evidenceIds = [];
+      goal.activeItemId = step.id;
+      return this.save(goal);
+    });
+  }
+  finishHost(goalId: string, input: { summary: string; outcome: "completed" | "partial" }, generation: number, policyHash: string) {
+    const summary = text(input.summary, "summary", 32768);
+    if (!["completed", "partial"].includes(input.outcome)) throw new HttpError(400, "A completed or partial business outcome is required");
+    return this.store.transaction(() => {
+      const goal = this.get(goalId);
+      if (!this.isHostManaged(goal) || terminal(goal.status)) throw new HttpError(409, "Task is closed or retains its explicit acceptance contract");
+      if (input.outcome === "partial") {
+        goal.status = this.unresolved(goalId) ? "blocked" : "paused"; goal.summary = summary;
+        // Presentation provenance only: this records an explicit business report,
+        // while task completion remains owned by the acceptance receipts below.
+        this.store.put("superDeliveries", digest([goalId, generation]), { taskId: goalId, generation, outcome: input.outcome, summary, at: now() });
+        return this.save(goal);
+      }
+      const active = this.active(goalId, generation, policyHash);
+      const step = goal.items.find((item) => item.id === active.step.id)!, attempt = active.attempt;
+      const operations = this.store.list<Operation>("superOperations").filter((operation) => operation.attemptId === attempt.id);
+      if (this.unresolved(goalId) || !operations.some((operation) => businessReceiptTools.has(operation.tool)))
+        throw new HttpError(409, "Current successful business evidence is required; discovery alone cannot complete the task");
+      if (goal.items.some((item) => item.id !== step.id && (item.status !== "completed" || !item.acceptanceId)))
+        throw new HttpError(409, "Other original plan items still need their own acceptance");
+      if (operations.some((operation) => operation.status !== "succeeded" || operation.generation !== generation ||
+          operation.policyHash !== policyHash || operation.goalRevision !== goal.goalRevision || operation.planRevision !== goal.planRevision ||
+          !operation.outputHash || operation.outputHash !== digest(operation.output)))
+        throw new HttpError(409, "Failed, stale or unrelated evidence cannot accept this task");
+      operations.forEach((operation) => this.revalidate?.(operation));
+      const receipt = { id: id(), goalId, sessionId: goal.sessionId, stepId: step.id, attemptId: attempt.id,
+        projectId: goal.projectId, goalRevision: goal.goalRevision, planRevision: goal.planRevision,
+        state: "pass", verifier: "host_tool_results/1", operationIds: operations.map((operation) => operation.id), at: now() };
+      this.store.put("superAcceptance", receipt.id, receipt);
+      attempt.state = "succeeded"; this.store.put("superAttempts", attempt.id, attempt);
+      step.status = "completed"; step.evidenceIds = receipt.operationIds; step.acceptanceId = receipt.id;
+      const goalReceiptId = id();
+      this.store.put("superAcceptance", goalReceiptId, { id: goalReceiptId, goalId, sessionId: goal.sessionId, scope: "goal", state: "pass",
+        goalRevision: goal.goalRevision, planRevision: goal.planRevision, stepReceipts: goal.items.map((item) => item.acceptanceId), at: now() });
+      goal.status = "completed"; goal.acceptanceState = "pass"; goal.summary = summary;
+      this.save(goal);
+      this.store.put("superDeliveries", digest([goalId, generation]), { taskId: goalId, generation, outcome: input.outcome, summary, at: now() });
+      this.store.put("superPendingReports", digest([goal.id, goal.revision]), { taskId: goal.id, revision: goal.revision, snapshot: structuredClone(goal), createdAt: now() });
+      return goal;
+    });
   }
   begin(goalId: string, input: Record<string, any>) {
     const title = text(input.title, "title", 1000);
@@ -86,6 +182,7 @@ export class TaskLedger {
         return goal;
       }
       goal.planHash = hash; goal.planRevision = 1; goal.items = steps;
+      goal.executionMode ??= "explicit_plan";
       goal.confirmed = goal.mode !== "plan";
       goal.status = goal.confirmed ? "running" : "waiting_user";
       return this.save(goal);
@@ -160,12 +257,13 @@ export class TaskLedger {
       if (previous.status === "succeeded") { this.revalidate?.(previous); return previous.output as T; }
       throw new HttpError(409, "The original operation must be reconciled; it cannot be replayed");
     }
+    if (this.isHostManaged(this.get(goalId))) this.prepareHostOperation(goalId, generation, policyHash, binding);
     const operation = this.store.transaction(() => {
       const { goal, step, attempt } = this.active(goalId, generation, policyHash);
-      if (this.unresolved(goalId)) throw new HttpError(409, "Original operation requires reconciliation");
-      if (!binding.remoteMcp && this.store.list<Operation>("superOperations").some((operation) => operation.projectId === goal.projectId && operation.status === "unknown"))
+      if (binding.readOnly !== true && this.unresolved(goalId)) throw new HttpError(409, "Original operation requires reconciliation");
+      if (binding.readOnly !== true && !binding.remoteMcp && this.store.list<Operation>("superOperations").some((operation) => operation.projectId === goal.projectId && operation.status === "unknown"))
         throw new HttpError(409, "A project operation still requires reconciliation");
-      if (!binding.remoteMcp && this.store.list<any>("legacyOperations").some((operation) => operation.projectId === goal.projectId && !operation.riskResolvedAt &&
+      if (binding.readOnly !== true && !binding.remoteMcp && this.store.list<any>("legacyOperations").some((operation) => operation.projectId === goal.projectId && !operation.riskResolvedAt &&
           (["running", "unknown", "dispatched"].includes(operation.status) || operation.orphanState === "unresolved")))
         throw new HttpError(409, "旧 Go 操作仍需核实；迁移不会解除原未决风险");
       if (tool === "call_mcp_tool") {

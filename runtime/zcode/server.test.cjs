@@ -22,7 +22,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
     const request = JSON.parse(Buffer.concat(chunks).toString());
     requests.push(request);
     calls++;
-    if (failWorkerRequests && request.tools?.some((tool) => tool.function?.name === "work_begin")) {
+    if (failWorkerRequests && request.tools?.some((tool) => tool.function?.name === "work_finish")) {
       res.writeHead(401, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: { message: "synthetic-current-invocation-failure", type: "authentication_error" } }));
       return;
@@ -138,9 +138,15 @@ async function fixture(t, mode = "text", legacyDev = false) {
 }
 
 function superReply(request, mode, home) {
+  if (mode === "super-host-retry") return hostRetryReply(request);
   const names = request.messages.flatMap((message) => (message.tool_calls ?? []).map((call) => call.function.name));
+  const exposes = (name) => request.tools?.some((tool) => tool.function?.name === name);
   const content = (message) => typeof message.content === "string" ? message.content : (message.content ?? []).map((part) => part.text ?? "").join("");
   const call = (name, input, id = name) => ({ tool_calls: [{ index: 0, id, type: "function", function: { name, arguments: JSON.stringify(input) } }] });
+  const finish = (summary, id) => {
+    const schema = request.tools.find((tool) => tool.function.name === "work_finish")?.function.parameters;
+    return call("work_finish", { summary, ...(schema?.properties?.outcome ? { outcome: "completed" } : {}) }, id);
+  };
   const router = request.tools?.some((tool) => tool.function?.name === "route_work");
   if (router) {
     if (mode === "super-chat") return { content: "我是 Lake Pilot，可以回答问题，并为实际工作安排专员。" };
@@ -154,18 +160,19 @@ function superReply(request, mode, home) {
     if (!names.includes("route_work")) return call("route_work", { event_id: event.id, part_key: "inspect", action: "create", title: "检查项目工作区", role_id: roleId, quote: event.text, reason: "用户明确要求检查本项目" });
     return { content: "已交给项目检查员处理，执行结果将从原任务回报。" };
   }
-  if (!names.includes("work_begin")) return call("work_begin", { title: "检查项目工作区", items: [{ id: "inspect", title: "读取工作区并按实际结果验收" }] });
+  if (exposes("work_begin") && !names.includes("work_begin")) return call("work_begin", { title: "检查项目工作区", items: [{ id: "inspect", title: "读取工作区并按实际结果验收" }] });
   const updates = request.messages.flatMap((message) => (message.tool_calls ?? []).filter((call) => call.function.name === "work_update").map((call) => JSON.parse(call.function.arguments)));
-  if (!updates.some((update) => update.status === "running")) return call("work_update", { item_id: "inspect", status: "running" }, "start-inspect");
+  if (exposes("work_update") && !updates.some((update) => update.status === "running")) return call("work_update", { item_id: "inspect", status: "running" }, "start-inspect");
   if (mode === "super-incomplete-report") return { content: "这次还没连上服务器，暂时查不到 CPU 和内存的实际使用情况。" };
   if (mode === "super-forged") {
-    if (!updates.some((update) => update.status === "completed")) return call("work_update", { item_id: "inspect", status: "completed", evidence_ids: ["invented-success"] }, "forged-acceptance");
+    if (exposes("work_update") && !updates.some((update) => update.status === "completed")) return call("work_update", { item_id: "inspect", status: "completed", evidence_ids: ["invented-success"] }, "forged-acceptance");
+    if (!names.includes("work_finish")) return finish("我已经完成并验收了任务。", "forged-finish");
     return { content: "我已经完成并验收了任务。" };
   }
   if (mode === "super-read-recovery") {
     const reads = names.filter((name) => name === "list_project_files").length;
     if (!reads) return call("list_project_files", { path: "missing-diagnostic-path" }, "failed-files");
-    if (updates.filter((update) => update.status === "running").length === 1) return call("work_update", { item_id: "inspect", status: "running" }, "retry-inspect");
+    if (exposes("work_update") && updates.filter((update) => update.status === "running").length === 1) return call("work_update", { item_id: "inspect", status: "running" }, "retry-inspect");
     if (reads < 2) return call("list_project_files", { path: "." }, "actual-files");
   }
   if (mode === "super-host") {
@@ -173,8 +180,8 @@ function superReply(request, mode, home) {
     if(!names.includes('list_assets'))return call('list_assets',{},'host-catalog');
     const asset=result('list_assets').assets.find(a=>a.kind==='ssh');
     if(!names.includes('inspect_host'))return call('inspect_host',{asset_ref:asset.id,configuration_revision:asset.configuration_revision,metric:'system'},'actual-host');
-    if(!updates.some(u=>u.status==='completed'))return call('work_update',{item_id:'inspect',status:'completed',evidence_ids:['actual-host']},'accept-host');
-    if(!names.includes('work_finish'))return call('work_finish',{summary:'已从本次 SSH 固定只读检查取得实际主机指标。'});
+    if(exposes('work_update')&&!updates.some(u=>u.status==='completed'))return call('work_update',{item_id:'inspect',status:'completed',evidence_ids:['actual-host']},'accept-host');
+    if(!names.includes('work_finish'))return finish('已从本次 SSH 固定只读检查取得实际主机指标。');
     return {content:'本次 SSH 读取已经完成。'};
   }
   if (mode.startsWith("super-mcp")) {
@@ -189,8 +196,8 @@ function superReply(request, mode, home) {
     const pins = { server_id: server.id, configuration_revision: server.configurationRevision, binding_revision: server.bindingRevision };
     if (!names.includes("list_mcp_tools")) return call("list_mcp_tools", pins, "actual-catalog");
     if (!names.includes("call_mcp_tool")) return call("call_mcp_tool", { ...pins, tool: "count_documents", catalog_revision: result("list_mcp_tools").catalogHash, arguments: {} }, "actual-mcp");
-    if (!updates.some((update) => update.status === "completed")) return call("work_update", { item_id: "inspect", status: "completed", evidence_ids: ["actual-mcp"] }, "accept-inspect");
-    if (!names.includes("work_finish")) return call("work_finish", { summary: "已通过当前项目 MCP 的实际回执取得 42 个测试文档。" });
+    if (exposes("work_update") && !updates.some((update) => update.status === "completed")) return call("work_update", { item_id: "inspect", status: "completed", evidence_ids: ["actual-mcp"] }, "accept-inspect");
+    if (!names.includes("work_finish")) return finish("已通过当前项目 MCP 的实际回执取得 42 个测试文档。");
     return { content: "MCP 查询已按真实回执完成。" };
   }
   if (!names.includes("list_project_files")) return call("list_project_files", { path: "." }, "actual-files");
@@ -199,9 +206,68 @@ function superReply(request, mode, home) {
     const assigned = JSON.parse(raw);
     return call("Write", { file_path: join(home, "workspaces", assigned.assignment.projectId, "approved.txt"), content: "approved task output" }, "actual-write");
   }
-  if (!updates.some((update) => update.status === "completed")) return call("work_update", { item_id: "inspect", status: "completed", evidence_ids: mode.includes("write") ? ["actual-files", "actual-write"] : ["actual-files"] }, "accept-inspect");
-  if (!names.includes("work_finish")) return call("work_finish", { summary: "已读取本项目工作区，并根据本次实际文件清单完成检查。" });
+  if (exposes("work_update") && !updates.some((update) => update.status === "completed")) return call("work_update", { item_id: "inspect", status: "completed", evidence_ids: mode.includes("write") ? ["actual-files", "actual-write"] : ["actual-files"] }, "accept-inspect");
+  if (!names.includes("work_finish")) return finish("已读取本项目工作区，并根据本次实际文件清单完成检查。");
   return { content: "本次真实检查已结束。" };
+}
+
+// A protocol fixture, not a language-model evaluation: choose only from the
+// latest host-provided context, then let real adapters and receipts decide work.
+function hostRetryReply(request) {
+  const content = (message) => typeof message.content === "string" ? message.content : (message.content ?? []).map((part) => part.text ?? "").join("");
+  const router = request.tools.some((tool) => tool.function.name === "route_work");
+  const boundary = request.messages.findLastIndex((message) => message.role === "user" && (router
+    ? content(message).startsWith("[LAKE ADMITTED HUMAN EVENTS")
+    : content(message).startsWith("{") && content(message).includes('"assignment"')));
+  assert.ok(boundary >= 0, "every turn needs its current host input");
+  const messages = request.messages.slice(boundary);
+  const calls = messages.flatMap((message) => message.tool_calls ?? []);
+  const names = calls.map((tool) => tool.function.name);
+  const raw = content(messages[0]);
+  const result = (name) => {
+    const id = calls.findLast((tool) => tool.function.name === name)?.id;
+    const message = messages.findLast((item) => item.role === "tool" && item.tool_call_id === id);
+    return message ? JSON.parse(content(message)) : undefined;
+  };
+  const call = (name, input, id = name) => ({ tool_calls: [{ index: 0, id, type: "function", function: { name, arguments: JSON.stringify(input) } }] });
+  if (router) {
+    const event = JSON.parse(raw.split("\n")[1])[0];
+    const workingSet = JSON.parse(raw.split("[CURRENT CONVERSATION WORKING SET]\n")[1]);
+    if (workingSet.focus.length) {
+      const focus = workingSet.focus[0];
+      if (!names.includes("route_work")) return call("route_work", {
+        event_id: event.id, part_key: "retry", action: "followup", task_id: focus.task.id,
+        quote: event.text, reason: "继续最近对话中的同一主机检查，重新读取当前连接情况。",
+      }, `retry-${event.id}`);
+      return { content: "我再检查一下这台服务器。" };
+    }
+    if (!names.includes("manage_specialist")) return call("manage_specialist", {
+      event_id: event.id, part_key: "specialist", action: "create", role_key: "host-inspector",
+      name: "服务器检查员", duties: "根据实时主机指标分析服务器状况", quote: event.text,
+    });
+    if (!names.includes("list_specialists")) return call("list_specialists", {});
+    const roleId = JSON.stringify(result("list_specialists")).match(/"id"\s*:\s*"([a-f0-9]{64})"/)?.[1];
+    if (!names.includes("route_work")) return call("route_work", {
+      event_id: event.id, part_key: "inspect", action: "create", title: "检查 SSH fixture 当前系统指标",
+      role_id: roleId, quote: event.text, reason: "用户要求读取这台服务器当前指标。",
+    });
+    return { content: "我先检查这台服务器。" };
+  }
+  const assignment = JSON.parse(raw), suffix = assignment.followups.at(-1)?.id ?? "original";
+  assert.ok(!request.tools.some((tool) => ["work_begin", "work_update"].includes(tool.function.name)), "ordinary work must not require model-written ledger transitions");
+  if (!names.includes("list_assets")) return call("list_assets", {}, `catalog-${suffix}`);
+  const asset = result("list_assets").assets.find((item) => item.kind === "ssh");
+  if (asset.status !== "available" || !asset.configuration_revision) {
+    if (!names.includes("work_finish")) return call("work_finish", { outcome: "partial", summary: "这台服务器的 SSH 连接还不可用，暂时没有查到实时指标。" }, `partial-${suffix}`);
+    return { content: "暂时没有查到实时指标。" };
+  }
+  if (!names.includes("inspect_host")) return call("inspect_host", {
+    asset_ref: asset.id, configuration_revision: asset.configuration_revision, metric: "system",
+  }, `inspect-${suffix}`);
+  if (!names.includes("work_finish")) return call("work_finish", {
+    outcome: "completed", summary: "已重新连上服务器，并取得本次系统指标。",
+  }, `finish-${suffix}`);
+  return { content: "本次检查完成。" };
 }
 
 async function until(read, predicate, milliseconds = 15000) {
@@ -804,6 +870,25 @@ test("a resumed Worker failure never republishes the preceding invocation's answ
   assert.equal(f.app.store.messages(project.routerSessionId).filter((message) => message.author?.taskId === goal.id && !old.includes(message.id)).length, 1);
 });
 
+test("a parked waiting_user record and stale view cannot advertise a live confirmation", async (t) => {
+  const f = await fixture(t, "super-incomplete-report"), project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "检查服务器。" }, 202);
+  const state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (value) => value.workers[0]?.assignmentState === "parked");
+  const worker = state.workers[0], goal = f.app.store.list("superGoals")[0];
+  f.app.store.put("superGoals", goal.id, { ...goal, status: "waiting_user" });
+  f.app.store.put("views", worker.sessionId, { ...f.app.store.view(worker.sessionId), status: "waiting_input",
+    question: { id: "expired-question", questions: [{ id: "old", title: "过期问题" }] },
+    pending: { id: "expired-approval", call: { id: "old-call", name: "inspect_host", arguments: "{}" }, kind: "tool" } });
+  const current = await f.api(`/api/projects/${f.project.id}/superagent`);
+  assert.equal(current.workers[0].task.state, "paused");
+  assert.equal(current.channels[0].needsConfirmation, false);
+  const channel = await f.api(`/api/sessions/${state.channels[0].sessionId}/channel`);
+  assert.equal(channel.active.length, 0, "a stale persisted card cannot revive an actionable interaction");
+  const calls = f.calls;
+  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`, "POST", { id: "expired-approval", accept: true }, 409);
+  assert.equal(f.calls, calls);assert.equal(f.app.store.list("superOperations").length, 0);
+});
+
 test("accepted Worker reports survive the closed-goal model fence without inventing a later answer", async (t) => {
   const f = await fixture(t, "super-inspect"), project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
   await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "检查项目工作区。" }, 202);
@@ -1006,7 +1091,6 @@ test("ordinary Pilot conversation completes in one model request without routing
   assert.equal(f.app.store.list("superDecisions").length, 0);
   assert.equal(f.app.store.list("superWorkers").length, 0);
   assert.equal(f.app.store.list("superInputs")[0].disposition, "routed");
-  assert.ok(JSON.stringify(f.requests[0]).includes("Answer ordinary questions directly"));
 });
 
 test("independent Worker queries a real project MCP service only after its exact approval and accepts actual receipts", async (t) => {
@@ -1248,6 +1332,65 @@ test('independent Worker uses an exact approved SSH diagnostic profile and accep
  const completed=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0].task.state==='completed');
  assert.equal(completed.channels[0].needsConfirmation,false);
  const operation=f.app.store.list('superOperations').find(o=>o.tool==='inspect_host');assert.equal(operation.status,'succeeded');assert.equal(operation.resourceId,resource.id);assert.equal(operation.output.exitCode,0);assert.ok(operation.output.hostFingerprint);assert.equal(operation.readOnly,true);
+});
+
+test('a short retry uses recent dialogue and current SSH capabilities, resumes the same task and accepts only the new host receipt', {skip:process.platform!=='darwin'}, async(t)=>{
+ const f=await fixture(t,'super-host-retry'),server=await sshFixture(t),resource=await sshResource(f,server);
+ const terminal=await trustTerminal(f,resource);await terminal.approve();await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');await f.api(terminal.base+'/disconnect','POST',{});
+ const authenticated=server.auths;
+ // Simulate a previously unavailable imported resource. Credentials remain in
+ // the private fixture home, and no user server or user task is involved.
+ f.app.store.put('resources',resource.id,{...f.app.store.get('resources',resource.id),status:'unavailable'});
+ const project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ const original='分析 SSH fixture 服务器的当前系统指标。';
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:original},202);
+ const first=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
+ const worker=first.workers[0],goalBefore=structuredClone(f.app.store.list('superGoals')[0]);
+ assert.notEqual(goalBefore.status,'completed');assert.notEqual(goalBefore.acceptanceState,'pass');
+ assert.equal(first.channels[0].needsConfirmation,false,'an unavailable connection is not an unanswered user interaction');
+ assert.equal(f.app.store.list('superAcceptance').length,0);assert.equal(server.auths,authenticated);
+ assert.equal(f.app.store.list('superOperations').filter(o=>o.tool==='inspect_host').length,0);
+ const oldReport=f.app.store.messages(project.routerSessionId).find(m=>m.author?.taskId===goalBefore.id);
+ assert.match(oldReport.text,/SSH 连接还不可用/);
+ await until(()=>f.api(`/api/sessions/${project.routerSessionId}/ai`),view=>view.status==='completed');
+
+ // Restoring the current configuration changes its revision; the preceding
+ // report remains historical and must not fence this newly authorized retry.
+ await f.api(`/api/resources/${resource.id}`,'PATCH',{ssh:{shell:'sh'}});
+ const beforeRetry=f.requests.length;
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'再试试'},202);
+ const pendingState=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.channels[0]?.needsConfirmation);
+ assert.equal(pendingState.workers.length,1);assert.equal(pendingState.workers[0].id,worker.id);
+ assert.equal(pendingState.workers[0].task.taskId,goalBefore.id);assert.equal(pendingState.workers[0].roleId,worker.roleId);
+ const retryEvent=f.app.store.list('superInputs').find(event=>event.payload==='再试试');
+ const decisions=f.app.store.list('superDecisions').filter(decision=>decision.eventId===retryEvent.id);
+ assert.equal(decisions.length,1);assert.equal(decisions[0].action,'followup');assert.equal(decisions[0].taskId,goalBefore.id);assert.equal(decisions[0].quote,'再试试');
+ const textOf=(message)=>typeof message.content==='string'?message.content:(message.content??[]).map(part=>part.text??'').join('');
+ const retryRequests=f.requests.slice(beforeRetry);
+ const routerRequest=retryRequests.find(request=>request.tools.some(tool=>tool.function.name==='route_work'));
+ const raw=routerRequest.messages.filter(m=>m.role==='user').map(textOf).findLast(text=>text.startsWith('[LAKE ADMITTED HUMAN EVENTS'));
+ const context=JSON.parse(raw.split('[CURRENT CONVERSATION WORKING SET]\n')[1]);
+ assert.equal(context.focus[0].task.id,goalBefore.id);assert.equal(context.focus[0].roleId,worker.roleId);assert.equal(context.focus[0].basis,'recent_dialogue');
+ assert.ok(context.dialogue.some(message=>message.role==='user'&&message.text===original));
+ assert.ok(context.dialogue.some(message=>message.taskId===goalBefore.id&&message.text.includes('SSH 连接还不可用')&&message.historical));
+ assert.ok(context.capabilities.workerTools.includes('inspect_host'));assert.equal(context.capabilities.ssh.adapterRegistered,true);
+ assert.equal(context.capabilities.relevantResources.find(item=>item.id===resource.id).configurationStatus,'available');
+ const workerRequest=retryRequests.find(request=>request.tools.some(tool=>tool.function.name==='work_finish'));
+ const assignment=JSON.parse(workerRequest.messages.filter(m=>m.role==='user').map(textOf).findLast(text=>text.startsWith('{')&&text.includes('"assignment"')));
+ assert.equal(assignment.assignment.taskId,goalBefore.id);assert.equal(assignment.followups.at(-1).text,'再试试');
+ const pending=(await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;
+ assert.equal(pending.call.name,'inspect_host');assert.equal(JSON.parse(pending.call.arguments).asset_ref,resource.id);
+ assert.equal(server.auths,authenticated,'the retry still requires its exact real-operation approval');
+ await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.id,accept:true});
+ const completed=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0].task.state==='completed');
+ assert.equal(completed.channels[0].needsConfirmation,false);assert.equal(f.app.store.list('superGoals').length,1);
+ const goal=f.app.store.list('superGoals')[0],operation=f.app.store.list('superOperations').find(o=>o.tool==='inspect_host');
+ assert.equal(goal.id,goalBefore.id);assert.equal(goal.executionMode,'host_managed');assert.equal(goal.acceptanceState,'pass');
+ assert.equal(goal.deadlineAt,goalBefore.deadlineAt);assert.equal(goal.roundLimit,goalBefore.roundLimit);assert.ok(goal.modelRounds>goalBefore.modelRounds);
+ assert.equal(operation.status,'succeeded');assert.equal(operation.resourceId,resource.id);assert.equal(operation.output.exitCode,0);assert.ok(operation.output.hostFingerprint);
+ assert.ok(server.auths>authenticated);assert.ok(server.requests.some(request=>!request.pty));
+ assert.ok(f.app.store.list('superAcceptance').some(receipt=>receipt.goalId===goal.id&&receipt.operationIds?.includes(operation.id)));
+ assert.equal(f.app.store.messages(project.routerSessionId).filter(m=>m.author?.taskId===goal.id&&m.text.includes('已重新连上服务器')).length,1);
 });
 
 test('legacy SSH references supplement an already imported v1 catalog without touching source data or replaying work',async(t)=>{

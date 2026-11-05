@@ -20,8 +20,15 @@ test('specialists show immediate preparation without claiming a leased execution
  assert.ok(!waiting.includes('class="pilot-worker-running"'));
 });
 
- test('a parked task without an actual question or approval does not advertise confirmation',()=>{
+test('a parked task without an actual question or approval does not advertise confirmation',()=>{
  const workspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},workers:[{id:'worker',roleId:'role',roleName:'主机专员',sessionId:'worker-session',createdAt:'',assignmentState:'parked',task:{taskId:'task',projectId:'project',sessionId:'worker-session',title:'读取主机',state:'waiting_user',acceptanceState:'insufficient'}}],channels:[{id:'channel',roleId:'role',projectId:'project',roleName:'主机专员',sessionId:'channel-session',revision:1,createdAt:'',needsConfirmation:false}]} as SuperWorkspace;
- const html=renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'channel-session',onPilot(){},onWorker(){}}));
- assert.ok(!html.includes('需确认')&&!html.includes('pilot-worker-confirmation'));
- });
+ const render=()=>renderToStaticMarkup(createElement(PilotWorkspace,{workspace,error:'',selectedId:'channel-session',onPilot(){},onWorker(){}}));
+ for(const needsConfirmation of [false,undefined]){
+  workspace.channels![0]!.needsConfirmation=needsConfirmation;
+  assert.doesNotMatch(render(),/需确认|pilot-worker-confirmation/);
+ }
+ workspace.channels![0]!.needsConfirmation=true;
+ assert.match(render(),/pilot-worker-confirmation/,'an actual host-attested interaction remains actionable regardless of old task state');
+ workspace.channels=undefined;
+ assert.doesNotMatch(render(),/需确认|pilot-worker-confirmation/,'missing channel metadata must not restore waiting_user inference');
+});

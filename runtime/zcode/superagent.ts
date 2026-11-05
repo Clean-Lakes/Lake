@@ -8,6 +8,7 @@ import { LakeAgents } from "./agent";
 import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
 import { canonical, digest, TaskLedger, terminal, text, type Goal, type Operation } from "./tasks";
 import { superRouterPrompt, superWorkerPrompt } from "./super-prompts";
+import { buildRouterContext, projectRouterHistory, type RouterMessage } from "./router-context";
 import { loadLegacyView } from "./migration";
 import type { LakeSecurity } from "./security";
 import type {LakeSSH} from "./ssh";
@@ -150,11 +151,17 @@ export class LakeSuperagent implements AgentHost {
   private workerFor(sessionId: string) { return this.store.list<Worker>("superWorkers").find((worker) => worker.sessionId === sessionId); }
   private channelFor(sessionId: string) { return this.store.list<Channel>("superChannels").find((channel) => channel.sessionId === sessionId); }
   private projectFor(sessionId: string) { return this.store.list<SuperProject>("superProjects").find((project) => project.routerSessionId === sessionId); }
+  private pendingInteraction(sessionId: string) {
+    const worker = this.workerFor(sessionId);
+    if (!worker) return false;
+    const owned = [...this.interactions.values()].some((entry) => entry.workerId === worker.id && entry.generation === worker.generation);
+    return owned || this.agents.isRunning(sessionId) && (!!this.store.view(sessionId).pending || !!this.ssh?.prompt(sessionId));
+  }
   private taskView(goal: Goal): SuperTask {
     const states: Record<string, SuperTask["state"]> = { waiting_user: "waiting_user", waiting_external: "waiting_external",
       paused: "paused", blocked: "blocked", completed: "completed", failed: "failed", cancelled: "cancelled" };
     return { taskId: goal.id, sessionId: goal.sessionId, projectId: goal.projectId, title: goal.title,
-      state: states[goal.status] ?? (this.store.require<Worker>("superWorkers", goal.workerId).state === "queued" ? "queued" : "running"),
+      state: goal.status === "waiting_user" && !this.pendingInteraction(goal.sessionId) ? "paused" : states[goal.status] ?? (this.store.require<Worker>("superWorkers", goal.workerId).state === "queued" ? "queued" : "running"),
       acceptanceState: goal.acceptanceState, revision: goal.revision, originRootTurnId: goal.originRootTurnId,
       deadlineAt: goal.deadlineAt, summary: goal.summary };
   }
@@ -169,7 +176,7 @@ export class LakeSuperagent implements AgentHost {
     return { ...channel, roleName: role.name, duties: role.duties, roleRevision: role.revision,
       running: workers.some((worker) => this.active.has(worker.id) && this.agents.isRunning(worker.sessionId)),
       preparing: workers.some((worker) => worker.assignmentState === "queued") || this.store.list<InputEvent>("superInputs").some((event) => event.preferredRoleId === role.id && event.disposition === "pending"),
-      needsConfirmation: workers.some((worker) => !!this.workerFor(worker.sessionId)&&(!!this.store.view(worker.sessionId).pending || !!this.store.view(worker.sessionId).question || !!this.ssh?.prompt(worker.sessionId))),
+      needsConfirmation: workers.some((worker) => this.pendingInteraction(worker.sessionId)),
       completionCursor: accepted ? String(accepted).padStart(20, "0") : "",
       seenCompletionCursor: this.store.get<string>("superChannelReads", channel.id) ?? "" };
   }
@@ -296,7 +303,8 @@ export class LakeSuperagent implements AgentHost {
         }
         this.ledger.create({ id: taskId, sessionId: workerSession, projectId: event.projectId, workerId, roleId: role.id, sourceEventId: event.id,
           originRootTurnId: "super_" + suffix, userText: event.payload, title, status: "running", roundLimit: Math.max(1, Math.min(500, Number(session.options.maxSteps) || 500)),
-          deadlineAt: new Date(Date.parse(event.receivedAt) + 86400000).toISOString(), mode: session.options.conversationMode === "plan" ? "plan" : "default" });
+          deadlineAt: new Date(Date.parse(event.receivedAt) + 86400000).toISOString(), mode: session.options.conversationMode === "plan" ? "plan" : "default",
+          executionMode: session.options.conversationMode === "plan" ? "explicit_plan" : "host_managed" });
         const worker: Worker = { id: workerId, projectId: event.projectId, roleId: role.id, roleSnapshot: structuredClone(role), sessionId: workerSession, taskId,
           sourceEventId: event.id, generation: 0, state: "queued", policyHash: this.policy(event.projectId), createdAt: now(), inputEventIds: [event.id] };
         this.store.put("superWorkers", workerId, worker);
@@ -310,7 +318,7 @@ export class LakeSuperagent implements AgentHost {
         if (action === "followup") {
           if (terminal(goal.status)) throw new HttpError(409, "Closed tasks require a new independent task; old evidence is retained");
           worker.inputEventIds.push(event.id);
-          if (worker.state !== "active" && !this.ledger.unresolved(goal.id) && goal.modelRounds < goal.roundLimit && Date.parse(goal.deadlineAt) > Date.now()) {
+          if (worker.state !== "active" && goal.modelRounds < goal.roundLimit && Date.parse(goal.deadlineAt) > Date.now()) {
             worker.state = "queued"; goal.status = "running"; this.ledger.save(goal);
           }
           this.store.put("superWorkers", worker.id, worker);
@@ -328,7 +336,13 @@ export class LakeSuperagent implements AgentHost {
       }
       this.store.put("superDecisions", key, { ...decision, reason }); return decision;
     });
-    this.notify(sessionId, "specialist"); return result;
+    this.notify(sessionId, "specialist");
+    if (!result.workerId || !["create", "followup"].includes(result.action)) return result;
+    const worker = this.store.require<Worker>("superWorkers", result.workerId), goal = this.ledger.get(worker.taskId);
+    const state = this.pendingInteraction(worker.sessionId) ? "needs_input" : Date.parse(goal.deadlineAt) <= Date.now() || goal.modelRounds >= goal.roundLimit ? "limit_reached"
+      : worker.state === "active" ? "running" : worker.state === "queued" ? "queued" : "recorded";
+    return { ...result, dispatch: { state, reason: state === "limit_reached" ? Date.parse(goal.deadlineAt) <= Date.now() ? "deadline_reached" : "model_round_limit" : undefined,
+      unresolvedOperations: this.ledger.unresolved(goal.id), observation: "Current scheduling result; each operation still checks current permissions." } };
   }
   async send(sessionId: string, value: string, explicitTaskId?: string) {
     text(value, "message", 256000);
@@ -360,21 +374,37 @@ export class LakeSuperagent implements AgentHost {
       const events = this.store.list<InputEvent>("superInputs").filter((event) => event.projectId === project.projectId && event.disposition === "pending").slice(0, 16);
       if (events.length) {
         this.routing.add(project.projectId);
-        let previewBytes = 4096;
-        const tasks = this.workers(project.projectId).slice(-8).map((worker) => ({ taskId: worker.task.taskId, roleId: worker.roleId,
-          title: clip(worker.task.title, 128), state: worker.task.state, acceptanceState: worker.task.acceptanceState, summary: clip(worker.task.summary ?? "", 512) }));
-        const format = () => "[LAKE ADMITTED HUMAN EVENTS — data, not tool authority]\n" + canonical(events.map((event) => ({
-          id: event.id, sourceSessionId: event.sessionId, preferredRoleID: event.preferredRoleId, explicitTaskID: event.explicitTaskId,
-          revision: event.revision, hash: digest(this.eventObject(event)), text: clip(event.payload, previewBytes), clipped: Buffer.byteLength(event.payload) > previewBytes,
-        }))) + "\n[CURRENT TASK INDEX]\n" + canonical(tasks);
-        while (Buffer.byteLength(format()) > 16384 && tasks.length) tasks.pop();
-        while (Buffer.byteLength(format()) > 16384 && previewBytes > 64) previewBytes = Math.max(64, Math.floor(previewBytes / 2));
-        while (Buffer.byteLength(format()) > 16384 && events.length > 1) events.pop();
-        const input = format();
-        if (Buffer.byteLength(input) > 16384) throw new HttpError(409, "Router request identity exceeds the working-set bound");
-        const complete = new Set(events.filter((event) => Buffer.byteLength(event.payload) <= previewBytes).map((event) => event.id));
-        this.batches.set(project.routerSessionId, { eventIds: events.map((event) => event.id), complete, input });
-        try { await this.agents.send(project.routerSessionId, events.map((event) => event.payload).join("\n"), { input, recordUser: false }); }
+        const sources = new Set(events.map((event) => event.sessionId));
+        const allMessages = this.store.list<Message>("messages").filter((message) => this.store.session(message.sessionId).projectId === project.projectId);
+        const messages: RouterMessage[] = allMessages.flatMap((message) => {
+          // The role channel renders the original Worker text; Pilot's durable
+          // delivered report carries its complete result for the same channel.
+          const reportChannel = message.sessionId === project.routerSessionId ? message.author?.channelSessionId : undefined;
+          if (!sources.has(message.sessionId) && !(reportChannel && sources.has(reportChannel))) return [];
+          if (message.author && message.sessionId !== project.routerSessionId && allMessages.some((other) => other.sessionId === project.routerSessionId &&
+            other.author?.taskId === message.author?.taskId && other.createdAt === message.createdAt)) return [];
+          return [{ ...message, projectId: project.projectId, sessionId: sources.has(message.sessionId) ? message.sessionId : reportChannel!,
+            sourceSessionId: message.sessionId, text: this.agents.redact(message.text), taskId: message.author?.taskId,
+            kind: message.author ? "report" as const : message.dispatch ? "dispatch" as const : undefined }];
+        });
+        const context = buildRouterContext({ projectId: project.projectId, now: now(),
+          events: events.map((event) => ({ ...event, hash: digest(this.eventObject(event)) })), messages,
+          tasks: this.workers(project.projectId).map((worker) => {
+            const goal = this.store.get<Goal>("superGoals", worker.task.taskId) ?? this.store.require<any>("legacyGoals", worker.task.taskId);
+            return { ...worker.task, projectId: project.projectId, sessionId: worker.sessionId, revision: goal.revision,
+              roleId: worker.roleId!, hash: digest(goal), updatedAt: goal.updatedAt ?? worker.createdAt ?? "", createdAt: worker.createdAt,
+              summary: this.agents.redact(worker.task.summary ?? ""), archived: worker.assignmentState === "archived",
+              pendingApproval: this.pendingInteraction(worker.sessionId),
+              unresolvedOperations: this.store.list<Operation>("superOperations").filter((operation) => operation.goalId === goal.id && ["unknown", "dispatched"].includes(operation.status)).length,
+              resourceIds: [...new Set([...(goal.resourceIds ?? []), ...(goal.resourceBindings ?? []).map((binding: any) => binding.assetRef).filter(Boolean)])] as string[],
+              blockers: (goal.items ?? []).filter((item: any) => item.reason && ["blocked", "failed", "waiting_user"].includes(item.status)).map((item: any) =>
+                ({ detail: this.agents.redact(item.reason), recordUpdatedAt: goal.updatedAt })) };
+          }), resources: this.store.catalog().resources.filter((resource) => resource.projectId === project.projectId).map((resource) =>
+            ({ id: resource.id, projectId: resource.projectId, name: resource.name, kind: resource.kind, status: resource.status, revision: this.store.get<number>("resourceRevisions", resource.id) ?? 1 })),
+          adapters: { ssh: !!this.ssh, extensions: !!this.extensions } });
+        const { input, complete, eventIds } = context;
+        this.batches.set(project.routerSessionId, { eventIds, complete, input });
+        try { await this.agents.send(project.routerSessionId, events.filter((event) => eventIds.includes(event.id)).map((event) => event.payload).join("\n"), { input, recordUser: false }); }
         catch (error) { this.routerFinished(project.routerSessionId, String(error)); }
       }
     }
@@ -385,11 +415,11 @@ export class LakeSuperagent implements AgentHost {
       if (this.active.size >= 4) break;
       if ([...this.active].filter((id) => this.store.require<Worker>("superWorkers", id).projectId === worker.projectId).length >= 2) continue;
       const goal = this.ledger.get(worker.taskId);
-      if (terminal(goal.status) || this.ledger.unresolved(goal.id) || Date.parse(goal.deadlineAt) <= Date.now() || goal.modelRounds >= goal.roundLimit) continue;
+      if (terminal(goal.status) || Date.parse(goal.deadlineAt) <= Date.now() || goal.modelRounds >= goal.roundLimit) continue;
       try { this.role(worker.projectId, worker.roleId); } catch { continue; }
       worker.state = "active"; worker.generation++; worker.owner = this.owner; worker.leaseUntil = Date.now() + 45000; worker.policyHash = this.policy(worker.projectId);
       worker.invocationInputIds = worker.inputEventIds.filter((eventId) => !worker.deliveredInputIds?.includes(eventId));
-      for (const step of goal.items) if (step.status === "running" && step.attemptId) {
+      for (const step of goal.items) if (!this.ledger.isHostManaged(goal) && step.status === "running" && step.attemptId) {
         const attempt = this.store.require<import("./tasks").Attempt>("superAttempts", step.attemptId);
         if (attempt.state === "running" && attempt.policyHash === worker.policyHash) {
           attempt.generation = worker.generation; this.store.put("superAttempts", attempt.id, attempt);
@@ -417,17 +447,17 @@ export class LakeSuperagent implements AgentHost {
   }
   profile(sessionId: string): HostProfile | undefined {
     const project = this.projectFor(sessionId);
-    if (project) return { version: "router:" + project.projectId, systemPrompt: superRouterPrompt +
-      "\nAnswer ordinary questions directly in a complete reply. Greetings, identity questions and explanations do not require route_work(action=respond). Do not announce that you will answer or introduce yourself before giving the actual answer. Use routing tools only when a real task, specialist change, task supplement or task control needs to be committed.",
+    if (project) return { version: "router:context-v2:" + project.projectId, systemPrompt: superRouterPrompt,
       tools: this.routerEntries(sessionId), allowlist: routerTools,
       projectRequest: (request) => this.projectRouterRequest(project.projectId, request) };
     const worker = this.workerFor(sessionId);
     if (!worker) return;
+    const managed = this.ledger.isHostManaged(this.ledger.get(worker.taskId));
+    const entries = this.workerEntries(worker).filter((entry) => !managed || !["work_begin", "work_update"].includes(entry.metadata.name));
     const generation = worker.generation;
     const router = this.store.require<SuperProject>("superProjects", worker.projectId), permissions = this.store.session(router.routerSessionId).options;
-    return { version: `${worker.id}:${generation}`, systemPrompt: superWorkerPrompt +
-      "\nUse the actual project MCP catalog and registered Skills when relevant. For SSH hosts use list_assets and inspect_host with its exact configuration_revision. Resource available means configured, not healthy; only a real inspect_host receipt proves connectivity or current metrics. Only tools present here are available. Never bypass an unavailable terminal, remote-resource or Memory adapter with another tool.",
-      tools: [...this.workerEntries(worker), ...this.extensionEntries(worker),...this.hostEntries(worker)], allowlist: [...workTools,...(this.ssh?hostTools:[]), ...(this.extensions ? extensionTools : []), "Read", ...(this.ledger.get(worker.taskId).mode === "plan" ? [] : ["Write", "Edit"])].filter((name) => this.ledger.get(worker.taskId).mode !== "plan" || name !== "call_mcp_tool"),
+    return { version: `${worker.id}:${generation}:host-v2:${managed}`, systemPrompt: superWorkerPrompt,
+      tools: [...entries, ...this.extensionEntries(worker),...this.hostEntries(worker)], allowlist: [...entries.map((entry) => entry.metadata.name),...(this.ssh?hostTools:[]), ...(this.extensions ? extensionTools : []), "Read", ...(this.ledger.get(worker.taskId).mode === "plan" ? [] : ["Write", "Edit"])].filter((name) => this.ledger.get(worker.taskId).mode !== "plan" || name !== "call_mcp_tool"),
       permissionRules: { scope: "session", version: 1,
         allow: [...(permissions.silentWriteFiles === true ? [{ toolName: "Write" }, { toolName: "Edit" }] : []),
           ...(this.extensions?.automaticCalls(worker.projectId, permissions) ? [{ toolName: "call_mcp_tool" }] : [])],
@@ -538,7 +568,7 @@ export class LakeSuperagent implements AgentHost {
       const approval = this.extensions!.discoveryApproval(worker.projectId, input.server_id);
       return { needsApproval: approval, permission: { needsApproval: approval, sideEffectScope: approval ? "workspace" : "none" } };
     };
-    const call = this.entry("call_mcp_tool", "Call one exact current project MCP tool after work_begin and work_update(running). Copy configuration_revision, binding_revision and catalog_revision from the discovery result. This opaque operation uses normal approval; never retry an unknown result.",
+    const call = this.entry("call_mcp_tool", "Call one exact current project MCP tool. The host records execution automatically for ordinary tasks. Copy configuration_revision, binding_revision and catalog_revision from the discovery result. This opaque operation uses normal approval; never retry an unknown result.",
       objectSchema({ ...pins, tool: str, catalog_revision: str, arguments: { type: "object", additionalProperties: true } }, [...Object.keys(pins), "tool", "catalog_revision", "arguments"]),
       (a, context) => this.extensions!.call(worker.projectId, a, options(), context.abortSignal), false, 131072);
     call.metadata = { ...call.metadata, readOnly: false, riskLevel: "high", sideEffectScope: "workspace", needsApproval: true };
@@ -652,8 +682,12 @@ export class LakeSuperagent implements AgentHost {
         objectSchema({ item_id: str, status: { type: "string", enum: ["running", "completed", "waiting_user", "blocked", "failed"] }, reason: str, evidence_ids: array(str) }, ["item_id", "status"]), run((a) => {
           const goal = this.ledger.update(worker.taskId, a, worker.generation, worker.policyHash); this.changed(worker.sessionId); return this.publicGoal(goal);
         })),
-      this.entry("work_finish", "Finish only after every original step has host acceptance from actual current evidence. Summary is the public report: answer the request with concrete findings, their significance and any relevant limits, in the user's language. Do not narrate internal task, tool or acceptance bookkeeping. Summary does not create acceptance.", objectSchema({ summary: str }, ["summary"]), run((a) => {
-        const goal = this.ledger.finish(worker.taskId, this.agents.redact(a.summary), worker.policyHash); this.changed(worker.sessionId); return this.publicGoal(goal);
+      this.entry("work_finish", this.ledger.isHostManaged(this.ledger.get(worker.taskId)) ? "Submit the business result. Use completed only when the user's requested deliverable is satisfied, partial for useful findings with remaining work or a blocker. Summary is the public reply. The host verifies actual current tool receipts; a report alone never proves success." : "Submit the final business report after every original plan item has accepted evidence. Use the existing plan tools for incomplete steps; summary does not create acceptance.", this.ledger.isHostManaged(this.ledger.get(worker.taskId)) ? objectSchema({ summary: str, outcome: { type: "string", enum: ["completed", "partial"] } }, ["summary", "outcome"]) : objectSchema({ summary: str }, ["summary"]), run((a) => {
+        const summary = this.agents.redact(text(a.summary, "summary", 32768));
+        const goal = this.ledger.isHostManaged(this.ledger.get(worker.taskId))
+          ? this.ledger.finishHost(worker.taskId, { summary, outcome: a.outcome }, worker.generation, worker.policyHash)
+          : this.ledger.finish(worker.taskId, summary, worker.policyHash);
+        this.changed(worker.sessionId); return this.publicGoal(goal);
       }), true),
       this.entry("work_wait", "Park an invocation without polling. Original handles and task constraints remain authoritative.", objectSchema({}), run(() => {
         throw new HttpError(409, "No registered external job observer is attached to this task; preserve the original handle and report the missing adapter");
@@ -809,11 +843,11 @@ export class LakeSuperagent implements AgentHost {
     const goal = this.ledger.get(worker.taskId);
     if (!terminal(goal.status) && goal.status === "running") {
       goal.status = this.ledger.unresolved(goal.id) ? "blocked" : "paused";
-      goal.summary = error ? this.agents.redact(error) : "这次检查还没完成，已暂停。";
+      goal.summary = error ? this.agents.redact(error) : response?.trim() ? this.agents.redact(response.trim()).slice(0, 32768) : goal.summary || "这次检查还没完成。";
       this.ledger.save(goal);
     }
     const pending = worker.inputEventIds.some((eventId) => !worker.deliveredInputIds?.includes(eventId) && this.store.require<InputEvent>("superInputs", eventId).disposition === "routed");
-    if (pending && !terminal(goal.status) && !this.closed && !this.ledger.unresolved(goal.id) && goal.modelRounds < goal.roundLimit && Date.parse(goal.deadlineAt) > Date.now()) {
+    if (pending && worker.state !== "stopped" && !terminal(goal.status) && !this.closed && goal.modelRounds < goal.roundLimit && Date.parse(goal.deadlineAt) > Date.now()) {
       worker.state = "queued"; goal.status = "running"; this.ledger.save(goal); this.store.put("superWorkers", worker.id, worker);
     }
     const reportKey = digest([goal.id, goal.revision]);
@@ -831,14 +865,19 @@ export class LakeSuperagent implements AgentHost {
       return { body, channelBody: reply ? null : body };
     }
     const notice = goal.status === "cancelled" ? "已停止这次工作。"
-      : this.ledger.unresolved(goal.id) ? "有一项操作的结果还没确认，后续工作已暂停。"
+      : this.ledger.unresolved(goal.id) ? "有一项操作的结果还需核实，暂时不能重复该操作。"
       : goal.summary === "deadline_reached" ? "这次工作已到截止时间，剩余部分尚未完成。"
       : goal.summary === "model_round_limit" ? "这次检查已达到单次任务的处理上限，剩余部分尚未完成。"
       : error || this.store.view(goal.sessionId).status === "failed" ? "这次处理遇到错误，尚未完成。具体原因可在执行详情中查看。"
       : goal.status === "blocked" ? "这次检查尚未完成，暂时无法继续。"
-      : goal.status === "waiting_user" ? "这次检查尚未完成，需要你补充信息后才能继续。"
+      : goal.status === "waiting_user" && this.pendingInteraction(goal.sessionId) ? "需要你回答当前问题后继续。"
       : goal.status === "paused" ? "这次检查还没完成，已暂停。" : "这部分工作还没完成。";
-    // The role channel already contains the Worker reply. Only Pilot needs a copy.
+    const worker = this.store.require<Worker>("superWorkers", goal.workerId);
+    const delivery = this.store.get<{ outcome: string; summary: string }>("superDeliveries", digest([goal.id, worker.generation]));
+    // An explicit partial business report is already truthful about what remains.
+    // Natural prose alone cannot turn an unaccepted task into a successful report.
+    if (!error && goal.status !== "cancelled" && delivery?.outcome === "partial")
+      return { body: delivery.summary, channelBody: reply === delivery.summary ? null : delivery.summary };
     return { body: reply ? `${notice}\n\n${reply}` : notice, channelBody: notice };
   }
   private deliverReports() {
@@ -878,28 +917,12 @@ export class LakeSuperagent implements AgentHost {
     }
   }
   private projectRouterRequest<T>(projectId: string, request: T): T {
-    // Keep original ZCode archives. Only complete, host-authored old message
-    // groups whose input events were consumed may be omitted from this request.
-    const value = request as any;
-    if (!Array.isArray(value?.messages)) return request;
+    // Current input already contains bounded channel dialogue and report facts.
+    // Remove only acknowledged complete SDK groups, retaining original archives.
+    const project = this.store.require<SuperProject>("superProjects", projectId);
     const markers = this.store.list<any>("superRouterArchives").filter((entry) => entry.projectId === projectId);
-    const messages = [...value.messages], keep = messages.map(() => true);
-    for (let index = 0; index < messages.length; index++) {
-      const message = messages[index];
-      if (message.role !== "user") continue;
-      const content = typeof message.content === "string" ? message.content : Array.isArray(message.content) ? message.content.filter((part: any) => part.type === "text").map((part: any) => part.text).join("") : "";
-      const marker = markers.find((marker) => marker.hash === digest(content));
-      if (!marker || !marker.eventIds.every((eventId: string) => this.store.require<InputEvent>("superInputs", eventId).disposition === "routed")) continue;
-      let end = index + 1; while (end < messages.length && messages[end].role !== "user" && messages[end].role !== "system") end++;
-      const calls = new Set<string>(), results = new Set<string>();
-      for (const item of messages.slice(index, end)) for (const part of Array.isArray(item.content) ? item.content : []) {
-        if (part.type === "tool-call") calls.add(part.toolCallId);
-        if (part.type === "tool-result") results.add(part.toolCallId);
-      }
-      if (calls.size !== results.size || [...calls].some((call) => !results.has(call))) continue;
-      for (let at = index; at < end; at++) keep[at] = false;
-    }
-    return { ...value, messages: messages.filter((_: unknown, index: number) => keep[index]) } as T;
+    const routed = new Set(this.store.list<InputEvent>("superInputs").filter((event) => event.projectId === projectId && event.disposition === "routed").map((event) => event.id));
+    return projectRouterHistory(request, markers, routed, this.batches.get(project.routerSessionId)?.input);
   }
   async stopTask(taskId: string, pause = false) {
     const goal = this.ledger.get(taskId), worker = this.store.require<Worker>("superWorkers", goal.workerId);
@@ -916,8 +939,8 @@ export class LakeSuperagent implements AgentHost {
     if (input.command === "cancel" || input.command === "pause") await this.stopTask(goal.id, input.command === "pause");
     else if (input.command === "resume") {
       const worker = this.store.require<Worker>("superWorkers", goal.workerId); this.role(worker.projectId, worker.roleId);
-      if (terminal(goal.status) || worker.state === "active" || this.ledger.unresolved(goal.id) || goal.modelRounds >= goal.roundLimit || Date.parse(goal.deadlineAt) <= Date.now())
-        throw new HttpError(409, "Original task limits or unresolved operations prohibit resume");
+      if (terminal(goal.status) || worker.state === "active" || goal.modelRounds >= goal.roundLimit || Date.parse(goal.deadlineAt) <= Date.now())
+        throw new HttpError(409, "Original task limits prohibit resume");
       goal.status = "running"; this.ledger.save(goal); worker.state = "queued";
       this.store.put("superWorkers", worker.id, worker);
       this.store.put("superHumanControls", id(), { sessionId, goalId: goal.id, command: "resume", revision: input.revision, at: now() });
@@ -984,7 +1007,7 @@ export class LakeSuperagent implements AgentHost {
     }
     const page = entries.slice(offset, offset + 50), last = page.at(-1);
     return { channel: this.channelView(channel), entries: page.reverse(), workers,
-      active: workers.filter((worker) => this.active.has(worker.id) || !!this.workerFor(worker.sessionId)&&(!!this.store.view(worker.sessionId).pending || !!this.store.view(worker.sessionId).question || !!this.ssh?.prompt(worker.sessionId)))
+      active: workers.filter((worker) => this.active.has(worker.id) || this.pendingInteraction(worker.sessionId))
         .map((worker) => this.decorate(this.store.snapshot(worker.sessionId))),
       routing: this.store.list<InputEvent>("superInputs").some((event) => event.preferredRoleId === channel.roleId && event.disposition === "pending"),
       queued: workers.filter((worker) => worker.assignmentState === "queued").length,

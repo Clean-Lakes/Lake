@@ -109,7 +109,9 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    const worker = workers[0], task = worker?.task;
    const name = channel?.roleName ?? worker!.roleName;
    const selected = channel ? channel.roleId === viewedRole : worker?.sessionId === selectedId;
-   const needsConfirmation = channel ? channel.needsConfirmation === true : workers.some(row => row.task.state === 'waiting_user');
+   // Only the host can attest that a live, source-bound interaction exists.
+   // A task's waiting state (including older protocol snapshots) is not one.
+   const needsConfirmation = channel?.needsConfirmation === true;
    const running = channel ? channel.running === true : task?.state === 'running';
    const replyActivity=activity&&(activity.sessionId===channel?.sessionId||workers.some(row=>row.sessionId===activity.sessionId))?activity.state:undefined;
    const preparing = channel?.preparing === true;

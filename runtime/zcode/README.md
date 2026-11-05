@@ -62,3 +62,13 @@ Node 命令须使用准备好的 24.14.0。测试经过真实 ZCode 源码与本
 本轮准确源码 SHA、签名进程检查、界面截图与未验证项见[阶段验证记录](../../docs/validation/zcode-typescript-candidate/README.md)。
 
 持续终端与 MCP/Skills 增量的实际范围、36 项隔离回归和 Dev 实测另见[验证记录](../../docs/validation/zcode-typescript-candidate/terminal-extensions.md)。本机 PTY 使用随包签名的 node-pty 1.1.0 原生 addon/启动程序，macOS 无需系统 Node；该记录保留当时的本机 PTY 水位；后续 SSH/确认入口修复见[SSH 增量记录](../../docs/validation/zcode-typescript-candidate/ssh-confirmation.md)，Agent 接管仍待移植。
+
+## 普通任务与对话续派
+
+TS Dev 的 Router 工作集携带当前来源频道最近四轮对话、最新专员公开报告、准确任务引用及实际适配器/项目资源能力摘要；旧阻碍单独标注为需重查的历史信息。工作集保持 16 KiB 上限，原 SDK 档案不删除。续派返回当前 queued/running/needs_input/limit_reached 结果，模型不能把“已记录”当作“已执行”。
+
+普通新任务采用 `host_managed`：模型直接选择业务工具，宿主自动建立步骤和 attempt、记录工具回执；`work_finish` 必须提供 completed/partial 和业务报告。completed 仍须当前 invocation 的真实成功业务回执，目录发现、失败、旧回执和自然语言不能制造验收；partial 保留具体业务结果而不附加机械流程回执。Plan 与旧显式复杂计划保持原步骤契约。只有旧 TS default 单步、未验收任务可通过留存原记录的兼容路径接管，旧 Go 任务不恢复执行。
+
+未知副作用仍保留原操作身份并禁止重放；独立且宿主证明只读的诊断不再被整个任务/项目一刀切拦住。MCP 标注不能证明只读。具体执行继续核对当前权限、配置/凭据版本、主机指纹和实际审批。频道“需确认”仅来自真实待处理交互。
+
+见 [实施计划](../../plan/refactor-zcode-conversation-runtime-1.md)及 [对话执行验收](../../docs/validation/zcode-typescript-candidate/conversation-runtime.md)。
