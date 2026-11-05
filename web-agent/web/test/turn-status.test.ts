@@ -49,7 +49,7 @@ test("current compaction has one live footer even when its card is hidden from t
  const html=renderToStaticMarkup(createElement(AITranscript,{snapshot}));
  assert.equal(html.split("正在压缩上下文…").length-1,1);
  assert.equal((html.match(/class="reply-duration /g)||[]).length,1);
- assert.ok(html.includes('thinking-buoys')&&!html.includes('reply-duration-spinner')&&!html.includes('status-text--active'));
+ assert.ok(html.includes('turn-activity-mark')&&html.includes('reply-duration-spinner')&&html.includes('status-text--active'));
  assert.ok(html.includes('title="正在压缩上下文 · 已处理 '),'the actual compaction state remains available on hover');
 });
 test("unverified and background results stay honest; missing endpoints never invent elapsed time",()=>{

@@ -89,12 +89,12 @@
   background:var(--surface-hover);
   pointer-events:none;
 }
-.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status .turn-status-mark {
+.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status:not(.is-thinking) .turn-status-mark {
   position:absolute;
   inset-inline-start:0;
 }
 
-/* A quiet typing bubble takes the same column as the next assistant reply. */
+/* Waiting status shares the next reply’s identity column, without a bubble. */
 .reply-duration.is-thinking { position:relative; min-height:44px; padding:0 0 0 var(--reply-avatar-column,40px); border:0; }
 .ai-turn > .turn-status.is-thinking { padding-inline-start:var(--reply-avatar-column,40px); }
 .ai-turn > .turn-status.is-thinking.without-avatar,
@@ -103,26 +103,5 @@
 .turn-thinking-avatar .response-identity { margin:0; }
 .turn-thinking-avatar .response-identity > strong { display:none; }
 .turn-thinking-avatar .response-avatar { width:var(--reply-avatar-size,28px); height:var(--reply-avatar-size,28px); }
-.turn-thinking-bubble { display:inline-flex; align-items:center; justify-content:center; flex:none; width:76px; height:44px; padding:0; border:0; border-radius:var(--radius-window); corner-shape:var(--corner-window); background:var(--assistant-message-background); color:var(--foreground); }
 .is-thinking > .turn-duration-disclosure { width:fit-content; max-width:100%; border-radius:var(--radius-window); corner-shape:var(--corner-window); }
 .is-thinking .turn-current-step { flex:0 1 auto; }
-/* White-banded fishing floats, waterline and reflection at chat scale. */
-.thinking-buoys { --buoy-moss:var(--agent-investigator); --buoy-shade:color-mix(in srgb,var(--buoy-moss) 75%,var(--foreground)); --buoy-glint:color-mix(in srgb,var(--buoy-moss) 50%,var(--surface)); position:relative; display:flex; justify-content:space-between; flex:none; width:46px; height:23px; color:var(--buoy-moss); isolation:isolate; }
-.thinking-buoys-pond { position:absolute; z-index:-1; left:-6px; right:-6px; top:11px; height:10px; border-radius:50%; background:radial-gradient(ellipse,color-mix(in srgb,currentColor 10%,transparent),color-mix(in srgb,currentColor 4%,transparent) 55%,transparent 75%); }
-.thinking-buoys-float { display:block; position:relative; width:10px; height:23px; flex:none; --buoy-phase:-3.2s; }
-.thinking-buoys-float:nth-of-type(3) { --buoy-phase:-1.9s; }
-.thinking-buoys-float:nth-of-type(4) { --buoy-phase:-.6s; }
-.thinking-buoys-above { position:absolute; z-index:3; left:0; top:0; width:10px; height:15px; overflow:hidden; }
-.thinking-buoys-body { display:block; position:absolute; left:1px; top:5px; width:8px; height:11px; border-radius:48% 48% 36% 36%; background:linear-gradient(90deg,var(--buoy-glint),var(--buoy-moss) 45%,var(--buoy-shade)); transform-origin:50% 90%; animation:thinking-buoy-bob 3.9s ease-in-out var(--buoy-phase) infinite; }
-.thinking-buoys-body::before { content:""; position:absolute; left:3.25px; top:-2px; width:1.5px; height:3px; background:var(--buoy-shade); border-radius:1px 1px 0 0; }
-.thinking-buoys-body::after { content:""; position:absolute; left:0; right:0; top:4px; height:2px; background:light-dark(#f2f4e8,#e4eada); opacity:.92; }
-.thinking-buoys-body>b { position:absolute; left:1.5px; top:1.2px; width:1px; height:2px; border-radius:50%; background:var(--buoy-glint); opacity:.75; }
-.thinking-buoys-ring { position:absolute; z-index:2; left:-2px; top:12.8px; width:14px; height:4px; border:0 solid color-mix(in srgb,currentColor 36%,transparent); border-bottom-width:.65px; border-radius:50%; animation:thinking-buoy-wake 3.9s ease-in-out var(--buoy-phase) infinite; }
-.thinking-buoys-ring-outer { left:-4px; top:12px; width:18px; height:6px; border-bottom-width:.5px; border-color:color-mix(in srgb,currentColor 17%,transparent); animation-name:thinking-buoy-wake-outer; }
-.thinking-buoys-reflection { position:absolute; z-index:1; left:2px; top:16px; width:6px; height:5px; background:linear-gradient(var(--buoy-moss),transparent); border-radius:35% 35% 50% 50%; opacity:.15; transform-origin:center top; animation:thinking-buoy-reflect 3.9s ease-in-out var(--buoy-phase) infinite; }
-@keyframes thinking-buoy-bob { 0%,100% { transform:translateY(.9px) rotate(-4deg); } 48% { transform:translateY(-1.4px) rotate(5deg); } }
-@keyframes thinking-buoy-wake { 0%,100% { transform:scaleX(1.06); opacity:.9; } 48% { transform:scaleX(.82); opacity:.45; } }
-@keyframes thinking-buoy-wake-outer { 0%,100% { transform:scale(.95); opacity:.35; } 42% { opacity:.55; } 70% { transform:scale(1.16,.92); opacity:0; } }
-@keyframes thinking-buoy-reflect { 0%,100% { transform:scale(.9,.6); opacity:.18; } 48% { transform:scale(1.04,1.05); opacity:.09; } }
-.thinking-buoys[data-hidden] * { animation-play-state:paused!important; }
-@media(prefers-reduced-motion:reduce) { .thinking-buoys * { animation:none!important; } }

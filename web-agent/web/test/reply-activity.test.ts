@@ -21,7 +21,7 @@ test('plain streamed replies have no extra activity row while model waiting reta
  assert.ok(!render(s).includes('正在生成回复')&&!render(s).includes('reply-duration-spinner'));
  s.ai!.cards=[];assert.equal(hasActivity(render(s)),false);
  assert.equal((render(s).match(/aria-label="执行状态"/g)??[]).length,1);
- assert.ok(render(s).includes('thinking-buoys'));
+ assert.ok(render(s).includes('turn-activity-mark'));
  for(const status of ['completed','failed','cancelled','waiting_approval'])assert.equal(hasActivity(render(snapshot(status))),false);
 });
 
