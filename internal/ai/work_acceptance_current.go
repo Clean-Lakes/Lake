@@ -134,6 +134,10 @@ func currentWorkAcceptanceTx(tx *gorm.DB, goal WorkGoal, stepID string, record w
 	if len(operations) == 0 {
 		return security.AcceptanceInsufficient, nil
 	}
+	if step.VerificationMode == "tool_results" {
+		state, _, err := verifyWorkToolResultsTx(tx, goal, stepID, attempt, operations, allowed)
+		return state, err
+	}
 	var evidence []security.Evidence
 	for _, op := range operations {
 		if op.Status != "succeeded" || op.GoalID != goal.ID || op.SessionID != goal.SessionID || op.StepID != stepID || op.GoalRevision != binding.GoalRevision || op.PlanRevision != binding.PlanRevision || op.StepRevision != binding.StepRevision || op.SecurityTaskID != attempt.SecurityTaskID || op.RootTurnID != attempt.RootTurnID || op.OwnerID == "" || op.OwnerGeneration < 1 {

@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/Clean-Lakes/Lake/internal/extensions"
 	"github.com/Clean-Lakes/Lake/internal/security"
+	"gorm.io/gorm"
 )
 
 func TestSuperWorkerResourceIndexAndMissingTargetCannotConfirmScope(t *testing.T) {
@@ -50,15 +52,18 @@ func TestSuperWorkerResourceIndexAndMissingTargetCannotConfirmScope(t *testing.T
 }
 
 func TestSuperWorkerUsesOriginalGoalAndHostConfirmation(t *testing.T) {
-	for _, paused := range []bool{false, true} {
-		t.Run(fmt.Sprintf("paused_proposal_%v", paused), func(t *testing.T) { testSuperWorkerConfirmedProposal(t, paused) })
+	for _, plan := range []bool{false, true} {
+		for _, paused := range []bool{false, true} {
+			t.Run(fmt.Sprintf("plan_%v_paused_%v", plan, paused), func(t *testing.T) { testSuperWorkerPlan(t, plan, paused) })
+		}
 	}
 }
 
-func testSuperWorkerConfirmedProposal(t *testing.T, paused bool) {
+func testSuperWorkerPlan(t *testing.T, plan, paused bool) {
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
 	home := t.TempDir()
+	var plannedItem string
 	if err := extensions.NewStore(home).SaveSkill("release-count", "Test instructions for counting releases.", true); err != nil {
 		t.Fatal(err)
 	}
@@ -84,13 +89,18 @@ func testSuperWorkerConfirmedProposal(t *testing.T, paused bool) {
 				t.Errorf("missing confirmed plan item: %s", lastToolResult)
 				return response("No plan to run.")
 			}
+			plannedItem = goal.Items[0].ID
 			return response("", Call{ID: "start", Name: "work_update", Arguments: js(map[string]any{"item_id": goal.Items[0].ID, "status": "running"})})
 		case 4:
 			return response("", Call{ID: "skill", Name: "load_skill", Arguments: `{"name":"release-count"}`})
-		default:
-			if n == 5 && !strings.Contains(lastToolResult, "Test instructions for counting releases.") {
+		case 5:
+			if !strings.Contains(lastToolResult, "Test instructions for counting releases.") {
 				t.Errorf("Worker did not receive the project Skill: %s", lastToolResult)
 			}
+			return response("", Call{ID: "finish-step", Name: "work_update", Arguments: js(map[string]any{"item_id": plannedItem, "status": "completed", "evidence_ids": []string{"skill"}})})
+		case 6:
+			return response("", Call{ID: "finish-goal", Name: "work_finish", Arguments: `{"summary":"The release counting procedure was read."}`})
+		default:
 			return response("The release counting procedure was read.")
 		}
 	})
@@ -150,6 +160,11 @@ func testSuperWorkerConfirmedProposal(t *testing.T, paused bool) {
 			t.Fatal(err)
 		}
 	}
+	if plan {
+		if err := db.Model(&superWorkerRow{}).Where("id = ?", w.ID).Update("conversation_mode", ModePlan).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 	p := DefaultPermissions()
 	if err := e.ConfigureTaskWorker(ctx, "project", w.ID, Config{Model: m, SecurityProjectID: "project", Profile: "core", MaxSteps: 12, Permissions: &p, CredentialDir: filepath.Join(home, "secrets"), AssetRef: "unrelated", Assets: []Asset{{ID: "unrelated", Kind: "ssh", Name: "Unrelated host"}}}); err != nil {
 		t.Fatal(err)
@@ -174,17 +189,22 @@ func testSuperWorkerConfirmedProposal(t *testing.T, paused bool) {
 			done <- e.StartTaskWorker(ctx, "project", w.ID)
 		}
 	}()
+	if plan {
+		select {
+		case id := <-questions:
+			if err := e.ReplyQuestion(w.SessionID, id, map[string][]string{"work_contract": {securityPlanConfirmLabel}}); err != nil {
+				t.Fatal(err)
+			}
+		case err := <-done:
+			t.Fatal("Worker skipped Plan confirmation", err)
+		case <-time.After(10 * time.Second):
+			t.Fatal("Worker did not present Plan confirmation")
+		}
+	}
+
 	select {
 	case id := <-questions:
-		if err := e.ReplyQuestion(w.SessionID, id, map[string][]string{"work_contract": {securityWorkConfirmLabel}}); err != nil {
-			t.Fatal(err)
-		}
-	case err := <-done:
-		t.Fatal("Worker skipped original host confirmation", err)
-	case <-time.After(10 * time.Second):
-		t.Fatal("Worker did not present confirmation")
-	}
-	select {
+		t.Fatal("ordinary work or result verification asked for confirmation", id)
 	case err := <-done:
 		if err != nil {
 			t.Fatal(err)
@@ -196,7 +216,7 @@ func testSuperWorkerConfirmedProposal(t *testing.T, paused bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if goal.closure == nil || goal.OriginRootTurnID != w.OriginRootTurnID || goal.Status == "completed" || len(goal.ResourceBindings) != 0 || goal.Binding.AssetRef != "" {
+	if goal.closure == nil || goal.OriginRootTurnID != w.OriginRootTurnID || goal.Status != "completed" || len(goal.ResourceBindings) != 0 || goal.Binding.AssetRef != "" {
 		t.Fatal("goal identity or acceptance changed", goal)
 	}
 	var count int64
@@ -206,6 +226,64 @@ func testSuperWorkerConfirmedProposal(t *testing.T, paused bool) {
 	var operations []nativeOperation
 	if err = db.Where("session_id = ?", w.SessionID).Find(&operations).Error; err != nil || len(operations) != 1 || operations[0].Tool != "load_skill" || operations[0].CallID != "skill" || operations[0].Status != "succeeded" || operations[0].ResourceID != "" || operations[0].AttemptID == "" {
 		t.Fatal("expected exactly one project-scoped Skill operation after confirmation", len(operations), err)
+	}
+
+	detail, err := e.SuperTaskDetail(w.SessionID, w.TaskID)
+	if err != nil || detail.Task.State != "completed" || detail.Task.AcceptanceState != "pass" {
+		t.Fatalf("task did not automatically verify: %+v %v", detail.Task, err)
+	}
+
+	var humanCount int64
+	if err := db.Model(&workAcceptanceRecord{}).Where("session_id = ? AND verifier_version = ?", w.SessionID, "human/1").Count(&humanCount).Error; err != nil || humanCount != 0 {
+		t.Fatal("automatic work manufactured human acceptance", humanCount, err)
+	}
+	var confirmations int64
+	if err := db.Model(&securityConfirmationQuestionRow{}).Where("session_id = ?", w.SessionID).Count(&confirmations).Error; err != nil || confirmations != int64(map[bool]int{false: 0, true: 1}[plan]) {
+		t.Fatal("unexpected host confirmation history", confirmations, err)
+	}
+	var record workAcceptanceRecord
+	if err := db.Where("goal_id = ? AND state = ? AND scope = ?", goal.ID, "pass", "step").First(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	op := operations[0]
+	cases := map[string]func(*gorm.DB) error{
+		"missing receipt": func(tx *gorm.DB) error { return tx.Where("operation_id = ?", op.ID).Delete(&nativeEvidence{}).Error },
+		"wrong call": func(tx *gorm.DB) error {
+			return tx.Model(&nativeEvidence{}).Where("operation_id = ?", op.ID).Update("call_id", "another-call").Error
+		},
+		"error result": func(tx *gorm.DB) error {
+			return tx.Model(&nativeEvidence{}).Where("operation_id = ?", op.ID).Update("data", `{"isError":true,"content":[{"type":"text","text":"failed"}]}`).Error
+		},
+		"future receipt": func(tx *gorm.DB) error {
+			return tx.Model(&nativeEvidence{}).Where("operation_id = ?", op.ID).Update("at", time.Now().Add(time.Hour)).Error
+		},
+		"unknown operation": func(tx *gorm.DB) error {
+			return tx.Model(&nativeOperation{}).Where("id = ?", op.ID).Update("status", "unknown").Error
+		},
+		"substituted attempt": func(tx *gorm.DB) error {
+			return tx.Model(&nativeOperation{}).Where("id = ?", op.ID).Update("attempt_id", "another-attempt").Error
+		},
+		"recovered store": func(tx *gorm.DB) error {
+			return tx.Model(&securityProjectPolicyRow{}).Where("project_id = ?", goal.closure.ProjectID).Update("recovery_epoch", "new-epoch").Error
+		},
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			rollback := errors.New("rollback fixture")
+			err := db.Transaction(func(tx *gorm.DB) error {
+				if err := mutate(tx); err != nil {
+					return err
+				}
+				state, err := currentWorkAcceptanceTx(tx, goal, goal.Items[0].ID, record)
+				if err != nil || state != security.AcceptanceInsufficient {
+					t.Errorf("stale or absent receipt accepted: %s %v", state, err)
+				}
+				return rollback
+			})
+			if !errors.Is(err, rollback) {
+				t.Fatal(err)
+			}
+		})
 	}
 
 }

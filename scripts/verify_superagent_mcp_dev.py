@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from urllib.error import HTTPError
 
 from dev_acceptance import Lake, require
 
@@ -43,9 +44,9 @@ class QuietHTTP(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(data).encode())
 
 
-def exercise(binary, home, native):
+def exercise(binary, home, native, plan=False):
     # Only the loopback MCP returns the receipt. Check it in the actual tool
-    # result and durable operation before independently accepting the task.
+    # result and durable operation; ordinary tasks must not ask for plan/acceptance.
     marker = os.urandom(16).hex()
     requests = []
     tool_name = 'read_release_count'
@@ -92,7 +93,8 @@ def exercise(binary, home, native):
         role = 'router' if 'route_work' in names else 'worker'
         messages = '\n'.join(str(message.get('content', '')) for message in request['messages'])
         title, = [label for label in projects if label in messages]
-        count = title == count_title
+        inherited = title == count_title
+        count = inherited and not plan
         key = (role, title, title in retries)
         steps[key] = n = steps.get(key, 0) + 1
         if role == 'router':
@@ -108,7 +110,7 @@ def exercise(binary, home, native):
             # path. No task records or runtime counters are edited by the fixture.
             return 'The release query needs a plan before it can run.', None, {}
         if n == 1:
-            require((server_id in messages) == count, 'Worker planning index lost project scope')
+            require((server_id in messages) == inherited, 'Worker planning index lost project scope')
             return '', 'work_begin', {'title': title, 'items': [{'id': 'verify', 'title': title}], 'asset_refs': []}
         completion = 6 if count else 4
         if n == 2 or n == completion:
@@ -118,7 +120,8 @@ def exercise(binary, home, native):
                 if count:
                     require(marker in last, 'the actual MCP result did not reach the Worker: ' + last[:400])
                 else:
-                    require(json.loads(last).get('servers') == [], 'the opted-out project saw a global server: ' + last[:400])
+                    servers = json.loads(last).get('servers')
+                    require([entry['id'] for entry in servers] == ([server_id] if inherited else []), 'project catalog lost its inheritance scope: ' + last[:400])
             return '', 'work_update', {'item_id': goal['items'][0]['id'], 'status': 'running' if n == 2 else 'completed'}
         if n == 3:
             return '', 'list_mcp_servers', {}
@@ -130,7 +133,7 @@ def exercise(binary, home, native):
             tool, = json.loads(last)['tools']
             require(tool['name'] == tool_name, 'the advertised MCP tool was missing from discovery')
             return '', 'call_mcp_tool', {'server_id': server_id, 'tool': tool['name'], 'arguments': {}}
-        summary = 'Verified 17 fixture releases.' if count else 'Verified an empty project MCP catalog.'
+        summary = 'Verified 17 fixture releases.' if count else 'Verified the project MCP catalog.'
         if n == completion + 1:
             return '', 'work_finish', {'summary': summary}
         return summary, None, {}
@@ -158,8 +161,14 @@ def exercise(binary, home, native):
 
     def run_worker(lake, title):
         base = '/api/projects/' + projects[title]
-        count = title == count_title
+        inherited = title == count_title
+        count = inherited and not plan
         pilot = lake.api(base + '/superagent', 'POST', {})['routerSessionId']
+        if plan:
+            try:
+                lake.api('/api/sessions/' + pilot + '/ai/mode', 'POST', {'mode': 'plan'})
+            except HTTPError as exc:
+                raise AssertionError('fixture Plan configuration rejected: ' + exc.read().decode()) from exc
         lake.api('/api/sessions/' + pilot + '/messages', 'POST', {'text': title})
         answered, approved = set(), set()
         until = time.monotonic() + 100
@@ -184,19 +193,13 @@ def exercise(binary, home, native):
                 require(worker['task']['taskId'] == retries[title]['taskId'] and sid == retries[title]['sessionId'], 'retry replaced the original task or Worker')
             question = view.get('question')
             if question and question['id'] not in answered:
-                answers = {}
-                for item in question['questions']:
-                    require(item['id'] in ('work_contract', 'manual_acceptance'), 'unexpected fixture question ' + item['id'])
-                    if item['id'] == 'manual_acceptance':
-                        require(requests == [tool_name], 'manual acceptance preceded the single fixture call')
-                        tool = 'call_mcp_tool' if count else 'list_mcp_servers'
-                        evidence = rows("SELECT result FROM native_operations WHERE session_id=? AND tool=? AND status='succeeded'", (sid, tool))
-                        require(len(evidence) == 1, 'missing or duplicate durable execution evidence')
-                        if count:
-                            require(marker in evidence[0][0], 'receipt missing from durable evidence')
-                    choice = item['options'][0]
-                    answers[item['id']] = [choice if isinstance(choice, str) else choice['label']]
-                lake.api('/api/sessions/' + sid + '/ai/questionReply', 'POST', {'id': question['id'], 'answers': answers})
+                require(plan and len(question['questions']) == 1, 'ordinary task unexpectedly requested confirmation')
+                item = question['questions'][0]
+                require(item['id'] == 'work_contract', 'automatic result verification asked for manual acceptance')
+                choice = item['options'][0]
+                label = choice if isinstance(choice, str) else choice['label']
+                require(label == '确认计划并继续', 'Plan mode promised manual acceptance')
+                lake.api('/api/sessions/' + sid + '/ai/questionReply', 'POST', {'id': question['id'], 'answers': {'work_contract': [label]}})
                 answered.add(question['id'])
             for pending in view.get('pendingApprovals') or ([view['pending']] if view.get('pending') else []):
                 if pending['id'] in approved:
@@ -217,7 +220,13 @@ def exercise(binary, home, native):
             time.sleep(.1)
         else:
             raise AssertionError('timed out at fixture steps ' + str(steps))
-        require(len(answered) == 2, 'original task contract or independent acceptance missing')
+        tool = 'call_mcp_tool' if count else 'list_mcp_servers'
+        evidence = rows("SELECT result FROM native_operations WHERE session_id=? AND tool=? AND status='succeeded'", (sid, tool))
+        require(len(evidence) == 1, 'missing or duplicate durable execution evidence')
+        if count:
+            require(marker in evidence[0][0], 'receipt missing from durable evidence')
+        require(not rows("SELECT 1 FROM work_acceptance_records WHERE session_id=? AND verifier_version='human/1'", (sid,)), 'automatic task manufactured human acceptance')
+        require(len(answered) == int(plan), 'missing or repeated Plan confirmation')
         require(len(approved) == int(count), 'unexpected number of operation approvals')
         return sid
 
@@ -234,10 +243,10 @@ def exercise(binary, home, native):
                      {'actionId': 'enable-project-inheritance', 'expectedRevision': 0, 'enabled': True})
             server_id = lake.api('/api/settings/mcp', 'POST', {'name': 'release-fixture', 'enabled': True, 'transport': 'http', 'url': mcp_url})['id']
             workers = {run_worker(lake, title) for title in (count_title, catalog_title)}
-            require(len(workers) == 2 and requests == [tool_name], 'fixture call was duplicated or Worker session reused')
+            require(len(workers) == 2 and requests == ([] if plan else [tool_name]), 'fixture call was duplicated or Worker session reused')
             require(not rows('SELECT 1 FROM security_mcp_bindings'), 'unexpected materialized per-server binding')
             return {'workerCount': len(workers), 'optedOutServerCount': 0, 'assetRefs': [], 'mcpCalls': len(requests),
-                    'resumedOriginalProposal': count_title in retries, 'manualBindings': 0, 'humanQuestions': 4, 'operationApprovals': 1, 'verifiedReceipt': True}
+                    'resumedOriginalProposal': count_title in retries, 'manualBindings': 0, 'humanQuestions': 2 if plan else 0, 'planMode': plan, 'operationApprovals': 0 if plan else 1, 'verifiedReceipt': not plan}
         finally:
             try:
                 if native:
@@ -251,6 +260,7 @@ def main():
     parser.add_argument('--binary', type=Path, required=True)
     parser.add_argument('--native', type=Path, help='installed Lake Dev executable, using its bundled backend')
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--plan', action='store_true', help='confirm readonly plans once per Worker and automatically verify catalog results; preserve Plan execution restrictions')
     args = parser.parse_args()
     binary = args.binary.resolve(strict=True)
     if args.native:
@@ -259,7 +269,7 @@ def main():
     if sys.platform == 'darwin':
         subprocess.run(['codesign', '--verify', '--strict', str(binary)], check=True)
     with tempfile.TemporaryDirectory(prefix='lake-super-mcp-dev.') as directory:
-        report = exercise(binary, Path(directory), args.native)
+        report = exercise(binary, Path(directory), args.native, args.plan)
     report.update(
         passed=True, native=bool(args.native),
         sourceDirty=bool(subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip()),

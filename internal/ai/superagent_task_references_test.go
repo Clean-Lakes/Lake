@@ -157,7 +157,7 @@ func resourceConnectionForTest(t *testing.T, e *Engine, project string) int64 {
 	return rows[0].ConnectionRevision
 }
 
-func TestSuperComparisonHistoricalReadCreatesManualVerificationReceipt(t *testing.T) {
+func TestSuperComparisonHistoricalReadVerifiesReceiptWithoutAcceptingSource(t *testing.T) {
 	e, b, a, _, comparison, resource, _ := superComparisonEvidenceFixture(t)
 	policy, err := e.SecurityProjectPolicy(t.Context(), b.ProjectID)
 	if err != nil {
@@ -213,15 +213,10 @@ func TestSuperComparisonHistoricalReadCreatesManualVerificationReceipt(t *testin
 		if n == 5 {
 			return response("Historical source remains unknown and unaccepted; only one stored page was read.", Call{ID: "verify", Name: "work_update", Arguments: js(map[string]any{"item_id": g.Items[0].ID, "status": "completed", "evidence_ids": []string{"historical-read"}})})
 		}
-		var messages []struct{ Role, Content string }
-		_ = json.Unmarshal([]byte(js(input["messages"])), &messages)
-		for _, m := range messages {
-			if m.Role == "tool" && strings.Contains(m.Content, `"error"`) {
-				t.Log(m.Content)
-			}
+		if n == 6 {
+			return response("", Call{ID: "finish", Name: "work_finish", Arguments: `{"summary":"Historical page read; source remains unaccepted."}`})
 		}
-		t.Errorf("unexpected model retry %d", n)
-		return response("blocked")
+		return response("Historical page read; source remains unaccepted.")
 	})
 	defer closeModel()
 	if err := e.ConfigureTaskWorker(t.Context(), b.ProjectID, worker.ID, Config{Model: model, SecurityProjectID: b.ProjectID, Profile: "core", MaxSteps: 8}); err != nil {
@@ -241,31 +236,21 @@ func TestSuperComparisonHistoricalReadCreatesManualVerificationReceipt(t *testin
 			t.Error("worker did not drain")
 		}
 	}()
-	waitQuestion := func(kind string) *QuestionRequest {
-		t.Helper()
-		for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
-			s.mu.Lock()
-			q := s.state.View.Question
-			ready := nativeQuestionReady(q) && len(q.Questions) == 1 && q.Questions[0].ID == kind
-			s.mu.Unlock()
-			if ready {
-				return q
-			}
-			select {
-			case err := <-done:
-				t.Fatalf("worker ended before %s: %v", kind, err)
-			default:
-			}
-			time.Sleep(10 * time.Millisecond)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
 		}
-		t.Fatalf("missing %s question", kind)
-		return nil
+	case <-time.After(10 * time.Second):
+		t.Fatal("automatic comparison did not finish")
 	}
-	q := waitQuestion("work_contract")
-	if err := e.ReplyQuestion(comparison.SessionID, q.ID, map[string][]string{"work_contract": {securityWorkConfirmLabel}}); err != nil {
-		t.Fatal(err)
+	s.mu.Lock()
+	question := s.state.View.Question
+	s.mu.Unlock()
+	if nativeQuestionReady(question) {
+		t.Fatal("automatic comparison requested confirmation")
 	}
-	waitQuestion("manual_acceptance")
+
 	var op nativeOperation
 	if err := db.First(&op, "session_id = ? AND tool = ?", comparison.SessionID, "read_referenced_task_evidence").Error; err != nil {
 		t.Fatal(err)
@@ -282,16 +267,20 @@ func TestSuperComparisonHistoricalReadCreatesManualVerificationReceipt(t *testin
 	}
 	var passes int64
 	db.Model(&workAcceptanceRecord{}).Where("goal_id = ? AND state = 'pass'", comparison.TaskID).Count(&passes)
+	if passes != 2 {
+		t.Fatal("comparison did not verify its own receipt", passes)
+	}
+	db.Model(&workAcceptanceRecord{}).Where("goal_id = ? AND verifier_version = 'human/1'", comparison.TaskID).Count(&passes)
 	if passes != 0 {
-		t.Fatal("read granted acceptance")
+		t.Fatal("comparison manufactured human verification")
 	}
 	var commands int64
 	db.Model(&nativeOperation{}).Where("session_id = ? AND resource_id <> ''", comparison.SessionID).Count(&commands)
 	if commands != 0 {
 		t.Fatal("comparison executed host operation")
 	}
-	// Every receipt is invalidated by source changes, including while an
-	// independent human acceptance question is still open.
+	// Every receipt is invalidated by source changes, including after the
+	// comparison has verified its own historical read.
 	original := op.Result
 	var page TaskEvidencePage
 	_ = json.Unmarshal([]byte(op.Result), &page)
