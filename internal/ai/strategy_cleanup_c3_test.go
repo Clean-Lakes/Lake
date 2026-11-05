@@ -75,7 +75,7 @@ func TestC3ProductionRuntimeHasNoRetiredExecutionHooks(t *testing.T) {
 		"StrategyOutbox": true, "AckStrategyOutbox": true,
 		"PendingStrategySessions": true, "PersistedStrategyOutboxes": true,
 		"StrategyLearningInputBytes": true,
-		"StrategyUsageHistory":       true, "StrategyUsageRequest": true,
+		"StrategyUsageHistory":       true, "StrategyUsageRequest": true, "RecordedMemoryEvidenceAvailable": true,
 	}
 	files, err := filepath.Glob("*.go")
 	if err != nil {

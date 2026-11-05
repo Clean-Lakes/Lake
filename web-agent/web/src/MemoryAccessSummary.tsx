@@ -1,6 +1,6 @@
 import type {MemoryAccess} from '../../shared/contracts';
 import {DisclosureSummary} from './DisclosureSummary';
-import {memoryTime} from './projectMemoryState';
+import {memoryTime} from './memoryTime';
 export function MemoryAccessSummary({entries,onOpen}:{entries:MemoryAccess[];onOpen?:()=>void}){
  if(!entries.length)return null;
  const visible=[...new Map(entries.map(entry=>[`${entry.key}:${entry.revision}:${entry.kind}`,entry])).values()];

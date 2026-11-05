@@ -1,0 +1,18 @@
+{
+  "sourceCommit": "d13e3a223784fbc53e4be10c034228ea2a6931ac",
+  "backendSHA256": "659352fd0208ff2d0b5af217351bb09e5b143c7884425362243e3fecec972081",
+  "status": "passed",
+  "nativeUIEvaluated": false,
+  "modelConfigured": false,
+  "checks": [
+    "current_v1_crud",
+    "all_retired_methods_410",
+    "authentication_401",
+    "missing_project_404",
+    "cross_project_body_404",
+    "retired_calls_no_mutation",
+    "restart_parity",
+    "current_forget_clears_content"
+  ],
+  "retiredRequests": 20
+}

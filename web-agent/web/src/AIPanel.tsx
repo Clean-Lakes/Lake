@@ -119,13 +119,13 @@ export function TranscriptMessage({message,sessionId,resources,arrive=false,pend
           {message.role==='user'&&!!message.text&&<UserMessageCopy text={message.text}/>}
         </div>;
 }
-type TranscriptProps = {superTask?:SuperTask;onSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;onOpenMemory?:()=>void;sourceMessageId?:string;onSourceLocated?:()=>void;onOpenPlans?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
+type TranscriptProps = {superTask?:SuperTask;onSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;onOpenMemory?:()=>void;onOpenPlans?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
 export function AITranscript(props: TranscriptProps) {
   const {snapshot} = props;
   const resources = useMemo(() => (snapshot.resources ?? []).filter(resource => !resource.projectId || resource.projectId === snapshot.session.projectId), [snapshot.resources, snapshot.session.projectId]);
   return <ObjectReferencesProvider key={snapshot.session.id} resources={resources} tasks={snapshot.ai?.agentRuns}><AITranscriptContent {...props}/></ObjectReferencesProvider>;
 }
-function AITranscriptContent({ superTask,onSpecialist,assistantIdentity,onOpenMemory,sourceMessageId,onSourceLocated,snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh, onOpenPlans }: TranscriptProps) {
+function AITranscriptContent({ superTask,onSpecialist,assistantIdentity,onOpenMemory,snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh, onOpenPlans }: TranscriptProps) {
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
   // Retain an observed completion when a legacy turn has no saved timing and
@@ -165,15 +165,6 @@ function AITranscriptContent({ superTask,onSpecialist,assistantIdentity,onOpenMe
     const top = target ? container.scrollTop + target.getBoundingClientRect().top - container.getBoundingClientRect().top - 16 : container.scrollHeight;
     container.scrollTo({top: Math.max(0, top), behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"});
   }
-  const sourceLoads=useRef(0);
-  useEffect(()=>{sourceLoads.current=0},[sourceMessageId]);
-  useEffect(()=>{
-    if(!sourceMessageId||loading)return;
-    const target=document.getElementById(conversationTurnId(snapshot.session.id,sourceMessageId));
-    if(target){jumpTo(sourceMessageId);onSourceLocated?.();return}
-    if(before>0&&sourceLoads.current<10){sourceLoads.current++;void loadOlder();return}
-    setError(before>0?'来源轮次较早，请继续加载更早记录。':'来源轮次暂不可用；原会话仍可查看。');onSourceLocated?.();
-  },[sourceMessageId,before,cards.length,loading,snapshot.session.id]);
   const tail = groups.at(-1);
   const thinkingVisible = !!tail?.some(entry => entry.agentRun || entry.card && ["thinking", "operation", "shell"].includes(entry.card.type)) && ["running", "waiting_approval"].includes(snapshot.ai?.status || "");
   const latestUser = snapshot.messages.filter(message => message.role === "user").at(-1);

@@ -4,18 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"os"
 	"sort"
 )
-
-func (e *Engine) RecordedMemoryEvidenceAvailable(sessionID, evidenceID string) bool {
-	path, err := e.evidencePath(AgentEvidence{SessionID: sessionID, ID: evidenceID})
-	if err != nil {
-		return false
-	}
-	info, err := os.Lstat(path)
-	return err == nil && info.Mode().IsRegular() && info.Mode()&os.ModeSymlink == 0
-}
 
 type MemoryAccess struct {
 	Category       string `json:"category,omitempty"`
