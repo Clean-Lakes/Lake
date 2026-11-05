@@ -308,6 +308,7 @@ func (b *Server) roleChannelRoute(w http.ResponseWriter, r *http.Request, sessio
 		}
 		project := stringOf(b.Store.Session(session)["projectId"])
 		aiFailure(b.Engine.StopSpecialistChannel(r.Context(), project, session))
+		_ = b.syncSuperSpecialists(r.Context(), project)
 		b.Store.AddMessage(session, "system", "已停止本专员当前处理与待派发工作；原任务和操作记录保留，远端执行状态以原记录为准。", nil)
 		reply(w, 200, Object{"stopped": true})
 		return

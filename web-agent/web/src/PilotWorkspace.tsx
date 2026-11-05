@@ -102,11 +102,13 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilo
    const selected = channel ? channel.roleId === viewedRole : worker?.sessionId === selectedId;
    const needsConfirmation = channel?.needsConfirmation || workers.some(row => row.task.state === 'waiting_user');
    const running = channel ? channel.running === true : task?.state === 'running';
+   const preparing = channel?.preparing === true;
+   const activityLabel = running ? '执行中' : preparing ? '准备处理' : '';
    const cursor = channel?.completionCursor ?? '';
    const read = channel ? readMarks.get(readKey(channel)) : undefined;
    const unread = !!channel && !selected && cursor > (channel.seenCompletionCursor ?? '') &&
     cursor > (read?.requested ?? '') && cursor > (read?.acknowledged ?? '');
-   const status = [needsConfirmation && '需确认', running && '执行中', unread && '有已完成任务未读'].filter(Boolean).join(' · ') ||
+   const status = [needsConfirmation && '需确认', activityLabel, unread && '有已完成任务未读'].filter(Boolean).join(' · ') ||
     (task && task.state !== 'running' ? superTaskPresentation(task).label : task ? '暂无正在执行的任务' : '暂无任务');
    const label = `${name} · ${task?.title ?? (channel?.duties || '持续沟通')} · ${status}`;
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
@@ -115,7 +117,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilo
     <SuperRoleAvatar name={name}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{task?.title ?? (channel?.duties || '持续沟通')}</span></span>
     <span className="pilot-worker-status">
      {needsConfirmation && <span className="pilot-worker-confirmation">需确认</span>}
-     {running ? <span className="pilot-worker-running" role="img" aria-label="执行中"><Glyph name="loader" size={14} className="activity-indicator"/></span> :
+     {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><Glyph name="loader" size={14} className="activity-indicator"/></span> :
       unread && <span className="pilot-worker-unread" role="img" aria-label="有已完成任务未读"/>}
     </span>
    </button>;

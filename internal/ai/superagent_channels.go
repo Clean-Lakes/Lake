@@ -66,6 +66,7 @@ type SpecialistChannel struct {
 	CreatedAt            time.Time `json:"createdAt"`
 	NeedsConfirmation    bool      `json:"needsConfirmation,omitempty"`
 	Running              bool      `json:"running,omitempty"`
+	Preparing            bool      `json:"preparing,omitempty"`
 	CompletionCursor     string    `json:"completionCursor,omitempty"`
 	SeenCompletionCursor string    `json:"seenCompletionCursor,omitempty"`
 }
@@ -99,12 +100,49 @@ func (e *Engine) ListSpecialistChannels(ctx context.Context, project string) ([]
 	if err != nil {
 		return nil, err
 	}
+	preparing, err := specialistPreparations(db.WithContext(ctx), project)
+	if err != nil {
+		return nil, err
+	}
 	for i := range out {
 		a := activity[out[i].RoleID]
 		out[i].Running = a.Running
+		out[i].Preparing = preparing[out[i].RoleID]
 		out[i].CompletionCursor = a.completionCursor()
 	}
 	return out, nil
+}
+
+// Preparation is presentation, not an execution lease. Read exact role/source
+// bindings across all tasks, including work outside the recent-100 preview.
+// A retained blocked input or parked assignment alone is never live activity.
+func specialistPreparations(db *gorm.DB, project string) (map[string]bool, error) {
+	var roles []string
+	err := db.Raw(`SELECT DISTINCT role_id FROM (
+		SELECT w.role_id FROM superagent_workers w
+		JOIN superagent_assignments a ON a.worker_id=w.id AND a.project_id=w.project_id
+		JOIN native_work_goals g ON g.id=w.task_id AND g.session_id=COALESCE(NULLIF(w.goal_session_id,''),w.session_id)
+		JOIN superagent_events e ON e.id=COALESCE(NULLIF(a.input_event_id,''),w.source_event_id) AND e.project_id=w.project_id
+		WHERE w.project_id=? AND w.parent_worker_id='' AND a.state='queued'
+		  AND e.disposition IN ('pending','routed') AND g.status NOT IN ('completed','failed','cancelled')
+		  AND (g.status IN ('pending','idle','queued','running') OR a.invocation_kind IN ('human','human_recovery'))
+		UNION
+		SELECT c.role_id FROM superagent_role_channels c
+		JOIN superagent_channel_sources s ON s.channel_id=c.id
+		JOIN superagent_events e ON e.id=s.event_id AND e.project_id=c.project_id
+		WHERE c.project_id=? AND e.disposition IN ('pending','staged')
+		UNION
+		SELECT w.role_id FROM superagent_workers w
+		JOIN superagent_inbox i ON i.worker_id=w.id AND i.task_id=w.task_id
+		JOIN superagent_events e ON e.id=i.event_id AND e.project_id=w.project_id
+		WHERE w.project_id=? AND w.parent_worker_id='' AND i.mode='followup'
+		  AND i.delivered_at IS NULL AND i.consumed_at IS NULL AND e.disposition='pending'
+	)`, project, project, project).Scan(&roles).Error
+	out := make(map[string]bool, len(roles))
+	for _, role := range roles {
+		out[role] = true
+	}
+	return out, err
 }
 
 type specialistActivityRow struct {

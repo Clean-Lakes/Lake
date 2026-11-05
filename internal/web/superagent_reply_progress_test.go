@@ -54,6 +54,10 @@ func TestSuperWorkerDirectReplyProgress(t *testing.T) {
 	if err = b.Engine.FinishSuperUserRouting(t.Context(), b.superUserSource(pid, pilot), event.ID); err != nil {
 		t.Fatal(err)
 	}
+	queued := objects(apiTest(t, h, "GET", "/api/projects/"+pid+"/superagent", nil, 200)["channels"])
+	if len(queued) != 1 || queued[0]["preparing"] != true || queued[0]["running"] == true {
+		t.Fatal("queued specialist waited for provider startup before showing activity", queued)
+	}
 	domain, _, err := b.Engine.SuperProject(t.Context(), pid)
 	if err != nil {
 		t.Fatal(err)
@@ -71,6 +75,10 @@ func TestSuperWorkerDirectReplyProgress(t *testing.T) {
 	view := object(snapshot["ai"])
 	if view["status"] != "running" || view["replyStatus"] != "running" {
 		t.Fatal("live model response was not projected", view["status"])
+	}
+	live := objects(apiTest(t, h, "GET", "/api/projects/"+pid+"/superagent", nil, 200)["channels"])
+	if len(live) != 1 || live[0]["running"] != true {
+		t.Fatal("background specialist reply was invisible in Pilot sidebar", live)
 	}
 	if goal := object(object(snapshot["superagent"])["task"]); goal["state"] != goalState {
 		t.Fatal("reply presentation promoted the canonical task", goal["state"])
