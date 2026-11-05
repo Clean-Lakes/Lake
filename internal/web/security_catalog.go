@@ -152,7 +152,7 @@ func (b *Server) securityCatalogSnapshotUnchecked(ctx context.Context, query ai.
 			fail(403, "Session outside project")
 		}
 		if query.SessionID != "" {
-			options := b.Store.row("SELECT value FROM aiOptions WHERE sessionId=?", query.SessionID)
+			options := b.Store.row("SELECT value FROM aiOptions WHERE sessionId=?", b.Store.permissionOwnerLocked(query.SessionID))
 			if options != nil {
 				settings := object(parsed(stringOf(options["value"])))
 				out.HardLocalDeny = settings["denyLocalExecution"] == true

@@ -305,10 +305,11 @@ func loadSecurityEvaluation(tx *gorm.DB, o security.PreparedOperation, owner Exe
 	}
 
 	if in.Policy.Mode == "legacy" {
-		var legacy securityLegacySessionPolicyRow
-		if err := tx.First(&legacy, "session_id = ? AND project_id = ? AND store_id = ? AND recovery_epoch = ?", o.SessionID, o.ProjectID, o.StoreID, o.RecoveryEpoch).Error; err != nil {
+		legacy, source, err := effectiveLegacyPolicyTx(tx, o.ProjectID, o.SessionID, o.StoreID, o.RecoveryEpoch)
+		if err != nil {
 			return in, err
 		}
+		in.LegacyPolicySourceID = source
 		in.LegacyPolicyRevision = legacy.Revision
 	}
 	if err = applyLegacySessionPolicyTx(tx, &in); err != nil {

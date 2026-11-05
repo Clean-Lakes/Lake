@@ -75,6 +75,7 @@ func (e *Engine) PrepareSecurityOperation(ctx context.Context, request SecurityO
 			op.FormatVersion, op.RegistryVersion = security.DescriptorVersion, security.RegistryVersion
 			op.PolicyRevision, op.TargetRevision = snapshot.Policy.Revision, snapshot.TargetRevision
 			op.LegacyPolicyRevision = snapshot.LegacyPolicyRevision
+			op.LegacyPolicySourceID = snapshot.LegacyPolicySourceID
 			op.Resources = snapshot.Resources
 			if len(request.frozenResources) > 0 {
 				for _, resource := range op.Resources {

@@ -30,6 +30,9 @@ func testSuperHumanRecovery(t *testing.T, mode string) {
 	if _, err := e.ActivateSuperProject(ctx, "project", "pilot", nil); err != nil {
 		t.Fatal(err)
 	}
+	if err := e.CaptureSecurityLegacyPolicy(ctx, "project", "pilot", "web", Config{}); err != nil {
+		t.Fatal(err)
+	}
 	b := SuperSourceBinding{SourceID: "human", ProjectID: "project", Kind: "user", ActorRef: "owner", Revision: "1"}
 	if err := e.RegisterSuperSource(ctx, b); err != nil {
 		t.Fatal(err)

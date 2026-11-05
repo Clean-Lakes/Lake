@@ -6,6 +6,7 @@ import (
 )
 
 type Permissions struct {
+	SilentMCPCalls          bool `json:"silentMCPCalls"`
 	SilentReadFiles         bool `json:"silentReadFiles"`
 	SilentWriteFiles        bool `json:"silentWriteFiles"`
 	SilentReadSQL           bool `json:"silentReadSQL"`

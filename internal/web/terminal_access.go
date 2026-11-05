@@ -22,7 +22,7 @@ func (s *Store) projectTerminal(id, tid string) Object {
 }
 func permissionVersion(options Object) string {
 	p := Object{}
-	for _, key := range []string{"silentCommands", "silentTerminalCreation", "silentReadFiles", "silentWriteFiles", "silentReadSQL", "denyLocalExecution", "blockUnreferencedAssets"} {
+	for _, key := range []string{"silentCommands", "silentTerminalCreation", "silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentMCPCalls", "denyLocalExecution", "blockUnreferencedAssets"} {
 		p[key] = options[key]
 	}
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(jsonText(p))))

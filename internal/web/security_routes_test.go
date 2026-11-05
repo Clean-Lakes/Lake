@@ -84,6 +84,14 @@ func TestSecurityLegacyPolicyManagementRequiresCompleteSettingsAndCAS(t *testing
 		t.Fatal(changed)
 	}
 	apiTest(t, h, "PUT", path, Object{"actionId": "stale", "expectedRevision": before["Revision"], "permissions": permissions}, 409)
+	permissions["silentMCPCalls"] = true
+	updated := apiTest(t, h, "PUT", path, Object{"actionId": "auto-mcp", "expectedRevision": changed["Revision"], "permissions": permissions}, 200)
+	if object(updated["Permissions"])["silentMCPCalls"] != true {
+		t.Fatal("MCP setting was not persisted", updated)
+	}
+	delete(permissions, "silentMCPCalls")
+	permissions["unknown"] = true
+	apiTest(t, h, "PUT", path, Object{"actionId": "unknown", "expectedRevision": updated["Revision"], "permissions": permissions}, 400)
 }
 
 func TestSecurityCommandTargetManagementStaleDefinitionCanBeReconfirmed(t *testing.T) {

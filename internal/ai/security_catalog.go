@@ -1228,7 +1228,7 @@ func securityCatalogResources(resources []security.ResourceRevision) []string {
 
 // Running operations keep the exact original catalog authority. This is a
 // revocation check only; it never grants a replacement endpoint or spends uses.
-func runningCatalogAuthorityValid(tx *gorm.DB, o security.PreparedOperation) (bool, error) {
+func runningCatalogAuthorityValid(tx *gorm.DB, o security.PreparedOperation, historical ...bool) (bool, error) {
 	if o.CommandProfileID != "" {
 		if len(o.Resources) != 1 {
 			return false, nil
@@ -1242,11 +1242,18 @@ func runningCatalogAuthorityValid(tx *gorm.DB, o security.PreparedOperation) (bo
 		}
 	}
 	if o.LegacyPolicyRevision > 0 {
-		var legacy securityLegacySessionPolicyRow
-		if err := tx.First(&legacy, "session_id = ? AND project_id = ? AND store_id = ? AND recovery_epoch = ?", o.SessionID, o.ProjectID, o.StoreID, o.RecoveryEpoch).Error; err != nil {
+		legacy, source, err := effectiveLegacyPolicyTx(tx, o.ProjectID, o.SessionID, o.StoreID, o.RecoveryEpoch)
+		if len(historical) == 1 && historical[0] && o.LegacyPolicySourceID == "" {
+			// Old committed observations retain their original session snapshot.
+			// This exception is never used for dispatch or running ownership.
+			source = ""
+			legacy = securityLegacySessionPolicyRow{}
+			err = tx.First(&legacy, "session_id = ? AND project_id = ? AND store_id = ? AND recovery_epoch = ?", o.SessionID, o.ProjectID, o.StoreID, o.RecoveryEpoch).Error
+		}
+		if err != nil {
 			return false, err
 		}
-		if legacy.Revision != o.LegacyPolicyRevision {
+		if source != o.LegacyPolicySourceID || legacy.Revision != o.LegacyPolicyRevision {
 			return false, nil
 		}
 	}

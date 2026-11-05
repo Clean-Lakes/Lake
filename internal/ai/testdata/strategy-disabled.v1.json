@@ -20,11 +20,11 @@
     "toolsHash": "0ee8623855165626f01d59f314aac330f866112aef3be71805d41765c809b64c"
   },
   "permissions-denied": {
-    "promptHash": "7a5a3f6aac22cc80e30fd28a919145fd1a0ef01ff3630007886cc26497c00f09",
+    "promptHash": "df6062e3a477b2dd6b1d9217747e5af7eeb7836d1c26c7ca0892102df7baa135",
     "toolsHash": "0ee8623855165626f01d59f314aac330f866112aef3be71805d41765c809b64c"
   },
   "permissions-silent": {
-    "promptHash": "271cb0181d7e8118a9c1a0f82b6e9a62d1d9e64a900f9996f86cb85ae27d2d15",
+    "promptHash": "cf9a5470005baf710e8720c299cc17db85d770c0a651c167d66be169808017b6",
     "toolsHash": "0ee8623855165626f01d59f314aac330f866112aef3be71805d41765c809b64c"
   },
   "preset": {
