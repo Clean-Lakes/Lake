@@ -101,7 +101,9 @@ export async function startLakeServer(options: ServerOptions) {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
-  const lockPath = join(options.data, "typescript-host.lock");
+  // Credentials and workspaces belong to Home, even when --data is overridden.
+  // Two data directories must not permit concurrent hosts sharing that Home.
+  const lockPath = join(options.home, "typescript-host.lock");
   try {
     const lock = JSON.parse(await readFile(lockPath, "utf8")) as { pid: number };
     if (!Number.isInteger(lock.pid) || lock.pid <= 0)

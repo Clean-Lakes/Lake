@@ -121,6 +121,10 @@ test("pure TS host authenticates, runs real ZCode, streams and restores history"
   );
   assert.equal((await f.api("/api/bootstrap")).backendRuntime, "typescript");
   await assert.rejects(startLakeServer(f.options), /已有后端/);
+  await assert.rejects(
+    startLakeServer({ ...f.options, data: join(f.home, "another-data") }),
+    /已有后端/,
+  );
   await f.api(
     `/api/sessions/${f.session.id}/messages`,
     "POST",
