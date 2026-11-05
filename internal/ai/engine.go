@@ -1170,6 +1170,15 @@ func (e *Engine) compact(ctx context.Context, s *session, c Config, force bool) 
 	chars := estimatedContextCost(s.state, history, toolCost)
 	s.mu.Unlock()
 	budget := (c.Model.ContextWindow - c.Model.MaxOutput) * 2
+	// Router history is an archive, not its provider working set. Both the
+	// SDK callback and the foreground gate use the same request projection.
+	working, projectionErr := e.pilotRequestHistory(ctx, s, c, history)
+	if projectionErr != nil {
+		return projectionErr
+	}
+	if !force && len(working) < len(history) && historyCost(working)+toolCost < budget*80/100 {
+		return nil
+	}
 	historyBudget := budget - toolCost
 	if !force && chars < budget*80/100 {
 		return nil

@@ -12,6 +12,8 @@ tags: [architecture, superagent, routing, triggers, execution, watchdog]
 
 > **Memory 主线调整（2026-11-04）**：后续以 [Agent 本地文件记忆主计划](feature-agent-file-memory-1.md) 为准。旧正文数据库/Markdown 投影及条目管理路线进入分批替换；下文既有行为和测试是历史/当前代码水位，不表示新方案已实现或旧链路已下线。保留真实来源、同意、项目/角色范围、撤回及运行账本；新 Agent 接管后停止旧写入/注入，Worker 读取能力另行验收。
 
+> **上下文与角色知识增量（2026-11-05，待实施）**：按[总方案](architecture-context-role-memory-1.md)区分 Pilot 协调工作集、独立任务上下文、RoleID 长期知识及原始档案。CM 负责摘要/引用和角色读取适配，FM 仍负责唯一记忆流水线；现有 Worker unavailable 与使用开关不因文档变更自动改变。
+
 ![Status: Planned](https://img.shields.io/badge/status-Planned-blue)
 
 用户在 Pilot 的一个项目入口提出多个目标、查看进展、补充要求或叫停任务。Pilot 负责分派和交付，长期专员保存职责，每个独立目标由自己的 Worker 跟进到验收。外部事件可以带回新线索，设备离线期间控制面仍能收件，需要那台设备的步骤等待重连。用户主要关注三件事：哪个结果可以使用，哪项工作需要自己决定，哪项工作确实卡住了。
