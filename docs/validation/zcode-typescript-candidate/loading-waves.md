@@ -13,4 +13,6 @@
 
 [浅色](loading-waves/light.png)、[深色](loading-waves/dark.png)、[窄窗口](loading-waves/narrow.png)。
 
-签名 Dev 安装提交和结果待安装后追加。完整 TS 功能迁移仍未完成，本次只恢复显示动画。
+已从干净源码 `66920079cce6130fd8d7e026d2ee11b0338cfaa3` 执行 `scripts/build_lake_desktop.sh --dev --ts-candidate --install`，覆盖并重新打开 Lake Dev。严格 App 签名与 ZIP/DMG SHA-256、Web 类型检查/生产构建通过。包内后端 SHA-256：`5c3e29e8a7ce7f78d9f8048b1bd06acbebd147cabe19ed5a83f298ebeb8dc97d`。新 JS/CSS 含水波及隐藏暂停规则，不含 thinking-buoys，保留 turn-progress-reply 气泡规则。原生工作区正常显示 Pilot、历史与输入区；bootstrap 为 typescript/zcode/3.17.2、pty、recoveryReadOnly=false，PID/Home/data 匹配。
+
+安装前正常停止并备份 Dev 应用和 Home，本机路径保存在 `/tmp/lake-loading-waves-backup-location`；正式 Lake 未操作。未向真实会话发送测试消息；等待过程与动效视觉证据来自上述隔离 fixture。完整 TS 功能迁移仍未完成，本次只恢复显示动画。
