@@ -4,15 +4,15 @@ version: 1
 date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake
-status: 'In progress'
+status: 'Completed'
 tags: [feature, zcode, worker, subagent, inspector]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-green)
 
-用户确认沿用 Lake 三联界面：点击任务打开第三联，查看由 Lake 为任务分配的 Worker、其临时子智能体及真实工具记录。多资源保留项目已有目录层级。当前 TS/ZCode 候选位于 PR #183；本次沿该已有工作分支增量实现，不切换正式版、不合并 PR。
+用户确认沿用 Lake 三联界面：点击任务打开第三联，查看由 Lake 为任务分配的 Worker、其临时子智能体及真实工具记录。多资源保留项目已有目录层级。本次在 TS/ZCode 候选 PR #183 上增量实现，用户随后明确要求提交 PR 并将所有 PR 合入 Dev；[PR #183](https://github.com/Clean-Lakes/Lake/pull/183) 已合入 `develop`，集成提交为 `c3076dae12f30b78fb7a66b96934c9f340cc186b`。
 
 ## 1. Requirements & Constraints
 
@@ -55,8 +55,8 @@ tags: [feature, zcode, worker, subagent, inspector]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-007 | 扩展 runtime/zcode/server.test.cjs 的本地合成模型夹具，覆盖真实子 Read、纯文字不验收、Write 审批、停止/重启与同 callId 隔离；父 Worker 不预先读取以免假阳性。依赖 TASK-001 至 TASK-004。 | ✅ | 2026-11-06 |
-| TASK-008 | 为执行树模型覆盖嵌套目录、重名资源、多资源与未知资源、跨任务隔离；完成前后端检查、签名候选构建与 Lake Dev 明暗/窄窗验证。依赖 TASK-005 至 TASK-007。 | false | — |
-| TASK-009 | 更新 runtime/zcode/README.md、agent.md 和验证记录，保存 tested SHA、检查结果与未验证边界；将本次变更提交至已有 develop PR，不合并。依赖 TASK-008。 | ✅ | 2026-11-06 |
+| TASK-008 | 为执行树模型覆盖嵌套目录、重名资源、多资源与未知资源、跨任务隔离；完成前后端检查、签名候选构建与 Lake Dev 明暗/窄窗验证。依赖 TASK-005 至 TASK-007。 | ✅ | 2026-11-06 |
+| TASK-009 | 更新 runtime/zcode/README.md、agent.md 和验证记录，保存 tested SHA、检查结果与未验证边界；通过 develop PR 提交，并按用户后续明确授权合并。依赖 TASK-008。 | ✅ | 2026-11-06 |
 
 ## 3. Alternatives
 
@@ -86,7 +86,7 @@ tags: [feature, zcode, worker, subagent, inspector]
 
 - **RISK-001**: 原生后台完成通知、子权限与父任务结束存在竞争；使用真实 registry 状态、取消信号和派发前重验，不根据文字推断完成。
 - **RISK-002**: 同任务并行业务调用切换 active attempt；本期保留子模型并发，对实际业务派发使用任务内串行约束。
-- **ASSUMPTION-001**: 用户授权本次 TS/ZCode Dev 功能改造与原型界面实现；未授权合并或生产发布。
+- **ASSUMPTION-001**: 用户授权本次 TS/ZCode Dev 功能改造与原型界面实现，随后明确授权提交 PR 并将所有 PR 合入 Dev；该授权不包括生产发布。
 
 ## 8. Related Specifications / Further Reading
 
@@ -96,4 +96,4 @@ tags: [feature, zcode, worker, subagent, inspector]
 - [Super-agent 架构](architecture-lake-superagent-1.md)
 - [UI 规范](../docs/ui-guidelines.md)
 
-当前检查点：代码与签名 Dev 安装已完成；63 项后端、644 项前端和 25 项账本/活动/目录回归通过。实际测试源码为 `ffcbc00a2711dddf74652eadaf92fe512b9dfe1f`。原生任务清单/第三联基本交互已在首个实现版本验证，最终历史投影修正后的原生重复检查因 Mac 锁屏待用户解锁；TASK-008 保留未完成。详见[验证记录](../docs/validation/worker-native-subagents/validation.md)。
+完成检查点：代码与签名 Dev 安装已完成；63 项后端、644 项前端和 25 项账本/活动/目录回归通过。安装源码为 `ffcbc00a2711dddf74652eadaf92fe512b9dfe1f`，与集成提交 `c3076dae12f30b78fb7a66b96934c9f340cc186b` 的运行代码一致；在集成提交上重跑后端 63/63、前端 644/644、类型检查和 ADK 边界检查均通过。2026-11-06 用户解锁后完成最终原生复核：任务点击收起清单并打开第三联；资源目录下显示 3 条真实主机检查，可展开参数和结果；结果页仅列 3 条业务回执，关闭和重开详情保留原频道。原历史任务为 0 个原生子实例，未补造或重放。详见[验证记录](../docs/validation/worker-native-subagents/validation.md)。
