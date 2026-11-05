@@ -17,6 +17,7 @@
 .lake-workbench-island .breadcrumbs strong { min-width:0; }
 .lake-workbench-island .pilot-island-trigger { border:0; padding-left:8px; gap:8px; }
 .lake-workbench-island .header-state-area { flex:0 1 auto; }
+.lake-workbench-island .header-inspector-toggle { flex:none; margin-left:0; }
 /* Keep Pilot in its own segment, allowing the copy to give space to its controls.
    Its preferred width is independent of the currently constrained pane width. */
 .island-conversation { --pilot-state-width:238px; }
@@ -132,7 +133,6 @@ html.lake-windows-chrome .app-shell.has-workbench-island .terminal-session .xter
  /* Outrank the WKWebView corner fallback, which otherwise restores visible overflow. */
  .lake-workbench-island .header-normal-state .session-state-badge { min-width:0; display:inline-flex; overflow:hidden; }
  :root.lake-corner-fallback .lake-workbench-island .header-morph-slot.header-normal-state .session-state-badge { overflow:hidden; }
- .lake-workbench-island .header-inspector-toggle { flex:none; margin-left:0; }
 }
 
 
