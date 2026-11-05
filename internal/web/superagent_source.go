@@ -81,6 +81,9 @@ func (b *Server) recordSuperInput(event ai.SuperEvent, refs, files []Object, ign
 		b.Store.exec("UPDATE superagentInputs SET ready=1 WHERE eventId=? AND requestHash=?", event.ID, requestHash)
 		return nil
 	})
+	if kind := b.Store.superSessionKind(event.ThreadRef); kind == "role" || kind == "worker" {
+		_ = b.syncSuperSpecialists(b.Context, event.ProjectID)
+	}
 	return nil
 }
 
