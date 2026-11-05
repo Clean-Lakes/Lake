@@ -52,6 +52,8 @@ tags: [refactor, zcode, typescript, backend]
 | TASK-022 | `runtime/zcode/navigation.ts` 移植会话置顶/排序、图标、项目标签及乐观版本/事务/事件合同；验证跨项目、并发、重启及会话活动不变。仅候选层完成，完整 UI/Dev 与历史数据验收仍属 TASK-021。 | ✅ | 2026-11-05 |
 | TASK-023 | 按用户新增的明确要求增加 `--dev --ts-candidate --install`：签名 SEA 和资源随包、原生运行类型校验/停止/重连、同 Dev 凭据引用、旧数据快照与保留；已覆盖安装并启动现有 Dev，真实 TS bootstrap 和原生窗口见 `docs/validation/zcode-typescript-candidate/dev-install.md`。仅 Dev 预览授权，不计全量验收。 | ✅ | 2026-11-05 |
 
+2026-11-05 Super-agent 增量：`superagent.ts`、`tasks.ts`、`migration.ts` 和迁移安全屏障进入候选，24 项真实 ZCode/HTTP/文件集成验证通过；TASK-008/012/013/014 仍为部分实现，未勾选全量交付。旧项目与任务只读迁入，未连接远程资源。详见 [本批验证](../docs/validation/zcode-typescript-candidate/superagent.md)。
+
 ### Implementation Phase 3
 
 - **GOAL-003**: 保留全部既有能力后切换；以下任务均依赖 TASK-007，以现有 Go 行为、前端 contracts 和相关设计规格为对照，而非只实现同名 URL。

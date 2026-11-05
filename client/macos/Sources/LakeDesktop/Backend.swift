@@ -60,7 +60,7 @@ struct RuntimeInfo: Decodable {
             // Port 0 binds a free loopback port atomically.
             child.arguments = ["web", "--port", "0"]
             if backendRuntime == "typescript" {
-                child.arguments = ["web", "--port", "0", "--home", home.path, "--data", dataDirectory.path, "--dev"]
+                child.arguments = ["web", "--port", "0", "--home", home.path, "--data", dataDirectory.path, "--dev", "--migrate-legacy"]
             }
             var environment = ProcessInfo.processInfo.environment
             environment["LAKE_HOME"] = home.path

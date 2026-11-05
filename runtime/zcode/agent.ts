@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { AgentRuntime, ManualPermissionBroker } from "@zcode/core";
+import { AgentRuntime, ManualPermissionBroker, createToolRegistry } from "@zcode/core";
 import { InMemorySessionEventStore, modelDescriptorOf } from "@zcode/contracts";
 import { AiSdkModelAdapter } from "@zcode/adapters/model";
 import { createNodeExecutionAdapter } from "@zcode/adapters/exec";
@@ -23,6 +23,7 @@ import type {
   SessionEvent,
 } from "../../web-agent/shared/contracts";
 import { HttpError, id, LakeStore, now } from "./store";
+import type { AgentHost, HostProfile } from "./agent-host";
 
 type Live = {
   runtime: AgentRuntime;
@@ -35,6 +36,8 @@ type Live = {
 type Selection = { providerId: string; modelId: string };
 
 export class LakeAgents {
+  host?: AgentHost;
+  guard?: () => void;
   private live = new Map<string, Live>();
   isRunning(sessionId: string) {
     return !!this.live.get(sessionId)?.controller;
@@ -67,6 +70,7 @@ export class LakeAgents {
               : "idle";
     this.store.put("sessions", sessionId, session);
     this.publish(this.store.event(sessionId, "session", extra));
+    this.host?.changed(sessionId);
   }
   private card(view: AIView, cardId: string, type: string, title = "") {
     let card = view.cards.find((card) => card.id === cardId);
@@ -154,6 +158,13 @@ export class LakeAgents {
     this.update(sessionId, view, extra);
   }
   private keys = new Set<string>();
+  async prepareRedaction() {
+    const selection = this.store.get<Selection>("settings", "modelSelection");
+    if (selection) {
+      const key = await this.store.secret(selection.providerId);
+      if (key) this.keys.add(key);
+    }
+  }
   redact(text: string) {
     for (const key of this.keys) if (key) text = text.split(key).join("[REDACTED]");
     return text.replace(
@@ -170,17 +181,21 @@ export class LakeAgents {
       ) as T;
     return value;
   }
-  private safeModel(base: Model): Model {
+  private safeModel(base: Model, profile?: HostProfile): Model {
     const owner = this;
     return {
       ...modelDescriptorOf(base),
       bind(options) {
-        return owner.safeModel(base.bind(options));
+        return owner.safeModel(base.bind(options), profile);
       },
       async generateText(request) {
-        return owner.scrub(await base.generateText(request));
+        owner.guard?.();
+        profile?.beforeModel?.();
+        return owner.scrub(await base.generateText(profile?.projectRequest?.(request) ?? request));
       },
       async *streamText(request) {
+        owner.guard?.();
+        profile?.beforeModel?.();
         // Hold a short raw tail so a credential split across provider chunks
         // cannot reach the UI, transcript or upstream session database.
         const held = new Map<string, { text: string; event: Record<string, any>; field: string }>();
@@ -190,7 +205,7 @@ export class LakeAgents {
             if (item.text) yield { ...item.event, [item.field]: owner.redact(item.text) } as any;
           held.clear();
         };
-        for await (const event of base.streamText(request)) {
+        for await (const event of base.streamText(profile?.projectRequest?.(request) ?? request)) {
           const raw = event as unknown as Record<string, any>;
           const field =
             typeof raw.text === "string"
@@ -231,7 +246,7 @@ export class LakeAgents {
     if (view.pendingApprovals)
       view.pendingApprovals = JSON.parse(this.redact(JSON.stringify(view.pendingApprovals)));
   }
-  private async model(provider: ModelProvider, model: ProviderModel): Promise<Model> {
+  private async model(provider: ModelProvider, model: ProviderModel, profile?: HostProfile): Promise<Model> {
     const key = await this.store.secret(provider.id);
     if (key) this.keys.add(key);
     const adapter = new AiSdkModelAdapter({ env: {}, retry: { maxAttempts: 2 } });
@@ -283,17 +298,18 @@ export class LakeAgents {
         providerConfig,
         modelConfig,
         options: { maxOutputTokens: 8192, reasoningLevel: "disabled" },
-      }),
+      }), profile,
     );
   }
   async runtime(sessionId: string) {
     const session = this.store.session(sessionId);
+    const profile = this.host?.profile(sessionId);
     const selection = this.store.get<Selection>("settings", "modelSelection");
     if (!selection) throw new HttpError(409, "请先配置模型");
     const provider = this.store.require<ModelProvider>("providers", selection.providerId);
     const model = provider.models.find((model) => model.id === selection.modelId && model.enabled);
     if (!provider.enabled || !model) throw new HttpError(409, "所选模型不可用");
-    const selectionKey = JSON.stringify([selection, provider, session.options]);
+    const selectionKey = JSON.stringify([selection, provider, session.options, profile?.version]);
     let live = this.live.get(sessionId);
     if (live?.selection === selectionKey) return live;
     if (live?.controller) throw new HttpError(409, "请先停止当前任务，再切换模型");
@@ -312,9 +328,11 @@ export class LakeAgents {
         directory: workspace,
         title: session.title,
         version: "3.17.2",
+        permission: profile?.permissionRules,
       });
     }
-    const boundModel = await this.model(provider, model);
+    if (existingSession && profile?.permissionRules) await this.sessions.updateSession({ id: sessionId as SessionId, permission: profile.permissionRules });
+    const boundModel = await this.model(provider, model, profile);
     const broker = new ManualPermissionBroker({
       onRequest: (request) => {
         const view = this.store.view(sessionId);
@@ -362,14 +380,34 @@ export class LakeAgents {
         };
       },
     });
+    const registry = createToolRegistry();
+    for (const tool of profile?.tools ?? []) registry.register(tool);
+    // ZCode bootstraps its record on first input with a cwd-derived project
+    // and mode-only permissions. Keep Lake's canonical host identity and
+    // session-scoped rules at the public SessionStore port on every write.
+    const sessionStore = !profile ? this.sessions : new Proxy(this.sessions, {
+      get: (target, property, receiver) => {
+        const value = Reflect.get(target, property, receiver);
+        if (typeof value !== "function") return value;
+        if (property === "createSession" || property === "updateSession") return (input: any) => {
+          if (input.id !== sessionId) throw new HttpError(409, "Managed runtime cannot write another session identity");
+          return value.call(target, { ...input, ...(property === "createSession" ? { projectID: session.projectId } : {}),
+            ...(profile.permissionRules ? { permission: profile.permissionRules } : {}) });
+        };
+        return value.bind(target);
+      },
+    });
     const runtime = new AgentRuntime(
       sessionId as SessionId,
       {
-        systemPrompt: `You are Lake, an operations assistant. Use the available tools and report actual results. Never read credential files.\n${String(session.options.userPrompt ?? "")}`,
+        systemPrompt: (profile?.systemPrompt ?? "You are Lake, an operations assistant. Use the available tools and report actual results. Never read credential files.") + `\n${String(session.options.userPrompt ?? "")}`,
+        toolAllowlist: profile?.allowlist,
         workingDirectory: workspace,
         modelSelection: { providerId: provider.id, modelId: model.name },
         maxTurns: Number(session.options.maxSteps ?? 500),
-        mode: session.options.conversationMode === "plan" ? "plan" : "build",
+        // Lake's versioned work_begin confirmation owns Worker plan execution.
+        // The upstream mode must not become a second conflicting plan authority.
+        mode: !profile && session.options.conversationMode === "plan" ? "plan" : "build",
         modelStreaming: "on",
         streamingToolExecution: "off",
         toolConcurrency: { maxConcurrency: 1 },
@@ -377,11 +415,12 @@ export class LakeAgents {
         targetCompletionVerification: { enabled: false },
         dynamicWorkflowEnabled: false,
         nativeSearchEnhancementsEnabled: false,
-        subagents: { enabled: true },
+        subagents: { enabled: !profile },
         mcp: { enabled: false },
       },
       {
-        sessionStore: this.sessions,
+        sessionStore,
+        toolRegistry: registry,
         eventStore: new InMemorySessionEventStore({ retention: "unbounded" }),
         modelFactory: () => boundModel,
         permissionBroker: broker,
@@ -396,14 +435,22 @@ export class LakeAgents {
         eventSink: { onSessionEvent: (event) => this.onEvent(sessionId, event) },
       },
     );
+    for (const name of registry.list()) {
+      const original = registry.get(name)!;
+      const entry = profile?.configureTool?.(original) ?? original;
+      // The public registry is shared with the executor. Interpose the Lake
+      // task/operation fence at the actual handler, after any approval wait.
+      registry.register({ ...entry, handler: (input, context) => { this.guard?.(); return profile?.invoke ? profile.invoke(entry, input, context) : entry.handler(input, context); } }, { silentDuplicateWarning: true });
+    }
     if (existingSession)
       await (runtime as AgentRuntime & { resumeFromStore(): Promise<unknown> }).resumeFromStore();
     live = { runtime, broker, execution, selection: selectionKey };
     this.live.set(sessionId, live);
     return live;
   }
-  async send(sessionId: string, text: string) {
+  async send(sessionId: string, text: string, options: { input?: string; recordUser?: boolean; recordAssistant?: boolean } = {}) {
     if (!text.trim()) throw new HttpError(400, "消息不能为空");
+    if (this.store.session(sessionId).workspaceRole === "legacy") throw new HttpError(409, "旧会话只读，不恢复或重放历史执行");
     const live = await this.runtime(sessionId);
     if (live.controller) throw new HttpError(409, "当前任务正在运行，请等待完成或停止后发送");
     const session = this.store.session(sessionId);
@@ -411,9 +458,10 @@ export class LakeAgents {
       session.title = text.slice(0, 40);
       this.store.put("sessions", sessionId, session);
     }
-    this.store.addMessage(sessionId, "user", text);
+    if (options.recordUser !== false) this.store.addMessage(sessionId, "user", text);
     const view = this.store.view(sessionId);
     view.status = "running";
+    view.replyStatus = "running";
     view.turns++;
     view.turnStartedAt = now();
     view.turnFinishedAt = undefined;
@@ -422,7 +470,7 @@ export class LakeAgents {
     live.controller = controller;
     live.completion = (async () => {
       try {
-        const result = await live.runtime.executeTurn(text, undefined, {
+        const result = await live.runtime.executeTurn(options.input ?? text, undefined, {
           abortSignal: controller.signal,
         });
         const final = this.store.view(sessionId);
@@ -439,7 +487,7 @@ export class LakeAgents {
               status: "completed",
               at: now(),
             });
-          this.store.addMessage(sessionId, "assistant", this.redact(result.response));
+          if (options.recordAssistant !== false) this.store.addMessage(sessionId, "assistant", this.redact(result.response));
         }
         final.status = controller.signal.aborted ? "cancelled" : "completed";
         this.update(sessionId, final);
@@ -460,13 +508,22 @@ export class LakeAgents {
         final.pending = undefined;
         final.pendingApprovals = [];
         final.turnFinishedAt = now();
+        final.replyStatus = final.status;
         for (const card of final.cards)
           if (["running", "pending"].includes(card.status)) card.status = final.status;
         this.update(sessionId, final);
         live.controller = undefined;
+        this.host?.settled(sessionId);
       }
     })();
     return {};
+  }
+  async wait(sessionId: string) { await this.live.get(sessionId)?.completion; }
+  async steer(sessionId: string, input: string, inputId: string) {
+    const live = this.live.get(sessionId);
+    if (!live?.controller) return false;
+    const result = await live.runtime.steerTurn({ input, pendingInputId: inputId, delivery: "guide" });
+    return result.kind === "queued";
   }
   decision(sessionId: string, approvalId: string, accept: boolean) {
     const live = this.live.get(sessionId);

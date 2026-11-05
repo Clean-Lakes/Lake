@@ -140,6 +140,11 @@ if [ "$install_app" -eq 1 ]; then
   ditto --norsrc "$lake_app" "$lake_install_stage"
   codesign --verify --deep --strict "$lake_install_stage"
   "$lake_install_stage/Contents/Resources/lake" --version >/dev/null
+  if [ "$typescript_candidate" -eq 1 ]; then
+    # Run the bounded, transactional identity/history import before native
+    # startup's readiness deadline. This never resumes an old Go operation.
+    "$lake_install_stage/Contents/Resources/lake" web --dev --migrate-legacy --import-only --home "$HOME/.lake-dev" --data "$HOME/.lake-dev/web-agent" --port 0
+  fi
   if [ -e "$lake_install" ]; then mv "$lake_install" "$lake_install_backup"; fi
   if ! mv "$lake_install_stage" "$lake_install" || ! codesign --verify --deep --strict "$lake_install"; then
     if [ -e "$lake_install" ]; then mv "$lake_install" "$lake_install_stage.failed"; fi

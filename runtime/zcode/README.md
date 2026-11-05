@@ -18,7 +18,7 @@ bin/lake-ts web --home "$HOME/.lake-ts-candidate" --port 0
 
 macOS 候选使用同一个持久开发签名身份；Node 24.14.0 通过官方归档固定摘要取得，打入 Node SEA，所以运行时不依赖系统 Node。仅默认构建入口处理用户二进制，不安装桌面应用。
 
-独立候选拒绝正式 `.lake`、日常 `.lake-dev` 及其符号链接目标。原生 TS Dev 通过显式 `--dev` 可以使用 `.lake-dev`，正式 `.lake` 始终拒绝。TS 使用单独的 `lake-typescript.sqlite` 和 `zcode-sessions.sqlite`；旧 Go 数据库不修改，旧项目/会话尚未迁入 TS 目录，也不会恢复历史审批或重派任务。测试使用临时 Home。
+独立候选拒绝正式 `.lake`、日常 `.lake-dev` 及其符号链接目标。原生 TS Dev 通过显式 `--dev` 可以使用 `.lake-dev`，正式 `.lake` 始终拒绝。TS 使用单独的 `lake-typescript.sqlite` 和 `zcode-sessions.sqlite`。显式 Dev 的 `--migrate-legacy` 一次性事务迁入旧项目、会话、专员与频道身份，保留只读历史；不修改旧 Go 数据库，不恢复旧审批、不重派历史任务。测试使用临时 Home。
 
 ### 覆盖安装 TS/ZCode Dev（用户已明确授权）
 
@@ -32,6 +32,16 @@ open "$HOME/Applications/Lake Dev.app"
 该选项只允许 Dev，使用相同 Dev Bundle ID 和安装路径，随包携带签名 Node SEA、React 和上游许可。原生客户端按包内元数据验证 `typescript` 与准确 Home/data，支持连接复用和正常停止。启动时一次性导入当前 Dev `providers.json` 中的公开模型配置，私有凭据保留原文件引用；不复制正式密钥，不改写旧配置。后续在 TS 中删除或修改配置不会在重启时被旧目录重新覆盖。
 
 这是已授权的 Dev 预览覆盖，不表示所有功能已通过等价验收。回退使用备份应用；旧 Go 数据原样保留，TS 新会话不会自动反向同步。
+
+### Super-agent 增量
+
+`superagent.ts` 将真实 Pilot Router、长期专员管理、独立任务 Worker、连续频道、分页与当前权限接入公开 ZCode AgentRuntime。Router 只持有路由/元数据工具，不能执行资源操作。Worker 目前可在本项目独立工作区使用 Read/Write/Edit、真实文件清单和任务工具；没有接通的终端、远程服务、MCP、Skills 和 Memory 不可绕过。职责按建单版本冻结，任务不受专员后续改名影响。
+
+`tasks.ts` 保存原目标、步骤、独立尝试、实际派发操作及验收。普通任务自动注册计划；Plan 必须确认且始终只读。步骤验收和最终汇总核对真实操作回执、项目/任务/尝试、原修订、当前权限、资源连接修订与输出 hash。模型文字不能验收；只读失败可以在原目标建立带 retryOf 的新诊断尝试，写入不明仍为 unknown。停止和重启使原 owner/审批失效，旧操作不重放；报告使用事务 outbox 幂等进入 Pilot 与专员频道。
+
+迁移优先读取旧 ADK state 指向的准确 artifact 版本并核验 hash；不选择最大 artifact 版本，旧 UI JSON 仅作前 ADK 兼容缓存。历史卡片分页保留，旧任务不成为新执行权威。原项目明确 Security 策略尚未完成 TS 适配时阻止资源执行；原安全 gate/epoch/reader 不兼容时只允许查看，不能改成 ZCode 默认放行。`security.ts` 是迁移屏障，完整 Security/grant/恢复合同仍待移植。
+
+本批 24 项隔离集成验证与真实 Dev 目录副本演练见[Super-agent 验证记录](../../docs/validation/zcode-typescript-candidate/superagent.md)。该批是已有迁移候选的增量，不代表全量功能切换。
 
 ### 验证和切换门槛
 

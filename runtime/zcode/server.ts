@@ -24,8 +24,13 @@ import { LakeStore, HttpError, id, now, privateDirectory } from "./store";
 import { LakeAgents } from "./agent";
 import { LakeNavigation } from "./navigation";
 import { importDevModelSettings } from "./dev-settings";
+import { LakeSuperagent } from "./superagent";
+import { applyLegacyMigration, loadLegacyView } from "./migration";
+import { digest } from "./tasks";
+import { LakeSecurity } from "./security";
+export { previewLegacyMigration, rollbackMigration } from "./migration";
 
-export type ServerOptions = { home: string; data: string; port: number; staticRoot: string; development?: boolean };
+export type ServerOptions = { home: string; data: string; port: number; staticRoot: string; development?: boolean; importLegacy?: boolean };
 const encode = (value: unknown) => JSON.stringify(value);
 const equal = (left: string, right: string) => {
   const a = Buffer.from(left),
@@ -132,6 +137,8 @@ export async function startLakeServer(options: ServerOptions) {
   await lock.close();
   let store: LakeStore | undefined;
   let agents: LakeAgents | undefined;
+  let superagent: LakeSuperagent | undefined;
+  let security: LakeSecurity | undefined;
   let draining = false;
   let closed = false;
   const clients = new Map<string, Set<ServerResponse>>();
@@ -195,13 +202,14 @@ export async function startLakeServer(options: ServerOptions) {
           ?.slice("lake_session=".length) ?? "";
       if (!equal(token, bearer) && !equal(token, cookie))
         throw new HttpError(401, "需要 Lake 访问凭据");
-      if (!store || !agents) throw new HttpError(503, "服务正在启动");
+      if (!store || !agents || !superagent) throw new HttpError(503, "服务正在启动");
       if (path[1] === "bootstrap")
         response.setHeader(
           "Set-Cookie",
           `lake_session=${token}; HttpOnly; SameSite=Strict; Path=/`,
         );
       const data = method === "GET" || method === "HEAD" ? {} : await body(request);
+      if (!["GET", "HEAD"].includes(method) && !(path[1] === "superagent" && path[2] === "lifecycle")) security?.check();
       const navigation = new LakeNavigation(store, broadcast);
       const selection = () =>
         store!.get<{ providerId: string; modelId: string }>("settings", "modelSelection");
@@ -262,7 +270,7 @@ export async function startLakeServer(options: ServerOptions) {
           aiRuntime: "zcode",
           backendRuntime: "typescript",
           upstreamVersion: "3.17.2",
-          recoveryReadOnly: false,
+          recoveryReadOnly: security?.readOnly() ?? true,
         };
       };
       let result: unknown;
@@ -412,13 +420,12 @@ export async function startLakeServer(options: ServerOptions) {
         }
       } else if (path[1] === "projects" && path[3] === "superagent") {
         store.project(path[2]);
-        if (method !== "GET") throw new HttpError(501, "Pilot 与长期专员调度尚未迁移完成");
-        result = {
-          active: false,
-          project: { projectId: path[2], routerSessionId: "", version: 0 },
-          workers: [],
-          channels: [],
-        };
+        if (path.length === 6 && path[4] === "specialists" && method === "DELETE")
+          result = await superagent.deleteRole(path[2], path[5], data.revision);
+        else if (path.length !== 4) throw new HttpError(404, "Super-agent 接口不存在");
+        else if (method === "GET") result = superagent.workspace(path[2]);
+        else if (method === "POST") result = superagent.ensure(path[2]);
+        else throw new HttpError(405, "不支持此请求方法");
       } else if (path[1] === "projects" && ["pilot", "sre"].includes(path[3])) {
         store.project(path[2]);
         result = { enabled: false, autoAdvance: false, revision: 0 };
@@ -443,6 +450,7 @@ export async function startLakeServer(options: ServerOptions) {
         if (path[3] === "terminals") result = { terminals: [] };
         else if (method === "PATCH") {
           resource.name = String(data.name ?? resource.name);
+          if (data.settings && digest(data.settings) !== digest(resource.settings)) store.put("resourceRevisions", resource.id, (store.get<number>("resourceRevisions", resource.id) ?? 1) + 1);
           resource.settings = data.settings ?? resource.settings;
           store.put("resources", resource.id, resource);
           result = resource;
@@ -450,10 +458,23 @@ export async function startLakeServer(options: ServerOptions) {
       } else if (path[1] === "sessions") {
         const sessionId = path[2];
         const session = store.session(sessionId);
-        if (path.length === 4 && path[3] === "presentation") {
+        if (session.workspaceRole === "legacy" && !["GET", "HEAD"].includes(method) && !(path[3] === "presentation" || path.length === 3 && method === "PATCH"))
+          throw new HttpError(409, "旧 Go 会话为只读档案；请在 Pilot 中提出新的明确要求，历史任务与操作不会重放");
+        if (method === "GET" && (path[3] === "snapshot" || path[3] === "ai")) {
+          await agents.prepareRedaction();
+          await loadLegacyView(store, sessionId, (value) => agents!.redact(value));
+        }
+        if (path[3] === "channel") {
+          if (path.length === 5 && path[4] === "tasks" && method === "GET") result = superagent.channelTasks(sessionId);
+          else if (path.length === 5 && path[4] === "read" && method === "PUT") result = superagent.readCompletion(sessionId, data.cursor);
+          else if (path.length !== 4) throw new HttpError(404, "频道接口不存在");
+          else if (method === "GET") { await agents.prepareRedaction(); result = await superagent.channelPage(sessionId, url.searchParams.get("cursor") ?? ""); }
+          else if (method === "POST" && data.action === "stop") result = await superagent.stopChannel(sessionId);
+          else throw new HttpError(405, "不支持此请求方法");
+        } else if (path.length === 4 && path[3] === "presentation") {
           if (method !== "PUT") throw new HttpError(405, "不支持此请求方法");
           result = navigation.presentation(sessionId, data);
-        } else if (path[3] === "snapshot") result = store.snapshot(sessionId);
+        } else if (path[3] === "snapshot") { const snapshot = store.snapshot(sessionId); snapshot.ai = store.viewPage(sessionId); result = superagent.decorate(snapshot); }
         else if (path[3] === "events") {
           const after = Number(url.searchParams.get("after") ?? 0);
           if (!Number.isSafeInteger(after) || after < 0) throw new HttpError(400, "无效的事件游标");
@@ -485,7 +506,7 @@ export async function startLakeServer(options: ServerOptions) {
             (data.references?.length ?? 0)
           )
             throw new HttpError(501, "附件与资源引用尚未迁移完成");
-          result = await agents.send(sessionId, String(data.text ?? ""));
+          result = await superagent.send(sessionId, String(data.text ?? ""), data.taskId);
           status = 202;
         } else if (path[3] === "message-queue") {
           if (method !== "GET") throw new HttpError(501, "消息队列尚未接入");
@@ -494,7 +515,7 @@ export async function startLakeServer(options: ServerOptions) {
           switch (path[4]) {
             case undefined:
             case "snapshot":
-              result = store.view(sessionId);
+              result = store.viewPage(sessionId, url.searchParams.has("before") ? Number(url.searchParams.get("before")) : undefined);
               break;
             case "options":
               result = session.options;
@@ -511,8 +532,16 @@ export async function startLakeServer(options: ServerOptions) {
               result = {};
               break;
             case "decision":
-              agents.decision(sessionId, String(data.id), data.accept === true);
+              if (!superagent.decision(sessionId, data)) agents.decision(sessionId, String(data.id), data.accept === true);
               result = {};
+              break;
+            case "answer":
+            case "questionReply":
+              superagent.answer(sessionId, data);
+              result = {};
+              break;
+            case "workControl":
+              result = await superagent.control(sessionId, data);
               break;
             case "references":
               result = [];
@@ -533,6 +562,7 @@ export async function startLakeServer(options: ServerOptions) {
           store.put("sessions", sessionId, session);
           result = session;
         } else if (method === "DELETE") {
+          if (["router", "role", "worker"].includes(session.workspaceRole ?? "")) throw new HttpError(409, "受管理会话保留任务与频道身份；请使用停止任务或删除专员");
           await agents.abort(sessionId);
           store.delete("sessions", sessionId);
           result = {};
@@ -562,6 +592,7 @@ export async function startLakeServer(options: ServerOptions) {
     if (closed) return;
     closed = true;
     draining = true;
+    await superagent?.close();
     await agents?.close();
     for (const set of clients.values()) for (const response of set) response.end();
     await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
@@ -573,6 +604,14 @@ export async function startLakeServer(options: ServerOptions) {
     store = await LakeStore.open(options.home, options.data);
     if (options.development) await importDevModelSettings(store);
     agents = await LakeAgents.open(store, broadcast);
+    security = new LakeSecurity(store);
+    agents.guard = () => security!.check();
+    if (options.importLegacy) {
+      if (!options.development) throw new HttpError(403, "旧数据迁移仅允许明确指定的 Dev 环境");
+      await agents.prepareRedaction();
+      await applyLegacyMigration(store, (value) => agents!.redact(value));
+    }
+    superagent = new LakeSuperagent(store, agents, security);
     await new Promise<void>((resolveListen, reject) => {
       server.once("error", reject);
       server.listen(options.port, "localhost", () => resolveListen());
@@ -588,7 +627,7 @@ export async function startLakeServer(options: ServerOptions) {
     await close();
     throw error;
   }
-  return { origin, token, store, agents, close };
+  return { origin, token, store, agents, superagent, close };
 }
 
 async function main() {
@@ -614,7 +653,11 @@ async function main() {
   const port = Number(option("--port") ?? 4182);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("无效的端口");
   const root = isSea() ? join(dirname(process.execPath), "lake-zcode") : __dirname;
-  const app = await startLakeServer({ home, data, port, staticRoot: join(root, "web"), development: args.includes("--dev") });
+  const app = await startLakeServer({ home, data, port, staticRoot: join(root, "web"), development: args.includes("--dev"), importLegacy: args.includes("--migrate-legacy") });
+  if (args.includes("--import-only")) {
+    console.log("Dev legacy catalog migration completed; original Go databases and execution ledgers retained");
+    await app.close(); return;
+  }
   const shutdown = () => void app.close();
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);

@@ -14,6 +14,7 @@ import {inspectedTask,inspectedAttempt,inspectorAttempts,resolvedInspectorSelect
 import {sessionInspectorId,useSessionInspector,type InspectorSelection} from './SessionInspectorContext';
 
 export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=false,taskNavigation}:{snapshot:SessionSnapshot;connected:boolean;onUpdated:()=>void;worker?:SuperWorker;readOnly?:boolean;taskNavigation?:ReactNode}){
+ readOnly=readOnly||snapshot.session.workspaceRole==='legacy';
  const inspector=useSessionInspector()!;
  const selection=resolvedInspectorSelection(snapshot,inspector.selection);
  const retained=useRef<InspectorSelection|null>(selection);

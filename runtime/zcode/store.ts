@@ -225,6 +225,13 @@ export class LakeStore {
   messages(sessionId: string) {
     return this.list<Message>("messages").filter((message) => message.sessionId === sessionId);
   }
+  viewPage(sessionId: string, before?: number, limit = 300): AIView {
+    const view = this.view(sessionId), total = view.cards.length;
+    const end = before == null ? total : before;
+    if (!Number.isSafeInteger(end) || end < 0 || end > total) throw new HttpError(400, "无效的历史分页位置");
+    const start = Math.max(0, end - limit);
+    return { ...view, cards: view.cards.slice(start, end), cardsOffset: start, totalCards: total };
+  }
   addMessage(sessionId: string, role: Message["role"], text: string) {
     const message: Message = { id: id(), sessionId, role, text, createdAt: now() };
     return this.put("messages", message.id, message);
