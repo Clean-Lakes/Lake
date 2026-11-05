@@ -22,6 +22,7 @@ import type {
 } from "../../web-agent/shared/contracts";
 import { LakeStore, HttpError, id, now, privateDirectory } from "./store";
 import { LakeAgents } from "./agent";
+import { LakeNavigation } from "./navigation";
 
 export type ServerOptions = { home: string; data: string; port: number; staticRoot: string };
 const encode = (value: unknown) => JSON.stringify(value);
@@ -41,6 +42,8 @@ async function canonicalNewPath(path: string): Promise<string> {
   }
 }
 async function body(request: IncomingMessage): Promise<Record<string, any>> {
+  if (!request.headers["content-type"]?.toLowerCase().startsWith("application/json"))
+    throw new HttpError(415, "Content-Type must be application/json");
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
@@ -48,9 +51,10 @@ async function body(request: IncomingMessage): Promise<Record<string, any>> {
     if (size > 24 * 1024 * 1024) throw new HttpError(413, "请求内容过大");
     chunks.push(chunk);
   }
-  if (!chunks.length) return {};
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const value = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (!value || Array.isArray(value) || typeof value !== "object") throw new Error();
+    return value;
   } catch {
     throw new HttpError(400, "无效的 JSON 请求");
   }
@@ -189,6 +193,7 @@ export async function startLakeServer(options: ServerOptions) {
           `lake_session=${token}; HttpOnly; SameSite=Strict; Path=/`,
         );
       const data = method === "GET" || method === "HEAD" ? {} : await body(request);
+      const navigation = new LakeNavigation(store, broadcast);
       const selection = () =>
         store!.get<{ providerId: string; modelId: string }>("settings", "modelSelection");
       const catalog = () => ({
@@ -365,6 +370,15 @@ export async function startLakeServer(options: ServerOptions) {
           store.delete("settings", "modelSelection");
           result = modelSettings();
         } else result = modelSettings();
+      } else if (path[1] === "projects" && path.length === 4 && path[3] === "tags" && method === "POST") {
+        result = navigation.createTag(path[2], data);
+        status = 201;
+      } else if (path[1] === "projects" && path.length === 4 && path[3] === "session-navigation" && method === "POST")
+        result = navigation.move(path[2], data);
+      else if (path[1] === "tags" && path.length === 3) {
+        if (method === "PUT") result = navigation.updateTag(path[2], data);
+        else if (method === "DELETE") result = navigation.deleteTag(path[2]);
+        else throw new HttpError(405, "不支持此请求方法");
       } else if (path[1] === "projects" && path.length === 2 && method === "POST")
         result = store.createProject(String(data.name ?? ""));
       else if (path[1] === "projects" && path[3] === "sessions" && method === "POST")
@@ -427,7 +441,10 @@ export async function startLakeServer(options: ServerOptions) {
       } else if (path[1] === "sessions") {
         const sessionId = path[2];
         const session = store.session(sessionId);
-        if (path[3] === "snapshot") result = store.snapshot(sessionId);
+        if (path.length === 4 && path[3] === "presentation") {
+          if (method !== "PUT") throw new HttpError(405, "不支持此请求方法");
+          result = navigation.presentation(sessionId, data);
+        } else if (path[3] === "snapshot") result = store.snapshot(sessionId);
         else if (path[3] === "events") {
           const after = Number(url.searchParams.get("after") ?? 0);
           if (!Number.isSafeInteger(after) || after < 0) throw new HttpError(400, "无效的事件游标");

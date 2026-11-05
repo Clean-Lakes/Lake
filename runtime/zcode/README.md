@@ -30,7 +30,7 @@ python3 scripts/check_zcode_parity.py --report
 python3 scripts/check_zcode_parity.py
 ```
 
-Node 命令须使用准备好的 24.14.0。测试经过真实 ZCode 源码与本地模型 HTTP 夹具，覆盖鉴权、Origin、单 Home、聊天/流式投影、写入批准与拒绝、取消不派发、重启历史和凭据隔离。
+Node 命令须使用准备好的 24.14.0。测试经过真实 ZCode 源码与本地模型 HTTP 夹具，覆盖鉴权、Origin、单 Home、聊天/流式投影、写入批准与拒绝、取消不派发、重启历史和凭据隔离。会话置顶/排序、图标和标签已移植现有合同，并验证项目范围、乐观版本、并发冲突、持久化以及不改变活动时间；这些候选测试仍不代表原生 Lake Dev 的完整验收。
 
 `api-inventory.json` 从现有前端 TypeScript AST 提取完整 API 操作表；`parity.json` 记录逐项与领域验收。最后一个检查目前**必须失败**：候选测试不等于功能等价。资产/SSH/数据库/终端、Pilot/专员/频道、任务/权限账本、工作流/日程、记忆、附件、MCP/Skills、队列/补充/压缩、历史迁移、CLI/Magpie、macOS/Windows 与 Lake Dev 主题/窄窗均需补齐。候选 API 的 501、空只读目录或关闭的开关不能作为已迁移证据。
 

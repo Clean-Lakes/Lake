@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { chmod, lstat, mkdir, open, readFile, realpath, rename, unlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
+import type { Position, Presentation } from "./navigation";
 import type {
   AIView,
   Catalog,
@@ -13,6 +14,7 @@ import type {
   SessionSnapshot,
   WorkSession,
   ResourceTreeNode,
+  WorkspaceTag,
 } from "../../web-agent/shared/contracts";
 
 export const now = () => new Date().toISOString();
@@ -104,11 +106,39 @@ export class LakeStore {
   delete(kind: string, key: string) {
     this.db.prepare("DELETE FROM records WHERE kind=? AND id=?").run(kind, key);
   }
+  transaction<T>(operation: () => T): T {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const result = operation();
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
   project(projectId: string) {
     return this.require<Project>("projects", projectId);
   }
   session(sessionId: string) {
-    return this.require<StoredSession>("sessions", sessionId);
+    const session = this.require<StoredSession>("sessions", sessionId);
+    const presentation = this.get<Presentation>("sessionPresentation", sessionId);
+    const position = this.get<Position>("sessionNavigation", sessionId);
+    const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
+    const tags = (presentation?.tagIds ?? [])
+      .map((id) => this.get<WorkspaceTag>("tags", id))
+      .filter((tag): tag is WorkspaceTag => !!tag && tag.projectId === session.projectId)
+      .sort((a, b) => compare(a.name, b.name) || compare(a.id, b.id));
+    // Derived metadata cannot be replaced by a stale model/runtime session write.
+    return {
+      ...session,
+      icon: presentation?.icon ?? "chat",
+      presentationRevision: presentation?.revision ?? 0,
+      tags,
+      pinned: position?.pinned ?? false,
+      navigationPosition: position?.position,
+      navigationRevision: this.get<number>("navigationRevisions", session.projectId) ?? 0,
+    };
   }
   createProject(name: string) {
     if (!name.trim()) throw new HttpError(400, "项目名称不能为空");
@@ -144,7 +174,10 @@ export class LakeStore {
       projects: this.list<Project>("projects"),
       resources,
       resourceTree: tree,
-      sessions: this.list<StoredSession>("sessions").map(({ options, ...session }) => session),
+      sessions: this.list<StoredSession>("sessions").map(({ id }) => {
+        const { options, ...session } = this.session(id);
+        return session;
+      }),
       tags: this.list("tags"),
       terminals: [],
     };
@@ -172,7 +205,7 @@ export class LakeStore {
       },
     };
     this.put("sessions", session.id, session);
-    return session;
+    return this.session(session.id);
   }
   view(sessionId: string): AIView {
     return (

@@ -245,3 +245,115 @@ test("credentials split across provider chunks are removed before events and can
   assert.ok(!JSON.stringify(artifacts).includes(secret));
   assert.ok(JSON.stringify(artifacts).includes("[REDACTED]"));
 });
+
+test("session tags and icons preserve project scope, revisions, activity and restart state", async (t) => {
+  const f = await fixture(t);
+  const other = await f.api("/api/projects", "POST", { name: "Other" });
+  const create = (project, name) => f.api(`/api/projects/${project}/tags`, "POST", { name, color: "purple" }, 201);
+  const tag = await create(f.project.id, "Database");
+  const foreign = await create(other.id, "External");
+  const path = `/api/sessions/${f.session.id}/presentation`;
+  const save = (data, status = 200) => f.api(path, "PUT", data, status);
+  const before = (await f.api(`/api/sessions/${f.session.id}/snapshot`)).session;
+  await save({ icon: "database", tagIds: [foreign.id], revision: 0 }, 404);
+  await save({ icon: "javascript:alert(1)", tagIds: [], revision: 0 }, 400);
+  await save({ icon: "database", tagIds: [tag.id, tag.id], revision: 0 }, 400);
+  await save({ icon: "database", tagIds: [], revision: "0" }, 400);
+  await save({ icon: "database", tagIds: [], revision: -1 }, 400);
+  assert.equal(f.app.store.cursor(f.session.id), 0, "rejected edits must not emit events");
+  let saved = await save({ icon: "database", tagIds: [tag.id], revision: 0 });
+  assert.deepEqual(saved.tags, [tag]);
+  assert.equal(saved.icon, "database");
+  assert.equal(saved.presentationRevision, 1);
+  assert.equal(saved.updatedAt, before.updatedAt);
+  assert.equal(saved.status, before.status);
+  await save({ icon: "chat", tagIds: [], revision: 0 }, 409);
+  await f.restart();
+  saved = (await f.api(`/api/sessions/${f.session.id}/snapshot`)).session;
+  assert.deepEqual(saved.tags, [tag]);
+  assert.equal(saved.presentationRevision, 1);
+  const edited = await f.api(`/api/tags/${tag.id}`, "PUT", { name: "Data", color: "blue" });
+  assert.deepEqual((await f.api(`/api/sessions/${f.session.id}/snapshot`)).session.tags, [edited]);
+  // A model update holding an older session snapshot cannot overwrite metadata.
+  f.app.store.put("sessions", before.id, { ...before, options: f.app.store.session(before.id).options });
+  assert.equal(f.app.store.session(before.id).icon, "database");
+  await f.api(`/api/tags/${tag.id}`, "DELETE", {});
+  saved = (await f.api(`/api/sessions/${f.session.id}/snapshot`)).session;
+  assert.deepEqual(saved.tags, []);
+  assert.equal(saved.presentationRevision, 1);
+  await save({ icon: "chat", tagIds: [tag.id], revision: 1 }, 404);
+  await f.api(`/api/projects/${other.id}/tags`, "POST", { name: "External", color: "red" }, 409);
+  await f.api(`/api/projects/${other.id}/tags`, "POST", { name: "Invalid", color: "url(evil)" }, 400);
+  await f.api(`/api/projects/${other.id}/tags`, "POST", { name: " ".repeat(41) + "x", color: "blue" }, 400);
+  assert.equal((await f.api("/api/catalog")).tags.length, 1);
+  assert.equal(f.app.store.events(f.session.id, 0).length, 3);
+});
+
+test("session pinning and ordering preserve activity, enforce group scope and reject stale concurrent moves", async (t) => {
+  const f = await fixture(t);
+  const second = await f.api(`/api/projects/${f.project.id}/sessions`, "POST", {});
+  const other = await f.api("/api/projects", "POST", { name: "Other" });
+  const foreign = await f.api(`/api/projects/${other.id}/sessions`, "POST", {});
+  const hidden = await f.api(`/api/projects/${f.project.id}/sessions`, "POST", {});
+  f.app.store.put("aiScopes", hidden.id, { scope: "resource-terminal" });
+  const move = (sessionId, pinned, beforeId, revision, status = 200) =>
+    f.api(`/api/projects/${f.project.id}/session-navigation`, "POST", { sessionId, pinned, beforeId, revision }, status);
+  await move(foreign.id, true, null, 0, 404);
+  await move(hidden.id, true, null, 0, 404);
+  await move(f.session.id, false, foreign.id, 0, 404);
+  await move(f.session.id, false, f.session.id, 0, 400);
+  await move(f.session.id, "true", null, 0, 400);
+  await move(f.session.id, true, null, undefined, 400);
+  const before = f.app.store.session(f.session.id);
+  let saved = await move(f.session.id, false, second.id, 0);
+  assert.equal(saved.navigationPosition, 0);
+  assert.equal(f.app.store.session(second.id).navigationPosition, 1);
+  assert.equal(saved.updatedAt, before.updatedAt);
+  assert.equal(saved.status, before.status);
+  await move(second.id, true, null, 0, 409);
+  assert.equal(f.app.store.session(second.id).pinned, false);
+  saved = await move(f.session.id, true, null, 1);
+  assert.equal(saved.navigationRevision, 2);
+  await move(second.id, false, f.session.id, 2, 404);
+  saved = await move(second.id, true, f.session.id, 2);
+  assert.equal(saved.navigationPosition, 0);
+  assert.equal(f.app.store.session(f.session.id).navigationPosition, 1);
+  await f.restart();
+  assert.equal(f.app.store.session(second.id).pinned, true);
+  const competing = await Promise.all([f.session.id, second.id].map(async (sessionId) => {
+    const response = await fetch(`${f.app.origin}/api/projects/${f.project.id}/session-navigation`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${f.app.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId, pinned: false, beforeId: null, revision: 3 }),
+    });
+    return { status: response.status, value: await response.json() };
+  }));
+  assert.deepEqual(competing.map((result) => result.status).sort(), [200, 409]);
+  assert.equal(competing.find((result) => result.status === 200).value.navigationRevision, 4);
+  const catalog = await f.api("/api/catalog");
+  assert.ok(catalog.sessions.filter((s) => s.projectId === f.project.id).every((s) => s.navigationRevision === 4));
+  const secondBefore = f.app.store.session(second.id);
+  await f.api(`/api/sessions/${f.session.id}`, "DELETE", {});
+  await move(second.id, false, f.session.id, 4, 404);
+  assert.equal(f.app.store.session(second.id).navigationRevision, 4);
+  assert.equal(f.app.store.session(second.id).pinned, secondBefore.pinned);
+});
+
+test("invalid JSON bodies cannot enter persistent navigation mutations", async (t) => {
+  const f = await fixture(t);
+  for (const body of ["null", "[]", "true", "", "{oops"]) {
+    const response = await fetch(`${f.app.origin}/api/projects/${f.project.id}/tags`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${f.app.token}`, "Content-Type": "application/json" },
+      body,
+    });
+    assert.equal(response.status, 400);
+  }
+  const response = await fetch(`${f.app.origin}/api/projects/${f.project.id}/tags`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${f.app.token}`, "Content-Type": "text/plain" },
+    body: JSON.stringify({ name: "Wrong content type", color: "blue" }),
+  });
+  assert.equal(response.status, 415);
+  assert.deepEqual((await f.api("/api/catalog")).tags, []);
+});

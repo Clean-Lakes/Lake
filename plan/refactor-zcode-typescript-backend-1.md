@@ -48,7 +48,8 @@ tags: [refactor, zcode, typescript, backend]
 | TASK-004 | 更新 `runtime/zcode/build.mjs` 与 `scripts/build_lake.sh --ts-candidate`；随候选提供 Node SEA、React 和许可；运行无需源码或 Go。默认入口、桌面构建与健康检查仅在全量验收后单独切换。候选部分不依赖 TASK-003 的全量完成。 | ✅ | 2026-11-05 |
 | TASK-005 | 添加真实模型 HTTP 夹具与工具副作用回归，验证审批接受/拒绝、取消、重连、重启、秘密与数据隔离；运行前端、签名包和 Lake Dev 验证。依赖 TASK-004。 | | |
 | TASK-006 | 更新开发说明、架构方向和验收记录；记录 SHA、平台缺口和未迁移功能，经普通 PR 到 develop。依赖 TASK-005。 | | |
-| TASK-007 | `runtime/zcode/inventory.mjs` 从当前 API AST 固定操作清单；`parity.json`、`scripts/check_zcode_parity.py` 区分候选测试与完整等价证据。同步 develop@16ef7075 后当前为 118 项操作、19 个领域，均未完成完整等价验收；默认检查失败，候选不能自动切换。 | ✅ | 2026-11-05 |
+| TASK-007 | `runtime/zcode/inventory.mjs` 从当前 API AST 固定操作清单；`parity.json`、`scripts/check_zcode_parity.py` 区分候选测试与完整等价证据。同步 develop@16ef7075 后当前为 118 项操作、20 个领域（含会话导航/标签），均未完成完整等价验收；默认检查失败，候选不能自动切换。 | ✅ | 2026-11-05 |
+| TASK-022 | `runtime/zcode/navigation.ts` 移植会话置顶/排序、图标、项目标签及乐观版本/事务/事件合同；验证跨项目、并发、重启及会话活动不变。仅候选层完成，完整 UI/Dev 与历史数据验收仍属 TASK-021。 | ✅ | 2026-11-05 |
 
 ### Implementation Phase 3
 
