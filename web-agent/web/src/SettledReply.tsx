@@ -2,7 +2,7 @@ import {useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 
 // Keep the original reply node mounted through completion. CSS folds its actual
 // height while the final reply stays mounted and keeps its streaming identity.
-export function SettledReply({collapsed,handoff=false,children}: {collapsed: boolean;handoff?:boolean; children: ReactNode}) {
+export function SettledReply({collapsed,handoff=false,continued=false,children}: {collapsed: boolean;handoff?:boolean;continued?:boolean; children: ReactNode}) {
   const ref=useRef<HTMLDivElement>(null);
   const [phase,setPhase]=useState({handoff,released:!handoff}),[entering,setEntering]=useState(false);
   if(phase.handoff!==handoff)setPhase({handoff,released:!handoff});
@@ -33,7 +33,7 @@ export function SettledReply({collapsed,handoff=false,children}: {collapsed: boo
     motion.addEventListener('change',stop);document.addEventListener('visibilitychange',stop);
     return()=>{clearTimeout(timer);motion.removeEventListener('change',stop);document.removeEventListener('visibilitychange',stop);};
   },[entering,collapsed]);
-  return <div ref={ref} className={`settled-reply${collapsed ? ' is-archived' : ''}${waiting?' is-awaiting-reply':''}${entering&&!collapsed?' is-presenting-reply':''}`} aria-hidden={collapsed||waiting||undefined} inert={collapsed||waiting} onAnimationEnd={event=>{if(event.target===event.currentTarget&&event.animationName==='reply-handoff-in')setEntering(false);}}>
+  return <div ref={ref} className={`settled-reply${continued?' is-reply-continuation':''}${collapsed ? ' is-archived' : ''}${waiting?' is-awaiting-reply':''}${entering&&!collapsed?' is-presenting-reply':''}`} aria-hidden={collapsed||waiting||undefined} inert={collapsed||waiting} onAnimationEnd={event=>{if(event.target===event.currentTarget&&event.animationName==='reply-handoff-in')setEntering(false);}}>
     <div className="settled-reply-content">{waiting?null:children}</div>
   </div>;
 }
