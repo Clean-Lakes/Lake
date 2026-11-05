@@ -11,7 +11,7 @@
 }
 
 /* One bubble per reply; the avatar owns a separate column beside it. */
-.ai-transcript { --reply-avatar-column:32px; --reply-bubble-inset:18px; }
+.ai-transcript { --reply-avatar-size:28px; --reply-avatar-column:40px; --reply-bubble-inset:18px; --reply-bubble-block:13px; --reply-body-size:15px; }
 .ai-transcript[data-reply-avatar=hidden] { --reply-avatar-column:0px; }
 .ai-transcript[data-reply-avatar=hidden] :is(.response-avatar,.turn-thinking-avatar) { display:none; }
 .ai-chat-message.ai-role-assistant,
@@ -22,7 +22,7 @@
   width: fit-content;
   min-width: 0;
   max-width: 100%;
-  padding: 14px 18px;
+  padding: var(--reply-bubble-block,13px) var(--reply-bubble-inset,18px);
   border-radius: var(--radius-window);
   corner-shape: var(--corner-window);
   background: var(--assistant-message-background);
@@ -39,14 +39,14 @@
 
 .response-avatar { display:inline-flex; align-items:center; justify-content:center; flex:none; }
 .ai-chat-message.ai-role-assistant,
-.ai-response:has(> .response-identity):has(> .ai-card:is(.ai-text, .ai-message)) {
+.ai-response:is(:has(> .response-identity),.is-reply-continuation):has(> .ai-card:is(.ai-text, .ai-message)) {
   position: relative;
   isolation: isolate;
   padding-inline-start: calc(var(--reply-bubble-inset) + var(--reply-avatar-column));
   background: transparent;
 }
 .ai-chat-message.ai-role-assistant::before,
-.ai-response:has(> .response-identity):has(> .ai-card:is(.ai-text, .ai-message))::before {
+.ai-response:is(:has(> .response-identity),.is-reply-continuation):has(> .ai-card:is(.ai-text, .ai-message))::before {
   content: "";
   position: absolute;
   inset: 0 0 0 var(--reply-avatar-column);
@@ -60,10 +60,19 @@
 .ai-response:has(> .ai-card:is(.ai-text, .ai-message)) > .response-identity .response-avatar {
   position: absolute;
   inset-inline-start: 0;
-  top: 14px;
-  width: 20px;
-  height: 1.75em;
+  top: calc(var(--reply-bubble-block) + (22px - var(--reply-avatar-size)) / 2);
+  width: var(--reply-avatar-size);
+  height: var(--reply-avatar-size);
 }
+.response-avatar :is(svg,.super-role-avatar) { width:var(--reply-avatar-size,28px); height:var(--reply-avatar-size,28px); }
+.response-avatar svg { max-width:none; max-height:none; }
+.ai-transcript .response-identity { min-height:22px; line-height:22px; margin-bottom:6px; font-size:var(--font-size-ui); }
+.reply-continued-author { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+.ai-transcript[data-transcript-mode=conversation] :is(.ai-chat-message.ai-role-assistant,.ai-response:has(> .ai-card:is(.ai-text,.ai-message))) { max-width:min(100%,calc(720px + var(--reply-avatar-column))); }
+.ai-transcript[data-transcript-mode=conversation] :is(.ai-role-assistant,.ai-response) .ai-markdown.assistant-prose { font-size:var(--reply-body-size); line-height:1.55; }
+.ai-transcript[data-transcript-mode=conversation] :is(.ai-role-assistant,.ai-response) .assistant-prose > p:not(:last-child) { margin-bottom:10px; }
+.ai-transcript[data-transcript-mode=conversation] .ai-role-user { font-size:var(--reply-body-size); line-height:1.55; }
+.settled-reply.is-reply-continuation:not(.is-archived):not(.is-awaiting-reply) { margin-block-start:calc(8px - var(--turn-entry-gap,12px)); }
 
 /* The caption follows the text; its divider starts at the painted bubble edge. */
 .ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status:not(.is-thinking) {
@@ -86,14 +95,14 @@
 }
 
 /* A quiet typing bubble takes the same column as the next assistant reply. */
-.reply-duration.is-thinking { position:relative; min-height:44px; padding:0 0 0 var(--reply-avatar-column,32px); border:0; }
-.ai-turn > .turn-status.is-thinking { padding-inline-start:var(--reply-avatar-column,32px); }
+.reply-duration.is-thinking { position:relative; min-height:44px; padding:0 0 0 var(--reply-avatar-column,40px); border:0; }
+.ai-turn > .turn-status.is-thinking { padding-inline-start:var(--reply-avatar-column,40px); }
 .ai-turn > .turn-status.is-thinking.without-avatar,
 .reply-duration.is-thinking.without-avatar { padding-inline-start:0; }
-.turn-thinking-avatar { position:absolute; inset-inline-start:0; top:12px; width:20px; height:20px; }
+.turn-thinking-avatar { position:absolute; inset-inline-start:0; top:8px; width:var(--reply-avatar-size,28px); height:var(--reply-avatar-size,28px); }
 .turn-thinking-avatar .response-identity { margin:0; }
 .turn-thinking-avatar .response-identity > strong { display:none; }
-.turn-thinking-avatar .response-avatar { width:20px; height:20px; }
+.turn-thinking-avatar .response-avatar { width:var(--reply-avatar-size,28px); height:var(--reply-avatar-size,28px); }
 .turn-thinking-bubble { display:inline-flex; align-items:center; justify-content:center; flex:none; width:76px; height:44px; padding:0; border:0; border-radius:var(--radius-window); corner-shape:var(--corner-window); background:var(--assistant-message-background); color:var(--foreground); }
 .is-thinking > .turn-duration-disclosure { width:fit-content; max-width:100%; border-radius:var(--radius-window); corner-shape:var(--corner-window); }
 .is-thinking .turn-current-step { flex:0 1 auto; }
