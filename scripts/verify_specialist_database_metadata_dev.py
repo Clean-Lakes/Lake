@@ -219,7 +219,7 @@ def exercise(binary, home):
             require(not queries, 'historical blocker fixture dispatched database I/O')
             lake.api('/api/sessions/' + pilot + '/messages', 'POST', {'text': followup})
             after = wait_for(lambda: observe('completed'), 90)
-            require(before['taskId'] == after['taskId'], 'retry replaced the canonical task')
+            require(before['task']['taskId'] == after['task']['taskId'], 'retry replaced the canonical task')
             operations = rows("SELECT status,security_descriptor FROM native_operations WHERE tool IN ('list_db_objects','db_table_ddl') ORDER BY rowid")
             require(len(operations) == 2 and all(status == 'succeeded' for status, _ in operations), 'metadata evidence did not succeed')
             for _, descriptor in operations:
@@ -241,7 +241,9 @@ def main():
     subprocess.run(['codesign', '--verify', '--strict', str(binary)], check=True)
     with tempfile.TemporaryDirectory(prefix='lake-metadata-dev.') as directory:
         report = exercise(binary, Path(directory))
-    report.update(passed=True, testedSHA=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(), sourceDirty=bool(subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip()), binarySHA256=hashlib.sha256(binary.read_bytes()).hexdigest())
+    origin_file = binary.parent / 'build-origin.json'
+    origin = json.loads(origin_file.read_text()) if origin_file.exists() else {}
+    report.update(passed=True, testedSHA=origin.get('gitHead'), buildDirty=origin.get('dirty'), fixtureSHA=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(), sourceDirty=bool(subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip()), binarySHA256=hashlib.sha256(binary.read_bytes()).hexdigest())
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report))
