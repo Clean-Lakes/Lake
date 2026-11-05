@@ -37,4 +37,12 @@ node --test runtime/zcode/server.test.cjs
 
 `parity.json` 对相关领域只标记 partial；全量门禁必须继续失败。本批未验证真实供应商、SSH/数据库/集群、Windows、完整 Go/race/vet 或全部恢复场景，不能将夹具成功写成这些场景通过。
 
-本批代码 SHA、签名安装、原生 Dev 与迁移后目录实测将在安装后追加。
+## 签名 Dev 实测
+
+已从干净源码 `52f7ff1ff57dae90c7ef1d85080d4169dafa3686` 执行 `scripts/build_lake_desktop.sh --dev --ts-candidate --install`，覆盖 `~/Applications/Lake Dev.app`。签名验证及 ZIP/DMG SHA-256 通过，原生 LakeUpdateTests 通过（下载进度/取消、Dev 隔离、更新状态/清理与发布策略）。包内后端 SHA-256：`bf6f374a4a46cc6f487a4beb534e539f65f5bcdb481aa3e82dac5177f9e51a68`。
+
+原生窗口实际显示 **Lake Dev · TS/ZCode**；页面实际显示 **Pilot、4 个未删除的现有专员、资源目录与旧 Pilot 历史**，不再是空欢迎页。未发送消息或调用真实供应商/远程服务。认证 bootstrap 为 `backendRuntime=typescript`、`aiRuntime=zcode`、`upstreamVersion=3.17.2`、`recoveryReadOnly=false`；lifecycle 的运行 PID、Home 和 data 与 Dev 运行记录匹配。
+
+真实迁入 5 项目、82 会话、8 专员（4 个未删除）、22 历史 Worker；TS 新 Worker/Goal/资源操作均为 0。原 Go Web 数据库、ADK 数据库、providers.json 与 Security control 的字节摘要均与停止后的备份一致。迁移前已正常停止旧 Dev，并将旧 Dev 应用和 Home 作 APFS 私有备份，路径保存在本机 `/tmp/lake-super-dev-backup-location`；原 Go Dev 的更早备份也保留。
+
+持续终端适配未完成，因此顶部“服务端不支持持续终端”的提示仍显示，没有删除提示或伪报 `terminalMode=pty`。实机未执行深色/窄窗全量等价验收，不能将这次原生启动算作相关领域 verified。
