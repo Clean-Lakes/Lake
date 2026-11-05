@@ -3,7 +3,7 @@ import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ToolEntry, ToolExecutionContext } from "@zcode/core";
 import type { AIApproval, AIQuestionRequest, Message, SessionSnapshot, SpecialistChannelInfo,
   SpecialistChannelPage, SuperProject, SuperTask, SuperWorker, SuperWorkspace } from "../../web-agent/shared/contracts";
-import type { AgentHost, HostProfile } from "./agent-host";
+import type { AgentHost, HostProfile, HostToolContext } from "./agent-host";
 import { LakeAgents } from "./agent";
 import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
 import { canonical, digest, TaskLedger, terminal, text, type Goal, type Operation } from "./tasks";
@@ -35,6 +35,7 @@ const workTools = ["work_begin", "work_read", "work_update", "work_finish", "wor
   "list_referenced_task_evidence", "read_referenced_task_evidence"];
 const hostTools=["inspect_host"];
 const extensionTools = ["list_mcp_servers", "list_mcp_tools", "call_mcp_tool", "load_skill"];
+const childControlTools = ["Agent", "Task", "TaskOutput", "TaskStop", "SendMessage"];
 const strings = (value: unknown, max = 128): string[] => {
   if (value == null) return [];
   if (!Array.isArray(value) || value.length > max || value.some((item) => typeof item !== "string") || new Set(value).size !== value.length)
@@ -60,6 +61,7 @@ export class LakeSuperagent implements AgentHost {
   private closed = false;
   private scheduled = false;
   private lastProject = "";
+  private businessQueues = new Map<string, Promise<void>>();
   private heartbeat: ReturnType<typeof setInterval>;
   constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH) {
     this.ledger = new TaskLedger(store, (operation) => {
@@ -483,8 +485,9 @@ export class LakeSuperagent implements AgentHost {
     const entries = this.workerEntries(worker).filter((entry) => !managed || !["work_begin", "work_update"].includes(entry.metadata.name));
     const generation = worker.generation;
     const router = this.store.require<SuperProject>("superProjects", worker.projectId), permissions = this.store.session(router.routerSessionId).options;
-    return { version: `${worker.id}:${generation}:host-v2:${managed}`, systemPrompt: superWorkerPrompt,
-      tools: [...entries, ...this.extensionEntries(worker),...this.hostEntries(worker)], allowlist: [...entries.map((entry) => entry.metadata.name),...(this.ssh?hostTools:[]), ...(this.extensions ? extensionTools : []), "Read", ...(this.ledger.get(worker.taskId).mode === "plan" ? [] : ["Write", "Edit"])].filter((name) => this.ledger.get(worker.taskId).mode !== "plan" || name !== "call_mcp_tool"),
+    return { version: `${worker.id}:${generation}:host-v3:${managed}`, systemPrompt: superWorkerPrompt,
+      subagents: true, taskId: worker.taskId, workerId: worker.id,
+      tools: [...entries, ...this.extensionEntries(worker),...this.hostEntries(worker)], allowlist: [...entries.map((entry) => entry.metadata.name),...(this.ssh?hostTools:[]), ...(this.extensions ? extensionTools : []), ...childControlTools, "Read", ...(this.ledger.get(worker.taskId).mode === "plan" ? [] : ["Write", "Edit"])].filter((name) => this.ledger.get(worker.taskId).mode !== "plan" || name !== "call_mcp_tool"),
       permissionRules: { scope: "session", version: 1,
         allow: [...(permissions.silentWriteFiles === true ? [{ toolName: "Write" }, { toolName: "Edit" }] : []),
           ...(this.extensions?.automaticCalls(worker.projectId, permissions) ? [{ toolName: "call_mcp_tool" }] : [])],
@@ -507,7 +510,16 @@ export class LakeSuperagent implements AgentHost {
         }
         goal.modelRounds++; this.ledger.save(goal);
       },
-      invoke: async (entry, input, context) => {
+      invokeControl: async (entry, input, context) => {
+        this.validateWorker(worker.id, generation);
+        this.security?.check();
+        const goal = this.ledger.get(worker.taskId);
+        if (context.abortSignal.aborted || goal.status !== "running" || Date.parse(goal.deadlineAt) <= Date.now())
+          throw new HttpError(409, "Task is no longer active for child delegation");
+        if (!childControlTools.includes(entry.metadata.name)) throw new HttpError(403, "Unknown child control tool");
+        return entry.handler(input, context);
+      },
+      invoke: (entry, input, context) => this.serializeBusiness(worker.id, async () => {
         this.validateWorker(worker.id, generation);
         if (context.abortSignal.aborted) throw new HttpError(409, "Worker stopped");
         if(hostTools.includes(entry.metadata.name))return this.invokeHost(worker,generation,entry,input,context);
@@ -534,8 +546,23 @@ export class LakeSuperagent implements AgentHost {
           throw new HttpError(403, "Pilot 当前仅允许操作明确引用的资源；尚未登记此工作区的用户引用");
         return this.ledger.operation(worker.taskId, generation, worker.policyHash, context.toolCallId, entry.metadata.name, input,
           () => entry.handler(input, context), (value) => JSON.parse(this.agents.redact(JSON.stringify(value ?? null))) as typeof value,
-          { readOnly: entry.metadata.readOnly, resourceId: resource?.id, resourceRevision: resource ? this.store.get<number>("resourceRevisions", resource.id) ?? 1 : undefined });
-      } };
+          { ...this.childSource(context), readOnly: entry.metadata.readOnly, resourceId: resource?.id, resourceRevision: resource ? this.store.get<number>("resourceRevisions", resource.id) ?? 1 : undefined });
+      }) };
+  }
+  // Concurrent child reasoning shares one canonical attempt. Serialize actual
+  // business dispatch so an in-flight operation cannot change its sibling's attempt.
+  private async serializeBusiness<T>(workerId: string, dispatch: () => Promise<T>): Promise<T> {
+    const previous = this.businessQueues.get(workerId) ?? Promise.resolve();
+    let release!: () => void;
+    const next = new Promise<void>((resolve) => { release = resolve; });
+    this.businessQueues.set(workerId, next);
+    await previous;
+    try { return await dispatch(); }
+    finally { release(); if (this.businessQueues.get(workerId) === next) this.businessQueues.delete(workerId); }
+  }
+  private childSource(context: ToolExecutionContext): Pick<Operation, "agentRunId" | "childSessionId" | "originalCallId"> {
+    const child = (context as HostToolContext).lakeSubagent;
+    return child ? { agentRunId: child.id, childSessionId: child.sessionId, originalCallId: child.toolCallId } : {};
   }
   private async scopedPath(workspace: string, path: string): Promise<string> {
     const candidate = resolve(workspace, path);
@@ -561,7 +588,7 @@ export class LakeSuperagent implements AgentHost {
     const resource=this.store.require<import("../../web-agent/shared/contracts").Resource>("resources",text(input.asset_ref,"asset_ref",200));
     this.security?.host(worker.projectId,resource.id);const revision=this.ssh.revision(resource);if(input.configuration_revision!==revision)throw new HttpError(409,"SSH 配置或凭据版本已变化，请重新读取资源目录");
     this.validateWorker(worker.id,generation);
-    return this.ledger.operation(worker.taskId,generation,worker.policyHash,context.toolCallId,entry.metadata.name,input,()=>entry.handler(input,context),value=>JSON.parse(this.ssh!.scrub(JSON.stringify(value??null))),{resourceId:resource.id,resourceRevision:this.store.get<number>("resourceRevisions",resource.id)??1,readOnly:true,hostConfigurationHash:revision});
+    return this.ledger.operation(worker.taskId,generation,worker.policyHash,context.toolCallId,entry.metadata.name,input,()=>entry.handler(input,context),value=>JSON.parse(this.ssh!.scrub(JSON.stringify(value??null))),{...this.childSource(context),resourceId:resource.id,resourceRevision:this.store.get<number>("resourceRevisions",resource.id)??1,readOnly:true,hostConfigurationHash:revision});
   }
   private async invokeExtension(worker: Worker, generation: number, entry: ToolEntry, input: any, context: ToolExecutionContext) {
     if (!this.extensions) throw new HttpError(409, "扩展宿主未接入");
@@ -583,7 +610,7 @@ export class LakeSuperagent implements AgentHost {
     }
     this.validateWorker(worker.id, generation);
     return this.ledger.operation(worker.taskId, generation, worker.policyHash, context.toolCallId, name, input,
-      () => entry.handler(input, context), (value) => JSON.parse(this.extensions!.scrub(JSON.stringify(value ?? null))) as typeof value, binding);
+      () => entry.handler(input, context), (value) => JSON.parse(this.extensions!.scrub(JSON.stringify(value ?? null))) as typeof value, { ...binding, ...this.childSource(context) });
   }
   private extensionEntries(worker: Worker): ToolEntry[] {
     if (!this.extensions) return [];

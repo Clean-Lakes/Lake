@@ -68,6 +68,7 @@ export class LakeStore {
     // A restart never resumes a model/tool request from a UI projection.
     for (const session of store.list<StoredSession>("sessions")) {
       const view = store.view(session.id);
+      let changed = false;
       if (["running", "waiting_approval", "waiting_input"].includes(view.status)) {
         view.status = "interrupted";
         view.pending = undefined;
@@ -75,8 +76,19 @@ export class LakeStore {
         view.question = undefined;
         for (const card of view.cards)
           if (["running", "pending"].includes(card.status)) card.status = "interrupted";
-        store.put("views", session.id, view);
+        changed = true;
       }
+      for (const run of view.agentRuns ?? []) {
+        if (run.source !== "zcode_subagent" || !["queued", "running", "waiting_approval", "waiting_input"].includes(run.status)) continue;
+        run.status = "interrupted";
+        run.finishedAt = now();
+        run.pending = undefined;
+        run.question = undefined;
+        for (const card of run.cards ?? [])
+          if (["running", "pending"].includes(card.status)) card.status = "interrupted";
+        changed = true;
+      }
+      if (changed) store.put("views", session.id, view);
     }
     return store;
   }

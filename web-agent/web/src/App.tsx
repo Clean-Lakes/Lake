@@ -736,15 +736,6 @@ function AppContent() {
   const currentSessionStatus = currentSessionPresentation.status ?? selectedSession?.status;
   const selectedResource = catalog?.resources.find(item => item.id === route.resourceId);
   useEffect(()=>{inspector.reset();},[sessionId,route.resourceId,isPlansPage]);
-  const requestedWorkerDetails=useRef<string|null>(null);
-  useEffect(()=>{
-    const target=requestedWorkerDetails.current;
-    if(!target)return;
-    if(target!==sessionId||route.resourceId||isPlansPage){requestedWorkerDetails.current=null;return;}
-    if(activeSnapshot?.session.id!==target||!activeSnapshot.superagent)return;
-    requestedWorkerDetails.current=null;
-    inspector.open(latestInspectorSelection(activeSnapshot,'execution'));
-  },[sessionId,route.resourceId,isPlansPage,activeSnapshot?.session.id,activeSnapshot?.superagent?.task.taskId,inspector.open]);
   const [roleReplyActivity,setRoleReplyActivity]=useState<{sessionId:string;state:'running'|'waiting'|'idle'}|null>(null);
   const updateRoleReplyActivity=useCallback((id:string,state:'running'|'waiting'|'idle')=>setRoleReplyActivity(previous=>previous?.sessionId===id&&previous.state===state?previous:{sessionId:id,state}),[]);
   const [roleInspection,setRoleInspection]=useState<SessionSnapshot|null>(null);
@@ -753,18 +744,19 @@ function AppContent() {
   const roleWorkers=roleTasks?.sessionId===sessionId?roleTasks.workers:[];
   const roleInspectionRequest=useRef(0);
   useEffect(()=>{roleInspectionRequest.current++;setRoleInspection(null);},[sessionId]);
-  const inspectedSnapshot=activeSnapshot?.session.workspaceRole==='role'&&roleInspection?roleInspection:activeSnapshot;
-  const inspectRoleTask=async(target:string)=>{
-    if(!roleWorkers.some(worker=>worker.sessionId===target))return;
-    if(roleInspection?.session.id===target&&inspector.selection?.sessionId===target)return;
+  const inspectedSnapshot=roleInspection??activeSnapshot;
+  const inspectRoleTask=async(target:string,selectedWorker?:SuperWorker)=>{
+    const expected=selectedWorker??roleWorkers.find(worker=>worker.sessionId===target);
+    if(!expected||expected.sessionId!==target)return;
+    if(roleInspection?.session.id===target&&inspector.selection?.sessionId===target&&inspector.selection.tab==='execution')return;
     const request=++roleInspectionRequest.current;
     try{const next=await api.snapshot(target);if(request!==roleInspectionRequest.current)return;
-      if(next.session.projectId!==activeSnapshot?.session.projectId||next.session.workspaceRole!=='worker')throw new Error('任务不属于当前专员项目');
+      if(next.session.projectId!==activeSnapshot?.session.projectId||next.session.workspaceRole!=='worker'||next.superagent?.task.taskId!==expected.task.taskId||next.superagent?.roleId!==expected.roleId)throw new Error('任务不属于当前项目或执行身份已变化');
       setRoleInspection(next);inspector.open(latestInspectorSelection(next,'execution'));
     }catch(error){if(request===roleInspectionRequest.current)handleFailure(error);}
   };
   useEffect(()=>{
-    if(activeSnapshot?.session.workspaceRole!=='role'||!roleInspection||inspector.selection?.sessionId!==roleInspection.session.id)return;
+    if(!roleInspection||inspector.selection?.sessionId!==roleInspection.session.id)return;
     const target=roleInspection.session.id,request=roleInspectionRequest.current,controller=new AbortController();let busy=false;
     const refresh=async()=>{if(busy)return;busy=true;try{const next=await api.snapshot(target,controller.signal);if(request===roleInspectionRequest.current)setRoleInspection(next);}catch(error){if(!controller.signal.aborted&&request===roleInspectionRequest.current)handleFailure(error);}finally{busy=false;}};
     const timer=window.setInterval(()=>void refresh(),1000);
@@ -1434,7 +1426,7 @@ function AppContent() {
   const avatarActivity=activeSnapshot?{sessionId:activeSnapshot.session.id,state:selectedSuperChannel&&roleReplyActivity?.sessionId===activeSnapshot.session.id?roleReplyActivity.state:conversationActivity(activeSnapshot.ai,selectedSession?.status)}:undefined;
   const superHeaderIdentity=sessionHeader&&(selectedRoleName||selectedSuperPilot);
   const specialistMenu=sessionHeader&&!!activeSnapshot&&(selectedSession.workspaceRole==='role'||selectedSession.workspaceRole==='worker');
-  const menuTask=selectedSession?.workspaceRole==='role'?roleInspection?.superagent:activeSnapshot?.superagent;
+  const menuTask=roleInspection?.superagent??activeSnapshot?.superagent;
   const sidebarSessionsExpanded=!closedSessionGroups.includes(sidebarProject?.id??"");
   const navigationProjects = projectList.filter(project => project.id === sidebarProject?.id && (!selectedTag || catalog.tags?.some(tag=>tag.id===selectedTag&&tag.projectId===project.id)));
   const itemList = activeSnapshot ? timelineItems(activeSnapshot) : [];
@@ -1452,13 +1444,7 @@ function AppContent() {
           inspector.open(entry?{sessionId:activeSnapshot.session.id,taskId:headerPilot.taskId,task,attemptId:entry.attemptId,tab:'execution'}:latestInspectorSelection(activeSnapshot,'plan'));
         }}/>}
         {specialistMenu&&<SpecialistTaskMenu key={selectedSession.id} sessionId={selectedSession.id} currentTaskId={menuTask?.task.taskId} source={menuTask?.goal?.userText} onTask={worker=>{
-          if(selectedSession.workspaceRole==='role'){void inspectRoleTask(worker.sessionId);return;}
-          if(worker.sessionId===selectedSession.id){
-            if(activeSnapshot)inspector.open(latestInspectorSelection(activeSnapshot,'execution'));
-            return;
-          }
-          requestedWorkerDetails.current=worker.sessionId;
-          navigate({sessionId:worker.sessionId,resourceId:null});
+          void inspectRoleTask(worker.sessionId,worker);
         }}/>}
       </header>;
   const terminalListMenu=terminalListOpen && <div className="terminal-list-menu" ref={terminalListPopup.menu} id="terminal-switcher" role="group" aria-label="已打开的终端">
@@ -1638,7 +1624,7 @@ function AppContent() {
           }}/><div className="composer-send-actions">{sendFeedback&&<span className="composer-send-feedback" role="status">{sendFeedback}</span>}{turnActive && hasMessageDraft && <button type="button" className="send-button queued-stop-button" aria-label="停止任务" title="停止任务，保留待发送消息" aria-busy={stoppingTurn} disabled={stoppingTurn || !sessionConnected} onClick={() => void stopCurrentTurn()}><Glyph name="stop" size={15}/></button>}<button className={`send-button${composerStop ? " stop-button" : ""}`} type={composerStop ? "button" : "submit"} data-sending={sendFeedback?true:undefined} aria-label={sendFeedback??(composerStop ? "停止任务" : !modelConfigured ? "连接模型" : queueMode ? "加入待发送队列" : "发送消息")} title={sendFeedback??(composerStop ? "停止任务" : !modelConfigured ? "连接模型，保留当前草稿" : `${queueMode ? "加入待发送队列" : "发送消息"}（${sendShortcutLabel}）`)} aria-busy={!!sendFeedback||stoppingTurn} onClick={composerStop ? () => void stopCurrentTurn() : undefined} disabled={sendFeedback?true:composerStop ? stoppingTurn || !sessionConnected : !sessionConnected || !!pendingOperation || reasoningSaving.has(sessionId) || modeSaving.has(sessionId) || stoppingTurn || (modelConfigured && (!hasMessageDraft || (imageDraft.length > 0 && !bootstrap?.supportsImageInput)))}><Glyph name={sendFeedback?"loader":composerStop ? "stop" : !modelConfigured ? "plug" : "return"} size={16}/></button></div></div></div><div className="composer-foot"><input ref={attachmentInputRef} className="visually-hidden" type="file" multiple aria-label="选择文件或图片" onChange={event => void attachFiles(event.target.files)}/><button type="button" className="image-attach-button" disabled={!sessionConnected || !!pendingOperation} title="添加任意文件或图片，也可拖入或粘贴文件" aria-label="添加附件" onClick={() => attachmentInputRef.current?.click()}><Glyph name="plus" size={18}/></button>{activeSnapshot?.ai && activeSnapshot.session.workspaceRole!=="role" && activeSnapshot.session.workspaceRole!=="worker" && <button type="button" ref={permissionButtonRef} className="composer-permission-button" aria-label="会话权限" title="会话权限" aria-haspopup="dialog" aria-expanded={permissionsOpen} onClick={() => setPermissionsOpen(current => !current)}><Glyph name="lakePermission" size={16}/><span className="composer-tool-label">权限</span></button>}{activeSnapshot&&canConfigurePlan&&<PlanModeToggle key={sessionId} mode={activeSnapshot.conversationMode} disabled={!sessionConnected||turnActive||!!pendingOperation||reasoningSaving.has(sessionId)||modeSaving.has(sessionId)||!!activeSnapshot.messageQueue?.items.length} onChange={changeConversationMode}/>} {activeSnapshot&&!pilotWorkspace.workspace?.active&&<LakePilotControl key={activeSnapshot.session.projectId} snapshot={activeSnapshot} onUpdated={refreshCurrent} disabled={!sessionConnected||turnActive} disabledReason={!sessionConnected?"连接恢复后可切换 Lake Pilot。":"本轮运行中，结束后可切换 Lake Pilot。"}/> }<div className="composer-status"><div className="model-switch-wrap">
           <ComposerModelSelect available={modelMenu} modelName={bootstrap?.modelName??null} selection={bootstrap?.modelSelection??undefined} configured={modelConfigured} open={modelMenuOpen} disabled={!!pendingOperation||reasoningSaving.size>0} onOpenChange={open=>{if(open) void openModelMenu();else setModelMenuOpen(false);}} onSelect={model=>void switchModel(model)} onSettings={()=>{setModelMenuOpen(false);void openSettings();}} reasoning={activeSnapshot?.ai ? {session:sessionId,modelId:bootstrap?.modelId,disabled:!sessionConnected || turnActive || !!pendingOperation,disabledReason:!sessionConnected?"连接恢复后可调整思考级别。":turnActive?"本轮运行中，结束后可调整思考级别。":"正在保存设置，请稍后调整思考级别。",onSaving:(saving,savingSession=sessionId) => setReasoningSaving(current=>{const next=new Set(current);if(saving)next.add(savingSession);else next.delete(savingSession);return next;})}:undefined}/>
         </div>{activeSnapshot?.ai && <ContextUsage view={activeSnapshot.ai} model={bootstrap || undefined} status={headerPilot?.status==='paused'?'idle':currentSessionStatus} compact/>}</div></div></form></div>}
-      </div>{activeSnapshot&&<SessionInspector key={inspectedSnapshot!.session.id} snapshot={inspectedSnapshot!} worker={pilotWorkspace.workspace?.workers.find(worker=>worker.sessionId===inspectedSnapshot?.session.id)} taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot!.session.id} onTask={id=>void inspectRoleTask(id)}/>:undefined} readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot!.session.id)} onUpdated={()=>{if(activeSnapshot.session.workspaceRole==='role'&&roleInspection){const request=roleInspectionRequest.current;void api.snapshot(roleInspection.session.id).then(next=>{if(request===roleInspectionRequest.current)setRoleInspection(next);}).catch(handleFailure);}else void refreshCurrent();}}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
+      </div>{activeSnapshot&&<SessionInspector key={inspectedSnapshot!.session.id} snapshot={inspectedSnapshot!} worker={pilotWorkspace.workspace?.workers.find(worker=>worker.sessionId===inspectedSnapshot?.session.id)} taskNavigation={activeSnapshot.session.workspaceRole==='role'&&roleWorkers.length>0?<SpecialistTaskSelect workers={roleWorkers} sessionId={inspectedSnapshot!.session.id} onTask={id=>void inspectRoleTask(id)}/>:undefined} readOnly={isLegacyHistory} connected={sessionConnected&&!modeSaving.has(inspectedSnapshot!.session.id)} onUpdated={()=>{if(roleInspection){const request=roleInspectionRequest.current;void api.snapshot(roleInspection.session.id).then(next=>{if(request===roleInspectionRequest.current)setRoleInspection(next);}).catch(handleFailure);}else void refreshCurrent();}}/>}</div> : <WelcomePage hasProjects={projectList.length>0} projectName={sidebarProject?.name} modelConfigured={modelConfigured} modelName={bootstrap?.modelName} disabled={!connected} onCreateProject={openProjectDialog} onNewSession={()=>openSessionDialog(sidebarProject?.id??projectList[0].id)} onModels={()=>void openSettings()}/>}
     </main>
     {terminalTabContext && <NavigationMenu title="终端" x={terminalTabContext.x} y={terminalTabContext.y} onClose={() => setTerminalTabContext(null)} actions={[
       {label: "打开终端", run: () => selectTerminalTab(terminalTabContext.terminal)},

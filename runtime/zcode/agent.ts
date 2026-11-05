@@ -1,5 +1,6 @@
 import { join } from "node:path";
-import { AgentRuntime, ManualPermissionBroker, createToolRegistry } from "@zcode/core";
+import { AgentRuntime, ManualPermissionBroker, createToolRegistry, createExploreSubagentPort, InMemoryRuntimeTaskRegistry,
+  createBuiltInGeneralPurposeAgentProfile, createBuiltInExploreAgentProfile, type ExploreSubagentRuntimeRequest } from "@zcode/core";
 import { InMemorySessionEventStore, modelDescriptorOf } from "@zcode/contracts";
 import { AiSdkModelAdapter } from "@zcode/adapters/model";
 import { createNodeExecutionAdapter } from "@zcode/adapters/exec";
@@ -15,6 +16,7 @@ import {
   ModelConfig,
 } from "@zcode/provider";
 import type {
+  AgentRun,
   AIApproval,
   AIView,
   AICard,
@@ -23,7 +25,7 @@ import type {
   SessionEvent,
 } from "../../web-agent/shared/contracts";
 import { HttpError, id, LakeStore, now } from "./store";
-import type { AgentHost, HostProfile } from "./agent-host";
+import type { AgentHost, HostProfile, HostToolContext } from "./agent-host";
 import { lakeCommunicationPrompt } from "./super-prompts";
 import { LiveToolActivity } from "./activity";
 
@@ -34,7 +36,11 @@ type Live = {
   controller?: AbortController;
   completion?: Promise<void>;
   selection: string;
+  children?: { registry: InMemoryRuntimeTaskRegistry; active: () => boolean; cancel: () => Promise<void> };
 };
+const nativeControlTools = new Set(["Agent", "Task", "TaskOutput", "TaskStop", "SendMessage"]);
+const childForbiddenTools = new Set([...nativeControlTools, "work_begin", "work_update", "work_finish", "work_wait", "route_work", "manage_specialist", "ask_user_question"]);
+const childTerminal = new Set(["completed", "failed", "cancelled", "killed", "stopped", "lost"]);
 type Selection = { providerId: string; modelId: string };
 
 export class LakeAgents {
@@ -85,6 +91,7 @@ export class LakeAgents {
     return card;
   }
   private onEvent(sessionId: string, event: ZCodeEvent) {
+    if (String(event.sessionId) !== sessionId) return;
     const view = this.store.view(sessionId);
     const payload = event.payload as Record<string, any>;
     let extra: Partial<SessionEvent> = {};
@@ -124,7 +131,7 @@ export class LakeAgents {
           "operation",
           String(call.name ?? call.toolName ?? "工具"),
         );
-        card.data = { call_id: callId, arguments: call.input };
+        card.data = { call_id: callId, arguments: call.input, ...(nativeControlTools.has(String(call.name ?? call.toolName)) ? { source: "zcode_subagent_control" } : {}) };
         break;
       }
       case "tool_call_started":
@@ -139,6 +146,7 @@ export class LakeAgents {
       case "tool_call_result": {
         this.toolActivity.finish(sessionId, String(payload.toolCallId));
         const card = this.card(view, String(payload.toolCallId), "operation");
+        this.bindOperationCard(sessionId, card, String(payload.toolCallId));
         card.status = payload.result?.success === false ? "failed" : "completed";
         card.content =
           typeof payload.result?.content === "string"
@@ -150,20 +158,78 @@ export class LakeAgents {
         this.toolActivity.finish(sessionId, String(payload.toolCallId));
         const card = this.card(view, String(payload.toolCallId), "operation");
         card.status = "failed";
+        this.bindOperationCard(sessionId, card, String(payload.toolCallId));
         card.content = String(payload.error?.message ?? "工具调用失败");
         break;
       }
-      case "permission_resolved":
-        view.pending = undefined;
-        view.pendingApprovals = [];
-        view.status = "running";
+      case "subagent_stopped": {
+        const run = view.agentRuns?.find((candidate) => candidate.id === payload.agentId && candidate.childSessionId === payload.childSessionId);
+        if (!run) return;
+        run.status = run.status === "cancelled" || this.live.get(sessionId)?.controller?.signal.aborted ? "cancelled" : payload.status === "completed" ? "completed" : payload.status === "failed" ? "failed" : "cancelled";
+        run.finishedAt ??= now(); run.pending = undefined;
+        if (payload.error) run.summary = this.redact(String(payload.error));
         break;
+      }
+      case "permission_resolved": {
+        const pending = view.pendingApprovals ?? [];
+        view.pendingApprovals = pending.filter((approval) => payload.requestId ? approval.id !== payload.requestId : pending.length !== 1 || approval.call.id !== payload.toolCallId);
+        view.pending = view.pendingApprovals[0];
+        view.status = view.pending ? "waiting_approval" : "running";
+        break;
+      }
       default:
         return;
     }
     this.redactView(view);
     if (extra.textUpdate) extra.textUpdate.content = this.redact(extra.textUpdate.content);
     this.update(sessionId, view, extra);
+  }
+  private bindOperationCard(sessionId: string, card: AICard, callId: string, run?: AgentRun) {
+    const operation = this.store.list<any>("superOperations").find((operation) =>
+      operation.sessionId === sessionId && operation.callId === callId && (!run || operation.goalId === run.taskId));
+    card.data = { ...(card.data && typeof card.data === "object" ? card.data : {}), ...(run ? { agentRunId: run.id, taskId: run.taskId } : {}),
+      ...(operation?.resourceId ? { resource_id: operation.resourceId } : {}),
+      ...(operation ? { operation_id: operation.id, attempt_id: operation.attemptId, operation_status: operation.status, completed_at: operation.completedAt } : {}) };
+    if (operation?.status === "unknown") card.status = "unknown";
+    if (run && operation?.resourceId && !run.resourceIds.includes(operation.resourceId)) run.resourceIds.push(operation.resourceId);
+  }
+  private childEvent(parentId: string, runId: string, event: ZCodeEvent) {
+    const view = this.store.view(parentId), run = view.agentRuns?.find((candidate) => candidate.id === runId);
+    if (!run || event.sessionId !== run.childSessionId) return;
+    const payload = event.payload as Record<string, any>;
+    const cards = run.cards ??= [];
+    const card = (callId: string, title?: string) => {
+      let entry = cards.find((entry) => entry.id === callId);
+      if (!entry) { entry = { id: callId, type: "operation", title, content: "", status: "running", at: now() }; cards.push(entry); }
+      return entry;
+    };
+    if (event.type === "turn_started") { run.activityPhase = "model"; run.activityUpdatedAt = now(); }
+    else if (event.type === "tool_call_scheduled") {
+      const call = payload.toolCall ?? payload, callId = String(call.id ?? call.toolCallId ?? payload.toolCallId);
+      const entry = card(callId, String(call.name ?? call.toolName ?? "工具"));
+      entry.data = { call_id: callId, arguments: this.scrub(call.input), agentRunId: run.id, taskId: run.taskId };
+      run.toolCount = cards.length;
+    } else if (event.type === "tool_call_started") {
+      card(String(payload.toolCallId), String(payload.toolName ?? "工具")).status = "running";
+      run.activityTool = String(payload.toolName ?? ""); run.activityPhase = "tool"; run.activityUpdatedAt = now();
+    } else if (event.type === "tool_call_result" || event.type === "tool_call_error") {
+      const entry = card(String(payload.toolCallId));
+      entry.status = event.type === "tool_call_error" || payload.result?.success === false ? "failed" : "completed";
+      entry.content = this.redact(event.type === "tool_call_error" ? String(payload.error?.message ?? "工具调用失败") :
+        typeof payload.result?.content === "string" ? payload.result.content : JSON.stringify(payload.result?.content ?? payload.result ?? {}));
+      this.bindOperationCard(parentId, entry, `${run.childSessionId}:${payload.toolCallId}`, run);
+      run.activityTool = undefined; run.activityPhase = "model"; run.activityUpdatedAt = now();
+    } else if (event.type === "permission_requested") {
+      run.status = "waiting_approval";
+    } else if (["permission_resolved", "permission_denied"].includes(event.type)) {
+      run.status = "running";
+      const id = run.pending?.id;
+      view.pendingApprovals = (view.pendingApprovals ?? []).filter((approval) => approval.id !== id && approval.id !== payload.requestId);
+      view.pending = view.pendingApprovals[0];
+      view.status = view.pending ? "waiting_approval" : "running";
+      run.pending = undefined;
+    } else return; // Raw model/reasoning events never become the parent's conversation.
+    this.update(parentId, view);
   }
   private keys = new Set<string>();
   async prepareRedaction() {
@@ -260,6 +326,10 @@ export class LakeAgents {
       card.content = this.redact(card.content ?? "");
       if (card.data) card.data = JSON.parse(this.redact(JSON.stringify(card.data)));
     }
+    for (const run of view.agentRuns ?? []) {
+      if (run.summary) run.summary = this.redact(run.summary);
+      for (const card of run.cards ?? []) { card.content = this.redact(card.content ?? ""); if (card.data) card.data = this.scrub(card.data); }
+    }
     if (view.pending) view.pending = JSON.parse(this.redact(JSON.stringify(view.pending)));
     if (view.pendingApprovals)
       view.pendingApprovals = JSON.parse(this.redact(JSON.stringify(view.pendingApprovals)));
@@ -319,6 +389,116 @@ export class LakeAgents {
       }), profile,
     );
   }
+  private async runManagedChild(options: {
+    request: ExploreSubagentRuntimeRequest; signal?: AbortSignal; parent: AgentRuntime;
+    parentId: string; profile: HostProfile; workspace: string; boundModel: Model;
+    provider: ModelProvider; model: ProviderModel;
+    execution: ReturnType<typeof createNodeExecutionAdapter>;
+    filesystem: ReturnType<typeof createNodeFileSystemAdapter>; ownedChildren: Set<AgentRuntime>;
+  }) {
+    const { request, signal, parent, parentId, profile, workspace, boundModel, provider, model, execution, filesystem, ownedChildren } = options;
+    this.guard?.();
+    if (signal?.aborted || !this.live.get(parentId)?.controller || !profile.taskId || !profile.workerId)
+      throw new HttpError(409, "任务已停止或子智能体缺少可信任务绑定");
+    const parentSession = this.store.session(parentId);
+    const view = this.store.view(parentId);
+    const previous = view.agentRuns?.find((run) => run.id === request.agentId);
+    if (previous && (previous.childSessionId !== request.sessionId || previous.taskId !== profile.taskId))
+      throw new HttpError(409, "子智能体执行身份不匹配");
+    if (!previous && (view.agentRuns ?? []).filter((run) => run.source === "zcode_subagent" && run.taskId === profile.taskId).length >= 7)
+      throw new HttpError(409, "同一任务累计最多 7 个临时子智能体；请复用已有结果继续原任务");
+    const run: AgentRun = previous ?? { id: request.agentId, sessionId: parentId, source: "zcode_subagent",
+      taskId: profile.taskId, workerId: profile.workerId, childSessionId: request.sessionId,
+      rootTurnId: view.rootTurnId, role: request.agentType, name: this.redact(request.description),
+      task: this.redact(request.description), resourceIds: [], status: "running", createdAt: now(), cards: [], toolCount: 0 };
+    run.status = "running"; run.startedAt = now(); run.finishedAt = undefined;
+    view.agentRuns = [...(view.agentRuns ?? []).filter((entry) => entry.id !== run.id), run];
+    this.update(parentId, view);
+    const allowed = profile.allowlist.filter((name) => !childForbiddenTools.has(name) &&
+      (request.allowedTools.includes("*") || request.allowedTools.includes(name)) &&
+      !request.disallowedTools?.includes(name));
+    const registry = createToolRegistry();
+    for (const tool of profile.tools) if (allowed.includes(tool.metadata.name)) registry.register(tool);
+    const childStore = new Proxy(this.sessions, {
+      get: (target, property, receiver) => {
+        const value = Reflect.get(target, property, receiver);
+        if (typeof value !== "function") return value;
+        if (property === "createSession" || property === "updateSession") return (input: any) => {
+          if (input.id !== request.sessionId) throw new HttpError(409, "Child runtime cannot write another session identity");
+          return value.call(target, { ...input,
+            ...(property === "createSession" ? { projectID: parentSession.projectId, parentID: parentId, taskType: "subagent_child" } : {}),
+            ...(profile.permissionRules ? { permission: profile.permissionRules } : {}) });
+        };
+        return value.bind(target);
+      },
+    });
+    const existing = await this.sessions.getSession(request.sessionId);
+    if (existing && (existing.projectID !== parentSession.projectId || existing.parentID !== parentId || existing.taskType !== "subagent_child"))
+      throw new HttpError(409, "Existing child session belongs to another task");
+    const interaction = { agentId: request.agentId, agentType: request.agentType, childSessionId: request.sessionId,
+      description: request.description, parentToolCallId: String(request.traceContext.attributes?.parentToolCallId ?? "") };
+    const child = new AgentRuntime(request.sessionId, {
+      workingDirectory: workspace,
+      systemPrompt: `You are a temporary child agent for one Lake task. Complete only the delegated work using the supplied business tools. Never change task ownership or claim acceptance. Report actual findings.\n${lakeCommunicationPrompt}`,
+      subagentContext: { agentPrompt: request.systemPrompt ?? request.profile.systemPrompt ?? "" },
+      parentSessionId: parentId as SessionId, taskType: "subagent_child", agentName: request.agentType,
+      toolAllowlist: allowed, modelSelection: { providerId: provider.id, modelId: model.name },
+      maxTurns: Math.min(request.maxTurns ?? Number(parentSession.options.maxSteps ?? 500), Number(parentSession.options.maxSteps ?? 500)),
+      mode: "build", modelStreaming: "on", streamingToolExecution: "off", toolConcurrency: { maxConcurrency: 1 },
+      titleGeneration: { enabled: false }, targetCompletionVerification: { enabled: false },
+      dynamicWorkflowEnabled: false, nativeSearchEnhancementsEnabled: false, subagents: { enabled: false }, mcp: { enabled: false },
+    }, {
+      sessionStore: childStore, toolRegistry: registry,
+      eventStore: parent.getSessionEventStore(), modelFactory: () => boundModel,
+      ...parent.createChildClientPorts(interaction), executionPort: execution, fileSystemPort: filesystem,
+      httpClientPort: createNodeWebFetchHttpClientAdapter(),
+      artifactStore: createNodeToolArtifactStore({ rootDir: join(this.store.data, "artifacts"),
+        imageCacheRootDir: join(this.store.data, "images"), videoCacheRootDir: join(this.store.data, "videos") }),
+      eventSink: { onSessionEvent: async (event) => {
+        request.reportActivity?.();
+        this.childEvent(parentId, request.agentId, event);
+        await parent.notifyExternalChildSessionEvent({ childSessionId: request.sessionId, event, traceContext: request.traceContext, interactionOrigin: interaction });
+      } },
+    });
+    ownedChildren.add(child);
+    for (const name of registry.list()) {
+      const original = registry.get(name)!;
+      const entry = profile.configureTool?.(original) ?? original;
+      registry.register({ ...entry, handler: (input, context) => {
+        this.guard?.();
+        if (!allowed.includes(name) || childForbiddenTools.has(name)) throw new HttpError(403, "子智能体不能使用此工具");
+        const scoped: HostToolContext = { ...context, toolCallId: `${request.sessionId}:${context.toolCallId}`,
+          lakeSubagent: { id: request.agentId, sessionId: request.sessionId, toolCallId: context.toolCallId } };
+        if (!profile.invoke) throw new HttpError(409, "Child business tool fence is unavailable");
+        return profile.invoke(entry, input, scoped);
+      } }, { silentDuplicateWarning: true });
+    }
+    try {
+      if (request.resumeFromStore) {
+        if (!existing) throw new HttpError(409, "No prior child session is available for resume");
+        await child.resumeFromStore();
+      } else await child.ensureSessionPersistedForExternalActivity(request.prompt, { traceContext: request.traceContext });
+      await request.onSessionReady?.();
+      request.registerMessageSink?.({ send: async (message) => {
+        await child.steerTurn({ input: message.message, pendingInputId: message.id, delivery: "guide" }); return "steered";
+      } });
+      const result = await child.executeTurn(request.prompt, undefined, {
+        abortSignal: signal, inputSource: "subagent", inputPresentation: "coordinator_input", traceContext: request.traceContext,
+      });
+      const finalView = this.store.view(parentId), final = finalView.agentRuns?.find((entry) => entry.id === request.agentId);
+      if (final) { final.status = signal?.aborted || this.live.get(parentId)?.controller?.signal.aborted ? "cancelled" : "completed"; final.summary = this.redact(result.response ?? ""); final.finishedAt = now(); final.pending = undefined; final.activityTool = undefined; }
+      this.update(parentId, finalView);
+      return result;
+    } catch (error) {
+      const finalView = this.store.view(parentId), final = finalView.agentRuns?.find((entry) => entry.id === request.agentId);
+      if (final) { final.status = signal?.aborted || this.live.get(parentId)?.controller?.signal.aborted ? "cancelled" : "failed"; final.summary = this.redact(error instanceof Error ? error.message : String(error)); final.finishedAt = now(); final.pending = undefined;
+        for (const card of final.cards ?? []) if (["running", "pending"].includes(card.status)) card.status = final.status; }
+      this.update(parentId, finalView);
+      throw error;
+    } finally {
+      await child.close(); ownedChildren.delete(child);
+    }
+  }
   async runtime(sessionId: string) {
     const session = this.store.session(sessionId);
     const profile = this.host?.profile(sessionId);
@@ -365,8 +545,10 @@ export class LakeAgents {
           risk: request.riskLevel,
           fingerprint: request.requestId,
         };
-        view.pending = approval;
-        view.pendingApprovals = [approval];
+        view.pendingApprovals = [...(view.pendingApprovals ?? []).filter((item) => item.id !== approval.id), approval];
+        view.pending = view.pendingApprovals[0];
+        const origin = request.origin;
+        if (origin?.kind === "subagent") { const run = view.agentRuns?.find((run) => run.id === origin.agentId); if (run) { run.pending = approval; run.status = "waiting_approval"; } }
         view.status = "waiting_approval";
         this.update(sessionId, view);
       },
@@ -415,7 +597,32 @@ export class LakeAgents {
         return value.bind(target);
       },
     });
-    const runtime = new AgentRuntime(
+    const runtimeTasks = profile?.subagents ? new InMemoryRuntimeTaskRegistry() : undefined;
+    const ownedChildren = new Set<AgentRuntime>();
+    const childExecutions = new Set<Promise<unknown>>();
+    let runtime: AgentRuntime;
+    const childPort = profile?.subagents && runtimeTasks ? createExploreSubagentPort({
+      runtimeTaskRegistry: runtimeTasks, outputRootDir: join(this.store.data, "subagents"),
+      profiles: [
+        { ...createBuiltInGeneralPurposeAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name)) },
+        { ...createBuiltInExploreAgentProfile(), tools: profile.allowlist.filter((name) => !childForbiddenTools.has(name) && !["Write", "Edit", "call_mcp_tool"].includes(name)) },
+      ],
+      getAllowedTools: () => profile.allowlist.filter((name) => !childForbiddenTools.has(name) && !["Write", "Edit", "call_mcp_tool"].includes(name)),
+      emitParentEvent: (event, trace) => runtime.appendEvent(event, trace),
+      closeOwnedRuntimes: async () => { await Promise.allSettled([...ownedChildren].map((child) => child.close())); },
+      enqueueParentTaskNotification: (notification) => {
+        if (this.live.get(sessionId)?.controller && !this.live.get(sessionId)?.controller?.signal.aborted)
+          void runtime.steerTurn({ input: notification.text, pendingInputId: `subagent:${notification.taskId}`, delivery: "guide" }).catch(() => {});
+        return undefined;
+      },
+      runExploreAgent: (request, options) => {
+        const work = this.runManagedChild({ request, signal: options?.signal, parent: runtime, parentId: sessionId, profile, workspace, boundModel, provider, model, execution, filesystem: guardedFilesystem, ownedChildren });
+        childExecutions.add(work);
+        void work.then(() => childExecutions.delete(work), () => childExecutions.delete(work));
+        return work;
+      },
+    }) : undefined;
+    runtime = new AgentRuntime(
       sessionId as SessionId,
       {
         systemPrompt: (profile?.systemPrompt ?? "You are Lake, an operations assistant. Use the available tools and report actual results. Never read credential files.") + `\n${lakeCommunicationPrompt}\n${String(session.options.userPrompt ?? "")}`,
@@ -433,11 +640,12 @@ export class LakeAgents {
         targetCompletionVerification: { enabled: false },
         dynamicWorkflowEnabled: false,
         nativeSearchEnhancementsEnabled: false,
-        subagents: { enabled: !profile },
+        subagents: { enabled: !profile || profile.subagents === true, maxTurns: Number(session.options.maxSteps ?? 500) },
         mcp: { enabled: false },
       },
       {
         sessionStore,
+        ...(childPort ? { subagentPort: childPort, runtimeTaskRegistry: runtimeTasks } : {}),
         toolRegistry: registry,
         eventStore: new InMemorySessionEventStore({ retention: "unbounded" }),
         modelFactory: () => boundModel,
@@ -455,14 +663,32 @@ export class LakeAgents {
     );
     for (const name of registry.list()) {
       const original = registry.get(name)!;
-      const entry = profile?.configureTool?.(original) ?? original;
+      let entry = profile?.configureTool?.(original) ?? original;
+      if (profile?.subagents && nativeControlTools.has(name)) entry = { ...entry, metadata: { ...entry.metadata, needsApproval: false }, permission: { ...entry.permission, needsApproval: false }, resolvePermissionCapability: () => ({ needsApproval: false, permission: { needsApproval: false } }) };
       // The public registry is shared with the executor. Interpose the Lake
       // task/operation fence at the actual handler, after any approval wait.
-      registry.register({ ...entry, handler: (input, context) => { this.guard?.(); return profile?.invoke ? profile.invoke(entry, input, context) : entry.handler(input, context); } }, { silentDuplicateWarning: true });
+      registry.register({ ...entry, handler: (input, context) => {
+        this.guard?.();
+        if (entry.metadata.name === "work_finish" && runtimeTasks && Object.values(runtimeTasks.all()).some((task) => !childTerminal.has(task.status)))
+          throw new HttpError(409, "子智能体仍在执行，请先使用 TaskOutput 汇合实际结果后再提交任务结果");
+        if (profile?.subagents && nativeControlTools.has(entry.metadata.name)) {
+          if (!profile.invokeControl) throw new HttpError(409, "Managed subagent control is unavailable");
+          return profile.invokeControl(entry, input, context);
+        }
+        return profile?.invoke ? profile.invoke(entry, input, context) : entry.handler(input, context);
+      } }, { silentDuplicateWarning: true });
     }
     if (existingSession)
       await (runtime as AgentRuntime & { resumeFromStore(): Promise<unknown> }).resumeFromStore();
-    live = { runtime, broker, execution, selection: selectionKey };
+    const children = runtimeTasks ? { registry: runtimeTasks, active: () => Object.values(runtimeTasks.all()).some((task) => !childTerminal.has(task.status)),
+      cancel: async () => {
+        // The public runtime cleanup method only cancels background Bash. Native
+        // Agent tasks are owned by the supplied SubagentPort and must stop there.
+        const active = Object.values(runtimeTasks.all()).filter((task) => !childTerminal.has(task.status));
+        await Promise.allSettled(active.map((task) => childPort!.stopTask?.(task.taskId, { initiator: "model" })));
+        await Promise.allSettled([...childExecutions]);
+      } } : undefined;
+    live = { runtime, broker, execution, selection: selectionKey, children };
     this.live.set(sessionId, live);
     return live;
   }
@@ -492,6 +718,7 @@ export class LakeAgents {
         const result = await live.runtime.executeTurn(options.input ?? text, undefined, {
           abortSignal: controller.signal,
         });
+        if (live.children?.active()) { await live.children.cancel(); throw new HttpError(409, "任务尚有未汇合的子智能体，已停止其后续执行；任务结果仍未完成"); }
         const final = this.store.view(sessionId);
         if (!controller.signal.aborted && result.response) outcome.response = this.redact(result.response);
         if (result.response) {
@@ -525,6 +752,7 @@ export class LakeAgents {
           });
         this.update(sessionId, final);
       } finally {
+        await live.children?.cancel();
         this.toolActivity.clear(sessionId);
         const final = this.store.view(sessionId);
         final.pending = undefined;

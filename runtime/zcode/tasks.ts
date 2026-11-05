@@ -42,6 +42,7 @@ export type Operation = {
   mcpServerId?: string; mcpTool?: string; remoteMcp?: boolean; configurationHash?: string; bindingHash?: string; catalogHash?: string;
   skillName?: string; skillHash?: string;
   hostConfigurationHash?: string;
+  agentRunId?: string; childSessionId?: string; originalCallId?: string;
 };
 
 const businessReceiptTools = new Set(["inspect_host", "Read", "Write", "Edit", "list_project_files", "call_mcp_tool", "read_referenced_task_evidence"]);
@@ -248,7 +249,7 @@ export class TaskLedger {
   }
   async operation<T>(goalId: string, generation: number, policyHash: string, callId: string, tool: string,
     input: unknown, dispatch: () => Promise<T>, redact: <V>(value: V) => V,
-    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash"> = {}): Promise<T> {
+    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash" | "agentRunId" | "childSessionId" | "originalCallId"> = {}): Promise<T> {
     const key = digest([this.get(goalId).sessionId, callId]);
     const previous = this.store.get<Operation>("superOperations", key);
     if (previous) {

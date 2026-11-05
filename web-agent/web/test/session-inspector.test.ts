@@ -4,7 +4,18 @@ import {InspectorTaskSummary,inspectorProgress} from '../src/InspectorTaskSummar
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {islandFixture} from './fixtures/pilot-island-data';
-import {inspectedTask,inspectedAttempt,inspectorAttempts,latestInspectorSelection,resolvedInspectorSelection} from '../src/sessionInspectorModel';
+import {hasInspectorTask,inspectedTask,inspectedAttempt,inspectorAttempts,latestInspectorSelection,resolvedInspectorSelection} from '../src/sessionInspectorModel';
+import type {SessionSnapshot} from '../../shared/contracts';
+
+test('native task execution is not an empty chat turn when child records exist without parent cards',()=>{
+ const snapshot={session:{id:'worker-session',projectId:'project'},superagent:{task:{taskId:'task',sessionId:'worker-session',projectId:'project'}},messages:[],ai:{cards:[],agentRuns:[{id:'child',source:'zcode_subagent',taskId:'task',status:'running'}]}} as unknown as SessionSnapshot;
+ const selection={sessionId:'worker-session',canonicalGoalId:'task',tab:'execution' as const};
+ assert.equal(hasInspectorTask(snapshot,selection),true);
+ assert.equal(hasInspectorTask({...snapshot,ai:{...snapshot.ai!,agentRuns:[]}},selection),true,'the known task also survives a lagging child projection');
+ assert.equal(hasInspectorTask(snapshot,{...selection,canonicalGoalId:'another-task'}),false);
+ assert.equal(hasInspectorTask(snapshot,{...selection,sessionId:'another-session'}),false);
+ assert.equal(hasInspectorTask({...snapshot,superagent:{task:{...snapshot.superagent!.task,projectId:'another-project'}}},selection),false);
+});
 
 test('the inspector uses the authoritative task and rejects another session or project',()=>{
  const snapshot=islandFixture(),task=snapshot.sre!.tasks[0]!;

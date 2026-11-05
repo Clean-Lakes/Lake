@@ -14,6 +14,9 @@ async function fixture(t, mode = "text", legacyDev = false) {
   await writeFile(join(web, "index.html"), "<html>Lake fixture</html>");
   let calls = 0;
   let failWorkerRequests = false;
+  let backgroundJoinRequested = false;
+  let releaseBackgroundChild;
+  const backgroundChildGate = new Promise((resolve) => { releaseBackgroundChild = resolve; });
   const requests = [];
   const target = join(home, "approved.txt");
   const provider = createServer(async (req, res) => {
@@ -22,6 +25,13 @@ async function fixture(t, mode = "text", legacyDev = false) {
     const request = JSON.parse(Buffer.concat(chunks).toString());
     requests.push(request);
     calls++;
+    // Keep the background child's first resource read pending until the parent
+    // asks to join it. This proves work_finish cannot accept a still-live child,
+    // independently of machine speed or an arbitrary delay.
+    if (mode.startsWith("super-subagent-background") &&
+        !request.tools?.some((tool) => ["route_work", "work_finish"].includes(tool.function?.name)) &&
+        JSON.stringify(request.messages).includes("LAKE_SUBAGENT_FIXTURE:"))
+      await backgroundChildGate;
     if (failWorkerRequests && request.tools?.some((tool) => tool.function?.name === "work_finish")) {
       res.writeHead(401, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: { message: "synthetic-current-invocation-failure", type: "authentication_error" } }));
@@ -47,6 +57,11 @@ async function fixture(t, mode = "text", legacyDev = false) {
     if (mode.startsWith("super")) {
       delta = superReply(request, mode, home);
       tool = !!delta.tool_calls;
+      if (mode.startsWith("super-subagent-background") && mode !== "super-subagent-background-stop" &&
+          delta.tool_calls?.some((call) => call.function.name === "TaskOutput")) {
+        backgroundJoinRequested = true;
+        releaseBackgroundChild();
+      }
     }
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     const deltas =
@@ -81,6 +96,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
   }
   let app = await startLakeServer(options);
   t.after(async () => {
+    releaseBackgroundChild();
     await app.close();
     await new Promise((resolve) => provider.close(resolve));
   });
@@ -130,6 +146,9 @@ async function fixture(t, mode = "text", legacyDev = false) {
     get calls() {
       return calls;
     },
+    get backgroundJoinRequested() {
+      return backgroundJoinRequested;
+    },
     async restart() {
       await app.close();
       app = await startLakeServer(options);
@@ -160,6 +179,7 @@ function superReply(request, mode, home) {
     if (!names.includes("route_work")) return call("route_work", { event_id: event.id, part_key: "inspect", action: "create", title: "检查项目工作区", role_id: roleId, quote: event.text, reason: "用户明确要求检查本项目" });
     return { content: "已交给项目检查员处理，执行结果将从原任务回报。" };
   }
+  if (mode.startsWith("super-subagent")) return subagentReply(request, mode, home);
   if (exposes("work_begin") && !names.includes("work_begin")) return call("work_begin", { title: "检查项目工作区", items: [{ id: "inspect", title: "读取工作区并按实际结果验收" }] });
   const updates = request.messages.flatMap((message) => (message.tool_calls ?? []).filter((call) => call.function.name === "work_update").map((call) => JSON.parse(call.function.arguments)));
   if (exposes("work_update") && !updates.some((update) => update.status === "running")) return call("work_update", { item_id: "inspect", status: "running" }, "start-inspect");
@@ -209,6 +229,66 @@ function superReply(request, mode, home) {
   if (exposes("work_update") && !updates.some((update) => update.status === "completed")) return call("work_update", { item_id: "inspect", status: "completed", evidence_ids: mode.includes("write") ? ["actual-files", "actual-write"] : ["actual-files"] }, "accept-inspect");
   if (!names.includes("work_finish")) return finish("已读取本项目工作区，并根据本次实际文件清单完成检查。");
   return { content: "本次真实检查已结束。" };
+}
+
+// This fixture supplies model protocol only. The parent never touches a
+// business resource, so acceptance must come from a real child tool receipt.
+function subagentReply(request, mode, home) {
+  const content = (message) => typeof message.content === "string" ? message.content : (message.content ?? []).map((part) => part.text ?? "").join("");
+  const calls = request.messages.flatMap((message) => message.tool_calls ?? []);
+  const exposes = (name) => request.tools?.some((tool) => tool.function?.name === name);
+  const call = (name, input, id) => ({ tool_calls: [{ index: 0, id, type: "function", function: { name, arguments: JSON.stringify(input) } }] });
+  if (exposes("work_finish")) {
+    const raw = request.messages.filter((message) => message.role === "user").map(content).findLast((value) => value.startsWith("{") && value.includes('"assignment"'));
+    assert.ok(raw, "parent Worker must have its host-provided assignment");
+    const assigned = JSON.parse(raw);
+    const delegated = calls.filter((tool) => tool.function.name === "Agent");
+    const wanted = mode === "super-subagent-cap" ? 8 : mode.endsWith("-two") ? 2 : 1;
+    if (delegated.length < wanted) {
+      const sibling = delegated.length;
+      const path = mode === "super-subagent-outside" ? join(home, "outside-task.txt") :
+        join(home, "workspaces", assigned.assignment.projectId,
+          mode.includes("write") ? "child-output.txt" : sibling ? "child-evidence-b.txt" : "child-evidence-a.txt");
+      return call("Agent", {
+        description: sibling ? "核对另一份证据" : "读取独立任务证据",
+        prompt: `LAKE_SUBAGENT_FIXTURE:${JSON.stringify({ mode, path, sibling })}\nUse only the assigned resource tool and report its actual result.`,
+        subagent_type: "general-purpose",
+        run_in_background: mode.startsWith("super-subagent-background"),
+      }, `delegate-${sibling}`);
+    }
+    if (mode === "super-subagent-background-early")
+      return { content: "父 Worker 提前结束回复，后台子任务仍未交付实际结果。" };
+    if (mode.startsWith("super-subagent-background")) {
+      const finished = calls.filter((tool) => tool.function.name === "work_finish");
+      if (!finished.length)
+        return call("work_finish", { summary: "子任务仍在运行，尝试过早结清。", outcome: "completed" }, "premature-child-finish");
+      const joined = calls.filter((tool) => tool.function.name === "TaskOutput");
+      if (joined.length < wanted) {
+        const results = request.messages.filter((message) => message.role === "tool").map(content).filter((value) => value.includes("agentId:"));
+        const childId = results[joined.length]?.match(/agentId:\s*([\w-]+)/)?.[1];
+        assert.ok(childId, "native Agent background result must supply its actual task identity");
+        return call("TaskOutput", { task_id: childId, block: true, timeout: 10000 }, `join-background-child-${joined.length}`);
+      }
+      if (finished.length < 2)
+        return call("work_finish", { summary: "已汇合原生后台子智能体，并取得实际工作区证据。", outcome: "completed" }, "finish-joined-child-work");
+      return { content: "原生后台子智能体已汇合，任务依据实际回执结束。" };
+    }
+    if (!calls.some((tool) => tool.function.name === "work_finish")) {
+      const schema = request.tools.find((tool) => tool.function.name === "work_finish").function.parameters;
+      return call("work_finish", { summary: "已由当前任务的子智能体读取或写入实际工作区证据。", ...(schema?.properties?.outcome ? { outcome: "completed" } : {}) }, "finish-child-work");
+    }
+    return { content: "子智能体已回报；未取得实际证据的任务仍应保持未完成。" };
+  }
+  const raw = request.messages.filter((message) => message.role === "user").map(content).findLast((value) => value.includes("LAKE_SUBAGENT_FIXTURE:"));
+  assert.ok(raw, "native child must receive its explicit task prompt");
+  const input = JSON.parse(raw.match(/LAKE_SUBAGENT_FIXTURE:(\{[^\n]+\})/)[1]);
+  if (["super-subagent-prose", "super-subagent-cap"].includes(mode))
+    return { content: "我宣称完成了检查，但没有调用任何实际资源工具。" };
+  const tool = mode.includes("write") ? "Write" : "Read";
+  if (!calls.some((entry) => entry.function.name === tool))
+    return call(tool, { file_path: input.path, ...(tool === "Write" ? { content: "actual child write receipt" } : {}) }, tool === "Read" ? "shared-child-read" : "child-write");
+  const actual = request.messages.filter((message) => message.role === "tool").map(content).at(-1);
+  return { content: `子智能体实际工具回执：${actual}` };
 }
 
 // A protocol fixture, not a language-model evaluation: choose only from the
@@ -279,6 +359,39 @@ async function until(read, predicate, milliseconds = 15000) {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   assert.fail("Timed out waiting for actual host state: " + JSON.stringify(value));
+}
+
+async function startSubagentTask(t, mode) {
+  const f = await fixture(t, mode);
+  const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
+  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, "POST", { maxSteps: 24 });
+  const workspace = await f.app.store.workspace(f.project.id);
+  await writeFile(join(workspace, "child-evidence-a.txt"), "ACTUAL_CHILD_EVIDENCE_A");
+  await writeFile(join(workspace, "child-evidence-b.txt"), "ACTUAL_CHILD_EVIDENCE_B");
+  await writeFile(join(f.home, "outside-task.txt"), "OUTSIDE_TASK_SENTINEL");
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", {
+    text: "请安排项目检查员，按需要创建临时子智能体，核对本项目的实际工作区证据。",
+  }, 202);
+  const state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (value) => value.workers.length === 1);
+  return { f, project, worker: state.workers[0], workspace };
+}
+
+async function settledSubagentTask(f) {
+  return until(() => f.api(`/api/projects/${f.project.id}/superagent`), (value) =>
+    value.workers.length === 1 && value.workers[0].assignmentState === "parked");
+}
+
+function assertNativeRun(run, worker, goal) {
+  assert.equal(run.source, "zcode_subagent");
+  assert.equal(run.taskId, goal.id);
+  assert.equal(run.workerId, worker.id);
+  assert.equal(run.sessionId, worker.sessionId);
+  assert.ok(run.childSessionId && run.childSessionId !== worker.sessionId, "child execution needs its own SDK session");
+  assert.ok(Array.isArray(run.cards), "child tool details must be retained on its actual run");
+}
+
+function childRequests(f) {
+  return f.requests.filter((request) => !request.tools?.some((tool) => ["route_work", "work_finish"].includes(tool.function?.name)));
 }
 
 test("pure TS host authenticates, runs real ZCode, streams and restores history", async (t) => {
@@ -605,6 +718,286 @@ test("real ZCode Pilot creates a stable specialist and independent Worker, with 
   const calls = f.calls;
   await new Promise((resolve) => setTimeout(resolve, 75));
   assert.equal(f.calls, calls, "restart must not replay an accepted task");
+});
+
+test("native ZCode subagent reads real evidence under its original Worker task and preserves run details", async (t) => {
+  const { f, project, worker } = await startSubagentTask(t, "super-subagent-read");
+  const state = await settledSubagentTask(f);
+  const goal = f.app.store.list("superGoals")[0];
+  assert.equal(state.workers[0].task.state, "completed", JSON.stringify(state.workers[0]));
+  assert.equal(goal.acceptanceState, "pass");
+  assert.equal(state.workers.length, 1);
+  assert.equal(state.channels.length, 1, "temporary child must not create a permanent specialist channel");
+  const routerRequest = f.requests.find((request) => request.tools?.some((tool) => tool.function.name === "route_work"));
+  assert.ok(!routerRequest.tools.some((tool) => tool.function.name === "Agent"));
+  const workerRequest = f.requests.find((request) => request.tools?.some((tool) => tool.function.name === "work_finish"));
+  assert.ok(workerRequest.tools.some((tool) => tool.function.name === "Agent"), "managed Worker should expose the native Agent tool");
+  const children = childRequests(f);
+  assert.equal(children.length, 2, "a real native child must request a tool and consume its actual result");
+  for (const request of children) {
+    assert.ok(request.tools.some((tool) => tool.function.name === "Read"));
+    assert.ok(!request.tools.some((tool) => ["Agent", "route_work", "manage_specialist", "work_begin", "work_update", "work_finish"].includes(tool.function.name)), "child has business tools without routing or task completion authority");
+  }
+  const operations = f.app.store.list("superOperations");
+  assert.equal(operations.length, 1, "parent delegation itself must not become a business observation");
+  assert.equal(operations[0].tool, "Read");
+  assert.equal(operations[0].goalId, goal.id);
+  assert.equal(operations[0].projectId, f.project.id);
+  assert.equal(operations[0].sessionId, worker.sessionId);
+  assert.equal(operations[0].status, "succeeded");
+  assert.ok(JSON.stringify(operations[0].output).includes("ACTUAL_CHILD_EVIDENCE_A"));
+  assert.ok(operations[0].outputHash);
+  const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
+  assert.equal(view.agentRuns.length, 1);
+  const run = view.agentRuns[0];
+  assertNativeRun(run, worker, goal);
+  assert.equal(run.status, "completed");
+  assert.ok(run.cards.some((card) => card.title === "Read" && card.status === "completed"));
+  assert.ok(JSON.stringify(run.cards).includes("ACTUAL_CHILD_EVIDENCE_A"));
+  assert.ok(operations[0].callId.startsWith(run.childSessionId + ":"));
+  assert.equal(operations[0].agentRunId, run.id);
+  assert.equal(operations[0].childSessionId, run.childSessionId);
+  assert.equal(operations[0].originalCallId, "shared-child-read");
+  const resource = f.app.store.catalog().resources.find((resource) => resource.projectId === f.project.id && resource.kind === "local");
+  assert.ok(resource);
+  assert.deepEqual(run.resourceIds, [resource.id]);
+  const readCard = run.cards.find((card) => card.title === "Read");
+  assert.equal(readCard.data.agentRunId, run.id);
+  assert.equal(readCard.data.taskId, goal.id);
+  assert.equal(readCard.data.resource_id, resource.id);
+  assert.equal(readCard.data.operation_id, operations[0].id);
+  const child = await f.app.agents.sessions.getSession(run.childSessionId);
+  assert.equal(child.parentID, worker.sessionId);
+  assert.equal(child.taskType, "subagent_child");
+  const reports = f.app.store.messages(project.routerSessionId).filter((message) => message.author?.taskId === goal.id);
+  assert.equal(reports.length, 1);
+  const calls = f.calls;
+  await f.restart();
+  const restored = await f.api(`/api/sessions/${worker.sessionId}/ai`);
+  assert.deepEqual(restored.agentRuns, view.agentRuns);
+  assert.equal((await f.app.agents.sessions.getSession(run.childSessionId)).parentID, worker.sessionId);
+  assert.equal(f.calls, calls, "restoring child history must not restart an accepted task");
+});
+
+test("native subagent prose and a successful Agent return cannot accept a task without child resource receipts", async (t) => {
+  const { f, worker } = await startSubagentTask(t, "super-subagent-prose");
+  const state = await settledSubagentTask(f);
+  const goal = f.app.store.list("superGoals")[0];
+  assert.notEqual(state.workers[0].task.state, "completed");
+  assert.notEqual(goal.acceptanceState, "pass");
+  assert.equal(f.app.store.list("superOperations").length, 0);
+  assert.equal(f.app.store.list("superAcceptance").length, 0);
+  assert.ok(childRequests(f).length > 0, "a child actually ran rather than rejecting delegation at the parent");
+  const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
+  assert.equal(view.agentRuns.length, 1);
+  assertNativeRun(view.agentRuns[0], worker, goal);
+  assert.equal(view.agentRuns[0].status, "completed", "a completed child is distinct from accepted business work");
+  assert.deepEqual(view.agentRuns[0].resourceIds, []);
+});
+
+test("native child Read cannot escape its parent task workspace or use rejected access as acceptance evidence", async (t) => {
+  const { f, worker } = await startSubagentTask(t, "super-subagent-outside");
+  const state = await settledSubagentTask(f);
+  assert.notEqual(state.workers[0].task.state, "completed");
+  assert.notEqual(f.app.store.list("superGoals")[0].acceptanceState, "pass");
+  assert.equal(f.app.store.list("superOperations").length, 0, "scope rejection occurs before a business operation is dispatched");
+  const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
+  assert.equal(view.agentRuns.length, 1);
+  assert.ok(view.agentRuns[0].cards.some((card) => card.title === "Read" && card.status === "failed"));
+  assert.ok(!JSON.stringify(view).includes("OUTSIDE_TASK_SENTINEL"));
+  assert.ok(!JSON.stringify(f.requests).includes("OUTSIDE_TASK_SENTINEL"));
+});
+
+test("two native subagents using the same raw tool call ID keep distinct evidence and execution sessions", async (t) => {
+  const { f, worker } = await startSubagentTask(t, "super-subagent-two");
+  const state = await settledSubagentTask(f);
+  assert.equal(state.workers[0].task.state, "completed", JSON.stringify(state.workers[0]));
+  const goal = f.app.store.list("superGoals")[0];
+  const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
+  assert.equal(view.agentRuns.length, 2);
+  view.agentRuns.forEach((run) => assertNativeRun(run, worker, goal));
+  assert.equal(new Set(view.agentRuns.map((run) => run.childSessionId)).size, 2);
+  const operations = f.app.store.list("superOperations");
+  assert.equal(operations.length, 2);
+  assert.equal(new Set(operations.map((operation) => operation.id)).size, 2);
+  assert.ok(operations.every((operation) => operation.callId.endsWith(":shared-child-read")));
+  assert.ok(operations.every((operation) => operation.tool === "Read" && operation.status === "succeeded" && operation.goalId === goal.id));
+  assert.ok(JSON.stringify(operations).includes("ACTUAL_CHILD_EVIDENCE_A"));
+  assert.ok(JSON.stringify(operations).includes("ACTUAL_CHILD_EVIDENCE_B"));
+  for (const run of view.agentRuns) assert.ok(operations.some((operation) => operation.callId.startsWith(run.childSessionId + ":")));
+  assert.equal(f.app.store.list("superGoals").length, 1);
+});
+
+test("one canonical task cannot create an eighth native child or erase its existing child identities on restart", async (t) => {
+  const { f, worker } = await startSubagentTask(t, "super-subagent-cap");
+  const state = await settledSubagentTask(f);
+  assert.notEqual(state.workers[0].task.state, "completed", "control results and child prose remain insufficient evidence");
+  const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
+  assert.equal(view.agentRuns.length, 7);
+  assert.equal(new Set(view.agentRuns.map((run) => run.childSessionId)).size, 7);
+  const rejected = view.cards.find((card) => card.data?.call_id === "delegate-7");
+  assert.ok(rejected && rejected.status === "failed", "the eighth Agent invocation must be rejected at the host boundary");
+  assert.equal(childRequests(f).length, 7, "only seven real child models may execute");
+  const sdkChildren = (await f.app.agents.sessions.listSessions({})).filter((session) => session.parentID === worker.sessionId);
+  assert.equal(sdkChildren.length, 7);
+  assert.equal(f.app.store.list("superGoals").length, 1);
+  assert.equal(f.app.store.list("superOperations").length, 0);
+  const calls = f.calls;
+  await f.restart();
+  assert.equal(f.calls, calls);
+  assert.deepEqual((await f.api(`/api/sessions/${worker.sessionId}/ai`)).agentRuns, view.agentRuns);
+});
+
+test("native child Write waits for the parent task approval and records only the approved actual write", async (t) => {
+  const { f, worker, workspace } = await startSubagentTask(t, "super-subagent-write");
+  const view = await until(() => f.api(`/api/sessions/${worker.sessionId}/ai`), (value) => value.status === "waiting_approval");
+  assert.equal(view.pending.call.name, "Write");
+  const target = join(workspace, "child-output.txt");
+  await assert.rejects(access(target));
+  assert.equal(f.app.store.list("superOperations").length, 0, "approval waiting is not a dispatched write");
+  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`, "POST", { id: view.pending.id, accept: true });
+  const state = await settledSubagentTask(f);
+  assert.equal(state.workers[0].task.state, "completed", JSON.stringify(state.workers[0]));
+  assert.equal(await readFile(target, "utf8"), "actual child write receipt");
+  const operations = f.app.store.list("superOperations");
+  assert.equal(operations.length, 1);
+  assert.equal(operations[0].tool, "Write");
+  assert.equal(operations[0].status, "succeeded");
+  const finished = await f.api(`/api/sessions/${worker.sessionId}/ai`);
+  assert.equal(finished.agentRuns.length, 1);
+  assertNativeRun(finished.agentRuns[0], worker, f.app.store.list("superGoals")[0]);
+  assert.ok(operations[0].callId.startsWith(finished.agentRuns[0].childSessionId + ":"));
+});
+
+test("rejecting a native child Write cannot create a file or turn child prose into task acceptance", async (t) => {
+  const { f, worker, workspace } = await startSubagentTask(t, "super-subagent-write");
+  const view = await until(() => f.api(`/api/sessions/${worker.sessionId}/ai`), (value) => value.status === "waiting_approval");
+  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`, "POST", { id: view.pending.id, accept: false });
+  await settledSubagentTask(f);
+  await assert.rejects(access(join(workspace, "child-output.txt")));
+  assert.equal(f.app.store.list("superOperations").length, 0);
+  assert.equal(f.app.store.list("superAcceptance").length, 0);
+  assert.notEqual(f.app.store.list("superGoals")[0].acceptanceState, "pass");
+});
+
+test("current Pilot permission changes fence a native child Write after its approval was presented", async (t) => {
+  const { f, project, worker, workspace } = await startSubagentTask(t, "super-subagent-write");
+  const view = await until(() => f.api(`/api/sessions/${worker.sessionId}/ai`), (value) => value.status === "waiting_approval");
+  await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, "POST", { denyLocalExecution: true });
+  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`, "POST", { id: view.pending.id, accept: true });
+  await settledSubagentTask(f);
+  await assert.rejects(access(join(workspace, "child-output.txt")));
+  assert.ok(!f.app.store.list("superOperations").some((operation) => operation.status === "succeeded"));
+  assert.equal(f.app.store.list("superAcceptance").length, 0);
+});
+
+test("stopping a Worker cancels its native child approval and restart cannot replay either execution", async (t) => {
+  const { f, worker, workspace } = await startSubagentTask(t, "super-subagent-write");
+  const pending = await until(() => f.api(`/api/sessions/${worker.sessionId}/ai`), (value) => value.status === "waiting_approval");
+  assert.equal(pending.pending.call.name, "Write");
+  const state = await f.api(`/api/projects/${f.project.id}/superagent`);
+  await f.api(`/api/sessions/${state.channels[0].sessionId}/channel`, "POST", { action: "stop" });
+  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`, "POST", { id: pending.pending.id, accept: true }, 409);
+  const stopped = await f.api(`/api/projects/${f.project.id}/superagent`);
+  assert.equal(stopped.workers[0].task.state, "cancelled");
+  const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
+  assert.equal(view.agentRuns.length, 1);
+  assert.equal(view.agentRuns[0].status, "cancelled");
+  assert.ok(view.agentRuns[0].finishedAt);
+  await assert.rejects(access(join(workspace, "child-output.txt")));
+  assert.equal(f.app.store.list("superOperations").length, 0);
+  const calls = f.calls;
+  await f.restart();
+  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`, "POST", { id: pending.pending.id, accept: true }, 409);
+  assert.equal((await f.api(`/api/sessions/${worker.sessionId}/ai`)).agentRuns[0].status, "cancelled");
+  assert.equal(f.calls, calls);
+  assert.equal(f.app.store.list("superOperations").length, 0);
+  await assert.rejects(access(join(workspace, "child-output.txt")));
+});
+
+test("native background subagents join through TaskOutput and cannot accept their parent before actual completion", async (t) => {
+  const { f, worker } = await startSubagentTask(t, "super-subagent-background");
+  const state = await settledSubagentTask(f);
+  const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
+  const goal = f.app.store.list("superGoals")[0];
+  assert.equal(state.workers[0].task.state, "completed", JSON.stringify(state.workers[0]));
+  assert.equal(goal.acceptanceState, "pass");
+  assert.equal(f.backgroundJoinRequested, true, "the parent must explicitly join the actual native task");
+  assert.equal(view.agentRuns.length, 1);
+  assertNativeRun(view.agentRuns[0], worker, goal);
+  assert.equal(view.agentRuns[0].status, "completed");
+  const operations = f.app.store.list("superOperations");
+  assert.equal(operations.length, 1, "Agent, TaskOutput and premature work_finish are not business receipts");
+  assert.equal(operations[0].tool, "Read");
+  assert.equal(operations[0].status, "succeeded");
+  assert.ok(JSON.stringify(operations[0].output).includes("ACTUAL_CHILD_EVIDENCE_A"));
+  const premature = view.cards.find((card) => card.data?.call_id === "premature-child-finish");
+  assert.ok(premature && premature.status === "failed", "the premature completion must be rejected while the child is still alive");
+  const calls = f.calls;
+  await f.restart();
+  assert.equal(f.calls, calls, "joined child and parent histories must restore without rerunning either model");
+  assert.equal((await f.api(`/api/sessions/${worker.sessionId}/ai`)).agentRuns[0].status, "completed");
+});
+
+test("a Worker can launch two native background children before joining their distinct actual receipts", async (t) => {
+  const { f, worker } = await startSubagentTask(t, "super-subagent-background-two");
+  const state = await settledSubagentTask(f);
+  assert.equal(state.workers[0].task.state, "completed", JSON.stringify(state.workers[0]));
+  assert.equal(f.backgroundJoinRequested, true);
+  const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
+  assert.equal(view.agentRuns.length, 2);
+  assert.ok(view.agentRuns.every((run) => run.status === "completed"));
+  assert.equal(new Set(view.agentRuns.map((run) => run.childSessionId)).size, 2);
+  const operations = f.app.store.list("superOperations");
+  assert.equal(operations.length, 2);
+  assert.ok(operations.every((operation) => operation.tool === "Read" && operation.status === "succeeded"));
+  assert.equal(new Set(operations.map((operation) => operation.id)).size, 2);
+  assert.ok(JSON.stringify(operations).includes("ACTUAL_CHILD_EVIDENCE_A"));
+  assert.ok(JSON.stringify(operations).includes("ACTUAL_CHILD_EVIDENCE_B"));
+  const lastParentRequest = f.requests.findLast((request) => request.tools?.some((tool) => tool.function.name === "work_finish"));
+  const parentCalls = lastParentRequest.messages.flatMap((message) => message.tool_calls ?? []);
+  const firstJoin = parentCalls.findIndex((tool) => tool.function.name === "TaskOutput");
+  assert.equal(parentCalls.slice(0, firstJoin).filter((tool) => tool.function.name === "Agent").length, 2,
+    "both independent child models must be launched before the first join");
+});
+
+test("an early parent reply cancels and settles native background children without pretending the task completed", async (t) => {
+  const { f, worker } = await startSubagentTask(t, "super-subagent-background-early");
+  const state = await settledSubagentTask(f);
+  assert.notEqual(state.workers[0].task.state, "completed");
+  assert.notEqual(f.app.store.list("superGoals")[0].acceptanceState, "pass");
+  assert.equal(f.app.store.list("superOperations").length, 0);
+  const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
+  assert.equal(view.agentRuns.length, 1);
+  assert.equal(view.agentRuns[0].status, "cancelled");
+  assert.ok(view.agentRuns[0].finishedAt);
+  const calls = f.calls;
+  await f.restart();
+  assert.equal(f.calls, calls);
+  assert.equal((await f.api(`/api/sessions/${worker.sessionId}/ai`)).agentRuns[0].status, "cancelled");
+});
+
+test("an explicit Worker stop cancels a waiting TaskOutput and its native background child without restart replay", async (t) => {
+  const { f, worker } = await startSubagentTask(t, "super-subagent-background-stop");
+  const live = await until(() => f.api(`/api/sessions/${worker.sessionId}/ai`), (view) =>
+    view.agentRuns?.some((run) => run.status === "running") &&
+    view.cards.some((card) => card.title === "TaskOutput" && card.status === "running"));
+  assert.equal(live.agentRuns.length, 1);
+  assert.equal(f.app.store.list("superOperations").length, 0);
+  const state = await f.api(`/api/projects/${f.project.id}/superagent`);
+  await f.api(`/api/sessions/${state.channels[0].sessionId}/channel`, "POST", { action: "stop" });
+  const stopped = await f.api(`/api/projects/${f.project.id}/superagent`);
+  assert.equal(stopped.workers[0].task.state, "cancelled");
+  const view = await f.api(`/api/sessions/${worker.sessionId}/ai`);
+  assert.equal(view.agentRuns[0].status, "cancelled");
+  assert.ok(view.agentRuns[0].finishedAt);
+  assert.equal(f.app.store.list("superOperations").length, 0);
+  assert.equal(f.app.store.list("superAcceptance").length, 0);
+  const calls = f.calls;
+  await f.restart();
+  assert.equal(f.calls, calls);
+  assert.equal((await f.api(`/api/sessions/${worker.sessionId}/ai`)).agentRuns[0].status, "cancelled");
+  assert.equal(f.app.store.list("superOperations").length, 0);
 });
 
 test("specialist metadata management creates a channel without a task or Worker execution session", async (t) => {
