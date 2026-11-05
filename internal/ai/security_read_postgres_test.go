@@ -2,6 +2,7 @@ package ai
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -17,11 +18,35 @@ import (
 // rather than only testing a query string classifier.
 func TestSecurityFixedPostgresProbeUsesReadOnlyOriginalPermit(t *testing.T) {
 	t.Setenv("PGPASSWORD", "SYNTHETIC_UNRELATED_ENV_PASSWORD")
+	as, transcript := fixedPostgresReadServer(t, "healthy", "1")
+	limits := security.ScopeLimits{DatabaseID: "fixture", Schemas: []string{"pg_catalog"}, MaxRows: 64, MaxDurationMS: 5000}
+	e, c := fixedReadManagedFixture(t, as, security.Rule{Capability: "db.read", Effect: security.EffectAllow, Limits: limits})
+	result, err := runFixedReadPermit(t, e, c, Call{ID: "pg-health", Name: "observe_data", Arguments: js(map[string]any{"asset_ref": assetAlias(as.ID), "metric": "health"})})
+	if err != nil || !strings.Contains(js(result), `"healthy":1`) {
+		t.Fatal(result, err)
+	}
+	joined := strings.Join(transcript(), "\n")
+	for _, required := range []string{"begin read only", "set local statement_timeout = 5000", "set local lock_timeout = 1000", "select 1 as healthy", "rollback"} {
+		if !strings.Contains(joined, required) {
+			t.Fatalf("missing %s in actual wire queries %s", required, joined)
+		}
+	}
+	if strings.Contains(joined, "commit") {
+		t.Fatal("read probe committed transaction")
+	}
+}
+
+func fixedPostgresReadServer(t *testing.T, column, value string) (Asset, func() []string) {
+	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	t.Cleanup(func() { listener.Close() })
+	oid, width := uint32(25), int16(-1)
+	if column == "healthy" {
+		oid, width = 23, 4
+	}
 	var mu sync.Mutex
 	queries := []string{}
 	emptyPassword := false
@@ -68,7 +93,7 @@ func TestSecurityFixedPostgresProbeUsesReadOnlyOriginalPermit(t *testing.T) {
 		format := int16(0)
 		record := func(q string) { mu.Lock(); queries = append(queries, strings.ToLower(q)); mu.Unlock() }
 		description := func() {
-			backend.Send(&pgproto3.RowDescription{Fields: []pgproto3.FieldDescription{{Name: []byte("healthy"), DataTypeOID: 23, DataTypeSize: 4, TypeModifier: -1, Format: format}}})
+			backend.Send(&pgproto3.RowDescription{Fields: []pgproto3.FieldDescription{{Name: []byte(column), DataTypeOID: oid, DataTypeSize: width, TypeModifier: -1, Format: format}}})
 		}
 		complete := func(q string) {
 			switch {
@@ -81,8 +106,8 @@ func TestSecurityFixedPostgresProbeUsesReadOnlyOriginalPermit(t *testing.T) {
 				status = 'I'
 				backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("ROLLBACK")})
 			case strings.HasPrefix(strings.ToLower(q), "select"):
-				value := []byte("1")
-				if format == 1 {
+				value := []byte(value)
+				if format == 1 && oid == 23 {
 					value = make([]byte, 4)
 					binary.BigEndian.PutUint32(value, 1)
 				}
@@ -112,7 +137,11 @@ func TestSecurityFixedPostgresProbeUsesReadOnlyOriginalPermit(t *testing.T) {
 				backend.Send(&pgproto3.ParseComplete{})
 			case *pgproto3.Describe:
 				if m.ObjectType == 'S' {
-					backend.Send(&pgproto3.ParameterDescription{})
+					parameters := []uint32{}
+					for n := 1; strings.Contains(query, fmt.Sprintf("$%d", n)); n++ {
+						parameters = append(parameters, 25)
+					}
+					backend.Send(&pgproto3.ParameterDescription{ParameterOIDs: parameters})
 				}
 				if strings.HasPrefix(strings.ToLower(query), "select") {
 					description()
@@ -140,29 +169,17 @@ func TestSecurityFixedPostgresProbeUsesReadOnlyOriginalPermit(t *testing.T) {
 		}
 	}()
 	as := Asset{ID: "resource", Kind: "database", Settings: map[string]any{"driver": "postgres", "host": "127.0.0.1", "port": listener.Addr().(*net.TCPAddr).Port, "database": "fixture", "username": "fixture", "sslmode": "disable"}}
-	limits := security.ScopeLimits{DatabaseID: "fixture", Schemas: []string{"pg_catalog"}, MaxRows: 64, MaxDurationMS: 5000}
-	e, c := fixedReadManagedFixture(t, as, security.Rule{Capability: "db.read", Effect: security.EffectAllow, Limits: limits})
-	result, err := runFixedReadPermit(t, e, c, Call{ID: "pg-health", Name: "observe_data", Arguments: js(map[string]any{"asset_ref": assetAlias(as.ID), "metric": "health"})})
-	if err != nil || !strings.Contains(js(result), `"healthy":1`) {
-		t.Fatal(result, err)
-	}
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("diagnostic did not close database connection")
-	}
-	mu.Lock()
-	defer mu.Unlock()
-	if !emptyPassword {
-		t.Fatal("fixed probe inherited unrelated environment password")
-	}
-	joined := strings.Join(queries, "\n")
-	for _, required := range []string{"begin read only", "set local statement_timeout = 5000", "set local lock_timeout = 1000", "select 1 as healthy", "rollback"} {
-		if !strings.Contains(joined, required) {
-			t.Fatalf("missing %s in actual wire queries %s", required, joined)
+	return as, func() []string {
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("diagnostic did not close database connection")
 		}
-	}
-	if strings.Contains(joined, "commit") {
-		t.Fatal("read probe committed transaction")
+		mu.Lock()
+		defer mu.Unlock()
+		if !emptyPassword {
+			t.Fatal("fixed probe inherited unrelated environment password")
+		}
+		return append([]string(nil), queries...)
 	}
 }
