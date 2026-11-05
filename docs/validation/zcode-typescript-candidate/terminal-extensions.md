@@ -35,4 +35,12 @@ MCP 原项目绑定/authority 的增量迁移尚未完成，旧配置不会自�
 
 ### 签名 Dev 实测
 
-待本批签名构建和原生窗口验证后记录准确源码 SHA、二进制摘要与结果。之前安装的 52f7ff1f 不包含此批 PTY/扩展实现。
+已从干净源码 `f7b1b399f46fb596515b80ab62c2d6496d6e0452` 执行 `scripts/build_lake_desktop.sh --dev --ts-candidate --install`，覆盖并打开 `~/Applications/Lake Dev.app`；版本 0.3.27，持久开发签名。包内后端 SHA-256：`a805c075cfe0b0f8371799ab5e78958fa96add1454a5776f82fb5cfef82b18c5`。App、PTY addon、spawn-helper 的严格签名与 ZIP/DMG 摘要均通过；Web 类型检查/生产构建通过。
+
+原生窗口实测顶部提示消失，原 Pilot/4 个现有专员/历史和资源仍显示。从“TS 项目工作区”打开真实 Bash PTY，经 xterm 的键盘/粘贴输入执行 `printf 'Lake TS PTY ready\\n'; test -t 0 && printf 'REAL_TTY\\n'`，界面实际显示两行结果并回到提示符。认证 history 记录真实输出、命令、cwd 与 ready/user/interactive 状态；cwd 位于 Dev 项目工作区。没有发送模型消息或连接远程服务。
+
+认证 bootstrap 为 typescript/zcode/3.17.2、terminalMode=pty、recoveryReadOnly=false；lifecycle PID、home 和 dataDirectory 与 Dev 运行记录一致。目录保留 5 项目/82 侧栏会话/144 资源条目，资源终端的私有 scope 不进入侧栏。原 Dev 中 2 个 MCP 配置可安全读取公开信息，未发起连接；已登记 Skills 为空。
+
+正常停止旧 Dev 后创建私有 APFS 应用/Home 备份，位置保存在本机 `/tmp/lake-pty-dev-backup-location`。覆盖启动后，原 Go Web/ADK 数据库、providers.json 和 security/control.json 的文件 SHA-256 均与备份一致。TS 新终端数据只进入 TS SQLite；原 Go Dev 和前次 TS Dev 备份均保留。正式 Lake 未操作。
+
+本机真实终端可用不代表 SSH、Agent 接管或全量迁移完成。未运行真实供应商、远程主机/数据库、Fish 或 Windows/Linux 验收；全量门禁仍为 BLOCKED。
