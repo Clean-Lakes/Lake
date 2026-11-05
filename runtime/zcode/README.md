@@ -35,3 +35,5 @@ Node 命令须使用准备好的 24.14.0。测试经过真实 ZCode 源码与本
 `api-inventory.json` 从现有前端 TypeScript AST 提取完整 API 操作表；`parity.json` 记录逐项与领域验收。最后一个检查目前**必须失败**：候选测试不等于功能等价。资产/SSH/数据库/终端、Pilot/专员/频道、任务/权限账本、工作流/日程、记忆、附件、MCP/Skills、队列/补充/压缩、历史迁移、CLI/Magpie、macOS/Windows 与 Lake Dev 主题/窄窗均需补齐。候选 API 的 501、空只读目录或关闭的开关不能作为已迁移证据。
 
 全量契约与真实行为通过后，才在单独变更中调整默认构建、原生协议和桌面包，并执行 Lake Dev 最终 SHA 验收。合并、生产安装和发布继续遵守仓库原有授权流程。
+
+本轮准确源码 SHA、签名进程检查、界面截图与未验证项见[阶段验证记录](../../docs/validation/zcode-typescript-candidate/README.md)。
