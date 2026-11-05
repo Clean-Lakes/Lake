@@ -1,9 +1,11 @@
 import {useEffect,useState} from 'react';
+import {usePageVisible} from './usePageVisible';
 
 export const HEADER_SWEEP_FADE_MS=700;
 
 /** Keep the same layer and freeze its phase during exit, including a quick resume. */
 export function HeaderSweep({active}:{active:boolean}) {
+ const visible=usePageVisible();
  const [retained,setRetained]=useState(active);
  useEffect(()=>{
   if(active){setRetained(true);return;}
@@ -12,5 +14,5 @@ export function HeaderSweep({active}:{active:boolean}) {
   return ()=>window.clearTimeout(timer);
  },[active,retained]);
  if(!active&&!retained)return null;
- return <span className={`workspace-header-sweep${active?'':' is-receding'}`} style={{transitionDuration:`${HEADER_SWEEP_FADE_MS}ms`}} aria-hidden="true"><span className="header-sweep-light" style={{animationPlayState:active?'running':'paused'}}/></span>;
+ return <span className={`workspace-header-sweep${active?'':' is-receding'}`} style={{transitionDuration:`${HEADER_SWEEP_FADE_MS}ms`}} aria-hidden="true"><span className="header-sweep-light" style={{animationPlayState:active&&visible?'running':'paused'}}/></span>;
 }
