@@ -10,8 +10,8 @@
   color: var(--user-message-foreground);
 }
 
-/* One bubble per reply; the avatar owns a separate column beside it. */
-.ai-transcript { --reply-avatar-size:28px; --reply-avatar-column:40px; --reply-bubble-inset:18px; --reply-bubble-block:13px; --reply-body-size:15px; }
+/* Assistant replies share a reading column; only human messages use bubbles. */
+.ai-transcript { --reply-avatar-size:24px; --reply-avatar-column:40px; --reply-body-width:720px; --reply-body-size:15px; }
 .ai-transcript[data-reply-avatar=hidden] { --reply-avatar-column:0px; }
 .ai-transcript[data-reply-avatar=hidden] :is(.response-avatar,.turn-thinking-avatar) { display:none; }
 .ai-chat-message.ai-role-assistant,
@@ -19,16 +19,18 @@
 .ai-response:has(> .ai-card:is(.ai-text, .ai-message)),
 .sre-role-message .sre-role-body,
 .message-assistant .timeline-content {
-  width: fit-content;
+  width: 100%;
   min-width: 0;
-  max-width: 100%;
-  padding: var(--reply-bubble-block,13px) var(--reply-bubble-inset,18px);
-  border-radius: var(--radius-window);
-  corner-shape: var(--corner-window);
-  background: var(--assistant-message-background);
+  max-width: var(--reply-body-width,720px);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .ai-response > .ai-card:is(.ai-text, .ai-message) {
-  width: auto;
+  width: 100%;
+  max-width: 100%;
   padding: 0;
   border-radius: 0;
   background: transparent;
@@ -41,88 +43,57 @@
 .ai-chat-message.ai-role-assistant,
 .ai-response:is(:has(> .response-identity),.is-reply-continuation):has(> .ai-card:is(.ai-text, .ai-message)) {
   position: relative;
-  isolation: isolate;
-  padding-inline-start: calc(var(--reply-bubble-inset) + var(--reply-avatar-column));
-  background: transparent;
-}
-.ai-chat-message.ai-role-assistant::before,
-.ai-response:is(:has(> .response-identity),.is-reply-continuation):has(> .ai-card:is(.ai-text, .ai-message))::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 0 var(--reply-avatar-column);
-  z-index: -1;
-  pointer-events: none;
-  border-radius: var(--radius-window);
-  corner-shape: var(--corner-window);
-  background: var(--assistant-message-background);
+  max-width: calc(var(--reply-body-width,720px) + var(--reply-avatar-column,40px));
+  padding-inline-start: var(--reply-avatar-column,40px);
 }
 .ai-chat-message.ai-role-assistant > .response-identity .response-avatar,
 .ai-response:has(> .ai-card:is(.ai-text, .ai-message)) > .response-identity .response-avatar {
   position: absolute;
   inset-inline-start: 0;
-  top: calc(var(--reply-bubble-block) + (22px - var(--reply-avatar-size)) / 2);
+  top: calc((22px - var(--reply-avatar-size)) / 2);
   width: var(--reply-avatar-size);
   height: var(--reply-avatar-size);
 }
-.response-avatar :is(svg,.super-role-avatar) { width:var(--reply-avatar-size,28px); height:var(--reply-avatar-size,28px); }
+.response-avatar :is(svg,.super-role-avatar) { width:var(--reply-avatar-size,24px); height:var(--reply-avatar-size,24px); }
 .response-avatar svg { max-width:none; max-height:none; }
-.ai-transcript .response-identity { min-height:22px; line-height:22px; margin-bottom:6px; font-size:var(--font-size-ui); }
+.ai-transcript .response-identity { min-width:0; min-height:22px; line-height:22px; margin-bottom:8px; font-size:var(--font-size-ui); }
 .reply-continued-author { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
-.ai-transcript[data-transcript-mode=conversation] :is(.ai-chat-message.ai-role-assistant,.ai-response:has(> .ai-card:is(.ai-text,.ai-message))) { max-width:min(100%,calc(720px + var(--reply-avatar-column))); }
-.ai-transcript[data-transcript-mode=conversation] :is(.ai-role-assistant,.ai-response) .ai-markdown.assistant-prose { font-size:var(--reply-body-size); line-height:1.55; }
-.ai-transcript[data-transcript-mode=conversation] :is(.ai-role-assistant,.ai-response) .assistant-prose > p:not(:last-child) { margin-bottom:10px; }
+.ai-transcript :is(.ai-chat-message.ai-role-assistant,.ai-card.ai-text,.ai-card.ai-message,.sre-role-body) .ai-markdown.assistant-prose {
+  width:100%; min-width:0; max-width:var(--reply-body-width,720px);
+  font-size:var(--reply-body-size,15px); line-height:1.75;
+}
+.ai-transcript :is(.ai-chat-message.ai-role-assistant,.ai-card.ai-text,.ai-card.ai-message,.sre-role-body) .assistant-prose > p:not(:last-child) { margin-bottom:14px; }
+.ai-transcript .pilot-dispatch-text { font-size:var(--reply-body-size,15px); line-height:1.75; }
 .ai-transcript[data-transcript-mode=conversation] .ai-role-user { font-size:var(--reply-body-size); line-height:1.55; }
 .settled-reply.is-reply-continuation:not(.is-archived):not(.is-awaiting-reply) { margin-block-start:calc(8px - var(--turn-entry-gap,12px)); }
 
-/* The caption follows the text; its divider starts at the painted bubble edge. */
-.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status:not(.is-thinking) {
+/* Activity stays on its own quiet row, aligned with the reading column. */
+.ai-turn > .turn-status {
   position:relative;
-  padding-inline-start:calc(var(--reply-avatar-column) + var(--reply-bubble-inset));
-  border-bottom:0;
+  min-width:0;
+  max-width:calc(var(--reply-body-width,720px) + var(--reply-avatar-column,40px));
+  padding-inline-start:var(--reply-avatar-column,40px);
+  border:0;
 }
-.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status:not(.is-live)::after {
-  content:"";
-  position:absolute;
-  inset-inline:var(--reply-avatar-column) 0;
-  bottom:0;
-  height:1px;
-  background:var(--surface-hover);
-  pointer-events:none;
-}
-.ai-turn:has(.ai-response > .ai-card:is(.ai-text,.ai-message),.ai-chat-message.ai-role-assistant) > .turn-status .turn-status-mark {
+.ai-turn > .turn-status:not(.is-thinking) .turn-status-mark {
   position:absolute;
   inset-inline-start:0;
 }
 
-/* A quiet typing bubble takes the same column as the next assistant reply. */
-.reply-duration.is-thinking { position:relative; min-height:44px; padding:0 0 0 var(--reply-avatar-column,40px); border:0; }
+/* Original water animation stays transparent and independent from prose. */
+.reply-duration.is-thinking { position:relative; min-height:32px; padding:0 0 0 var(--reply-avatar-column,40px); border:0; }
 .ai-turn > .turn-status.is-thinking { padding-inline-start:var(--reply-avatar-column,40px); }
 .ai-turn > .turn-status.is-thinking.without-avatar,
 .reply-duration.is-thinking.without-avatar { padding-inline-start:0; }
-.turn-thinking-avatar { position:absolute; inset-inline-start:0; top:8px; width:var(--reply-avatar-size,28px); height:var(--reply-avatar-size,28px); }
+.turn-thinking-avatar { position:absolute; inset-inline-start:0; top:4px; width:var(--reply-avatar-size,24px); height:var(--reply-avatar-size,24px); }
 .turn-thinking-avatar .response-identity { margin:0; }
 .turn-thinking-avatar .response-identity > strong { display:none; }
-.turn-thinking-avatar .response-avatar { width:var(--reply-avatar-size,28px); height:var(--reply-avatar-size,28px); }
-.turn-thinking-bubble { display:inline-flex; align-items:center; justify-content:center; flex:none; width:76px; height:44px; padding:0; border:0; border-radius:var(--radius-window); corner-shape:var(--corner-window); background:var(--assistant-message-background); color:var(--foreground); }
-.is-thinking > .turn-duration-disclosure { width:fit-content; max-width:100%; border-radius:var(--radius-window); corner-shape:var(--corner-window); }
+.turn-thinking-avatar .response-avatar { width:var(--reply-avatar-size,24px); height:var(--reply-avatar-size,24px); }
+.is-thinking > .turn-duration-disclosure { width:auto; max-width:100%; }
 .is-thinking .turn-current-step { flex:0 1 auto; }
-/* White-banded fishing floats, waterline and reflection at chat scale. */
-.thinking-buoys { --buoy-moss:var(--agent-investigator); --buoy-shade:color-mix(in srgb,var(--buoy-moss) 75%,var(--foreground)); --buoy-glint:color-mix(in srgb,var(--buoy-moss) 50%,var(--surface)); position:relative; display:flex; justify-content:space-between; flex:none; width:46px; height:23px; color:var(--buoy-moss); isolation:isolate; }
-.thinking-buoys-pond { position:absolute; z-index:-1; left:-6px; right:-6px; top:11px; height:10px; border-radius:50%; background:radial-gradient(ellipse,color-mix(in srgb,currentColor 10%,transparent),color-mix(in srgb,currentColor 4%,transparent) 55%,transparent 75%); }
-.thinking-buoys-float { display:block; position:relative; width:10px; height:23px; flex:none; --buoy-phase:-3.2s; }
-.thinking-buoys-float:nth-of-type(3) { --buoy-phase:-1.9s; }
-.thinking-buoys-float:nth-of-type(4) { --buoy-phase:-.6s; }
-.thinking-buoys-above { position:absolute; z-index:3; left:0; top:0; width:10px; height:15px; overflow:hidden; }
-.thinking-buoys-body { display:block; position:absolute; left:1px; top:5px; width:8px; height:11px; border-radius:48% 48% 36% 36%; background:linear-gradient(90deg,var(--buoy-glint),var(--buoy-moss) 45%,var(--buoy-shade)); transform-origin:50% 90%; animation:thinking-buoy-bob 3.9s ease-in-out var(--buoy-phase) infinite; }
-.thinking-buoys-body::before { content:""; position:absolute; left:3.25px; top:-2px; width:1.5px; height:3px; background:var(--buoy-shade); border-radius:1px 1px 0 0; }
-.thinking-buoys-body::after { content:""; position:absolute; left:0; right:0; top:4px; height:2px; background:light-dark(#f2f4e8,#e4eada); opacity:.92; }
-.thinking-buoys-body>b { position:absolute; left:1.5px; top:1.2px; width:1px; height:2px; border-radius:50%; background:var(--buoy-glint); opacity:.75; }
-.thinking-buoys-ring { position:absolute; z-index:2; left:-2px; top:12.8px; width:14px; height:4px; border:0 solid color-mix(in srgb,currentColor 36%,transparent); border-bottom-width:.65px; border-radius:50%; animation:thinking-buoy-wake 3.9s ease-in-out var(--buoy-phase) infinite; }
-.thinking-buoys-ring-outer { left:-4px; top:12px; width:18px; height:6px; border-bottom-width:.5px; border-color:color-mix(in srgb,currentColor 17%,transparent); animation-name:thinking-buoy-wake-outer; }
-.thinking-buoys-reflection { position:absolute; z-index:1; left:2px; top:16px; width:6px; height:5px; background:linear-gradient(var(--buoy-moss),transparent); border-radius:35% 35% 50% 50%; opacity:.15; transform-origin:center top; animation:thinking-buoy-reflect 3.9s ease-in-out var(--buoy-phase) infinite; }
-@keyframes thinking-buoy-bob { 0%,100% { transform:translateY(.9px) rotate(-4deg); } 48% { transform:translateY(-1.4px) rotate(5deg); } }
-@keyframes thinking-buoy-wake { 0%,100% { transform:scaleX(1.06); opacity:.9; } 48% { transform:scaleX(.82); opacity:.45; } }
-@keyframes thinking-buoy-wake-outer { 0%,100% { transform:scale(.95); opacity:.35; } 42% { opacity:.55; } 70% { transform:scale(1.16,.92); opacity:0; } }
-@keyframes thinking-buoy-reflect { 0%,100% { transform:scale(.9,.6); opacity:.18; } 48% { transform:scale(1.04,1.05); opacity:.09; } }
-.thinking-buoys[data-hidden] * { animation-play-state:paused!important; }
-@media(prefers-reduced-motion:reduce) { .thinking-buoys * { animation:none!important; } }
+
+/* Older specialist report components share the same body geometry. */
+.ai-transcript .sre-role-message { width:100%; max-width:calc(var(--reply-body-width,720px) + 40px); }
+.ai-transcript .sre-role-message .sre-role-body { width:100%; max-width:var(--reply-body-width,720px); padding:0; font-size:var(--reply-body-size,15px); line-height:1.75; }
+.ai-transcript .sre-role-conversation .sre-role-content { padding-inline-start:40px; }
+.ai-transcript .sre-role-conversation .sre-role-content > header { padding-inline-start:0; margin-bottom:8px; }

@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "typeRoots": ["../../third_party/zcode/node_modules/@types"],
+    "paths": {
+      "ssh2": ["../../third_party/zcode/node_modules/@types/ssh2/index.d.ts"],
+      "node-pty": ["../../third_party/zcode/node_modules/node-pty/typings/node-pty.d.ts"],
+      "@modelcontextprotocol/client": ["../../third_party/zcode/node_modules/@modelcontextprotocol/client/dist/index.d.mts"],
+      "@modelcontextprotocol/client/stdio": ["../../third_party/zcode/node_modules/@modelcontextprotocol/client/dist/stdio.d.mts"],
+      "@zcode/core": ["../../third_party/zcode/apps/zcode-cli/packages/core/dist/index.d.ts"],
+      "@zcode/contracts": ["../../third_party/zcode/apps/zcode-cli/packages/contracts/dist/index.d.ts"],
+      "@zcode/provider": ["../../third_party/zcode/packages/provider/dist/index.d.ts"],
+      "@zcode/adapters/*": ["../../third_party/zcode/apps/zcode-cli/packages/adapters/dist/*/index.d.ts"]
+    }
+  },
+  "include": ["./*.ts"]
+}

@@ -7,6 +7,15 @@ export function inspectedTask(snapshot:SessionSnapshot,selection:InspectorSelect
  const task=snapshot.sre?.tasks.find(task=>task.id===selection.taskId)??selection.task;
  return task&&task.id===selection.taskId&&task.sessionId===snapshot.session.id&&task.projectId===snapshot.session.projectId?task:undefined;
 }
+
+/** A canonical task remains a valid execution target while its goal or tool
+ * projection is catching up. An empty chat turn must not hide its records. */
+export function hasInspectorTask(snapshot:SessionSnapshot,selection:InspectorSelection):boolean{
+ if(inspectedTask(snapshot,selection))return true;
+ const task=snapshot.superagent?.task;
+ return !!task&&selection.sessionId===snapshot.session.id&&task.sessionId===snapshot.session.id&&
+  task.taskId===selection.canonicalGoalId&&(!task.projectId||task.projectId===snapshot.session.projectId);
+}
 export function inspectorAttempts(task:SRETask){
  const run=task.runs?.at(-1),plan=task.plans?.find(p=>p.id===run?.planRevisionId)??task.plans?.at(-1);
  return (plan?.steps??[]).flatMap(step=>{

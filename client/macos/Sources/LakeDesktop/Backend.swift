@@ -18,8 +18,10 @@ struct RuntimeInfo: Decodable {
     private(set) var runtime: RuntimeInfo?
     let home: URL
     let dataDirectory: URL
+    let backendRuntime: String
     init() {
         let profile = DesktopProfile(bundleIdentifier: Bundle.main.bundleIdentifier)
+        backendRuntime = profile.backendRuntime(requested: Bundle.main.object(forInfoDictionaryKey: "LakeBackendRuntime") as? String)
         let directories = profile.directories(userHome: NSHomeDirectory(),
             environment: ProcessInfo.processInfo.environment, arguments: CommandLine.arguments)
         home = directories.home
@@ -42,8 +44,8 @@ struct RuntimeInfo: Decodable {
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              json["backendRuntime"] as? String == "go" else { return false }
-        return await SuperagentConnection.matches(info, home: home, data: dataDirectory)
+              json["backendRuntime"] as? String == backendRuntime else { return false }
+        return await SuperagentConnection.matches(info, home: home, data: dataDirectory, backendRuntime: backendRuntime)
     }
     func start() async throws -> URL {
         if let existing = readRuntime(), await healthy(existing) {
@@ -55,13 +57,17 @@ struct RuntimeInfo: Decodable {
             }
             let child = Process()
             child.executableURL = cli
-            // Port 0 asks the Go backend to bind a free loopback port atomically.
+            // Port 0 binds a free loopback port atomically.
             child.arguments = ["web", "--port", "0"]
+            if backendRuntime == "typescript" {
+                child.arguments = ["web", "--port", "0", "--home", home.path, "--data", dataDirectory.path, "--dev", "--migrate-legacy"]
+            }
             var environment = ProcessInfo.processInfo.environment
             environment["LAKE_HOME"] = home.path
             environment["LAKE_WEB_DATA_DIR"] = dataDirectory.path
             environment.removeValue(forKey: "LAKE_WEB_START_OPEN")
             environment.removeValue(forKey: "LAKE_WEB_DEV_ORIGIN")
+            environment.removeValue(forKey: "LAKE_TS_IMPORT_ONLY")
             if DesktopProfile(bundleIdentifier: Bundle.main.bundleIdentifier).isDevelopment {
                 environment.removeValue(forKey: "LAKE_WEB_TOKEN")
             }
@@ -88,7 +94,7 @@ struct RuntimeInfo: Decodable {
         return components.url!
     }
     func detach() {
-        // Process deallocation does not terminate the Go service. Keep its
+        // Process deallocation does not terminate the service. Keep its
         // private runtime record for the next UI's authenticated reconnect.
         process = nil
         runtime = nil
@@ -96,7 +102,7 @@ struct RuntimeInfo: Decodable {
     func stop() async -> Bool {
         guard let info = runtime ?? readRuntime() else { return process?.isRunning != true }
         if kill(info.pid, 0) != 0 && errno == ESRCH { detach(); return true }
-        let stopped = await SuperagentConnection.drain(info, home: home, data: dataDirectory)
+        let stopped = await SuperagentConnection.drain(info, home: home, data: dataDirectory, backendRuntime: backendRuntime)
         if stopped { detach() }
         return stopped
     }

@@ -1,0 +1,112 @@
+import {
+  readFile,
+  readdir,
+  mkdir,
+  copyFile,
+  writeFile,
+  cp,
+  mkdtemp,
+  rm,
+  rename,
+  chmod,
+} from "node:fs/promises";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const source = join(root, "third_party/zcode");
+const require = createRequire(join(source, "package.json"));
+const { build } = require("esbuild");
+const manifests = new Map();
+for (const base of ["packages", "apps/zcode-cli/packages"]) {
+  for (const name of await readdir(join(source, base))) {
+    const directory = join(source, base, name);
+    try {
+      const manifest = JSON.parse(await readFile(join(directory, "package.json"), "utf8"));
+      manifests.set(manifest.name, { directory, manifest });
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+}
+const destination = join(root, "bin/lake-zcode");
+await mkdir(join(root, "bin"), { recursive: true });
+const output = await mkdtemp(join(root, "bin/.lake-zcode-build-"));
+await build({
+  entryPoints: [join(root, "runtime/zcode/server.ts")],
+  outfile: join(output, "server.cjs"),
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node24",
+  sourcemap: false,
+  legalComments: "eof",
+  logLevel: "warning",
+  external: ["koffi", "playwright-core", "ripgrep", "cpu-features", "./crypto/build/Release/sshcrypto.node"],
+  nodePaths: [join(source, "node_modules")],
+  plugins: [
+    {
+      name: "pinned-zcode-source",
+      setup(builder) {
+        builder.onResolve({ filter: /^ssh2$/ }, (args) => ({ path: require.resolve(args.path) }));
+        builder.onResolve({ filter: /^@modelcontextprotocol\/client(?:\/stdio)?$/ }, (args) => ({ path: require.resolve(args.path) }));
+        builder.onResolve({ filter: /^@zcode\// }, async (args) => {
+          const segments = args.path.split("/");
+          const name = segments.slice(0, 2).join("/");
+          const entry = manifests.get(name);
+          if (!entry) return;
+          const subpath = segments.length === 2 ? "." : "./" + segments.slice(2).join("/");
+          let target = entry.manifest.exports?.[subpath];
+          if (target && typeof target === "object") target = target.import ?? target.default;
+          target ??= subpath === "." ? entry.manifest.main : undefined;
+          if (!target) throw new Error(`Missing public upstream export ${args.path}`);
+          target = target.replace(/^\.\/dist\//, "./src/");
+          const resolved = await builder.resolve(join(entry.directory, target), {
+            kind: args.kind,
+            resolveDir: entry.directory,
+          });
+          return { path: resolved.path, errors: resolved.errors };
+        });
+      },
+    },
+  ],
+});
+await copyFile(join(root, "runtime/zcode/upstream.json"), join(output, "upstream.json"));
+await mkdir(join(output, "licenses"), { recursive: true });
+for (const file of ["LICENSE", "NOTICE.md", "THIRD-PARTY-NOTICES.md"]) {
+  await copyFile(join(source, file), join(output, "licenses", file));
+}
+await copyFile(join(source, "node_modules/@modelcontextprotocol/client/LICENSE"), join(output, "licenses/MCP-client-LICENSE"));
+await copyFile(join(source, "node_modules/ssh2/LICENSE"), join(output, "licenses/ssh2-LICENSE"));
+// Native PTY stays outside the SEA bundle so Node can dlopen the pinned addon.
+const ptySource = dirname(require.resolve("node-pty/package.json"));
+const ptyOutput = join(output, "native/node-pty");
+await mkdir(ptyOutput, { recursive: true });
+for (const file of ["lib", "prebuilds", "package.json"]) await cp(join(ptySource, file), join(ptyOutput, file), { recursive: true });
+await chmod(join(ptyOutput, `prebuilds/${process.platform}-${process.arch}/spawn-helper`), 0o755);
+await copyFile(join(ptySource, "LICENSE"), join(output, "licenses/node-pty-LICENSE"));
+await cp(join(root, "internal/web/hooks"), join(output, "hooks"), { recursive: true });
+await writeFile(
+  join(output, "licenses/Lake-modifications.md"),
+  "Lake embeds ZCode 3.17.2 AgentRuntime and Node adapters in a TypeScript HTTP host. " +
+    "The upstream UI and optional contributor presentation are not included. " +
+    "Upstream source files, copyright, LICENSE, NOTICE and third-party attribution are preserved.\n",
+);
+await cp(join(root, "web-agent/web/dist"), join(output, "web"), { recursive: true });
+await copyFile(
+  join(dirname(dirname(process.execPath)), "LICENSE"),
+  join(output, "licenses/Node-LICENSE"),
+);
+await rm(destination, { recursive: true, force: true });
+await rename(output, destination);
+await writeFile(
+  join(root, "bin/lake-sea.json"),
+  JSON.stringify({
+    main: join(destination, "server.cjs"),
+    output: join(root, "bin/lake-sea.blob"),
+    disableExperimentalSEAWarning: true,
+    useSnapshot: false,
+    useCodeCache: false,
+  }),
+);
+console.log("Built Lake ZCode runtime from pinned v3.17.2 source");

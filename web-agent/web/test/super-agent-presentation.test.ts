@@ -35,7 +35,7 @@ test('navigation keeps task and status accessible while completed workers have n
  assert.match(html,/data-role="coordinator"/);assert.ok(html.includes(`data-role="${superWorkerIcon(worker)}"`));
  assert.doesNotMatch(html,/class="session-status-dot"/);
  const pending=renderToStaticMarkup(createElement(PilotWorkspace,{workspace:{...workspace,workers:[{...worker,task:{...task,state:'waiting_user',acceptanceState:'not_evaluated'}}]},error:'',selectedId:null,onPilot(){},onWorker(){}}));
- assert.match(pending,/需确认/);assert.match(pending,/pilot-worker-confirmation/);
+ assert.doesNotMatch(pending,/需确认|pilot-worker-confirmation/,'a waiting task without host interaction metadata cannot invent an actionable confirmation');
 });
 
 test('inspector never attributes another session or task to the selected specialist',()=>{
@@ -47,7 +47,8 @@ test('inspector never attributes another session or task to the selected special
 
 test('opening the details of a paused task before its first plan shows the empty state',()=>{
  const html=renderToStaticMarkup(createElement(SuperTaskInspector,{task:{...task,state:'paused'},goal:{...goal,items:null}}));
- assert.match(html,/专员生成计划后会显示在这里/);
+ assert.match(html,/计划生成后会显示在这里/);
+ assert.doesNotMatch(html,/专员生成计划/,'task execution does not require an attached long-lived specialist');
 });
 
 test('specialist sidebar prioritizes live execution, keeps confirmations and clears only viewed completions', () => {

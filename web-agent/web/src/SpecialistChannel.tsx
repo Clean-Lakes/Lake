@@ -8,12 +8,11 @@ import {ObjectReferencesProvider} from './AssistantMarkdown';
 import {conversationActivity,superTaskPresentation} from './superAgentPresentation';
 import {isCompactionFallbackEntry} from './timeline';
 import {AppSelect} from './AppSelect';
-
-export function mergeChannelEntries(previous:SpecialistChannelEntry[],incoming:SpecialistChannelEntry[]){
- const entries=new Map(previous.map(entry=>[entry.id,entry]));
- for(const entry of incoming)entries.set(entry.id,entry);
- return [...entries.values()].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
-}
+import {LoadingWaves} from './LoadingWaves';
+import {StatusText} from './StatusText';
+import {mergeChannelEntries,mergeChannelPage} from './specialistChannelProjection';
+import {conversationPlanEntry} from './planConversation';
+export {mergeChannelEntries} from './specialistChannelProjection';
 
 export function preferredChannelTask(workers:SuperWorker[]){
  return workers.find(worker=>worker.task.state==='waiting_user')??workers.find(worker=>['running','queued','waiting_external'].includes(worker.task.state))??workers[0];
@@ -29,11 +28,17 @@ export function SpecialistTaskSelect({workers,sessionId,onTask}:{workers:SuperWo
  return <label className="specialist-task-select"><span>任务记录</span><AppSelect aria-label="查看专员任务" value={sessionId} title={workers.find(worker=>worker.sessionId===sessionId)?.task.title} onChange={event=>onTask(event.target.value)}>{workers.map(worker=><option key={worker.id} value={worker.sessionId}>{worker.task.title} · {superTaskPresentation(worker.task).label}</option>)}</AppSelect></label>;
 }
 
-export function SpecialistChannelEntries({entries,resources}:{entries:SpecialistChannelEntry[];resources:SessionSnapshot['resources']}){
+export function SpecialistChannelEntries({entries,resources,activeSources,activeSnapshots}:{entries:SpecialistChannelEntry[];resources:SessionSnapshot['resources'];activeSources?:ReadonlySet<string>;activeSnapshots?:ReadonlyMap<string,SessionSnapshot>}){
  const forwarded=new Set(entries.flatMap(entry=>entry.message?.dispatch?[`${entry.sourceSessionId}\0${entry.message.dispatch.sourceMessageId}`]:[]));
- return <>{entries.filter(entry=>!isCompactionFallbackEntry(entry)&&!(entry.message?.role==='user'&&forwarded.has(`${entry.sourceSessionId}\0${entry.message.id}`))).map(entry=><div className="specialist-channel-entry" key={entry.id} data-source-session={entry.sourceSessionId} data-task-id={entry.taskId}>
-  {entry.message?<TranscriptMessage message={entry.message} sessionId={entry.sourceSessionId} resources={resources} hideIdentity/>:entry.card?<Card card={entry.card}/>:null}
- </div>)}</>;
+ return <>{entries.filter(entry=>!isCompactionFallbackEntry(entry)&&!(entry.message?.role==='user'&&forwarded.has(`${entry.sourceSessionId}\0${entry.message.id}`))).map(entry=>{
+  const active=activeSnapshots?.get(entry.sourceSessionId);
+  // Keep the channel key, but plan metadata refers to the original source ID.
+  // Project before Markdown so neither live nor saved plans mount their body.
+  const projected=conversationPlanEntry({id:entry.card?.id??entry.message?.id??entry.id,at:entry.createdAt,card:entry.card,message:entry.message},{planMode:active?.conversationMode==='plan',live:active?.ai?.status==='running',currentPlanId:active?.ai?.proposedPlan?.id});
+  return <div className="specialist-channel-entry" key={entry.id} data-channel-entry={entry.id} data-source-session={entry.sourceSessionId} data-task-id={entry.taskId}>
+   {projected.message?<TranscriptMessage message={projected.message} sessionId={entry.sourceSessionId} resources={resources} hideIdentity/>:projected.card?<Card card={projected.card} streaming={activeSources?projected.card.status==='running'&&activeSources.has(entry.sourceSessionId):undefined}/>:null}
+  </div>;
+ })}</>;
 }
 
 // Questions, approvals and host trust always use their original task session.
@@ -65,7 +70,7 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
   const refresh=async()=>{
    if(busy)return;busy=true;
    try{const next=await api.specialistChannel(session,'',controller.signal);if(current!==generation.current)return;
-    setPage(next);setEntries(old=>mergeChannelEntries(old,next.entries));setError('');if(!hasOlder.current)cursor.current=next.nextCursor;
+    setPage(next);setEntries(old=>mergeChannelPage(old,next));setError('');if(!hasOlder.current)cursor.current=next.nextCursor;
    }catch(reason){if(!controller.signal.aborted&&current===generation.current)setError(readableError(reason));}finally{busy=false;}
   };
   void refresh();const timer=window.setInterval(()=>void refresh(),1000);
@@ -88,17 +93,16 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
  return <ObjectReferencesProvider resources={snapshot.resources}><div className="ai-transcript specialist-channel" data-reply-avatar="hidden">
   {!!cursor.current&&<button type="button" className="button secondary" disabled={loading} onClick={()=>void loadOlder()}>{loading?'正在加载…':'加载更早记录'}</button>}
   {error&&<p className="pilot-workspace-error" role="alert">{error}</p>}
-  <SpecialistChannelEntries entries={entries} resources={snapshot.resources}/>
-  {(page?.routing||admitting||!!page?.queued)&&<div className="reply-duration turn-status is-live is-thinking without-avatar" role="status" aria-label="专员正在处理消息"><span className="turn-thinking-bubble"><ThinkingBuoys/><span className="visually-hidden">正在安排工作</span></span></div>}
+  <SpecialistChannelEntries entries={entries} resources={snapshot.resources} activeSources={new Set(connected?page?.active.map(active=>active.session.id)??[]:[])} activeSnapshots={new Map(page?.active.map(active=>[active.session.id,active])??[])}/>
+  {(page?.routing||admitting||!!page?.queued)&&<div className="reply-duration turn-status is-live is-thinking without-avatar" role="status" aria-label="专员正在处理消息"><LoadingWaves/><StatusText active>正在安排工作</StatusText></div>}
   {page?.active.map(active=>{
    const task=active.superagent?.task;
    const cards=active.ai?.cards.filter(card=>!!active.ai?.turnStartedAt&&card.at>=active.ai.turnStartedAt)??[];
    const live={...active,messages:[],ai:active.ai?{...active.ai,cards,cardsOffset:0,totalCards:cards.length}:undefined};
    return <section className="specialist-channel-active" key={active.session.id} aria-label={task?.title??'当前任务'}>
-    <AITranscript snapshot={live} superTask={task} assistantIdentity={{name}} disabled={!connected} refresh={()=>api.snapshot(active.session.id)} onInspect={()=>onTask(active.session.id)}/>
+    <AITranscript snapshot={live} proseInChannel superTask={task} assistantIdentity={{name}} disabled={!connected} refresh={()=>api.snapshot(active.session.id)} onInspect={()=>onTask(active.session.id)}/>
     <SpecialistTaskControls snapshot={active} connected={connected}/>
    </section>;
   })}
  </div></ObjectReferencesProvider>;
 }
-import {ThinkingBuoys} from './ThinkingBuoys';

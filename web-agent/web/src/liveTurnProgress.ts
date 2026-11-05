@@ -2,14 +2,14 @@ import type {TranscriptEntry} from './timeline';
 import {isAssistantProse} from './completedTurnProse';
 import {resourceStagePreview} from './resourceStageProgress';
 import {toolDescription} from './activity';
+import {quietCoordination} from './coordinationActivity';
 
 const normal=new Set(['running','completed','success','succeeded']);
-const bookkeeping=new Set(['work_begin','work_read','work_update','work_wait','work_finish','__lake_apply_user_supplement']);
 /** Ordinary live tool turns expose one real caption, not a generated summary.
  * Preserve the full prose/IDs for inspection and the final saved response. */
 export function liveTurnProgress(turn:TranscriptEntry[]) {
  if(turn.some(entry=>entry.agentRun||entry.sre))return;
- const tools=turn.filter(entry=>entry.card&&['operation','shell'].includes(entry.card.type)&&entry.card.title!=='ask_user_question'&&!bookkeeping.has(entry.card.title??''));
+ const tools=turn.filter(entry=>entry.card&&['operation','shell'].includes(entry.card.type)&&entry.card.title!=='ask_user_question'&&!quietCoordination(entry.card));
  const latestTool=tools.at(-1)?.card;
  if(!latestTool)return;
  const lastTool=turn.lastIndexOf(tools.at(-1)!);

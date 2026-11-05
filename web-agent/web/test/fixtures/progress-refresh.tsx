@@ -13,7 +13,8 @@ import '../../src/composerCompletion.css';
 import '../../src/agentQuestion.css';
 const query=new URLSearchParams(location.search);
 setThemePreference(query.get('theme')==='dark'?'dark':'light');
-const stamp=(index:number)=>new Date(Date.now()-3600000+index*1000).toISOString();
+const epoch=Date.now()-120000;
+const stamp=(index:number)=>new Date(epoch+index*1000).toISOString();
 const messages=Array.from({length:12},(_,i)=>({id:`user-${i}`,sessionId:'fixture',role:'user',text:i===11?'核对演示服务状态':`历史检查 ${i+1}`,createdAt:stamp(i*10)}));
 const cards:AICard[]=Array.from({length:11},(_,i)=>({id:`reply-${i}`,type:'message',status:'completed',at:stamp(i*10+1),content:'历史检查记录保持稳定。\n\n| 项目 | 观察 |\n| --- | --- |\n| 演示服务 | 正常 |\n\n[查看已保存证据](#evidence)'}));
 cards.push({id:'note',type:'message',status:'completed',at:stamp(111),content:'先核对演示服务与运行记录，保留本轮原始证据。'},{id:'operation-0',type:'operation',title:'shell',status:'running',at:stamp(112),content:'',data:{target:'演示主机',arguments:{command:'uptime'}}});
@@ -37,7 +38,7 @@ if(query.has('reference-time')){
  state.ai!.cards.push({id:'reference-answer',type:'message',status:'completed',at:stamp(114),content:'已核对演示服务的运行状态，完整执行步骤与命令结果可在上方用时入口中查看。'});
 }
 // Reproduce a saved incomplete turn with a real answer after failed tools.
-// The pre-tool note belongs to process; both distinct result paragraphs and
+// Public prose stays in its original slot; both distinct result paragraphs and
 // the actual failure remain in the main transcript without changing its status.
 if(query.has('ended-failure')){
  const user=state.messages.at(-1)!;
@@ -66,6 +67,7 @@ window.fetch=async(input)=>{
  const path=new URL(String(input),location.href).pathname;let value:unknown={};
  if(path==='/api/bootstrap')value={authenticated:true,modelConfigured:true,modelName:'演示模型',modelId:'fixture',aiRuntime:'adk',terminalMode:'pty'};
  else if(path==='/api/catalog')value={projects:[{id:'p',name:'隔离测试',createdAt:stamp(0)}],sessions:[state.session],resources:[],resourceTree:[],tags:[],terminals:[]};
+ else if(path.endsWith('/superagent'))value={active:false,project:{projectId:'p',routerSessionId:'fixture',version:1},workers:[],channels:[]};
  else if(path.endsWith('/snapshot')){metrics.snapshots++;value=state}
  else if(path.includes('/reasoning'))value={levels:[],effort:'',modelId:'fixture'};
  else if(path.endsWith('/message-queue'))value=state.messageQueue;
@@ -165,6 +167,8 @@ document.getElementById('next-operation')!.onclick=()=>{
 };
 document.getElementById('grow-reply')!.onclick=()=>{finishCurrent();state.ai!.cards.push({id:'final-reply',type:'message',status:'completed',at:stamp(++tick),content:'核对完成。\n\n'+('这里是实际新增的回复正文，新增高度应正常跟随到底部。\n\n').repeat(12)});state.ai!.status='completed';state.ai!.turnFinishedAt=new Date().toISOString();update()};
 document.getElementById('stream-reply')!.onclick=()=>{finishCurrent();state.ai!.cards.push({id:'stream-reply',type:'message',status:'running',at:stamp(++tick),content:query.has('long')?'核对已完成，完整说明保持可见。\n\n## 详细运行记录\n\n'+('新生成的内容保持原有位置，完成时继续完整展示。\n\n').repeat(40):'核对完成。演示服务运行正常，原始操作记录已保留。'});update()};
+document.getElementById('refresh-snapshot')!.onclick=()=>update();
+document.getElementById('cancel-reply')!.onclick=()=>{finishCurrent();state.ai!.status='cancelled';state.ai!.turnFinishedAt=new Date().toISOString();update()};
 document.getElementById('complete-reply')!.onclick=()=>{finishCurrent();state.ai!.status='completed';state.ai!.turnFinishedAt=new Date().toISOString();update()};
 
 document.getElementById('new-narration')!.onclick=()=>{finishCurrent();const n=++index;state.ai!.cards.push({id:`new-note-${n}`,type:'message',status:'completed',at:stamp(++tick),content:'继续核对演示服务的运行记录，保留现有证据。'},{id:`operation-${n}`,type:'operation',title:'shell',status:'running',at:stamp(++tick),content:'',data:{target:'演示主机',arguments:{command:'uptime'}}});update()};

@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import plistlib
 import re
 import subprocess
 from pathlib import Path
@@ -51,6 +52,8 @@ def write(repo, manifest):
         "sourceRoot": str(repo.resolve()), "version": (repo / "VERSION").read_text().strip(),
         "dirty": bool(git(repo, "status", "--porcelain").stdout),
     }
+    info = manifest.parent.parent / "Info.plist"
+    data["backendRuntime"] = plistlib.loads(info.read_bytes()).get("LakeBackendRuntime", "go") if info.exists() else "go"
     binary = manifest.parent / "lake"
     if binary.exists():
         data["backendSHA256"] = hashlib.sha256(binary.read_bytes()).hexdigest()

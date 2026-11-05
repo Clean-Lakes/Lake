@@ -127,21 +127,10 @@ export function conversationGroups(entries:TranscriptEntry[],resources:Resource[
  return result;
 }
 
-/** Keep visible assistant prose above progress while a turn is still active.
- * Reorder only the presentation groups: stable row IDs, raw tool chronology,
- * exceptional states and decision controls remain intact. */
-export function conversationDisplayGroups(entries:TranscriptEntry[],active=false,resources:Resource[]=[]):ConversationGroup[] {
- if(!active)return conversationGroups(entries,resources);
- const background=backgroundResources(entries,resources);
- return transcriptTurns(entries).flatMap(turn=>{
-  const groups=conversationGroups(turn,resources,background);
-  const firstProgress=groups.findIndex(group=>group.progress);
-  if(firstProgress<0)return groups;
-  const isProse=(group:ConversationGroup)=>!group.progress&&group.entries.every(entry=>
-   entry.message?.role==='assistant'||!!entry.card&&['message','text'].includes(entry.card.type));
-  const tail=groups.slice(firstProgress);
-  return [...groups.slice(0,firstProgress),...tail.filter(isProse),...tail.filter(group=>!isProse(group))];
- });
+/** Stable chronological presentation in every lifecycle state. Tool groups are
+ * rendered separately by the transcript; completing a turn never reorders prose. */
+export function conversationDisplayGroups(entries:TranscriptEntry[],_active=false,resources:Resource[]=[]):ConversationGroup[] {
+ return conversationGroups(entries,resources);
 }
 
 /** Render position is anchored at first use, so find the live row by its latest

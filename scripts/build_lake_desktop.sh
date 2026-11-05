@@ -1,17 +1,28 @@
 #!/bin/sh
-# Current Go/React macOS client.
+# macOS client. TS/ZCode is an explicit Dev-only build choice.
 set -eu
 lake_repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$lake_repo_root"
 install_app=0
 development_app=0
+typescript_candidate=0
 for lake_argument in "$@"; do
   case "$lake_argument" in
     --install) install_app=1 ;;
     --dev) development_app=1 ;;
-    *) echo '用法: scripts/build_lake_desktop.sh [--dev] [--install]' >&2; exit 2 ;;
+    --ts-candidate) typescript_candidate=1 ;;
+    *) echo '用法: scripts/build_lake_desktop.sh [--dev [--ts-candidate]] [--install]' >&2; exit 2 ;;
   esac
 done
+[ "$typescript_candidate" -eq 0 ] || [ "$development_app" -eq 1 ] || {
+  echo 'TS/ZCode 候选只允许 --dev；正式版后端切换仍需完整功能验收' >&2; exit 2;
+}
+lake_backend_runtime=go
+lake_backend_binary=bin/lake
+if [ "$typescript_candidate" -eq 1 ]; then
+  lake_backend_runtime=typescript
+  lake_backend_binary=bin/lake-ts
+fi
 lake_app_name=Lake
 lake_bundle_id=com.cleanlakes.lake.desktop
 if [ "$development_app" -eq 1 ]; then
@@ -33,7 +44,11 @@ lake_arch=arm64
 export GOARCH=arm64
 export GOOS=darwin CGO_ENABLED=1
 export CC="clang -arch $lake_arch"
-scripts/build_lake.sh
+if [ "$typescript_candidate" -eq 1 ]; then
+  scripts/build_lake.sh --ts-candidate
+else
+  scripts/build_lake.sh
+fi
 swift build --package-path client/macos --build-system native -c release --triple "$lake_arch-apple-macosx13.0"
 lake_swift_bin=$(swift build --package-path client/macos --build-system native -c release --triple "$lake_arch-apple-macosx13.0" --show-bin-path)
 lake_output="$lake_repo_root/dist/macos/$lake_version/$lake_arch"
@@ -45,9 +60,9 @@ trap 'rm -rf "$lake_stage"' EXIT HUP INT TERM
 lake_app="$lake_stage/$lake_app_name.app"
 mkdir -p "$lake_app/Contents/MacOS" "$lake_app/Contents/Resources/licenses"
 cp "$lake_swift_bin/LakeDesktop" "$lake_app/Contents/MacOS/Lake"
-cp bin/lake "$lake_app/Contents/Resources/lake"
-if [ "$development_app" -eq 1 ]; then
-  python3 scripts/dev_build_origin.py write "$lake_repo_root" "$lake_app/Contents/Resources/build-origin.json"
+cp "$lake_backend_binary" "$lake_app/Contents/Resources/lake"
+if [ "$typescript_candidate" -eq 1 ]; then
+  ditto --norsrc bin/lake-zcode "$lake_app/Contents/Resources/lake-zcode"
 fi
 cp client/macos/Resources/install-update.sh "$lake_app/Contents/Resources/"
 cp web-agent/web/src/workbenchLayout.js "$lake_app/Contents/Resources/workbench-layout.js"
@@ -65,12 +80,16 @@ cat > "$lake_app/Contents/Info.plist" <<EOF
 <key>CFBundleShortVersionString</key><string>$lake_version</string>
 <key>CFBundleVersion</key><string>$lake_version</string>
 <key>CFBundlePackageType</key><string>APPL</string>
+<key>LakeBackendRuntime</key><string>$lake_backend_runtime</string>
 <key>CFBundleIconFile</key><string>Lake.icns</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>
 EOF
+if [ "$development_app" -eq 1 ]; then
+  python3 scripts/dev_build_origin.py write "$lake_repo_root" "$lake_app/Contents/Resources/build-origin.json"
+fi
 swift scripts/generate_lake_icon.swift "$lake_stage/icon.png"
 lake_iconset="$lake_stage/Lake.iconset"
 mkdir "$lake_iconset"
@@ -87,6 +106,7 @@ codesign --verify --deep --strict "$lake_app"
 "$lake_app/Contents/Resources/lake" --version
 lake_name="Lake-$lake_version-macos-$lake_arch"
 if [ "$development_app" -eq 1 ]; then lake_name="$lake_name-dev"; fi
+if [ "$typescript_candidate" -eq 1 ]; then lake_name="$lake_name-zcode"; fi
 ditto --norsrc -c -k --keepParent "$lake_app" "$lake_output/$lake_name.zip"
 (cd "$lake_output" && shasum -a 256 "$lake_name.zip" > "$lake_name.zip.sha256")
 mkdir "$lake_stage/dmg"
@@ -120,6 +140,11 @@ if [ "$install_app" -eq 1 ]; then
   ditto --norsrc "$lake_app" "$lake_install_stage"
   codesign --verify --deep --strict "$lake_install_stage"
   "$lake_install_stage/Contents/Resources/lake" --version >/dev/null
+  if [ "$typescript_candidate" -eq 1 ]; then
+    # Run the bounded, transactional identity/history import before native
+    # startup's readiness deadline. This never resumes an old Go operation.
+    "$lake_install_stage/Contents/Resources/lake" web --dev --migrate-legacy --import-only --home "$HOME/.lake-dev" --data "$HOME/.lake-dev/web-agent" --port 0
+  fi
   if [ -e "$lake_install" ]; then mv "$lake_install" "$lake_install_backup"; fi
   if ! mv "$lake_install_stage" "$lake_install" || ! codesign --verify --deep --strict "$lake_install"; then
     if [ -e "$lake_install" ]; then mv "$lake_install" "$lake_install_stage.failed"; fi
