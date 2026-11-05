@@ -16,6 +16,14 @@ if [ "${LAKE_REUSE_WEB_ASSETS:-0}" != 1 ]; then pnpm --dir web-agent build:web; 
 [ -f web-agent/web/dist/index.html ] || { echo '缺少 React 构建产物' >&2; exit 1; }
 "$lake_node" third_party/zcode/node_modules/typescript/bin/tsc -p runtime/zcode/tsconfig.json
 "$lake_node" runtime/zcode/build.mjs
+if [ "$(uname -s)" = Darwin ]; then
+  lake_pty_arch=$("$lake_node" -p process.arch)
+  for lake_pty_file in pty.node spawn-helper; do
+    lake_pty_path="$lake_repo_root/bin/lake-zcode/native/node-pty/prebuilds/darwin-$lake_pty_arch/$lake_pty_file"
+    codesign --force --timestamp=none --sign "$lake_identity" "$lake_pty_path"
+    codesign --verify --strict "$lake_pty_path"
+  done
+fi
 "$lake_node" --experimental-sea-config bin/lake-sea.json
 lake_build_tmp=$(mktemp "$lake_repo_root/bin/.lake-ts-build.XXXXXX")
 trap 'rm -f "$lake_build_tmp"' EXIT HUP INT TERM

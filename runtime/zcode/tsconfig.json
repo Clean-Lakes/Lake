@@ -9,6 +9,9 @@
     "types": ["node"],
     "typeRoots": ["../../third_party/zcode/node_modules/@types"],
     "paths": {
+      "node-pty": ["../../third_party/zcode/node_modules/node-pty/typings/node-pty.d.ts"],
+      "@modelcontextprotocol/client": ["../../third_party/zcode/node_modules/@modelcontextprotocol/client/dist/index.d.mts"],
+      "@modelcontextprotocol/client/stdio": ["../../third_party/zcode/node_modules/@modelcontextprotocol/client/dist/stdio.d.mts"],
       "@zcode/core": ["../../third_party/zcode/apps/zcode-cli/packages/core/dist/index.d.ts"],
       "@zcode/contracts": ["../../third_party/zcode/apps/zcode-cli/packages/contracts/dist/index.d.ts"],
       "@zcode/provider": ["../../third_party/zcode/packages/provider/dist/index.d.ts"],

@@ -28,6 +28,9 @@ import { LakeSuperagent } from "./superagent";
 import { applyLegacyMigration, loadLegacyView } from "./migration";
 import { digest } from "./tasks";
 import { LakeSecurity } from "./security";
+import { LakeExtensions } from "./extensions";
+import { LakeTerminals } from "./terminal";
+import { commandPolicy } from "../../web-agent/shared/command-policy";
 export { previewLegacyMigration, rollbackMigration } from "./migration";
 
 export type ServerOptions = { home: string; data: string; port: number; staticRoot: string; development?: boolean; importLegacy?: boolean };
@@ -139,6 +142,8 @@ export async function startLakeServer(options: ServerOptions) {
   let agents: LakeAgents | undefined;
   let superagent: LakeSuperagent | undefined;
   let security: LakeSecurity | undefined;
+  let extensions: LakeExtensions | undefined;
+  let terminals: LakeTerminals | undefined;
   let draining = false;
   let closed = false;
   const clients = new Map<string, Set<ServerResponse>>();
@@ -266,7 +271,7 @@ export async function startLakeServer(options: ServerOptions) {
           modelId: model?.id ?? null,
           modelSelection: model && provider ? entry(provider, model) : null,
           supportsImageInput: model?.supportsImageInput ?? false,
-          terminalMode: "command",
+          terminalMode: terminals?.supported ? "pty" : "command",
           aiRuntime: "zcode",
           backendRuntime: "typescript",
           upstreamVersion: "3.17.2",
@@ -277,6 +282,7 @@ export async function startLakeServer(options: ServerOptions) {
       let status = 200;
       if (path[1] === "bootstrap") result = bootstrap();
       else if (path[1] === "catalog") result = store.catalog();
+      else if (path[1] === "commands" && path[2] === "policy" && method === "POST") result = commandPolicy(String(data.command ?? ""));
       else if (path[1] === "superagent" && path[2] === "lifecycle") {
         result = {
           pid: process.pid,
@@ -387,6 +393,14 @@ export async function startLakeServer(options: ServerOptions) {
           store.delete("settings", "modelSelection");
           result = modelSettings();
         } else result = modelSettings();
+      } else if (path[1] === "projects" && path[3] === "security" && ["mcp-inheritance", "mcp-bindings"].includes(path[4])) {
+        if (path[4] === "mcp-inheritance" && path.length === 5) {
+          if (method === "GET") result = extensions!.inheritance(path[2]);
+          else if (method === "PUT") result = extensions!.setBinding(path[2], undefined, data);
+          else throw new HttpError(405, "不支持此项目 MCP 继承操作");
+        } else if (path[4] === "mcp-bindings" && path.length === 5 && method === "GET") result = extensions!.bindings(path[2]);
+        else if (path[4] === "mcp-bindings" && path.length === 6 && method === "PUT") result = extensions!.setBinding(path[2], path[5], data);
+        else throw new HttpError(405, "不支持此项目 MCP 绑定操作");
       } else if (path[1] === "projects" && path.length === 4 && path[3] === "tags" && method === "POST") {
         result = navigation.createTag(path[2], data);
         status = 201;
@@ -447,7 +461,13 @@ export async function startLakeServer(options: ServerOptions) {
         if (method !== "GET") throw new HttpError(501, "新记忆流水线尚未接入");
       } else if (path[1] === "resources") {
         const resource = store.require<Resource>("resources", path[2]);
-        if (path[3] === "terminals") result = { terminals: [] };
+        if (path[3] === "terminal-context" && path.length === 4 && method === "POST") result = terminals!.context(resource.id);
+        else if (path[3] === "terminals" && method === "GET" && path.length === 4) result = { terminals: terminals!.resourceTerminals(resource.id) };
+        else if (path[3] === "terminals" && method === "DELETE" && (path.length === 4 || path.length === 5)) {
+          const entries = terminals!.resourceTerminals(resource.id).filter((terminal) => path.length === 4 || terminal.id === path[4]);
+          for (const terminal of entries) await terminals!.disconnect(terminal.sessionId, terminal.id);
+          result = { closed: entries.length };
+        }
         else if (method === "PATCH") {
           resource.name = String(data.name ?? resource.name);
           if (data.settings && digest(data.settings) !== digest(resource.settings)) store.put("resourceRevisions", resource.id, (store.get<number>("resourceRevisions", resource.id) ?? 1) + 1);
@@ -464,7 +484,25 @@ export async function startLakeServer(options: ServerOptions) {
           await agents.prepareRedaction();
           await loadLegacyView(store, sessionId, (value) => agents!.redact(value));
         }
-        if (path[3] === "channel") {
+        if (path[3] === "terminals") {
+          if (path.length === 4 && method === "POST") { await agents.prepareRedaction(); extensions!.servers(); result = await terminals!.open(sessionId, data); status = 201; }
+          else if (path.length === 5 && path[4] === "available" && method === "GET") result = terminals!.available(sessionId);
+          else if (path.length === 6 && path[5] === "history" && method === "GET") result = terminals!.history(sessionId, path[4], url.searchParams.get("outputOnly") === "1");
+          else if (path.length === 6 && method === "POST") {
+            const terminalId = path[4];
+            switch (path[5]) {
+              case "adopt": result = terminals!.adopt(sessionId, terminalId, data); break;
+              case "control": result = terminals!.control(sessionId, terminalId, data.holder); break;
+              case "input": result = terminals!.input(sessionId, terminalId, data.data); status = 202; break;
+              case "resize": result = terminals!.resize(sessionId, terminalId, data.cols, data.rows); break;
+              case "commands": result = terminals!.command(sessionId, terminalId, data); status = 202; break;
+              case "interrupt": result = terminals!.interrupt(sessionId, terminalId); status = 202; break;
+              case "interrupt-command": result = terminals!.interrupt(sessionId, terminalId, data); status = 202; break;
+              case "disconnect": result = await terminals!.disconnect(sessionId, terminalId); break;
+              default: throw new HttpError(501, "此终端能力仍在迁移中");
+            }
+          } else throw new HttpError(405, "不支持此终端请求");
+        } else if (path[3] === "channel") {
           if (path.length === 5 && path[4] === "tasks" && method === "GET") result = superagent.channelTasks(sessionId);
           else if (path.length === 5 && path[4] === "read" && method === "PUT") result = superagent.readCompletion(sessionId, data.cursor);
           else if (path.length !== 4) throw new HttpError(404, "频道接口不存在");
@@ -569,11 +607,22 @@ export async function startLakeServer(options: ServerOptions) {
         } else result = session;
       } else if (path[1] === "navigation-trash") result = { items: [] };
       else if (path[1] === "settings" && path[2] === "mcp") {
-        if (method !== "GET") throw new HttpError(501, "MCP 配置尚未迁移完成");
-        result = { servers: [] };
+        if (path.length === 3 && method === "GET") result = extensions!.servers();
+        else if (path.length === 3 && method === "POST") result = extensions!.save(undefined, data);
+        else if (path.length === 4 && path[3] === "import" && method === "POST") result = extensions!.import(data);
+        else if (path.length === 4 && method === "PUT") result = extensions!.save(path[3], data);
+        else if (path.length === 4 && method === "DELETE") result = extensions!.remove(path[3]);
+        else if (path.length === 5 && path[4] === "test" && method === "POST") {
+          const cancel = new AbortController();
+          response.on("close", () => { if (!response.writableFinished) cancel.abort(); });
+          result = await extensions!.test(path[3], cancel.signal);
+        } else throw new HttpError(405, "不支持此 MCP 配置操作");
       } else if (path[1] === "settings" && path[2] === "skills") {
-        if (method !== "GET") throw new HttpError(501, "Skill 配置尚未迁移完成");
-        result = { skills: [], roots: [] };
+        if (path.length === 3 && method === "GET") result = extensions!.skills();
+        else if (path.length === 4 && path[3] === "roots" && ["POST", "DELETE"].includes(method)) result = extensions!.skillRoot(data.path, method === "DELETE");
+        else if (path.length === 4 && method === "GET") result = extensions!.skill(path[3]);
+        else if (path.length === 4 && method === "PUT") result = extensions!.saveSkill(path[3], data);
+        else throw new HttpError(405, "不支持此 Skill 配置操作");
       } else if (path[1] === "ai" && path[2] === "presets") result = [];
       else throw new HttpError(404, "接口不存在");
       json(response, status, result);
@@ -584,7 +633,7 @@ export async function startLakeServer(options: ServerOptions) {
       }
       const status = error instanceof HttpError ? error.status : 500;
       const message =
-        agents?.redact(error instanceof Error ? error.message : String(error)) ?? "请求失败";
+        extensions?.scrub(error instanceof Error ? error.message : String(error)) ?? agents?.redact(error instanceof Error ? error.message : String(error)) ?? "请求失败";
       json(response, status, { error: message });
     }
   });
@@ -594,6 +643,8 @@ export async function startLakeServer(options: ServerOptions) {
     draining = true;
     await superagent?.close();
     await agents?.close();
+    await terminals?.close();
+    await extensions?.close();
     for (const set of clients.values()) for (const response of set) response.end();
     await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
     store?.close();
@@ -605,13 +656,15 @@ export async function startLakeServer(options: ServerOptions) {
     if (options.development) await importDevModelSettings(store);
     agents = await LakeAgents.open(store, broadcast);
     security = new LakeSecurity(store);
+    extensions = new LakeExtensions(store, security, (value) => agents!.redact(value));
+    terminals = new LakeTerminals(store, security, (value, live) => live ? agents!.redactLive(extensions!.scrubLive(value)) : extensions!.scrub(value), broadcast);
     agents.guard = () => security!.check();
     if (options.importLegacy) {
       if (!options.development) throw new HttpError(403, "旧数据迁移仅允许明确指定的 Dev 环境");
       await agents.prepareRedaction();
       await applyLegacyMigration(store, (value) => agents!.redact(value));
     }
-    superagent = new LakeSuperagent(store, agents, security);
+    superagent = new LakeSuperagent(store, agents, security, extensions);
     await new Promise<void>((resolveListen, reject) => {
       server.once("error", reject);
       server.listen(options.port, "localhost", () => resolveListen());

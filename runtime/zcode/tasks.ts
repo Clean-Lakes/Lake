@@ -38,6 +38,8 @@ export type Operation = {
   status: "dispatched" | "succeeded" | "failed" | "unknown";
   output?: unknown; outputHash?: string; at: string; completedAt?: string;
   resourceId?: string; resourceRevision?: number; readOnly?: boolean;
+  mcpServerId?: string; mcpTool?: string; remoteMcp?: boolean; configurationHash?: string; bindingHash?: string; catalogHash?: string;
+  skillName?: string; skillHash?: string;
 };
 
 // The goal and immutable acceptance receipts are the only completion authority.
@@ -148,7 +150,7 @@ export class TaskLedger {
   }
   async operation<T>(goalId: string, generation: number, policyHash: string, callId: string, tool: string,
     input: unknown, dispatch: () => Promise<T>, redact: <V>(value: V) => V,
-    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly"> = {}): Promise<T> {
+    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash"> = {}): Promise<T> {
     const key = digest([this.get(goalId).sessionId, callId]);
     const previous = this.store.get<Operation>("superOperations", key);
     if (previous) {
@@ -160,11 +162,17 @@ export class TaskLedger {
     const operation = this.store.transaction(() => {
       const { goal, step, attempt } = this.active(goalId, generation, policyHash);
       if (this.unresolved(goalId)) throw new HttpError(409, "Original operation requires reconciliation");
-      if (this.store.list<Operation>("superOperations").some((operation) => operation.projectId === goal.projectId && operation.status === "unknown"))
+      if (!binding.remoteMcp && this.store.list<Operation>("superOperations").some((operation) => operation.projectId === goal.projectId && operation.status === "unknown"))
         throw new HttpError(409, "A project operation still requires reconciliation");
-      if (this.store.list<any>("legacyOperations").some((operation) => operation.projectId === goal.projectId && !operation.riskResolvedAt &&
+      if (!binding.remoteMcp && this.store.list<any>("legacyOperations").some((operation) => operation.projectId === goal.projectId && !operation.riskResolvedAt &&
           (["running", "unknown", "dispatched"].includes(operation.status) || operation.orphanState === "unresolved")))
         throw new HttpError(409, "旧 Go 操作仍需核实；迁移不会解除原未决风险");
+      if (tool === "call_mcp_tool") {
+        const pending = (operation: any) => ["unknown", "dispatched", "running"].includes(operation.status) || operation.orphanState && !operation.riskResolvedAt;
+        if (this.store.list<Operation>("superOperations").some((operation) => operation.tool === tool && pending(operation) && (!operation.mcpServerId || operation.mcpServerId === binding.mcpServerId)) ||
+            this.store.list<any>("legacyOperations").some((operation) => operation.tool === tool && pending(operation) && (!operation.mcpServerId || operation.mcpServerId === binding.mcpServerId)))
+          throw new HttpError(409, "同一 MCP 服务的原调用结果尚未核实，不能跨任务或项目重试");
+      }
       if (!binding.readOnly && this.store.list<Operation>("superOperations").some((operation) => operation.goalId === goalId && operation.tool === tool &&
           operation.argsHash === digest(input) && operation.resourceId === binding.resourceId))
         throw new HttpError(409, "Identical mutation already recorded; inspect the original operation instead of dispatching another call ID");

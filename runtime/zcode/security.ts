@@ -58,4 +58,43 @@ export class LakeSecurity {
     if (this.store.get("legacyProjectPolicies", projectId))
       throw new HttpError(409, "此项目的安全策略已保留，资源操作须完成迁移核验后继续");
   }
+  mcp(projectId: string, capability: "mcp.discover" | "mcp.call" | "artifact.read", local: boolean): "allow" | "ask" {
+    this.check();
+    // Catalog v1 imported only visible projects. Until exact legacy service
+    // descriptors are validated, an unresolved MCP call anywhere in the old
+    // ledger remains an unknown service identity, including archived projects.
+    const path = join(this.store.data, "adk/sessions.sqlite");
+    if (capability === "mcp.call" && existsSync(path)) {
+      const db = new DatabaseSync(path, { readOnly: true });
+      try {
+        if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='native_operations'").get() &&
+            db.prepare("SELECT 1 FROM native_operations WHERE tool='call_mcp_tool' AND (status IN ('dispatched','running','unknown') OR (orphan_state <> '' AND risk_resolved_at IS NULL)) AND (closure_state IS NULL OR closure_state <> 'reconciled') LIMIT 1").get())
+          throw new HttpError(409, "旧 MCP 调用的准确服务身份及结果仍需核实，不能跨项目重试");
+      } finally { db.close(); }
+    }
+    const legacy = this.store.get<any>("legacyProjectPolicies", projectId);
+    if (!legacy) return "allow";
+    const policy = legacy.data;
+    if (!policy || policy.SchemaVersion !== 1 || !policy.Confirmed || policy.ProjectID !== projectId || !Array.isArray(policy.Rules) ||
+        !["legacy", "restricted", "compatible"].includes(policy.Mode) || !Number.isSafeInteger(policy.Revision) || policy.Revision < 1) throw new HttpError(409, "原项目策略需核实");
+    const controlPath = join(this.store.home, "security/control.json");
+    if (existsSync(controlPath)) {
+      const control = JSON.parse(readFileSync(controlPath, "utf8"));
+      if (policy.StoreID !== control.storeID || policy.RecoveryEpoch !== control.recoveryEpoch) throw new HttpError(409, "原项目策略的安全身份已失效");
+    }
+    if (local && policy.DenyLocal) throw new HttpError(403, "项目策略禁止本机 MCP 执行");
+    let result: "allow" | "ask" = "allow";
+    for (const name of [capability, ...(local ? ["local.execute"] : [])]) {
+      const rules = policy.Rules.filter((rule: any) => rule.Capability === name && (!rule.ResourceIDs || !rule.ResourceIDs.length));
+      if (!rules.length || rules.some((rule: any) => rule.Effect === "deny")) throw new HttpError(403, "项目策略禁止此 MCP 能力");
+      for (const rule of rules) {
+        if (rule.Limits && Object.values(rule.Limits).some((value) => Array.isArray(value) ? value.length > 0 : !!value)) throw new HttpError(403, "此 MCP 调用无法证明原策略的受限范围");
+        if (rule.Effect === "ask") {
+          if (!["single", "either"].includes(rule.Confirmation)) throw new HttpError(409, "原策略需要专用任务授权，不能以单次批准替代");
+          result = "ask";
+        } else if (rule.Effect !== "allow") throw new HttpError(403, "项目 MCP 策略无效");
+      }
+    }
+    return result;
+  }
 }

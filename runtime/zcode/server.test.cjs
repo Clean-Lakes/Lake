@@ -136,6 +136,7 @@ function superReply(request, mode, home) {
   const call = (name, input, id = name) => ({ tool_calls: [{ index: 0, id, type: "function", function: { name, arguments: JSON.stringify(input) } }] });
   const router = request.tools?.some((tool) => tool.function?.name === "route_work");
   if (router) {
+    if (mode === "super-chat") return { content: "我是 Lake Pilot，可以回答问题，并为实际工作安排专员。" };
     const raw = [...request.messages].reverse().filter((message) => message.role === "user").map(content).find((text) => text.startsWith("[LAKE ADMITTED HUMAN EVENTS"));
     if (!raw) return { content: "Missing actual admitted event" };
     const event = JSON.parse(raw.split("\n")[1])[0];
@@ -158,6 +159,22 @@ function superReply(request, mode, home) {
     if (!reads) return call("list_project_files", { path: "missing-diagnostic-path" }, "failed-files");
     if (updates.filter((update) => update.status === "running").length === 1) return call("work_update", { item_id: "inspect", status: "running" }, "retry-inspect");
     if (reads < 2) return call("list_project_files", { path: "." }, "actual-files");
+  }
+  if (mode.startsWith("super-mcp")) {
+    const result = (name) => {
+      const id = request.messages.flatMap((message) => message.tool_calls ?? []).filter((tool) => tool.function.name === name).at(-1)?.id;
+      const message = request.messages.findLast((message) => message.role === "tool" && message.tool_call_id === id);
+      return message ? JSON.parse(content(message)) : undefined;
+    };
+    if (!names.includes("list_mcp_servers")) return call("list_mcp_servers", {}, "mcp-servers");
+    const server = result("list_mcp_servers")?.servers?.[0];
+    if (!server) return { content: "当前项目没有可用 MCP 服务。" };
+    const pins = { server_id: server.id, configuration_revision: server.configurationRevision, binding_revision: server.bindingRevision };
+    if (!names.includes("list_mcp_tools")) return call("list_mcp_tools", pins, "actual-catalog");
+    if (!names.includes("call_mcp_tool")) return call("call_mcp_tool", { ...pins, tool: "count_documents", catalog_revision: result("list_mcp_tools").catalogHash, arguments: {} }, "actual-mcp");
+    if (!updates.some((update) => update.status === "completed")) return call("work_update", { item_id: "inspect", status: "completed", evidence_ids: ["actual-mcp"] }, "accept-inspect");
+    if (!names.includes("work_finish")) return call("work_finish", { summary: "已通过当前项目 MCP 的实际回执取得 42 个测试文档。" });
+    return { content: "MCP 查询已按真实回执完成。" };
   }
   if (!names.includes("list_project_files")) return call("list_project_files", { path: "." }, "actual-files");
   if (mode.includes("write") && !names.includes("Write")) {
@@ -803,4 +820,262 @@ test("a failed proven read obtains a fresh attempt without replaying the failure
   assert.equal(goals[0].acceptanceState, "pass");
   assert.equal(goals[0].roundLimit, 500);
   assert.equal(f.app.store.list("superWorkers").length, 1);
+});
+
+async function mcpFixture(t) {
+  const requests = [], stolen = [];
+  const sink = createServer((req, res) => { stolen.push(req.url); res.writeHead(200); res.end(); });
+  await new Promise((resolve) => sink.listen(0, "127.0.0.1", resolve));
+  const server = createServer(async (req, res) => {
+    if (req.url === "/redirect") { res.writeHead(302, { Location: `http://127.0.0.1:${sink.address().port}/stolen` }); res.end(); return; }
+    if (req.method !== "POST") { res.writeHead(405); res.end(); return; }
+    const chunks = []; for await (const chunk of req) chunks.push(chunk);
+    const rpc = JSON.parse(Buffer.concat(chunks).toString()); requests.push({ rpc, credentialMatched: req.headers['x-fixture-key'] === 'synthetic-mcp-token' });
+    if (rpc.id === undefined) { res.writeHead(202); res.end(); return; }
+    let result;
+    if (rpc.method === "initialize") result = { protocolVersion: "2025-11-25", capabilities: { tools: {} }, serverInfo: { name: "Lake fixture", version: "1" } };
+    else if (rpc.method === "tools/list") result = rpc.params?.cursor ? { tools: [{ name: "second_tool", description: "Second catalog page", inputSchema: { type: "object", properties: {} } }] }
+      : { tools: [{ name: "count_documents", description: "Count fixture documents", inputSchema: { type: "object", properties: {} } }], nextCursor: "page-2" };
+    else if (rpc.method === "tools/call") result = { content: [{ type: "text", text: "42 fixture documents" }], isError: false };
+    else if (rpc.method === "ping") result = {};
+    else { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ jsonrpc: "2.0", id: rpc.id, error: { code: -32601, message: "Method not found" } })); return; }
+    res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ jsonrpc: "2.0", id: rpc.id, result }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => { await new Promise((resolve) => server.close(resolve)); await new Promise((resolve) => sink.close(resolve)); });
+  return { url: `http://127.0.0.1:${server.address().port}/mcp`, requests, stolen };
+}
+
+test("MCP settings preserve private credentials, page real protocol catalogs, and never call tools during listing", async (t) => {
+  const f = await fixture(t), mcp = await mcpFixture(t);
+  const server = await f.api("/api/settings/mcp", "POST", { name: "Fixture knowledge", transport: "http", enabled: true, url: mcp.url, headers: { "X-Fixture-Key": "synthetic-mcp-token" }, args: [] });
+  assert.equal(server.headersConfigured, true);
+  assert.ok(!JSON.stringify(server).includes("synthetic-mcp-token"));
+  assert.deepEqual(mcp.requests, []);
+  const catalog = await f.api(`/api/settings/mcp/${server.id}/test`, "POST", {});
+  assert.deepEqual(catalog.tools.map((tool) => tool.name), ["count_documents", "second_tool"]);
+  assert.ok(mcp.requests.every((request) => request.credentialMatched));
+  assert.equal(mcp.requests.filter((request) => request.rpc.method === "tools/call").length, 0);
+  const { stat } = require("node:fs/promises");
+  assert.equal((await stat(join(f.home, "secrets/extensions-typescript.json"))).mode & 0o777, 0o600);
+  await f.api(`/api/settings/mcp/${server.id}`, "PUT", { ...server, name: "Renamed service" });
+  assert.equal((await f.api("/api/settings/mcp")).servers[0].headersConfigured, true);
+  await f.restart();
+  assert.equal((await f.api("/api/settings/mcp")).servers[0].id, server.id);
+  await f.api(`/api/settings/mcp/${server.id}/test`, "POST", {});
+  assert.equal(mcp.requests.filter((request) => request.rpc.method === "tools/call").length, 0);
+});
+
+test("MCP JSON import is atomic and authenticated redirects never send custom credentials to another origin", async (t) => {
+  const f = await fixture(t), mcp = await mcpFixture(t);
+  const imported = await f.api("/api/settings/mcp/import", "POST", { mcpServers: { first: { url: mcp.url, headers: { "X-Fixture-Key": "synthetic-mcp-token" } }, second: { type: "stdio", command: "node", args: ["fixture-only.cjs"], enabled: false } } });
+  assert.equal(imported.servers.length, 2);
+  assert.deepEqual(mcp.requests, []);
+  await f.api("/api/settings/mcp/import", "POST", { mcpServers: { third: { url: mcp.url }, invalid: { command: "node", args: "wrong type" } } }, 400);
+  assert.equal((await f.api("/api/settings/mcp")).servers.length, 2);
+  const redirect = await f.api("/api/settings/mcp", "POST", { name: "Redirect fixture", transport: "http", enabled: true, url: mcp.url.replace("/mcp", "/redirect"), headers: { "X-Fixture-Key": "synthetic-mcp-token" } });
+  await f.api(`/api/settings/mcp/${redirect.id}/test`, "POST", {}, 502);
+  assert.deepEqual(mcp.stolen, []);
+});
+
+test("legacy MCP credentials remain references in the same Dev Home and are never copied into TS records", async (t) => {
+  const f = await fixture(t), fs = require("node:fs/promises");
+  await fs.mkdir(join(f.home, "secrets"), { recursive: true, mode: 0o700 });
+  const source = JSON.stringify({ version: 1, servers: [{ id: "legacy-service", name: "Legacy fixture", transport: "http", enabled: false, url: "http://127.0.0.1:9/mcp", args: null, headers: { Authorization: "Bearer synthetic-legacy-mcp-key" } }], skillRoots: null, disabledSkills: null });
+  await writeFile(join(f.home, "secrets/extensions.json"), source, { mode: 0o600 });
+  const before = await f.api("/api/settings/mcp");
+  assert.equal(before.servers[0].headersConfigured, true);
+  await f.api(`/api/settings/mcp/legacy-service`, "PUT", { ...before.servers[0], name: "Renamed legacy" });
+  assert.equal(await readFile(join(f.home, "secrets/extensions.json"), "utf8"), source);
+  assert.ok(!(await readFile(join(f.home, "secrets/extensions-typescript.json"), "utf8")).includes("synthetic-legacy-mcp-key"));
+  assert.ok(!JSON.stringify(f.app.store.list("settings")).includes("synthetic-legacy-mcp-key"));
+});
+
+test("Skills preserve managed editing, enablement, external roots, restart and symlink credential exclusion", async (t) => {
+  const f = await fixture(t), fs = require("node:fs/promises");
+  await f.api("/api/settings/skills/fixture-skill", "PUT", { create: true, content: "---\nname: fixture-skill\ndescription: Check the fixture workspace\n---\nRead actual results." });
+  let catalog = await f.api("/api/settings/skills");
+  assert.equal(catalog.skills[0].managed, true);
+  await f.api("/api/settings/skills/fixture-skill", "PUT", { enabled: false });
+  assert.equal((await f.api("/api/settings/skills")).skills[0].enabled, false);
+  const root = join(f.home, "external-skills"); await fs.mkdir(join(root, "external"), { recursive: true });
+  await writeFile(join(root, "external/SKILL.md"), "---\ndescription: External reference\n---\nExternal content.");
+  await f.api("/api/settings/skills/roots", "POST", { path: root });
+  await f.api("/api/settings/skills/external", "PUT", { content: "overwrite imported content" }, 409);
+  await fs.mkdir(join(f.home, "secrets/hidden"), { recursive: true, mode: 0o700 });
+  await writeFile(join(f.home, "secrets/hidden/SKILL.md"), "sensitive credential sentinel", { mode: 0o600 });
+  await fs.symlink(join(f.home, "secrets/hidden"), join(root, "hidden"));
+  await f.api("/api/settings/skills/roots", "POST", { path: join(f.home, "secrets") }, 403);
+  await f.restart();
+  catalog = await f.api("/api/settings/skills");
+  assert.deepEqual(catalog.skills.map((skill) => skill.name), ["external", "fixture-skill"]);
+  assert.equal(catalog.skills.find((skill) => skill.name === "fixture-skill").enabled, false);
+  assert.equal((await f.api("/api/settings/skills/external")).content.includes("External content"), true);
+});
+
+test("ordinary Pilot conversation completes in one model request without routing or spawning a Worker", async (t) => {
+  const f = await fixture(t, "super-chat"), project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "你是谁" }, 202);
+  const snapshot = await until(() => f.api(`/api/sessions/${project.routerSessionId}/snapshot`), (value) => value.ai.status === "completed");
+  assert.equal(f.calls, 1);
+  assert.equal(snapshot.ai.replyStatus, "completed");
+  assert.ok(snapshot.ai.turnFinishedAt);
+  assert.ok(snapshot.messages.some((message) => message.role === "assistant" && message.text.includes("我是 Lake Pilot")));
+  assert.equal(f.app.store.list("superDecisions").length, 0);
+  assert.equal(f.app.store.list("superWorkers").length, 0);
+  assert.equal(f.app.store.list("superInputs")[0].disposition, "routed");
+  assert.ok(JSON.stringify(f.requests[0]).includes("Answer ordinary questions directly"));
+});
+
+test("independent Worker queries a real project MCP service only after its exact approval and accepts actual receipts", async (t) => {
+  const f = await fixture(t, "super-mcp"), mcp = await mcpFixture(t);
+  await f.api("/api/settings/mcp", "POST", { name: "Knowledge fixture", transport: "http", enabled: true, url: mcp.url });
+  await f.api(`/api/projects/${f.project.id}/security/mcp-inheritance`, "PUT", { actionId: "inherit-fixture", expectedRevision: 0, enabled: true });
+  const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "通过项目知识库 MCP 查询文档数量。" }, 202);
+  const state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (value) => value.channels[0]?.needsConfirmation);
+  const worker = state.workers[0], pending = (await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;
+  assert.equal(pending.call.name, "call_mcp_tool");
+  assert.equal(mcp.requests.filter((request) => request.rpc.method === "tools/call").length, 0);
+  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`, "POST", { id: pending.id, accept: true });
+  await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (value) => value.workers[0].task.state === "completed");
+  const operations = f.app.store.list("superOperations");
+  assert.deepEqual(operations.map((operation) => operation.tool), ["list_mcp_tools", "call_mcp_tool"]);
+  assert.ok(operations.every((operation) => operation.status === "succeeded" && operation.mcpServerId && operation.configurationHash && operation.bindingHash));
+  assert.equal(mcp.requests.filter((request) => request.rpc.method === "tools/call").length, 1);
+  assert.equal(f.app.store.list("superGoals")[0].acceptanceState, "pass");
+});
+
+test("explicit MCP service opt-out overrides global inheritance and a stale inheritance edit cannot widen scope", async (t) => {
+  const f = await fixture(t), mcp = await mcpFixture(t);
+  const server = await f.api("/api/settings/mcp", "POST", { name: "Scoped fixture", transport: "http", enabled: true, url: mcp.url });
+  const inheritance = `/api/projects/${f.project.id}/security/mcp-inheritance`, binding = `/api/projects/${f.project.id}/security/mcp-bindings/${server.id}`;
+  await f.api(inheritance, "PUT", { actionId: "enable", expectedRevision: 0, enabled: true });
+  assert.equal((await f.api(inheritance)).servers.length, 1);
+  await f.api(binding, "PUT", { actionId: "opt-out", expectedRevision: 0, enabled: false, toolNames: [] });
+  assert.equal((await f.api(inheritance)).servers.length, 0);
+  await f.api(inheritance, "PUT", { actionId: "stale", expectedRevision: 0, enabled: true }, 409);
+  assert.equal((await f.api(inheritance)).servers.length, 0);
+  assert.deepEqual(mcp.requests, []);
+  await f.restart();
+  assert.equal((await f.api(inheritance)).servers.length, 0);
+});
+
+test('persistent PTY preserves shell state, resizes and keeps output without replay after restart', { skip: process.platform !== 'darwin' }, async (t) => {
+  const f = await fixture(t);
+  assert.equal((await f.api('/api/bootstrap')).terminalMode, 'pty');
+  const resource = (await f.api('/api/catalog')).resources.find(r => r.projectId === f.project.id && r.kind === 'local');
+  const {sessionId} = await f.api(`/api/resources/${resource.id}/terminal-context`, 'POST', {});
+  const term = await f.api(`/api/sessions/${sessionId}/terminals`, 'POST', {resourceId: resource.id, shell:'bash', interactive:true}, 201);
+  const base = `/api/sessions/${sessionId}/terminals/${term.id}`;
+  const history = () => f.api(base+'/history');
+  await until(history, h => h.terminal.status === 'ready');
+  await f.api(base+'/input', 'POST', {data:"test -t 0 && printf 'REAL_TTY\\n'; export LAKE_PTY_FIXTURE=retained; mkdir -p nested; cd nested\r"}, 202);
+  await until(history, h => h.output.includes('REAL_TTY') && h.terminal.cwd?.endsWith('/nested') && h.terminal.status === 'ready');
+  await f.api(base+'/resize', 'POST', {cols:91,rows:27});
+  await f.api(base+'/input','POST',{data:"printf 'STATE_%s\\n' \"$LAKE_PTY_FIXTURE\"; stty size\r"},202);
+  await until(history,h=>h.output.includes('STATE_retained') && h.output.includes('27 91'));
+  const command = await f.api(base+'/commands','POST',{actor:'user',command:'printf ledger-ready'},202);
+  const finished = await until(history,h=>h.entries.some(e=>e.id===command.id&&e.status==='completed'));
+  assert.equal(finished.entries.find(e=>e.id===command.id).exitCode,0);
+  assert.match(finished.entries.find(e=>e.id===command.id).output,/ledger-ready/);
+  const catalog = await f.api('/api/catalog');
+  assert.ok(catalog.terminals.some(item=>item.id===term.id));
+  assert.ok(!catalog.sessions.some(item=>item.id===sessionId),'resource scope stays out of chat sidebar');
+  await f.restart();
+  const recovered = await history();
+  assert.equal(recovered.terminal.status,'disconnected');
+  assert.equal(recovered.terminal.interactive,false);
+  assert.match(recovered.output,/STATE_retained/);
+  await f.api(base+'/input','POST',{data:'echo must-not-run\r'},409);
+});
+
+test('PTY enforces project and human ownership, exact danger confirmation and command interruption', { skip: process.platform !== 'darwin' }, async(t)=>{
+  const f=await fixture(t);
+  const resource=(await f.api('/api/catalog')).resources.find(r=>r.projectId===f.project.id);
+  const term=await f.api(`/api/sessions/${f.session.id}/terminals`,'POST',{resourceId:resource.id,shell:'zsh'},201);
+  const base=`/api/sessions/${f.session.id}/terminals/${term.id}`;
+  const history=()=>f.api(base+'/history');
+  await until(history,h=>h.terminal.status==='ready');
+  await f.api(base+'/commands','POST',{actor:'agent',command:'pwd'},403);
+  await f.api(base+'/commands','POST',{actor:'user',command:'touch prohibited'},400);
+  await f.api(base+'/commands','POST',{actor:'user',command:"sh -c 'printf safe'",confirmed:true},400);
+  await f.api(base+'/control','POST',{holder:null});
+  await f.api(base+'/input','POST',{data:'pwd\r'},409);
+  await f.api(base+'/control','POST',{holder:'user'});
+  const other=await f.api(`/api/projects/${f.project.id}/sessions`,'POST',{});
+  const otherBase=`/api/sessions/${other.id}/terminals/${term.id}`;
+  await f.api(otherBase+'/input','POST',{data:'pwd\r'},403);
+  await f.api(otherBase+'/adopt','POST',{accept:true,generation:'stale'},409);
+  await f.api(otherBase+'/adopt','POST',{accept:true,generation:term.generation,bind:false});
+  const foreign=await f.api('/api/projects','POST',{name:'other project'});
+  const foreignSession=await f.api(`/api/projects/${foreign.id}/sessions`,'POST',{});
+  await f.api(`/api/sessions/${foreignSession.id}/terminals/${term.id}/history`,'GET',undefined,404);
+  const command=await f.api(base+'/commands','POST',{actor:'user',command:'sleep 30'},202);
+  await new Promise(resolve=>setTimeout(resolve,150));
+  await f.api(base+'/interrupt-command','POST',{generation:'stale',entryId:command.id},409);
+  await f.api(base+'/interrupt-command','POST',{generation:term.generation,entryId:command.id},202);
+  const stopped=await until(history,h=>h.entries.some(e=>e.id===command.id&&e.status==='completed'));
+  assert.equal(stopped.entries.find(e=>e.id===command.id).exitCode,130);
+  await f.api(base+'/disconnect','POST',{});
+  assert.equal((await history()).terminal.status,'disconnected');
+});
+
+test('PTY redacts a credential split across actual output chunks and persists no raw secret', { skip:process.platform!=='darwin' }, async(t)=>{
+  const f=await fixture(t);
+  const resource=(await f.api('/api/catalog')).resources.find(r=>r.projectId===f.project.id);
+  const term=await f.api(`/api/sessions/${f.session.id}/terminals`,'POST',{resourceId:resource.id,shell:'bash'},201);
+  const base=`/api/sessions/${f.session.id}/terminals/${term.id}`;
+  await until(()=>f.api(base+'/history'),h=>h.terminal.status==='ready');
+  // No contiguous key appears in the typed/echoed command. The actual process emits it in two writes.
+  await f.api(base+'/input','POST',{data:"printf 'synthetic-secret-'; sleep 0.3; printf 'no-real-credential'; printf '\\nfinished-redaction\\n'\r"},202);
+  await new Promise(resolve=>setTimeout(resolve,120));
+  const middle=await f.api(base+'/history');
+  assert.ok(!middle.output.endsWith('synthetic-secret-'));
+  const final=await until(()=>f.api(base+'/history'),h=>h.output.includes('finished-redaction')&&h.terminal.status==='ready');
+  assert.ok(!JSON.stringify(final).includes('synthetic-secret-no-real-credential'));
+  assert.match(final.output,/\[REDACTED\]/);
+  await f.restart();
+  const sqlite=new (require('node:sqlite').DatabaseSync)(join(f.options.data,'lake-typescript.sqlite'),{readOnly:true});
+  assert.ok(!JSON.stringify(sqlite.prepare("SELECT value FROM records WHERE kind IN ('terminalOutput','terminalEntries')").all()).includes('synthetic-secret-no-real-credential'));
+  sqlite.close();
+});
+
+test('PTY partial input blocks managed dispatch and output reads do not produce an SSE feedback loop', {skip:process.platform!=='darwin'}, async(t)=>{
+ const f=await fixture(t);
+ const resource=(await f.api('/api/catalog')).resources.find(r=>r.projectId===f.project.id);
+ const term=await f.api(`/api/sessions/${f.session.id}/terminals`,'POST',{resourceId:resource.id,shell:'sh'},201);
+ const base=`/api/sessions/${f.session.id}/terminals/${term.id}`;
+ const history=()=>f.api(base+'/history');
+ await until(history,h=>h.terminal.status==='ready');
+ await f.api(base+'/input','POST',{data:'printf incomplete'},202);
+ await f.api(base+'/commands','POST',{actor:'user',command:'pwd'},409);
+ await f.api(base+'/input','POST',{data:'\u0003'},202);
+ await new Promise(resolve=>setTimeout(resolve,100));
+ const command=await f.api(base+'/commands','POST',{actor:'user',command:'printf clean-command'},202);
+ const done=await until(history,h=>h.entries.some(e=>e.id===command.id&&e.status==='completed'));
+ assert.match(done.output,/clean-command/);
+ assert.ok(!done.output.includes('__lake_managed=1'),'managed transport command must not be painted');
+ await new Promise(resolve=>setTimeout(resolve,80));
+ const before=(await f.api(`/api/sessions/${f.session.id}/snapshot`)).cursor;
+ await history(); await history();
+ assert.equal((await f.api(`/api/sessions/${f.session.id}/snapshot`)).cursor,before);
+});
+
+test('legacy unresolved MCP calls outside visible projects still fence a new approved remote call', async(t)=>{
+ const f=await fixture(t,'super-mcp'), mcp=await mcpFixture(t);
+ await f.api('/api/settings/mcp','POST',{name:'fixture',transport:'http',enabled:true,url:mcp.url});
+ await f.api(`/api/projects/${f.project.id}/security/mcp-inheritance`,'PUT',{actionId:'inherit',expectedRevision:0,enabled:true});
+ const project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'查询项目 MCP 文档数量'},202);
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),value=>value.channels[0]?.needsConfirmation);
+ const worker=state.workers[0], pending=(await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;
+ const fs=require('node:fs/promises'), path=join(f.options.data,'adk/sessions.sqlite');
+ await fs.mkdir(join(f.options.data,'adk'),{recursive:true,mode:0o700});
+ const db=new(require('node:sqlite').DatabaseSync)(path);
+ db.exec("CREATE TABLE native_operations(project_id TEXT,tool TEXT,status TEXT,orphan_state TEXT,risk_resolved_at TEXT,closure_state TEXT); INSERT INTO native_operations VALUES('archived-not-imported','call_mcp_tool','unknown','',NULL,NULL)"); db.close(); await fs.chmod(path,0o600);
+ await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.id,accept:true});
+ await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),view=>!['running','waiting_approval'].includes(view.status));
+ assert.equal(mcp.requests.filter(request=>request.rpc.method==='tools/call').length,0);
+ assert.equal(f.app.store.list('superOperations').filter(operation=>operation.tool==='call_mcp_tool').length,0);
 });

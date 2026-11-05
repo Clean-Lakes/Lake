@@ -8,6 +8,7 @@ import {
   mkdtemp,
   rm,
   rename,
+  chmod,
 } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
@@ -42,10 +43,12 @@ await build({
   legalComments: "eof",
   logLevel: "warning",
   external: ["koffi", "playwright-core", "ripgrep"],
+  nodePaths: [join(source, "node_modules")],
   plugins: [
     {
       name: "pinned-zcode-source",
       setup(builder) {
+        builder.onResolve({ filter: /^@modelcontextprotocol\/client(?:\/stdio)?$/ }, (args) => ({ path: require.resolve(args.path) }));
         builder.onResolve({ filter: /^@zcode\// }, async (args) => {
           const segments = args.path.split("/");
           const name = segments.slice(0, 2).join("/");
@@ -72,6 +75,15 @@ await mkdir(join(output, "licenses"), { recursive: true });
 for (const file of ["LICENSE", "NOTICE.md", "THIRD-PARTY-NOTICES.md"]) {
   await copyFile(join(source, file), join(output, "licenses", file));
 }
+await copyFile(join(source, "node_modules/@modelcontextprotocol/client/LICENSE"), join(output, "licenses/MCP-client-LICENSE"));
+// Native PTY stays outside the SEA bundle so Node can dlopen the pinned addon.
+const ptySource = dirname(require.resolve("node-pty/package.json"));
+const ptyOutput = join(output, "native/node-pty");
+await mkdir(ptyOutput, { recursive: true });
+for (const file of ["lib", "prebuilds", "package.json"]) await cp(join(ptySource, file), join(ptyOutput, file), { recursive: true });
+await chmod(join(ptyOutput, `prebuilds/${process.platform}-${process.arch}/spawn-helper`), 0o755);
+await copyFile(join(ptySource, "LICENSE"), join(output, "licenses/node-pty-LICENSE"));
+await cp(join(root, "internal/web/hooks"), join(output, "hooks"), { recursive: true });
 await writeFile(
   join(output, "licenses/Lake-modifications.md"),
   "Lake embeds ZCode 3.17.2 AgentRuntime and Node adapters in a TypeScript HTTP host. " +

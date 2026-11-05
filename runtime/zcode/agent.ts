@@ -172,6 +172,16 @@ export class LakeAgents {
       "[PRIVATE KEY REDACTED]",
     );
   }
+  redactLive(text: string) {
+    // A partial credential must not be persisted while its remaining bytes are in flight.
+    let keep = 0;
+    for (const key of this.keys) for (let size = 1; size < key.length && size <= text.length; size++)
+      if (text.endsWith(key.slice(0, size))) keep = Math.max(keep, size);
+    const header = text.lastIndexOf("-----");
+    if (header >= 0 && /^-----(?:BEGIN [A-Z ]*)?$/.test(text.slice(header))) keep = Math.max(keep, text.length - header);
+    for (let size = 1; size < 5; size++) if (text.endsWith("-----".slice(0, size))) keep = Math.max(keep, size);
+    return this.redact(keep ? text.slice(0, -keep) : text) + (keep ? "[REDACTED]" : "");
+  }
   private scrub<T>(value: T): T {
     if (typeof value === "string") return this.redact(value) as T;
     if (Array.isArray(value)) return value.map((item) => this.scrub(item)) as T;

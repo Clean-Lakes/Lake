@@ -174,12 +174,12 @@ export class LakeStore {
       projects: this.list<Project>("projects"),
       resources,
       resourceTree: tree,
-      sessions: this.list<StoredSession>("sessions").map(({ id }) => {
+      sessions: this.list<StoredSession>("sessions").filter((session) => !this.list<string>("terminalScopes").includes(session.id)).map(({ id }) => {
         const { options, ...session } = this.session(id);
         return session;
       }),
       tags: this.list("tags"),
-      terminals: [],
+      terminals: this.list<import("../../web-agent/shared/contracts").TerminalSession>("terminals").map((terminal) => ({ ...terminal, sessionTitle: this.session(terminal.sessionId).title })),
     };
   }
   createSession(projectId: string) {
@@ -273,7 +273,7 @@ export class LakeStore {
       specialists: [],
       evidence: [],
       actions: [],
-      terminals: [],
+      terminals: (catalog.terminals ?? []).filter((terminal) => terminal.sessionId === sessionId),
       cursor: this.cursor(sessionId),
       ai: this.view(sessionId),
       conversationMode: options.conversationMode === "plan" ? "plan" : "default",

@@ -35,13 +35,13 @@ open "$HOME/Applications/Lake Dev.app"
 
 ### Super-agent 增量
 
-`superagent.ts` 将真实 Pilot Router、长期专员管理、独立任务 Worker、连续频道、分页与当前权限接入公开 ZCode AgentRuntime。Router 只持有路由/元数据工具，不能执行资源操作。Worker 目前可在本项目独立工作区使用 Read/Write/Edit、真实文件清单和任务工具；没有接通的终端、远程服务、MCP、Skills 和 Memory 不可绕过。职责按建单版本冻结，任务不受专员后续改名影响。
+`superagent.ts` 将真实 Pilot Router、长期专员管理、独立任务 Worker、连续频道、分页与当前权限接入公开 ZCode AgentRuntime。Router 只持有路由/元数据工具，不能执行资源操作。Worker 目前可在本项目独立工作区使用 Read/Write/Edit、真实文件清单和任务工具；Worker 已增量接入项目 MCP 目录/调用和 Skills 读取；本机手动 PTY 与 Worker 执行权限分开。SSH、Agent 终端交接、远程服务和 Memory 仍未接通，不可绕过。职责按建单版本冻结，任务不受专员后续改名影响。
 
 `tasks.ts` 保存原目标、步骤、独立尝试、实际派发操作及验收。普通任务自动注册计划；Plan 必须确认且始终只读。步骤验收和最终汇总核对真实操作回执、项目/任务/尝试、原修订、当前权限、资源连接修订与输出 hash。模型文字不能验收；只读失败可以在原目标建立带 retryOf 的新诊断尝试，写入不明仍为 unknown。停止和重启使原 owner/审批失效，旧操作不重放；报告使用事务 outbox 幂等进入 Pilot 与专员频道。
 
 迁移优先读取旧 ADK state 指向的准确 artifact 版本并核验 hash；不选择最大 artifact 版本，旧 UI JSON 仅作前 ADK 兼容缓存。历史卡片分页保留，旧任务不成为新执行权威。原项目明确 Security 策略尚未完成 TS 适配时阻止资源执行；原安全 gate/epoch/reader 不兼容时只允许查看，不能改成 ZCode 默认放行。`security.ts` 是迁移屏障，完整 Security/grant/恢复合同仍待移植。
 
-本批 24 项隔离集成验证与真实 Dev 目录副本演练见[Super-agent 验证记录](../../docs/validation/zcode-typescript-candidate/superagent.md)。该批是已有迁移候选的增量，不代表全量功能切换。
+最初 24 项隔离集成验证与真实 Dev 目录副本演练见[Super-agent 验证记录](../../docs/validation/zcode-typescript-candidate/superagent.md)。该批是已有迁移候选的增量，不代表全量功能切换。
 
 ### 验证和切换门槛
 
@@ -60,3 +60,5 @@ Node 命令须使用准备好的 24.14.0。测试经过真实 ZCode 源码与本
 全量契约与真实行为通过后，才在单独变更中切换普通默认/正式版后端，并执行最终 SHA 验收。上述显式 Dev 预览不作为该门槛通过。合并、生产安装和发布继续遵守仓库原有授权流程。
 
 本轮准确源码 SHA、签名进程检查、界面截图与未验证项见[阶段验证记录](../../docs/validation/zcode-typescript-candidate/README.md)。
+
+持续终端与 MCP/Skills 增量的实际范围、36 项隔离回归和 Dev 实测另见[验证记录](../../docs/validation/zcode-typescript-candidate/terminal-extensions.md)。本机 PTY 使用随包签名的 node-pty 1.1.0 原生 addon/启动程序，macOS 无需系统 Node；没有将 SSH 或 Agent 接管视为已交付。
