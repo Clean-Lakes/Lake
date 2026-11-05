@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/Clean-Lakes/Lake/internal/ai"
 )
@@ -445,23 +444,15 @@ func (b *Server) DeliverPilotReport(ctx context.Context, project, routerID, repo
 		}
 	}
 	destination := report.ChannelRef
-	var payload struct {
-		Task ai.SuperTaskView `json:"task"`
-		Text string           `json:"text"`
-	}
+	var payload pilotReportPayload
 	if err = json.Unmarshal([]byte(report.Payload), &payload); err != nil {
 		return err
 	}
-	states := map[string]string{"queued": "排队中", "running": "执行中", "waiting_external": "等待外部结果", "waiting_user": "需要你回答", "paused": "已暂停", "blocked": "待核实", "completed": "已验收", "failed": "执行失败", "cancelled": "已停止后续跟进"}
-	acceptance := map[string]string{"pass": "通过", "fail": "未通过", "insufficient": "条件尚不充分", "not_evaluated": "未验收"}
-	text := fmt.Sprintf("%s\n\n任务「%s」· %s · 验收：%s", payload.Text, payload.Task.Title, states[payload.Task.State], acceptance[payload.Task.AcceptanceState])
-	if report.Kind == "router_reply" && report.TaskID == "" {
-		text = payload.Text
-	}
+	text := payload.Text
 	b.Store.update(func() any {
 		b.Store.session(destination)
 		if prior := b.Store.row("SELECT sessionId,text FROM messages WHERE id=?", report.ID); prior != nil {
-			if prior["sessionId"] != destination || prior["text"] != text {
+			if prior["sessionId"] != destination || (prior["text"] != text && prior["text"] != legacyPilotReportText(report, payload)) {
 				fail(409, "回复回执内容冲突")
 			}
 			return nil
