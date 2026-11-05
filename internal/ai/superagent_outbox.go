@@ -219,6 +219,42 @@ func (e *Engine) PendingPilotReports(ctx context.Context, projectID string) ([]S
 	}
 	return out, err
 }
+
+// SuperHostReports resolves only reports already admitted to this exact host
+// channel. It supports read-only presentation of historical host messages.
+func (e *Engine) SuperHostReports(ctx context.Context, project, channel string, ids []string) (map[string]SuperReport, error) {
+	out := map[string]SuperReport{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	domain, active, err := e.SuperProject(ctx, project)
+	if err != nil {
+		return nil, err
+	}
+	if !active {
+		return nil, errSuperBinding
+	}
+	if domain.RouterSessionID != channel {
+		if _, err := e.SpecialistChannelForSession(ctx, project, channel); err != nil {
+			return nil, err
+		}
+	}
+	db, err := e.superStore()
+	if err != nil {
+		return nil, err
+	}
+	for start := 0; start < len(ids); start += 200 {
+		var rows []superOutputRow
+		if err := db.WithContext(ctx).Where("project_id = ? AND channel_ref = ? AND id IN ? AND state IN ?", project, channel, ids[start:min(start+200, len(ids))], []string{"sending", "unknown", "delivered"}).Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			out[row.ID] = row.report()
+		}
+	}
+	return out, nil
+}
+
 func (e *Engine) AcknowledgePilotDelivery(ctx context.Context, projectID, id, receipt string) error {
 	if receipt == "" || len(receipt) > 1024 {
 		return errSuperBinding

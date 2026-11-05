@@ -98,6 +98,7 @@ func (b *Server) sessionSnapshot(id string) Object {
 	}
 	if b.Engine != nil && object(snap["session"])["workspaceRole"] == "router" {
 		messages := objects(snap["messages"])
+		b.projectPilotReportMessages(b.Context, stringOf(object(snap["session"])["projectId"]), id, messages)
 		ids := []string{}
 		for _, message := range messages {
 			if message["role"] == "assistant" {
@@ -123,6 +124,9 @@ func (b *Server) sessionSnapshot(id string) Object {
 			}
 			appendPilotDispatchMessages(snap, b.pilotDispatchMessages(b.Context, stringOf(object(snap["session"])["projectId"]), workerSessions...))
 		}
+	}
+	if b.Engine != nil && object(snap["session"])["workspaceRole"] == "role" {
+		b.projectPilotReportMessages(b.Context, stringOf(object(snap["session"])["projectId"]), id, objects(snap["messages"]))
 	}
 	return snap
 }
