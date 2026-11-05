@@ -1,7 +1,7 @@
 {
   "core": {
     "promptHash": "df9ab9b1851dc0c7645a9b3bb4b8e3f09143ad89c980628aee2ecf87067af023",
-    "toolsHash": "0ee8623855165626f01d59f314aac330f866112aef3be71805d41765c809b64c"
+    "toolsHash": "6fe013ca0ff03d591600c53a4efac5702555410d78a1f6ba11b6fcd971cb7129"
   },
   "db-query-editor": {
     "promptHash": "25e09234e0da998c37622ee8e47d420a27528bc319c4138ee64d4066b57b717d",
@@ -9,27 +9,27 @@
   },
   "default": {
     "promptHash": "df9ab9b1851dc0c7645a9b3bb4b8e3f09143ad89c980628aee2ecf87067af023",
-    "toolsHash": "0ee8623855165626f01d59f314aac330f866112aef3be71805d41765c809b64c"
+    "toolsHash": "6fe013ca0ff03d591600c53a4efac5702555410d78a1f6ba11b6fcd971cb7129"
   },
   "legacy-investigation": {
     "promptHash": "d66cedd5c863e5f9bcfa31dd79e2b49471f8e44a1fd1f366994e9a896374888c",
-    "toolsHash": "b162e8b3ce6087363b412ae5db56cedb8554215e698bd2e170387f20e82a24f9"
+    "toolsHash": "f067ab58b7c3d3fa4d22a7f99df6e53a0837ab02c682ff5cdc38e617b2dbeddf"
   },
   "memory": {
     "promptHash": "cdf5765558d260076593b27035afbceec0c1cb569d24beb48e86429df5b9f916",
-    "toolsHash": "0ee8623855165626f01d59f314aac330f866112aef3be71805d41765c809b64c"
+    "toolsHash": "6fe013ca0ff03d591600c53a4efac5702555410d78a1f6ba11b6fcd971cb7129"
   },
   "permissions-denied": {
     "promptHash": "df6062e3a477b2dd6b1d9217747e5af7eeb7836d1c26c7ca0892102df7baa135",
-    "toolsHash": "0ee8623855165626f01d59f314aac330f866112aef3be71805d41765c809b64c"
+    "toolsHash": "6fe013ca0ff03d591600c53a4efac5702555410d78a1f6ba11b6fcd971cb7129"
   },
   "permissions-silent": {
     "promptHash": "cf9a5470005baf710e8720c299cc17db85d770c0a651c167d66be169808017b6",
-    "toolsHash": "0ee8623855165626f01d59f314aac330f866112aef3be71805d41765c809b64c"
+    "toolsHash": "6fe013ca0ff03d591600c53a4efac5702555410d78a1f6ba11b6fcd971cb7129"
   },
   "preset": {
     "promptHash": "f7daf83e7cdf08581bda8e0652909f981cf120abcbb8c2d3357636de7f5394e3",
-    "toolsHash": "0ee8623855165626f01d59f314aac330f866112aef3be71805d41765c809b64c"
+    "toolsHash": "6fe013ca0ff03d591600c53a4efac5702555410d78a1f6ba11b6fcd971cb7129"
   },
   "role-coordinator": {
     "promptHash": "be9b6cb9dc6b3b994e798a4b6a43e76efb1ea6af70436547550ccff41ee23256",
@@ -57,7 +57,7 @@
   },
   "text-only": {
     "promptHash": "e52078afc89ea74eb1e844483a4593090685689bf033ac6d2108dceb6d7d6f8b",
-    "toolsHash": "0ee8623855165626f01d59f314aac330f866112aef3be71805d41765c809b64c"
+    "toolsHash": "6fe013ca0ff03d591600c53a4efac5702555410d78a1f6ba11b6fcd971cb7129"
   },
   "unknown": {
     "promptHash": "4ff6bdb17d66036a5e537ed8420066b5116ae363b09cd1968148e8e6d9c5806f",
