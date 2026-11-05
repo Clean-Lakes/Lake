@@ -50,7 +50,7 @@ tags: [refactor, zcode, typescript, backend]
 | TASK-006 | 更新开发说明、架构方向和验收记录；记录 SHA、平台缺口和未迁移功能，经普通 PR 到 develop。依赖 TASK-005。 | | |
 | TASK-007 | `runtime/zcode/inventory.mjs` 从当前 API AST 固定操作清单；`parity.json`、`scripts/check_zcode_parity.py` 区分候选测试与完整等价证据。同步 develop@16ef7075 后当前为 118 项操作、20 个领域（含会话导航/标签），均未完成完整等价验收；默认检查失败，候选不能自动切换。 | ✅ | 2026-11-05 |
 | TASK-022 | `runtime/zcode/navigation.ts` 移植会话置顶/排序、图标、项目标签及乐观版本/事务/事件合同；验证跨项目、并发、重启及会话活动不变。仅候选层完成，完整 UI/Dev 与历史数据验收仍属 TASK-021。 | ✅ | 2026-11-05 |
-| TASK-023 | 按用户新增的明确要求增加 `--dev --ts-candidate --install`：签名 SEA 和资源随包、原生运行类型校验/停止/重连、同 Dev 凭据引用、旧数据快照与保留；覆盖安装并启动现有 Dev，记录真实 TS bootstrap 和原生窗口。仅 Dev 预览授权，不计全量验收。 | | |
+| TASK-023 | 按用户新增的明确要求增加 `--dev --ts-candidate --install`：签名 SEA 和资源随包、原生运行类型校验/停止/重连、同 Dev 凭据引用、旧数据快照与保留；已覆盖安装并启动现有 Dev，真实 TS bootstrap 和原生窗口见 `docs/validation/zcode-typescript-candidate/dev-install.md`。仅 Dev 预览授权，不计全量验收。 | ✅ | 2026-11-05 |
 
 ### Implementation Phase 3
 
