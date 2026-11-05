@@ -1,6 +1,9 @@
 package memory
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestRoleScopeIdentityAndFences(t *testing.T) {
 	s := RoleKnowledgeScopeV1{Version: 1, StoreID: "store", ProjectID: "project", RoleID: "role", RecoveryEpoch: "epoch", SettingsRevision: 1}
@@ -8,7 +11,7 @@ func TestRoleScopeIdentityAndFences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p, err := s.RelativeDirectory(); err != nil || p != "projects/project/roles/role" {
+	if p, err := s.RelativeDirectory(); err != nil || p != filepath.Join("projects", "project", "roles", "role") {
 		t.Fatal(p, err)
 	}
 	ref := KnowledgeRefV1{ScopeKey: key, EntryID: "entry", Revision: 1, ContentHash: key}
