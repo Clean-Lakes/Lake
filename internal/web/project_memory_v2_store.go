@@ -91,7 +91,7 @@ func (s *Store) appendMemoryV2Source(entry, source Object) {
  WHERE projectId=? AND key=? AND sourceId NOT IN (SELECT sourceId FROM projectMemorySourcesV2 WHERE projectId=? AND key=? ORDER BY entryRevision DESC,rowid DESC LIMIT 8)`, entry["projectId"], entry["key"], entry["projectId"], entry["key"])
 }
 
-func ValidateMemoryV2(m MemoryMutation, allowUnbound ...bool) {
+func ValidateMemoryV2(m MemoryMutation) {
 	validateMemoryMutation(m)
 	if m.Forget {
 		return
@@ -109,7 +109,7 @@ func ValidateMemoryV2(m MemoryMutation, allowUnbound ...bool) {
 	if !set("preference procedure topology configuration incident_lesson")[d.KnowledgeKind] || !set("project resources")[d.ScopeKind] || !memoryFactPattern.MatchString(d.FactKey) {
 		fail(400, "Invalid memory classification")
 	}
-	if d.ScopeKind == "project" && (len(d.ResourceIDs) != 0 || d.KnowledgeKind != "preference" && d.KnowledgeKind != "procedure") || d.ScopeKind == "resources" && (len(d.ResourceIDs) == 0 && (len(allowUnbound) == 0 || !allowUnbound[0]) || len(d.ResourceIDs) > 32) {
+	if d.ScopeKind == "project" && (len(d.ResourceIDs) != 0 || d.KnowledgeKind != "preference" && d.KnowledgeKind != "procedure") || d.ScopeKind == "resources" && (len(d.ResourceIDs) == 0 || len(d.ResourceIDs) > 32) {
 		fail(422, "Invalid memory resource scope")
 	}
 	if d.AlwaysReference && (d.ScopeKind != "project" || d.KnowledgeKind != "preference" && d.KnowledgeKind != "procedure") {

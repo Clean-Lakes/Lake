@@ -1,0 +1,30 @@
+{
+  "testedCommit": "d1a57101457c479f7b062db01bfc8670738bad81",
+  "surface": "Lake Dev.app / WKWebView",
+  "checks": [
+    {
+      "step": "backdrop_close_then_Return",
+      "dialogClosed": true,
+      "workspaceOpened": true
+    },
+    {
+      "step": "Tab_ShiftTab_Escape_then_Return",
+      "dialogClosed": true,
+      "workspaceOpened": true
+    },
+    {
+      "step": "Tab_ShiftTab_Return_then_Return",
+      "dialogClosed": true,
+      "workspaceOpened": true
+    },
+    {
+      "step": "mouse_Close_then_Return",
+      "dialogClosed": true,
+      "workspaceOpened": true
+    },
+    {
+      "step": "open_then_Return_without_Tab",
+      "dialogClosed": true
+    }
+  ]
+}

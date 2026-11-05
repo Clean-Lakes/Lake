@@ -2,34 +2,27 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {reduceMemoryView,memoryDraft,memoryJobUsage} from '../src/projectMemoryState';
-import {ProjectMemoryDetail} from '../src/ProjectMemoryDetail';
+import {ProjectMemoryGate} from '../src/ProjectMemoryGate';
 import {MemoryAccessSummary} from '../src/MemoryAccessSummary';
-import type {ProjectMemoryList,ProjectMemoryEntry} from '../../shared/contracts';
 
-test('memory state rejects old search responses and cross-project results',()=>{
- const empty={projectId:'A',sequence:1,list:null,error:''};
- const a={items:[{key:'A-secret'}],settings:{},total:1,projectRevision:1} as ProjectMemoryList;
- const requested=reduceMemoryView(empty,{type:'request',projectId:'B',sequence:2});
- assert.equal(requested.list,null);
- assert.equal(reduceMemoryView(requested,{type:'loaded',projectId:'A',sequence:1,list:a}),requested);
- const newer=reduceMemoryView(requested,{type:'request',projectId:'B',sequence:3});
- assert.equal(reduceMemoryView(newer,{type:'failed',projectId:'B',sequence:2,error:'stale'}),newer);
+// An editable child must not mount for retired, unknown or unqualified formats.
+test('memory gate mounts the current editor only for a qualified V1 response',()=>{
+ const current=()=>createElement('button',null,'current-editor');
+ for(const version of [null,0,2,3,-1,NaN]){
+  const html=renderToStaticMarkup(createElement(ProjectMemoryGate,{version,onClose:()=>{},children:createElement(current)}));
+  assert.doesNotMatch(html,/current-editor/);assert.match(html,/role="dialog"/);assert.match(html,/关闭/);
+ }
+ const html=renderToStaticMarkup(createElement(ProjectMemoryGate,{version:1,onClose:()=>{},children:createElement(current)}));
+ assert.match(html,/current-editor/);
+ const failed=renderToStaticMarkup(createElement(ProjectMemoryGate,{version:1,error:'读取失败',onClose:()=>{},children:createElement(current)}));
+ assert.doesNotMatch(failed,/current-editor/);assert.match(failed,/读取失败/);
 });
-test('unclassified legacy memory never defaults to project scope and unknown cost is not zero',()=>{
- const draft=memoryDraft({key:'old-method',revision:1,reviewState:'needs_review'});
- assert.equal(draft.scopeKind,'resources');assert.deepEqual(draft.resourceIds,[]);
- assert.match(memoryJobUsage({dispatchCount:2,unknownAttempts:1,knownTokens:70} as Parameters<typeof memoryJobUsage>[0]),/未知/);
+test('retired memory has a closed view without editing or adoption controls',()=>{
+ const html=renderToStaticMarkup(createElement(ProjectMemoryGate,{version:2,onClose:()=>{},children:createElement('button',null,'保存')}));
+ assert.match(html,/已停用/);assert.match(html,/历史记录仍保留/);
+ assert.equal((html.match(/<button/g)||[]).length,1);assert.doesNotMatch(html,/保存|审核|采用|重试/);
 });
-test('forgotten memories start with new content and explicit restoration',()=>{
- const draft=memoryDraft({key:'forgotten',revision:3,deletedAt:'2026-10-23T00:00:00Z'});
- assert.equal(draft.body,'');assert.equal(draft.restoreDeleted,true);assert.equal(draft.revision,3);
-});
-test('detail distinguishes observation from edits and uses shared selects',()=>{
- const entry={key:'service-port',type:'project',description:'服务端口',body:'该版本曾使用 8080。',revision:2,knowledgeKind:'configuration',scopeKind:'resources',resourceIds:['node-a'],factKey:'service.port',observedAt:'2026-10-22T08:00:00Z',updatedAt:'2026-10-23T08:00:00Z',validUntil:'2026-10-23T08:00:00Z',eligibility:'expired',verification:'observed',sources:[{sourceId:'source-1',kind:'evidence',observedAt:'2026-10-22T08:00:00Z'}]} as ProjectMemoryEntry;
- const html=renderToStaticMarkup(createElement(ProjectMemoryDetail,{draft:memoryDraft(entry),entry,resources:[],busy:false,onChange:()=>{},onSave:()=>{},onForget:()=>{},onBack:()=>{},onSource:()=>{}}));
- assert.match(html,/已有观测/);assert.match(html,/观测时间/);assert.match(html,/内容更新/);assert.match(html,/已过期/);assert.match(html,/不会刷新/);assert.match(html,/查看来源/);assert.match(html,/app-select/);
-});
+
 test('access summary never equates indexing with reading or adoption',()=>{
  const html=renderToStaticMarkup(createElement(MemoryAccessSummary,{entries:[{key:'rule',revision:1,kind:'index',at:'2026-10-23T00:00:00Z'},{key:'history',revision:2,kind:'read',at:'2026-10-23T00:00:00Z',historical:true}],onOpen:()=>{}}));
  assert.match(html,/索引 1 条 \/ 已读取 1 条/);assert.match(html,/仅索引/);assert.match(html,/历史资料/);assert.doesNotMatch(html,/已采纳|已验证/);
