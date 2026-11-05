@@ -81,6 +81,7 @@ def exercise(binary, home, native):
     projects = {}
     errors = []
     server_id = None
+    retries = {}
 
     def model_turn(request):
         names = {t['function']['name'] for t in request.get('tools', [])}
@@ -92,13 +93,20 @@ def exercise(binary, home, native):
         messages = '\n'.join(str(message.get('content', '')) for message in request['messages'])
         title, = [label for label in projects if label in messages]
         count = title == count_title
-        key = (role, title)
+        key = (role, title, title in retries)
         steps[key] = n = steps.get(key, 0) + 1
         if role == 'router':
             if n == 1:
                 event = rows("SELECT id FROM superagent_events WHERE project_id=? AND source_kind='user' AND disposition='pending'", (projects[title],))[0][0]
-                return '', 'route_work', {'event_id': event, 'part_key': 'inspect', 'action': 'create', 'title': title, 'role_key': 'release specialist', 'quote': title, 'reason': title}
+                route = {'event_id': event, 'part_key': 'inspect', 'action': 'create', 'title': title, 'role_key': 'release specialist', 'quote': title, 'reason': title}
+                if title in retries:
+                    route.update(action='followup', task_id=retries[title]['taskId'])
+                return '', 'route_work', route
             return 'Assigned to the release specialist.', None, {}
+        if count and title not in retries:
+            # Reproduce the original failure through the real ADK task repair
+            # path. No task records or runtime counters are edited by the fixture.
+            return 'The release query needs a plan before it can run.', None, {}
         if n == 1:
             require((server_id in messages) == count, 'Worker planning index lost project scope')
             return '', 'work_begin', {'title': title, 'items': [{'id': 'verify', 'title': title}], 'asset_refs': []}
@@ -165,6 +173,15 @@ def exercise(binary, home, native):
             worker = workers[0]
             sid = worker['sessionId']
             view = lake.snapshot(sid)
+            if count and title not in retries and worker['task']['state'] == 'paused' and worker['assignmentState'] == 'parked':
+                proposal = json.loads(rows('SELECT data FROM native_work_goals WHERE id=? AND session_id=?', (worker['task']['taskId'], sid))[0][0])
+                require(not proposal.get('items') and not requests, 'the original proposal already executed')
+                retries[title] = {'taskId': worker['task']['taskId'], 'sessionId': sid,
+                                  'modelRounds': proposal['modelRounds'], 'deadlineAt': proposal['deadlineAt']}
+                lake.api('/api/sessions/' + pilot + '/messages', 'POST', {'text': title})
+                continue
+            if count and title in retries:
+                require(worker['task']['taskId'] == retries[title]['taskId'] and sid == retries[title]['sessionId'], 'retry replaced the original task or Worker')
             question = view.get('question')
             if question and question['id'] not in answered:
                 answers = {}
@@ -189,7 +206,13 @@ def exercise(binary, home, native):
                 lake.api('/api/sessions/' + sid + '/ai/decision', 'POST', {'id': pending['id'], 'accept': True, 'confirmation': pending.get('confirmation', '')})
                 approved.add(pending['id'])
             if worker['task']['state'] == 'completed' and worker['task']['acceptanceState'] == 'pass':
+                if count:
+                    goal = json.loads(rows('SELECT data FROM native_work_goals WHERE id=? AND session_id=?', (worker['task']['taskId'], sid))[0][0])
+                    require(goal['modelRounds'] > retries[title]['modelRounds'] and goal['deadlineAt'] == retries[title]['deadlineAt'], 'retry reset task usage or extended its deadline')
                 break
+            if count and worker['task']['state'] == 'paused' and not answered:
+                time.sleep(.1)
+                continue
             require(worker['task']['state'] not in ('failed', 'blocked', 'paused'), 'worker stalled: ' + str(worker['task']))
             time.sleep(.1)
         else:
@@ -214,7 +237,7 @@ def exercise(binary, home, native):
             require(len(workers) == 2 and requests == [tool_name], 'fixture call was duplicated or Worker session reused')
             require(not rows('SELECT 1 FROM security_mcp_bindings'), 'unexpected materialized per-server binding')
             return {'workerCount': len(workers), 'optedOutServerCount': 0, 'assetRefs': [], 'mcpCalls': len(requests),
-                    'manualBindings': 0, 'humanQuestions': 4, 'operationApprovals': 1, 'verifiedReceipt': True}
+                    'resumedOriginalProposal': count_title in retries, 'manualBindings': 0, 'humanQuestions': 4, 'operationApprovals': 1, 'verifiedReceipt': True}
         finally:
             try:
                 if native:
