@@ -55,3 +55,5 @@ Automatic context maintenance uses the existing input estimator, triggers at 80%
 ## Super-agent 统一入口（2026-11-02）
 
 已切换的 Super-agent 项目由 Pilot Router 接单，Worker/保存工作流/日程共用持久准入与租约；模型/工具循环及图调度全部由官方 ADK 承担。原生人工问题与审批的恢复绑定原 SDK/root；原句柄、未知操作和验收账本不因恢复重置。旧执行写入口不能逃逸到 unmanaged；未排空的旧项目保留原 owner，拒绝双写。 验证与边界见 [运行架构](../design/lake-superagent-runtime.md)。
+
+Pilot Router 在每轮原生恢复后，将已验证来源的历史任务目录正文投影为明确省略标记及准确任务 ID/版本/hash；保留全部事件页、原用户消息、引用、入口目标和工具调用/结果配对。当前轮仍读取新目录，旧状态不能成为当前状态或权限。只修改待提交模型投影；旧 ADK 会话、原事件及任务/操作账本继续保留。普通用户文字、其他项目及不匹配来源不参与投影。失败轮次正文只显示首个整理失败，所有重试原因保留在执行诊断中。
