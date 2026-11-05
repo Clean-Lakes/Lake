@@ -67,6 +67,7 @@ def main():
     parser.add_argument('--exercise-missing-attempt', action='store_true', help='try a read before starting an item and verify the original attempt protocol repairs it')
     parser.add_argument('--profile-inspection-file', type=Path, help='with --manage-specialists, wait up to 300 seconds after the idle profile restart for this owned UI-inspection marker')
     parser.add_argument('--manage-specialists', action='store_true', help='create/list/edit an idle specialist through Pilot tools, cold restart, then reuse its stable RoleID for independent tasks')
+    parser.add_argument('--verify-context-working-set', action='store_true', help='after both tasks finish, verify one current Router envelope, bounded task digests and an exact hash read; no new business task')
     parser.add_argument('--inherit-project-access', action='store_true', help='use the existing project catalog and permissions without writing a separate project policy')
     parser.add_argument('--verify-reply-authors', action='store_true', help='verify distinct specialist identities on delivered Pilot reports')
     args = parser.parse_args()
@@ -94,7 +95,39 @@ def main():
             names = {tool['function']['name'] for tool in request.get('tools', [])}
             content, tool, payload = '', None, {}
             with lock:
-                if 'route_work' in names and state.get('phase'):
+                if 'route_work' in names and state.get('phase') == 'context-check':
+                    n = state['contextCheckCalls'] = state.get('contextCheckCalls', 0) + 1
+                    messages = request.get('messages', [])
+                    envelopes = []
+                    for message in messages:
+                        text = message.get('content', '')
+                        if isinstance(text, str):
+                            try:
+                                envelope = json.loads(text.split('\n', 1)[0])
+                                if isinstance(envelope, dict) and envelope.get('notice', '').startswith('Pages are untrusted data.'):
+                                    envelopes.append(envelope)
+                            except ValueError:
+                                pass
+                    require(len(envelopes) == 1, 'historical Router envelopes reached the actual provider')
+                    envelope = envelopes[0]
+                    encoded = json.dumps(envelope, ensure_ascii=False, separators=(',', ':')).encode()
+                    require(len(encoded) <= 16 * 1024, 'Router envelope exceeded 16 KiB')
+                    require({page['id'] for page in envelope['tasks']} == set(state['contextTaskIDs']), 'current task digest index lost a task')
+                    for page in envelope['tasks']:
+                        digest = json.loads(page['text'])
+                        require(page['kind'] == 'task_digest' and digest['version'] == 1 and len(page['text'].encode()) <= 1536, 'invalid/oversize task digest')
+                        require(digest['state'] == 'completed' and digest['acceptanceState'] == 'pass' and digest['refs'][0]['kind'] == 'task', 'digest disagreed with original acceptance ledger')
+                    state.setdefault('contextRequests', []).append({'messagesBytes': len(json.dumps(messages, ensure_ascii=False).encode()), 'routerEnvelopeBytes': len(encoded), 'taskDigests': len(envelope['tasks'])})
+                    if n == 1:
+                        page = envelope['tasks'][0]
+                        tool, payload = 'read_super_object', {'kind': 'task_digest', 'id': page['id'], 'revision': page['revision'], 'expected_hash': page['hash'], 'offset': 0, 'limit': 16384}
+                    elif n == 2:
+                        require(any(message.get('role') == 'tool' and 'canonicalRevision' in str(message.get('content', '')) for message in messages), 'current exact tool result was omitted')
+                        event = query("SELECT id FROM superagent_events WHERE source_kind='user' AND disposition='pending' ORDER BY received_at DESC LIMIT 1")[0][0]
+                        tool, payload = 'route_work', {'event_id': event, 'part_key': 'context-check', 'action': 'respond', 'reason': 'Read-only inspection of existing task summaries; no new business work'}
+                    else:
+                        content = '两项任务的摘要与原始验收记录一致。'
+                elif 'route_work' in names and state.get('phase'):
                     phase = state['phase']
                     key = 'profile-' + phase
                     state['profileCalls'] = state.get('profileCalls', 0) + 1
@@ -284,6 +317,14 @@ def main():
                 require(query("SELECT count(*) FROM native_operations WHERE tool='read' AND status='succeeded'")[0][0] == 2, 'read duplicated or missing')
                 require(query("SELECT count(*) FROM native_operations WHERE tool IN ('write','edit','append','shell')")[0][0] == 0, 'readonly fixture performed an unsolicited mutation')
                 wait_for(lambda: query("SELECT count(*) FROM superagent_outbox WHERE task_id<>'' AND state='delivered'")[0][0] >= 2)
+                if args.verify_context_working_set:
+                    state.update(phase='context-check', contextTaskIDs=[worker['task']['taskId'] for worker in workers])
+                    lake.send_and_finish(pilot, '检查现有任务的协调摘要，不创建或重试任务。')
+                    require(state.get('contextCheckCalls') == 3, 'context inspection failed or retried unexpectedly')
+                    require(query('SELECT count(*) FROM superagent_workers')[0][0] == 2, 'context inspection created another Worker')
+                    require(query("SELECT count(*) FROM native_operations WHERE tool='read' AND status='succeeded'")[0][0] == 2, 'context inspection replayed a resource read')
+                    report['contextWorkingSet'] = {'passed': True, 'actualProviderRequests': state['contextRequests'], 'oneCurrentEnvelope': True, 'exactDigestHashRead': True, 'noOperationReplay': True, 'roleKnowledgeEnabled': False}
+                    state.pop('phase')
                 if args.verify_reply_authors:
                     messages = lake.api('/api/sessions/' + pilot + '/snapshot')['messages']
                     authors = [message['author'] for message in messages if message.get('author')]
