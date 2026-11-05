@@ -84,7 +84,32 @@ func (b *Server) channelWorkers(ctx context.Context, project, session string) []
 	}
 }
 
-func (b *Server) reconcileRoleChannelTimeline(ctx context.Context, ch ai.SpecialistChannel, workers []ai.SuperWorkerView) {
+func (b *Server) reconcileRoleChannelTimeline(ctx context.Context, ch ai.SpecialistChannel, workers []ai.SuperWorkerView) map[string]Object {
+	dispatches := map[string]Object{}
+	forwarded := map[string]bool{}
+	workerIDs := map[string]bool{}
+	workerSessions := []string{}
+	for _, worker := range workers {
+		workerIDs[worker.ID] = true
+		workerSessions = append(workerSessions, worker.SessionID)
+	}
+	for _, message := range b.pilotDispatchMessages(ctx, ch.ProjectID, workerSessions...) {
+		d := object(message["dispatch"])
+		if workerIDs[stringOf(d["workerId"])] {
+			dispatches[stringOf(message["id"])] = message
+			forwarded[stringOf(message["sessionId"])+"\x00"+stringOf(d["sourceMessageId"])] = true
+		}
+	}
+	b.Store.update(func() any {
+		for id, message := range dispatches {
+			d := object(message["dispatch"])
+			b.Store.exec("INSERT OR IGNORE INTO superagentChannelTimeline(channelId,kind,sourceSessionId,sourceId,taskId,workerId,createdAt) VALUES(?,'dispatch',?,?,?,?,?)", ch.ID, message["sessionId"], id, d["taskId"], d["workerId"], channelEntryTime(stringOf(message["createdAt"])))
+			// Repair only the display index. The original user message, event,
+			// task source and execution context are preserved in their stores.
+			b.Store.exec("DELETE FROM superagentChannelTimeline WHERE channelId=? AND kind='message' AND sourceSessionId=? AND sourceId=?", ch.ID, message["sessionId"], d["sourceMessageId"])
+		}
+		return nil
+	})
 	for _, worker := range workers {
 		b.ensureSuperWorkerSession(ch.ProjectID, worker.SessionID, worker.Task.Title)
 		cursorState := b.Store.read(func() any {
@@ -99,7 +124,7 @@ func (b *Server) reconcileRoleChannelTimeline(ctx context.Context, ch ai.Special
 		b.Store.update(func() any {
 			for _, id := range ids {
 				row := b.Store.row("SELECT m.id,m.sessionId,m.createdAt FROM superagentInputs i JOIN messages m ON m.id=i.messageId AND m.sessionId=i.sessionId JOIN sessions s ON s.id=m.sessionId WHERE i.eventId=? AND s.projectId=?", id, ch.ProjectID)
-				if row != nil {
+				if row != nil && !forwarded[stringOf(row["sessionId"])+"\x00"+stringOf(row["id"])] {
 					b.Store.exec("INSERT OR IGNORE INTO superagentChannelTimeline(channelId,kind,sourceSessionId,sourceId,createdAt) VALUES(?,'message',?,?,?)", ch.ID, row["sessionId"], row["id"], channelEntryTime(stringOf(row["createdAt"])))
 				}
 			}
@@ -142,6 +167,7 @@ func (b *Server) reconcileRoleChannelTimeline(ctx context.Context, ch ai.Special
 		}
 		return nil
 	})
+	return dispatches
 }
 
 type roleChannelEntry struct {
@@ -160,7 +186,7 @@ func (b *Server) roleChannelPage(ctx context.Context, session, cursor string, li
 	ch, err := b.Engine.SpecialistChannelForSession(ctx, project, session)
 	aiFailure(err)
 	workers := b.channelWorkers(ctx, project, session)
-	b.reconcileRoleChannelTimeline(ctx, ch, workers)
+	dispatches := b.reconcileRoleChannelTimeline(ctx, ch, workers)
 	args := []any{ch.ID}
 	condition := ""
 	if cursor != "" {
@@ -214,7 +240,9 @@ func (b *Server) roleChannelPage(ctx context.Context, session, cursor string, li
 			snapshots[source] = b.Store.Snapshot(source)
 		}
 		entry := roleChannelEntry{ID: jsonText([]any{row["kind"], source, row["sourceId"]}), SourceSessionID: source, TaskID: stringOf(row["taskId"]), WorkerID: stringOf(row["workerId"]), CreatedAt: stringOf(row["createdAt"])}
-		if row["kind"] == "message" {
+		if row["kind"] == "dispatch" {
+			entry.Message = dispatches[stringOf(row["sourceId"])]
+		} else if row["kind"] == "message" {
 			for _, m := range objects(snapshots[source]["messages"]) {
 				if m["id"] == row["sourceId"] {
 					entry.Message = m

@@ -114,5 +114,15 @@ func (b *Server) sessionSnapshot(id string) Object {
 			}
 		}
 	}
+	if b.Engine != nil {
+		kind := object(snap["session"])["workspaceRole"]
+		if kind == "router" || kind == "worker" {
+			workerSessions := []string{}
+			if kind == "worker" {
+				workerSessions = append(workerSessions, id)
+			}
+			appendPilotDispatchMessages(snap, b.pilotDispatchMessages(b.Context, stringOf(object(snap["session"])["projectId"]), workerSessions...))
+		}
+	}
 	return snap
 }

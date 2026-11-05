@@ -6,6 +6,35 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {channelTasksByRecentRecord,mergeChannelEntries,preferredChannelTask,SpecialistChannelEntries,SpecialistTaskControls,SpecialistTaskSelect} from '../src/SpecialistChannel';
 import type {SessionSnapshot,SpecialistChannelEntry,SuperWorker} from '../../shared/contracts';
 import {isCompactionFallbackEntry} from '../src/timeline';
+import {TranscriptMessage} from '../src/AIPanel';
+import {completedTurnInterimIds} from '../src/completedTurnProse';
+
+test('Pilot omits duplicate dispatch chatter while the specialist retains the instruction',()=>{
+ const at='2026-11-04T01:00:00Z';
+ const message={id:'dispatch-message',sessionId:'pilot',role:'assistant' as const,text:'@数据库专员，请去做一下：核对两端 MySQL 数据',createdAt:at,dispatch:{id:'decision',sourceMessageId:'original-user',workerId:'worker',sessionId:'worker-session',taskId:'task',roleId:'stable-role',roleName:'数据库专员',channelSessionId:'channel',instruction:'核对两端 MySQL 数据',action:'create' as const}};
+ const channelHTML=renderToStaticMarkup(createElement(TranscriptMessage,{message,sessionId:'pilot',hideIdentity:true}));
+ assert.match(channelHTML,/>Pilot<\/strong>/);
+ assert.ok(channelHTML.includes('核对两端 MySQL 数据'));
+ assert.ok(!channelHTML.includes('@数据库专员')&&!channelHTML.includes('请去做一下'));
+ assert.ok(!channelHTML.includes('ai-role-user'));
+ const pilotHTML=renderToStaticMarkup(createElement(TranscriptMessage,{message,sessionId:'pilot',onSpecialist:()=>{}}));
+ assert.equal(pilotHTML,'');
+ assert.equal(message.dispatch.instruction,'核对两端 MySQL 数据','display filtering preserves the source record');
+ const followup={...message,dispatch:{...message.dispatch,action:'followup' as const,instruction:'只比较业务表'}};
+ const followupHTML=renderToStaticMarkup(createElement(TranscriptMessage,{message:followup,sessionId:'pilot',hideIdentity:true}));
+ assert.ok(followupHTML.includes('补充要求：只比较业务表')&&!followupHTML.includes('@数据库专员'));
+ const entry={id:'dispatch',sourceSessionId:'pilot',createdAt:at,message};
+ const entries:SpecialistChannelEntry[]=[
+  {id:'cached-old-bubble',sourceSessionId:'pilot',createdAt:at,message:{id:'original-user',sessionId:'pilot',role:'user',createdAt:at,text:'ORIGINAL PILOT USER INPUT'}},
+  entry,
+  {id:'direct',sourceSessionId:'channel',createdAt:at,message:{id:'direct',sessionId:'channel',role:'user',createdAt:at,text:'MY DIRECT SPECIALIST INPUT'}},
+ ];
+ const html=renderToStaticMarkup(createElement(SpecialistChannelEntries,{entries,resources:[]}));
+ assert.ok(!html.includes('ORIGINAL PILOT USER INPUT'));
+ assert.ok(html.includes('MY DIRECT SPECIALIST INPUT')&&html.includes('ai-role-user'));
+ const turn=[{id:'dispatch',at,message},{id:'operation',at,card:{id:'operation',type:'operation',status:'completed',at}},{id:'final',at,card:{id:'final',type:'message',status:'completed',content:'已完成',at}}];
+ assert.ok(!completedTurnInterimIds(turn,true).has('dispatch'),'the dispatch must remain visible after the reply finishes');
+});
 
 test('channel pagination and retries use source identity rather than report body',()=>{
  const entry=(id:string,at:string,source='worker-a'):SpecialistChannelEntry=>({id,sourceSessionId:source,taskId:`task-${source}`,createdAt:at,message:{id,sessionId:source,role:'assistant',text:'相同正文',createdAt:at}});
