@@ -99,7 +99,7 @@ func (e *Engine) readSuperObject(ctx context.Context, sessionID, kind, id string
 			if c.superRole == "worker" && w.TaskID != c.superTaskID {
 				return errSuperBinding
 			}
-			digest, err := buildTaskDigestTx(tx, w)
+			digest, err := e.buildTaskDigestTx(tx, w)
 			if err != nil {
 				return err
 			}

@@ -100,3 +100,28 @@ func TestRouterContextContainsBoundedPrioritizedDigests(t *testing.T) {
 		}
 	}
 }
+
+func TestTaskDigestKeepsExactObjectCredentialBoundary(t *testing.T) {
+	e, b := superFixture(t)
+	task := superCreateFixture(t, e, b, "source", "只读检查", "check", "只读检查")
+	configureContextRouter(t, e, b)
+	secret := "synthetic-credential-" + strings.Repeat("x", 80)
+	e.superSecrets.Store(secret, true)
+	row, goal, err := e.workRow(task.SessionID, task.TaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	goal.Summary = strings.Repeat("a", 480) + secret
+	if err = e.writeWorkGoal(&row, &goal, false); err != nil {
+		t.Fatal(err)
+	}
+	if digest, err := e.BuildTaskDigest(t.Context(), "pilot", task.TaskID); err == nil || digest.TaskID != "" {
+		t.Fatal("digest bypassed the original credential boundary")
+	}
+	if _, err = e.ReadSuperObject(t.Context(), "pilot", "task_digest", task.TaskID, 0, 0, 100); err == nil {
+		t.Fatal("digest page bypassed the original credential boundary")
+	}
+	if _, err = e.BuildRouterContext(t.Context(), "pilot", nil); err == nil {
+		t.Fatal("default Router index bypassed the original credential boundary")
+	}
+}

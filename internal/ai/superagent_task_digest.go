@@ -63,12 +63,12 @@ func (e *Engine) BuildTaskDigest(ctx context.Context, sessionID, taskID string) 
 		if w.TaskID != taskID {
 			return errSuperBinding
 		}
-		out, err = buildTaskDigestTx(tx, w)
+		out, err = e.buildTaskDigestTx(tx, w)
 		return err
 	})
 	return out, err
 }
-func buildTaskDigestTx(tx *gorm.DB, w superWorkerRow) (TaskDigestV1, error) {
+func (e *Engine) buildTaskDigestTx(tx *gorm.DB, w superWorkerRow) (TaskDigestV1, error) {
 	var out TaskDigestV1
 	view, err := projectSuperTaskTx(tx, w.goalSession(), w.TaskID)
 	if err != nil {
@@ -80,6 +80,11 @@ func buildTaskDigestTx(tx *gorm.DB, w superWorkerRow) (TaskDigestV1, error) {
 	}
 	view.ProjectID = w.ProjectID
 	raw := js(map[string]any{"task": view, "sourceEventId": w.SourceEventID, "originalRequirements": goal.UserText})
+	// Apply the existing exact-object credential boundary before shortening
+	// any text, including a secret that straddles the digest preview boundary.
+	if err := e.checkSuperPayload(raw); err != nil {
+		return out, err
+	}
 	var role SpecialistRole
 	if w.RoleSnapshot != "" {
 		if err := json.Unmarshal([]byte(w.RoleSnapshot), &role); err != nil {
