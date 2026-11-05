@@ -78,7 +78,7 @@ func (e *Engine) confirmSecurityWorkProposal(ctx context.Context, s *session, c 
 		confirmLabel = securityPlanConfirmLabel
 	}
 	var description strings.Builder
-	fmt.Fprintf(&description, "目标：%s\n原始要求可在下方展开查看。\n资源：%s\n", goal.Title, securityWorkResourceSummary(goal, c))
+	fmt.Fprintf(&description, "目标：%s\n原始要求可在下方展开查看。\n资源参考：%s\n", goal.Title, securityWorkResourceSummary(goal, c))
 	if toolResults {
 		description.WriteString("确认以下任务步骤及依赖。完成后根据实际工具回执自动核对结果。\n")
 	} else {
@@ -157,10 +157,7 @@ func securityWorkResourceSummary(goal WorkGoal, c Config) string {
 		names = append(names, redact(name, c))
 	}
 	if len(names) == 0 {
-		if c.superRole == "worker" && len(goal.ResourceBindings) == 0 && goal.Binding.AssetRef == "" {
-			return "本任务未绑定主机或其他资产；MCP 和技能按项目权限使用"
-		}
-		return "执行前仍需核实具体目标"
+		return "执行时按需选择项目内资源，沿用现有权限"
 	}
 	return strings.Join(names, "、")
 }

@@ -100,22 +100,29 @@ func (e *Engine) resumeWorkGoal(ctx context.Context, row nativeWorkGoal, g WorkG
 	if configured && g.closure == nil {
 		return errors.New("security: an unconfirmed legacy goal cannot automatically resume")
 	}
-	// Credentials and permissions are live; the requested resource binding is
-	// frozen. Switching foreground terminals must never retarget old work.
-	bindings := append([]WorkBinding{}, g.ResourceBindings...)
-	bindings = append(bindings, g.Binding) // Existing goals keep their original frozen identity.
-	for _, binding := range bindings {
-		if binding.ResourceIdentity == "" {
-			continue
+	if g.closure == nil {
+		// Legacy automatic resumes lack a complete trusted operation descriptor.
+		// Retain their conservative target check instead of reinterpreting them.
+		bindings := append([]WorkBinding{}, g.ResourceBindings...)
+		bindings = append(bindings, g.Binding)
+		for _, binding := range bindings {
+			if binding.ResourceIdentity == "" {
+				continue
+			}
+			resource, lookupErr := asset(c, binding.AssetRef)
+			if lookupErr != nil || hash(js(resource)) != binding.ResourceIdentity {
+				g.Status = "blocked"
+				g.Summary = "原资源绑定已变化，接续已暂停；未切换到其他资源"
+				return e.writeWorkGoal(&row, &g, false)
+			}
 		}
-		resource, lookupErr := asset(c, binding.AssetRef)
-		if lookupErr != nil || hash(js(resource)) != binding.ResourceIdentity {
-			g.Status = "blocked"
-			g.Summary = "原资源绑定已变化，接续已暂停；未切换到其他资源"
-			return e.writeWorkGoal(&row, &g, false)
-		}
+		c.Runtime, c.AssetRef, c.Container, c.TerminalID = g.Binding.Runtime, g.Binding.AssetRef, g.Binding.Container, g.Binding.TerminalID
+	} else {
+		// Managed observations/claimSecurityWorkResume validate the exact original
+		// operation and its current authority. Historical task references do not
+		// restrict the next operation or donate the foreground terminal.
+		c.Runtime, c.AssetRef, c.Container, c.TerminalID = "local", "", "", ""
 	}
-	c.Runtime, c.AssetRef, c.Container, c.TerminalID = g.Binding.Runtime, g.Binding.AssetRef, g.Binding.Container, g.Binding.TerminalID
 	owner, err := e.get(g.SessionID)
 	if err != nil {
 		return err

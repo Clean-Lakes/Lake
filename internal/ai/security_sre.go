@@ -94,6 +94,25 @@ func (e *Engine) BindSecuritySREPlan(ctx context.Context, sessionID, sreTaskID s
 	if err != nil {
 		return err
 	}
+	// A normal goal's resource references are descriptive. Child scopes still
+	// freeze the actual plan targets and every operation checks live authority.
+	// Saved workflows retain their separately confirmed immutable resources.
+	allowed := map[string]bool{}
+	if len(execution.FrozenResources) > 0 {
+		for _, resource := range execution.FrozenResources {
+			allowed[resource.ID] = true
+		}
+	} else {
+		catalog, err := e.currentSecurityCatalog(ctx, SecurityCatalogQuery{ProjectID: execution.ProjectID, SessionID: execution.SessionID, All: true})
+		if err != nil {
+			return err
+		}
+		for _, resource := range catalog.Resources {
+			if resource.ProjectID == execution.ProjectID {
+				allowed[resource.ID] = true
+			}
+		}
+	}
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := ValidateExecutionOwner(tx, execution.Owner, time.Now().UTC()); err != nil {
 			return err
@@ -133,18 +152,6 @@ func (e *Engine) BindSecuritySREPlan(ctx context.Context, sessionID, sreTaskID s
 		} else if !errors.Is(workflowErr, gorm.ErrRecordNotFound) {
 			return workflowErr
 		}
-		allowed := map[string]bool{}
-		for _, binding := range goal.ResourceBindings {
-			allowed[binding.AssetRef] = true
-		}
-		if goal.Binding.AssetRef != "" {
-			allowed[goal.Binding.AssetRef] = true
-		}
-		for _, contract := range goal.closure.Steps {
-			for _, criterion := range contract.Criteria {
-				allowed[criterion.Target] = true
-			}
-		}
 		for _, step := range plan.Steps {
 			if _, ok := goal.closure.Steps[step.ID]; !ok {
 				return errors.New("security: SRE step has no confirmed goal contract")
@@ -163,7 +170,7 @@ func (e *Engine) BindSecuritySREPlan(ctx context.Context, sessionID, sreTaskID s
 			}
 			for _, id := range step.ResourceIDs {
 				if !allowed[id] {
-					return errors.New("security: SRE resource was not in the confirmed work scope")
+					return errors.New("security: SRE resource is not in the current project catalog or frozen workflow")
 				}
 			}
 		}
