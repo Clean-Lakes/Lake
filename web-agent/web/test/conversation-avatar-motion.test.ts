@@ -29,13 +29,16 @@ test('sidebar activity affects only the exact source channel or worker and never
  assert.deepEqual(motions('other-project-channel','running'),['idle','idle','idle']);
  assert.deepEqual(motions('channel-a','idle'),['idle','idle','idle']);
 });
-test('thinking avatar and only the newest reply animate; historical replies and reports keep idle motion',()=>{
+test('thinking avatar and newest visible sender group animate; historical replies and reports keep idle motion',()=>{
  const start='2026-11-04T00:00:00Z';
  const snapshot={session:{id:'pilot',title:'Pilot',projectId:'p',status:'investigating'},resources:[],messages:[{id:'u',sessionId:'pilot',role:'user',text:'查询',createdAt:start}],actions:[],evidence:[],ai:view('running',{turnStartedAt:start,cards:[{id:'first',type:'message',status:'completed',content:'先查一下。',at:start},{id:'latest',type:'message',status:'running',content:'正在核对。',at:'2026-11-04T00:00:02Z'}]})} as unknown as SessionSnapshot;
+ snapshot.messages.unshift({id:'old-user',sessionId:'pilot',role:'user',text:'旧话题',createdAt:'2026-11-03T00:00:00Z'},{id:'old-reply',sessionId:'pilot',role:'assistant',text:'历史结果。',createdAt:'2026-11-03T00:00:01Z'});
  const render=()=>renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'Pilot',pilot:true}}));
  const html=render();
  assert.equal((html.match(/data-motion="working"/g)||[]).length,1);
  assert.match(html,/data-motion="idle"/);
+ assert.ok(html.includes('data-conversation-entry="latest" class="ai-response is-reply-continuation"'));
+ assert.match(html,/data-conversation-entry="first"[\s\S]*?data-motion="working"/);
  snapshot.ai!.status='completed';
  assert.doesNotMatch(render(),/data-motion="working"/);
  snapshot.ai!.status='waiting_approval';
