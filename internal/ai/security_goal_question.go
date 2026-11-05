@@ -81,6 +81,11 @@ func (e *Engine) replySecurityGoalQuestion(id, requestID string, answers map[str
 		s.mu.Unlock()
 		return true, errors.New("security: session is busy")
 	}
+	if noQuestionAnswers(answers) {
+		err := e.dismissQuestionLocked(s, &pending.Request, "dismissed")
+		s.mu.Unlock()
+		return true, err
+	}
 	if err = validateQuestionAnswers(&pending.Request, answers); err != nil {
 		s.mu.Unlock()
 		return true, err
