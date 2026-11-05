@@ -31,4 +31,14 @@
 
 这不是全量 SSH/安全/资产等价验收。Agent 任意终端接管、完整受控命令/TaskGrant/对账、文件传输、SSH key picker、键盘交互/多因素挑战、主机算法整体迁换、全部 SSH 配置与 Shell/平台恢复仍未全面移植；原策略存在尚未支持的非空限制时拒绝，旧未决操作仍保留阻断。SSH 手动连接可用不代表旧任务已恢复或服务器已健康。
 
-签名 Dev 安装 SHA 和资源列表实际创建终端结果待安装后追加。
+### 签名 Dev 安装与实机验证
+
+使用 `scripts/build_lake_desktop.sh --dev --ts-candidate --install` 覆盖已授权的 Lake Dev，构建源码为干净的 `7b85928cb77420c2278aed209684e9d156ec9315`。安装包元数据与实际后端 SHA-256 一致：`d67a7c87ac2b354befe9ecc26f1c5e614484d3cd9740ab88789d3c53962fff32`。App 深度严格签名和 ZIP/DMG 摘要验证通过。
+
+原生窗口显示 `Lake Dev · TS/ZCode`，bootstrap 确认为 TypeScript / ZCode 3.17.2、PTY 模式；实际 PID、Home 和数据目录属于当前 Dev。原 Go 主数据库、ADK 数据库、providers.json、Security control 与停机备份的字节摘要均一致。备份留存在本机私有目录，没有操作正式 Lake。
+
+实机从资源列表点击用户所报 SSH 资源的终端按钮，成功创建终端并显示“已连接”；输入只读验证命令后实际返回 `SSH_DEV_OK`、`REMOTE_TTY_OK` 和 `Linux`，回到远端提示符。终端 history 同步包含这些输出，状态为 ready、user、interactive；保留连接供用户继续使用。此次复用原 Dev 已信任的主机公钥，没有接受新指纹或重放旧任务。指纹变化和 Worker 审批的认证前阻断由上述隔离协议测试覆盖；本次实机连接未触发新的确认弹窗。
+
+原生专员侧栏不再显示没有实际确认项的“需确认”，当前四个频道的 needsConfirmation 均为 false。旧回复中的 unavailable 文字保留为历史，不代表修复后的连接状态；本次终端验证不构成服务器全面健康检查。
+
+当前 API 清单仍为 118 项，46 项有候选证据、完整等价验收 0/118，20 个领域仍待完整验收，全量切换门禁继续 BLOCKED。
