@@ -21,7 +21,8 @@ if result.returncode:
 required = {
     "internal/ai/security_execution.go": ["PrepareCatalogOperation", "dispatchNativeOperation", "securityPermitContext", "RequireSecurityBridgeContext"],
     "internal/ai/adk_operations.go": ["withSecurityDispatchBarrier", "acquirePreparedSecurityPermitTx", "RefundSecurityPermitTx"],
-    "internal/ai/security_coordinator.go": ["ValidateExecutionOwner", "CheckResourceWriteBlock", "applyLegacySessionPolicyTx"],
+    "internal/ai/security_mcp_conflicts.go": ["checkMCPServiceWriteBlock", "CheckResourceWriteBlock", "security.OperationDigest", "descriptor.MCPServerID == serverID"],
+    "internal/ai/security_coordinator.go": ["ValidateExecutionOwner", "checkSecurityOperationConflicts", "CheckSecurityRecoveryWriteBlocks", "applyLegacySessionPolicyTx"],
     "internal/ai/adk_session.go": ["pauseSecurityTasksAfterRestart", "securityPolicyModels", "securityRecoveryModels"],
     "internal/ai/runtime.go": ["requireSecurityAdapterContext", "checkFrozenRuntimeCommand"],
     "internal/ai/provider_runtime.go": ["checkSecurityProviderContext", "securityProviderDeadlineKey"],
