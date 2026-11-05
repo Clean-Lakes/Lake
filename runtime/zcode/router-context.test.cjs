@@ -33,6 +33,45 @@ test("retry context includes the delivered report, exact original task and curre
   assert.equal(result.complete.has("event-retry"), true);
 });
 
+test("focus carries the current lifecycle and acceptance separately for a continuation or a new check", () => {
+  for (const state of ["queued", "running", "waiting_user", "waiting_external", "paused", "blocked", "completed", "failed", "cancelled"]) {
+    for (const acceptanceState of ["insufficient", "pass"]) {
+      const original = source({ tasks: [task({ state, acceptanceState, revision: 12, updatedAt: when(8),
+        pendingApproval: state === "waiting_user", unresolvedOperations: state === "blocked" ? 1 : 0 })] });
+      const before = JSON.stringify(original), value = parse(buildRouterContext(original));
+      assert.deepEqual(value.context.focus[0], {
+        task: { kind: "task", id: "original-task", revision: 12, hash: "a".repeat(64) },
+        roleId: "ops", title: "检查测试服务器", state, acceptanceState, archived: false, updatedAt: when(8), basis: "recent_dialogue",
+      });
+      assert.equal(value.tasks[0].pendingApproval, state === "waiting_user");
+      assert.equal(value.tasks[0].unresolvedOperations, state === "blocked" ? 1 : 0);
+      assert.equal(JSON.stringify(original), before, "routing context does not reopen tasks or alter acceptance");
+    }
+  }
+});
+
+test("a new check sees the exact completed task without rewriting old queue prose or inferring IDs from it", () => {
+  const oldQueueText = "目前还在排队，旧记录任务是 retired-task，专员是 retired-role。";
+  const original = source({ events: [event({ payload: "重新查一下这台服务器" })],
+    tasks: [task({ state: "completed", acceptanceState: "pass", revision: 11, updatedAt: when(8), summary: "磁盘使用率 18%。" })],
+    messages: [...source().messages, message("old-queue", "assistant", oldQueueText, 2)] });
+  const before = JSON.stringify(original), result = buildRouterContext(original), value = parse(result);
+  const historical = value.context.dialogue.find((row) => row.id === "old-queue");
+  assert.equal(historical.text, oldQueueText);
+  assert.equal(historical.historical, true);
+  assert.equal(historical.at, when(2));
+  assert.equal(value.context.focus[0].task.id, "original-task");
+  assert.equal(value.context.focus[0].roleId, "ops");
+  assert.equal(value.context.focus[0].state, "completed");
+  assert.equal(value.context.focus[0].acceptanceState, "pass");
+  assert.ok(!JSON.stringify(value.context.focus).includes("retired-"));
+  assert.deepEqual(parse(buildRouterContext({ ...original, tasks: [] })).context.focus, [], "historical IDs cannot manufacture current task references");
+  const request = projectRouterHistory({ messages: [{ role: "user", content: result.input }] }, [], new Set(), result.input);
+  const providerContext = JSON.parse(request.messages[0].content.split("\n")[5]);
+  assert.deepEqual(providerContext.focus, value.context.focus, "current lifecycle and references reach the provider input");
+  assert.equal(JSON.stringify(original), before, "old conversation remains an unchanged historical record");
+});
+
 test("conversation workset is scoped to the admitted channel and current project", () => {
   const value = parse(buildRouterContext(source({ messages: [...source().messages,
     message("foreign-channel", "assistant", "OTHER_CHANNEL_PRIVATE", 9, { sessionId: "other-channel" }),
@@ -69,6 +108,16 @@ test("bounded UTF-8 request clips narrative without changing identities or sourc
   assert.equal(value.events[0].clipped, true);
   assert.equal(result.complete.size, 0);
   assert.equal(value.context.truncated, true);
+  assert.ok(value.context.focus.length > 0);
+  for (const focus of value.context.focus) {
+    const current = original.tasks.find((row) => row.taskId === focus.task.id);
+    assert.ok(current);
+    assert.equal(focus.task.revision, current.revision);
+    assert.equal(focus.task.hash, current.hash);
+    assert.equal(focus.state, current.state);
+    assert.equal(focus.acceptanceState, current.acceptanceState);
+    assert.equal(focus.updatedAt, current.updatedAt);
+  }
   assert.equal(JSON.stringify(original), before, "workset projection cannot mutate the original archive");
 });
 

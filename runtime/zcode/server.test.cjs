@@ -1827,13 +1827,15 @@ test('independent Worker uses an exact approved SSH diagnostic profile and accep
  const originalInput=f.app.store.list('superInputs').find(event=>event.sessionId===project.routerSessionId);
  assert.equal(worker.activity.sourceMessageId,originalInput.messageId);assert.equal(worker.activity.sourceSessionId,project.routerSessionId);
  // A newly routed follow-up has not yet entered this worker. Do not move the
- // current activity to that new bubble until the runtime accepts the steering.
+ // current activity to that new bubble until the next invocation receives it.
  const storedWorker=f.app.store.get('superWorkers',worker.id),fakeInput={...originalInput,id:'not-delivered',messageId:'future-message',disposition:'routed'};
  f.app.store.put('superInputs',fakeInput.id,fakeInput);f.app.store.put('superWorkers',worker.id,{...storedWorker,inputEventIds:[...storedWorker.inputEventIds,fakeInput.id]});
  assert.equal((await f.api(`/api/projects/${f.project.id}/superagent`)).workers[0].activity.sourceMessageId,originalInput.messageId);
  f.app.store.put('superInputs',fakeInput.id,{...fakeInput,disposition:'blocked'});
- f.app.store.put('superWorkers',worker.id,{...storedWorker,state:'queued',inputEventIds:[...storedWorker.inputEventIds,fakeInput.id]});
- assert.equal((await f.api(`/api/projects/${f.project.id}/superagent`)).workers[0].activity,undefined,'a blocked dispatch is not a runnable queue');
+ // Model a settled original invocation: only the blocked follow-up remains.
+ // Old blocked inputs must not suppress a later *valid* queued input.
+ f.app.store.put('superWorkers',worker.id,{...storedWorker,state:'queued',settledInputIds:storedWorker.invocationInputIds,inputEventIds:[...storedWorker.inputEventIds,fakeInput.id]});
+ assert.equal((await f.api(`/api/projects/${f.project.id}/superagent`)).workers[0].activity,undefined,'a queue with only a blocked remaining input is not runnable');
  f.app.store.put('superWorkers',worker.id,storedWorker);f.app.store.delete('superInputs',fakeInput.id);
  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.id,accept:true});
  const active=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0].activity?.phase==='tool');
