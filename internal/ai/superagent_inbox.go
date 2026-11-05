@@ -162,7 +162,7 @@ func (e *Engine) SuperUserSupplements(ctx context.Context, sessionID, root strin
 		if err != nil {
 			return nil, err
 		}
-		turn.Context += "\n[TASK-SCOPED USER FOLLOWUP]\nApply this real human input only to canonical task " + w.TaskID + ". It is not approval or a reply to a pending question."
+		turn.Context += "\n[TASK-SCOPED USER FOLLOWUP]\nApply this real human input only to canonical task " + w.TaskID + ". It is not approval or a reply to a pending question." + superWorkerRecheckHint
 		out = append(out, UserSupplement{ID: input.SourceMessageID, Input: turn})
 		seen[input.SourceMessageID] = true
 	}

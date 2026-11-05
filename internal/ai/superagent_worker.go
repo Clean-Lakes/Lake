@@ -163,6 +163,10 @@ func (e *Engine) StartTaskWorker(ctx context.Context, projectID, workerID string
 
 const superWorkerAssetRefsHint = "asset_refs is optional task reference metadata; omit it or pass [] before resources are known. Add newly discovered project assets to the same task without rebuilding it. Use exact catalog aliases for actual asset operations; MCP server IDs and Skill names are not asset_refs."
 
+// Applies to both parked-task resumes and supplements to a live invocation.
+// It asks for fresh evidence, without granting permission or replaying effects.
+const superWorkerRecheckHint = " Prior blocker prose is historical, not a current permission check. Re-read the task and current catalog, activate the actual next step, and use a relevant current bounded read or diagnostic before claiming a technical restriction persists. Never repeat an unknown write or claim that listing unrelated tools verified the target."
+
 var errSuperWorkerPlanRequired = errors.New("security: confirm the assigned task's steps and acceptance with work_begin before resource access, then use work_update(item_id, status=running) on the returned item. " + superWorkerAssetRefsHint)
 
 // The host supplies only visible planning metadata. MCP discovery and actual I/O
@@ -327,7 +331,7 @@ func (e *Engine) ResumeTaskWorker(ctx context.Context, projectID, workerID strin
 		return err
 	}
 	input.superInboxIDs = ids
-	input.Context += "\n[ACTUAL TASK FOLLOWUP]\nContinue only canonical task " + w.TaskID + " with this actual new human input. Existing approvals, unknown operations, evidence, deadline and cumulative budget remain authoritative."
+	input.Context += "\n[ACTUAL TASK FOLLOWUP]\nContinue only canonical task " + w.TaskID + " with this actual new human input. Existing approvals, unknown operations, evidence, deadline and cumulative budget remain authoritative." + superWorkerRecheckHint
 	input.Context += "\nFor an unconfirmed task, submit work_begin on this same goal with the current project catalog and obtain the host confirmation. An earlier paused proposal does not require the user to find a workspace resume control. Use work_read for current task state; past assistant messages are historical observations."
 	refs, refErr := e.superTaskReferenceContext(ctx, w.ProjectID, w.TaskID)
 	if refErr != nil {
