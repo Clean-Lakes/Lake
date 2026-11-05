@@ -11,6 +11,8 @@
 
 ## 源码与运行路径
 
+回复表达与专员汇报增量、46 项后端回归、三个真实模型合成措辞场景和 Dev 安装提交 `13ce5ce2` 见[表达验证记录](conversation-style.md)。
+
 上游归档、标签提交与 SHA-256 固定在 [upstream.json](../../../runtime/zcode/upstream.json)：`v3.17.2` / `a9fe401eede6e6e5e01be9048679c206fe6f02d9`。发布页另列的安装包构建提交不作为源码标签提交。构建前验证归档摘要和上游原文件内容。
 
 候选实际路径为 Lake React → TS HTTP/SSE 宿主 → ZCode `AgentRuntime`、Node adapters 和上游 SQLite 会话存储。模型与工具执行不经过 Go 代理。上游 UI 和可选贡献者展示未打入；版权、LICENSE、NOTICE、第三方归属及 Node LICENSE 保留。
