@@ -46,6 +46,7 @@ test('ordinary running tool turns show exactly one caption and archive complete 
  assert.ok(!html.includes('turn-current-step'),'the caption must not duplicate a second progress description beside the timer');
  assert.match(html,/class="settled-reply is-archived"[^>]*aria-hidden="true"[^>]*inert=""/);
  assert.ok(html.includes('data-conversation-entry="note"'),'original narration keeps its identity in the records');
+ assert.match(html, /class="ai-response turn-progress-reply"><div class="response-identity[^]*?<div class="ai-card ai-message"><div class="turn-latest-progress"/,'live narration uses the same identity and gray bubble structure as assistant replies');
 });
 test('completion restores the real final reply and stops the live caption; failures retain incomplete prose',()=>{
  for(const status of ['completed','failed','cancelled']){
