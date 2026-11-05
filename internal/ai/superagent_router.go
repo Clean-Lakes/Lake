@@ -266,6 +266,11 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 		out, err = superRouteResult(tx, row)
 		return err
 	})
+	if err == nil && (in.Action == "create" || in.Action == "followup") && e.SuperRolesChanged != nil {
+		// Publish after commit, before the Router's final prose/model round.
+		// A failed hint never changes the committed routing decision.
+		_ = e.SuperRolesChanged(ctx, b.ProjectID)
+	}
 	return out, err
 }
 
@@ -334,6 +339,9 @@ func (e *Engine) RunPilotRouter(ctx context.Context, sessionID string, b SuperSo
 	defer func() {
 		if !succeeded {
 			_ = e.failSuperRouting(context.WithoutCancel(ctx), b.ProjectID, remaining)
+		}
+		if e.SuperRolesChanged != nil {
+			_ = e.SuperRolesChanged(context.WithoutCancel(ctx), b.ProjectID)
 		}
 	}()
 	run := &superRouterRun{projectID: b.ProjectID, binding: b, events: map[string]bool{}, remaining: 16, workerRoundLimit: c.MaxSteps, conversationMode: c.ConversationMode, readCursors: map[string]int{}, readComplete: map[string]bool{}}

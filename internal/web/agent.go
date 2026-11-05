@@ -331,6 +331,16 @@ func (b *Server) event(event ai.Event) {
 	default:
 		b.Store.Touch(event.Session)
 	}
+	if event.Type == "inputState" || event.Type == "approval" || event.Type == "done" {
+		// This callback can hold an Engine session lock. Only consult the host
+		// projection here; the receiving client reads the canonical snapshot.
+		b.Store.update(func() any {
+			for _, row := range b.Store.rows("SELECT pilot.sessionId FROM superagentSessions worker JOIN superagentSessions pilot ON pilot.projectId=worker.projectId AND pilot.kind='router' WHERE worker.sessionId=? AND worker.kind='worker'", event.Session) {
+				b.Store.event(stringOf(row["sessionId"]), "specialist")
+			}
+			return nil
+		})
+	}
 }
 func (b *Server) runTurn(id, messageID, message string, images []ai.ImageAttachment, refs, files []Object, ignoreProjectMemory bool) {
 	defer b.workers.Done()

@@ -57,6 +57,7 @@ func (b *Server) superagentRoute(w http.ResponseWriter, r *http.Request) bool {
 		}
 		channels := b.reconcileSpecialistChannels(r.Context(), project)
 		attention := map[string]bool{}
+		responding := map[string]bool{}
 		waiting, err := b.Engine.SuperInteractionSessions(r.Context(), project)
 		aiFailure(err)
 		b.Store.read(func() any {
@@ -78,10 +79,13 @@ func (b *Server) superagentRoute(w http.ResponseWriter, r *http.Request) bool {
 			view, err := b.Engine.Snapshot(session)
 			if err == nil && (view.Question != nil || view.Pending != nil || b.hostKeyPrompt(session) != nil) {
 				attention[ch.ID] = true
+			} else if err == nil && view.ReplyStatus == "running" {
+				responding[ch.ID] = true
 			}
 		}
 		for i := range channels {
 			channels[i].NeedsConfirmation = attention[channels[i].ID]
+			channels[i].Running = channels[i].Running || responding[channels[i].ID]
 		}
 		b.populateSpecialistReads(project, channels)
 		reply(w, 200, Object{"active": active, "project": domain, "workers": workers, "channels": channels, "cursor": cursor})

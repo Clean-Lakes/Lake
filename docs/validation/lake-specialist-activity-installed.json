@@ -1,0 +1,11 @@
+{
+  "devHomeVerified": true,
+  "runtimePidMatches": true,
+  "installedDevSHA": "26cd60e07a84c819881b2f4614b51bdac272b1f3",
+  "cleanBuild": true,
+  "backendSHA256": "18efc1d260a4efb5c37ffeae9164a34d3aa79e52056563a4c28a7b329f9e9bba",
+  "backendMatchesManifest": true,
+  "servedAssetMatchesBuild": true,
+  "servedAssetSHA256": "6bd33f6f858a5def3f9d10d83b97816f0f2893bcb42b5b3bc134db3ede163472",
+  "canonicalTablesUnchanged": true
+}
