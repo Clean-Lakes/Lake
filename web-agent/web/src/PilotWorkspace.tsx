@@ -4,12 +4,15 @@ import {api,readableError} from './api';
 import {SuperRoleAvatar} from './SuperRoleAvatar';
 import {superTaskPresentation} from './superAgentPresentation';
 import {Glyph} from './Icons';
+import {NavigationMenu} from './NavigationDelete';
+import {SpecialistDelete} from './SpecialistDelete';
 
 export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
  const [workspace,setWorkspace]=useState<SuperWorkspace|null>(null),[error,setError]=useState('');
  const generation=useRef(0),refreshRef=useRef<()=>void>(()=>{});
+ const deletedRoles=useRef(new Set<string>());
  useEffect(()=>{
-  const current=++generation.current;setWorkspace(null);setError('');
+  const current=++generation.current;deletedRoles.current.clear();setWorkspace(null);setError('');
   if(!projectId||!connected)return;
   const controller=new AbortController();let busy=false,queued=false,nextActivation=0;
   const refresh=async()=>{
@@ -17,7 +20,7 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
    try{
     let next=await api.superWorkspace(projectId,controller.signal);
     if(!next.active&&Date.now()>=nextActivation){nextActivation=Date.now()+15000;await api.ensureSuperWorkspace(projectId,controller.signal);next=await api.superWorkspace(projectId,controller.signal);}
-    if(generation.current===current){setWorkspace(next);if(next.active)setError('');}
+    if(generation.current===current){setWorkspace({...next,channels:next.channels?.filter(channel=>!deletedRoles.current.has(channel.roleId)),workers:next.workers.filter(worker=>!deletedRoles.current.has(worker.roleId))});if(next.active)setError('');}
    }catch(reason){if(!controller.signal.aborted&&generation.current===current)setError(readableError(reason));}
    finally{busy=false;if(queued&&!controller.signal.aborted){queued=false;void refresh();}}
   };
@@ -34,7 +37,8 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
   stream.addEventListener('specialist',refresh);stream.addEventListener('open',refresh);
   return()=>stream.close();
  },[routerId,connected]);
- return {workspace,error};
+ const removeRole=(roleId:string)=>{deletedRoles.current.add(roleId);setWorkspace(current=>current?{...current,channels:current.channels?.filter(channel=>channel.roleId!==roleId),workers:current.workers.filter(worker=>worker.roleId!==roleId)}:current);refreshRef.current();};
+ return {workspace,error,removeRole};
 }
 
 type ReadMark = {requested: string; acknowledged: string; pending: boolean};
@@ -80,9 +84,13 @@ function useCompletionReads(workspace: SuperWorkspace | null, viewedRole: string
 type PilotWorkspaceProps = {
  workspace: SuperWorkspace | null; error: string; selectedId: string | null; selectedRoleId?: string;
  onPilot: () => void; onWorker: (worker: SuperWorker) => void; onChannel?: (channel: SpecialistChannelInfo) => void;
+ disabled?:boolean; onDeleted?:(channel:SpecialistChannelInfo)=>void;
 };
 
-export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilot,onWorker,onChannel}: PilotWorkspaceProps) {
+export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilot,onWorker,onChannel,disabled=false,onDeleted}: PilotWorkspaceProps) {
+ const [context,setContext]=useState<{channel:SpecialistChannelInfo;x:number;y:number}|null>(null),[deleting,setDeleting]=useState<SpecialistChannelInfo|null>(null);
+ const anchor=useRef<HTMLButtonElement|null>(null),pilotButton=useRef<HTMLButtonElement|null>(null);
+ useEffect(()=>{setContext(null);setDeleting(null);},[workspace?.project.projectId]);
  const roots = workspace?.workers?.filter(worker => !worker.parentWorkerId) ?? [];
  const channels = workspace?.channels;
  const viewedRole = selectedId ? selectedRoleId ?? channels?.find(channel => channel.sessionId === selectedId)?.roleId ??
@@ -92,7 +100,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilo
  const entries = channels ? channels.map(channel => ({channel, workers: roots.filter(worker => worker.roleId === channel.roleId)})) :
   roots.map(worker => ({channel: undefined, workers: [worker]}));
  return <section className="pilot-workspace" aria-label="Pilot 与专员">
-  <button type="button" className={`nav-row pilot-workspace-entry${selectedId===workspace.project.routerSessionId?' active':''}`} aria-current={selectedId===workspace.project.routerSessionId?'page':undefined} title="Pilot · 持续沟通，自动安排工作" onClick={onPilot}>
+  <button ref={pilotButton} type="button" className={`nav-row pilot-workspace-entry${selectedId===workspace.project.routerSessionId?' active':''}`} aria-current={selectedId===workspace.project.routerSessionId?'page':undefined} title="Pilot · 持续沟通，自动安排工作" onClick={onPilot}>
    <SuperRoleAvatar pilot/><span className="nav-row-text"><strong>Pilot</strong></span><Glyph name="arrow" size={14}/>
   </button>
   <div className="nav-heading"><span>专员</span><small>{entries.length}</small></div>
@@ -111,6 +119,9 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilo
    const label = `${name} · ${task?.title ?? (channel?.duties || '持续沟通')} · ${status}`;
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label} title={label}
+     aria-haspopup={channel?'menu':undefined}
+     onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(channel&&!disabled){anchor.current=event.currentTarget;setContext({channel,x:event.clientX,y:event.clientY});}}}
+     onKeyDown={event=>{if(channel&&!disabled&&(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){event.preventDefault();const bounds=event.currentTarget.getBoundingClientRect();anchor.current=event.currentTarget;setContext({channel,x:bounds.left+20,y:bounds.bottom});}}}
      onClick={() => channel && onChannel ? onChannel(channel) : worker && onWorker(worker)}>
     <SuperRoleAvatar name={name}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{task?.title ?? (channel?.duties || '持续沟通')}</span></span>
     <span className="pilot-worker-status">
@@ -120,5 +131,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,onPilo
     </span>
    </button>;
   }) : <p className="pilot-workspace-empty">告诉 Pilot 你的目标，它会安排合适的专员。</p>}
+  {context&&<NavigationMenu title={context.channel.roleName} x={context.x} y={context.y} anchor={anchor} onClose={()=>setContext(null)} actions={[{label:'删除专员',icon:'trash',danger:true,disabled:disabled||context.channel.roleRevision===undefined,run:()=>setDeleting(context.channel)}]}/>}
+  {deleting&&<SpecialistDelete channel={deleting} returnFocus={anchor} onClose={()=>setDeleting(null)} onDeleted={()=>{onDeleted?.(deleting);if(deleting.roleId===viewedRole){onPilot();anchor.current=pilotButton.current;}}}/>}
  </section>;
 }

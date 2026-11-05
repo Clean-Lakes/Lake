@@ -210,6 +210,9 @@ func (e *Engine) ApplySuperDecision(ctx context.Context, b SuperSourceBinding, i
 					return lookup
 				}
 			}
+			if err := checkSuperRoleAvailableTx(tx, b.ProjectID, role.ID); err != nil {
+				return err
+			}
 			key := hash(js([]any{event.ID, in.PartKey}))[:32]
 			sessionID, taskID, workerID := "sw_"+key, "st_"+key, "worker_"+key
 			root := "super_" + key

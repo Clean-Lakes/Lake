@@ -91,7 +91,7 @@ func (e *Engine) ListSpecialistChannels(ctx context.Context, project string) ([]
 		return nil, err
 	}
 	out := []SpecialistChannel{}
-	err = db.WithContext(ctx).Table("superagent_role_channels c").Select("c.id,c.project_id,c.role_id,r.name AS role_name,r.duties,r.revision AS role_revision,c.host_session_id AS session_id,c.revision,c.created_at").Joins("JOIN superagent_roles r ON r.id=c.role_id AND r.project_id=c.project_id").Where("c.project_id = ?", project).Order("c.created_at,c.id").Scan(&out).Error
+	err = db.WithContext(ctx).Table("superagent_role_channels c").Select("c.id,c.project_id,c.role_id,r.name AS role_name,r.duties,r.revision AS role_revision,c.host_session_id AS session_id,c.revision,c.created_at").Joins("JOIN superagent_roles r ON r.id=c.role_id AND r.project_id=c.project_id").Where("c.project_id = ? AND r.deleted_at IS NULL", project).Order("c.created_at,c.id").Scan(&out).Error
 	if err != nil || len(out) == 0 {
 		return out, err
 	}
@@ -190,6 +190,9 @@ func (e *Engine) BindSpecialistSource(ctx context.Context, project, session, eve
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var channel superChannelRow
 		if err := tx.First(&channel, "project_id = ? AND host_session_id = ?", project, session).Error; err != nil {
+			return err
+		}
+		if err := checkSuperRoleAvailableTx(tx, project, channel.RoleID); err != nil {
 			return err
 		}
 		var event superEventRow

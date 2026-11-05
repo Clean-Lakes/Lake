@@ -40,7 +40,7 @@ func (e *Engine) ListSuperSpecialists(ctx context.Context, project, after string
 		return out, err
 	}
 	var rows []superRoleRow
-	if err = db.WithContext(ctx).Where("project_id = ? AND id > ?", project, after).Order("id").Limit(limit + 1).Find(&rows).Error; err != nil {
+	if err = db.WithContext(ctx).Where("project_id = ? AND id > ? AND deleted_at IS NULL", project, after).Order("id").Limit(limit + 1).Find(&rows).Error; err != nil {
 		return out, err
 	}
 	if len(rows) > limit {
@@ -167,6 +167,9 @@ func (e *Engine) ManageSuperSpecialist(ctx context.Context, b SuperSourceBinding
 				return errSuperConflict
 			}
 			role.Name, role.Duties, role.Revision = in.Name, in.Duties, role.Revision+1
+		}
+		if err := checkSuperRoleAvailableTx(tx, b.ProjectID, role.ID); err != nil {
+			return err
 		}
 		if _, err := ensureSuperChannelTx(tx, b.ProjectID, role.ID, time.Now().UTC()); err != nil {
 			return err
