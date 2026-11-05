@@ -112,10 +112,11 @@ def exercise(binary, home):
 
     original = 'Inspect the fixture database metadata'
     followup = 'Retry the same metadata task using current bounded reads'
-    state = {'worker_calls': 0}
+    state = {'worker_calls': 0, 'routed_events': []}
     errors = []
 
     def model_turn(request):
+        state['lastToolResult'] = next((str(m.get('content', ''))[:2500] for m in reversed(request['messages']) if m.get('role') == 'tool'), '')
         tools = {tool['function']['name'] for tool in request.get('tools', [])}
         if not tools:
             return 'Keep the original task and recorded operations.', None, {}
@@ -124,6 +125,9 @@ def exercise(binary, home):
             if not pending:
                 return 'Assigned to the database specialist.', None, {}
             event, payload = pending[0]
+            if event in state['routed_events']:
+                return 'Assigned to the database specialist.', None, {}
+            state['routed_events'].append(event)
             workers = rows('SELECT task_id FROM superagent_workers WHERE project_id=?', (state['project'],))
             args = {'event_id': event, 'part_key': 'metadata', 'quote': original if original in payload else followup, 'reason': 'one original metadata task'}
             if workers:
@@ -194,11 +198,14 @@ def exercise(binary, home):
             def observe(expected):
                 require(not errors, '; '.join(errors))
                 workers = lake.api('/api/projects/' + project + '/superagent')['workers']
+                state['workers'] = workers
                 if not workers:
                     return None
                 require(len(workers) == 1, 'retry created a replacement Worker')
                 worker = workers[0]
                 view = lake.snapshot(worker['sessionId'])
+                state['viewStatus'] = view.get('status')
+                state['failedCards'] = [{'content': c.get('content'), 'status': c.get('status')} for c in view.get('cards', []) if c.get('status') in ('failed', 'not_executed')]
                 require(not view.get('pendingApprovals') and not view.get('pending'), 'read unexpectedly requires operation approval')
                 question = view.get('question')
                 if question and question['id'] not in answered:
@@ -211,8 +218,9 @@ def exercise(binary, home):
                         answers[item['id']] = [option if isinstance(option, str) else option['label']]
                     lake.api('/api/sessions/' + worker['sessionId'] + '/ai/questionReply', 'POST', {'id': question['id'], 'answers': answers})
                     answered.add(question['id'])
-                parked = rows("SELECT state FROM superagent_assignments WHERE worker_id=?", (worker['id'],)) == [('parked',)]
-                return worker if worker['task']['state'] == expected and parked else None
+                assignment = rows("SELECT state FROM superagent_assignments WHERE worker_id=?", (worker['id'],))
+                settled = assignment in ([('parked',)], [('finished',)]) if expected == 'completed' else assignment == [('parked',)]
+                return worker if worker['task']['state'] == expected and settled else None
 
             lake.api('/api/sessions/' + pilot + '/messages', 'POST', {'text': original})
             before = wait_for(lambda: observe('blocked'), 90)
@@ -228,6 +236,9 @@ def exercise(binary, home):
             require(rows("SELECT status,handle,risk_resolved_at FROM native_operations WHERE id='old-ssh'") == [('unknown', 'original-handle', None)], 'unknown SSH effect was cleared')
             require(queries.count('START TRANSACTION READ ONLY') == 2 and queries.count('ROLLBACK') == 2 and not any('COMMIT' in q for q in queries), 'wire transaction boundary failed')
             return {'sameTaskAndWorker': True, 'metadataOperations': 2, 'readOnlyTransactions': 2, 'rollbacks': 2, 'unknownSSHPreserved': True, 'operationApprovals': 0, 'acceptanceState': after['task']['acceptanceState'], 'provider': 'scripted loopback, not a model intelligence benchmark', 'realDatabaseComparison': 'not executed'}
+        except Exception:
+            print(json.dumps({'diagnostic': state, 'events': rows('SELECT disposition FROM superagent_events')}, default=str), flush=True)
+            raise
         finally:
             lake.stop()
 
