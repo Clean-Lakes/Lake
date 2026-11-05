@@ -2,11 +2,11 @@
 
 更新日期：2026-11-05。本文记录用户确认的架构方向，供后续 Agent 和模块维护者共同遵循。它不代表所有能力已经实现，也不改变 `AGENTS.md`、`CONTRIBUTING.md` 和 `docs/development-workflow.md` 中的开发、合并、发布与数据隔离要求。
 
-## 后端迁移方向（2026-11-05，未切换）
+## 后端迁移方向（2026-11-05，Dev 预览）
 
-用户确认保留 Lake UI，直接使用 ZCode v3.17.2 源码，将后端语言迁为 TypeScript，并要求**全部既有功能保留并验收后再切换**。这替代后续迁移工作的 ADK/Go 内核选择，不表示当前产品已经下线 Go/ADK。新候选直接使用 ZCode AgentRuntime 与 Node adapters，不通过 Go 模型代理；默认构建、桌面包和日常 Dev 在全量等价验收前维持当前实现。
+用户确认保留 Lake UI，直接使用 ZCode v3.17.2 源码，将后端语言迁为 TypeScript，并要求**全部既有功能保留并验收后进行完整切换**。2026-11-05 用户进一步明确授权将 TS/ZCode Dev 覆盖现有 Dev，增加显式 `--dev --ts-candidate --install` 入口；这不等于全量验收或正式切换。新后端直接使用 ZCode AgentRuntime 与 Node adapters，不通过 Go 模型代理；普通默认构建与正式版继续维持当前实现。TS Dev 使用独立命名的 SQLite，旧 Go 数据保留，历史项目/会话迁移仍待交付，不自动重派任务。
 
-Items、Security、Memory、任务与证据的权威职责、bearqy 当前记忆方案、范围/同意/撤回及 unknown 不重放约束继续有效。不能将上游通用权限、会话或工具能力当作 Lake 对应安全与业务合同已经迁移。候选仅在独立 Home 运行，禁止接管正式或日常 Dev 数据。下面关于 ADK 的实现说明记录现有产品水位；目标 TS 对接按 [迁移计划](plan/refactor-zcode-typescript-backend-1.md)、[候选边界与验证](runtime/zcode/README.md) 和完整等价矩阵逐项推进，不提前修改已存在的运行账本或开启未完成能力。
+Items、Security、Memory、任务与证据的权威职责、bearqy 当前记忆方案、范围/同意/撤回及 unknown 不重放约束继续有效。不能将上游通用权限、会话或工具能力当作 Lake 对应安全与业务合同已经迁移。独立候选使用独立 Home；已授权的原生 Dev 预览可用 `.lake-dev`，正式 Home 始终拒绝，旧运行账本不改写。下面关于 ADK 的实现说明记录现有完整产品水位；目标 TS 对接按 [迁移计划](plan/refactor-zcode-typescript-backend-1.md)、[候选边界与验证](runtime/zcode/README.md) 和完整等价矩阵逐项推进，不提前开启未完成能力。
 
 ## 0. 统一 Super-agent 内核方向（实施中）
 

@@ -236,9 +236,9 @@ export class LakeAgents {
     if (key) this.keys.add(key);
     const adapter = new AiSdkModelAdapter({ env: {}, retry: { maxAttempts: 2 } });
     const apiType =
-      provider.protocol === "anthropic"
+      ["anthropic", "claude"].includes(provider.protocol)
         ? "anthropic-messages"
-        : provider.protocol === "responses"
+        : ["responses", "openai-response"].includes(provider.protocol)
           ? "openai-responses"
           : "openai-chat-completions";
     const baseURL = provider.baseURL.replace(/\/(chat\/completions|responses|messages)\/?$/, "");

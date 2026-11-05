@@ -11,6 +11,10 @@ func testDesktopProfiles() {
     // Inherited production environment variables must never make Dev attach to the release backend.
     precondition(b.home.path == "/user/.lake-dev" && b.data.path == "/user/.lake-dev/web-agent")
     precondition(release.allowsReleaseUpdates && !dev.allowsReleaseUpdates)
+    precondition(dev.backendRuntime(requested: "typescript") == "typescript")
+    precondition(dev.backendRuntime(requested: nil) == "go")
+    precondition(dev.backendRuntime(requested: "unknown") == "go")
+    precondition(release.backendRuntime(requested: "typescript") == "go")
     let configured = dev.directories(userHome: "/user", environment: ["LAKE_DEV_HOME": "/test"], arguments: [])
     precondition(configured.home.path == "/test" && configured.data.path == "/test/web-agent")
     let explicit = dev.directories(userHome: "/user", environment: [:], arguments: ["--lake-home", "/isolated", "--lake-data", "/data"])

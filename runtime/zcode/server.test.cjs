@@ -7,7 +7,7 @@ const { createServer } = require("node:http");
 process.env.LAKE_TS_IMPORT_ONLY = "1";
 const { startLakeServer } = require("../../bin/lake-zcode/server.cjs");
 
-async function fixture(t, mode = "text") {
+async function fixture(t, mode = "text", legacyDev = false) {
   const home = await mkdtemp(join(tmpdir(), "lake-ts-test-"));
   const web = join(home, "web");
   await require("node:fs/promises").mkdir(web);
@@ -53,7 +53,22 @@ async function fixture(t, mode = "text") {
     res.end("data: [DONE]\n\n");
   });
   await new Promise((resolve) => provider.listen(0, "127.0.0.1", resolve));
-  const options = { home, data: join(home, "data"), port: 0, staticRoot: web };
+  const options = { home, data: join(home, "data"), port: 0, staticRoot: web, development: legacyDev };
+  if (legacyDev) {
+    const fs = require("node:fs/promises");
+    await fs.mkdir(options.data, { mode: 0o700 });
+    await fs.mkdir(join(home, "secrets"), { mode: 0o700 });
+    await writeFile(join(home, "secrets/provider-fixture.key"), "synthetic-secret-no-real-credential", { mode: 0o600 });
+    await writeFile(join(options.data, "providers.json"), JSON.stringify({
+      version: 1, activeProviderId: "legacy.fixture", activeModelId: "fixture", activeSource: "native",
+      providers: [{
+        id: "legacy.fixture", name: "Existing Dev provider", baseURL: `http://127.0.0.1:${provider.address().port}/v1`,
+        protocol: "openai", enabled: true, credentialRef: "provider-fixture.key",
+        models: [{ id: "fixture", name: "fixture", enabled: true }],
+      }],
+    }), { mode: 0o600 });
+    await writeFile(join(options.data, "lake-web.sqlite"), "legacy database sentinel", { mode: 0o600 });
+  }
   let app = await startLakeServer(options);
   t.after(async () => {
     await app.close();
@@ -72,7 +87,7 @@ async function fixture(t, mode = "text") {
     assert.equal(response.status, expected, JSON.stringify(value));
     return value;
   };
-  await api("/api/settings/model", "PUT", {
+  if (!legacyDev) await api("/api/settings/model", "PUT", {
     url: `http://127.0.0.1:${provider.address().port}/v1/chat/completions`,
     name: "fixture",
     apiKey: "synthetic-secret-no-real-credential",
@@ -363,4 +378,37 @@ test("invalid JSON bodies cannot enter persistent navigation mutations", async (
   });
   assert.equal(response.status, 415);
   assert.deepEqual((await f.api("/api/catalog")).tags, []);
+});
+
+test("explicit TS Dev imports model configuration once without copying credentials or touching the Go database", async (t) => {
+  const f = await fixture(t, "text", true);
+  const catalogFile = join(f.options.data, "providers.json");
+  const oldCatalog = await readFile(catalogFile);
+  const legacyKey = join(f.home, "secrets/provider-fixture.key");
+  const bootstrap = await f.api("/api/bootstrap");
+  assert.equal(bootstrap.backendRuntime, "typescript");
+  assert.equal(bootstrap.modelConfigured, true);
+  const catalog = await f.api("/api/settings/providers");
+  assert.equal(catalog.activeProviderId, "legacy.fixture");
+  assert.equal(catalog.providers[0].keyConfigured, true);
+  assert.ok(!JSON.stringify(catalog).includes("credentialRef"));
+  assert.ok(!JSON.stringify(catalog).includes("synthetic-secret"));
+  await assert.rejects(access(join(f.home, "secrets/model-legacy.fixture.json")));
+  await f.api(`/api/sessions/${f.session.id}/messages`, "POST", { text: "Use the existing Dev provider" }, 202);
+  assert.equal((await f.wait(["completed", "failed"])).status, "completed");
+  assert.equal(f.calls, 1);
+  assert.deepEqual(await readFile(catalogFile), oldCatalog);
+  assert.equal(await readFile(join(f.options.data, "lake-web.sqlite"), "utf8"), "legacy database sentinel");
+  await f.api("/api/settings/providers/legacy.fixture", "DELETE");
+  await f.restart();
+  assert.deepEqual((await f.api("/api/settings/providers")).providers, [], "a deleted TS provider must not be reimported");
+  assert.deepEqual(await readFile(catalogFile), oldCatalog);
+  assert.equal(await readFile(legacyKey, "utf8"), "synthetic-secret-no-real-credential");
+});
+
+test("Dev opt-in never permits the production Home, and daily Dev still requires explicit opt-in", async (t) => {
+  const f = await fixture(t);
+  const userHome = require("node:os").homedir();
+  await assert.rejects(startLakeServer({ ...f.options, home: join(userHome, ".lake"), development: true }), /独立 Home/);
+  await assert.rejects(startLakeServer({ ...f.options, home: join(userHome, ".lake-dev"), development: false }), /独立 Home/);
 });

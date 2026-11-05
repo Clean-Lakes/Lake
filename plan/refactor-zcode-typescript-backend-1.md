@@ -12,7 +12,7 @@ tags: [refactor, zcode, typescript, backend]
 
 ![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
 
-用户于 2026-11-05 明确要求直接使用 ZCode v3.17.2 源码，后端语言改为 TypeScript，保留 Lake UI，并确认**全部既有功能保留后再切换**。取消本分支最初的 Go/stdio 桥接试验。目标由 ZCode 拥有 Agent 循环、上下文、工具和执行适配器；Lake TS 宿主提供产品接口、资产目录、安全交互、配置和 UI 投影。Swift 仅保留平台外壳与签名启动入口。当前仅建立隔离候选，默认构建和原生桌面入口保持原实现。
+用户于 2026-11-05 明确要求直接使用 ZCode v3.17.2 源码，后端语言改为 TypeScript，保留 Lake UI，并确认**全部既有功能保留后进行完整切换**。随后用户明确要求 TS/ZCode Dev 覆盖现有 Dev，新增显式 Dev 预览打包和安装入口；完整迁移、正式版及普通默认入口的等价门槛保持。取消本分支最初的 Go/stdio 桥接试验。目标由 ZCode 拥有 Agent 循环、上下文、工具和执行适配器；Lake TS 宿主提供产品接口、资产目录、安全交互、配置和 UI 投影。Swift 保留平台外壳与签名启动入口。
 
 ## 1. Requirements & Constraints
 
@@ -20,7 +20,7 @@ tags: [refactor, zcode, typescript, backend]
 - **REQ-002**: `runtime/zcode/server.ts`、`agent.ts`、`store.ts` 实现 TS 后端；生产入口不启动 Go 服务或把模型调用转回 Go。
 - **REQ-003**: 保留 React 页面与 `/api`、SSE、运行发现协议；原生健康检查明确识别 `typescript`。
 - **REQ-004**: 上游 UI、贡献者名单、头像及致谢展示不进入 Lake 发行物；保留完整版权、LICENSE、NOTICE 和第三方归属，另记 Lake 的修改。
-- **REQ-005**: `runtime/zcode/api-inventory.json` 覆盖当前 Lake UI 全部 API 操作；`parity.json` 中每个操作及领域取得等价验收之前，禁止替换默认构建、桌面包和日常 Dev。候选只经 `scripts/build_lake.sh --ts-candidate` 输出到 `bin/lake-ts`。
+- **REQ-005**: `runtime/zcode/api-inventory.json` 覆盖当前 Lake UI 全部 API 操作；`parity.json` 中每个操作及领域取得等价验收之前，禁止普通默认/正式版后端切换。候选经 `scripts/build_lake.sh --ts-candidate` 输出到 `bin/lake-ts`；用户已另行明确授权用 `scripts/build_lake_desktop.sh --dev --ts-candidate --install` 覆盖 Dev，不将其计为完整验收。
 - **SEC-001**: 凭据仅存当前 Home 的私有 secrets 文件；不得记录 API Key，不读取 Keychain、不使用正式 Home 联调。
 - **SEC-002**: HTTP 仅监听 loopback，Bearer/cookie 鉴权、Origin 校验和静态路径约束；每个 Home 一个宿主。
 - **SEC-003**: 审批使用 ZCode PermissionBroker，取消必须中止 Agent 与执行器；历史任务不自动重派。Items、Security、Memory 的数据职责保持独立。
@@ -50,6 +50,7 @@ tags: [refactor, zcode, typescript, backend]
 | TASK-006 | 更新开发说明、架构方向和验收记录；记录 SHA、平台缺口和未迁移功能，经普通 PR 到 develop。依赖 TASK-005。 | | |
 | TASK-007 | `runtime/zcode/inventory.mjs` 从当前 API AST 固定操作清单；`parity.json`、`scripts/check_zcode_parity.py` 区分候选测试与完整等价证据。同步 develop@16ef7075 后当前为 118 项操作、20 个领域（含会话导航/标签），均未完成完整等价验收；默认检查失败，候选不能自动切换。 | ✅ | 2026-11-05 |
 | TASK-022 | `runtime/zcode/navigation.ts` 移植会话置顶/排序、图标、项目标签及乐观版本/事务/事件合同；验证跨项目、并发、重启及会话活动不变。仅候选层完成，完整 UI/Dev 与历史数据验收仍属 TASK-021。 | ✅ | 2026-11-05 |
+| TASK-023 | 按用户新增的明确要求增加 `--dev --ts-candidate --install`：签名 SEA 和资源随包、原生运行类型校验/停止/重连、同 Dev 凭据引用、旧数据快照与保留；覆盖安装并启动现有 Dev，记录真实 TS bootstrap 和原生窗口。仅 Dev 预览授权，不计全量验收。 | | |
 
 ### Implementation Phase 3
 

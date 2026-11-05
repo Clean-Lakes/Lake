@@ -23,8 +23,9 @@ import type {
 import { LakeStore, HttpError, id, now, privateDirectory } from "./store";
 import { LakeAgents } from "./agent";
 import { LakeNavigation } from "./navigation";
+import { importDevModelSettings } from "./dev-settings";
 
-export type ServerOptions = { home: string; data: string; port: number; staticRoot: string };
+export type ServerOptions = { home: string; data: string; port: number; staticRoot: string; development?: boolean };
 const encode = (value: unknown) => JSON.stringify(value);
 const equal = (left: string, right: string) => {
   const a = Buffer.from(left),
@@ -73,6 +74,10 @@ export async function startLakeServer(options: ServerOptions) {
   options.data = await canonicalNewPath(options.data);
   for (const name of [".lake", ".lake-dev"]) {
     const protectedHome = await canonicalNewPath(resolve(homedir(), name));
+    // The user explicitly authorized replacing Lake Dev with the TS build.
+    // Only its explicit --dev launch can use daily Dev data; release is always denied.
+    if (name === ".lake-dev" && options.development && options.home === protectedHome &&
+        options.data.startsWith(protectedHome + sep)) continue;
     if (
       [options.home, options.data].some(
         (path) => path === protectedHome || path.startsWith(protectedHome + sep),
@@ -566,6 +571,7 @@ export async function startLakeServer(options: ServerOptions) {
   };
   try {
     store = await LakeStore.open(options.home, options.data);
+    if (options.development) await importDevModelSettings(store);
     agents = await LakeAgents.open(store, broadcast);
     await new Promise<void>((resolveListen, reject) => {
       server.once("error", reject);
@@ -588,12 +594,12 @@ export async function startLakeServer(options: ServerOptions) {
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes("--version")) {
-    console.log("Lake · TypeScript / ZCode 3.17.2");
+    console.log("Lake Dev · TypeScript / ZCode 3.17.2");
     return;
   }
   if (args.includes("--help") || !args.length) {
     console.log(
-      "Lake TypeScript backend\n用法：lake web --home <隔离目录> [--port 0] [--data <目录>]",
+      "Lake TypeScript backend\n用法：lake web --home <目录> [--port 0] [--data <目录>] [--dev]",
     );
     return;
   }
@@ -608,7 +614,7 @@ async function main() {
   const port = Number(option("--port") ?? 4182);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("无效的端口");
   const root = isSea() ? join(dirname(process.execPath), "lake-zcode") : __dirname;
-  const app = await startLakeServer({ home, data, port, staticRoot: join(root, "web") });
+  const app = await startLakeServer({ home, data, port, staticRoot: join(root, "web"), development: args.includes("--dev") });
   const shutdown = () => void app.close();
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);

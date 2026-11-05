@@ -136,7 +136,7 @@ import LakeDesktopCore
         webView.uiDelegate = self
         window = WorkbenchWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 840),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-        window.title = profile.name
+        window.title = backend.backendRuntime == "typescript" ? profile.name + " · TS/ZCode" : profile.name
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.toolbarStyle = .unified

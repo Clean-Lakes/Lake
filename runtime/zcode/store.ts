@@ -274,12 +274,13 @@ export class LakeStore {
     };
   }
   async secret(providerId: string, value?: string | null) {
-    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(providerId))
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,119}$/.test(providerId))
       throw new HttpError(400, "Invalid provider identity");
     const directory = join(this.home, "secrets");
     await privateDirectory(directory);
     const file = join(directory, `model-${providerId}.json`);
     if (value === null) {
+      this.delete("providerCredentialRefs", providerId);
       await unlink(file).catch((error) => {
         if (error.code !== "ENOENT") throw error;
       });
@@ -295,6 +296,7 @@ export class LakeStore {
         await handle.close();
       }
       await rename(temp, file);
+      this.delete("providerCredentialRefs", providerId);
       return value;
     }
     try {
@@ -303,7 +305,18 @@ export class LakeStore {
         throw new Error("Model secret permissions are invalid");
       return String(JSON.parse(await readFile(file, "utf8")).apiKey ?? "");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return "";
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        const ref = this.get<string>("providerCredentialRefs", providerId);
+        if (!ref) return "";
+        if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$/.test(ref))
+          throw new Error("Dev model credential reference is invalid");
+        const legacyFile = join(directory, ref);
+        const info = await lstat(legacyFile);
+        if (!info.isFile() || info.isSymbolicLink() || (info.mode & 0o077) !== 0 ||
+            (process.platform !== "win32" && info.uid !== process.getuid?.()) || info.size > 4096)
+          throw new Error("Dev model credential permissions are invalid");
+        return readFile(legacyFile, "utf8");
+      }
       throw error;
     }
   }
