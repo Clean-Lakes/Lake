@@ -62,7 +62,10 @@ async function fixture(t, mode = "text") {
   const api = async (path, method = "GET", data, expected = 200) => {
     const response = await fetch(app.origin + path, {
       method,
-      headers: { Authorization: `Bearer ${app.token}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${app.token}`,
+        ...(data === undefined ? {} : { "Content-Type": "application/json" }),
+      },
       body: data === undefined ? undefined : JSON.stringify(data),
     });
     const value = await response.json();
@@ -281,7 +284,7 @@ test("session tags and icons preserve project scope, revisions, activity and res
   // A model update holding an older session snapshot cannot overwrite metadata.
   f.app.store.put("sessions", before.id, { ...before, options: f.app.store.session(before.id).options });
   assert.equal(f.app.store.session(before.id).icon, "database");
-  await f.api(`/api/tags/${tag.id}`, "DELETE", {});
+  await f.api(`/api/tags/${tag.id}`, "DELETE");
   saved = (await f.api(`/api/sessions/${f.session.id}/snapshot`)).session;
   assert.deepEqual(saved.tags, []);
   assert.equal(saved.presentationRevision, 1);
@@ -337,7 +340,7 @@ test("session pinning and ordering preserve activity, enforce group scope and re
   const catalog = await f.api("/api/catalog");
   assert.ok(catalog.sessions.filter((s) => s.projectId === f.project.id).every((s) => s.navigationRevision === 4));
   const secondBefore = f.app.store.session(second.id);
-  await f.api(`/api/sessions/${f.session.id}`, "DELETE", {});
+  await f.api(`/api/sessions/${f.session.id}`, "DELETE");
   await move(second.id, false, f.session.id, 4, 404);
   assert.equal(f.app.store.session(second.id).navigationRevision, 4);
   assert.equal(f.app.store.session(second.id).pinned, secondBefore.pinned);

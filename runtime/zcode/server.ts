@@ -42,8 +42,6 @@ async function canonicalNewPath(path: string): Promise<string> {
   }
 }
 async function body(request: IncomingMessage): Promise<Record<string, any>> {
-  if (!request.headers["content-type"]?.toLowerCase().startsWith("application/json"))
-    throw new HttpError(415, "Content-Type must be application/json");
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
@@ -51,6 +49,10 @@ async function body(request: IncomingMessage): Promise<Record<string, any>> {
     if (size > 24 * 1024 * 1024) throw new HttpError(413, "请求内容过大");
     chunks.push(chunk);
   }
+  // Existing Lake DELETE callers intentionally send no JSON body or content type.
+  if (!size && request.method === "DELETE") return {};
+  if (!request.headers["content-type"]?.toLowerCase().startsWith("application/json"))
+    throw new HttpError(415, "Content-Type must be application/json");
   try {
     const value = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     if (!value || Array.isArray(value) || typeof value !== "object") throw new Error();
