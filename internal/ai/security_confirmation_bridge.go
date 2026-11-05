@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
+const securityPlanConfirmLabel = "确认计划并继续"
 const securityWorkConfirmLabel = "确认步骤，完成后由我逐项验收"
 const securityWorkRejectLabel = "暂不确认，需要调整"
 
@@ -71,9 +72,18 @@ func (e *Engine) confirmSecurityWorkProposal(ctx context.Context, s *session, c 
 		return goal, err
 	}
 	proposal.SelectionRevision = selection.Revision
+	toolResults := c.superRole == "worker"
+	confirmLabel := securityWorkConfirmLabel
+	if toolResults {
+		confirmLabel = securityPlanConfirmLabel
+	}
 	var description strings.Builder
 	fmt.Fprintf(&description, "目标：%s\n原始要求可在下方展开查看。\n资源：%s\n", goal.Title, securityWorkResourceSummary(goal, c))
-	description.WriteString("确认以下任务步骤及依赖。每一步需要你在结果出现后另行确认，不能由模型总结替代验收。此确认不授予资源或命令权限。\n")
+	if toolResults {
+		description.WriteString("确认以下任务步骤及依赖。完成后根据实际工具回执自动核对结果。\n")
+	} else {
+		description.WriteString("确认以下任务步骤及依赖。每一步需要你在结果出现后另行确认，不能由模型总结替代验收。此确认不授予资源或命令权限。\n")
+	}
 	for i, item := range goal.Items {
 		if strings.TrimSpace(item.Title) == "" || item.ID == "" {
 			return goal, errors.New("security: complete work steps required")
@@ -85,6 +95,12 @@ func (e *Engine) confirmSecurityWorkProposal(ctx context.Context, s *session, c 
 		description.WriteByte('\n')
 		expected, _ := json.Marshal(item.Title)
 		proposal.Steps[item.ID] = WorkStepContract{Required: true, VerificationMode: "manual", Criteria: []security.AcceptanceCriterion{{ID: "manual_" + hash(item.ID)[:16], Method: "human_verified", TargetKind: security.TargetSession, Target: sessionID, SourceDigest: hash("human-work-condition\x00" + proposal.PlanDigest + "\x00" + item.ID), Expected: expected}}}
+		if toolResults {
+			proposal.Steps[item.ID] = WorkStepContract{Required: true, VerificationMode: "tool_results", Criteria: []security.AcceptanceCriterion{{ID: "result_" + hash(item.ID)[:16], Method: "tool_result", TargetKind: security.TargetSession, Target: sessionID, SourceDigest: hash("work-result\x00" + proposal.PlanDigest + "\x00" + item.ID)}}}
+		}
+	}
+	if toolResults && c.ConversationMode != ModePlan {
+		return e.activateAutomaticSecurityWork(ctx, s, c, goal, proposal, sourceID, rootID)
 	}
 	if len([]rune(description.String())) > 1800 || len(description.String()) > 1900 {
 		return goal, errors.New("security: proposed plan is too large for a complete confirmation; split it into a smaller reviewable plan")
@@ -94,7 +110,7 @@ func (e *Engine) confirmSecurityWorkProposal(ctx context.Context, s *session, c 
 		expires = proposal.TaskDeadline
 	}
 	binding := &securityConfirmationQuestionContext{Source: &QuestionSource{MessageID: sourceID, Text: redact(goal.UserText, c)}, Row: securityConfirmationQuestionRow{Kind: "work_contract", StoreID: storeID, RecoveryEpoch: epoch, ProjectID: configSecurityProject(c), SessionID: sessionID, RootTurnID: rootID, SourceMessageID: sourceID, GoalID: goal.ID, CallID: call.ID, Data: js(proposal), ExpiresAt: expires}}
-	questions := []UserQuestion{{ID: "work_contract", Title: "确认任务步骤与验收方式", Reason: redact(description.String(), c), Options: []QuestionOption{{Label: securityWorkConfirmLabel, Description: "只确认任务和验收要求；资源操作仍需当前策略或单独审批。"}, {Label: securityWorkRejectLabel, Description: "保留提案，不创建执行授权。"}}}}
+	questions := []UserQuestion{{ID: "work_contract", Title: "确认任务步骤与验收方式", Reason: redact(description.String(), c), Options: []QuestionOption{{Label: confirmLabel, Description: "只确认任务和验收要求；资源操作仍需当前策略或单独审批。"}, {Label: securityWorkRejectLabel, Description: "保留提案，不创建执行授权。"}}}}
 	questionCall := call
 	questionCall.Arguments = js(map[string]any{"questions": questions})
 	if _, err = e.askQuestion(withSecurityConfirmationQuestion(ctx, binding), s, questionCall); err != nil {
@@ -105,7 +121,7 @@ func (e *Engine) confirmSecurityWorkProposal(ctx context.Context, s *session, c 
 		return goal, err
 	}
 	var answers map[string][]string
-	if row.Status != "answered" || json.Unmarshal([]byte(row.Answers), &answers) != nil || len(answers["work_contract"]) != 1 || answers["work_contract"][0] != securityWorkConfirmLabel {
+	if row.Status != "answered" || json.Unmarshal([]byte(row.Answers), &answers) != nil || len(answers["work_contract"]) != 1 || answers["work_contract"][0] != confirmLabel {
 		_ = db.Model(&securityConfirmationQuestionRow{}).Where("question_id = ? AND status = ?", row.QuestionID, "answered").Update("status", "rejected").Error
 		return goal, errors.New("security: task requirements remain unconfirmed; no execution task was activated")
 	}

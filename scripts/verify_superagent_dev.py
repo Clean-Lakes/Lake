@@ -170,7 +170,7 @@ def main():
                     elif step == 5:
                         tool, payload = 'work_finish', {'summary': 'The original marker was read and independently verified.'}
                     else:
-                        content = '原文件已读取，独立人工验收通过。'
+                        content = '原文件已读取，并按工具结果自动验收。'
             delta = {'role': 'assistant', 'content': content}
             if tool:
                 delta['tool_calls'] = [{'index': 0, 'id': f'fixture-{key}-{n}', 'type': 'function', 'function': {'name': tool, 'arguments': json.dumps(payload)}}]
@@ -257,16 +257,7 @@ def main():
                         sid = worker['sessionId']
                         view = lake.snapshot(sid)
                         question = view.get('question')
-                        if question and question['id'] not in answered:
-                            answers = {}
-                            for item in question['questions']:
-                                labels = [option if isinstance(option, str) else option['label'] for option in item['options']]
-                                if item['id'] == 'manual_acceptance':
-                                    operations = query("SELECT status,result FROM native_operations WHERE session_id=? AND tool='read'", (sid,))
-                                    require(len(operations) == 1 and operations[0][0] == 'succeeded' and 'LAKE_SUPER_READ_ONLY_' in operations[0][1], 'human verification preceded actual file evidence')
-                                answers[item['id']] = [labels[0]]
-                            lake.api('/api/sessions/' + sid + '/ai/questionReply', 'POST', {'id': question['id'], 'answers': answers})
-                            answered.add(question['id'])
+                        require(not question, 'ordinary Worker unexpectedly requested plan or manual acceptance')
                     if len(workers) == 2 and all(worker['task']['state'] in ('blocked', 'failed') for worker in workers):
                         raise AssertionError('Workers blocked: ' + json.dumps({'toolResults': {label: state.get('lastToolResults' + label) for label in ('A', 'B')}, 'goals': [json.loads(row[0]) for row in query('SELECT data FROM native_work_goals')], 'operations': query('SELECT tool,status,result FROM native_operations')}, ensure_ascii=False))
                     if len(workers) == 2 and all(worker['task']['state'] == 'completed' and worker['task']['acceptanceState'] == 'pass' for worker in workers):
@@ -306,7 +297,7 @@ def main():
                 args.output.parent.mkdir(parents=True, exist_ok=True)
                 args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
                 args.output.chmod(0o600)
-                print('PASS: two Pilot tasks, isolated Workers, original plan confirmations, actual readonly files, independent goal acceptance and durable Pilot reports', flush=True)
+                print('PASS: two Pilot tasks, isolated Workers, no plan/acceptance questions, actual readonly files, automatic goal acceptance and durable Pilot reports', flush=True)
                 if args.hold_seconds:
                     print('Fixture Home for local UI inspection: ' + str(home), flush=True)
                     print('Fixture origin: ' + lake.runtime['origin'], flush=True)

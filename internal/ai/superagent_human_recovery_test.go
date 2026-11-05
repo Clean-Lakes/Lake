@@ -19,7 +19,7 @@ func testSuperHumanRecovery(t *testing.T, mode string) {
 		if n == 1 {
 			return response("", Call{ID: "original-question", Name: "work_begin", Arguments: `{"asset_refs":[],"title":"Inspect test target","items":[{"title":"Review test evidence"}]}`})
 		}
-		if !strings.Contains(js(input["messages"]), securityWorkConfirmLabel) {
+		if !strings.Contains(js(input["messages"]), securityPlanConfirmLabel) {
 			t.Error("actual answer missing")
 		}
 		return response("Actual answer recovered; no resource operations requested.")
@@ -41,6 +41,10 @@ func testSuperHumanRecovery(t *testing.T, mode string) {
 		t.Fatal(err)
 	}
 	if err := e.finishSuperRouting(ctx, b, w.SourceEventID); err != nil {
+		t.Fatal(err)
+	}
+	// Plan mode deliberately waits for a real answer, including after restart.
+	if err := db.Model(&superWorkerRow{}).Where("id = ?", w.ID).Update("conversation_mode", ModePlan).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := e.ConfigureTaskWorker(ctx, "project", w.ID, Config{Model: model, SecurityProjectID: "project", Profile: "core", MaxSteps: 12}); err != nil {
@@ -118,7 +122,7 @@ func testSuperHumanRecovery(t *testing.T, mode string) {
 		s.cancel, s.questionReply = nil, nil
 		s.mu.Unlock()
 	}
-	if err := e.ReplyQuestion(w.SessionID, saved.View.Question.ID, map[string][]string{"work_contract": {securityWorkConfirmLabel}}); err != nil {
+	if err := e.ReplyQuestion(w.SessionID, saved.View.Question.ID, map[string][]string{"work_contract": {securityPlanConfirmLabel}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.ResumeTaskWorker(ctx, "project", w.ID); err != nil {
@@ -133,7 +137,7 @@ func testSuperHumanRecovery(t *testing.T, mode string) {
 	if err := db.Model(&nativeOperation{}).Count(&operations).Error; err != nil || operations != 0 {
 		t.Fatal("human recovery dispatched resource operations", operations, err)
 	}
-	if err := e.ReplyQuestion(w.SessionID, saved.View.Question.ID, map[string][]string{"work_contract": {securityWorkConfirmLabel}}); err == nil {
+	if err := e.ReplyQuestion(w.SessionID, saved.View.Question.ID, map[string][]string{"work_contract": {securityPlanConfirmLabel}}); err == nil {
 		t.Fatal("answered question accepted twice")
 	}
 }

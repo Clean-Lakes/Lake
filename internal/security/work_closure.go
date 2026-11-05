@@ -94,6 +94,12 @@ func ValidateCriteria(criteria []AcceptanceCriterion) error {
 			return errors.New("invalid acceptance criterion")
 		}
 		seen[c.ID] = true
+		if c.Method == "tool_result" {
+			if c.TargetKind != TargetSession || c.ConnectionRevision != 0 || len(c.Expected) != 0 || c.Pointer != "" {
+				return errors.New("invalid tool result criterion")
+			}
+			continue
+		}
 		if c.Method == "human_verified" {
 			if c.TargetKind != TargetSession && c.TargetKind != TargetProject && c.TargetKind != TargetResource {
 				return errors.New("invalid human verification target")
