@@ -4,6 +4,7 @@ import {createContext,useEffect,useId,useRef,useState,type ReactNode} from 'reac
 import {ReplyDuration,type ReplyDurationProps} from './ReplyDuration';
 import {turnStatus} from './turnStatus';
 import {ReplyIdentity} from './ReplyIdentity';
+import {quietCoordination} from './coordinationActivity';
 export const ExecutionDetailsOpen=createContext(false);
 export function TurnExecutionDetails({details,onInspect,presentingReply=false,hideLive=false,hideIdentity=false,sessionId,latest=false,latestTaskId,children,progress,...timing}:{hideIdentity?:boolean;latest?:boolean;latestTaskId?:string;progress?:{text:string;active:boolean};hideLive?:boolean;sessionId?:string;children?:ReactNode;details:ReactNode[];onInspect?:()=>void;presentingReply?:boolean}&ReplyDurationProps){
  const id=useId();
@@ -14,7 +15,8 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
  const [replyClock,setReplyClock]=useState({presenting:presentingReply,at:Date.now()});
  if(replyClock.presenting!==presentingReply)setReplyClock({presenting:presentingReply,at:Date.now()});
  const previewAt=live&&presentingReply&&!hideLive?replyClock.at:undefined;
- const active=live&&!presentingReply;
+ const internalOnly=!!timing.cards?.some(quietCoordination)&&!timing.cards.some(card=>['operation','shell'].includes(card.type)&&!quietCoordination(card));
+ const active=live&&!presentingReply&&!internalOnly;
  const [disclosure,setDisclosure]=useState({active,open:active});
  const previousDetails=useRef(details);
  const [retiringDetails,setRetiringDetails]=useState<ReactNode[]|null>(null);
@@ -32,7 +34,7 @@ export function TurnExecutionDetails({details,onInspect,presentingReply=false,hi
   const timer=setTimeout(()=>setRetiringDetails(null),400);
   return()=>clearTimeout(timer);
  },[retiringDetails]);
- const latestStep=timing.cards?.filter(card=>['operation','shell'].includes(card.type)).at(-1);
+ const latestStep=timing.cards?.filter(card=>['operation','shell'].includes(card.type)&&!quietCoordination(card)).at(-1);
  const summaryDisclosure=details.length?{open:inspector&&sessionId?inspecting:open,controls:inspector&&sessionId?sessionInspectorId:id,side:!!(inspector&&sessionId),onToggle:()=>{
   if(inspector&&sessionId)inspector.open({sessionId,turnId:id,tab:'execution'});
   else {onInspect?.();setDisclosure({active,open:!open});}

@@ -1,6 +1,7 @@
 import type { AICard, AIView } from "../../shared/contracts";
 import { compareTime } from "./timeline";
 import type {GlyphName} from './Icons';
+import {quietCoordination} from './coordinationActivity';
 
 /** Use the actual tool identity, never shell text or its untrusted result. */
 export function progressGlyph(card?:AICard):GlyphName {
@@ -59,7 +60,7 @@ export function turnProgress(view: AIView, cards: AICard[], latestUserAt: string
   const live = ["running", "waiting_approval"].includes(view.status);
   const start = view.turnStartedAt && (!latestUserAt || compareTime(view.turnStartedAt, latestUserAt) >= 0) ? view.turnStartedAt : live ? latestUserAt : "";
   const turnCards = start ? cards.filter(card => compareTime(card.at, start) >= 0) : [];
-  const current = turnCards.filter(card => ["operation", "shell"].includes(card.type) && ["running", "pending"].includes(card.status)).at(-1);
+  const current = turnCards.filter(card => ["operation", "shell"].includes(card.type) && ["running", "pending"].includes(card.status) && !quietCoordination(card)).at(-1);
   let activity: Activity | undefined;
   if (live) {
     if(view.question) return {activity:{text:"等待你的选择",icon:"approval"}};
