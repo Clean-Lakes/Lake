@@ -387,9 +387,15 @@ export async function startLakeServer(options: ServerOptions) {
           store.put("resources", resource.id, resource);
           result = resource;
         }
-      } else if (path[1] === "projects" && path[3] === "superagent" && method === "GET") {
+      } else if (path[1] === "projects" && path[3] === "superagent") {
         store.project(path[2]);
-        result = {active:false,project:{projectId:path[2],routerSessionId:"",version:0},workers:[],channels:[]};
+        if (method !== "GET") throw new HttpError(501, "Pilot 与长期专员调度尚未迁移完成");
+        result = {
+          active: false,
+          project: { projectId: path[2], routerSessionId: "", version: 0 },
+          workers: [],
+          channels: [],
+        };
       } else if (path[1] === "projects" && ["pilot", "sre"].includes(path[3])) {
         store.project(path[2]);
         result = { enabled: false, autoAdvance: false, revision: 0 };

@@ -53,7 +53,7 @@ const result =
     {
       schemaVersion: 1,
       source: "web-agent/web/src/api.ts",
-      baselineCommit: "caab241e89bc93f38e6395b69f3e85a285637296",
+    baselineCommit: "16ef70750bf63a9fc6b800ce6cac674c7194257e",
       operations,
     },
     null,

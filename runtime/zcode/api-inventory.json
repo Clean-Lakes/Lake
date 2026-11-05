@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "source": "web-agent/web/src/api.ts",
-  "baselineCommit": "caab241e89bc93f38e6395b69f3e85a285637296",
+  "baselineCommit": "16ef70750bf63a9fc6b800ce6cac674c7194257e",
   "operations": [
     {
       "name": "adoptTerminal",
@@ -103,15 +103,6 @@
       ]
     },
     {
-      "name": "classifyProjectMemories",
-      "routes": [
-        {
-          "method": "POST",
-          "path": "`/api/projects/${encodeURIComponent(projectId)}/memory-classification`"
-        }
-      ]
-    },
-    {
       "name": "clearModelSettings",
       "routes": [
         {
@@ -202,15 +193,6 @@
       ]
     },
     {
-      "name": "decideMemoryCandidate",
-      "routes": [
-        {
-          "method": "POST",
-          "path": "`/api/projects/${encodeURIComponent(projectId)}/memory-candidates/${encodeURIComponent(id)}/decision`"
-        }
-      ]
-    },
-    {
       "name": "deleteAIPreset",
       "routes": [
         {
@@ -252,6 +234,15 @@
         {
           "method": "DELETE",
           "path": "`/api/sessions/${encodeURIComponent(sessionId)}`"
+        }
+      ]
+    },
+    {
+      "name": "deleteSpecialist",
+      "routes": [
+        {
+          "method": "DELETE",
+          "path": "`/api/projects/${encodeURIComponent(project)}/superagent/specialists/${encodeURIComponent(role)}`"
         }
       ]
     },
@@ -490,29 +481,11 @@
       ]
     },
     {
-      "name": "projectMemoriesV2",
-      "routes": [
-        {
-          "method": "GET",
-          "path": "`/api/projects/${encodeURIComponent(projectId)}/memory?${new URLSearchParams(filters)}`"
-        }
-      ]
-    },
-    {
       "name": "projectMemory",
       "routes": [
         {
           "method": "GET",
           "path": "`/api/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(key)}${includeDeleted ? \"?includeDeleted=true\" : \"\"}`"
-        }
-      ]
-    },
-    {
-      "name": "projectMemoryCandidates",
-      "routes": [
-        {
-          "method": "GET",
-          "path": "`/api/projects/${encodeURIComponent(projectId)}/memory-candidates`"
         }
       ]
     },
@@ -531,15 +504,6 @@
         {
           "method": "GET",
           "path": "`/api/projects/${encodeURIComponent(projectId)}/memory-settings`"
-        }
-      ]
-    },
-    {
-      "name": "projectMemorySource",
-      "routes": [
-        {
-          "method": "GET",
-          "path": "`/api/projects/${encodeURIComponent(projectId)}/memory/${encodeURIComponent(key)}/sources/${encodeURIComponent(sourceId)}`"
         }
       ]
     },
