@@ -1,6 +1,6 @@
 # Lake Super-agent 内核与三模块协作约定
 
-更新日期：2026-11-04。本文记录用户确认的架构方向，供后续 Agent 和模块维护者共同遵循。它不代表所有能力已经实现，也不改变 `AGENTS.md`、`CONTRIBUTING.md` 和 `docs/development-workflow.md` 中的开发、合并、发布与数据隔离要求。
+更新日期：2026-11-05。本文记录用户确认的架构方向，供后续 Agent 和模块维护者共同遵循。它不代表所有能力已经实现，也不改变 `AGENTS.md`、`CONTRIBUTING.md` 和 `docs/development-workflow.md` 中的开发、合并、发布与数据隔离要求。
 
 ## 0. 统一 Super-agent 内核方向（实施中）
 
@@ -58,6 +58,14 @@ flowchart TB
 - Pilot 首批接入分层读取；Worker 在任务/资源范围视图单独验收前保持 unavailable。原任务历史证据读取、ADK、普通 Skills、会话压缩、操作/审批/验收/unknown 账本不随旧 Memory 一并退役。
 - 不自动重新扫描开启前历史，不复活退役策略资产、在线纠错或自动可执行 Skill；本期不引入向量模型、外部基础设施或端云记忆同步。新计划合入不代表运行开关已改变或新角色已启用。
 
+### 2.1 上下文与角色长期知识方向（2026-11-05，待实施）
+
+用户确认参考 xAI Grok Bot 的分层思路：专员按 `storeID + projectID + RoleID` 长期保留知识，每项新任务使用独立 Task/Worker/ADK Session，Pilot 只接收必要任务摘要与准确引用。频道是连续展示入口，不是共享执行历史；改名保留知识，同名新角色不继承。任务当前状态/未决操作和长期知识分开，动态观测需重查。
+
+[上下文与角色知识总方案](plan/architecture-context-role-memory-1.md)的 CM 阶段负责请求工作集、摘要、预算和角色范围适配；[文件记忆主计划](plan/feature-agent-file-memory-1.md)的 FM 阶段继续独占来源提取、整理、文件发布及旧实现退役。角色文件纳入同一 Memory 流水线，不新增每角色学习器；Claude-Mem 暂不作为首期依赖或强制正文库。
+
+角色知识视图须按准确身份、当前项目权限、来源和使用设置独立验收。现有 Worker unavailable、N5 限制和 V2 关闭状态保持至对应代码/验证交付；不通过复制全项目知识补齐，不新增专员权限配置或任务资源勾选层。清理模型上下文不删除知识或执行账本；纠正、遗忘和角色删除沿同一来源抑制与清理协议。
+
 ## 3. 三组必须对齐的接口
 
 | 接口组 | 提供者 | 使用约定 |
@@ -86,6 +94,8 @@ flowchart TB
 
 按 [新主计划 FM 阶段](plan/feature-agent-file-memory-1.md#3-分批实施) 推进，历史遗留清理优先级最高：先审计 caller 和存储/恢复契约，立即删除已无依赖的旧运行代码；每批实现前重复清理，不推迟到最终验收。仍支撑实际链路的旧 Memory 在后台提取、文件整理和 Pilot 读取接替后迁移，停止旧写入/注入再移除；随后接 Worker 范围读取及质量验收。保留项必须说明依赖和退出条件，见 [首批遗留审计](docs/design/agent-file-memory-legacy-audit.md)。
 
+CM 的 Pilot 工作集/摘要可在 FM 新流水线启用前独立交付；角色持久知识与 Worker 读取按 CM/FM 依赖完成后验收，不把本方案当成开关授权。
+
 三模块的资产身份、权限、来源、时间和撤回边界继续有效；旧 12 项条目管理对接任务不再是排期前提。Super-agent 外部事件主线可以在 Worker 知识视图 unavailable 时继续。每批记录准确 tested SHA 与平台缺口，经 develop PR 交付，不将文档替代视作运行下线或验收完成。
 
 ## 6. 详细规格与维护
@@ -95,6 +105,7 @@ flowchart TB
 - [统一 Super-agent 内核实施方案（待实施）](plan/architecture-lake-superagent-1.md)
 - [三模块对接说明、当前进度、接口与验收矩阵](docs/design/items-security-memory-integration.md)
 - [Agent 本地文件记忆主计划（当前）](plan/feature-agent-file-memory-1.md)
+- [上下文与角色长期知识总方案（Planned）](plan/architecture-context-role-memory-1.md)
 - [三模块旧实施路线（已替代，仅历史参考）](plan/feature-items-security-memory-integration-1.md)
 - [Memory 当前使用与兼容说明](docs/lake-memory.md)及[自然记忆 N1–N5 历史交付](plan/feature-natural-memory-1.md)
 - [Security 设计](docs/design/lake-security-v1.md)及[实施计划](plan/feature-lake-security-1.md)
