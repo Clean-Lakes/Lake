@@ -76,7 +76,7 @@ func Evaluate(in EvaluationInput) Decision {
 	if !validPolicy(p) || !p.Confirmed || p.ProjectID != o.ProjectID || p.StoreID != o.StoreID || p.RecoveryEpoch != o.RecoveryEpoch {
 		return deny(ReasonRecoveryRequired)
 	}
-	if o.CommandTargetRevision != in.CommandTargetRevision || p.Revision != o.PolicyRevision || o.LegacyPolicyRevision != in.LegacyPolicyRevision || in.TargetRevision != o.TargetRevision {
+	if o.CommandTargetRevision != in.CommandTargetRevision || p.Revision != o.PolicyRevision || o.LegacyPolicySourceID != in.LegacyPolicySourceID || o.LegacyPolicyRevision != in.LegacyPolicyRevision || in.TargetRevision != o.TargetRevision {
 		return deny(ReasonOperationStale)
 	}
 	if o.LocalExecution != in.LocalExecution {

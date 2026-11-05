@@ -26,7 +26,7 @@ func (b *Server) recordSuperInput(event ai.SuperEvent, refs, files []Object, ign
 	input := superHostInput{References: refs, Files: files, IgnoreMemory: ignoreMemory}
 	options := b.sessionOptions(event.ThreadRef)
 	input.TargetOptions = Object{}
-	for _, key := range []string{"runtime", "asset_ref", "terminal_id", "terminal_generation", "container_id", "conversationMode", "maxSteps", "reasoningEffort", "reasoningModelId", "contextBudgetMode", "contextWindow", "maxOutput", "silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "blockUnreferencedAssets", "denyLocalExecution"} {
+	for _, key := range []string{"runtime", "asset_ref", "terminal_id", "terminal_generation", "container_id", "conversationMode", "maxSteps", "reasoningEffort", "reasoningModelId", "contextBudgetMode", "contextWindow", "maxOutput", "silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "silentMCPCalls", "blockUnreferencedAssets", "denyLocalExecution"} {
 		if value, ok := options[key]; ok {
 			input.TargetOptions[key] = value
 		}
@@ -327,6 +327,9 @@ func (b *Server) ensureSuperProject(ctx context.Context, project string) (ai.Sup
 	if existing, ok, err := b.Engine.SuperProject(ctx, project); err != nil || ok {
 		if err == nil && ok {
 			b.reconcileSuperSessionRoles(existing)
+			if err := b.capturePilotPermissions(ctx, existing); err != nil {
+				return existing, err
+			}
 		}
 		return existing, err
 	}
@@ -376,6 +379,9 @@ func (b *Server) ensureSuperProject(ctx context.Context, project string) (ai.Sup
 	b.Store.ensureSuperSession(project, routerID, "Pilot", "router")
 	domain, err := b.Engine.ActivateSuperProject(ctx, project, routerID, ids)
 	if err != nil {
+		return domain, err
+	}
+	if err := b.capturePilotPermissions(ctx, domain); err != nil {
 		return domain, err
 	}
 	b.Store.update(func() any {

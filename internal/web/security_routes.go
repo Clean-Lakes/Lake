@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -100,10 +101,18 @@ func (b *Server) securityRoute(w http.ResponseWriter, r *http.Request) bool {
 		data := body(w, r, 8192)
 		memoryFields(data, "actionId", "expectedRevision", "permissions")
 		permissions := object(data["permissions"])
-		if len(permissions) != 7 {
-			fail(400, "All seven permission settings are required")
+		if len(permissions) != 7 && len(permissions) != len(permissionOptionKeys) {
+			fail(400, "All permission settings are required")
 		}
-		for _, key := range []string{"silentReadFiles", "silentWriteFiles", "silentReadSQL", "silentCommands", "silentTerminalCreation", "blockUnreferencedAssets", "denyLocalExecution"} {
+		for key := range permissions {
+			if !slices.Contains(permissionOptionKeys, key) {
+				fail(400, "Invalid permission setting")
+			}
+		}
+		for _, key := range permissionOptionKeys {
+			if key == "silentMCPCalls" && permissions[key] == nil {
+				continue // Older clients did not expose MCP auto execution.
+			}
 			if _, ok := permissions[key].(bool); !ok {
 				fail(400, "Invalid permission setting")
 			}

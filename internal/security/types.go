@@ -91,6 +91,7 @@ type PreparedOperation struct {
 	PreviewDigest             string               `json:"previewDigest"`
 	TargetRevision            int64                `json:"targetRevision"`
 	EnvelopeRevision          int64                `json:"envelopeRevision"`
+	LegacyPolicySourceID      string               `json:"legacyPolicySourceId,omitempty"`
 	LegacyPolicyRevision      int64                `json:"legacyPolicyRevision"`
 	PolicyRevision            int64                `json:"policyRevision"`
 	BoundaryRevisions         []RevisionRef        `json:"boundaryRevisions"`
@@ -278,6 +279,7 @@ type TaskEnvelope struct {
 
 type EvaluationInput struct {
 	CommandTargetRevision                                     int64
+	LegacyPolicySourceID                                      string
 	LegacyPolicyRevision                                      int64
 	LocalExecution                                            bool
 	Now                                                       time.Time

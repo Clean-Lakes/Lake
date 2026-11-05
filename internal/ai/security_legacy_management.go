@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"github.com/Clean-Lakes/Lake/internal/security"
 	"gorm.io/gorm"
 	"time"
@@ -23,11 +24,14 @@ func (e *Engine) SecurityLegacySessionPolicy(ctx context.Context, projectID, ses
 	if err != nil {
 		return out, err
 	}
-	var row securityLegacySessionPolicyRow
-	if err = db.WithContext(ctx).First(&row, "session_id = ? AND project_id = ? AND store_id = ? AND recovery_epoch = ?", sessionID, projectID, storeID, epoch).Error; err != nil {
+	row, source, err := effectiveLegacyPolicyTx(db.WithContext(ctx), projectID, sessionID, storeID, epoch)
+	if err != nil {
 		return out, err
 	}
 	out = SecurityLegacyPolicy{ProjectID: projectID, SessionID: sessionID, Source: row.Source, Revision: row.Revision}
+	if source != "" {
+		out.Source = "pilot:" + source
+	}
 	err = decodeSecurityJSON(row.Data, &out.Permissions)
 	return out, err
 }
@@ -55,6 +59,13 @@ func (e *Engine) UpdateSecurityLegacySessionPolicy(ctx context.Context, a Securi
 			}
 			if policy.Mode != "legacy" {
 				return errSecurityAction
+			}
+			_, source, err := effectiveLegacyPolicyTx(tx, a.ProjectID, a.SessionID, storeID, epoch)
+			if err != nil {
+				return err
+			}
+			if source != "" {
+				return errors.New("专员权限由 Pilot 统一管理")
 			}
 			var row securityLegacySessionPolicyRow
 			if err = tx.First(&row, "session_id = ? AND project_id = ? AND store_id = ? AND recovery_epoch = ?", a.SessionID, a.ProjectID, storeID, epoch).Error; err != nil {

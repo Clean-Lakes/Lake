@@ -102,7 +102,7 @@ func currentWorkToolResultAuthorityTx(tx *gorm.DB, descriptor security.PreparedO
 		}
 		descriptor.MCPCatalogRevision = server.CatalogRevision
 	}
-	return runningCatalogAuthorityValid(tx, descriptor)
+	return runningCatalogAuthorityValid(tx, descriptor, true)
 }
 
 func toolResultObserved(tool, raw string) bool {

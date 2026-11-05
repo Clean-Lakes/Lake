@@ -17,8 +17,8 @@ func applyLegacySessionPolicyTx(tx *gorm.DB, in *security.EvaluationInput) error
 		return nil
 	}
 	o := in.Operation
-	var row securityLegacySessionPolicyRow
-	if err := tx.First(&row, "session_id = ? AND project_id = ? AND store_id = ? AND recovery_epoch = ?", o.SessionID, o.ProjectID, o.StoreID, o.RecoveryEpoch).Error; err != nil {
+	row, _, err := effectiveLegacyPolicyTx(tx, o.ProjectID, o.SessionID, o.StoreID, o.RecoveryEpoch)
+	if err != nil {
 		return err
 	}
 	if row.Revision < 1 {
@@ -70,6 +70,11 @@ func applyLegacySessionPolicyTx(tx *gorm.DB, in *security.EvaluationInput) error
 			allowed = permissions.SilentCommands
 		case "resource.list", "resource.resolve", "cluster.read", "memory.read", "artifact.read", "session.read", "task.read", "workflow.read", "schedule.read", "network.fetch", "network.search", "terminal.read", "mcp.discover", "task.control":
 			allowed = true
+		case "mcp.call":
+			allowed = permissions.SilentMCPCalls
+			if inherited && allowed {
+				rule.Effect, rule.Grantable, rule.Confirmation = security.EffectAllow, false, ""
+			}
 		case "local.execute":
 			allowed = !permissions.DenyLocalExecution
 		}

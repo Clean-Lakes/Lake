@@ -44,7 +44,7 @@ class QuietHTTP(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(data).encode())
 
 
-def exercise(binary, home, native, plan=False):
+def exercise(binary, home, native, plan=False, pilot_mcp_auto=False):
     # Only the loopback MCP returns the receipt. Check it in the actual tool
     # result and durable operation; ordinary tasks must not ask for plan/acceptance.
     marker = os.urandom(16).hex()
@@ -164,6 +164,8 @@ def exercise(binary, home, native, plan=False):
         inherited = title == count_title
         count = inherited and not plan
         pilot = lake.api(base + '/superagent', 'POST', {})['routerSessionId']
+        if pilot_mcp_auto:
+            lake.api('/api/sessions/' + pilot + '/ai/configure', 'POST', {'silentMCPCalls': True})
         if plan:
             try:
                 lake.api('/api/sessions/' + pilot + '/ai/mode', 'POST', {'mode': 'plan'})
@@ -202,6 +204,7 @@ def exercise(binary, home, native, plan=False):
                 lake.api('/api/sessions/' + sid + '/ai/questionReply', 'POST', {'id': question['id'], 'answers': {'work_contract': [label]}})
                 answered.add(question['id'])
             for pending in view.get('pendingApprovals') or ([view['pending']] if view.get('pending') else []):
+                require(not pilot_mcp_auto, 'Pilot auto MCP still requested a Worker approval')
                 if pending['id'] in approved:
                     continue
                 call = pending['call']
@@ -227,7 +230,7 @@ def exercise(binary, home, native, plan=False):
             require(marker in evidence[0][0], 'receipt missing from durable evidence')
         require(not rows("SELECT 1 FROM work_acceptance_records WHERE session_id=? AND verifier_version='human/1'", (sid,)), 'automatic task manufactured human acceptance')
         require(len(answered) == int(plan), 'missing or repeated Plan confirmation')
-        require(len(approved) == int(count), 'unexpected number of operation approvals')
+        require(len(approved) == int(count and not pilot_mcp_auto), 'unexpected number of operation approvals')
         return sid
 
     env = {key: value for key, value in os.environ.items() if not key.startswith('LAKE_')}
@@ -246,7 +249,7 @@ def exercise(binary, home, native, plan=False):
             require(len(workers) == 2 and requests == ([] if plan else [tool_name]), 'fixture call was duplicated or Worker session reused')
             require(not rows('SELECT 1 FROM security_mcp_bindings'), 'unexpected materialized per-server binding')
             return {'workerCount': len(workers), 'optedOutServerCount': 0, 'assetRefs': [], 'mcpCalls': len(requests),
-                    'resumedOriginalProposal': count_title in retries, 'manualBindings': 0, 'humanQuestions': 2 if plan else 0, 'planMode': plan, 'operationApprovals': 0 if plan else 1, 'verifiedReceipt': not plan}
+                    'resumedOriginalProposal': count_title in retries, 'manualBindings': 0, 'humanQuestions': 2 if plan else 0, 'planMode': plan, 'operationApprovals': 0 if plan or pilot_mcp_auto else 1, 'pilotMCPAuto': pilot_mcp_auto, 'verifiedReceipt': not plan}
         finally:
             try:
                 if native:
@@ -261,6 +264,7 @@ def main():
     parser.add_argument('--native', type=Path, help='installed Lake Dev executable, using its bundled backend')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--plan', action='store_true', help='confirm readonly plans once per Worker and automatically verify catalog results; preserve Plan execution restrictions')
+    parser.add_argument('--pilot-mcp-auto', action='store_true', help='enable MCP auto execution through the Pilot permission setting and require zero per-Worker approvals')
     args = parser.parse_args()
     binary = args.binary.resolve(strict=True)
     if args.native:
@@ -269,7 +273,7 @@ def main():
     if sys.platform == 'darwin':
         subprocess.run(['codesign', '--verify', '--strict', str(binary)], check=True)
     with tempfile.TemporaryDirectory(prefix='lake-super-mcp-dev.') as directory:
-        report = exercise(binary, Path(directory), args.native, args.plan)
+        report = exercise(binary, Path(directory), args.native, args.plan, args.pilot_mcp_auto)
     report.update(
         passed=True, native=bool(args.native),
         sourceDirty=bool(subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip()),
