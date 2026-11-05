@@ -10,4 +10,6 @@
 - [深色](progress-bubbles/dark.png)
 - [窄窗口](progress-bubbles/narrow.png)
 
-签名 Dev 的准确安装 SHA 与构建结果将在安装后追加。终端和其他 TS 迁移范围仍以[终端/扩展记录](terminal-extensions.md)为准，本次气泡修复不表示全部功能等价验收完成。
+已从干净源码 `a11c497420e082ba385c4df7a12229f8ef2a463f` 运行 `scripts/build_lake_desktop.sh --dev --ts-candidate --install`，覆盖并打开 Lake Dev。App 严格签名、ZIP/DMG SHA-256、Web 生产构建通过；包内后端 SHA-256 为 `cbabbd65862ba7613584288708a8e0ec4ba1d36304f9225665dac9a9452f52b7`，打包 JS/CSS 包含本次气泡及换行规则。原生窗口实际显示 Pilot、历史、输入区，无持续终端警告；认证 bootstrap 仍是 typescript/zcode/3.17.2、pty、非恢复只读，PID/Home/data 匹配。
+
+本次没有向真实会话发送测试消息；工具间瞬态气泡的视觉检查来自上述隔离 fixture。安装前正常排空 Dev 后端并创建私有 APFS 备份，位置保存在本机 `/tmp/lake-progress-bubble-backup-location`。终端和其他 TS 迁移范围仍以[终端/扩展记录](terminal-extensions.md)为准，本次气泡修复不表示全部功能等价验收完成。

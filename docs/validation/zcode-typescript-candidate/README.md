@@ -7,7 +7,7 @@
 - 前端 603 项测试、类型检查与构建提交：`22b2a8e8233c0c692ec64c15b30fb0f4ef14d1e6`。从该提交至后端测试提交，前端文件未变化。
 - 平台：macOS / Apple Silicon；Node 24.14.0；候选由 `scripts/build_lake.sh --ts-candidate` 构建，并使用持久 `Lake Local Development Code Signing` 身份签名。
 
-后续增量：已授权覆盖 Dev 的 [Super-agent 记录](superagent.md)，以及本机真实 PTY/扩展、36 项回归与安装提交 `f7b1b399` 的[最新记录](terminal-extensions.md)。本文保留最初隔离候选的历史证据，以下未安装说明仅描述该轮。
+后续增量：已授权覆盖 Dev 的 [Super-agent 记录](superagent.md)，以及本机真实 PTY/扩展、36 项回归与安装提交 `f7b1b399` 的[最新记录](terminal-extensions.md)。后续气泡修复与安装提交 `a11c4974` 见[进度气泡记录](progress-bubbles.md)。本文保留最初隔离候选的历史证据，以下未安装说明仅描述该轮。
 
 ## 源码与运行路径
 
