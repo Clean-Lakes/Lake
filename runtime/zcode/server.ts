@@ -560,7 +560,7 @@ export async function startLakeServer(options: ServerOptions) {
           switch (path[4]) {
             case undefined:
             case "snapshot":
-              result = store.viewPage(sessionId, url.searchParams.has("before") ? Number(url.searchParams.get("before")) : undefined);
+              result = agents.executionView(sessionId, store.viewPage(sessionId, url.searchParams.has("before") ? Number(url.searchParams.get("before")) : undefined));
               break;
             case "options":
               result = session.options;

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import type {AICard,AgentRun,Resource,ResourceTreeNode,SessionSnapshot} from '../../shared/contracts';
-import {nativeRunState,workerExecutionModel} from '../src/workerExecutionModel';
+import {nativeRunState,workerBusinessReceipts,workerExecutionModel} from '../src/workerExecutionModel';
 
 const resource=(id:string,name='同名服务器',projectId='p')=>({id,name,projectId,kind:'ssh',status:'available'} as Resource);
 const folder=(id:string,name:string,parentId:string|null=null):ResourceTreeNode=>({id,name,parentId,projectId:'p',kind:'folder',resourceId:null,position:0});
@@ -66,4 +66,24 @@ test('completed child with an unknown business effect keeps its resource and anc
  assert.ok(flatten(model.resources).every(node=>node.state==='unknown'),'the unresolved effect propagates through every actual ancestor');
  assert.equal(nativeRunState(run('settled',['a'],[{...call('old-read','a'),status:'failed'},call('new-read','a')])),'completed','a settled diagnostic failure alone is not an unknown mutation');
  assert.equal(workerExecutionModel(snapshot([run('clean',['a'],[call('success','a')])])).resources[0]?.state,'completed');
+});
+test('business receipts require current-task host ledger IDs, never successful control or discovery cards',()=>{
+ const oldTools=['work_begin','work_update','work_finish','list_assets','list_mcp_servers','list_mcp_tools','Read'];
+ const unproven=oldTools.map((title,index)=>({...call(`unproven-${index}`),title}));
+ const argumentForgery={...call('argument-forgery'),data:{taskId:'task',arguments:{operation_id:'not-a-host-receipt'}}};
+ const actual={...call('actual','a'),data:{taskId:'task',resource_id:'a',operation_id:'operation-actual'}};
+ const failed={...call('failed','b'),status:'failed',data:{taskId:'task',resource_id:'b',operation_id:'operation-failed'}};
+ const unknown={...call('unknown','a'),status:'unknown',data:{taskId:'task',resource_id:'a',operation_id:'operation-unknown'}};
+ const foreign={...call('foreign'),data:{taskId:'other',operation_id:'operation-foreign'}};
+ const incomplete={...call('incomplete'),data:{operation_id:'operation-unbound'}};
+ const native={...call('native'),title:'Agent',status:'failed',data:{taskId:'task',operation_id:'operation-native'}};
+ const model=snapshot([run('child',['b'],[failed])],[...unproven,argumentForgery,actual,unknown,foreign,incomplete,native]);
+ assert.deepEqual(workerBusinessReceipts(model).map(card=>card.id).sort(),['actual','failed','unknown']);
+ assert.equal(workerExecutionModel(model).taskCards.some(card=>card.id==='unproven-0'),true,'unproven historical controls remain available in execution history');
+});
+test('one canonical operation produces one receipt and normal success cannot conceal its unknown projection',()=>{
+ const unknown={...call('unknown','a'),status:'unknown',data:{taskId:'task',resource_id:'a',operation_id:'same-operation'}};
+ const duplicate={...unknown,id:'duplicate',status:'completed'};
+ const model=snapshot([run('child',['a'],[duplicate])],[unknown]);
+ assert.deepEqual(workerBusinessReceipts(model).map(card=>[card.id,card.status]),[['unknown','unknown']]);
 });

@@ -86,3 +86,22 @@ export function workerExecutionModel(snapshot:SessionSnapshot):WorkerExecutionMo
  result.resources=build(null,[],new Set());
  return result;
 }
+
+/** Receipt identity comes only from the host's canonical operation ledger
+ * projection. A tool label, success status or model argument is not evidence. */
+export function workerBusinessReceipts(snapshot:SessionSnapshot):AICard[]{
+ const task=snapshot.superagent?.task;
+ if(!task||task.sessionId!==snapshot.session.id)return [];
+ const model=workerExecutionModel(snapshot);
+ const ownCards=(nodes:WorkerExecutionNode[]):AICard[]=>nodes.flatMap(node=>[...node.cards,...ownCards(node.children)]);
+ const candidates=[...model.taskCards,...ownCards(model.resources),...model.runs.flatMap(run=>run.cards??[])];
+ const receipts=new Map<string,AICard>();
+ for(const card of candidates){
+  if(!executionCard(card)||nativeControlCard(card))continue;
+  const data=record(card.data),operationId=data.operation_id;
+  if(data.taskId!==task.taskId||typeof operationId!=='string'||!operationId.trim())continue;
+  const previous=receipts.get(operationId);
+  if(!previous||card.status==='unknown'||previous.status!=='unknown')receipts.set(operationId,card);
+ }
+ return [...receipts.values()];
+}

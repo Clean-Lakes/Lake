@@ -3,7 +3,7 @@ import type {AICard,AgentRun,SessionSnapshot,SuperWorker} from '../../shared/con
 import {DisclosureSummary} from './DisclosureSummary';
 import {Glyph,ResourceIcon} from './Icons';
 import {ToolStep} from './ThinkingTimeline';
-import {executionCard,nativeControlCard,nativeRunState,needsExecutionAttention,workerExecutionModel,type WorkerExecutionNode} from './workerExecutionModel';
+import {executionCard,nativeRunState,needsExecutionAttention,workerBusinessReceipts,workerExecutionModel,type WorkerExecutionNode} from './workerExecutionModel';
 import './workerExecutionTree.css';
 
 const labels:Record<string,string>={queued:'排队中',running:'执行中',background_running:'后台执行中',pending:'等待确认',waiting_approval:'等待确认',waiting_input:'等待补充',waiting_external:'等待外部结果',paused:'已暂停',blocked:'结果待核实',completed:'已完成',succeeded:'已完成',success:'已完成',failed:'执行失败',cancelled:'已停止',interrupted:'已中断',not_executed:'未执行',unknown:'结果待核实'};
@@ -69,8 +69,7 @@ export function WorkerExecutionTree({snapshot,worker}:{snapshot:SessionSnapshot;
 export function WorkerExecutionResults({snapshot}:{snapshot:SessionSnapshot}){
  const task=snapshot.superagent?.task,model=workerExecutionModel(snapshot);
  if(!task)return null;
- const resourceCards=(nodes:WorkerExecutionNode[]):AICard[]=>nodes.flatMap(node=>[...node.cards,...resourceCards(node.children)]);
- const cards=[...model.taskCards,...resourceCards(model.resources),...model.runs.flatMap(run=>(run.cards??[]).filter(executionCard))].filter(card=>!nativeControlCard(card));
+ const cards=workerBusinessReceipts(snapshot);
  return <section className="worker-execution-results" aria-label="任务结果与证据">
   {task.summary?<p className="worker-task-report">{task.summary}</p>:<p className="inspector-empty">任务结果尚未提交。</p>}
   <Branch summary={<><Glyph name="document" size={15}/><span className="worker-execution-name">业务工具回执</span><small>{cards.length} 项</small></>}><Calls cards={cards} paths={model.resourcePaths}/></Branch>

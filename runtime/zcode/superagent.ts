@@ -850,7 +850,10 @@ export class LakeSuperagent implements AgentHost {
     if (worker) {
       const goal = this.ledger.get(worker.taskId);
       snapshot.superagent = { task: this.taskView(goal), goal: this.publicGoal(goal), roleId: worker.roleId };
-      if (snapshot.ai) snapshot.ai.workGoals = [this.publicGoal(goal)];
+      if (snapshot.ai) {
+        snapshot.ai = this.agents.executionView(snapshot.session.id, snapshot.ai);
+        snapshot.ai.workGoals = [this.publicGoal(goal)];
+      }
     } else {
       const legacy = this.legacyWorkerViews(snapshot.session.projectId).find((worker) => worker.sessionId === snapshot.session.id);
       const goal = legacy && this.store.get<any>("legacyGoals", legacy.task.taskId);

@@ -26,6 +26,7 @@ import type {
 } from "../../web-agent/shared/contracts";
 import { HttpError, id, LakeStore, now } from "./store";
 import type { AgentHost, HostProfile, HostToolContext } from "./agent-host";
+import type { Operation } from "./tasks";
 import { lakeCommunicationPrompt } from "./super-prompts";
 import { LiveToolActivity } from "./activity";
 
@@ -146,20 +147,20 @@ export class LakeAgents {
       case "tool_call_result": {
         this.toolActivity.finish(sessionId, String(payload.toolCallId));
         const card = this.card(view, String(payload.toolCallId), "operation");
-        this.bindOperationCard(sessionId, card, String(payload.toolCallId));
         card.status = payload.result?.success === false ? "failed" : "completed";
         card.content =
           typeof payload.result?.content === "string"
             ? payload.result.content
             : JSON.stringify(payload.result?.content ?? payload.result ?? {});
+        this.bindOperationCard(sessionId, card, String(payload.toolCallId));
         break;
       }
       case "tool_call_error": {
         this.toolActivity.finish(sessionId, String(payload.toolCallId));
         const card = this.card(view, String(payload.toolCallId), "operation");
         card.status = "failed";
-        this.bindOperationCard(sessionId, card, String(payload.toolCallId));
         card.content = String(payload.error?.message ?? "工具调用失败");
+        this.bindOperationCard(sessionId, card, String(payload.toolCallId));
         break;
       }
       case "subagent_stopped": {
@@ -184,14 +185,50 @@ export class LakeAgents {
     if (extra.textUpdate) extra.textUpdate.content = this.redact(extra.textUpdate.content);
     this.update(sessionId, view, extra);
   }
-  private bindOperationCard(sessionId: string, card: AICard, callId: string, run?: AgentRun) {
-    const operation = this.store.list<any>("superOperations").find((operation) =>
-      operation.sessionId === sessionId && operation.callId === callId && (!run || operation.goalId === run.taskId));
-    card.data = { ...(card.data && typeof card.data === "object" ? card.data : {}), ...(run ? { agentRunId: run.id, taskId: run.taskId } : {}),
-      ...(operation?.resourceId ? { resource_id: operation.resourceId } : {}),
-      ...(operation ? { operation_id: operation.id, attempt_id: operation.attemptId, operation_status: operation.status, completed_at: operation.completedAt } : {}) };
-    if (operation?.status === "unknown") card.status = "unknown";
-    if (run && operation?.resourceId && !run.resourceIds.includes(operation.resourceId)) run.resourceIds.push(operation.resourceId);
+  /** Rebuild execution-only metadata from the immutable operation records.
+   * Older TS cards did not retain resource IDs. This is a read projection: it
+   * does not update a view, operation, goal, acceptance receipt or SDK session.
+   */
+  executionView(sessionId: string, view: AIView): AIView {
+    const projectId = this.store.session(sessionId).projectId;
+    const operations = new Map<string, Operation | null>();
+    for (const operation of this.store.list<Operation>("superOperations")) {
+      if (operation.sessionId !== sessionId || operation.projectId !== projectId) continue;
+      // Ambiguous legacy identities are not guessed or merged by tool name.
+      operations.set(operation.callId, operations.has(operation.callId) ? null : operation);
+    }
+    const projected = structuredClone(view);
+    const callId = (card: AICard) => {
+      const data = card.data && typeof card.data === "object" ? card.data as Record<string, unknown> : undefined;
+      return typeof data?.call_id === "string" ? data.call_id : card.id;
+    };
+    for (const card of projected.cards) if (["operation", "shell", "error"].includes(card.type))
+      this.bindOperationCard(sessionId, card, callId(card), undefined, operations);
+    for (const run of projected.agentRuns ?? []) {
+      if (run.source !== "zcode_subagent" || run.sessionId !== sessionId || !run.taskId || !run.childSessionId) continue;
+      for (const card of run.cards ?? []) if (["operation", "shell", "error"].includes(card.type)) {
+        const raw = callId(card), prefix = run.childSessionId + ":";
+        this.bindOperationCard(sessionId, card, raw.startsWith(prefix) ? raw : prefix + raw, run, operations);
+      }
+    }
+    this.redactView(projected);
+    return projected;
+  }
+  private bindOperationCard(sessionId: string, card: AICard, callId: string, run?: AgentRun,
+    operations?: ReadonlyMap<string, Operation | null>) {
+    const operation = operations ? operations.get(callId) : this.store.list<Operation>("superOperations").find((operation) =>
+      operation.sessionId === sessionId && operation.callId === callId);
+    const scoped = operation && (!run || operation.goalId === run.taskId &&
+      (!operation.childSessionId || operation.childSessionId === run.childSessionId) &&
+      (!operation.agentRunId || operation.agentRunId === run.id)) ? operation : undefined;
+    card.data = { ...(card.data && typeof card.data === "object" ? card.data : {}),
+      ...(run ? { agentRunId: run.id, taskId: run.taskId } : {}),
+      ...(scoped ? { taskId: scoped.goalId, resource_id: scoped.resourceId,
+        operation_id: scoped.id, attempt_id: scoped.attemptId, operation_status: scoped.status, completed_at: scoped.completedAt,
+        ...(scoped.agentRunId ? { agentRunId: scoped.agentRunId } : {}),
+        ...(scoped.childSessionId ? { childSessionId: scoped.childSessionId } : {}) } : {}) };
+    if (scoped?.status === "unknown") card.status = "unknown";
+    if (run && scoped?.resourceId && !run.resourceIds.includes(scoped.resourceId)) run.resourceIds.push(scoped.resourceId);
   }
   private childEvent(parentId: string, runId: string, event: ZCodeEvent) {
     const view = this.store.view(parentId), run = view.agentRuns?.find((candidate) => candidate.id === runId);

@@ -394,6 +394,22 @@ function childRequests(f) {
   return f.requests.filter((request) => !request.tools?.some((tool) => ["route_work", "work_finish"].includes(tool.function?.name)));
 }
 
+function executionRecordBytes(f) {
+  return JSON.stringify(f.app.store.db.prepare(
+    "SELECT kind,id,value FROM records WHERE kind IN ('views','superOperations','superGoals','superAcceptance') ORDER BY kind,id",
+  ).all());
+}
+
+async function readExecutionProjections(f, sessionId) {
+  const count = f.app.store.view(sessionId).cards.length;
+  return [
+    (await f.api(`/api/sessions/${sessionId}/snapshot`)).ai,
+    await f.api(`/api/sessions/${sessionId}/ai`),
+    await f.api(`/api/sessions/${sessionId}/ai?before=${count}`),
+    await f.api(`/api/sessions/${sessionId}/ai/snapshot?before=${count}`),
+  ];
+}
+
 test("pure TS host authenticates, runs real ZCode, streams and restores history", async (t) => {
   const f = await fixture(t);
   assert.equal((await fetch(f.app.origin + "/api/catalog")).status, 401);
@@ -777,6 +793,88 @@ test("native ZCode subagent reads real evidence under its original Worker task a
   assert.deepEqual(restored.agentRuns, view.agentRuns);
   assert.equal((await f.app.agents.sessions.getSession(run.childSessionId)).parentID, worker.sessionId);
   assert.equal(f.calls, calls, "restoring child history must not restart an accepted task");
+});
+
+test("legacy parent tool cards recover exact resource ownership in read-only snapshots and paginated AI views", async (t) => {
+  const f = await fixture(t, "super-inspect");
+  const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "检查当前项目工作区。" }, 202);
+  const state = await settledSubagentTask(f);
+  const worker = state.workers[0], operation = f.app.store.list("superOperations")[0];
+  assert.equal(operation.status, "succeeded");
+  const old = f.app.store.view(worker.sessionId), card = old.cards.find((card) => card.data?.call_id === operation.callId);
+  assert.ok(card);
+  card.id = "legacy-parent-display-id";
+  card.data = { call_id: operation.callId }; // Legacy cards retained only call identity.
+  card.status = "completed";
+  old.cards.push({ id: "unrelated-same-tool-name", type: "operation", title: card.title, content: "legacy unbound card", status: "completed" });
+  f.app.store.put("views", worker.sessionId, old);
+  // Matching call IDs in another task/session or project are not valid sources.
+  f.app.store.put("superOperations", "foreign-session-decoy", { ...operation, id: "foreign-session-decoy", sessionId: f.session.id, goalId: "another-task", resourceId: "foreign-resource" });
+  f.app.store.put("superOperations", "foreign-project-decoy", { ...operation, id: "foreign-project-decoy", projectId: "another-project", resourceId: "foreign-resource" });
+  operation.status = "unknown";
+  f.app.store.put("superOperations", operation.id, operation);
+  const before = executionRecordBytes(f), calls = f.calls;
+  for (const projected of await readExecutionProjections(f, worker.sessionId)) {
+    const recovered = projected.cards.find((entry) => entry.id === card.id);
+    assert.equal(recovered.data.resource_id, operation.resourceId);
+    assert.equal(recovered.data.taskId, operation.goalId);
+    assert.equal(recovered.data.operation_id, operation.id);
+    assert.equal(recovered.data.attempt_id, operation.attemptId);
+    assert.equal(recovered.data.operation_status, "unknown");
+    assert.equal(recovered.status, "unknown", "legacy completed presentation cannot downgrade an unknown operation");
+    const unrelated = projected.cards.find((entry) => entry.id === "unrelated-same-tool-name");
+    assert.equal(unrelated.data?.resource_id, undefined, "tool title alone never supplies resource ownership");
+  }
+  assert.equal(executionRecordBytes(f), before, "reading history must preserve exact stored views, goals, operations and acceptance bytes");
+  assert.equal(f.calls, calls);
+  // Ambiguous imported identities remain unbound rather than picking one row.
+  f.app.store.put("superOperations", "ambiguous-call-decoy", { ...operation, id: "ambiguous-call-decoy", resourceId: "other-resource" });
+  const ambiguousBefore = executionRecordBytes(f);
+  const ambiguous = await f.api(`/api/sessions/${worker.sessionId}/ai`);
+  assert.equal(ambiguous.cards.find((entry) => entry.id === card.id).data?.resource_id, undefined);
+  assert.equal(executionRecordBytes(f), ambiguousBefore);
+  assert.equal(f.calls, calls);
+});
+
+test("legacy native child cards recover namespaced evidence without changing stored records or mixing another task", async (t) => {
+  const { f, worker } = await startSubagentTask(t, "super-subagent-read");
+  await settledSubagentTask(f);
+  const operation = f.app.store.list("superOperations")[0], old = f.app.store.view(worker.sessionId);
+  const run = old.agentRuns[0], card = run.cards.find((entry) => entry.title === "Read");
+  assert.ok(card);
+  delete card.data; // Older child records can fall back to the actual card ID.
+  card.status = "completed";
+  run.resourceIds = [];
+  const unrelated = structuredClone(run);
+  unrelated.id = "unrelated-task-run";
+  unrelated.taskId = "another-task";
+  unrelated.resourceIds = [];
+  old.agentRuns.push(unrelated);
+  f.app.store.put("views", worker.sessionId, old);
+  f.app.store.put("superOperations", "foreign-child-call-decoy", { ...operation, id: "foreign-child-call-decoy", sessionId: f.session.id, goalId: "another-task", resourceId: "foreign-resource" });
+  operation.status = "unknown";
+  f.app.store.put("superOperations", operation.id, operation);
+  const before = executionRecordBytes(f), calls = f.calls;
+  for (const projected of await readExecutionProjections(f, worker.sessionId)) {
+    const recoveredRun = projected.agentRuns.find((entry) => entry.id === run.id);
+    const recovered = recoveredRun.cards.find((entry) => entry.id === card.id);
+    assert.equal(recovered.data.resource_id, operation.resourceId);
+    assert.equal(recovered.data.taskId, operation.goalId);
+    assert.equal(recovered.data.agentRunId, run.id);
+    assert.equal(recovered.data.childSessionId, run.childSessionId);
+    assert.equal(recovered.data.operation_id, operation.id);
+    assert.equal(recovered.data.attempt_id, operation.attemptId);
+    assert.equal(recovered.data.operation_status, "unknown");
+    assert.equal(recovered.status, "unknown");
+    assert.deepEqual(recoveredRun.resourceIds, [operation.resourceId]);
+    const wrongTask = projected.agentRuns.find((entry) => entry.id === unrelated.id);
+    assert.equal(wrongTask.cards[0].data?.resource_id, undefined);
+    assert.equal(wrongTask.cards[0].data?.operation_id, undefined);
+    assert.deepEqual(wrongTask.resourceIds, []);
+  }
+  assert.equal(executionRecordBytes(f), before, "response-only backfill must not rewrite stored child cards or the original ledger");
+  assert.equal(f.calls, calls, "opening old execution details must not call a model");
 });
 
 test("native subagent prose and a successful Agent return cannot accept a task without child resource receipts", async (t) => {
