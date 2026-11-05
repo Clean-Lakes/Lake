@@ -1,22 +1,24 @@
 ---
 goal: 专员按稳定 RoleID 保留长期知识，任务上下文独立，Pilot 按需接收摘要与准确引用
-version: 1
+version: 1.1
 date_created: 2026-11-05
 last_updated: 2026-11-05
 owner: Lake Runtime / Memory（bearqy）/ Items / Security
-status: Planned
+status: In progress
 baseline_commit: caab241e89bc93f38e6395b69f3e85a285637296
-delivery_scope: architecture-and-implementation-plan-only
+delivery_scope: staged-implementation
 tags: [architecture, context, memory, specialist, pilot, adk]
 ---
 
 # Introduction
 
-![Status: Planned](https://img.shields.io/badge/status-Planned-blue)
+![Status: In progress](https://img.shields.io/badge/status-In%20progress-blue)
 
 本方案落实 2026-11-05 用户确认的方向：参考 xAI Grok Bot 的持续角色与分层记忆思路，**专员长期保留知识，每项新任务使用独立上下文，Pilot 只接收协调所需的摘要和引用**。它定义 Lake 自己的实现，不复刻未公开的 Grok Bot 内核。
 
-本文是上下文、角色知识和任务交接的总约定；[文件记忆主计划](feature-agent-file-memory-1.md)继续独占长期记忆提取、整理、文件发布和旧实现退役。本文不新增第二个学习器，不实施 Claude-Mem 强制替换。计划落盘不代表 Worker 记忆已启用；本次不修改运行代码、真实数据、权限或开关。
+本文是上下文、角色知识和任务交接的总约定；[文件记忆主计划](feature-agent-file-memory-1.md)继续独占长期记忆提取、整理、文件发布和旧实现退役。本文不新增第二个学习器，不实施 Claude-Mem 强制替换。首批开始交付 Pilot 请求投影及基础契约，角色知识的写入/使用尚未启用；不改变真实项目权限和记忆开关。
+
+2026-11-05 CM 首批：短任务摘要、准确 hash 读取、请求级历史省略、闲置恢复与预算占用已接通；身份及 Role Memory 范围提供基础契约。Task 完整工作集和 FM 角色发布/使用/生命周期仍未交付。具体字段、限制与验证分别见[契约说明](../docs/design/context-role-memory-contract.md)及[验收记录](../docs/validation/lake-context-role-memory.md)，本批不标为全部阶段完成。
 
 ## 1. Requirements & Constraints
 
@@ -100,7 +102,7 @@ flowchart TB
 
 ### 1.4 拟新增契约
 
-下列类型拟放在 `internal/ai/superagent_context_contract.go`；知识范围 DTO 拟放在 `internal/memory/role_scope.go`。当前没有这些接口，不改写旧 snapshot/hash。
+下列是最终目标字段；基础 DTO 已放入 `internal/ai/superagent_context_contract.go` 和 `internal/memory/role_scope.go`，尚未接通的扩展以契约说明为准。不改写旧 snapshot/hash。
 
 | 类型 | 必要字段与可信生成方式 |
 | --- | --- |
@@ -196,7 +198,7 @@ CM 上下文投影先独立交付；不等待文件记忆流水线才能改善 P
 
 ## 2. Implementation Steps
 
-以下任务全部未实施。表内依赖是执行前提，不表示可自动派出并行Agent；每批从最新develop创建分支并遵守仓库PR流程。
+表内记录实际交付；“部分”不代表完整完成。依赖是执行前提，不表示可自动派出并行Agent；每批从最新develop创建分支并遵守仓库PR流程。
 
 ### Implementation Phase 1
 
@@ -204,9 +206,9 @@ CM 上下文投影先独立交付；不等待文件记忆流水线才能改善 P
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-001 | 在拟新增 `internal/ai/superagent_context_contract.go` 定义 `TaskAssignmentV1/TaskDigestV1/TaskWorkingSetV1/ContextRefV1`；逐字段映射现有 RoleID、WorkGoal、来源、操作和验收；未知字段及伪造关联拒绝。 | 否 | 未执行 |
-| TASK-002 | 联合FM-01在拟新增 `internal/memory/role_scope.go` 定义 `RoleKnowledgeScopeV1/KnowledgeRefV1` 与角色目录、项目级积累/使用设置、发布/抑制协议；复用FM单写者和正文，不改变旧snapshot/hash或全局默认开关。 | 否 | 未执行 |
-| TASK-003 | 新增 `internal/ai/superagent_context_contract_test.go`、`internal/memory/role_scope_test.go` 和合成fixture；验证序列化上限、RoleID/项目/来源归属、职责版本和引用哈希；生成契约说明 `docs/design/context-role-memory-contract.md`。依赖TASK-001/002。 | 否 | 未执行 |
+| TASK-001 | 在 `internal/ai/superagent_context_contract.go` 定义版本 DTO，映射原身份、来源、目标与验收。 | 部分：assignment/digest/ref 已映射；完整 TaskWorkingSet 留 TASK-010 | 2026-11-05 |
+| TASK-002 | 联合FM-01定义角色范围、目录、设置及发布/抑制协议，复用单写者和正文。 | 部分：范围/设置/引用/发布围栏基础类型；FM 接入待交付 | 2026-11-05 |
+| TASK-003 | 新增契约测试、合成 fixture 和 `docs/design/context-role-memory-contract.md`。 | 部分：本批字段、范围、冻结版本、hash/上限已覆盖；完整 FM 契约待后续 | 2026-11-05 |
 
 ### Implementation Phase 2
 
@@ -214,10 +216,10 @@ CM 上下文投影先独立交付；不等待文件记忆流水线才能改善 P
 
 | Task | Description | Completed | Date |
 | --- | --- | --- | --- |
-| TASK-004 | 新增 `internal/ai/superagent_task_digest.go:BuildTaskDigest()`；从原goal/验收投影生成短状态与refs，在 `superagent_outbox.go:QueuePilotReport` 保留原正文/投递回执，摘要按版本幂等更新，失效缓存可从原记录重建。 | 否 | 未执行 |
-| TASK-005 | 新增 `internal/ai/superagent_context_projection.go:BuildPilotWorkingSet()`，接入 `BuildRouterContext/RunPilotRouter` 与 `adk_provider_step.go:streamWithManifest` 的请求准备；确保限制作用于真正送模型的history，不仅限制TurnInput附件，不删除canonical ADK事件。依赖TASK-004。 | 否 | 未执行 |
-| TASK-006 | 在 `superagent_context.go:ReadSuperObject` 和 `superagent_task_references.go:ReadReferencedTaskEvidence` 复用准确分页，补摘要失效/游标/目标核验；跨任务比较须先登记原任务引用，不能借摘要ID读取其他任务完整Session。依赖TASK-004。 | 否 | 未执行 |
-| TASK-007 | 在既有 `internal/ai/context_budget.go` 新增 `BuildContextBudgetView()`，复用 `engine.go:compact`、`context_compaction.go:recoverCompaction`、`context_resume.go:compactForTurn` 和 `adk_projection.go:SummarizeEvents`；统一请求预算与未决引用保留，覆盖取消/失败恢复及单次提示去重，不创建新模型循环。依赖TASK-005/006。 | 否 | 未执行 |
+| TASK-004 | 新增 `BuildTaskDigest()`，从原 goal/验收投影短状态及 refs，报告保留原正文/回执。 | 是：无第二持久缓存，每次按原 revision 重建 | 2026-11-05 |
+| TASK-005 | 新增 `BuildPilotWorkingSet()`，接入真正 provider 请求准备，不删除 canonical ADK 事件。 | 是：仅省略已消费且完整可核验的旧 Router 组；百任务冷恢复与当前工具续接覆盖 | 2026-11-05 |
+| TASK-006 | 复用准确分页，补摘要失效/hash/游标核验；跨任务证据保持显式登记与原资格检查。 | 是：新增 task_digest 及 expected_hash；原证据协议不放宽 | 2026-11-05 |
+| TASK-007 | 新增 `BuildContextBudgetView()`，复用现有压缩、恢复、SDK 回调和提示去重。 | 是：最终请求预算检查、投影占用锚点、Router 闲置恢复；无新模型循环 | 2026-11-05 |
 
 ### Implementation Phase 3
 

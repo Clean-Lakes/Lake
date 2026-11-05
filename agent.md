@@ -58,11 +58,13 @@ flowchart TB
 - Pilot 首批接入分层读取；Worker 在任务/资源范围视图单独验收前保持 unavailable。原任务历史证据读取、ADK、普通 Skills、会话压缩、操作/审批/验收/unknown 账本不随旧 Memory 一并退役。
 - 不自动重新扫描开启前历史，不复活退役策略资产、在线纠错或自动可执行 Skill；本期不引入向量模型、外部基础设施或端云记忆同步。新计划合入不代表运行开关已改变或新角色已启用。
 
-### 2.1 上下文与角色长期知识方向（2026-11-05，待实施）
+### 2.1 上下文与角色长期知识方向（2026-11-05，分批实施）
 
 用户确认参考 xAI Grok Bot 的分层思路：专员按 `storeID + projectID + RoleID` 长期保留知识，每项新任务使用独立 Task/Worker/ADK Session，Pilot 只接收必要任务摘要与准确引用。频道是连续展示入口，不是共享执行历史；改名保留知识，同名新角色不继承。任务当前状态/未决操作和长期知识分开，动态观测需重查。
 
 [上下文与角色知识总方案](plan/architecture-context-role-memory-1.md)的 CM 阶段负责请求工作集、摘要、预算和角色范围适配；[文件记忆主计划](plan/feature-agent-file-memory-1.md)的 FM 阶段继续独占来源提取、整理、文件发布及旧实现退役。角色文件纳入同一 Memory 流水线，不新增每角色学习器；Claude-Mem 暂不作为首期依赖或强制正文库。
+
+CM 首批已接通 Pilot 短任务摘要、准确引用/hash 与实际请求历史投影，并提供基础身份/范围类型。原始档案保留；完整 Task 工作集及角色文件写入、读取、遗忘尚未交付。当前字段与限制见[首批契约](docs/design/context-role-memory-contract.md)，不能将基础类型视作 FM 发布者已经运行。
 
 角色知识视图须按准确身份、当前项目权限、来源和使用设置独立验收。现有 Worker unavailable、N5 限制和 V2 关闭状态保持至对应代码/验证交付；不通过复制全项目知识补齐，不新增专员权限配置或任务资源勾选层。清理模型上下文不删除知识或执行账本；纠正、遗忘和角色删除沿同一来源抑制与清理协议。
 
@@ -105,7 +107,7 @@ CM 的 Pilot 工作集/摘要可在 FM 新流水线启用前独立交付；角�
 - [统一 Super-agent 内核实施方案（待实施）](plan/architecture-lake-superagent-1.md)
 - [三模块对接说明、当前进度、接口与验收矩阵](docs/design/items-security-memory-integration.md)
 - [Agent 本地文件记忆主计划（当前）](plan/feature-agent-file-memory-1.md)
-- [上下文与角色长期知识总方案（Planned）](plan/architecture-context-role-memory-1.md)
+- [上下文与角色长期知识总方案（In progress）](plan/architecture-context-role-memory-1.md)
 - [三模块旧实施路线（已替代，仅历史参考）](plan/feature-items-security-memory-integration-1.md)
 - [Memory 当前使用与兼容说明](docs/lake-memory.md)及[自然记忆 N1–N5 历史交付](plan/feature-natural-memory-1.md)
 - [Security 设计](docs/design/lake-security-v1.md)及[实施计划](plan/feature-lake-security-1.md)

@@ -87,10 +87,21 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	}
 	s.mu.Lock()
 	history := append([]Message(nil), s.state.History...)
+	archiveHistoryCost := historyCost(history)
+	archiveMessages := len(history)
 	if c.MemorySchemaVersion == 2 {
 		filterMemoryHistory(history, memoryLive)
 	}
+	s.mu.Unlock()
+	history, err = e.pilotRequestHistory(ctx, s, c, history)
+	if err != nil {
+		return modelResult{}, err
+	}
+	s.mu.Lock()
 	requestHistoryCost := historyCost(history)
+	if len(history) >= archiveMessages {
+		archiveHistoryCost = 0
+	}
 	textID, thinkID := uid(), uid()
 	d.textID = textID
 	textType := "message"
@@ -347,7 +358,7 @@ func (d *adkTurnDriver) next(ctx context.Context) (modelResult, error) {
 	latest := result.Usage
 	s.state.LastRequest = &latest
 	s.state.LastRequestAt = timestamp()
-	s.state.ContextMeasurement = &ContextMeasurement{ModelID: ModelIdentity(c.Model), HistoryCost: requestHistoryCost, ToolsCost: len(js(tools))}
+	s.state.ContextMeasurement = &ContextMeasurement{ModelID: ModelIdentity(c.Model), HistoryCost: requestHistoryCost, ToolsCost: len(js(tools)), ArchiveHistoryCost: archiveHistoryCost}
 	for i := range s.state.View.Cards {
 		if s.state.View.Cards[i].ID == textID || s.state.View.Cards[i].ID == thinkID {
 			s.state.View.Cards[i].Status = "completed"
@@ -385,6 +396,10 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 	if providerGuardErr != nil {
 		return modelResult{}, providerGuardErr
 	}
+	history, providerGuardErr = e.pilotRequestHistory(ctx, s, c, history)
+	if providerGuardErr != nil {
+		return modelResult{}, providerGuardErr
+	}
 	// Legacy adopted assets are archival data, never request enrichment.
 	selection := strategy.Selection{}
 	var recallText string
@@ -395,6 +410,11 @@ func (d *adkTurnDriver) streamWithManifest(ctx context.Context, m Model, history
 	}
 	if recallText != "" {
 		fragments = appendPromptFragment(fragments, strategy.UserStrategy, "natural-memory-preferences", recallText)
+	}
+	if c.superRole == "router" && c.superRouter != nil && BuildContextBudgetView(m, history, tools).OverBudget {
+		// Include the final system layers, tools, images and output reserve.
+		// Never execute a silently clipped current request to fit the window.
+		return modelResult{}, errors.New("context compaction: current Pilot working set exceeds the configured input budget; original input and execution records retained")
 	}
 	s.mu.Lock()
 	if s.state.Runtime == nil {
