@@ -648,11 +648,11 @@ export class LakeSuperagent implements AgentHost {
         if (a.goal_id && a.goal_id !== worker.taskId) throw new HttpError(404, "Task not found in this worker");
         return { goal: this.publicGoal(this.ledger.get(worker.taskId)), operations: this.store.list<Operation>("superOperations").filter((op) => op.goalId === worker.taskId) };
       })),
-      this.entry("work_update", "Start the returned actual item ID before resource I/O; completed requires real successful call IDs from this exact attempt. Metadata or prose is not evidence.",
+      this.entry("work_update", "Start the returned actual item ID before resource I/O; completed requires real successful call IDs from this exact attempt. Metadata or prose is not evidence. For a blocker, reason describes the specific practical obstacle in the user's language, not internal bookkeeping.",
         objectSchema({ item_id: str, status: { type: "string", enum: ["running", "completed", "waiting_user", "blocked", "failed"] }, reason: str, evidence_ids: array(str) }, ["item_id", "status"]), run((a) => {
           const goal = this.ledger.update(worker.taskId, a, worker.generation, worker.policyHash); this.changed(worker.sessionId); return this.publicGoal(goal);
         })),
-      this.entry("work_finish", "Finish only after every original step has host acceptance from actual current evidence. Summary does not create acceptance.", objectSchema({ summary: str }, ["summary"]), run((a) => {
+      this.entry("work_finish", "Finish only after every original step has host acceptance from actual current evidence. Summary is the public report: answer the request with concrete findings, their significance and any relevant limits, in the user's language. Do not narrate internal task, tool or acceptance bookkeeping. Summary does not create acceptance.", objectSchema({ summary: str }, ["summary"]), run((a) => {
         const goal = this.ledger.finish(worker.taskId, this.agents.redact(a.summary), worker.policyHash); this.changed(worker.sessionId); return this.publicGoal(goal);
       }), true),
       this.entry("work_wait", "Park an invocation without polling. Original handles and task constraints remain authoritative.", objectSchema({}), run(() => {
@@ -777,9 +777,9 @@ export class LakeSuperagent implements AgentHost {
     const channel = this.store.require<Channel>("superChannels", worker.roleId);
     this.notify(channel.sessionId, "specialist");
   }
-  settled(sessionId: string) {
+  settled(sessionId: string, outcome?: { response?: string; error?: string }) {
     if (this.projectFor(sessionId)) this.routerFinished(sessionId);
-    else if (this.workerFor(sessionId)) this.workerFinished(sessionId);
+    else if (this.workerFor(sessionId)) this.workerFinished(sessionId, outcome?.error, outcome?.response);
     this.schedule();
   }
   private routerFinished(sessionId: string, error?: string) {
@@ -800,7 +800,7 @@ export class LakeSuperagent implements AgentHost {
       this.store.put("superDispatchErrors", id(), { projectId: project.projectId, error: this.agents.redact(String(error)), at: now() });
     });
   }
-  private workerFinished(sessionId: string, error?: string) {
+  private workerFinished(sessionId: string, error?: string, response?: string) {
     const worker = this.workerFor(sessionId); if (!worker) return;
     this.active.delete(worker.id);
     worker.deliveredInputIds = [...new Set([...(worker.deliveredInputIds ?? []), ...(worker.invocationInputIds ?? [])])];
@@ -809,7 +809,7 @@ export class LakeSuperagent implements AgentHost {
     const goal = this.ledger.get(worker.taskId);
     if (!terminal(goal.status) && goal.status === "running") {
       goal.status = this.ledger.unresolved(goal.id) ? "blocked" : "paused";
-      goal.summary = error ? this.agents.redact(error) : "专员已保留当前进度；尚未取得全部验收证据。";
+      goal.summary = error ? this.agents.redact(error) : "这次检查还没完成，已暂停。";
       this.ledger.save(goal);
     }
     const pending = worker.inputEventIds.some((eventId) => !worker.deliveredInputIds?.includes(eventId) && this.store.require<InputEvent>("superInputs", eventId).disposition === "routed");
@@ -817,20 +817,42 @@ export class LakeSuperagent implements AgentHost {
       worker.state = "queued"; goal.status = "running"; this.ledger.save(goal); this.store.put("superWorkers", worker.id, worker);
     }
     const reportKey = digest([goal.id, goal.revision]);
-    if (!this.store.get("superPendingReports", reportKey)) this.store.put("superPendingReports", reportKey, { taskId: goal.id, revision: goal.revision, snapshot: structuredClone(goal), createdAt: now() });
+    // Freeze this invocation's public report separately from the completion ledger.
+    // Never recover a reply from accumulated cards: it may belong to an older turn.
+    const reply = !error && this.store.view(sessionId).status === "completed" ? response?.trim() : undefined;
+    const presentation = this.reportPresentation(goal, reply, error);
+    if (!this.store.get("superPendingReports", reportKey)) this.store.put("superPendingReports", reportKey, { taskId: goal.id, revision: goal.revision, snapshot: structuredClone(goal), presentation, createdAt: now() });
     this.deliverReports();
     this.changed(sessionId); this.schedule();
   }
+  private reportPresentation(goal: Goal, reply?: string, error?: string) {
+    if (goal.status === "completed" && goal.acceptanceState === "pass") {
+      const body = goal.summary?.trim() || "检查已完成。";
+      return { body, channelBody: reply ? null : body };
+    }
+    const notice = goal.status === "cancelled" ? "已停止这次工作。"
+      : this.ledger.unresolved(goal.id) ? "有一项操作的结果还没确认，后续工作已暂停。"
+      : goal.summary === "deadline_reached" ? "这次工作已到截止时间，剩余部分尚未完成。"
+      : goal.summary === "model_round_limit" ? "这次检查已达到单次任务的处理上限，剩余部分尚未完成。"
+      : error || this.store.view(goal.sessionId).status === "failed" ? "这次处理遇到错误，尚未完成。具体原因可在执行详情中查看。"
+      : goal.status === "blocked" ? "这次检查尚未完成，暂时无法继续。"
+      : goal.status === "waiting_user" ? "这次检查尚未完成，需要你补充信息后才能继续。"
+      : goal.status === "paused" ? "这次检查还没完成，已暂停。" : "这部分工作还没完成。";
+    // The role channel already contains the Worker reply. Only Pilot needs a copy.
+    return { body: reply ? `${notice}\n\n${reply}` : notice, channelBody: notice };
+  }
   private deliverReports() {
     if (this.closed) return;
-    for (const pending of this.store.list<{ taskId: string; revision: number; snapshot: Goal; createdAt: string }>("superPendingReports")) {
+    for (const pending of this.store.list<{ taskId: string; revision: number; snapshot: Goal; presentation?: { body: string; channelBody: string | null }; createdAt: string }>("superPendingReports")) {
       const goal = pending.snapshot, worker = this.store.require<Worker>("superWorkers", goal.workerId);
       const key = digest([worker.taskId, pending.revision]);
     if (!this.store.get("superReports", key)) {
       const project = this.store.require<SuperProject>("superProjects", worker.projectId), channel = this.store.require<Channel>("superChannels", worker.roleId);
-      const body = this.agents.redact(goal.summary ?? "专员已保留当前工作进度。");
+      const presentation = pending.presentation ?? { body: goal.summary ?? "这次检查还没完成。", channelBody: goal.summary ?? "这次检查还没完成。" };
       this.store.transaction(() => { for (const target of [project.routerSessionId, channel.sessionId]) {
-        const message: Message = { id: "report_" + digest([key, target]), sessionId: target, role: "assistant", text: body, createdAt: pending.createdAt,
+        const body = target === channel.sessionId ? presentation.channelBody : presentation.body;
+        if (body === null) continue;
+        const message: Message = { id: "report_" + digest([key, target]), sessionId: target, role: "assistant", text: this.agents.redact(body), createdAt: pending.createdAt,
           author: { kind: "specialist", name: worker.roleSnapshot.name, roleId: worker.roleId, workerId: worker.id,
             sessionId: worker.sessionId, taskId: goal.id, channelSessionId: channel.sessionId } };
         if (!this.store.get("messages", message.id)) this.store.put("messages", message.id, message);

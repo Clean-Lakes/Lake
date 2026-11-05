@@ -15,5 +15,5 @@ export type HostProfile = {
 export interface AgentHost {
   profile(sessionId: string): HostProfile | undefined;
   changed(sessionId: string): void;
-  settled(sessionId: string): void;
+  settled(sessionId: string, outcome?: { response?: string; error?: string }): void;
 }

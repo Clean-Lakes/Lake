@@ -13,6 +13,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
   await require("node:fs/promises").mkdir(web);
   await writeFile(join(web, "index.html"), "<html>Lake fixture</html>");
   let calls = 0;
+  let failWorkerRequests = false;
   const requests = [];
   const target = join(home, "approved.txt");
   const provider = createServer(async (req, res) => {
@@ -21,6 +22,11 @@ async function fixture(t, mode = "text", legacyDev = false) {
     const request = JSON.parse(Buffer.concat(chunks).toString());
     requests.push(request);
     calls++;
+    if (failWorkerRequests && request.tools?.some((tool) => tool.function?.name === "work_begin")) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { message: "synthetic-current-invocation-failure", type: "authentication_error" } }));
+      return;
+    }
     const hasResult = request.messages.some((message) => message.role === "tool");
     let tool = mode === "write" && !hasResult;
     let delta = tool
@@ -116,6 +122,7 @@ async function fixture(t, mode = "text", legacyDev = false) {
     api,
     wait,
     requests,
+    failWorkerRequests() { failWorkerRequests = true; },
     options,
     get app() {
       return app;
@@ -150,6 +157,7 @@ function superReply(request, mode, home) {
   if (!names.includes("work_begin")) return call("work_begin", { title: "检查项目工作区", items: [{ id: "inspect", title: "读取工作区并按实际结果验收" }] });
   const updates = request.messages.flatMap((message) => (message.tool_calls ?? []).filter((call) => call.function.name === "work_update").map((call) => JSON.parse(call.function.arguments)));
   if (!updates.some((update) => update.status === "running")) return call("work_update", { item_id: "inspect", status: "running" }, "start-inspect");
+  if (mode === "super-incomplete-report") return { content: "这次还没连上服务器，暂时查不到 CPU 和内存的实际使用情况。" };
   if (mode === "super-forged") {
     if (!updates.some((update) => update.status === "completed")) return call("work_update", { item_id: "inspect", status: "completed", evidence_ids: ["invented-success"] }, "forged-acceptance");
     return { content: "我已经完成并验收了任务。" };
@@ -745,6 +753,71 @@ test("Worker prose and invented evidence cannot accept or complete a canonical g
   assert.notEqual(goal.acceptanceState, "pass");
   assert.equal(f.app.store.list("superAcceptance").length, 0);
   assert.equal(f.app.store.list("superOperations").length, 0);
+  const reports = f.app.store.messages(project.routerSessionId).filter((message) => message.author?.taskId === goal.id);
+  assert.equal(reports.length, 1);
+  assert.match(reports[0].text, /未完成|还没完成/);
+});
+
+test("an incomplete Worker reports its current explanation once without claiming task acceptance", async (t) => {
+  const f = await fixture(t, "super-incomplete-report"), project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "检查服务器的使用情况。" }, 202);
+  const state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (result) => result.workers[0]?.assignmentState === "parked");
+  const worker = state.workers[0], goal = f.app.store.list("superGoals")[0];
+  const explanation = "这次还没连上服务器，暂时查不到 CPU 和内存的实际使用情况。";
+  assert.equal(goal.status, "paused");
+  assert.notEqual(goal.acceptanceState, "pass");
+  assert.equal(f.app.store.list("superAcceptance").length, 0);
+  const reports = () => f.app.store.messages(project.routerSessionId).filter((message) => message.author?.taskId === goal.id);
+  assert.equal(reports().length, 1);
+  assert.ok(reports()[0].text.includes(explanation));
+  assert.match(reports()[0].text, /暂停|未完成|还没完成/);
+  assert.ok(!reports()[0].text.includes("尚未取得全部验收证据"));
+  const channel = await f.api(`/api/sessions/${state.channels[0].sessionId}/channel`);
+  assert.equal(channel.entries.filter((entry) => (entry.message?.text ?? entry.card?.content ?? "").includes(explanation)).length, 1, "channel must not repeat its Worker answer as another report");
+  const before = reports().map((message) => ({ id: message.id, text: message.text }));
+  f.app.superagent.settled(worker.sessionId);
+  assert.deepEqual(reports().map((message) => ({ id: message.id, text: message.text })), before, "duplicate settlement must not replace the invocation report");
+  await f.restart();
+  assert.deepEqual(reports().map((message) => ({ id: message.id, text: message.text })), before);
+  const restored = await f.api(`/api/sessions/${state.channels[0].sessionId}/channel`);
+  assert.equal(restored.entries.filter((entry) => (entry.message?.text ?? entry.card?.content ?? "").includes(explanation)).length, 1);
+});
+
+test("a resumed Worker failure never republishes the preceding invocation's answer", async (t) => {
+  const f = await fixture(t, "super-incomplete-report"), project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "检查服务器。" }, 202);
+  const state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (result) => result.workers[0]?.assignmentState === "parked");
+  const worker = state.workers[0], goal = f.app.store.list("superGoals")[0];
+  const old = f.app.store.messages(project.routerSessionId).filter((message) => message.author?.taskId === goal.id).map((message) => message.id);
+  f.failWorkerRequests();
+  await f.api(`/api/sessions/${worker.sessionId}/ai/workControl`, "POST", { command: "resume", goalId: goal.id, revision: goal.revision });
+  const newer = await until(async () => f.app.store.messages(project.routerSessionId).filter((message) => message.author?.taskId === goal.id && !old.includes(message.id)), (reports) => reports.length > 0);
+  assert.equal(newer.length, 1);
+  assert.ok(!newer[0].text.includes("这次还没连上服务器"), "previous final cards are historical, not this invocation's response");
+  assert.match(newer[0].text, /失败|中断|未完成|还没完成|暂停/);
+  assert.notEqual(f.app.store.list("superGoals")[0].status, "completed");
+  assert.notEqual(f.app.store.list("superGoals")[0].acceptanceState, "pass");
+  assert.equal(f.app.store.list("superOperations").length, 0);
+  const calls = f.calls;
+  await f.restart();
+  assert.equal(f.calls, calls, "restoring the report must not invoke a model or retry work");
+  assert.equal(f.app.store.messages(project.routerSessionId).filter((message) => message.author?.taskId === goal.id && !old.includes(message.id)).length, 1);
+});
+
+test("accepted Worker reports survive the closed-goal model fence without inventing a later answer", async (t) => {
+  const f = await fixture(t, "super-inspect"), project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
+  await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "检查项目工作区。" }, 202);
+  const state = await until(() => f.api(`/api/projects/${f.project.id}/superagent`), (result) => result.workers[0]?.assignmentState === "parked" && result.workers[0].task.state === "completed");
+  const goal = f.app.store.list("superGoals")[0], reports = f.app.store.messages(project.routerSessionId).filter((message) => message.author?.taskId === goal.id);
+  assert.equal(goal.acceptanceState, "pass");
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].text, goal.summary);
+  assert.ok(!reports[0].text.includes("本次真实检查已结束"), "later model prose cannot replace the accepted work_finish report");
+  const channel = await f.api(`/api/sessions/${state.channels[0].sessionId}/channel`);
+  assert.equal(channel.entries.filter((entry) => entry.card?.content === "本次真实检查已结束。").length, 0, "the closed-goal model fence prevents a later answer from being generated");
+  const channelReports = channel.entries.filter((entry) => entry.message?.author?.taskId === goal.id);
+  assert.equal(channelReports.length, 1, "without a later Worker answer, the channel must receive the canonical result exactly once");
+  assert.equal(channelReports[0].message.text, goal.summary);
 });
 
 test("Pilot object pages enforce current project, revision and hash, including digest revisions", async (t) => {

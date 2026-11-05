@@ -24,6 +24,7 @@ import type {
 } from "../../web-agent/shared/contracts";
 import { HttpError, id, LakeStore, now } from "./store";
 import type { AgentHost, HostProfile } from "./agent-host";
+import { lakeCommunicationPrompt } from "./super-prompts";
 
 type Live = {
   runtime: AgentRuntime;
@@ -410,7 +411,7 @@ export class LakeAgents {
     const runtime = new AgentRuntime(
       sessionId as SessionId,
       {
-        systemPrompt: (profile?.systemPrompt ?? "You are Lake, an operations assistant. Use the available tools and report actual results. Never read credential files.") + `\n${String(session.options.userPrompt ?? "")}`,
+        systemPrompt: (profile?.systemPrompt ?? "You are Lake, an operations assistant. Use the available tools and report actual results. Never read credential files.") + `\n${lakeCommunicationPrompt}\n${String(session.options.userPrompt ?? "")}`,
         toolAllowlist: profile?.allowlist,
         workingDirectory: workspace,
         modelSelection: { providerId: provider.id, modelId: model.name },
@@ -479,11 +480,13 @@ export class LakeAgents {
     const controller = new AbortController();
     live.controller = controller;
     live.completion = (async () => {
+      const outcome: { response?: string; error?: string } = {};
       try {
         const result = await live.runtime.executeTurn(options.input ?? text, undefined, {
           abortSignal: controller.signal,
         });
         const final = this.store.view(sessionId);
+        if (!controller.signal.aborted && result.response) outcome.response = this.redact(result.response);
         if (result.response) {
           const matching = [...final.cards]
             .reverse()
@@ -502,6 +505,7 @@ export class LakeAgents {
         final.status = controller.signal.aborted ? "cancelled" : "completed";
         this.update(sessionId, final);
       } catch (error) {
+        outcome.error = this.redact(error instanceof Error ? error.message : String(error));
         const final = this.store.view(sessionId);
         final.status = controller.signal.aborted ? "cancelled" : "failed";
         if (!controller.signal.aborted)
@@ -523,7 +527,7 @@ export class LakeAgents {
           if (["running", "pending"].includes(card.status)) card.status = final.status;
         this.update(sessionId, final);
         live.controller = undefined;
-        this.host?.settled(sessionId);
+        this.host?.settled(sessionId, outcome);
       }
     })();
     return {};
