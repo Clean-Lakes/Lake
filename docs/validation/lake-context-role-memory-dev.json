@@ -1,17 +1,17 @@
 {
   "passed": true,
-  "binarySHA256": "889215c0f4c440ec309204caa20b6251d69cc02abe77312ea308f3069e098523",
+  "binarySHA256": "6d2ebfc29a8c59f5b9f110c6943b320eeb337eb8df9265d2486fadf2c81be5e4",
   "provider": "loopback synthetic fixture",
   "providerUsage": "synthetic four-JSON-character fixture tokens, not real model billing",
   "native": true,
-  "testedSHA": "cb7d3ca054a745cd0e5771eb621ec13b4be4d768",
+  "testedSHA": "94c9ae8cdb96d1b022dd2cd539665dc1e71f101c",
   "sourceDirty": false,
   "projectAccess": "inherited catalog and original permissions; no policy PUT",
   "specialistManagement": {
     "createdWithoutTask": true,
     "editedWithoutTask": true,
     "coldRestartRetainedRoleAndChannel": true,
-    "stableRoleID": "fafdf4ac00a92573921115f6956bd0cc56d60cddd45b846b4452eb6824576617",
+    "stableRoleID": "13822b4684c29464cfa9bb69e49bdaf3a12b3ada9a7e09be067176dcb966ebe6",
     "roleRevision": 2,
     "reusedRoleForTwoIndependentTasks": true,
     "oneSidebarChannel": true
@@ -52,15 +52,15 @@
   "windows": "not_run",
   "sleepAndPowerLoss": "not_run",
   "explicitKernelDrainVerified": true,
-  "runtimeCodeSHA": "e7b18f0622ed998c7dfa06d71ab660bdd873a9fc",
-  "installedDevBuildSHA": "fc0d84c6682923f962cb8e15fdcc9cb79b3f0822",
+  "runtimeCodeSHA": "675a073d049104f279104bc62bd6ff8a8a79d808",
+  "installedDevBuildSHA": "94c9ae8cdb96d1b022dd2cd539665dc1e71f101c",
   "legacyScenarioMatrix": "not claimed; no unit-matrix file supplied",
   "dailyDev": {
-    "canonicalTablesUnchanged": true,
     "homeIsDailyDev": true,
     "nativeBackendMatchesInstalled": true,
+    "servedAssetSHA256": "a549fb07ed7b08841a7131c3f1f4eff130ebe235da82e34c52473d39989a857a",
     "servedAssetMatchesBuild": true,
-    "servedAssetSHA256": "a549fb07ed7b08841a7131c3f1f4eff130ebe235da82e34c52473d39989a857a"
+    "canonicalTablesUnchanged": true
   },
   "scope": "CM first batch: bounded Pilot context and foundation contracts; role file-memory pipeline remains unavailable"
 }
