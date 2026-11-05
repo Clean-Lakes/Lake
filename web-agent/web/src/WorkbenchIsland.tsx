@@ -67,7 +67,7 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const textWidth=(node:HTMLElement|null)=>{
     if(!node)return 0;
     // Text ranges retain the full glyph width through ellipsis. Measuring the
-    // rendered font also avoids WebKit's system-font canvas approximation.
+    // rendered font includes its system-font fallback and letter spacing.
     const range=document.createRange();range.selectNodeContents(node);
     return range.getBoundingClientRect().width;
    };
