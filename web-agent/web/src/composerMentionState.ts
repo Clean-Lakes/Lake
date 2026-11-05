@@ -1,4 +1,4 @@
-import type {MCPServerConfig,Resource,SkillConfig} from "../../shared/contracts";
+import type {MCPServerConfig,Resource,SkillConfig,SpecialistChannelInfo} from "../../shared/contracts";
 import {referencedExtensions, type MentionKind} from "../../shared/references";
 
 export type MentionOption={id:string;kind:MentionKind;name:string;detail:string;resourceKind?:Resource['kind']};
@@ -7,7 +7,7 @@ export function mentionTypeLabel(option:MentionOption):string {
  return option.kind==='resource'?(option.resourceKind&&resourceMentionLabels[option.resourceKind]||'资源'):option.kind==='skill'?'Skill':option.kind==='mcp'?'MCP':'专员';
 }
 export type MentionCategory=MentionKind|"all";
-export const mentionCategories=[{kind:"all",label:"全部"},{kind:"resource",label:"资源"},{kind:"skill",label:"Skills"},{kind:"mcp",label:"MCP"},{kind:"role",label:"专员"}] as const;
+export const mentionCategories=[{kind:"all",label:"全部"},{kind:"role",label:"专员"},{kind:"resource",label:"资源"},{kind:"skill",label:"Skills"},{kind:"mcp",label:"MCP"}] as const;
 export function visibleMentionCategories(options:MentionOption[]) {
  return mentionCategories.filter(group=>group.kind!=="role"||options.some(option=>option.kind==="role"));
 }
@@ -17,8 +17,9 @@ export function nextMentionCategory(category:MentionCategory,options:MentionOpti
  const index=categories.findIndex(group=>group.kind===category);
  return categories[(index+(event.key==="ArrowLeft"?-1:1)+categories.length)%categories.length]!.kind;
 }
-export function mentionOptions(resources:Resource[],skills:SkillConfig[],servers:MCPServerConfig[],sreEnabled=false):MentionOption[] {
+export function mentionOptions(resources:Resource[],skills:SkillConfig[],servers:MCPServerConfig[],sreEnabled=false,specialists:Pick<SpecialistChannelInfo,'roleId'|'roleName'|'duties'>[]=[]):MentionOption[] {
  return [
+  ...specialists.map(role=>({id:role.roleId,kind:'role' as const,name:role.roleName,detail:role.duties||'已创建的专员'})),
   ...resources.map(r=>({id:r.id,kind:"resource" as const,resourceKind:r.kind,name:r.name,detail:r.status==="available"?"可用资源":"不可用资源"})),
   ...skills.filter(s=>s.enabled).map(s=>({id:s.name,kind:"skill" as const,name:s.name,detail:s.description||"可复用操作流程"})),
   ...servers.filter(s=>s.enabled).map(s=>({id:s.id,kind:"mcp" as const,name:s.name,detail:s.transport==="stdio"?"本机工具服务":"远程工具服务"})),
@@ -27,8 +28,9 @@ export function mentionOptions(resources:Resource[],skills:SkillConfig[],servers
 }
 export function filterMentions(options:MentionOption[],query:string,category:MentionCategory):MentionOption[] {
  const needle=query.trim().toLocaleLowerCase();
- return options.filter(o=>(category==="all"||o.kind===category)&&`${o.name} ${o.detail} ${o.kind} ${mentionTypeLabel(o)}`.toLocaleLowerCase().includes(needle));
+ return options.filter(o=>(category==="all"?o.kind!=="role":o.kind===category)&&`${o.name} ${o.detail} ${o.kind} ${mentionTypeLabel(o)}`.toLocaleLowerCase().includes(needle));
 }
+export const mentionCategoryCount=(options:MentionOption[],category:MentionCategory)=>filterMentions(options,'',category).length;
 export function mentionInsertion(draft:string,caret:number,option:MentionOption) {
  const before=draft.slice(0,caret),token=before.match(/(?:^|\s)@([^\s@]*)$/);
  const start=token?before.lastIndexOf("@"):caret;

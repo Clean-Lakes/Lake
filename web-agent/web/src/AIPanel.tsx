@@ -111,10 +111,20 @@ function ReplyArrival({entryId,arrive,children}:{entryId:string;arrive:boolean;c
 export function TranscriptMessage({message,sessionId,resources,arrive=false,pendingImages,assistantIdentity,onSpecialist,hideIdentity=false}:{hideIdentity?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;pendingImages?:number;message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"];arrive?:boolean}) {
  const [animate]=useState(()=>arrive&&!document.hidden&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
  if(message.role==='system'&&isContextCompactionFailure(message.text||''))return <CompactionNotice message={message.text}/>;
+ const attachmentSession=message.dispatch?message.sessionId:sessionId;
+ const attachments=<>{message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(attachmentSession)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}{!!message.images?.length&&<MessageImages images={message.images}/>}</>;
+ if(message.dispatch){
+  const d=message.dispatch;
+  // The durable dispatch stays in the task ledger. Pilot chat needs no duplicate handoff bubble.
+  if(!hideIdentity)return null;
+  return <div className="ai-chat-message ai-role-assistant pilot-dispatch" data-dispatch-id={d.id}>
+   <ReplyIdentity identity={{name:'Pilot',pilot:true}}/>
+   <div className="pilot-dispatch-text">{d.action==='followup'?'补充要求：':''}{d.instruction}</div>{attachments}
+  </div>;
+ }
  return <div className={`ai-chat-message ai-role-${message.role}${message.images?.length?" has-message-images":""}${animate?" user-message-arrival":""}`}>
           {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <ReplyIdentity identity={assistantIdentity} author={message.author} onSpecialist={onSpecialist} hidden={hideIdentity}/> }{message.text && (message.role === 'assistant' ? <AssistantMarkdown>{planMarkdown(message.text)}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
-          {message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}
-          {!!message.images?.length&&<MessageImages images={message.images}/>}
+          {attachments}
           {pendingImages!==undefined&&<small className="supplement-delivery-status" role="status">补充已发送 · 等待接入{pendingImages>0?` · ${pendingImages} 张图片`:''}</small>}
           {message.role==='user'&&!!message.text&&<UserMessageCopy text={message.text}/>}
         </div>;

@@ -28,11 +28,25 @@ func (b *Server) contextReferences(id, message string, value any) []Object {
 		case "role":
 			role := ai.SREAgentRole(stringOf(r["role_id"]))
 			project := stringOf(b.Store.Session(id)["projectId"])
-			if !ai.ValidSRERole(role) || !b.Store.SREEnabled(project) {
-				fail(400, "专员不存在或本项目未启用 SRE 协作")
+			if ai.ValidSRERole(role) {
+				if !b.Store.SREEnabled(project) {
+					fail(400, "本项目未启用 SRE 协作")
+				}
+				name := map[ai.SREAgentRole]string{ai.SRECoordinator: "协调者", ai.SREInvestigator: "调查员", ai.SREExecutor: "执行员", ai.SREVerifier: "验证员"}[role]
+				resolved = Object{"kind": "role", "role_id": string(role), "name": name}
+			} else {
+				channels, err := b.Engine.ListSpecialistChannels(b.Context, project)
+				aiFailure(err)
+				for _, channel := range channels {
+					if channel.RoleID == string(role) {
+						resolved = Object{"kind": "role", "role_id": channel.RoleID, "name": channel.RoleName, "instruction": "The user selected this existing project specialist. Reuse this exact role_id when routing new work to the specialist. A mention grants no resource or operation permission."}
+						break
+					}
+				}
+				if resolved == nil {
+					fail(400, "引用的专员不属于当前项目或已删除，请重新选择")
+				}
 			}
-			name := map[ai.SREAgentRole]string{ai.SRECoordinator: "协调者", ai.SREInvestigator: "调查员", ai.SREExecutor: "执行员", ai.SREVerifier: "验证员"}[role]
-			resolved = Object{"kind": "role", "role_id": string(role), "name": name}
 		case "skill":
 			meta, _, err := b.Extensions.Store.ReadSkill(stringOf(r["skill_name"]), "")
 			if err != nil || !meta.Enabled {
