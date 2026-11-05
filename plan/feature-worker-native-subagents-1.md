@@ -34,10 +34,10 @@ tags: [feature, zcode, worker, subagent, inspector]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | 扩展 runtime/zcode/agent-host.ts 的 HostProfile 与可信子调用上下文；在 runtime/zcode/agent.ts 通过公开 createExploreSubagentPort 构造受管理 child AgentRuntime，并投影原生运行记录。 | false | — |
-| TASK-002 | 修改 runtime/zcode/superagent.ts 的 Worker profile，开放原生控制工具并加入 invokeControl；原业务工具串行派发，执行前重验任务、权限与取消。依赖 TASK-001。 | false | — |
-| TASK-003 | 在 runtime/zcode/tasks.ts 的 Operation 与 operation() 保存可信子调用来源；原验收不把子 Agent 控制回执作为业务成功。依赖 TASK-002。 | false | — |
-| TASK-004 | 在 web-agent/shared/contracts.ts 扩展 AgentRun 的原生来源、任务、Worker、child Session 和工具卡字段，旧记录保持缺省兼容。 | false | — |
+| TASK-001 | 扩展 runtime/zcode/agent-host.ts 的 HostProfile 与可信子调用上下文；在 runtime/zcode/agent.ts 通过公开 createExploreSubagentPort 构造受管理 child AgentRuntime，并投影原生运行记录。 | ✅ | 2026-11-06 |
+| TASK-002 | 修改 runtime/zcode/superagent.ts 的 Worker profile，开放原生控制工具并加入 invokeControl；原业务工具串行派发，执行前重验任务、权限与取消。依赖 TASK-001。 | ✅ | 2026-11-06 |
+| TASK-003 | 在 runtime/zcode/tasks.ts 的 Operation 与 operation() 保存可信子调用来源；原验收不把子 Agent 控制回执作为业务成功。依赖 TASK-002。 | ✅ | 2026-11-06 |
+| TASK-004 | 在 web-agent/shared/contracts.ts 扩展 AgentRun 的原生来源、任务、Worker、child Session 和工具卡字段，旧记录保持缺省兼容。 | ✅ | 2026-11-06 |
 
 ### Implementation Phase 2
 
@@ -45,8 +45,8 @@ tags: [feature, zcode, worker, subagent, inspector]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-005 | 新增 web-agent/web/src/WorkerExecutionTree.tsx 与纯分组模型及 CSS；复用 resource-tree-model.ts 和既有工具详情组件，展示 Worker、真实子任务与准确资源归属。依赖 TASK-004。 | false | — |
-| TASK-006 | 修改 SessionInspector.tsx、SuperTaskInspector.tsx、AIPanel.tsx、App.tsx 的任务入口和原生子过程投影，避免对话/第三联重复；保留旧 SRE。依赖 TASK-005。 | false | — |
+| TASK-005 | 新增 web-agent/web/src/WorkerExecutionTree.tsx 与纯分组模型及 CSS；复用 resource-tree-model.ts 和既有工具详情组件，展示 Worker、真实子任务与准确资源归属。依赖 TASK-004。 | ✅ | 2026-11-06 |
+| TASK-006 | 修改 SessionInspector.tsx、SuperTaskInspector.tsx、AIPanel.tsx、App.tsx 的任务入口和原生子过程投影，避免对话/第三联重复；保留旧 SRE。依赖 TASK-005。 | ✅ | 2026-11-06 |
 
 ### Implementation Phase 3
 
@@ -54,9 +54,9 @@ tags: [feature, zcode, worker, subagent, inspector]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-007 | 扩展 runtime/zcode/server.test.cjs 的本地合成模型夹具，覆盖真实子 Read、纯文字不验收、Write 审批、停止/重启与同 callId 隔离；父 Worker 不预先读取以免假阳性。依赖 TASK-001 至 TASK-004。 | false | — |
+| TASK-007 | 扩展 runtime/zcode/server.test.cjs 的本地合成模型夹具，覆盖真实子 Read、纯文字不验收、Write 审批、停止/重启与同 callId 隔离；父 Worker 不预先读取以免假阳性。依赖 TASK-001 至 TASK-004。 | ✅ | 2026-11-06 |
 | TASK-008 | 为执行树模型覆盖嵌套目录、重名资源、多资源与未知资源、跨任务隔离；完成前后端检查、签名候选构建与 Lake Dev 明暗/窄窗验证。依赖 TASK-005 至 TASK-007。 | false | — |
-| TASK-009 | 更新 runtime/zcode/README.md、agent.md 和验证记录，保存 tested SHA、检查结果与未验证边界；将本次变更提交至已有 develop PR，不合并。依赖 TASK-008。 | false | — |
+| TASK-009 | 更新 runtime/zcode/README.md、agent.md 和验证记录，保存 tested SHA、检查结果与未验证边界；将本次变更提交至已有 develop PR，不合并。依赖 TASK-008。 | ✅ | 2026-11-06 |
 
 ## 3. Alternatives
 
@@ -95,3 +95,5 @@ tags: [feature, zcode, worker, subagent, inspector]
 - [当前候选](../runtime/zcode/README.md)
 - [Super-agent 架构](architecture-lake-superagent-1.md)
 - [UI 规范](../docs/ui-guidelines.md)
+
+当前检查点：代码与签名 Dev 安装已完成；63 项后端、644 项前端和 25 项账本/活动/目录回归通过。实际测试源码为 `ffcbc00a2711dddf74652eadaf92fe512b9dfe1f`。原生任务清单/第三联基本交互已在首个实现版本验证，最终历史投影修正后的原生重复检查因 Mac 锁屏待用户解锁；TASK-008 保留未完成。详见[验证记录](../docs/validation/worker-native-subagents/validation.md)。
