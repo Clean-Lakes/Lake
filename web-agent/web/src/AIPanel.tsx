@@ -1,6 +1,7 @@
 import {conversationActivity,conversationAvatarMotion,type AvatarMotion} from './superAgentPresentation';
 import {ReplyIdentity,type AssistantIdentity} from './ReplyIdentity';
-import type {SpecialistReplyAuthor,SuperTask} from '../../shared/contracts';
+import type {SpecialistReplyAuthor,SuperTask,SuperWorkspace} from '../../shared/contracts';
+import {PilotDispatchProgress,pilotDispatchRows} from './PilotDispatchProgress';
 import {pendingUserSupplements} from "./messageQueue";
 import {latestInspectorSelection} from './sessionInspectorModel';
 import {MiniBoxCompletionNotice} from './MiniBox';
@@ -131,13 +132,13 @@ export function TranscriptMessage({message,sessionId,resources,arrive=false,pend
           {message.role==='user'&&!!message.text&&<UserMessageCopy text={message.text}/>}
         </div>;
 }
-type TranscriptProps = {superTask?:SuperTask;onSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;onOpenMemory?:()=>void;onOpenPlans?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
+type TranscriptProps = {pilotWorkspace?:SuperWorkspace|null;pilotConnected?:boolean;superTask?:SuperTask;onSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;onOpenMemory?:()=>void;onOpenPlans?:()=>void; refresh?: () => Promise<unknown>; mode?: "conversation" | "activity" | "evidence"; snapshot: SessionSnapshot; renderAction?: (action: SessionSnapshot["actions"][number]) => ReactNode; onInspect?: () => void; onStopTurn?: () => void; stopping?: boolean; disabled?: boolean};
 export function AITranscript(props: TranscriptProps) {
   const {snapshot} = props;
   const resources = useMemo(() => (snapshot.resources ?? []).filter(resource => !resource.projectId || resource.projectId === snapshot.session.projectId), [snapshot.resources, snapshot.session.projectId]);
   return <ObjectReferencesProvider key={snapshot.session.id} resources={resources} tasks={snapshot.ai?.agentRuns}><AITranscriptContent {...props}/></ObjectReferencesProvider>;
 }
-function AITranscriptContent({ superTask,onSpecialist,assistantIdentity,onOpenMemory,snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh, onOpenPlans }: TranscriptProps) {
+function AITranscriptContent({ pilotWorkspace,pilotConnected=true,superTask,onSpecialist,assistantIdentity,onOpenMemory,snapshot, renderAction, onInspect, onStopTurn, stopping = false, disabled = false, mode = "conversation", refresh, onOpenPlans }: TranscriptProps) {
   // Restoring a session shows existing text immediately. Replies first observed
   // after mount reveal their first packet too (cards mount only once nonempty).
   // Retain an observed completion when a legacy turn has no saved timing and
@@ -197,6 +198,7 @@ function AITranscriptContent({ superTask,onSpecialist,assistantIdentity,onOpenMe
     const reports = cards.filter(card => ["chart", "image"].includes(card.type));
     return <div className="ai-transcript evidence-view">{before > 0 && <button type="button" disabled={loading} onClick={() => void loadOlder()}>{loading ? "正在加载…" : "加载更早记录"}</button>}{error && <p role="alert">{error}</p>}{!evidence.length && !reports.length && <div className="record-empty"><h2>暂无已记录证据</h2><p>调查中的图表、图片和取证结果会保留在这里。</p></div>}{reports.map(card => <Card key={card.id} card={card}/>)}{evidence.map(item => <section key={item.id} className="evidence-record"><header><strong>{item.title}</strong><small>{snapshot.resources.find(resource => resource.id===item.resourceId)?.name || "调查证据"}</small></header>{"command" in item && item.command && <pre>{item.command}</pre>}<pre>{item.excerpt}</pre><small>{item.exitCode !== null ? `退出码 ${item.exitCode} · ` : ""}{new Date(item.collectedAt).toLocaleString("zh-CN")}</small></section>)}</div>;
   }
+  const dispatchRows=mode==='conversation'&&assistantIdentity?.pilot?pilotDispatchRows(pilotWorkspace,snapshot.session.id,snapshot.messages):[];
   const hideReplyIdentity=snapshot.session.workspaceRole==='worker'||!!assistantIdentity&&!assistantIdentity.pilot;
   return <div className="ai-transcript" data-transcript-mode={mode} data-reply-avatar={hideReplyIdentity?"hidden":undefined} ref={transcript}>
     {(snapshot.sre?.tasks.length??0)>=20&&sreCursor!==''&&<button type="button" disabled={loadingSRE} onClick={()=>void loadOlderSRE()}>{loadingSRE?'正在加载…':'加载更早的 SRE 任务'}</button>}
@@ -213,6 +215,7 @@ function AITranscriptContent({ superTask,onSpecialist,assistantIdentity,onOpenMe
       const progress=mode==='conversation'&&turn===currentTurn&&liveConversation&&snapshot.conversationMode!=='plan'?liveTurnProgress(conversationTurnEntries(turn)):undefined;
       const completed = timingForTurn(turn,snapshot)?.status ?? (turn===currentTurn?snapshot.ai?.status:undefined);
       const turnId = turn[0]!.id;
+      const turnDispatchRows=dispatchRows.filter(row=>turn.some(entry=>entry.message?.id===row.sourceMessageId));
       if (completed==='completed') settledTurnIds.current.add(turnId);
       else if (completed && completed!=='running') settledTurnIds.current.delete(turnId);
       const settled = completed?completed==='completed':settledTurnIds.current.has(turnId);
@@ -257,6 +260,7 @@ function AITranscriptContent({ superTask,onSpecialist,assistantIdentity,onOpenMe
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources} arrive={entry.message!.id===latestUser?.id&&!restoredMessageIds.current.has(entry.message!.id)}/>)}
       {mode==='activity'&&<ReplyDuration assistantIdentity={assistantIdentity} {...timingProps}/>}
       {mode==='conversation'?<TurnExecutionDetails assistantIdentity={assistantIdentity} hideIdentity={hideReplyIdentity} latest={latestUser?turn===currentTurn:turn===turns.at(-1)} latestTaskId={latestInspectorTaskId} sessionId={snapshot.session.id} progress={progress} {...timingProps} presentingReply={presentingReply} hideLive={turn.some(entry=>entry.sre?.task.pilot)} detailNotice={pilotLive?undefined:notices} details={pilotLive?[]:[...processGroups.map(renderGroup),...compactionDiagnostics,...(interim.length?[<details className="turn-progress-prose" key="interim-prose"><DisclosureSummary>过程播报 · {interim.length}</DisclosureSummary>{interim.map(entry=><div className="ai-response" key={entry.id}>{entry.card?<Card card={entry.card}/>:entry.message?<TranscriptMessage message={entry.message} sessionId={snapshot.session.id} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} hideIdentity={hideReplyIdentity}/>:null}</div>)}</details>]:[])]} onInspect={onInspect}>{replyContent}</TurnExecutionDetails>:replyContent}
+      {mode==='conversation'&&turnDispatchRows.length>0&&<PilotDispatchProgress rows={turnDispatchRows} onSpecialist={onSpecialist} connected={pilotConnected}/>}
       <FileChanges live={turn===currentTurn&&(currentTiming?currentTiming.status==='running':liveConversation)} deferUntilEnd={mode==='conversation'} cards={turn.flatMap(entry => entry.card && (entry.card.type === "diff" || entry.card.type === "operation" && ["write", "edit", "multi_edit", "append", "delete"].includes(entry.card.title || "")) ? [entry.card] : [])} resources={snapshot.resources ?? []} partial={index === 0 && before > 0}/>
       <TaskProgress cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}/>
       {mode==='conversation'&&!(turn===currentTurn&&liveConversation)&&<MiniBoxCompletionNotice notices={snapshot.commandStopNotices??[]} startedAt={miniStartedAt} endedAt={miniEndedAt}/>}

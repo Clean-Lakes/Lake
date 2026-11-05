@@ -1246,7 +1246,7 @@ test('legacy unresolved MCP calls outside visible projects still fence a new app
  assert.equal(f.app.store.list('superOperations').filter(operation=>operation.tool==='call_mcp_tool').length,0);
 });
 
-async function sshFixture(t){
+async function sshFixture(t, diagnosticsGate){
  const fs=require('node:fs/promises'),{generateKeyPairSync}=require('node:crypto'),{Server}=require('../../third_party/zcode/node_modules/ssh2'),{spawn}=require('node:child_process');
  const pty=require('../../bin/lake-zcode/native/node-pty'),home=await mkdtemp(join(tmpdir(),'lake-ssh-server-')),clients=new Set();
  let server,port=0,key;const requests=[];let auths=0;
@@ -1259,7 +1259,7 @@ async function sshFixture(t){
    client.on('ready',()=>client.on('session',accept=>{
     const session=accept();let dimensions;
     session.on('pty',(accept,reject,info)=>{dimensions=info;accept();});
-    session.on('exec',(accept,reject,info)=>{
+    session.on('exec',async(accept,reject,info)=>{
      const stream=accept();requests.push({command:info.command,pty:!!dimensions});
      if(dimensions){
       const child=pty.spawn('/bin/sh',['-c',info.command],{cwd:home,env:{HOME:home,PATH:'/usr/bin:/bin:/usr/sbin:/sbin',LANG:'en_US.UTF-8'},cols:dimensions.cols,rows:dimensions.rows});
@@ -1267,6 +1267,8 @@ async function sshFixture(t){
       child.onExit(event=>{if(!stream.destroyed){stream.exit(event.exitCode);stream.end();}});stream.on('close',()=>{try{child.kill();}catch{}});
       session.on('window-change',(accept,reject,info)=>{try{child.resize(info.cols,info.rows);}catch{}accept?.();});
      }else{
+      if(diagnosticsGate)await diagnosticsGate;
+      if(stream.destroyed)return;
       const child=spawn('/bin/sh',['-c',info.command],{cwd:home,env:{HOME:home,PATH:'/usr/bin:/bin:/usr/sbin:/sbin'}});
       child.stdout.on('data',data=>stream.write(data));child.stderr.on('data',data=>stream.stderr.write(data));child.on('close',code=>{stream.exit(code??1);stream.end();});stream.on('close',()=>child.kill());
      }
@@ -1321,15 +1323,34 @@ test('SSH key changes prompt before authentication; cancellation and stale finge
 });
 
 test('independent Worker uses an exact approved SSH diagnostic profile and accepts only its real receipt', {skip:process.platform!=='darwin'},async(t)=>{
- const f=await fixture(t,'super-host'),server=await sshFixture(t),resource=await sshResource(f,server);
+ let releaseDiagnostic;const diagnosticsGate=new Promise(resolve=>{releaseDiagnostic=resolve;});t.after(()=>releaseDiagnostic());
+ const f=await fixture(t,'super-host'),server=await sshFixture(t,diagnosticsGate),resource=await sshResource(f,server);
  const terminal=await trustTerminal(f,resource);await terminal.approve();await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');await f.api(terminal.base+'/disconnect','POST',{});
  const authenticated=server.auths,project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'读取该 SSH 主机当前系统指标。'},202);
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),value=>value.channels[0]?.needsConfirmation),worker=state.workers[0];
  const channel=await f.api(`/api/sessions/${state.channels[0].sessionId}/channel`);assert.ok(channel.active.some(s=>s.ai.pending?.call.name==='inspect_host'));
  const pending=(await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;assert.equal(pending.call.name,'inspect_host');assert.equal(server.auths,authenticated);
+ assert.equal(worker.activity.phase,'waiting_approval');assert.equal(worker.activity.label,'等待操作确认');
+ assert.equal(f.app.agents.currentActivity(worker.sessionId),undefined,'scheduled tools are not executing before approval');
+ const originalInput=f.app.store.list('superInputs').find(event=>event.sessionId===project.routerSessionId);
+ assert.equal(worker.activity.sourceMessageId,originalInput.messageId);assert.equal(worker.activity.sourceSessionId,project.routerSessionId);
+ // A newly routed follow-up has not yet entered this worker. Do not move the
+ // current activity to that new bubble until the runtime accepts the steering.
+ const storedWorker=f.app.store.get('superWorkers',worker.id),fakeInput={...originalInput,id:'not-delivered',messageId:'future-message',disposition:'routed'};
+ f.app.store.put('superInputs',fakeInput.id,fakeInput);f.app.store.put('superWorkers',worker.id,{...storedWorker,inputEventIds:[...storedWorker.inputEventIds,fakeInput.id]});
+ assert.equal((await f.api(`/api/projects/${f.project.id}/superagent`)).workers[0].activity.sourceMessageId,originalInput.messageId);
+ f.app.store.put('superInputs',fakeInput.id,{...fakeInput,disposition:'blocked'});
+ f.app.store.put('superWorkers',worker.id,{...storedWorker,state:'queued',inputEventIds:[...storedWorker.inputEventIds,fakeInput.id]});
+ assert.equal((await f.api(`/api/projects/${f.project.id}/superagent`)).workers[0].activity,undefined,'a blocked dispatch is not a runnable queue');
+ f.app.store.put('superWorkers',worker.id,storedWorker);f.app.store.delete('superInputs',fakeInput.id);
  await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.id,accept:true});
+ const active=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0].activity?.phase==='tool');
+ assert.equal(active.workers[0].activity.toolName,'inspect_host');assert.equal(active.workers[0].activity.label,'正在读取服务器指标');
+ assert.equal(active.workers[0].activity.sourceMessageId,originalInput.messageId);
+ releaseDiagnostic();
  const completed=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0].task.state==='completed');
+ assert.equal(completed.workers[0].activity,undefined);
  assert.equal(completed.channels[0].needsConfirmation,false);
  const operation=f.app.store.list('superOperations').find(o=>o.tool==='inspect_host');assert.equal(operation.status,'succeeded');assert.equal(operation.resourceId,resource.id);assert.equal(operation.output.exitCode,0);assert.ok(operation.output.hostFingerprint);assert.equal(operation.readOnly,true);
 });
@@ -1348,6 +1369,7 @@ test('a short retry uses recent dialogue and current SSH capabilities, resumes t
  const worker=first.workers[0],goalBefore=structuredClone(f.app.store.list('superGoals')[0]);
  assert.notEqual(goalBefore.status,'completed');assert.notEqual(goalBefore.acceptanceState,'pass');
  assert.equal(first.channels[0].needsConfirmation,false,'an unavailable connection is not an unanswered user interaction');
+ assert.equal(first.workers[0].activity,undefined,'a parked task does not pretend to be running');
  assert.equal(f.app.store.list('superAcceptance').length,0);assert.equal(server.auths,authenticated);
  assert.equal(f.app.store.list('superOperations').filter(o=>o.tool==='inspect_host').length,0);
  const oldReport=f.app.store.messages(project.routerSessionId).find(m=>m.author?.taskId===goalBefore.id);
@@ -1363,6 +1385,7 @@ test('a short retry uses recent dialogue and current SSH capabilities, resumes t
  assert.equal(pendingState.workers.length,1);assert.equal(pendingState.workers[0].id,worker.id);
  assert.equal(pendingState.workers[0].task.taskId,goalBefore.id);assert.equal(pendingState.workers[0].roleId,worker.roleId);
  const retryEvent=f.app.store.list('superInputs').find(event=>event.payload==='再试试');
+ assert.equal(pendingState.workers[0].activity.phase,'waiting_approval');assert.equal(pendingState.workers[0].activity.sourceMessageId,retryEvent.messageId);
  const decisions=f.app.store.list('superDecisions').filter(decision=>decision.eventId===retryEvent.id);
  assert.equal(decisions.length,1);assert.equal(decisions[0].action,'followup');assert.equal(decisions[0].taskId,goalBefore.id);assert.equal(decisions[0].quote,'再试试');
  const textOf=(message)=>typeof message.content==='string'?message.content:(message.content??[]).map(part=>part.text??'').join('');

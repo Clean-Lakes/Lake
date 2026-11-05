@@ -9,10 +9,12 @@ import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
 import { canonical, digest, TaskLedger, terminal, text, type Goal, type Operation } from "./tasks";
 import { superRouterPrompt, superWorkerPrompt } from "./super-prompts";
 import { buildRouterContext, projectRouterHistory, type RouterMessage } from "./router-context";
+import { listProjectAssets } from "./assets";
 import { loadLegacyView } from "./migration";
 import type { LakeSecurity } from "./security";
 import type {LakeSSH} from "./ssh";
 import type { LakeExtensions } from "./extensions";
+import { toolActivityLabel } from "./activity";
 
 type Role = { id: string; projectId: string; roleKey: string; name: string; duties: string; revision: number; deletedAt?: string };
 type Channel = { id: string; projectId: string; roleId: string; sessionId: string; revision: number; createdAt: string };
@@ -167,7 +169,32 @@ export class LakeSuperagent implements AgentHost {
   }
   private workerView(worker: Worker): SuperWorker {
     return { id: worker.id, createdAt: worker.createdAt, roleId: worker.roleId, roleName: worker.roleSnapshot.name,
-      sessionId: worker.sessionId, task: this.taskView(this.ledger.get(worker.taskId)), assignmentState: worker.state };
+      sessionId: worker.sessionId, task: this.taskView(this.ledger.get(worker.taskId)), assignmentState: worker.state,
+      activity: this.workerActivity(worker) };
+  }
+  private workerActivity(worker: Worker): SuperWorker["activity"] {
+    const goal = this.ledger.get(worker.taskId);
+    if (terminal(goal.status) || worker.state === "stopped") return;
+    if (worker.state === "queued" && (goal.modelRounds >= goal.roundLimit || Date.parse(goal.deadlineAt) <= Date.now() ||
+      worker.inputEventIds.some((id) => this.store.get<InputEvent>("superInputs", id)?.disposition !== "routed"))) return;
+    const acceptedIds = new Set([...(worker.invocationInputIds ?? []), ...(worker.deliveredInputIds ?? [])]);
+    const source = [...worker.inputEventIds].reverse()
+      .filter((id) => worker.state === "queued" || acceptedIds.has(id))
+      .map((id) => this.store.get<InputEvent>("superInputs", id)).find((event) => event?.disposition === "routed");
+    if (!source) return;
+    const origin = { sourceMessageId: source?.messageId, sourceSessionId: source?.sessionId };
+    if (worker.state === "queued") return { phase: "queued", label: "等待开始", updatedAt: source?.receivedAt ?? worker.createdAt, ...origin };
+    if (!this.active.has(worker.id) || !this.agents.isRunning(worker.sessionId)) return;
+    const view = this.store.view(worker.sessionId), updatedAt = view.turnStartedAt ?? goal.updatedAt;
+    if (this.ssh?.prompt(worker.sessionId)) return { phase: "waiting_approval", label: "等待确认服务器指纹", updatedAt, ...origin };
+    const interaction = [...this.interactions.values()].find((entry) => entry.workerId === worker.id && entry.generation === worker.generation);
+    if (interaction) return { phase: interaction.kind === "plan" ? "waiting_approval" : "waiting_input",
+      label: interaction.kind === "plan" ? "等待确认计划" : "等待补充信息", updatedAt, ...origin };
+    if (view.pending) return { phase: "waiting_approval", label: "等待操作确认", updatedAt, ...origin };
+    const tool = this.agents.currentActivity(worker.sessionId);
+    if (tool && !["work_begin", "work_read", "work_update", "work_finish", "work_wait", "ask_user_question"].includes(tool.toolName))
+      return { phase: "tool", label: toolActivityLabel(tool.toolName), toolName: tool.toolName, updatedAt: tool.startedAt, ...origin };
+    return { phase: "thinking", label: "正在分析", updatedAt, ...origin };
   }
   private channelView(channel: Channel): SpecialistChannelInfo {
     const role = this.role(channel.projectId, channel.roleId, true);
@@ -694,7 +721,10 @@ export class LakeSuperagent implements AgentHost {
       }), true),
       this.entry("ask_user_question", "Ask a bounded human prerequisite question for this exact task. Answers are not operation approval or goal acceptance.",
         objectSchema({ questions: array(objectSchema({ id: str, title: str, reason: str, options: array(str), multi_select: { type: "boolean" } }, ["id", "title"])) }, ["questions"]), run((a, context) => this.questionInteraction(worker, a, context.abortSignal))),
-      this.entry("list_assets", "List current project resource metadata. A resource ID is not permission and unavailable adapters cannot be replaced with local execution.", objectSchema({}), run(() => ({ assets: this.store.catalog().resources.filter((resource) => resource.projectId === worker.projectId).map((resource) => ({ id: resource.id, asset_ref: resource.id, name: resource.name, kind: resource.kind, status: resource.status, ...(resource.kind==="ssh"&&resource.status==="available"&&this.ssh?{configuration_revision:this.ssh.revision(resource),connectionState:"configured; not a health observation"}:{}) })) }))),
+      this.entry("list_assets", "Find current project resource metadata: use asset_ref for an exact resource ID, or query for its name/ID (Chinese names supported). Same-name matches remain separate resources. Otherwise browse bounded pages (default 20, max 50); follow nextCursor with the same query until hasMore is false. Use the exact returned asset_ref and configuration_revision for inspect_host. Metadata and cursor are not execution permission.",
+        objectSchema({ asset_ref: str, query: str, cursor: str, limit: integer }), run((a) => listProjectAssets({ projectId: worker.projectId,
+          resources: this.store.catalog().resources, resourceRevision: (resource) => this.store.get<number>("resourceRevisions", resource.id) ?? 1,
+          sshRevision: this.ssh ? (resource) => this.ssh!.revision(resource) : undefined }, a))),
       this.entry("list_project_files", "List at most 200 immediate entries in the assigned project workspace. Symlink targets are never followed.", objectSchema({ path: str }), run(async (a) => {
         const workspace = await this.store.workspace(worker.projectId), path = await this.scopedPath(workspace, a.path ?? ".");
         const entries = await readdir(path, { withFileTypes: true });
@@ -912,6 +942,7 @@ export class LakeSuperagent implements AgentHost {
         const current = this.store.require<Worker>("superWorkers", worker.id);
         if (accepted && current.generation === worker.generation) {
           current.deliveredInputIds = [...new Set([...(current.deliveredInputIds ?? []), event.id])]; this.store.put("superWorkers", current.id, current);
+          this.changed(current.sessionId);
         }
       }
     }

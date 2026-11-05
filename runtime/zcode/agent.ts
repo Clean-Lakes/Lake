@@ -25,6 +25,7 @@ import type {
 import { HttpError, id, LakeStore, now } from "./store";
 import type { AgentHost, HostProfile } from "./agent-host";
 import { lakeCommunicationPrompt } from "./super-prompts";
+import { LiveToolActivity } from "./activity";
 
 type Live = {
   runtime: AgentRuntime;
@@ -40,9 +41,11 @@ export class LakeAgents {
   host?: AgentHost;
   guard?: () => void;
   private live = new Map<string, Live>();
+  private toolActivity = new LiveToolActivity();
   isRunning(sessionId: string) {
     return !!this.live.get(sessionId)?.controller;
   }
+  currentActivity(sessionId: string) { return this.isRunning(sessionId) ? this.toolActivity.latest(sessionId) : undefined; }
   private constructor(
     readonly store: LakeStore,
     readonly sessions: Awaited<ReturnType<typeof createSqliteSessionStore>>,
@@ -87,6 +90,7 @@ export class LakeAgents {
     let extra: Partial<SessionEvent> = {};
     switch (event.type) {
       case "turn_started":
+        this.toolActivity.clear(sessionId);
         view.rootTurnId = String(event.turnId ?? id());
         view.status = "running";
         view.turnStartedAt = now();
@@ -124,6 +128,7 @@ export class LakeAgents {
         break;
       }
       case "tool_call_started":
+        this.toolActivity.start(sessionId, String(payload.toolCallId), String(payload.toolName ?? ""), now());
         this.card(
           view,
           String(payload.toolCallId),
@@ -132,6 +137,7 @@ export class LakeAgents {
         ).status = "running";
         break;
       case "tool_call_result": {
+        this.toolActivity.finish(sessionId, String(payload.toolCallId));
         const card = this.card(view, String(payload.toolCallId), "operation");
         card.status = payload.result?.success === false ? "failed" : "completed";
         card.content =
@@ -141,6 +147,7 @@ export class LakeAgents {
         break;
       }
       case "tool_call_error": {
+        this.toolActivity.finish(sessionId, String(payload.toolCallId));
         const card = this.card(view, String(payload.toolCallId), "operation");
         card.status = "failed";
         card.content = String(payload.error?.message ?? "工具调用失败");
@@ -518,6 +525,7 @@ export class LakeAgents {
           });
         this.update(sessionId, final);
       } finally {
+        this.toolActivity.clear(sessionId);
         const final = this.store.view(sessionId);
         final.pending = undefined;
         final.pendingApprovals = [];

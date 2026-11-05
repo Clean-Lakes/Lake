@@ -1,0 +1,8 @@
+.pilot-dispatch-progress { display:grid; grid-template-columns:minmax(0,1fr); gap:4px; width:100%; min-width:0; max-width:calc(720px + var(--reply-avatar-column,40px)); box-sizing:border-box; padding-inline-start:var(--reply-avatar-column,40px); }
+.pilot-dispatch-progress-row { display:flex; align-items:center; gap:9px; width:100%; min-width:0; max-width:100%; min-height:34px; box-sizing:border-box; padding:5px 7px 5px 0; border:0; border-radius:var(--radius-settings-control,10px); corner-shape:var(--corner-window); background:transparent; color:var(--text-muted); text-align:left; }
+.pilot-dispatch-progress-row:hover:not(:disabled) { color:var(--foreground); background:var(--surface-hover); }
+.pilot-dispatch-progress-row:disabled { opacity:1; }
+.pilot-dispatch-progress-text { flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--font-size-ui); --status-text-base:var(--text-muted); --status-text-highlight:var(--foreground); }
+.pilot-dispatch-progress-chevron { flex:0 0 auto; }
+.pilot-dispatch-progress-row[data-phase="waiting_approval"] > .turn-status-mark,
+.pilot-dispatch-progress-row[data-phase="waiting_input"] > .turn-status-mark { color:var(--info); }
