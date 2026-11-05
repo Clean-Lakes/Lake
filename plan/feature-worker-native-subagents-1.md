@@ -55,7 +55,7 @@ tags: [feature, zcode, worker, subagent, inspector]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-007 | 扩展 runtime/zcode/server.test.cjs 的本地合成模型夹具，覆盖真实子 Read、纯文字不验收、Write 审批、停止/重启与同 callId 隔离；父 Worker 不预先读取以免假阳性。依赖 TASK-001 至 TASK-004。 | ✅ | 2026-11-06 |
-| TASK-008 | 为执行树模型覆盖嵌套目录、重名资源、多资源与未知资源、跨任务隔离；完成前后端检查、签名候选构建与 Lake Dev 明暗/窄窗验证。依赖 TASK-005 至 TASK-007。 | ✅ | 2026-11-06 |
+| TASK-008 | 为执行树模型覆盖嵌套目录、重名资源、多资源与未知资源、跨任务隔离；完成前后端检查、签名候选构建、合成多资源界面明暗/窄窗验证及 Lake Dev 原生交互复核。依赖 TASK-005 至 TASK-007。 | ✅ | 2026-11-06 |
 | TASK-009 | 更新 runtime/zcode/README.md、agent.md 和验证记录，保存 tested SHA、检查结果与未验证边界；通过 develop PR 提交，并按用户后续明确授权合并。依赖 TASK-008。 | ✅ | 2026-11-06 |
 
 ## 3. Alternatives
@@ -65,7 +65,7 @@ tags: [feature, zcode, worker, subagent, inspector]
 
 ## 4. Dependencies
 
-- **DEP-001**: PR #183 的 TypeScript/ZCode 候选及其固定 v3.17.2 依赖，当前基线 35e40262344048528a2145b4c809db79c92c995b。
+- **DEP-001**: PR #183 的 TypeScript/ZCode 候选及其固定 v3.17.2 依赖，实现起始基线 35e40262344048528a2145b4c809db79c92c995b。
 - **DEP-002**: 现有 TaskLedger、LakeSecurity、项目资源目录与三联 Inspector。
 
 ## 5. Files
