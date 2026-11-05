@@ -66,17 +66,17 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const title=identity.querySelector<HTMLElement>('.crumb-title'),state=identity.querySelector<HTMLElement>('.header-morph-slot.is-visible .header-morph-content');
    const textWidth=(node:HTMLElement|null)=>{
     if(!node)return 0;
-    if(!textMetrics)return node.scrollWidth;
-    textMetrics.font=getComputedStyle(node).font;
-    return textMetrics.measureText(node.textContent??'').width;
+    // Text ranges retain the full glyph width through ellipsis. Measuring the
+    // rendered font includes its system-font fallback and letter spacing.
+    const range=document.createRange();range.selectNodeContents(node);
+    return range.getBoundingClientRect().width;
    };
    // Measure intrinsic text/controls, never the width imposed by this island's
    // own container query. Otherwise a compact 114px state expands the island,
    // its natural state shrinks it below 300px, and ResizeObserver oscillates.
    const badge=state?.querySelector<HTMLElement>('.session-state-badge')??null;
    const badgeStyle=badge?getComputedStyle(badge):null;
-   // Compact badges use smaller padding too. Budget the preferred padding,
-   // otherwise even intrinsic text can still oscillate across the breakpoint.
+   // Budget the shared padding token rather than constrained badge geometry.
    const badgePadding=parseFloat(getComputedStyle(identity).getPropertyValue('--island-badge-padding'));
    const badgeWidth=badgeStyle?textWidth(badge!.querySelector('.session-state-label'))+(badge!.querySelector('.session-state-icon')?.getBoundingClientRect().width??0)+parseFloat(badgeStyle.columnGap||'0')+2*badgePadding+parseFloat(badgeStyle.borderLeftWidth)+parseFloat(badgeStyle.borderRightWidth):0;
    const disclosure=state?.querySelector<HTMLElement>('.header-inspector-toggle');
@@ -101,15 +101,15 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    };
    // The panel becomes visible after the shared width budget has been applied.
    const terminalPane=open.current.terminal?rail(shell.querySelector<HTMLElement>('.terminal-side-panel.is-open')):undefined;
-   const titleWidth=Math.min(190,title?textWidth(title):160)+titleIconWidth;
+   const titleWidth=Math.max(60,Math.min(213,(title?textWidth(title):160)+titleIconWidth));
    const taskTrigger=identity.querySelector<HTMLElement>('.specialist-task-trigger');
-   // Reserve the preferred gap even when the compact header has tightened it.
-   const taskControlWidth=taskTrigger?taskTrigger.offsetWidth+10:0;
-   const preferredWidth=titleWidth+(pilotWidth||normalStateWidth)+60+taskControlWidth;
-   // The compact grid reserves 114px for ordinary status (300px content +
-   // two border pixels). Budget that once from intrinsic size so a short
-   // island does not unnecessarily truncate its title on an otherwise wide rail.
-   const conversationWidth=!pilotWidth&&preferredWidth<=302?titleWidth+Math.max(114,normalStateWidth)+60+taskControlWidth:preferredWidth;
+   // Use the same stable spacing tokens as CSS. No second status reserve or
+   // extra task-button gap: each visible segment contributes exactly once.
+   const islandStyle=getComputedStyle(identity);
+   const inset=parseFloat(islandStyle.getPropertyValue('--island-header-inset'));
+   const gap=parseFloat(islandStyle.getPropertyValue('--island-header-gap'));
+   const taskControlWidth=taskTrigger?.offsetWidth??0;
+   const conversationWidth=titleWidth+(pilotWidth||normalStateWidth)+taskControlWidth+2*inset+gap*(taskTrigger?2:1)+parseFloat(islandStyle.borderLeftWidth)+parseFloat(islandStyle.borderRightWidth);
    const layout=workbenchIslandLayout({
     conversation:{left,width:available,inset:0},
     terminal:terminalPane,
