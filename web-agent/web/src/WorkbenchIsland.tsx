@@ -66,9 +66,10 @@ export function WorkbenchIsland({conversation,terminal,activity,inspectorOpen,te
    const title=identity.querySelector<HTMLElement>('.crumb-title'),state=identity.querySelector<HTMLElement>('.header-morph-slot.is-visible .header-morph-content');
    const textWidth=(node:HTMLElement|null)=>{
     if(!node)return 0;
-    if(!textMetrics)return node.scrollWidth;
-    textMetrics.font=getComputedStyle(node).font;
-    return textMetrics.measureText(node.textContent??'').width;
+    // Text ranges retain the full glyph width through ellipsis. Measuring the
+    // rendered font also avoids WebKit's system-font canvas approximation.
+    const range=document.createRange();range.selectNodeContents(node);
+    return range.getBoundingClientRect().width;
    };
    // Measure intrinsic text/controls, never the width imposed by this island's
    // own container query. Otherwise a compact 114px state expands the island,
