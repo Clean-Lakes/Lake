@@ -40,6 +40,7 @@ export type Operation = {
   resourceId?: string; resourceRevision?: number; readOnly?: boolean;
   mcpServerId?: string; mcpTool?: string; remoteMcp?: boolean; configurationHash?: string; bindingHash?: string; catalogHash?: string;
   skillName?: string; skillHash?: string;
+  hostConfigurationHash?: string;
 };
 
 // The goal and immutable acceptance receipts are the only completion authority.
@@ -150,7 +151,7 @@ export class TaskLedger {
   }
   async operation<T>(goalId: string, generation: number, policyHash: string, callId: string, tool: string,
     input: unknown, dispatch: () => Promise<T>, redact: <V>(value: V) => V,
-    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash"> = {}): Promise<T> {
+    binding: Pick<Operation, "resourceId" | "resourceRevision" | "readOnly" | "mcpServerId" | "mcpTool" | "remoteMcp" | "configurationHash" | "bindingHash" | "catalogHash" | "skillName" | "skillHash" | "hostConfigurationHash"> = {}): Promise<T> {
     const key = digest([this.get(goalId).sessionId, callId]);
     const previous = this.store.get<Operation>("superOperations", key);
     if (previous) {

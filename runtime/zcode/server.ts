@@ -25,10 +25,11 @@ import { LakeAgents } from "./agent";
 import { LakeNavigation } from "./navigation";
 import { importDevModelSettings } from "./dev-settings";
 import { LakeSuperagent } from "./superagent";
-import { applyLegacyMigration, loadLegacyView } from "./migration";
+import { applyLegacyMigration, importLegacySSH, loadLegacyView } from "./migration";
 import { digest } from "./tasks";
 import { LakeSecurity } from "./security";
 import { LakeExtensions } from "./extensions";
+import {LakeSSH} from "./ssh";
 import { LakeTerminals } from "./terminal";
 import { commandPolicy } from "../../web-agent/shared/command-policy";
 export { previewLegacyMigration, rollbackMigration } from "./migration";
@@ -144,6 +145,7 @@ export async function startLakeServer(options: ServerOptions) {
   let security: LakeSecurity | undefined;
   let extensions: LakeExtensions | undefined;
   let terminals: LakeTerminals | undefined;
+  let ssh:LakeSSH|undefined;
   let draining = false;
   let closed = false;
   const clients = new Map<string, Set<ServerResponse>>();
@@ -214,7 +216,8 @@ export async function startLakeServer(options: ServerOptions) {
           `lake_session=${token}; HttpOnly; SameSite=Strict; Path=/`,
         );
       const data = method === "GET" || method === "HEAD" ? {} : await body(request);
-      if (!["GET", "HEAD"].includes(method) && !(path[1] === "superagent" && path[2] === "lifecycle")) security?.check();
+      const cleanup=path[1]==="sessions"&&(path[3]==="host-key"&&data.accept===false||path[3]==="terminals"&&path[5]==="disconnect");
+      if (!["GET", "HEAD"].includes(method) && !cleanup && !(path[1] === "superagent" && path[2] === "lifecycle")) security?.check();
       const navigation = new LakeNavigation(store, broadcast);
       const selection = () =>
         store!.get<{ providerId: string; modelId: string }>("settings", "modelSelection");
@@ -419,12 +422,14 @@ export async function startLakeServer(options: ServerOptions) {
         if (method === "GET")
           result = store.catalog().resources.filter((resource) => resource.projectId === path[2]);
         else {
-          if (data.kind !== "local") throw new HttpError(501, "远程资源连接尚未迁移完成");
+          if (!["local","ssh"].includes(data.kind)) throw new HttpError(501, "此资源类型的连接仍在迁移中");
+          if(method!=="POST")throw new HttpError(405,"不支持此资源请求");
           const resource: Resource = {
             id: id(),
             projectId: path[2],
             name: String(data.name ?? "本机"),
-            kind: "local",
+            kind: data.kind,
+            ...(data.kind==="ssh"?{ssh:ssh!.prepare(data.ssh)}:{}),
             description: "",
             status: "available",
             settings: data.settings ?? {},
@@ -472,6 +477,7 @@ export async function startLakeServer(options: ServerOptions) {
           resource.name = String(data.name ?? resource.name);
           if (data.settings && digest(data.settings) !== digest(resource.settings)) store.put("resourceRevisions", resource.id, (store.get<number>("resourceRevisions", resource.id) ?? 1) + 1);
           resource.settings = data.settings ?? resource.settings;
+          if(data.ssh!==undefined){resource.ssh=ssh!.prepare(data.ssh,resource.ssh);resource.status="available";store.put("resourceRevisions",resource.id,(store.get<number>("resourceRevisions",resource.id)??1)+1);}
           store.put("resources", resource.id, resource);
           result = resource;
         } else result = resource;
@@ -484,7 +490,8 @@ export async function startLakeServer(options: ServerOptions) {
           await agents.prepareRedaction();
           await loadLegacyView(store, sessionId, (value) => agents!.redact(value));
         }
-        if (path[3] === "terminals") {
+        if (path[3] === "host-key" && path.length===4 && method==="POST")result=ssh!.decide(sessionId,data);
+        else if (path[3] === "terminals") {
           if (path.length === 4 && method === "POST") { await agents.prepareRedaction(); extensions!.servers(); result = await terminals!.open(sessionId, data); status = 201; }
           else if (path.length === 5 && path[4] === "available" && method === "GET") result = terminals!.available(sessionId);
           else if (path.length === 6 && path[5] === "history" && method === "GET") result = terminals!.history(sessionId, path[4], url.searchParams.get("outputOnly") === "1");
@@ -633,7 +640,7 @@ export async function startLakeServer(options: ServerOptions) {
       }
       const status = error instanceof HttpError ? error.status : 500;
       const message =
-        extensions?.scrub(error instanceof Error ? error.message : String(error)) ?? agents?.redact(error instanceof Error ? error.message : String(error)) ?? "请求失败";
+        ssh?.scrub(error instanceof Error ? error.message : String(error)) ?? agents?.redact(error instanceof Error ? error.message : String(error)) ?? "请求失败";
       json(response, status, { error: message });
     }
   });
@@ -644,6 +651,7 @@ export async function startLakeServer(options: ServerOptions) {
     await superagent?.close();
     await agents?.close();
     await terminals?.close();
+    await ssh?.close();
     await extensions?.close();
     for (const set of clients.values()) for (const response of set) response.end();
     await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
@@ -657,14 +665,16 @@ export async function startLakeServer(options: ServerOptions) {
     agents = await LakeAgents.open(store, broadcast);
     security = new LakeSecurity(store);
     extensions = new LakeExtensions(store, security, (value) => agents!.redact(value));
-    terminals = new LakeTerminals(store, security, (value, live) => live ? agents!.redactLive(extensions!.scrubLive(value)) : extensions!.scrub(value), broadcast);
+    ssh=new LakeSSH(store,security,(session)=>{broadcast(store!.event(session,"session"));superagent?.changed(session);},value=>extensions!.scrub(value));
+    terminals = new LakeTerminals(store, security, (value, live) => live ? agents!.redactLive(ssh!.scrub(extensions!.scrubLive(value),true)) : ssh!.scrub(value), broadcast,ssh);
     agents.guard = () => security!.check();
     if (options.importLegacy) {
       if (!options.development) throw new HttpError(403, "旧数据迁移仅允许明确指定的 Dev 环境");
       await agents.prepareRedaction();
       await applyLegacyMigration(store, (value) => agents!.redact(value));
+      await importLegacySSH(store,ssh);
     }
-    superagent = new LakeSuperagent(store, agents, security, extensions);
+    superagent = new LakeSuperagent(store, agents, security, extensions,ssh);
     await new Promise<void>((resolveListen, reject) => {
       server.once("error", reject);
       server.listen(options.port, "localhost", () => resolveListen());

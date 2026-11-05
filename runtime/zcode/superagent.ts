@@ -10,6 +10,7 @@ import { canonical, digest, TaskLedger, terminal, text, type Goal, type Operatio
 import { superRouterPrompt, superWorkerPrompt } from "./super-prompts";
 import { loadLegacyView } from "./migration";
 import type { LakeSecurity } from "./security";
+import type {LakeSSH} from "./ssh";
 import type { LakeExtensions } from "./extensions";
 
 type Role = { id: string; projectId: string; roleKey: string; name: string; duties: string; revision: number; deletedAt?: string };
@@ -29,6 +30,7 @@ const permissionKeys = ["silentReadFiles", "silentWriteFiles", "silentReadSQL", 
 const routerTools = ["list_specialists", "manage_specialist", "search_super_tasks", "route_work", "read_super_object"];
 const workTools = ["work_begin", "work_read", "work_update", "work_finish", "work_wait", "ask_user_question", "list_assets", "list_project_files",
   "list_referenced_task_evidence", "read_referenced_task_evidence"];
+const hostTools=["inspect_host"];
 const extensionTools = ["list_mcp_servers", "list_mcp_tools", "call_mcp_tool", "load_skill"];
 const strings = (value: unknown, max = 128): string[] => {
   if (value == null) return [];
@@ -56,7 +58,7 @@ export class LakeSuperagent implements AgentHost {
   private scheduled = false;
   private lastProject = "";
   private heartbeat: ReturnType<typeof setInterval>;
-  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions) {
+  constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH) {
     this.ledger = new TaskLedger(store, (operation) => {
       if (operation.mcpServerId) {
         const project = store.require<SuperProject>("superProjects", operation.projectId);
@@ -69,6 +71,7 @@ export class LakeSuperagent implements AgentHost {
         if (!value?.skill.enabled || digest(value.content) !== operation.skillHash) throw new HttpError(409, "Skill 来源已改变或停用");
         return;
       }
+      if(operation.hostConfigurationHash){if(!ssh)throw new HttpError(409,"SSH 适配器未接入");security?.host(operation.projectId,operation.resourceId!);ssh.revalidate(store.require("resources",operation.resourceId!),operation.hostConfigurationHash,(operation.output as any)?.hostFingerprint);return;}
       if (!operation.resourceId) return;
       security?.resource(operation.projectId);
       const resource = store.require<any>("resources", operation.resourceId);
@@ -166,7 +169,7 @@ export class LakeSuperagent implements AgentHost {
     return { ...channel, roleName: role.name, duties: role.duties, roleRevision: role.revision,
       running: workers.some((worker) => this.active.has(worker.id) && this.agents.isRunning(worker.sessionId)),
       preparing: workers.some((worker) => worker.assignmentState === "queued") || this.store.list<InputEvent>("superInputs").some((event) => event.preferredRoleId === role.id && event.disposition === "pending"),
-      needsConfirmation: workers.some((worker) => !!this.store.view(worker.sessionId).pending || !!this.store.view(worker.sessionId).question),
+      needsConfirmation: workers.some((worker) => !!this.workerFor(worker.sessionId)&&(!!this.store.view(worker.sessionId).pending || !!this.store.view(worker.sessionId).question || !!this.ssh?.prompt(worker.sessionId))),
       completionCursor: accepted ? String(accepted).padStart(20, "0") : "",
       seenCompletionCursor: this.store.get<string>("superChannelReads", channel.id) ?? "" };
   }
@@ -423,8 +426,8 @@ export class LakeSuperagent implements AgentHost {
     const generation = worker.generation;
     const router = this.store.require<SuperProject>("superProjects", worker.projectId), permissions = this.store.session(router.routerSessionId).options;
     return { version: `${worker.id}:${generation}`, systemPrompt: superWorkerPrompt +
-      "\nUse the actual project MCP catalog and registered Skills when relevant. Only tools present here are available. Never bypass an unavailable terminal, remote-resource or Memory adapter with another tool.",
-      tools: [...this.workerEntries(worker), ...this.extensionEntries(worker)], allowlist: [...workTools, ...(this.extensions ? extensionTools : []), "Read", ...(this.ledger.get(worker.taskId).mode === "plan" ? [] : ["Write", "Edit"])].filter((name) => this.ledger.get(worker.taskId).mode !== "plan" || name !== "call_mcp_tool"),
+      "\nUse the actual project MCP catalog and registered Skills when relevant. For SSH hosts use list_assets and inspect_host with its exact configuration_revision. Resource available means configured, not healthy; only a real inspect_host receipt proves connectivity or current metrics. Only tools present here are available. Never bypass an unavailable terminal, remote-resource or Memory adapter with another tool.",
+      tools: [...this.workerEntries(worker), ...this.extensionEntries(worker),...this.hostEntries(worker)], allowlist: [...workTools,...(this.ssh?hostTools:[]), ...(this.extensions ? extensionTools : []), "Read", ...(this.ledger.get(worker.taskId).mode === "plan" ? [] : ["Write", "Edit"])].filter((name) => this.ledger.get(worker.taskId).mode !== "plan" || name !== "call_mcp_tool"),
       permissionRules: { scope: "session", version: 1,
         allow: [...(permissions.silentWriteFiles === true ? [{ toolName: "Write" }, { toolName: "Edit" }] : []),
           ...(this.extensions?.automaticCalls(worker.projectId, permissions) ? [{ toolName: "call_mcp_tool" }] : [])],
@@ -450,6 +453,7 @@ export class LakeSuperagent implements AgentHost {
       invoke: async (entry, input, context) => {
         this.validateWorker(worker.id, generation);
         if (context.abortSignal.aborted) throw new HttpError(409, "Worker stopped");
+        if(hostTools.includes(entry.metadata.name))return this.invokeHost(worker,generation,entry,input,context);
         if (extensionTools.includes(entry.metadata.name)) return this.invokeExtension(worker, generation, entry, input, context);
         if (workTools.includes(entry.metadata.name) && !["list_project_files", "read_referenced_task_evidence"].includes(entry.metadata.name))
           return entry.handler(input, context);
@@ -486,6 +490,21 @@ export class LakeSuperagent implements AgentHost {
     }
     if (actual !== workspace && !actual.startsWith(workspace + sep)) throw new HttpError(403, "File is outside the assigned project workspace");
     return actual;
+  }
+  private hostEntries(worker:Worker):ToolEntry[]{
+    if(!this.ssh)return [];
+    const entry=this.entry("inspect_host","Read current SSH host metrics using one fixed readonly system, disks or processes profile. Copy exact asset_ref and configuration_revision from list_assets. Never accepts Shell text or credentials.",objectSchema({asset_ref:str,configuration_revision:str,metric:{type:"string",enum:["system","disks","processes"]}},["asset_ref","configuration_revision","metric"]),async(a,context)=>this.ssh!.inspect(worker.sessionId,this.store.require("resources",a.asset_ref),a.metric,context.abortSignal,()=>{this.validateWorker(worker.id,worker.generation);this.security?.host(worker.projectId,a.asset_ref);}),false,131072);
+    entry.resolvePermissionCapability=(input:any)=>{const project=this.store.require<SuperProject>("superProjects",worker.projectId),options=this.store.session(project.routerSessionId).options,policy=this.security?.host(worker.projectId,input.asset_ref);const approval=options.silentCommands!==true||policy==='ask';return {needsApproval:approval,permission:{needsApproval:approval,sideEffectScope:"workspace"}};};
+    return [entry];
+  }
+  private async invokeHost(worker:Worker,generation:number,entry:ToolEntry,input:any,context:ToolExecutionContext){
+    if(!this.ssh)throw new HttpError(409,"SSH 适配器未接入");
+    const project=this.store.require<SuperProject>("superProjects",worker.projectId),options=this.store.session(project.routerSessionId).options;
+    if(options.blockUnreferencedAssets===true)throw new HttpError(403,"Pilot 当前要求明确的资源引用；该主机尚未登记可执行引用");
+    const resource=this.store.require<import("../../web-agent/shared/contracts").Resource>("resources",text(input.asset_ref,"asset_ref",200));
+    this.security?.host(worker.projectId,resource.id);const revision=this.ssh.revision(resource);if(input.configuration_revision!==revision)throw new HttpError(409,"SSH 配置或凭据版本已变化，请重新读取资源目录");
+    this.validateWorker(worker.id,generation);
+    return this.ledger.operation(worker.taskId,generation,worker.policyHash,context.toolCallId,entry.metadata.name,input,()=>entry.handler(input,context),value=>JSON.parse(this.ssh!.scrub(JSON.stringify(value??null))),{resourceId:resource.id,resourceRevision:this.store.get<number>("resourceRevisions",resource.id)??1,readOnly:true,hostConfigurationHash:revision});
   }
   private async invokeExtension(worker: Worker, generation: number, entry: ToolEntry, input: any, context: ToolExecutionContext) {
     if (!this.extensions) throw new HttpError(409, "扩展宿主未接入");
@@ -641,7 +660,7 @@ export class LakeSuperagent implements AgentHost {
       }), true),
       this.entry("ask_user_question", "Ask a bounded human prerequisite question for this exact task. Answers are not operation approval or goal acceptance.",
         objectSchema({ questions: array(objectSchema({ id: str, title: str, reason: str, options: array(str), multi_select: { type: "boolean" } }, ["id", "title"])) }, ["questions"]), run((a, context) => this.questionInteraction(worker, a, context.abortSignal))),
-      this.entry("list_assets", "List current project resource metadata. A resource ID is not permission and unavailable adapters cannot be replaced with local execution.", objectSchema({}), run(() => ({ assets: this.store.catalog().resources.filter((resource) => resource.projectId === worker.projectId).map((resource) => ({ id: resource.id, asset_ref: resource.id, name: resource.name, kind: resource.kind, status: resource.status })) }))),
+      this.entry("list_assets", "List current project resource metadata. A resource ID is not permission and unavailable adapters cannot be replaced with local execution.", objectSchema({}), run(() => ({ assets: this.store.catalog().resources.filter((resource) => resource.projectId === worker.projectId).map((resource) => ({ id: resource.id, asset_ref: resource.id, name: resource.name, kind: resource.kind, status: resource.status, ...(resource.kind==="ssh"&&resource.status==="available"&&this.ssh?{configuration_revision:this.ssh.revision(resource),connectionState:"configured; not a health observation"}:{}) })) }))),
       this.entry("list_project_files", "List at most 200 immediate entries in the assigned project workspace. Symlink targets are never followed.", objectSchema({ path: str }), run(async (a) => {
         const workspace = await this.store.workspace(worker.projectId), path = await this.scopedPath(workspace, a.path ?? ".");
         const entries = await readdir(path, { withFileTypes: true });
@@ -733,6 +752,7 @@ export class LakeSuperagent implements AgentHost {
     return publicGoal;
   }
   decorate(snapshot: SessionSnapshot): SessionSnapshot {
+    snapshot.hostKeyTrust=this.ssh?.prompt(snapshot.session.id)??null;
     snapshot.messages = [...snapshot.messages, ...this.store.list<Message>("superDispatchMessages").filter((message) => message.sessionId === snapshot.session.id)]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
     const worker = this.workerFor(snapshot.session.id);
@@ -788,7 +808,7 @@ export class LakeSuperagent implements AgentHost {
     this.store.put("superWorkers", worker.id, worker);
     const goal = this.ledger.get(worker.taskId);
     if (!terminal(goal.status) && goal.status === "running") {
-      goal.status = this.ledger.unresolved(goal.id) ? "blocked" : this.closed ? "paused" : "waiting_user";
+      goal.status = this.ledger.unresolved(goal.id) ? "blocked" : "paused";
       goal.summary = error ? this.agents.redact(error) : "专员已保留当前进度；尚未取得全部验收证据。";
       this.ledger.save(goal);
     }
@@ -942,7 +962,7 @@ export class LakeSuperagent implements AgentHost {
     }
     const page = entries.slice(offset, offset + 50), last = page.at(-1);
     return { channel: this.channelView(channel), entries: page.reverse(), workers,
-      active: workers.filter((worker) => this.active.has(worker.id) || !!this.store.view(worker.sessionId).pending || !!this.store.view(worker.sessionId).question)
+      active: workers.filter((worker) => this.active.has(worker.id) || !!this.workerFor(worker.sessionId)&&(!!this.store.view(worker.sessionId).pending || !!this.store.view(worker.sessionId).question || !!this.ssh?.prompt(worker.sessionId)))
         .map((worker) => this.decorate(this.store.snapshot(worker.sessionId))),
       routing: this.store.list<InputEvent>("superInputs").some((event) => event.preferredRoleId === channel.roleId && event.disposition === "pending"),
       queued: workers.filter((worker) => worker.assignmentState === "queued").length,

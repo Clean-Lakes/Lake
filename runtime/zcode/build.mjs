@@ -42,12 +42,13 @@ await build({
   sourcemap: false,
   legalComments: "eof",
   logLevel: "warning",
-  external: ["koffi", "playwright-core", "ripgrep"],
+  external: ["koffi", "playwright-core", "ripgrep", "cpu-features", "./crypto/build/Release/sshcrypto.node"],
   nodePaths: [join(source, "node_modules")],
   plugins: [
     {
       name: "pinned-zcode-source",
       setup(builder) {
+        builder.onResolve({ filter: /^ssh2$/ }, (args) => ({ path: require.resolve(args.path) }));
         builder.onResolve({ filter: /^@modelcontextprotocol\/client(?:\/stdio)?$/ }, (args) => ({ path: require.resolve(args.path) }));
         builder.onResolve({ filter: /^@zcode\// }, async (args) => {
           const segments = args.path.split("/");
@@ -76,6 +77,7 @@ for (const file of ["LICENSE", "NOTICE.md", "THIRD-PARTY-NOTICES.md"]) {
   await copyFile(join(source, file), join(output, "licenses", file));
 }
 await copyFile(join(source, "node_modules/@modelcontextprotocol/client/LICENSE"), join(output, "licenses/MCP-client-LICENSE"));
+await copyFile(join(source, "node_modules/ssh2/LICENSE"), join(output, "licenses/ssh2-LICENSE"));
 // Native PTY stays outside the SEA bundle so Node can dlopen the pinned addon.
 const ptySource = dirname(require.resolve("node-pty/package.json"));
 const ptyOutput = join(output, "native/node-pty");

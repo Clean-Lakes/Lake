@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, isAbsolute } from "node:path";
 import { isSea } from "node:sea";
-import type { IPty } from "node-pty";
+import type {LakeSSH,TerminalDevice} from "./ssh";
 import type { Resource, SessionEvent, TerminalEntry, TerminalSession } from "../../web-agent/shared/contracts";
 import { commandPolicy, dangerConfirmation } from "../../web-agent/shared/command-policy";
 import { HttpError, id, LakeStore, now } from "./store";
@@ -12,7 +12,7 @@ import { digest } from "./tasks";
 const root = () => isSea() ? join(dirname(process.execPath), "lake-zcode") : __dirname;
 const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
 const limit = 256 * 1024;
-type Live = { pty: IPty; terminal: TerminalSession; signature: string; partial: string; raw: string; ready: boolean; closed: boolean;
+type Live = { pty: TerminalDevice; terminal: TerminalSession; signature: string; partial: string; raw: string; ready: boolean; closed: boolean;
   marker: string; jobMarker: string; suppressEcho: boolean; jobStarted: boolean; inputPending: boolean; jobRaw: string; job?: TerminalEntry; timer?: ReturnType<typeof setTimeout>; flush?: ReturnType<typeof setTimeout>; exited: Promise<void>; resolveExit: () => void };
 
 /** Human PTY ownership is separate from Worker authority. Opening a console never binds an agent. */
@@ -22,7 +22,7 @@ export class LakeTerminals {
   private reservations = 0;
   private closing = false;
   constructor(readonly store: LakeStore, readonly security: LakeSecurity, readonly scrub: (value: string, live?: boolean) => string,
-    readonly publish: (event: SessionEvent) => void) {
+    readonly publish: (event: SessionEvent) => void, readonly ssh?:LakeSSH) {
     // Old processes are not trusted handles. Retain output; never resume or kill a saved PID.
     for (const terminal of store.list<TerminalSession>("terminals")) {
       if (terminal.status !== "disconnected") {
@@ -78,37 +78,41 @@ export class LakeTerminals {
     if (!this.supported) throw new HttpError(501, "当前平台尚未接入持续终端");
     const session = this.store.session(sessionId), resource = this.resource(data.resourceId);
     if (resource.projectId !== session.projectId) throw new HttpError(404, "资源不属于此项目");
-    if (resource.kind !== "local") throw new HttpError(501, "SSH 持续终端的凭据与主机身份校验仍在迁移中");
+    if (!["local","ssh"].includes(resource.kind)) throw new HttpError(400, "此资源不支持终端");
+    const remote=resource.kind==="ssh"; if(remote&&!this.ssh)throw new HttpError(501,"SSH 适配器未接入");
     if (resource.status !== "available") throw new HttpError(409, "此资源尚未完成迁移核验，请使用 TS 项目工作区");
-    const shell = data.shell ?? resource.settings?.shell ?? "zsh";
+    const shell = data.shell ?? (remote?resource.ssh?.shell:resource.settings?.shell) ?? (remote?"bash":"zsh");
     if (!["sh", "bash", "zsh", "fish"].includes(shell)) throw new HttpError(400, "Shell 必须是 sh、bash、zsh 或 fish");
     const program = ["/bin/" + shell, "/usr/bin/" + shell, "/opt/homebrew/bin/" + shell].find(existsSync);
-    if (!program) throw new HttpError(400, "所选 Shell 未安装");
+    if (!program&&!remote) throw new HttpError(400, "所选 Shell 未安装");
     if (this.closing || this.live.size + this.reservations >= 16) throw new HttpError(409, "最多同时连接 16 个终端");
     this.reservations++;
     try {
-      const cwd = await this.store.workspace(session.projectId);
+      const cwd = remote?null:await this.store.workspace(session.projectId);
       this.security.check();
       if (this.closing) throw new HttpError(409, "终端服务正在停止");
       const terminal: TerminalSession = { id: id(), sessionId, resourceId: resource.id, generation: id(), status: "connecting", holder: "user", contextVersion: 1,
         shell, cwd, createdAt: now(), outputCapturedAt: null, interactive: true };
       const marker = id().replaceAll("-", "");
       const hooks = shell === "sh" ? "" : readFileSync(join(root(), "hooks", shell + ".txt"), "utf8").replace("__lake_recording=;", "__lake_recording=; __lake_managed=;").replace("local __lake_status=$?;", "local __lake_status=$?; __lake_managed=;");
+      const shPrompt = `if [ -n "\${BASH_VERSION-}" ]; then PROMPT_COMMAND='printf "\\033]9003;%s;%s\\007" "$?" "$PWD"'; PS1='[$PWD]$ '; else PS1='$(printf "\\033]9003;%s;%s\\007" "$?" "$PWD")[$PWD]$ '; fi`;
       const initialization = shell === "fish"
-        ? `stty -echo; ${hooks}\nset -g __lake_interactive 1; set -g __lake_managed 1; stty echo; printf '\\036LAKE_READY_${marker}\\037'; set -e __lake_managed`
-        : `stty -echo; ${hooks}\n${shell === "sh" ? `PROMPT_COMMAND='printf "\\033]9003;%s;%s\\007" "$?" "$PWD"'; PS1='[$PWD]$ '` : shell === "bash" ? "PS1='[\\u@\\h \\w]\\$ '" : "PS1='[%n@%m %~]%# '"}; PS2='> '; HISTFILE=/dev/null; __lake_managed=1; stty echo; printf '\\036LAKE_READY_${marker}\\037'; __lake_managed=`;
+        ? `stty -echo; ${remote?'cd -- "$HOME"; ':''}${hooks}\nset -g __lake_interactive 1; set -g __lake_managed 1; stty echo; printf '\\036LAKE_READY_${marker}\\037'; set -e __lake_managed`
+        : `stty -echo; ${remote?'cd -- "$HOME"; ':''}${hooks}\n${shell === "sh" ? shPrompt : shell === "bash" ? "PS1='[\\u@\\h \\w]\\$ '" : "PS1='[%n@%m %~]%# '"}; PS2='> '; HISTFILE=/dev/null; __lake_managed=1; stty echo; printf '\\036LAKE_READY_${marker}\\037'; __lake_managed=`;
       const env: Record<string, string> = { HOME: this.store.home, PATH: "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", LANG: "en_US.UTF-8", LC_ALL: "en_US.UTF-8", TERM: "xterm-256color", COLORTERM: "truecolor" };
       // Staging command is environment data, not an echoed command containing hook bodies.
       env.__lake_init = initialization;
       const args = shell === "bash" ? ["--noprofile", "--norc", "-i"] : shell === "zsh" ? ["-f", "-i"] : shell === "fish" ? ["--no-config", "--private", "-i"] : ["-i"];
-      const pty = (createRequire(join(root(), "server.cjs"))(join(root(), "native/node-pty")) as typeof import("node-pty")).spawn(program, args, { cwd, env, cols: 100, rows: 30, name: "xterm-256color" });
+      const command="/bin/sh -c "+quote("export __lake_init="+quote(initialization)+"; exec "+shell+" "+args.map(quote).join(" "));
+      const pty:TerminalDevice = remote?this.ssh!.terminal(sessionId,resource,command):(createRequire(join(root(), "server.cjs"))(join(root(), "native/node-pty")) as typeof import("node-pty")).spawn(program!, args, { cwd:cwd!, env, cols: 100, rows: 30, name: "xterm-256color" });
       let resolveExit!: () => void; const exited = new Promise<void>((resolve) => { resolveExit = resolve; });
       const live: Live = { pty, terminal, marker, signature: this.signature(resource), partial: "", raw: "", jobRaw: "", jobMarker: "", suppressEcho: false, jobStarted: false, inputPending: false, ready: false, closed: false, exited, resolveExit };
       this.live.set(terminal.id, live); this.emit(terminal);
       pty.onData((value) => this.receive(live, value));
       pty.onExit(() => { this.finish(live); live.resolveExit(); });
-      live.timer = setTimeout(() => { if (!live.ready) void this.stop(live); }, 8000);
-      pty.write('eval "$__lake_init"\r');
+      live.timer = setTimeout(() => { if (!live.ready) void this.stop(live); }, remote?150000:8000);
+      if(!remote)pty.write('eval "$__lake_init"\r');
+      else { const launch=setInterval(()=>{if(live.closed||live.ready){clearInterval(launch);return;}try{pty.write('eval "$__lake_init"\r');clearInterval(launch);}catch{}},100);launch.unref(); }
       return terminal;
     } finally { this.reservations--; }
   }
@@ -169,7 +173,7 @@ export class LakeTerminals {
   }
   private finish(live: Live) {
     if (live.closed) return;
-    clearTimeout(live.timer); clearTimeout(live.flush); this.save(live); live.closed = true;
+    clearTimeout(live.timer); clearTimeout(live.flush); if(!live.ready&&live.pty.error)live.raw="\r\n"+live.pty.error+"\r\n"; this.save(live); live.closed = true;
     if (live.job) { live.job.status = "unknown"; live.job.finishedAt = now(); this.store.put("terminalEntries", live.job.id, live.job); live.job = undefined; }
     live.terminal.status = "disconnected"; live.terminal.holder = null; live.terminal.interactive = false; this.live.delete(live.terminal.id); this.emit(live.terminal);
   }
@@ -229,7 +233,7 @@ export class LakeTerminals {
   }
   private async stop(live: Live) {
     // Only this process's registered child handle can be signalled.
-    const signal = (value: NodeJS.Signals) => { if (!live.closed) { try { process.kill(-live.pty.pid, value); } catch { try { live.pty.kill(value); } catch {} } } };
+    const signal = (value: NodeJS.Signals) => { if (!live.closed) { try { if(live.pty.pid)process.kill(-live.pty.pid,value);else live.pty.kill(value); } catch { try { live.pty.kill(value); } catch {} } } };
     signal("SIGTERM");
     let timer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([live.exited, new Promise<void>((resolve) => { timer = setTimeout(resolve, 500); })]); clearTimeout(timer);

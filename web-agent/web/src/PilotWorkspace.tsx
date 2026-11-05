@@ -109,7 +109,7 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    const worker = workers[0], task = worker?.task;
    const name = channel?.roleName ?? worker!.roleName;
    const selected = channel ? channel.roleId === viewedRole : worker?.sessionId === selectedId;
-   const needsConfirmation = channel?.needsConfirmation || workers.some(row => row.task.state === 'waiting_user');
+   const needsConfirmation = channel ? channel.needsConfirmation === true : workers.some(row => row.task.state === 'waiting_user');
    const running = channel ? channel.running === true : task?.state === 'running';
    const replyActivity=activity&&(activity.sessionId===channel?.sessionId||workers.some(row=>row.sessionId===activity.sessionId))?activity.state:undefined;
    const preparing = channel?.preparing === true;

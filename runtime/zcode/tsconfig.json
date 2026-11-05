@@ -9,6 +9,7 @@
     "types": ["node"],
     "typeRoots": ["../../third_party/zcode/node_modules/@types"],
     "paths": {
+      "ssh2": ["../../third_party/zcode/node_modules/@types/ssh2/index.d.ts"],
       "node-pty": ["../../third_party/zcode/node_modules/node-pty/typings/node-pty.d.ts"],
       "@modelcontextprotocol/client": ["../../third_party/zcode/node_modules/@modelcontextprotocol/client/dist/index.d.mts"],
       "@modelcontextprotocol/client/stdio": ["../../third_party/zcode/node_modules/@modelcontextprotocol/client/dist/stdio.d.mts"],

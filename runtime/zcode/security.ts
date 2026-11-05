@@ -58,6 +58,27 @@ export class LakeSecurity {
     if (this.store.get("legacyProjectPolicies", projectId))
       throw new HttpError(409, "此项目的安全策略已保留，资源操作须完成迁移核验后继续");
   }
+  host(projectId:string,resourceId:string):'allow'|'ask' {
+    this.check();const resource=this.store.require<any>('resources',resourceId);
+    if(resource.projectId!==projectId||resource.kind!=='ssh'||resource.status!=='available')throw new HttpError(403,'主机不在当前项目或连接配置不可用');
+    const legacy=this.store.get<any>('legacyProjectPolicies',projectId);if(!legacy)return 'allow';
+    const policy=legacy.data;
+    if(!policy||policy.SchemaVersion!==1||!policy.Confirmed||policy.ProjectID!==projectId||!['legacy','restricted','compatible'].includes(policy.Mode)||!Number.isSafeInteger(policy.Revision)||policy.Revision<1||!Array.isArray(policy.Rules)||!Array.isArray(policy.ResourceIDs)||!policy.ResourceIDs.includes(resourceId))throw new HttpError(403,'原项目策略不允许此主机范围，或策略需核实');
+    const path=join(this.store.home,'security/control.json');if(existsSync(path)){const control=JSON.parse(readFileSync(path,'utf8'));if(policy.StoreID!==control.storeID||policy.RecoveryEpoch!==control.recoveryEpoch)throw new HttpError(409,'原项目安全身份已失效');}
+    let result:'allow'|'ask'='allow';
+    for(const capability of ['command.diagnostics','resource.resolve']){
+      const applicable=policy.Rules.filter((rule:any)=>rule.Capability===capability&&(!rule.ResourceIDs?.length||rule.ResourceIDs.includes(resourceId)));
+      if(!applicable.length||applicable.some((rule:any)=>rule.Effect==='deny'))throw new HttpError(403,'原项目策略禁止此主机读取能力');
+      const specific=applicable.filter((rule:any)=>rule.ResourceIDs?.length),width=specific.length?Math.min(...specific.map((rule:any)=>rule.ResourceIDs.length)):0;
+      const rules=width?specific.filter((rule:any)=>rule.ResourceIDs.length===width):applicable;
+      for(const rule of rules){
+        if(rule.Limits&&Object.values(rule.Limits).some(value=>Array.isArray(value)?value.length>0:!!value))throw new HttpError(403,'此主机读取适配尚不能证明原策略的受限范围');
+        if(rule.Effect==='ask'){if(!['single','either'].includes(rule.Confirmation))throw new HttpError(409,'原策略需要专用任务授权，不能以单次确认替代');result='ask';}
+        else if(rule.Effect!=='allow')throw new HttpError(403,'原主机读取规则无效');
+      }
+    }
+    return result;
+  }
   mcp(projectId: string, capability: "mcp.discover" | "mcp.call" | "artifact.read", local: boolean): "allow" | "ask" {
     this.check();
     // Catalog v1 imported only visible projects. Until exact legacy service

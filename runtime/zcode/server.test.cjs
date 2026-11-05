@@ -160,6 +160,15 @@ function superReply(request, mode, home) {
     if (updates.filter((update) => update.status === "running").length === 1) return call("work_update", { item_id: "inspect", status: "running" }, "retry-inspect");
     if (reads < 2) return call("list_project_files", { path: "." }, "actual-files");
   }
+  if (mode === "super-host") {
+    const result=(name)=>{const id=request.messages.flatMap(m=>m.tool_calls??[]).filter(c=>c.function.name===name).at(-1)?.id;const m=request.messages.findLast(m=>m.role==='tool'&&m.tool_call_id===id);return m?JSON.parse(content(m)):undefined;};
+    if(!names.includes('list_assets'))return call('list_assets',{},'host-catalog');
+    const asset=result('list_assets').assets.find(a=>a.kind==='ssh');
+    if(!names.includes('inspect_host'))return call('inspect_host',{asset_ref:asset.id,configuration_revision:asset.configuration_revision,metric:'system'},'actual-host');
+    if(!updates.some(u=>u.status==='completed'))return call('work_update',{item_id:'inspect',status:'completed',evidence_ids:['actual-host']},'accept-host');
+    if(!names.includes('work_finish'))return call('work_finish',{summary:'已从本次 SSH 固定只读检查取得实际主机指标。'});
+    return {content:'本次 SSH 读取已经完成。'};
+  }
   if (mode.startsWith("super-mcp")) {
     const result = (name) => {
       const id = request.messages.flatMap((message) => message.tool_calls ?? []).filter((tool) => tool.function.name === name).at(-1)?.id;
@@ -1078,4 +1087,131 @@ test('legacy unresolved MCP calls outside visible projects still fence a new app
  await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),view=>!['running','waiting_approval'].includes(view.status));
  assert.equal(mcp.requests.filter(request=>request.rpc.method==='tools/call').length,0);
  assert.equal(f.app.store.list('superOperations').filter(operation=>operation.tool==='call_mcp_tool').length,0);
+});
+
+async function sshFixture(t){
+ const fs=require('node:fs/promises'),{generateKeyPairSync}=require('node:crypto'),{Server}=require('../../third_party/zcode/node_modules/ssh2'),{spawn}=require('node:child_process');
+ const pty=require('../../bin/lake-zcode/native/node-pty'),home=await mkdtemp(join(tmpdir(),'lake-ssh-server-')),clients=new Set();
+ let server,port=0,key;const requests=[];let auths=0;
+ const password='synthetic-ssh-password-no-real-credential';
+ const start=async()=>{
+  key=generateKeyPairSync('rsa',{modulusLength:2048}).privateKey.export({type:'pkcs1',format:'pem'});
+  server=new Server({hostKeys:[key]},client=>{
+   clients.add(client);client.on('error',()=>{});client.once('close',()=>clients.delete(client));
+   client.on('authentication',ctx=>{auths++;if(ctx.method==='password'&&ctx.username==='fixture'&&ctx.password===password)ctx.accept();else ctx.reject();});
+   client.on('ready',()=>client.on('session',accept=>{
+    const session=accept();let dimensions;
+    session.on('pty',(accept,reject,info)=>{dimensions=info;accept();});
+    session.on('exec',(accept,reject,info)=>{
+     const stream=accept();requests.push({command:info.command,pty:!!dimensions});
+     if(dimensions){
+      const child=pty.spawn('/bin/sh',['-c',info.command],{cwd:home,env:{HOME:home,PATH:'/usr/bin:/bin:/usr/sbin:/sbin',LANG:'en_US.UTF-8'},cols:dimensions.cols,rows:dimensions.rows});
+      child.onData(data=>{if(!stream.destroyed)stream.write(data);});stream.on('data',data=>child.write(data.toString()));
+      child.onExit(event=>{if(!stream.destroyed){stream.exit(event.exitCode);stream.end();}});stream.on('close',()=>{try{child.kill();}catch{}});
+      session.on('window-change',(accept,reject,info)=>{try{child.resize(info.cols,info.rows);}catch{}accept?.();});
+     }else{
+      const child=spawn('/bin/sh',['-c',info.command],{cwd:home,env:{HOME:home,PATH:'/usr/bin:/bin:/usr/sbin:/sbin'}});
+      child.stdout.on('data',data=>stream.write(data));child.stderr.on('data',data=>stream.stderr.write(data));child.on('close',code=>{stream.exit(code??1);stream.end();});stream.on('close',()=>child.kill());
+     }
+    });
+   }));
+  });
+  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',()=>{port=server.address().port;resolve();});});
+ };
+ const stop=async()=>{for(const client of clients)client.end();await new Promise(resolve=>server.close(resolve));};
+ await start();t.after(stop);
+ return {get port(){return port;},password,requests,get auths(){return auths;},async rotate(){await stop();await start();}};
+}
+async function sshResource(f,server){return f.api(`/api/projects/${f.project.id}/resources`,'POST',{kind:'ssh',name:'SSH fixture',ssh:{host:'127.0.0.1',port:server.port,username:'fixture',authMethod:'password',password:server.password,shell:'bash'}});}
+async function trustTerminal(f,resource,sessionId=f.session.id){
+ const term=await f.api(`/api/sessions/${sessionId}/terminals`,'POST',{resourceId:resource.id,interactive:true},201);
+ const base=`/api/sessions/${sessionId}/terminals/${term.id}`;
+ const snapshot=await until(()=>f.api(`/api/sessions/${sessionId}/snapshot`),s=>!!s.hostKeyTrust);
+ return {term,base,prompt:snapshot.hostKeyTrust,approve:()=>f.api(`/api/sessions/${sessionId}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint})};
+}
+
+test('SSH host trust blocks authentication, then opens a real remote PTY with saved private credentials', {skip:process.platform!=='darwin'},async(t)=>{
+ const f=await fixture(t),server=await sshFixture(t),resource=await sshResource(f,server);
+ assert.ok(!JSON.stringify(resource).includes(server.password));
+ const {sessionId}=await f.api(`/api/resources/${resource.id}/terminal-context`,'POST',{});
+ const terminal=await trustTerminal(f,resource,sessionId);
+ assert.equal(server.auths,0,'host confirmation must precede all authentication');
+ assert.equal(terminal.prompt.changed,false);
+ await terminal.approve();
+ const history=()=>f.api(terminal.base+'/history');await until(history,h=>h.terminal.status==='ready');
+ await f.api(terminal.base+'/input','POST',{data:"test -t 0 && printf 'REMOTE_TTY_OK\\n'; export SAVED_SSH_STATE=retained\r"},202);
+ await until(history,h=>h.output.includes('REMOTE_TTY_OK')&&h.terminal.status==='ready');
+ await f.api(terminal.base+'/input','POST',{data:"printf 'SSH_STATE_%s\\n' \"$SAVED_SSH_STATE\"\r"},202);
+ const final=await until(history,h=>h.output.includes('SSH_STATE_retained'));
+ assert.ok(!JSON.stringify(final).includes(server.password));assert.ok(server.requests.some(request=>request.pty));
+ await f.api(terminal.base+'/disconnect','POST',{});
+ await f.restart();
+ const reused=await f.api(`/api/sessions/${sessionId}/terminals`,'POST',{resourceId:resource.id},201);
+ await until(()=>f.api(`/api/sessions/${sessionId}/terminals/${reused.id}/history`),h=>h.terminal.status==='ready');
+ assert.equal((await f.api(`/api/sessions/${sessionId}/snapshot`)).hostKeyTrust,null,'confirmed host pin is reusable after restart');
+});
+
+test('SSH key changes prompt before authentication; cancellation and stale fingerprints cannot silently change trust', {skip:process.platform!=='darwin'},async(t)=>{
+ const f=await fixture(t),server=await sshFixture(t),resource=await sshResource(f,server);
+ let terminal=await trustTerminal(f,resource);await terminal.approve();await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');await f.api(terminal.base+'/disconnect','POST',{});
+ const authenticated=server.auths;await server.rotate();terminal=await trustTerminal(f,resource);
+ assert.equal(terminal.prompt.changed,true);assert.equal(terminal.prompt.previousFingerprints.length,1);assert.equal(server.auths,authenticated);
+ await f.api(`/api/sessions/${f.session.id}/host-key`,'POST',{id:terminal.prompt.id,accept:true,fingerprint:'SHA256:stale'},409);
+ await f.api(`/api/sessions/${f.session.id}/host-key`,'POST',{id:terminal.prompt.id,accept:false,fingerprint:terminal.prompt.fingerprint});
+ await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='disconnected');assert.equal(server.auths,authenticated);
+ terminal=await trustTerminal(f,resource);await terminal.approve();await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');
+ assert.ok(server.auths>authenticated);
+});
+
+test('independent Worker uses an exact approved SSH diagnostic profile and accepts only its real receipt', {skip:process.platform!=='darwin'},async(t)=>{
+ const f=await fixture(t,'super-host'),server=await sshFixture(t),resource=await sshResource(f,server);
+ const terminal=await trustTerminal(f,resource);await terminal.approve();await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');await f.api(terminal.base+'/disconnect','POST',{});
+ const authenticated=server.auths,project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'读取该 SSH 主机当前系统指标。'},202);
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),value=>value.channels[0]?.needsConfirmation),worker=state.workers[0];
+ const channel=await f.api(`/api/sessions/${state.channels[0].sessionId}/channel`);assert.ok(channel.active.some(s=>s.ai.pending?.call.name==='inspect_host'));
+ const pending=(await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;assert.equal(pending.call.name,'inspect_host');assert.equal(server.auths,authenticated);
+ await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.id,accept:true});
+ const completed=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0].task.state==='completed');
+ assert.equal(completed.channels[0].needsConfirmation,false);
+ const operation=f.app.store.list('superOperations').find(o=>o.tool==='inspect_host');assert.equal(operation.status,'succeeded');assert.equal(operation.resourceId,resource.id);assert.equal(operation.output.exitCode,0);assert.ok(operation.output.hostFingerprint);assert.equal(operation.readOnly,true);
+});
+
+test('legacy SSH references supplement an already imported v1 catalog without touching source data or replaying work',async(t)=>{
+ const f=await fixture(t),source=await seedLegacyCatalog(f),fs=require('node:fs/promises');f.options.development=true;f.options.importLegacy=true;await f.restart();
+ const oldBatch=JSON.stringify(f.app.store.get('settings','legacyCatalogMigration.v1'));
+ assert.equal((await f.api('/api/resources/old-ssh')).status,'unavailable');
+ const privateKey=require('node:crypto').generateKeyPairSync('rsa',{modulusLength:2048}).privateKey.export({type:'pkcs1',format:'pem'});
+ await fs.mkdir(join(f.home,'secrets'),{mode:0o700,recursive:true});await writeFile(join(f.home,'secrets/ssh-key-fixture'),privateKey,{mode:0o600});
+ const db=new(require('node:sqlite').DatabaseSync)(source.path);db.exec('CREATE TABLE resourceConnections(resourceId TEXT,config TEXT)');db.prepare('INSERT INTO resourceConnections VALUES(?,?)').run('old-ssh',JSON.stringify({host:'127.0.0.1',port:22,username:'fixture',authMethod:'key',identityFile:'ssh-key-fixture',shell:'bash'}));db.close();
+ const before=await source.hash(source.path),calls=f.calls;await f.restart();
+ const resource=await f.api('/api/resources/old-ssh');assert.equal(resource.status,'available');assert.equal(resource.ssh.identityFile,'ssh-key-fixture');
+ assert.equal(JSON.stringify(f.app.store.get('settings','legacyCatalogMigration.v1')),oldBatch);assert.equal(await source.hash(source.path),before);assert.equal(f.calls,calls);assert.equal(f.app.store.list('superWorkers').length,0);
+ await f.api('/api/resources/old-ssh','PATCH',{name:'Edited SSH'});await f.restart();assert.equal((await f.api('/api/resources/old-ssh')).name,'Edited SSH');
+});
+
+test('changing SSH configuration while approval waits invalidates the exact call without authentication', {skip:process.platform!=='darwin'},async(t)=>{
+ const f=await fixture(t,'super-host'),server=await sshFixture(t),resource=await sshResource(f,server),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'读取 SSH 主机指标'},202);
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.channels[0]?.needsConfirmation),worker=state.workers[0],pending=(await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;
+ await f.api(`/api/resources/${resource.id}`,'PATCH',{ssh:{shell:'sh'}});
+ await f.api(`/api/sessions/${worker.sessionId}/ai/decision`,'POST',{id:pending.id,accept:true});
+ await until(()=>f.api(`/api/sessions/${worker.sessionId}/ai`),s=>!['running','waiting_approval'].includes(s.status));
+ assert.equal(server.auths,0);assert.equal(server.requests.length,0);assert.equal(f.app.store.list('superOperations').filter(o=>o.tool==='inspect_host').length,0);
+});
+
+test('an explicit project host deny cannot be replaced by SDK readonly defaults', {skip:process.platform!=='darwin'},async(t)=>{
+ const f=await fixture(t,'super-host'),server=await sshFixture(t),resource=await sshResource(f,server);
+ f.app.store.put('legacyProjectPolicies',f.project.id,{data:{SchemaVersion:1,Revision:1,Confirmed:true,Mode:'legacy',ProjectID:f.project.id,ResourceIDs:[resource.id],Rules:[{Capability:'command.diagnostics',Effect:'deny'},{Capability:'resource.resolve',Effect:'allow'}]}});
+ const project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'读取主机'},202);
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
+ assert.equal(server.auths,0);assert.equal(server.requests.length,0);assert.equal(state.channels[0].needsConfirmation,false);
+ assert.equal(f.app.store.list('superOperations').filter(o=>o.tool==='inspect_host').length,0);
+});
+
+test('SSH authentication failure is distinct from availability and never exposes the saved password', {skip:process.platform!=='darwin'},async(t)=>{
+ const f=await fixture(t),server=await sshFixture(t),resource=await sshResource(f,server);
+ await f.api(`/api/resources/${resource.id}`,'PATCH',{ssh:{password:'synthetic-wrong-ssh-password'}});
+ const terminal=await trustTerminal(f,resource);await terminal.approve();const history=await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='disconnected');
+ assert.match(history.output,/身份认证失败/);assert.ok(!JSON.stringify(history).includes('synthetic-wrong-ssh-password'));assert.equal(server.requests.length,0);
 });

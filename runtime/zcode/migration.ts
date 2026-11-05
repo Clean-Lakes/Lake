@@ -5,6 +5,7 @@ import { join, sep } from "node:path";
 import type { AICard, AIView, Message, Project, Resource, WorkSession } from "../../web-agent/shared/contracts";
 import { HttpError, id, LakeStore, now, type StoredSession } from "./store";
 import { digest } from "./tasks";
+import type {LakeSSH} from './ssh';
 
 const tables = ["projects", "resources", "resourceTree", "sessions", "messages", "workspaceTags", "sessionPresentation", "sessionTags", "sessionNavigation", "projectSessionNavigation", "navigationTrash", "aiScopes", "superagentRoleChannels", "superagentChannelReads", "superagentChannelTimeline"];
 const runtimeTables = ["superagent_projects", "superagent_roles", "superagent_role_channels", "superagent_workers", "native_work_goals", "native_operations", "security_project_policies", "security_legacy_session_policies"];
@@ -32,6 +33,27 @@ async function openLegacy(path: string, home?: string) {
   return db;
 }
 const exists = (db: DatabaseSync, table: string) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);
+
+// Catalog v1 intentionally retained only metadata. Supplement exact SSH config
+// references without rewriting that batch's immutable receipts or old Go data.
+export async function importLegacySSH(store:LakeStore,ssh:LakeSSH) {
+ const source=join(store.data,'lake-web.sqlite'),db=await openLegacy(source,store.home);if(!db)return;
+ try {
+  if(!exists(db,'resourceConnections'))return;
+  const before=await fingerprint(source);
+  const candidates=db.prepare("SELECT r.id,r.projectId,c.config FROM resources r JOIN resourceConnections c ON c.resourceId=r.id WHERE r.kind='ssh'").all();
+  const prepared:{resource:Resource;hash:string}[]=[];
+  for(const row of candidates){
+   const resource=store.get<Resource>('resources',String(row.id)),legacy=store.get<any>('legacyResources',String(row.id));
+   if(!resource||!legacy||resource.kind!=='ssh'||resource.projectId!==row.projectId||resource.ssh||store.get('legacySSHConnections',resource.id))continue;
+   try{const config=ssh.configuration(JSON.parse(String(row.config)));prepared.push({resource:{...resource,ssh:config,status:legacy.originalStatus==='available'?'available':'unavailable'},hash:digest(String(row.config))});}
+   catch {store.put('legacySSHConnectionErrors',resource.id,{resourceId:resource.id,reason:'SSH 连接配置或 Dev 凭据引用需核实'});}
+  }
+  if(await fingerprint(source)!==before)throw new HttpError(409,'旧连接配置正在变化，SSH 增量导入未提交');
+  store.transaction(()=>{for(const item of prepared){store.put('resources',item.resource.id,item.resource);store.put('resourceRevisions',item.resource.id,(store.get<number>('resourceRevisions',item.resource.id)??1)+1);
+   store.put('legacySSHConnections',item.resource.id,{resourceId:item.resource.id,sourceHash:item.hash,importedAt:now(),source:'go-resourceConnections'});}});
+ }finally{db.close();}
+}
 function rows(db: DatabaseSync | undefined, table: string): Record<string, any>[] {
   if (!db || !exists(db, table)) return [];
   // Names are compile-time whitelisted, never supplied by an HTTP request/model.
