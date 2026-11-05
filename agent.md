@@ -2,6 +2,12 @@
 
 更新日期：2026-11-05。本文记录用户确认的架构方向，供后续 Agent 和模块维护者共同遵循。它不代表所有能力已经实现，也不改变 `AGENTS.md`、`CONTRIBUTING.md` 和 `docs/development-workflow.md` 中的开发、合并、发布与数据隔离要求。
 
+## 后端迁移方向（2026-11-05，未切换）
+
+用户确认保留 Lake UI，直接使用 ZCode v3.17.2 源码，将后端语言迁为 TypeScript，并要求**全部既有功能保留并验收后再切换**。这替代后续迁移工作的 ADK/Go 内核选择，不表示当前产品已经下线 Go/ADK。新候选直接使用 ZCode AgentRuntime 与 Node adapters，不通过 Go 模型代理；默认构建、桌面包和日常 Dev 在全量等价验收前维持当前实现。
+
+Items、Security、Memory、任务与证据的权威职责、bearqy 当前记忆方案、范围/同意/撤回及 unknown 不重放约束继续有效。不能将上游通用权限、会话或工具能力当作 Lake 对应安全与业务合同已经迁移。候选仅在独立 Home 运行，禁止接管正式或日常 Dev 数据。下面关于 ADK 的实现说明记录现有产品水位；目标 TS 对接按 [迁移计划](plan/refactor-zcode-typescript-backend-1.md)、[候选边界与验证](runtime/zcode/README.md) 和完整等价矩阵逐项推进，不提前修改已存在的运行账本或开启未完成能力。
+
 ## 0. 统一 Super-agent 内核方向（实施中）
 
 Lake 的目标业务架构统一为持续的 **Pilot Router + 独立任务 Worker**：Pilot 接收用户要求、路由工作、跨任务协调并统一回复；Worker 使用官方 ADK 完成执行，复杂任务内部按同一受控协议组织专员。普通操作、Plan、SRE、保存工作流、日程和外部结果逐步进入同一事件与任务链路，不维护彼此竞争的接单、调度与结清内核。用户无需管理执行会话；内部 Session、原 RootTurnID、操作句柄、审批和证据继续保留。 Pilot 与 Worker 复用当前项目原资源目录和已有权限，不新增用户管理的资源勾选层；未配置过独立策略时由可信宿主接入既有会话权限适配器，明确策略和项目隔离继续生效。

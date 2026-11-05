@@ -86,7 +86,7 @@ export type Bootstrap = {
   modelSelection?: AvailableModelEntry | null;
   terminalMode: "command" | "pty";
   supportsImageInput?: boolean;
-  aiRuntime?: "go" | "legacy";
+  aiRuntime?: "zcode" | "go" | "legacy";
 };
 
 export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"modelId"|"modelSelection"|"supportsImageInput"> & {

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "cutoverAllowed": false,
+  "requirement": "All existing Lake functionality must be preserved before switching the default backend or installed Dev application.",
+  "domains": {
+    "chatToolsApprovalsCancellation": "candidate-tested",
+    "sessionHistoryAndReconnect": "candidate-tested",
+    "providerProtocolsAndModelSettings": "partial",
+    "attachmentsImagesReferencesCaret": "pending",
+    "resourceCatalogFoldersImportHexHub": "pending",
+    "sshHostTrustTerminalsAdoptionRecovery": "pending",
+    "databaseRedisDockerKubernetesServices": "pending",
+    "pilotRouterPersistentSpecialistsChannels": "pending",
+    "taskGoalsAttemptsAcceptanceEvidence": "pending",
+    "securityScopesGrantsRevocationUnknownOperations": "pending",
+    "workflowSchedulesExternalEvents": "pending",
+    "memoryConsentFilesCaptureRetrievalForgetting": "pending",
+    "skillsMcpPlugins": "pending",
+    "messageQueuesSupplementsCompactionRollback": "pending",
+    "existingDataMigrationAndRollback": "pending",
+    "cliStdioMagpie": "pending",
+    "macOSDesktopUpdatesDevIsolation": "pending",
+    "windowsDesktopInstallationUpdates": "pending",
+    "lightDarkNarrowWindowLakeDev": "pending"
+  },
+  "verifiedOperations": [],
+  "candidateTestedOperations": [
+    "bootstrap",
+    "createProject",
+    "createSession",
+    "saveModelSettings",
+    "sendMessage",
+    "snapshot"
+  ],
+  "evidence": "runtime/zcode/server.test.cjs",
+  "notes": "Candidate tests are not full functional parity evidence. Generic aiOperation is pending until every currently exposed operation has equivalent behavior, persistence and recovery. No production, default-build or installed-Dev switch is authorized by this matrix."
+}

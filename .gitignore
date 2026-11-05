@@ -90,5 +90,6 @@ __pycache__/
 
 # Retired ZCode snapshots, local tooling and generated runtime
 /third_party/zcode/
+/third_party/.lake-cache/
 /zcode-plugin-ops-data/
 /.zcodeignore
