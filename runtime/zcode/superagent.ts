@@ -1,3 +1,4 @@
+import {permissionDefaults} from '../../web-agent/shared/execution-preferences';
 import { readdir, realpath } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ToolEntry, ToolExecutionContext } from "@zcode/core";
@@ -611,7 +612,7 @@ export class LakeSuperagent implements AgentHost {
       memoryActor: { kind: "worker", projectId: worker.projectId, roleId: worker.roleId },
       tools: [...entries,...this.nativeEntries(worker), ...this.extensionEntries(worker),...this.hostEntries(worker),...this.databaseEntries(worker)], allowlist: [...entries.map((entry) => entry.metadata.name),...(this.ssh?hostTools:[]),...(this.mysql?databaseTools:[]), ...(this.extensions ? extensionTools : []), ...childControlTools, ...agentToolNames].filter((name) => mode !== "plan" || !["Write","Edit","call_mcp_tool"].includes(name)),
       permissionRules: { scope: "session", version: 1,
-        allow: [...(permissions.silentCommands===true?[{toolName:"Bash"}]:[]),...(permissions.silentWriteFiles === true ? [{ toolName: "Write" }, { toolName: "Edit" }] : []),
+        allow: [...((permissions.silentCommands??permissionDefaults.silentCommands)===true?[{toolName:"Bash"}]:[]),...(permissions.silentWriteFiles === true ? [{ toolName: "Write" }, { toolName: "Edit" }] : []),
           ...(this.extensions?.automaticCalls(worker.projectId, permissions) ? [{ toolName: "call_mcp_tool" }] : [])],
         ask: permissions.silentReadFiles === false ? [{ toolName: "Read" }, { toolName: "list_project_files" }] : [] },
       configureTool: (entry) => {
@@ -719,7 +720,7 @@ export class LakeSuperagent implements AgentHost {
       permission:{...entry.permission,needsApproval:false},
       metadata:{...entry.metadata,needsApproval:false,description:entry.metadata.description+'\nLake resource execution: omit asset_ref for the assigned local workspace. For SSH copy exact asset_ref and configuration_revision from list_assets; the host connects with saved credentials. Optional cwd is an absolute path on that target. Never supply passwords/private keys. Inspect the actual environment and use its installed kubectl/mysql/docker tools; do not stop at a missing specialized adapter. Background commands must finish or be stopped before work_finish.'},
       inputSchema:{...schema,properties:{...schema.properties,asset_ref:str,configuration_revision:str,cwd:str}},
-      resolvePermissionCapability:(input:any)=>{const {plan,options}=this.shellPlan(worker,input);const ask=options.silentCommands!==true||plan.policy==='ask'||plan.risk==='dangerous';return {readOnly:plan.readOnly,needsApproval:ask,permission:{needsApproval:ask,...(ask?{alwaysAsk:true as const}:{}),riskLevel:plan.risk==='dangerous'?'high':plan.readOnly?'low':'medium',sideEffectScope:'system'}};},
+      resolvePermissionCapability:(input:any)=>{const {plan,options}=this.shellPlan(worker,input);const ask=(options.silentCommands??permissionDefaults.silentCommands)!==true||plan.policy==='ask'||plan.risk==='dangerous';return {readOnly:plan.readOnly,needsApproval:ask,permission:{needsApproval:ask,...(ask?{alwaysAsk:true as const}:{}),riskLevel:plan.risk==='dangerous'?'high':plan.readOnly?'low':'medium',sideEffectScope:'system'}};},
       handler:(input:any,context)=>{const {asset_ref,configuration_revision,cwd,...native}=input;return entry.handler(native,context);}};
   }
   private async invokeBash(worker:Worker,entry:ToolEntry,input:ShellInput,context:HostToolContext){
@@ -797,7 +798,7 @@ export class LakeSuperagent implements AgentHost {
   private hostEntries(worker:Worker):ToolEntry[]{
     if(!this.ssh)return [];
     const entry=this.entry("inspect_host","Read current SSH host metrics using one fixed readonly system, disks or processes profile. Copy exact asset_ref and configuration_revision from list_assets. Never accepts Shell text or credentials.",objectSchema({asset_ref:str,configuration_revision:str,metric:{type:"string",enum:["system","disks","processes"]}},["asset_ref","configuration_revision","metric"]),async(a,context)=>this.ssh!.inspect(worker.sessionId,this.store.require("resources",a.asset_ref),a.metric,context.abortSignal,()=>{this.validateWorker(worker.id,worker.generation);this.security?.host(worker.projectId,a.asset_ref);}),false,131072);
-    entry.resolvePermissionCapability=(input:any)=>{const project=this.store.require<SuperProject>("superProjects",worker.projectId),options=this.store.session(project.routerSessionId).options,policy=this.security?.host(worker.projectId,input.asset_ref);const approval=options.silentCommands!==true||policy==='ask';return {needsApproval:approval,permission:{needsApproval:approval,sideEffectScope:"workspace"}};};
+    entry.resolvePermissionCapability=(input:any)=>{const project=this.store.require<SuperProject>("superProjects",worker.projectId),options=this.store.session(project.routerSessionId).options,policy=this.security?.host(worker.projectId,input.asset_ref);const approval=(options.silentCommands??permissionDefaults.silentCommands)!==true||policy==='ask';return {needsApproval:approval,permission:{needsApproval:approval,sideEffectScope:"workspace"}};};
     return [entry];
   }
   private databaseEntries(worker:Worker):ToolEntry[]{
@@ -806,7 +807,7 @@ export class LakeSuperagent implements AgentHost {
     return databaseTools.map(name=>{
       const description=name==="list_db_objects"?"Read actual MySQL databases or tables. Use query_type database first when no saved db exists, then exact db/schema. This is real bounded metadata, not a connectivity claim.":name==="db_table_ddl"?"Read actual MySQL table DDL for exact db/schema and table.":"Read bounded MySQL table rows (mode rows, limit max 500, order_by exact columns) or an exact row count (mode count). Use explicit stable order for pagination. No raw SQL. Samples/counts are not a full cross-server equality proof.";
       const entry=this.entry(name,description+" Copy asset_ref and configuration_revision from list_assets. Host uses saved credentials and a read-only transaction.",objectSchema(props,["asset_ref","configuration_revision",...(name==='list_db_objects'?[]:['table'])]),(input,context)=>this.mysql!.read(worker.projectId,this.store.require('resources',input.asset_ref),name,input,context.abortSignal,()=>this.validateWorker(worker.id,worker.generation)),false,131072);
-      entry.resolvePermissionCapability=(input:any)=>{const resource=this.store.require<any>('resources',input.asset_ref);if(resource.projectId!==worker.projectId)throw new HttpError(403,'MySQL 不属于当前项目');const plan=this.mysql!.plan(resource,name,input),project=this.store.require<SuperProject>('superProjects',worker.projectId),options=this.store.session(project.routerSessionId).options;const approval=options.silentReadSQL!==true||plan.policy==='ask';return {needsApproval:approval,permission:{needsApproval:approval,sideEffectScope:'workspace'}};};
+      entry.resolvePermissionCapability=(input:any)=>{const resource=this.store.require<any>('resources',input.asset_ref);if(resource.projectId!==worker.projectId)throw new HttpError(403,'MySQL 不属于当前项目');const plan=this.mysql!.plan(resource,name,input),project=this.store.require<SuperProject>('superProjects',worker.projectId),options=this.store.session(project.routerSessionId).options;const approval=(options.silentReadSQL??permissionDefaults.silentReadSQL)!==true||plan.policy==='ask';return {needsApproval:approval,permission:{needsApproval:approval,sideEffectScope:'workspace'}};};
       return entry;
     });
   }

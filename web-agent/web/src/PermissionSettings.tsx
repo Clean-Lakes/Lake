@@ -3,16 +3,8 @@ import { createPortal } from "react-dom";
 import { Glyph } from "./Icons";
 import {DisclosureSummary} from "./DisclosureSummary";
 
-export const permissionDefaults = {
-  silentReadFiles: true,
-  silentWriteFiles: false,
-  silentReadSQL: true,
-  silentMCPCalls: false,
-  silentCommands: true,
-  silentTerminalCreation: true,
-  blockUnreferencedAssets: false,
-  denyLocalExecution: false,
-};
+import {permissionDefaults} from '../../shared/execution-preferences';
+export {permissionDefaults} from '../../shared/execution-preferences';
 
 const groups: Array<{title: string; hint?: string; fields: Array<{key: keyof typeof permissionDefaults; label: string; description: string}>}> = [
   {title: "免确认操作", hint: "关闭后先询问", fields: [

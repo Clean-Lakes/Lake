@@ -111,3 +111,5 @@ Pilot、专员 Worker 与临时 child 共享公开 ZCode 文件、Bash、搜索�
 原生 Enter/ExitPlanMode 连接实际 SDK mode 和 Lake 审批；批准计划不扩大命令、文件或资源权限。模式切换重新注册工具时同样保留宿主包装。Todo 以 Task + 实际 SDK Session 存储，直接 Pilot 历史任务通过准确 taskId 检查，避免多任务共用展示入口导致错读回执。合格 Pilot 执行经验进入现有项目 Memory，专员仍归 RoleID，child 通过父任务回流。
 
 `GET /api/agent-capabilities` 列出固定上游完整工具清单及实际连接状态。Cron/OffPeak、动态工作流、浏览器插件和跨会话上下文读取等还需要相应 Lake 宿主服务及范围适配，不注册成可成功调用的假工具。未连接项不被称为已完成，完整 TS 产品等价门禁保持原状态。准确检查、签名 Dev 来源和未验证项见[本批记录](../../docs/validation/zcode-typescript-candidate/agent-capabilities.md)。
+
+普通命令/只读数据库免确认的缺省值与现有 Web 设置共用 shared/execution-preferences.ts，显式关闭仍询问。程序发现和有限容器查询包装按实际内部命令判断，不因 command 或 exec 这几个字一律升级；危险动作、动态或未识别脚本保留确认。此判定只影响追加确认，不构成 readonly 证据或 TaskGrant，仍受原策略和 unknown 约束。验证见上面的本批记录。

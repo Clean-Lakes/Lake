@@ -232,7 +232,7 @@ function fullAgentReply(request,mode,home){
  }
  if(mode.includes('child')&&!names.includes('Agent'))return call('Agent',{subagent_type:'general-purpose',description:'执行独立 Shell 检查',prompt:'请通过 Bash 执行 printf CHILD_NATIVE_SHELL 并报告实际结果。'});
  if(!['child','files','image'].some(kind=>mode.includes(kind))&&!names.includes('Bash')){
-  let command=mode.includes('danger')?"rm -f ./agent-capability-absent.txt":mode.includes('stop')?"printf 'started' > interrupted.txt; sleep 30; printf 'LATE_NATIVE_OUTPUT'":mode.includes('protected')?`cat '${home}/secrets/hidden-fixture.txt'`:mode.includes('nonzero')?"printf 'ACTUAL_FAILED_COMMAND' >&2; false":mode.includes('background')?"printf 'BEGIN_BACKGROUND'; sleep 0.15; printf 'ACTUAL_BACKGROUND_SHELL'":"printf 'ACTUAL_NATIVE_SHELL'";
+  let command=mode.includes('container')?(mode.includes('docker')?'docker exec fixture-db sh -c \'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -B -e "SELECT 42"\'':'kubectl -n fixture exec fixture-db -- sh -c \'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -B -e "SELECT 42"\''):mode.includes('lookup')?"command -v kubectl && kubectl config current-context && kubectl get pods -A -o wide":mode.includes('danger')?"rm -f ./agent-capability-absent.txt":mode.includes('stop')?"printf 'started' > interrupted.txt; sleep 30; printf 'LATE_NATIVE_OUTPUT'":mode.includes('protected')?`cat '${home}/secrets/hidden-fixture.txt'`:mode.includes('nonzero')?"printf 'ACTUAL_FAILED_COMMAND' >&2; false":mode.includes('background')?"printf 'BEGIN_BACKGROUND'; sleep 0.15; printf 'ACTUAL_BACKGROUND_SHELL'":"printf 'ACTUAL_NATIVE_SHELL'";
   if(mode.includes('ssh')){
    if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
    const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh');
@@ -1765,7 +1765,7 @@ test('PTY enforces project and human ownership, exact danger confirmation and co
   await until(history,h=>h.terminal.status==='ready');
   await f.api(base+'/commands','POST',{actor:'agent',command:'pwd'},403);
   await f.api(base+'/commands','POST',{actor:'user',command:'touch prohibited'},400);
-  await f.api(base+'/commands','POST',{actor:'user',command:"sh -c 'printf safe'",confirmed:true},400);
+  await f.api(base+'/commands','POST',{actor:'user',command:"sh -c 'rm -f fixture-absent'",confirmed:true},400);
   await f.api(base+'/control','POST',{holder:null});
   await f.api(base+'/input','POST',{data:'pwd\r'},409);
   await f.api(base+'/control','POST',{holder:'user'});
@@ -1869,7 +1869,7 @@ async function sshFixture(t, diagnosticsGate){
      }else{
       if(diagnosticsGate)await diagnosticsGate;
       if(stream.destroyed)return;
-      const child=spawn('/bin/sh',['-c',info.command],{cwd:home,env:{HOME:home,PATH:'/usr/bin:/bin:/usr/sbin:/sbin'}});
+      const child=spawn('/bin/sh',['-c',info.command],{cwd:home,env:{HOME:home,PATH:join(home,'bin')+':/usr/bin:/bin:/usr/sbin:/sbin'}});
       child.stdout.on('data',data=>stream.write(data));child.stderr.on('data',data=>stream.stderr.write(data));child.on('close',code=>{stream.exit(code??1);stream.end();});stream.on('close',()=>child.kill());
      }
     });
@@ -1879,7 +1879,7 @@ async function sshFixture(t, diagnosticsGate){
  };
  const stop=async()=>{for(const client of clients)client.end();await new Promise(resolve=>server.close(resolve));};
  await start();t.after(stop);
- return {get port(){return port;},password,requests,get auths(){return auths;},async rotate(){await stop();await start();}};
+ return {home,get port(){return port;},password,requests,get auths(){return auths;},async rotate(){await stop();await start();}};
 }
 async function sshResource(f,server){return f.api(`/api/projects/${f.project.id}/resources`,'POST',{kind:'ssh',name:'SSH fixture',ssh:{host:'127.0.0.1',port:server.port,username:'fixture',authMethod:'password',password:server.password,shell:'bash'}});}
 async function trustTerminal(f,resource,sessionId=f.session.id){
@@ -1927,6 +1927,7 @@ test('independent Worker uses an exact approved SSH diagnostic profile and accep
  const f=await fixture(t,'super-host'),server=await sshFixture(t,diagnosticsGate),resource=await sshResource(f,server);
  const terminal=await trustTerminal(f,resource);await terminal.approve();await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='ready');await f.api(terminal.base+'/disconnect','POST',{});
  const authenticated=server.auths,project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:false});
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'读取该 SSH 主机当前系统指标。'},202);
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),value=>value.channels[0]?.needsConfirmation),worker=state.workers[0];
  const channel=await f.api(`/api/sessions/${state.channels[0].sessionId}/channel`);assert.ok(channel.active.some(s=>s.ai.pending?.call.name==='inspect_host'));
@@ -1965,6 +1966,7 @@ test('a short retry uses recent dialogue and current SSH capabilities, resumes t
  // the private fixture home, and no user server or user task is involved.
  f.app.store.put('resources',resource.id,{...f.app.store.get('resources',resource.id),status:'unavailable'});
  const project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:false});
  const original='分析 SSH fixture 服务器的当前系统指标。';
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:original},202);
  const first=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
@@ -2033,6 +2035,7 @@ test('legacy SSH references supplement an already imported v1 catalog without to
 
 test('changing SSH configuration while approval waits invalidates the exact call without authentication', {skip:process.platform!=='darwin'},async(t)=>{
  const f=await fixture(t,'super-host'),server=await sshFixture(t),resource=await sshResource(f,server),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{silentCommands:false});
  await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'读取 SSH 主机指标'},202);
  const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.channels[0]?.needsConfirmation),worker=state.workers[0],pending=(await f.api(`/api/sessions/${worker.sessionId}/ai`)).pending;
  await f.api(`/api/resources/${resource.id}`,'PATCH',{ssh:{shell:'sh'}});
@@ -2346,4 +2349,46 @@ for(const remote of [false,true])test(`native Bash foreground timeout promotes $
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'succeeded');assert.match(op.output.stdout.text,/ACTUAL_BACKGROUND_SHELL/);assert.equal(f.app.store.list('commandExecutions').length,1);
  if(wire)assert.equal(wire.requests.length,1);
+});
+
+async function lookupCommandTask(t,automatic,mode='super-full-worker-ssh-lookup'){
+ const f=await fixture(t,mode),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{}),wire=await sshFixture(t),fs=require('node:fs/promises');
+ await fs.mkdir(join(wire.home,'bin'),{mode:0o700});
+ await writeFile(join(wire.home,'bin/kubectl'),'#!/bin/sh\nif [ "$1" = "-n" ]; then shift 2; fi\nif [ "$1" = "exec" ]; then shift 2; [ "$1" = "--" ] && shift; exec "$@"; fi\ncase "$*" in\n "config current-context") printf "FIXTURE_CONTEXT\\n";;\n "get pods -A -o wide") printf "FIXTURE_POD_READY\\n";;\n *) exit 64;;\nesac\n',{mode:0o700});
+ await writeFile(join(wire.home,'bin/docker'),'#!/bin/sh\n[ "$1" = "exec" ] || exit 64\nshift 2\nexec "$@"\n',{mode:0o700});
+ await writeFile(join(wire.home,'bin/mysql'),'#!/bin/sh\nprintf "ACTUAL_CONTAINER_QUERY_42\\n"\n',{mode:0o700});
+ await sshResource(f,wire);await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`,'POST',{...(automatic===undefined?{}:{silentCommands:automatic}),maxSteps:30});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'检查实际执行和当前权限。'},202);
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers.length===1);
+ return {f,project,wire,worker:state.workers[0]};
+}
+
+test('a specialist inherits Pilot command auto-approval for actual SSH program discovery',async t=>{
+ const {f,project,wire,worker}=await lookupCommandTask(t,true),session=worker.sessionId;
+ const snapshot=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust||s.ai?.pending?.call.name==='Bash');
+ assert.ok(snapshot.hostKeyTrust,'lookup must reach host trust rather than an unnecessary Bash confirmation');
+ assert.equal(snapshot.ai?.pending,undefined);assert.equal(wire.auths,0);
+ await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'succeeded');assert.match(op.output.stdout,/FIXTURE_CONTEXT/);assert.match(op.output.stdout,/FIXTURE_POD_READY/);assert.equal(wire.requests.length,1);assert.equal(op.readOnly,false,'CLI discovery is not an unrestricted readonly proof');
+});
+
+test('the same program discovery still asks when Pilot command auto-approval is off',async t=>{
+ const {f,wire,worker}=await lookupCommandTask(t,false),session=worker.sessionId;
+ const view=await until(()=>f.api(`/api/sessions/${session}/ai`),v=>v.pending?.call.name==='Bash');
+ assert.equal(view.pending.risk,'medium');assert.equal(wire.auths,0);assert.equal(wire.requests.length,0);
+ await f.api(`/api/sessions/${session}/ai/decision`,'POST',{id:view.pending.id,accept:false});
+ await until(()=>f.api(`/api/sessions/${session}/ai`),v=>!v.running);assert.equal(wire.requests.length,0);
+});
+
+for(const variant of ['default','container-kube','container-docker'])test(`Pilot ordinary command permission is honored for ${variant}`,async t=>{
+ const {f,project,wire,worker}=await lookupCommandTask(t,variant==='default'?undefined:true,'super-full-worker-ssh-'+(variant==='default'?'lookup':variant)),session=worker.sessionId;
+ if(variant==='default')assert.equal(f.app.store.session(project.routerSessionId).options.silentCommands,undefined,'leave the stored option absent as in an untouched preferences popup');
+ const snapshot=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust||s.ai?.pending?.call.name==='Bash');
+ assert.ok(snapshot.hostKeyTrust,'ordinary execution must not require a redundant command confirmation');
+ await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'succeeded');assert.equal(op.readOnly,false);
+ if(variant!=='default')assert.match(op.output.stdout,/ACTUAL_CONTAINER_QUERY_42/);
+ assert.equal(wire.requests.length,1);
 });
