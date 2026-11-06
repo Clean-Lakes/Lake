@@ -43,3 +43,6 @@
 .worker-execution-results { margin-bottom:22px; }
 .worker-task-report { margin:0 0 18px; white-space:pre-wrap; overflow-wrap:anywhere; }
 @media(max-width:600px) { .worker-execution-meta { display:none; } .worker-execution-root { flex-wrap:wrap; } .worker-execution-children { padding-left:11px; } .worker-execution-trunk { padding-left:13px; } }
+
+.worker-mini-command { list-style:none; min-width:0; margin:8px 0 12px; }
+.worker-execution-calls:has(> .worker-mini-command) { padding-left:0; }

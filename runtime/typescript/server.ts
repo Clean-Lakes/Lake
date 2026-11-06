@@ -1,3 +1,4 @@
+import {acknowledgeConversation} from "./conversation-reads";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
@@ -33,6 +34,7 @@ import { digest } from "./tasks";
 import { LakeSecurity } from "./security";
 import { LakeMemory } from "./memory";
 import {openClaudeMemIndex} from './claude-mem';
+import {LakeServiceResources,isServiceKind} from './service-resources';
 import { LakeExtensions } from "./extensions";
 import {LakeSSH} from "./ssh";
 import { LakeTerminals } from "./terminal";
@@ -157,6 +159,7 @@ export async function startLakeServer(options: ServerOptions) {
   let terminals: LakeTerminals | undefined;
   let ssh:LakeSSH|undefined;
   let mysql:LakeMySQL|undefined;
+  let services:LakeServiceResources|undefined;
   let execution:LakeExecution|undefined;
   let draining = false;
   let closed = false;
@@ -449,8 +452,14 @@ export async function startLakeServer(options: ServerOptions) {
         result = store.createSession(path[2]);
       else if (path[1] === "projects" && path[3] === "resources") {
         store.project(path[2]);
-        if (method === "GET")
+        if(path.length===5&&path[4]==='test'&&method==='POST'){
+          const cancel=new AbortController(),abort=()=>cancel.abort();response.on('close',abort);
+          try{result=await services!.test(path[2],data,cancel.signal);}finally{response.off('close',abort);}
+        }
+        else if(path.length!==4)throw new HttpError(404,'资源接口不存在');
+        else if (method === "GET")
           result = store.catalog().resources.filter((resource) => resource.projectId === path[2]);
+        else if(method==='POST'&&isServiceKind(data.kind,data.settings))result=services!.create(path[2],data);
         else {
           if (!["local","ssh"].includes(data.kind)&&!(data.kind==="database"&&data.settings?.driver==="mysql")) throw new HttpError(501, "此资源类型的连接仍在迁移中");
           if(method!=="POST")throw new HttpError(405,"不支持此资源请求");
@@ -504,7 +513,8 @@ export async function startLakeServer(options: ServerOptions) {
           for (const terminal of entries) await terminals!.disconnect(terminal.sessionId, terminal.id);
           result = { closed: entries.length };
         }
-        else if (method === "PATCH") {
+        else if (method === 'PATCH'&&path.length===3&&isServiceKind(resource.kind,resource.settings))result=services!.update(resource,data);
+        else if (method === "PATCH"&&path.length===3) {
           resource.name = String(data.name ?? resource.name);
           if (data.settings && digest(data.settings) !== digest(resource.settings)) store.put("resourceRevisions", resource.id, (store.get<number>("resourceRevisions", resource.id) ?? 1) + 1);
           resource.settings = resource.kind==="database"&&data.settings?mysql!.prepare(data.settings,resource.settings):data.settings ?? resource.settings;
@@ -512,7 +522,7 @@ export async function startLakeServer(options: ServerOptions) {
           if(data.ssh!==undefined){resource.ssh=ssh!.prepare(data.ssh,resource.ssh);resource.status="available";store.put("resourceRevisions",resource.id,(store.get<number>("resourceRevisions",resource.id)??1)+1);}
           store.put("resources", resource.id, resource);
           result = resource;
-        } else result = resource;
+        } else result = {...resource,configurationRevision:store.get<number>('resourceRevisions',resource.id)??1};
       } else if (path[1] === "sessions") {
         const sessionId = path[2];
         const session = store.session(sessionId);
@@ -522,7 +532,9 @@ export async function startLakeServer(options: ServerOptions) {
           await agents.prepareRedaction();
           await loadLegacyView(store, sessionId, (value) => agents!.redact(value));
         }
-        if (path[3] === "host-key" && path.length===4 && method==="POST")result=ssh!.decide(sessionId,data);
+        if (path[3] === "messages-read" && path.length === 4 && method === "PUT") result = acknowledgeConversation(store, sessionId, data.cursor);
+        else if (path[3] === "executions" && path.length === 6 && path[5] === "interrupt" && method === "POST") { result = execution!.interrupt(sessionId, path[4], data.generation); status = 202; }
+        else if (path[3] === "host-key" && path.length===4 && method==="POST")result=ssh!.decide(sessionId,data);
         else if (path[3] === "terminals") {
           if (path.length === 4 && method === "POST") { await agents.prepareRedaction(); extensions!.servers(); result = await terminals!.open(sessionId, data); status = 201; }
           else if (path.length === 5 && path[4] === "available" && method === "GET") result = terminals!.available(sessionId);
@@ -685,7 +697,7 @@ export async function startLakeServer(options: ServerOptions) {
     await agents?.close();
     await terminals?.close();
     await ssh?.close();
-    mysql?.close();
+    services?.close();mysql?.close();
     await execution?.close();
     await extensions?.close();
     for (const set of clients.values()) for (const response of set) response.end();
@@ -702,6 +714,7 @@ export async function startLakeServer(options: ServerOptions) {
     extensions = new LakeExtensions(store, security, (value) => agents!.redact(value));
     ssh=new LakeSSH(store,security,(session)=>{broadcast(store!.event(session,"session"));superagent?.changed(session);},value=>extensions!.scrub(value),value=>agents!.registerSecret(value));
     mysql=new LakeMySQL(store,security,value=>agents!.registerSecret(value),value=>agents!.redact(value));
+    services=new LakeServiceResources(store,security,value=>agents!.registerSecret(value));
     terminals = new LakeTerminals(store, security, (value, live) => live ? agents!.redactLive(ssh!.scrub(extensions!.scrubLive(value),true)) : ssh!.scrub(value), broadcast,ssh);
     agents.guard = () => security!.check();
     if (options.importLegacy) {
@@ -713,6 +726,7 @@ export async function startLakeServer(options: ServerOptions) {
     }
     execution=new LakeExecution(store,security,ssh,value=>agents!.redact(ssh!.scrub(value)));
     superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution);
+    await superagent.discoveryRecovery.verify();
     memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }
     agents.memory = memory;
@@ -736,7 +750,7 @@ export async function startLakeServer(options: ServerOptions) {
     await close();
     throw error;
   }
-  return { origin, token, store, agents, superagent, memory, mysql, execution, close };
+  return { origin, token, store, agents, superagent, memory, mysql, services, execution, close };
 }
 
 async function main() {

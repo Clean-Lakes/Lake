@@ -96,3 +96,6 @@
 .ai-transcript .sre-role-message .sre-role-body { width:100%; max-width:var(--reply-body-width,720px); padding:0; font-size:var(--reply-body-size,15px); line-height:1.75; }
 .ai-transcript .sre-role-conversation .sre-role-content { padding-inline-start:40px; }
 .ai-transcript .sre-role-conversation .sre-role-content > header { padding-inline-start:0; margin-bottom:8px; }
+
+/* A different speaker gets a 24px boundary (12px turn gap + 12px inset). */
+.ai-transcript[data-transcript-mode=conversation] :is(.settled-reply,.ai-chat-message).is-role-break { margin-block-start:12px; }

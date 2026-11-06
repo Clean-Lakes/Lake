@@ -292,6 +292,15 @@
       ]
     },
     {
+      "name": "editServiceResource",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "`/api/resources/${encodeURIComponent(id)}`"
+        }
+      ]
+    },
+    {
       "name": "editTerminalResource",
       "routes": [
         {
@@ -387,6 +396,15 @@
         {
           "method": "POST",
           "path": "`/api/projects/${encodeURIComponent(projectId)}/resource-import`"
+        }
+      ]
+    },
+    {
+      "name": "interruptExecution",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/sessions/${encodeURIComponent(session)}/executions/${encodeURIComponent(execution)}/interrupt`"
         }
       ]
     },
@@ -558,6 +576,15 @@
         {
           "method": "GET",
           "path": "\"/api/settings/providers\""
+        }
+      ]
+    },
+    {
+      "name": "readConversation",
+      "routes": [
+        {
+          "method": "PUT",
+          "path": "`/api/sessions/${encodeURIComponent(session)}/messages-read`"
         }
       ]
     },
@@ -1075,6 +1102,15 @@
         {
           "method": "POST",
           "path": "`/api/settings/providers/${encodeURIComponent(id)}/test`"
+        }
+      ]
+    },
+    {
+      "name": "testServiceResource",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/projects/${encodeURIComponent(projectId)}/resources/test`"
         }
       ]
     },

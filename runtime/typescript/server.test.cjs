@@ -232,8 +232,16 @@ function fullAgentReply(request,mode,home){
   if(!names.includes('ExitPlanMode'))return call('ExitPlanMode',{plan:'读取本机测试标记，核对实际输出，然后报告结果。'});
  }
  if(mode.includes('child')&&!names.includes('Agent'))return call('Agent',{subagent_type:'general-purpose',description:'执行独立 Shell 检查',prompt:'请通过 Bash 执行 printf CHILD_NATIVE_SHELL 并报告实际结果。'});
+ if(mode.includes('missing-discovery')){
+  if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
+  const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh'),count=names.filter(name=>name==='Bash').length;
+  if(!count)return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_revision,command:'hostname; command -v lake_fixture_absent_program',description:'Discover an optional program'},'missing-program');
+  if(count===1&&!mode.includes('only'))return call('Bash',{asset_ref:asset.asset_ref,configuration_revision:asset.configuration_revision,command:'kubectl config current-context',description:'Inspect current fixture context'},'current-query');
+  if(!names.includes('work_finish'))return call('work_finish',{summary:'已按真实回执检查程序和当前上下文。',outcome:mode.includes('only')?'partial':'completed'});
+  return {content:'检查结束。'};
+ }
  if(!['child','files','image'].some(kind=>mode.includes(kind))&&!names.includes('Bash')){
-  let command=mode.includes('container')?(mode.includes('docker')?'docker exec fixture-db sh -c \'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -B -e "SELECT 42"\'':'kubectl -n fixture exec fixture-db -- sh -c \'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -B -e "SELECT 42"\''):mode.includes('lookup')?"command -v kubectl && kubectl config current-context && kubectl get pods -A -o wide":mode.includes('danger')?"rm -f ./agent-capability-absent.txt":mode.includes('stop')?"printf 'started' > interrupted.txt; sleep 30; printf 'LATE_NATIVE_OUTPUT'":mode.includes('protected')?`cat '${home}/secrets/hidden-fixture.txt'`:mode.includes('nonzero')?"printf 'ACTUAL_FAILED_COMMAND' >&2; false":mode.includes('background')?"printf 'BEGIN_BACKGROUND'; sleep 0.15; printf 'ACTUAL_BACKGROUND_SHELL'":"printf 'ACTUAL_NATIVE_SHELL'";
+  let command=mode.includes('container')?(mode.includes('docker')?'docker exec fixture-db sh -c \'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -B -e "SELECT 42"\'':'kubectl -n fixture exec fixture-db -- sh -c \'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -B -e "SELECT 42"\''):mode.includes('lookup')?"command -v kubectl && kubectl config current-context && kubectl get pods -A -o wide":mode.includes('danger')?"rm -f ./agent-capability-absent.txt":mode.includes('read-stop')?"printf 'READ_STOP_STARTED'; sleep 5; printf 'READ_STOP_LATE'":mode.includes('stop')?"printf 'started' > interrupted.txt; sleep 30; printf 'LATE_NATIVE_OUTPUT'":mode.includes('protected')?`cat '${home}/secrets/hidden-fixture.txt'`:mode.includes('nonzero')?"printf 'ACTUAL_FAILED_COMMAND' >&2; false":mode.includes('background')?"printf 'BEGIN_BACKGROUND'; sleep 0.15; printf 'ACTUAL_BACKGROUND_SHELL'":"printf 'ACTUAL_NATIVE_SHELL'";
   if(mode.includes('ssh')){
    if(!names.includes('list_assets'))return call('list_assets',{query:'SSH fixture'});
    const asset=result('list_assets').assets.find(asset=>asset.kind==='ssh');
@@ -1711,6 +1719,68 @@ test("Skills preserve managed editing, enablement, external roots, restart and s
   assert.equal((await f.api("/api/settings/skills/external")).content.includes("External content"), true);
 });
 
+test('message unread receipts include Pilot and non-success specialist replies and survive stale reads/restart',async t=>{
+ const f=await fixture(t,'super-chat'),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{}),pilot=project.routerSessionId;
+ const workspace=()=>f.api(`/api/projects/${f.project.id}/superagent`);
+ assert.equal((await workspace()).pilotMessageRead.cursor,'');
+ f.app.store.addMessage(pilot,'user','own input does not notify');
+ const view=f.app.store.view(pilot);view.cards.push({id:'tool-only',type:'operation',title:'Bash',status:'running',at:new Date().toISOString()});f.app.store.put('views',pilot,view);
+ assert.equal((await workspace()).pilotMessageRead.cursor,'');
+ f.app.store.addMessage(pilot,'assistant','a useful answer');
+ const first=(await f.api(`/api/sessions/${pilot}/snapshot`)).messageRead.cursor;
+ assert.equal((await workspace()).pilotMessageRead.cursor,first);
+ f.app.store.addMessage(pilot,'assistant','newer reply while old read is in flight');
+ const latest=(await workspace()).pilotMessageRead.cursor;assert.ok(latest>first);
+ await f.api(`/api/sessions/${pilot}/messages-read`,'PUT',{cursor:'99999999999999999999'},409);
+ await f.api(`/api/sessions/${pilot}/messages-read`,'PUT',{cursor:first});
+ assert.deepEqual((await workspace()).pilotMessageRead,{cursor:latest,seenCursor:first});
+ await f.api(`/api/sessions/${pilot}/messages-read`,'PUT',{cursor:latest});
+ await f.api(`/api/sessions/${pilot}/messages-read`,'PUT',{cursor:first});
+ assert.equal((await workspace()).pilotMessageRead.seenCursor,latest);
+ // Isolated fixture channel, with a failed reply and no accepted task.
+ const session=await f.api(`/api/projects/${f.project.id}/sessions`,'POST',{});
+ const role={id:'unread-role',projectId:f.project.id,roleKey:'unread',name:'未读验证专员',duties:'fixture',revision:1};
+ f.app.store.put('superRoles',role.id,role);
+ f.app.store.put('superChannels',role.id,{id:'unread-channel',projectId:f.project.id,roleId:role.id,sessionId:session.id,createdAt:new Date().toISOString(),revision:1});
+ f.app.store.addMessage(session.id,'assistant','本次失败，已保留实际输出。');
+ const channel=(await workspace()).channels[0];assert.ok(channel.messageRead.cursor);assert.equal(channel.completionCursor,'');
+ const page=await f.api(`/api/sessions/${session.id}/channel`);assert.equal(page.channel.messageRead.cursor,channel.messageRead.cursor);
+ await f.api(`/api/sessions/${session.id}/messages-read`,'PUT',{cursor:channel.messageRead.cursor});
+ await f.restart();
+ const restored=await workspace();assert.deepEqual(restored.pilotMessageRead,{cursor:latest,seenCursor:latest});assert.deepEqual(restored.channels[0].messageRead,{cursor:channel.messageRead.cursor,seenCursor:channel.messageRead.cursor});
+ assert.equal(f.calls,0,'notification metadata never invokes a model or replays work');
+});
+
+test('Mini Box interrupts only its exact live SDK command and rejects stale or foreign handles',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-stop');await send();
+ const session=project.routerSessionId;
+ const running=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>s.commandExecutions?.some(command=>command.canStop));
+ const command=running.commandExecutions.find(command=>command.canStop);
+ assert.equal(command.sessionId,session);assert.ok(command.command);assert.equal(command.status,'running');
+ const ledgerBefore=JSON.stringify(f.app.store.list('superOperations'));
+ await f.api(`/api/sessions/${f.session.id}/executions/${command.id}/interrupt`,'POST',{generation:command.generation},409);
+ await f.api(`/api/sessions/${session}/executions/${command.id}/interrupt`,'POST',{generation:command.generation+1},409);
+ assert.equal(JSON.stringify(f.app.store.list('superOperations')),ledgerBefore);
+ await f.api(`/api/sessions/${session}/executions/${command.id}/interrupt`,'POST',{generation:command.generation},202);
+ await until(()=>f.app.store.get('commandExecutions',command.id),r=>r.status!=='running');
+ const stopped=f.app.store.get('commandExecutions',command.id);assert.ok(stopped.stopRequestedAt);assert.equal(stopped.status,'cancelled');
+ await f.api(`/api/sessions/${session}/executions/${command.id}/interrupt`,'POST',{generation:command.generation},409);
+ const snapshot=await f.api(`/api/sessions/${session}/snapshot`);assert.equal(snapshot.commandExecutions.find(row=>row.id===command.id).canStop,false);
+ assert.notEqual(snapshot.superagent.task.acceptanceState,'pass');
+ // The stop fence is command + task generation + resource, not command text
+ // alone. A separate target must remain available in the same task.
+ const original=f.app.store.require('resources',stopped.resourceId),other={...original,id:'independent-local-target'};
+ f.app.store.put('resources',other.id,other);
+ let dispatched=0;
+ const base={run:async()=>{dispatched++;return {status:'completed',exitCode:0,stdout:{text:'independent',bytes:11,truncated:false},stderr:{text:'',bytes:0,truncated:false},startedAt:new Date(),completedAt:new Date(),durationMs:0};}};
+ const actor={sessionId:session,taskId:stopped.taskId,workerId:stopped.workerId,generation:stopped.generation,guard(){}};
+ const plan=resource=>({resource,command:stopped.command,revision:f.app.execution.revision(resource),resourceRevision:1,readOnly:true,policy:'allow',risk:'readonly'});
+ await assert.rejects(()=>f.app.execution.bind(base,actor,plan(original),'stopped-retry').run({}),/用户已终止此命令/);
+ assert.equal(dispatched,0);
+ assert.equal((await f.app.execution.bind(base,actor,plan(other),'independent-target').run({})).exitCode,0);
+ assert.equal(dispatched,1);
+});
+
 test("ordinary Pilot conversation completes in one model request without routing or spawning a Worker", async (t) => {
   const f = await fixture(t, "super-chat"), project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
   await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "你是谁" }, 202);
@@ -2402,6 +2472,65 @@ test('a specialist inherits Pilot command auto-approval for actual SSH program d
  await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
  await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
  const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash');assert.equal(op.status,'succeeded');assert.match(op.output.stdout,/FIXTURE_CONTEXT/);assert.match(op.output.stdout,/FIXTURE_POD_READY/);assert.equal(wire.requests.length,1);assert.equal(op.readOnly,false,'CLI discovery is not an unrestricted readonly proof');
+});
+
+test('a missing optional program cannot lock the next ordinary SSH command or accept stale failure evidence',async t=>{
+ const {f,wire,worker}=await lookupCommandTask(t,true,'super-full-worker-ssh-missing-discovery'),session=worker.sessionId;
+ const snapshot=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.task.state==='completed');
+ const ops=f.app.store.list('superOperations').filter(o=>o.tool==='Bash').sort((a,b)=>a.at.localeCompare(b.at));
+ assert.equal(ops.length,2);assert.equal(ops[0].status,'failed');assert.equal(ops[0].readOnly,true);assert.equal(ops[0].output.exitCode,1);
+ assert.equal(ops[1].status,'succeeded');assert.equal(ops[1].readOnly,false);assert.match(ops[1].output.stdout,/FIXTURE_CONTEXT/);
+ assert.equal(wire.requests.length,2);assert.equal(state.workers[0].task.acceptanceState,'pass');
+ const receipts=f.app.store.list('superAcceptance');assert.ok(receipts.every(r=>!r.evidenceIds?.includes(ops[0].id)));
+});
+
+test('startup verifies an exact legacy discovery from the real SDK archive without changing its original rows or dispatching again',async t=>{
+ const {f,wire,worker}=await lookupCommandTask(t,true,'super-full-worker-ssh-missing-discovery-only'),session=worker.sessionId;
+ const snapshot=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
+ await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
+ const crypto=require('node:crypto'),canonical=v=>Array.isArray(v)?'['+v.map(canonical).join(',')+']':v&&typeof v==='object'?'{'+Object.entries(v).filter(([,x])=>x!==undefined).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([k,x])=>JSON.stringify(k)+':'+canonical(x)).join(',')+'}':JSON.stringify(v)??'null',digest=v=>crypto.createHash('sha256').update(canonical(v)).digest('hex');
+ const op=f.app.store.list('superOperations').find(o=>o.tool==='Bash'),execution=f.app.store.require('commandExecutions',op.commandExecutionId);
+ // Seed the exact legacy host representation; the input/result source remains
+ // the actual SDK/SSH fixture call, not a model-supplied reconciliation claim.
+ op.status='unknown';op.readOnly=false;execution.readOnly=false;execution.commandHash=digest('hostname; command -v lake_fixture_absent_program');
+ f.app.store.put('superOperations',op.id,op);f.app.store.put('commandExecutions',execution.id,execution);
+ const before=['superOperations','commandExecutions','superGoals','superAttempts','superAcceptance'].map(kind=>f.app.store.list(kind));
+ const calls=f.calls;await f.restart();
+ assert.equal(wire.requests.length,1);assert.equal(f.calls,calls);
+ assert.deepEqual(['superOperations','commandExecutions','superGoals','superAttempts','superAcceptance'].map(kind=>f.app.store.list(kind)),before);
+ const receipt=f.app.store.require('commandReadReconciliations',op.id);assert.equal(receipt.effects,'none');assert.equal(receipt.operationHash,digest(op));assert.ok(receipt.sourcePartId);assert.ok(receipt.sourceMessageId);
+ await f.restart();assert.equal(f.app.store.list('commandReadReconciliations').length,1);assert.equal(wire.requests.length,1);
+});
+
+test('stopping an actual SDK SSH read reports stopped after settlement and projects cancelled command cards without rewriting evidence',async t=>{
+ const {f,wire,worker}=await lookupCommandTask(t,true,'super-full-worker-ssh-read-stop'),session=worker.sessionId;
+ const snapshot=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>!!s.hostKeyTrust);
+ await f.api(`/api/sessions/${session}/host-key`,'POST',{id:snapshot.hostKeyTrust.id,accept:true,fingerprint:snapshot.hostKeyTrust.fingerprint});
+ await until(async()=>({executions:f.app.store.list('commandExecutions'),requests:wire.requests.length}),v=>v.requests===1&&v.executions.some(e=>e.status==='running'));
+ const goal=f.app.store.require('superGoals',worker.task.taskId);
+ await f.api(`/api/sessions/${session}/ai/workControl`,'POST',{goalId:goal.id,command:'cancel',revision:goal.revision});
+ const final=f.app.store.require('superGoals',goal.id),op=f.app.store.list('superOperations').find(o=>o.goalId===goal.id&&o.tool==='Bash');
+ assert.equal(final.status,'cancelled');assert.equal(op.status,'failed');assert.equal(op.readOnly,true);assert.equal(op.output.status,'cancelled');
+ const raw=JSON.stringify(op),view=await f.api(`/api/sessions/${session}/snapshot`),card=view.ai.cards.find(c=>c.title==='Bash');
+ assert.equal(card.status,'cancelled');assert.equal(card.data.operation_status,'failed');assert.equal(JSON.stringify(f.app.store.require('superOperations',op.id)),raw);
+ const state=await f.api(`/api/projects/${f.project.id}/superagent`),router=state.project.routerSessionId;
+ const reports=f.app.store.messages(router).filter(m=>m.author?.taskId===goal.id);assert.equal(reports.length,1);assert.equal(reports[0].text,'已停止这次工作。');
+ const channel=state.channels[0],page=await f.api(`/api/sessions/${channel.sessionId}/channel`);
+ assert.equal(page.entries.filter(e=>e.message?.author?.taskId===goal.id).length,1);assert.ok(!JSON.stringify(page).includes('有一项操作的结果还需核实'));
+ // Reproduce an old outbox's premature host notice. Only read projections may
+ // correct it; the old message and original operation remain byte-identical.
+ for(const target of [router,channel.sessionId]){
+  const saved=f.app.store.messages(target).find(m=>m.author?.taskId===goal.id);saved.text='有一项操作的结果还需核实，暂时不能重复该操作。';f.app.store.put('messages',saved.id,saved);
+ }
+ const history=f.app.store.messages(channel.sessionId).find(m=>m.author?.taskId===goal.id),historyBytes=JSON.stringify(history);
+ assert.equal((await f.api(`/api/sessions/${channel.sessionId}/channel`)).entries.find(e=>e.message?.author?.taskId===goal.id).message.text,'已停止这次工作。');
+ assert.equal((await f.api(`/api/sessions/${router}/snapshot`)).messages.find(m=>m.author?.taskId===goal.id).text,'已停止这次工作。');
+ assert.equal(JSON.stringify(f.app.store.require('messages',history.id)),historyBytes);
+ const calls=f.calls;await f.restart();assert.equal(f.calls,calls);assert.equal(wire.requests.length,1);
+ assert.equal((await f.api(`/api/sessions/${session}/snapshot`)).ai.cards.find(c=>c.title==='Bash').status,'cancelled');
 });
 
 test('the same program discovery still asks when Pilot command auto-approval is off',async t=>{

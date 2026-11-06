@@ -1,8 +1,9 @@
+import {hasUnreadMessages} from './ConversationReadMarker';
 import {useEffect,useRef,useState} from 'react';
 import type {SuperWorkspace,SuperWorker,SpecialistChannelInfo} from '../../shared/contracts';
 import {api,readableError} from './api';
 import {greetRoleAvatar,SuperRoleAvatar} from './SuperRoleAvatar';
-import {conversationAvatarMotion,superAvatarMotion,superTaskPresentation,type ConversationAvatarActivity,type ConversationActivity} from './superAgentPresentation';
+import {conversationAvatarMotion,superAvatarMotion,superTaskPresentation,specialistTaskActivity,type ConversationAvatarActivity,type ConversationActivity} from './superAgentPresentation';
 import {Glyph} from './Icons';
 import {NavigationMenu} from './NavigationDelete';
 import {SpecialistDelete} from './SpecialistDelete';
@@ -34,9 +35,10 @@ export function usePilotWorkspace(projectId:string|undefined,connected:boolean){
   if(!routerId||!connected||typeof EventSource==='undefined')return;
   const stream=new EventSource(api.eventsUrl(routerId,cursor.current),{withCredentials:true});
   const refresh=()=>refreshRef.current();
-  stream.addEventListener('specialist',refresh);stream.addEventListener('open',refresh);
+  stream.addEventListener('specialist',refresh);stream.addEventListener('message',refresh);stream.addEventListener('open',refresh);
   return()=>stream.close();
  },[routerId,connected]);
+ useEffect(()=>{const refresh=()=>refreshRef.current();window.addEventListener('lake:conversation-read',refresh);return()=>window.removeEventListener('lake:conversation-read',refresh);},[]);
  const removeRole=(roleId:string)=>{deletedRoles.current.add(roleId);setWorkspace(current=>current?{...current,channels:current.channels?.filter(channel=>channel.roleId!==roleId),workers:current.workers.filter(worker=>worker.roleId!==roleId)}:current);refreshRef.current();};
  return {workspace,error,removeRole};
 }
@@ -57,6 +59,7 @@ function useCompletionReads(workspace: SuperWorkspace | null, viewedRole: string
   const sync = () => {
    for (const channel of channels) {
     const key = readKey(channel);
+    if(channel.messageRead)continue;
     const cursor = channel.completionCursor ?? '';
     let mark = marks.current.get(key);
     if (!document.hidden && channel.roleId === viewedRole && cursor > (channel.seenCompletionCursor ?? '')) {
@@ -102,11 +105,11 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
   roots.map(worker => ({channel: undefined, workers: [worker]}));
  return <section className="pilot-workspace" aria-label="Pilot 与专员">
   <button ref={pilotButton} type="button" className={`nav-row pilot-workspace-entry${selectedId===workspace.project.routerSessionId?' active':''}`} aria-current={selectedId===workspace.project.routerSessionId?'page':undefined} title="Pilot · 持续沟通，自动安排工作" onClick={event=>{greetRoleAvatar(event.currentTarget);onPilot();}}>
-   <SuperRoleAvatar pilot motion={conversationAvatarMotion(activity?.sessionId===workspace.project.routerSessionId?activity.state:pilotActivity)}/><span className="nav-row-text"><strong>Pilot</strong></span><Glyph name="arrow" size={14}/>
+   <SuperRoleAvatar pilot motion={conversationAvatarMotion(activity?.sessionId===workspace.project.routerSessionId?activity.state:pilotActivity)}/><span className="nav-row-text"><strong>Pilot</strong><span className="pilot-entry-caption" aria-hidden="true">对话与任务</span></span>{hasUnreadMessages(workspace.pilotMessageRead)&&<span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}<Glyph name="next" size={12}/>
   </button>
   <div className="nav-heading"><span>专员</span><small>{entries.length}</small></div>
   {entries.length ? entries.map(({channel, workers}) => {
-   const worker = workers[0], task = worker?.task;
+   const aggregate=specialistTaskActivity(workers),worker = aggregate.worker, task = worker?.task;
    const name = channel?.roleName ?? worker!.roleName;
    const selected = channel ? channel.roleId === viewedRole : worker?.sessionId === selectedId;
    // Only the host can attest that a live, source-bound interaction exists.
@@ -118,22 +121,24 @@ export function PilotWorkspace({workspace,error,selectedId,selectedRoleId,activi
    const activityLabel = running ? '执行中' : preparing ? '准备处理' : '';
    const cursor = channel?.completionCursor ?? '';
    const read = channel ? readMarks.get(readKey(channel)) : undefined;
-   const unread = !!channel && !selected && cursor > (channel.seenCompletionCursor ?? '') &&
+   const unread = channel?.messageRead ? hasUnreadMessages(channel.messageRead) : !!channel && !selected && cursor > (channel.seenCompletionCursor ?? '') &&
     cursor > (read?.requested ?? '') && cursor > (read?.acknowledged ?? '');
-   const status = [needsConfirmation && '需确认', activityLabel, unread && '有已完成任务未读'].filter(Boolean).join(' · ') ||
+   const showUnread = unread && !activityLabel;
+   const status = [needsConfirmation && '需确认', activityLabel, showUnread && '有新消息未读'].filter(Boolean).join(' · ') ||
     (task && task.state !== 'running' ? superTaskPresentation(task).label : task ? '暂无正在执行的任务' : '暂无任务');
-   const label = `${name} · ${task?.title ?? (channel?.duties || '持续沟通')} · ${status}`;
+   const detail=aggregate.detail??(channel?.duties||'持续沟通');
+   const label = `${name} · ${detail}${detail.endsWith(status)?'':` · ${status}`}`;
    return <button type="button" key={channel?.id ?? worker!.id} className={`nav-row pilot-worker-row${selected ? ' active' : ''}`}
      aria-current={selected ? 'page' : undefined} aria-label={label} title={label}
      aria-haspopup={channel?'menu':undefined}
      onContextMenu={event=>{event.preventDefault();event.stopPropagation();if(channel&&!disabled){anchor.current=event.currentTarget;setContext({channel,x:event.clientX,y:event.clientY});}}}
      onKeyDown={event=>{if(channel&&!disabled&&(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){event.preventDefault();const bounds=event.currentTarget.getBoundingClientRect();anchor.current=event.currentTarget;setContext({channel,x:bounds.left+20,y:bounds.bottom});}}}
      onClick={event=>{greetRoleAvatar(event.currentTarget);if(channel&&onChannel)onChannel(channel);else if(worker)onWorker(worker);}}>
-    <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{task?.title ?? (channel?.duties || '持续沟通')}</span></span>
+    <SuperRoleAvatar name={name} roleId={channel?.roleId??worker?.roleId} motion={preparing?'working':replyActivity?conversationAvatarMotion(replyActivity,task?.state):superAvatarMotion(running,task?.state)}/><span className="nav-row-text"><strong>{name}</strong><span className="pilot-worker-task">{detail}</span></span>
     <span className="pilot-worker-status">
+     {aggregate.runningCount>1&&<span className="pilot-worker-count" aria-label={`${aggregate.runningCount} 项任务执行中`}>{aggregate.runningCount}</span>}
      {needsConfirmation && <span className="pilot-worker-confirmation">需确认</span>}
-     {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><Glyph name="loader" size={14} className="activity-indicator"/></span> :
-      unread && <span className="pilot-worker-unread" role="img" aria-label="有已完成任务未读"/>}
+     {activityLabel ? <span className="pilot-worker-running" role="img" aria-label={activityLabel}><Glyph name="loader" size={14} className="activity-indicator"/></span> : showUnread && <span className="pilot-worker-unread" role="img" aria-label="有新消息未读"/>}
     </span>
    </button>;
   }) : <p className="pilot-workspace-empty">告诉 Pilot 你的目标，它会执行或安排专员协作。</p>}

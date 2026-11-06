@@ -9,6 +9,7 @@ import { createNodeFileSystemAdapter } from "./sdk";
 import {createJimpImageProcessorAdapter} from "./sdk";
 import {createPopplerPdfDocumentAdapter} from "./sdk";
 import {digest} from "./tasks";
+import { cancelledReadOperation } from "./task-cancellation";
 import { createNodeWebFetchHttpClientAdapter } from "./sdk";
 import { createSqliteSessionStore, createNodeToolArtifactStore } from "./sdk";
 import type { Model, NativeSessionEvent, SessionId, ProjectId } from "./sdk";
@@ -246,6 +247,7 @@ export class LakeAgents {
         ...(scoped.agentRunId ? { agentRunId: scoped.agentRunId } : {}),
         ...(scoped.childSessionId ? { childSessionId: scoped.childSessionId } : {}) } : {}) };
     if (scoped?.status === "unknown") card.status = "unknown";
+    else if (scoped && cancelledReadOperation(this.store, scoped)) card.status = "cancelled";
     if (run && scoped?.resourceId && !run.resourceIds.includes(scoped.resourceId)) run.resourceIds.push(scoped.resourceId);
   }
   private childEvent(parentId: string, runId: string, event: NativeSessionEvent) {

@@ -170,7 +170,7 @@ export class LakeStore {
     return project;
   }
   catalog(): Catalog {
-    const resources = this.list<Resource>("resources");
+    const resources = this.list<Resource>("resources").map(resource=>({...resource,configurationRevision:this.get<number>('resourceRevisions',resource.id)??1}));
     const tree = this.list<ResourceTreeNode>("tree");
     for (const resource of resources)
       if (!tree.some((node) => node.resourceId === resource.id))

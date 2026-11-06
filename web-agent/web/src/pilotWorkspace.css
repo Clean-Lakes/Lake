@@ -3,8 +3,13 @@
 .sidebar.workspace-navigation .pilot-workspace .nav-row { padding:8px var(--sidebar-row-inset); gap:var(--sidebar-icon-gap); border-radius:var(--window-corner-radius,18px); corner-shape:var(--corner-window); }
 .sidebar.workspace-navigation .pilot-workspace .super-role-avatar { flex:0 0 var(--sidebar-icon-column); width:var(--sidebar-icon-column); }
 .pilot-workspace .nav-row:focus-visible { outline:2px solid var(--focus-outline); outline-offset:-2px; }
-.pilot-workspace-entry { min-height:44px; }
-.sidebar.workspace-navigation .pilot-workspace .nav-heading { margin-inline:var(--sidebar-row-inset); padding:16px 0 8px; }
+.sidebar.workspace-navigation .pilot-workspace .pilot-workspace-entry { min-height:52px; }
+.sidebar.workspace-navigation .pilot-workspace .pilot-workspace-entry:not(.active) { background:color-mix(in srgb,var(--surface-hover) 48%,transparent); }
+.sidebar.workspace-navigation .pilot-workspace .pilot-workspace-entry:not(.active):hover { background:var(--surface-hover); }
+.pilot-workspace-entry .nav-row-text { gap:1px; }
+.pilot-entry-caption { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-muted); font-size:12px; line-height:18px; }
+.pilot-workspace-entry > svg:last-child { flex:none; color:var(--text-muted); }
+.sidebar.workspace-navigation .pilot-workspace .nav-heading { margin-inline:var(--sidebar-row-inset); padding:14px 0 6px; }
 .pilot-workspace .nav-heading small,.pilot-workspace-empty,.pilot-workspace-error { color:var(--text-muted); font-size:var(--font-size-ui); }
 .pilot-worker-row { min-height:56px; margin-bottom:2px; align-items:center; }
 .pilot-worker-row .nav-row-text { gap:3px; min-width:0; }
@@ -12,6 +17,7 @@
 .pilot-worker-status { display:inline-flex; align-items:center; justify-content:flex-end; gap:6px; flex:0 0 auto; }
 .pilot-worker-status:empty { display:none; }
 .pilot-worker-running { display:inline-flex; }
+.pilot-worker-count { min-width:18px; padding:1px 4px; border-radius:5px; corner-shape:var(--corner-window); background:color-mix(in srgb,var(--info) 10%,transparent); color:var(--info); font-size:11px; line-height:16px; text-align:center; }
 .nav-row .pilot-worker-running .activity-indicator { color:var(--info); }
 .pilot-worker-unread { width:7px; height:7px; border-radius:50%; background:var(--success); }
 .super-role-avatar { display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; background:none; }

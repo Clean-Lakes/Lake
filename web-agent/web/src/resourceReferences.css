@@ -18,7 +18,11 @@
  font-weight:inherit;
 }
 :is(.ai-role-user,.message-user) .message-reference-token:has(> .resource-kind-icon) {
- color:color-mix(in srgb,var(--resource-reference-foreground) 65%,var(--user-message-foreground));
+ color:color-mix(in srgb,var(--resource-reference-foreground) 55%,var(--user-message-foreground));
+}
+/* Local references stay neutral on the human-message surface. */
+:is(.ai-role-user,.message-user) .message-reference-token:has(> .resource-kind-icon.kind-local) {
+ color:var(--user-message-foreground);
 }
 :is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon:is(.kind-ssh,.kind-apisix)) {
  --resource-reference-background:var(--info-soft);

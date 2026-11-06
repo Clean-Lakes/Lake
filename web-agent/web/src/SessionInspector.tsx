@@ -68,7 +68,7 @@ export function SessionInspector({snapshot,connected,onUpdated,worker,readOnly=f
        {currentEntry?<SRERoleMessage key={`${task.id}:${currentEntry.attemptId}`} detailsOnly connected={connected&&!readOnly} task={task} entry={currentEntry} snapshot={snapshot} onUpdated={onUpdated} renderApproval={()=>null}/>:<p className="inspector-empty">本步骤尚无执行记录。</p>}
       </details>
      </>}
-     {goal&&canonical&&<><WorkerExecutionTree snapshot={snapshot} worker={worker}/><SuperTaskInspector task={canonical} goal={goal} worker={worker} controlsOnly connected={connected&&!readOnly} onUpdated={onUpdated}/></>}
+     {goal&&canonical&&<><WorkerExecutionTree snapshot={snapshot} worker={worker} connected={connected&&!readOnly} onUpdated={onUpdated}/><SuperTaskInspector task={canonical} goal={goal} worker={worker} controlsOnly connected={connected&&!readOnly} onUpdated={onUpdated}/></>}
      {!task&&!goal&&<h3 className="inspector-execution-title"><Glyph name="document" size={17}/>当前执行</h3>}
      {!hasInspectorTask(snapshot,target)&&!target.turnId&&(!target.followLatest||!(snapshot.messages?.length??0)&&!snapshot.ai?.cards.length)&&<p className="inspector-empty">本轮尚无执行记录。</p>}
      {!goal&&<div ref={inspector.setHost} className="inspector-turn-host"/>}
