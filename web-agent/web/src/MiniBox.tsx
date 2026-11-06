@@ -2,16 +2,17 @@ import {useId,useLayoutEffect,useRef,useState} from 'react';
 import type {AICard,CommandStopNotice} from '../../shared/contracts';
 import {api} from './api';
 import {Glyph} from './Icons';
-import {miniCanStop,miniControlActive,miniTarget,type MiniBoxScope} from './miniBoxModel';
+import {miniCanStop,miniControlActive,miniTarget,miniHostCommands,type MiniBoxScope} from './miniBoxModel';
 import {miniAnomalyLine,miniPreview,miniPreviewRows,miniReadableOutput,miniRecordedEntry,miniRecordedEntries,retainMiniPreview,miniExecutionStatus,type MiniPreview} from './miniBoxPreview';
 import {useMiniBox} from './useMiniBox';
 import {MiniBoxControl} from './MiniBoxControl';
 import {ExecutionIcon} from './ExecutionIcon';
 
-export function MiniBox({scope,resource,kind,cards,onInspect,marker=false}:{marker?:boolean;scope:MiniBoxScope;resource:string;kind:'local'|'ssh';cards:AICard[];onInspect?:()=>void}) {
+export function MiniBox({scope,resource,kind,cards,onInspect,onCommandStopped,marker=false}:{marker?:boolean;scope:MiniBoxScope;resource:string;kind:'local'|'ssh';cards:AICard[];onInspect?:()=>void;onCommandStopped?:()=>void}) {
   const protocol=kind==='local'?'本机':'SSH';
   const {histories,stale,refresh}=useMiniBox(scope,resource);
   const target=miniTarget(histories);
+  const hostCommands=miniHostCommands(scope,cards,resource),host=hostCommands.at(-1);
   const [open,setOpen]=useState(!scope.multiResource),[fullOpen,setFullOpen]=useState(false),[pending,setPending]=useState(''),[error,setError]=useState(''),[jump,setJump]=useState(0);
   const disclosure=useRef({manual:false,autoFolded:!!scope.multiResource});
   // Adding a second host folds untouched boxes once. A later completion
@@ -24,7 +25,7 @@ export function MiniBox({scope,resource,kind,cards,onInspect,marker=false}:{mark
   if(observed.current.scope!==observationScope)observed.current={scope:observationScope,entries:new Map()};
   const liveEntries=histories.flatMap(history=>history.entries.map(entry=>({entry,key:`${history.terminal.id}:${history.terminal.generation}:${entry.id}`}))).sort((a,b)=>Date.parse(a.entry.startedAt??a.entry.createdAt)-Date.parse(b.entry.startedAt??b.entry.createdAt));
   const recorded=miniRecordedEntry(cards.at(-1));
-  const records=liveEntries.length?liveEntries:miniRecordedEntries(cards).map(entry=>({entry,key:`recorded:${entry.id}`}));
+  const records=hostCommands.length?hostCommands.map(command=>({key:`host:${command.id}`,entry:{...command,status:command.status==='running'?'running' as const:['completed','failed'].includes(command.status)&&command.exitCode!==null?'completed' as const:'unknown' as const}})):liveEntries.length?liveEntries:miniRecordedEntries(cards).map(entry=>({entry,key:`recorded:${entry.id}`}));
   const allowed=new Set(records.map(row=>row.key));
   for(const key of observed.current.entries.keys())if(!allowed.has(key))observed.current.entries.delete(key);
   const analyzed=records.map(row=>{
@@ -35,10 +36,10 @@ export function MiniBox({scope,resource,kind,cards,onInspect,marker=false}:{mark
     return {...row,preview};
   });
   const last=cards.at(-1);
-  const dispatching=!!target&&last?.status==='running'&&Date.parse(last.at)>Date.parse(target.entry.startedAt??target.entry.createdAt);
+  const dispatching=!host&&!!target&&last?.status==='running'&&Date.parse(last.at)>Date.parse(target.entry.startedAt??target.entry.createdAt);
   const current=dispatching&&recorded?{entry:recorded,preview:miniPreview(recorded.output)}:analyzed.find(row=>row.entry.id===target?.entry.id)??analyzed.at(-1);
   const command=current?.entry.command||'';
-  const commandLabel=command?command.replace(/\r?\n/g,' ⏎ '):'等待命令派发…';
+  const commandLabel=command?command.replace(/\r?\n/g,' ⏎ '):current?.entry.status==='running'||last?.status==='pending'?'等待命令派发…':'未保留原命令';
   const preview=current?.preview??miniPreview('');
   const rows=miniPreviewRows(preview,preview.anomalies[0]);
   const anomalyCount=analyzed.reduce((count,row)=>count+row.preview.anomalies.length,0);
@@ -49,15 +50,15 @@ export function MiniBox({scope,resource,kind,cards,onInspect,marker=false}:{mark
     const issue=detail.current.querySelector<HTMLElement>('[data-mini-anomaly]');
     if(issue){detail.current.scrollTop+=issue.getBoundingClientRect().top-detail.current.getBoundingClientRect().top-8;detail.current.focus({preventScroll:true});}
   },[fullOpen,jump]);
-  const currentKey=target?`${target.history.terminal.id}:${target.entry.id}`:'';
-  const stopping=!!target&&(!!target.entry.stopRequestedAt||pending===currentKey);
-  const canStop=miniCanStop(target,scope,stale)&&!stopping&&!dispatching;
-  const active=miniControlActive(scope,cards.find(card=>card.status==='running'),target,stale,stopping);
+  const currentKey=host?`host:${host.id}`:target?`${target.history.terminal.id}:${target.entry.id}`:'';
+  const stopping=host?!!host.stopRequestedAt||pending===currentKey:!!target&&(!!target.entry.stopRequestedAt||pending===currentKey);
+  const canStop=(host?scope.connected&&host.canStop:miniCanStop(target,scope,stale))&&!stopping&&!dispatching;
+  const active=host?scope.connected&&scope.live&&host.status==='running'&&!stopping:miniControlActive(scope,cards.find(card=>card.status==='running'),target,stale,stopping);
   const status=miniExecutionStatus({entry:current?.entry,card:last,stale,stopping,active,anomalies:preview.anomalies.length,dispatching});
   async function stop(){
-    if(!canStop||!target)return;
+    if(!canStop)return;
     setPending(currentKey);setError('');onInspect?.();
-    try {await api.terminalInterruptCommand(scope.session,target.history.terminal.id,target.history.terminal.generation,target.entry.id);refresh();}
+    try {if(host)await api.interruptExecution(scope.session,host.id,host.generation);else if(target)await api.terminalInterruptCommand(scope.session,target.history.terminal.id,target.history.terminal.generation,target.entry.id);refresh();onCommandStopped?.();}
     catch{setError('终止未确认，请核查当前命令状态。');setPending('');refresh();}
   }
   return <>{marker&&<span className="thinking-step-marker"><ExecutionIcon card={last} active={active} size={20}/></span>}<div className="mini-box-container"><div className="mini-box-content">

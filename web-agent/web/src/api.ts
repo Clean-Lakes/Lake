@@ -107,6 +107,8 @@ export const api = {
 	superWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorkspace>(`/api/projects/${encodeURIComponent(project)}/superagent`,{signal}),
 	stopSuperWorkspace:(project:string,routerSessionId:string)=>request<{stopped:boolean;tasks:number}>(`/api/projects/${encodeURIComponent(project)}/superagent/stop`,{method:'POST',body:JSON.stringify({routerSessionId})}),
 	deleteSpecialist:(project:string,role:string,revision:number)=>request<{deleted:boolean}>(`/api/projects/${encodeURIComponent(project)}/superagent/specialists/${encodeURIComponent(role)}`,{method:'DELETE',body:JSON.stringify({revision})}),
+	interruptExecution:(session:string,execution:string,generation:number)=>request<{requested:boolean}>(`/api/sessions/${encodeURIComponent(session)}/executions/${encodeURIComponent(execution)}/interrupt`,{method:'POST',body:JSON.stringify({generation})}),
+	readConversation:(session:string,cursor:string)=>request<{cursor:string}>(`/api/sessions/${encodeURIComponent(session)}/messages-read`,{method:'PUT',body:JSON.stringify({cursor})}),
 	readSpecialistCompletion:(session:string,cursor:string)=>request<{cursor:string}>(`/api/sessions/${encodeURIComponent(session)}/channel/read`,{method:'PUT',body:JSON.stringify({cursor})}),
 	specialistTasks:(session:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorker[]>(`/api/sessions/${encodeURIComponent(session)}/channel/tasks`,{signal}),
 	specialistChannel:(session:string,cursor='',signal?:AbortSignal)=>request<import('../../shared/contracts').SpecialistChannelPage>(`/api/sessions/${encodeURIComponent(session)}/channel${cursor?`?cursor=${encodeURIComponent(cursor)}`:''}`,{signal}),

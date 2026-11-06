@@ -31,3 +31,14 @@ test('results render only canonical business receipts and preserve failure and u
  assert.match(html,/真实业务读取/);assert.match(html,/step-failed/);assert.match(html,/step-unknown/);
  assert.doesNotMatch(html,/work_begin|work_finish|list_assets|list_mcp_servers|没有账本的旧读取/);
 });
+
+
+test('task execution mounts Mini Box immediately for host-owned Bash and inspect_host including child calls',()=>{
+ const card=(id:string,title:string,resource='a'):AICard=>({id,title,type:'operation',status:'running',at:'2026-11-06T00:00:00Z',data:{taskId:'task',resource_id:resource,operation_id:id,arguments:{command:'printf MINI_FIRST'}}});
+ const snapshot={session:{id:'session',projectId:'project',createdAt:'2026-11-06T00:00:00Z'},terminals:[],resources:[{id:'a',name:'本机',projectId:'project',kind:'local'},{id:'b',name:'远端',projectId:'project',kind:'ssh'}],superagent:{task:{taskId:'task',sessionId:'session',state:'running'}},ai:{cards:[card('parent','Bash')],agentRuns:[{id:'child',source:'zcode_subagent',sessionId:'session',taskId:'task',childSessionId:'sdk-child',name:'原生子执行',status:'running',createdAt:'2026-11-06T00:00:00Z',resourceIds:['b'],cards:[card('child-call','inspect_host','b')]}]}} as unknown as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(WorkerExecutionTree,{snapshot,connected:true}));
+ assert.match(html,/Mini Box 本机 命令终端/);assert.match(html,/Mini Box SSH 命令终端/);
+ assert.equal((html.match(/class="mini-box is-operating is-collapsed"/g)??[]).length,2);
+ assert.match(html,/MINI_FIRST/);assert.match(html,/原始执行记录/);
+ assert.doesNotMatch(renderToStaticMarkup(createElement(WorkerExecutionTree,{snapshot:{...snapshot,ai:{...snapshot.ai!,cards:[{...card('foreign','Bash'),data:{taskId:'other',resource_id:'a'}}],agentRuns:[]}}})),/Mini Box/);
+});

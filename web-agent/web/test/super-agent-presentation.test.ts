@@ -70,7 +70,7 @@ test('specialist sidebar prioritizes live execution, keeps confirmations and cle
  assert.match(executing, /class="pilot-worker-running"/);
  assert.match(executing, /activity-indicator/);
  assert.match(executing, /class="pilot-worker-confirmation"/);
- assert.doesNotMatch(executing, /class="pilot-worker-unread"/);
+ assert.match(executing, /class="pilot-worker-unread"/);
 
  const finished = render(unread);
  assert.match(finished, /class="pilot-worker-unread"/);
@@ -81,4 +81,15 @@ test('specialist sidebar prioritizes live execution, keeps confirmations and cle
   render(unread, 'older-session-outside-worker-preview', worker.roleId),
  ]) assert.doesNotMatch(html, /class="(?:pilot-worker-unread|pilot-worker-running|session-status-dot)"/);
  assert.match(render(unread, 'pilot'), /class="pilot-worker-unread"/);
+});
+
+
+test('Pilot and specialist message dots are independent of completion, running and current route',()=>{
+ const state={cursor:'00000000000000000002',seenCursor:'00000000000000000001'};
+ const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},pilotMessageRead:state,workers:[worker],channels:[{id:'channel',sessionId:'role-channel',projectId:'project',roleId:worker.roleId,roleName:worker.roleName,revision:1,createdAt:'',running:true,messageRead:state}]};
+ const render=(next=workspace)=>renderToStaticMarkup(createElement(PilotWorkspace,{workspace:next,selectedId:'role-channel',error:'',onPilot(){},onWorker(){}}));
+ assert.equal((render().match(/class="pilot-worker-unread"/g)??[]).length,2);
+ assert.match(render(),/有新消息未读/);
+ assert.match(render(),/pilot-worker-running/);
+ assert.doesNotMatch(render({...workspace,pilotMessageRead:{...state,seenCursor:state.cursor},channels:workspace.channels!.map(channel=>({...channel,messageRead:{...state,seenCursor:state.cursor}}))}),/class="pilot-worker-unread"/);
 });

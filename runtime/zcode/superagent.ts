@@ -1,3 +1,4 @@
+import {conversationReadState} from "./conversation-reads";
 import {permissionDefaults} from '../../web-agent/shared/execution-preferences';
 import {specialistReplies} from '../../web-agent/shared/specialist-replies';
 import {TaskContext,projectTaskContext,type TaskContextActor} from './task-context';
@@ -241,6 +242,7 @@ export class LakeSuperagent implements AgentHost {
       running: workers.some((worker) => this.active.has(worker.id) && this.agents.isRunning(worker.sessionId)),
       preparing: workers.some((worker) => worker.assignmentState === "queued") || this.store.list<InputEvent>("superInputs").some((event) => event.preferredRoleId === role.id && event.disposition === "pending"),
       needsConfirmation: workers.some((worker) => this.pendingInteraction(worker.sessionId)),
+      messageRead: conversationReadState(this.store, channel.sessionId, [channel.sessionId, ...workers.map(worker => worker.sessionId)]),
       completionCursor: accepted ? String(accepted).padStart(20, "0") : "",
       seenCompletionCursor: this.store.get<string>("superChannelReads", channel.id) ?? "" };
   }
@@ -260,7 +262,7 @@ export class LakeSuperagent implements AgentHost {
   workspace(projectId: string): SuperWorkspace {
     this.store.project(projectId);
     const project = this.store.get<SuperProject>("superProjects", projectId);
-    return { active: !!project, project: project ?? { projectId, routerSessionId: "", version: 0 }, workers: this.workers(projectId),
+    return { pilotMessageRead: project ? conversationReadState(this.store, project.routerSessionId) : undefined, active: !!project, project: project ?? { projectId, routerSessionId: "", version: 0 }, workers: this.workers(projectId),
       channels: this.store.list<Channel>("superChannels").filter((channel) => channel.projectId === projectId && !this.role(projectId, channel.roleId, true).deletedAt)
         .map((channel) => this.channelView(channel)), cursor: project ? this.store.cursor(project.routerSessionId) : 0 };
   }
@@ -1122,6 +1124,7 @@ export class LakeSuperagent implements AgentHost {
     if (worker) {
       const goal = this.ledger.get(worker.taskId);
       snapshot.superagent = { task: this.taskView(goal), goal: this.publicGoal(goal), roleId: worker.roleId };
+      snapshot.commandExecutions = this.execution?.views(snapshot.session.id, goal.id);
       if (snapshot.ai) {
         snapshot.ai = this.agents.executionView(snapshot.session.id, snapshot.ai);
         snapshot.ai.workGoals = [this.publicGoal(goal)];
@@ -1132,6 +1135,7 @@ export class LakeSuperagent implements AgentHost {
       const goal = legacy && this.store.get<any>("legacyGoals", legacy.task.taskId);
       if (goal) { snapshot.superagent = { task: legacy!.task, goal, roleId: legacy!.roleId }; if (snapshot.ai) snapshot.ai.workGoals = [goal]; }
     }
+    if(snapshot.session.workspaceRole === "router") snapshot.messageRead = conversationReadState(this.store, snapshot.session.id);
     return snapshot;
   }
   changed(sessionId: string) {

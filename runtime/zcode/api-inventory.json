@@ -328,6 +328,15 @@
       ]
     },
     {
+      "name": "forgetMemory",
+      "routes": [
+        {
+          "method": "DELETE",
+          "path": "`/api/memory/scopes/${encodeURIComponent(key)}/entries/${encodeURIComponent(entryId)}?projectId=${encodeURIComponent(projectId)}`"
+        }
+      ]
+    },
+    {
       "name": "forgetProjectMemory",
       "routes": [
         {
@@ -382,11 +391,47 @@
       ]
     },
     {
+      "name": "interruptExecution",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/sessions/${encodeURIComponent(session)}/executions/${encodeURIComponent(execution)}/interrupt`"
+        }
+      ]
+    },
+    {
       "name": "mcpServers",
       "routes": [
         {
           "method": "GET",
           "path": "\"/api/settings/mcp\""
+        }
+      ]
+    },
+    {
+      "name": "memoryScopes",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/memory?projectId=${encodeURIComponent(projectId)}`"
+        }
+      ]
+    },
+    {
+      "name": "memorySettings",
+      "routes": [
+        {
+          "method": "PATCH",
+          "path": "`/api/memory/scopes/${encodeURIComponent(key)}/settings?projectId=${encodeURIComponent(projectId)}`"
+        }
+      ]
+    },
+    {
+      "name": "memoryView",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "`/api/memory/scopes/${encodeURIComponent(key)}?projectId=${encodeURIComponent(projectId)}`"
         }
       ]
     },
@@ -526,6 +571,15 @@
       ]
     },
     {
+      "name": "readConversation",
+      "routes": [
+        {
+          "method": "PUT",
+          "path": "`/api/sessions/${encodeURIComponent(session)}/messages-read`"
+        }
+      ]
+    },
+    {
       "name": "readSpecialistCompletion",
       "routes": [
         {
@@ -621,6 +675,15 @@
         {
           "method": "value.id?\"PUT\":\"POST\"",
           "path": "`/api/settings/mcp${value.id?`/${encodeURIComponent(String(value.id))}`:\"\"}`"
+        }
+      ]
+    },
+    {
+      "name": "saveMemory",
+      "routes": [
+        {
+          "method": "entryId ? \"PUT\" : \"POST\"",
+          "path": "`/api/memory/scopes/${encodeURIComponent(key)}/entries${entryId ? \"/\"+encodeURIComponent(entryId) : \"\"}?projectId=${encodeURIComponent(projectId)}`"
         }
       ]
     },
@@ -804,7 +867,7 @@
       "routes": [
         {
           "method": "GET",
-          "path": "`/api/sessions/${encodeURIComponent(sessionId)}/snapshot`"
+          "path": "`/api/sessions/${encodeURIComponent(sessionId)}/snapshot${taskId?`?taskId=${encodeURIComponent(taskId)}`:\"\"}`"
         }
       ]
     },
@@ -895,6 +958,15 @@
         {
           "method": "POST",
           "path": "`/api/sessions/${encodeURIComponent(session)}/channel`"
+        }
+      ]
+    },
+    {
+      "name": "stopSuperWorkspace",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "`/api/projects/${encodeURIComponent(project)}/superagent/stop`"
         }
       ]
     },
