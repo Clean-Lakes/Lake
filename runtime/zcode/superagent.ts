@@ -21,6 +21,7 @@ import type { LakeExtensions } from "./extensions";
 import { toolActivityLabel } from "./activity";
 import {agentToolNames,nativeTool,agentCapabilityCatalog} from "./capabilities";
 import type {LakeExecution,ShellInput,ShellActor} from "./execution";
+import { ProgramDiscoveryRecovery } from "./discovery-recovery";
 
 type Role = { id: string; projectId: string; roleKey: string; name: string; duties: string; revision: number; deletedAt?: string };
 type Channel = { id: string; projectId: string; roleId: string; sessionId: string; revision: number; createdAt: string };
@@ -66,6 +67,7 @@ function clip(value: string, maximum: number) {
 
 export class LakeSuperagent implements AgentHost {
   readonly ledger: TaskLedger;
+  readonly discoveryRecovery: ProgramDiscoveryRecovery;
   readonly owner = id();
   private batches = new Map<string, RouterBatch>();
   private routing = new Set<string>();
@@ -79,6 +81,7 @@ export class LakeSuperagent implements AgentHost {
   private businessQueues = new Map<string, Promise<void>>();
   private heartbeat: ReturnType<typeof setInterval>;
   constructor(readonly store: LakeStore, readonly agents: LakeAgents, readonly security?: LakeSecurity, readonly extensions?: LakeExtensions, readonly ssh?:LakeSSH,readonly mysql?:LakeMySQL,readonly execution?:LakeExecution) {
+    this.discoveryRecovery = new ProgramDiscoveryRecovery(store, agents.sessions);
     this.ledger = new TaskLedger(store, (operation) => {
       if (operation.mcpServerId) {
         const project = store.require<SuperProject>("superProjects", operation.projectId);
@@ -114,7 +117,7 @@ export class LakeSuperagent implements AgentHost {
       if (resource.projectId !== operation.projectId || resource.status !== "available" ||
           (store.get<number>("resourceRevisions", resource.id) ?? 1) !== operation.resourceRevision)
         throw new HttpError(409, "Resource ownership, availability or connection revision changed");
-    }); agents.host = this;
+    }, operation => this.discoveryRecovery.resolution(operation)); agents.host = this;
     // A process boundary revokes every previous execution owner. Unknown effects
     // remain unknown; neither a pending UI approval nor a queued SDK call is replayed.
     store.transaction(() => {
@@ -736,6 +739,7 @@ export class LakeSuperagent implements AgentHost {
   }
   private async invokeBash(worker:Worker,entry:ToolEntry,input:ShellInput,context:HostToolContext){
     const {plan}=this.shellPlan(worker,input),actor=this.shellActor(worker),generation=worker.generation;
+    await this.discoveryRecovery.verify(worker.projectId);
     if(context.lakeSubagent?.agentType==='explore'&&!plan.readOnly)throw new HttpError(403,'Explore 子智能体仅允许只读调查命令');
     if(!context.executionPort)throw new HttpError(409,'ZCode ExecutionPort 未连接');
     const executionId=this.execution!.executionId(actor,context.toolCallId),port=this.execution!.bind(context.executionPort,actor,plan,context.toolCallId);
@@ -980,9 +984,10 @@ export class LakeSuperagent implements AgentHost {
           if (!goal.confirmed) await this.planInteraction(worker, goal, context.abortSignal);
           return this.publicGoal(this.ledger.get(goal.id));
         })),
-      this.entry("work_read", "Read only this canonical task, original attempts and operation handles. Never retry unknown effects.", objectSchema({ goal_id: str, item_id: str, evidence_id: str }), run((a) => {
+      this.entry("work_read", "Read only this canonical task, original attempts and operation handles. Never retry unknown effects. An effectReconciliation verifies only that an old literal program lookup had no writes; its failed result remains historical and is not business success.", objectSchema({ goal_id: str, item_id: str, evidence_id: str }), run(async (a) => {
         if (a.goal_id && a.goal_id !== worker.taskId) throw new HttpError(404, "Task not found in this worker");
-        return { goal: this.publicGoal(this.ledger.get(worker.taskId)), operations: this.store.list<Operation>("superOperations").filter((op) => op.goalId === worker.taskId) };
+        await this.discoveryRecovery.verify(worker.projectId);
+        return { goal: this.publicGoal(this.ledger.get(worker.taskId)), operations: this.store.list<Operation>("superOperations").filter((op) => op.goalId === worker.taskId).map(op => ({...op, effectReconciliation:this.discoveryRecovery.resolution(op)})) };
       })),
       this.entry("work_update", "Start the returned actual item ID before resource I/O; completed requires real successful call IDs from this exact attempt. Metadata or prose is not evidence. For a blocker, reason describes the specific practical obstacle in the user's language, not internal bookkeeping.",
         objectSchema({ item_id: str, status: { type: "string", enum: ["running", "completed", "waiting_user", "blocked", "failed"] }, reason: str, evidence_ids: array(str) }, ["item_id", "status"]), run((a) => {

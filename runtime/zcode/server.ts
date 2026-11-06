@@ -722,6 +722,7 @@ export async function startLakeServer(options: ServerOptions) {
     }
     execution=new LakeExecution(store,security,ssh,value=>agents!.redact(ssh!.scrub(value)));
     superagent = new LakeSuperagent(store, agents, security, extensions,ssh,mysql,execution);
+    await superagent.discoveryRecovery.verify();
     memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))));
     try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }
     agents.memory = memory;
