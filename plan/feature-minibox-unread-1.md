@@ -31,7 +31,7 @@ Restore the existing Mini Box in task execution details and show green unread do
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | Add scrubbed command execution projections and exact interruption to runtime/zcode/execution.ts and server.ts; keep operation ownership checks. | ✅ | 2026-11-06 |
+| TASK-001 | Add scrubbed command execution projections and exact interruption to runtime/typescript/execution.ts and server.ts; keep operation ownership checks. | ✅ | 2026-11-06 |
 | TASK-002 | Mount MiniBox in web-agent/web/src/WorkerExecutionTree.tsx with scoped cards, including native child runs; adapt miniBoxModel.ts and MiniBox.tsx for SDK execution identities. | ✅ | 2026-11-06 |
 
 ### Implementation Phase 2
@@ -40,9 +40,9 @@ Restore the existing Mini Box in task execution details and show green unread do
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-003 | Add runtime/zcode/conversation-reads.ts; project cursors in workspace/channel/snapshot responses; validate monotonic read acknowledgements. | ✅ | 2026-11-06 |
+| TASK-003 | Add runtime/typescript/conversation-reads.ts; project cursors in workspace/channel/snapshot responses; validate monotonic read acknowledgements. | ✅ | 2026-11-06 |
 | TASK-004 | Add visible conversation read marker and Pilot/specialist green indicators; retain legacy completion protocol compatibility. | ✅ | 2026-11-06 |
-| TASK-005 | Run frontend and runtime checks, verify Lake Dev command display and unread behavior, record exact tested SHA, and open PR against develop. Automated checks and signed installation passed; native message read-on-view, role spacing, light/dark and narrow execution pane reviewed at bedcece6. Coverage limits are recorded separately. See docs/validation/zcode-typescript-candidate/minibox-unread.md. | ✅ | 2026-11-06 |
+| TASK-005 | Run frontend and runtime checks, verify Lake Dev command display and unread behavior, record exact tested SHA, and open PR against develop. Automated checks and signed installation passed; native message read-on-view, role spacing, light/dark and narrow execution pane reviewed at bedcece6. Coverage limits are recorded separately. See docs/validation/typescript-candidate/minibox-unread.md. | ✅ | 2026-11-06 |
 
 ## 3. Alternatives
 
@@ -56,11 +56,11 @@ Restore the existing Mini Box in task execution details and show green unread do
 
 ## 5. Files
 
-- **FILE-001**: runtime/zcode/conversation-reads.ts, execution.ts, superagent.ts, server.ts and api-inventory.json implement host projections and endpoints.
+- **FILE-001**: runtime/typescript/conversation-reads.ts, execution.ts, superagent.ts, server.ts and api-inventory.json implement host projections and endpoints.
 - **FILE-002**: web-agent/shared/contracts.ts and web-agent/web/src/api.ts define optional backward-compatible fields and clients.
 - **FILE-003**: web-agent/web/src/WorkerExecutionTree.tsx, MiniBox.tsx, miniBoxModel.ts, miniBoxPreview.ts, SessionInspector.tsx restore execution UI.
 - **FILE-004**: web-agent/web/src/ConversationReadMarker.tsx, PilotWorkspace.tsx, SpecialistChannel.tsx and App.tsx connect visible reads and navigation dots.
-- **FILE-005**: runtime/zcode/server.test.cjs and web-agent/web/test cover identity isolation, read races and rendering.
+- **FILE-005**: runtime/typescript/server.test.cjs and web-agent/web/test cover identity isolation, read races and rendering.
 
 ## 6. Testing
 

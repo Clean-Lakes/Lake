@@ -5,7 +5,7 @@ date_created: 2026-10-13
 last_updated: 2026-11-04
 owner: Lake
 status: Superseded
-tags: [feature, memory, project, persistence, go, zcode]
+tags: [feature, memory, project, persistence, go, typescript]
 superseded_by: feature-agent-file-memory-1.md
 ---
 
@@ -15,13 +15,13 @@ superseded_by: feature-agent-file-memory-1.md
 
 ![Status: Superseded](https://img.shields.io/badge/status-Superseded-lightgrey)
 
-参考 ZCode 的项目 Markdown 记忆、`MEMORY.md` 索引和成功轮次后的后台提取，为 Lake 当前 Go 后端增加跨会话记忆。实现后，同项目普通聊天和资源／终端 AI 可以复用用户反馈、项目约束和外部参考；后台提取支持中文输入，并在后端重启后恢复尚未完成的工作。
+参考 运行时的项目 Markdown 记忆、`MEMORY.md` 索引和成功轮次后的后台提取，为 Lake 当前 Go 后端增加跨会话记忆。实现后，同项目普通聊天和资源／终端 AI 可以复用用户反馈、项目约束和外部参考；后台提取支持中文输入，并在后端重启后恢复尚未完成的工作。
 
 本文件是实施方案，代码层正在落地。首版不实现长期无人值守调度、自动执行恢复、向量检索、语义召回、Dream 整理或跨项目用户全局记忆。
 
 当前代码层进展与实际验证记录见 `docs/validation/lake-project-memory.md`；尚未通过全部验收项，因此本计划仍标记为 In Progress。
 
-参考基线为 ZCode `main` 提交 `aac4755666d09fdcd70272fcf063c077a639015f`。该版本实际默认使用索引加载，Semantic Recall 的开关为 `false`，Dream handler 未自动接入产品链路。Lake 仓库的 `third_party/zcode/` 与该提交存在差异，实施时以本方案规定的行为和固定上游链接为准。
+参考基线为 Agent SDK `main` 提交 `aac4755666d09fdcd70272fcf063c077a639015f`。该版本实际默认使用索引加载，Semantic Recall 的开关为 `false`，Dream handler 未自动接入产品链路。Lake 仓库的 `third_party/agent-sdk/` 与该提交存在差异，实施时以本方案规定的行为和固定上游链接为准。
 
 2026-10-13 对照复核：`git ls-remote` 确认上游 main 仍为上述提交；同时检查上游 Memory 设计 v4、主 Agent 提示词、提取调度、Custom Agent Memory 和 Dream 接线。1.1 补齐有限前文、主动查询、临时停用、时效与来源、请求预算、过期任务与数据保留规则；对照差异见 1.8。本文仍为待实施方案。
 
@@ -35,7 +35,7 @@ superseded_by: feature-agent-file-memory-1.md
 - **REQ-006**: Markdown 格式、索引和有来源的记忆条目可查看及编辑。SQLite 存储规范化条目、完整 Markdown 原文、版本、提交记录和任务状态，作为事务提交与崩溃恢复的权威数据；磁盘 Markdown 是可重建的持久投影。所有首版编辑通过 Lake API／记忆工具提交，不支持直接编辑投影目录自动导入。
 - **REQ-007**: 普通回答正常完成后不等待模型提取；后台失败不将回答、回复耗时或会话状态改成失败。页面显示独立的记忆任务状态和错误类别；新会话在尚未提交时只能读到此前已提交的版本。明确记住和忘记使用同步工具提交，不依赖后台任务是否成功。
 - **REQ-008**: 首版自动保存长期偏好、用户反馈、项目约束和外部参考。运行时健康、进程 PID、实时主节点、瞬时指标、某命令已完成等状态不自动成为永久知识；模型推测、计划和未经确认的结论不得写成已验证事实。需要描述一次观测时必须保留采集时间并明确标记其历史性质。
-- **REQ-009**: 项目提供“使用项目记忆”和“自动提取”两个持久开关，均默认开启，这是 Lake 的产品选择，不代表 ZCode 桌面默认启用。有效自动提取为 `useEnabled && extractionEnabled && !ignoreMemoryThisTurn`。关闭使用后停止加载索引、使用专用工具以及新增／执行提取；关闭自动提取允许读取及用户明确同步写入，但停止后台学习。恢复开关后只处理新产生的任务，暂停前未执行任务需用户在记忆页明确重试。
+- **REQ-009**: 项目提供“使用项目记忆”和“自动提取”两个持久开关，均默认开启，这是 Lake 的产品选择，不代表 Agent SDK 桌面默认启用。有效自动提取为 `useEnabled && extractionEnabled && !ignoreMemoryThisTurn`。关闭使用后停止加载索引、使用专用工具以及新增／执行提取；关闭自动提取允许读取及用户明确同步写入，但停止后台学习。恢复开关后只处理新产生的任务，暂停前未执行任务需用户在记忆页明确重试。
 - **REQ-010**: 提供最小项目记忆面板：条目列表、正文、类型、来源、版本、编辑／忘记、两个开关和后台任务状态。沿用项目右键菜单入口与当前弹窗风格，不增加会话级记忆副本。
 - **REQ-011**: 主 Agent 在真实用户明确要求回忆／查询历史时必须先查询相关记忆；索引截断或为空不等于没有记忆。支持确定性的标题／描述查询，不增加语义召回模型请求。分页读取须固定版本，修改或忘记后不得继续注入旧正文。
 - **REQ-012**: 本轮可显式忽略项目记忆；关闭使用同时禁止后台学习。记忆按一条可复用事实组织，feedback/project 包含原因与应用方式，相对日期绑定来源时间及时区；当前证据优先于历史记录。具体规则见 1.8。
@@ -45,7 +45,7 @@ superseded_by: feature-agent-file-memory-1.md
 - **SEC-002**: 记忆是历史参考数据，不是工具授权或高优先级系统指令。索引和正文不得改变资源引用范围、禁止本地执行、文件／SQL 权限、终端采用授权或 SSH 主机信任。附加内容显式标记为不可信历史数据；不得把正文拼成未分隔的系统指令。
 - **SEC-003**: 后台提取只允许无工具的模型请求和服务端验证后的记忆变更，不具备 shell、文件浏览、SSH、数据库、MCP 或子 Agent 权限。专用工具只接受当前项目内的逻辑记忆键，不接受任意路径或调用方提供的 `projectId`。
 - **SEC-004**: 验证项目与会话归属、条目归属、资源来源、版本、输入大小及请求来源。记忆目录 `0700`，文件及快照 `0600`；拒绝符号链接、目录越界和非法文件名，Windows 沿用 `internal/platform` 的权限／替换实现。项目软删除立即阻止加载、入队和提交，恢复项目后保留原记忆，旧任务不自动续跑。
-- **CON-001**: 当前发布入口是 Go `internal/ai/` 和 `internal/web/`；`agent/`、`legacy/` 与 `third_party/zcode/` 不参与实现。SQLite 已有单后端锁与串行事务封装，复用这些机制；网络请求不得持有 `Store.mu`、`session.mu` 或数据库事务。
+- **CON-001**: 当前发布入口是 Go `internal/ai/` 和 `internal/web/`；`agent/`、`legacy/` 与 `third_party/agent-sdk/` 不参与实现。SQLite 已有单后端锁与串行事务封装，复用这些机制；网络请求不得持有 `Store.mu`、`session.mu` 或数据库事务。
 - **CON-002**: macOS 用户二进制仅使用 `scripts/build_lake.sh` 签名构建；缺少签名身份先运行 `scripts/setup_lake_signing.sh`。不以 unsigned build 验收。开发验证使用隔离 home，不重启用户当前生产服务，不使用真实生产凭据。
 - **CON-003**: 沿用六种模型协议与现有供应商设置。提取采用产生该轮次的供应商／模型引用，运行时重新解析有效凭据，不冻结或持久保存密钥，不因模型移除而隐式切换到另一供应商。
 - **PAT-001**: 使用“成功轮次持久 outbox → SQLite 幂等入队 → 租约认领 → 无工具提取 → 版本校验事务提交 → Markdown 发布”处理链路。对模型请求允许至少一次执行，对已提交的逻辑记忆变更保证幂等。
@@ -184,9 +184,9 @@ API 全部沿用现有 Bearer/Cookie、Host、Origin 校验；projectId 从已�
 
 记忆页面初版打开时刷新，提取有活动任务时每 5 秒刷新，关闭页面停止轮询。无需为 `events.type` 加新值或给每个会话写事件。状态文字区分“等待提取、正在提取、已更新、无新记忆、已跳过、等待处理、提取失败”和文件同步状态，不展示模型原始思考。项目记忆使用说明明确“同项目会话共享；后台提取会使用当前轮次模型产生额外用量”。
 
-### 1.8 ZCode 对照复核与补充契约
+### 1.8 Agent SDK 对照复核与补充契约
 
-| 对照能力 | ZCode 固定基线 | Lake 首版决定 |
+| 对照能力 | Agent SDK 固定基线 | Lake 首版决定 |
 |---|---|---|
 | 项目身份与四类记忆 | workspace identity／路径散列；user/feedback/project/reference | 已覆盖；用 Lake projectId，四类均限当前项目；无有效项目时不创建默认共享库、不入队 |
 | 开关生效 | CLI 默认启用；桌面 app-global 总开关默认关闭；根 Runtime 创建时冻结 | 有意不同：项目两个开关默认开启、每轮重读；关闭使用同时禁止学习，并展示额外用量提示 |
@@ -283,11 +283,11 @@ worker 空闲每小时运行 `PruneMemoryArtifacts`：终态任务 7 天后清�
 
 - **ALT-001**: 仅复用上下文压缩摘要。未采用，因为当前摘要属于单会话且会滚动改写，不能提供项目级来源、版本、编辑、忘记与提取任务恢复。
 - **ALT-002**: 文件作为唯一真相、SQLite 只记文件名。未采用，因为模型提交、多个文件替换、索引更新与队列结算不能跨介质原子提交；采用 SQLite 原文事务与可重建 Markdown 投影。
-- **ALT-003**: 原样移植 ZCode 五轮读写工具 Memory Agent。未采用，因为 Lake 首版只需从冻结快照学习，无工具 JSON 提取更容易限定权限和实现幂等提交；仍保留其项目身份、单条文件、索引、成功轮次触发思路。
+- **ALT-003**: 原样移植 Agent SDK 五轮读写工具 Memory Agent。未采用，因为 Lake 首版只需从冻结快照学习，无工具 JSON 提取更容易限定权限和实现幂等提交；仍保留其项目身份、单条文件、索引、成功轮次触发思路。
 - **ALT-004**: 首版接入 Semantic Recall、向量库或 Dream。未采用，因为用户范围是项目记忆、索引和自动提取，且上游此提交没有默认启用这些链路。后续必须基于记忆规模和检索测量另立方案。
 - **ALT-005**: 普通回复结束时等待模型提取。未采用，因为模型延迟和失败会影响交互；只有明确用户要求的记忆工具同步提交，自动提取走持久队列。
 - **ALT-006**: 仅在进程内排队并在重启时从最新 History 猜测遗漏。未采用，因为回复已保存但入队尚未发生存在丢失窗口，History 压缩与会话继续运行也会破坏稳定消息边界。
-- **ALT-007**: 将 ZCode 的用户词数阈值直接用于中文。未采用，连续中文通常不含空格；使用 Unicode 类别与真实意图检测，并将寒暄规则作为独立过滤。
+- **ALT-007**: 将 运行时的用户词数阈值直接用于中文。未采用，连续中文通常不含空格；使用 Unicode 类别与真实意图检测，并将寒暄规则作为独立过滤。
 
 ## 4. Dependencies
 
@@ -367,7 +367,7 @@ codesign --verify --strict bin/lake
 - **RISK-005**: 模型会把“计划执行”或 assistant 推测写成事实。严格 sourceIds 与 verification 验证，observed 限定真实完成证据；提取失败／no_op 不影响正常回答，不能编造记忆成功。
 - **RISK-006**: 记忆中的指令注入、秘密值或旧健康状态可能误导操作。保留专用历史数据包装、服务器执行边界、来源时间和全链路脱敏；任何记忆均不扩展当前权限。
 - **RISK-007**: 前台长期繁忙时后台可能积压；outbox 上限、队列状态与 backlog_full 必须可见。首版不以不断启动提取抢占前台资源，也不承诺固定完成时限。
-- **RISK-008**: 无工具提取缺少 ZCode 完整 Main context，有限前文只能解释部分指代；资料不足必须 no_op。初期用 TEST-024 的多轮中文样例评估，不把增加旧会话全量输入当默认补救。
+- **RISK-008**: 无工具提取缺少 Agent SDK 完整 Main context，有限前文只能解释部分指代；资料不足必须 no_op。初期用 TEST-024 的多轮中文样例评估，不把增加旧会话全量输入当默认补救。
 - **RISK-009**: CAS 只阻止并发提交，不保证较晚执行的任务代表较新事实；需同时比较冻结 knowledgeBaseRevision，人工重试明确更新基线。日期过滤也不能保证未到期知识仍准确，主 Agent 使用前必须核验。
 - **ASSUMPTION-001**: 用户此轮要求的是实施方案，只创建本计划，不开始运行代码修改、构建、部署或重启。
 - **ASSUMPTION-002**: 当前 Lake Web 数据目录只由一个已取得 server.lock 的后端写入；若后续支持多节点共享数据库，需另立分布式租约与文件发布方案。
@@ -383,13 +383,13 @@ codesign --verify --strict bin/lake
 - [Lake 终端 AI 与资源访问边界](feature-hexhub-terminal-parity-1.md)
 - [Lake 多 Agent 与后续复盘知识范围](architecture-lake-multi-agent-1.md)
 - [Lake 会话压缩与首轮工具恢复](refactor-context-turn-recovery-1.md)
-- [ZCode Memory 设计 v4：产品开关、Custom Agent 与 provider 验收](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/docs/design/v2/memory/README.md)
-- [ZCode 项目记忆身份](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/memory/project-root.ts)
-- [ZCode 记忆格式与索引规则](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/context/sections/memory.ts)
-- [ZCode 索引加载](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/runtime/methods/context.ts)
-- [ZCode 成功轮次后台提取入口](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/runtime/helpers/project-memory-extraction.ts)
-- [ZCode 提取调度及真实用户文本判断](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/memory/extraction.ts)
-- [ZCode Memory Agent 工具边界](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/memory/memory-agent-loop.ts)
-- [ZCode 当前关闭的 Semantic Recall 分支](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/memory/project-memory-retrieval-branch.ts)
-- [ZCode 尚未自动接入的 Dream handler](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/runtime/helpers/project-memory-dream.ts)
-- [ZCode 自定义 Agent 独立持久记忆 scope](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/subagent/persistent-memory.ts)
+- [原生 Memory 设计 v4：产品开关、Custom Agent 与 provider 验收](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/docs/design/v2/memory/README.md)
+- [Agent SDK 项目记忆身份](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/memory/project-root.ts)
+- [Agent SDK 记忆格式与索引规则](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/context/sections/memory.ts)
+- [Agent SDK 索引加载](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/runtime/methods/context.ts)
+- [Agent SDK 成功轮次后台提取入口](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/runtime/helpers/project-memory-extraction.ts)
+- [Agent SDK 提取调度及真实用户文本判断](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/memory/extraction.ts)
+- [原生 Memory Agent 工具边界](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/memory/memory-agent-loop.ts)
+- [Agent SDK 当前关闭的 Semantic Recall 分支](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/memory/project-memory-retrieval-branch.ts)
+- [Agent SDK 尚未自动接入的 Dream handler](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/runtime/helpers/project-memory-dream.ts)
+- [Agent SDK 自定义 Agent 独立持久记忆 scope](https://github.com/zai-org/ZCode/blob/aac4755666d09fdcd70272fcf063c077a639015f/apps/zcode-cli/packages/core/src/subagent/persistent-memory.ts)

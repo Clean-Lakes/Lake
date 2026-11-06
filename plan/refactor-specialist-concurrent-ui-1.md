@@ -5,7 +5,7 @@ date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake
 status: 'Completed'
-tags: [fix, ui, zcode, tasks]
+tags: [fix, ui, typescript, tasks]
 ---
 
 # Introduction
@@ -32,7 +32,7 @@ Fix the three issues reproduced in native Lake Dev: premature unknown-effect can
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | Add runtime/zcode/task-cancellation.ts receipt validation and legacy host-notice projection; connect it to agent.ts and superagent.ts. | Yes | 2026-11-06 |
+| TASK-001 | Add runtime/typescript/task-cancellation.ts receipt validation and legacy host-notice projection; connect it to agent.ts and superagent.ts. | Yes | 2026-11-06 |
 | TASK-002 | Coalesce per-task stop requests in superagent.ts, defer reporting during cancellation, drain business dispatch, then publish exactly one final report. Depends on TASK-001. | Yes | 2026-11-06 |
 
 ### Implementation Phase 2
@@ -61,14 +61,14 @@ Fix the three issues reproduced in native Lake Dev: premature unknown-effect can
 
 ## 4. Dependencies
 
-- **DEP-001**: Existing TaskLedger, public ZCode cancellation, host command receipts, persistent report outbox and role channels.
+- **DEP-001**: Existing TaskLedger, public SDK cancellation, host command receipts, persistent report outbox and role channels.
 - **DEP-002**: Resource PR 190 and discovery PR 191 stay independent; local Dev validation may integrate them without merging GitHub PRs.
 
 ## 5. Files
 
-- **FILE-001**: runtime/zcode/task-cancellation.ts, agent.ts, superagent.ts and matching tests.
+- **FILE-001**: runtime/typescript/task-cancellation.ts, agent.ts, superagent.ts and matching tests.
 - **FILE-002**: web-agent/shared/contracts.ts, superAgentPresentation.ts, PilotWorkspace.tsx, App.tsx, SuperTaskInspector.tsx and existing theme CSS.
-- **FILE-003**: docs/ui-guidelines.md and docs/validation/zcode-typescript-candidate/specialist-concurrent-ui.md.
+- **FILE-003**: docs/ui-guidelines.md and docs/validation/typescript-candidate/specialist-concurrent-ui.md.
 
 ## 6. Testing
 
@@ -77,7 +77,7 @@ Fix the three issues reproduced in native Lake Dev: premature unknown-effect can
 - **TEST-003**: Two running tasks show two; stopping the first shows the remaining active title; an idle role uses the latest updated task without inferring confirmation from old waiting states.
 - **TEST-004**: Native Dev shows A stopped and B continuing to success, accurate history projection, explicit stop scopes, stable drafts, and usable light/dark/narrow geometry.
 
-Native validation passed on clean signed candidate `918cae17608d06ebb29d278daa64aaae2e64efb9`, which integrates fix code `8774ea2a00f24eb291d45b12b7c3daa285f7bc46` with the previously installed PR 190/191 changes. A stopped at 17:36:31; B continued until 17:39:09 and passed independently. Combined checks: frontend 715/715, SDK/resource integration 131/131, source units 108 passed and one optional external Claude-Mem endpoint test skipped. See the [validation record](../docs/validation/zcode-typescript-candidate/specialist-concurrent-ui.md).
+Native validation passed on clean signed candidate `918cae17608d06ebb29d278daa64aaae2e64efb9`, which integrates fix code `8774ea2a00f24eb291d45b12b7c3daa285f7bc46` with the previously installed PR 190/191 changes. A stopped at 17:36:31; B continued until 17:39:09 and passed independently. Combined checks: frontend 715/715, SDK/resource integration 131/131, source units 108 passed and one optional external Claude-Mem endpoint test skipped. See the [validation record](../docs/validation/typescript-candidate/specialist-concurrent-ui.md).
 
 Delivered as [PR 192](https://github.com/Clean-Lakes/Lake/pull/192) targeting `develop`; the PR remains unmerged.
 

@@ -8,7 +8,7 @@ import {canonicalGoalForExecution,hasInspectorTask,inspectedTask,inspectedAttemp
 import type {SessionSnapshot} from '../../shared/contracts';
 
 test('native task execution is not an empty chat turn when child records exist without parent cards',()=>{
- const snapshot={session:{id:'worker-session',projectId:'project'},superagent:{task:{taskId:'task',sessionId:'worker-session',projectId:'project'}},messages:[],ai:{cards:[],agentRuns:[{id:'child',source:'zcode_subagent',taskId:'task',status:'running'}]}} as unknown as SessionSnapshot;
+ const snapshot={session:{id:'worker-session',projectId:'project'},superagent:{task:{taskId:'task',sessionId:'worker-session',projectId:'project'}},messages:[],ai:{cards:[],agentRuns:[{id:'child',source:'native_subagent',taskId:'task',status:'running'}]}} as unknown as SessionSnapshot;
  const selection={sessionId:'worker-session',canonicalGoalId:'task',tab:'execution' as const};
  assert.equal(hasInspectorTask(snapshot,selection),true);
  assert.equal(hasInspectorTask({...snapshot,ai:{...snapshot.ai!,agentRuns:[]}},selection),true,'the known task also survives a lagging child projection');

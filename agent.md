@@ -4,22 +4,22 @@
 
 ## 后端迁移方向（2026-11-05，Dev 预览）
 
-2026-11-06 用户确认：Worker 是 Lake 为任务分配的执行实例；开启 ZCode 原生子智能体供 Worker 按需组织任务内工作。临时子智能体不创建长期专员或独立目标完成权威。原 Task 持有目标、权限、尝试、业务工具回执及验收；子执行使用独立上下文，当前仅允许一层，继续受父任务范围与权限约束。点击任务在第三联展示 Worker、真实子智能体过程与工具结果，多资源保留项目原目录层级，跨资源汇总放任务层。实施与验收见 [任务 Worker 原生子智能体计划](plan/feature-worker-native-subagents-1.md)，未验证项不作为已交付能力。
+2026-11-06 用户确认：Worker 是 Lake 为任务分配的执行实例；开启 原生子智能体供 Worker 按需组织任务内工作。临时子智能体不创建长期专员或独立目标完成权威。原 Task 持有目标、权限、尝试、业务工具回执及验收；子执行使用独立上下文，当前仅允许一层，继续受父任务范围与权限约束。点击任务在第三联展示 Worker、真实子智能体过程与工具结果，多资源保留项目原目录层级，跨资源汇总放任务层。实施与验收见 [任务 Worker 原生子智能体计划](plan/feature-worker-native-subagents-1.md)，未验证项不作为已交付能力。
 
-用户确认保留 Lake UI，直接使用 ZCode v3.17.2 源码，将后端语言迁为 TypeScript，并要求**全部既有功能保留并验收后进行完整切换**。2026-11-05 用户进一步明确授权将 TS/ZCode Dev 覆盖现有 Dev，增加显式 `--dev --ts-candidate --install` 入口；这不等于全量验收或正式切换。新后端直接使用 ZCode AgentRuntime 与 Node adapters，不通过 Go 模型代理；普通默认构建与正式版继续维持当前实现。TS Dev 使用独立命名的 SQLite，旧 Go 数据保留；当前增量迁入项目/专员/频道稳定身份及只读历史，不自动重派任务。真实 Pilot/独立 Worker、文件工具回执验收和只读失败恢复已进入候选验证，完整资源、安全、Memory 及平台等价验收仍待交付。
+用户确认保留 Lake UI，直接使用 Agent SDK v3.17.2 源码，将后端语言迁为 TypeScript，并要求**全部既有功能保留并验收后进行完整切换**。2026-11-05 用户进一步明确授权将 TypeScript Dev 覆盖现有 Dev，增加显式 `--dev --ts-candidate --install` 入口；这不等于全量验收或正式切换。新后端直接使用 AgentRuntime 与 Node adapters，不通过 Go 模型代理；普通默认构建与正式版继续维持当前实现。TS Dev 使用独立命名的 SQLite，旧 Go 数据保留；当前增量迁入项目/专员/频道稳定身份及只读历史，不自动重派任务。真实 Pilot/独立 Worker、文件工具回执验收和只读失败恢复已进入候选验证，完整资源、安全、Memory 及平台等价验收仍待交付。
 
-Items、Security、Memory、任务与证据的权威职责、bearqy 当前记忆方案、范围/同意/撤回及 unknown 不重放约束继续有效。不能将上游通用权限、会话或工具能力当作 Lake 对应安全与业务合同已经迁移。独立候选使用独立 Home；已授权的原生 Dev 预览可用 `.lake-dev`，正式 Home 始终拒绝，旧运行账本不改写。下面关于 ADK 的实现说明记录现有完整产品水位；目标 TS 对接按 [迁移计划](plan/refactor-zcode-typescript-backend-1.md)、[候选边界与验证](runtime/zcode/README.md) 和完整等价矩阵逐项推进，不提前开启未完成能力。
+Items、Security、Memory、任务与证据的权威职责、bearqy 当前记忆方案、范围/同意/撤回及 unknown 不重放约束继续有效。不能将上游通用权限、会话或工具能力当作 Lake 对应安全与业务合同已经迁移。独立候选使用独立 Home；已授权的原生 Dev 预览可用 `.lake-dev`，正式 Home 始终拒绝，旧运行账本不改写。下面关于 ADK 的实现说明记录现有完整产品水位；目标 TS 对接按 [迁移计划](plan/refactor-typescript-backend-1.md)、[候选边界与验证](runtime/typescript/README.md) 和完整等价矩阵逐项推进，不提前开启未完成能力。
 
 ## 0. 统一 Super-agent 内核方向（实施中）
 
-2026-11-06 用户进一步确认：Pilot、长期专员对应的 Task Worker 和临时 child 共享通用 Agent 执行能力，职责不用于裁剪 Shell、文件、搜索或工具使用。Pilot 默认协调和委派，也可直接调查与执行；首次实际执行按本轮受信输入建立原 Task/attempt/Operation，纯对话及派单不制造业务任务。直接任务在连续 Pilot 展示入口内保留独立的目标、操作、待办与有界请求工作集；专员 Worker 和 child 仍使用独立 SDK Session。SSH Bash 通过准确资源与当前配置版本接入已有凭据/指纹，模型可使用远端已安装的 kubectl、mysql 等工具自主调查；缺少专用适配器不等于没有通用执行能力。计划切换与工具延迟加载均经过同一权限包装，后台进程汇合和停止沿原 Task 记账。完整通用 Agent 接入及外部可选服务边界见[实施计划](plan/feature-zcode-agent-capabilities-1.md)和[验证记录](docs/validation/zcode-typescript-candidate/agent-capabilities.md)。此方向取代下面历史阶段的“Pilot 只路由/固定诊断”限制，既有资源、安全、记忆及未知操作职责继续有效。
+2026-11-06 用户进一步确认：Pilot、长期专员对应的 Task Worker 和临时 child 共享通用 Agent 执行能力，职责不用于裁剪 Shell、文件、搜索或工具使用。Pilot 默认协调和委派，也可直接调查与执行；首次实际执行按本轮受信输入建立原 Task/attempt/Operation，纯对话及派单不制造业务任务。直接任务在连续 Pilot 展示入口内保留独立的目标、操作、待办与有界请求工作集；专员 Worker 和 child 仍使用独立 SDK Session。SSH Bash 通过准确资源与当前配置版本接入已有凭据/指纹，模型可使用远端已安装的 kubectl、mysql 等工具自主调查；缺少专用适配器不等于没有通用执行能力。计划切换与工具延迟加载均经过同一权限包装，后台进程汇合和停止沿原 Task 记账。完整通用 Agent 接入及外部可选服务边界见[实施计划](plan/feature-typescript-agent-capabilities-1.md)和[验证记录](docs/validation/typescript-candidate/agent-capabilities.md)。此方向取代下面历史阶段的“Pilot 只路由/固定诊断”限制，既有资源、安全、记忆及未知操作职责继续有效。
 
 
 Lake 的目标业务架构统一为持续的 **Pilot Router + 独立任务 Worker**：Pilot 接收用户要求、路由工作、跨任务协调并统一回复；Worker 使用官方 ADK 完成执行，复杂任务内部按同一受控协议组织专员。普通操作、Plan、SRE、保存工作流、日程和外部结果逐步进入同一事件与任务链路，不维护彼此竞争的接单、调度与结清内核。用户无需管理执行会话；内部 Session、原 RootTurnID、操作句柄、审批和证据继续保留。 Pilot 与 Worker 复用当前项目原资源目录和已有权限，不新增用户管理的资源勾选层；未配置过独立策略时由可信宿主接入既有会话权限适配器，明确策略和项目隔离继续生效。
 
 项目可以显式选择继承全局已启用的 MCP。该选择和单服务绑定按项目持久化，专员复用项目的有效目录及操作权限。纯 MCP 或技能任务可使用空资产清单建单。专员普通任务自动注册计划并推进，根据真实工具回执验收；Plan 模式先确认计划。原任务期限、资源权限和具体操作审批继续生效，既有人工或显式业务验收契约不自动改写。详见 [任务计划与结果验收](docs/security/task-confirmation.md)。
 
-2026-11-05 用户授权精简 TS/ZCode Dev 的对话执行架构：保留 Pilot 与独立 Worker，Pilot 请求工作集保留当前频道最近四轮对话、公开专员报告、任务焦点与实际适配器能力。旧阻碍是历史观察，不能代替当前检查。普通新任务由宿主自动建立步骤/attempt、关联真实工具回执；专员以 `work_finish(summary, outcome)` 明确提交完成或部分结果，不再逐次手填步骤和证据 ID。明确 Plan、多步骤旧契约和既有验收保持；旧 TS 普通单步未验收任务可保留原记录接管，旧 Go 任务仍只读。模型回复本身不构成完成，真正完成仍须当前有效的成功业务回执。未知写入不能重放，宿主证明且权限允许的独立只读诊断可继续；结果未知时整个任务不能冒充验收完成。需确认只对应当前真实交互。实施与验证见 [普通任务改造计划](plan/refactor-zcode-conversation-runtime-1.md)和 [验证记录](docs/validation/zcode-typescript-candidate/conversation-runtime.md)。
+2026-11-05 用户授权精简 TypeScript Dev 的对话执行架构：保留 Pilot 与独立 Worker，Pilot 请求工作集保留当前频道最近四轮对话、公开专员报告、任务焦点与实际适配器能力。旧阻碍是历史观察，不能代替当前检查。普通新任务由宿主自动建立步骤/attempt、关联真实工具回执；专员以 `work_finish(summary, outcome)` 明确提交完成或部分结果，不再逐次手填步骤和证据 ID。明确 Plan、多步骤旧契约和既有验收保持；旧 TS 普通单步未验收任务可保留原记录接管，旧 Go 任务仍只读。模型回复本身不构成完成，真正完成仍须当前有效的成功业务回执。未知写入不能重放，宿主证明且权限允许的独立只读诊断可继续；结果未知时整个任务不能冒充验收完成。需确认只对应当前真实交互。实施与验证见 [普通任务改造计划](plan/refactor-typescript-conversation-runtime-1.md)和 [验证记录](docs/validation/typescript-candidate/conversation-runtime.md)。
 
 2026-11-04 用户确认远程 MCP 按稳定服务 ID 隔离未决调用：无资产绑定的远程 MCP 不受旧主机/数据库未决操作全局阻断，同一服务的未决调用仍阻断跨任务、跨项目重试。服务身份不明的旧 MCP 调用仍阻断 MCP；本机 stdio、带资产绑定的调用和恢复阻断沿用原检查。MCP 仍为 opaque，具体调用审批与配置/目录/凭据版本重验不变。
 
@@ -71,7 +71,7 @@ flowchart TB
 
 ## 2. Memory 新主线：Agent 自主管理本地文件
 
-2026-11-06 用户确认 TS/ZCode 采用原生 Memory 引擎并保留 Super-agent 分层：用户明确保存的跨项目偏好、项目共享和稳定 RoleID 经验。TS 候选通过公开 AgentRuntime 的原生提取、私有暂存与 Lake 单一发布者接入；Provider 每次读取重验范围与来源，临时 child 不建立长期库。项目及角色共用积累/使用开关，新 Home 默认关闭；全局偏好仅明确保存。设置支持来源、更正和遗忘，旧 Go 数据不自动导入。当前边界及验收见 [TS 分层记忆](docs/design/zcode-layered-memory.md)和[实施计划](plan/feature-zcode-layered-memory-1.md)。以下 ADK/FM 描述保留旧 Go 产品及历史计划，TS 不另建并行 ADK 提取器；未验收平台和完整迁移仍保持原门禁。
+2026-11-06 用户确认 TypeScript 采用原生 Memory 引擎并保留 Super-agent 分层：用户明确保存的跨项目偏好、项目共享和稳定 RoleID 经验。TS 候选通过公开 AgentRuntime 的原生提取、私有暂存与 Lake 单一发布者接入；Provider 每次读取重验范围与来源，临时 child 不建立长期库。项目及角色共用积累/使用开关，新 Home 默认关闭；全局偏好仅明确保存。设置支持来源、更正和遗忘，旧 Go 数据不自动导入。当前边界及验收见 [TS 分层记忆](docs/design/typescript-layered-memory.md)和[实施计划](plan/feature-typescript-layered-memory-1.md)。以下 ADK/FM 描述保留旧 Go 产品及历史计划，TS 不另建并行 ADK 提取器；未验收平台和完整迁移仍保持原门禁。
 
 - 当前唯一开发主计划为 [Agent 本地文件记忆](plan/feature-agent-file-memory-1.md)。旧项目记忆、运维 V2、自然记忆和三模块旧对接任务路线已替代；历史交付事实与必要审计保留，未完成项不再按旧内容继续开发。
 - 目标采用两阶段后台 ADK Agent：会话/任务来源提取 → SQLite 中间结果与运行状态 → 文件整理 Agent → 本地摘要、手册、来源总结及方法资料。程序安排资格、调度和恢复，模型自主组织知识；用户控制开关、查看、纠正和删除，不建设逐条审核、采用和晋升平台。
@@ -85,7 +85,7 @@ flowchart TB
 
 用户确认参考 xAI Grok Bot 的分层思路：专员按 `storeID + projectID + RoleID` 长期保留知识，每项新任务使用独立 Task/Worker/ADK Session，Pilot 只接收必要任务摘要与准确引用。频道是连续展示入口，不是共享执行历史；改名保留知识，同名新角色不继承。任务当前状态/未决操作和长期知识分开，动态观测需重查。
 
-[上下文与角色知识总方案](plan/architecture-context-role-memory-1.md)的 CM 阶段负责请求工作集、摘要、预算和角色范围适配；[文件记忆主计划](plan/feature-agent-file-memory-1.md)的 FM 阶段继续独占来源提取、整理、文件发布及旧实现退役。角色文件纳入同一 Memory 流水线，不新增每角色学习器；2026-11-06 用户要求试接 Claude-Mem，TS 候选现以可选私有本地检索索引接入，ZCode 原生 Memory 与 Lake 单一成品发布者保持；不成为强制正文库，也不启用第二套 observer。见 [本地检索适配](runtime/claude-mem/README.md)。
+[上下文与角色知识总方案](plan/architecture-context-role-memory-1.md)的 CM 阶段负责请求工作集、摘要、预算和角色范围适配；[文件记忆主计划](plan/feature-agent-file-memory-1.md)的 FM 阶段继续独占来源提取、整理、文件发布及旧实现退役。角色文件纳入同一 Memory 流水线，不新增每角色学习器；2026-11-06 用户要求试接 Claude-Mem，TS 候选现以可选私有本地检索索引接入，原生 Memory 与 Lake 单一成品发布者保持；不成为强制正文库，也不启用第二套 observer。见 [本地检索适配](runtime/claude-mem/README.md)。
 
 CM 首批已接通 Pilot 短任务摘要、准确引用/hash 与实际请求历史投影，并提供基础身份/范围类型。原始档案保留；完整 Task 工作集及角色文件写入、读取、遗忘尚未交付。当前字段与限制见[首批契约](docs/design/context-role-memory-contract.md)，不能将基础类型视作 FM 发布者已经运行。
 

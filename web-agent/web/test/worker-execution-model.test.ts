@@ -2,16 +2,25 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import type {AICard,AgentRun,Resource,ResourceTreeNode,SessionSnapshot} from '../../shared/contracts';
 import {nativeRunState,workerBusinessReceipts,workerExecutionModel} from '../src/workerExecutionModel';
+import {legacyNativeAgentSource} from '../../shared/runtime-compat';
 
 const resource=(id:string,name='同名服务器',projectId='p')=>({id,name,projectId,kind:'ssh',status:'available'} as Resource);
 const folder=(id:string,name:string,parentId:string|null=null):ResourceTreeNode=>({id,name,parentId,projectId:'p',kind:'folder',resourceId:null,position:0});
 const leaf=(id:string,parentId:string|null):ResourceTreeNode=>({id:`node-${id}`,name:'',parentId,projectId:'p',kind:'resource',resourceId:id,position:1});
 const call=(id:string,resourceId?:string):AICard=>({id,type:'operation',title:'inspect_host',content:'synthetic result',status:'completed',at:'2026-11-06T00:00:00Z',data:{taskId:'task',...(resourceId?{resource_id:resourceId}:{})}});
-const run=(id:string,resourceIds:string[],cards:AICard[]=[]):AgentRun=>({id,source:'zcode_subagent',taskId:'task',workerId:'worker',sessionId:`child-${id}`,childSessionId:`child-${id}`,role:'general-purpose',task:'现场检查',resourceIds,cards,status:'completed',createdAt:'2026-11-06T00:00:00Z'});
+const run=(id:string,resourceIds:string[],cards:AICard[]=[]):AgentRun=>({id,source:'native_subagent',taskId:'task',workerId:'worker',sessionId:`child-${id}`,childSessionId:`child-${id}`,role:'general-purpose',task:'现场检查',resourceIds,cards,status:'completed',createdAt:'2026-11-06T00:00:00Z'});
 function snapshot(runs:AgentRun[],cards:AICard[]=[],tree:ResourceTreeNode[]=[folder('prod','生产环境'),folder('cloud','京东云','prod'),leaf('a','cloud'),leaf('b','prod')]):SessionSnapshot{
  return {session:{id:'session',projectId:'p',workspaceRole:'worker'},superagent:{task:{taskId:'task',sessionId:'session',projectId:'p'}},resources:[resource('a'),resource('b')],resourceTree:tree,ai:{cards,agentRuns:runs}} as unknown as SessionSnapshot;
 }
 const flatten=(nodes:ReturnType<typeof workerExecutionModel>['resources']):ReturnType<typeof workerExecutionModel>['resources']=>nodes.flatMap(node=>[node,...flatten(node.children)]);
+
+test('historical native child keeps its exact resource and identity after the runtime rename',()=>{
+ const child={...run('old-child',['a'],[call('old-call','a')]),source:legacyNativeAgentSource} as unknown as AgentRun;
+ const model=workerExecutionModel(snapshot([child]));
+ assert.deepEqual(model.runs.map(run=>run.id),['old-child']);
+ assert.equal(model.resources[0]?.resource?.id,'a');
+ assert.equal(model.resources[0]?.runs[0]?.childSessionId,'child-old-child');
+});
 
 test('native child appears under its resource without directory levels',()=>{
  const model=workerExecutionModel(snapshot([run('one',['a'],[call('c','a')])]));

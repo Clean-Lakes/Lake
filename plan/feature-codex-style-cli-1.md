@@ -11,7 +11,7 @@ tags: [cli, agent, model, compatibility]
 
 ![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
-以本机 `codex --help`、`exec --help`、`resume --help` 为名称与行为基线。扩展 Lake 自有 TS 内核；不导入 Codex/ZCode runtime。此计划同时记录实现和明确不支持的功能，避免参数静默无效。
+以本机 `codex --help`、`exec --help`、`resume --help` 为名称与行为基线。扩展 Lake 自有 TS 内核；不导入 Codex/TypeScript runtime。此计划同时记录实现和明确不支持的功能，避免参数静默无效。
 
 ## 1. Requirements & Constraints
 

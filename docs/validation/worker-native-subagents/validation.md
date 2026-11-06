@@ -1,10 +1,13 @@
 # 任务 Worker 原生子智能体与第三联验证
 
-日期：2026-11-06。测试源码：`ffcbc00a2711dddf74652eadaf92fe512b9dfe1f`；实现提交 `d43433d4`，历史只读投影与回执修正 `ffcbc00a`。[PR #183](https://github.com/Clean-Lakes/Lake/pull/183) 已经用户明确授权合入 `develop`，集成提交为 `c3076dae12f30b78fb7a66b96934c9f340cc186b`；原远端及本地工作分支 `codex/zcode-backend-3172` 已清理。
+命名说明：本文路径和协议名称已映射到当前 TypeScript 后端；历史提交 SHA 保留，原始命令与输出以对应提交为准，此映射不表示重新执行历史验证。
+
+
+日期：2026-11-06。测试源码：`ffcbc00a2711dddf74652eadaf92fe512b9dfe1f`；实现提交 `d43433d4`，历史只读投影与回执修正 `ffcbc00a`。[PR #183](https://github.com/Clean-Lakes/Lake/pull/183) 已经用户明确授权合入 `develop`，集成提交为 `c3076dae12f30b78fb7a66b96934c9f340cc186b`；原远端及本地工作分支 `codex/typescript-backend-3172` 已清理。
 
 ## 已验证行为
 
-- Worker 使用公开 ZCode 3.17.2 AgentRuntime、SubagentPort 和原生 runner 创建独立 child Session。Pilot 无 Agent 工具；子不获得父任务结清、路由或递归能力。
+- Worker 使用公开 Agent SDK 3.17.2 AgentRuntime、SubagentPort 和原生 runner 创建独立 child Session。Pilot 无 Agent 工具；子不获得父任务结清、路由或递归能力。
 - 临时 child 绑定原 Task/Worker；真实工具调用继承当前权限、审批、范围、owner/generation 和原账本。调用 ID 按准确 child Session 命名空间隔离。同 Task 实际业务派发串行，子模型与后台调查可并行。
 - 原生后台调用通过 TaskOutput 汇合；活跃 child 阻止 work_finish。提前返回或用户停止经原生端口取消并等待实际子执行退出。根 Worker 与子实例累计最多 8 个，继续/失败/重启不重置记录。
 - 子纯文字、Agent 启动回执与目录发现不能制造目标验收；拒绝、权限收窄和停止后的旧批准不能写入，unknown 保留且禁止重放。
@@ -16,14 +19,14 @@
 
 ## 自动检查
 
-构建与测试使用固定 Node 24.14.0。模型夹具是本地合成 OpenAI SSE 服务，实际执行的是打包后的 ZCode AgentRuntime、原生 Agent 工具及真实临时文件/SSH 测试服务，没有替换模型/工具循环。
+构建与测试使用固定 Node 24.14.0。模型夹具是本地合成 OpenAI SSE 服务，实际执行的是打包后的 AgentRuntime、原生 Agent 工具及真实临时文件/SSH 测试服务，没有替换模型/工具循环。
 
 | 检查 | 结果 |
 | --- | --- |
-| `node .../typescript/bin/tsc -p runtime/zcode/tsconfig.json` | 通过 |
-| `node runtime/zcode/build.mjs` | 通过，固定上游源与许可证 |
-| `node --test runtime/zcode/server.test.cjs` | 63/63 通过，无跳过 |
-| `tsx --test runtime/zcode/tasks.test.ts runtime/zcode/activity.test.ts runtime/zcode/assets.test.ts` | 25/25 通过 |
+| `node .../typescript/bin/tsc -p runtime/typescript/tsconfig.json` | 通过 |
+| `node runtime/typescript/build.mjs` | 通过，固定上游源与许可证 |
+| `node --test runtime/typescript/server.test.cjs` | 63/63 通过，无跳过 |
+| `tsx --test runtime/typescript/tasks.test.ts runtime/typescript/activity.test.ts runtime/typescript/assets.test.ts` | 25/25 通过 |
 | `pnpm --dir web-agent test:frontend` | 644/644 通过 |
 | `pnpm --dir web-agent build:web` | 类型检查与生产 Web 构建通过；保留既有 bundle size 提示 |
 | `python3 scripts/check_adk_runtime_boundary.py` | 通过 |
@@ -40,10 +43,10 @@
 - `scripts/build_lake_desktop.sh --dev --ts-candidate --install` 成功。Dev 0.3.27 已安装并重新启动，来源为干净 `ffcbc00a`，`backendRuntime=typescript`，二进制 SHA-256 与 build-origin.json 一致，严格签名校验通过。
 - 原生窗口在首个实现提交 `d43433d4` 已实际验证：点击服务器专员、任务清单、已验收任务，清单关闭并在第三联显示准确任务/Worker；中间原频道保留。旧任务没有虚构 child。
 - 2026-11-06 用户手动解锁后，完成最终签名 Dev 的原生重复检查：在服务器专员任务清单中点击“分析京东云服务器整体情况”，清单收起，第三联显示准确任务、验收状态与“任务 Worker · 由 Lake 分配”；中间原频道 URL 保持不变。展开资源后显示 3 条真实主机检查，单次检查可查看调用参数和实际结果；“结果与证据”仅显示 3 条业务工具回执，控制工具留在执行历史。关闭详情后重新从任务清单打开，仍定位原任务与频道；没有矛盾的“本轮尚无执行记录”空态。浅色原生界面的树层级、详情面板圆角和内容裁切正常。未将含实际资源数据的原生截图提交仓库。
-- 最终 Dev 的实际只读 API 检查确认 ZCode 3.17.2 正在运行：原“分析京东云服务器整体情况”任务准确恢复 3 个历史操作回执和 1 个资源绑定，原任务仍为 0 个原生子实例；没有补造子任务或重执行。
+- 最终 Dev 的实际只读 API 检查确认 Agent SDK 3.17.2 正在运行：原“分析京东云服务器整体情况”任务准确恢复 3 个历史操作回执和 1 个资源绑定，原任务仍为 0 个原生子实例；没有补造子任务或重执行。
 
 ## 边界与回退
 
-本次功能在已授权 TS/ZCode Dev 预览内交付，不表示 PR #183 的完整迁移等价门禁已通过。未使用真实供应商重新执行多资源 child 业务任务；原生子执行使用上述合成供应商验证，未重放用户旧任务。其他平台与完整 Memory/工作流/终端等迁移仍按原计划验收。
+本次功能在已授权 TypeScript Dev 预览内交付，不表示 PR #183 的完整迁移等价门禁已通过。未使用真实供应商重新执行多资源 child 业务任务；原生子执行使用上述合成供应商验证，未重放用户旧任务。其他平台与完整 Memory/工作流/终端等迁移仍按原计划验收。
 
 本次仅按用户授权经 GitHub PR 合入 `develop`；未改变正式 Lake 或正式 Home，未读取/复制正式凭据，未创建 Release/标签或绕过保护。仓库 `develop` 的服务器分支保护查询返回 404（未启用），已向用户报告；文档约束不等于服务器强制保护。签名安装前退出 Dev 时确认无 active/queued Worker，通过鉴权 drain 正常停止，无强杀；安装继续使用持久开发签名。回退应保留新原生 child 与原操作/unknown 记录，停止 Dev 后更换兼容候选程序；不能清理账本或用旧结果重放操作。

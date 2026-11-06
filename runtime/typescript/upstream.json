@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/zai-org/ZCode",
+  "version": "3.17.2",
+  "tag": "v3.17.2",
+  "commit": "a9fe401eede6e6e5e01be9048679c206fe6f02d9",
+  "releaseBuildCommit": "e6b675b40abb79e1d38d98d4e8750d0859cfedd9",
+  "archive": "https://github.com/zai-org/ZCode/archive/refs/tags/v3.17.2.tar.gz",
+  "sha256": "8380f0738b95322d1f4a41b3f5bd0ed1953a17df0a5c5945f1a0e6125abdfc9b",
+  "node": "24.14.0",
+  "sourceDirectory": "ZCode-3.17.2"
+}

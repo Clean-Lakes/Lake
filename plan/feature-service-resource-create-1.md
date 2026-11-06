@@ -5,7 +5,7 @@ date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake
 status: 'Completed'
-tags: [feature, items, resources, zcode]
+tags: [feature, items, resources, typescript]
 ---
 
 # Introduction
@@ -31,8 +31,8 @@ Enable MySQL, PostgreSQL, Redis, APISIX, Prometheus and VictoriaMetrics creation
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | Add runtime/zcode/service-resources.ts with validated per-kind settings, scoped private credentials, prepare/rollback and connection tests. | Yes | 2026-11-06 |
-| TASK-002 | Integrate resource creation/edit/test endpoints in runtime/zcode/server.ts and connection revision updates. Depends on TASK-001. | Yes | 2026-11-06 |
+| TASK-001 | Add runtime/typescript/service-resources.ts with validated per-kind settings, scoped private credentials, prepare/rollback and connection tests. | Yes | 2026-11-06 |
+| TASK-002 | Integrate resource creation/edit/test endpoints in runtime/typescript/server.ts and connection revision updates. Depends on TASK-001. | Yes | 2026-11-06 |
 | TASK-003 | Enable choices in web-agent/web/src/App.tsx and add explicit cancellable tests to ServiceResourceFields.tsx and api.ts. Depends on TASK-002. | Yes | 2026-11-06 |
 
 ### Implementation Phase 2
@@ -56,9 +56,9 @@ Enable MySQL, PostgreSQL, Redis, APISIX, Prometheus and VictoriaMetrics creation
 
 ## 5. Files
 
-- **FILE-001**: runtime/zcode/service-resources.ts and server.ts own registration and explicit probes.
+- **FILE-001**: runtime/typescript/service-resources.ts and server.ts own registration and explicit probes.
 - **FILE-002**: ServiceResourceFields.tsx, serviceResourceModel.ts, App.tsx and api.ts own the user flow.
-- **FILE-003**: runtime/zcode/service-resources.test.cjs, server.test.cjs and web frontend tests cover actual boundaries.
+- **FILE-003**: runtime/typescript/service-resources.test.cjs, server.test.cjs and web frontend tests cover actual boundaries.
 
 ## 6. Testing
 
@@ -78,4 +78,4 @@ Enable MySQL, PostgreSQL, Redis, APISIX, Prometheus and VictoriaMetrics creation
 - [Ownership](../agent.md)
 - [Items integration](../docs/design/items-security-memory-integration.md)
 - [UI guidelines](../docs/ui-guidelines.md)
-- [Validation and tested code SHA](../docs/validation/zcode-typescript-candidate/service-resources.md)
+- [Validation and tested code SHA](../docs/validation/typescript-candidate/service-resources.md)

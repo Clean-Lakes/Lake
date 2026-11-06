@@ -5,7 +5,7 @@ date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake Runtime
 status: 'Completed'
-tags: [feature, zcode, mysql, superagent]
+tags: [feature, typescript, mysql, superagent]
 ---
 
 # Introduction
@@ -41,7 +41,7 @@ tags: [feature, zcode, mysql, superagent]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-003 | 固定 mysql2 依赖及 bundle/license 接点，新增 runtime/zcode/mysql.ts 的私有配置解析、摘要、固定查询构建、事务和取消/结果预算；新增 Security database 范围检查。 | ✅ | 2026-11-06 |
+| TASK-003 | 固定 mysql2 依赖及 bundle/license 接点，新增 runtime/typescript/mysql.ts 的私有配置解析、摘要、固定查询构建、事务和取消/结果预算；新增 Security database 范围检查。 | ✅ | 2026-11-06 |
 | TASK-004 | 新增 migration.ts 增量连接导入，接通 server 创建/编辑与启动；superagent 注册工具和原 Operation 绑定，assets/router-context 展示实际能力，Memory 复用新的连接摘要。依赖 TASK-003。 | ✅ | 2026-11-06 |
 | TASK-005 | 新增 mysql.test.cjs 的合成 MySQL 协议、只读/回滚、参数/路径/凭据/权限/跨项目/取消/超限/连接变化测试，扩展真实 SDK Worker 集成及迁移回归。依赖 TASK-004。 | ✅ | 2026-11-06 |
 
@@ -61,14 +61,14 @@ tags: [feature, zcode, mysql, superagent]
 
 ## 4. Dependencies
 
-- **DEP-001**: 原 LakeStore、LakeSecurity、TaskLedger、ZCode ToolEntry/取消协议和 Dev 连接引用。
+- **DEP-001**: 原 LakeStore、LakeSecurity、TaskLedger、Agent SDK ToolEntry/取消协议和 Dev 连接引用。
 - **DEP-002**: 固定 mysql2 3.24.6（MIT），公共 createConnection/query/stream API，锁文件和许可一并保留。
 
 ## 5. Files
 
-- **FILE-001**: runtime/zcode/mysql.ts、mysql.test.cjs、security.ts、migration.ts、server.ts、superagent.ts、tasks.ts、assets.ts、router-context.ts、agent.ts。
-- **FILE-002**: web-agent/package.json/pnpm-lock.yaml、runtime/zcode/build.mjs/tsconfig.json、App.tsx/api.ts/superPilotActivity.ts 及相关测试。
-- **FILE-003**: runtime/zcode/README.md、docs/validation/zcode-typescript-candidate/pilot-stop-mysql-read.md、本计划。
+- **FILE-001**: runtime/typescript/mysql.ts、mysql.test.cjs、security.ts、migration.ts、server.ts、superagent.ts、tasks.ts、assets.ts、router-context.ts、agent.ts。
+- **FILE-002**: web-agent/package.json/pnpm-lock.yaml、runtime/typescript/build.mjs/tsconfig.json、App.tsx/api.ts/superPilotActivity.ts 及相关测试。
+- **FILE-003**: runtime/typescript/README.md、docs/validation/typescript-candidate/pilot-stop-mysql-read.md、本计划。
 
 ## 6. Testing
 
@@ -87,6 +87,6 @@ tags: [feature, zcode, mysql, superagent]
 
 - [架构约定](../agent.md)
 - [Security 范围与适配器](../docs/design/lake-security-v1.md)
-- [TS 候选边界](../runtime/zcode/README.md)
+- [TS 候选边界](../runtime/typescript/README.md)
 - [MySQL2 公共 API](https://sidorares.github.io/node-mysql2/docs/examples/connections/create-connection)
 - [贡献流程](../CONTRIBUTING.md)

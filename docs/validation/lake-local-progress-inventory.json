@@ -675,5 +675,6 @@
     ".zcode/",
     "website/lake-official/.openai/"
   ],
-  "note": "Existing integrated source, current workflow and runtime repairs take precedence. Historical validation files are archived evidence, not results rerun at this PR head. The original workspace and index remain unchanged."
+  "note": "Existing integrated source, current workflow and runtime repairs take precedence. Historical validation files are archived evidence, not results rerun at this PR head. The original workspace and index remain unchanged.",
+  "namingNote": "命名说明：本文路径和协议名称已映射到当前 TypeScript 后端；历史提交 SHA 保留，原始命令与输出以对应提交为准，此映射不表示重新执行历史验证。"
 }

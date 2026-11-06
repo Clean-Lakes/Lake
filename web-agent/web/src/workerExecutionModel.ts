@@ -1,10 +1,11 @@
+import {isNativeAgentSource,isNativeControlSource} from '../../shared/runtime-compat';
 import type {AICard,AgentRun,Resource,ResourceTreeNode,SessionSnapshot} from '../../shared/contracts';
 import {compareTreeNodes,projectResourceTree} from './resource-tree-model';
 
 const controls=new Set(['Agent','Task','TaskOutput','TaskStop','SendMessage']);
 const settled=new Set(['completed','succeeded','success','cancelled','interrupted','not_executed']);
 const record=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'?value as Record<string,unknown>:{};
-export const nativeControlCard=(card:AICard)=>controls.has(card.title??'')||record(card.data).source==='zcode_subagent_control';
+export const nativeControlCard=(card:AICard)=>controls.has(card.title??'')||isNativeControlSource(record(card.data).source);
 export const executionCard=(card:AICard)=>['operation','shell','error'].includes(card.type);
 export const needsExecutionAttention=(status:string)=>['running','queued','pending','waiting_approval','waiting_input','unknown','failed','background_running'].includes(status);
 /** Ending the child model loop cannot resolve an unknown business effect. A
@@ -44,7 +45,7 @@ export function workerExecutionModel(snapshot:SessionSnapshot):WorkerExecutionMo
   else result.taskCards.push(card);
  }
  const unique=new Map<string,AgentRun>();
- for(const run of snapshot.ai?.agentRuns??[])if(run.source==='zcode_subagent'&&run.taskId===task.taskId&&run.childSessionId&&run.id)unique.set(run.id,run);
+ for(const run of snapshot.ai?.agentRuns??[])if(isNativeAgentSource(run.source)&&run.taskId===task.taskId&&run.childSessionId&&run.id)unique.set(run.id,run);
  result.runs=[...unique.values()].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
  for(const run of result.runs){
   const ids=[...new Set(run.resourceIds)];

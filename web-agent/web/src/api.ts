@@ -87,9 +87,9 @@ export type Bootstrap = {
   modelSelection?: AvailableModelEntry | null;
   terminalMode: "command" | "pty";
   supportsImageInput?: boolean;
-  aiRuntime?: "zcode" | "go" | "legacy";
+  aiRuntime?: "typescript" | "go" | "legacy";
   backendRuntime?: "typescript" | "go";
-  memoryEngine?: "zcode-layered";
+  memoryEngine?: "layered";
 };
 
 export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"modelId"|"modelSelection"|"supportsImageInput"> & {
@@ -99,7 +99,7 @@ export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"model
 };
 
 export const api = {
-  memoryScopes: (projectId = "", signal?: AbortSignal) => request<{engine: "zcode"; scopes: LayeredMemoryScope[]}>(`/api/memory?projectId=${encodeURIComponent(projectId)}`, {signal}),
+  memoryScopes: (projectId = "", signal?: AbortSignal) => request<{engine: "typescript"; scopes: LayeredMemoryScope[]}>(`/api/memory?projectId=${encodeURIComponent(projectId)}`, {signal}),
   memoryView: (key: string, projectId = "", signal?: AbortSignal) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}?projectId=${encodeURIComponent(projectId)}`, {signal}),
   memorySettings: (key: string, projectId: string, data: LayeredMemorySettings) => request<LayeredMemorySettings>(`/api/memory/scopes/${encodeURIComponent(key)}/settings?projectId=${encodeURIComponent(projectId)}`, {method: "PATCH", body: JSON.stringify({useEnabled: data.useEnabled, extractionEnabled: data.extractionEnabled, expectedRevision: data.revision})}),
   saveMemory: (key: string, projectId: string, data: {title: string; body: string; expectedRevision: number}, entryId?: string) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}/entries${entryId ? "/"+encodeURIComponent(entryId) : ""}?projectId=${encodeURIComponent(projectId)}`, {method: entryId ? "PUT" : "POST", body: JSON.stringify(data)}),

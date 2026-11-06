@@ -5,7 +5,7 @@ date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake
 status: 'Completed'
-tags: [fix, security, zcode, execution]
+tags: [fix, security, typescript, execution]
 ---
 
 # Introduction
@@ -32,7 +32,7 @@ Classify literal program discovery as read-only and reconcile only verifiable hi
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-001 | Update web-agent/shared/command-policy.ts to recognize literal lookup arguments and compile PATH-preserving discovery without changing opaque CLI classification. | Yes | 2026-11-06 |
-| TASK-002 | Add runtime/zcode/discovery-recovery.ts to verify original SDK parts and host receipts; use verified receipts in TaskLedger unresolved-effect checks and work_read projection. Depends on TASK-001. | Yes | 2026-11-06 |
+| TASK-002 | Add runtime/typescript/discovery-recovery.ts to verify original SDK parts and host receipts; use verified receipts in TaskLedger unresolved-effect checks and work_read projection. Depends on TASK-001. | Yes | 2026-11-06 |
 | TASK-003 | Add classification and actual SDK execution regressions for missing programs, historical reconciliation, source tampering, unknown writes and original-call replay. Depends on TASK-002. | Yes | 2026-11-06 |
 
 ### Implementation Phase 2
@@ -41,7 +41,7 @@ Classify literal program discovery as read-only and reconcile only verifiable hi
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-004 | Run frontend, runtime type/build/integration, ledger and Dev isolation checks; record exact results in docs/validation/zcode-typescript-candidate/program-discovery-recovery.md. Depends on TASK-003. | Yes | 2026-11-06 |
+| TASK-004 | Run frontend, runtime type/build/integration, ledger and Dev isolation checks; record exact results in docs/validation/typescript-candidate/program-discovery-recovery.md. Depends on TASK-003. | Yes | 2026-11-06 |
 | TASK-005 | Build a clean local candidate combining this branch and resource PR 190, install signed Lake Dev, verify exact historical discovery reconciliation and unchanged canonical records without running business commands; open a develop PR. Depends on TASK-004. | Yes | 2026-11-06 |
 
 ## 3. Alternatives
@@ -57,7 +57,7 @@ Classify literal program discovery as read-only and reconcile only verifiable hi
 ## 5. Files
 
 - **FILE-001**: web-agent/shared/command-policy.ts and web-agent/web/test/command-policy.test.ts.
-- **FILE-002**: runtime/zcode/discovery-recovery.ts, tasks.ts, superagent.ts and server.ts.
+- **FILE-002**: runtime/typescript/discovery-recovery.ts, tasks.ts, superagent.ts and server.ts.
 - **FILE-003**: Runtime regression tests and the matching validation record.
 
 ## 6. Testing
@@ -76,6 +76,6 @@ Classify literal program discovery as read-only and reconcile only verifiable hi
 
 - [Contribution workflow](../CONTRIBUTING.md)
 - [Security ownership](../agent.md)
-- [Conversation execution](../docs/validation/zcode-typescript-candidate/conversation-runtime.md)
-- [Agent capabilities](../docs/validation/zcode-typescript-candidate/agent-capabilities.md)
-- [Validation and installed candidate](../docs/validation/zcode-typescript-candidate/program-discovery-recovery.md)
+- [Conversation execution](../docs/validation/typescript-candidate/conversation-runtime.md)
+- [Agent capabilities](../docs/validation/typescript-candidate/agent-capabilities.md)
+- [Validation and installed candidate](../docs/validation/typescript-candidate/program-discovery-recovery.md)

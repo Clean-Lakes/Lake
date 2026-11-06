@@ -5,7 +5,7 @@ date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake
 status: 'Completed'
-tags: [refactor, frontend, zcode]
+tags: [refactor, frontend, typescript]
 ---
 
 # Introduction
@@ -30,7 +30,7 @@ Project each actual specialist invocation into one changing status followed by i
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-001 | Add invocation projection in web-agent/shared/specialist-replies.ts and root-bound report metadata in runtime/zcode/superagent.ts. | ✅ | 2026-11-06 |
+| TASK-001 | Add invocation projection in web-agent/shared/specialist-replies.ts and root-bound report metadata in runtime/typescript/superagent.ts. | ✅ | 2026-11-06 |
 | TASK-002 | Replace stacked prose with a stable live status in web-agent/web/src/SpecialistChannel.tsx and preserve final report identity. Depends on TASK-001. | ✅ | 2026-11-06 |
 
 ### Implementation Phase 2
@@ -54,7 +54,7 @@ Project each actual specialist invocation into one changing status followed by i
 ## 5. Files
 
 - **FILE-001**: web-agent/shared/contracts.ts and web-agent/shared/specialist-replies.ts define presentation metadata and projection.
-- **FILE-002**: runtime/zcode/superagent.ts and runtime/zcode/agent.ts retain exact report/card invocation provenance.
+- **FILE-002**: runtime/typescript/superagent.ts and runtime/typescript/agent.ts retain exact report/card invocation provenance.
 - **FILE-003**: web-agent/web/src/SpecialistChannel.tsx, specialistChannelProjection.ts and specialistChannel.css render the stable status.
 
 ## 6. Testing

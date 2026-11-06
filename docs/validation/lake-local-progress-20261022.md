@@ -1,5 +1,8 @@
 # 主目录未提交进度整理
 
+命名说明：本文路径和协议名称已映射到当前 TypeScript 后端；历史提交 SHA 保留，原始命令与输出以对应提交为准，此映射不表示重新执行历史验证。
+
+
 本批从最新 develop 创建独立分支，原主目录 experiment/adk-runtime 的文件与暂存区未修改。
 
 ## 当前可执行内容
@@ -13,7 +16,7 @@
 
 文件级清单见 lake-local-progress-inventory.json。lake-local-progress-unreconciled.patch 使用零上下文 diff 保存 35 个旧工作区文件相对 develop 的差异，仅供审阅；**不可直接应用**，其中包含已被近期修复替代的旧逻辑。当前运行源码保留 develop 的审批恢复、计划历史、Windows 启动及前端修复。
 
-已在 develop 历史出现的文件版本不重复提交。外部逆向提取目录 docs/hexhub-ai/、重复生成目录 assets/web/dist 2/、临时 .zcode/ 与网站 .openai/ 部署元数据保持在原目录，未打入产品 PR。原始 .txt 第三方许可证随网站一并保存。
+已在 develop 历史出现的文件版本不重复提交。外部逆向提取目录 docs/hexhub-ai/、重复生成目录 assets/web/dist 2/、临时 .typescript/ 与网站 .openai/ 部署元数据保持在原目录，未打入产品 PR。原始 .txt 第三方许可证随网站一并保存。
 
 ## 本次验证
 

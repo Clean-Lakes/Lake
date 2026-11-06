@@ -20,5 +20,5 @@ func (a *App) TakeCommandControl(id string) error {
 	return errors.New("当前使用原生终端；请在权限卡处理原生工具请求")
 }
 func (a *App) ReturnCommandControl(id string, sequence uint64) error {
-	return errors.New("当前使用原生终端；执行结果由 ZCode 自行管理")
+	return errors.New("当前使用原生终端；执行结果由 Lake 运行时管理")
 }

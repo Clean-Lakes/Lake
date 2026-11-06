@@ -10,7 +10,7 @@ tags: [feature, plugin, data]
 
 # Introduction
 
-用户改变了方向：不再二开 ZCode Electron 客户端，改为把运维数据层做成 Harness 插件，专注于资产数据的建设。原生客户端计划的 TASK-010 不再推进。
+用户改变了方向：不再二开 Agent SDK Electron 客户端，改为把运维数据层做成 Harness 插件，专注于资产数据的建设。原生客户端计划的 TASK-010 不再推进。
 
 ## 1. Requirements & Constraints
 
@@ -38,7 +38,7 @@ tags: [feature, plugin, data]
 
 ## 3. Alternatives
 
-- **ALT-001**: 继续推进原生 Electron 客户端（`plan/refactor-native-zcode-client-1.md`）与用户新方向冲突，暂停。
+- **ALT-001**: 继续推进原生 Electron 客户端（`plan/refactor-native-typescript-client-1.md`）与用户新方向冲突，暂停。
 - **ALT-002**: 复用 `packages/lake` 的 TS 数据层会带入 Electron 客户端上下文与 schema 20 迁移链，被否决。
 - **ALT-003**: 用 `ctx.storageDomain` 的 KV 域持久化缺少关系查询与事务，被否决。
 
@@ -76,7 +76,7 @@ tags: [feature, plugin, data]
 
 [数据契约](../dsh-plugin-ops-data/docs/spec.md)
 [插件 README](../dsh-plugin-ops-data/README.md)
-[原生客户端计划（已暂停）](refactor-native-zcode-client-1.md)
+[原生客户端计划（已暂停）](refactor-native-typescript-client-1.md)
 
 ## Verification record (2026-10-03)
 

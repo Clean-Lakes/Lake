@@ -1,6 +1,6 @@
 # 授权与迁移回归
 
-> 历史记录：本文描述已停用的 ZCode 集成。相关源码与构建入口已移除；当前 Go/React 架构和本地开发流程见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
+> 历史记录：本文描述已停用的 Agent SDK 集成。相关源码与构建入口已移除；当前 Go/React 架构和本地开发流程见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
 
 | 边界 | 当前证据 |
 |---|---|
@@ -15,4 +15,4 @@
 | 原生 SSH 主机校验与多连接转发 | `native-remote.test.ts` |
 | 桌面协议范围、凭据入口拒绝、75 个方法 | `desktop-server.test.mjs`、`client/desktop/bridge_test.go` |
 
-测试均使用合成数据。原生代码工具、插件、浏览器和其他通用能力的权限实现由 ZCode 负责；LAKE 运维工具另外核对自己的资源与工作流范围。
+测试均使用合成数据。原生代码工具、插件、浏览器和其他通用能力的权限实现由 Agent SDK 负责；LAKE 运维工具另外核对自己的资源与工作流范围。
