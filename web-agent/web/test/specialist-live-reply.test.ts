@@ -163,6 +163,7 @@ test("one SDK invocation replaces progress in place and the final host report re
 test("polling, history pages and late live snapshots cannot restore narration after a final report", () => {
   const s = snapshot([card("first", "先检查连接")]);
   const live = mergeChannelPage([], {
+    replyPresentation: "invocation",
     entries: [],
     active: [s],
     workers: [worker],
@@ -172,6 +173,7 @@ test("polling, history pages and late live snapshots cannot restore narration af
     { ...card("next", "下一步正在生成"), status: "running" },
   ]);
   const updated = mergeChannelPage(live, {
+    replyPresentation: "invocation",
     entries: [],
     active: [newer],
     workers: [worker],
@@ -187,11 +189,13 @@ test("polling, history pages and late live snapshots cannot restore narration af
     [{ snapshot: s, worker, active: false }],
   );
   const merged = mergeChannelPage(live, {
+    replyPresentation: "invocation",
     entries: end,
     active: [],
     workers: [worker],
   });
   const late = mergeChannelPage(merged, {
+    replyPresentation: "invocation",
     entries: [],
     active: [s],
     workers: [worker],
@@ -200,7 +204,12 @@ test("polling, history pages and late live snapshots cannot restore narration af
   assert.equal(late[0].message?.text, "最终结果");
   assert.deepEqual(mergeChannelEntries(late, end), late);
   assert.deepEqual(
-    mergeChannelPage(late, { entries: live, active: [s], workers: [worker] }),
+    mergeChannelPage(late, {
+      replyPresentation: "invocation",
+      entries: live,
+      active: [s],
+      workers: [worker],
+    }),
     late,
     "a late complete page cannot downgrade a frozen report",
   );
@@ -314,4 +323,43 @@ test("historical root metadata compacts narration without deleting unbound legac
   assert.doesNotMatch(html, /OLD_PROGRESS|PLAN_PRIVATE_STEP/);
   assert.match(html, /计划已保存/);
   assert.match(html, /LEGACY_UNBOUND/);
+});
+
+test("hosts without invocation presentation retain source-card compatibility even when they have root IDs", () => {
+  const s = snapshot([card("a", "进展一"), card("b", "进展二")]);
+  const legacy = mergeChannelPage([], {
+    entries: [],
+    active: [s],
+    workers: [worker],
+  });
+  assert.equal(legacy.length, 2);
+  assert.ok(legacy.every((entry) => !entry.reply));
+  const modern = mergeChannelPage([], {
+    replyPresentation: "invocation",
+    entries: [],
+    active: [s],
+    workers: [worker],
+  });
+  assert.equal(modern.length, 1);
+  assert.equal(modern[0].card?.content, "进展二");
+});
+
+test("SDK initialization without a root ID cannot leave an orphaned thinking reply after the first real event", () => {
+  const s = snapshot([]);
+  delete s.ai!.rootTurnId;
+  const initial = mergeChannelPage([], {
+    replyPresentation: "invocation",
+    entries: [],
+    active: [s],
+    workers: [worker],
+  });
+  assert.equal(initial.length, 0);
+  const running = mergeChannelPage(initial, {
+    replyPresentation: "invocation",
+    entries: [],
+    active: [snapshot([card("a", "实际执行进展")])],
+    workers: [worker],
+  });
+  assert.equal(running.length, 1);
+  assert.equal(running[0].reply?.turnId, "turn-a");
 });

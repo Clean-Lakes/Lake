@@ -28,7 +28,7 @@ export function specialistReplies(
     const source = snapshot.session.id,
       view = snapshot.ai;
     if (!view) continue;
-    const liveId = active ? (view.rootTurnId ?? view.turnStartedAt) : undefined;
+    const liveId = active ? view.rootTurnId : undefined;
     const groups = new Map<
       string,
       { at: string; cards: AICard[]; report?: SpecialistChannelEntry }

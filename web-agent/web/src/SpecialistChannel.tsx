@@ -1,7 +1,7 @@
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage,SuperWorker} from '../../shared/contracts';
 import {api,readableError} from './api';
-import {AIPending,Card,TranscriptMessage} from './AIPanel';
+import {AIPending,AITranscript,Card,TranscriptMessage} from './AIPanel';
 import {AgentQuestion} from './AgentQuestion';
 import {HostKeyTrust} from './HostKeyTrust';
 import {ObjectReferencesProvider} from './AssistantMarkdown';
@@ -22,7 +22,7 @@ export function preferredChannelTask(workers:SuperWorker[]){
 
 export function channelTasksByRecentRecord(workers:SuperWorker[],entries:SpecialistChannelEntry[]){
  const latest=new Map<string,number>();
- for(const entry of entries)latest.set(entry.sourceSessionId,Math.max(latest.get(entry.sourceSessionId)??0,Date.parse(entry.createdAt)||0));
+ for(const entry of entries)latest.set(entry.sourceSessionId,Math.max(latest.get(entry.sourceSessionId)??0,Date.parse(entry.createdAt)||0,Date.parse(entry.message?.createdAt??'')||0));
  return [...workers].sort((a,b)=>(latest.get(b.sessionId)??0)-(latest.get(a.sessionId)??0));
 }
 
@@ -76,7 +76,7 @@ export function SpecialistTaskControls({snapshot,connected}:{snapshot:SessionSna
  </fieldset>;
 }
 
-export function SpecialistChannel({snapshot,connected,onTasks,onActivity,onReady}:{snapshot:SessionSnapshot;connected:boolean;onTask:(sessionId:string)=>void;onTasks?:(sessionId:string,workers:SuperWorker[])=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void;onReady?:(sessionId:string,ready:boolean)=>void}){
+export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,onReady}:{snapshot:SessionSnapshot;connected:boolean;onTask:(sessionId:string)=>void;onTasks?:(sessionId:string,workers:SuperWorker[])=>void;onActivity?:(sessionId:string,state:"running"|"waiting"|"idle")=>void;onReady?:(sessionId:string,ready:boolean)=>void}){
  const session=snapshot.session.id;
  const [page,setPage]=useState<SpecialistChannelPage|null>(null),[entries,setEntries]=useState<SpecialistChannelEntry[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(false);
  const cursor=useRef(''),hasOlder=useRef(false),generation=useRef(0);
@@ -119,7 +119,10 @@ export function SpecialistChannel({snapshot,connected,onTasks,onActivity,onReady
   {(page?.routing||admitting||!!page?.queued)&&!page?.active.length&&<div className="reply-duration turn-status is-live is-thinking without-avatar" role="status" aria-label="专员正在处理消息"><LoadingWaves/><StatusText active={connected}>正在安排工作</StatusText></div>}
   {page?.active.map(active=>{
    const task=active.superagent?.task;
+   const cards=active.ai?.cards.filter(card=>!!active.ai?.turnStartedAt&&card.at>=active.ai.turnStartedAt)??[];
+   const live={...active,messages:[],ai:active.ai?{...active.ai,cards,cardsOffset:0,totalCards:cards.length}:undefined};
    return <section className="specialist-channel-active" key={active.session.id} aria-label={task?.title??'当前任务'}>
+    {page.replyPresentation!=='invocation'&&<AITranscript snapshot={live} proseInChannel superTask={task} assistantIdentity={{name:page.channel.roleName}} disabled={!connected} refresh={()=>api.snapshot(active.session.id)} onInspect={()=>onTask(active.session.id)}/>}
     <SpecialistTaskControls snapshot={active} connected={connected}/>
    </section>;
   })}

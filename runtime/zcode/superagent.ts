@@ -1407,7 +1407,7 @@ export class LakeSuperagent implements AgentHost {
       if (offset < 0) offset = entries.length;
     }
     const page = entries.slice(offset, offset + 50), last = page.at(-1);
-    return { channel: this.channelView(channel), entries: page.reverse(), workers,
+    return { replyPresentation:'invocation',channel: this.channelView(channel), entries: page.reverse(), workers,
       active: workers.filter((worker) => this.active.has(worker.id) || this.pendingInteraction(worker.sessionId))
         .map((worker) => this.decorate(this.store.snapshot(worker.sessionId))),
       routing: this.store.list<InputEvent>("superInputs").some((event) => event.preferredRoleId === channel.roleId && event.disposition === "pending"),

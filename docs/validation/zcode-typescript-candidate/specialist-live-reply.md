@@ -16,7 +16,7 @@
 
 | 检查 | 结果 |
 | --- | --- |
-| `npm --prefix web-agent run test:frontend` | 689/689 |
+| `npm --prefix web-agent run test:frontend` | 692/692 |
 | `npm --prefix web-agent run build:web` | 通过；保留现有 Vite 大块提示 |
 | `node third_party/zcode/node_modules/typescript/bin/tsc -p runtime/zcode/tsconfig.json` | 通过 |
 | `node runtime/zcode/build.mjs` | 通过 |

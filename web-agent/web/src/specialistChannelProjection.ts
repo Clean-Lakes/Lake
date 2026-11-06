@@ -24,13 +24,13 @@ export function liveChannelProse(active:SessionSnapshot[]):SpecialistChannelEntr
 }
 
 /** Keep publicly shown prose in one list through streaming, settlement and paging. */
-export function mergeChannelPage(previous:SpecialistChannelEntry[],page:Pick<SpecialistChannelPage,'entries'|'active'|'workers'>):SpecialistChannelEntry[]{
+export function mergeChannelPage(previous:SpecialistChannelEntry[],page:Pick<SpecialistChannelPage,'entries'|'active'|'workers'|'replyPresentation'>):SpecialistChannelEntry[]{
  const durable=mergeChannelEntries(previous,page.entries);
  const byId=new Map(durable.map(entry=>[entry.id,entry]));
  const workers=new Map(page.workers.map(worker=>[worker.sessionId,worker]));
- // Older hosts have no SDK root IDs and retain their original projection.
- const modern=page.active.filter(snapshot=>!!snapshot.ai?.rootTurnId);
- const incoming=[...liveSpecialistReplies(modern,page.workers),...liveChannelProse(page.active.filter(snapshot=>!snapshot.ai?.rootTurnId))];
+ // The host opts in explicitly. Go/older hosts may also have root IDs, but
+ // their durable page still uses source-card identities and stays compatible.
+ const incoming=page.replyPresentation==='invocation'?liveSpecialistReplies(page.active,page.workers):liveChannelProse(page.active);
  for(const entry of incoming){
   const current=byId.get(entry.id);
   if(current?.reply?.state==='settled'&&entry.reply?.state==='working')continue;
