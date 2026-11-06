@@ -62,4 +62,4 @@
 
 验证：TS 类型与 bundle 通过；后端集成 115/115；前端 683/683（含新增分类与拒绝绕过用例 30 项）；Task/Memory/lifecycle 57/57；ADK 边界通过；Dev 保护 16/16。实际 SDK/SSH 夹具验证默认值未保存、显式开启、显式关闭、容器查询内部 Shell 和危险操作。Docker/Kubernetes/MySQL CLI 在新增夹具中为本机测试程序，真实用户远端没有执行。原“必须等待确认”的测试现在显式设置 false，不再依赖与 UI 不一致的隐藏默认。PTY 危险确认使用真实危险动作的输入，仍验证缺少准确确认时不执行。
 
-签名 Dev 的最终代码 SHA 和启动核对将在本次安装完成后记录；前述 93b69953 是上一批已验证构建。
+本次准确测试代码 SHA：`e5583b9378a571efd7c84c5c67eefb84bb4028f4`。干净工作区签名安装后，build-origin 的 gitHead、dirty=false、实际后端 SHA256 和深度代码签名检查一致；启动 API 确认 TS/ZCode。原生 Pilot 权限浮层仍显示“运行命令 / 查询数据库 开启、写入文件 关闭”，只查看，没有切换任何值。对比安装前私有备份，所有会话原 options、资源、目标、业务 Operation 及 commandExecutions 逐项保持；启动后活动 Worker 为 0，没有重跑查询。备份：`~/Library/Application Support/Lake Dev/backups/approval-preferences-20261106-132111/`。前述 93b69953 是上一批历史构建，正式应用没有重启或更新。
