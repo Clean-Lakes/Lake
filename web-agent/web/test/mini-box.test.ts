@@ -3,11 +3,11 @@ import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import type {TerminalEntry,TerminalHistory} from '../../shared/contracts';
-import {hasMultipleMiniResources,miniCanStop,miniControlActive,miniEntries,miniTarget,type MiniBoxScope} from '../src/miniBoxModel';
+import {miniHostCommands,hasMultipleMiniResources,miniCanStop,miniControlActive,miniEntries,miniTarget,type MiniBoxScope} from '../src/miniBoxModel';
 import {MiniBoxCompletionNotice} from '../src/MiniBox';
 import {ThinkingTimeline} from '../src/ThinkingTimeline';
 import {ExecutionDetailsOpen} from '../src/TurnExecutionDetails';
-import {miniReadableOutput,miniPreview,miniPreviewRows} from '../src/miniBoxPreview';
+import {miniRecordedEntry,miniReadableOutput,miniPreview,miniPreviewRows} from '../src/miniBoxPreview';
 
 const at='2026-10-24T10:00:00Z';
 const scope:MiniBoxScope={session:'s',terminals:[],startedAt:at,live:true,connected:true};
@@ -87,4 +87,17 @@ test('grouped command marker follows mini terminal activity through running, wai
  assert.ok(render().includes('mini-box is-operating'));
  for(const overrides of [{live:false},{waiting:true},{connected:false}])assert.ok(!render(overrides).includes(marker),JSON.stringify(overrides));
  assert.ok(!render({},true).includes(marker),'finished commands stop their marker');
+});
+
+
+test('SDK Mini Box projection binds task, session, resource and operation without guessing PTY ownership',()=>{
+ const command={id:'exec',operationId:'op',taskId:'task',sessionId:'s',generation:2,resourceId:'r',command:'printf sdk',output:'sdk',exitCode:null,status:'running',canStop:true,startedAt:at};
+ const own={id:'call',type:'operation',title:'Bash',at,status:'running',data:{taskId:'task',resource_id:'r',operation_id:'op'}};
+ const sdk={...scope,taskId:'task',executions:[command]};
+ assert.deepEqual(miniHostCommands(sdk,[own],'r'),[command]);
+ for(const bad of [{session:'other'},{taskId:'other'},{executions:[{...command,operationId:'different'}]},{executions:[{...command,resourceId:'different'}]}])assert.deepEqual(miniHostCommands({...sdk,...bad},[own],'r'),[]);
+ assert.deepEqual(miniHostCommands(sdk,[{...own,data:{...own.data,operation_id:'invented'}}],'r'),[]);
+ const recorded=miniRecordedEntry({...own,status:'completed',data:{arguments:{command:'printf sdk'}},content:JSON.stringify({stdout:'hello',stderr:'warning',exitCode:3})});
+ assert.equal(recorded?.command,'printf sdk');assert.equal(recorded?.output,'hello\nwarning');assert.equal(recorded?.exitCode,3);
+ assert.equal(miniRecordedEntry({...own,status:'unknown'})?.status,'unknown');
 });

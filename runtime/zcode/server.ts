@@ -1,3 +1,4 @@
+import {acknowledgeConversation} from "./conversation-reads";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
@@ -530,7 +531,9 @@ export async function startLakeServer(options: ServerOptions) {
           await agents.prepareRedaction();
           await loadLegacyView(store, sessionId, (value) => agents!.redact(value));
         }
-        if (path[3] === "host-key" && path.length===4 && method==="POST")result=ssh!.decide(sessionId,data);
+        if (path[3] === "messages-read" && path.length === 4 && method === "PUT") result = acknowledgeConversation(store, sessionId, data.cursor);
+        else if (path[3] === "executions" && path.length === 6 && path[5] === "interrupt" && method === "POST") { result = execution!.interrupt(sessionId, path[4], data.generation); status = 202; }
+        else if (path[3] === "host-key" && path.length===4 && method==="POST")result=ssh!.decide(sessionId,data);
         else if (path[3] === "terminals") {
           if (path.length === 4 && method === "POST") { await agents.prepareRedaction(); extensions!.servers(); result = await terminals!.open(sessionId, data); status = 201; }
           else if (path.length === 5 && path[4] === "available" && method === "GET") result = terminals!.available(sessionId);

@@ -1,10 +1,14 @@
-import {useState,type ReactNode} from 'react';
+import {createContext,useContext,useState,type ReactNode} from 'react';
 import type {AICard,AgentRun,SessionSnapshot,SuperWorker} from '../../shared/contracts';
 import {DisclosureSummary} from './DisclosureSummary';
 import {Glyph,ResourceIcon} from './Icons';
 import {ToolStep} from './ThinkingTimeline';
+import {MiniBox} from './MiniBox';
+import {isTerminalCommand,type MiniBoxScope} from './miniBoxModel';
 import {executionCard,nativeRunState,needsExecutionAttention,workerBusinessReceipts,workerExecutionModel,type WorkerExecutionNode} from './workerExecutionModel';
 import './workerExecutionTree.css';
+
+const ExecutionMiniContext=createContext<{snapshot:SessionSnapshot;scope:MiniBoxScope;onUpdated?:()=>void}|null>(null);
 
 const labels:Record<string,string>={queued:'排队中',running:'执行中',background_running:'后台执行中',pending:'等待确认',waiting_approval:'等待确认',waiting_input:'等待补充',waiting_external:'等待外部结果',paused:'已暂停',blocked:'结果待核实',completed:'已完成',succeeded:'已完成',success:'已完成',failed:'执行失败',cancelled:'已停止',interrupted:'已中断',not_executed:'未执行',unknown:'结果待核实'};
 const time=(value?:string)=>value?new Date(value).toLocaleTimeString('zh-CN',{hour12:false}):'';
@@ -19,11 +23,24 @@ function Branch({children,summary,active=false,className=''}:{children:ReactNode
  return <details className={`worker-execution-branch ${className}`} open={open} onToggle={event=>setOpen(event.currentTarget.open)}><DisclosureSummary>{summary}</DisclosureSummary>{children}</details>;
 }
 function Calls({cards,paths}:{cards:AICard[];paths:Map<string,string>}){
+ const mini=useContext(ExecutionMiniContext);
  const calls=cards.filter(executionCard);
+ const groups=new Map<string,AICard[]>();
+ if(mini)for(const card of calls){
+  const data=card.data as {resource_id?:string;taskId?:string}|undefined;
+  const resource=mini.snapshot.resources.find(row=>row.id===data?.resource_id&&row.projectId===mini.snapshot.session.projectId);
+  if(resource&&['local','ssh'].includes(resource.kind)&&data?.taskId===mini.scope.taskId&&isTerminalCommand(card))groups.set(resource.id,[...(groups.get(resource.id)??[]),card]);
+ }
  if(!calls.length)return null;
  return <ol className="thinking-steps worker-execution-calls">{calls.map(card=>{
   const data=card.data&&typeof card.data==='object'?card.data as Record<string,unknown>:{};
   const path=typeof data.resource_id==='string'?paths.get(data.resource_id):undefined;
+  const commands=typeof data.resource_id==='string'?groups.get(data.resource_id):undefined;
+  if(mini&&commands){
+   if(card!==commands[0])return null;
+   const resource=mini.snapshot.resources.find(row=>row.id===data.resource_id)!;
+   return <li key={card.id} className="worker-mini-command"><MiniBox scope={mini.scope} resource={resource.id} kind={resource.kind as 'local'|'ssh'} cards={commands} onCommandStopped={mini.onUpdated}/><details className="mini-box-audit"><DisclosureSummary>原始执行记录 · {commands.length}</DisclosureSummary><ol className="thinking-steps">{commands.map(command=><ToolStep key={command.id} card={command} active={command.status==='running'}/>)}</ol></details></li>;
+  }
   return <ToolStep key={card.id} card={path?{...card,data:{...data,target:path}}:card} active={card.status==='running'}/>;
  })}</ol>;
 }
@@ -42,11 +59,11 @@ function Child({run,paths}:{run:AgentRun;paths:Map<string,string>}){
  </Branch>;
 }
 function ResourceBranch({node,paths}:{node:WorkerExecutionNode;paths:Map<string,string>}){
- return <Branch active={needsExecutionAttention(node.state)} className={`worker-resource-${node.kind}`} summary={<>{node.resource?<ResourceIcon kind={node.resource.kind} size={15}/>:<Glyph name="folder" size={15}/>}<span className="worker-execution-name" title={node.path}>{node.name}</span><State status={node.state}/></>}>
+ return <Branch active className={`worker-resource-${node.kind}`} summary={<>{node.resource?<ResourceIcon kind={node.resource.kind} size={15}/>:<Glyph name="folder" size={15}/>}<span className="worker-execution-name" title={node.path}>{node.name}</span><State status={node.state}/></>}>
   <div className="worker-execution-children">{node.children.map(child=><ResourceBranch key={child.id} node={child} paths={paths}/>)}{node.runs.map(run=><Child key={run.id} run={run} paths={paths}/>)}<Calls cards={node.cards} paths={paths}/></div>
  </Branch>;
 }
-export function WorkerExecutionTree({snapshot,worker}:{snapshot:SessionSnapshot;worker?:SuperWorker}){
+export function WorkerExecutionTree({snapshot,worker,connected=false,onUpdated}:{snapshot:SessionSnapshot;worker?:SuperWorker;connected?:boolean;onUpdated?:()=>void}){
  const task=snapshot.superagent?.task;
  const model=workerExecutionModel(snapshot);
  if(!task)return null;
@@ -54,7 +71,11 @@ export function WorkerExecutionTree({snapshot,worker}:{snapshot:SessionSnapshot;
  const identity=worker?.task.taskId===task.taskId?worker.id:undefined;
  const active=model.runs.filter(run=>needsExecutionAttention(run.status)&&run.status!=='failed'&&run.status!=='unknown').length;
  const unresolved=model.runs.filter(run=>nativeRunState(run)==='unknown').length;
- return <section className="worker-execution-tree" aria-label="任务执行过程" data-worker-id={identity}>
+ const resourceIds=new Set([...model.taskCards,...snapshot.ai?.cards??[],...model.runs.flatMap(run=>run.cards??[])].filter(isTerminalCommand).flatMap(card=>{
+  const data=card.data as {resource_id?:string;taskId?:string}|undefined;return data?.taskId===task.taskId&&snapshot.resources.some(resource=>resource.id===data.resource_id&&resource.projectId===snapshot.session.projectId&&['local','ssh'].includes(resource.kind))?[data!.resource_id!]:[];
+ }));
+ const scope:MiniBoxScope={session:snapshot.session.id,taskId:task.taskId,terminals:snapshot.terminals??[],executions:snapshot.commandExecutions,startedAt:worker?.createdAt??snapshot.ai?.cards[0]?.at??snapshot.session.createdAt,live:['running','waiting_user','waiting_external','queued'].includes(task.state),waiting:snapshot.ai?.status==='waiting_approval',connected,multiResource:resourceIds.size>1};
+ return <ExecutionMiniContext.Provider value={{snapshot,scope,onUpdated}}><section className="worker-execution-tree" aria-label="任务执行过程" data-worker-id={identity}>
   <header className="worker-execution-root"><Glyph name="lakeWorkflow" size={19}/><strong>任务 Worker</strong><small>由 Lake 分配</small><State status={status}/></header>
   {model.runs.length>0&&<p className="worker-execution-caption">临时子智能体 · {model.runs.length}{active>0&&<span>{active} 个需要跟进</span>}</p>}
   <div className="worker-execution-trunk">
@@ -63,7 +84,7 @@ export function WorkerExecutionTree({snapshot,worker}:{snapshot:SessionSnapshot;
    {!model.resources.length&&!model.taskRuns.length&&!model.taskCards.length&&<p className="worker-execution-empty">执行工具后，记录会按资源显示在这里。</p>}
   </div>
   {model.runs.length>0&&<footer className="worker-execution-footer"><Glyph name="layers" size={13}/>{unresolved>0?`${unresolved} 个子智能体存在待核实结果`:active>0?'子智能体执行状态会持续更新。':`${model.runs.length} 个子智能体均已结束`}<span>任务验收以实际结果为准</span></footer>}
- </section>;
+ </section></ExecutionMiniContext.Provider>;
 }
 
 export function WorkerExecutionResults({snapshot}:{snapshot:SessionSnapshot}){

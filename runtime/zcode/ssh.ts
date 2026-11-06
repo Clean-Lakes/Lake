@@ -185,7 +185,7 @@ export class LakeSSH {
    conn.exec(command,(error,stream)=>{if(error){finish(new HttpError(502,'SSH 只读命令未启动'));return;}channel=stream;let code:number|undefined;
     const collect=(data:Buffer)=>{if(output.length+data.length>131072){finish(new HttpError(502,'SSH 只读结果超过上限'));return;}output=Buffer.concat([output,data]);};
     stream.on('data',collect);stream.stderr.on('data',collect);stream.on('exit',(value:number)=>{code=value;});
-    stream.once('close',()=>code===0?finish(undefined,{resourceId:resource.id,metric:profile,profileId:'lake.host.'+profile,profileVersion:1,configurationRevision:revision,hostFingerprint:this.peerKeys.get(conn),exitCode:code,output:this.scrub(output.toString('utf8')),observedAt:new Date().toISOString()}):finish(new HttpError(502,'SSH 只读检查未取得成功退出回执')));
+    stream.once('close',()=>code===0?finish(undefined,{command,resourceId:resource.id,metric:profile,profileId:'lake.host.'+profile,profileVersion:1,configurationRevision:revision,hostFingerprint:this.peerKeys.get(conn),exitCode:code,output:this.scrub(output.toString('utf8')),observedAt:new Date().toISOString()}):finish(new HttpError(502,'SSH 只读检查未取得成功退出回执')));
     stream.once('error',()=>finish(new HttpError(502,'SSH 只读检查连接中断')));
    });conn.once('close',()=>finish(new HttpError(502,'SSH 连接中断，读取结果未确认')));
   });}finally{conn.end();}

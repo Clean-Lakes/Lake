@@ -69,11 +69,12 @@ export function miniRecordedEntry(card:AICard|undefined):Pick<TerminalEntry,'id'
   if(check&&typeof check==='object'){
    if(typeof check.command==='string')command=check.command;
    if(typeof check.output==='string')output=check.output;
+   else if(check.stdout||check.stderr)output=[typeof check.stdout==='string'?check.stdout:check.stdout?.text,typeof check.stderr==='string'?check.stderr:check.stderr?.text].filter((value):value is string=>typeof value==='string').join('\n');
    if(typeof check.exitCode==='number')exitCode=check.exitCode;
    else if(typeof check.exit_code==='number')exitCode=check.exit_code;
   }
  }catch{/* The recorded output is still readable when no structured result exists. */}
- return {id:card.id,command,output,exitCode,status:exitCode!==null?'completed':card.status==='running'?'running':card.status==='failed'||card.status==='interrupted'?'unknown':'completed'};
+ return {id:card.id,command,output,exitCode,status:exitCode!==null?'completed':card.status==='running'?'running':['failed','interrupted','unknown','cancelled'].includes(card.status)?'unknown':'completed'};
 }
 
 export function miniExecutionStatus({entry,card,stale,stopping,active,anomalies,dispatching}:{entry:ReturnType<typeof miniRecordedEntry>;card:AICard|undefined;stale:boolean;stopping:boolean;active:boolean;anomalies:number;dispatching:boolean}):string {

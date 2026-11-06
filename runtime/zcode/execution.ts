@@ -11,6 +11,8 @@ import type {
 import type { Resource } from "../../web-agent/shared/contracts";
 import type { LakeSSH } from "./ssh";
 import type { LakeSecurity } from "./security";
+import type { HostCommandView } from '../../web-agent/shared/contracts';
+import type { Operation } from './tasks';
 import { HttpError, LakeStore, id, now } from "./store";
 import { digest, text } from "./tasks";
 import { commandPolicy } from "../../web-agent/shared/command-policy";
@@ -45,6 +47,10 @@ export type ShellPlan = {
   risk: "readonly" | "write" | "dangerous";
 };
 type CommandRecord = {
+  command?: string;
+  stdoutTail?: string;
+  stderrTail?: string;
+  stopRequestedAt?: string;
   id: string;
   taskId: string;
   workerId: string;
@@ -182,6 +188,36 @@ export class LakeExecution {
         record.resourceRevision
     )
       throw new HttpError(409, "Shell 资源配置或凭据已变化");
+  }
+  /** UI projection uses both immutable operation ownership and command identity. */
+  views(sessionId: string, taskId: string): HostCommandView[] {
+    const projectId = this.store.session(sessionId).projectId;
+    const operations = this.store.list<Operation>('superOperations').filter(op => op.projectId === projectId && op.sessionId === sessionId && op.goalId === taskId && op.commandExecutionId);
+    return operations.flatMap(op => {
+      const record = this.store.get<CommandRecord>('commandExecutions', op.commandExecutionId!);
+      if (!record || record.sessionId !== sessionId || record.taskId !== taskId || record.generation !== op.generation || record.resourceId !== op.resourceId || record.resourceRevision !== op.resourceRevision || record.configurationRevision !== op.hostConfigurationHash) return [];
+      const live = this.lives.get(record.id);
+      let canStop = false;
+      if (live && record.status === 'running' && !record.stopRequestedAt) {
+        try { live.actor.guard(); this.revalidate(record); canStop = true; } catch { /* Historical or fenced command. */ }
+      }
+      return [{ id: record.id, operationId: op.id, taskId, sessionId, generation: record.generation, resourceId: record.resourceId,
+        command: this.scrub(record.command ?? ''), output: this.scrub(record.result ? [record.result.stdout?.text, record.result.stderr?.text].filter(Boolean).join('\n') : [record.stdoutTail, record.stderrTail].filter(Boolean).join('\n')),
+        exitCode: record.result?.exitCode ?? null, status: record.status, canStop, stopRequestedAt: record.stopRequestedAt,
+        startedAt: record.startedAt, finishedAt: record.finishedAt }];
+    });
+  }
+  interrupt(sessionId: string, executionId: string, generation: unknown) {
+    const live = this.lives.get(executionId);
+    if (!live || live.record.sessionId !== sessionId || live.record.generation !== generation || live.record.status !== 'running')
+      throw new HttpError(409, '当前命令已结束或执行版本已变化');
+    live.actor.guard(); this.revalidate(live.record);
+    if (!this.views(sessionId, live.record.taskId).some(row => row.id === executionId)) throw new HttpError(409, '缺少原任务命令回执');
+    live.record.stopRequestedAt ??= now();
+    this.store.put('commandExecutions', executionId, live.record);
+    live.controller.abort();
+    void live.cancel?.().catch(() => {});
+    return { requested: true };
   }
   evidence(executionId: string, taskId: string, generation: number) {
     const record = this.store.require<CommandRecord>(
@@ -366,7 +402,10 @@ export class LakeExecution {
         owner.store.get("commandExecutions", executionId)
       )
         throw new HttpError(409, "原 Shell 操作不能重新派发");
+      if(owner.store.list<CommandRecord>('commandExecutions').some(prior => prior.sessionId === actor.sessionId && prior.taskId === actor.taskId && prior.generation === actor.generation && prior.resourceId === plan.resource.id && prior.commandHash === digest(plan.command) && prior.stopRequestedAt))
+        throw new HttpError(409, '用户已终止此命令；本轮不得自动重试，请等待新的用户要求');
       const record: CommandRecord = {
+        command: owner.scrub(plan.command),
         id: executionId,
         taskId: actor.taskId,
         workerId: actor.workerId,
@@ -420,6 +459,11 @@ export class LakeExecution {
           signal,
           onEvent: async (event: any) => {
             const safe = JSON.parse(owner.scrub(JSON.stringify(event)));
+            if (safe.type === 'progress' && owner.lives.get(record.id) === live) {
+              if (typeof safe.stdoutTail === 'string') record.stdoutTail = safe.stdoutTail.slice(-8192);
+              if (typeof safe.stderrTail === 'string') record.stderrTail = safe.stderrTail.slice(-8192);
+              owner.store.put('commandExecutions', record.id, record);
+            }
             if (safe.timestamp) safe.timestamp = new Date(safe.timestamp);
             await options.onEvent?.(safe);
           },

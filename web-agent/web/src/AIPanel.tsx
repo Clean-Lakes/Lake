@@ -13,7 +13,7 @@ import {PlanReference,planMarkdown} from './PlanMode';
 import {conversationPlanEntry} from './planConversation';
 import {isAssistantProse,trailingTurnReplyId} from './completedTurnProse';
 import {SettledReply} from './SettledReply';
-import {pilotReplyContinuations} from './replyGrouping';
+import {pilotReplyContinuations,replyRoleBreaks} from './replyGrouping';
 import {recoveredRouteFailures} from './routeDispatchPresentation';
 import {OperationOutcomes} from './OperationOutcomes';
 import {MessageText} from './MessageText';
@@ -109,13 +109,13 @@ function ReplyArrival({entryId,arrive,continued=false,children}:{entryId:string;
   const [animate] = useState(arrive);
   return <div data-conversation-entry={entryId} className={`ai-response${continued?' is-reply-continuation':''}${animate?' reply-arrival':''}`}>{children}</div>;
 }
-export function TranscriptMessage({message,sessionId,resources,arrive=false,pendingImages,assistantIdentity,onSpecialist,hideIdentity=false,continued=false,motion='idle'}:{continued?:boolean;motion?:AvatarMotion;hideIdentity?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;pendingImages?:number;message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"];arrive?:boolean}) {
+export function TranscriptMessage({message,sessionId,resources,arrive=false,pendingImages,assistantIdentity,onSpecialist,hideIdentity=false,continued=false,roleBreak=false,motion='idle'}:{roleBreak?:boolean;continued?:boolean;motion?:AvatarMotion;hideIdentity?:boolean;onSpecialist?:(author:SpecialistReplyAuthor)=>void;assistantIdentity?:AssistantIdentity;pendingImages?:number;message:SessionSnapshot["messages"][number];sessionId:string;resources?:SessionSnapshot["resources"];arrive?:boolean}) {
  const [animate]=useState(()=>arrive&&!document.hidden&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
  // Handoffs belong to execution records, not the human-facing conversation.
  if(message.dispatch)return null;
  if(message.role==='system'&&isContextCompactionFailure(message.text||''))return <CompactionNotice message={message.text}/>;
  const attachments=<>{message.files?.length ? <div className="message-attachments">{message.files.map(file=><a key={file.sourceId} href={`/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(file.sourceId)}`} download={file.name}><Glyph name="file" size={14}/>{file.name}</a>)}</div> : null}{!!message.images?.length&&<MessageImages images={message.images}/>}</>;
- return <div className={`ai-chat-message ai-role-${message.role}${continued?' is-reply-continuation':''}${message.images?.length?" has-message-images":""}${animate?" user-message-arrival":""}`}>
+ return <div className={`ai-chat-message ai-role-${message.role}${roleBreak?' is-role-break':''}${continued?' is-reply-continuation':''}${message.images?.length?" has-message-images":""}${animate?" user-message-arrival":""}`}>
           {message.role === "system" && <small>系统</small>}{message.role === "assistant" && <ReplyIdentity identity={assistantIdentity} author={message.author} onSpecialist={onSpecialist} hidden={hideIdentity} continued={continued} motion={motion}/> }{message.text && (message.role === 'assistant' ? <AssistantMarkdown>{planMarkdown(message.text)}</AssistantMarkdown> : <div className={message.role==='user'?'user-message-text':undefined}>{message.role === "system" ? displayAiError(message.text) : <MessageText text={message.text} mentions={message.mentions} resources={resources}/>}</div>)}
           {attachments}
           {pendingImages!==undefined&&<small className="supplement-delivery-status" role="status">补充已发送 · 等待接入{pendingImages>0?` · ${pendingImages} 张图片`:''}</small>}
@@ -215,7 +215,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       const timingProps={timing:timingForTurn(turn,snapshot),view:turn.some(entry=>entry.message?.id===latestUser?.id)?snapshot.ai:undefined,cards:turn.flatMap(entry=>entry.card?[entry.card]:[]),latestUserAt:turn.find(entry=>entry.message?.role==='user')?.at??''};
       const miniStartedAt=timingProps.timing?.startedAt||timingProps.latestUserAt||turn[0]!.at;
       const miniEndedAt=turns[index+1]?.find(entry=>entry.message?.role==='user')?.at;
-      const miniScope={session:snapshot.session.id,terminals:snapshot.terminals??[],startedAt:miniStartedAt,endedAt:miniEndedAt,live:turn===currentTurn&&liveConversation,waiting:snapshot.ai?.status==='waiting_approval',connected:!disabled,multiResource:hasMultipleMiniResources(processGroups)};
+      const miniScope={session:snapshot.session.id,taskId:snapshot.superagent?.task.taskId,executions:snapshot.commandExecutions,terminals:snapshot.terminals??[],startedAt:miniStartedAt,endedAt:miniEndedAt,live:turn===currentTurn&&liveConversation,waiting:snapshot.ai?.status==='waiting_approval',connected:!disabled,multiResource:hasMultipleMiniResources(processGroups)};
       const hiddenProcess=new Set(processGroups.flatMap(group=>group.entries).filter(entry=>entry.card?.title!=='ask_user_question'&&!!entry.card&&(['running','completed','succeeded','success'].includes(entry.card.status)||recoveredRouting.has(entry.id))).map(entry=>entry.id));
       for(const entry of turn){
         if(entry.message?.dispatch&&!hideReplyIdentity)hiddenProcess.add(entry.id);
@@ -223,6 +223,7 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
       }
       const emptyProse=new Set(turn.filter(entry=>isAssistantProse(entry)&&!(entry.message?.text.trim()||entry.card?.content?.trim())).map(entry=>entry.id));
       const continuations=mode==='conversation'&&assistantIdentity?.pilot?pilotReplyContinuations(turn,emptyProse,hiddenProcess):new Set<string>();
+      const roleBreaks=mode==='conversation'&&!hideReplyIdentity?replyRoleBreaks(turn,emptyProse,hiddenProcess):new Set<string>();
       const activeIdentity=activeReply&&continuations.has(activeReply)?turn.slice(0,turn.findIndex(entry=>entry.id===activeReply)).filter(entry=>isAssistantProse(entry)&&!continuations.has(entry.id)).at(-1)?.id:activeReply;
       const replyMotion=(id:string)=>id===activeIdentity?conversationAvatarMotion(conversationActivity(snapshot.ai)):'idle';
       const renderGroup=({entries:group,progress,resource}:ConversationGroup)=>{
@@ -239,13 +240,13 @@ function AITranscriptContent({ proseInChannel=false,pilotWorkspace,pilotConnecte
           return <AgentTaskList compact key={entry.id} runs={runs} resources={snapshot.resources || []} evidence={[...(snapshot.evidence || []), ...(snapshot.ai?.agentRuns || []).flatMap(run => (run.evidence || []).map(item => ({...item, specialistId:null, command:null})))]} live={live} disabled={disabled} stopping={stopping} onInspect={onInspect} onStopTurn={onStopTurn} onCancelRun={run => api.aiOperation(snapshot.session.id,"cancelAgent",{runId:run.id})} renderApproval={run => snapshot.ai && <AIPending attachments={snapshot.messages.flatMap(message=>message.files??[])} session={snapshot.session.id} runId={run.id} agentName={run.name} view={{...snapshot.ai,pending:run.pending}} refresh={() => api.aiView(snapshot.session.id)}/>}>{tools.length ? <ThinkingTimeline cards={tools} live={false} onInspect={onInspect}/> : null}</AgentTaskList>;
         }
         if (entry.card && ["thinking", "operation", "shell"].includes(entry.card.type)) return <ThinkingTimeline key={entry.id} cards={group.map(item => item.card!)} live={thinkingVisible && group.at(-1)?.id === visibleEntries.at(-1)?.id} onInspect={onInspect}/>;
-        if (entry.message) return entry.message.role==='user'?null:<TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} hideIdentity={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}/>;
+        if (entry.message) return entry.message.role==='user'?null:<TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message} roleBreak={!!entry.message.author&&roleBreaks.has(entry.id)} assistantIdentity={assistantIdentity} onSpecialist={onSpecialist} hideIdentity={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}/>;
         if (entry.action) return <div key={entry.id}>{renderAction?.(entry.action)}</div>;
         return <ReplyArrival key={entry.id} entryId={entry.id} continued={continuations.has(entry.id)} arrive={false}>{entry.card&&['text','message'].includes(entry.card.type) && <ReplyIdentity identity={assistantIdentity} hidden={hideReplyIdentity} continued={continuations.has(entry.id)} motion={replyMotion(entry.id)}/>}<Card card={entry.card!} tags={snapshot.session.tags} animateInitial={!restoredText.current.has(entry.card!.id)} onOpenPlans={onOpenPlans} onOpenMemory={onOpenMemory}/></ReplyArrival>;
       };
       const pilotLive=miniScope.live&&turn.some(entry=>entry.sre?.task.pilot);
       // Public prose keeps its key and container throughout tool rounds and completion.
-      const replyContent=<>{groups.filter(group=>!processGroups.includes(group)&&!(proseInChannel&&group.entries.every(channelBody))).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} continued={continuations.has(group.entries[0]!.id)}>{renderGroup(group)}</SettledReply>:renderGroup(group))}</>;
+      const replyContent=<>{groups.filter(group=>!processGroups.includes(group)&&!(proseInChannel&&group.entries.every(channelBody))).map(group=>mode==='conversation'&&group.entries.every(isAssistantProse)?<SettledReply key={group.entries[0]!.id} roleBreak={roleBreaks.has(group.entries[0]!.id)} continued={continuations.has(group.entries[0]!.id)}>{renderGroup(group)}</SettledReply>:renderGroup(group))}</>;
       return <ReplyReferenceScope key={turn[0]!.id} cards={turn.flatMap(entry => entry.card ? [entry.card] : [])}><div className="ai-turn" id={conversationTurnId(snapshot.session.id, turn[0]!.id)}>
       {mode==='conversation'&&turn.filter(entry=>entry.message?.role==='user').map(entry=><TranscriptMessage key={entry.id} sessionId={snapshot.session.id} message={entry.message!} resources={snapshot.resources} arrive={entry.message!.id===latestUser?.id&&!restoredMessageIds.current.has(entry.message!.id)}/>)}
       {mode==='activity'&&<ReplyDuration assistantIdentity={assistantIdentity} {...timingProps}/>}

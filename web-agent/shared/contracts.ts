@@ -196,7 +196,13 @@ export type SendMessageResult = {pilotSessionId?:string;queued?: boolean; queued
 
 export type ReplyTiming = {messageId:string;startedAt:string;finishedAt:string;status:"running" | "completed" | "cancelled" | "failed" | "interrupted"};
 
+export type HostCommandView = {id:string;operationId:string;taskId:string;sessionId:string;generation:number;resourceId:string;command:string;output:string;exitCode:number|null;status:string;canStop:boolean;stopRequestedAt?:string;startedAt:string;finishedAt?:string};
+
+export type ConversationReadState = {cursor:string;seenCursor:string};
+
 export type SessionSnapshot = {
+ commandExecutions?:HostCommandView[];
+ messageRead?:ConversationReadState;
 	superagent?:{task:SuperTask;goal?:WorkGoal;roleId?:string};
  naturalMemoryNotices?:{changeId:string;scope:string;entryId:string;revision:number;batchId?:string}[];
   commandStopNotices?: CommandStopNotice[];
@@ -331,10 +337,10 @@ export type SuperTask = {taskId:string;sessionId:string;projectId?:string;title:
 export type SuperProject = {projectId:string;routerSessionId:string;version:number};
 export type SuperWorkerActivity = {phase:'queued'|'thinking'|'tool'|'waiting_approval'|'waiting_input'|'waiting_external';label:string;toolName?:string;updatedAt:string;sourceMessageId?:string;sourceSessionId?:string};
 export type SuperWorker = {id:string;createdAt?:string;roleId:string;roleName:string;sessionId:string;task:SuperTask;assignmentState:string;parentWorkerId?:string;activity?:SuperWorkerActivity};
-export type SpecialistChannelInfo = {id:string;projectId:string;roleId:string;roleName:string;duties?:string;roleRevision?:number;sessionId:string;revision:number;createdAt:string;needsConfirmation?:boolean;running?:boolean;preparing?:boolean;completionCursor?:string;seenCompletionCursor?:string};
+export type SpecialistChannelInfo = {messageRead?:ConversationReadState;id:string;projectId:string;roleId:string;roleName:string;duties?:string;roleRevision?:number;sessionId:string;revision:number;createdAt:string;needsConfirmation?:boolean;running?:boolean;preparing?:boolean;completionCursor?:string;seenCompletionCursor?:string};
 export type SpecialistChannelEntry = {id:string;sourceSessionId:string;taskId?:string;workerId?:string;createdAt:string;message?:Message;card?:AICard;reply?:{turnId:string;state:'working'|'settled'}};
 export type SpecialistChannelPage = {replyPresentation?:'invocation';channel:SpecialistChannelInfo;entries:SpecialistChannelEntry[];nextCursor:string;workers:SuperWorker[];active:SessionSnapshot[];routing:boolean;queued:number};
-export type SuperWorkspace = {active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[];cursor?:number};
+export type SuperWorkspace = {pilotMessageRead?:ConversationReadState;active:boolean;project:SuperProject;workers:SuperWorker[];channels?:SpecialistChannelInfo[];cursor?:number};
 export type SRESnapshot = {featureVersion:number;enabled:boolean;tasks:SRETask[];pilot?:PilotSettings};
 
 export type ScheduleExecution={id:string;scheduled_at:string;started_at?:string;finished_at?:string;status:string;error?:string;task_id?:string;session_id?:string};

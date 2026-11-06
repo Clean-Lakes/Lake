@@ -1,10 +1,10 @@
-import type {AICard, TerminalHistory, TerminalSession, TerminalEntry} from '../../shared/contracts';
+import type {HostCommandView, AICard, TerminalHistory, TerminalSession, TerminalEntry} from '../../shared/contracts';
 
 export type MiniCommandScope = {owned:string[];calls:Array<{id:string;resource:string;command:string;startedAt:string;terminalId?:string;entryId?:string}>};
 
-export type MiniBoxScope = {session:string;terminals:TerminalSession[];startedAt:string;endedAt?:string;live:boolean;waiting?:boolean;connected:boolean;multiResource?:boolean;commandScope?:MiniCommandScope};
+export type MiniBoxScope = {taskId?:string;executions?:HostCommandView[];session:string;terminals:TerminalSession[];startedAt:string;endedAt?:string;live:boolean;waiting?:boolean;connected:boolean;multiResource?:boolean;commandScope?:MiniCommandScope};
 // Host inspection also executes real command blocks through the same terminal.
-export const isTerminalCommand = (card:AICard) => ['shell','terminal_execute_command','inspect_host'].includes(card.title ?? '');
+export const isTerminalCommand = (card:AICard) => ['Bash','shell','terminal_execute_command','inspect_host'].includes(card.title ?? '');
 
 export function miniEntries(history:TerminalHistory,scope:MiniBoxScope,resource:string) {
   if(history.terminal.resourceId!==resource || !history.terminal.generation)return [];
@@ -58,4 +58,15 @@ export function hasMultipleMiniResources(groups:Array<{resource?:{id?:string;kin
     if(resource?.id&&['local','ssh'].includes(resource.kind??'')&&group.entries.some(entry=>entry.card&&isTerminalCommand(entry.card)))resources.add(resource.id);
   }
   return resources.size>1;
+}
+
+// SDK executions are not PTY entries. Retain their original host identity and
+// require an exact operation/card match rather than matching command text.
+export function miniHostCommands(scope:MiniBoxScope,cards:AICard[],resource:string){
+ const operations=new Set(cards.flatMap(card=>{
+  const data=card.data as {operation_id?:string;resource_id?:string;taskId?:string}|undefined;
+  return data?.resource_id===resource&&data.taskId===scope.taskId&&data.operation_id?[data.operation_id]:[];
+ }));
+ return (scope.executions??[]).filter(row=>row.sessionId===scope.session&&row.taskId===scope.taskId&&row.resourceId===resource&&operations.has(row.operationId))
+  .sort((a,b)=>a.startedAt.localeCompare(b.startedAt)||a.id.localeCompare(b.id));
 }

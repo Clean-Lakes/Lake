@@ -71,7 +71,9 @@
     "skillRoot",
     "createSshResource",
     "editTerminalResource",
-    "hostKeyDecision"
+    "hostKeyDecision",
+    "readConversation",
+    "interruptExecution"
   ],
   "evidence": "runtime/zcode/server.test.cjs",
   "notes": "Candidate tests are not full functional parity evidence. Generic aiOperation is pending until every exposed operation has equivalent behavior, persistence and recovery. The explicit --dev --ts-candidate installation is user-authorized separately; the matrix does not authorize a normal default-build or release switch."

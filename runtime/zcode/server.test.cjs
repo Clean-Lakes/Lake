@@ -1704,6 +1704,68 @@ test("Skills preserve managed editing, enablement, external roots, restart and s
   assert.equal((await f.api("/api/settings/skills/external")).content.includes("External content"), true);
 });
 
+test('message unread receipts include Pilot and non-success specialist replies and survive stale reads/restart',async t=>{
+ const f=await fixture(t,'super-chat'),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{}),pilot=project.routerSessionId;
+ const workspace=()=>f.api(`/api/projects/${f.project.id}/superagent`);
+ assert.equal((await workspace()).pilotMessageRead.cursor,'');
+ f.app.store.addMessage(pilot,'user','own input does not notify');
+ const view=f.app.store.view(pilot);view.cards.push({id:'tool-only',type:'operation',title:'Bash',status:'running',at:new Date().toISOString()});f.app.store.put('views',pilot,view);
+ assert.equal((await workspace()).pilotMessageRead.cursor,'');
+ f.app.store.addMessage(pilot,'assistant','a useful answer');
+ const first=(await f.api(`/api/sessions/${pilot}/snapshot`)).messageRead.cursor;
+ assert.equal((await workspace()).pilotMessageRead.cursor,first);
+ f.app.store.addMessage(pilot,'assistant','newer reply while old read is in flight');
+ const latest=(await workspace()).pilotMessageRead.cursor;assert.ok(latest>first);
+ await f.api(`/api/sessions/${pilot}/messages-read`,'PUT',{cursor:'99999999999999999999'},409);
+ await f.api(`/api/sessions/${pilot}/messages-read`,'PUT',{cursor:first});
+ assert.deepEqual((await workspace()).pilotMessageRead,{cursor:latest,seenCursor:first});
+ await f.api(`/api/sessions/${pilot}/messages-read`,'PUT',{cursor:latest});
+ await f.api(`/api/sessions/${pilot}/messages-read`,'PUT',{cursor:first});
+ assert.equal((await workspace()).pilotMessageRead.seenCursor,latest);
+ // Isolated fixture channel, with a failed reply and no accepted task.
+ const session=await f.api(`/api/projects/${f.project.id}/sessions`,'POST',{});
+ const role={id:'unread-role',projectId:f.project.id,roleKey:'unread',name:'未读验证专员',duties:'fixture',revision:1};
+ f.app.store.put('superRoles',role.id,role);
+ f.app.store.put('superChannels',role.id,{id:'unread-channel',projectId:f.project.id,roleId:role.id,sessionId:session.id,createdAt:new Date().toISOString(),revision:1});
+ f.app.store.addMessage(session.id,'assistant','本次失败，已保留实际输出。');
+ const channel=(await workspace()).channels[0];assert.ok(channel.messageRead.cursor);assert.equal(channel.completionCursor,'');
+ const page=await f.api(`/api/sessions/${session.id}/channel`);assert.equal(page.channel.messageRead.cursor,channel.messageRead.cursor);
+ await f.api(`/api/sessions/${session.id}/messages-read`,'PUT',{cursor:channel.messageRead.cursor});
+ await f.restart();
+ const restored=await workspace();assert.deepEqual(restored.pilotMessageRead,{cursor:latest,seenCursor:latest});assert.deepEqual(restored.channels[0].messageRead,{cursor:channel.messageRead.cursor,seenCursor:channel.messageRead.cursor});
+ assert.equal(f.calls,0,'notification metadata never invokes a model or replays work');
+});
+
+test('Mini Box interrupts only its exact live SDK command and rejects stale or foreign handles',{skip:process.platform!=='darwin'},async t=>{
+ const {f,project,send}=await fullAgentTask(t,'super-full-pilot-stop');await send();
+ const session=project.routerSessionId;
+ const running=await until(()=>f.api(`/api/sessions/${session}/snapshot`),s=>s.commandExecutions?.some(command=>command.canStop));
+ const command=running.commandExecutions.find(command=>command.canStop);
+ assert.equal(command.sessionId,session);assert.ok(command.command);assert.equal(command.status,'running');
+ const ledgerBefore=JSON.stringify(f.app.store.list('superOperations'));
+ await f.api(`/api/sessions/${f.session.id}/executions/${command.id}/interrupt`,'POST',{generation:command.generation},409);
+ await f.api(`/api/sessions/${session}/executions/${command.id}/interrupt`,'POST',{generation:command.generation+1},409);
+ assert.equal(JSON.stringify(f.app.store.list('superOperations')),ledgerBefore);
+ await f.api(`/api/sessions/${session}/executions/${command.id}/interrupt`,'POST',{generation:command.generation},202);
+ await until(()=>f.app.store.get('commandExecutions',command.id),r=>r.status!=='running');
+ const stopped=f.app.store.get('commandExecutions',command.id);assert.ok(stopped.stopRequestedAt);assert.equal(stopped.status,'cancelled');
+ await f.api(`/api/sessions/${session}/executions/${command.id}/interrupt`,'POST',{generation:command.generation},409);
+ const snapshot=await f.api(`/api/sessions/${session}/snapshot`);assert.equal(snapshot.commandExecutions.find(row=>row.id===command.id).canStop,false);
+ assert.notEqual(snapshot.superagent.task.acceptanceState,'pass');
+ // The stop fence is command + task generation + resource, not command text
+ // alone. A separate target must remain available in the same task.
+ const original=f.app.store.require('resources',stopped.resourceId),other={...original,id:'independent-local-target'};
+ f.app.store.put('resources',other.id,other);
+ let dispatched=0;
+ const base={run:async()=>{dispatched++;return {status:'completed',exitCode:0,stdout:{text:'independent',bytes:11,truncated:false},stderr:{text:'',bytes:0,truncated:false},startedAt:new Date(),completedAt:new Date(),durationMs:0};}};
+ const actor={sessionId:session,taskId:stopped.taskId,workerId:stopped.workerId,generation:stopped.generation,guard(){}};
+ const plan=resource=>({resource,command:stopped.command,revision:f.app.execution.revision(resource),resourceRevision:1,readOnly:true,policy:'allow',risk:'readonly'});
+ await assert.rejects(()=>f.app.execution.bind(base,actor,plan(original),'stopped-retry').run({}),/用户已终止此命令/);
+ assert.equal(dispatched,0);
+ assert.equal((await f.app.execution.bind(base,actor,plan(other),'independent-target').run({})).exitCode,0);
+ assert.equal(dispatched,1);
+});
+
 test("ordinary Pilot conversation completes in one model request without routing or spawning a Worker", async (t) => {
   const f = await fixture(t, "super-chat"), project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
   await f.api(`/api/sessions/${project.routerSessionId}/messages`, "POST", { text: "你是谁" }, 202);

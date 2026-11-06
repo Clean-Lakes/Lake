@@ -1,3 +1,4 @@
+import {ConversationReadMarker} from './ConversationReadMarker';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {SessionSnapshot,SpecialistChannelEntry,SpecialistChannelPage,SuperWorker} from '../../shared/contracts';
 import {api,readableError} from './api';
@@ -126,5 +127,6 @@ export function SpecialistChannel({snapshot,connected,onTask,onTasks,onActivity,
     <SpecialistTaskControls snapshot={active} connected={connected}/>
    </section>;
   })}
+  <ConversationReadMarker session={session} state={page?.channel.messageRead} enabled={connected&&!error}/>
  </div></ObjectReferencesProvider>;
 }
