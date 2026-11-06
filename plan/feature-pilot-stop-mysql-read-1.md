@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake Runtime
-status: 'In progress'
+status: 'Completed'
 tags: [feature, zcode, mysql, superagent]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 在 develop `90aa1274` 上修复 Pilot 回复结束而 Worker 仍活动时缺失停止按钮的问题，并补充当前 TS 候选缺少的 MySQL 只读业务工具。复用已保存 Dev 连接、原任务/操作账本和公开 SDK，不修改上游、不执行旧任务、不放宽完整后端迁移门禁。
 
@@ -51,8 +51,8 @@ tags: [feature, zcode, mysql, superagent]
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-006 | 运行 TS、前端、后端、MySQL、任务与边界检查；签名安装 Dev，使用合成活动任务验证输入区停止；只读核对已保存 MySQL 连接状态，记录准确 SHA 与未验证的 K2 入口。依赖 TASK-002、TASK-005。 | | |
-| TASK-007 | 更新 README、验证记录及本计划，创建 develop PR，记录本地验证和回退方式。依赖 TASK-006。 | | |
+| TASK-006 | 运行 TS、前端、后端、MySQL、任务与边界检查；签名安装 Dev，使用合成活动任务验证输入区停止；只读核对已保存 MySQL 连接状态，记录准确 SHA 与未验证的 K2 入口。依赖 TASK-002、TASK-005。 | ✅ | 2026-11-06 |
+| TASK-007 | 更新 README、验证记录及本计划，创建 develop PR，记录本地验证和回退方式。依赖 TASK-006。 | ✅ | 2026-11-06 |
 
 ## 3. Alternatives
 
