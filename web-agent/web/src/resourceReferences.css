@@ -20,6 +20,13 @@
 :is(.ai-role-user,.message-user) .message-reference-token:has(> .resource-kind-icon) {
  color:color-mix(in srgb,var(--resource-reference-foreground) 65%,var(--user-message-foreground));
 }
+/* Dark workbenches use white human bubbles: darken type colors on that surface. */
+:root[data-theme="dark"] :is(.ai-role-user,.message-user) .message-reference-token:has(> .resource-kind-icon) {
+ color:color-mix(in srgb,var(--resource-reference-foreground) 55%,var(--user-message-foreground));
+}
+:root[data-theme="dark"] :is(.ai-role-user,.message-user) .message-reference-token:has(> .resource-kind-icon.kind-local) {
+ color:color-mix(in srgb,var(--user-message-foreground) 70%,transparent);
+}
 :is(.composer-reference-token,.message-reference-token):has(> .resource-kind-icon:is(.kind-ssh,.kind-apisix)) {
  --resource-reference-background:var(--info-soft);
  --resource-reference-foreground:var(--info);

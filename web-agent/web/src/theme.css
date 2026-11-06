@@ -109,6 +109,8 @@
   --surface-muted: #242424;
   --surface-hover: #2c2c2c;
   --surface-selected: #333333;
+  --user-message-background: #ffffff;
+  --user-message-foreground: #111111;
   --sidebar: #141414;
   --foreground: #dfdfdf;
   --text-secondary: var(--text-muted);
