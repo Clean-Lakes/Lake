@@ -74,15 +74,22 @@ test('two waiting task controls expose both original questions and approvals wit
  assert.match(renderToStaticMarkup(createElement(SpecialistTaskControls,{snapshot:snapshot('A'),connected:false})),/<fieldset[^>]*disabled=""/);
 });
 
-test('channel messages retain source identity without repeated execution links',()=>{
+test('channel task boundaries use exact task identity while keeping each task’s prose continuous',()=>{
  const at='2026-11-04T01:00:00Z';
  const entries:SpecialistChannelEntry[]=[
   {id:'reply',sourceSessionId:'worker-a',taskId:'task-a',createdAt:at,message:{id:'reply',sessionId:'worker-a',role:'assistant',text:'已取得磁盘证据',createdAt:at}},
+  {id:'more',sourceSessionId:'worker-a',taskId:'task-a',createdAt:at,message:{id:'more',sessionId:'worker-a',role:'assistant',text:'这是同一任务的后续说明',createdAt:at}},
   {id:'blocked',sourceSessionId:'worker-b',taskId:'task-b',createdAt:at,card:{id:'blocked',type:'error',status:'failed',content:'需要核实原操作',at}},
  ];
- const html=renderToStaticMarkup(createElement(SpecialistChannelEntries,{entries,resources:[]}));
+ const workers=['a','b'].map(id=>({id,roleName:'运维专员',sessionId:`worker-${id}`,task:{taskId:`task-${id}`,title:'检查服务器'}} as SuperWorker));
+ const original=JSON.stringify(entries);
+ const html=renderToStaticMarkup(createElement(SpecialistChannelEntries,{entries,resources:[],workers}));
  assert.ok(html.includes('已取得磁盘证据')&&html.includes('需要核实原操作'));
  assert.ok(html.includes('data-source-session="worker-a"')&&html.includes('data-task-id="task-b"'));
+ assert.equal((html.match(/role="separator"/g)??[]).length,2,'equal task titles still have distinct boundaries; follow-on prose has no extra divider');
+ assert.ok(html.includes('data-task-divider="task-a"')&&html.includes('data-task-divider="task-b"'));
+ assert.ok(html.includes('这是同一任务的后续说明'));
+ assert.equal(JSON.stringify(entries),original);
  assert.ok(!html.includes('执行详情')&&!html.includes('specialist-channel-source'));
 });
 
