@@ -32,6 +32,44 @@ function tokenize(command: string): { words: Array<{ word: string; operator: boo
   return { words, dynamic: dynamic || !!mode, substitution };
 }
 
+function programLookup(group: string[]): boolean {
+  return (
+    group[0] === "command" &&
+    ["-v", "-V"].includes(group[1] ?? "") &&
+    group.length >= 3 &&
+    group
+      .slice(2)
+      .every((word) => /^[A-Za-z_][A-Za-z0-9_.+-]{0,127}$/.test(word))
+  );
+}
+
+/** Narrow compatibility proof, not the broader confirmation-only inspection grammar. */
+export function isLiteralProgramDiscovery(command: string): boolean {
+  const parsed = tokenize(command),
+    groups: string[][] = [[]];
+  if (parsed.dynamic || parsed.substitution || parsed.words.length > 128)
+    return false;
+  for (const token of parsed.words) {
+    if (!token.operator) groups.at(-1)!.push(token.word);
+    else if ([";", "&&", "||"].includes(token.word)) groups.push([]);
+    else return false;
+  }
+  return (
+    groups.some(programLookup) &&
+    groups.every(
+      (group) =>
+        programLookup(group) || (group.length === 1 && group[0] === "hostname"),
+    )
+  );
+}
+
+function compileLookup(group: string[]): string {
+  // -p must not replace the PATH being inspected. Pass it as data into a fresh
+  // standard shell, bypassing user functions without losing /usr/local/bin etc.
+  const script = 'PATH=$1; export PATH; shift; command "$@"';
+  return `command -p sh -c ${quote(script)} lake-program-lookup "$PATH" ${group.map(quote).join(" ")}`;
+}
+
 // These bounded adapters only decide whether an *additional* danger prompt is
 // needed when ordinary commands are already authorized. They never confer a
 // readonly proof, a task grant, or permission to bypass an explicit project rule.
@@ -179,7 +217,7 @@ function inspectionGroup(original: string[], depth = 0): boolean {
     (group !== original && !["mysql", "mariadb"].includes(program))
   )
     return false;
-  if (program === "command") return ["-v", "-V"].includes(args[0] ?? "");
+  if (program === "command") return programLookup(group);
   if (["sh", "bash"].includes(program))
     return (
       args.length === 2 &&
@@ -249,7 +287,7 @@ export function commandPolicy(command: string): CommandPolicy {
   for (const group of groups) {
     const path = group[0]!, program = path.split("/").at(-1)!;
     const args = group.slice(1);
-    let safe = readPrograms.has(program) && (!path.includes("/") || /^\/(?:usr\/)?s?bin\/[^/]+$/.test(path));
+    let safe = (readPrograms.has(program) && (!path.includes("/") || /^\/(?:usr\/)?s?bin\/[^/]+$/.test(path))) || programLookup(group);
     if (program === "date") safe &&= args.every(arg => arg === "-u" || arg === "--utc" || arg.startsWith("+"));
     if (program === "hostname") safe &&= args.every(arg => ["-f", "-s", "-d", "-i", "-I", "-a", "--fqdn"].includes(arg));
     if (program === "file") safe &&= !args.some(arg => arg === "--compile" || /^-[^-]*C/.test(arg));
@@ -260,7 +298,7 @@ export function commandPolicy(command: string): CommandPolicy {
     if (!safe) return { risk: "write", riskReason: "该程序或参数可能改变状态，或暂不能可靠判定为只读；请先核对影响。" };
   }
   // command -p bypasses user-defined functions and a modified PATH in the persistent shell.
-  const safeCommand = groups.map((group, index) => `${index ? joins[index - 1] + " " : ""}command -p ${group.map(quote).join(" ")}`).join(" ");
+  const safeCommand = groups.map((group, index) => `${index ? joins[index - 1] + " " : ""}${programLookup(group) ? compileLookup(group) : `command -p ${group.map(quote).join(" ")}`}`).join(" ");
   return { risk: "readonly", riskReason: "完整命令仅包含可识别的只读检查，无写入或危险操作。", safeCommand };
 }
 

@@ -1,10 +1,61 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { commandPolicy } from "../../shared/command-policy";
+import {
+  commandPolicy,
+  isLiteralProgramDiscovery,
+} from "../../shared/command-policy";
+import { execFileSync } from "node:child_process";
+import {
+  mkdtempSync,
+  writeFileSync,
+  chmodSync,
+  existsSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 for (const command of [
   "command -v kubectl",
-  "command -V kubectl",
+  "command -V mysql mysqldump",
+  "hostname; command -v mysql; command -v kubectl; command -v mysqldump",
+]) {
+  test(`literal program discovery is a read-only observation: ${command}`, () => {
+    assert.equal(commandPolicy(command).risk, "readonly");
+    assert.ok(commandPolicy(command).safeCommand);
+    assert.equal(isLiteralProgramDiscovery(command), true);
+  });
+}
+
+test("compiled lookup preserves the inspected PATH and never executes discovered programs", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "lake-lookup-")),
+    executable = join(directory, "lake_fixture_lookup_cli"),
+    marker = join(directory, "executed");
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  writeFileSync(executable, `#!/bin/sh\nprintf executed > '${marker}'\n`);
+  chmodSync(executable, 0o700);
+  const policy = commandPolicy("command -v lake_fixture_lookup_cli");
+  const output = execFileSync("/bin/sh", ["-c", policy.safeCommand!], {
+    env: { PATH: directory + ":/usr/bin:/bin" },
+    encoding: "utf8",
+  });
+  assert.equal(output.trim(), executable);
+  assert.equal(existsSync(marker), false);
+  assert.throws(
+    () =>
+      execFileSync(
+        "/bin/sh",
+        [
+          "-c",
+          commandPolicy("command -v lake_fixture_absent_cli").safeCommand!,
+        ],
+        { env: { PATH: directory + ":/usr/bin:/bin" } },
+      ),
+    { status: 1 },
+  );
+});
+
+for (const command of [
   "command -v kubectl && kubectl config current-context && kubectl get pods -A -o wide",
   "command -v kubectl || which kubectl",
 ])
@@ -19,6 +70,8 @@ for (const command of [
   });
 
 for (const command of [
+  "command -v --help",
+  "command -v kubectl -p",
   "command kubectl get pods -A",
   "command -p kubectl get pods -A",
   "/tmp/command -v kubectl",
@@ -31,6 +84,20 @@ for (const command of [
   test(`lookup cannot hide a dangerous execution: ${command}`, () => {
     assert.equal(commandPolicy(command).risk, "dangerous");
   });
+
+for (const command of [
+  "hostname; command -v mysql; mysql -e 'SHOW DATABASES'",
+  "command -v mysql > fixture",
+  "command -v mysql | cat",
+  "hostname; command -v '$PATH'",
+  "command -v mysql;",
+  "command -v mysql &",
+  "hostname; command -v mysql\nrm -f fixture",
+]) {
+  test(`historical discovery proof excludes non-discovery syntax: ${command}`, () => {
+    assert.equal(isLiteralProgramDiscovery(command), false);
+  });
+}
 
 for (const command of [
   'sh -c "printf hello && pwd"',
