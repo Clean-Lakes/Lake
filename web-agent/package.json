@@ -20,11 +20,13 @@
     "package": "../scripts/build_lake.sh"
   },
   "dependencies": {
+    "@redis/client": "6.3.1",
     "@xterm/addon-fit": "0.10.0",
     "@xterm/xterm": "5.5.0",
     "diff": "8.0.2",
     "lucide-react": "^1.56.0",
     "mysql2": "3.24.6",
+    "pg": "8.23.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-markdown": "10.1.0",
@@ -32,6 +34,7 @@
   },
   "devDependencies": {
     "@types/node": "24.10.0",
+    "@types/pg": "8.20.0",
     "@types/react": "19.1.0",
     "@types/react-dom": "19.1.0",
     "@vitejs/plugin-react": "5.0.0",

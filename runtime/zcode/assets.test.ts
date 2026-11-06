@@ -12,6 +12,11 @@ function catalog(count = 140): Resource[] {
 }
 const source = (resources: Resource[]) => ({ projectId: "project", resources, sshRevision: (resource: Resource) => digest([resource.id, "current-configuration"]) });
 
+test('PostgreSQL resources expose their driver without claiming a MySQL execution binding or leaking credentials',()=>{
+ const resource:Resource={id:'pg',name:'订单库',projectId:'project',kind:'database',description:'',status:'available',settings:{driver:'postgres',database:'orders',credentialRef:'private-reference'}};
+ const result=listProjectAssets(source([resource]));assert.equal(result.assets[0].driver,'postgres');assert.equal(result.assets[0].database,'orders');assert.equal(result.assets[0].configuration_revision,undefined);assert.ok(!JSON.stringify(result).includes('private-reference'));
+});
+
 test("a target beyond the first 136 resources is directly discoverable by exact ID and Chinese name", () => {
   const resources = catalog();
   const first = listProjectAssets(source(resources));
