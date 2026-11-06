@@ -8,6 +8,14 @@ export type Project = {
   createdAt: string;
 };
 
+export type LayeredMemoryActor = { kind: "pilot" | "worker"; projectId: string; roleId?: string; sessionId?: string };
+export type LayeredMemoryScope = { key: string; kind: "user" | "project" | "role"; name: string; projectId?: string; roleId?: string };
+export type LayeredMemorySettings = { useEnabled: boolean; extractionEnabled: boolean; revision: number };
+export type LayeredMemoryEntry = { id: string; title: string; revision: number; contentHash: string; updatedAt: string;
+  body?: string; available?: boolean; sources?: { id: string; kind: string; createdAt: string; taskId?: string; messageId?: string; evidenceState?: "accepted" | "failed" }[] };
+export type LayeredMemoryView = { scope: LayeredMemoryScope; settings: LayeredMemorySettings; items: LayeredMemoryEntry[];
+  jobs: { id: string; state: string; createdAt: string; finishedAt?: string; error?: string; nativeExtraction?: boolean }[] };
+
 export type MemoryKnowledgeKind = "preference" | "procedure" | "topology" | "configuration" | "incident_lesson";
 export type MemoryTaskContext = {taskId?:string;workerId?:string;taskRevision?:number;goalRevision?:number;planRevision?:number;ledger?:{kind:string;id:string;stepId?:string;attemptId?:string;state?:string}[];truncated?:boolean};
 export type MemorySource = {taskContext?:MemoryTaskContext;sourceId?:string; kind:string; sessionId?:string; turnId?:string; messageId?:string; evidenceId?:string; at?:string; observedAt?:string; assertedAt?:string; excerpt?:string; outcome?:string};

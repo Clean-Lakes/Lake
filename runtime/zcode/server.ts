@@ -28,11 +28,13 @@ import { LakeSuperagent } from "./superagent";
 import { applyLegacyMigration, importLegacySSH, loadLegacyView } from "./migration";
 import { digest } from "./tasks";
 import { LakeSecurity } from "./security";
+import { LakeMemory } from "./memory";
 import { LakeExtensions } from "./extensions";
 import {LakeSSH} from "./ssh";
 import { LakeTerminals } from "./terminal";
 import { commandPolicy } from "../../web-agent/shared/command-policy";
 export { previewLegacyMigration, rollbackMigration } from "./migration";
+export { LakeMemory } from "./memory";
 
 export type ServerOptions = { home: string; data: string; port: number; staticRoot: string; development?: boolean; importLegacy?: boolean };
 const encode = (value: unknown) => JSON.stringify(value);
@@ -143,6 +145,7 @@ export async function startLakeServer(options: ServerOptions) {
   let agents: LakeAgents | undefined;
   let superagent: LakeSuperagent | undefined;
   let security: LakeSecurity | undefined;
+  let memory: LakeMemory | undefined;
   let extensions: LakeExtensions | undefined;
   let terminals: LakeTerminals | undefined;
   let ssh:LakeSSH|undefined;
@@ -276,6 +279,7 @@ export async function startLakeServer(options: ServerOptions) {
           supportsImageInput: model?.supportsImageInput ?? false,
           terminalMode: terminals?.supported ? "pty" : "command",
           aiRuntime: "zcode",
+          memoryEngine: "zcode-layered",
           backendRuntime: "typescript",
           upstreamVersion: "3.17.2",
           recoveryReadOnly: security?.readOnly() ?? true,
@@ -284,6 +288,20 @@ export async function startLakeServer(options: ServerOptions) {
       let result: unknown;
       let status = 200;
       if (path[1] === "bootstrap") result = bootstrap();
+      else if (path[1] === "memory") {
+        if (!memory) throw new HttpError(503, "记忆服务正在启动");
+        const projectId = url.searchParams.get("projectId") || undefined;
+        if (path.length === 2 && method === "GET") result = { engine: "zcode", scopes: memory.scopes(projectId) };
+        else if (path[2] === "scopes" && path[3]) {
+          const scope = memory.resolveScope(path[3], projectId);
+          if (path.length === 4 && method === "GET") result = memory.view(scope);
+          else if (path[4] === "settings" && path.length === 5 && method === "PATCH") result = memory.setSettings(scope, data);
+          else if (path[4] === "entries" && path.length === 5 && method === "POST") result = await memory.remember(scope, data);
+          else if (path[4] === "entries" && path.length === 6 && method === "PUT") result = await memory.remember(scope, data, path[5]);
+          else if (path[4] === "entries" && path.length === 6 && method === "DELETE") result = await memory.forget(scope, path[5], data.expectedRevision);
+          else throw new HttpError(405, "不支持此记忆操作");
+        } else throw new HttpError(404, "记忆接口不存在");
+      }
       else if (path[1] === "catalog") result = store.catalog();
       else if (path[1] === "commands" && path[2] === "policy" && method === "POST") result = commandPolicy(String(data.command ?? ""));
       else if (path[1] === "superagent" && path[2] === "lifecycle") {
@@ -551,7 +569,7 @@ export async function startLakeServer(options: ServerOptions) {
             (data.references?.length ?? 0)
           )
             throw new HttpError(501, "附件与资源引用尚未迁移完成");
-          result = await superagent.send(sessionId, String(data.text ?? ""), data.taskId);
+          result = await superagent.send(sessionId, String(data.text ?? ""), data.taskId, data.ignoreProjectMemory === true);
           status = 202;
         } else if (path[3] === "message-queue") {
           if (method !== "GET") throw new HttpError(501, "消息队列尚未接入");
@@ -649,6 +667,7 @@ export async function startLakeServer(options: ServerOptions) {
     closed = true;
     draining = true;
     await superagent?.close();
+    await memory?.close();
     await agents?.close();
     await terminals?.close();
     await ssh?.close();
@@ -675,6 +694,13 @@ export async function startLakeServer(options: ServerOptions) {
       await importLegacySSH(store,ssh);
     }
     superagent = new LakeSuperagent(store, agents, security, extensions,ssh);
+    memory = new LakeMemory(store, () => security!.check(), value => agents!.redact(ssh!.scrub(extensions!.scrub(value))));
+    try { await memory.initialize(); } catch { memory.disable("记忆文件需要核实，当前暂停记忆功能；原记录保留，普通新任务仍可运行"); }
+    agents.memory = memory;
+    memory.runNative = work => agents!.runMemory(work);
+    memory.isForegroundBusy = () => agents!.foregroundBusy();
+    memory.validateOperation = operation => superagent!.ledger.revalidate?.(operation);
+    memory.wake();
     await new Promise<void>((resolveListen, reject) => {
       server.once("error", reject);
       server.listen(options.port, "localhost", () => resolveListen());
@@ -690,7 +716,7 @@ export async function startLakeServer(options: ServerOptions) {
     await close();
     throw error;
   }
-  return { origin, token, store, agents, superagent, close };
+  return { origin, token, store, agents, superagent, memory, close };
 }
 
 async function main() {
