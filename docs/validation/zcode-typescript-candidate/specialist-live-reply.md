@@ -20,12 +20,14 @@
 | `npm --prefix web-agent run build:web` | 通过；保留现有 Vite 大块提示 |
 | `node third_party/zcode/node_modules/typescript/bin/tsc -p runtime/zcode/tsconfig.json` | 通过 |
 | `node runtime/zcode/build.mjs` | 通过 |
-| `node --test runtime/zcode/server.test.cjs runtime/zcode/mysql.test.cjs runtime/zcode/router-context.test.cjs` | 116/116 |
+| `node --test runtime/zcode/server.test.cjs runtime/zcode/mysql.test.cjs runtime/zcode/router-context.test.cjs` | 117/117 |
 | 固定 tsx 执行 tasks/assets/activity/memory/superagent-lifecycle 测试 | 57/57 |
 | `python3 scripts/check_adk_runtime_boundary.py` | 通过 |
 | `python3 -m unittest discover -s scripts -p 'test_dev_*py'` | 16/16 |
 
 SDK 集成用本地协议夹具启动真实 ZCode Worker：连续两次 `list_project_files` 读取隔离临时项目，保留两段进展和两次实际操作。频道只返回一份 canonical 总结，作者绑定准确 RootTurnID；重启后结果相同且无新增模型调用。
+
+旧 outbox 曾把具体回复和频道暂停提示分开保存。按准确 outbox key 读取同一份 Pilot 报告投影完整结论，避免收拢过程后只剩提示、丢失真实发现；原消息与执行记录保持不变。旧 Go 后端通过缺省 API 能力标记沿用原投影，不用 RootTurnID 是否存在猜测宿主类型。
 
 ## 实页复核
 

@@ -1375,13 +1375,28 @@ export class LakeSuperagent implements AgentHost {
     const workers = this.channelTasks(sessionId), sessions = new Set([sessionId, ...workers.map((worker) => worker.sessionId)]);
     let entries: SpecialistChannelPage["entries"] = [];
     const sources:{snapshot:SessionSnapshot;worker:SuperWorker;active:boolean}[]=[];
+    // Older outboxes split the Worker answer and a channel-only status notice.
+    // Reuse the exact sibling Pilot report, never discard its concrete findings
+    // while compacting narration. This is read-only; saved messages stay intact.
+    const project=this.store.require<SuperProject>('superProjects',channel.projectId),reportBodies=new Map<string,Message>();
+    for(const report of this.store.list<{key:string;workerId:string}>('superReports')){
+      const worker=workers.find(worker=>worker.id===report.workerId);
+      if(!worker||!report.key)continue;
+      const sibling=this.store.get<Message>('messages','report_'+digest([report.key,project.routerSessionId]));
+      if(sibling?.author?.workerId===worker.id&&sibling.author.taskId===worker.task.taskId)
+        reportBodies.set('report_'+digest([report.key,sessionId]),sibling);
+    }
     for (const source of sessions) {
       await loadLegacyView(this.store, source, (value) => this.agents.redact(value));
       const worker = workers.find((worker) => worker.sessionId === source);
       const snapshot = this.store.snapshot(source);
       if(worker&&snapshot.session.workspaceRole!=='legacy')sources.push({snapshot,worker,active:this.active.has(worker.id)||!!this.pendingInteraction(source)});
-      for (const message of snapshot.messages) entries.push({ id: canonical(["message", source, message.id]), sourceSessionId: source,
-        taskId: worker?.task.taskId, workerId: worker?.id, createdAt: message.createdAt, message });
+      for (const original of snapshot.messages){
+        const sibling=source===sessionId&&!original.author?.rootTurnId?reportBodies.get(original.id):undefined;
+        const message=sibling?{...original,text:sibling.text}:original;
+        entries.push({ id: canonical(["message", source, message.id]), sourceSessionId: source,
+          taskId: worker?.task.taskId, workerId: worker?.id, createdAt: message.createdAt, message });
+      }
       // Projection retires intermediate prose; the original task keeps every
       // card for the inspector. Legacy records without SDK roots stay intact.
       if (worker) for (const card of snapshot.ai?.cards ?? [])

@@ -2422,3 +2422,21 @@ test('specialist SDK progress settles into one canonical summary while the inspe
  assert.deepEqual(restored.entries.filter(e=>e.reply),replies);
  assert.equal(f.calls,calls,'reading restored summaries must never invoke a model or replay operations');
 });
+
+test('compacting a pre-metadata channel report preserves its exact sibling findings without rewriting history',async t=>{
+ const f=await fixture(t,'super-incomplete-report'),project=await f.api(`/api/projects/${f.project.id}/superagent`,'POST',{});
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'检查服务器并保留实际发现。'},202);
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),s=>s.workers[0]?.assignmentState==='parked');
+ const channelId=state.channels[0].sessionId,worker=state.workers[0];
+ const saved=f.app.store.messages(channelId).find(m=>m.author?.taskId===worker.task.taskId);
+ const legacy={...saved,text:'这次检查还没完成，已暂停。',author:{...saved.author}};
+ delete legacy.author.rootTurnId;f.app.store.put('messages',legacy.id,legacy);
+ const before=JSON.stringify(f.app.store.get('messages',legacy.id)),calls=f.calls;
+ const page=await f.api(`/api/sessions/${channelId}/channel`);
+ assert.equal(page.replyPresentation,'invocation');
+ const replies=page.entries.filter(e=>e.reply);
+ assert.equal(replies.length,1);assert.match(replies[0].message.text,/暂时查不到 CPU 和内存/);
+ assert.equal(replies[0].message.id,saved.id);
+ assert.equal(JSON.stringify(f.app.store.get('messages',legacy.id)),before);
+ assert.equal(f.calls,calls);
+});
