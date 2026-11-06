@@ -3,13 +3,34 @@ import test from 'node:test';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {AITranscript} from '../src/AIPanel';
-import {pilotReplyContinuations} from '../src/replyGrouping';
+import {pilotReplyContinuations,replyRoleBreaks} from '../src/replyGrouping';
 import type {TranscriptEntry} from '../src/timeline';
 import type {SessionSnapshot,SpecialistReplyAuthor} from '../../shared/contracts';
 
 const at=(n:number)=>`2026-11-05T01:00:0${n}Z`;
 const prose=(id:string,n:number):TranscriptEntry=>({id,at:at(n),card:{id,type:'message',status:'completed',at:at(n),content:id}});
 const author:SpecialistReplyAuthor={kind:'specialist',name:'知识库专员',workerId:'w',taskId:'t',sessionId:'s'};
+
+test('extra role spacing follows exact sender changes while preserving same-role task replies',()=>{
+ const report=(id:string,n:number,roleId:string,workerId=id):TranscriptEntry=>({id,at:at(n),message:{id,sessionId:'pilot',role:'assistant',text:id,createdAt:at(n),author:{...author,roleId,workerId}}});
+ const entries=[prose('pilot-first',1),prose('pilot-continued',2),report('role-a',3,'a'),report('same-role-new-task',4,'a'),report('role-b-same-name',5,'b'),prose('pilot-return',6)];
+ const original=JSON.stringify(entries);
+ assert.deepEqual([...replyRoleBreaks(entries,new Set())],['role-a','role-b-same-name','pilot-return']);
+ assert.deepEqual([...replyRoleBreaks(entries,new Set(['role-b-same-name']),new Set(['same-role-new-task']))],['role-a','pilot-return']);
+ assert.equal(JSON.stringify(entries),original);
+});
+
+test('Pilot-to-specialist and specialist-to-Pilot boundaries receive spacing without duplicating identities',()=>{
+ const messages=[{id:'user',sessionId:'pilot',role:'user',text:'检查',createdAt:at(0)},
+  {id:'pilot',sessionId:'pilot',role:'assistant',text:'已安排检查。',createdAt:at(1)},
+  {id:'report',sessionId:'pilot',role:'assistant',text:'这是实际结果。',createdAt:at(2),author:{...author,roleId:'role'}},
+  {id:'pilot-return',sessionId:'pilot',role:'assistant',text:'收到检查结果。',createdAt:at(3)}];
+ const snapshot={session:{id:'pilot'},resources:[],actions:[],specialists:[],evidence:[],messages} as SessionSnapshot;
+ const html=renderToStaticMarkup(createElement(AITranscript,{snapshot,assistantIdentity:{name:'Pilot',pilot:true},onSpecialist(){}}));
+ assert.equal((html.match(/is-role-break/g)??[]).length,2);
+ assert.equal((html.match(/aria-label="与知识库专员继续沟通"/g)??[]).length,1);
+ for(const text of messages.map(message=>message.text))assert.ok(html.includes(text));
+});
 test('Pilot sender grouping preserves text and stops at tools, errors, users and authored reports',()=>{
  const first=prose('first',1),second=prose('second',2);
  assert.deepEqual([...pilotReplyContinuations([first,second],new Set())],['second']);

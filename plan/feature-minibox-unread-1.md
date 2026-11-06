@@ -18,6 +18,7 @@ Restore the existing Mini Box in task execution details and show green unread do
 
 - **REQ-001**: Render resource-bound Bash and inspect_host records in Mini Box, retaining raw receipts and child execution identity.
 - **REQ-002**: Persist message revisions and read receipts for Pilot and specialist channels; include failed replies and pending questions, independently of task acceptance and running indicators.
+- **REQ-003**: Running/preparing spinners and unread dots are visually exclusive; retain unread receipts until content is viewed. Different adjacent reply roles receive 12px additional spacing.
 - **SEC-001**: Interrupt only the exact live command owned by the original session, task, generation and unchanged resource configuration. Scrub projected output. Do not change task acceptance or reconcile unknown operations.
 - **CON-001**: Branch from origin/develop; PR targets develop and remains unmerged until explicit authorization. Build only signed Lake Dev, preserving other pending Dev changes and release isolation.
 - **GUD-001**: Follow docs/ui-guidelines.md; retain Mini Box geometry and shared Glyph icons. A viewed conversation is read only when loaded content is visible at its end.
@@ -41,7 +42,7 @@ Restore the existing Mini Box in task execution details and show green unread do
 |------|-------------|-----------|------|
 | TASK-003 | Add runtime/zcode/conversation-reads.ts; project cursors in workspace/channel/snapshot responses; validate monotonic read acknowledgements. | ✅ | 2026-11-06 |
 | TASK-004 | Add visible conversation read marker and Pilot/specialist green indicators; retain legacy completion protocol compatibility. | ✅ | 2026-11-06 |
-| TASK-005 | Run frontend and runtime checks, verify Lake Dev command display and unread behavior, record exact tested SHA, and open PR against develop. Automated checks and signed build passed; final native attention/light-dark/narrow checks await manual Mac unlock. See docs/validation/zcode-typescript-candidate/minibox-unread.md. | | |
+| TASK-005 | Run frontend and runtime checks, verify Lake Dev command display and unread behavior, record exact tested SHA, and open PR against develop. Automated checks and signed build passed; final native attention/light-dark/narrow checks continue after manual Mac unlock; include the requested exclusive status indicators and role spacing. See docs/validation/zcode-typescript-candidate/minibox-unread.md. | | |
 
 ## 3. Alternatives
 

@@ -70,7 +70,7 @@ test('specialist sidebar prioritizes live execution, keeps confirmations and cle
  assert.match(executing, /class="pilot-worker-running"/);
  assert.match(executing, /activity-indicator/);
  assert.match(executing, /class="pilot-worker-confirmation"/);
- assert.match(executing, /class="pilot-worker-unread"/);
+ assert.doesNotMatch(executing, /class="pilot-worker-unread"/);
 
  const finished = render(unread);
  assert.match(finished, /class="pilot-worker-unread"/);
@@ -84,11 +84,16 @@ test('specialist sidebar prioritizes live execution, keeps confirmations and cle
 });
 
 
-test('Pilot and specialist message dots are independent of completion, running and current route',()=>{
+test('unread messages persist while running and preparing indicators take visual priority',()=>{
  const state={cursor:'00000000000000000002',seenCursor:'00000000000000000001'};
  const workspace:SuperWorkspace={active:true,project:{projectId:'project',routerSessionId:'pilot',version:1},pilotMessageRead:state,workers:[worker],channels:[{id:'channel',sessionId:'role-channel',projectId:'project',roleId:worker.roleId,roleName:worker.roleName,revision:1,createdAt:'',running:true,messageRead:state}]};
  const render=(next=workspace)=>renderToStaticMarkup(createElement(PilotWorkspace,{workspace:next,selectedId:'role-channel',error:'',onPilot(){},onWorker(){}}));
- assert.equal((render().match(/class="pilot-worker-unread"/g)??[]).length,2);
+ assert.equal((render().match(/class="pilot-worker-unread"/g)??[]).length,1,'only Pilot has a green dot while the specialist spins');
+ const preparing={...workspace,channels:workspace.channels!.map(channel=>({...channel,running:false,preparing:true}))};
+ assert.equal((render(preparing).match(/class="pilot-worker-unread"/g)??[]).length,1);
+ const settled={...workspace,channels:workspace.channels!.map(channel=>({...channel,running:false,preparing:false}))};
+ assert.equal((render(settled).match(/class="pilot-worker-unread"/g)??[]).length,2,'specialist unread reappears after work settles');
+ assert.deepEqual(settled.channels[0].messageRead,state,'display priority must not mark a message read');
  assert.match(render(),/有新消息未读/);
  assert.match(render(),/pilot-worker-running/);
  assert.doesNotMatch(render({...workspace,pilotMessageRead:{...state,seenCursor:state.cursor},channels:workspace.channels!.map(channel=>({...channel,messageRead:{...state,seenCursor:state.cursor}}))}),/class="pilot-worker-unread"/);
