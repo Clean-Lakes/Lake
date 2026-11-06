@@ -66,6 +66,8 @@ flowchart TB
 
 ## 2. Memory 新主线：Agent 自主管理本地文件
 
+2026-11-06 用户确认 TS/ZCode 采用原生 Memory 引擎并保留 Super-agent 分层：用户明确保存的跨项目偏好、项目共享和稳定 RoleID 经验。TS 候选通过公开 AgentRuntime 的原生提取、私有暂存与 Lake 单一发布者接入；Provider 每次读取重验范围与来源，临时 child 不建立长期库。项目及角色共用积累/使用开关，新 Home 默认关闭；全局偏好仅明确保存。设置支持来源、更正和遗忘，旧 Go 数据不自动导入。当前边界及验收见 [TS 分层记忆](docs/design/zcode-layered-memory.md)和[实施计划](plan/feature-zcode-layered-memory-1.md)。以下 ADK/FM 描述保留旧 Go 产品及历史计划，TS 不另建并行 ADK 提取器；未验收平台和完整迁移仍保持原门禁。
+
 - 当前唯一开发主计划为 [Agent 本地文件记忆](plan/feature-agent-file-memory-1.md)。旧项目记忆、运维 V2、自然记忆和三模块旧对接任务路线已替代；历史交付事实与必要审计保留，未完成项不再按旧内容继续开发。
 - 目标采用两阶段后台 ADK Agent：会话/任务来源提取 → SQLite 中间结果与运行状态 → 文件整理 Agent → 本地摘要、手册、来源总结及方法资料。程序安排资格、调度和恢复，模型自主组织知识；用户控制开关、查看、纠正和删除，不建设逐条审核、采用和晋升平台。
 - 当前源码仍是 SQLite 记忆正文与 Markdown 投影，新流水线尚未实现。目标中 SQLite 保留同意、提取结果、outbox、租约、用量和抑制状态；文件保存 Agent 整理的成品。迁移不能让两套成品长期并行写入或重复注入，也不要求所有历史字段都改成文件资产。

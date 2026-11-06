@@ -20,6 +20,8 @@ tags: [memory, agent, files, migration, retirement, adk]
 
 FM-00 已经 PR #163 合入；FM-01 首批遗留清理已经 PR #164 合入，V2 自动提取已由 #167 合入，第三批继续移除 V2 手动管理入口与 UI。新文件流水线、工作区协议和切换尚未交付，旧有效链路继续运行。后续各批从最新 develop 建分支，经 PR 与本地验证交付。
 
+2026-11-06 TS/ZCode 方向更新：用户授权复用 ZCode 原生 Memory，按本方案保留用户/项目/RoleID 归属、来源、单写者、独立开关与撤回合同。TS 的执行与发布实现见 [分层原生记忆计划](feature-zcode-layered-memory-1.md)；不再为 TS 新建 ADK 提取/整理引擎。本文未完成的旧 Go 阶段不因 TS 候选实现自动勾选，旧数据迁移与真实质量验收仍保留。
+
 ## 1. 目标与架构
 
 ```mermaid

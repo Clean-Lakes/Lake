@@ -19,6 +19,7 @@ import { toolActivityLabel } from "./activity";
 type Role = { id: string; projectId: string; roleKey: string; name: string; duties: string; revision: number; deletedAt?: string };
 type Channel = { id: string; projectId: string; roleId: string; sessionId: string; revision: number; createdAt: string };
 type InputEvent = { id: string; projectId: string; sessionId: string; messageId: string; payload: string;
+  ignoreMemory?: boolean;
   preferredRoleId?: string; explicitTaskId?: string; disposition: "pending" | "routed" | "blocked" | "stopped";
   receivedAt: string; revision: number; error?: string };
 type Worker = { id: string; projectId: string; roleId: string; roleSnapshot: Role; sessionId: string; taskId: string;
@@ -409,11 +410,11 @@ export class LakeSuperagent implements AgentHost {
       originalDeliverable: prior?.originalDeliverable ?? decision.quote, summary: clip(this.agents.redact(source.summary ?? ""), 4096),
       resourceIds, historicalContextOnly: true };
   }
-  async send(sessionId: string, value: string, explicitTaskId?: string) {
+  async send(sessionId: string, value: string, explicitTaskId?: string, ignoreMemory = false) {
     text(value, "message", 256000);
     await this.agents.prepareRedaction();
     const source = this.store.session(sessionId), project = this.store.get<SuperProject>("superProjects", source.projectId);
-    if (!project) return this.agents.send(sessionId, value);
+    if (!project) return this.agents.send(sessionId, value, { ignoreMemory });
     const channel = this.channelFor(sessionId), worker = this.workerFor(sessionId);
     const preferredRoleId = channel?.roleId ?? worker?.roleId;
     if (preferredRoleId) this.role(source.projectId, preferredRoleId);
@@ -423,8 +424,9 @@ export class LakeSuperagent implements AgentHost {
     }
     const message = this.store.addMessage(sessionId, "user", this.agents.redact(value));
     const event: InputEvent = { id: id(), projectId: source.projectId, sessionId, messageId: message.id, payload: this.agents.redact(value),
-      preferredRoleId, explicitTaskId: explicitTaskId ?? worker?.taskId, disposition: "pending", receivedAt: message.createdAt, revision: 1 };
+      preferredRoleId, explicitTaskId: explicitTaskId ?? worker?.taskId, disposition: "pending", receivedAt: message.createdAt, revision: 1, ignoreMemory };
     this.store.put("superInputs", event.id, event); this.notify(sessionId, "message");
+    this.agents.memory?.captureUser(sessionId, message.id, preferredRoleId, ignoreMemory);
     this.schedule();
     return { ...message, pilotSessionId: channel?.sessionId ?? project.routerSessionId };
   }
@@ -469,7 +471,7 @@ export class LakeSuperagent implements AgentHost {
           adapters: { ssh: !!this.ssh, extensions: !!this.extensions } });
         const { input, complete, eventIds } = context;
         this.batches.set(project.routerSessionId, { eventIds, complete, input });
-        try { await this.agents.send(project.routerSessionId, events.filter((event) => eventIds.includes(event.id)).map((event) => event.payload).join("\n"), { input, recordUser: false }); }
+        try { await this.agents.send(project.routerSessionId, events.filter((event) => eventIds.includes(event.id)).map((event) => event.payload).join("\n"), { input, recordUser: false, ignoreMemory: events.some(event => event.ignoreMemory) }); }
         catch (error) { this.routerFinished(project.routerSessionId, String(error)); }
       }
     }
@@ -504,7 +506,8 @@ export class LakeSuperagent implements AgentHost {
         predecessor: this.store.get<TaskPredecessor>("superTaskPredecessors", worker.taskId),
         humanControl: resume ? { command: resume.command, at: resume.at } : undefined,
         followups: followups.map((event) => ({ id: event.id, text: event.payload })) });
-      try { await this.agents.send(worker.sessionId, "[Task assignment] " + goal.title, { input, recordUser: false, recordAssistant: false }); }
+      try { await this.agents.send(worker.sessionId, "[Task assignment] " + goal.title, { input, recordUser: false, recordAssistant: false,
+        ignoreMemory: worker.invocationInputIds.some(eventId => this.store.get<InputEvent>("superInputs", eventId)?.ignoreMemory === true) }); }
       catch (error) { this.workerFinished(worker.sessionId, String(error)); }
     }
   }
@@ -519,6 +522,7 @@ export class LakeSuperagent implements AgentHost {
   profile(sessionId: string): HostProfile | undefined {
     const project = this.projectFor(sessionId);
     if (project) return { version: "router:context-v2:" + project.projectId, systemPrompt: superRouterPrompt,
+      memoryActor: { kind: "pilot", projectId: project.projectId },
       tools: this.routerEntries(sessionId), allowlist: routerTools,
       projectRequest: (request) => this.projectRouterRequest(project.projectId, request) };
     const worker = this.workerFor(sessionId);
@@ -529,6 +533,7 @@ export class LakeSuperagent implements AgentHost {
     const router = this.store.require<SuperProject>("superProjects", worker.projectId), permissions = this.store.session(router.routerSessionId).options;
     return { version: `${worker.id}:${generation}:host-v3:${managed}`, systemPrompt: superWorkerPrompt,
       subagents: true, taskId: worker.taskId, workerId: worker.id,
+      memoryActor: { kind: "worker", projectId: worker.projectId, roleId: worker.roleId },
       tools: [...entries, ...this.extensionEntries(worker),...this.hostEntries(worker)], allowlist: [...entries.map((entry) => entry.metadata.name),...(this.ssh?hostTools:[]), ...(this.extensions ? extensionTools : []), ...childControlTools, "Read", ...(this.ledger.get(worker.taskId).mode === "plan" ? [] : ["Write", "Edit"])].filter((name) => this.ledger.get(worker.taskId).mode !== "plan" || name !== "call_mcp_tool"),
       permissionRules: { scope: "session", version: 1,
         allow: [...(permissions.silentWriteFiles === true ? [{ toolName: "Write" }, { toolName: "Edit" }] : []),
@@ -1000,6 +1005,7 @@ export class LakeSuperagent implements AgentHost {
     const presentation = deferredFailure ? { body: deferredFailure, channelBody: deferredFailure } : this.reportPresentation(goal, reply, error);
     if (!this.store.get("superPendingReports", reportKey)) this.store.put("superPendingReports", reportKey, { taskId: goal.id, revision: goal.revision, snapshot: structuredClone(goal), presentation, createdAt: now() });
     this.deliverReports();
+    this.agents.memory?.captureTask(goal.id);
     this.changed(sessionId); this.schedule();
   }
   private queueFollowups(worker: Worker) {
@@ -1072,6 +1078,7 @@ export class LakeSuperagent implements AgentHost {
     this.store.delete("superPendingReports", digest([pending.taskId, pending.revision]));
     }
   }
+
   private projectRouterRequest<T>(projectId: string, request: T): T {
     // Current input already contains bounded channel dialogue and report facts.
     // Remove only acknowledged complete SDK groups, retaining original archives.
@@ -1124,6 +1131,7 @@ export class LakeSuperagent implements AgentHost {
     if ((!role.deletedAt && role.revision !== revision) || (role.deletedAt && role.revision !== revision + 1))
       throw new HttpError(409, "专员信息已更新，请刷新后重试");
     if (!role.deletedAt) { role.deletedAt = now(); role.revision++; this.store.put("superRoles", role.id, role); }
+    await this.agents.memory?.retireRole(projectId, roleId);
     await this.stopChannel(this.store.require<Channel>("superChannels", role.id).sessionId);
     this.notify(this.store.require<SuperProject>("superProjects", projectId).routerSessionId, "specialist");
     return { deleted: true };

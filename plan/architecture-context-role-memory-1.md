@@ -20,6 +20,8 @@ tags: [architecture, context, memory, specialist, pilot, adk]
 
 2026-11-05 CM 首批：短任务摘要、准确 hash 读取、请求级历史省略、闲置恢复与预算占用已接通；身份及 Role Memory 范围提供基础契约。Task 完整工作集和 FM 角色发布/使用/生命周期仍未交付。具体字段、限制与验证分别见[契约说明](../docs/design/context-role-memory-contract.md)及[验收记录](../docs/validation/lake-context-role-memory.md)，本批不标为全部阶段完成。
 
+2026-11-06 TS/ZCode 方向更新：用户授权复用 ZCode 原生 Memory，按本方案保留用户/项目/RoleID 归属、来源、单写者、独立开关与撤回合同。TS 的执行与发布实现见 [分层原生记忆计划](feature-zcode-layered-memory-1.md)；不再为 TS 新建 ADK 提取/整理引擎。本文未完成的旧 Go 阶段不因 TS 候选实现自动勾选，旧数据迁移与真实质量验收仍保留。
+
 ## 1. Requirements & Constraints
 
 - **REQ-001**: 专员知识归属使用 `storeID + projectID + RoleID`，不使用显示名、头像、WorkerID 或聊天标题作为身份。改名保留知识；新建同名角色不继承旧角色知识。

@@ -35,7 +35,7 @@ open "$HOME/Applications/Lake Dev.app"
 
 ### Super-agent 增量
 
-`superagent.ts` 将真实 Pilot Router、长期专员管理、独立任务 Worker、连续频道、分页与当前权限接入公开 ZCode AgentRuntime。Router 只持有路由/元数据工具，不能执行资源操作。Worker 目前可在本项目独立工作区使用 Read/Write/Edit、真实文件清单和任务工具；Worker 已增量接入项目 MCP 目录/调用和 Skills 读取；本机手动 PTY 与 Worker 执行权限分开。SSH 手动 PTY、原 Dev 凭据/主机指纹和固定主机只读检查已增量接入；Agent 终端交接、远程服务管理和 Memory 仍未接通，不可绕过。职责按建单版本冻结，任务不受专员后续改名影响。
+`superagent.ts` 将真实 Pilot Router、长期专员管理、独立任务 Worker、连续频道、分页与当前权限接入公开 ZCode AgentRuntime。Router 只持有路由/元数据工具，不能执行资源操作。Worker 目前可在本项目独立工作区使用 Read/Write/Edit、真实文件清单和任务工具；Worker 已增量接入项目 MCP 目录/调用和 Skills 读取；本机手动 PTY 与 Worker 执行权限分开。SSH 手动 PTY、原 Dev 凭据/主机指纹和固定主机只读检查已增量接入；Agent 终端交接、远程服务管理仍未接通；分层 Memory 的新入口见下文，不可绕过。职责按建单版本冻结，任务不受专员后续改名影响。
 
 `tasks.ts` 保存原目标、步骤、独立尝试、实际派发操作及验收。普通任务自动注册计划；Plan 必须确认且始终只读。步骤验收和最终汇总核对真实操作回执、项目/任务/尝试、原修订、当前权限、资源连接修订与输出 hash。模型文字不能验收；只读失败可以在原目标建立带 retryOf 的新诊断尝试，写入不明仍为 unknown。停止和重启使原 owner/审批失效，旧操作不重放；报告使用事务 outbox 幂等进入 Pilot 与专员频道。
 
@@ -84,3 +84,12 @@ TS Dev 的 Router 工作集携带当前来源频道最近四轮对话、最新�
 未知副作用仍保留原操作身份并禁止重放；独立且宿主证明只读的诊断不再被整个任务/项目一刀切拦住。MCP 标注不能证明只读。具体执行继续核对当前权限、配置/凭据版本、主机指纹和实际审批。频道“需确认”仅来自真实待处理交互。
 
 见 [实施计划](../../plan/refactor-zcode-conversation-runtime-1.md)及 [对话执行验收](../../docs/validation/zcode-typescript-candidate/conversation-runtime.md)。
+
+
+## 分层长期记忆
+
+2026-11-06 用户授权接入 ZCode 原生 Memory。用户明确保存的全局偏好、项目共享、稳定 RoleID 经验分别保存；新任务上下文独立，临时 child 的真实结果通过父任务回流。Provider 按当前资格投影少量知识，不把完整手册或其他任务 transcript 复制给 Worker。
+
+项目及角色共用积累/使用开关，新 Home 默认关闭。原生提取在私有暂存运行，宿主校验来源、设置、权限及版本后发布；更正/遗忘先抑制旧读取和迟到写入。旧 Go 数据不自动导入，退役 V2 不启用。全局仅允许明确保存，聊天记忆管理以设置中的实际结果为准。
+
+设计、接口和限制见 [分层记忆说明](../../docs/design/zcode-layered-memory.md)，准确检查与 Dev 水位见 [验证记录](../../docs/validation/zcode-layered-memory/validation.md)。此项不代表全量后端迁移或真实模型长期质量已经验收。

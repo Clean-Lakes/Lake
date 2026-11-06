@@ -54,7 +54,11 @@ async function fixture(t, mode = "text", legacyDev = false) {
           ],
         }
       : { content: "Lake TS 完成" };
-    if (mode.startsWith("super")) {
+    const nativeMemory = JSON.stringify(request.messages).includes("persistent file-based memory at");
+    if (nativeMemory) {
+      delta = nativeMemoryReply(request);
+      tool = !!delta.tool_calls;
+    } else if (mode.startsWith("super")) {
       delta = superReply(request, mode, home);
       tool = !!delta.tool_calls;
       if (mode.startsWith("super-subagent-background") && mode !== "super-subagent-background-stop" &&
@@ -62,6 +66,16 @@ async function fixture(t, mode = "text", legacyDev = false) {
         backgroundJoinRequested = true;
         releaseBackgroundChild();
       }
+    }
+    if (mode === "memory-native-error" && nativeMemory && JSON.stringify(request.messages).includes("You are now acting as the memory extraction subagent")) {
+      res.writeHead(401,{"Content-Type":"application/json"});res.end(JSON.stringify({error:{message:"synthetic-memory-provider-failure",type:"authentication_error"}}));return;
+    }
+    if (request.stream !== true) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({id:"fixture",object:"chat.completion",created:1,model:"fixture",choices:[{index:0,
+        message:{role:"assistant",...delta,...(delta.tool_calls?{tool_calls:delta.tool_calls.map(({index,...call})=>call)}:{})},
+        finish_reason:tool?"tool_calls":"stop"}],usage:{prompt_tokens:10,completion_tokens:3,total_tokens:13}}));
+      return;
     }
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     const deltas =
@@ -156,9 +170,31 @@ async function fixture(t, mode = "text", legacyDev = false) {
   };
 }
 
+function nativeMemoryReply(request) {
+  const content = message => typeof message.content === "string" ? message.content : (message.content ?? []).map(part => part.text ?? "").join("");
+  const messages = request.messages.map(content);
+  const extractionStart = messages.findIndex(value => value.includes("You are now acting as the memory extraction subagent"));
+  if (extractionStart < 0) return { content: "已收到限定范围的来源，交由原生记忆提取。" };
+  const root = messages.join("\n").match(/persistent file-based memory at `([^`]+)`/)?.[1];
+  assert.ok(root, "real SDK Memory prompt must provide its actual private directory");
+  const calls = request.messages.slice(extractionStart).flatMap(message => message.tool_calls ?? []);
+  const call = (name, input, id, index=0) => ({ index, id, type: "function", function: { name, arguments: JSON.stringify(input) } });
+  if (!calls.some(call => call.function.name === "Read")) return { tool_calls: [
+    call("Read", { file_path: join(root, "MEMORY.md") }, "memory-read-index"),
+    ...(messages.join("\n").includes("native-method.md") ? [call("Read", {file_path:join(root,"native-method.md")}, "memory-read-method",1)] : []),
+  ] };
+  if (!calls.some(call => call.function.name === "Write")) {
+    const role = messages.join("\n").includes('"kind":"accepted_task"');
+    const body = "---\nname: native-method\ndescription: 按证据报告的方法\nmetadata:\n  type: feedback\n---\n" + (role ? "NATIVE_ROLE_MEMORY：子智能体发现由父任务汇合，重新检查当前状态。" : "NATIVE_PROJECT_MEMORY：报告先给结论，再列证据；历史数值需要重新查询。");
+    return { tool_calls: [call("Write", {file_path:join(root,"native-method.md"),content:body},"memory-write-fact"),
+      call("Write",{file_path:join(root,"MEMORY.md"),content:"- [按证据报告的方法](native-method.md)"},"memory-write-index",1)] };
+  }
+  return { content: "已按原生文件协议保存知识。" };
+}
+
 function superReply(request, mode, home) {
   if (mode === "super-host-retry") return hostRetryReply(request);
-  const names = request.messages.flatMap((message) => (message.tool_calls ?? []).map((call) => call.function.name));
+  let names = request.messages.flatMap((message) => (message.tool_calls ?? []).map((call) => call.function.name));
   const exposes = (name) => request.tools?.some((tool) => tool.function?.name === name);
   const content = (message) => typeof message.content === "string" ? message.content : (message.content ?? []).map((part) => part.text ?? "").join("");
   const call = (name, input, id = name) => ({ tool_calls: [{ index: 0, id, type: "function", function: { name, arguments: JSON.stringify(input) } }] });
@@ -172,10 +208,12 @@ function superReply(request, mode, home) {
     const raw = [...request.messages].reverse().filter((message) => message.role === "user").map(content).find((text) => text.startsWith("[LAKE ADMITTED HUMAN EVENTS"));
     if (!raw) return { content: "Missing actual admitted event" };
     const event = JSON.parse(raw.split("\n")[1])[0];
+    const currentStart = request.messages.findLastIndex(message => message.role === "user" && content(message) === raw);
+    names = request.messages.slice(currentStart).flatMap(message => (message.tool_calls ?? []).map(call => call.function.name));
     if (!names.includes("manage_specialist")) return call("manage_specialist", { event_id: event.id, part_key: "specialist", action: "create", role_key: "project-inspector", name: "项目检查员", duties: "检查当前项目工作区，按实际证据报告", quote: event.text });
     if (mode === "super-meta") return { content: "已创建长期专员，没有创建执行任务。" };
     if (!names.includes("list_specialists")) return call("list_specialists", {});
-    const roleId = request.messages.filter((message) => message.role === "tool").map(content).join("\n").match(/"id"\s*:\s*"([a-f0-9]{64})"/)?.[1];
+    const roleId = request.messages.slice(currentStart).filter((message) => message.role === "tool").map(content).join("\n").match(/"id"\s*:\s*"([a-f0-9]{64})"/)?.[1];
     if (!names.includes("route_work")) return call("route_work", { event_id: event.id, part_key: "inspect", action: "create", title: "检查项目工作区", role_id: roleId, quote: event.text, reason: "用户明确要求检查本项目" });
     return { content: "已交给项目检查员处理，执行结果将从原任务回报。" };
   }
@@ -361,10 +399,14 @@ async function until(read, predicate, milliseconds = 15000) {
   assert.fail("Timed out waiting for actual host state: " + JSON.stringify(value));
 }
 
-async function startSubagentTask(t, mode) {
+async function startSubagentTask(t, mode, memory = false) {
   const f = await fixture(t, mode);
   const project = await f.api(`/api/projects/${f.project.id}/superagent`, "POST", {});
   await f.api(`/api/sessions/${project.routerSessionId}/ai/configure`, "POST", { maxSteps: 24 });
+  if (memory) {
+    const scope = f.app.memory.scope("project", f.project.id);
+    f.app.memory.setSettings(scope, {useEnabled:true,extractionEnabled:true,expectedRevision:0});
+  }
   const workspace = await f.app.store.workspace(f.project.id);
   await writeFile(join(workspace, "child-evidence-a.txt"), "ACTUAL_CHILD_EVIDENCE_A");
   await writeFile(join(workspace, "child-evidence-b.txt"), "ACTUAL_CHILD_EVIDENCE_B");
@@ -1946,4 +1988,69 @@ test('SSH authentication failure is distinct from availability and never exposes
  await f.api(`/api/resources/${resource.id}`,'PATCH',{ssh:{password:'synthetic-wrong-ssh-password'}});
  const terminal=await trustTerminal(f,resource);await terminal.approve();const history=await until(()=>f.api(terminal.base+'/history'),h=>h.terminal.status==='disconnected');
  assert.match(history.output,/身份认证失败/);assert.ok(!JSON.stringify(history).includes('synthetic-wrong-ssh-password'));assert.equal(server.requests.length,0);
+});
+
+test('native ZCode Memory extracts after real user input, publishes scoped files, recalls across sessions and honors forget',async t=>{
+ const f=await fixture(t,'memory-native');
+ const catalog=await f.api(`/api/memory?projectId=${f.project.id}`),scope=catalog.scopes.find(scope=>scope.kind==='project');
+ assert.equal(catalog.engine,'zcode');
+ await f.api(`/api/memory/scopes/${scope.key}/settings?projectId=${f.project.id}`,'PATCH',{useEnabled:true,extractionEnabled:true,expectedRevision:0});
+ await f.api(`/api/sessions/${f.session.id}/messages`,'POST',{text:'以后报告先给结论，然后给实际证据。'},202);await f.wait(['completed']);
+ await until(async()=>!f.app.agents.foregroundBusy(),Boolean);await f.app.memory.wait();
+ let view=await f.api(`/api/memory/scopes/${scope.key}?projectId=${f.project.id}`);
+ assert.equal(view.jobs[0].state,'completed',JSON.stringify(view.jobs));assert.equal(view.items.length,1,JSON.stringify(view));
+ assert.match(view.items[0].body,/NATIVE_PROJECT_MEMORY/);assert.equal(view.items[0].sources[0].kind,'user');
+ assert.ok(f.requests.some(request=>JSON.stringify(request.messages).includes('You are now acting as the memory extraction subagent')));
+ const learnedCalls=f.calls;
+ const next=await f.api(`/api/projects/${f.project.id}/sessions`,'POST',{});
+ await f.api(`/api/sessions/${next.id}/messages`,'POST',{text:'再做一个新的检查任务。'},202);await until(()=>f.api(`/api/sessions/${next.id}/ai`),view=>view.status==='completed');
+ const request=f.requests.slice(learnedCalls).find(request=>JSON.stringify(request.messages).includes('LAKE SCOPED LONG-TERM KNOWLEDGE'));
+ assert.ok(request);assert.match(JSON.stringify(request.messages),/NATIVE_PROJECT_MEMORY/);
+ // Disable capture before deletion, so no new source can write it back.
+ await f.api(`/api/memory/scopes/${scope.key}/settings?projectId=${f.project.id}`,'PATCH',{useEnabled:true,extractionEnabled:false,expectedRevision:view.settings.revision});
+ await f.app.memory.wait();view=await f.api(`/api/memory/scopes/${scope.key}?projectId=${f.project.id}`);
+ await f.api(`/api/memory/scopes/${scope.key}/entries/${view.items[0].id}?projectId=${f.project.id}`,'DELETE',{expectedRevision:view.items[0].revision});
+ const baseline=f.calls;await f.api(`/api/sessions/${next.id}/messages`,'POST',{text:'再次检查当前状态。'},202);await until(()=>f.api(`/api/sessions/${next.id}/ai`),view=>view.status==='failed');
+ const fresh=await f.api(`/api/projects/${f.project.id}/sessions`,'POST',{});await f.api(`/api/sessions/${fresh.id}/messages`,'POST',{text:'在新的任务中检查当前状态。'},202);await until(()=>f.api(`/api/sessions/${fresh.id}/ai`),view=>view.status==='completed');
+ assert.ok(f.requests.slice(baseline).every(request=>!JSON.stringify(request.messages).includes('NATIVE_PROJECT_MEMORY')),'withdrawn knowledge never entered canonical model history');
+ assert.deepEqual(await require('node:fs/promises').readdir(join(f.options.data,'memory/staging')),[]);
+});
+
+test('native child evidence flows into stable role Memory and a new Worker reads it without sharing execution history',async t=>{
+ const {f,project,worker}=await startSubagentTask(t,'super-subagent-read',true);
+ await settledSubagentTask(f);await until(async()=>!f.app.agents.foregroundBusy(),Boolean);await f.app.memory.wait();
+ const scope=f.app.memory.scope('role',f.project.id,worker.roleId),view=f.app.memory.view(scope);
+ assert.equal(view.items.length,1,JSON.stringify(view.jobs));assert.match(view.items[0].body,/NATIVE_ROLE_MEMORY/);
+ assert.equal(view.items[0].sources[0].taskId,worker.task.taskId);
+ assert.ok(f.requests.some(request=>JSON.stringify(request.messages).includes('You are now acting as the memory extraction subagent')&&JSON.stringify(request.messages).includes('ACTUAL_CHILD_EVIDENCE_A')));
+ assert.equal(f.app.store.list('memoryScopes').filter(scope=>scope.kind==='role').length,1,'temporary child has no independent long-term scope');
+ const offset=f.requests.length;
+ await f.api(`/api/sessions/${project.routerSessionId}/messages`,'POST',{text:'请新建另一次检查任务，重新读取本项目实际证据。'},202);
+ const state=await until(()=>f.api(`/api/projects/${f.project.id}/superagent`),value=>value.workers.length===2&&value.workers.every(worker=>worker.assignmentState==='parked'));
+ assert.notEqual(state.workers[0].sessionId,state.workers[1].sessionId);assert.equal(state.workers[0].roleId,state.workers[1].roleId);
+ const newWorker=f.requests.slice(offset).find(request=>request.tools?.some(tool=>tool.function.name==='work_finish'));
+ assert.match(JSON.stringify(newWorker.messages),/NATIVE_ROLE_MEMORY/);
+ assert.ok(!JSON.stringify(newWorker.messages).includes('shared-child-read'),'new task starts without previous task tool history');
+ const router=f.requests.slice(offset).find(request=>request.tools?.some(tool=>tool.function.name==='route_work'));
+ assert.doesNotMatch(JSON.stringify(router.messages),/NATIVE_ROLE_MEMORY/,'Pilot has no automatic role-private knowledge');
+});
+
+test('single-message ignore prevents native Memory reads and source capture; explicit global notes do not auto-share to Workers',async t=>{
+ const f=await fixture(t,'memory-native'),scope=f.app.memory.scope('project',f.project.id);
+ f.app.memory.setSettings(scope,{useEnabled:true,extractionEnabled:true,expectedRevision:0});
+ await f.app.memory.remember(scope,{title:'Only scoped knowledge',body:'MANUAL_PRIVATE_MEMORY',expectedRevision:0});
+ await f.api(`/api/sessions/${f.session.id}/messages`,'POST',{text:'本轮请只检查，不使用或积累记忆。',ignoreProjectMemory:true},202);await f.wait(['completed']);await f.app.memory.wait();
+ assert.ok(f.requests.every(request=>!JSON.stringify(request.messages).includes('MANUAL_PRIVATE_MEMORY')));assert.equal(f.app.store.list('memoryJobs').length,0);
+ const other=await f.api('/api/projects','POST',{name:'different-project'});
+ await f.api(`/api/memory/scopes/${scope.key}?projectId=${other.id}`,'GET',undefined,404);
+ await f.restart();assert.equal(f.app.memory.view(f.app.memory.scope('project',f.project.id)).items[0].body,'MANUAL_PRIVATE_MEMORY');
+});
+
+test('native background extraction failure cannot be reported as a published success or retried at restart',async t=>{
+ const f=await fixture(t,'memory-native-error'),scope=f.app.memory.scope('project',f.project.id);
+ f.app.memory.setSettings(scope,{useEnabled:true,extractionEnabled:true,expectedRevision:0});
+ await f.api(`/api/sessions/${f.session.id}/messages`,'POST',{text:'以后请先给结论再给依据。'},202);await f.wait(['completed']);await f.app.memory.wait();
+ const view=f.app.memory.view(scope);assert.equal(view.items.length,0);assert.equal(view.jobs[0].state,'failed');assert.equal(view.jobs[0].nativeExtraction,undefined);
+ assert.ok(view.jobs[0].modelAttempts>=2);assert.equal(view.jobs[0].unknownUsage,true);
+ const calls=f.calls;await f.restart();assert.equal(f.calls,calls);assert.equal(f.app.memory.view(f.app.memory.scope('project',f.project.id)).jobs[0].state,'failed');
 });

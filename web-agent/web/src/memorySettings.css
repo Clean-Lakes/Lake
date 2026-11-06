@@ -19,3 +19,8 @@
 .memory-activity{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}.memory-activity>div{display:flex;flex-direction:column;gap:5px}.memory-activity dt{color:var(--text-muted)}.memory-activity dd{margin:0;color:var(--foreground)}
 .memory-settings :is(button,summary,input):focus-visible{outline:2px solid var(--focus-outline);outline-offset:3px}
 @media(max-width:760px){.memory-settings{padding:14px 16px}.memory-control{padding:12px}.memory-control-hint{padding:0 12px 12px}.memory-activity{grid-template-columns:repeat(2,minmax(0,1fr))}.memory-settings .button{min-height:36px}.memory-item-actions{gap:12px}}
+.memory-editor{margin:16px 0;padding:14px;border:1px solid var(--border);border-radius:var(--radius-settings-panel);corner-shape:var(--corner-window)}
+.memory-editor .field-label{display:flex;flex-direction:column;gap:8px;margin:0 0 12px}
+.memory-editor :is(input,textarea){box-sizing:border-box;width:100%;min-width:0;border:1px solid var(--border);border-radius:var(--radius-settings-control);corner-shape:var(--corner-window);background:var(--background);color:var(--foreground);font:inherit;padding:10px 12px}
+.memory-editor textarea{resize:vertical;line-height:1.6}
+.memory-section-header>.memory-toolbar{margin:0;justify-content:flex-end}

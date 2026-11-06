@@ -2,6 +2,7 @@ import type {MCPServerConfig,MCPToolCatalog,SkillConfig,SkillCatalog} from "../.
 import {displayAiError} from "./aiErrors";
 import type { CommandPolicy } from "../../shared/command-policy";
 import type { WorkspaceTag } from "../../shared/contracts";
+import type { LayeredMemoryScope, LayeredMemorySettings, LayeredMemoryView } from "../../shared/contracts";
 import type {
   SSHConnectionInput,
   SSHKeyDirectory,
@@ -87,6 +88,7 @@ export type Bootstrap = {
   terminalMode: "command" | "pty";
   supportsImageInput?: boolean;
   aiRuntime?: "zcode" | "go" | "legacy";
+  memoryEngine?: "zcode-layered";
 };
 
 export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"modelId"|"modelSelection"|"supportsImageInput"> & {
@@ -96,6 +98,11 @@ export type ModelSyncState = Pick<Bootstrap,"modelConfigured"|"modelName"|"model
 };
 
 export const api = {
+  memoryScopes: (projectId = "", signal?: AbortSignal) => request<{engine: "zcode"; scopes: LayeredMemoryScope[]}>(`/api/memory?projectId=${encodeURIComponent(projectId)}`, {signal}),
+  memoryView: (key: string, projectId = "", signal?: AbortSignal) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}?projectId=${encodeURIComponent(projectId)}`, {signal}),
+  memorySettings: (key: string, projectId: string, data: LayeredMemorySettings) => request<LayeredMemorySettings>(`/api/memory/scopes/${encodeURIComponent(key)}/settings?projectId=${encodeURIComponent(projectId)}`, {method: "PATCH", body: JSON.stringify({useEnabled: data.useEnabled, extractionEnabled: data.extractionEnabled, expectedRevision: data.revision})}),
+  saveMemory: (key: string, projectId: string, data: {title: string; body: string; expectedRevision: number}, entryId?: string) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}/entries${entryId ? "/"+encodeURIComponent(entryId) : ""}?projectId=${encodeURIComponent(projectId)}`, {method: entryId ? "PUT" : "POST", body: JSON.stringify(data)}),
+  forgetMemory: (key: string, projectId: string, entryId: string, expectedRevision: number) => request<LayeredMemoryView>(`/api/memory/scopes/${encodeURIComponent(key)}/entries/${encodeURIComponent(entryId)}?projectId=${encodeURIComponent(projectId)}`, {method: "DELETE", body: JSON.stringify({expectedRevision})}),
 	superWorkspace:(project:string,signal?:AbortSignal)=>request<import('../../shared/contracts').SuperWorkspace>(`/api/projects/${encodeURIComponent(project)}/superagent`,{signal}),
 	deleteSpecialist:(project:string,role:string,revision:number)=>request<{deleted:boolean}>(`/api/projects/${encodeURIComponent(project)}/superagent/specialists/${encodeURIComponent(role)}`,{method:'DELETE',body:JSON.stringify({revision})}),
 	readSpecialistCompletion:(session:string,cursor:string)=>request<{cursor:string}>(`/api/sessions/${encodeURIComponent(session)}/channel/read`,{method:'PUT',body:JSON.stringify({cursor})}),
