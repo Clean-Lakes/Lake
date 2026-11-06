@@ -1,6 +1,6 @@
 # Lake Super-agent 内核与三模块协作约定
 
-更新日期：2026-11-05。本文记录用户确认的架构方向，供后续 Agent 和模块维护者共同遵循。它不代表所有能力已经实现，也不改变 `AGENTS.md`、`CONTRIBUTING.md` 和 `docs/development-workflow.md` 中的开发、合并、发布与数据隔离要求。
+更新日期：2026-11-06。本文记录用户确认的架构方向，供后续 Agent 和模块维护者共同遵循。它不代表所有能力已经实现，也不改变 `AGENTS.md`、`CONTRIBUTING.md` 和 `docs/development-workflow.md` 中的开发、合并、发布与数据隔离要求。
 
 ## 后端迁移方向（2026-11-05，Dev 预览）
 

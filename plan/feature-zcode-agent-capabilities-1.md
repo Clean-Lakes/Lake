@@ -4,13 +4,13 @@ version: 1
 date_created: 2026-11-06
 last_updated: 2026-11-06
 owner: Lake Runtime
-status: 'In progress'
+status: 'Completed'
 tags: [feature, zcode, agent, ssh]
 ---
 
 # Introduction
 
-![Status: In progress](https://img.shields.io/badge/status-In%20progress-yellow)
+![Status: Completed](https://img.shields.io/badge/status-Completed-brightgreen)
 
 用户授权 Pilot、专员和 Task Worker 拥有同一通用 Agent 能力。沿用从 origin/develop 90aa1274 创建的当前干净分支及开放 PR 188，在已有停止/MySQL 变更上完成能力接入；不合并 PR 或发布生产版本。
 
@@ -53,8 +53,8 @@ tags: [feature, zcode, agent, ssh]
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-006 | 扩展 server.test.cjs，使用真实本机进程、SSH 协议夹具和公开 SDK 验证 Pilot 直接执行、Worker 自主命令、child、后台汇合、审批拒绝/版本变化/停止/unknown/秘密隔离；补能力清单及执行单元测试。依赖 TASK-004。 | true | 2026-11-06 |
-| TASK-007 | 运行 TS/前端/既有 MySQL、Memory、任务、迁移与 ADK/Dev 边界回归，签名安装 Lake Dev，验证实际源码 SHA、界面和目录保持，记录真实远端/外部服务限制。依赖 TASK-005、TASK-006。 | | |
-| TASK-008 | 完成 docs/validation/zcode-typescript-candidate/agent-capabilities.md、runtime/zcode/README.md 和本计划，更新 PR 188 标题/说明及验证依据；保留开放待评审。依赖 TASK-007。 | | |
+| TASK-007 | 运行 TS/前端/既有 MySQL、Memory、任务、迁移与 ADK/Dev 边界回归，签名安装 Lake Dev，验证实际源码 SHA、界面和目录保持，记录真实远端/外部服务限制。依赖 TASK-005、TASK-006。 | true | 2026-11-06 |
+| TASK-008 | 完成 docs/validation/zcode-typescript-candidate/agent-capabilities.md、runtime/zcode/README.md 和本计划，更新 PR 188 标题/说明及验证依据；保留开放待评审。依赖 TASK-007。 | true | 2026-11-06 |
 
 ## 3. Alternatives
 

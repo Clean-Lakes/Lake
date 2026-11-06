@@ -34,7 +34,11 @@
 
 ## 签名 Lake Dev
 
-安装来源与启动验证在签名构建后追加；当前记录不把尚未完成的安装写成通过。Dev 使用固定 ~/.lake-dev，保留原资源、专员、消息与未决记录。正式 Lake 未安装、未重启。
+实际测试代码 SHA：`93b69953b90015b54df0dba7b990ea56475cc3e4`。在干净工作区通过 `scripts/build_lake_desktop.sh --dev --ts-candidate --install` 签名安装，build-origin 的 gitHead/dirty=false/backendSHA256 与实际安装二进制吻合。`codesign --verify --deep --strict` 通过，后端签名为 Lake Local Development Code Signing。
+
+重新启动 `~/Applications/Lake Dev.app`，原生页面与 API 确认 backendRuntime=typescript、aiRuntime=zcode；能力目录给出 20 个已连接通用工具、23 个需宿主服务工具，当前模型原生 WebSearch 保持 model_dependent。Dev 使用固定 `~/.lake-dev`；原生页面保留 4 个专员和原目录，API 保留 144 个资源。对比安装前同 Home 私有备份，resources/superRoles/superGoals/superOperations 原记录逐项一致，启动后没有 active/queued Worker。
+
+备份在 `~/Library/Application Support/Lake Dev/backups/full-agent-20261106-123452/`，仅本机私有保存；没有复制正式凭据。正式 Lake 未安装、未重启。此次构建仍保留 Node SQLite 实验提示、现有 Web chunk 体积与 Swift build-system 提示，不影响上述检查。文档跟进提交晚于此测试代码 SHA，不另称新版二进制。
 
 ## 明确边界
 
